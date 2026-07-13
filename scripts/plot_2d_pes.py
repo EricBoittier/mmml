@@ -366,6 +366,7 @@ def _panel_label(backend: str) -> str:
         "spookynet_hybrid_step44600": "Hybrid s44600",
         "spookynet_hybrid_step44600_mbd": "Hybrid s44600 + MBD",
         "spookynet_hybrid_step45600": "Hybrid s45600",
+        "spookynet_hybrid_corrected_v2_step4600": "Spooky residual v2 s4600",
     }
     return PANEL_LABELS.get(backend, tuned_labels.get(backend, BACKEND_LABELS.get(backend, backend)))
 

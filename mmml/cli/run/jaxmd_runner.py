@@ -21,6 +21,7 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
     wrap_groups_by_id_with_weight_sum,
 )
+from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
 from mmml.utils.jax_gpu_warmup import block_jax_values, ensure_xla_gpu_warmed
@@ -77,9 +78,11 @@ def resolve_jaxmd_steps_per_loop_call(
             return candidate_block_steps
     return max_block_steps
 
-# JAX-MD integrator carry (positions, momenta) must stay float32 even when the hybrid
-# calculator runs ML/MM interior math in float64 (ml_compute_dtype=float64).
-_JAXMD_DTYPE = jnp.float32
+# Use the same configured precision for the integrator carry and hybrid force
+# evaluation.  A float32 carry silently defeated ``--ml-compute-dtype float64``
+# and can destabilize Nose-Hoover integration even when the calculator itself
+# evaluates in float64.
+_JAXMD_DTYPE = resolve_ml_compute_dtype()
 
 
 def as_jaxmd_dtype(x):
@@ -88,7 +91,7 @@ def as_jaxmd_dtype(x):
 
 
 def normalize_jaxmd_state(state):
-    """Keep JAX-MD integrator carry dtypes consistent (float32) for lax.scan/fori_loop."""
+    """Keep JAX-MD integrator carry dtypes consistent for lax.scan/fori_loop."""
     return state.set(
         position=as_jaxmd_dtype(state.position),
         momentum=as_jaxmd_dtype(state.momentum),
@@ -332,11 +335,11 @@ def set_up_nhc_sim_routine(
         )
 
     atomic_numbers = jnp.asarray(atoms.get_atomic_numbers(), dtype=jnp.int32)
-    R = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
+    R = as_jaxmd_dtype(atoms.get_positions())
 
     @jit
     def jax_md_eval_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
-        position = jnp.asarray(position, dtype=jnp.float32)
+        position = as_jaxmd_dtype(position)
         return evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=position,
@@ -358,7 +361,7 @@ def set_up_nhc_sim_routine(
     @jit
     def jax_md_force_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
         """Return forces from calculator (no autodiff). jax.grad(energy_fn) produces NaN."""
-        position = jnp.asarray(position, dtype=jnp.float32)
+        position = as_jaxmd_dtype(position)
         result = evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=position,
@@ -375,7 +378,7 @@ def set_up_nhc_sim_routine(
     pair_idx, pair_mask = None, None
     # Use (3,) or 3x3 box format for consistency with mm_energy_forces._box_to_cell_3x3
     L_cell = float(args.cell) if args.cell else None
-    box_init = jnp.array([L_cell, L_cell, L_cell], dtype=jnp.float32) if L_cell else None
+    box_init = jnp.array([L_cell, L_cell, L_cell], dtype=_JAXMD_DTYPE) if L_cell else None
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
     if update_fn is not None and use_pbc:
@@ -1095,7 +1098,7 @@ def set_up_nhc_sim_routine(
         if initial_velocities is not None:
             state = state.set(
                 momentum=as_jaxmd_dtype(
-                    Si_mass[:, None] * jnp.asarray(initial_velocities, dtype=jnp.float32)
+                    Si_mass[:, None] * as_jaxmd_dtype(initial_velocities)
                 )
             )
         state = normalize_jaxmd_state(state)
