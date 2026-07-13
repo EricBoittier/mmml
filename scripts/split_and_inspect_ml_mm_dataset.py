@@ -24,7 +24,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.analysis.style import apply_plot_style
+from mmml.utils.plotting.styles import apply_plot_style
 
 
 def compute_com_distance(z: np.ndarray, r: np.ndarray, mol_id: np.ndarray) -> float:
