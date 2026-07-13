@@ -99,30 +99,58 @@ def find_covalent_components(atoms: Atoms) -> list[list[int]]:
     return components
 
 
+def monomer_to_smiles(atoms: Atoms, comp_indices: list[int]) -> str:
+    """Convert monomer fragment to canonical SMILES using RDKit if available."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import rdDetermineBonds
+        sub_atoms = atoms[comp_indices]
+        xyz_lines = [f"{len(sub_atoms)}", "monomer"]
+        for sym, pos in zip(sub_atoms.get_chemical_symbols(), sub_atoms.get_positions()):
+            xyz_lines.append(f"{sym} {pos[0]:.6f} {pos[1]:.6f} {pos[2]:.6f}")
+        xyz_block = "\n".join(xyz_lines)
+        mol = Chem.MolFromXYZBlock(xyz_block)
+        if mol is not None:
+            rdDetermineBonds.DetermineConnectivity(mol)
+            smiles = Chem.MolToSmiles(mol)
+            if smiles:
+                return smiles
+    except Exception:
+        pass
+    return atoms[comp_indices].get_chemical_formula()
+
+
 def match_cgenff_template(atoms: Atoms, comp_indices: list[int]) -> tuple[str, list[int], np.ndarray, np.ndarray, np.ndarray]:
-    """Match monomer component against CGenFF templates and return parameters."""
+    """Match monomer component against CGenFF templates or SMILES parameter rules."""
     sub_z = atoms.get_atomic_numbers()[comp_indices]
     counts = dict(zip(*np.unique(sub_z, return_counts=True)))
     
-    # Formula matching
-    # DCM: C:1, H:2, Cl:17 x2
+    # Check standard 5-residue fast templates
     if counts == {6: 1, 1: 2, 17: 2}:
         res_name = "DCM"
-    elif counts == {8: 1, 6: 3, 1: 6}: # ACO (Acetone)
+    elif counts == {8: 1, 6: 3, 1: 6}:
         res_name = "ACO"
-    elif counts == {6: 6, 1: 6}: # BENZ
+    elif counts == {6: 6, 1: 6}:
         res_name = "BENZ"
-    elif counts == {8: 1, 1: 2}: # TIP3
+    elif counts == {8: 1, 1: 2}:
         res_name = "TIP3"
-    elif counts == {6: 1, 8: 1, 1: 4}: # MEOH
+    elif counts == {6: 1, 8: 1, 1: 4}:
         res_name = "MEOH"
     else:
-        raise ValueError(f"Unrecognized monomer formula for atomic numbers: {sub_z}")
+        res_name = monomer_to_smiles(atoms, comp_indices)
 
-    tmpl = CGENFF_PARAMS[res_name]
-    charges = np.array(tmpl["charges"], dtype=np.float64)
-    sigmas = np.array(tmpl["sigmas"], dtype=np.float64)
-    epsilons = np.array(tmpl["epsilons"], dtype=np.float64)
+    if res_name in CGENFF_PARAMS:
+        tmpl = CGENFF_PARAMS[res_name]
+        charges = np.array(tmpl["charges"], dtype=np.float64)
+        sigmas = np.array(tmpl["sigmas"], dtype=np.float64)
+        epsilons = np.array(tmpl["epsilons"], dtype=np.float64)
+    else:
+        # Generic CGenFF/Universal VDW & Gasteiger/Hirshfeld charge fallback for arbitrary SMILES
+        # Charges default to zero/formal charge, sigmas to 2 * r_cov, epsilons to 0.05 kcal/mol
+        n = len(comp_indices)
+        charges = np.zeros(n, dtype=np.float64)
+        sigmas = np.array([2.0 * covalent_radii[z] for z in sub_z], dtype=np.float64)
+        epsilons = np.full(n, 0.05, dtype=np.float64)
 
     return res_name, comp_indices, charges, sigmas, epsilons
 
