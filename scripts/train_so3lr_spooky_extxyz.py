@@ -48,6 +48,7 @@ from mmml.models.physnetjax.physnetjax.restart.restart import save_training_chec
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
+from mmml.utils.model_checkpoint import json_to_params
 from mmml.models.mbd.calculator import (
     HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM,
     HARTREE_TO_EV,
@@ -760,7 +761,10 @@ def _initialize_from_checkpoint(
     checkpoint_path: Path,
     state: train_state.TrainState,
 ) -> train_state.TrainState:
-    restored = ocp.PyTreeCheckpointer().restore(checkpoint_path)
+    if checkpoint_path.is_file() and checkpoint_path.suffix == ".json":
+        restored = json_to_params(checkpoint_path)
+    else:
+        restored = ocp.PyTreeCheckpointer().restore(checkpoint_path)
     loaded_params = restored.get("params")
     if loaded_params is None and isinstance(restored.get("model"), Mapping):
         loaded_params = restored["model"].get("params")
