@@ -31,7 +31,16 @@ def repo_root() -> Path:
 def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
     path = Path(config_path) if config_path is not None else (workflow_root() / "config.yaml")
     with path.open(encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f) or {}
+    # These documented environment overrides must also affect the generated
+    # campaign YAML, not merely pass the initial path-existence preflight.
+    if ckpt := os.environ.get("MMML_CKPT", "").strip():
+        cfg["checkpoint"] = ckpt
+    # Useful for isolated diagnostic/smoke runs without mutating a campaign
+    # configuration file or colliding with its resumable artifacts.
+    if output_root := os.environ.get("MMML_PBC_OUTPUT_ROOT", "").strip():
+        cfg["output_root"] = output_root
+    return cfg
 
 
 def resolve_checkpoint(raw: str) -> Path:
