@@ -268,6 +268,8 @@ def plot_field_slice(
     title: str = "Electrostatic potential + field (multipole sources)",
     cmap=None,
     style: str = "icml",
+    ax=None,
+    colorbar: bool = True,
 ):
     """Potential contours + electric-field streamlines on a 2D plane.
 
@@ -276,6 +278,9 @@ def plot_field_slice(
     (potential in Hartree/e, field in a.u.); nothing new is computed here beyond
     laying a grid on ``plane`` through the sources' centroid and drawing it.
     Potential has a real zero -> diverging colour; streamlines show E = -grad V.
+
+    Pass ``ax`` to draw into an existing axis (e.g. a molecule grid); the
+    caller then owns the colorbar and saving.
     """
     apply_plot_style(style)
     origins_bohr = np.asarray(origins_bohr, dtype=np.float64).reshape(-1, 3)
@@ -288,14 +293,17 @@ def plot_field_slice(
     )
     vmax = float(np.percentile(np.abs(P), 97))
     cmap = _resolve_cmap(cmap, ELECTROSTATIC_CMAP)
-    fig, ax = plt.subplots(figsize=(7.5, 6.6))
+    made_fig = ax is None
+    fig, ax = (plt.subplots(figsize=(7.5, 6.6)) if made_fig else (ax.figure, ax))
     cf = _draw_field_panel(ax, Ua, Va, P, Fx, Fy, origins_bohr, a0, a1, centroid, cmap, vmax)
     ax.set_title(title)
-    fig.colorbar(cf, ax=ax, label="electrostatic potential (a.u.)")
-    fig.tight_layout()
-    if out is not None:
-        fig.savefig(out, dpi=200, bbox_inches="tight")
-        plt.close(fig)
+    if colorbar:
+        fig.colorbar(cf, ax=ax, label="electrostatic potential (a.u.)")
+    if made_fig:
+        fig.tight_layout()
+        if out is not None:
+            fig.savefig(out, dpi=200, bbox_inches="tight")
+            plt.close(fig)
     return ax
 
 
