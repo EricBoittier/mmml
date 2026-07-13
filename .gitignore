@@ -279,3 +279,8 @@ fftw-wisdom.dat
 mmml/generate/packmol/packmol
 examples/jax_cache/
 MagicMock/
+
+# LaTeX build artifacts (reports/)
+reports/*.aux
+reports/*.out
+reports/*.toc
