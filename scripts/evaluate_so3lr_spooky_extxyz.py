@@ -774,9 +774,12 @@ def evaluate_dataset(
                 Z = np.asarray(predictions["Z"]).reshape(
                     is_real_np.shape[0], is_real_np.shape[1], bucket_atoms
                 )
-                plot_forces_reference.append(F_ref[is_real_np])
-                plot_forces_prediction.append(F_pred[is_real_np])
-                plot_atomic_numbers.append(Z[is_real_np])
+                # Buckets have different atom counts.  Store flat atom rows,
+                # not ``(structures, atoms, 3)`` blocks, so a mixed-size test
+                # set can be concatenated into one parity plot.
+                plot_forces_reference.append(F_ref[is_real_np].reshape(-1, 3))
+                plot_forces_prediction.append(F_pred[is_real_np].reshape(-1, 3))
+                plot_atomic_numbers.append(Z[is_real_np].reshape(-1))
             
         total_atoms += int(is_real_np.sum()) * bucket_atoms
         
