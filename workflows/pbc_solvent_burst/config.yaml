@@ -93,6 +93,10 @@ packmol_tolerance: 1.0
 
 ml_gpu_count: 1
 ml_batch_size: 2048
+# Require 64-bit JAX evaluation for all MLpot PBC jobs.  The Slurm wrapper also
+# exports JAX_ENABLE_X64=1; keeping this explicit prevents a silent float32
+# downgrade when a job is launched from another environment.
+ml_compute_dtype: float64
 
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 

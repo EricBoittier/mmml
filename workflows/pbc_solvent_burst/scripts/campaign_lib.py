@@ -284,6 +284,10 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "mm_switch_width": float(cfg.get("mm_switch_width", 5.0)),
         "ml_switch_width": float(cfg.get("ml_switch_width", 1.5)),
         "ml_gpu_count": int(cfg.get("ml_gpu_count", 1)),
+        # PBC ML/MM production and diagnostics must be conservative in their
+        # numerical precision; do not rely on JAX_ENABLE_X64 implicitly
+        # selecting this through the environment.
+        "ml_compute_dtype": str(cfg.get("ml_compute_dtype", "float64")),
         "ml_batch_size": int(
             dense_cell_mlpot_overrides(cell, cfg).get(
                 "ml_batch_size", cfg.get("ml_batch_size", 1024)

@@ -65,4 +65,5 @@ spacing: 5.5
 packmol_tolerance: 2.0
 ml_gpu_count: 1
 ml_batch_size: 512
+ml_compute_dtype: float64
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh

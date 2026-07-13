@@ -38,8 +38,31 @@ HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = Hartree / Bohr
 
 
 def load_mbd_model(checkpoint: str | Path) -> tuple[E3xMBDModel, Any]:
-    """Load a trained QCML MBD checkpoint."""
+    """Load a trained QCML MBD checkpoint.
+
+    Accepts either an Orbax checkpoint directory (with a sibling
+    ``model_config.json``) or a portable JSON file produced by
+    :func:`mmml.utils.model_checkpoint.orbax_to_json` (params + config bundled
+    together, no sibling file needed).
+    """
     checkpoint = Path(checkpoint).expanduser()
+    if checkpoint.is_file() and checkpoint.suffix == ".json":
+        from mmml.utils.model_checkpoint import json_to_params
+
+        restored = json_to_params(checkpoint)
+        raw_config = restored.get("config")
+        if not raw_config:
+            raise ValueError(
+                f"JSON checkpoint {checkpoint} has no 'config' — cannot determine "
+                "MBD model architecture (features/cutoff/etc.)"
+            )
+        valid = {field.name for field in fields(MBDModelConfig)}
+        model_config = {key: value for key, value in raw_config.items() if key in valid}
+        MBDModelConfig(**model_config)
+        if "params" not in restored:
+            raise KeyError(f"Checkpoint {checkpoint} does not contain params")
+        return E3xMBDModel(**model_config), restored["params"]
+
     config_path = checkpoint / "model_config.json"
     if not config_path.exists():
         raise FileNotFoundError(f"Missing model_config.json: {config_path}")

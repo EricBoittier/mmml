@@ -55,6 +55,7 @@ from mmml.models.mbd.calculator import (
     load_mbd_model,
 )
 from mmml.models.mbd.model import mbd_energy_and_forces
+from mmml.models.multipoles.electrostatics import load_multipole_model
 
 ANGSTROM_TO_BOHR = 1.0 / 0.529177210903
 
@@ -450,6 +451,8 @@ def make_steps(
     *,
     mbd_model: Any | None = None,
     mbd_params: Any | None = None,
+    multipole_model: Any | None = None,
+    multipole_params: Any | None = None,
 ):
     per_device_batch_size = args.batch_size_per_device
     energy_weight = args.energy_weight
@@ -457,12 +460,21 @@ def make_steps(
     dipole_weight = args.dipole_weight
     charges_weight = args.charges_weight
     mbd_weight = args.mbd_weight
+    multipole_consistency_weight = args.multipole_consistency_weight
     if (mbd_model is None) != (mbd_params is None):
         raise ValueError("mbd_model and mbd_params must be provided together")
     if mbd_params is not None:
         # These parameters are fixed external physics.  Positions deliberately
         # remain differentiable so the residual learns against MBD forces.
         mbd_params = jax.tree.map(jax.lax.stop_gradient, mbd_params)
+    if (multipole_model is None) != (multipole_params is None):
+        raise ValueError("multipole_model and multipole_params must be provided together")
+    if multipole_params is not None:
+        # Frozen reference dipole model — only used to compute a consistency target,
+        # never updated. Gradients through it are only needed w.r.t. positions if we
+        # ever want to backprop the consistency loss into geometry; for now it's used
+        # purely as a stop-gradient dipole reference.
+        multipole_params = jax.tree.map(jax.lax.stop_gradient, multipole_params)
 
     def loss_fn(params, batch, mbd_scale):
         out = model.apply(
@@ -527,6 +539,8 @@ def make_steps(
         charge_mae = jnp.asarray(0.0)
         dipole_mse = jnp.asarray(0.0)
         charge_mse = jnp.asarray(0.0)
+        multipole_dipole_mae = jnp.asarray(0.0)
+        multipole_dipole_mse = jnp.asarray(0.0)
         if args.predict_charges:
             dipole_pred = out["dipoles"].reshape(batch["D"].shape)
             charge_pred = out["sum_charges"].reshape(batch["Q_total"].shape)
@@ -535,6 +549,32 @@ def make_steps(
             dipole_mae = jnp.mean(jnp.abs(dipole_pred - batch["D"]))
             charge_mae = jnp.mean(jnp.abs(charge_pred - batch["Q_total"]))
             loss += dipole_weight * dipole_mse + charges_weight * charge_mse
+            if multipole_model is not None:
+                # Auxiliary signal from a frozen, separately-trained multipole model:
+                # encourage the network's own learned-charge dipole to agree with an
+                # independent dipole prediction, on top of (not instead of) the main
+                # dipole_mse loss against the DFT reference D. Combination strategy is
+                # deliberately simple (plain MSE, weighted by --multipole-consistency-
+                # weight) since the "right" way to blend the two hasn't been decided yet.
+                multipole_out = multipole_model.apply(
+                    {"params": multipole_params},
+                    positions=batch["R"],
+                    atomic_numbers=batch["Z"],
+                    charge=batch["Q_total"].reshape(-1),
+                    spin=batch["S_total"].reshape(-1),
+                    dst_idx=batch["dst_idx"],
+                    src_idx=batch["src_idx"],
+                    batch_segments=batch["batch_segments"],
+                    batch_size=per_device_batch_size,
+                    atom_mask=batch["atom_mask"],
+                    edge_mask=batch["batch_mask"],
+                )
+                multipole_dipole = jax.lax.stop_gradient(
+                    multipole_out["multipoles"][:, 1:4].reshape(batch["D"].shape)
+                )
+                multipole_dipole_mse = jnp.mean((dipole_pred - multipole_dipole) ** 2)
+                multipole_dipole_mae = jnp.mean(jnp.abs(dipole_pred - multipole_dipole))
+                loss += multipole_consistency_weight * multipole_dipole_mse
         metrics = {
             "loss": loss,
             "energy_mae": energy_mae,
@@ -549,6 +589,8 @@ def make_steps(
             "mbd_force_abs_mean": jnp.sum(jnp.abs(mbd_forces) * force_mask)
             / (jnp.sum(force_mask) * 3.0 + 1e-8),
             "mbd_scale": mbd_scale,
+            "multipole_dipole_mae": multipole_dipole_mae,
+            "multipole_dipole_mse": multipole_dipole_mse,
         }
         return loss, metrics
 
@@ -1009,6 +1051,19 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"total complex energy, not an interaction energy — no counterpoise decomposition)",
             flush=True,
         )
+    multipole_model = None
+    multipole_params = None
+    if args.multipole_checkpoint is not None:
+        multipole_model, multipole_params = load_multipole_model(
+            Path(args.multipole_checkpoint).expanduser()
+        )
+        print(
+            f"Using frozen multipole model from {Path(args.multipole_checkpoint).expanduser()} "
+            f"with consistency weight {args.multipole_consistency_weight:g}: its predicted "
+            f"molecular dipole is added as an auxiliary MSE target alongside (not replacing) "
+            f"the DFT-reference dipole loss on the network's own learned-charge dipole",
+            flush=True,
+        )
     state = init_state(model, data, train_buckets, args)
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
@@ -1059,7 +1114,13 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 **{**vars(args), "batch_size_per_device": batch_size}
             )
             step_functions[batch_size] = make_steps(
-                model, step_args, devices, mbd_model=mbd_model, mbd_params=mbd_params
+                model,
+                step_args,
+                devices,
+                mbd_model=mbd_model,
+                mbd_params=mbd_params,
+                multipole_model=multipole_model,
+                multipole_params=multipole_params,
             )
         return step_functions[batch_size]
 
@@ -1101,6 +1162,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 )
                 if mbd_model is not None:
                     line += f" MBD_λ={m['mbd_scale']:.3f}"
+                if multipole_model is not None:
+                    line += f" MultipoleD_MAE={m['multipole_dipole_mae']:.6g}"
                 print(line)
             if args.steps_per_epoch and step >= args.steps_per_epoch:
                 break
@@ -1297,7 +1360,7 @@ def build_parser() -> argparse.ArgumentParser:
             "sigmas/epsilons/cgenff_type_idx are present in the cache. Useful when "
             "training with --mbd-checkpoint instead of empirical LJ dispersion, to "
             "avoid double-counting dispersion physics between the two. mol_id-based "
-            "electrostatics masking and MBD counterpoise decomposition are unaffected."
+            "electrostatics masking is unaffected."
         ),
     )
     parser.add_argument(
@@ -1313,6 +1376,27 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Linearly introduce the frozen MBD correction over this many optimizer "
             "steps (default: 10000; 0 enables it immediately)."
+        ),
+    )
+    parser.add_argument(
+        "--multipole-checkpoint",
+        type=str,
+        default=None,
+        help=(
+            "Frozen QCML multipole model checkpoint (Orbax dir or portable JSON). Its "
+            "predicted molecular dipole is used as an auxiliary consistency target for "
+            "the network's own learned-charge dipole, on top of the DFT-reference dipole "
+            "loss (see --multipole-consistency-weight)."
+        ),
+    )
+    parser.add_argument(
+        "--multipole-consistency-weight",
+        type=float,
+        default=1.0,
+        help=(
+            "Weight for the MSE between the network's learned-charge dipole and the "
+            "frozen multipole model's predicted dipole (default: 1.0; only used when "
+            "--multipole-checkpoint is set)."
         ),
     )
     parser.add_argument("--features", type=int, default=128)

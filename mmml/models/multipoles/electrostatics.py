@@ -53,13 +53,36 @@ def _load_checkpoint_payload(checkpoint: str | Path) -> dict[str, Any]:
 
 
 def load_multipole_model(checkpoint: str | Path) -> tuple[E3xMultipoleModel, Any]:
-    """Load a trained unified QCML multipole model checkpoint."""
+    """Load a trained unified QCML multipole model checkpoint.
+
+    Accepts either an Orbax checkpoint directory (with a sibling
+    ``model_config.json``) or a portable JSON file produced by
+    :func:`mmml.utils.model_checkpoint.orbax_to_json` (params + config bundled
+    together, no sibling file needed).
+    """
     checkpoint = Path(checkpoint).expanduser()
+    valid = {field.name for field in fields(TrainConfig)}
+    if checkpoint.is_file() and checkpoint.suffix == ".json":
+        from mmml.utils.model_checkpoint import json_to_params
+
+        restored = json_to_params(checkpoint)
+        raw_config = restored.get("config")
+        if not raw_config:
+            raise ValueError(
+                f"JSON checkpoint {checkpoint} has no 'config' — cannot determine "
+                "multipole model architecture (features/cutoff/etc.)"
+            )
+        model_config = {key: value for key, value in raw_config.items() if key in valid}
+        TrainConfig(**model_config)
+        model_config.pop("target_degree", None)
+        if "params" not in restored:
+            raise KeyError(f"Checkpoint {checkpoint} does not contain params")
+        return E3xMultipoleModel(**model_config), restored["params"]
+
     config_path = checkpoint / "model_config.json"
     if not config_path.exists():
         raise FileNotFoundError(f"Missing model_config.json: {config_path}")
     raw_config = json.loads(config_path.read_text(encoding="utf-8"))
-    valid = {field.name for field in fields(TrainConfig)}
     model_config = {key: value for key, value in raw_config.items() if key in valid}
     TrainConfig(**model_config)
     model_config.pop("target_degree", None)
