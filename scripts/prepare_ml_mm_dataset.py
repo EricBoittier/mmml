@@ -377,6 +377,18 @@ def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[i
     return components
 
 
+def _fmt_comp(z_arr: np.ndarray) -> str:
+    """Format atomic composition as human-readable formula, e.g. C6H6N2."""
+    from ase.data import chemical_symbols as _sym
+    counts = {}
+    for z in z_arr:
+        counts[int(z)] = counts.get(int(z), 0) + 1
+    # Standard Hill order: C first, H second, then alphabetical
+    order = sorted(counts.keys(), key=lambda z: (z != 6, z != 1, _sym[z]))
+    return "".join(f"{_sym[z]}{counts[z] if counts[z] > 1 else ''}" for z in order)
+
+
+
 def match_cgenff_template_fast(
     z_sub: np.ndarray,
     comp_indices: list[int],
@@ -405,10 +417,8 @@ def match_cgenff_template_fast(
             # Priority 3: composition index (may be ambiguous for isomers)
             res_name = _COMPOSITION_MAP[comp_key][0]
         else:
-            raise KeyError(
-                f"No CGenFF RTF template found for composition {comp_key} "
-                f"(SMILES={canonical_smiles!r}). Add to DES_SMILES_TO_RESI."
-            )
+            formula = _fmt_comp(z_sub)
+            raise KeyError(f"No CGenFF template for {formula}. Add to DES_SMILES_TO_RESI.")
 
     if res_name not in _CGENFF_RESIDUES:
         raise KeyError(f"RESI '{res_name}' not found in parsed RTF residues.")
@@ -524,9 +534,9 @@ def process_single_frame(args_tuple):
             n_atoms, q_i, s_i, d_i, mol_id, cgenff_type, cgenff_charge
         )
     except KeyError as e:
-        counts_a = dict(zip(*np.unique(z_struct[comp_a], return_counts=True)))
-        counts_b = dict(zip(*np.unique(z_struct[comp_b], return_counts=True)))
-        return ("SKIP", f"Unmapped: {e} | compA={counts_a} compB={counts_b}")
+        formula_a = _fmt_comp(z_struct[comp_a])
+        formula_b = _fmt_comp(z_struct[comp_b])
+        return ("SKIP", f"Unmapped: {e} (A={formula_a}, B={formula_b})")
     except Exception as e:
         return ("SKIP", f"Unexpected error: {type(e).__name__}: {e}")
 
@@ -626,8 +636,23 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
                 print(f"  Processed {dimers_processed:,} dimers ({rate:.0f} frames/sec)")
 
     if dropped_total > 0:
-        print(f"\n[WARNING] Dropped {dropped_total:,} frames ({100*dropped_total/(dropped_total+dimers_processed):.2f}%). Top reasons:")
-        for reason, count in sorted(dropped_reasons.items(), key=lambda x: -x[1])[:20]:
+        # Group by category for clarity
+        non_dimer = sum(c for r, c in dropped_reasons.items() if r.startswith("non-dimer"))
+        unmapped  = sum(c for r, c in dropped_reasons.items() if r.startswith("Unmapped"))
+        sentinel  = sum(c for r, c in dropped_reasons.items() if "DEFAULT sentinel" in r)
+        other     = dropped_total - non_dimer - unmapped - sentinel
+        print(f"\n[WARNING] Dropped {dropped_total:,} frames ({100*dropped_total/(dropped_total+dimers_processed):.1f}%):")
+        print(f"   {non_dimer:>10,}  non-dimer structures (monomers / clusters / multi-component) — expected")
+        print(f"   {unmapped:>10,}  unmapped CGenFF templates (exotic molecules / fragments)")
+        if sentinel:
+            print(f"   {sentinel:>10,}  sentinel zero-LJ atoms (check atom types)")
+        if other:
+            print(f"   {other:>10,}  other errors")
+        print(f"\n   Top unmapped compositions:")
+        for reason, count in sorted(
+            ((r, c) for r, c in dropped_reasons.items() if r.startswith("Unmapped")),
+            key=lambda x: -x[1]
+        )[:15]:
             print(f"   {count:>8,} : {reason}")
 
     dt = time.time() - t0
