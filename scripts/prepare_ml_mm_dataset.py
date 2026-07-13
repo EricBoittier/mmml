@@ -277,6 +277,12 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
     cache_dir = Path(cache_dir).expanduser()
     output_cache = Path(output_cache).expanduser()
     workers = num_workers or min(mp.cpu_count(), 32)
+    
+    # Use spawn to prevent JAX multithreaded os.fork() deadlocks in Python 3.13
+    try:
+        mp.set_start_method("spawn", force=True)
+    except RuntimeError:
+        pass
 
     print(f"==================================================================")
     print(f" Multi-Core Orbax Cache ML/MM Pre-computer ({workers} CPU Workers)")
