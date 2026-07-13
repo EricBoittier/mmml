@@ -4392,6 +4392,7 @@ def _salvage_overlap_segment_progress(
             [read_path],
             label=f"overlap salvage ({overlap_context})",
             allow_in_memory=False,
+            mlpot_ctx=mlpot_ctx,
         )
     except RuntimeError:
         return None
@@ -7012,6 +7013,7 @@ def run_dynamics_with_io(
                         overlap,
                         overlap_context=overlap_context,
                         overlap_run_state_dir=overlap_run_state_dir,
+                        mlpot_ctx=mlpot_ctx,
                     )
                 if heat_ramp_spec is not None:
                     _apply_overlap_chunk_heat_ramp(

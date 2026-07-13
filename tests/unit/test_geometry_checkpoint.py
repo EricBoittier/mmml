@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -762,6 +763,48 @@ def test_restore_geometry_from_ladder_falls_back_to_in_memory(tmp_path):
         )
 
     assert path == Path("<in-memory>")
+
+
+def test_restore_geometry_from_ladder_rejects_collapsed_restart(tmp_path):
+    collapsed = tmp_path / "baseline.res"
+    intact = tmp_path / "mini.res"
+    collapsed.write_text("restart\n", encoding="utf-8")
+    intact.write_text("restart\n", encoding="utf-8")
+    reference = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=float,
+    )
+    collapsed_pos = reference * 0.01
+    ctx = SimpleNamespace(
+        atoms_per_monomer=[3],
+        geometry_mini_positions=reference.copy(),
+        geometry_baseline_positions=reference.copy(),
+    )
+
+    def positions(path):
+        return collapsed_pos if Path(path).name == "baseline.res" else reference
+
+    with (
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.first_valid_restart_path",
+            side_effect=lambda paths: Path(paths[0]).resolve(),
+        ),
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+            side_effect=positions,
+        ),
+        mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart"
+        ) as restore,
+    ):
+        selected = restore_geometry_from_ladder(
+            [collapsed, intact],
+            label="test recovery",
+            mlpot_ctx=ctx,
+        )
+
+    assert selected == intact.resolve()
+    restore.assert_called_once_with(intact.resolve())
 
 
 def test_attempt_overlap_early_abort_recovery_uses_crd_when_restarts_invalid(

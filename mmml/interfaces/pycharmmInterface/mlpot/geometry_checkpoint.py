@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
+
 from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import alternate_overlap_scratch
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
@@ -747,6 +749,7 @@ def restore_geometry_from_ladder(
     *,
     label: str = "geometry recovery",
     allow_in_memory: bool = False,
+    mlpot_ctx: Any | None = None,
 ) -> Path:
     """Load the first usable geometry source in ``candidates`` into CHARMM.
 
@@ -760,8 +763,73 @@ def restore_geometry_from_ladder(
         restore_charmm_state_from_restart,
     )
 
-    path = first_valid_restart_path(candidates)
-    if path is not None:
+    def _restart_is_internally_plausible(path: Path) -> bool:
+        """Reject readable restart templates with collapsed monomers."""
+        if mlpot_ctx is None:
+            return True
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            read_restart_coordinates,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+            _memory_extent_reference_sources,
+        )
+
+        candidate = read_restart_coordinates(path)
+        references = _memory_extent_reference_sources(mlpot_ctx)
+        if candidate is None or not references:
+            return candidate is not None
+        atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+        args = getattr(mlpot_ctx, "workflow_args", None)
+        if atoms_per is None and args is not None:
+            atoms_per = getattr(args, "_cluster_atoms_per_list", None)
+        if atoms_per is None:
+            model = getattr(mlpot_ctx, "pyCModel", None)
+            atoms_per = getattr(model, "_atoms_per_monomer", None)
+        if not atoms_per:
+            return True
+        counts = [int(x) for x in atoms_per]
+        if sum(counts) != int(candidate.shape[0]):
+            return False
+
+        # Accept when the candidate agrees with at least one intact in-memory
+        # mini/baseline reference.  Translation and PBC image changes cancel
+        # because only centered intramolecular radii are compared.
+        for raw_ref, _source in references:
+            ref = np.asarray(raw_ref, dtype=np.float64)
+            if ref.shape != candidate.shape:
+                continue
+            offset = 0
+            ratios: list[float] = []
+            valid = True
+            for count in counts:
+                cand_m = candidate[offset : offset + count]
+                ref_m = ref[offset : offset + count]
+                offset += count
+                if count < 2:
+                    continue
+                cand_r = float(np.sqrt(np.mean(np.sum((cand_m - cand_m.mean(0)) ** 2, axis=1))))
+                ref_r = float(np.sqrt(np.mean(np.sum((ref_m - ref_m.mean(0)) ** 2, axis=1))))
+                if ref_r <= 1.0e-8:
+                    valid = False
+                    break
+                ratios.append(cand_r / ref_r)
+            if valid and ratios and min(ratios) >= 0.5 and max(ratios) <= 2.0:
+                return True
+        return False
+
+    # Test every restart before applying READYN.  A syntactically valid file is
+    # not necessarily a physically usable template (coordinate-history scratch
+    # files have previously contained collapsed monomers).
+    for candidate in candidates:
+        path = first_valid_restart_path([Path(candidate)])
+        if path is None:
+            continue
+        if not _restart_is_internally_plausible(path):
+            print(
+                f"{label}: rejected internally implausible restart {path.name}",
+                flush=True,
+            )
+            continue
         restore_charmm_state_from_restart(path)
         print(f"{label}: restored CHARMM state from {path.name}", flush=True)
         return path
@@ -882,6 +950,7 @@ def attempt_overlap_early_abort_recovery(
                 paths,
                 label=label,
                 allow_in_memory=False,
+                mlpot_ctx=mlpot_ctx,
             )
             return GeometryRecoveryResult(
                 True,
@@ -973,6 +1042,7 @@ def attempt_overlap_blowup_geometry_rescue(
             candidates,
             label=label,
             allow_in_memory=False,
+            mlpot_ctx=mlpot_ctx,
         )
     except RuntimeError:
         tried = ", ".join(p.name for p in candidates) or "(none)"
@@ -1043,6 +1113,7 @@ def ensure_restartable_before_overlap_chunk(
     *,
     overlap_context: str,
     overlap_run_state_dir: Path | None = None,
+    mlpot_ctx: Any | None = None,
 ) -> None:
     """Reload from the geometry ladder when the latest restart is unusable."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
@@ -1060,7 +1131,12 @@ def ensure_restartable_before_overlap_chunk(
 
     label = f"pre-chunk geometry reload ({overlap_context})"
     try:
-        restore_geometry_from_ladder(candidates, label=label, allow_in_memory=True)
+        restore_geometry_from_ladder(
+            candidates,
+            label=label,
+            allow_in_memory=True,
+            mlpot_ctx=mlpot_ctx,
+        )
         return
     except RuntimeError:
         pass
