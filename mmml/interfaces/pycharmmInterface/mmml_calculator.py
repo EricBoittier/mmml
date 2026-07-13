@@ -384,6 +384,10 @@ def setup_calculator(
     ml_potential_mode: str = "physnet",
     jax_mm_spoof_psf: Path | str | None = None,
     electrostatics_damping_sigma: float | None = None,
+    mbd_checkpoint: str | Path | None = None,
+    mbd_weight: float = 1.0,
+    mbd_charge: float = 0.0,
+    mbd_spin: float = 1.0,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -1216,6 +1220,26 @@ def setup_calculator(
             _cached_update_mm_pairs[0] = update_fn
             _cached_mm_cutoff_key[0] = key
 
+    # Optional whole-system learned MBD dispersion correction. Checkpoints
+    # trained as E = E_spooky + mbd_weight * E_mbd must add the same term at
+    # inference, else the dispersion physics they were trained to complement is
+    # silently missing. Non-periodic, fully connected over the real atoms,
+    # matching how the MBD model was trained (see mbd_term.py).
+    _mbd_energy_force_fn = None
+    if mbd_checkpoint is not None:
+        from mmml.interfaces.pycharmmInterface.mbd_term import build_mbd_energy_force_fn
+
+        _mbd_energy_force_fn = build_mbd_energy_force_fn(
+            mbd_checkpoint,
+            weight=float(mbd_weight),
+            charge=float(mbd_charge),
+            spin=float(mbd_spin),
+            jit=False,  # inlined into the jitted spherical_cutoff_calculator
+        )
+        setup_rows.append(
+            ("mbd_correction", f"{Path(mbd_checkpoint)} (weight={float(mbd_weight):g})")
+        )
+
     @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
     def spherical_cutoff_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
@@ -1410,6 +1434,19 @@ def setup_calculator(
             outputs["out_E"] = outputs.get("out_E", 0) + outputs["mm_E"]
             outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_F"]
 
+        # Whole-system learned MBD dispersion correction (weight already applied
+        # inside the term). Uses PyCHARMM atom ordering directly; no reordering.
+        mbd_E = jnp.array(0.0, dtype=ml_jnp_dtype)
+        if _mbd_energy_force_fn is not None:
+            mbd_E_raw, mbd_F_raw = _mbd_energy_force_fn(positions, atomic_numbers)
+            mbd_E = jnp.where(jnp.isfinite(mbd_E_raw), mbd_E_raw, 0.0).astype(ml_jnp_dtype)
+            mbd_F = jnp.where(jnp.isfinite(mbd_F_raw), mbd_F_raw, 0.0).astype(
+                outputs["out_F"].dtype
+            )
+            outputs["out_E"] = outputs.get("out_E", 0) + mbd_E
+            outputs["out_F"] = outputs.get("out_F", 0) + mbd_F
+        outputs["mbd_E"] = mbd_E
+
         # Final validation: check for NaN/Inf in final forces
         final_forces = outputs["out_F"]
         
@@ -1486,6 +1523,7 @@ def setup_calculator(
             com_restraint_min_dist=com_restraint_min_dist,
             mm_vdw_E=outputs.get("mm_vdw_E", 0),
             mm_elec_E=outputs.get("mm_elec_E", 0),
+            mbd_E=outputs.get("mbd_E", 0.0),
         )
 
     def get_ML_energy_fn(

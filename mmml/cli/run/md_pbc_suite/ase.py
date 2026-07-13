@@ -838,6 +838,8 @@ def _factory_mmml(
     ml_compute_dtype: Optional[str] = None,
     electrostatics_damping_sigma: float | None = None,
     at_codes_override: np.ndarray | None = None,
+    mbd_checkpoint: str | Path | None = None,
+    mbd_weight: float = 1.0,
 ):
     if at_codes_override is not None:
         at_codes = np.asarray(at_codes_override, dtype=int)
@@ -884,6 +886,8 @@ def _factory_mmml(
         ml_max_active_dimers=ml_max_active_dimers,
         ml_compute_dtype=ml_compute_dtype,
         electrostatics_damping_sigma=electrostatics_damping_sigma,
+        mbd_checkpoint=mbd_checkpoint,
+        mbd_weight=mbd_weight,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(
@@ -1997,6 +2001,8 @@ def main(argv: list[str] | None = None) -> int:
             ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
             ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
             electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
+            mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
+            mbd_weight=getattr(args, "mbd_weight", 1.0),
         )
         atoms.calc = calc
         _save_cutoff_plot(

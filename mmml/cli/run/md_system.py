@@ -77,6 +77,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--checkpoint", type=Path, default=None, help="Model checkpoint path.")
     parser.add_argument(
+        "--mbd-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional learned MBD dispersion checkpoint. Adds a whole-system "
+            "E += mbd_weight * E_mbd correction to the hybrid ML/MM calculator "
+            "(ASE / JAX-MD backends). Required when the model was trained with an "
+            "additive MBD term, else that dispersion physics is silently omitted."
+        ),
+    )
+    parser.add_argument(
+        "--mbd-weight",
+        type=float,
+        default=1.0,
+        help="Weight for the --mbd-checkpoint correction (default 1.0; match training).",
+    )
+    parser.add_argument(
         "--jaxmd-unified",
         action="store_true",
         help=(

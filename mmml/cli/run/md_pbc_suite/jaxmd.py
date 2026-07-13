@@ -706,6 +706,8 @@ def main(argv: list[str] | None = None) -> int:
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
+        mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
+        mbd_weight=getattr(args, "mbd_weight", 1.0),
     )
     cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
     calc_result = factory(

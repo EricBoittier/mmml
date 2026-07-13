@@ -353,6 +353,8 @@ def _panel_label(backend: str) -> str:
         "spookynet_hybrid_muon_ep7": "Hybrid (Muon e7)",
         "spookynet_mbdzbl_ep2": "MBD+ZBL (e2)",
         "spookynet_hybrid_mbdzbl_ep2": "Hybrid (MBD+ZBL e2)",
+        "spookynet_hybrid_step3000": "SpookyNet (hybrid train s3000)",
+        "spookynet_hybrid_hybrid_step3000": "Hybrid decomposition (s3000)",
     }
     return PANEL_LABELS.get(backend, tuned_labels.get(backend, BACKEND_LABELS.get(backend, backend)))
 
@@ -586,6 +588,10 @@ def plot_2d_pes_for_pair(
             # global-minimum search land in a region with zero real data
             # (e.g. right where the clash/outlier filters had stripped every
             # point), reporting a fabricated minimum at an excluded geometry.
+            # Keep the physical interpolated surface for locating/reporting the
+            # minimum.  Clipping is a display-only operation; using the clipped
+            # array made deep wells report exactly the colour-scale floor.
+            Z_physical = Z_fine.copy()
             Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
 
             norm = Normalize(vmin=-vmax, vmax=vmax)
@@ -609,16 +615,16 @@ def plot_2d_pes_for_pair(
             cb.set_label("$E_{int}$ / kcal mol$^{-1}$", fontsize=COLORBAR_LABEL_FONTSIZE)
             cb.ax.tick_params(labelsize=TICK_LABEL_FONTSIZE)
 
-            # Mark minimum (NaN-aware: gaps outside the clean-data hull must
-            # never win the search)
-            if np.all(np.isnan(Z_fine)):
-                min_idx = None
-            else:
-                min_idx = np.unravel_index(np.nanargmin(Z_fine), Z_fine.shape)
-            if min_idx is None:
+            # Report and mark a real sampled geometry.  The smoothed surface is
+            # presentation-only and can attenuate a narrow well or move its
+            # apparent minimum between evaluated configurations.
+            if df_be.empty:
                 min_d = min_o = min_e = None
             else:
-                min_d, min_o, min_e = D_fine[min_idx[1]], O_fine[min_idx[0]], Z_fine[min_idx]
+                best = df_be.loc[df_be["E_int"].idxmin()]
+                min_d = float(best["distance_angstrom"])
+                min_o = float(best["offset_angstrom"])
+                min_e = float(best["E_int"])
 
         # Guide lines linking this heatmap back to the filmstrip snapshots above
         for d in snap_distances:
@@ -635,15 +641,15 @@ def plot_2d_pes_for_pair(
         ax.set_xlabel(r"$d$ / Å", fontsize=AXIS_LABEL_FONTSIZE)
         ax.set_ylabel(r"$c$ / Å", fontsize=AXIS_LABEL_FONTSIZE)
         ax.tick_params(labelsize=TICK_LABEL_FONTSIZE)
-        ax.set_title(
-            _panel_label(backend),
-            loc="left", fontsize=PANEL_TITLE_FONTSIZE, fontweight="bold",
-        )
+        panel_title = _panel_label(backend)
         if min_e is not None and np.isfinite(min_e):
-            ax.set_title(
-                rf"$E_{{\mathrm{{min}}}}={min_e:.2f}$",
-                loc="right", fontsize=PANEL_TITLE_FONTSIZE, fontweight="bold",
-            )
+            panel_title += "\n" + rf"$E_{{\mathrm{{min}}}}={min_e:.2f}$ kcal mol$^{{-1}}$"
+        ax.set_title(
+            panel_title,
+            loc="left",
+            fontsize=PANEL_TITLE_FONTSIZE,
+            fontweight="bold",
+        )
 
         # Highlighted render of the located minimum, overlaid directly on the
         # surface as a small inset anchored near its actual (d, offset)
