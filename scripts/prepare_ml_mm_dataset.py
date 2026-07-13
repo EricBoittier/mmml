@@ -274,8 +274,8 @@ def process_single_frame(args_tuple):
 
 
 def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_structures: int | None = None, num_workers: int | None = None):
-    cache_dir = Path(cache_dir).expanduser()
-    output_cache = Path(output_cache).expanduser()
+    cache_dir = Path(cache_dir).expanduser().resolve()
+    output_cache = Path(output_cache).expanduser().resolve()
     workers = num_workers or min(mp.cpu_count(), 32)
     
     # Use spawn to prevent JAX multithreaded os.fork() deadlocks in Python 3.13
