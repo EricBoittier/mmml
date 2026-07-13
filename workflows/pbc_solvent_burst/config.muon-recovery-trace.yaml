@@ -1,0 +1,64 @@
+# Focused DCM:10 recovery-transition diagnostic using the current Muon checkpoint.
+solvents: [DCM]
+cluster_sizes: [10]
+temperatures: [150.0]
+box_sizes: [32.0]
+checkpoint: artifacts/spooky_so3lr_muon_tight/epoch-0001_params.json
+output_root: artifacts/pbc_muon_epoch1_recovery_trace
+seed_base: 456
+jaxmd_burst_ps: 0.02
+jaxmd_bursts: 1
+pycharmm_equi_ps: 0.02
+pycharmm_equi_legs: 1
+ps_heat: 0.02
+n_heat_segments: 1
+heat_firstt: 20.0
+heat_thermostat: hoover
+dt_fs: 0.1
+pressure: 1.0
+ml_compute_dtype: float64
+cleanup_strategy:
+  name: pbc_hybrid_muon_recovery_trace
+  charmm_mm:
+    pretreat_on_pycharmm: true
+    ps_heat: 1.0
+    ps_equi: 1.0
+    ps_prod: 1.0
+    overlap_rescue_sd_steps: 2000
+    overlap_rescue_abnr_steps: 4000
+  mlpot:
+    no_echeck_heat: true
+    dynamics_overlap_action: rescue
+    dynamics_overlap_min_distance: 1.5
+    dynamics_intra_min_distance: 0.5
+    dynamics_overlap_check_interval: 100
+    dynamics_overlap_memory_handoff: true
+    bonded_mm_mini: true
+    bonded_mm_mini_after: mini,heat,equi
+    bonded_mm_mini_steps: 2000
+    charmm_pre_minimize: true
+    charmm_sd_steps: 2000
+    charmm_abnr_steps: 4000
+    mini_nstep: 2000
+    dcd_nsavc: 50
+    dyn_nprint: 50
+    save_run_state: true
+  jaxmd_pbc:
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 10.0
+    handoff_quality_action: minimize
+    jaxmd_minimize_steps: 500
+    jaxmd_pbc_minimize_steps: 500
+    dynamics_overlap_action: rescue
+    overlap_rescue_sd_steps: 2000
+    overlap_rescue_abnr_steps: 4000
+    steps_per_recording: 50
+    jax_md_update_interval: 1
+mm_switch_on: 6.0
+mm_switch_width: 4.0
+ml_switch_width: 1.0
+spacing: 5.5
+packmol_tolerance: 2.0
+ml_gpu_count: 1
+ml_batch_size: 512
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh

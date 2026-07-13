@@ -55,7 +55,6 @@ from mmml.models.mbd.calculator import (
     load_mbd_model,
 )
 from mmml.models.mbd.model import mbd_energy_and_forces
-from mmml.models.multipoles.electrostatics import load_multipole_model
 
 ANGSTROM_TO_BOHR = 1.0 / 0.529177210903
 
@@ -888,6 +887,30 @@ def save_epoch_checkpoint(
     save_training_checkpoint(workdir / f"epoch-{epoch:04d}", ckpt)
 
 
+def save_step_checkpoint(
+    workdir: Path,
+    epoch: int,
+    global_step: int,
+    state: train_state.TrainState,
+    model: SpookyPhysNet,
+    args: argparse.Namespace,
+    metrics: dict[str, float],
+) -> None:
+    ckpt = {
+        "model": state,
+        "params": state.params,
+        "model_attributes": {
+            **model.return_attributes(),
+            "model_type": "spooky",
+        },
+        "config": vars(args),
+        "epoch": epoch,
+        "global_step": global_step,
+        "metrics": metrics,
+    }
+    save_training_checkpoint(workdir / f"step-{global_step:08d}", ckpt)
+
+
 def train(args: argparse.Namespace, cache_path: Path) -> None:
     data = restore_cached_data(cache_path)
     has_mol_id = "mol_id" in data
@@ -1060,6 +1083,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     multipole_model = None
     multipole_params = None
     if args.multipole_checkpoint is not None:
+        from mmml.models.multipoles.electrostatics import load_multipole_model
+
         multipole_model, multipole_params = load_multipole_model(
             Path(args.multipole_checkpoint).expanduser()
         )
@@ -1160,10 +1185,22 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             state, metrics = train_step(state, batch)
             train_metrics.append(metrics)
             log_window_metrics.append(metrics)
+            global_step = (epoch - 1) * batches_per_epoch + step
+            if args.save_every_steps and global_step % args.save_every_steps == 0:
+                unreplicated = jax_utils.unreplicate(state)
+                save_step_checkpoint(
+                    workdir,
+                    epoch,
+                    global_step,
+                    unreplicated,
+                    model,
+                    args,
+                    {"train": mean_metrics(train_metrics[-args.log_every_steps :])},
+                )
+                print(f"Saved mid-epoch checkpoint at global step {global_step}", flush=True)
             if step % args.log_every_steps == 0:
                 m = mean_metrics(log_window_metrics)
                 log_window_metrics = []
-                global_step = (epoch - 1) * batches_per_epoch + step
                 pct_done = 100.0 * global_step / max(1, total_planned_steps)
                 line = (
                     f"epoch {epoch:04d} step {step:06d} "
@@ -1301,7 +1338,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--steps-per-epoch", type=int, default=None)
     parser.add_argument("--valid-steps", type=int, default=100)
-    parser.add_argument("--save-every", type=int, default=1)
+    parser.add_argument("--save-every", type=int, default=1, help="Save a checkpoint every N epochs.")
+    parser.add_argument(
+        "--save-every-steps",
+        type=int,
+        default=0,
+        help=(
+            "Additionally save a mid-epoch checkpoint every N optimizer steps "
+            "(global step count, across epochs). 0 disables this (default)."
+        ),
+    )
     parser.add_argument(
         "--optimizer",
         choices=("adamw", "muon"),

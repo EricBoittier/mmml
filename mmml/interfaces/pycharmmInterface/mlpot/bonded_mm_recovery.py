@@ -22,6 +22,89 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 PathLike = str | Path
 
 
+def write_overlap_recovery_trace(
+    ctx: MlpotContext,
+    *,
+    phase: str,
+    context: str,
+    evaluate: bool = True,
+) -> Path | None:
+    """Write an opt-in coordinate/force snapshot around overlap recovery.
+
+    Set ``MMML_OVERLAP_RECOVERY_TRACE_DIR`` to enable this diagnostic.  Keeping
+    it environment-gated avoids extra ``ENER FORCE`` evaluations in production.
+    """
+    import json
+    import os
+    import re
+
+    root = os.environ.get("MMML_OVERLAP_RECOVERY_TRACE_DIR", "").strip()
+    if not root:
+        return None
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_grms,
+        charmm_grms_after_ener_force,
+        charmm_total_forces_kcalmol_A,
+        mlpot_last_hybrid_forces_kcalmol_A,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+    )
+
+    out_dir = Path(root).expanduser()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    safe_context = re.sub(r"[^A-Za-z0-9_.-]+", "_", context).strip("_")
+    safe_phase = re.sub(r"[^A-Za-z0-9_.-]+", "_", phase).strip("_")
+    stem = f"{safe_context}__{safe_phase}"
+
+    grms = (
+        float(charmm_grms_after_ener_force(silent=True))
+        if evaluate
+        else float(charmm_grms())
+    )
+    positions = np.asarray(get_charmm_positions_array(), dtype=np.float64)
+    total_forces = np.asarray(charmm_total_forces_kcalmol_A(), dtype=np.float64)
+    py_model = getattr(ctx, "pyCModel", None)
+    hybrid_forces = mlpot_last_hybrid_forces_kcalmol_A(py_model)
+    if hybrid_forces is None:
+        hybrid_forces = np.empty((0, 3), dtype=np.float64)
+    else:
+        hybrid_forces = np.asarray(hybrid_forces, dtype=np.float64)
+
+    npz_path = out_dir / f"{stem}.npz"
+    np.savez_compressed(
+        npz_path,
+        positions_A=positions,
+        total_forces_kcalmol_A=total_forces,
+        hybrid_forces_kcalmol_A=hybrid_forces,
+    )
+    max_total = float(np.max(np.linalg.norm(total_forces, axis=1)))
+    max_hybrid = (
+        float(np.max(np.linalg.norm(hybrid_forces, axis=1)))
+        if hybrid_forces.size
+        else None
+    )
+    metadata = {
+        "phase": phase,
+        "context": context,
+        "grms_kcalmol_A": grms,
+        "max_total_force_kcalmol_A": max_total,
+        "max_hybrid_force_kcalmol_A": max_hybrid,
+        "n_atoms": int(positions.shape[0]),
+        "npz": npz_path.name,
+    }
+    (out_dir / f"{stem}.json").write_text(
+        json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+    )
+    print(
+        f"overlap recovery trace: {phase} GRMS={grms:.6f} "
+        f"max|F|={max_total:.6f} -> {npz_path}",
+        flush=True,
+    )
+    return npz_path
+
+
 @dataclass(frozen=True)
 class MmStrainBaseline:
     """Reference MM strain after the first CHARMM MM-only pre-minimize."""
@@ -973,6 +1056,11 @@ def finalize_overlap_rescue_for_dynamics(
     )
 
     sync_charmm_lists_after_mini(quiet=True)
+    write_overlap_recovery_trace(
+        ctx,
+        phase="post_rescue_pre_reregister",
+        context=context,
+    )
     # Coordinate-only rescue (repack / selective rebuild): reattach MLpot without
     # CGENFF READ PARAM — append clears PBC nb/image lists on all-ML clusters.
     ctx.reregister_mlpot(verbose=verbose, reregister_params=False)
@@ -982,6 +1070,12 @@ def finalize_overlap_rescue_for_dynamics(
         context=f"{context} (post-rescue)",
         reregister=False,
         verbose=verbose,
+    )
+    write_overlap_recovery_trace(
+        ctx,
+        phase="post_reregister_first_refresh",
+        context=context,
+        evaluate=False,
     )
 
     mini_n = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)

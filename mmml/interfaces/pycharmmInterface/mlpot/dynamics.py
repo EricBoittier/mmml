@@ -7562,6 +7562,16 @@ def run_dynamics_with_io(
                         f"overlap ({overlap_context}): geometry check at step {steps_done}",
                         flush=True,
                     )
+                    if mlpot_ctx is not None:
+                        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                            write_overlap_recovery_trace,
+                        )
+
+                        write_overlap_recovery_trace(
+                            mlpot_ctx,
+                            phase="pre_overlap_check",
+                            context=f"{overlap_context} at step {steps_done}",
+                        )
                     _, rescued = check_dynamics_overlap(
                         overlap,
                         context=overlap_context,
