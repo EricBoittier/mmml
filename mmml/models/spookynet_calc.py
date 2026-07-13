@@ -68,12 +68,13 @@ class SpookyNetCalculator(Calculator):
         spin_multiplicity: float = 1.0,
         mbd_checkpoint: str | Path | bool | None = None,
         mbd_weight: float | None = None,
+        use_orbax: bool | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         checkpoint = Path(checkpoint).expanduser()
         ckpt = load_model_checkpoint(
-            checkpoint, use_orbax=False, load_params=True, load_config=True
+            checkpoint, use_orbax=use_orbax, load_params=True, load_config=True
         )
         params = ckpt.get("params")
         if params is None:

@@ -350,6 +350,15 @@ def load_model_checkpoint(
     elif (checkpoint_dir / "params.json").exists():
         json_params_path = checkpoint_dir / "params.json"
 
+    # Auto-detect use_orbax if None or default False and no json/pkl found
+    if use_orbax is None:
+        if json_params_path is not None and json_params_path.exists():
+            use_orbax = False
+        elif (checkpoint_dir / "params").exists() or (checkpoint_dir / "default").exists() or (checkpoint_dir / "_checkpoint").exists() or (checkpoint_dir / "manifest.ocp").exists():
+            use_orbax = True
+        else:
+            use_orbax = False
+
     result = {}
 
     json_payload = None
@@ -365,17 +374,35 @@ def load_model_checkpoint(
     if load_params:
         if use_orbax:
             try:
-                from orbax.checkpoint import PyTreeCheckpointer
-                checkpointer = PyTreeCheckpointer()
-                params_path = checkpoint_dir / "params"
-                if params_path.exists():
-                    result['params'] = checkpointer.restore(params_path)
+                import orbax.checkpoint as ocp
+                checkpointer = ocp.PyTreeCheckpointer()
+                params_candidates = [
+                    checkpoint_dir / "params",
+                    checkpoint_dir / "default",
+                    checkpoint_dir,
+                ]
+                restored = None
+                for path in params_candidates:
+                    if path.exists():
+                        try:
+                            restored = checkpointer.restore(path)
+                            if restored is not None:
+                                break
+                        except Exception:
+                            pass
+                if restored is not None:
+                    if isinstance(restored, dict) and "params" in restored:
+                        result["params"] = restored["params"]
+                    else:
+                        result["params"] = restored
                 else:
-                    raise FileNotFoundError(f"Parameters not found at {params_path}")
-            except ImportError:
-                print("Warning: orbax not available, trying pickle")
+                    raise FileNotFoundError(f"Parameters not found via Orbax at {checkpoint_dir}")
+            except Exception as err:
+                # If explicit use_orbax=True failed, log and fall back to json/pkl search if available
+                if json_params_path is None and not (checkpoint_dir / "params.pkl").exists():
+                    raise FileNotFoundError(f"Could not load Orbax checkpoint at {checkpoint_dir}: {err}") from err
                 use_orbax = False
-        
+
         if not use_orbax:
             # Try JSON file first (preferred for portability)
             if json_params_path is not None and json_params_path.exists():
@@ -406,7 +433,7 @@ def load_model_checkpoint(
                     else:
                         raise FileNotFoundError(
                             f"Parameters not found in {checkpoint_dir}. "
-                            f"Tried: params.json, params.pkl, and alternatives."
+                            f"Tried: params.json, params.pkl, Orbax format, and alternatives."
                         )
                 
                 with open(params_path, 'rb') as f:
@@ -422,18 +449,30 @@ def load_model_checkpoint(
                         result['params'] = checkpoint_data
                 else:
                     result['params'] = checkpoint_data
-    
+
     # Load config
     if load_config and "config" not in result:
-        config_path = checkpoint_dir / "model_config.json"
-        if not config_path.exists():
+        config_candidates = [
+            checkpoint_dir / "model_config.json",
+            checkpoint_dir / "run_config.json",
+            checkpoint_dir.parent / "model_config.json",
+            checkpoint_dir.parent / "run_config.json",
+        ]
+        config_loaded = False
+        for config_path in config_candidates:
+            if config_path.exists():
+                with open(config_path, 'r', encoding="utf-8") as f:
+                    result['config'] = json.load(f)
+                config_loaded = True
+                break
+        if not config_loaded:
             # Try pickle version
             config_pkl_path = checkpoint_dir / "model_config.pkl"
             if config_pkl_path.exists():
                 with open(config_pkl_path, 'rb') as f:
                     result['config'] = pickle.load(f)
             else:
-                print(f"Warning: Config not found at {config_path}")
+                print(f"Warning: Config not found at {checkpoint_dir}")
         else:
             with open(config_path, 'r') as f:
                 result['config'] = json.load(f)
