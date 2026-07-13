@@ -620,6 +620,8 @@ def init_state(
         batch_mask=batch["batch_mask"],
         atom_mask=batch["atom_mask"],
         compute_forces=False,
+        cgenff_master_sigmas=batch.get("cgenff_master_sigmas"),
+        cgenff_master_epsilons=batch.get("cgenff_master_epsilons"),
     )
     tx = optax.chain(
         optax.clip_by_global_norm(args.clip_global_norm),
