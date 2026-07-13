@@ -478,61 +478,37 @@ def make_steps(
             batch_mask=batch["batch_mask"],
             atom_mask=batch["atom_mask"],
             mol_id=batch.get("mol_id"),
-            cgenff_type_idx=batch.get("cgenff_type_idx"),
-            cgenff_master_sigmas=batch.get("cgenff_master_sigmas"),
-            cgenff_master_epsilons=batch.get("cgenff_master_epsilons"),
+            cgenff_type_idx=None if args.no_cgenff_vdw else batch.get("cgenff_type_idx"),
+            cgenff_master_sigmas=None if args.no_cgenff_vdw else batch.get("cgenff_master_sigmas"),
+            cgenff_master_epsilons=None if args.no_cgenff_vdw else batch.get("cgenff_master_epsilons"),
         )
         spooky_energy = out["energy"].reshape(-1, 1)
         spooky_forces = out["forces"].reshape(batch["F"].shape)
         mbd_energy = jnp.zeros_like(spooky_energy)
         mbd_forces = jnp.zeros_like(spooky_forces)
         if mbd_model is not None:
-
-            def _mbd_pass(atom_mask_m, edge_mask_m):
-                out_m, forces_au_m = mbd_energy_and_forces(
-                    mbd_model,
-                    mbd_params,
-                    positions=batch["R"] * ANGSTROM_TO_BOHR,
-                    atomic_numbers=batch["Z"],
-                    charge=batch["Q_total"].reshape(-1),
-                    spin=batch["S_total"].reshape(-1),
-                    dst_idx=batch["dst_idx"],
-                    src_idx=batch["src_idx"],
-                    batch_segments=batch["batch_segments"],
-                    batch_size=per_device_batch_size,
-                    atom_mask=atom_mask_m,
-                    edge_mask=edge_mask_m,
-                )
-                return out_m["energy"], forces_au_m
-
-            mol_id = batch.get("mol_id")
-            if mol_id is not None:
-                # Counterpoise-style interaction dispersion: E_int = E(AB) - E(A) - E(B),
-                # evaluated at the fixed complex geometry. The MBD checkpoint was trained
-                # on isolated monomers, so it must be run once per fragment (with the other
-                # fragment's atoms/edges masked out) rather than once on the whole complex,
-                # otherwise each monomer's own intra-fragment dispersion gets double-counted
-                # against the interaction-energy target.
-                mol_id_flat = mol_id.reshape(-1)
-                dst_mol = jnp.take(mol_id_flat, batch["dst_idx"])
-                src_mol = jnp.take(mol_id_flat, batch["src_idx"])
-                same_monomer = (dst_mol == src_mol).astype(batch["batch_mask"].dtype)
-
-                e_ab, f_ab = _mbd_pass(batch["atom_mask"], batch["batch_mask"])
-                e_a, f_a = _mbd_pass(
-                    batch["atom_mask"] * (mol_id_flat == 0).astype(batch["atom_mask"].dtype),
-                    batch["batch_mask"] * same_monomer * (dst_mol == 0).astype(same_monomer.dtype),
-                )
-                e_b, f_b = _mbd_pass(
-                    batch["atom_mask"] * (mol_id_flat == 1).astype(batch["atom_mask"].dtype),
-                    batch["batch_mask"] * same_monomer * (dst_mol == 1).astype(same_monomer.dtype),
-                )
-                mbd_energy = (e_ab - e_a - e_b).reshape(-1, 1) * HARTREE_TO_EV
-                mbd_forces = (f_ab - f_a - f_b).reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
-            else:
-                e_ab, f_ab = _mbd_pass(batch["atom_mask"], batch["batch_mask"])
-                mbd_energy = e_ab.reshape(-1, 1) * HARTREE_TO_EV
-                mbd_forces = f_ab.reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
+            # E (and F) in this dataset are total complex energies (confirmed: they
+            # scale with atom count, ~-5 eV/atom, not the O(0.01-2 eV) size-independent
+            # magnitude an interaction energy would have). So MBD is a whole-system
+            # dispersion correction here, same as for single molecules — no counterpoise
+            # E(AB)-E(A)-E(B) decomposition. mol_id is still used elsewhere (electrostatics,
+            # CGenFF LJ) to mask those terms to inter-monomer pairs only.
+            mbd_output, mbd_forces_au = mbd_energy_and_forces(
+                mbd_model,
+                mbd_params,
+                positions=batch["R"] * ANGSTROM_TO_BOHR,
+                atomic_numbers=batch["Z"],
+                charge=batch["Q_total"].reshape(-1),
+                spin=batch["S_total"].reshape(-1),
+                dst_idx=batch["dst_idx"],
+                src_idx=batch["src_idx"],
+                batch_segments=batch["batch_segments"],
+                batch_size=per_device_batch_size,
+                atom_mask=batch["atom_mask"],
+                edge_mask=batch["batch_mask"],
+            )
+            mbd_energy = mbd_output["energy"].reshape(-1, 1) * HARTREE_TO_EV
+            mbd_forces = mbd_forces_au.reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
         composite_mbd_weight = mbd_weight * mbd_scale
         energy_pred = spooky_energy + composite_mbd_weight * mbd_energy
         forces_pred = spooky_forces + composite_mbd_weight * mbd_forces
@@ -636,7 +612,11 @@ def init_state(
         )
     rng.shuffle(init_indices)
     batch = build_spooky_batch_from_flat_data(data, init_indices)
-    if "cgenff_master_sigmas" in data and "cgenff_master_epsilons" in data:
+    if (
+        not args.no_cgenff_vdw
+        and "cgenff_master_sigmas" in data
+        and "cgenff_master_epsilons" in data
+    ):
         batch["cgenff_master_sigmas"] = jnp.asarray(data["cgenff_master_sigmas"], dtype=jnp.float32)
         batch["cgenff_master_epsilons"] = jnp.asarray(data["cgenff_master_epsilons"], dtype=jnp.float32)
     variables = model.init(
@@ -653,9 +633,9 @@ def init_state(
         atom_mask=batch["atom_mask"],
         compute_forces=False,
         mol_id=batch.get("mol_id"),
-        cgenff_type_idx=batch.get("cgenff_type_idx"),
-        cgenff_master_sigmas=batch.get("cgenff_master_sigmas"),
-        cgenff_master_epsilons=batch.get("cgenff_master_epsilons"),
+        cgenff_type_idx=None if args.no_cgenff_vdw else batch.get("cgenff_type_idx"),
+        cgenff_master_sigmas=None if args.no_cgenff_vdw else batch.get("cgenff_master_sigmas"),
+        cgenff_master_epsilons=None if args.no_cgenff_vdw else batch.get("cgenff_master_epsilons"),
     )
     tx = optax.chain(
         optax.clip_by_global_norm(args.clip_global_norm),
@@ -868,20 +848,29 @@ def save_epoch_checkpoint(
 
 def train(args: argparse.Namespace, cache_path: Path) -> None:
     data = restore_cached_data(cache_path)
-    has_cgenff_lj = (
+    has_mol_id = "mol_id" in data
+    has_cgenff_data = (
         "cgenff_master_sigmas" in data
         and "cgenff_master_epsilons" in data
         and "cgenff_type_idx" in data
-        and "mol_id" in data
+        and has_mol_id
     )
-    if has_cgenff_lj:
+    has_cgenff_lj = has_cgenff_data and not args.no_cgenff_vdw
+    if has_cgenff_data:
         n_types = int(np.asarray(data["cgenff_master_sigmas"]).shape[0])
-        print(
-            f"CGenFF LJ data found in cache: {n_types} atom types "
-            f"(cgenff_master_sigmas/epsilons, cgenff_type_idx, mol_id) — "
-            f"ML/MM residual VdW term is active",
-            flush=True,
-        )
+        if has_cgenff_lj:
+            print(
+                f"CGenFF LJ data found in cache: {n_types} atom types "
+                f"(cgenff_master_sigmas/epsilons, cgenff_type_idx, mol_id) — "
+                f"ML/MM residual VdW term is active",
+                flush=True,
+            )
+        else:
+            print(
+                f"CGenFF LJ data found in cache ({n_types} atom types) but "
+                f"--no-cgenff-vdw was passed — empirical LJ term is disabled",
+                flush=True,
+            )
     else:
         print("No CGenFF LJ data in cache — training a plain ML potential", flush=True)
     n_molecules = int(np.asarray(data["E"]).shape[0])
@@ -1013,14 +1002,11 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     mbd_params = None
     if args.mbd_checkpoint is not None:
         mbd_model, mbd_params = load_mbd_model(Path(args.mbd_checkpoint).expanduser())
-        mbd_mode = (
-            "counterpoise interaction dispersion E(AB)-E(A)-E(B) (mol_id found)"
-            if has_cgenff_lj
-            else "whole-system dispersion (no mol_id — treating batch as single molecules)"
-        )
         print(
             f"Using frozen MBD correction from {Path(args.mbd_checkpoint).expanduser()} "
-            f"with weight {args.mbd_weight:g}: {mbd_mode}",
+            f"with weight {args.mbd_weight:g}: whole-system dispersion added directly to "
+            f"the total-energy target (E in this cache scales with atom count, so it's a "
+            f"total complex energy, not an interaction energy — no counterpoise decomposition)",
             flush=True,
         )
     state = init_state(model, data, train_buckets, args)
@@ -1301,6 +1287,17 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Frozen QCML MBD checkpoint. Its energy/forces are added to Spooky's "
             "prediction, so Spooky trains the remaining residual."
+        ),
+    )
+    parser.add_argument(
+        "--no-cgenff-vdw",
+        action="store_true",
+        help=(
+            "Disable the empirical CGenFF Lennard-Jones term even if cgenff_master_"
+            "sigmas/epsilons/cgenff_type_idx are present in the cache. Useful when "
+            "training with --mbd-checkpoint instead of empirical LJ dispersion, to "
+            "avoid double-counting dispersion physics between the two. mol_id-based "
+            "electrostatics masking and MBD counterpoise decomposition are unaffected."
         ),
     )
     parser.add_argument(
