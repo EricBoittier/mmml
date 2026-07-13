@@ -484,6 +484,36 @@ without reading the legend first.
 
 ![linewidth/alpha hierarchy](plot-style-gallery-assets/chart_linewidth_hierarchy.png)
 
+## Finite-difference validation: analytic vs. numerical forces
+
+A finite-difference (FD) check compares an analytic force (autodiff, or a
+hand-derived gradient) against a central-difference numerical derivative of
+the energy — the standard way to catch a sign error, a missing term, or a
+broken chain rule in a force implementation. Regenerate with
+`python scripts/render_fd_test_gallery.py`. Two real checks, deliberately
+shown side by side rather than cherry-picking the passing one:
+
+- **SMD bias restraint** (`mmml.md.energy.terms.SMDBiasTerm`, the same check
+  as `tests/unit/test_md_energy_terms.py::test_ase_forces_match_finite_difference`)
+  — PASSES, `atol=1e-4`.
+- **CHARMM/mlpot ML-only calculator**
+  (`mmml/interfaces/pycharmmInterface/mlpot/derivative_test.py`, saved
+  result at `artifacts/pycharmm_mlpot/mlpot_force_fd.json`) — currently
+  FAILS all 60 checked force components against `tol=0.005 kcal/mol/Å`, with
+  a max discrepancy of 1.52 kcal/mol/Å and rms 0.75. This is real, current
+  state, not historical — worth fixing before trusting forces from that
+  integration path.
+
+![finite-difference parity and residuals](plot-style-gallery-assets/chart_fd_parity_residuals.png)
+
+The per-atom breakdown of the failing check shows the discrepancy spread
+roughly evenly across all 20 atoms rather than concentrated on a few — that
+pattern is more consistent with a systematic force-term issue (a missing or
+mis-signed contribution present at every atom) than a boundary/indexing bug
+that would only hit a handful of atoms:
+
+![per-atom max discrepancy](plot-style-gallery-assets/chart_fd_mlpot_per_atom.png)
+
 ## How to pick
 
 ```python
