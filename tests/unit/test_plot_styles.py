@@ -15,13 +15,20 @@ from mmml.utils.plotting.styles import (
     MULTI_CMAP_SHORTLIST,
     OKABE_ITO_PALETTE,
     PLOT_STYLES,
+    STATUS_COLORS,
+    STATUS_HATCHES,
+    STYLE_DISPLAY_ORDER,
     apply_plot_style,
+    assert_no_text_overlap,
     comparison_colors,
+    find_overlapping_text,
     get_plot_style,
     latex_available,
     legend_outside,
     list_plot_styles,
     render_latex_table,
+    status_color,
+    status_hatch,
 )
 
 
@@ -188,4 +195,81 @@ def test_legend_outside_auto_side_tall_figure_goes_right() -> None:
     legend = legend_outside(ax, side="auto")
     # right-side legends are anchored via bbox_to_anchor=(1.02, 1.0)
     assert legend.get_bbox_to_anchor().transformed(ax.transAxes.inverted()).x0 > 1.0
+    plt.close(fig)
+
+
+def test_style_display_order_covers_every_registered_style() -> None:
+    assert set(STYLE_DISPLAY_ORDER) == set(PLOT_STYLES)
+    assert STYLE_DISPLAY_ORDER[0] == "icml"
+
+
+def test_status_colors_and_hatches_share_the_same_keys() -> None:
+    assert set(STATUS_COLORS) == set(STATUS_HATCHES) == {
+        "good", "warning", "serious", "critical", "neutral",
+    }
+    assert len(set(STATUS_COLORS.values())) == 5  # all distinct hex colors
+
+
+def test_status_color_resolves_aliases() -> None:
+    assert status_color("success") == status_color("good") == STATUS_COLORS["good"]
+    assert status_color("fail") == status_color("critical") == STATUS_COLORS["critical"]
+
+
+def test_status_color_rejects_unknown_level() -> None:
+    with pytest.raises(ValueError, match="Unknown status level"):
+        status_color("not-a-real-level")
+
+
+def test_status_hatch_good_is_unhatched() -> None:
+    assert status_hatch("good") == ""
+    assert status_hatch("critical") != ""
+
+
+def test_find_overlapping_text_clean_figure_has_no_overlaps() -> None:
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    apply_plot_style("icml")
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    ax.plot(np.linspace(0, 10, 50), np.sin(np.linspace(0, 10, 50)))
+    ax.set_title("A reasonably sized figure")
+    ax.set_xlabel("x")
+    ax.set_ylabel("sin(x)")
+    assert find_overlapping_text(fig) == []
+    assert_no_text_overlap(fig)  # should not raise
+    plt.close(fig)
+
+
+def test_legend_outside_left_does_not_collide_with_ylabel() -> None:
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    apply_plot_style("icml")
+    fig, ax = plt.subplots(figsize=(7, 5))
+    x = np.arange(50)
+    ax.plot(x, -75 + 0.1 * np.sin(x / 5), label="a fairly long series label")
+    ax.set_xlim(0, 49)
+    ax.set_ylabel("E(t) - E(0)  (eV)")
+    legend_outside(ax, side="left", fontsize=10)
+    overlaps = find_overlapping_text(fig)
+    # The regression this guards: the legend's own text used to sit right on
+    # top of the y-tick labels/ylabel when anchored at the old -0.02 offset.
+    label_related = [(a, b) for a, b in overlaps
+                      if "series label" in a or "series label" in b
+                      or "E(t)" in a or "E(t)" in b]
+    assert label_related == [], overlaps
+    plt.close(fig)
+
+
+def test_find_overlapping_text_detects_a_real_collision() -> None:
+    import matplotlib.pyplot as plt
+
+    apply_plot_style("icml")
+    fig, ax = plt.subplots(figsize=(3, 2))
+    ax.set_title("Very Long Overlapping Title Text Here", fontsize=22, y=0.85)
+    ax.set_ylabel("y")
+    overlaps = find_overlapping_text(fig)
+    assert overlaps, "expected a real overlap in a deliberately cramped figure"
+    with pytest.raises(AssertionError, match="Overlapping text"):
+        assert_no_text_overlap(fig)
     plt.close(fig)

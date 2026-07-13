@@ -32,11 +32,18 @@ __all__ = [
     "MULTI_CMAP_SHORTLIST",
     "LINE_STYLE_CYCLE",
     "MARKER_CYCLE",
+    "STATUS_COLORS",
+    "STATUS_HATCHES",
+    "status_color",
+    "status_hatch",
+    "STYLE_DISPLAY_ORDER",
     "shared_axis_labels",
     "booktabs_table",
     "latex_available",
     "render_latex_table",
     "latex_table_image",
+    "find_overlapping_text",
+    "assert_no_text_overlap",
 ]
 
 
@@ -108,7 +115,7 @@ _NATURE_RC = {
     "axes.labelsize": 9,
     "axes.titlesize": 10,
     "axes.titleweight": "bold",
-    "axes.titlepad": 10.0,
+    "axes.titlepad": 14.0,
     "axes.grid": True,
     "grid.alpha": 0.25,
     "grid.linestyle": "-",
@@ -143,7 +150,7 @@ _XMGRACE_RC = {
     "axes.labelsize": 11,
     "axes.titlesize": 12,
     "axes.titleweight": "normal",
-    "axes.titlepad": 10.0,
+    "axes.titlepad": 14.0,
     "axes.grid": True,
     "grid.alpha": 0.55,
     "grid.linestyle": ":",
@@ -177,7 +184,7 @@ _GOOGLE_RC = {
     "axes.labelsize": 11,
     "axes.titlesize": 12,
     "axes.titleweight": "medium",
-    "axes.titlepad": 12.0,
+    "axes.titlepad": 16.0,
     "axes.grid": True,
     "grid.alpha": 0.45,
     "grid.linestyle": "-",
@@ -212,7 +219,7 @@ _TRON_RC = {
     "axes.labelsize": 11,
     "axes.titlesize": 12,
     "axes.titleweight": "bold",
-    "axes.titlepad": 12.0,
+    "axes.titlepad": 16.0,
     "axes.grid": True,
     "grid.alpha": 0.35,
     "grid.linestyle": "-",
@@ -266,7 +273,7 @@ def _editorial_rc(*, family: str, serif: list[str] | None = None,
         "axes.labelsize": 15,
         "axes.titlesize": 17,
         "axes.titleweight": "bold",
-        "axes.titlepad": 16.0,
+        "axes.titlepad": 20.0,
         "axes.spines.top": False,
         "axes.spines.right": False,
         "axes.grid": True,
@@ -328,7 +335,7 @@ _ICML_RC = {
     "axes.labelsize": 16,
     "axes.titlesize": 17,
     "axes.titleweight": "bold",
-    "axes.titlepad": 16.0,
+    "axes.titlepad": 20.0,
     "axes.spines.top": False,
     "axes.spines.right": False,
     "axes.grid": True,
@@ -411,7 +418,13 @@ def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwa
         return target.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0),
                               borderaxespad=0.0, ncol=ncol or 1, **kwargs)
     if side == "left":
-        return target.legend(loc="upper right", bbox_to_anchor=(-0.02, 1.0),
+        # -0.25, not -0.02: the y-axis label and its tick labels already
+        # occupy roughly the -0.02..-0.20 band to the left of the axes box
+        # (tick labels, then the label itself) -- anchoring a left legend's
+        # own right edge at -0.02 sits it right on top of them. There's no
+        # equivalent problem on the "right" side because the house style
+        # removes the top/right spines and nothing else lives out there.
+        return target.legend(loc="upper right", bbox_to_anchor=(-0.25, 1.0),
                               borderaxespad=0.0, ncol=ncol or 1, **kwargs)
     if side == "bottom":
         n_entries = len(kwargs.get("labels") or kwargs.get("handles") or [])
@@ -678,6 +691,72 @@ def latex_table_image(ax, cell_text, *, col_labels=None, row_labels=None,
     return image
 
 
+def find_overlapping_text(fig, *, padding_px: float = 0.0) -> list[tuple[str, str]]:
+    """Detect overlapping text artists (titles, axis labels, tick labels,
+    legend entries, annotations -- anything that's a ``matplotlib.text.Text``)
+    after layout, so a "title collides with the y-axis label" or "two
+    subplot titles run into each other" bug can be caught by running this
+    once instead of eyeballing every render.
+
+    Renders the figure first (``fig.canvas.draw()``) so bounding boxes
+    reflect the actual laid-out positions, then pairwise-checks each
+    non-empty text artist's ``get_window_extent()`` (display/pixel
+    coordinates) for overlap. ``padding_px`` shrinks each box by that many
+    pixels before checking, if a small amount of visual closeness (e.g.
+    adjacent tick labels almost touching) should not count as a real
+    collision.
+
+    Returns a list of ``(text_a, text_b)`` string pairs for every
+    overlapping pair found (empty list = no overlaps). This is a heuristic,
+    not a proof -- rotated text's true glyph outline is tighter than its
+    axis-aligned bounding box, so a very close near-miss on rotated labels
+    can be flagged as a false positive; look at the actual PNG for those.
+    """
+    import matplotlib.text
+
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+
+    boxes = []
+    for artist in fig.findobj(matplotlib.text.Text):
+        # matplotlib keeps hidden template Text objects around for ticks
+        # that aren't currently shown (e.g. off-scale positions); these
+        # report a degenerate (0, 0, 1, 1) bbox that trivially "overlaps"
+        # everything else at the origin -- get_visible() filters them out.
+        if not artist.get_visible():
+            continue
+        text = artist.get_text().strip()
+        if not text:
+            continue
+        bbox = artist.get_window_extent(renderer=renderer)
+        if padding_px:
+            bbox = bbox.expanded(1.0, 1.0).padded(-padding_px)
+        if bbox.width <= 0 or bbox.height <= 0:
+            continue
+        boxes.append((text, bbox))
+
+    overlaps = []
+    for i in range(len(boxes)):
+        text_a, bbox_a = boxes[i]
+        for j in range(i + 1, len(boxes)):
+            text_b, bbox_b = boxes[j]
+            if text_a == text_b:
+                continue  # e.g. a repeated tick label value -- not a layout bug
+            if bbox_a.overlaps(bbox_b):
+                overlaps.append((text_a, text_b))
+    return overlaps
+
+
+def assert_no_text_overlap(fig, *, padding_px: float = 0.0) -> None:
+    """Raise ``AssertionError`` with a readable list if `find_overlapping_text`
+    finds anything -- call this at the end of a render function (or in a
+    test) instead of only trusting a visual check of the PNG."""
+    overlaps = find_overlapping_text(fig, padding_px=padding_px)
+    if overlaps:
+        pairs = "\n".join(f"  {a!r} overlaps {b!r}" for a, b in overlaps)
+        raise AssertionError(f"Overlapping text found in figure:\n{pairs}")
+
+
 # Classic matplotlib defaults (pre-seaborn era feel).
 _MPL_CLASSIC_COLORS = {
     "train": "#1f77b4",
@@ -694,7 +773,7 @@ _MPL_CLASSIC_RC = {
     "axes.labelsize": 12,
     "axes.titlesize": 12,
     "axes.titleweight": "normal",
-    "axes.titlepad": 10.0,
+    "axes.titlepad": 14.0,
     "axes.grid": False,
     "legend.frameon": False,
     "legend.fontsize": 10,
@@ -758,6 +837,87 @@ MULTI_CMAP_SHORTLIST: dict[str, tuple[str, ...]] = {
 # markers, and symbols" in docs/plotting-style-guide.md.
 LINE_STYLE_CYCLE: tuple[str, ...] = ("-", "--", "-.", ":")
 MARKER_CYCLE: tuple[str, ...] = ("o", "s", "^", "D", "v", "P", "X", "*")
+
+
+# Semantic status colors -- a FIXED, reserved palette for state (pass/fail,
+# converged/diverged, in-tolerance/out-of-tolerance), never reused for "the
+# 5th series in a categorical plot." A categorical palette (comparison_colors
+# / OKABE_ITO_PALETTE) encodes *identity* ("which run is this"); this palette
+# encodes *state* ("is this thing okay"). Four levels, not just green/red --
+# most real diagnostics have a middle ground (a check that's borderline, not
+# a clean pass or a hard failure), and collapsing that to a binary hides it.
+# Same four-level convention as the dataviz skill's status palette
+# (good/warning/serious/critical): each level is also colorblind-distinguishable
+# on its own (not by hue alone -- see STATUS_HATCHES below for texture
+# redundancy on filled areas/bars, since red/green/amber can still collide
+# for some color-vision deficiencies).
+STATUS_COLORS: dict[str, str] = {
+    "good": "#2E7D32",       # pass / converged / in-tolerance
+    "warning": "#F9A825",    # borderline -- worth a second look, not yet a failure
+    "serious": "#E65100",    # notable problem, not yet critical
+    "critical": "#C62828",   # fail / diverged / out-of-tolerance
+    "neutral": "#616161",    # informational baseline, not a judgment call
+}
+# Convenience aliases for the common pass/fail binary case (e.g. a single FD
+# check that's just PASS or FAIL, no borderline state) -- these are NOT new
+# colors, just spelling: "success"/"fail" always resolve to "good"/"critical".
+_STATUS_ALIASES = {"success": "good", "pass": "good", "ok": "good", "fail": "critical", "error": "critical"}
+
+
+def status_color(level: str) -> str:
+    """Resolve a semantic status level ("good"/"warning"/"serious"/"critical"/
+    "neutral", or the "success"/"pass"/"fail"/"error" aliases) to its fixed
+    hex color. Raises on typos rather than silently returning a wrong color."""
+    key = _STATUS_ALIASES.get(level, level)
+    if key not in STATUS_COLORS:
+        raise ValueError(f"Unknown status level {level!r}. Choose from: {sorted(STATUS_COLORS)}")
+    return STATUS_COLORS[key]
+
+
+# Hatch textures paired 1:1 with STATUS_COLORS, for filled areas (bars,
+# regions, matshow cells) where color alone shouldn't carry the pass/fail
+# distinction -- print-safe and colorblind-safe redundant encoding, same
+# principle as LINE_STYLE_CYCLE/MARKER_CYCLE for categorical identity.
+# "good" gets no hatch (a clean pass shouldn't visually compete for
+# attention); severity increases with hatch density.
+STATUS_HATCHES: dict[str, str] = {
+    "good": "",
+    "warning": "//",
+    "serious": "xx",
+    "critical": "OO",
+    "neutral": "..",
+}
+
+
+def status_hatch(level: str) -> str:
+    """Resolve a semantic status level to its paired hatch pattern -- see
+    STATUS_HATCHES."""
+    key = _STATUS_ALIASES.get(level, level)
+    if key not in STATUS_HATCHES:
+        raise ValueError(f"Unknown status level {level!r}. Choose from: {sorted(STATUS_HATCHES)}")
+    return STATUS_HATCHES[key]
+
+
+# Display order for "defaults at a glance"-style galleries -- NOT the same as
+# PLOT_STYLES' insertion order (which groups by family for readability while
+# defining them) or list_plot_styles()' alphabetical order (a stable lookup
+# order). This one leads with "icml" (the actual recommended default for new
+# work) then its closest siblings, then the rest roughly by how likely a
+# reader is to reach for them.
+STYLE_DISPLAY_ORDER: tuple[str, ...] = (
+    "icml",
+    "editorial_dejavu_sans",
+    "editorial_dejavu_serif",
+    "editorial_stix",
+    "editorial_cm",
+    "nature",
+    "science",
+    "google",
+    "mpl_classic",
+    "xmgrace",
+    "tron",
+    "dark",
+)
 
 
 PLOT_STYLES: dict[str, PlotStyle] = {

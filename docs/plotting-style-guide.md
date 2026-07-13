@@ -44,7 +44,11 @@ a visible border; rely on `legend_outside()` placing them clear of the data
 instead of a frame to separate them from it.
 
 Run `mmml.utils.plotting.styles.list_plot_styles()` to see all registered
-names/aliases.
+names/aliases (alphabetical — a stable lookup order, not a recommendation
+order). For a "show these to a human, default first" ordering (e.g. a
+gallery), use `STYLE_DISPLAY_ORDER` instead — it leads with `"icml"`, then
+its closest siblings, then the rest roughly by how likely they are to be
+reached for.
 
 ### Documentation assets
 
@@ -233,14 +237,15 @@ wall-clock seconds) that wouldn't overlay meaningfully.
   stacked panels (`plt.subplots(2, 1, ...)`) instead, as
   `workflows/*/scripts/plot_results.py` do for energy vs. elapsed time.
 - **Title padding**: every house preset sets `axes.titlepad` explicitly
-  (10-16pt depending on the preset's title size) rather than leaving
+  (14-20pt depending on the preset's title size) rather than leaving
   matplotlib's default (`6.0pt`) — a bold, larger-than-body-text title sits
   close enough to the axes box at the default pad that it visually collides
   with the topmost y-tick label in the corner. If a one-off script overrides
   `axes.titlesize`/`axes.titleweight` after `apply_plot_style()`, bump
   `axes.titlepad` (or the specific `ax.set_title(..., pad=...)`) to match —
   don't leave it at the smaller preset default with a manually-enlarged
-  title.
+  title. Don't take this on faith either — run `find_overlapping_text(fig)`
+  (below) on the finished figure.
 
 ## Energy drift: fluctuation + tendency, not a bare endpoint delta
 
@@ -555,3 +560,78 @@ alpha=0.35`), so the eye finds the point of the figure immediately.
 
 See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Line styles,
 markers, and symbols" for all three rendered.
+
+## Semantic status colors: a reserved palette for state, not identity
+
+`comparison_colors`/`OKABE_ITO_PALETTE` answer "which series is this" —
+**identity**. A separate question, "is this thing okay", needs its own
+palette so the two never collide (a run colored orange because it's the 2nd
+series in a plot must never be confused with a value colored orange because
+it failed a check). `STATUS_COLORS` is that reserved palette:
+
+```python
+from mmml.utils.plotting.styles import STATUS_COLORS, STATUS_HATCHES, status_color, status_hatch
+
+STATUS_COLORS   # {"good": "#2E7D32", "warning": "#F9A825", "serious": "#E65100",
+                 #  "critical": "#C62828", "neutral": "#616161"}
+status_color("success")  # -> "#2E7D32" (alias for "good")
+status_color("fail")     # -> "#C62828" (alias for "critical")
+```
+
+- **Four severity levels, not a green/red binary.** Most real diagnostics
+  have a middle ground — a check that's borderline, not a clean pass or a
+  hard failure — and collapsing that to pass/fail hides it. Use `"warning"`/
+  `"serious"` for that middle ground; reach for the `"good"`/`"critical"`
+  (or `"success"`/`"fail"`) aliases only for a genuinely binary check.
+- **Paired hatch textures** (`STATUS_HATCHES`, matched 1:1 by key) give
+  color-independent redundancy on filled areas (bars, matshow cells, shaded
+  regions) — the same print-safe/colorblind-safe principle as line
+  styles/markers for categorical identity, applied to state instead:
+  ```python
+  ax.bar(labels, values, color=[status_color(s) for s in states],
+         hatch=[status_hatch(s) for s in states], edgecolor="#222222")
+  ```
+  `"good"` gets no hatch (`""`) — a clean pass shouldn't visually compete for
+  attention; severity increases with hatch density.
+- **Never reuse a status color for a categorical series**, even if it
+  happens to look right for a specific plot (e.g. don't use `STATUS_COLORS
+  ["good"]` as "the green line" in an unrelated multi-series plot) — a
+  reader who has learned "green means passed" elsewhere in the same
+  document will misread it.
+
+See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Semantic status
+palette" for the rendered bar-chart and matshow-cell examples, and
+`scripts/render_fd_test_gallery.py`'s "PASSES"/"FAILS" titles for a
+pre-existing example this palette should be adopted into going forward.
+
+## Checking for overlapping text automatically
+
+Eyeballing every rendered PNG for a colliding title/label catches most
+overlaps but not all of them, especially across a batch of many figures.
+`find_overlapping_text(fig)` does the check programmatically: it draws the
+figure, reads every visible `Text` artist's actual laid-out bounding box
+(`get_window_extent()`), and pairwise-checks for overlap.
+
+```python
+from mmml.utils.plotting.styles import assert_no_text_overlap, find_overlapping_text
+
+fig, ax = plt.subplots()
+# ... build the figure ...
+overlaps = find_overlapping_text(fig)   # [] if clean, else [(text_a, text_b), ...]
+assert_no_text_overlap(fig)             # raises AssertionError with the pairs, if any
+```
+
+- Call this **after** the figure is fully built (titles, labels, legend,
+  annotations all added) — it draws the canvas itself, so it reflects the
+  actual final layout, not a stale one.
+- It's a heuristic on axis-aligned bounding boxes, not a proof: rotated
+  text's true glyph outline is tighter than its bbox, so a very close
+  near-miss on rotated labels (e.g. `rotation=60` x-tick labels) can
+  false-positive. Look at the actual PNG for those before concluding it's a
+  real bug.
+- Empty-text artists and matplotlib's hidden tick-label template objects
+  (which report a degenerate `(0, 0, 1, 1)` bbox and would otherwise
+  trivially "overlap" everything) are already filtered out.
+- Good places to call it: at the end of a `render_*` function right before
+  `savefig` (so a broken layout fails loudly instead of shipping a bad PNG),
+  or in a unit test alongside `PLOT_STYLES`/palette assertions.

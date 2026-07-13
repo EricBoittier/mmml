@@ -40,6 +40,39 @@ written before the two merged.)
 
 ![default colormaps](plot-style-gallery-assets/chart_default_colormaps.png)
 
+### Non-color categorical cycles: line styles and markers
+
+Color isn't the only default cycle — `LINE_STYLE_CYCLE` and `MARKER_CYCLE`
+are shown here on the graph type each actually applies to (line styles on a
+line plot, markers on a scatter), not as an abstract legend key, so what
+you'll actually see in a figure is what's pictured:
+
+![line and marker cycles](plot-style-gallery-assets/chart_line_marker_cycles.png)
+
+### Semantic status palette
+
+A **separate, reserved** palette for encoding *state* (pass/fail,
+converged/diverged, in/out of tolerance) — never reused for "the next
+series in a categorical plot." Four levels (`good`/`warning`/`serious`/
+`critical`), plus `neutral` for a non-judgmental baseline, each paired with a
+hatch texture so state doesn't rely on color alone (print-safe,
+colorblind-safe redundancy — same principle as line styles/markers for
+categorical identity):
+
+![status palette](plot-style-gallery-assets/chart_status_palette.png)
+
+```python
+from mmml.utils.plotting.styles import status_color, status_hatch
+
+ax.bar(labels, values, color=[status_color(s) for s in states],
+       hatch=[status_hatch(s) for s in states], edgecolor="#222222")
+```
+
+`status_color("success")`/`status_color("fail")` are convenience aliases for
+`"good"`/`"critical"` — same fixed colors, just the common pass/fail
+spelling for a binary check (e.g. one FD test that's just PASS or FAIL, no
+borderline state).
+
 ## `icml`
 
 ![icml](plot-style-gallery-assets/icml.png)
