@@ -17,10 +17,19 @@ units by default, with helpers for V/Angstrom.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import fields
 from collections.abc import Sequence as SequenceABC
 from pathlib import Path
 from typing import Any, Iterable, Sequence
+
+# scripts/ has no __init__.py — it's only importable as a namespace package once
+# the repo root is on sys.path, which isn't guaranteed for arbitrary entry points
+# (e.g. `python scripts/some_other_script.py` puts that script's own directory on
+# sys.path, not the repo root).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 import e3x
 import jax

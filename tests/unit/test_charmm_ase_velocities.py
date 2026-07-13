@@ -68,6 +68,22 @@ def test_clamp_velocity_assignment_dynamics_kw_clamps_firstt_on_start():
     assert kw["tbath"] == pytest.approx(40.0)
 
 
+def test_zero_temperature_assignment_requires_explicit_opt_in():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        clamp_velocity_assignment_dynamics_kw,
+    )
+
+    kw = {"start": True, "iasvel": 1, "firstt": 0.0}
+    with pytest.raises(ValueError, match="positive"):
+        clamp_velocity_assignment_dynamics_kw(kw)
+
+    kw = {"start": True, "iasvel": 1, "firstt": 0.0}
+    clamp_velocity_assignment_dynamics_kw(
+        kw, allow_zero_temperature_start=True
+    )
+    assert kw["firstt"] == pytest.approx(0.0)
+
+
 def test_maybe_assign_velocities_via_ase_if_cold_sets_iasvel_after_assign():
     kw = {"iasvel": 0, "start": True, "finalt": 240.0}
     with patch(

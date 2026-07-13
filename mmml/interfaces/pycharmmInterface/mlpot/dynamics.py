@@ -4048,6 +4048,9 @@ def _dynamics_script_append_for_heat_ramp(kw: dict[str, Any]) -> str:
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
     kw = dict(dynamics_kwargs)
+    allow_zero_temperature_start = bool(
+        kw.pop("_allow_zero_temperature_start", False)
+    )
     skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
@@ -4073,7 +4076,10 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
 
     import pycharmm
-    clamp_velocity_assignment_dynamics_kw(kw)
+    clamp_velocity_assignment_dynamics_kw(
+        kw,
+        allow_zero_temperature_start=allow_zero_temperature_start,
+    )
     # Resolve / assign warm AKMA velocities before COMP mirror (post-rescue CGENFF
     # reregister clears CHARMM memory; MB fallback must run before mirror can raise).
     init_velocities = _resolve_dynamics_init_velocities(

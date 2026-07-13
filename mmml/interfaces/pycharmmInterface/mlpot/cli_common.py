@@ -124,7 +124,15 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         metavar="K",
         help=(
             "Heat start temperature (CHARMM FIRSTT). Default: 0.2×--temperature. "
-            "Use 0 for a cold start (zero initial velocities, then IHTFRQ scaling)."
+            "Must be positive unless --allow-zero-temperature-start is explicit."
+        ),
+    )
+    group.add_argument(
+        "--allow-zero-temperature-start",
+        action="store_true",
+        help=(
+            "Explicitly permit FIRSTT=0 K and zero-temperature CHARMM velocity "
+            "assignment. Disabled by default to prevent accidental frozen starts."
         ),
     )
     group.add_argument(
@@ -460,10 +468,21 @@ def resolve_heat_firstt_finalt(
     if resolve_heat_mode(args) == "hold":
         t_hold = clamp_velocity_assignment_temp_k(t_end)
         return t_hold, t_end
-    if firstt is None or float(firstt) <= 0.0:
+    if firstt is None:
         t_start = t_end * 0.2
+    elif float(firstt) == 0.0:
+        if not bool(getattr(args, "allow_zero_temperature_start", False)):
+            raise ValueError(
+                "--heat-firstt=0 requires --allow-zero-temperature-start; "
+                "use a positive temperature for ordinary dynamics"
+            )
+        t_start = 0.0
+    elif float(firstt) < 0.0:
+        raise ValueError("--heat-firstt must be non-negative")
     else:
         t_start = float(firstt)
+    if t_start == 0.0:
+        return 0.0, t_end
     return clamp_velocity_assignment_temp_k(t_start), t_end
 
 

@@ -416,6 +416,8 @@ def _build_stage_dynamics_kw(
                 echeck=heat_echeck,
                 use_pbc=use_pbc,
             )
+        if bool(getattr(args, "allow_zero_temperature_start", False)):
+            kw["_allow_zero_temperature_start"] = True
     elif stage == "nve":
         kw = build_nve_dynamics(
             timestep_ps=timestep_ps,

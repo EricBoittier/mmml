@@ -96,6 +96,37 @@ def test_resolve_monomer_template_reference_positions_uses_memory_mini():
     assert source.name == "<in-memory-mini>"
 
 
+def test_resolve_monomer_template_rejects_collapsed_restart_and_uses_memory(monkeypatch):
+    current = np.array(
+        [
+            [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0], [6.0, 0.0, 0.0], [5.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    collapsed = np.repeat(current.reshape(2, 3, 3).mean(axis=1), 3, axis=0)
+    intact_memory = current + np.array([0.0, 0.0, 0.2])
+    ctx = _ctx(positions=current, mini_positions=intact_memory)
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
+        lambda *a, **k: [__import__("pathlib").Path("bad.res")],
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
+        lambda *a, **k: (collapsed, __import__("pathlib").Path("bad.res")),
+    )
+    resolved = resolve_monomer_template_reference_positions(
+        ctx,
+        n_atoms=6,
+        current_positions=current,
+        monomer_offsets=np.array([0, 3, 6]),
+    )
+    assert resolved is not None
+    arr, source = resolved
+    assert source.name == "<in-memory-mini>"
+    np.testing.assert_allclose(arr, intact_memory)
+
+
 def test_resolve_monomer_template_reference_positions_same_residue_fallback(monkeypatch):
     pos = np.array(
         [

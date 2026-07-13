@@ -236,6 +236,7 @@ class ModelOutput(NamedTuple):
     com_restraint_min_dist: Array  # minimum inter-monomer COM distance (Å)
     mm_vdw_E: Array = 0.0  # switched MM LJ (eV)
     mm_elec_E: Array = 0.0  # switched MM Coulomb (eV)
+    mbd_E: Array = 0.0  # learned MBD dispersion correction, mbd_weight-scaled (eV)
     mm_vdw_primary_E: Array = 0.0  # primary-cell MM LJ (kcal/mol bookkeeping)
     mm_vdw_image_E: Array = 0.0  # image MM LJ (kcal/mol bookkeeping)
     mm_elec_primary_E: Array = 0.0  # primary-cell MM Coulomb (kcal/mol bookkeeping)

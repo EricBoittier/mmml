@@ -165,9 +165,18 @@ def resolve_monomer_template_reference_positions(
     *,
     restart_path: Path | str | None = None,
     n_atoms: int | None = None,
+    current_positions: np.ndarray | None = None,
+    monomer_offsets: np.ndarray | None = None,
 ) -> tuple[np.ndarray, Path] | None:
-    """Restart/CRD ladder, in-memory snapshots, then same-residue cluster template."""
+    """Return a plausible monomer template, preferring disk then memory.
+
+    Dynamics restart files can be syntactically readable while containing
+    collapsed coordinate-history values.  Reject references whose centered
+    monomer radii differ grossly from the intact current geometry and continue
+    down the in-memory mini/baseline ladder.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        _memory_extent_reference_sources,
         resolve_extent_reference_positions,
     )
 
@@ -175,10 +184,49 @@ def resolve_monomer_template_reference_positions(
         mlpot_ctx,
         restart_path=restart_path,
     )
+    refs: list[tuple[np.ndarray, Path]] = []
     try:
-        ref, source = resolve_extent_reference_positions(candidates, mlpot_ctx)
-        ref_arr = np.asarray(ref, dtype=np.float64)
+        ref, source = resolve_extent_reference_positions(candidates, None)
+        refs.append((np.asarray(ref, dtype=np.float64), source))
     except RuntimeError:
+        pass
+    refs.extend(_memory_extent_reference_sources(mlpot_ctx))
+
+    def plausible(arr: np.ndarray) -> bool:
+        if current_positions is None or monomer_offsets is None:
+            return True
+        cur = np.asarray(current_positions, dtype=np.float64)
+        offsets = np.asarray(monomer_offsets, dtype=int)
+        if arr.shape != cur.shape or offsets.size < 2:
+            return False
+        ratios: list[float] = []
+        for mi in range(offsets.size - 1):
+            s, e = int(offsets[mi]), int(offsets[mi + 1])
+            if e - s < 2:
+                continue
+            cur_centered = cur[s:e] - cur[s:e].mean(axis=0)
+            ref_centered = arr[s:e] - arr[s:e].mean(axis=0)
+            cur_rms = float(np.sqrt(np.mean(np.sum(cur_centered**2, axis=1))))
+            ref_rms = float(np.sqrt(np.mean(np.sum(ref_centered**2, axis=1))))
+            if cur_rms > 1.0e-6:
+                ratios.append(ref_rms / cur_rms)
+        return bool(ratios) and min(ratios) >= 0.5 and max(ratios) <= 2.0
+
+    for ref_arr, source in refs:
+        ref_arr = np.asarray(ref_arr, dtype=np.float64)
+        if n_atoms is not None and int(ref_arr.shape[0]) != int(n_atoms):
+            continue
+        if ref_arr.size == 0 or not np.all(np.isfinite(ref_arr)):
+            continue
+        if plausible(ref_arr):
+            return ref_arr, source
+        print(
+            f"Monomer template: rejecting internally implausible reference {source}; "
+            "falling back to intact in-memory/template geometry",
+            flush=True,
+        )
+
+    try:
         from mmml.interfaces.pycharmmInterface.cluster_geometry import (
             packmol_template_reference_from_ctx,
             same_residue_cluster_reference_from_ctx,
@@ -192,9 +240,13 @@ def resolve_monomer_template_reference_positions(
             if ref_arr is None:
                 return None
             source = Path("<same-residue-cluster>")
+    except (RuntimeError, ValueError):
+        return None
     if n_atoms is not None and int(ref_arr.shape[0]) != int(n_atoms):
         return None
     if ref_arr.size == 0 or not np.all(np.isfinite(ref_arr)):
+        return None
+    if not plausible(ref_arr):
         return None
     return ref_arr, source
 
@@ -369,6 +421,8 @@ def run_selective_monomer_physnet_mini(
         mlpot_ctx,
         restart_path=restart_path,
         n_atoms=int(pos.shape[0]),
+        current_positions=pos,
+        monomer_offsets=offsets,
     )
     if ref_info is not None:
         ref, source = ref_info

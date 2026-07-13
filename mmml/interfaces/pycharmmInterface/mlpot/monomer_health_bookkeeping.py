@@ -634,7 +634,17 @@ def restore_monomer_velocities_from_template(
         ref_vel = np.asarray(ref_vel, dtype=np.float64).reshape(-1, 3)
 
     masses = charmm_masses_amu()
-    temp = float(temperature_K if temperature_K is not None else _resolve_health_velocity_temperature_K(mlpot_ctx))
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        clamp_velocity_assignment_temp_k,
+    )
+
+    temp = clamp_velocity_assignment_temp_k(
+        float(
+            temperature_K
+            if temperature_K is not None
+            else _resolve_health_velocity_temperature_K(mlpot_ctx)
+        )
+    )
     modified = False
     for mi in flagged:
         start = int(offsets[int(mi)])
@@ -690,10 +700,16 @@ def redraw_monomer_velocities(
     if vel is None:
         vel = np.zeros((n_atoms, 3), dtype=np.float64)
     masses = charmm_masses_amu()
-    temp = float(
-        temperature_K
-        if temperature_K is not None
-        else _resolve_health_velocity_temperature_K(mlpot_ctx)
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        clamp_velocity_assignment_temp_k,
+    )
+
+    temp = clamp_velocity_assignment_temp_k(
+        float(
+            temperature_K
+            if temperature_K is not None
+            else _resolve_health_velocity_temperature_K(mlpot_ctx)
+        )
     )
     modified = False
     selected = [int(i) for i in flagged]

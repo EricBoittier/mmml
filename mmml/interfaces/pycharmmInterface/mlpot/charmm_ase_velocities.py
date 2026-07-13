@@ -629,7 +629,11 @@ def resolve_assignment_temperature_k(
     return clamp_velocity_assignment_temp_k(max(candidates))
 
 
-def clamp_velocity_assignment_dynamics_kw(kw: dict[str, Any]) -> None:
+def clamp_velocity_assignment_dynamics_kw(
+    kw: dict[str, Any],
+    *,
+    allow_zero_temperature_start: bool = False,
+) -> None:
     """Clamp CHARMM ``FIRSTT`` / bath keys when a dyna call assigns velocities."""
     if not bool(kw.get("start")):
         return
@@ -637,7 +641,10 @@ def clamp_velocity_assignment_dynamics_kw(kw: dict[str, Any]) -> None:
         return
     for key in ("firstt", "tbath", "tstruct"):
         if key in kw:
-            kw[key] = clamp_velocity_assignment_temp_k(float(kw[key]))
+            value = float(kw[key])
+            if value == 0.0 and allow_zero_temperature_start:
+                continue
+            kw[key] = clamp_velocity_assignment_temp_k(value)
 
 
 def _pycharmm_coor_module():
