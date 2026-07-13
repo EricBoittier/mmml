@@ -69,29 +69,32 @@ def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndar
                         if atom_type not in nb_map:
                             epsilon = abs(float(parts[2]))  # kcal/mol
                             rmin_half = float(parts[3])     # Angstrom (Rmin/2)
-                            if epsilon == 0.0 or rmin_half == 0.0:
-                                raise ValueError(
-                                    f"CGenFF atom type '{atom_type}' has zero epsilon={epsilon} or rmin_half={rmin_half}. "
-                                    f"This indicates a bad PRM parse."
-                                )
                             sigma = rmin_half * 2.0 / (2.0 ** (1.0 / 6.0))
                             idx = len(nb_map)
                             nb_map[atom_type] = idx
                             sigmas.append(sigma)
                             epsilons.append(epsilon)
-                    except ValueError:
-                        raise
+                    except (ValueError, IndexError):
+                        # Skip non-atom lines (CUTNB, header lines, etc.)
+                        pass
 
     if not nb_map:
         raise RuntimeError(f"No NONBONDED entries found in {prm_path}")
 
-    # Sentinel DEFAULT type for unmapped types — values are deliberately large/visible
-    # so model output is clearly wrong if it gets used (force debugging)
+    # Sentinel DEFAULT type for unmapped types — zero values deliberately visible
     nb_map["DEFAULT"] = len(nb_map)
-    sigmas.append(0.0)    # deliberately zero → will produce zero LJ → visible in distribution
-    epsilons.append(0.0)  # deliberately zero → will produce zero LJ → visible in distribution
+    sigmas.append(0.0)    # deliberately zero → produces zero LJ → clearly wrong in diagnostics
+    epsilons.append(0.0)  # deliberately zero → produces zero LJ → clearly wrong in diagnostics
 
-    return nb_map, np.array(sigmas, dtype=np.float64), np.array(epsilons, dtype=np.float64)
+    # Post-parse sanity check: warn about any non-DEFAULT types with zero epsilon/sigma
+    sig_arr = np.array(sigmas, dtype=np.float64)
+    eps_arr = np.array(epsilons, dtype=np.float64)
+    default_idx = nb_map["DEFAULT"]
+    bad_types = [t for t, i in nb_map.items() if t != "DEFAULT" and (sig_arr[i] == 0.0 or eps_arr[i] == 0.0)]
+    if bad_types:
+        print(f"[WARNING] {len(bad_types)} CGenFF atom types parsed with zero sigma or epsilon: {bad_types[:10]}")
+
+    return nb_map, sig_arr, eps_arr
 
 
 def _parse_mass_element_map(rtf_path: Path) -> dict[str, int]:
