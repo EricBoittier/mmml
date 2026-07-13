@@ -487,22 +487,52 @@ def make_steps(
         mbd_energy = jnp.zeros_like(spooky_energy)
         mbd_forces = jnp.zeros_like(spooky_forces)
         if mbd_model is not None:
-            mbd_output, mbd_forces_au = mbd_energy_and_forces(
-                mbd_model,
-                mbd_params,
-                positions=batch["R"] * ANGSTROM_TO_BOHR,
-                atomic_numbers=batch["Z"],
-                charge=batch["Q_total"].reshape(-1),
-                spin=batch["S_total"].reshape(-1),
-                dst_idx=batch["dst_idx"],
-                src_idx=batch["src_idx"],
-                batch_segments=batch["batch_segments"],
-                batch_size=per_device_batch_size,
-                atom_mask=batch["atom_mask"],
-                edge_mask=batch["batch_mask"],
-            )
-            mbd_energy = mbd_output["energy"].reshape(-1, 1) * HARTREE_TO_EV
-            mbd_forces = mbd_forces_au.reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
+
+            def _mbd_pass(atom_mask_m, edge_mask_m):
+                out_m, forces_au_m = mbd_energy_and_forces(
+                    mbd_model,
+                    mbd_params,
+                    positions=batch["R"] * ANGSTROM_TO_BOHR,
+                    atomic_numbers=batch["Z"],
+                    charge=batch["Q_total"].reshape(-1),
+                    spin=batch["S_total"].reshape(-1),
+                    dst_idx=batch["dst_idx"],
+                    src_idx=batch["src_idx"],
+                    batch_segments=batch["batch_segments"],
+                    batch_size=per_device_batch_size,
+                    atom_mask=atom_mask_m,
+                    edge_mask=edge_mask_m,
+                )
+                return out_m["energy"], forces_au_m
+
+            mol_id = batch.get("mol_id")
+            if mol_id is not None:
+                # Counterpoise-style interaction dispersion: E_int = E(AB) - E(A) - E(B),
+                # evaluated at the fixed complex geometry. The MBD checkpoint was trained
+                # on isolated monomers, so it must be run once per fragment (with the other
+                # fragment's atoms/edges masked out) rather than once on the whole complex,
+                # otherwise each monomer's own intra-fragment dispersion gets double-counted
+                # against the interaction-energy target.
+                mol_id_flat = mol_id.reshape(-1)
+                dst_mol = jnp.take(mol_id_flat, batch["dst_idx"])
+                src_mol = jnp.take(mol_id_flat, batch["src_idx"])
+                same_monomer = (dst_mol == src_mol).astype(batch["batch_mask"].dtype)
+
+                e_ab, f_ab = _mbd_pass(batch["atom_mask"], batch["batch_mask"])
+                e_a, f_a = _mbd_pass(
+                    batch["atom_mask"] * (mol_id_flat == 0).astype(batch["atom_mask"].dtype),
+                    batch["batch_mask"] * same_monomer * (dst_mol == 0).astype(same_monomer.dtype),
+                )
+                e_b, f_b = _mbd_pass(
+                    batch["atom_mask"] * (mol_id_flat == 1).astype(batch["atom_mask"].dtype),
+                    batch["batch_mask"] * same_monomer * (dst_mol == 1).astype(same_monomer.dtype),
+                )
+                mbd_energy = (e_ab - e_a - e_b).reshape(-1, 1) * HARTREE_TO_EV
+                mbd_forces = (f_ab - f_a - f_b).reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
+            else:
+                e_ab, f_ab = _mbd_pass(batch["atom_mask"], batch["batch_mask"])
+                mbd_energy = e_ab.reshape(-1, 1) * HARTREE_TO_EV
+                mbd_forces = f_ab.reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
         composite_mbd_weight = mbd_weight * mbd_scale
         energy_pred = spooky_energy + composite_mbd_weight * mbd_energy
         forces_pred = spooky_forces + composite_mbd_weight * mbd_forces
@@ -983,9 +1013,14 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     mbd_params = None
     if args.mbd_checkpoint is not None:
         mbd_model, mbd_params = load_mbd_model(Path(args.mbd_checkpoint).expanduser())
+        mbd_mode = (
+            "counterpoise interaction dispersion E(AB)-E(A)-E(B) (mol_id found)"
+            if has_cgenff_lj
+            else "whole-system dispersion (no mol_id — treating batch as single molecules)"
+        )
         print(
             f"Using frozen MBD correction from {Path(args.mbd_checkpoint).expanduser()} "
-            f"with weight {args.mbd_weight:g}",
+            f"with weight {args.mbd_weight:g}: {mbd_mode}",
             flush=True,
         )
     state = init_state(model, data, train_buckets, args)
