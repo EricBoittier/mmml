@@ -555,6 +555,27 @@ to the electrostatic field slice above:
 
 ![mbd dispersion field](plot-style-gallery-assets/chart_mbd_dispersion_field.png)
 
+### Real molecules: optimized, then predicted
+
+The scenes above are analytic, to make the method legible. This row is the real
+pipeline end to end (`scripts/render_multipole_real_molecules.py`): four small
+molecules **geometry-optimized on the trained SpookyNet potential**, then their
+learned molecular multipoles predicted on the optimized geometry with the
+committed multipole weights. The field each molecule produces, side by side —
+water, ammonia, methanol, formaldehyde:
+
+![real optimized-molecule fields](plot-style-gallery-assets/chart_real_multipole_fields.png)
+
+The same molecules as multipole surfaces (probe radius pulled in to 1.4 Å so the
+dipole/quadrupole/octupole angular structure reads over the monopole):
+
+![real optimized-molecule surfaces](plot-style-gallery-assets/chart_real_multipole_surfaces.png)
+
+And the learned MBD response on the same optimized geometries — heavy atoms
+carry the large polarizability and C6, hydrogens are small:
+
+![real optimized-molecule MBD](plot-style-gallery-assets/chart_real_mbd_surfaces.png)
+
 ## Colormaps for a figure with several panels
 
 A figure with more than one sequential (or diverging) panel — one per
