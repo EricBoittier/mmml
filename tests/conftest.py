@@ -269,3 +269,54 @@ def _charmm_default_levels_for_pycharmm_tests(request: pytest.FixtureRequest) ->
         apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)
     except Exception:
         pass
+
+
+# --- Synthetic systems for the checkpoint-free jaxmd-unified suite ----------
+# A TIP3-like water box built directly as a MolecularSystem (no CHARMM build,
+# no ML checkpoint), so the unified assemble -> compose -> jaxmd path can be
+# exercised for regression and profiling on any machine with jax/jax-md.
+
+
+def build_synthetic_water_box(n_waters: int = 8, box_len: float = 18.0, seed: int = 0):
+    """A periodic MolecularSystem of ``n_waters`` rigid TIP3-geometry waters.
+
+    Charges/LJ are the standard TIP3P values so ``mm_nonbonded`` produces
+    physically-scaled (non-degenerate) energies; molecules are placed at random
+    non-edge centres for reproducible-but-nontrivial dynamics.
+    """
+    import numpy as np
+
+    from mmml.md.system import FFParams, MolecularSystem
+
+    rng = np.random.default_rng(seed)
+    geom = np.array([[0.0, 0.0, 0.0], [0.757, 0.586, 0.0], [-0.757, 0.586, 0.0]])
+    coords = []
+    for _ in range(n_waters):
+        centre = rng.uniform(2.0, box_len - 2.0, size=3)
+        coords.append(geom + centre)
+    R = np.concatenate(coords, axis=0)
+    Z = np.tile([8, 1, 1], n_waters)
+    mol_id = np.repeat(np.arange(n_waters), 3).astype(np.int32)
+    ff = FFParams(
+        charges=np.tile([-0.834, 0.417, 0.417], n_waters),
+        epsilon=np.tile([0.152, 0.046, 0.046], n_waters),
+        rmin_half=np.tile([1.768, 0.2245, 0.2245], n_waters),
+        at_codes=np.tile([0, 1, 1], n_waters).astype(np.int32),
+        exclusions=np.empty((0, 2), dtype=np.int32),
+        e14_pairs=np.empty((0, 2), dtype=np.int32),
+    )
+    return MolecularSystem(
+        R=R,
+        Z=Z,
+        box=np.diag([box_len, box_len, box_len]),
+        mol_id=mol_id,
+        monomer_indices=[np.arange(3 * g, 3 * g + 3) for g in range(n_waters)],
+        water_indices=[np.arange(3 * g, 3 * g + 3) for g in range(n_waters)],
+        ff_params=ff,
+    )
+
+
+@pytest.fixture
+def synthetic_water_box():
+    """Factory fixture: ``synthetic_water_box(n_waters=, box_len=, seed=)``."""
+    return build_synthetic_water_box
