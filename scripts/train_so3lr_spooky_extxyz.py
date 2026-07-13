@@ -1128,6 +1128,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
         train_metrics = []
+        log_window_metrics = []
         train_batches = iter_device_batches(
             train_buckets,
             per_device_batch_size=args.batch_size_per_device,
@@ -1152,8 +1153,10 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             batch = stack_device_batches(data, device_indices)
             state, metrics = train_step(state, batch)
             train_metrics.append(metrics)
+            log_window_metrics.append(metrics)
             if step % args.log_every_steps == 0:
-                m = mean_metrics([metrics])
+                m = mean_metrics(log_window_metrics)
+                log_window_metrics = []
                 line = (
                     f"epoch {epoch:04d} step {step:06d} "
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
