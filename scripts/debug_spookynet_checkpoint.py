@@ -119,18 +119,21 @@ def analyze_checkpoint(
             )
 
             # Extract breakdown from model outputs
-            total_spooky = float(np.asarray(output["energy"]).squeeze()) * EV_TO_KCAL_MOL
-            charges = np.asarray(output["charges"]).squeeze()[:n_real] if "charges" in output else np.zeros(n_real)
+            total_spooky = float(np.sum(np.asarray(output["energy"]))) * EV_TO_KCAL_MOL
+            if "charges" in output and output["charges"] is not None:
+                charges = np.asarray(output["charges"]).squeeze()[:n_real]
+            else:
+                charges = np.zeros(n_real)
             
             # Electrostatics component (if available)
             if "electrostatics" in output and output["electrostatics"] is not None:
-                e_elec = float(np.asarray(output["electrostatics"]).squeeze()) * EV_TO_KCAL_MOL
+                e_elec = float(np.sum(np.asarray(output["electrostatics"]))) * EV_TO_KCAL_MOL
             else:
                 e_elec = 0.0
 
             # Repulsion component (if available)
             if "repulsion" in output and output["repulsion"] is not None:
-                e_rep = float(np.asarray(output["repulsion"]).squeeze()) * EV_TO_KCAL_MOL
+                e_rep = float(np.sum(np.asarray(output["repulsion"]))) * EV_TO_KCAL_MOL
             else:
                 e_rep = 0.0
 
@@ -162,23 +165,28 @@ def analyze_checkpoint(
                 "E_elec": e_elec,
                 "E_rep": e_rep,
                 "E_neural": e_neural,
-                "q_max_abs": np.max(np.abs(charges)),
-                "q_rms": np.sqrt(np.mean(charges**2)),
-                "q_net_monA": np.sum(charges_a),
-                "q_net_monB": np.sum(charges_b),
+                "q_max_abs": np.max(np.abs(charges)) if len(charges) > 0 else 0.0,
+                "q_rms": np.sqrt(np.mean(charges**2)) if len(charges) > 0 else 0.0,
+                "q_net_monA": np.sum(charges_a) if len(charges_a) > 0 else 0.0,
+                "q_net_monB": np.sum(charges_b) if len(charges_b) > 0 else 0.0,
             })
 
     df = pd.DataFrame(rows)
-    csv_path = output_dir / f"spookynet_diagnostic_{checkpoint_path.name}_{pair_name.replace('+', '_')}.csv"
+    stem_name = checkpoint_path.stem if checkpoint_path.is_file() else checkpoint_path.name
+    csv_path = output_dir / f"spookynet_diagnostic_{stem_name}_{pair_name.replace('+', '_')}.csv"
     df.to_csv(csv_path, index=False)
     print(f"\n[+] Tabular diagnostic saved to: {csv_path}")
 
-    # Report Canary point: d ≈ 5.9 Å at offset = 2.0 Å
-    canary_sub = df[(np.isclose(df["offset"], 2.0)) & (np.isclose(df["distance"], 5.9, atol=0.25))]
+    # Select target offset for canary summary & detailed breakdown plot (prefer 2.0 Å if available)
+    avail_offsets = df["offset"].unique()
+    target_offset = 2.0 if any(np.isclose(avail_offsets, 2.0)) else avail_offsets[min(2, len(avail_offsets) - 1)]
+
+    # Report Canary point: d ≈ 5.9 Å at target offset
+    canary_sub = df[(np.isclose(df["offset"], target_offset)) & (np.isclose(df["distance"], 5.9, atol=0.25))]
     if not canary_sub.empty:
         c_row = canary_sub.iloc[0]
         print(f"\n==================================================================")
-        print(f" CANARY GEOMETRY SUMMARY (d ≈ 5.9 Å, offset = 2.0 Å)")
+        print(f" CANARY GEOMETRY SUMMARY (d ≈ 5.9 Å, offset = {target_offset:.1f} Å)")
         print(f"==================================================================")
         print(f"  Interaction Energy (ΔE_total): {c_row['delta_E_total']:.3f} kcal/mol")
         print(f"  Spooky Component (ΔE_spooky) : {c_row['delta_E_spooky']:.3f} kcal/mol")
@@ -204,8 +212,8 @@ def analyze_checkpoint(
     axes[0].set_title(f"Interaction Energy Curves ({pair_name})")
     axes[0].legend()
 
-    # Panel 2: Component Breakdown at Canary Offset (2.0 Å)
-    sub_canary = df[df["offset"] == 2.0]
+    # Panel 2: Component Breakdown at target offset
+    sub_canary = df[np.isclose(df["offset"], target_offset)]
     axes[1].plot(sub_canary["distance"], sub_canary["delta_E_total"], "k-", linewidth=2, label="ΔE Total")
     axes[1].plot(sub_canary["distance"], sub_canary["E_elec"], "r--", label="Explicit Electrostatics")
     axes[1].plot(sub_canary["distance"], sub_canary["E_neural"], "g--", label="Neural Network")
@@ -214,7 +222,7 @@ def analyze_checkpoint(
     axes[1].axhline(0, color="gray", linestyle="--", alpha=0.6)
     axes[1].set_xlabel("Distance d (Å)")
     axes[1].set_ylabel("Energy (kcal/mol)")
-    axes[1].set_title(f"Component Breakdown at offset=2.0 Å")
+    axes[1].set_title(f"Component Breakdown at offset={target_offset:.1f} Å")
     axes[1].legend()
 
     # Panel 3: Predicted Charges
@@ -226,8 +234,9 @@ def analyze_checkpoint(
     axes[2].legend()
 
     fig.tight_layout()
-    plot_path = output_dir / f"spookynet_diagnostic_{checkpoint_path.name}_{pair_name.replace('+', '_')}.png"
+    plot_path = output_dir / f"spookynet_diagnostic_{stem_name}_{pair_name.replace('+', '_')}.png"
     plt.savefig(plot_path, dpi=300)
+    plt.close()
     plt.close()
     print(f"[+] Diagnostic plot saved to: {plot_path}\n")
 
