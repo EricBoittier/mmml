@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Cache SO3LR-style extxyz data in Orbax and train SpookyPhysNet on it.
+"""Cache SO3LR-style extxyz data and train a SpookyPhysNet residual model.
+
+With ``--mbd-checkpoint``, the QCML MBD model is restored once and kept frozen.
+Its geometry-dependent energy and force correction are added to Spooky's output,
+while only Spooky parameters are optimized.  Spooky's latent atom-centred
+charges/dipoles and configurable ZBL term remain active.
 
 Example:
     CUDA_VISIBLE_DEVICES=0,1 uv run python scripts/train_so3lr_spooky_extxyz.py \
