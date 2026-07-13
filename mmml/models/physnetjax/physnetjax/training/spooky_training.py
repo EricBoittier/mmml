@@ -309,6 +309,12 @@ def build_spooky_batch_from_flat_data(
     q_np = np.asarray(data_dict["Q"], dtype=np.float64).reshape(-1)
     s_np = np.asarray(data_dict["S"], dtype=np.float64).reshape(-1)
 
+    # Optional ML/MM keys (present in DES ML/MM dataset, absent in raw SO3LR)
+    has_mm = "cgenff_type_idx" in data_dict and "mol_id" in data_dict
+    if has_mm:
+        mol_id_flat   = np.asarray(data_dict["mol_id"],        dtype=np.int32)
+        cgenff_flat   = np.asarray(data_dict["cgenff_type_idx"], dtype=np.int32)
+
     batch_size = int(mol_indices.shape[0])
     dst_parts: list[np.ndarray] = []
     src_parts: list[np.ndarray] = []
@@ -319,6 +325,8 @@ def build_spooky_batch_from_flat_data(
     s_parts: list[np.ndarray] = []
     seg_parts: list[np.ndarray] = []
     e_rows: list[float] = []
+    mol_id_parts: list[np.ndarray] = []
+    cgenff_parts: list[np.ndarray] = []
 
     atom_offset = 0
     key = None
@@ -342,6 +350,9 @@ def build_spooky_batch_from_flat_data(
         s_parts.append(np.full((n, 1), s_np[mi], dtype=np.float32))
         seg_parts.append(np.full((n,), b, dtype=np.int32))
         e_rows.append(e_np[mi])
+        if has_mm:
+            mol_id_parts.append(mol_id_flat[a0:a1])
+            cgenff_parts.append(cgenff_flat[a0:a1])
         atom_offset += n
         if rot_augment:
             rot_b = sample_random_rotations(
@@ -362,7 +373,7 @@ def build_spooky_batch_from_flat_data(
     batch_segments_np = np.concatenate(seg_parts, axis=0)
     e_batch = np.array(e_rows, dtype=np.float64).reshape(-1, 1)
 
-    return {
+    batch = {
         "Z": jnp.asarray(z_cat, dtype=jnp.int32),
         "R": jnp.asarray(r_cat, dtype=jnp.float32),
         "Q_atoms": jnp.asarray(q_atoms_np, dtype=jnp.float32),
@@ -376,6 +387,10 @@ def build_spooky_batch_from_flat_data(
         "atom_mask": jnp.ones(z_cat.shape[0], dtype=jnp.float32),
         "batch_size": batch_size,
     }
+    if has_mm:
+        batch["mol_id"]         = jnp.asarray(np.concatenate(mol_id_parts), dtype=jnp.int32)
+        batch["cgenff_type_idx"] = jnp.asarray(np.concatenate(cgenff_parts), dtype=jnp.int32)
+    return batch
 
 
 def bucket_flat_molecule_indices_by_natoms(N: Union[np.ndarray, Any]) -> Dict[int, np.ndarray]:

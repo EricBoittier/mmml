@@ -144,47 +144,23 @@ class SpookyPhysNet(nn.Module):
         batch_mask: jnp.ndarray,
         atom_mask: jnp.ndarray,
         cell: Optional[jnp.ndarray] = None,
+        mol_id: jnp.ndarray | None = None,
+        cgenff_type_idx: jnp.ndarray | None = None,
+        cgenff_master_sigmas: jnp.ndarray | None = None,
+        cgenff_master_epsilons: jnp.ndarray | None = None,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
         """
         Calculate molecular energy and related properties.
 
         Computes the total energy of molecular systems including atomic energies,
-        electrostatic interactions, and repulsion terms.
-
-        Parameters
-        ----------
-        atomic_numbers : jnp.ndarray
-            Array of atomic numbers for each atom
-        positions : jnp.ndarray
-            Array of atomic coordinates
-        dst_idx : jnp.ndarray
-            Destination indices for message passing
-        src_idx : jnp.ndarray
-            Source indices for message passing
-        batch_segments : jnp.ndarray
-            Batch segment indices
-        batch_size : int
-            Number of molecules in batch
-        batch_mask : jnp.ndarray
-            Mask for valid batch elements
-        atom_mask : jnp.ndarray
-            Mask for valid atoms
-
-        Returns
-        -------
-        tuple[Array, tuple[Array, Array, Array, Array]]
-            Tuple containing:
-            - Total energy (negative sum)
-            - Tuple of (energy, charges, electrostatics, repulsion, features)
+        electrostatic interactions, ZBL repulsion, and optionally CGenFF LJ vdW.
         """
-        # Calculate basic geometric features
         basis, displacements = self._calculate_geometric_features(
             positions, dst_idx, src_idx, cell=cell
         )
 
         graph_mask = jnp.ones(batch_size)
 
-        # Embed and process atomic features
         x = self._process_atomic_features(
             atomic_numbers,
             charges,
@@ -208,6 +184,10 @@ class SpookyPhysNet(nn.Module):
             batch_mask,
             batch_segments,
             batch_size,
+            mol_id=mol_id,
+            cgenff_type_idx=cgenff_type_idx,
+            cgenff_master_sigmas=cgenff_master_sigmas,
+            cgenff_master_epsilons=cgenff_master_epsilons,
         )
 
     def _calculate_geometric_features(
@@ -1072,6 +1052,10 @@ class SpookyPhysNet(nn.Module):
         atom_mask: Optional[jnp.ndarray] = None,
         cell: Optional[jnp.ndarray] = None,
         compute_forces: bool = True,
+        mol_id: jnp.ndarray | None = None,
+        cgenff_type_idx: jnp.ndarray | None = None,
+        cgenff_master_sigmas: jnp.ndarray | None = None,
+        cgenff_master_epsilons: jnp.ndarray | None = None,
     ) -> Dict[str, Optional[jnp.ndarray]]:
         """
         Forward pass of the model.
@@ -1143,14 +1127,15 @@ class SpookyPhysNet(nn.Module):
                 batch_mask,
                 atom_mask,
                 cell,
+                mol_id=mol_id,
+                cgenff_type_idx=cgenff_type_idx,
+                cgenff_master_sigmas=cgenff_master_sigmas,
+                cgenff_master_epsilons=cgenff_master_epsilons,
             )
             forces = None
         else:
-            # Since we want to also predict forces, i.e. the gradient of the energy w.r.t. positions (argument 3), we use
-            # jax.value_and_grad to create a function for predicting both energy and forces for us.
             energy_and_forces = jax.value_and_grad(self.energy, argnums=3, has_aux=True)
 
-            # Calculate energies and forces
             (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
                 atomic_numbers,
                 charges,
@@ -1163,10 +1148,11 @@ class SpookyPhysNet(nn.Module):
                 batch_mask,
                 atom_mask,
                 cell,
+                mol_id,
+                cgenff_type_idx,
+                cgenff_master_sigmas,
+                cgenff_master_epsilons,
             )
-            # NOTE: energy() returns -E (negative energy) at line 532
-            # So: gradient = d(-E)/dr = -dE/dr
-            # And forces F = -dE/dr = gradient (no extra negation needed!)
             forces = gradient
             forces *= atom_mask[..., None]
 

@@ -406,11 +406,16 @@ def stack_device_batches(
         build_spooky_batch_from_flat_data(data, device_indices[i])
         for i in range(device_indices.shape[0])
     ]
+    has_mm = "cgenff_master_sigmas" in data and "cgenff_master_epsilons" in data
     for i, batch in enumerate(batches):
         indices = device_indices[i]
         batch["D"] = jnp.asarray(data["D"][indices], dtype=jnp.float32)
         batch["Q_total"] = jnp.asarray(data["Q"][indices], dtype=jnp.float32)
         batch["S_total"] = jnp.asarray(data["S"][indices], dtype=jnp.float32)
+        if has_mm:
+            # Master tables are constant — same for every batch, just replicated per device
+            batch["cgenff_master_sigmas"]   = jnp.asarray(data["cgenff_master_sigmas"],   dtype=jnp.float32)
+            batch["cgenff_master_epsilons"] = jnp.asarray(data["cgenff_master_epsilons"], dtype=jnp.float32)
     stacked: dict[str, Any] = {}
     for key in batches[0]:
         if key == "batch_size":
@@ -459,6 +464,7 @@ def make_steps(
         mbd_params = jax.tree.map(jax.lax.stop_gradient, mbd_params)
 
     def loss_fn(params, batch, mbd_scale):
+        has_mm = "cgenff_type_idx" in batch and "mol_id" in batch
         out = model.apply(
             params,
             atomic_numbers=batch["Z"],
@@ -471,6 +477,10 @@ def make_steps(
             batch_size=per_device_batch_size,
             batch_mask=batch["batch_mask"],
             atom_mask=batch["atom_mask"],
+            mol_id=batch.get("mol_id"),
+            cgenff_type_idx=batch.get("cgenff_type_idx"),
+            cgenff_master_sigmas=batch.get("cgenff_master_sigmas"),
+            cgenff_master_epsilons=batch.get("cgenff_master_epsilons"),
         )
         spooky_energy = out["energy"].reshape(-1, 1)
         spooky_forces = out["forces"].reshape(batch["F"].shape)
