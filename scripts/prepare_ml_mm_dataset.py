@@ -37,14 +37,17 @@ DEF_PRM_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
 
 
 def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndarray, np.ndarray]:
-    """Parse NONBONDED section from par_all36_cgenff.prm returning type_map, sigmas, epsilons."""
+    """Parse NONBONDED section from par_all36_cgenff.prm returning type_map, sigmas, epsilons.
+    
+    Raises ValueError if epsilon or sigma is exactly 0.0 for any type (sentinel for bad parse).
+    """
     nb_map = {}
     sigmas = []
     epsilons = []
     in_nb = False
     
     if not prm_path.exists():
-        return {"DEFAULT": 0}, np.array([3.5], dtype=np.float64), np.array([0.05], dtype=np.float64)
+        raise FileNotFoundError(f"CGenFF parameter file not found: {prm_path}")
 
     with prm_path.open("r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -64,36 +67,110 @@ def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndar
                     try:
                         atom_type = parts[0]
                         if atom_type not in nb_map:
-                            epsilon = abs(float(parts[2])) # kcal/mol
-                            rmin_half = float(parts[3])    # Angstrom
-                            sigma = rmin_half * 2.0 / (2.0**(1.0 / 6.0))
-                            
+                            epsilon = abs(float(parts[2]))  # kcal/mol
+                            rmin_half = float(parts[3])     # Angstrom (Rmin/2)
+                            if epsilon == 0.0 or rmin_half == 0.0:
+                                raise ValueError(
+                                    f"CGenFF atom type '{atom_type}' has zero epsilon={epsilon} or rmin_half={rmin_half}. "
+                                    f"This indicates a bad PRM parse."
+                                )
+                            sigma = rmin_half * 2.0 / (2.0 ** (1.0 / 6.0))
                             idx = len(nb_map)
                             nb_map[atom_type] = idx
                             sigmas.append(sigma)
                             epsilons.append(epsilon)
                     except ValueError:
-                        pass
+                        raise
 
-    if "DEFAULT" not in nb_map:
-        idx = len(nb_map)
-        nb_map["DEFAULT"] = idx
-        sigmas.append(3.5)
-        epsilons.append(0.05)
+    if not nb_map:
+        raise RuntimeError(f"No NONBONDED entries found in {prm_path}")
+
+    # Sentinel DEFAULT type for unmapped types — values are deliberately large/visible
+    # so model output is clearly wrong if it gets used (force debugging)
+    nb_map["DEFAULT"] = len(nb_map)
+    sigmas.append(0.0)    # deliberately zero → will produce zero LJ → visible in distribution
+    epsilons.append(0.0)  # deliberately zero → will produce zero LJ → visible in distribution
 
     return nb_map, np.array(sigmas, dtype=np.float64), np.array(epsilons, dtype=np.float64)
 
 
-def load_cgenff_rtf_residues(rtf_path: Path, nb_map: dict[str, int]) -> tuple[dict[str, dict], dict[tuple[tuple[int, int], ...], list[str]]]:
-    """Parse all RESI blocks from top_all36_cgenff.rtf, indexing by name and elemental composition."""
+def _parse_mass_element_map(rtf_path: Path) -> dict[str, int]:
+    """Parse MASS records from top_all36_cgenff.rtf to get authoritative atom_type -> atomic_number mapping.
+    
+    MASS line format: MASS  -1  HGA1  1.00800 H ! comment
+    The 5th field (index 4) is the element symbol — this is the ground truth.
+    If the element field is absent (old RTF format), fall back to mass-based inference.
+    """
+    _MASS_BY_APPROX = {
+        1.008: 1, 4.003: 2, 6.941: 3, 9.012: 4, 10.811: 5, 12.011: 6,
+        14.007: 7, 15.999: 8, 18.998: 9, 20.180: 10, 22.990: 11, 24.305: 12,
+        26.982: 13, 28.086: 14, 30.974: 15, 32.065: 16, 35.453: 17, 39.948: 18,
+        79.904: 35, 126.904: 53,
+    }
+    type_to_z = {}
+    if not rtf_path.exists():
+        return type_to_z
+    with rtf_path.open("r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line.startswith("MASS"):
+                continue
+            parts = line.split("!")[0].split()
+            if len(parts) < 4:
+                continue
+            atom_type = parts[2]
+            try:
+                mass = float(parts[3])
+            except ValueError:
+                continue
+            # Prefer explicit element symbol in field 5
+            if len(parts) >= 5 and parts[4].isalpha() and len(parts[4]) <= 2:
+                elem_sym = parts[4].capitalize()
+                z = atomic_numbers.get(elem_sym, 0)
+            else:
+                # Fall back to mass lookup (rounded to nearest tabulated mass)
+                closest = min(_MASS_BY_APPROX.keys(), key=lambda m: abs(m - mass))
+                z = _MASS_BY_APPROX[closest] if abs(closest - mass) < 1.0 else 6
+            if z > 0:
+                type_to_z[atom_type] = z
+    return type_to_z
+
+
+def load_cgenff_rtf_residues(
+    rtf_path: Path,
+    nb_map: dict[str, int],
+    type_to_z: dict[str, int],
+) -> tuple[dict[str, dict], dict[tuple[tuple[int, int], ...], list[str]], dict[tuple, list[str]]]:
+    """Parse all RESI blocks from top_all36_cgenff.rtf using MASS-record element mapping.
+    
+    Returns:
+        residues: dict[resi_name -> resi_data]
+        composition_map: dict[comp_key -> [resi_name, ...]]  (may have collisions for isomers)
+        collision_map: dict[comp_key -> [resi_name, ...]]    (only entries with >1 name = isomers)
+    """
     residues = {}
     composition_map = {}
     if not rtf_path.exists():
-        return residues, composition_map
+        raise FileNotFoundError(f"CGenFF RTF file not found: {rtf_path}")
 
+    default_idx = nb_map["DEFAULT"]
     current_resi = None
     resi_data = None
-    default_idx = nb_map.get("DEFAULT", 0)
+    bad_type_count = 0
+
+    def _finalize_resi():
+        """Store completed RESI block and index by composition."""
+        nonlocal bad_type_count
+        if not (current_resi and resi_data and resi_data["atoms"]):
+            return
+        # Validate: no atom should have the DEFAULT sentinel type index
+        for i, (aname, tidx) in enumerate(zip(resi_data["atoms"], resi_data["type_indices"])):
+            if tidx == default_idx:
+                bad_type_count += 1
+        residues[current_resi] = resi_data
+        z_arr = np.array(resi_data["z_elements"], dtype=np.int32)
+        comp_key = tuple(sorted(dict(zip(*np.unique(z_arr, return_counts=True))).items()))
+        composition_map.setdefault(comp_key, []).append(current_resi)
 
     with rtf_path.open("r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -104,45 +181,42 @@ def load_cgenff_rtf_residues(rtf_path: Path, nb_map: dict[str, int]) -> tuple[di
             if not parts:
                 continue
             if parts[0] == "RESI":
-                if current_resi and resi_data and resi_data["atoms"]:
-                    residues[current_resi] = resi_data
-                    comp_key = tuple(sorted(dict(zip(*np.unique(resi_data["z_elements"], return_counts=True))).items()))
-                    composition_map.setdefault(comp_key, []).append(current_resi)
+                _finalize_resi()
                 current_resi = parts[1]
                 resi_data = {"name": current_resi, "atoms": [], "type_indices": [], "charges": [], "z_elements": []}
             elif parts[0] == "ATOM" and current_resi:
                 atom_name = parts[1]
                 atom_type = parts[2]
-                charge = float(parts[3])
+                try:
+                    charge = float(parts[3])
+                except (ValueError, IndexError):
+                    charge = 0.0
                 t_idx = nb_map.get(atom_type, default_idx)
-                
-                # Infer atomic element from atom_type / atom_name
-                first_letter = atom_name[0].upper()
-                if first_letter == "C" and len(atom_name) > 1 and atom_name[1].lower() in ("l", "r"):
-                    elem_sym = "CL" if atom_name[1].lower() == "l" else "BR"
-                elif first_letter == "B" and len(atom_name) > 1 and atom_name[1].lower() == "r":
-                    elem_sym = "BR"
-                elif first_letter in chemical_symbols:
-                    elem_sym = first_letter
-                else:
-                    elem_sym = atom_type[0].upper()
-                
-                z_elem = atomic_numbers.get(elem_sym, 6)
+                # Use MASS-record authoritative element mapping
+                z_elem = type_to_z.get(atom_type, 6)
                 resi_data["atoms"].append(atom_name)
                 resi_data["type_indices"].append(t_idx)
                 resi_data["charges"].append(charge)
                 resi_data["z_elements"].append(z_elem)
+        _finalize_resi()
 
-        if current_resi and resi_data and resi_data["atoms"]:
-            residues[current_resi] = resi_data
-            comp_key = tuple(sorted(dict(zip(*np.unique(resi_data["z_elements"], return_counts=True))).items()))
-            composition_map.setdefault(comp_key, []).append(current_resi)
+    collision_map = {k: v for k, v in composition_map.items() if len(v) > 1}
 
-    return residues, composition_map
+    if bad_type_count > 0:
+        print(f"[WARNING] {bad_type_count} ATOM records mapped to DEFAULT sentinel type (unmapped atom_type in PRM). "
+              f"These atoms will have zero LJ parameters!")
+    if collision_map:
+        n_collisions = sum(len(v) for v in collision_map.values())
+        print(f"[WARNING] {len(collision_map)} elemental composition keys map to multiple RESI templates ({n_collisions} total). "
+              f"Isomer matching via composition alone is ambiguous — first match will be used. "
+              f"Consider adding explicit SMILES-based matching for these.")
+
+    return residues, composition_map, collision_map
 
 
 _NB_MAP, _CGENFF_SIGMAS, _CGENFF_EPSILONS = load_cgenff_nonbonded_table(DEF_PRM_PATH)
-_CGENFF_RESIDUES, _COMPOSITION_MAP = load_cgenff_rtf_residues(DEF_RTF_PATH, _NB_MAP)
+_CGENFF_TYPE_TO_Z = _parse_mass_element_map(DEF_RTF_PATH)
+_CGENFF_RESIDUES, _COMPOSITION_MAP, _COLLISION_MAP = load_cgenff_rtf_residues(DEF_RTF_PATH, _NB_MAP, _CGENFF_TYPE_TO_Z)
 
 
 def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[int]]:
@@ -261,7 +335,7 @@ def process_single_frame(args_tuple):
     
     comps = find_covalent_components_fast(z_struct, r_struct)
     if len(comps) != 2:
-        return None
+        return ("SKIP", f"non-dimer: {len(comps)} components")
 
     comp_a, comp_b = comps[0], comps[1]
     
@@ -269,6 +343,13 @@ def process_single_frame(args_tuple):
         # Neutral monomer target charge assumption for neutral DES dimers (0.0)
         res_a, t_a, q_a = match_cgenff_template_fast(z_struct[comp_a], comp_a, target_charge=0.0)
         res_b, t_b, q_b = match_cgenff_template_fast(z_struct[comp_b], comp_b, target_charge=0.0)
+
+        # Validate: no DEFAULT sentinel type indices (zero LJ params) should appear
+        default_idx = _NB_MAP["DEFAULT"]
+        if np.any(t_a == default_idx) or np.any(t_b == default_idx):
+            counts_a = dict(zip(*np.unique(z_struct[comp_a], return_counts=True)))
+            counts_b = dict(zip(*np.unique(z_struct[comp_b], return_counts=True)))
+            return ("SKIP", f"DEFAULT sentinel type in {res_a}:{counts_a} or {res_b}:{counts_b}")
 
         e_mm, f_mm = compute_inter_monomer_cgenff_mm_fast(
             r_struct, comp_a, t_a, q_a, comp_b, t_b, q_b
@@ -289,8 +370,12 @@ def process_single_frame(args_tuple):
             r_struct, z_struct, f_struct, f_mm, energy_i, e_mm,
             n_atoms, q_i, s_i, d_i, mol_id, cgenff_type, cgenff_charge
         )
-    except Exception:
-        return None
+    except KeyError as e:
+        counts_a = dict(zip(*np.unique(z_struct[comp_a], return_counts=True)))
+        counts_b = dict(zip(*np.unique(z_struct[comp_b], return_counts=True)))
+        return ("SKIP", f"Unmapped CGenFF template: {e} | compA={counts_a} compB={counts_b}")
+    except Exception as e:
+        return ("SKIP", f"Unexpected error: {type(e).__name__}: {e}")
 
 
 def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_structures: int | None = None, num_workers: int | None = None):
@@ -348,10 +433,19 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
     kept_offsets = [0]
 
     dimers_processed = 0
+    dropped_total = 0
+    dropped_reasons: dict[str, int] = {}
 
     with mp.Pool(processes=workers) as pool:
         for res in pool.imap(process_single_frame, frame_generator(), chunksize=5000):
+            if isinstance(res, tuple) and len(res) == 2 and res[0] == "SKIP":
+                dropped_total += 1
+                reason = res[1][:120]  # truncate long reasons
+                dropped_reasons[reason] = dropped_reasons.get(reason, 0) + 1
+                continue
             if res is None:
+                dropped_total += 1
+                dropped_reasons["None result"] = dropped_reasons.get("None result", 0) + 1
                 continue
 
             (r_struct, z_struct, f_struct, f_mm, energy_i, e_mm,
@@ -377,6 +471,11 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
                 dt = time.time() - t0
                 rate = dimers_processed / dt
                 print(f"  Processed {dimers_processed:,} dimers ({rate:.0f} frames/sec)")
+
+    if dropped_total > 0:
+        print(f"\n[WARNING] Dropped {dropped_total:,} frames ({100*dropped_total/(dropped_total+dimers_processed):.2f}%). Top reasons:")
+        for reason, count in sorted(dropped_reasons.items(), key=lambda x: -x[1])[:20]:
+            print(f"   {count:>8,} : {reason}")
 
     dt = time.time() - t0
     print(f"\n[+] Total Dimer Structures Prepared: {dimers_processed:,} in {dt:.2f}s ({dimers_processed / dt:.0f} frames/sec)")
