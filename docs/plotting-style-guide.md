@@ -118,18 +118,37 @@ semantic. If the only answer is "it's next in the list," fix it.
 [`mmml.utils.plotting.styles.legend_outside(target, side="auto", **kwargs)`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py)
 instead of `axis.legend(loc="best", ...)`.
 
-**Which side depends on the figure's longest dimension, not a fixed default:**
+**Which side is decided by measurement, not a guess from the figure's
+aspect ratio:**
 
+- **`side="auto"`** (default) actually places the legend at **both**
+  candidate sides ("right" and "bottom"), reads back each candidate's real
+  rendered size (`get_window_extent()`), computes what the *total figure
+  bounding box* would be for each —
+  `(fig_w + legend_w) * max(fig_h, legend_h)` for a side legend,
+  `max(fig_w, legend_w) * (fig_h + legend_h)` for a bottom legend — and
+  keeps whichever candidate gives the smaller area. This is a real
+  measurement of the two options, not an inference from the plotted data's
+  aspect ratio: a small legend (few short entries) costs almost nothing
+  added to a bottom placement regardless of whether the figure itself is
+  wide or tall, while a large legend (many long labels) wrapping into
+  several columns at the bottom can cost *more* added height than it would
+  cost added width on the side — again regardless of the figure's own
+  proportions. Guessing from `fig.get_size_inches()` alone gets both of
+  these cases wrong for exactly the figures where it matters (a big legend
+  on a wide figure, a tiny legend on a tall one).
 - **Single-column, multi-row (stacked) figures** — e.g. 2-3 subplots stacked
-  vertically, the figure is *taller than wide* — put the legend **below the
-  whole figure**, not to the side. Pass the `Figure` (not an `Axes`) so one
-  combined legend covers every panel instead of stacking several smaller
-  ones:
+  vertically — put the legend **below the whole figure**, not to the side,
+  by passing the `Figure` (not an `Axes`) so one combined legend covers
+  every panel instead of stacking several smaller ones:
   ```python
   legend_outside(fig, handles=all_handles, labels=all_labels, side="bottom", fontsize=12)
   ```
   A bottom legend wraps into a small grid (`ncol` auto-picked, ≤4) rather
-  than one long row, so it stays roughly as wide as the figure itself.
+  than one long row, so it stays roughly as wide as the figure itself. This
+  is a structural choice ("one legend for N stacked panels reads better
+  below all of them") independent of the min-area comparison above — set
+  `side` explicitly here rather than leaving it to `"auto"`.
 - **Multi-column figures** — e.g. two panels side by side — **each column
   gets its own legend on its own outer edge**: the left panel's legend
   attaches further left, the right panel's further right. Never stack both
@@ -138,16 +157,9 @@ instead of `axis.legend(loc="best", ...)`.
   legend_outside(ax_left, side="left", fontsize=10)
   legend_outside(ax_right, side="right", fontsize=10)
   ```
-- **`side="auto"`** (default) picks between right/bottom by comparing the
-  *figure's* width to height (`fig.get_size_inches()`) — a **wide** figure
-  gets a **bottom** legend (it already has little spare width, so a
-  right-hand legend would squeeze the data; the surplus width becomes room
-  for a multi-column legend instead) and a **tall** figure gets a **side**
-  legend (little spare height for a bottom legend without stretching the
-  figure further; the surplus height on the side absorbs it instead). Use
-  `"auto"` for a single-axes figure where there's no column/row structure to
-  reason about; set the side explicitly for anything with subplots, per the
-  two cases above.
+  `"left"` is deliberately excluded from `"auto"`'s own candidate search —
+  it's for this explicit multi-column case, not something the automatic
+  comparison should reach for on its own.
 
 Because a legend is outside, **it's free to grow long** — a 12-setting
 sweep's legend reads like a small table (marker/color/seed-symbol → setting

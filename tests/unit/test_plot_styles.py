@@ -176,25 +176,67 @@ def test_every_preset_sets_a_title_pad() -> None:
         assert style.rc_params["axes.titlepad"] >= 8.0, name
 
 
-def test_legend_outside_auto_side_wide_figure_goes_bottom() -> None:
+def _legend_side(legend, ax) -> str:
+    bbox = legend.get_bbox_to_anchor().transformed(ax.transAxes.inverted())
+    return "bottom" if bbox.y0 < 0 else "right"
+
+
+def test_legend_outside_auto_picks_bottom_for_a_small_legend_either_aspect() -> None:
+    # A single short entry costs almost nothing added to figure height at the
+    # bottom, but a full extra column of width on the side -- min-area picks
+    # bottom regardless of whether the figure itself is wide or tall.
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot([0, 1], [0, 1], label="series")
-    legend = legend_outside(ax, side="auto")
-    # bottom legends are anchored via bbox_to_anchor=(0.5, -0.08)
-    assert legend.get_bbox_to_anchor().transformed(ax.transAxes.inverted()).y0 < 0
-    plt.close(fig)
+    apply_plot_style("icml")
+    for figsize in [(10, 4), (4, 10)]:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.plot([0, 1], [0, 1], label="series")
+        legend = legend_outside(ax, side="auto")
+        assert _legend_side(legend, ax) == "bottom", figsize
+        plt.close(fig)
 
 
-def test_legend_outside_auto_side_tall_figure_goes_right() -> None:
+def test_legend_outside_auto_picks_right_for_a_large_legend_either_aspect() -> None:
+    # Many long-label entries would wrap into several wide columns at the
+    # bottom (adding more height than the side adds width) -- min-area picks
+    # "right" regardless of the figure's own aspect ratio.
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(4, 10))
-    ax.plot([0, 1], [0, 1], label="series")
+    apply_plot_style("icml")
+    for figsize in [(12, 4), (4, 10)]:
+        fig, ax = plt.subplots(figsize=figsize)
+        for i in range(8):
+            ax.plot([0, 1], [i, i + 1], label=f"a fairly long series label number {i}")
+        legend = legend_outside(ax, side="auto")
+        assert _legend_side(legend, ax) == "right", figsize
+        plt.close(fig)
+
+
+def test_legend_outside_auto_matches_explicit_min_area_side() -> None:
+    # The "auto" choice should always equal whichever of "right"/"bottom"
+    # actually produces the smaller total figure bounding box -- check this
+    # directly rather than trusting the heuristic reasoning above alone.
+    import matplotlib.pyplot as plt
+
+    from mmml.utils.plotting.styles import _legend_footprint_in
+
+    apply_plot_style("icml")
+    fig, ax = plt.subplots(figsize=(7, 6))
+    for i in range(4):
+        ax.plot([0, 1], [i, i + 1], label=f"series {i}")
+    fig_w, fig_h = fig.get_size_inches()
+
+    areas = {}
+    for side in ("right", "bottom"):
+        legend_w, legend_h = _legend_footprint_in(ax, fig, side, None, {})
+        if side == "right":
+            areas[side] = (fig_w + legend_w) * max(fig_h, legend_h)
+        else:
+            areas[side] = max(fig_w, legend_w) * (fig_h + legend_h)
+    expected_side = min(areas, key=areas.get)
+
     legend = legend_outside(ax, side="auto")
-    # right-side legends are anchored via bbox_to_anchor=(1.02, 1.0)
-    assert legend.get_bbox_to_anchor().transformed(ax.transAxes.inverted()).x0 > 1.0
+    assert _legend_side(legend, ax) == expected_side
     plt.close(fig)
 
 

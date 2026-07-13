@@ -376,44 +376,10 @@ def seed_symbol(seed: int) -> str:
     return SEED_DICE[seed] if seed in SEED_DICE else str(seed)
 
 
-def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwargs: Any):
-    """Place a legend outside the plotted data, on whichever side matches the
-    figure's *longest* dimension -- never squeezed against the short side.
-
-    See docs/plotting-style-guide.md "Legends live outside the plot":
-
-    - ``target`` an ``Axes``: legend is anchored to that axes specifically
-      (right or left of it) -- use this for a multi-column figure, where the
-      left column's legend goes further left and the right column's goes
-      further right, rather than stacking both on one side.
-    - ``target`` a ``Figure``: legend is anchored to the whole figure (right
-      or below it) -- use this for a single-column, multi-row (stacked)
-      figure, where "outside" more naturally means below the tallest side.
-    - ``side="auto"`` (default): compares the *figure's* width to height
-      (``fig.get_size_inches()``) -- a wide figure already has little spare
-      width, so a right-hand legend would squeeze the data further; put it
-      **below** instead, where the surplus width becomes room for a
-      multi-column legend. A tall (portrait/stacked) figure has little
-      spare height for a bottom legend to live in without stretching the
-      figure further, so put it on the **side** instead, where the surplus
-      height is already there to absorb it. Pass
-      ``side="left"``/``"right"``/``"bottom"`` to override.
-
-    A legend placed this way is also free to grow large (many entries, long
-    labels) without crowding the data, so it can double as a compact table
-    (e.g. one row per setting with its color/marker/seed-die as the row key).
-    ``ncol`` defaults to 1 for a side legend (reads top-to-bottom like a
-    table) and wraps to multiple columns for a bottom legend (so a long
-    legend doesn't stretch further than the figure itself).
-    """
-    import matplotlib.figure
-
-    fig = target if isinstance(target, matplotlib.figure.Figure) else target.figure
-
-    if side == "auto":
-        width_in, height_in = fig.get_size_inches()
-        side = "bottom" if width_in >= height_in else "right"
-
+def _place_legend_at(target, side: str, ncol: int | None, kwargs: dict[str, Any]):
+    """Actually create the legend at the given side. Shared by
+    `legend_outside`'s final placement and by `_min_area_side`'s measurement
+    pass (which creates one of these, measures it, and throws it away)."""
     if side == "right":
         return target.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0),
                               borderaxespad=0.0, ncol=ncol or 1, **kwargs)
@@ -433,12 +399,92 @@ def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwa
         default_ncol = max(1, min(4, n_entries)) if n_entries else 3
         # -0.18, not -0.08: an Axes' own x-axis label already occupies roughly
         # the -0.08..-0.14 band below the axes box (tick labels then the
-        # label itself) -- -0.08 sits the legend right on top of it. This
-        # matters more now that "auto" picks "bottom" for wide figures (the
-        # common case), not just occasionally.
+        # label itself) -- -0.08 sits the legend right on top of it.
         return target.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18),
                               borderaxespad=0.0, ncol=ncol or default_ncol, **kwargs)
-    raise ValueError(f"side must be 'auto', 'left', 'right', or 'bottom'; got {side!r}")
+    raise ValueError(f"side must be 'left', 'right', or 'bottom'; got {side!r}")
+
+
+def _legend_footprint_in(target, fig, side: str, ncol: int | None, kwargs: dict[str, Any]) -> tuple[float, float]:
+    """Render a candidate legend at ``side``, measure its (width, height) in
+    inches from its actual laid-out bbox, then remove it -- a real
+    measurement, not an estimate from character/entry counts (font, entry
+    text length, and ncol wrapping all affect the real footprint, and
+    guessing gets all three wrong in different ways)."""
+    legend = _place_legend_at(target, side, ncol, dict(kwargs))
+    fig.canvas.draw()
+    bbox_in = legend.get_window_extent(renderer=fig.canvas.get_renderer()).transformed(
+        fig.dpi_scale_trans.inverted()
+    )
+    legend.remove()
+    return bbox_in.width, bbox_in.height
+
+
+def _min_area_side(target, fig, ncol: int | None, kwargs: dict[str, Any]) -> str:
+    """Pick whichever of "right"/"bottom" results in the SMALLEST total
+    figure bounding box (width x height, in inches) once the legend is
+    actually placed -- not a guess from the figure's raw aspect ratio.
+    "left" is deliberately excluded from the automatic choice: it's for the
+    explicit multi-column case (see legend_outside's docstring), not
+    something "auto" should reach for on its own.
+    """
+    fig_w, fig_h = fig.get_size_inches()
+    best_side, best_area = "right", None
+    for side in ("right", "bottom"):
+        legend_w, legend_h = _legend_footprint_in(target, fig, side, ncol, kwargs)
+        if side == "right":
+            total_w, total_h = fig_w + legend_w, max(fig_h, legend_h)
+        else:  # bottom
+            total_w, total_h = max(fig_w, legend_w), fig_h + legend_h
+        area = total_w * total_h
+        if best_area is None or area < best_area:
+            best_area, best_side = area, side
+    return best_side
+
+
+def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwargs: Any):
+    """Place a legend outside the plotted data -- never overlapping it.
+
+    See docs/plotting-style-guide.md "Legends live outside the plot":
+
+    - ``target`` an ``Axes``: legend is anchored to that axes specifically
+      (right or left of it) -- use this for a multi-column figure, where the
+      left column's legend goes further left and the right column's goes
+      further right, rather than stacking both on one side.
+    - ``target`` a ``Figure``: legend is anchored to the whole figure (right
+      or below it) -- use this for a single-column, multi-row (stacked)
+      figure, where "outside" more naturally means below the tallest side.
+    - ``side="auto"`` (default): tries the legend at **both** "right" and
+      "bottom", measures each candidate's *actual* rendered footprint
+      (``get_window_extent()``, not an estimate from entry count), computes
+      the resulting total figure bounding-box area for each
+      (``(fig_w + legend_w) * max(fig_h, legend_h)`` for a side legend,
+      ``max(fig_w, legend_w) * (fig_h + legend_h)`` for a bottom legend),
+      and keeps whichever is smaller. This directly minimizes how much
+      bigger the legend makes the overall figure, rather than guessing from
+      the plotted data's raw aspect ratio (which can be misleading: a
+      legend with a few short entries costs little added width on the
+      side even for a tall figure, while a legend with many long labels
+      can cost more added width on the side than it would added height on
+      the bottom, regardless of the figure's own proportions). Pass
+      ``side="left"``/``"right"``/``"bottom"`` to skip the measurement and
+      force a specific side.
+
+    A legend placed this way is also free to grow large (many entries, long
+    labels) without crowding the data, so it can double as a compact table
+    (e.g. one row per setting with its color/marker/seed-die as the row key).
+    ``ncol`` defaults to 1 for a side legend (reads top-to-bottom like a
+    table) and wraps to multiple columns for a bottom legend (so a long
+    legend doesn't stretch further than the figure itself).
+    """
+    import matplotlib.figure
+
+    fig = target if isinstance(target, matplotlib.figure.Figure) else target.figure
+
+    if side == "auto":
+        side = _min_area_side(target, fig, ncol, kwargs)
+
+    return _place_legend_at(target, side, ncol, kwargs)
 
 
 def shared_axis_labels(fig, *, xlabel: str | None = None, ylabel: str | None = None,
