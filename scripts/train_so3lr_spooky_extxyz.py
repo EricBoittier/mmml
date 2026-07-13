@@ -1057,13 +1057,15 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             train_metrics.append(metrics)
             if step % args.log_every_steps == 0:
                 m = mean_metrics([metrics])
-                print(
+                line = (
                     f"epoch {epoch:04d} step {step:06d} "
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
                     f"F_MAE={m['forces_mae']:.6g} "
                     f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g}"
-                    f" MBD_λ={m['mbd_scale']:.3f}"
                 )
+                if mbd_model is not None:
+                    line += f" MBD_λ={m['mbd_scale']:.3f}"
+                print(line)
             if args.steps_per_epoch and step >= args.steps_per_epoch:
                 break
 
