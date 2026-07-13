@@ -191,7 +191,14 @@ def load_cgenff_rtf_residues(
             if parts[0] == "RESI":
                 _finalize_resi()
                 current_resi = parts[1]
-                resi_data = {"name": current_resi, "atoms": [], "type_indices": [], "charges": [], "z_elements": []}
+                resi_data = {
+                    "name": current_resi,
+                    "atoms": [],
+                    "type_indices": [],
+                    "charges": [],
+                    "z_elements": [],
+                    "bonds": [],
+                }
             elif parts[0] == "ATOM" and current_resi:
                 atom_name = parts[1]
                 atom_type = parts[2]
@@ -206,6 +213,16 @@ def load_cgenff_rtf_residues(
                 resi_data["type_indices"].append(t_idx)
                 resi_data["charges"].append(charge)
                 resi_data["z_elements"].append(z_elem)
+            elif parts[0] in {"BOND", "DOUBLE", "TRIPLE"} and current_resi:
+                # CHARMM lists bonded atom-name pairs after the directive.  Skip
+                # cross-residue references (``+N``/``-C``) and TIP3's artificial
+                # H-H SHAKE constraint: neither describes the covalent graph used
+                # to identify atoms in an isolated geometry.
+                names = parts[1:]
+                for a, b in zip(names[0::2], names[1::2]):
+                    if a.startswith(("+", "-")) or b.startswith(("+", "-")):
+                        continue
+                    resi_data["bonds"].append((a, b))
         _finalize_resi()
 
     collision_map = {k: v for k, v in composition_map.items() if len(v) > 1}
@@ -392,6 +409,7 @@ def _fmt_comp(z_arr: np.ndarray) -> str:
 def match_cgenff_template_fast(
     z_sub: np.ndarray,
     comp_indices: list[int],
+    pos_sub: np.ndarray | None = None,
     target_charge: float = 0.0,
     canonical_smiles: str | None = None,
 ) -> tuple[str, np.ndarray, np.ndarray]:
@@ -427,6 +445,11 @@ def match_cgenff_template_fast(
     type_indices = np.array(tmpl["type_indices"], dtype=np.int32)
     charges = np.array(tmpl["charges"], dtype=np.float64)
 
+    if pos_sub is not None:
+        permutation = _template_to_geometry_permutation(tmpl, z_sub, pos_sub)
+        type_indices = type_indices[permutation]
+        charges = charges[permutation]
+
     # Strict charge conservation
     n_atoms = len(charges)
     if n_atoms > 0:
@@ -435,6 +458,81 @@ def match_cgenff_template_fast(
             charges = charges + (charge_diff / n_atoms)
 
     return res_name, type_indices, charges
+
+
+def _template_to_geometry_permutation(
+    tmpl: dict, z_observed: np.ndarray, positions: np.ndarray
+) -> np.ndarray:
+    """Return template indices in observed atom order using graph isomorphism.
+
+    Composition-only residue lookup does not imply atom-order equivalence.  This
+    explicitly maps the RTF covalent graph onto the geometry graph, preventing
+    e.g. TIP3 ``O,H,H`` parameters from being assigned to an ``H,H,O`` frame.
+    """
+    z_obs = np.asarray(z_observed, dtype=np.int32).reshape(-1)
+    pos = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+    z_tmpl = np.asarray(tmpl["z_elements"], dtype=np.int32)
+    n = z_obs.size
+    if z_tmpl.size != n or sorted(z_tmpl.tolist()) != sorted(z_obs.tolist()):
+        raise ValueError(f"Template {tmpl['name']} composition does not match geometry")
+
+    names = list(tmpl["atoms"])
+    name_to_idx = {name: i for i, name in enumerate(names)}
+    adj_t = np.zeros((n, n), dtype=bool)
+    for a, b in tmpl.get("bonds", []):
+        if a not in name_to_idx or b not in name_to_idx:
+            continue
+        ia, ib = name_to_idx[a], name_to_idx[b]
+        if z_tmpl[ia] == z_tmpl[ib] == 1:  # TIP3 SHAKE-only H-H constraint
+            continue
+        adj_t[ia, ib] = adj_t[ib, ia] = True
+
+    dr = pos[:, None, :] - pos[None, :, :]
+    dist = np.linalg.norm(dr, axis=-1)
+    cutoff = 1.3 * (covalent_radii[z_obs, None] + covalent_radii[z_obs][None, :])
+    adj_o = (dist < cutoff) & (dist > 1.0e-8)
+
+    def signature(z: np.ndarray, adj: np.ndarray, i: int) -> tuple:
+        return int(z[i]), tuple(sorted(map(int, z[np.flatnonzero(adj[i])]))), int(adj[i].sum())
+
+    candidates = []
+    for oi in range(n):
+        sig_o = signature(z_obs, adj_o, oi)
+        matches = [ti for ti in range(n) if signature(z_tmpl, adj_t, ti) == sig_o]
+        if not matches:
+            raise ValueError(
+                f"No topology match for atom {oi} (Z={z_obs[oi]}) in template {tmpl['name']}"
+            )
+        candidates.append(matches)
+
+    observed_order = sorted(range(n), key=lambda oi: len(candidates[oi]))
+    obs_to_tmpl = np.full(n, -1, dtype=np.int32)
+    used: set[int] = set()
+
+    def assign(depth: int) -> bool:
+        if depth == n:
+            return True
+        oi = observed_order[depth]
+        for ti in candidates[oi]:
+            if ti in used:
+                continue
+            if any(
+                bool(adj_o[oi, oj]) != bool(adj_t[ti, obs_to_tmpl[oj]])
+                for oj in range(n)
+                if obs_to_tmpl[oj] >= 0
+            ):
+                continue
+            obs_to_tmpl[oi] = ti
+            used.add(ti)
+            if assign(depth + 1):
+                return True
+            used.remove(ti)
+            obs_to_tmpl[oi] = -1
+        return False
+
+    if not assign(0):
+        raise ValueError(f"Geometry is not graph-isomorphic to CGenFF template {tmpl['name']}")
+    return obs_to_tmpl
 
 
 def compute_inter_monomer_cgenff_mm_fast(pos: np.ndarray, comp_a: list[int], t_a: np.ndarray, q_a: np.ndarray,
@@ -501,10 +599,12 @@ def process_single_frame(args_tuple):
         # canonical_smiles=None: use composition lookup (SMILES lookup reserved for future
         # use if source cache provides smiles0/smiles1 keys directly)
         res_a, t_a, q_a = match_cgenff_template_fast(
-            z_struct[comp_a], comp_a, target_charge=0.0, canonical_smiles=None
+            z_struct[comp_a], comp_a, r_struct[comp_a],
+            target_charge=0.0, canonical_smiles=None
         )
         res_b, t_b, q_b = match_cgenff_template_fast(
-            z_struct[comp_b], comp_b, target_charge=0.0, canonical_smiles=None
+            z_struct[comp_b], comp_b, r_struct[comp_b],
+            target_charge=0.0, canonical_smiles=None
         )
 
         # Validate: no DEFAULT sentinel type indices (zero LJ params) should appear

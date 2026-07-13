@@ -393,6 +393,9 @@ def plot_2d_pes_for_pair(
     forces_calc=None,
     forces_label: str | None = None,
     max_cols: int = MAX_COLS,
+    shared_vmin: float | None = None,
+    shared_vmax: float | None = None,
+    keep_energy_outliers: bool = False,
 ) -> None:
     """Render a 2D PES heatmap for one (pair, backend) set."""
     n_be = len(backends)
@@ -496,9 +499,10 @@ def plot_2d_pes_for_pair(
         # energetic blow-ups; catch those directly from E_int via a robust
         # (MAD-based) outlier test and exclude them the same way.
         df_be = flag_energy_outliers(df_be, "E_int")
-        n_outlier = int(df_be["is_energy_outlier"].sum())
-        df_outlier = df_be[df_be["is_energy_outlier"]]
-        df_be = df_be[~df_be["is_energy_outlier"]]
+        n_outlier = 0 if keep_energy_outliers else int(df_be["is_energy_outlier"].sum())
+        df_outlier = df_be.iloc[0:0] if keep_energy_outliers else df_be[df_be["is_energy_outlier"]]
+        if not keep_energy_outliers:
+            df_be = df_be[~df_be["is_energy_outlier"]]
         if df_be.empty:
             ax.set_visible(False)
             continue
@@ -513,6 +517,8 @@ def plot_2d_pes_for_pair(
         # fixed, comparable scale across backends; default is fully
         # data-driven per backend.
         vmax = robust_color_vmax(df_be["E_int"].to_numpy(), ceiling=energy_clip_kcal)
+        display_vmin = -vmax if shared_vmin is None else float(shared_vmin)
+        display_vmax = vmax if shared_vmax is None else float(shared_vmax)
         # Clip bound for interpolation stability only — kept a bit above vmax
         # so genuine (non-outlier) structure near the edge of the colour
         # range isn't itself washed out by the clip.
@@ -543,7 +549,7 @@ def plot_2d_pes_for_pair(
         sparse_data = len(dist_vals) < 3 or len(off_vals) < 2 or len(surface_df) < 6
 
         if sparse_data:
-            norm = Normalize(vmin=-vmax, vmax=vmax)
+            norm = Normalize(vmin=display_vmin, vmax=display_vmax)
             sc = ax.scatter(
                 df_be["distance_angstrom"],
                 df_be["offset_angstrom"],
@@ -592,7 +598,9 @@ def plot_2d_pes_for_pair(
             if np.any(valid):
                 weights = gaussian_filter(valid.astype(float), sigma=0.8)
                 blurred = gaussian_filter(np.where(valid, Z_fine, 0.0), sigma=0.8)
-                Z_fine = np.where(weights > 1e-8, blurred / weights, np.nan)
+                smoothed = np.full_like(blurred, np.nan)
+                np.divide(blurred, weights, out=smoothed, where=weights > 1e-8)
+                Z_fine = smoothed
             # Cells outside the convex hull of the *clean* points come back as
             # NaN — deliberately left as gaps rather than flat-filled by
             # nearest-neighbour extrapolation. A flat fill previously let the
@@ -605,14 +613,23 @@ def plot_2d_pes_for_pair(
             Z_physical = Z_fine.copy()
             Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
 
-            norm = Normalize(vmin=-vmax, vmax=vmax)
+            norm = Normalize(vmin=display_vmin, vmax=display_vmax)
 
             cmap = panel_cmap
             im = ax.contourf(
                 D_fine, O_fine, Z_fine,
-                levels=30,
+                levels=(
+                    np.linspace(display_vmin, display_vmax, 31)
+                    if shared_vmin is not None and shared_vmax is not None
+                    else 30
+                ),
                 cmap=cmap,
                 norm=norm,
+                extend=(
+                    "both"
+                    if shared_vmin is not None and shared_vmax is not None
+                    else "neither"
+                ),
             )
             ax.contour(
                 D_fine, O_fine, Z_fine,
@@ -625,6 +642,24 @@ def plot_2d_pes_for_pair(
             cb = plt.colorbar(im, ax=ax, shrink=0.85)
             cb.set_label("$E_{int}$ / kcal mol$^{-1}$", fontsize=COLORBAR_LABEL_FONTSIZE)
             cb.ax.tick_params(labelsize=TICK_LABEL_FONTSIZE)
+
+            # Explicitly mark saturated evaluated geometries. Down/up triangles
+            # distinguish values below/above the shared display range so a
+            # clipped catastrophic well cannot masquerade as an ordinary basin.
+            below = df_be[df_be["E_int"] < display_vmin]
+            above = df_be[df_be["E_int"] > display_vmax]
+            if not below.empty:
+                ax.scatter(
+                    below["distance_angstrom"], below["offset_angstrom"],
+                    marker="v", s=20, facecolors="none", edgecolors="white",
+                    linewidths=0.8, zorder=6,
+                )
+            if not above.empty:
+                ax.scatter(
+                    above["distance_angstrom"], above["offset_angstrom"],
+                    marker="^", s=20, facecolors="none", edgecolors="black",
+                    linewidths=0.8, zorder=6,
+                )
 
             # Report and mark a real sampled geometry.  The smoothed surface is
             # presentation-only and can attenuate a narrow well or move its
@@ -745,6 +780,12 @@ def main() -> None:
             "comparable scale across backends instead."
         ),
     )
+    parser.add_argument("--shared-vmin", type=float, default=None)
+    parser.add_argument("--shared-vmax", type=float, default=None)
+    parser.add_argument(
+        "--keep-energy-outliers", action="store_true",
+        help="Keep backend energy outliers so failures remain visible/saturated.",
+    )
     parser.add_argument(
         "--n-grid", type=int, default=80,
         help="Interpolation grid resolution (default 80)",
@@ -800,6 +841,9 @@ def main() -> None:
             min_contact=args.min_contact, show_atoms=not args.no_atoms,
             forces_calc=forces_calc, forces_label=forces_label,
             max_cols=args.max_cols,
+            shared_vmin=args.shared_vmin,
+            shared_vmax=args.shared_vmax,
+            keep_energy_outliers=args.keep_energy_outliers,
         )
 
     print(f"\nAll 2D PES plots saved to {args.output_dir}")

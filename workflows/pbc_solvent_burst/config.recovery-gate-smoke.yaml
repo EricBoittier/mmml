@@ -4,7 +4,7 @@ cluster_sizes: [10]
 temperatures: [150.0]
 box_sizes: [32.0]
 checkpoint: artifacts/spooky_so3lr_muon_tight/epoch-0001_params.json
-output_root: artifacts/pbc_recovery_gate_smoke
+output_root: artifacts/pbc_recovery_gate_smoke_v2
 seed_base: 456
 
 jaxmd_burst_ps: 0.02

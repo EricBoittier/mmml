@@ -190,12 +190,29 @@ def resolve_monomer_template_reference_positions(
         refs.append((np.asarray(ref, dtype=np.float64), source))
     except RuntimeError:
         pass
-    refs.extend(_memory_extent_reference_sources(mlpot_ctx))
+    memory_refs = _memory_extent_reference_sources(mlpot_ctx)
+    refs.extend(memory_refs)
+
+    # The live geometry may already be the damaged frame that triggered
+    # recovery.  Never use it to disqualify the trusted pre-dynamics mini or
+    # baseline snapshots.  Instead, validate disk/fallback templates against
+    # the first intact in-memory reference when one exists.
+    plausibility_reference = None
+    for raw_ref, _source in memory_refs:
+        arr = np.asarray(raw_ref, dtype=np.float64)
+        if arr.size and np.all(np.isfinite(arr)):
+            plausibility_reference = arr
+            break
 
     def plausible(arr: np.ndarray) -> bool:
-        if current_positions is None or monomer_offsets is None:
+        comparison = (
+            plausibility_reference
+            if plausibility_reference is not None
+            else current_positions
+        )
+        if comparison is None or monomer_offsets is None:
             return True
-        cur = np.asarray(current_positions, dtype=np.float64)
+        cur = np.asarray(comparison, dtype=np.float64)
         offsets = np.asarray(monomer_offsets, dtype=int)
         if arr.shape != cur.shape or offsets.size < 2:
             return False
@@ -357,6 +374,8 @@ def run_selective_monomer_physnet_mini(
     atoms_per_list = [int(x) for x in atoms_per]
     offsets = _monomer_offsets(atoms_per_list)
     pos = np.asarray(get_charmm_positions_array(), dtype=np.float64).copy()
+    rollback_positions = pos.copy()
+    initial_grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
     z_arr = np.asarray(z_full, dtype=int)
 
     selected: tuple[int, ...]
@@ -492,6 +511,27 @@ def run_selective_monomer_physnet_mini(
     sync_charmm_positions(pos)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
     grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
+    rollback_limit = max(
+        50.0,
+        5.0 * float(initial_grms)
+        if initial_grms is not None and np.isfinite(initial_grms)
+        else 50.0,
+    )
+    if not np.isfinite(grms) or grms > rollback_limit:
+        sync_charmm_positions(rollback_positions)
+        invalidate_mlpot_calculator_caches(mlpot_ctx)
+        restored_grms = refresh_mlpot_energy_and_grms(mlpot_ctx, context="")
+        print(
+            f"{context_prefix}: rejecting monomer PhysNet result "
+            f"(GRMS={grms:.4f} > rollback limit {rollback_limit:.4f}); "
+            f"restored pre-recovery geometry (GRMS={restored_grms:.4f})",
+            flush=True,
+        )
+        return SelectiveMonomerPhysnetMiniResult(
+            grms=float(restored_grms),
+            ran=False,
+            flagged=selected,
+        )
     if config.verbose:
         print(
             f"{context_prefix}: done — hybrid GRMS={grms:.4f} kcal/mol/Å "

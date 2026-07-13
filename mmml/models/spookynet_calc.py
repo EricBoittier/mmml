@@ -32,7 +32,11 @@ import jax.numpy as jnp
 import numpy as np
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.interfaces.pycharmmInterface.ml_dtypes import json_tree_to_jax_params
+from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+    json_tree_to_jax_params,
+    ml_numpy_dtype,
+    resolve_ml_compute_dtype,
+)
 from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 from mmml.utils.model_checkpoint import (
     load_model_checkpoint,
@@ -83,7 +87,9 @@ class SpookyNetCalculator(Calculator):
         config = normalize_physnet_config(raw_config)
         
         # Check model architecture: standard PhysNet vs SpookyPhysNet
-        jax_params = json_tree_to_jax_params(params)
+        self.compute_dtype = resolve_ml_compute_dtype()
+        self.numpy_dtype = ml_numpy_dtype(self.compute_dtype)
+        jax_params = json_tree_to_jax_params(params, dtype=self.compute_dtype)
         model_type = str(config.get("model_type", "")).lower()
         if model_type == "physnet" or "charge_feature_projection" not in jax_params:
             from mmml.models.physnetjax.physnetjax.models.model import PhysNet
@@ -136,13 +142,14 @@ class SpookyNetCalculator(Calculator):
     def _make_apply_fn(self):
         model = self.model
         params = self.params
+        compute_dtype = self.compute_dtype
 
         def _fn(atomic_numbers, positions, dst_idx, src_idx, atom_mask, batch_mask, charge, spin, mol_id=None, cgenff_type_idx=None, cgenff_master_sigmas=None, cgenff_master_epsilons=None):
             n_atoms = atomic_numbers.shape[0]
             batch_segments = jnp.zeros((n_atoms,), dtype=jnp.int32)
             if isinstance(model, SpookyPhysNet):
-                q_atoms = jnp.full((n_atoms, 1), charge, dtype=jnp.float32)
-                s_atoms = jnp.full((n_atoms, 1), spin, dtype=jnp.float32)
+                q_atoms = jnp.full((n_atoms, 1), charge, dtype=compute_dtype)
+                s_atoms = jnp.full((n_atoms, 1), spin, dtype=compute_dtype)
                 return model.apply(
                     params,
                     atomic_numbers=atomic_numbers,
@@ -184,22 +191,29 @@ class SpookyNetCalculator(Calculator):
             )
         pad = self.max_atoms - n_real
         z = np.asarray(atoms.get_atomic_numbers(), dtype=np.int32)
-        pos = np.asarray(atoms.get_positions(), dtype=np.float32)
+        pos = np.asarray(atoms.get_positions(), dtype=self.numpy_dtype)
         if pad:
             # Scatter padded "ghost" atoms far apart from real atoms and from
             # each other. Stacking them all at the origin makes pad-pad and
             # real-pad pairwise distances exactly (or near) zero, which blows
             # up 1/r terms (e.g. ZBL repulsion) to inf/NaN *before* masking
             # is applied (0 * inf = NaN survives the mask).
-            far = 1.0e4 + 100.0 * np.arange(pad, dtype=np.float32)
-            pad_pos = np.stack([far, np.zeros(pad, dtype=np.float32), np.zeros(pad, dtype=np.float32)], axis=1)
+            far = 1.0e4 + 100.0 * np.arange(pad, dtype=self.numpy_dtype)
+            pad_pos = np.stack(
+                [
+                    far,
+                    np.zeros(pad, dtype=self.numpy_dtype),
+                    np.zeros(pad, dtype=self.numpy_dtype),
+                ],
+                axis=1,
+            )
             z = np.concatenate([z, np.zeros(pad, dtype=np.int32)])
             pos = np.concatenate([pos, pad_pos], axis=0)
 
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(self.max_atoms)
-        atom_mask = (z > 0).astype(np.float32)
+        atom_mask = (z > 0).astype(self.numpy_dtype)
         valid_pairs = (atom_mask[dst_idx] > 0) & (atom_mask[src_idx] > 0)
-        batch_mask = valid_pairs.astype(np.float32)
+        batch_mask = valid_pairs.astype(self.numpy_dtype)
 
         output = self._apply(
             jnp.asarray(z),
