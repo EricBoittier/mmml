@@ -84,11 +84,12 @@ def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndar
     return nb_map, np.array(sigmas, dtype=np.float64), np.array(epsilons, dtype=np.float64)
 
 
-def load_cgenff_rtf_residues(rtf_path: Path, nb_map: dict[str, int]) -> dict[str, dict]:
-    """Parse all RESI blocks from top_all36_cgenff.rtf mapping atom names to type indices and charges."""
+def load_cgenff_rtf_residues(rtf_path: Path, nb_map: dict[str, int]) -> tuple[dict[str, dict], dict[tuple[tuple[int, int], ...], list[str]]]:
+    """Parse all RESI blocks from top_all36_cgenff.rtf, indexing by name and elemental composition."""
     residues = {}
+    composition_map = {}
     if not rtf_path.exists():
-        return residues
+        return residues, composition_map
 
     current_resi = None
     resi_data = None
@@ -105,25 +106,43 @@ def load_cgenff_rtf_residues(rtf_path: Path, nb_map: dict[str, int]) -> dict[str
             if parts[0] == "RESI":
                 if current_resi and resi_data and resi_data["atoms"]:
                     residues[current_resi] = resi_data
+                    comp_key = tuple(sorted(dict(zip(*np.unique(resi_data["z_elements"], return_counts=True))).items()))
+                    composition_map.setdefault(comp_key, []).append(current_resi)
                 current_resi = parts[1]
-                resi_data = {"name": current_resi, "atoms": [], "type_indices": [], "charges": []}
+                resi_data = {"name": current_resi, "atoms": [], "type_indices": [], "charges": [], "z_elements": []}
             elif parts[0] == "ATOM" and current_resi:
                 atom_name = parts[1]
                 atom_type = parts[2]
                 charge = float(parts[3])
                 t_idx = nb_map.get(atom_type, default_idx)
+                
+                # Infer atomic element from atom_type / atom_name
+                first_letter = atom_name[0].upper()
+                if first_letter == "C" and len(atom_name) > 1 and atom_name[1].lower() in ("l", "r"):
+                    elem_sym = "CL" if atom_name[1].lower() == "l" else "BR"
+                elif first_letter == "B" and len(atom_name) > 1 and atom_name[1].lower() == "r":
+                    elem_sym = "BR"
+                elif first_letter in chemical_symbols:
+                    elem_sym = first_letter
+                else:
+                    elem_sym = atom_type[0].upper()
+                
+                z_elem = atomic_numbers.get(elem_sym, 6)
                 resi_data["atoms"].append(atom_name)
                 resi_data["type_indices"].append(t_idx)
                 resi_data["charges"].append(charge)
+                resi_data["z_elements"].append(z_elem)
 
         if current_resi and resi_data and resi_data["atoms"]:
             residues[current_resi] = resi_data
+            comp_key = tuple(sorted(dict(zip(*np.unique(resi_data["z_elements"], return_counts=True))).items()))
+            composition_map.setdefault(comp_key, []).append(current_resi)
 
-    return residues
+    return residues, composition_map
 
 
 _NB_MAP, _CGENFF_SIGMAS, _CGENFF_EPSILONS = load_cgenff_nonbonded_table(DEF_PRM_PATH)
-_CGENFF_RESIDUES = load_cgenff_rtf_residues(DEF_RTF_PATH, _NB_MAP)
+_CGENFF_RESIDUES, _COMPOSITION_MAP = load_cgenff_rtf_residues(DEF_RTF_PATH, _NB_MAP)
 
 
 def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[int]]:
@@ -157,9 +176,11 @@ def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[i
 
 
 def match_cgenff_template_fast(z_sub: np.ndarray, comp_indices: list[int], target_charge: float = 0.0) -> tuple[str, np.ndarray, np.ndarray]:
-    """Match monomer component against CGenFF templates and enforce sum(charges) == target_charge exactly."""
+    """Match monomer component against CGenFF templates by elemental composition and enforce sum(charges) == target_charge exactly."""
     counts = dict(zip(*np.unique(z_sub, return_counts=True)))
+    comp_key = tuple(sorted(counts.items()))
     
+    # 1. Fast match for common DES monomers
     if counts == {6: 1, 1: 2, 17: 2} and "DCM" in _CGENFF_RESIDUES:
         res_name = "DCM"
     elif counts == {8: 1, 6: 3, 1: 6} and "ACO" in _CGENFF_RESIDUES:
@@ -170,18 +191,15 @@ def match_cgenff_template_fast(z_sub: np.ndarray, comp_indices: list[int], targe
         res_name = "TIP3"
     elif counts == {6: 1, 8: 1, 1: 4} and "MEOH" in _CGENFF_RESIDUES:
         res_name = "MEOH"
+    elif comp_key in _COMPOSITION_MAP:
+        # Match from elemental composition index
+        res_name = _COMPOSITION_MAP[comp_key][0]
     else:
-        res_name = "GENERIC"
+        raise KeyError(f"No CGenFF RTF template found for elemental composition key: {comp_key}")
 
-    default_t_idx = _NB_MAP.get("DEFAULT", 0)
-    if res_name in _CGENFF_RESIDUES:
-        tmpl = _CGENFF_RESIDUES[res_name]
-        type_indices = np.array(tmpl["type_indices"], dtype=np.int32)
-        charges = np.array(tmpl["charges"], dtype=np.float64)
-    else:
-        n = len(comp_indices)
-        type_indices = np.full(n, default_t_idx, dtype=np.int32)
-        charges = np.zeros(n, dtype=np.float64)
+    tmpl = _CGENFF_RESIDUES[res_name]
+    type_indices = np.array(tmpl["type_indices"], dtype=np.int32)
+    charges = np.array(tmpl["charges"], dtype=np.float64)
 
     # STRICT CHARGE CONSERVATION GUARD:
     # Adjust charges uniformly so sum(charges) matches target_charge exactly (to float64 precision)
