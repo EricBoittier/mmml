@@ -1,14 +1,11 @@
-# One-cell Slurm smoke test for the PBC ML/MM pipeline.
-# Kept separate from config.yaml so production matrix settings remain untouched.
+# Conservative one-cell Slurm smoke for the charge-aware SpookyPhysNet checkpoint.
 solvents: [DCM]
 cluster_sizes: [10]
 temperatures: [150.0]
 box_sizes: [32.0]
-checkpoint: examples/sppoky-epoch-0010_params.json
-output_root: artifacts/pbc_solvent_burst_spooky_smoke_relaxed_ep10
-seed_base: 123
-
-# Exercise every handoff, but keep the test short enough for a 30-minute slot.
+checkpoint: examples/spooky_so3lr_muon_mbd_zbl-epoch-0002.json
+output_root: artifacts/pbc_solvent_burst_spooky_smoke_relaxed_muon
+seed_base: 456
 jaxmd_burst_ps: 0.02
 jaxmd_bursts: 1
 pycharmm_equi_ps: 0.02
@@ -19,9 +16,8 @@ heat_firstt: 20.0
 heat_thermostat: hoover
 dt_fs: 0.1
 pressure: 1.0
-
 cleanup_strategy:
-  name: pbc_hybrid_smoke
+  name: pbc_hybrid_spooky_muon_smoke
   charmm_mm:
     pretreat_on_pycharmm: true
     ps_heat: 1.0
@@ -57,7 +53,6 @@ cleanup_strategy:
     overlap_rescue_abnr_steps: 4000
     steps_per_recording: 50
     jax_md_update_interval: 1
-
 mm_switch_on: 6.0
 mm_switch_width: 4.0
 ml_switch_width: 1.0

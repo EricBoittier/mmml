@@ -26,7 +26,7 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW_ROOT="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 >>>>>>> cc7dd8f95 (sdaf)
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-CONFIG="$WORKFLOW_ROOT/config.spooky-smoke.yaml"
+CONFIG="${MMML_SMOKE_CONFIG:-$WORKFLOW_ROOT/config.spooky-smoke.yaml}"
 cd "$REPO_ROOT"
 
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
