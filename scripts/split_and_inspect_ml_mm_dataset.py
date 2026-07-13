@@ -196,24 +196,49 @@ def validate_and_inspect_dataset(
     print(f"    - Range : [{e_tot_mm_arr.min():.4f} eV, {e_tot_mm_arr.max():.4f} eV] ([{e_tot_mm_arr.min()/KCAL_TO_EV:.2f}, {e_tot_mm_arr.max()/KCAL_TO_EV:.2f}] kcal/mol)")
     print(f"    - Mean  : {e_tot_mm_arr.mean():.4f} eV ({e_tot_mm_arr.mean()/KCAL_TO_EV:.2f} kcal/mol) | std = {e_tot_mm_arr.std():.4f} eV")
 
-    # 3. Multi-Panel Diagnostic Plotting
+    # 3. COM Distance Breakdown
     print(f"\n==================================================================")
-    print(f" 3. GENERATING MULTI-PANEL DISTRIBUTION PLOTS")
+    print(f" 3. INTER-MONOMER COM DISTANCE BREAKDOWN")
+    print(f"==================================================================")
+    d_q = np.quantile(d_com_arr, [0.01, 0.05, 0.25, 0.50, 0.75, 0.95, 0.99])
+    print(f"  - Range   : [{d_com_arr.min():.3f}, {d_com_arr.max():.3f}] Å")
+    print(f"  - Mean    : {d_com_arr.mean():.3f} Å  |  std = {d_com_arr.std():.3f} Å")
+    print(f"  - Quantiles [1%, 5%, 25%, 50%, 75%, 95%, 99%]:")
+    print(f"    {d_q.round(3)} Å")
+    # ASCII-style binned count histogram
+    n_hist_bins = 15
+    hist_counts, hist_edges = np.histogram(d_com_arr, bins=n_hist_bins)
+    max_count = hist_counts.max()
+    bar_width  = 30
+    print(f"\n  COM Distance Histogram ({len(d_com_arr):,} sampled frames):")
+    print(f"  {'d_COM range (\u00c5)':<22} {'count':>8}  bar")
+    print(f"  {'-'*22} {'-'*8}  {'-'*bar_width}")
+    for lo, hi, cnt in zip(hist_edges, hist_edges[1:], hist_counts):
+        bar = '\u2588' * int(bar_width * cnt / max_count)
+        print(f"  [{lo:6.2f} - {hi:6.2f})      {cnt:>8,}  {bar}")
+
+    # Also compute sample DFT interaction energies for distance-energy plot
+    E_all_structs = np.asarray(data["E"]).reshape(-1)
+    E_sample = E_all_structs[sample_indices]
+
+    # 4. Multi-Panel Diagnostic Plotting
+    print(f"\n==================================================================")
+    print(f" 4. GENERATING MULTI-PANEL DISTRIBUTION PLOTS")
     print(f"==================================================================")
     apply_plot_style("icml")
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
 
     # Panel A: Charge Distribution Histogram by Element
     ax_a = axes[0, 0]
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2"]
     for idx, (sym, elem_q) in enumerate(element_charges.items()):
         color = colors[idx % len(colors)]
         ax_a.hist(elem_q, bins=30, alpha=0.5, label=f"{sym} (mean={elem_q.mean():.2f}e)", color=color)
     ax_a.set_xlabel("CGenFF Charge $q_i$ (e)")
     ax_a.set_ylabel("Count")
     ax_a.set_title("A. Atomic Charge Distribution by Element")
-    ax_a.legend(frameon=True)
+    ax_a.legend(frameon=True, fontsize=7)
 
     # Panel B: Inter-monomer Electrostatics (Coulomb) Distribution
     ax_b = axes[0, 1]
@@ -223,19 +248,38 @@ def validate_and_inspect_dataset(
     ax_b.set_title("B. CGenFF Electrostatics Distribution")
 
     # Panel C: Inter-monomer Lennard-Jones vdW Distribution
-    ax_c = axes[1, 0]
+    ax_c = axes[0, 2]
     ax_c.hist(e_vdw_arr / KCAL_TO_EV, bins=50, color="#2ca02c", alpha=0.7, edgecolor="none")
     ax_c.set_xlabel("Inter-Monomer Lennard-Jones Energy $E_{\\mathrm{vdw}}$ (kcal/mol)")
     ax_c.set_ylabel("Frame Count")
     ax_c.set_title("C. CGenFF Lennard-Jones vdW Distribution")
 
-    # Panel D: Total MM Energy vs COM Distance
-    ax_d = axes[1, 1]
-    hb = ax_d.hexbin(d_com_arr, e_tot_mm_arr / KCAL_TO_EV, gridsize=40, cmap="viridis", mincnt=1)
-    fig.colorbar(hb, ax=ax_d, label="Frames")
-    ax_d.set_xlabel("COM Distance $d_{\\mathrm{COM}}$ (Å)")
-    ax_d.set_ylabel("Total $E_{\\mathrm{MM}}$ (kcal/mol)")
-    ax_d.set_title("D. Total MM Energy vs Monomer Distance")
+    # Panel D: COM Distance Distribution
+    ax_d = axes[1, 0]
+    ax_d.hist(d_com_arr, bins=60, color="#9467bd", alpha=0.8, edgecolor="none")
+    ax_d.axvline(d_com_arr.mean(), color="k", linestyle="--", linewidth=1.2, label=f"mean={d_com_arr.mean():.2f} Å")
+    ax_d.axvline(d_q[2], color="#e377c2", linestyle=":", linewidth=1.2, label=f"Q25={d_q[2]:.2f} Å")
+    ax_d.axvline(d_q[4], color="#e377c2", linestyle=":", linewidth=1.2, label=f"Q75={d_q[4]:.2f} Å")
+    ax_d.set_xlabel("Inter-Monomer COM Distance $d_{\\mathrm{COM}}$ (Å)")
+    ax_d.set_ylabel("Frame Count")
+    ax_d.set_title("D. COM Distance Distribution")
+    ax_d.legend(frameon=True, fontsize=8)
+
+    # Panel E: Total MM Energy vs COM Distance
+    ax_e = axes[1, 1]
+    hb = ax_e.hexbin(d_com_arr, e_tot_mm_arr / KCAL_TO_EV, gridsize=40, cmap="viridis", mincnt=1)
+    fig.colorbar(hb, ax=ax_e, label="Frames")
+    ax_e.set_xlabel("COM Distance $d_{\\mathrm{COM}}$ (Å)")
+    ax_e.set_ylabel("Total $E_{\\mathrm{MM}}$ (kcal/mol)")
+    ax_e.set_title("E. Total MM Energy vs Monomer Distance")
+
+    # Panel F: DFT interaction energy vs COM Distance
+    ax_f = axes[1, 2]
+    hb2 = ax_f.hexbin(d_com_arr, E_sample, gridsize=40, cmap="plasma", mincnt=1)
+    fig.colorbar(hb2, ax=ax_f, label="Frames")
+    ax_f.set_xlabel("COM Distance $d_{\\mathrm{COM}}$ (Å)")
+    ax_f.set_ylabel("DFT Energy $E$ (eV)")
+    ax_f.set_title("F. DFT Energy vs Monomer Distance")
 
     fig.tight_layout()
     plot_path = output_dir / "cgenff_charges_and_energies_breakdown.png"
