@@ -94,6 +94,67 @@ def test_npz_round_trip(tmp_path: Path) -> None:
     assert loaded.temperature_K == pytest.approx(300.0)
 
 
+def test_akma_handoff_conversion_is_angstrom_per_ps_not_per_fs() -> None:
+    from ase.data import atomic_masses
+
+    from mmml.cli.run.md_handoff import (
+        handoff_velocities_as_ang_ps,
+        kinetic_temperature_k_from_ang_ps_velocities,
+    )
+
+    z = np.array([6, 1, 17], dtype=np.int32)
+    masses = atomic_masses[z]
+    velocities_ang_ps = np.array(
+        [[1.5, -2.0, 0.5], [-3.0, 1.0, 2.0], [0.25, -0.5, 1.25]],
+        dtype=float,
+    )
+    velocities_akma = velocities_ang_ps * np.sqrt(masses)[:, None] * 1000.0
+    handoff = MdHandoffState(
+        positions=np.zeros((3, 3)),
+        atomic_numbers=z,
+        velocities=velocities_akma,
+        metadata={"backend": "pycharmm"},
+    )
+
+    converted = handoff_velocities_as_ang_ps(handoff)
+    np.testing.assert_allclose(converted, velocities_ang_ps)
+    assert kinetic_temperature_k_from_ang_ps_velocities(converted, masses) > 0.0
+
+
+def test_handoff_temperature_and_displacement_do_not_use_fs_as_ps() -> None:
+    from ase.data import atomic_masses
+
+    from mmml.cli.run.md_handoff import kinetic_temperature_k_from_ang_ps_velocities
+
+    z = np.array([6, 1, 17], dtype=np.int32)
+    masses = atomic_masses[z]
+    velocities_ang_ps = np.array(
+        [[12.0, 0.0, 0.0], [-8.0, 2.0, 0.0], [1.0, -1.0, 3.0]],
+        dtype=float,
+    )
+    temperature = kinetic_temperature_k_from_ang_ps_velocities(
+        velocities_ang_ps, masses
+    )
+    max_displacement = np.linalg.norm(velocities_ang_ps, axis=1).max() * 0.1e-3
+
+    assert temperature < 5000.0
+    assert max_displacement == pytest.approx(0.0012)
+    assert max_displacement != pytest.approx(
+        np.linalg.norm(velocities_ang_ps, axis=1).max() * 0.1
+    )
+
+
+def test_remove_center_of_mass_velocity_preserves_internal_motion() -> None:
+    from mmml.cli.run.md_handoff import remove_center_of_mass_velocity_ang_ps
+
+    masses = np.array([12.0, 1.0, 35.0])
+    velocities = np.array([[2.0, 1.0, 0.0], [-1.0, 4.0, 2.0], [0.5, -2.0, 1.0]])
+    corrected = remove_center_of_mass_velocity_ang_ps(velocities, masses)
+
+    np.testing.assert_allclose(np.sum(masses[:, None] * corrected, axis=0), 0.0, atol=1e-12)
+    np.testing.assert_allclose(corrected[0] - corrected[1], velocities[0] - velocities[1])
+
+
 def test_format_fortran_float_rejects_non_finite() -> None:
     from mmml.cli.run.md_handoff import _format_fortran_float
 

@@ -878,12 +878,17 @@ def resolve_handoff_velocity_units(
     return "akma"
 
 
-def handoff_velocities_as_ase_ang_fs(
+def handoff_velocities_as_ang_ps(
     handoff: MdHandoffState,
     *,
     velocity_units: str = "auto",
 ) -> np.ndarray | None:
-    """Convert handoff velocities to ASE ``Atoms.get_velocities`` units (Å/fs)."""
+    """Return handoff velocities in Å/ps, the convention used by JAX-MD here.
+
+    CHARMM restart components are mass-weighted AKMA values.  Despite the
+    historical helper name used below, dividing by ``sqrt(mass) * 1000``
+    produces Å/ps, not ASE-native velocity units and not Å/fs.
+    """
     if handoff.velocities is None:
         return None
     z = np.asarray(handoff.atomic_numbers, dtype=np.int32).reshape(-1)
@@ -899,6 +904,64 @@ def handoff_velocities_as_ase_ang_fs(
     )
 
     return charmm_akma_to_ang_fs_velocities(vel, masses)
+
+
+def handoff_velocities_as_ase_ang_fs(
+    handoff: MdHandoffState,
+    *,
+    velocity_units: str = "auto",
+) -> np.ndarray | None:
+    """Backward-compatible alias for :func:`handoff_velocities_as_ang_ps`.
+
+    The legacy name is dimensionally incorrect.  New integration code must use
+    the explicitly named Å/ps helper instead.
+    """
+    return handoff_velocities_as_ang_ps(handoff, velocity_units=velocity_units)
+
+
+def kinetic_temperature_k_from_ang_ps_velocities(
+    velocities_ang_ps: np.ndarray,
+    masses_amu: np.ndarray,
+    *,
+    ndegf: int | None = None,
+) -> float:
+    """Kinetic temperature for ordinary velocities in Å/ps."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _AMU_ANG_PS2_TO_KCALMOL,
+        _KCALMOL_PER_K,
+    )
+
+    v = np.asarray(velocities_ang_ps, dtype=np.float64).reshape(-1, 3)
+    m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+    if v.shape[0] != m.shape[0] or v.shape[0] == 0:
+        raise ValueError("velocity and mass arrays must have the same non-zero length")
+    if not np.all(np.isfinite(v)) or not np.all(np.isfinite(m)) or np.any(m <= 0.0):
+        raise ValueError("velocities and positive masses must be finite")
+    ke_kcal = (
+        0.5
+        * float(np.sum(m[:, None] * v * v))
+        * _AMU_ANG_PS2_TO_KCALMOL
+    )
+    dof = int(ndegf) if ndegf is not None else 3 * int(v.shape[0])
+    if dof <= 0:
+        raise ValueError("ndegf must be positive")
+    return 2.0 * ke_kcal / (float(dof) * _KCALMOL_PER_K)
+
+
+def remove_center_of_mass_velocity_ang_ps(
+    velocities_ang_ps: np.ndarray,
+    masses_amu: np.ndarray,
+) -> np.ndarray:
+    """Remove translational COM drift without invoking ASE unit conversions."""
+    v = np.asarray(velocities_ang_ps, dtype=np.float64).reshape(-1, 3)
+    m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+    if v.shape[0] != m.shape[0] or v.shape[0] == 0:
+        raise ValueError("velocity and mass arrays must have the same non-zero length")
+    total_mass = float(np.sum(m))
+    if not np.isfinite(total_mass) or total_mass <= 0.0:
+        raise ValueError("total mass must be positive and finite")
+    v_com = np.sum(m[:, None] * v, axis=0) / total_mass
+    return v - v_com[None, :]
 
 
 def atoms_from_handoff(

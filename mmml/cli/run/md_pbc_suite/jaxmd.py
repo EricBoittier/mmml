@@ -495,7 +495,9 @@ def main(argv: list[str] | None = None) -> int:
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
         handoff_from_atoms,
-        handoff_velocities_as_ase_ang_fs,
+        handoff_velocities_as_ang_ps,
+        kinetic_temperature_k_from_ang_ps_velocities,
+        remove_center_of_mass_velocity_ang_ps,
         handoff_skip_pre_min,
         resolve_jaxmd_minimize_steps_for_handoff,
         print_handoff_policy_panel,
@@ -1045,19 +1047,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     initial_velocities: np.ndarray | None = None
     if use_handoff_velocities and handoff_in is not None and handoff_in.velocities is not None:
-        converted_velocities = handoff_velocities_as_ase_ang_fs(
+        converted_velocities = handoff_velocities_as_ang_ps(
             handoff_in, velocity_units="auto"
         )
         if converted_velocities is None:
             raise RuntimeError("handoff velocity policy selected velocities, but none were converted")
-        atoms.set_velocities(np.asarray(converted_velocities, dtype=float))
+        initial_velocities = np.asarray(converted_velocities, dtype=float)
         if getattr(args, "handoff_velocity_remove_drift", True):
-            Stationary(atoms)
-            ZeroRotation(atoms)
-        initial_velocities = np.asarray(atoms.get_velocities(), dtype=float)
-        handoff_temperature = float(atoms.get_temperature())
+            masses_amu = np.asarray(atoms.get_masses(), dtype=float)
+            initial_velocities = remove_center_of_mass_velocity_ang_ps(
+                initial_velocities, masses_amu
+            )
+        else:
+            masses_amu = np.asarray(atoms.get_masses(), dtype=float)
+        handoff_temperature = kinetic_temperature_k_from_ang_ps_velocities(
+            initial_velocities, masses_amu
+        )
+        dt_ps = float(args.dt_fs) * 0.001
         max_step_displacement = float(
-            np.max(np.linalg.norm(initial_velocities, axis=1)) * float(args.dt_fs)
+            np.max(np.linalg.norm(initial_velocities, axis=1)) * dt_ps
         )
         if (
             not np.all(np.isfinite(initial_velocities))
