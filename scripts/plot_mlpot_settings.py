@@ -8,8 +8,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from mmml.utils.plotting.styles import comparison_colors, default_cmap, legend_outside
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "docs" / "images" / "mlpot-settings"
+STYLE_NAME = "icml"
 
 from mmml.interfaces.pycharmmInterface.cutoffs import (  # noqa: E402
     DEFAULT_ML_SWITCH_WIDTH,
@@ -58,20 +61,22 @@ def plot_cutoff_preset(name: str, label: str, cp: CutoffParameters) -> Path:
     s_mm = cp.mm_scale_complementary(r, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF)
     handoff_start = float(cp.mm_switch_on) - float(cp.ml_switch_width)
 
+    ml_color, mm_color = comparison_colors(STYLE_NAME, n=2)
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(r, s_ml, lw=2, color="C0", label=r"$s_{\mathrm{ML}}$")
-    ax.plot(r, s_mm, lw=2, color="C1", label=r"$s_{\mathrm{MM}}$")
+    ax.plot(r, s_ml, lw=2, color=ml_color, label=r"$s_{\mathrm{ML}}$")
+    ax.plot(r, s_mm, lw=2, color=mm_color, label=r"$s_{\mathrm{MM}}$")
     ax.plot(
         r,
         s_ml + s_mm,
-        "k--",
+        color="#222222",
+        ls="--",
         lw=1.5,
         alpha=0.85,
         label=r"$s_{\mathrm{ML}} + s_{\mathrm{MM}}$",
     )
     ax.axvline(
         handoff_start,
-        color="C0",
+        color=ml_color,
         ls="--",
         lw=1,
         alpha=0.7,
@@ -79,14 +84,14 @@ def plot_cutoff_preset(name: str, label: str, cp: CutoffParameters) -> Path:
     )
     ax.axvline(
         cp.mm_switch_on,
-        color="k",
+        color="#222222",
         ls="-.",
         lw=1.5,
         label=f"handoff end {cp.mm_switch_on:.2f} Å",
     )
     ax.axvline(
         cp.mm_switch_on + cp.mm_switch_width,
-        color="C1",
+        color=mm_color,
         ls="--",
         lw=1,
         alpha=0.8,
@@ -96,18 +101,16 @@ def plot_cutoff_preset(name: str, label: str, cp: CutoffParameters) -> Path:
     ax.set_ylabel("Energy scale factor")
     ax.set_ylim(-0.05, 1.2)
     ax.set_title(label)
-    ax.legend(loc="best", fontsize=8)
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
+    legend_outside(ax)
     out = OUT_DIR / f"cutoffs_{name}.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
 
 
 def plot_cutoff_comparison() -> Path:
     fig, axes = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
-    colors = plt.cm.tab10(np.linspace(0, 0.45, len(CUTOFF_PRESETS)))
+    colors = comparison_colors(STYLE_NAME, n=len(CUTOFF_PRESETS))
 
     r_max = 16.0
     r = np.linspace(0.01, r_max, 600)
@@ -134,12 +137,11 @@ def plot_cutoff_comparison() -> Path:
     axes[0].set_title("ML/MM handoff presets (complementary)")
     axes[0].set_ylim(-0.05, 1.05)
     axes[1].set_ylim(-0.05, 1.05)
-    for ax in axes:
-        ax.grid(alpha=0.3)
-        ax.legend(loc="best", fontsize=8)
+    legend_outside(axes[0], side="left")
+    legend_outside(axes[1], side="right")
     fig.tight_layout()
     out = OUT_DIR / "cutoffs_comparison.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
 
@@ -158,10 +160,11 @@ def plot_legacy_vs_complementary() -> Path:
     )
     mm_legacy = cp_legacy.mm_scale(r, gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF)
 
+    ml_color, mm_color, legacy_color = comparison_colors(STYLE_NAME, n=3)
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(r, s_ml, lw=2, color="C0", label=r"$s_{\mathrm{ML}}$ (same)")
-    ax.plot(r, mm_comp, lw=2, color="C1", label=r"$s_{\mathrm{MM}}$ complementary")
-    ax.plot(r, mm_legacy, lw=2, ls=":", color="C3", label=r"$s_{\mathrm{MM}}$ legacy window")
+    ax.plot(r, s_ml, lw=2, color=ml_color, label=r"$s_{\mathrm{ML}}$ (same)")
+    ax.plot(r, mm_comp, lw=2, color=mm_color, label=r"$s_{\mathrm{MM}}$ complementary")
+    ax.plot(r, mm_legacy, lw=2, ls=":", color=legacy_color, label=r"$s_{\mathrm{MM}}$ legacy window")
     ax.set_xlabel("Dimer COM distance r (Å)")
     ax.set_ylabel("Scale factor")
     ax.set_title(
@@ -169,11 +172,9 @@ def plot_legacy_vs_complementary() -> Path:
         f"{DEFAULT_ML_SWITCH_WIDTH:g} Å): complementary vs legacy MM window"
     )
     ax.set_ylim(-0.05, 1.2)
-    ax.legend(loc="best", fontsize=9)
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
+    legend_outside(ax)
     out = OUT_DIR / "cutoffs_complementary_vs_legacy.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
 
@@ -184,9 +185,14 @@ def plot_heat_segments() -> Path:
     ps_heat = 20.0
     segment_counts = (1, 4, 8)
 
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
+    # Wider figure + explicit wspace: icml's larger title font (17pt bold)
+    # made the two subplot titles wide enough to collide at the default
+    # matplotlib-sized figure/spacing this used before the house style.
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig.subplots_adjust(wspace=0.35)
+    seg_colors = comparison_colors(STYLE_NAME, n=len(segment_counts))
 
-    for n_seg in segment_counts:
+    for color, n_seg in zip(seg_colors, segment_counts):
         seg_ps = ps_heat / n_seg
         times: list[float] = [0.0]
         temps: list[float] = [heat_firstt]
@@ -196,14 +202,13 @@ def plot_heat_segments() -> Path:
             times.extend([seg_i * seg_ps, seg_end])
             t_start = heat_firstt + (heat_finalt - heat_firstt) * (seg_i / n_seg)
             temps.extend([t_start, seg_t])
-        axes[0].plot(times, temps, lw=2, marker="o", label=f"{n_seg} segment(s)")
+        axes[0].plot(times, temps, lw=2, marker="o", color=color, label=f"{n_seg} segment(s)")
 
     axes[0].set_xlabel("Time (ps)")
     axes[0].set_ylabel("Target bath T (K)")
     axes[0].set_title(f"Staged heat ramp ({heat_firstt:.0f} → {heat_finalt:.0f} K, {ps_heat:.0f} ps)")
     axes[0].set_xlim(0, ps_heat)
-    axes[0].grid(alpha=0.3)
-    axes[0].legend()
+    legend_outside(axes[0], side="left")
 
     labels = []
     seg_temps = []
@@ -222,17 +227,17 @@ def plot_heat_segments() -> Path:
             x[:n_seg] + idx * width,
             temps,
             width=width,
+            color=seg_colors[idx],
             label=f"{n_seg} segments",
         )
     axes[1].set_xlabel("Segment index (0-based)")
     axes[1].set_ylabel("Segment end target T (K)")
     axes[1].set_title("Per-segment bath target (DCM:9 uses N=4)")
-    axes[1].grid(axis="y", alpha=0.3)
-    axes[1].legend()
+    legend_outside(axes[1], side="right")
 
     fig.tight_layout()
     out = OUT_DIR / "heat_staged_ramp.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
 
@@ -247,7 +252,12 @@ def plot_cutoff_radius_ladder() -> Path:
     jax_pme_sr = 6.0
     charmm_cut = float(PBC_CUTNB)
 
-    fig, ax = plt.subplots(figsize=(10, 3.8))
+    # Height bumped from 3.8 to 6.0: this axes is a single flat band strip
+    # (no y-extent to speak of), so nearly the whole old 3.8in figure was
+    # already the band itself -- not enough room left below for both the
+    # xlabel and a 2-column bottom legend once icml's larger fonts are
+    # accounted for; they collided.
+    fig, ax = plt.subplots(figsize=(10, 6.0))
     ax.set_xlim(0, max(charmm_cut, mm_outer) + 4)
     ax.set_ylim(0, 1)
     ax.set_yticks([])
@@ -270,14 +280,18 @@ def plot_cutoff_radius_ladder() -> Path:
         (charmm_cut, ":", "#64748b", f"CHARMM IMAGE cutnb {charmm_cut:g} Å (PBC)"),
     ):
         ax.axvline(x, color=color, ls=ls, lw=1.6, alpha=0.9)
-        ax.text(x + 0.15, 0.92, txt, rotation=90, va="top", fontsize=7.5, color=color)
+        # y=0.80, not 0.92: icml's larger, bolder title (17pt) needs more
+        # headroom above the axes than the small default matplotlib title
+        # this was tuned for -- the rotated band label at 0.92 started
+        # running into it.
+        ax.text(x + 0.15, 0.80, txt, rotation=90, va="top", fontsize=7.5, color=color)
 
     ax.set_title(
         "Default cutoffs (8 / 5 / 1.5 Å): COM-distance regions vs CHARMM list radius",
         fontweight="500",
-        pad=10,
+        pad=18,
     )
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, fontsize=8)
+    legend_outside(ax, side="bottom", ncol=2)
     fig.tight_layout()
     out = OUT_DIR / "cutoff_radius_ladder.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -547,6 +561,7 @@ def _draw_dimer_forces_panel(
     subtitle: str,
     rotation: str = "25x,18y,0z",
     force_norm=None,
+    force_cmap=None,
 ) -> None:
     from ase import Atoms
     from ase.data import chemical_symbols
@@ -600,7 +615,7 @@ def _draw_dimer_forces_panel(
         f2d[:, 0],
         f2d[:, 1],
         fmag,
-        cmap="magma",
+        cmap=force_cmap or default_cmap("sequential"),
         norm=force_norm,
         angles="xy",
         scale_units="xy",
@@ -636,6 +651,7 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
         panel_rows.append((ax, zone, dist, subtitle, pos, z_full, forces, n_per))
 
     force_norm = mcolors.Normalize(vmin=0.0, vmax=max(global_fmax, 1e-6))
+    force_cmap = default_cmap("sequential")
     for ax, zone, dist, subtitle, pos, z_full, forces, n_per in panel_rows:
         r_com = _com_distance(pos, n_per)
         s_ml = float(cp.ml_scale(r_com, gamma_ml=GAMMA_ON))
@@ -650,13 +666,18 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
             zone=zone,
             subtitle=f"{subtitle}\n{ann}",
             force_norm=force_norm,
+            force_cmap=force_cmap,
         )
 
-    sm = plt.cm.ScalarMappable(cmap="magma", norm=force_norm)
+    sm = plt.cm.ScalarMappable(cmap=force_cmap, norm=force_norm)
     sm.set_array([])
-    fig.tight_layout(rect=(0, 0.06, 1, 0.78))
+    # rect top/bottom tuned for the house style's larger label/title fonts
+    # (icml: titlesize=17 vs matplotlib's ~10-12 default) -- the previous
+    # fixed fractions (rect top=0.78, cbar at 0.90) were sized for small
+    # default fonts and left a large empty gap once those fonts got bigger.
+    fig.tight_layout(rect=(0, 0.05, 1, 0.90))
     # Dedicated axes at top so the colorbar never steals space from the 2×2 panels.
-    cbar_ax = fig.add_axes([0.12, 0.90, 0.76, 0.022])
+    cbar_ax = fig.add_axes([0.12, 0.95, 0.76, 0.018])
     cbar = fig.colorbar(sm, cax=cbar_ax, orientation="horizontal")
     cbar.set_label("|F| (kcal/mol/Å)", fontsize=9)
     fig.suptitle(
@@ -664,7 +685,7 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
         f"(default {DEFAULT_MM_SWITCH_ON:g} / {DEFAULT_MM_SWITCH_WIDTH:g} / {DEFAULT_ML_SWITCH_WIDTH:g} Å)",
         fontsize=10,
         fontweight="600",
-        y=0.84,
+        y=0.99,
     )
     fig.text(
         0.5,
@@ -684,7 +705,10 @@ def plot_dimer_forces_cutoff_panels(residue: str) -> Path:
 
 def plot_dual_stack_responsibilities() -> Path:
     """Which layer owns which physics on ML-tagged atoms."""
-    fig, ax = plt.subplots(figsize=(9.5, 5.2))
+    # Height bumped from 5.2 to 6.2 and the row spacing loosened slightly:
+    # the last row's description text was landing right on top of the
+    # footer caption below it once rendered in the house sans-serif stack.
+    fig, ax = plt.subplots(figsize=(9.5, 6.2))
     ax.axis("off")
 
     layers = [
@@ -694,16 +718,16 @@ def plot_dual_stack_responsibilities() -> Path:
         ("CHARMM IMAGE", "#64748b", "VDW/ELEC on non-ML atoms; BLOCK zeros ELEC/VDW on ML atoms"),
         ("CHARMM bonded", "#94a3b8", "BOND/ANGL/DIHE (optional scaled internal MM on ML)"),
     ]
-    y = 0.85
+    y = 0.88
     for name, color, desc in layers:
         ax.add_patch(plt.Rectangle((0.05, y - 0.11), 0.22, 0.09, color=color, alpha=0.85))
         ax.text(0.16, y - 0.065, name, ha="center", va="center", color="white", fontsize=9, fontweight="600")
         ax.text(0.32, y - 0.065, desc, ha="left", va="center", fontsize=9, color="#334155")
-        y -= 0.17
+        y -= 0.16
 
     ax.text(
         0.5,
-        0.08,
+        0.05,
         "Atoms are tagged ML in the PSF; monomers are never dropped — switching scales pair energies by COM distance.",
         ha="center",
         fontsize=9,
@@ -725,8 +749,11 @@ def plot_lr_solvers_overview() -> Path:
         ("nvalchemiops_pme", "nvalchemiops PME\n(full-box Coulomb)", "periodic_external", "JAX k-space", "#2563eb"),
         ("scafacos", "ScaFaCoS libfcs\n(PME / P³M / P²NFFT …)", "periodic_external", "Fortran k-space", "#7c3aed"),
     ]
-    fig, ax = plt.subplots(figsize=(10, 4.8))
-    ax.set_xlim(0, 10)
+    # Widened from 10 to 11.5: "mm_nonbond_mode:\nperiodic_external" is
+    # long enough to run into the right-aligned k-space column at the old
+    # width once rendered in the house font.
+    fig, ax = plt.subplots(figsize=(11.5, 4.8))
+    ax.set_xlim(0, 11.5)
     ax.set_ylim(0, len(solvers) + 1)
     ax.axis("off")
     ax.set_title("Long-range Coulomb solvers (`lr_solver`)", fontweight="500", pad=12)
@@ -737,10 +764,10 @@ def plot_lr_solvers_overview() -> Path:
         ax.text(1.2, y, key, ha="center", va="center", color="white", fontsize=9, fontweight="600")
         ax.text(2.3, y, desc, ha="left", va="center", fontsize=9, color="#1e293b")
         ax.text(7.2, y, f"mm_nonbond_mode:\n{mode}", ha="left", va="center", fontsize=8, color="#475569")
-        ax.text(9.0, y, kspace, ha="right", va="center", fontsize=8, color="#64748b")
+        ax.text(10.7, y, kspace, ha="right", va="center", fontsize=8, color="#64748b")
 
     ax.text(
-        5.0,
+        5.75,
         0.35,
         "Default mic (truncated pair loop). Opt in: jax_pme, scafacos, nvalchemiops_pme. Legacy auto = mic.",
         ha="center",
@@ -768,19 +795,26 @@ def plot_lr_energy_split() -> Path:
     ax.axvline(13.0, color="#64748b", ls="--", lw=1.2, label="JAX MM outer radius (default)")
     ax.axvline(6.0, color="#059669", ls=":", lw=1.2, label="jax-pme SR cutoff (6 Å)")
     ax.set_xlabel("Intercharge distance (Å) — schematic")
-    ax.set_ylabel("Relative Coulomb weight (illustrative)")
-    ax.set_title("Coulomb split: switched pairs + jax-pme correction (not quantitative PME)", fontweight="500")
-    ax.legend(loc="upper right", fontsize=8)
+    # Short ylabel + explicit title pad: the long original label ("...
+    # (illustrative)") plus icml's larger axis-label font (16pt) made the
+    # label tall enough to collide with the title above it; "illustrative"
+    # is already stated in the title itself ("not quantitative PME").
+    ax.set_ylabel("Relative Coulomb weight")
+    ax.set_title("Coulomb split: switched pairs + jax-pme correction (schematic, not quantitative PME)",
+                  fontweight="500", pad=16)
+    legend_outside(ax)
     ax.set_xlim(0, 20)
-    ax.grid(alpha=0.3)
     fig.tight_layout()
     out = OUT_DIR / "lr_energy_split_schematic.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
 
 
 def main() -> None:
+    from mmml.utils.plotting.styles import apply_plot_style
+
+    apply_plot_style(STYLE_NAME)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
     for slug, label, cp in CUTOFF_PRESETS:
