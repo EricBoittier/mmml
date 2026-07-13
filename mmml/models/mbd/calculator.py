@@ -126,6 +126,7 @@ class QCMLMBDCalculator(Calculator):
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
+        self.checkpoint = Path(checkpoint)
         self.model, self.params = load_mbd_model(checkpoint)
         self.charge = float(charge)
         self.multiplicity = float(multiplicity)

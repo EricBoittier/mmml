@@ -51,7 +51,8 @@ def analyze_checkpoint(
     mbd_status = "ACTIVE" if calc.mbd_calc is not None else "NOT LOADED / RESIDUAL ONLY"
     print(f"\n[+] MBD Correction Status: {mbd_status}")
     if calc.mbd_calc is not None:
-        print(f"    MBD Checkpoint: {calc.mbd_calc.checkpoint}")
+        mbd_path = getattr(calc.mbd_calc, 'checkpoint', 'Loaded')
+        print(f"    MBD Checkpoint: {mbd_path}")
         print(f"    MBD Weight: {calc.mbd_weight}")
     else:
         print("    [!] WARNING: Evaluating SpookyNet residual neural network alone.")
