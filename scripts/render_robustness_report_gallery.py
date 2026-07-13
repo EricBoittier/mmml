@@ -87,7 +87,7 @@ def charge_and_dipole_fluctuation(traj: dict, out: Path) -> None:
 
     plot_utils = _load_plot_utils()
 
-    fig = plt.figure(figsize=(16, 5))
+    fig = plt.figure(figsize=(16, 6.3))
     # top=0.75: leaves headroom for the figure suptitle above the panel
     # titles -- without an explicit top margin the suptitle and the panel
     # titles (icml's bold 17pt) collide.
@@ -367,10 +367,10 @@ def energy_conservation_small_system(stable: dict, unstable: dict, out: Path) ->
     plot_utils = _load_plot_utils()
     colors = comparison_colors(STYLE_NAME, n=2)  # [PE color, total-energy color]
 
-    fig = plt.figure(figsize=(15, 9))
-    # top=0.87: same headroom fix as charge_and_dipole_fluctuation -- the
+    fig = plt.figure(figsize=(15, 10.5))
+    # top=0.80: same headroom fix as charge_and_dipole_fluctuation -- the
     # figure suptitle needs real room above the top row's panel titles.
-    outer = fig.add_gridspec(2, 3, width_ratios=[0.85, 2.2, 2.2], hspace=0.55, wspace=0.4, top=0.87)
+    outer = fig.add_gridspec(2, 3, width_ratios=[0.85, 2.2, 2.2], hspace=0.55, wspace=0.4, top=0.80)
 
     for row, (traj, label, dt) in enumerate([(stable, "stable", 0.1), (unstable, "unstable", 0.5)]):
         status = "good" if row == 0 else "critical"
