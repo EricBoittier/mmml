@@ -67,15 +67,16 @@ def compute_cgenff_component_breakdown(
 
     dr = pos_a[:, None, :] - pos_b[None, :, :]
     dist = np.linalg.norm(dr, axis=-1)
-    dist = np.maximum(dist, 1e-6)
+    r_coulomb = np.maximum(dist, 1e-6)
 
     q_ij = q_a[:, None] * q_b[None, :]
     sig_ij = 0.5 * (sig_a[:, None] + sig_b[None, :])
     eps_ij = np.sqrt(eps_a[:, None] * eps_b[None, :])
 
-    e_coulomb_kcal = np.sum(K_COULOMB_KCAL_ANG * q_ij / dist)
+    e_coulomb_kcal = np.sum(K_COULOMB_KCAL_ANG * q_ij / r_coulomb)
 
-    sr6 = (sig_ij / dist) ** 6
+    r_vdw = np.maximum(dist, 0.8 * sig_ij)
+    sr6 = (sig_ij / r_vdw) ** 6
     sr12 = sr6 ** 2
     e_vdw_kcal = np.sum(4.0 * eps_ij * (sr12 - sr6))
 

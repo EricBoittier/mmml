@@ -549,7 +549,8 @@ class SpookyPhysNet(nn.Module):
         else:
             inter_monomer_mask = 1.0
 
-        r_safe = jnp.maximum(r, 1e-6)
+        # Soft-core distance clamping to cap unphysical LJ 6-12 repulsion spikes at r < 0.8 * sig_ij
+        r_safe = jnp.maximum(r, 0.8 * sig_ij)
         sr6 = (sig_ij / r_safe) ** 6
         sr12 = sr6 ** 2
         

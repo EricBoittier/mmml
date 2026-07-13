@@ -215,14 +215,16 @@ def compute_inter_monomer_cgenff_mm_fast(pos: np.ndarray, comp_a: list[int], t_a
     eps_ij = np.sqrt(eps_a[:, None] * eps_b[None, :])
     
     # Coulomb
-    e_coulomb = np.sum(K_COULOMB_KCAL_ANG * q_ij / r)
-    f_c_mag = K_COULOMB_KCAL_ANG * q_ij / (r**3)
+    r_coulomb = np.maximum(r, 1e-6)
+    e_coulomb = np.sum(K_COULOMB_KCAL_ANG * q_ij / r_coulomb)
+    f_c_mag = K_COULOMB_KCAL_ANG * q_ij / (r_coulomb**3)
     
-    # LJ
-    sr6 = (sig_ij / r)**6
+    # LJ with soft-core distance clamping at r < 0.8 * sig_ij
+    r_vdw = np.maximum(r, 0.8 * sig_ij)
+    sr6 = (sig_ij / r_vdw)**6
     sr12 = sr6**2
     e_vdw = np.sum(4.0 * eps_ij * (sr12 - sr6))
-    f_v_mag = (24.0 * eps_ij / (r**2)) * (2.0 * sr12 - sr6)
+    f_v_mag = (24.0 * eps_ij / (r_vdw**2)) * (2.0 * sr12 - sr6)
     
     f_mag = f_c_mag + f_v_mag
     f_vec = dr * f_mag[:, :, None]
