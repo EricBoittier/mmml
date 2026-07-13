@@ -516,6 +516,21 @@ class SpookyPhysNet(nn.Module):
         return y
 
     learn_cgenff_vdw_scale: bool = True
+    predict_atomic_vdw_scale: bool = True
+
+    def _calculate_atomic_vdw_scales(
+        self, x: jnp.ndarray, atomic_numbers: jnp.ndarray, atom_mask: jnp.ndarray
+    ) -> jnp.ndarray:
+        """Predict dynamic atom-specific vdW scale factor gamma_i from atomic features x_i.
+
+        Returns values smoothly bounded around 1.0 e.g. in range [0.5, 1.5].
+        """
+        scale_raw = nn.Dense(
+            1, use_bias=True, kernel_init=jax.nn.initializers.zeros, dtype=DTYPE
+        )(x)
+        atomic_vdw_scale = 1.0 + 0.5 * jnp.tanh(scale_raw)
+        atomic_vdw_scale *= atom_mask[..., None, None, None]
+        return atomic_vdw_scale.reshape(-1)
 
     def _calculate_cgenff_vdw(
         self,
@@ -525,6 +540,7 @@ class SpookyPhysNet(nn.Module):
         cgenff_master_sigmas: jnp.ndarray,
         cgenff_master_epsilons: jnp.ndarray,
         atomic_numbers: jnp.ndarray,
+        atomic_vdw_scales: jnp.ndarray | None,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
         mol_id: jnp.ndarray | None,
@@ -532,7 +548,7 @@ class SpookyPhysNet(nn.Module):
         batch_segments: jnp.ndarray,
         batch_size: int,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Calculate inter-monomer CGenFF 6-12 Lennard-Jones vdW interactions in JAX with optional learnable scaling.
+        """Calculate inter-monomer CGenFF 6-12 Lennard-Jones vdW interactions in JAX with dynamic atom-specific scaling.
 
         Conversion: 1 kcal/mol = 0.0433641153 eV.
         Lorentz-Berthelot combination rules:
@@ -547,6 +563,13 @@ class SpookyPhysNet(nn.Module):
         sig_ij = 0.5 * (sig_dst + sig_src)
         eps_ij = jnp.sqrt(eps_dst * eps_src)
 
+        # Apply dynamic atom-specific vdW scale factors gamma_i predicted by neural network
+        if atomic_vdw_scales is not None:
+            scale_dst = jnp.take(atomic_vdw_scales, dst_idx)
+            scale_src = jnp.take(atomic_vdw_scales, src_idx)
+            eps_scale = jnp.sqrt(jnp.maximum(scale_dst * scale_src, 1e-4))
+            eps_ij = eps_ij * eps_scale
+
         # Optional learnable global and per-element LJ parameter scaling
         if self.learn_cgenff_vdw_scale:
             global_scale = self.param(
@@ -559,10 +582,10 @@ class SpookyPhysNet(nn.Module):
                 lambda rng, shape: jnp.ones(shape, dtype=r.dtype),
                 (self.max_atomic_number + 1,),
             )
-            scale_dst = jnp.take(element_scale, jnp.take(atomic_numbers, dst_idx))
-            scale_src = jnp.take(element_scale, jnp.take(atomic_numbers, src_idx))
-            eps_scale = global_scale * jnp.sqrt(jnp.maximum(scale_dst * scale_src, 1e-4))
-            eps_ij = eps_ij * eps_scale
+            elem_dst = jnp.take(element_scale, jnp.take(atomic_numbers, dst_idx))
+            elem_src = jnp.take(element_scale, jnp.take(atomic_numbers, src_idx))
+            elem_scale = global_scale * jnp.sqrt(jnp.maximum(elem_dst * elem_src, 1e-4))
+            eps_ij = eps_ij * elem_scale
 
         if mol_id is not None:
             inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(r.dtype)
@@ -636,6 +659,11 @@ class SpookyPhysNet(nn.Module):
         if (cgenff_type_idx is not None and 
             cgenff_master_sigmas is not None and 
             cgenff_master_epsilons is not None):
+            if self.predict_atomic_vdw_scale:
+                atomic_vdw_scales = self._calculate_atomic_vdw_scales(x, atomic_numbers, atom_mask)
+            else:
+                atomic_vdw_scales = None
+
             atomic_vdw, batch_vdw = self._calculate_cgenff_vdw(
                 r,
                 off_dist,
@@ -643,6 +671,7 @@ class SpookyPhysNet(nn.Module):
                 cgenff_master_sigmas,
                 cgenff_master_epsilons,
                 atomic_numbers,
+                atomic_vdw_scales,
                 dst_idx,
                 src_idx,
                 mol_id,
