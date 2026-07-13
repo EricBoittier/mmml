@@ -70,9 +70,15 @@ def _text_color_for(rgba) -> str:
 
 
 def plot_multipole_triangle(ax, coeffs_by_l: dict[int, np.ndarray], mpl_cmap, vmax: float,
-                             fontsize: float = 12, fmt: str = "{:.2f}") -> None:
+                             fontsize: float = 12, fmt: str = "{:.2f}", gap: float = 0.08) -> None:
     """Draw one (l, m) coefficient per colored, labeled box, in a
-    Pascal's-triangle layout (row l has 2l+1 boxes, centered)."""
+    Pascal's-triangle layout (row l has 2l+1 boxes, centered).
+
+    ``gap`` shrinks each box inward on all four sides (in cell units) so the
+    axes background shows through between neighbors -- plain edge-to-edge
+    boxes with only a thin cell border read as one solid mosaic rather than
+    a grid of individually-legible values.
+    """
     max_l = max(coeffs_by_l)
     n_cols = 2 * max_l + 1
     norm = Normalize(vmin=-vmax, vmax=vmax)
@@ -83,11 +89,10 @@ def plot_multipole_triangle(ax, coeffs_by_l: dict[int, np.ndarray], mpl_cmap, vm
         for i, value in enumerate(values):
             col_x = offset + i
             color = mpl_cmap(norm(value))
-            ax.add_patch(Rectangle((col_x, row_bottom), 1, 1, facecolor=color,
-                                    edgecolor="#222222", linewidth=1.1))
+            ax.add_patch(Rectangle((col_x + gap, row_bottom + gap), 1 - 2 * gap, 1 - 2 * gap,
+                                    facecolor=color, edgecolor="#222222", linewidth=1.1))
             ax.text(col_x + 0.5, row_bottom + 0.5, fmt.format(value), ha="center", va="center",
                     fontsize=fontsize, color=_text_color_for(color), fontweight="medium")
-        m_labels = list(range(-l, l + 1))
         ax.text(offset - 0.15, row_bottom + 0.5, _L_LABELS[l], ha="right", va="center", fontsize=fontsize - 1)
 
     ax.set_xlim(-4.5, n_cols + 0.2)

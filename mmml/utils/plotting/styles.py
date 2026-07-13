@@ -23,6 +23,9 @@ __all__ = [
     "DEFAULT_SEQUENTIAL_CMAP",
     "DEFAULT_DIVERGING_CMAP",
     "DEFAULT_CYCLIC_CMAP",
+    "OKABE_ITO_PALETTE",
+    "shared_axis_labels",
+    "booktabs_table",
 ]
 
 
@@ -422,13 +425,22 @@ def shared_axis_labels(fig, *, xlabel: str | None = None, ylabel: str | None = N
 
 def booktabs_table(ax, cell_text, *, col_labels=None, row_labels=None,
                     fontsize: float = 12, header_fontsize: float | None = None,
-                    col_widths=None):
+                    col_widths=None, row_height: float = 2.0,
+                    numeric_cols: Sequence[int] | None = None):
     """A LaTeX-`booktabs`-style table drawn with matplotlib: a rule above the
     header, a rule below the header, a rule at the bottom -- and nothing
     else. No vertical rules, no per-cell grid, no zebra-striping -- the
     classic "table ink" minimalism `booktabs` popularized in LaTeX, done in
     matplotlib so it renders in the same figure/style pipeline as everything
     else (same font, exportable as one PNG/PDF with the rest of a panel).
+
+    matplotlib's raw `ax.table()` defaults to cramped, vertically-centered,
+    center-aligned cells that read as "a grid dumped onto a figure" rather
+    than a typeset table -- ``row_height`` opens up breathing room (via
+    `Table.scale`), and text is nudged left-aligned within its cell padding
+    for row/data labels and right-aligned for ``numeric_cols`` (columns that
+    are actual numbers read better ones-place-aligned; auto-detected from
+    the first data row when not given).
 
     ``ax`` should have no other content -- give it its own subplot/axes.
     Returns the underlying `matplotlib.table.Table` for further tweaks.
@@ -438,19 +450,38 @@ def booktabs_table(ax, cell_text, *, col_labels=None, row_labels=None,
                     cellLoc="center", loc="center", colWidths=col_widths)
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(fontsize)
+    tbl.scale(1.0, row_height)
+
     has_header = col_labels is not None
     n_rows = len(cell_text) + (1 if has_header else 0)
     n_cols = len(cell_text[0]) if cell_text else 0
     col_range = range(-1 if row_labels is not None else 0, n_cols)
 
-    RULE_WIDTH = 1.4
+    if numeric_cols is None and cell_text:
+        numeric_cols = [
+            c for c in range(n_cols)
+            if all(_looks_numeric(row[c]) for row in cell_text)
+        ]
+    numeric_cols = set(numeric_cols or ())
+
     for (row, col), cell in tbl.get_celld().items():
         cell.set_linewidth(0)  # start from no rules; only 2-3 exact rules added back below
         cell.set_edgecolor("#222222")
+        cell.PAD = 0.06
+        is_data_row = row > 0 if has_header else row >= 0
+        if col in numeric_cols and is_data_row:
+            cell.get_text().set_ha("right")
+            cell.get_text().set_position((1.0 - cell.PAD, 0.5))
+        elif col >= 0:
+            cell.get_text().set_ha("left")
+            cell.get_text().set_position((cell.PAD, 0.5))
         if has_header and row == 0:
             cell.set_text_props(fontweight="bold")
             if header_fontsize:
                 cell.set_fontsize(header_fontsize)
+            if col in numeric_cols:
+                cell.get_text().set_ha("right")
+                cell.get_text().set_position((1.0 - cell.PAD, 0.5))
 
     def _set_edge(row: int, col: int, edge: str) -> None:
         try:
@@ -461,6 +492,7 @@ def booktabs_table(ax, cell_text, *, col_labels=None, row_labels=None,
         cell.visible_edges = "".join(sorted(set(existing) | {edge}))
         cell.set_linewidth(RULE_WIDTH)
 
+    RULE_WIDTH = 1.4
     # Top rule: above the header (or above the first data row if headerless).
     for col in col_range:
         _set_edge(0, col, "T")
@@ -473,6 +505,18 @@ def booktabs_table(ax, cell_text, *, col_labels=None, row_labels=None,
     for col in col_range:
         _set_edge(last_row, col, "B")
     return tbl
+
+
+def _looks_numeric(value: object) -> bool:
+    text = str(value).strip()
+    text = text.lstrip("+-").replace(",", "")
+    for suffix in ("%", "°"):
+        text = text.removesuffix(suffix)
+    try:
+        float(text)
+        return True
+    except ValueError:
+        return False
 
 
 # Classic matplotlib defaults (pre-seaborn era feel).
@@ -499,6 +543,24 @@ _MPL_CLASSIC_RC = {
     "font.family": "sans-serif",
     "lines.linewidth": 1.5,
 }
+
+
+# Okabe & Ito (2008) colorblind-safe categorical palette -- eight colors
+# designed by two Japanese vision scientists specifically to remain
+# distinguishable under the common forms of color vision deficiency
+# (protanopia, deuteranopia, tritanopia), while still reading well for
+# non-colorblind viewers. Order matters: this is the sequence the authors
+# recommend introducing colors in as series count grows.
+OKABE_ITO_PALETTE = (
+    "#000000",  # black
+    "#E69F00",  # orange
+    "#56B4E9",  # sky blue
+    "#009E73",  # bluish green
+    "#F0E442",  # yellow
+    "#0072B2",  # blue
+    "#D55E00",  # vermillion
+    "#CC79A7",  # reddish purple
+)
 
 
 PLOT_STYLES: dict[str, PlotStyle] = {
@@ -621,6 +683,17 @@ PLOT_STYLES: dict[str, PlotStyle] = {
         "legend meant to live outside the axes (see legend_outside()).",
         colors=_ICML_COLORS, rc_params=_ICML_RC,
         comparison_palette=("#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B2", "#937860"),
+        train_linewidth=2.4, valid_linewidth=2.6, best_marker_edge="#333333", best_marker_size=130.0,
+        text_box={"boxstyle": "round", "facecolor": "#FAFAFA", "edgecolor": "#CCCCCC", "alpha": 0.95},
+    ),
+    "icml_okabe_ito": _style(
+        "icml_okabe_ito",
+        "Same layout/type as 'icml', but the categorical palette is swapped "
+        "for Okabe-Ito -- use this whenever a figure's *categorical* series "
+        "identity (not a sequential/diverging heatmap) must stay legible "
+        "under color vision deficiency.",
+        colors=_ICML_COLORS, rc_params=_ICML_RC,
+        comparison_palette=OKABE_ITO_PALETTE,
         train_linewidth=2.4, valid_linewidth=2.6, best_marker_edge="#333333", best_marker_size=130.0,
         text_box={"boxstyle": "round", "facecolor": "#FAFAFA", "edgecolor": "#CCCCCC", "alpha": 0.95},
     ),

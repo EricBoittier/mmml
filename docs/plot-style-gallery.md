@@ -15,6 +15,29 @@ categorical colors, moderate (not oversized) type; the closest preset to a
 modern ML-conference figure. This is what `workflows/*/scripts/plot_results.py`
 and `plot_structure.py` use by default now.
 
+## Defaults at a glance
+
+Before picking a style by scrolling through full example figures below, here
+is every preset's default categorical color cycle, plus the three house
+colormap defaults (which are shared across *all* styles — colormaps are
+chosen by what the data *is*, sequential/diverging/cyclic, not by which font
+preset is active). Regenerate with `python scripts/render_style_defaults_gallery.py`.
+
+### Categorical color cycle per style
+
+![style palettes](plot-style-gallery-assets/chart_style_palettes.png)
+
+`icml_okabe_ito` is the same layout/type as `icml` but swaps in the
+[Okabe–Ito](https://jfly.uni-koeln.de/color/) eight-color palette — designed
+by Masataka Okabe and Kei Ito specifically to stay distinguishable under
+protanopia, deuteranopia, and tritanopia. Use it whenever a figure's
+categorical series identity (not a sequential/diverging heatmap) needs to
+stay legible for colorblind readers.
+
+### Default colormaps (`default_cmap(kind)`)
+
+![default colormaps](plot-style-gallery-assets/chart_default_colormaps.png)
+
 ## `icml`
 
 ![icml](plot-style-gallery-assets/icml.png)
@@ -220,6 +243,26 @@ something you'd have to notice by comparing many separate panels.
 
 ![histogram time series](plot-style-gallery-assets/chart_histogram_timeseries.png)
 
+### Jitter / strip plot
+
+Every individual observation as one point, x position randomly jittered
+within its category so overlapping points stay visible instead of stacking
+into a solid blob. Data-ink principle: nothing here is a derived summary
+statistic drawn on top of the data — only a short median bar per group — so
+shape that a mean+errorbar would hide (skew, a bimodal group) stays visible.
+
+![jitter/strip plot](plot-style-gallery-assets/chart_jitter_strip.png)
+
+### Violin plot
+
+The same three groups, but the estimated full distribution shape instead of
+individual points — complementary to jitter/strip: better once N is large
+enough that individual points would overplot. The bimodal `vacuum` group,
+invisible in a bar+errorbar chart, reads immediately as a violin with two
+lobes.
+
+![violin plot](plot-style-gallery-assets/chart_violin.png)
+
 ## Colormap picks: choosing defaults
 
 A shortlist of `cmap`-library colormaps, each rendered on synthetic data
@@ -356,6 +399,17 @@ particular, very common plot. A dedicated red/blue shortlist:
 being on the original shortlist — more brown/teal — a good reminder to
 *look at the render*, not just the name, before picking.
 
+**Decided default: `crameri:vik`** — the classic red-positive/blue-negative
+read with a controlled, perceptually-uniform ramp (unlike matplotlib's
+built-in `seismic`/`coolwarm`, which are not perceptually uniform). This is
+`complex_figure()`'s default `cmap_name` in
+`scripts/render_multipole_gallery.py`.
+
+Each box in the triangle is now drawn with a visible inset gap
+(`plot_multipole_triangle(..., gap=0.08)`) rather than edge-to-edge — plain
+adjacent boxes with only a thin border read as one solid mosaic; the gap
+lets each (l, m) value read as its own cell.
+
 ### Standardized complex figure
 
 Multipole triangle + per-atom partial-charge bars + a booktabs-style summary
@@ -364,7 +418,8 @@ table, combined under the "Complex figure layout" rules from
 colorbar for both the triangle and the bars (same colormap, same scale,
 `constrained_layout=True` so it doesn't overlap either panel), and
 `booktabs_table()` for the summary — a rule above the header, one below it,
-one at the bottom, nothing else:
+one at the bottom, nothing else, generous row height (`row_height=2.0`),
+and numeric columns right-aligned against label columns left-aligned:
 
 ![multipole standardized complex figure](plot-style-gallery-assets/chart_multipole_complex.png)
 

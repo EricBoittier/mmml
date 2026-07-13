@@ -37,6 +37,7 @@ colors = comparison_colors(style, n=len(settings))  # fixed categorical order
 | `"nature"` (alias `"pub"`/`"publication"`) | Compact journal-figure alternative when `"icml"`'s or the editorial family's type doesn't fit a dense multi-panel grid — sans-serif, `axes.labelsize=9`. |
 | `"google"` (module default) | Training-curve dashboards (loss/lr curves) — this is what most existing training-plot scripts assume implicitly. |
 | `"mpl_classic"` | Quick throwaway diagnostics where house branding doesn't matter. |
+| `"icml_okabe_ito"` | Same layout/type as `"icml"`, but `comparison_palette` is the [Okabe–Ito](https://jfly.uni-koeln.de/color/) eight-color colorblind-safe categorical palette (`OKABE_ITO_PALETTE`) instead of the muted "seaborn deep" colors. Use whenever a figure's *categorical* series identity — not a sequential/diverging heatmap, which already goes through `default_cmap()` — must stay legible under protanopia/deuteranopia/tritanopia. |
 | `"xmgrace"` / `"tron"` | Not for new work — legacy/novelty presets. |
 
 Run `mmml.utils.plotting.styles.list_plot_styles()` to see all registered
@@ -384,7 +385,12 @@ plot_multipole_triangle(ax, coeffs_by_l, mpl_cmap, vmax)
   `matplotlib:seismic`, `matplotlib:coolwarm` (`crameri:roma` was in the
   same shortlist but isn't actually red/blue — more brown/teal — dropped).
   See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Multipole
-  triangle: colormap candidates" for the rendered comparison.
+  triangle: colormap candidates" for the rendered comparison. **Decided
+  default: `crameri:vik`** (`complex_figure()`'s `cmap_name` default).
+- **Cell spacing**: `plot_multipole_triangle(..., gap=0.08)` shrinks each box
+  inward on all sides by `gap` (in cell units) instead of drawing them
+  edge-to-edge — plain adjacent boxes with only a thin border read as one
+  solid mosaic rather than a grid of individually-legible values.
 - **Text color**: computed per-cell from the fill color's luminance
   (`0.299r + 0.587g + 0.114b`), not hardcoded — a dark cell needs white
   text, a light one needs black, and which cells are dark vs. light depends
@@ -416,7 +422,13 @@ plots glued together. Two house helpers:
   nothing else (no vertical rules, no per-cell grid, no zebra-striping).
   Give it its own subplot; it draws via matplotlib's own `Axes.table` so it
   renders in the exact same font/DPI/figure as the rest of the panel,
-  without a separate LaTeX build step.
+  without a separate LaTeX build step. Raw `ax.table()` defaults to cramped,
+  center-aligned-everything cells that read as a plain grid dump, so this
+  also applies: `row_height` (default `2.0`, via `Table.scale`) for
+  breathing room between rows, left-alignment for label/text columns, and
+  right-alignment for numeric columns (auto-detected from the data unless
+  `numeric_cols` is passed explicitly) — numbers read faster ones-place
+  aligned than centered.
 
   ```python
   from mmml.utils.plotting.styles import booktabs_table

@@ -468,6 +468,73 @@ def histogram_timeseries(out: Path) -> None:
     plt.close(fig)
 
 
+def jitter_strip(out: Path) -> None:
+    """A jitter/strip plot: every individual observation as one point, x
+    position randomly jittered within its category so overlapping points
+    stay visible instead of stacking into a solid blob.
+
+    Tufte/data-ink principle: no summary statistic is drawn on top of
+    anything -- unlike a box or bar chart, nothing here is a derived
+    quantity. When N is small-to-moderate, showing the raw data itself is
+    more honest and often more informative than any summary of it (e.g. a
+    bimodal or skewed distribution is invisible in a mean+errorbar but
+    obvious in a strip plot).
+    """
+    groups = ["water_box", "peptide_water", "vacuum"]
+    group_colors = [_SYSTEM_COLORS.get(g, "#6C3483") for g in groups]
+    data = {
+        "water_box": RNG.normal(-74.8, 0.35, 60),
+        "peptide_water": RNG.normal(-71.2, 0.55, 60),
+        "vacuum": np.concatenate([RNG.normal(-69.0, 0.2, 30), RNG.normal(-67.5, 0.25, 30)]),
+    }
+
+    fig, ax = plt.subplots(figsize=(7.5, 5.5))
+    for i, (group, color) in enumerate(zip(groups, group_colors)):
+        values = data[group]
+        x = i + RNG.uniform(-0.18, 0.18, size=values.size)
+        ax.scatter(x, values, s=22, color=color, alpha=0.65, edgecolor="none")
+        ax.hlines(np.median(values), i - 0.28, i + 0.28, color="#222222", linewidth=2.2, zorder=3)
+    ax.set_xticks(range(len(groups)))
+    ax.set_xticklabels(groups)
+    ax.set_ylabel("energy (kcal/mol)")
+    ax.set_title("Jitter/strip plot: raw per-run values, median as a short bar")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def violin_comparison(out: Path) -> None:
+    """A violin plot: the same three groups as the jitter plot, but showing
+    the estimated full distribution shape (a mirrored, smoothed histogram)
+    rather than individual points -- complementary to jitter/strip, better
+    when N is large enough that individual points would overplot.
+    """
+    groups = ["water_box", "peptide_water", "vacuum"]
+    group_colors = [_SYSTEM_COLORS.get(g, "#6C3483") for g in groups]
+    data = [
+        RNG.normal(-74.8, 0.35, 400),
+        RNG.normal(-71.2, 0.55, 400),
+        np.concatenate([RNG.normal(-69.0, 0.2, 200), RNG.normal(-67.5, 0.25, 200)]),
+    ]
+
+    fig, ax = plt.subplots(figsize=(7.5, 5.5))
+    parts = ax.violinplot(data, showmedians=True, widths=0.8)
+    for body, color in zip(parts["bodies"], group_colors):
+        body.set_facecolor(color)
+        body.set_edgecolor("#222222")
+        body.set_alpha(0.75)
+    for key in ("cmedians", "cmins", "cmaxes", "cbars"):
+        parts[key].set_color("#222222")
+        parts[key].set_linewidth(1.2)
+    ax.set_xticks(range(1, len(groups) + 1))
+    ax.set_xticklabels(groups)
+    ax.set_ylabel("energy (kcal/mol)")
+    ax.set_title("Violin plot: full distribution shape (bimodal vacuum group visible)")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     apply_plot_style(STYLE_NAME)
@@ -485,6 +552,8 @@ def main() -> None:
         "chart_colormaps": colormap_gallery,
         "chart_hist2d": hist2d,
         "chart_histogram_timeseries": histogram_timeseries,
+        "chart_jitter_strip": jitter_strip,
+        "chart_violin": violin_comparison,
     }
     for name, fn in renders.items():
         out = OUT_DIR / f"{name}.png"
