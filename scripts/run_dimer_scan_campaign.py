@@ -198,6 +198,17 @@ def main():
         help="Path to a SpookyNet JSON checkpoint (params + config)",
     )
     parser.add_argument(
+        "--spookynet-tag",
+        type=str,
+        default=None,
+        help=(
+            "Suffix appended to the spookynet/spookynet_hybrid backend names "
+            "(e.g. 'muon_ep7' -> 'spookynet_muon_ep7'), so multiple checkpoints "
+            "can be evaluated into the same CSV without colliding under the "
+            "same backend name."
+        ),
+    )
+    parser.add_argument(
         "--with-charmm",
         action="store_true",
         help="Also evaluate CHARMM/CGenFF energies (requires pycharmm)",
@@ -363,22 +374,26 @@ def main():
 
         # Evaluate SpookyNet (raw dimer energy)
         if use_spookynet:
-            print("  Evaluating SpookyNet...")
+            spookynet_backend = f"spookynet_{args.spookynet_tag}" if args.spookynet_tag else "spookynet"
+            spookynet_hybrid_backend = (
+                f"spookynet_hybrid_{args.spookynet_tag}" if args.spookynet_tag else "spookynet_hybrid"
+            )
+            print(f"  Evaluating SpookyNet (backend={spookynet_backend})...")
             try:
                 sn_rows = evaluate_scan(geometries, lambda: spookynet_calc)
                 for r in sn_rows:
-                    r["backend"] = "spookynet"
+                    r["backend"] = spookynet_backend
                 results.extend(sn_rows)
             except Exception as e:
                 print(f"    Error: {e}")
 
-            print("  Evaluating SpookyNet hybrid (dimer/monomer decomposition)...")
+            print(f"  Evaluating SpookyNet hybrid (backend={spookynet_hybrid_backend})...")
             try:
                 sn_hybrid_rows = evaluate_scan_monomer_decomposed(
                     geometries, lambda: spookynet_calc
                 )
                 for r in sn_hybrid_rows:
-                    r["backend"] = "spookynet_hybrid"
+                    r["backend"] = spookynet_hybrid_backend
                 results.extend(sn_hybrid_rows)
             except Exception as e:
                 print(f"    Error: {e}")

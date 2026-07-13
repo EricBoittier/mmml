@@ -18,7 +18,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers 3d projection)
 
-from mmml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
+from mmml.utils.plotting.styles import (
+    DEFAULT_SEQUENTIAL_CMAP,
+    apply_plot_style,
+    default_cmap,
+    legend_outside,
+    seed_symbol,
+)
 
 STYLE_NAME = "icml"
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -103,7 +109,8 @@ def surface_3d(out: Path) -> None:
 
     fig = plt.figure(figsize=(7, 6))
     ax = fig.add_subplot(projection="3d")
-    surf = ax.plot_surface(xx, yy, zz, cmap="viridis", alpha=0.9, linewidth=0, antialiased=True)
+    surf = ax.plot_surface(xx, yy, zz, cmap=default_cmap("sequential"), alpha=0.9, linewidth=0,
+                            antialiased=True)
     ax.set_xlabel("r (Å)")
     ax.set_ylabel("lateral offset (Å)")
     ax.set_zlabel("energy (kcal/mol)")
@@ -392,7 +399,7 @@ def colormap_gallery(out: Path) -> None:
     zz = 4.0 * ((2.9 / xx) ** 12 - (2.9 / xx) ** 6) + 0.2 * yy**2
 
     names = [
-        ("viridis", "viridis (matplotlib default, perceptually uniform)"),
+        (DEFAULT_SEQUENTIAL_CMAP, f"{DEFAULT_SEQUENTIAL_CMAP} (house sequential default)"),
         ("cmocean:haline", "cmocean:haline (oceanographic sequential)"),
         ("cmocean:balance", "cmocean:balance (diverging, zero-centered)"),
         ("crameri:batlow", "crameri:batlow (colorblind-safe sequential)"),

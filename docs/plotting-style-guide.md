@@ -32,13 +32,16 @@ colors = comparison_colors(style, n=len(settings))  # fixed categorical order
 
 | Preset | When |
 |---|---|
-| `"icml"` | **Default for sweep/analysis figures** (energy traces, RDFs, bond/angle histograms, anything going in a writeup) — clean sans-serif, muted "seaborn deep"-style categorical colors (`#4C72B0`/`#DD8452`/`#55A868`/...), moderate type (`axes.labelsize=13`), no top/right spine. The closest preset to a modern ML-conference (ICML/NeurIPS) figure — less soft/rounded than `"google"`, less serif/journal than the `editorial_*` family. Pairs with `legend_outside()` (see below). Used by `workflows/*/scripts/plot_results.py` and `plot_structure.py`. |
+| `"icml"` | **Default for sweep/analysis figures** (energy traces, RDFs, bond/angle histograms, anything going in a writeup) — clean sans-serif, moderate type (`axes.labelsize=13`), no top/right spine, no legend border (`legend.frameon=False`). Categorical color cycle is the [Okabe–Ito](https://jfly.uni-koeln.de/color/) eight-color colorblind-safe palette (`OKABE_ITO_PALETTE`) — the house default, not an opt-in variant. The closest preset to a modern ML-conference (ICML/NeurIPS) figure — less soft/rounded than `"google"`, less serif/journal than the `editorial_*` family. Pairs with `legend_outside()` (see below). Used by `workflows/*/scripts/plot_results.py` and `plot_structure.py`. `"icml_okabe_ito"` still resolves (alias → `"icml"`) for anything written before the palettes merged. |
 | `"editorial_dejavu_sans"` / `"editorial_dejavu_serif"` / `"editorial_stix"` / `"editorial_cm"` | An alternative "read from across the room" family (e.g. a talk slide) — large type (`axes.labelsize=15`, `axes.titlesize=17` bold), thick lines (`lines.linewidth=2.8`), LaTeX-style math via `mathtext.fontset`, no top/right spine, faint dotted grid. The four variants share this axis/spacing treatment and differ only in typeface — see [`docs/plot-style-gallery.md`](plot-style-gallery.md) for a rendered comparison. |
 | `"nature"` (alias `"pub"`/`"publication"`) | Compact journal-figure alternative when `"icml"`'s or the editorial family's type doesn't fit a dense multi-panel grid — sans-serif, `axes.labelsize=9`. |
 | `"google"` (module default) | Training-curve dashboards (loss/lr curves) — this is what most existing training-plot scripts assume implicitly. |
 | `"mpl_classic"` | Quick throwaway diagnostics where house branding doesn't matter. |
-| `"icml_okabe_ito"` | Same layout/type as `"icml"`, but `comparison_palette` is the [Okabe–Ito](https://jfly.uni-koeln.de/color/) eight-color colorblind-safe categorical palette (`OKABE_ITO_PALETTE`) instead of the muted "seaborn deep" colors. Use whenever a figure's *categorical* series identity — not a sequential/diverging heatmap, which already goes through `default_cmap()` — must stay legible under protanopia/deuteranopia/tritanopia. |
 | `"xmgrace"` / `"tron"` | Not for new work — legacy/novelty presets. |
+
+Every preset now sets `legend.frameon = False` — legends are never boxed with
+a visible border; rely on `legend_outside()` placing them clear of the data
+instead of a frame to separate them from it.
 
 Run `mmml.utils.plotting.styles.list_plot_styles()` to see all registered
 names/aliases.
@@ -532,9 +535,9 @@ by the role a series plays):
   and needs a second one on top (e.g. replicate run) — color = force field,
   line style/marker = replicate, with **two separate legends** (one per
   axis) rather than one combined legend enumerating every combination.
-- Redundant coding for accessibility — even with a colorblind-safe palette
-  (`icml_okabe_ito`), a second non-color cue means identity survives
-  grayscale printing or a viewer who can't rely on color at all.
+- Redundant coding for accessibility — even with the house's colorblind-safe
+  default palette (Okabe-Ito), a second non-color cue means identity
+  survives grayscale printing or a viewer who can't rely on color at all.
 
 ```python
 from mmml.utils.plotting.styles import LINE_STYLE_CYCLE, MARKER_CYCLE, comparison_colors

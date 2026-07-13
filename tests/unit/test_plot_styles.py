@@ -105,9 +105,35 @@ def test_okabe_ito_palette_is_eight_distinct_hex_colors() -> None:
     assert all(c.startswith("#") and len(c) == 7 for c in OKABE_ITO_PALETTE)
 
 
-def test_icml_okabe_ito_style_uses_the_palette() -> None:
-    style = get_plot_style("icml_okabe_ito")
+def test_icml_uses_okabe_ito_as_its_default_cycle() -> None:
+    style = get_plot_style("icml")
     assert style.comparison_palette == OKABE_ITO_PALETTE
+
+
+def test_icml_okabe_ito_alias_resolves_to_icml() -> None:
+    assert get_plot_style("icml_okabe_ito") is get_plot_style("icml")
+
+
+def test_every_preset_has_no_legend_border() -> None:
+    for name, style in PLOT_STYLES.items():
+        assert style.rc_params.get("legend.frameon") is False, name
+        assert "legend.edgecolor" not in style.rc_params, name
+
+
+def test_every_preset_wires_comparison_palette_into_prop_cycle() -> None:
+    for name, style in PLOT_STYLES.items():
+        cycle_colors = [c["color"] for c in style.rc_params["axes.prop_cycle"]]
+        assert cycle_colors == list(style.comparison_palette), name
+
+
+def test_icml_bare_plot_calls_cycle_through_okabe_ito() -> None:
+    import matplotlib.pyplot as plt
+
+    apply_plot_style("icml")
+    fig, ax = plt.subplots()
+    colors = [ax.plot([0, 1], [i, i + 1])[0].get_color() for i in range(3)]
+    plt.close(fig)
+    assert colors == list(OKABE_ITO_PALETTE[:3])
 
 
 def test_multi_cmap_shortlist_covers_all_three_kinds() -> None:

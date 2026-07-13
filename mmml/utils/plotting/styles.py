@@ -74,11 +74,18 @@ def _style(
     comparison_palette: Sequence[str],
     **kwargs: Any,
 ) -> PlotStyle:
+    # Wire comparison_palette into matplotlib's actual color cycle
+    # (axes.prop_cycle), not just comparison_colors()'s manual lookup -- a
+    # bare `ax.plot(x, y)`/`ax.scatter(...)` with no explicit `color=` should
+    # already draw from the house palette instead of silently falling back
+    # to matplotlib's built-in tab10 cycle.
+    resolved_rc = dict(rc_params)
+    resolved_rc.setdefault("axes.prop_cycle", plt.cycler(color=list(comparison_palette)))
     return PlotStyle(
         name=name,
         description=description,
         colors=colors,
-        rc_params=rc_params,
+        rc_params=resolved_rc,
         comparison_palette=comparison_palette,
         **kwargs,
     )
@@ -107,9 +114,8 @@ _NATURE_RC = {
     "grid.linestyle": "-",
     "grid.linewidth": 0.5,
     "grid.color": "#B0B0B0",
-    "legend.framealpha": 1.0,
+    "legend.frameon": False,
     "legend.fontsize": 8,
-    "legend.edgecolor": "#CCCCCC",
     "xtick.labelsize": 8,
     "ytick.labelsize": 8,
     "xtick.direction": "out",
@@ -143,9 +149,8 @@ _XMGRACE_RC = {
     "grid.linestyle": ":",
     "grid.linewidth": 0.8,
     "grid.color": "#888888",
-    "legend.framealpha": 1.0,
+    "legend.frameon": False,
     "legend.fontsize": 9,
-    "legend.edgecolor": "black",
     "xtick.labelsize": 10,
     "ytick.labelsize": 10,
     "xtick.direction": "in",
@@ -178,9 +183,8 @@ _GOOGLE_RC = {
     "grid.linestyle": "-",
     "grid.linewidth": 0.7,
     "grid.color": "#E8EAED",
-    "legend.framealpha": 0.98,
+    "legend.frameon": False,
     "legend.fontsize": 9,
-    "legend.edgecolor": "#E8EAED",
     "xtick.labelsize": 10,
     "ytick.labelsize": 10,
     "font.family": "sans-serif",
@@ -214,9 +218,7 @@ _TRON_RC = {
     "grid.linestyle": "-",
     "grid.linewidth": 0.6,
     "grid.color": "#1E3A5F",
-    "legend.framealpha": 0.85,
-    "legend.facecolor": "#101820",
-    "legend.edgecolor": "#00E5FF",
+    "legend.frameon": False,
     "legend.fontsize": 9,
     "legend.labelcolor": "#C8E6FF",
     "text.color": "#C8E6FF",
@@ -272,9 +274,8 @@ def _editorial_rc(*, family: str, serif: list[str] | None = None,
         "grid.linestyle": ":",
         "grid.linewidth": 0.7,
         "grid.color": "#888888",
-        "legend.framealpha": 0.92,
+        "legend.frameon": False,
         "legend.fontsize": 12,
-        "legend.edgecolor": "#CCCCCC",
         "xtick.labelsize": 13,
         "ytick.labelsize": 13,
         "xtick.direction": "out",
@@ -336,10 +337,9 @@ _ICML_RC = {
     "grid.linewidth": 0.6,
     "grid.color": "#DDDDDD",
     "axes.axisbelow": True,
-    "legend.framealpha": 0.95,
+    "legend.frameon": False,
     "legend.fontsize": 13,
     "legend.title_fontsize": 14,
-    "legend.edgecolor": "#CCCCCC",
     "xtick.labelsize": 14,
     "ytick.labelsize": 14,
     "font.family": "sans-serif",
@@ -696,7 +696,7 @@ _MPL_CLASSIC_RC = {
     "axes.titleweight": "normal",
     "axes.titlepad": 10.0,
     "axes.grid": False,
-    "legend.framealpha": 1.0,
+    "legend.frameon": False,
     "legend.fontsize": 10,
     "xtick.labelsize": 10,
     "ytick.labelsize": 10,
@@ -876,19 +876,10 @@ PLOT_STYLES: dict[str, PlotStyle] = {
     ),
     "icml": _style(
         "icml",
-        "ICML/NeurIPS-paper vibe: clean sans-serif, muted categorical colors, "
-        "legend meant to live outside the axes (see legend_outside()).",
-        colors=_ICML_COLORS, rc_params=_ICML_RC,
-        comparison_palette=("#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B2", "#937860"),
-        train_linewidth=2.4, valid_linewidth=2.6, best_marker_edge="#333333", best_marker_size=130.0,
-        text_box={"boxstyle": "round", "facecolor": "#FAFAFA", "edgecolor": "#CCCCCC", "alpha": 0.95},
-    ),
-    "icml_okabe_ito": _style(
-        "icml_okabe_ito",
-        "Same layout/type as 'icml', but the categorical palette is swapped "
-        "for Okabe-Ito -- use this whenever a figure's *categorical* series "
-        "identity (not a sequential/diverging heatmap) must stay legible "
-        "under color vision deficiency.",
+        "ICML/NeurIPS-paper vibe: clean sans-serif, legend meant to live "
+        "outside the axes (see legend_outside()). Categorical color cycle is "
+        "the Okabe-Ito colorblind-safe palette (OKABE_ITO_PALETTE) -- the "
+        "house default, not an opt-in variant.",
         colors=_ICML_COLORS, rc_params=_ICML_RC,
         comparison_palette=OKABE_ITO_PALETTE,
         train_linewidth=2.4, valid_linewidth=2.6, best_marker_edge="#333333", best_marker_size=130.0,
@@ -959,6 +950,7 @@ _STYLE_ALIASES = {
     "matplotlib": "mpl_classic",
     "editorial": "editorial_dejavu_serif",
     "tufte": "editorial_stix",  # renamed: Tufte is a set of principles, not one font/preset
+    "icml_okabe_ito": "icml",  # Okabe-Ito is now icml's own default categorical cycle
 }
 
 

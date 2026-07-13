@@ -32,6 +32,10 @@ BACKEND_LABELS: dict[str, str] = {
     "b2plyp_def2svp_d3bj_cp":   "B2PLYP-D3BJ/def2-SVP (CP)",
     "dsdblyp_def2svp_d3bj_cp":  "DSD-BLYP-D3BJ/def2-SVP (CP)",
     "pwpb95_def2svp_d3bj_cp":   "PWPB95-D3BJ/def2-SVP (CP)",
+    "hf_def2svp_gpu4pyscf_cp": "HF (GPU4PySCF, CP)",
+    "mp2_def2svp_gpu4pyscf_cp": "MP2 (GPU4PySCF, CP)",
+    "pbe0_def2svp_gpu4pyscf_cp": "PBE0 (GPU4PySCF, CP)",
+    "pbe0_def2svp_gpu4pyscf_d3bj_cp": "PBE0-D3BJ (GPU4PySCF, CP)",
 }
 
 BACKEND_COLORS: dict[str, str] = {
@@ -49,6 +53,10 @@ BACKEND_COLORS: dict[str, str] = {
     "b2plyp_def2svp_d3bj_cp":   "#af7aa1",
     "dsdblyp_def2svp_d3bj_cp":  "#ff9da7",
     "pwpb95_def2svp_d3bj_cp":   "#9c755f",
+    "hf_def2svp_gpu4pyscf_cp": "#76b7b2",
+    "mp2_def2svp_gpu4pyscf_cp": "#edc948",
+    "pbe0_def2svp_gpu4pyscf_cp": "#59a14f",
+    "pbe0_def2svp_gpu4pyscf_d3bj_cp": "#af7aa1",
 }
 
 BACKEND_CMAPS: dict[str, str] = {
@@ -66,6 +74,10 @@ BACKEND_CMAPS: dict[str, str] = {
     "b2plyp_def2svp_d3bj_cp":   "PuRd_r",
     "dsdblyp_def2svp_d3bj_cp":  "RdPu_r",
     "pwpb95_def2svp_d3bj_cp":   "copper_r",
+    "hf_def2svp_gpu4pyscf_cp": "PuBuGn_r",
+    "mp2_def2svp_gpu4pyscf_cp": "YlOrBr_r",
+    "pbe0_def2svp_gpu4pyscf_cp": "GnBu_r",
+    "pbe0_def2svp_gpu4pyscf_d3bj_cp": "PuRd_r",
 }
 
 # Canonical ordering for legend / subplot layout
@@ -73,13 +85,17 @@ BACKEND_ORDER: list[str] = [
     "multipoles_mbd",
     "learned_multipole",
     "learned_mbd",
-    "spookynet_hybrid",
     "spookynet",
+    "spookynet_hybrid",
     "xtb_gfn2",
     "charmm",
+    "mp2_def2svp_gpu4pyscf_cp",
+    "hf_def2svp_gpu4pyscf_cp",
+    "pbe0_def2svp_gpu4pyscf_cp",
+    "pbe0_def2svp_gpu4pyscf_d3bj_cp",
     "hf_def2svp_cp",
-    "hf_def2svp",
     "mp2_def2svp_cp",
+    "hf_def2svp",
     "mp2_def2svp",
     "dsdblyp_def2svp_d3bj_cp",
     "b2plyp_def2svp_d3bj_cp",

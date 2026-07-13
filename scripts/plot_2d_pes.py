@@ -38,7 +38,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.colors import TwoSlopeNorm
-from scipy.interpolate import griddata
+from scipy.interpolate import PchipInterpolator, griddata
+from scipy.ndimage import gaussian_filter
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
@@ -47,6 +48,7 @@ from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS
 from mmml.analysis.dimer_scans import build_rigid_dimer_2d
 from plot_utils import (
     BACKEND_CMAPS,
+    BACKEND_COLORS,
     BACKEND_LABELS,
     MIN_SAFE_CONTACT_ANGSTROM,
     flag_clashing_geometries,
@@ -56,22 +58,12 @@ from plot_utils import (
     render_dimer_atoms,
     robust_color_vmax,
 )
-
-mpl.rcParams.update(
-    {
-        "font.family": "sans-serif",
-        "font.size": 10,
-        "axes.labelsize": 11,
-        "axes.titlesize": 11,
-        "figure.dpi": 150,
-        "text.usetex": False,
-    }
-)
+from mmml.utils.plotting.styles import apply_plot_style
 
 MAX_COLS = 4
 
-COORD1_COLOR = "#d62728"  # distance (approach axis)
-COORD2_COLOR = "#1f77b4"  # lateral offset (transverse axis)
+COORD1_COLOR = "0.25"
+COORD2_COLOR = "0.25"
 
 
 def _pair_cfg(label_a: str, label_b: str) -> dict | None:
@@ -84,13 +76,13 @@ def _pair_cfg(label_a: str, label_b: str) -> dict | None:
 
 
 def _coord_axes_for(label_a: str, label_b: str) -> list[tuple[np.ndarray, str, str]] | None:
-    """Direction vectors for coordinate 1 (distance) and 2 (offset), for the arrow overlay."""
+    """Direction vectors for the d and c scan coordinates, for the arrow overlay."""
     cfg = _pair_cfg(label_a, label_b)
     if cfg is None:
         return None
     return [
         (np.array([0.0, 0.0, 1.0]), COORD1_COLOR, "d"),
-        (np.array(cfg["transverse_axis"], dtype=float), COORD2_COLOR, "off"),
+        (np.array(cfg["transverse_axis"], dtype=float), COORD2_COLOR, "c"),
     ]
 
 
@@ -157,7 +149,7 @@ def _plot_distance_filmstrip(
             warnings.simplefilter("ignore")
             render_dimer_atoms(
                 inset, atoms_snap, fragments,
-                forces=forces, coord_axes=coord_axes, title=f"{d:.2f} Å",
+                forces=forces, coord_axes=coord_axes, title=rf"$d={d:.2f}$ Å",
             )
     if forces_calc is not None and forces_label:
         ax.text(
@@ -192,7 +184,7 @@ def _plot_offset_filmstrip(
             warnings.simplefilter("ignore")
             render_dimer_atoms(
                 inset, atoms_snap, fragments,
-                forces=forces, coord_axes=coord_axes, title=f"off={off:.2f} Å", title_fontsize=6,
+                forces=forces, coord_axes=coord_axes, title=rf"$c={off:.2f}$ Å", title_fontsize=6,
             )
     return snap_offsets
 
@@ -215,6 +207,75 @@ def _inset_bounds_for(
     x0 = min(max(x0, 0.0), 1.0 - size)
     y0 = min(max(y0, 0.0), 1.0 - size)
     return x0, y0, size, size
+
+
+def _clean_interaction_data(df_pair: pd.DataFrame, backend: str, min_contact: float) -> pd.DataFrame:
+    """Return a consistently referenced, clash/outlier-filtered PES."""
+    df_be = df_pair[df_pair["backend"] == backend].copy()
+    if df_be.empty:
+        return df_be
+    df_be = flag_clashing_geometries(df_be, min_contact=min_contact)
+    df_be = df_be[~df_be["is_clash"]].copy()
+    if df_be.empty:
+        return df_be
+    df_on = df_be[df_be["offset_angstrom"] == df_be["offset_angstrom"].min()]
+    ref_source = df_on if not df_on.empty else df_be
+    ref = ref_source.sort_values("distance_angstrom")["energy_kcal_mol"].iloc[-1]
+    df_be["E_int"] = df_be["energy_kcal_mol"] - ref
+    df_be = flag_energy_outliers(df_be, "E_int")
+    df_be = df_be[~df_be["is_energy_outlier"]].copy()
+    return df_be
+
+
+def _plot_summary_panel(ax, df_pair: pd.DataFrame, backends: list[str], min_contact: float) -> None:
+    """Compare smooth distance curves across all lateral offsets."""
+    line_styles = ["-", "--", ":", "-.", (0, (5, 1, 1, 1))]
+    y_values = []
+    x_values = []
+    for backend in backends:
+        df_be = _clean_interaction_data(df_pair, backend, min_contact)
+        if df_be.empty:
+            continue
+        color = BACKEND_COLORS.get(backend)
+        offsets = np.sort(df_be["offset_angstrom"].unique())
+        # At most five representative lateral cuts keep the panel readable.
+        offset_indices = np.unique(np.linspace(0, len(offsets) - 1, min(5, len(offsets))).round().astype(int))
+        for style_idx, offset_idx in enumerate(offset_indices):
+            curve = df_be[df_be["offset_angstrom"] == offsets[offset_idx]].sort_values("distance_angstrom")
+            x = curve["distance_angstrom"].to_numpy()
+            y = curve["E_int"].to_numpy()
+            if len(x) < 2:
+                continue
+            x_smooth = np.linspace(x.min(), x.max(), 180)
+            y_smooth = PchipInterpolator(x, y)(x_smooth) if len(x) >= 3 else np.interp(x_smooth, x, y)
+            ax.plot(
+                x_smooth, y_smooth, color=color, lw=1.4, alpha=0.9,
+                ls=line_styles[style_idx],
+                label=BACKEND_LABELS.get(backend, backend) if style_idx == 0 else None,
+            )
+            y_values.append(y_smooth)
+            x_values.append(x_smooth)
+    if y_values:
+        values = np.concatenate(y_values)
+        low = min(float(np.nanmin(values)), -1.0)
+        high = max(float(np.nanmax(values)), 2.0)
+        ax.set_ylim(low * 1.12, high * 1.12)
+        # A symlog axis keeps the modest wells readable while retaining the
+        # very steep walls of unstable methods in the same comparison.
+        ax.set_yscale("symlog", linthresh=5.0)
+    if x_values:
+        xmin = min(float(x.min()) for x in x_values)
+        xmax = max(float(x.max()) for x in x_values)
+        ax.set_xlim(xmin, xmax + 0.55 * (xmax - xmin))
+    ax.axhline(0.0, color="0.35", lw=0.7, zorder=0)
+    ax.legend(
+        fontsize=12, ncol=1, loc="upper right", handlelength=2.1,
+        bbox_to_anchor=(1.055, 0.99), borderaxespad=0,
+        labelspacing=0.62, frameon=True, facecolor="0.85", edgecolor="none", framealpha=0.34,
+    )
+    ax.set_title("Summary — repulsive walls")
+    ax.set_xlabel(r"$d$ / Å")
+    ax.set_ylabel("$E_{int}$ / kcal mol$^{-1}$")
 
 
 def _reference_energy(series: pd.Series, ref_dist: float | None = None) -> pd.Series:
@@ -246,8 +307,12 @@ def plot_2d_pes_for_pair(
     if n_be == 0:
         return
 
-    n_cols = min(n_be, max_cols)
-    n_be_rows = -(-n_be // n_cols)  # ceil
+    # Reserve the first panel for the cross-method summary.  With the standard
+    # 11 backends this deliberately makes a 3 × 4 grid: model families first,
+    # followed by SpookyNet/classical methods, then the reference methods.
+    n_panels = n_be + 1
+    n_cols = min(n_panels, max_cols)
+    n_be_rows = -(-n_panels // n_cols)  # ceil
 
     film_h = 1.1   # distance filmstrip row height (matches the heatmaps' x-axis, across the top)
     film_w = 1.3   # offset filmstrip column width (matches the heatmaps' y-axis, down the side)
@@ -290,10 +355,6 @@ def plot_2d_pes_for_pair(
             ax_film_dist, label_a, label_b, all_distances,
             forces_calc=forces_calc, forces_label=forces_label,
         )
-        ax_film_dist.set_title(
-            f"Coordinate 1 — approach distance (offset=0)  [arrow: d]",
-            fontsize=9, color=COORD1_COLOR,
-        )
     if ax_film_off is not None:
         all_offsets = df_pair["offset_angstrom"].to_numpy()
         fixed_distance = snap_distances[len(snap_distances) // 2] if snap_distances else float(
@@ -303,16 +364,14 @@ def plot_2d_pes_for_pair(
             ax_film_off, label_a, label_b, all_offsets, fixed_distance,
             forces_calc=forces_calc,
         )
-        ax_film_off.text(
-            -0.28, 0.5,
-            f"Coordinate 2 — lateral offset (fixed d={fixed_distance:.2f} Å)  [arrow: off]",
-            transform=ax_film_off.transAxes, rotation=90, ha="center", va="center",
-            fontsize=9, color=COORD2_COLOR,
-        )
+
+    summary_ax = fig.add_subplot(gs[row_offset, col_offset])
+    _plot_summary_panel(summary_ax, df_pair, backends, min_contact)
 
     for i, backend in enumerate(backends):
-        row_block = i // n_cols
-        col = i % n_cols
+        panel_index = i + 1
+        row_block = panel_index // n_cols
+        col = panel_index % n_cols
         heat_row = row_offset + row_block
         heat_col = col_offset + col
         ax = fig.add_subplot(gs[heat_row, heat_col])
@@ -367,16 +426,22 @@ def plot_2d_pes_for_pair(
         if energy_clip_kcal is not None:
             clip_bound = min(energy_clip_kcal, clip_bound)
 
-        dist_vals = np.sort(df_be["distance_angstrom"].unique())
-        off_vals  = np.sort(df_be["offset_angstrom"].unique())
-
         min_d = min_o = min_e = None
         # Clash + outlier removal can leave the surface too sparse/degenerate
         # to interpolate meaningfully (e.g. a pair whose safe contact
         # distance is far outside most of the scanned range) — fall back to
         # a plain scatter rather than fitting a surface to a handful of points.
         n_excluded_total = n_clash + n_outlier
-        sparse_data = len(dist_vals) < 3 or len(off_vals) < 2 or len(df_be) < 6
+        panel_cmap = BACKEND_CMAPS.get(backend, "RdBu_r")
+        excluded = pd.concat([df_clash, df_outlier], ignore_index=True)
+        surface_df = df_be.copy()
+        if not excluded.empty:
+            excluded = excluded.copy()
+            excluded["E_int"] = vmax
+            surface_df = pd.concat([surface_df, excluded], ignore_index=True)
+        dist_vals = np.sort(surface_df["distance_angstrom"].unique())
+        off_vals  = np.sort(surface_df["offset_angstrom"].unique())
+        sparse_data = len(dist_vals) < 3 or len(off_vals) < 2 or len(surface_df) < 6
 
         if sparse_data:
             norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
@@ -384,7 +449,7 @@ def plot_2d_pes_for_pair(
                 df_be["distance_angstrom"],
                 df_be["offset_angstrom"],
                 c=df_be["E_int"],
-                cmap=BACKEND_CMAPS.get(backend, "RdBu_r"),
+                cmap=panel_cmap,
                 norm=norm,
                 s=80,
                 edgecolors="k",
@@ -402,12 +467,6 @@ def plot_2d_pes_for_pair(
             if not df_be.empty:
                 best = df_be.loc[df_be["E_int"].idxmin()]
                 min_d, min_o, min_e = best["distance_angstrom"], best["offset_angstrom"], best["E_int"]
-                ax.plot(
-                    min_d, min_o,
-                    "*", color="gold", markersize=14, markeredgecolor="k", markeredgewidth=0.5,
-                    label=f"min {min_e:.2f} kcal/mol", zorder=5,
-                )
-                ax.legend(fontsize=7, loc="upper right", framealpha=0.7)
         else:
             # Interpolate directly from the clean scattered (distance, offset,
             # E_int) points onto a regular grid. Using scattered-data
@@ -415,16 +474,26 @@ def plot_2d_pes_for_pair(
             # is essential here: dropping clash/outlier rows leaves holes in
             # what would otherwise be a rectangular grid, and a rectangular-
             # grid spline can't handle missing cells.
-            points = df_be[["distance_angstrom", "offset_angstrom"]].to_numpy()
-            values = df_be["E_int"].to_numpy()
+            points = surface_df[["distance_angstrom", "offset_angstrom"]].to_numpy()
+            values = surface_df["E_int"].to_numpy()
             D_fine = np.linspace(dist_vals.min(), dist_vals.max(), n_grid)
             O_fine = np.linspace(off_vals.min(), off_vals.max(), n_grid)
             Dg, Og = np.meshgrid(D_fine, O_fine)
 
             try:
                 Z_fine = griddata(points, values, (Dg, Og), method="linear")
+                if np.all(np.isnan(Z_fine)):
+                    raise ValueError("linear interpolation returned no valid surface")
             except Exception:
                 Z_fine = np.full(Dg.shape, np.nan)
+            # A light, mask-aware Gaussian pass softens the piecewise-linear
+            # facets without leaking values across regions outside the sampled
+            # surface.
+            valid = np.isfinite(Z_fine)
+            if np.any(valid):
+                weights = gaussian_filter(valid.astype(float), sigma=0.8)
+                blurred = gaussian_filter(np.where(valid, Z_fine, 0.0), sigma=0.8)
+                Z_fine = np.where(weights > 1e-8, blurred / weights, np.nan)
             # Cells outside the convex hull of the *clean* points come back as
             # NaN — deliberately left as gaps rather than flat-filled by
             # nearest-neighbour extrapolation. A flat fill previously let the
@@ -435,7 +504,7 @@ def plot_2d_pes_for_pair(
 
             norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
 
-            cmap = BACKEND_CMAPS.get(backend, "RdBu_r")
+            cmap = panel_cmap
             im = ax.contourf(
                 D_fine, O_fine, Z_fine,
                 levels=30,
@@ -463,48 +532,16 @@ def plot_2d_pes_for_pair(
                 min_d = min_o = min_e = None
             else:
                 min_d, min_o, min_e = D_fine[min_idx[1]], O_fine[min_idx[0]], Z_fine[min_idx]
-                ax.plot(
-                    min_d, min_o,
-                    "*", color="gold", markersize=14, markeredgecolor="k", markeredgewidth=0.5,
-                    label=f"min {min_e:.2f} kcal/mol",
-                    zorder=5,
-                )
-                ax.legend(fontsize=7, loc="upper right", framealpha=0.7)
-
-            # Data point dots
-            ax.scatter(
-                df_be["distance_angstrom"],
-                df_be["offset_angstrom"],
-                c="w", s=15, edgecolors="k", linewidths=0.3, zorder=4,
-            )
 
         # Guide lines linking this heatmap back to the filmstrip snapshots above
         for d in snap_distances:
             ax.axvline(d, color="k", lw=0.5, ls=":", alpha=0.35, zorder=0)
 
-        if n_clash:
-            # Excluded on geometric grounds (unphysically close atom-atom contact).
-            ax.scatter(
-                df_clash["distance_angstrom"],
-                df_clash["offset_angstrom"],
-                marker="x", c="red", s=40, linewidths=1.2, zorder=6,
-                label=f"{n_clash} clashing (<{min_contact:.1f} Å contact)",
-            )
-        if n_outlier:
-            # Excluded on energetic grounds (robust outlier in E_int even
-            # though the geometric contact cutoff didn't flag it).
-            ax.scatter(
-                df_outlier["distance_angstrom"],
-                df_outlier["offset_angstrom"],
-                marker="+", c="darkorange", s=50, linewidths=1.4, zorder=6,
-                label=f"{n_outlier} energy outlier",
-            )
-        if n_clash or n_outlier:
-            ax.legend(fontsize=6, loc="lower right", framealpha=0.7)
-
-        ax.set_xlabel("Centre distance / Å")
-        ax.set_ylabel("Lateral offset / Å")
-        ax.set_title(BACKEND_LABELS.get(backend, backend))
+        ax.set_xlabel(r"$d$ / Å")
+        ax.set_ylabel(r"$c$ / Å")
+        ax.set_title(BACKEND_LABELS.get(backend, backend), loc="left", fontsize=11)
+        if min_e is not None and np.isfinite(min_e):
+            ax.set_title(rf"$E_{{\mathrm{{min}}}}={min_e:.2f}$", loc="right", fontsize=7)
 
         # Highlighted render of the located minimum, overlaid directly on the
         # surface as a small inset anchored near its actual (d, offset)
@@ -521,7 +558,7 @@ def plot_2d_pes_for_pair(
                 render_dimer_atoms(
                     ax_min, atoms_min, fragments_min, forces=forces_min,
                     coord_axes=_coord_axes_for(label_a, label_b),
-                    title=f"E={min_e:.2f} kcal/mol", title_fontsize=6.5,
+                    title="", title_fontsize=9,
                 )
             ax.annotate(
                 "", xy=(min_d, min_o), xycoords="data",
@@ -608,22 +645,22 @@ def main() -> None:
         help="Checkpoint path for --forces-backend spookynet",
     )
     args = parser.parse_args()
+    apply_plot_style("icml")
+    mpl.rcParams["text.usetex"] = False
 
     df = load_and_enrich(args.csv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    all_backends = ordered_backends(df, args.backends)
-    backends = all_backends
-
     forces_calc, forces_label = _build_forces_calc(args.forces_backend, args.forces_checkpoint)
 
     pairs = df[["molecule_a", "molecule_b"]].drop_duplicates().values
-    print(f"Plotting 2D PES for {len(pairs)} pairs × {len(backends)} backends...")
+    print(f"Plotting 2D PES for {len(pairs)} pairs...")
 
     for label_a, label_b in pairs:
         df_pair = df[(df["molecule_a"] == label_a) & (df["molecule_b"] == label_b)]
+        pair_backends = ordered_backends(df_pair, args.backends)
         plot_2d_pes_for_pair(
-            df_pair, label_a, label_b, backends, args.output_dir,
+            df_pair, label_a, label_b, pair_backends, args.output_dir,
             n_grid=args.n_grid, energy_clip_kcal=args.energy_clip,
             min_contact=args.min_contact, show_atoms=not args.no_atoms,
             forces_calc=forces_calc, forces_label=forces_label,

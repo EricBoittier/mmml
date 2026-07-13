@@ -27,12 +27,14 @@ preset is active). Regenerate with `python scripts/render_style_defaults_gallery
 
 ![style palettes](plot-style-gallery-assets/chart_style_palettes.png)
 
-`icml_okabe_ito` is the same layout/type as `icml` but swaps in the
-[Okabe–Ito](https://jfly.uni-koeln.de/color/) eight-color palette — designed
-by Masataka Okabe and Kei Ito specifically to stay distinguishable under
-protanopia, deuteranopia, and tritanopia. Use it whenever a figure's
-categorical series identity (not a sequential/diverging heatmap) needs to
-stay legible for colorblind readers.
+`icml`'s categorical cycle (and so the house default for every plot that
+doesn't override it) is the [Okabe–Ito](https://jfly.uni-koeln.de/color/)
+eight-color palette — designed by Masataka Okabe and Kei Ito specifically to
+stay distinguishable under protanopia, deuteranopia, and tritanopia. It
+isn't an opt-in variant: series identity stays legible for colorblind
+readers by default, not only when a special preset is chosen.
+(`"icml_okabe_ito"` still resolves as an alias to `"icml"` for anything
+written before the two merged.)
 
 ### Default colormaps (`default_cmap(kind)`)
 
@@ -206,11 +208,14 @@ within-fragment-only bonds) applied as an overlay rather than its own panel
 
 ### Colormaps (via the `cmap` library)
 
-The same 2D field under six colormaps — `viridis` (matplotlib's own
-perceptually-uniform default) alongside picks from
-[`cmap`](https://cmap-docs.readthedocs.io) (`pip`/`uv` package, added to the
-`plotting` extra in `pyproject.toml`), which bundles cmocean, Fabio Crameri's
-scientific colormaps, ColorBrewer, and more — over 1500 registered names.
+The same 2D field under six colormaps — the house sequential default
+(`default_cmap("sequential")`, currently `crameri:lipari`) alongside picks
+from [`cmap`](https://cmap-docs.readthedocs.io) (`pip`/`uv` package, added to
+the `plotting` extra in `pyproject.toml`), which bundles cmocean, Fabio
+Crameri's scientific colormaps, ColorBrewer, and more — over 1500 registered
+names. Not `viridis`: matplotlib's own default reads fine on its own but
+isn't part of the house system, so a figure using it looks inconsistent next
+to everything else built through `default_cmap()`/`MULTI_CMAP_SHORTLIST`.
 `crameri:batlow`/`crameri:vik` and `cmocean:haline`/`cmocean:balance` are
 specifically designed to be perceptually uniform and colorblind-safe;
 `colorbrewer:RdYlBu` renders as visibly discrete bands here because
