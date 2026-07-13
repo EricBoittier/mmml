@@ -81,11 +81,21 @@ class SpookyNetCalculator(Calculator):
             raise FileNotFoundError(f"No params found in checkpoint: {checkpoint}")
         raw_config = ckpt.get("config") or {}
         config = normalize_physnet_config(raw_config)
-        model_config = physnet_constructor_kwargs(config, SpookyPhysNet)
-        self.model = SpookyPhysNet(**model_config)
-        self.params = json_tree_to_jax_params(params)
+        
+        # Check model architecture: standard PhysNet vs SpookyPhysNet
+        jax_params = json_tree_to_jax_params(params)
+        model_type = str(config.get("model_type", "")).lower()
+        if model_type == "physnet" or "charge_feature_projection" not in jax_params:
+            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+            model_config = physnet_constructor_kwargs(config, PhysNet)
+            self.model = PhysNet(**model_config)
+        else:
+            model_config = physnet_constructor_kwargs(config, SpookyPhysNet)
+            self.model = SpookyPhysNet(**model_config)
+
+        self.params = jax_params
         self.max_atoms = int(
-            model_config.get("max_padded_atoms", self.model.natoms)
+            model_config.get("max_padded_atoms", getattr(self.model, "natoms", 60))
         )
         self.charge = float(charge)
         self.spin_multiplicity = float(spin_multiplicity)
@@ -130,21 +140,34 @@ class SpookyNetCalculator(Calculator):
         def _fn(atomic_numbers, positions, dst_idx, src_idx, atom_mask, batch_mask, charge, spin):
             n_atoms = atomic_numbers.shape[0]
             batch_segments = jnp.zeros((n_atoms,), dtype=jnp.int32)
-            q_atoms = jnp.full((n_atoms, 1), charge, dtype=jnp.float32)
-            s_atoms = jnp.full((n_atoms, 1), spin, dtype=jnp.float32)
-            return model.apply(
-                params,
-                atomic_numbers=atomic_numbers,
-                charges=q_atoms,
-                spins=s_atoms,
-                positions=positions,
-                dst_idx=dst_idx,
-                src_idx=src_idx,
-                batch_segments=batch_segments,
-                batch_size=1,
-                batch_mask=batch_mask,
-                atom_mask=atom_mask,
-            )
+            if isinstance(model, SpookyPhysNet):
+                q_atoms = jnp.full((n_atoms, 1), charge, dtype=jnp.float32)
+                s_atoms = jnp.full((n_atoms, 1), spin, dtype=jnp.float32)
+                return model.apply(
+                    params,
+                    atomic_numbers=atomic_numbers,
+                    charges=q_atoms,
+                    spins=s_atoms,
+                    positions=positions,
+                    dst_idx=dst_idx,
+                    src_idx=src_idx,
+                    batch_segments=batch_segments,
+                    batch_size=1,
+                    batch_mask=batch_mask,
+                    atom_mask=atom_mask,
+                )
+            else:
+                return model.apply(
+                    params,
+                    atomic_numbers=atomic_numbers,
+                    positions=positions,
+                    dst_idx=dst_idx,
+                    src_idx=src_idx,
+                    batch_segments=batch_segments,
+                    batch_size=1,
+                    batch_mask=batch_mask,
+                    atom_mask=atom_mask,
+                )
 
         return _fn
 
