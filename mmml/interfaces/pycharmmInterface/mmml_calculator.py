@@ -1587,7 +1587,17 @@ def setup_calculator(
             batches["_spatial_n_monomers_global"] = jnp.array(n_monomers, dtype=jnp.int32)
             _effective_batch_size = sparse_batch_size
         elif use_sparse:
-            mm_switch_on = cutoff_params.mm_switch_on
+            # Keep a sparse dimer slot alive past the physical ML→MM handoff.
+            # The dimer contribution is exactly switched to zero at
+            # ``mm_switch_on``, but changing a boolean active mask at that same
+            # coordinate introduces a discrete control-flow boundary into an
+            # otherwise conservative potential.  Select through one complete
+            # handoff width beyond the endpoint; any extra slot has zero
+            # switched energy/force and is removed only outside the physical
+            # switching interval.
+            active_radius = (
+                cutoff_params.mm_switch_on + cutoff_params.ml_switch_width
+            )
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
             def _dimer_com_dist(pos_di, na, nb):
@@ -1611,7 +1621,7 @@ def setup_calculator(
 
             com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
                 dimer_positions, dimer_n_a, dimer_n_b)
-            active_mask = com_dists < mm_switch_on
+            active_mask = com_dists < active_radius
             active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
             active_indices_safe = jnp.where(active_indices < n_dimers, active_indices, 0)
             sparse_dimer_positions = dimer_positions[active_indices_safe]
