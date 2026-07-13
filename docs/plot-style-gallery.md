@@ -332,6 +332,46 @@ small-multiples above applied to a real MM-vs-ML question.
 
 ![MM vs ML small multiples](plot-style-gallery-assets/chart_mm_vs_ml_multiples.png)
 
+## Multipole visualization: a standardized complex figure
+
+Multipole coefficients (charge, dipole, quadrupole, octupole — spherical
+harmonics indexed by degree `l` and order `m`) as one colored, numbered box
+per (l, m), in a Pascal's-triangle layout (row `l` has `2l+1` boxes,
+centered) — regenerate with `python scripts/render_multipole_gallery.py`.
+No real saved multipole-coefficient array exists in this checkout (real
+values come from `mmml.models.multipoles` at runtime); these use
+physically-plausible synthetic values matching that module's documented
+units and packed-irrep convention (see the script's docstring).
+
+### Multipole triangle: colormap candidates
+
+Multipole coefficients are signed — diverging data — but the house general
+diverging default (`contrib:pampa`) is muted pink/teal, not the classic
+red-positive/blue-negative convention that reads fastest for this
+particular, very common plot. A dedicated red/blue shortlist:
+
+![multipole colormap candidates](plot-style-gallery-assets/chart_multipole_colormaps.png)
+
+`crameri:roma` (top right) turned out not to actually be red/blue despite
+being on the original shortlist — more brown/teal — a good reminder to
+*look at the render*, not just the name, before picking.
+
+### Standardized complex figure
+
+Multipole triangle + per-atom partial-charge bars + a booktabs-style summary
+table, combined under the "Complex figure layout" rules from
+[`docs/plotting-style-guide.md`](plotting-style-guide.md): **one** shared
+colorbar for both the triangle and the bars (same colormap, same scale,
+`constrained_layout=True` so it doesn't overlap either panel), and
+`booktabs_table()` for the summary — a rule above the header, one below it,
+one at the bottom, nothing else:
+
+![multipole standardized complex figure](plot-style-gallery-assets/chart_multipole_complex.png)
+
+```python
+from mmml.utils.plotting.styles import booktabs_table, shared_axis_labels
+```
+
 ## How to pick
 
 ```python

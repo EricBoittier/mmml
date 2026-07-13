@@ -398,6 +398,83 @@ def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwa
     raise ValueError(f"side must be 'auto', 'left', 'right', or 'bottom'; got {side!r}")
 
 
+def shared_axis_labels(fig, *, xlabel: str | None = None, ylabel: str | None = None,
+                        clear_panel_labels: bool = True, **kwargs: Any) -> None:
+    """One x/y-axis label for the whole figure instead of repeating it on
+    every panel -- see docs/plotting-style-guide.md "Complex figure layout":
+    a multi-panel figure sharing units/quantity on an axis should say so
+    once (`fig.supxlabel`/`fig.supylabel`), not N times.
+
+    ``clear_panel_labels=True`` (default) blanks each axes' own x/y label so
+    the shared one isn't duplicated underneath it.
+    """
+    if xlabel is not None:
+        fig.supxlabel(xlabel, **kwargs)
+    if ylabel is not None:
+        fig.supylabel(ylabel, **kwargs)
+    if clear_panel_labels:
+        for ax in fig.axes:
+            if xlabel is not None:
+                ax.set_xlabel("")
+            if ylabel is not None:
+                ax.set_ylabel("")
+
+
+def booktabs_table(ax, cell_text, *, col_labels=None, row_labels=None,
+                    fontsize: float = 12, header_fontsize: float | None = None,
+                    col_widths=None):
+    """A LaTeX-`booktabs`-style table drawn with matplotlib: a rule above the
+    header, a rule below the header, a rule at the bottom -- and nothing
+    else. No vertical rules, no per-cell grid, no zebra-striping -- the
+    classic "table ink" minimalism `booktabs` popularized in LaTeX, done in
+    matplotlib so it renders in the same figure/style pipeline as everything
+    else (same font, exportable as one PNG/PDF with the rest of a panel).
+
+    ``ax`` should have no other content -- give it its own subplot/axes.
+    Returns the underlying `matplotlib.table.Table` for further tweaks.
+    """
+    ax.set_axis_off()
+    tbl = ax.table(cellText=cell_text, colLabels=col_labels, rowLabels=row_labels,
+                    cellLoc="center", loc="center", colWidths=col_widths)
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(fontsize)
+    has_header = col_labels is not None
+    n_rows = len(cell_text) + (1 if has_header else 0)
+    n_cols = len(cell_text[0]) if cell_text else 0
+    col_range = range(-1 if row_labels is not None else 0, n_cols)
+
+    RULE_WIDTH = 1.4
+    for (row, col), cell in tbl.get_celld().items():
+        cell.set_linewidth(0)  # start from no rules; only 2-3 exact rules added back below
+        cell.set_edgecolor("#222222")
+        if has_header and row == 0:
+            cell.set_text_props(fontweight="bold")
+            if header_fontsize:
+                cell.set_fontsize(header_fontsize)
+
+    def _set_edge(row: int, col: int, edge: str) -> None:
+        try:
+            cell = tbl[row, col]
+        except KeyError:
+            return
+        existing = cell.visible_edges if cell.visible_edges != "closed" else ""
+        cell.visible_edges = "".join(sorted(set(existing) | {edge}))
+        cell.set_linewidth(RULE_WIDTH)
+
+    # Top rule: above the header (or above the first data row if headerless).
+    for col in col_range:
+        _set_edge(0, col, "T")
+    # Rule below the header, separating it from the data -- only if there IS one.
+    if has_header:
+        for col in col_range:
+            _set_edge(0, col, "B")
+    # Bottom rule: below the last row.
+    last_row = n_rows - 1
+    for col in col_range:
+        _set_edge(last_row, col, "B")
+    return tbl
+
+
 # Classic matplotlib defaults (pre-seaborn era feel).
 _MPL_CLASSIC_COLORS = {
     "train": "#1f77b4",

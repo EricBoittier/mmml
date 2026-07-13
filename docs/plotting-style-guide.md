@@ -361,3 +361,68 @@ missing, rather than silently substituting an unrelated matplotlib colormap.
 See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Colormap picks:
 choosing defaults" for the rendered comparison these defaults were chosen
 from.
+
+## Multipole visualization: the (l, m) triangle
+
+Represent a set of spherical-harmonic multipole coefficients (monopole,
+dipole, quadrupole, octupole, ...) as one colored, numbered box per (l, m),
+laid out like Pascal's triangle — row `l` has `2l+1` boxes (m = −l..l),
+centered under the row above:
+
+```python
+from scripts.render_multipole_gallery import plot_multipole_triangle
+# coeffs_by_l = {0: array([q00]), 1: array([q1,-1, q10, q1,+1]), 2: [...], ...}
+plot_multipole_triangle(ax, coeffs_by_l, mpl_cmap, vmax)
+```
+
+- **Colormap**: multipole coefficients are signed (positive/negative), so
+  this is diverging data — but not the house general-purpose diverging
+  default (`contrib:pampa`, muted pink/teal). A classic red = positive,
+  blue = negative convention reads faster for this specific, very common
+  plot, so pick from the **red/blue shortlist** instead:
+  `colorbrewer:RdBu`, `crameri:vik`, `cmocean:balance`,
+  `matplotlib:seismic`, `matplotlib:coolwarm` (`crameri:roma` was in the
+  same shortlist but isn't actually red/blue — more brown/teal — dropped).
+  See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Multipole
+  triangle: colormap candidates" for the rendered comparison.
+- **Text color**: computed per-cell from the fill color's luminance
+  (`0.299r + 0.587g + 0.114b`), not hardcoded — a dark cell needs white
+  text, a light one needs black, and which cells are dark vs. light depends
+  on the colormap and the value's sign/magnitude, so this can't be a fixed
+  choice.
+- **Row labels** (`monopole (l=0)`, `dipole (l=1)`, ...) sit to the left of
+  each row rather than in a legend — see "Semantic color, not palette
+  index": label the thing directly where it is.
+
+## Complex figure layout: shared labels, shared legends, booktabs tables
+
+A figure combining several panels (e.g. a multipole triangle + a per-atom
+bar chart + a summary table) should read as *one* figure, not N independent
+plots glued together. Two house helpers:
+
+- **`shared_axis_labels(fig, xlabel=..., ylabel=...)`**: one label for the
+  whole figure (`fig.supxlabel`/`fig.supylabel`) instead of repeating the
+  same axis label on every panel that happens to share it.
+- **One shared colorbar/legend** for panels using the same scale — a single
+  `fig.colorbar(mappable, ax=[ax1, ax2], ...)` (or `legend_outside(fig, ...)`
+  for a categorical legend) rather than one per panel. **Use
+  `constrained_layout=True` on the figure, not a manual `fig.tight_layout()`
+  call, whenever a colorbar spans multiple axes from a `GridSpec`** —
+  `tight_layout` doesn't know how to reserve room for it and will silently
+  overlap the colorbar with the second axes (a real bug hit and fixed while
+  building `scripts/render_multipole_gallery.py::complex_figure`).
+- **`booktabs_table(ax, cell_text, col_labels=...)`**: a LaTeX-`booktabs`-style
+  table — a rule above the header, a rule below it, a rule at the bottom,
+  nothing else (no vertical rules, no per-cell grid, no zebra-striping).
+  Give it its own subplot; it draws via matplotlib's own `Axes.table` so it
+  renders in the exact same font/DPI/figure as the rest of the panel,
+  without a separate LaTeX build step.
+
+  ```python
+  from mmml.utils.plotting.styles import booktabs_table
+  booktabs_table(ax, [["monopole", "+0.29", "e"], ...], col_labels=["quantity", "value", "units"])
+  ```
+
+See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Multipole
+visualization: a standardized complex figure" for the full rendered
+example combining all three.
