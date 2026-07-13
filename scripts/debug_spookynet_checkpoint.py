@@ -76,9 +76,17 @@ def analyze_checkpoint(
     rows = []
 
     for offset in offsets:
-        geoms = make_oriented_scan_geometries(mol_a, mol_b, distances=distances, offset=offset)
+        geoms = list(
+            make_oriented_scan_geometries(
+                mon_a_name,
+                mon_b_name,
+                distances_angstrom=distances,
+                offsets_angstrom=[offset],
+            )
+        )
 
-        for d, dimer in zip(distances, geoms):
+        for d, dimer_geom in zip(distances, geoms):
+            dimer = dimer_geom.atoms
             # Calculate dimer using internal model to inspect raw outputs
             n_real = len(dimer)
             pad = calc.max_atoms - n_real
