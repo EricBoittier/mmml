@@ -29,6 +29,8 @@ from mmml.utils.plotting.styles import (
     apply_plot_style,
     booktabs_table,
     default_cmap,
+    latex_available,
+    latex_table_image,
     legend_outside,
     shared_axis_labels,
 )
@@ -158,16 +160,52 @@ def complex_figure(out: Path, cmap_name: str = "crameri:vik") -> None:
     col_labels = ["quantity", "value", "units"]
     cell_text = [
         ["monopole", f"{coeffs[0][0]:+.3f}", "e"],
-        ["|dipole|", f"{np.linalg.norm(coeffs[1]):.3f}", "e·bohr"],
-        ["|quadrupole|", f"{np.linalg.norm(coeffs[2]):.3f}", "e·bohr²"],
-        ["|octupole|", f"{np.linalg.norm(coeffs[3]):.3f}", "e·bohr³"],
+        ["|dipole|", f"{np.linalg.norm(coeffs[1]):.3f}", "e\\textperiodcentered bohr"],
+        ["|quadrupole|", f"{np.linalg.norm(coeffs[2]):.3f}", "e\\textperiodcentered bohr$^2$"],
+        ["|octupole|", f"{np.linalg.norm(coeffs[3]):.3f}", "e\\textperiodcentered bohr$^3$"],
         ["total atoms", str(n_atoms), "--"],
     ]
-    booktabs_table(ax_table, cell_text, col_labels=col_labels, fontsize=12, header_fontsize=12,
-                    col_widths=[0.22, 0.16, 0.16])
-    ax_table.set_title("Summary (booktabs-style table)", fontsize=13, pad=14)
+    if latex_available():
+        latex_table_image(ax_table, cell_text, col_labels=col_labels, fontsize_pt=13)
+        ax_table.set_title("Summary (real LaTeX booktabs table)", fontsize=13, pad=14)
+    else:
+        booktabs_table(ax_table, cell_text, col_labels=col_labels, fontsize=12, header_fontsize=12,
+                        col_widths=[0.22, 0.16, 0.16])
+        ax_table.set_title("Summary (booktabs-style table, matplotlib fallback)", fontsize=13, pad=14)
 
     fig.suptitle(f'Standardized complex figure ("{cmap_name}", shared legend/labels)')
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def multi_cmap_panel_figure(out: Path) -> None:
+    """A figure that genuinely needs several DIFFERENT colormaps at once --
+    three sequential panels, each a distinct physical quantity, so reusing
+    one colormap for all three would erase the fact they're different
+    things. Picks from `MULTI_CMAP_SHORTLIST["sequential"]` in fixed order.
+    See docs/plotting-style-guide.md "Colormaps for multi-colormap figures".
+    """
+    import cmap as cmap_lib
+
+    from mmml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
+
+    n = 40
+    x, y = np.meshgrid(np.linspace(-3, 3, n), np.linspace(-3, 3, n))
+    fields = {
+        "electron density": np.exp(-(x**2 + y**2) / 2),
+        "electrostatic potential": np.exp(-((x - 0.8) ** 2 + y**2) / 3),
+        "local dielectric response": np.exp(-((x + 0.8) ** 2 + (y - 0.5) ** 2) / 2.5),
+    }
+    cmap_names = MULTI_CMAP_SHORTLIST["sequential"][:3]
+
+    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.6))
+    for ax, (title, field), name in zip(axes, fields.items(), cmap_names):
+        im = ax.pcolormesh(x, y, field, cmap=cmap_lib.Colormap(name).to_mpl(), shading="gouraud")
+        ax.set_title(f"{title}\n({name})", fontsize=11)
+        ax.set_aspect("equal")
+        fig.colorbar(im, ax=ax, shrink=0.8)
+    fig.suptitle("Three quantities, three sequential colormaps -- never the same map reused")
+    fig.tight_layout()
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -180,6 +218,8 @@ def main() -> None:
     print(f"wrote {OUT_DIR / 'chart_multipole_colormaps.png'}")
     complex_figure(OUT_DIR / "chart_multipole_complex.png")
     print(f"wrote {OUT_DIR / 'chart_multipole_complex.png'}")
+    multi_cmap_panel_figure(OUT_DIR / "chart_multi_cmap_panels.png")
+    print(f"wrote {OUT_DIR / 'chart_multi_cmap_panels.png'}")
 
 
 if __name__ == "__main__":

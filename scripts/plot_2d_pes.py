@@ -234,7 +234,7 @@ def plot_2d_pes_for_pair(
     backends: list[str],
     out_dir: Path,
     n_grid: int = 80,
-    energy_clip_kcal: float = 5.0,
+    energy_clip_kcal: float | None = None,
     min_contact: float = MIN_SAFE_CONTACT_ANGSTROM,
     show_atoms: bool = True,
     forces_calc=None,
@@ -352,13 +352,20 @@ def plot_2d_pes_for_pair(
 
         # Colour range from the *clean* raw scatter (not the clipped/
         # interpolated grid, whose spline can amplify a residual repulsive
-        # wall): a percentile so a handful of remaining steep points can't
-        # blow out the whole scale, with a floor for near-flat surfaces.
+        # wall): a percentile of THIS backend's own distribution, so a
+        # backend with a genuinely much deeper/shallower well (e.g. an
+        # undertrained model that's 4x overbound) gets its own appropriate
+        # scale instead of being flattened by a fixed global ceiling.
+        # --energy-clip is an optional hard cap for when you *do* want a
+        # fixed, comparable scale across backends; default is fully
+        # data-driven per backend.
         vmax = robust_color_vmax(df_be["E_int"].to_numpy(), ceiling=energy_clip_kcal)
         # Clip bound for interpolation stability only — kept a bit above vmax
         # so genuine (non-outlier) structure near the edge of the colour
         # range isn't itself washed out by the clip.
-        clip_bound = min(energy_clip_kcal, max(vmax * 2.0, 1.0))
+        clip_bound = max(vmax * 2.0, 1.0)
+        if energy_clip_kcal is not None:
+            clip_bound = min(energy_clip_kcal, clip_bound)
 
         dist_vals = np.sort(df_be["distance_angstrom"].unique())
         off_vals  = np.sort(df_be["offset_angstrom"].unique())
@@ -558,8 +565,13 @@ def main() -> None:
         help="Backends to plot (default: all found)",
     )
     parser.add_argument(
-        "--energy-clip", type=float, default=5.0,
-        help="Clip energies to ±N kcal/mol for colour scale (default 5.0)",
+        "--energy-clip", type=float, default=None,
+        help=(
+            "Optional hard cap (±N kcal/mol) on the colour scale. Default: fully "
+            "data-driven per backend (85th percentile of that backend's own clean "
+            "E_int distribution) — set this only if you want a fixed, directly "
+            "comparable scale across backends instead."
+        ),
     )
     parser.add_argument(
         "--n-grid", type=int, default=80,

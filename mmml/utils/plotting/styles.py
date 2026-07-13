@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import matplotlib.pyplot as plt
@@ -24,8 +29,14 @@ __all__ = [
     "DEFAULT_DIVERGING_CMAP",
     "DEFAULT_CYCLIC_CMAP",
     "OKABE_ITO_PALETTE",
+    "MULTI_CMAP_SHORTLIST",
+    "LINE_STYLE_CYCLE",
+    "MARKER_CYCLE",
     "shared_axis_labels",
     "booktabs_table",
+    "latex_available",
+    "render_latex_table",
+    "latex_table_image",
 ]
 
 
@@ -519,6 +530,138 @@ def _looks_numeric(value: object) -> bool:
         return False
 
 
+_LATEX_SPECIAL = {"_": r"\_", "%": r"\%", "&": r"\&", "#": r"\#", "|": r"\textbar{}"}
+
+
+def _latex_escape(value: object) -> str:
+    """Escape the handful of LaTeX-special characters that show up in plain
+    labels/numbers (underscore, percent, ampersand, hash, pipe -- a bare `|`
+    in LaTeX text mode does not render as a literal vertical bar with every
+    font). Deliberately does NOT touch `$...$`/`\\` -- a cell that already
+    contains real LaTeX math (e.g. ``r"$|\\mathbf{q}|$"``) is passed through
+    untouched."""
+    text = str(value)
+    if "$" in text or "\\" in text:
+        return text
+    for char, escaped in _LATEX_SPECIAL.items():
+        text = text.replace(char, escaped)
+    return text
+
+
+def latex_available() -> bool:
+    """Whether a LaTeX toolchain (pdflatex + pdftocairo) is on PATH -- both
+    `render_latex_table` and `latex_table_image` need these to actually
+    typeset with real LaTeX/booktabs rather than matplotlib's own `Axes.table`
+    approximation of it."""
+    return shutil.which("pdflatex") is not None and shutil.which("pdftocairo") is not None
+
+
+def render_latex_table(cell_text, *, col_labels=None, row_labels=None,
+                        out_path: str | Path | None = None, fontsize_pt: float = 11,
+                        column_format: str | None = None, escape: bool = True,
+                        dpi: int = 400) -> Path:
+    """Typeset a real LaTeX `booktabs` table (compiled with `pdflatex`,
+    rasterized with `pdftocairo`) and return the path to a transparent PNG.
+
+    This exists because matplotlib's own `Axes.table` (see `booktabs_table`
+    below) can only approximate a typeset table -- it can't do real kerning,
+    proper decimal-point alignment, or LaTeX math in cells. When a real LaTeX
+    toolchain is available (`latex_available()`), prefer this for any table
+    that will appear in a final figure; `booktabs_table` remains as a
+    dependency-free fallback.
+
+    ``out_path`` defaults to a content-hashed path under a repo-local cache
+    directory (`.cache/latex_tables/`) so repeated calls with the same table
+    reuse the same compiled PNG instead of re-invoking LaTeX every time.
+    """
+    if not latex_available():
+        raise RuntimeError(
+            "render_latex_table() requires `pdflatex` and `pdftocairo` on PATH "
+            "-- install a LaTeX distribution (e.g. MacTeX/TeX Live) providing "
+            "both, plus the `booktabs` and `standalone` packages, or use "
+            "booktabs_table() instead (matplotlib-only, no LaTeX dependency)."
+        )
+
+    has_header = col_labels is not None
+    n_cols = len(cell_text[0]) if cell_text else (len(col_labels) if col_labels else 0)
+    if column_format is None:
+        col_letter = "l" if row_labels is not None else ""
+        column_format = col_letter + "l" * n_cols
+
+    def _row(cells) -> str:
+        rendered = [_latex_escape(c) if escape else str(c) for c in cells]
+        return " & ".join(rendered) + r" \\"
+
+    lines = [
+        r"\documentclass[preview,border=3pt,varwidth]{standalone}",
+        r"\usepackage{booktabs}",
+        r"\usepackage{helvet}",
+        r"\renewcommand{\familydefault}{\sfdefault}",
+        r"\begin{document}",
+        rf"\fontsize{{{fontsize_pt}pt}}{{{fontsize_pt * 1.2}pt}}\selectfont",
+        rf"\begin{{tabular}}{{{column_format}}}",
+        r"\toprule",
+    ]
+    if has_header:
+        header_cells = ([""] if row_labels is not None else []) + list(col_labels)
+        lines.append(_row(header_cells))
+        lines.append(r"\midrule")
+    for i, row in enumerate(cell_text):
+        row_cells = ([row_labels[i]] if row_labels is not None else []) + list(row)
+        lines.append(_row(row_cells))
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{document}"]
+    tex_source = "\n".join(lines)
+
+    if out_path is None:
+        digest = hashlib.sha256(tex_source.encode() + str(dpi).encode()).hexdigest()[:16]
+        cache_dir = Path(__file__).resolve().parents[3] / ".cache" / "latex_tables"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        out_path = cache_dir / f"table_{digest}.png"
+    out_path = Path(out_path)
+    if out_path.exists():
+        return out_path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        tex_file = tmp_path / "table.tex"
+        tex_file.write_text(tex_source)
+        result = subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", tex_file.name],
+            cwd=tmp, capture_output=True, text=True,
+        )
+        pdf_file = tmp_path / "table.pdf"
+        if result.returncode != 0 or not pdf_file.exists():
+            raise RuntimeError(f"pdflatex failed to compile the table:\n{result.stdout[-4000:]}")
+        subprocess.run(
+            ["pdftocairo", "-png", "-r", str(dpi), "-transp", "-singlefile",
+             pdf_file.name, "table"],
+            cwd=tmp, check=True, capture_output=True,
+        )
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(tmp_path / "table.png", out_path)
+    return out_path
+
+
+def latex_table_image(ax, cell_text, *, col_labels=None, row_labels=None,
+                       fontsize_pt: float = 11, column_format: str | None = None,
+                       escape: bool = True, dpi: int = 400):
+    """Compile a real LaTeX `booktabs` table (`render_latex_table`) and draw
+    it into ``ax`` via `imshow`, so it drops into a matplotlib figure/subplot
+    exactly like `booktabs_table` does, but typeset by an actual LaTeX
+    engine rather than approximated by `Axes.table`.
+
+    ``ax`` should have no other content -- give it its own subplot/axes.
+    """
+    png_path = render_latex_table(
+        cell_text, col_labels=col_labels, row_labels=row_labels,
+        fontsize_pt=fontsize_pt, column_format=column_format, escape=escape, dpi=dpi,
+    )
+    image = plt.imread(png_path)
+    ax.imshow(image)
+    ax.set_axis_off()
+    return image
+
+
 # Classic matplotlib defaults (pre-seaborn era feel).
 _MPL_CLASSIC_COLORS = {
     "train": "#1f77b4",
@@ -561,6 +704,43 @@ OKABE_ITO_PALETTE = (
     "#D55E00",  # vermillion
     "#CC79A7",  # reddish purple
 )
+
+# A figure that needs SEVERAL colormaps at once (e.g. one sequential panel
+# per quantity in a small-multiples grid, or several diverging quantities
+# shown side by side) should not just reuse the single house default for
+# every panel -- that erases the fact that they're different quantities.
+# Instead, pick a distinct map per panel from within its category, in this
+# fixed order, so repeated use across a project stays consistent (panel 1
+# always gets the same map as last time, not a random pick).
+MULTI_CMAP_SHORTLIST: dict[str, tuple[str, ...]] = {
+    "sequential": (
+        "crameri:lipari",   # house default -- reserve for the "primary" quantity
+        "crameri:batlow",
+        "cmocean:thermal",
+        "crameri:acton",
+        "cmocean:matter",
+    ),
+    "diverging": (
+        "contrib:pampa",    # house default -- reserve for the "primary" quantity
+        "crameri:vik",      # red/blue -- charge- or sign-like quantities
+        "cmocean:balance",
+        "crameri:broc",
+        "colorbrewer:PuOr_11",
+    ),
+    "cyclic": (
+        "cmocean:phase",    # house default
+        "crameri:romaO",
+        "crameri:vikO",
+        "matplotlib:twilight",
+    ),
+}
+
+# Line style and marker cycles -- assigned by the *role* a series plays
+# (e.g. "this is the same run, alternate replicate" vs. "this is a
+# different quantity entirely"), never by index alone. See "Line styles,
+# markers, and symbols" in docs/plotting-style-guide.md.
+LINE_STYLE_CYCLE: tuple[str, ...] = ("-", "--", "-.", ":")
+MARKER_CYCLE: tuple[str, ...] = ("o", "s", "^", "D", "v", "P", "X", "*")
 
 
 PLOT_STYLES: dict[str, PlotStyle] = {
