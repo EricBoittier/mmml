@@ -419,8 +419,19 @@ def main():
 
     df = pd.DataFrame(results)
     csv_path = args.output_dir / "scan_results.csv"
+    if csv_path.exists():
+        # Accumulate with whatever's already in this output dir instead of
+        # clobbering it — e.g. re-running with a different --spookynet-tag
+        # (or any other backend combo) into the same --output-dir would
+        # otherwise silently overwrite prior results with none of this run's
+        # backends in them. Keep this run's rows on any (pair, backend,
+        # distance, offset) collision (an intentional re-run of the same
+        # backend refreshes it); everything else from before is preserved.
+        df_prior = pd.read_csv(csv_path)
+        key_cols = ["molecule_a", "molecule_b", "backend", "distance_angstrom", "offset_angstrom"]
+        df = pd.concat([df_prior, df], ignore_index=True).drop_duplicates(subset=key_cols, keep="last")
     df.to_csv(csv_path, index=False)
-    print(f"Results saved to {csv_path}")
+    print(f"Results saved to {csv_path} ({len(df)} total rows, backends: {sorted(df['backend'].unique())})")
 
     # Generate plots
     print("Generating plots...")
