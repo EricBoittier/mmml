@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
@@ -40,6 +41,8 @@ def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
     # configuration file or colliding with its resumable artifacts.
     if output_root := os.environ.get("MMML_PBC_OUTPUT_ROOT", "").strip():
         cfg["output_root"] = output_root
+    if raw_extra := os.environ.get("MMML_PBC_INIT_EXTRA_ARGS", "").strip():
+        cfg["pycharmm_init_extra_args"] = shlex.split(raw_extra)
     return cfg
 
 
@@ -318,6 +321,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 "heat_firstt": float(cfg.get("heat_firstt", 10.0)),
                 "heat_finalt": float(cell.temperature),
                 "heat_thermostat": heat_thermostat,
+                "extra_args": list(cfg.get("pycharmm_init_extra_args") or []),
                 **repair,
                 **pretreat,
             },
