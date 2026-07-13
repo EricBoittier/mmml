@@ -19,6 +19,7 @@ from mmml.utils.plotting.styles import (
     comparison_colors,
     get_plot_style,
     latex_available,
+    legend_outside,
     list_plot_styles,
     render_latex_table,
 )
@@ -132,3 +133,33 @@ def test_render_latex_table_produces_a_png(tmp_path: Path) -> None:
     assert result == out
     assert out.is_file()
     assert out.stat().st_size > 0
+
+
+def test_every_preset_sets_a_title_pad() -> None:
+    # A bold/enlarged title with matplotlib's default 6pt titlepad sits close
+    # enough to the axes box to visually collide with the top y-tick label.
+    for name, style in PLOT_STYLES.items():
+        assert "axes.titlepad" in style.rc_params, f"{name} is missing axes.titlepad"
+        assert style.rc_params["axes.titlepad"] >= 8.0, name
+
+
+def test_legend_outside_auto_side_wide_figure_goes_bottom() -> None:
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot([0, 1], [0, 1], label="series")
+    legend = legend_outside(ax, side="auto")
+    # bottom legends are anchored via bbox_to_anchor=(0.5, -0.08)
+    assert legend.get_bbox_to_anchor().transformed(ax.transAxes.inverted()).y0 < 0
+    plt.close(fig)
+
+
+def test_legend_outside_auto_side_tall_figure_goes_right() -> None:
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(4, 10))
+    ax.plot([0, 1], [0, 1], label="series")
+    legend = legend_outside(ax, side="auto")
+    # right-side legends are anchored via bbox_to_anchor=(1.02, 1.0)
+    assert legend.get_bbox_to_anchor().transformed(ax.transAxes.inverted()).x0 > 1.0
+    plt.close(fig)

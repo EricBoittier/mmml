@@ -132,10 +132,15 @@ instead of `axis.legend(loc="best", ...)`.
   legend_outside(ax_right, side="right", fontsize=10)
   ```
 - **`side="auto"`** (default) picks between right/bottom by comparing the
-  *figure's* width to height (`fig.get_size_inches()`) — use it for a
-  single-axes figure where there's no column/row structure to reason about;
-  set the side explicitly for anything with subplots, per the two cases
-  above.
+  *figure's* width to height (`fig.get_size_inches()`) — a **wide** figure
+  gets a **bottom** legend (it already has little spare width, so a
+  right-hand legend would squeeze the data; the surplus width becomes room
+  for a multi-column legend instead) and a **tall** figure gets a **side**
+  legend (little spare height for a bottom legend without stretching the
+  figure further; the surplus height on the side absorbs it instead). Use
+  `"auto"` for a single-axes figure where there's no column/row structure to
+  reason about; set the side explicitly for anything with subplots, per the
+  two cases above.
 
 Because a legend is outside, **it's free to grow long** — a 12-setting
 sweep's legend reads like a small table (marker/color/seed-symbol → setting
@@ -224,6 +229,15 @@ wall-clock seconds) that wouldn't overlay meaningfully.
 - **One y-axis per panel.** Never a dual-axis (twinx) chart — split into two
   stacked panels (`plt.subplots(2, 1, ...)`) instead, as
   `workflows/*/scripts/plot_results.py` do for energy vs. elapsed time.
+- **Title padding**: every house preset sets `axes.titlepad` explicitly
+  (10-16pt depending on the preset's title size) rather than leaving
+  matplotlib's default (`6.0pt`) — a bold, larger-than-body-text title sits
+  close enough to the axes box at the default pad that it visually collides
+  with the topmost y-tick label in the corner. If a one-off script overrides
+  `axes.titlesize`/`axes.titleweight` after `apply_plot_style()`, bump
+  `axes.titlepad` (or the specific `ax.set_title(..., pad=...)`) to match —
+  don't leave it at the smaller preset default with a manually-enlarged
+  title.
 
 ## Energy drift: fluctuation + tendency, not a bare endpoint delta
 

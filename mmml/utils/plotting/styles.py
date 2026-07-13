@@ -101,6 +101,7 @@ _NATURE_RC = {
     "axes.labelsize": 9,
     "axes.titlesize": 10,
     "axes.titleweight": "bold",
+    "axes.titlepad": 10.0,
     "axes.grid": True,
     "grid.alpha": 0.25,
     "grid.linestyle": "-",
@@ -136,6 +137,7 @@ _XMGRACE_RC = {
     "axes.labelsize": 11,
     "axes.titlesize": 12,
     "axes.titleweight": "normal",
+    "axes.titlepad": 10.0,
     "axes.grid": True,
     "grid.alpha": 0.55,
     "grid.linestyle": ":",
@@ -170,6 +172,7 @@ _GOOGLE_RC = {
     "axes.labelsize": 11,
     "axes.titlesize": 12,
     "axes.titleweight": "medium",
+    "axes.titlepad": 12.0,
     "axes.grid": True,
     "grid.alpha": 0.45,
     "grid.linestyle": "-",
@@ -205,6 +208,7 @@ _TRON_RC = {
     "axes.labelsize": 11,
     "axes.titlesize": 12,
     "axes.titleweight": "bold",
+    "axes.titlepad": 12.0,
     "axes.grid": True,
     "grid.alpha": 0.35,
     "grid.linestyle": "-",
@@ -260,6 +264,7 @@ def _editorial_rc(*, family: str, serif: list[str] | None = None,
         "axes.labelsize": 15,
         "axes.titlesize": 17,
         "axes.titleweight": "bold",
+        "axes.titlepad": 16.0,
         "axes.spines.top": False,
         "axes.spines.right": False,
         "axes.grid": True,
@@ -322,6 +327,7 @@ _ICML_RC = {
     "axes.labelsize": 16,
     "axes.titlesize": 17,
     "axes.titleweight": "bold",
+    "axes.titlepad": 16.0,
     "axes.spines.top": False,
     "axes.spines.right": False,
     "axes.grid": True,
@@ -377,8 +383,13 @@ def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwa
       or below it) -- use this for a single-column, multi-row (stacked)
       figure, where "outside" more naturally means below the tallest side.
     - ``side="auto"`` (default): compares the *figure's* width to height
-      (``fig.get_size_inches()``) -- wider-than-tall figures get a
-      right-hand legend, taller-than-wide figures get a below legend. Pass
+      (``fig.get_size_inches()``) -- a wide figure already has little spare
+      width, so a right-hand legend would squeeze the data further; put it
+      **below** instead, where the surplus width becomes room for a
+      multi-column legend. A tall (portrait/stacked) figure has little
+      spare height for a bottom legend to live in without stretching the
+      figure further, so put it on the **side** instead, where the surplus
+      height is already there to absorb it. Pass
       ``side="left"``/``"right"``/``"bottom"`` to override.
 
     A legend placed this way is also free to grow large (many entries, long
@@ -394,7 +405,7 @@ def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwa
 
     if side == "auto":
         width_in, height_in = fig.get_size_inches()
-        side = "right" if width_in >= height_in else "bottom"
+        side = "bottom" if width_in >= height_in else "right"
 
     if side == "right":
         return target.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0),
@@ -407,7 +418,12 @@ def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwa
         if not n_entries and hasattr(target, "get_legend_handles_labels"):
             n_entries = len(target.get_legend_handles_labels()[1])
         default_ncol = max(1, min(4, n_entries)) if n_entries else 3
-        return target.legend(loc="upper center", bbox_to_anchor=(0.5, -0.08),
+        # -0.18, not -0.08: an Axes' own x-axis label already occupies roughly
+        # the -0.08..-0.14 band below the axes box (tick labels then the
+        # label itself) -- -0.08 sits the legend right on top of it. This
+        # matters more now that "auto" picks "bottom" for wide figures (the
+        # common case), not just occasionally.
+        return target.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18),
                               borderaxespad=0.0, ncol=ncol or default_ncol, **kwargs)
     raise ValueError(f"side must be 'auto', 'left', 'right', or 'bottom'; got {side!r}")
 
@@ -678,6 +694,7 @@ _MPL_CLASSIC_RC = {
     "axes.labelsize": 12,
     "axes.titlesize": 12,
     "axes.titleweight": "normal",
+    "axes.titlepad": 10.0,
     "axes.grid": False,
     "legend.framealpha": 1.0,
     "legend.fontsize": 10,
