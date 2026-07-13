@@ -312,7 +312,7 @@ def summary_table(stable: dict, unstable: dict, out: Path) -> None:
     unstable_etot = unstable["energy_eV"] + unstable["kinetic_eV"]
     cell_text = [
         ["Water cluster NVE (dt=0.1 fs)", f"{np.abs(stable_etot - stable_etot[0]).max():.4f}", "eV"],
-        ["Water cluster NVE (dt=0.5 fs)", f"{np.abs(unstable_etot - unstable_etot[0]).max():.2f}", "eV"],
+        ["Water cluster NVE (dt=0.5 fs)", f"{np.abs(unstable_etot - unstable_etot[0]).max():.4f}", "eV"],
         ["Charge range (all frames)", f"{stable['charges_e'].min():.3f} to {stable['charges_e'].max():.3f}", "e"],
         ["Dipole magnitude range", f"{np.linalg.norm(stable['dipole_eA'], axis=1).min():.3f} to "
                                     f"{np.linalg.norm(stable['dipole_eA'], axis=1).max():.3f}", "e\\textperiodcentered\\r{A}"],
