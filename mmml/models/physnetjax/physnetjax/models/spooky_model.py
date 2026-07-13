@@ -553,7 +553,7 @@ class SpookyPhysNet(nn.Module):
         sr6 = (sig_ij / r_safe) ** 6
         sr12 = sr6 ** 2
         
-        KCAL_TO_EV = 0.0433641153
+        KCAL_TO_EV = jnp.asarray(0.0433641153, dtype=r.dtype)
         vdw_pair = 4.0 * eps_ij * (sr12 - sr6) * KCAL_TO_EV * off_dist * batch_mask * inter_monomer_mask
         vdw_pair = 0.5 * vdw_pair
 
