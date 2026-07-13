@@ -37,7 +37,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import TwoSlopeNorm
+from matplotlib.colors import Normalize
+from matplotlib.font_manager import FontProperties
+from matplotlib.textpath import TextPath
 from scipy.interpolate import PchipInterpolator, griddata
 from scipy.ndimage import gaussian_filter
 
@@ -47,10 +49,10 @@ sys.path.insert(0, str(_REPO_ROOT))
 from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS
 from mmml.analysis.dimer_scans import build_rigid_dimer_2d
 from plot_utils import (
-    BACKEND_CMAPS,
     BACKEND_COLORS,
     BACKEND_LABELS,
     MIN_SAFE_CONTACT_ANGSTROM,
+    backend_cmap,
     flag_clashing_geometries,
     flag_energy_outliers,
     load_and_enrich,
@@ -80,6 +82,14 @@ PANEL_LABELS = {
 
 COORD1_COLOR = "0.25"
 COORD2_COLOR = "0.25"
+MIN_TEXT_SIZE = 10.0
+PANEL_TITLE_FONTSIZE = 14
+AXIS_LABEL_FONTSIZE = 13
+TICK_LABEL_FONTSIZE = 11
+COLORBAR_LABEL_FONTSIZE = max(MIN_TEXT_SIZE, 10)
+MAX_LEGEND_TEXT_SIZE = 16.0
+MAX_LEGEND_COLUMNS = 8
+MAX_COMPACT_LEGEND_ROWS = 2
 
 
 def _pair_cfg(label_a: str, label_b: str) -> dict | None:
@@ -286,22 +296,64 @@ def _plot_summary_panel(
         xmax = max(float(x.max()) for x in x_values)
         ax.set_xlim(xmin, xmax + 0.55 * (xmax - xmin))
     ax.axhline(0.0, color="0.35", lw=0.7, zorder=0)
-    ax.set_title("Summary — repulsive walls")
-    ax.set_xlabel(r"$d$ / Å")
-    ax.set_ylabel("$E_{int}$ / kcal mol$^{-1}$")
+    ax.set_title("Summary — repulsive walls", fontsize=PANEL_TITLE_FONTSIZE, fontweight="bold")
+    ax.set_xlabel(r"$d$ / Å", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_ylabel("$E_{int}$ / kcal mol$^{-1}$", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.tick_params(labelsize=TICK_LABEL_FONTSIZE)
     return ax.get_legend_handles_labels()
 
 
-def _summary_legend_layout(n_entries: int) -> tuple[int, float]:
-    """Choose a compact figure-level legend layout from its actual contents."""
-    if n_entries <= 4:
-        return max(n_entries, 1), 9.0
-    if n_entries <= 8:
-        return 4, 8.5
-    # The figure spans up to four PES columns, so seven columns keep even the
-    # full comparison set to two short rows below the figure instead of
-    # obscuring the summary curves.
-    return min(n_entries, 7), 8.5
+def _legend_width_points(labels: list[str], ncol: int, fontsize: float) -> float:
+    """Estimated Matplotlib legend width, including handles and column gaps."""
+    prop = FontProperties(size=fontsize)
+    text_widths = [TextPath((0, 0), label, prop=prop).get_extents().width for label in labels]
+    # Matplotlib fills legend entries row-wise.  A column needs room for its
+    # widest label, its line handle, and the gap between them.
+    column_widths = [
+        max(text_widths[column::ncol], default=0.0) + fontsize * (1.6 + 0.45)
+        for column in range(ncol)
+    ]
+    return sum(column_widths) + fontsize * 0.65 * max(ncol - 1, 0)
+
+
+def _summary_legend_layout(fig, labels: list[str]) -> tuple[int, float]:
+    """Maximise legend type while fitting the measured labels in few rows.
+
+    The legend sits below the complete figure, so it can use the full canvas
+    width.  Prefer at most two rows; only fall back to more rows when the
+    minimum readable font cannot fit.
+    """
+    n_entries = len(labels)
+    if n_entries == 0:
+        return 1, MIN_TEXT_SIZE
+    available_width = fig.get_size_inches()[0] * 72.0 * 0.93
+    max_columns = min(MAX_LEGEND_COLUMNS, n_entries)
+    for max_rows in range(1, n_entries + 1):
+        if max_rows > MAX_COMPACT_LEGEND_ROWS and max_rows > 3:
+            break
+        min_columns = int(np.ceil(n_entries / max_rows))
+        if min_columns > max_columns:
+            continue
+        for fontsize in np.arange(MAX_LEGEND_TEXT_SIZE, MIN_TEXT_SIZE - 0.01, -0.25):
+            viable_columns = [
+                ncol for ncol in range(min_columns, max_columns + 1)
+                if _legend_width_points(labels, ncol, float(fontsize)) <= available_width
+            ]
+            if viable_columns:
+                # More columns means fewer rows at the same maximised font.
+                return max(viable_columns), float(fontsize)
+    return max_columns, MIN_TEXT_SIZE
+
+
+def _panel_label(backend: str) -> str:
+    """Readable, compact label for a PES panel and its minimum annotation."""
+    tuned_labels = {
+        "spookynet_muon_ep7": "SpookyNet (Muon e7)",
+        "spookynet_hybrid_muon_ep7": "Hybrid (Muon e7)",
+        "spookynet_mbdzbl_ep2": "MBD+ZBL (e2)",
+        "spookynet_hybrid_mbdzbl_ep2": "Hybrid (MBD+ZBL e2)",
+    }
+    return PANEL_LABELS.get(backend, tuned_labels.get(backend, BACKEND_LABELS.get(backend, backend)))
 
 
 def _reference_energy(series: pd.Series, ref_dist: float | None = None) -> pd.Series:
@@ -371,7 +423,7 @@ def plot_2d_pes_for_pair(
     pair_key = f"{MONOMER_FIGURE_KEYS.get(label_a, label_a[0])}{MONOMER_FIGURE_KEYS.get(label_b, label_b[0])}"
     fig.suptitle(
         f"({pair_key}) 2D PES: {label_a} + {label_b}",
-        x=0.015, y=0.99, ha="left", fontsize=13, fontweight="bold",
+        x=0.015, y=0.99, ha="left", fontsize=15, fontweight="bold",
     )
 
     snap_distances: list[float] = []
@@ -460,7 +512,12 @@ def plot_2d_pes_for_pair(
         # distance is far outside most of the scanned range) — fall back to
         # a plain scatter rather than fitting a surface to a handful of points.
         n_excluded_total = n_clash + n_outlier
-        panel_cmap = BACKEND_CMAPS.get(backend, "RdBu_r")
+        # One shared, linear (sequential, non-diverging) colormap per model
+        # family (ML / ab initio / empirical reference) — see backend_cmap
+        # in plot_utils.py. A linear norm (not TwoSlopeNorm) means equal
+        # energy differences map to equal colour differences throughout,
+        # with no special white-centred treatment of E_int=0.
+        panel_cmap = backend_cmap(backend)
         excluded = pd.concat([df_clash, df_outlier], ignore_index=True)
         surface_df = df_be.copy()
         if not excluded.empty:
@@ -472,7 +529,7 @@ def plot_2d_pes_for_pair(
         sparse_data = len(dist_vals) < 3 or len(off_vals) < 2 or len(surface_df) < 6
 
         if sparse_data:
-            norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
+            norm = Normalize(vmin=-vmax, vmax=vmax)
             sc = ax.scatter(
                 df_be["distance_angstrom"],
                 df_be["offset_angstrom"],
@@ -530,7 +587,7 @@ def plot_2d_pes_for_pair(
             # point), reporting a fabricated minimum at an excluded geometry.
             Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
 
-            norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
+            norm = Normalize(vmin=-vmax, vmax=vmax)
 
             cmap = panel_cmap
             im = ax.contourf(
@@ -548,7 +605,8 @@ def plot_2d_pes_for_pair(
                 alpha=0.6,
             )
             cb = plt.colorbar(im, ax=ax, shrink=0.85)
-            cb.set_label("$E_{int}$ / kcal mol$^{-1}$", fontsize=9)
+            cb.set_label("$E_{int}$ / kcal mol$^{-1}$", fontsize=COLORBAR_LABEL_FONTSIZE)
+            cb.ax.tick_params(labelsize=TICK_LABEL_FONTSIZE)
 
             # Mark minimum (NaN-aware: gaps outside the clean-data hull must
             # never win the search)
@@ -573,11 +631,18 @@ def plot_2d_pes_for_pair(
             ax.plot(min_d, star_c, "*", color="gold", markersize=13,
                     markeredgecolor="k", markeredgewidth=0.5, zorder=5, clip_on=False)
 
-        ax.set_xlabel(r"$d$ / Å")
-        ax.set_ylabel(r"$c$ / Å")
-        ax.set_title(PANEL_LABELS.get(backend, BACKEND_LABELS.get(backend, backend)), loc="left", fontsize=13)
+        ax.set_xlabel(r"$d$ / Å", fontsize=AXIS_LABEL_FONTSIZE)
+        ax.set_ylabel(r"$c$ / Å", fontsize=AXIS_LABEL_FONTSIZE)
+        ax.tick_params(labelsize=TICK_LABEL_FONTSIZE)
+        ax.set_title(
+            _panel_label(backend),
+            loc="left", fontsize=PANEL_TITLE_FONTSIZE, fontweight="bold",
+        )
         if min_e is not None and np.isfinite(min_e):
-            ax.set_title(rf"$E_{{\mathrm{{min}}}}={min_e:.2f}$", loc="right", fontsize=13)
+            ax.set_title(
+                rf"$E_{{\mathrm{{min}}}}={min_e:.2f}$",
+                loc="right", fontsize=PANEL_TITLE_FONTSIZE, fontweight="bold",
+            )
 
         # Highlighted render of the located minimum, overlaid directly on the
         # surface as a small inset anchored near its actual (d, offset)
@@ -604,16 +669,16 @@ def plot_2d_pes_for_pair(
             )
 
     if summary_handles:
-        ncol, fontsize = _summary_legend_layout(len(summary_labels))
+        ncol, fontsize = _summary_legend_layout(fig, summary_labels)
         fig.legend(
             summary_handles,
             summary_labels,
-            loc="lower center",
-            bbox_to_anchor=(0.53, -0.012),
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.018),
             ncol=ncol,
             fontsize=fontsize,
             frameon=False,
-            handlelength=1.5,
+            handlelength=1.6,
             handletextpad=0.45,
             columnspacing=0.65,
             labelspacing=0.45,

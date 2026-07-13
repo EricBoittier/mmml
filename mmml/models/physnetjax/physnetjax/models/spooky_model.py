@@ -195,6 +195,7 @@ class SpookyPhysNet(nn.Module):
             positions,
             batch_segments,
             graph_mask,
+            atom_mask,
         )
 
         return self._calculate(
@@ -267,10 +268,11 @@ class SpookyPhysNet(nn.Module):
         positions: jnp.ndarray,
         batch_segments: jnp.ndarray,
         graph_mask: jnp.ndarray,
+        atom_mask: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         Process atomic features through message passing and refinement.
-        
+
         Parameters
         ----------
         atomic_numbers : jnp.ndarray
@@ -287,7 +289,15 @@ class SpookyPhysNet(nn.Module):
             Batch segment indices
         graph_mask : jnp.ndarray
             Graph mask
-            
+        atom_mask : jnp.ndarray
+            Per-atom validity mask (1 for real atoms, 0 for padding). Threaded
+            through to EFA (see _message_passing_iteration) — unlike the
+            regular message-passing/basis-function path (which has a smooth
+            distance cutoff baked into e3x.nn.smooth_cutoff), EFA's attention
+            has no distance decay of its own, so padded "ghost" atoms must be
+            masked explicitly or their (not-guaranteed-zero) embedding leaks
+            into the attention sum regardless of how far away they are.
+
         Returns
         -------
         jnp.ndarray
@@ -329,7 +339,7 @@ class SpookyPhysNet(nn.Module):
         
         for i in range(self.num_iterations):
             x = self._message_passing_iteration(
-                x, basis, dst_idx, src_idx, i, positions, batch_segments, graph_mask
+                x, basis, dst_idx, src_idx, i, positions, batch_segments, graph_mask, atom_mask
             )
             x = self._refinement_iteration(x)
 
@@ -415,10 +425,11 @@ class SpookyPhysNet(nn.Module):
         positions: jnp.ndarray,
         batch_segments: jnp.ndarray,
         graph_mask: jnp.ndarray,
+        atom_mask: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         Perform one iteration of message passing.
-        
+
         Parameters
         ----------
         x : jnp.ndarray
@@ -437,7 +448,9 @@ class SpookyPhysNet(nn.Module):
             Batch segment indices
         graph_mask : jnp.ndarray
             Graph mask
-            
+        atom_mask : jnp.ndarray
+            Per-atom validity mask, see _process_atomic_features docstring.
+
         Returns
         -------
         jnp.ndarray
@@ -459,8 +472,18 @@ class SpookyPhysNet(nn.Module):
             # dense_bias_init=jax.nn.initializers.zeros,
         )(x, basis, dst_idx=dst_idx, src_idx=src_idx, indices_are_sorted=False)
         if self.efa:
-            x1 = self.efa_final(x, positions, batch_segments, graph_mask)
-            x = e3x.nn.add(x, x1)
+            # EFA's attention has no distance cutoff/decay of its own (unlike
+            # the message-passing basis functions above, which use
+            # e3x.nn.smooth_cutoff) — padded "ghost" atoms share
+            # batch_segments=0 with real atoms in single-structure inference,
+            # and their embedding (atomic number 0, row 0 of a trained table)
+            # isn't guaranteed to be the zero vector. Mask explicitly on both
+            # sides of the call so padding provably contributes nothing,
+            # regardless of how the embedding for the padding species turned
+            # out during training.
+            mask4 = atom_mask[..., None, None, None]
+            x1 = self.efa_final(x * mask4, positions, batch_segments, graph_mask)
+            x = e3x.nn.add(x, x1 * mask4)
         return x
 
     def _refinement_iteration(self, x: jnp.ndarray) -> jnp.ndarray:

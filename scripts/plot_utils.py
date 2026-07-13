@@ -26,6 +26,10 @@ BACKEND_LABELS: dict[str, str] = {
     "charmm":            "CGenFF",
     "spookynet":         "SpookyNet",
     "spookynet_hybrid":  "SpookyNet Hybrid ML",
+    "spookynet_muon_ep7": "SpookyNet (Muon e7)",
+    "spookynet_hybrid_muon_ep7": "Hybrid (Muon e7)",
+    "spookynet_mbdzbl_ep2": "MBD+ZBL (e2)",
+    "spookynet_hybrid_mbdzbl_ep2": "Hybrid MBD+ZBL (e2)",
     "hf_def2svp_cp":     "HF/def2-SVP (CP)",
     "mp2_def2svp_cp":    "MP2/def2-SVP (CP)",
     "hf_def2svp":        "HF/def2-SVP",
@@ -82,6 +86,52 @@ BACKEND_CMAPS: dict[str, str] = {
     "pbe0_def2svp_gpu4pyscf_cp": "GnBu_r",
     "pbe0_def2svp_gpu4pyscf_d3bj_cp": "PuRd_r",
 }
+
+# ── Backend grouping for harmonized colour scales ────────────────────────────
+#
+# Individual per-backend colormaps (BACKEND_CMAPS above) made cross-model
+# comparison hard: every panel used a different diverging (two-hue,
+# white-centered) colormap, so nothing about the *colour* was comparable
+# between e.g. two SpookyNet checkpoints, let alone between an ML model and
+# an ab initio reference. Group backends into families and give each family
+# one shared, linear (sequential, single-hue) colormap instead: same colour
+# = same physical meaning across every panel in that family, and equal energy
+# differences map to equal colour differences everywhere (no special
+# treatment of E_int=0 the way a diverging norm would give it).
+
+GROUP_ML = "ml"
+GROUP_QM = "qm"
+GROUP_REFERENCE = "reference"
+
+_ML_PREFIXES = ("spookynet", "learned_multipole", "learned_mbd", "multipoles_mbd")
+_REFERENCE_BACKENDS = {"xtb_gfn2", "dftb3_d4", "charmm"}
+
+GROUP_CMAPS: dict[str, str] = {
+    GROUP_ML: "viridis",
+    GROUP_QM: "magma",
+    GROUP_REFERENCE: "cividis",
+}
+
+GROUP_LABELS: dict[str, str] = {
+    GROUP_ML: "Learned / ML models",
+    GROUP_QM: "Ab initio (HF/MP2/DFT)",
+    GROUP_REFERENCE: "Empirical references (xTB/DFTB/CGenFF)",
+}
+
+
+def backend_group(backend: str) -> str:
+    """Classify a backend name into a colour-scale family (ml/qm/reference)."""
+    if backend in _REFERENCE_BACKENDS:
+        return GROUP_REFERENCE
+    if any(backend == p or backend.startswith(p) for p in _ML_PREFIXES):
+        return GROUP_ML
+    return GROUP_QM
+
+
+def backend_cmap(backend: str) -> str:
+    """Shared, linear (sequential) colormap for *backend*'s family."""
+    return GROUP_CMAPS[backend_group(backend)]
+
 
 # Canonical ordering for legend / subplot layout
 BACKEND_ORDER: list[str] = [

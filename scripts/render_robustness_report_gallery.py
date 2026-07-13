@@ -22,6 +22,7 @@ data only:
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 from pathlib import Path
 
@@ -40,6 +41,7 @@ from mmml.utils.plotting.styles import (
     latex_table_image,
     legend_outside,
     status_color,
+    timeseries_with_distribution,
 )
 from mmml.utils.plotting.trajectory_structure import internal_coordinate_distributions
 
@@ -47,12 +49,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "docs" / "robustness-report-assets"
 STYLE_NAME = "icml"
 
-NVE_DIR = REPO_ROOT / "artifacts" / "robustness_report" / "water_cluster_nve"
+EV_TO_KCAL_MOL = 23.060548867
+
+NVE_DIR = REPO_ROOT / "artifacts" / "robustness_report" / "ethanol_nve"
 SCAN_DIR = REPO_ROOT / "artifacts" / "robustness_report" / "scans"
 DIHEDRAL_CSV = REPO_ROOT / "artifacts" / "trialanine_phi_psi_mm_then_ml_64x64" / "phi_psi_pes.csv"
 DIMER_CSV = REPO_ROOT / "results" / "dimer_scan_campaign" / "scan_results.csv"
 SWEEP_SUMMARY_CSV = REPO_ROOT / "workflows" / "mixed_calculator_sweep" / "results" / "summary.csv"
 SWEEP_RESULTS_DIR = REPO_ROOT / "workflows" / "mixed_calculator_sweep" / "results"
+
+
+def _load_plot_utils():
+    """Import scripts/plot_utils.py::render_dimer_atoms by path (not a package) --
+    same convention as scripts/render_chart_type_gallery.py."""
+    spec = importlib.util.spec_from_file_location("plot_utils", REPO_ROOT / "scripts" / "plot_utils.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _atoms_from_traj(traj: dict, frame: int = 0) -> Atoms:
+    return Atoms(numbers=traj["Z"], positions=traj["positions"][frame])
 
 
 # --- 1. Fluctuating charges and multipoles ----------------------------------
@@ -63,27 +81,40 @@ def charge_and_dipole_fluctuation(traj: dict, out: Path) -> None:
     charges = traj["charges_e"]           # (n_frames, n_atoms)
     dipole = traj["dipole_eA"]             # (n_frames, 3)
     t = traj["time_fs"]
-    symbols = [{8: "O", 1: "H"}[z] for z in Z]
+    element_symbol = {6: "C", 8: "O", 1: "H"}
+    symbols = [element_symbol[z] for z in Z]
+    present_elements = sorted(set(symbols), key=lambda s: -Z[symbols.index(s)])
 
-    fig, (ax_q, ax_d) = plt.subplots(1, 2, figsize=(13, 5))
+    plot_utils = _load_plot_utils()
 
+    fig = plt.figure(figsize=(16, 5))
+    # top=0.75: leaves headroom for the figure suptitle above the panel
+    # titles -- without an explicit top margin the suptitle and the panel
+    # titles (icml's bold 17pt) collide.
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.0, 2.0, 2.0], wspace=0.32, top=0.75)
+
+    ax_mol = fig.add_subplot(gs[0, 0])
+    plot_utils.render_dimer_atoms(ax_mol, _atoms_from_traj(traj), title="Simulated molecule\n(ethanol, relaxed geometry)")
+
+    ax_q = fig.add_subplot(gs[0, 1])
     # jmol's H color is literal white (1,1,1) -- invisible on a white figure
     # background, so substitute a visible dark gray for H while keeping
-    # jmol's red for O (still a semantically-recognizable element color).
-    element_colors = {"O": jmol_colors[atomic_numbers["O"]], "H": "#444444"}
+    # jmol's colors for the other (visible) elements.
+    element_colors = {s: ("#444444" if s == "H" else jmol_colors[atomic_numbers[s]]) for s in present_elements}
     for atom_idx in range(len(Z)):
         sym = symbols[atom_idx]
         ax_q.plot(t, charges[:, atom_idx], color=element_colors[sym], alpha=0.7, linewidth=1.1)
-    # Legend by element only (not per-atom -- 12 near-identical lines would be unreadable).
     handles = [plt.Line2D([0], [0], color=element_colors[s], linewidth=2.5, label=f"{s} atoms")
-               for s in ("O", "H")]
+               for s in present_elements]
     ax_q.legend(handles=handles, loc="center right")
     ax_q.set_xlabel("time (fs)")
     ax_q.set_ylabel("predicted partial charge (e)")
-    ax_q.set_title(f"Per-atom charge fluctuation\n({(Z == 8).sum()} O + {(Z == 1).sum()} H, real NVE trajectory)")
+    counts = ", ".join(f"{symbols.count(s)} {s}" for s in present_elements)
+    ax_q.set_title(f"Per-atom charge fluctuation\n({counts}, real NVE trajectory)")
 
     dipole_mag = np.linalg.norm(dipole, axis=1)
     colors = comparison_colors(STYLE_NAME, n=3)
+    ax_d = fig.add_subplot(gs[0, 2])
     ax_d.plot(t, dipole[:, 0], color=colors[0], linewidth=1.2, alpha=0.85, label="$\\mu_x$")
     ax_d.plot(t, dipole[:, 1], color=colors[1], linewidth=1.2, alpha=0.85, label="$\\mu_y$")
     ax_d.plot(t, dipole[:, 2], color=colors[2], linewidth=1.2, alpha=0.85, label="$\\mu_z$")
@@ -93,9 +124,8 @@ def charge_and_dipole_fluctuation(traj: dict, out: Path) -> None:
     ax_d.set_title("Total dipole moment fluctuation")
     legend_outside(ax_d, side="right")
 
-    fig.suptitle(f"Fluctuating charges and multipoles -- real {len(Z)}-atom water cluster, "
-                 f"real charge-predicting checkpoint")
-    fig.tight_layout()
+    fig.suptitle("Fluctuating charges and multipoles -- real ethanol molecule, "
+                 "real charge-predicting checkpoint")
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -200,40 +230,205 @@ def dihedral_and_dimer_scans(out: Path) -> None:
     plt.close(fig)
 
 
+# --- 2b. Full 2D potential energy surfaces (trialanine backbone) ------------
+#
+# Adapted from /Users/ericboittier/Untitled.ipynb's MM/ML landscape figure
+# (scatter + interpolated 3D surface + torus inner/outer views), on the same
+# real phi/psi PES scan used above -- ported to the house style (default
+# sequential colormap instead of an ad hoc pick, apply_plot_style fonts)
+# rather than copied verbatim.
+
+
+def _pes_panel_label(ax, label: str, x: float = 0.03, y: float = 0.94, fontsize: float = 13) -> None:
+    target = ax.text2D if hasattr(ax, "text2D") else ax.text
+    target(x, y, label, transform=ax.transAxes, fontsize=fontsize, fontweight="bold", ha="left", va="top")
+
+
+def _pes_interpolate_grid(phi_deg, psi_deg, e, n=200, sigma=2):
+    from scipy.interpolate import griddata
+    from scipy.ndimage import gaussian_filter
+
+    xi = np.linspace(-180, 180, n)
+    yi = np.linspace(-180, 180, n)
+    xi_grid, yi_grid = np.meshgrid(xi, yi)
+    zi = griddata((phi_deg, psi_deg), e, (xi_grid, yi_grid), method="cubic")
+    return xi_grid, yi_grid, gaussian_filter(zi, sigma=sigma)
+
+
+def _pes_interpolate_periodic(phi_rad, psi_rad, e, n=200, smoothing=0.1, sigma=1.5):
+    from scipy.interpolate import RBFInterpolator
+    from scipy.ndimage import gaussian_filter
+
+    features = np.column_stack([np.cos(phi_rad), np.sin(phi_rad), np.cos(psi_rad), np.sin(psi_rad)])
+    rbf = RBFInterpolator(features, e, kernel="thin_plate_spline", smoothing=smoothing)
+    phi_g = np.linspace(-np.pi, np.pi, n)
+    psi_g = np.linspace(-np.pi, np.pi, n)
+    phi_grid, psi_grid = np.meshgrid(phi_g, psi_g)
+    grid_features = np.column_stack([np.cos(phi_grid).ravel(), np.sin(phi_grid).ravel(),
+                                      np.cos(psi_grid).ravel(), np.sin(psi_grid).ravel()])
+    z = rbf(grid_features).reshape(phi_grid.shape)
+    return phi_grid, psi_grid, gaussian_filter(z, sigma=sigma)
+
+
+def _pes_torus_coordinates(phi_grid, psi_grid, major_r=1.15, minor_r=0.55):
+    x = (major_r + minor_r * np.cos(psi_grid)) * np.cos(phi_grid)
+    y = (major_r + minor_r * np.cos(psi_grid)) * np.sin(phi_grid)
+    z = minor_r * np.sin(psi_grid)
+    return x, y, z
+
+
+def _pes_plot_energy_row(axes, phi_deg, psi_deg, e, cmap, norm, row_name, labels) -> None:
+    axes[0].scatter(phi_deg, psi_deg, s=14, c=e, cmap=cmap, norm=norm, linewidths=0)
+    axes[0].set_xlim(-180, 180)
+    axes[0].set_ylim(-180, 180)
+    axes[0].set_aspect("equal")
+    axes[0].set_xlabel(r"$\phi$ (deg)")
+    axes[0].set_ylabel(row_name + "\n" + r"$\psi$ (deg)")
+    _pes_panel_label(axes[0], labels[0])
+
+    xi, yi, zi = _pes_interpolate_grid(phi_deg, psi_deg, e)
+    axes[1].plot_surface(xi, yi, zi, cmap=cmap, norm=norm, edgecolor="none", antialiased=True)
+    axes[1].view_init(elev=33, azim=45, roll=1)
+    axes[1].set_proj_type("ortho")
+    axes[1].set_xlabel(r"$\phi$", labelpad=-6)
+    axes[1].set_ylabel(r"$\psi$", labelpad=-6)
+    axes[1].set_zlim(norm.vmin, norm.vmax)
+    axes[1].tick_params(labelsize=7, pad=0)
+    _pes_panel_label(axes[1], labels[1])
+
+    phi_grid, psi_grid, z_tor = _pes_interpolate_periodic(np.deg2rad(phi_deg), np.deg2rad(psi_deg), e)
+    for ax, view, label in ((axes[2], "outer", labels[2]), (axes[3], "inner", labels[3])):
+        xt, yt, zt = _pes_torus_coordinates(phi_grid, psi_grid)
+        ax.plot_surface(xt, yt, zt, facecolors=cmap(norm(z_tor)), rstride=1, cstride=1,
+                         linewidth=0, antialiased=False, shade=False)
+        ax.view_init(elev=25 if view == "outer" else 20, azim=45 if view == "outer" else 225, roll=1)
+        ax.set_proj_type("ortho")
+        ax.set_axis_off()
+        ax.set_box_aspect([1, 1, 0.55])
+        _pes_panel_label(ax, label)
+
+
+def trialanine_pes_landscape(out: Path) -> None:
+    """MM and ML trialanine backbone energy landscapes, four representations
+    each (scatter / interpolated 3D surface / torus outer / torus inner) --
+    the torus views make phi=-180/+180 and psi=-180/+180 correctly adjacent
+    (real periodic topology) rather than an artificial seam at a flat plot's
+    edge. Real phi/psi PES scan data, real MM (CHARMM) and ML energies."""
+    from matplotlib.colors import Normalize
+    from matplotlib.cm import ScalarMappable
+    from mmml.utils.plotting.styles import default_cmap
+
+    df = pd.read_csv(DIHEDRAL_CSV)
+    phi_deg = df["phi_deg"].to_numpy()
+    psi_deg = df["psi_deg"].to_numpy()
+    e_mm = (df["charmm_mm_min_energy_kcal_mol"] - df["charmm_mm_min_energy_kcal_mol"].min()).to_numpy()
+    e_ml = (EV_TO_KCAL_MOL * (df["ml_energy_eV"] - df["ml_energy_eV"].min())).to_numpy()
+
+    vmax = 100.0
+    cmap = default_cmap("sequential")
+    norm = Normalize(vmin=0, vmax=vmax, clip=True)
+
+    fig = plt.figure(figsize=(18, 8), constrained_layout=True)
+    gs = fig.add_gridspec(2, 5, width_ratios=[1, 1, 1, 1, 0.05], height_ratios=[1, 1])
+    axes = np.empty((2, 4), dtype=object)
+    for i in range(2):
+        axes[i, 0] = fig.add_subplot(gs[i, 0])
+        for j in (1, 2, 3):
+            axes[i, j] = fig.add_subplot(gs[i, j], projection="3d")
+    cax = fig.add_subplot(gs[:, 4])
+
+    _pes_plot_energy_row(axes[0], phi_deg, psi_deg, e_mm, cmap, norm, "MM", ("(a)", "(b)", "(c)", "(d)"))
+    _pes_plot_energy_row(axes[1], phi_deg, psi_deg, e_ml, cmap, norm, "ML", ("(e)", "(f)", "(g)", "(h)"))
+
+    for j, title in enumerate(("Scatter", "Interpolated surface", "Torus outer face", "Torus inner face")):
+        axes[0, j].set_title(title, fontsize=13)
+
+    sm = ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
+    fig.colorbar(sm, cax=cax, label="energy above minimum (kcal/mol)")
+    fig.suptitle("Trialanine backbone PES: MM (CHARMM) vs. ML, real 64x64 scan", fontsize=16)
+    fig.savefig(out, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
 # --- 3. Energy conservation ---------------------------------------------------
 
 
 def energy_conservation_small_system(stable: dict, unstable: dict, out: Path) -> None:
-    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
-    colors = comparison_colors(STYLE_NAME, n=3)
+    """PE and total energy each get their OWN panel (never overlaid --
+    they live on different absolute scales and overlaying them either
+    crushes one or forces a distracting second y-axis), each as a real
+    time-series + marginal-distribution pair (`timeseries_with_distribution`)
+    so "does it drift" and "how wide is the fluctuation" both read at a
+    glance. Both series are mean-subtracted and reported in kcal/mol (the
+    house energy unit), with a molecular render of the actual simulated
+    system alongside so the numbers aren't disembodied from what was run.
+    """
+    plot_utils = _load_plot_utils()
+    colors = comparison_colors(STYLE_NAME, n=2)  # [PE color, total-energy color]
+
+    fig = plt.figure(figsize=(15, 9))
+    # top=0.87: same headroom fix as charge_and_dipole_fluctuation -- the
+    # figure suptitle needs real room above the top row's panel titles.
+    outer = fig.add_gridspec(2, 3, width_ratios=[0.85, 2.2, 2.2], hspace=0.55, wspace=0.4, top=0.87)
 
     for row, (traj, label, dt) in enumerate([(stable, "stable", 0.1), (unstable, "unstable", 0.5)]):
-        ax = axes[row, 0]
-        t = traj["time_fs"]
-        pe, ke = traj["energy_eV"], traj["kinetic_eV"]
-        etot = pe + ke
-        ax.plot(t, pe, color=colors[0], linewidth=1.4, label="PE", alpha=0.85)
-        ax.plot(t, ke, color=colors[1], linewidth=1.4, label="KE", alpha=0.85)
-        ax.plot(t, etot, color="#222222", linewidth=2.2, label="total")
         status = "good" if row == 0 else "critical"
-        ax.set_title(f"dt={dt} fs ({label.upper()})", color=status_color(status), fontweight="bold")
-        ax.set_xlabel("time (fs)")
-        ax.set_ylabel("energy (eV)")
-        if row == 0:
-            ax.legend(fontsize=9, loc="center right")
+        t = traj["time_fs"]
+        pe_kcal = traj["energy_eV"] * EV_TO_KCAL_MOL
+        etot_kcal = (traj["energy_eV"] + traj["kinetic_eV"]) * EV_TO_KCAL_MOL
 
-        ax2 = axes[row, 1]
-        drift = etot - etot[0]
-        ax2.plot(t, drift, color=status_color(status), linewidth=2.0)
-        ax2.axhline(0, color="#999999", linewidth=1.0, linestyle="--")
-        ax2.set_xlabel("time (fs)")
-        ax2.set_ylabel(r"$E_{tot}(t) - E_{tot}(0)$ (eV)")
-        max_drift = float(np.abs(drift).max())
-        ax2.set_title(f"max |drift| = {max_drift:.4f} eV over {t[-1]:.0f} fs")
+        ax_mol = fig.add_subplot(outer[row, 0])
+        plot_utils.render_dimer_atoms(
+            ax_mol, _atoms_from_traj(traj),
+            title=f"dt={dt} fs ({label.upper()})",
+        )
+        ax_mol.title.set_color(status_color(status))
+        ax_mol.title.set_fontweight("bold")
+
+        ax_pe, _ = timeseries_with_distribution(
+            fig, outer[row, 1], t, pe_kcal, color=colors[0],
+            ylabel="PE $-\\ \\overline{PE}$ (kcal/mol)", xlabel="time (fs)",
+        )
+        ax_pe.set_title(f"Potential energy (mean-subtracted)\nstd = {pe_kcal.std():.4f} kcal/mol", fontsize=11)
+
+        ax_etot, _ = timeseries_with_distribution(
+            fig, outer[row, 2], t, etot_kcal, color=colors[1],
+            ylabel="$E_{tot} - \\overline{E_{tot}}$ (kcal/mol)", xlabel="time (fs)",
+        )
+        ax_etot.set_title(f"Total energy (mean-subtracted)\nstd = {etot_kcal.std():.4f} kcal/mol", fontsize=11)
 
     fig.suptitle("Energy conservation: correct integration timestep vs. an under-resolved one\n"
                  "(real NVE trajectories, same system/model/initial condition, only dt differs)")
-    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def energy_fluctuation_comparison(stable: dict, unstable: dict, out: Path) -> None:
+    """Direct comparison of fluctuation magnitude: both runs' mean-subtracted
+    total-energy distributions on the SAME axis (kcal/mol) -- the width
+    difference (not just the drift-over-time plot) is the actual claim
+    "an under-resolved timestep fluctuates more, not just drifts more."
+    """
+    colors = [status_color("good"), status_color("critical")]
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    stds = []
+    for (traj, label, dt), color in zip(
+        [(stable, "stable", 0.1), (unstable, "unstable", 0.5)], colors,
+    ):
+        etot_kcal = (traj["energy_eV"] + traj["kinetic_eV"]) * EV_TO_KCAL_MOL
+        centered = etot_kcal - etot_kcal.mean()
+        stds.append(float(centered.std()))
+        ax.hist(centered, bins=40, density=True, alpha=0.55, color=color,
+                edgecolor="#222222", linewidth=0.4,
+                label=f"dt={dt} fs ({label}), std={centered.std():.4f} kcal/mol")
+    ax.axvline(0, color="#999999", linewidth=1.0, linestyle="--")
+    ax.set_xlabel(r"$E_{tot} - \overline{E_{tot}}$ (kcal/mol)")
+    ax.set_ylabel("probability density")
+    ratio = stds[1] / stds[0] if stds[0] else float("nan")
+    ax.set_title(f"Fluctuation comparison: {ratio:.1f}x wider at 5x the timestep\n"
+                 f"(Verlet integration error scales as O(dt²): expected ~25x)")
+    legend_outside(ax)
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -283,22 +478,25 @@ def structural_analysis(traj: dict, out_internal: Path) -> None:
     frames_bare = [Atoms(numbers=Z, positions=p) for p in positions_all[::4]]
     internal = internal_coordinate_distributions(frames_bare, range(len(Z)))
     _COORDINATE_TYPE_COLORS = {"Bond lengths": "#1A5276", "Angles": "#B9770E", "Dihedrals": "#1E8449"}
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
-    groups = ((internal.bonds, "Bond lengths", "Å", 30), (internal.angles, "Angles", "degrees", 30),
-              (internal.dihedrals, "Dihedrals", "degrees", 30))
+    all_groups = ((internal.bonds, "Bond lengths", "Å", 30), (internal.angles, "Angles", "degrees", 30),
+                  (internal.dihedrals, "Dihedrals", "degrees", 30))
+    # Only build a panel for coordinate types that actually exist for this
+    # system (e.g. a system with no 4-atom chain has zero dihedrals) --
+    # a "none found" placeholder panel is dead space, not information.
+    groups = [g for g in all_groups if g[0]]
+
+    fig, axes = plt.subplots(1, len(groups), figsize=(5 * len(groups), 4.5))
+    if len(groups) == 1:
+        axes = [axes]
     for axis, (coordinates, title, unit, bins) in zip(axes, groups):
         color = _COORDINATE_TYPE_COLORS[title]
-        if not coordinates:
-            axis.set_title(f"{title} (0 coordinates)")
-            axis.text(0.5, 0.5, "none found", ha="center", va="center", transform=axis.transAxes)
-            continue
         all_values = np.concatenate(list(coordinates.values()))
         axis.hist(all_values, bins=bins, density=True, alpha=0.85, color=color)
         axis.set_title(f"{title} ({len(coordinates)} coordinates)")
         axis.set_xlabel(unit)
         axis.set_ylabel("probability density")
         axis.grid(alpha=0.2)
-    fig.suptitle("Internal-coordinate distributions -- real NVE trajectory (water cluster)")
+    fig.suptitle("Internal-coordinate distributions -- real NVE trajectory (ethanol)")
     fig.tight_layout()
     fig.savefig(out_internal, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -308,11 +506,13 @@ def structural_analysis(traj: dict, out_internal: Path) -> None:
 
 
 def summary_table(stable: dict, unstable: dict, out: Path) -> None:
-    stable_etot = stable["energy_eV"] + stable["kinetic_eV"]
-    unstable_etot = unstable["energy_eV"] + unstable["kinetic_eV"]
+    stable_etot = (stable["energy_eV"] + stable["kinetic_eV"]) * EV_TO_KCAL_MOL
+    unstable_etot = (unstable["energy_eV"] + unstable["kinetic_eV"]) * EV_TO_KCAL_MOL
     cell_text = [
-        ["Water cluster NVE (dt=0.1 fs)", f"{np.abs(stable_etot - stable_etot[0]).max():.4f}", "eV"],
-        ["Water cluster NVE (dt=0.5 fs)", f"{np.abs(unstable_etot - unstable_etot[0]).max():.4f}", "eV"],
+        ["Ethanol NVE, max drift (dt=0.1 fs)", f"{np.abs(stable_etot - stable_etot[0]).max():.4f}", "kcal/mol"],
+        ["Ethanol NVE, max drift (dt=0.5 fs)", f"{np.abs(unstable_etot - unstable_etot[0]).max():.4f}", "kcal/mol"],
+        ["Ethanol NVE, fluctuation std (dt=0.1 fs)", f"{stable_etot.std():.4f}", "kcal/mol"],
+        ["Ethanol NVE, fluctuation std (dt=0.5 fs)", f"{unstable_etot.std():.4f}", "kcal/mol"],
         ["Charge range (all frames)", f"{stable['charges_e'].min():.3f} to {stable['charges_e'].max():.3f}", "e"],
         ["Dipole magnitude range", f"{np.linalg.norm(stable['dipole_eA'], axis=1).min():.3f} to "
                                     f"{np.linalg.norm(stable['dipole_eA'], axis=1).max():.3f}", "e\\textperiodcentered\\r{A}"],
@@ -341,8 +541,14 @@ def main() -> None:
     dihedral_and_dimer_scans(OUT_DIR / "chart_dihedral_dimer_scans.png")
     print("wrote chart_dihedral_dimer_scans.png")
 
+    trialanine_pes_landscape(OUT_DIR / "chart_pes_landscape.png")
+    print("wrote chart_pes_landscape.png")
+
     energy_conservation_small_system(stable_dict, unstable_dict, OUT_DIR / "chart_energy_conservation_small.png")
     print("wrote chart_energy_conservation_small.png")
+
+    energy_fluctuation_comparison(stable_dict, unstable_dict, OUT_DIR / "chart_energy_fluctuation_comparison.png")
+    print("wrote chart_energy_fluctuation_comparison.png")
 
     energy_conservation_sweep_summary(OUT_DIR / "chart_energy_conservation_sweep.png")
     print("wrote chart_energy_conservation_sweep.png")

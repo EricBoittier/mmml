@@ -44,6 +44,7 @@ __all__ = [
     "latex_table_image",
     "find_overlapping_text",
     "assert_no_text_overlap",
+    "timeseries_with_distribution",
 ]
 
 
@@ -332,6 +333,10 @@ _ICML_RC = {
     "axes.facecolor": "white",
     "axes.edgecolor": "#444444",
     "axes.linewidth": 1.0,
+    # Lighter hatch strokes -- matplotlib's 1.0pt default reads as a bold,
+    # busy texture on filled bars/regions (e.g. STATUS_HATCHES); 0.6pt stays
+    # visible without competing with the fill color for attention.
+    "hatch.linewidth": 0.6,
     "axes.labelsize": 16,
     "axes.titlesize": 17,
     "axes.titleweight": "bold",
@@ -803,6 +808,58 @@ def assert_no_text_overlap(fig, *, padding_px: float = 0.0) -> None:
         raise AssertionError(f"Overlapping text found in figure:\n{pairs}")
 
 
+def timeseries_with_distribution(
+    fig, gridspec_slot, t, y, *, color: str, label: str | None = None,
+    ylabel: str | None = None, xlabel: str = "time", bins: int = 40,
+    center: bool = True, width_ratios: tuple[float, float] = (3.2, 1.0),
+):
+    """A time series with its marginal distribution beside it, sharing the
+    y-axis -- the house pattern for "does this quantity fluctuate around a
+    stable value, and what does that fluctuation look like." A bare time
+    series alone answers "is there drift"; the histogram alongside answers
+    "how wide is the noise" without a separate figure.
+
+    ``gridspec_slot`` is anything indexable that already carved out a region
+    for this panel (e.g. ``fig.add_gridspec(...)[row, col]`` or a plain
+    ``(row, col)`` tuple against a 1x1 outer grid) -- this function
+    subdivides it internally via `subgridspec`, so it composes inside a
+    larger multi-panel figure instead of only working as a whole-figure
+    layout.
+
+    ``center=True`` (default) subtracts the series' own mean before
+    plotting both panels, so "conserved" reads as "flat around zero" and
+    the histogram is centered at zero -- appropriate for a fluctuating
+    physical quantity (energy, charge) where the absolute offset is
+    arbitrary/uninteresting and only the fluctuation matters. Returns
+    ``(ax_series, ax_hist)``.
+    """
+    y = np.asarray(y)
+    if center:
+        y = y - y.mean()
+
+    sub_gs = gridspec_slot.subgridspec(1, 2, width_ratios=width_ratios, wspace=0.05)
+    ax_series = fig.add_subplot(sub_gs[0, 0])
+    ax_hist = fig.add_subplot(sub_gs[0, 1], sharey=ax_series)
+
+    ax_series.plot(t, y, color=color, linewidth=1.1, alpha=0.9, label=label)
+    ax_series.axhline(0.0, color="#999999", linewidth=0.8, linestyle="--")
+    ax_series.set_xlabel(xlabel)
+    if ylabel:
+        ax_series.set_ylabel(ylabel)
+    if label:
+        ax_series.legend(loc="upper right", fontsize=9)
+
+    ax_hist.hist(y, bins=bins, orientation="horizontal", color=color, alpha=0.75,
+                 edgecolor="#222222", linewidth=0.4)
+    ax_hist.axhline(0.0, color="#999999", linewidth=0.8, linestyle="--")
+    ax_hist.set_xlabel("count")
+    ax_hist.tick_params(labelleft=False)
+    for spine in ("top", "right"):
+        ax_hist.spines[spine].set_visible(False)
+
+    return ax_series, ax_hist
+
+
 # Classic matplotlib defaults (pre-seaborn era feel).
 _MPL_CLASSIC_COLORS = {
     "train": "#1f77b4",
@@ -898,11 +955,11 @@ MARKER_CYCLE: tuple[str, ...] = ("o", "s", "^", "D", "v", "P", "X", "*")
 # redundancy on filled areas/bars, since red/green/amber can still collide
 # for some color-vision deficiencies).
 STATUS_COLORS: dict[str, str] = {
-    "good": "#2E7D32",       # pass / converged / in-tolerance
-    "warning": "#F9A825",    # borderline -- worth a second look, not yet a failure
-    "serious": "#E65100",    # notable problem, not yet critical
-    "critical": "#C62828",   # fail / diverged / out-of-tolerance
-    "neutral": "#616161",    # informational baseline, not a judgment call
+    "good": "#3D8C6C",       # pass / converged / in-tolerance -- muted teal-green
+    "warning": "#D9A441",    # borderline -- worth a second look, not yet a failure
+    "serious": "#C1652F",    # notable problem, not yet critical
+    "critical": "#B23A48",   # fail / diverged / out-of-tolerance -- muted brick red
+    "neutral": "#6B7280",    # informational baseline, not a judgment call
 }
 # Convenience aliases for the common pass/fail binary case (e.g. a single FD
 # check that's just PASS or FAIL, no borderline state) -- these are NOT new
@@ -929,8 +986,8 @@ def status_color(level: str) -> str:
 STATUS_HATCHES: dict[str, str] = {
     "good": "",
     "warning": "//",
-    "serious": "xx",
-    "critical": "OO",
+    "serious": "\\\\",
+    "critical": "xx",
     "neutral": "..",
 }
 
