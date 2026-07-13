@@ -824,10 +824,9 @@ class PhysNet(nn.Module):
         q1 = jnp.clip(jnp.take(atomic_charges, dst_idx, fill_value=0.0), -10.0, 10.0)
         q2 = jnp.clip(jnp.take(atomic_charges, src_idx, fill_value=0.0), -10.0, 10.0)
         # Calculate electrostatic energy (in Hartree)
-        # Conversion factor 7.199822675975274 is 1/(4π*ε₀) in atomic units
-        electrostatics = 7.199822675975274 * q1 * q2 * r * batch_mask
-        # apply shifted force truncation scheme
-        electrostatics += eshift * batch_mask
+        # Calculate electrostatic energy with shifted force truncation scheme
+        # Conversion factor 7.199822675975274 is (e^2 / 4πε₀) / 2 in eV * Å
+        electrostatics = 7.199822675975274 * q1 * q2 * (r + eshift) * batch_mask
         electrostatics *= off_dist
         # Sum contributions for each atom
         # Use actual number of atoms from atomic_charges to match atomic_energies shape

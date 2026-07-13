@@ -74,6 +74,7 @@ MONOMER_FIGURE_KEYS = {
 }
 
 PANEL_LABELS = {
+    "ccsd_def2svp_gpu4pyscf_cp": "CCSD/def2-SVP",
     "mp2_def2svp_gpu4pyscf_cp": "MP2/def2-SVP",
     "hf_def2svp_gpu4pyscf_cp": "HF/def2-SVP",
     "pbe0_def2svp_gpu4pyscf_cp": "PBE0/def2-SVP",

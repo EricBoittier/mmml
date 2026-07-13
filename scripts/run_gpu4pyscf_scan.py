@@ -14,7 +14,7 @@ Counterpoise (Boys-Bernardi) correction uses PySCF's ghost-atom convention
 charge/electrons), matching the existing pattern in
 ``mmml/interfaces/pyscf4gpuInterface/calcs.py:compute_interaction_energy``.
 
-``--methods`` accepts ``HF`` or any PySCF/GPU4PySCF XC functional keyword
+``--methods`` accepts ``HF``, ``MP2``, ``CCSD``, or any PySCF/GPU4PySCF XC functional keyword
 (e.g. ``PBE0``, ``B3LYP``, ``wB97M-V``).
 
 Usage
@@ -66,7 +66,7 @@ def _rhf(mol, use_gpu: bool):
 
 
 def _mean_field(mol, method: str, use_gpu: bool):
-    """Build the SCF reference for HF or a DFT functional (not MP2 — see _energy_for)."""
+    """Build the SCF reference for HF or a DFT functional (correlated methods are handled separately)."""
     if method.upper() == "HF":
         return _rhf(mol, use_gpu)
     if use_gpu:
@@ -105,6 +105,29 @@ def _energy_for(
         pt = dfmp2.DFMP2(mf)
         e_corr, _ = pt.kernel()
         return float(e_hf + e_corr)
+
+    if method.upper() == "CCSD":
+        # GPU4PySCF currently exposes CCSD through its in-core implementation.
+        # It does not support DF-CCSD, so do *not* call density_fit() here even
+        # when an auxiliary basis was supplied for the other scan methods.
+        # The CPU fallback deliberately mirrors the same canonical CCSD energy.
+        if use_gpu:
+            from gpu4pyscf.cc import ccsd_incore
+            cc_solver = ccsd_incore.CCSD
+        else:
+            from pyscf.cc import CCSD as cc_solver
+        mf = _rhf(mol, use_gpu)
+        mf.conv_tol = scf_conv_tol
+        mf.max_cycle = scf_max_cycle
+        mf.kernel()
+        if not mf.converged:
+            raise RuntimeError(f"SCF (CCSD reference) did not converge ({basis})")
+        cc = cc_solver(mf)
+        cc.conv_tol = scf_conv_tol
+        cc.kernel()
+        if not cc.converged:
+            raise RuntimeError(f"CCSD did not converge ({basis})")
+        return float(cc.e_tot)
 
     mf = _mean_field(mol, method, use_gpu)
     if dispersion and dispersion.lower() != "none":
@@ -205,7 +228,8 @@ def main():
     parser.add_argument(
         "--methods", nargs="+", default=["HF", "PBE0"],
         help=(
-            "'HF', 'MP2' (density-fitted, RHF reference), or any PySCF/GPU4PySCF XC functional "
+            "'HF', 'MP2' (density-fitted, RHF reference), 'CCSD' (canonical/in-core; no DF-CCSD), "
+            "or any PySCF/GPU4PySCF XC functional "
             "keyword (default: HF PBE0). GPU4PySCF makes larger basis sets (def2-TZVP, "
             "aug-cc-pVDZ, ...) much more tractable than the ORCA/CPU runs — worth trying via --basis."
         ),
@@ -227,8 +251,8 @@ def main():
         "--dispersion", default="none", choices=["none", "d3bj", "d3zero", "d4"],
         help=(
             "Empirical dispersion correction via pyscf-dispersion (default: none). No-op for "
-            "--methods MP2 (dispersion parameterizations are DFT/HF-specific, not meaningful "
-            "for a method that already computes correlation directly). Requires the "
+            "--methods MP2 or CCSD (dispersion parameterizations are DFT/HF-specific, not meaningful "
+            "for methods that already compute correlation directly). Requires the "
             "pyscf-dispersion package with a working DFT-D3/D4 library for your platform."
         ),
     )
@@ -309,10 +333,16 @@ def main():
         for method in args.methods:
             method_slug = method.lower().replace("-", "")
             is_mp2 = method.upper() == "MP2"
-            disp_suffix = f"_{args.dispersion}" if (args.dispersion != "none" and not is_mp2) else ""
+            is_ccsd = method.upper() == "CCSD"
+            disp_suffix = f"_{args.dispersion}" if (args.dispersion != "none" and not (is_mp2 or is_ccsd)) else ""
             backend_name = f"{method_slug}_{basis_slug}_{engine_tag}{disp_suffix}{cp_suffix}"
-            disp_note = "" if is_mp2 else f" disp={args.dispersion}"
-            print(f"  Evaluating {method}/{args.basis} (aux={aux_basis or 'auto'}){disp_note}...")
+            if is_ccsd:
+                method_note = " canonical/in-core CCSD (aux basis unused)"
+                disp_note = ""
+            else:
+                method_note = ""
+                disp_note = "" if is_mp2 else f" disp={args.dispersion}"
+            print(f"  Evaluating {method}/{args.basis} (aux={aux_basis or 'auto'}){disp_note}{method_note}...")
             rows = evaluate_pyscf_scan(
                 geometries, label_a, label_b,
                 method=method, basis=args.basis, aux_basis=aux_basis,
@@ -320,7 +350,7 @@ def main():
                 charge=args.charge, spin=args.spin, use_gpu=not args.cpu,
                 scf_conv_tol=args.scf_conv_tol, scf_max_cycle=args.scf_max_cycle,
                 backend_name=backend_name, skip_keys=seen_keys,
-                dispersion=None if is_mp2 else args.dispersion,
+                dispersion=None if (is_mp2 or is_ccsd) else args.dispersion,
             )
             results.extend(rows)
             seen_keys.update(
