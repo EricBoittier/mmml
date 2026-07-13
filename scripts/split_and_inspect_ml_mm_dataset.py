@@ -244,11 +244,131 @@ def validate_and_inspect_dataset(
     print(f"==================================================================")
 
 
+def split_dataset(
+    cache_dir: str | Path,
+    output_dir: str | Path,
+    train_frac: float = 0.80,
+    val_frac: float = 0.10,
+    test_frac: float = 0.10,
+    n_bins: int = 20,
+    seed: int = 42,
+):
+    """Stratified train/val/test split by inter-monomer COM distance.
+    
+    Splits the dataset so that the distance distribution is equally
+    represented in each split (same min/max bounds in every set).
+    Saves three Orbax caches: train_cache/, val_cache/, test_cache/.
+    """
+    cache_dir = Path(cache_dir).expanduser().resolve()
+    output_dir = Path(output_dir).expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    assert abs(train_frac + val_frac + test_frac - 1.0) < 1e-6, "Fractions must sum to 1.0"
+
+    print(f"\n==================================================================")
+    print(f" 4. STRATIFIED TRAIN / VAL / TEST SPLIT")
+    print(f" Fractions: train={train_frac:.0%}  val={val_frac:.0%}  test={test_frac:.0%}")
+    print(f" Distance bins: {n_bins} (equal-width in COM distance)")
+    print(f"==================================================================")
+
+    data = ocp.PyTreeCheckpointer().restore(cache_dir)
+    all_keys = list(data.keys())
+
+    Z        = np.asarray(data["Z"]).reshape(-1)
+    R        = np.asarray(data["R"]).reshape(-1, 3)
+    offsets  = np.asarray(data["mol_offsets"]).reshape(-1)
+    mol_id   = np.asarray(data["mol_id"]).reshape(-1)
+    N        = np.asarray(data["N"]).reshape(-1)
+    n_structs = len(N)
+
+    # Compute COM distance for every structure
+    print(f" Computing COM distances for {n_structs:,} structures...")
+    d_com = np.zeros(n_structs, dtype=np.float32)
+    for i in range(n_structs):
+        st, en = offsets[i], offsets[i + 1]
+        m = mol_id[st:en]
+        r = R[st:en]
+        com_a = r[m == 0].mean(axis=0)
+        com_b = r[m == 1].mean(axis=0)
+        d_com[i] = np.linalg.norm(com_a - com_b)
+
+    # Stratified split: within each distance bin, assign train/val/test
+    bin_edges = np.linspace(d_com.min(), d_com.max(), n_bins + 1)
+    bin_idx   = np.digitize(d_com, bin_edges, right=True).clip(1, n_bins) - 1
+
+    rng = np.random.default_rng(seed)
+    train_mask = np.zeros(n_structs, dtype=bool)
+    val_mask   = np.zeros(n_structs, dtype=bool)
+    test_mask  = np.zeros(n_structs, dtype=bool)
+
+    for b in range(n_bins):
+        idx = np.flatnonzero(bin_idx == b)
+        if len(idx) == 0:
+            continue
+        rng.shuffle(idx)
+        n_val  = max(1, int(len(idx) * val_frac))
+        n_test = max(1, int(len(idx) * test_frac))
+        test_mask[idx[:n_test]]             = True
+        val_mask [idx[n_test:n_test+n_val]] = True
+        train_mask[idx[n_test+n_val:]]      = True
+
+    print(f" Split sizes:  train={train_mask.sum():,}  val={val_mask.sum():,}  test={test_mask.sum():,}")
+    print(f" d_COM ranges: [{d_com.min():.2f}, {d_com.max():.2f}] Å  "
+          f"(train [{d_com[train_mask].min():.2f}, {d_com[train_mask].max():.2f}]  "
+          f"val [{d_com[val_mask].min():.2f}, {d_com[val_mask].max():.2f}]  "
+          f"test [{d_com[test_mask].min():.2f}, {d_com[test_mask].max():.2f}])")
+
+    def _save_split(mask: np.ndarray, split_name: str):
+        indices = np.flatnonzero(mask)
+        n = len(indices)
+        # Rebuild flat atom arrays for the selected structures
+        atom_counts  = N[indices]
+        new_offsets  = np.concatenate([[0], np.cumsum(atom_counts)]).astype(np.int64)
+        atom_indices = np.concatenate([np.arange(offsets[i], offsets[i + 1]) for i in indices])
+
+        split_data = {
+            "R":                  np.asarray(data["R"]).reshape(-1, 3)[atom_indices],
+            "Z":                  np.asarray(data["Z"]).reshape(-1)[atom_indices],
+            "F":                  np.asarray(data["F"]).reshape(-1, 3)[atom_indices],
+            "F_cgenff_mm":        np.asarray(data["F_cgenff_mm"]).reshape(-1, 3)[atom_indices],
+            "mol_id":             np.asarray(data["mol_id"]).reshape(-1)[atom_indices],
+            "cgenff_type_idx":    np.asarray(data["cgenff_type_idx"]).reshape(-1)[atom_indices],
+            "cgenff_charge":      np.asarray(data["cgenff_charge"]).reshape(-1)[atom_indices],
+            "mol_offsets":        new_offsets,
+            "E":                  np.asarray(data["E"]).reshape(-1, 1)[indices],
+            "E_cgenff_mm":        np.asarray(data["E_cgenff_mm"]).reshape(-1, 1)[indices],
+            "N":                  np.asarray(data["N"]).reshape(-1, 1)[indices],
+            "Q":                  np.asarray(data["Q"]).reshape(-1, 1)[indices],
+            "S":                  np.asarray(data["S"]).reshape(-1, 1)[indices],
+            "D":                  np.asarray(data["D"]).reshape(-1, 3)[indices],
+            "cgenff_master_sigmas":   np.asarray(data["cgenff_master_sigmas"]),
+            "cgenff_master_epsilons": np.asarray(data["cgenff_master_epsilons"]),
+            "metadata_n_structures":  np.asarray(n, dtype=np.int64),
+            "metadata_n_atoms_total": np.asarray(len(atom_indices), dtype=np.int64),
+            "metadata_max_atoms":     np.asarray(int(atom_counts.max()), dtype=np.int32),
+        }
+        out_path = output_dir / f"{split_name}_cache"
+        print(f" Saving {split_name} ({n:,} structs) → {out_path}")
+        ocp.PyTreeCheckpointer().save(out_path, split_data, force=True)
+
+    _save_split(train_mask, "train")
+    _save_split(val_mask,   "val")
+    _save_split(test_mask,  "test")
+    print(f"[+] All splits saved to {output_dir}")
+    print(f"==================================================================")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Dataset charge and energy distribution inspector")
-    parser.add_argument("--cache-dir", required=True, help="Path to prepared Orbax dataset cache")
-    parser.add_argument("--output-dir", default="data/splits_des_ml_mm", help="Output directory for plots")
-    parser.add_argument("--sample-size", type=int, default=100000, help="Number of frames to sample for energy breakdown (default: 100k)")
+    parser = argparse.ArgumentParser(description="Dataset charge and energy distribution inspector + splitter")
+    parser.add_argument("--cache-dir",   required=True, help="Path to prepared Orbax dataset cache")
+    parser.add_argument("--output-dir",  default="data/splits_des_ml_mm", help="Output directory for splits and plots")
+    parser.add_argument("--sample-size", type=int, default=100000, help="Frames to sample for energy breakdown (default: 100k)")
+    parser.add_argument("--train-frac",  type=float, default=0.80, help="Train fraction (default: 0.80)")
+    parser.add_argument("--val-frac",    type=float, default=0.10, help="Val fraction (default: 0.10)")
+    parser.add_argument("--test-frac",   type=float, default=0.10, help="Test fraction (default: 0.10)")
+    parser.add_argument("--n-bins",      type=int,   default=20,   help="Number of COM distance bins for stratification")
+    parser.add_argument("--seed",        type=int,   default=42,   help="Random seed")
+    parser.add_argument("--inspect-only", action="store_true", help="Only run inspection, skip splitting")
     args = parser.parse_args()
 
     validate_and_inspect_dataset(
@@ -256,6 +376,17 @@ def main():
         args.output_dir,
         sample_size=args.sample_size,
     )
+
+    if not args.inspect_only:
+        split_dataset(
+            args.cache_dir,
+            args.output_dir,
+            train_frac=args.train_frac,
+            val_frac=args.val_frac,
+            test_frac=args.test_frac,
+            n_bins=args.n_bins,
+            seed=args.seed,
+        )
 
 
 if __name__ == "__main__":
