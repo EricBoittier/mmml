@@ -9,8 +9,9 @@ so the default fast suite skips them::
 
     pytest tests/unit/test_jaxmd_unified_profiling.py -m slow
 
-A JSON report is written to ``MMML_PROFILE_OUT`` if set, else a temp file, so a
-CI job can diff throughput over time. The assertions are deliberately loose
+A JSON report is written to ``MMML_PROFILE_OUT`` if that env var is set, so a
+CI job can diff throughput over time; otherwise each test prints a ``PROFILE``
+line (visible with ``pytest -s``). The assertions are deliberately loose
 floors: they catch catastrophic regressions (an accidental recompile per step,
 losing jit, O(N^2) blow-ups) without being flaky on a slow shared runner.
 """
@@ -53,10 +54,14 @@ def _block(x):
 
 
 def _report(record: dict) -> None:
+    """Append ``record`` to the JSON report at ``MMML_PROFILE_OUT`` if set.
+
+    When unset (the default), the ``PROFILE ...`` line printed by each test is
+    the record — visible with ``pytest -s`` or on failure.
+    """
     out = os.environ.get("MMML_PROFILE_OUT")
-    path = Path(out) if out else Path(os.environ.get("PYTEST_CURRENT_TEST", "")).parent
     if not out:
-        return  # nothing requested; the captured stdout below is the record
+        return
     path = Path(out)
     existing = []
     if path.exists():
@@ -81,7 +86,7 @@ def _energy_and_R(system):
     return fn, R, kw, nfn
 
 
-def test_profile_energy_build_and_eval(synthetic_water_box, capsys):
+def test_profile_energy_build_and_eval(synthetic_water_box):
     """Compile once, then energy evals should be cheap and recompile-free."""
     system = synthetic_water_box(n_waters=16, seed=0)
     fn, R, kw, _ = _energy_and_R(system)
@@ -101,7 +106,7 @@ def test_profile_energy_build_and_eval(synthetic_water_box, capsys):
     print("\nPROFILE", json.dumps(rec))
 
 
-def test_profile_md_throughput(synthetic_water_box, capsys):
+def test_profile_md_throughput(synthetic_water_box):
     """Steady-state MD steps/second on a fixed system, past the first compile."""
     system = synthetic_water_box(n_waters=16, seed=0)
 
@@ -126,7 +131,7 @@ def test_profile_md_throughput(synthetic_water_box, capsys):
     print("\nPROFILE", json.dumps(rec))
 
 
-def test_profile_neighbor_rebuild(synthetic_water_box, capsys):
+def test_profile_neighbor_rebuild(synthetic_water_box):
     """Neighbor-list rebuild time (host pair build) must stay modest."""
     system = synthetic_water_box(n_waters=32, seed=0)
     _, _, _, nfn = _energy_and_R(system)
@@ -144,7 +149,7 @@ def test_profile_neighbor_rebuild(synthetic_water_box, capsys):
 
 
 @pytest.mark.parametrize("n_waters", [8, 16, 32])
-def test_profile_scaling(synthetic_water_box, n_waters, capsys):
+def test_profile_scaling(synthetic_water_box, n_waters):
     """Throughput across sizes; recorded so a CI job can watch the trend."""
     system = synthetic_water_box(n_waters=n_waters, box_len=8.0 + n_waters, seed=0)
     energy = build_hybrid_energy(system, ("mm_nonbonded",))
