@@ -495,6 +495,7 @@ def main(argv: list[str] | None = None) -> int:
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
         handoff_from_atoms,
+        handoff_velocities_as_ase_ang_fs,
         handoff_skip_pre_min,
         resolve_jaxmd_minimize_steps_for_handoff,
         print_handoff_policy_panel,
@@ -1044,14 +1045,37 @@ def main(argv: list[str] | None = None) -> int:
     )
     initial_velocities: np.ndarray | None = None
     if use_handoff_velocities and handoff_in is not None and handoff_in.velocities is not None:
-        atoms.set_velocities(np.asarray(handoff_in.velocities, dtype=float))
+        converted_velocities = handoff_velocities_as_ase_ang_fs(
+            handoff_in, velocity_units="auto"
+        )
+        if converted_velocities is None:
+            raise RuntimeError("handoff velocity policy selected velocities, but none were converted")
+        atoms.set_velocities(np.asarray(converted_velocities, dtype=float))
         if getattr(args, "handoff_velocity_remove_drift", True):
             Stationary(atoms)
             ZeroRotation(atoms)
         initial_velocities = np.asarray(atoms.get_velocities(), dtype=float)
+        handoff_temperature = float(atoms.get_temperature())
+        max_step_displacement = float(
+            np.max(np.linalg.norm(initial_velocities, axis=1)) * float(args.dt_fs)
+        )
+        if (
+            not np.all(np.isfinite(initial_velocities))
+            or not np.isfinite(handoff_temperature)
+            or handoff_temperature <= 0.0
+            or max_step_displacement > 0.25
+        ):
+            raise RuntimeError(
+                "implausible converted handoff velocities: "
+                f"T={handoff_temperature:.3f} K, "
+                f"max one-step displacement={max_step_displacement:.6f} Å "
+                f"at dt={float(args.dt_fs):g} fs"
+            )
         if not getattr(args, "quiet", False):
             print(
-                f"Using handoff velocities ({len(initial_velocities)} atoms).",
+                f"Using converted handoff velocities ({len(initial_velocities)} atoms): "
+                f"T={handoff_temperature:.3f} K, "
+                f"max dt*v={max_step_displacement:.6f} Å.",
                 flush=True,
             )
     else:
