@@ -465,7 +465,6 @@ def make_steps(
         mbd_params = jax.tree.map(jax.lax.stop_gradient, mbd_params)
 
     def loss_fn(params, batch, mbd_scale):
-        has_mm = "cgenff_type_idx" in batch and "mol_id" in batch
         out = model.apply(
             params,
             atomic_numbers=batch["Z"],
@@ -839,6 +838,22 @@ def save_epoch_checkpoint(
 
 def train(args: argparse.Namespace, cache_path: Path) -> None:
     data = restore_cached_data(cache_path)
+    has_cgenff_lj = (
+        "cgenff_master_sigmas" in data
+        and "cgenff_master_epsilons" in data
+        and "cgenff_type_idx" in data
+        and "mol_id" in data
+    )
+    if has_cgenff_lj:
+        n_types = int(np.asarray(data["cgenff_master_sigmas"]).shape[0])
+        print(
+            f"CGenFF LJ data found in cache: {n_types} atom types "
+            f"(cgenff_master_sigmas/epsilons, cgenff_type_idx, mol_id) — "
+            f"ML/MM residual VdW term is active",
+            flush=True,
+        )
+    else:
+        print("No CGenFF LJ data in cache — training a plain ML potential", flush=True)
     n_molecules = int(np.asarray(data["E"]).shape[0])
     max_atoms = int(np.max(np.asarray(data["N"]).reshape(-1)))
     train_idx, valid_idx = split_indices(n_molecules, args.valid_fraction, args.seed)
