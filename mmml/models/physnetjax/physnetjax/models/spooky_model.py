@@ -515,6 +515,8 @@ class SpookyPhysNet(nn.Module):
 
         return y
 
+    learn_cgenff_vdw_scale: bool = True
+
     def _calculate_cgenff_vdw(
         self,
         r: jnp.ndarray,
@@ -522,6 +524,7 @@ class SpookyPhysNet(nn.Module):
         cgenff_type_idx: jnp.ndarray,
         cgenff_master_sigmas: jnp.ndarray,
         cgenff_master_epsilons: jnp.ndarray,
+        atomic_numbers: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
         mol_id: jnp.ndarray | None,
@@ -529,7 +532,7 @@ class SpookyPhysNet(nn.Module):
         batch_segments: jnp.ndarray,
         batch_size: int,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Calculate inter-monomer CGenFF 6-12 Lennard-Jones vdW interactions in JAX.
+        """Calculate inter-monomer CGenFF 6-12 Lennard-Jones vdW interactions in JAX with optional learnable scaling.
 
         Conversion: 1 kcal/mol = 0.0433641153 eV.
         Lorentz-Berthelot combination rules:
@@ -543,6 +546,23 @@ class SpookyPhysNet(nn.Module):
 
         sig_ij = 0.5 * (sig_dst + sig_src)
         eps_ij = jnp.sqrt(eps_dst * eps_src)
+
+        # Optional learnable global and per-element LJ parameter scaling
+        if self.learn_cgenff_vdw_scale:
+            global_scale = self.param(
+                "global_vdw_scale",
+                lambda rng, shape: jnp.ones(shape, dtype=r.dtype),
+                (1,),
+            )
+            element_scale = self.param(
+                "element_vdw_scale",
+                lambda rng, shape: jnp.ones(shape, dtype=r.dtype),
+                (self.max_atomic_number + 1,),
+            )
+            scale_dst = jnp.take(element_scale, jnp.take(atomic_numbers, dst_idx))
+            scale_src = jnp.take(element_scale, jnp.take(atomic_numbers, src_idx))
+            eps_scale = global_scale * jnp.sqrt(jnp.maximum(scale_dst * scale_src, 1e-4))
+            eps_ij = eps_ij * eps_scale
 
         if mol_id is not None:
             inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(r.dtype)
@@ -622,6 +642,7 @@ class SpookyPhysNet(nn.Module):
                 cgenff_type_idx,
                 cgenff_master_sigmas,
                 cgenff_master_epsilons,
+                atomic_numbers,
                 dst_idx,
                 src_idx,
                 mol_id,
