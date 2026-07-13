@@ -1,7 +1,7 @@
-# PyCHARMM + MM/ML: capabilities checklist
+# `md-system` / `cg_jaxmd`: capabilities checklist
 
-A stakeholder-facing summary of what the unified `mmml/md/` stack (built to
-merge `md-system` and `cg_jaxmd` — see the
+A stakeholder-facing summary of what the experimental unified `mmml/md/` stack
+(built to merge `md-system` and `cg_jaxmd` — see the
 [full design doc](md-cg-unification-design.md) and
 [handoff notes](md-cg-unification-handoff.md)) can do **today**, with runnable
 examples and real-structure diagrams. Status marks: ✅ done & tested, 🚧 partially
@@ -14,8 +14,8 @@ done, ⬜ planned / not started.
 ### Shared calculator & builder architecture
 
 The historical split — `md-system` speaking ASE `Calculator` objects,
-`cg_jaxmd` hand-composing a jax-md `energy_fn` — is now one shared stack both
-front-ends call into.
+`cg_jaxmd` hand-composing a jax-md `energy_fn` — now has one shared stack
+available to both front-ends through their opt-in routes.
 
 - ✅ One config object (`RunConfig`) for both the `md-system` CLI and the
   `cg_jaxmd` Snakemake JSON — no more drifting configs.
@@ -24,22 +24,25 @@ front-ends call into.
   exclusions resolved once by CHARMM, never recomputed at runtime.
 - ✅ Four system builders share one interface: **PSF** (from an existing
   CHARMM PSF), **Packmol** (liquid boxes), **PyXtal** (molecular crystals),
-  **peptide + water** (CGENFF peptide solvated in TIP3).
+  and **peptide + water** (a trialanine/TIP3 CGENFF builder).
 - ✅ All six physics terms extracted into standalone, independently
   parity-tested modules: ML intramolecular, ML peptide–water dimer, classical
   MM nonbonded, repulsive core wall, steered-MD bias, backbone dihedral
   restraint.
-- ✅ One `HybridEnergy` that composes any selection of those terms and exposes
-  **both** faces from the same definition — an ASE `Calculator` for
-  CHARMM/ASE-style workflows, and a jittable `energy_fn(R)` for jax-md.
+- ✅ One `HybridEnergy` that composes selected terms and exposes both faces
+  from the same definition: an ASE `Calculator` and a jittable
+  `energy_fn(R)` for jax-md.
 - ✅ One driver (`JaxmdDriver`) covering minimization (FIRE), NVE, NVT
   (Nosé–Hoover), and **NPT** (Nosé–Hoover barostat) — replacing two
   independently-drifting integrator implementations.
-- ✅ Both front-ends now run through this shared pipeline:
-  `mmml md-system --backend jaxmd --jaxmd-unified` (opt-in flag) and
-  `examples/cg_jaxmd_unified.py`.
-- ✅ 333 unit tests green across the package (`tests/unit/test_md_*.py`),
-  including CHARMM-integration tests and real-checkpoint end-to-end runs.
+- 🚧 Both front-ends have an opt-in shared route:
+  `mmml md-system --backend jaxmd --jaxmd-unified` supports only Packmol
+  composition inputs, while `examples/cg_jaxmd_unified.py` supports the
+  trialanine/water configuration surface documented below. The legacy routes
+  remain the defaults.
+- ✅ The shared modules have focused unit and optional live-CHARMM/checkpoint
+  integration tests. The latter are skipped when their local dependencies are
+  unavailable; do not read a test count as a deployment certification.
 
 ### Mixed systems: one ML-scored core + explicit MM/ML solvent
 
@@ -50,14 +53,15 @@ pure-MM run.
 
 - ✅ Build a real system (CHARMM CGENFF): one ML "core" molecule + N TIP3
   waters, lowered into one `MolecularSystem`.
-- ✅ Split the energy into four terms computed together in one `HybridEnergy`:
+- ✅ The trialanine/water front end can split energy into four terms in one
+  `HybridEnergy`:
   **ML intramolecular** (core, `ml_intra`) + **ML dimer** (core↔near-water,
   `ml_pep_water`) + **repulsive wall** (core↔far-water, `vdw_core`, keeps
   waters outside the ML shell from collapsing into the core unscored) +
   **classical MM** (water↔water, `mm_nonbonded`).
-- ✅ Swappable ML checkpoints, electrostatics damping, and point-charge
-  Coulomb toggles — validated via a 10,000-step NVE sweep
-  (`workflows/mixed_calculator_sweep/`) with a real ML checkpoint.
+- ✅ The trialanine/water front end accepts a checkpoint and the documented
+  energy-mode toggles. The `mixed_calculator_sweep` workflow contains the
+  NVE validation setup for this route.
 - 🚧 Long-range electrostatics solvers (PME, ScaFaCoS) work for one-off ASE
   evaluation but are not yet wireable into the jitted MD loop.
 - ⬜ A general "any small-molecule ML core" builder — today the peptide+water
@@ -68,7 +72,8 @@ pure-MM run.
 
 ### Sampling & ensembles
 
-- ✅ Standard MD: NVE / NVT / NPT, free space or periodic boundaries.
+- ✅ `JaxmdDriver` implements minimization, NVE, NVT, and NPT; NPT requires a
+  periodic box. Mixed-system NVT/NPT production validation remains open.
 - ✅ Rigid-body Monte Carlo sampler — moves whole monomers as rigid bodies
   (translation + quaternion rotation) using the *same* energy and system, no
   code fork. Selected by one config field (`sampler="rigid"`).
@@ -77,16 +82,10 @@ pure-MM run.
 
 ### Cluster deployment & validation
 
-- ✅ Runs on SLURM, both GPU and CPU partitions (auto-detected CUDA jaxlib
-  availability).
-- ✅ Automated cross-backend regression sweep
-  (`workflows/unified_backend_sweep/`) exercises every driver × ensemble
-  combination (FIRE/NVE/NVT/NPT, rigid MC) against the same real system on
-  every run.
-- ✅ Three real deployment bugs (Packmol binary not vendored in git, a
-  transient XLA compile race under concurrent CPU jobs, silent CPU fallback
-  when no CUDA jaxlib is present) found and fixed by actually submitting to
-  the cluster, not just unit tests.
+- 🚧 The repository includes SLURM-oriented workflows and an automated
+  `unified_backend_sweep`, but availability of CUDA, Packmol, PyCHARMM and
+  the ML checkpoint is host-specific. Validate a target cluster before using
+  the experimental route for production.
 
 ### GPU-native CHARMM (apocharmm) — next major piece, design-complete
 
@@ -98,9 +97,9 @@ pure-MM run.
 
 ## 2. What this looks like
 
-Real trialanine + TIP3 water snapshot (`examples/atoms.pdb`), colored by which
-energy term scores each atom — not a schematic, this is an actual structure
-run through the builder:
+Trialanine + TIP3 water snapshot from `examples/atoms.pdb`, colored by the
+role used in the mixed-system decomposition. The role assignment is a static
+distance-based illustration, not a trajectory-derived adaptive solvent shell:
 
 ![Mixed ML/MM system, zoomed](images/structures/mixed-system-zoom.png)
 
@@ -127,90 +126,89 @@ any structure/builder change; CI checks staleness with `--check`.
 
 ## 3. Code examples
 
-### 3.1 Build a mixed system and run dynamics — the one-call path
+### 3.1 Lower a trialanine/water JSON-style configuration
 
-This is what both `md-system --backend jaxmd --jaxmd-unified` and
-`cg_jaxmd_unified.py` do under the hood.
+This pure mapping is used by `examples/cg_jaxmd_unified.py`; it is also a
+convenient way to inspect the exact term selection before a live build.
 
 ```python
-from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from mmml.md.lowering import runconfig_from_cg_config
+
+cfg = {
+    "checkpoint": "examples/sppoky-epoch-0010_params.json",
+    "n_waters": 4,
+    "box_size": 15.0,
+    "seed": 11,
+    "dt_fs": 1.0,
+    "fire_total_steps": 10,
+    "peptide_water_ml": True,
+    "peptide_water_ml_core_vdw": True,
+}
+run_config = runconfig_from_cg_config(cfg, phase="fire")
+assert run_config.system.builder == "peptide_water"
+assert run_config.terms == ("ml_intra", "mm_nonbonded", "ml_pep_water", "vdw_core")
+assert run_config.ensemble.ensemble == "min"
+```
+
+Save `cfg` as JSON, then run
+`uv run python examples/cg_jaxmd_unified.py --config path/to/config.json`.
+Live execution also requires a working PyCHARMM installation and checkpoint.
+
+### 3.2 Assemble and run a pre-built system
+
+This minimal example is the tested `assemble_and_run` contract. Supplying a
+pre-built `MolecularSystem` avoids a live CHARMM build; the SMD term needs only
+the two selected atom indices.
+
+```python
+import numpy as np
 from mmml.md.assemble import assemble_and_run
 from mmml.md.config import EnsembleSpec, RunConfig
-from mmml.md.energy import EnergyContext
 from mmml.md.system import SystemSpec
 
-config = RunConfig(
-    system=SystemSpec(
-        builder="peptide_water",   # CGENFF peptide + TIP3 waters, live CHARMM
-        n_molecules=30,            # water count
-        box_size=28.0,             # Angstrom cube
-        seed=42,
-    ),
-    terms=("ml_intra", "ml_pep_water", "vdw_core", "mm_nonbonded"),
-    ensemble=EnsembleSpec(ensemble="nve", dt_fs=0.5, n_steps=10_000),
-    backend="jaxmd",
-    output_dir="runs/mixed_demo",
+from mmml.md.system import MolecularSystem
+system = MolecularSystem(
+    R=np.array([[0., 0., 0.], [2., 0., 0.]]), Z=np.array([1, 1]),
+    box=None, mol_id=np.array([0, 1]),
 )
-
-# The ML model/params come from a trained checkpoint, wrapped in an EnergyContext.
-calc = create_calculator_from_checkpoint("examples/sppoky-epoch-0010_params.json")
-ctx = EnergyContext(model=calc.model, params=calc.params)
-
+config = RunConfig(
+    system=SystemSpec(builder="psf"), terms=("smd",), backend="jaxmd",
+    ensemble=EnsembleSpec(ensemble="nve", dt_fs=0.5, n_steps=10),
+)
 trajectory = assemble_and_run(
-    config,
-    ctx=ctx,
-    term_kwargs={
-        "ml_pep_water": {"interaction_cutoff_A": 8.0},
-        "vdw_core": {},
-    },
+    config, system=system,
+    term_kwargs={"smd": {"atom_i": 0, "atom_j": 1,
+                          "k_ev_per_A2": 0.5, "target": 1.5}},
 )
-print(trajectory.n_frames, "frames written to runs/mixed_demo/trajectory.npz")
+print(trajectory.n_frames)
 ```
 
-`assemble_and_run` resolves the builder, composes the four terms into one
-`HybridEnergy`, auto-wires the padded neighbor list `mm_nonbonded` needs, and
-drives it with `JaxmdDriver` — all from one declarative config.
-
-### 3.2 Same energy, exposed as a plain ASE `Calculator`
-
-Useful for dropping straight into existing PyCHARMM/ASE scripts without
-touching the jax-md driver at all.
+### 3.3 Expose a term composition as an ASE calculator
 
 ```python
-from mmml.md.assemble import build_system, build_hybrid_energy
-from mmml.md.energy import EnergyContext
-from mmml.md.system import SystemSpec
+import numpy as np
+from ase import Atoms
+from mmml.md.assemble import build_hybrid_energy
+from mmml.md.system import MolecularSystem
 
-system = build_system(SystemSpec(builder="peptide_water", n_molecules=30, box_size=28.0))
-ctx = EnergyContext(model=my_model, params=my_params)  # ML model/params, e.g. from a checkpoint
+system = MolecularSystem(
+    R=np.array([[0., 0., 0.], [2., 0., 0.]]), Z=np.array([1, 1]),
+    box=None, mol_id=np.array([0, 1]),
+)
+
 energy = build_hybrid_energy(
-    system,
-    term_names=("ml_intra", "ml_pep_water", "vdw_core", "mm_nonbonded"),
-    ctx=ctx,
+    system, ("smd",),
+    term_kwargs={"smd": {"atom_i": 0, "atom_j": 1,
+                          "k_ev_per_A2": 0.5, "target": 1.5}},
 )
-
-calc = energy.as_ase_calculator()          # -> ase.calculators.calculator.Calculator
-atoms.calc = calc                          # drop-in for any ASE workflow
-energy_eV = atoms.get_potential_energy()
+atoms = Atoms(numbers=system.Z, positions=system.R)
+atoms.calc = energy.as_ase_calculator()
+print(atoms.get_potential_energy())
 ```
 
-### 3.3 Swap MD for rigid-body Monte Carlo — one field
-
-```python
-config = RunConfig(
-    # Packmol builder resolves FFParams via the live CHARMM PSF it builds behind it.
-    system=SystemSpec(builder="packmol", composition="tip3", n_molecules=64, box_size=20.0),
-    terms=("mm_nonbonded",),
-    ensemble=EnsembleSpec(ensemble="nvt", temperature_K=300.0, n_steps=5_000),
-    backend="jaxmd",
-    sampler="rigid",   # <- the only change from a normal MD run
-)
-trajectory = assemble_and_run(config)
-```
-
-`RigidBodySampler` reuses the exact same `MolecularSystem` and `HybridEnergy`
-as the MD driver; only the propagator (Metropolis MC translation + quaternion
-rotation vs. integrator) differs.
+For rigid-body Monte Carlo, set `sampler="rigid"` on `RunConfig`. Its geometry
+preservation and neighbor-list behavior are unit-tested, but structural RDF
+validation against flexible MD is still open.
 
 ### 3.4 CLI equivalent (no Python required)
 
@@ -223,9 +221,9 @@ back to the legacy path:
 
 ```bash
 uv run mmml md-system --setup pbc_nve --backend jaxmd --jaxmd-unified \
-  --composition "TIP3:64" --box-size 20.0 \
+  --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
-  --dt-fs 1.0 --ps 5.0 --seed 42
+  --dt-fs 1.0 --ps 0.01 --seed 42
 ```
 
 The full mixed ML-core (peptide) + MM-shell system from §3.1 is reachable
