@@ -494,6 +494,23 @@ Ramachandran difference plot.
 
 ![multipole surfaces](plot-style-gallery-assets/chart_multipole_surfaces.png)
 
+The scene above is analytic (one clean monopole, dipole, quadrupole) so the lobe
+structure is unambiguous. The same function drives real predictions: the learned
+multipole model emits one molecular multipole per fragment, so pointing it at a
+water trimer (via the committed `multipoles_20260711-100037_epoch-0100.json`
+weights) gives one sphere per water. The learned waters carry a small net charge,
+so the monopole dominates the surface with only weak dipolar structure on top —
+an honest picture of what this checkpoint predicts, not the idealized lobes:
+
+![learned multipole surfaces](plot-style-gallery-assets/chart_multipole_surfaces_learned.png)
+
+Colour is a real choice for signed data, not a default to accept. Every plotter
+takes a `cmap=` override — a house kind (`"diverging"`), a `cmap`-library name
+(`"crameri:vik"`, `"cmocean:balance"`), a matplotlib name, or a Colormap object.
+The muted house default beside the two classic red/blue reads:
+
+![multipole colormap variants](plot-style-gallery-assets/chart_multipole_colormap_variants.png)
+
 ### The field itself: potential contours + streamlines
 
 When you want the field of the *whole* set rather than per-source lobes,
@@ -504,6 +521,11 @@ wraps the existing physics in
 nothing new is computed, only drawn.
 
 ![multipole field slice](plot-style-gallery-assets/chart_multipole_field.png)
+
+Driven by the committed weights on the same water trimer, this is the field the
+learned model actually produces:
+
+![learned multipole field](plot-style-gallery-assets/chart_multipole_field_learned.png)
 
 ### Extending the language to the MBD term
 
