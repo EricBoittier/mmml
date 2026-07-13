@@ -40,6 +40,7 @@ from mmml.utils.ase_structure_plot import (
     save_structure_figure as _save_structure_figure,
     use_matplotlib_agg as _use_agg,
 )
+from mmml.utils.plotting.styles import apply_plot_style
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -154,19 +155,8 @@ def figure_build_crystal(out: Path) -> bool:
 
 
 def _style_matplotlib_rc() -> None:
-    import matplotlib.pyplot as plt
-
-    plt.rcParams.update(
-        {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["DejaVu Sans", "Helvetica", "Arial"],
-            "axes.edgecolor": "#cbd5e1",
-            "axes.labelcolor": "#334155",
-            "xtick.color": "#64748b",
-            "ytick.color": "#64748b",
-            "grid.color": "#e2e8f0",
-        }
-    )
+    """Apply the shared documentation plot preset before creating figures."""
+    apply_plot_style("icml")
 
 
 def figure_liquid_box_schematic(out: Path) -> None:

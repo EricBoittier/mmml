@@ -55,7 +55,9 @@ def _histogram_figures(data: dict[str, np.ndarray], img_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
     from mmml.data.external.aaa_ama import inspect_dataset_aaa, per_element_force_magnitudes
+    from mmml.utils.plotting.styles import apply_plot_style
 
+    apply_plot_style("icml")
     report = inspect_dataset_aaa(data)
     e = np.asarray(data["E"], dtype=float).ravel()
     f_mag = np.linalg.norm(np.asarray(data["F"]), axis=-1).ravel()

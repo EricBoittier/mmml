@@ -16,7 +16,7 @@ usage: mmml extract-checkpoint-metrics [-h] -o OUTPUT [--log-loss] [--quiet]
                                        [--stride STRIDE]
                                        [--max-epochs MAX_EPOCHS]
                                        [--metrics-json METRICS_JSON] [--ef-only]
-                                       [--plot-style {dark,google,mpl_classic,nature,science,tron,xmgrace}]
+                                       [--plot-style {dark,editorial_cm,editorial_dejavu_sans,editorial_dejavu_serif,editorial_stix,google,icml,icml_okabe_ito,mpl_classic,nature,science,tron,xmgrace}]
                                        [--individual-dir INDIVIDUAL_DIR]
                                        checkpoint_dir
 
@@ -39,7 +39,7 @@ options:
                         Optional path to write extracted metrics as JSON arrays.
   --ef-only             Plot energy/forces panels only (omit dipole inset from
                         main layout).
-  --plot-style {dark,google,mpl_classic,nature,science,tron,xmgrace}
+  --plot-style {dark,editorial_cm,editorial_dejavu_sans,editorial_dejavu_serif,editorial_stix,google,icml,icml_okabe_ito,mpl_classic,nature,science,tron,xmgrace}
                         Matplotlib style preset (default: google). Options:
                         nature, xmgrace, google, tron, mpl_classic.
   --individual-dir INDIVIDUAL_DIR

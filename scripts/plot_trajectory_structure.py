@@ -18,6 +18,7 @@ from mmml.utils.plotting.trajectory_structure import (
     radius_of_gyration_and_diffusion,
     water_tetrahedrality,
 )
+from mmml.utils.plotting.styles import apply_plot_style
 
 
 def plot_rdfs(radii, rdfs, output: Path) -> None:
@@ -277,6 +278,7 @@ def main() -> int:
     parser.add_argument("--hbond-distance", type=float, default=3.8)
     parser.add_argument("--hbond-angle", type=float, default=135.0)
     args = parser.parse_args()
+    apply_plot_style("icml")
     frames = read(args.trajectory, index=":")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if not args.hydrogen_bonds_only and not args.dynamics_only:

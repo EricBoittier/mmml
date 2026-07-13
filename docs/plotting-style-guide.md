@@ -43,6 +43,17 @@ colors = comparison_colors(style, n=len(settings))  # fixed categorical order
 Run `mmml.utils.plotting.styles.list_plot_styles()` to see all registered
 names/aliases.
 
+### Documentation assets
+
+Every script that creates a Matplotlib image committed under `docs/images/`
+must call `apply_plot_style("icml")` before it creates a figure. This includes
+the static figure generator (`scripts/generate_docs_figures.py`), trajectory
+analysis (`scripts/plot_trajectory_structure.py`), and the aaa.ama /
+md-embedding documentation publishers. Structure drawings may additionally
+use `mmml.utils.ase_structure_plot` for bonds, element colours, and projection;
+that helper complements the shared Matplotlib baseline rather than replacing
+it. Re-run the relevant publisher after changing a preset.
+
 **On the name**: these are *not* "the Tufte style" — Tufte described a set of
 principles (data-ink ratio, redundant encoding instead of decoration, small
 multiples), not one font or palette, so no single preset should claim his

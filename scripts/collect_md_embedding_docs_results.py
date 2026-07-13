@@ -89,7 +89,9 @@ def _training_loss_plot(ckpt_dir: Path, out: Path) -> Path | None:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from mmml.utils.plotting.styles import apply_plot_style
 
+    apply_plot_style("icml")
     fig, ax = plt.subplots(figsize=(5.5, 3.5), dpi=140)
     ax.plot(epochs, train_loss, label="train_loss", color="#2563eb", lw=1.5)
     ax.plot(epochs, valid_loss, label="valid_loss", color="#059669", lw=1.5)
