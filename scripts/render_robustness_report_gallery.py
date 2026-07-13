@@ -12,14 +12,17 @@ data only:
   (artifacts/trialanine_phi_psi_mm_then_ml_64x64/phi_psi_pes.csv).
 - dimer-separation scan: the existing real xTB/CHARMM/ML dimer campaign
   (results/dimer_scan_campaign/scan_results.csv).
-- structural analysis: internal_coordinate_distributions + element_pair_rdfs
-  (mmml.utils.plotting.trajectory_structure) run on the new NVE trajectory.
+- structural analysis: internal_coordinate_distributions
+  (mmml.utils.plotting.trajectory_structure) run on the new NVE trajectory,
+  plus the existing real element-pair RDFs from the large-scale sweep's
+  periodic bulk trajectories (see the note above `structural_analysis`).
 - large-scale energy conservation: the existing real 12-setting NVE sweep
   (workflows/mixed_calculator_sweep/results/summary.csv).
 """
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -30,18 +33,15 @@ from ase.data import atomic_numbers
 from ase.data.colors import jmol_colors
 
 from mmml.utils.plotting.styles import (
-    OKABE_ITO_PALETTE,
-    STATUS_COLORS,
     STATUS_HATCHES,
     apply_plot_style,
     comparison_colors,
     latex_available,
     latex_table_image,
     legend_outside,
-    shared_axis_labels,
     status_color,
 )
-from mmml.utils.plotting.trajectory_structure import element_pair_rdfs, internal_coordinate_distributions
+from mmml.utils.plotting.trajectory_structure import internal_coordinate_distributions
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "docs" / "robustness-report-assets"
@@ -52,14 +52,7 @@ SCAN_DIR = REPO_ROOT / "artifacts" / "robustness_report" / "scans"
 DIHEDRAL_CSV = REPO_ROOT / "artifacts" / "trialanine_phi_psi_mm_then_ml_64x64" / "phi_psi_pes.csv"
 DIMER_CSV = REPO_ROOT / "results" / "dimer_scan_campaign" / "scan_results.csv"
 SWEEP_SUMMARY_CSV = REPO_ROOT / "workflows" / "mixed_calculator_sweep" / "results" / "summary.csv"
-
-
-def _atoms_from_frame(positions: np.ndarray, Z: np.ndarray, box: float | None = None) -> Atoms:
-    atoms = Atoms(numbers=Z, positions=positions)
-    if box is not None:
-        atoms.set_cell([box, box, box])
-        atoms.set_pbc(True)
-    return atoms
+SWEEP_RESULTS_DIR = REPO_ROOT / "workflows" / "mixed_calculator_sweep" / "results"
 
 
 # --- 1. Fluctuating charges and multipoles ----------------------------------
@@ -273,37 +266,20 @@ def energy_conservation_sweep_summary(out: Path) -> None:
 
 
 # --- 4. Structural analysis ---------------------------------------------------
+#
+# element_pair_rdfs() normalizes against a uniform bulk (ideal-gas) density
+# over the periodic cell -- correct for a real periodic bulk trajectory, but
+# meaningless for a small non-periodic cluster stuffed into an artificially
+# large box (the local density near the actual cluster is enormously higher
+# than the box average, so g(r) blows up at short range regardless of the
+# real structure). Rather than force it onto a system it isn't built for,
+# reuse the REAL RDFs already computed on real periodic bulk NVE
+# trajectories from the large-scale sweep -- see
+# workflows/mixed_calculator_sweep/results/*/seed_1/figures/element_pair_rdfs.png.
 
 
-def structural_analysis(traj: dict, out_rdf: Path, out_internal: Path) -> None:
+def structural_analysis(traj: dict, out_internal: Path) -> None:
     positions_all, Z = traj["positions"], traj["Z"]
-    box = 20.0  # large periodic box around the small cluster, for RDF normalization only
-    frames = [_atoms_from_frame(p, Z, box=box) for p in positions_all[::4]]  # subsample for speed
-
-    radii, rdfs = element_pair_rdfs(frames, r_max=6.0, bins=80)
-    elements = sorted({e for pair in rdfs for e in pair.split("-")})
-    size = len(elements)
-    fig, axes = plt.subplots(size, size, figsize=(3.2 * size, 3.0 * size), sharex=True)
-    for row, element_a in enumerate(elements):
-        for col, element_b in enumerate(elements):
-            axis = axes[row, col] if size > 1 else axes
-            if col > row:
-                axis.set_visible(False)
-                continue
-            key = "-".join(sorted((element_a, element_b)))
-            color = jmol_colors[atomic_numbers[element_a]]
-            axis.plot(radii, rdfs[key], color=color, linewidth=2.0)
-            axis.set_title(key, fontweight="bold")
-            axis.grid(alpha=0.18)
-            if col == 0:
-                axis.set_ylabel(f"{element_a}  g(r)")
-            if row == size - 1:
-                axis.set_xlabel("r (Å)")
-    fig.suptitle("Element-pair RDFs -- real NVE trajectory (small cluster, large-box normalization)")
-    fig.tight_layout()
-    fig.savefig(out_rdf, dpi=200, bbox_inches="tight")
-    plt.close(fig)
-
     frames_bare = [Atoms(numbers=Z, positions=p) for p in positions_all[::4]]
     internal = internal_coordinate_distributions(frames_bare, range(len(Z)))
     _COORDINATE_TYPE_COLORS = {"Bond lengths": "#1A5276", "Angles": "#B9770E", "Dihedrals": "#1E8449"}
@@ -371,8 +347,19 @@ def main() -> None:
     energy_conservation_sweep_summary(OUT_DIR / "chart_energy_conservation_sweep.png")
     print("wrote chart_energy_conservation_sweep.png")
 
-    structural_analysis(stable_dict, OUT_DIR / "chart_structural_rdfs.png", OUT_DIR / "chart_structural_internal.png")
-    print("wrote chart_structural_rdfs.png, chart_structural_internal.png")
+    structural_analysis(stable_dict, OUT_DIR / "chart_structural_internal.png")
+    print("wrote chart_structural_internal.png")
+
+    for setting, dest_name in [
+        ("water_baseline", "chart_structural_rdfs_water_baseline.png"),
+        ("mixed_baseline", "chart_structural_rdfs_mixed_baseline.png"),
+    ]:
+        src = SWEEP_RESULTS_DIR / setting / "seed_1" / "figures" / "element_pair_rdfs.png"
+        if src.is_file():
+            shutil.copy(src, OUT_DIR / dest_name)
+            print(f"copied real {setting} RDF -> {dest_name}")
+        else:
+            print(f"WARNING: {src} not found, skipping")
 
     summary_table(stable_dict, unstable_dict, OUT_DIR / "chart_summary_table.png")
     print("wrote chart_summary_table.png")

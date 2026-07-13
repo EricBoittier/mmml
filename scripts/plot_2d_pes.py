@@ -243,7 +243,9 @@ def _clean_interaction_data(df_pair: pd.DataFrame, backend: str, min_contact: fl
     return df_be
 
 
-def _plot_summary_panel(ax, df_pair: pd.DataFrame, backends: list[str], min_contact: float) -> None:
+def _plot_summary_panel(
+    ax, df_pair: pd.DataFrame, backends: list[str], min_contact: float
+) -> tuple[list, list[str]]:
     """Compare smooth distance curves across all lateral offsets."""
     line_styles = ["-", "--", ":", "-.", (0, (5, 1, 1, 1))]
     y_values = []
@@ -284,14 +286,22 @@ def _plot_summary_panel(ax, df_pair: pd.DataFrame, backends: list[str], min_cont
         xmax = max(float(x.max()) for x in x_values)
         ax.set_xlim(xmin, xmax + 0.55 * (xmax - xmin))
     ax.axhline(0.0, color="0.35", lw=0.7, zorder=0)
-    ax.legend(
-        fontsize=12, ncol=1, loc="upper right", handlelength=2.1,
-        bbox_to_anchor=(1.055, 0.99), borderaxespad=0,
-        labelspacing=0.62, frameon=True, facecolor="0.85", edgecolor="none", framealpha=0.34,
-    )
     ax.set_title("Summary — repulsive walls")
     ax.set_xlabel(r"$d$ / Å")
     ax.set_ylabel("$E_{int}$ / kcal mol$^{-1}$")
+    return ax.get_legend_handles_labels()
+
+
+def _summary_legend_layout(n_entries: int) -> tuple[int, float]:
+    """Choose a compact figure-level legend layout from its actual contents."""
+    if n_entries <= 4:
+        return max(n_entries, 1), 9.0
+    if n_entries <= 8:
+        return 4, 8.5
+    # The figure spans up to four PES columns, so seven columns keep even the
+    # full comparison set to two short rows below the figure instead of
+    # obscuring the summary curves.
+    return min(n_entries, 7), 8.5
 
 
 def _reference_energy(series: pd.Series, ref_dist: float | None = None) -> pd.Series:
@@ -382,7 +392,9 @@ def plot_2d_pes_for_pair(
         )
 
     summary_ax = fig.add_subplot(gs[row_offset, col_offset])
-    _plot_summary_panel(summary_ax, df_pair, backends, min_contact)
+    summary_handles, summary_labels = _plot_summary_panel(
+        summary_ax, df_pair, backends, min_contact
+    )
 
     for i, backend in enumerate(backends):
         panel_index = i + 1
@@ -590,6 +602,22 @@ def plot_2d_pes_for_pair(
                 arrowprops=dict(arrowstyle="-", color="gray", lw=0.7, ls="dashed", alpha=0.7),
                 zorder=4,
             )
+
+    if summary_handles:
+        ncol, fontsize = _summary_legend_layout(len(summary_labels))
+        fig.legend(
+            summary_handles,
+            summary_labels,
+            loc="lower center",
+            bbox_to_anchor=(0.53, -0.012),
+            ncol=ncol,
+            fontsize=fontsize,
+            frameon=False,
+            handlelength=1.5,
+            handletextpad=0.45,
+            columnspacing=0.65,
+            labelspacing=0.45,
+        )
 
     out_path = out_dir / f"{pair_tag}_2d_pes.png"
     fig.savefig(out_path, bbox_inches="tight")

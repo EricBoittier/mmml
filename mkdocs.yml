@@ -127,6 +127,7 @@ nav:
       - MD sweep plotting improvements: md-sweep-plotting-improvements.md
       - Plotting style guide: plotting-style-guide.md
       - Plot style gallery: plot-style-gallery.md
+      - Simulation robustness report: simulation-robustness-report.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
