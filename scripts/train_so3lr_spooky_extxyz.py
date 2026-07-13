@@ -796,29 +796,6 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     train_idx, valid_idx = split_indices(n_molecules, args.valid_fraction, args.seed)
     train_buckets = bucket_indices_by_natoms(data, train_idx)
     valid_buckets = bucket_indices_by_natoms(data, valid_idx)
-    if args.lr_schedule == "warmup_cosine" and args.lr_decay_steps == 0:
-        batches_per_epoch = sum(
-            math.ceil(
-                len(indices)
-                / (
-                    min(
-                        args.batch_size_per_device,
-                        max(1, args.max_pairs_per_device // (n_atoms * n_atoms)),
-                    )
-                    * args.num_devices
-                )
-            )
-            for n_atoms, indices in train_buckets.items()
-        )
-        if args.steps_per_epoch:
-            batches_per_epoch = min(batches_per_epoch, args.steps_per_epoch)
-        args.lr_decay_steps = max(args.lr_warmup_steps + 1, args.epochs * batches_per_epoch)
-        print(
-            f"LR schedule: {args.lr_warmup_steps} warmup steps, cosine decay over "
-            f"{args.lr_decay_steps} optimizer steps",
-            flush=True,
-        )
-
     devices = jax.local_devices()[: args.num_devices]
     if len(devices) != args.num_devices:
         raise RuntimeError(
@@ -869,6 +846,39 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 if current_val != saved_val:
                     print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
                     setattr(args, param, saved_val)
+            # A true restart must restore the same composite definition and
+            # optimizer schedule.  Defaults mean "inherit" here; any explicit
+            # non-default CLI value remains an intentional override.
+            if restart_path is not None:
+                resume_params = (
+                    "optimizer",
+                    "mbd_checkpoint",
+                    "mbd_weight",
+                    "lr_schedule",
+                    "lr_warmup_steps",
+                    "lr_decay_steps",
+                    "lr_end_fraction",
+                    "learning_rate",
+                    "muon_adam_lr",
+                    "muon_beta",
+                    "muon_adam_b1",
+                    "muon_adam_b2",
+                    "weight_decay",
+                    "clip_global_norm",
+                )
+                for param in resume_params:
+                    if param not in saved_config:
+                        continue
+                    current_val = getattr(args, param)
+                    if current_val != parser.get_default(param):
+                        continue
+                    saved_val = saved_config[param]
+                    if current_val != saved_val:
+                        print(
+                            f"  Restoring {param}: {current_val} -> {saved_val} "
+                            "(from restart config)"
+                        )
+                        setattr(args, param, saved_val)
 
     if restart_path is not None:
         restart_payload = ocp.PyTreeCheckpointer().restore(restart_path)
@@ -879,6 +889,30 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 f"{args.optimizer!r}. Use the same optimizer with --restart, or use "
                 f"--init-checkpoint {restart_path} for a fresh optimizer state."
             )
+
+    if args.lr_schedule == "warmup_cosine" and args.lr_decay_steps == 0:
+        batches_per_epoch = sum(
+            math.ceil(
+                len(indices)
+                / (
+                    min(
+                        args.batch_size_per_device,
+                        max(1, args.max_pairs_per_device // (n_atoms * n_atoms)),
+                    )
+                    * args.num_devices
+                )
+            )
+            for n_atoms, indices in train_buckets.items()
+        )
+        if args.steps_per_epoch:
+            batches_per_epoch = min(batches_per_epoch, args.steps_per_epoch)
+        args.lr_decay_steps = max(args.lr_warmup_steps + 1, args.epochs * batches_per_epoch)
+    if args.lr_schedule == "warmup_cosine":
+        print(
+            f"LR schedule: {args.lr_warmup_steps} warmup steps, cosine decay over "
+            f"{args.lr_decay_steps} optimizer steps",
+            flush=True,
+        )
 
     model = create_model(args, max_atoms=max_atoms)
     mbd_model = None

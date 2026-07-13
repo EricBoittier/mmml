@@ -77,7 +77,10 @@ class CacheMeta:
     default_charge: float
     default_spin: float
     max_structures: int | None
-    cache_version: int = 3
+    # Bump when the on-disk payload schema changes.  In particular, Orbax's
+    # TensorStore backend does not support NumPy Unicode dtypes, so cache
+    # metadata must remain numeric/boolean arrays only.
+    cache_version: int = 4
 
 
 def _cache_name(meta: CacheMeta) -> str:
@@ -384,7 +387,6 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
     data["metadata_has_energy"] = np.asarray(has_energy, dtype=bool)
     data["metadata_has_forces"] = np.asarray(has_forces, dtype=bool)
     data["metadata_has_dipole"] = np.asarray(any(dipole_masks), dtype=bool)
-    data["metadata_dipole_key"] = np.asarray(dipole_key or "", dtype="<U32")
     data["metadata_n_dipoles"] = np.asarray(int(np.sum(dipole_masks)), dtype=np.int64)
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
