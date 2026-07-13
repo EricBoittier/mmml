@@ -607,6 +607,9 @@ def init_state(
         )
     rng.shuffle(init_indices)
     batch = build_spooky_batch_from_flat_data(data, init_indices)
+    if "cgenff_master_sigmas" in data and "cgenff_master_epsilons" in data:
+        batch["cgenff_master_sigmas"] = jnp.asarray(data["cgenff_master_sigmas"], dtype=jnp.float32)
+        batch["cgenff_master_epsilons"] = jnp.asarray(data["cgenff_master_epsilons"], dtype=jnp.float32)
     variables = model.init(
         jax.random.PRNGKey(args.seed),
         atomic_numbers=batch["Z"],
