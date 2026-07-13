@@ -6,7 +6,8 @@ Example:
         --checkpoint artifacts/spooky_so3lr/epoch-50 \
         --extxyz ~/data/so3lr_test \
         --cache-dir ~/data/so3lr_orbax_cache \
-        --batch-size-per-device 4
+        --batch-size-per-device 4 \
+        --plots-dir artifacts/spooky_so3lr/eval_epoch-0050
 """
 
 from __future__ import annotations
@@ -569,6 +570,7 @@ def make_eval_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: lis
             "E_ref": batch["E"].reshape(-1, 1),
             "F_pred": forces_pred,
             "F_ref": batch["F"],
+            "Z": batch["Z"],
         }
         if predict_charges:
             res["D_pred"] = out["dipoles"].reshape(batch["D"].shape)
@@ -579,6 +581,80 @@ def make_eval_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: lis
         return res
 
     return jax.pmap(eval_fn, axis_name="device", devices=devices)
+
+
+def plot_force_parity(
+    force_reference: np.ndarray,
+    force_prediction: np.ndarray,
+    atomic_numbers: np.ndarray,
+    output_path: Path,
+    *,
+    max_atoms: int,
+) -> None:
+    """Write a force-component parity plot with stable element identity colours."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from ase.data import chemical_symbols
+    from ase.data.colors import jmol_colors
+
+    from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+
+    force_reference = np.asarray(force_reference, dtype=float).reshape(-1, 3)
+    force_prediction = np.asarray(force_prediction, dtype=float).reshape(-1, 3)
+    atomic_numbers = np.asarray(atomic_numbers, dtype=np.int32).reshape(-1)
+    if force_reference.shape != force_prediction.shape:
+        raise ValueError("force reference and prediction arrays must have the same shape")
+    if atomic_numbers.shape != (force_reference.shape[0],):
+        raise ValueError("atomic_numbers must have one entry per force vector")
+
+    # Keep a deterministic, balanced sample when large test sets would make a
+    # dense scatter unreadable. Sampling applies to atoms, so all x/y/z
+    # components retain their atom's identity colour.
+    keep: list[np.ndarray] = []
+    elements = np.unique(atomic_numbers)
+    per_element = max(1, int(max_atoms) // max(1, len(elements)))
+    rng = np.random.default_rng(0)
+    for z in elements:
+        indices = np.flatnonzero(atomic_numbers == z)
+        if len(indices) > per_element:
+            indices = np.sort(rng.choice(indices, size=per_element, replace=False))
+        keep.append(indices)
+    atom_indices = np.concatenate(keep) if keep else np.empty(0, dtype=np.int64)
+    if len(atom_indices) == 0:
+        raise ValueError("cannot plot an empty force dataset")
+
+    ref = force_reference[atom_indices]
+    pred = force_prediction[atom_indices]
+    z_sample = atomic_numbers[atom_indices]
+    extent = float(np.max(np.abs(np.concatenate((ref.ravel(), pred.ravel())))))
+    extent = max(extent, 1e-8)
+
+    apply_plot_style("icml")
+    fig, ax = plt.subplots(figsize=(7.2, 6.2))
+    for z in elements:
+        element_mask = z_sample == z
+        colour = jmol_colors[int(z)]
+        ax.scatter(
+            ref[element_mask].ravel(),
+            pred[element_mask].ravel(),
+            s=7,
+            alpha=0.38,
+            color=colour,
+            edgecolors="none",
+            label=chemical_symbols[int(z)],
+            rasterized=True,
+        )
+    ax.plot((-extent, extent), (-extent, extent), color="#333333", linestyle="--", label="ideal")
+    ax.set(xlim=(-extent, extent), ylim=(-extent, extent), aspect="equal")
+    ax.set_xlabel("Reference force component (eV/Å)")
+    ax.set_ylabel("Predicted force component (eV/Å)")
+    ax.set_title("Force-component parity by element")
+    legend_outside(ax, side="right", title="atom identity")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
 
 
 def restore_checkpoint(checkpoint_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -606,7 +682,7 @@ def evaluate_dataset(
     metadata: dict[str, Any],
     args: argparse.Namespace,
     devices: list[Any],
-) -> dict[str, float]:
+) -> tuple[dict[str, float], dict[str, np.ndarray] | None]:
     n_atoms = np.asarray(data["N"]).reshape(-1)
     buckets = bucket_indices_by_natoms(data)
     
@@ -630,6 +706,10 @@ def evaluate_dataset(
     dipole_count = 0
     charge_sae = 0.0
     charge_sse = 0.0
+    plots_dir = getattr(args, "plots_dir", None)
+    plot_forces_reference: list[np.ndarray] = []
+    plot_forces_prediction: list[np.ndarray] = []
+    plot_atomic_numbers: list[np.ndarray] = []
 
     step_functions: dict[int, Any] = {}
     def eval_step_for_batch_size(batch_size: int):
@@ -688,6 +768,13 @@ def evaluate_dataset(
             force_errors = np.abs(F_pred[is_real_np] - F_ref[is_real_np])
             force_sae += float(np.sum(force_errors))
             force_sse += float(np.sum(force_errors**2))
+            if plots_dir is not None:
+                Z = np.asarray(predictions["Z"]).reshape(
+                    is_real_np.shape[0], is_real_np.shape[1], bucket_atoms
+                )
+                plot_forces_reference.append(F_ref[is_real_np])
+                plot_forces_prediction.append(F_pred[is_real_np])
+                plot_atomic_numbers.append(Z[is_real_np])
             
         total_atoms += int(is_real_np.sum()) * bucket_atoms
         
@@ -734,7 +821,14 @@ def evaluate_dataset(
         metrics["charge_mae"] = charge_sae / max(1, total_structures)
         metrics["charge_rmse"] = math.sqrt(charge_sse / max(1, total_structures))
         
-    return metrics
+    plot_data = None
+    if plots_dir is not None and plot_forces_reference:
+        plot_data = {
+            "force_reference": np.concatenate(plot_forces_reference, axis=0),
+            "force_prediction": np.concatenate(plot_forces_prediction, axis=0),
+            "atomic_numbers": np.concatenate(plot_atomic_numbers, axis=0),
+        }
+    return metrics, plot_data
 
 
 
@@ -747,6 +841,17 @@ def main() -> None:
     parser.add_argument("--max-pairs-per-device", type=int, default=18000)
     parser.add_argument("--num-devices", type=int, default=1)
     parser.add_argument("--output", help="Optional path to write JSON evaluation summary")
+    parser.add_argument(
+        "--plots-dir",
+        type=Path,
+        help="Write parity plots here; force components are coloured by element identity.",
+    )
+    parser.add_argument(
+        "--plot-max-atoms",
+        type=int,
+        default=100_000,
+        help="Maximum atoms drawn in each parity plot, sampled evenly by element (default: 100000).",
+    )
     parser.add_argument(
         "--max-eval-structures",
         type=int,
@@ -773,6 +878,8 @@ def main() -> None:
     parser.add_argument("--log-every", type=int, default=10000)
     
     args = parser.parse_args()
+    if args.plot_max_atoms <= 0:
+        parser.error("--plot-max-atoms must be positive")
     
     # 1. Load checkpoint parameters and config
     checkpoint_path = Path(args.checkpoint).resolve()
@@ -818,11 +925,21 @@ def main() -> None:
         model = create_model_from_config(config, max_atoms=max_atoms)
         
         t0 = time.time()
-        metrics = evaluate_dataset(model, params, data, metadata, args, devices)
+        metrics, plot_data = evaluate_dataset(model, params, data, metadata, args, devices)
         elapsed = time.time() - t0
         print(f"Evaluation finished in {elapsed:.1f} seconds.")
         
         results[extxyz_file.name] = metrics
+        if plot_data is not None:
+            plot_path = args.plots_dir / f"{extxyz_file.stem}_force_parity_by_element.png"
+            plot_force_parity(
+                plot_data["force_reference"],
+                plot_data["force_prediction"],
+                plot_data["atomic_numbers"],
+                plot_path,
+                max_atoms=args.plot_max_atoms,
+            )
+            print(f"Wrote force parity plot: {plot_path}")
         
     # 5. Print a nice formatted table of summary results
     print("\n" + "="*80)

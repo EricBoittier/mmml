@@ -43,6 +43,14 @@ from mmml.models.physnetjax.physnetjax.restart.restart import save_training_chec
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
+from mmml.models.mbd.calculator import (
+    HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM,
+    HARTREE_TO_EV,
+    load_mbd_model,
+)
+from mmml.models.mbd.model import mbd_energy_and_forces
+
+ANGSTROM_TO_BOHR = 1.0 / 0.529177210903
 
 DIPOLE_KEY_ALIASES = (
     "dipole",
@@ -397,6 +405,7 @@ def stack_device_batches(
         indices = device_indices[i]
         batch["D"] = jnp.asarray(data["D"][indices], dtype=jnp.float32)
         batch["Q_total"] = jnp.asarray(data["Q"][indices], dtype=jnp.float32)
+        batch["S_total"] = jnp.asarray(data["S"][indices], dtype=jnp.float32)
     stacked: dict[str, Any] = {}
     for key in batches[0]:
         if key == "batch_size":
@@ -423,12 +432,26 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
     )
 
 
-def make_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: list[Any]):
+def make_steps(
+    model: SpookyPhysNet,
+    args: argparse.Namespace,
+    devices: list[Any],
+    *,
+    mbd_model: Any | None = None,
+    mbd_params: Any | None = None,
+):
     per_device_batch_size = args.batch_size_per_device
     energy_weight = args.energy_weight
     forces_weight = args.forces_weight
     dipole_weight = args.dipole_weight
     charges_weight = args.charges_weight
+    mbd_weight = args.mbd_weight
+    if (mbd_model is None) != (mbd_params is None):
+        raise ValueError("mbd_model and mbd_params must be provided together")
+    if mbd_params is not None:
+        # These parameters are fixed external physics.  Positions deliberately
+        # remain differentiable so the residual learns against MBD forces.
+        mbd_params = jax.tree.map(jax.lax.stop_gradient, mbd_params)
 
     def loss_fn(params, batch):
         out = model.apply(
@@ -444,8 +467,29 @@ def make_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: list[Any
             batch_mask=batch["batch_mask"],
             atom_mask=batch["atom_mask"],
         )
-        energy_pred = out["energy"].reshape(-1, 1)
-        forces_pred = out["forces"].reshape(batch["F"].shape)
+        spooky_energy = out["energy"].reshape(-1, 1)
+        spooky_forces = out["forces"].reshape(batch["F"].shape)
+        mbd_energy = jnp.zeros_like(spooky_energy)
+        mbd_forces = jnp.zeros_like(spooky_forces)
+        if mbd_model is not None:
+            mbd_output, mbd_forces_au = mbd_energy_and_forces(
+                mbd_model,
+                mbd_params,
+                positions=batch["R"] * ANGSTROM_TO_BOHR,
+                atomic_numbers=batch["Z"],
+                charge=batch["Q_total"].reshape(-1),
+                spin=batch["S_total"].reshape(-1),
+                dst_idx=batch["dst_idx"],
+                src_idx=batch["src_idx"],
+                batch_segments=batch["batch_segments"],
+                batch_size=per_device_batch_size,
+                atom_mask=batch["atom_mask"],
+                edge_mask=batch["batch_mask"],
+            )
+            mbd_energy = mbd_output["energy"].reshape(-1, 1) * HARTREE_TO_EV
+            mbd_forces = mbd_forces_au.reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
+        energy_pred = spooky_energy + mbd_weight * mbd_energy
+        forces_pred = spooky_forces + mbd_weight * mbd_forces
         energy_ref = batch["E"].reshape(-1, 1)
         forces_ref = batch["F"]
         force_mask = batch["atom_mask"][:, None]
@@ -479,6 +523,9 @@ def make_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: list[Any
             "charge_mae": charge_mae,
             "dipole_mse": dipole_mse,
             "charge_mse": charge_mse,
+            "mbd_energy_abs_mean": jnp.mean(jnp.abs(mbd_energy)),
+            "mbd_force_abs_mean": jnp.sum(jnp.abs(mbd_forces) * force_mask)
+            / (jnp.sum(force_mask) * 3.0 + 1e-8),
         }
         return loss, metrics
 
@@ -556,20 +603,34 @@ def init_state(
 
 
 def build_optimizer(args: argparse.Namespace) -> optax.GradientTransformation:
+    learning_rate: float | Any = args.learning_rate
+    if args.lr_schedule == "warmup_cosine":
+        if args.lr_decay_steps <= args.lr_warmup_steps:
+            raise ValueError("--lr-decay-steps must be greater than --lr-warmup-steps")
+        learning_rate = optax.warmup_cosine_decay_schedule(
+            init_value=0.0,
+            peak_value=args.learning_rate,
+            warmup_steps=args.lr_warmup_steps,
+            decay_steps=args.lr_decay_steps,
+            end_value=args.learning_rate * args.lr_end_fraction,
+        )
     if args.optimizer == "adamw":
-        return optax.adamw(args.learning_rate, weight_decay=args.weight_decay)
+        return optax.adamw(learning_rate, weight_decay=args.weight_decay)
     if args.optimizer == "muon":
         from optax.contrib import muon
 
         return muon(
-            learning_rate=args.learning_rate,
+            learning_rate=learning_rate,
             beta=args.muon_beta,
             weight_decay=args.weight_decay,
             nesterov=True,
             adam_b1=args.muon_adam_b1,
             adam_b2=args.muon_adam_b2,
             adam_weight_decay=args.weight_decay,
-            adam_learning_rate=args.muon_adam_lr,
+            adam_learning_rate=(
+                learning_rate if args.muon_adam_lr is None
+                else args.muon_adam_lr
+            ),
         )
     raise ValueError(f"Unknown optimizer: {args.optimizer}")
 
@@ -730,6 +791,28 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     train_idx, valid_idx = split_indices(n_molecules, args.valid_fraction, args.seed)
     train_buckets = bucket_indices_by_natoms(data, train_idx)
     valid_buckets = bucket_indices_by_natoms(data, valid_idx)
+    if args.lr_schedule == "warmup_cosine" and args.lr_decay_steps == 0:
+        batches_per_epoch = sum(
+            math.ceil(
+                len(indices)
+                / (
+                    min(
+                        args.batch_size_per_device,
+                        max(1, args.max_pairs_per_device // (n_atoms * n_atoms)),
+                    )
+                    * args.num_devices
+                )
+            )
+            for n_atoms, indices in train_buckets.items()
+        )
+        if args.steps_per_epoch:
+            batches_per_epoch = min(batches_per_epoch, args.steps_per_epoch)
+        args.lr_decay_steps = max(args.lr_warmup_steps + 1, args.epochs * batches_per_epoch)
+        print(
+            f"LR schedule: {args.lr_warmup_steps} warmup steps, cosine decay over "
+            f"{args.lr_decay_steps} optimizer steps",
+            flush=True,
+        )
 
     devices = jax.local_devices()[: args.num_devices]
     if len(devices) != args.num_devices:
@@ -782,15 +865,26 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
                     setattr(args, param, saved_val)
 
-    if restart_path is not None and args.optimizer != "adamw":
-        raise ValueError(
-            f"--restart/--auto-resume replays the checkpoint's optimizer state, which "
-            f"is only compatible with the optimizer it was saved with. To switch to "
-            f"'{args.optimizer}' as a warm restart, use --init-checkpoint {restart_path} "
-            f"instead (loads params only, initializes fresh optimizer state)."
-        )
+    if restart_path is not None:
+        restart_payload = ocp.PyTreeCheckpointer().restore(restart_path)
+        saved_optimizer = restart_payload.get("config", {}).get("optimizer")
+        if saved_optimizer is not None and saved_optimizer != args.optimizer:
+            raise ValueError(
+                f"Checkpoint uses optimizer {saved_optimizer!r}, but --optimizer is "
+                f"{args.optimizer!r}. Use the same optimizer with --restart, or use "
+                f"--init-checkpoint {restart_path} for a fresh optimizer state."
+            )
 
     model = create_model(args, max_atoms=max_atoms)
+    mbd_model = None
+    mbd_params = None
+    if args.mbd_checkpoint is not None:
+        mbd_model, mbd_params = load_mbd_model(Path(args.mbd_checkpoint).expanduser())
+        print(
+            f"Using frozen MBD correction from {Path(args.mbd_checkpoint).expanduser()} "
+            f"with weight {args.mbd_weight:g}",
+            flush=True,
+        )
     state = init_state(model, data, train_buckets, args)
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
@@ -840,7 +934,9 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             step_args = argparse.Namespace(
                 **{**vars(args), "batch_size_per_device": batch_size}
             )
-            step_functions[batch_size] = make_steps(model, step_args, devices)
+            step_functions[batch_size] = make_steps(
+                model, step_args, devices, mbd_model=mbd_model, mbd_params=mbd_params
+            )
         return step_functions[batch_size]
 
     compiled_shapes: set[tuple[int, int]] = set()
@@ -1008,12 +1104,51 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--muon-adam-b1", type=float, default=0.9)
     parser.add_argument("--muon-adam-b2", type=float, default=0.999)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument(
+        "--lr-schedule",
+        choices=("constant", "warmup_cosine"),
+        default="warmup_cosine",
+        help="Optimizer LR schedule (default: linear warmup followed by cosine decay).",
+    )
+    parser.add_argument(
+        "--lr-warmup-steps",
+        type=int,
+        default=1_000,
+        help="Linear warmup steps for --lr-schedule warmup_cosine (default: 1000).",
+    )
+    parser.add_argument(
+        "--lr-decay-steps",
+        type=int,
+        default=0,
+        help="Cosine-decay horizon; 0 derives it from epochs and train batches.",
+    )
+    parser.add_argument(
+        "--lr-end-fraction",
+        type=float,
+        default=0.05,
+        help="Final LR divided by peak LR for cosine decay (default: 0.05).",
+    )
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--clip-global-norm", type=float, default=10.0)
     parser.add_argument("--energy-weight", type=float, default=1.0)
     parser.add_argument("--forces-weight", type=float, default=52.91)
     parser.add_argument("--dipole-weight", type=float, default=1.0)
     parser.add_argument("--charges-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--mbd-checkpoint",
+        type=str,
+        default=None,
+        help=(
+            "Frozen QCML MBD checkpoint. Its energy/forces are added to Spooky's "
+            "prediction, so Spooky trains the remaining residual."
+        ),
+    )
+    parser.add_argument(
+        "--mbd-weight",
+        type=float,
+        default=1.0,
+        help="Scale for the frozen MBD energy and forces (default: 1.0).",
+    )
     parser.add_argument("--features", type=int, default=128)
     parser.add_argument("--max-degree", type=int, default=2)
     parser.add_argument("--num-iterations", type=int, default=3)
@@ -1039,6 +1174,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.lr_warmup_steps < 0:
+        raise ValueError("--lr-warmup-steps must be non-negative")
+    if not 0.0 <= args.lr_end_fraction <= 1.0:
+        raise ValueError("--lr-end-fraction must be between 0 and 1")
+    if args.mbd_weight < 0.0:
+        raise ValueError("--mbd-weight must be non-negative")
     cache_path = _resolve_cache_path(args)
     if args.mode in {"cache", "cache-and-train"}:
         cache_path = cache_extxyz_to_orbax(args)
