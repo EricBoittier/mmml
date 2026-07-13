@@ -1015,29 +1015,35 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 f"--init-checkpoint {restart_path} for a fresh optimizer state."
             )
 
-    if args.lr_schedule == "warmup_cosine" and args.lr_decay_steps == 0:
-        batches_per_epoch = sum(
-            math.ceil(
-                len(indices)
-                / (
-                    min(
-                        args.batch_size_per_device,
-                        max(1, args.max_pairs_per_device // (n_atoms * n_atoms)),
-                    )
-                    * args.num_devices
+    batches_per_epoch = sum(
+        math.ceil(
+            len(indices)
+            / (
+                min(
+                    args.batch_size_per_device,
+                    max(1, args.max_pairs_per_device // (n_atoms * n_atoms)),
                 )
+                * args.num_devices
             )
-            for n_atoms, indices in train_buckets.items()
         )
-        if args.steps_per_epoch:
-            batches_per_epoch = min(batches_per_epoch, args.steps_per_epoch)
-        args.lr_decay_steps = max(args.lr_warmup_steps + 1, args.epochs * batches_per_epoch)
+        for n_atoms, indices in train_buckets.items()
+    )
+    if args.steps_per_epoch:
+        batches_per_epoch = min(batches_per_epoch, args.steps_per_epoch)
+    total_planned_steps = args.epochs * batches_per_epoch
+    if args.lr_schedule == "warmup_cosine" and args.lr_decay_steps == 0:
+        args.lr_decay_steps = max(args.lr_warmup_steps + 1, total_planned_steps)
     if args.lr_schedule == "warmup_cosine":
         print(
             f"LR schedule: {args.lr_warmup_steps} warmup steps, cosine decay over "
             f"{args.lr_decay_steps} optimizer steps",
             flush=True,
         )
+    print(
+        f"Planned run: {args.epochs} epochs x {batches_per_epoch} steps/epoch "
+        f"= {total_planned_steps} total training steps",
+        flush=True,
+    )
 
     model = create_model(args, max_atoms=max_atoms)
     mbd_model = None
@@ -1157,8 +1163,11 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             if step % args.log_every_steps == 0:
                 m = mean_metrics(log_window_metrics)
                 log_window_metrics = []
+                global_step = (epoch - 1) * batches_per_epoch + step
+                pct_done = 100.0 * global_step / max(1, total_planned_steps)
                 line = (
                     f"epoch {epoch:04d} step {step:06d} "
+                    f"[{pct_done:5.1f}% of {total_planned_steps}] "
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
                     f"F_MAE={m['forces_mae']:.6g} "
                     f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g}"
