@@ -137,7 +137,7 @@ class SpookyNetCalculator(Calculator):
         model = self.model
         params = self.params
 
-        def _fn(atomic_numbers, positions, dst_idx, src_idx, atom_mask, batch_mask, charge, spin):
+        def _fn(atomic_numbers, positions, dst_idx, src_idx, atom_mask, batch_mask, charge, spin, mol_id=None, cgenff_type_idx=None, cgenff_master_sigmas=None, cgenff_master_epsilons=None):
             n_atoms = atomic_numbers.shape[0]
             batch_segments = jnp.zeros((n_atoms,), dtype=jnp.int32)
             if isinstance(model, SpookyPhysNet):
@@ -155,6 +155,10 @@ class SpookyNetCalculator(Calculator):
                     batch_size=1,
                     batch_mask=batch_mask,
                     atom_mask=atom_mask,
+                    mol_id=mol_id,
+                    cgenff_type_idx=cgenff_type_idx,
+                    cgenff_master_sigmas=cgenff_master_sigmas,
+                    cgenff_master_epsilons=cgenff_master_epsilons,
                 )
             else:
                 return model.apply(

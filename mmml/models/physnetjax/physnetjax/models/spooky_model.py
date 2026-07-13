@@ -515,6 +515,56 @@ class SpookyPhysNet(nn.Module):
 
         return y
 
+    def _calculate_cgenff_vdw(
+        self,
+        r: jnp.ndarray,
+        off_dist: jnp.ndarray,
+        cgenff_type_idx: jnp.ndarray,
+        cgenff_master_sigmas: jnp.ndarray,
+        cgenff_master_epsilons: jnp.ndarray,
+        dst_idx: jnp.ndarray,
+        src_idx: jnp.ndarray,
+        mol_id: jnp.ndarray | None,
+        batch_mask: jnp.ndarray,
+        batch_segments: jnp.ndarray,
+        batch_size: int,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Calculate inter-monomer CGenFF 6-12 Lennard-Jones vdW interactions in JAX.
+
+        Conversion: 1 kcal/mol = 0.0433641153 eV.
+        Lorentz-Berthelot combination rules:
+            sig_ij = 0.5 * (sig_i + sig_j)
+            eps_ij = sqrt(eps_i * eps_j)
+        """
+        sig_dst = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=3.5)
+        sig_src = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=3.5)
+        eps_dst = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=0.05)
+        eps_src = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=0.05)
+
+        sig_ij = 0.5 * (sig_dst + sig_src)
+        eps_ij = jnp.sqrt(eps_dst * eps_src)
+
+        if mol_id is not None:
+            inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(r.dtype)
+        else:
+            inter_monomer_mask = 1.0
+
+        r_safe = jnp.maximum(r, 1e-6)
+        sr6 = (sig_ij / r_safe) ** 6
+        sr12 = sr6 ** 2
+        
+        KCAL_TO_EV = 0.0433641153
+        vdw_pair = 4.0 * eps_ij * (sr12 - sr6) * KCAL_TO_EV * off_dist * batch_mask * inter_monomer_mask
+        vdw_pair = 0.5 * vdw_pair
+
+        num_atoms_actual = cgenff_type_idx.shape[0]
+        atomic_vdw = jax.ops.segment_sum(vdw_pair, segment_ids=dst_idx, num_segments=num_atoms_actual)[:num_atoms_actual]
+        batch_vdw = jax.ops.segment_sum(atomic_vdw, segment_ids=batch_segments, num_segments=batch_size)
+
+        atomic_vdw = atomic_vdw[..., None, None, None]
+        batch_vdw = batch_vdw[..., None, None, None]
+        return atomic_vdw, batch_vdw
+
     def _calculate(
         self,
         x: jnp.ndarray,
@@ -526,39 +576,20 @@ class SpookyPhysNet(nn.Module):
         batch_mask: jnp.ndarray,
         batch_segments: jnp.ndarray,
         batch_size: int,
+        mol_id: jnp.ndarray | None = None,
+        cgenff_type_idx: jnp.ndarray | None = None,
+        cgenff_master_sigmas: jnp.ndarray | None = None,
+        cgenff_master_epsilons: jnp.ndarray | None = None,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
-        """
-        Calculate energies including charge interactions.
-        
-        Parameters
-        ----------
-        x : jnp.ndarray
-            Processed atomic features
-        atomic_numbers : jnp.ndarray
-            Atomic numbers
-        displacements : jnp.ndarray
-            Interatomic displacements
-        dst_idx : jnp.ndarray
-            Destination indices
-        src_idx : jnp.ndarray
-            Source indices
-        atom_mask : jnp.ndarray
-            Atom mask
-        batch_mask : jnp.ndarray
-            Batch mask
-        batch_segments : jnp.ndarray
-            Batch segment indices
-        batch_size : int
-            Batch size
-            
-        Returns
-        -------
-        tuple[Array, tuple[Array, Array, Array, Array]]
-            Tuple of (total energy, (atomic energies, charges, electrostatics, repulsion))
-        """
         r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
 
         atomic_energies = self._calculate_atomic_energies(x, atomic_numbers, atom_mask)
+
+        if mol_id is not None:
+            inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(r.dtype)
+            elec_batch_mask = batch_mask * inter_monomer_mask
+        else:
+            elec_batch_mask = batch_mask
 
         if self.charges:
             atomic_charges = self._calculate_atomic_charges(
@@ -572,7 +603,7 @@ class SpookyPhysNet(nn.Module):
                 dst_idx,
                 src_idx,
                 atom_mask,
-                batch_mask,
+                elec_batch_mask,
                 batch_segments,
                 batch_size,
             )
@@ -580,6 +611,26 @@ class SpookyPhysNet(nn.Module):
             atomic_charges = None
             electrostatics = 0.0
             batch_electrostatics = None
+
+        if (cgenff_type_idx is not None and 
+            cgenff_master_sigmas is not None and 
+            cgenff_master_epsilons is not None):
+            atomic_vdw, batch_vdw = self._calculate_cgenff_vdw(
+                r,
+                off_dist,
+                cgenff_type_idx,
+                cgenff_master_sigmas,
+                cgenff_master_epsilons,
+                dst_idx,
+                src_idx,
+                mol_id,
+                batch_mask,
+                batch_segments,
+                batch_size,
+            )
+        else:
+            atomic_vdw = 0.0
+            batch_vdw = None
 
         if self.zbl:
             repulsion = self._calculate_repulsion(
@@ -594,27 +645,14 @@ class SpookyPhysNet(nn.Module):
                 batch_segments,
                 batch_size,
             )
-            # Repulsion is per-atom; align mask to atom_mask for consistency
-            # repulsion = repulsion * atom_mask[..., None, None, None]
-            # Guard against NaN/Inf and huge magnitudes to keep grads stable
-            # repulsion = jnp.nan_to_num(repulsion, nan=0.0, posinf=0.0, neginf=0.0)
-            # repulsion = jnp.clip(repulsion, -1.0e8, 1.0e8)
-            if self.debug:
-                jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
-                jax.debug.print("Repulsion stats min={mn}, max={mx}, mean={mu}",
-                                mn=jnp.min(repulsion),
-                                mx=jnp.max(repulsion),
-                                mu=jnp.mean(repulsion))
-
         else:
             repulsion = 0.0
 
         energy = jax.ops.segment_sum(
-            atomic_energies + electrostatics + repulsion,
+            atomic_energies + electrostatics + repulsion + atomic_vdw,
             segment_ids=batch_segments,
             num_segments=batch_size,
         )
-        # Collapse any extra singleton dims and ensure per-batch shape (batch_size, 1)
         energy = energy.reshape((batch_size, -1)).sum(axis=1, keepdims=True)
 
         return -1 * jnp.sum(energy), (
