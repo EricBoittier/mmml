@@ -43,21 +43,27 @@ from mmml.utils.plotting.styles import apply_plot_style, default_cmap
 __all__ = [
     "plot_multipole_surfaces",
     "plot_field_slice",
+    "plot_field_progression",
     "plot_mbd_surfaces",
     "plot_dispersion_field_slice",
 ]
 
 
-def _resolve_cmap(spec, default_kind: str):
+# Default colormap for electrostatics (signed potential): the classic
+# red-positive/blue-negative perceptually-uniform read, overridable per call.
+ELECTROSTATIC_CMAP = "crameri:vik"
+
+
+def _resolve_cmap(spec, default):
     """Resolve a colormap spec to a matplotlib Colormap.
 
-    ``spec`` may be ``None`` (house default for ``default_kind``), a house kind
+    ``spec`` (and ``default``, used when ``spec is None``) may be a house kind
     (``"sequential"``/``"diverging"``/``"cyclic"``), a ``cmap``-library name
     such as ``"crameri:vik"`` or ``"cmocean:balance"``, a plain matplotlib
     name, or an already-resolved Colormap.
     """
     if spec is None:
-        return default_cmap(default_kind)
+        spec = default
     if not isinstance(spec, str):
         return spec  # assume a Colormap-like object
     if spec in ("sequential", "diverging", "cyclic"):
@@ -149,7 +155,7 @@ def plot_multipole_surfaces(
     else:
         fig = ax.figure
 
-    cmap = _resolve_cmap(cmap, "diverging")
+    cmap = _resolve_cmap(cmap, ELECTROSTATIC_CMAP)
     n = 60
     # Shared symmetric colour scale so sources are comparable.
     all_v = []
@@ -197,6 +203,57 @@ def plot_multipole_surfaces(
     return ax
 
 
+_PLANE_AXES = {"xy": (0, 1, 2), "xz": (0, 2, 1), "yz": (1, 2, 0)}
+
+
+def _field_on_plane(origins_bohr, charges, dipoles_bohr, quadrupoles_bohr,
+                    octupoles_bohr, plane, span_angstrom, grid):
+    """Potential + in-plane field components on a grid through the centroid.
+
+    Returns ``(Ua, Va, P, Fx, Fy, a0, a1, centroid)`` with grid coords in
+    Angstrom relative to the centroid. Thin wrapper over the existing physics.
+    """
+    a0, a1, a2 = _PLANE_AXES[plane]
+    centroid = origins_bohr.mean(axis=0)
+    span_bohr = span_angstrom / BOHR_TO_ANGSTROM
+    u = np.linspace(-span_bohr, span_bohr, grid)
+    U, V = np.meshgrid(u, u)
+    pts = np.zeros((U.size, 3))
+    pts[:, a0] = centroid[a0] + U.ravel()
+    pts[:, a1] = centroid[a1] + V.ravel()
+    pts[:, a2] = centroid[a2]
+    potential, field = _point_multipole_potential_field_au(
+        pts, origins_bohr, charges, dipoles_bohr,
+        None if quadrupoles_bohr is None else np.asarray(quadrupoles_bohr),
+        None if octupoles_bohr is None else np.asarray(octupoles_bohr),
+        softening_bohr=0.3,
+    )
+    return (U * BOHR_TO_ANGSTROM, V * BOHR_TO_ANGSTROM,
+            potential.reshape(U.shape),
+            field[:, a0].reshape(U.shape), field[:, a1].reshape(U.shape),
+            a0, a1, centroid)
+
+
+def _draw_field_panel(ax, Ua, Va, P, Fx, Fy, origins_bohr, a0, a1, centroid,
+                      cmap, vmax, *, streamlines=True):
+    """Filled potential contours + streamlines for one panel (shared scale)."""
+    cf = ax.contourf(Ua, Va, np.clip(P, -vmax, vmax),
+                     levels=np.linspace(-vmax, vmax, 31), cmap=cmap, extend="both")
+    if streamlines:
+        speed = np.hypot(Fx, Fy)
+        lw = 0.4 + 2.2 * (speed / (np.percentile(speed, 95) + 1e-12))
+        ax.streamplot(Ua, Va, Fx, Fy, color="#20202090",
+                      density=1.3, linewidth=np.clip(lw, 0.3, 2.2), arrowsize=0.8)
+    for o in origins_bohr * BOHR_TO_ANGSTROM:
+        ax.plot(o[a0] - centroid[a0] * BOHR_TO_ANGSTROM,
+                o[a1] - centroid[a1] * BOHR_TO_ANGSTROM,
+                "o", ms=7, mfc="white", mec="#111", mew=1.2)
+    ax.set_aspect("equal")
+    ax.set_xlabel(f"{'xyz'[a0]} (Å)")
+    ax.set_ylabel(f"{'xyz'[a1]} (Å)")
+    return cf
+
+
 def plot_field_slice(
     origins_bohr: np.ndarray,
     charges: np.ndarray,
@@ -225,48 +282,14 @@ def plot_field_slice(
     charges = np.asarray(charges, dtype=np.float64).reshape(-1)
     dipoles_bohr = np.asarray(dipoles_bohr, dtype=np.float64).reshape(-1, 3)
 
-    axes = {"xy": (0, 1, 2), "xz": (0, 2, 1), "yz": (1, 2, 0)}[plane]
-    a0, a1, a2 = axes
-    centroid = origins_bohr.mean(axis=0)
-    span_bohr = span_angstrom / BOHR_TO_ANGSTROM
-    u = np.linspace(-span_bohr, span_bohr, grid)
-    v = np.linspace(-span_bohr, span_bohr, grid)
-    U, V = np.meshgrid(u, v)
-    pts = np.zeros((U.size, 3))
-    pts[:, a0] = centroid[a0] + U.ravel()
-    pts[:, a1] = centroid[a1] + V.ravel()
-    pts[:, a2] = centroid[a2]
-
-    quad = quadrupoles_bohr
-    octu = octupoles_bohr
-    potential, field = _point_multipole_potential_field_au(
-        pts, origins_bohr, charges, dipoles_bohr,
-        None if quad is None else np.asarray(quad),
-        None if octu is None else np.asarray(octu),
-        softening_bohr=0.3,
+    Ua, Va, P, Fx, Fy, a0, a1, centroid = _field_on_plane(
+        origins_bohr, charges, dipoles_bohr, quadrupoles_bohr,
+        octupoles_bohr, plane, span_angstrom, grid,
     )
-    P = potential.reshape(U.shape)
-    Fx = field[:, a0].reshape(U.shape)
-    Fy = field[:, a1].reshape(U.shape)
-
-    Ua = U * BOHR_TO_ANGSTROM
-    Va = V * BOHR_TO_ANGSTROM
     vmax = float(np.percentile(np.abs(P), 97))
+    cmap = _resolve_cmap(cmap, ELECTROSTATIC_CMAP)
     fig, ax = plt.subplots(figsize=(7.5, 6.6))
-    cmap = _resolve_cmap(cmap, "diverging")
-    cf = ax.contourf(Ua, Va, np.clip(P, -vmax, vmax),
-                     levels=np.linspace(-vmax, vmax, 31), cmap=cmap, extend="both")
-    speed = np.hypot(Fx, Fy)
-    lw = 0.4 + 2.2 * (speed / (np.percentile(speed, 95) + 1e-12))
-    ax.streamplot(Ua, Va, Fx, Fy, color="#20202090",
-                  density=1.3, linewidth=np.clip(lw, 0.3, 2.2), arrowsize=0.8)
-    for o in origins_bohr * BOHR_TO_ANGSTROM:
-        ax.plot(o[a0] - centroid[a0] * BOHR_TO_ANGSTROM,
-                o[a1] - centroid[a1] * BOHR_TO_ANGSTROM,
-                "o", ms=7, mfc="white", mec="#111", mew=1.2)
-    ax.set_aspect("equal")
-    ax.set_xlabel(f"{'xyz'[a0]} (Å)")
-    ax.set_ylabel(f"{'xyz'[a1]} (Å)")
+    cf = _draw_field_panel(ax, Ua, Va, P, Fx, Fy, origins_bohr, a0, a1, centroid, cmap, vmax)
     ax.set_title(title)
     fig.colorbar(cf, ax=ax, label="electrostatic potential (a.u.)")
     fig.tight_layout()
@@ -274,6 +297,69 @@ def plot_field_slice(
         fig.savefig(out, dpi=200, bbox_inches="tight")
         plt.close(fig)
     return ax
+
+
+def plot_field_progression(
+    origin_bohr: np.ndarray,
+    charge: float,
+    dipole_bohr: np.ndarray,
+    quadrupole_bohr: np.ndarray,
+    octupole_bohr: np.ndarray,
+    *,
+    plane: str = "xy",
+    span_angstrom: float = 5.0,
+    grid: int = 240,
+    out: str | Path | None = None,
+    title: str = "Building up the multipole field, rank by rank",
+    cmap=None,
+    style: str = "icml",
+):
+    """One source, four panels: monopole, +dipole, +quadrupole, +octupole.
+
+    Each panel adds the next rank of the *same* site's expansion, all on a
+    shared colour scale so the growing angular structure is directly
+    comparable. Purely illustrative of the expansion — the physics is the same
+    :func:`~mmml.models.multipoles.electrostatics._point_multipole_potential_field_au`.
+    """
+    apply_plot_style(style)
+    origin = np.asarray(origin_bohr, dtype=np.float64).reshape(1, 3)
+    dip = np.asarray(dipole_bohr, dtype=np.float64).reshape(1, 3)
+    quad = np.asarray(quadrupole_bohr, dtype=np.float64).reshape(1, 3, 3)
+    octu = np.asarray(octupole_bohr, dtype=np.float64).reshape(1, 3, 3, 3)
+    zero_q = np.zeros((1, 3, 3))
+    zero_o = np.zeros((1, 3, 3, 3))
+
+    stages = [
+        ("monopole", np.array([charge]), np.zeros((1, 3)), None, None),
+        ("+ dipole (l=1)", np.array([charge]), dip, None, None),
+        ("+ quadrupole (l=2)", np.array([charge]), dip, quad, None),
+        ("+ octupole (l=3)", np.array([charge]), dip, quad, octu),
+    ]
+    panels = []
+    vmax = 1e-9
+    for label, q, d, Q, O in stages:
+        Ua, Va, P, Fx, Fy, a0, a1, centroid = _field_on_plane(
+            origin, q, d, zero_q if Q is None else Q, zero_o if O is None else O,
+            plane, span_angstrom, grid,
+        )
+        panels.append((label, Ua, Va, P, Fx, Fy, a0, a1, centroid))
+        vmax = max(vmax, float(np.percentile(np.abs(P), 97)))
+
+    cmap = _resolve_cmap(cmap, ELECTROSTATIC_CMAP)
+    fig, axes = plt.subplots(1, 4, figsize=(17, 4.6))
+    cf = None
+    for ax, (label, Ua, Va, P, Fx, Fy, a0, a1, centroid) in zip(axes, panels):
+        cf = _draw_field_panel(ax, Ua, Va, P, Fx, Fy, origin, a0, a1, centroid, cmap, vmax)
+        ax.set_title(label)
+        if ax is not axes[0]:
+            ax.set_ylabel("")
+    fig.suptitle(title)
+    fig.colorbar(cf, ax=axes, label="electrostatic potential (a.u.)",
+                 shrink=0.85, pad=0.02)
+    if out is not None:
+        fig.savefig(out, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+    return axes
 
 
 def plot_mbd_surfaces(
