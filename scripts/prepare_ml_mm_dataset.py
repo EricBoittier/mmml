@@ -35,8 +35,9 @@ KCAL_TO_EV = 1.0 / ase.units.kcal * ase.units.mol
 DEF_RTF_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "top_all36_cgenff.rtf"
 DEF_PRM_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
 
-# Guard so module-level warnings only print once in the main process, not in every worker
-_IS_WORKER = False
+# Guard so module-level warnings only print once in the main process, not in every worker.
+# Evaluated at import time: spawned pool workers have names like 'SpawnPoolWorker-N'.
+_IS_WORKER = mp.current_process().name != "MainProcess"
 
 
 def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndarray, np.ndarray]:
