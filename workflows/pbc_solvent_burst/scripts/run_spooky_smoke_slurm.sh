@@ -14,19 +14,11 @@
 
 set -euo pipefail
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 # Slurm executes a staged copy under /var/spool; retain the submit directory.
 WORKFLOW_ROOT="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-=======
-WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
->>>>>>> c59714611 (asdf)
-=======
-# Slurm executes a staged copy under /var/spool; retain the submit directory.
-WORKFLOW_ROOT="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
->>>>>>> cc7dd8f95 (sdaf)
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 CONFIG="${MMML_SMOKE_CONFIG:-$WORKFLOW_ROOT/config.spooky-smoke.yaml}"
+RUN_TAG="${MMML_SMOKE_TAG:-dcm_10}"
 cd "$REPO_ROOT"
 
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
@@ -39,4 +31,4 @@ eval "$("$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml 100 --pbc --bo
   | tee /dev/stderr | grep '^export ')"
 
 mkdir -p "$REPO_ROOT/artifacts/pbc_solvent_burst_spooky_smoke"
-exec "$MMML_PYTHON" "$WORKFLOW_ROOT/scripts/run_job.py" --tag dcm_10 --config "$CONFIG"
+exec "$MMML_PYTHON" "$WORKFLOW_ROOT/scripts/run_job.py" --tag "$RUN_TAG" --config "$CONFIG"
