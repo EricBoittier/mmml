@@ -26,7 +26,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from ase.data import covalent_radii
+from ase.data import covalent_radii, atomic_numbers, chemical_symbols
 import ase.units
 
 K_COULOMB_KCAL_ANG = 332.06371  # e^2 / Angstrom -> kcal/mol
