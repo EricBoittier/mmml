@@ -358,6 +358,8 @@ def _panel_label(backend: str) -> str:
         "spookynet_hybrid_hybrid_step3000": "Hybrid decomposition (s3000)",
         "spookynet_hybrid_step3000_mbd": "Hybrid s3000 + MBD",
         "spookynet_hybrid_muon_epoch1_mbd": "Muon e1 + MBD",
+        "spookynet_hybrid_step19800": "Hybrid s19800",
+        "spookynet_hybrid_step19800_mbd": "Hybrid s19800 + MBD",
     }
     return PANEL_LABELS.get(backend, tuned_labels.get(backend, BACKEND_LABELS.get(backend, backend)))
 
