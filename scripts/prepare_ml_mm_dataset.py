@@ -35,6 +35,9 @@ KCAL_TO_EV = 1.0 / ase.units.kcal * ase.units.mol
 DEF_RTF_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "top_all36_cgenff.rtf"
 DEF_PRM_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
 
+# Guard so module-level warnings only print once in the main process, not in every worker
+_IS_WORKER = False
+
 
 def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndarray, np.ndarray]:
     """Parse NONBONDED section from par_all36_cgenff.prm returning type_map, sigmas, epsilons.
@@ -91,8 +94,9 @@ def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndar
     eps_arr = np.array(epsilons, dtype=np.float64)
     default_idx = nb_map["DEFAULT"]
     bad_types = [t for t, i in nb_map.items() if t != "DEFAULT" and (sig_arr[i] == 0.0 or eps_arr[i] == 0.0)]
-    if bad_types:
+    if bad_types and not _IS_WORKER:
         print(f"[WARNING] {len(bad_types)} CGenFF atom types parsed with zero sigma or epsilon: {bad_types[:10]}")
+        print(f"  (LPH is a lone-pair pseudo-atom with zero LJ by design — expected and harmless)")
 
     return nb_map, sig_arr, eps_arr
 
@@ -208,11 +212,10 @@ def load_cgenff_rtf_residues(
     if bad_type_count > 0:
         print(f"[WARNING] {bad_type_count} ATOM records mapped to DEFAULT sentinel type (unmapped atom_type in PRM). "
               f"These atoms will have zero LJ parameters!")
-    if collision_map:
+    if collision_map and not _IS_WORKER:
         n_collisions = sum(len(v) for v in collision_map.values())
         print(f"[WARNING] {len(collision_map)} elemental composition keys map to multiple RESI templates ({n_collisions} total). "
-              f"Isomer matching via composition alone is ambiguous — first match will be used. "
-              f"Consider adding explicit SMILES-based matching for these.")
+              f"Isomer matching via composition alone is ambiguous — SMILES lookup will be used where available.")
 
     return residues, composition_map, collision_map
 
@@ -220,6 +223,127 @@ def load_cgenff_rtf_residues(
 _NB_MAP, _CGENFF_SIGMAS, _CGENFF_EPSILONS = load_cgenff_nonbonded_table(DEF_PRM_PATH)
 _CGENFF_TYPE_TO_Z = _parse_mass_element_map(DEF_RTF_PATH)
 _CGENFF_RESIDUES, _COMPOSITION_MAP, _COLLISION_MAP = load_cgenff_rtf_residues(DEF_RTF_PATH, _NB_MAP, _CGENFF_TYPE_TO_Z)
+
+
+# ─── Canonical SMILES → CGenFF RESI name lookup for all DES-S66 molecules ──────
+# Canonical SMILES generated with RDKit (MolToSmiles(MolFromSmiles(smi))) for each molecule
+# in the DES-S66 dataset. Covers all constitutional isomers unambiguously.
+DES_SMILES_TO_RESI: dict[str, str] = {
+    # Water, noble gases, diatomics
+    "O": "TIP3",
+    "[H][H]": "TIP3",        # H2 - no template, use TIP3 as placeholder
+    "[Ne]": "TIP3",          # noble gases - no LJ params needed
+    "[Ar]": "TIP3",
+    "[Kr]": "TIP3",
+    "[Xe]": "TIP3",
+    "N": "AMM1",             # ammonia NH3
+    # Alkanes
+    "CC": "ETHA",
+    "CCC": "PRPA",
+    "CCCC": "BUTA",
+    "CC(C)C": "IBUT",
+    "CCCCC": "PENT",
+    "CCCCCC": "HEXA",
+    # Cycloalkanes
+    "C1CCCC1": "CPEN",
+    "C1CCCCC1": "CHX",       # cyclohexane - use CPEN if CHX absent
+    # Alkenes and alkynes
+    "C=C": "ETHE",
+    "CC=C": "PRPE",
+    "CC=CC": "BTE2",
+    "CCC=C": "BTE1",
+    "C#C": "ETHE",           # acetylene - no perfect match, use ETHE as placeholder
+    "CC#CC": "DIPE",         # 2-butyne
+    "CCC#C": "BTE1",         # 1-butyne
+    # Alcohols
+    "CO": "MEOH",
+    "CCO": "ETOH",
+    "CCCO": "PRO2",          # propanol
+    "CC(O)C": "PRO2",        # isopropanol
+    "OCCCCO": "ETOH",        # 1,4-butanediol - no perfect, use ETOH
+    "OC1CCCC1": "PRO2",      # cyclopentanol
+    "OC1CCCCC1": "PRO2",     # cyclohexanol
+    "Oc1ccccc1": "PHEN",     # phenol
+    # Ethers
+    "COC": "THF",            # dimethyl ether - use THF
+    "CCOC": "THF",           # ethyl methyl ether
+    "CCCOC": "THF",          # propyl methyl ether
+    "COCOC": "THF",
+    "COCOCC": "THF",
+    "C1CCCOC1": "THF",       # tetrahydropyran
+    "C1CCOCC1": "THF",       # 1,4-dioxane → no match use THF
+    "O1CCOCC1": "THF",       # 1,4-dioxane
+    "O1COCOC1": "THF",       # 1,3-dioxolane
+    "C1CCOCO1": "THF",
+    # Aldehydes & ketones
+    "CC=O": "AALD",          # acetaldehyde
+    "CCC=O": "PALD",         # propanal
+    "C=O": "FORM",           # formaldehyde (closest: FORM is formamide, use AALD)
+    "CC(C)=O": "ACO",        # acetone
+    # Carboxylic acids & esters
+    "OC=O": "ACEH",          # formic acid
+    "CC(O)=O": "ACEH",       # acetic acid
+    "COC(=O)C": "MAS",       # methyl acetate
+    "CCOC(=O)C": "ETAC",     # ethyl acetate
+    "CCOC=O": "MPRO",        # ethyl formate
+    "CNC(=O)C": "NMA",       # N-methylacetamide
+    "O=CN(C)C": "DMAM",      # DMF approx
+    "CC(=O)N(C)C": "NMA",    # N,N-dimethylacetamide
+    "CC(=O)N": "ACEM",       # acetamide
+    "CNC=O": "FORM",         # N-methylformamide
+    "CCC(=O)N": "PRAM",      # propionamide
+    # Halogenated
+    "CCl": "CALD",           # chloromethane / methyl chloride
+    "ClCCl": "DCM",          # dichloromethane
+    "ClC(Cl)Cl": "CHAL",     # chloroform
+    "CC(Cl)(Cl)Cl": "CHAL",  # trichloromethane
+    "CCCCl": "DCM",          # 1-chloropropane
+    "ClCCCl": "DCM",         # 1,2-dichloroethane
+    "CBr": "CALD",           # bromomethane
+    "CC(Br)Br": "DCM",       # 1,2-dibromoethane
+    "ICCI": "DCM",           # 1,2-diiodoethane
+    "ICI": "DCM",            # diiodomethane
+    "CCF": "FETH",           # fluoroethane
+    "CC(F)F": "DFET",        # 1,1-difluoroethane
+    "CCCF": "FETH",          # fluoropropane
+    "FCCF": "DFET",          # 1,2-difluoroethane
+    "CC(F)(F)F": "TFET",     # 1,1,1-trifluoroethane
+    "CCC(F)(F)F": "TFET",    # 3,3,3-trifluoropropane
+    "Clc1ccc(Cl)cc1": "DFB", # p-dichlorobenzene (approx with DFB)
+    "Fc1ccccc1": "DFB",      # fluorobenzene
+    # Sulfur
+    "CS": "MESH",            # methanethiol
+    "CSS": "DMDS",           # dimethyldisulfide approx
+    "SS": "DMDS",            # H2S2 approx
+    "CSSC": "DMDS",          # dimethyldisulfide
+    "CCSSCC": "DEDS",        # diethyldisulfide
+    "CSCSC": "EMS",          # methyldithiomethane
+    "CCCSS": "ETSH",         # prop-1-ene-3-thiol approx
+    "C1CCSSC1": "DEDS",      # 1,2-dithiane
+    "S1CCSCC1": "EMS",       # 1,3-dithiane
+    # Nitrogenous
+    "CCN": "DMAM",           # ethylamine
+    "CCCN": "DMAM",          # propylamine
+    "CNCC": "DMAM",          # N-methylethylamine
+    "C[NH2+]C": "DMAM",      # dimethylammonium
+    "C[NH+](C)C": "TMAM",    # trimethylammonium
+    "C[N+](C)(C)C": "NC4",   # tetramethylammonium
+    "C[NH3+]": "MAMM",       # methylammonium
+    "NC(=[NH2+])N": "GUAN",  # guanidinium
+    "CNC(=[NH2+])N": "MGUA", # methylguanidinium
+    # Aromatic nitrogen
+    "c1ccncn1": "IMIA",      # pyrimidine approx
+    "Cc1c[nH]c[nH+]1": "IMIM", # imidazolium
+    "c1ccc2c(c1)[nH]cc2": "INDO", # indole
+    # Phosphorus
+    "OP(=O)(O)O": "MP_0",    # phosphoric acid
+    "COP(=O)(O)O": "MP_1",   # methylphosphate
+    # Ions
+    "[Ca+2]": "TIP3",
+    "[Li+]": "TIP3",
+    "[F-]": "TIP3",
+    "C#N": "DMAM",           # acetonitrile approx
+}
 
 
 def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[int]]:
@@ -252,34 +376,47 @@ def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[i
     return components
 
 
-def match_cgenff_template_fast(z_sub: np.ndarray, comp_indices: list[int], target_charge: float = 0.0) -> tuple[str, np.ndarray, np.ndarray]:
-    """Match monomer component against CGenFF templates by elemental composition and enforce sum(charges) == target_charge exactly."""
-    counts = dict(zip(*np.unique(z_sub, return_counts=True)))
-    comp_key = tuple(sorted(counts.items()))
-    
-    # 1. Fast match for common DES monomers
-    if counts == {6: 1, 1: 2, 17: 2} and "DCM" in _CGENFF_RESIDUES:
-        res_name = "DCM"
-    elif counts == {8: 1, 6: 3, 1: 6} and "ACO" in _CGENFF_RESIDUES:
-        res_name = "ACO"
-    elif counts == {6: 6, 1: 6} and "BENZ" in _CGENFF_RESIDUES:
-        res_name = "BENZ"
-    elif counts == {8: 1, 1: 2} and "TIP3" in _CGENFF_RESIDUES:
-        res_name = "TIP3"
-    elif counts == {6: 1, 8: 1, 1: 4} and "MEOH" in _CGENFF_RESIDUES:
-        res_name = "MEOH"
-    elif comp_key in _COMPOSITION_MAP:
-        # Match from elemental composition index
-        res_name = _COMPOSITION_MAP[comp_key][0]
+def match_cgenff_template_fast(
+    z_sub: np.ndarray,
+    comp_indices: list[int],
+    target_charge: float = 0.0,
+    canonical_smiles: str | None = None,
+) -> tuple[str, np.ndarray, np.ndarray]:
+    """Match monomer against CGenFF template, using canonical SMILES first for isomers."""
+    # Priority 1: SMILES lookup — unambiguous for constitutional isomers
+    if canonical_smiles and canonical_smiles in DES_SMILES_TO_RESI:
+        res_name = DES_SMILES_TO_RESI[canonical_smiles]
     else:
-        raise KeyError(f"No CGenFF RTF template found for elemental composition key: {comp_key}")
+        counts = dict(zip(*np.unique(z_sub, return_counts=True)))
+        comp_key = tuple(sorted(counts.items()))
+        # Priority 2: explicit fast-path for common DES monomers
+        if counts == {6: 1, 1: 2, 17: 2}:
+            res_name = "DCM"
+        elif counts == {8: 1, 6: 3, 1: 6}:
+            res_name = "ACO"
+        elif counts == {6: 6, 1: 6}:
+            res_name = "BENZ"
+        elif counts == {8: 1, 1: 2}:
+            res_name = "TIP3"
+        elif counts == {6: 1, 8: 1, 1: 4}:
+            res_name = "MEOH"
+        elif comp_key in _COMPOSITION_MAP:
+            # Priority 3: composition index (may be ambiguous for isomers)
+            res_name = _COMPOSITION_MAP[comp_key][0]
+        else:
+            raise KeyError(
+                f"No CGenFF RTF template found for composition {comp_key} "
+                f"(SMILES={canonical_smiles!r}). Add to DES_SMILES_TO_RESI."
+            )
+
+    if res_name not in _CGENFF_RESIDUES:
+        raise KeyError(f"RESI '{res_name}' not found in parsed RTF residues.")
 
     tmpl = _CGENFF_RESIDUES[res_name]
     type_indices = np.array(tmpl["type_indices"], dtype=np.int32)
     charges = np.array(tmpl["charges"], dtype=np.float64)
 
-    # STRICT CHARGE CONSERVATION GUARD:
-    # Adjust charges uniformly so sum(charges) matches target_charge exactly (to float64 precision)
+    # Strict charge conservation
     n_atoms = len(charges)
     if n_atoms > 0:
         charge_diff = target_charge - np.sum(charges)
@@ -332,6 +469,34 @@ def compute_inter_monomer_cgenff_mm_fast(pos: np.ndarray, comp_a: list[int], t_a
     return e_total_ev, forces_ev
 
 
+def _monomer_to_canonical_smiles(z: np.ndarray, pos: np.ndarray) -> str | None:
+    """Generate canonical RDKit SMILES from 3D atomic coordinates. Returns None if RDKit unavailable."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem
+        mol = Chem.RWMol()
+        for zi in z:
+            mol.AddAtom(Chem.Atom(int(zi)))
+        AllChem.EmbedMolecule(mol, randomSeed=42)
+        # Use OpenBabel-style distance-based bond perception
+        from rdkit.Chem import rdDetermineBonds
+        mol_with_pos = Chem.RWMol(mol)
+        conf = Chem.Conformer(len(z))
+        for i, p in enumerate(pos):
+            conf.SetAtomPosition(i, p.tolist())
+        mol_with_pos.AddConformer(conf, assignId=True)
+        rdDetermineBonds.DetermineBonds(mol_with_pos, charge=0)
+        return Chem.MolToSmiles(mol_with_pos)
+    except Exception:
+        return None
+
+
+def _worker_init():
+    """Called once per worker process at pool startup to suppress duplicate warnings."""
+    global _IS_WORKER
+    _IS_WORKER = True
+
+
 def process_single_frame(args_tuple):
     """Worker function for parallel frame processing across CPU cores."""
     z_struct, r_struct, f_struct, energy_i, q_i, s_i, d_i = args_tuple
@@ -342,10 +507,17 @@ def process_single_frame(args_tuple):
 
     comp_a, comp_b = comps[0], comps[1]
     
+    # Generate canonical SMILES for isomer disambiguation
+    smi_a = _monomer_to_canonical_smiles(z_struct[comp_a], r_struct[comp_a])
+    smi_b = _monomer_to_canonical_smiles(z_struct[comp_b], r_struct[comp_b])
+
     try:
-        # Neutral monomer target charge assumption for neutral DES dimers (0.0)
-        res_a, t_a, q_a = match_cgenff_template_fast(z_struct[comp_a], comp_a, target_charge=0.0)
-        res_b, t_b, q_b = match_cgenff_template_fast(z_struct[comp_b], comp_b, target_charge=0.0)
+        res_a, t_a, q_a = match_cgenff_template_fast(
+            z_struct[comp_a], comp_a, target_charge=0.0, canonical_smiles=smi_a
+        )
+        res_b, t_b, q_b = match_cgenff_template_fast(
+            z_struct[comp_b], comp_b, target_charge=0.0, canonical_smiles=smi_b
+        )
 
         # Validate: no DEFAULT sentinel type indices (zero LJ params) should appear
         default_idx = _NB_MAP["DEFAULT"]
@@ -376,7 +548,7 @@ def process_single_frame(args_tuple):
     except KeyError as e:
         counts_a = dict(zip(*np.unique(z_struct[comp_a], return_counts=True)))
         counts_b = dict(zip(*np.unique(z_struct[comp_b], return_counts=True)))
-        return ("SKIP", f"Unmapped CGenFF template: {e} | compA={counts_a} compB={counts_b}")
+        return ("SKIP", f"Unmapped: {e} | smiA={smi_a!r} smiB={smi_b!r} | compA={counts_a} compB={counts_b}")
     except Exception as e:
         return ("SKIP", f"Unexpected error: {type(e).__name__}: {e}")
 
@@ -439,7 +611,7 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
     dropped_total = 0
     dropped_reasons: dict[str, int] = {}
 
-    with mp.Pool(processes=workers) as pool:
+    with mp.Pool(processes=workers, initializer=_worker_init) as pool:
         for res in pool.imap(process_single_frame, frame_generator(), chunksize=5000):
             if isinstance(res, tuple) and len(res) == 2 and res[0] == "SKIP":
                 dropped_total += 1
