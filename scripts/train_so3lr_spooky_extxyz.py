@@ -778,6 +778,19 @@ def _initialize_from_checkpoint(
     if loaded_params is None:
         raise ValueError(f"Checkpoint {checkpoint_path} has no parameters")
 
+    # Some checkpoints (e.g. orbax_to_json exports) store the flax "params"
+    # collection unwrapped, i.e. {"Dense_0": ..., ...} rather than the
+    # {"params": {"Dense_0": ...}} shape flax's TrainState.params actually has.
+    # Detect and re-wrap so the tree shapes line up before merging, otherwise
+    # every leaf silently fails to match at the top level.
+    if (
+        isinstance(state.params, Mapping)
+        and set(state.params.keys()) == {"params"}
+        and isinstance(loaded_params, Mapping)
+        and "params" not in loaded_params
+    ):
+        loaded_params = {"params": loaded_params}
+
     params, loaded, initialized, skipped = _merge_compatible_params(
         state.params, loaded_params
     )
