@@ -169,15 +169,16 @@ def _load_reference_cluster(
         print("Building DCM:3 reference cluster (Packmol + CHARMM MM pre-min)...", flush=True)
     try:
         z, pos, atoms_per_list, _names = build_packmol_composition_cluster(
-        composition=composition,
-        center=(0.0, 0.0, 0.0),
-        radius=float(args.packmol_radius),
-        tolerance=1.0,
-        seed=123,
-        charmm_sd_steps=50,
-        charmm_abnr_steps=100,
-        verbose=not args.quiet,
-        scratch_dir=args.output.parent / "packmol_scratch",
+            composition=composition,
+            placement="sphere",
+            center=(0.0, 0.0, 0.0),
+            radius=float(args.packmol_radius),
+            tolerance=1.0,
+            seed=123,
+            charmm_sd_steps=50,
+            charmm_abnr_steps=100,
+            verbose=not args.quiet,
+            scratch_dir=args.output.parent / "packmol_scratch",
         )
     except FileNotFoundError as exc:
         raise SystemExit(
