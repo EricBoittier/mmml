@@ -80,6 +80,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Directory for PSF/DCD/restart outputs",
     )
     parser.add_argument(
+        "--handoff-template-res",
+        type=Path,
+        default=None,
+        help="CHARMM restart template used when materializing an mmml handoff.",
+    )
+    parser.add_argument(
+        "--continue-velocities",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Preserve velocities from an incoming mmml handoff.",
+    )
+    parser.add_argument(
         "--nstep",
         type=int,
         default=0,

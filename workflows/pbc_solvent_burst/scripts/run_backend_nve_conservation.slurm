@@ -24,7 +24,7 @@ export MMML_ML_DTYPE=float64
 eval "$("$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml 100 --pbc --box-size 32 \
   | tee /dev/stderr | grep '^export ')"
 
-ROOT="$REPO_ROOT/artifacts/diagnostics/dcm10_nve_backend_compare"
+ROOT="${MMML_NVE_COMPARE_ROOT:-$REPO_ROOT/artifacts/diagnostics/dcm10_nve_backend_compare_v2}"
 HANDOFF="$REPO_ROOT/artifacts/pbc_recovery_gate_smoke_v2/dcm_10/pycharmm_equi_00/handoff/state.npz"
 TEMPLATE="$REPO_ROOT/artifacts/pbc_recovery_gate_smoke_v2/dcm_10/pycharmm_equi_00/handoff/final.res"
 CHECKPOINT="$REPO_ROOT/artifacts/spooky_so3lr_muon_tight/epoch-0001_params.json"

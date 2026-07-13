@@ -2465,8 +2465,19 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--ps-nve", getattr(args, "ps_nve", None))
     _append_optional(cmd, "--ps-prod", getattr(args, "ps_prod", None))
     _append_optional(cmd, "--restart-from", getattr(args, "restart_from", None))
-    if getattr(args, "continue_from", None) and not getattr(args, "restart_from", None):
-        _append_optional(cmd, "--restart-from", args.continue_from)
+    # ``continue_from`` is an mmml handoff (often NPZ/HDF5), not necessarily a
+    # CHARMM dynamics restart.  ``run_backend`` loads it into the process-local
+    # handoff state before calling the PyCHARMM backend.  Never relabel it as
+    # ``--restart-from``: that bypasses handoff velocity synchronization and
+    # makes CHARMM try to consume an NPZ as a Fortran restart.
+    _append_optional(
+        cmd, "--handoff-template-res", getattr(args, "handoff_template_res", None)
+    )
+    _append_boolean_optional_flag(
+        cmd,
+        "--continue-velocities",
+        bool(getattr(args, "continue_velocities", True)),
+    )
     _append_optional(cmd, "--from-psf", getattr(args, "from_psf", None))
     _append_optional(cmd, "--from-crd", getattr(args, "from_crd", None))
     if args.no_fix:

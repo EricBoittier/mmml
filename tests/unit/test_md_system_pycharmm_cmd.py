@@ -146,6 +146,31 @@ def test_build_pycharmm_command_forwards_pre_mlpot_pair_floors():
     assert parsed.pre_mlpot_heavy_heavy_min_distance == pytest.approx(2.45)
 
 
+def test_build_pycharmm_command_does_not_relabel_npz_handoff_as_restart():
+    args = _pycharmm_args(
+        continue_from="/tmp/state.npz",
+        restart_from=None,
+        handoff_template_res="/tmp/final.res",
+        continue_velocities=True,
+    )
+    cmd = build_pycharmm_command(args)
+
+    assert "--restart-from" not in cmd
+    assert cmd[cmd.index("--handoff-template-res") + 1] == "/tmp/final.res"
+    assert "--continue-velocities" in cmd
+
+
+def test_build_pycharmm_command_keeps_explicit_charmm_restart():
+    args = _pycharmm_args(
+        continue_from=None,
+        restart_from="/tmp/dynamics.res",
+        handoff_template_res=None,
+    )
+    cmd = build_pycharmm_command(args)
+
+    assert cmd[cmd.index("--restart-from") + 1] == "/tmp/dynamics.res"
+
+
 def test_build_pycharmm_command_forwards_zero_mini_box_equil_and_lattice():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 
