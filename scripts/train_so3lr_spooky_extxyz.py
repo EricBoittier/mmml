@@ -1098,8 +1098,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Cache extxyz in Orbax and train SpookyPhysNet with charge/spin inputs."
     )
-    parser.add_argument("--extxyz", required=True, help="Input extxyz file, e.g. so3lr_train.extxyz")
-    parser.add_argument("--cache-dir", required=True, help="Directory for Orbax data caches")
+    parser.add_argument(
+        "--extxyz",
+        default=None,
+        help=(
+            "Input extxyz file, e.g. so3lr_train.extxyz. Required for --mode cache/"
+            "cache-and-train (used to derive the cache path). Not needed for --mode "
+            "train if --cache-path is given directly."
+        ),
+    )
+    parser.add_argument("--cache-dir", default=None, help="Directory for Orbax data caches")
+    parser.add_argument(
+        "--cache-path",
+        default=None,
+        help=(
+            "Exact path to a pre-built Orbax data cache to train from (e.g. one produced "
+            "by split_and_inspect_ml_mm_dataset.py's train_cache/). Bypasses the --extxyz/"
+            "--cache-dir hash-based lookup. Only valid with --mode train."
+        ),
+    )
     parser.add_argument("--workdir", default="artifacts/spooky_so3lr", help="Training output/checkpoint directory")
     parser.add_argument("--mode", choices=("cache", "train", "cache-and-train"), default="cache-and-train")
     parser.add_argument("--force-recache", action="store_true", help="Overwrite existing matching data cache")
@@ -1262,9 +1279,18 @@ def main() -> None:
         raise ValueError("--mbd-weight must be non-negative")
     if args.mbd_ramp_steps < 0:
         raise ValueError("--mbd-ramp-steps must be non-negative")
-    cache_path = _resolve_cache_path(args)
-    if args.mode in {"cache", "cache-and-train"}:
-        cache_path = cache_extxyz_to_orbax(args)
+    if args.cache_path is not None:
+        if args.mode != "train":
+            raise ValueError("--cache-path is only valid with --mode train")
+        cache_path = Path(args.cache_path).expanduser().resolve()
+    else:
+        if args.extxyz is None:
+            raise ValueError("--extxyz is required unless --cache-path is given")
+        if args.cache_dir is None:
+            raise ValueError("--cache-dir is required unless --cache-path is given")
+        cache_path = _resolve_cache_path(args)
+        if args.mode in {"cache", "cache-and-train"}:
+            cache_path = cache_extxyz_to_orbax(args)
     if args.mode in {"train", "cache-and-train"}:
         if not cache_path.exists():
             raise FileNotFoundError(
