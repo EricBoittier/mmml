@@ -428,24 +428,113 @@ plots glued together. Two house helpers:
   `tight_layout` doesn't know how to reserve room for it and will silently
   overlap the colorbar with the second axes (a real bug hit and fixed while
   building `scripts/render_multipole_gallery.py::complex_figure`).
-- **`booktabs_table(ax, cell_text, col_labels=...)`**: a LaTeX-`booktabs`-style
-  table — a rule above the header, a rule below it, a rule at the bottom,
-  nothing else (no vertical rules, no per-cell grid, no zebra-striping).
-  Give it its own subplot; it draws via matplotlib's own `Axes.table` so it
-  renders in the exact same font/DPI/figure as the rest of the panel,
-  without a separate LaTeX build step. Raw `ax.table()` defaults to cramped,
-  center-aligned-everything cells that read as a plain grid dump, so this
-  also applies: `row_height` (default `2.0`, via `Table.scale`) for
-  breathing room between rows, left-alignment for label/text columns, and
-  right-alignment for numeric columns (auto-detected from the data unless
-  `numeric_cols` is passed explicitly) — numbers read faster ones-place
-  aligned than centered.
-
-  ```python
-  from mmml.utils.plotting.styles import booktabs_table
-  booktabs_table(ax, [["monopole", "+0.29", "e"], ...], col_labels=["quantity", "value", "units"])
-  ```
+- **Tables — prefer real LaTeX** (see "Tables: LaTeX-typeset `booktabs`"
+  below) via `latex_table_image(ax, cell_text, col_labels=...)`, falling back
+  to `booktabs_table(ax, cell_text, col_labels=...)` only when no LaTeX
+  toolchain is on PATH.
 
 See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Multipole
 visualization: a standardized complex figure" for the full rendered
 example combining all three.
+
+## Tables: LaTeX-typeset `booktabs`
+
+matplotlib's own `Axes.table` (what `booktabs_table()` uses) can only
+approximate a typeset table — no real kerning, no proper decimal-point
+alignment, no LaTeX math in cells, and cramped default cell padding that
+reads as "a grid dumped onto a figure" no matter how much it's tuned. When a
+real LaTeX toolchain is on the machine, prefer typesetting the table for
+real:
+
+```python
+from mmml.utils.plotting.styles import latex_available, latex_table_image, booktabs_table
+
+if latex_available():
+    latex_table_image(ax, cell_text, col_labels=["quantity", "value", "units"])
+else:
+    booktabs_table(ax, cell_text, col_labels=["quantity", "value", "units"])  # matplotlib fallback
+```
+
+- **`render_latex_table(cell_text, col_labels=..., row_labels=..., fontsize_pt=11)`**
+  writes a minimal `standalone`-class LaTeX document (`booktabs`, Helvetica
+  via `helvet` to match the house sans-serif figures), compiles it with
+  `pdflatex`, rasterizes the result to a transparent PNG with `pdftocairo`
+  at 400 DPI, and returns the PNG path. Output is content-hashed and cached
+  under `.cache/latex_tables/` (gitignored) so re-running a script that
+  builds the same table doesn't re-invoke LaTeX every time.
+- **`latex_table_image(ax, cell_text, ...)`** calls `render_latex_table` and
+  draws the PNG into `ax` via `imshow` — give it its own subplot, exactly
+  like `booktabs_table`.
+- **`latex_available()`** checks whether `pdflatex` and `pdftocairo` are on
+  PATH; both scripts and callers should branch on this rather than letting
+  `render_latex_table` raise partway through a batch render.
+- Plain-text cells are auto-escaped (`_`, `%`, `&`, `#`, `|`) so labels like
+  `atom_id` or `50%` don't break compilation. A cell that already contains
+  `$` or `\` is assumed to be real LaTeX (e.g. `r"$|\mathbf{q}|$"`) and is
+  passed through untouched — don't mix escaped and raw LaTeX in the same
+  cell.
+- `booktabs_table()` (the matplotlib-only fallback, no LaTeX dependency)
+  still exists for environments without a LaTeX install — CI runners,
+  Docker images without `texlive`, etc. It has `row_height` (default `2.0`,
+  via `Table.scale`) for breathing room between rows, and left/right
+  auto-alignment (`numeric_cols`) for text vs. numbers.
+
+## Colormaps for a figure with several sequential/diverging panels
+
+`default_cmap(kind)` gives ONE house default per category — right for a
+figure with a single sequential/diverging quantity, wrong for a figure with
+*several distinct* ones (e.g. three physical fields shown as small
+multiples): reusing one colormap for all of them erases the fact that the
+panels encode different quantities. Use `MULTI_CMAP_SHORTLIST` instead,
+which gives a short, fixed-order list per category:
+
+```python
+from mmml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
+
+names = MULTI_CMAP_SHORTLIST["sequential"][:3]  # e.g. for 3 side-by-side panels
+```
+
+`MULTI_CMAP_SHORTLIST[kind][0]` is always identical to `default_cmap(kind)`
+— reserve it for the figure's "primary"/most-important quantity, and assign
+later entries to secondary panels in order, so the same quantity (e.g. "MM
+energy") gets the same colormap every time it appears across a project,
+rather than a fresh pick per script. See
+[`docs/plot-style-gallery.md`](plot-style-gallery.md) "Colormaps for a
+figure with several panels" for the rendered example.
+
+## Line styles, markers, and symbols
+
+Color is not the only categorical encoding available. Two house cycles:
+
+- **`LINE_STYLE_CYCLE = ("-", "--", "-.", ":")`** — for line plots.
+- **`MARKER_CYCLE = ("o", "s", "^", "D", "v", "P", "X", "*")`** — for
+  scatter plots.
+
+Use these as a **second, independent** categorical axis on top of color
+(never as a substitute for it, and never assigned by raw index alone — pick
+by the role a series plays):
+
+- A figure that already spends color on one distinction (e.g. force field)
+  and needs a second one on top (e.g. replicate run) — color = force field,
+  line style/marker = replicate, with **two separate legends** (one per
+  axis) rather than one combined legend enumerating every combination.
+- Redundant coding for accessibility — even with a colorblind-safe palette
+  (`icml_okabe_ito`), a second non-color cue means identity survives
+  grayscale printing or a viewer who can't rely on color at all.
+
+```python
+from mmml.utils.plotting.styles import LINE_STYLE_CYCLE, MARKER_CYCLE, comparison_colors
+
+colors = comparison_colors(style, n=len(force_fields))
+for ff, color in zip(force_fields, colors):
+    for rep, ls in enumerate(LINE_STYLE_CYCLE):
+        ax.plot(t, trace, color=color, linestyle=ls)
+```
+
+A **non-categorical** third technique: use linewidth/alpha as a visual
+hierarchy instead of a legend lookup — draw the "headline" series bold and
+opaque, supporting/context traces thin and faint (`linewidth=1.0,
+alpha=0.35`), so the eye finds the point of the figure immediately.
+
+See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Line styles,
+markers, and symbols" for all three rendered.

@@ -10,11 +10,17 @@ from mmml.cli.misc.extract_checkpoint_metrics import (
 )
 from mmml.utils.plotting.styles import (
     DEFAULT_PLOT_STYLE,
+    LINE_STYLE_CYCLE,
+    MARKER_CYCLE,
+    MULTI_CMAP_SHORTLIST,
+    OKABE_ITO_PALETTE,
     PLOT_STYLES,
     apply_plot_style,
     comparison_colors,
     get_plot_style,
+    latex_available,
     list_plot_styles,
+    render_latex_table,
 )
 
 
@@ -90,3 +96,39 @@ def test_comparison_plot_accepts_style(tmp_path: Path, style_name: str) -> None:
     written = plot_training_comparison(runs, out, ef_only=True, verbose=False, plot_style=style_name)
     assert len(written) == 3
     assert (tmp_path / f"compare_{style_name}_valid_loss.png").is_file()
+
+
+def test_okabe_ito_palette_is_eight_distinct_hex_colors() -> None:
+    assert len(OKABE_ITO_PALETTE) == 8
+    assert len(set(OKABE_ITO_PALETTE)) == 8
+    assert all(c.startswith("#") and len(c) == 7 for c in OKABE_ITO_PALETTE)
+
+
+def test_icml_okabe_ito_style_uses_the_palette() -> None:
+    style = get_plot_style("icml_okabe_ito")
+    assert style.comparison_palette == OKABE_ITO_PALETTE
+
+
+def test_multi_cmap_shortlist_covers_all_three_kinds() -> None:
+    assert set(MULTI_CMAP_SHORTLIST) == {"sequential", "diverging", "cyclic"}
+    for kind, names in MULTI_CMAP_SHORTLIST.items():
+        assert len(names) >= 2, kind
+        assert len(set(names)) == len(names), f"duplicate colormap name in {kind}"
+
+
+def test_line_and_marker_cycles_are_nonempty_and_distinct() -> None:
+    assert len(set(LINE_STYLE_CYCLE)) == len(LINE_STYLE_CYCLE) > 0
+    assert len(set(MARKER_CYCLE)) == len(MARKER_CYCLE) > 0
+
+
+@pytest.mark.skipif(not latex_available(), reason="requires pdflatex + pdftocairo on PATH")
+def test_render_latex_table_produces_a_png(tmp_path: Path) -> None:
+    out = tmp_path / "table.png"
+    result = render_latex_table(
+        [["monopole", "+0.289", "e"], ["atom_id_5%", "0.9", "e|bohr"]],
+        col_labels=["quantity", "value", "units"],
+        out_path=out,
+    )
+    assert result == out
+    assert out.is_file()
+    assert out.stat().st_size > 0

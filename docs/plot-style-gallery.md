@@ -412,20 +412,77 @@ lets each (l, m) value read as its own cell.
 
 ### Standardized complex figure
 
-Multipole triangle + per-atom partial-charge bars + a booktabs-style summary
-table, combined under the "Complex figure layout" rules from
-[`docs/plotting-style-guide.md`](plotting-style-guide.md): **one** shared
-colorbar for both the triangle and the bars (same colormap, same scale,
-`constrained_layout=True` so it doesn't overlap either panel), and
-`booktabs_table()` for the summary — a rule above the header, one below it,
-one at the bottom, nothing else, generous row height (`row_height=2.0`),
-and numeric columns right-aligned against label columns left-aligned:
+Multipole triangle + per-atom partial-charge bars + a **real LaTeX-typeset**
+`booktabs` summary table, combined under the "Complex figure layout" rules
+from [`docs/plotting-style-guide.md`](plotting-style-guide.md): **one**
+shared colorbar for both the triangle and the bars (same colormap, same
+scale, `constrained_layout=True` so it doesn't overlap either panel), and
+`latex_table_image()` for the summary — compiled with `pdflatex` and
+rasterized at 400 DPI, so it has real kerning and decimal-point alignment
+instead of matplotlib's `Axes.table` approximation:
 
 ![multipole standardized complex figure](plot-style-gallery-assets/chart_multipole_complex.png)
 
 ```python
-from mmml.utils.plotting.styles import booktabs_table, shared_axis_labels
+from mmml.utils.plotting.styles import latex_table_image, latex_available, shared_axis_labels
+
+if latex_available():
+    latex_table_image(ax_table, cell_text, col_labels=col_labels)
+else:
+    booktabs_table(ax_table, cell_text, col_labels=col_labels)  # matplotlib fallback
 ```
+
+See [`docs/plotting-style-guide.md`](plotting-style-guide.md) "Tables:
+LaTeX-typeset `booktabs`" for why, and when to fall back to
+`booktabs_table()`.
+
+### Colormaps for a figure with several panels
+
+A figure with more than one sequential (or diverging) panel — one per
+physical quantity — should not reuse a single colormap for all of them; that
+erases the fact that the panels encode different things. Pick a distinct map
+per panel, in a fixed order, from `MULTI_CMAP_SHORTLIST`:
+
+![three sequential colormaps, one figure](plot-style-gallery-assets/chart_multi_cmap_panels.png)
+
+```python
+from mmml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
+
+names = MULTI_CMAP_SHORTLIST["sequential"][:3]  # or ["diverging"] / ["cyclic"]
+```
+
+`MULTI_CMAP_SHORTLIST[kind][0]` is always the same as the corresponding
+`default_cmap(kind)` — reserve it for the figure's "primary" quantity, and
+use the later entries for secondary panels, so a repeated panel (e.g. "MM
+energy" across many workflow figures) keeps the same colormap project-wide.
+
+## Line styles, markers, and symbols
+
+Color is not the only axis available — line style (dash pattern) and marker
+shape are a second, independent categorical encoding, useful when: a figure
+already spends color on one distinction (e.g. force field) and needs a
+second one (e.g. replicate) on top of it; the figure must survive grayscale
+printing; or color-alone identity would fail a colorblind reader even with a
+safe palette (redundant coding). See `LINE_STYLE_CYCLE` / `MARKER_CYCLE` in
+`mmml.utils.plotting.styles` and
+[`docs/plotting-style-guide.md`](plotting-style-guide.md) "Line styles,
+markers, and symbols" for the full writeup.
+
+### Line style = one axis, color = another
+
+![line style by role](plot-style-gallery-assets/chart_line_style_roles.png)
+
+### Marker shape = one axis, color = another
+
+![marker style by role](plot-style-gallery-assets/chart_marker_style_roles.png)
+
+### Linewidth/alpha as a visual hierarchy (not categorical at all)
+
+A non-categorical use of the same idea: bold + opaque for the "headline"
+series, thin + faint for supporting context, so the eye finds the point
+without reading the legend first.
+
+![linewidth/alpha hierarchy](plot-style-gallery-assets/chart_linewidth_hierarchy.png)
 
 ## How to pick
 
