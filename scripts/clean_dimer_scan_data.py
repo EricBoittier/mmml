@@ -40,7 +40,10 @@ def main() -> None:
     reason[~np.isfinite(energy)] = "nonfinite_energy"
     reason[(reason == "") & (~np.isfinite(contact))] = "nonfinite_contact"
     reason[(reason == "") & (contact < args.min_contact)] = "close_contact"
-    extreme = df["interaction_kcal_mol_for_cleaning"] < args.min_interaction_kcal
+    extreme = (
+        (df["interaction_kcal_mol_for_cleaning"] < args.min_interaction_kcal)
+        & (contact >= args.min_contact)
+    )
     failed_groups = set(
         map(
             tuple,
