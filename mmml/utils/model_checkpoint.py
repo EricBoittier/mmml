@@ -379,8 +379,14 @@ def load_model_checkpoint(
                 params_candidates = [
                     checkpoint_dir / "params",
                     checkpoint_dir / "default",
+                    checkpoint_dir / "items",
+                    checkpoint_dir / "0",
                     checkpoint_dir,
                 ]
+                if checkpoint_dir.exists() and checkpoint_dir.is_dir():
+                    for child in checkpoint_dir.iterdir():
+                        if child.is_dir() and child not in params_candidates:
+                            params_candidates.append(child)
                 restored = None
                 for path in params_candidates:
                     if path.exists():
