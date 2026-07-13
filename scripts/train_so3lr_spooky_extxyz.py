@@ -623,6 +623,8 @@ def init_state(
         batch_mask=batch["batch_mask"],
         atom_mask=batch["atom_mask"],
         compute_forces=False,
+        mol_id=batch.get("mol_id"),
+        cgenff_type_idx=batch.get("cgenff_type_idx"),
         cgenff_master_sigmas=batch.get("cgenff_master_sigmas"),
         cgenff_master_epsilons=batch.get("cgenff_master_epsilons"),
     )
