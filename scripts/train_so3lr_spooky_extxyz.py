@@ -458,7 +458,7 @@ def make_steps(
         # remain differentiable so the residual learns against MBD forces.
         mbd_params = jax.tree.map(jax.lax.stop_gradient, mbd_params)
 
-    def loss_fn(params, batch):
+    def loss_fn(params, batch, mbd_scale):
         out = model.apply(
             params,
             atomic_numbers=batch["Z"],
@@ -493,8 +493,9 @@ def make_steps(
             )
             mbd_energy = mbd_output["energy"].reshape(-1, 1) * HARTREE_TO_EV
             mbd_forces = mbd_forces_au.reshape(batch["F"].shape) * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM
-        energy_pred = spooky_energy + mbd_weight * mbd_energy
-        forces_pred = spooky_forces + mbd_weight * mbd_forces
+        composite_mbd_weight = mbd_weight * mbd_scale
+        energy_pred = spooky_energy + composite_mbd_weight * mbd_energy
+        forces_pred = spooky_forces + composite_mbd_weight * mbd_forces
         energy_ref = batch["E"].reshape(-1, 1)
         forces_ref = batch["F"]
         force_mask = batch["atom_mask"][:, None]
@@ -531,12 +532,19 @@ def make_steps(
             "mbd_energy_abs_mean": jnp.mean(jnp.abs(mbd_energy)),
             "mbd_force_abs_mean": jnp.sum(jnp.abs(mbd_forces) * force_mask)
             / (jnp.sum(force_mask) * 3.0 + 1e-8),
+            "mbd_scale": mbd_scale,
         }
         return loss, metrics
 
     def train_step(state, batch):
+        if args.mbd_ramp_steps > 0:
+            mbd_scale = jnp.minimum(
+                1.0, state.step.astype(jnp.float32) / float(args.mbd_ramp_steps)
+            )
+        else:
+            mbd_scale = jnp.asarray(1.0, dtype=jnp.float32)
         (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(
-            state.params, batch
+            state.params, batch, mbd_scale
         )
         grads = jax.lax.pmean(grads, axis_name="device")
         state = state.apply_gradients(grads=grads)
@@ -545,7 +553,13 @@ def make_steps(
         return state, metrics
 
     def eval_step(state, batch):
-        _, metrics = loss_fn(state.params, batch)
+        if args.mbd_ramp_steps > 0:
+            mbd_scale = jnp.minimum(
+                1.0, state.step.astype(jnp.float32) / float(args.mbd_ramp_steps)
+            )
+        else:
+            mbd_scale = jnp.asarray(1.0, dtype=jnp.float32)
+        _, metrics = loss_fn(state.params, batch, mbd_scale)
         return jax.lax.pmean(metrics, axis_name="device")
 
     return (
@@ -854,6 +868,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     "optimizer",
                     "mbd_checkpoint",
                     "mbd_weight",
+                    "mbd_ramp_steps",
                     "lr_schedule",
                     "lr_warmup_steps",
                     "lr_decay_steps",
@@ -1013,6 +1028,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
                     f"F_MAE={m['forces_mae']:.6g} "
                     f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g}"
+                    f" MBD_λ={m['mbd_scale']:.3f}"
                 )
             if args.steps_per_epoch and step >= args.steps_per_epoch:
                 break
@@ -1190,6 +1206,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=1.0,
         help="Scale for the frozen MBD energy and forces (default: 1.0).",
     )
+    parser.add_argument(
+        "--mbd-ramp-steps",
+        type=int,
+        default=10_000,
+        help=(
+            "Linearly introduce the frozen MBD correction over this many optimizer "
+            "steps (default: 10000; 0 enables it immediately)."
+        ),
+    )
     parser.add_argument("--features", type=int, default=128)
     parser.add_argument("--max-degree", type=int, default=2)
     parser.add_argument("--num-iterations", type=int, default=3)
@@ -1221,6 +1246,8 @@ def main() -> None:
         raise ValueError("--lr-end-fraction must be between 0 and 1")
     if args.mbd_weight < 0.0:
         raise ValueError("--mbd-weight must be non-negative")
+    if args.mbd_ramp_steps < 0:
+        raise ValueError("--mbd-ramp-steps must be non-negative")
     cache_path = _resolve_cache_path(args)
     if args.mode in {"cache", "cache-and-train"}:
         cache_path = cache_extxyz_to_orbax(args)
