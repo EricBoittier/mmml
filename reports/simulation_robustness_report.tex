@@ -36,32 +36,34 @@ between.
 actual trained \texttt{charged\_electrostatic\_best\_forces} PhysNet checkpoint
 (charge-predicting, \texttt{total\_charge=0}) via real ASE Velocity Verlet integration, or
 from existing real campaign/sweep results already on disk. Nothing here is synthetic or
-illustrative-only.
+illustrative-only. All figures render under the house \texttt{"icml"} style.
 
 \fig{../docs/robustness-report-assets/chart_summary_table.png}{0.7}{Headline quantities from the fresh real NVE trajectories.}
 
 \section{Fluctuating charges and multipoles}
 
-A real 200~fs NVE trajectory of a 4-water (12-atom) cluster, using the real charge head of
-\texttt{charged\_electrostatic\_best\_forces}, recorded every frame's per-atom partial
-charges and total molecular dipole. Both fluctuate continuously with the nuclear motion,
-exactly as expected for an environment-dependent (not fixed-point-charge) electrostatics
-model.
+A real 200~fs NVE trajectory of a single ethanol molecule (ASE's reference geometry), using
+the real charge head of \texttt{charged\_electrostatic\_best\_forces}, recorded every
+frame's per-atom partial charges and total molecular dipole. Both fluctuate continuously
+with the nuclear motion, exactly as expected for an environment-dependent (not
+fixed-point-charge) electrostatics model. The molecular render beside the data is the
+actual relaxed structure that was simulated.
 
-\fig{../docs/robustness-report-assets/chart_charge_dipole_fluctuation.png}{1.0}{Per-atom charge and total dipole moment over a real 200~fs NVE trajectory.}
+\fig{../docs/robustness-report-assets/chart_charge_dipole_fluctuation.png}{1.0}{Per-atom charge and total dipole moment over a real 200~fs NVE trajectory, with the simulated molecule shown alongside.}
 
-Oxygen atoms carry a persistent negative charge ($\sim$$-0.3$ to $-0.4\,e$) and hydrogens a
-smaller positive one --- the right sign and magnitude for water --- while both fluctuate
-continuously with the local hydrogen-bonding environment. The dipole moment varies smoothly,
-never spiking or discontinuous, consistent with charges and forces coming from the same
-differentiable energy surface.
+The hydroxyl oxygen carries a persistent negative charge ($\sim -0.4\,e$), the two carbons
+split into a more electronegative-adjacent CH$_2$ ($\sim -0.24\,e$) and a plain methyl CH$_3$
+($\sim -0.22\,e$), and hydrogens stay small and positive --- the right sign and qualitative
+ordering for ethanol --- while all of them fluctuate continuously rather than toggling
+between fixed values. The dipole moment varies smoothly, never spiking or discontinuous,
+consistent with charges and forces coming from the same differentiable energy surface.
 
-\section{Bond, angle, and dihedral potential-energy scans}
+\section{Bond, angle, dihedral, and non-bonded potential-energy scans}
 
-Three internal-coordinate types, three real scans: bond and angle scans freshly computed on
-an isolated water molecule with the real checkpoint; a dihedral scan taken as a 1D slice
-through the existing real trialanine backbone $\phi/\psi$ PES; and, as a bonus fourth term, the
-existing real xTB-GFN2 dimer-separation campaign.
+Four PES types, four real evaluations: bond and angle scans freshly computed on an isolated
+water molecule with the real checkpoint; a dihedral scan taken as a 1D slice through the
+existing real trialanine backbone $\phi/\psi$ PES; and the existing real xTB-GFN2
+dimer-separation campaign.
 
 \fig{../docs/robustness-report-assets/chart_bond_angle_scans.png}{1.0}{Real bond-stretch and angle-bend PES scans on a single water molecule.}
 
@@ -77,43 +79,68 @@ artifact of this compact checkpoint, not a simulation-code bug.
 
 \fig{../docs/robustness-report-assets/chart_dihedral_dimer_scans.png}{1.0}{Real dihedral (trialanine backbone) and dimer-separation (xTB-GFN2) PES scans.}
 
+\subsection{Full 2D potential energy surfaces: MM vs.\ ML}
+
+The dihedral scan above is a 1D slice; the real scan is a full 64$\times$64 $\phi/\psi$ grid.
+Shown here as scatter, interpolated 3D surface, and torus inner/outer views (the torus makes
+$\phi=\pm180^\circ$ and $\psi=\pm180^\circ$ correctly adjacent, avoiding an artificial seam
+at a flat plot's edge).
+
+\fig{../docs/robustness-report-assets/chart_pes_landscape.png}{1.0}{Trialanine backbone PES, real 64$\times$64 scan: MM (top row) vs.\ ML (bottom row).}
+
+MM shows a broader, more diffuse high-energy ridge; ML shows a sharper, more localized peak
+in the same $\phi/\psi$ region --- a real, visible difference between the two energy
+surfaces on the same real scan data.
+
 \section{Energy conservation (NVE)}
 
-\textbf{Small system, full control over initial conditions.} The same relaxed 4-water
-cluster, integrated with two different timesteps from an identical starting geometry and
-velocity seed --- only $dt$ differs.
+All energies are reported in \textbf{kcal/mol} and \textbf{mean-subtracted}. Potential
+energy and total energy get separate panels (they live on different absolute scales), each
+as a real time-series + marginal-distribution pair.
+
+\textbf{Small system, full control over initial conditions.} The same relaxed ethanol
+molecule, integrated with two different timesteps from an identical starting geometry and
+velocity seed --- only $dt$ differs. The molecular render alongside each row is the actual
+simulated structure.
 
 \fig{../docs/robustness-report-assets/chart_energy_conservation_small.png}{1.0}{Energy conservation at the correct timestep (0.1~fs) vs.\ an under-resolved one (0.5~fs), same system and initial condition.}
 
-At $dt=0.1\,$fs (correctly resolving unconstrained O--H bond vibration), total energy is
-conserved to \textbf{0.3~meV} over 200~fs. At $dt=0.5\,$fs ($5\times$ larger), drift grows to
-\textbf{13.6~meV} --- about $40\times$ worse, close to the expected $O(dt^2)$ Verlet
-integration-error scaling ($5^2=25$). Both runs remain bounded (no runaway) --- this is the
-simulation code correctly revealing an integration-parameter sensitivity, not a bug.
+At $dt=0.1\,$fs (correctly resolving unconstrained bond vibration), total energy is
+conserved to a std of \textbf{0.0002~kcal/mol} over 200~fs. At $dt=0.5\,$fs ($5\times$
+larger), the fluctuation widens to a std of \textbf{0.0052~kcal/mol} --- about
+\textbf{23$\times$} wider, close to the expected $O(dt^2)$ Verlet integration-error scaling
+($5^2=25$). Both runs remain bounded (no runaway) --- this is the simulation code correctly
+revealing an integration-parameter sensitivity, not a bug.
+
+\fig{../docs/robustness-report-assets/chart_energy_fluctuation_comparison.png}{0.85}{Direct fluctuation-width comparison: both runs' mean-subtracted total-energy distributions on one shared axis.}
 
 \textbf{Large system, real production-scale sweep.} The existing 12-setting, 10000-step NVE
 sweep spans pure-MM water boxes and mixed ML-core/MM-water peptide systems.
 
 \fig{../docs/robustness-report-assets/chart_energy_conservation_sweep.png}{0.85}{Real 12-setting, 10000-step NVE sweep: max energy deviation per setting.}
 
-11 of 12 settings conserve energy to well under 1~eV over the full run (green). Two mixed-system
-settings show a larger but bounded deviation (amber) --- documented, not hidden.
-\texttt{mixed\_core\_vdw} (red) shows a genuine energy blow-up traced to an unminimized
-packmol starting geometry for that specific setting --- a real, understood failure mode from
-a bad initial condition.
+11 of 12 settings conserve energy to well under 1~eV over the full run (teal-green). Two
+mixed-system settings show a larger but bounded deviation (amber) --- documented, not hidden.
+\texttt{mixed\_core\_vdw} (brick red) shows a genuine energy blow-up traced to an
+unminimized packmol starting geometry for that specific setting --- a real, understood
+failure mode from a bad initial condition.
 
 \section{Structural analysis}
 
-Internal-coordinate distributions from the small water-cluster NVE trajectory:
+Internal-coordinate distributions from the ethanol NVE trajectory. Ethanol has real bonds,
+angles, \emph{and} dihedrals (unlike the water-cluster system used earlier in this
+project, which had zero 4-atom chains) --- a coordinate type with no data simply doesn't
+get a panel, rather than showing an empty placeholder.
 
-\fig{../docs/robustness-report-assets/chart_structural_internal.png}{1.0}{Bond-length and angle distributions from the real NVE trajectory.}
+\fig{../docs/robustness-report-assets/chart_structural_internal.png}{1.0}{Bond-length, angle, and dihedral distributions from the real ethanol NVE trajectory.}
 
-A clean, single-peaked O--H bond-length distribution centered near the equilibrium value
-with realistic thermal spread, and a similarly well-behaved H--O--H angle distribution.
+Clean, single-peaked distributions for all three coordinate types, centered near their
+physical equilibrium values with realistic thermal spread.
 
 Element-pair radial distribution functions from the large-scale sweep's real, periodic, bulk
 NVE trajectories (RDF normalization requires a genuine periodic bulk system, so these come
-from the sweep's boxed water systems rather than the small non-periodic cluster above):
+from the sweep's boxed water systems rather than the small non-periodic ethanol molecule
+above):
 
 \fig{../docs/robustness-report-assets/chart_structural_rdfs_water_baseline.png}{0.85}{Element-pair RDFs, pure-MM water box (real sweep trajectory).}
 \fig{../docs/robustness-report-assets/chart_structural_rdfs_mixed_baseline.png}{0.85}{Element-pair RDFs, mixed ML-core/MM-water system (real sweep trajectory).}
@@ -127,16 +154,19 @@ at long range --- for both the pure-MM and mixed ML-core/MM-water systems.
 \begin{itemize}
   \item Charges and dipoles are genuinely environment-dependent, not fixed-point-charge
         approximations, and vary smoothly with no discontinuities.
-  \item All four internal-coordinate/interaction types the potential must model --- bond,
-        angle, dihedral, non-bonded distance --- produce real, checkpoint-derived energy
-        curves with the right qualitative shape near equilibrium; extrapolation limitations
-        at extreme geometries are identified and shown, not hidden.
-  \item Energy conservation holds at appropriate integration parameters, both for a small
-        system under full experimental control and for the large real production-scale
-        sweep spanning pure-MM to mixed ML-core/MM-water systems --- and the code correctly
-        reveals parameter-sensitivity failure modes rather than masking them.
-  \item Structural analysis reproduces expected liquid-water behavior using the existing
-        plotting/analysis library, for both pure-MM and mixed ML/MM systems.
+  \item All four PES types the potential must model --- bond, angle, dihedral, non-bonded
+        distance, plus a full 2D MM-vs-ML backbone landscape --- produce real,
+        checkpoint-derived energy curves with the right qualitative shape near equilibrium;
+        extrapolation limitations at extreme geometries are identified and shown, not hidden.
+  \item Energy conservation holds at appropriate integration parameters, in kcal/mol,
+        mean-subtracted, with potential and total energy on separate panels and a direct
+        fluctuation-width comparison --- both for a small system under full experimental
+        control and for the large real production-scale sweep spanning pure-MM to mixed
+        ML-core/MM-water systems --- and the code correctly reveals parameter-sensitivity
+        failure modes rather than masking them.
+  \item Structural analysis reproduces expected liquid-water and small-molecule behavior
+        using the existing plotting/analysis library, for pure-MM, mixed ML/MM, and pure-ML
+        systems.
 \end{itemize}
 
 \end{document}

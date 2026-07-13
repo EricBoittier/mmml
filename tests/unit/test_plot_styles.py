@@ -29,6 +29,7 @@ from mmml.utils.plotting.styles import (
     render_latex_table,
     status_color,
     status_hatch,
+    timeseries_with_distribution,
 )
 
 
@@ -314,4 +315,36 @@ def test_find_overlapping_text_detects_a_real_collision() -> None:
     assert overlaps, "expected a real overlap in a deliberately cramped figure"
     with pytest.raises(AssertionError, match="Overlapping text"):
         assert_no_text_overlap(fig)
+    plt.close(fig)
+
+
+def test_timeseries_with_distribution_centers_by_default() -> None:
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    apply_plot_style("icml")
+    fig = plt.figure(figsize=(8, 4))
+    gs = fig.add_gridspec(1, 1)
+    t = np.linspace(0, 10, 50)
+    y = 5.0 + np.sin(t)  # offset series -- centering should remove the 5.0
+    ax_series, ax_hist = timeseries_with_distribution(fig, gs[0, 0], t, y, color="#4C72B0")
+    # the plotted series (not the raw input) should be mean-centered
+    plotted_y = ax_series.lines[0].get_ydata()
+    assert abs(float(np.mean(plotted_y))) < 1e-9
+    assert ax_hist is not ax_series
+    plt.close(fig)
+
+
+def test_timeseries_with_distribution_no_center_keeps_raw_values() -> None:
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    apply_plot_style("icml")
+    fig = plt.figure(figsize=(8, 4))
+    gs = fig.add_gridspec(1, 1)
+    t = np.linspace(0, 10, 50)
+    y = 5.0 + np.sin(t)
+    ax_series, _ = timeseries_with_distribution(fig, gs[0, 0], t, y, color="#4C72B0", center=False)
+    plotted_y = ax_series.lines[0].get_ydata()
+    assert abs(float(np.mean(plotted_y)) - 5.0) < 0.5
     plt.close(fig)
