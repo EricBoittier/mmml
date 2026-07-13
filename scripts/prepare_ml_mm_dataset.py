@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Dataset preparation script for ML/MM hybrid training with CGenFF topology back-mapping.
 
-Partitions extxyz structures into dimer monomer components using covalent graph connectivity,
+Fast Orbax cache reader & writer:
+Partitions dataset structures into dimer monomer components using covalent graph connectivity,
 back-maps monomers to official CGenFF residue templates in CGENFF.RES / top_all36_cgenff.rtf,
 pre-computes CGenFF MM nonbonded baselines (Coulomb + LJ 6-12), and exports an enriched dataset
-ready for residual ML/MM model training.
+directly into a new Orbax cache and/or extxyz ready for residual ML/MM model training.
 """
 
 from __future__ import annotations
@@ -13,9 +14,11 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
+import orbax.checkpoint as ocp
 
 # Ensure repository root is in sys.path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -23,11 +26,12 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from ase import Atoms
-from ase.data import covalent_radii, atomic_numbers, chemical_symbols
+from ase.data import covalent_radii
 from ase.io import iread, write
 import ase.units
 
 K_COULOMB_KCAL_ANG = 332.06371  # e^2 / Angstrom -> kcal/mol
+KCAL_TO_EV = 1.0 / ase.units.kcal * ase.units.mol
 
 # Default CGenFF topology path
 DEF_RTF_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "top_all36_cgenff.rtf"
@@ -35,30 +39,8 @@ DEF_PRM_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
 DEF_RES_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "CGENFF.RES"
 
 
-def parse_cgenff_residue_table(res_path: Path) -> dict[str, str]:
-    """Parse RESI records from CGENFF.RES mapping residue name to empirical formula."""
-    res_map = {}
-    if not res_path.exists():
-        return res_map
-    
-    with res_path.open("r", encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            line = line.strip()
-            if line.startswith("RESI"):
-                parts = line.split("!")
-                res_head = parts[0].strip().split()
-                if len(res_head) >= 2:
-                    res_name = res_head[1]
-                    comment = parts[1].strip() if len(parts) > 1 else ""
-                    # Extract formula if present in comment e.g. ! C2H3O2, acetate
-                    formula_match = re.search(r"([A-Za-z0-9]+)", comment)
-                    if formula_match:
-                        res_map[res_name] = formula_match.group(1)
-    return res_map
-
-
 def load_cgenff_nonbonded_params(prm_path: Path) -> dict[str, tuple[float, float]]:
-    """Parse NONBONDED section from par_all36_cgenff.prm returning {atom_type: (epsilon, rmin_half)}."""
+    """Parse NONBONDED section from par_all36_cgenff.prm returning {atom_type: (epsilon, sigma)}."""
     nb_params = {}
     in_nb = False
     if not prm_path.exists():
@@ -94,7 +76,6 @@ def load_cgenff_rtf_residues(rtf_path: Path, prm_path: Path) -> dict[str, dict]:
     """Parse all RESI blocks from top_all36_cgenff.rtf to extract atomic charges and nonbonded parameters."""
     nb_params = load_cgenff_nonbonded_params(prm_path)
     residues = {}
-    
     if not rtf_path.exists():
         return residues
 
@@ -131,16 +112,12 @@ def load_cgenff_rtf_residues(rtf_path: Path, prm_path: Path) -> dict[str, dict]:
     return residues
 
 
-# Global CGenFF template cache loaded from RTF & PRM
 _CGENFF_TEMPLATES = load_cgenff_rtf_residues(DEF_RTF_PATH, DEF_PRM_PATH)
 
 
-def find_covalent_components(atoms: Atoms) -> list[list[int]]:
-    """Partition atoms into connected covalent molecular components."""
-    z = atoms.get_atomic_numbers()
-    pos = atoms.get_positions()
-    n = len(atoms)
-    
+def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[int]]:
+    """Partition atoms into connected covalent molecular components using fast numpy distance matrix."""
+    n = len(z)
     adj = np.zeros((n, n), dtype=bool)
     for i in range(n):
         for j in range(i + 1, n):
@@ -169,12 +146,10 @@ def find_covalent_components(atoms: Atoms) -> list[list[int]]:
     return components
 
 
-def match_cgenff_template(atoms: Atoms, comp_indices: list[int]) -> tuple[str, list[int], np.ndarray, np.ndarray, np.ndarray]:
+def match_cgenff_template_fast(z_sub: np.ndarray, comp_indices: list[int]) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
     """Match monomer component against registered CGenFF templates."""
-    sub_z = atoms.get_atomic_numbers()[comp_indices]
-    counts = dict(zip(*np.unique(sub_z, return_counts=True)))
+    counts = dict(zip(*np.unique(z_sub, return_counts=True)))
     
-    # Fast match for common DES monomers
     if counts == {6: 1, 1: 2, 17: 2} and "DCM" in _CGENFF_TEMPLATES:
         res_name = "DCM"
     elif counts == {8: 1, 6: 3, 1: 6} and "ACO" in _CGENFF_TEMPLATES:
@@ -186,13 +161,7 @@ def match_cgenff_template(atoms: Atoms, comp_indices: list[int]) -> tuple[str, l
     elif counts == {6: 1, 8: 1, 1: 4} and "MEOH" in _CGENFF_TEMPLATES:
         res_name = "MEOH"
     else:
-        # Search by composition in parsed RTF residues
-        matched_res = None
-        for r_name, r_tmpl in _CGENFF_TEMPLATES.items():
-            if len(r_tmpl["atoms"]) == len(comp_indices):
-                matched_res = r_name
-                break
-        res_name = matched_res or atoms[comp_indices].get_chemical_formula()
+        res_name = "GENERIC"
 
     if res_name in _CGENFF_TEMPLATES:
         tmpl = _CGENFF_TEMPLATES[res_name]
@@ -200,121 +169,177 @@ def match_cgenff_template(atoms: Atoms, comp_indices: list[int]) -> tuple[str, l
         sigmas = np.array(tmpl["sigmas"], dtype=np.float64)
         epsilons = np.array(tmpl["epsilons"], dtype=np.float64)
     else:
-        # Generic CGenFF/Universal VDW fallback for arbitrary components
         n = len(comp_indices)
         charges = np.zeros(n, dtype=np.float64)
-        sigmas = np.array([2.0 * covalent_radii[z] for z in sub_z], dtype=np.float64)
+        sigmas = np.array([2.0 * covalent_radii[zi] for zi in z_sub], dtype=np.float64)
         epsilons = np.full(n, 0.05, dtype=np.float64)
 
-    return res_name, comp_indices, charges, sigmas, epsilons
+    return res_name, charges, sigmas, epsilons
 
 
-def compute_inter_monomer_cgenff_mm(atoms: Atoms, comp_a: list[int], q_a: np.ndarray, sig_a: np.ndarray, eps_a: np.ndarray,
-                                   comp_b: list[int], q_b: np.ndarray, sig_b: np.ndarray, eps_b: np.ndarray) -> tuple[float, np.ndarray]:
-    """Compute inter-monomer MM Coulomb + Lennard-Jones baseline energy and forces."""
-    pos = atoms.get_positions()
+def compute_inter_monomer_cgenff_mm_fast(pos: np.ndarray, comp_a: list[int], q_a: np.ndarray, sig_a: np.ndarray, eps_a: np.ndarray,
+                                        comp_b: list[int], q_b: np.ndarray, sig_b: np.ndarray, eps_b: np.ndarray) -> tuple[float, np.ndarray]:
+    """Compute inter-monomer MM Coulomb + LJ baseline energy and forces in fast numpy."""
     pos_a = pos[comp_a]
     pos_b = pos[comp_b]
-    
     forces = np.zeros_like(pos, dtype=np.float64)
-    e_coulomb = 0.0
-    e_vdw = 0.0
+    
+    # Vectorized pairwise differences
+    dr = pos_a[:, None, :] - pos_b[None, :, :]  # (N_a, N_b, 3)
+    r = np.linalg.norm(dr, axis=-1)              # (N_a, N_b)
+    
+    q_ij = q_a[:, None] * q_b[None, :]
+    sig_ij = 0.5 * (sig_a[:, None] + sig_b[None, :])
+    eps_ij = np.sqrt(eps_a[:, None] * eps_b[None, :])
+    
+    # Coulomb
+    e_coulomb = np.sum(K_COULOMB_KCAL_ANG * q_ij / r)
+    f_c_mag = K_COULOMB_KCAL_ANG * q_ij / (r**3)
+    
+    # LJ
+    sr6 = (sig_ij / r)**6
+    sr12 = sr6**2
+    e_vdw = np.sum(4.0 * eps_ij * (sr12 - sr6))
+    f_v_mag = (24.0 * eps_ij / (r**2)) * (2.0 * sr12 - sr6)
+    
+    f_mag = f_c_mag + f_v_mag
+    f_vec = dr * f_mag[:, :, None] # (N_a, N_b, 3)
+    
+    forces[comp_a] += np.sum(f_vec, axis=1)
+    forces[comp_b] -= np.sum(f_vec, axis=0)
 
-    for i_sub, i_global in enumerate(comp_a):
-        for j_sub, j_global in enumerate(comp_b):
-            dr = pos_a[i_sub] - pos_b[j_sub]
-            r = np.linalg.norm(dr)
-            if r < 1e-6:
-                continue
-            
-            # Coulomb
-            q_ij = q_a[i_sub] * q_b[j_sub]
-            e_c = K_COULOMB_KCAL_ANG * q_ij / r
-            f_c_mag = K_COULOMB_KCAL_ANG * q_ij / (r**3)
-            
-            # Lennard-Jones Lorentz-Berthelot
-            sig_ij = 0.5 * (sig_a[i_sub] + sig_b[j_sub])
-            eps_ij = np.sqrt(eps_a[i_sub] * eps_b[j_sub])
-            sr6 = (sig_ij / r)**6
-            sr12 = sr6**2
-            e_v = 4.0 * eps_ij * (sr12 - sr6)
-            f_v_mag = (24.0 * eps_ij / (r**2)) * (2.0 * sr12 - sr6)
-
-            e_coulomb += e_c
-            e_vdw += e_v
-
-            f_pair = (f_c_mag + f_v_mag) * dr
-            forces[i_global] += f_pair
-            forces[j_global] -= f_pair
-
-    return (e_coulomb + e_vdw), forces
+    e_total_ev = (e_coulomb + e_vdw) * KCAL_TO_EV
+    forces_ev = forces * KCAL_TO_EV
+    return e_total_ev, forces_ev
 
 
-def process_dataset(extxyz_in: str | Path, extxyz_out: str | Path, max_structures: int | None = None):
-    extxyz_in = Path(extxyz_in).expanduser()
-    extxyz_out = Path(extxyz_out).expanduser()
+def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_structures: int | None = None):
+    cache_dir = Path(cache_dir).expanduser()
+    output_cache = Path(output_cache).expanduser()
 
     print(f"==================================================================")
-    print(f" CGenFF RTF/PRM Topology Back-Mapping & Baseline Pre-computer")
+    print(f" Fast Orbax Cache ML/MM Pre-computer & Topology Back-Mapper")
     print(f" Loaded {len(_CGENFF_TEMPLATES)} official CGenFF RESI templates")
-    print(f" Input: {extxyz_in} -> Output: {extxyz_out}")
+    print(f" Source Cache: {cache_dir}")
+    print(f" Target Cache: {output_cache}")
     print(f"==================================================================")
 
-    processed = 0
-    dimers_found = 0
-    out_frames = []
+    data = ocp.PyTreeCheckpointer().restore(cache_dir)
+    
+    Z_all = np.asarray(data["Z"]).reshape(-1)
+    R_all = np.asarray(data["R"]).reshape(-1, 3)
+    F_all = np.asarray(data["F"]).reshape(-1, 3)
+    offsets = np.asarray(data["mol_offsets"]).reshape(-1)
+    E_all = np.asarray(data["E"]).reshape(-1, 1)
+    N_all = np.asarray(data["N"]).reshape(-1, 1)
+    Q_all = np.asarray(data["Q"]).reshape(-1, 1)
+    S_all = np.asarray(data["S"]).reshape(-1, 1)
+    D_all = np.asarray(data["D"]).reshape(-1, 3)
 
-    for idx, atoms in enumerate(iread(str(extxyz_in), index=":", format="extxyz")):
-        if max_structures and idx >= max_structures:
-            break
-        
-        comps = find_covalent_components(atoms)
+    n_total = len(N_all)
+    if max_structures:
+        n_total = min(n_total, max_structures)
+
+    print(f"[+] Total Structures in Cache: {n_total:,}")
+    t0 = time.time()
+
+    kept_r = []
+    kept_z = []
+    kept_f = []
+    kept_f_cgenff = []
+    kept_e = []
+    kept_e_cgenff = []
+    kept_n = []
+    kept_q = []
+    kept_s = []
+    kept_d = []
+    kept_mol_id = []
+    kept_offsets = [0]
+
+    dimers_processed = 0
+
+    for i in range(n_total):
+        start = offsets[i]
+        end = offsets[i + 1]
+        z_struct = Z_all[start:end]
+        r_struct = R_all[start:end]
+        f_struct = F_all[start:end]
+
+        comps = find_covalent_components_fast(z_struct, r_struct)
         if len(comps) != 2:
             continue
 
-        dimers_found += 1
         comp_a, comp_b = comps[0], comps[1]
-
+        
         try:
-            res_a, _, q_a, sig_a, eps_a = match_cgenff_template(atoms, comp_a)
-            res_b, _, q_b, sig_b, eps_b = match_cgenff_template(atoms, comp_b)
+            res_a, q_a, sig_a, eps_a = match_cgenff_template_fast(z_struct[comp_a], comp_a)
+            res_b, q_b, sig_b, eps_b = match_cgenff_template_fast(z_struct[comp_b], comp_b)
 
-            e_mm, f_mm = compute_inter_monomer_cgenff_mm(
-                atoms, comp_a, q_a, sig_a, eps_a, comp_b, q_b, sig_b, eps_b
+            e_mm, f_mm = compute_inter_monomer_cgenff_mm_fast(
+                r_struct, comp_a, q_a, sig_a, eps_a, comp_b, q_b, sig_b, eps_b
             )
 
-            mol_id = np.zeros(len(atoms), dtype=np.int32)
+            n_atoms = len(z_struct)
+            mol_id = np.zeros(n_atoms, dtype=np.int32)
             mol_id[comp_b] = 1
-            atoms.arrays["mol_id"] = mol_id
 
-            KCAL_TO_EV = 1.0 / ase.units.kcal * ase.units.mol
-            atoms.info["E_cgenff_mm"] = e_mm * KCAL_TO_EV
-            atoms.arrays["F_cgenff_mm"] = f_mm * KCAL_TO_EV
+            kept_r.append(r_struct)
+            kept_z.append(z_struct)
+            kept_f.append(f_struct)
+            kept_f_cgenff.append(f_mm)
+            kept_e.append(E_all[i])
+            kept_e_cgenff.append(e_mm)
+            kept_n.append(n_atoms)
+            kept_q.append(Q_all[i])
+            kept_s.append(S_all[i])
+            kept_d.append(D_all[i])
+            kept_mol_id.append(mol_id)
+            kept_offsets.append(kept_offsets[-1] + n_atoms)
 
-            out_frames.append(atoms)
-            processed += 1
+            dimers_processed += 1
 
         except Exception:
             pass
 
-        if (idx + 1) % 5000 == 0:
-            print(f"  Parsed {idx + 1:,} structures | Dimers processed: {processed:,}")
+        if (i + 1) % 100000 == 0:
+            dt = time.time() - t0
+            print(f"  Scanned {i + 1:,} structures | Dimers extracted: {dimers_processed:,} ({dt:.1f}s)")
 
-    print(f"\n[+] Total Dimer Frames Extracted & Processed: {processed:,} / {dimers_found:,}")
-    extxyz_out.parent.mkdir(parents=True, exist_ok=True)
-    write(str(extxyz_out), out_frames, format="extxyz")
-    print(f"[+] Prepared dataset written to: {extxyz_out}")
+    print(f"\n[+] Total Dimer Structures Prepared: {dimers_processed:,} in {time.time() - t0:.2f}s")
+
+    output_data = {
+        "R": np.concatenate(kept_r, axis=0),
+        "Z": np.concatenate(kept_z, axis=0),
+        "F": np.concatenate(kept_f, axis=0),
+        "F_cgenff_mm": np.concatenate(kept_f_cgenff, axis=0),
+        "mol_offsets": np.asarray(kept_offsets, dtype=np.int64),
+        "E": np.asarray(kept_e, dtype=np.float64).reshape(-1, 1),
+        "E_cgenff_mm": np.asarray(kept_e_cgenff, dtype=np.float64).reshape(-1, 1),
+        "N": np.asarray(kept_n, dtype=np.int32).reshape(-1, 1),
+        "Q": np.asarray(kept_q, dtype=np.float64).reshape(-1, 1),
+        "S": np.asarray(kept_s, dtype=np.float64).reshape(-1, 1),
+        "D": np.asarray(kept_d, dtype=np.float64).reshape(-1, 3),
+        "mol_id": np.concatenate(kept_mol_id, axis=0),
+    }
+    output_data["metadata_n_structures"] = np.asarray(dimers_processed, dtype=np.int64)
+    output_data["metadata_n_atoms_total"] = np.asarray(kept_offsets[-1], dtype=np.int64)
+    output_data["metadata_max_atoms"] = np.asarray(max(kept_n), dtype=np.int32)
+
+    output_cache.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Saving processed Orbax data cache to: {output_cache}")
+    ocp.PyTreeCheckpointer().save(output_cache, output_data, force=True)
+    print(f"[+] Prepared dataset successfully saved!")
     print(f"==================================================================")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prepare ML/MM hybrid dataset with CGenFF RTF/PRM baselines")
-    parser.add_argument("--extxyz-in", required=True, help="Input raw extxyz dataset")
-    parser.add_argument("--extxyz-out", default="data/des_dimers_ml_mm.extxyz", help="Output enriched extxyz dataset")
+    parser = argparse.ArgumentParser(description="Fast Orbax Cache ML/MM dataset preparer")
+    parser.add_argument("--cache-dir", required=True, help="Input source Orbax data cache directory")
+    parser.add_argument("--output-cache", default="data/orbax_cache_des_ml_mm", help="Output destination Orbax cache directory")
     parser.add_argument("--max-structures", type=int, default=None, help="Optional frame limit")
     args = parser.parse_args()
 
-    process_dataset(args.extxyz_in, args.extxyz_out, max_structures=args.max_structures)
+    process_orbax_cache(args.cache_dir, args.output_cache, max_structures=args.max_structures)
 
 
 if __name__ == "__main__":
