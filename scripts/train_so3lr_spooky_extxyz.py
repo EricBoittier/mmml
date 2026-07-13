@@ -1003,7 +1003,9 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"valid_E_MAE={valid_mean.get('energy_mae', float('nan')):.6g} "
             f"valid_F_MAE={valid_mean.get('forces_mae', float('nan')):.6g} "
             f"valid_D_MAE={valid_mean.get('dipole_mae', float('nan')):.6g} "
-            f"valid_Q_MAE={valid_mean.get('charge_mae', float('nan')):.6g}"
+            f"valid_Q_MAE={valid_mean.get('charge_mae', float('nan')):.6g} "
+            f"MBD_|E|={valid_mean.get('mbd_energy_abs_mean', 0.0):.6g} "
+            f"MBD_|F|={valid_mean.get('mbd_force_abs_mean', 0.0):.6g}"
         )
 
         should_save = epoch % args.save_every == 0
