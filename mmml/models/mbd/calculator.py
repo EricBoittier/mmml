@@ -37,6 +37,36 @@ HARTREE_TO_EV = Hartree
 HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = Hartree / Bohr
 
 
+def _validate_mbd_config_against_params(
+    config: MBDModelConfig, params: Any, checkpoint: str | Path
+) -> None:
+    """Fail loudly if assumed ``config`` disagrees with the saved weight shapes.
+
+    The atom embedding fixes ``(max_atomic_number + 1, ..., features)`` and the
+    number of ``MessagePass_*`` submodules fixes ``num_iterations``; both are
+    cheap to read and the most likely things to differ from the defaults.
+    """
+    if not isinstance(params, dict):
+        return
+    embed = params.get("Embed_0", {}).get("embedding")
+    if embed is not None:
+        emb = np.asarray(embed)
+        n_emb, feats = int(emb.shape[0]), int(emb.shape[-1])
+        if n_emb != config.max_atomic_number + 1 or feats != config.features:
+            raise ValueError(
+                f"MBD checkpoint {checkpoint} weight shapes (max_atomic_number="
+                f"{n_emb - 1}, features={feats}) disagree with assumed default "
+                f"config (max_atomic_number={config.max_atomic_number}, "
+                f"features={config.features}); re-export the checkpoint with its config."
+            )
+    n_mp = sum(1 for key in params if key.startswith("MessagePass_"))
+    if n_mp and n_mp != config.num_iterations:
+        raise ValueError(
+            f"MBD checkpoint {checkpoint} has {n_mp} MessagePass layers but assumed "
+            f"num_iterations={config.num_iterations}; re-export the checkpoint with its config."
+        )
+
+
 def load_mbd_model(checkpoint: str | Path) -> tuple[E3xMBDModel, Any]:
     """Load a trained QCML MBD checkpoint.
 
@@ -52,10 +82,21 @@ def load_mbd_model(checkpoint: str | Path) -> tuple[E3xMBDModel, Any]:
         restored = json_to_params(checkpoint)
         raw_config = restored.get("config")
         if not raw_config:
-            raise ValueError(
-                f"JSON checkpoint {checkpoint} has no 'config' — cannot determine "
-                "MBD model architecture (features/cutoff/etc.)"
+            # Portable exports sometimes ship params only. Fall back to the
+            # default MBD architecture, but verify it is consistent with the
+            # saved weights (embedding shape pins max_atomic_number + features)
+            # so we fail loudly on a genuine mismatch rather than mis-loading.
+            import warnings
+
+            defaults = MBDModelConfig()
+            _validate_mbd_config_against_params(defaults, restored.get("params"), checkpoint)
+            warnings.warn(
+                f"JSON checkpoint {checkpoint} has no 'config'; assuming default "
+                f"MBDModelConfig ({defaults}). This matches the saved weight shapes, "
+                "but re-export with config to remove the guess.",
+                stacklevel=2,
             )
+            raw_config = {field.name: getattr(defaults, field.name) for field in fields(MBDModelConfig)}
         valid = {field.name for field in fields(MBDModelConfig)}
         model_config = {key: value for key, value in raw_config.items() if key in valid}
         MBDModelConfig(**model_config)
