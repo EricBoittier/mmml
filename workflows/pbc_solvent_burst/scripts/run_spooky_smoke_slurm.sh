@@ -14,8 +14,12 @@
 
 set -euo pipefail
 
+<<<<<<< HEAD
 # Slurm executes a staged copy under /var/spool; retain the submit directory.
 WORKFLOW_ROOT="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+=======
+WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+>>>>>>> c59714611 (asdf)
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 CONFIG="$WORKFLOW_ROOT/config.spooky-smoke.yaml"
 cd "$REPO_ROOT"
