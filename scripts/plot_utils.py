@@ -257,6 +257,7 @@ def render_dimer_atoms(
     forces=None,
     force_scale: float = 1.5,
     force_color: str = "crimson",
+    coord_axes: list[tuple[np.ndarray, str, str]] | None = None,
     title: str | None = None,
     title_fontsize: float = 7,
 ) -> None:
@@ -266,7 +267,13 @@ def render_dimer_atoms(
     *fragments* is given, so close intermolecular contacts don't render as
     spurious bonds) and depth-cues atoms with per-atom alpha so overlapping
     monomers in a dimer stay legible. If *forces* (N, 3) is given, overlays a
-    2D-projected force-arrow field using the same camera rotation.
+    2D-projected force-arrow field using the same camera rotation. If
+    *coord_axes* is given (list of ``(vector3, color, label)`` in the same
+    unrotated frame as the atoms), draws small arrows near the structure
+    showing which direction each scan coordinate (e.g. approach distance,
+    lateral offset) points, projected through the same camera rotation as
+    everything else — so the arrows genuinely reflect the 3D geometry rather
+    than being a flat, angle-independent annotation.
     """
     ax.set_axis_off()
     ax.set_aspect("equal")
@@ -332,8 +339,39 @@ def render_dimer_atoms(
         )
 
     pad = (radii.max() if len(radii) else 1.0) * 2.2
-    ax.set_xlim(x.min() - pad, x.max() + pad)
-    ax.set_ylim(y.min() - pad, y.max() + pad)
+    xlo, xhi = x.min() - pad, x.max() + pad
+    ylo, yhi = y.min() - pad, y.max() + pad
+
+    if coord_axes:
+        # Anchor at the lower-left corner of the structure's bounding box
+        # (offset slightly further out) so the arrows read as a small
+        # coordinate-frame glyph rather than overlapping the molecule.
+        span = max(xhi - xlo, yhi - ylo)
+        arrow_len = span * 0.28
+        origin = np.array([xlo + pad * 0.4, ylo + pad * 0.4])
+        for vec3, color, label in coord_axes:
+            v_proj = (np.asarray(vec3, dtype=float) @ R)[:2]
+            norm = np.linalg.norm(v_proj)
+            if norm < 1e-9:
+                continue
+            v_hat = v_proj / norm
+            tip = origin + v_hat * arrow_len
+            ax.annotate(
+                "", xy=tuple(tip), xytext=tuple(origin),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=1.8, shrinkA=0, shrinkB=0),
+                zorder=11,
+            )
+            if label:
+                label_pos = origin + v_hat * arrow_len * 1.25
+                ax.text(
+                    label_pos[0], label_pos[1], label, color=color,
+                    fontsize=6, fontweight="bold", ha="center", va="center", zorder=11,
+                )
+                xlo, xhi = min(xlo, label_pos[0]), max(xhi, label_pos[0])
+                ylo, yhi = min(ylo, label_pos[1]), max(yhi, label_pos[1])
+
+    ax.set_xlim(xlo, xhi)
+    ax.set_ylim(ylo, yhi)
 
 
 def ordered_backends(df: pd.DataFrame, requested: list[str] | None = None) -> list[str]:
