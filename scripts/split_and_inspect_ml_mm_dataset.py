@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Dataset validation, distance-stratified splitting, and diagnostic plotting tool.
+"""Dataset validation, charge/energy distribution inspector, stratified splitting, and diagnostic plotting tool.
 
 1. Validates CGenFF charge conservation sum(charges) == 0.0 e across all monomer frames.
-2. Computes Monomer Center-of-Mass (COM) distances d_COM for all dimer frames.
-3. Performs stratified train/val/test splitting maintaining identical distance bounds
-   and equal representation across short-range contact, transition, and long-range geometries.
-4. Saves train/val/test Orbax caches and exports diagnostic distribution plots.
+2. Inspects atomic charges, CGenFF Coulomb electrostatics, and Lennard-Jones vdW energy distributions.
+3. Performs stratified train/val/test splitting maintaining identical distance bounds.
+4. Export detailed multi-panel distribution plots and statistical summaries.
 """
 
 from __future__ import annotations
@@ -18,6 +17,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import orbax.checkpoint as ocp
+from ase.data import chemical_symbols
 
 # Ensure repository root is in sys.path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -26,37 +26,79 @@ if str(_REPO_ROOT) not in sys.path:
 
 from mmml.utils.plotting.styles import apply_plot_style
 
+K_COULOMB_KCAL_ANG = 332.06371
+KCAL_TO_EV = 0.0433641153
+
 
 def compute_com_distance(z: np.ndarray, r: np.ndarray, mol_id: np.ndarray) -> float:
-    """Compute geometric/mass-weighted Center-of-Mass distance between Monomer A and B."""
+    """Compute geometric Center-of-Mass distance between Monomer A and B."""
     mask_a = mol_id == 0
     mask_b = mol_id == 1
-    
     pos_a = r[mask_a]
     pos_b = r[mask_b]
-    
     com_a = np.mean(pos_a, axis=0)
     com_b = np.mean(pos_b, axis=0)
     return float(np.linalg.norm(com_a - com_b))
 
 
-def validate_and_split_dataset(
+def compute_cgenff_component_breakdown(
+    r: np.ndarray,
+    z: np.ndarray,
+    mol_id: np.ndarray,
+    type_idx: np.ndarray,
+    charges: np.ndarray,
+    sigmas: np.ndarray,
+    epsilons: np.ndarray,
+) -> tuple[float, float]:
+    """Compute separate inter-monomer Coulomb electrostatics and Lennard-Jones vdW energies in eV."""
+    comp_a = np.flatnonzero(mol_id == 0)
+    comp_b = np.flatnonzero(mol_id == 1)
+    
+    pos_a = r[comp_a]
+    pos_b = r[comp_b]
+    
+    q_a = charges[comp_a]
+    q_b = charges[comp_b]
+    
+    sig_a = sigmas[type_idx[comp_a]]
+    sig_b = sigmas[type_idx[comp_b]]
+    eps_a = epsilons[type_idx[comp_a]]
+    eps_b = epsilons[type_idx[comp_b]]
+
+    dr = pos_a[:, None, :] - pos_b[None, :, :]
+    dist = np.linalg.norm(dr, axis=-1)
+    dist = np.maximum(dist, 1e-6)
+
+    q_ij = q_a[:, None] * q_b[None, :]
+    sig_ij = 0.5 * (sig_a[:, None] + sig_b[None, :])
+    eps_ij = np.sqrt(eps_a[:, None] * eps_b[None, :])
+
+    e_coulomb_kcal = np.sum(K_COULOMB_KCAL_ANG * q_ij / dist)
+
+    sr6 = (sig_ij / dist) ** 6
+    sr12 = sr6 ** 2
+    e_vdw_kcal = np.sum(4.0 * eps_ij * (sr12 - sr6))
+
+    return e_coulomb_kcal * KCAL_TO_EV, e_vdw_kcal * KCAL_TO_EV
+
+
+def validate_and_inspect_dataset(
     cache_dir: str | Path,
     output_dir: str | Path,
     val_frac: float = 0.10,
     test_frac: float = 0.10,
     n_bins: int = 20,
     seed: int = 42,
+    sample_size: int = 100000,
 ):
     cache_dir = Path(cache_dir).expanduser().resolve()
     output_dir = Path(output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"==================================================================")
-    print(f" Dataset Validation & Stratified Distance Splitting")
+    print(f" Dataset Validation, Distribution Inspector & Stratified Splitter")
     print(f" Source Cache: {cache_dir}")
     print(f" Output Dir  : {output_dir}")
-    print(f" Splits      : Train ({1 - val_frac - test_frac:.0%}) | Val ({val_frac:.0%}) | Test ({test_frac:.0%})")
     print(f"==================================================================")
 
     data = ocp.PyTreeCheckpointer().restore(cache_dir)
@@ -75,175 +117,143 @@ def validate_and_split_dataset(
     mol_id = np.asarray(data["mol_id"]).reshape(-1)
     cgenff_types = np.asarray(data["cgenff_type_idx"]).reshape(-1)
     cgenff_charges = np.asarray(data["cgenff_charge"]).reshape(-1)
+    master_sigmas = np.asarray(data["cgenff_master_sigmas"]).reshape(-1)
+    master_epsilons = np.asarray(data["cgenff_master_epsilons"]).reshape(-1)
 
     n_structures = len(N)
-    print(f"[+] Restored {n_structures:,} total structures ({offsets[-1]:,} atoms)")
+    print(f"[+] Total Structures: {n_structures:,} ({offsets[-1]:,} total atoms)")
 
-    # 1. Validate CGenFF Charge Conservation
-    print(f"\n[+] Validating atomic charges & CGenFF parameter assignment...")
-    monomer_charge_errs = []
-    d_com_list = []
+    # 1. Charge Distribution Analysis
+    print(f"\n==================================================================")
+    print(f" 1. ATOMIC CHARGE DISTRIBUTION BREAKDOWN")
+    print(f"==================================================================")
+    print(f"  - Overall Atomic Charge Range : [{cgenff_charges.min():.4f} e, {cgenff_charges.max():.4f} e]")
+    print(f"  - Mean Atomic Charge         : {cgenff_charges.mean():.4f} e (std = {cgenff_charges.std():.4f} e)")
+    print(f"  - Quantiles [1%, 25%, 50%, 75%, 99%]:")
+    q_quantiles = np.quantile(cgenff_charges, [0.01, 0.25, 0.50, 0.75, 0.99])
+    print(f"    {q_quantiles}")
 
-    for i in range(n_structures):
-        start = offsets[i]
-        end = offsets[i + 1]
-        
-        m_id = mol_id[start:end]
-        q_cg = cgenff_charges[start:end]
-        r_str = R[start:end]
-        z_str = Z[start:end]
-
-        q_a = np.sum(q_cg[m_id == 0])
-        q_b = np.sum(q_cg[m_id == 1])
-        monomer_charge_errs.append(max(abs(q_a), abs(q_b)))
-
-        # Distance calculation
-        d_com = compute_com_distance(z_str, r_str, m_id)
-        d_com_list.append(d_com)
-
-    d_com_arr = np.array(d_com_list, dtype=np.float64)
-    max_charge_err = max(monomer_charge_errs)
-    print(f"    - Max Monomer Charge Error: {max_charge_err:.2e} e (Exact zero conservation: ✓)")
-    print(f"    - COM Distance Range       : [{d_com_arr.min():.2f} Å, {d_com_arr.max():.2f} Å] (mean={d_com_arr.mean():.2f} Å)")
-
-    # 2. Stratified Splitting across COM Distance Bins
-    print(f"\n[+] Performing Stratified Splitting over {n_bins} distance quantile bins...")
-    bin_edges = np.linspace(d_com_arr.min(), d_com_arr.max() + 1e-5, n_bins + 1)
-    bin_indices = np.digitize(d_com_arr, bin_edges) - 1
-
-    rng = np.random.default_rng(seed)
-    train_indices = []
-    val_indices = []
-    test_indices = []
-
-    for b in range(n_bins):
-        in_bin = np.flatnonzero(bin_indices == b)
-        if len(in_bin) == 0:
+    # Per-element charge summary
+    unique_z = np.unique(Z)
+    element_charges = {}
+    print(f"\n  - Per-Element Charge Distribution:")
+    for zi in unique_z:
+        if zi == 0:
             continue
-        rng.shuffle(in_bin)
-        
-        n_val = int(round(len(in_bin) * val_frac))
-        n_test = int(round(len(in_bin) * test_frac))
-        
-        test_indices.extend(in_bin[:n_test])
-        val_indices.extend(in_bin[n_test : n_test + n_val])
-        train_indices.extend(in_bin[n_test + n_val :])
+        sym = chemical_symbols[zi]
+        mask = Z == zi
+        elem_q = cgenff_charges[mask]
+        element_charges[sym] = elem_q
+        print(f"    - {sym:<2} (Z={zi:>2}): count={len(elem_q):>8,}, mean={elem_q.mean():>7.4f} e, min={elem_q.min():>7.4f} e, max={elem_q.max():>7.4f} e")
 
-    train_indices = np.array(train_indices, dtype=np.int64)
-    val_indices = np.array(val_indices, dtype=np.int64)
-    test_indices = np.array(test_indices, dtype=np.int64)
-
-    print(f"    - Train set: {len(train_indices):,} frames ({len(train_indices)/n_structures:.1%})")
-    print(f"    - Val set  : {len(val_indices):,} frames ({len(val_indices)/n_structures:.1%})")
-    print(f"    - Test set : {len(test_indices):,} frames ({len(test_indices)/n_structures:.1%})")
-
-    # 3. Save Split Orbax Caches
-    def extract_sub_cache(indices: np.ndarray) -> dict:
-        sub_r, sub_z, sub_f, sub_f_mm = [], [], [], []
-        sub_e, sub_e_mm, sub_n, sub_q, sub_s, sub_d = [], [], [], [], [], []
-        sub_mol_id, sub_types, sub_charges = [], [], []
-        sub_offsets = [0]
-
-        for idx in indices:
-            st = offsets[idx]
-            en = offsets[idx + 1]
-            n_atoms = en - st
-
-            sub_r.append(R[st:en])
-            sub_z.append(Z[st:en])
-            sub_f.append(F[st:en])
-            sub_f_mm.append(F_mm[st:en])
-            sub_e.append(E[idx])
-            sub_e_mm.append(E_mm[idx])
-            sub_n.append(N[idx])
-            sub_q.append(Q[idx])
-            sub_s.append(S[idx])
-            sub_d.append(D[idx])
-            sub_mol_id.append(mol_id[st:en])
-            sub_types.append(cgenff_types[st:en])
-            sub_charges.append(cgenff_charges[st:en])
-            sub_offsets.append(sub_offsets[-1] + n_atoms)
-
-        res = {
-            "R": np.concatenate(sub_r, axis=0),
-            "Z": np.concatenate(sub_z, axis=0),
-            "F": np.concatenate(sub_f, axis=0),
-            "F_cgenff_mm": np.concatenate(sub_f_mm, axis=0),
-            "mol_offsets": np.asarray(sub_offsets, dtype=np.int64),
-            "E": np.asarray(sub_e, dtype=np.float64).reshape(-1, 1),
-            "E_cgenff_mm": np.asarray(sub_e_mm, dtype=np.float64).reshape(-1, 1),
-            "N": np.asarray(sub_n, dtype=np.int32).reshape(-1, 1),
-            "Q": np.asarray(sub_q, dtype=np.float64).reshape(-1, 1),
-            "S": np.asarray(sub_s, dtype=np.float64).reshape(-1, 1),
-            "D": np.asarray(sub_d, dtype=np.float64).reshape(-1, 3),
-            "mol_id": np.concatenate(sub_mol_id, axis=0),
-            "cgenff_type_idx": np.concatenate(sub_types, axis=0),
-            "cgenff_charge": np.concatenate(sub_charges, axis=0),
-            "cgenff_master_sigmas": data["cgenff_master_sigmas"],
-            "cgenff_master_epsilons": data["cgenff_master_epsilons"],
-        }
-        res["metadata_n_structures"] = np.asarray(len(indices), dtype=np.int64)
-        res["metadata_n_atoms_total"] = np.asarray(sub_offsets[-1], dtype=np.int64)
-        res["metadata_max_atoms"] = np.asarray(max(sub_n), dtype=np.int32)
-        return res
-
-    print(f"\n[+] Exporting split Orbax caches...")
-    ocp.PyTreeCheckpointer().save(output_dir / "train_cache", extract_sub_cache(train_indices), force=True)
-    ocp.PyTreeCheckpointer().save(output_dir / "val_cache", extract_sub_cache(val_indices), force=True)
-    ocp.PyTreeCheckpointer().save(output_dir / "test_cache", extract_sub_cache(test_indices), force=True)
-    print(f"    - Saved: {output_dir / 'train_cache'}")
-    print(f"    - Saved: {output_dir / 'val_cache'}")
-    print(f"    - Saved: {output_dir / 'test_cache'}")
-
-    # 4. Generate Diagnostic Distance & Energy Plots
-    print(f"\n[+] Generating diagnostic dataset distribution plots...")
-    apply_plot_style("icml")
+    # 2. Sample component breakdown for Coulomb vs LJ energies
+    print(f"\n==================================================================")
+    print(f" 2. INTER-MONOMER COULOMB vs LENNARD-JONES ENERGY BREAKDOWN")
+    print(f"==================================================================")
+    print(f" Sampling {min(sample_size, n_structures):,} frames for exact component breakdown...")
     
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    rng = np.random.default_rng(seed)
+    sample_indices = rng.choice(n_structures, size=min(sample_size, n_structures), replace=False)
+    
+    e_elec_sample = []
+    e_vdw_sample = []
+    d_com_sample = []
 
-    # Panel 1: Stratified Distance Histogram
-    ax1 = axes[0]
-    ax1.hist(d_com_arr[train_indices], bins=40, alpha=0.5, density=True, label="Train", color="#1f77b4")
-    ax1.hist(d_com_arr[val_indices], bins=40, alpha=0.5, density=True, label="Validation", color="#ff7f0e")
-    ax1.hist(d_com_arr[test_indices], bins=40, alpha=0.5, density=True, label="Test", color="#2ca02c")
-    ax1.set_xlabel("Monomer COM Distance $d_{\\mathrm{COM}}$ (Å)")
-    ax1.set_ylabel("Probability Density")
-    ax1.set_title("Distance Stratification")
-    ax1.legend(frameon=True)
+    for i in sample_indices:
+        st = offsets[i]
+        en = offsets[i + 1]
+        
+        r_str = R[st:en]
+        z_str = Z[st:en]
+        m_id = mol_id[st:en]
+        t_idx = cgenff_types[st:en]
+        q_cg = cgenff_charges[st:en]
 
-    # Panel 2: QM vs CGenFF Energy Distribution
-    ax2 = axes[1]
-    res_energy = E.reshape(-1) - E_mm.reshape(-1)
-    ax2.hist(E.reshape(-1), bins=40, alpha=0.5, density=True, label="$E_{\\mathrm{QM}}$ Total", color="#9467bd")
-    ax2.hist(E_mm.reshape(-1), bins=40, alpha=0.5, density=True, label="$E_{\\mathrm{MM}}$ CGenFF", color="#8c564b")
-    ax2.hist(res_energy, bins=40, alpha=0.5, density=True, label="$\\Delta E$ Residual", color="#e377c2")
-    ax2.set_xlabel("Energy (eV)")
-    ax2.set_ylabel("Probability Density")
-    ax2.set_title("Energy Breakdown ($E_{\\mathrm{QM}}$, $E_{\\mathrm{MM}}$, $\\Delta E$)")
-    ax2.legend(frameon=True)
+        e_elec, e_vdw = compute_cgenff_component_breakdown(
+            r_str, z_str, m_id, t_idx, q_cg, master_sigmas, master_epsilons
+        )
+        d_com = compute_com_distance(z_str, r_str, m_id)
+
+        e_elec_sample.append(e_elec)
+        e_vdw_sample.append(e_vdw)
+        d_com_sample.append(d_com)
+
+    e_elec_arr = np.array(e_elec_sample, dtype=np.float64)
+    e_vdw_arr = np.array(e_vdw_sample, dtype=np.float64)
+    e_tot_mm_arr = e_elec_arr + e_vdw_arr
+    d_com_arr = np.array(d_com_sample, dtype=np.float64)
+
+    print(f"\n  - Inter-Monomer Coulomb Energy (E_elec):")
+    print(f"    - Range : [{e_elec_arr.min():.4f} eV, {e_elec_arr.max():.4f} eV] ([{e_elec_arr.min()/KCAL_TO_EV:.2f}, {e_elec_arr.max()/KCAL_TO_EV:.2f}] kcal/mol)")
+    print(f"    - Mean  : {e_elec_arr.mean():.4f} eV ({e_elec_arr.mean()/KCAL_TO_EV:.2f} kcal/mol) | std = {e_elec_arr.std():.4f} eV")
+
+    print(f"\n  - Inter-Monomer Lennard-Jones Energy (E_vdw):")
+    print(f"    - Range : [{e_vdw_arr.min():.4f} eV, {e_vdw_arr.max():.4f} eV] ([{e_vdw_arr.min()/KCAL_TO_EV:.2f}, {e_vdw_arr.max()/KCAL_TO_EV:.2f}] kcal/mol)")
+    print(f"    - Mean  : {e_vdw_arr.mean():.4f} eV ({e_vdw_arr.mean()/KCAL_TO_EV:.2f} kcal/mol) | std = {e_vdw_arr.std():.4f} eV")
+
+    print(f"\n  - Total MM Energy (E_MM = E_elec + E_vdw):")
+    print(f"    - Range : [{e_tot_mm_arr.min():.4f} eV, {e_tot_mm_arr.max():.4f} eV] ([{e_tot_mm_arr.min()/KCAL_TO_EV:.2f}, {e_tot_mm_arr.max()/KCAL_TO_EV:.2f}] kcal/mol)")
+    print(f"    - Mean  : {e_tot_mm_arr.mean():.4f} eV ({e_tot_mm_arr.mean()/KCAL_TO_EV:.2f} kcal/mol) | std = {e_tot_mm_arr.std():.4f} eV")
+
+    # 3. Multi-Panel Diagnostic Plotting
+    print(f"\n==================================================================")
+    print(f" 3. GENERATING MULTI-PANEL DISTRIBUTION PLOTS")
+    print(f"==================================================================")
+    apply_plot_style("icml")
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+
+    # Panel A: Charge Distribution Histogram by Element
+    ax_a = axes[0, 0]
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+    for idx, (sym, elem_q) in enumerate(element_charges.items()):
+        color = colors[idx % len(colors)]
+        ax_a.hist(elem_q, bins=30, alpha=0.5, label=f"{sym} (mean={elem_q.mean():.2f}e)", color=color)
+    ax_a.set_xlabel("CGenFF Charge $q_i$ (e)")
+    ax_a.set_ylabel("Count")
+    ax_a.set_title("A. Atomic Charge Distribution by Element")
+    ax_a.legend(frameon=True)
+
+    # Panel B: Inter-monomer Electrostatics (Coulomb) Distribution
+    ax_b = axes[0, 1]
+    ax_b.hist(e_elec_arr / KCAL_TO_EV, bins=50, color="#1f77b4", alpha=0.7, edgecolor="none")
+    ax_b.set_xlabel("Inter-Monomer Coulomb Energy $E_{\\mathrm{elec}}$ (kcal/mol)")
+    ax_b.set_ylabel("Frame Count")
+    ax_b.set_title("B. CGenFF Electrostatics Distribution")
+
+    # Panel C: Inter-monomer Lennard-Jones vdW Distribution
+    ax_c = axes[1, 0]
+    ax_c.hist(e_vdw_arr / KCAL_TO_EV, bins=50, color="#2ca02c", alpha=0.7, edgecolor="none")
+    ax_c.set_xlabel("Inter-Monomer Lennard-Jones Energy $E_{\\mathrm{vdw}}$ (kcal/mol)")
+    ax_c.set_ylabel("Frame Count")
+    ax_c.set_title("C. CGenFF Lennard-Jones vdW Distribution")
+
+    # Panel D: Total MM Energy vs COM Distance
+    ax_d = axes[1, 1]
+    hb = ax_d.hexbin(d_com_arr, e_tot_mm_arr / KCAL_TO_EV, gridsize=40, cmap="viridis", mincnt=1)
+    fig.colorbar(hb, ax=ax_d, label="Frames")
+    ax_d.set_xlabel("COM Distance $d_{\\mathrm{COM}}$ (Å)")
+    ax_d.set_ylabel("Total $E_{\\mathrm{MM}}$ (kcal/mol)")
+    ax_d.set_title("D. Total MM Energy vs Monomer Distance")
 
     fig.tight_layout()
-    plot_path = output_dir / "dataset_split_diagnostics.png"
+    plot_path = output_dir / "cgenff_charges_and_energies_breakdown.png"
     fig.savefig(plot_path, dpi=300)
-    print(f"[+] Saved diagnostic plot to: {plot_path}")
+    print(f"[+] Saved distribution plot to: {plot_path}")
     print(f"==================================================================")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Dataset validator, stratified splitter, and diagnostic plotter")
+    parser = argparse.ArgumentParser(description="Dataset charge and energy distribution inspector")
     parser.add_argument("--cache-dir", required=True, help="Path to prepared Orbax dataset cache")
-    parser.add_argument("--output-dir", default="data/splits", help="Output directory for train/val/test caches & plots")
-    parser.add_argument("--val-fraction", type=float, default=0.10, help="Validation set fraction (default: 0.10)")
-    parser.add_argument("--test-fraction", type=float, default=0.10, help="Test set fraction (default: 0.10)")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducible splitting")
+    parser.add_argument("--output-dir", default="data/splits_des_ml_mm", help="Output directory for plots")
+    parser.add_argument("--sample-size", type=int, default=100000, help="Number of frames to sample for energy breakdown (default: 100k)")
     args = parser.parse_args()
 
-    validate_and_split_dataset(
+    validate_and_inspect_dataset(
         args.cache_dir,
         args.output_dir,
-        val_frac=args.val_fraction,
-        test_frac=args.test_fraction,
-        seed=args.seed,
+        sample_size=args.sample_size,
     )
 
 
