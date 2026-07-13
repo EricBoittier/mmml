@@ -48,6 +48,30 @@ __all__ = [
 ]
 
 
+def _resolve_cmap(spec, default_kind: str):
+    """Resolve a colormap spec to a matplotlib Colormap.
+
+    ``spec`` may be ``None`` (house default for ``default_kind``), a house kind
+    (``"sequential"``/``"diverging"``/``"cyclic"``), a ``cmap``-library name
+    such as ``"crameri:vik"`` or ``"cmocean:balance"``, a plain matplotlib
+    name, or an already-resolved Colormap.
+    """
+    if spec is None:
+        return default_cmap(default_kind)
+    if not isinstance(spec, str):
+        return spec  # assume a Colormap-like object
+    if spec in ("sequential", "diverging", "cyclic"):
+        return default_cmap(spec)
+    try:
+        import cmap as cmap_lib
+
+        return cmap_lib.Colormap(spec).to_mpl()
+    except Exception:
+        import matplotlib.pyplot as _plt
+
+        return _plt.get_cmap(spec)
+
+
 def _unit_sphere(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(x, y, z) direction cosines of an n*n theta/phi parametric sphere."""
     theta = np.linspace(0.0, np.pi, n)          # polar
@@ -124,7 +148,7 @@ def plot_multipole_surfaces(
     else:
         fig = ax.figure
 
-    cmap = default_cmap("diverging")
+    cmap = _resolve_cmap(cmap, "diverging")
     n = 60
     # Shared symmetric colour scale so sources are comparable.
     all_v = []
@@ -227,7 +251,7 @@ def plot_field_slice(
     Va = V * BOHR_TO_ANGSTROM
     vmax = float(np.percentile(np.abs(P), 97))
     fig, ax = plt.subplots(figsize=(7.5, 6.6))
-    cmap = default_cmap("diverging")
+    cmap = _resolve_cmap(cmap, "diverging")
     cf = ax.contourf(Ua, Va, np.clip(P, -vmax, vmax),
                      levels=np.linspace(-vmax, vmax, 31), cmap=cmap, extend="both")
     speed = np.hypot(Fx, Fy)
@@ -283,7 +307,7 @@ def plot_mbd_surfaces(
     else:
         fig = ax.figure
 
-    cmap = default_cmap("sequential")
+    cmap = _resolve_cmap(cmap, "sequential")
     dx, dy, dz = _unit_sphere(48)
     a_scale = np.cbrt(np.maximum(alpha, 1e-9))
     a_scale = a_scale / (a_scale.max() + 1e-12)
@@ -352,7 +376,7 @@ def plot_dispersion_field_slice(
         field += -c6[i] / r2 ** 3
 
     fig, ax = plt.subplots(figsize=(7.5, 6.6))
-    cmap = default_cmap("sequential")
+    cmap = _resolve_cmap(cmap, "sequential")
     mag = -field  # positive magnitude of an attractive potential
     vmax = float(np.percentile(mag, 99))
     cf = ax.contourf(U, V, np.clip(mag, 0, vmax),

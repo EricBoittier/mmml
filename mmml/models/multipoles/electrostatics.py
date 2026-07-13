@@ -61,13 +61,42 @@ def _load_checkpoint_payload(checkpoint: str | Path) -> dict[str, Any]:
     return ocp.PyTreeCheckpointer().restore(Path(checkpoint).expanduser())
 
 
+def _multipole_config_from_params(params: Any) -> dict[str, int]:
+    """Infer architecture kwargs from a multipole checkpoint's weight shapes.
+
+    Portable exports sometimes ship params only. The atom embedding fixes
+    ``(max_atomic_number + 1, ..., features)``, the number of ``MessagePass_*``
+    submodules fixes ``num_iterations``, the filter kernel's first axis fixes
+    ``num_basis_functions``, and the highest irrep degree present fixes
+    ``max_degree`` -- enough to rebuild the backbone without a config.
+    """
+    backbone = params.get("_E3xMultipoleBackbone_0", params) if isinstance(params, dict) else {}
+    cfg: dict[str, int] = {}
+    embed = backbone.get("Embed_0", {}).get("embedding")
+    if embed is not None:
+        emb = np.asarray(embed)
+        cfg["max_atomic_number"] = int(emb.shape[0]) - 1
+        cfg["features"] = int(emb.shape[-1])
+    n_mp = sum(1 for key in backbone if key.startswith("MessagePass_"))
+    if n_mp:
+        cfg["num_iterations"] = n_mp
+    mp0 = backbone.get("MessagePass_0", {}).get("filter", {})
+    degrees = [k for k in mp0 if k[:1].isdigit()]
+    if degrees:
+        cfg["max_degree"] = max(int(k[:-1]) for k in degrees)
+        any_kernel = np.asarray(mp0[degrees[0]]["kernel"])
+        cfg["num_basis_functions"] = int(any_kernel.shape[0])
+    return cfg
+
+
 def load_multipole_model(checkpoint: str | Path) -> tuple[E3xMultipoleModel, Any]:
     """Load a trained unified QCML multipole model checkpoint.
 
     Accepts either an Orbax checkpoint directory (with a sibling
     ``model_config.json``) or a portable JSON file produced by
     :func:`mmml.utils.model_checkpoint.orbax_to_json` (params + config bundled
-    together, no sibling file needed).
+    together, no sibling file needed). A JSON export that shipped params only
+    (no ``config``) is rebuilt from the weight shapes with a warning.
     """
     checkpoint = Path(checkpoint).expanduser()
     valid = {field.name for field in fields(TrainConfig)}
@@ -77,10 +106,22 @@ def load_multipole_model(checkpoint: str | Path) -> tuple[E3xMultipoleModel, Any
         restored = json_to_params(checkpoint)
         raw_config = restored.get("config")
         if not raw_config:
-            raise ValueError(
-                f"JSON checkpoint {checkpoint} has no 'config' — cannot determine "
-                "multipole model architecture (features/cutoff/etc.)"
+            import warnings
+
+            inferred = _multipole_config_from_params(restored.get("params"))
+            if "features" not in inferred:
+                raise ValueError(
+                    f"JSON checkpoint {checkpoint} has no 'config' and its architecture "
+                    "could not be inferred from the weight shapes; re-export with config."
+                )
+            warnings.warn(
+                f"Multipole checkpoint {checkpoint} has no 'config'; inferred "
+                f"architecture {inferred} from the saved weight shapes (cutoff and "
+                "output flags fall back to E3xMultipoleModel defaults). Re-export "
+                "with config to remove the guess.",
+                stacklevel=2,
             )
+            raw_config = inferred
         model_config = {key: value for key, value in raw_config.items() if key in valid}
         TrainConfig(**model_config)
         model_config.pop("target_degree", None)
