@@ -125,6 +125,7 @@ def plot_multipole_surfaces(
     radius_gain: float = 0.6,
     out: str | Path | None = None,
     title: str = "Learned molecular multipoles (angular potential per source)",
+    cmap=None,
     style: str = "icml",
     ax=None,
 ):
@@ -208,6 +209,7 @@ def plot_field_slice(
     grid: int = 220,
     out: str | Path | None = None,
     title: str = "Electrostatic potential + field (multipole sources)",
+    cmap=None,
     style: str = "icml",
 ):
     """Potential contours + electric-field streamlines on a 2D plane.
@@ -283,6 +285,7 @@ def plot_mbd_surfaces(
     radius_gain: float = 0.9,
     out: str | Path | None = None,
     title: str = "Learned MBD response: per-atom polarizability spheres",
+    cmap=None,
     style: str = "icml",
     ax=None,
 ):
@@ -349,6 +352,7 @@ def plot_dispersion_field_slice(
     softening_angstrom: float = 0.6,
     out: str | Path | None = None,
     title: str = "MBD dispersion potential  −Σ C$_6$/r$^6$",
+    cmap=None,
     style: str = "icml",
 ):
     """The ``-C6/r^6`` dispersion potential of the atoms on a 2D plane.

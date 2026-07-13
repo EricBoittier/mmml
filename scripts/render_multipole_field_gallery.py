@@ -36,8 +36,22 @@ STYLE_NAME = "icml"
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "docs" / "plot-style-gallery-assets"
 MBD_CHECKPOINT = ROOT / "mbd_20260711-100037_epoch-0100.json"
+MULTIPOLE_CHECKPOINT = ROOT / "multipoles_20260711-100037_epoch-0100.json"
 
 ANGSTROM_TO_BOHR = 1.0 / 0.529177210903
+
+# Diverging palettes worth comparing for signed multipole potential. The house
+# default (contrib:pampa) is muted; crameri:vik is the classic red/blue read.
+DIVERGING_PALETTES = ("contrib:pampa", "crameri:vik", "cmocean:balance")
+
+# A water trimer reused across panels so electrostatic + dispersion views line up.
+_WATER_TRIMER = np.array([
+    [0.0, 0.0, 0.0], [0.76, 0.59, 0.0], [-0.76, 0.59, 0.0],
+    [3.0, 0.2, 0.0], [3.76, 0.79, 0.0], [2.24, 0.79, 0.0],
+    [1.4, 2.6, 0.3], [2.16, 3.19, 0.3], [0.64, 3.19, 0.3],
+])
+_WATER_TRIMER_Z = np.array([8, 1, 1, 8, 1, 1, 8, 1, 1])
+_WATER_FRAGMENTS = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 
 
 def _analytic_multipole_scene():
@@ -58,6 +72,88 @@ def multipole_surfaces(out: Path) -> None:
 def field_slice(out: Path) -> None:
     o, q, d, quad, _ = _analytic_multipole_scene()
     plot_field_slice(o, q, d, quad, plane="xy", out=out, style=STYLE_NAME)
+
+
+def multipole_colormap_variants(out: Path) -> None:
+    """The same analytic scene under three diverging palettes, small-multiples.
+
+    Colour choice is a real decision for signed data (see the multipole-triangle
+    colormap discussion): this shows the muted house default beside the classic
+    red/blue reads so the trade-off is visible, not asserted.
+    """
+    import matplotlib.pyplot as plt
+
+    o, q, d, quad, z = _analytic_multipole_scene()
+    fig = plt.figure(figsize=(15, 5.2))
+    for i, name in enumerate(DIVERGING_PALETTES, start=1):
+        ax = fig.add_subplot(1, 3, i, projection="3d")
+        plot_multipole_surfaces(o, q, d, quad, atomic_numbers=z, cmap=name,
+                                title=name, style=STYLE_NAME, ax=ax)
+    fig.suptitle("Signed multipole potential: diverging palette comparison")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _multipole_prediction():
+    """Predict per-molecule multipoles for a water trimer with the real trained
+    checkpoint. Returns the arrays plot_multipole_surfaces/plot_field_slice
+    expect, or None if the checkpoint or its deps are unavailable."""
+    if not MULTIPOLE_CHECKPOINT.exists():
+        return None
+    try:
+        import jax
+
+        jax.config.update("jax_enable_x64", True)
+        from ase import Atoms
+
+        from mmml.models.multipoles.electrostatics import (
+            LearnedMolecularMultipoleElectrostatics,
+        )
+    except Exception:
+        return None
+    atoms = Atoms(numbers=_WATER_TRIMER_Z, positions=_WATER_TRIMER)
+    n_frag = len(_WATER_FRAGMENTS)
+    calc = LearnedMolecularMultipoleElectrostatics(
+        MULTIPOLE_CHECKPOINT, fragments=_WATER_FRAGMENTS,
+        charges=[0.0] * n_frag, multiplicities=[1.0] * n_frag,
+    )
+    pred = calc.predict_fragment_multipoles(atoms)
+    return (
+        pred["origins_bohr"], pred["charges"], pred["dipoles_bohr"],
+        pred["quadrupoles_bohr"], pred["octupoles_bohr"],
+    )
+
+
+def multipole_surfaces_learned(out: Path) -> bool:
+    """One sphere per water, from the committed multipole weights. The learned
+    model emits one molecular multipole per fragment, so each sphere is a whole
+    molecule's charge+dipole+quadrupole+octupole, not a single atom."""
+    pred = _multipole_prediction()
+    if pred is None:
+        return False
+    origins, charges, dipoles, quads, octs = pred
+    plot_multipole_surfaces(
+        origins, charges, dipoles, quads, octs,
+        probe_radius_angstrom=1.6, radius_gain=0.8, cmap="crameri:vik",
+        title="Learned molecular multipoles per water (committed weights)",
+        out=out, style=STYLE_NAME,
+    )
+    return True
+
+
+def field_slice_learned(out: Path) -> bool:
+    """The electrostatic field of the learned water-trimer multipoles."""
+    pred = _multipole_prediction()
+    if pred is None:
+        return False
+    origins, charges, dipoles, quads, octs = pred
+    plot_field_slice(
+        origins, charges, dipoles, quads, octs, plane="xy", span_angstrom=7.0,
+        title="Electrostatic field of learned water-trimer multipoles",
+        out=out, style=STYLE_NAME,
+    )
+    return True
 
 
 def _mbd_prediction():
@@ -95,6 +191,19 @@ def main() -> None:
     print(f"wrote {OUT_DIR / 'chart_multipole_surfaces.png'}")
     field_slice(OUT_DIR / "chart_multipole_field.png")
     print(f"wrote {OUT_DIR / 'chart_multipole_field.png'}")
+    multipole_colormap_variants(OUT_DIR / "chart_multipole_colormap_variants.png")
+    print(f"wrote {OUT_DIR / 'chart_multipole_colormap_variants.png'}")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        learned_ok = multipole_surfaces_learned(OUT_DIR / "chart_multipole_surfaces_learned.png")
+        if learned_ok:
+            field_slice_learned(OUT_DIR / "chart_multipole_field_learned.png")
+    if learned_ok:
+        print(f"wrote {OUT_DIR / 'chart_multipole_surfaces_learned.png'}")
+        print(f"wrote {OUT_DIR / 'chart_multipole_field_learned.png'}")
+    else:
+        print(f"SKIP learned multipole panels: {MULTIPOLE_CHECKPOINT.name} or deps unavailable")
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
