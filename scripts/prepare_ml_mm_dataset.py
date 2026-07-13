@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Dataset preparation script for ML/MM hybrid training with CGenFF topology back-mapping.
+"""Dataset preparation script for ML/MM hybrid training with CGenFF atom typing.
 
-Fast Orbax cache reader & writer:
-Partitions dataset structures into dimer monomer components using covalent graph connectivity,
-back-maps monomers to official CGenFF residue templates in CGENFF.RES / top_all36_cgenff.rtf,
-pre-computes CGenFF MM nonbonded baselines (Coulomb + LJ 6-12), and exports an enriched dataset
-directly into a new Orbax cache and/or extxyz ready for residual ML/MM model training.
+Stores atomic cgenff_type_idx, cgenff_charge, and mol_id for every atom in the Orbax cache,
+plus the master CGenFF nonbonded parameter tables (sigmas, epsilons), enabling dynamic,
+differentiable MM nonbonded & switching function evaluation inside JAX during training.
 """
 
 from __future__ import annotations
@@ -27,24 +25,25 @@ if str(_REPO_ROOT) not in sys.path:
 
 from ase import Atoms
 from ase.data import covalent_radii
-from ase.io import iread, write
+from ase.io import iread
 import ase.units
 
 K_COULOMB_KCAL_ANG = 332.06371  # e^2 / Angstrom -> kcal/mol
 KCAL_TO_EV = 1.0 / ase.units.kcal * ase.units.mol
 
-# Default CGenFF topology path
 DEF_RTF_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "top_all36_cgenff.rtf"
 DEF_PRM_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
-DEF_RES_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "CGENFF.RES"
 
 
-def load_cgenff_nonbonded_params(prm_path: Path) -> dict[str, tuple[float, float]]:
-    """Parse NONBONDED section from par_all36_cgenff.prm returning {atom_type: (epsilon, sigma)}."""
-    nb_params = {}
+def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndarray, np.ndarray]:
+    """Parse NONBONDED section from par_all36_cgenff.prm returning type_map, sigmas, epsilons."""
+    nb_map = {}
+    sigmas = []
+    epsilons = []
     in_nb = False
+    
     if not prm_path.exists():
-        return nb_params
+        return {"DEFAULT": 0}, np.array([3.5], dtype=np.float64), np.array([0.05], dtype=np.float64)
 
     with prm_path.open("r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -63,24 +62,36 @@ def load_cgenff_nonbonded_params(prm_path: Path) -> dict[str, tuple[float, float
                 if len(parts) >= 4:
                     try:
                         atom_type = parts[0]
-                        epsilon = abs(float(parts[2])) # kcal/mol
-                        rmin_half = float(parts[3])    # Angstrom
-                        sigma = rmin_half * 2.0 / (2.0**(1.0 / 6.0))
-                        nb_params[atom_type] = (epsilon, sigma)
+                        if atom_type not in nb_map:
+                            epsilon = abs(float(parts[2])) # kcal/mol
+                            rmin_half = float(parts[3])    # Angstrom
+                            sigma = rmin_half * 2.0 / (2.0**(1.0 / 6.0))
+                            
+                            idx = len(nb_map)
+                            nb_map[atom_type] = idx
+                            sigmas.append(sigma)
+                            epsilons.append(epsilon)
                     except ValueError:
                         pass
-    return nb_params
+
+    if "DEFAULT" not in nb_map:
+        idx = len(nb_map)
+        nb_map["DEFAULT"] = idx
+        sigmas.append(3.5)
+        epsilons.append(0.05)
+
+    return nb_map, np.array(sigmas, dtype=np.float64), np.array(epsilons, dtype=np.float64)
 
 
-def load_cgenff_rtf_residues(rtf_path: Path, prm_path: Path) -> dict[str, dict]:
-    """Parse all RESI blocks from top_all36_cgenff.rtf to extract atomic charges and nonbonded parameters."""
-    nb_params = load_cgenff_nonbonded_params(prm_path)
+def load_cgenff_rtf_residues(rtf_path: Path, nb_map: dict[str, int]) -> dict[str, dict]:
+    """Parse all RESI blocks from top_all36_cgenff.rtf mapping atom names to type indices and charges."""
     residues = {}
     if not rtf_path.exists():
         return residues
 
     current_resi = None
     resi_data = None
+    default_idx = nb_map.get("DEFAULT", 0)
 
     with rtf_path.open("r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -94,17 +105,15 @@ def load_cgenff_rtf_residues(rtf_path: Path, prm_path: Path) -> dict[str, dict]:
                 if current_resi and resi_data and resi_data["atoms"]:
                     residues[current_resi] = resi_data
                 current_resi = parts[1]
-                resi_data = {"name": current_resi, "atoms": [], "types": [], "charges": [], "sigmas": [], "epsilons": []}
+                resi_data = {"name": current_resi, "atoms": [], "type_indices": [], "charges": []}
             elif parts[0] == "ATOM" and current_resi:
                 atom_name = parts[1]
                 atom_type = parts[2]
                 charge = float(parts[3])
-                eps, sig = nb_params.get(atom_type, (0.05, 3.5))
+                t_idx = nb_map.get(atom_type, default_idx)
                 resi_data["atoms"].append(atom_name)
-                resi_data["types"].append(atom_type)
+                resi_data["type_indices"].append(t_idx)
                 resi_data["charges"].append(charge)
-                resi_data["sigmas"].append(sig)
-                resi_data["epsilons"].append(eps)
 
         if current_resi and resi_data and resi_data["atoms"]:
             residues[current_resi] = resi_data
@@ -112,7 +121,8 @@ def load_cgenff_rtf_residues(rtf_path: Path, prm_path: Path) -> dict[str, dict]:
     return residues
 
 
-_CGENFF_TEMPLATES = load_cgenff_rtf_residues(DEF_RTF_PATH, DEF_PRM_PATH)
+_NB_MAP, _CGENFF_SIGMAS, _CGENFF_EPSILONS = load_cgenff_nonbonded_table(DEF_PRM_PATH)
+_CGENFF_RESIDUES = load_cgenff_rtf_residues(DEF_RTF_PATH, _NB_MAP)
 
 
 def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[int]]:
@@ -146,44 +156,48 @@ def find_covalent_components_fast(z: np.ndarray, pos: np.ndarray) -> list[list[i
     return components
 
 
-def match_cgenff_template_fast(z_sub: np.ndarray, comp_indices: list[int]) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
-    """Match monomer component against registered CGenFF templates."""
+def match_cgenff_template_fast(z_sub: np.ndarray, comp_indices: list[int]) -> tuple[str, np.ndarray, np.ndarray]:
+    """Match monomer component against registered CGenFF templates returning (res_name, type_indices, charges)."""
     counts = dict(zip(*np.unique(z_sub, return_counts=True)))
     
-    if counts == {6: 1, 1: 2, 17: 2} and "DCM" in _CGENFF_TEMPLATES:
+    if counts == {6: 1, 1: 2, 17: 2} and "DCM" in _CGENFF_RESIDUES:
         res_name = "DCM"
-    elif counts == {8: 1, 6: 3, 1: 6} and "ACO" in _CGENFF_TEMPLATES:
+    elif counts == {8: 1, 6: 3, 1: 6} and "ACO" in _CGENFF_RESIDUES:
         res_name = "ACO"
-    elif counts == {6: 6, 1: 6} and "BENZ" in _CGENFF_TEMPLATES:
+    elif counts == {6: 6, 1: 6} and "BENZ" in _CGENFF_RESIDUES:
         res_name = "BENZ"
-    elif counts == {8: 1, 1: 2} and "TIP3" in _CGENFF_TEMPLATES:
+    elif counts == {8: 1, 1: 2} and "TIP3" in _CGENFF_RESIDUES:
         res_name = "TIP3"
-    elif counts == {6: 1, 8: 1, 1: 4} and "MEOH" in _CGENFF_TEMPLATES:
+    elif counts == {6: 1, 8: 1, 1: 4} and "MEOH" in _CGENFF_RESIDUES:
         res_name = "MEOH"
     else:
         res_name = "GENERIC"
 
-    if res_name in _CGENFF_TEMPLATES:
-        tmpl = _CGENFF_TEMPLATES[res_name]
+    default_t_idx = _NB_MAP.get("DEFAULT", 0)
+    if res_name in _CGENFF_RESIDUES:
+        tmpl = _CGENFF_RESIDUES[res_name]
+        type_indices = np.array(tmpl["type_indices"], dtype=np.int32)
         charges = np.array(tmpl["charges"], dtype=np.float64)
-        sigmas = np.array(tmpl["sigmas"], dtype=np.float64)
-        epsilons = np.array(tmpl["epsilons"], dtype=np.float64)
     else:
         n = len(comp_indices)
+        type_indices = np.full(n, default_t_idx, dtype=np.int32)
         charges = np.zeros(n, dtype=np.float64)
-        sigmas = np.array([2.0 * covalent_radii[zi] for zi in z_sub], dtype=np.float64)
-        epsilons = np.full(n, 0.05, dtype=np.float64)
 
-    return res_name, charges, sigmas, epsilons
+    return res_name, type_indices, charges
 
 
-def compute_inter_monomer_cgenff_mm_fast(pos: np.ndarray, comp_a: list[int], q_a: np.ndarray, sig_a: np.ndarray, eps_a: np.ndarray,
-                                        comp_b: list[int], q_b: np.ndarray, sig_b: np.ndarray, eps_b: np.ndarray) -> tuple[float, np.ndarray]:
+def compute_inter_monomer_cgenff_mm_fast(pos: np.ndarray, comp_a: list[int], t_a: np.ndarray, q_a: np.ndarray,
+                                        comp_b: list[int], t_b: np.ndarray, q_b: np.ndarray) -> tuple[float, np.ndarray]:
     """Compute inter-monomer MM Coulomb + LJ baseline energy and forces in fast numpy."""
     pos_a = pos[comp_a]
     pos_b = pos[comp_b]
     forces = np.zeros_like(pos, dtype=np.float64)
     
+    sig_a = _CGENFF_SIGMAS[t_a]
+    eps_a = _CGENFF_EPSILONS[t_a]
+    sig_b = _CGENFF_SIGMAS[t_b]
+    eps_b = _CGENFF_EPSILONS[t_b]
+
     # Vectorized pairwise differences
     dr = pos_a[:, None, :] - pos_b[None, :, :]  # (N_a, N_b, 3)
     r = np.linalg.norm(dr, axis=-1)              # (N_a, N_b)
@@ -218,8 +232,8 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
     output_cache = Path(output_cache).expanduser()
 
     print(f"==================================================================")
-    print(f" Fast Orbax Cache ML/MM Pre-computer & Topology Back-Mapper")
-    print(f" Loaded {len(_CGENFF_TEMPLATES)} official CGenFF RESI templates")
+    print(f" Fast Orbax Cache ML/MM Pre-computer with CGenFF Atom-Type IDs")
+    print(f" Master Nonbonded Types: {len(_NB_MAP):,} types | Registered RESI: {len(_CGENFF_RESIDUES):,}")
     print(f" Source Cache: {cache_dir}")
     print(f" Target Cache: {output_cache}")
     print(f"==================================================================")
@@ -254,6 +268,8 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
     kept_s = []
     kept_d = []
     kept_mol_id = []
+    kept_cgenff_type = []
+    kept_cgenff_charge = []
     kept_offsets = [0]
 
     dimers_processed = 0
@@ -272,16 +288,23 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
         comp_a, comp_b = comps[0], comps[1]
         
         try:
-            res_a, q_a, sig_a, eps_a = match_cgenff_template_fast(z_struct[comp_a], comp_a)
-            res_b, q_b, sig_b, eps_b = match_cgenff_template_fast(z_struct[comp_b], comp_b)
+            res_a, t_a, q_a = match_cgenff_template_fast(z_struct[comp_a], comp_a)
+            res_b, t_b, q_b = match_cgenff_template_fast(z_struct[comp_b], comp_b)
 
             e_mm, f_mm = compute_inter_monomer_cgenff_mm_fast(
-                r_struct, comp_a, q_a, sig_a, eps_a, comp_b, q_b, sig_b, eps_b
+                r_struct, comp_a, t_a, q_a, comp_b, t_b, q_b
             )
 
             n_atoms = len(z_struct)
             mol_id = np.zeros(n_atoms, dtype=np.int32)
             mol_id[comp_b] = 1
+
+            cgenff_type = np.zeros(n_atoms, dtype=np.int32)
+            cgenff_charge = np.zeros(n_atoms, dtype=np.float64)
+            cgenff_type[comp_a] = t_a
+            cgenff_type[comp_b] = t_b
+            cgenff_charge[comp_a] = q_a
+            cgenff_charge[comp_b] = q_b
 
             kept_r.append(r_struct)
             kept_z.append(z_struct)
@@ -294,6 +317,8 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
             kept_s.append(S_all[i])
             kept_d.append(D_all[i])
             kept_mol_id.append(mol_id)
+            kept_cgenff_type.append(cgenff_type)
+            kept_cgenff_charge.append(cgenff_charge)
             kept_offsets.append(kept_offsets[-1] + n_atoms)
 
             dimers_processed += 1
@@ -320,20 +345,24 @@ def process_orbax_cache(cache_dir: str | Path, output_cache: str | Path, max_str
         "S": np.asarray(kept_s, dtype=np.float64).reshape(-1, 1),
         "D": np.asarray(kept_d, dtype=np.float64).reshape(-1, 3),
         "mol_id": np.concatenate(kept_mol_id, axis=0),
+        "cgenff_type_idx": np.concatenate(kept_cgenff_type, axis=0),
+        "cgenff_charge": np.concatenate(kept_cgenff_charge, axis=0),
+        "cgenff_master_sigmas": _CGENFF_SIGMAS,
+        "cgenff_master_epsilons": _CGENFF_EPSILONS,
     }
     output_data["metadata_n_structures"] = np.asarray(dimers_processed, dtype=np.int64)
     output_data["metadata_n_atoms_total"] = np.asarray(kept_offsets[-1], dtype=np.int64)
     output_data["metadata_max_atoms"] = np.asarray(max(kept_n), dtype=np.int32)
 
     output_cache.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Saving processed Orbax data cache to: {output_cache}")
+    print(f"Saving enriched Orbax data cache to: {output_cache}")
     ocp.PyTreeCheckpointer().save(output_cache, output_data, force=True)
     print(f"[+] Prepared dataset successfully saved!")
     print(f"==================================================================")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fast Orbax Cache ML/MM dataset preparer")
+    parser = argparse.ArgumentParser(description="Fast Orbax Cache ML/MM dataset preparer with CGenFF graph atom types")
     parser.add_argument("--cache-dir", required=True, help="Input source Orbax data cache directory")
     parser.add_argument("--output-cache", default="data/orbax_cache_des_ml_mm", help="Output destination Orbax cache directory")
     parser.add_argument("--max-structures", type=int, default=None, help="Optional frame limit")
