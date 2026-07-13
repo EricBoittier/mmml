@@ -75,6 +75,7 @@ MONOMER_FIGURE_KEYS = {
 
 PANEL_LABELS = {
     "ccsd_def2svp_gpu4pyscf_cp": "CCSD/def2-SVP",
+    "ccsd_def2svpd_gpu4pyscf_cp": "CCSD/def2-SVPD",
     "mp2_def2svp_gpu4pyscf_cp": "MP2/def2-SVP",
     "hf_def2svp_gpu4pyscf_cp": "HF/def2-SVP",
     "pbe0_def2svp_gpu4pyscf_cp": "PBE0/def2-SVP",
@@ -355,6 +356,8 @@ def _panel_label(backend: str) -> str:
         "spookynet_hybrid_mbdzbl_ep2": "Hybrid (MBD+ZBL e2)",
         "spookynet_hybrid_step3000": "SpookyNet (hybrid train s3000)",
         "spookynet_hybrid_hybrid_step3000": "Hybrid decomposition (s3000)",
+        "spookynet_hybrid_step3000_mbd": "Hybrid s3000 + MBD",
+        "spookynet_hybrid_muon_epoch1_mbd": "Muon e1 + MBD",
     }
     return PANEL_LABELS.get(backend, tuned_labels.get(backend, BACKEND_LABELS.get(backend, backend)))
 
