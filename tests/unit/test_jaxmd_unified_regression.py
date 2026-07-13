@@ -103,28 +103,19 @@ def test_nve_mm_nonbonded_finite_and_bounded(synthetic_water_box):
 
 @pytest.mark.parametrize("ensemble", ["min", "nve", "nvt", "npt"])
 def test_all_ensembles_run_and_stay_finite(synthetic_water_box, ensemble):
-    # NPT's jax-md barostat carries a float64 kT under JAX_ENABLE_X64, so it
-    # only runs in float64 (see test_npt_float32_dtype_regression for the
-    # float32 bug this documents).
-    extra = {"float64": True} if ensemble == "npt" else None
-    traj = _run(synthetic_water_box(seed=0), ensemble=ensemble, n_steps=10,
-                extra_params=extra)
+    traj = _run(synthetic_water_box(seed=0), ensemble=ensemble, n_steps=10)
     energies = np.asarray(traj.metadata["energies"])
     assert traj.n_frames >= 1
     assert np.all(np.isfinite(energies))
 
 
-@pytest.mark.xfail(
-    reason="jax-md NPT barostat mixes float32 box momentum with a float64 kT "
-    "under JAX_ENABLE_X64; the driver should force float64 for npt (or cast "
-    "kT). Flips to xpass when fixed.",
-    strict=False,
-    raises=TypeError,
-)
-def test_npt_float32_dtype_regression(synthetic_water_box):
-    """Documents the float32-NPT-under-x64 dtype mismatch as a tracked bug."""
+@pytest.mark.parametrize("float64", [False, True])
+def test_npt_runs_in_both_dtypes(synthetic_water_box, float64):
+    """Regression guard for the barostat dtype fix: the driver casts kT/pressure
+    to the run dtype, so NPT runs in float32 *and* float64 under JAX_ENABLE_X64
+    (previously float32 raised a mixed-carry TypeError in the barostat scan)."""
     traj = _run(synthetic_water_box(seed=0), ensemble="npt", n_steps=10,
-                extra_params={"float64": False})
+                extra_params={"float64": float64})
     assert np.all(np.isfinite(np.asarray(traj.metadata["energies"])))
 
 
@@ -201,7 +192,7 @@ def test_npt_requires_box(synthetic_water_box):
 
     aperiodic = dataclasses.replace(synthetic_water_box(seed=0), box=None)
     with pytest.raises(ValueError, match="requires a periodic box"):
-        _run(aperiodic, ensemble="npt", n_steps=5, extra_params={"float64": True})
+        _run(aperiodic, ensemble="npt", n_steps=5)
 
 
 def test_assemble_rejects_non_jaxmd_backend(synthetic_water_box):

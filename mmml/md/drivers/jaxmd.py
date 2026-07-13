@@ -158,14 +158,23 @@ class JaxmdDriver:
         if ensemble.ensemble == "min":
             init_fn, step_fn = minimize.fire_descent(energy_fn, shift_fn, dt_start=dt_ps)
         else:
-            kT = float(ensemble.temperature_K) * unit_system["temperature"]
+            # Cast kT to the run dtype: under JAX_ENABLE_X64 a Python-float kT is
+            # float64, which makes jax-md build the (NPT) barostat state in
+            # float64 while positions/box are float32 -- the integrator scan then
+            # rejects the mixed carry. Matching kT to ``dtype`` keeps all
+            # integrator state in one precision (NVE/NVT benefit too).
+            kT = jnp.asarray(
+                float(ensemble.temperature_K) * unit_system["temperature"], dtype=dtype
+            )
             if ensemble.ensemble == "nvt":
                 init_fn, step_fn = simulate.nvt_nose_hoover(
                     energy_fn, shift_fn, dt_ps, kT,
                     thermostat_kwargs=options.get("thermostat_kwargs", {}),
                 )
             elif is_npt:
-                pressure = float(ensemble.pressure_bar) * unit_system["pressure"]
+                pressure = jnp.asarray(
+                    float(ensemble.pressure_bar) * unit_system["pressure"], dtype=dtype
+                )
                 init_fn, step_fn = simulate.npt_nose_hoover(
                     energy_fn, shift_fn, dt_ps, pressure, kT,
                     barostat_kwargs=options.get("barostat_kwargs", {}),
