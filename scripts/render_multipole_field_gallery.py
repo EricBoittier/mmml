@@ -26,6 +26,7 @@ import numpy as np
 
 from mmml.utils.plotting.multipoles import (
     plot_dispersion_field_slice,
+    plot_field_progression,
     plot_field_slice,
     plot_mbd_surfaces,
     plot_multipole_surfaces,
@@ -72,6 +73,20 @@ def multipole_surfaces(out: Path) -> None:
 def field_slice(out: Path) -> None:
     o, q, d, quad, _ = _analytic_multipole_scene()
     plot_field_slice(o, q, d, quad, plane="xy", out=out, style=STYLE_NAME)
+
+
+def field_progression(out: Path) -> None:
+    """One site's field built up rank by rank: monopole -> +dipole -> +quad ->
+    +octupole. Moments (a.u.) chosen so each rank visibly adds structure; the
+    octupole is a simple 'linear' O_ijk = s*d_i*d_j*d_k tilted into the plane."""
+    origin = np.zeros(3)
+    charge = 0.6
+    dipole = np.array([0.0, 1.0, 0.0]) * ANGSTROM_TO_BOHR
+    quadrupole = np.array([[2.0, 0, 0], [0, -1.0, 0], [0, 0, -1.0]]) * ANGSTROM_TO_BOHR**2
+    d = np.array([1.0, 0.2, 0.0])
+    octupole = 3.0 * ANGSTROM_TO_BOHR**3 * np.einsum("i,j,k->ijk", d, d, d)
+    plot_field_progression(origin, charge, dipole, quadrupole, octupole,
+                           plane="xy", out=out, style=STYLE_NAME)
 
 
 def multipole_colormap_variants(out: Path) -> None:
@@ -191,6 +206,8 @@ def main() -> None:
     print(f"wrote {OUT_DIR / 'chart_multipole_surfaces.png'}")
     field_slice(OUT_DIR / "chart_multipole_field.png")
     print(f"wrote {OUT_DIR / 'chart_multipole_field.png'}")
+    field_progression(OUT_DIR / "chart_multipole_field_progression.png")
+    print(f"wrote {OUT_DIR / 'chart_multipole_field_progression.png'}")
     multipole_colormap_variants(OUT_DIR / "chart_multipole_colormap_variants.png")
     print(f"wrote {OUT_DIR / 'chart_multipole_colormap_variants.png'}")
 

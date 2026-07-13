@@ -527,6 +527,18 @@ learned model actually produces:
 
 ![learned multipole field](plot-style-gallery-assets/chart_multipole_field_learned.png)
 
+### Going up the expansion, rank by rank
+
+The multipole expansion is a *series*, and `plot_field_progression` shows it as
+one: a single site's field with the monopole alone, then adding the dipole
+(l=1), quadrupole (l=2), and octupole (l=3), all on a shared colour scale so the
+angular structure each rank contributes is directly comparable. The monopole is
+radial; the dipole breaks the up/down symmetry; the quadrupole adds four lobes;
+the octupole sharpens the near-field angular detail. Electrostatics defaults to
+`crameri:vik` (the classic red-positive/blue-negative read).
+
+![multipole field progression](plot-style-gallery-assets/chart_multipole_field_progression.png)
+
 ### Extending the language to the MBD term
 
 The learned MBD dispersion model predicts a per-atom polarizability and C6
