@@ -469,27 +469,6 @@ def compute_inter_monomer_cgenff_mm_fast(pos: np.ndarray, comp_a: list[int], t_a
     return e_total_ev, forces_ev
 
 
-def _monomer_to_canonical_smiles(z: np.ndarray, pos: np.ndarray) -> str | None:
-    """Generate canonical RDKit SMILES from 3D atomic coordinates. Returns None if RDKit unavailable."""
-    try:
-        from rdkit import Chem
-        from rdkit.Chem import AllChem
-        mol = Chem.RWMol()
-        for zi in z:
-            mol.AddAtom(Chem.Atom(int(zi)))
-        AllChem.EmbedMolecule(mol, randomSeed=42)
-        # Use OpenBabel-style distance-based bond perception
-        from rdkit.Chem import rdDetermineBonds
-        mol_with_pos = Chem.RWMol(mol)
-        conf = Chem.Conformer(len(z))
-        for i, p in enumerate(pos):
-            conf.SetAtomPosition(i, p.tolist())
-        mol_with_pos.AddConformer(conf, assignId=True)
-        rdDetermineBonds.DetermineBonds(mol_with_pos, charge=0)
-        return Chem.MolToSmiles(mol_with_pos)
-    except Exception:
-        return None
-
 
 def _worker_init():
     """Called once per worker process at pool startup to suppress duplicate warnings."""
@@ -506,17 +485,15 @@ def process_single_frame(args_tuple):
         return ("SKIP", f"non-dimer: {len(comps)} components")
 
     comp_a, comp_b = comps[0], comps[1]
-    
-    # Generate canonical SMILES for isomer disambiguation
-    smi_a = _monomer_to_canonical_smiles(z_struct[comp_a], r_struct[comp_a])
-    smi_b = _monomer_to_canonical_smiles(z_struct[comp_b], r_struct[comp_b])
 
     try:
+        # canonical_smiles=None: use composition lookup (SMILES lookup reserved for future
+        # use if source cache provides smiles0/smiles1 keys directly)
         res_a, t_a, q_a = match_cgenff_template_fast(
-            z_struct[comp_a], comp_a, target_charge=0.0, canonical_smiles=smi_a
+            z_struct[comp_a], comp_a, target_charge=0.0, canonical_smiles=None
         )
         res_b, t_b, q_b = match_cgenff_template_fast(
-            z_struct[comp_b], comp_b, target_charge=0.0, canonical_smiles=smi_b
+            z_struct[comp_b], comp_b, target_charge=0.0, canonical_smiles=None
         )
 
         # Validate: no DEFAULT sentinel type indices (zero LJ params) should appear
@@ -548,7 +525,7 @@ def process_single_frame(args_tuple):
     except KeyError as e:
         counts_a = dict(zip(*np.unique(z_struct[comp_a], return_counts=True)))
         counts_b = dict(zip(*np.unique(z_struct[comp_b], return_counts=True)))
-        return ("SKIP", f"Unmapped: {e} | smiA={smi_a!r} smiB={smi_b!r} | compA={counts_a} compB={counts_b}")
+        return ("SKIP", f"Unmapped: {e} | compA={counts_a} compB={counts_b}")
     except Exception as e:
         return ("SKIP", f"Unexpected error: {type(e).__name__}: {e}")
 
