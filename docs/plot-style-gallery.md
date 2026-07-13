@@ -276,6 +276,62 @@ ax.pcolormesh(xx, yy, zz, cmap=default_cmap("sequential"))
 unrelated matplotlib colormap) if the optional `cmap` library isn't
 installed — `uv sync --extra plotting` or `pip install cmap`.
 
+## Merging notebook examples with the house style
+
+A working notebook (phi/psi Ramachandran energy-landscape exploration) had
+several genuinely nice plot ideas — reworked here under the house style
+(`"icml"`, `legend_outside`, big fonts) and `default_cmap`, using the real
+64×64 phi/psi scan (`artifacts/trialanine_phi_psi_mm_then_ml_64x64/phi_psi_pes.csv`)
+rather than synthetic data. Regenerate with
+`python scripts/render_ramachandran_gallery.py`.
+
+**This is also the concrete version of "choosing a colormap category from
+the data" from the section above** — each plot below picks sequential vs.
+diverging by asking what the data *is*, not by taste:
+
+### Ramachandran scatter (sequential: energy is strictly positive)
+
+MM energy relative to its own minimum has no natural zero to diverge around
+— `default_cmap("sequential")`.
+
+![Ramachandran scatter](plot-style-gallery-assets/chart_ramachandran_scatter.png)
+
+### Ramachandran contour + raw samples (sequential)
+
+The same data as a smoothed filled contour with the actual sample points
+overlaid faintly on top — reads both the interpolated landscape and exactly
+where it was (and wasn't) sampled.
+
+![Ramachandran contour](plot-style-gallery-assets/chart_ramachandran_contour.png)
+
+### MM vs. ML disagreement (diverging: has a real zero)
+
+`ML energy - MM energy` is a genuine residual — zero means perfect
+agreement, positive/negative means ML over/under-estimates relative to MM.
+This *is* diverging data, unlike the two panels above — `default_cmap("diverging")`.
+
+![MM vs ML diff](plot-style-gallery-assets/chart_ramachandran_diff.png)
+
+### Periodic landscape on a torus (sequential, correct topology)
+
+Phi and psi are periodic — φ=−180° and φ=+180° are the *same* geometry, not
+adjacent-but-distinct values. A flat Ramachandran plot hides this at its
+edges; wrapping the same data onto an actual torus removes the artificial
+seam entirely. Energy is still the encoded quantity (not an angle), so this
+stays sequential, not cyclic — `cmocean:phase` (cyclic) would be for coloring
+by *angle itself*, e.g. the radial dihedral histogram earlier in this
+gallery.
+
+![periodic torus](plot-style-gallery-assets/chart_periodic_torus.png)
+
+### MM vs. ML, small multiples
+
+The two landscapes side by side on the *same* colormap and the *same* color
+scale — direct visual comparison, the same principle as the font/chart-type
+small-multiples above applied to a real MM-vs-ML question.
+
+![MM vs ML small multiples](plot-style-gallery-assets/chart_mm_vs_ml_multiples.png)
+
 ## How to pick
 
 ```python
