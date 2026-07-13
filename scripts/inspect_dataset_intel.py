@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Lightweight scanner to extract composition intel from an extxyz dataset.
+"""Lightweight scanner to extract composition intel from an Orbax data cache or extxyz dataset.
 
-Reports total structures, unique chemical formulas, atom count distributions,
-info keys, arrays keys, and identifies dimer monomer pairs.
+Fast Orbax cache reader for instant dataset inspection across hundreds of thousands of structures.
 """
 
 from __future__ import annotations
@@ -18,61 +17,87 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from ase.io import iread
+import numpy as np
+import orbax.checkpoint as ocp
+from ase.data import chemical_symbols
 
 
-def inspect_dataset(extxyz_path: str | Path, max_structures: int | None = None, output_json: str | Path | None = None):
-    extxyz_path = Path(extxyz_path).expanduser()
-    if not extxyz_path.exists():
-        raise FileNotFoundError(f"Dataset path not found: {extxyz_path}")
+def formula_from_atomic_numbers(z_arr: np.ndarray) -> str:
+    """Fast chemical formula string from atomic numbers array."""
+    counts = Counter(z_arr)
+    parts = []
+    # Standard chemical ordering: C, H, then alphabetical
+    order = []
+    if 6 in counts:
+        order.append(6)
+    if 1 in counts:
+        order.append(1)
+    for z in sorted(counts.keys()):
+        if z not in (1, 6):
+            order.append(z)
+    for z in order:
+        sym = chemical_symbols[z]
+        c = counts[z]
+        parts.append(f"{sym}{c if c > 1 else ''}")
+    return "".join(parts)
+
+
+def inspect_orbax_cache(cache_path: str | Path, max_structures: int | None = None, output_json: str | Path | None = None):
+    cache_path = Path(cache_path).expanduser()
+    if not cache_path.exists():
+        raise FileNotFoundError(f"Cache path not found: {cache_path}")
 
     print(f"==================================================================")
-    print(f" Dataset Intel Inspector: {extxyz_path}")
+    print(f" Fast Orbax Cache Intel Inspector: {cache_path.name}")
+    print(f" Path: {cache_path}")
     print(f"==================================================================")
 
-    formula_counts = Counter()
-    atom_count_counts = Counter()
-    info_keys = Counter()
-    arrays_keys = Counter()
-    total_structures = 0
+    data = ocp.PyTreeCheckpointer().restore(cache_path)
+    
+    # Extract flat arrays
+    Z = np.asarray(data["Z"]).reshape(-1)
+    N = np.asarray(data["N"]).reshape(-1)
+    offsets = np.asarray(data["mol_offsets"]).reshape(-1)
+    E = np.asarray(data["E"]).reshape(-1)
+    Q = np.asarray(data["Q"]).reshape(-1)
 
-    for atoms in iread(str(extxyz_path), index=":", format="extxyz"):
-        total_structures += 1
-        formula_counts[atoms.get_chemical_formula()] += 1
-        atom_count_counts[len(atoms)] += 1
-        
-        for k in atoms.info:
-            info_keys[k] += 1
-        for k in atoms.arrays:
-            arrays_keys[k] += 1
+    n_total = len(N)
+    if max_structures:
+        n_total = min(n_total, max_structures)
 
-        if max_structures and total_structures >= max_structures:
-            break
+    print(f"\n[+] Total Structures: {n_total:,}")
+    print(f"[+] Total Atoms     : {offsets[n_total]:,}")
 
-    print(f"\n[+] Total Structures Scanned: {total_structures}")
+    atom_count_counts = Counter(N[:n_total].tolist())
     print(f"\n[+] Atom Count Distribution:")
     for n_atoms, count in sorted(atom_count_counts.items()):
-        print(f"    - {n_atoms} atoms: {count} structures")
+        print(f"    - {n_atoms} atoms: {count:,} structures ({count / n_total * 100:.1f}%)")
+
+    # Fast formula extraction across structures
+    print(f"\n[+] Sampling Chemical Formulas across structures...")
+    formula_counts = Counter()
+    for i in range(n_total):
+        start = offsets[i]
+        end = offsets[i + 1]
+        z_struct = Z[start:end]
+        formula_counts[formula_from_atomic_numbers(z_struct)] += 1
 
     print(f"\n[+] Unique Chemical Formulas (Top 25):")
     for formula, count in formula_counts.most_common(25):
-        print(f"    - {formula:<20}: {count} frames")
+        print(f"    - {formula:<20}: {count:,} frames ({count / n_total * 100:.1f}%)")
 
-    print(f"\n[+] Info Keys Found:")
-    for k, count in info_keys.most_common():
-        print(f"    - {k:<25}: in {count} frames")
-
-    print(f"\n[+] Arrays Keys Found:")
-    for k, count in arrays_keys.most_common():
-        print(f"    - {k:<25}: in {count} frames")
+    print(f"\n[+] Dataset Targets Summary:")
+    print(f"    - Energy range : [{E[:n_total].min():.3f}, {E[:n_total].max():.3f}] (mean={E[:n_total].mean():.3f})")
+    print(f"    - Charge range : [{Q[:n_total].min():.3f}, {Q[:n_total].max():.3f}] (mean={Q[:n_total].mean():.3f})")
 
     intel = {
-        "dataset_path": str(extxyz_path),
-        "total_structures": total_structures,
-        "atom_counts": dict(atom_count_counts),
+        "cache_path": str(cache_path),
+        "total_structures": int(n_total),
+        "total_atoms": int(offsets[n_total]),
+        "atom_counts": {int(k): int(v) for k, v in atom_count_counts.items()},
         "top_formulas": dict(formula_counts.most_common(50)),
-        "info_keys": dict(info_keys),
-        "arrays_keys": dict(arrays_keys),
+        "energy_min": float(E[:n_total].min()),
+        "energy_max": float(E[:n_total].max()),
     }
 
     if output_json:
@@ -85,13 +110,13 @@ def inspect_dataset(extxyz_path: str | Path, max_structures: int | None = None, 
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Extract composition intel from extxyz dataset")
-    parser.add_argument("--extxyz", required=True, help="Path to extxyz file")
-    parser.add_argument("--max-structures", type=int, default=None, help="Optional frame limit for fast scan")
+    parser = argparse.ArgumentParser(description="Extract composition intel fast from Orbax cache or extxyz dataset")
+    parser.add_argument("--cache-dir", required=True, help="Path to Orbax data cache directory")
+    parser.add_argument("--max-structures", type=int, default=None, help="Optional frame limit")
     parser.add_argument("--output-json", default="dataset_intel.json", help="Path to save output JSON intel")
     args = parser.parse_args()
 
-    inspect_dataset(args.extxyz, max_structures=args.max_structures, output_json=args.output_json)
+    inspect_orbax_cache(args.cache_dir, max_structures=args.max_structures, output_json=args.output_json)
 
 
 if __name__ == "__main__":
