@@ -73,10 +73,9 @@ tasks:
     systems: [BENZ, TIP3, DCM, ACO]
     methods: [MM, ML, MMML]
     backends: [jaxmd, pycharmm]
-    environments: [pcstudix, scicore, local_computer]
-    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task pure_liquids.smoke --output-dir {output_dir}"
+    environments: [local_laptop, local_computer, pcstudix, scicore]
+    command: "{python} workflows/validation_campaign/scripts/pure_liquids_smoke.py --output-dir {output_dir}"
     acceptance: [packmol_audit, finite_energy_force, positive_temperature, no_overlap, short_nvt_pass]
-    state: needs_driver
 
   pure_liquids.production:
     goal: pure_liquids
