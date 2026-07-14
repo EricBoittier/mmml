@@ -26,7 +26,10 @@ def render(
     out = lib.output_dir(cfg, run_id, task_id, env["name"])
     out.mkdir(parents=True, exist_ok=True)
 
-    command = lib.render_command(task, out, python='"$MMML_PYTHON"')
+    # Everything *inside* the script is relative to the cluster's repo root: this
+    # file is rendered on one machine and executed on another.
+    rel = lib.rel_output_dir(cfg, run_id, task_id, env["name"])
+    command = lib.render_command(task, rel, python='"$MMML_PYTHON"')
     lib.write_json(
         out / "request.json", lib.request_payload(task_id, task, env, run_id, command)
     )
@@ -42,8 +45,8 @@ def render(
         f"#SBATCH --cpus-per-task={int(env.get('cpus_per_task', 4))}",
         f"#SBATCH --mem-per-cpu={int(env.get('mem_mb_per_cpu', 4000))}M",
         f"#SBATCH --time={hours:02d}:{minutes:02d}:00",
-        f"#SBATCH --output={out / 'slurm-%j.out'}",
-        f"#SBATCH --error={out / 'slurm-%j.err'}",
+        f"#SBATCH --output={rel / 'slurm-%j.out'}",
+        f"#SBATCH --error={rel / 'slurm-%j.err'}",
     ]
     if int(env.get("gpus", 0)) > 0:
         directives.append(f"#SBATCH --gres=gpu:{int(env['gpus'])}")
@@ -60,7 +63,7 @@ def render(
             'fi'
         )
 
-    quoted_out = shlex.quote(str(out))
+    quoted_out = shlex.quote(str(rel))
     script = "\n".join(
         [
             "#!/usr/bin/env bash",
@@ -68,7 +71,7 @@ def render(
             *directives,
             "set -uo pipefail",
             "",
-            'cd "${SLURM_SUBMIT_DIR:-' + str(lib.REPO) + '}"',
+            f"cd {lib.repo_root_shell(env)}",
             prolog,
             "",
             "source scripts/resolve_mmml_env.sh",
@@ -76,17 +79,17 @@ def render(
             lib.shell_exports(env),
             "",
             f"mkdir -p {quoted_out}",
-            f'"$MMML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
+            '"$MMML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
             f"  --output-dir {quoted_out} --phase running",
             "",
             "set +e",
             f"{command} \\",
-            f"  > {shlex.quote(str(out / 'stdout.log'))} \\",
-            f"  2> {shlex.quote(str(out / 'stderr.log'))}",
+            f"  > {shlex.quote(str(rel / 'stdout.log'))} \\",
+            f"  2> {shlex.quote(str(rel / 'stderr.log'))}",
             "task_rc=$?",
             "set -e",
             "",
-            f'"$MMML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
+            '"$MMML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
             f'  --output-dir {quoted_out} --phase finished --exit-code "$task_rc"',
             "",
             "exit $task_rc",

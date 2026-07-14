@@ -94,6 +94,26 @@ def output_dir(cfg: dict[str, Any], run_id: str, task_id: str, env_name: str) ->
     return artifact_root(cfg) / run_id / env_name / task_path(task_id)
 
 
+def rel_output_dir(cfg: dict[str, Any], run_id: str, task_id: str, env_name: str) -> Path:
+    """Output dir relative to the repo root.
+
+    Job scripts must use this, never an absolute path: a script rendered on the
+    laptop is executed on a cluster whose repo root is somewhere else entirely.
+    """
+    root = cfg.get("artifact_root", "artifacts/validation_campaign")
+    return Path(root) / run_id / env_name / task_path(task_id)
+
+
+def repo_root_shell(env: dict[str, Any]) -> str:
+    """The environment's repo root, as a shell word ('~/mmml' -> "$HOME"/mmml)."""
+    root = str(env.get("repo_root", "."))
+    if root in {".", ""}:
+        return shlex.quote(str(REPO))
+    if root.startswith("~/"):
+        return '"$HOME"/' + shlex.quote(root[2:])
+    return shlex.quote(root)
+
+
 def select_tasks(
     cfg: dict[str, Any], args: Any
 ) -> list[tuple[str, dict[str, Any]]]:

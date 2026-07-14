@@ -19,10 +19,12 @@ from typing import Iterable
 
 
 ROUTINE_RE = re.compile(
-    r"(?P<prefix>(?:[a-z][a-z0-9_]*(?:\([^)]*\))?\s+)*?)"
+    r"^[ \t]*(?P<prefix>(?:(?:integer|real|complex|logical|character|type)"
+    r"\s*(?:\([^)]*\))?\s+)?)"
     r"(?P<kind>subroutine|function)\s+(?P<name>[a-z][a-z0-9_]*)\s*"
-    r"\((?P<args>.*?)\)\s*bind\s*\(\s*c(?P<bind_opts>[^)]*)\)",
-    re.IGNORECASE | re.DOTALL,
+    r"\((?P<args>[^)]*)\)\s*(?:result\s*\([^)]*\)\s*)?"
+    r"bind\s*\(\s*c(?P<bind_opts>[^)]*)\)",
+    re.IGNORECASE | re.DOTALL | re.MULTILINE,
 )
 PY_SYMBOL_RE = re.compile(r"\blib\.charmm\.([A-Za-z][A-Za-z0-9_]*)")
 
@@ -130,7 +132,12 @@ def audit_argument(name: str, declaration: str | None) -> Argument:
         return Argument(name, None, None, None, False, False, None, problems)
     left = declaration.split("::", 1)[0].lower()
     type_match = re.match(r"\s*(integer|real|complex|logical|character|type)\s*(\([^)]*\))?", left)
-    type_spec = type_match.group(0).strip() if type_match else None
+    procedure_match = re.match(r"\s*procedure\s*\([^)]*\)", left)
+    type_spec = (
+        type_match.group(0).strip() if type_match
+        else procedure_match.group(0).strip() if procedure_match
+        else None
+    )
     intent_match = re.search(r"intent\s*\(\s*(inout|in|out)\s*\)", left)
     dim_match = re.search(r"dimension\s*\(([^)]*)\)", left)
     dimension = dim_match.group(1).strip() if dim_match else None
@@ -145,7 +152,12 @@ def audit_argument(name: str, declaration: str | None) -> Argument:
         problems.append(issue("error", "allocatable_dummy", "allocatable dummy is not a raw C pointer"))
     if re.search(r"(?:^|,)\s*pointer\s*(?:,|$)", left):
         problems.append(issue("error", "pointer_dummy", "Fortran POINTER dummy requires descriptor semantics"))
-    if type_spec is None:
+    if type_spec is not None and type_spec.startswith("procedure"):
+        problems.append(issue(
+            "info", "procedure_callback",
+            "callback interoperability depends on the referenced bind(c) abstract interface",
+        ))
+    elif type_spec is None:
         problems.append(issue("error", "unknown_type", "could not determine interoperable type"))
     elif type_spec.startswith("character"):
         char_kind_ok = "c_char" in type_spec
@@ -200,7 +212,10 @@ def scan(fortran_root: Path, python_root: Path) -> dict:
     symbols = Counter(row.symbol for row in routines)
     for row in routines:
         if symbols[row.symbol] > 1:
-            row.issues.append(issue("error", "duplicate_symbol", f"C symbol exported {symbols[row.symbol]} times"))
+            row.issues.append(issue(
+                "warning", "duplicate_symbol",
+                f"C symbol appears {symbols[row.symbol]} times in source; inspect preprocessor branches",
+            ))
     exported = {row.symbol for row in routines}
     unresolved = {name: locations for name, locations in wrappers.items() if name not in exported}
     issue_counts = Counter(p["severity"] for row in routines for p in row.issues)
@@ -272,4 +287,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
