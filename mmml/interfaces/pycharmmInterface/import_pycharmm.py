@@ -252,8 +252,12 @@ def get_forces_pycharmm():
 
 import pandas as pd
 def set_pycharmm_xyz(atom_positions):
-    xyz = pd.DataFrame(atom_positions, columns=["x", "y", "z"])
-    coor.set_positions(xyz)
+    if hasattr(coor, "set_positions_array"):
+        pos = np.asarray(atom_positions, dtype=np.float64)
+        coor.set_positions_array(pos[:, 0], pos[:, 1], pos[:, 2])
+    else:
+        xyz = pd.DataFrame(atom_positions, columns=["x", "y", "z"])
+        coor.set_positions(xyz)
 
 
 def capture_neighbour_list():

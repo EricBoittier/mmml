@@ -41,6 +41,48 @@ def get_natom():
     return natom  
   
   
+def _ptr_double(arr: np.ndarray):
+    return np.ascontiguousarray(arr, dtype=np.float64).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+
+
+def set_positions_array(x, y, z):
+    """Sets atom positions directly from array-like 1D coordinates (zero-DataFrame overhead)."""
+    natom = get_natom()
+    cx = _ptr_double(x[:natom])
+    cy = _ptr_double(y[:natom])
+    cz = _ptr_double(z[:natom])
+    return lib.charmm.coor_set_positions(cx, cy, cz)
+
+
+def get_positions_array():
+    """Gets atom positions directly into NumPy float64 arrays (zero-DataFrame overhead)."""
+    natom = get_natom()
+    x = np.empty(natom, dtype=np.float64)
+    y = np.empty(natom, dtype=np.float64)
+    z = np.empty(natom, dtype=np.float64)
+    lib.charmm.coor_get_positions(_ptr_double(x), _ptr_double(y), _ptr_double(z))
+    return x, y, z
+
+
+def set_forces_array(dx, dy, dz):
+    """Sets atom forces directly from array-like 1D gradients (zero-DataFrame overhead)."""
+    natom = get_natom()
+    cdx = _ptr_double(dx[:natom])
+    cdy = _ptr_double(dy[:natom])
+    cdz = _ptr_double(dz[:natom])
+    return lib.charmm.coor_set_forces(cdx, cdy, cdz)
+
+
+def get_forces_array():
+    """Gets atom forces directly into NumPy float64 arrays (zero-DataFrame overhead)."""
+    natom = get_natom()
+    dx = np.empty(natom, dtype=np.float64)
+    dy = np.empty(natom, dtype=np.float64)
+    dz = np.empty(natom, dtype=np.float64)
+    lib.charmm.coor_get_forces(_ptr_double(dx), _ptr_double(dy), _ptr_double(dz))
+    return dx, dy, dz
+
+
 def set_positions(pos):  
     """Sets the positions of the atoms in the simulation  
   
@@ -55,16 +97,10 @@ def set_positions(pos):
         number of atoms in the simulation  
     """  
     natom = get_natom()  
-    pos_x = pos['x'][0:natom].tolist()  
-    pos_y = pos['y'][0:natom].tolist()  
-    pos_z = pos['z'][0:natom].tolist()  
-  
-    c_x = (ctypes.c_double * natom)(*pos_x)  
-    c_y = (ctypes.c_double * natom)(*pos_y)  
-    c_z = (ctypes.c_double * natom)(*pos_z)  
-  
-    natom = lib.charmm.coor_set_positions(c_x, c_y, c_z)  
-    return natom  
+    x = pos['x'].values[:natom]
+    y = pos['y'].values[:natom]
+    z = pos['z'].values[:natom]
+    return set_positions_array(x, y, z)
   
 
 def get_positions():  
@@ -75,19 +111,8 @@ def get_positions():
     pos : pandas.core.frame.DataFrame  
         a dataframe with columns named *x*, *y* and *z*  
     """  
-    natom = get_natom()  
-    c_x = (ctypes.c_double * natom)()  
-    c_y = (ctypes.c_double * natom)()  
-    c_z = (ctypes.c_double * natom)()  
-  
-    lib.charmm.coor_get_positions(c_x, c_y, c_z)  
-  
-    pos_x = [c_x[i] for i in range(natom)]  
-    pos_y = [c_y[i] for i in range(natom)]  
-    pos_z = [c_z[i] for i in range(natom)]  
-  
-    pos = pandas.DataFrame({'x': pos_x, 'y': pos_y, 'z': pos_z})  
-    return pos  
+    x, y, z = get_positions_array()
+    return pandas.DataFrame({'x': x, 'y': y, 'z': z})  
   
   
 def set_weights(weights):  
@@ -104,9 +129,8 @@ def set_weights(weights):
         number of atoms in the simulation  
     """  
     natom = get_natom()  
-    c_weights = (ctypes.c_double * natom)(*weights)  
-    natom = lib.charmm.coor_set_weights(c_weights)  
-    return natom  
+    c_weights = _ptr_double(weights[:natom])  
+    return lib.charmm.coor_set_weights(c_weights)  
   
   
 def get_weights():  
@@ -118,11 +142,9 @@ def get_weights():
         a list of float atom weights 0:natom  
     """  
     natom = get_natom()  
-    c_weights = (ctypes.c_double * natom)()  
-    lib.charmm.coor_get_weights(c_weights)  
-  
-    weights = [c_weights[i] for i in range(natom)]  
-    return weights  
+    w = np.empty(natom, dtype=np.float64)
+    lib.charmm.coor_get_weights(_ptr_double(w))  
+    return w.tolist()  
   
   
 def copy_forces(mass=False, selection=None):  
@@ -147,9 +169,7 @@ def copy_forces(mass=False, selection=None):
     c_mass = ctypes.c_int(mass)  
   
     status = lib.charmm.coor_copy_forces(ctypes.byref(c_mass), c_sel)  
-  
-    status = bool(status)  
-    return status  
+    return bool(status)  
   
   
 def set_forces(forces):  
@@ -166,16 +186,10 @@ def set_forces(forces):
         number of atoms in the simulation  
     """  
     natom = get_natom()  
-    dx = forces['dx'][0:natom].tolist()  
-    dy = forces['dy'][0:natom].tolist()  
-    dz = forces['dz'][0:natom].tolist()  
-  
-    c_dx = (ctypes.c_double * natom)(*dx)  
-    c_dy = (ctypes.c_double * natom)(*dy)  
-    c_dz = (ctypes.c_double * natom)(*dz)  
-  
-    natom = lib.charmm.coor_set_forces(c_dx, c_dy, c_dz)  
-    return natom  
+    dx = forces['dx'].values[:natom]
+    dy = forces['dy'].values[:natom]
+    dz = forces['dz'].values[:natom]
+    return set_forces_array(dx, dy, dz)
   
   
 def get_forces():  
@@ -186,19 +200,8 @@ def get_forces():
     forces : pandas.core.frame.DataFrame  
         a dataframe with columns named *dx*, *dy* and *dz*  
     """  
-    natom = get_natom()  
-    c_dx = (ctypes.c_double * natom)()  
-    c_dy = (ctypes.c_double * natom)()  
-    c_dz = (ctypes.c_double * natom)()  
-  
-    lib.charmm.coor_get_forces(c_dx, c_dy, c_dz)  
-  
-    dx = [c_dx[i] for i in range(natom)]  
-    dy = [c_dy[i] for i in range(natom)]  
-    dz = [c_dz[i] for i in range(natom)]  
-  
-    forces = pandas.DataFrame({'dx': dx, 'dy': dy, 'dz': dz})  
-    return forces  
+    dx, dy, dz = get_forces_array()
+    return pandas.DataFrame({'dx': dx, 'dy': dy, 'dz': dz})  
   
   
 def set_comparison(pos):  
@@ -215,18 +218,11 @@ def set_comparison(pos):
         number of atoms in the simulation  
     """  
     natom = get_natom()  
-    x = pos['x'][0:natom].tolist()  
-    y = pos['y'][0:natom].tolist()  
-    z = pos['z'][0:natom].tolist()  
-    w = pos['w'][0:natom].tolist()  
-  
-    x = (ctypes.c_double * natom)(*x)  
-    y = (ctypes.c_double * natom)(*y)  
-    z = (ctypes.c_double * natom)(*z)  
-    w = (ctypes.c_double * natom)(*w)  
-  
-    natom = lib.charmm.coor_set_comparison(x, y, z, w)  
-    return natom  
+    cx = _ptr_double(pos['x'].values[:natom])
+    cy = _ptr_double(pos['y'].values[:natom])
+    cz = _ptr_double(pos['z'].values[:natom])
+    cw = _ptr_double(pos['w'].values[:natom])
+    return lib.charmm.coor_set_comparison(cx, cy, cz, cw)  
   
   
 def get_comparison():  
@@ -238,23 +234,12 @@ def get_comparison():
         dataframe with columns named *x*, *y*, *z*, and *w*  
     """  
     natom = get_natom()  
-    x = (ctypes.c_double * natom)()  
-    y = (ctypes.c_double * natom)()  
-    z = (ctypes.c_double * natom)()  
-    w = (ctypes.c_double * natom)()  
-  
-    lib.charmm.coor_get_comparison(x, y, z, w)  
-  
-    x = [x[i] for i in range(natom)]  
-    y = [y[i] for i in range(natom)]  
-    z = [z[i] for i in range(natom)]  
-    w = [w[i] for i in range(natom)]  
-  
-    pos = pandas.DataFrame({'x': x,  
-                            'y': y,  
-                            'z': z,  
-                            'w': w})  
-    return pos  
+    x = np.empty(natom, dtype=np.float64)  
+    y = np.empty(natom, dtype=np.float64)  
+    z = np.empty(natom, dtype=np.float64)  
+    w = np.empty(natom, dtype=np.float64)  
+    lib.charmm.coor_get_comparison(_ptr_double(x), _ptr_double(y), _ptr_double(z), _ptr_double(w))  
+    return pandas.DataFrame({'x': x, 'y': y, 'z': z, 'w': w})  
   
   
 def set_comp2(pos):  
@@ -271,18 +256,11 @@ def set_comp2(pos):
         number of atoms in the simulation  
     """  
     natom = get_natom()  
-    x = pos['x'][0:natom].tolist()  
-    y = pos['y'][0:natom].tolist()  
-    z = pos['z'][0:natom].tolist()  
-    w = pos['w'][0:natom].tolist()  
-  
-    x = (ctypes.c_double * natom)(*x)  
-    y = (ctypes.c_double * natom)(*y)  
-    z = (ctypes.c_double * natom)(*z)  
-    w = (ctypes.c_double * natom)(*w)  
-  
-    natom = lib.charmm.coor_set_comp2(x, y, z, w)  
-    return natom  
+    cx = _ptr_double(pos['x'].values[:natom])
+    cy = _ptr_double(pos['y'].values[:natom])
+    cz = _ptr_double(pos['z'].values[:natom])
+    cw = _ptr_double(pos['w'].values[:natom])
+    return lib.charmm.coor_set_comp2(cx, cy, cz, cw)  
   
   
 def get_comp2():  
@@ -294,23 +272,12 @@ def get_comp2():
         dataframe with columns named *x*, *y*, *z*, and *w*  
     """  
     natom = get_natom()  
-    x = (ctypes.c_double * natom)()  
-    y = (ctypes.c_double * natom)()  
-    z = (ctypes.c_double * natom)()  
-    w = (ctypes.c_double * natom)()  
-  
-    lib.charmm.coor_get_comp2(x, y, z, w)  
-  
-    x = [x[i] for i in range(natom)]  
-    y = [y[i] for i in range(natom)]  
-    z = [z[i] for i in range(natom)]  
-    w = [w[i] for i in range(natom)]  
-  
-    pos = pandas.DataFrame({'x': x,  
-                            'y': y,  
-                            'z': z,  
-                            'w': w})  
-    return pos  
+    x = np.empty(natom, dtype=np.float64)  
+    y = np.empty(natom, dtype=np.float64)  
+    z = np.empty(natom, dtype=np.float64)  
+    w = np.empty(natom, dtype=np.float64)  
+    lib.charmm.coor_get_comp2(_ptr_double(x), _ptr_double(y), _ptr_double(z), _ptr_double(w))  
+    return pandas.DataFrame({'x': x, 'y': y, 'z': z, 'w': w})  
   
   
 def set_main(pos):  
@@ -327,18 +294,11 @@ def set_main(pos):
         number of atoms in the simulation  
     """  
     natom = get_natom()  
-    x = pos['x'][0:natom].tolist()  
-    y = pos['y'][0:natom].tolist()  
-    z = pos['z'][0:natom].tolist()  
-    w = pos['w'][0:natom].tolist()  
-  
-    x = (ctypes.c_double * natom)(*x)  
-    y = (ctypes.c_double * natom)(*y)  
-    z = (ctypes.c_double * natom)(*z)  
-    w = (ctypes.c_double * natom)(*w)  
-  
-    natom = lib.charmm.coor_set_main(x, y, z, w)  
-    return natom  
+    cx = _ptr_double(pos['x'].values[:natom])
+    cy = _ptr_double(pos['y'].values[:natom])
+    cz = _ptr_double(pos['z'].values[:natom])
+    cw = _ptr_double(pos['w'].values[:natom])
+    return lib.charmm.coor_set_main(cx, cy, cz, cw)  
   
   
 def get_main():  
@@ -350,23 +310,12 @@ def get_main():
         dataframe with columns named *x*, *y*, *z*, and *w*  
     """  
     natom = get_natom()  
-    x = (ctypes.c_double * natom)()  
-    y = (ctypes.c_double * natom)()  
-    z = (ctypes.c_double * natom)()  
-    w = (ctypes.c_double * natom)()  
-  
-    lib.charmm.coor_get_main(x, y, z, w)  
-  
-    x = [x[i] for i in range(natom)]  
-    y = [y[i] for i in range(natom)]  
-    z = [z[i] for i in range(natom)]  
-    w = [w[i] for i in range(natom)]  
-  
-    pos = pandas.DataFrame({'x': x,  
-                            'y': y,  
-                            'z': z,  
-                            'w': w})  
-    return pos  
+    x = np.empty(natom, dtype=np.float64)  
+    y = np.empty(natom, dtype=np.float64)  
+    z = np.empty(natom, dtype=np.float64)  
+    w = np.empty(natom, dtype=np.float64)  
+    lib.charmm.coor_get_main(_ptr_double(x), _ptr_double(y), _ptr_double(z), _ptr_double(w))  
+    return pandas.DataFrame({'x': x, 'y': y, 'z': z, 'w': w})  
   
   
 # def orient(by_mass, by_rms, by_noro):  

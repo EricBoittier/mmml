@@ -1933,14 +1933,18 @@ def charmm_total_forces_kcalmol_A() -> np.ndarray:
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
-    fdf = coor.get_forces()
-    grad = np.column_stack(
-        [
-            fdf["dx"].to_numpy(dtype=float),
-            fdf["dy"].to_numpy(dtype=float),
-            fdf["dz"].to_numpy(dtype=float),
-        ]
-    )
+    if hasattr(coor, "get_forces_array"):
+        dx, dy, dz = coor.get_forces_array()
+        grad = np.column_stack([dx, dy, dz])
+    else:
+        fdf = coor.get_forces()
+        grad = np.column_stack(
+            [
+                fdf["dx"].to_numpy(dtype=float),
+                fdf["dy"].to_numpy(dtype=float),
+                fdf["dz"].to_numpy(dtype=float),
+            ]
+        )
     return -grad
 
 
