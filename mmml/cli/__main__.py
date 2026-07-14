@@ -5,12 +5,40 @@ Main entry point for MMML CLI commands.
 Provides a unified interface for all MMML command-line tools.
 """
 
+import os
 import sys
 import argparse
 
 from mmml.cli.completion import completion_main, try_autocomplete
 from mmml.cli.help_text import format_top_level_help, validate_command
 from mmml.cli.registry import _DISPATCH_COMMANDS
+
+
+def _hard_exit(code: int | None) -> None:
+    """Terminate with *code*, bypassing CHARMM's Fortran teardown.
+
+    Importing pycharmm installs a Fortran/MPI finalizer that runs during
+    interpreter shutdown and **resets the process exit status to 0**. A command
+    that returned 1 therefore reported success to the shell, so every caller
+    that trusts exit codes -- Slurm, CI, Make, the validation campaign -- was
+    blind to failures.
+
+    ``os._exit`` skips atexit handlers and interpreter shutdown entirely, so the
+    status chosen here is the status the caller actually observes. Streams are
+    flushed first because ``os._exit`` will not do it for us.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(int(code or 0))
+
+
+def cli() -> None:
+    """Console-script entry point. Never returns.
+
+    ``main`` keeps returning an ``int`` so it stays callable from tests; only
+    this wrapper forces the process exit status.
+    """
+    _hard_exit(main())
 
 
 class _MMMLTopLevelParser(argparse.ArgumentParser):
@@ -334,4 +362,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    cli()
