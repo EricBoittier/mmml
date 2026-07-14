@@ -13,8 +13,14 @@ set -euo pipefail
 REPO_ROOT="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "${REPO_ROOT}"
 
-# Load pc-bach environment
-source "${REPO_ROOT}/scripts/env/pcbach.env"
+# Load pc-bach environment (with fallback to scripts/pc_bach_env.sh)
+if [[ -f "${REPO_ROOT}/scripts/env/pcbach.env" ]]; then
+  source "${REPO_ROOT}/scripts/env/pcbach.env"
+elif [[ -f "${REPO_ROOT}/scripts/pc_bach_env.sh" ]]; then
+  source "${REPO_ROOT}/scripts/pc_bach_env.sh"
+  source "${REPO_ROOT}/scripts/resolve_mmml_env.sh"
+  mmml_resolve_env "${REPO_ROOT}"
+fi
 
 echo "[pc-bach Slurm] Running High-Core CPU Suite (MPI / PyCHARMM / Liquids & Peptides)..."
 mkdir -p reports/pcbach_cpu

@@ -160,6 +160,7 @@ celerybeat-schedule
 .venv
 venv/
 ENV/
+!scripts/env/
 
 # Spyder project settings
 .spyderproject
