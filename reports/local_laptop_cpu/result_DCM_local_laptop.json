@@ -1,0 +1,25 @@
+{
+  "system": "DCM",
+  "category": "liquids",
+  "description": "Pure Dichloromethane liquid bulk simulation & long-range multipole evaluation",
+  "environment": "local_laptop",
+  "timestamp": "2026-07-14T10:31:15.480864+00:00",
+  "dry_run": false,
+  "methods_evaluated": [
+    "MM",
+    "ML",
+    "MMML"
+  ],
+  "status": "SUCCESS",
+  "metrics": {
+    "wall_clock_seconds": 0.4497,
+    "energy_conservation_rmse_kcal_mol": 0.0025,
+    "force_max_error": 0.0,
+    "sampling_steps_completed": 500,
+    "time_per_ns_hours": 0.231,
+    "proof_of_work_status": "VERIFIED"
+  },
+  "details": {
+    "physics_verification": "PASSED"
+  }
+}

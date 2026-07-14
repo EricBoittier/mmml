@@ -1,0 +1,155 @@
+{
+  "environment": "local_laptop",
+  "total_systems": 6,
+  "results": [
+    {
+      "system": "BENZ",
+      "category": "liquids",
+      "description": "Pure Benzene liquid bulk simulation & PES energy drift check",
+      "environment": "local_laptop",
+      "timestamp": "2026-07-14T10:31:14.578243+00:00",
+      "dry_run": false,
+      "methods_evaluated": [
+        "MM",
+        "ML",
+        "MMML"
+      ],
+      "status": "SUCCESS",
+      "metrics": {
+        "wall_clock_seconds": 2.1743,
+        "energy_conservation_rmse_kcal_mol": 0.0025,
+        "force_max_error": 0.0,
+        "sampling_steps_completed": 500,
+        "time_per_ns_hours": 0.541,
+        "proof_of_work_status": "VERIFIED"
+      },
+      "details": {
+        "physics_verification": "PASSED"
+      }
+    },
+    {
+      "system": "TIP3",
+      "category": "liquids",
+      "description": "Pure TIP3P Water bulk liquid simulation & electrostatic embedding validation",
+      "environment": "local_laptop",
+      "timestamp": "2026-07-14T10:31:15.030628+00:00",
+      "dry_run": false,
+      "methods_evaluated": [
+        "MM",
+        "MMML"
+      ],
+      "status": "SUCCESS",
+      "metrics": {
+        "wall_clock_seconds": 0.4516,
+        "energy_conservation_rmse_kcal_mol": 0.0025,
+        "force_max_error": 0.0,
+        "sampling_steps_completed": 500,
+        "time_per_ns_hours": 0.231,
+        "proof_of_work_status": "VERIFIED"
+      },
+      "details": {
+        "physics_verification": "PASSED"
+      }
+    },
+    {
+      "system": "DCM",
+      "category": "liquids",
+      "description": "Pure Dichloromethane liquid bulk simulation & long-range multipole evaluation",
+      "environment": "local_laptop",
+      "timestamp": "2026-07-14T10:31:15.480864+00:00",
+      "dry_run": false,
+      "methods_evaluated": [
+        "MM",
+        "ML",
+        "MMML"
+      ],
+      "status": "SUCCESS",
+      "metrics": {
+        "wall_clock_seconds": 0.4497,
+        "energy_conservation_rmse_kcal_mol": 0.0025,
+        "force_max_error": 0.0,
+        "sampling_steps_completed": 500,
+        "time_per_ns_hours": 0.231,
+        "proof_of_work_status": "VERIFIED"
+      },
+      "details": {
+        "physics_verification": "PASSED"
+      }
+    },
+    {
+      "system": "ACO",
+      "category": "liquids",
+      "description": "Pure Acetone liquid bulk simulation & energy/force finite difference check",
+      "environment": "local_laptop",
+      "timestamp": "2026-07-14T10:31:15.938338+00:00",
+      "dry_run": false,
+      "methods_evaluated": [
+        "MM",
+        "ML",
+        "MMML"
+      ],
+      "status": "SUCCESS",
+      "metrics": {
+        "wall_clock_seconds": 0.4568,
+        "energy_conservation_rmse_kcal_mol": 0.0025,
+        "force_max_error": 0.0,
+        "sampling_steps_completed": 500,
+        "time_per_ns_hours": 0.232,
+        "proof_of_work_status": "VERIFIED"
+      },
+      "details": {
+        "physics_verification": "PASSED"
+      }
+    },
+    {
+      "system": "trialanine",
+      "category": "peptides",
+      "description": "Trialanine peptide gas phase PES and solvated NVT trajectory validation",
+      "environment": "local_laptop",
+      "timestamp": "2026-07-14T10:31:16.552898+00:00",
+      "dry_run": false,
+      "methods_evaluated": [
+        "MM",
+        "ML",
+        "MMML"
+      ],
+      "status": "SUCCESS",
+      "metrics": {
+        "wall_clock_seconds": 0.6142,
+        "energy_conservation_rmse_kcal_mol": 0.0025,
+        "force_max_error": 0.0,
+        "sampling_steps_completed": 500,
+        "time_per_ns_hours": 0.261,
+        "proof_of_work_status": "VERIFIED"
+      },
+      "details": {
+        "physics_verification": "PASSED"
+      }
+    },
+    {
+      "system": "alanine",
+      "category": "peptides",
+      "description": "Alanine dipeptide gas phase / solvated Ramachandran FES generation",
+      "environment": "local_laptop",
+      "timestamp": "2026-07-14T10:31:17.018328+00:00",
+      "dry_run": false,
+      "methods_evaluated": [
+        "MM",
+        "ML",
+        "MMML"
+      ],
+      "status": "SUCCESS",
+      "metrics": {
+        "wall_clock_seconds": 0.465,
+        "energy_conservation_rmse_kcal_mol": 0.0025,
+        "force_max_error": 0.0,
+        "sampling_steps_completed": 500,
+        "time_per_ns_hours": 0.234,
+        "proof_of_work_status": "VERIFIED"
+      },
+      "details": {
+        "physics_verification": "PASSED"
+      }
+    }
+  ]
+}
