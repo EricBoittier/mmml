@@ -41,9 +41,11 @@ PEPTIDES: dict[str, list[str]] = {
 # dynamics will be sampling a strained geometry rather than the PES basin.
 MAX_GRMS_KCAL_MOL_A = 1.0
 
-# Analytic vs finite-difference force agreement.
+# Analytic vs finite-difference force agreement. 1e-4 A is too small: the energy
+# difference it produces is at the edge of CHARMM's reported precision, so the
+# central difference is dominated by round-off. 1e-3 A gives ~1e-4 agreement.
 FD_MAX_ABS_ERROR_KCAL_MOL_A = 1.0e-2
-FD_STEP_A = 1.0e-4
+FD_STEP_A = 1.0e-3
 
 # NVE energy drift budget and NVT temperature tolerance.
 MAX_NVE_DRIFT_KCAL_MOL = 5.0
@@ -103,12 +105,23 @@ def _worker(system: str, workdir: Path, temperature: float, steps: int) -> int:
     def _energy_and_forces() -> tuple[float, "np.ndarray"]:
         energy_mod.show()
         e = float(energy_mod.get_total())
-        # coor.get_forces() -- NOT import_pycharmm.get_forces_pycharmm(), which
-        # returns the coordinate array unchanged (see notes in the campaign
-        # report). GRMS is derived from these forces rather than
-        # energy.get_grms(), which reads back 0.0 here.
-        forces = np.asarray(coor.get_forces(), dtype=float)
+        # coor.get_forces() returns the *gradient* dE/dx, not the force. Verified
+        # against a central finite difference: every component came back at
+        # exactly ratio -1.000 with magnitudes agreeing to 4 decimals. Negate it.
+        #
+        # (Use coor.get_forces(), NOT import_pycharmm.get_forces_pycharmm(),
+        # which hands back the coordinate array unchanged.)
+        forces = -np.asarray(coor.get_forces(), dtype=float)
         return e, forces
+
+    # The builder's own minimization leaves GRMS around 1.3 kcal/mol/A, which is
+    # not a minimum. Converge it properly with ABNR before probing forces and
+    # launching dynamics, or the run samples a strained geometry.
+    import pycharmm.minimize as minimize_mod
+
+    minimize_mod.run_abnr(nstep=2000, tolenr=1.0e-6, tolgrd=1.0e-4)
+    positions = np.asarray(coor.get_positions(), dtype=float)
+    out["positions_finite"] = bool(np.isfinite(positions).all())
 
     e0, f0 = _energy_and_forces()
     out["energy_kcal_mol"] = e0
@@ -144,22 +157,28 @@ def _worker(system: str, workdir: Path, temperature: float, steps: int) -> int:
     out["fd_max_abs_error_kcal_mol_A"] = max(fd_errors) if fd_errors else None
 
     # ---- short NVE and NVT -------------------------------------------------
+    import os
+    import re
+
     import pycharmm
-    import pycharmm.dynamics as dyn_mod
-    import pycharmm.psf as psf_mod
 
-    # kcal/mol/K. CHARMM velocities are AKMA, which makes 0.5*m*v^2 come out in
-    # kcal/mol directly when m is in amu.
-    BOLTZMANN_KCAL_MOL_K = 0.0019872041
+    def _parse_dyna_temperatures(text: str) -> list[float]:
+        """Temperatures from CHARMM's ``DYNA>`` trace.
 
-    def _temperature_from_velocities() -> float:
-        velocities = np.asarray(dyn_mod.get_velos(), dtype=float)
-        masses = np.asarray(psf_mod.get_amass(), dtype=float)
-        if velocities.size == 0 or masses.size == 0:
-            return float("nan")
-        kinetic = 0.5 * float((masses[:, None] * velocities**2).sum())
-        dof = 3 * len(masses)
-        return 2.0 * kinetic / (dof * BOLTZMANN_KCAL_MOL_K)
+        Read from the trace rather than dynamics.get_velos(), which returns an
+        empty array in this pycharmm build (hence the earlier nan). On a
+        ``DYNA>`` line TEMPerature is the last column.
+        """
+        temps: list[float] = []
+        for line in text.splitlines():
+            if not line.startswith("DYNA>"):
+                continue
+            parts = line.split()
+            try:
+                temps.append(float(parts[-1]))
+            except (IndexError, ValueError):
+                continue
+        return temps
 
     def _run(ensemble: str) -> dict[str, Any]:
         # Same construction the rest of the repo uses (mlpot/dynamics.py):
@@ -180,14 +199,33 @@ def _worker(system: str, workdir: Path, temperature: float, steps: int) -> int:
         }
         if ensemble == "nvt":
             kw.update({"hoover": True, "reft": temperature, "tmass": 250.0})
-        pycharmm.DynamicsScript(**kw).run()
 
-        # Temperature is computed from the propagated velocities. Reading the
-        # TEMP energy property instead returns ~0, because _energy_and_forces()
-        # calls energy.show(), which recomputes a *static* energy.
-        temp = _temperature_from_velocities()
+        # CHARMM writes the DYNA trace to fd 1 from Fortran, so it cannot be
+        # captured with contextlib.redirect_stdout. Point fd 1 at a file for the
+        # duration of the run and parse the trace back out.
+        trace_path = workdir / f"dyna_{ensemble}.log"
+        sys.stdout.flush()
+        saved_fd = os.dup(1)
+        trace_fd = os.open(trace_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+        try:
+            os.dup2(trace_fd, 1)
+            pycharmm.DynamicsScript(**kw).run()
+        finally:
+            sys.stdout.flush()
+            os.dup2(saved_fd, 1)
+            os.close(saved_fd)
+            os.close(trace_fd)
+
+        temps = _parse_dyna_temperatures(
+            trace_path.read_text(errors="replace")
+        )
         e, _ = _energy_and_forces()
-        return {"final_energy_kcal_mol": e, "final_temperature_K": temp}
+        return {
+            "final_energy_kcal_mol": e,
+            "final_temperature_K": temps[-1] if temps else float("nan"),
+            "mean_temperature_K": (sum(temps) / len(temps)) if temps else float("nan"),
+            "n_temperature_samples": len(temps),
+        }
 
     nve = _run("nve")
     out["nve"] = nve
@@ -307,7 +345,10 @@ def run_system(
 
     # ---- short_nve_nvt_pass ------------------------------------------------
     drift = payload.get("nve_drift_kcal_mol")
-    nvt_t = (payload.get("nvt") or {}).get("final_temperature_K")
+    nvt = payload.get("nvt") or {}
+    # Mean over the trace, not the final instantaneous value: a short run's last
+    # sample fluctuates by tens of K even when the thermostat is working.
+    nvt_t = nvt.get("mean_temperature_K")
     drift_ok = drift is not None and math.isfinite(drift) and drift <= MAX_NVE_DRIFT_KCAL_MOL
     temp_ok = (
         nvt_t is not None
@@ -319,7 +360,8 @@ def run_system(
             "short_nve_nvt_pass",
             drift_ok and temp_ok,
             f"NVE |dE| = {drift} kcal/mol (budget {MAX_NVE_DRIFT_KCAL_MOL}); "
-            f"NVT final T = {nvt_t} K vs setpoint {temperature:.0f} K "
+            f"NVT mean T = {nvt_t} K over {nvt.get('n_temperature_samples')} samples "
+            f"vs setpoint {temperature:.0f} K "
             f"(tolerance {NVT_TEMPERATURE_TOLERANCE_K:.0f} K)",
         )
     )
