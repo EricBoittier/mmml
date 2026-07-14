@@ -311,6 +311,36 @@ class SpookyNetCalculator(Calculator):
         valid_pairs = (atom_mask[dst_idx] > 0) & (atom_mask[src_idx] > 0)
         batch_mask = valid_pairs.astype(self.numpy_dtype)
 
+        metadata_names = ("mol_id", "cgenff_type_idx")
+        have_metadata = all(name in atoms.arrays for name in metadata_names)
+        have_tables = all(
+            name in atoms.info
+            for name in ("cgenff_master_sigmas", "cgenff_master_epsilons")
+        )
+        if have_metadata != have_tables:
+            raise ValueError(
+                "Incomplete CGenFF inference metadata: mol_id/type indices and "
+                "master sigma/epsilon tables must be supplied together"
+            )
+        mol_id = cgenff_type_idx = master_sigmas = master_epsilons = None
+        if have_metadata:
+            mol_id = np.asarray(atoms.arrays["mol_id"], dtype=np.int32)
+            cgenff_type_idx = np.asarray(
+                atoms.arrays["cgenff_type_idx"], dtype=np.int32
+            )
+            if pad:
+                mol_id = np.pad(mol_id, (0, pad), constant_values=0)
+                cgenff_type_idx = np.pad(
+                    cgenff_type_idx, (0, pad), constant_values=0
+                )
+            master_sigmas = np.asarray(
+                atoms.info["cgenff_master_sigmas"], dtype=self.numpy_dtype
+            )
+            master_epsilons = np.asarray(
+                atoms.info["cgenff_master_epsilons"], dtype=self.numpy_dtype
+            )
+            self.cgenff_lj_inputs_supplied = True
+
         output = self._apply(
             jnp.asarray(z),
             jnp.asarray(pos),
@@ -320,6 +350,10 @@ class SpookyNetCalculator(Calculator):
             jnp.asarray(batch_mask),
             self.charge,
             self.spin_multiplicity,
+            None if mol_id is None else jnp.asarray(mol_id),
+            None if cgenff_type_idx is None else jnp.asarray(cgenff_type_idx),
+            None if master_sigmas is None else jnp.asarray(master_sigmas),
+            None if master_epsilons is None else jnp.asarray(master_epsilons),
         )
         spooky_energy = float(np.asarray(output["energy"]).squeeze())
         spooky_forces = np.asarray(output["forces"])[:n_real] if "forces" in output else None
@@ -327,6 +361,22 @@ class SpookyNetCalculator(Calculator):
         energy = spooky_energy
         forces = spooky_forces
         self.results["spooky_energy"] = spooky_energy
+        def _component_sum(name: str) -> float:
+            value = output.get(name)
+            return 0.0 if value is None else float(np.asarray(value).sum())
+
+        electrostatics_energy = _component_sum("electrostatics")
+        cgenff_vdw_energy = _component_sum("cgenff_vdw")
+        zbl_repulsion_energy = _component_sum("repulsion")
+        self.results["electrostatics_energy"] = electrostatics_energy
+        self.results["cgenff_vdw_energy"] = cgenff_vdw_energy
+        self.results["zbl_repulsion_energy"] = zbl_repulsion_energy
+        self.results["neural_energy"] = (
+            spooky_energy
+            - electrostatics_energy
+            - cgenff_vdw_energy
+            - zbl_repulsion_energy
+        )
 
         if self.mbd_calc is not None:
             mbd_out = self.mbd_calc.predict_mbd(atoms)

@@ -5,7 +5,13 @@ from types import SimpleNamespace
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from ase import Atoms
 
+from mmml.analysis.dimer_cgenff import (
+    CGENFF_ATOM_TYPES,
+    attach_cgenff_dimer_metadata,
+    load_cgenff_sigma_epsilon,
+)
 from mmml.interfaces.pycharmmInterface.long_range_backend import per_atom_jax_pme_c6_sqrt
 from mmml.models.spookynet_calc import SpookyNetCalculator
 from scripts.run_dimer_scan_campaign import _charmm_component_rows
@@ -63,3 +69,31 @@ def test_pme_dispersion_converts_charmm_rmin_half_to_full_rmin():
     old_wrong_c6 = 2.0 * epsilon * rmin_half**6
     assert coefficient**2 == pytest.approx(expected_c6)
     assert expected_c6 / old_wrong_c6 == pytest.approx(64.0)
+
+
+def test_dimer_metadata_converts_rmin_half_and_preserves_ace_order(tmp_path):
+    prm = tmp_path / "test.prm"
+    prm.write_text(
+        "NONBONDED\n"
+        "OG2D3  0.0 -0.12 1.7\n"
+        "CG2O5  0.0 -0.10 2.0\n"
+        "CG331  0.0 -0.08 2.1\n"
+        "HGA3   0.0 -0.02 1.2\n"
+        "NBFIX\n"
+    )
+    numbers = [8, 6, 6, 6, 1, 1, 1, 1, 1, 1] * 2
+    atoms = Atoms(numbers=numbers, positions=np.zeros((20, 3)))
+    fragments = (np.arange(10, dtype=int), np.arange(10, 20, dtype=int))
+    attach_cgenff_dimer_metadata(
+        atoms, ("ACE", "ACE"), fragments, prm_path=prm
+    )
+    mapping, sigmas, _ = load_cgenff_sigma_epsilon(str(prm.resolve()))
+    indices = atoms.arrays["cgenff_type_idx"]
+    assert indices[0] == mapping["OG2D3"]  # ASE acetone atom 0 is oxygen.
+    assert indices[1] == mapping["CG2O5"]  # Atom 1 is the carbonyl carbon.
+    assert sigmas[mapping["CG331"]] == pytest.approx(
+        2.0 * 2.1 / 2.0 ** (1.0 / 6.0)
+    )
+    assert CGENFF_ATOM_TYPES["ACE"][:4] == (
+        "OG2D3", "CG2O5", "CG331", "CG331"
+    )

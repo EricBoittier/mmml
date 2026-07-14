@@ -63,7 +63,7 @@ def _charmm_residue_geometries() -> dict:
             np.array([6, 1, 1, 17, 17]),
         ),
         "ACO": (
-            MOLECULES["ACE"].positions[[3, 0, 1, 2, 4, 5, 6, 7, 8, 9]],
+            MOLECULES["ACE"].positions[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]],
             ["O1", "C1", "C2", "C3", "H21", "H22", "H23", "H31", "H32", "H33"],
             np.array([8, 6, 6, 6, 1, 1, 1, 1, 1, 1]),
         ),
@@ -444,6 +444,18 @@ def main():
         print(f"  {len(distances)} distances × {len(offsets)} offsets = {len(distances) * len(offsets)} geometries")
         geometries = list(make_oriented_scan_geometries(label_a, label_b, distances, offsets))
 
+        if use_spookynet:
+            from mmml.analysis.dimer_cgenff import attach_cgenff_dimer_metadata
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+
+            for geometry in geometries:
+                attach_cgenff_dimer_metadata(
+                    geometry.atoms,
+                    geometry.pair,
+                    geometry.fragments,
+                    prm_path=CGENFF_PRM,
+                )
+
         # Evaluate Multipoles
         if use_multipole:
             print(f"  Evaluating learned multipole (max_ell={args.max_ell})...")
@@ -489,6 +501,33 @@ def main():
                 for r in sn_hybrid_rows:
                     r["backend"] = spookynet_hybrid_backend
                 results.extend(sn_hybrid_rows)
+
+                component_backends = {
+                    "electrostatics_energy": "electrostatics",
+                    "cgenff_vdw_energy": "cgenff_lj",
+                    "zbl_repulsion_energy": "zbl",
+                    "neural_energy": "neural",
+                    "mbd_energy": "mbd",
+                }
+                for key, suffix in component_backends.items():
+                    value_key = f"comp_Eint_{key}_ev"
+                    for source in sn_hybrid_rows:
+                        value_ev = float(source.get(value_key, 0.0))
+                        component_row = {
+                            "molecule_a": source["molecule_a"],
+                            "molecule_b": source["molecule_b"],
+                            "distance_angstrom": source["distance_angstrom"],
+                            "offset_angstrom": source["offset_angstrom"],
+                            "energy_ev": value_ev,
+                            "energy_kcal_mol": value_ev * EV_TO_KCAL_MOL,
+                            "min_contact_angstrom": source["min_contact_angstrom"],
+                            "backend": (
+                                f"spookynet_{suffix}_{args.spookynet_tag}"
+                                if args.spookynet_tag
+                                else f"spookynet_{suffix}"
+                            ),
+                        }
+                        results.append(component_row)
             except Exception as e:
                 print(f"    Error: {e}")
 

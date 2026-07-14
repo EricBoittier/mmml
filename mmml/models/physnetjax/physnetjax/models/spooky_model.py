@@ -690,6 +690,7 @@ class SpookyPhysNet(nn.Module):
             energy,
             atomic_charges,
             batch_electrostatics,
+            batch_vdw,
             repulsion,
             x,
         )
@@ -1115,7 +1116,7 @@ class SpookyPhysNet(nn.Module):
         # jax.debug.print("atom_mask {x}", x=atom_mask[::])
 
         if not compute_forces:
-            _, (energy, charges, electrostatics, repulsion, state) = self.energy(
+            _, (energy, charges, electrostatics, cgenff_vdw, repulsion, state) = self.energy(
                 atomic_numbers,
                 charges,
                 spins,
@@ -1136,7 +1137,7 @@ class SpookyPhysNet(nn.Module):
         else:
             energy_and_forces = jax.value_and_grad(self.energy, argnums=3, has_aux=True)
 
-            (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
+            (_, (energy, charges, electrostatics, cgenff_vdw, repulsion, state)), gradient = energy_and_forces(
                 atomic_numbers,
                 charges,
                 spins,
@@ -1183,6 +1184,7 @@ class SpookyPhysNet(nn.Module):
             "forces": forces,
             "charges": charges,
             "electrostatics": electrostatics,
+            "cgenff_vdw": cgenff_vdw,
             "repulsion": repulsion,
             "dipoles": dipoles,
             "sum_charges": sum_charges,
