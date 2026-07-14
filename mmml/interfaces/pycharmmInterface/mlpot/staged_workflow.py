@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any, Literal
 
@@ -660,6 +661,8 @@ def _configure_nve_dynamics_start(
     use_pbc: bool,
     quiet: bool,
     temp: float,
+    preserve_memory_velocities: bool = False,
+    handoff_restart_path: Path | None = None,
 ) -> None:
     """One-shot Boltzmann draw at ``temp`` in the main ``dyna`` call (``start=True``).
 
@@ -670,6 +673,45 @@ def _configure_nve_dynamics_start(
     target_t = float(temp)
     for key in ("iasors", "iscale", "iscvel", "ichecw", "firstt", "finalt", "tbath", "tstruct"):
         kw.pop(key, None)
+    if coords_in_memory and preserve_memory_velocities:
+        restart_path = (
+            Path(handoff_restart_path).expanduser().resolve()
+            if handoff_restart_path is not None
+            else None
+        )
+        force_c_api_handoff = os.environ.get("MMML_NVE_C_API_HANDOFF") == "1"
+        use_restart = (
+            not force_c_api_handoff
+            and restart_path is not None
+            and restart_path.is_file()
+        )
+        io.restart_read = restart_path if use_restart else None
+        kw["restart"] = bool(use_restart)
+        kw["new"] = False
+        kw["start"] = False
+        kw["iasvel"] = 0
+        kw["ihtfrq"] = 0
+        if use_restart:
+            # The overlap driver normally rejects handoff-named restart seeds.
+            # This seed was just built from the validated NPZ state and must be
+            # READYN'd for the first NVE chunk so CHARMM retains its velocities.
+            kw["_verified_handoff_restart"] = True
+        else:
+            kw["_preserve_handoff_velocities"] = True
+        if not quiet:
+            if use_restart:
+                print(
+                    f"NVE: reading handoff velocities from {restart_path} "
+                    "(restart=True, start=False, iasvel=0; no reassignment)",
+                    flush=True,
+                )
+            else:
+                print(
+                    "NVE: continuing in-memory handoff velocities "
+                    "(start=False, restart=False, iasvel=0; no reassignment)",
+                    flush=True,
+                )
+        return
     kw["iasvel"] = 1
     kw["ihtfrq"] = 0
     kw["firstt"] = target_t
@@ -3181,6 +3223,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart = False
                         rread = None
             io = _io_for_stage(stage, paths)
+            if dcd_nsavc <= 0:
+                io.trajectory = None
             if restart and rread is not None:
                 io.restart_read = Path(rread)
 
@@ -3314,6 +3358,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     use_pbc=charmm_pbc,
                     quiet=bool(args.quiet),
                     temp=nve_t,
+                    preserve_memory_velocities=bool(
+                        handoff_leg
+                        and getattr(args, "continue_velocities", True)
+                        and "mini" not in stages
+                    ),
+                    handoff_restart_path=(
+                        Path(args.restart_from)
+                        if getattr(args, "restart_from", None)
+                        else None
+                    ),
                 )
             heat_freq_changes: dict[str, tuple[int, int]] = {}
             if stage == "heat":
@@ -3412,6 +3466,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     _stage_handoff_restart_for_early_abort(stage, paths, prev_restart)
                     if stage in ("heat", "equi", "prod")
                     else None
+                ),
+                verified_handoff_restart=bool(
+                    kw.get("_verified_handoff_restart", False)
                 ),
                 **overlap_run_state_kwargs_from_args(args),
             )

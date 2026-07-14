@@ -175,13 +175,13 @@ def test_apply_dynamics_io_setters_uses_path_strings():
         sys.modules,
         {"pycharmm": SimpleNamespace(dynamics=fake_dyn), "pycharmm.dynamics": fake_dyn},
     ):
-        _apply_dynamics_io_setters(kw)
+        _apply_dynamics_io_setters(kw, restart_read_unit=7)
     assert calls == [
         ("iunrea", "/tmp/in.res"),
         ("iunwri", "/tmp/out.res"),
         ("iuncrd", "/tmp/out.dcd"),
     ]
-    assert "iunrea" not in kw
+    assert kw["iunrea"] == 7
     assert "iunwri" not in kw
     assert "iuncrd" not in kw
 

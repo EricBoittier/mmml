@@ -369,6 +369,8 @@ def resolve_dcd_nsavc(
         nsavc = int(round(float(dcd_interval_ps) / float(timestep_ps)))
     else:
         nsavc = int(dcd_nsavc)
+    if dcd_interval_ps is None and int(dcd_nsavc) == 0:
+        return 0
     nsavc = max(1, nsavc)
     if (
         dcd_interval_ps is None

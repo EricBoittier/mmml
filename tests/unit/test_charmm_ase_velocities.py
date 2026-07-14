@@ -108,6 +108,19 @@ def test_maybe_assign_velocities_via_ase_if_cold_skips_when_warm():
     assign.assert_not_called()
 
 
+def test_maybe_assign_velocities_via_ase_if_cold_never_overwrites_restart():
+    kw = {"restart": True, "iasvel": 0, "start": False}
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+    ) as assign:
+        assert maybe_assign_velocities_via_ase_if_cold(kw) is False
+    assign.assert_not_called()
+    assert kw == {"restart": True, "iasvel": 0, "start": False}
+
+
 def test_maybe_assign_velocities_via_ase_if_cold_assigns_and_clears_start():
     kw = {"iasvel": 0, "start": True, "finalt": 240.0}
     with patch(

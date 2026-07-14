@@ -2021,7 +2021,9 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
         ),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_overlap_chunk_restart_read",
-        side_effect=lambda path: Path(path) if path and Path(path).is_file() else None,
+        side_effect=lambda path, **_kwargs: (
+            Path(path) if path and Path(path).is_file() else None
+        ),
     ):
         run_dynamics_with_io(
             {"nstep": 1500},
@@ -4078,6 +4080,7 @@ def test_resolve_dcd_nsavc_strictly_below_nstep():
     assert resolve_dcd_nsavc(dcd_nsavc=100, nstep=50) == 49
     assert resolve_dcd_nsavc(dcd_nsavc=10, nstep=50) == 10
     assert resolve_dcd_nsavc(dcd_nsavc=5, nstep=2) == 1
+    assert resolve_dcd_nsavc(dcd_nsavc=0, nstep=50) == 0
 
 
 def test_overlap_reseeds_rng_before_each_chunk():
@@ -4393,7 +4396,9 @@ def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
     materialize.assert_not_called()
 
 
-def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
+def test_valid_overlap_chunk_restart_read_rejects_handoff_seed_by_default(
+    tmp_path, monkeypatch
+):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_chunk_uses_memory_handoff,
         _valid_overlap_chunk_restart_read,
@@ -4402,7 +4407,15 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
     handoff = tmp_path / "handoff" / "continue_seed.res"
     handoff.parent.mkdir()
     handoff.write_text("seed\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        lambda path: Path(path),
+    )
     assert _valid_overlap_chunk_restart_read(handoff) is None
+    assert (
+        _valid_overlap_chunk_restart_read(handoff, allow_handoff_seed=True)
+        == handoff
+    )
 
     overlap = DynamicsOverlapConfig(memory_handoff=True)
     assert not _overlap_chunk_uses_memory_handoff(
@@ -4420,3 +4433,26 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed(tmp_path):
     assert not _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=1, n_chunks=1, overlap=overlap, cpt=True
     )
+def test_overlap_chunk_zero_preserves_explicit_handoff_velocities():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_dynamics_kw,
+    )
+
+    chunk_kw = {
+        "start": False,
+        "restart": False,
+        "iasvel": 0,
+        "ihtfrq": 0,
+        "firstt": 0.0,
+        "_preserve_handoff_velocities": True,
+    }
+    _apply_overlap_chunk_dynamics_kw(
+        chunk_kw, chunk_index=0, has_restart_read=False
+    )
+
+    assert chunk_kw["start"] is False
+    assert chunk_kw["restart"] is False
+    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iunrea"] == -1
+    assert "firstt" not in chunk_kw
+    assert "_preserve_handoff_velocities" not in chunk_kw

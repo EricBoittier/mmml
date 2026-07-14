@@ -756,6 +756,60 @@ def test_configure_nve_dynamics_start_memory_handoff_single_dyna(tmp_path):
     assert io.restart_read is None
 
 
+def test_configure_nve_handoff_preserves_in_memory_velocities(tmp_path):
+    res = tmp_path / "nve.res"
+    io = CharmmTrajectoryFiles(restart_write=res)
+    kw = {"restart": True, "start": True, "iasvel": 1, "firstt": 30.0}
+
+    _configure_nve_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=True,
+        restart_from_file=False,
+        timestep_ps=0.0001,
+        use_pbc=True,
+        quiet=True,
+        temp=30.0,
+        preserve_memory_velocities=True,
+    )
+
+    assert kw["restart"] is False
+    assert kw["start"] is False
+    assert kw["iasvel"] == 0
+    assert kw["ihtfrq"] == 0
+    assert kw["_preserve_handoff_velocities"] is True
+    assert "firstt" not in kw
+    assert "tbath" not in kw
+
+
+def test_configure_nve_handoff_prefers_verified_restart_velocities(tmp_path):
+    restart = tmp_path / "continue_seed.res"
+    restart.write_text("restart fixture", encoding="ascii")
+    io = CharmmTrajectoryFiles(restart_write=tmp_path / "nve.res")
+    kw = {"restart": False, "start": True, "iasvel": 1, "firstt": 30.0}
+
+    _configure_nve_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=True,
+        restart_from_file=False,
+        timestep_ps=0.0001,
+        use_pbc=True,
+        quiet=True,
+        temp=30.0,
+        preserve_memory_velocities=True,
+        handoff_restart_path=restart,
+    )
+
+    assert io.restart_read == restart.resolve()
+    assert kw["restart"] is True
+    assert kw["start"] is False
+    assert kw["iasvel"] == 0
+    assert kw["_verified_handoff_restart"] is True
+    assert "_preserve_handoff_velocities" not in kw
+    assert "firstt" not in kw
+
+
 def _write_restartable_res(path: Path, *, jhstrt: int = 250) -> None:
     path.write_text(
         "REST     1       500\n"
@@ -1270,4 +1324,3 @@ def test_mlpot_profile_propagation(monkeypatch):
 
     assert os.environ.get("MMML_MLPOT_PROFILE") == "1"
     assert os.environ.get("MMML_JAX_COMPILE_TIMERS") == "1"
-

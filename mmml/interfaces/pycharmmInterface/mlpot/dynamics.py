@@ -49,7 +49,9 @@ def _dynamics_io_fortran_path(
         return str(p.expanduser().resolve()), None
 
 
-def _apply_dynamics_io_setters(kw: dict[str, Any]) -> None:
+def _apply_dynamics_io_setters(
+    kw: dict[str, Any], *, restart_read_unit: int = 3
+) -> None:
     """Wire restart/trajectory paths via CHARMM dynamics C API (MPI-safe).
 
     ``DynamicsScript`` unit numbers do not always reach Fortran ``reawri`` under
@@ -66,7 +68,12 @@ def _apply_dynamics_io_setters(kw: dict[str, Any]) -> None:
         if kw.get("restart"):
             if not charm_dyn.set_iunrea(iunrea):
                 raise RuntimeError(f"dynamics iunrea open failed: {iunrea}")
-        kw.pop("iunrea", None)
+            if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
+                print(f"MMML CHARMM RESTART READ BOUND: {iunrea}", flush=True)
+        # The path setter opens the MPI-safe alias, but CHARMM's DYNAMICS parser
+        # still requires the logical read unit on the command line.  Omitting it
+        # silently turns DYNA RESTART into a zero-K velocity assignment.
+        kw["iunrea"] = int(restart_read_unit)
 
     for key, setter in (
         ("iunwri", charm_dyn.set_iunwri),
@@ -117,13 +124,32 @@ class CharmmTrajectoryFiles:
         aliases: list[Any] = []
         kw: dict[str, Any] = {}
         if self.restart_read is not None:
+            import pycharmm
+
             fortran_path, alias = _dynamics_io_fortran_path(
                 self.restart_read,
                 for_write=False,
             )
             if alias is not None:
                 aliases.append(alias)
-            kw["iunrea"] = fortran_path
+            # The dynamics_set_iunrea(path) binding reports success under the
+            # cluster MPI build but DYNA RESTART subsequently sees an empty unit
+            # and assigns zero-K velocities.  Open the formatted restart on the
+            # conventional explicit unit instead and retain IUNREA in the script.
+            restart_file = pycharmm.CharmmFile(
+                file_name=str(fortran_path),
+                file_unit=int(self.restart_read_unit),
+                formatted=True,
+                read_only=True,
+            )
+            open_files.append(restart_file)
+            kw["iunrea"] = int(self.restart_read_unit)
+            if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
+                print(
+                    "MMML CHARMM RESTART UNIT OPEN: "
+                    f"unit={self.restart_read_unit} path={fortran_path}",
+                    flush=True,
+                )
         if self.restart_write is not None:
             p = Path(self.restart_write)
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -3645,6 +3671,10 @@ def _execute_dynamics_script(dyn: Any, *, append: str = "") -> None:
     import pycharmm.lingo as lingo
 
     script = _merge_dynamics_script_append(dyn.create_script_string(), append)
+    if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
+        print("MMML CHARMM DYNAMICS COMMAND BEGIN", flush=True)
+        print(script.rstrip(), flush=True)
+        print("MMML CHARMM DYNAMICS COMMAND END", flush=True)
     lingo.charmm_script(script)
 
 
@@ -4054,6 +4084,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
+    restart_read_unit = int(kw.pop("_restart_read_unit", 3) or 3)
     post_dyna_restart_write = kw.pop("_post_dyna_restart_write", None)
     post_dyna_restart_target = kw.pop("_post_dyna_restart_write_target", None)
     post_dyna_io_aliases = kw.pop("_post_dyna_io_aliases", None) or []
@@ -4141,7 +4172,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         kw,
         init_velocities=init_velocities,
     )
-    _apply_dynamics_io_setters(kw)
+    _apply_dynamics_io_setters(kw, restart_read_unit=restart_read_unit)
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     if use_c_api:
@@ -4572,7 +4603,11 @@ def _overlap_chunk_uses_memory_handoff(
     return False
 
 
-def _valid_overlap_chunk_restart_read(path: PathLike | None) -> Path | None:
+def _valid_overlap_chunk_restart_read(
+    path: PathLike | None,
+    *,
+    allow_handoff_seed: bool = False,
+) -> Path | None:
     """Valid restart for overlap chunk READYN; excludes handoff/pretreat seeds."""
     if path is None:
         return None
@@ -4582,7 +4617,7 @@ def _valid_overlap_chunk_restart_read(path: PathLike | None) -> Path | None:
     )
 
     p = Path(path)
-    if is_handoff_seed_restart_path(p) or is_pretreat_mm_restart_path(p):
+    if (is_handoff_seed_restart_path(p) and not allow_handoff_seed) or is_pretreat_mm_restart_path(p):
         return None
     return _valid_restart_file(p)
 
@@ -5740,6 +5775,19 @@ def _apply_overlap_chunk_dynamics_kw(
     has_restart_read: bool,
 ) -> None:
     """Set ``restart`` / ``new`` / ``start`` for one overlap chunk (in-place)."""
+    preserve_handoff_velocities = bool(
+        chunk_kw.pop("_preserve_handoff_velocities", False)
+    )
+    if preserve_handoff_velocities and int(chunk_index) == 0 and not has_restart_read:
+        chunk_kw["new"] = False
+        chunk_kw["restart"] = False
+        chunk_kw["start"] = False
+        chunk_kw["iasvel"] = 0
+        chunk_kw["ihtfrq"] = 0
+        chunk_kw["iunrea"] = -1
+        for key in ("firstt", "finalt", "tbath", "tstruct"):
+            chunk_kw.pop(key, None)
+        return
     if has_restart_read:
         chunk_kw["new"] = False
         chunk_kw["restart"] = True
@@ -6011,6 +6059,7 @@ def _run_dynamics_chunk(
     if io is not None:
         if io.restart_read is not None:
             kw["_restart_read_path"] = io.restart_read
+            kw["_restart_read_unit"] = int(io.restart_read_unit)
         open_files, iokw, io_aliases = io.open_for_run()
         if io.restart_write is not None:
             kw["_post_dyna_restart_write_target"] = io.restart_write
@@ -6531,6 +6580,7 @@ def run_dynamics_with_io(
     overlap_run_state_dir: Path | None = None,
     overlap_run_state_every_chunks: int = 0,
     segment_restart_read: Path | str | None = None,
+    verified_handoff_restart: bool = False,
 ) -> OverlapDynamicsResult:
     """Run dynamics and open/close CharmmFile units from ``io``.
 
@@ -6936,7 +6986,13 @@ def run_dynamics_with_io(
                     and chunk_io is not None
                     and chunk_io.restart_read is not None
                 ):
-                    filtered = _valid_overlap_chunk_restart_read(chunk_io.restart_read)
+                    filtered = _valid_overlap_chunk_restart_read(
+                        chunk_io.restart_read,
+                        allow_handoff_seed=(
+                            chunk_index == 0
+                            and bool(verified_handoff_restart)
+                        ),
+                    )
                     if filtered is None:
                         has_restart_read = False
                         chunk_io = CharmmTrajectoryFiles(

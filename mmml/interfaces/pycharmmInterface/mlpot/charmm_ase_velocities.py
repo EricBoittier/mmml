@@ -945,6 +945,12 @@ def _resolve_bussi_rescale_velocities(
 
 def _dynamics_would_start_cold(kw: dict[str, Any]) -> bool:
     """True when CHARMM would integrate from near-zero kinetic energy."""
+    # DYNA RESTART obtains velocities from IUNREA/READYN.  The current in-memory
+    # velocity buffer can legitimately be empty before CHARMM reads that file;
+    # treating it as a cold in-memory start silently changes IASVEL to 1 and
+    # destroys the restart velocities.
+    if bool(kw.get("restart")):
+        return False
     iasvel = int(kw.get("iasvel", 0) or 0)
     start = bool(kw.get("start"))
     if iasvel == 0 and start:

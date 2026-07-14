@@ -2096,6 +2096,12 @@ def _write_handoff_restart_via_charmm(
 
     restore_charmm_state_from_restart(template)
     sync_charmm_positions(handoff.positions)
+    if handoff.velocities is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            sync_charmm_velocities_akma,
+        )
+
+        sync_charmm_velocities_akma(handoff.velocities)
     if handoff.cell is not None:
         from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
@@ -2139,9 +2145,18 @@ def _patch_handoff_into_restart_template(
     if handoff.velocities is not None:
         vel_lines = _format_coord_lines(handoff.velocities)
         vel_block = " !VELOCITIES\n" + "\n".join(vel_lines) + "\n"
-        if " !VELOCITIES" in text:
+        velocity_header = next(
+            (
+                header
+                for header in (" !VELOCITIES", " !VX, VY, VZ", " !VX,VY,VZ")
+                if header in text
+            ),
+            None,
+        )
+        if velocity_header is not None:
+            vel_block = velocity_header + "\n" + "\n".join(vel_lines) + "\n"
             text = re.sub(
-                r" !VELOCITIES.*?(?=\n !|\Z)",
+                re.escape(velocity_header) + r".*?(?=\n !|\Z)",
                 vel_block.rstrip(),
                 text,
                 count=1,

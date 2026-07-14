@@ -311,6 +311,29 @@ def test_save_handoff_to_res_with_template(
     np.testing.assert_allclose(reloaded.positions, shift, rtol=0, atol=1e-10)
 
 
+def test_save_handoff_replaces_native_charmm_velocity_block(
+    nve_stub: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import mmml.interfaces.pycharmmInterface.import_pycharmm as charmm_bootstrap
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+
+    monkeypatch.setattr(charmm_bootstrap, "PYCHARMM_AVAILABLE", False)
+    pos = load_handoff_from_res(nve_stub).positions
+    wanted = np.arange(pos.size, dtype=float).reshape(pos.shape) + 1000.0
+    state = MdHandoffState(
+        positions=pos,
+        atomic_numbers=np.ones(len(pos), dtype=np.int32),
+        velocities=wanted,
+    )
+    out = tmp_path / "velocity-patched.res"
+
+    save_handoff_to_res(state, out, template_res=nve_stub)
+
+    np.testing.assert_allclose(read_restart_velocities(out), wanted)
+
+
 def test_save_handoff_to_res_crystal_parameters_patching(tmp_path: Path) -> None:
     # 1. Create a dummy template containing crystal parameters
     template_content = """REST  SYNTHETIC-HANDOFF      0
