@@ -1,0 +1,6 @@
+* argon params
+ATOMS
+MASS -1 AR 39.948
+NONBONDED
+AR 0.0 0.0 1.9075
+END
