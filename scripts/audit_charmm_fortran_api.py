@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
+import ctypes
 import dataclasses
 import json
 from pathlib import Path
@@ -210,6 +211,11 @@ def audit_argument(name: str, declaration: str | None) -> Argument:
     )
     intent_match = re.search(r"intent\s*\(\s*(inout|in|out)\s*\)", left)
     dim_match = re.search(r"dimension\s*\(([^)]*)\)", left)
+    if dim_match is None:
+        entity = declaration.split("::", 1)[1]
+        dim_match = re.search(
+            rf"(?:^|,)\s*{re.escape(name)}\s*\(([^)]*)\)", entity, re.IGNORECASE,
+        )
     dimension = dim_match.group(1).strip() if dim_match else None
     value = bool(re.search(r"(?:^|,)\s*value\s*(?:,|$)", left))
     optional = "optional" in left
@@ -336,6 +342,25 @@ def scan(fortran_root: Path, python_root: Path) -> dict:
         "data_types": [dataclasses.asdict(row) for row in data_types],
         "enums": [dataclasses.asdict(row) for row in enums],
         "python_symbols_not_in_api_directory": unresolved,
+        "runtime_symbol_probe": None,
+    }
+
+
+def probe_shared_library(library: Path, report: dict) -> dict:
+    """Check that every inventoried routine symbol exists in a local build."""
+    symbols = sorted({row["symbol"] for row in report["routines"]})
+    try:
+        handle = ctypes.CDLL(str(library.resolve()))
+    except OSError as exc:
+        return {
+            "library": str(library), "expected_symbols": len(symbols), "found_symbols": 0,
+            "missing_symbols": symbols, "load_error": str(exc),
+        }
+    missing = [symbol for symbol in symbols if not hasattr(handle, symbol)]
+    return {
+        "library": str(library), "expected_symbols": len(symbols),
+        "found_symbols": len(symbols) - len(missing), "missing_symbols": missing,
+        "load_error": None,
     }
 
 
@@ -353,13 +378,29 @@ def markdown(report: dict) -> str:
         f"- Not directly referenced by vendored PyCHARMM: **{s['unwrapped_exports']}**",
         f"- Python symbols implemented outside `source/api` or unresolved: **{s['python_symbols_not_in_api_directory']}**",
         f"- Issues: `{json.dumps(s['issues'], sort_keys=True)}`", "",
+        "The routine table includes the complete declared calling contract. Exact",
+        "declaration text and every vendored-PyCHARMM call site are retained in the JSON report.", "",
         "## Exported routines", "",
-        "| Symbol | Kind | Source | Python uses | ABI findings |", "|---|---|---|---:|---|",
+        "| Symbol | Kind | Source | C contract | Python uses | ABI findings |",
+        "|---|---|---|---|---:|---|",
     ]
     for row in report["routines"]:
         findings = "; ".join(f"**{x['severity']}** `{x['code']}`" for x in row["issues"]) or "—"
         source = f"`{Path(row['source']).name}:{row['line']}`"
-        lines.append(f"| `{row['symbol']}` | {row['kind']} | {source} | {len(row['python_wrappers'])} | {findings} |")
+        contract_parts = []
+        for arg in row["arguments"]:
+            shape = f"[{arg['dimension']}]" if arg["dimension"] is not None else ""
+            qualifiers = [x for x in (arg["intent"], "value" if arg["value"] else None,
+                                      "optional" if arg["optional"] else None) if x]
+            qualifier_text = f" ({', '.join(qualifiers)})" if qualifiers else ""
+            contract_parts.append(
+                f"`{arg['name']}: {arg['type_spec'] or 'unknown'}{shape}{qualifier_text}`"
+            )
+        contract = "<br>".join(contract_parts) or "—"
+        lines.append(
+            f"| `{row['symbol']}` | {row['kind']} | {source} | {contract} | "
+            f"{len(row['python_wrappers'])} | {findings} |"
+        )
     lines += ["", "## Interoperable derived types", "",
               "| Type | Source | Components | ABI findings |", "|---|---|---:|---|"]
     for row in report["data_types"]:

@@ -30,6 +30,15 @@ def test_explicit_bounds_struct_array_is_not_descriptor_error():
     assert not any(x["code"] == "assumed_shape_array" for x in arg.issues)
 
 
+def test_entity_declarator_array_shape_is_recorded():
+    arg = audit_argument(
+        "label",
+        "character(kind=c_char), intent(in) :: label(*)",
+    )
+    assert arg.dimension == "*"
+    assert not any(x["code"] == "character_length" for x in arg.issues)
+
+
 def test_repository_api_surface_includes_fixed_dynamics_entrypoints():
     report = scan(
         REPO / "setup/charmm/source/api",

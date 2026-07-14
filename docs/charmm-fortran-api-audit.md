@@ -32,6 +32,11 @@ layout. The enum section records every C-compatible enumerator. Together with
 the routine table, these sections account for every real (non-comment)
 `bind(c)` declaration in the API directory.
 
+The Markdown routine table shows every argument's type, array shape, intent,
+`VALUE`, and optionality. The JSON additionally preserves the exact Fortran
+declaration and every direct Python wrapper location, making it suitable for
+diffing in CI or generating wrapper documentation.
+
 Static auditing proves the declaration-level contract. Runtime tests remain a
 separate layer because they require a compiled `libcharmm` and initialized PSF:
 
