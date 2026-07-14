@@ -1,0 +1,21 @@
+name: pcbach
+kind: slurm
+role: CPU-heavy reference generation, cache building, classical MM, and analysis
+repo_root: ~/mmml
+partition: compute
+account: null
+qos: null
+nodes: 1
+ntasks: 1
+cpus_per_task: 32
+mem_mb_per_cpu: 8000
+runtime_min: 1440
+gpus: 0
+gpu_constraint: null
+max_concurrent: 8
+launcher: scripts/mmml-charmm-mpirun.sh
+environment:
+  JAX_ENABLE_X64: "1"
+  MMML_ML_DTYPE: float64
+  OMP_NUM_THREADS: "32"
+

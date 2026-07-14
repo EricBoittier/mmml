@@ -1,0 +1,12 @@
+name: local_computer
+kind: local
+role: CUDA debugging and single-GPU integration tests on RTX4060
+repo_root: .
+cpus: 8
+gpus: 1
+environment:
+  JAX_ENABLE_X64: "1"
+  MMML_ML_DTYPE: float64
+  OMP_NUM_THREADS: "1"
+  CUDA_VISIBLE_DEVICES: "0"
+

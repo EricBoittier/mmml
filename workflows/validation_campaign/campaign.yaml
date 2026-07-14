@@ -1,0 +1,119 @@
+schema_version: 1
+artifact_root: artifacts/validation_campaign
+defaults:
+  require_x64: true
+  checkpoint: artifacts/spooky_so3lr_muon_tight/epoch-0001_params.json
+  seed: 69420
+
+goals:
+  platform:
+    description: Reproducible runtime and dependency readiness.
+  force_energy:
+    description: Energy components, derivatives, switching, masks, and parameters are correct.
+  backend_parity:
+    description: Backends propagate an identical state consistently and conserve energy.
+  pure_liquids:
+    description: Pure BENZ, TIP3, DCM, and ACO liquids prepare and sample stably.
+  peptide_gas:
+    description: Alanine and trialanine are stable and physically meaningful in gas phase.
+  peptide_solution:
+    description: Alanine and trialanine are stable and physically meaningful in TIP3 solution.
+  coverage:
+    description: Every supported method/backend combination has an explicit result.
+
+tasks:
+  platform.static:
+    goal: platform
+    tier: static
+    environments: [local_laptop, local_computer, pcbach, scicore, pcstudix]
+    command: python workflows/validation_campaign/scripts/platform_probe.py --output-dir {output_dir}
+    acceptance: [provenance_complete, jax_x64_enabled, imports_pass]
+
+  force_energy.unit:
+    goal: force_energy
+    tier: static
+    environments: [local_laptop, local_computer, pcbach]
+    command: python -m pytest tests/unit/test_md_handoff.py tests/unit/test_charmm_ase_velocities.py tests/unit/test_md_mm_nonbonded.py -q
+    acceptance: [exit_zero]
+
+  force_energy.lj_elec_fd:
+    goal: force_energy
+    tier: smoke
+    environments: [pcstudix, scicore, local_computer]
+    command: python workflows/validation_campaign/scripts/task_placeholder.py --task force_energy.lj_elec_fd --output-dir {output_dir}
+    acceptance: [finite_components, nonzero_expected_lj, charge_sums_match, fd_max_error_below_tolerance, cutoff_continuity]
+    state: needs_driver
+
+  backend_parity.dcm10_pycharmm_jaxmd:
+    goal: backend_parity
+    tier: blocker
+    environments: [pcstudix, scicore, local_computer]
+    command: python workflows/validation_campaign/scripts/task_placeholder.py --task backend_parity.dcm10_pycharmm_jaxmd --output-dir {output_dir}
+    acceptance: [identical_initial_state, positive_temperature, nve_drift_pass, nvt_temperature_pass, roundtrip_pass]
+    state: blocked
+    blocker: PyCHARMM dynamics velocity handoff ABI/restart issue; latest control job 204734 SIGSEGV in dynamics_run_kw/dynopt.
+
+  pure_liquids.smoke:
+    goal: pure_liquids
+    tier: smoke
+    systems: [BENZ, TIP3, DCM, ACO]
+    methods: [MM, ML, MMML]
+    backends: [jaxmd, pycharmm]
+    environments: [pcstudix, scicore, local_computer]
+    command: python workflows/validation_campaign/scripts/task_placeholder.py --task pure_liquids.smoke --output-dir {output_dir}
+    acceptance: [packmol_audit, finite_energy_force, positive_temperature, no_overlap, short_nvt_pass]
+    state: needs_driver
+
+  pure_liquids.production:
+    goal: pure_liquids
+    tier: production
+    systems: [BENZ, TIP3, DCM, ACO]
+    methods: [MM, ML, MMML]
+    backends: [jaxmd, pycharmm]
+    environments: [scicore, pcbach]
+    command: python workflows/validation_campaign/scripts/task_placeholder.py --task pure_liquids.production --output-dir {output_dir}
+    acceptance: [nvt_pass, npt_pass, density_report, rdf_report, energy_temperature_report]
+    state: gated
+    requires: [pure_liquids.smoke, backend_parity.dcm10_pycharmm_jaxmd]
+
+  peptide_gas.smoke:
+    goal: peptide_gas
+    tier: smoke
+    systems: [alanine, trialanine]
+    methods: [MM, ML, MMML]
+    backends: [jaxmd, pycharmm]
+    environments: [pcstudix, scicore, local_computer]
+    command: python workflows/validation_campaign/scripts/task_placeholder.py --task peptide_gas.smoke --output-dir {output_dir}
+    acceptance: [build_audit, finite_energy_force, fd_force_pass, minimized_structure, short_nve_nvt_pass]
+    state: needs_driver
+
+  peptide_solution.smoke:
+    goal: peptide_solution
+    tier: smoke
+    systems: [alanine_TIP3, trialanine_TIP3]
+    methods: [MM, ML, MMML]
+    backends: [jaxmd, pycharmm]
+    environments: [pcstudix, scicore, local_computer]
+    command: python workflows/validation_campaign/scripts/task_placeholder.py --task peptide_solution.smoke --output-dir {output_dir}
+    acceptance: [solvation_audit, finite_energy_force, positive_temperature, no_overlap, short_nvt_pass]
+    state: needs_driver
+
+  peptide.production:
+    goal: peptide_solution
+    tier: production
+    systems: [alanine, trialanine, alanine_TIP3, trialanine_TIP3]
+    methods: [MM, ML, MMML]
+    backends: [jaxmd, pycharmm]
+    environments: [scicore, pcbach]
+    command: python workflows/validation_campaign/scripts/task_placeholder.py --task peptide.production --output-dir {output_dir}
+    acceptance: [ensemble_pass, energy_temperature_report, conformation_report, solvent_contact_report]
+    state: gated
+    requires: [peptide_gas.smoke, peptide_solution.smoke, backend_parity.dcm10_pycharmm_jaxmd]
+
+  coverage.matrix:
+    goal: coverage
+    tier: report
+    environments: [local_laptop, pcbach]
+    command: python workflows/validation_campaign/scripts/campaign.py status --write
+    acceptance: [all_supported_combinations_accounted_for]
+

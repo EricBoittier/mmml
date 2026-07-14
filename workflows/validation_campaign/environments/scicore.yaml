@@ -1,0 +1,21 @@
+name: scicore
+kind: slurm
+role: primary GPU production and checkpoint/method matrices
+repo_root: ~/mmml
+partition: gpu
+account: null
+qos: null
+nodes: 1
+ntasks: 1
+cpus_per_task: 8
+mem_mb_per_cpu: 8000
+runtime_min: 1440
+gpus: 1
+gpu_constraint: null  # set to the site value for RTX4090/A100 selection
+max_concurrent: 16
+launcher: scripts/mmml-charmm-mpirun.sh
+environment:
+  JAX_ENABLE_X64: "1"
+  MMML_ML_DTYPE: float64
+  OMP_NUM_THREADS: "1"
+
