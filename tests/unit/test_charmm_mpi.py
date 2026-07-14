@@ -754,6 +754,26 @@ def test_mpi_openmpi_install_env_defaults(monkeypatch, tmp_path):
     assert os.environ["OMPI_MCA_component_path"] == str(mca)
 
 
+def test_pmix_preload_precedes_opal_for_cuda_tool_subprocesses(monkeypatch, tmp_path):
+    pmix = tmp_path / "libpmix.so.2"
+    opal = tmp_path / "libopen-pal.so.80"
+    pmix.write_bytes(b"")
+    opal.write_bytes(b"")
+    monkeypatch.delenv("MMML_NO_MPI_PMIX_PRELOAD", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_LD_PATH", raising=False)
+    preload_var = "DYLD_INSERT_LIBRARIES" if charmm_mpi._IS_DARWIN else "LD_PRELOAD"
+    monkeypatch.setenv(preload_var, str(opal))
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_pmix_library_path",
+        return_value=pmix,
+    ):
+        charmm_mpi._export_openmpi_pmix_ld_preload()
+    assert os.environ[preload_var].split(os.pathsep) == [
+        str(pmix.resolve()),
+        str(opal),
+    ]
+
+
 def test_mpi_openmpi_install_env_defaults_opal_prefix_when_complete(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     monkeypatch.delenv("OPAL_PREFIX", raising=False)

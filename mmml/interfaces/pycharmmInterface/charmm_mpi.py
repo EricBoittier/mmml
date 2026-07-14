@@ -458,6 +458,28 @@ def _export_openmpi_opal_ld_preload() -> None:
         os.environ[var] = os.pathsep.join([path, *parts])
 
 
+def _export_openmpi_pmix_ld_preload() -> None:
+    """Preload PMIx before OPAL for rank children and CUDA tool subprocesses.
+
+    OpenMPI's ``libopen-pal`` references PMIx symbols.  Preloading OPAL alone
+    works for the MPI rank once the launcher has initialized PMIx, but poisons
+    subprocesses spawned later by JAX: NVIDIA ``ptxas`` then exits with an
+    undefined ``pmix_framework_names`` symbol.  Keeping the matched PMIx DSO
+    first makes both MPI initialization and JAX GPU compilation safe.
+    """
+    if _truthy("MMML_NO_MPI_PMIX_PRELOAD") or _truthy("MMML_NO_MPI_LD_PATH"):
+        return
+    pmix = charmm_pmix_library_path()
+    if pmix is None or not pmix.is_file():
+        return
+    path = str(pmix.resolve())
+    var = "DYLD_INSERT_LIBRARIES" if _IS_DARWIN else "LD_PRELOAD"
+    parts = [p for p in os.environ.get(var, "").split(os.pathsep) if p]
+    if path in parts:
+        parts.remove(path)
+    os.environ[var] = os.pathsep.join([path, *parts])
+
+
 def _mpi_preload_sort_key(path: Path) -> tuple[int, str]:
     """Load core ``libmpi`` and Fortran stubs before dependent ``libmpi_*`` shims."""
     name = path.name
@@ -585,6 +607,8 @@ def mpi_openmpi_install_env_defaults() -> None:
         os.environ.setdefault("OMPI_MCA_shmem", shmem)
     _export_openmpi_mpi_ld_preload()
     _export_openmpi_opal_ld_preload()
+    # Must be last so PMIx is first in LD_PRELOAD, ahead of libopen-pal.
+    _export_openmpi_pmix_ld_preload()
     override = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
     if override:
         os.environ.setdefault("OPAL_PREFIX", override)
