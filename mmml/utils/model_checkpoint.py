@@ -36,6 +36,7 @@ Example Usage:
 
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+from collections.abc import Mapping
 import json
 import pickle
 
@@ -94,6 +95,24 @@ def normalize_physnet_config(cfg: dict[str, Any]) -> dict[str, Any]:
 def canonicalize_physnet_config_for_save(cfg: dict[str, Any]) -> dict[str, Any]:
     """Ensure both legacy and canonical PhysNet config keys are written."""
     return normalize_physnet_config(cfg)
+
+
+def infer_trainable_zbl_config(
+    cfg: dict[str, Any], parameter_tree: Any
+) -> dict[str, Any]:
+    """Infer the legacy ZBL architecture without changing explicit configs.
+
+    New models record ``trainable_zbl`` and default it to ``False``. Older
+    PhysNet-family checkpoints always trained ZBL and can be identified by the
+    four parameter leaves under the Flax ``repulsion`` module.
+    """
+    out = dict(cfg)
+    if "trainable_zbl" in out:
+        return out
+    modules = parameter_tree.get("params", parameter_tree)
+    repulsion = modules.get("repulsion", {}) if isinstance(modules, Mapping) else {}
+    out["trainable_zbl"] = bool(repulsion)
+    return out
 
 
 def physnet_constructor_kwargs(cfg: dict[str, Any], model_cls: type) -> dict[str, Any]:
@@ -527,7 +546,9 @@ def create_model_from_checkpoint(
     checkpoint = load_model_checkpoint(checkpoint_dir)
     
     # Get config
-    config_dict = checkpoint.get('config', {})
+    config_dict = infer_trainable_zbl_config(
+        checkpoint.get('config', {}), checkpoint.get('params') or {}
+    )
     
     # Merge config with provided kwargs (kwargs take precedence)
     model_config = {**config_dict, **model_kwargs}
@@ -535,7 +556,7 @@ def create_model_from_checkpoint(
     # Create model instance
     # Filter out non-model attributes
     model_attrs = ['features', 'max_degree', 'num_iterations', 'num_basis_functions',
-                   'cutoff', 'max_atomic_number', 'n_res', 'n_refinement_blocks', 'zbl', 'efa', 'charges',
+                   'cutoff', 'max_atomic_number', 'n_res', 'n_refinement_blocks', 'zbl', 'trainable_zbl', 'efa', 'charges',
                    'natoms', 'max_padded_atoms', 'total_charge', 'n_dcm', 'include_pseudotensors']
     
     filtered_config = {k: v for k, v in model_config.items() 

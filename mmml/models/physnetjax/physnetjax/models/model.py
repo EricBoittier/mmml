@@ -58,6 +58,7 @@ class PhysNet(nn.Module):
     total_charge: float = 0
     n_refinement_blocks: int = 3
     zbl: bool = True
+    trainable_zbl: bool = False
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = False
@@ -91,7 +92,7 @@ class PhysNet(nn.Module):
         if self.zbl:
             self.repulsion = ZBLRepulsion(
                 cutoff=self.cutoff,
-                trainable=True,
+                trainable=self.trainable_zbl,
             )
         self.efa_final = None
         if self.efa:
@@ -131,6 +132,7 @@ class PhysNet(nn.Module):
             "n_res": self.n_refinement_blocks,
             "n_refinement_blocks": self.n_refinement_blocks,
             "zbl": self.zbl,
+            "trainable_zbl": self.trainable_zbl,
             "debug": self.debug,
             "efa": self.efa,
             "use_energy_bias": self.use_energy_bias,

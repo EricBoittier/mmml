@@ -46,7 +46,7 @@ class ZBLRepulsion(nn.Module):
 
     cutoff: float
     cuton: Optional[float] = None
-    trainable: bool = True
+    trainable: bool = False
     dtype: Any = jnp.float32
     debug: bool = False
 

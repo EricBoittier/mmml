@@ -41,6 +41,7 @@ from mmml.interfaces.pycharmmInterface.ml_dtypes import (
 )
 from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 from mmml.utils.model_checkpoint import (
+    infer_trainable_zbl_config,
     load_model_checkpoint,
     normalize_physnet_config,
     physnet_constructor_kwargs,
@@ -63,7 +64,7 @@ def _is_spooky_checkpoint(model_type: str, parameter_tree: Any) -> bool:
 def _infer_vdw_architecture_config(
     config: dict[str, Any], parameter_tree: Any
 ) -> dict[str, Any]:
-    """Recover optional vdW-head flags omitted by older checkpoints.
+    """Recover optional architecture flags omitted by older checkpoints.
 
     The atomic vdW scaling head and learnable global/element scales were added
     after many valid checkpoints had already been written.  Instantiating
@@ -71,7 +72,7 @@ def _infer_vdw_architecture_config(
     a nonexistent ``Dense_13/kernel``.  The parameter tree is authoritative
     when the saved config does not explicitly record these flags.
     """
-    inferred = dict(config)
+    inferred = infer_trainable_zbl_config(config, parameter_tree)
     modules = parameter_tree.get("params", parameter_tree)
     if "predict_atomic_vdw_scale" not in inferred:
         inferred["predict_atomic_vdw_scale"] = "Dense_13" in modules
@@ -201,6 +202,7 @@ class SpookyNetCalculator(Calculator):
         )
         charges_enabled = bool(getattr(model, "charges", False))
         zbl_enabled = bool(getattr(model, "zbl", False))
+        trainable_zbl = bool(getattr(model, "trainable_zbl", False))
         cutoff = self.normalized_config.get(
             "cutoff", getattr(model, "cutoff", None)
         )
@@ -218,6 +220,11 @@ class SpookyNetCalculator(Calculator):
                 "Checkpoint records a companion MBD model, but it is not loaded; "
                 "evaluated energies contain only the residual Spooky term."
             )
+        if zbl_enabled and trainable_zbl:
+            warnings.append(
+                "This checkpoint uses trainable ZBL screening parameters rather "
+                "than the fixed universal ZBL form; audit their values for drift."
+            )
 
         return {
             "calculator": type(self).__name__,
@@ -233,6 +240,7 @@ class SpookyNetCalculator(Calculator):
                 "neural_atomic_energy": True,
                 "cutoff_angstrom": None if cutoff is None else float(cutoff),
                 "zbl_repulsion": zbl_enabled,
+                "zbl_trainable": trainable_zbl,
             },
             "electrostatics": {
                 "predicted_atomic_charges": charges_enabled,

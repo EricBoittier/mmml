@@ -755,6 +755,7 @@ def setup_calculator(
             )
             from mmml.models.physnetjax.physnetjax.models.model import PhysNet
             from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+            from mmml.utils.model_checkpoint import infer_trainable_zbl_config
 
             def json_to_jax_config(obj):
                 if isinstance(obj, dict):
@@ -765,6 +766,8 @@ def setup_calculator(
 
             if is_joint_checkpoint_config(config):
                 physnet_cfg = normalize_physnet_config(dict(config["physnet_config"]))
+                params = extract_physnet_params_for_hybrid(params)
+                physnet_cfg = infer_trainable_zbl_config(physnet_cfg, params)
                 physnet_cfg["max_padded_atoms"] = max_atoms
                 if electrostatics_damping_sigma is not None:
                     physnet_cfg["electrostatics_damping_sigma"] = float(electrostatics_damping_sigma)
@@ -773,7 +776,6 @@ def setup_calculator(
                 )
                 MODEL = PhysNet(**model_config)
                 MODEL.max_padded_atoms = max_atoms
-                params = extract_physnet_params_for_hybrid(params)
                 setup_rows.append(
                     (
                         "ml_backend",
@@ -801,6 +803,7 @@ def setup_calculator(
                         "use_pbc": bool(cell),
                     }
                 model_config = json_to_jax_config(config)
+                model_config = infer_trainable_zbl_config(model_config, params)
                 model_config["max_padded_atoms"] = max_atoms
                 if electrostatics_damping_sigma is not None:
                     model_config["electrostatics_damping_sigma"] = float(electrostatics_damping_sigma)

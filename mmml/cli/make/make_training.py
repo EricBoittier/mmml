@@ -236,6 +236,12 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         help="Disable ZBL repulsion in EF model",
     )
     parser.set_defaults(zbl=False)
+    parser.add_argument(
+        "--trainable-zbl",
+        action="store_true",
+        default=False,
+        help="Opt in to optimizing ZBL screening parameters; fixed ZBL is the default.",
+    )
 
     parser.add_argument(
         "--use-pbc",
@@ -950,6 +956,7 @@ def main_loop(args):
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
             zbl=args.zbl,
+            trainable_zbl=args.trainable_zbl,
             efa=args.efa,
             use_pbc=args.use_pbc,
             use_energy_bias=args.use_energy_bias,

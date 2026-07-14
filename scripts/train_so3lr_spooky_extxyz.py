@@ -437,6 +437,7 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         max_padded_atoms=max_atoms,
         n_refinement_blocks=args.n_res,
         zbl=not args.no_zbl,
+        trainable_zbl=args.trainable_zbl,
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
@@ -975,6 +976,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "n_res",
                 "predict_charges",
                 "no_zbl",
+                "trainable_zbl",
                 "efa",
                 "use_energy_bias",
                 "electrostatics_damping_sigma",
@@ -993,6 +995,12 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 if current_val != saved_val:
                     print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
                     setattr(args, param, saved_val)
+            if "trainable_zbl" not in saved_config and not args.no_zbl:
+                # Every checkpoint produced before trainable_zbl was recorded
+                # used trainable ZBL parameters. Preserve that architecture for
+                # legacy restart/warm-starts; new runs remain fixed by default.
+                print("  Legacy checkpoint: inferring trainable_zbl=True")
+                args.trainable_zbl = True
             # A true restart must restore the same composite definition and
             # optimizer schedule.  Defaults mean "inherit" here; any explicit
             # non-default CLI value remains an intentional override.
@@ -1466,6 +1474,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-res", type=int, default=2)
     parser.add_argument("--predict-charges", action="store_true", help="Also predict atomic charges/dipoles")
     parser.add_argument("--no-zbl", action="store_true")
+    parser.add_argument(
+        "--trainable-zbl",
+        action="store_true",
+        help="Opt in to optimizing ZBL screening parameters (fixed universal ZBL is the default).",
+    )
     parser.add_argument("--efa", action="store_true")
     parser.add_argument("--use-energy-bias", action="store_true")
     parser.add_argument(

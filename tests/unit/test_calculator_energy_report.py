@@ -60,6 +60,17 @@ def test_explicit_vdw_architecture_flags_override_tree_inference():
     assert config["learn_cgenff_vdw_scale"] is True
 
 
+def test_legacy_checkpoint_infers_trainable_zbl_from_parameter_tree():
+    tree = {"params": {"repulsion": {"a_coefficient": np.asarray(0.5)}}}
+    assert _infer_vdw_architecture_config({}, tree)["trainable_zbl"] is True
+
+
+def test_new_checkpoint_keeps_explicit_fixed_zbl():
+    tree = {"params": {"repulsion": {"a_coefficient": np.asarray(0.5)}}}
+    config = _infer_vdw_architecture_config({"trainable_zbl": False}, tree)
+    assert config["trainable_zbl"] is False
+
+
 def test_spookynet_report_flags_missing_training_lj_inputs(tmp_path):
     calc = object.__new__(SpookyNetCalculator)
     calc.checkpoint_path = tmp_path / "checkpoint.json"
@@ -87,6 +98,7 @@ def test_spookynet_report_flags_missing_training_lj_inputs(tmp_path):
     assert report["cgenff_lennard_jones"]["annotated_atoms_supported"] is True
     assert report["cgenff_lennard_jones"]["inputs_supplied_at_inference"] is False
     assert report["short_range"]["zbl_repulsion"] is True
+    assert report["short_range"]["zbl_trainable"] is False
     assert any("omit the fixed LJ contribution" in item for item in report["warnings"])
 
 
