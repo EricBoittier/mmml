@@ -104,7 +104,7 @@ def _init_charmm():
 
 
 def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]:
-    """Evaluate a scan's geometries with CHARMM/CGenFF (PSF built once per pair)."""
+    """Evaluate CHARMM total, electrostatics-only, and LJ-only scan surfaces."""
     build_cluster, setup_nbonds, sync_positions, energy_row = charmm_fns
     res_a = CHARMM_RESIDUES[label_a]
     res_b = CHARMM_RESIDUES[label_b]
@@ -126,20 +126,31 @@ def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]
             elec = float(terms.get("ELEC", np.nan))
             vdw = float(terms.get("VDW", np.nan))
             tot = float(terms.get("ENER", np.nan))
-            rows.append(
-                {
+            common = {
                     "molecule_a": label_a,
                     "molecule_b": label_b,
                     "distance_angstrom": geom.distance_angstrom,
                     "offset_angstrom": geom.offset_angstrom,
-                    "energy_ev": tot / EV_TO_KCAL_MOL,
-                    "energy_kcal_mol": tot,
-                    "backend": "charmm",
                     "charmm_ELEC_kcal": elec,
                     "charmm_VDW_kcal": vdw,
                     "min_contact_angstrom": min_fragment_contact_distance(geom.atoms, geom.fragments),
                 }
-            )
+            # Materialize the components as ordinary backends so the existing
+            # reference/interaction-energy and 2D plotting pipeline can render
+            # them with exactly the same geometry masks as the total surface.
+            for backend, component in (
+                ("charmm", tot),
+                ("charmm_electrostatics", elec),
+                ("charmm_lj", vdw),
+            ):
+                rows.append(
+                    {
+                        **common,
+                        "energy_ev": component / EV_TO_KCAL_MOL,
+                        "energy_kcal_mol": component,
+                        "backend": backend,
+                    }
+                )
         except Exception as e:
             print(f"    Warning: CHARMM failed at d={geom.distance_angstrom} Å offset={geom.offset_angstrom} Å: {e}")
     return rows
