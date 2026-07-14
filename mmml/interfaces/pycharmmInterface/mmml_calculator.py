@@ -309,14 +309,15 @@ def capture_neighbour_list():
 def get_forces_pycharmm(update: bool = True):
     """Per-atom CHARMM forces (kcal/mol/Å) as an ``(natom, 3)`` array.
 
-    ``coor.get_forces()`` exposes ``dx/dy/dz`` as the energy gradient (``dE/dx``),
-    so the physical force is the negative gradient. Pass ``update=False`` to read
-    the forces left by a previous ``ENER FORCE`` instead of re-evaluating.
+    CHARMM's ``dx/dy/dz`` is the energy gradient (``dE/dx``), so the physical force
+    is the negative gradient. Pass ``update=False`` to read the forces left by a
+    previous ``ENER FORCE`` instead of re-evaluating.
     """
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+
     if update:
         pycharmm.lingo.charmm_script("ENER FORCE")
-    grad = coor.get_forces()[["dx", "dy", "dz"]].to_numpy(dtype=float)
-    return -grad
+    return charmm_forces_array()
 
 
 def view_atoms(atoms):

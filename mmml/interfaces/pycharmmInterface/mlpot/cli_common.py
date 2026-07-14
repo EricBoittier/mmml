@@ -1931,17 +1931,10 @@ def charmm_total_forces_kcalmol_A() -> np.ndarray:
     ``tests/functionality/mlpot/01_callback_vs_ase_no_charmm.py``).
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm.coor as coor
 
-    fdf = coor.get_forces()
-    grad = np.column_stack(
-        [
-            fdf["dx"].to_numpy(dtype=float),
-            fdf["dy"].to_numpy(dtype=float),
-            fdf["dz"].to_numpy(dtype=float),
-        ]
-    )
-    return -grad
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+
+    return charmm_forces_array()
 
 
 def charmm_total_forces_ev_angstrom() -> np.ndarray:

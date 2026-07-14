@@ -129,12 +129,13 @@ def _collect_charmm_terms() -> dict[str, float]:
 def _get_charmm_forces() -> np.ndarray:
     """Return CHARMM forces (kcal/mol/Å) for the current coordinates.
 
-    ``coor.get_forces()`` exposes ``dx/dy/dz`` as the energy gradient (``dE/dx``),
-    so the physical force is the negative gradient.
+    CHARMM's ``dx/dy/dz`` is the energy gradient (``dE/dx``), so the physical force
+    is the negative gradient.
     """
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+
     pycharmm.lingo.charmm_script("ENER FORCE")
-    grad = coor.get_forces()[["dx", "dy", "dz"]].to_numpy(dtype=float)
-    return -grad
+    return charmm_forces_array()
 
 
 def _to_float_sum(value) -> float:
