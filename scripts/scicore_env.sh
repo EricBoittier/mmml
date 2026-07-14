@@ -58,13 +58,28 @@ else
   echo "scicore_env: lmod not found; libcharmm will fail to dlopen" >&2
 fi
 
-# Fail loudly rather than letting the job run on to an opaque
+# Warn loudly rather than letting the job run on to an opaque
 # "libmpi.so.40 => not found" from deep inside pycharmm.
-if ! ldconfig -p 2>/dev/null | grep -q "libmpi\.so\.40" \
-   && ! { IFS=:; for d in ${LD_LIBRARY_PATH:-}; do [[ -e "$d/libmpi.so.40" ]] && exit 0; done; false; }; then
+#
+# NB: this file is *sourced*. Never call `exit` here -- it terminates the
+# calling job script, not this snippet.
+_mmml_found_libmpi=0
+_mmml_saved_ifs="$IFS"
+IFS=:
+for _mmml_dir in ${LD_LIBRARY_PATH:-}; do
+  if [[ -e "$_mmml_dir/libmpi.so.40" ]]; then
+    _mmml_found_libmpi=1
+    break
+  fi
+done
+IFS="$_mmml_saved_ifs"
+unset _mmml_dir _mmml_saved_ifs
+
+if [[ "$_mmml_found_libmpi" != "1" ]]; then
   echo "scicore_env: warning: libmpi.so.40 not on LD_LIBRARY_PATH after loading" \
        "'$MMML_SCICORE_TOOLCHAIN' (MODULEPATH=${MODULEPATH:-empty}); CHARMM will fail to load." >&2
 fi
+unset _mmml_found_libmpi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
