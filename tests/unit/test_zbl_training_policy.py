@@ -58,8 +58,8 @@ def test_spooky_training_requires_explicit_trainable_zbl_flag():
     parser = build_spooky_parser()
     defaults = parser.parse_args([])
     assert defaults.trainable_zbl is False
-    assert defaults.zbl_cuton == 0.8
-    assert defaults.zbl_cutoff == 1.5
+    assert defaults.zbl_cuton == 0.1
+    assert defaults.zbl_cutoff == 0.6
     assert parser.parse_args(["--trainable-zbl"]).trainable_zbl is True
     fixed = parser.parse_args(["--fixed-zbl"])
     assert fixed.trainable_zbl is False
@@ -108,7 +108,7 @@ def test_spooky_full_path_uses_geometric_distance_and_zbl_own_cutoff():
     variables = model.init(jax.random.PRNGKey(1), **inputs)
     output = model.apply(variables, **inputs)
 
-    direct = ZBLRepulsion(cutoff=1.5, cuton=0.8)
+    direct = ZBLRepulsion(cutoff=0.6, cuton=0.1)
     direct_inputs = _inputs()
     direct_inputs["distances"] = jnp.asarray([2.0, 2.0])
     direct_variables = direct.init(jax.random.PRNGKey(2), **direct_inputs)
@@ -117,16 +117,16 @@ def test_spooky_full_path_uses_geometric_distance_and_zbl_own_cutoff():
 
 
 def test_default_model_zbl_is_exactly_zero_at_and_beyond_short_cutoff():
-    module = ZBLRepulsion(cutoff=1.5, cuton=0.8)
+    module = ZBLRepulsion(cutoff=0.6, cuton=0.1)
     inputs = _inputs()
-    inputs["distances"] = jnp.asarray([1.5, 2.0])
+    inputs["distances"] = jnp.asarray([0.6, 2.0])
     variables = module.init(jax.random.PRNGKey(4), **inputs)
     energy = module.apply(variables, **inputs)
     np.testing.assert_allclose(energy, 0.0, atol=0.0)
 
 
 def test_short_zbl_switch_has_continuous_zero_force_at_cutoff():
-    module = ZBLRepulsion(cutoff=1.5, cuton=0.8)
+    module = ZBLRepulsion(cutoff=0.6, cuton=0.1)
 
     def pair_energy(r):
         inputs = _inputs()
@@ -134,20 +134,30 @@ def test_short_zbl_switch_has_continuous_zero_force_at_cutoff():
         variables = module.init(jax.random.PRNGKey(5), **inputs)
         return module.apply(variables, **inputs).sum()
 
-    left_force = -jax.grad(pair_energy)(jnp.asarray(1.5 - 1.0e-6))
-    cutoff_force = -jax.grad(pair_energy)(jnp.asarray(1.5))
+    left_force = -jax.grad(pair_energy)(jnp.asarray(0.6 - 1.0e-6))
+    cutoff_force = -jax.grad(pair_energy)(jnp.asarray(0.6))
     assert abs(float(left_force)) < 1.0e-8
     assert float(cutoff_force) == 0.0
 
 
 @pytest.mark.parametrize(
     ("cuton", "cutoff"),
-    [(-0.1, 1.5), (1.5, 1.5), (2.0, 1.5), (0.8, 0.0)],
+    [(-0.1, 0.6), (0.6, 0.6), (1.0, 0.6), (0.1, 0.0)],
 )
 def test_invalid_zbl_windows_fail_fast(cuton, cutoff):
     module = ZBLRepulsion(cutoff=cutoff, cuton=cuton)
     with pytest.raises(ValueError, match="ZBL"):
         module.init(jax.random.PRNGKey(6), **_inputs())
+
+
+def test_default_zbl_is_inert_at_h2_and_common_xh_bond_lengths():
+    module = ZBLRepulsion(cutoff=0.6, cuton=0.1)
+    inputs = _inputs()
+    variables = module.init(jax.random.PRNGKey(7), **inputs)
+    for distance in (0.74, 0.96, 1.09):
+        bond_inputs = {**inputs, "distances": jnp.asarray([distance, distance])}
+        energy = module.apply(variables, **bond_inputs)
+        np.testing.assert_allclose(energy, 0.0, atol=0.0)
 
 
 def test_spooky_fixed_zbl_force_matches_finite_difference():

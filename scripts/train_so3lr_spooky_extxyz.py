@@ -1491,14 +1491,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--zbl-cuton",
         type=float,
-        default=0.8,
-        help="Distance in Å below which fixed ZBL is fully on (default: 0.8).",
+        default=0.1,
+        help="Distance in Å below which fixed ZBL is fully on (default: 0.1).",
     )
     parser.add_argument(
         "--zbl-cutoff",
         type=float,
-        default=1.5,
-        help="Distance in Å where fixed ZBL reaches exactly zero (default: 1.5).",
+        default=0.6,
+        help="Distance in Å where fixed ZBL reaches exactly zero (default: 0.6).",
     )
     zbl_training.add_argument(
         "--fixed-zbl",

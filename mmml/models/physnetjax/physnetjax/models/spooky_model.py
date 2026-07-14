@@ -56,8 +56,8 @@ class SpookyPhysNet(nn.Module):
     n_refinement_blocks: int = 2
     zbl: bool = True
     trainable_zbl: bool = False
-    zbl_cuton: float | None = 0.8
-    zbl_cutoff: float = 1.5
+    zbl_cuton: float | None = 0.1
+    zbl_cutoff: float = 0.6
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = False
