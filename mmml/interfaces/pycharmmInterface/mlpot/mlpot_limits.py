@@ -76,27 +76,33 @@ def _api_func_f90_candidates() -> list[Path]:
 
 
 def _libcharmm_candidates() -> list[Path]:
-    home = _charmm_home()
+    """Locate the built CHARMM shared library, whatever it is called.
+
+    Delegates to ``charmm_paths.find_charmm_lib_in_dir`` so the platform suffix
+    (``.so`` on Linux, ``.dylib`` on macOS) is handled in exactly one place.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_paths import find_charmm_lib_in_dir
+
+    search_dirs: list[Path] = []
     lib_dir = _charmm_lib_dir()
-    paths: list[Path] = []
     if lib_dir is not None:
-        paths.append(lib_dir / "libcharmm.so")
+        search_dirs.append(lib_dir)
+    home = _charmm_home()
     if home is not None:
-        paths.extend(
-            [
-                home / "libcharmm.so",
-                home / "lib" / "libcharmm.so",
-            ]
-        )
+        search_dirs.append(home)
+    search_dirs.append(_repo_root() / "setup" / "charmm")
+
     seen: set[Path] = set()
     out: list[Path] = []
-    for path in paths:
-        resolved = path.expanduser().resolve()
+    for directory in search_dirs:
+        found = find_charmm_lib_in_dir(directory.expanduser())
+        if found is None:
+            continue
+        resolved = found.resolve()
         if resolved in seen:
             continue
         seen.add(resolved)
-        if resolved.is_file():
-            out.append(resolved)
+        out.append(resolved)
     return out
 
 
@@ -138,7 +144,7 @@ class MlpotLimitsStatus:
         if self.api_func_f90 is not None:
             lines.append(f"  api_func.F90: {self.api_func_f90}")
         if self.libcharmm is not None:
-            lines.append(f"  libcharmm.so: {self.libcharmm}")
+            lines.append(f"  {self.libcharmm.name}: {self.libcharmm}")
         if self.note:
             lines.append(f"  note: {self.note}")
         return "\n".join(lines)
@@ -172,16 +178,20 @@ def mlpot_limits_status() -> MlpotLimitsStatus:
         return MlpotLimitsStatus(
             max_ml,
             max_pr,
-            source="api_func.F90 (libcharmm.so not located for freshness check)",
+            source="api_func.F90 (libcharmm not located for freshness check)",
             api_func_f90=f90,
-            note="Set CHARMM_LIB_DIR or CHARMM_HOME so lib freshness can be checked.",
+            note=(
+                "No libcharmm found under setup/charmm. Build it with "
+                "./scripts/rebuild_charmm_mlpot.sh, or set CHARMM_HOME to an "
+                "out-of-tree CHARMM."
+            ),
         )
 
     lib = max(libs, key=lambda p: p.stat().st_mtime)
     if lib.stat().st_mtime < f90.stat().st_mtime:
         return MlpotLimitsStatus(
             *_CONSERVATIVE_LIMITS,
-            source="conservative fallback (libcharmm.so older than api_func.F90)",
+            source=f"conservative fallback ({lib.name} older than api_func.F90)",
             api_func_f90=f90,
             libcharmm=lib,
             note="Run ./scripts/rebuild_charmm_mlpot.sh --clean",
@@ -190,7 +200,7 @@ def mlpot_limits_status() -> MlpotLimitsStatus:
     return MlpotLimitsStatus(
         max_ml,
         max_pr,
-        source="api_func.F90 (libcharmm.so is up to date)",
+        source=f"api_func.F90 ({lib.name} is up to date)",
         api_func_f90=f90,
         libcharmm=lib,
     )
