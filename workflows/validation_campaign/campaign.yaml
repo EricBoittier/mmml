@@ -95,10 +95,9 @@ tasks:
     systems: [alanine, trialanine]
     methods: [MM, ML, MMML]
     backends: [jaxmd, pycharmm]
-    environments: [pcstudix, scicore, local_computer]
-    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task peptide_gas.smoke --output-dir {output_dir}"
+    environments: [local_laptop, local_computer, pcstudix, scicore]
+    command: "{python} workflows/validation_campaign/scripts/peptide_gas_smoke.py --output-dir {output_dir}"
     acceptance: [build_audit, finite_energy_force, fd_force_pass, minimized_structure, short_nve_nvt_pass]
-    state: needs_driver
 
   peptide_solution.smoke:
     goal: peptide_solution
