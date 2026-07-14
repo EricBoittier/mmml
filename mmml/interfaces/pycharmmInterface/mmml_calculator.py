@@ -443,6 +443,9 @@ def setup_calculator(
             float64 also requires ``JAX_ENABLE_X64=1`` before Python starts. Overridden by
             ``MMML_ML_DTYPE`` when unset.
     """
+    # Retained through the 2026-09 compatibility window; capacity is now
+    # derived from the actual monomer topology rather than this fixed hint.
+    _ = MAX_ATOMS_PER_SYSTEM
     if model_restart_path is None:
         _ml_mode = str(ml_potential_mode or "physnet").strip().lower()
         if _ml_mode not in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}:

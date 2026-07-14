@@ -406,7 +406,6 @@ def _fmt_comp(z_arr: np.ndarray) -> str:
 
 def match_cgenff_template_fast(
     z_sub: np.ndarray,
-    comp_indices: list[int],
     pos_sub: np.ndarray | None = None,
     target_charge: float = 0.0,
     canonical_smiles: str | None = None,
@@ -597,11 +596,11 @@ def process_single_frame(args_tuple):
         # canonical_smiles=None: use composition lookup (SMILES lookup reserved for future
         # use if source cache provides smiles0/smiles1 keys directly)
         res_a, t_a, q_a = match_cgenff_template_fast(
-            z_struct[comp_a], comp_a, r_struct[comp_a],
+            z_struct[comp_a], r_struct[comp_a],
             target_charge=0.0, canonical_smiles=None
         )
         res_b, t_b, q_b = match_cgenff_template_fast(
-            z_struct[comp_b], comp_b, r_struct[comp_b],
+            z_struct[comp_b], r_struct[comp_b],
             target_charge=0.0, canonical_smiles=None
         )
 

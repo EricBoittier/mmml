@@ -24,7 +24,6 @@ def _parse_counts(spec: str) -> list[int]:
 def _run_case(
     *,
     python_exe: str,
-    script_path: Path,
     backend: str,
     ensemble: str,
     n_mol: int,
@@ -150,13 +149,10 @@ def main() -> int:
     counts = _parse_counts(args.counts)
     out_dir = (Path.cwd() / args.output_dir.expanduser()).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
-    scripts_dir = Path(__file__).resolve().parent
-
     rows: list[dict] = []
     for n_mol in counts:
         row = _run_case(
             python_exe=sys.executable,
-            script_path=scripts_dir,
             backend=args.backend,
             ensemble=args.ensemble,
             n_mol=n_mol,
@@ -201,4 +197,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
