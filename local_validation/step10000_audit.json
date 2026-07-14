@@ -1,0 +1,19 @@
+{
+  "checkpoint": "/mmhome/boittier/home/mmml/artifacts/zbl_cgenff_1000step_20260714/regular_step294400/step-00010000_params.zblfixed.json",
+  "backend": "spookynet_hybrid_regular_s10000",
+  "n_points": 1387,
+  "component_columns": [
+    "comp_Eint_neural_energy_ev",
+    "comp_Eint_electrostatics_energy_ev",
+    "comp_Eint_cgenff_vdw_energy_ev",
+    "comp_Eint_zbl_repulsion_energy_ev",
+    "comp_Eint_mbd_energy_ev"
+  ],
+  "max_abs_component_reconstruction_error_ev": 2.4457082782320793e-14,
+  "cgenff_lj_nonzero_points": 1305,
+  "cgenff_lj_min_ev": -0.0026903173592791397,
+  "cgenff_lj_max_ev": 0.1326939940156323,
+  "cgenff_inputs_consumed": true,
+  "jax_enable_x64": true,
+  "mmml_ml_dtype": "float64"
+}
