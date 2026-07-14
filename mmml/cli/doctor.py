@@ -20,6 +20,17 @@ import sys
 from pathlib import Path
 
 
+def _mute_charmm_teardown() -> None:
+    """Point fd 1 at fd 2 for the rest of the process.
+
+    CHARMM flushes a timer profile to fd 1 during Fortran finalization, i.e.
+    *after* ``main`` returns. Without this, that trailing noise lands on stdout
+    behind our report and makes ``--json`` unparseable.
+    """
+    sys.stdout.flush()
+    os.dup2(2, 1)
+
+
 @contextlib.contextmanager
 def _stdout_to_stderr():
     """Send everything written to fd 1 to fd 2 for the duration of the block.
@@ -138,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         }
         payload["ok"] = bool(report.ok and charmm_ok)
         print(json.dumps(payload, indent=2))
+        _mute_charmm_teardown()
         return 0 if payload["ok"] else 1
 
     print(render_health_report(report))
@@ -150,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     if not ok:
         print("Install: make install       (Python deps via uv)")
         print("         make install-native (libcharmm + packmol)")
+    _mute_charmm_teardown()
     return 0 if ok else 1
 
 

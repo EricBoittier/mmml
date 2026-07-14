@@ -15,7 +15,6 @@ _MIN_CGENFF_RTF_BYTES = 1_000_000
 _MIN_CGENFF_PRM_BYTES = 500_000
 
 _CHARMM_LIB_NAMES = ("libcharmm.so", "libcharmm.dylib", "charmm.so", "charmm.dylib")
-_CHARMMSETUP_KEYS = frozenset({"CHARMM_HOME", "CHARMM_LIB_DIR"})
 
 
 def mmml_repo_root(start: Path | None = None) -> Path:
@@ -49,28 +48,6 @@ def default_repo_charmm_home(repo_root: Path | None = None) -> Path | None:
     return None
 
 
-def read_charmmsetup(repo_root: Path | None = None) -> dict[str, str]:
-    """Parse legacy ``CHARMMSETUP`` (``export KEY=val`` or ``KEY=val``)."""
-    root = repo_root or mmml_repo_root()
-    setup_file = root / "CHARMMSETUP"
-    out: dict[str, str] = {}
-    if not setup_file.is_file():
-        return out
-    for line in setup_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[7:].strip()
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key in _CHARMMSETUP_KEYS:
-            out[key] = value.strip()
-    return out
-
-
 def normalize_charmm_lib_dir(raw: str | None) -> str:
     """Return a directory path for ``CHARMM_LIB_DIR`` (not a ``.so`` file path)."""
     value = (raw or "").strip()
@@ -85,16 +62,11 @@ def normalize_charmm_lib_dir(raw: str | None) -> str:
 def _resolve_lib_dir(
     *,
     env: os._Environ,
-    setup: dict[str, str],
     default: str,
 ) -> str:
     """Pick the first ``CHARMM_LIB_DIR`` candidate that contains ``libcharmm``."""
     candidates: list[str] = []
-    for raw in (
-        env.get("CHARMM_LIB_DIR"),
-        setup.get("CHARMM_LIB_DIR"),
-        default,
-    ):
+    for raw in (env.get("CHARMM_LIB_DIR"), default):
         norm = normalize_charmm_lib_dir(raw)
         if norm and norm not in candidates:
             candidates.append(norm)
@@ -108,15 +80,11 @@ def _resolve_one(
     key: str,
     *,
     env: os._Environ,
-    setup: dict[str, str],
     default: str,
 ) -> str:
     explicit = (env.get(key) or "").strip()
     if explicit:
         return explicit
-    from_setup = (setup.get(key) or "").strip()
-    if from_setup:
-        return from_setup
     return default
 
 
@@ -137,21 +105,24 @@ def resolve_charmm_paths(
 ) -> tuple[str, str]:
     """Return ``(CHARMM_HOME, CHARMM_LIB_DIR)``.
 
-    Precedence per variable: explicit environment → ``CHARMMSETUP`` → repo
-    ``setup/charmm`` when ``libcharmm`` is present there.
+    Precedence per variable: explicit environment → repo ``setup/charmm`` when
+    ``libcharmm`` is present there.
+
+    Neither variable needs to be set: a repo built with ``make install-native``
+    is discovered automatically. Set them only to point at an out-of-tree CHARMM
+    (for example the per-tier libs built by ``ensure_charmm_mlpot_limits.sh``).
     """
     environ = env if env is not None else os.environ
     root = repo_root or mmml_repo_root()
-    setup = read_charmmsetup(root)
 
     default_home = default_repo_charmm_home(root)
     default_home_s = str(default_home) if default_home else ""
 
-    home = _resolve_one("CHARMM_HOME", env=environ, setup=setup, default=default_home_s)
+    home = _resolve_one("CHARMM_HOME", env=environ, default=default_home_s)
     if home and not _valid_charmm_home(home) and default_home_s:
         home = default_home_s
 
-    lib = _resolve_lib_dir(env=environ, setup=setup, default=default_home_s)
+    lib = _resolve_lib_dir(env=environ, default=default_home_s)
     if lib and not _valid_charmm_home(lib) and default_home_s:
         lib = default_home_s
 

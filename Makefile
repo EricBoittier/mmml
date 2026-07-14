@@ -1,11 +1,15 @@
-.PHONY: help install install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
 
 help:
 	@echo "MMML - Makefile Commands"
 	@echo "========================"
 	@echo ""
-	@echo "Installation:"
-	@echo "  make install          - Install with uv (CPU only)"
+	@echo "Installation (from a fresh clone: make install-full):"
+	@echo "  make install-full     - Python deps + native (libcharmm, packmol) + doctor"
+	@echo "  make install          - Python deps only, via uv"
+	@echo "  make install-native   - Native only: libcharmm + packmol (uv cannot build these)"
+	@echo "  make doctor           - Is this machine ready? (JAX, CHARMM, Packmol)"
+	@echo ""
 	@echo "  make install-md-cpu   - Install CPU MD smoke extras (Vesin, mdanalysis)"
 	@echo "  make install-gpu      - Install with uv (GPU/CUDA 13, default)"
 	@echo "  make install-gpu-cuda12 - Install with uv (GPU/CUDA 12)"
@@ -75,6 +79,21 @@ help:
 
 install:
 	uv sync
+
+# The native half: libcharmm (CMake/Fortran) + packmol. uv cannot build these --
+# they are not Python packages -- so they get their own door.
+# No env vars are needed afterwards: mmml auto-discovers setup/charmm.
+install-native:
+	./scripts/rebuild_charmm_mlpot.sh
+	@echo ""
+	@$(MAKE) --no-print-directory doctor
+
+# Everything, from a fresh clone.
+install-full: install install-native
+
+# Is this machine ready to run MMML?
+doctor:
+	uv run mmml doctor
 
 install-md-cpu:
 	uv sync --extra md-cpu

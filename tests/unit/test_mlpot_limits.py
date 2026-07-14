@@ -105,7 +105,16 @@ def test_ensure_mlpot_limits_for_system_raises_with_tier(monkeypatch):
         mlpot_limits.ensure_mlpot_limits_for_system(2195)
 
 
-def test_limits_status_reads_charmmsetup_and_repo_api_func(tmp_path, monkeypatch):
+@pytest.mark.parametrize("lib_name", ["libcharmm.so", "libcharmm.dylib"])
+def test_limits_status_autodiscovers_repo_lib_and_api_func(
+    tmp_path, monkeypatch, lib_name
+):
+    """No env vars, no CHARMMSETUP: setup/charmm is discovered on its own.
+
+    Parametrized over the platform suffix because the macOS build emits
+    ``.dylib`` -- hardcoding ``.so`` here previously made the freshness check
+    silently fail and demand CHARMM_LIB_DIR.
+    """
     repo = tmp_path / "repo"
     charmm_home = repo / "setup" / "charmm"
     f90 = charmm_home / "source" / "api" / "api_func.F90"
@@ -117,12 +126,8 @@ def test_limits_status_reads_charmmsetup_and_repo_api_func(tmp_path, monkeypatch
     )
     lib_dir = charmm_home / "lib"
     lib_dir.mkdir(parents=True)
-    lib = lib_dir / "libcharmm.so"
-    lib.write_bytes(b"so")
-    (repo / "CHARMMSETUP").write_text(
-        f"CHARMM_HOME={charmm_home}\nCHARMM_LIB_DIR={lib_dir}\n",
-        encoding="utf-8",
-    )
+    lib = lib_dir / lib_name
+    lib.write_bytes(b"stub")
 
     monkeypatch.delenv("CHARMM_HOME", raising=False)
     monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
