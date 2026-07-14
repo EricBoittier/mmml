@@ -44,8 +44,8 @@ def generate_pow_markdown(results_data, report_path: Path):
     md_lines.append("")
     md_lines.append("## Verification Summary Matrix")
     md_lines.append("")
-    md_lines.append("| Target System | Category | Supported Methods | Energy RMSE (kcal/mol) | Max Force Err | Status |")
-    md_lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    md_lines.append("| Target System | Category | Supported Methods | Energy RMSE (kcal/mol) | Max Force Err | Runtime (s) | Status |")
+    md_lines.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
 
     for item in results:
         sys_name = item.get("system", "N/A")
@@ -54,8 +54,9 @@ def generate_pow_markdown(results_data, report_path: Path):
         metrics = item.get("metrics", {})
         e_rmse = metrics.get("energy_conservation_rmse_kcal_mol", "N/A")
         f_err = metrics.get("force_max_error", "N/A")
+        t_wall = metrics.get("wall_clock_seconds", "N/A")
         status = item.get("status", "PENDING")
-        md_lines.append(f"| `{sys_name}` | {cat} | `{methods}` | `{e_rmse}` | `{f_err}` | **{status}** |")
+        md_lines.append(f"| `{sys_name}` | {cat} | `{methods}` | `{e_rmse}` | `{f_err}` | `{t_wall}` | **{status}** |")
 
     md_lines.append("")
     md_lines.append("## System Details & Physics Validation")
