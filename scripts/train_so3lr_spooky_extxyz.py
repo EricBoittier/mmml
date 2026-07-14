@@ -995,7 +995,11 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 if current_val != saved_val:
                     print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
                     setattr(args, param, saved_val)
-            if "trainable_zbl" not in saved_config and not args.no_zbl:
+            if (
+                "trainable_zbl" not in saved_config
+                and not args.no_zbl
+                and not args.force_fixed_zbl
+            ):
                 # Every checkpoint produced before trainable_zbl was recorded
                 # used trainable ZBL parameters. Preserve that architecture for
                 # legacy restart/warm-starts; new runs remain fixed by default.
@@ -1474,10 +1478,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-res", type=int, default=2)
     parser.add_argument("--predict-charges", action="store_true", help="Also predict atomic charges/dipoles")
     parser.add_argument("--no-zbl", action="store_true")
-    parser.add_argument(
+    zbl_training = parser.add_mutually_exclusive_group()
+    zbl_training.add_argument(
         "--trainable-zbl",
         action="store_true",
         help="Opt in to optimizing ZBL screening parameters (fixed universal ZBL is the default).",
+    )
+    zbl_training.add_argument(
+        "--fixed-zbl",
+        dest="force_fixed_zbl",
+        action="store_true",
+        help=(
+            "Force universal fixed ZBL when warm-starting a legacy checkpoint; "
+            "drops its legacy repulsion parameter leaves during compatible merge."
+        ),
     )
     parser.add_argument("--efa", action="store_true")
     parser.add_argument("--use-energy-bias", action="store_true")

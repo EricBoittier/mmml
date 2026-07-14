@@ -4,7 +4,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.zbl import (
+    ZBLRepulsion,
+    geometric_pair_distances,
+)
 from mmml.models.physnetjax.physnetjax.models.model import PhysNet
 from mmml.models.physnetjax.physnetjax.models.model_charge_spin import PhysNetChargeSpin
 from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
@@ -54,3 +57,97 @@ def test_spooky_training_requires_explicit_trainable_zbl_flag():
     parser = build_spooky_parser()
     assert parser.parse_args([]).trainable_zbl is False
     assert parser.parse_args(["--trainable-zbl"]).trainable_zbl is True
+    fixed = parser.parse_args(["--fixed-zbl"])
+    assert fixed.trainable_zbl is False
+    assert fixed.force_fixed_zbl is True
+
+
+def test_zbl_receives_geometric_angstrom_distances_not_coulomb_kernel():
+    displacements = jnp.asarray([[2.0, 0.0, 0.0], [0.0, 3.0, 4.0]])
+    distances = geometric_pair_distances(displacements, jnp.ones(2))
+    np.testing.assert_allclose(distances, [2.0, 5.0])
+
+
+def test_masked_zbl_distance_is_finite_and_inert():
+    distances = geometric_pair_distances(
+        jnp.zeros((1, 3)), jnp.zeros(1)
+    )
+    np.testing.assert_allclose(distances, [1.0])
+
+
+def test_spooky_full_path_uses_geometric_distance_and_zbl_own_cutoff():
+    model = SpookyPhysNet(
+        features=4,
+        max_degree=0,
+        num_iterations=1,
+        num_basis_functions=4,
+        cutoff=6.0,
+        max_atomic_number=2,
+        max_padded_atoms=2,
+        charges=False,
+        zbl=True,
+        trainable_zbl=False,
+    )
+    inputs = dict(
+        atomic_numbers=jnp.asarray([1, 1]),
+        charges=jnp.zeros((2, 1)),
+        spins=jnp.ones((2, 1)),
+        positions=jnp.asarray([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]]),
+        dst_idx=jnp.asarray([0, 1]),
+        src_idx=jnp.asarray([1, 0]),
+        batch_segments=jnp.zeros(2, dtype=jnp.int32),
+        batch_size=1,
+        batch_mask=jnp.ones(2),
+        atom_mask=jnp.ones(2),
+        compute_forces=False,
+    )
+    variables = model.init(jax.random.PRNGKey(1), **inputs)
+    output = model.apply(variables, **inputs)
+
+    direct = ZBLRepulsion(cutoff=6.0)
+    direct_inputs = _inputs()
+    direct_inputs["distances"] = jnp.asarray([2.0, 2.0])
+    direct_variables = direct.init(jax.random.PRNGKey(2), **direct_inputs)
+    expected = direct.apply(direct_variables, **direct_inputs)
+    np.testing.assert_allclose(output["repulsion"], expected, rtol=1e-6)
+
+
+def test_spooky_fixed_zbl_force_matches_finite_difference():
+    model = SpookyPhysNet(
+        features=4,
+        max_degree=0,
+        num_iterations=1,
+        num_basis_functions=4,
+        cutoff=6.0,
+        max_atomic_number=2,
+        max_padded_atoms=2,
+        charges=False,
+        zbl=True,
+        trainable_zbl=False,
+    )
+    inputs = dict(
+        atomic_numbers=jnp.asarray([1, 1]),
+        charges=jnp.zeros((2, 1)),
+        spins=jnp.ones((2, 1)),
+        positions=jnp.asarray([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]]),
+        dst_idx=jnp.asarray([0, 1]),
+        src_idx=jnp.asarray([1, 0]),
+        batch_segments=jnp.zeros(2, dtype=jnp.int32),
+        batch_size=1,
+        batch_mask=jnp.ones(2),
+        atom_mask=jnp.ones(2),
+    )
+    variables = model.init(
+        jax.random.PRNGKey(3), **inputs, compute_forces=False
+    )
+    force = model.apply(variables, **inputs, compute_forces=True)["forces"][1, 0]
+    h = 1.0e-3
+
+    def energy_at(x):
+        positions = inputs["positions"].at[1, 0].set(x)
+        return model.apply(
+            variables, **{**inputs, "positions": positions}, compute_forces=False
+        )["energy"].sum()
+
+    finite_difference_force = -(energy_at(2.0 + h) - energy_at(2.0 - h)) / (2 * h)
+    np.testing.assert_allclose(force, finite_difference_force, rtol=3e-3, atol=3e-4)

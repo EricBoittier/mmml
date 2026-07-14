@@ -25,6 +25,24 @@ BOHR_TO_ANGSTROM = 0.529177249  # Å / Bohr
 COULOMB_EV_ANGSTROM = 14.3996454784255  # eV·Å
 
 
+def geometric_pair_distances(
+    displacements: jnp.ndarray,
+    pair_mask: jnp.ndarray,
+    *,
+    dtype: Any | None = None,
+) -> jnp.ndarray:
+    """Return masked geometric pair distances in Å for short-range terms.
+
+    This must remain distinct from PhysNet's damped Coulomb kernel, which is
+    approximately inverse distance and is not a valid input to ZBL.
+    """
+    target_dtype = dtype or displacements.dtype
+    disp = jnp.asarray(displacements, dtype=target_dtype)
+    mask = jnp.asarray(pair_mask, dtype=target_dtype)
+    distances = jnp.sqrt(jnp.maximum(jnp.sum(disp**2, axis=-1), 1.0e-16))
+    return jnp.where(mask > 0, distances, jnp.ones_like(distances))
+
+
 class ZBLRepulsion(nn.Module):
     """
     Ziegler-Biersack-Littmark nuclear repulsion model (Flax).

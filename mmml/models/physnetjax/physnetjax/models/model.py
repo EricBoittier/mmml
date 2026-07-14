@@ -20,7 +20,10 @@ from jax import Array
 # from jax.sharding import PartitionSpec as P
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.zbl import (
+    ZBLRepulsion,
+    geometric_pair_distances,
+)
 
 EFA = efa.EuclideanFastAttention
 import ase.data
@@ -511,6 +514,7 @@ class PhysNet(nn.Module):
             Tuple of (total energy, (atomic energies, charges, electrostatics, repulsion))
         """
         r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
+        zbl_distances = geometric_pair_distances(displacements, batch_mask)
 
         atomic_energies = self._calculate_atomic_energies(x, atomic_numbers, atom_mask)
 
@@ -542,8 +546,8 @@ class PhysNet(nn.Module):
         if self.zbl:
             repulsion = self._calculate_repulsion(
                 atomic_numbers,
-                r,
-                off_dist,
+                zbl_distances,
+                None,
                 eshift,
                 dst_idx,
                 src_idx,

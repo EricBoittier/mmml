@@ -16,7 +16,10 @@ import jax.numpy as jnp
 from jax import Array
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.zbl import (
+    ZBLRepulsion,
+    geometric_pair_distances,
+)
 
 EFA = efa.EuclideanFastAttention
 
@@ -467,6 +470,7 @@ class PhysNetChargeSpin(nn.Module):
         """Calculate final energy and related quantities."""
         # Calculate switching functions
         r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
+        zbl_distances = geometric_pair_distances(displacements, batch_mask)
         
         # Predict atomic energies
         energy_per_atom = nn.Dense(1, use_bias=False, dtype=DTYPE, name="energy_dense")(x)
@@ -501,8 +505,8 @@ class PhysNetChargeSpin(nn.Module):
         if self.zbl:
             repulsion = self.repulsion(
                 atomic_numbers,
-                r,
-                off_dist,
+                zbl_distances,
+                None,
                 1 - eshift,  # Note: 1 - eshift as in working model
                 dst_idx,
                 src_idx,
