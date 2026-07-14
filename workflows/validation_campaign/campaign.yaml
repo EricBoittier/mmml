@@ -5,6 +5,20 @@ defaults:
   checkpoint: artifacts/spooky_so3lr_muon_tight/epoch-0001_params.json
   seed: 69420
 
+coverage_dimensions:
+  methods: [MM, ML, MMML]
+  execution_faces: [ase, jax, pycharmm]
+  backends: [jaxmd, pycharmm, rigid_mc]
+  ensembles: [min, nve, nvt, npt]
+  periodic_electrostatics:
+    mic: supported_in_jitted_md
+    jax_pme: ase_only
+    nvalchemiops_pme: ase_only
+    scafacos: ase_only
+  required_numeric_policy:
+    jax_enable_x64: true
+    ml_dtype: float64
+
 goals:
   platform:
     description: Reproducible runtime and dependency readiness.

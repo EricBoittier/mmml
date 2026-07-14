@@ -1,305 +1,223 @@
 """Core library for the MMML validation campaign.
 
-Loads ``campaign.yaml`` and ``environments/*.yaml``, expands task x environment
-work units, owns the on-disk proof layout, and resolves task state *only* from
-proof receipts. A submitted or exited job is never treated as success: the
-acceptance checks declared in ``campaign.yaml`` must each appear in the task's
-``proof.json`` and pass.
+Loads ``campaign.yaml`` and ``environments/*.yaml``, owns the on-disk proof
+layout, renders job scripts, and resolves state *only* from proof receipts.
+
+The central rule: a task is PASS only when every acceptance check declared in
+``campaign.yaml`` appears in that task's ``proof.json`` and is true. A job that
+was submitted, or that exited zero without writing the checks it promised, is
+INCOMPLETE -- never PASS. Only ``exit_zero`` may be certified by the harness
+itself; every other check must be asserted by a scientific driver.
+
+Artifact layout (accumulating; runs never clobber each other):
+
+    artifacts/validation_campaign/<run_id>/<environment>/<task/path>/
+        request.json  provenance.json  status.json
+        proof.json    metrics.json     stdout.log  stderr.log
+        job.slurm | job.sh
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 import os
 import platform
-import shutil
+import shlex
 import socket
 import subprocess
 import sys
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-WORKFLOW_DIR = Path(__file__).resolve().parent.parent
-REPO_ROOT = WORKFLOW_DIR.parent.parent
-CAMPAIGN_FILE = WORKFLOW_DIR / "campaign.yaml"
-ENVIRONMENTS_DIR = WORKFLOW_DIR / "environments"
+WORKFLOW = Path(__file__).resolve().parents[1]
+REPO = WORKFLOW.parents[1]
+CAMPAIGN_FILE = WORKFLOW / "campaign.yaml"
+ENV_DIR = WORKFLOW / "environments"
 
-DEFAULT_RUN_ID = "current"
+# States, most severe first: this ordering drives every rollup.
+FAIL = "FAIL"
+BLOCKED = "BLOCKED"
+GATED = "GATED"
+NEEDS_DRIVER = "NEEDS_DRIVER"
+INCOMPLETE = "INCOMPLETE"
+RUNNING = "RUNNING"
+PASS = "PASS"
 
-# Terminal states, most severe first. Ordering drives the summary rollup.
-STATE_FAIL = "FAIL"
-STATE_BLOCKED = "BLOCKED"
-STATE_GATED = "GATED"
-STATE_NEEDS_DRIVER = "NEEDS_DRIVER"
-STATE_INCOMPLETE = "INCOMPLETE"
-STATE_RUNNING = "RUNNING"
-STATE_PASS = "PASS"
+STATE_ORDER = [FAIL, BLOCKED, GATED, NEEDS_DRIVER, INCOMPLETE, RUNNING, PASS]
 
-STATE_ORDER = [
-    STATE_FAIL,
-    STATE_BLOCKED,
-    STATE_GATED,
-    STATE_NEEDS_DRIVER,
-    STATE_INCOMPLETE,
-    STATE_RUNNING,
-    STATE_PASS,
-]
-
-# Checks the harness can certify itself, without the driver asserting them.
-# Everything else must be proven by the driver in proof.json.
+# The only check the harness may certify without a driver asserting it.
 HARNESS_CHECKS = {"exit_zero"}
 
 
 def utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return dt.datetime.now(dt.UTC).isoformat()
 
 
-# --------------------------------------------------------------------------
-# Model
-# --------------------------------------------------------------------------
+def load_yaml(path: Path) -> dict[str, Any]:
+    with path.open(encoding="utf-8") as handle:
+        return yaml.safe_load(handle) or {}
 
 
-@dataclass
-class Environment:
-    name: str
-    kind: str  # "slurm" | "local"
-    role: str = ""
-    repo_root: str = "."
-    cpus: int = 1
-    gpus: int = 0
-    environment: dict[str, str] = field(default_factory=dict)
-    # slurm-only
-    partition: str | None = None
-    account: str | None = None
-    qos: str | None = None
-    nodes: int = 1
-    ntasks: int = 1
-    cpus_per_task: int | None = None
-    mem_mb_per_cpu: int | None = None
-    runtime_min: int = 60
-    gpu_constraint: str | None = None
-    max_concurrent: int = 4
-    launcher: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def is_slurm(self) -> bool:
-        return self.kind == "slurm"
+def campaign() -> dict[str, Any]:
+    return load_yaml(CAMPAIGN_FILE)
 
 
-@dataclass
-class Task:
-    task_id: str
-    goal: str
-    tier: str
-    environments: list[str]
-    command: str
-    acceptance: list[str]
-    state: str | None = None  # declared: needs_driver | blocked | gated
-    blocker: str | None = None
-    requires: list[str] = field(default_factory=list)
-    systems: list[str] = field(default_factory=list)
-    methods: list[str] = field(default_factory=list)
-    backends: list[str] = field(default_factory=list)
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class Campaign:
-    artifact_root: Path
-    defaults: dict[str, Any]
-    goals: dict[str, dict[str, Any]]
-    tasks: dict[str, Task]
-
-
-def load_environment(name: str) -> Environment:
-    path = ENVIRONMENTS_DIR / f"{name}.yaml"
+def environment(name: str) -> dict[str, Any]:
+    path = ENV_DIR / f"{name}.yaml"
     if not path.is_file():
-        available = sorted(p.stem for p in ENVIRONMENTS_DIR.glob("*.yaml"))
-        raise SystemExit(
-            f"unknown environment {name!r}; available: {', '.join(available)}"
-        )
-    data = yaml.safe_load(path.read_text()) or {}
-    known = {f for f in Environment.__dataclass_fields__ if f != "raw"}
-    kwargs = {k: v for k, v in data.items() if k in known}
-    kwargs.setdefault("name", name)
-    return Environment(raw=data, **kwargs)
+        known = ", ".join(sorted(p.stem for p in ENV_DIR.glob("*.yaml")))
+        raise SystemExit(f"unknown environment {name!r}; available: {known}")
+    env = load_yaml(path)
+    env.setdefault("name", name)
+    return env
 
 
-def all_environment_names() -> list[str]:
-    return sorted(p.stem for p in ENVIRONMENTS_DIR.glob("*.yaml"))
-
-
-def load_campaign() -> Campaign:
-    data = yaml.safe_load(CAMPAIGN_FILE.read_text()) or {}
-    tasks: dict[str, Task] = {}
-    for task_id, spec in (data.get("tasks") or {}).items():
-        known = {f for f in Task.__dataclass_fields__ if f not in {"raw", "task_id"}}
-        kwargs = {k: v for k, v in spec.items() if k in known}
-        tasks[task_id] = Task(task_id=task_id, raw=spec, **kwargs)
-    return Campaign(
-        artifact_root=REPO_ROOT / (data.get("artifact_root") or "artifacts/validation_campaign"),
-        defaults=data.get("defaults") or {},
-        goals=data.get("goals") or {},
-        tasks=tasks,
+def new_run_id() -> str:
+    return os.environ.get("MMML_VALIDATION_RUN_ID") or dt.datetime.now(dt.UTC).strftime(
+        "%Y%m%dT%H%M%SZ"
     )
+
+
+def artifact_root(cfg: dict[str, Any]) -> Path:
+    return REPO / cfg.get("artifact_root", "artifacts/validation_campaign")
+
+
+def task_path(task_id: str) -> str:
+    return task_id.replace(".", "/")
+
+
+def output_dir(cfg: dict[str, Any], run_id: str, task_id: str, env_name: str) -> Path:
+    return artifact_root(cfg) / run_id / env_name / task_path(task_id)
 
 
 def select_tasks(
-    campaign: Campaign,
-    *,
-    environment: str | None = None,
-    tier: str | None = None,
-    goal: str | None = None,
-    task_ids: list[str] | None = None,
-) -> list[Task]:
-    out = []
-    for task in campaign.tasks.values():
-        if task_ids and task.task_id not in task_ids:
+    cfg: dict[str, Any], args: Any
+) -> list[tuple[str, dict[str, Any]]]:
+    rows = []
+    for task_id, task in (cfg.get("tasks") or {}).items():
+        env = getattr(args, "environment", None)
+        if env and env not in task.get("environments", []):
             continue
-        if environment and environment not in task.environments:
+        if getattr(args, "tier", None) and args.tier != task.get("tier"):
             continue
-        if tier and task.tier != tier:
+        if getattr(args, "goal", None) and args.goal != task.get("goal"):
             continue
-        if goal and task.goal != goal:
+        if getattr(args, "task", None) and args.task != task_id:
             continue
-        out.append(task)
-    return sorted(out, key=lambda t: (t.goal, t.tier, t.task_id))
+        rows.append((task_id, task))
+    return sorted(rows, key=lambda kv: (kv[1].get("goal", ""), kv[0]))
+
+
+def declared_state(task: dict[str, Any]) -> str:
+    return task.get("state", "ready")
+
+
+def is_runnable(task: dict[str, Any]) -> bool:
+    """Blocked/gated/needs_driver tasks are catalogued but must not be dispatched."""
+    return declared_state(task) == "ready"
+
+
+def render_command(task: dict[str, Any], out: Path, *, python: str) -> str:
+    return str(task["command"]).format(output_dir=shlex.quote(str(out)), python=python)
 
 
 # --------------------------------------------------------------------------
-# Artifact layout
+# Receipts
 # --------------------------------------------------------------------------
 
 
-def output_dir(campaign: Campaign, run_id: str, task_id: str, environment: str) -> Path:
-    """One task on one environment gets one proof directory."""
-    return campaign.artifact_root / run_id / task_id / environment
-
-
-def render_command(task: Task, campaign: Campaign, out_dir: Path) -> str:
-    return task.command.format(
-        output_dir=str(out_dir),
-        repo_root=str(REPO_ROOT),
-        task_id=task.task_id,
-        checkpoint=str(campaign.defaults.get("checkpoint", "")),
-        seed=str(campaign.defaults.get("seed", "")),
-    )
-
-
-def git_provenance() -> dict[str, Any]:
-    def _git(*args: str) -> str | None:
-        try:
-            return subprocess.run(
-                ["git", *args],
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return None
-
-    diff = _git("diff", "HEAD") or ""
-    return {
-        "revision": _git("rev-parse", "HEAD"),
-        "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
-        "dirty": bool(diff.strip()),
-        "dirty_diff_sha256": hashlib.sha256(diff.encode()).hexdigest() if diff.strip() else None,
-    }
-
-
-def runtime_provenance() -> dict[str, Any]:
-    info: dict[str, Any] = {
-        "hostname": socket.gethostname(),
-        "platform": platform.platform(),
-        "python": sys.version.split()[0],
-        "python_executable": sys.executable,
-        "timestamp": utcnow(),
-    }
-    try:
-        import jax  # noqa: PLC0415
-
-        info["jax"] = jax.__version__
-        info["jax_x64"] = bool(jax.config.read("jax_enable_x64"))
-        info["jax_devices"] = [str(d) for d in jax.devices()]
-        info["jax_backend"] = jax.default_backend()
-    except Exception as exc:  # pragma: no cover - environment dependent
-        info["jax_error"] = f"{type(exc).__name__}: {exc}"
-
-    nvidia = shutil.which("nvidia-smi")
-    if nvidia:
-        try:
-            info["cuda_gpus"] = subprocess.run(
-                [nvidia, "--query-gpu=name,memory.total", "--format=csv,noheader"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip().splitlines()
-        except subprocess.CalledProcessError:
-            pass
-
-    info["charmm_lib_dir"] = os.environ.get("CHARMM_LIB_DIR")
-    return info
-
-
-def write_provenance(out_dir: Path, environment: Environment) -> dict[str, Any]:
-    prov = {
-        "git": git_provenance(),
-        "runtime": runtime_provenance(),
-        "environment": environment.name,
-        "environment_kind": environment.kind,
-        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
-    }
-    (out_dir / "provenance.json").write_text(json.dumps(prov, indent=2) + "\n")
-    return prov
-
-
-def write_request(
-    out_dir: Path, task: Task, campaign: Campaign, environment: Environment, command: str
-) -> dict[str, Any]:
-    """Immutable record of what was asked for, written before the work starts."""
-    request = {
-        "task_id": task.task_id,
-        "goal": task.goal,
-        "tier": task.tier,
-        "environment": environment.name,
-        "command": command,
-        "acceptance": task.acceptance,
-        "declared_state": task.state,
-        "blocker": task.blocker,
-        "requires": task.requires,
-        "systems": task.systems,
-        "methods": task.methods,
-        "backends": task.backends,
-        "checkpoint": campaign.defaults.get("checkpoint"),
-        "seed": campaign.defaults.get("seed"),
-        "require_x64": campaign.defaults.get("require_x64", True),
-        "created": utcnow(),
-    }
-    path = out_dir / "request.json"
-    if not path.exists():
-        path.write_text(json.dumps(request, indent=2) + "\n")
-    return request
-
-
-def write_status(out_dir: Path, **fields: Any) -> None:
-    status = {"updated": utcnow(), **fields}
-    (out_dir / "status.json").write_text(json.dumps(status, indent=2) + "\n")
+def write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def read_json(path: Path) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
+
+
+def _git(*args: str) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", *args], cwd=REPO, text=True, capture_output=True, timeout=30
+        )
+        return out.stdout.strip() or None
+    except Exception:
+        return None
+
+
+def git_provenance() -> dict[str, Any]:
+    diff = _git("diff", "HEAD") or ""
+    return {
+        "revision": _git("rev-parse", "HEAD"),
+        "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+        "dirty": bool(diff.strip()),
+        "dirty_diff_sha256": hashlib.sha256(diff.encode()).hexdigest()
+        if diff.strip()
+        else None,
+    }
+
+
+def request_payload(
+    task_id: str, task: dict[str, Any], env: dict[str, Any], run_id: str, command: str
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "task_id": task_id,
+        "goal": task["goal"],
+        "tier": task["tier"],
+        "environment": env["name"],
+        "systems": task.get("systems", []),
+        "methods": task.get("methods", []),
+        "backends": task.get("backends", []),
+        "acceptance": task.get("acceptance", []),
+        "command": command,
+        "declared_state": declared_state(task),
+        "blocker": task.get("blocker"),
+        "requires": task.get("requires", []),
+        "git": git_provenance(),
+        "created_utc": utcnow(),
+    }
+
+
+def shell_exports(env: dict[str, Any]) -> str:
+    return "\n".join(
+        f"export {key}={shlex.quote(str(value))}"
+        for key, value in (env.get("environment") or {}).items()
+    )
+
+
+def runtime_provenance() -> dict[str, Any]:
+    info: dict[str, Any] = {
+        "generated_utc": utcnow(),
+        "hostname": socket.gethostname(),
+        "platform": platform.platform(),
+        "python": sys.version.split()[0],
+        "python_executable": sys.executable,
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+        "git": git_provenance(),
+    }
+    try:
+        import jax  # noqa: PLC0415
+
+        info["jax"] = {
+            "version": jax.__version__,
+            "x64_enabled": bool(jax.config.jax_enable_x64),
+            "default_backend": jax.default_backend(),
+            "devices": [str(d) for d in jax.devices()],
+        }
+    except Exception as exc:
+        info["jax"] = {"error": repr(exc), "x64_enabled": False}
+    return info
 
 
 # --------------------------------------------------------------------------
@@ -307,166 +225,171 @@ def read_json(path: Path) -> dict[str, Any] | None:
 # --------------------------------------------------------------------------
 
 
-def evaluate_unit(
-    campaign: Campaign, task: Task, environment: str, run_id: str
-) -> dict[str, Any]:
-    """Resolve one (task, environment) unit's state purely from its receipts."""
-    out_dir = output_dir(campaign, run_id, task.task_id, environment)
-    status = read_json(out_dir / "status.json")
-    proof = read_json(out_dir / "proof.json")
-    metrics = read_json(out_dir / "metrics.json")
+def _normalize_checks(proof: dict[str, Any]) -> dict[str, bool]:
+    """Accept either {"checks": {name: bool}} or {"checks": [{name, passed}]}."""
+    checks = proof.get("checks")
+    if isinstance(checks, dict):
+        return {str(k): bool(v) for k, v in checks.items()}
+    if isinstance(checks, list):
+        out = {}
+        for entry in checks:
+            if isinstance(entry, dict) and entry.get("name"):
+                out[str(entry["name"])] = bool(entry.get("passed"))
+        return out
+    return {}
 
+
+def find_receipts(
+    cfg: dict[str, Any], task_id: str, env_name: str
+) -> Path | None:
+    """Newest run directory holding a status.json for this (task, environment)."""
+    root = artifact_root(cfg)
+    if not root.is_dir():
+        return None
+    candidates = [
+        d
+        for d in root.glob(f"*/{env_name}/{task_path(task_id)}")
+        if (d / "status.json").is_file()
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda d: (d / "status.json").stat().st_mtime)
+
+
+def evaluate_unit(
+    cfg: dict[str, Any], task_id: str, task: dict[str, Any], env_name: str
+) -> dict[str, Any]:
     result: dict[str, Any] = {
-        "task_id": task.task_id,
-        "goal": task.goal,
-        "tier": task.tier,
-        "environment": environment,
-        "output_dir": str(out_dir.relative_to(REPO_ROOT)) if out_dir.exists() else None,
-        "acceptance": task.acceptance,
+        "task_id": task_id,
+        "goal": task["goal"],
+        "tier": task["tier"],
+        "environment": env_name,
+        "acceptance": task.get("acceptance", []),
         "checks": {},
-        "metrics": metrics or {},
-        "blocker": task.blocker,
-        "notes": [],
+        "note": "",
+        "receipt": None,
     }
 
-    # Declared blockers/gates stay visible even if a stale receipt exists.
-    if task.state == "blocked":
-        result["state"] = STATE_BLOCKED
-        result["notes"].append(task.blocker or "declared blocked in campaign.yaml")
+    if declared_state(task) == "blocked":
+        result["state"] = BLOCKED
+        result["note"] = task.get("blocker", "declared blocked in campaign.yaml")
         return result
 
-    if not out_dir.exists() or status is None:
-        result["state"] = STATE_INCOMPLETE
-        result["notes"].append("no receipt: task has not run in this environment")
-        if task.state == "needs_driver":
-            result["state"] = STATE_NEEDS_DRIVER
-            result["notes"] = ["driver not implemented (state: needs_driver)"]
+    out = find_receipts(cfg, task_id, env_name)
+    if out is None:
+        result["state"] = (
+            NEEDS_DRIVER if declared_state(task) == "needs_driver" else INCOMPLETE
+        )
+        result["note"] = (
+            "scientific driver not implemented"
+            if result["state"] == NEEDS_DRIVER
+            else "no receipt: never run in this environment"
+        )
         return result
 
-    phase = status.get("phase")
-    if phase in {"submitted", "running"}:
-        result["state"] = STATE_RUNNING
-        result["notes"].append(f"phase={phase}")
+    result["receipt"] = str(out.relative_to(REPO))
+    status = read_json(out / "status.json") or {}
+
+    if str(status.get("state", "")).upper() == "NEEDS_DRIVER":
+        result["state"] = NEEDS_DRIVER
+        result["note"] = status.get("message", "driver not implemented")
         return result
 
-    if status.get("state") == "needs_driver":
-        result["state"] = STATE_NEEDS_DRIVER
-        result["notes"].append(status.get("detail") or "driver not implemented")
+    if status.get("state") in {"RUNNING", "SUBMITTED"}:
+        result["state"] = RUNNING
+        result["note"] = str(status.get("state")).lower()
         return result
 
     exit_code = status.get("exit_code")
+    proof = read_json(out / "proof.json")
+    result["metrics"] = read_json(out / "metrics.json") or {}
 
-    # Harness-certifiable checks, derived from the runner's own observation.
-    checks: dict[str, dict[str, Any]] = {}
-    if "exit_zero" in task.acceptance:
-        checks["exit_zero"] = {
-            "passed": exit_code == 0,
-            "detail": f"exit_code={exit_code}",
-            "source": "harness",
-        }
-
-    # Driver-asserted checks come only from proof.json.
-    for entry in (proof or {}).get("checks", []) or []:
-        name = entry.get("name")
-        if not name:
-            continue
-        checks[name] = {
-            "passed": bool(entry.get("passed")),
-            "detail": entry.get("detail"),
-            "source": "proof.json",
-        }
-
+    checks = _normalize_checks(proof or {})
     result["checks"] = checks
 
-    missing = [
-        name
-        for name in task.acceptance
-        if name not in checks and name not in HARNESS_CHECKS
-    ]
-    failed = [name for name, c in checks.items() if not c["passed"]]
+    required = list(task.get("acceptance", []))
+    missing = [c for c in required if c not in checks]
+    failed = [c for c, ok in checks.items() if not ok]
 
     if failed:
-        result["state"] = STATE_FAIL
-        result["notes"].append("failed checks: " + ", ".join(sorted(failed)))
+        result["state"] = FAIL
+        result["note"] = "failed checks: " + ", ".join(sorted(failed))
     elif missing:
-        result["state"] = STATE_INCOMPLETE
-        result["notes"].append("missing proof for: " + ", ".join(missing))
+        result["state"] = INCOMPLETE
+        result["note"] = "missing proof for: " + ", ".join(missing)
     elif exit_code not in (0, None):
-        result["state"] = STATE_FAIL
-        result["notes"].append(f"nonzero exit_code={exit_code}")
+        result["state"] = FAIL
+        result["note"] = f"nonzero exit_code={exit_code}"
+    elif not required:
+        result["state"] = INCOMPLETE
+        result["note"] = "task declares no acceptance checks"
     else:
-        result["state"] = STATE_PASS
-
+        result["state"] = PASS
     return result
 
 
-def _rollup(states: list[str]) -> str:
+def rollup(states: list[str]) -> str:
     for state in STATE_ORDER:
         if state in states:
             return state
-    return STATE_INCOMPLETE
+    return INCOMPLETE
 
 
-def evaluate_campaign(campaign: Campaign, run_id: str) -> dict[str, Any]:
-    """Full campaign state. Gating is applied after per-unit evaluation."""
+def evaluate(cfg: dict[str, Any]) -> dict[str, Any]:
+    tasks = cfg.get("tasks") or {}
     units: list[dict[str, Any]] = []
-    for task in sorted(campaign.tasks.values(), key=lambda t: (t.goal, t.task_id)):
-        for env_name in task.environments:
-            units.append(evaluate_unit(campaign, task, env_name, run_id))
+    for task_id, task in tasks.items():
+        for env_name in task.get("environments", []):
+            units.append(evaluate_unit(cfg, task_id, task, env_name))
 
-    # A task's own state is the rollup over the environments it targets.
     task_states: dict[str, str] = {}
-    for task in campaign.tasks.values():
-        states = [u["state"] for u in units if u["task_id"] == task.task_id]
-        task_states[task.task_id] = _rollup(states) if states else STATE_INCOMPLETE
+    for task_id, task in tasks.items():
+        states = [u["state"] for u in units if u["task_id"] == task_id]
+        task_states[task_id] = rollup(states) if states else INCOMPLETE
 
-    # Apply gating: a task whose prerequisites are not PASS is GATED, not merely
-    # incomplete. This keeps "blocked upstream" distinct from "nobody ran it".
-    for task in campaign.tasks.values():
-        if not task.requires:
+    # Gating: prerequisites that are not PASS hold a task at GATED, which is a
+    # different statement from "nobody ran it".
+    for task_id, task in tasks.items():
+        requires = task.get("requires") or []
+        if not requires or task_states[task_id] == PASS:
             continue
-        unmet = [r for r in task.requires if task_states.get(r) != STATE_PASS]
-        if unmet and task_states[task.task_id] != STATE_PASS:
-            task_states[task.task_id] = STATE_GATED
+        unmet = [r for r in requires if task_states.get(r) != PASS]
+        if unmet:
+            task_states[task_id] = GATED
+            detail = ", ".join(f"{r}={task_states.get(r, '?')}" for r in unmet)
             for unit in units:
-                if unit["task_id"] == task.task_id and unit["state"] in {
-                    STATE_INCOMPLETE,
-                    STATE_NEEDS_DRIVER,
+                if unit["task_id"] == task_id and unit["state"] in {
+                    INCOMPLETE,
+                    NEEDS_DRIVER,
                 }:
-                    unit["state"] = STATE_GATED
-                    unit["notes"].append(
-                        "gated by: " + ", ".join(f"{r}={task_states.get(r)}" for r in unmet)
-                    )
+                    unit["state"] = GATED
+                    unit["note"] = f"gated by {detail}"
 
-    goal_states: dict[str, str] = {}
-    for goal in campaign.goals:
-        states = [
-            task_states[t.task_id]
-            for t in campaign.tasks.values()
-            if t.goal == goal
-        ]
-        goal_states[goal] = _rollup(states) if states else STATE_INCOMPLETE
+    goals = cfg.get("goals") or {}
+    goal_states = {
+        goal: rollup([task_states[t] for t, v in tasks.items() if v["goal"] == goal])
+        for goal in goals
+    }
 
     return {
-        "run_id": run_id,
-        "generated": utcnow(),
+        "generated_utc": utcnow(),
         "git": git_provenance(),
+        "overall": rollup(list(task_states.values())),
         "goals": {
             goal: {
                 "state": goal_states[goal],
-                "description": (campaign.goals[goal] or {}).get("description", ""),
+                "description": (goals[goal] or {}).get("description", ""),
             }
-            for goal in campaign.goals
+            for goal in goals
         },
         "tasks": {
             task_id: {
                 "state": state,
-                "goal": campaign.tasks[task_id].goal,
-                "tier": campaign.tasks[task_id].tier,
-                "blocker": campaign.tasks[task_id].blocker,
+                "goal": tasks[task_id]["goal"],
+                "tier": tasks[task_id]["tier"],
+                "blocker": tasks[task_id].get("blocker"),
             }
             for task_id, state in task_states.items()
         },
         "units": units,
-        "overall": _rollup(list(task_states.values())),
     }

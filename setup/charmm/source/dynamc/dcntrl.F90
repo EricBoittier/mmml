@@ -141,7 +141,9 @@ contains
 #if KEY_LIBRARY == 1
   ! args
   type(dynamics_settings), optional, intent(in) :: options
-  real(c_double), dimension(:), optional :: &
+  ! Raw C-interoperable buffers from api_dynamics; the caller guarantees at
+  ! least NATOM entries in each present array.
+  real(c_double), dimension(*), optional :: &
     in_vx, in_vy, in_vz, &
     out_vx, out_vy, out_vz
 #endif /* KEY_LIBRARY */

@@ -29,7 +29,13 @@ contains
 
     type(dynamics_settings), intent(in) :: options
 
-    real(c_double), dimension(:), optional :: &
+    ! C callers pass raw ``double *`` buffers.  Assumed-shape ``(:)`` dummies
+    ! require a compiler-specific CFI descriptor and are not interoperable with
+    ! the ctypes arrays used by PyCHARMM (gfortran dereferences the raw velocity
+    ! data as a descriptor and crashes in DYNOPT).  Assumed-size ``(*)`` maps to
+    ! a plain pointer and is the correct bind(c) ABI here; DYNOPT bounds access
+    ! with the active PSF atom count.
+    real(c_double), dimension(*), optional :: &
          in_vx, in_vy, in_vz, &
          out_vx, out_vy, out_vz
 
@@ -38,7 +44,7 @@ contains
     if (present(in_vx)) then
        call dynopt('', 0, options, &
             in_vx, in_vy, in_vz, &
-            out_vz, out_vy, out_vz)
+            out_vx, out_vy, out_vz)
     else
        call dynopt('', 0, options)
     end if
@@ -66,7 +72,7 @@ contains
     character(kind=c_char), intent(in) :: c_kw(*)
     integer(c_int), value :: c_kw_len
 
-    real(c_double), dimension(:), optional :: &
+    real(c_double), dimension(*), optional :: &
          in_vx, in_vy, in_vz, &
          out_vx, out_vy, out_vz
 
