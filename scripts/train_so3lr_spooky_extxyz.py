@@ -467,6 +467,7 @@ def make_steps(
     charges_weight = args.charges_weight
     mbd_weight = args.mbd_weight
     multipole_consistency_weight = args.multipole_consistency_weight
+    neural_interaction_l2 = args.neural_interaction_l2
     if (mbd_model is None) != (mbd_params is None):
         raise ValueError("mbd_model and mbd_params must be provided together")
     if mbd_params is not None:
@@ -581,12 +582,73 @@ def make_steps(
                 multipole_dipole_mse = jnp.mean((dipole_pred - multipole_dipole) ** 2)
                 multipole_dipole_mae = jnp.mean(jnp.abs(dipole_pred - multipole_dipole))
                 loss += multipole_consistency_weight * multipole_dipole_mse
+        # Shrinkage of the neural *interaction* energy toward zero.
+        #
+        # The MM terms (CGenFF LJ + electrostatics) are a physical prior, but nothing
+        # stops the neural term from swamping them: measured on the dimer scans, the
+        # neural interaction energy is 4.1x LARGER on pairs with <15 training structures
+        # than on pairs with >=300 -- loudest exactly where there is no evidence for it
+        # (ACE-BENZ, n=2: neural 7.76 kcal/mol vs an LJ prior of 0.007).
+        #
+        # Penalising (E_neural(AB) - E_neural(A) - E_neural(B))^2 is ridge shrinkage
+        # toward the prior: the residual decays to zero by default, and the energy/force
+        # loss overrides it wherever the data actually demands. The zero-evidence limit
+        # becomes CGenFF instead of an invented surface.
+        #
+        # E_neural(A) + E_neural(B) is obtained exactly by masking the inter-monomer
+        # edges out of the pair list: with those cut, every atom only sees its own
+        # monomer, and all pairwise prior terms vanish too, so subtracting the prior
+        # components isolates the neural residual. Forces are not needed for the penalty,
+        # so the extra pass is forward-only.
+        neural_int_mse = jnp.asarray(0.0)
+        if neural_interaction_l2 > 0.0 and batch.get("mol_id") is not None:
+            mol_id = batch["mol_id"]
+            # edge_mask keeps only intra-monomer message-passing edges AND zeroes the
+            # inter-monomer prior pair terms, so the masked pass equals the two monomers
+            # evaluated in isolation (E_neural(A) + E_neural(B)).
+            intra_edge = (
+                jnp.take(mol_id, batch["dst_idx"]) == jnp.take(mol_id, batch["src_idx"])
+            ).astype(batch["batch_mask"].dtype)
+            out_intra = model.apply(
+                params,
+                atomic_numbers=batch["Z"],
+                charges=batch["Q_atoms"],
+                spins=batch["S_atoms"],
+                positions=batch["R"],
+                dst_idx=batch["dst_idx"],
+                src_idx=batch["src_idx"],
+                batch_segments=batch["batch_segments"],
+                batch_size=per_device_batch_size,
+                batch_mask=batch["batch_mask"] * intra_edge,
+                atom_mask=batch["atom_mask"],
+                mol_id=mol_id,
+                cgenff_type_idx=None if args.no_cgenff_vdw else batch.get("cgenff_type_idx"),
+                cgenff_master_sigmas=None if args.no_cgenff_vdw else batch.get("cgenff_master_sigmas"),
+                cgenff_master_epsilons=None if args.no_cgenff_vdw else batch.get("cgenff_master_epsilons"),
+                edge_mask=intra_edge,
+                compute_forces=False,
+            )
+
+            def _neural_only(o):
+                total = _per_structure(o["energy"], batch["batch_segments"], per_device_batch_size)
+                prior = sum(
+                    _per_structure(o.get(k), batch["batch_segments"], per_device_batch_size)
+                    for k in ("electrostatics", "cgenff_vdw", "repulsion")
+                )
+                return total - prior
+
+            neural_interaction = _neural_only(out) - _neural_only(out_intra)
+            neural_int_mse = jnp.mean(neural_interaction**2)
+            loss += neural_interaction_l2 * neural_int_mse
+
         metrics = {
             "loss": loss,
             "energy_mae": energy_mae,
             "forces_mae": force_mae,
             "energy_mse": energy_mse,
             "forces_mse": force_mse,
+            "neural_int_mse": neural_int_mse,
+            "neural_int_rms": jnp.sqrt(neural_int_mse + 1e-12),
             "dipole_mae": dipole_mae,
             "charge_mae": charge_mae,
             "dipole_mse": dipole_mse,
@@ -790,6 +852,26 @@ def _restore_state_from_checkpoint(
     epoch = int(np.asarray(restored.get("epoch", _epoch_number_from_path(checkpoint_path))))
     metrics = restored.get("metrics", {})
     return state, epoch, metrics
+
+
+def _per_structure(value: Any, batch_segments: jnp.ndarray, batch_size: int) -> jnp.ndarray:
+    """Reduce a model output component to a per-structure (batch_size, 1) energy.
+
+    The model surfaces its energy components in mixed layouts: ``energy`` and the
+    electrostatics/vdW terms already come back per structure, while the ZBL repulsion is
+    per atom. Disabled terms come back as ``None`` or a scalar ``0.0``.
+    """
+    if value is None:
+        return jnp.zeros((batch_size, 1))
+    value = jnp.asarray(value)
+    if value.ndim == 0:
+        return jnp.zeros((batch_size, 1))
+    flat = value.reshape(value.shape[0], -1).sum(axis=-1) if value.ndim > 1 else value
+    if flat.shape[0] == batch_segments.shape[0]:  # per-atom -> sum onto structures
+        return jax.ops.segment_sum(
+            flat, segment_ids=batch_segments, num_segments=batch_size
+        ).reshape(batch_size, 1)
+    return flat.reshape(batch_size, -1).sum(axis=1, keepdims=True)
 
 
 def _merge_compatible_params(
@@ -1439,6 +1521,21 @@ def build_parser() -> argparse.ArgumentParser:
             "training with --mbd-checkpoint instead of empirical LJ dispersion, to "
             "avoid double-counting dispersion physics between the two. mol_id-based "
             "electrostatics masking is unaffected."
+        ),
+    )
+    parser.add_argument(
+        "--neural-interaction-l2",
+        type=float,
+        default=0.0,
+        help=(
+            "Ridge shrinkage of the neural INTERACTION energy toward zero (lambda). "
+            "Penalises lambda * mean[(E_neural(AB) - E_neural(A) - E_neural(B))^2], with "
+            "E_neural(A)+E_neural(B) obtained exactly by masking inter-monomer edges out "
+            "of the pair list (one extra forward-only pass, ~2x step cost). The target "
+            "stays the total energy; this only regularises how loudly the neural term may "
+            "speak on top of the MM prior. Without it the neural interaction is 4.1x "
+            "LARGER on pairs with <15 training structures than on pairs with >=300, i.e. "
+            "loudest where there is no evidence for it. Pairs with --fixed-cgenff-vdw."
         ),
     )
     parser.add_argument(

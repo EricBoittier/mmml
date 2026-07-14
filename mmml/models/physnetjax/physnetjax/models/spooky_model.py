@@ -158,6 +158,7 @@ class SpookyPhysNet(nn.Module):
         cgenff_type_idx: jnp.ndarray | None = None,
         cgenff_master_sigmas: jnp.ndarray | None = None,
         cgenff_master_epsilons: jnp.ndarray | None = None,
+        edge_mask: jnp.ndarray | None = None,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
         """
         Calculate molecular energy and related properties.
@@ -166,7 +167,7 @@ class SpookyPhysNet(nn.Module):
         electrostatic interactions, ZBL repulsion, and optionally CGenFF LJ vdW.
         """
         basis, displacements = self._calculate_geometric_features(
-            positions, dst_idx, src_idx, cell=cell
+            positions, dst_idx, src_idx, cell=cell, edge_mask=edge_mask
         )
 
         graph_mask = jnp.ones(batch_size)
@@ -206,9 +207,15 @@ class SpookyPhysNet(nn.Module):
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
         cell: Optional[jnp.ndarray] = None,
+        edge_mask: Optional[jnp.ndarray] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Calculate geometric features including displacements and basis functions.
+
+        ``edge_mask`` (per-edge 0/1) zeroes the message-passing basis for masked edges,
+        which is how the neural graph is restricted to intra-monomer edges when computing
+        the monomer reference for the interaction-energy penalty. It does not touch the
+        pairwise prior terms (those are gated separately by ``batch_mask``).
         
         Parameters
         ----------
@@ -236,16 +243,16 @@ class SpookyPhysNet(nn.Module):
             displacements = dS_mic @ cell
         else:
             displacements = positions_src - positions_dst
-        return (
-            e3x.nn.basis(
-                displacements,
-                num=self.num_basis_functions,
-                max_degree=self.max_degree,
-                radial_fn=e3x.nn.exponential_chebyshev,
-                cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
-            ),
+        basis = e3x.nn.basis(
             displacements,
+            num=self.num_basis_functions,
+            max_degree=self.max_degree,
+            radial_fn=e3x.nn.exponential_chebyshev,
+            cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
+        if edge_mask is not None:
+            basis = basis * jnp.asarray(edge_mask, dtype=basis.dtype).reshape(-1, 1, 1, 1)
+        return basis, displacements
 
     def _process_atomic_features(
         self,
@@ -1076,6 +1083,7 @@ class SpookyPhysNet(nn.Module):
         cgenff_type_idx: jnp.ndarray | None = None,
         cgenff_master_sigmas: jnp.ndarray | None = None,
         cgenff_master_epsilons: jnp.ndarray | None = None,
+        edge_mask: jnp.ndarray | None = None,
     ) -> Dict[str, Optional[jnp.ndarray]]:
         """
         Forward pass of the model.
@@ -1151,6 +1159,7 @@ class SpookyPhysNet(nn.Module):
                 cgenff_type_idx=cgenff_type_idx,
                 cgenff_master_sigmas=cgenff_master_sigmas,
                 cgenff_master_epsilons=cgenff_master_epsilons,
+                edge_mask=edge_mask,
             )
             forces = None
         else:
@@ -1172,6 +1181,7 @@ class SpookyPhysNet(nn.Module):
                 cgenff_type_idx,
                 cgenff_master_sigmas,
                 cgenff_master_epsilons,
+                edge_mask,
             )
             forces = gradient
             forces *= atom_mask[..., None]
