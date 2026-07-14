@@ -29,7 +29,7 @@ END
         # print(_)
         energy.show()
         if forces:
-            f = get_forces_pycharmm().to_numpy()
+            f = get_forces_pycharmm()
             mm_forces[i] = f
 
         evdw = energy.get_vdw()
