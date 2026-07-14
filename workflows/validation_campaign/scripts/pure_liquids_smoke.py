@@ -113,12 +113,41 @@ def _exit_detail(returncode: int) -> str:
     return f"exit {returncode}"
 
 
+def _rel(path: Path) -> str:
+    """Repo-relative when possible; the driver may be handed a relative output dir."""
+    try:
+        return str(path.resolve().relative_to(lib.REPO))
+    except ValueError:
+        return str(path)
+
+
 def _find_packed_pdb(out_dir: Path) -> Path | None:
-    for candidate in sorted(out_dir.rglob("*.pdb")):
-        if "packmol" in str(candidate).lower():
-            return candidate
-    pdbs = sorted(out_dir.rglob("*.pdb"))
-    return pdbs[0] if pdbs else None
+    """The final packed box, not Packmol's scratch.
+
+    ``.packmol_cache`` holds intermediates such as ``init-packmol-sphere.pdb``;
+    picking one of those would audit the wrong structure. Among the real
+    candidates the packed box is the one with the most atoms.
+    """
+    candidates = [
+        p
+        for p in out_dir.rglob("*.pdb")
+        if ".packmol_cache" not in p.parts and not p.name.startswith("init-")
+    ]
+    if not candidates:
+        return None
+
+    def atom_count(path: Path) -> int:
+        try:
+            return sum(
+                1
+                for line in path.read_text(errors="replace").splitlines()
+                if line.startswith(("ATOM", "HETATM"))
+            )
+        except OSError:
+            return 0
+
+    best = max(candidates, key=atom_count)
+    return best if atom_count(best) > 0 else None
 
 
 def _parse_temperatures(log: str) -> list[float]:
@@ -201,19 +230,25 @@ def run_system(
     # ---- packmol_audit -----------------------------------------------------
     packed = _find_packed_pdb(build_dir) if build_dir.is_dir() else None
     apm = ATOMS_PER_MONOMER.get(system)
-    if packed is None:
+    expected = n_molecules * apm if apm else None
+    coords: list[tuple[float, float, float]] = []
+
+    if not build_ok:
+        # When the build crashed, the only PDBs left on disk are monomer
+        # templates. Auditing one of those would report "packed 3 atoms" and
+        # imply a box exists. Say what actually happened instead.
         checks.append(
             _check(
                 "packmol_audit",
                 False,
-                f"no packed structure produced ({metrics.get('build_failure_reason', 'unknown')})",
+                f"box build did not complete: {metrics['build_failure_reason']}",
             )
         )
-        coords: list[tuple[float, float, float]] = []
+    elif packed is None:
+        checks.append(_check("packmol_audit", False, "build reported success but produced no PDB"))
     else:
         coords, _ = _read_pdb_coords(packed)
-        expected = n_molecules * apm if apm else None
-        metrics["packed_structure"] = str(packed.relative_to(lib.REPO))
+        metrics["packed_structure"] = _rel(packed)
         metrics["packed_atoms"] = len(coords)
         metrics["expected_atoms"] = expected
         ok = expected is not None and len(coords) == expected

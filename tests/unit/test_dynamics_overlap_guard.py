@@ -4445,6 +4445,7 @@ def test_overlap_chunk_zero_preserves_explicit_handoff_velocities():
         "ihtfrq": 0,
         "firstt": 0.0,
         "_preserve_handoff_velocities": True,
+        "_required_handoff_velocity_restart": "/tmp/continue_seed.res",
     }
     _apply_overlap_chunk_dynamics_kw(
         chunk_kw, chunk_index=0, has_restart_read=False
@@ -4456,3 +4457,12 @@ def test_overlap_chunk_zero_preserves_explicit_handoff_velocities():
     assert chunk_kw["iunrea"] == -1
     assert "firstt" not in chunk_kw
     assert "_preserve_handoff_velocities" not in chunk_kw
+    assert chunk_kw["_required_handoff_velocity_restart"] == "/tmp/continue_seed.res"
+
+    later_kw = {
+        "_required_handoff_velocity_restart": "/tmp/continue_seed.res",
+    }
+    _apply_overlap_chunk_dynamics_kw(
+        later_kw, chunk_index=1, has_restart_read=False
+    )
+    assert "_required_handoff_velocity_restart" not in later_kw
