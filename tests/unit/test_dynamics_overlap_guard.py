@@ -2223,6 +2223,7 @@ def test_mlpot_overlap_memory_handoff_flag_does_not_skip_readyn_between_chunks(t
 
 
 def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
     """Bussi heat overlap stays in RAM between chunks (no scratch READYN)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,

@@ -141,9 +141,11 @@ def test_charmm_total_forces_negates_gradient():
             "dz": [-3.0, 0.5, 2.0],
         }
     )
-    fake_coor = mock.MagicMock()
-    fake_coor.get_forces.return_value = grad
-    with fake_pycharmm_modules(coor=fake_coor):
+    gradient = np.column_stack([grad["dx"], grad["dy"], grad["dz"]])
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
+        return_value=gradient,
+    ):
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_total_forces_kcalmol_A,
         )

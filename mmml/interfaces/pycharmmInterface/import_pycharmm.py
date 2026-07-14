@@ -412,6 +412,10 @@ def disable_charmm_domdec(*, when: str = "early") -> bool:
         return False
 
     try:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+            charmm_relaxed_bomlev,
+        )
+
         with charmm_relaxed_bomlev():
             pycharmm.lingo.charmm_script("domdec off")
     except Exception as exc:
