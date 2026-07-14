@@ -12,6 +12,7 @@ columns are labelled as unavailable and are never interpreted as zero.
 from __future__ import annotations
 
 import argparse
+import base64
 from pathlib import Path
 
 import matplotlib.colors as mcolors
@@ -96,7 +97,7 @@ def _plot_pair(
     fig, axes = plt.subplots(
         nrows,
         ncols,
-        figsize=(2.05 * ncols, 1.55 * nrows + 0.8),
+        figsize=(2.15 * ncols, 1.75 * nrows + 0.8),
         sharex=True,
         sharey=True,
         constrained_layout=True,
@@ -133,7 +134,15 @@ def _plot_pair(
             if row == 0:
                 ax.set_title(component)
             if col == 0:
-                ax.set_ylabel(f"{label}\noffset (Å)")
+                ax.set_ylabel(
+                    f"{label}\noffset (Å)",
+                    rotation=0,
+                    ha="right",
+                    va="center",
+                    labelpad=12,
+                    fontsize=7,
+                    fontweight="bold",
+                )
             if row == nrows - 1:
                 ax.set_xlabel("separation (Å)")
     if image is not None:
@@ -151,16 +160,43 @@ def main() -> None:
     parser.add_argument("--pair", nargs=2, action="append", metavar=("A", "B"))
     parser.add_argument("--vmin", type=float, default=-10.0)
     parser.add_argument("--vmax", type=float, default=20.0)
+    parser.add_argument("--html", type=Path, help="Optional inline-visualization HTML fragment")
     args = parser.parse_args()
 
     apply_plot_style("icml")
     models = [(label, _hybrid_rows(pd.read_csv(path))) for label, path in args.input]
     first = models[0][1]
     pairs = args.pair or list(first[["molecule_a", "molecule_b"]].drop_duplicates().itertuples(index=False, name=None))
+    shared_outputs: list[tuple[tuple[str, str], Path]] = []
     for pair in pairs:
         stem = f"{pair[0]}_{pair[1]}"
-        _plot_pair(models, pair, args.output_dir / f"{stem}_components_shared.png", full_range=False, vmin=args.vmin, vmax=args.vmax)
+        shared = args.output_dir / f"{stem}_components_shared.png"
+        _plot_pair(models, pair, shared, full_range=False, vmin=args.vmin, vmax=args.vmax)
         _plot_pair(models, pair, args.output_dir / f"{stem}_components_full.png", full_range=True, vmin=args.vmin, vmax=args.vmax)
+        shared_outputs.append((pair, shared))
+
+    if args.html:
+        figures = []
+        for pair, path in shared_outputs:
+            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+            label = f"{pair[0]}–{pair[1]} shared-scale energy-component surfaces"
+            figures.append(
+                f'<figure><img src="data:image/png;base64,{encoded}" alt="{label}">'
+                f'<figcaption class="text-small text-muted">{label}</figcaption></figure>'
+            )
+        fragment = (
+            '<div id="mmml-component-energy-surfaces">\n'
+            '<style>\n'
+            '#mmml-component-energy-surfaces{display:grid;gap:16px;color:var(--foreground);}\n'
+            '#mmml-component-energy-surfaces figure{margin:0;}\n'
+            '#mmml-component-energy-surfaces img{display:block;width:100%;height:auto;}\n'
+            '#mmml-component-energy-surfaces figcaption{margin-top:4px;}\n'
+            '</style>\n'
+            + "\n".join(figures)
+            + '\n</div>\n'
+        )
+        args.html.parent.mkdir(parents=True, exist_ok=True)
+        args.html.write_text(fragment)
 
 
 if __name__ == "__main__":
