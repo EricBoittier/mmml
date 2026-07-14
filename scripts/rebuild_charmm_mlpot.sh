@@ -719,7 +719,8 @@ echo "Installed $LIB_OUT (from $BUILT)"
 if [[ "$SKIP_PACKMOL" != 1 ]]; then
   PACKMOL_ARGS=()
   [[ "$CLEAN" == 1 ]] && PACKMOL_ARGS+=(--clean)
-  bash "$ROOT/scripts/rebuild_packmol.sh" "${PACKMOL_ARGS[@]}"
+  # macOS ships bash 3.2, where "${arr[@]}" on an empty array trips `set -u`.
+  bash "$ROOT/scripts/rebuild_packmol.sh" ${PACKMOL_ARGS[@]+"${PACKMOL_ARGS[@]}"}
 fi
 if [[ "$DEBUG" == 1 ]]; then
   if command -v readelf >/dev/null 2>&1 && readelf -S "$LIB_OUT" 2>/dev/null | grep -q '\.debug'; then

@@ -6,8 +6,9 @@ Run the complete static surface audit locally:
 .venv/bin/python scripts/audit_charmm_fortran_api.py
 ```
 
-It scans every `bind(c)` routine in `setup/charmm/source/api/*.F90`, maps direct
-uses from the vendored `setup/charmm/tool/pycharmm/pycharmm` package, and writes:
+It scans every `bind(c)` routine, derived type, and enum in
+`setup/charmm/source/api/*.F90`, maps direct uses from the vendored
+`setup/charmm/tool/pycharmm/pycharmm` package, and writes:
 
 - `artifacts/diagnostics/charmm_fortran_api.json` for automation;
 - `artifacts/diagnostics/charmm_fortran_api.md` for review.
@@ -26,6 +27,11 @@ The audit detects the most dangerous interoperability errors, including:
 - Python symbols with no matching export in the API directory;
 - exported routines with no direct vendored-PyCHARMM use.
 
+The derived-type section records every component participating in the C memory
+layout. The enum section records every C-compatible enumerator. Together with
+the routine table, these sections account for every real (non-comment)
+`bind(c)` declaration in the API directory.
+
 Static auditing proves the declaration-level contract. Runtime tests remain a
 separate layer because they require a compiled `libcharmm` and initialized PSF:
 
@@ -39,4 +45,3 @@ separate layer because they require a compiled `libcharmm` and initialized PSF:
 The dynamics regression is additionally pinned by
 `tests/unit/test_charmm_dynamics_c_abi.py`, which ensures velocity buffers remain
 raw-pointer-compatible assumed-size arrays and x/y/z outputs are not aliased.
-

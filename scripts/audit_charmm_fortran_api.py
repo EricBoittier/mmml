@@ -2,9 +2,9 @@
 """Inventory and statically audit CHARMM's Fortran/Python C API surface.
 
 This deliberately requires neither a CHARMM build nor a GPU.  It inspects every
-``bind(c)`` routine under ``setup/charmm/source/api`` and every direct
-``lib.charmm.<symbol>`` use in the vendored PyCHARMM package, then writes a
-machine-readable JSON report and a navigable Markdown report.
+``bind(c)`` routine, derived type, and enum under ``setup/charmm/source/api``
+and every direct ``lib.charmm.<symbol>`` use in the vendored PyCHARMM package,
+then writes a machine-readable JSON report and a navigable Markdown report.
 """
 
 from __future__ import annotations
@@ -27,6 +27,11 @@ ROUTINE_RE = re.compile(
     re.IGNORECASE | re.DOTALL | re.MULTILINE,
 )
 PY_SYMBOL_RE = re.compile(r"\blib\.charmm\.([A-Za-z][A-Za-z0-9_]*)")
+TYPE_RE = re.compile(
+    r"^\s*type\s*,\s*bind\s*\(\s*c\s*\)\s*::\s*(?P<name>[a-z][a-z0-9_]*)\b",
+    re.IGNORECASE,
+)
+ENUM_RE = re.compile(r"^\s*enum\s*,\s*bind\s*\(\s*c\s*\)\s*$", re.IGNORECASE)
 
 
 @dataclasses.dataclass
@@ -50,6 +55,24 @@ class Routine:
     line: int
     arguments: list[Argument]
     python_wrappers: list[str]
+    issues: list[dict[str, str]]
+
+
+@dataclasses.dataclass
+class InteroperableType:
+    name: str
+    source: str
+    line: int
+    components: list[Argument]
+    issues: list[dict[str, str]]
+
+
+@dataclasses.dataclass
+class InteroperableEnum:
+    name: str
+    source: str
+    line: int
+    enumerators: list[str]
     issues: list[dict[str, str]]
 
 
@@ -121,6 +144,53 @@ def declarations(block: str) -> dict[str, str]:
     return found
 
 
+def data_type_blocks(path: Path) -> Iterable[tuple[str, int, list[str]]]:
+    """Yield each C-interoperable derived type and its logical body lines."""
+    rows = logical_lines(path.read_text(encoding="utf-8", errors="replace"))
+    index = 0
+    while index < len(rows):
+        lineno, line = rows[index]
+        match = TYPE_RE.match(line)
+        if not match:
+            index += 1
+            continue
+        body: list[str] = []
+        index += 1
+        while index < len(rows):
+            _, candidate = rows[index]
+            if re.match(r"^\s*end\s+type\b", candidate, re.IGNORECASE):
+                break
+            body.append(candidate)
+            index += 1
+        yield match.group("name").lower(), lineno, body
+        index += 1
+
+
+def enum_blocks(path: Path) -> Iterable[tuple[str, int, list[str]]]:
+    """Yield each anonymous Fortran bind(c) enum with a stable report name."""
+    rows = logical_lines(path.read_text(encoding="utf-8", errors="replace"))
+    ordinal = 0
+    index = 0
+    while index < len(rows):
+        lineno, line = rows[index]
+        if not ENUM_RE.match(line):
+            index += 1
+            continue
+        ordinal += 1
+        values: list[str] = []
+        index += 1
+        while index < len(rows):
+            _, candidate = rows[index]
+            if re.match(r"^\s*end\s+enum\b", candidate, re.IGNORECASE):
+                break
+            if "::" in candidate and re.match(r"^\s*enumerator\b", candidate, re.IGNORECASE):
+                values.extend(split_names(candidate.split("::", 1)[1]))
+            index += 1
+        name = f"{path.stem}_enum_{ordinal}"
+        yield name, lineno, values
+        index += 1
+
+
 def issue(severity: str, code: str, message: str) -> dict[str, str]:
     return {"severity": severity, "code": code, "message": message}
 
@@ -143,7 +213,12 @@ def audit_argument(name: str, declaration: str | None) -> Argument:
     dimension = dim_match.group(1).strip() if dim_match else None
     value = bool(re.search(r"(?:^|,)\s*value\s*(?:,|$)", left))
     optional = "optional" in left
-    if dimension and ":" in dimension:
+    dimension_parts = [part.strip() for part in dimension.split(",")] if dimension else []
+    assumed_shape = any(
+        part == ":" or (":" in part and not part.split(":", 1)[1].strip())
+        for part in dimension_parts
+    )
+    if assumed_shape:
         problems.append(issue(
             "error", "assumed_shape_array",
             "bind(c) assumed-shape array requires a CFI descriptor; ctypes passes a raw pointer",
@@ -183,6 +258,12 @@ def audit_argument(name: str, declaration: str | None) -> Argument:
     )
 
 
+def audit_components(body: list[str]) -> list[Argument]:
+    """Audit fields whose binary layout is part of a bind(c) struct contract."""
+    decls = declarations("\n".join(body))
+    return [audit_argument(name, declaration) for name, declaration in decls.items()]
+
+
 def python_symbol_map(root: Path) -> dict[str, list[str]]:
     result: dict[str, list[str]] = defaultdict(list)
     for path in sorted(root.rglob("*.py")):
@@ -196,6 +277,8 @@ def python_symbol_map(root: Path) -> dict[str, list[str]]:
 def scan(fortran_root: Path, python_root: Path) -> dict:
     wrappers = python_symbol_map(python_root)
     routines: list[Routine] = []
+    data_types: list[InteroperableType] = []
+    enums: list[InteroperableEnum] = []
     for path in sorted(fortran_root.glob("*.F90")):
         for match, line, block in routine_blocks(path):
             opts = match.group("bind_opts") or ""
@@ -209,6 +292,19 @@ def scan(fortran_root: Path, python_root: Path) -> dict:
                 source=str(path), line=line, arguments=args,
                 python_wrappers=wrappers.get(symbol, []), issues=routine_issues,
             ))
+        for name, line, body in data_type_blocks(path):
+            components = audit_components(body)
+            data_types.append(InteroperableType(
+                name=name, source=str(path), line=line, components=components,
+                issues=[problem for component in components for problem in component.issues],
+            ))
+        for name, line, enumerators in enum_blocks(path):
+            problems = []
+            if not enumerators:
+                problems.append(issue("error", "empty_enum", "bind(c) enum has no enumerators"))
+            enums.append(InteroperableEnum(
+                name=name, source=str(path), line=line, enumerators=enumerators, issues=problems,
+            ))
     symbols = Counter(row.symbol for row in routines)
     for row in routines:
         if symbols[row.symbol] > 1:
@@ -218,7 +314,8 @@ def scan(fortran_root: Path, python_root: Path) -> dict:
             ))
     exported = {row.symbol for row in routines}
     unresolved = {name: locations for name, locations in wrappers.items() if name not in exported}
-    issue_counts = Counter(p["severity"] for row in routines for p in row.issues)
+    all_rows = [*routines, *data_types, *enums]
+    issue_counts = Counter(p["severity"] for row in all_rows for p in row.issues)
     wrapped = sum(bool(row.python_wrappers) for row in routines)
     return {
         "schema_version": 1,
@@ -226,6 +323,9 @@ def scan(fortran_root: Path, python_root: Path) -> dict:
         "python_root": str(python_root),
         "summary": {
             "bind_c_routines": len(routines),
+            "bind_c_types": len(data_types),
+            "bind_c_enums": len(enums),
+            "total_bind_c_surface_entries": len(routines) + len(data_types) + len(enums),
             "wrapped_exports": wrapped,
             "unwrapped_exports": len(routines) - wrapped,
             "python_referenced_symbols": len(wrappers),
@@ -233,6 +333,8 @@ def scan(fortran_root: Path, python_root: Path) -> dict:
             "issues": dict(sorted(issue_counts.items())),
         },
         "routines": [dataclasses.asdict(row) for row in routines],
+        "data_types": [dataclasses.asdict(row) for row in data_types],
+        "enums": [dataclasses.asdict(row) for row in enums],
         "python_symbols_not_in_api_directory": unresolved,
     }
 
@@ -244,6 +346,9 @@ def markdown(report: dict) -> str:
         "This report is generated statically; it requires no CHARMM build or GPU.", "",
         "## Summary", "",
         f"- `bind(c)` routines: **{s['bind_c_routines']}**",
+        f"- `bind(c)` derived types: **{s['bind_c_types']}**",
+        f"- `bind(c)` enums: **{s['bind_c_enums']}**",
+        f"- Total C surface declarations: **{s['total_bind_c_surface_entries']}**",
         f"- Directly referenced by vendored PyCHARMM: **{s['wrapped_exports']}**",
         f"- Not directly referenced by vendored PyCHARMM: **{s['unwrapped_exports']}**",
         f"- Python symbols implemented outside `source/api` or unresolved: **{s['python_symbols_not_in_api_directory']}**",
@@ -255,6 +360,24 @@ def markdown(report: dict) -> str:
         findings = "; ".join(f"**{x['severity']}** `{x['code']}`" for x in row["issues"]) or "—"
         source = f"`{Path(row['source']).name}:{row['line']}`"
         lines.append(f"| `{row['symbol']}` | {row['kind']} | {source} | {len(row['python_wrappers'])} | {findings} |")
+    lines += ["", "## Interoperable derived types", "",
+              "| Type | Source | Components | ABI findings |", "|---|---|---:|---|"]
+    for row in report["data_types"]:
+        findings = "; ".join(f"**{x['severity']}** `{x['code']}`" for x in row["issues"]) or "—"
+        source = f"`{Path(row['source']).name}:{row['line']}`"
+        lines.append(f"| `{row['name']}` | {source} | {len(row['components'])} | {findings} |")
+        component_text = ", ".join(
+            f"`{component['name']}: {component['type_spec'] or 'unknown'}`"
+            for component in row["components"]
+        )
+        lines.append(f"| ↳ fields |  |  | {component_text} |")
+    lines += ["", "## Interoperable enums", "",
+              "| Report name | Source | Enumerators | ABI findings |", "|---|---|---|---|"]
+    for row in report["enums"]:
+        findings = "; ".join(f"**{x['severity']}** `{x['code']}`" for x in row["issues"]) or "—"
+        source = f"`{Path(row['source']).name}:{row['line']}`"
+        values = ", ".join(f"`{value}`" for value in row["enumerators"])
+        lines.append(f"| `{row['name']}` | {source} | {values} | {findings} |")
     lines += ["", "## Python symbols outside this API directory", ""]
     for symbol, locations in sorted(report["python_symbols_not_in_api_directory"].items()):
         lines.append(f"- `{symbol}` — {', '.join(f'`{x}`' for x in locations)}")
