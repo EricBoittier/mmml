@@ -28,7 +28,9 @@ from ase.data import covalent_radii, atomic_numbers
 import ase.units
 
 K_COULOMB_KCAL_ANG = 332.06371  # e^2 / Angstrom -> kcal/mol
-KCAL_TO_EV = 1.0 / ase.units.kcal * ase.units.mol
+# kcal/mol -> eV (0.0433641...). The reciprocal (23.06) is the eV -> kcal/mol factor;
+# using it here inflated E_cgenff_mm/F_cgenff_mm by 531.8x.
+KCAL_TO_EV = ase.units.kcal / ase.units.mol
 
 DEF_RTF_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "top_all36_cgenff.rtf"
 DEF_PRM_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
