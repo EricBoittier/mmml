@@ -515,6 +515,14 @@ class SpookyPhysNet(nn.Module):
     learn_cgenff_vdw_scale: bool = True
     predict_atomic_vdw_scale: bool = True
 
+    # Learned per-element-pair shrinkage ("trust map") for the neural interaction energy.
+    # When enabled, a (n_el, n_el) log-lambda matrix over these elements is created as a
+    # parameter and surfaced in the output; the training loss turns it into an
+    # evidence-balanced per-chemistry shrinkage and can dump it as a data-provenance
+    # fingerprint. Off by default (no parameter, no behavioural change).
+    interaction_trust_map: bool = False
+    trust_map_elements: tuple = (1, 6, 7, 8, 16, 17)  # H, C, N, O, S, Cl
+
     def _calculate_atomic_vdw_scales(
         self, x: jnp.ndarray, atomic_numbers: jnp.ndarray, atom_mask: jnp.ndarray
     ) -> jnp.ndarray:
@@ -1207,6 +1215,20 @@ class SpookyPhysNet(nn.Module):
             else None
         )
 
+        # Per-element-pair "trust map": a learned log-shrinkage matrix over the neural
+        # interaction energy (used only by the training loss, never by the forward
+        # energy). Living here means it is checkpointed and restarted like any other
+        # parameter; it is surfaced in the output so the loss can read it without
+        # reaching into the params tree. See --interaction-trust-map in the trainer.
+        neural_interaction_log_lambda = None
+        if self.interaction_trust_map:
+            n_el = len(self.trust_map_elements)
+            neural_interaction_log_lambda = self.param(
+                "neural_interaction_log_lambda",
+                lambda rng, shape: jnp.zeros(shape, dtype=DTYPE),
+                (n_el, n_el),
+            )
+
         # Prepare output dictionary
         output = {
             "energy": energy,
@@ -1217,6 +1239,7 @@ class SpookyPhysNet(nn.Module):
             "repulsion": repulsion,
             "dipoles": dipoles,
             "sum_charges": sum_charges,
+            "neural_interaction_log_lambda": neural_interaction_log_lambda,
             "state": state,
         }
 

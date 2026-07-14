@@ -445,8 +445,9 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
         # --fixed-cgenff-vdw pins the CGenFF LJ term at its published parameters, so it
         # acts as a fixed physical prior the network can only add to, never scale away.
-        learn_cgenff_vdw_scale=not args.fixed_cgenff_vdw,
-        predict_atomic_vdw_scale=not args.fixed_cgenff_vdw,
+        learn_cgenff_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
+        predict_atomic_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
+        interaction_trust_map=getattr(args, "interaction_trust_map", False),
     )
 
 
@@ -601,7 +602,7 @@ def make_steps(
         # components isolates the neural residual. Forces are not needed for the penalty,
         # so the extra pass is forward-only.
         neural_int_mse = jnp.asarray(0.0)
-        if neural_interaction_l2 > 0.0 and batch.get("mol_id") is not None:
+        if (neural_interaction_l2 > 0.0 or args.interaction_trust_map) and batch.get("mol_id") is not None:
             mol_id = batch["mol_id"]
             # edge_mask keeps only intra-monomer message-passing edges AND zeroes the
             # inter-monomer prior pair terms, so the masked pass equals the two monomers
@@ -639,7 +640,25 @@ def make_steps(
 
             neural_interaction = _neural_only(out) - _neural_only(out_intra)
             neural_int_mse = jnp.mean(neural_interaction**2)
-            loss += neural_interaction_l2 * neural_int_mse
+            if args.interaction_trust_map:
+                tm_loss, _ = _interaction_trust_map_loss(
+                    neural_interaction,
+                    out["neural_interaction_log_lambda"],
+                    Z=batch["Z"],
+                    R=batch["R"],
+                    dst_idx=batch["dst_idx"],
+                    src_idx=batch["src_idx"],
+                    mol_id=mol_id,
+                    batch_segments=batch["batch_segments"],
+                    batch_mask=batch["batch_mask"],
+                    batch_size=per_device_batch_size,
+                    cutoff=args.cutoff,
+                    evidence=args.trust_map_evidence,
+                    hyperprior=args.trust_map_hyperprior,
+                )
+                loss += neural_interaction_l2 * tm_loss
+            else:
+                loss += neural_interaction_l2 * neural_int_mse
 
         metrics = {
             "loss": loss,
@@ -852,6 +871,79 @@ def _restore_state_from_checkpoint(
     epoch = int(np.asarray(restored.get("epoch", _epoch_number_from_path(checkpoint_path))))
     metrics = restored.get("metrics", {})
     return state, epoch, metrics
+
+
+TRUST_MAP_ELEMENTS = (1, 6, 7, 8, 16, 17)  # H, C, N, O, S, Cl; must match the model
+
+
+def _interaction_trust_map_loss(
+    neural_interaction: jnp.ndarray,   # (B, 1) or (B,) per-structure E_neural(AB)-E_neural(A)-E_neural(B)
+    log_lambda: jnp.ndarray,           # (n_el, n_el) learned raw parameter
+    *,
+    Z: jnp.ndarray,
+    R: jnp.ndarray,
+    dst_idx: jnp.ndarray,
+    src_idx: jnp.ndarray,
+    mol_id: jnp.ndarray,
+    batch_segments: jnp.ndarray,
+    batch_mask: jnp.ndarray,           # (n_edges,) valid-edge mask
+    batch_size: int,
+    cutoff: float,
+    evidence: float,
+    hyperprior: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Evidence-balanced, per-element-pair shrinkage of the neural interaction energy.
+
+    Each dimer's interaction energy is attributed to element-pair buckets by its
+    inter-monomer contacts (weighted by a linear cutoff), giving a per-structure
+    effective shrinkage ``Lambda_s = <lambda_{Zi,Zj}>`` over the interface. The loss is
+    the negative log-likelihood of a zero-mean Gaussian residual with precision Lambda_s:
+
+        0.5 * Lambda_s * r_s^2  -  0.5 * evidence * log(Lambda_s)
+
+    The data term wants Lambda small (let the residual live); the evidence term wants it
+    large (shrink to the prior). The stationary point is Lambda_c ~ evidence / <r^2>_c, so
+    the learned lambda is small exactly where the data justifies a large neural
+    correction and large where it does not -- that matrix is the trust-map fingerprint. A
+    shared hyperprior ties the buckets (var penalty toward their common mean), so
+    data-poor buckets borrow strength instead of drifting.
+
+    Returns (loss_term, lambda_matrix) with lambda symmetric and positive.
+    """
+    elements = jnp.asarray(TRUST_MAP_ELEMENTS)
+    lam = jax.nn.softplus(log_lambda)
+    lam = 0.5 * (lam + lam.T)  # symmetric
+
+    # Z -> slot index in `elements`, or -1 if not one of the tracked elements.
+    slot_of = -jnp.ones((int(Z.max()) + 1,), dtype=jnp.int32)
+    slot_of = slot_of.at[elements].set(jnp.arange(elements.shape[0], dtype=jnp.int32))
+
+    r = neural_interaction.reshape(-1)  # (B,)
+    si = slot_of[jnp.take(Z, dst_idx)]
+    sj = slot_of[jnp.take(Z, src_idx)]
+    valid = ((si >= 0) & (sj >= 0)).astype(lam.dtype)
+    inter = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(lam.dtype)
+
+    dr = jnp.take(R, dst_idx, axis=0) - jnp.take(R, src_idx, axis=0)
+    dist = jnp.linalg.norm(dr, axis=-1)
+    contact_w = jnp.clip(1.0 - dist / cutoff, 0.0, 1.0)  # linear cutoff weight
+
+    w = batch_mask * inter * valid * contact_w
+    lam_e = lam[jnp.clip(si, 0), jnp.clip(sj, 0)]  # gather; invalid entries zeroed by w
+
+    edge_struct = jnp.take(batch_segments, dst_idx)
+    num = jax.ops.segment_sum(lam_e * w, edge_struct, num_segments=batch_size)
+    den = jax.ops.segment_sum(w, edge_struct, num_segments=batch_size)
+    has_contact = (den > 0).astype(lam.dtype)
+    Lambda_s = num / (den + 1e-8)
+
+    nll = 0.5 * Lambda_s * (r ** 2) - 0.5 * evidence * jnp.log(Lambda_s + 1e-8)
+    data_term = jnp.sum(nll * has_contact) / (jnp.sum(has_contact) + 1e-8)
+
+    # Shared hyperprior: pull buckets toward their common mean so sparse pairs (which get
+    # little gradient from the data term) don't drift.
+    hyper = hyperprior * jnp.mean((log_lambda - jnp.mean(log_lambda)) ** 2)
+    return data_term + hyper, lam
 
 
 def _per_structure(value: Any, batch_segments: jnp.ndarray, batch_size: int) -> jnp.ndarray:
@@ -1537,6 +1629,33 @@ def build_parser() -> argparse.ArgumentParser:
             "LARGER on pairs with <15 training structures than on pairs with >=300, i.e. "
             "loudest where there is no evidence for it. Pairs with --fixed-cgenff-vdw."
         ),
+    )
+    parser.add_argument(
+        "--interaction-trust-map",
+        action="store_true",
+        help=(
+            "Replace the scalar --neural-interaction-l2 with a LEARNED per-element-pair "
+            "shrinkage (a 6x6 log-lambda matrix over H,C,N,O,S,Cl), fit by empirical Bayes "
+            "so lambda_c ~ evidence/<neural_interaction^2>_c: small where the data justifies "
+            "a large neural correction, large where it does not. --neural-interaction-l2 "
+            "scales the whole term (use ~1.0). The learned matrix is a per-chemistry TRUST "
+            "MAP / data-provenance fingerprint -- dump it with scripts/dump_trust_map.py. "
+            "Pairs with --fixed-cgenff-vdw."
+        ),
+    )
+    parser.add_argument(
+        "--trust-map-evidence",
+        type=float,
+        default=1.0,
+        help="Evidence weight (gamma) in the trust-map NLL; sets the lambda scale via "
+             "lambda ~ gamma/<r^2>. Larger = stronger default shrinkage.",
+    )
+    parser.add_argument(
+        "--trust-map-hyperprior",
+        type=float,
+        default=0.1,
+        help="Shared-hyperprior strength tying the per-element-pair lambdas toward their "
+             "common mean, so data-poor buckets borrow strength.",
     )
     parser.add_argument(
         "--fixed-cgenff-vdw",
