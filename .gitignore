@@ -285,3 +285,5 @@ MagicMock/
 reports/*.aux
 reports/*.out
 reports/*.toc
+pdb/aco.pdb
+psf/aco-1.psf
