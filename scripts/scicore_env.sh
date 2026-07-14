@@ -18,9 +18,10 @@
 
 MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2023b}"
 
-# In a Slurm batch script the shell is not a login shell, so `module` -- a shell
-# function installed by lmod's init -- does not exist yet. Bootstrap it, or the
-# module load below silently does nothing and CHARMM fails to load at runtime.
+# In a Slurm batch script the shell is not a login shell, so neither `module`
+# (an lmod shell function) nor MODULEPATH exists. Both are needed: with `module`
+# defined but MODULEPATH empty, `module load` finds nothing and fails *silently*,
+# and CHARMM then fails to dlopen at runtime.
 if ! command -v module >/dev/null 2>&1; then
   for _mmml_lmod_init in \
     "${LMOD_PKG:-/scicore/soft/lmod/lmod}/init/bash" \
@@ -35,10 +36,24 @@ if ! command -v module >/dev/null 2>&1; then
   unset _mmml_lmod_init
 fi
 
+# soft_stacks.sh is what populates MODULEPATH with the easybuild module trees.
+if [[ -z "${MODULEPATH:-}" && -r /etc/profile.d/soft_stacks.sh ]]; then
+  # shellcheck disable=SC1091
+  source /etc/profile.d/soft_stacks.sh
+fi
+
 if command -v module >/dev/null 2>&1; then
-  module load "$MMML_SCICORE_TOOLCHAIN" 2>/dev/null || true
+  module load "$MMML_SCICORE_TOOLCHAIN" || true
 else
-  echo "scicore_env: lmod not found; libcharmm will fail to load" >&2
+  echo "scicore_env: lmod not found; libcharmm will fail to dlopen" >&2
+fi
+
+# Fail loudly rather than letting the job run on to an opaque
+# "libmpi.so.40 => not found" from deep inside pycharmm.
+if ! ldconfig -p 2>/dev/null | grep -q "libmpi\.so\.40" \
+   && ! { IFS=:; for d in ${LD_LIBRARY_PATH:-}; do [[ -e "$d/libmpi.so.40" ]] && exit 0; done; false; }; then
+  echo "scicore_env: warning: libmpi.so.40 not on LD_LIBRARY_PATH after loading" \
+       "'$MMML_SCICORE_TOOLCHAIN' (MODULEPATH=${MODULEPATH:-empty}); CHARMM will fail to load." >&2
 fi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
