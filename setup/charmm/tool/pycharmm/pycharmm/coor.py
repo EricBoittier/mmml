@@ -22,7 +22,6 @@ See [corman documentation](https://academiccharmm.org/documentation/version/c47b
 """  
   
 import ctypes  
-import typing  
   
 import pandas  
 import numpy as np
@@ -552,8 +551,8 @@ def qexclt(i, j):
     i += 1
     j += 1
 
-    c_i = ctypes.c_int(i)
-    c_j = ctypes.c_int(j)
+    ctypes.c_int(i)
+    ctypes.c_int(j)
 
     is14exclt = lib.charmm.qexclt(i, j)
     return is14exclt
@@ -609,8 +608,8 @@ def dist(selection1, selection2 = None, cutoff = None, resi = True, omit_14excl 
     numexcl = [0, 0, 0] 
 
     # fetch resids and segids in the system
-    allResids = psf.get_resid()
-    allSegids = psf.get_segid()
+    psf.get_resid()
+    psf.get_segid()
     
     # number of atoms in the selections
     insel = sum(selection1.get_selection()) 
@@ -808,11 +807,11 @@ class Coordinates:
         self.pull()  
   
     def pull(self):  
-        if self.which_set is 'main':  
+        if self.which_set == 'main':  
             self.coords = get_main()  
-        elif self.which_set is 'comp':  
+        elif self.which_set == 'comp':  
             self.coords = get_comparison()  
-        elif self.which_set is 'comp2':  
+        elif self.which_set == 'comp2':  
             self.coords = get_comp2()  
         else:  
             msg = '{} is not a valid coordinate set'.format(self.which_set)  
@@ -822,11 +821,11 @@ class Coordinates:
         return self  
   
     def push(self):  
-        if self.which_set is 'main':  
+        if self.which_set == 'main':  
             set_main(self.coords)  
-        elif self.which_set is 'comp':  
+        elif self.which_set == 'comp':  
             set_comparison(self.coords)  
-        elif self.which_set is 'comp2':  
+        elif self.which_set == 'comp2':  
             set_comp2(self.coords)  
         else:  
             msg = '{} is not a valid coordinate set'.format(self.which_set)  

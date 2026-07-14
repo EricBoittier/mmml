@@ -23,7 +23,6 @@ from mmml.utils.plotting.styles import (
     apply_plot_style,
     default_cmap,
     legend_outside,
-    seed_symbol,
 )
 
 STYLE_NAME = "icml"

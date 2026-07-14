@@ -11,7 +11,6 @@ from typing import Any, Literal
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import alternate_overlap_scratch
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
 
 def geometry_baseline_path(out_dir: Path, tag: str) -> Path:

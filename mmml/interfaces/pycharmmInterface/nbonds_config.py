@@ -374,7 +374,6 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
 
     toppar = assert_cgenff_toppar_readable()
 

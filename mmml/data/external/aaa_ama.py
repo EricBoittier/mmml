@@ -152,7 +152,7 @@ def per_element_force_magnitudes(
     data: dict[str, np.ndarray],
 ) -> dict[str, np.ndarray]:
     """Flatten |F| per element symbol across all frames and atoms."""
-    z = np.asarray(data["Z"], dtype=int)
+    np.asarray(data["Z"], dtype=int)
     f = np.asarray(data["F"], dtype=float)
     f_mag = np.linalg.norm(f, axis=-1)
     report = inspect_dataset_aaa(data)

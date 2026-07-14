@@ -253,7 +253,7 @@ def align_npz_arrays(
     }
 
     z_ref = reference.get("Z")
-    z_pred = predictions.get("Z")
+    predictions.get("Z")
     if z_ref is not None:
         z = np.asarray(z_ref)
         out["Z"] = z[idx] if z.ndim >= 2 else z

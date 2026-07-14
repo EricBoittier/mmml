@@ -24,7 +24,6 @@ from jax import Array
 
 from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
     KCAL_MOL_TO_EV,
-    bonded_energy_and_forces,
     build_bonded_energy_fn,
 )
 from mmml.interfaces.pycharmmInterface.cgenff_topology import (

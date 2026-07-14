@@ -16,7 +16,7 @@ from ase import Atoms
 from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
 from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
 from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
+from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CHARMM_HOME, CHARMM_LIB_DIR
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
 
 os.environ["CHARMM_HOME"] = CHARMM_HOME
@@ -36,7 +36,6 @@ import pycharmm.coor as coor
 import pycharmm.minimize as minimize
 import pycharmm.read as read
 import pycharmm.write as write
-import pycharmm.settings as settings
 import pycharmm.lingo
 
 

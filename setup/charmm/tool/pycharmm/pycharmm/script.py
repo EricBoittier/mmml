@@ -58,7 +58,8 @@ class CommandScript:
         selection.unstore()
 
     def create_script_string(self):
-        script = self.command
+        # CHARMM maincomx matches 4-char command tokens case-sensitively (e.g. NBON).
+        script = self.command.upper()
         if self.opts.values():
             script += ' ' + ' '.join(self.opts.values())
             script = script.strip()

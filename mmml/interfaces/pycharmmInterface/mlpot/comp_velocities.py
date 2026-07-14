@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
 DEFAULT_COMP_FORCE_MIN_KCALMOL_A = 1.0
 DEFAULT_COMP_FORCE_SCALE = 0.01

@@ -11,9 +11,7 @@ Multi-threaded Orbax Cache Processor:
 from __future__ import annotations
 
 import argparse
-import json
 import multiprocessing as mp
-import re
 import sys
 import time
 from pathlib import Path
@@ -26,7 +24,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from ase.data import covalent_radii, atomic_numbers, chemical_symbols
+from ase.data import covalent_radii, atomic_numbers
 import ase.units
 
 K_COULOMB_KCAL_ANG = 332.06371  # e^2 / Angstrom -> kcal/mol
@@ -93,7 +91,7 @@ def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndar
     # Post-parse sanity check: warn about any non-DEFAULT types with zero epsilon/sigma
     sig_arr = np.array(sigmas, dtype=np.float64)
     eps_arr = np.array(epsilons, dtype=np.float64)
-    default_idx = nb_map["DEFAULT"]
+    nb_map["DEFAULT"]
     bad_types = [t for t, i in nb_map.items() if t != "DEFAULT" and (sig_arr[i] == 0.0 or eps_arr[i] == 0.0)]
     if bad_types and not _IS_WORKER:
         print(f"[WARNING] {len(bad_types)} CGenFF atom types parsed with zero sigma or epsilon: {bad_types[:10]}")

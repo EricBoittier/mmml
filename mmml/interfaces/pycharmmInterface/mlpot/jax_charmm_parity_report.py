@@ -29,9 +29,6 @@ class RecoveryMmParityMetrics:
 def _recovery_nbond_settings(ctx: Any):
     from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        PBC_CUTNB,
-        PBC_CTONNB,
-        PBC_CTOFNB,
         VACUUM_CTONNB,
         VACUUM_CTOFNB,
         VACUUM_CUTNB,

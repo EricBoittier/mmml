@@ -104,7 +104,6 @@ def _selected_max_radius(selection: str, *, xref: float, yref: float, zref: floa
 
 def _current_charmm_energy_kcalmol() -> float | None:
     try:
-        import pycharmm
         import pycharmm.energy as energy
 
         from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet

@@ -17,7 +17,6 @@ physics functionality is unchanged when the third-party libraries are present.
 from __future__ import annotations
 
 import os
-import warnings
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -49,7 +48,6 @@ from mmml.interfaces.pycharmmInterface.ml_dtypes import (
     cast_pytree_to_ml_dtype,
     json_tree_to_jax_params,
     ml_numpy_dtype,
-    ml_scalar,
     ml_zeros,
     resolve_ml_compute_dtype,
 )
@@ -1075,7 +1073,7 @@ def setup_calculator(
       
         return ml_scale * ml_energy
 
-    switch_ML_grad = jax.grad(switch_ML)
+    jax.grad(switch_ML)
 
     
     _fractional_coordinates = ensemble == "npt"

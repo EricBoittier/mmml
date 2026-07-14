@@ -71,9 +71,6 @@ import pycharmm.coor as coor
 import pycharmm.generate as gen
 import pycharmm.ic as ic
 import pycharmm.minimize as charmm_minimize
-from mmml.interfaces.pycharmmInterface.packmol_placement import (
-    write_monomer_pdb_for_packmol as _write_monomer_pdb_for_packmol,
-)
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 from mmml.paths import default_meoh_template_pdb

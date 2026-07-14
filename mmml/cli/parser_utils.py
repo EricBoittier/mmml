@@ -7,7 +7,6 @@ import ast
 import importlib
 import importlib.util
 from pathlib import Path
-from typing import Any
 
 from mmml.cli.registry import COMMAND_REGISTRY, command_by_name
 

@@ -57,7 +57,6 @@ dependencies = [
     # Web/API (for GUI)
     "fastapi",
     "uvicorn",
-    "pytest>=9.0.2",
     # Alchemical / multistate free energy (mmml lambda-mbar, scripts/meoh_dimer_lambda_mbar.py)
     "pymbar>=4.0",
     "umap-learn>=0.5.12",
@@ -294,7 +293,7 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 namespaces = false
-where = ["."]
+where = [".", "setup/charmm/tool/pycharmm"]
 include = ["mmml*", "pycharmm*"]
 
 [tool.setuptools.package-data]
@@ -345,7 +344,7 @@ file = "mmml/_version.py"
 [tool.ruff]
 target-version = "py313"
 line-length = 119
-src = ["mmml", "tests", "scripts", "pycharmm"]
+src = ["mmml", "tests", "scripts", "setup/charmm/tool/pycharmm"]
 extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
@@ -362,11 +361,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"pycharmm/__init__.py" = ["F401"]
+"setup/charmm/tool/pycharmm/pycharmm/__init__.py" = ["F401"]
 "tests/**/*.py" = ["ARG"]
 
 [tool.vulture]
-paths = ["mmml", "tests", "scripts", "pycharmm"]
+paths = ["mmml", "tests", "scripts", "setup/charmm/tool/pycharmm/pycharmm"]
 min_confidence = 80
 ignore_names = [
     "ngrid",

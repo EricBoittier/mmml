@@ -12,7 +12,6 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 
 
 def _parse_args() -> argparse.Namespace:
@@ -46,7 +45,6 @@ def _run_recovery(manifest_path: Path) -> dict[str, float]:
         raise FileNotFoundError(f"sidecar input CRD not found: {input_crd}")
 
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
 
     read_cgenff_toppar()

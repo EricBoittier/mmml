@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Sequence, Union
 
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
-    RankActiveSet,
     build_rank_active_set,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     SpatialDomainGrid,
     halo_radius_from_cutoffs,
-    resolve_halo_radius,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
     canonical_dimer_owner_ranks,
