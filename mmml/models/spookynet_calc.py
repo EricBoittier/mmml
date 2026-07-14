@@ -60,6 +60,28 @@ def _is_spooky_checkpoint(model_type: str, parameter_tree: Any) -> bool:
     return "charge_feature_projection" in modules
 
 
+def _infer_vdw_architecture_config(
+    config: dict[str, Any], parameter_tree: Any
+) -> dict[str, Any]:
+    """Recover optional vdW-head flags omitted by older checkpoints.
+
+    The atomic vdW scaling head and learnable global/element scales were added
+    after many valid checkpoints had already been written.  Instantiating
+    those older trees with today's class defaults (both ``True``) asks Flax for
+    a nonexistent ``Dense_13/kernel``.  The parameter tree is authoritative
+    when the saved config does not explicitly record these flags.
+    """
+    inferred = dict(config)
+    modules = parameter_tree.get("params", parameter_tree)
+    if "predict_atomic_vdw_scale" not in inferred:
+        inferred["predict_atomic_vdw_scale"] = "Dense_13" in modules
+    if "learn_cgenff_vdw_scale" not in inferred:
+        inferred["learn_cgenff_vdw_scale"] = all(
+            name in modules for name in ("global_vdw_scale", "element_vdw_scale")
+        )
+    return inferred
+
+
 class SpookyNetCalculator(Calculator):
     """ASE calculator wrapping a SpookyNet-style PhysNet model.
 
@@ -97,7 +119,9 @@ class SpookyNetCalculator(Calculator):
         if params is None:
             raise FileNotFoundError(f"No params found in checkpoint: {checkpoint}")
         raw_config = ckpt.get("config") or {}
-        config = normalize_physnet_config(raw_config)
+        config = _infer_vdw_architecture_config(
+            normalize_physnet_config(raw_config), params
+        )
         self.checkpoint_path = checkpoint.resolve()
         self.raw_config = dict(raw_config)
         self.normalized_config = dict(config)

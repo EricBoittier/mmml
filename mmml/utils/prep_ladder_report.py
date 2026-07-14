@@ -87,6 +87,7 @@ class PrepMetrics:
         hybrid_grms: float | None = None,
         charmm_grms: float | None = None,
         diag_kind: str | None = None,
+        user_kcal: float | None = None,
     ) -> PrepMetrics:
         box_f: float | None = None
         if mlpot_ctx is not None:
@@ -101,7 +102,11 @@ class PrepMetrics:
         return cls(
             hybrid_grms=hybrid_grms,
             charmm_grms=charmm_grms,
-            user_kcal=try_user_energy_kcal(mlpot_ctx),
+            # Never evaluate CHARMM merely to populate a report.  Recovery
+            # callers frequently build these metrics before nonbond state is
+            # valid; a hidden energy probe can therefore be fatal.  A value
+            # already measured in a safe state can be supplied explicitly.
+            user_kcal=user_kcal,
             box_L_A=box_f,
             diag_kind=diag_kind,
         )
@@ -180,8 +185,11 @@ def emit_hybrid_grms_diag(
     note = _DIAG_NOTES.get(kind, kind)
     if kind == "desync_suspected" and ratio is not None and np.isfinite(ratio):
         note = f"{note} (ratio={float(ratio):.1f})"
-    if user_kcal is None:
-        user_kcal = try_user_energy_kcal(mlpot_ctx)
+    # Reporting must remain observational.  In particular, do not probe the
+    # live CHARMM energy function here: this helper is also used while the
+    # nonbond list/MLpot state is only partially initialized, where an implicit
+    # ``ENER`` can terminate CHARMM rather than merely fail.  Callers that have
+    # already measured a safe USER energy may pass it explicitly.
     metrics = PrepMetrics(
         hybrid_grms=float(hybrid),
         charmm_grms=charmm,

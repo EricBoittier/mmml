@@ -45,6 +45,37 @@ def test_emit_hybrid_grms_diag_plain_desync(capsys) -> None:
     assert "possible hybrid/CHARMM desync" in out
 
 
+def test_emit_hybrid_grms_diag_does_not_probe_live_energy(monkeypatch, capsys) -> None:
+    def _unexpected_energy_probe(_ctx=None):
+        raise AssertionError("reporting must not evaluate the live CHARMM energy")
+
+    monkeypatch.setattr(
+        prep_ladder_report, "try_user_energy_kcal", _unexpected_energy_probe
+    )
+    prep_ladder_report.emit_hybrid_grms_diag(
+        "partially initialized gate",
+        hybrid=12.0,
+        charmm=2.0,
+        kind="geometry_stress",
+        mlpot_ctx=object(),
+    )
+    assert "partially initialized gate" in capsys.readouterr().out
+
+
+def test_prep_metrics_from_mlpot_does_not_probe_live_energy(monkeypatch) -> None:
+    def _unexpected_energy_probe(_ctx=None):
+        raise AssertionError("metrics construction must be observational")
+
+    monkeypatch.setattr(
+        prep_ladder_report, "try_user_energy_kcal", _unexpected_energy_probe
+    )
+    ctx = type("Ctx", (), {"cubic_box_side_A": 28.0})()
+    metrics = prep_ladder_report.PrepMetrics.from_mlpot(ctx, hybrid_grms=4.0)
+    assert metrics.hybrid_grms == pytest.approx(4.0)
+    assert metrics.box_L_A == pytest.approx(28.0)
+    assert metrics.user_kcal is None
+
+
 def test_prep_ladder_journal_plain(capsys) -> None:
     journal = prep_ladder_report.PrepLadderJournal(quiet=False)
     journal.begin(initial_grms=100.0, max_grms=30.0, max_rounds=2)

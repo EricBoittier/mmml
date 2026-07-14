@@ -13,7 +13,11 @@ from mmml.analysis.dimer_cgenff import (
     load_cgenff_sigma_epsilon,
 )
 from mmml.interfaces.pycharmmInterface.long_range_backend import per_atom_jax_pme_c6_sqrt
-from mmml.models.spookynet_calc import SpookyNetCalculator, _is_spooky_checkpoint
+from mmml.models.spookynet_calc import (
+    SpookyNetCalculator,
+    _infer_vdw_architecture_config,
+    _is_spooky_checkpoint,
+)
 from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 from scripts.run_dimer_scan_campaign import _charmm_component_rows
 
@@ -25,6 +29,35 @@ def test_spooky_checkpoint_markers_can_be_nested_under_params():
     assert _is_spooky_checkpoint("", tree) is True
     assert _is_spooky_checkpoint("spooky", {}) is True
     assert _is_spooky_checkpoint("physnet", tree) is False
+
+
+def test_legacy_checkpoint_disables_absent_optional_vdw_heads():
+    tree = {"params": {"Dense_12": {"kernel": np.ones((1, 1))}}}
+    config = _infer_vdw_architecture_config({}, tree)
+    assert config["predict_atomic_vdw_scale"] is False
+    assert config["learn_cgenff_vdw_scale"] is False
+
+
+def test_recent_checkpoint_infers_present_optional_vdw_heads():
+    tree = {
+        "params": {
+            "Dense_13": {"kernel": np.ones((1, 1))},
+            "global_vdw_scale": np.ones(1),
+            "element_vdw_scale": np.ones(18),
+        }
+    }
+    config = _infer_vdw_architecture_config({}, tree)
+    assert config["predict_atomic_vdw_scale"] is True
+    assert config["learn_cgenff_vdw_scale"] is True
+
+
+def test_explicit_vdw_architecture_flags_override_tree_inference():
+    tree = {"params": {"Dense_13": {"kernel": np.ones((1, 1))}}}
+    config = _infer_vdw_architecture_config(
+        {"predict_atomic_vdw_scale": False, "learn_cgenff_vdw_scale": True}, tree
+    )
+    assert config["predict_atomic_vdw_scale"] is False
+    assert config["learn_cgenff_vdw_scale"] is True
 
 
 def test_spookynet_report_flags_missing_training_lj_inputs(tmp_path):
