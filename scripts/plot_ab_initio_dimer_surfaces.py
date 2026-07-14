@@ -128,7 +128,7 @@ def _plot_pair(frame: pd.DataFrame, pair: tuple[str, str], output: Path, *, full
         fig.colorbar(image, ax=axes, label="counterpoise interaction energy (kcal mol$^{-1}$)", extend="both")
     fig.suptitle(f"{pair[0]}–{pair[1]} ab-initio surfaces — {suffix}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output, dpi=220)
+    fig.savefig(output, dpi=220, bbox_inches="tight")
     plt.close(fig)
 
 
