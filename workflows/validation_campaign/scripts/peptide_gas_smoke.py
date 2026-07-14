@@ -158,9 +158,9 @@ def _worker(system: str, workdir: Path, temperature: float, steps: int) -> int:
 
     # ---- short NVE and NVT -------------------------------------------------
     import os
-    import re
 
     import pycharmm
+    import pycharmm.settings as settings_mod
 
     def _parse_dyna_temperatures(text: str) -> list[float]:
         """Temperatures from CHARMM's ``DYNA>`` trace.
@@ -200,10 +200,14 @@ def _worker(system: str, workdir: Path, temperature: float, steps: int) -> int:
         if ensemble == "nvt":
             kw.update({"hoover": True, "reft": temperature, "tmass": 250.0})
 
-        # CHARMM writes the DYNA trace to fd 1 from Fortran, so it cannot be
-        # captured with contextlib.redirect_stdout. Point fd 1 at a file for the
-        # duration of the run and parse the trace back out.
+        # The peptide builder lowers CHARMM's print level, which suppresses the
+        # DYNA trace entirely -- without raising it there is nothing to parse and
+        # the temperature silently reads back as nan. Raise it for the run only.
+        #
+        # CHARMM writes the trace to fd 1 from Fortran, so redirect_stdout cannot
+        # catch it; point fd 1 at a file and parse the trace back out.
         trace_path = workdir / f"dyna_{ensemble}.log"
+        previous_verbosity = settings_mod.set_verbosity(5)
         sys.stdout.flush()
         saved_fd = os.dup(1)
         trace_fd = os.open(trace_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
@@ -215,6 +219,7 @@ def _worker(system: str, workdir: Path, temperature: float, steps: int) -> int:
             os.dup2(saved_fd, 1)
             os.close(saved_fd)
             os.close(trace_fd)
+            settings_mod.set_verbosity(previous_verbosity)
 
         temps = _parse_dyna_temperatures(
             trace_path.read_text(errors="replace")
