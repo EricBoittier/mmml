@@ -8,10 +8,9 @@ from ase.calculators.calculator import Calculator, all_changes
 from mmml.analysis.dimer_scans import (
     assign_mol_id,
     build_rigid_dimer,
-    build_rigid_dimer_2d,
     distance_scan_geometries,
-    distance_scan_geometries_2d,
     evaluate_scan,
+    evaluate_scan_monomer_decomposed,
     geometric_centroid,
     make_dftb3_d4_calculator,
     make_xtb_calculator,
@@ -29,6 +28,15 @@ class ConstantEnergyCalculator(Calculator):
     def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
         super().calculate(atoms, properties, system_changes)
         self.results["energy"] = self.energy_ev
+
+
+class AtomCountSquaredCalculator(Calculator):
+    implemented_properties = ["energy"]
+
+    def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+        super().calculate(atoms, properties, system_changes)
+        energy = float(len(atoms) ** 2)
+        self.results.update(energy=energy, neural_energy=energy)
 
 
 def test_molecule_pair_labels_all_pairs_for_five_molecules():
@@ -108,6 +116,24 @@ def test_evaluate_scan_uses_calculator_factory():
             "min_contact_angstrom": 2.0,
         }
     ]
+
+
+def test_monomer_decomposed_scan_uses_interaction_energy_as_plot_value():
+    geometries = distance_scan_geometries(
+        Atoms("H", positions=[[0.0, 0.0, 0.0]]),
+        Atoms("H", positions=[[0.0, 0.0, 0.0]]),
+        [2.0],
+        pair=("H", "H"),
+    )
+
+    [row] = evaluate_scan_monomer_decomposed(
+        geometries, AtomCountSquaredCalculator
+    )
+
+    assert row["energy_ev"] == pytest.approx(2.0)
+    assert row["comp_Eint_ev"] == pytest.approx(2.0)
+    assert row["total_energy_ev"] == pytest.approx(4.0)
+    assert row["comp_Eint_neural_energy_ev"] == pytest.approx(2.0)
 
 
 def test_make_xtb_calculator_when_optional_dependency_is_available():

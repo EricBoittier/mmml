@@ -352,9 +352,10 @@ def evaluate_scan_monomer_decomposed(
     isolated-monomer energies ``Ea``, ``Eb`` (monomer atoms taken at their
     dimer-geometry positions, using ``geometry.fragments``) with the same
     calculator. Reports the interaction energy ``E_int = E_dimer - Ea - Eb``
-    alongside the reconstructed total ``E_int + Ea + Eb`` (== ``E_dimer``) as
-    ``energy_ev`` / ``energy_kcal_mol``, so downstream consumers get both the
-    absolute energy and its monomer decomposition (``comp_Ea_ev``,
+    as ``energy_ev`` / ``energy_kcal_mol``. The absolute dimer energy is kept
+    separately as ``total_energy_ev`` / ``total_energy_kcal_mol`` so a plot
+    cannot silently compare arbitrary molecular baselines. Downstream consumers
+    also get the monomer decomposition (``comp_Ea_ev``,
     ``comp_Eb_ev``, ``comp_Eint_ev`` and ``_kcal_mol`` counterparts).
     """
 
@@ -391,15 +392,17 @@ def evaluate_scan_monomer_decomposed(
             }
 
             e_int_ev = e_dimer_ev - e_a_ev - e_b_ev
-            e_hybrid_ev = e_int_ev + e_a_ev + e_b_ev
+            e_total_ev = e_int_ev + e_a_ev + e_b_ev
 
             row: dict[str, float | str] = {
                     "molecule_a": geometry.pair[0],
                     "molecule_b": geometry.pair[1],
                     "distance_angstrom": geometry.distance_angstrom,
                     "offset_angstrom": geometry.offset_angstrom,
-                    "energy_ev": e_hybrid_ev,
-                    "energy_kcal_mol": e_hybrid_ev * 23.060548867,
+                    "energy_ev": e_int_ev,
+                    "energy_kcal_mol": e_int_ev * 23.060548867,
+                    "total_energy_ev": e_total_ev,
+                    "total_energy_kcal_mol": e_total_ev * 23.060548867,
                     "comp_Ea_ev": e_a_ev,
                     "comp_Ea_kcal_mol": e_a_ev * 23.060548867,
                     "comp_Eb_ev": e_b_ev,
