@@ -268,7 +268,6 @@ def build_trialanine_water_box_in_charmm(
     import pycharmm.write as write
 
     from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,

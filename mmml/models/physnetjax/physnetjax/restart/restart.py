@@ -16,7 +16,6 @@ import numpy as np
 import orbax
 import orbax.checkpoint
 
-from mmml.models.physnetjax.physnetjax.models.model import EF
 from mmml.models.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
 from mmml.models.physnetjax.physnetjax.utils.utils import get_files
 

@@ -16,7 +16,7 @@ from mmml.analysis.npz_comparison import (
     plot_comparison,
     write_comparison_report,
 )
-from mmml.data.units import normalize_energy_unit, normalize_force_unit
+from mmml.data.units import normalize_energy_unit
 from mmml.interfaces.qc_backends.factory import backend_from_dict, build_backend
 from mmml.interfaces.qc_backends.npz_output import (
     BACKEND_NATIVE_UNITS,

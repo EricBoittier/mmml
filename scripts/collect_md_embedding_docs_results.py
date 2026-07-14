@@ -49,7 +49,7 @@ def _load_json(path: Path) -> dict:
 def _copy_figures(artifacts: Path) -> list[str]:
     IMG.mkdir(parents=True, exist_ok=True)
     copied: list[str] = []
-    patterns = [
+    [
         artifacts / "figures" / "*.png",
         artifacts / "eval" / "*.png",
     ]

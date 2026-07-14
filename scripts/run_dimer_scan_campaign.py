@@ -11,6 +11,7 @@ one fixed floor that's unsafe for bulky/asymmetric pairs (e.g. ACE+ACE needs
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -63,7 +64,7 @@ def _charmm_residue_geometries() -> dict:
             np.array([6, 1, 1, 17, 17]),
         ),
         "ACO": (
-            MOLECULES["ACE"].positions[[3, 0, 1, 2, 4, 5, 6, 7, 8, 9]],
+            MOLECULES["ACE"].positions[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]],
             ["O1", "C1", "C2", "C3", "H21", "H22", "H23", "H31", "H32", "H33"],
             np.array([8, 6, 6, 6, 1, 1, 1, 1, 1, 1]),
         ),
@@ -103,8 +104,29 @@ def _init_charmm():
     return _build_cluster_from_composition, setup_default_nbonds, sync_charmm_positions, charmm_energy_row
 
 
+def _charmm_component_rows(
+    common: dict, *, total_kcal: float, elec_kcal: float, vdw_kcal: float
+) -> list[dict]:
+    """Materialize CHARMM nonbond components as plot-compatible backends."""
+    rows: list[dict] = []
+    for backend, component in (
+        ("charmm", total_kcal),
+        ("charmm_electrostatics", elec_kcal),
+        ("charmm_lj", vdw_kcal),
+    ):
+        rows.append(
+            {
+                **common,
+                "energy_ev": component / EV_TO_KCAL_MOL,
+                "energy_kcal_mol": component,
+                "backend": backend,
+            }
+        )
+    return rows
+
+
 def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]:
-    """Evaluate a scan's geometries with CHARMM/CGenFF (PSF built once per pair)."""
+    """Evaluate CHARMM total, electrostatics-only, and LJ-only scan surfaces."""
     build_cluster, setup_nbonds, sync_positions, energy_row = charmm_fns
     res_a = CHARMM_RESIDUES[label_a]
     res_b = CHARMM_RESIDUES[label_b]
@@ -126,19 +148,22 @@ def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]
             elec = float(terms.get("ELEC", np.nan))
             vdw = float(terms.get("VDW", np.nan))
             tot = float(terms.get("ENER", np.nan))
-            rows.append(
-                {
+            common = {
                     "molecule_a": label_a,
                     "molecule_b": label_b,
                     "distance_angstrom": geom.distance_angstrom,
                     "offset_angstrom": geom.offset_angstrom,
-                    "energy_ev": tot / EV_TO_KCAL_MOL,
-                    "energy_kcal_mol": tot,
-                    "backend": "charmm",
                     "charmm_ELEC_kcal": elec,
                     "charmm_VDW_kcal": vdw,
                     "min_contact_angstrom": min_fragment_contact_distance(geom.atoms, geom.fragments),
                 }
+            # Materialize the components as ordinary backends so the existing
+            # reference/interaction-energy and 2D plotting pipeline can render
+            # them with exactly the same geometry masks as the total surface.
+            rows.extend(
+                _charmm_component_rows(
+                    common, total_kcal=tot, elec_kcal=elec, vdw_kcal=vdw
+                )
             )
         except Exception as e:
             print(f"    Warning: CHARMM failed at d={geom.distance_angstrom} Å offset={geom.offset_angstrom} Å: {e}")
@@ -420,6 +445,18 @@ def main():
         print(f"  {len(distances)} distances × {len(offsets)} offsets = {len(distances) * len(offsets)} geometries")
         geometries = list(make_oriented_scan_geometries(label_a, label_b, distances, offsets))
 
+        if use_spookynet:
+            from mmml.analysis.dimer_cgenff import attach_cgenff_dimer_metadata
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+
+            for geometry in geometries:
+                attach_cgenff_dimer_metadata(
+                    geometry.atoms,
+                    geometry.pair,
+                    geometry.fragments,
+                    prm_path=CGENFF_PRM,
+                )
+
         # Evaluate Multipoles
         if use_multipole:
             print(f"  Evaluating learned multipole (max_ell={args.max_ell})...")
@@ -465,6 +502,33 @@ def main():
                 for r in sn_hybrid_rows:
                     r["backend"] = spookynet_hybrid_backend
                 results.extend(sn_hybrid_rows)
+
+                component_backends = {
+                    "electrostatics_energy": "electrostatics",
+                    "cgenff_vdw_energy": "cgenff_lj",
+                    "zbl_repulsion_energy": "zbl",
+                    "neural_energy": "neural",
+                    "mbd_energy": "mbd",
+                }
+                for key, suffix in component_backends.items():
+                    value_key = f"comp_Eint_{key}_ev"
+                    for source in sn_hybrid_rows:
+                        value_ev = float(source.get(value_key, 0.0))
+                        component_row = {
+                            "molecule_a": source["molecule_a"],
+                            "molecule_b": source["molecule_b"],
+                            "distance_angstrom": source["distance_angstrom"],
+                            "offset_angstrom": source["offset_angstrom"],
+                            "energy_ev": value_ev,
+                            "energy_kcal_mol": value_ev * EV_TO_KCAL_MOL,
+                            "min_contact_angstrom": source["min_contact_angstrom"],
+                            "backend": (
+                                f"spookynet_{suffix}_{args.spookynet_tag}"
+                                if args.spookynet_tag
+                                else f"spookynet_{suffix}"
+                            ),
+                        }
+                        results.append(component_row)
             except Exception as e:
                 print(f"    Error: {e}")
 
@@ -515,6 +579,50 @@ def main():
         df = pd.concat([df_prior, df], ignore_index=True).drop_duplicates(subset=key_cols, keep="last")
     df.to_csv(csv_path, index=False)
     print(f"Results saved to {csv_path} ({len(df)} total rows, backends: {sorted(df['backend'].unique())})")
+
+    if use_spookynet:
+        # Proof-of-work for the standalone adapter: this report is written
+        # after evaluation, so it records whether annotated CGenFF inputs were
+        # actually consumed rather than merely supported by the class.
+        spookynet_calc.write_energy_function_report(
+            args.output_dir / "calculator_energy_function.json"
+        )
+        hybrid = df[df["backend"] == spookynet_hybrid_backend].copy()
+        component_columns = [
+            "comp_Eint_neural_energy_ev",
+            "comp_Eint_electrostatics_energy_ev",
+            "comp_Eint_cgenff_vdw_energy_ev",
+            "comp_Eint_zbl_repulsion_energy_ev",
+            "comp_Eint_mbd_energy_ev",
+        ]
+        available = [name for name in component_columns if name in hybrid.columns]
+        reconstructed = hybrid[available].fillna(0.0).sum(axis=1)
+        target = hybrid["comp_Eint_ev"]
+        lj_values = hybrid["comp_Eint_cgenff_vdw_energy_ev"].fillna(0.0)
+        audit = {
+            "checkpoint": str(args.spookynet_checkpoint.resolve()),
+            "backend": spookynet_hybrid_backend,
+            "n_points": int(len(hybrid)),
+            "component_columns": available,
+            "max_abs_component_reconstruction_error_ev": float(
+                np.max(np.abs(reconstructed - target)) if len(hybrid) else np.nan
+            ),
+            "cgenff_lj_nonzero_points": int(np.count_nonzero(np.abs(lj_values) > 1e-12)),
+            "cgenff_lj_min_ev": float(lj_values.min()) if len(hybrid) else np.nan,
+            "cgenff_lj_max_ev": float(lj_values.max()) if len(hybrid) else np.nan,
+            "cgenff_inputs_consumed": bool(spookynet_calc.cgenff_lj_inputs_supplied),
+            "jax_enable_x64": bool(__import__("jax").config.jax_enable_x64),
+            "mmml_ml_dtype": os.environ.get("MMML_ML_DTYPE"),
+        }
+        (args.output_dir / "component_reconstruction_audit.json").write_text(
+            json.dumps(audit, indent=2) + "\n", encoding="utf-8"
+        )
+        print(
+            "Spooky component audit: "
+            f"CGenFF LJ nonzero at {audit['cgenff_lj_nonzero_points']}/{audit['n_points']} points; "
+            "max reconstruction error "
+            f"{audit['max_abs_component_reconstruction_error_ev']:.3e} eV"
+        )
 
     # Generate plots
     print("Generating plots...")

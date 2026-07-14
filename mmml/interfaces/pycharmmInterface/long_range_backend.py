@@ -517,18 +517,27 @@ def scale_per_atom_coefficients_by_monomer_lambda(
 
 def per_atom_jax_pme_c6_sqrt(
     epsilons_kcal: np.ndarray,
-    rmins_A: np.ndarray,
+    rmin_half_A: np.ndarray,
 ) -> np.ndarray:
-    """Per-atom √C6 for jax-pme exponent=6 (geometric k-space combining).
+    """Per-atom √C6 for CHARMM LJ dispersion in jax-pme.
 
-    Uses per-atom C6_i = 2 |ε_i| σ_i^6 with ε, σ already scaled (``ep_scale`` /
-    ``sig_scale`` in ``build_mm_energy_forces_fn``).  Reciprocal-space products
-    √C6_i √C6_j approximate Lorentz–Berthelot r⁻⁶ like GROMACS ``lj-pme-comb-rule
-    geometric``; direct-space r⁻¹² in the pair loop keeps exact LB σ_ij, ε_ij.
+    CHARMM NONBONDED parameter records store ``Rmin/2``, not conventional LJ
+    ``sigma`` and not full per-atom ``Rmin``.  For an identical atom pair,
+    CHARMM's attractive coefficient is::
+
+        C6_ii = 2 * |epsilon_i| * (2 * Rmin_half_i) ** 6
+
+    The factor of two inside the sixth power is essential; treating
+    ``Rmin/2`` as the full radius suppresses dispersion by 2**6 = 64.
+
+    Products of the returned coefficients use geometric k-space combining.
+    That is exact for identical atom types and an approximation to CHARMM's
+    arithmetic ``Rmin/2`` combining for unlike types.  Direct-space r⁻¹²
+    retains the exact CHARMM pair ``Rmin`` and epsilon combination.
     """
     ep_abs = np.abs(np.asarray(epsilons_kcal, dtype=np.float64))
-    sig = np.asarray(rmins_A, dtype=np.float64)
-    c6 = 2.0 * ep_abs * np.power(sig, 6)
+    rmin_full = 2.0 * np.asarray(rmin_half_A, dtype=np.float64)
+    c6 = 2.0 * ep_abs * np.power(rmin_full, 6)
     return np.sqrt(c6)
 
 

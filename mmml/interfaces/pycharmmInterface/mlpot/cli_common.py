@@ -4430,9 +4430,6 @@ def resolve_jax_pme_sr_cutoff_for_mlpot(
 ) -> float:
     """Real-space jax-pme cutoff (Å), aligned with switched-MM outer edge by default."""
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
-        DEFAULT_JAX_PME_SR_CUTOFF_A,
-    )
 
     if args is not None:
         explicit = getattr(args, "jax_pme_sr_cutoff", None)

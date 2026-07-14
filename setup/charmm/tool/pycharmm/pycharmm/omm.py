@@ -31,7 +31,6 @@ Get serlialized system
 
 import ctypes
 
-import pycharmm
 import pycharmm.lib as lib
 
 

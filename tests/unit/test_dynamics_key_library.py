@@ -46,7 +46,7 @@ def test_run_dynamics_uses_c_api_when_available():
 
 def test_configure_known_only_skips_integer_io_units():
     block = (
-        Path("pycharmm/dynamics.py")
+        Path("setup/charmm/tool/pycharmm/pycharmm/dynamics.py")
         .read_text(encoding="utf-8")
         .split("def _configure_known_only(")[1]
         .split("\ndef ")[0]

@@ -601,7 +601,6 @@ def prepare_charmm_pbc(
     from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         PBC_NBOND_BOX_MARGIN_A,
-        VACUUM_CUTNB,
     )
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
 
@@ -757,7 +756,7 @@ def reassert_pbc_nbond_cutoffs(
             cuts=cuts,
         )
 
-    applied = _apply()
+    _apply()
     if charmm_has_vacuum_nbond_preset() or not charmm_nbond_cutoffs_match_target(cuts):
         print(
             f"{context}: re-applying PBC cutoffs (vacuum preset or target mismatch)…",
@@ -768,7 +767,7 @@ def reassert_pbc_nbond_cutoffs(
             cuts.ctofnb,
             rebuild=False,
         )
-        applied = _apply()
+        _apply()
     stash_pbc_nbond_cutoffs(workflow_args, cuts)
     log_charmm_pbc_nbond_cutoffs(cuts, context=context, strict=strict)
     return cuts

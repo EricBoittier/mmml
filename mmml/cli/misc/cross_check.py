@@ -22,7 +22,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import yaml
 
 from mmml.interfaces.qc_backends.factory import backend_from_dict
 from mmml.interfaces.qc_backends.protocol import BackendSpec

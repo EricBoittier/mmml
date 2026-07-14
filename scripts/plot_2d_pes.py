@@ -613,7 +613,7 @@ def plot_2d_pes_for_pair(
             # Keep the physical interpolated surface for locating/reporting the
             # minimum.  Clipping is a display-only operation; using the clipped
             # array made deep wells report exactly the colour-scale floor.
-            Z_physical = Z_fine.copy()
+            Z_fine.copy()
             Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
 
             norm = Normalize(vmin=display_vmin, vmax=display_vmax)

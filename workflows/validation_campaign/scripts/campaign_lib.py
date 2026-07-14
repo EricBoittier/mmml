@@ -132,6 +132,40 @@ def select_tasks(
     return sorted(rows, key=lambda kv: (kv[1].get("goal", ""), kv[0]))
 
 
+def charmm_mpi_prefix() -> list[str]:
+    """Launcher prefix for a child process that will load CHARMM.
+
+    An MPI-linked ``libcharmm`` aborts in ``MPI_Init`` unless the process was
+    started by an MPI launcher, so drivers must not spawn CHARMM children with a
+    bare ``python``. Returns e.g. ``[mpirun, -np, 1, ...]``, or ``[]`` when the
+    library is not MPI-linked (or we are already running under mpirun, in which
+    case nesting a second launcher would fail).
+
+    Launching the child under mpirun ourselves also stops the mmml CLI from
+    trying to re-exec itself via ``maybe_rerun_mmml_under_mpirun``: it sees it is
+    already under mpirun and proceeds.
+    """
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            charmm_lib_links_mpi,
+            charmm_mpirun_path,
+            mpi_mpirun_extra_args,
+        )
+    except Exception:
+        return []
+
+    try:
+        if _under_mpirun() or not charmm_lib_links_mpi():
+            return []
+        mpirun = charmm_mpirun_path()
+        if mpirun is None:
+            return []
+        return [str(mpirun), "-np", "1", *mpi_mpirun_extra_args()]
+    except Exception:
+        return []
+
+
 def declared_state(task: dict[str, Any]) -> str:
     return task.get("state", "ready")
 

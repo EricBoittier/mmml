@@ -4,7 +4,7 @@ import argparse
 import inspect
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -1220,7 +1220,6 @@ def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -
     """Temporary nonbond settings for bonded rescue SD (``NBXMOD 2``, VDW on in BLOCK)."""
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         apply_nbonds_script_kwargs,
-        apply_vacuum_nbonds,
         trigger_nbonds_update_script,
         vacuum_nbond_kwargs,
     )

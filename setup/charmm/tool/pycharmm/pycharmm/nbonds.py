@@ -409,7 +409,11 @@ def update_bnbnd():
 
 
 def get_primary_pair_count():
-    """Return the number of primary-cell pairs in the current JNB list."""
+    """Return the number of primary-cell pairs in the current JNB list.
+
+    Requires CHARMM build exporting ``nbonds_get_primary_pair_count``.
+    Returns ``None`` when unavailable.
+    """
     try:
         getter = lib.charmm.nbonds_get_primary_pair_count
     except AttributeError:
@@ -418,7 +422,10 @@ def get_primary_pair_count():
 
 
 def export_primary_pairs(*, max_pairs: int | None = None):
-    """Export primary-cell JNB pairs as 0-based ``(i, j)`` with ``i < j``."""
+    """Export primary-cell JNB pairs as 0-based ``(i, j)`` with ``i < j``.
+
+    Returns ``None`` when the C API is unavailable.
+    """
     try:
         exporter = lib.charmm.nbonds_export_primary_pairs
         counter = lib.charmm.nbonds_get_primary_pair_count

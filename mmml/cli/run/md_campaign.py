@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from mmml.cli.run.md_config import (
-    campaign_job_ids,
     expand_repeated_jobs,
     load_yaml_config,
     merge_campaign_job_config,

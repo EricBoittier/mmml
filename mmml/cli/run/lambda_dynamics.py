@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -46,7 +44,6 @@ SNAPSHOTS_NPZ = "lambda_ti_snapshots.npz"
 SUMMARY_JSON = "lambda_ti_summary.json"
 
 
-from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
 
 def lambda_repeat_label(wi: int, rep: int, lam: float) -> str:
@@ -480,7 +477,7 @@ def minimize_lambda_structure(
     min_traj_path: Path | None,
 ) -> dict[str, float | int | str]:
     """CHARMM (MM) then MMML-calculator BFGS, matching ``md_10mer_mmml_pbc_suite``."""
-    repo_root = cfg.repo_root or repo_root_from_here()
+    cfg.repo_root or repo_root_from_here()
     md = md_suite
     timings: dict[str, float | int | str] = {}
     overlap_kw = dict(

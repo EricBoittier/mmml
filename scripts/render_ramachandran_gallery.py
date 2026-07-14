@@ -31,7 +31,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers 3d projection)
 from scipy.interpolate import RBFInterpolator, griddata
 from scipy.ndimage import gaussian_filter
 
-from mmml.utils.plotting.styles import apply_plot_style, default_cmap, legend_outside
+from mmml.utils.plotting.styles import apply_plot_style, default_cmap
 
 STYLE_NAME = "icml"
 OUT_DIR = Path(__file__).resolve().parents[1] / "docs" / "plot-style-gallery-assets"

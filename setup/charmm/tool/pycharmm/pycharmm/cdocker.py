@@ -283,7 +283,7 @@ def FACTS_rescore(fixAtomSel = None, steps = 1000, tolgrd = 0.001):
 
     ## Non-bond option
     lingo.charmm_script("faster on")
-    update_nonbond = pycharmm.UpdateNonBondedScript(
+    pycharmm.UpdateNonBondedScript(
      nbxmod = 5, atom = True, cdiel = True, eps = 1, shift = True,
      vatom = True, vdistance = True, vswitch = True, cutnb = 14.0,
      ctofnb = 12.0, ctonnb = 10.0, e14fac = 1.0, wmin = 1.5).run()
@@ -441,12 +441,12 @@ def RCDOCKER_init_place(ligPDB = './ligand.pdb', ligSeg = 'LIGA',
 
     ## Update nonbond interactions
     if flag_rdie:
-        update_nonbond = pycharmm.UpdateNonBondedScript(
+        pycharmm.UpdateNonBondedScript(
           atom = True, switch = True, vswitch = True, vdwe = True,
           elec = True, rdie = True, cutnb = 12, ctofnb = 10, ctonnb = 8,
           emax = 10000, maxe = 10000, mine = -10000, epsilon = dielec).run()
     else:
-        update_nonbond = pycharmm.UpdateNonBondedScript(
+        pycharmm.UpdateNonBondedScript(
           atom = True, switch = True, vswitch = True, vdwe = True,
           elec = True, cdie = True, cutnb = 12, ctofnb = 10, ctonnb = 8,
           emax = 10000, maxe = 10000, mine = -10000, epsilon = dielec).run()
@@ -499,7 +499,7 @@ def RCDOCKER_init_place(ligPDB = './ligand.pdb', ligSeg = 'LIGA',
             ## Check energy
             energy.show()
             flag_mutate = False
-            allEner = energy.get_energy()
+            energy.get_energy()
             confEner = energy.get_total()
             if confEner <= totalener : flag_mutate = True
             if flag_use_hbond:
@@ -510,7 +510,6 @@ def RCDOCKER_init_place(ligPDB = './ligand.pdb', ligSeg = 'LIGA',
 
             if flag_mutate :
                 tmpidx = 1
-                randomEner = confEner
                 while tmpidx <= 5:
                     ## Random rotation and translation
                     mutate_xyz = pd.DataFrame(rand_rot_trans(new_xyz.to_numpy(), max_rot = pi / 6),
@@ -651,7 +650,6 @@ def RCDOCKER_fast_init_place(receptorPDB = './protein.pdb', receptorPSF = './pro
             ligGrid = _lig_grid(tmp_xyz, size, protCenter)
             conformer_score = np.sum(protGrid * ligGrid)
             if conformer_score <= cutoff:
-                conformer_xyz = tmp_xyz
                 tmpidx = 1
 
                 ## Mutate conformer position, save pose based on probability
@@ -877,7 +875,6 @@ def FCDOCKER_fast_init_place(receptorPDB='./protein.pdb', receptorPSF='./protein
             ligGrid = _lig_grid(tmp_xyz, size, protCenter)
             conformer_score = np.sum(protGrid * ligGrid)
             if conformer_score <= cutoff:
-                conformer_xyz = tmp_xyz
                 tmpidx = 1
 
                 ## Mutate conformer position, save pose based on probability
@@ -1413,7 +1410,7 @@ def top_N_cluster(logFile = 'cluster.log', N = 10, total = 500):
     ''' % (logFile, cutoff, N, logFile)
     system(cmd)
     try:
-        cluster_list = np.loadtxt("cluster_list", dtype = int)
+        np.loadtxt("cluster_list", dtype = int)
         return np.loadtxt("cluster_list", dtype = int)
     except IOError:
         print("All clusters have a cluster number of 1, please increase docking trials")
@@ -1584,12 +1581,12 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
 
         ## Update nonbond interactions
         if flag_rdie:
-            update_nonbond = pycharmm.UpdateNonBondedScript(
+            pycharmm.UpdateNonBondedScript(
               atom = True, switch = True, vswitch = True, vdwe = True,
               elec = True, rdie = True, cutnb = 12, ctofnb = 10, ctonnb = 8,
               emax = 10000, maxe = 10000, mine = -10000, epsilon = dielec).run()
         else:
-            update_nonbond = pycharmm.UpdateNonBondedScript(
+            pycharmm.UpdateNonBondedScript(
               atom = True, switch = True, vswitch = True, vdwe = True,
               elec = True, cdie = True, cutnb = 12, ctofnb = 10, ctonnb = 8,
               emax = 10000, maxe = 10000, mine = -10000, epsilon = dielec).run()
@@ -1622,12 +1619,12 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
 
     ## Update nonbond interactions
     if flag_rdie:
-        update_nonbond = pycharmm.UpdateNonBondedScript(
+        pycharmm.UpdateNonBondedScript(
           atom = True, switch = True, vswitch = True, vdwe = True,
           elec = True, rdie = True, cutnb = 12, ctofnb = 10, ctonnb = 8,
           emax = 10000, maxe = 10000, mine = -10000, epsilon = dielec).run()
     else:
-        update_nonbond = pycharmm.UpdateNonBondedScript(
+        pycharmm.UpdateNonBondedScript(
           atom = True, switch = True, vswitch = True, vdwe = True,
           elec = True, cdie = True, cutnb = 12, ctofnb = 10, ctonnb = 8,
           emax = 10000, maxe = 10000, mine = -10000, epsilon = dielec).run()
@@ -2225,7 +2222,7 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
                     * Receptor Side Chain Initial Position''')
 
     ## Update nonbond interactions
-    update_nonbond = pycharmm.UpdateNonBondedScript(
+    pycharmm.UpdateNonBondedScript(
       atom = True,
       switch = True,
       vswitch = True,
@@ -2243,8 +2240,8 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
     ## Coor stats
     allCoor = coor.get_positions()
     allCoor['atomIndex'] = np.arange(np.shape(list(ligand))[0])
-    ligand_xyz = allCoor.loc[np.asarray(list(ligand)), ['x', 'y', 'z']]
-    receptor_xyz = allCoor.loc[np.asarray(list(receptor)), ['x', 'y', 'z', 'atomIndex']]
+    allCoor.loc[np.asarray(list(ligand)), ['x', 'y', 'z']]
+    allCoor.loc[np.asarray(list(receptor)), ['x', 'y', 'z', 'atomIndex']]
 
     ligStat = coor.stat(selection = ligand)
     xcen = ligStat['xave']
@@ -2578,7 +2575,7 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
             tmpvdw = np.sum(tmp_result[:, 2] * prob)
             tmpelec = np.sum(tmp_result[:, 3] * prob)
             tmpentropy = np.sum(tmp_result[:, 4] * prob)
-            tmpcluster = np.sum(tmp_result[:, 6] * prob)
+            np.sum(tmp_result[:, 6] * prob)
 
             vdw.append(tmpvdw)
             elec.append(tmpelec)

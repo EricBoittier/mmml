@@ -13,7 +13,6 @@ from mmml.interfaces.pyxtal_placement import (
     _match_molecule_blocks_to_psf_order,
     ase_supercell,
     crystal_mass_density_g_cm3,
-    parse_supercell_reps,
     write_psf_order_mapping_pdb,
 )
 from mmml.paths import (

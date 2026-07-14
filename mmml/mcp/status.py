@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from mmml.mcp.env import ensure_run_dir, runs_root, repo_root
-from mmml.mcp.manifest import RunManifest, load_manifest
+from mmml.mcp.manifest import load_manifest
 
 
 def list_runs() -> list[dict[str, Any]]:

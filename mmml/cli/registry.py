@@ -17,6 +17,7 @@ class CommandSpec:
     summary: str
     status: CommandStatus = "active"
     replacement: str | None = None
+    removal_date: str | None = None
     note: str | None = None
     parser_module: str | None = None
     """Import path for ``build_parser`` when different from ``module``."""
@@ -33,6 +34,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "MM/ML simulation (ASE + JAX-MD hybrid)",
         status="legacy",
         replacement="md-system",
+        removal_date="2026-09-01",
         note="Prefer md-system for new MD; run kept for hybrid calculator demos.",
     ),
     CommandSpec("md-system", "mmml.cli.run.md_system", "Mixed-composition MD (ASE/JAX-MD/PyCHARMM)"),
@@ -55,6 +57,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Pure CHARMM heating/equilibration",
         status="legacy",
         replacement="md-system --backend pycharmm (no ML checkpoint)",
+        removal_date="2026-09-01",
         note="Pure MM CHARMM without MLpot; md-system covers ML workflows.",
     ),
     CommandSpec(
@@ -70,6 +73,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Train DCMNet or legacy unified trainer",
         status="deprecated",
         replacement="physnet-train (PhysNet) or train-joint (PhysNet+DCMNet)",
+        removal_date="2026-09-01",
     ),
     CommandSpec("train-joint", "mmml.cli.misc.train_joint", "Joint PhysNet+DCMNet training"),
     CommandSpec(
@@ -78,6 +82,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Legacy unified model evaluation",
         status="deprecated",
         replacement="physnet-evaluate or efield-evaluate",
+        removal_date="2026-09-01",
     ),
     CommandSpec("downstream", "mmml.cli.misc.downstream", "Downstream analysis utilities"),
     CommandSpec("fix-and-split", "mmml.cli.misc.fix_and_split", "Unit fixes + train/valid/test splits"),
@@ -101,6 +106,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Train EF equivariant model (deprecated)",
         status="deprecated",
         replacement="efield-train",
+        removal_date="2026-09-01",
     ),
     CommandSpec(
         "ef-evaluate",
@@ -108,6 +114,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Evaluate EF model (deprecated)",
         status="deprecated",
         replacement="efield-evaluate",
+        removal_date="2026-09-01",
     ),
     CommandSpec(
         "ef-md",
@@ -115,6 +122,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "MD with trained EF model (deprecated)",
         status="deprecated",
         replacement="efield-md",
+        removal_date="2026-09-01",
     ),
     CommandSpec("active-learning", "mmml.cli.misc.active_learning", "Sample structures for re-labeling"),
     CommandSpec("kernel-fit", "mmml.cli.misc.kernel_fit", "Kernel fitting utilities"),
@@ -176,7 +184,8 @@ def format_audit_report() -> str:
         if spec.status == "active":
             continue
         rep = f" → use {spec.replacement}" if spec.replacement else ""
-        lines.append(f"  {spec.name:<28} [{spec.status}]{rep}")
+        deadline = f"; removal {spec.removal_date}" if spec.removal_date else ""
+        lines.append(f"  {spec.name:<28} [{spec.status}]{rep}{deadline}")
         if spec.note:
             lines.append(f"    {spec.note}")
     lines.extend(["", "Active commands with tab-completion when build_parser() exists:", ""])

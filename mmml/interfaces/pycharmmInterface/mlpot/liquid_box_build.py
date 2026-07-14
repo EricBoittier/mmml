@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -558,7 +557,6 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         r = get_charmm_positions_array()
 
     from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
-        MAX_MM_PRETREAT_DYNAMICS_GRMS,
         measure_mm_pretreat_grms,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results

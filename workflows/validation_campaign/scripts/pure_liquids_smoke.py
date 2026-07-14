@@ -183,7 +183,10 @@ def run_system(
     sys_dir.mkdir(parents=True, exist_ok=True)
     build_dir = sys_dir / "box"
 
+    # An MPI-linked libcharmm must be started by an MPI launcher or it aborts in
+    # MPI_Init. Launching it here also means the CLI does not re-exec itself.
     cmd = [
+        *lib.charmm_mpi_prefix(),
         python,
         "-m",
         "mmml.cli.__main__",

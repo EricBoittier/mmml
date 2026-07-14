@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_monomer_3d_coords
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     coor,
     pycharmm,

@@ -7,6 +7,7 @@ the identical file.
 
 from __future__ import annotations
 
+import re
 import shlex
 import shutil
 import subprocess
@@ -14,6 +15,35 @@ from pathlib import Path
 from typing import Any
 
 import campaign_lib as lib
+
+# Per-cluster environment prologs, sourced inside the job before pycharmm is
+# imported. Repo-relative: the job has already cd'd to the cluster's repo root.
+CLUSTER_PROLOGS: dict[str, str] = {
+    "pcbach": "scripts/pc_bach_env.sh",
+    "scicore": "scripts/scicore_env.sh",
+}
+
+
+def _check_qos_runtime(env: dict[str, Any]) -> None:
+    """Reject a runtime the qos cannot grant, before Slurm does.
+
+    scicore encodes the wall-clock cap in the qos name (``rtx4090-6hours``).
+    Asking for more time than the qos allows is rejected at submission, so catch
+    it here where the error can name the offending field.
+    """
+    qos = str(env.get("qos") or "")
+    match = re.search(r"(\d+)\s*hours?", qos)
+    if not match:
+        return
+    cap_min = int(match.group(1)) * 60
+    runtime = int(env.get("runtime_min", 0))
+    if runtime > cap_min:
+        raise SystemExit(
+            f"{env['name']}: runtime_min={runtime} exceeds the {cap_min} min cap "
+            f"implied by qos {qos!r}. Lower runtime_min in "
+            f"workflows/validation_campaign/environments/{env['name']}.yaml, "
+            f"or pick a longer qos."
+        )
 
 
 def render(
@@ -23,6 +53,8 @@ def render(
     env: dict[str, Any],
     run_id: str,
 ) -> Path:
+    _check_qos_runtime(env)
+
     out = lib.output_dir(cfg, run_id, task_id, env["name"])
     out.mkdir(parents=True, exist_ok=True)
 
@@ -54,13 +86,16 @@ def render(
         if env.get(key):
             directives.append(f"#SBATCH --{flag}={env[key]}")
 
-    # pc-bach must load its MPI/CHARMM prolog before anything imports pycharmm.
+    # Clusters whose compute nodes need modules loaded (MPI, newer libstdc++)
+    # before anything dlopens libcharmm. Without this, pycharmm import fails with
+    # "libmpi.so.40 => not found" / "GLIBCXX_... not found".
     prolog = ""
-    if env["name"] == "pcbach":
+    prolog_script = CLUSTER_PROLOGS.get(env["name"])
+    if prolog_script:
         prolog = (
-            'if [[ -f scripts/pc_bach_env.sh ]]; then\n'
-            '  source scripts/pc_bach_env.sh\n'
-            'fi'
+            f'if [[ -f {prolog_script} ]]; then\n'
+            f'  source {prolog_script}\n'
+            f'fi'
         )
 
     quoted_out = shlex.quote(str(rel))

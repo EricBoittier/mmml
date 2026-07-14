@@ -12,7 +12,7 @@ or ``(3, 3)`` Å cell. The returned JAX arrays are padded ``pair_idx`` with shap
 from __future__ import annotations
 
 import os
-from typing import Literal, Optional, Sequence, Tuple
+from typing import Literal, Tuple
 
 import numpy as np
 

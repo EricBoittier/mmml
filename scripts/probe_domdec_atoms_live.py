@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,7 +44,6 @@ def main() -> None:
 
     # ------------------------------------------------------------------ MPI
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
     import pycharmm.lingo as lingo
 
     try:

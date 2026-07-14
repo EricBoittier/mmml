@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
@@ -20,19 +20,7 @@ from flax.training import train_state
 
 from mmml.data.orbax_shards import partition_shards
 from mmml.models.multipoles import E3xDegreeMultipoleModel, E3xMultipoleModel
-
-
-@dataclass(frozen=True)
-class TrainConfig:
-    features: int = 64
-    max_degree: int = 3
-    target_degree: int | None = None
-    num_iterations: int = 3
-    num_basis_functions: int = 16
-    cutoff: float = 6.0
-    max_atomic_number: int = 118
-    compose_dipole_from_atomic: bool = False
-    enforce_total_charge: bool = True
+from mmml.models.multipoles.config import TrainConfig
 
 
 def degree_slices(max_degree: int = 3) -> dict[str, tuple[int, int]]:

@@ -100,7 +100,7 @@ def _parse_list_option(val: Any) -> Optional[Sequence[Any]]:
         if val_stripped.startswith("[") or val_stripped.startswith("("):
             try:
                 return json.loads(val_stripped)
-            except Exception as e:
+            except Exception:
                 pass
         if "," in val_stripped:
             return [x.strip() for x in val_stripped.split(",")]

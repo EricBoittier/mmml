@@ -15,7 +15,9 @@ mmml md-system --help
 usage: mmml md-system [-h]
                       [--setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}]
                       [--backend {auto,ase,jaxmd,pycharmm}]
-                      [--checkpoint CHECKPOINT] [--jaxmd-unified]
+                      [--checkpoint CHECKPOINT]
+                      [--mbd-checkpoint MBD_CHECKPOINT]
+                      [--mbd-weight MBD_WEIGHT] [--jaxmd-unified]
                       [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
                       [--output-dir OUTPUT_DIR] [--job-name JOB_NAME]
                       [--jobs-dir JOBS_DIR] [--template-pdb TEMPLATE_PDB]
@@ -289,6 +291,15 @@ options:
                         MD.
   --checkpoint CHECKPOINT
                         Model checkpoint path.
+  --mbd-checkpoint MBD_CHECKPOINT
+                        Optional learned MBD dispersion checkpoint. Adds a
+                        whole-system E += mbd_weight * E_mbd correction to the
+                        hybrid ML/MM calculator (ASE / JAX-MD backends).
+                        Required when the model was trained with an additive MBD
+                        term, else that dispersion physics is silently omitted.
+  --mbd-weight MBD_WEIGHT
+                        Weight for the --mbd-checkpoint correction (default 1.0;
+                        match training).
   --jaxmd-unified       EXPERIMENTAL: run --backend jaxmd through the unified
                         mmml.md pipeline (mmml.cli.run.md_system_unified)
                         instead of the legacy md_pbc_suite.jaxmd inline loop.

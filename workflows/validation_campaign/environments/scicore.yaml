@@ -2,20 +2,25 @@ name: scicore
 kind: slurm
 role: primary GPU production and checkpoint/method matrices
 repo_root: ~/mmml
-partition: gpu
+
+# On scicore the GPU type is chosen by the *partition* (rtx4090 / a100 / titanx),
+# not by a --constraint, and the qos must agree with the partition and the
+# requested wall clock. qos ``rtx4090-6hours`` caps runtime at 6 h, so
+# runtime_min must stay <= 360.
+partition: rtx4090
+qos: rtx4090-6hours
 account: null
-qos: null
+
 nodes: 1
 ntasks: 1
-cpus_per_task: 8
-mem_mb_per_cpu: 8000
-runtime_min: 1440
+cpus_per_task: 2
+mem_mb_per_cpu: 20000
+runtime_min: 360
 gpus: 1
-gpu_constraint: null  # set to the site value for RTX4090/A100 selection
+gpu_constraint: null  # unused on scicore: the partition selects the GPU
 max_concurrent: 16
 launcher: scripts/mmml-charmm-mpirun.sh
 environment:
   JAX_ENABLE_X64: "1"
   MMML_ML_DTYPE: float64
-  OMP_NUM_THREADS: "1"
-
+  OMP_NUM_THREADS: "2"

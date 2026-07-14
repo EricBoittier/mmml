@@ -45,8 +45,6 @@ Apply a dihedral potential on four selected atoms
  
 
 """
-import ctypes
-import pycharmm.lib as lib
 import pycharmm.script
 
 def dihe(selection='', cldh=False, force=0, **kwargs):
