@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from scripts.audit_charmm_fortran_api import audit_argument, scan
+import scripts.audit_charmm_fortran_api as api_audit
+from scripts.audit_charmm_fortran_api import audit_argument, probe_shared_library, scan
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -67,3 +68,17 @@ def test_repository_api_surface_includes_interoperable_types_and_enums():
     assert report["summary"]["bind_c_types"] == 7
     assert report["summary"]["bind_c_enums"] == 2
     assert report["summary"]["total_bind_c_surface_entries"] == 345
+
+
+def test_optional_shared_library_probe_reports_missing_exports(monkeypatch, tmp_path):
+    class FakeLibrary:
+        known_symbol = object()
+
+    monkeypatch.setattr(api_audit.ctypes, "CDLL", lambda _: FakeLibrary())
+    result = probe_shared_library(
+        tmp_path / "libcharmm.so",
+        {"routines": [{"symbol": "known_symbol"}, {"symbol": "missing_symbol"}]},
+    )
+    assert result["found_symbols"] == 1
+    assert result["missing_symbols"] == ["missing_symbol"]
+    assert result["load_error"] is None

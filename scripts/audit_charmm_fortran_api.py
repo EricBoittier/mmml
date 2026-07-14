@@ -419,6 +419,16 @@ def markdown(report: dict) -> str:
         source = f"`{Path(row['source']).name}:{row['line']}`"
         values = ", ".join(f"`{value}`" for value in row["enumerators"])
         lines.append(f"| `{row['name']}` | {source} | {values} | {findings} |")
+    probe = report.get("runtime_symbol_probe")
+    if probe is not None:
+        load_status = f"`{probe['load_error']}`" if probe["load_error"] else "none"
+        missing = ", ".join(f"`{x}`" for x in probe["missing_symbols"]) or "none"
+        lines += ["", "## Runtime shared-library symbol probe", "",
+                  f"- Library: `{probe['library']}`",
+                  f"- Expected symbols: **{probe['expected_symbols']}**",
+                  f"- Found symbols: **{probe['found_symbols']}**",
+                  f"- Load error: {load_status}",
+                  f"- Missing symbols: {missing}"]
     lines += ["", "## Python symbols outside this API directory", ""]
     for symbol, locations in sorted(report["python_symbols_not_in_api_directory"].items()):
         lines.append(f"- `{symbol}` — {', '.join(f'`{x}`' for x in locations)}")
@@ -435,9 +445,15 @@ def main() -> int:
     parser.add_argument("--python-root", type=Path, default=Path("setup/charmm/tool/pycharmm/pycharmm"))
     parser.add_argument("--json", type=Path, default=Path("artifacts/diagnostics/charmm_fortran_api.json"))
     parser.add_argument("--markdown", type=Path, default=Path("artifacts/diagnostics/charmm_fortran_api.md"))
+    parser.add_argument(
+        "--library", type=Path,
+        help="optional compatible libcharmm shared library for an exported-symbol probe",
+    )
     parser.add_argument("--strict", action="store_true", help="exit nonzero when ABI errors are found")
     args = parser.parse_args()
     report = scan(args.fortran_root, args.python_root)
+    if args.library is not None:
+        report["runtime_symbol_probe"] = probe_shared_library(args.library, report)
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -446,7 +462,12 @@ def main() -> int:
     print(f"JSON: {args.json}")
     print(f"Markdown: {args.markdown}")
     errors = int(report["summary"]["issues"].get("error", 0))
-    return 1 if args.strict and errors else 0
+    probe_failed = bool(
+        report["runtime_symbol_probe"] is not None
+        and (report["runtime_symbol_probe"]["load_error"]
+             or report["runtime_symbol_probe"]["missing_symbols"])
+    )
+    return 1 if args.strict and (errors or probe_failed) else 0
 
 
 if __name__ == "__main__":

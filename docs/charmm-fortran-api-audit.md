@@ -6,6 +6,18 @@ Run the complete static surface audit locally:
 .venv/bin/python scripts/audit_charmm_fortran_api.py
 ```
 
+On a machine with a compatible local build, include a runtime export check in
+the same report:
+
+```bash
+.venv/bin/python scripts/audit_charmm_fortran_api.py --strict \
+  --library /path/to/libcharmm.dylib
+```
+
+Use the corresponding `.so` path on Linux. This loads the library and verifies
+that every statically inventoried routine symbol is actually exported. It does
+not call stateful routines; safe behavioral round trips remain separate tests.
+
 It scans every `bind(c)` routine, derived type, and enum in
 `setup/charmm/source/api/*.F90`, maps direct uses from the vendored
 `setup/charmm/tool/pycharmm/pycharmm` package, and writes:
