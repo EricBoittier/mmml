@@ -70,8 +70,10 @@ def relative_output_dir(cfg: dict[str, Any], rid: str, task_id: str, env_name: s
     return Path(cfg.get("artifact_root", "artifacts/validation_campaign")) / rid / env_name / task_id.replace(".", "/")
 
 
-def task_command(task: dict[str, Any], out: Path) -> str:
-    return str(task["command"]).format(output_dir=shlex.quote(str(out)))
+def task_command(task: dict[str, Any], out: Path, *, python: str) -> str:
+    return str(task["command"]).format(
+        output_dir=shlex.quote(str(out)), python=python
+    )
 
 
 def request_payload(task_id: str, task: dict[str, Any], env: dict[str, Any], rid: str) -> dict[str, Any]:
@@ -124,7 +126,7 @@ def slurm_script(task_id: str, task: dict[str, Any], env: dict[str, Any], out: P
     for key, flag in (("account", "account"), ("qos", "qos"), ("gpu_constraint", "constraint")):
         if env.get(key):
             directives.append(f"#SBATCH --{flag}={env[key]}")
-    command = task_command(task, out)
+    command = task_command(task, out, python='"$MMML_PYTHON"')
     repo_root = str(env.get("repo_root", "~/mmml"))
     repo_shell = "$HOME/" + repo_root[2:] if repo_root.startswith("~/") else shlex.quote(repo_root)
     return "\n".join(
@@ -133,9 +135,16 @@ def slurm_script(task_id: str, task: dict[str, Any], env: dict[str, Any], out: P
             *directives,
             "set -euo pipefail",
             f"cd {repo_shell}",
+            'source scripts/resolve_mmml_env.sh',
+            'mmml_resolve_env "$PWD"',
             shell_exports(env),
             f"mkdir -p {shlex.quote(str(out))}",
+            "set +e",
             f"{command} > {shlex.quote(str(out / 'stdout.log'))} 2> {shlex.quote(str(out / 'stderr.log'))}",
+            "task_rc=$?",
+            "set -e",
+            f'"$MMML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py --output-dir {shlex.quote(str(out))} --exit-code "$task_rc"',
+            "exit $task_rc",
         ]
     ) + "\n"
 
@@ -191,13 +200,22 @@ def run_local(args: argparse.Namespace) -> int:
         merged.update({str(k): str(v) for k, v in env.get("environment", {}).items()})
         started = dt.datetime.now(dt.UTC)
         with (out / "stdout.log").open("w") as stdout, (out / "stderr.log").open("w") as stderr:
-            proc = subprocess.run(task_command(task, out), cwd=REPO, env=merged, shell=True, stdout=stdout, stderr=stderr)
+            proc = subprocess.run(
+                task_command(task, out, python=shlex.quote(sys.executable)),
+                cwd=REPO, env=merged, shell=True, stdout=stdout, stderr=stderr
+            )
         write_json(out / "status.json", {
             "state": "COMPLETED" if proc.returncode == 0 else "FAILED",
             "exit_code": proc.returncode,
             "started_utc": started.isoformat(),
             "finished_utc": dt.datetime.now(dt.UTC).isoformat(),
         })
+        if not (out / "proof.json").exists() and task.get("acceptance") == ["exit_zero"]:
+            write_json(out / "proof.json", {
+                "passed": proc.returncode == 0,
+                "checks": {"exit_zero": proc.returncode == 0},
+                "sources": ["stdout.log", "stderr.log", "status.json"],
+            })
         failures += proc.returncode != 0
         print(f"{'PASS' if proc.returncode == 0 else 'FAIL'} {task_id}: {out}")
     return int(bool(failures))

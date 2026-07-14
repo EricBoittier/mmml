@@ -26,21 +26,21 @@ tasks:
     goal: platform
     tier: static
     environments: [local_laptop, local_computer, pcbach, scicore, pcstudix]
-    command: python workflows/validation_campaign/scripts/platform_probe.py --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/platform_probe.py --output-dir {output_dir}"
     acceptance: [provenance_complete, jax_x64_enabled, imports_pass]
 
   force_energy.unit:
     goal: force_energy
     tier: static
     environments: [local_laptop, local_computer, pcbach]
-    command: python -m pytest tests/unit/test_md_handoff.py tests/unit/test_charmm_ase_velocities.py tests/unit/test_md_mm_nonbonded.py -q
+    command: "{python} -m pytest tests/unit/test_md_handoff.py tests/unit/test_charmm_ase_velocities.py tests/unit/test_md_mm_nonbonded.py -q"
     acceptance: [exit_zero]
 
   force_energy.lj_elec_fd:
     goal: force_energy
     tier: smoke
     environments: [pcstudix, scicore, local_computer]
-    command: python workflows/validation_campaign/scripts/task_placeholder.py --task force_energy.lj_elec_fd --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task force_energy.lj_elec_fd --output-dir {output_dir}"
     acceptance: [finite_components, nonzero_expected_lj, charge_sums_match, fd_max_error_below_tolerance, cutoff_continuity]
     state: needs_driver
 
@@ -48,7 +48,7 @@ tasks:
     goal: backend_parity
     tier: blocker
     environments: [pcstudix, scicore, local_computer]
-    command: python workflows/validation_campaign/scripts/task_placeholder.py --task backend_parity.dcm10_pycharmm_jaxmd --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task backend_parity.dcm10_pycharmm_jaxmd --output-dir {output_dir}"
     acceptance: [identical_initial_state, positive_temperature, nve_drift_pass, nvt_temperature_pass, roundtrip_pass]
     state: blocked
     blocker: PyCHARMM dynamics velocity handoff ABI/restart issue; latest control job 204734 SIGSEGV in dynamics_run_kw/dynopt.
@@ -60,7 +60,7 @@ tasks:
     methods: [MM, ML, MMML]
     backends: [jaxmd, pycharmm]
     environments: [pcstudix, scicore, local_computer]
-    command: python workflows/validation_campaign/scripts/task_placeholder.py --task pure_liquids.smoke --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task pure_liquids.smoke --output-dir {output_dir}"
     acceptance: [packmol_audit, finite_energy_force, positive_temperature, no_overlap, short_nvt_pass]
     state: needs_driver
 
@@ -71,7 +71,7 @@ tasks:
     methods: [MM, ML, MMML]
     backends: [jaxmd, pycharmm]
     environments: [scicore, pcbach]
-    command: python workflows/validation_campaign/scripts/task_placeholder.py --task pure_liquids.production --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task pure_liquids.production --output-dir {output_dir}"
     acceptance: [nvt_pass, npt_pass, density_report, rdf_report, energy_temperature_report]
     state: gated
     requires: [pure_liquids.smoke, backend_parity.dcm10_pycharmm_jaxmd]
@@ -83,7 +83,7 @@ tasks:
     methods: [MM, ML, MMML]
     backends: [jaxmd, pycharmm]
     environments: [pcstudix, scicore, local_computer]
-    command: python workflows/validation_campaign/scripts/task_placeholder.py --task peptide_gas.smoke --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task peptide_gas.smoke --output-dir {output_dir}"
     acceptance: [build_audit, finite_energy_force, fd_force_pass, minimized_structure, short_nve_nvt_pass]
     state: needs_driver
 
@@ -94,7 +94,7 @@ tasks:
     methods: [MM, ML, MMML]
     backends: [jaxmd, pycharmm]
     environments: [pcstudix, scicore, local_computer]
-    command: python workflows/validation_campaign/scripts/task_placeholder.py --task peptide_solution.smoke --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task peptide_solution.smoke --output-dir {output_dir}"
     acceptance: [solvation_audit, finite_energy_force, positive_temperature, no_overlap, short_nvt_pass]
     state: needs_driver
 
@@ -105,7 +105,7 @@ tasks:
     methods: [MM, ML, MMML]
     backends: [jaxmd, pycharmm]
     environments: [scicore, pcbach]
-    command: python workflows/validation_campaign/scripts/task_placeholder.py --task peptide.production --output-dir {output_dir}
+    command: "{python} workflows/validation_campaign/scripts/task_placeholder.py --task peptide.production --output-dir {output_dir}"
     acceptance: [ensemble_pass, energy_temperature_report, conformation_report, solvent_contact_report]
     state: gated
     requires: [peptide_gas.smoke, peptide_solution.smoke, backend_parity.dcm10_pycharmm_jaxmd]
@@ -114,6 +114,5 @@ tasks:
     goal: coverage
     tier: report
     environments: [local_laptop, pcbach]
-    command: python workflows/validation_campaign/scripts/campaign.py status --write
+    command: "{python} workflows/validation_campaign/scripts/campaign.py status --write"
     acceptance: [all_supported_combinations_accounted_for]
-
