@@ -443,6 +443,10 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
+        # --fixed-cgenff-vdw pins the CGenFF LJ term at its published parameters, so it
+        # acts as a fixed physical prior the network can only add to, never scale away.
+        learn_cgenff_vdw_scale=not args.fixed_cgenff_vdw,
+        predict_atomic_vdw_scale=not args.fixed_cgenff_vdw,
     )
 
 
@@ -1435,6 +1439,19 @@ def build_parser() -> argparse.ArgumentParser:
             "training with --mbd-checkpoint instead of empirical LJ dispersion, to "
             "avoid double-counting dispersion physics between the two. mol_id-based "
             "electrostatics masking is unaffected."
+        ),
+    )
+    parser.add_argument(
+        "--fixed-cgenff-vdw",
+        action="store_true",
+        help=(
+            "Pin the CGenFF Lennard-Jones term at its published parameters: disables the "
+            "learned global/per-element epsilon scaling AND the network-predicted per-atom "
+            "vdW scale. By default the model may rescale the LJ prior freely, and it does — "
+            "a trained checkpoint reached global_vdw_scale=0.14 with element scales of 0.10 "
+            "(C) and 0.24 (H), i.e. carbon-carbon epsilon at ~1.4% of its physical value, "
+            "effectively erasing the force-field prior. With this flag the LJ term becomes "
+            "a fixed physical baseline the network can only correct, never scale away."
         ),
     )
     parser.add_argument(
