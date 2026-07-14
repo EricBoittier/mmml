@@ -111,7 +111,14 @@ def infer_trainable_zbl_config(
         return out
     modules = parameter_tree.get("params", parameter_tree)
     repulsion = modules.get("repulsion", {}) if isinstance(modules, Mapping) else {}
-    out["trainable_zbl"] = bool(repulsion)
+    legacy_trainable = bool(repulsion)
+    out["trainable_zbl"] = legacy_trainable
+    if legacy_trainable:
+        # Preserve the historical architecture when evaluating an untouched
+        # legacy checkpoint. Fixed-ZBL warm starts explicitly record the new
+        # short collision window instead.
+        out.setdefault("zbl_cuton", None)
+        out.setdefault("zbl_cutoff", out.get("cutoff", 6.0))
     return out
 
 

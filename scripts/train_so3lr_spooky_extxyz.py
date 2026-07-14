@@ -438,6 +438,8 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         n_refinement_blocks=args.n_res,
         zbl=not args.no_zbl,
         trainable_zbl=args.trainable_zbl,
+        zbl_cuton=args.zbl_cuton,
+        zbl_cutoff=args.zbl_cutoff,
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
@@ -977,6 +979,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "predict_charges",
                 "no_zbl",
                 "trainable_zbl",
+                "zbl_cuton",
+                "zbl_cutoff",
                 "efa",
                 "use_energy_bias",
                 "electrostatics_damping_sigma",
@@ -1484,6 +1488,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Opt in to optimizing ZBL screening parameters (fixed universal ZBL is the default).",
     )
+    parser.add_argument(
+        "--zbl-cuton",
+        type=float,
+        default=0.8,
+        help="Distance in Å below which fixed ZBL is fully on (default: 0.8).",
+    )
+    parser.add_argument(
+        "--zbl-cutoff",
+        type=float,
+        default=1.5,
+        help="Distance in Å where fixed ZBL reaches exactly zero (default: 1.5).",
+    )
     zbl_training.add_argument(
         "--fixed-zbl",
         dest="force_fixed_zbl",
@@ -1517,6 +1533,10 @@ def main() -> None:
         raise ValueError("--mbd-weight must be non-negative")
     if args.mbd_ramp_steps < 0:
         raise ValueError("--mbd-ramp-steps must be non-negative")
+    if args.zbl_cutoff <= 0.0:
+        raise ValueError("--zbl-cutoff must be positive")
+    if args.zbl_cuton is not None and not 0.0 <= args.zbl_cuton < args.zbl_cutoff:
+        raise ValueError("--zbl-cuton must satisfy 0 <= cuton < cutoff")
     if args.cache_path is not None:
         if args.mode != "train":
             raise ValueError("--cache-path is only valid with --mode train")

@@ -12,6 +12,7 @@ from mmml.analysis.dimer_cgenff import (
     attach_cgenff_dimer_metadata,
     load_cgenff_sigma_epsilon,
 )
+from mmml.analysis.dimer_molecules import MOLECULES
 from mmml.interfaces.pycharmmInterface.long_range_backend import per_atom_jax_pme_c6_sqrt
 from mmml.models.spookynet_calc import (
     SpookyNetCalculator,
@@ -152,6 +153,35 @@ def test_dimer_metadata_converts_rmin_half_and_preserves_ace_order(tmp_path):
     )
     assert CGENFF_ATOM_TYPES["ACE"][:4] == (
         "OG2D3", "CG2O5", "CG331", "CG331"
+    )
+
+
+def test_dcm_geometry_order_matches_cgenff_types_and_topology(tmp_path):
+    prm = tmp_path / "dcm.prm"
+    prm.write_text(
+        "NONBONDED\n"
+        "CG321 0.0 -0.0560 2.0100\n"
+        "CLGA1 0.0 -0.3430 1.9100\n"
+        "HGA2 0.0 -0.0350 1.3400\n"
+        "NBFIX\n"
+    )
+    monomer = MOLECULES["DCM"]
+    atoms = monomer + monomer.copy()
+    fragments = (np.arange(5), np.arange(5, 10))
+    attach_cgenff_dimer_metadata(
+        atoms, ("DCM", "DCM"), fragments, prm_path=prm
+    )
+    mapping, sigmas, epsilons = load_cgenff_sigma_epsilon(str(prm.resolve()))
+    expected_names = ("CG321", "CLGA1", "CLGA1", "HGA2", "HGA2")
+    assert monomer.get_chemical_symbols() == ["C", "Cl", "Cl", "H", "H"]
+    assert CGENFF_ATOM_TYPES["DCM"] == expected_names
+    np.testing.assert_array_equal(
+        atoms.arrays["cgenff_type_idx"][:5],
+        [mapping[name] for name in expected_names],
+    )
+    assert epsilons[mapping["CLGA1"]] == pytest.approx(0.3430)
+    assert sigmas[mapping["CLGA1"]] == pytest.approx(
+        2.0 * 1.9100 / 2.0 ** (1.0 / 6.0)
     )
 
 

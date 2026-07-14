@@ -241,6 +241,8 @@ class SpookyNetCalculator(Calculator):
                 "cutoff_angstrom": None if cutoff is None else float(cutoff),
                 "zbl_repulsion": zbl_enabled,
                 "zbl_trainable": trainable_zbl,
+                "zbl_cuton_angstrom": getattr(model, "zbl_cuton", None),
+                "zbl_cutoff_angstrom": getattr(model, "zbl_cutoff", None),
             },
             "electrostatics": {
                 "predicted_atomic_charges": charges_enabled,

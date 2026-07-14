@@ -69,6 +69,11 @@ class ZBLRepulsion(nn.Module):
     debug: bool = False
 
     def setup(self):
+        if self.cutoff <= 0.0:
+            raise ValueError("ZBL cutoff must be positive")
+        if self.cuton is not None and not 0.0 <= self.cuton < self.cutoff:
+            raise ValueError("ZBL cuton must satisfy 0 <= cuton < cutoff")
+
         # Default ZBL parameters
         # a_ij = (0.8854 a0) / (Zi^0.23 + Zj^0.23), with a0 in Å because distances are Å
         a_coefficient = 0.8854 * BOHR_TO_ANGSTROM  # Å
@@ -82,14 +87,10 @@ class ZBLRepulsion(nn.Module):
             self.cuton_dist = jnp.asarray(0.0, dtype=self.dtype)
             self.switchoff_range = self.cutoff_dist
             self.use_switch = True
-        elif self.cuton < self.cutoff:
+        else:
             self.cuton_dist = jnp.asarray(self.cuton, dtype=self.dtype)
             self.switchoff_range = jnp.asarray(self.cutoff - self.cuton, dtype=self.dtype)
             self.use_switch = True
-        else:
-            self.cuton_dist = None
-            self.switchoff_range = None
-            self.use_switch = False
 
         # Params (trainable or fixed)
         def make_param(name, value):
