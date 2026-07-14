@@ -104,6 +104,7 @@ nav:
           - ef-evaluate: cli/commands/ef-evaluate.md
           - ef-md: cli/commands/ef-md.md
       - Other utilities:
+          - doctor: cli/commands/doctor.md
           - md-embedding: cli/commands/md-embedding.md
           - mpi-launch: cli/commands/mpi-launch.md
           - plot-restart-velocities: cli/commands/plot-restart-velocities.md
