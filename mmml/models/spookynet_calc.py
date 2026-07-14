@@ -49,6 +49,17 @@ from mmml.utils.model_checkpoint import (
 EV_TO_KCAL_MOL = 1 / (ase.units.kcal / ase.units.mol)
 
 
+def _is_spooky_checkpoint(model_type: str, parameter_tree: Any) -> bool:
+    """Identify Spooky checkpoints without assuming a flat Flax params tree."""
+    kind = str(model_type).lower()
+    if kind in {"spooky", "spookynet"}:
+        return True
+    if kind == "physnet":
+        return False
+    modules = parameter_tree.get("params", parameter_tree)
+    return "charge_feature_projection" in modules
+
+
 class SpookyNetCalculator(Calculator):
     """ASE calculator wrapping a SpookyNet-style PhysNet model.
 
@@ -96,7 +107,7 @@ class SpookyNetCalculator(Calculator):
         self.numpy_dtype = ml_numpy_dtype(self.compute_dtype)
         jax_params = json_tree_to_jax_params(params, dtype=self.compute_dtype)
         model_type = str(config.get("model_type", "")).lower()
-        if model_type == "physnet" or "charge_feature_projection" not in jax_params:
+        if not _is_spooky_checkpoint(model_type, jax_params):
             from mmml.models.physnetjax.physnetjax.models.model import PhysNet
             model_config = physnet_constructor_kwargs(config, PhysNet)
             self.model = PhysNet(**model_config)
@@ -110,7 +121,11 @@ class SpookyNetCalculator(Calculator):
         )
         self.charge = float(charge)
         self.spin_multiplicity = float(spin_multiplicity)
-        self._apply = jax.jit(self._make_apply_fn())
+        # Energy-only scans should not compile the substantially larger force
+        # gradient graph.  Keep independent JITs so ASE force callers still
+        # receive exact derivatives while PES scans compile quickly.
+        self._apply_energy = jax.jit(self._make_apply_fn(compute_forces=False))
+        self._apply_forces = jax.jit(self._make_apply_fn(compute_forces=True))
 
         # The standalone ASE adapter currently supplies only Z/R/masks to the
         # model. Dynamic CGenFF type, sigma, epsilon and molecule-id arrays are
@@ -237,7 +252,7 @@ class SpookyNetCalculator(Calculator):
         )
         return output
 
-    def _make_apply_fn(self):
+    def _make_apply_fn(self, *, compute_forces: bool):
         model = self.model
         params = self.params
         compute_dtype = self.compute_dtype
@@ -264,6 +279,7 @@ class SpookyNetCalculator(Calculator):
                     cgenff_type_idx=cgenff_type_idx,
                     cgenff_master_sigmas=cgenff_master_sigmas,
                     cgenff_master_epsilons=cgenff_master_epsilons,
+                    compute_forces=compute_forces,
                 )
             else:
                 return model.apply(
@@ -343,7 +359,8 @@ class SpookyNetCalculator(Calculator):
             )
             self.cgenff_lj_inputs_supplied = True
 
-        output = self._apply(
+        apply_fn = self._apply_forces if "forces" in properties else self._apply_energy
+        output = apply_fn(
             jnp.asarray(z),
             jnp.asarray(pos),
             jnp.asarray(dst_idx),

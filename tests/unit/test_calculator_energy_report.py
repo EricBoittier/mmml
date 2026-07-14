@@ -13,8 +13,17 @@ from mmml.analysis.dimer_cgenff import (
     load_cgenff_sigma_epsilon,
 )
 from mmml.interfaces.pycharmmInterface.long_range_backend import per_atom_jax_pme_c6_sqrt
-from mmml.models.spookynet_calc import SpookyNetCalculator
+from mmml.models.spookynet_calc import SpookyNetCalculator, _is_spooky_checkpoint
 from scripts.run_dimer_scan_campaign import _charmm_component_rows
+
+
+def test_spooky_checkpoint_markers_can_be_nested_under_params():
+    # JSON checkpoint trees are Flax variable dicts: module names live under
+    # the outer ``params`` collection, not at the root.
+    tree = {"params": {"charge_feature_projection": {"kernel": np.ones((1, 2))}}}
+    assert _is_spooky_checkpoint("", tree) is True
+    assert _is_spooky_checkpoint("spooky", {}) is True
+    assert _is_spooky_checkpoint("physnet", tree) is False
 
 
 def test_spookynet_report_flags_missing_training_lj_inputs(tmp_path):
