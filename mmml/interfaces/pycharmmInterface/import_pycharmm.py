@@ -148,12 +148,6 @@ def reset_block() -> None:
         return
     if should_skip_charmm_reset_block():
         return
-    block = """BLOCK 
-        CALL 1 SELE ALL END
-          COEFF 1 1 1.0 
-        END
-        """
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
     from mmml.utils.rich_report import emit_charmm_block, is_verbose
 
     # run_charmm_script_quiet(block)
@@ -248,18 +242,24 @@ def view_atoms(atoms):
 
     return view(atoms, viewer="x3d")
 
-def get_forces_pycharmm():
-    positions = coor.get_positions()
-    force_command = """coor force sele all end"""
-    _ = pycharmm.lingo.charmm_script(force_command)
-    forces = coor.get_positions()
-    coor.set_positions(positions)
-    return forces
+def get_forces_pycharmm(update: bool = True):
+    """Per-atom CHARMM forces (kcal/mol/Å) as an ``(natom, 3)`` array.
+
+    CHARMM's ``dx/dy/dz`` is the energy gradient (``dE/dx``), so the physical force
+    is the negative gradient. Pass ``update=False`` to read the forces left by a
+    previous ``ENER FORCE`` instead of re-evaluating.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+
+    if update:
+        pycharmm.lingo.charmm_script("ENER FORCE")
+    return charmm_forces_array()
 
 import pandas as pd
 def set_pycharmm_xyz(atom_positions):
-    xyz = pd.DataFrame(atom_positions, columns=["x", "y", "z"])
-    coor.set_positions(xyz)
+    from mmml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
+
+    set_charmm_positions_array(atom_positions)
 
 
 def capture_neighbour_list():
@@ -410,9 +410,12 @@ def disable_charmm_domdec(*, when: str = "early") -> bool:
                 flush=True,
             )
         return False
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     try:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+            charmm_relaxed_bomlev,
+        )
+
         with charmm_relaxed_bomlev():
             pycharmm.lingo.charmm_script("domdec off")
     except Exception as exc:
@@ -628,7 +631,6 @@ def charmm_print_level(prnlev: int = 0, wrnlev: int | None = None):
         settings.set_warn_level(old_wrn)
 
 
-from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev  # noqa: E402
 
 if PYCHARMM_AVAILABLE:
     pycharmm_quiet()

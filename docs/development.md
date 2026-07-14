@@ -8,6 +8,26 @@ Run tests:
 pytest
 ```
 
+Run the same static check that CI enforces:
+
+```bash
+make lint
+```
+
+## Repository boundaries
+
+- `mmml/` is the supported distributable library and CLI. Production code must
+  not import from `scripts/`, `workflows/`, or `tests/`.
+- `setup/charmm/tool/pycharmm/pycharmm/` is the sole tracked PyCHARMM source.
+  Do not recreate a root-level `pycharmm/` copy; changes belong in this tree.
+- `scripts/` contains developer and operational entry points; `workflows/`
+  contains reproducible campaign definitions. Neither is a library API.
+- Large checkpoints and generated campaign output belong in external storage or
+  ignored artifact paths, not in new package source commits.
+
+Unit tests run in the normal CI job. The separate `charmm` CI job is the
+integration boundary for a compiled CHARMM/PyCHARMM runtime.
+
 ## Docs workflow
 
 Documentation has its own GitHub Actions workflow (`.github/workflows/docs.yml`):

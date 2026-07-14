@@ -245,7 +245,6 @@ def _mixed_system_atoms(*, near_cutoff_A: float, far_cutoff_A: float | None):
     distance. ``far_cutoff_A=None`` keeps every remaining water as MM shell.
     """
     import ase.io
-    import numpy as np
     from matplotlib.colors import to_rgb
 
     full = ase.io.read(str(REPO / "examples" / "atoms.pdb"))

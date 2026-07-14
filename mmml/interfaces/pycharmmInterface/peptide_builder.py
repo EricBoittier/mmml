@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import shutil
 import warnings
 import subprocess
@@ -18,8 +17,6 @@ from ase import Atoms
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     ensure_pycharmm_loaded,
-    CGENFF_PRM,
-    CGENFF_RTF,
 )
 from mmml.interfaces.pycharmmInterface.protein_charmm_build import (
     ProteinToppar,
@@ -28,7 +25,6 @@ from mmml.interfaces.pycharmmInterface.protein_charmm_build import (
 from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
 
 ONE_TO_THREE = {
     "A": "ALA", "R": "ARG", "N": "ASN", "D": "ASP", "C": "CYS",
@@ -404,7 +400,6 @@ def build_peptide_in_charmm(
     settings.set_warn_level(-2)
 
     # Load parameters & generate segment under relaxed bomlev to prevent termination on toppar warnings
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     with charmm_relaxed_bomlev(-5):
         # 1. Load CGENFF topology and parameters first
         from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
@@ -517,7 +512,6 @@ def solvate_peptide_in_charmm(
     import pycharmm.generate as generate
     import pycharmm.read as read
     import pycharmm.write as write
-    import pycharmm.settings as settings
 
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
@@ -642,7 +636,6 @@ end structure
     pdb_path = out_dir / f"{peptide_result.segment.lower()}-water.pdb"
 
     # Avoid issues with relative directory writes in MPI setups by changing dir safely
-    import os
     prev_cwd = os.getcwd()
     try:
         os.chdir(out_dir)

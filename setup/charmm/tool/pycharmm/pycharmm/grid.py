@@ -255,20 +255,20 @@ class Grid(ctypes.Structure):
         if self.nbond_opt is None:
             print("Use default non-bond set up")
             if self.flag_rdie:
-                nbonds_script = pycharmm.UpdateNonBondedScript(
+                pycharmm.UpdateNonBondedScript(
                   atom = True, switch = True, vswitch = True, soft = True,
                   vdwe = True, elee = True, rdie = True, cutnb = 999, ctofnb = 999,
                   ctonnb = 999, emax = self.emax, mine = self.mine, maxe = self.maxe,
                   epsilon = self.dielec).run()
             else: 
-                nbonds_script = pycharmm.UpdateNonBondedScript(
+                pycharmm.UpdateNonBondedScript(
                   atom = True, switch = True, vswitch = True, soft = True,
                   vdwe = True, elee = True, cdie = True, cutnb = 999, ctofnb = 999,
                   ctonnb = 999, emax = self.emax, mine = self.mine, maxe = self.maxe,
                   epsilon = self.dielec).run()
         else:
             print("Use user-defined non-bond set up")
-            nbonds_script = pycharmm.UpdateNonBondedScript(**self.nbond_opt).run() 
+            pycharmm.UpdateNonBondedScript(**self.nbond_opt).run() 
             
         ## Generate grids
         if tmp_flag_gpu_gen:
@@ -337,7 +337,6 @@ class Grid(ctypes.Structure):
             Islct = np.ones(psf.get_natom())
             Islct = Islct * probe_atoms
             Islct = Islct.astype(int)
-            Jslct = Islct
             GridSlct = np.where(Islct == 1)[0] + 1
             GridSlct = GridSlct.astype(int)
   
@@ -422,8 +421,7 @@ class CDOCKER(Grid):
         GridSlct = np.ones(psf.get_natom())
         GridSlct = GridSlct * ligand_atoms
         GridSlct = GridSlct.astype(int)
-        GridAtm = GridSlct
-        GridHBAtm = np.zeros(len(GridSlct)).astype(int)
+        np.zeros(len(GridSlct)).astype(int)
         Natom = len(GridSlct)
         NAtmGrd = np.sum(ligand_atoms)
  
@@ -461,8 +459,7 @@ class CDOCKER(Grid):
         GridSlct = np.ones(psf.get_natom())
         GridSlct = GridSlct * ligand_atoms
         GridSlct = GridSlct.astype(int)
-        GridAtm = GridSlct
-        GridHBAtm = np.zeros(len(GridSlct)).astype(int)
+        np.zeros(len(GridSlct)).astype(int)
         Natom = len(GridSlct)
         NAtmGrd = np.sum(ligand_atoms)
  

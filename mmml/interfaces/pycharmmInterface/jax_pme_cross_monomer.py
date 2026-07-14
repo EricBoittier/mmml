@@ -256,7 +256,6 @@ def _structure_factor_cross_energy(
 
 def _build_cross_monomer_jit(key: _CrossMonomerJitKey):
     import jax
-    import jax.numpy as jnp
     from jaxpme.potentials import potential
     from jaxpme.solvers import ewald, p3m, pme
 

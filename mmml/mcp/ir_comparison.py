@@ -378,7 +378,6 @@ def _stick_overlay(
 
 def plot_method_figure(
     *,
-    method_key: str,
     title: str,
     description: str,
     grid: np.ndarray,
@@ -480,7 +479,6 @@ def plot_ir_comparison_publication(
 ) -> Path:
     """Summary three-panel figure (default method: ACF harmonic)."""
     return plot_method_figure(
-        method_key="summary",
         title=title,
         description=subtitle,
         grid=grid,
@@ -606,7 +604,6 @@ def generate_ir_comparison_figure(
             continue
         png_path = methods_dir / f"ir_{key}.png"
         plot_method_figure(
-            method_key=key,
             title=str(payload["title"]),
             description=str(payload["description"]),
             grid=grid,

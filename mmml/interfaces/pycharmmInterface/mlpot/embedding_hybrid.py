@@ -194,7 +194,6 @@ def prepare_trialanine_hybrid_session(
     prepare_charmm_pbc(side)
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
 
-    import pycharmm.psf as psf
 
     from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_seg_id
 

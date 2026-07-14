@@ -33,7 +33,13 @@ if ! flock -n 9; then
   exit 0
 fi 9>"$_CFG_LOCK"
 
-export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
+  eval "$(
+    "$REPO_ROOT/scripts/ensure_charmm_mlpot_limits.sh" --n-ml 2660 --pbc --box-size 32 \
+      2>/dev/null | grep '^export CHARMM_LIB_DIR=' || true
+  )"
+fi
+export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib}"
 if [[ -z "${MMML_CKPT:-}" ]]; then
   _default_ckpt="/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70"
   if [[ -d "$_default_ckpt" ]]; then
@@ -73,7 +79,8 @@ echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} MMML_CKPT=${MMML_CK
 # shadowing deps required by snakemake-executor-plugin-slurm/pandas.
 # --python 3.12: project .venv is 3.13; uv would otherwise reuse it and still
 # import the broken pyarrow namespace from site-packages.
-unset VIRTUAL_ENV
+unset VIRTUAL_ENV PYTHONPATH
+export PYTHONNOUSERSITE=1
 _SNAKE_UV=(run --no-project --python 3.12 --with snakemake --with snakemake-executor-plugin-slurm)
 "$UV" "${_SNAKE_UV[@]}" snakemake \
   --profile "$PROFILE" \

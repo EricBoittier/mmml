@@ -46,7 +46,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_charmm_use_pbc,
     resolve_loose_pbc,
     resolve_mlpot_use_pbc,
-    resolve_use_pbc,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
@@ -59,7 +58,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _valid_restart_file,
     build_cpt_equilibration_dynamics,
     build_cpt_production_dynamics,
-    build_heat_dynamics,
     build_nvt_equilibration_dynamics,
     build_nvt_production_dynamics,
     build_nve_dynamics,
@@ -112,13 +110,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
     PACKMOL_CLUSTER,
     legacy_mlpot_mini_paths,
     mirror_legacy_mlpot_files,
-    save_snapshot_from_charmm,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
     verify_mlpot_charmm_atom_consistency,
     ensure_domdec_off_for_mlpot_energy,
-    get_charmm_positions_array,
     load_cluster_from_artifacts,
     save_cluster_topology_for_vmd,
     select_by_resids,
@@ -1241,7 +1237,6 @@ def _load_or_build_cluster(
         get_handoff_in,
     )
     from mmml.cli.run.md_pbc_suite.ase import _parse_composition
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
 
     ho = handoff_in if handoff_in is not None else get_handoff_in()
     if ho is not None:

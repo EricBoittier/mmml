@@ -6,7 +6,7 @@ import re
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Sequence
+from typing import Literal, Sequence
 
 import numpy as np
 

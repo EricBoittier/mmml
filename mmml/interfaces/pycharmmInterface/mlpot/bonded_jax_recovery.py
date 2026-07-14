@@ -13,7 +13,6 @@ from jax import Array, jit
 
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 PathLike = str | Path
 

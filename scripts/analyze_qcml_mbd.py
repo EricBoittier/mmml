@@ -253,7 +253,7 @@ def compute_metrics(
     energy_error_hartree = prediction_energy - target_energy
     energy_error_kcal = energy_error_hartree * HARTREE_TO_KCAL_MOL
     force_error_au = prediction_forces - target_forces
-    force_error_kcal = force_error_au * FORCE_AU_TO_KCAL_MOL_ANGSTROM
+    force_error_au * FORCE_AU_TO_KCAL_MOL_ANGSTROM
     per_structure_force_rmse = np.sqrt(
         np.sum(np.square(force_error_au) * atom_mask[:, :, None], axis=(1, 2))
         / np.maximum(3 * num_atoms, 1)

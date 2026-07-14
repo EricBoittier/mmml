@@ -105,60 +105,12 @@ def test_resolve_lib_dir_accepts_lib_subdir(tmp_path):
     assert home == str(chm)
 
 
-def test_charmmsetup_legacy_export_format(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    custom = tmp_path / "custom"
-    custom.mkdir()
-    (repo / "CHARMMSETUP").write_text(
-        f"export CHARMM_HOME={custom}\nexport CHARMM_LIB_DIR={custom}\n",
-        encoding="utf-8",
-    )
+def test_charmmsetup_file_is_ignored(tmp_path):
+    """CHARMMSETUP is no longer a config source; auto-discovery wins.
 
-    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
-
-    assert home == str(custom)
-    assert lib == str(custom)
-
-
-def test_charmmsetup_legacy_plain_format(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    custom = tmp_path / "custom"
-    custom.mkdir()
-    (repo / "CHARMMSETUP").write_text(
-        f"CHARMM_HOME={custom}\nCHARMM_LIB_DIR={custom}\n",
-        encoding="utf-8",
-    )
-
-    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
-
-    assert home == str(custom)
-    assert lib == str(custom)
-
-
-def test_env_beats_charmmsetup(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    setup_dir = tmp_path / "from-setup"
-    env_dir = tmp_path / "from-env"
-    setup_dir.mkdir()
-    env_dir.mkdir()
-    (repo / "CHARMMSETUP").write_text(
-        f"CHARMM_HOME={setup_dir}\nCHARMM_LIB_DIR={setup_dir}\n",
-        encoding="utf-8",
-    )
-
-    home, lib = charmm_paths.resolve_charmm_paths(
-        repo_root=repo,
-        env={"CHARMM_HOME": str(env_dir), "CHARMM_LIB_DIR": str(env_dir)},
-    )
-
-    assert home == str(env_dir)
-    assert lib == str(env_dir)
-
-
-def test_stale_charmmsetup_home_falls_back_to_repo_default(tmp_path):
+    A leftover CHARMMSETUP from an older checkout must not silently override the
+    library that was actually built under setup/charmm.
+    """
     repo = tmp_path / "repo"
     chm = repo / "setup" / "charmm"
     chm.mkdir(parents=True)
@@ -168,6 +120,37 @@ def test_stale_charmmsetup_home_falls_back_to_repo_default(tmp_path):
         "export CHARMM_LIB_DIR=/nonexistent/charmm\n",
         encoding="utf-8",
     )
+
+    home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
+
+    assert home == str(chm)
+    assert lib == str(chm)
+
+
+def test_stale_env_home_falls_back_to_repo_default(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.so").write_bytes(b"stub")
+
+    home, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo,
+        env={
+            "CHARMM_HOME": "/nonexistent/charmm",
+            "CHARMM_LIB_DIR": "/nonexistent/charmm",
+        },
+    )
+
+    assert home == str(chm)
+    assert lib == str(chm)
+
+
+def test_dylib_is_discovered_on_macos_layout(tmp_path):
+    """The macOS build produces libcharmm.dylib, not .so."""
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    (chm / "lib").mkdir(parents=True)
+    (chm / "lib" / "libcharmm.dylib").write_bytes(b"stub")
 
     home, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={})
 

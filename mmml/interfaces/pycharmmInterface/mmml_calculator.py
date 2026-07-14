@@ -17,7 +17,6 @@ physics functionality is unchanged when the third-party libraries are present.
 from __future__ import annotations
 
 import os
-import warnings
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -49,7 +48,6 @@ from mmml.interfaces.pycharmmInterface.ml_dtypes import (
     cast_pytree_to_ml_dtype,
     json_tree_to_jax_params,
     ml_numpy_dtype,
-    ml_scalar,
     ml_zeros,
     resolve_ml_compute_dtype,
 )
@@ -306,13 +304,18 @@ def capture_neighbour_list():
     }
 
 
-def get_forces_pycharmm():
-    positions = coor.get_positions()
-    force_command = """coor force sele all end"""
-    _ = pycharmm.lingo.charmm_script(force_command)
-    forces = coor.get_positions()
-    coor.set_positions(positions)
-    return forces
+def get_forces_pycharmm(update: bool = True):
+    """Per-atom CHARMM forces (kcal/mol/Å) as an ``(natom, 3)`` array.
+
+    CHARMM's ``dx/dy/dz`` is the energy gradient (``dE/dx``), so the physical force
+    is the negative gradient. Pass ``update=False`` to read the forces left by a
+    previous ``ENER FORCE`` instead of re-evaluating.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+
+    if update:
+        pycharmm.lingo.charmm_script("ENER FORCE")
+    return charmm_forces_array()
 
 
 def view_atoms(atoms):
@@ -445,6 +448,9 @@ def setup_calculator(
             float64 also requires ``JAX_ENABLE_X64=1`` before Python starts. Overridden by
             ``MMML_ML_DTYPE`` when unset.
     """
+    # Retained through the 2026-09 compatibility window; capacity is now
+    # derived from the actual monomer topology rather than this fixed hint.
+    _ = MAX_ATOMS_PER_SYSTEM
     if model_restart_path is None:
         _ml_mode = str(ml_potential_mode or "physnet").strip().lower()
         if _ml_mode not in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}:
@@ -1075,7 +1081,7 @@ def setup_calculator(
       
         return ml_scale * ml_energy
 
-    switch_ML_grad = jax.grad(switch_ML)
+    jax.grad(switch_ML)
 
     
     _fractional_coordinates = ensemble == "npt"

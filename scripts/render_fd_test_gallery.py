@@ -38,7 +38,6 @@ def _smd_fd_check():
     """Recompute the SMD-bias-term analytic-vs-FD force check (same
     procedure as test_ase_forces_match_finite_difference) and return
     (analytic, fd) force arrays, shape (n_atoms, 3)."""
-    import jax.numpy as jnp
 
     from mmml.md.energy.registry import EnergyContext
     from mmml.md.energy.terms import SMDBiasTerm

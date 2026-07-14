@@ -1931,17 +1931,10 @@ def charmm_total_forces_kcalmol_A() -> np.ndarray:
     ``tests/functionality/mlpot/01_callback_vs_ase_no_charmm.py``).
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm.coor as coor
 
-    fdf = coor.get_forces()
-    grad = np.column_stack(
-        [
-            fdf["dx"].to_numpy(dtype=float),
-            fdf["dy"].to_numpy(dtype=float),
-            fdf["dz"].to_numpy(dtype=float),
-        ]
-    )
-    return -grad
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+
+    return charmm_forces_array()
 
 
 def charmm_total_forces_ev_angstrom() -> np.ndarray:
@@ -4437,9 +4430,6 @@ def resolve_jax_pme_sr_cutoff_for_mlpot(
 ) -> float:
     """Real-space jax-pme cutoff (Å), aligned with switched-MM outer edge by default."""
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
-        DEFAULT_JAX_PME_SR_CUTOFF_A,
-    )
 
     if args is not None:
         explicit = getattr(args, "jax_pme_sr_cutoff", None)

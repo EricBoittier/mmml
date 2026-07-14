@@ -1,0 +1,11 @@
+name: local_laptop
+kind: local
+role: CPU debugging, unit tests, plotting, dry-runs, and proof collection
+repo_root: .
+cpus: 4
+gpus: 0
+environment:
+  JAX_ENABLE_X64: "1"
+  MMML_ML_DTYPE: float64
+  OMP_NUM_THREADS: "4"
+

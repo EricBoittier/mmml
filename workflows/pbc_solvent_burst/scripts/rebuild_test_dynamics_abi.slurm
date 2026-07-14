@@ -30,5 +30,5 @@ mmml_resolve_env "$REPO_ROOT"
 # Reproduce the former dynamics_run_kw/dynopt crash with the fixed library,
 # then continue through the matched PyCHARMM/JAX-MD NVE control.
 export MMML_NVE_COMPARE_ROOT="$REPO_ROOT/artifacts/diagnostics/dcm10_nve_backend_compare_abi_fixed"
+export MMML_REPO_ROOT="$REPO_ROOT"
 bash workflows/pbc_solvent_burst/scripts/run_backend_nve_conservation.slurm
-

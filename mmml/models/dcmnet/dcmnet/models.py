@@ -1,5 +1,5 @@
 # import pandas as pd
-from .modules import DCMNetCharges, DCMNetMultipole, MessagePassingModel
+from .modules import DCMNetCharges
 import numpy as np
 import os
 

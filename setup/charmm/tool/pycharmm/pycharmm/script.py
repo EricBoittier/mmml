@@ -32,16 +32,20 @@ class CommandScript:
         then a "key" line is added.
         """ 
         for k, v in kwargs.items():
+            # CHARMM command options are case-sensitive.  Public PyCHARMM
+            # APIs use Pythonic lowercase kwargs, but the generated CHARMM
+            # script must use uppercase tokens (e.g. FIRSTT, IASVEL).
+            key = str(k).upper()
             # must check for bools first because
             # a bool is also a numbers.Number but
             # numeric values must be handled differently
             if isinstance(v, bool):
                 if v:
-                    self.opts[k] = str(k) + ' -\n'
+                    self.opts[key] = key + ' -\n'
             # bytes added here to handle numpy.string_
             # numbers.Number should encompass float, int, and numpy.float64
             elif isinstance(v, (numbers.Number, bytes, str)):
-                self.opts[k] = str(k) + ' ' + str(v) + ' -\n'
+                self.opts[key] = key + ' ' + str(v) + ' -\n'
             else:
                 message = 'invalid option {} = {}'
                 raise ValueError(message.format(k, v))
@@ -54,11 +58,12 @@ class CommandScript:
         return
 
     def _remove_selection(self, selection):
-        self.opts.pop('sel', None)
+        self.opts.pop('SELE', None)
         selection.unstore()
 
     def create_script_string(self):
-        script = self.command
+        # CHARMM maincomx matches 4-char command tokens case-sensitively (e.g. NBON).
+        script = self.command.upper()
         if self.opts.values():
             script += ' ' + ' '.join(self.opts.values())
             script = script.strip()

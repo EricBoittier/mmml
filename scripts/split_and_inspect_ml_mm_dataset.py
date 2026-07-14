@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -106,15 +105,15 @@ def validate_and_inspect_dataset(
 
     Z = np.asarray(data["Z"]).reshape(-1)
     R = np.asarray(data["R"]).reshape(-1, 3)
-    F = np.asarray(data["F"]).reshape(-1, 3)
-    F_mm = np.asarray(data["F_cgenff_mm"]).reshape(-1, 3)
+    np.asarray(data["F"]).reshape(-1, 3)
+    np.asarray(data["F_cgenff_mm"]).reshape(-1, 3)
     offsets = np.asarray(data["mol_offsets"]).reshape(-1)
-    E = np.asarray(data["E"]).reshape(-1, 1)
-    E_mm = np.asarray(data["E_cgenff_mm"]).reshape(-1, 1)
+    np.asarray(data["E"]).reshape(-1, 1)
+    np.asarray(data["E_cgenff_mm"]).reshape(-1, 1)
     N = np.asarray(data["N"]).reshape(-1, 1)
-    Q = np.asarray(data["Q"]).reshape(-1, 1)
-    S = np.asarray(data["S"]).reshape(-1, 1)
-    D = np.asarray(data["D"]).reshape(-1, 3)
+    np.asarray(data["Q"]).reshape(-1, 1)
+    np.asarray(data["S"]).reshape(-1, 1)
+    np.asarray(data["D"]).reshape(-1, 3)
     mol_id = np.asarray(data["mol_id"]).reshape(-1)
     cgenff_types = np.asarray(data["cgenff_type_idx"]).reshape(-1)
     cgenff_charges = np.asarray(data["cgenff_charge"]).reshape(-1)
@@ -316,9 +315,9 @@ def split_dataset(
     print(f"==================================================================")
 
     data = ocp.PyTreeCheckpointer().restore(cache_dir)
-    all_keys = list(data.keys())
+    list(data.keys())
 
-    Z        = np.asarray(data["Z"]).reshape(-1)
+    np.asarray(data["Z"]).reshape(-1)
     R        = np.asarray(data["R"]).reshape(-1, 3)
     offsets  = np.asarray(data["mol_offsets"]).reshape(-1)
     mol_id   = np.asarray(data["mol_id"]).reshape(-1)

@@ -1024,13 +1024,8 @@ def minimize_hybrid_calculator_before_sd(
     """Relax CHARMM coordinates with ASE BFGS on the hybrid calculator."""
     import ase
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        invalidate_mlpot_calculator_caches,
-        sync_charmm_lists_after_mini,
-    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
-        sync_charmm_positions,
     )
 
     z = getattr(mlpot_ctx, "ml_Z", None)
@@ -1150,13 +1145,8 @@ def minimize_hybrid_calculator_fire_before_sd(
     """Relax CHARMM coordinates with guarded ASE FIRE on the hybrid calculator."""
     import ase
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        invalidate_mlpot_calculator_caches,
-        sync_charmm_lists_after_mini,
-    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
-        sync_charmm_positions,
     )
 
     if config is None:

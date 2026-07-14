@@ -26,6 +26,7 @@ MAX_PACKMOL_MARGIN_FRAC_PER_SIDE = 0.20
 
 # Experimental bulk liquid densities (~298 K) for auto-sizing.
 SOLVENT_BULK_PROPS: dict[str, dict[str, float]] = {
+    "BENZ": {"rho_g_cm3": 0.874, "mw_g_mol": 78.11},
     "DCM": {"rho_g_cm3": 1.326, "mw_g_mol": 84.93},
     "ACO": {"rho_g_cm3": 0.784, "mw_g_mol": 58.08},
     "MEOH": {"rho_g_cm3": 0.792, "mw_g_mol": 32.04},

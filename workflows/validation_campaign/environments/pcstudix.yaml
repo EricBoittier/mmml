@@ -1,0 +1,21 @@
+name: pcstudix
+kind: slurm
+role: fast GPU smoke tests and focused diagnostics
+repo_root: ~/mmml
+partition: gpu
+account: null
+qos: null
+nodes: 1
+ntasks: 1
+cpus_per_task: 4
+mem_mb_per_cpu: 4000
+runtime_min: 120
+gpus: 1
+gpu_constraint: null
+max_concurrent: 4
+launcher: scripts/mmml-charmm-mpirun.sh
+environment:
+  JAX_ENABLE_X64: "1"
+  MMML_ML_DTYPE: float64
+  OMP_NUM_THREADS: "1"
+

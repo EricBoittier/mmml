@@ -26,8 +26,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
@@ -146,7 +144,7 @@ def plot_components_vs_offset(
             cols_used.append(col)
 
         colors = COMP_COLORS[: len(vals)]
-        bars = ax.bar(range(len(vals)), vals, color=colors, edgecolor="k", linewidth=0.4, width=0.7)
+        ax.bar(range(len(vals)), vals, color=colors, edgecolor="k", linewidth=0.4, width=0.7)
         ax.axhline(0, color="k", lw=0.7)
         ax.set_xticks(range(len(vals)))
         ax.set_xticklabels(lbls, rotation=45, ha="right", fontsize=7)

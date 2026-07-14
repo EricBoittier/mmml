@@ -47,6 +47,13 @@ def resolve_checkpoint(raw: str) -> Path:
     if raw == "${MMML_CKPT}":
         env = os.environ.get("MMML_CKPT", "").strip()
         if not env:
+            try:
+                from mmml.cli.base import resolve_checkpoint_paths
+                base_ckpt, _ = resolve_checkpoint_paths(None)
+                if base_ckpt and base_ckpt.exists():
+                    return base_ckpt
+            except Exception:
+                pass
             raise RuntimeError("MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})")
         path = Path(env).expanduser().resolve()
     else:

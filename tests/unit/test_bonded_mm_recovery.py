@@ -1959,6 +1959,8 @@ def test_reload_pre_mlpot_topology_default_reads_finite_charmm_positions(tmp_pat
         side_effect=lambda pos: synced.append(np.asarray(pos, dtype=float)),
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file",
     ):
         _reload_pre_mlpot_topology(ctx, topology_psf=topo)
 

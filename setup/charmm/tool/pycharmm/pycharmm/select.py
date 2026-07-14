@@ -45,7 +45,6 @@ from collections.abc import Iterable
 
 import numpy as np
 
-import pycharmm
 import pycharmm.coor as coor
 import pycharmm.lib as lib
 import pycharmm.param as param

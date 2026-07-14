@@ -180,6 +180,10 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
         cav,
         "_pycharmm_coor_module",
         return_value=fake_coor,
+    ), patch.object(
+        cav,
+        "_velocity_array_matches_psf",
+        return_value=True,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
     ) as sync_comp:
@@ -232,6 +236,8 @@ def test_run_dynamics_ensures_bussi_iasvel_zero(monkeypatch):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), patch(

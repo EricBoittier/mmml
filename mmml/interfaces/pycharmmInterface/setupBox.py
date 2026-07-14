@@ -30,7 +30,6 @@ import pycharmm
 import pycharmm.minimize as minimize
 import pycharmm.read as read
 import pycharmm.write as write
-import pycharmm.settings as settings
 import pycharmm.lingo
 
 # import simple scripts

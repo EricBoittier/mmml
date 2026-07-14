@@ -60,7 +60,6 @@ def profile_batch_prep(n: int, natoms: int, batch_size: int, repeats: int) -> No
 
 def profile_model(features: int, natoms: int, batch_size: int, steps: int) -> None:
     from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
-    import optax
 
     data = _mock_data(max(steps * batch_size, batch_size), natoms)
     pair_cache = _pair_indices(natoms, batch_size)
@@ -100,7 +99,6 @@ def profile_model(features: int, natoms: int, batch_size: int, steps: int) -> No
         src_idx=src_idx,
     )
     from mmml.models.physnetjax.physnetjax.training.optimizer import (
-        base_transform,
         get_optimizer,
     )
 

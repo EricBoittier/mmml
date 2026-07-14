@@ -28,11 +28,8 @@ from matplotlib.patches import Rectangle
 from mmml.utils.plotting.styles import (
     apply_plot_style,
     booktabs_table,
-    default_cmap,
     latex_available,
     latex_table_image,
-    legend_outside,
-    shared_axis_labels,
 )
 
 STYLE_NAME = "icml"

@@ -6,7 +6,9 @@ Runnable scripts to bring up `pycharmm.MLpot` alongside the existing ASE PhysNet
 
 ## Prerequisites
 
-- `CHARMM_HOME` and `CHARMM_LIB_DIR` (via `mmml/CHARMMSETUP` or environment)
+- A built `libcharmm` (`make install-native`). `CHARMM_HOME` / `CHARMM_LIB_DIR`
+  are auto-discovered from `setup/charmm`; set them only to point at an
+  out-of-tree CHARMM. Check with `mmml doctor`.
 - PyCHARMM importable (`import_pycharmm` path)
 - JAX, e3x, ASE
 - A PhysNet checkpoint (same as other mmml tests)
@@ -149,7 +151,7 @@ Reserved GPU node — run in order (fast → thorough):
 
 ```bash
 cd ~/mmml
-source CHARMMSETUP   # or export CHARMM_HOME / CHARMM_LIB_DIR
+mmml doctor          # CHARMM paths auto-discover; no env vars needed
 export JAX_ENABLE_X64=1
 export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json
 

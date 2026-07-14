@@ -9,9 +9,6 @@ import numpy as np
 
 from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
 from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
-    mic_displacement_numpy,
-)
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     SpatialDomainGrid,
     compute_monomer_coms,

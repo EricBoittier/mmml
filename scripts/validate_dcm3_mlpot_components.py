@@ -331,7 +331,7 @@ def _eval_breakdown(
     full = _one(True, True, do_mm)
     ml_internal = _one(True, False, False)
     ml_dimer_only = _one(True, True, False)
-    mm_only = _one(False, False, do_mm) if do_mm else None
+    _one(False, False, do_mm) if do_mm else None
 
     def _scalar(x) -> float:
         v = jax.device_get(x)

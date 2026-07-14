@@ -14,7 +14,6 @@ from mmml.cli.run.md_handoff import (
     apply_handoff_geometry_to_atoms,
     cluster_geometry_from_handoff,
     ensure_psf_for_handoff_cluster,
-    load_handoff_from_npz,
     resolve_handoff_box,
     set_handoff_in,
 )

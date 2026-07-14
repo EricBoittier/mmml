@@ -39,7 +39,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_charmm_use_pbc,
     resolve_loose_pbc,
     resolve_mlpot_use_pbc,
-    resolve_use_pbc,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
@@ -196,7 +195,6 @@ def _run_charmm_mm_pretreat_cpt_stage(
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         build_cpt_equilibration_dynamics,
         build_cpt_production_dynamics,
-        build_nvt_equilibration_dynamics,
         build_nvt_production_dynamics,
         ps_to_nsteps,
     )
@@ -207,7 +205,6 @@ def _run_charmm_mm_pretreat_cpt_stage(
         _configure_npt_dynamics_start,
         _reset_stage_trajectory,
         _seed_restart_for_memory_handoff,
-        _npt_cpt_builder_options,
     )
 
     nstep = max(1, ps_to_nsteps(timestep_ps, duration_ps))
