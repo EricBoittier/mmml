@@ -698,6 +698,12 @@ def _configure_nve_dynamics_start(
             kw["_verified_handoff_restart"] = True
         else:
             kw["_preserve_handoff_velocities"] = True
+            if restart_path is None or not restart_path.is_file():
+                raise RuntimeError(
+                    "NVE: explicit C-API handoff requires a validated restart "
+                    "containing the saved velocities; refusing a silent Boltzmann draw"
+                )
+            kw["_required_handoff_velocity_restart"] = str(restart_path)
         if not quiet:
             if use_restart:
                 print(

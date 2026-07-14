@@ -4041,6 +4041,46 @@ def _resolve_dynamics_init_velocities(
     return _init_velocities_dict_from_akma(v)
 
 
+def _required_handoff_init_velocities(
+    restart_path: Path | str,
+    *,
+    quiet: bool = False,
+) -> dict[str, np.ndarray]:
+    """Load exact AKMA velocities for a strict continuation, never rethermalize."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+
+    path = Path(restart_path).expanduser().resolve()
+    v = read_restart_velocities(path) if path.is_file() else None
+    if v is None:
+        raise RuntimeError(
+            f"NVE: required handoff velocities are missing from {path}; "
+            "refusing a silent Boltzmann reassignment"
+        )
+    out = _init_velocities_dict_from_akma(np.asarray(v, dtype=np.float64))
+    _validate_init_velocities_handoff(
+        out,
+        quiet=quiet,
+        context="NVE required handoff restart",
+    )
+    if not quiet:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            charmm_masses_amu,
+            estimate_kinetic_temperature_k,
+        )
+
+        stacked = np.column_stack([out["vx"], out["vy"], out["vz"]])
+        temp = estimate_kinetic_temperature_k(stacked, charmm_masses_amu())
+        temp_text = f"{float(temp):.3f}" if temp is not None else "?"
+        print(
+            f"NVE: loaded required handoff velocities from {path} "
+            f"(T_est≈{temp_text} K; no reassignment)",
+            flush=True,
+        )
+    return out
+
+
 def _run_dynamics_via_c_api(
     kw: dict[str, Any],
     *,
@@ -4089,6 +4129,9 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     post_dyna_restart_target = kw.pop("_post_dyna_restart_write_target", None)
     post_dyna_io_aliases = kw.pop("_post_dyna_io_aliases", None) or []
     bussi_restart_fallbacks = kw.pop("_bussi_restart_fallback_paths", None)
+    required_handoff_velocity_restart = kw.pop(
+        "_required_handoff_velocity_restart", None
+    )
     bussi_active = _bussi_heat_ramp_active(kw)
     _ensure_bussi_heat_continuation_iasvel(kw)
     nstep = int(kw.get("nstep", 0) or 0)
@@ -4113,11 +4156,18 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
     # Resolve / assign warm AKMA velocities before COMP mirror (post-rescue CGENFF
     # reregister clears CHARMM memory; MB fallback must run before mirror can raise).
-    init_velocities = _resolve_dynamics_init_velocities(
-        kw,
-        restart_read_path=restart_read_path,
-        fallback_paths=bussi_restart_fallbacks,
-    )
+    if required_handoff_velocity_restart is not None:
+        init_velocities = _required_handoff_init_velocities(
+            required_handoff_velocity_restart,
+            quiet=quiet_ase,
+        )
+        skip_ase_cold = True
+    else:
+        init_velocities = _resolve_dynamics_init_velocities(
+            kw,
+            restart_read_path=restart_read_path,
+            fallback_paths=bussi_restart_fallbacks,
+        )
     _bussi_handoff_preserve = frozenset({"_bussi_ramp", "_bussi_global_step"})
     _strip_non_charmm_dynamics_keywords(
         kw,
@@ -5778,6 +5828,8 @@ def _apply_overlap_chunk_dynamics_kw(
     preserve_handoff_velocities = bool(
         chunk_kw.pop("_preserve_handoff_velocities", False)
     )
+    if int(chunk_index) > 0:
+        chunk_kw.pop("_required_handoff_velocity_restart", None)
     if preserve_handoff_velocities and int(chunk_index) == 0 and not has_restart_read:
         chunk_kw["new"] = False
         chunk_kw["restart"] = False

@@ -2,7 +2,7 @@
 tolerance 2.0
 filetype pdb
 output packmol_out.pdb
-seed 473188
+seed 895953
 
 structure peptide.pdb
   number 1

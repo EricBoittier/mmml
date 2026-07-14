@@ -359,6 +359,13 @@ def evaluate_scan_monomer_decomposed(
     """
 
     rows: list[dict[str, float | str]] = []
+    component_keys = (
+        "neural_energy",
+        "electrostatics_energy",
+        "cgenff_vdw_energy",
+        "zbl_repulsion_energy",
+        "mbd_energy",
+    )
     for geometry in geometries:
         atoms = geometry.atoms.copy()
         idx_a, idx_b = geometry.fragments
@@ -367,18 +374,26 @@ def evaluate_scan_monomer_decomposed(
         try:
             atoms.calc = calculator_factory()
             e_dimer_ev = float(atoms.get_potential_energy())
+            components_dimer = {
+                key: float(atoms.calc.results.get(key, 0.0)) for key in component_keys
+            }
 
             atoms_a.calc = calculator_factory()
             e_a_ev = float(atoms_a.get_potential_energy())
+            components_a = {
+                key: float(atoms_a.calc.results.get(key, 0.0)) for key in component_keys
+            }
 
             atoms_b.calc = calculator_factory()
             e_b_ev = float(atoms_b.get_potential_energy())
+            components_b = {
+                key: float(atoms_b.calc.results.get(key, 0.0)) for key in component_keys
+            }
 
             e_int_ev = e_dimer_ev - e_a_ev - e_b_ev
             e_hybrid_ev = e_int_ev + e_a_ev + e_b_ev
 
-            rows.append(
-                {
+            row: dict[str, float | str] = {
                     "molecule_a": geometry.pair[0],
                     "molecule_b": geometry.pair[1],
                     "distance_angstrom": geometry.distance_angstrom,
@@ -395,7 +410,13 @@ def evaluate_scan_monomer_decomposed(
                         geometry.atoms, geometry.fragments
                     ),
                 }
-            )
+            for key in component_keys:
+                component_int = (
+                    components_dimer[key] - components_a[key] - components_b[key]
+                )
+                row[f"comp_Eint_{key}_ev"] = component_int
+                row[f"comp_Eint_{key}_kcal_mol"] = component_int * 23.060548867
+            rows.append(row)
         except Exception as e:
             print(f"    Warning: calculation failed at {geometry.distance_angstrom} Å: {e}")
     return rows

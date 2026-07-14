@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
@@ -756,10 +757,31 @@ def test_configure_nve_dynamics_start_memory_handoff_single_dyna(tmp_path):
     assert io.restart_read is None
 
 
-def test_configure_nve_handoff_preserves_in_memory_velocities(tmp_path):
+def test_configure_nve_handoff_refuses_missing_velocity_restart(tmp_path):
     res = tmp_path / "nve.res"
     io = CharmmTrajectoryFiles(restart_write=res)
     kw = {"restart": True, "start": True, "iasvel": 1, "firstt": 30.0}
+
+    with pytest.raises(RuntimeError, match="refusing a silent Boltzmann draw"):
+        _configure_nve_dynamics_start(
+            kw,
+            io,
+            coords_in_memory=True,
+            restart_from_file=False,
+            timestep_ps=0.0001,
+            use_pbc=True,
+            quiet=True,
+            temp=30.0,
+            preserve_memory_velocities=True,
+        )
+
+
+def test_configure_nve_explicit_c_api_requires_saved_velocities(tmp_path, monkeypatch):
+    restart = tmp_path / "continue_seed.res"
+    restart.write_text("restart fixture", encoding="ascii")
+    io = CharmmTrajectoryFiles(restart_write=tmp_path / "nve.res")
+    kw = {"restart": False, "start": True, "iasvel": 1, "firstt": 30.0}
+    monkeypatch.setenv("MMML_NVE_C_API_HANDOFF", "1")
 
     _configure_nve_dynamics_start(
         kw,
@@ -771,13 +793,14 @@ def test_configure_nve_handoff_preserves_in_memory_velocities(tmp_path):
         quiet=True,
         temp=30.0,
         preserve_memory_velocities=True,
+        handoff_restart_path=restart,
     )
 
     assert kw["restart"] is False
     assert kw["start"] is False
     assert kw["iasvel"] == 0
-    assert kw["ihtfrq"] == 0
     assert kw["_preserve_handoff_velocities"] is True
+    assert kw["_required_handoff_velocity_restart"] == str(restart.resolve())
     assert "firstt" not in kw
     assert "tbath" not in kw
 

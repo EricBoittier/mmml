@@ -514,7 +514,7 @@ class SpookyPhysNet(nn.Module):
 
     def _calculate_cgenff_vdw(
         self,
-        r: jnp.ndarray,
+        displacements: jnp.ndarray,
         off_dist: jnp.ndarray,
         cgenff_type_idx: jnp.ndarray,
         cgenff_master_sigmas: jnp.ndarray,
@@ -535,6 +535,14 @@ class SpookyPhysNet(nn.Module):
             sig_ij = 0.5 * (sig_i + sig_j)
             eps_ij = sqrt(eps_i * eps_j)
         """
+        # Use the actual pair separation in Å.  The ``r`` produced by
+        # ``_calc_switches`` is a damped Coulomb kernel (approximately 1/r),
+        # and using it here forced nearly every active LJ pair onto the
+        # 0.8*sigma clamp.
+        pair_distances = jnp.sqrt(
+            jnp.maximum(jnp.sum(displacements**2, axis=-1), 1.0e-12)
+        )
+
         sig_dst = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=3.5)
         sig_src = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=3.5)
         eps_dst = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=0.05)
@@ -554,12 +562,12 @@ class SpookyPhysNet(nn.Module):
         if self.learn_cgenff_vdw_scale:
             global_scale = self.param(
                 "global_vdw_scale",
-                lambda rng, shape: jnp.ones(shape, dtype=r.dtype),
+                lambda rng, shape: jnp.ones(shape, dtype=pair_distances.dtype),
                 (1,),
             )
             element_scale = self.param(
                 "element_vdw_scale",
-                lambda rng, shape: jnp.ones(shape, dtype=r.dtype),
+                lambda rng, shape: jnp.ones(shape, dtype=pair_distances.dtype),
                 (self.max_atomic_number + 1,),
             )
             elem_dst = jnp.take(element_scale, jnp.take(atomic_numbers, dst_idx))
@@ -568,16 +576,16 @@ class SpookyPhysNet(nn.Module):
             eps_ij = eps_ij * elem_scale
 
         if mol_id is not None:
-            inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(r.dtype)
+            inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(pair_distances.dtype)
         else:
             inter_monomer_mask = 1.0
 
         # Soft-core distance clamping to cap unphysical LJ 6-12 repulsion spikes at r < 0.8 * sig_ij
-        r_safe = jnp.maximum(r, 0.8 * sig_ij)
+        r_safe = jnp.maximum(pair_distances, 0.8 * sig_ij)
         sr6 = (sig_ij / r_safe) ** 6
         sr12 = sr6 ** 2
         
-        KCAL_TO_EV = jnp.asarray(0.0433641153, dtype=r.dtype)
+        KCAL_TO_EV = jnp.asarray(0.0433641153, dtype=pair_distances.dtype)
         vdw_pair = 4.0 * eps_ij * (sr12 - sr6) * KCAL_TO_EV * off_dist * batch_mask * inter_monomer_mask
         vdw_pair = 0.5 * vdw_pair
 
@@ -645,7 +653,7 @@ class SpookyPhysNet(nn.Module):
                 atomic_vdw_scales = None
 
             atomic_vdw, batch_vdw = self._calculate_cgenff_vdw(
-                r,
+                displacements,
                 off_dist,
                 cgenff_type_idx,
                 cgenff_master_sigmas,
@@ -690,6 +698,7 @@ class SpookyPhysNet(nn.Module):
             energy,
             atomic_charges,
             batch_electrostatics,
+            batch_vdw,
             repulsion,
             x,
         )
@@ -1115,7 +1124,7 @@ class SpookyPhysNet(nn.Module):
         # jax.debug.print("atom_mask {x}", x=atom_mask[::])
 
         if not compute_forces:
-            _, (energy, charges, electrostatics, repulsion, state) = self.energy(
+            _, (energy, charges, electrostatics, cgenff_vdw, repulsion, state) = self.energy(
                 atomic_numbers,
                 charges,
                 spins,
@@ -1136,7 +1145,7 @@ class SpookyPhysNet(nn.Module):
         else:
             energy_and_forces = jax.value_and_grad(self.energy, argnums=3, has_aux=True)
 
-            (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
+            (_, (energy, charges, electrostatics, cgenff_vdw, repulsion, state)), gradient = energy_and_forces(
                 atomic_numbers,
                 charges,
                 spins,
@@ -1183,6 +1192,7 @@ class SpookyPhysNet(nn.Module):
             "forces": forces,
             "charges": charges,
             "electrostatics": electrostatics,
+            "cgenff_vdw": cgenff_vdw,
             "repulsion": repulsion,
             "dipoles": dipoles,
             "sum_charges": sum_charges,

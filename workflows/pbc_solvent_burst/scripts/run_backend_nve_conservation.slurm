@@ -13,8 +13,11 @@
 
 set -euo pipefail
 
-WORKFLOW_ROOT="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${MMML_REPO_ROOT:-${SLURM_SUBMIT_DIR:-}}"
+if [[ ! -f "$REPO_ROOT/scripts/resolve_mmml_env.sh" ]]; then
+  REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+fi
 cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"

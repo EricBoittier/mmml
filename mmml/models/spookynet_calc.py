@@ -23,7 +23,9 @@ own saved config records an ``mbd_checkpoint`` (unless overridden).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import ase.units
 import e3x
@@ -45,6 +47,17 @@ from mmml.utils.model_checkpoint import (
 )
 
 EV_TO_KCAL_MOL = 1 / (ase.units.kcal / ase.units.mol)
+
+
+def _is_spooky_checkpoint(model_type: str, parameter_tree: Any) -> bool:
+    """Identify Spooky checkpoints without assuming a flat Flax params tree."""
+    kind = str(model_type).lower()
+    if kind in {"spooky", "spookynet"}:
+        return True
+    if kind == "physnet":
+        return False
+    modules = parameter_tree.get("params", parameter_tree)
+    return "charge_feature_projection" in modules
 
 
 class SpookyNetCalculator(Calculator):
@@ -85,13 +98,16 @@ class SpookyNetCalculator(Calculator):
             raise FileNotFoundError(f"No params found in checkpoint: {checkpoint}")
         raw_config = ckpt.get("config") or {}
         config = normalize_physnet_config(raw_config)
+        self.checkpoint_path = checkpoint.resolve()
+        self.raw_config = dict(raw_config)
+        self.normalized_config = dict(config)
         
         # Check model architecture: standard PhysNet vs SpookyPhysNet
         self.compute_dtype = resolve_ml_compute_dtype()
         self.numpy_dtype = ml_numpy_dtype(self.compute_dtype)
         jax_params = json_tree_to_jax_params(params, dtype=self.compute_dtype)
         model_type = str(config.get("model_type", "")).lower()
-        if model_type == "physnet" or "charge_feature_projection" not in jax_params:
+        if not _is_spooky_checkpoint(model_type, jax_params):
             from mmml.models.physnetjax.physnetjax.models.model import PhysNet
             model_config = physnet_constructor_kwargs(config, PhysNet)
             self.model = PhysNet(**model_config)
@@ -105,7 +121,16 @@ class SpookyNetCalculator(Calculator):
         )
         self.charge = float(charge)
         self.spin_multiplicity = float(spin_multiplicity)
-        self._apply = jax.jit(self._make_apply_fn())
+        # Energy-only scans should not compile the substantially larger force
+        # gradient graph.  Keep independent JITs so ASE force callers still
+        # receive exact derivatives while PES scans compile quickly.
+        self._apply_energy = jax.jit(self._make_apply_fn(compute_forces=False))
+        self._apply_forces = jax.jit(self._make_apply_fn(compute_forces=True))
+
+        # The standalone ASE adapter currently supplies only Z/R/masks to the
+        # model. Dynamic CGenFF type, sigma, epsilon and molecule-id arrays are
+        # therefore not present, even if they were used during training.
+        self.cgenff_lj_inputs_supplied = False
 
         # --- Companion MBD correction (see module docstring) -------------
         self.mbd_calc = None
@@ -139,7 +164,95 @@ class SpookyNetCalculator(Calculator):
                 )
                 print(f"  Using MBD correction from {resolved_path} (weight={self.mbd_weight:g})")
 
-    def _make_apply_fn(self):
+    def energy_function_report(self) -> dict[str, Any]:
+        """Return a machine-readable manifest of the active energy function.
+
+        This deliberately distinguishes terms supported/trained by the model
+        from terms actually supplied by this calculator adapter.  That makes
+        silent omissions such as missing dynamic CGenFF LJ inputs visible.
+        """
+        model = self.model
+        trained_with_cgenff_lj = not bool(
+            self.raw_config.get("no_cgenff_vdw", False)
+        )
+        charges_enabled = bool(getattr(model, "charges", False))
+        zbl_enabled = bool(getattr(model, "zbl", False))
+        cutoff = self.normalized_config.get(
+            "cutoff", getattr(model, "cutoff", None)
+        )
+        warnings: list[str] = []
+        if trained_with_cgenff_lj and not self.cgenff_lj_inputs_supplied:
+            warnings.append(
+                "Checkpoint training enabled CGenFF LJ, but no annotated Atoms "
+                "object has yet supplied mol_id/cgenff_type_idx/sigma/epsilon to "
+                "this calculator instance. Evaluations without that metadata omit "
+                "the fixed LJ contribution."
+            )
+        configured_mbd = self.raw_config.get("mbd_checkpoint")
+        if configured_mbd and self.mbd_calc is None:
+            warnings.append(
+                "Checkpoint records a companion MBD model, but it is not loaded; "
+                "evaluated energies contain only the residual Spooky term."
+            )
+
+        return {
+            "calculator": type(self).__name__,
+            "checkpoint": str(self.checkpoint_path),
+            "model_class": type(model).__name__,
+            "precision": {
+                "jax_enable_x64": bool(jax.config.jax_enable_x64),
+                "compute_dtype": str(self.compute_dtype),
+            },
+            "energy_units": "eV",
+            "force_units": "eV/angstrom",
+            "short_range": {
+                "neural_atomic_energy": True,
+                "cutoff_angstrom": None if cutoff is None else float(cutoff),
+                "zbl_repulsion": zbl_enabled,
+            },
+            "electrostatics": {
+                "predicted_atomic_charges": charges_enabled,
+                "damping_sigma": self.raw_config.get(
+                    "electrostatics_damping_sigma"
+                ),
+                "target_total_charge": self.charge,
+            },
+            "cgenff_lennard_jones": {
+                "enabled_during_training": trained_with_cgenff_lj,
+                "annotated_atoms_supported": True,
+                "inputs_supplied_at_inference": self.cgenff_lj_inputs_supplied,
+                "parameter_file_radius_field": "Rmin/2 (angstrom)",
+                "pair_combination": "Rmin_ij = Rmin_i/2 + Rmin_j/2; epsilon_ij = sqrt(|epsilon_i epsilon_j|)",
+                "charmm_form": "epsilon_ij * [(Rmin_ij/r)^12 - 2*(Rmin_ij/r)^6]",
+                "conventional_sigma_conversion": "sigma_i = 2*(Rmin_i/2)/2^(1/6)",
+                "predict_atomic_vdw_scale": bool(
+                    getattr(model, "predict_atomic_vdw_scale", False)
+                ),
+                "learn_cgenff_vdw_scale": bool(
+                    getattr(model, "learn_cgenff_vdw_scale", False)
+                ),
+            },
+            "mbd": {
+                "configured_checkpoint": None
+                if configured_mbd is None
+                else str(configured_mbd),
+                "loaded": self.mbd_calc is not None,
+                "weight": float(self.mbd_weight),
+            },
+            "warnings": warnings,
+        }
+
+    def write_energy_function_report(self, path: str | Path) -> Path:
+        """Write :meth:`energy_function_report` as formatted JSON."""
+        output = Path(path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(self.energy_function_report(), indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return output
+
+    def _make_apply_fn(self, *, compute_forces: bool):
         model = self.model
         params = self.params
         compute_dtype = self.compute_dtype
@@ -166,6 +279,7 @@ class SpookyNetCalculator(Calculator):
                     cgenff_type_idx=cgenff_type_idx,
                     cgenff_master_sigmas=cgenff_master_sigmas,
                     cgenff_master_epsilons=cgenff_master_epsilons,
+                    compute_forces=compute_forces,
                 )
             else:
                 return model.apply(
@@ -215,7 +329,38 @@ class SpookyNetCalculator(Calculator):
         valid_pairs = (atom_mask[dst_idx] > 0) & (atom_mask[src_idx] > 0)
         batch_mask = valid_pairs.astype(self.numpy_dtype)
 
-        output = self._apply(
+        metadata_names = ("mol_id", "cgenff_type_idx")
+        have_metadata = all(name in atoms.arrays for name in metadata_names)
+        have_tables = all(
+            name in atoms.info
+            for name in ("cgenff_master_sigmas", "cgenff_master_epsilons")
+        )
+        if have_metadata != have_tables:
+            raise ValueError(
+                "Incomplete CGenFF inference metadata: mol_id/type indices and "
+                "master sigma/epsilon tables must be supplied together"
+            )
+        mol_id = cgenff_type_idx = master_sigmas = master_epsilons = None
+        if have_metadata:
+            mol_id = np.asarray(atoms.arrays["mol_id"], dtype=np.int32)
+            cgenff_type_idx = np.asarray(
+                atoms.arrays["cgenff_type_idx"], dtype=np.int32
+            )
+            if pad:
+                mol_id = np.pad(mol_id, (0, pad), constant_values=0)
+                cgenff_type_idx = np.pad(
+                    cgenff_type_idx, (0, pad), constant_values=0
+                )
+            master_sigmas = np.asarray(
+                atoms.info["cgenff_master_sigmas"], dtype=self.numpy_dtype
+            )
+            master_epsilons = np.asarray(
+                atoms.info["cgenff_master_epsilons"], dtype=self.numpy_dtype
+            )
+            self.cgenff_lj_inputs_supplied = True
+
+        apply_fn = self._apply_forces if "forces" in properties else self._apply_energy
+        output = apply_fn(
             jnp.asarray(z),
             jnp.asarray(pos),
             jnp.asarray(dst_idx),
@@ -224,13 +369,36 @@ class SpookyNetCalculator(Calculator):
             jnp.asarray(batch_mask),
             self.charge,
             self.spin_multiplicity,
+            None if mol_id is None else jnp.asarray(mol_id),
+            None if cgenff_type_idx is None else jnp.asarray(cgenff_type_idx),
+            None if master_sigmas is None else jnp.asarray(master_sigmas),
+            None if master_epsilons is None else jnp.asarray(master_epsilons),
         )
         spooky_energy = float(np.asarray(output["energy"]).squeeze())
-        spooky_forces = np.asarray(output["forces"])[:n_real] if "forces" in output else None
+        force_output = output.get("forces")
+        spooky_forces = (
+            np.asarray(force_output)[:n_real] if force_output is not None else None
+        )
 
         energy = spooky_energy
         forces = spooky_forces
         self.results["spooky_energy"] = spooky_energy
+        def _component_sum(name: str) -> float:
+            value = output.get(name)
+            return 0.0 if value is None else float(np.asarray(value).sum())
+
+        electrostatics_energy = _component_sum("electrostatics")
+        cgenff_vdw_energy = _component_sum("cgenff_vdw")
+        zbl_repulsion_energy = _component_sum("repulsion")
+        self.results["electrostatics_energy"] = electrostatics_energy
+        self.results["cgenff_vdw_energy"] = cgenff_vdw_energy
+        self.results["zbl_repulsion_energy"] = zbl_repulsion_energy
+        self.results["neural_energy"] = (
+            spooky_energy
+            - electrostatics_energy
+            - cgenff_vdw_energy
+            - zbl_repulsion_energy
+        )
 
         if self.mbd_calc is not None:
             mbd_out = self.mbd_calc.predict_mbd(atoms)
