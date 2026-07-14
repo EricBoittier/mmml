@@ -11,6 +11,7 @@ one fixed floor that's unsafe for bulky/asymmetric pairs (e.g. ACE+ACE needs
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -578,6 +579,50 @@ def main():
         df = pd.concat([df_prior, df], ignore_index=True).drop_duplicates(subset=key_cols, keep="last")
     df.to_csv(csv_path, index=False)
     print(f"Results saved to {csv_path} ({len(df)} total rows, backends: {sorted(df['backend'].unique())})")
+
+    if use_spookynet:
+        # Proof-of-work for the standalone adapter: this report is written
+        # after evaluation, so it records whether annotated CGenFF inputs were
+        # actually consumed rather than merely supported by the class.
+        spookynet_calc.write_energy_function_report(
+            args.output_dir / "calculator_energy_function.json"
+        )
+        hybrid = df[df["backend"] == spookynet_hybrid_backend].copy()
+        component_columns = [
+            "comp_Eint_neural_energy_ev",
+            "comp_Eint_electrostatics_energy_ev",
+            "comp_Eint_cgenff_vdw_energy_ev",
+            "comp_Eint_zbl_repulsion_energy_ev",
+            "comp_Eint_mbd_energy_ev",
+        ]
+        available = [name for name in component_columns if name in hybrid.columns]
+        reconstructed = hybrid[available].fillna(0.0).sum(axis=1)
+        target = hybrid["comp_Eint_ev"]
+        lj_values = hybrid["comp_Eint_cgenff_vdw_energy_ev"].fillna(0.0)
+        audit = {
+            "checkpoint": str(args.spookynet_checkpoint.resolve()),
+            "backend": spookynet_hybrid_backend,
+            "n_points": int(len(hybrid)),
+            "component_columns": available,
+            "max_abs_component_reconstruction_error_ev": float(
+                np.max(np.abs(reconstructed - target)) if len(hybrid) else np.nan
+            ),
+            "cgenff_lj_nonzero_points": int(np.count_nonzero(np.abs(lj_values) > 1e-12)),
+            "cgenff_lj_min_ev": float(lj_values.min()) if len(hybrid) else np.nan,
+            "cgenff_lj_max_ev": float(lj_values.max()) if len(hybrid) else np.nan,
+            "cgenff_inputs_consumed": bool(spookynet_calc.cgenff_lj_inputs_supplied),
+            "jax_enable_x64": bool(__import__("jax").config.jax_enable_x64),
+            "mmml_ml_dtype": os.environ.get("MMML_ML_DTYPE"),
+        }
+        (args.output_dir / "component_reconstruction_audit.json").write_text(
+            json.dumps(audit, indent=2) + "\n", encoding="utf-8"
+        )
+        print(
+            "Spooky component audit: "
+            f"CGenFF LJ nonzero at {audit['cgenff_lj_nonzero_points']}/{audit['n_points']} points; "
+            "max reconstruction error "
+            f"{audit['max_abs_component_reconstruction_error_ev']:.3e} eV"
+        )
 
     # Generate plots
     print("Generating plots...")

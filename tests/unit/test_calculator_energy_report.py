@@ -41,9 +41,10 @@ def test_spookynet_report_flags_missing_training_lj_inputs(tmp_path):
     report = calc.energy_function_report()
 
     assert report["cgenff_lennard_jones"]["parameter_file_radius_field"] == "Rmin/2 (angstrom)"
+    assert report["cgenff_lennard_jones"]["annotated_atoms_supported"] is True
     assert report["cgenff_lennard_jones"]["inputs_supplied_at_inference"] is False
     assert report["short_range"]["zbl_repulsion"] is True
-    assert any("fixed LJ contribution is absent" in item for item in report["warnings"])
+    assert any("omit the fixed LJ contribution" in item for item in report["warnings"])
 
 
 def test_charmm_components_are_materialized_as_independent_backends():

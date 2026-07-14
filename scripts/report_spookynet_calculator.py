@@ -31,6 +31,7 @@ def _markdown(report: dict) -> str:
         f"- Predicted-charge electrostatics: `{electrostatics['predicted_atomic_charges']}`",
         f"- ZBL repulsion: `{short['zbl_repulsion']}`",
         f"- CGenFF LJ used during training: `{lj['enabled_during_training']}`",
+        f"- Annotated CGenFF inputs supported by adapter: `{lj['annotated_atoms_supported']}`",
         f"- CGenFF LJ inputs supplied now: `{lj['inputs_supplied_at_inference']}`",
         f"- Companion MBD loaded: `{mbd['loaded']}` (weight `{mbd['weight']}`)",
         "",

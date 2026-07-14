@@ -168,9 +168,10 @@ class SpookyNetCalculator(Calculator):
         warnings: list[str] = []
         if trained_with_cgenff_lj and not self.cgenff_lj_inputs_supplied:
             warnings.append(
-                "Checkpoint training enabled CGenFF LJ, but this standalone "
-                "calculator does not supply mol_id/cgenff_type_idx/sigma/epsilon; "
-                "the fixed LJ contribution is absent from evaluated energies."
+                "Checkpoint training enabled CGenFF LJ, but no annotated Atoms "
+                "object has yet supplied mol_id/cgenff_type_idx/sigma/epsilon to "
+                "this calculator instance. Evaluations without that metadata omit "
+                "the fixed LJ contribution."
             )
         configured_mbd = self.raw_config.get("mbd_checkpoint")
         if configured_mbd and self.mbd_calc is None:
@@ -203,6 +204,7 @@ class SpookyNetCalculator(Calculator):
             },
             "cgenff_lennard_jones": {
                 "enabled_during_training": trained_with_cgenff_lj,
+                "annotated_atoms_supported": True,
                 "inputs_supplied_at_inference": self.cgenff_lj_inputs_supplied,
                 "parameter_file_radius_field": "Rmin/2 (angstrom)",
                 "pair_combination": "Rmin_ij = Rmin_i/2 + Rmin_j/2; epsilon_ij = sqrt(|epsilon_i epsilon_j|)",
