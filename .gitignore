@@ -287,3 +287,5 @@ reports/*.out
 reports/*.toc
 pdb/aco.pdb
 psf/aco-1.psf
+pept.pdb
+pept.psf
