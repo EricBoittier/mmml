@@ -18,6 +18,16 @@
 
 MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2023b}"
 
+# The system profile scripts below are not written to survive `set -u`
+# (soft_stacks.sh dereferences MODULEPATH before assigning it). Job scripts run
+# with `set -u`, where sourcing them aborts the whole job. Relax nounset for the
+# duration and restore the caller's setting afterwards.
+_mmml_had_nounset=0
+case "$-" in
+  *u*) _mmml_had_nounset=1 ;;
+esac
+set +u
+
 # In a Slurm batch script the shell is not a login shell, so neither `module`
 # (an lmod shell function) nor MODULEPATH exists. Both are needed: with `module`
 # defined but MODULEPATH empty, `module load` finds nothing and fails *silently*,
@@ -57,6 +67,12 @@ if ! ldconfig -p 2>/dev/null | grep -q "libmpi\.so\.40" \
 fi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+
+# Restore the caller's nounset setting.
+if [[ "$_mmml_had_nounset" == "1" ]]; then
+  set -u
+fi
+unset _mmml_had_nounset
 
 # CHARMM_HOME / CHARMM_LIB_DIR are auto-discovered from setup/charmm; set them
 # only to point at an out-of-tree or per-tier CHARMM build.
