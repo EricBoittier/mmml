@@ -12,20 +12,20 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_
 
 
 def charmm_positions_xyz_array() -> np.ndarray:
-    """Read active PyCHARMM coordinates as ``(N, 3)`` with explicit ``x,y,z`` columns."""
-    import pycharmm.coor as coor
+    """Read active PyCHARMM coordinates as ``(N, 3)``."""
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_positions_array
 
-    return coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=np.float64)
+    return charmm_positions_array()
 
 
 def set_charmm_positions(positions: np.ndarray) -> None:
     """Load ``(N, 3)`` coordinates into the active PyCHARMM session."""
-    import pycharmm.coor as coor
+    from mmml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
 
     arr = np.asarray(positions, dtype=np.float64)
     if arr.ndim != 2 or arr.shape[1] != 3:
         raise ValueError(f"positions must be (N, 3), got {arr.shape}")
-    coor.set_positions(pd.DataFrame(arr, columns=["x", "y", "z"]))
+    set_charmm_positions_array(arr)
 
 
 def _psf_needs_xplor_reader(path: Path) -> bool:

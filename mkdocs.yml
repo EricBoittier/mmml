@@ -12,14 +12,14 @@ theme:
       primary: indigo
       accent: indigo
       toggle:
-        icon: material/brightness-7
+        icon: material/weather-sunny
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: indigo
       accent: indigo
       toggle:
-        icon: material/brightness-4
+        icon: material/weather-night
         name: Switch to light mode
   features:
     - navigation.instant
@@ -119,7 +119,6 @@ nav:
           - ef-evaluate: cli/commands/ef-evaluate.md
           - ef-md: cli/commands/ef-md.md
       - Other utilities:
-          - doctor: cli/commands/doctor.md
           - md-embedding: cli/commands/md-embedding.md
           - mpi-launch: cli/commands/mpi-launch.md
           - plot-restart-velocities: cli/commands/plot-restart-velocities.md
