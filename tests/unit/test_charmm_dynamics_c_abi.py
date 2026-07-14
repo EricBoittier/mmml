@@ -21,11 +21,13 @@ def _function_block(name: str) -> str:
 
 
 def test_ctypes_velocity_buffers_use_raw_pointer_abi():
-    """ctypes arrays are ``double *`` and must not be read as CFI descriptors."""
+    """ctypes arrays cross bind(c) only as explicit by-value C pointers."""
     for name in ("dynamics_run", "dynamics_run_kw"):
         block = _function_block(name)
-        assert "dimension(*)" in block
+        assert block.lower().count("type(c_ptr), value") == 2
+        assert ", optional ::" not in block.lower()
         assert "dimension(:)" not in block
+        assert block.lower().count("call c_f_pointer") == 6
 
     dynopt_head = DYNOPT.read_text(encoding="utf-8").split("!     begin", 1)[0]
     dummy_decl = re.search(
@@ -36,6 +38,15 @@ def test_ctypes_velocity_buffers_use_raw_pointer_abi():
     )
     assert dummy_decl is not None
     assert dummy_decl.group(1).strip() == "*"
+
+
+def test_state_free_velocity_probe_uses_explicit_pointers():
+    block = _function_block("dynamics_velocity_buffer_probe")
+    assert block.lower().count("type(c_ptr), value") == 2
+    assert block.lower().count("call c_f_pointer") == 6
+    assert "out_vx(1:n) = in_vx(1:n)" in block
+    assert "out_vy(1:n) = in_vy(1:n)" in block
+    assert "out_vz(1:n) = in_vz(1:n)" in block
 
 
 def test_dynamics_run_returns_xyz_to_distinct_buffers():

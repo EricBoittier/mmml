@@ -51,7 +51,9 @@ def test_repository_api_surface_includes_fixed_dynamics_entrypoints():
         assert not any(x["code"] == "assumed_shape_array" for x in rows[symbol]["issues"])
         velocity_args = [x for x in rows[symbol]["arguments"] if x["name"].startswith(("in_v", "out_v"))]
         assert len(velocity_args) == 6
-        assert all(x["dimension"] == "*" for x in velocity_args)
+        assert all(x["dimension"] is None for x in velocity_args)
+        assert all(x["type_spec"] == "type(c_ptr)" for x in velocity_args)
+        assert all(x["value"] for x in velocity_args)
 
 
 def test_repository_api_surface_includes_interoperable_types_and_enums():
@@ -67,7 +69,7 @@ def test_repository_api_surface_includes_interoperable_types_and_enums():
     assert not rows["dynamics_settings"]["issues"]
     assert report["summary"]["bind_c_types"] == 7
     assert report["summary"]["bind_c_enums"] == 2
-    assert report["summary"]["total_bind_c_surface_entries"] == 345
+    assert report["summary"]["total_bind_c_surface_entries"] == 346
 
 
 def test_optional_shared_library_probe_reports_missing_exports(monkeypatch, tmp_path):

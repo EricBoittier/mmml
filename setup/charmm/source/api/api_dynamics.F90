@@ -19,29 +19,45 @@ contains
   !> param[out] out_vy z-component of initial velocity for each atom 1:natom
   !> param[out] out_vz z-component of initial velocity for each atom 1:natom
   integer(c_int) function dynamics_run(options, &
-       in_vx, in_vy, in_vz, &
-       out_vx, out_vy, out_vz) bind(c)
-    use, intrinsic :: iso_c_binding, only: c_int, c_double
+       in_vx_ptr, in_vy_ptr, in_vz_ptr, &
+       out_vx_ptr, out_vy_ptr, out_vz_ptr) bind(c)
+    use, intrinsic :: iso_c_binding, only: c_int, c_double, c_ptr, &
+         c_associated, c_f_pointer
     use dcntrl_mod, only: dynopt
     use api_types, only: dynamics_settings
+    use psf, only: natom
 
     implicit none
 
     type(dynamics_settings), intent(in) :: options
 
-    ! C callers pass raw ``double *`` buffers.  Assumed-shape ``(:)`` dummies
-    ! require a compiler-specific CFI descriptor and are not interoperable with
-    ! the ctypes arrays used by PyCHARMM (gfortran dereferences the raw velocity
-    ! data as a descriptor and crashes in DYNOPT).  Assumed-size ``(*)`` maps to
-    ! a plain pointer and is the correct bind(c) ABI here; DYNOPT bounds access
-    ! with the active PSF atom count.
-    real(c_double), dimension(*), optional :: &
-         in_vx, in_vy, in_vz, &
-         out_vx, out_vy, out_vz
+    ! Avoid OPTIONAL-array compiler conventions at the C boundary entirely.
+    ! ctypes passes raw addresses (or NULL); c_f_pointer creates ordinary
+    ! Fortran views only after all six buffers have been validated.
+    type(c_ptr), value :: in_vx_ptr, in_vy_ptr, in_vz_ptr
+    type(c_ptr), value :: out_vx_ptr, out_vy_ptr, out_vz_ptr
+    real(c_double), pointer :: in_vx(:), in_vy(:), in_vz(:)
+    real(c_double), pointer :: out_vx(:), out_vy(:), out_vz(:)
+    logical :: have_any, have_all
 
     dynamics_run = 0
 
-    if (present(in_vx)) then
+    have_any = c_associated(in_vx_ptr) .or. c_associated(in_vy_ptr) .or. &
+         c_associated(in_vz_ptr) .or. c_associated(out_vx_ptr) .or. &
+         c_associated(out_vy_ptr) .or. c_associated(out_vz_ptr)
+    have_all = c_associated(in_vx_ptr) .and. c_associated(in_vy_ptr) .and. &
+         c_associated(in_vz_ptr) .and. c_associated(out_vx_ptr) .and. &
+         c_associated(out_vy_ptr) .and. c_associated(out_vz_ptr)
+    if (have_any .and. .not. have_all) then
+       dynamics_run = -2
+       return
+    else if (have_all) then
+       call c_f_pointer(in_vx_ptr, in_vx, [natom])
+       call c_f_pointer(in_vy_ptr, in_vy, [natom])
+       call c_f_pointer(in_vz_ptr, in_vz, [natom])
+       call c_f_pointer(out_vx_ptr, out_vx, [natom])
+       call c_f_pointer(out_vy_ptr, out_vy, [natom])
+       call c_f_pointer(out_vz_ptr, out_vz, [natom])
        call dynopt('', 0, options, &
             in_vx, in_vy, in_vz, &
             out_vx, out_vy, out_vz)
@@ -58,13 +74,15 @@ contains
   ! ``dynamics_run`` passes an empty command line; integrator / thermostat flags
   ! are only parsed from ``c_kw`` (same tokens as after ``DYNAmics`` in a script).
   integer(c_int) function dynamics_run_kw(options, c_kw, c_kw_len, &
-       in_vx, in_vy, in_vz, &
-       out_vx, out_vy, out_vz) bind(c)
-    use, intrinsic :: iso_c_binding, only: c_int, c_double, c_char
+       in_vx_ptr, in_vy_ptr, in_vz_ptr, &
+       out_vx_ptr, out_vy_ptr, out_vz_ptr) bind(c)
+    use, intrinsic :: iso_c_binding, only: c_int, c_double, c_char, c_ptr, &
+         c_associated, c_f_pointer
     use dcntrl_mod, only: dynopt
     use api_types, only: dynamics_settings
     use api_util, only: c2f_string
     use dimens_fcm, only: mxcmsz
+    use psf, only: natom
 
     implicit none
 
@@ -72,13 +90,15 @@ contains
     character(kind=c_char), intent(in) :: c_kw(*)
     integer(c_int), value :: c_kw_len
 
-    real(c_double), dimension(*), optional :: &
-         in_vx, in_vy, in_vz, &
-         out_vx, out_vy, out_vz
+    type(c_ptr), value :: in_vx_ptr, in_vy_ptr, in_vz_ptr
+    type(c_ptr), value :: out_vx_ptr, out_vy_ptr, out_vz_ptr
+    real(c_double), pointer :: in_vx(:), in_vy(:), in_vz(:)
+    real(c_double), pointer :: out_vx(:), out_vy(:), out_vz(:)
 
     character(len=:), allocatable :: kw_str
     character(len=mxcmsz) :: comlyn
     integer :: ntrim
+    logical :: have_any, have_all
 
     dynamics_run_kw = 0
     kw_str = c2f_string(c_kw, c_kw_len)
@@ -87,7 +107,22 @@ contains
     comlyn = ' '
     if (ntrim > 0) comlyn(1:ntrim) = kw_str(1:ntrim)
 
-    if (present(in_vx)) then
+    have_any = c_associated(in_vx_ptr) .or. c_associated(in_vy_ptr) .or. &
+         c_associated(in_vz_ptr) .or. c_associated(out_vx_ptr) .or. &
+         c_associated(out_vy_ptr) .or. c_associated(out_vz_ptr)
+    have_all = c_associated(in_vx_ptr) .and. c_associated(in_vy_ptr) .and. &
+         c_associated(in_vz_ptr) .and. c_associated(out_vx_ptr) .and. &
+         c_associated(out_vy_ptr) .and. c_associated(out_vz_ptr)
+    if (have_any .and. .not. have_all) then
+       dynamics_run_kw = -2
+       return
+    else if (have_all) then
+       call c_f_pointer(in_vx_ptr, in_vx, [natom])
+       call c_f_pointer(in_vy_ptr, in_vy, [natom])
+       call c_f_pointer(in_vz_ptr, in_vz, [natom])
+       call c_f_pointer(out_vx_ptr, out_vx, [natom])
+       call c_f_pointer(out_vy_ptr, out_vy, [natom])
+       call c_f_pointer(out_vz_ptr, out_vz, [natom])
        call dynopt(comlyn, ntrim, options, &
             in_vx, in_vy, in_vz, &
             out_vx, out_vy, out_vz)
@@ -98,6 +133,36 @@ contains
     dynamics_run_kw = 1
     call dynamics_reset()
   end function dynamics_run_kw
+
+  !> @brief state-free runtime probe for the ctypes/Fortran velocity ABI
+  integer(c_int) function dynamics_velocity_buffer_probe(n, &
+       in_vx_ptr, in_vy_ptr, in_vz_ptr, &
+       out_vx_ptr, out_vy_ptr, out_vz_ptr) bind(c)
+    use, intrinsic :: iso_c_binding, only: c_int, c_double, c_ptr, &
+         c_associated, c_f_pointer
+    implicit none
+    integer(c_int), value :: n
+    type(c_ptr), value :: in_vx_ptr, in_vy_ptr, in_vz_ptr
+    type(c_ptr), value :: out_vx_ptr, out_vy_ptr, out_vz_ptr
+    real(c_double), pointer :: in_vx(:), in_vy(:), in_vz(:)
+    real(c_double), pointer :: out_vx(:), out_vy(:), out_vz(:)
+
+    dynamics_velocity_buffer_probe = -1
+    if (n < 1) return
+    if (.not. (c_associated(in_vx_ptr) .and. c_associated(in_vy_ptr) .and. &
+         c_associated(in_vz_ptr) .and. c_associated(out_vx_ptr) .and. &
+         c_associated(out_vy_ptr) .and. c_associated(out_vz_ptr))) return
+    call c_f_pointer(in_vx_ptr, in_vx, [n])
+    call c_f_pointer(in_vy_ptr, in_vy, [n])
+    call c_f_pointer(in_vz_ptr, in_vz, [n])
+    call c_f_pointer(out_vx_ptr, out_vx, [n])
+    call c_f_pointer(out_vy_ptr, out_vy, [n])
+    call c_f_pointer(out_vz_ptr, out_vz, [n])
+    out_vx(1:n) = in_vx(1:n)
+    out_vy(1:n) = in_vy(1:n)
+    out_vz(1:n) = in_vz(1:n)
+    dynamics_velocity_buffer_probe = 1
+  end function dynamics_velocity_buffer_probe
 
   !> @brief use Langevin dynamics
   !
