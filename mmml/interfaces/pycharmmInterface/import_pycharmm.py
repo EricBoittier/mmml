@@ -263,8 +263,9 @@ def get_forces_pycharmm(update: bool = True):
 
 import pandas as pd
 def set_pycharmm_xyz(atom_positions):
-    xyz = pd.DataFrame(atom_positions, columns=["x", "y", "z"])
-    coor.set_positions(xyz)
+    from mmml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
+
+    set_charmm_positions_array(atom_positions)
 
 
 def capture_neighbour_list():

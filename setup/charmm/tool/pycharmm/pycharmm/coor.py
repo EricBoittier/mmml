@@ -63,12 +63,14 @@ def _as_np(cbuf):
 def _in_buffer(column, natom):
     """Build a C double buffer from a DataFrame column / array-like.
 
-    Returns (cbuf, backing) -- `backing` must stay referenced for the lifetime of
-    `cbuf`, which shares its memory.
+    Fills a fresh buffer rather than aliasing the input: pandas hands out read-only
+    views, which ctypes.from_buffer rejects. The copy is done in C by numpy, so this
+    still avoids materialising natom Python floats.
     """
     arr = np.asarray(column, dtype=np.float64)[0:natom]
-    arr = np.ascontiguousarray(arr, dtype=np.float64)
-    return (ctypes.c_double * natom).from_buffer(arr), arr
+    cbuf = (ctypes.c_double * natom)()
+    np.ctypeslib.as_array(cbuf)[:] = arr
+    return cbuf, arr
 
 
   
