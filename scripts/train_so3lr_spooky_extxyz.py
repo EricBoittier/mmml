@@ -914,13 +914,18 @@ def _interaction_trust_map_loss(
     lam = jax.nn.softplus(log_lambda)
     lam = 0.5 * (lam + lam.T)  # symmetric
 
-    # Z -> slot index in `elements`, or -1 if not one of the tracked elements.
-    slot_of = -jnp.ones((int(Z.max()) + 1,), dtype=jnp.int32)
+    # Z -> slot index in `elements`, or -1 if not one of the tracked elements. Table size
+    # is static (max tracked element + 1) so this traces under jit; any Z beyond it maps
+    # to -1 via the clip+compare below.
+    table_size = max(TRUST_MAP_ELEMENTS) + 1
+    slot_of = -jnp.ones((table_size,), dtype=jnp.int32)
     slot_of = slot_of.at[elements].set(jnp.arange(elements.shape[0], dtype=jnp.int32))
+    z_dst = jnp.clip(jnp.take(Z, dst_idx), 0, table_size - 1)
+    z_src = jnp.clip(jnp.take(Z, src_idx), 0, table_size - 1)
 
     r = neural_interaction.reshape(-1)  # (B,)
-    si = slot_of[jnp.take(Z, dst_idx)]
-    sj = slot_of[jnp.take(Z, src_idx)]
+    si = slot_of[z_dst]
+    sj = slot_of[z_src]
     valid = ((si >= 0) & (sj >= 0)).astype(lam.dtype)
     inter = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(lam.dtype)
 
