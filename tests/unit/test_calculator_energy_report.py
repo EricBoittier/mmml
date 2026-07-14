@@ -14,6 +14,7 @@ from mmml.analysis.dimer_cgenff import (
 )
 from mmml.interfaces.pycharmmInterface.long_range_backend import per_atom_jax_pme_c6_sqrt
 from mmml.models.spookynet_calc import SpookyNetCalculator, _is_spooky_checkpoint
+from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 from scripts.run_dimer_scan_campaign import _charmm_component_rows
 
 
@@ -106,4 +107,32 @@ def test_dimer_metadata_converts_rmin_half_and_preserves_ace_order(tmp_path):
     )
     assert CGENFF_ATOM_TYPES["ACE"][:4] == (
         "OG2D3", "CG2O5", "CG331", "CG331"
+    )
+
+
+def test_cgenff_lj_uses_pair_distance_not_coulomb_kernel():
+    sigma = 3.0
+    epsilon = 0.2
+    r_min = 2.0 ** (1.0 / 6.0) * sigma
+    model = SpookyPhysNet(
+        learn_cgenff_vdw_scale=False,
+        predict_atomic_vdw_scale=False,
+    )
+    _, batch_vdw = model._calculate_cgenff_vdw(
+        jnp.asarray([[r_min, 0.0, 0.0], [-r_min, 0.0, 0.0]]),
+        jnp.ones(2),
+        jnp.zeros(2, dtype=jnp.int32),
+        jnp.asarray([sigma]),
+        jnp.asarray([epsilon]),
+        jnp.asarray([6, 6]),
+        None,
+        jnp.asarray([0, 1], dtype=jnp.int32),
+        jnp.asarray([1, 0], dtype=jnp.int32),
+        jnp.asarray([0, 1], dtype=jnp.int32),
+        jnp.ones(2),
+        jnp.zeros(2, dtype=jnp.int32),
+        1,
+    )
+    assert float(batch_vdw.squeeze()) == pytest.approx(
+        -epsilon * 0.0433641153, rel=1e-6
     )

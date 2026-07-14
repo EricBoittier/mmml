@@ -375,7 +375,10 @@ class SpookyNetCalculator(Calculator):
             None if master_epsilons is None else jnp.asarray(master_epsilons),
         )
         spooky_energy = float(np.asarray(output["energy"]).squeeze())
-        spooky_forces = np.asarray(output["forces"])[:n_real] if "forces" in output else None
+        force_output = output.get("forces")
+        spooky_forces = (
+            np.asarray(force_output)[:n_real] if force_output is not None else None
+        )
 
         energy = spooky_energy
         forces = spooky_forces
