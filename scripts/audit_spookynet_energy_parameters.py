@@ -106,7 +106,7 @@ def main() -> None:
     parser.add_argument("checkpoint", nargs="+", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    report = {path.stem: audit(path) for path in args.checkpoint}
+    report = {f"{path.parent.name}/{path.stem}": audit(path) for path in args.checkpoint}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=2))
