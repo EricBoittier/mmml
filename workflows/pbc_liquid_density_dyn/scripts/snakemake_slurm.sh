@@ -73,7 +73,8 @@ echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} MMML_CKPT=${MMML_CK
 # shadowing deps required by snakemake-executor-plugin-slurm/pandas.
 # --python 3.12: project .venv is 3.13; uv would otherwise reuse it and still
 # import the broken pyarrow namespace from site-packages.
-unset VIRTUAL_ENV
+unset VIRTUAL_ENV PYTHONPATH
+export PYTHONNOUSERSITE=1
 _SNAKE_UV=(run --no-project --python 3.12 --with snakemake --with snakemake-executor-plugin-slurm)
 "$UV" "${_SNAKE_UV[@]}" snakemake \
   --profile "$PROFILE" \
