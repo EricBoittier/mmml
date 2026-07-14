@@ -123,6 +123,10 @@ def main():
         from .run import mpi_launch
         return mpi_launch.main(args.args)
 
+    elif command == "doctor":
+        from . import doctor
+        return doctor.main(args.args)
+
     elif command == "health-check":
         from .run import health_check
         sys.argv = ["mmml health-check"] + args.args
