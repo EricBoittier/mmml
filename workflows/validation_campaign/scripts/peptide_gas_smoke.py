@@ -211,7 +211,10 @@ def run_system(
     sys_dir = out_dir / system
     sys_dir.mkdir(parents=True, exist_ok=True)
 
+    # The worker loads CHARMM directly, so an MPI-linked libcharmm needs an MPI
+    # launcher here; a bare `python` child aborts in MPI_Init.
     cmd = [
+        *lib.charmm_mpi_prefix(),
         sys.executable,
         str(Path(__file__).resolve()),
         "--_worker",
