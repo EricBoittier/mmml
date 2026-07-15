@@ -325,3 +325,69 @@ def test_spoof_psf_monomer_matches_cgenff_bonded_components() -> None:
             err_msg=f"spoof vs cgenff component mismatch: {key}",
         )
     np.testing.assert_allclose(np.asarray(forces), np.asarray(ref_f), rtol=1e-8, atol=1e-8)
+
+
+def test_spoof_dcm_box_sum_matches_full_bonded_components() -> None:
+    """Sum of per-monomer spoof bonded terms equals full-box CGenFF bonded (no soft)."""
+    from pathlib import Path
+
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_crd_coordinates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+        load_monomer_bonded_components_from_psf,
+    )
+
+    base = Path.home() / "tests" / "boxes" / "dcm27_rho100"
+    psf = base / "model.psf"
+    crd = base / "model.crd"
+    if not psf.is_file() or not crd.is_file():
+        pytest.skip("optional DCM liquid-box fixtures missing (~/tests/boxes/dcm27_rho100)")
+
+    pos_np = read_crd_coordinates(crd)
+    assert pos_np is not None and pos_np.shape[0] > 0
+    pos = jnp.asarray(pos_np, dtype=jnp.float64)
+    n_atoms = int(pos.shape[0])
+    atoms_per = 5
+    n_mono = n_atoms // atoms_per
+    assert n_atoms == n_mono * atoms_per
+
+    system = load_cgenff_bonded_from_psf(psf, pos)
+    ref_comp, ref_f = bonded_energy_and_forces(
+        pos,
+        system.topology,
+        system.bonded,
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
+        energy_unit="kcal/mol",
+    )
+
+    sum_comp: dict[str, float] = {}
+    sum_f = np.zeros_like(pos_np)
+    for i in range(n_mono):
+        off = i * atoms_per
+        slice_pos = pos[off : off + atoms_per]
+        components, forces = load_monomer_bonded_components_from_psf(
+            psf,
+            slice_pos,
+            atoms_per_monomer=atoms_per,
+            atom_offset=off,
+            energy_unit="kcal/mol",
+        )
+        for key, val in components.items():
+            sum_comp[key] = sum_comp.get(key, 0.0) + float(val)
+        sum_f[off : off + atoms_per] = np.asarray(forces)
+
+    for key in ("bond", "angle", "urey", "torsion", "improper", "total"):
+        if key not in ref_comp:
+            continue
+        np.testing.assert_allclose(
+            sum_comp.get(key, 0.0),
+            float(ref_comp[key]),
+            rtol=1e-6,
+            atol=1e-5,
+            err_msg=f"DCM spoof sum vs full bonded mismatch: {key}",
+        )
+    np.testing.assert_allclose(sum_f, np.asarray(ref_f), rtol=1e-5, atol=1e-5)
