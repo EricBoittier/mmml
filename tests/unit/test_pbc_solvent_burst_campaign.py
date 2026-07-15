@@ -73,6 +73,7 @@ def cfg() -> dict:
         # Preserve coverage of the legacy supported solvents independently of
         # the validated TIP3/MEOH production defaults.
         "solvents": ["DCM", "ACO"],
+        "checkpoint": "examples/ckpts_json/DESdimers_params.json",
         "cluster_sizes": [10, 30, 50, 80, 100],
         "bulk_density_fractions": None,
         "temperatures": [300.0],
