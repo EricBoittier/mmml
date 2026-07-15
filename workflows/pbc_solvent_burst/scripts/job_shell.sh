@@ -11,6 +11,14 @@ CONFIG="${MMML_BURST_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 
 cd "$REPO_ROOT"
 
+# SciCORE batch shells do not initialize Lmod or the GCC/OpenMPI runtime used
+# by libcharmm. Detect its shared-home layout and load the repository prolog
+# before Python resolves or imports PyCHARMM.
+if [[ "${HOME:-}" == /scicore/* && -r "$REPO_ROOT/scripts/scicore_env.sh" ]]; then
+  # shellcheck source=../../../scripts/scicore_env.sh
+  source "$REPO_ROOT/scripts/scicore_env.sh"
+fi
+
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
