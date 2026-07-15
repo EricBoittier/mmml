@@ -1491,16 +1491,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=200,
         help=(
-            "Free-space / vacuum FIRE steps in the JAX-MD runner (default: 200). "
-            "Under PBC this stage is skipped (per-atom wrap breaks monomers); "
-            "use --jaxmd-pbc-minimize-steps instead."
+            "Pre-dynamics FIRE steps in the JAX-MD runner (default: 200). "
+            "Free space: COM-centered. PBC: molecular (monomer-COM) wrapping."
         ),
     )
     parser.add_argument(
         "--jaxmd-pbc-minimize-steps",
         type=int,
         default=200,
-        help="PBC-aware FIRE steps with molecular wrapping before dynamics (default: 200).",
+        help=(
+            "Additional PBC FIRE steps with molecular wrapping before dynamics "
+            "(default: 200; only when a cell is set)."
+        ),
     )
     parser.add_argument(
         "--jax-md-update-interval",

@@ -912,13 +912,12 @@ options:
                         Require periodic cell in handoff for PBC continuation
                         (default: off).
   --jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS
-                        Free-space / vacuum FIRE steps in the JAX-MD runner
-                        (default: 200). Under PBC this stage is skipped (per-
-                        atom wrap breaks monomers); use --jaxmd-pbc-minimize-
-                        steps instead.
+                        Pre-dynamics FIRE steps in the JAX-MD runner (default:
+                        200). Free space: COM-centered. PBC: molecular (monomer-
+                        COM) wrapping.
   --jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS
-                        PBC-aware FIRE steps with molecular wrapping before
-                        dynamics (default: 200).
+                        Additional PBC FIRE steps with molecular wrapping before
+                        dynamics (default: 200; only when a cell is set).
   --jax-md-update-interval JAX_MD_UPDATE_INTERVAL
                         JAX-MD/ASE PBC MM neighbor-list refresh interval in MD
                         steps or calculator calls (default: 1, conservative).

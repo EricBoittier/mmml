@@ -179,15 +179,15 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=200,
         help=(
-            "Free-space / vacuum FIRE steps (default: 200). "
-            "Skipped under PBC; use --jaxmd-pbc-minimize-steps."
+            "Pre-dynamics FIRE steps (default: 200). "
+            "Free space: COM-centered. PBC: molecular wrapping."
         ),
     )
     p.add_argument(
         "--jaxmd-pbc-minimize-steps",
         type=int,
         default=200,
-        help="PBC FIRE with molecular wrapping before dynamics (default: 200).",
+        help="Additional PBC FIRE with molecular wrapping (default: 200).",
     )
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(

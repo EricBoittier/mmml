@@ -11,7 +11,7 @@ from mmml.cli.run.jaxmd_runner import (
     _nl_update_positions,
     resolve_jaxmd_steps_per_loop_call,
     resolve_mm_pair_list_capacity,
-    should_skip_vacuum_com_fire,
+    resolve_pre_md_fire_start_positions,
 )
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
@@ -62,11 +62,20 @@ def test_resolve_mm_pair_list_capacity_prefers_get_stats():
     assert resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx) == 12345
 
 
-def test_should_skip_vacuum_com_fire_under_pbc():
-    assert should_skip_vacuum_com_fire(use_pbc=True, minimization_skipped=False) is True
-    assert should_skip_vacuum_com_fire(use_pbc=True, minimization_skipped=True) is True
-    assert should_skip_vacuum_com_fire(use_pbc=False, minimization_skipped=False) is False
-    assert should_skip_vacuum_com_fire(use_pbc=False, minimization_skipped=True) is True
+def test_pre_md_fire_start_keeps_box_frame_under_pbc():
+    """PBC FIRE must not COM-center (that plus per-atom wrap splits monomers)."""
+    R = np.array([[10.0, 0.0, 0.0], [12.0, 0.0, 0.0]], dtype=np.float32)
+    masses = np.array([12.0, 1.0], dtype=np.float32)
+    out = resolve_pre_md_fire_start_positions(R, masses, use_pbc=True)
+    np.testing.assert_allclose(np.asarray(out), R, atol=1e-6)
+
+
+def test_pre_md_fire_start_com_centers_in_free_space():
+    R = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32)
+    masses = np.array([1.0, 1.0], dtype=np.float32)
+    out = np.asarray(resolve_pre_md_fire_start_positions(R, masses, use_pbc=False))
+    np.testing.assert_allclose(out.mean(axis=0), [0.0, 0.0, 0.0], atol=1e-6)
+    np.testing.assert_allclose(out[1, 0] - out[0, 0], 2.0, atol=1e-6)
 
 
 def test_skin_zero_interval_one_never_reuses():

@@ -71,14 +71,24 @@ def resolve_mm_pair_list_capacity(
     return None
 
 
-def should_skip_vacuum_com_fire(*, use_pbc: bool, minimization_skipped: bool) -> bool:
-    """Whether to skip the first (vacuum/COM) FIRE before PBC FIRE.
+def resolve_pre_md_fire_start_positions(
+    positions,
+    masses,
+    *,
+    use_pbc: bool,
+):
+    """Starting coordinates for the first JAX-MD FIRE stage.
 
-    Under PBC, that stage COM-centers and shifts with ``space.periodic``
-    (per-atom wrap), which can split monomers across the box and destroy
-    ASE/CHARMM-minimized geometries.  PBC FIRE uses molecular wrapping.
+    Free space: COM-center (historical vacuum FIRE).
+    PBC: keep box-frame coordinates — COM-centering plus per-atom periodic
+    shift can split monomers across the cell and destroy ASE/CHARMM minima.
     """
-    return bool(minimization_skipped) or bool(use_pbc)
+    R = jnp.asarray(positions)
+    if use_pbc:
+        return jnp.asarray(R, dtype=jnp.float32)
+    mass = jnp.asarray(masses)
+    com = jnp.sum(mass[:, None] * R, axis=0) / mass.sum()
+    return jnp.asarray(R - com, dtype=jnp.float32)
 
 
 def resolve_jaxmd_steps_per_loop_call(
@@ -643,12 +653,10 @@ def set_up_nhc_sim_routine(
     else:
         displacement, shift = space.free()
 
-    # Minimization shift: Cartesian + periodic when PBC (matches MIC energy/force)
-    if use_pbc and L_cell_val is not None:
-        _, shift_min = space.periodic(L_cell_val)
-    else:
-        shift_min = shift
-
+    # Free-space FIRE uses free shift.  Under PBC the first FIRE is built inside
+    # run_sim with molecular (monomer-COM) wrapping — never space.periodic, which
+    # wraps atoms individually and can split monomers across the box.
+    shift_min = shift
     unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
         wrapped_force_fn, shift_min, dt_start=0.001, dt_max=0.001
     )
@@ -923,40 +931,46 @@ def set_up_nhc_sim_routine(
                     ))
                 return None
         fire_positions = []
-        skip_vacuum_fire = should_skip_vacuum_com_fire(
-            use_pbc=bool(use_pbc),
-            minimization_skipped=bool(skip_minimization),
-        )
-        if skip_vacuum_fire:
+        if skip_minimization:
             minimized_pos = jnp.asarray(R, dtype=jnp.float32)
             nmin_pbc_planned = int(getattr(args, "jaxmd_pbc_minimize_steps", 0) or 0)
-            nmin_vac_requested = int(getattr(args, "jaxmd_minimize_steps", 0) or 0)
             if use_pbc and nmin_pbc_planned > 0:
-                if skip_minimization:
-                    skip_msg = (
-                        "Skipping vacuum/COM FIRE (handoff positions); "
-                        f"PBC FIRE ({nmin_pbc_planned} steps) follows."
-                    )
-                else:
-                    skip_msg = (
-                        f"Skipping vacuum/COM FIRE ({nmin_vac_requested} steps requested); "
-                        "per-atom periodic wrap can split monomers under PBC and "
-                        "destroy ASE/CHARMM-minimized geometries. "
-                        f"PBC FIRE ({nmin_pbc_planned} steps, molecular wrap) follows."
-                    )
-            elif use_pbc:
                 skip_msg = (
-                    "Skipping vacuum/COM FIRE under PBC "
-                    "(use --jaxmd-pbc-minimize-steps for molecular-wrap FIRE)."
+                    "Skipping first FIRE (handoff positions); "
+                    f"PBC FIRE ({nmin_pbc_planned} steps) follows."
                 )
             else:
                 skip_msg = "Skipping minimization (using input positions)"
             c.print(Panel(skip_msg, title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
         else:
-            # Translate to center of mass before minimization (use actual masses)
-            com = jnp.sum(Si_mass[:, None] * R, axis=0) / Si_mass.sum()
-            initial_pos = jnp.asarray(R - com, dtype=jnp.float32)
-            # Sanity check: ensure energy/gradient are finite at start; else use R directly
+            initial_pos = resolve_pre_md_fire_start_positions(
+                R, Si_mass, use_pbc=bool(use_pbc)
+            )
+            fire_init_fn = unwrapped_init_fn
+            fire_step_fn = unwrapped_step_fn
+            if use_pbc:
+                # Molecular wrap (same policy as PBC FIRE below). Never use
+                # space.periodic here — per-atom wrap splits monomers.
+                _cell_fire = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+                initial_pos = _wrap_monomers(initial_pos, _cell_fire)
+                if update_fn is not None:
+                    fire_pair_idx, fire_pair_mask = update_fn(
+                        np.asarray(initial_pos), box=pbc_box_nl
+                    )
+                    _pbc_state["pair_idx"] = fire_pair_idx
+                    _pbc_state["pair_mask"] = fire_pair_mask
+
+                def _shift_molecular_fire(pos, dR, **kwargs):
+                    return _wrap_monomers(pos + dR, _cell_fire)
+
+                fire_init_fn, fire_step_fn = jax_md.minimize.fire_descent(
+                    wrapped_force_fn,
+                    _shift_molecular_fire,
+                    dt_start=0.001,
+                    dt_max=0.001,
+                )
+                fire_step_fn = jit(fire_step_fn)
+            # Sanity check: ensure energy/gradient are finite at start
             try:
                 _out0 = jax_md_eval_fn(
                     initial_pos,
@@ -968,82 +982,101 @@ def set_up_nhc_sim_routine(
                 _f0 = _out0.forces
                 if not (np.isfinite(_e0) and np.all(np.isfinite(np.asarray(_f0)))):
                     initial_pos = jnp.asarray(R, dtype=jnp.float32)
-                    c.print(Panel("Non-finite energy/forces at COM-centered pos; using R directly", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+                    if use_pbc:
+                        initial_pos = _wrap_monomers(
+                            initial_pos, jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+                        )
+                    c.print(Panel(
+                        "Non-finite energy/forces at FIRE start; using wrapped/raw R",
+                        title="[bold yellow]Warning[/bold yellow]",
+                        border_style="yellow",
+                    ))
                 else:
                     print_flat_bottom_summary(
                         _out0,
                         flat_bottom_radius=flat_bottom_radius,
                         flat_bottom_k=flat_bottom_k,
                         flat_bottom_mode=flat_bottom_mode,
-                        label="FIRE start (COM-centered)",
+                        label=(
+                            "FIRE start (molecular wrap, box frame)"
+                            if use_pbc
+                            else "FIRE start (COM-centered)"
+                        ),
                         console=c,
                     )
-                _out_r = jax_md_eval_fn(
-                    R,
-                    mm_pair_idx=_pbc_state["pair_idx"],
-                    mm_pair_mask=_pbc_state["pair_mask"],
-                    box=_pbc_state["box"],
-                )
-                print_flat_bottom_summary(
-                    _out_r,
-                    flat_bottom_radius=flat_bottom_radius,
-                    flat_bottom_k=flat_bottom_k,
-                    flat_bottom_mode=flat_bottom_mode,
-                    label="FIRE reference (raw R, no COM shift)",
-                    console=c,
-                )
+                if not use_pbc:
+                    _out_r = jax_md_eval_fn(
+                        R,
+                        mm_pair_idx=_pbc_state["pair_idx"],
+                        mm_pair_mask=_pbc_state["pair_mask"],
+                        box=_pbc_state["box"],
+                    )
+                    print_flat_bottom_summary(
+                        _out_r,
+                        flat_bottom_radius=flat_bottom_radius,
+                        flat_bottom_k=flat_bottom_k,
+                        flat_bottom_mode=flat_bottom_mode,
+                        label="FIRE reference (raw R, no COM shift)",
+                        console=c,
+                    )
             except Exception:
                 initial_pos = jnp.asarray(R, dtype=jnp.float32)
                 print("Fallback: using R directly for minimization")
-            fire_state = unwrapped_init_fn(initial_pos, mass=Si_mass)
+            fire_state = fire_init_fn(initial_pos, mass=Si_mass)
 
             # FIRE minimization with step rejection (reject steps that produce NaN)
             NMIN = getattr(args, "jaxmd_minimize_steps", 1000)
             if NMIN <= 0:
                 c.print(Panel("Skipping first minimization (0 steps requested)", title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
+                minimized_pos = initial_pos
             else:
-                c.print(Panel(f"FIRE minimization ({NMIN} steps)", title="[bold cyan]JAX-MD Minimization[/bold cyan]", border_style="cyan"))
-            for i in range(NMIN):
-                fire_positions.append(fire_state.position)
-                new_state = unwrapped_step_fn(fire_state)
-                # Reject step if it produces NaN/Inf positions
-                if not jnp.all(jnp.isfinite(new_state.position)):
-                    c.print(Panel("FIRE step produced NaN/Inf positions; rejecting and stopping", title="[bold red]Error[/bold red]", border_style="red"))
-                    break
-                # Check energy/forces at new position before accepting
-                out_step = jax_md_eval_fn(
-                    new_state.position,
-                    mm_pair_idx=_pbc_state["pair_idx"],
-                    mm_pair_mask=_pbc_state["pair_mask"],
-                    box=_pbc_state["box"],
+                fire_label = (
+                    f"FIRE minimization ({NMIN} steps, molecular wrap)"
+                    if use_pbc
+                    else f"FIRE minimization ({NMIN} steps)"
                 )
-                energy = float(out_step.energy)
-                max_force = float(jnp.abs(out_step.forces).max())
-                if not (np.isfinite(energy) and np.isfinite(max_force)):
-                    print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
-                    break
-                fire_state = new_state
+                c.print(Panel(fire_label, title="[bold cyan]JAX-MD Minimization[/bold cyan]", border_style="cyan"))
+                for i in range(NMIN):
+                    fire_positions.append(fire_state.position)
+                    new_state = fire_step_fn(fire_state)
+                    # Reject step if it produces NaN/Inf positions
+                    if not jnp.all(jnp.isfinite(new_state.position)):
+                        c.print(Panel("FIRE step produced NaN/Inf positions; rejecting and stopping", title="[bold red]Error[/bold red]", border_style="red"))
+                        break
+                    # Check energy/forces at new position before accepting
+                    out_step = jax_md_eval_fn(
+                        new_state.position,
+                        mm_pair_idx=_pbc_state["pair_idx"],
+                        mm_pair_mask=_pbc_state["pair_mask"],
+                        box=_pbc_state["box"],
+                    )
+                    energy = float(out_step.energy)
+                    max_force = float(jnp.abs(out_step.forces).max())
+                    if not (np.isfinite(energy) and np.isfinite(max_force)):
+                        print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
+                        break
+                    fire_state = new_state
 
-                if i % max(1, NMIN // 10) == 0:
-                    c.print(
-                        f"  [dim]{i}/{NMIN}[/dim]: E_total={energy:.6f} eV, "
-                        f"E_hybrid={float(out_step.hybrid_energy):.6f} eV, "
-                        f"E_fb={float(out_step.flat_bottom_E):.6f} eV, "
-                        f"{_fb_dist_hdr}={float(out_step.com_dist):.4f}, max|F|={max_force:.6f}"
-                    )
-                    print_flat_bottom_summary(
-                        out_step,
-                        flat_bottom_radius=flat_bottom_radius,
-                        flat_bottom_k=flat_bottom_k,
-                        flat_bottom_mode=flat_bottom_mode,
-                        label=f"FIRE step {i}/{NMIN}",
-                        console=c,
-                    )
-            # fire_state always holds last valid position (we reject bad steps)
-            minimized_pos = fire_state.position
-            if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
-                minimized_pos = fire_positions[-1]
-                c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+                    if i % max(1, NMIN // 10) == 0:
+                        c.print(
+                            f"  [dim]{i}/{NMIN}[/dim]: E_total={energy:.6f} eV, "
+                            f"E_hybrid={float(out_step.hybrid_energy):.6f} eV, "
+                            f"E_fb={float(out_step.flat_bottom_E):.6f} eV, "
+                            f"{_fb_dist_hdr}={float(out_step.com_dist):.4f}, max|F|={max_force:.6f}"
+                        )
+                        print_flat_bottom_summary(
+                            out_step,
+                            flat_bottom_radius=flat_bottom_radius,
+                            flat_bottom_k=flat_bottom_k,
+                            flat_bottom_mode=flat_bottom_mode,
+                            label=f"FIRE step {i}/{NMIN}",
+                            console=c,
+                        )
+                # fire_state always holds last valid position (we reject bad steps)
+                minimized_pos = fire_state.position
+                if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
+                    minimized_pos = fire_positions[-1]
+                    c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
         res_overlap = _check_overlap(
             minimized_pos,
             atoms.get_cell()[:] if use_pbc else None,
