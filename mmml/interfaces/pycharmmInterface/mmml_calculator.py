@@ -1002,7 +1002,9 @@ def setup_calculator(
 
 
     if use_smooth_mic is None:
-        use_smooth_mic = bool(cell)
+        # Exact MIC for MD energy conservation. Smooth MIC is for PBC
+        # minimization gradients only — pass use_smooth_mic=True explicitly.
+        use_smooth_mic = False
 
     if cell and not _jax_mm_spoof_mode:
         MODEL.use_pbc = True

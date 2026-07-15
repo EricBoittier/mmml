@@ -893,7 +893,11 @@ def build_mm_energy_forces_fn(
     for mi in range(n_monomers):
         _monomer_id_np[_offsets_np[mi] : _offsets_np[mi + 1]] = mi
     # Smooth MIC avoids discontinuities at cell boundaries during minimization
-    _use_smooth_mic = use_smooth_mic if use_smooth_mic is not None else (pbc_cell is not None)
+    _use_smooth_mic = (
+        bool(use_smooth_mic)
+        if use_smooth_mic is not None
+        else False  # exact MIC by default (NVE-safe); enable smooth only for PBC opt
+    )
     _resolved_nl_backend = resolve_mm_nl_backend(mm_nl_backend)
     _use_jax_md_nbrs = (
         pbc_cell is not None

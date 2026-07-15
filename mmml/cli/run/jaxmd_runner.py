@@ -1461,6 +1461,12 @@ def set_up_nhc_sim_routine(
         run_status = "complete"
         run_error = None
         rescue_rng = key
+        e_tot_ref: float | None = None
+        # Abort NVE when |E_tot - E_tot_ref| exceeds this (eV). Non-conservative
+        # force bugs otherwise run to multi-1000 K before anyone notices.
+        e_tot_drift_abort_eV = float(
+            getattr(args, "nve_etot_drift_abort_eV", 2.0) or 0.0
+        )
 
         def _state_after_overlap_rescue(
             pos,
@@ -1688,6 +1694,29 @@ def set_up_nhc_sim_routine(
                         mass=state.mass
                     ))
                     e_tot = e_pot + e_kin
+                    if (
+                        not is_npt
+                        and args.ensemble == "nve"
+                        and e_tot_drift_abort_eV > 0.0
+                        and np.isfinite(e_tot)
+                    ):
+                        if e_tot_ref is None:
+                            e_tot_ref = e_tot
+                        elif abs(e_tot - e_tot_ref) > e_tot_drift_abort_eV:
+                            run_status = "error"
+                            run_error = (
+                                f"NVE E_tot drift {e_tot - e_tot_ref:+.4f} eV "
+                                f"exceeds abort threshold {e_tot_drift_abort_eV:.4f} eV "
+                                f"at step {steps} (E_tot={e_tot:.4f}, ref={e_tot_ref:.4f})"
+                            )
+                            c.print(Panel(
+                                run_error,
+                                title="[bold red]NVE energy conservation failed[/bold red]",
+                                border_style="red",
+                            ))
+                            if len(nhc_positions) > 1:
+                                nhc_positions = nhc_positions[:-1]
+                            break
                     elapsed_s = time.perf_counter() - jaxmd_loop_start
                     simulated_ns = steps * dt_fs * 1e-6
                     if simulated_ns > 0 and elapsed_s > 0:
