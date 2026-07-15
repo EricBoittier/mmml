@@ -38,6 +38,7 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 | Axis | Values (config keys) |
 |------|----------------------|
 | Solvent | `solvents` |
+| Mixtures | `mixtures` — mappings of residue to mole fraction |
 | Bulk density | `bulk_density_fractions` — N = fraction × 298 K liquid count per solvent/box |
 | Legacy fixed N | `cluster_sizes` — use instead of `bulk_density_fractions` (mutually exclusive) |
 | Temperature (K) | `temperatures` (list) |
@@ -54,6 +55,12 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 Default fractions `[0.1, 0.25]` keep the first campaign practical while still
 testing condensed environments. For example, the 28 Å cells contain 73/183
 TIP3 waters or 32/81 MEOH molecules.
+
+The default mixed branch adds TIP3:MEOH mole fractions 25:75, 50:50, and
+75:25. Mixture counts use ideal volume mixing and largest-remainder integer
+allocation, so every generated composition has exactly the requested total N
+and retains both components. A representative tag is
+`meohx50_tip3x50_45_t300_l28`, with campaign composition `MEOH:23,TIP3:22`.
 
 Run `scripts/preflight.sh` to print the full table for configured `box_sizes`.
 

@@ -100,16 +100,11 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
 
 def dense_cell_mlpot_overrides(cell: Any, cfg: dict[str, Any]) -> dict[str, Any]:
     """Size/density-aware MLpot flags for large or tight PBC burst cells."""
-    from bulk_density import n_monomers_at_bulk_density
+    from campaign_lib import cell_bulk_total
 
     n = int(cell.n_monomers)
     overrides: dict[str, Any] = {}
-    bulk_n = n_monomers_at_bulk_density(
-        cell.solvent,
-        float(cell.box_size),
-        1.0,
-        min_n=1,
-    )
+    bulk_n = cell_bulk_total(cell, 1.0)
     bulk_fraction = float(n) / float(max(1, bulk_n))
     dense = n >= 150 or bulk_fraction >= 0.75
 
