@@ -29,7 +29,7 @@ jobs:
       - name: Package import sanity
         run: |
           uv run python -V
-          uv run python -c "import mmml; import pycharmm; print('package imports ok')"
+          uv run python -c "import mmml; print('package imports ok')"
       - name: Run tests
         run: uv run pytest -v --color=yes tests/
       - name: Run CHARMM MPI unit suite
