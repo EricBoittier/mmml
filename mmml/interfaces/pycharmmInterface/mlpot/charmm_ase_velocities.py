@@ -1136,6 +1136,58 @@ def apply_bussi_velocity_rescale(
     )
 
 
+def resolve_bussi_ase_traj_path(
+    *,
+    explicit: Path | str | None = None,
+    stage_trajectory: Path | str | None = None,
+) -> Path | None:
+    """``heat.bussi.traj`` next to the stage DCD (or an explicit path)."""
+    if explicit is not None:
+        return Path(explicit).expanduser().resolve()
+    if stage_trajectory is None:
+        return None
+    p = Path(stage_trajectory)
+    return (p.parent / f"{p.stem}.bussi.traj").resolve()
+
+
+def append_bussi_rescale_ase_frame(
+    traj_path: Path | str,
+    *,
+    global_step: int,
+    temperature_K: float,
+    temperature_after_K: float | None,
+    alpha: float,
+    velocities_akma: np.ndarray | None = None,
+) -> Path:
+    """Append one ASE frame after a Bussi rescale (positions + optional velocities)."""
+    from ase import Atoms
+    from ase.io.trajectory import Trajectory
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    path = Path(traj_path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    positions = np.asarray(get_charmm_positions_array(), dtype=np.float64)
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    atoms = Atoms(numbers=z, positions=positions)
+    if velocities_akma is not None:
+        # ASE expects Å/ps; CHARMM AKMA is essentially Å/AKMA-time (~0.0489 ps).
+        # Store raw AKMA in arrays and also set velocities for visualization.
+        v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+        atoms.set_velocities(v)
+        atoms.arrays["velocities_akma"] = v
+    atoms.info["bussi_global_step"] = int(global_step)
+    atoms.info["bussi_T_target_K"] = float(temperature_K)
+    if temperature_after_K is not None:
+        atoms.info["bussi_T_after_K"] = float(temperature_after_K)
+    atoms.info["bussi_alpha"] = float(alpha)
+    mode = "a" if path.is_file() and path.stat().st_size > 0 else "w"
+    with Trajectory(str(path), mode=mode) as traj:
+        traj.write(atoms)
+    return path
+
+
 def maybe_assign_velocities_via_ase_if_cold(
     dynamics_kw: dict[str, Any] | None = None,
     *,

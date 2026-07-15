@@ -5011,33 +5011,25 @@ def _harmonize_overlap_chunk_frequencies(
                 target = old
             if old >= n:
                 # Prefer a relative nsavc that lands a global save in this chunk.
-                # Suppress only when no boundary falls here (short Bussi micro-chunk).
                 per = nsavc_for_chunk_preserving_interval(
                     int(target), n, int(global_step_start)
                 )
                 if per is not None:
                     chunk_kw["nsavc"] = int(per)
+                    chunk_kw.pop("_suppress_trajectory", None)
                     _emit_overlap_log(
                         f"chunk: DCD nsavc={chunk_kw['nsavc']} "
                         f"(target={int(target)}; "
                         f"global step {int(global_step_start)}–{int(global_step_start) + n})",
                     )
-                elif split_trajectory and resolve_target_dcd_nsavc(chunk_kw) is None:
-                    # Legacy per-chunk DCD without a stage cadence: one frame at end.
-                    chunk_kw["nsavc"] = max(1, n - 1)
-                    _emit_overlap_log(
-                        f"chunk: per-chunk DCD nsavc={chunk_kw['nsavc']} "
-                        f"(global step {int(global_step_start)}–{int(global_step_start) + n})",
-                    )
                 else:
                     # Keep an explicit large NSAVC so CHARMM does not default to 1
-                    # when IUNCRD=-1 (expensive per-step trajectory bookkeeping).
+                    # when IUNCRD=-1.  Callers with ``split_trajectory`` (Bussi) may
+                    # clear ``_suppress_trajectory`` for the save-boundary micro-chunk.
                     chunk_kw["nsavc"] = max(1, n - 1)
                     chunk_kw["_suppress_trajectory"] = True
                     for k in ("nprint", "iprfrq", "isvfrq"):
                         chunk_kw.pop(k, None)
-                    # Keep ``nsavv=n`` so restart I/O still records ``!VELOCITIES``
-                    # for ASE Bussi rescales between micro-chunks.
                     chunk_kw["nsavv"] = n
                     _emit_overlap_log(
                         f"chunk: skip DCD (target nsavc={old} >= nstep={n}; "
@@ -6452,11 +6444,17 @@ def _run_bussi_heat_subchunked(
 ) -> Any:
     """Integrate Verlet heat in short segments with ASE Bussi rescales between them."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        append_bussi_rescale_ase_frame,
         apply_bussi_velocity_rescale,
         charmm_masses_amu,
         charmm_velocities_akma_for_thermostat,
         estimate_kinetic_temperature_k,
+        resolve_bussi_ase_traj_path,
         resolve_restart_velocities_read_paths,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        nsavc_for_chunk_preserving_interval,
+        resolve_target_dcd_nsavc,
     )
 
     spec = bussi_heat_ramp_spec_from_kw(kw)
@@ -6470,11 +6468,25 @@ def _run_bussi_heat_subchunked(
     last_dyn = None
     n_subchunks = (total + chunk_nstep - 1) // chunk_nstep
     dcd_opened_this_leg = False
+    stage_traj = None
+    if io is not None and io.trajectory is not None:
+        stage_traj = Path(io.trajectory)
+    elif kw.get("_stage_trajectory") is not None:
+        stage_traj = Path(kw["_stage_trajectory"])
+    ase_traj_path = resolve_bussi_ase_traj_path(
+        explicit=kw.get("_bussi_ase_traj"),
+        stage_trajectory=stage_traj,
+    )
     if log_banner and n_subchunks > 1:
         print(
             f"{overlap_context}: Bussi heat chunking — {total} steps in "
             f"{n_subchunks} segment(s) of ≤{chunk_nstep} "
             f"(ASE stochastic rescale every {interval} steps; CHARMM ihtfrq=0)",
+            flush=True,
+        )
+    if ase_traj_path is not None and log_banner:
+        print(
+            f"{overlap_context}: ASE Bussi rescale trajectory → {ase_traj_path.name}",
             flush=True,
         )
     while steps_done < total:
@@ -6487,9 +6499,8 @@ def _run_bussi_heat_subchunked(
         global_end = global_start + n
         sub_kw["_bussi_global_step"] = global_start
         traj_active = io is not None and io.trajectory is not None
-        # Continuous (non-split) overlap opens the stage DCD once and passes
-        # ``iuncrd`` via ``extra_iokw`` even when ``chunk_io.trajectory`` is None.
         continuous_dcd = bool(extra_iokw and "iuncrd" in extra_iokw)
+        # Prefer per-chunk / continuous DCD handles so save-boundary micro-chunks write.
         traj_split = bool(split_trajectory or traj_active or continuous_dcd)
         _harmonize_overlap_chunk_frequencies(
             sub_kw,
@@ -6498,20 +6509,36 @@ def _run_bussi_heat_subchunked(
             global_step_start=global_start,
             split_trajectory=traj_split,
         )
-        suppress_sub_traj = bool(sub_kw.get("_suppress_trajectory", False))
-        write_dcd = (
-            not suppress_sub_traj
-            and "nsavc" in sub_kw
-            and (traj_active or continuous_dcd)
-            and not dcd_opened_this_leg
+        target = resolve_target_dcd_nsavc(sub_kw)
+        if target is None and "nsavc" in sub_kw:
+            target = int(sub_kw["nsavc"])
+        per = (
+            nsavc_for_chunk_preserving_interval(int(target), n, global_start)
+            if target is not None
+            else None
         )
-        # Sparse stage cadence often lands in a later Bussi micro-chunk (e.g.
-        # nsavc=499 inside steps 250–500).  Open the DCD on that first write
-        # only — never reopen the same file on a continuation micro-chunk.
+        is_last_sub = steps_done + n >= total
+        # Open CHARMM DCD once per outer overlap leg: on the micro-chunk that
+        # contains a global save, otherwise on the last micro-chunk (guarantees
+        # ≥1 frame per overlap chunk even when nsavc > micro nstep).
+        wants_dcd = (traj_active or continuous_dcd) and not dcd_opened_this_leg and (
+            per is not None or is_last_sub
+        )
+        if wants_dcd:
+            sub_kw["nsavc"] = int(per) if per is not None else max(1, n - 1)
+            sub_kw.pop("_suppress_trajectory", None)
+            _emit_overlap_log(
+                f"chunk: Bussi DCD nsavc={sub_kw['nsavc']} "
+                f"(target={int(target) if target is not None else '—'}; "
+                f"global step {global_start}–{global_end})",
+            )
+        elif traj_active or continuous_dcd:
+            sub_kw["nsavc"] = max(1, n - 1)
+            sub_kw["_suppress_trajectory"] = True
+            sub_kw["nsavv"] = n
+        write_dcd = wants_dcd
         drop_sub_traj = not write_dcd
         sub_io = _drop_trajectory_io(io) if drop_sub_traj else io
-        # Split paths: ``open_for_run`` opens ``sub_io.trajectory``.  Continuous
-        # stage DCD: keep the already-open unit via ``extra_iokw``.
         sub_traj_iokw = (
             extra_iokw if (write_dcd and continuous_dcd and extra_iokw) else {}
         )
@@ -6522,7 +6549,7 @@ def _run_bussi_heat_subchunked(
             t1 = global_end * timestep_ps
             traj_note = ""
             if not write_dcd:
-                traj_note = "; DCD suppressed"
+                traj_note = "; DCD deferred"
             elif sub_io is not None and sub_io.trajectory is not None:
                 traj_note = f"; DCD -> {Path(sub_io.trajectory).name}"
             elif write_dcd and continuous_dcd:
@@ -6570,7 +6597,7 @@ def _run_bussi_heat_subchunked(
             )
             steps_done += n
             break
-        apply_bussi_velocity_rescale(
+        t_after, alpha = apply_bussi_velocity_rescale(
             target_k,
             timestep_ps=timestep_ps,
             rescale_interval_steps=n,
@@ -6582,6 +6609,21 @@ def _run_bussi_heat_subchunked(
             dt_ps=sub_kw.get("_bussi_last_dt_ps"),
             frame_dt_ps=sub_kw.get("_bussi_last_frame_dt_ps"),
         )
+        if ase_traj_path is not None:
+            try:
+                append_bussi_rescale_ase_frame(
+                    ase_traj_path,
+                    global_step=global_after,
+                    temperature_K=float(target_k),
+                    temperature_after_K=float(t_after),
+                    alpha=float(alpha),
+                    velocities_akma=charmm_velocities_akma_for_thermostat(),
+                )
+            except Exception as exc:
+                print(
+                    f"{overlap_context}: WARN ASE Bussi traj write failed ({exc})",
+                    flush=True,
+                )
         if not quiet_bussi:
             live = estimate_kinetic_temperature_k(
                 charmm_velocities_akma_for_thermostat(),
@@ -6689,6 +6731,16 @@ def run_dynamics_with_io(
     )
 
     install_target_dcd_metadata(kw)
+    if io is not None and io.trajectory is not None:
+        kw.setdefault("_stage_trajectory", str(Path(io.trajectory).resolve()))
+        kw.setdefault(
+            "_bussi_ase_traj",
+            str(
+                Path(io.trajectory).resolve().with_name(
+                    f"{Path(io.trajectory).stem}.bussi.traj"
+                )
+            ),
+        )
     _ensure_nsavc_below_nstep(kw)
     total_nstep = int(kw.get("nstep", 0))
     if loose_pbc and total_nstep > 0:

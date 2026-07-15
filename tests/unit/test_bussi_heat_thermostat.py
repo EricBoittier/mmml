@@ -997,6 +997,9 @@ def test_run_bussi_heat_subchunked_keeps_trajectory_when_split():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        return_value=Path("/tmp/heat.bussi.traj"),
     ):
         _run_bussi_heat_subchunked(
             kw,
@@ -1035,10 +1038,12 @@ def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
         "nstep": 500,
         "nsavc": 499,
         "_target_dcd_nsavc": 499,
+        "_bussi_ase_traj": "/tmp/heat.bussi.traj",
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=500, ihtfrq=250, timestep_ps=0.00025)
     io = CharmmTrajectoryFiles(trajectory=Path("/tmp/heat.0000.dcd"))
     captured: list[dict[str, Any]] = []
+    ase_calls: list[int] = []
 
     def fake_chunk(sub_kw, sub_io, **kwargs):
         captured.append(
@@ -1051,6 +1056,10 @@ def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
         )
         return mock.Mock()
 
+    def fake_ase_frame(_path, **kwargs):
+        ase_calls.append(int(kwargs["global_step"]))
+        return Path(_path)
+
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
@@ -1060,6 +1069,12 @@ def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        side_effect=fake_ase_frame,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+        return_value=np.zeros((3, 3)),
     ):
         _run_bussi_heat_subchunked(
             kw,
@@ -1080,6 +1095,17 @@ def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
     assert captured[1]["suppress"] is False
     assert captured[1]["nsavc"] == 249
     assert captured[1]["start"] == 250
+    assert ase_calls == [250, 500]
+
+
+def test_resolve_bussi_ase_traj_path_from_stage_dcd():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        resolve_bussi_ase_traj_path,
+    )
+
+    p = resolve_bussi_ase_traj_path(stage_trajectory="/tmp/md/heat.dcd")
+    assert p is not None
+    assert p.name == "heat.bussi.traj"
 
 
 def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
@@ -1122,6 +1148,9 @@ def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        return_value=Path("/tmp/heat.bussi.traj"),
     ):
         _run_bussi_heat_subchunked(
             kw,

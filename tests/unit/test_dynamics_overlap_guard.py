@@ -3760,8 +3760,9 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     _harmonize_overlap_chunk_frequencies(
         kw6, 500, global_step_start=0, split_trajectory=True
     )
+    # Mid-chunk without a save boundary still suppresses; Bussi clears this.
     assert kw6["nsavc"] == 499
-    assert "_suppress_trajectory" not in kw6
+    assert kw6["_suppress_trajectory"] is True
 
 
 def test_apply_overlap_chunk_heat_ramp_chunk_zero():
