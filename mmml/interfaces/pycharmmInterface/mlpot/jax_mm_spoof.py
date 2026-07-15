@@ -489,10 +489,9 @@ __all__ = [
     "build_jax_mm_spoof_batch_apply",
     "build_minimal_chain_bonded_evaluator",
     "jax_mm_spoof_enabled",
-    "load_monomer_bonded_evaluator_from_psf",
-    "minimal_chain_bonded_system",
     "load_monomer_bonded_components_from_psf",
     "load_monomer_bonded_evaluator_from_psf",
+    "minimal_chain_bonded_system",
     "resolve_monomer_bonded_evaluator",
     "resolve_monomer_bonded_evaluators",
 ]
