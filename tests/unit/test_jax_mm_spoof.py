@@ -337,7 +337,7 @@ def test_spoof_dcm_box_sum_matches_full_bonded_components() -> None:
         read_crd_coordinates,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
-        load_monomer_bonded_components_from_psf,
+        _monomer_bonded_fn_from_psf,
     )
 
     base = Path.home() / "tests" / "boxes" / "dcm27_rho100"
@@ -364,18 +364,18 @@ def test_spoof_dcm_box_sum_matches_full_bonded_components() -> None:
         energy_unit="kcal/mol",
     )
 
+    # Identical DCM monomers share one remapped topology (offset 0).
+    _, bonded_fn = _monomer_bonded_fn_from_psf(
+        psf,
+        atoms_per_monomer=atoms_per,
+        atom_offset=0,
+        energy_unit="kcal/mol",
+    )
     sum_comp: dict[str, float] = {}
     sum_f = np.zeros_like(pos_np)
     for i in range(n_mono):
         off = i * atoms_per
-        slice_pos = pos[off : off + atoms_per]
-        components, forces = load_monomer_bonded_components_from_psf(
-            psf,
-            slice_pos,
-            atoms_per_monomer=atoms_per,
-            atom_offset=off,
-            energy_unit="kcal/mol",
-        )
+        components, forces = bonded_fn(pos[off : off + atoms_per])
         for key, val in components.items():
             sum_comp[key] = sum_comp.get(key, 0.0) + float(val)
         sum_f[off : off + atoms_per] = np.asarray(forces)
