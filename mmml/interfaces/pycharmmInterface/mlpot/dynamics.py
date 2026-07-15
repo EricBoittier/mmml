@@ -8594,27 +8594,22 @@ def write_minimized_coordinates(
 
 
 def load_minimized_coordinates(crd_path: PathLike) -> None:
-    """Load optimized coords from a CRD card (preferred over PDB for ML exclusions)."""
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    """Load optimized coords from a CRD card (preferred over PDB for ML exclusions).
 
-    *_, read, _write = _import_pycharmm_modules()
+    Always parses the EXT card in Python and syncs into CHARMM.  Under
+    MPI-linked ``libcharmm``, ``READ COOR CARD`` can take the binary (FILE)
+    path and abort with ``Missing format for FORMATTED data transfer`` in
+    ``coorio.F90`` — the same class of Fortran I/O failure that forced
+    ``write_charmm_crd_from_charmm`` for writes.
+    """
     path = Path(crd_path)
     if not path.exists():
         raise FileNotFoundError(f"CRD not found: {path}")
-    with charmm_relaxed_bomlev():
-        read.coor_card(str(path))
-    import pycharmm.coor as coor
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        apply_crd_file_to_charmm,
+    )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import _charmm_coords_are_placeholder
-
-    loaded = coor.get_main()[["x", "y", "z"]].to_numpy(dtype=float)
-    if _charmm_coords_are_placeholder(loaded):
-        # PyCHARMM read.coor_card often leaves 9999 sentinels after PSF EXT XPLOR load.
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-            apply_crd_file_to_charmm,
-        )
-
-        apply_crd_file_to_charmm(path)
+    apply_crd_file_to_charmm(path)
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         clear_comparison_coordinates,
     )

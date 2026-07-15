@@ -114,7 +114,7 @@ def psf_card(filename, **kwargs):
     filename : str
     """
     psf_script = pycharmm.script.CommandScript('read',
-                                               psf='card',
+                                               psf='CARD',
                                                name=filename,
                                                **kwargs)
     psf_script.run()
@@ -213,9 +213,12 @@ def coor_card(filename, **kwargs):
         fortran_path = filename
     else:
         fortran_path, _alias = charmm_fortran_path(filename, for_write=False)
+    # Keyword values must be uppercase: CommandScript uppercases option *keys*
+    # only.  Lowercase ``card`` can leave NINPUT=0 so CREAD takes the binary
+    # FILE path and aborts on an ASCII EXT card under MPI-linked CHARMM.
     read_script = pycharmm.script.CommandScript(
         'read',
-        coor='card',
+        coor='CARD',
         name=fortran_path,
         **kwargs,
     )
