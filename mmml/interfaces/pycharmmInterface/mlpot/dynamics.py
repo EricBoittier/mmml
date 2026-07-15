@@ -1560,6 +1560,109 @@ class HeatTemperatureAbort(RuntimeError):
     """Raised when HEAT kinetic temperature runs away from its target."""
 
 
+_EV_A_PER_KCALMOL_A = 1.0 / 23.060541945329334
+
+
+def dump_worst_force_atoms(
+    mlpot_ctx: Any,
+    *,
+    atoms_per_list: list[int] | tuple[int, ...] | None,
+    context: str,
+    top_n: int = 12,
+    global_step: int | None = None,
+) -> None:
+    """Log the highest-force atoms/monomers (and a geometry .xyz) at an abort.
+
+    A well-minimized geometry that explodes in HEAT points at an ML force
+    pathology; this surfaces *which* atoms/monomers the model mispredicts so the
+    geometry can be inspected offline (retraining coverage, repulsive floor, …).
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_grms_after_ener_force,
+        charmm_positions_angstrom,
+        charmm_total_forces_kcalmol_A,
+    )
+
+    try:
+        charmm_grms_after_ener_force(silent=True)
+        forces = np.asarray(charmm_total_forces_kcalmol_A(), dtype=np.float64).reshape(-1, 3)
+    except Exception as exc:  # noqa: BLE001
+        print(f"{context}: worst-force dump unavailable ({exc})", flush=True)
+        return
+    if forces.size == 0:
+        return
+
+    mags = np.linalg.norm(forces, axis=1)  # kcal/mol/Å
+    z = getattr(mlpot_ctx, "ml_Z", None)
+    z = np.asarray(z, dtype=int).reshape(-1) if z is not None else None
+
+    counts = [int(x) for x in atoms_per_list] if atoms_per_list else [int(mags.shape[0])]
+    atom_to_mono = np.zeros(int(mags.shape[0]), dtype=int)
+    start = 0
+    for mi, n in enumerate(counts):
+        atom_to_mono[start : start + n] = mi
+        start += n
+
+    from ase.data import chemical_symbols
+
+    order = np.argsort(mags)[::-1][: max(1, int(top_n))]
+    print(f"{context}: worst {len(order)} atomic forces (of {mags.shape[0]}):", flush=True)
+    print("  rank  atom  monomer  elem   |F| kcal/mol/Å   |F| eV/Å", flush=True)
+    for rank, ai in enumerate(order, start=1):
+        ai = int(ai)
+        elem = (
+            chemical_symbols[int(z[ai])]
+            if z is not None and 0 <= int(z[ai]) < len(chemical_symbols)
+            else "?"
+        )
+        print(
+            f"  {rank:>4}  {ai:>4}  {int(atom_to_mono[ai]):>7}  {elem:>4}   "
+            f"{float(mags[ai]):>13.1f}   {float(mags[ai]) * _EV_A_PER_KCALMOL_A:>8.2f}",
+            flush=True,
+        )
+
+    if atoms_per_list and len(counts) > 1:
+        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            per_monomer_fmax_from_forces,
+        )
+
+        per_mono = per_monomer_fmax_from_forces(forces, atoms_per_list)
+        mono_order = np.argsort(per_mono)[::-1][: min(8, len(counts))]
+        worst = ", ".join(
+            f"#{int(mi)}:{float(per_mono[int(mi)]):.0f}" for mi in mono_order
+        )
+        print(f"{context}: worst monomer fmax (kcal/mol/Å): {worst}", flush=True)
+
+    # Write a geometry .xyz with per-atom |F| when an output dir is resolvable.
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    out_dir = getattr(args, "output_dir", None)
+    if out_dir is None:
+        return
+    try:
+        pos = np.asarray(charmm_positions_angstrom(), dtype=np.float64).reshape(-1, 3)
+        from pathlib import Path
+
+        step_txt = f"_step{int(global_step)}" if global_step is not None else ""
+        path = Path(str(out_dir)) / f"heat_abort_worst_forces{step_txt}.xyz"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as fh:
+            fh.write(f"{pos.shape[0]}\n")
+            fh.write(f"{context} | column 5 = |F| kcal/mol/A\n")
+            for ai in range(pos.shape[0]):
+                elem = (
+                    chemical_symbols[int(z[ai])]
+                    if z is not None and 0 <= int(z[ai]) < len(chemical_symbols)
+                    else "X"
+                )
+                x, y, zc = pos[ai]
+                fh.write(
+                    f"{elem:<3} {x:>12.5f} {y:>12.5f} {zc:>12.5f} {float(mags[ai]):>12.2f}\n"
+                )
+        print(f"{context}: geometry dumped -> {path}", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"{context}: geometry .xyz dump skipped ({exc})", flush=True)
+
+
 def _maybe_abort_heat_on_temperature(
     mlpot_ctx: Any,
     chunk_kw: dict[str, Any],
@@ -1610,6 +1713,13 @@ def _maybe_abort_heat_on_temperature(
         f"HEAT chunk {chunk_index + 1}/{n_chunks} (step {global_step}, "
         f"{overlap_context})"
     )
+    if not bool(getattr(args, "no_heat_abort_force_dump", False)):
+        dump_worst_force_atoms(
+            mlpot_ctx,
+            atoms_per_list=getattr(args, "_cluster_atoms_per_list", None),
+            context=f"{where} force dump",
+            global_step=global_step,
+        )
     if bool(getattr(args, "allow_high_grms", False)):
         print(f"WARN: {where}: {reason} (continuing: --allow-high-grms)", flush=True)
         return
@@ -1675,6 +1785,13 @@ def _maybe_abort_heat_on_grms_jump(
         f"HEAT chunk {chunk_index + 1}/{n_chunks} (step {global_step}, "
         f"{overlap_context})"
     )
+    if not bool(getattr(args, "no_heat_abort_force_dump", False)):
+        dump_worst_force_atoms(
+            mlpot_ctx,
+            atoms_per_list=getattr(args, "_cluster_atoms_per_list", None),
+            context=f"{where} force dump",
+            global_step=global_step,
+        )
     if bool(getattr(args, "allow_high_grms", False)):
         print(f"WARN: {where}: {reason} (continuing: --allow-high-grms)", flush=True)
         return
