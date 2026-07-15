@@ -659,6 +659,18 @@ def resolve_overlap_monomer_offsets(
 
     pos = get_charmm_positions_array()
     n_atoms = int(pos.shape[0])
+    # Mixed solvent PSFs have heterogeneous residue sizes.  Consult the
+    # residue boundaries directly before falling back to a uniform split.
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+            atoms_per_monomer_from_psf,
+        )
+
+        per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
+        if len(per_psf) == int(config.n_monomers) and sum(per_psf) == n_atoms:
+            return np.concatenate(([0], np.cumsum(per_psf, dtype=int)))
+    except Exception:
+        pass
     if mlpot_ctx is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
             resolve_monomer_offsets_for_limits,
