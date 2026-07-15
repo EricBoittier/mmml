@@ -743,11 +743,12 @@ cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
 cmake --install "$BUILD_DIR" || true
 
 BUILT=""
+# Prefer cmake --install output under lib/ over a stale top-level copy.
 for candidate in \
   "$CHARMM_HOME/lib/$LIB_BASENAME" \
-  "$CHARMM_HOME/$LIB_BASENAME" \
+  "$BUILD_DIR/lib/$LIB_BASENAME" \
   "$BUILD_DIR/$LIB_BASENAME" \
-  "$BUILD_DIR/lib/$LIB_BASENAME"; do
+  "$CHARMM_HOME/$LIB_BASENAME"; do
   if [[ -f "$candidate" ]]; then
     BUILT="$candidate"
     break
@@ -762,7 +763,18 @@ if [[ -z "$BUILT" ]]; then
 fi
 
 cp -f "$BUILT" "$LIB_OUT"
-echo "Installed $LIB_OUT (from $BUILT)"
+# Keep lib/ and top-level in sync so either CHARMM_LIB_DIR works.
+mkdir -p "$CHARMM_HOME/lib"
+cp -f "$BUILT" "$CHARMM_HOME/lib/$LIB_BASENAME"
+echo "Installed $LIB_OUT and $CHARMM_HOME/lib/$LIB_BASENAME (from $BUILT)"
+if [[ "$NO_MPI" == 1 ]]; then
+  if ldd "$CHARMM_HOME/lib/$LIB_BASENAME" 2>/dev/null | grep -qiE 'libmpi|libopen-';|libopen-pal'; then
+    echo "rebuild_charmm_mlpot: ERROR: installed lib still links MPI — check -Dmpi=OFF" >&2
+    ldd "$CHARMM_HOME/lib/$LIB_BASENAME" | grep -iE 'mpi|open-pal|open-rme' || true
+    exit 1
+  fi
+  echo "Serial link check OK: $CHARMM_HOME/lib/$LIB_BASENAME (no libmpi)"
+fi
 if [[ "$SKIP_PACKMOL" != 1 ]]; then
   PACKMOL_ARGS=()
   [[ "$CLEAN" == 1 ]] && PACKMOL_ARGS+=(--clean)
@@ -780,18 +792,16 @@ if [[ "$DEBUG" == 1 ]]; then
 fi
 if [[ "$NO_MPI" == 1 ]]; then
   cat <<EOF
-Installed serial $LIB_OUT (overwrites any prior MPI-linked copy at this path).
+Installed serial $LIB_OUT (and $CHARMM_HOME/lib/$LIB_BASENAME).
 MPI cmake cache (if any) remains under \${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}.
 
-Verify no libmpi link:
-  ldd "$LIB_OUT" | grep -i mpi || echo "OK: serial libcharmm (no libmpi)"
-
 Pytest / bonded parity without OpenMPI launcher:
-  export CHARMM_LIB_DIR="$(dirname "$LIB_OUT")"
   export CHARMM_HOME="$CHARMM_HOME"
+  export CHARMM_LIB_DIR="$CHARMM_HOME/lib"
   export MMML_NO_CHARMM_MPI=1
   export MMML_NO_MPI_RERUN=1
   unset OMPI_COMM_WORLD_RANK OMPI_COMM_WORLD_SIZE PMI_RANK PMI_SIZE
+  ldd "\$CHARMM_LIB_DIR/$LIB_BASENAME" | grep -i mpi || echo "OK: no libmpi"
   uv run pytest tests/functionality/charmm/test_jax_mm_spoof_bonded_pycharmm.py -v
 
 Do not use scripts/mmml-charmm-mpirun.sh with this lib.

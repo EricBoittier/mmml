@@ -7,11 +7,10 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
 
 from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
-    charmm_positions_xyz_array,
     compare_bonded_to_charmm,
-    read_pdb_file,
     read_psf_card_file,
     run_charmm_bonded_ener_force,
     set_charmm_positions,
@@ -21,7 +20,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
     load_monomer_bonded_components_from_psf,
 )
 from tests.conftest import bonded_block_hangs_under_mpi_mpirun, can_import_pycharmm
-from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR, workdir_pdb, workdir_psf
+from tests.functionality.pycharmmETC._paths import PYCHARMMETC_DIR, workdir_psf
 
 pytestmark = [
     pytest.mark.skipif(
@@ -53,19 +52,19 @@ def test_jax_mm_spoof_aco_components_match_pycharmm(pycharmm_workdir) -> None:
     assert ACO_PDB.is_file(), f"missing fixture PDB: {ACO_PDB}"
 
     aco_psf = Path(workdir_psf("aco-1.psf"))
-    aco_pdb = Path(workdir_pdb("aco.pdb"))
+    # Avoid CHARMM ``read.pdb``: coorio FORMATTED aborts on this fixture REMARK.
+    _, positions = parse_pdb_simple(str(ACO_PDB))
 
     with charmm_relaxed_bomlev():
         read.rtf(CGENFF_RTF)
         read.prm(CGENFF_PRM)
         read_psf_card_file(aco_psf)
-        read_pdb_file(aco_pdb, resid=True)
 
-    positions = _perturb_positions(charmm_positions_xyz_array(), seed=29)
+    positions = _perturb_positions(np.asarray(positions, dtype=np.float64), seed=29)
     n_atoms = int(positions.shape[0])
+    set_charmm_positions(positions)
 
     setup_bonded_only_charmm()
-    set_charmm_positions(positions)
     run_charmm_bonded_ener_force(silent=True)
 
     components, forces = load_monomer_bonded_components_from_psf(

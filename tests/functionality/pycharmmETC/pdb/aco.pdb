@@ -1,4 +1,4 @@
-REMARK  Acetone (ACO) CGENFF monomer — 3D geometry (PSF atom order)
+REMARK  Acetone (ACO) CGENFF monomer - 3D geometry (PSF atom order)
 ATOM      1  O1  ACO     1       0.664   2.193   0.407  1.00  0.00      ACO
 ATOM      2  C1  ACO     1       0.414   1.021   0.662  1.00  0.00      ACO
 ATOM      3  C2  ACO     1       1.291  -0.084   0.176  1.00  0.00      ACO
