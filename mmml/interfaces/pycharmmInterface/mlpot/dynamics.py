@@ -1520,6 +1520,105 @@ class HeatGrmsJumpAbort(RuntimeError):
     """Raised when HEAT hybrid GRMS jumps by an order of magnitude."""
 
 
+# HEAT should never run far above its target temperature; a large overshoot is a
+# force/integration blow-up regardless of the GRMS baseline (which is masked by
+# per-chunk velocity reassignment). This is the unit-clean divergence signal.
+HEAT_TEMP_ABORT_FACTOR = 8.0
+# Do not abort below this absolute ceiling even at a low target (avoids tripping
+# on the ordinary early-heat overshoot of a cold start).
+HEAT_TEMP_ABORT_MIN_CEILING_K = 400.0
+
+
+def heat_temperature_abort_reason(
+    target_K: float | None,
+    live_K: float | None,
+    *,
+    factor: float = HEAT_TEMP_ABORT_FACTOR,
+    min_ceiling_K: float = HEAT_TEMP_ABORT_MIN_CEILING_K,
+) -> str | None:
+    """Reason to abort HEAT when live temperature runs away from target, else None.
+
+    Aborts when the live kinetic temperature exceeds ``max(factor*target,
+    min_ceiling)`` — a target-relative ceiling with an absolute floor so a low
+    target (e.g. 50 K) still tolerates normal overshoot but not a blow-up.
+    """
+    if live_K is None or not np.isfinite(live_K):
+        return None
+    live = float(live_K)
+    tgt = float(target_K) if target_K is not None and np.isfinite(target_K) else 0.0
+    ceiling = max(float(factor) * tgt, float(min_ceiling_K))
+    if live > ceiling:
+        tgt_txt = f"{tgt:.0f} K target" if tgt > 0.0 else "unknown target"
+        return (
+            f"live temperature {live:.0f} K > {ceiling:.0f} K ceiling "
+            f"({tgt_txt}; integration blow-up)"
+        )
+    return None
+
+
+class HeatTemperatureAbort(RuntimeError):
+    """Raised when HEAT kinetic temperature runs away from its target."""
+
+
+def _maybe_abort_heat_on_temperature(
+    mlpot_ctx: Any,
+    chunk_kw: dict[str, Any],
+    *,
+    overlap_context: str,
+    chunk_index: int,
+    n_chunks: int,
+    global_step: int,
+    ndof: int | None = None,
+) -> None:
+    """Abort HEAT when the post-chunk kinetic temperature runs away from target.
+
+    Independent of the GRMS baseline (which per-chunk velocity reassignment
+    masks): reads live CHARMM velocities, estimates temperature, and aborts on a
+    target-relative ceiling.  ``--allow-high-grms`` downgrades to a warning.
+    """
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if bool(getattr(args, "no_heat_temp_abort", False)):
+        return
+
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        charmm_velocities_akma,
+        estimate_kinetic_temperature_k,
+    )
+
+    live_K = estimate_kinetic_temperature_k(charmm_velocities_akma(), ndegf=ndof)
+    if live_K is None or not np.isfinite(live_K):
+        return
+
+    target_K = _bussi_ramp_target_k_for_kw(chunk_kw)
+    if target_K is None:
+        for key in ("finalt", "firstt"):
+            val = chunk_kw.get(key)
+            if val is not None and float(val) > 0.0:
+                target_K = float(val)
+                break
+    if target_K is None:
+        target_K = float(getattr(args, "temperature", 0.0) or 0.0) or None
+
+    factor = float(
+        getattr(args, "heat_temp_abort_factor", None) or HEAT_TEMP_ABORT_FACTOR
+    )
+    reason = heat_temperature_abort_reason(target_K, float(live_K), factor=factor)
+    if reason is None:
+        return
+
+    where = (
+        f"HEAT chunk {chunk_index + 1}/{n_chunks} (step {global_step}, "
+        f"{overlap_context})"
+    )
+    if bool(getattr(args, "allow_high_grms", False)):
+        print(f"WARN: {where}: {reason} (continuing: --allow-high-grms)", flush=True)
+        return
+    raise HeatTemperatureAbort(
+        f"{where}: {reason}. Aborting HEAT; the starting geometry or ML forces "
+        "are unstable — tighten pre-dynamics minimization or reduce the timestep."
+    )
+
+
 def _maybe_abort_heat_on_grms_jump(
     mlpot_ctx: Any,
     *,
@@ -7732,6 +7831,14 @@ def run_dynamics_with_io(
                     )
                     _maybe_abort_heat_on_grms_jump(
                         mlpot_ctx,
+                        overlap_context=str(overlap_context),
+                        chunk_index=chunk_index,
+                        n_chunks=n_chunks,
+                        global_step=int(steps_done),
+                    )
+                    _maybe_abort_heat_on_temperature(
+                        mlpot_ctx,
+                        chunk_kw,
                         overlap_context=str(overlap_context),
                         chunk_index=chunk_index,
                         n_chunks=n_chunks,

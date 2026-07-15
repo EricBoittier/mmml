@@ -47,3 +47,49 @@ def test_none_and_nonfinite_are_safe():
     assert fn(np.nan, 500.0) is None
     assert fn(22.0, np.nan) is None
     assert fn(0.0, 500.0) is None
+
+
+def _temp_fn():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        heat_temperature_abort_reason,
+    )
+
+    return heat_temperature_abort_reason
+
+
+def test_temp_abort_low_target_runaway():
+    fn = _temp_fn()
+    # 50 K target, 1027 K live (the observed early-chunk overshoot) -> abort.
+    assert fn(50.0, 1027.0) is not None
+    # 50 K target, 300 K live -> below the 400 K absolute ceiling -> no abort.
+    assert fn(50.0, 300.0) is None
+    # Just over the absolute ceiling.
+    assert fn(50.0, 450.0) is not None
+
+
+def test_temp_abort_scales_with_high_target():
+    fn = _temp_fn()
+    # 300 K target: ceiling = 8*300 = 2400 K.
+    assert fn(300.0, 1000.0) is None
+    assert fn(300.0, 3000.0) is not None
+
+
+def test_temp_abort_unknown_target_uses_absolute_ceiling():
+    fn = _temp_fn()
+    assert fn(None, 500.0) is not None   # > 400 K floor
+    assert fn(None, 300.0) is None
+
+
+def test_temp_abort_nonfinite_safe():
+    import numpy as np
+
+    fn = _temp_fn()
+    assert fn(50.0, None) is None
+    assert fn(50.0, np.nan) is None
+
+
+def test_temp_abort_custom_factor():
+    fn = _temp_fn()
+    # factor 20 at 50 K target -> ceiling 1000 K; 900 K stays under.
+    assert fn(50.0, 900.0, factor=20.0) is None
+    assert fn(50.0, 1100.0, factor=20.0) is not None
