@@ -400,7 +400,7 @@ def test_build_run_advice_pre_heat_gate(tmp_path: Path) -> None:
     assert "prep_ladder" in str(advice.restart.path)
     assert advice.md_stages == "mini,heat,equi"
     assert "Pre-heat gate failed" in advice.headline
-    assert "dynamics_intra_rescue_sd_steps" in advice.config_yaml
+    assert any("Failed before heat dynamics" in n for n in advice.notes)
     assert "flyoff-strict" not in advice.config_yaml
     assert "--config" in advice.command and "heat.conf" in advice.command
 
