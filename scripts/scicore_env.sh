@@ -17,6 +17,7 @@
 # calling job script would abort it on the first tolerated non-zero command.
 
 MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2023b}"
+MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.27.6-GCCcore-13.2.0}"
 
 # The system profile scripts below are not written to survive `set -u`
 # (soft_stacks.sh dereferences MODULEPATH before assigning it). Job scripts run
@@ -54,6 +55,7 @@ fi
 
 if command -v module >/dev/null 2>&1; then
   module load "$MMML_SCICORE_TOOLCHAIN" || true
+  module load "$MMML_SCICORE_CMAKE" || true
 else
   echo "scicore_env: lmod not found; libcharmm will fail to dlopen" >&2
 fi
