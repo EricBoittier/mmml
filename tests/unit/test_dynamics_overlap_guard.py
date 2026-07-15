@@ -4012,6 +4012,31 @@ def test_sync_dynamics_io_units_keeps_explicit_iunrea_minus_one():
     assert "iunwri" not in kw
 
 
+def test_sync_dynamics_io_units_forces_iuncrd_minus_one_without_dcd():
+    """Deferred-DCD chunks must not leave IUNCRD aliased to IUNWRI (FORMATTED crash)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
+
+    kw = {
+        "iunrea": -1,
+        "iunwri": "/tmp/heat.res",
+        "nstep": 250,
+        "nsavc": 249,
+        "restart": False,
+    }
+    _sync_dynamics_io_units(kw, {"iunwri": "/tmp/heat.res"})
+    assert kw["iunrea"] == -1
+    assert kw["iuncrd"] == -1
+    assert kw["iunvel"] == -1
+    assert kw["iunwri"] == "/tmp/heat.res"
+
+
+def test_dynamics_writes_dcd_false_when_iuncrd_disabled():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _dynamics_writes_dcd
+
+    assert _dynamics_writes_dcd({"iuncrd": -1, "nsavc": 249}) is False
+    assert _dynamics_writes_dcd({"iuncrd": 51, "nsavc": 249}) is True
+
+
 def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
@@ -4044,6 +4069,7 @@ def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
         )
 
     assert captured[0]["iunrea"] == -1
+    assert captured[0]["iuncrd"] == -1
 
 
 def test_run_dynamics_chunk_clears_iunrea_from_io_when_not_restart():

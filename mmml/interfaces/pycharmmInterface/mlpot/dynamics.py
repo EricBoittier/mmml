@@ -3702,7 +3702,10 @@ def _dynamics_c_api_safe_for_kw(
 
 
 def _dynamics_writes_dcd(kw: dict[str, Any]) -> bool:
-    if "iuncrd" not in kw:
+    iuncrd = kw.get("iuncrd")
+    if iuncrd is None:
+        return False
+    if isinstance(iuncrd, (int, np.integer)) and int(iuncrd) <= 0:
         return False
     try:
         nsavc = int(kw.get("nsavc", 0) or 0)
@@ -6020,12 +6023,21 @@ def _sync_dynamics_io_units(
     kw: dict[str, Any],
     iokw: dict[str, Any],
 ) -> None:
-    """Drop restart/trajectory unit numbers not backed by opened CharmmFile handles."""
+    """Drop restart/trajectory unit numbers not backed by opened CharmmFile handles.
+
+    When no DCD/velocity unit is open, force ``iuncrd`` / ``iunvel`` to ``-1``.
+    Omitting them lets CHARMM reuse ``IUNWRI`` (restart write), which opens as
+    FORMATTED while DCD uses unformatted ``WRITE`` — Fortran then aborts with
+    ``Missing format for FORMATTED data transfer`` (see ``cvio.F90`` / ``WRITCV``).
+    """
     for key in ("iunrea", "iunwri", "iuncrd", "iunvel"):
         if key in iokw:
             continue
         if key == "iunrea" and int(kw.get("iunrea", 0)) == -1:
             # Explicit no-read: keep in ``dyna`` so CHARMM does not reuse a stale unit.
+            continue
+        if key in ("iuncrd", "iunvel"):
+            kw[key] = -1
             continue
         kw.pop(key, None)
 
