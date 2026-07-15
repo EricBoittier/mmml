@@ -216,9 +216,10 @@ def _inter_monomer_soft_repulsion(
     else:
         nb = jnp.asarray(n_b, dtype=jnp.int32)
 
+    zero_i = jnp.asarray(0, dtype=na.dtype)
     r_ext = jnp.concatenate([positions, jnp.zeros_like(positions)], axis=0)
-    pos_a = jax.lax.dynamic_slice(r_ext, (jnp.asarray(0, dtype=na.dtype), 0), (max_mono, 3))
-    pos_b = jax.lax.dynamic_slice(r_ext, (na, jnp.asarray(0, dtype=na.dtype)), (max_mono, 3))
+    pos_a = jax.lax.dynamic_slice(r_ext, (zero_i, zero_i), (max_mono, 3))
+    pos_b = jax.lax.dynamic_slice(r_ext, (na, zero_i), (max_mono, 3))
     # Mask padded slots past the true monomer sizes.
     ia = jnp.arange(max_mono, dtype=jnp.int32)
     ib = jnp.arange(max_mono, dtype=jnp.int32)
