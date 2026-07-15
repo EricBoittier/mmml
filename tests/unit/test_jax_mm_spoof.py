@@ -170,6 +170,24 @@ def test_setup_calculator_jax_mm_spoof_heterogeneous() -> None:
     assert bool(jnp.all(jnp.isfinite(out.forces)))
 
 
+def test_soft_repulsion_finite_near_contact() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+        _inter_monomer_soft_repulsion,
+    )
+
+    R = jnp.zeros((10, 3), dtype=jnp.float32)
+    R = R.at[0].set(jnp.array([0.0, 0.0, 0.0], dtype=jnp.float32))
+    # Near-overlap A–B pair formerly overflowed float32 via an N×N 1/r^12 matrix.
+    R = R.at[5].set(jnp.array([1e-4, 0.0, 0.0], dtype=jnp.float32))
+    for i in range(1, 5):
+        R = R.at[i].set(jnp.array([float(i) * 1.5, 0.0, 0.0], dtype=jnp.float32))
+        R = R.at[5 + i].set(jnp.array([float(i) * 1.5 + 4.0, 0.5, 0.0], dtype=jnp.float32))
+    e, f = _inter_monomer_soft_repulsion(R, 5, 5)
+    assert bool(jnp.isfinite(e))
+    assert bool(jnp.all(jnp.isfinite(f)))
+    assert float(jnp.max(jnp.abs(f))) < 1.0e6
+
+
 def test_setup_calculator_jax_mm_spoof_hybrid_eval() -> None:
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 

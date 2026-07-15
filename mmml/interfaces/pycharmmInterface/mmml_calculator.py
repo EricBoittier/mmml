@@ -696,6 +696,9 @@ def setup_calculator(
             atoms_per_monomer=atoms_per_monomer_list,
             max_atoms=max_atoms,
             monomer_evals=_jax_mm_spoof_monomer_evals,
+            # PSF-backed CGenFF bonded + hybrid doMM: JAX MM owns inter-monomer
+            # NB. Soft r^-12 is only for toy (no-PSF) plumbing tests.
+            include_soft_repulsion=jax_mm_spoof_psf is None,
         )
         MODEL = None
         params = None

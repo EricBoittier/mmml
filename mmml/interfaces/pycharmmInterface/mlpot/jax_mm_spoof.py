@@ -195,24 +195,40 @@ def _inter_monomer_soft_repulsion(
     *,
     epsilon_ev: float = 0.01,
     sigma_a: float = 3.4,
+    r_floor_a: float = 1.5,
 ) -> tuple[Array, Array]:
     """Vacuum r^-12 repulsion between atoms in monomer A vs monomer B.
 
     ``n_a`` / ``n_b`` may be traced integers (heterogeneous dimer batches).
-    When ``n_b`` is omitted, B is ``positions.shape[0] - n_a`` (uniform path).
+    When ``n_b`` is omitted, B is taken as the trailing ``max_atoms - n_a``
+    window (uniform path).
+
+    Computed on the A×B rectangular block only (never N×N): a full pairwise
+    ``1/r^12`` matrix hits the diagonal (r=0) and overflows to Inf under
+    float32 before any mask can zero it.
     """
     max_n = int(positions.shape[0])
+    # Cap how large a rectangular block we materialize (jit shape).
+    max_mono = max_n
     na = jnp.asarray(n_a, dtype=jnp.int32)
     if n_b is None:
         nb = jnp.asarray(max_n, dtype=jnp.int32) - na
     else:
         nb = jnp.asarray(n_b, dtype=jnp.int32)
-    idx = jnp.arange(max_n, dtype=jnp.int32)
-    mask_a = idx < na
-    mask_b = (idx >= na) & (idx < (na + nb))
-    diff = positions[:, None, :] - positions[None, :, :]
+
+    r_ext = jnp.concatenate([positions, jnp.zeros_like(positions)], axis=0)
+    pos_a = jax.lax.dynamic_slice(r_ext, (jnp.asarray(0, dtype=na.dtype), 0), (max_mono, 3))
+    pos_b = jax.lax.dynamic_slice(r_ext, (na, jnp.asarray(0, dtype=na.dtype)), (max_mono, 3))
+    # Mask padded slots past the true monomer sizes.
+    ia = jnp.arange(max_mono, dtype=jnp.int32)
+    ib = jnp.arange(max_mono, dtype=jnp.int32)
+    mask_a = ia < na
+    mask_b = ib < nb
     pair_mask = mask_a[:, None] & mask_b[None, :]
-    r2 = jnp.sum(diff * diff, axis=-1) + 1e-8
+
+    diff = pos_a[:, None, :] - pos_b[None, :, :]
+    r2 = jnp.sum(diff * diff, axis=-1)
+    r2 = jnp.maximum(r2, float(r_floor_a) ** 2)
     r6 = r2**3
     r12 = r6 * r6
     sig6 = float(sigma_a) ** 6
@@ -221,9 +237,17 @@ def _inter_monomer_soft_repulsion(
     energy = jnp.sum(jnp.where(pair_mask, pair_e, 0.0))
     coeff = -12.0 * float(epsilon_ev) * sig12 / (r12 * r2)
     coeff = jnp.where(pair_mask, coeff, 0.0)
-    forces = jnp.sum(coeff[:, :, None] * diff, axis=1) - jnp.sum(
-        coeff[:, :, None] * diff, axis=0
-    )
+    f_a = jnp.sum(coeff[:, :, None] * diff, axis=1)
+    f_b = -jnp.sum(coeff[:, :, None] * diff, axis=0)
+
+    forces = jnp.zeros_like(positions)
+    idx = jnp.arange(max_n, dtype=jnp.int32)
+    in_a = idx < na
+    in_b = (idx >= na) & (idx < (na + nb))
+    safe_a = jnp.where(in_a, idx, 0)
+    safe_b = jnp.where(in_b, idx - na, 0)
+    forces = jnp.where(in_a[:, None], f_a[safe_a], forces)
+    forces = jnp.where(in_b[:, None], f_b[safe_b], forces)
     return energy, forces
 
 
@@ -267,12 +291,17 @@ def build_jax_mm_spoof_batch_apply(
     max_atoms: int,
     monomer_eval: BondedEvalFn | Mapping[int, BondedEvalFn] | None = None,
     monomer_evals: Mapping[int, BondedEvalFn] | None = None,
+    include_soft_repulsion: bool = True,
 ) -> Callable[..., dict[str, Array]]:
     """Return ``apply_model(Z, R, N, N_a=None)`` compatible with MLpot batching.
 
     ``N_a`` is the first-fragment atom count: for monomers ``N_a == N``; for
     dimers ``N_a`` is the size of monomer A and ``N == N_a + N_b``.  When
     omitted, a uniform ``atoms_per_monomer`` heuristic is used (legacy).
+
+    ``include_soft_repulsion`` adds a toy A↔B r^-12 for dimer batches.  Disable
+    it when a CGenFF PSF spoof is paired with hybrid ``doMM`` (JAX MM already
+    carries inter-monomer nonbond).
     """
     if isinstance(atoms_per_monomer, (list, tuple)):
         per_list = [int(x) for x in atoms_per_monomer]
@@ -305,6 +334,7 @@ def build_jax_mm_spoof_batch_apply(
     eval_padded = _build_size_switch_eval(evals, max_atoms=max_atoms)
     # Pad so dynamic_slice(start=na, size=max_atoms) never runs past the end.
     slice_pad = max_atoms
+    use_soft = bool(include_soft_repulsion)
 
     def _eval_one(R: Array, N: Array, N_a: Array) -> tuple[Array, Array]:
         na = jnp.asarray(N_a, dtype=jnp.int32)
@@ -324,7 +354,11 @@ def build_jax_mm_spoof_batch_apply(
             )
             e_a, f_a = eval_padded(R, na)
             e_b, f_b_window = eval_padded(window_b, nb)
-            e_nb, f_nb = _inter_monomer_soft_repulsion(R, na, nb)
+            if use_soft:
+                e_nb, f_nb = _inter_monomer_soft_repulsion(R, na, nb)
+            else:
+                e_nb = jnp.asarray(0.0, dtype=R.dtype)
+                f_nb = jnp.zeros_like(R)
             idx = jnp.arange(max_atoms, dtype=jnp.int32)
             in_b = (idx >= na) & (idx < n_tot)
             safe_local = jnp.where(in_b, idx - na, 0)
