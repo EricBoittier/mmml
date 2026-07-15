@@ -91,6 +91,38 @@ def test_monomer_offsets_uniform():
     np.testing.assert_array_equal(off, [0, 5, 10])
 
 
+def test_resolve_overlap_monomer_offsets_uses_composition(monkeypatch):
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        resolve_overlap_monomer_offsets,
+    )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: np.zeros((9, 3)),
+    )
+
+    def _boom():
+        raise RuntimeError("psf resid unavailable")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
+        _boom,
+    )
+    ctx = SimpleNamespace(
+        atoms_per_monomer=None,
+        pyCModel=None,
+        workflow_args=SimpleNamespace(
+            composition="MEOH:1,TIP3:1",
+            _cluster_atoms_per_list=None,
+        ),
+    )
+    cfg = DynamicsOverlapConfig(n_monomers=2)
+    off = resolve_overlap_monomer_offsets(cfg, ctx)
+    np.testing.assert_array_equal(off, [0, 6, 9])
+
+
 def test_attach_prior_uses_geometry_fallback_ladder(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,

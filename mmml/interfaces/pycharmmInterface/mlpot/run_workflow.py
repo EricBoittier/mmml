@@ -604,7 +604,12 @@ def run_charmm_mm_pretreat_before_mlpot(
     return get_charmm_positions_array()
 
 
-def _atoms_per_monomer_list(z: np.ndarray, n_monomers: int) -> list[int]:
+def _atoms_per_monomer_list(
+    z: np.ndarray,
+    n_monomers: int,
+    *,
+    args: Any | None = None,
+) -> list[int]:
     n_atoms = int(len(z))
     # Mixed solvent cells do not have a uniform atom count per monomer
     # (e.g. TIP3=3 atoms and MEOH=6 atoms).  Prefer the residue/PSF
@@ -620,10 +625,22 @@ def _atoms_per_monomer_list(z: np.ndarray, n_monomers: int) -> list[int]:
     except Exception:
         # Keep the legacy uniform fallback for callers without a live PSF.
         pass
+    if args is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            _cluster_atoms_per_from_composition,
+        )
+
+        comp_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+        if (
+            comp_per is not None
+            and len(comp_per) == int(n_monomers)
+            and sum(comp_per) == n_atoms
+        ):
+            return list(comp_per)
     if n_atoms % int(n_monomers) != 0:
         raise ValueError(
             f"atom count {n_atoms} not divisible by n_monomers={n_monomers}; "
-            "mixed systems require PSF residue boundaries"
+            "mixed systems require PSF residue boundaries or --composition"
         )
     per = n_atoms // int(n_monomers)
     return [per] * int(n_monomers)
@@ -712,7 +729,7 @@ def _register_mlpot_context(
     apm = (
         list(atoms_per_monomer)
         if atoms_per_monomer is not None
-        else _atoms_per_monomer_list(z, n_monomers)
+        else _atoms_per_monomer_list(z, n_monomers, args=args)
     )
     import sys
 

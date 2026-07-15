@@ -21,9 +21,24 @@ from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
     audit_monomer_health,
     emit_monomer_health_dot_matrix,
     monomer_health_config_from_args,
+    resolve_monomer_offsets_for_ctx,
     select_flagged_bad_by_highest_grms,
     select_systemic_velocity_warn_by_highest_grms,
 )
+
+
+def test_resolve_monomer_offsets_uses_composition_for_mixed_system() -> None:
+    ctx = SimpleNamespace(
+        atoms_per_monomer=None,
+        pyCModel=None,
+        workflow_args=SimpleNamespace(
+            composition="MEOH:1,TIP3:1",
+            _cluster_atoms_per_list=None,
+        ),
+    )
+    offsets = resolve_monomer_offsets_for_ctx(ctx, n_monomers=2, n_atoms=9)
+    assert offsets is not None
+    np.testing.assert_array_equal(offsets, [0, 6, 9])
 
 
 def test_classify_component_absolute_bad() -> None:

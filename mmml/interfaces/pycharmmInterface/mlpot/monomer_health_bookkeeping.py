@@ -236,7 +236,7 @@ def resolve_monomer_offsets_for_ctx(
     n_monomers: int,
     n_atoms: int,
 ) -> np.ndarray | None:
-    """Return cumulative monomer offsets, preferring PSF-derived atom counts."""
+    """Return cumulative monomer offsets, preferring PSF / composition atom counts."""
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
@@ -254,6 +254,20 @@ def resolve_monomer_offsets_for_ctx(
             per = []
         if per and int(sum(per)) == int(n_atoms) and len(per) == int(n_monomers):
             return monomer_offsets_from_atoms_per(per)
+    # Mixed systems (MEOH + TIP3, …) when live PSF resid parsing is unavailable.
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if args is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            _cluster_atoms_per_from_composition,
+        )
+
+        comp_per = _cluster_atoms_per_from_composition(args, n_atoms=int(n_atoms))
+        if (
+            comp_per is not None
+            and len(comp_per) == int(n_monomers)
+            and int(sum(comp_per)) == int(n_atoms)
+        ):
+            return monomer_offsets_from_atoms_per(comp_per)
     if int(n_monomers) > 0 and int(n_atoms) > 0 and int(n_atoms) % int(n_monomers) == 0:
         return monomer_offsets(int(n_atoms), int(n_monomers))
     return None

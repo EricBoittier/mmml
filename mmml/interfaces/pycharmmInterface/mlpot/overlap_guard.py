@@ -654,7 +654,10 @@ def resolve_overlap_monomer_offsets(
     config: DynamicsOverlapConfig,
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> np.ndarray:
-    """Monomer offsets from PSF atom counts when available, else uniform split."""
+    """Monomer offsets from PSF / composition / ctx when available, else uniform."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
@@ -683,6 +686,19 @@ def resolve_overlap_monomer_offsets(
         )
         if offsets is not None:
             return offsets
+        args = getattr(mlpot_ctx, "workflow_args", None)
+        if args is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                _cluster_atoms_per_from_composition,
+            )
+
+            comp_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+            if (
+                comp_per is not None
+                and len(comp_per) == int(config.n_monomers)
+                and sum(comp_per) == n_atoms
+            ):
+                return monomer_offsets_from_atoms_per(comp_per)
     return monomer_offsets(n_atoms, int(config.n_monomers))
 
 
