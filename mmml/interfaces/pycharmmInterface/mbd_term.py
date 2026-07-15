@@ -36,7 +36,7 @@ MBDEnergyForceFn = Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.n
 
 
 # Re-export shared companion resolver (also used by SpookyNetCalculator).
-from mmml.models.mbd.calculator import resolve_companion_mbd  # noqa: E402
+from mmml.models.mbd.calculator import resolve_companion_mbd  # noqa: E402,F401
 
 
 def build_mbd_energy_force_fn(
