@@ -495,8 +495,32 @@ def pair_energy_charge_dipole_au(
     )
 
 
+def resolve_multipoles_checkpoint(explicit: str | Path | None = None) -> Path:
+    """Resolve default Multipoles checkpoint path."""
+    import os
+
+    env_ckpt = (os.environ.get("MULTIPOLES_CKPT") or os.environ.get("MULTIPOLES_CHECKPOINT") or "").strip()
+    target = explicit or (env_ckpt if env_ckpt else None)
+    if target is not None:
+        p = Path(target).expanduser().resolve()
+        if p.exists():
+            return p
+        raise FileNotFoundError(f"Multipoles checkpoint not found at: {target}")
+    repo_root = Path(__file__).resolve().parents[3]
+    candidates = [
+        repo_root / "multipoles_20260711-100037_epoch-0100.json",
+        repo_root / "examples" / "multipoles_20260711-100037_epoch-0100.json",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise FileNotFoundError(
+        "No default Multipoles checkpoint found. Set MULTIPOLES_CKPT or pass explicit path."
+    )
+
+
 class LearnedMolecularMultipoleElectrostatics(Calculator):
-    """ASE calculator for intermolecular q+dipole electrostatics.
+    """ASE calculator for learned molecular multipoles.
 
     The model predicts one molecular multipole vector per fragment. Current
     energy includes only l=0 and l=1. l=2/l=3 are stored in results for later
@@ -507,7 +531,7 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
 
     def __init__(
         self,
-        checkpoint: str | Path,
+        checkpoint: str | Path | None = None,
         *,
         fragments: Sequence[Sequence[int]] | None = None,
         charges: Sequence[float] | None = None,
@@ -519,7 +543,8 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
-        self.model, self.params = load_multipole_model(checkpoint)
+        resolved_ckpt = resolve_multipoles_checkpoint(checkpoint)
+        self.model, self.params = load_multipole_model(resolved_ckpt)
         self.fragments = fragments
         self.charges = None if charges is None else np.asarray(charges, dtype=np.float64)
         self.multiplicities = (

@@ -172,6 +172,30 @@ def predict_mbd_from_atoms(
     }
 
 
+def resolve_mbd_checkpoint(explicit: str | Path | None = None) -> Path:
+    """Resolve default MBD checkpoint path."""
+    import os
+
+    env_ckpt = (os.environ.get("MBD_CKPT") or os.environ.get("MBD_CHECKPOINT") or "").strip()
+    target = explicit or (env_ckpt if env_ckpt else None)
+    if target is not None:
+        p = Path(target).expanduser().resolve()
+        if p.exists():
+            return p
+        raise FileNotFoundError(f"MBD checkpoint not found at: {target}")
+    repo_root = Path(__file__).resolve().parents[3]
+    candidates = [
+        repo_root / "mbd_20260711-100037_epoch-0100.json",
+        repo_root / "examples" / "mbd_20260711-100037_epoch-0100.json",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise FileNotFoundError(
+        "No default MBD checkpoint found. Set MBD_CKPT or pass explicit path."
+    )
+
+
 class QCMLMBDCalculator(Calculator):
     """ASE calculator for the learned QCML MBD surrogate.
 
@@ -183,15 +207,16 @@ class QCMLMBDCalculator(Calculator):
 
     def __init__(
         self,
-        checkpoint: str | Path,
+        checkpoint: str | Path | None = None,
         *,
         charge: float = 0.0,
         multiplicity: float = 1.0,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
-        self.checkpoint = Path(checkpoint)
-        self.model, self.params = load_mbd_model(checkpoint)
+        resolved_ckpt = resolve_mbd_checkpoint(checkpoint)
+        self.checkpoint = resolved_ckpt
+        self.model, self.params = load_mbd_model(resolved_ckpt)
         self.charge = float(charge)
         self.multiplicity = float(multiplicity)
         self._predict = jax.jit(self._predict_impl)
