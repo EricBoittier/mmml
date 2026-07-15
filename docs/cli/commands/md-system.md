@@ -178,6 +178,10 @@ usage: mmml md-system [-h]
                       [--dynamics-monomer-baseline-floor-fraction DYNAMICS_MONOMER_BASELINE_FLOOR_FRACTION]
                       [--dynamics-monomer-ratio-without-abs]
                       [--dynamics-monomer-template-on-force]
+                      [--dynamics-monomer-bond-stretch-factor DYNAMICS_MONOMER_BOND_STRETCH_FACTOR]
+                      [--dynamics-monomer-bond-stretch-abs DYNAMICS_MONOMER_BOND_STRETCH_ABS]
+                      [--dynamics-monomer-com-flyoff DYNAMICS_MONOMER_COM_FLYOFF]
+                      [--no-dynamics-monomer-com-flyoff]
                       [--restart-from RESTART_FROM] [--from-psf FROM_PSF]
                       [--from-crd FROM_CRD] [--skip-cluster-build]
                       [--skip-if-crd-exists] [--no-save-vmd-topology]
@@ -1283,6 +1287,19 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         Allow template+FIRE on GRMS/force-bad monomers without
                         geometry failure (legacy; off by default — restore is
                         for fly-off/collapse).
+  --dynamics-monomer-bond-stretch-factor DYNAMICS_MONOMER_BOND_STRETCH_FACTOR
+                        Geometry-bad when a PSF 1–2 bond exceeds this ×
+                        reference length (default: 1.75; also abs floor via
+                        --dynamics-monomer-bond-stretch-abs).
+  --dynamics-monomer-bond-stretch-abs DYNAMICS_MONOMER_BOND_STRETCH_ABS
+                        Absolute bond-length floor (Å) for geometry-bad stretch
+                        (default: 2.50).
+  --dynamics-monomer-com-flyoff DYNAMICS_MONOMER_COM_FLYOFF
+                        Unwrapped COM drift (Å) from health baseline that marks
+                        geometry-bad (default: 0 → max(15, 0.35×box)).
+  --no-dynamics-monomer-com-flyoff
+                        Disable unwrapped COM-drift fly-off checks in monomer
+                        health.
 ```
 
 

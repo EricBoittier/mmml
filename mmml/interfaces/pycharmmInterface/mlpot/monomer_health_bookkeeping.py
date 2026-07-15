@@ -31,10 +31,11 @@ _DOT_RICH = {
 class MonomerHealthConfig:
     """Thresholds for per-monomer early intervention during dynamics.
 
-    Template + per-monomer FIRE are reserved for geometry failures (extent
-    fly-off / intra collapse).  Velocity/GRMS stress only redraws velocities.
-    Ratios never escalate a level unless the absolute floor is also met, and
-    baselines are floored so a near-zero post-mini reference cannot explode.
+    Template + per-monomer FIRE are reserved for geometry failures (extent,
+    bond stretch, COM drift / intra collapse).  Velocity/GRMS stress only
+    redraws velocities.  Ratios never escalate a level unless the absolute
+    floor is also met, and baselines are floored so a near-zero post-mini
+    reference cannot explode.
     """
 
     enabled: bool = True
@@ -61,8 +62,15 @@ class MonomerHealthConfig:
     baseline_floor_fraction_of_warn: float = 0.25
     # Ratio may only annotate / escalate when abs is already at least warn.
     ratio_requires_abs_warn: bool = True
-    # Template+FIRE only when extent / intra geometry fails.
+    # Template+FIRE only when geometry fails (not velocity/GRMS alone).
     template_restore_requires_geometry: bool = True
+    # Flag PSF 1–2 bonds stretched beyond factor × baseline (or abs floor).
+    bond_stretch_factor: float = 1.75
+    bond_stretch_abs_A: float = 2.50
+    # Incremental COM unwrap drift vs health baseline (catches rigid fly-aways
+    # under IMAGE centering that intramolecular extent cannot see).
+    com_flyoff_enabled: bool = True
+    com_flyoff_A: float = 0.0  # <=0 → max(15 Å, 0.35 * cubic box side)
     verbose: bool = False
 
 
@@ -274,6 +282,18 @@ def monomer_health_config_from_args(args: Any | None) -> MonomerHealthConfig:
         template_restore_requires_geometry=not bool(
             getattr(args, "dynamics_monomer_template_on_force", False)
         ),
+        bond_stretch_factor=_safe_float(
+            getattr(args, "dynamics_monomer_bond_stretch_factor", 1.75), 1.75
+        ),
+        bond_stretch_abs_A=_safe_float(
+            getattr(args, "dynamics_monomer_bond_stretch_abs", 2.50), 2.50
+        ),
+        com_flyoff_enabled=not bool(
+            getattr(args, "no_dynamics_monomer_com_flyoff", False)
+        ),
+        com_flyoff_A=_safe_float(
+            getattr(args, "dynamics_monomer_com_flyoff", 0.0), 0.0
+        ),
         verbose=not bool(getattr(args, "quiet", False)),
     )
 
@@ -458,6 +478,8 @@ def record_monomer_health_baseline(
         global_step=global_step,
     )
     setattr(mlpot_ctx, "_monomer_health_baseline", baseline)
+    # Re-seed unwrapped COM baseline whenever health metrics baseline resets.
+    setattr(mlpot_ctx, "_monomer_com_unwrap_reset", True)
     return baseline
 
 
@@ -468,13 +490,166 @@ def _get_baseline(mlpot_ctx: Any) -> MonomerHealthBaseline | None:
     return None
 
 
+def _monomer_coms_numpy(
+    positions: np.ndarray,
+    offsets: np.ndarray,
+    masses: np.ndarray | None = None,
+) -> np.ndarray:
+    """Geometric or mass-weighted COM per monomer, shape ``(n_monomers, 3)``."""
+    pos = np.asarray(positions, dtype=np.float64)
+    off = np.asarray(offsets, dtype=int)
+    n_mon = max(0, int(len(off) - 1))
+    coms = np.zeros((n_mon, 3), dtype=np.float64)
+    m = None if masses is None else np.asarray(masses, dtype=np.float64).reshape(-1)
+    for mi in range(n_mon):
+        s, e = int(off[mi]), int(off[mi + 1])
+        if e <= s:
+            continue
+        chunk = pos[s:e]
+        if m is not None and m.shape[0] >= e:
+            w = np.maximum(m[s:e], 1.0e-12)
+            coms[mi] = (chunk * w[:, None]).sum(axis=0) / w.sum()
+        else:
+            coms[mi] = chunk.mean(axis=0)
+    return coms
+
+
+def _mic_delta(a: np.ndarray, b: np.ndarray, cell: np.ndarray | None) -> np.ndarray:
+    """Minimum-image ``b - a`` (Å)."""
+    from mmml.utils.geometry_checks import _cell_matrix, _mic
+
+    cell_mat = _cell_matrix(cell)
+    d = np.asarray(b, dtype=np.float64) - np.asarray(a, dtype=np.float64)
+    return _mic(d.reshape(-1, 3), cell_mat).reshape(d.shape)
+
+
+def _resolve_com_flyoff_threshold_A(
+    config: MonomerHealthConfig,
+    overlap_config: Any,
+    cell: Any | None,
+) -> float:
+    explicit = float(getattr(config, "com_flyoff_A", 0.0) or 0.0)
+    if explicit > 0.0:
+        return explicit
+    side = float(getattr(overlap_config, "fallback_box_side_A", 0.0) or 0.0)
+    if side <= 0.0 and cell is not None:
+        from mmml.utils.geometry_checks import _cell_matrix
+
+        mat = _cell_matrix(cell)
+        if mat is not None:
+            side = float(np.mean(np.linalg.norm(mat, axis=1)))
+    if side > 0.0:
+        return max(15.0, 0.35 * side)
+    return 15.0
+
+
+def _update_com_unwrap_state(
+    mlpot_ctx: Any,
+    coms_wrapped: np.ndarray,
+    cell: Any | None,
+    *,
+    reset_baseline: bool = False,
+) -> np.ndarray:
+    """Return unwrapped COMs; seed / refresh state on ``mlpot_ctx``."""
+    wrapped = np.asarray(coms_wrapped, dtype=np.float64)
+    state = getattr(mlpot_ctx, "_monomer_com_unwrap_state", None)
+    if (
+        reset_baseline
+        or not isinstance(state, dict)
+        or state.get("last_wrapped") is None
+        or np.asarray(state["last_wrapped"]).shape != wrapped.shape
+    ):
+        state = {
+            "last_wrapped": wrapped.copy(),
+            "unwrapped": wrapped.copy(),
+            "baseline_unwrapped": wrapped.copy(),
+        }
+        setattr(mlpot_ctx, "_monomer_com_unwrap_state", state)
+        return wrapped.copy()
+
+    last = np.asarray(state["last_wrapped"], dtype=np.float64)
+    unwrapped = np.asarray(state["unwrapped"], dtype=np.float64).copy()
+    for mi in range(wrapped.shape[0]):
+        unwrapped[mi] = unwrapped[mi] + _mic_delta(last[mi], wrapped[mi], cell)
+    state["last_wrapped"] = wrapped.copy()
+    state["unwrapped"] = unwrapped
+    setattr(mlpot_ctx, "_monomer_com_unwrap_state", state)
+    return unwrapped
+
+
+def _flag_bond_stretch_monomers(
+    positions: np.ndarray,
+    offsets: np.ndarray,
+    *,
+    stretch_factor: float,
+    stretch_abs_A: float,
+    ref_positions: np.ndarray | None,
+) -> dict[int, tuple[str, ...]]:
+    """Flag monomers with overstretched PSF 1–2 bonds."""
+    out: dict[int, tuple[str, ...]] = {}
+    if float(stretch_factor) <= 1.0 and float(stretch_abs_A) <= 0.0:
+        return out
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+            psf_bond_pairs_0based,
+        )
+
+        bonds = psf_bond_pairs_0based(exclude_1_3=False)
+    except Exception:
+        return out
+    if not bonds:
+        return out
+
+    pos = np.asarray(positions, dtype=np.float64)
+    ref = None if ref_positions is None else np.asarray(ref_positions, dtype=np.float64)
+    off = np.asarray(offsets, dtype=int)
+    n_mon = max(0, int(len(off) - 1))
+    for mi in range(n_mon):
+        s, e = int(off[mi]), int(off[mi + 1])
+        worst_ratio = 0.0
+        worst_len = 0.0
+        worst_ref = 0.0
+        for a, b in bonds:
+            if not (s <= a < e and s <= b < e):
+                continue
+            length = float(np.linalg.norm(pos[b] - pos[a]))
+            ref_len = None
+            if ref is not None and ref.shape == pos.shape:
+                ref_len = float(np.linalg.norm(ref[b] - ref[a]))
+            limit = float(stretch_abs_A)
+            if ref_len is not None and ref_len > 0.05:
+                limit = max(limit, float(stretch_factor) * ref_len)
+            if length > limit and length > worst_len:
+                worst_len = length
+                worst_ref = float(ref_len) if ref_len is not None else 0.0
+                worst_ratio = length / max(ref_len, 1.0e-8) if ref_len else 0.0
+        if worst_len > 0.0:
+            if worst_ref > 0.0:
+                out[mi] = (
+                    f"bond {worst_len:.2f} Å > limit "
+                    f"({float(stretch_factor):.2f}×{worst_ref:.2f} / "
+                    f"abs {float(stretch_abs_A):.2f} Å; {worst_ratio:.1f}×)",
+                )
+            else:
+                out[mi] = (
+                    f"bond {worst_len:.2f} Å > abs {float(stretch_abs_A):.2f} Å",
+                )
+    return out
+
+
 def flag_geometry_problem_monomers(
     mlpot_ctx: Any,
     overlap_config: Any,
     *,
     offsets: np.ndarray,
+    health_config: MonomerHealthConfig | None = None,
 ) -> dict[int, tuple[str, ...]]:
-    """Return monomers that fail fly-off (extent) or intra-collapse checks."""
+    """Return monomers with fly-off / bond-stretch / intra-collapse geometry failures.
+
+    Extent catches torn monomers; bond stretch catches early dissociation; COM
+    unwrap drift catches rigid-body escapes even when IMAGE centering rewraps
+    coordinates into the primary cell.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         _bond_exclusion_pairs,
         _overlap_cell,
@@ -482,11 +657,10 @@ def flag_geometry_problem_monomers(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
     from mmml.utils.geometry_checks import monomer_axis_extent
 
+    cfg = health_config or MonomerHealthConfig()
     out: dict[int, tuple[str, ...]] = {}
     max_extent = float(getattr(overlap_config, "max_monomer_extent_A", 0.0) or 0.0)
     intra_min = float(getattr(overlap_config, "intra_min_distance_A", 0.0) or 0.0)
-    if max_extent <= 0.0 and intra_min <= 0.0:
-        return out
 
     pos = get_charmm_positions_array()
     cell = _overlap_cell(
@@ -502,13 +676,61 @@ def flag_geometry_problem_monomers(
                     f"extent {extent:.2f} Å > {max_extent:.2f} Å",
                 )
 
+    ref_pos = None
+    for attr in ("geometry_baseline_positions", "geometry_mini_positions"):
+        cand = getattr(mlpot_ctx, attr, None)
+        if cand is None:
+            continue
+        arr = np.asarray(cand, dtype=np.float64)
+        if arr.shape == np.asarray(pos).shape and np.all(np.isfinite(arr)):
+            ref_pos = arr
+            break
+
+    for mi, reasons in _flag_bond_stretch_monomers(
+        pos,
+        offsets,
+        stretch_factor=float(cfg.bond_stretch_factor),
+        stretch_abs_A=float(cfg.bond_stretch_abs_A),
+        ref_positions=ref_pos,
+    ).items():
+        out[mi] = out.get(mi, ()) + reasons
+
+    if bool(cfg.com_flyoff_enabled) and n_monomers > 1:
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                charmm_masses_amu,
+            )
+
+            masses = charmm_masses_amu()
+        except Exception:
+            masses = None
+        coms = _monomer_coms_numpy(pos, offsets, masses=masses)
+        reset = bool(getattr(mlpot_ctx, "_monomer_com_unwrap_reset", False))
+        if reset:
+            setattr(mlpot_ctx, "_monomer_com_unwrap_reset", False)
+        unwrapped = _update_com_unwrap_state(
+            mlpot_ctx, coms, cell, reset_baseline=reset
+        )
+        state = getattr(mlpot_ctx, "_monomer_com_unwrap_state", None)
+        baseline = (
+            np.asarray(state["baseline_unwrapped"], dtype=np.float64)
+            if isinstance(state, dict) and state.get("baseline_unwrapped") is not None
+            else unwrapped
+        )
+        thresh = _resolve_com_flyoff_threshold_A(cfg, overlap_config, cell)
+        for mi in range(n_monomers):
+            drift = float(np.linalg.norm(unwrapped[mi] - baseline[mi]))
+            if drift > thresh:
+                out[mi] = out.get(mi, ()) + (
+                    f"COM drift {drift:.1f} Å > {thresh:.1f} Å (unwrapped)",
+                )
+
     if intra_min > 0.0:
         from mmml.utils.geometry_checks import find_worst_intramonomer_close_contact
 
         excluded = _bond_exclusion_pairs(
             exclude_1_3=bool(getattr(overlap_config, "intra_exclude_1_3", True))
         )
-        # Collect per-monomer by re-scanning from worst; mark until none left under floor.
         marked: set[int] = set()
         work_pos = np.asarray(pos, dtype=np.float64)
         for _ in range(max(1, n_monomers * 2)):
@@ -527,7 +749,6 @@ def flag_geometry_problem_monomers(
                 out[mi] = out.get(mi, ()) + (
                     f"intra {float(dist):.3f} Å < {intra_min:.3f} Å",
                 )
-            # Nudge the pair apart in a scratch copy so the next-worst monomer surfaces.
             mid = 0.5 * (work_pos[int(viol.atom_i)] + work_pos[int(viol.atom_j)])
             work_pos[int(viol.atom_i)] = mid
             work_pos[int(viol.atom_j)] = mid
@@ -579,7 +800,10 @@ def audit_monomer_health(
     geom_reasons = {}
     if overlap_config is not None:
         geom_reasons = flag_geometry_problem_monomers(
-            mlpot_ctx, overlap_config, offsets=offsets
+            mlpot_ctx,
+            overlap_config,
+            offsets=offsets,
+            health_config=config,
         )
 
     v_floor = float(config.velocity_warn_abs_akma) * float(
@@ -671,7 +895,10 @@ def emit_monomer_health_dot_matrix(
     from mmml.utils.rich_report import emit, rich_enabled
 
     use_rich = rich_enabled(quiet=quiet)
-    header = "Monomer health  [v]=velocity [f]=GRMS [g]=geometry (fly-off/collapse)"
+    header = (
+        "Monomer health  [v]=velocity [f]=GRMS "
+        "[g]=geometry (extent/bond/COM-drift/intra)"
+    )
     lines = [header, " idx   v f g  residue"]
     for entry in report.entries:
         g_level = getattr(entry, "geometry_level", entry.energy_level)

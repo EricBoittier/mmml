@@ -565,3 +565,94 @@ def test_maybe_rebaseline_heat_once() -> None:
             ctx, n_monomers=4, context="HEAT chunk", global_step=500
         ) is False
     assert rec.call_count == 1
+
+
+def test_com_unwrap_flags_rigid_flyoff() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        MonomerHealthConfig,
+        _update_com_unwrap_state,
+        flag_geometry_problem_monomers,
+    )
+
+    ctx = SimpleNamespace(_monomer_com_unwrap_reset=True)
+    cell = np.diag([30.0, 30.0, 30.0])
+    coms0 = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=float)
+    _update_com_unwrap_state(ctx, coms0, cell, reset_baseline=True)
+    # Incremental unwrap across the cell (IMAGE would show small wrapped jump).
+    coms1 = np.array([[1.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=float)
+    for _ in range(20):
+        coms1 = coms1.copy()
+        coms1[0, 0] = (coms1[0, 0] + 1.0) % 30.0
+        _update_com_unwrap_state(ctx, coms1, cell, reset_baseline=False)
+    drift = np.linalg.norm(
+        ctx._monomer_com_unwrap_state["unwrapped"][0]
+        - ctx._monomer_com_unwrap_state["baseline_unwrapped"][0]
+    )
+    assert drift > 15.0
+
+    offsets = np.array([0, 3, 6], dtype=int)
+    pos = np.zeros((6, 3), dtype=float)
+    pos[0] = coms1[0]
+    pos[1] = coms1[0] + [0.1, 0.0, 0.0]
+    pos[2] = coms1[0] + [0.0, 0.1, 0.0]
+    pos[3] = coms1[1]
+    pos[4] = coms1[1] + [0.1, 0.0, 0.0]
+    pos[5] = coms1[1] + [0.0, 0.1, 0.0]
+    overlap = SimpleNamespace(
+        max_monomer_extent_A=0.0,
+        intra_min_distance_A=0.0,
+        use_pbc=True,
+        fallback_box_side_A=30.0,
+        intra_exclude_1_3=True,
+    )
+    with (
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            return_value=pos,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_cell",
+            return_value=cell,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+            return_value=np.ones(6),
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._flag_bond_stretch_monomers",
+            return_value={},
+        ),
+    ):
+        flagged = flag_geometry_problem_monomers(
+            ctx,
+            overlap,
+            offsets=offsets,
+            health_config=MonomerHealthConfig(com_flyoff_A=15.0),
+        )
+    assert 0 in flagged
+    assert any("COM drift" in r for r in flagged[0])
+    assert 1 not in flagged
+
+
+def test_bond_stretch_flags_geometry() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        _flag_bond_stretch_monomers,
+    )
+
+    offsets = np.array([0, 3], dtype=int)
+    ref = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=float)
+    pos = ref.copy()
+    pos[1, 0] = 3.0  # 3× stretch of first bond
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.psf_bond_pairs_0based",
+        return_value=[(0, 1), (0, 2)],
+    ):
+        flagged = _flag_bond_stretch_monomers(
+            pos,
+            offsets,
+            stretch_factor=1.75,
+            stretch_abs_A=2.5,
+            ref_positions=ref,
+        )
+    assert 0 in flagged
+    assert any("bond" in r for r in flagged[0])

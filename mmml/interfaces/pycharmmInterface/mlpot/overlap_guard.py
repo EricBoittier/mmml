@@ -309,6 +309,38 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
             "failure (legacy; off by default — restore is for fly-off/collapse)."
         ),
     )
+    group.add_argument(
+        "--dynamics-monomer-bond-stretch-factor",
+        type=float,
+        default=1.75,
+        help=(
+            "Geometry-bad when a PSF 1–2 bond exceeds this × reference length "
+            "(default: 1.75; also abs floor via --dynamics-monomer-bond-stretch-abs)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-bond-stretch-abs",
+        type=float,
+        default=2.50,
+        help=(
+            "Absolute bond-length floor (Å) for geometry-bad stretch "
+            "(default: 2.50)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-com-flyoff",
+        type=float,
+        default=0.0,
+        help=(
+            "Unwrapped COM drift (Å) from health baseline that marks geometry-bad "
+            "(default: 0 → max(15, 0.35×box))."
+        ),
+    )
+    group.add_argument(
+        "--no-dynamics-monomer-com-flyoff",
+        action="store_true",
+        help="Disable unwrapped COM-drift fly-off checks in monomer health.",
+    )
 
 
 def _truthy_env(name: str) -> bool:
