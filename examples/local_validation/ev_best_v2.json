@@ -1,0 +1,15 @@
+{
+  "checkpoint": "/mmhome/boittier/home/mmml/artifacts/zbl_cgenff_1000step_20260714/from_step2000_lowlr/step-00005000",
+  "cache": "/mmhome/boittier/home/mmml/data/splits_des_ml_mm_v2/test_cache",
+  "n_structures": 35260,
+  "metrics": {
+    "energy_mae": 1.3153118701530193,
+    "energy_rmse": 1.4908803478611137,
+    "forces_mae": 0.04732539311589812,
+    "forces_rmse": 0.0987320569189227,
+    "dipole_mae": 0.052677840736340055,
+    "dipole_rmse": 0.11784980748099116,
+    "charge_mae": 0.02665101517112297,
+    "charge_rmse": 0.04278972929209686
+  }
+}
