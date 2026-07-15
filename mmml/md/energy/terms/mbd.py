@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
-
 from mmml.md.energy.capacity import COMPUTE_DTYPE
 from mmml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
 from mmml.md.system import MolecularSystem
