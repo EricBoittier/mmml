@@ -17,6 +17,7 @@ from jax import random
 
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
+from mmml.cli.run.summaries import save_calculator_summary_json
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
@@ -1416,6 +1417,41 @@ def main(argv: list[str] | None = None) -> int:
     if run_status != "complete":
         print(f"Partial output saved after {run_status}: {run_error}")
     print(f"Wrote {out_dir / 'suite_summary_jaxmd.json'}")
+
+    # ── Persist calculator summary to run dir and handoff dir ──────────────────
+    _calc_summary_kw = dict(
+        model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
+        n_monomers=n_molecules,
+        n_atoms=len(atoms),
+        doML=True,
+        doMM=bool(getattr(args, "include_mm", True)),
+        doML_dimer=True,
+        ensemble=args.ensemble,
+        checkpoint=str(base_ckpt_dir),
+        nl_skin_distance_A=float(effective_skin),
+        nl_update_interval_steps=int(effective_update_interval),
+        extra={
+            "box_A": float(L) if L is not None else None,
+            "free_space": bool(free_space),
+            "run_status": run_status,
+        },
+    )
+    for _dest in [out_dir / "calculator_summary.json"]:
+        try:
+            save_calculator_summary_json(_dest, cutoff, **_calc_summary_kw)
+            print(f"Wrote {_dest}")
+        except Exception as _e:
+            print(f"[warning] Could not save {_dest}: {_e}")
+    # Also copy into the handoff sub-directory if it was created by set_handoff_out.
+    _handoff_dir = out_dir / "handoff"
+    if _handoff_dir.is_dir():
+        try:
+            _ho_path = _handoff_dir / "calculator_summary.json"
+            save_calculator_summary_json(_ho_path, cutoff, **_calc_summary_kw)
+            print(f"Wrote {_ho_path}")
+        except Exception as _e:
+            print(f"[warning] Could not save handoff calculator_summary.json: {_e}")
+
     if run_status == "interrupted":
         return 130
     if run_status == "error":

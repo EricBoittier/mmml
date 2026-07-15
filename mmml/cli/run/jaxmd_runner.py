@@ -16,7 +16,13 @@ from rich.table import Table
 
 import jax.numpy as jnp
 
-from mmml.cli.run.summaries import print_flat_bottom_summary, print_forces_summary
+from mmml.cli.run.summaries import (
+    print_flat_bottom_summary,
+    print_forces_summary,
+    print_calculator_summary,
+    print_neighbor_list_summary,
+    save_calculator_summary_json,
+)
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
     wrap_groups_by_id_with_weight_sum,
@@ -424,6 +430,74 @@ def set_up_nhc_sim_routine(
         "max|COM_m| (Å)" if flat_bottom_mode == "monomer" else "|COM| (Å)"
     )
     c.print(Panel(f"Compilation done in {elapsed:.2f} s", title="[bold green]JAX[/bold green]", border_style="green"))
+
+    # ── Calculator summary (rich diagram) ─────────────────────────────────────
+    _checkpoint_hint = str(getattr(args, "checkpoint", None) or getattr(args, "output_prefix", ""))
+    print_calculator_summary(
+        CUTOFF_PARAMS,
+        model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
+        n_monomers=n_monomers,
+        n_atoms=len(atoms),
+        doML=True,
+        doMM=getattr(args, "include_mm", True),
+        doML_dimer=not getattr(args, "skip_ml_dimers", False),
+        complementary_handoff=getattr(CUTOFF_PARAMS, "complementary_handoff", True),
+        ensemble=getattr(args, "ensemble", None),
+        checkpoint=_checkpoint_hint,
+        console=c,
+    )
+
+    # Neighbor-list capacity summary (values extracted from update_fn metadata if available)
+    _nl_capacity = None
+    _nl_n_valid = None
+    _nl_mult = None
+    _nl_skin = getattr(args, "jax_md_skin_distance", None)
+    _nl_interval = getattr(args, "jax_md_update_interval", None)
+    if update_fn is not None and hasattr(update_fn, "capacity"):
+        _nl_capacity = int(update_fn.capacity)
+    if pair_idx is not None:
+        try:
+            _nl_n_valid = int(np.sum(np.asarray(pair_mask))) if pair_mask is not None else None
+            _nl_capacity = _nl_capacity or (int(pair_idx.shape[-1]) if pair_idx.ndim >= 2 else None)
+        except Exception:
+            pass
+    if use_pbc and (pair_idx is not None or _nl_capacity is not None):
+        print_neighbor_list_summary(
+            n_atoms=len(atoms),
+            n_monomers=n_monomers,
+            cell_L_A=float(args.cell) if args.cell is not None else None,
+            mm_cutoff_A=float(CUTOFF_PARAMS.mm_switch_on + CUTOFF_PARAMS.mm_switch_width),
+            capacity_pairs=_nl_capacity,
+            n_valid_pairs=_nl_n_valid,
+            skin_distance_A=_nl_skin,
+            update_interval_steps=_nl_interval,
+            console=c,
+        )
+
+    # Save calculator summary JSON to run directory
+    _run_prefix = Path(str(getattr(args, "output_prefix", "md")))
+    _calc_json_path = _run_prefix.parent / "calculator_summary.json"
+    try:
+        save_calculator_summary_json(
+            _calc_json_path,
+            CUTOFF_PARAMS,
+            model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
+            n_monomers=n_monomers,
+            n_atoms=len(atoms),
+            doML=True,
+            doMM=getattr(args, "include_mm", True),
+            doML_dimer=not getattr(args, "skip_ml_dimers", False),
+            ensemble=getattr(args, "ensemble", None),
+            checkpoint=_checkpoint_hint,
+            nl_capacity_pairs=_nl_capacity,
+            nl_n_valid_pairs=_nl_n_valid,
+            nl_skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
+            nl_update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+        )
+        c.print(Panel(str(_calc_json_path), title="[bold green]Calculator Summary JSON[/bold green]", border_style="green"))
+    except Exception as _e:
+        c.print(Panel(f"Could not save calculator_summary.json: {_e}", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+
     _eval_label = (
         "post-compile (initial R)"
         if minimization_skipped
