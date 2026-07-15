@@ -142,6 +142,22 @@ def test_collect_zbl_cutoff_mapping_from_model() -> None:
     assert mapping["cuton_Å"] == "0.1000"
     assert mapping["cutoff_Å"] == "0.6000"
     assert mapping["trainable"] is False
+    assert mapping.get("mode") == "fixed universal"
+
+
+def test_collect_zbl_cutoff_mapping_legacy_trainable() -> None:
+    class _Model:
+        zbl = True
+        zbl_cuton = None
+        zbl_cutoff = 6.0
+        trainable_zbl = True
+
+    mapping = rich_report.collect_zbl_cutoff_mapping(_Model())
+    assert mapping is not None
+    assert mapping["cuton_Å"] == "0.0000"
+    assert mapping["cutoff_Å"] == "6.0000"
+    assert mapping["trainable"] is True
+    assert "legacy trainable" in str(mapping.get("mode", ""))
 
 
 def test_collect_zbl_cutoff_mapping_none_for_spoof() -> None:

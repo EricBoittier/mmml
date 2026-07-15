@@ -304,6 +304,10 @@ def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
 
     Returns ``None`` when the model has no ZBL flag (e.g. jax_mm_clone spoof with
     ``MODEL is None``). Pair-distance cutoffs (Å) are distinct from COM handoff.
+
+    Fixed universal ZBL uses cuton/cutoff ≈ 0.1 / 0.6 Å.  Older trainable-ZBL
+    checkpoints often omit those keys; loaders then infer ``cuton=None`` (switch
+    from 0) and ``cutoff≈model cutoff`` (commonly 6 Å) with ``trainable=True``.
     """
     if model is None:
         return None
@@ -316,18 +320,20 @@ def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
     # Some checkpoints store cutoffs only on the repulsion submodule.
     repulsion = getattr(model, "repulsion", None)
     if repulsion is not None:
-        if cuton is None:
+        if cuton is None and not hasattr(model, "zbl_cuton"):
             cuton = getattr(repulsion, "cuton", None)
         if cutoff is None:
             cutoff = getattr(repulsion, "cutoff", None)
         if trainable is None:
             trainable = getattr(repulsion, "trainable", None)
     out: dict[str, Any] = {"enabled": enabled}
-    if cuton is not None:
+    # ``cuton is None`` means switch from 0 → cutoff (legacy trainable window).
+    cuton_effective = 0.0 if cuton is None and enabled else cuton
+    if cuton_effective is not None:
         try:
-            out["cuton_Å"] = f"{float(cuton):.4f}"
+            out["cuton_Å"] = f"{float(cuton_effective):.4f}"
         except (TypeError, ValueError):
-            out["cuton_Å"] = cuton
+            out["cuton_Å"] = cuton_effective
     if cutoff is not None:
         try:
             out["cutoff_Å"] = f"{float(cutoff):.4f}"
@@ -335,6 +341,14 @@ def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
             out["cutoff_Å"] = cutoff
     if trainable is not None:
         out["trainable"] = bool(trainable)
+    try:
+        cutoff_f = float(cutoff) if cutoff is not None else None
+    except (TypeError, ValueError):
+        cutoff_f = None
+    if enabled and bool(trainable) and (cutoff_f is None or cutoff_f >= 1.0):
+        out["mode"] = "legacy trainable (wide; not fixed 0.1–0.6)"
+    elif enabled and not bool(trainable) and cutoff_f is not None and cutoff_f <= 1.0:
+        out["mode"] = "fixed universal"
     out["distance"] = "pair r (Å), not COM"
     return out
 

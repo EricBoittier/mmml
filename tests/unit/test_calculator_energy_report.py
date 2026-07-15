@@ -63,13 +63,31 @@ def test_explicit_vdw_architecture_flags_override_tree_inference():
 
 def test_legacy_checkpoint_infers_trainable_zbl_from_parameter_tree():
     tree = {"params": {"repulsion": {"a_coefficient": np.asarray(0.5)}}}
-    assert _infer_vdw_architecture_config({}, tree)["trainable_zbl"] is True
+    config = _infer_vdw_architecture_config({}, tree)
+    assert config["trainable_zbl"] is True
+    # Must not reuse the ML neighbor cutoff as the ZBL window.
+    assert config["zbl_cuton"] == pytest.approx(0.1)
+    assert config["zbl_cutoff"] == pytest.approx(0.6)
+
+
+def test_legacy_zbl_clamps_wide_cutoff_copied_from_model_cutoff():
+    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+
+    tree = {"params": {"repulsion": {"a_coefficient": np.asarray(0.5)}}}
+    config = infer_trainable_zbl_config(
+        {"trainable_zbl": True, "cutoff": 6.0, "zbl_cuton": None, "zbl_cutoff": 6.0},
+        tree,
+    )
+    assert config["zbl_cuton"] == pytest.approx(0.1)
+    assert config["zbl_cutoff"] == pytest.approx(0.6)
 
 
 def test_new_checkpoint_keeps_explicit_fixed_zbl():
     tree = {"params": {"repulsion": {"a_coefficient": np.asarray(0.5)}}}
     config = _infer_vdw_architecture_config({"trainable_zbl": False}, tree)
     assert config["trainable_zbl"] is False
+    assert config["zbl_cuton"] == pytest.approx(0.1)
+    assert config["zbl_cutoff"] == pytest.approx(0.6)
 
 
 def test_spookynet_report_flags_missing_training_lj_inputs(tmp_path):
