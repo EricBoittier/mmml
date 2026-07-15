@@ -206,24 +206,42 @@ atoms.calc = energy.as_ase_calculator()
 print(atoms.get_potential_energy())
 ```
 
-For rigid-body Monte Carlo, set `sampler="rigid"` on `RunConfig`. Its geometry
-preservation and neighbor-list behavior are unit-tested, but structural RDF
-validation against flexible MD is still open.
+For rigid-body Monte Carlo, set `sampler="rigid"` on `RunConfig` (or
+`mmml md-system --jaxmd-unified --sampler rigid`). Geometry preservation and
+neighbor-list behavior are unit-tested; structural RDF validation against
+flexible MD is still open.
+
+With `--sampler rigid`, the default intermolecular FF is **CGenFF**
+(`mm_nonbonded` from Packmol/CHARMM params, no ML checkpoint). Alternatively
+`--ff zbl-mbd-multipoles` freezes fragment multipoles and per-atom C6/C8/C10
+once at build (from `--multipole-checkpoint` / `--mbd-checkpoint` or bundled
+defaults), then evaluates classical pair electrostatics + QDO dispersion plus
+intermolecular ZBL (`cuton=0.1` Å, `cutoff=0.6` Å) during MC.
 
 ### 3.4 CLI equivalent (no Python required)
 
 `mmml md-system --backend jaxmd --jaxmd-unified` routes through this same
 shared pipeline (`runconfig_from_md_system_args` → `assemble_and_run`). Its
-CLI surface today wires the **Packmol composition** builder only (default
-terms `ml_intra` + `mm_nonbonded`); `--builder pyxtal`, `--template-pdb`, and
-`--continue-from` raise `NotImplementedError` rather than silently falling
-back to the legacy path:
+CLI surface today wires the **Packmol composition** builder only; `--builder
+pyxtal`, `--template-pdb`, and `--continue-from` raise `NotImplementedError`
+rather than silently falling back to the legacy path:
 
 ```bash
+# Hybrid ML/MM flexible MD (requires --checkpoint)
 uv run mmml md-system --setup pbc_nve --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 1.0 --ps 0.01 --seed 42
+
+# Rigid MC with CGenFF intermolecular (no checkpoint)
+uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+  --sampler rigid --ff cgenff \
+  --composition "TIP3:4" --box-size 15.0 --ps 0.1 --seed 42
+
+# Rigid MC with ZBL + fixed multipoles + fixed C6 dispersion
+uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+  --sampler rigid --ff zbl-mbd-multipoles \
+  --composition "TIP3:4" --box-size 15.0 --ps 0.1 --seed 42
 ```
 
 The full mixed ML-core (peptide) + MM-shell system from §3.1 is reachable

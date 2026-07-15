@@ -14,8 +14,8 @@ driver-owned list.
 
 This module defines the protocol, the registry, and the composition skeleton.
 The concrete terms (``ml_intra``, ``ml_pep_water``, ``mm_nonbonded``, ``smd``,
-``dihedral``, ``vdw_core``) migrate into ``mmml/md/energy/terms/`` from
-``examples/cg_jaxmd.py`` and ``mmml.interfaces.jaxmdInterface`` in later steps.
+``dihedral``, ``vdw_core``, ``zbl``, ``mbd``, ``multipole``) live in
+``mmml/md/energy/terms/``.
 """
 
 from __future__ import annotations

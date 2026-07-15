@@ -33,6 +33,11 @@ def _args(**overrides):
         seed=1,
         checkpoint=str(CKPT),
         output_dir=None,
+        sampler="md",
+        ff=None,
+        mbd_checkpoint=None,
+        mbd_weight=1.0,
+        multipole_checkpoint=None,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -60,9 +65,21 @@ def test_check_supported_rejects_continue_from():
         check_md_system_args_supported(_args(continue_from="run1"))
 
 
-def test_check_supported_requires_checkpoint():
+def test_check_supported_requires_checkpoint_for_ml_intra():
     with pytest.raises(ValueError, match="checkpoint"):
-        check_md_system_args_supported(_args(checkpoint=None))
+        check_md_system_args_supported(_args(checkpoint=None, sampler="md", ff=None))
+
+
+def test_check_supported_cgenff_rigid_without_checkpoint():
+    check_md_system_args_supported(
+        _args(checkpoint=None, sampler="rigid", ff="cgenff")
+    )
+
+
+def test_check_supported_zbl_mbd_multipoles_without_spooky_checkpoint():
+    check_md_system_args_supported(
+        _args(checkpoint=None, sampler="rigid", ff="zbl-mbd-multipoles")
+    )
 
 
 def test_run_unified_jaxmd_fails_fast_on_unsupported():

@@ -24,6 +24,7 @@ from mmml.md.system import SystemSpec
 
 __all__ = [
     "terms_from_cg_config",
+    "terms_from_md_system_args",
     "runconfig_from_cg_config",
     "ensemble_from_setup",
     "runconfig_from_md_system_args",
@@ -104,6 +105,34 @@ def runconfig_from_cg_config(cfg: Mapping[str, Any], phase: str = "nve") -> RunC
 # --- md-system argparse ------------------------------------------------------
 
 
+def terms_from_md_system_args(args: Any) -> tuple[str, ...]:
+    """Select registered energy terms from ``md-system`` argparse knobs.
+
+    Precedence:
+    1. Explicit ``args.terms`` when non-empty.
+    2. ``--ff cgenff`` → ``mm_nonbonded`` only.
+    3. ``--ff zbl-mbd-multipoles`` → intermolecular ZBL + fixed multipole + fixed C6.
+    4. ``--sampler rigid`` with no checkpoint and no ``--ff`` → CGenFF default.
+    5. Otherwise hybrid ``ml_intra`` + ``mm_nonbonded``.
+    """
+    explicit = getattr(args, "terms", None)
+    if explicit:
+        return tuple(explicit)
+
+    ff = getattr(args, "ff", None)
+    sampler = getattr(args, "sampler", "md") or "md"
+    checkpoint = getattr(args, "checkpoint", None)
+
+    if ff is None and sampler == "rigid" and not checkpoint:
+        ff = "cgenff"
+
+    if ff == "cgenff":
+        return ("mm_nonbonded",)
+    if ff == "zbl-mbd-multipoles":
+        return ("zbl", "mbd", "multipole")
+    return ("ml_intra", "mm_nonbonded")
+
+
 def ensemble_from_setup(setup: str) -> tuple[str, str]:
     """Split a jaxmd ``--setup`` into ``(space, ensemble)``.
 
@@ -144,15 +173,27 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
         dt_fs=dt_fs,
         n_steps=_nsteps_from_ps(ps, dt_fs),
     )
-    terms = tuple(getattr(args, "terms", ()) or ("ml_intra", "mm_nonbonded"))
+    terms = terms_from_md_system_args(args)
     checkpoint = getattr(args, "checkpoint", None)
     output_dir = getattr(args, "output_dir", None)
+    sampler = getattr(args, "sampler", "md") or "md"
     return RunConfig(
         system=system,
         terms=terms,
         ensemble=ensemble,
         backend="jaxmd",
+        sampler=str(sampler),
         checkpoint=Path(checkpoint) if checkpoint else None,
         output_dir=Path(output_dir) if output_dir else None,
         seed=int(getattr(args, "seed", 0)),
+        params={
+            k: v
+            for k, v in {
+                "ff": getattr(args, "ff", None),
+                "mbd_checkpoint": getattr(args, "mbd_checkpoint", None),
+                "mbd_weight": getattr(args, "mbd_weight", 1.0),
+                "multipole_checkpoint": getattr(args, "multipole_checkpoint", None),
+            }.items()
+            if v is not None
+        },
     )

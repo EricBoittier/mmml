@@ -81,10 +81,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "Optional learned MBD dispersion checkpoint. Adds a whole-system "
-            "E += mbd_weight * E_mbd correction to the hybrid ML/MM calculator "
-            "(ASE / JAX-MD backends). Required when the model was trained with an "
-            "additive MBD term, else that dispersion physics is silently omitted."
+            "Optional learned MBD dispersion checkpoint. On the legacy ASE/JAX-MD "
+            "hybrid path, adds E += mbd_weight * E_mbd. With --jaxmd-unified "
+            "--ff zbl-mbd-multipoles, used once at build to freeze per-atom C6/C8/C10 "
+            "for the classical pairwise dispersion term (default: bundled example)."
         ),
     )
     parser.add_argument(
@@ -92,6 +92,37 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="Weight for the --mbd-checkpoint correction (default 1.0; match training).",
+    )
+    parser.add_argument(
+        "--multipole-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional learned multipole checkpoint. With --jaxmd-unified "
+            "--ff zbl-mbd-multipoles, used once at build to freeze fragment multipoles "
+            "for classical pair electrostatics during rigid MC (default: bundled example)."
+        ),
+    )
+    parser.add_argument(
+        "--sampler",
+        choices=["md", "rigid"],
+        default="md",
+        help=(
+            "Propagator for --jaxmd-unified: md (JaxmdDriver) or rigid "
+            "(RigidBodySampler Metropolis MC over whole monomers). Default: md."
+        ),
+    )
+    parser.add_argument(
+        "--ff",
+        choices=["cgenff", "zbl-mbd-multipoles"],
+        default=None,
+        help=(
+            "Intermolecular FF preset for --jaxmd-unified. cgenff: CHARMM/CGenFF "
+            "mm_nonbonded only (default when --sampler rigid and no --checkpoint). "
+            "zbl-mbd-multipoles: intermolecular ZBL (defaults) + fixed multipoles + "
+            "fixed C6 dispersion. Omit for hybrid ml_intra+mm_nonbonded when a "
+            "checkpoint is set."
+        ),
     )
     parser.add_argument(
         "--jaxmd-unified",
@@ -2459,6 +2490,13 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--md-stages", _default_stages[args.setup]])
     _append_optional(cmd, "--tag", getattr(args, "tag", None))
     _append_optional(cmd, "--checkpoint", args.checkpoint)
+    _append_optional(cmd, "--mbd-checkpoint", getattr(args, "mbd_checkpoint", None))
+    _append_optional(cmd, "--mbd-weight", getattr(args, "mbd_weight", None))
+    _append_optional(cmd, "--multipole-checkpoint", getattr(args, "multipole_checkpoint", None))
+    _append_optional(cmd, "--sampler", getattr(args, "sampler", None))
+    _append_optional(cmd, "--ff", getattr(args, "ff", None))
+    if getattr(args, "jaxmd_unified", False):
+        cmd.append("--jaxmd-unified")
     _append_optional(cmd, "--electrostatics-damping-sigma", getattr(args, "electrostatics_damping_sigma", None))
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--box-size", args.box_size)

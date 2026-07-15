@@ -141,3 +141,19 @@ def test_runconfig_from_md_system_args_default_builder_and_terms():
     assert cfg.ensemble.space == "free"
     assert cfg.ensemble.n_steps == 2000  # 1 ps / 0.5 fs
     assert cfg.terms == ("ml_intra", "mm_nonbonded")
+    assert cfg.sampler == "md"
+
+
+def test_runconfig_from_md_system_args_rigid_cgenff():
+    args = argparse.Namespace(
+        setup="pbc_nvt",
+        dt_fs=1.0,
+        ps=0.1,
+        seed=0,
+        sampler="rigid",
+        ff="cgenff",
+        checkpoint=None,
+    )
+    cfg = runconfig_from_md_system_args(args)
+    assert cfg.sampler == "rigid"
+    assert cfg.terms == ("mm_nonbonded",)

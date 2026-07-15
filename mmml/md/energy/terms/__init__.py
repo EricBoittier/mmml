@@ -6,24 +6,31 @@ in ``jax`` — so the ``mmml.md`` protocol/dataclass seams stay dependency-light
 (see ``docs/md-cg-unification-design.md``).
 
 All energy terms are now extracted: bias/restraint (`smd`, `dihedral`),
-`vdw_core`, `mm_nonbonded`, and the ML terms (`ml_intra`, `ml_pep_water`).
+`vdw_core`, `mm_nonbonded`, the ML terms (`ml_intra`, `ml_pep_water`), and the
+rigid-QCML intermolecular set (`zbl`, `mbd`, `multipole`).
 """
 
 from __future__ import annotations
 
 from mmml.md.energy.terms.dihedral import DihedralRestraint, DihedralRestraintTerm
+from mmml.md.energy.terms.mbd import MBDDispersionTerm
 from mmml.md.energy.terms.ml_intra import MLIntramolecularTerm
 from mmml.md.energy.terms.ml_pep_water import MLCoreGroupTerm
 from mmml.md.energy.terms.mm_nonbonded import MMNonbondedTerm
+from mmml.md.energy.terms.multipole import MultipoleTerm
 from mmml.md.energy.terms.smd import SMDBiasTerm
 from mmml.md.energy.terms.vdw_core import RepulsiveCoreVdwTerm
+from mmml.md.energy.terms.zbl import ZBLTerm
 
 __all__ = [
     "DihedralRestraint",
     "DihedralRestraintTerm",
+    "MBDDispersionTerm",
     "MLIntramolecularTerm",
     "MLCoreGroupTerm",
     "MMNonbondedTerm",
+    "MultipoleTerm",
     "SMDBiasTerm",
     "RepulsiveCoreVdwTerm",
+    "ZBLTerm",
 ]
