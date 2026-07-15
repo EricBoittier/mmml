@@ -83,6 +83,30 @@ def _infer_vdw_architecture_config(
     return inferred
 
 
+def resolve_spooky_checkpoint(explicit: str | Path | None = None) -> Path:
+    """Resolve default SpookyNet checkpoint path."""
+    import os
+
+    env_ckpt = (os.environ.get("SPOOKYNET_CKPT") or os.environ.get("SPOOKY_CKPT") or "").strip()
+    target = explicit or (env_ckpt if env_ckpt else None)
+    if target is not None:
+        p = Path(target).expanduser().resolve()
+        if p.exists():
+            return p
+        raise FileNotFoundError(f"SpookyNet checkpoint not found at: {target}")
+    repo_root = Path(__file__).resolve().parents[2]
+    candidates = [
+        repo_root / "examples" / "spooky_so3lr_muon_mbd_zbl-epoch-0002.json",
+        repo_root / "examples" / "ckpts_json" / "spooky_epoch-0004-chunk-000040-step-00584747.json",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise FileNotFoundError(
+        "No default SpookyNet checkpoint found in examples/. Set SPOOKYNET_CKPT or pass explicit path."
+    )
+
+
 class SpookyNetCalculator(Calculator):
     """ASE calculator wrapping a SpookyNet-style PhysNet model.
 
@@ -102,7 +126,7 @@ class SpookyNetCalculator(Calculator):
 
     def __init__(
         self,
-        checkpoint: str | Path,
+        checkpoint: str | Path | None = None,
         *,
         charge: float = 0.0,
         spin_multiplicity: float = 1.0,
@@ -112,7 +136,7 @@ class SpookyNetCalculator(Calculator):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        checkpoint = Path(checkpoint).expanduser()
+        checkpoint = resolve_spooky_checkpoint(checkpoint)
         ckpt = load_model_checkpoint(
             checkpoint, use_orbax=use_orbax, load_params=True, load_config=True
         )

@@ -15,6 +15,21 @@ DCM*LOG
 setup/charmm/*.mod
 setup/charmm/**.mod
 
+# Temporary runtime output folders at root
+/res/
+/dcd/
+/xyz/
+/psf/
+/pdb/
+/pycharmm/
+fort.*
+fftw-wisdom.dat
+domdec_probe_*.txt
+*.out
+profile_git_metadata.json
+args.model.json
+dataset_intel.json
+
 # DCM:5 benchmark workflow outputs (see workflows/dcm5_md_benchmark/.gitignore)
 workflows/dcm5_md_benchmark/results/
 workflows/dcm5_md_benchmark/.snakemake/
