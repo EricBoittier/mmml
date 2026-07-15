@@ -1970,7 +1970,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             stash_mkimat2_registration_log,
         )
 
-        mkimat_log = capture_charmm_script_output("UPDATE", replay=False)
+        mkimat_log = capture_charmm_script_output("UPDATE NBXMOD 0", replay=False)
         stash_mkimat2_registration_log(workflow_args, mkimat_log)
     pycharmm.image.update_bimag()
     rewrap_charmm_coords_for_mlpot_pbc(
@@ -1991,7 +1991,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             stash_mkimat2_registration_log,
         )
 
-        mkimat_log2 = capture_charmm_script_output("UPDATE", replay=False)
+        mkimat_log2 = capture_charmm_script_output("UPDATE NBXMOD 0", replay=False)
         if mkimat_log.strip():
             mkimat_log2 = "\n".join(
                 part for part in (mkimat_log, mkimat_log2) if part.strip()
