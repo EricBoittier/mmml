@@ -55,17 +55,37 @@ def test_classify_component_absolute_bad() -> None:
     assert reasons
 
 
-def test_classify_component_ratio_warn() -> None:
+def test_classify_component_ratio_alone_does_not_warn() -> None:
+    """Tiny baseline + large ratio must not flag when abs floors are not met."""
     level, reasons = _classify_component(
         4000.0,
-        1000.0,
+        1.0,
         warn_ratio=3.0,
         bad_ratio=6.0,
         warn_abs=50000.0,
         bad_abs=100000.0,
         name="GRMS",
+        baseline_floor=12.5,
+        ratio_requires_abs_warn=True,
+    )
+    assert level == LEVEL_OK
+    assert not reasons
+
+
+def test_classify_component_ratio_annotates_when_abs_warn_met() -> None:
+    level, reasons = _classify_component(
+        40.0,
+        5.0,
+        warn_ratio=2.5,
+        bad_ratio=5.0,
+        warn_abs=30.0,
+        bad_abs=80.0,
+        name="GRMS",
+        baseline_floor=7.5,
+        ratio_requires_abs_warn=True,
     )
     assert level == LEVEL_WARN
+    assert any("abs" in r for r in reasons)
     assert any("ratio" in r for r in reasons)
 
 

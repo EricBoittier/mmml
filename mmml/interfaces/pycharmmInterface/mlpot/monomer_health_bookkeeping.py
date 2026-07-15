@@ -29,7 +29,13 @@ _DOT_RICH = {
 
 @dataclass(frozen=True)
 class MonomerHealthConfig:
-    """Thresholds for per-monomer early intervention during dynamics."""
+    """Thresholds for per-monomer early intervention during dynamics.
+
+    Template + per-monomer FIRE are reserved for geometry failures (extent
+    fly-off / intra collapse).  Velocity/GRMS stress only redraws velocities.
+    Ratios never escalate a level unless the absolute floor is also met, and
+    baselines are floored so a near-zero post-mini reference cannot explode.
+    """
 
     enabled: bool = True
     debug_dot_matrix: bool = False
@@ -46,10 +52,17 @@ class MonomerHealthConfig:
     force_bad_ratio: float = 5.0
     force_warn_abs_kcalmol_A: float = 30.0
     force_bad_abs_kcalmol_A: float = 80.0
+    # Kept for CLI compat; MM/energy GRMS double-count is disabled.
     energy_warn_ratio: float = 2.0
     energy_bad_ratio: float = 4.0
     energy_warn_abs_kcalmol_A: float = 25.0
     energy_bad_abs_kcalmol_A: float = 60.0
+    # Floor baseline for ratio math as a fraction of the warn absolute cut.
+    baseline_floor_fraction_of_warn: float = 0.25
+    # Ratio may only annotate / escalate when abs is already at least warn.
+    ratio_requires_abs_warn: bool = True
+    # Template+FIRE only when extent / intra geometry fails.
+    template_restore_requires_geometry: bool = True
     verbose: bool = False
 
 
@@ -76,12 +89,17 @@ class MonomerHealthEntry:
     charmm_grms_kcalmol_A: float | None
     velocity_level: MonomerHealthLevel
     force_level: MonomerHealthLevel
-    energy_level: MonomerHealthLevel
+    energy_level: MonomerHealthLevel  # legacy alias; geometry uses geometry_level
     reasons: tuple[str, ...] = ()
+    geometry_level: MonomerHealthLevel = LEVEL_OK
 
     @property
     def overall_level(self) -> MonomerHealthLevel:
-        levels = (self.velocity_level, self.force_level, self.energy_level)
+        levels = (
+            self.velocity_level,
+            self.force_level,
+            self.geometry_level,
+        )
         if LEVEL_BAD in levels:
             return LEVEL_BAD
         if LEVEL_WARN in levels:
@@ -90,7 +108,8 @@ class MonomerHealthEntry:
 
     @property
     def needs_template_restore(self) -> bool:
-        return self.overall_level == LEVEL_BAD
+        """Geometry fly-off / collapse only (not velocity or GRMS alone)."""
+        return self.geometry_level == LEVEL_BAD
 
 
 @dataclass(frozen=True)
@@ -226,6 +245,15 @@ def monomer_health_config_from_args(args: Any | None) -> MonomerHealthConfig:
         energy_bad_ratio=_safe_float(
             getattr(args, "dynamics_monomer_energy_bad_ratio", 4.0), 4.0
         ),
+        baseline_floor_fraction_of_warn=_safe_float(
+            getattr(args, "dynamics_monomer_baseline_floor_fraction", 0.25), 0.25
+        ),
+        ratio_requires_abs_warn=not bool(
+            getattr(args, "dynamics_monomer_ratio_without_abs", False)
+        ),
+        template_restore_requires_geometry=not bool(
+            getattr(args, "dynamics_monomer_template_on_force", False)
+        ),
         verbose=not bool(getattr(args, "quiet", False)),
     )
 
@@ -322,6 +350,8 @@ def _classify_component(
     warn_abs: float,
     bad_abs: float,
     name: str,
+    baseline_floor: float = 0.0,
+    ratio_requires_abs_warn: bool = True,
 ) -> tuple[MonomerHealthLevel, tuple[str, ...]]:
     if value is None or not np.isfinite(value):
         return LEVEL_OK, ()
@@ -332,18 +362,20 @@ def _classify_component(
         level = LEVEL_BAD
         reasons.append(f"{name} abs {val:.1f} ≥ {bad_abs:.1f}")
     elif val >= float(warn_abs):
-        if _level_rank(level) < _level_rank(LEVEL_WARN):
-            level = LEVEL_WARN
+        level = LEVEL_WARN
         reasons.append(f"{name} abs {val:.1f} ≥ {warn_abs:.1f}")
-    if baseline is not None and np.isfinite(baseline) and float(baseline) > 1.0e-8:
-        ratio = val / float(baseline)
-        if ratio >= float(bad_ratio):
-            level = LEVEL_BAD
-            reasons.append(f"{name} ratio {ratio:.1f}× baseline")
-        elif ratio >= float(warn_ratio):
-            if _level_rank(level) < _level_rank(LEVEL_WARN):
-                level = LEVEL_WARN
-            reasons.append(f"{name} ratio {ratio:.1f}× baseline")
+    # Ratios never promote alone: require abs floor, and floor a tiny baseline.
+    if baseline is not None and np.isfinite(baseline):
+        base = max(float(baseline), float(baseline_floor), 1.0e-8)
+        if (not ratio_requires_abs_warn) or val >= float(warn_abs):
+            ratio = val / base
+            if ratio >= float(bad_ratio) and val >= float(bad_abs):
+                level = LEVEL_BAD
+                reasons.append(f"{name} ratio {ratio:.1f}× baseline")
+            elif ratio >= float(warn_ratio) and val >= float(warn_abs):
+                if _level_rank(level) < _level_rank(LEVEL_WARN):
+                    level = LEVEL_WARN
+                reasons.append(f"{name} ratio {ratio:.1f}× baseline")
     return level, tuple(reasons)
 
 
@@ -416,14 +448,81 @@ def _get_baseline(mlpot_ctx: Any) -> MonomerHealthBaseline | None:
     return None
 
 
+def flag_geometry_problem_monomers(
+    mlpot_ctx: Any,
+    overlap_config: Any,
+    *,
+    offsets: np.ndarray,
+) -> dict[int, tuple[str, ...]]:
+    """Return monomers that fail fly-off (extent) or intra-collapse checks."""
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        _bond_exclusion_pairs,
+        _overlap_cell,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from mmml.utils.geometry_checks import monomer_axis_extent
+
+    out: dict[int, tuple[str, ...]] = {}
+    max_extent = float(getattr(overlap_config, "max_monomer_extent_A", 0.0) or 0.0)
+    intra_min = float(getattr(overlap_config, "intra_min_distance_A", 0.0) or 0.0)
+    if max_extent <= 0.0 and intra_min <= 0.0:
+        return out
+
+    pos = get_charmm_positions_array()
+    cell = _overlap_cell(
+        use_pbc=bool(getattr(overlap_config, "use_pbc", False)),
+        fallback_box_side_A=getattr(overlap_config, "fallback_box_side_A", None),
+    )
+    n_monomers = max(0, int(len(offsets) - 1))
+    if max_extent > 0.0:
+        for mi in range(n_monomers):
+            extent = float(monomer_axis_extent(pos, offsets, mi, cell=cell))
+            if extent > max_extent:
+                out[mi] = out.get(mi, ()) + (
+                    f"extent {extent:.2f} Å > {max_extent:.2f} Å",
+                )
+
+    if intra_min > 0.0:
+        from mmml.utils.geometry_checks import find_worst_intramonomer_close_contact
+
+        excluded = _bond_exclusion_pairs(
+            exclude_1_3=bool(getattr(overlap_config, "intra_exclude_1_3", True))
+        )
+        # Collect per-monomer by re-scanning from worst; mark until none left under floor.
+        marked: set[int] = set()
+        work_pos = np.asarray(pos, dtype=np.float64)
+        for _ in range(max(1, n_monomers * 2)):
+            dist, viol = find_worst_intramonomer_close_contact(
+                work_pos,
+                offsets,
+                excluded,
+                cell=cell,
+                min_distance=intra_min,
+            )
+            if viol is None or float(dist) >= intra_min:
+                break
+            mi = int(viol.monomer)
+            if mi not in marked:
+                marked.add(mi)
+                out[mi] = out.get(mi, ()) + (
+                    f"intra {float(dist):.3f} Å < {intra_min:.3f} Å",
+                )
+            # Nudge the pair apart in a scratch copy so the next-worst monomer surfaces.
+            mid = 0.5 * (work_pos[int(viol.atom_i)] + work_pos[int(viol.atom_j)])
+            work_pos[int(viol.atom_i)] = mid
+            work_pos[int(viol.atom_j)] = mid
+    return out
+
+
 def audit_monomer_health(
     mlpot_ctx: Any,
     config: MonomerHealthConfig,
     *,
     n_monomers: int,
     global_step: int | None = None,
+    overlap_config: Any | None = None,
 ) -> MonomerHealthReport | None:
-    """Classify per-monomer velocity / force / energy stress vs baseline."""
+    """Classify per-monomer velocity / GRMS / geometry stress vs baseline."""
     if not config.enabled or int(n_monomers) <= 1:
         return None
 
@@ -457,6 +556,18 @@ def audit_monomer_health(
     )
 
     labels = resolve_cluster_residue_labels(mlpot_ctx, int(n_monomers))
+    geom_reasons = {}
+    if overlap_config is not None:
+        geom_reasons = flag_geometry_problem_monomers(
+            mlpot_ctx, overlap_config, offsets=offsets
+        )
+
+    v_floor = float(config.velocity_warn_abs_akma) * float(
+        config.baseline_floor_fraction_of_warn
+    )
+    f_floor = float(config.force_warn_abs_kcalmol_A) * float(
+        config.baseline_floor_fraction_of_warn
+    )
     entries: list[MonomerHealthEntry] = []
     bad: list[int] = []
     warn: list[int] = []
@@ -472,6 +583,8 @@ def audit_monomer_health(
             warn_abs=config.velocity_warn_abs_akma,
             bad_abs=config.velocity_bad_abs_akma,
             name="|v|",
+            baseline_floor=v_floor,
+            ratio_requires_abs_warn=bool(config.ratio_requires_abs_warn),
         )
         f_val = float(hybrid[mi]) if np.isfinite(hybrid[mi]) else float(charmm[mi])
         f_base = (
@@ -492,23 +605,13 @@ def audit_monomer_health(
             warn_abs=config.force_warn_abs_kcalmol_A,
             bad_abs=config.force_bad_abs_kcalmol_A,
             name="GRMS",
+            baseline_floor=f_floor,
+            ratio_requires_abs_warn=bool(config.ratio_requires_abs_warn),
         )
-        e_val = float(charmm[mi]) if np.isfinite(charmm[mi]) else f_val
-        e_base = (
-            float(baseline.charmm_grms_kcalmol_A[mi])
-            if mi < baseline.charmm_grms_kcalmol_A.size
-            else f_base
-        )
-        e_level, e_reasons = _classify_component(
-            e_val if np.isfinite(e_val) else None,
-            e_base,
-            warn_ratio=config.energy_warn_ratio,
-            bad_ratio=config.energy_bad_ratio,
-            warn_abs=config.energy_warn_abs_kcalmol_A,
-            bad_abs=config.energy_bad_abs_kcalmol_A,
-            name="MM",
-        )
-        reasons = v_reasons + f_reasons + e_reasons
+        g_reasons = geom_reasons.get(int(mi), ())
+        g_level = LEVEL_BAD if g_reasons else LEVEL_OK
+        # energy_level kept for matrix layout; store geometry status there too.
+        reasons = v_reasons + f_reasons + g_reasons
         entry = MonomerHealthEntry(
             index=int(mi),
             label=str(labels[mi]) if mi < len(labels) else f"M{mi:02d}",
@@ -518,8 +621,9 @@ def audit_monomer_health(
             charmm_grms_kcalmol_A=float(charmm[mi]) if np.isfinite(charmm[mi]) else None,
             velocity_level=v_level,
             force_level=f_level,
-            energy_level=e_level,
+            energy_level=g_level,
             reasons=reasons,
+            geometry_level=g_level,
         )
         entries.append(entry)
         if entry.overall_level == LEVEL_BAD:
@@ -547,18 +651,19 @@ def emit_monomer_health_dot_matrix(
     from mmml.utils.rich_report import emit, rich_enabled
 
     use_rich = rich_enabled(quiet=quiet)
-    header = "Monomer health  [v]=velocity [f]=force [e]=MM/energy"
-    lines = [header, " idx   v f e  residue"]
+    header = "Monomer health  [v]=velocity [f]=GRMS [g]=geometry (fly-off/collapse)"
+    lines = [header, " idx   v f g  residue"]
     for entry in report.entries:
+        g_level = getattr(entry, "geometry_level", entry.energy_level)
         if use_rich:
             v_dot = _DOT_RICH[entry.velocity_level]
             f_dot = _DOT_RICH[entry.force_level]
-            e_dot = _DOT_RICH[entry.energy_level]
+            g_dot = _DOT_RICH[g_level]
         else:
             v_dot = _DOT_PLAIN[entry.velocity_level]
             f_dot = _DOT_PLAIN[entry.force_level]
-            e_dot = _DOT_PLAIN[entry.energy_level]
-        dots = f"{v_dot} {f_dot} {e_dot}"
+            g_dot = _DOT_PLAIN[g_level]
+        dots = f"{v_dot} {f_dot} {g_dot}"
         lines.append(
             f" {entry.index:3d}  {dots}  {entry.label}"
             + (f"  ({'; '.join(entry.reasons)})" if entry.reasons else "")
@@ -867,6 +972,46 @@ def _run_per_monomer_jax_on_indices(
     )
 
 
+def maybe_rebaseline_monomer_health_after_heat_velocities(
+    mlpot_ctx: Any,
+    *,
+    n_monomers: int,
+    context: str,
+    global_step: int,
+) -> bool:
+    """Re-record baseline once after HEAT has assigned thermal velocities.
+
+    Initial baseline is often post-mini (near-zero GRMS / cold). Comparing mid-heat
+    metrics to that reference produces misleading hundreds× ratios.
+    """
+    if mlpot_ctx is None or int(n_monomers) <= 1:
+        return False
+    if "heat" not in str(context).lower():
+        return False
+    if int(global_step) <= 0:
+        return False
+    if bool(getattr(mlpot_ctx, "_monomer_health_rebaselined_after_heat_vel", False)):
+        return False
+    record_monomer_health_baseline(
+        mlpot_ctx,
+        n_monomers=int(n_monomers),
+        global_step=int(global_step),
+    )
+    setattr(mlpot_ctx, "_monomer_health_rebaselined_after_heat_vel", True)
+    return True
+
+
+def _velocity_only_redraw_indices(report: MonomerHealthReport) -> tuple[int, ...]:
+    """Monomers with hot velocity but healthy geometry (no template restore)."""
+    out: list[int] = []
+    for entry in report.entries:
+        if entry.geometry_level == LEVEL_BAD:
+            continue
+        if entry.velocity_level == LEVEL_BAD:
+            out.append(int(entry.index))
+    return tuple(out)
+
+
 def maybe_intervene_monomer_health(
     mlpot_ctx: Any,
     overlap_config: Any,
@@ -875,9 +1020,9 @@ def maybe_intervene_monomer_health(
     global_step: int | None = None,
     restart_path: Any | None = None,
 ) -> bool:
-    """Audit per-monomer health; template-restore + JAX mini on bad monomers.
+    """Audit health; template+FIRE only for geometry; redraw hot velocities otherwise.
 
-    Returns True when coordinates were rewritten (caller should refresh restart).
+    Returns True when coordinates or velocities were rewritten.
     """
     health_cfg = getattr(overlap_config, "monomer_health", None)
     if health_cfg is None:
@@ -887,11 +1032,20 @@ def maybe_intervene_monomer_health(
         return False
 
     n_monomers = int(getattr(overlap_config, "n_monomers", 1) or 1)
+    if global_step is not None:
+        maybe_rebaseline_monomer_health_after_heat_velocities(
+            mlpot_ctx,
+            n_monomers=n_monomers,
+            context=context,
+            global_step=int(global_step),
+        )
+
     report = audit_monomer_health(
         mlpot_ctx,
         health_cfg,
         n_monomers=n_monomers,
         global_step=global_step,
+        overlap_config=overlap_config,
     )
     if report is None or report.baseline_recorded:
         return False
@@ -903,22 +1057,77 @@ def maybe_intervene_monomer_health(
             quiet=not health_cfg.verbose and not health_cfg.debug_dot_matrix,
         )
 
-    if not report.flagged_bad:
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+
+    n_atoms = int(coor.get_natom())
+    offsets = resolve_monomer_offsets_for_ctx(
+        mlpot_ctx, n_monomers=int(n_monomers), n_atoms=n_atoms
+    )
+    if offsets is None:
+        return False
+
+    changed = False
+
+    geometry_bad = tuple(
+        int(e.index) for e in report.entries if e.geometry_level == LEVEL_BAD
+    )
+    if geometry_bad and health_cfg.template_restore_on_bad:
+        if bool(health_cfg.template_restore_requires_geometry):
+            to_restore = select_flagged_bad_by_highest_grms(
+                MonomerHealthReport(
+                    entries=report.entries,
+                    flagged_bad=geometry_bad,
+                    flagged_warn=(),
+                    baseline_recorded=False,
+                ),
+                max_select=int(health_cfg.max_restore_per_check),
+            )
+        else:
+            to_restore = select_flagged_bad_by_highest_grms(
+                report,
+                max_select=int(health_cfg.max_restore_per_check),
+            )
+        if to_restore:
+            restored = restore_flagged_monomers_from_template(
+                mlpot_ctx,
+                to_restore,
+                context=context,
+                restart_path=restart_path,
+                verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
+                velocity_restore=bool(health_cfg.velocity_restore_on_template),
+                temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
+            )
+            if restored:
+                changed = True
+                if health_cfg.per_monomer_jax_after_restore:
+                    _run_per_monomer_jax_on_indices(
+                        mlpot_ctx,
+                        overlap_config,
+                        tuple(to_restore),
+                        context=context,
+                        restart_path=restart_path,
+                    )
+                mlpot_ctx.reregister_mlpot(verbose=False)
+    elif geometry_bad and health_cfg.verbose:
+        print(
+            f"{context}: geometry-bad monomers {geometry_bad} "
+            "(template restore disabled)",
+            flush=True,
+        )
+
+    # Hot velocities without a geometry failure: redraw only (no template / FIRE).
+    to_redraw = _velocity_only_redraw_indices(report)
+    if not to_redraw:
         to_redraw = select_systemic_velocity_warn_by_highest_grms(
             report,
             min_fraction=float(health_cfg.velocity_warn_recover_fraction),
         )
-        if not to_redraw:
-            return False
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        import pycharmm.coor as coor
-
-        n_atoms = int(coor.get_natom())
-        offsets = resolve_monomer_offsets_for_ctx(
-            mlpot_ctx, n_monomers=int(n_monomers), n_atoms=n_atoms
-        )
-        if offsets is None:
-            return False
+    # Do not redraw monomers we just template-restored.
+    if geometry_bad and health_cfg.template_restore_on_bad:
+        geom_set = set(geometry_bad)
+        to_redraw = tuple(i for i in to_redraw if i not in geom_set)
+    if to_redraw:
         redrawn = redraw_monomer_velocities(
             mlpot_ctx,
             to_redraw,
@@ -927,53 +1136,12 @@ def maybe_intervene_monomer_health(
             verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
             context=context,
         )
-        if not redrawn:
-            return False
+        changed = bool(changed or redrawn)
+
+    if changed:
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
             invalidate_mlpot_calculator_caches,
         )
 
         invalidate_mlpot_calculator_caches(mlpot_ctx)
-        return True
-
-    to_restore = select_flagged_bad_by_highest_grms(
-        report,
-        max_select=int(health_cfg.max_restore_per_check),
-    )
-    if not health_cfg.template_restore_on_bad:
-        if health_cfg.verbose:
-            print(
-                f"{context}: monomer health bad {to_restore} "
-                "(template restore disabled)",
-                flush=True,
-            )
-        return False
-
-    restored = restore_flagged_monomers_from_template(
-        mlpot_ctx,
-        to_restore,
-        context=context,
-        restart_path=restart_path,
-        verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
-        velocity_restore=bool(health_cfg.velocity_restore_on_template),
-        temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
-    )
-    if not restored:
-        return False
-
-    if health_cfg.per_monomer_jax_after_restore:
-        _run_per_monomer_jax_on_indices(
-            mlpot_ctx,
-            overlap_config,
-            tuple(to_restore),
-            context=context,
-            restart_path=restart_path,
-        )
-
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        invalidate_mlpot_calculator_caches,
-    )
-
-    invalidate_mlpot_calculator_caches(mlpot_ctx)
-    mlpot_ctx.reregister_mlpot(verbose=False)
-    return True
+    return changed

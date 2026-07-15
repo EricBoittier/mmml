@@ -6957,11 +6957,15 @@ def run_dynamics_with_io(
             record_monomer_health_baseline,
         )
 
-        record_monomer_health_baseline(
-            mlpot_ctx,
-            n_monomers=int(getattr(overlap, "n_monomers", 1) or 1),
-            global_step=0,
-        )
+        # HEAT: defer until after first velocity-assigning chunk so the baseline
+        # is not a near-zero post-mini GRMS that makes every thermal fluctuation
+        # look like a collapse. Non-heat stages still baseline at step 0.
+        if "heat" not in str(overlap_context).lower():
+            record_monomer_health_baseline(
+                mlpot_ctx,
+                n_monomers=int(getattr(overlap, "n_monomers", 1) or 1),
+                global_step=0,
+            )
 
     n_chunks = total_nstep // interval
     post_rescue_in_memory_mode = False
@@ -7530,6 +7534,22 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                 )
                 steps_done = chunk_outcome.integrated_step
+                if (
+                    mlpot_ctx is not None
+                    and overlap is not None
+                    and steps_done > 0
+                    and "heat" in str(overlap_context).lower()
+                ):
+                    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                        maybe_rebaseline_monomer_health_after_heat_velocities,
+                    )
+
+                    maybe_rebaseline_monomer_health_after_heat_velocities(
+                        mlpot_ctx,
+                        n_monomers=int(getattr(overlap, "n_monomers", 1) or 1),
+                        context=str(overlap_context),
+                        global_step=int(steps_done),
+                    )
                 if (
                     chunk_io is not None
                     and getattr(chunk_io, "restart_write", None) is not None
