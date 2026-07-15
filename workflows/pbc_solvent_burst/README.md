@@ -45,22 +45,26 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 
 **Bulk reference** (monomers at 100% liquid density):
 
-| L (Å) | DCM N | ACO N |
-|-------|-------|-------|
-| 28 | 206 | 178 |
-| 32 | 308 | 266 |
-| 36 | 439 | 379 |
+| L (Å) | TIP3 N | MEOH N |
+|-------|--------|--------|
+| 28 | 732 | 325 |
+| 30 | 900 | 399 |
+| 32 | 1092 | 484 |
 
-Default fractions `[0.5, 0.75, 1.0]` → e.g. `dcm_103_t200_l28` (50% bulk DCM), `dcm_206_t200_l28` (100%).
+Default fractions `[0.1, 0.25]` keep the first campaign practical while still
+testing condensed environments. For example, the 28 Å cells contain 73/183
+TIP3 waters or 32/81 MEOH molecules.
 
 Run `scripts/preflight.sh` to print the full table for configured `box_sizes`.
 
-Run tag: `{solvent}_{n}` when there is one temperature and one box (default). When sweeping `temperatures` or `box_sizes`, tags include T/L: `dcm_154_t300_l32`.
+Run tag: `{solvent}_{n}` when there is one temperature and one box. When
+sweeping `temperatures` or `box_sizes`, tags include T/L, for example
+`tip3_90_t300_l30`.
 
 Outputs:
 
 ```
-artifacts/pbc_solvent_burst/dcm_30_t320_l28/
+artifacts/pbc_solvent_burst/tip3_73_t300_l28/
   campaign.yaml
   pycharmm_init/pretreat/ …
   jaxmd_burst_01/ …
@@ -102,7 +106,11 @@ box_sizes: [28, 32, 36]
 
 ### Density warning
 
-N=80–100 in a 32 Å cube is **extremely dense** when using legacy fixed `cluster_sizes`. With **bulk-density** sizing, 0.5× liquid (~154 DCM in L=32) is the moderate tier; 1.0× (~308) is full liquid and may stress Packmol or heat — those cells mark the final JAX burst `optional` via `optional_bulk_fractions: [1.0]`.
+Interpret N relative to the molecule. In a 32 Å cube, full density is about
+1092 TIP3 waters or 484 MEOH molecules. The default 0.1×/0.25× matrix therefore
+uses 109/273 waters or 48/121 methanols. Full-density cells can stress Packmol,
+MLpot pair budgets, and heat recovery; add them only as an explicitly optional
+follow-up tier.
 
 Tune or drop large sizes in `config.yaml` if placement fails.
 
