@@ -37,6 +37,57 @@ def test_scrub_stale_openmpi_env_when_charmm_mpi_linked(monkeypatch):
     assert "OMPI_COMM_WORLD_SIZE" not in os.environ
 
 
+def test_mpi_comm_valid_swallows_mpi4py_abi_runtime_error(monkeypatch):
+    """Serial CHARMM must not abort when mpi4py cannot dlopen venv libmpi."""
+    monkeypatch.setattr(charmm_mpi, "_mpi4py_available", lambda: True)
+    monkeypatch.setattr(charmm_mpi, "ensure_mpi4py_libmpi_env", lambda: None)
+
+    def _boom():
+        raise RuntimeError(
+            "cannot load MPI library\n"
+            "/tmp/venv/lib/libmpi.so: cannot open shared object file"
+        )
+
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _import(name, *args, **kwargs):
+        if name == "mpi4py" or name.startswith("mpi4py."):
+            _boom()
+        return real_import(name, *args, **kwargs)
+
+    with mock.patch("builtins.__import__", side_effect=_import):
+        assert charmm_mpi._mpi_comm_valid() is False
+
+
+def test_needs_mpi_setup_false_for_serial_charmm_outside_mpirun(monkeypatch):
+    monkeypatch.setenv("OMPI_COMM_WORLD_SIZE", "4")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ):
+        assert charmm_mpi._needs_mpi_setup() is False
+
+
+def test_recover_mpi_skips_mpi4py_when_serial_charmm(monkeypatch):
+    monkeypatch.setattr(
+        "mmml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm",
+        lambda **kwargs: None,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        side_effect=AssertionError("must not import mpi4py for serial CHARMM"),
+    ):
+        assert charmm_mpi.recover_mpi_for_charmm_after_jax(phase="test") is True
+
+
 def test_ensure_mpi_skips_when_disabled(monkeypatch):
     monkeypatch.setenv("MMML_NO_MPI_INIT", "1")
     assert charmm_mpi.ensure_mpi_for_charmm_domdec() is True

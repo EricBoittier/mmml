@@ -248,7 +248,36 @@ def selective_bonded_block_unsafe_under_mpi() -> bool:
 
 
 def _needs_mpi_setup() -> bool:
-    return charmm_lib_links_mpi() or _openmpi_env_without_launch() or _under_mpirun()
+    """True when CHARMM/mpi4py may need MPI env (linked lib, mpirun, or stale OMPI)."""
+    if charmm_lib_links_mpi():
+        return True
+    # Serial libcharmm: do not chase mpi4py ABI just because OMPI_* leftovers remain.
+    if not _under_mpirun():
+        return False
+    return True
+
+
+def ensure_mpi4py_libmpi_env() -> str | None:
+    """Point ``MPI4PY_LIBMPI`` at a resolvable OpenMPI ``libmpi`` for ABI discovery.
+
+    Serial ``libcharmm`` does not preload ``libmpi``, so ``from mpi4py import MPI``
+    otherwise probes ``$venv/lib/libmpi.so*`` and raises ``cannot load MPI library``.
+    """
+    if _truthy("MMML_NO_MPI_LD_PATH"):
+        return None
+    existing = (os.environ.get("MPI4PY_LIBMPI") or "").strip()
+    if existing and Path(existing).is_file():
+        os.environ.setdefault("MPI4PY_MPIABI", "openmpi")
+        return existing
+    for lib_dir in _openmpi_lib_search_dirs():
+        for name in ("libmpi.so.40", "libmpi.so", "libmpi.so.12"):
+            candidate = Path(lib_dir) / name
+            if candidate.is_file():
+                resolved = str(candidate.resolve())
+                os.environ["MPI4PY_LIBMPI"] = resolved
+                os.environ.setdefault("MPI4PY_MPIABI", "openmpi")
+                return resolved
+    return None
 
 
 def mpi_library_path_export() -> str:
@@ -2366,7 +2395,15 @@ def prepare_serial_charmm_mpi_env() -> None:
     )
 
     sanitize_xla_flags_env(quiet=True)
+    if not _under_mpirun() and not charmm_lib_links_mpi():
+        # Drop leftover launcher vars before any late ``import mpi4py``.
+        scrub_stale_openmpi_env(force=True)
     prepare_charmm_mpi_runtime()
+    # mpi4py's ABI loader needs an absolute libmpi even when CHARMM is serial.
+    ensure_mpi4py_libmpi_env()
+    if not charmm_lib_links_mpi():
+        # Prefer system OpenMPI on LD_LIBRARY_PATH for optional mpi4py imports.
+        ensure_charmm_mpi_library_path()
     if charmm_lib_links_mpi():
         configure_mpi4py_charmm_owned_init()
     _pin_charmm_openmp_for_serial_mlpot()
@@ -2409,11 +2446,16 @@ def _apply_cuda_mpi_env_defaults() -> None:
 def _mpi_comm_valid(*, barrier: bool = False) -> bool:
     if not _mpi4py_available():
         return False
-    from mpi4py import MPI
-
-    if not MPI.Is_initialized():
-        return False
+    ensure_mpi4py_libmpi_env()
     try:
+        from mpi4py import MPI
+    except Exception:
+        # Serial CHARMM + missing venv libmpi → mpi4py ABI RuntimeError.
+        return False
+
+    try:
+        if not MPI.Is_initialized():
+            return False
         MPI.COMM_WORLD.Get_size()
         if barrier:
             MPI.COMM_WORLD.Barrier()
@@ -2423,7 +2465,11 @@ def _mpi_comm_valid(*, barrier: bool = False) -> bool:
 
 
 def _init_mpi_thread_multiple() -> None:
-    from mpi4py import MPI
+    ensure_mpi4py_libmpi_env()
+    try:
+        from mpi4py import MPI
+    except Exception:
+        return
 
     if MPI.Is_initialized():
         return
@@ -2432,6 +2478,8 @@ def _init_mpi_thread_multiple() -> None:
         MPI.Init_thread(MPI.THREAD_MULTIPLE)
     except (AttributeError, NotImplementedError):
         MPI.Init()
+    except Exception:
+        return
 
 
 def _python_should_own_mpi_init() -> bool:
@@ -2505,7 +2553,12 @@ def recover_mpi_for_charmm_after_jax(*, phase: str = "after JAX warmup") -> bool
 
     sync_jax_gpu_before_charmm(phase=phase)
     _pin_charmm_openmp_for_serial_mlpot()
-    if _truthy("MMML_NO_MPI_INIT") or not _needs_mpi_setup():
+    if _truthy("MMML_NO_MPI_INIT"):
+        return True
+    # Serial libcharmm has no Fortran MPI world to sync; skip mpi4py ABI dlopen.
+    if not charmm_lib_links_mpi():
+        return True
+    if not _needs_mpi_setup():
         return True
     if _under_mpirun():
         if _mpi4py_available() and _mpi_comm_valid(barrier=True):
