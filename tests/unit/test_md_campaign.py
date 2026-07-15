@@ -305,7 +305,7 @@ def test_namespace_from_merged_preserves_no_periodic_charmm_vdw() -> None:
     assert "--periodic-charmm-vdw" not in cmd
 
 
-def test_namespace_from_merged_defaults_bonded_mm_mini_on_pycharmm() -> None:
+def test_namespace_from_merged_defaults_bonded_mm_mini_off_pycharmm() -> None:
     from mmml.cli.run.md_campaign import namespace_from_merged
 
     args = namespace_from_merged(
@@ -315,7 +315,7 @@ def test_namespace_from_merged_defaults_bonded_mm_mini_on_pycharmm() -> None:
             "composition": "BENZ:10",
         }
     )
-    assert args.bonded_mm_mini is True
+    assert args.bonded_mm_mini is False
     assert args.bonded_mm_mini_after == "mini,heat"
 
 

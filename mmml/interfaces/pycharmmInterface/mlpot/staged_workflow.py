@@ -1901,7 +1901,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     baseline = None
     if (
-        getattr(args, "bonded_mm_mini", True)
+        getattr(args, "bonded_mm_mini", False)
         and getattr(args, "charmm_pre_minimize", True)
         and not pretreat_mm
     ):
@@ -2023,7 +2023,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     flush=True,
                 )
             _pre_sd_threshold = getattr(args, "pre_sd_recovery_energy_threshold", None)
-            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", True):
+            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", False):
                 # Default: 100 kcal/mol per atom — catches severe Packmol clash energies
                 # (e.g. 17M kcal/mol for 890 atoms) while ignoring normal ML energies.
                 _pre_sd_threshold = 1000.0 * float(n_atoms)
@@ -2289,7 +2289,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
             _pre_sd_threshold = getattr(args, "pre_sd_recovery_energy_threshold", None)
-            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", True):
+            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", False):
                 _pre_sd_threshold = 100.0 * float(n_atoms)
             _pre_sd_grms = getattr(args, "pre_sd_recovery_grms_threshold", None)
             if _pre_sd_grms is None:

@@ -170,7 +170,7 @@ def test_cleanup_strategy_maps_to_pycharmm_and_jaxmd(cfg: dict) -> None:
     init = campaign["runs"]["pycharmm_init"]
     burst = campaign["runs"]["jaxmd_burst_01"]
     assert init["dynamics_overlap_action"] == "rescue"
-    assert init["bonded_mm_mini"] is True
+    assert init["bonded_mm_mini"] is True  # config.yaml opts in explicitly
     assert init["no_echeck_heat"] is True
     assert init["dynamics_overlap_memory_handoff"] is True
     assert init["heat_thermostat"] == "hoover"

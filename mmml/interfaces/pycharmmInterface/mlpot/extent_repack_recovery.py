@@ -189,7 +189,7 @@ def polish_after_extent_repack(
                 grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
 
     bonded_cfg = _bonded_cfg_from_overlap_config(config)
-    if bonded_cfg.nstep_sd > 0 and bool(getattr(args, "bonded_mm_mini", True) if args else True):
+    if bonded_cfg.nstep_sd > 0 and bool(getattr(args, "bonded_mm_mini", False) if args else False):
         _run_hybrid_bonded_mlpot_recovery(
             mlpot_ctx,
             bonded_cfg,

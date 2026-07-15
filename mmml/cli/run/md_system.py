@@ -883,10 +883,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--bonded-mm-mini",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
             "pycharmm: bonded-only SD if MM bonded strain exceeds post-MM-pre-min baseline "
-            "(default: on; heat always checked when enabled)"
+            "(default: off — opt in; can stall on PBC crystal free / CGENFF APPEND; "
+            "heat is always checked when enabled)"
         ),
     )
     parser.add_argument(
@@ -2538,7 +2539,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-pre-nve-charmm-update")
     elif getattr(args, "pre_nve_charmm_update", None) is True:
         cmd.append("--pre-nve-charmm-update")
-    if getattr(args, "bonded_mm_mini", True):
+    if getattr(args, "bonded_mm_mini", False):
         cmd.append("--bonded-mm-mini")
         cmd.extend(
             [

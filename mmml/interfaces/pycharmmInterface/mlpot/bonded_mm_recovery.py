@@ -1626,7 +1626,7 @@ def _bonded_mm_skip_reason_after_heat_overlap(
 
 def bonded_mm_mini_watches_stage(args: argparse.Namespace, stage: str) -> bool:
     """Whether ``maybe_run_bonded_mm_mini_after_stage`` should run for ``stage``."""
-    if not getattr(args, "bonded_mm_mini", True):
+    if not getattr(args, "bonded_mm_mini", False):
         return False
     st = stage.strip().lower()
     if st == "heat":

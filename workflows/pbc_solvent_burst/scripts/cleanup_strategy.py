@@ -72,7 +72,7 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
         "dynamics_overlap_min_distance": cfg.get("dynamics_overlap_min_distance", 1.5),
         "dynamics_intra_min_distance": cfg.get("dynamics_intra_min_distance", 0.5),
         "dynamics_overlap_check_interval": cfg.get("dynamics_overlap_check_interval", 500),
-        "bonded_mm_mini": cfg.get("bonded_mm_mini", True),
+        "bonded_mm_mini": cfg.get("bonded_mm_mini", False),
         "bonded_mm_mini_after": cfg.get("bonded_mm_mini_after", "mini,heat"),
         "bonded_mm_mini_steps": cfg.get("bonded_mm_mini_steps", 100),
         "charmm_pre_minimize": cfg.get("charmm_pre_minimize", True),
@@ -171,7 +171,7 @@ def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
         "dynamics_overlap_charmm_abnr_steps": int(
             mm.get("overlap_rescue_abnr_steps", ml.get("dynamics_overlap_charmm_abnr_steps", 400))
         ),
-        "bonded_mm_mini": bool(ml.get("bonded_mm_mini", True)),
+        "bonded_mm_mini": bool(ml.get("bonded_mm_mini", False)),
         "bonded_mm_mini_after": str(ml.get("bonded_mm_mini_after", "mini,heat")),
         "bonded_mm_mini_steps": int(ml.get("bonded_mm_mini_steps", 100)),
         "charmm_pre_minimize": bool(ml.get("charmm_pre_minimize", True)),

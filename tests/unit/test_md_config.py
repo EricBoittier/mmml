@@ -90,7 +90,7 @@ def test_dcm_liquid_workflow_resilient_merges_presets() -> None:
     d = cfg["defaults"]
     assert d["md_stages"] == "mini,heat,equi"
     assert d["calculator_pre_minimize"] is True
-    assert d["bonded_mm_mini"] is True
+    assert d.get("bonded_mm_mini", False) is False
     assert d["mini_box_equil_ps"] == pytest.approx(5.0)
     assert d["mini_lattice_abnr_steps"] == 300
     assert d["heat_thermostat"] == "hoover"

@@ -295,12 +295,14 @@ options:
   --checkpoint CHECKPOINT
                         Model checkpoint path.
   --mbd-checkpoint MBD_CHECKPOINT
-                        Optional learned MBD dispersion checkpoint. On the
-                        legacy ASE/JAX-MD hybrid path, adds E += mbd_weight *
-                        E_mbd. With --jaxmd-unified --ff zbl-mbd-multipoles,
-                        used once at build to freeze per-atom C6/C8/C10 for the
-                        classical pairwise dispersion term (default: bundled
-                        example).
+                        Optional learned MBD dispersion checkpoint. On ASE/JAX-
+                        MD and PyCHARMM hybrid paths, adds E += mbd_weight *
+                        E_mbd. When omitted on the hybrid path, auto-loads from
+                        the model checkpoint's recorded mbd_checkpoint if that
+                        path exists locally. With --jaxmd-unified --ff zbl-mbd-
+                        multipoles, used once at build to freeze per-atom
+                        C6/C8/C10 for the classical pairwise dispersion term
+                        (default: bundled example).
   --mbd-weight MBD_WEIGHT
                         Weight for the --mbd-checkpoint correction (default 1.0;
                         match training).
@@ -643,8 +645,9 @@ options:
                         pycharmm: split production into chained restart segments
   --bonded-mm-mini, --no-bonded-mm-mini
                         pycharmm: bonded-only SD if MM bonded strain exceeds
-                        post-MM-pre-min baseline (default: on; heat always
-                        checked when enabled)
+                        post-MM-pre-min baseline (default: off — opt in; can
+                        stall on PBC crystal free / CGENFF APPEND; heat is
+                        always checked when enabled)
   --bonded-mm-mini-after BONDED_MM_MINI_AFTER
                         pycharmm: comma-separated stages to check (default:
                         mini,heat; heat always)
@@ -700,7 +703,7 @@ options:
   --dyn-imgfrq N        pycharmm PBC: image/HB list rebuild every N steps
                         (default 50; larger=faster)
   --dyn-freq-cadence N  pycharmm: align heat/print cadence (ihtfrq, nprint, …)
-                        to N steps; decoupled from DCD nsavc (default: 50).
+                        to N steps; decoupled from DCD nsavc (default: 500).
                         Overlap CPT chunks still disable interior inbfrq/imgfrq.
                         Use 0 for legacy behavior.
   --pre-nve-charmm-update, --no-pre-nve-charmm-update
