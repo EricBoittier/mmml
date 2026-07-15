@@ -2490,6 +2490,13 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--md-stages", _default_stages[args.setup]])
     _append_optional(cmd, "--tag", getattr(args, "tag", None))
     _append_optional(cmd, "--checkpoint", args.checkpoint)
+    _append_optional(cmd, "--mbd-checkpoint", getattr(args, "mbd_checkpoint", None))
+    _append_optional(cmd, "--mbd-weight", getattr(args, "mbd_weight", None))
+    _append_optional(cmd, "--multipole-checkpoint", getattr(args, "multipole_checkpoint", None))
+    _append_optional(cmd, "--sampler", getattr(args, "sampler", None))
+    _append_optional(cmd, "--ff", getattr(args, "ff", None))
+    if getattr(args, "jaxmd_unified", False):
+        cmd.append("--jaxmd-unified")
     _append_optional(cmd, "--electrostatics-damping-sigma", getattr(args, "electrostatics_damping_sigma", None))
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--box-size", args.box_size)
