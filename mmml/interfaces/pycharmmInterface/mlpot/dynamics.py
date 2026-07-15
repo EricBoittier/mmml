@@ -1453,6 +1453,116 @@ def _maybe_abort_sd_on_grms(
     return False
 
 
+# HEAT dynamics can diverge within the first ramp segments when the starting
+# geometry is over-stressed: hybrid GRMS jumps by an order of magnitude and the
+# integrator is already unrecoverable.  Aborting on the jump is more honest than
+# redrawing velocities and integrating garbage.
+HEAT_GRMS_JUMP_ABORT_FACTOR = 10.0
+# Below this absolute GRMS a large ratio is just thermostat noise on a quiet
+# baseline, not a real force blow-up; do not abort.
+HEAT_GRMS_JUMP_ABORT_FLOOR_KCALMOL_A = 150.0
+
+
+def heat_grms_jump_abort_reason(
+    baseline_grms: float | None,
+    current_grms: float | None,
+    *,
+    factor: float = HEAT_GRMS_JUMP_ABORT_FACTOR,
+    floor_kcalmol_A: float = HEAT_GRMS_JUMP_ABORT_FLOOR_KCALMOL_A,
+) -> str | None:
+    """Reason to abort HEAT on an order-of-magnitude hybrid-GRMS jump, else None.
+
+    Aborts only when the current GRMS is both a ``factor``× multiple of the heat
+    baseline **and** above an absolute floor, so a large ratio on a quiet
+    baseline (thermostat noise) does not trip it.
+    """
+    if baseline_grms is None or current_grms is None:
+        return None
+    b = float(baseline_grms)
+    c = float(current_grms)
+    if not (np.isfinite(b) and np.isfinite(c)):
+        return None
+    if b <= 1.0e-6 or c < float(floor_kcalmol_A):
+        return None
+    if c >= float(factor) * b:
+        return (
+            f"hybrid GRMS jumped {b:.1f} -> {c:.1f} kcal/mol/Å "
+            f"(≥{float(factor):.0f}× heat baseline; force instability, "
+            "not thermostat noise)"
+        )
+    return None
+
+
+class HeatGrmsJumpAbort(RuntimeError):
+    """Raised when HEAT hybrid GRMS jumps by an order of magnitude."""
+
+
+def _maybe_abort_heat_on_grms_jump(
+    mlpot_ctx: Any,
+    *,
+    overlap_context: str,
+    chunk_index: int,
+    n_chunks: int,
+    global_step: int,
+) -> None:
+    """Seed the heat GRMS baseline, then abort HEAT on an order-of-magnitude jump.
+
+    The first heat chunk sets ``mlpot_ctx.heat_grms_jump_baseline``; later chunks
+    that jump ≥ factor× that baseline (and above the absolute floor) raise
+    :class:`HeatGrmsJumpAbort`, unless ``--allow-high-grms`` downgrades it to a
+    warning.  Velocity redraw is deliberately not attempted as primary recovery.
+    """
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if bool(getattr(args, "no_heat_grms_jump_abort", False)):
+        return
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        refresh_mlpot_energy_and_grms,
+    )
+
+    current = refresh_mlpot_energy_and_grms(
+        mlpot_ctx,
+        context="",
+        verbose=False,
+    )
+    if current is None or not np.isfinite(current):
+        return
+
+    baseline = getattr(mlpot_ctx, "heat_grms_jump_baseline", None)
+    if baseline is None or not np.isfinite(baseline):
+        mlpot_ctx.heat_grms_jump_baseline = float(current)
+        return
+
+    factor = float(
+        getattr(args, "heat_grms_jump_factor", None) or HEAT_GRMS_JUMP_ABORT_FACTOR
+    )
+    floor = float(
+        getattr(args, "heat_grms_jump_floor_kcalmol_A", None)
+        or HEAT_GRMS_JUMP_ABORT_FLOOR_KCALMOL_A
+    )
+    reason = heat_grms_jump_abort_reason(
+        float(baseline),
+        float(current),
+        factor=factor,
+        floor_kcalmol_A=floor,
+    )
+    if reason is None:
+        return
+
+    where = (
+        f"HEAT chunk {chunk_index + 1}/{n_chunks} (step {global_step}, "
+        f"{overlap_context})"
+    )
+    if bool(getattr(args, "allow_high_grms", False)):
+        print(f"WARN: {where}: {reason} (continuing: --allow-high-grms)", flush=True)
+        return
+    raise HeatGrmsJumpAbort(
+        f"{where}: {reason}. Aborting HEAT; the starting geometry is over-stressed "
+        "— tighten pre-dynamics minimization (lower fmax / max-force gate) rather "
+        "than redrawing velocities."
+    )
+
+
 def _sync_mlpot_lists_after_sd_chunk(
     config: MinimizeWithMlpotConfig,
     *,
@@ -7579,6 +7689,13 @@ def run_dynamics_with_io(
                         mlpot_ctx,
                         n_monomers=int(getattr(overlap, "n_monomers", 1) or 1),
                         context=str(overlap_context),
+                        global_step=int(steps_done),
+                    )
+                    _maybe_abort_heat_on_grms_jump(
+                        mlpot_ctx,
+                        overlap_context=str(overlap_context),
+                        chunk_index=chunk_index,
+                        n_chunks=n_chunks,
                         global_step=int(steps_done),
                     )
                 if (

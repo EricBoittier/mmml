@@ -154,6 +154,8 @@ class MlpotContext:
     pre_mlpot_iblo: list[int] | None = None
     pre_mlpot_inb: list[int] | None = None
     sd_watchdog_baseline_grms: float | None = None
+    # First-heat-chunk hybrid GRMS; later chunks abort on an order-of-magnitude jump.
+    heat_grms_jump_baseline: float | None = None
     # In-memory templates for extent fly-off repack (no disk CRD/restart required).
     geometry_baseline_positions: np.ndarray | None = None
     geometry_mini_positions: np.ndarray | None = None
