@@ -103,6 +103,11 @@ class RunCell:
     box_size: float
     heat_thermostat: str | None = None
     sweep_id: str | None = None
+    # Mixture fields expected by the shared pbc_solvent_burst helpers
+    # (cell_ml_atoms/cell_bulk_total); empty means a pure-solvent cell.
+    components: tuple[tuple[str, int], ...] = ()
+    mole_fractions: tuple[tuple[str, float], ...] = ()
+    mixture_key: str = ""
 
 
 def matrix_setup_ids(cfg: dict[str, Any]) -> list[str]:
