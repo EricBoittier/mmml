@@ -17,7 +17,10 @@ usage: mmml md-system [-h]
                       [--backend {auto,ase,jaxmd,pycharmm}]
                       [--checkpoint CHECKPOINT]
                       [--mbd-checkpoint MBD_CHECKPOINT]
-                      [--mbd-weight MBD_WEIGHT] [--jaxmd-unified]
+                      [--mbd-weight MBD_WEIGHT]
+                      [--multipole-checkpoint MULTIPOLE_CHECKPOINT]
+                      [--sampler {md,rigid}] [--ff {cgenff,zbl-mbd-multipoles}]
+                      [--jaxmd-unified]
                       [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
                       [--output-dir OUTPUT_DIR] [--job-name JOB_NAME]
                       [--jobs-dir JOBS_DIR] [--template-pdb TEMPLATE_PDB]
@@ -292,14 +295,27 @@ options:
   --checkpoint CHECKPOINT
                         Model checkpoint path.
   --mbd-checkpoint MBD_CHECKPOINT
-                        Optional learned MBD dispersion checkpoint. Adds a
-                        whole-system E += mbd_weight * E_mbd correction to the
-                        hybrid ML/MM calculator (ASE / JAX-MD backends).
-                        Required when the model was trained with an additive MBD
-                        term, else that dispersion physics is silently omitted.
+                        Optional learned MBD dispersion checkpoint. On the
+                        legacy ASE/JAX-MD hybrid path, adds E += mbd_weight *
+                        E_mbd. With --jaxmd-unified --ff zbl-mbd-multipoles,
+                        used once at build to freeze per-atom C6/C8/C10 for
+                        classical pairwise dispersion (default: bundled example).
   --mbd-weight MBD_WEIGHT
                         Weight for the --mbd-checkpoint correction (default 1.0;
                         match training).
+  --multipole-checkpoint MULTIPOLE_CHECKPOINT
+                        Optional learned multipole checkpoint. With
+                        --jaxmd-unified --ff zbl-mbd-multipoles, used once at
+                        build to freeze fragment multipoles for classical pair
+                        electrostatics during rigid MC (default: bundled example).
+  --sampler {md,rigid}  Propagator for --jaxmd-unified: md (JaxmdDriver) or
+                        rigid (RigidBodySampler Metropolis MC). Default: md.
+  --ff {cgenff,zbl-mbd-multipoles}
+                        Intermolecular FF preset for --jaxmd-unified. cgenff:
+                        CHARMM/CGenFF mm_nonbonded only (default when --sampler
+                        rigid and no --checkpoint). zbl-mbd-multipoles:
+                        intermolecular ZBL (defaults) + fixed multipoles +
+                        fixed C6 dispersion.
   --jaxmd-unified       EXPERIMENTAL: run --backend jaxmd through the unified
                         mmml.md pipeline (mmml.cli.run.md_system_unified)
                         instead of the legacy md_pbc_suite.jaxmd inline loop.

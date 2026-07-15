@@ -11,7 +11,7 @@ import argparse
 import numpy as np
 import pytest
 
-from mmml.md.energy.registry import EnergyContext, HybridEnergy
+from mmml.md.energy.registry import EnergyContext
 from mmml.md.energy.terms.multipole import (
     HARTREE_TO_EV,
     MultipoleTerm,
