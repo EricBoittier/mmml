@@ -118,7 +118,7 @@ def dense_cell_mlpot_overrides(cell: Any, cfg: dict[str, Any]) -> dict[str, Any]
         overrides["dynamics_overlap_charmm_sd_steps"] = max(400, sd)
 
     if n >= 200:
-        overrides["ml_batch_size"] = min(int(cfg.get("ml_batch_size", 2048)), 1024)
+        overrides["ml_batch_size"] = min(int(cfg.get("ml_batch_size", 32)), 32)
 
     if bulk_fraction >= 0.75 and dense:
         intra = float(cfg.get("dynamics_intra_min_distance", 0.5))

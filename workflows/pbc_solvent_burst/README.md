@@ -148,6 +148,9 @@ Repair defaults: `dynamics_overlap_action: rescue` (PyCHARMM), bonded-MM after m
 
 ## Run
 
+For SciCORE, use the validated module, MPI, QoS, and dependency-gated launch
+procedure in [the SciCORE environment guide](../../docs/scicore.md).
+
 ```bash
 cd workflows/pbc_solvent_burst
 bash scripts/preflight.sh
