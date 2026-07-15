@@ -27,11 +27,18 @@ from typing import Any
 
 import numpy as np
 
-__all__ = ["check_md_system_args_supported", "build_packmol_system_with_ffparams", "run_unified_jaxmd"]
+__all__ = [
+    "check_md_system_args_supported",
+    "build_packmol_system_with_ffparams",
+    "build_energy_context",
+    "run_unified_jaxmd",
+]
 
 
 def check_md_system_args_supported(args: Any) -> None:
     """Raise clearly (before any CHARMM build) for combinations not yet wired."""
+    from mmml.md.lowering import terms_from_md_system_args
+
     builder = getattr(args, "builder", None)
     if builder not in (None, "packmol"):
         raise NotImplementedError(
@@ -41,8 +48,10 @@ def check_md_system_args_supported(args: Any) -> None:
         raise NotImplementedError("--jaxmd-unified does not yet support --template-pdb")
     if getattr(args, "continue_from", None):
         raise NotImplementedError("--jaxmd-unified does not yet support --continue-from (handoff)")
-    if not getattr(args, "checkpoint", None):
-        raise ValueError("--jaxmd-unified requires --checkpoint")
+
+    terms = terms_from_md_system_args(args)
+    if "ml_intra" in terms and not getattr(args, "checkpoint", None):
+        raise ValueError("--jaxmd-unified with ml_intra requires --checkpoint")
 
 
 def build_packmol_system_with_ffparams(spec: Any):
@@ -94,6 +103,92 @@ def _load_model(checkpoint_path: Path) -> tuple[Any, Any]:
     return model, params
 
 
+def _freeze_multipoles(system, multipole_checkpoint: Path | None) -> dict[str, Any]:
+    """Predict fragment multipoles once and return fixed_multipoles options."""
+    from ase import Atoms
+
+    from mmml.models.multipoles.electrostatics import (
+        LearnedMolecularMultipoleElectrostatics,
+        resolve_multipoles_checkpoint,
+    )
+
+    ckpt = resolve_multipoles_checkpoint(multipole_checkpoint)
+    calc = LearnedMolecularMultipoleElectrostatics(checkpoint=ckpt)
+    atoms = Atoms(numbers=np.asarray(system.Z), positions=np.asarray(system.R))
+    atoms.arrays["mol_id"] = np.asarray(system.mol_id, dtype=np.int32)
+    pred = calc.predict_fragment_multipoles(atoms)
+    fragments = [
+        np.asarray(ix, dtype=np.int32) for ix in system.monomer_indices
+    ]
+    charges = np.asarray(pred["charges"], dtype=np.float64)
+    dipoles = np.asarray(pred["dipoles_bohr"], dtype=np.float64)
+    return {
+        "charges": charges,
+        "dipoles_body_bohr": dipoles,
+        "ref_positions_A": np.asarray(system.R, dtype=np.float64),
+        "fragment_indices": fragments,
+    }
+
+
+def _freeze_dispersion(system, mbd_checkpoint: Path | None, mbd_weight: float) -> dict[str, Any]:
+    """Predict per-atom C6/alpha once; map to QDO coefficients + damping."""
+    from ase import Atoms
+
+    from mmml.models.mbd.calculator import QCMLMBDCalculator, resolve_mbd_checkpoint
+
+    ckpt = resolve_mbd_checkpoint(mbd_checkpoint)
+    calc = QCMLMBDCalculator(checkpoint=ckpt)
+    atoms = Atoms(numbers=np.asarray(system.Z), positions=np.asarray(system.R))
+    pred = calc.predict_mbd(atoms)
+    c6 = np.asarray(pred["c6_native"], dtype=np.float64).reshape(-1)
+    # QDO wants (N, 3) C6/C8/C10; without higher multipole C_n from the model,
+    # use C8=C10=0 and a simple damping radius from polarizability when present.
+    coeffs = np.zeros((system.n_atoms, 3), dtype=np.float64)
+    coeffs[:, 0] = c6
+    if "polarizabilities_bohr3" in pred:
+        alpha = np.asarray(pred["polarizabilities_bohr3"], dtype=np.float64).reshape(-1)
+        damp = np.maximum(alpha ** (1.0 / 3.0), 1e-3)
+    else:
+        damp = np.ones(system.n_atoms, dtype=np.float64)
+    return {
+        "coefficients_per_atom": coeffs,
+        "damping_radii": damp,
+        "weight": float(mbd_weight),
+    }
+
+
+def build_energy_context(args: Any, system, terms: tuple[str, ...]):
+    """Build :class:`EnergyContext` for the selected terms (ML and/or fixed QCML)."""
+    from mmml.md.energy.registry import EnergyContext
+    from mmml.md.energy.terms.zbl import DEFAULT_ZBL_CUTOFF_A, DEFAULT_ZBL_CUTON_A
+
+    options: dict[str, Any] = {
+        "zbl_cuton": DEFAULT_ZBL_CUTON_A,
+        "zbl_cutoff": DEFAULT_ZBL_CUTOFF_A,
+        "mbd_weight": float(getattr(args, "mbd_weight", 1.0)),
+    }
+
+    model = params = None
+    if "ml_intra" in terms:
+        ckpt = getattr(args, "checkpoint", None)
+        if ckpt is None:
+            raise ValueError("ml_intra requires --checkpoint")
+        model, params = _load_model(Path(ckpt))
+
+    if "multipole" in terms and "fixed_multipoles" not in options:
+        options["fixed_multipoles"] = _freeze_multipoles(
+            system, getattr(args, "multipole_checkpoint", None)
+        )
+    if "mbd" in terms and "fixed_dispersion" not in options:
+        options["fixed_dispersion"] = _freeze_dispersion(
+            system,
+            getattr(args, "mbd_checkpoint", None),
+            float(getattr(args, "mbd_weight", 1.0)),
+        )
+
+    return EnergyContext(model=model, params=params, options=options)
+
+
 def run_unified_jaxmd(args: Any) -> int:
     """Run ``args`` through the unified ``mmml.md`` pipeline; return an exit code."""
     check_md_system_args_supported(args)
@@ -104,7 +199,6 @@ def run_unified_jaxmd(args: Any) -> int:
 
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
     from mmml.md.assemble import assemble_and_run
-    from mmml.md.energy.registry import EnergyContext
     from mmml.md.lowering import runconfig_from_md_system_args
 
     # Explicit and idempotent: unlike PeptideWaterSystemBuilder's underlying
@@ -115,8 +209,7 @@ def run_unified_jaxmd(args: Any) -> int:
 
     run_config = runconfig_from_md_system_args(args)
     system = build_packmol_system_with_ffparams(run_config.system)
-    model, params = _load_model(run_config.checkpoint)
-    ctx = EnergyContext(model=model, params=params)
+    ctx = build_energy_context(args, system, run_config.terms)
 
     traj = assemble_and_run(run_config, system=system, ctx=ctx)
 
@@ -127,7 +220,7 @@ def run_unified_jaxmd(args: Any) -> int:
             f"E0={energies[0]:.4f} eV, Efinal={energies[-1]:.4f} eV",
             flush=True,
         )
-    if not np.all(np.isfinite(energies)):
+    if energies is None or not np.all(np.isfinite(energies)):
         print("mmml md-system: jaxmd-unified produced non-finite energies", file=sys.stderr)
         return 1
     return 0
