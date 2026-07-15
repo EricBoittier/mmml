@@ -764,10 +764,13 @@ def test_pbc_nbond_cutoffs_respects_half_box():
     assert cuts38.was_capped
 
     cuts55 = pbc_nbond_cutoffs(55.0)
-    assert cuts55.cutnb == pytest.approx(18.0)
-    assert cuts55.cutim == pytest.approx(22.0)
+    # Interaction cutoff (ctofnb) stays at the vacuum 17 Å; pairlist cutnb carries
+    # a 2 Å skin above it, and cutim tracks cutnb + the image offset.
+    assert cuts55.cutnb == pytest.approx(19.0)
+    assert cuts55.cutim == pytest.approx(23.0)
     assert cuts55.ctonnb == pytest.approx(13.0)
     assert cuts55.ctofnb == pytest.approx(17.0)
+    assert cuts55.cutnb - cuts55.ctofnb == pytest.approx(2.0)
     assert not cuts55.was_capped
 
 
@@ -1531,7 +1534,9 @@ def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
         mm_switch_on=DEFAULT_MM_SWITCH_ON,
         mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
     )
-    assert cuts.cutnb == pytest.approx(DEFAULT_MM_SWITCH_ON + DEFAULT_MM_SWITCH_WIDTH)
+    # Pairlist cutnb = interaction cutoff (mm_switch_on + width) + 2 Å skin.
+    assert cuts.ctofnb == pytest.approx(DEFAULT_MM_SWITCH_ON + DEFAULT_MM_SWITCH_WIDTH - 0.72, abs=0.05)
+    assert cuts.cutnb == pytest.approx(cuts.ctofnb + 2.0)
     assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
     assert cuts.cutnb < 0.5 * 38.0
 
@@ -1555,7 +1560,7 @@ def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
         mm_switch_on=DEFAULT_MM_SWITCH_ON,
         mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
     )
-    assert pretreat.cutnb == pytest.approx(13.0)
+    assert pretreat.cutnb == pytest.approx(14.28, rel=0, abs=0.01)
     args = argparse.Namespace(
         mm_switch_on=12.0,
         mm_switch_width=6.0,
@@ -1563,7 +1568,7 @@ def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
     stash_pbc_nbond_cutoffs(args, pretreat)
     resolved = resolve_pbc_nbond_cutoffs(38.0, workflow_args=args)
     assert resolved is pretreat
-    assert resolved.cutnb == pytest.approx(13.0)
+    assert resolved.cutnb == pytest.approx(14.28, rel=0, abs=0.01)
     assert resolved.ctonnb == pytest.approx(9.0)
     assert resolved.ctofnb == pytest.approx(12.28, rel=0, abs=0.01)
 
