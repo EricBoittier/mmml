@@ -77,3 +77,28 @@ Score any checkpoint with:
     python local_validation/rescore.py \
         "CGenFF=surfaces/cgenff_direct.csv" \
         "L2 0.1=surfaces/<scan>.csv"
+
+## Results (all runs annealed, scored vs PBE0-D3BJ on 14 trained pairs)
+
+| model | mean RMSE | n≥300 | note |
+|---|---|---|---|
+| CGenFF (force field) | 1.07 | 0.96 | transferable baseline; beats every ML variant overall |
+| ML best (step5000) | 3.63 | **0.54** | best where it has data; erases prior on sparse pairs |
+| fixed-prior only (50k) | 6.66 | 4.63 | negative control: freezing prior alone double-counts |
+| 150k annealed, free | 4.80 | 1.58 | training longer at sane LR does not help |
+| scalar L2 λ=0.1 | 4.46 | 2.06 | fixes sparse dispersion, over-taxes rich H-bonds |
+| learned trust map | 4.41 | 2.05 | as tuned (hyperprior=0.1) ≈ weak scalar |
+
+**Verdict:** no interaction-prior variant beats the untouched step-5000 checkpoint, and
+none beats CGenFF. The scalar λ and the trust map both trade sparse-pair robustness
+(BENZ–BENZ 3.62 → 0.6–0.8) for well-covered accuracy (n≥300 0.54 → ~2.0).
+
+**Why the trust map underdelivered:** the learned λ matrix at 25k spans only 0.72–0.76 —
+`--trust-map-hyperprior 0.1` over-tied the buckets toward their common mean, so the map
+is nearly uniform and behaves like a weak global scalar. The *direction* is right (H–C,
+C–C most shrunk; O-containing pairs least) and ACE–TIP3 is gentler under the map (1.98)
+than under scalar λ=0.1 (2.84), but the differentiation is too small to matter.
+
+**Next tuning:** loosen the hyperprior (0.1 → 0.01) and/or raise `--trust-map-evidence`
+so the per-chemistry λ can actually separate dispersion (shrink hard) from H-bonds
+(leave alone). Only then is the hierarchical hypothesis fairly tested.

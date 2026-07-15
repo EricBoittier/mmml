@@ -343,10 +343,12 @@ NPR_TIERS: dict[str, int] = {
     "xxxlarge": 56_000_000,
 }
 
-# CGenFF all-atom monomer sizes for PBC burst solvents (DCM / ACO campaign).
+# CGenFF all-atom monomer sizes for supported PBC burst solvents.
 PBC_BURST_ML_ATOMS_PER_MONOMER: dict[str, int] = {
     "DCM": 5,
     "ACO": 10,
+    "TIP3": 3,
+    "MEOH": 6,
 }
 
 
