@@ -681,20 +681,21 @@ def setup_calculator(
     if _jax_mm_spoof_mode:
         from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
             build_jax_mm_spoof_batch_apply,
-            resolve_monomer_bonded_evaluator,
+            resolve_monomer_bonded_evaluators,
         )
 
-        if not _all_same_size:
-            raise ValueError("jax_mm_clone spoof requires uniform atoms_per_monomer")
-        _jax_mm_spoof_monomer_eval = resolve_monomer_bonded_evaluator(
-            atoms_per_monomer=int(atoms_per_monomer_list[0]),
+        _jax_mm_spoof_monomer_evals = resolve_monomer_bonded_evaluators(
+            atoms_per_monomer_list,
             monomer_psf=jax_mm_spoof_psf,
             energy_unit="eV",
         )
+        _jax_mm_spoof_monomer_eval = _jax_mm_spoof_monomer_evals[
+            int(atoms_per_monomer_list[0])
+        ]
         _jax_mm_spoof_batch_apply = build_jax_mm_spoof_batch_apply(
-            atoms_per_monomer=int(atoms_per_monomer_list[0]),
+            atoms_per_monomer=atoms_per_monomer_list,
             max_atoms=max_atoms,
-            monomer_eval=_jax_mm_spoof_monomer_eval,
+            monomer_evals=_jax_mm_spoof_monomer_evals,
         )
         MODEL = None
         params = None
@@ -873,19 +874,29 @@ def setup_calculator(
         emit_tagged,
     )
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units
-    from mmml.interfaces.pycharmmInterface.mbd_term import resolve_companion_mbd
+    from mmml.models.mbd.calculator import resolve_companion_mbd
 
     _resolved_mbd_path, _resolved_mbd_weight, _mbd_missing_path = resolve_companion_mbd(
         mbd_checkpoint,
         mbd_weight,
         config,
     )
+    if _resolved_mbd_path is not None:
+        recorded_mbd = (config or {}).get("mbd_checkpoint")
+        if recorded_mbd and Path(str(recorded_mbd)).expanduser().resolve() != _resolved_mbd_path.resolve():
+            setup_rows.append(
+                (
+                    "mbd_remapped",
+                    f"{recorded_mbd} → {_resolved_mbd_path}",
+                )
+            )
     if _mbd_missing_path:
         import warnings
 
         warnings.warn(
             f"Checkpoint was trained with mbd_checkpoint={_mbd_missing_path} "
-            "but that path doesn't exist here — skipping the MBD correction "
+            "but that path doesn't exist here and no local twin was found — "
+            "skipping the MBD correction "
             "(energies will be Spooky/PhysNet-residual-only, not matching training). "
             "Pass mbd_checkpoint=<path that exists here> to fix this.",
             stacklevel=2,
@@ -1696,9 +1707,11 @@ def setup_calculator(
             sparse_dimer_positions = dimer_positions[dimer_idx]
             sparse_dimer_atomic = dimer_atomic[dimer_idx]
             sparse_dimer_N = dimer_N_arr[dimer_idx]
+            sparse_dimer_n_a = dimer_n_a[dimer_idx]
             batch_data["R"] = jnp.concatenate([monomer_positions, sparse_dimer_positions])
             batch_data["Z"] = jnp.concatenate([monomer_atomic, sparse_dimer_atomic])
             batch_data["N"] = jnp.concatenate([monomer_N_arr, sparse_dimer_N])
+            batch_data["N_a"] = jnp.concatenate([monomer_N_arr, sparse_dimer_n_a])
             sparse_batch_size = n_mono_local + n_dimer_local
             batches = prepare_batches_md(
                 batch_data, batch_size=sparse_batch_size, num_atoms=max_atoms
@@ -1749,9 +1762,11 @@ def setup_calculator(
             sparse_dimer_positions = dimer_positions[active_indices_safe]
             sparse_dimer_atomic = dimer_atomic[active_indices_safe]
             sparse_dimer_N = jnp.where(active_indices < n_dimers, dimer_N_arr[active_indices], dimer_N_arr[0])
+            sparse_dimer_n_a = jnp.where(active_indices < n_dimers, dimer_n_a[active_indices], dimer_n_a[0])
             batch_data["R"] = jnp.concatenate([monomer_positions, sparse_dimer_positions])
             batch_data["Z"] = jnp.concatenate([monomer_atomic, sparse_dimer_atomic])
             batch_data["N"] = jnp.concatenate([monomer_N_arr, sparse_dimer_N])
+            batch_data["N_a"] = jnp.concatenate([monomer_N_arr, sparse_dimer_n_a])
             sparse_batch_size = n_monomers + _max_active_dimers
             cached = _cached_sparse_batch_structure if _cached_sparse_batch_structure is not None else None
             batches = prepare_batches_md(batch_data, batch_size=sparse_batch_size, num_atoms=max_atoms, cached_structure=cached)[0]
@@ -1763,6 +1778,7 @@ def setup_calculator(
             batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
             dimer_N = dimer_n_a + dimer_n_b
             batch_data["N"] = jnp.concatenate([monomer_N_arr, dimer_N])
+            batch_data["N_a"] = jnp.concatenate([monomer_N_arr, dimer_n_a])
             _effective_batch_size = n_monomers + n_dimers
             cached = _cached_batch_structure if (_cached_batch_structure is not None and _effective_batch_size == full_batch_size) else None
             batches = prepare_batches_md(batch_data, batch_size=_effective_batch_size, num_atoms=max_atoms, cached_structure=cached)[0]
@@ -1783,7 +1799,12 @@ def setup_calculator(
         ) -> Dict[str, Array]:
             """Applies the ML model to batched inputs (with optional chunking)."""
             if _jax_mm_spoof_mode:
-                return _jax_mm_spoof_batch_apply(atomic_numbers, positions, batches["N"])
+                return _jax_mm_spoof_batch_apply(
+                    atomic_numbers,
+                    positions,
+                    batches["N"],
+                    batches.get("N_a"),
+                )
             if _do_chunked:
                 R_full = positions.reshape(_effective_batch_size, max_atoms, 3)
                 Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)

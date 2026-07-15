@@ -4811,6 +4811,33 @@ def _drop_trajectory_io(io: Optional[CharmmTrajectoryFiles]) -> Optional[CharmmT
     )
 
 
+def _overlap_should_drop_chunk_trajectory(
+    *,
+    suppress_trajectory: bool,
+    has_nsavc: bool,
+    split_trajectory: bool,
+    bussi_sub_chunk: int | None,
+    cpt_sub_chunk: int | None,
+) -> bool:
+    """Whether the outer overlap loop should strip ``chunk_io.trajectory``.
+
+    Outer ``_harmonize_overlap_chunk_frequencies`` sets ``_suppress_trajectory``
+    when ``nsavc >=`` the *outer* chunk ``nstep``. Bussi/CPT micro-chunk runners
+    then re-enable DCD on the save-boundary (or last) micro-chunk. Dropping the
+    traj path before those runners leave them with ``traj_active=False`` forever
+    (``DCD deferred`` on every micro-step).
+    """
+    if not has_nsavc:
+        return True
+    if not suppress_trajectory:
+        return False
+    if split_trajectory and (
+        bussi_sub_chunk is not None or cpt_sub_chunk is not None
+    ):
+        return False
+    return True
+
+
 # Per-chunk DCDs at nsavc=1 and overlap interval 2 create O(nstep) tiny files.
 _OVERLAP_MAX_CHUNK_DCD_FILES = 64
 # Sparse ``nsavc`` (HEAT / equil): one small DCD per overlap chunk is fine.
@@ -5032,8 +5059,13 @@ def _harmonize_overlap_chunk_frequencies(
                         chunk_kw.pop(k, None)
                     chunk_kw["nsavv"] = n
                     _emit_overlap_log(
-                        f"chunk: skip DCD (target nsavc={old} >= nstep={n}; "
-                        f"CHARMM nsavc={chunk_kw['nsavc']}; "
+                        f"chunk: skip DCD (nsavc={old} >= nstep={n}"
+                        + (
+                            f"; stage target={int(target)}"
+                            if int(target) != old
+                            else ""
+                        )
+                        + f"; CHARMM nsavc={chunk_kw['nsavc']}; "
                         f"global step {int(global_step_start)}–{int(global_step_start) + n})",
                     )
                 if cadence_active and not chunk_kw.get("_suppress_trajectory"):
@@ -7311,7 +7343,23 @@ def run_dynamics_with_io(
                         overlap_context=overlap_context,
                     )
                 suppress_chunk_traj = bool(chunk_kw.get("_suppress_trajectory", False))
-                if suppress_chunk_traj or "nsavc" not in chunk_kw:
+                cpt_sub_chunk = (
+                    _cpt_stability_chunk_nstep(chunk_kw, chunk_nstep)
+                    if bool(chunk_kw.get("cpt"))
+                    else None
+                )
+                bussi_sub_chunk = (
+                    _bussi_heat_chunk_nstep(chunk_kw, chunk_nstep)
+                    if cpt_sub_chunk is None
+                    else None
+                )
+                if _overlap_should_drop_chunk_trajectory(
+                    suppress_trajectory=suppress_chunk_traj,
+                    has_nsavc="nsavc" in chunk_kw,
+                    split_trajectory=split_trajectory,
+                    bussi_sub_chunk=bussi_sub_chunk,
+                    cpt_sub_chunk=cpt_sub_chunk,
+                ):
                     chunk_io = _drop_trajectory_io(chunk_io)
                 if (
                     split_trajectory
@@ -7348,6 +7396,9 @@ def run_dynamics_with_io(
                         ),
                     )
 
+                # Continuous (non-split) DCD: only open on the first outer chunk
+                # when that chunk is not suppressed. Split + Bussi/CPT reopen the
+                # per-chunk path via ``CharmmTrajectoryFiles.open_for_run``.
                 chunk_traj_iokw = (
                     trajectory_iokw
                     if (
@@ -7359,16 +7410,6 @@ def run_dynamics_with_io(
                         )
                     )
                     else {}
-                )
-                cpt_sub_chunk = (
-                    _cpt_stability_chunk_nstep(chunk_kw, chunk_nstep)
-                    if bool(chunk_kw.get("cpt"))
-                    else None
-                )
-                bussi_sub_chunk = (
-                    _bussi_heat_chunk_nstep(chunk_kw, chunk_nstep)
-                    if cpt_sub_chunk is None
-                    else None
                 )
                 if cpt_sub_chunk is not None:
                     last_dyn = _run_cpt_stability_subchunked(

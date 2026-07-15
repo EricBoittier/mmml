@@ -1020,6 +1020,52 @@ def test_run_bussi_heat_subchunked_keeps_trajectory_when_split():
     assert captured[0]["iokw"] == {"iuncrd": 1}
 
 
+def test_overlap_should_not_drop_traj_before_bussi_when_outer_suppresses():
+    """Regression: outer nsavc>>chunk nstep used to strip traj before Bussi."""
+    from pathlib import Path
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _drop_trajectory_io,
+        _harmonize_overlap_chunk_frequencies,
+        _overlap_should_drop_chunk_trajectory,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 300.0,
+        "timestep": 0.00025,
+        "nstep": 500,
+        "nsavc": 1600,
+        "_target_dcd_nsavc": 1600,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=500, ihtfrq=250, timestep_ps=0.00025)
+    _harmonize_overlap_chunk_frequencies(
+        kw,
+        500,
+        global_step_start=0,
+        split_trajectory=True,
+    )
+    assert kw.get("_suppress_trajectory") is True
+    assert not _overlap_should_drop_chunk_trajectory(
+        suppress_trajectory=True,
+        has_nsavc=True,
+        split_trajectory=True,
+        bussi_sub_chunk=250,
+        cpt_sub_chunk=None,
+    )
+    assert _overlap_should_drop_chunk_trajectory(
+        suppress_trajectory=True,
+        has_nsavc=True,
+        split_trajectory=True,
+        bussi_sub_chunk=None,
+        cpt_sub_chunk=None,
+    )
+    io = CharmmTrajectoryFiles(trajectory=Path("/tmp/heat.0000.dcd"))
+    assert _drop_trajectory_io(io).trajectory is None
+
+
 def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
     """Stage nsavc=499 in a 500-step outer block writes on the 250–500 Bussi leg."""
     from pathlib import Path
@@ -1096,6 +1142,82 @@ def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
     assert captured[1]["nsavc"] == 249
     assert captured[1]["start"] == 250
     assert ase_calls == [250, 500]
+
+
+def test_run_bussi_writes_last_micro_even_when_outer_suppressed_stage_nsavc():
+    """HEAT: outer nsavc=1600, chunk=500 → last Bussi micro must still open DCD."""
+    from pathlib import Path
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _harmonize_overlap_chunk_frequencies,
+        _run_bussi_heat_subchunked,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 300.0,
+        "timestep": 0.00025,
+        "nstep": 500,
+        "nsavc": 1600,
+        "_target_dcd_nsavc": 1600,
+        "_bussi_ase_traj": "/tmp/heat.bussi.traj",
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=500, ihtfrq=250, timestep_ps=0.00025)
+    _harmonize_overlap_chunk_frequencies(
+        kw, 500, global_step_start=0, split_trajectory=True
+    )
+    assert kw.get("_suppress_trajectory") is True
+
+    io = CharmmTrajectoryFiles(trajectory=Path("/tmp/heat.0000.dcd"))
+    captured: list[dict[str, Any]] = []
+
+    def fake_chunk(sub_kw, sub_io, **_k):
+        captured.append(
+            {
+                "suppress": bool(sub_kw.get("_suppress_trajectory")),
+                "traj": None if sub_io is None else sub_io.trajectory,
+                "start": int(sub_kw.get("_bussi_global_step", -1)),
+            }
+        )
+        return mock.Mock()
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        return_value=(50.0, 1.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        return_value=Path("/tmp/heat.bussi.traj"),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+        return_value=np.zeros((3, 3)),
+    ):
+        # Traj path preserved (outer no longer drops before Bussi).
+        _run_bussi_heat_subchunked(
+            kw,
+            io,
+            overlap_context="overlap (HEAT) chunk 1/80",
+            rng_base=None,
+            chunk_nstep=250,
+            total_nstep=500,
+            log_banner=False,
+            quiet_bussi=True,
+            split_trajectory=True,
+            global_step_offset=0,
+        )
+    assert len(captured) == 2
+    assert captured[0]["traj"] is None and captured[0]["suppress"] is True
+    assert captured[1]["traj"] == Path("/tmp/heat.0000.dcd")
+    assert captured[1]["suppress"] is False
+    assert captured[1]["start"] == 250
 
 
 def test_resolve_bussi_ase_traj_path_from_stage_dcd():

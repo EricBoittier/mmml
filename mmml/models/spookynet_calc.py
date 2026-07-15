@@ -184,7 +184,7 @@ class SpookyNetCalculator(Calculator):
         # --- Companion MBD correction (see module docstring) -------------
         self.mbd_calc = None
         self.mbd_weight = 0.0
-        from mmml.interfaces.pycharmmInterface.mbd_term import resolve_companion_mbd
+        from mmml.models.mbd.calculator import QCMLMBDCalculator, resolve_companion_mbd
 
         load_path, weight, missing = resolve_companion_mbd(
             mbd_checkpoint,
@@ -192,15 +192,13 @@ class SpookyNetCalculator(Calculator):
             raw_config,
         )
         if load_path is not None:
-            from mmml.models.mbd.calculator import QCMLMBDCalculator
-
             self.mbd_calc = QCMLMBDCalculator(
                 checkpoint=load_path, charge=charge, multiplicity=spin_multiplicity,
             )
             self.mbd_weight = float(weight)
             recorded = raw_config.get("mbd_checkpoint")
             note = ""
-            if recorded and Path(str(recorded)).expanduser() != load_path:
+            if recorded and Path(str(recorded)).expanduser().resolve() != load_path.resolve():
                 note = f" (remapped from recorded {recorded})"
             print(f"  Using MBD correction from {load_path} (weight={self.mbd_weight:g}){note}")
         elif missing:

@@ -64,6 +64,112 @@ def test_jax_mm_spoof_batch_apply_monomer_and_dimer() -> None:
     assert bool(jnp.all(jnp.isfinite(out["forces"])))
 
 
+def test_jax_mm_spoof_batch_apply_heterogeneous_sizes() -> None:
+    """3+6 dimers must not be confused with a 6-atom monomer (N alone is ambiguous)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+        resolve_monomer_bonded_evaluators,
+    )
+
+    per = [3, 6, 3]
+    evals = resolve_monomer_bonded_evaluators(per)
+    apply = build_jax_mm_spoof_batch_apply(
+        atoms_per_monomer=per,
+        max_atoms=12,
+        monomer_evals=evals,
+    )
+    # batch: mono(3), mono(6), dimer(3+6)=9
+    batch_n = jnp.array([3, 6, 9], dtype=jnp.int32)
+    batch_n_a = jnp.array([3, 6, 3], dtype=jnp.int32)
+    R = jnp.zeros((3, 12, 3), dtype=jnp.float64)
+    for i in range(3):
+        R = R.at[0, i].set(jnp.array([float(i), 0.0, 0.0]))
+        R = R.at[2, i].set(jnp.array([float(i), 0.0, 0.0]))
+    for i in range(6):
+        R = R.at[1, i].set(jnp.array([float(i), 0.2, 0.0]))
+        R = R.at[2, 3 + i].set(jnp.array([float(i) + 4.0, 1.0, 0.0]))
+    Z = jnp.ones((3, 12), dtype=jnp.int32)
+    out = apply(Z.reshape(-1), R.reshape(-1, 3), batch_n, batch_n_a)
+    assert out["energy"].shape == (3,)
+    assert bool(jnp.all(jnp.isfinite(out["energy"])))
+    assert out["forces"].shape == (36, 3)
+    assert bool(jnp.all(jnp.isfinite(out["forces"])))
+    # Heterogeneous dimer should be more than either monomer alone when far apart
+    # (soft repulsion is small, bonded energy dominates); at least all finite.
+    assert float(out["energy"][2]) != 0.0
+
+
+def test_setup_calculator_jax_mm_spoof_heterogeneous() -> None:
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
+    per = [3, 6, 3, 6]
+    n_monomers = len(per)
+    n_atoms = sum(per)
+    z = jnp.full((n_atoms,), 6, dtype=jnp.int32)
+    r0 = np.random.default_rng(1).normal(size=(n_atoms, 3)) * 0.5
+    # Separate monomers along x so soft repulsion stays finite
+    off = 0
+    for i, n in enumerate(per):
+        r0[off : off + n, 0] += float(i) * 6.0
+        off += n
+    box = 40.0
+    fake_mm_fn = lambda *args, **kwargs: (
+        jnp.array(0.0, dtype=jnp.float32),
+        jnp.zeros((n_atoms, 3), dtype=jnp.float32),
+    )
+    fake_update_fn = lambda *args, **kwargs: (
+        jnp.zeros((1, 2), dtype=jnp.int32),
+        jnp.ones((1,), dtype=bool),
+    )
+
+    def fake_build_mm(*args, **kwargs):
+        if kwargs.get("use_jax_md_neighbor_list", True):
+            return fake_mm_fn, fake_update_fn
+        return fake_mm_fn
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        side_effect=fake_build_mm,
+    ):
+        factory = setup_calculator(
+            ATOMS_PER_MONOMER=per,
+            N_MONOMERS=n_monomers,
+            model_restart_path=None,
+            ml_potential_mode="jax_mm_clone",
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            MAX_ATOMS_PER_SYSTEM=12,
+            cell=box,
+            defer_xla_gpu_warmup=True,
+            verbose=False,
+            ml_sparse_dimers=False,
+        )
+        _, spherical_fn, _ = factory(
+            atomic_numbers=z,
+            atomic_positions=jnp.asarray(r0),
+            n_monomers=n_monomers,
+            cutoff_params=CutoffParameters(),
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            backprop=False,
+            create_ase_calculator=False,
+        )
+        out = spherical_fn(
+            atomic_numbers=z,
+            positions=jnp.asarray(r0),
+            n_monomers=n_monomers,
+            cutoff_params=CutoffParameters(),
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            box=jnp.asarray([[box, 0, 0], [0, box, 0], [0, 0, box]], dtype=jnp.float64),
+        )
+    assert bool(jnp.isfinite(out.energy))
+    assert out.forces.shape == (n_atoms, 3)
+    assert bool(jnp.all(jnp.isfinite(out.forces)))
+
+
 def test_setup_calculator_jax_mm_spoof_hybrid_eval() -> None:
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
