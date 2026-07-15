@@ -154,6 +154,7 @@ nav:
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
       - Spatial ML MPI: mlpot-spatial-mpi.md
   - PyCHARMM & cluster:
+      - SciCORE cluster guide: scicore.md
       - Periodic boundaries (IMAGE super system): pbc-super-system.md
       - PyCHARMM C API (box and pressure): pycharmm-c-api-pbc-box-pressure.md
       - MPI operations: pycharmm-mpi.md
