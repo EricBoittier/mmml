@@ -253,3 +253,75 @@ def test_setup_calculator_jax_mm_spoof_hybrid_eval() -> None:
     assert bool(jnp.isfinite(out.energy))
     assert out.forces.shape == (n_atoms, 3)
     assert bool(jnp.all(jnp.isfinite(out.forces)))
+
+
+def test_spoof_psf_monomer_matches_cgenff_bonded_components() -> None:
+    """``jax_mm_spoof`` PSF slice must match full-system CGenFF bonded for that monomer."""
+    from pathlib import Path
+
+    from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
+
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+        filter_bonded_topology_for_mm,
+        load_cgenff_bonded_from_psf,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+        load_monomer_bonded_components_from_psf,
+        load_monomer_bonded_evaluator_from_psf,
+    )
+
+    aco_psf = Path("tests/functionality/pycharmmETC/psf/aco-1.psf")
+    aco_pdb = Path("tests/functionality/pycharmmETC/pdb/aco.pdb")
+    if not aco_psf.is_file() or not aco_pdb.is_file():
+        pytest.skip("ACO PSF/PDB fixtures missing")
+
+    _, positions = parse_pdb_simple(str(aco_pdb))
+    pos = jnp.asarray(positions, dtype=jnp.float64)
+    n_atoms = int(pos.shape[0])
+    rng = np.random.default_rng(7)
+    pos = pos + jnp.asarray(rng.normal(scale=0.03, size=pos.shape), dtype=jnp.float64)
+
+    components, forces = load_monomer_bonded_components_from_psf(
+        aco_psf,
+        pos,
+        atoms_per_monomer=n_atoms,
+        energy_unit="kcal/mol",
+    )
+    eval_fn = load_monomer_bonded_evaluator_from_psf(
+        aco_psf,
+        atoms_per_monomer=n_atoms,
+        energy_unit="kcal/mol",
+    )
+    e_total, f_eval = eval_fn(pos)
+    np.testing.assert_allclose(float(e_total), float(components["total"]), rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(np.asarray(f_eval), np.asarray(forces), rtol=1e-10, atol=1e-10)
+
+    system = load_cgenff_bonded_from_psf(aco_psf, pos)
+    mm_mask = jnp.ones(system.n_atoms, dtype=bool)
+    topology, bonded, urey_k, urey_r0 = filter_bonded_topology_for_mm(
+        system.topology,
+        system.bonded,
+        mm_mask,
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
+    )
+    ref_comp, ref_f = bonded_energy_and_forces(
+        pos,
+        topology,
+        bonded,
+        urey_k=urey_k,
+        urey_r0=urey_r0,
+        energy_unit="kcal/mol",
+    )
+    for key in ("bond", "angle", "urey", "torsion", "improper", "total"):
+        if key not in components or key not in ref_comp:
+            continue
+        np.testing.assert_allclose(
+            float(components[key]),
+            float(ref_comp[key]),
+            rtol=1e-8,
+            atol=1e-8,
+            err_msg=f"spoof vs cgenff component mismatch: {key}",
+        )
+    np.testing.assert_allclose(np.asarray(forces), np.asarray(ref_f), rtol=1e-8, atol=1e-8)

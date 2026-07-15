@@ -3179,39 +3179,17 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
     job_name = resolve_job_name(args) or "run"
     if backend == "pycharmm":
         from mmml.cli.run.md_stage_summary import (
-            pycharmm_stage_dcd_frames,
+            finalize_pycharmm_plan_rows,
             pycharmm_trajectory_tag,
         )
 
         plan: list[MdStageSummary] = build_pycharmm_plan_rows(job_name, args)
-        tag = pycharmm_trajectory_tag(args)
-        out_dir = Path(args.output_dir) if args.output_dir is not None else None
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
-
-        for row in plan:
-            if row.stage != "mini":
-                if exit_code == 0 and out_dir is not None:
-                    res = stage_restart(out_dir, row.stage)
-                    if _valid_restart_file(res) is not None:
-                        row.nsteps_completed = row.nsteps_requested
-                        row.ps_completed = row.ps_requested
-                        row.status = "complete"
-                    else:
-                        row.nsteps_completed = 0
-                        row.ps_completed = 0.0
-                        row.status = "planned"
-                elif exit_code == 0:
-                    row.nsteps_completed = row.nsteps_requested
-                    row.ps_completed = row.ps_requested
-                    row.status = "complete"
-                else:
-                    row.nsteps_completed = 0
-                    row.ps_completed = 0.0
-                    row.status = "error"
-                if out_dir is not None and row.stage in {"heat", "equi", "nve", "prod"}:
-                    row.frames_written = pycharmm_stage_dcd_frames(out_dir, row.stage, tag)
-                    row.record_every_steps = max(1, int(row.record_every_steps or 1))
+        finalize_pycharmm_plan_rows(
+            plan,
+            exit_code=exit_code,
+            output_dir=Path(args.output_dir) if args.output_dir is not None else None,
+            trajectory_tag=pycharmm_trajectory_tag(args),
+        )
     else:
         row = build_single_leg_plan_row(job_name, args, backend)
         nsteps = dynamics_nstep_from_ps(float(args.ps), float(args.dt_fs))

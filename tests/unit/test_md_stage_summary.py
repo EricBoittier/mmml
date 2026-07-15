@@ -14,7 +14,9 @@ from mmml.cli.run.md_stage_summary import (
     build_pycharmm_plan_rows,
     build_single_leg_plan_row,
     dynamics_nstep_from_ps,
+    finalize_pycharmm_plan_rows,
     ps_from_nsteps,
+    pycharmm_mini_artifacts_present,
     write_campaign_plan,
     write_stage_summary_json,
 )
@@ -154,3 +156,55 @@ def test_write_campaign_plan(tmp_path: Path) -> None:
     payload = json.loads(path.read_text())
     assert isinstance(payload, list)
     assert payload[0]["stage"] == "heat"
+
+
+def test_pycharmm_mini_artifacts_present(tmp_path: Path) -> None:
+    assert not pycharmm_mini_artifacts_present(tmp_path)
+    (tmp_path / "02_mini.crd").write_text("* mini\n", encoding="ascii")
+    assert pycharmm_mini_artifacts_present(tmp_path)
+
+
+def test_finalize_pycharmm_plan_rows_marks_mini_complete(tmp_path: Path) -> None:
+    args = Namespace(
+        setup="pbc_npt",
+        md_stages="mini,heat",
+        dt_fs=0.25,
+        ps_heat=0.1,
+        temperature=160.0,
+        pressure=1.0,
+        dcd_nsavc=800,
+        mini_nstep=20,
+        heat_firstt=None,
+        heat_finalt=None,
+    )
+    plan = build_pycharmm_plan_rows("equil", args)
+    assert all(r.status == "planned" for r in plan)
+    assert next(r for r in plan if r.stage == "mini").nsteps_requested == 20
+
+    (tmp_path / "mini.crd").write_text("* mini\n", encoding="ascii")
+    finalize_pycharmm_plan_rows(plan, exit_code=0, output_dir=tmp_path, trajectory_tag="dcm_32")
+
+    mini = next(r for r in plan if r.stage == "mini")
+    assert mini.status == "complete"
+    assert mini.nsteps_completed == 20
+    assert mini.ps_completed == pytest.approx(ps_from_nsteps(20, 0.25))
+
+    heat = next(r for r in plan if r.stage == "heat")
+    assert heat.status == "planned"
+    assert heat.nsteps_completed == 0
+
+
+def test_finalize_pycharmm_plan_rows_mini_stays_planned_without_crd(tmp_path: Path) -> None:
+    args = Namespace(
+        setup="pbc_npt",
+        md_stages="mini",
+        dt_fs=0.25,
+        temperature=160.0,
+        pressure=1.0,
+        dcd_nsavc=800,
+        mini_nstep=20,
+    )
+    plan = build_pycharmm_plan_rows("equil", args)
+    finalize_pycharmm_plan_rows(plan, exit_code=0, output_dir=tmp_path)
+    assert plan[0].status == "planned"
+    assert plan[0].nsteps_completed == 0

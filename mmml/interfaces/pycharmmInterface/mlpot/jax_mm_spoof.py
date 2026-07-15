@@ -116,14 +116,14 @@ def _topology_slice_to_local(
     )
 
 
-def load_monomer_bonded_evaluator_from_psf(
+def _monomer_bonded_fn_from_psf(
     psf_path: Path | str,
     *,
     atoms_per_monomer: int,
     atom_offset: int = 0,
     energy_unit: str = "eV",
-) -> BondedEvalFn:
-    """Bonded evaluator for one monomer slice from a cluster PSF."""
+):
+    """Build a CGenFF bonded energy fn for one monomer PSF slice."""
     psf = Path(psf_path).expanduser().resolve()
     n_mono = int(atoms_per_monomer)
     start = int(atom_offset)
@@ -152,6 +152,41 @@ def load_monomer_bonded_evaluator_from_psf(
         bonded,
         urey_k=urey_k,
         urey_r0=urey_r0,
+        energy_unit=energy_unit,
+    )
+    return n_mono, bonded_fn
+
+
+def load_monomer_bonded_components_from_psf(
+    psf_path: Path | str,
+    positions: Array,
+    *,
+    atoms_per_monomer: int,
+    atom_offset: int = 0,
+    energy_unit: str = "kcal/mol",
+) -> tuple[dict[str, Array], Array]:
+    """Bonded component energies + forces for one monomer (CHARMM parity helper)."""
+    n_mono, bonded_fn = _monomer_bonded_fn_from_psf(
+        psf_path,
+        atoms_per_monomer=atoms_per_monomer,
+        atom_offset=atom_offset,
+        energy_unit=energy_unit,
+    )
+    return bonded_fn(positions[:n_mono])
+
+
+def load_monomer_bonded_evaluator_from_psf(
+    psf_path: Path | str,
+    *,
+    atoms_per_monomer: int,
+    atom_offset: int = 0,
+    energy_unit: str = "eV",
+) -> BondedEvalFn:
+    """Bonded evaluator for one monomer slice from a cluster PSF."""
+    n_mono, bonded_fn = _monomer_bonded_fn_from_psf(
+        psf_path,
+        atoms_per_monomer=atoms_per_monomer,
+        atom_offset=atom_offset,
         energy_unit=energy_unit,
     )
 
@@ -456,6 +491,8 @@ __all__ = [
     "jax_mm_spoof_enabled",
     "load_monomer_bonded_evaluator_from_psf",
     "minimal_chain_bonded_system",
+    "load_monomer_bonded_components_from_psf",
+    "load_monomer_bonded_evaluator_from_psf",
     "resolve_monomer_bonded_evaluator",
     "resolve_monomer_bonded_evaluators",
 ]
