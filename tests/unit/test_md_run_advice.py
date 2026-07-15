@@ -157,6 +157,46 @@ def test_build_run_advice_failure_suggests_resume(tmp_path: Path) -> None:
     assert paths["json"].is_file()
 
 
+def test_build_run_advice_exit_zero_error_stage_is_incomplete(tmp_path: Path) -> None:
+    out = tmp_path / "run"
+    out.mkdir()
+    baseline = out / "baseline.res"
+    _write_restart(baseline)
+    summary = {
+        "exit_code": 0,
+        "stages": [
+            {"stage": "mini", "status": "complete"},
+            {"stage": "heat", "status": "error"},
+            {"stage": "equi", "status": "planned"},
+        ],
+    }
+    (out / "stage_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    manifest = {
+        "job_name": "dcm52_equil",
+        "backend": "pycharmm",
+        "exit_code": 0,
+        "args": {
+            "md_stages": "mini,heat,equi",
+            "output_dir": str(out),
+        },
+    }
+
+    advice = build_run_advice(
+        manifest=manifest,
+        output_dir=out,
+        exit_code=0,
+        repo_root=tmp_path,
+    )
+
+    assert advice is not None
+    assert advice.exit_code == 0
+    assert advice.restart is not None
+    assert "Incomplete" in advice.headline
+    assert "Job failed (exit 0)" not in advice.headline
+    assert "Exit code was 0" in "\n".join(advice.notes)
+    assert "--restart-from" in advice.command
+
+
 def test_build_run_advice_success_continues_remaining_stages(tmp_path: Path) -> None:
     out = tmp_path / "run"
     out.mkdir()

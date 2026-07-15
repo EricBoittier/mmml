@@ -770,7 +770,16 @@ def build_run_advice(
             elif failed_stage and failed_stage in planned:
                 idx = planned.index(failed_stage)
                 overrides["md_stages"] = ",".join(planned[idx:])
-            headline = f"Job failed (exit {exit_code}) — resume from best checkpoint"
+            if int(exit_code) == 0:
+                headline = (
+                    "Incomplete — stage summary has errors; "
+                    "resume from best checkpoint"
+                )
+                notes.append(
+                    "Exit code was 0 but at least one staged workflow row is marked error."
+                )
+            else:
+                headline = f"Job failed (exit {exit_code}) — resume from best checkpoint"
         preset_includes, preset_notes = _failure_preset_hints(
             out_dir, args, failure_mode=failure_mode
         )
@@ -925,7 +934,7 @@ def emit_run_advice(
         if advice.command:
             table.add_row("Script", str(Path(output_dir) / "next_run.sh"))
             table.add_row("One-liner", str(Path(output_dir) / "next_run.command"))
-        border = "red" if advice.exit_code != 0 else "green"
+        border = "red" if advice.exit_code != 0 else ("yellow" if advice.command else "green")
         console.print(Panel(table, title="[bold]Next md-system run[/bold]", border_style=border))
         if advice.command:
             sys.stdout.write("Copy-paste:\n")
