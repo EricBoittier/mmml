@@ -4813,6 +4813,8 @@ def _drop_trajectory_io(io: Optional[CharmmTrajectoryFiles]) -> Optional[CharmmT
 
 # Per-chunk DCDs at nsavc=1 and overlap interval 2 create O(nstep) tiny files.
 _OVERLAP_MAX_CHUNK_DCD_FILES = 64
+# Sparse ``nsavc`` (HEAT / equil): one small DCD per overlap chunk is fine.
+_OVERLAP_MAX_SPARSE_CHUNK_DCD_FILES = 256
 
 
 def _overlap_should_split_trajectory(
@@ -4820,15 +4822,21 @@ def _overlap_should_split_trajectory(
     n_chunks: int,
     traj_nsavc: int | None,
 ) -> bool:
-    """Write per-chunk ``*.chunk.NNNN.dcd`` files for multi-segment overlap runs."""
+    """Write per-chunk ``stem.NNNN.dcd`` files for multi-segment overlap runs.
+
+    Dense ``nsavc<=1`` is capped hard (tiny file explosion).  Sparse cadences
+    (typical HEAT ``nsavc≈500``) keep split DCDs so Bussi/overlap micro-chunks
+    can still write frames when ``nsavc >=`` micro-chunk ``nstep``.
+    """
     if n_chunks <= 1:
         return False
-    if n_chunks > 8:
-        return False
-    if traj_nsavc is not None and int(traj_nsavc) <= 1:
-        if n_chunks > _OVERLAP_MAX_CHUNK_DCD_FILES:
-            return False
-    return True
+    nsavc = int(traj_nsavc) if traj_nsavc is not None else None
+    if nsavc is not None and nsavc <= 1:
+        # Dense every-step DCD: keep the old small-file explosion cap.
+        return int(n_chunks) <= min(8, _OVERLAP_MAX_CHUNK_DCD_FILES)
+    if nsavc is not None and nsavc >= 10:
+        return int(n_chunks) <= _OVERLAP_MAX_SPARSE_CHUNK_DCD_FILES
+    return int(n_chunks) <= 8
 
 
 def effective_overlap_check_interval(
@@ -4988,22 +4996,43 @@ def _harmonize_overlap_chunk_frequencies(
     n = max(1, int(chunk_nstep))
     cadence = chunk_kw.get("_dyn_freq_cadence")
     cadence_active = cadence is not None and int(cadence) > 0
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        nsavc_for_chunk_preserving_interval,
+        resolve_target_dcd_nsavc,
+    )
+
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
         if key == "nsavc":
             old = int(chunk_kw[key])
+            target = resolve_target_dcd_nsavc(chunk_kw)
+            if target is None:
+                target = old
             if old >= n:
-                # Suppress trajectory I/O but keep an explicit large NSAVC.
-                # If NSAVC is omitted, CHARMM defaults to NSAVC=1 even with
-                # IUNCRD=-1, which creates expensive per-step trajectory
-                # bookkeeping.  n-1 is accepted by CHARMM and avoids the slow
-                # default while producing no DCD without an IUNCRD handle.
-                chunk_kw["nsavc"] = max(1, n - 1)
-                if split_trajectory:
-                    # Per-chunk ``*.chunk.NNNN.dcd``: one frame at chunk end.
-                    pass
+                # Prefer a relative nsavc that lands a global save in this chunk.
+                # Suppress only when no boundary falls here (short Bussi micro-chunk).
+                per = nsavc_for_chunk_preserving_interval(
+                    int(target), n, int(global_step_start)
+                )
+                if per is not None:
+                    chunk_kw["nsavc"] = int(per)
+                    _emit_overlap_log(
+                        f"chunk: DCD nsavc={chunk_kw['nsavc']} "
+                        f"(target={int(target)}; "
+                        f"global step {int(global_step_start)}–{int(global_step_start) + n})",
+                    )
+                elif split_trajectory and resolve_target_dcd_nsavc(chunk_kw) is None:
+                    # Legacy per-chunk DCD without a stage cadence: one frame at end.
+                    chunk_kw["nsavc"] = max(1, n - 1)
+                    _emit_overlap_log(
+                        f"chunk: per-chunk DCD nsavc={chunk_kw['nsavc']} "
+                        f"(global step {int(global_step_start)}–{int(global_step_start) + n})",
+                    )
                 else:
+                    # Keep an explicit large NSAVC so CHARMM does not default to 1
+                    # when IUNCRD=-1 (expensive per-step trajectory bookkeeping).
+                    chunk_kw["nsavc"] = max(1, n - 1)
                     chunk_kw["_suppress_trajectory"] = True
                     for k in ("nprint", "iprfrq", "isvfrq"):
                         chunk_kw.pop(k, None)
@@ -5015,12 +5044,7 @@ def _harmonize_overlap_chunk_frequencies(
                         f"CHARMM nsavc={chunk_kw['nsavc']}; "
                         f"global step {int(global_step_start)}–{int(global_step_start) + n})",
                     )
-                if split_trajectory:
-                    _emit_overlap_log(
-                        f"chunk: per-chunk DCD nsavc={chunk_kw['nsavc']} "
-                        f"(global step {int(global_step_start)}–{int(global_step_start) + n})",
-                    )
-                if cadence_active:
+                if cadence_active and not chunk_kw.get("_suppress_trajectory"):
                     c = _harmonize_dynamics_frequency(int(cadence), n)
                     for k in ("nprint", "iprfrq", "isvfrq", "nsavv"):
                         chunk_kw[k] = c
@@ -6445,6 +6469,7 @@ def _run_bussi_heat_subchunked(
     steps_done = 0
     last_dyn = None
     n_subchunks = (total + chunk_nstep - 1) // chunk_nstep
+    dcd_opened_this_leg = False
     if log_banner and n_subchunks > 1:
         print(
             f"{overlap_context}: Bussi heat chunking — {total} steps in "
@@ -6462,7 +6487,10 @@ def _run_bussi_heat_subchunked(
         global_end = global_start + n
         sub_kw["_bussi_global_step"] = global_start
         traj_active = io is not None and io.trajectory is not None
-        traj_split = bool(split_trajectory or traj_active)
+        # Continuous (non-split) overlap opens the stage DCD once and passes
+        # ``iuncrd`` via ``extra_iokw`` even when ``chunk_io.trajectory`` is None.
+        continuous_dcd = bool(extra_iokw and "iuncrd" in extra_iokw)
+        traj_split = bool(split_trajectory or traj_active or continuous_dcd)
         _harmonize_overlap_chunk_frequencies(
             sub_kw,
             n,
@@ -6471,29 +6499,34 @@ def _run_bussi_heat_subchunked(
             split_trajectory=traj_split,
         )
         suppress_sub_traj = bool(sub_kw.get("_suppress_trajectory", False))
-        # Continuation Bussi legs keep restart I/O but must not reopen the same DCD.
-        drop_sub_traj = suppress_sub_traj or "nsavc" not in sub_kw or steps_done > 0
-        sub_io = _drop_trajectory_io(io) if drop_sub_traj else io
-        # Match CPT sub-chunking: pass iuncrd only on the first in-memory leg so
-        # CHARMM does not reopen an existing DCD (formatted vs unformatted crash).
-        sub_traj_iokw = (
-            extra_iokw
-            if (
-                extra_iokw
-                and steps_done == 0
-                and "nsavc" in sub_kw
-                and not suppress_sub_traj
-            )
-            else {}
+        write_dcd = (
+            not suppress_sub_traj
+            and "nsavc" in sub_kw
+            and (traj_active or continuous_dcd)
+            and not dcd_opened_this_leg
         )
-        if n_subchunks > 1 or traj_active:
+        # Sparse stage cadence often lands in a later Bussi micro-chunk (e.g.
+        # nsavc=499 inside steps 250–500).  Open the DCD on that first write
+        # only — never reopen the same file on a continuation micro-chunk.
+        drop_sub_traj = not write_dcd
+        sub_io = _drop_trajectory_io(io) if drop_sub_traj else io
+        # Split paths: ``open_for_run`` opens ``sub_io.trajectory``.  Continuous
+        # stage DCD: keep the already-open unit via ``extra_iokw``.
+        sub_traj_iokw = (
+            extra_iokw if (write_dcd and continuous_dcd and extra_iokw) else {}
+        )
+        if write_dcd:
+            dcd_opened_this_leg = True
+        if n_subchunks > 1 or traj_active or continuous_dcd:
             t0 = global_start * timestep_ps
             t1 = global_end * timestep_ps
             traj_note = ""
-            if suppress_sub_traj:
+            if not write_dcd:
                 traj_note = "; DCD suppressed"
             elif sub_io is not None and sub_io.trajectory is not None:
                 traj_note = f"; DCD -> {Path(sub_io.trajectory).name}"
+            elif write_dcd and continuous_dcd:
+                traj_note = "; DCD (stage)"
             print(
                 f"{overlap_context}: dyna global steps {global_start}–{global_end} "
                 f"(t={t0:.4f}–{t1:.4f} ps{traj_note})",

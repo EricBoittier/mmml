@@ -2892,8 +2892,9 @@ def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     assert not _overlap_should_split_trajectory(n_chunks=7390, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=100, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=9, traj_nsavc=1)
-    assert not _overlap_should_split_trajectory(n_chunks=50, traj_nsavc=100)
-    assert not _overlap_should_split_trajectory(n_chunks=80, traj_nsavc=25)
+    # Sparse HEAT cadence: allow many per-chunk DCDs.
+    assert _overlap_should_split_trajectory(n_chunks=50, traj_nsavc=100)
+    assert _overlap_should_split_trajectory(n_chunks=80, traj_nsavc=25)
     assert _overlap_should_split_trajectory(n_chunks=4, traj_nsavc=100)
     assert _overlap_should_split_trajectory(n_chunks=8, traj_nsavc=1)
     assert _overlap_should_split_trajectory(n_chunks=3, traj_nsavc=100)
@@ -3689,7 +3690,7 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     kw3 = {"nsavc": 40}
     _harmonize_overlap_chunk_frequencies(kw3, 40)
     assert kw3["nsavc"] == 39
-    assert kw3["_suppress_trajectory"] is True
+    assert "_suppress_trajectory" not in kw3
 
     kw3b = {"nsavc": 16, "nprint": 10, "iprfrq": 10, "isvfrq": 10}
     _harmonize_overlap_chunk_frequencies(kw3b, 250)
@@ -3745,6 +3746,15 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw5["nsavc"] == 249
     assert kw5["_suppress_trajectory"] is True
     assert kw5["nsavv"] == 250
+
+    kw5b = {
+        "nsavc": 499,
+        "_target_dcd_nsavc": 499,
+        "timestep": 0.00025,
+    }
+    _harmonize_overlap_chunk_frequencies(kw5b, 250, global_step_start=250)
+    assert kw5b["nsavc"] == 249
+    assert "_suppress_trajectory" not in kw5b
 
     kw6 = {"nsavc": 1600}
     _harmonize_overlap_chunk_frequencies(

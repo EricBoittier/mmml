@@ -153,14 +153,22 @@ def nsavc_for_chunk_preserving_interval(
     ]
 
     if len(aligned) == 1:
-        rel = aligned[0] - start
+        g = int(aligned[0])
+        rel = g - start
+        # CHARMM requires nsavc < nstep.  A boundary exactly at chunk end (or at
+        # n-1) still gets one frame via nsavc = n-1.
         if rel > cap:
+            if g == end:
+                return cap
             return None
-        if n % rel == 0:
+        if rel == cap or n % rel == 0:
             return rel
         harmonized = harmonize_nsavc_frequency(rel, n)
-        if harmonized == rel or (n // harmonized == 1 and start + harmonized == aligned[0]):
+        if harmonized == rel or (n // harmonized == 1 and start + harmonized == g):
             return harmonized
+        # Prefer a single end-of-chunk frame over skipping the global save.
+        if abs(start + cap - g) <= max(1, target // 20):
+            return cap
         return None
 
     if not aligned:
