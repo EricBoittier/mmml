@@ -997,6 +997,29 @@ class MlpotSdChunkResult:
     stalled: bool = False
     last_grms: float | None = None
     rolled_back_chunk: int = 0
+    exact_plateau: bool = False
+
+
+def is_exact_sd_plateau(
+    previous_grms: float | None,
+    current_grms: float | None,
+    *,
+    rel_tol: float = 1.0e-4,
+) -> bool:
+    """True when hybrid GRMS is unchanged between SD chunks (SD moving nothing).
+
+    An exact plateau — CHARMM SD reporting bit-for-bit the same GRMS chunk after
+    chunk — means the minimizer is no longer displacing coordinates under the ML
+    callback, so further SD chunks are wasted.  This is a stronger, immediate
+    signal than the tolerance/patience stall and triggers a calculator switch.
+    """
+    if previous_grms is None or current_grms is None:
+        return False
+    p = float(previous_grms)
+    c = float(current_grms)
+    if not (np.isfinite(p) and np.isfinite(c)):
+        return False
+    return abs(c - p) <= float(rel_tol) * max(abs(p), 1.0e-6)
 
 
 @dataclass(frozen=True)
@@ -1841,6 +1864,22 @@ def _run_minimize_in_chunks(
                     flush=True,
                 )
             return MlpotSdChunkResult(completed=True, last_grms=grms)
+        if grms is not None and is_exact_sd_plateau(previous_grms, grms):
+            target = _resolved_sd_converged_grms(config)
+            if float(grms) > float(target):
+                if config.verbose:
+                    print(
+                        f"MLpot SD ({pass_label}, after chunk {chunk_index}): "
+                        f"hybrid GRMS pinned at {grms:.4f} kcal/mol/Å "
+                        "(exact plateau) — switching to calculator minimization",
+                        flush=True,
+                    )
+                return MlpotSdChunkResult(
+                    completed=False,
+                    stalled=True,
+                    exact_plateau=True,
+                    last_grms=grms,
+                )
         if grms is not None and previous_grms is not None:
             if abs(float(grms) - float(previous_grms)) <= float(config.sd_stall_grms_abs_tol):
                 stagnant_chunks += 1
@@ -8530,6 +8569,44 @@ def minimize_with_mlpot(
                         flush=True,
                     )
                     post_stall_grms = sd_result.last_grms
+                    # Exact CHARMM-SD plateau: the minimizer is no longer moving
+                    # coordinates, so switch to the hybrid calculator (FIRE) before
+                    # the density ladder rather than burning more ineffective SD.
+                    if (
+                        sd_result.exact_plateau
+                        and config.mlpot_ctx is not None
+                        and config.calculator_pre_minimize
+                    ):
+                        from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                            minimize_hybrid_calculator_fire_before_sd,
+                        )
+
+                        try:
+                            calc_result = minimize_hybrid_calculator_fire_before_sd(
+                                config.mlpot_ctx,
+                                max_steps=int(config.calculator_fire_steps),
+                                fmax_ev_a=float(config.calculator_fire_fmax_ev_a),
+                                fire_maxstep=float(config.calculator_fire_maxstep),
+                                verbose=config.verbose,
+                                context_prefix="Post-SD-plateau",
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            if config.verbose:
+                                print(
+                                    "Post-SD-plateau calculator switch failed "
+                                    f"({exc}); falling back to density prep ladder",
+                                    flush=True,
+                                )
+                        else:
+                            calc_grms = getattr(calc_result, "grms", None)
+                            if calc_grms is not None and np.isfinite(float(calc_grms)):
+                                post_stall_grms = float(calc_grms)
+                                if config.verbose:
+                                    print(
+                                        "Post-SD-plateau calculator FIRE: "
+                                        f"GRMS→{float(calc_grms):.4f} kcal/mol/Å",
+                                        flush=True,
+                                    )
                     if (
                         config.mlpot_ctx is not None
                         and config.pre_sd_bonded_recovery_grms_kcalmol_A is not None
