@@ -1239,11 +1239,21 @@ def set_up_nhc_sim_routine(
         nbr_monitor = getattr(args, "nbr_monitor", False)
         if use_pbc:
             c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
-        c.print(Panel(f"Starting {args.ensemble.upper()} simulation", title="[bold cyan]JAX-MD[/bold cyan]", border_style="cyan"))
+        _total_time_ps = total_steps * dt
+        c.print(Panel(
+            f"Starting {args.ensemble.upper()} simulation | "
+            f"total steps: {total_steps:,} | "
+            f"total time: {_total_time_ps:.4f} ps | "
+            f"dt: {dt_fs:.4f} fs | "
+            f"recording every {steps_per_recording} steps ({steps_per_recording * dt:.4f} ps)",
+            title="[bold cyan]JAX-MD[/bold cyan]",
+            border_style="cyan",
+        ))
         _fb_hdr = f"\t{_fb_dist_hdr}\tV_fb (eV)" if use_flat_bottom else ""
         if is_npt:
             hdr = (
-                "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)"
+                f"\t\tTime (ps) [of {_total_time_ps:.3f} ps, {total_steps:,} steps, dt={dt_fs:.4f} fs]"
+                "\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)"
                 f"\tP_tgt (atm)\tP_meas (atm){_fb_hdr}\tavg(ns/day)"
             )
             if nbr_monitor:
@@ -1251,7 +1261,8 @@ def set_up_nhc_sim_routine(
             c.print(f"[dim]{hdr}[/dim]")
         else:
             c.print(
-                f"[dim]\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K){_fb_hdr}\tavg(ns/day)[/dim]"
+                f"[dim]\t\tTime (ps) [of {_total_time_ps:.3f} ps, {total_steps:,} steps, dt={dt_fs:.4f} fs]"
+                f"\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K){_fb_hdr}\tavg(ns/day)[/dim]"
             )
 
         # ========================================================================
