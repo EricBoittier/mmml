@@ -241,13 +241,13 @@ def test_parse_defaults_forward_500_step_overlap_interval():
     assert cmd[cmd.index("--dyn-freq-cadence") + 1] == "500"
 
 
-def test_build_pycharmm_command_omits_jaxmd_unified_only_flags():
+def test_build_pycharmm_command_forwards_mbd_override_and_omits_unified_only_flags():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
             mbd_checkpoint="/tmp/mbd.json",
-            mbd_weight=1.0,
+            mbd_weight=0.5,
             multipole_checkpoint="/tmp/multipole.json",
             sampler="md",
             ff="zbl-mbd-multipoles",
@@ -255,8 +255,10 @@ def test_build_pycharmm_command_omits_jaxmd_unified_only_flags():
         )
     )
 
-    assert "--mbd-checkpoint" not in cmd
-    assert "--mbd-weight" not in cmd
+    assert "--mbd-checkpoint" in cmd
+    assert cmd[cmd.index("--mbd-checkpoint") + 1] == "/tmp/mbd.json"
+    assert "--mbd-weight" in cmd
+    assert cmd[cmd.index("--mbd-weight") + 1] == "0.5"
     assert "--multipole-checkpoint" not in cmd
     assert "--sampler" not in cmd
     assert "--ff" not in cmd

@@ -310,6 +310,7 @@ def print_calculator_summary(
     ensemble: Optional[str] = None,
     checkpoint: Optional[str] = None,
     zbl: Optional[dict] = None,
+    energy_terms: Optional[dict] = None,
     extra: Optional[dict] = None,
     console: Optional[Console] = None,
 ) -> None:
@@ -394,6 +395,11 @@ def print_calculator_summary(
     table.add_row("doMM", "[green]✓[/green]" if doMM else "[red]✗[/red]")
     table.add_row("doML_dimer", "[green]✓[/green]" if doML_dimer else "[red]✗[/red]")
     table.add_row("Complementary handoff", "[green]✓[/green]" if complementary_handoff else "[yellow]legacy[/yellow]")
+    if energy_terms:
+        table.add_row("─" * 22, "─" * 22)
+        table.add_row("[bold]ML energy terms[/bold]", "")
+        for k, v in energy_terms.items():
+            table.add_row(str(k), str(v))
     table.add_row("─" * 22, "─" * 22)
     table.add_row("ml_switch_width (Å)", f"[bright_blue]{ml_w:.3f}[/bright_blue]")
     table.add_row("mm_switch_on (Å)", f"[bright_yellow]{mm_on:.3f}[/bright_yellow]")
@@ -417,6 +423,8 @@ def print_calculator_summary(
                 "ZBL trainable",
                 "[yellow]yes[/yellow]" if zbl["trainable"] else "fixed",
             )
+        if "mode" in zbl:
+            table.add_row("ZBL mode", str(zbl["mode"]))
     if extra:
         for k, v in extra.items():
             table.add_row(str(k), str(v))

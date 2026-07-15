@@ -250,6 +250,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Override learned-charge Coulomb erf damping sigma in Angstrom; set 0 to disable.",
     )
     parser.add_argument(
+        "--mbd-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional learned MBD dispersion checkpoint. Adds E += mbd_weight * E_mbd "
+            "to the hybrid calculator. When omitted, auto-loads from the model "
+            "checkpoint's recorded mbd_checkpoint if that path exists locally."
+        ),
+    )
+    parser.add_argument(
+        "--mbd-weight",
+        type=float,
+        default=None,
+        help="Weight for the MBD correction (default: value recorded in the model config, else 1.0).",
+    )
+    parser.add_argument(
         "--ml-max-active-dimers",
         type=int,
         default=None,

@@ -353,6 +353,59 @@ def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
     return out
 
 
+def collect_ml_energy_terms_mapping(
+    model: Any,
+    *,
+    checkpoint_config: Mapping[str, Any] | None = None,
+    mbd_loaded: bool = False,
+    mbd_checkpoint: str | None = None,
+    mbd_weight: float | None = None,
+    mbd_missing_path: str | None = None,
+) -> dict[str, Any]:
+    """Human-readable which ML energy terms are active vs recorded in the ckpt."""
+    cfg = dict(checkpoint_config or {})
+    charges = False
+    if model is not None and hasattr(model, "charges"):
+        charges = bool(getattr(model, "charges"))
+    elif "charges" in cfg or "predict_charges" in cfg:
+        charges = bool(cfg.get("charges") or cfg.get("predict_charges"))
+    if model is not None and hasattr(model, "include_electrostatics"):
+        include_elec = bool(getattr(model, "include_electrostatics"))
+    elif "include_electrostatics" in cfg:
+        include_elec = bool(cfg["include_electrostatics"])
+    else:
+        include_elec = charges
+    damp = getattr(model, "electrostatics_damping_sigma", None) if model is not None else None
+    if damp is None:
+        damp = cfg.get("electrostatics_damping_sigma")
+    zbl = bool(getattr(model, "zbl", False)) if model is not None else bool(cfg.get("zbl", False))
+    cgenff = not bool(cfg.get("no_cgenff_vdw", False)) if cfg else None
+    cfg_mbd = cfg.get("mbd_checkpoint")
+    out: dict[str, Any] = {
+        "neural ML": "✓ (PhysNet/Spooky atomic)",
+        "electrostatics": (
+            f"✓ predicted charges (σ={float(damp):g} Å)"
+            if include_elec and charges and damp is not None
+            else ("✓ predicted charges" if include_elec and charges else "✗ off")
+        ),
+        "ZBL repulsion": "✓" if zbl else "✗ off",
+    }
+    if cgenff is not None:
+        out["CGenFF LJ (training)"] = "✓ recorded" if cgenff else "✗ off"
+    if mbd_loaded:
+        w = 1.0 if mbd_weight is None else float(mbd_weight)
+        path = mbd_checkpoint or (str(cfg_mbd) if cfg_mbd else "—")
+        out["MBD dispersion"] = f"✓ loaded (weight={w:g})"
+        out["MBD checkpoint"] = path
+    elif cfg_mbd or mbd_missing_path:
+        missing = mbd_missing_path or str(cfg_mbd)
+        out["MBD dispersion"] = "✗ NOT loaded (checkpoint trained with MBD)"
+        out["MBD checkpoint"] = f"missing: {missing}"
+    else:
+        out["MBD dispersion"] = "✗ not configured"
+    return out
+
+
 def emit_hybrid_ml_setup(
     *,
     system: Mapping[str, Any],
@@ -364,6 +417,7 @@ def emit_hybrid_ml_setup(
     runtime: Mapping[str, Any] | None = None,
     long_range: Mapping[str, Any] | None = None,
     zbl: Mapping[str, Any] | None = None,
+    energy_terms: Mapping[str, Any] | None = None,
     quiet: bool = False,
 ) -> None:
     """Single dashboard for hybrid calculator setup (replaces duplicate setup/model panels)."""
@@ -371,6 +425,8 @@ def emit_hybrid_ml_setup(
         ("System", system),
         ("Handoff & cutoffs", handoff),
     ]
+    if energy_terms:
+        sections.append(("ML energy terms", energy_terms))
     zbl_map = zbl if zbl is not None else collect_zbl_cutoff_mapping(model)
     if zbl_map:
         sections.append(("ZBL repulsion", zbl_map))
@@ -401,6 +457,7 @@ def emit_md_system_calculator_report(
     ml_flags: Mapping[str, Any] | None = None,
     runtime: Mapping[str, Any] | None = None,
     long_range: Mapping[str, Any] | None = None,
+    energy_terms: Mapping[str, Any] | None = None,
     cutoff_params: Any = None,
     model_type: str | None = None,
     n_monomers: int | None = None,
@@ -440,6 +497,9 @@ def emit_md_system_calculator_report(
         return
 
     zbl_map = zbl if zbl is not None else collect_zbl_cutoff_mapping(model)
+    energy_map = energy_terms
+    if energy_map is None and model is not None:
+        energy_map = collect_ml_energy_terms_mapping(model)
 
     if include_hybrid_setup and system is not None and handoff is not None:
         emit_hybrid_ml_setup(
@@ -452,6 +512,7 @@ def emit_md_system_calculator_report(
             runtime=runtime,
             long_range=long_range,
             zbl=zbl_map,
+            energy_terms=energy_map,
             quiet=quiet,
         )
 
@@ -470,6 +531,7 @@ def emit_md_system_calculator_report(
             ensemble=ensemble,
             checkpoint=checkpoint_path,
             zbl=zbl_map,
+            energy_terms=energy_map,
             extra=dict(calculator_extra) if calculator_extra else None,
         )
 

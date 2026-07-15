@@ -387,8 +387,8 @@ def setup_calculator(
     ml_potential_mode: str = "physnet",
     jax_mm_spoof_psf: Path | str | None = None,
     electrostatics_damping_sigma: float | None = None,
-    mbd_checkpoint: str | Path | None = None,
-    mbd_weight: float = 1.0,
+    mbd_checkpoint: str | Path | bool | None = None,
+    mbd_weight: float | None = None,
     mbd_charge: float = 0.0,
     mbd_spin: float = 1.0,
 ):
@@ -674,6 +674,8 @@ def setup_calculator(
         _mlpot_jax_defer_stack.enter_context(jax_cpu_until_mlpot_registered())
 
     checkpoint_meta: dict[str, Any] | None = None
+    config: dict[str, Any] = {}
+    _is_spooky_model = False
     _jax_mm_spoof_monomer_eval = None
     _jax_mm_spoof_batch_apply = None
     if _jax_mm_spoof_mode:
@@ -811,11 +813,11 @@ def setup_calculator(
                     model_config["use_pbc"] = True
                 if not model_config.get("charges", False):
                     model_config["include_electrostatics"] = False
-                is_spooky_model = (
+                _is_spooky_model = (
                     str(config.get("model_type", "")).lower() == "spooky"
                     or "spooky" in str(restart_path).lower()
                 )
-                model_cls = SpookyPhysNet if is_spooky_model else PhysNet
+                model_cls = SpookyPhysNet if _is_spooky_model else PhysNet
                 model_fields = getattr(model_cls, "__dataclass_fields__", None)
                 if model_fields:
                     model_config = physnet_constructor_kwargs(model_config, model_cls)
@@ -865,11 +867,39 @@ def setup_calculator(
         MODEL.max_padded_atoms = max_atoms
 
     from mmml.utils.rich_report import (
+        collect_ml_energy_terms_mapping,
         collect_zbl_cutoff_mapping,
         emit_md_system_calculator_report,
         emit_tagged,
     )
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units
+    from mmml.interfaces.pycharmmInterface.mbd_term import resolve_companion_mbd
+
+    _resolved_mbd_path, _resolved_mbd_weight, _mbd_missing_path = resolve_companion_mbd(
+        mbd_checkpoint,
+        mbd_weight,
+        config,
+    )
+    if _mbd_missing_path:
+        import warnings
+
+        warnings.warn(
+            f"Checkpoint was trained with mbd_checkpoint={_mbd_missing_path} "
+            "but that path doesn't exist here — skipping the MBD correction "
+            "(energies will be Spooky/PhysNet-residual-only, not matching training). "
+            "Pass mbd_checkpoint=<path that exists here> to fix this.",
+            stacklevel=2,
+        )
+    mbd_checkpoint = _resolved_mbd_path
+    mbd_weight = float(_resolved_mbd_weight)
+    _energy_terms = collect_ml_energy_terms_mapping(
+        MODEL,
+        checkpoint_config=config,
+        mbd_loaded=_resolved_mbd_path is not None,
+        mbd_checkpoint=str(_resolved_mbd_path) if _resolved_mbd_path is not None else None,
+        mbd_weight=mbd_weight if _resolved_mbd_path is not None else None,
+        mbd_missing_path=_mbd_missing_path,
+    )
 
     if is_json_checkpoint:
         if checkpoint_meta is None:
@@ -1065,7 +1095,11 @@ def setup_calculator(
         model_type=(
             "Hybrid ML/MM (jax_mm_clone spoof)"
             if _jax_mm_spoof_mode
-            else "Hybrid ML/MM (PhysNet spherical cutoff)"
+            else (
+                "Hybrid ML/MM (SpookyPhysNet spherical cutoff)"
+                if _is_spooky_model
+                else "Hybrid ML/MM (PhysNet spherical cutoff)"
+            )
         ),
         n_monomers=n_monomers,
         n_atoms=total_atoms,
@@ -1081,6 +1115,7 @@ def setup_calculator(
         skin_distance_A=float(_jax_md_skin_distance),
         update_interval_steps=int(jax_md_update_interval),
         zbl=_zbl_map,
+        energy_terms=_energy_terms,
         include_psf_topology=True,
     )
 

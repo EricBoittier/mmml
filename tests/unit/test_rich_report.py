@@ -164,6 +164,81 @@ def test_collect_zbl_cutoff_mapping_none_for_spoof() -> None:
     assert rich_report.collect_zbl_cutoff_mapping(None) is None
 
 
+def test_collect_ml_energy_terms_flags_elec_and_missing_mbd() -> None:
+    from types import SimpleNamespace
+
+    model = SimpleNamespace(
+        charges=True,
+        include_electrostatics=True,
+        electrostatics_damping_sigma=4.0,
+        zbl=True,
+    )
+    mapping = rich_report.collect_ml_energy_terms_mapping(
+        model,
+        checkpoint_config={
+            "charges": True,
+            "mbd_checkpoint": "/missing/mbd-epoch-0100",
+            "mbd_weight": 1.0,
+            "no_cgenff_vdw": False,
+        },
+        mbd_loaded=False,
+        mbd_missing_path="/missing/mbd-epoch-0100",
+    )
+    assert "✓ predicted charges" in str(mapping["electrostatics"])
+    assert "4" in str(mapping["electrostatics"])
+    assert "NOT loaded" in str(mapping["MBD dispersion"])
+    assert "missing" in str(mapping["MBD checkpoint"]).lower()
+
+
+def test_collect_ml_energy_terms_flags_loaded_mbd() -> None:
+    from types import SimpleNamespace
+
+    model = SimpleNamespace(charges=False, include_electrostatics=False, zbl=False)
+    mapping = rich_report.collect_ml_energy_terms_mapping(
+        model,
+        checkpoint_config={"mbd_checkpoint": "/tmp/mbd.json", "mbd_weight": 0.5},
+        mbd_loaded=True,
+        mbd_checkpoint="/tmp/mbd.json",
+        mbd_weight=0.5,
+    )
+    assert mapping["electrostatics"] == "✗ off"
+    assert "✓ loaded" in str(mapping["MBD dispersion"])
+    assert "0.5" in str(mapping["MBD dispersion"])
+
+
+def test_resolve_companion_mbd_auto_and_missing(tmp_path) -> None:
+    from mmml.interfaces.pycharmmInterface.mbd_term import resolve_companion_mbd
+
+    present = tmp_path / "mbd.json"
+    present.write_text("{}")
+    load_path, weight, missing = resolve_companion_mbd(
+        None,
+        None,
+        {"mbd_checkpoint": str(present), "mbd_weight": 0.25},
+    )
+    assert load_path == present
+    assert weight == pytest.approx(0.25)
+    assert missing is None
+
+    load_path, weight, missing = resolve_companion_mbd(
+        None,
+        None,
+        {"mbd_checkpoint": str(tmp_path / "gone.json"), "mbd_weight": 1.0},
+    )
+    assert load_path is None
+    assert missing is not None
+    assert "gone.json" in missing
+
+    load_path, weight, missing = resolve_companion_mbd(
+        False,
+        None,
+        {"mbd_checkpoint": str(present)},
+    )
+    assert load_path is None
+    assert missing is None
+    assert weight == 0.0
+
+
 def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None:
     from types import SimpleNamespace
 
@@ -171,7 +246,9 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
         features = 32
         natoms = 10
         cutoff = 12.0
-        charges = False
+        charges = True
+        include_electrostatics = True
+        electrostatics_damping_sigma = 4.0
         zbl = True
         zbl_cuton = 0.1
         zbl_cutoff = 0.6
@@ -191,7 +268,7 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
         checkpoint={"epoch": 1000},
         ml_flags={"doML": True, "doMM": True, "doML_dimer": True},
         cutoff_params=cp,
-        model_type="Hybrid ML/MM (PhysNet spherical cutoff)",
+        model_type="Hybrid ML/MM (SpookyPhysNet spherical cutoff)",
         n_monomers=2,
         n_atoms=10,
         doML=True,
@@ -204,6 +281,16 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
         skin_distance_A=1.0,
         update_interval_steps=20,
         include_psf_topology=True,
+        energy_terms=rich_report.collect_ml_energy_terms_mapping(
+            _Model(),
+            checkpoint_config={
+                "charges": True,
+                "mbd_checkpoint": "/missing/mbd",
+                "mbd_weight": 1.0,
+            },
+            mbd_loaded=False,
+            mbd_missing_path="/missing/mbd",
+        ),
     )
     out = capsys.readouterr().out
     assert "Hybrid ML/MM setup" in out
@@ -214,6 +301,9 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
     assert "ZBL" in out
     assert "0.1000" in out or "0.1" in out
     assert "0.6000" in out or "0.6" in out
+    assert "ML energy terms" in out or "electrostatics" in out
+    assert "MBD" in out
+    assert "predicted charges" in out or "electrostatics" in out
 
 
 def test_emit_md_system_calculator_report_nl_only_refresh(capsys) -> None:
