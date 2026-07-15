@@ -107,7 +107,7 @@ def ensure_monomers_inside_cell(
     monomer_offsets: np.ndarray,
     cell: Any,
     *,
-    margin_A: float = 1.5,
+    margin_A: float = 0.05,
 ) -> np.ndarray:
     """Shift monomers whose atoms are outside ``[margin_A, L - margin_A]`` back inward.
 

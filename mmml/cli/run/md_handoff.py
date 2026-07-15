@@ -1392,7 +1392,7 @@ def rewrap_charmm_pbc_molecules(
     atoms_per_monomer: list[int],
     box_side_A: float,
     *,
-    margin_A: float = 1.5,
+    margin_A: float = 0.05,
 ) -> np.ndarray:
     """Re-wrap CHARMM primary-cell coords after MLpot SD drift.
 
