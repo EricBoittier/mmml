@@ -7326,7 +7326,18 @@ def run_dynamics_with_io(
                         total_nstep=total_nstep,
                         n_chunks=n_chunks,
                     )
-                if post_rescue_memory_this_chunk and not post_rescue_handoff_applied:
+                velocity_redraw_pending = bool(
+                    mlpot_ctx is not None
+                    and getattr(
+                        mlpot_ctx,
+                        "_overlap_velocity_redraw_memory_handoff",
+                        False,
+                    ) is True
+                )
+                if (
+                    (post_rescue_memory_this_chunk or velocity_redraw_pending)
+                    and not post_rescue_handoff_applied
+                ):
                     _prepare_post_rescue_overlap_handoff(
                         chunk_kw,
                         mlpot_ctx=mlpot_ctx,

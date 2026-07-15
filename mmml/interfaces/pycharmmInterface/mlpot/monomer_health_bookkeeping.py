@@ -419,6 +419,36 @@ def _classify_component(
     return level, tuple(reasons)
 
 
+def _classify_velocity_component(
+    value: float | None,
+    baseline: float | None,
+    *,
+    config: MonomerHealthConfig,
+    baseline_floor: float,
+) -> tuple[MonomerHealthLevel, tuple[str, ...]]:
+    """Classify thermal velocity only when it also departs from its baseline.
+
+    The stored CHARMM/AKMA components are mass weighted, so a perfectly normal
+    hydrogen Maxwell draw can exceed the legacy absolute cutoffs.  Absolute
+    values remain a floor, but a live baseline must also show a ratio excursion.
+    """
+    if baseline is None or not np.isfinite(baseline):
+        return LEVEL_OK, ()
+    level, reasons = _classify_component(
+        value,
+        baseline,
+        warn_ratio=config.velocity_warn_ratio,
+        bad_ratio=config.velocity_bad_ratio,
+        warn_abs=config.velocity_warn_abs_akma,
+        bad_abs=config.velocity_bad_abs_akma,
+        name="|v|",
+        baseline_floor=baseline_floor,
+        ratio_requires_abs_warn=True,
+    )
+    has_ratio = any("ratio" in reason for reason in reasons)
+    return (level, reasons) if has_ratio else (LEVEL_OK, ())
+
+
 def _level_rank(level: MonomerHealthLevel) -> int:
     return {LEVEL_OK: 0, LEVEL_WARN: 1, LEVEL_BAD: 2}[level]
 
@@ -818,18 +848,13 @@ def audit_monomer_health(
     warn: list[int] = []
 
     for mi in range(int(n_monomers)):
-        v_level, v_reasons = _classify_component(
+        v_level, v_reasons = _classify_velocity_component(
             float(vel_max[mi]) if np.isfinite(vel_max[mi]) else None,
             float(baseline.velocity_max_akma[mi])
             if mi < baseline.velocity_max_akma.size
             else None,
-            warn_ratio=config.velocity_warn_ratio,
-            bad_ratio=config.velocity_bad_ratio,
-            warn_abs=config.velocity_warn_abs_akma,
-            bad_abs=config.velocity_bad_abs_akma,
-            name="|v|",
+            config=config,
             baseline_floor=v_floor,
-            ratio_requires_abs_warn=bool(config.ratio_requires_abs_warn),
         )
         f_val = float(hybrid[mi]) if np.isfinite(hybrid[mi]) else float(charmm[mi])
         f_base = (

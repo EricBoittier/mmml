@@ -2418,6 +2418,37 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 else "",
             )
 
+        # A whole-system RMS can hide a few atoms at multi-eV/Å force.  Measure
+        # the live hybrid force field after every recovery/minimization step and
+        # enforce the independent per-atom ceiling before entering HEAT.
+        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            geometry_safe_for_dynamics,
+            measure_monomer_grms_stats,
+            resolve_grms_thresholds,
+        )
+
+        force_gate = geometry_safe_for_dynamics(
+            measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
+            resolve_grms_thresholds(
+                args,
+                atoms_per_list=atoms_per_list,
+                n_monomers=n_mol,
+                n_atoms=n_atoms,
+                mlpot_ctx=ctx,
+                pbc=charmm_pbc,
+            ),
+        )
+        if not force_gate.ok:
+            msg = (
+                "Pre-dynamics force gate failed: "
+                f"{force_gate.reason}. Dynamics skipped; continue calculator "
+                "minimization or repair the stressed monomer geometry."
+            )
+            if not getattr(args, "allow_high_grms", False):
+                raise RuntimeError(msg)
+            if not args.quiet:
+                print(f"WARN: {msg}", flush=True)
+
         _auto_echeck_off_grms = 30.0
         if (
             float(current_grms) > _auto_echeck_off_grms

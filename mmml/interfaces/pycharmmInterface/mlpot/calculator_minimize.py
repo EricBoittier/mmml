@@ -341,6 +341,7 @@ class _BestMinimizationFrame:
         self.best_lex_fmax = float("inf")
         self.best_lex_energy_ev = float("inf")
         self.best_lex_label = ""
+        self.last_fmax = float("inf")
         self._restored_label = ""
 
     @staticmethod
@@ -368,6 +369,7 @@ class _BestMinimizationFrame:
             fmax = float(np.abs(self.atoms.get_forces()).max())
         except Exception:
             fmax = float("inf")
+        self.last_fmax = fmax
         try:
             energy = float(self.atoms.get_potential_energy())
         except Exception:
@@ -803,23 +805,33 @@ def _run_hybrid_calculator_bfgs(
         nonlocal stopped_on_spike, stopped_on_safe_grms
         if stopped_on_spike or stopped_on_safe_grms:
             return
+        fmax = float(np.abs(atoms.get_forces()).max())
         safe_grms = config.safe_grms_kcalmol_A
         if safe_grms is not None:
             try:
                 grms = _hybrid_grms_from_ase_atoms(atoms)
             except Exception:
                 grms = float("inf")
-            if np.isfinite(grms) and float(grms) <= float(safe_grms):
+            # RMS force alone can hide one catastrophically stressed atom or
+            # monomer.  Only use the relaxed GRMS shortcut once the maximum
+            # component is also in the optimizer's soft-force region.
+            safe_fmax = float(config.fmax_ev_a) * float(config.stall_soft_fmax_factor)
+            if (
+                np.isfinite(grms)
+                and float(grms) <= float(safe_grms)
+                and np.isfinite(fmax)
+                and fmax <= safe_fmax
+            ):
                 stopped_on_safe_grms = True
                 if config.verbose:
                     print(
                         f"{context_prefix} hybrid calculator BFGS: "
                         f"safe GRMS reached ({grms:.4f} <= {float(safe_grms):.4f} "
-                        "kcal/mol/Å); stopping early",
+                        f"kcal/mol/Å; fmax={fmax:.4f} <= {safe_fmax:.4f} eV/Å); "
+                        "stopping early",
                         flush=True,
                     )
                 return
-        fmax = float(np.abs(atoms.get_forces()).max())
         if should_abort_bfgs_fmax(
             fmax,
             spike_limit_ev_a=spike_limit,

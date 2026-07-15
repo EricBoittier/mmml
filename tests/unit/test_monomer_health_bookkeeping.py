@@ -172,6 +172,46 @@ def test_audit_monomer_health_flags_bad_monomer(
     assert report.entries[1].needs_template_restore is False
 
 
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.collect_monomer_health_metrics"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 3, 6], dtype=int),
+)
+def test_audit_monomer_health_does_not_flag_normal_high_thermal_draw(
+    _offsets: MagicMock,
+    collect_metrics: MagicMock,
+) -> None:
+    ctx = SimpleNamespace(
+        _monomer_health_baseline=MonomerHealthBaseline(
+            velocity_rms_akma=np.array([9000.0, 9000.0]),
+            velocity_max_akma=np.array([16000.0, 16000.0]),
+            hybrid_grms_kcalmol_A=np.array([5.0, 5.0]),
+            charmm_grms_kcalmol_A=np.array([3.0, 3.0]),
+        ),
+        workflow_args=SimpleNamespace(residue="TIP3"),
+        atoms_per_monomer=[3, 3],
+    )
+    collect_metrics.return_value = (
+        np.array([10000.0, 10000.0]),
+        np.array([18000.0, 18000.0]),
+        np.array([5.0, 5.0]),
+        np.array([3.0, 3.0]),
+    )
+    report = audit_monomer_health(
+        ctx,
+        MonomerHealthConfig(),
+        n_monomers=2,
+        global_step=100,
+        overlap_config=None,
+    )
+    assert report is not None
+    assert report.entries[0].velocity_level == LEVEL_OK
+    assert report.flagged_bad == ()
+    assert report.flagged_warn == ()
+
+
 def test_select_flagged_bad_by_highest_grms() -> None:
     report = MonomerHealthReport(
         entries=(

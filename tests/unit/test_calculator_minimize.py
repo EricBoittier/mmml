@@ -462,8 +462,9 @@ def test_run_hybrid_calculator_bfgs_stops_on_safe_grms():
     atoms = MagicMock()
     atoms.get_forces.side_effect = [
         np.array([[2.0, 0.0, 0.0]]),
-        np.array([[1.0, 0.0, 0.0]]),
-        np.array([[1.0, 0.0, 0.0]]),
+        np.array([[0.1, 0.0, 0.0]]),
+        np.array([[0.1, 0.0, 0.0]]),
+        np.array([[0.1, 0.0, 0.0]]),
     ]
     atoms.get_positions.return_value = np.zeros((1, 3))
 
