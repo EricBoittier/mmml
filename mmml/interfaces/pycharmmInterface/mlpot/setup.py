@@ -1492,21 +1492,34 @@ def load_physnet_mlpot_bundle(
         )
 
         if atoms_per_monomer is None:
-            if int(n_atoms) % int(n_monomers) != 0:
-                nres_hint = ""
-                try:
-                    import pycharmm.psf as psf
-
-                    if hasattr(psf, "get_nres"):
-                        nres_hint = f"; PSF has {int(psf.get_nres())} residues"
-                except Exception:
-                    pass
-                raise ValueError(
-                    f"atom count {n_atoms} not divisible by n_monomers={n_monomers}{nres_hint}. "
-                    "Align --composition or --n-molecules with the loaded PSF/box."
+            # Mixed solvent systems have heterogeneous residue sizes.  Use
+            # PSF residue boundaries before applying the legacy uniform split.
+            try:
+                from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+                    atoms_per_monomer_from_psf,
                 )
-            per = int(n_atoms) // int(n_monomers)
-            atoms_per_monomer = [per] * int(n_monomers)
+
+                per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
+                if len(per_psf) == int(n_monomers) and sum(per_psf) == int(n_atoms):
+                    atoms_per_monomer = per_psf
+            except Exception:
+                pass
+            if atoms_per_monomer is None:
+                if int(n_atoms) % int(n_monomers) != 0:
+                    nres_hint = ""
+                    try:
+                        import pycharmm.psf as psf
+
+                        if hasattr(psf, "get_nres"):
+                            nres_hint = f"; PSF has {int(psf.get_nres())} residues"
+                    except Exception:
+                        pass
+                    raise ValueError(
+                        f"atom count {n_atoms} not divisible by n_monomers={n_monomers}{nres_hint}. "
+                        "Align --composition or --n-molecules with the loaded PSF/box."
+                    )
+                per = int(n_atoms) // int(n_monomers)
+                atoms_per_monomer = [per] * int(n_monomers)
         pyCModel = build_decomposed_mlpot_model(
             ckpt,
             z,

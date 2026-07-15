@@ -7,8 +7,16 @@ from pathlib import Path
 import numpy as np
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_PYCHARMM_PKG = _REPO_ROOT / "setup" / "charmm" / "tool" / "pycharmm" / "pycharmm"
+
+
 def _read(path: str) -> str:
-    return Path(path).read_text(encoding="utf-8")
+    if path.startswith("pycharmm/"):
+        target = _PYCHARMM_PKG / path.removeprefix("pycharmm/")
+    else:
+        target = _REPO_ROOT / path
+    return target.read_text(encoding="utf-8")
 
 
 def test_read_rtf_uses_c_api_not_command_script():

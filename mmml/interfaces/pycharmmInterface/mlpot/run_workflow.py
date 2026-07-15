@@ -606,9 +606,24 @@ def run_charmm_mm_pretreat_before_mlpot(
 
 def _atoms_per_monomer_list(z: np.ndarray, n_monomers: int) -> list[int]:
     n_atoms = int(len(z))
+    # Mixed solvent cells do not have a uniform atom count per monomer
+    # (e.g. TIP3=3 atoms and MEOH=6 atoms).  Prefer the residue/PSF
+    # boundaries when available instead of assuming a divisible total.
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+            atoms_per_monomer_from_psf,
+        )
+
+        per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
+        if len(per_psf) == int(n_monomers) and sum(per_psf) == n_atoms:
+            return per_psf
+    except Exception:
+        # Keep the legacy uniform fallback for callers without a live PSF.
+        pass
     if n_atoms % int(n_monomers) != 0:
         raise ValueError(
-            f"atom count {n_atoms} not divisible by n_monomers={n_monomers}"
+            f"atom count {n_atoms} not divisible by n_monomers={n_monomers}; "
+            "mixed systems require PSF residue boundaries"
         )
     per = n_atoms // int(n_monomers)
     return [per] * int(n_monomers)

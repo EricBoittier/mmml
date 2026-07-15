@@ -220,6 +220,8 @@ CHARMMSETUP
 !mmml/data/molecules/dcm.xyz
 *.png
 !docs/images/**/*.png
+!docs/plot-style-gallery-assets/*.png
+!docs/robustness-report-assets/*.png
 CHARMMSETUP
 examples/co2/dcmnet_physnet_train/md_ir_long/trajectory.npz
 examples/openqdc/openqdc_packed_memmap/
