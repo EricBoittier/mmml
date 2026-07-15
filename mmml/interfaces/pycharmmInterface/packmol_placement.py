@@ -282,7 +282,16 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResu
     os.makedirs(inp_path.parent, exist_ok=True)
     inp_path.write_text(packmol_input)
     packmol_bin = packmol_executable()
+    
+    import time
+    from mmml.utils.rich_report import emit
+    emit("Running packmol geometry builder (this may take a few minutes)...")
+    start_t = time.time()
+    
     proc = _run_packmol_subprocess(packmol_bin, inp_path)
+    
+    elapsed = time.time() - start_t
+    emit(f"Packmol finished in {elapsed:.1f} seconds.")
     log_text = (proc.stdout or "") + (
         ("\n" + proc.stderr) if proc.stderr else ""
     )
