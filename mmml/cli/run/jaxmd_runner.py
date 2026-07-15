@@ -1383,7 +1383,12 @@ def set_up_nhc_sim_routine(
 
         nbr_monitor = getattr(args, "nbr_monitor", False)
         if use_pbc:
-            c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
+            c.print(Panel(
+                f"{n_monomers} monomer groups, wrap+NL every {steps_per_loop_call} MD steps "
+                f"(record every {steps_per_recording})",
+                title="[bold]PBC Wrapping[/bold]",
+                border_style="blue",
+            ))
         _total_time_ps = total_steps * dt
         c.print(Panel(
             f"Starting {args.ensemble.upper()} simulation | "

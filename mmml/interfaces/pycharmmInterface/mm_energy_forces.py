@@ -21,8 +21,24 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacements_batched_smooth,
 )
 
-# Verlet skin for jax-md MM pair reuse: ≤ dr_threshold/2 (dr_threshold=0.5 Å in bundle).
+# Verlet skin for MM pair reuse. List is built at interaction_cutoff + skin;
+# reuse is allowed only while max per-atom displacement ≤ skin/2.
 DEFAULT_JAX_MD_CAPACITY_MULTIPLIER = 1.75
+DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
+
+
+def resolve_mm_pair_list_cutoff_A(
+    mm_switch_on: float,
+    mm_switch_width: float,
+    skin_distance: float = 0.0,
+) -> float:
+    """Outer pair-list radius: switched-MM cutoff plus Verlet skin buffer."""
+    return float(mm_switch_on) + float(mm_switch_width) + float(max(0.0, skin_distance))
+
+
+def verlet_reuse_displacement_limit_A(skin_distance: float) -> float:
+    """Max per-atom move since last rebuild before the list is stale (skin/2)."""
+    return 0.5 * float(max(0.0, skin_distance))
 
 
 def _unpack_mm_energy_forces(
@@ -33,7 +49,6 @@ def _unpack_mm_energy_forces(
     energy, forces = result
     zero = jnp.zeros_like(energy)
     return energy, forces, zero, zero
-DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
 
 try:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
@@ -179,27 +194,41 @@ def neighbor_pair_cache_should_reuse(
     have_cache: bool,
     box_delta_tol: float = 1e-8,
 ) -> bool:
-    """Return True when ``update_mm_pairs`` may reuse cached pair_idx/pair_mask."""
+    """Return True when ``update_mm_pairs`` may reuse cached pair_idx/pair_mask.
+
+    Verlet rules (list must be built at interaction_cutoff + skin):
+    - ``skin == 0``: never reuse (caller rebuilds every time).
+    - ``skin > 0``: reuse only while max per-atom displacement ≤ skin/2 and the
+      box is unchanged.  ``interval > 1`` also forces a rebuild every
+      ``interval`` calls even if still within the skin.
+    """
     if not have_cache:
         return False
 
     interval_i = int(max(1, interval))
     skin_f = float(max(0.0, skin))
 
-    box_delta = 0.0
     if (box is None) != (last_box is None):
         return False
+    box_delta = 0.0
     if box is not None and last_box is not None:
         box_delta = float(np.max(np.abs(np.asarray(box) - np.asarray(last_box))))
+    if box_delta > box_delta_tol:
+        return False
 
-    if int(calls) % interval_i != 0:
-        return box_delta <= box_delta_tol
+    if skin_f <= 0.0:
+        return False
 
-    if skin_f > 0.0 and last_R is not None:
-        max_disp = float(np.max(np.linalg.norm(R - last_R, axis=1)))
-        return max_disp <= skin_f and box_delta <= box_delta_tol
+    if last_R is None:
+        return False
+    max_disp = float(np.max(np.linalg.norm(R - last_R, axis=1)))
+    if max_disp > verlet_reuse_displacement_limit_A(skin_f):
+        return False
 
-    return False
+    # Optional periodic refresh even when still inside the skin buffer.
+    if interval_i > 1 and int(calls) % interval_i == 0:
+        return False
+    return True
 
 
 def _fractional_positions_for_jax_md_neighbor_list(
@@ -885,7 +914,9 @@ def build_mm_energy_forces_fn(
     def _create_jax_md_bundle(capacity_multiplier: float):
         return create_jax_md_neighbor_list(
             np.asarray(pbc_cell),
-            r_cutoff=mm_switch_on + mm_switch_width,
+            r_cutoff=resolve_mm_pair_list_cutoff_A(
+                mm_switch_on, mm_switch_width, jax_md_skin_distance
+            ),
             monomer_offsets=np.asarray(monomer_offsets),
             dr_threshold=0.5,
             capacity_multiplier=capacity_multiplier,
@@ -908,8 +939,12 @@ def build_mm_energy_forces_fn(
             )
             _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
 
+    _mm_list_cutoff = resolve_mm_pair_list_cutoff_A(
+        mm_switch_on, mm_switch_width, jax_md_skin_distance
+    )
+
     if _use_rebuild_nbrs:
-        _mm_switch_width_dist = mm_switch_on + mm_switch_width
+        _mm_switch_width_dist = _mm_list_cutoff
         _static_backend = pick_static_rebuild_backend(
             mm_nl_backend,
             use_jax_md_neighbor_list=False,
@@ -949,7 +984,7 @@ def build_mm_energy_forces_fn(
         if force_static_mm_eval:
             _use_dynamic_nbrs = False
     elif _use_jax_md_nbrs:
-        _mm_switch_width_dist = mm_switch_on + mm_switch_width
+        _mm_switch_width_dist = _mm_list_cutoff
         nbrs_init = _neighbor_fn_cell[0].allocate(np.asarray(R))
         _nbrs[0] = nbrs_init
         idx = nbrs_init.idx
@@ -958,7 +993,7 @@ def build_mm_energy_forces_fn(
         if debug:
             n_valid_init = int(np.sum(np.asarray(jax.device_get(mask))))
             print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={n_valid_init}, "
-                  f"frac_coords={fractional_coordinates}, r_cutoff={mm_switch_on + mm_switch_width:.2f}")
+                  f"frac_coords={fractional_coordinates}, r_cutoff={_mm_list_cutoff:.2f}")
         pair_idx_atom_atom = jnp.stack([pair_i, pair_j], axis=1)
         _cl_mask_jnp = jnp.asarray(mask, dtype=ml_jnp_dtype)
         _pair_idx_cell[0] = pair_idx_atom_atom
@@ -1432,7 +1467,7 @@ def build_mm_energy_forces_fn(
             _nbr_debug: bool,
             box_in: Optional[np.ndarray] = None,
         ) -> Tuple[Array, Array]:
-            cutoff = mm_switch_on + mm_switch_width
+            cutoff = _mm_list_cutoff
             current_pbc_cell = pbc_cell
             if box_in is not None:
                 box_np = np.asarray(box_in, dtype=np.float64)
@@ -1539,15 +1574,6 @@ def build_mm_energy_forces_fn(
             box_delta = float(np.max(np.abs(np.asarray(box_in) - np.asarray(_last_box[0]))))
             return box_delta <= 1e-8
 
-        def _gpu_interval_reuse_allowed(box_in: Optional[np.ndarray], interval: int, skin: float) -> bool:
-            if not (
-                _pair_idx_cell[0] is not None and _pair_mask_cell[0] is not None
-            ):
-                return False
-            if _pair_stats["calls"] % int(max(1, interval)) == 0:
-                return False
-            return _box_delta_within_tolerance(box_in)
-
         def _rebuild_pairs_with_static_backend(
             positions_in: np.ndarray,
             box_in: Optional[np.ndarray],
@@ -1572,7 +1598,7 @@ def build_mm_energy_forces_fn(
                         pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
                             pos_for_gpu,
                             pbc_for_build,
-                            cutoff=mm_switch_on + mm_switch_width,
+                            cutoff=_mm_list_cutoff,
                             monomer_offsets=_offsets_np,
                             mm_r_min=mm_r_min,
                             max_pairs=_fallback_max_pairs_cell[0],
@@ -1614,7 +1640,7 @@ def build_mm_energy_forces_fn(
                         backend_req,
                         positions=R_build,
                         box=pbc_for_build,
-                        cutoff=mm_switch_on + mm_switch_width,
+                        cutoff=_mm_list_cutoff,
                         monomer_offsets=_offsets_np,
                         atoms_per_monomer_list=atoms_per_monomer_list,
                         mm_r_min=mm_r_min,
@@ -1675,38 +1701,8 @@ def build_mm_energy_forces_fn(
                 and _pair_mask_cell[0] is not None
             )
 
-            if _use_rebuild_nbrs and positions_jax is not None:
-                from mmml.interfaces.pycharmmInterface.nl_gpu import gpu_nl_path_available
-
-                if gpu_nl_path_available():
-                    _pair_stats["cache_checks"] += 1
-                    if _gpu_interval_reuse_allowed(box, interval, skin):
-                        _pair_stats["reused"] += 1
-                        _pair_stats["cache_reuse_reason"] = "gpu_interval_box_stable"
-                        _pair_stats["last_reuse_reason"] = "gpu_interval_box_stable"
-                        return _pair_idx_cell[0], _pair_mask_cell[0]
-
-                    pair_idx, pair_mask = _rebuild_pairs_with_static_backend(
-                        np.empty((0, 3), dtype=np.float64),
-                        box,
-                        _nbr_debug,
-                        positions_jax=positions_jax,
-                    )
-                    _pair_idx_cell[0] = pair_idx
-                    _pair_mask_cell[0] = pair_mask
-                    _last_cartesian_positions[0] = None
-                    _last_cartesian_positions_jax[0] = None
-                    _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
-                    _pair_stats["updates"] += 1
-                    _pair_stats["last_reuse_reason"] = (
-                        "gpu_rebuild_no_host_skin_cache"
-                        if skin > 0.0
-                        else "gpu_rebuild"
-                    )
-                    _pair_stats["cache_reuse_reason"] = _pair_stats["last_reuse_reason"]
-                    _record_pair_capacity(int(pair_idx.shape[0]), "gpu_rebuild_shape")
-                    return pair_idx, pair_mask
-
+            # Verlet skin check (GPU and host): list is built at Rcut+skin, so
+            # reuse is safe only while max per-atom displacement ≤ skin/2.
             if (
                 _use_rebuild_nbrs
                 and positions_jax is not None
@@ -1714,19 +1710,15 @@ def build_mm_energy_forces_fn(
                 and skin > 0.0
                 and _last_cartesian_positions_jax[0] is not None
                 and _box_delta_within_tolerance(box)
+                and not (interval > 1 and _pair_stats["calls"] % interval == 0)
             ):
                 _pair_stats["cache_checks"] += 1
-                if _gpu_interval_reuse_allowed(box, interval, skin):
-                    _pair_stats["reused"] += 1
-                    _pair_stats["cache_reuse_reason"] = "device_interval"
-                    _pair_stats["last_reuse_reason"] = "device_interval"
-                    return _pair_idx_cell[0], _pair_mask_cell[0]
                 _pair_stats["device_skin_checks"] += 1
                 R_cart_jax = _jax_cartesian_for_nl_build(positions_jax, box)
                 c = np.asarray(jax.device_get(R_cart_jax), dtype=np.float64)
                 p = np.asarray(jax.device_get(_last_cartesian_positions_jax[0]), dtype=np.float64)
                 max_disp = float(np.max(np.linalg.norm(c - p, axis=1)))
-                if max_disp <= skin:
+                if max_disp <= verlet_reuse_displacement_limit_A(skin):
                     _pair_stats["reused"] += 1
                     _pair_stats["cache_reuse_reason"] = "device_skin"
                     _pair_stats["last_reuse_reason"] = "device_skin"

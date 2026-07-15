@@ -95,8 +95,24 @@ def test_skin_zero_interval_one_never_reuses():
 def test_default_skin_interval_one_reuses_small_step():
     R0 = np.zeros((4, 3), dtype=np.float64)
     R1 = R0.copy()
-    R1[0, 0] = 0.1
+    R1[0, 0] = 0.05  # < skin/2 for default skin=0.25
     assert neighbor_pair_cache_should_reuse(
+        calls=1,
+        interval=1,
+        skin=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+        R=R1,
+        last_R=R0,
+        box=PBC_BOX_A,
+        last_box=PBC_BOX_A.copy(),
+        have_cache=True,
+    )
+
+
+def test_default_skin_rejects_disp_beyond_half_skin():
+    R0 = np.zeros((4, 3), dtype=np.float64)
+    R1 = R0.copy()
+    R1[0, 0] = 0.13  # > 0.125 = skin/2
+    assert not neighbor_pair_cache_should_reuse(
         calls=1,
         interval=1,
         skin=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
