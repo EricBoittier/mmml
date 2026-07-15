@@ -152,6 +152,15 @@ If you only need MLpot at `mpirun -np 1` and can skip DOMDEC:
 ./scripts/rebuild_charmm_mlpot.sh --no-domdec --clean
 ```
 
+For a **serial** `libcharmm` (no OpenMPI link; plain `pytest` / no `mmml-charmm-mpirun.sh`):
+
+```bash
+./scripts/rebuild_charmm_mlpot.sh --no-mpi --clean
+# installs setup/charmm/libcharmm.so; cmake cache in ~/.cache/mmml-charmm-build/<platform>-nompi
+export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1
+uv run pytest tests/functionality/charmm/test_jax_mm_spoof_bonded_pycharmm.py -v
+```
+
 DOMDEC tier-3 (`np>1` with domain decomposition) still requires FFTW/MKL.
 
 ---
