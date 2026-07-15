@@ -92,6 +92,39 @@ def per_monomer_grms_from_forces(
     return np.asarray(out, dtype=np.float64)
 
 
+def per_monomer_fmax_from_forces(
+    forces: np.ndarray,
+    atoms_per_list: list[int] | tuple[int, ...],
+) -> np.ndarray:
+    """Largest single-atom force magnitude per monomer (kcal/mol/Å)."""
+    f = np.asarray(forces, dtype=np.float64).reshape(-1, 3)
+    counts = [int(x) for x in atoms_per_list]
+    if int(np.sum(counts)) != int(f.shape[0]):
+        raise ValueError(
+            f"force rows ({f.shape[0]}) != sum(atoms_per_list) ({int(np.sum(counts))})"
+        )
+    out: list[float] = []
+    start = 0
+    for n in counts:
+        out.append(atomic_fmax_kcalmol_A(f[start : start + n]))
+        start += n
+    return np.asarray(out, dtype=np.float64)
+
+
+def select_stressed_monomers(
+    per_monomer_fmax_kcalmol_A: np.ndarray,
+    ceiling_kcalmol_A: float,
+) -> list[int]:
+    """Indices of monomers whose max single-atom force exceeds the ceiling."""
+    arr = np.asarray(per_monomer_fmax_kcalmol_A, dtype=np.float64)
+    ceiling = float(ceiling_kcalmol_A)
+    return [
+        int(i)
+        for i, v in enumerate(arr)
+        if np.isfinite(v) and float(v) > ceiling
+    ]
+
+
 def measure_monomer_grms_stats(
     atoms_per_list: list[int] | tuple[int, ...],
     *,

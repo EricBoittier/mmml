@@ -294,3 +294,34 @@ def test_geometry_gate_rejects_high_grms_even_with_low_fmax():
     result = geometry_safe_for_dynamics(stats, thresholds)
     assert result.ok is False
     assert "global GRMS" in result.reason
+
+
+def test_per_monomer_fmax_and_selection():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        per_monomer_fmax_from_forces,
+        select_stressed_monomers,
+    )
+
+    # 3 monomers of 2 atoms each; monomer 1 has one atom at |f|=10.
+    forces = np.array(
+        [
+            [0.1, 0.0, 0.0], [0.2, 0.0, 0.0],   # monomer 0: quiet
+            [10.0, 0.0, 0.0], [0.1, 0.0, 0.0],  # monomer 1: one stressed atom
+            [0.3, 0.0, 0.0], [0.1, 0.0, 0.0],   # monomer 2: quiet
+        ],
+        dtype=float,
+    )
+    per = per_monomer_fmax_from_forces(forces, [2, 2, 2])
+    assert per.shape == (3,)
+    assert per[1] == pytest.approx(10.0)
+    assert select_stressed_monomers(per, 2.0) == [1]
+    assert select_stressed_monomers(per, 20.0) == []
+
+
+def test_select_stressed_monomers_ignores_nonfinite():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        select_stressed_monomers,
+    )
+
+    per = np.array([1.0, np.nan, 5.0, np.inf])
+    assert select_stressed_monomers(per, 2.0) == [2]

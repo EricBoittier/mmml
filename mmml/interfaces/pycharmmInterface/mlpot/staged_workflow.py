@@ -2439,6 +2439,59 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             ),
         )
         if not force_gate.ok:
+            # A whole-system minimizer barely feels one or two stressed monomers
+            # (global RMS is dominated by the healthy majority), so before failing
+            # try a targeted per-monomer calculator repair on the bad monomers.
+            if (
+                getattr(args, "monomer_calc_repair", True)
+                and pyCModel is not None
+                and atoms_per_list is not None
+                and len(atoms_per_list) > 1
+            ):
+                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                    repair_stressed_monomers_with_calculator,
+                )
+
+                try:
+                    repair = repair_stressed_monomers_with_calculator(
+                        ctx,
+                        atoms_per_list=atoms_per_list,
+                        fmax_ceiling_ev_a=float(force_gate.max_fmax_before_dyn)
+                        / 23.060541945329334,
+                        max_steps=int(getattr(args, "fire_min_steps", 200) or 200),
+                        fmax_ev_a=float(getattr(args, "pre_min_fmax", 0.05) or 0.05),
+                        fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
+                        verbose=not args.quiet,
+                        context_prefix="Pre-dynamics monomer repair",
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    if not args.quiet:
+                        print(
+                            f"WARN: per-monomer calculator repair failed ({exc})",
+                            flush=True,
+                        )
+                else:
+                    if repair.ran:
+                        sync_charmm_positions(get_charmm_positions_array())
+                        current_grms = refresh_mlpot_energy_and_grms(
+                            ctx,
+                            context="Pre-dynamics gate (post-monomer repair)"
+                            if not args.quiet
+                            else "",
+                        )
+                        force_gate = geometry_safe_for_dynamics(
+                            measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
+                            resolve_grms_thresholds(
+                                args,
+                                atoms_per_list=atoms_per_list,
+                                n_monomers=n_mol,
+                                n_atoms=n_atoms,
+                                mlpot_ctx=ctx,
+                                pbc=charmm_pbc,
+                            ),
+                        )
+
+        if not force_gate.ok:
             msg = (
                 "Pre-dynamics force gate failed: "
                 f"{force_gate.reason}. Dynamics skipped; continue calculator "
