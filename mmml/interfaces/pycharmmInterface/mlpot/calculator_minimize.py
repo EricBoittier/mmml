@@ -867,6 +867,10 @@ def _run_hybrid_calculator_bfgs(
                     flush=True,
                 )
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
+
+    # ASE Optimizer.log → world.rank; serial libcharmm has no libmpi for mpi4py.
+    disable_ase_mpi_parallel()
     opt = BfgsOptimizer(
         atoms,
         logfile=None if config.quiet_bfgs else ase_optimizer_dual_unit_logfile(),
@@ -998,6 +1002,9 @@ def _run_hybrid_calculator_fire(
             flush=True,
         )
 
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
+
+    disable_ase_mpi_parallel()
     opt = FIRE(
         atoms,
         logfile=None if not config.verbose else ase_optimizer_dual_unit_logfile(),

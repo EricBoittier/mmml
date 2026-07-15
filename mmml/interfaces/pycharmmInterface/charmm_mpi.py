@@ -257,26 +257,74 @@ def _needs_mpi_setup() -> bool:
     return True
 
 
-def ensure_mpi4py_libmpi_env() -> str | None:
-    """Point ``MPI4PY_LIBMPI`` at a resolvable OpenMPI ``libmpi`` for ABI discovery.
+def _distro_openmpi_library_dirs() -> tuple[str, ...]:
+    """Well-known OpenMPI lib dirs when ``mpirun`` / ``OPENMPI_ROOT`` are unset."""
+    candidates = (
+        Path("/usr/lib64/openmpi/lib"),
+        Path("/usr/lib/openmpi/lib"),
+        Path("/usr/lib/x86_64-linux-gnu/openmpi/lib"),
+        Path("/usr/lib/x86_64-linux-gnu"),
+        Path("/usr/local/lib"),
+    )
+    return tuple(str(p) for p in candidates if p.is_dir())
 
-    Serial ``libcharmm`` does not preload ``libmpi``, so ``from mpi4py import MPI``
-    otherwise probes ``$venv/lib/libmpi.so*`` and raises ``cannot load MPI library``.
+
+def _symlink_libmpi_into_venv(libmpi: Path) -> None:
+    """Place soname symlinks under ``sys.prefix/lib`` for mpi4py's default probe."""
+    import sys
+
+    try:
+        venv_lib = Path(sys.prefix) / "lib"
+        if not venv_lib.is_dir():
+            return
+        # Keep the soname path (libmpi.so.40); do not resolve to libmpi.so.40.40.7.
+        target = libmpi if libmpi.is_file() else libmpi.resolve()
+        if not target.is_file():
+            return
+        for name in ("libmpi.so.40", "libmpi.so"):
+            link = venv_lib / name
+            if link.exists() or link.is_symlink():
+                link.unlink(missing_ok=True)
+            link.symlink_to(target)
+    except OSError:
+        return
+
+
+def ensure_mpi4py_libmpi_env() -> str | None:
+    """Make ``from mpi4py import MPI`` work with serial CHARMM / empty venv ``lib/``.
+
+    Prefer ``MPI4PY_MPIABI=openmpi`` (skips ctypes ABI dlopen) plus a soname
+    symlink under ``sys.prefix/lib``. Setting ``MPI4PY_LIBMPI`` alone can leave
+    the OpenMPI extension unable to resolve ``libmpi.so.40`` at load time.
     """
     if _truthy("MMML_NO_MPI_LD_PATH"):
         return None
+    os.environ.setdefault("MPI4PY_MPIABI", "openmpi")
     existing = (os.environ.get("MPI4PY_LIBMPI") or "").strip()
     if existing and Path(existing).is_file():
-        os.environ.setdefault("MPI4PY_MPIABI", "openmpi")
+        _symlink_libmpi_into_venv(Path(existing))
         return existing
-    for lib_dir in _openmpi_lib_search_dirs():
-        for name in ("libmpi.so.40", "libmpi.so", "libmpi.so.12"):
-            candidate = Path(lib_dir) / name
-            if candidate.is_file():
-                resolved = str(candidate.resolve())
-                os.environ["MPI4PY_LIBMPI"] = resolved
-                os.environ.setdefault("MPI4PY_MPIABI", "openmpi")
-                return resolved
+    search_dirs = (
+        *_openmpi_lib_search_dirs(),
+        *_distro_openmpi_library_dirs(),
+    )
+    seen: set[str] = set()
+    for lib_dir in search_dirs:
+        if lib_dir in seen:
+            continue
+        seen.add(lib_dir)
+        preferred = Path(lib_dir) / "libmpi.so.40"
+        if not preferred.is_file():
+            for name in ("libmpi.so", "libmpi.so.12"):
+                candidate = Path(lib_dir) / name
+                if candidate.is_file():
+                    preferred = candidate
+                    break
+            else:
+                continue
+        _symlink_libmpi_into_venv(preferred)
+        # Do not force MPI4PY_LIBMPI — ABI is already set via MPI4PY_MPIABI.
+        return str(preferred)
     return None
 
 
@@ -2380,12 +2428,22 @@ def bootstrap_topology_mpi(
 
 
 def disable_ase_mpi_parallel() -> None:
-    """Force ASE serial I/O when mpi4py is loaded for CHARMM (avoids bcast clashes)."""
+    """Force ASE serial communicators (no ``mpi4py`` import in Optimizer.log).
+
+    ASE 3.26 ``Log.write`` touches ``world.rank``.  When the ``mpi4py`` *package*
+    is present in ``sys.modules``, ``_get_comm()`` constructs ``MPI4PY()`` which
+    imports ``mpi4py.MPI`` and fails if ``libmpi.so`` is not on the linker path
+    (serial ``libcharmm`` / empty venv ``lib/``).  Patch the live ``world``
+    instance and ``_get_comm`` so BFGS/FIRE never touch mpi4py.
+    """
     try:
         import ase.parallel as ase_parallel
     except ImportError:
         return
-    ase_parallel.MPI.comm = ase_parallel.DummyMPI()
+    dummy = ase_parallel.DummyMPI()
+    # Instance attribute (``MPI.__init__`` sets ``self.comm = None``).
+    ase_parallel.world.comm = dummy
+    ase_parallel._get_comm = lambda: dummy  # type: ignore[assignment]
 
 
 def prepare_serial_charmm_mpi_env() -> None:
@@ -2404,6 +2462,8 @@ def prepare_serial_charmm_mpi_env() -> None:
     if not charmm_lib_links_mpi():
         # Prefer system OpenMPI on LD_LIBRARY_PATH for optional mpi4py imports.
         ensure_charmm_mpi_library_path()
+        # ASE BFGS/FIRE log paths must not import mpi4py without libmpi.
+        disable_ase_mpi_parallel()
     if charmm_lib_links_mpi():
         configure_mpi4py_charmm_owned_init()
     _pin_charmm_openmp_for_serial_mlpot()
@@ -2419,6 +2479,14 @@ def prepare_serial_charmm_mpi_env() -> None:
         os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
     if not _under_mpirun():
         scrub_stale_openmpi_env()
+    # Always pin ASE serial when mpi4py cannot satisfy ASE's lazy MPI4PY() path.
+    try:
+        import sys
+
+        if "mpi4py" in sys.modules and not charmm_lib_links_mpi():
+            disable_ase_mpi_parallel()
+    except Exception:
+        pass
 
 
 def scrub_stale_openmpi_env(*, force: bool = False) -> int:

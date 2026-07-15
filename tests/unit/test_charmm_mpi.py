@@ -37,6 +37,21 @@ def test_scrub_stale_openmpi_env_when_charmm_mpi_linked(monkeypatch):
     assert "OMPI_COMM_WORLD_SIZE" not in os.environ
 
 
+def test_disable_ase_mpi_parallel_avoids_mpi4py_import():
+    """ASE Optimizers must not call mpi4py.MPI when libmpi is missing."""
+    import sys
+
+    import ase.parallel as ase_parallel
+
+    # Simulate: mpi4py package imported, but MPI extension unloadable.
+    sys.modules.setdefault("mpi4py", type(sys)("mpi4py"))
+    charmm_mpi.disable_ase_mpi_parallel()
+    assert isinstance(ase_parallel.world.comm, ase_parallel.DummyMPI)
+    assert ase_parallel.world.rank == 0
+    # Must not construct MPI4PY() / import mpi4py.MPI.
+    assert isinstance(ase_parallel._get_comm(), ase_parallel.DummyMPI)
+
+
 def test_mpi_comm_valid_swallows_mpi4py_abi_runtime_error(monkeypatch):
     """Serial CHARMM must not abort when mpi4py cannot dlopen venv libmpi."""
     monkeypatch.setattr(charmm_mpi, "_mpi4py_available", lambda: True)

@@ -46,6 +46,16 @@ def _rank_size_from_launcher_env() -> Tuple[int, int]:
     return int(rank_raw), max(1, int(size_raw))
 
 
+def _import_mpi4py_mpi():
+    """Import ``mpi4py.MPI`` after pointing ABI discovery at system OpenMPI."""
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_libmpi_env
+
+    ensure_mpi4py_libmpi_env()
+    from mpi4py import MPI
+
+    return MPI
+
+
 def _mpi4py_is_initialized() -> bool:
     """Return True only when mpi4py.MPI extension is already loaded AND initialized.
 
@@ -67,8 +77,7 @@ def _mpi4py_is_initialized() -> bool:
     if "mpi4py.MPI" not in sys.modules:
         return False
     try:
-        from mpi4py import MPI
-
+        MPI = _import_mpi4py_mpi()
         return bool(MPI.Is_initialized())
     except Exception:
         return False
@@ -87,11 +96,22 @@ def mpi_rank_size(comm: Any = None) -> Tuple[int, int]:
     if comm is not None:
         return int(comm.Get_rank()), int(comm.Get_size())
     env_rank, env_size = _rank_size_from_launcher_env()
+    # Serial libcharmm: ignore stale multi-rank launcher env (causes bare mpi4py
+    # imports that fail with "cannot load MPI library" under a plain venv).
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            charmm_lib_links_mpi,
+            _under_mpirun,
+        )
+
+        if not charmm_lib_links_mpi() and not _under_mpirun():
+            return 0, 1
+    except Exception:
+        pass
     if not _mpi4py_is_initialized():
         return env_rank, env_size
     try:
-        from mpi4py import MPI
-
+        MPI = _import_mpi4py_mpi()
         c = MPI.COMM_WORLD
         rank, size = int(c.Get_rank()), int(c.Get_size())
         if size <= 1 and env_size > 1:
@@ -152,12 +172,16 @@ def broadcast_mlpot_result(
     from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
 
     ensure_charmm_mpi_initialized()
+    try:
+        MPI = _import_mpi4py_mpi()
+    except Exception as exc:
+        raise RuntimeError(
+            "mpi4py could not load libmpi (set MPI4PY_LIBMPI to OpenMPI's "
+            "libmpi.so.40, or export LD_LIBRARY_PATH to include its lib dir). "
+            f"Original error: {exc}"
+        ) from exc
     if comm is None:
-        from mpi4py import MPI
-
         comm = MPI.COMM_WORLD
-
-    from mpi4py import MPI
 
     e_buf = np.array([energy_kcal if rank == 0 else 0.0], dtype=np.float64)
     comm.Bcast([e_buf, MPI.DOUBLE], root=0)
