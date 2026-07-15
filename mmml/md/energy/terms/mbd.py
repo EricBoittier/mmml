@@ -59,11 +59,6 @@ class MBDDispersionTerm:
             if self.cutoff_A is not None
             else opts.get("mbd_cutoff", DEFAULT_MBD_CUTOFF_A)
         )
-        box0 = (
-            None
-            if system.box is None
-            else jnp.asarray(np.diag(np.asarray(system.box)), dtype=COMPUTE_DTYPE)
-        )
 
         def energy_fn(R, *, pair_i=None, pair_j=None, pair_mask=None, box=None, **kwargs) -> Any:
             if pair_i is None or pair_j is None:

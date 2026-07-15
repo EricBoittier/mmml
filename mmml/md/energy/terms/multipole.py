@@ -91,20 +91,16 @@ class MultipoleTerm:
         idx_pad_j = jnp.asarray(idx_pad, dtype=jnp.int32)
         mask_pad_j = jnp.asarray(mask_pad, dtype=COMPUTE_DTYPE)
 
-        ref_com = []
         ref_local = []
         for f in range(n_frag):
             ix = frag_idx[f]
             pts = ref_pos[ix]
             com = jnp.mean(pts, axis=0)
             local = pts - com
-            # pad
             pad = jnp.zeros((max_n, 3), dtype=COMPUTE_DTYPE)
             pad = pad.at[: ix.size].set(local)
-            ref_com.append(com)
             ref_local.append(pad)
         ref_local_j = jnp.stack(ref_local)
-        # ref_com unused at runtime (recomputed from R)
 
         def _fragment_frame(R):
             pos = jnp.asarray(R, dtype=COMPUTE_DTYPE)
