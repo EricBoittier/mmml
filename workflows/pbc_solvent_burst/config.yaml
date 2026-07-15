@@ -15,6 +15,12 @@
 # Override matrix root: output_root: /path/to/runs/pbc_solvent_burst
 
 solvents: [TIP3, MEOH]
+# Mixed-water/methanol cells at three mole ratios. Counts are allocated from
+# ideal volume mixing using the same 298 K pure-liquid density references.
+mixtures:
+  - {TIP3: 0.25, MEOH: 0.75}
+  - {TIP3: 0.50, MEOH: 0.50}
+  - {TIP3: 0.75, MEOH: 0.25}
 # Fractions of 298 K bulk liquid monomer count (per solvent, per box side).
 bulk_density_fractions: [0.1, 0.25]
 bulk_density_n_min: 10

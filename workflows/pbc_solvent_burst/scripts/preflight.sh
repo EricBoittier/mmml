@@ -16,6 +16,7 @@ sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 from campaign_lib import (
     load_config,
+    cell_ml_atoms,
     matrix_box_sizes,
     matrix_job_count,
     matrix_temperatures,
@@ -69,15 +70,15 @@ from campaign_lib import iter_matrix_cells
 worst = max(
     iter_matrix_cells(cfg),
     key=lambda c: required_max_npr(
-        estimate_ml_atoms(c.n_monomers, solvent=c.solvent),
+        cell_ml_atoms(c),
         pbc=True,
         box_side_A=pbc_pair_budget_box_side_A(
-            estimate_ml_atoms(c.n_monomers, solvent=c.solvent),
+            cell_ml_atoms(c),
             c.box_size,
         ),
     ),
 )
-max_n_ml = estimate_ml_atoms(worst.n_monomers, solvent=worst.solvent)
+max_n_ml = cell_ml_atoms(worst)
 worst_box = worst.box_size
 tier = select_npr_tier_for_build(max_n_ml, pbc=True, box_side_A=worst_box)
 budget_box = pbc_pair_budget_box_side_A(max_n_ml, worst_box)
