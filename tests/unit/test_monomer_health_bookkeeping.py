@@ -163,10 +163,13 @@ def test_audit_monomer_health_flags_bad_monomer(
         MonomerHealthConfig(),
         n_monomers=2,
         global_step=100,
+        overlap_config=None,
     )
     assert report is not None
     assert 1 in report.flagged_bad
     assert report.entries[1].velocity_level == LEVEL_BAD
+    assert report.entries[1].geometry_level == LEVEL_OK
+    assert report.entries[1].needs_template_restore is False
 
 
 def test_select_flagged_bad_by_highest_grms() -> None:
@@ -284,7 +287,8 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
                 velocity_level=LEVEL_OK,
                 force_level=LEVEL_WARN,
                 energy_level=LEVEL_BAD,
-                reasons=("MM ratio 5.0× baseline",),
+                geometry_level=LEVEL_BAD,
+                reasons=("extent 20.0 Å > 12.0 Å",),
             ),
         ),
         flagged_bad=(0,),
@@ -295,6 +299,7 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
         emit_monomer_health_dot_matrix(report, context="test", quiet=False)
     out = capsys.readouterr().out
     assert "DCM" in out
+    assert "geometry" in out
     assert "G O R" in out or "G" in out
 
 
@@ -360,6 +365,10 @@ def test_restore_monomer_velocities_splices_template_slice(
 
 
 @patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    return_value=True,
+)
+@patch(
     "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
     return_value=True,
 )
@@ -376,6 +385,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
     audit: MagicMock,
     _offsets: MagicMock,
     redraw: MagicMock,
+    restore_template: MagicMock,
 ) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         maybe_intervene_monomer_health,
@@ -393,6 +403,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
                 velocity_level=LEVEL_WARN,
                 force_level=LEVEL_OK,
                 energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
             ),
             MonomerHealthEntry(
                 index=1,
@@ -404,6 +415,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
                 velocity_level=LEVEL_WARN,
                 force_level=LEVEL_OK,
                 energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
             ),
             MonomerHealthEntry(
                 index=2,
@@ -415,6 +427,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
                 velocity_level=LEVEL_WARN,
                 force_level=LEVEL_OK,
                 energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
             ),
         ),
         flagged_bad=(),
@@ -436,8 +449,115 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
             context="NVE",
             global_step=100,
         )
-
-    assert recovered is True
+    assert recovered
     redraw.assert_called_once()
-    assert redraw.call_args.args[1] == (1, 2, 0)
-    invalidate.assert_called_once_with(ctx)
+    restore_template.assert_not_called()
+    invalidate.assert_called()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 2, 4], dtype=int),
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+)
+@patch("pycharmm.coor.get_natom", return_value=4)
+def test_maybe_intervene_templates_only_geometry_bad(
+    _natom: MagicMock,
+    audit: MagicMock,
+    _offsets: MagicMock,
+    redraw: MagicMock,
+    restore_template: MagicMock,
+    jax_mini: MagicMock,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_intervene_monomer_health,
+    )
+
+    audit.return_value = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="TIP3",
+                velocity_rms_akma=50000.0,
+                velocity_max_akma=80000.0,
+                hybrid_grms_kcalmol_A=90.0,
+                charmm_grms_kcalmol_A=90.0,
+                velocity_level=LEVEL_BAD,
+                force_level=LEVEL_BAD,
+                energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=1,
+                label="TIP3",
+                velocity_rms_akma=100.0,
+                velocity_max_akma=200.0,
+                hybrid_grms_kcalmol_A=5.0,
+                charmm_grms_kcalmol_A=5.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_BAD,
+                geometry_level=LEVEL_BAD,
+                reasons=("extent 20.0 Å > 12.0 Å",),
+            ),
+        ),
+        flagged_bad=(0, 1),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+    ctx = MagicMock(workflow_args=SimpleNamespace(temperature=200.0))
+    overlap = SimpleNamespace(
+        n_monomers=2,
+        monomer_health=MonomerHealthConfig(
+            verbose=False,
+            template_restore_requires_geometry=True,
+            per_monomer_jax_after_restore=True,
+        ),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ):
+        ok = maybe_intervene_monomer_health(
+            ctx, overlap, context="HEAT", global_step=500
+        )
+    assert ok
+    restore_template.assert_called_once()
+    restored_idx = restore_template.call_args[0][1]
+    assert restored_idx == (1,)
+    redraw.assert_called_once()
+    redraw_idx = redraw.call_args[0][1]
+    assert 0 in redraw_idx
+    assert 1 not in redraw_idx
+    jax_mini.assert_called_once()
+
+
+def test_maybe_rebaseline_heat_once() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_rebaseline_monomer_health_after_heat_velocities,
+    )
+
+    ctx = SimpleNamespace()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.record_monomer_health_baseline",
+        return_value=object(),
+    ) as rec:
+        assert maybe_rebaseline_monomer_health_after_heat_velocities(
+            ctx, n_monomers=4, context="HEAT chunk", global_step=250
+        )
+        assert maybe_rebaseline_monomer_health_after_heat_velocities(
+            ctx, n_monomers=4, context="HEAT chunk", global_step=500
+        ) is False
+    assert rec.call_count == 1

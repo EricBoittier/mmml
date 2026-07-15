@@ -233,8 +233,8 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         "--no-dynamics-monomer-health",
         action="store_true",
         help=(
-            "Disable per-monomer velocity/force/energy bookkeeping and early "
-            "template restore during dynamics."
+            "Disable per-monomer velocity/GRMS/geometry bookkeeping and early "
+            "intervention during dynamics."
         ),
     )
     group.add_argument(
@@ -242,13 +242,16 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=(
             "Print per-residue monomer health dot matrix (green/yellow/red for "
-            "velocity, force, MM energy) at each dynamics health check."
+            "velocity, GRMS, geometry) at each dynamics health check."
         ),
     )
     group.add_argument(
         "--no-dynamics-monomer-template-restore",
         action="store_true",
-        help="Audit monomer health but do not template-restore bad monomers.",
+        help=(
+            "Audit monomer health but do not template-restore geometry-bad "
+            "monomers (fly-off / collapse)."
+        ),
     )
     group.add_argument(
         "--no-dynamics-monomer-jax-after-restore",
@@ -267,7 +270,10 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         "--dynamics-monomer-health-max-restore",
         type=int,
         default=4,
-        help="Max monomers to template-restore per health check (default: 4).",
+        help=(
+            "Max geometry-bad monomers to template-restore per health check "
+            "(default: 4)."
+        ),
     )
     group.add_argument(
         "--dynamics-monomer-velocity-warn-recover-fraction",
@@ -276,6 +282,31 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Fraction of monomers that must be velocity-warn before velocity-only "
             "redraw recovery runs (default: 0.80)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-baseline-floor-fraction",
+        type=float,
+        default=0.25,
+        help=(
+            "Floor health baselines at this fraction of the warn absolute cut "
+            "before ratio math (default: 0.25)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-ratio-without-abs",
+        action="store_true",
+        help=(
+            "Allow velocity/GRMS ratios to escalate health without meeting the "
+            "absolute warn floor (legacy; off by default)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-template-on-force",
+        action="store_true",
+        help=(
+            "Allow template+FIRE on GRMS/force-bad monomers without geometry "
+            "failure (legacy; off by default — restore is for fly-off/collapse)."
         ),
     )
 

@@ -114,11 +114,11 @@ class MonomerHealthEntry:
 
 @dataclass(frozen=True)
 class MonomerHealthReport:
-  entries: tuple[MonomerHealthEntry, ...]
-  flagged_bad: tuple[int, ...]
-  flagged_warn: tuple[int, ...]
-  baseline_recorded: bool
-  restored: bool = False
+    entries: tuple[MonomerHealthEntry, ...]
+    flagged_bad: tuple[int, ...]
+    flagged_warn: tuple[int, ...]
+    baseline_recorded: bool
+    restored: bool = False
 
 
 def _entry_grms_for_selection(entry: MonomerHealthEntry) -> float:
@@ -169,7 +169,7 @@ def select_systemic_velocity_warn_by_highest_grms(
         for entry in report.entries
         if entry.velocity_level == LEVEL_WARN
         and entry.force_level != LEVEL_BAD
-        and entry.energy_level != LEVEL_BAD
+        and entry.geometry_level != LEVEL_BAD
     ]
     if not velocity_warn:
         return ()
@@ -645,7 +645,7 @@ def emit_monomer_health_dot_matrix(
     context: str,
     quiet: bool = False,
 ) -> None:
-    """Print residue grid: green/yellow/red dots for velocity, force, energy."""
+    """Print residue grid: green/yellow/red dots for velocity, GRMS, geometry."""
     if not report.entries:
         return
     from mmml.utils.rich_report import emit, rich_enabled
