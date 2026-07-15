@@ -1,0 +1,30 @@
+{
+  "tag": "meoh_6_tip3_6",
+  "snapshots": [
+    {
+      "seq": 0,
+      "slug": "pack",
+      "stem": "00_pack",
+      "kind": "packmol",
+      "label": "Packmol sphere placement (pre-minimize)",
+      "files": {
+        "pdb": "/scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/model.pdb",
+        "psf": "/scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/model.psf"
+      }
+    },
+    {
+      "seq": 1,
+      "slug": "mm",
+      "stem": "01_mm",
+      "kind": "MM",
+      "label": "CHARMM CGENFF SD/ABNR before MLpot (MM only)",
+      "files": {
+        "crd": "/scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/pretreat/01_mm.crd",
+        "energy_json": "/scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/pretreat/01_mm_energy.json",
+        "pdb": "/scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/pretreat/01_mm.pdb",
+        "psf": "/scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/pretreat/01_mm.psf"
+      },
+      "grms_kcalmol_A": 0.31240287463755834
+    }
+  ]
+}

@@ -102,3 +102,31 @@ than under scalar λ=0.1 (2.84), but the differentiation is too small to matter.
 **Next tuning:** loosen the hyperprior (0.1 → 0.01) and/or raise `--trust-map-evidence`
 so the per-chemistry λ can actually separate dispersion (shrink hard) from H-bonds
 (leave alone). Only then is the hierarchical hypothesis fairly tested.
+
+## Held-out test-set evaluation — the ranking reverses
+
+Scoring the top-4 on the real held-out test caches (E/F/D/Q MAE, all chemistries,
+molecules up to 41 atoms) with `scripts/eval_spooky_on_cache.py` gives the OPPOSITE
+ranking to the dimer PES:
+
+| model | v1 test E_MAE | v1 test F_MAE | dimer-PES mean |
+|---|---|---|---|
+| L2 λ=1.0 | **0.807** | 0.071 | 4.20 |
+| L2 λ=0.1 | 0.829 | 0.071 | 4.46 |
+| trust map | 0.844 | 0.071 | 4.41 |
+| ML best (unconstrained) | **1.548** | **0.092** | **3.63** |
+
+Cross-check on the v2 test set: ML best **1.315** vs trust map **0.737** — the constrained
+model wins even on the unconstrained model's own training split.
+
+**Interpretation.** The 15-pair dimer PES is a narrow, adversarial probe (specific
+small-molecule wells, several with 2–13 training structures). The unconstrained "best"
+checkpoint wins there because it overfits those wells. On broad held-out generalization
+(75k diverse structures) the interaction-constrained models are ~2× better on energy and
+clearly better on forces — exactly the regularization benefit the penalty was designed
+for. Constraining the neural interaction toward the physical prior trades a little dimer-
+well accuracy for substantially better generalization.
+
+**Confound (stated honestly):** the two model families trained on different caches (ML
+best on v2, the constrained models on v1), so no single test set is perfectly fair to
+both. The constrained models win on BOTH test sets, which is robust to that.
