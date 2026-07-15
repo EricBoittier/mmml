@@ -864,7 +864,11 @@ def setup_calculator(
     if not _jax_mm_spoof_mode:
         MODEL.max_padded_atoms = max_atoms
 
-    from mmml.utils.rich_report import emit_md_system_calculator_report, emit_tagged
+    from mmml.utils.rich_report import (
+        collect_zbl_cutoff_mapping,
+        emit_md_system_calculator_report,
+        emit_tagged,
+    )
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units
 
     if is_json_checkpoint:
@@ -1011,6 +1015,12 @@ def setup_calculator(
             _cell_side = float(np.asarray(pbc_cell)[0, 0])
         except Exception:
             _cell_side = None
+    _zbl_map = collect_zbl_cutoff_mapping(MODEL)
+    if _jax_mm_spoof_mode and _zbl_map is None:
+        _zbl_map = {
+            "enabled": False,
+            "note": "n/a (jax_mm_clone spoof; no PhysNet ZBL)",
+        }
     emit_md_system_calculator_report(
         system={
             "n_monomers": n_monomers,
@@ -1070,6 +1080,7 @@ def setup_calculator(
         capacity_multiplier=float(jax_md_capacity_multiplier),
         skin_distance_A=float(_jax_md_skin_distance),
         update_interval_steps=int(jax_md_update_interval),
+        zbl=_zbl_map,
         include_psf_topology=True,
     )
 

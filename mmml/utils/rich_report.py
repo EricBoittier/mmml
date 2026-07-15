@@ -299,6 +299,46 @@ def emit_dashboard(
         _emit_plain("\n".join(lines))
 
 
+def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
+    """Extract ZBL repulsion cutoffs from a PhysNet/Spooky model when present.
+
+    Returns ``None`` when the model has no ZBL flag (e.g. jax_mm_clone spoof with
+    ``MODEL is None``). Pair-distance cutoffs (Å) are distinct from COM handoff.
+    """
+    if model is None:
+        return None
+    if not hasattr(model, "zbl"):
+        return None
+    enabled = bool(getattr(model, "zbl", False))
+    cuton = getattr(model, "zbl_cuton", None)
+    cutoff = getattr(model, "zbl_cutoff", None)
+    trainable = getattr(model, "trainable_zbl", None)
+    # Some checkpoints store cutoffs only on the repulsion submodule.
+    repulsion = getattr(model, "repulsion", None)
+    if repulsion is not None:
+        if cuton is None:
+            cuton = getattr(repulsion, "cuton", None)
+        if cutoff is None:
+            cutoff = getattr(repulsion, "cutoff", None)
+        if trainable is None:
+            trainable = getattr(repulsion, "trainable", None)
+    out: dict[str, Any] = {"enabled": enabled}
+    if cuton is not None:
+        try:
+            out["cuton_Å"] = f"{float(cuton):.4f}"
+        except (TypeError, ValueError):
+            out["cuton_Å"] = cuton
+    if cutoff is not None:
+        try:
+            out["cutoff_Å"] = f"{float(cutoff):.4f}"
+        except (TypeError, ValueError):
+            out["cutoff_Å"] = cutoff
+    if trainable is not None:
+        out["trainable"] = bool(trainable)
+    out["distance"] = "pair r (Å), not COM"
+    return out
+
+
 def emit_hybrid_ml_setup(
     *,
     system: Mapping[str, Any],
@@ -309,6 +349,7 @@ def emit_hybrid_ml_setup(
     ml_flags: Mapping[str, Any] | None = None,
     runtime: Mapping[str, Any] | None = None,
     long_range: Mapping[str, Any] | None = None,
+    zbl: Mapping[str, Any] | None = None,
     quiet: bool = False,
 ) -> None:
     """Single dashboard for hybrid calculator setup (replaces duplicate setup/model panels)."""
@@ -316,12 +357,15 @@ def emit_hybrid_ml_setup(
         ("System", system),
         ("Handoff & cutoffs", handoff),
     ]
+    zbl_map = zbl if zbl is not None else collect_zbl_cutoff_mapping(model)
+    if zbl_map:
+        sections.append(("ZBL repulsion", zbl_map))
     if long_range:
         sections.append(("Long-range Coulomb", long_range))
     sections.extend(
         [
             ("Neighbor lists & ML batching", neighbor_lists),
-            ("Model", _model_attributes_mapping(model)),
+            ("Model", _model_attributes_mapping(model) if model is not None else {"class": "—"}),
         ]
     )
     if runtime:
@@ -364,6 +408,7 @@ def emit_md_system_calculator_report(
     jax_md_n_valid: int | None = None,
     neighbor_extra: Mapping[str, Any] | None = None,
     calculator_extra: Mapping[str, Any] | None = None,
+    zbl: Mapping[str, Any] | None = None,
     include_hybrid_setup: bool = True,
     include_calculator_summary: bool = True,
     include_neighbor_list_summary: bool = True,
@@ -380,6 +425,8 @@ def emit_md_system_calculator_report(
     if quiet or is_quiet():
         return
 
+    zbl_map = zbl if zbl is not None else collect_zbl_cutoff_mapping(model)
+
     if include_hybrid_setup and system is not None and handoff is not None:
         emit_hybrid_ml_setup(
             system=system,
@@ -390,6 +437,7 @@ def emit_md_system_calculator_report(
             ml_flags=ml_flags,
             runtime=runtime,
             long_range=long_range,
+            zbl=zbl_map,
             quiet=quiet,
         )
 
@@ -407,6 +455,7 @@ def emit_md_system_calculator_report(
             complementary_handoff=complementary_handoff,
             ensemble=ensemble,
             checkpoint=checkpoint_path,
+            zbl=zbl_map,
             extra=dict(calculator_extra) if calculator_extra else None,
         )
 
@@ -647,6 +696,8 @@ def _model_attr_label(name: str) -> str:
 
 
 def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
+    if model is None:
+        return [("class", "—")]
     preferred = (
         "features",
         "max_degree",
@@ -661,6 +712,9 @@ def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
         "n_res",
         "n_refinement_blocks",
         "zbl",
+        "zbl_cuton",
+        "zbl_cutoff",
+        "trainable_zbl",
         "debug",
         "efa",
         "use_energy_bias",

@@ -309,6 +309,7 @@ def print_calculator_summary(
     complementary_handoff: Optional[bool] = None,
     ensemble: Optional[str] = None,
     checkpoint: Optional[str] = None,
+    zbl: Optional[dict] = None,
     extra: Optional[dict] = None,
     console: Optional[Console] = None,
 ) -> None:
@@ -318,6 +319,8 @@ def print_calculator_summary(
     * A property table with all cutoff/model parameters.
     * A colored ASCII ruler diagram showing where ML / MM / handoff zones
       are active along the COM-distance axis.
+    * Optional ZBL pair-distance cutoffs (recorded in the table; not on the
+      COM ruler, which uses a different distance convention).
     """
     c = console or Console()
 
@@ -398,6 +401,22 @@ def print_calculator_summary(
     table.add_row("ML fully-on range (Å)", f"0 → [bright_blue]{ml_full_end:.3f}[/bright_blue]")
     table.add_row("ML/MM handoff range (Å)", f"[bright_blue]{ml_full_end:.3f}[/bright_blue] → [bright_yellow]{mm_on:.3f}[/bright_yellow]")
     table.add_row("MM tail range (Å)", f"[bright_yellow]{mm_on:.3f}[/bright_yellow] → [bright_red]{mm_outer_end:.3f}[/bright_red]")
+    if zbl is not None:
+        table.add_row("─" * 22, "─" * 22)
+        enabled = bool(zbl.get("enabled", False))
+        table.add_row(
+            "ZBL repulsion",
+            "[green]✓[/green]" if enabled else "[dim]off[/dim]",
+        )
+        if "cuton_Å" in zbl:
+            table.add_row("ZBL cuton (pair Å)", f"[magenta]{zbl['cuton_Å']}[/magenta]")
+        if "cutoff_Å" in zbl:
+            table.add_row("ZBL cutoff (pair Å)", f"[magenta]{zbl['cutoff_Å']}[/magenta]")
+        if "trainable" in zbl:
+            table.add_row(
+                "ZBL trainable",
+                "[yellow]yes[/yellow]" if zbl["trainable"] else "fixed",
+            )
     if extra:
         for k, v in extra.items():
             table.add_row(str(k), str(v))
@@ -414,6 +433,12 @@ def print_calculator_summary(
         Text("  ") + legend,
         Text(""),
         Text(f"  ruler scale: 0 → {ruler_max:.1f} Å", style="dim white"),
+        Text(
+            "  ZBL cutoffs are pair distances (recorded above), not on this COM ruler.",
+            style="dim magenta",
+        )
+        if zbl is not None
+        else Text(""),
     )
     c.print(Panel(inner, title="[bold green]Calculator Summary[/bold green]", border_style="green"))
 
@@ -509,6 +534,7 @@ def build_calculator_summary_dict(
     doML_dimer: bool = True,
     ensemble: Optional[str] = None,
     checkpoint: Optional[str] = None,
+    zbl: Optional[dict] = None,
     nl_capacity_pairs: Optional[int] = None,
     nl_n_valid_pairs: Optional[int] = None,
     nl_capacity_multiplier: Optional[float] = None,
@@ -547,6 +573,8 @@ def build_calculator_summary_dict(
         "jax_md_capacity": jax_md_capacity,
         "jax_md_n_valid": jax_md_n_valid,
     }
+    if zbl is not None:
+        d["zbl"] = dict(zbl)
     if extra:
         d.update(extra)
     return d

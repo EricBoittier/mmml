@@ -129,6 +129,25 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
     assert "features" in out
 
 
+def test_collect_zbl_cutoff_mapping_from_model() -> None:
+    class _Model:
+        zbl = True
+        zbl_cuton = 0.1
+        zbl_cutoff = 0.6
+        trainable_zbl = False
+
+    mapping = rich_report.collect_zbl_cutoff_mapping(_Model())
+    assert mapping is not None
+    assert mapping["enabled"] is True
+    assert mapping["cuton_Å"] == "0.1000"
+    assert mapping["cutoff_Å"] == "0.6000"
+    assert mapping["trainable"] is False
+
+
+def test_collect_zbl_cutoff_mapping_none_for_spoof() -> None:
+    assert rich_report.collect_zbl_cutoff_mapping(None) is None
+
+
 def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None:
     from types import SimpleNamespace
 
@@ -137,6 +156,10 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
         natoms = 10
         cutoff = 12.0
         charges = False
+        zbl = True
+        zbl_cuton = 0.1
+        zbl_cutoff = 0.6
+        trainable_zbl = False
 
     cp = SimpleNamespace(
         ml_switch_width=1.5,
@@ -172,6 +195,9 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
     assert "COM-distance ruler" in out
     assert "Neighbor" in out
     assert "ml_switch_width" in out or "ml_switch_width_Å" in out
+    assert "ZBL" in out
+    assert "0.1000" in out or "0.1" in out
+    assert "0.6000" in out or "0.6" in out
 
 
 def test_emit_md_system_calculator_report_nl_only_refresh(capsys) -> None:
