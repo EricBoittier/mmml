@@ -13,15 +13,32 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     forces_grms_kcalmol_A,
 )
 
+# 1 eV/Å ≈ 23.06 kcal/mol/Å.
+_EV_A_TO_KCALMOL_A = 23.060541945329334
+
+# Per-atom force ceiling for entering dynamics. A 0.25 fs timestep at 50 K cannot
+# stabilize atoms carrying multi-eV/Å forces; ~2 eV/Å is a generous upper bound
+# that still rejects the 14+ eV/Å frames the FIRE fallback used to accept, while
+# staying well above the minimizer's own 0.05 eV/Å convergence target.
+DEFAULT_FMAX_CEILING_EV_A = 2.0
+DEFAULT_FMAX_CEILING_KCALMOL_A = DEFAULT_FMAX_CEILING_EV_A * _EV_A_TO_KCALMOL_A
+
 
 @dataclass(frozen=True)
 class MonomerGrmsStats:
-    """Per-monomer and total GRMS from CHARMM and optional hybrid forces."""
+    """Per-monomer and total GRMS from CHARMM and optional hybrid forces.
+
+    ``*_fmax`` fields are the largest single-atom force magnitude (kcal/mol/Å),
+    which a global RMS hides: a handful of extremely stressed atoms can sit at
+    multi-eV/Å while the whole-system RMS still looks safe.
+    """
 
     charmm_per_monomer: np.ndarray
     hybrid_per_monomer: np.ndarray | None
     charmm_total: float
     hybrid_total: float | None
+    charmm_fmax: float = 0.0
+    hybrid_fmax: float | None = None
 
     @property
     def n_monomers(self) -> int:
@@ -37,6 +54,22 @@ class GrmsThresholds:
     charmm_p90: float
     hybrid_p90: float | None
     notes: str
+    # Hard per-atom force ceiling for entering dynamics (kcal/mol/Å). A geometry
+    # can pass the global GRMS gate yet still contain individual atoms far too
+    # stressed to integrate; this catches those independently of the RMS.
+    max_fmax_before_dyn: float = DEFAULT_FMAX_CEILING_KCALMOL_A
+
+
+def atomic_fmax_kcalmol_A(forces: np.ndarray) -> float:
+    """Largest single-atom force magnitude in a force array (kcal/mol/Å)."""
+    f = np.asarray(forces, dtype=np.float64).reshape(-1, 3)
+    if f.size == 0:
+        return 0.0
+    mags = np.linalg.norm(f, axis=1)
+    mags = mags[np.isfinite(mags)]
+    if mags.size == 0:
+        return 0.0
+    return float(np.max(mags))
 
 
 def per_monomer_grms_from_forces(
@@ -69,12 +102,15 @@ def measure_monomer_grms_stats(
     charmm_f = charmm_total_forces_kcalmol_A()
     charmm_per = per_monomer_grms_from_forces(charmm_f, atoms_per_list)
     charmm_total = forces_grms_kcalmol_A(charmm_f)
+    charmm_fmax = atomic_fmax_kcalmol_A(charmm_f)
 
     hybrid_per: np.ndarray | None = None
     hybrid_total: float | None = None
+    hybrid_fmax: float | None = None
     if hybrid_forces_kcal is not None:
         hybrid_per = per_monomer_grms_from_forces(hybrid_forces_kcal, atoms_per_list)
         hybrid_total = forces_grms_kcalmol_A(hybrid_forces_kcal)
+        hybrid_fmax = atomic_fmax_kcalmol_A(hybrid_forces_kcal)
     elif mlpot_ctx is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_positions_angstrom,
@@ -98,6 +134,7 @@ def measure_monomer_grms_stats(
                 hybrid_f = np.asarray(forces_ev, dtype=np.float64) * float(ev2kcalmol)
                 hybrid_per = per_monomer_grms_from_forces(hybrid_f, atoms_per_list)
                 hybrid_total = forces_grms_kcalmol_A(hybrid_f)
+                hybrid_fmax = atomic_fmax_kcalmol_A(hybrid_f)
                 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
                     mlpot_skip_charmm_ener_force_before_first_sd,
                 )
@@ -121,6 +158,8 @@ def measure_monomer_grms_stats(
         hybrid_per_monomer=hybrid_per,
         charmm_total=float(charmm_total),
         hybrid_total=float(hybrid_total) if hybrid_total is not None else None,
+        charmm_fmax=float(charmm_fmax),
+        hybrid_fmax=float(hybrid_fmax) if hybrid_fmax is not None else None,
     )
 
 
@@ -268,6 +307,7 @@ def resolve_grms_thresholds_from_stats(
         charmm_p90=float(charmm_p90),
         hybrid_p90=hybrid_p90,
         notes=notes,
+        max_fmax_before_dyn=float(DEFAULT_FMAX_CEILING_KCALMOL_A),
     )
 
 
@@ -310,10 +350,18 @@ def resolve_grms_thresholds(
     else:
         max_dyn = thresholds.max_grms_before_dyn
 
+    explicit_fmax = getattr(args, "max_fmax_before_dyn_ev_A", None)
+    if explicit_fmax is not None:
+        max_fmax = float(explicit_fmax) * _EV_A_TO_KCALMOL_A
+    else:
+        max_fmax = thresholds.max_fmax_before_dyn
+
     if not getattr(args, "quiet", False):
         print(
             f"GRMS thresholds: intervention={intervention:.1f}, "
-            f"max_before_dyn={max_dyn:.1f} kcal/mol/Å "
+            f"max_before_dyn={max_dyn:.1f} kcal/mol/Å, "
+            f"max_fmax_before_dyn={max_fmax:.1f} kcal/mol/Å "
+            f"({max_fmax / _EV_A_TO_KCALMOL_A:.2f} eV/Å) "
             f"({thresholds.notes})",
             flush=True,
         )
@@ -323,6 +371,76 @@ def resolve_grms_thresholds(
         charmm_p90=thresholds.charmm_p90,
         hybrid_p90=thresholds.hybrid_p90,
         notes=thresholds.notes,
+        max_fmax_before_dyn=float(max_fmax),
+    )
+
+
+@dataclass(frozen=True)
+class DynamicsGateResult:
+    """Outcome of the pre-dynamics safety gate."""
+
+    ok: bool
+    reason: str
+    hybrid_total_grms: float | None
+    fmax_kcalmol_A: float | None
+    max_grms_before_dyn: float
+    max_fmax_before_dyn: float
+
+
+def geometry_safe_for_dynamics(
+    stats: MonomerGrmsStats,
+    thresholds: GrmsThresholds,
+) -> DynamicsGateResult:
+    """Reject a geometry for dynamics on EITHER global GRMS or per-atom fmax.
+
+    The historical gate looked only at global RMS, so a frame with a handful of
+    atoms at 14+ eV/Å could pass while individual waters were far too stressed to
+    integrate.  This checks the max single-atom force independently.
+    """
+    hybrid_total = stats.hybrid_total
+    total_grms = (
+        float(hybrid_total)
+        if hybrid_total is not None and np.isfinite(hybrid_total)
+        else float(stats.charmm_total)
+    )
+    fmax = stats.hybrid_fmax if stats.hybrid_fmax is not None else stats.charmm_fmax
+    fmax = float(fmax) if fmax is not None and np.isfinite(fmax) else None
+
+    grms_ceiling = float(thresholds.max_grms_before_dyn)
+    fmax_ceiling = float(thresholds.max_fmax_before_dyn)
+
+    if np.isfinite(total_grms) and total_grms > grms_ceiling:
+        return DynamicsGateResult(
+            ok=False,
+            reason=(
+                f"global GRMS {total_grms:.2f} > {grms_ceiling:.2f} kcal/mol/Å"
+            ),
+            hybrid_total_grms=total_grms,
+            fmax_kcalmol_A=fmax,
+            max_grms_before_dyn=grms_ceiling,
+            max_fmax_before_dyn=fmax_ceiling,
+        )
+    if fmax is not None and fmax > fmax_ceiling:
+        return DynamicsGateResult(
+            ok=False,
+            reason=(
+                f"max atomic force {fmax:.1f} kcal/mol/Å "
+                f"({fmax / _EV_A_TO_KCALMOL_A:.2f} eV/Å) > "
+                f"{fmax_ceiling:.1f} kcal/mol/Å "
+                f"({fmax_ceiling / _EV_A_TO_KCALMOL_A:.2f} eV/Å)"
+            ),
+            hybrid_total_grms=total_grms,
+            fmax_kcalmol_A=fmax,
+            max_grms_before_dyn=grms_ceiling,
+            max_fmax_before_dyn=fmax_ceiling,
+        )
+    return DynamicsGateResult(
+        ok=True,
+        reason="GRMS and max-force within pre-dynamics ceilings",
+        hybrid_total_grms=total_grms,
+        fmax_kcalmol_A=fmax,
+        max_grms_before_dyn=grms_ceiling,
+        max_fmax_before_dyn=fmax_ceiling,
     )
 
 

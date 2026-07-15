@@ -195,3 +195,102 @@ def test_run_pre_mlpot_geometry_gate_disabled_without_liquid_prep():
     assert summary.enabled is False
     assert np.allclose(out_pos, pos)
     assert side == 20.0
+
+
+def test_atomic_fmax_picks_largest_atom_not_rms():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        atomic_fmax_kcalmol_A,
+    )
+
+    # One stressed atom among many quiet ones: RMS stays low, fmax must not.
+    forces = np.zeros((100, 3), dtype=float)
+    forces[7] = [300.0, 0.0, 0.0]
+    assert atomic_fmax_kcalmol_A(forces) == pytest.approx(300.0)
+    assert atomic_fmax_kcalmol_A(np.zeros((0, 3))) == 0.0
+
+
+def test_geometry_gate_rejects_high_fmax_with_safe_grms():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        DEFAULT_FMAX_CEILING_KCALMOL_A,
+        GrmsThresholds,
+        MonomerGrmsStats,
+        geometry_safe_for_dynamics,
+    )
+
+    # Global GRMS well under the ceiling, but one atom at ~14 eV/Å (~323 kcal/mol/Å).
+    stats = MonomerGrmsStats(
+        charmm_per_monomer=np.array([5.0, 6.0, 4.0]),
+        hybrid_per_monomer=np.array([5.0, 6.0, 4.0]),
+        charmm_total=8.0,
+        hybrid_total=8.0,
+        charmm_fmax=323.0,
+        hybrid_fmax=323.0,
+    )
+    thresholds = GrmsThresholds(
+        intervention_grms=25.0,
+        max_grms_before_dyn=85.0,
+        charmm_p90=5.0,
+        hybrid_p90=5.0,
+        notes="",
+        max_fmax_before_dyn=DEFAULT_FMAX_CEILING_KCALMOL_A,
+    )
+    result = geometry_safe_for_dynamics(stats, thresholds)
+    assert result.ok is False
+    assert "max atomic force" in result.reason
+
+
+def test_geometry_gate_accepts_low_grms_and_low_fmax():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        DEFAULT_FMAX_CEILING_KCALMOL_A,
+        GrmsThresholds,
+        MonomerGrmsStats,
+        geometry_safe_for_dynamics,
+    )
+
+    stats = MonomerGrmsStats(
+        charmm_per_monomer=np.array([5.0, 6.0, 4.0]),
+        hybrid_per_monomer=np.array([5.0, 6.0, 4.0]),
+        charmm_total=8.0,
+        hybrid_total=8.0,
+        charmm_fmax=20.0,
+        hybrid_fmax=20.0,
+    )
+    thresholds = GrmsThresholds(
+        intervention_grms=25.0,
+        max_grms_before_dyn=85.0,
+        charmm_p90=5.0,
+        hybrid_p90=5.0,
+        notes="",
+        max_fmax_before_dyn=DEFAULT_FMAX_CEILING_KCALMOL_A,
+    )
+    result = geometry_safe_for_dynamics(stats, thresholds)
+    assert result.ok is True
+
+
+def test_geometry_gate_rejects_high_grms_even_with_low_fmax():
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        DEFAULT_FMAX_CEILING_KCALMOL_A,
+        GrmsThresholds,
+        MonomerGrmsStats,
+        geometry_safe_for_dynamics,
+    )
+
+    stats = MonomerGrmsStats(
+        charmm_per_monomer=np.array([90.0, 95.0]),
+        hybrid_per_monomer=np.array([90.0, 95.0]),
+        charmm_total=100.0,
+        hybrid_total=100.0,
+        charmm_fmax=20.0,
+        hybrid_fmax=20.0,
+    )
+    thresholds = GrmsThresholds(
+        intervention_grms=25.0,
+        max_grms_before_dyn=85.0,
+        charmm_p90=5.0,
+        hybrid_p90=5.0,
+        notes="",
+        max_fmax_before_dyn=DEFAULT_FMAX_CEILING_KCALMOL_A,
+    )
+    result = geometry_safe_for_dynamics(stats, thresholds)
+    assert result.ok is False
+    assert "global GRMS" in result.reason
