@@ -54,6 +54,12 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         md_stages="mini,heat,equi",
         tag=None,
         checkpoint=None,
+        mbd_checkpoint=None,
+        mbd_weight=1.0,
+        multipole_checkpoint=None,
+        sampler="md",
+        ff=None,
+        jaxmd_unified=False,
         electrostatics_damping_sigma=None,
         output_dir=Path("artifacts/pycharmm_mlpot/dcm20_pbc"),
         job_name=None,
@@ -212,6 +218,29 @@ def test_build_pycharmm_command_forwards_electrostatics_damping_sigma():
     assert cmd[cmd.index("--electrostatics-damping-sigma") + 1] == "0.0"
     parsed = pycharmm_mlpot.parse_args(cmd)
     assert parsed.electrostatics_damping_sigma == pytest.approx(0.0)
+
+
+def test_build_pycharmm_command_omits_jaxmd_unified_only_flags():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            mbd_checkpoint="/tmp/mbd.json",
+            mbd_weight=1.0,
+            multipole_checkpoint="/tmp/multipole.json",
+            sampler="md",
+            ff="zbl-mbd-multipoles",
+            jaxmd_unified=True,
+        )
+    )
+
+    assert "--mbd-checkpoint" not in cmd
+    assert "--mbd-weight" not in cmd
+    assert "--multipole-checkpoint" not in cmd
+    assert "--sampler" not in cmd
+    assert "--ff" not in cmd
+    assert "--jaxmd-unified" not in cmd
+    pycharmm_mlpot.parse_args(cmd)
 
 
 def test_build_pycharmm_command_forwards_include_mm_false():
