@@ -1330,9 +1330,15 @@ def reconcile_n_monomers_with_psf(
 
         atoms_per = atoms_per_monomer_from_psf()
     except Exception:
+        comp_atoms_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+        if comp_atoms_per is not None:
+            return len(comp_atoms_per), comp_atoms_per
         return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
 
     if sum(atoms_per) != n_atoms:
+        comp_atoms_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+        if comp_atoms_per is not None:
+            return len(comp_atoms_per), comp_atoms_per
         return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
 
     n_psf = len(atoms_per)
@@ -1361,6 +1367,40 @@ def reconcile_n_monomers_with_psf(
         return n_psf, atoms_per
 
     return n_mol, existing
+
+
+def _cluster_atoms_per_from_composition(
+    args: Any | None,
+    *,
+    n_atoms: int,
+) -> list[int] | None:
+    """Resolve heterogeneous monomer sizes from ``--composition`` when PSF resid parsing fails."""
+    if args is None:
+        return None
+    composition = getattr(args, "composition", None)
+    if not composition:
+        return None
+    existing = getattr(args, "_cluster_atoms_per_list", None)
+    if existing is not None:
+        try:
+            per = [int(x) for x in existing]
+        except TypeError:
+            per = []
+        if per and sum(per) == int(n_atoms):
+            return per
+    try:
+        from mmml.cli.run.md_handoff import cluster_layout_from_composition_string
+
+        atoms_per, residue_labels, summary = cluster_layout_from_composition_string(
+            str(composition),
+            n_atoms=int(n_atoms),
+        )
+    except Exception:
+        return None
+    setattr(args, "_cluster_atoms_per_list", list(atoms_per))
+    setattr(args, "_cluster_residue_labels", list(residue_labels))
+    setattr(args, "_cluster_composition_summary", dict(summary))
+    return list(atoms_per)
 
 
 def load_cluster_from_artifacts(
@@ -1504,6 +1544,11 @@ def load_physnet_mlpot_bundle(
                     atoms_per_monomer = per_psf
             except Exception:
                 pass
+            if atoms_per_monomer is None:
+                atoms_per_monomer = _cluster_atoms_per_from_composition(
+                    args,
+                    n_atoms=int(n_atoms),
+                )
             if atoms_per_monomer is None:
                 if int(n_atoms) % int(n_monomers) != 0:
                     nres_hint = ""

@@ -69,7 +69,7 @@ dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
 min_intermonomer_atom_distance: 2.0
 
-# GPU throughput: align Bussi micro-chunks with overlap interval (default dyn_freq_cadence=50
+# GPU throughput: align Bussi micro-chunks with overlap interval (default dyn_freq_cadence=500
 # creates ~40×50-step heat segments and suppresses DCD on many sub-chunks).
 heat_ihtfrq: 200
 dyn_freq_cadence: 200

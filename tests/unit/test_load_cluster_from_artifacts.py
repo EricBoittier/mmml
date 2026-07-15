@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -86,3 +87,57 @@ def test_load_cluster_from_artifacts_uses_xplor_psf_reader(tmp_path: Path, monke
     assert len(z) == 5
     assert r.shape == (5, 3)
     assert n_mol == 1
+
+
+def test_reconcile_n_monomers_uses_mixed_composition_when_psf_resids_unavailable():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
+
+    args = SimpleNamespace(
+        composition="MEOH:1,TIP3:1",
+        quiet=True,
+        _cluster_atoms_per_list=None,
+    )
+
+    n_mol, atoms_per = reconcile_n_monomers_with_psf(args, np.zeros(9, dtype=int), 2)
+
+    assert n_mol == 2
+    assert atoms_per == [6, 3]
+    assert args._cluster_atoms_per_list == [6, 3]
+    assert args._cluster_residue_labels == ["MEOH", "TIP3"]
+
+
+def test_load_physnet_mlpot_uses_mixed_composition_when_psf_resids_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_physnet_mlpot_bundle
+
+    calls: list[tuple[list[int], int]] = []
+    fake_hybrid = ModuleType("mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot")
+
+    def _fake_build(_ckpt, _z, atoms_per_monomer, n_monomers, **_kwargs):
+        calls.append((list(atoms_per_monomer), int(n_monomers)))
+        return object()
+
+    fake_hybrid.build_decomposed_mlpot_model = _fake_build  # type: ignore[attr-defined]
+    monkeypatch.setitem(
+        sys.modules,
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot",
+        fake_hybrid,
+    )
+
+    class _Atoms:
+        def get_atomic_numbers(self):
+            return np.array([6, 8, 1, 1, 1, 1, 8, 1, 1], dtype=int)
+
+    args = SimpleNamespace(composition="MEOH:1,TIP3:1", _cluster_atoms_per_list=None)
+
+    load_physnet_mlpot_bundle(
+        tmp_path / "ckpt.json",
+        9,
+        _Atoms(),
+        n_monomers=2,
+        args=args,
+    )
+
+    assert calls == [([6, 3], 2)]

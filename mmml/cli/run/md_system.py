@@ -1028,11 +1028,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dyn-freq-cadence",
         type=int,
-        default=50,
+        default=500,
         metavar="N",
         help=(
             "pycharmm: align heat/print cadence (ihtfrq, nprint, …) to N steps; "
-            "decoupled from DCD nsavc (default: 50). Overlap CPT chunks still "
+            "decoupled from DCD nsavc (default: 500). Overlap CPT chunks still "
             "disable interior inbfrq/imgfrq. Use 0 for legacy behavior."
         ),
     )

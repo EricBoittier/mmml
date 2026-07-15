@@ -77,11 +77,11 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dyn-freq-cadence",
         type=int,
-        default=50,
+        default=500,
         metavar="N",
         help=(
             "Align heat/print cadence (ihtfrq, nprint, iprfrq, isvfrq) to N steps; "
-            "decoupled from DCD nsavc (default: 50). Overlap CPT chunks still "
+            "decoupled from DCD nsavc (default: 500). Overlap CPT chunks still "
             "disable interior inbfrq/imgfrq (MPI mlpot_update safety). Use 0 for "
             "legacy (ihtfrq≈--dyn-nprint, print≈nsavc)."
         ),
@@ -893,11 +893,11 @@ def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float |
     return kw
 
 
-DEFAULT_DYN_FREQ_CADENCE = 50
+DEFAULT_DYN_FREQ_CADENCE = 500
 
 
 def resolve_dynamics_freq_cadence(args: argparse.Namespace) -> int | None:
-    """Shared heat/print cadence (default 50); decoupled from DCD ``nsavc``.
+    """Shared heat/print cadence (default 500); decoupled from DCD ``nsavc``.
 
     Interior ``inbfrq``/``imgfrq`` on overlap CPT chunks stay disabled separately
     (MPI ``mlpot_update`` safety). Pass ``--dyn-freq-cadence 0`` for legacy behavior.
