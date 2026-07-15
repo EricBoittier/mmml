@@ -152,7 +152,20 @@ class _WarmupBuildArgs:
 
 
 def run_warmup_mlpot_jax(args: argparse.Namespace) -> int:
+    # Defer libcharmm during JAX-only compile, then restore so in-process
+    # md-system (auto warmup) can load PyCHARMM afterward.
+    _prev_warmup_only = os.environ.get("MMML_WARMUP_MLPOT_JAX_ONLY")
     os.environ["MMML_WARMUP_MLPOT_JAX_ONLY"] = "1"
+    try:
+        return _run_warmup_mlpot_jax_body(args)
+    finally:
+        if _prev_warmup_only is None:
+            os.environ.pop("MMML_WARMUP_MLPOT_JAX_ONLY", None)
+        else:
+            os.environ["MMML_WARMUP_MLPOT_JAX_ONLY"] = _prev_warmup_only
+
+
+def _run_warmup_mlpot_jax_body(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         scrub_stale_openmpi_env,
@@ -473,7 +486,12 @@ def maybe_auto_warmup_mlpot_jax_from_md_system(args: argparse.Namespace) -> int 
             file=sys.stderr,
             flush=True,
         )
-    return code
+        return code
+    # Warmup may have imported import_pycharmm with pycharmm=None; reload before CHARMM.
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+
+    ensure_pycharmm_loaded()
+    return 0
 
 
 def maybe_auto_warmup_mlpot_jax_from_md_system_argv(argv: list[str]) -> int:

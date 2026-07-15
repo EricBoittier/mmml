@@ -26,6 +26,7 @@ def test_warmup_mlpot_jax_dry_run(tmp_path, monkeypatch):
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
     monkeypatch.delenv("OMPI_COMM_WORLD_SIZE", raising=False)
+    monkeypatch.delenv("MMML_WARMUP_MLPOT_JAX_ONLY", raising=False)
     args = wm.parse_args(
         [
             "--checkpoint",
@@ -43,6 +44,26 @@ def test_warmup_mlpot_jax_dry_run(tmp_path, monkeypatch):
         return_value=0,
     ):
         assert wm.run_warmup_mlpot_jax(args) == 0
+    # Must not leave JAX-only deferral set for in-process md-system after auto warmup.
+    assert "MMML_WARMUP_MLPOT_JAX_ONLY" not in __import__("os").environ
+
+
+def test_warmup_mlpot_jax_restores_prior_warmup_only_env(tmp_path, monkeypatch):
+    ckpt = tmp_path / "params.json"
+    ckpt.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MMML_WARMUP_MLPOT_JAX_ONLY", "0")
+    args = wm.parse_args(
+        ["--checkpoint", str(ckpt), "--n-monomers", "2", "--dry-run"]
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.scrub_stale_openmpi_env",
+        return_value=0,
+    ):
+        assert wm.run_warmup_mlpot_jax(args) == 0
+    assert __import__("os").environ.get("MMML_WARMUP_MLPOT_JAX_ONLY") == "0"
 
 
 def test_warmup_mlpot_jax_missing_checkpoint_exits():

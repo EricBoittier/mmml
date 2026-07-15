@@ -63,6 +63,7 @@ from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
+import pycharmm as _pycharmm_mod
 import pycharmm.param as param
 import pycharmm.psf as psf
 import pycharmm.read as read
@@ -75,6 +76,9 @@ from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 from mmml.paths import default_meoh_template_pdb
 
+# Direct pycharmm imports succeed even when import_pycharmm deferred libcharmm
+# (MMML_WARMUP_MLPOT_JAX_ONLY); keep pyci globals in sync for helpers.
+pyci.pycharmm = _pycharmm_mod
 pyci.read = read
 
 _parse_composition = parse_composition
@@ -99,6 +103,12 @@ def _read_cgenff_toppar(*, enable_drude: bool = False) -> None:
 
 
 def _reset_pycharmm_system() -> None:
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+
+    if not ensure_pycharmm_loaded() or pyci.pycharmm is None:
+        import pycharmm as _pycharmm
+
+        pyci.pycharmm = _pycharmm
     pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
     reset_block_no_internal()

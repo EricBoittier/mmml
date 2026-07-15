@@ -283,7 +283,10 @@ def main(argv: list[str] | None = None) -> int:
 
     apply_mlpot_jax_platform_env()
     # CHARMM_LIB_DIR is set when import_pycharmm loads; ensure MPI before workflow.
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    # After in-process auto warmup-mlpot-jax, pycharmm may still be None until load.
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+
+    ensure_pycharmm_loaded()
     from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi_for_charmm_domdec
     from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
