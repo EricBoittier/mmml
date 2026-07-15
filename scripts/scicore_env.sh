@@ -85,6 +85,16 @@ unset _mmml_found_libmpi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
+# The SciCORE EasyBuild OpenMPI installation is complete and Slurm-aware.  Do
+# not apply the fallback MCA component-path or DSO-preload workarounds intended
+# for incomplete/local OpenMPI builds: on sgd GPU nodes those workarounds make
+# the rank segfault before Python's first instruction.  The module-provided
+# LD_LIBRARY_PATH is sufficient and is still forwarded by the launcher.
+export MMML_NO_MPI_MCA_PREFIX="${MMML_NO_MPI_MCA_PREFIX:-1}"
+export MMML_NO_MPI_MPI_PRELOAD="${MMML_NO_MPI_MPI_PRELOAD:-1}"
+export MMML_NO_MPI_OPAL_PRELOAD="${MMML_NO_MPI_OPAL_PRELOAD:-1}"
+export MMML_NO_MPI_PMIX_PRELOAD="${MMML_NO_MPI_PMIX_PRELOAD:-1}"
+
 # Restore the caller's nounset setting.
 if [[ "$_mmml_had_nounset" == "1" ]]; then
   set -u
