@@ -628,6 +628,10 @@ def test_calculator_max_ell_and_components(monkeypatch) -> None:
         "mmml.models.multipoles.electrostatics.load_multipole_model",
         lambda cp: (MagicMock(), MagicMock())
     )
+    monkeypatch.setattr(
+        "mmml.models.multipoles.electrostatics.resolve_multipoles_checkpoint",
+        lambda cp=None: cp,
+    )
 
     calc = LearnedMolecularMultipoleElectrostatics(
         checkpoint="dummy",
