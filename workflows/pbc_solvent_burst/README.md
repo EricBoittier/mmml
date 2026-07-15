@@ -1,6 +1,10 @@
-# PBC DCM / ACO burst campaign workflow
+# PBC pure-liquid solvent burst campaign workflow
 
-Snakemake workflow for **DCM** and **ACO** in cubic PBC boxes. Each matrix cell runs one in-process `mmml md-system --run-all` campaign:
+Snakemake workflow for pure solvents in cubic PBC boxes. The default validated
+matrix uses **TIP3 water** and **MEOH methanol**. DCM and ACO remain supported
+for targeted diagnostics, but are excluded from the default campaign because
+their current dimer PES validation fails. Each matrix cell runs one in-process
+`mmml md-system --run-all` campaign:
 
 1. **PyCHARMM init** — MLpot mini + gentle segmented heat (overlap rescue + bonded-MM repair)
 2. **PyCHARMM equi** — 5 × 10 ps NPT equilibration segments (50 ps total)

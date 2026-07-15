@@ -70,6 +70,9 @@ def cfg() -> dict:
     # config.yaml raises jaxmd_bursts for production campaigns.
     return {
         **raw,
+        # Preserve coverage of the legacy supported solvents independently of
+        # the validated TIP3/MEOH production defaults.
+        "solvents": ["DCM", "ACO"],
         "cluster_sizes": [10, 30, 50, 80, 100],
         "bulk_density_fractions": None,
         "temperatures": [300.0],
@@ -300,12 +303,17 @@ def test_bulk_density_matrix_sizes() -> None:
     assert n_monomers_at_bulk_density("DCM", 28.0, 1.0) == 206
     assert n_monomers_at_bulk_density("ACO", 28.0, 1.0) == 178
     assert n_monomers_at_bulk_density("DCM", 28.0, 0.5) == 103
+    assert n_monomers_at_bulk_density("TIP3", 28.0, 1.0) == 732
+    assert n_monomers_at_bulk_density("MEOH", 28.0, 1.0) == 325
+    assert n_monomers_at_bulk_density("TIP3", 28.0, 0.1) == 73
+    assert n_monomers_at_bulk_density("MEOH", 28.0, 0.25) == 81
 
 
 def test_bulk_density_iter_matrix_cells() -> None:
     raw = yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
     cfg = {
         **raw,
+        "solvents": ["DCM", "ACO"],
         "temperatures": [300.0],
         "box_sizes": [28.0],
         "bulk_density_fractions": [0.5, 1.0],
@@ -318,6 +326,16 @@ def test_bulk_density_iter_matrix_cells() -> None:
     assert "aco_89" in tags  # round(0.5 * 178)
     assert "aco_178" in tags
     assert matrix_job_count(cfg) == 4  # 2 solvents × 2 fractions × 1 T × 1 L
+
+
+def test_default_matrix_uses_validated_water_methanol_region() -> None:
+    cfg = load_config(WORKFLOW / "config.yaml")
+    assert cfg["solvents"] == ["TIP3", "MEOH"]
+    assert cfg["temperatures"] == [280.0, 300.0, 320.0]
+    assert cfg["checkpoint"] == "${MMML_CKPT}"
+    cells = list(iter_matrix_cells(cfg))
+    assert {cell.solvent for cell in cells} == {"TIP3", "MEOH"}
+    assert min(cell.temperature for cell in cells) >= 280.0
 
 
 def test_heat_thermostat_coerced_when_pretreat(cfg: dict, cell: RunCell) -> None:

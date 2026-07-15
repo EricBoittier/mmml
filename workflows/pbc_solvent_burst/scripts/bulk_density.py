@@ -8,6 +8,8 @@ from typing import Any
 BULK_SOLVENTS: dict[str, dict[str, float]] = {
     "DCM": {"rho_g_cm3": 1.326, "mw_g_mol": 84.93},
     "ACO": {"rho_g_cm3": 0.784, "mw_g_mol": 58.08},
+    "TIP3": {"rho_g_cm3": 0.9970, "mw_g_mol": 18.01528},
+    "MEOH": {"rho_g_cm3": 0.7866, "mw_g_mol": 32.04186},
 }
 
 AVOGADRO = 6.02214076e23
@@ -105,12 +107,15 @@ def matrix_cluster_sizes_for_cell(
 
 def bulk_reference_table(box_sizes: list[float]) -> str:
     """Human-readable N_bulk per solvent and box (for preflight / docs)."""
-    lines = [
-        f"{'L (Å)':>6}  {'V (Å³)':>10}  {'DCM N_bulk':>12}  {'ACO N_bulk':>12}",
-    ]
+    solvents = tuple(BULK_SOLVENTS)
+    header = f"{'L (Å)':>6}  {'V (Å³)':>10}"
+    header += "".join(f"  {f'{sol} N_bulk':>12}" for sol in solvents)
+    lines = [header]
     for L in box_sizes:
         vol = float(L) ** 3
-        nd = n_monomers_at_bulk_density("DCM", L, 1.0)
-        na = n_monomers_at_bulk_density("ACO", L, 1.0)
-        lines.append(f"{L:6.0f}  {vol:10.0f}  {nd:12d}  {na:12d}")
+        counts = [n_monomers_at_bulk_density(sol, L, 1.0) for sol in solvents]
+        lines.append(
+            f"{L:6.0f}  {vol:10.0f}"
+            + "".join(f"  {count:12d}" for count in counts)
+        )
     return "\n".join(lines)

@@ -145,6 +145,8 @@ def test_limits_status_autodiscovers_repo_lib_and_api_func(
 def test_estimate_ml_atoms_aco_solvent():
     assert mlpot_limits.estimate_ml_atoms(110, solvent="ACO") == 1100
     assert mlpot_limits.estimate_ml_atoms(110, solvent="DCM") == 550
+    assert mlpot_limits.estimate_ml_atoms(110, solvent="TIP3") == 330
+    assert mlpot_limits.estimate_ml_atoms(110, solvent="MEOH") == 660
 
 
 def test_select_npr_tier_aco_110_pbc():
