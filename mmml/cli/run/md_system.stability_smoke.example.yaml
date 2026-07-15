@@ -1,0 +1,90 @@
+# Pre-dynamics stability smoke test — deliberately trips the two runtime
+# guards added in the stability review so you can confirm they fire on a node.
+#
+#   #3  HEAT abort on order-of-magnitude hybrid-GRMS jump  (dynamics.py)
+#   #6  exact SD plateau -> hybrid calculator FIRE switch   (dynamics.py)
+#
+# Run both:
+#   mmml md-system --config mmml/cli/run/md_system.stability_smoke.example.yaml --run-all
+# Or one at a time (campaign runs are selected with --job-id):
+#   mmml md-system --config .../md_system.stability_smoke.example.yaml --run-all --job-id heat_blowup
+#   mmml md-system --config .../md_system.stability_smoke.example.yaml --run-all --job-id sd_plateau
+#
+# These are BEST-EFFORT triggers: the pre-dynamics minimization ladder may
+# rescue the geometry before the guard fires. If a run does NOT trip, tighten
+# the stress (see per-run notes). What to grep in the logs is at the bottom.
+
+defaults:
+  # Point at any small DCM PhysNet checkpoint you already use on the cluster.
+  checkpoint: /path/to/DESdimers_params.json
+  seed: 123
+  temperature: 300.0
+  packmol_tolerance: 1.2
+  # Let the over-stressed geometry through the pre-dynamics max-force gate (#1)
+  # as a WARN instead of a hard reject, so the HEAT / SD paths actually run.
+  allow_high_grms: true
+
+campaign_output: artifacts/stability_smoke
+
+runs:
+  # ---------------------------------------------------------------------------
+  # #6  Exact CHARMM-SD plateau -> calculator FIRE switch.
+  # setup: pycharmm_minimize runs MLpot SD only (all-ML cluster => bonded-MM SD
+  # is skipped, so CHARMM SD under the ML callback is what pins/plateaus).
+  # ---------------------------------------------------------------------------
+  sd_plateau:
+    description: "Small all-ML cluster; MLpot SD pins -> calculator switch"
+    backend: pycharmm
+    setup: pycharmm_minimize
+    composition: "DCM:20"
+    md_stages: "mini"
+    # Enough SD steps that a plateau is visible chunk-to-chunk (SD is internally
+    # chunked). Keep calculator pre-minimize ON (default) so the switch has a
+    # target.
+    mini_nstep: 300
+    pre_min_steps: 30
+    output_dir: results/stability_smoke/sd_plateau
+    # If it does NOT plateau: raise packmol_tolerance toward 1.5 (looser start,
+    # SD stalls sooner on the ML surface) or lower pre_min_steps to 5.
+
+  # ---------------------------------------------------------------------------
+  # #3  HEAT abort on >=10x hybrid-GRMS jump above the 150 kcal/mol/A floor.
+  # Over-pack a vacuum cluster and heat it with weak pre-minimization so the
+  # strain survives into HEAT and the integrator diverges within a few chunks.
+  # ---------------------------------------------------------------------------
+  heat_blowup:
+    description: "Over-packed vacuum cluster; HEAT diverges -> HeatGrmsJumpAbort"
+    backend: pycharmm
+    setup: free_nvt
+    composition: "DCM:20"
+    packmol_tolerance: 0.8          # tighter than default -> overlapping start
+    md_stages: "mini,heat"
+    ps_heat: 0.5
+    n_heat_segments: 4              # >=2 chunks: chunk 1 seeds baseline, 2+ can jump
+    # Weak minimization so the stress reaches HEAT.
+    mini_nstep: 10
+    pre_min_steps: 5
+    output_dir: results/stability_smoke/heat_blowup
+    # If HEAT does NOT abort: tighten packmol_tolerance to 0.6, drop mini_nstep
+    # to 0, and/or shorten each heat segment so the jump lands inside a chunk.
+
+# --- What success looks like in the logs --------------------------------------
+#
+# #6 (sd_plateau):
+#   "hybrid GRMS pinned at <x> kcal/mol/A (exact plateau) — switching to
+#    calculator minimization"
+#   "Post-SD-plateau calculator FIRE: GRMS-> <y> kcal/mol/A"
+#   grep -E "exact plateau|Post-SD-plateau calculator FIRE"
+#
+# #3 (heat_blowup):
+#   "HEAT chunk k/N (step ...): hybrid GRMS jumped <b> -> <c> kcal/mol/A
+#    (>=10x heat baseline; force instability, not thermostat noise)"
+#   RuntimeError: HeatGrmsJumpAbort (unless allow_high_grms downgrades to WARN)
+#   grep -E "hybrid GRMS jumped|HeatGrmsJumpAbort"
+#
+# NOTE: allow_high_grms: true above makes BOTH the #1 gate AND the #3 abort
+# WARN instead of raise. To see #3 hard-abort (RuntimeError), set
+# allow_high_grms: false on the heat_blowup run only — but then the #1 max-force
+# gate may reject before HEAT starts. Pick based on which you want to verify:
+#   - guard FIRES + run continues (WARN)   -> allow_high_grms: true
+#   - guard ABORTS the run (RuntimeError)  -> allow_high_grms: false
