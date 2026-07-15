@@ -660,3 +660,39 @@ def test_commit_hybrid_calculator_mini_non_defer_restores_historical_best():
     assert grms == pytest.approx(0.5)
     assert sync_lists.call_count == 2
     assert ener_force.call_count == 2
+
+
+def test_safe_grms_stop_allowed_requires_low_grms_and_low_fmax():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        safe_grms_stop_allowed,
+    )
+
+    # Low GRMS but high fmax (the observed 20.37 kcal/mol/Å GRMS, 15.1 eV/Å fmax):
+    # must NOT allow the early stop.
+    assert (
+        safe_grms_stop_allowed(
+            20.37, 15.1, safe_grms_kcalmol_A=30.0, safe_fmax_ev_a=0.5
+        )
+        is False
+    )
+    # Both low: allowed.
+    assert (
+        safe_grms_stop_allowed(
+            20.37, 0.4, safe_grms_kcalmol_A=30.0, safe_fmax_ev_a=0.5
+        )
+        is True
+    )
+    # High GRMS, low fmax: not allowed.
+    assert (
+        safe_grms_stop_allowed(
+            40.0, 0.1, safe_grms_kcalmol_A=30.0, safe_fmax_ev_a=0.5
+        )
+        is False
+    )
+    # Non-finite is never allowed.
+    assert (
+        safe_grms_stop_allowed(
+            float("inf"), 0.1, safe_grms_kcalmol_A=30.0, safe_fmax_ev_a=0.5
+        )
+        is False
+    )
