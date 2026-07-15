@@ -565,6 +565,7 @@ def _update_com_unwrap_state(
             "baseline_unwrapped": wrapped.copy(),
         }
         setattr(mlpot_ctx, "_monomer_com_unwrap_state", state)
+        setattr(mlpot_ctx, "_monomer_com_unwrap_reset", False)
         return wrapped.copy()
 
     last = np.asarray(state["last_wrapped"], dtype=np.float64)

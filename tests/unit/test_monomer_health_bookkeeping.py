@@ -574,7 +574,7 @@ def test_com_unwrap_flags_rigid_flyoff() -> None:
         flag_geometry_problem_monomers,
     )
 
-    ctx = SimpleNamespace(_monomer_com_unwrap_reset=True)
+    ctx = SimpleNamespace(_monomer_com_unwrap_reset=False)
     cell = np.diag([30.0, 30.0, 30.0])
     coms0 = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=float)
     _update_com_unwrap_state(ctx, coms0, cell, reset_baseline=True)
