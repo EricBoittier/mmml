@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
-import jax.numpy as jnp
+from types import SimpleNamespace
 
-from mmml.cli.run.jaxmd_runner import _nl_update_positions, resolve_jaxmd_steps_per_loop_call
+import jax.numpy as jnp
+import numpy as np
+
+from mmml.cli.run.jaxmd_runner import (
+    _nl_update_positions,
+    resolve_jaxmd_steps_per_loop_call,
+    resolve_mm_pair_list_capacity,
+    should_skip_vacuum_com_fire,
+)
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     format_mm_pair_update_stats_summary,
     neighbor_pair_cache_should_reuse,
 )
-import numpy as np
-
 
 PBC_RECORDING_BLOCK_STEPS = 800
 PBC_BOX_A = np.array([40.0, 40.0, 40.0])
@@ -42,6 +48,25 @@ def test_nl_update_positions_force_host_escape_hatch(monkeypatch):
     positions = jnp.zeros((2, 3))
     out = _nl_update_positions(positions)
     assert isinstance(out, np.ndarray)
+
+
+def test_resolve_mm_pair_list_capacity_uses_axis0_not_last():
+    """Regression: shape[-1]==2 produced fill fractions like 74400%."""
+    pair_idx = np.zeros((20000, 2), dtype=np.int32)
+    assert resolve_mm_pair_list_capacity(pair_idx=pair_idx) == 20000
+
+
+def test_resolve_mm_pair_list_capacity_prefers_get_stats():
+    update_fn = SimpleNamespace(get_stats=lambda: {"pair_capacity": 12345})
+    pair_idx = np.zeros((20000, 2), dtype=np.int32)
+    assert resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx) == 12345
+
+
+def test_should_skip_vacuum_com_fire_under_pbc():
+    assert should_skip_vacuum_com_fire(use_pbc=True, minimization_skipped=False) is True
+    assert should_skip_vacuum_com_fire(use_pbc=True, minimization_skipped=True) is True
+    assert should_skip_vacuum_com_fire(use_pbc=False, minimization_skipped=False) is False
+    assert should_skip_vacuum_com_fire(use_pbc=False, minimization_skipped=True) is True
 
 
 def test_skin_zero_interval_one_never_reuses():

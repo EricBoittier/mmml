@@ -174,8 +174,21 @@ def main(argv: list[str] | None = None) -> int:
             "helps visualization). Default off: coordinates match what was accumulated during dynamics."
         ),
     )
-    p.add_argument("--jaxmd-minimize-steps", type=int, default=200)
-    p.add_argument("--jaxmd-pbc-minimize-steps", type=int, default=200)
+    p.add_argument(
+        "--jaxmd-minimize-steps",
+        type=int,
+        default=200,
+        help=(
+            "Free-space / vacuum FIRE steps (default: 200). "
+            "Skipped under PBC; use --jaxmd-pbc-minimize-steps."
+        ),
+    )
+    p.add_argument(
+        "--jaxmd-pbc-minimize-steps",
+        type=int,
+        default=200,
+        help="PBC FIRE with molecular wrapping before dynamics (default: 200).",
+    )
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(
         "--packmol",

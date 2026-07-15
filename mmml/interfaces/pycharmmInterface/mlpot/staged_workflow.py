@@ -2490,6 +2490,58 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                                 pbc=charmm_pbc,
                             ),
                         )
+                        if (
+                            not force_gate.ok
+                            and repair.repaired_monomers
+                            and getattr(args, "monomer_physnet_mini", True)
+                        ):
+                            # Constrained full-box FIRE can immediately step
+                            # uphill when the stressed intramolecular geometry
+                            # is coupled to the surrounding cluster.  Restore a
+                            # known-good monomer template and minimize the
+                            # selected residues with isolated PhysNet instead.
+                            from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+                                run_selective_monomer_physnet_mini,
+                                selective_monomer_physnet_mini_config_from_args,
+                            )
+
+                            isolated = run_selective_monomer_physnet_mini(
+                                ctx,
+                                config=selective_monomer_physnet_mini_config_from_args(
+                                    args,
+                                    verbose=not args.quiet,
+                                    quiet_bfgs=bool(
+                                        getattr(args, "quiet_bfgs", False)
+                                    ),
+                                ),
+                                context_prefix="Pre-dynamics isolated monomer repair",
+                                flagged=tuple(repair.repaired_monomers),
+                                restart_path=paths.get("geometry_baseline_res"),
+                            )
+                            if isolated.ran:
+                                sync_charmm_positions(get_charmm_positions_array())
+                                current_grms = refresh_mlpot_energy_and_grms(
+                                    ctx,
+                                    context=(
+                                        "Pre-dynamics gate "
+                                        "(post-isolated monomer repair)"
+                                    )
+                                    if not args.quiet
+                                    else "",
+                                )
+                                force_gate = geometry_safe_for_dynamics(
+                                    measure_monomer_grms_stats(
+                                        atoms_per_list, mlpot_ctx=ctx
+                                    ),
+                                    resolve_grms_thresholds(
+                                        args,
+                                        atoms_per_list=atoms_per_list,
+                                        n_monomers=n_mol,
+                                        n_atoms=n_atoms,
+                                        mlpot_ctx=ctx,
+                                        pbc=charmm_pbc,
+                                    ),
+                                )
 
         if not force_gate.ok:
             msg = (

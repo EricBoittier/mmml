@@ -46,6 +46,41 @@ def _nl_update_positions(positions):
 WORSE_COUNT_THRESHOLD = 100
 
 
+def resolve_mm_pair_list_capacity(
+    *,
+    update_fn=None,
+    pair_idx=None,
+) -> int | None:
+    """Return MM pair-list padding capacity (number of pair slots).
+
+    ``pair_idx`` is shaped ``(capacity, 2)``; capacity is axis 0.  Using
+    ``shape[-1]`` (always 2) produced bogus fill fractions like 74400%.
+    Prefer ``update_fn.get_stats()["pair_capacity"]`` when available.
+    """
+    if update_fn is not None and hasattr(update_fn, "get_stats"):
+        try:
+            stats = update_fn.get_stats()
+            cap = int(stats.get("pair_capacity") or 0)
+            if cap > 0:
+                return cap
+        except Exception:
+            pass
+    if pair_idx is not None and hasattr(pair_idx, "shape") and len(pair_idx.shape) >= 1:
+        # (capacity, 2) → capacity on axis 0; never use shape[-1] (== 2).
+        return int(pair_idx.shape[0])
+    return None
+
+
+def should_skip_vacuum_com_fire(*, use_pbc: bool, minimization_skipped: bool) -> bool:
+    """Whether to skip the first (vacuum/COM) FIRE before PBC FIRE.
+
+    Under PBC, that stage COM-centers and shifts with ``space.periodic``
+    (per-atom wrap), which can split monomers across the box and destroy
+    ASE/CHARMM-minimized geometries.  PBC FIRE uses molecular wrapping.
+    """
+    return bool(minimization_skipped) or bool(use_pbc)
+
+
 def resolve_jaxmd_steps_per_loop_call(
     *,
     steps_per_recording: int,
@@ -433,18 +468,15 @@ def set_up_nhc_sim_routine(
     # setup_calculator already emitted Track A+B for md-system. After compile we
     # only refresh the neighbor-list panel with live capacity / fill fractions.
     _checkpoint_hint = str(getattr(args, "checkpoint", None) or getattr(args, "output_prefix", ""))
-    _nl_capacity = None
     _nl_n_valid = None
     _nl_skin = getattr(args, "jax_md_skin_distance", None)
     _nl_interval = getattr(args, "jax_md_update_interval", None)
-    if update_fn is not None and hasattr(update_fn, "capacity"):
-        _nl_capacity = int(update_fn.capacity)
-    if pair_idx is not None:
+    _nl_capacity = resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx)
+    if pair_mask is not None:
         try:
-            _nl_n_valid = int(np.sum(np.asarray(pair_mask))) if pair_mask is not None else None
-            _nl_capacity = _nl_capacity or (int(pair_idx.shape[-1]) if pair_idx.ndim >= 2 else None)
+            _nl_n_valid = int(np.sum(np.asarray(pair_mask)))
         except Exception:
-            pass
+            _nl_n_valid = None
     if use_pbc and (pair_idx is not None or _nl_capacity is not None):
         emit_md_system_calculator_report(
             cutoff_params=CUTOFF_PARAMS,
@@ -891,13 +923,31 @@ def set_up_nhc_sim_routine(
                     ))
                 return None
         fire_positions = []
-        if skip_minimization:
+        skip_vacuum_fire = should_skip_vacuum_com_fire(
+            use_pbc=bool(use_pbc),
+            minimization_skipped=bool(skip_minimization),
+        )
+        if skip_vacuum_fire:
             minimized_pos = jnp.asarray(R, dtype=jnp.float32)
             nmin_pbc_planned = int(getattr(args, "jaxmd_pbc_minimize_steps", 0) or 0)
+            nmin_vac_requested = int(getattr(args, "jaxmd_minimize_steps", 0) or 0)
             if use_pbc and nmin_pbc_planned > 0:
+                if skip_minimization:
+                    skip_msg = (
+                        "Skipping vacuum/COM FIRE (handoff positions); "
+                        f"PBC FIRE ({nmin_pbc_planned} steps) follows."
+                    )
+                else:
+                    skip_msg = (
+                        f"Skipping vacuum/COM FIRE ({nmin_vac_requested} steps requested); "
+                        "per-atom periodic wrap can split monomers under PBC and "
+                        "destroy ASE/CHARMM-minimized geometries. "
+                        f"PBC FIRE ({nmin_pbc_planned} steps, molecular wrap) follows."
+                    )
+            elif use_pbc:
                 skip_msg = (
-                    "Skipping vacuum/COM FIRE (handoff positions); "
-                    f"PBC FIRE ({nmin_pbc_planned} steps) follows."
+                    "Skipping vacuum/COM FIRE under PBC "
+                    "(use --jaxmd-pbc-minimize-steps for molecular-wrap FIRE)."
                 )
             else:
                 skip_msg = "Skipping minimization (using input positions)"
