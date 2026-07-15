@@ -93,3 +93,16 @@ def test_temp_abort_custom_factor():
     # factor 20 at 50 K target -> ceiling 1000 K; 900 K stays under.
     assert fn(50.0, 900.0, factor=20.0) is None
     assert fn(50.0, 1100.0, factor=20.0) is not None
+
+
+def test_iasvel0_continuation_env_flag_routes(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _configure_bussi_in_memory_continuation_iasvel,
+    )
+
+    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
+    kw: dict = {"firstt": 50.0}
+    _configure_bussi_in_memory_continuation_iasvel(kw)
+    assert int(kw["iasvel"]) == 0
+    assert kw["start"] is False
+    assert kw["_skip_ase_cold_velocity_assign"] is True

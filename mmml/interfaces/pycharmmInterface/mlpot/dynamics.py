@@ -4029,14 +4029,43 @@ def _apply_bussi_iasvel_one_at_ramp_target(kw: dict[str, Any]) -> None:
     kw.pop("_skip_ase_cold_velocity_assign", None)
 
 
+def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
+    """EXPERIMENTAL: keep CHARMM in-memory velocities across Bussi micro-chunks.
+
+    ``iasvel=1`` (the default) re-draws Boltzmann velocities every chunk, so the
+    HEAT phase is a series of cold relaunches rather than a continuous trajectory
+    and the ASE Bussi thermostat's rescale is discarded.  This path uses
+    ``iasvel=0`` / ``start=False`` so CHARMM continues its in-memory velocities,
+    letting the thermostat actually control temperature.
+
+    It is gated behind ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` because PyCHARMM
+    cannot force the START flag off via API: if START lingers from chunk 0,
+    ``iasvel=0`` reads comparison COMP coordinates as velocities (T collapses to
+    ~0 K).  Needs on-node validation — watch for a sudden T≈0 K chunk (COMP
+    misread) or a ``dynopt`` segfault, and unset the flag if either occurs.
+    """
+    kw["iasvel"] = 0
+    kw["iasors"] = 0
+    kw["start"] = False
+    kw["_skip_ase_cold_velocity_assign"] = True
+    _ensure_bussi_plain_verlet_fortran_state()
+
+
 def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
-    """Use safe ``iasvel=1`` Bussi continuation unless C-API handoff is explicitly requested.
+    """Use safe ``iasvel=1`` Bussi continuation unless a handoff is explicitly requested.
 
     Some libcharmm builds expose ``dynamics_run_kw`` but segfault in ``dynopt`` when
     `init_velocities` are injected on an in-memory continuation.  The stable default
-    is therefore a ramp-target Boltzmann continuation; the old C-API handoff remains
-    available only through ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1``.
+    is therefore a ramp-target Boltzmann continuation.  Two opt-in alternatives:
+
+    * ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` — keep CHARMM in-memory velocities
+      (``iasvel=0``); experimental, see :func:`_apply_bussi_iasvel_zero_continuation`.
+    * ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1`` — legacy C-API velocity injection
+      (known to segfault on gfortran).
     """
+    if os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") == "1":
+        _apply_bussi_iasvel_zero_continuation(kw)
+        return
     use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
     if not use_c_api_handoff or not _dynamics_c_api_available():
         _apply_bussi_iasvel_one_at_ramp_target(kw)
