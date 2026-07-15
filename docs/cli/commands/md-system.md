@@ -175,6 +175,9 @@ usage: mmml md-system [-h]
                       [--no-dynamics-monomer-velocity-restore]
                       [--dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE]
                       [--dynamics-monomer-velocity-warn-recover-fraction DYNAMICS_MONOMER_VELOCITY_WARN_RECOVER_FRACTION]
+                      [--dynamics-monomer-baseline-floor-fraction DYNAMICS_MONOMER_BASELINE_FLOOR_FRACTION]
+                      [--dynamics-monomer-ratio-without-abs]
+                      [--dynamics-monomer-template-on-force]
                       [--restart-from RESTART_FROM] [--from-psf FROM_PSF]
                       [--from-crd FROM_CRD] [--skip-cluster-build]
                       [--skip-if-crd-exists] [--no-save-vmd-topology]
@@ -1248,15 +1251,15 @@ Dynamics overlap guard (PyCHARMM MLpot):
   --no-dynamics-max-monomer-extent
                         Disable max monomer extent / fly-off guard.
   --no-dynamics-monomer-health
-                        Disable per-monomer velocity/force/energy bookkeeping
-                        and early template restore during dynamics.
+                        Disable per-monomer velocity/GRMS/geometry bookkeeping
+                        and early intervention during dynamics.
   --dynamics-monomer-health-debug
                         Print per-residue monomer health dot matrix
-                        (green/yellow/red for velocity, force, MM energy) at
-                        each dynamics health check.
+                        (green/yellow/red for velocity, GRMS, geometry) at each
+                        dynamics health check.
   --no-dynamics-monomer-template-restore
-                        Audit monomer health but do not template-restore bad
-                        monomers.
+                        Audit monomer health but do not template-restore
+                        geometry-bad monomers (fly-off / collapse).
   --no-dynamics-monomer-jax-after-restore
                         Skip per-monomer JAX bonded mini after template restore.
   --no-dynamics-monomer-velocity-restore
@@ -1264,11 +1267,22 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         restart velocities (or Maxwell-Boltzmann redraw) onto
                         restored monomers.
   --dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE
-                        Max monomers to template-restore per health check
-                        (default: 4).
+                        Max geometry-bad monomers to template-restore per health
+                        check (default: 4).
   --dynamics-monomer-velocity-warn-recover-fraction DYNAMICS_MONOMER_VELOCITY_WARN_RECOVER_FRACTION
                         Fraction of monomers that must be velocity-warn before
                         velocity-only redraw recovery runs (default: 0.80).
+  --dynamics-monomer-baseline-floor-fraction DYNAMICS_MONOMER_BASELINE_FLOOR_FRACTION
+                        Floor health baselines at this fraction of the warn
+                        absolute cut before ratio math (default: 0.25).
+  --dynamics-monomer-ratio-without-abs
+                        Allow velocity/GRMS ratios to escalate health without
+                        meeting the absolute warn floor (legacy; off by
+                        default).
+  --dynamics-monomer-template-on-force
+                        Allow template+FIRE on GRMS/force-bad monomers without
+                        geometry failure (legacy; off by default — restore is
+                        for fly-off/collapse).
 ```
 
 

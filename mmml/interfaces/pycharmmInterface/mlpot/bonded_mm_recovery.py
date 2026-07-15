@@ -406,6 +406,7 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
             ctx,
             health_cfg,
             n_monomers=n_monomers,
+            overlap_config=config,
         )
         if report is not None and not report.baseline_recorded:
             if getattr(health_cfg, "debug_dot_matrix", False) or report.flagged_bad:
@@ -419,10 +420,34 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
                     quiet=not getattr(health_cfg, "verbose", False)
                     and not getattr(health_cfg, "debug_dot_matrix", False),
                 )
-            if report.flagged_bad:
-                to_restore = report.flagged_bad[
-                    : int(getattr(health_cfg, "max_restore_per_check", 4))
-                ]
+            if bool(getattr(health_cfg, "template_restore_requires_geometry", True)):
+                from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                    LEVEL_BAD,
+                )
+
+                restore_candidates = tuple(
+                    int(e.index)
+                    for e in report.entries
+                    if getattr(e, "geometry_level", None) == LEVEL_BAD
+                    or bool(getattr(e, "needs_template_restore", False))
+                )
+            else:
+                restore_candidates = tuple(report.flagged_bad)
+            if restore_candidates:
+                from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                    MonomerHealthReport,
+                    select_flagged_bad_by_highest_grms,
+                )
+
+                to_restore = select_flagged_bad_by_highest_grms(
+                    MonomerHealthReport(
+                        entries=report.entries,
+                        flagged_bad=restore_candidates,
+                        flagged_warn=(),
+                        baseline_recorded=False,
+                    ),
+                    max_select=int(getattr(health_cfg, "max_restore_per_check", 4)),
+                )
                 flagged = tuple(to_restore)
                 if getattr(health_cfg, "template_restore_on_bad", True):
                     restore_flagged_monomers_from_template(
