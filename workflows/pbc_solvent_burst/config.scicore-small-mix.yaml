@@ -1,0 +1,76 @@
+# Scicore diagnostic only: four-molecule water/methanol cells.
+# The checkpoint currently pads 41 atoms; these cells stay below that limit
+# (1:3, 2:2, and 3:1 TIP3:MEOH, at most 21 atoms before padding).
+# Empty pure-solvent list: this diagnostic intentionally emits mixtures only.
+solvents: []
+mixtures:
+  - {TIP3: 0.25, MEOH: 0.75}
+  - {TIP3: 0.50, MEOH: 0.50}
+  - {TIP3: 0.75, MEOH: 0.25}
+bulk_density_fractions: [0.05]
+bulk_density_n_min: 4
+bulk_density_n_max: 4
+temperatures: [300.0]
+box_sizes: [20.0]
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/pbc_solvent_burst_scicore_small_mix
+seed_base: 20260714
+
+jaxmd_burst_ps: 0.02
+jaxmd_bursts: 1
+pycharmm_equi_ps: 0.02
+pycharmm_equi_legs: 1
+ps_heat: 0.02
+n_heat_segments: 1
+heat_firstt: 20.0
+heat_thermostat: hoover
+dt_fs: 0.1
+pressure: 1.0
+
+cleanup_strategy:
+  name: pbc_hybrid_smoke
+  charmm_mm:
+    pretreat_on_pycharmm: true
+    ps_heat: 1.0
+    ps_equi: 1.0
+    ps_prod: 1.0
+    overlap_rescue_sd_steps: 200
+    overlap_rescue_abnr_steps: 400
+  mlpot:
+    no_echeck_heat: true
+    dynamics_overlap_action: rescue
+    dynamics_overlap_min_distance: 1.5
+    dynamics_intra_min_distance: 0.5
+    dynamics_overlap_check_interval: 50
+    dynamics_overlap_memory_handoff: true
+    bonded_mm_mini: true
+    bonded_mm_mini_after: mini,heat,equi
+    bonded_mm_mini_steps: 200
+    charmm_pre_minimize: true
+    charmm_sd_steps: 200
+    charmm_abnr_steps: 400
+    mini_nstep: 200
+    dcd_nsavc: 20
+    dyn_nprint: 20
+    save_run_state: true
+  jaxmd_pbc:
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 10.0
+    handoff_quality_action: minimize
+    jaxmd_minimize_steps: 100
+    jaxmd_pbc_minimize_steps: 100
+    dynamics_overlap_action: rescue
+    overlap_rescue_sd_steps: 100
+    overlap_rescue_abnr_steps: 200
+    steps_per_recording: 20
+    jax_md_update_interval: 1
+
+mm_switch_on: 6.0
+mm_switch_width: 4.0
+ml_switch_width: 1.0
+spacing: 3.0
+packmol_tolerance: 2.0
+ml_gpu_count: 1
+ml_batch_size: 32
+ml_compute_dtype: float64
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
