@@ -4405,12 +4405,13 @@ def resolve_lr_solver_for_mlpot(
 ) -> str:
     """Resolve long-range Coulomb backend for MLpot hybrid MM.
 
-    Explicit ``--lr-solver`` or ``MMML_LR_SOLVER`` wins.  For periodic ML MIC
-    (``pbc_*`` / ``--mlpot-pbc`` with ``jax_mic``), default to ``jax_pme`` so
-    bulk boxes get k-space electrostatics instead of truncated MIC-only Coulomb.
+    Explicit ``--lr-solver`` or ``MMML_LR_SOLVER`` wins.  Otherwise default to
+    truncated ``mic`` (switched-MM pair loop), including periodic ``jax_mic``
+    boxes.  Opt in to k-space with ``--lr-solver jax_pme`` (or env).
     """
     import os
 
+    _ = mlpot_pbc, mm_nonbond_mode  # retained for call-site compatibility
     explicit = None
     if args is not None:
         explicit = getattr(args, "lr_solver", None)
@@ -4419,8 +4420,6 @@ def resolve_lr_solver_for_mlpot(
     env = (os.environ.get("MMML_LR_SOLVER") or "").strip().lower()
     if env:
         return env
-    if mlpot_pbc and str(mm_nonbond_mode).strip().lower() in ("jax_mic", "mic", "jax"):
-        return "jax_pme"
     return "mic"
 
 
@@ -4446,23 +4445,19 @@ def warn_if_mic_pbc_without_lr(
     mm_nonbond_mode: str = "jax_mic",
     verbose: bool = False,
 ) -> None:
-    """Emit a loud warning when truncated MIC Coulomb is used under PBC."""
+    """Note truncated MIC under PBC when verbose (mic is the default; jax_pme is opt-in)."""
     from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
+    if not verbose:
+        return
     if not mlpot_pbc:
         return
     if str(mm_nonbond_mode).strip().lower() not in ("jax_mic", "mic", "jax"):
         return
     if pick_lr_solver(lr_solver) != "mic":
         return
-    msg = (
-        "PBC MLpot with lr_solver=mic uses truncated MIC Coulomb (~mm_switch_on+width Å) "
-        "without k-space correction; bulk liquids may drift from CHARMM Ewald/PME. "
-        "Use --lr-solver jax_pme (default for pbc_* when unset)."
+    print(
+        "NOTE: PBC MLpot lr_solver=mic uses truncated MIC Coulomb "
+        "(~mm_switch_on+width Å). Opt in to k-space with --lr-solver jax_pme.",
+        flush=True,
     )
-    if verbose:
-        print(f"WARNING: {msg}", flush=True)
-    else:
-        import warnings
-
-        warnings.warn(msg, stacklevel=2)
