@@ -511,7 +511,7 @@ def run_mlpot_pbc_image_registration_gate(
     with charmm_relaxed_bomlev():
         pycharmm.image.update_bimag()
         log_charmm_image_nb_stats(context="MLpot PBC registration image NB")
-        update_log = capture_charmm_script_output("UPDATE NBXMOD 0", replay=False)
+        update_log = capture_charmm_script_output("UPDATE", replay=False)
     if not parse_mkimat2_min_distances(update_log):
         file_log = _probe_command_via_charmm_log_file("update")
         if file_log:

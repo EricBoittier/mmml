@@ -145,7 +145,7 @@ contains
        IF(nSub > 1) I=I*nSub
     ENDIF
 #endif 
-    IF(NBXMOD > 0) I=MAX(NNB+1,I)
+    IF(NBXMOD > 0) I=NNB+I+1
     IF(QDRUDE) I=I*1.5
     call NBGROW(bnbndx%INB14, I)
 
