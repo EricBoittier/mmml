@@ -1397,8 +1397,11 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
     assert nnb == 6
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
-    prep_pbc.assert_called_once_with(40.0)
-    apply_nb.assert_called_once()
+    prep_pbc.assert_called_once_with(
+        40.0, workflow_args=prep_pbc.call_args.kwargs.get("workflow_args")
+    )
+    # Short nnb (get_nnb 5 -> reinstall -> 6) drives a second apply_pbc_nbonds.
+    assert apply_nb.call_count == 2
     fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
     fake_pycharmm.image.update_bimag.assert_called_once()
 
@@ -1444,7 +1447,9 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_
 
     assert nnb == 6
     install.assert_called_once_with(fake_sel, update=False)
-    prep_pbc.assert_called_once_with(42.0)
+    prep_pbc.assert_called_once_with(
+        42.0, workflow_args=prep_pbc.call_args.kwargs.get("workflow_args")
+    )
     fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
 
 
