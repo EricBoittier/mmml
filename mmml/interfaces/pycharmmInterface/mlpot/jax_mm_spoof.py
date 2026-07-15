@@ -317,7 +317,11 @@ def build_jax_mm_spoof_batch_apply(
 
         def _take_dimer(_):
             r_ext = jnp.concatenate([R, jnp.zeros_like(R[:slice_pad])], axis=0)
-            window_b = jax.lax.dynamic_slice(r_ext, (na, 0), (max_atoms, 3))
+            window_b = jax.lax.dynamic_slice(
+                r_ext,
+                (na, jnp.asarray(0, dtype=na.dtype)),
+                (max_atoms, 3),
+            )
             e_a, f_a = eval_padded(R, na)
             e_b, f_b_window = eval_padded(window_b, nb)
             e_nb, f_nb = _inter_monomer_soft_repulsion(R, na, nb)
