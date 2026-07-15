@@ -11,6 +11,7 @@ import pytest
 
 from mmml.cli.run.md_handoff import (
     MdHandoffState,
+    cluster_layout_from_composition_string,
     detect_handoff_format,
     handoff_to_npz_dict,
     load_handoff,
@@ -52,6 +53,24 @@ def test_cluster_geometry_from_handoff_skips_packmol_layout() -> None:
     assert labels == ["DCM"] * 20
     assert summary == {"DCM": 20}
     assert r0.shape == (100, 3)
+
+
+def test_mixed_water_methanol_handoff_layout_uses_residue_atom_counts() -> None:
+    per, labels, summary = cluster_layout_from_composition_string(
+        "MEOH:23,TIP3:22",
+        n_atoms=23 * 6 + 22 * 3,
+    )
+    assert per == [6] * 23 + [3] * 22
+    assert labels == ["MEOH"] * 23 + ["TIP3"] * 22
+    assert summary == {"MEOH": 23, "TIP3": 22}
+
+
+def test_mixed_water_methanol_handoff_layout_rejects_wrong_atom_count() -> None:
+    with pytest.raises(ValueError, match="requires 204 atoms"):
+        cluster_layout_from_composition_string(
+            "MEOH:23,TIP3:22",
+            n_atoms=203,
+        )
 
 
 def test_pycharmm_stage_dcd_frames_counts_overlap_chunks(tmp_path: Path) -> None:

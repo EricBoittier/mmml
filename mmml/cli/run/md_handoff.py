@@ -620,6 +620,31 @@ def cluster_layout_from_composition_string(
     n_mol = sum(composition_summary.values())
     if n_mol <= 0:
         raise ValueError("composition must include at least one monomer")
+
+    # Mixed PBC cells are heterogeneous (for example MEOH has six atoms while
+    # TIP3 has three), so total_atoms / total_monomers is not a valid layout.
+    # Use the same supported-solvent atom counts as the PBC resource estimator
+    # whenever every residue is known, and retain the uniform fallback for
+    # arbitrary user residues.
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+        PBC_BURST_ML_ATOMS_PER_MONOMER,
+    )
+
+    if all(res in PBC_BURST_ML_ATOMS_PER_MONOMER for res, _cnt in comp):
+        atoms_per_list = [
+            int(PBC_BURST_ML_ATOMS_PER_MONOMER[res])
+            for res, cnt in comp
+            for _ in range(int(cnt))
+        ]
+        expected_atoms = sum(atoms_per_list)
+        if expected_atoms != int(n_atoms):
+            raise ValueError(
+                f"handoff has {n_atoms} atoms but composition {composition!r} "
+                f"requires {expected_atoms} atoms"
+            )
+        residue_labels = [res for res, cnt in comp for _ in range(int(cnt))]
+        return atoms_per_list, residue_labels, composition_summary
+
     if int(n_atoms) % int(n_mol) != 0:
         raise ValueError(
             f"handoff has {n_atoms} atoms but composition implies {n_mol} monomers "
