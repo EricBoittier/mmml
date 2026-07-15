@@ -29,9 +29,9 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--num-iterations NUM_ITERATIONS] [--n-res N_RES]
                           [--cutoff CUTOFF]
                           [--max-atomic-number MAX_ATOMIC_NUMBER] [--zbl]
-                          [--no-zbl] [--use-pbc] [--no-pbc] [--no-energy-bias]
-                          [--optimizer OPTIMIZER] [--transform TRANSFORM]
-                          [--schedule-fn SCHEDULE_FN]
+                          [--no-zbl] [--trainable-zbl] [--use-pbc] [--no-pbc]
+                          [--no-energy-bias] [--optimizer OPTIMIZER]
+                          [--transform TRANSFORM] [--schedule-fn SCHEDULE_FN]
                           [--early-stop-patience EARLY_STOP_PATIENCE] [--best]
                           [--no-save-every-epoch] [--profile-epoch-timing]
                           [--print-freq PRINT_FREQ]
@@ -95,6 +95,8 @@ options:
   --max-atomic-number, --max_atomic_number MAX_ATOMIC_NUMBER
   --zbl                 Enable ZBL repulsion in EF model
   --no-zbl              Disable ZBL repulsion in EF model
+  --trainable-zbl       Opt in to optimizing ZBL screening parameters; fixed ZBL
+                        is the default.
   --use-pbc, --use_pbc  Use periodic boundary conditions
   --no-pbc              Disable periodic boundary conditions
   --no-energy-bias      Disable per-element energy bias in the model

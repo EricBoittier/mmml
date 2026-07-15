@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 

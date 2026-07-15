@@ -255,7 +255,6 @@ def get_forces_pycharmm(update: bool = True):
         pycharmm.lingo.charmm_script("ENER FORCE")
     return charmm_forces_array()
 
-import pandas as pd
 def set_pycharmm_xyz(atom_positions):
     from mmml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
 
