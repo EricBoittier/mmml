@@ -90,11 +90,90 @@ def test_write_prm_policy_overlay_nonbond(tmp_path: Path):
     write_prm_policy_overlay(src, dst, zero_bonded=False, zero_nonbond=True)
     text = dst.read_text(encoding="utf-8")
     assert "MMML energy-policy overlay" in text
-    assert "VDW term removed" in text
-    assert "NONBONDED" not in text
-    assert "NBFIX" not in text
-    assert "CL" not in text
+    # Append overlay must emit ε=0 NONBONDED rows (not omit the section).
+    assert "NONBONDED" in text
+    assert "nbxmod" not in text.lower()
+    assert "CL" in text
+    assert "-0.1200" not in text
     assert "300.0" not in text
+    assert "2.4700" in text
+
+
+def test_apply_before_pbc_writes_epsilon_zero_overlay(tmp_path: Path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    args = argparse.Namespace(
+        mm_nonbond_mode="jax_mic",
+        periodic_charmm_vdw=False,
+        charmm_zero_energy_terms=None,
+        quiet=True,
+        output_dir=tmp_path,
+    )
+    src = tmp_path / "par.prm"
+    src.write_text(
+        "NONBONDED nbxmod 5\n"
+        "CL     0.0       -0.1200     2.4700 ! comment\n"
+        "END\n",
+        encoding="utf-8",
+    )
+    read_calls: list[Path] = []
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
+        lambda: src,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
+        lambda path, append=False: read_calls.append(Path(path)),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.import_pycharmm",
+        object(),
+        raising=False,
+    )
+
+    class _Silent:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    scripts: list[str] = []
+    monkeypatch.setattr(
+        cep,
+        "charmm_silent_command",
+        lambda: _Silent(),
+        raising=False,
+    )
+    # Patch at the import sites used inside the function
+    import types
+    import sys
+
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_lingo = types.ModuleType("pycharmm.lingo")
+    fake_lingo.charmm_script = lambda s: scripts.append(s)
+    fake_pycharmm.lingo = fake_lingo
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        lambda: _Silent(),
+    )
+
+    applied = cep.apply_charmm_energy_term_policies_before_pbc_finalize(
+        args,
+        ml_selection=object(),
+        verbose=False,
+    )
+    assert applied == ["vdw"]
+    assert len(read_calls) == 1
+    overlay = read_calls[0]
+    assert overlay.name == "zeroed_vdw_pre_pbc.prm"
+    text = overlay.read_text(encoding="utf-8")
+    assert "NONBONDED" in text
+    assert "-0.1200" not in text
+    assert any("scalar vdw" in s.lower() for s in scripts)
 
 
 def test_policy_violation_detects_imnb():
@@ -127,7 +206,7 @@ def test_policy_violation_detects_small_imnb():
     assert hits == {"IMNB": pytest.approx(-3.0e-4)}
 
 
-def test_nonbond_only_prm_text_omits_section_headers(tmp_path: Path):
+def test_nonbond_policy_overlay_emits_epsilon_zero_rows(tmp_path: Path):
     from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_prm_policy_overlay,
     )
@@ -141,11 +220,12 @@ def test_nonbond_only_prm_text_omits_section_headers(tmp_path: Path):
         zero_nonbond=True,
     )
     text = dst.read_text(encoding="utf-8")
-    assert "\nNONBONDED" not in text
-    assert "\nNBFIX" not in text
-    assert "\nHBOND" not in text
+    assert "NONBONDED" in text
     assert "nbxmod" not in text.lower()
-
+    assert "MMML energy-policy overlay" in text
+    assert "HBOND" not in "\n".join(
+        line for line in text.splitlines() if not line.startswith("*")
+    )
 
 def test_enforce_skips_when_terms_already_zero(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
