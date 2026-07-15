@@ -155,6 +155,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ensemble", type=str, default="npt", choices=["nve", "nvt", "npt"])
     p.add_argument("--temperature", type=float, default=300.0)
     p.add_argument("--pressure", type=float, default=1.0, help="atm (for NPT)")
+    p.add_argument(
+        "--nve-force-energy-relative-tolerance",
+        type=float,
+        default=0.20,
+        help=(
+            "Maximum relative mismatch between a finite-difference energy slope "
+            "and the explicit hybrid force before NVE is rejected (<=0 disables)."
+        ),
+    )
+    p.add_argument(
+        "--nve-force-energy-epsilon-A",
+        type=float,
+        default=0.01,
+        help="Directional finite-difference displacement for the NVE force preflight.",
+    )
+    p.add_argument(
+        "--nve-etot-drift-abort-eV",
+        type=float,
+        default=0.5,
+        help="Abort NVE when total-energy drift exceeds this value (<=0 disables).",
+    )
     p.add_argument("--nhc-chain-length", type=int, default=3)
     p.add_argument("--nhc-chain-steps", type=int, default=2)
     p.add_argument("--nhc-sy-steps", type=int, default=3)

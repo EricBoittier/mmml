@@ -1,8 +1,14 @@
 """JAX-MD integrator carry follows the configured ML compute dtype."""
 
 import jax.numpy as jnp
+import numpy as np
 
-from mmml.cli.run.jaxmd_runner import _JAXMD_DTYPE, as_jaxmd_dtype, normalize_jaxmd_state
+from mmml.cli.run.jaxmd_runner import (
+    _JAXMD_DTYPE,
+    as_jaxmd_dtype,
+    directional_force_energy_error,
+    normalize_jaxmd_state,
+)
 
 
 def test_as_jaxmd_dtype_uses_configured_dtype():
@@ -35,3 +41,24 @@ def test_normalize_jaxmd_state_casts_carry_fields():
     assert normed.position.dtype == _JAXMD_DTYPE
     assert normed.momentum.dtype == _JAXMD_DTYPE
     assert normed.mass.dtype == _JAXMD_DTYPE
+
+
+def test_directional_force_energy_error_accepts_conservative_force():
+    slope, relerr = directional_force_energy_error(
+        energy_plus=1.98,
+        energy_minus=2.02,
+        epsilon_A=0.01,
+        projected_force_eV_A=2.0,
+    )
+    assert np.isclose(slope, -2.0)
+    assert relerr < 1.0e-12
+
+
+def test_directional_force_energy_error_detects_wrong_force():
+    _, relerr = directional_force_energy_error(
+        energy_plus=1.98,
+        energy_minus=2.02,
+        epsilon_A=0.01,
+        projected_force_eV_A=1.0,
+    )
+    assert np.isclose(relerr, 0.5)

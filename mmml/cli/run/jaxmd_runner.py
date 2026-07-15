@@ -35,6 +35,22 @@ import ase.io as ase_io
 from typing import Callable, Optional
 
 
+def directional_force_energy_error(
+    energy_plus: float,
+    energy_minus: float,
+    epsilon_A: float,
+    projected_force_eV_A: float,
+) -> tuple[float, float]:
+    """Compare a finite-difference energy slope with ``-F·direction``."""
+    eps = float(epsilon_A)
+    if eps <= 0.0:
+        raise ValueError("epsilon_A must be positive")
+    derivative = (float(energy_plus) - float(energy_minus)) / (2.0 * eps)
+    expected = -float(projected_force_eV_A)
+    scale = max(abs(derivative), abs(expected), 1.0e-3)
+    return derivative, abs(derivative - expected) / scale
+
+
 def _nl_update_positions(positions):
     """Pass JAX arrays to ``update_mm_pairs`` so it can avoid host sync on cache hits."""
     import os
@@ -1289,6 +1305,64 @@ def set_up_nhc_sim_routine(
         else:
             forces_jax = wrapped_force_fn(state.position, neighbor=current_neighbors)
         print_forces_summary(np.asarray(forces_jax), energy_eV=energy_initial, console=c)
+        if args.ensemble == "nve":
+            # NVE is only meaningful when the explicit calculator forces are
+            # the negative derivative of the reported potential energy.  The
+            # hybrid calculator cannot currently be differentiated end-to-end,
+            # so verify that contract numerically before integrating.
+            fd_tol = float(
+                getattr(args, "nve_force_energy_relative_tolerance", 0.20)
+                or 0.0
+            )
+            if fd_tol > 0.0:
+                fd_eps = float(
+                    getattr(args, "nve_force_energy_epsilon_A", 0.01) or 0.01
+                )
+                ncoord = int(np.prod(state.position.shape))
+                direction_np = np.sin(
+                    np.arange(1, ncoord + 1, dtype=np.float64)
+                ).reshape(tuple(state.position.shape))
+                direction_np /= max(float(np.linalg.norm(direction_np)), 1.0e-12)
+                direction = as_jaxmd_dtype(direction_np)
+                e_plus = float(
+                    wrapped_energy_fn(
+                        state.position + fd_eps * direction,
+                        neighbor=current_neighbors,
+                    )
+                )
+                e_minus = float(
+                    wrapped_energy_fn(
+                        state.position - fd_eps * direction,
+                        neighbor=current_neighbors,
+                    )
+                )
+                projected_force = float(jnp.sum(forces_jax * direction))
+                fd_slope, fd_relerr = directional_force_energy_error(
+                    e_plus,
+                    e_minus,
+                    fd_eps,
+                    projected_force,
+                )
+                if not np.isfinite(fd_relerr) or fd_relerr > fd_tol:
+                    msg = (
+                        "NVE force–energy consistency failed: "
+                        f"finite-difference dE/ds={fd_slope:.6f} eV/Å, "
+                        f"-F·d={-projected_force:.6f} eV/Å, relative error "
+                        f"{fd_relerr:.3f} > {fd_tol:.3f}. The hybrid force is "
+                        "non-conservative for this configuration; NVE would heat "
+                        "and drift."
+                    )
+                    c.print(
+                        Panel(
+                            msg,
+                            title="[bold red]NVE preflight failed[/bold red]",
+                            border_style="red",
+                        )
+                    )
+                    run_sim.last_status = "error"
+                    run_sim.last_error = msg
+                    pos0 = np.asarray(jax.device_get(state.position), dtype=float)
+                    return 0, np.stack([pos0]), None
         # velocity = momentum / mass; position update = R + dt * v (half-step in VV)
         vel = state.momentum / state.mass
         disp_first = dt * vel
@@ -1465,7 +1539,7 @@ def set_up_nhc_sim_routine(
         # Abort NVE when |E_tot - E_tot_ref| exceeds this (eV). Non-conservative
         # force bugs otherwise run to multi-1000 K before anyone notices.
         e_tot_drift_abort_eV = float(
-            getattr(args, "nve_etot_drift_abort_eV", 2.0) or 0.0
+            getattr(args, "nve_etot_drift_abort_eV", 0.5) or 0.0
         )
 
         def _state_after_overlap_rescue(
