@@ -450,6 +450,8 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
             global_step=100,
         )
     assert recovered
+    assert recovered.velocities_redrawn
+    assert not recovered.geometry_restored
     redraw.assert_called_once()
     restore_template.assert_not_called()
     invalidate.assert_called()
@@ -534,6 +536,8 @@ def test_maybe_intervene_templates_only_geometry_bad(
             ctx, overlap, context="HEAT", global_step=500
         )
     assert ok
+    assert ok.geometry_restored
+    assert not ok.velocities_redrawn  # redraw mock returns False
     restore_template.assert_called_once()
     restored_idx = restore_template.call_args[0][1]
     assert restored_idx == (1,)

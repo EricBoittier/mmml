@@ -5265,6 +5265,26 @@ def _prepare_post_rescue_overlap_handoff(
     if mlpot_ctx is not None and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False):
         _prepare_post_rescue_cold_start_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
         return
+    if mlpot_ctx is not None and getattr(
+        mlpot_ctx, "_overlap_velocity_redraw_memory_handoff", False
+    ) is True:
+        # Keep Maxwell–Boltzmann redraws in CHARMM RAM; do not IASVEL=1 reassign.
+        setattr(mlpot_ctx, "_overlap_velocity_redraw_memory_handoff", False)
+        chunk_kw["restart"] = False
+        chunk_kw["new"] = False
+        chunk_kw["start"] = True
+        chunk_kw["iasvel"] = 0
+        chunk_kw.pop("iunrea", None)
+        chunk_kw["iunrea"] = -1
+        _strip_stale_heat_ramp_keywords(chunk_kw)
+        if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
+            chunk_kw["ihtfrq"] = 0
+        print(
+            "overlap: post-velocity-redraw in-memory handoff "
+            "(iasvel=0; no READYN / no MLpot rescue mini)",
+            flush=True,
+        )
+        return
     if _bussi_heat_ramp_active(chunk_kw):
         _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
         _apply_bussi_in_memory_continuation_kw(chunk_kw)
@@ -7852,13 +7872,13 @@ def run_dynamics_with_io(
                         step=steps_done,
                         mlpot_ctx=mlpot_ctx,
                     )
-                    health_rescued = False
+                    health_action = None
                     if mlpot_ctx is not None and overlap is not None:
                         from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
                             maybe_intervene_monomer_health,
                         )
 
-                        health_rescued = maybe_intervene_monomer_health(
+                        health_action = maybe_intervene_monomer_health(
                             mlpot_ctx,
                             overlap,
                             context=overlap_context,
@@ -7867,7 +7887,34 @@ def run_dynamics_with_io(
                                 chunk_io.restart_write if chunk_io is not None else None
                             ),
                         )
-                    rescued = bool(rescued or health_rescued)
+                    geometry_health_rescued = bool(
+                        getattr(health_action, "geometry_restored", False)
+                    )
+                    velocity_health_redrawn = bool(
+                        getattr(health_action, "velocities_redrawn", False)
+                    )
+                    rescued = bool(rescued or geometry_health_rescued)
+                    if (
+                        velocity_health_redrawn
+                        and not rescued
+                        and chunk_index + 1 < n_chunks
+                        and mlpot_ctx is not None
+                    ):
+                        # Arm next chunk: keep redrawn velocities in RAM. Never run
+                        # finalize_overlap_rescue / write_charmm_restart_from_memory +
+                        # READYN — those truncated REST files crash dynio.
+                        setattr(
+                            mlpot_ctx,
+                            "_overlap_velocity_redraw_memory_handoff",
+                            True,
+                        )
+                        post_rescue_in_memory_mode = True
+                        print(
+                            f"overlap ({overlap_context}): velocity redraw only "
+                            f"at step {steps_done}; next chunk continues in-memory "
+                            "(no MLpot rescue / READYN)",
+                            flush=True,
+                        )
                     if not rescued and overlap is not None and overlap.extent_enabled:
                         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                             refresh_overlap_prior_segment_restart,

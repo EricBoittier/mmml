@@ -121,6 +121,26 @@ class MonomerHealthReport:
     restored: bool = False
 
 
+@dataclass(frozen=True)
+class MonomerHealthIntervention:
+    """Result of :func:`maybe_intervene_monomer_health`.
+
+    ``geometry_restored`` arms the full overlap rescue / READYN chain.
+    ``velocities_redrawn`` only keeps Maxwell–Boltzmann velocities in RAM for
+    the next overlap chunk (no MLpot SD, no truncated ``write restart``).
+    """
+
+    geometry_restored: bool = False
+    velocities_redrawn: bool = False
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.geometry_restored or self.velocities_redrawn)
+
+    def __bool__(self) -> bool:
+        return self.changed
+
+
 def _entry_grms_for_selection(entry: MonomerHealthEntry) -> float:
     """Highest live GRMS signal for prioritizing limited intervention slots."""
     vals = [
@@ -1019,17 +1039,18 @@ def maybe_intervene_monomer_health(
     context: str,
     global_step: int | None = None,
     restart_path: Any | None = None,
-) -> bool:
+) -> MonomerHealthIntervention:
     """Audit health; template+FIRE only for geometry; redraw hot velocities otherwise.
 
-    Returns True when coordinates or velocities were rewritten.
+    Only ``geometry_restored`` should enter the overlap MLpot-SD / READYN rescue chain.
+    Velocity redraws keep state in RAM for the next chunk.
     """
     health_cfg = getattr(overlap_config, "monomer_health", None)
     if health_cfg is None:
         args = getattr(mlpot_ctx, "workflow_args", None)
         health_cfg = monomer_health_config_from_args(args)
     if not health_cfg.enabled:
-        return False
+        return MonomerHealthIntervention()
 
     n_monomers = int(getattr(overlap_config, "n_monomers", 1) or 1)
     if global_step is not None:
@@ -1048,7 +1069,7 @@ def maybe_intervene_monomer_health(
         overlap_config=overlap_config,
     )
     if report is None or report.baseline_recorded:
-        return False
+        return MonomerHealthIntervention()
 
     if health_cfg.debug_dot_matrix or report.flagged_bad or report.flagged_warn:
         emit_monomer_health_dot_matrix(
@@ -1065,9 +1086,10 @@ def maybe_intervene_monomer_health(
         mlpot_ctx, n_monomers=int(n_monomers), n_atoms=n_atoms
     )
     if offsets is None:
-        return False
+        return MonomerHealthIntervention()
 
-    changed = False
+    geometry_restored = False
+    velocities_redrawn = False
 
     geometry_bad = tuple(
         int(e.index) for e in report.entries if e.geometry_level == LEVEL_BAD
@@ -1099,7 +1121,7 @@ def maybe_intervene_monomer_health(
                 temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
             )
             if restored:
-                changed = True
+                geometry_restored = True
                 if health_cfg.per_monomer_jax_after_restore:
                     _run_per_monomer_jax_on_indices(
                         mlpot_ctx,
@@ -1136,12 +1158,16 @@ def maybe_intervene_monomer_health(
             verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
             context=context,
         )
-        changed = bool(changed or redrawn)
+        velocities_redrawn = bool(redrawn)
 
-    if changed:
+    result = MonomerHealthIntervention(
+        geometry_restored=geometry_restored,
+        velocities_redrawn=velocities_redrawn,
+    )
+    if result.changed:
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
             invalidate_mlpot_calculator_caches,
         )
 
         invalidate_mlpot_calculator_caches(mlpot_ctx)
-    return changed
+    return result

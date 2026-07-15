@@ -4319,6 +4319,32 @@ def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
     assert "finalt" not in chunk_kw
 
 
+def test_prepare_post_rescue_velocity_redraw_keeps_iasvel0():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_post_rescue_overlap_handoff,
+    )
+
+    chunk_kw = {
+        "tbath": 200.0,
+        "timestep": 0.0001,
+        "restart": True,
+        "iunrea": 3,
+        "iasvel": 1,
+    }
+    ctx = mock.Mock(
+        use_pbc=True,
+        charmm_cubic_box_side_A=30.0,
+        _overlap_post_rescue_cold_start=False,
+        _overlap_velocity_redraw_memory_handoff=True,
+    )
+    _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
+    assert chunk_kw["restart"] is False
+    assert chunk_kw["start"] is True
+    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iunrea"] == -1
+    assert ctx._overlap_velocity_redraw_memory_handoff is False
+
+
 def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _post_rescue_bath_target_K,
