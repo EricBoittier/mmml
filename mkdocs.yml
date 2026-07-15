@@ -147,6 +147,7 @@ nav:
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
+      - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md
       - Settings: mlpot-settings.md
       - Calculator profiling: calculator-profiling.md
