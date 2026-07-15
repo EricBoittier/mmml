@@ -4544,6 +4544,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         mirror_comparison_velocities_for_dynamics,
+        sync_comparison_velocities_akma,
+        sync_comparison_velocities_from_main,
     )
 
     import pycharmm
@@ -4579,12 +4581,17 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
                 np.asarray(init_velocities["vz"], dtype=np.float64),
             ]
         )
-    elif _requires_init_velocities_handoff(kw):
-        # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
-        mirror_comparison_velocities_for_dynamics(
-            kw,
-            restart_read_path=restart_read_path,
-        )
+    # Lingering START + iasvel=0 still reads COMP. Always keep COMP in sync with
+    # handoff / main velocities — even when C-API init_velocities is also injected
+    # (gfortran builds often ignore those arrays and keep using COMP).
+    if _requires_init_velocities_handoff(kw):
+        if handoff_vel is not None:
+            sync_comparison_velocities_akma(handoff_vel)
+        else:
+            mirror_comparison_velocities_for_dynamics(
+                kw,
+                restart_read_path=restart_read_path,
+            )
     if not skip_ase_cold:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     if "echeck" in kw:
@@ -4608,6 +4615,17 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             fallback_paths=bussi_restart_fallbacks,
             quiet=bool(kw.get("_quiet_bussi_rescale", False)),
         )
+        # Re-sync COMP from the finalized arrays; finalize may redraw / regenerate.
+        if init_velocities is not None:
+            sync_comparison_velocities_akma(
+                np.column_stack(
+                    [
+                        np.asarray(init_velocities["vx"], dtype=np.float64),
+                        np.asarray(init_velocities["vy"], dtype=np.float64),
+                        np.asarray(init_velocities["vz"], dtype=np.float64),
+                    ]
+                )
+            )
         init_velocities = _drop_unsafe_bussi_init_velocities_for_dcd(
             kw,
             init_velocities,
@@ -4647,12 +4665,15 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             fallback_paths=bussi_restart_fallbacks,
             quiet=bool(kw.get("_quiet_bussi_rescale", False)),
         )
-    elif int(kw.get("iasvel", 0) or 0) == 0:
+    # Always refresh COMP after dyna so the next iasvel=0 overlap chunk does not
+    # inherit comparison *coordinates* left behind by iasvel=1 / cold-start legs.
+    synced_comp = sync_comparison_velocities_from_main()
+    if not synced_comp and int(kw.get("iasvel", 0) or 0) == 0:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-            sync_comparison_velocities_from_main,
+            sync_comparison_velocities_from_comparison,
         )
 
-        sync_comparison_velocities_from_main()
+        sync_comparison_velocities_from_comparison()
     _release_charmm_dynamics_api_buffers()
     return dyn
 
