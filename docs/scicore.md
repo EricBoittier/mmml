@@ -76,24 +76,25 @@ The output must contain both markers and CHARMM `NORMAL TERMINATION`.
 
 ## Slurm resources
 
-Use a GPU partition and its matching QoS. A short smoke header is:
+Use a GPU partition and its matching QoS. The validated mixed-system force
+compilation gate uses an 80 GB A100:
 
 ```bash
-#SBATCH --partition=rtx4090
-#SBATCH --qos=rtx4090-30min
+#SBATCH --partition=a100-80g
+#SBATCH --qos=a100-30min
 #SBATCH --time=00:30:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 ```
 
-Production GPU cells use `rtx4090-1week`. The Snakemake driver itself is a
+Production GPU cells use `a100-1week`. The Snakemake driver itself is a
 small CPU job on `scicore` with the `1week` QoS. SciCORE node names must not be
 replaced by the pc-studix `gpu08`/`gpu09` lists. Use:
 
 ```bash
 export MMML_SLURM_NO_NODELIST=1
-export MMML_SLURM_EXTRA="--qos=rtx4090-1week"
+export MMML_SLURM_EXTRA="--qos=a100-1week"
 ```
 
 The workflow's `Snakefile` honors these scheduler overrides while retaining
@@ -117,9 +118,11 @@ export JAX_ENABLE_X64=1
 export MMML_ML_DTYPE=float64
 ```
 
-Keep `ml_batch_size: 32` for the portable RTX4090 configuration. A 204-atom
-mixed float64 force compile exhausted 24 GB at batch size 512; the historical
-production default of 2048 is not valid on this partition. Larger values are
+Keep `ml_batch_size: 32` for the portable configuration. A 204-atom mixed
+float64 force compile exhausted a shared 24 GB RTX4090 at batch size 512; the
+historical production default of 2048 is not valid there. RTX4090 is suitable
+for the import gate only when memory is demonstrably free. Use `a100-80g` for
+the mixed force-compilation gate and campaign. Larger batch values remain
 site/GPU-specific opt-ins and require a successful compile smoke first.
 
 Submit the full campaign behind a successful smoke, never merely behind its
@@ -144,5 +147,5 @@ campaign cells.
 | Segfault before a Python `BEFORE` marker | Fallback MCA/preload workarounds were applied. Confirm the four `MMML_NO_MPI_*` variables above. |
 | `libmpi.so.40 => not found` or missing `GLIBCXX_3.4.32` | The EasyBuild module environment was not loaded in that shell. |
 | Import appears to hang on the login node | Do not use a login import as the acceptance test. Submit the rank-zero Slurm import gate; shared-home metadata and first-time builds can be slow. |
-| JAX autotuning reports multi-GiB `CUDA_ERROR_OUT_OF_MEMORY` | Confirm `ml_batch_size: 32`; do not reuse the historical 512/2048 settings on a 24 GB RTX4090. |
+| JAX autotuning reports multi-GiB `CUDA_ERROR_OUT_OF_MEMORY` | Confirm `ml_batch_size: 32`, inspect `nvidia-smi` for shared/orphan ranks, and use `a100-80g` for the mixed compile gate. Do not reuse historical 512/2048 settings on a 24 GB RTX4090. |
 | Production jobs appear after a failed smoke | The full driver was not submitted with `afterok:<smoke_job_id>`; cancel it and repair the dependency chain. |
