@@ -1964,6 +1964,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 1)",
         )
+        _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
@@ -1971,7 +1972,6 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
 
         mkimat_log = capture_charmm_script_output("UPDATE", replay=False)
         stash_mkimat2_registration_log(workflow_args, mkimat_log)
-    _install_ml_exclusions(ml_selection, update=False)
     pycharmm.image.update_bimag()
     rewrap_charmm_coords_for_mlpot_pbc(
         cubic_box_side_A=side,
@@ -1985,6 +1985,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 2)",
         )
+        _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
@@ -1996,7 +1997,6 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
                 part for part in (mkimat_log, mkimat_log2) if part.strip()
             )
         stash_mkimat2_registration_log(workflow_args, mkimat_log2)
-    _install_ml_exclusions(ml_selection, update=False)
     pycharmm.image.update_bimag()
     reassert_pbc_nbond_cutoffs(
         side,
