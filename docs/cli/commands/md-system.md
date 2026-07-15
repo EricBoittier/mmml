@@ -298,24 +298,28 @@ options:
                         Optional learned MBD dispersion checkpoint. On the
                         legacy ASE/JAX-MD hybrid path, adds E += mbd_weight *
                         E_mbd. With --jaxmd-unified --ff zbl-mbd-multipoles,
-                        used once at build to freeze per-atom C6/C8/C10 for
-                        classical pairwise dispersion (default: bundled example).
+                        used once at build to freeze per-atom C6/C8/C10 for the
+                        classical pairwise dispersion term (default: bundled
+                        example).
   --mbd-weight MBD_WEIGHT
                         Weight for the --mbd-checkpoint correction (default 1.0;
                         match training).
   --multipole-checkpoint MULTIPOLE_CHECKPOINT
-                        Optional learned multipole checkpoint. With
-                        --jaxmd-unified --ff zbl-mbd-multipoles, used once at
-                        build to freeze fragment multipoles for classical pair
-                        electrostatics during rigid MC (default: bundled example).
+                        Optional learned multipole checkpoint. With --jaxmd-
+                        unified --ff zbl-mbd-multipoles, used once at build to
+                        freeze fragment multipoles for classical pair
+                        electrostatics during rigid MC (default: bundled
+                        example).
   --sampler {md,rigid}  Propagator for --jaxmd-unified: md (JaxmdDriver) or
-                        rigid (RigidBodySampler Metropolis MC). Default: md.
+                        rigid (RigidBodySampler Metropolis MC over whole
+                        monomers). Default: md.
   --ff {cgenff,zbl-mbd-multipoles}
                         Intermolecular FF preset for --jaxmd-unified. cgenff:
                         CHARMM/CGenFF mm_nonbonded only (default when --sampler
                         rigid and no --checkpoint). zbl-mbd-multipoles:
-                        intermolecular ZBL (defaults) + fixed multipoles +
-                        fixed C6 dispersion.
+                        intermolecular ZBL (defaults) + fixed multipoles + fixed
+                        C6 dispersion. Omit for hybrid ml_intra+mm_nonbonded
+                        when a checkpoint is set.
   --jaxmd-unified       EXPERIMENTAL: run --backend jaxmd through the unified
                         mmml.md pipeline (mmml.cli.run.md_system_unified)
                         instead of the legacy md_pbc_suite.jaxmd inline loop.
