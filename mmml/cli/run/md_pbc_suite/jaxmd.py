@@ -176,6 +176,15 @@ def main(argv: list[str] | None = None) -> int:
         default=0.5,
         help="Abort NVE when total-energy drift exceeds this value (<=0 disables).",
     )
+    p.add_argument(
+        "--nve-max-f-start-eVA",
+        type=float,
+        default=0.5,
+        help=(
+            "Refuse to start NVE when post-FIRE max|F| exceeds this (eV/Å). "
+            "Use <=0 to disable."
+        ),
+    )
     p.add_argument("--nhc-chain-length", type=int, default=3)
     p.add_argument("--nhc-chain-steps", type=int, default=2)
     p.add_argument("--nhc-sy-steps", type=int, default=3)
@@ -1227,6 +1236,14 @@ def main(argv: list[str] | None = None) -> int:
         flat_bottom_radius=args.flat_bottom_radius,
         flat_bottom_k=args.flat_bottom_k,
         flat_bottom_mode=args.flat_bottom_mode,
+        nve_force_energy_relative_tolerance=float(
+            getattr(args, "nve_force_energy_relative_tolerance", 0.20)
+        ),
+        nve_force_energy_epsilon_A=float(
+            getattr(args, "nve_force_energy_epsilon_A", 0.01)
+        ),
+        nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
+        nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 0.5)),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,

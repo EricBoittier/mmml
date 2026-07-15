@@ -1306,6 +1306,25 @@ def set_up_nhc_sim_routine(
             forces_jax = wrapped_force_fn(state.position, neighbor=current_neighbors)
         print_forces_summary(np.asarray(forces_jax), energy_eV=energy_initial, console=c)
         if args.ensemble == "nve":
+            max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
+            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 0.5) or 0.0)
+            if fmax_gate > 0.0 and max_f_start > fmax_gate:
+                msg = (
+                    f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "
+                    f"> gate {fmax_gate:.4f} eV/Å. Improve minimization / packing "
+                    "before microcanonical dynamics (or raise --nve-max-f-start-eVA)."
+                )
+                c.print(
+                    Panel(
+                        msg,
+                        title="[bold red]NVE preflight failed[/bold red]",
+                        border_style="red",
+                    )
+                )
+                run_sim.last_status = "error"
+                run_sim.last_error = msg
+                pos0 = np.asarray(jax.device_get(state.position), dtype=float)
+                return 0, np.stack([pos0]), None
             # NVE is only meaningful when the explicit calculator forces are
             # the negative derivative of the reported potential energy.  The
             # hybrid calculator cannot currently be differentiated end-to-end,
@@ -1342,6 +1361,15 @@ def set_up_nhc_sim_routine(
                     e_minus,
                     fd_eps,
                     projected_force,
+                )
+                c.print(
+                    Panel(
+                        f"directional FD dE/ds={fd_slope:.6f} eV/Å, "
+                        f"-F·d={-projected_force:.6f} eV/Å, "
+                        f"relative error={fd_relerr:.4f} (tol={fd_tol:.4f})",
+                        title="[bold]NVE force–energy preflight[/bold]",
+                        border_style="cyan",
+                    )
                 )
                 if not np.isfinite(fd_relerr) or fd_relerr > fd_tol:
                     msg = (
@@ -1727,70 +1755,70 @@ def set_up_nhc_sim_routine(
                     atoms_template.set_positions(np.asarray(jax.device_get(pos_real)))
                     show_frame(atoms_template, steps, "jaxmd")
 
-                # Print progress every 10 steps
+                # Energies every record for NVE conservation; print every 10 records.
                 nbr_n_valid = nbr_capacity = nbr_fill_ratio = None
-                if i % 10 == 0:
-                    steps = (i + 1) * steps_per_recording
-                    time_ps = steps * dt
-                    T_curr = jax_md.quantity.temperature(
-                        momentum=state.momentum,
-                        mass=state.mass
-                    ) / unit['temperature']
-                    temp = float(T_curr)
-                    com_dist_report = float("nan")
-                    e_fb_report = float("nan")
-                    if use_flat_bottom:
-                        if is_npt and npt_pair_idx is not None:
-                            box_curr = simulate.npt_box(state)
-                            out_dyn = _eval_at_position(
-                                state.position,
-                                box=box_curr,
-                                pair_idx=npt_pair_idx,
-                                pair_mask=npt_pair_mask,
-                            )
-                        else:
-                            pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
-                            out_dyn = _eval_at_position(
-                                state.position,
-                                pair_idx=pair_idx,
-                                pair_mask=pair_mask,
-                            )
-                        e_pot = float(out_dyn.energy)
-                        com_dist_report = float(out_dyn.com_dist)
-                        e_fb_report = float(out_dyn.flat_bottom_E)
-                    elif is_npt and npt_pair_idx is not None:
+                steps = (i + 1) * steps_per_recording
+                time_ps = steps * dt
+                T_curr = jax_md.quantity.temperature(
+                    momentum=state.momentum,
+                    mass=state.mass
+                ) / unit['temperature']
+                temp = float(T_curr)
+                com_dist_report = float("nan")
+                e_fb_report = float("nan")
+                if use_flat_bottom:
+                    if is_npt and npt_pair_idx is not None:
                         box_curr = simulate.npt_box(state)
-                        e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+                        out_dyn = _eval_at_position(
+                            state.position,
+                            box=box_curr,
+                            pair_idx=npt_pair_idx,
+                            pair_mask=npt_pair_mask,
+                        )
                     else:
-                        e_pot = float(wrapped_energy_fn(state.position, neighbor=current_neighbors))
-                    e_kin = float(jax_md.quantity.kinetic_energy(
-                        momentum=state.momentum,
-                        mass=state.mass
-                    ))
-                    e_tot = e_pot + e_kin
-                    if (
-                        not is_npt
-                        and args.ensemble == "nve"
-                        and e_tot_drift_abort_eV > 0.0
-                        and np.isfinite(e_tot)
-                    ):
-                        if e_tot_ref is None:
-                            e_tot_ref = e_tot
-                        elif abs(e_tot - e_tot_ref) > e_tot_drift_abort_eV:
-                            run_status = "error"
-                            run_error = (
-                                f"NVE E_tot drift {e_tot - e_tot_ref:+.4f} eV "
-                                f"exceeds abort threshold {e_tot_drift_abort_eV:.4f} eV "
-                                f"at step {steps} (E_tot={e_tot:.4f}, ref={e_tot_ref:.4f})"
-                            )
-                            c.print(Panel(
-                                run_error,
-                                title="[bold red]NVE energy conservation failed[/bold red]",
-                                border_style="red",
-                            ))
-                            if len(nhc_positions) > 1:
-                                nhc_positions = nhc_positions[:-1]
-                            break
+                        pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
+                        out_dyn = _eval_at_position(
+                            state.position,
+                            pair_idx=pair_idx,
+                            pair_mask=pair_mask,
+                        )
+                    e_pot = float(out_dyn.energy)
+                    com_dist_report = float(out_dyn.com_dist)
+                    e_fb_report = float(out_dyn.flat_bottom_E)
+                elif is_npt and npt_pair_idx is not None:
+                    box_curr = simulate.npt_box(state)
+                    e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+                else:
+                    e_pot = float(wrapped_energy_fn(state.position, neighbor=current_neighbors))
+                e_kin = float(jax_md.quantity.kinetic_energy(
+                    momentum=state.momentum,
+                    mass=state.mass
+                ))
+                e_tot = e_pot + e_kin
+                if (
+                    not is_npt
+                    and args.ensemble == "nve"
+                    and e_tot_drift_abort_eV > 0.0
+                    and np.isfinite(e_tot)
+                ):
+                    if e_tot_ref is None:
+                        e_tot_ref = e_tot
+                    elif abs(e_tot - e_tot_ref) > e_tot_drift_abort_eV:
+                        run_status = "error"
+                        run_error = (
+                            f"NVE E_tot drift {e_tot - e_tot_ref:+.4f} eV "
+                            f"exceeds abort threshold {e_tot_drift_abort_eV:.4f} eV "
+                            f"at step {steps} (E_tot={e_tot:.4f}, ref={e_tot_ref:.4f})"
+                        )
+                        c.print(Panel(
+                            run_error,
+                            title="[bold red]NVE energy conservation failed[/bold red]",
+                            border_style="red",
+                        ))
+                        if len(nhc_positions) > 1:
+                            nhc_positions = nhc_positions[:-1]
+                        break
+                if i % 10 == 0:
                     elapsed_s = time.perf_counter() - jaxmd_loop_start
                     simulated_ns = steps * dt_fs * 1e-6
                     if simulated_ns > 0 and elapsed_s > 0:
@@ -1841,59 +1869,63 @@ def set_up_nhc_sim_routine(
                             f"{_fb_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
 
-                    # Record to HDF5 (NPT: real-space via transform; optional monomer wrap for viewers)
-                    pos_for_h5 = state.position
-                    if is_npt:
-                        box_curr = simulate.npt_box(state)
-                        pos_for_h5 = space.transform(box_curr, state.position)
-                        if traj_export_molecular_wrap:
-                            pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
-                    report_kw = dict(
-                        potential_energy=e_pot,
-                        kinetic_energy=e_kin,
-                        temperature=temp,
-                        invariant=e_tot,
-                        total_energy=e_tot,
-                        time_ps=time_ps,
-                        positions=pos_for_h5,
-                        velocities=state.momentum / state.mass,
+                # Record to HDF5 every record (NPT: real-space; optional monomer wrap)
+                pos_for_h5 = state.position
+                if is_npt:
+                    box_curr = simulate.npt_box(state)
+                    pos_for_h5 = space.transform(box_curr, state.position)
+                    if traj_export_molecular_wrap:
+                        pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
+                report_kw = dict(
+                    potential_energy=e_pot,
+                    kinetic_energy=e_kin,
+                    temperature=temp,
+                    invariant=e_tot,
+                    total_energy=e_tot,
+                    time_ps=time_ps,
+                    positions=pos_for_h5,
+                    velocities=state.momentum / state.mass,
+                )
+                if is_npt:
+                    box_for_density = simulate.npt_box(state)
+                    vol_for_density = float(quantity.volume(3, box_for_density))
+                    report_kw["density_g_cm3"] = (
+                        float(np.sum(Si_mass) * 1.66053906660 / vol_for_density)
+                        if vol_for_density > 0
+                        else float("nan")
                     )
-                    if is_npt:
-                        box_for_density = simulate.npt_box(state)
-                        vol_for_density = float(quantity.volume(3, box_for_density))
-                        report_kw["density_g_cm3"] = (
-                            float(np.sum(Si_mass) * 1.66053906660 / vol_for_density)
-                            if vol_for_density > 0
-                            else float("nan")
-                        )
-                    if nbr_monitor and is_npt and npt_pair_idx is not None and nbr_n_valid is not None:
-                        report_kw["nbr_n_valid"] = nbr_n_valid
-                        report_kw["nbr_capacity"] = nbr_capacity
-                        report_kw["nbr_fill_ratio"] = nbr_fill_ratio
-                    if use_flat_bottom:
-                        report_kw["com_dist_A"] = com_dist_report
-                        report_kw["flat_bottom_E_eV"] = e_fb_report
-                    hdf5_reporter.report(**report_kw)
+                if nbr_monitor and is_npt and npt_pair_idx is not None:
+                    if nbr_n_valid is None:
+                        nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
+                        nbr_capacity = npt_pair_idx.shape[0]
+                        nbr_fill_ratio = nbr_n_valid / nbr_capacity if nbr_capacity > 0 else 0.0
+                    report_kw["nbr_n_valid"] = nbr_n_valid
+                    report_kw["nbr_capacity"] = nbr_capacity
+                    report_kw["nbr_fill_ratio"] = nbr_fill_ratio
+                if use_flat_bottom:
+                    report_kw["com_dist_A"] = com_dist_report
+                    report_kw["flat_bottom_E_eV"] = e_fb_report
+                hdf5_reporter.report(**report_kw)
 
-                    # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
-                    if not np.isfinite(e_pot) or not np.isfinite(temp):
-                        run_status = "error"
-                        run_error = f"numerical instability at step {steps}"
-                        print(f"Numerical instability at step {steps}; stopping.")
-                        if len(nhc_positions) > 1:
-                            nhc_positions = nhc_positions[:-1]
-                            if is_npt:
-                                nhc_boxes = nhc_boxes[:-1]
-                        break
-                    if e_pot >= 0 and energy_initial < 0:
-                        run_status = "error"
-                        run_error = f"energy blow-up at step {steps} (E_pot={e_pot:.4f})"
-                        c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
-                        if len(nhc_positions) > 1:
-                            nhc_positions = nhc_positions[:-1]
-                            if is_npt:
-                                nhc_boxes = nhc_boxes[:-1]
-                        break
+                # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
+                if not np.isfinite(e_pot) or not np.isfinite(temp):
+                    run_status = "error"
+                    run_error = f"numerical instability at step {steps}"
+                    print(f"Numerical instability at step {steps}; stopping.")
+                    if len(nhc_positions) > 1:
+                        nhc_positions = nhc_positions[:-1]
+                        if is_npt:
+                            nhc_boxes = nhc_boxes[:-1]
+                    break
+                if e_pot >= 0 and energy_initial < 0:
+                    run_status = "error"
+                    run_error = f"energy blow-up at step {steps} (E_pot={e_pot:.4f})"
+                    c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
+                    if len(nhc_positions) > 1:
+                        nhc_positions = nhc_positions[:-1]
+                        if is_npt:
+                            nhc_boxes = nhc_boxes[:-1]
+                    break
         except KeyboardInterrupt:
             run_status = "interrupted"
             run_error = "KeyboardInterrupt"

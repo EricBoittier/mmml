@@ -1,5 +1,7 @@
 """JAX-MD integrator carry follows the configured ML compute dtype."""
 
+from pathlib import Path
+
 import jax.numpy as jnp
 import numpy as np
 
@@ -62,3 +64,15 @@ def test_directional_force_energy_error_detects_wrong_force():
         projected_force_eV_A=1.0,
     )
     assert np.isclose(relerr, 0.5)
+
+
+def test_jaxmd_suite_nve_preflight_cli_defaults():
+    """NVE gates must be wired into jargs (not only suite argparse)."""
+    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+
+    src = Path(jaxmd_suite.__file__).read_text()
+    assert "--nve-etot-drift-abort-eV" in src
+    assert "--nve-max-f-start-eVA" in src
+    assert "--nve-force-energy-relative-tolerance" in src
+    assert "nve_max_f_start_eVA=" in src
+    assert "nve_etot_drift_abort_eV=" in src
