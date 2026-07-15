@@ -184,34 +184,33 @@ class SpookyNetCalculator(Calculator):
         # --- Companion MBD correction (see module docstring) -------------
         self.mbd_calc = None
         self.mbd_weight = 0.0
-        resolved_mbd_checkpoint: str | Path | None
-        if mbd_checkpoint is False:
-            resolved_mbd_checkpoint = None
-        elif mbd_checkpoint is not None and mbd_checkpoint is not True:
-            resolved_mbd_checkpoint = mbd_checkpoint
-        else:
-            # Auto-detect from the checkpoint's own recorded training config.
-            resolved_mbd_checkpoint = raw_config.get("mbd_checkpoint")
+        from mmml.interfaces.pycharmmInterface.mbd_term import resolve_companion_mbd
 
-        if resolved_mbd_checkpoint:
-            resolved_path = Path(resolved_mbd_checkpoint).expanduser()
-            if not resolved_path.exists():
-                print(
-                    f"  Note: checkpoint was trained with mbd_checkpoint={resolved_path} "
-                    "but that path doesn't exist here — skipping the MBD correction "
-                    "(energies will be Spooky-residual-only, not matching training). "
-                    "Pass mbd_checkpoint=<path that exists here> to fix this."
-                )
-            else:
-                from mmml.models.mbd.calculator import QCMLMBDCalculator
+        load_path, weight, missing = resolve_companion_mbd(
+            mbd_checkpoint,
+            mbd_weight,
+            raw_config,
+        )
+        if load_path is not None:
+            from mmml.models.mbd.calculator import QCMLMBDCalculator
 
-                self.mbd_calc = QCMLMBDCalculator(
-                    checkpoint=resolved_path, charge=charge, multiplicity=spin_multiplicity,
-                )
-                self.mbd_weight = float(
-                    mbd_weight if mbd_weight is not None else raw_config.get("mbd_weight", 1.0)
-                )
-                print(f"  Using MBD correction from {resolved_path} (weight={self.mbd_weight:g})")
+            self.mbd_calc = QCMLMBDCalculator(
+                checkpoint=load_path, charge=charge, multiplicity=spin_multiplicity,
+            )
+            self.mbd_weight = float(weight)
+            recorded = raw_config.get("mbd_checkpoint")
+            note = ""
+            if recorded and Path(str(recorded)).expanduser() != load_path:
+                note = f" (remapped from recorded {recorded})"
+            print(f"  Using MBD correction from {load_path} (weight={self.mbd_weight:g}){note}")
+        elif missing:
+            print(
+                f"  Note: checkpoint was trained with mbd_checkpoint={missing} "
+                "but that path doesn't exist here and no local twin was found — "
+                "skipping the MBD correction "
+                "(energies will be Spooky-residual-only, not matching training). "
+                "Pass mbd_checkpoint=<path that exists here> to fix this."
+            )
 
     def energy_function_report(self) -> dict[str, Any]:
         """Return a machine-readable manifest of the active energy function.

@@ -81,8 +81,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "Optional learned MBD dispersion checkpoint. On the legacy ASE/JAX-MD "
-            "hybrid path, adds E += mbd_weight * E_mbd. With --jaxmd-unified "
+            "Optional learned MBD dispersion checkpoint. On ASE/JAX-MD and "
+            "PyCHARMM hybrid paths, adds E += mbd_weight * E_mbd. When omitted on "
+            "the hybrid path, auto-loads from the model checkpoint's recorded "
+            "mbd_checkpoint if that path exists locally. With --jaxmd-unified "
             "--ff zbl-mbd-multipoles, used once at build to freeze per-atom C6/C8/C10 "
             "for the classical pairwise dispersion term (default: bundled example)."
         ),
@@ -2491,6 +2493,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--tag", getattr(args, "tag", None))
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--electrostatics-damping-sigma", getattr(args, "electrostatics_damping_sigma", None))
+    _append_optional(cmd, "--mbd-checkpoint", getattr(args, "mbd_checkpoint", None))
+    _append_optional(cmd, "--mbd-weight", getattr(args, "mbd_weight", None))
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--ps-nve", getattr(args, "ps_nve", None))

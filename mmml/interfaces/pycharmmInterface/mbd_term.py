@@ -35,39 +35,8 @@ HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = _HARTREE_EV / _BOHR_A
 MBDEnergyForceFn = Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]
 
 
-def resolve_companion_mbd(
-    mbd_checkpoint: str | Path | bool | None,
-    mbd_weight: float | None = None,
-    config: Mapping[str, Any] | None = None,
-) -> tuple[Path | None, float, str | None]:
-    """Resolve companion MBD like :class:`~mmml.models.spookynet_calc.SpookyNetCalculator`.
-
-    Returns ``(load_path, weight, missing_recorded_path)``:
-    * ``load_path`` — existing checkpoint to attach, else ``None``
-    * ``weight`` — scale for ``E += weight * E_mbd``
-    * ``missing_recorded_path`` — configured path that does not exist locally
-      (for warnings / calculator reports); ``None`` if nothing was recorded or
-      the path exists
-
-    Pass ``mbd_checkpoint=False`` to force Spooky/PhysNet-only (no auto-load).
-    ``None`` / omit reads ``config["mbd_checkpoint"]`` when present.
-    """
-    cfg = dict(config or {})
-    if mbd_checkpoint is False:
-        return None, 0.0, None
-    if mbd_checkpoint is not None and mbd_checkpoint is not True:
-        candidate: str | Path | None = mbd_checkpoint
-    else:
-        candidate = cfg.get("mbd_checkpoint")
-    weight = float(
-        mbd_weight if mbd_weight is not None else cfg.get("mbd_weight", 1.0)
-    )
-    if not candidate:
-        return None, weight, None
-    resolved = Path(candidate).expanduser()
-    if not resolved.exists():
-        return None, weight, str(resolved)
-    return resolved, weight, None
+# Re-export shared companion resolver (also used by SpookyNetCalculator).
+from mmml.models.mbd.calculator import resolve_companion_mbd  # noqa: E402
 
 
 def build_mbd_energy_force_fn(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import e3x
 import jax
@@ -182,18 +182,122 @@ def resolve_mbd_checkpoint(explicit: str | Path | None = None) -> Path:
         p = Path(target).expanduser().resolve()
         if p.exists():
             return p
+        remapped = remap_missing_mbd_checkpoint(p)
+        if remapped is not None:
+            return remapped
         raise FileNotFoundError(f"MBD checkpoint not found at: {target}")
-    repo_root = Path(__file__).resolve().parents[3]
-    candidates = [
-        repo_root / "mbd_20260711-100037_epoch-0100.json",
-        repo_root / "examples" / "mbd_20260711-100037_epoch-0100.json",
-    ]
-    for candidate in candidates:
+    for candidate in default_mbd_checkpoint_candidates():
         if candidate.is_file():
             return candidate.resolve()
     raise FileNotFoundError(
         "No default MBD checkpoint found. Set MBD_CKPT or pass explicit path."
     )
+
+
+def default_mbd_checkpoint_candidates() -> list[Path]:
+    """Portable MBD JSON twins shipped with the repo / examples layout."""
+    repo_root = Path(__file__).resolve().parents[3]
+    return [
+        repo_root / "mbd_20260711-100037_epoch-0100.json",
+        repo_root / "examples" / "mbd_20260711-100037_epoch-0100.json",
+    ]
+
+
+def remap_missing_mbd_checkpoint(recorded: str | Path) -> Path | None:
+    """Map a missing training-time MBD path to a local portable twin.
+
+    Training configs often record cluster Orbax dirs such as::
+
+        /mmhome/.../mbd_restart_20260711-100037/epoch-0100
+
+    while the portable copy lives at::
+
+        examples/mbd_20260711-100037_epoch-0100.json
+
+    Returns an existing local path, or ``None`` if no twin is found.
+    """
+    import re
+
+    recorded_path = Path(recorded).expanduser()
+    if recorded_path.exists():
+        return recorded_path.resolve()
+
+    text = str(recorded)
+    repo_root = Path(__file__).resolve().parents[3]
+    candidates: list[Path] = []
+
+    match = re.search(r"mbd_restart_(\d{8}-\d{6}).*?epoch-0*(\d+)", text)
+    if match:
+        stamp = match.group(1)
+        epoch = int(match.group(2))
+        for name in (
+            f"mbd_{stamp}_epoch-{epoch:04d}.json",
+            f"mbd_{stamp}_epoch-{epoch}.json",
+        ):
+            candidates.extend(
+                [
+                    repo_root / name,
+                    repo_root / "examples" / name,
+                ]
+            )
+
+    # Basename already looks like the portable JSON name.
+    name = recorded_path.name
+    if name.endswith(".json") and name.startswith("mbd_"):
+        candidates.extend([repo_root / name, repo_root / "examples" / name])
+
+    # Deduplicate while preserving order.
+    seen: set[Path] = set()
+    for candidate in candidates:
+        key = candidate.resolve() if candidate.exists() else candidate
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.is_file():
+            return candidate.resolve()
+
+    # Known default companion used by the shipped Spooky MBD training runs.
+    if match and match.group(1) == "20260711-100037":
+        for candidate in default_mbd_checkpoint_candidates():
+            if candidate.is_file():
+                return candidate.resolve()
+    return None
+
+
+def resolve_companion_mbd(
+    mbd_checkpoint: str | Path | bool | None,
+    mbd_weight: float | None = None,
+    config: Mapping[str, Any] | None = None,
+) -> tuple[Path | None, float, str | None]:
+    """Resolve a Spooky/hybrid companion MBD checkpoint for inference.
+
+    Returns ``(load_path, weight, missing_recorded_path)``.
+    Pass ``mbd_checkpoint=False`` to force Spooky/PhysNet-only (no auto-load).
+    ``None`` reads ``config["mbd_checkpoint"]`` when present.
+
+    Missing cluster Orbax dirs such as
+    ``.../mbd_restart_20260711-100037/epoch-0100`` are remapped to
+    ``examples/mbd_20260711-100037_epoch-0100.json`` when present.
+    """
+    cfg = dict(config or {})
+    if mbd_checkpoint is False:
+        return None, 0.0, None
+    if mbd_checkpoint is not None and mbd_checkpoint is not True:
+        candidate: str | Path | None = mbd_checkpoint
+    else:
+        candidate = cfg.get("mbd_checkpoint")
+    weight = float(
+        mbd_weight if mbd_weight is not None else cfg.get("mbd_weight", 1.0)
+    )
+    if not candidate:
+        return None, weight, None
+    resolved = Path(candidate).expanduser()
+    if resolved.exists():
+        return resolved, weight, None
+    remapped = remap_missing_mbd_checkpoint(resolved)
+    if remapped is not None:
+        return remapped, weight, None
+    return None, weight, str(resolved)
 
 
 class QCMLMBDCalculator(Calculator):
