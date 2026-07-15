@@ -1403,10 +1403,6 @@ def build_decomposed_mlpot_model(
             getattr(args, "jax_mm_spoof_psf", None) if args is not None else None
         ),
     )
-    if verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
-
-        report_charmm_topology_summary()
     if defer_jax_until_mlpot_registered:
         return DecomposedMlpotModel(
             None,

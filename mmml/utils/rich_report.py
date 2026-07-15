@@ -333,6 +333,136 @@ def emit_hybrid_ml_setup(
     emit_dashboard("Hybrid ML/MM setup", sections, border_style="cyan", quiet=quiet)
 
 
+def emit_md_system_calculator_report(
+    *,
+    system: Mapping[str, Any] | None = None,
+    handoff: Mapping[str, Any] | None = None,
+    neighbor_lists: Mapping[str, Any] | None = None,
+    model: Any = None,
+    checkpoint: Mapping[str, Any] | None = None,
+    ml_flags: Mapping[str, Any] | None = None,
+    runtime: Mapping[str, Any] | None = None,
+    long_range: Mapping[str, Any] | None = None,
+    cutoff_params: Any = None,
+    model_type: str | None = None,
+    n_monomers: int | None = None,
+    n_atoms: int | None = None,
+    doML: bool = True,
+    doMM: bool = True,
+    doML_dimer: bool = True,
+    complementary_handoff: bool | None = None,
+    ensemble: str | None = None,
+    checkpoint_path: str | None = None,
+    cell_L_A: float | None = None,
+    mm_cutoff_A: float | None = None,
+    capacity_pairs: int | None = None,
+    n_valid_pairs: int | None = None,
+    capacity_multiplier: float | None = None,
+    skin_distance_A: float | None = None,
+    update_interval_steps: int | None = None,
+    jax_md_capacity: int | None = None,
+    jax_md_n_valid: int | None = None,
+    neighbor_extra: Mapping[str, Any] | None = None,
+    calculator_extra: Mapping[str, Any] | None = None,
+    include_hybrid_setup: bool = True,
+    include_calculator_summary: bool = True,
+    include_neighbor_list_summary: bool = True,
+    include_psf_topology: bool = True,
+    quiet: bool = False,
+) -> None:
+    """Unified md-system calculator report: Track A dashboard + Track B ruler/NL + PSF.
+
+    Track A (:func:`emit_hybrid_ml_setup`) covers system/handoff/model/runtime flags.
+    Track B (:func:`mmml.cli.run.summaries.print_calculator_summary`) draws the
+    COM-distance cutoff ruler and optional neighbor-list capacities.
+    PSF/CGenFF topology is appended when CHARMM has a loaded PSF.
+    """
+    if quiet or is_quiet():
+        return
+
+    if include_hybrid_setup and system is not None and handoff is not None:
+        emit_hybrid_ml_setup(
+            system=system,
+            handoff=handoff,
+            neighbor_lists=neighbor_lists or {},
+            model=model if model is not None else object(),
+            checkpoint=checkpoint,
+            ml_flags=ml_flags,
+            runtime=runtime,
+            long_range=long_range,
+            quiet=quiet,
+        )
+
+    if include_calculator_summary and cutoff_params is not None:
+        from mmml.cli.run.summaries import print_calculator_summary
+
+        print_calculator_summary(
+            cutoff_params,
+            model_type=model_type,
+            n_monomers=n_monomers,
+            n_atoms=n_atoms,
+            doML=doML,
+            doMM=doMM,
+            doML_dimer=doML_dimer,
+            complementary_handoff=complementary_handoff,
+            ensemble=ensemble,
+            checkpoint=checkpoint_path,
+            extra=dict(calculator_extra) if calculator_extra else None,
+        )
+
+    if include_neighbor_list_summary and n_atoms is not None:
+        has_nl_detail = any(
+            v is not None
+            for v in (
+                cell_L_A,
+                mm_cutoff_A,
+                capacity_pairs,
+                n_valid_pairs,
+                capacity_multiplier,
+                skin_distance_A,
+                update_interval_steps,
+                jax_md_capacity,
+                jax_md_n_valid,
+                neighbor_extra,
+            )
+        )
+        if has_nl_detail or (neighbor_lists and any(neighbor_lists.values())):
+            from mmml.cli.run.summaries import print_neighbor_list_summary
+
+            extra: dict[str, Any] = {}
+            if neighbor_lists:
+                for key in (
+                    "ml_sparse_dimers",
+                    "dimers_total",
+                    "max_active_dimers",
+                    "ml_batch_size",
+                    "ml_gpu_count",
+                    "max_pairs",
+                    "PBC",
+                ):
+                    if key in neighbor_lists:
+                        extra[key] = neighbor_lists[key]
+            if neighbor_extra:
+                extra.update(neighbor_extra)
+            print_neighbor_list_summary(
+                n_atoms=int(n_atoms),
+                n_monomers=n_monomers,
+                cell_L_A=cell_L_A,
+                mm_cutoff_A=mm_cutoff_A,
+                capacity_pairs=capacity_pairs,
+                n_valid_pairs=n_valid_pairs,
+                capacity_multiplier=capacity_multiplier,
+                skin_distance_A=skin_distance_A,
+                update_interval_steps=update_interval_steps,
+                jax_md_capacity=jax_md_capacity,
+                jax_md_n_valid=jax_md_n_valid,
+                extra=extra or None,
+            )
+
+    if include_psf_topology:
+        emit_charmm_topology_summary(quiet=quiet)
+
+
 def collect_psf_topology_mapping(
     *,
     max_residue_rows: int = 6,

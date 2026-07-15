@@ -129,6 +129,80 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
     assert "features" in out
 
 
+def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None:
+    from types import SimpleNamespace
+
+    class _Model:
+        features = 32
+        natoms = 10
+        cutoff = 12.0
+        charges = False
+
+    cp = SimpleNamespace(
+        ml_switch_width=1.5,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+        complementary_handoff=True,
+    )
+    rich_report.emit_md_system_calculator_report(
+        system={"n_monomers": 2, "total_atoms": 10},
+        handoff={"mm_switch_on_Å": "8.0", "ml_switch_width_Å": "1.5"},
+        neighbor_lists={"ml_sparse_dimers": True, "max_active_dimers": 1, "PBC": True},
+        model=_Model(),
+        checkpoint={"epoch": 1000},
+        ml_flags={"doML": True, "doMM": True, "doML_dimer": True},
+        cutoff_params=cp,
+        model_type="Hybrid ML/MM (PhysNet spherical cutoff)",
+        n_monomers=2,
+        n_atoms=10,
+        doML=True,
+        doMM=True,
+        doML_dimer=True,
+        complementary_handoff=True,
+        checkpoint_path="/tmp/ckpt.json",
+        cell_L_A=24.0,
+        mm_cutoff_A=13.0,
+        skin_distance_A=1.0,
+        update_interval_steps=20,
+        include_psf_topology=True,
+    )
+    out = capsys.readouterr().out
+    assert "Hybrid ML/MM setup" in out
+    assert "Calculator Summary" in out or "Calculator Configuration" in out
+    assert "COM-distance ruler" in out
+    assert "Neighbor" in out
+    assert "ml_switch_width" in out or "ml_switch_width_Å" in out
+
+
+def test_emit_md_system_calculator_report_nl_only_refresh(capsys) -> None:
+    from types import SimpleNamespace
+
+    cp = SimpleNamespace(
+        ml_switch_width=1.5,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+        complementary_handoff=True,
+    )
+    rich_report.emit_md_system_calculator_report(
+        cutoff_params=cp,
+        n_monomers=2,
+        n_atoms=10,
+        cell_L_A=24.0,
+        mm_cutoff_A=13.0,
+        capacity_pairs=1200,
+        n_valid_pairs=180,
+        include_hybrid_setup=False,
+        include_calculator_summary=False,
+        include_neighbor_list_summary=True,
+        include_psf_topology=False,
+    )
+    out = capsys.readouterr().out
+    assert "Hybrid ML/MM setup" not in out
+    assert "COM-distance ruler" not in out
+    assert "Neighbor" in out
+    assert "1200" in out or "1,200" in out
+
+
 def test_collect_psf_topology_mapping_without_charmm() -> None:
     assert rich_report.collect_psf_topology_mapping() is None
 

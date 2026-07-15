@@ -542,7 +542,7 @@ def setup_calculator(
                 f"got {lambda_monomer.shape}"
             )
 
-    CutoffParameters(
+    cutoff_params = CutoffParameters(
         ml_switch_width,
         mm_switch_on,
         mm_switch_width,
@@ -864,7 +864,7 @@ def setup_calculator(
     if not _jax_mm_spoof_mode:
         MODEL.max_padded_atoms = max_atoms
 
-    from mmml.utils.rich_report import emit_hybrid_ml_setup, emit_tagged
+    from mmml.utils.rich_report import emit_md_system_calculator_report, emit_tagged
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units
 
     if is_json_checkpoint:
@@ -981,38 +981,47 @@ def setup_calculator(
     _density_est = cell_list_density_estimate if cell_list_density_estimate is not None else 0.03
     from mmml.interfaces.pycharmmInterface.long_range_backend import collect_lr_solver_mapping
 
-    emit_hybrid_ml_setup(
+    _checkpoint_dir = (
+        "(jax_mm_clone spoof)" if _jax_mm_spoof_mode else str(restart_path.resolve())
+    )
+    _handoff = {
+        "ml_switch_width_Å": f"{ml_switch_width:.4f}",
+        "mm_switch_on_Å": f"{mm_switch_on:.4f}",
+        "mm_switch_width_Å": f"{mm_switch_width:.4f}",
+        "complementary": complementary_handoff,
+        "mm_r_min_Å": f"{mm_r_min:.4f}" if mm_r_min is not None else "—",
+        "model_cutoff_Å": getattr(MODEL, "cutoff", "—") if MODEL is not None else "—",
+    }
+    _neighbor_lists = {
+        "ml_sparse_dimers": ml_sparse_dimers,
+        "dimers_total": n_dimers_total,
+        "max_active_dimers": _max_active_dimers,
+        "ml_batch_size": ml_batch_size if ml_batch_size is not None else "all",
+        "ml_gpu_count": ml_gpu_count,
+        "jax_md_skin_Å": _jax_md_skin_distance,
+        "jax_md_update_every": jax_md_update_interval,
+        "max_pairs": max_pairs if max_pairs is not None else "auto",
+        "cell_list_safety": cell_list_safety_factor,
+        "density_est": _density_est,
+        "PBC": bool(pbc_cell is not None),
+    }
+    _cell_side = None
+    if pbc_cell is not None:
+        try:
+            _cell_side = float(np.asarray(pbc_cell)[0, 0])
+        except Exception:
+            _cell_side = None
+    emit_md_system_calculator_report(
         system={
             "n_monomers": n_monomers,
             "atoms_per_monomer": atoms_per_monomer_list,
             "total_atoms": total_atoms,
             "max_atoms": max_atoms,
             "ml_compute_dtype": str(ml_jnp_dtype),
-            "checkpoint_dir": "(jax_mm_clone spoof)"
-            if _jax_mm_spoof_mode
-            else str(restart_path.resolve()),
+            "checkpoint_dir": _checkpoint_dir,
         },
-        handoff={
-            "ml_switch_width_Å": f"{ml_switch_width:.4f}",
-            "mm_switch_on_Å": f"{mm_switch_on:.4f}",
-            "mm_switch_width_Å": f"{mm_switch_width:.4f}",
-            "complementary": complementary_handoff,
-            "mm_r_min_Å": f"{mm_r_min:.4f}" if mm_r_min is not None else "—",
-            "model_cutoff_Å": getattr(MODEL, "cutoff", "—") if MODEL is not None else "—",
-        },
-        neighbor_lists={
-            "ml_sparse_dimers": ml_sparse_dimers,
-            "dimers_total": n_dimers_total,
-            "max_active_dimers": _max_active_dimers,
-            "ml_batch_size": ml_batch_size if ml_batch_size is not None else "all",
-            "ml_gpu_count": ml_gpu_count,
-            "jax_md_skin_Å": _jax_md_skin_distance,
-            "jax_md_update_every": jax_md_update_interval,
-            "max_pairs": max_pairs if max_pairs is not None else "auto",
-            "cell_list_safety": cell_list_safety_factor,
-            "density_est": _density_est,
-            "PBC": bool(pbc_cell is not None),
-        },
+        handoff=_handoff,
+        neighbor_lists=_neighbor_lists,
         model=MODEL,
         checkpoint=checkpoint_meta,
         runtime={
@@ -1042,6 +1051,26 @@ def setup_calculator(
             do_mm=doMM,
             periodic_charmm_vdw=periodic_charmm_vdw,
         ),
+        cutoff_params=cutoff_params,
+        model_type=(
+            "Hybrid ML/MM (jax_mm_clone spoof)"
+            if _jax_mm_spoof_mode
+            else "Hybrid ML/MM (PhysNet spherical cutoff)"
+        ),
+        n_monomers=n_monomers,
+        n_atoms=total_atoms,
+        doML=doML,
+        doMM=doMM,
+        doML_dimer=doML_dimer,
+        complementary_handoff=complementary_handoff,
+        ensemble=str(ensemble) if ensemble is not None else None,
+        checkpoint_path=_checkpoint_dir,
+        cell_L_A=_cell_side,
+        mm_cutoff_A=float(mm_switch_on + mm_switch_width),
+        capacity_multiplier=float(jax_md_capacity_multiplier),
+        skin_distance_A=float(_jax_md_skin_distance),
+        update_interval_steps=int(jax_md_update_interval),
+        include_psf_topology=True,
     )
 
 

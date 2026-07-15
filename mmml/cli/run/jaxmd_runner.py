@@ -19,10 +19,9 @@ import jax.numpy as jnp
 from mmml.cli.run.summaries import (
     print_flat_bottom_summary,
     print_forces_summary,
-    print_calculator_summary,
-    print_neighbor_list_summary,
     save_calculator_summary_json,
 )
+from mmml.utils.rich_report import emit_md_system_calculator_report
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
     wrap_groups_by_id_with_weight_sum,
@@ -431,26 +430,11 @@ def set_up_nhc_sim_routine(
     )
     c.print(Panel(f"Compilation done in {elapsed:.2f} s", title="[bold green]JAX[/bold green]", border_style="green"))
 
-    # ── Calculator summary (rich diagram) ─────────────────────────────────────
+    # setup_calculator already emitted Track A+B for md-system. After compile we
+    # only refresh the neighbor-list panel with live capacity / fill fractions.
     _checkpoint_hint = str(getattr(args, "checkpoint", None) or getattr(args, "output_prefix", ""))
-    print_calculator_summary(
-        CUTOFF_PARAMS,
-        model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
-        n_monomers=n_monomers,
-        n_atoms=len(atoms),
-        doML=True,
-        doMM=getattr(args, "include_mm", True),
-        doML_dimer=not getattr(args, "skip_ml_dimers", False),
-        complementary_handoff=getattr(CUTOFF_PARAMS, "complementary_handoff", True),
-        ensemble=getattr(args, "ensemble", None),
-        checkpoint=_checkpoint_hint,
-        console=c,
-    )
-
-    # Neighbor-list capacity summary (values extracted from update_fn metadata if available)
     _nl_capacity = None
     _nl_n_valid = None
-    _nl_mult = None
     _nl_skin = getattr(args, "jax_md_skin_distance", None)
     _nl_interval = getattr(args, "jax_md_update_interval", None)
     if update_fn is not None and hasattr(update_fn, "capacity"):
@@ -462,16 +446,20 @@ def set_up_nhc_sim_routine(
         except Exception:
             pass
     if use_pbc and (pair_idx is not None or _nl_capacity is not None):
-        print_neighbor_list_summary(
-            n_atoms=len(atoms),
+        emit_md_system_calculator_report(
+            cutoff_params=CUTOFF_PARAMS,
             n_monomers=n_monomers,
+            n_atoms=len(atoms),
             cell_L_A=float(args.cell) if args.cell is not None else None,
             mm_cutoff_A=float(CUTOFF_PARAMS.mm_switch_on + CUTOFF_PARAMS.mm_switch_width),
             capacity_pairs=_nl_capacity,
             n_valid_pairs=_nl_n_valid,
-            skin_distance_A=_nl_skin,
-            update_interval_steps=_nl_interval,
-            console=c,
+            skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
+            update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+            include_hybrid_setup=False,
+            include_calculator_summary=False,
+            include_neighbor_list_summary=True,
+            include_psf_topology=False,
         )
 
     # Save calculator summary JSON to run directory
