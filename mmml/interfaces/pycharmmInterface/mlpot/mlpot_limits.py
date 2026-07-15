@@ -336,11 +336,11 @@ def mlpot_limits_message() -> str:
 
 
 NPR_TIERS: dict[str, int] = {
-    "default": 16_000_000,
-    "large": 32_000_000,
-    "xlarge": 64_000_000,
-    "xxlarge": 128_000_000,
-    "xxxlarge": 256_000_000,
+    "default": 64_000_000,
+    "large": 64_000_000,
+    "xlarge": 128_000_000,
+    "xxlarge": 256_000_000,
+    "xxxlarge": 512_000_000,
 }
 
 # CGenFF all-atom monomer sizes for supported PBC burst solvents.
