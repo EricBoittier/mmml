@@ -1,0 +1,35 @@
+# Mode B — latent MM charges (dimer-only)
+#   q_MM = neutralize_per_monomer(q_ML)
+#
+#   mmml md-system --config examples/hybrid_mm_charges/md_latent.yaml --run-all
+#
+# Requires a charges=True checkpoint trained with mm_charge_mode: latent.
+# Liquids (n_monomers != 2) and lr_solver: jax_pme are refused.
+
+defaults:
+  composition: "DCM:2"
+  checkpoint: /path/to/ckpts/hybrid_mm_latent/<run>/params.json
+  spacing: 5.0
+  packmol_radius: 6.9
+  packmol_tolerance: 2.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+  include_mm: true
+  mm_charge_mode: latent
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+  # Do NOT set lr_solver: jax_pme for Mode B/C
+
+campaign_output: results/hybrid_mm_latent
+runs:
+  dimer_nve:
+    description: Vacuum NVE — Mode B latent MM charges (dimer-only)
+    backend: pycharmm
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_mm_latent/dimer_nve
+    extra_args:
+      - --skip-jit-warmup
+      - --quiet

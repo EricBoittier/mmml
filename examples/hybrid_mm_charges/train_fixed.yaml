@@ -1,0 +1,42 @@
+# Mode A — fixed CGenFF charges in E_MM Coulomb
+#   q_MM = q_CGenFF
+#
+#   mmml physnet-train --config examples/hybrid_mm_charges/train_fixed.yaml
+#
+# NPZ must include cgenff_type_idx, mol_id, cgenff_charge, cgenff_master_*.
+# charges: true is optional here (dipoles / in-ML Coulomb only).
+
+data: /path/to/out_combined_dedup/energies_forces_dipoles_train.npz
+valid_data: /path/to/out_combined_dedup/energies_forces_dipoles_valid.npz
+ckpt_dir: ./ckpts/hybrid_mm_fixed
+tag: hybrid_mm_fixed
+
+hybrid_mm: true
+mm_charge_mode: fixed
+
+# Handoff (same defaults as MD)
+ml_switch_width: 1.5
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+# no_complementary_handoff: false
+
+charges: true
+batch_size: 16
+num_epochs: 500
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+
+features: 64
+max_degree: 0
+num_basis_functions: 32
+num_iterations: 2
+n_res: 2
+cutoff: 8.0
+max_atomic_number: 35
+use_energy_bias: true

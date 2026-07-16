@@ -1343,6 +1343,30 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        type=str,
+        default=None,
+        dest="mm_charge_mode",
+        choices=["fixed", "latent", "fixed_plus_latent"],
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
+            "latent (neutralize(q_ML)), or fixed_plus_latent "
+            "(q_CGenFF + neutralize(q_ML)). Modes latent / fixed_plus_latent "
+            "require a charges=True checkpoint and are dimer-only "
+            "(see docs/hybrid-mm-charges.md)."
+        ),
+    )
+    parser.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        action="store_true",
+        dest="mm_charge_correction",
+        help=(
+            "Alias for --mm-charge-mode fixed_plus_latent on the MD calculator."
+        ),
+    )
+    parser.add_argument(
         "--jax-mm-spoof",
         action="store_true",
         help=(

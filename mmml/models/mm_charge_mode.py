@@ -9,19 +9,17 @@ These modes control **only** the per-atom ``q`` that enters intermolecular
 Modes
 -----
 **fixed** (Mode A)
-    ``q_MM = q_CGenFF``.  Default hybrid train and today's MD calculator.
+    ``q_MM = q_CGenFF``.  Default hybrid train and MD calculator.
 
-**latent** (Mode B) — **deferred**
-    ``q_MM = neutralize_per_monomer(q_ML)``.  Not implemented in hybrid train
-    or MD.  Named here so CLI/docs do not grow a third flag by accident.
-    Closest cousin: ``examples/cg_jaxmd.py`` peptide–water embedding (different
-    product).
+**latent** (Mode B)
+    ``q_MM = neutralize_per_monomer(q_ML)``.  Dimer-only (train + MD); liquids
+    deferred (no multi-neighbor ``q_ML`` context).
 
 **fixed_plus_latent** (Mode C)
     ``q_MM = q_CGenFF + neutralize_per_monomer(q_ML)``.
-    Train: ``--mm-charge-correction`` / ``HybridMMConfig.charge_correction``.
-    ``q_ML`` comes from the **AB dimer** forward in training.  MD v1 supports
-    dimers only (``n_monomers == 2``); liquid ``q_ML`` context is undefined.
+    Train: ``--mm-charge-mode fixed_plus_latent`` or ``--mm-charge-correction``.
+    ``q_ML`` comes from the **AB dimer** forward.  MD v1 is dimer-only
+    (``n_monomers == 2``); liquid ``q_ML`` context is undefined.
 
 Liquid follow-up (not implemented): choose L1 monomer-context charges, L2
 aggregate active-dimer charges, or L3 liquid-aware training before
@@ -42,9 +40,12 @@ Array = jnp.ndarray
 __all__ = [
     "MMChargeMode",
     "apply_mm_charge_mode",
+    "hybrid_mm_metadata_dict",
     "mm_charge_mode_from_charge_correction",
+    "mm_charge_mode_needs_q_ml",
     "parse_mm_charge_mode",
     "require_charge_head_for_mode",
+    "resolve_hybrid_mm_charge_mode",
 ]
 
 
@@ -86,15 +87,42 @@ def parse_mm_charge_mode(value: str | MMChargeMode | None) -> MMChargeMode:
 
 
 def mm_charge_mode_from_charge_correction(charge_correction: bool) -> MMChargeMode:
-    """Map the training bool flag onto the taxonomy."""
+    """Map the legacy training bool flag onto the taxonomy."""
     return (
         MMChargeMode.FIXED_PLUS_LATENT if charge_correction else MMChargeMode.FIXED
     )
 
 
+def mm_charge_mode_needs_q_ml(mode: str | MMChargeMode) -> bool:
+    """True when the mode reads the ML charge head for ``E_MM`` Coulomb."""
+    mode = parse_mm_charge_mode(mode)
+    return mode in (MMChargeMode.LATENT, MMChargeMode.FIXED_PLUS_LATENT)
+
+
+def resolve_hybrid_mm_charge_mode(
+    *,
+    mm_charge_mode: str | MMChargeMode | None = None,
+    charge_correction: bool = False,
+) -> MMChargeMode:
+    """Resolve ``mm_charge_mode`` / legacy ``charge_correction`` to one mode.
+
+    Explicit ``mm_charge_mode`` wins.  ``charge_correction=True`` alone selects
+    Mode C.  Conflicting pairs (e.g. correction + ``fixed`` / ``latent``) raise.
+    """
+    if mm_charge_mode is not None:
+        mode = parse_mm_charge_mode(mm_charge_mode)
+        if charge_correction and mode is not MMChargeMode.FIXED_PLUS_LATENT:
+            raise ValueError(
+                "Conflicting MM charge settings: --mm-charge-correction with "
+                f"mm_charge_mode={mode.value}."
+            )
+        return mode
+    return mm_charge_mode_from_charge_correction(bool(charge_correction))
+
+
 def require_charge_head_for_mode(mode: MMChargeMode, *, has_charges: bool) -> None:
     """Raise if the mode needs a charge head and the model has none."""
-    if mode in (MMChargeMode.LATENT, MMChargeMode.FIXED_PLUS_LATENT) and not has_charges:
+    if mm_charge_mode_needs_q_ml(mode) and not has_charges:
         raise ValueError(
             f"mm_charge_mode={mode.value} requires a model built with charges=True "
             "(the charge head is absent, so there is nothing to correct with)."
@@ -151,11 +179,7 @@ def apply_mm_charge_mode(
         dq_proj = jax.vmap(_project)(dq, mol_id)
 
     if mode is MMChargeMode.LATENT:
-        raise NotImplementedError(
-            "mm_charge_mode=latent (Mode B) is deferred: hybrid training has no "
-            "flag for q_MM = neutralize(q_ML), and MD must not invent one. "
-            "Use fixed or fixed_plus_latent."
-        )
+        return dq_proj
 
     # Mode C
     return q_cgenff + dq_proj
@@ -169,11 +193,13 @@ def hybrid_mm_metadata_dict(hybrid_mm: Any) -> dict[str, Any]:
             "charge_correction": False,
             "mm_charge_mode": MMChargeMode.FIXED.value,
         }
-    charge_correction = bool(getattr(hybrid_mm, "charge_correction", False))
-    mode = mm_charge_mode_from_charge_correction(charge_correction)
+    mode = resolve_hybrid_mm_charge_mode(
+        mm_charge_mode=getattr(hybrid_mm, "mm_charge_mode", None),
+        charge_correction=bool(getattr(hybrid_mm, "charge_correction", False)),
+    )
     return {
         "hybrid_mm": True,
-        "charge_correction": charge_correction,
+        "charge_correction": mode is MMChargeMode.FIXED_PLUS_LATENT,
         "mm_charge_mode": mode.value,
         "mm_switch_on": float(getattr(hybrid_mm, "mm_switch_on", 8.0)),
         "mm_switch_width": float(getattr(hybrid_mm, "mm_switch_width", 5.0)),

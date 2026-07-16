@@ -104,19 +104,33 @@ def test_charge_correction_flag_defaults_off_and_reaches_the_config(tmp_path):
     p = _npz(tmp_path)
     args = parse_args(["--data", str(p), "--hybrid-mm", "--quiet"])
     assert args.mm_charge_correction is False
-    assert _build_hybrid_mm_config(args, [str(p)])["charge_correction"] is False
+    assert args.mm_charge_mode is None
+    assert _build_hybrid_mm_config(args, [str(p)])["mm_charge_mode"] == "fixed"
 
     args = parse_args(
         ["--data", str(p), "--hybrid-mm", "--mm-charge-correction", "--charges", "--quiet"]
     )
-    assert _build_hybrid_mm_config(args, [str(p)])["charge_correction"] is True
+    assert _build_hybrid_mm_config(args, [str(p)])["mm_charge_mode"] == "fixed_plus_latent"
+
+    args = parse_args(
+        [
+            "--data", str(p), "--hybrid-mm",
+            "--mm-charge-mode", "latent", "--charges", "--quiet",
+        ]
+    )
+    assert _build_hybrid_mm_config(args, [str(p)])["mm_charge_mode"] == "latent"
 
 
 def test_charge_correction_without_a_charge_head_errors(tmp_path):
-    """--mm-charge-correction without --charges must fail loudly."""
+    """--mm-charge-correction / latent without --charges must fail loudly."""
     from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
 
     p = _npz(tmp_path)
     args = parse_args(["--data", str(p), "--hybrid-mm", "--mm-charge-correction", "--quiet"])
+    with pytest.raises(ValueError, match="charge head"):
+        _build_hybrid_mm_config(args, [str(p)])
+    args = parse_args(
+        ["--data", str(p), "--hybrid-mm", "--mm-charge-mode", "latent", "--quiet"]
+    )
     with pytest.raises(ValueError, match="charge head"):
         _build_hybrid_mm_config(args, [str(p)])

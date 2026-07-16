@@ -1,0 +1,39 @@
+# Mode B — latent MM charges (replace CGenFF in E_MM Coulomb)
+#   q_MM = neutralize_per_monomer(q_ML)
+#
+#   mmml physnet-train --config examples/hybrid_mm_charges/train_latent.yaml
+#
+# Requires charges: true (charge head). Dimer-trained AB context; liquids deferred.
+
+data: /path/to/out_combined_dedup/energies_forces_dipoles_train.npz
+valid_data: /path/to/out_combined_dedup/energies_forces_dipoles_valid.npz
+ckpt_dir: ./ckpts/hybrid_mm_latent
+tag: hybrid_mm_latent
+
+hybrid_mm: true
+mm_charge_mode: latent
+charges: true
+
+ml_switch_width: 1.5
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+
+batch_size: 16
+num_epochs: 500
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+
+features: 64
+max_degree: 0
+num_basis_functions: 32
+num_iterations: 2
+n_res: 2
+cutoff: 8.0
+max_atomic_number: 35
+use_energy_bias: true

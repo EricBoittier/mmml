@@ -1,0 +1,35 @@
+# Mode A — fixed CGenFF charges in E_MM (default MD)
+#   q_MM = q_CGenFF
+#
+#   mmml md-system --config examples/hybrid_mm_charges/md_fixed.yaml --run-all
+#
+# Dimer vacuum smoke. Point checkpoint at a Mode A hybrid train (or any
+# charges=True / False checkpoint — Mode A ignores the charge head for E_MM).
+
+defaults:
+  composition: "DCM:2"
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed/<run>/params.json
+  spacing: 5.0
+  packmol_radius: 6.9
+  packmol_tolerance: 2.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+  # lr_solver: mic   # default; jax_pme OK for Mode A only
+
+campaign_output: results/hybrid_mm_fixed
+runs:
+  dimer_nve:
+    description: Vacuum NVE — Mode A fixed MM charges
+    backend: pycharmm
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_mm_fixed/dimer_nve
+    extra_args:
+      - --skip-jit-warmup
+      - --quiet

@@ -127,6 +127,7 @@ Examples:
 YAML keys match CLI flags (with optional aliases: train, output, max_epochs).
 See mmml/cli/misc/physnet_train.example.yaml for a template.
 See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / distillation.
+See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fixed_plus_latent).
         """,
     )
     parser.add_argument(
@@ -202,16 +203,29 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
     )
     parser.add_argument("--objective", type=str, default="valid_loss")
     parser.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        type=str,
+        default=None,
+        dest="mm_charge_mode",
+        choices=["fixed", "latent", "fixed_plus_latent"],
+        help=(
+            "Hybrid MM Coulomb charges: fixed (q_CGenFF, default), latent "
+            "(neutralize(q_ML)), or fixed_plus_latent (q_CGenFF + neutralize(q_ML)). "
+            "Modes latent / fixed_plus_latent require --charges and are dimer-only. "
+            "See docs/hybrid-mm-charges.md."
+        ),
+    )
+    parser.add_argument(
         "--mm-charge-correction",
         "--mm_charge_correction",
         action="store_true",
         dest="mm_charge_correction",
         help=(
-            "Hybrid MM: use the model's predicted charges as a CORRECTION to the "
-            "fixed CGenFF charges in the MM electrostatics "
-            "(q_eff = q_cgenff + dq_ML, projected net-zero per monomer). "
-            "Requires --charges (a model with a charge head). Off by default: "
-            "MM electrostatics then uses the CGenFF charges alone."
+            "Alias for --mm-charge-mode fixed_plus_latent: use the model's "
+            "predicted charges as a CORRECTION to fixed CGenFF charges in MM "
+            "electrostatics (q_eff = q_cgenff + dq_ML, projected net-zero per "
+            "monomer). Requires --charges."
         ),
     )
     parser.add_argument(
@@ -778,6 +792,15 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         sigmas = _np.asarray(d["cgenff_master_sigmas"])
         epsilons = _np.asarray(d["cgenff_master_epsilons"])
 
+    from mmml.models.mm_charge_mode import (
+        mm_charge_mode_needs_q_ml,
+        resolve_hybrid_mm_charge_mode,
+    )
+
+    mode = resolve_hybrid_mm_charge_mode(
+        mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        charge_correction=bool(getattr(args, "mm_charge_correction", False)),
+    )
     cfg = {
         "master_sigmas": sigmas,
         "master_epsilons": epsilons,
@@ -785,12 +808,12 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "mm_switch_width": float(args.mm_switch_width),
         "ml_switch_width": float(args.ml_switch_width),
         "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
-        "charge_correction": bool(getattr(args, "mm_charge_correction", False)),
+        "mm_charge_mode": mode.value,
     }
-    if cfg["charge_correction"] and not getattr(args, "charges", False):
+    if mm_charge_mode_needs_q_ml(mode) and not getattr(args, "charges", False):
         raise ValueError(
-            "--mm-charge-correction needs a model with a charge head; pass --charges "
-            "(without it the model predicts no charges, so there is no correction)."
+            f"--mm-charge-mode {mode.value} needs a model with a charge head; "
+            "pass --charges (without it the model predicts no charges)."
         )
     if not getattr(args, "quiet", False):
         print(
@@ -798,7 +821,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             f"({len(sigmas)} CGenFF types; ml_switch_width={cfg['ml_switch_width']}, "
             f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
             f"complementary_handoff={cfg['complementary_handoff']}, "
-            f"charge_correction={cfg['charge_correction']})",
+            f"mm_charge_mode={cfg['mm_charge_mode']})",
             flush=True,
         )
     return cfg
