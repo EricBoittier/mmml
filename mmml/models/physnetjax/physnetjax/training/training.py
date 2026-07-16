@@ -585,6 +585,7 @@ def train_model(
                     charges_weight=charges_weight,
                     charges=do_charges,
                     params=ema_params,
+                    hybrid_mm=hybrid_mm,
                 )
                 # Per-batch sync removed; one sync per validation epoch is enough.
                 valid_loss += (loss - valid_loss) / (i + 1)

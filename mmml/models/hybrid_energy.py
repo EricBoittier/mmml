@@ -1,32 +1,36 @@
 """Assemble hybrid ML/MM energy + forces for training.
 
 Mirrors what the MD hybrid calculator evaluates, so a model trained here is
-trained on the energy it will later be deployed with::
+trained on the energy it will later be deployed with.
 
-    E_total = ml_switch_scale(r_com) * E_ML  +  E_MM(switched LJ + electrostatics)
+**The taper applies to the dimer interaction, never to the total.**  The
+monomers' intramolecular energy is always present and cannot be switched off;
+scaling the *total* ML energy makes a well-separated dimer's energy collapse
+toward 0 while its reference stays at (here) ~-43 eV, which is unfittable.  The
+calculator reflects this with separate ``doML`` (monomers, always on) and
+``doML_dimer`` (switched) terms, so the correct form is the E(AB)-E(A)-E(B)
+decomposition::
+
+    dE_ML   = E_ML(AB) - E_ML(A) - E_ML(B)
+    E_total = E_ML(A) + E_ML(B) + s(r_com) * dE_ML + E_MM
+            = (1 - s) * (E_A + E_B) + s * E_AB + E_MM
 
 Both scale factors come from the shared single source of truth
-(:mod:`mmml.interfaces.pycharmmInterface.calculator_utils`), and ``E_MM`` from
-:mod:`mmml.models.cgenff_mm` (CHARMM-free, formula- and parameter-matched to
-``mm_energy_forces``; see ``tests/unit/test_cgenff_lj_parity.py`` and
-``tests/unit/test_cgenff_mm_energy.py``).
+(:mod:`mmml.interfaces.pycharmmInterface.calculator_utils`), and ``E_MM``
+(switched LJ + electrostatics) from :mod:`mmml.models.cgenff_mm` -- CHARMM-free
+but formula- and parameter-matched to ``mm_energy_forces``; see
+``tests/unit/test_cgenff_lj_parity.py`` and ``tests/unit/test_cgenff_mm_energy.py``.
 
-Forces need care.  ``ml_switch_scale`` depends on the *positions* (through the
-monomer COMs), so the ML contribution is **not** simply ``scale * F_ML``:
+Forces need care: ``s`` depends on the *positions* (through the monomer COMs),
+so the product rule contributes a term the model's own forces do not contain::
 
-.. math::
+    F_total = (1 - s)(F_A + F_B) + s F_AB + (E_A + E_B - E_AB) ds/dR + F_MM
 
-    F_{total} = -\\frac{d}{dR}\\big[s(R)\\,E_{ML}(R) + E_{MM}(R)\\big]
-              = s\\,F_{ML} \\;-\\; E_{ML}\\,\\frac{ds}{dR} \\;+\\; F_{MM}
-
-The middle term is the force exerted by the handoff itself; dropping it (a
-tempting shortcut, since the model already hands back ``F_ML``) silently breaks
-energy conservation in the handoff region.
+Dropping that ``ds/dR`` term (tempting, since the model already hands back
+forces) silently breaks energy conservation in the handoff region.
 """
 
 from __future__ import annotations
-
-from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -38,9 +42,7 @@ Array = jnp.ndarray
 
 __all__ = [
     "HYBRID_MM_BATCH_KEYS",
-    "HybridEnergyForces",
-    "apply_hybrid_mm_to_output",
-    "hybrid_energy_forces",
+    "hybrid_forward",
     "ml_scale_from_positions",
 ]
 
@@ -52,15 +54,6 @@ __all__ = [
 HYBRID_MM_BATCH_KEYS = ("cgenff_type_idx", "mol_id", "cgenff_charge")
 
 
-class HybridEnergyForces(NamedTuple):
-    """Assembled hybrid result (kcal/mol, kcal/mol/A) plus its components."""
-
-    energy: Array
-    forces: Array
-    ml_scale: Array
-    e_mm: Array
-
-
 def ml_scale_from_positions(
     positions: Array,
     mol_id: Array,
@@ -70,12 +63,13 @@ def ml_scale_from_positions(
 ) -> Array:
     """ML taper for one structure, as a differentiable function of positions.
 
-    Monomers (a single ``mol_id``) have no second centroid, so ML stays fully on.
+    Monomers (no ``mol_id == 1`` atoms) have no second centroid, so ML stays
+    fully on -- which also makes their ``dE_ML`` term vanish identically.
     """
     coms = monomer_centroids(positions, mol_id, n_monomers=2)
     # sqrt(max(., eps)) rather than norm(): a monomer's centroid coincides with
-    # the (all-zero) second centroid when there is no second monomer, and
-    # d|x|/dx is undefined at 0 -- that NaN would propagate into every force.
+    # the (all-zero) second centroid, and d|x|/dx is undefined at 0 -- that NaN
+    # would propagate into every force.
     d_com = coms[1] - coms[0]
     r_com = jnp.sqrt(jnp.maximum(jnp.sum(d_com * d_com), 1e-20))
     scale = ml_switch_scale(
@@ -85,74 +79,23 @@ def ml_scale_from_positions(
     return jnp.where(is_dimer, scale, 1.0)
 
 
-def hybrid_energy_forces(
-    e_ml: Array,
-    f_ml: Array,
-    positions: Array,
-    type_idx: Array,
-    mol_id: Array,
-    charges: Array,
-    master_sigmas: Array,
-    master_epsilons: Array,
-    *,
-    mm_switch_on: float,
-    mm_switch_width: float,
-    ml_switch_width: float,
-    complementary_handoff: bool = True,
-) -> HybridEnergyForces:
-    """Combine a model's ``E_ML``/``F_ML`` with the switched CGenFF MM term.
+def _monomer_restricted_masks(batch: dict, which: int) -> tuple[Array, Array]:
+    """``(atom_mask, batch_mask)`` restricted to one monomer of each structure.
 
-    Parameters
-    ----------
-    e_ml : scalar ML energy for this structure (kcal/mol).
-    f_ml : (n_atoms, 3) ML forces, i.e. ``-dE_ML/dR`` (kcal/mol/A).
-    positions : (n_atoms, 3)
-    type_idx, mol_id : (n_atoms,) padded with ``-1``.
-    charges : (n_atoms,) CGenFF charges.
-    master_sigmas, master_epsilons : (n_types,) dataset LJ tables.
-
-    Returns
-    -------
-    HybridEnergyForces with the total energy/forces and the components.
-
-    Padding-safe and vmap-safe; differentiable w.r.t. ``e_ml``/``f_ml``.
+    Masked atoms contribute no energy (this is exactly how padding already
+    works), so a forward with these masks yields ``E_ML`` of that monomer alone.
     """
-
-    def _scale(pos: Array) -> Array:
-        return ml_scale_from_positions(
-            pos, mol_id, mm_switch_on=mm_switch_on, ml_switch_width=ml_switch_width
-        )
-
-    def _emm(pos: Array) -> Array:
-        return cgenff_mm_energy(
-            pos,
-            type_idx,
-            mol_id,
-            charges,
-            master_sigmas,
-            master_epsilons,
-            mm_switch_on=mm_switch_on,
-            mm_switch_width=mm_switch_width,
-            ml_switch_width=ml_switch_width,
-            complementary_handoff=complementary_handoff,
-        )
-
-    scale, dscale_dR = jax.value_and_grad(_scale)(positions)
-    e_mm, demm_dR = jax.value_and_grad(_emm)(positions)
-
-    energy = scale * e_ml + e_mm
-    # F = s*F_ML - E_ML*ds/dR + F_MM     (F_MM = -dE_MM/dR)
-    forces = scale * f_ml - e_ml * dscale_dR - demm_dR
-
-    # Padding must not carry force.
-    valid = (mol_id >= 0)[:, None]
-    forces = jnp.where(valid, forces, 0.0)
-
-    return HybridEnergyForces(energy=energy, forces=forces, ml_scale=scale, e_mm=e_mm)
+    mol_flat = batch["mol_id"].reshape(-1)
+    keep = (mol_flat == which).astype(batch["atom_mask"].dtype)
+    atom_mask = batch["atom_mask"] * keep
+    pair_keep = keep[batch["dst_idx"]] * keep[batch["src_idx"]]
+    batch_mask = batch["batch_mask"] * pair_keep.astype(batch["batch_mask"].dtype)
+    return atom_mask, batch_mask
 
 
-def apply_hybrid_mm_to_output(
-    output: dict,
+def hybrid_forward(
+    model_apply,
+    params,
     batch: dict,
     batch_size: int,
     master_sigmas: Array,
@@ -163,48 +106,106 @@ def apply_hybrid_mm_to_output(
     ml_switch_width: float,
     complementary_handoff: bool = True,
 ) -> dict:
-    """Replace a model's ``energy``/``forces`` with the hybrid ML/MM totals.
+    """Model forward assembled into the hybrid ML/MM total the calculator uses.
 
-    ``prepare_batches_jit`` flattens ``R``/``F`` to ``(batch*natoms, 3)`` but
-    leaves the per-atom CGenFF fields as ``(batch, natoms)``, so reshape the
-    former and vmap over structures.  Returns a shallow copy of ``output`` with
-    ``energy``/``forces`` replaced (same shapes) plus ``ml_scale``/``e_mm``.
+    The ML taper applies to the dimer **interaction**, never to the total: the
+    monomers' intramolecular energy (~-43 eV here) is always present and cannot
+    be switched off.  This mirrors the calculator's separate ``doML`` (monomers,
+    always on) and ``doML_dimer`` (switched) terms::
+
+        dE_ML   = E_ML(AB) - E_ML(A) - E_ML(B)
+        E_total = E_ML(A) + E_ML(B) + s * dE_ML + E_MM
+                = (1 - s) * (E_A + E_B) + s * E_AB + E_MM
+
+    which is the E(AB)-E(A)-E(B) decomposition.  Forces follow by the product
+    rule (``s`` depends on positions through the COMs)::
+
+        F_total = (1 - s)(F_A + F_B) + s F_AB + (E_A + E_B - E_AB) ds/dR + F_MM
+
+    Monomer structures fall out correctly for free: they have no ``mol_id == 1``
+    atoms, so ``E_B = 0`` and ``E_A = E_AB``, giving ``dE_ML = 0`` and
+    ``E_total = E_AB``.
+
+    Costs three forwards per step (AB, A, B).
     """
-    r_flat = batch["R"]
-    n_atoms = r_flat.shape[0] // int(batch_size)
 
-    pos = r_flat.reshape(batch_size, n_atoms, 3)
-    f_ml = output["forces"].reshape(batch_size, n_atoms, 3)
-    e_ml = output["energy"].reshape(batch_size)
-
-    def _one(e, f, p, t, m, q):
-        return hybrid_energy_forces(
-            e,
-            f,
-            p,
-            t,
-            m,
-            q,
-            master_sigmas,
-            master_epsilons,
-            mm_switch_on=mm_switch_on,
-            mm_switch_width=mm_switch_width,
-            ml_switch_width=ml_switch_width,
-            complementary_handoff=complementary_handoff,
+    def _fwd(atom_mask, batch_mask):
+        return model_apply(
+            params,
+            atomic_numbers=batch["Z"],
+            positions=batch["R"],
+            dst_idx=batch["dst_idx"],
+            src_idx=batch["src_idx"],
+            batch_segments=batch["batch_segments"],
+            batch_size=batch_size,
+            batch_mask=batch_mask,
+            atom_mask=atom_mask,
         )
 
-    hyb = jax.vmap(_one)(
-        e_ml,
-        f_ml,
+    out_ab = _fwd(batch["atom_mask"], batch["batch_mask"])
+    out_a = _fwd(*_monomer_restricted_masks(batch, 0))
+    out_b = _fwd(*_monomer_restricted_masks(batch, 1))
+
+    n_atoms = batch["R"].shape[0] // int(batch_size)
+    pos = batch["R"].reshape(batch_size, n_atoms, 3)
+
+    e_ab = out_ab["energy"].reshape(batch_size)
+    e_a = out_a["energy"].reshape(batch_size)
+    e_b = out_b["energy"].reshape(batch_size)
+    f_ab = out_ab["forces"].reshape(batch_size, n_atoms, 3)
+    f_a = out_a["forces"].reshape(batch_size, n_atoms, 3)
+    f_b = out_b["forces"].reshape(batch_size, n_atoms, 3)
+
+    def _one(p, t, m, q, eab, ea, eb, fab, fa, fb):
+        def _scale(x):
+            return ml_scale_from_positions(
+                x, m, mm_switch_on=mm_switch_on, ml_switch_width=ml_switch_width
+            )
+
+        def _emm(x):
+            return cgenff_mm_energy(
+                x,
+                t,
+                m,
+                q,
+                master_sigmas,
+                master_epsilons,
+                mm_switch_on=mm_switch_on,
+                mm_switch_width=mm_switch_width,
+                ml_switch_width=ml_switch_width,
+                complementary_handoff=complementary_handoff,
+            )
+
+        s, ds_dR = jax.value_and_grad(_scale)(p)
+        e_mm, demm_dR = jax.value_and_grad(_emm)(p)
+
+        e_mono = ea + eb
+        energy = (1.0 - s) * e_mono + s * eab + e_mm
+        forces = (
+            (1.0 - s) * (fa + fb)
+            + s * fab
+            + (e_mono - eab) * ds_dR
+            - demm_dR
+        )
+        forces = jnp.where((m >= 0)[:, None], forces, 0.0)
+        return energy, forces, s, e_mm
+
+    energy, forces, scale, e_mm = jax.vmap(_one)(
         pos,
         batch["cgenff_type_idx"],
         batch["mol_id"],
         batch["cgenff_charge"],
+        e_ab,
+        e_a,
+        e_b,
+        f_ab,
+        f_a,
+        f_b,
     )
 
-    out = dict(output)
-    out["energy"] = hyb.energy.reshape(output["energy"].shape)
-    out["forces"] = hyb.forces.reshape(output["forces"].shape)
-    out["ml_scale"] = hyb.ml_scale
-    out["e_mm"] = hyb.e_mm
+    out = dict(out_ab)
+    out["energy"] = energy.reshape(out_ab["energy"].shape)
+    out["forces"] = forces.reshape(out_ab["forces"].shape)
+    out["ml_scale"] = scale
+    out["e_mm"] = e_mm
     return out

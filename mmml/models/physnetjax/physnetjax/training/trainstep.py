@@ -54,9 +54,9 @@ def _forward(model_apply, params, batch, batch_size, hybrid_mm=None):
         atom_mask=batch["atom_mask"],
     )
     if hybrid_mm is not None:
-        from mmml.models.hybrid_energy import apply_hybrid_mm_to_output
+        from mmml.models.hybrid_energy import hybrid_forward
 
-        out = apply_hybrid_mm_to_output(out, batch, batch_size, **hybrid_mm)
+        return hybrid_forward(model_apply, params, batch, batch_size, **hybrid_mm)
     return out
 
 
