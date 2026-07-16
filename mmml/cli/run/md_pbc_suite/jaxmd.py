@@ -375,12 +375,30 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fire-min-steps", type=int, default=100)
     p.add_argument("--fire-min-maxstep", type=float, default=0.02)
     p.add_argument(
+        "--pre-min-ase-order",
+        choices=("fire-first", "bfgs-first"),
+        default="fire-first",
+        help=(
+            "ASE hybrid pre-min order. fire-first (default): FIRE on the rough surface, "
+            "then BFGS only to polish when max|F| is soft. bfgs-first: legacy BFGS-then-rescue."
+        ),
+    )
+    p.add_argument(
+        "--bfgs-polish-max-fmax",
+        type=float,
+        default=1.0,
+        help=(
+            "With fire-first: run ASE BFGS polish only when current max|F| is at or below "
+            "this (eV/Å; default 1.0). Skip BFGS while the hybrid surface is still rough."
+        ),
+    )
+    p.add_argument(
         "--rescue-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "If post-BFGS fmax stays above --pre-min-fmax, alternate CHARMM SD/ABNR with "
-            "ASE BFGS+FIRE on the CHARMM coordinates until fmax converges or rounds are exhausted."
+            "If post-ASE fmax stays above --pre-min-fmax, alternate CHARMM SD/ABNR with "
+            "ASE FIRE (and BFGS polish when soft) until fmax converges or rounds are exhausted."
         ),
     )
     p.add_argument("--rescue-charmm-sd-steps", type=int, default=100, help="Rescue CHARMM SD steps.")
@@ -416,13 +434,13 @@ def main(argv: list[str] | None = None) -> int:
         dest="calculator_pre_minimize",
         action="store_true",
         default=True,
-        help="Run ASE BFGS with the MMML calculator before JAX-MD minimization (default).",
+        help="Run ASE hybrid pre-minimization (FIRE/BFGS per --pre-min-ase-order) before JAX-MD (default).",
     )
     p.add_argument(
         "--no-calculator-pre-minimize",
         dest="calculator_pre_minimize",
         action="store_false",
-        help="Skip ASE BFGS/FIRE pre-minimization before the JAX-MD runner.",
+        help="Skip ASE FIRE/BFGS pre-minimization before the JAX-MD runner.",
     )
     p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.75)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
@@ -950,8 +968,9 @@ def main(argv: list[str] | None = None) -> int:
         best_frame.record("initial")
         minimization_summary["pre_bfgs_fmax_eVA"] = pre_bfgs_fmax
         print(
-            f"ASE BFGS pre-minimization starting "
-            f"(max {args.pre_min_steps} steps, fmax={args.pre_min_fmax})"
+            f"ASE hybrid pre-minimization starting "
+            f"(order={getattr(args, 'pre_min_ase_order', 'fire-first')}, "
+            f"target fmax={args.pre_min_fmax})"
         )
 
         def _check_pre_min_overlap(label: str) -> None:
@@ -1058,66 +1077,132 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ASE FIRE {phase} complete, fmax={fmax:.6f} eV/A")
             return fmax
 
-        def _run_mmml_after_charmm(phase: str, traj_suffix: str) -> float:
-            """Relax CHARMM coordinates with the hybrid MMML calculator (BFGS then FIRE)."""
-            fmax = _run_ase_bfgs_rescue(
+        def _maybe_bfgs_polish(phase: str, traj_suffix: str, fmax: float) -> float:
+            """BFGS only when the surface is soft enough (fire-first policy)."""
+            polish_gate = float(getattr(args, "bfgs_polish_max_fmax", 1.0))
+            if fmax <= args.pre_min_fmax:
+                return fmax
+            if fmax > polish_gate:
+                print(
+                    f"Skipping ASE BFGS polish ({phase}): "
+                    f"fmax={fmax:.6f} > --bfgs-polish-max-fmax={polish_gate:.6f}"
+                )
+                return fmax
+            return _run_ase_bfgs_rescue(
                 phase,
                 traj_suffix=traj_suffix,
                 fmax_key=f"{traj_suffix}_bfgs_fmax_eVA",
                 iter_key=f"{traj_suffix}_bfgs_iterations",
             )
-            if fmax > args.pre_min_fmax:
-                fmax = _run_ase_fire_rescue(
+
+        def _run_mmml_after_charmm(phase: str, traj_suffix: str) -> float:
+            """Relax CHARMM coords on hybrid MMML: FIRE first, BFGS polish if soft."""
+            order = str(getattr(args, "pre_min_ase_order", "fire-first"))
+            if order == "bfgs-first":
+                fmax = _run_ase_bfgs_rescue(
                     phase,
                     traj_suffix=traj_suffix,
-                    fmax_key=f"{traj_suffix}_fire_fmax_eVA",
+                    fmax_key=f"{traj_suffix}_bfgs_fmax_eVA",
+                    iter_key=f"{traj_suffix}_bfgs_iterations",
                 )
-            return fmax
-
-        from mmml.cli.run.ase_minimize_log import (
-            attach_compact_ase_optimizer_log,
-            resolve_ase_optimizer_logfile,
-        )
-
-        bfgs_traj_path = out_dir / f"{geom_tag}_{args.ensemble}_bfgs_min.traj"
-        opt = BFGS(
-            atoms,
-            logfile=resolve_ase_optimizer_logfile(args),
-            trajectory=str(bfgs_traj_path),
-            maxstep=args.bfgs_maxstep,
-        )
-        attach_compact_ase_optimizer_log(
-            opt, args, label="ASE BFGS", max_steps=args.pre_min_steps
-        )
-        opt.attach(lambda: best_frame.record("bfgs"), interval=1)
-        opt.attach(lambda: _check_pre_min_overlap("ASE BFGS pre-minimization"), interval=1)
-        opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
-        best_frame.record("bfgs_final")
-        _check_pre_min_overlap("after ASE BFGS pre-minimization")
-        fmin = float(np.abs(atoms.get_forces()).max())
-        minimization_summary["bfgs_iterations"] = float(opt.get_number_of_steps())
-        minimization_summary["bfgs_fmax_eVA"] = fmin
-        minimization_summary["bfgs_traj"] = str(bfgs_traj_path.relative_to(out_dir))
-        print(f"ASE BFGS pre-minimization complete, fmax={fmin:.6f} eV/A")
-        if fmin > args.pre_min_fmax and args.rescue_minimize:
-            bfgs_best_fmax = best_frame.restore_best_force()
-            minimization_summary["bfgs_best_force_fmax_eVA"] = bfgs_best_fmax
-            print(
-                f"Starting CHARMM/ML rescue from best BFGS frame "
-                f"({best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f})"
+                if fmax > args.pre_min_fmax:
+                    fmax = _run_ase_fire_rescue(
+                        phase,
+                        traj_suffix=traj_suffix,
+                        fmax_key=f"{traj_suffix}_fire_fmax_eVA",
+                    )
+                return fmax
+            fmax = _run_ase_fire_rescue(
+                phase,
+                traj_suffix=traj_suffix,
+                fmax_key=f"{traj_suffix}_fire_fmax_eVA",
             )
-            fmin = _run_charmm_rescue("pre-FIRE", fmax_key="charmm_rescue_pre_fire_fmax_eVA")
-            fmin = _run_mmml_after_charmm("rescue (pre-FIRE)", "rescue")
-            minimization_summary["fire_fmax_eVA"] = fmin
+            return _maybe_bfgs_polish(phase, traj_suffix, fmax)
+
+        ase_order = str(getattr(args, "pre_min_ase_order", "fire-first"))
+        minimization_summary["pre_min_ase_order"] = ase_order
+        polish_gate = float(getattr(args, "bfgs_polish_max_fmax", 1.0))
+        minimization_summary["bfgs_polish_max_fmax"] = polish_gate
+
+        if ase_order == "bfgs-first":
+            from mmml.cli.run.ase_minimize_log import (
+                attach_compact_ase_optimizer_log,
+                resolve_ase_optimizer_logfile,
+            )
+
+            bfgs_traj_path = out_dir / f"{geom_tag}_{args.ensemble}_bfgs_min.traj"
+            opt = BFGS(
+                atoms,
+                logfile=resolve_ase_optimizer_logfile(args),
+                trajectory=str(bfgs_traj_path),
+                maxstep=args.bfgs_maxstep,
+            )
+            attach_compact_ase_optimizer_log(
+                opt, args, label="ASE BFGS", max_steps=args.pre_min_steps
+            )
+            opt.attach(lambda: best_frame.record("bfgs"), interval=1)
+            opt.attach(lambda: _check_pre_min_overlap("ASE BFGS pre-minimization"), interval=1)
+            opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
+            best_frame.record("bfgs_final")
+            _check_pre_min_overlap("after ASE BFGS pre-minimization")
+            fmin = float(np.abs(atoms.get_forces()).max())
+            minimization_summary["bfgs_iterations"] = float(opt.get_number_of_steps())
+            minimization_summary["bfgs_fmax_eVA"] = fmin
+            minimization_summary["bfgs_traj"] = str(bfgs_traj_path.relative_to(out_dir))
+            print(f"ASE BFGS pre-minimization complete, fmax={fmin:.6f} eV/A")
+            if fmin > args.pre_min_fmax and args.rescue_minimize:
+                bfgs_best_fmax = best_frame.restore_best_force()
+                minimization_summary["bfgs_best_force_fmax_eVA"] = bfgs_best_fmax
+                print(
+                    f"Starting CHARMM/ML rescue from best BFGS frame "
+                    f"({best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f})"
+                )
+                fmin = _run_charmm_rescue("pre-FIRE", fmax_key="charmm_rescue_pre_fire_fmax_eVA")
+                fmin = _run_mmml_after_charmm("rescue (pre-FIRE)", "rescue")
+                minimization_summary["fire_fmax_eVA"] = fmin
+                if fmin > args.pre_min_fmax:
+                    fmin = _run_charmm_rescue("post-FIRE", fmax_key="charmm_rescue_post_fire_fmax_eVA")
+                    fmin = _run_mmml_after_charmm("rescue (post-CHARMM)", "post_charmm_rescue")
+                    minimization_summary["post_charmm_rescue_fire_fmax_eVA"] = fmin
+            elif fmin > args.pre_min_fmax:
+                print(
+                    f"Skipping CHARMM/FIRE rescue (--no-rescue-minimize); "
+                    f"BFGS fmax={fmin:.6f} eV/A"
+                )
+        else:
+            # fire-first: do not open with BFGS on a rough hybrid surface.
+            print(
+                f"ASE FIRE-first pre-minimization starting "
+                f"(max|F|={pre_bfgs_fmax:.4f} eV/Å; BFGS polish if ≤ {polish_gate:.4f})"
+            )
+            if pre_bfgs_fmax > polish_gate and args.rescue_minimize:
+                fmin = _run_charmm_rescue(
+                    "pre-FIRE", fmax_key="charmm_rescue_pre_fire_fmax_eVA"
+                )
+            else:
+                fmin = pre_bfgs_fmax
             if fmin > args.pre_min_fmax:
+                fmin = _run_ase_fire_rescue(
+                    "pre-min",
+                    traj_suffix="premin",
+                    fmax_key="fire_fmax_eVA",
+                )
+            fmin = _maybe_bfgs_polish("pre-min", "premin", fmin)
+            if fmin > args.pre_min_fmax and args.rescue_minimize:
+                best_fmax = best_frame.restore_best_force()
+                minimization_summary["premin_best_force_fmax_eVA"] = best_fmax
+                print(
+                    f"Starting CHARMM/ML rescue from best frame "
+                    f"({best_frame.best_force_label}, fmax={best_fmax:.6f})"
+                )
                 fmin = _run_charmm_rescue("post-FIRE", fmax_key="charmm_rescue_post_fire_fmax_eVA")
                 fmin = _run_mmml_after_charmm("rescue (post-CHARMM)", "post_charmm_rescue")
                 minimization_summary["post_charmm_rescue_fire_fmax_eVA"] = fmin
-        elif fmin > args.pre_min_fmax:
-            print(
-                f"Skipping CHARMM/FIRE rescue (--no-rescue-minimize); "
-                f"BFGS fmax={fmin:.6f} eV/A"
-            )
+            elif fmin > args.pre_min_fmax:
+                print(
+                    f"Skipping CHARMM/FIRE rescue (--no-rescue-minimize); "
+                    f"fmax={fmin:.6f} eV/A"
+                )
         minimization_summary.update(best_frame.write(out_dir, f"{geom_tag}_{args.ensemble}_pre_md"))
         fmin = best_frame.restore_best_force()
         _check_pre_min_overlap("restored best-force pre-MD structure")

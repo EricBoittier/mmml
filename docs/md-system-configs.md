@@ -701,6 +701,21 @@ runs:
       - "500000"
 ```
 
+#### ASE hybrid pre-min order (FIRE first, BFGS polish)
+
+On a rough hybrid surface, ASE BFGS often lowers energy while `fmax` explodes.
+JAX-MD / ASE calculator pre-min defaults to **`pre_min_ase_order: fire-first`**:
+FIRE (and CHARMM rescue when `|F|` is high), then BFGS only if
+`max|F| ≤ bfgs_polish_max_fmax` (default 1.0 eV/Å). Legacy order:
+`pre_min_ase_order: bfgs-first`.
+
+```yaml
+setup: pbc_nve
+backend: jaxmd
+pre_min_ase_order: fire-first
+bfgs_polish_max_fmax: 1.0
+```
+
 #### JAX-MD handoff prep only (after equilibrated PyCHARMM)
 
 Use when PyCHARMM equil already converged; JAX leg needs PBC FIRE + short NPT:
