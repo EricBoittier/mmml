@@ -638,20 +638,30 @@ def resolve_batch_sizes(
     steps_for_batch_size: Any | None = None,
     state: Any | None = None,
     step_functions: dict[int, Any] | None = None,
+    only_pads: set[int] | None = None,
+    seed_sizes: Mapping[int, int] | None = None,
 ) -> dict[int, int]:
-    """Per-pad-atoms batch sizes: single-GPU memory probe when enabled."""
-    sizes: dict[int, int] = {}
-    # Largest pads first: they force small B and avoid leaving huge compiled
-    # small-molecule kernels resident while probing 100+ atom buckets.
+    """Per-pad-atoms batch sizes: single-GPU memory probe when enabled.
+
+    ``seed_sizes`` supplies known widths from a workdir cache. When
+    ``only_pads`` is set, only those widths are probed; others keep the seed
+    (or fall back to the pair-budget heuristic).
+    """
+    sizes: dict[int, int] = {
+        int(k): int(v) for k, v in (seed_sizes or {}).items() if int(k) in buckets
+    }
     pad_order = sorted(buckets, reverse=True)
-    committed_bsz: set[int] = set()
+    committed_bsz: set[int] = set(sizes.values())
     for pad_atoms in pad_order:
-        indices = buckets[pad_atoms]
         heuristic = pairs_budget_batch_size(
             pad_atoms,
             per_device_batch_size=per_device_batch_size,
             max_pairs_per_device=max_pairs_per_device,
         )
+        should_probe = only_pads is None or pad_atoms in only_pads
+        if not should_probe:
+            sizes.setdefault(pad_atoms, heuristic)
+            continue
         if (
             not auto_batch
             or data is None
@@ -660,6 +670,7 @@ def resolve_batch_sizes(
         ):
             sizes[pad_atoms] = heuristic
             continue
+        indices = buckets[pad_atoms]
         print(
             f"  auto-batch probing pad_atoms={pad_atoms} "
             f"(start B={heuristic}, cap={per_device_batch_size}, single-GPU)...",
@@ -681,14 +692,95 @@ def resolve_batch_sizes(
             f"(cap={per_device_batch_size}, pair-heuristic={heuristic})",
             flush=True,
         )
-        # Drop compiled step fns for batch sizes we are not keeping so the next
-        # pad width is not fighting residual executable / allocator pressure.
         if step_functions is not None:
             for key in list(step_functions):
                 if key not in committed_bsz:
                     del step_functions[key]
         _clear_jax_caches()
     return sizes
+
+
+AUTO_BATCH_CACHE_FILENAME = "auto_batch_sizes.json"
+
+
+def auto_batch_cache_fingerprint(
+    args: argparse.Namespace,
+    devices: list[Any],
+    pad_widths: list[int] | tuple[int, ...],
+) -> dict[str, Any]:
+    """Settings that must match for a cached probe to be reusable."""
+    device0 = devices[0] if devices else None
+    device_kind = getattr(device0, "device_kind", str(device0))
+    bytes_limit = None
+    if device0 is not None:
+        try:
+            stats = device0.memory_stats()
+            if stats:
+                bytes_limit = int(stats.get("bytes_limit") or stats.get("bytes_limit", 0) or 0)
+                if bytes_limit == 0:
+                    bytes_limit = None
+        except Exception:  # noqa: BLE001
+            bytes_limit = None
+    return {
+        "version": 1,
+        "batch_size_per_device": int(args.batch_size_per_device),
+        "atom_bucket_width": int(args.atom_bucket_width),
+        "num_devices": int(args.num_devices),
+        "predict_charges": bool(args.predict_charges),
+        "features": int(args.features),
+        "max_degree": int(args.max_degree),
+        "num_iterations": int(args.num_iterations),
+        "num_basis_functions": int(args.num_basis_functions),
+        "cutoff": float(args.cutoff),
+        "n_res": int(args.n_res),
+        "no_zbl": bool(args.no_zbl),
+        "efa": bool(args.efa),
+        "device_kind": str(device_kind),
+        "device_bytes_limit": bytes_limit,
+        "pad_widths": sorted(int(p) for p in pad_widths),
+    }
+
+
+def load_auto_batch_cache(
+    path: Path,
+    fingerprint: Mapping[str, Any],
+) -> dict[int, int] | None:
+    """Load cached B/device sizes when fingerprint matches (ignoring pad_widths)."""
+    if not path.is_file():
+        return None
+    try:
+        with path.open("r") as fh:
+            payload = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+    saved_fp = payload.get("fingerprint")
+    sizes_raw = payload.get("batch_sizes")
+    if not isinstance(saved_fp, dict) or not isinstance(sizes_raw, dict):
+        return None
+    # pad_widths in the fingerprint may be a subset/superset; compare the rest.
+    cmp_keys = [k for k in fingerprint if k != "pad_widths"]
+    for key in cmp_keys:
+        if saved_fp.get(key) != fingerprint.get(key):
+            return None
+    try:
+        return {int(k): int(v) for k, v in sizes_raw.items()}
+    except (TypeError, ValueError):
+        return None
+
+
+def save_auto_batch_cache(
+    path: Path,
+    fingerprint: Mapping[str, Any],
+    batch_sizes: Mapping[int, int],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "fingerprint": dict(fingerprint),
+        "batch_sizes": {str(int(k)): int(v) for k, v in sorted(batch_sizes.items())},
+    }
+    with path.open("w") as fh:
+        json.dump(payload, fh, indent=2, sort_keys=True)
+        fh.write("\n")
 
 
 def accumulate_metrics(
@@ -1641,10 +1733,14 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             return
 
     rng = np.random.default_rng(args.seed)
+    auto_batch_cache_path = workdir / AUTO_BATCH_CACHE_FILENAME
+    fingerprint = auto_batch_cache_fingerprint(
+        args, devices, list(train_buckets.keys())
+    )
 
     # Auto-batch on a single GPU *before* multi-device replicate. Probing with
     # 2-GPU pmap OOMs one device mid-collective and deadlocks the other
-    # (rendezvous / Acquire clique hang).
+    # (rendezvous / Acquire clique hang). Results are cached under workdir.
     print(
         f"Resolving per-bucket batch sizes "
         f"(auto_batch={args.auto_batch}, cap={args.batch_size_per_device}, "
@@ -1671,20 +1767,70 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         return probe_step_functions[batch_size]
 
     if args.auto_batch:
-        probe_state = jax_utils.replicate(state, devices=probe_devices)
-        train_batch_sizes = resolve_batch_sizes(
-            train_buckets,
-            per_device_batch_size=args.batch_size_per_device,
-            max_pairs_per_device=args.max_pairs_per_device,
-            auto_batch=True,
-            data=data,
-            steps_for_batch_size=probe_steps_for_batch_size,
-            state=probe_state,
-            step_functions=probe_step_functions,
-        )
-        del probe_state
-        probe_step_functions.clear()
-        _clear_jax_caches()
+        cached_sizes = None
+        if not args.force_auto_batch:
+            cached_sizes = load_auto_batch_cache(auto_batch_cache_path, fingerprint)
+        if cached_sizes is not None:
+            missing = {pad for pad in train_buckets if pad not in cached_sizes}
+            if not missing:
+                train_batch_sizes = {
+                    pad: int(cached_sizes[pad]) for pad in train_buckets
+                }
+                print(
+                    f"Loaded auto-batch sizes from {auto_batch_cache_path} "
+                    f"({len(train_batch_sizes)} pad widths; skip probe)",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"Auto-batch cache partial ({len(cached_sizes)} widths); "
+                    f"probing {len(missing)} missing: {sorted(missing, reverse=True)}",
+                    flush=True,
+                )
+                probe_state = jax_utils.replicate(state, devices=probe_devices)
+                train_batch_sizes = resolve_batch_sizes(
+                    train_buckets,
+                    per_device_batch_size=args.batch_size_per_device,
+                    max_pairs_per_device=args.max_pairs_per_device,
+                    auto_batch=True,
+                    data=data,
+                    steps_for_batch_size=probe_steps_for_batch_size,
+                    state=probe_state,
+                    step_functions=probe_step_functions,
+                    only_pads=missing,
+                    seed_sizes=cached_sizes,
+                )
+                del probe_state
+                probe_step_functions.clear()
+                _clear_jax_caches()
+                save_auto_batch_cache(
+                    auto_batch_cache_path, fingerprint, train_batch_sizes
+                )
+                print(f"Wrote auto-batch cache: {auto_batch_cache_path}", flush=True)
+        else:
+            if args.force_auto_batch and auto_batch_cache_path.is_file():
+                print(
+                    f"--force-auto-batch: ignoring {auto_batch_cache_path}",
+                    flush=True,
+                )
+            probe_state = jax_utils.replicate(state, devices=probe_devices)
+            train_batch_sizes = resolve_batch_sizes(
+                train_buckets,
+                per_device_batch_size=args.batch_size_per_device,
+                max_pairs_per_device=args.max_pairs_per_device,
+                auto_batch=True,
+                data=data,
+                steps_for_batch_size=probe_steps_for_batch_size,
+                state=probe_state,
+                step_functions=probe_step_functions,
+            )
+            del probe_state
+            probe_step_functions.clear()
+            _clear_jax_caches()
+            save_auto_batch_cache(
+                auto_batch_cache_path, fingerprint, train_batch_sizes
+            )
+            print(f"Wrote auto-batch cache: {auto_batch_cache_path}", flush=True)
     else:
         train_batch_sizes = resolve_batch_sizes(
             train_buckets,
@@ -1950,6 +2096,14 @@ def build_parser() -> argparse.ArgumentParser:
         dest="auto_batch",
         action="store_false",
         help="Disable memory probing; use --max-pairs-per-device heuristic.",
+    )
+    parser.add_argument(
+        "--force-auto-batch",
+        action="store_true",
+        help=(
+            "Ignore workdir/auto_batch_sizes.json and re-probe all pad widths. "
+            "Use after changing GPUs, model size, or --batch-size-per-device cap."
+        ),
     )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument(
