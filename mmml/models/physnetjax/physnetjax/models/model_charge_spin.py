@@ -269,20 +269,35 @@ class PhysNetChargeSpin(nn.Module):
         positions: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
+        batch_mask: Optional[jnp.ndarray] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """Calculate pairwise geometric features."""
+        """Calculate pairwise geometric features.
+
+        ``batch_mask`` zeroes the message-passing basis for padding edges so
+        pad atoms at the origin cannot corrupt real-atom features inside the
+        cutoff (translation-invariance bug). Masked pairs are also shifted off
+        r=0 before the basis to avoid 0 * NaN forces from coincident padding.
+        """
         positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
         positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
         displacements = positions_src - positions_dst
-        
+
+        basis_displacements = displacements
+        if batch_mask is not None:
+            m = batch_mask.astype(displacements.dtype).reshape(-1, 1)
+            basis_displacements = displacements + (1.0 - m)
+
         basis = e3x.nn.basis(
-            displacements,
+            basis_displacements,
             num=self.num_basis_functions,
             max_degree=self.max_degree,
             radial_fn=e3x.nn.exponential_chebyshev,
             cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
-        
+        if batch_mask is not None:
+            basis = basis * batch_mask.astype(basis.dtype).reshape(
+                -1, *([1] * (basis.ndim - 1))
+            )
         return basis, displacements
     
     def _process_atomic_features(
@@ -579,9 +594,10 @@ class PhysNetChargeSpin(nn.Module):
         tuple
             (total_energy, (energy, charges, electrostatics, repulsion, features))
         """
-        # Calculate geometric features
+        # Calculate geometric features (batch_mask zeroes padding edges before
+        # MessagePass — see _calculate_geometric_features).
         basis, displacements = self._calculate_geometric_features(
-            positions, dst_idx, src_idx
+            positions, dst_idx, src_idx, batch_mask=batch_mask
         )
         
         # Embed molecular properties (charge and spin)
