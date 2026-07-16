@@ -45,14 +45,18 @@ Signature: preflight green; later `E_pot` drops tens–hundreds of eV, `T` →
 thousands K, `E_tot` nearly flat then may drift past
 `--nve-etot-drift-abort-eV`. **Not** a missing MIC-wrap Jacobian.
 
-Falsified as sole cause (ACO/DCM liquid NVE, 2026-07): same PE→KE dump with
-`--jax-md-update-interval 1` (wrap+NL every step). NL cadence can still worsen
-stale-pair cases; it is not sufficient to explain the crash.
+Falsified as sole cause (DCM:80 @ 30 Å, 2026-07): same PE→KE dump with
+`--jax-md-update-interval 1`. NL cadence can still worsen stale-pair cases; it
+is not sufficient to explain the crash.
 
-Check suite JSON: `dynamics_min_intermonomer_distance_A` (e.g. ~0.4 Å) vs
-`--min-intermonomer-atom-distance` (default **0.1 Å** — too loose; guard stays
-silent). Prefer `--dynamics-overlap-action error` and a physical threshold
-(~1.5–2.0 Å) or NVT; inspect HDF5 frames around the spike.
+Counter-example (same stack): **DCM:30 @ 30 Å** completed 100 ps NVE with
+flat `E_tot` (~0.1 eV), `T` ~170–230 K, min intermonomer ~2.07 Å — so the
+hybrid+NVE path can be stable at lower density / fewer contacts.
+
+Check suite JSON: `dynamics_min_intermonomer_distance_A` (e.g. ~0.4 Å on
+failures) vs `--min-intermonomer-atom-distance` (default **0.1 Å** — too loose).
+Prefer `--dynamics-overlap-action error` and a physical threshold (~1.5–2.0 Å)
+or NVT; inspect HDF5 frames around the spike.
 
 ## Tests that lock this in
 
