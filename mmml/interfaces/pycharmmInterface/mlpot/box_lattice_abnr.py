@@ -14,6 +14,22 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
 PathLike = Union[str, Path]
 
 
+def density_target_holds_box(args: argparse.Namespace) -> bool:
+    """True when box side was chosen to hit a mass-density target (must not resize).
+
+    Lattice ABNR that expands/contracts the cell silently destroys that density
+    and makes liquid-box PASS reports misleading.
+    """
+    if bool(getattr(args, "mini_lattice_abnr_allow_density_resize", False)):
+        return False
+    if getattr(args, "target_density_g_cm3", None) is not None:
+        return True
+    if getattr(args, "bulk_density_fraction", None) is not None:
+        return True
+    mode = str(getattr(args, "box_auto", "") or "").strip().lower()
+    return mode == "density"
+
+
 def should_run_mini_lattice_abnr(
     args: argparse.Namespace,
     *,
@@ -29,6 +45,8 @@ def should_run_mini_lattice_abnr(
     if getattr(args, "box_size", None) is not None and not bool(
         getattr(args, "mini_lattice_abnr_allow_fixed_box", False)
     ):
+        return False
+    if density_target_holds_box(args):
         return False
     return True
 

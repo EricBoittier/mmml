@@ -130,7 +130,14 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     _bump_int_attr(args, "mini_nstep", 500)
     _bump_int_attr(args, "bonded_mm_mini_steps", 500)
     fixed_box = getattr(args, "box_size", None) is not None
-    skip_box_prep = certified_box_handoff(args) or fixed_box
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        density_target_holds_box,
+    )
+
+    # Density-sized cells must stay fixed: lattice ABNR that expands L makes
+    # reported ρ meaningless (liquid-box "PASS" at the wrong density).
+    hold_density_box = density_target_holds_box(args)
+    skip_box_prep = certified_box_handoff(args) or fixed_box or hold_density_box
     if skip_box_prep:
         if getattr(args, "mini_lattice_abnr_steps", None) is None:
             args.mini_lattice_abnr_steps = 0

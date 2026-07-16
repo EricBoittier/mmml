@@ -49,8 +49,33 @@ def test_apply_liquid_box_profile_dense_enables_liquid_prep():
     assert args.liquid_prep is True
     assert args.setup == "pbc_nvt"
     assert args.box_auto == "density"
-    assert int(args.mini_lattice_abnr_steps) >= 200
-    assert float(args.min_intermonomer_atom_distance) == pytest.approx(2.0)
+    # Density-sized cells must not be resized by lattice ABNR.
+    assert int(args.mini_lattice_abnr_steps) == 0
+    from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+
+    assert float(args.min_intermonomer_atom_distance) == pytest.approx(
+        DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+    )
+
+
+def test_certify_density_against_target_fails_on_large_drift():
+    from mmml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
+        certify_density_against_target,
+    )
+
+    ok, msg = certify_density_against_target(
+        density_g_cm3=0.29,
+        target_density_g_cm3=1.326,
+        relative_tolerance=0.05,
+    )
+    assert not ok
+    assert "relative error" in msg
+    ok2, _ = certify_density_against_target(
+        density_g_cm3=1.30,
+        target_density_g_cm3=1.326,
+        relative_tolerance=0.05,
+    )
+    assert ok2
 
 
 def test_liquid_box_uses_packmol_by_default():
@@ -92,7 +117,8 @@ def test_liquid_box_density_auto_sizes_packmol_cube():
     )
     apply_liquid_box_profile(args)
     side = resolve_packmol_cube_side_from_args(args)
-    assert 15.0 < side < 30.0
+    # Density-sized Packmol cube for DCM:60 @ 1.326 g/cm³ (sim L ~19 Å with margin).
+    assert 15.0 < side < 40.0
 
 
 def test_apply_liquid_box_profile_standard_skips_liquid_prep():

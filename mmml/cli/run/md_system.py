@@ -2234,6 +2234,11 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.append("--mini-lattice-abnr-nocoords")
     if getattr(args, "mini_lattice_abnr_allow_fixed_box", False):
         cmd.append("--mini-lattice-abnr-allow-fixed-box")
+    if getattr(args, "mini_lattice_abnr_allow_density_resize", False):
+        cmd.append("--mini-lattice-abnr-allow-density-resize")
+    dens_tol = getattr(args, "density_certify_relative_tolerance", None)
+    if dens_tol is not None:
+        cmd.extend(["--density-certify-relative-tolerance", str(float(dens_tol))])
     if bool(getattr(args, "liquid_prep", False)):
         cmd.append("--liquid-prep")
     elif bool(getattr(args, "cleanup", False)):
