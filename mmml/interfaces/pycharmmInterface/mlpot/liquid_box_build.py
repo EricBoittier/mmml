@@ -30,6 +30,9 @@ class LiquidBoxBuildResult:
     n_atoms: int
     box_side_A: float | None = None
     density_g_cm3: float | None = None
+    target_box_side_A: float | None = None
+    target_density_g_cm3: float | None = None
+    density_relative_error: float | None = None
     worst_intermonomer_A: float | None = None
     prep_overlap_floor_A: float | None = None
     mm_grms_kcalmol_A: float | None = None
@@ -54,6 +57,9 @@ class LiquidBoxBuildResult:
             "n_atoms": int(self.n_atoms),
             "box_side_A": self.box_side_A,
             "density_g_cm3": self.density_g_cm3,
+            "target_box_side_A": self.target_box_side_A,
+            "target_density_g_cm3": self.target_density_g_cm3,
+            "density_relative_error": self.density_relative_error,
             "worst_intermonomer_A": self.worst_intermonomer_A,
             "prep_overlap_floor_A": self.prep_overlap_floor_A,
             "dynamics_overlap_reference_A": resolve_dynamics_overlap_reference_A(args),
@@ -122,6 +128,53 @@ def apply_liquid_box_profile(
                 args.bulk_density_fraction = min(float(current), 0.55)
 
     return resolved
+
+
+def density_relative_error(
+    *,
+    density_g_cm3: float | None,
+    target_density_g_cm3: float | None,
+) -> float | None:
+    """``|ρ − ρ_target| / ρ_target``, or None when either side is unavailable."""
+    if density_g_cm3 is None or target_density_g_cm3 is None:
+        return None
+    target = float(target_density_g_cm3)
+    if target <= 0.0 or not np.isfinite(target):
+        return None
+    achieved = float(density_g_cm3)
+    if not np.isfinite(achieved):
+        return None
+    return abs(achieved - target) / target
+
+
+def certify_density_against_target(
+    *,
+    density_g_cm3: float | None,
+    target_density_g_cm3: float | None,
+    relative_tolerance: float,
+) -> tuple[bool, str]:
+    """Return ``(ok, message)`` for liquid-box density certification."""
+    tol = float(relative_tolerance)
+    if tol <= 0.0 or target_density_g_cm3 is None:
+        return True, ""
+    rel = density_relative_error(
+        density_g_cm3=density_g_cm3,
+        target_density_g_cm3=target_density_g_cm3,
+    )
+    if rel is None:
+        return True, ""
+    if rel > tol:
+        return (
+            False,
+            (
+                f"density {float(density_g_cm3):.4f} g/cm³ vs target "
+                f"{float(target_density_g_cm3):.4f} g/cm³ "
+                f"(relative error {rel:.1%} > {tol:.1%}); "
+                "box was resized away from the density-sized cell "
+                "(lattice ABNR / NPT). Hold L fixed for density certification."
+            ),
+        )
+    return True, ""
 
 
 def estimate_density_g_cm3(
@@ -246,10 +299,18 @@ def render_liquid_box_report(
         "## Box",
         "",
     ]
+    if result.target_box_side_A is not None:
+        lines.append(f"- Target cubic side: {result.target_box_side_A:.3f} Å")
     if result.box_side_A is not None:
-        lines.append(f"- Cubic side: {result.box_side_A:.3f} Å")
+        lines.append(f"- Final cubic side: {result.box_side_A:.3f} Å")
+    if result.target_density_g_cm3 is not None:
+        lines.append(f"- Target density: {result.target_density_g_cm3:.4f} g/cm³")
     if result.density_g_cm3 is not None:
-        lines.append(f"- Density: {result.density_g_cm3:.4f} g/cm³")
+        lines.append(f"- Final density: {result.density_g_cm3:.4f} g/cm³")
+    if result.density_relative_error is not None:
+        lines.append(
+            f"- Density relative error: {100.0 * float(result.density_relative_error):.2f}%"
+        )
     lines.extend(
         [
             "",
@@ -344,6 +405,23 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     (out_dir / "pretreat").mkdir(parents=True, exist_ok=True)
     charmm_pbc = resolve_charmm_use_pbc(args)
     box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
+    target_box_side_A = float(box_side) if box_side is not None else None
+    target_density_g_cm3: float | None = None
+    if charmm_pbc and comp is not None:
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+                resolve_target_density_g_cm3,
+            )
+
+            target_density_g_cm3 = float(resolve_target_density_g_cm3(args, comp))
+        except (ValueError, TypeError):
+            target_density_g_cm3 = None
+    if target_density_g_cm3 is None and target_box_side_A is not None:
+        target_density_g_cm3 = estimate_density_g_cm3(
+            composition=comp,
+            box_side_A=target_box_side_A,
+            n_molecules=int(n_mol),
+        )
     atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
     if atoms_per_list is None and int(n_mol) > 0 and len(z) % int(n_mol) == 0:
         atoms_per_list = [len(z) // int(n_mol)] * int(n_mol)
@@ -383,6 +461,9 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         mc_summary = mc_result.to_dict()
         if mc_result.ran:
             steps_applied.append("mc_density_equalize")
+        # Hold this L for the rest of Phase A (lattice ABNR must not expand it).
+        if box_side is not None:
+            target_box_side_A = float(box_side)
 
     if charmm_pbc and box_side is not None and atoms_per_list is not None:
         from mmml.cli.run.md_handoff import (
@@ -608,6 +689,20 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         box_side_A=box_side,
         n_molecules=int(n_mol),
     )
+    dens_rel = density_relative_error(
+        density_g_cm3=density,
+        target_density_g_cm3=target_density_g_cm3,
+    )
+    dens_ok, dens_msg = certify_density_against_target(
+        density_g_cm3=density,
+        target_density_g_cm3=target_density_g_cm3,
+        relative_tolerance=float(
+            getattr(args, "density_certify_relative_tolerance", 0.05) or 0.0
+        ),
+    )
+    if not dens_ok:
+        passed = False
+        cert_message = f"{cert_message}; {dens_msg}" if cert_message else dens_msg
 
     result = LiquidBoxBuildResult(
         status="pass" if passed else "fail",
@@ -618,6 +713,9 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         n_atoms=len(z),
         box_side_A=float(box_side) if box_side is not None else None,
         density_g_cm3=density,
+        target_box_side_A=target_box_side_A,
+        target_density_g_cm3=target_density_g_cm3,
+        density_relative_error=dens_rel,
         worst_intermonomer_A=float(worst) if worst is not None else None,
         prep_overlap_floor_A=float(prep_floor),
         mm_grms_kcalmol_A=mm_grms,

@@ -758,7 +758,9 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "PyCHARMM mini: CHARMM MINI ABNR LATTice steps to optimize the cubic unit cell "
             "after coordinate-only CHARMM MM mini and before MLpot SD. "
-            "0=off; default with --liquid-prep: 200. Requires CRYSTAL/PBC."
+            "0=off; default with --liquid-prep and no density target: 200. "
+            "Skipped when a density target sizes the box (see "
+            "--mini-lattice-abnr-allow-density-resize). Requires CRYSTAL/PBC."
         ),
     )
     group.add_argument(
@@ -778,13 +780,32 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--mini-lattice-abnr-allow-density-resize",
+        action="store_true",
+        help=(
+            "Allow lattice ABNR to change the cell when the box was sized from "
+            "--target-density-g-cm3 / --bulk-density-fraction / --box-auto density. "
+            "Default: hold L fixed so certified density stays meaningful."
+        ),
+    )
+    group.add_argument(
+        "--density-certify-relative-tolerance",
+        type=float,
+        default=0.05,
+        metavar="FRAC",
+        help=(
+            "liquid-box: fail certification when |ρ_final − ρ_target|/ρ_target "
+            "exceeds this fraction (default: 0.05). <=0 disables the density gate."
+        ),
+    )
+    group.add_argument(
         "--liquid-prep",
         action=argparse.BooleanOptionalAction,
         default=False,
         help=(
             "Easy dense-liquid setup: same as --density-prep-mode resilient "
-            "(looser Packmol, MC density equalization, stronger CHARMM/lattice mini, "
-            "mini box equil, post-mini rescue ladder when GRMS is high). "
+            "(looser Packmol, MC density equalization, stronger CHARMM mini, "
+            "fixed-L density hold, post-mini rescue ladder when GRMS is high). "
             "For full prep + dynamics recovery in one flag, prefer --cleanup."
         ),
     )
@@ -794,8 +815,10 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         default="off",
         help=(
             "Condensed-phase box prep strategy. resilient: start Packmol slightly "
-            "below target density, enable MC equalization, stronger CHARMM/lattice "
-            "mini, and the post-mini density prep ladder when GRMS is high."
+            "below target density, enable MC equalization, stronger CHARMM mini "
+            "(box held at the density-sized L unless "
+            "--mini-lattice-abnr-allow-density-resize), and the post-mini density "
+            "prep ladder when GRMS is high."
         ),
     )
     group.add_argument(

@@ -28,9 +28,12 @@ def _args(**overrides) -> argparse.Namespace:
         mini_lattice_abnr_steps=None,
         mini_box_equil_ps=None,
         mini_lattice_abnr_allow_fixed_box=False,
+        mini_lattice_abnr_allow_density_resize=False,
         mini_box_equil_allow_fixed_box=False,
         calculator_pre_minimize=True,
         quiet=True,
+        composition=None,
+        n_molecules=None,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -49,8 +52,9 @@ def test_resilient_defaults_bump_mini_and_enable_ladder():
     assert args.charmm_sd_steps == 1000
     assert args.charmm_abnr_steps == 1000
     assert args.mini_nstep == 500
-    assert args.mini_lattice_abnr_steps == 200
-    assert args.mini_box_equil_ps == 200.0
+    # Auto bulk-density target holds L — no lattice resize / NPT mini-equil.
+    assert args.mini_lattice_abnr_steps == 0
+    assert args.mini_box_equil_ps == 0.0
 
 
 def test_resilient_defaults_respect_explicit_zero_mini_lattice_abnr():
@@ -324,7 +328,25 @@ def test_liquid_prep_shorthand_enables_defaults():
     assert liquid_prep_enabled(args)
     apply_density_prep_resilient_defaults(args)
     assert density_prep_ladder_enabled(args)
+    assert args.mini_lattice_abnr_steps == 0
+
+
+def test_resilient_defaults_lattice_when_density_resize_allowed():
+    """Opt-in: lattice ABNR may change L even with a density target."""
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_density_prep_resilient_defaults,
+    )
+
+    args = _args(
+        liquid_prep=True,
+        composition="DCM:5",
+        n_molecules=5,
+        mini_lattice_abnr_allow_density_resize=True,
+    )
+    apply_density_prep_resilient_defaults(args)
+    assert float(args.bulk_density_fraction) == pytest.approx(0.75)
     assert args.mini_lattice_abnr_steps == 200
+    assert args.mini_box_equil_ps == 200.0
 
 
 def test_sync_pbc_after_box_change_skips_prepare_charmm_pbc_with_mlpot(monkeypatch):
@@ -754,8 +776,9 @@ def test_overlap_last_chance_separates_to_ml_safe_pair_floors(monkeypatch):
 
     assert summary.reason == "ok"
     assert "pre_mlpot:overlap_last_chance" in summary.steps_applied
-    assert repack_targets[-1] == pytest.approx(DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A)
-    assert separate_targets == [pytest.approx(DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A)]
+    # Last-chance uses the configured prep floor (1.0 Å here), not the ML heavy floor alone.
+    assert repack_targets[-1] == pytest.approx(1.0)
+    assert separate_targets == [pytest.approx(1.0)]
 
 
 def test_dynamics_open_runs_when_prep_passes_but_contact_tight(monkeypatch):

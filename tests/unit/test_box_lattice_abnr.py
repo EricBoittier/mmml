@@ -51,11 +51,57 @@ def test_should_run_mini_lattice_abnr_true_for_pbc_mini():
         mini_lattice_abnr_steps=25,
         box_size=None,
         mini_lattice_abnr_allow_fixed_box=False,
+        mini_lattice_abnr_allow_density_resize=False,
+        target_density_g_cm3=None,
+        bulk_density_fraction=None,
+        box_auto=None,
     )
     assert should_run_mini_lattice_abnr(
         args,
         charmm_pbc=True,
         stages=["mini", "heat"],
+    )
+
+
+def test_should_run_mini_lattice_abnr_skips_density_target():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        should_run_mini_lattice_abnr,
+    )
+
+    args = argparse.Namespace(
+        mini_lattice_abnr_steps=200,
+        box_size=None,
+        mini_lattice_abnr_allow_fixed_box=False,
+        mini_lattice_abnr_allow_density_resize=False,
+        target_density_g_cm3=1.326,
+        bulk_density_fraction=None,
+        box_auto="density",
+    )
+    assert not should_run_mini_lattice_abnr(
+        args,
+        charmm_pbc=True,
+        stages=["mini"],
+    )
+
+
+def test_should_run_mini_lattice_abnr_density_resize_opt_in():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        should_run_mini_lattice_abnr,
+    )
+
+    args = argparse.Namespace(
+        mini_lattice_abnr_steps=200,
+        box_size=None,
+        mini_lattice_abnr_allow_fixed_box=False,
+        mini_lattice_abnr_allow_density_resize=True,
+        target_density_g_cm3=1.326,
+        bulk_density_fraction=None,
+        box_auto="density",
+    )
+    assert should_run_mini_lattice_abnr(
+        args,
+        charmm_pbc=True,
+        stages=["mini"],
     )
 
 
