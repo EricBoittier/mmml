@@ -11,6 +11,7 @@ from mmml.cli.run.jaxmd_runner import (
     directional_force_energy_error,
     normalize_jaxmd_state,
     nve_force_energy_ablation_verdict,
+    nve_force_energy_should_attempt_rescue,
 )
 
 
@@ -83,6 +84,27 @@ def test_nve_force_energy_ablation_verdict_both_hybrid_worse():
     assert "MM/hybrid assembly adds" in text
 
 
+def test_nve_force_energy_ablation_verdict_hybrid_pass_ml_fail():
+    text = nve_force_energy_ablation_verdict(0.15, 0.23, 0.20)
+    assert "hybrid gate passed" in text
+    assert "continuing" in text
+
+
+def test_nve_force_energy_should_attempt_rescue():
+    assert nve_force_energy_should_attempt_rescue(
+        0.25, 0.20, rescue_enabled=True, rescue_already_attempted=False
+    )
+    assert not nve_force_energy_should_attempt_rescue(
+        0.15, 0.20, rescue_enabled=True, rescue_already_attempted=False
+    )
+    assert not nve_force_energy_should_attempt_rescue(
+        0.25, 0.20, rescue_enabled=True, rescue_already_attempted=True
+    )
+    assert not nve_force_energy_should_attempt_rescue(
+        0.25, 0.20, rescue_enabled=False, rescue_already_attempted=False
+    )
+
+
 def test_jaxmd_suite_nve_preflight_cli_defaults():
     """NVE gates must be wired into jargs (not only suite argparse)."""
     from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
@@ -92,9 +114,13 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
     assert "--nve-max-f-start-eVA" in src
     assert "--nve-force-energy-relative-tolerance" in src
     assert "--nve-force-energy-ml-only-diagnose" in src
+    assert "--nve-force-energy-rescue" in src
+    assert "--nve-force-energy-rescue-fire-steps" in src
     assert "nve_max_f_start_eVA=" in src
     assert "nve_etot_drift_abort_eV=" in src
     assert "nve_force_energy_ml_only_diagnose=" in src
+    assert "nve_force_energy_rescue=" in src
+    assert "nve_force_energy_rescue_fire_steps=" in src
     assert "default=1000" in src or "default: 1000" in src
     # Early NVE abort must not crash on missing HDF5 path.
     assert '_hdf5 if _hdf5 else' in src or "last_hdf5_path" in src
@@ -108,3 +134,5 @@ def test_nve_requires_float64_message_in_runner():
     assert "jax_enable_x64" in src
     assert "NVE force–energy ML-only ablation" in src
     assert "nve_force_energy_ablation_verdict" in src
+    assert "NVE preflight rescue" in src
+    assert "force_rebuild=True" in src

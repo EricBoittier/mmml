@@ -201,6 +201,24 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--nve-force-energy-rescue",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "When hybrid NVE force–energy FD fails, force an MM neighbor-list rebuild "
+            "and a short jax-md FIRE, then re-check before aborting (default: on)."
+        ),
+    )
+    p.add_argument(
+        "--nve-force-energy-rescue-fire-steps",
+        type=int,
+        default=50,
+        help=(
+            "jax-md FIRE steps for NVE force–energy preflight rescue "
+            "(0 = NL rebuild only; default: 50)."
+        ),
+    )
+    p.add_argument(
         "--nve-etot-drift-abort-eV",
         type=float,
         default=0.5,
@@ -1413,6 +1431,12 @@ def main(argv: list[str] | None = None) -> int:
         ),
         nve_force_energy_ml_only_diagnose=bool(
             getattr(args, "nve_force_energy_ml_only_diagnose", True)
+        ),
+        nve_force_energy_rescue=bool(
+            getattr(args, "nve_force_energy_rescue", True)
+        ),
+        nve_force_energy_rescue_fire_steps=int(
+            getattr(args, "nve_force_energy_rescue_fire_steps", 50)
         ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.0)),
