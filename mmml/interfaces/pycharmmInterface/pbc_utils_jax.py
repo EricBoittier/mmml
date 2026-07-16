@@ -175,6 +175,59 @@ def mic_displacement_smooth(Ri: Array, Rj: Array, cell: Array, k: float = SMOOTH
     return cart_coords(dS_mic, cell)
 
 
+def wrap_dimer_monomer_b(
+    pos_di: Array,
+    n_a: Array | int,
+    n_b: Array | int,
+    cell: Array,
+    *,
+    k: float = SMOOTH_MIC_K,
+) -> Array:
+    """MIC-shift monomer B so the dimer uses the minimum-image COM separation.
+
+    Uses **smooth** MIC and is differentiable w.r.t. ``pos_di`` (no
+    ``stop_gradient``). Exact MIC + stopped shift makes
+    ``E = E_model(wrap(R))`` disagree with model forces assigned to unwrapped
+    atoms — the NVE force–energy preflight failure mode for liquid PBC dimers.
+    """
+    pos_di = jnp.asarray(pos_di)
+    max_n = pos_di.shape[0]
+    i = jnp.arange(max_n, dtype=jnp.int32)
+    na = jnp.asarray(n_a, dtype=jnp.int32)
+    nb = jnp.asarray(n_b, dtype=jnp.int32)
+    dtype = pos_di.dtype
+    mask_a = (i < na).astype(dtype)
+    mask_b = ((i >= na) & (i < na + nb)).astype(dtype)
+    n_a_safe = jnp.maximum(jnp.sum(mask_a), jnp.asarray(1e-10, dtype=dtype))
+    n_b_safe = jnp.maximum(jnp.sum(mask_b), jnp.asarray(1e-10, dtype=dtype))
+    com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a_safe
+    com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b_safe
+    d = mic_displacement_smooth(com_a, com_b, cell, k=k)
+    shift_b = com_a + d - com_b
+    return pos_di + shift_b * mask_b[:, None]
+
+
+def vjp_wrap_dimer_monomer_b_forces(
+    pos_di: Array,
+    n_a: Array | int,
+    n_b: Array | int,
+    forces_wrapped: Array,
+    cell: Array,
+    *,
+    k: float = SMOOTH_MIC_K,
+) -> Array:
+    """Map forces on wrapped dimer coords back to unwrapped atom coords.
+
+    If ``F_wrapped = -∂E/∂R_wrapped`` and ``R_wrapped = wrap(R)``, then
+    ``F_unwrapped = VJP(wrap)(F_wrapped) = -∂E/∂R``.
+    """
+    def _wrap(p: Array) -> Array:
+        return wrap_dimer_monomer_b(p, n_a, n_b, cell, k=k)
+
+    _, vjp_fn = jax.vjp(_wrap, pos_di)
+    return vjp_fn(forces_wrapped)[0]
+
+
 def mic_displacements_batched(positions_dst: Array, positions_src: Array, cell: Array) -> Array:
     """MIC displacement for batched pairs. positions_dst/src shape (n_edges, 3)."""
     dR = positions_src - positions_dst
