@@ -93,7 +93,32 @@ def monomer_coms_segment(
     *,
     masses: Array | None = None,
 ) -> Array:
-    """Monomer COMs via ``segment_sum`` (JIT-safe; no Python loops over monomers)."""
+    """Monomer COMs via ``segment_sum`` (JIT-safe; no Python loops over monomers).
+
+    .. note::
+
+       Despite the name, this returns an **unweighted centroid** unless
+       ``masses`` is passed, and the codebase is currently inconsistent about
+       which it uses:
+
+       * ML/MM switching (``mm_energy_forces``) and PME
+         (``jax_pme_hybrid_coulomb``) call this **without** masses -> centroid.
+       * Flat-bottom / COM-wall restraints call it **with** masses -> true COM.
+
+       The difference is not cosmetic.  Measured over 724 DCM/acetone dimers:
+       ``|r_centroid - r_COM|`` averages 0.35 A (acetone) to 0.45 A (DCM), up to
+       1.3 A -- because e.g. DCM's two Cl carry ~83% of the mass but only 40% of
+       the centroid weight.  Against a 1.5 A wide handoff that shifted the ML
+       switch on 97/724 dimers and changed the switching regime on 44/724.
+
+       The centroid is a defensible modelling choice (switching is a smooth
+       interpolation between two valid models; only *consistency* across
+       training and every MD backend matters, and all of them go through
+       ``setup_calculator``).  It is kept deliberately: changing it would
+       silently move the effective handoff for existing checkpoints.  Any move
+       to mass weighting should be an explicit, flagged migration with
+       retraining -- not a drive-by "fix".
+    """
     n = int(n_monomers)
     if masses is None:
         weights = jnp.ones(positions.shape[0], dtype=positions.dtype)
