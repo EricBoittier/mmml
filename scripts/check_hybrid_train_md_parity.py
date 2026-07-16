@@ -177,7 +177,7 @@ def main() -> int:
             ml_force_conversion_factor=1,
             mm_charge_correction=bool(args.mm_charge_correction),
         )
-        res = factory(
+        _calc, sc_fn, update_fn_factory = factory(
             atomic_numbers=Z[:n_real],
             atomic_positions=R[:n_real],
             n_monomers=2,
@@ -185,8 +185,27 @@ def main() -> int:
             doML=True,
             doMM=True,
             doML_dimer=True,
+            backprop=False,
         )
-        e_md = float(res[0]) if isinstance(res, (tuple, list)) else float(res)
+        R_jax = jnp.asarray(R[:n_real])
+        Z_jax = jnp.asarray(Z[:n_real])
+        mm_pair_idx = mm_pair_mask = None
+        if update_fn_factory is not None:
+            update_fn = update_fn_factory(R[:n_real], cutoff_params)
+            if update_fn is not None:
+                mm_pair_idx, mm_pair_mask = update_fn(R[:n_real])
+        out_md = sc_fn(
+            R_jax,
+            Z_jax,
+            2,
+            cutoff_params,
+            doML=True,
+            doMM=True,
+            doML_dimer=True,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+        )
+        e_md = float(np.asarray(out_md.energy).reshape(-1)[0])
 
         diff = abs(e_train - e_md)
         worst = max(worst, diff)
