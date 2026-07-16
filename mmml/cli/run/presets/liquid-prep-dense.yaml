@@ -26,4 +26,4 @@ defaults:
   # bonded_mm_mini_steps: 500
 
   max_grms_before_dyn: 50.0
-  dynamics_overlap_min_distance: 1.5
+  dynamics_overlap_min_distance: 0.45

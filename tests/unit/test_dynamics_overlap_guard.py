@@ -637,11 +637,11 @@ def test_probe_dynamics_geometry_violation_detects_extent():
         assert probe_dynamics_geometry_violation(cfg, context="probe")
 
 
-def test_resolve_defaults_to_rescue_and_1p5A():
+def test_resolve_defaults_to_rescue_and_0p45A():
     args = argparse.Namespace()
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
     assert cfg.action == "rescue"
-    assert cfg.min_distance_A == 1.5
+    assert cfg.min_distance_A == pytest.approx(0.45)
     assert cfg.intra_min_distance_A == 0.5
     assert cfg.intra_exclude_1_3 is True
     assert cfg.check_interval == 500
@@ -657,7 +657,7 @@ def test_resolve_defaults_to_rescue_and_1p5A():
 def test_resolve_dynamics_overlap_config_tolerates_none_args():
     cfg = resolve_dynamics_overlap_config(None, n_monomers=4, use_pbc=False)
     assert cfg.action == "rescue"
-    assert cfg.min_distance_A == pytest.approx(1.5)
+    assert cfg.min_distance_A == pytest.approx(0.45)
     assert cfg.intra_min_distance_A == pytest.approx(0.5)
     assert cfg.max_monomer_extent_A == pytest.approx(12.0)
     assert cfg.monomer_health.enabled is True
@@ -677,7 +677,7 @@ def test_resolve_dynamics_overlap_config_tolerates_explicit_none_fields():
     )
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
     assert cfg.action == "rescue"
-    assert cfg.min_distance_A == pytest.approx(1.5)
+    assert cfg.min_distance_A == pytest.approx(0.45)
     assert cfg.intra_min_distance_A == pytest.approx(0.5)
     assert cfg.max_monomer_extent_A == pytest.approx(12.0)
     assert cfg.check_interval == 500

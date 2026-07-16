@@ -411,7 +411,7 @@ n_heat_segments: 3
 heat_thermostat: hoover
 no_echeck_heat: true
 dynamics_overlap_action: rescue
-dynamics_overlap_min_distance: 1.5
+dynamics_overlap_min_distance: 0.45
 dynamics_intra_min_distance: 0.5
 dynamics_overlap_check_interval: 50
 ```
@@ -762,7 +762,7 @@ bonded_mm_mini: true
 bonded_mm_mini_after: mini,heat,equi
 bonded_mm_mini_steps: 1000
 dynamics_overlap_action: rescue
-dynamics_overlap_min_distance: 1.5
+dynamics_overlap_min_distance: 0.45
 dynamics_intra_min_distance: 0.35
 dynamics_overlap_check_interval: 500
 dynamics_overlap_charmm_sd_steps: 400
@@ -1558,7 +1558,7 @@ allow_high_bonded_strain: false
 dynamics_overlap_action: rescue
 dynamics_overlap_charmm_sd_steps: 200
 dynamics_overlap_charmm_abnr_steps: 400
-dynamics_overlap_min_distance: 1.5
+dynamics_overlap_min_distance: 0.45
 dynamics_intra_min_distance: 1.0
 no_dynamics_intra_exclude_1_3: false
 dynamics_intra_rescue_sd_steps: null
