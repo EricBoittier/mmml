@@ -44,6 +44,7 @@ __all__ = [
     "sigma_to_rmin_half",
     "cgenff_pair_lj",
     "cgenff_pair_coulomb",
+    "neutralize_per_monomer",
     "cgenff_lj_energy",
     "cgenff_mm_energy",
     "monomer_centroids",
@@ -137,6 +138,32 @@ def cgenff_pair_coulomb(r: Array, qq: Array) -> Array:
     """Coulomb for a pair: ``332.063711 * q_i q_j / r`` (mirrors mm_energy_forces)."""
     r_safe = jnp.maximum(r, 1e-10)
     return COULOMB_CONSTANT * qq / r_safe
+
+
+def neutralize_per_monomer(dq: Array, mol_id: Array, n_monomers: int = 2) -> Array:
+    """Project a per-atom charge correction to be net-zero on every monomer.
+
+    CGenFF charges are neutral per monomer, so neutral monomers interact through
+    their dipoles (~1/r^3) in the far field.  PhysNet's charge head is a bare
+    ``nn.Dense`` -- neutrality is only a *soft* loss penalty -- so an unprojected
+    correction can leave a monomer with net charge, turning the long-range MM
+    electrostatics into monopole-monopole (~1/r).  That is not a rounding error:
+    a net +-0.05 e adds ~-0.10 kcal/mol at 8 A, larger than the mean |E_MM| of
+    these dimers, and it decays far more slowly.
+
+    Subtracting each monomer's mean correction preserves CGenFF's per-monomer
+    neutrality while keeping the environment-dependent *shape* of the correction.
+    Padding (``mol_id < 0``) is excluded and left at zero.
+    """
+    valid = mol_id >= 0
+    dq = jnp.where(valid, dq, 0.0)
+    out = jnp.zeros_like(dq)
+    for m in range(n_monomers):
+        sel = valid & (mol_id == m)
+        n = jnp.maximum(jnp.sum(sel), 1.0)
+        mean = jnp.sum(jnp.where(sel, dq, 0.0)) / n
+        out = out + jnp.where(sel, dq - mean, 0.0)
+    return out
 
 
 def monomer_centroids(positions: Array, mol_id: Array, n_monomers: int = 2) -> Array:

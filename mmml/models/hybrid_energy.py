@@ -36,7 +36,11 @@ import jax
 import jax.numpy as jnp
 
 from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
-from mmml.models.cgenff_mm import cgenff_mm_energy, monomer_centroids
+from mmml.models.cgenff_mm import (
+    cgenff_mm_energy,
+    monomer_centroids,
+    neutralize_per_monomer,
+)
 
 Array = jnp.ndarray
 
@@ -105,6 +109,7 @@ def hybrid_forward(
     mm_switch_width: float,
     ml_switch_width: float,
     complementary_handoff: bool = True,
+    charge_correction: bool = False,
 ) -> dict:
     """Model forward assembled into the hybrid ML/MM total the calculator uses.
 
@@ -127,6 +132,17 @@ def hybrid_forward(
     ``E_total = E_AB``.
 
     Costs three forwards per step (AB, A, B).
+
+    ``charge_correction`` (opt-in) makes the MM electrostatics use the model's
+    predicted charges as a *correction* to the fixed CGenFF ones::
+
+        q_eff = q_cgenff + neutralize_per_monomer(q_ML)
+
+    so the charge head learns an environment-dependent residual on top of
+    CGenFF's atom-type charges instead of ignoring them.  The correction is
+    projected net-zero per monomer -- see
+    :func:`mmml.models.cgenff_mm.neutralize_per_monomer` for why that is not
+    optional.  Requires a model built with ``charges=True``.
     """
 
     def _fwd(atom_mask, batch_mask):
@@ -153,6 +169,18 @@ def hybrid_forward(
 
     n_atoms = batch["R"].shape[0] // int(batch_size)
     pos = batch["R"].reshape(batch_size, n_atoms, 3)
+
+    # MM electrostatics charges: fixed CGenFF, optionally corrected by the model.
+    charges = batch["cgenff_charge"]
+    if charge_correction:
+        q_ml = out_ab.get("charges")
+        if q_ml is None:
+            raise ValueError(
+                "charge_correction requires a model built with charges=True "
+                "(the charge head is absent, so there is nothing to correct with)."
+            )
+        dq = jnp.asarray(q_ml).reshape(batch_size, n_atoms)
+        charges = charges + jax.vmap(neutralize_per_monomer)(dq, batch["mol_id"])
 
     e_ab = out_ab["energy"].reshape(batch_size)
     e_a = out_a["energy"].reshape(batch_size)
@@ -199,7 +227,7 @@ def hybrid_forward(
         pos,
         batch["cgenff_type_idx"],
         batch["mol_id"],
-        batch["cgenff_charge"],
+        charges,
         e_ab,
         e_a,
         e_b,

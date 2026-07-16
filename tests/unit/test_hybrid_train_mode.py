@@ -96,3 +96,27 @@ def test_batch_keys_are_the_per_atom_fields_only():
 
     assert set(HYBRID_MM_BATCH_KEYS) == {"cgenff_type_idx", "mol_id", "cgenff_charge"}
     assert not any("master" in k for k in HYBRID_MM_BATCH_KEYS)
+
+
+def test_charge_correction_flag_defaults_off_and_reaches_the_config(tmp_path):
+    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+
+    p = _npz(tmp_path)
+    args = parse_args(["--data", str(p), "--hybrid-mm", "--quiet"])
+    assert args.mm_charge_correction is False
+    assert _build_hybrid_mm_config(args, [str(p)])["charge_correction"] is False
+
+    args = parse_args(
+        ["--data", str(p), "--hybrid-mm", "--mm-charge-correction", "--charges", "--quiet"]
+    )
+    assert _build_hybrid_mm_config(args, [str(p)])["charge_correction"] is True
+
+
+def test_charge_correction_without_a_charge_head_errors(tmp_path):
+    """--mm-charge-correction without --charges must fail loudly."""
+    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+
+    p = _npz(tmp_path)
+    args = parse_args(["--data", str(p), "--hybrid-mm", "--mm-charge-correction", "--quiet"])
+    with pytest.raises(ValueError, match="charge head"):
+        _build_hybrid_mm_config(args, [str(p)])

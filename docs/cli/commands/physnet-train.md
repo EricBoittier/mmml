@@ -22,8 +22,8 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--forces-weight FORCES_WEIGHT]
                           [--dipole-weight DIPOLE_WEIGHT]
                           [--charges-weight CHARGES_WEIGHT]
-                          [--objective OBJECTIVE] [--hybrid-mm]
-                          [--ml-switch-width ML_SWITCH_WIDTH]
+                          [--objective OBJECTIVE] [--mm-charge-correction]
+                          [--hybrid-mm] [--ml-switch-width ML_SWITCH_WIDTH]
                           [--mm-switch-on MM_SWITCH_ON]
                           [--mm-switch-width MM_SWITCH_WIDTH]
                           [--no-complementary-handoff]
@@ -91,6 +91,13 @@ options:
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --charges-weight, --charges_weight CHARGES_WEIGHT
   --objective OBJECTIVE
+  --mm-charge-correction, --mm_charge_correction
+                        Hybrid MM: use the model's predicted charges as a
+                        CORRECTION to the fixed CGenFF charges in the MM
+                        electrostatics (q_eff = q_cgenff + dq_ML, projected net-
+                        zero per monomer). Requires --charges (a model with a
+                        charge head). Off by default: MM electrostatics then
+                        uses the CGenFF charges alone.
   --hybrid-mm, --hybrid_mm
                         Train on the hybrid ML/MM total the MD calculator
                         evaluates: E = ml_switch_scale(r_com)*E_ML + E_MM

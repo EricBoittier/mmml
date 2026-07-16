@@ -202,6 +202,19 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
     )
     parser.add_argument("--objective", type=str, default="valid_loss")
     parser.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        action="store_true",
+        dest="mm_charge_correction",
+        help=(
+            "Hybrid MM: use the model's predicted charges as a CORRECTION to the "
+            "fixed CGenFF charges in the MM electrostatics "
+            "(q_eff = q_cgenff + dq_ML, projected net-zero per monomer). "
+            "Requires --charges (a model with a charge head). Off by default: "
+            "MM electrostatics then uses the CGenFF charges alone."
+        ),
+    )
+    parser.add_argument(
         "--hybrid-mm",
         "--hybrid_mm",
         action="store_true",
@@ -771,13 +784,20 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "mm_switch_width": float(args.mm_switch_width),
         "ml_switch_width": float(args.ml_switch_width),
         "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
+        "charge_correction": bool(getattr(args, "mm_charge_correction", False)),
     }
+    if cfg["charge_correction"] and not getattr(args, "charges", False):
+        raise ValueError(
+            "--mm-charge-correction needs a model with a charge head; pass --charges "
+            "(without it the model predicts no charges, so there is no correction)."
+        )
     if not getattr(args, "quiet", False):
         print(
             f"Hybrid ML/MM training: E = ml_switch_scale(r_com)*E_ML + E_MM  "
             f"({len(sigmas)} CGenFF types; ml_switch_width={cfg['ml_switch_width']}, "
             f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
-            f"complementary_handoff={cfg['complementary_handoff']})",
+            f"complementary_handoff={cfg['complementary_handoff']}, "
+            f"charge_correction={cfg['charge_correction']})",
             flush=True,
         )
     return cfg

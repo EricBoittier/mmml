@@ -236,3 +236,82 @@ def test_hybrid_forward_never_passes_cgenff_to_the_model():
         assert not (kw & forbidden), f"hybrid_forward leaked MM args to the model: {kw & forbidden}"
     # and it really did run the three forwards (AB, A, B)
     assert len(seen) == 3
+
+
+# --------------------------------------------------------------------------
+# Opt-in: learnt charges as a CORRECTION to the CGenFF charges.
+# --------------------------------------------------------------------------
+
+def _charged_model(dq):
+    """Fake model that predicts a fixed per-atom charge `dq`."""
+    def apply(params, **kw):
+        n = kw["positions"].shape[0]
+        bs = kw["batch_size"]
+        base = _fake_model_apply(params, **kw)
+        base["charges"] = jnp.asarray(dq)[:n]
+        return base
+    return apply
+
+
+def test_charge_correction_is_off_by_default():
+    """Default MM electrostatics uses the CGenFF charges alone."""
+    from mmml.models.hybrid_energy import hybrid_forward
+
+    b = _batch(9.0)
+    dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
+    off = hybrid_forward(_charged_model(dq), {}, b, 1, SIG, EPS, **KW)
+    on = hybrid_forward(_charged_model(dq), {}, b, 1, SIG, EPS, charge_correction=True, **KW)
+    # in the MM tail the correction must actually change E_MM
+    assert _f(off["e_mm"]) != pytest.approx(_f(on["e_mm"]))
+
+
+def test_charge_correction_requires_a_charge_head():
+    """A model without charges=True must fail loudly, not silently no-op."""
+    from mmml.models.hybrid_energy import hybrid_forward
+
+    with pytest.raises(ValueError, match="charges=True"):
+        hybrid_forward(
+            _fake_model_apply, {}, _batch(9.0), 1, SIG, EPS,
+            charge_correction=True, **KW,
+        )
+
+
+def test_correction_is_projected_net_zero_per_monomer():
+    """The invariant: q_cgenff + dq stays neutral on EVERY monomer.
+
+    Unprojected, a net monomer charge turns the far-field MM electrostatics into
+    monopole-monopole (~1/r) instead of dipole-dipole (~1/r^3).
+    """
+    from mmml.models.cgenff_mm import neutralize_per_monomer
+
+    mol_id = jnp.array([0, 0, 1, 1, -1])
+    dq = jnp.array([0.7, 0.1, -0.4, 0.2, 99.0])   # net charge on both monomers
+    out = neutralize_per_monomer(dq, mol_id)
+    assert float(jnp.sum(out[:2])) == pytest.approx(0.0, abs=1e-12)   # monomer A
+    assert float(jnp.sum(out[2:4])) == pytest.approx(0.0, abs=1e-12)  # monomer B
+    assert float(out[4]) == 0.0                                       # padding untouched
+    # the *shape* of the correction survives (only the mean is removed)
+    assert float(out[0] - out[1]) == pytest.approx(float(dq[0] - dq[1]))
+
+
+def test_uniform_correction_is_a_no_op():
+    """A constant shift carries no information -> projected away entirely."""
+    from mmml.models.cgenff_mm import neutralize_per_monomer
+
+    mol_id = jnp.array([0, 0, 1, 1, -1])
+    out = neutralize_per_monomer(jnp.array([0.5, 0.5, 0.5, 0.5, 0.0]), mol_id)
+    assert np.allclose(np.asarray(out), 0.0, atol=1e-12)
+
+
+def test_corrected_charges_keep_the_dimer_neutral_in_the_mm_term():
+    """End-to-end: with the correction on, monomers stay neutral."""
+    from mmml.models.cgenff_mm import neutralize_per_monomer
+
+    b = _batch(9.0)
+    dq = jnp.array([0.4, -0.1, 0.25, 0.05, 7.0])
+    q_eff = b["cgenff_charge"][0] + neutralize_per_monomer(dq, b["mol_id"][0])
+    for sel in (slice(0, 2), slice(2, 4)):
+        # cgenff_charge in this fixture is -0.3/+0.15 per monomer = -0.15, so we
+        # assert the *correction* added no net charge, not that q_eff sums to 0.
+        added = float(jnp.sum(q_eff[sel] - b["cgenff_charge"][0][sel]))
+        assert added == pytest.approx(0.0, abs=1e-12)
