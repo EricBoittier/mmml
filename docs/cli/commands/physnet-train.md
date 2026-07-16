@@ -100,8 +100,9 @@ options:
                         uses the CGenFF charges alone.
   --hybrid-mm, --hybrid_mm
                         Train on the hybrid ML/MM total the MD calculator
-                        evaluates: E = ml_switch_scale(r_com)*E_ML + E_MM
-                        (switched CGenFF LJ + electrostatics). Requires a
+                        evaluates: E = (1-s)*(E_A+E_B) + s*E_AB + E_MM, where
+                        the taper s(r_com) applies to the dimer interaction and
+                        E_MM is switched CGenFF LJ + electrostatics. Requires a
                         dataset carrying cgenff_type_idx, mol_id, cgenff_charge
                         and the cgenff_master_* LJ tables. The handoff is
                         controlled by --ml-switch-width/--mm-switch-on/--mm-

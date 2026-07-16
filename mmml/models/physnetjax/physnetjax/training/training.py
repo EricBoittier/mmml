@@ -219,12 +219,13 @@ def train_model(
         Useful for warm-starting from transplanted parameters (progressive
         training).  The optimizer and EMA are initialised from these params.
         Ignored when ``restart`` is set.
-    hybrid_mm : dict | None, optional
+    hybrid_mm : HybridMMConfig | dict | None, optional
         When set, train on the hybrid ML/MM total the MD calculator
-        evaluates: ``E = ml_switch_scale(r_com) * E_ML + E_MM``.  Kwargs for
-        ``mmml.models.hybrid_energy.apply_hybrid_mm_to_output`` (master LJ
-        tables + switching widths).  Requires the CGenFF per-atom fields in
-        the batch (see ``HYBRID_MM_BATCH_KEYS``).
+        evaluates: ``E = (1 - s) * (E_A + E_B) + s * E_AB + E_MM``, where the
+        taper ``s(r_com)`` applies to the dimer *interaction* only.  A
+        ``mmml.models.hybrid_energy.HybridMMConfig`` (master LJ tables +
+        switching widths); a plain dict is coerced to one.  Requires the CGenFF
+        per-atom fields in the batch (see ``HYBRID_MM_BATCH_KEYS``).
     ema_decay : float, optional
         Decay for the exponential moving average of parameters, by default
         0.999.  Validation, checkpointing and restart all use the EMA weights,

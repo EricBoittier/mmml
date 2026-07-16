@@ -221,8 +221,9 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         dest="hybrid_mm",
         help=(
             "Train on the hybrid ML/MM total the MD calculator evaluates: "
-            "E = ml_switch_scale(r_com)*E_ML + E_MM (switched CGenFF LJ + "
-            "electrostatics). Requires a dataset carrying cgenff_type_idx, "
+            "E = (1-s)*(E_A+E_B) + s*E_AB + E_MM, where the taper s(r_com) "
+            "applies to the dimer interaction and E_MM is switched CGenFF LJ + "
+            "electrostatics. Requires a dataset carrying cgenff_type_idx, "
             "mol_id, cgenff_charge and the cgenff_master_* LJ tables. The "
             "handoff is controlled by --ml-switch-width/--mm-switch-on/"
             "--mm-switch-width (same flags and defaults as the MD side)."
@@ -793,7 +794,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         )
     if not getattr(args, "quiet", False):
         print(
-            f"Hybrid ML/MM training: E = ml_switch_scale(r_com)*E_ML + E_MM  "
+            f"Hybrid ML/MM training: E = (1-s)*(E_A+E_B) + s*E_AB + E_MM  "
             f"({len(sigmas)} CGenFF types; ml_switch_width={cfg['ml_switch_width']}, "
             f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
             f"complementary_handoff={cfg['complementary_handoff']}, "

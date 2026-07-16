@@ -36,11 +36,15 @@ Supports both standard energy/force prediction and charge/dipole prediction.
 def _forward(model_apply, params, batch, batch_size, hybrid_mm=None):
     """Model forward; optionally assembled into the hybrid ML/MM total.
 
-    ``hybrid_mm`` is the kwargs dict for
-    :func:`mmml.models.hybrid_energy.apply_hybrid_mm_to_output` (master LJ
-    tables + switching widths).  When set, ``energy``/``forces`` become
-    ``s(R) * E_ML + E_MM`` and its consistent forces -- i.e. the same quantity
-    the MD hybrid calculator evaluates -- so the loss trains what is deployed.
+    ``hybrid_mm`` is a :class:`mmml.models.hybrid_energy.HybridMMConfig` (or a
+    kwargs dict for it: master LJ tables + switching widths).  When set,
+    ``energy``/``forces`` become the hybrid ML/MM total the MD calculator
+    evaluates -- so the loss trains what is deployed::
+
+        E_total = (1 - s) * (E_A + E_B) + s * E_AB + E_MM
+
+    The taper ``s`` applies to the dimer *interaction*, never to the total: the
+    monomers' intramolecular energy is always on.  See :func:`hybrid_forward`.
     """
     out = model_apply(
         params,
