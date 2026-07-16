@@ -997,6 +997,7 @@ def _factory_mmml(
     mbd_checkpoint: str | Path | None = None,
     mbd_weight: float = 1.0,
 ):
+    _load_pycharmm_modules()
     if at_codes_override is not None:
         at_codes = np.asarray(at_codes_override, dtype=int)
     else:
@@ -1182,6 +1183,9 @@ def _run_charmm_minimize(
     """
     if nstep_sd <= 0 and nstep_abnr <= 0:
         return
+    # Certified-box / artifact load imports pycharmm elsewhere and leaves these
+    # module-level caches as None until a CHARMM-backed builder runs.
+    _load_pycharmm_modules()
     t0 = _tmark()
     reset_block()
     coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))

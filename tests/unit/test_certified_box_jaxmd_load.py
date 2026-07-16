@@ -180,6 +180,53 @@ def test_validate_psf_charges_works_when_module_psf_cache_is_none(monkeypatch):
     assert summary["residues"]["ACO"]["n_atoms"] == 2
 
 
+def test_run_charmm_minimize_loads_module_cache_when_none(monkeypatch):
+    """Certified-box path leaves ase.coor None; pre-min must hydrate the cache."""
+    import types
+
+    import mmml.cli.run.md_pbc_suite.ase as ase_mod
+    from ase import Atoms
+
+    pos = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=float)
+    fake_coor = types.SimpleNamespace(
+        set_positions=lambda _df: None,
+        get_positions=lambda: types.SimpleNamespace(
+            to_numpy=lambda dtype=float: pos.copy()
+        ),
+    )
+    fake_min = types.SimpleNamespace(
+        run_sd=lambda **_k: None,
+        run_abnr=lambda **_k: None,
+    )
+    load_calls = {"n": 0}
+
+    def _fake_load() -> None:
+        load_calls["n"] += 1
+        ase_mod.coor = fake_coor
+        ase_mod.charmm_minimize = fake_min
+
+    monkeypatch.setattr(ase_mod, "coor", None)
+    monkeypatch.setattr(ase_mod, "charmm_minimize", None)
+    monkeypatch.setattr(ase_mod, "_load_pycharmm_modules", _fake_load)
+    monkeypatch.setattr(ase_mod, "reset_block", lambda: None)
+    monkeypatch.setattr(ase_mod.pyci, "pycharmm_quiet", lambda: None)
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_vacuum_nbonds",
+        lambda **_k: None,
+    )
+
+    atoms = Atoms("HH", positions=pos)
+    ase_mod._run_charmm_minimize(
+        atoms,
+        nstep_sd=1,
+        nstep_abnr=0,
+        tolenr=1e-3,
+        tolgrd=1e-3,
+    )
+    assert load_calls["n"] == 1
+    assert np.allclose(atoms.get_positions(), pos)
+
+
 def test_build_command_jaxmd_forwards_from_psf_crd_and_skips_packmol():
     args = parse_md_system_minimal(
         from_psf=Path("boxes/dcm206/model.psf"),
