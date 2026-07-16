@@ -38,8 +38,18 @@ forces near ±L/2.
   (`--nve-force-energy-ml-only-diagnose`, default on).
 - Prefer NVT/NPT for liquids; do not “fix conservation” by differentiating the
   MIC lattice shift.
-- Mid-run `T` spikes / `E_pot` crashes after a green preflight are packing /
-  contacts / `dt` issues — not a missing wrap Jacobian.
+
+## Mid-run T spikes with flat E_tot (often NL cadence — not MIC wrap)
+
+Signature: preflight green; then at some later record `E_pot` drops tens of eV,
+`T` jumps to ~1000 K, but `E_tot` stays flat (PE→KE dump from a discontinuous
+force). Check whether the step index is a multiple of the wrap+NL block
+(`steps_per_loop_call` / `jax_md_update_interval`, often 20). Known failure
+mode: stale MM pairs (interval too large / skin too small) or wrap+rebuild
+boundary — **not** a missing MIC-wrap Jacobian.
+
+Smoke: `--jax-md-update-interval 1` (and/or larger `--jax-md-skin-distance`).
+Docs: `docs/md-system-configs.md` § Neighbor-list requirements.
 
 ## Tests that lock this in
 

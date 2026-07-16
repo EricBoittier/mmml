@@ -175,6 +175,26 @@ def test_build_spooky_batch_empty_raises() -> None:
         build_spooky_batch_from_flat_data(d, np.array([], dtype=np.int64))
 
 
+def test_build_spooky_batch_from_flat_data_pad_atoms() -> None:
+    d = _synthetic_flat_dict()
+    batch = build_spooky_batch_from_flat_data(
+        d, np.array([0, 1], dtype=np.int64), pad_atoms=4
+    )
+    assert int(batch["batch_size"]) == 2
+    assert batch["Z"].shape[0] == 8
+    am = np.asarray(batch["atom_mask"])
+    assert am.tolist() == [1, 1, 0, 0, 1, 1, 1, 0]
+    assert np.asarray(batch["Z"])[2] == 0
+    assert np.asarray(batch["Z"])[3] == 0
+    bm = np.asarray(batch["batch_mask"])
+    dst = np.asarray(batch["dst_idx"])
+    src = np.asarray(batch["src_idx"])
+    assert bm.shape[0] == dst.shape[0]
+    pad_edge = (am[dst] == 0) | (am[src] == 0)
+    assert np.all(bm[pad_edge] == 0)
+    assert np.all(bm[~pad_edge] == 1)
+
+
 def test_flat_no_zero_z_in_real_atoms(tmp_path: Path) -> None:
     z = np.array([1, 6], dtype=np.int32)
     r = np.zeros((2, 3))

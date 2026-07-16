@@ -1321,6 +1321,7 @@ For JAX-MD:
 
 - `max_pairs` must cover the maximum MM pair count in the dense box. The backend default is `20000`, which is too small for many condensed-phase systems. Large DCM boxes often need values in the hundreds of thousands or millions.
 - `jax_md_update_interval: 1` is the conservative choice. NPT and changing boxes need frequent refreshes; stale pairs can produce wrong forces and NaNs.
+- **Symptom of interval/skin too lax:** after a green NVE preflight, a later frame shows `E_pot` dropping tens of eV and `T` spiking to ~1000 K while `E_tot` stays flat (PE→KE). Step indices often land on wrap+NL block boundaries (`steps_per_loop_call`, commonly equal to `jax_md_update_interval`). Smoke with `jax_md_update_interval: 1` before chasing MIC-wrap or model bugs.
 - `jax_md_skin_distance` defaults to a safe Verlet skin. Use `0` only for debugging because it rebuilds every step.
 - `steps_per_recording` controls NPT recording blocks and, in the JAX-MD runner, the outer neighbor-list refresh cadence. Smaller values are safer for NPT; larger values can be faster for stable NVT/NVE.
 - `jax_md_capacity_multiplier`, `jax_md_capacity_growth_factor`, and `jax_md_max_overflow_retries` let JAX-MD reallocate when capacity overflows. Persistent overflow means the geometry/capacity needs attention.
