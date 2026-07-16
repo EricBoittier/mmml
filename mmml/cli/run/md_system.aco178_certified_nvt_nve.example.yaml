@@ -53,10 +53,12 @@ campaign_output: artifacts/aco178_certified_nvt_nve
 
 runs:
   jaxmd_nvt:
-    description: "Load certified ACO box; short JAX-MD NVT thermalization"
+    description: "Load certified ACO box; JAX-MD NVT thermalization"
     backend: jaxmd
     setup: pbc_nvt
-    ps: 5.0
+    # Short 2 ps leaves |F| high and handoff momenta unreliable — prefer ≥10 ps.
+    ps: 10.0
+    temperature: 250.0
     output_dir: runs/aco178_jaxmd_nvt
     calculator_pre_minimize: true
     pre_min_ase_order: fire-first
@@ -68,15 +70,19 @@ runs:
     continue_velocities: false
 
   jaxmd_nve:
-    description: "JAX-MD NVE from NVT handoff (keep velocities; skip pre-min)"
+    description: "JAX-MD NVE from NVT handoff"
     backend: jaxmd
     setup: pbc_nve
     depends_on: jaxmd_nvt
     ps: 10.0
+    temperature: 250.0
     output_dir: runs/aco178_jaxmd_nve
     continue_velocities: true
+    # If NVT left |F| > ~1 eV/Å, relax before microcanonical (do not force 0 FIRE steps).
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    handoff_quality_action: minimize
     handoff_pre_minimize: false
-    handoff_quality_gate: false
     calculator_pre_minimize: false
-    jaxmd_minimize_steps: 0
-    jaxmd_pbc_minimize_steps: 0
+    jaxmd_minimize_steps: 500
+    jaxmd_pbc_minimize_steps: 500

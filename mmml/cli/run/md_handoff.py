@@ -870,6 +870,13 @@ def resolve_handoff_velocity_units(
         return units
 
     meta = handoff.metadata or {}
+    tagged = str(meta.get("velocity_units", "")).strip().lower()
+    if tagged in {"ang_ps", "angstrom_per_ps", "aps"}:
+        return "ase"  # stored Å/ps; handoff_velocities_as_ang_ps returns as-is
+    if tagged in {"ase", "ang_fs", "angstrom_per_fs"}:
+        return "ase"
+    if tagged in {"akma", "charmm"}:
+        return "akma"
     source = str(meta.get("source", "")).strip().lower()
     backend = str(meta.get("backend", "")).strip().lower()
     if source in {"traj"} or backend in {"ase", "jaxmd"}:

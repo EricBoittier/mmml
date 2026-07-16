@@ -59,12 +59,11 @@ campaign_output: artifacts/dcm206_certified_nvt_nve
 
 runs:
   jaxmd_nvt:
-    description: "Load certified box; short JAX-MD NVT thermalization"
+    description: "Load certified box; JAX-MD NVT thermalization"
     backend: jaxmd
     setup: pbc_nvt
-    ps: 5.0
+    ps: 10.0
     output_dir: runs/dcm206_jaxmd_nvt
-    # First leg: relax on hybrid surface, then thermostat
     calculator_pre_minimize: true
     pre_min_ase_order: fire-first
     bfgs_polish_max_fmax: 1.0
@@ -72,20 +71,20 @@ runs:
     pre_min_steps: 50
     jaxmd_minimize_steps: 500
     jaxmd_pbc_minimize_steps: 500
-    # No predecessor velocities
     continue_velocities: false
 
   jaxmd_nve:
-    description: "JAX-MD NVE from NVT handoff (keep velocities; skip pre-min)"
+    description: "JAX-MD NVE from NVT handoff"
     backend: jaxmd
     setup: pbc_nve
     depends_on: jaxmd_nvt
     ps: 10.0
     output_dir: runs/dcm206_jaxmd_nve
     continue_velocities: true
-    # Default: skip ASE/CHARMM pre-min on handoff (do not set handoff_pre_minimize)
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    handoff_quality_action: minimize
     handoff_pre_minimize: false
-    handoff_quality_gate: false
     calculator_pre_minimize: false
-    jaxmd_minimize_steps: 0
-    jaxmd_pbc_minimize_steps: 0
+    jaxmd_minimize_steps: 500
+    jaxmd_pbc_minimize_steps: 500
