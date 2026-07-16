@@ -45,6 +45,26 @@ from .ase import (
 )
 
 
+def _compatible_h5_per_atom_array(
+    arr: np.ndarray | None,
+    *,
+    n_atoms: int,
+    label: str,
+    path_name: str,
+) -> np.ndarray | None:
+    """Drop stale HDF5 (velocities/forces) when Natoms does not match the run."""
+    if arr is None:
+        return None
+    if arr.ndim != 3 or int(arr.shape[-2]) != int(n_atoms):
+        print(
+            f"[warning] Ignoring HDF5 {label}: shape {tuple(arr.shape)} "
+            f"incompatible with n_atoms={int(n_atoms)} (stale file {path_name}?).",
+            flush=True,
+        )
+        return None
+    return arr
+
+
 class _BestMinimizationFrame:
     def __init__(self, atoms: Atoms) -> None:
         self.atoms = atoms
@@ -1467,7 +1487,16 @@ def main(argv: list[str] | None = None) -> int:
                 out_atoms.set_pbc(True)
             final_vel = getattr(run_sim, "last_velocities", None)
             if final_vel is not None:
-                out_atoms.set_velocities(np.asarray(final_vel, dtype=float))
+                vel_arr = np.asarray(final_vel, dtype=float)
+                if vel_arr.shape == (len(out_atoms), 3):
+                    out_atoms.set_velocities(vel_arr)
+                else:
+                    print(
+                        "mmml jaxmd: skipping handoff velocities — shape "
+                        f"{tuple(vel_arr.shape)} != ({len(out_atoms)}, 3).",
+                        flush=True,
+                    )
+                    final_vel = None
             set_handoff_out(
                 handoff_from_atoms(
                     out_atoms,
@@ -1498,6 +1527,7 @@ def main(argv: list[str] | None = None) -> int:
     velocities_data = None
     potential_energy_data = None
     forces_data = None
+    n_atoms_out = int(len(z))
     if hdf5_path.exists():
         try:
             with h5py.File(hdf5_path, "r") as h5_f:
@@ -1509,6 +1539,21 @@ def main(argv: list[str] | None = None) -> int:
                     forces_data = np.asarray(h5_f["forces"])
         except Exception as e:
             print(f"[warning] Failed to read energies/velocities/forces from HDF5: {e}")
+
+    # Stale HDF5 from a previous composition (e.g. DCM:120 → DCM:180) must not
+    # crash traj export after an early NVE preflight abort.
+    velocities_data = _compatible_h5_per_atom_array(
+        velocities_data,
+        n_atoms=n_atoms_out,
+        label="velocities",
+        path_name=hdf5_path.name,
+    )
+    forces_data = _compatible_h5_per_atom_array(
+        forces_data,
+        n_atoms=n_atoms_out,
+        label="forces",
+        path_name=hdf5_path.name,
+    )
 
     for part_idx, traj_path in enumerate(traj_paths):
         start = part_idx * traj_chunk_frames if traj_chunk_frames > 0 else 0
@@ -1535,7 +1580,9 @@ def main(argv: list[str] | None = None) -> int:
             if potential_energy_data is not None and i < len(potential_energy_data):
                 results["energy"] = float(potential_energy_data[i])
             if forces_data is not None and i < len(forces_data):
-                results["forces"] = np.asarray(forces_data[i])
+                force_i = np.asarray(forces_data[i])
+                if force_i.shape == (n_atoms_out, 3):
+                    results["forces"] = force_i
 
             if results:
                 f.calc = SinglePointCalculator(f, **results)

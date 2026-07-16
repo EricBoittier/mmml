@@ -73,6 +73,27 @@ def test_jaxmd_pre_min_defaults_to_fire_first() -> None:
     assert "_maybe_bfgs_polish" in src
 
 
+def test_compatible_h5_per_atom_array_drops_stale_natoms() -> None:
+    """Traj export must not apply DCM:120 velocities onto a DCM:180 frame."""
+    import numpy as np
+
+    from mmml.cli.run.md_pbc_suite.jaxmd import _compatible_h5_per_atom_array
+
+    stale = np.zeros((3, 600, 3), dtype=float)
+    ok = np.zeros((3, 900, 3), dtype=float)
+    assert (
+        _compatible_h5_per_atom_array(
+            stale, n_atoms=900, label="velocities", path_name="old.h5"
+        )
+        is None
+    )
+    kept = _compatible_h5_per_atom_array(
+        ok, n_atoms=900, label="velocities", path_name="new.h5"
+    )
+    assert kept is not None
+    assert kept.shape == (3, 900, 3)
+
+
 def test_unique_output_dir_if_exists_keeps_missing_path(tmp_path) -> None:
     from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
 
