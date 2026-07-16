@@ -28,3 +28,12 @@ gitignore exceptions for `docs/*-assets/` directories).
   main. `git fetch` and rebase before pushing; expect HEAD to move under you.
 - Never set env vars in tests via `os.environ[...] =` — use
   `monkeypatch.setenv` so state can't leak into later tests.
+
+## PBC ML-dimer MIC wrap — do not “fix” stop_gradient
+
+If NVE force–energy preflight fails on a liquid box, **do not** remove
+`jax.lax.stop_gradient` on the MIC lattice shift that wraps monomer B in
+`mmml_calculator`, and **do not** switch that wrap to smooth MIC + force VJP.
+Exact MIC shifts are piecewise-constant; making them differentiable injects
+huge forces near ±L/2 and breaks minimization (seen: `|F|max` → hundreds eV/Å).
+Keep exact MIC + `stop_gradient`. See `.cursor/rules/pbc-dimer-mic-wrap.mdc`.

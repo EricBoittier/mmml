@@ -177,6 +177,13 @@ For ``--setup pbc_*``, the PyCHARMM backend:
 1. Installs CHARMM crystal + IMAGE (``pbc_env.py``) for the cubic box.
 2. Passes the same box side into ``setup_calculator(cell=L)`` for the decomposed monomer/dimer MLpot path (**MIC-only**, matching the ASE/JAX-MD hybrid calculator — no coordinate wrapping during energy evaluation).
 
+**Do not “fix” `stop_gradient` on the ML-dimer MIC wrap.** Monomer B is
+shifted by an exact-MIC lattice vector with `stop_gradient(shift)` in
+`mmml_calculator`. That shift is piecewise-constant (Jacobian ≈ 0 almost
+everywhere). Replacing it with smooth MIC and/or VJP’ing forces through the
+wrap to chase NVE force–energy consistency creates huge forces near ±L/2 and
+breaks minimize/MD. See `.cursor/rules/pbc-dimer-mic-wrap.mdc`.
+
 **Loose PBC (``--setup free_*`` + ``--box-size``):** CHARMM gets crystal + CPT (e.g. Hoover heat with ``pmass=0``), but ML stays **open-boundary** (no MIC, free-space dimer lists) unless ``--mlpot-pbc`` is set. Use a box large enough that the cluster does not interact with its periodic images.
 
 Log lines to expect:

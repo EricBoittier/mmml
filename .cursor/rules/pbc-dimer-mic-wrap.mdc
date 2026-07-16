@@ -1,0 +1,47 @@
+---
+description: Do NOT “fix” PBC ML-dimer MIC wrap by removing stop_gradient or using smooth MIC+VJP
+globs: mmml/interfaces/pycharmmInterface/mmml_calculator.py,mmml/interfaces/pycharmmInterface/pbc_utils_jax.py,mmml/cli/run/jaxmd_runner.py,docs/**/*pbc*,docs/**/*hybrid*,docs/**/*nve*
+alwaysApply: false
+---
+
+# PBC ML-dimer MIC wrap — do not “fix” stop_gradient
+
+## Trap (already burned once)
+
+NVE force–energy preflight can fail (~relerr 0.2+) on liquid boxes. It is
+tempting to blame `jax.lax.stop_gradient` on the MIC lattice shift that wraps
+monomer B in `mmml_calculator` (`_wrap_dimer_coords`), then:
+
+1. remove `stop_gradient`, and/or
+2. switch the wrap to `mic_displacement_smooth`, and/or
+3. VJP model forces through the wrap (`vjp_wrap_dimer_monomer_b_forces`).
+
+**That breaks MD.** Initial `|F|max` jumps to tens–hundreds eV/Å, ASE/CHARMM
+rescue diverges, minimize never reaches `fmax≲0.1`. Exact MIC lattice shifts
+are **piecewise-constant**; their Jacobian is zero almost everywhere.
+`stop_gradient(shift)` is correct. Smooth/differentiable shifts inject huge
+forces near ±L/2.
+
+## Correct production behavior
+
+- **Keep** exact MIC + `stop_gradient` on the dimer-B lattice shift in
+  `mmml_calculator.py` (both wrap sites: ML forward and `apply_dimer_switching`).
+- `use_smooth_mic=True` is for **minimization gradients on other paths only**,
+  not for making the ML-dimer wrap differentiable.
+- `wrap_dimer_monomer_b(..., detach_shift=True, smooth=False)` is the MD
+  default in `pbc_utils_jax.py`. The smooth+attached / VJP helpers are
+  **analysis-only** — do not wire them into the calculator force path.
+
+## If NVE preflight fails
+
+- Use the built-in ML-only ablation panel
+  (`--nve-force-energy-ml-only-diagnose`, default on).
+- Prefer NVT/NPT for liquids; do not “fix conservation” by differentiating the
+  MIC lattice shift.
+- Mid-run `T` spikes / `E_pot` crashes after a green preflight are packing /
+  contacts / `dt` issues — not a missing wrap Jacobian.
+
+## Tests that lock this in
+
+- `tests/unit/test_pbc_utils_jax.py::test_wrap_dimer_monomer_b_md_detaches_lattice_shift`
+- `tests/unit/test_mlpot_pbc_cell.py::test_calculator_dimer_wrap_detaches_lattice_shift`

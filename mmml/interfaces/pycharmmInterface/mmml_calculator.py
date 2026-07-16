@@ -30,8 +30,6 @@ import jax.numpy as jnp
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
     mic_displacement_smooth,
-    vjp_wrap_dimer_monomer_b_forces,
-    wrap_dimer_monomer_b,
 )
 from mmml.interfaces.pycharmmInterface.calculator_utils import (
     FLAT_BOTTOM_MODES,
@@ -1055,8 +1053,11 @@ def setup_calculator(
 
 
     if use_smooth_mic is None:
-        # Exact MIC elsewhere (flat-bottom, sparse radius). ML-dimer wrap always
-        # uses smooth MIC without stop_gradient so F = -∇E under PBC (NVE).
+        # Exact MIC for MD. Smooth MIC is for PBC minimization gradients only —
+        # pass use_smooth_mic=True explicitly. ML-dimer wrap uses exact MIC with
+        # stop_gradient(shift): the lattice shift is piecewise-constant, so the
+        # Jacobian is zero almost everywhere; making it smooth injects huge
+        # forces near ±L/2 and breaks minimization / NVE.
         use_smooth_mic = False
 
     if cell and not _jax_mm_spoof_mode:
@@ -1755,12 +1756,26 @@ def setup_calculator(
 
         cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
         if cell_for_mic is not None:
-            # Smooth MIC, differentiable shift (no stop_gradient): required for
-            # NVE force–energy consistency when dimers straddle the box.
-            dimer_positions = jax.vmap(
-                lambda p, na, nb: wrap_dimer_monomer_b(p, na, nb, cell_for_mic),
-                in_axes=(0, 0, 0),
-            )(dimer_positions, dimer_n_a, dimer_n_b)
+            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+
+            def _wrap_dimer_coords(pos_di, na, nb):
+                max_n = pos_di.shape[0]
+                i = jnp.arange(max_n, dtype=jnp.int32)
+                mask_a = (i < na).astype(pos_di.dtype)
+                mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+                n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+                n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+                com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+                com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
+                d = mic_fn(com_a, com_b, cell_for_mic)
+                # Exact MIC lattice shift is piecewise-constant → detach it.
+                # Differentiable/smooth shifts create large forces near ±L/2.
+                shift_b = jax.lax.stop_gradient(com_a + d - com_b)
+                return pos_di + shift_b * mask_b[:, None]
+
+            dimer_positions = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(
+                dimer_positions, dimer_n_a, dimer_n_b
+            )
 
         dimer_atomic = atomic_numbers[dimer_idx_arr_jnp]
         dimer_N_arr = dimer_n_a + dimer_n_b
@@ -2940,21 +2955,10 @@ def setup_calculator(
         dimer_int_energies = dimer_int_energies * dimer_lambda
 
         # Convert model dimer forces into interaction forces matching
-        # E_int = E_dimer(wrap(R)) - E_monomer_a - E_monomer_b before switching.
-        # Model forces are w.r.t. wrapped coords; VJP(wrap) maps them back so
-        # F_int = -∂E_int/∂R on the unwrapped positions used by the integrator.
+        # E_int = E_dimer - E_monomer_a - E_monomer_b before switching.
+        # Wrap shift is stop_gradient'd (piecewise-constant lattice vector), so
+        # F on wrapped coords maps to unwrapped atoms with identity Jacobian.
         ml_dimer_forces_2d = ml_dimer_forces.reshape(n_dimers, max_atoms, 3)
-        cell_for_force = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
-        if cell_for_force is not None:
-            pos_di_unwrapped = positions[dimer_idx_arr_jnp[:n_dimers]]
-            na_force = dimer_n_atoms_a_jnp[:n_dimers]
-            nb_force = dimer_n_atoms_b_jnp[:n_dimers]
-            ml_dimer_forces_2d = jax.vmap(
-                lambda p, na, nb, f: vjp_wrap_dimer_monomer_b_forces(
-                    p, na, nb, f, cell_for_force
-                ),
-                in_axes=(0, 0, 0, 0),
-            )(pos_di_unwrapped, na_force, nb_force, ml_dimer_forces_2d)
         monomer_pair_forces = monomer_forces[dimer_idx_arr_jnp]
         dimer_interaction_forces_2d = (
             (ml_dimer_forces_2d - monomer_pair_forces)
@@ -3089,14 +3093,28 @@ def setup_calculator(
         else:
             na_arr = dimer_n_atoms_a_jnp
             nb_arr = dimer_n_atoms_b_jnp
-        # Match forward ML-dimer wrap: smooth MIC, differentiable (NVE F=-∇E).
-        mic_fn = mic_displacement_smooth if cell_for_mic is not None else None
+        mic_fn = (
+            mic_displacement_smooth if use_smooth_mic else mic_displacement
+        ) if cell_for_mic is not None else None
 
         if cell_for_mic is not None:
-            dimer_pos_padded = jax.vmap(
-                lambda p, na, nb: wrap_dimer_monomer_b(p, na, nb, cell_for_mic),
-                in_axes=(0, 0, 0),
-            )(dimer_pos_padded, na_arr, nb_arr)
+
+            def _wrap_dimer_coords(pos_di, na, nb):
+                max_n = pos_di.shape[0]
+                i = jnp.arange(max_n, dtype=jnp.int32)
+                mask_a = (i < na).astype(pos_di.dtype)
+                mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+                n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+                n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+                com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+                com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
+                d = mic_fn(com_a, com_b, cell_for_mic)
+                shift_b = jax.lax.stop_gradient(com_a + d - com_b)
+                return pos_di + shift_b * mask_b[:, None]
+
+            dimer_pos_padded = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(
+                dimer_pos_padded, na_arr, nb_arr
+            )
 
         def _dimer_com_sep(pos_di, na, nb):
             max_n = pos_di.shape[0]
