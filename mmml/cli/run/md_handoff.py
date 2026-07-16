@@ -871,9 +871,19 @@ def resolve_handoff_velocity_units(
 
     meta = handoff.metadata or {}
     tagged = str(meta.get("velocity_units", "")).strip().lower()
-    if tagged in {"ang_ps", "angstrom_per_ps", "aps"}:
-        return "ase"  # stored Å/ps; handoff_velocities_as_ang_ps returns as-is
-    if tagged in {"ase", "ang_fs", "angstrom_per_fs"}:
+    # jaxmd_metal / ang_ps / ase: components are JAX-MD metal / ASE native
+    # (NOT CHARMM AKMA).  handoff_velocities_as_ang_ps returns them as-is for
+    # the next JAX-MD leg.  The historical "ang_ps" tag is a misnomer.
+    if tagged in {
+        "ang_ps",
+        "angstrom_per_ps",
+        "aps",
+        "jaxmd_metal",
+        "metal",
+        "ase",
+        "ang_fs",
+        "angstrom_per_fs",
+    }:
         return "ase"
     if tagged in {"akma", "charmm"}:
         return "akma"
@@ -978,6 +988,34 @@ def kinetic_temperature_k_from_ang_ps_velocities(
     if dof <= 0:
         raise ValueError("ndegf must be positive")
     return 2.0 * ke_kcal / (float(dof) * _KCALMOL_PER_K)
+
+
+def kinetic_temperature_k_from_jaxmd_metal_velocities(
+    velocities: np.ndarray,
+    masses_amu: np.ndarray,
+    *,
+    ndegf: int | None = None,
+) -> float:
+    """Kinetic temperature for JAX-MD / ASE metal-unit velocities (eV, Å, amu).
+
+    JAX-MD ``quantity.temperature`` uses ``sum(m v²) / dof`` as kT in eV (no
+    amu·Å²/ps²→kcal factor).  ASE ``Atoms.get_velocities()`` and
+    ``state.momentum / state.mass`` share this convention.  Treating those
+    components as Å/ps under-reads T by ~10⁴ (e.g. ~150 K → ~0.007 K).
+    """
+    v = np.asarray(velocities, dtype=np.float64).reshape(-1, 3)
+    m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+    if v.shape[0] != m.shape[0] or v.shape[0] == 0:
+        raise ValueError("velocity and mass arrays must have the same non-zero length")
+    if not np.all(np.isfinite(v)) or not np.all(np.isfinite(m)) or np.any(m <= 0.0):
+        raise ValueError("velocities and positive masses must be finite")
+    dof = int(ndegf) if ndegf is not None else 3 * int(v.shape[0])
+    if dof <= 0:
+        raise ValueError("ndegf must be positive")
+    # k_B in eV/K (CODATA); matches jax_md.units.metal_unit_system()['temperature'].
+    k_b_ev = 8.617330337217213e-05
+    # Same as jax_md.quantity.temperature(momentum=m*v, mass=m) / k_B.
+    return float(np.sum(m[:, None] * v * v)) / (float(dof) * k_b_ev)
 
 
 def remove_center_of_mass_velocity_ang_ps(
