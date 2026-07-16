@@ -22,9 +22,9 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--forces-weight FORCES_WEIGHT]
                           [--dipole-weight DIPOLE_WEIGHT]
                           [--charges-weight CHARGES_WEIGHT]
-                          [--objective OBJECTIVE] [--restart RESTART]
-                          [--num-atoms NUM_ATOMS] [--features FEATURES]
-                          [--max-degree MAX_DEGREE]
+                          [--objective OBJECTIVE] [--ema-decay EMA_DECAY]
+                          [--restart RESTART] [--num-atoms NUM_ATOMS]
+                          [--features FEATURES] [--max-degree MAX_DEGREE]
                           [--num-basis-functions NUM_BASIS_FUNCTIONS]
                           [--num-iterations NUM_ITERATIONS] [--n-res N_RES]
                           [--cutoff CUTOFF]
@@ -81,6 +81,11 @@ options:
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --charges-weight, --charges_weight CHARGES_WEIGHT
   --objective OBJECTIVE
+  --ema-decay, --ema_decay EMA_DECAY
+                        Decay for the parameter EMA (default: 0.999).
+                        Validation, checkpointing and restart all use the EMA
+                        weights. Set 0 to disable EMA (saved weights then track
+                        the raw parameters).
   --restart RESTART     Checkpoint path to restart from
   --num-atoms, --num_atoms NUM_ATOMS
                         Atoms per structure (auto-detected from N/R if omitted)

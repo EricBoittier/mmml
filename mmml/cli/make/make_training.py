@@ -181,6 +181,18 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         "--charges-weight", "--charges_weight", type=float, default=14.39, dest="charges_weight"
     )
     parser.add_argument("--objective", type=str, default="valid_loss")
+    parser.add_argument(
+        "--ema-decay",
+        "--ema_decay",
+        type=float,
+        default=0.999,
+        dest="ema_decay",
+        help=(
+            "Decay for the parameter EMA (default: 0.999). Validation, "
+            "checkpointing and restart all use the EMA weights. Set 0 to "
+            "disable EMA (saved weights then track the raw parameters)."
+        ),
+    )
     parser.add_argument("--restart", type=str, default=None, help="Checkpoint path to restart from")
 
     parser.add_argument(
@@ -999,6 +1011,7 @@ def main_loop(args):
         dipole_weight=args.dipole_weight,
         charges_weight=args.charges_weight,
         restart=args.restart,
+        ema_decay=args.ema_decay,
         conversion=conversion,
         print_freq=args.print_freq,
         name=args.tag,

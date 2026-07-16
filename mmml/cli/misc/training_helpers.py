@@ -75,6 +75,9 @@ class TrainingConfig:
     charges_weight: float = 14.39
     objective: str = "valid_loss"
     restart: Optional[str] = None
+    # EMA of parameters; validation/checkpointing/restart all use the EMA
+    # weights. Set to 0.0 to disable EMA (EMA weights track raw params exactly).
+    ema_decay: float = 0.999
     
     # Output
     tag: str = "run"
@@ -325,6 +328,7 @@ def run_training(
         batch_args_dict=None,
         data_keys=('R', 'Z', 'F', 'N', 'E', 'D', 'batch_segments'),
         num_epochs=config.num_epochs,
+        ema_decay=config.ema_decay,
     )
     
     result = {
