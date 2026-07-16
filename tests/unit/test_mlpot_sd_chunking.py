@@ -160,11 +160,9 @@ def test_run_minimize_in_chunks_splits_long_pbc_sd():
     )
     base_kw = {"tolenr": 1e-3, "tolgrd": 1e-3, "inbfrq": 0, "ihbfrq": 0}
 
-    grms_values = iter([5.0, 4.0, 3.0])
-
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
-        side_effect=lambda *a, **k: next(grms_values),
+        return_value=None,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
@@ -190,8 +188,8 @@ def test_run_minimize_in_chunks_splits_long_pbc_sd():
         )
 
     assert result.completed is True
-    assert minimize.run_sd.call_count == 4
-    assert [call.kwargs["nstep"] for call in minimize.run_sd.call_args_list] == [200, 200, 25, 25]
+    assert minimize.run_sd.call_count == 3
+    assert [call.kwargs["nstep"] for call in minimize.run_sd.call_args_list] == [200, 200, 50]
 
 
 def test_run_minimize_in_chunks_watchdog_stops_early():
@@ -854,8 +852,9 @@ def test_run_minimize_in_chunks_stops_on_grms_plateau():
 
     assert result.completed is False
     assert result.stalled is True
+    assert result.exact_plateau is True
     assert result.last_grms == pytest.approx(272.8245)
-    assert minimize.run_sd.call_count == 3
+    assert minimize.run_sd.call_count == 1
 
 
 def test_resolved_sd_converged_grms_defaults_to_one():
