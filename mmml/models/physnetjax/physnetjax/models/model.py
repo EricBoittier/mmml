@@ -242,6 +242,9 @@ class PhysNet(nn.Module):
             Destination indices for message passing
         src_idx : jnp.ndarray
             Source indices for message passing
+        batch_mask : Optional[jnp.ndarray]
+            Per-edge validity mask (1 for real↔real, 0 for padding edges).
+            Zeroes the message-passing basis for invalid edges.
         cell : Optional[jnp.ndarray]
             If provided, apply minimum-image convention to displacements (PBC).
             
