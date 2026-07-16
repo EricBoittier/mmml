@@ -1,0 +1,82 @@
+# ACO:178 certified liquid-box → JAX-MD NVT → JAX-MD NVE (handoff).
+#
+# Bulk acetone ≈ 0.784 g/cm³ → L ≈ 28.0 Å for 178 molecules (same cell scale as DCM:206).
+#
+# Prerequisites (campaign dir, e.g. mmml_tutorial/acodcm):
+#   boxes/aco178/{model.psf,model.crd,box.json}   # liquid-box PASS
+#   checkpoint path below points at your hybrid ckpt
+#
+# Setup + run (copy-paste): see comment block at bottom, or docs below.
+#
+# Expected NVT markers:
+#   Loading certified geometry from model.psf + model.crd ...
+#   Certified box: L≈28.0 Å ... from .../box.json
+# NVE: skip pre-min; continue velocities from NVT handoff.
+
+include:
+  - presets/base-dt0.5.yaml
+  - presets/certified-box-handoff.yaml
+
+defaults:
+  composition: "ACO:178"
+  # Edit to your hybrid checkpoint (directory or params JSON):
+  checkpoint: ckpts/hybrid/hybrid-96e58a2d-3798-4463-a318-fca1b7001dc3
+  seed: 22
+  temperature: 250.0
+  pressure: 1.0
+  dt_fs: 0.5
+
+  from_psf: boxes/aco178/model.psf
+  from_crd: boxes/aco178/model.crd
+  # box.json overrides; optional explicit:
+  # box_size: 27.976
+
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+  ml_switch_width: 1.5
+  include_mm: true
+
+  min_intermonomer_atom_distance: 0.45
+  dynamics_overlap_min_distance: 0.45
+  dynamics_overlap_action: warn
+
+  jax_md_update_interval: 1
+  jax_md_skin_distance: 0.5
+  steps_per_recording: 500
+
+  continue_velocities: true
+  handoff_write_res: true
+  handoff_require_cell: true
+  mc_density_equalize: false
+
+campaign_output: artifacts/aco178_certified_nvt_nve
+
+runs:
+  jaxmd_nvt:
+    description: "Load certified ACO box; short JAX-MD NVT thermalization"
+    backend: jaxmd
+    setup: pbc_nvt
+    ps: 5.0
+    output_dir: runs/aco178_jaxmd_nvt
+    calculator_pre_minimize: true
+    pre_min_ase_order: fire-first
+    bfgs_polish_max_fmax: 1.0
+    pre_min_fmax: 0.1
+    pre_min_steps: 50
+    jaxmd_minimize_steps: 500
+    jaxmd_pbc_minimize_steps: 500
+    continue_velocities: false
+
+  jaxmd_nve:
+    description: "JAX-MD NVE from NVT handoff (keep velocities; skip pre-min)"
+    backend: jaxmd
+    setup: pbc_nve
+    depends_on: jaxmd_nvt
+    ps: 10.0
+    output_dir: runs/aco178_jaxmd_nve
+    continue_velocities: true
+    handoff_pre_minimize: false
+    handoff_quality_gate: false
+    calculator_pre_minimize: false
+    jaxmd_minimize_steps: 0
+    jaxmd_pbc_minimize_steps: 0
