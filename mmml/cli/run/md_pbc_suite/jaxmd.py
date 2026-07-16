@@ -280,6 +280,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(
+        "--from-psf",
+        type=Path,
+        default=None,
+        help="Load certified/liquid-box PSF with --from-crd (skips Packmol rebuild).",
+    )
+    p.add_argument(
+        "--from-crd",
+        type=Path,
+        default=None,
+        help="Load certified/liquid-box CRD with --from-psf (skips Packmol rebuild).",
+    )
+    p.add_argument(
         "--packmol",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -676,7 +688,14 @@ def main(argv: list[str] | None = None) -> int:
         residue_labels=residue_labels,
         total_atoms=len(z),
     )
-    if not resolve_cluster_packmol_sphere(args) and handoff_in is None:
+    from mmml.cli.run.md_pbc_suite.ase import certified_box_geometry_requested
+
+    certified_geom = certified_box_geometry_requested(args)
+    if (
+        not resolve_cluster_packmol_sphere(args)
+        and handoff_in is None
+        and not certified_geom
+    ):
         r0 = _randomize_monomer_com_positions(
             r0,
             monomer_offsets,
@@ -710,15 +729,16 @@ def main(argv: list[str] | None = None) -> int:
             "use --ensemble npt with a short --ps for cell equilibration today.",
             flush=True,
         )
+    keep_loaded_coords = handoff_in is not None or certified_geom
     if free_space:
         if args.box_size is not None:
             print(
                 "md_10mer_mmml_pbc_suite_jaxmd: note: ignoring --box-size with --free-space "
                 f"({float(args.box_size):g} Å)."
             )
-        r = np.asarray(r0, dtype=float) if handoff_in is not None else r0 - r0.mean(axis=0)
+        r = np.asarray(r0, dtype=float) if keep_loaded_coords else r0 - r0.mean(axis=0)
     else:
-        if handoff_in is not None:
+        if keep_loaded_coords:
             r = np.asarray(r0, dtype=float)
         else:
             assert L is not None

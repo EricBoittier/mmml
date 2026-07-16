@@ -574,6 +574,108 @@ def packmol_sphere_center_from_args(args: argparse.Namespace) -> tuple[float, fl
     return (0.0, 0.0, 0.0)
 
 
+def certified_box_geometry_requested(args: argparse.Namespace | None) -> bool:
+    """True when suite should load liquid-box / mini PSF+CRD instead of Packmol."""
+    if args is None:
+        return False
+    return (
+        getattr(args, "from_psf", None) is not None
+        and getattr(args, "from_crd", None) is not None
+    )
+
+
+def _residue_labels_from_loaded_psf(atoms_per_list: list[int]) -> list[str]:
+    import pycharmm.psf as psf
+
+    if hasattr(psf, "get_res"):
+        res_all = [str(x).strip().upper() for x in psf.get_res()]
+        labels: list[str] = []
+        offset = 0
+        for n in atoms_per_list:
+            labels.append(res_all[offset] if 0 <= offset < len(res_all) else "UNK")
+            offset += int(n)
+        return labels
+    return ["UNK"] * len(atoms_per_list)
+
+
+def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) -> None:
+    """Prefer sibling ``box.json`` cubic side over a stale YAML ``--box-size``."""
+    import json
+
+    box_json = Path(crd_path).expanduser().resolve().parent / "box.json"
+    if not box_json.is_file():
+        return
+    try:
+        data = json.loads(box_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    side = data.get("box_side_A")
+    if side is None:
+        side = data.get("final_cubic_side_A")
+    if side is None:
+        return
+    side_f = float(side)
+    if side_f <= 0.0:
+        return
+    prev = getattr(args, "box_size", None)
+    args.box_size = side_f
+    if not getattr(args, "quiet", False):
+        if prev is None:
+            print(
+                f"Certified box: using L={side_f:.3f} Å from {box_json}",
+                flush=True,
+            )
+        elif abs(float(prev) - side_f) > 1.0e-3:
+            print(
+                f"Certified box: overriding --box-size {float(prev):.3f} → "
+                f"{side_f:.3f} Å from {box_json}",
+                flush=True,
+            )
+
+
+def cluster_geometry_from_certified_artifacts(
+    args: argparse.Namespace,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
+    """Load PSF+CRD (liquid-box / mini) for ASE/JAX-MD; skip Packmol rebuild."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
+    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        atoms_per_monomer_from_psf,
+    )
+
+    crd = Path(getattr(args, "from_crd")).expanduser().resolve()
+    _maybe_apply_certified_box_json(args, crd)
+    z, r0, _n_mol, _tag = load_cluster_from_artifacts(args)
+    atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
+    if sum(atoms_per_list) != int(len(z)):
+        raise ValueError(
+            f"PSF resid atom counts sum to {sum(atoms_per_list)} but Z has {len(z)} atoms"
+        )
+    if getattr(args, "composition", None):
+        composition = _parse_composition(args.composition)
+        residue_labels = [res for res, cnt in composition for _ in range(int(cnt))]
+        composition_summary = {res: int(cnt) for res, cnt in composition}
+        if len(residue_labels) != len(atoms_per_list):
+            residue_labels = _residue_labels_from_loaded_psf(atoms_per_list)
+            composition_summary = None
+    else:
+        residue_labels = _residue_labels_from_loaded_psf(atoms_per_list)
+        composition_summary = None
+    if not getattr(args, "quiet", False):
+        print(
+            f"Loading certified geometry from {Path(args.from_psf).name} + "
+            f"{crd.name} ({len(z)} atoms, {len(atoms_per_list)} monomers); "
+            "skipped Packmol/cluster build",
+            flush=True,
+        )
+    return (
+        np.asarray(z, dtype=int),
+        np.asarray(r0, dtype=float),
+        atoms_per_list,
+        residue_labels,
+        composition_summary,
+    )
+
+
 def resolve_cluster_geometry(
     args: argparse.Namespace,
     handoff: Any | None = None,
@@ -595,6 +697,13 @@ def resolve_cluster_geometry(
                 flush=True,
             )
         return z, r0, atoms_per_list, residue_labels, composition_summary
+    if certified_box_geometry_requested(args):
+        return cluster_geometry_from_certified_artifacts(args)
+    if getattr(args, "from_psf", None) or getattr(args, "from_crd", None):
+        raise ValueError(
+            "--from-psf and --from-crd must be provided together to load a "
+            "certified liquid-box (or mini) geometry on ase/jaxmd."
+        )
     return build_initial_cluster_from_args(args)
 
 
@@ -1488,6 +1597,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument(
+        "--from-psf",
+        type=Path,
+        default=None,
+        help="Load certified/liquid-box PSF with --from-crd (skips Packmol rebuild).",
+    )
+    parser.add_argument(
+        "--from-crd",
+        type=Path,
+        default=None,
+        help="Load certified/liquid-box CRD with --from-psf (skips Packmol rebuild).",
+    )
+    parser.add_argument(
         "--packmol",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -1799,7 +1920,12 @@ def main(argv: list[str] | None = None) -> int:
         total_atoms=n_atoms,
         log_lines=timing_log,
     )
-    if not resolve_cluster_packmol_sphere(args) and handoff_in is None:
+    certified_geom = certified_box_geometry_requested(args)
+    if (
+        not resolve_cluster_packmol_sphere(args)
+        and handoff_in is None
+        and not certified_geom
+    ):
         r0 = _randomize_monomer_com_positions(
             r0,
             monomer_offsets,
