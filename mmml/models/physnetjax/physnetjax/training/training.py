@@ -395,6 +395,18 @@ def train_model(
     CKPT_DIR = ckpt_dir / f"{name}-{uuid_}"
     if not restart:
         CKPT_DIR.mkdir(parents=True, exist_ok=True)
+    if hybrid_mm is not None:
+        # Persist Mode A/C metadata next to the run so MD can warn on mismatch.
+        import json
+
+        from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+
+        CKPT_DIR.mkdir(parents=True, exist_ok=True)
+        _meta_path = CKPT_DIR / "hybrid_mm.json"
+        with open(_meta_path, "w") as _mf:
+            json.dump(hybrid_mm_metadata_dict(hybrid_mm), _mf, indent=2)
+            _mf.write("\n")
+        print(f"Wrote hybrid MM metadata to {_meta_path}", flush=True)
 
     # Batches for the validation set need to be prepared only once.
     key, valid_shuffle_key = jax.random.split(key)
@@ -653,6 +665,8 @@ def train_model(
             if should_save:
                 ckpt_t0 = time.perf_counter()
                 model_attributes = model.return_attributes()
+                from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+
                 ckpt = {
                     "model": state,
                     "model_attributes": model_attributes,
@@ -665,6 +679,7 @@ def train_model(
                     "lr_eff": lr_eff,
                     "objectives": obj_res,
                     "training_units": dict(TRAINING_UNITS),
+                    "hybrid_mm": hybrid_mm_metadata_dict(hybrid_mm),
                 }
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)

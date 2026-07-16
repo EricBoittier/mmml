@@ -1389,6 +1389,12 @@ def build_decomposed_mlpot_model(
         mbd_weight=(
             getattr(args, "mbd_weight", None) if args is not None else None
         ),
+        mm_charge_correction=bool(
+            getattr(args, "mm_charge_correction", False) if args is not None else False
+        ),
+        mm_charge_mode=(
+            getattr(args, "mm_charge_mode", None) if args is not None else None
+        ),
         mm_atomic_numbers=np.asarray(atomic_numbers, dtype=int),
         min_com_restraint_distance=(
             getattr(args, "min_com_restraint_distance", None) if args is not None else None
