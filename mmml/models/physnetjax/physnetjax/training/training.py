@@ -140,6 +140,7 @@ def train_model(
     teacher_params=None,
     distill_alpha: float = 1.0,
     distill_targets=None,
+    ema_decay: float = 0.999,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -217,7 +218,12 @@ def train_model(
         Useful for warm-starting from transplanted parameters (progressive
         training).  The optimizer and EMA are initialised from these params.
         Ignored when ``restart`` is set.
-        
+    ema_decay : float, optional
+        Decay for the exponential moving average of parameters, by default
+        0.999.  Validation, checkpointing and restart all use the EMA weights,
+        so this affects the saved model.  Set to ``0.0`` to disable EMA
+        entirely (``ema_params`` then tracks the raw parameters exactly).
+
     Returns
     -------
     tuple
@@ -536,6 +542,7 @@ def train_model(
                     doCharges=do_charges,
                     params=params,
                     ema_params=ema_params,
+                    ema_decay=ema_decay,
                     teacher_params=teacher_params,
                     distill_alpha=distill_alpha,
                     doDistill=do_distill,
