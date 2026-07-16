@@ -557,9 +557,9 @@ def test_resolve_mic_registration_fallback_uses_prep_floor_not_mkimat():
     )
     assert resolve_mkimat2_min_distance_A(args) == pytest.approx(1.0)
     assert resolve_mic_registration_fallback_min_A(args) == pytest.approx(2.3)
-    assert resolve_mic_registration_fallback_min_A(None) == pytest.approx(2.0)
+    assert resolve_mic_registration_fallback_min_A(None) == pytest.approx(0.45)
     sparse = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 10)
-    assert resolve_mic_registration_fallback_min_A(sparse) == pytest.approx(2.0)
+    assert resolve_mic_registration_fallback_min_A(sparse) == pytest.approx(0.45)
 
 
 def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):

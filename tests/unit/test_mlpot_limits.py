@@ -51,23 +51,23 @@ def test_pbc_image_copies_dense_aco_200_l32():
 
 
 def test_select_npr_tier_aco_200_pbc_l32():
-    assert mlpot_limits.select_npr_tier(2000, pbc=True, box_side_A=32.0) == "xxxlarge"
+    assert mlpot_limits.select_npr_tier(2000, pbc=True, box_side_A=32.0) == "default"
 
 
 def test_select_npr_tier():
     assert mlpot_limits.select_npr_tier(89) == "default"
     assert mlpot_limits.select_npr_tier(2195) == "default"
     assert mlpot_limits.select_npr_tier(2200) == "default"
-    assert mlpot_limits.select_npr_tier(3000) == "xlarge"
-    assert mlpot_limits.select_npr_tier(4390) == "xxlarge"
-    assert mlpot_limits.select_npr_tier(6000) == "xxxlarge"
+    assert mlpot_limits.select_npr_tier(8000) == "xlarge"
+    assert mlpot_limits.select_npr_tier(11000) == "xxlarge"
+    assert mlpot_limits.select_npr_tier(15000) == "xxxlarge"
     with pytest.raises(ValueError, match="largest tier"):
-        mlpot_limits.select_npr_tier(7000)
+        mlpot_limits.select_npr_tier(22000)
 
 
 def test_select_npr_tier_pbc():
     assert mlpot_limits.select_npr_tier(825, pbc=True) == "default"
-    assert mlpot_limits.select_npr_tier(2200, pbc=True) == "xxlarge"
+    assert mlpot_limits.select_npr_tier(2200, pbc=True) == "default"
 
 
 def test_required_max_npr_margin():
@@ -76,8 +76,8 @@ def test_required_max_npr_margin():
 
 
 def test_select_npr_tier_dcm_206_pbc_l35():
-    assert mlpot_limits.select_npr_tier(1030, pbc=True, box_side_A=35.0) == "xlarge"
-    assert mlpot_limits.tier_max_npr("xlarge") == 12_000_000
+    assert mlpot_limits.select_npr_tier(1030, pbc=True, box_side_A=35.0) == "default"
+    assert mlpot_limits.tier_max_npr("xlarge") == 128_000_000
 
 
 def test_preflight_mlpot_registration_limits_delegates(monkeypatch):
@@ -150,19 +150,19 @@ def test_estimate_ml_atoms_aco_solvent():
 
 
 def test_select_npr_tier_aco_110_pbc():
-    assert mlpot_limits.select_npr_tier(1100, pbc=True) == "xlarge"
+    assert mlpot_limits.select_npr_tier(1100, pbc=True) == "default"
 
 
 def test_select_npr_tier_aco_165_pbc():
-    assert mlpot_limits.select_npr_tier(1650, pbc=True) == "xxlarge"
+    assert mlpot_limits.select_npr_tier(1650, pbc=True) == "default"
 
 
 def test_select_npr_tier_for_build_aco_266_dense_l32():
     assert (
         mlpot_limits.select_npr_tier_for_build(2660, pbc=True, box_side_A=32.0)
-        == "xxxlarge"
+        == "xlarge"
     )
-    assert mlpot_limits.pbc_pair_budget_box_side_A(2660, 32.0) is None
+    assert mlpot_limits.pbc_pair_budget_box_side_A(2660, 32.0) == 32.0
     assert mlpot_limits.pbc_pair_budget_box_side_A(2000, 32.0) == 32.0
 
 
@@ -242,6 +242,8 @@ def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
         "mmml.interfaces.pycharmmInterface.mlpot.setup._install_ml_exclusions"
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
     ):
         register_mlpot(mock.MagicMock(), list(range(1650)), sel, use_pbc=True)
     assert calls == [(1650, True, None)]

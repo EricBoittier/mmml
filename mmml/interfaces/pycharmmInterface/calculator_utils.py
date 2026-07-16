@@ -347,6 +347,7 @@ class ModelOutput(NamedTuple):
     mm_vdw_image_E: Array = 0.0  # image MM LJ (kcal/mol bookkeeping)
     mm_elec_primary_E: Array = 0.0  # primary-cell MM Coulomb (kcal/mol bookkeeping)
     mm_elec_image_E: Array = 0.0  # image MM Coulomb (kcal/mol bookkeeping)
+    wall_E: Array = 0.0  # short-range inter-monomer repulsive wall (eV)
 
 
 FLAT_BOTTOM_MODES = ("system", "monomer")

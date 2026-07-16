@@ -1767,6 +1767,7 @@ def setup_calculator(
             mm_vdw_E=outputs.get("mm_vdw_E", 0),
             mm_elec_E=outputs.get("mm_elec_E", 0),
             mbd_E=outputs.get("mbd_E", 0.0),
+            wall_E=outputs.get("wall_E", 0.0),
         )
 
     def get_ML_energy_fn(
