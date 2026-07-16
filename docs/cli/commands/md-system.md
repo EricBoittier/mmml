@@ -250,6 +250,7 @@ usage: mmml md-system [-h]
                       [--jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS]
                       [--jax-md-update-interval JAX_MD_UPDATE_INTERVAL]
                       [--jax-md-skin-distance JAX_MD_SKIN_DISTANCE]
+                      [--steps-per-recording STEPS_PER_RECORDING]
                       [--evaluate-npz PATH] [--evaluate-output EVALUATE_OUTPUT]
                       [--evaluate-frame EVALUATE_FRAME]
                       [--evaluate-forces-npz PATH] [--evaluate-traj PATH]
@@ -927,6 +928,10 @@ options:
   --jax-md-skin-distance JAX_MD_SKIN_DISTANCE
                         JAX-MD/ASE PBC MM neighbor-list skin distance in Å
                         (default: 0.25).
+  --steps-per-recording STEPS_PER_RECORDING
+                        JAX-MD: MD steps between trajectory/HDF5 records
+                        (default: 100; must be a multiple of --jax-md-update-
+                        interval).
   --evaluate-npz PATH   Single-point evaluation: load positions (and optional
                         charges/LJ types) from an NPZ file, build the selected
                         backend calculator, and write energy/forces to

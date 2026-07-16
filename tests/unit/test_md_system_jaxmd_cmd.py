@@ -56,6 +56,7 @@ def _jaxmd_args(**overrides) -> Namespace:
         handoff_require_cell=False,
         jaxmd_minimize_steps=500,
         jaxmd_pbc_minimize_steps=300,
+        steps_per_recording=800,
         calculator_pre_minimize=True,
         charmm_pre_minimize=True,
         pre_min_fmax=0.1,
@@ -80,6 +81,8 @@ def test_build_command_jaxmd_forwards_handoff_and_cutoff_flags() -> None:
     assert argv[argv.index("--jaxmd-minimize-steps") + 1] == "500"
     assert "--jaxmd-pbc-minimize-steps" in argv
     assert argv[argv.index("--jaxmd-pbc-minimize-steps") + 1] == "300"
+    assert "--steps-per-recording" in argv
+    assert argv[argv.index("--steps-per-recording") + 1] == "800"
     assert "--continue-velocities" in argv
 
 

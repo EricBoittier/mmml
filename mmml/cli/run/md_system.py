@@ -28,7 +28,9 @@ _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    from mmml.cli.argparse_suggest import SuggestingArgumentParser
+
+    parser = SuggestingArgumentParser(
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
             "lambda TI for arbitrary compositions) for arbitrary residue compositions. "
@@ -1522,6 +1524,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="JAX-MD/ASE PBC MM neighbor-list skin distance in Å (default: 0.25).",
     )
     parser.add_argument(
+        "--steps-per-recording",
+        type=int,
+        default=100,
+        help=(
+            "JAX-MD: MD steps between trajectory/HDF5 records "
+            "(default: 100; must be a multiple of --jax-md-update-interval)."
+        ),
+    )
+    parser.add_argument(
         "--evaluate-npz",
         type=Path,
         default=None,
@@ -1943,6 +1954,13 @@ def _append_suite_mmml_handoff_args(
     cmd.extend(
         ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
     )
+    if backend == "jaxmd":
+        cmd.extend(
+            [
+                "--steps-per-recording",
+                str(getattr(args, "steps_per_recording", 100)),
+            ]
+        )
     _append_boolean_optional_flag(
         cmd,
         "--charmm-pre-minimize",
