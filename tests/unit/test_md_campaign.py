@@ -51,6 +51,16 @@ def test_expand_repeated_jobs() -> None:
     assert run_ids == ["equil", "prod", "nve.0", "nve.1"]
 
 
+def test_campaign_continue_from_h5_honors_frame() -> None:
+    """HDF5 NVE restarts must pass continue_from_frame into load_handoff."""
+    from pathlib import Path
+
+    from mmml.cli.run import md_campaign as mc
+
+    src = Path(mc.__file__).read_text(encoding="utf-8")
+    assert 'frame=int(merged.get("continue_from_frame"' in src
+
+
 def test_unique_output_dir_if_exists_keeps_missing_path(tmp_path) -> None:
     from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
 

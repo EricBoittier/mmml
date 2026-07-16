@@ -108,3 +108,97 @@ After pre-min, velocities are re-thermalized at `--temperature`.
 
 Drift removal (`handoff_velocity_remove_drift: true`, default) zeros net momentum
 and angular momentum before dynamics.
+
+## Continue a JAX-MD NVE from a partial trajectory
+
+Aborted or partial NVE runs write `output_dir/pbc_nve_jaxmd_nve.h5` (and
+`.traj`) with positions and velocities each recording interval. You can restart
+**without** Packmol rebuild:
+
+```yaml
+# Single job (mmml md-system --config …) — do NOT pass --rebuild-packmol
+setup: pbc_nve
+backend: jaxmd
+composition: DCM:80
+checkpoint: /path/to/ckpt
+output_dir: artifacts/md_run_nve_cont
+box_size: 30.0
+temperature: 250.0
+ps: 100
+dt_fs: 0.5
+md_stages: nve
+
+continue_from: artifacts/md_run/pbc_nve_jaxmd_nve.h5
+continue_from_frame: 140          # 0-based; NOT -1 if the last frame exploded
+continue_velocities: true         # keep momenta for true NVE continuation
+
+jax_md_update_interval: 1
+min_intermonomer_atom_distance: 1.5
+dynamics_overlap_action: error
+```
+
+CLI equivalent:
+
+```bash
+mmml md-system --config md_system.yaml \
+  --continue-from artifacts/md_run/pbc_nve_jaxmd_nve.h5 \
+  --continue-from-frame 140
+```
+
+**Frame choice:** with `steps_per_recording: 500` and `dt_fs: 0.5`, frame `k`
+is at step `(k+1)*500` and time `(k+1)*0.25` ps. After a PE→KE spike, pick a
+frame **before** the bad record (e.g. the last quiet row in the log). Last
+frame (`continue_from_frame: -1`) is wrong if that frame is the explosion.
+
+Also accepts `handoff/state.npz`, ASE `.traj`, or CHARMM `.res` via the same
+`continue_from` key.
+
+## Replicate NVE from one restart (`repeat`, not `repeats`)
+
+Single-job YAML has no `repeats:` key. Use a **campaign** with job key
+`repeat:` (singular) and `--run-all`:
+
+```yaml
+# campaign_nve_reps.yaml
+defaults:
+  backend: jaxmd
+  setup: pbc_nve
+  composition: DCM:80
+  checkpoint: /path/to/ckpt
+  box_size: 30.0
+  temperature: 250.0
+  dt_fs: 0.5
+  ps: 100
+  md_stages: nve
+  jax_md_update_interval: 1
+  min_intermonomer_atom_distance: 1.5
+  dynamics_overlap_action: error
+
+runs:
+  nve_from_partial:
+    description: 10 NVE replicas from one pre-crash HDF5 frame
+    repeat: 10
+    output_dir: artifacts/nve_reps
+    continue_from: artifacts/md_run/pbc_nve_jaxmd_nve.h5
+    continue_from_frame: 140
+    # Independent trajectories: redraw Maxwell–Boltzmann per seed offset
+    continue_velocities: false
+    seed: 22
+```
+
+```bash
+mmml md-system --config campaign_nve_reps.yaml --run-all
+# resume later: add --resume
+```
+
+| Behavior | Detail |
+|----------|--------|
+| Outputs | `artifacts/nve_reps/rep00` … `rep09` |
+| Seeds | `seed`, `seed+1`, … (replicate index offset) |
+| Same `continue_from` | All reps start from that geometry/frame |
+| `continue_velocities: true` | Same momenta → near-identical NVE paths (seed unused for velocities) |
+| `continue_velocities: false` | Re-thermalize at `temperature` with per-rep seed → independent runs |
+
+`depends_on: some_equil_job` is the usual campaign pattern when the predecessor
+wrote `handoff/state.npz`; `continue_from` + `continue_from_frame` is for an
+existing `.h5` / `.traj` / `.npz` path (including a crashed NVE).
