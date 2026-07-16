@@ -648,6 +648,7 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
     repacked[1] = [5.0, 0.0, 0.0]
     repacked[3] = [15.0, 0.0, 0.0]
     contexts: list[str] = []
+    repack_calls = {"n": 0}
 
     def _fake_assert(_pos, _atoms_per_list, *, min_distance_A, box_side, use_pbc, context, **kwargs):
         contexts.append(context)
@@ -655,13 +656,17 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
             raise RuntimeError("inter-monomer atom overlap detected")
         return 2.5
 
+    def _fake_repack(*_a, **_kw):
+        repack_calls["n"] += 1
+        return repacked.copy()
+
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
         _fake_assert,
     )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
-        lambda *_a, **_kw: repacked.copy(),
+        _fake_repack,
     )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
@@ -692,7 +697,70 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
     assert summary.reason == "ok"
     assert not summary.aborted
     assert "pre_mlpot:monomer_repack" in summary.steps_applied
+    assert repack_calls["n"] == 1
     assert np.allclose(out_pos, repacked)
+    assert side == 20.0
+
+
+def test_run_pre_mlpot_geometry_gate_skips_repack_when_initial_clean(monkeypatch):
+    """Clean post-MM geometry should not pay for a full Packmol monomer repack."""
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        run_pre_mlpot_geometry_gate,
+    )
+
+    args = _args(liquid_prep=True, pre_mlpot_overlap_min_distance=1.0)
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [10.0, 0.0, 0.0],
+            [10.0, 0.0, 1.0],
+        ],
+        dtype=float,
+    )
+    repack_calls = {"n": 0}
+
+    def _fake_repack(*_a, **_kw):
+        repack_calls["n"] += 1
+        return pos.copy()
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        lambda *_a, **_kw: 2.5,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        _fake_repack,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        lambda **_kw: 20.0,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda _arr: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        lambda *_a, **_kw: None,
+    )
+
+    out_pos, side, summary = run_pre_mlpot_geometry_gate(
+        args,
+        positions=pos,
+        atoms_per_list=[2, 2],
+        composition={"DCM": 2},
+        box_side=20.0,
+        charmm_pbc=False,
+        n_mol=2,
+        n_atoms=4,
+    )
+
+    assert summary.reason == "ok"
+    assert "pre_mlpot:monomer_repack_skipped_clean" in summary.steps_applied
+    assert "pre_mlpot:monomer_repack" not in summary.steps_applied
+    assert repack_calls["n"] == 0
+    assert np.allclose(out_pos, pos)
     assert side == 20.0
 
 

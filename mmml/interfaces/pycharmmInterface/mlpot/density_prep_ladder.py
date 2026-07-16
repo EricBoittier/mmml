@@ -1367,6 +1367,7 @@ def run_pre_mlpot_geometry_gate(
             note=note,
         )
 
+    initial_geometry_ok = False
     try:
         worst = assert_pre_mlpot_intermonomer_geometry(
             pos,
@@ -1379,6 +1380,7 @@ def run_pre_mlpot_geometry_gate(
             atomic_numbers=atomic_numbers,
         )
         result.worst_intermonomer_A = float(worst)
+        initial_geometry_ok = True
         _record_gate_step(
             "initial",
             note=f"worst inter-monomer {result.worst_intermonomer_A:.3f} Å",
@@ -1395,35 +1397,59 @@ def run_pre_mlpot_geometry_gate(
         _record_gate_step("initial", note="overlap before ladder")
 
     step_label = "pre_mlpot:monomer_repack"
-    try:
-        new_pos = _step_monomer_repack(
-            pos,
-            atoms_per_list=list(atoms_per_list),
-            box_side=side,
-            min_distance=min_overlap,
-            spacing=float(spacing) if spacing is not None else None,
-            seed=int(seed) if seed is not None else None,
-            scratch_dir=_packmol_repack_scratch_dir(args),
-            packmol_tolerance=packmol_tol_f,
-            packmol_margin_A=packmol_margin_A,
+    if initial_geometry_ok:
+        # Packmol repack is expensive at liquid density; only repair when needed.
+        result.steps_applied.append("pre_mlpot:monomer_repack_skipped_clean")
+        _record_gate_step(
+            "pre_mlpot:monomer_repack_skipped_clean",
+            note=(
+                f"worst inter-monomer {float(result.worst_intermonomer_A):.3f} Å "
+                f">= floor {float(min_overlap):.3f} Å"
+                if result.worst_intermonomer_A is not None
+                else "initial geometry ok"
+            ),
         )
-        side = _sync_pbc_after_box_change(
-            positions=new_pos,
-            box_side=side,
-            charmm_pbc=charmm_pbc,
-            mlpot_ctx=None,
-            args=args,
-            quiet=quiet,
-        )
-        pos = new_pos
-        sync_charmm_positions(pos)
-        worst = _mic_check("Pre-MLpot gate (post-repack MIC)", pos)
-        result.worst_intermonomer_A = float(worst)
-        result.steps_applied.append(step_label)
-        _record_gate_step(step_label)
-    except Exception as exc:
         if not quiet:
-            print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
+            worst_txt = (
+                f"{float(result.worst_intermonomer_A):.3f} Å"
+                if result.worst_intermonomer_A is not None
+                else "ok"
+            )
+            print(
+                f"Pre-MLpot gate: skip Packmol monomer repack "
+                f"(initial contacts {worst_txt} >= floor {float(min_overlap):.3f} Å).",
+                flush=True,
+            )
+    else:
+        try:
+            new_pos = _step_monomer_repack(
+                pos,
+                atoms_per_list=list(atoms_per_list),
+                box_side=side,
+                min_distance=min_overlap,
+                spacing=float(spacing) if spacing is not None else None,
+                seed=int(seed) if seed is not None else None,
+                scratch_dir=_packmol_repack_scratch_dir(args),
+                packmol_tolerance=packmol_tol_f,
+                packmol_margin_A=packmol_margin_A,
+            )
+            side = _sync_pbc_after_box_change(
+                positions=new_pos,
+                box_side=side,
+                charmm_pbc=charmm_pbc,
+                mlpot_ctx=None,
+                args=args,
+                quiet=quiet,
+            )
+            pos = new_pos
+            sync_charmm_positions(pos)
+            worst = _mic_check("Pre-MLpot gate (post-repack MIC)", pos)
+            result.worst_intermonomer_A = float(worst)
+            result.steps_applied.append(step_label)
+            _record_gate_step(step_label)
+        except Exception as exc:
+            if not quiet:
+                print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
 
     if charmm_pbc and composition is not None and not hold_density_box:
         for frac, tag in ((staged_fraction, "mc_density_staged"), (1.0, "mc_density_target")):
