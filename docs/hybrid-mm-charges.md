@@ -2,14 +2,14 @@
 
 How per-atom charges enter **intermolecular `E_MM` Coulomb** in hybrid ML/MM
 training and deployment.  Implementation:
-[`mmml/models/mm_charge_mode.py`](../mmml/models/mm_charge_mode.py).
+[`mmml/models/mm_charge_mode.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/mm_charge_mode.py).
 
 Related: [Hybrid potential regions](hybrid-potential-regions.md),
-[hybrid energy assembly](../mmml/models/hybrid_energy.py).
+[hybrid energy assembly](https://github.com/EricBoittier/mmml/blob/main/mmml/models/hybrid_energy.py).
 
 **Example YAMLs (train + MD for all three modes):**
-[`examples/hybrid_mm_charges/`](../examples/hybrid_mm_charges/) — see that
-folder’s `README.md` for the table and copy-paste commands.
+[`examples/hybrid_mm_charges/`](https://github.com/EricBoittier/mmml/tree/main/examples/hybrid_mm_charges)
+— see that folder’s `README.md` for the table and copy-paste commands.
 
 ---
 
@@ -50,9 +50,9 @@ q_MM = q_CGenFF
 ```
 
 - **Train:** `--hybrid-mm` without `--mm-charge-mode` / `--mm-charge-correction`
-  — YAML: [`examples/hybrid_mm_charges/train_fixed.yaml`](../examples/hybrid_mm_charges/train_fixed.yaml)
+  — YAML: [`train_fixed.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_fixed.yaml)
 - **MD:** PSF / RTF charges in `mm_energy_forces` (default)
-  — YAML: [`examples/hybrid_mm_charges/md_fixed.yaml`](../examples/hybrid_mm_charges/md_fixed.yaml)
+  — YAML: [`md_fixed.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_fixed.yaml)
 - Charge head may still exist for dipoles / `E_ML` electrostatics
 - What `scripts/check_hybrid_train_md_parity.py` exercises by default
 
@@ -67,9 +67,9 @@ q_MM = neutralize_per_monomer(q_ML)
 Replace CGenFF in `E_MM`; do not add.
 
 - **Train:** `--hybrid-mm --mm-charge-mode latent --charges`
-  — YAML: [`examples/hybrid_mm_charges/train_latent.yaml`](../examples/hybrid_mm_charges/train_latent.yaml)
+  — YAML: [`train_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_latent.yaml)
 - **MD:** `--mm-charge-mode latent` (dimer-only; same gates as Mode C)
-  — YAML: [`examples/hybrid_mm_charges/md_latent.yaml`](../examples/hybrid_mm_charges/md_latent.yaml)
+  — YAML: [`md_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_latent.yaml)
 - **`q_ML` source:** AB dimer forward (train `out_ab["charges"]`; MD sole dimer slot)
 - Liquids / JAX-PME / chunked multi-GPU apply: refused
 
@@ -82,9 +82,9 @@ q_MM = q_CGenFF + neutralize_per_monomer(q_ML)
 ```
 
 - **Train:** `--mm-charge-mode fixed_plus_latent` or `--mm-charge-correction` (requires `--charges`)
-  — YAML: [`examples/hybrid_mm_charges/train_fixed_plus_latent.yaml`](../examples/hybrid_mm_charges/train_fixed_plus_latent.yaml)
+  — YAML: [`train_fixed_plus_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_fixed_plus_latent.yaml)
 - **MD:** `--mm-charge-mode fixed_plus_latent` (or `--mm-charge-correction`)
-  — YAML: [`examples/hybrid_mm_charges/md_fixed_plus_latent.yaml`](../examples/hybrid_mm_charges/md_fixed_plus_latent.yaml)
+  — YAML: [`md_fixed_plus_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_fixed_plus_latent.yaml)
 - **`q_ML` source in train:** AB dimer forward (`out_ab["charges"]`)
 - **Projection:** required — the charge head is a bare `Dense`; neutrality is
   only a soft loss.  Unprojected net monomer charge turns far-field MM from
