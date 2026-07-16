@@ -121,8 +121,9 @@ PBC box sizing:
                         sized L_sim).
   --packmol-box-padding ANG
                         Cold-start margin (Å per side) between Packmol cube and
-                        simulation cell (default: 10; capped at 20% of L_sim for
-                        small boxes).
+                        simulation cell (default: 1.0; thin face birth only —
+                        pack nearly full cell; raise MM pair capacity if NL fill
+                        is high). Capped at 20% of L_sim.
   --box-auto {geometry,density,count}
                         How to choose the cubic box / molecule count:
                         geometry=span+padding (default); density=box side from

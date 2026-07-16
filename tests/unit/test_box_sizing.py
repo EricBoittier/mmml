@@ -93,7 +93,7 @@ def test_resolve_packmol_cube_side_from_args_uses_density_auto():
     side = resolve_packmol_cube_side_from_args(args)
     sim = float(args._cold_start_sim_cell_side_A)
     assert side < sim
-    assert 10.0 < side < 30.0
+    assert side == pytest.approx(sim - 2.0)  # default 1 Å/side padding
     assert 20.0 < sim < 35.0
 
 
@@ -104,7 +104,7 @@ def test_resolve_packmol_cube_side_smaller_than_explicit_sim_cell():
 
     args = argparse.Namespace(
         packmol_box_size=None,
-        packmol_box_padding=10.0,
+        packmol_box_padding=1.0,
         packmol_tolerance=2.0,
         spacing=5.0,
         ml_cutoff=12.0,
@@ -112,7 +112,7 @@ def test_resolve_packmol_cube_side_smaller_than_explicit_sim_cell():
     )
     sim = 80.0
     packmol = resolve_packmol_cube_side_for_sim_cell(args, sim)
-    assert packmol == pytest.approx(60.0)
+    assert packmol == pytest.approx(78.0)
     assert packmol < sim
 
 
@@ -141,7 +141,7 @@ def test_resolve_packmol_cube_side_from_args_explicit_box_size():
     args = argparse.Namespace(
         box_size=80.0,
         packmol_box_size=None,
-        packmol_box_padding=10.0,
+        packmol_box_padding=None,
         packmol_radius=None,
         flat_bottom_radius=None,
         packmol_tolerance=2.0,
@@ -154,7 +154,8 @@ def test_resolve_packmol_cube_side_from_args_explicit_box_size():
     )
     side = resolve_packmol_cube_side_from_args(args)
     assert args._cold_start_sim_cell_side_A == pytest.approx(80.0)
-    assert side == pytest.approx(60.0)
+    # Default 1 Å/side face birth → Packmol cube fills nearly the whole cell.
+    assert side == pytest.approx(78.0)
 
 
 def test_resolve_packmol_box_padding_defaults_small_for_fixed_box_composition():
@@ -178,8 +179,8 @@ def test_resolve_packmol_box_padding_defaults_small_for_fixed_box_composition():
         FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A
     )
     packmol = resolve_packmol_cube_side_for_sim_cell(args, 30.0)
-    assert packmol == pytest.approx(25.0)
-    assert packmol > 20.0
+    assert packmol == pytest.approx(30.0 - 2.0 * FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A)
+    assert packmol == pytest.approx(28.0)
 
 
 def test_n_molecules_for_target_density_in_fixed_box_dcm32():
