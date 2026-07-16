@@ -132,6 +132,34 @@ def _to_psf_order(data, i, n_real):
     return perm
 
 
+def _add_wall_probe(data, picks, target_sep):
+    """Append a dimer squeezed to ``target_sep`` closest inter-monomer contact.
+
+    Every real dimer sits above the 1.9 A wall onset, so the wall term is zero
+    on all of them and they would pass whether the MD wall were wired correctly,
+    wired wrong, or absent. This makes the term live so the gate can fail.
+    """
+    mol = np.asarray(data["mol_id"])
+    res = np.array([str(x) for x in data["res_name"]])
+    cand = [k for k in range(len(res)) if "," in res[k] and (mol[k] == 1).any()]
+    if not cand:
+        return picks
+    i = cand[0]
+    R = np.asarray(data["R"]).copy()
+    a, b = mol[i] == 0, mol[i] == 1
+    axis = R[i][b].mean(0) - R[i][a].mean(0)
+    axis = axis / np.linalg.norm(axis)
+    for _ in range(500):
+        d = np.linalg.norm(R[i][a][:, None] - R[i][b][None, :], axis=-1).min()
+        if d <= target_sep:
+            break
+        R[i][b] -= axis * max((d - target_sep) * 0.5, 1e-3)
+    data["R"] = R
+    sep = np.linalg.norm(R[i][a][:, None] - R[i][b][None, :], axis=-1).min()
+    print(f"[wall-probe] structure {i} ({res[i]}) squeezed to closest contact {sep:.3f} A")
+    return list(picks) + [(i, res[i], "WALL")]
+
+
 def _md_parts(res) -> dict:
     """Pull the MD calculator's per-term decomposition out of its ModelOutput.
 
@@ -243,6 +271,17 @@ def main() -> int:
         default=1e-2,
         help="max abs per-component force tolerance (eV/Angstrom)",
     )
+    p.add_argument(
+        "--wall-probe",
+        type=float,
+        default=0.0,
+        help=(
+            "If >0, append a synthetic close-contact dimer squeezed to this "
+            "closest atom-atom separation (Angstrom), so the short-range wall is "
+            "non-zero and actually exercised. The real dimers all sit where the "
+            "wall is exactly 0 and cannot detect a mis-wired MD wall."
+        ),
+    )
     args = p.parse_args()
 
     import jax.numpy as jnp
@@ -275,6 +314,8 @@ def main() -> int:
         return 1
 
     picks = _pick_dimers(data)
+    if args.wall_probe:
+        picks = _add_wall_probe(data, picks, args.wall_probe)
     if not picks:
         print("no dimers found in the dataset", file=sys.stderr)
         return 1
