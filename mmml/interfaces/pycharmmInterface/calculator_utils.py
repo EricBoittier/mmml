@@ -46,6 +46,7 @@ __all__ = [
     "epsilon",
     "indices_of_monomer",
     "indices_of_pairs",
+    "ml_switch_scale",
     "jax_smooth_cutoff_cosine",
     "jax_smooth_switch_linear",
     "ml_switch_simple",
@@ -161,6 +162,33 @@ def _sharpstep(r: Array, x0: float, x1: float, gamma: float = GAMMA_ON) -> Array
     s = jnp.clip((r - x0) / _safe_den(x1 - x0), 0.0, 1.0)
     s = s ** gamma
     return _smoothstep01(s)
+
+
+def ml_switch_scale(
+    r_com: Array,
+    *,
+    mm_switch_on: float,
+    ml_switch_width: float,
+    gamma: float = GAMMA_ON,
+) -> Array:
+    """ML taper as a function of monomer COM–COM separation.
+
+    Single source of truth for the ML side of the ML/MM handoff, shared by the
+    MD hybrid calculator and hybrid training.  Returns 1 while the pair is inside
+    the ML-only region, tapering smoothly to 0 at ``mm_switch_on``:
+
+    * ``r <= mm_switch_on - ml_switch_width``  -> 1 (ML fully on)
+    * ``mm_switch_on - ml_switch_width < r < mm_switch_on`` -> smooth handoff
+    * ``r >= mm_switch_on``                    -> 0 (MM tail only)
+
+    With the defaults (``mm_switch_on=8.0``, ``ml_switch_width=1.5``) this is the
+    0 -> 6.5 fully-on / 6.5 -> 8.0 handoff schedule the calculator reports.
+
+    Differentiable and vmap-safe (no dynamic shapes).
+    """
+    return 1.0 - _sharpstep(
+        r_com, mm_switch_on - ml_switch_width, mm_switch_on, gamma=gamma
+    )
 
 
 def indices_of_pairs(

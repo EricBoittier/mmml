@@ -41,7 +41,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     dimer_permutations,
     indices_of_monomer,
     indices_of_pairs,
-    _sharpstep,
+    ml_switch_scale,
 )
 from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
 from mmml.interfaces.pycharmmInterface.ml_dtypes import (
@@ -245,7 +245,6 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
     CutoffParameters,
-    GAMMA_ON,
     _resolve_ml_switch_width,
     _resolve_mm_switch_width,
 )
@@ -1169,10 +1168,11 @@ def setup_calculator(
             r = jnp.linalg.norm(com2 - com1)
     
         # ML: 1 -> 0 over [mm_switch_on - ml_switch_width, mm_switch_on]
-        ml_scale = 1.0 - _sharpstep(
-            r, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON
+        # (shared with hybrid training -- see calculator_utils.ml_switch_scale)
+        ml_scale = ml_switch_scale(
+            r, mm_switch_on=mm_switch_on, ml_switch_width=ml_switch_width
         )
-      
+
         return ml_scale * ml_energy
 
     jax.grad(switch_ML)
@@ -2991,11 +2991,10 @@ def setup_calculator(
 
         def _ml_switch_scale(pos_di, na, nb):
             r = _dimer_com_sep(pos_di, na, nb)
-            return 1.0 - _sharpstep(
+            return ml_switch_scale(
                 r,
-                cutoff_params.mm_switch_on - cutoff_params.ml_switch_width,
-                cutoff_params.mm_switch_on,
-                gamma=GAMMA_ON,
+                mm_switch_on=cutoff_params.mm_switch_on,
+                ml_switch_width=cutoff_params.ml_switch_width,
             )
 
         _ml_switch_scale_grad = jax.grad(_ml_switch_scale)
@@ -3003,11 +3002,10 @@ def setup_calculator(
         com_seps = jax.vmap(_dimer_com_sep, in_axes=(0, 0, 0))(
             dimer_pos_padded, na_arr, nb_arr
         )
-        switching_scales = 1.0 - _sharpstep(
+        switching_scales = ml_switch_scale(
             com_seps,
-            cutoff_params.mm_switch_on - cutoff_params.ml_switch_width,
-            cutoff_params.mm_switch_on,
-            gamma=GAMMA_ON,
+            mm_switch_on=cutoff_params.mm_switch_on,
+            ml_switch_width=cutoff_params.ml_switch_width,
         )
         switched_energy = dimer_energies_all * switching_scales
         switched_grad = jax.vmap(
