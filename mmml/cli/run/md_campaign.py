@@ -381,7 +381,10 @@ def run_campaign(args: Namespace) -> int:
                     if res is not None:
                         merged["continue_from"] = str(res)
         if handoff_in is None and merged.get("continue_from"):
-            handoff_in = load_handoff(Path(str(merged["continue_from"])))
+            handoff_in = load_handoff(
+                Path(str(merged["continue_from"])),
+                frame=int(merged.get("continue_from_frame", -1)),
+            )
 
         if resume and handoff_is_valid(out_dir):
             print(f"mmml md-system: resume skip complete job {run_id!r}", flush=True)

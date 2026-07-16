@@ -106,7 +106,7 @@ Campaign-only keys are ignored when building the backend command:
 
 - `description`: human-readable label in the campaign plan.
 - `depends_on`: job id whose handoff state is used as input.
-- `repeat`: replicate count. Repeats write to `rep00`, `rep01`, etc., and seeds are offset by replicate index.
+- `repeat`: replicate count (**singular** — there is no top-level `repeats:` key). Repeats write to `rep00`, `rep01`, etc., and seeds are offset by replicate index. Use with `--run-all`. To fan out NVE from one HDF5/handoff frame, set the same `continue_from` / `continue_from_frame` on that job and usually `continue_velocities: false` so each rep re-thermalizes (see [handoff.md](handoff.md)).
 - `optional`: continue the campaign if this job fails.
 - `extra_args`: raw backend flags that `md-system` does not expose directly; put each token in its own list item.
 
@@ -155,7 +155,7 @@ sequenceDiagram
 
 **Crystal starts use PyXtal plus CHARMM refinement.** Enable with `builder: crystal` (or legacy `pyxtal: true`) and install `mmml[chem]`. Useful knobs are `pyxtal_spg`, `pyxtal_factor`, `pyxtal_stoichiometry`, `pyxtal_supercell`, `pyxtal_attempts`, and `pyxtal_trim`. This path is still less tested than Packmol liquid placement.
 
-**Reference/handoff builders reuse prior states.** `depends_on` loads a campaign predecessor handoff. `continue_from` can start from a handoff NPZ or CHARMM restart. This is the safest route after equilibration because it preserves box, coordinates, and optionally velocities.
+**Reference/handoff builders reuse prior states.** `depends_on` loads a campaign predecessor handoff. `continue_from` can start from a handoff NPZ, CHARMM restart, ASE `.traj`, or JAX-MD HDF5 (`.h5`) with optional `continue_from_frame`. This is the safest route after equilibration because it preserves box, coordinates, and optionally velocities. See [Cross-backend MD handoff](handoff.md) for NVE restart from a partial trajectory and campaign `repeat:` replicas.
 
 ## Box and density choices
 
