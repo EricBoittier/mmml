@@ -530,25 +530,42 @@ def _is_oom_error(exc: BaseException) -> bool:
         "RESOURCE_EXHAUSTED",
         "OUT_OF_MEMORY",
         "OUT OF MEMORY",
+        "RAN OUT OF MEMORY",
         "FAILED TO ALLOCATE",
         "CUDA_ERROR_OUT_OF_MEMORY",
         "CNDRV_ALLOC",
+        "BFC_ALLOCATOR",
+        "ALLOCATOR (GPU",
     )
     return any(m in text for m in markers)
+
+
+def _clear_jax_caches() -> None:
+    try:
+        jax.clear_caches()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def probe_max_batch_size(
     *,
     pad_atoms: int,
     max_batch: int,
+    start_batch: int = 1,
     data: dict[str, np.ndarray],
     candidate_indices: np.ndarray,
     n_devices: int,
     steps_for_batch_size: Any,
     state: Any,
 ) -> int:
-    """Binary-search the largest per-device batch that fits for ``pad_atoms``."""
+    """Find the largest per-device batch that fits for ``pad_atoms``.
+
+    Starts at ``start_batch`` (typically the pair-budget heuristic) and grows
+    upward, so large-molecule buckets do not immediately request multi‑GiB
+    allocations at B=64/128.
+    """
     max_batch = max(1, int(max_batch))
+    start_batch = max(1, min(max_batch, int(start_batch)))
     pool = np.asarray(candidate_indices, dtype=np.int64)
     if pool.size < n_devices:
         return 1
@@ -557,37 +574,29 @@ def probe_max_batch_size(
         need = batch_size * n_devices
         if pool.size < need:
             return False
+        print(
+            f"    probe pad_atoms={pad_atoms} B/device={batch_size} ...",
+            flush=True,
+        )
         device_indices = pool[:need].reshape(n_devices, batch_size)
         batch = stack_device_batches(data, device_indices, pad_atoms=pad_atoms)
         train_step, _ = steps_for_batch_size(batch_size)
         try:
             new_state, metrics = train_step(state, batch)
             jax.block_until_ready(metrics["loss"])
-            # Keep optimizer buffers warm for this shape; caller restores params.
             del new_state
             return True
         except Exception as exc:  # noqa: BLE001 — OOM is raised as various types
             if not _is_oom_error(exc):
                 raise
-            try:
-                jax.clear_caches()
-            except Exception:  # noqa: BLE001
-                pass
+            print(
+                f"    probe pad_atoms={pad_atoms} B/device={batch_size} OOM, backing off",
+                flush=True,
+            )
+            _clear_jax_caches()
             return False
 
-    if not _try(1):
-        return 1
-    best = 1
-    trial = 2
-    while trial <= max_batch:
-        if _try(trial):
-            best = trial
-            if trial == max_batch:
-                return best
-            trial = min(max_batch, trial * 2)
-            continue
-        # Failed at `trial`; binary-search (best, trial).
-        lo, hi = best + 1, trial - 1
+    def _search(lo: int, hi: int, best: int) -> int:
         while lo <= hi:
             mid = (lo + hi) // 2
             if _try(mid):
@@ -596,6 +605,26 @@ def probe_max_batch_size(
             else:
                 hi = mid - 1
         return best
+
+    # Establish a feasible floor at/below start_batch.
+    if _try(start_batch):
+        best = start_batch
+    else:
+        best = _search(1, start_batch - 1, 1)
+        return best
+
+    # Grow upward from the floor toward max_batch.
+    trial = min(max_batch, max(best + 1, best * 2))
+    while trial <= max_batch:
+        if trial == best:
+            break
+        if _try(trial):
+            best = trial
+            if best >= max_batch:
+                return best
+            trial = min(max_batch, max(best + 1, best * 2))
+            continue
+        return _search(best + 1, trial - 1, best)
     return best
 
 
@@ -609,10 +638,16 @@ def resolve_batch_sizes(
     n_devices: int = 1,
     steps_for_batch_size: Any | None = None,
     state: Any | None = None,
+    step_functions: dict[int, Any] | None = None,
 ) -> dict[int, int]:
     """Per-pad-atoms batch sizes: memory probe when enabled, else pair budget."""
     sizes: dict[int, int] = {}
-    for pad_atoms, indices in buckets.items():
+    # Largest pads first: they force small B and avoid leaving huge compiled
+    # small-molecule kernels resident while probing 100+ atom buckets.
+    pad_order = sorted(buckets, reverse=True)
+    committed_bsz: set[int] = set()
+    for pad_atoms in pad_order:
+        indices = buckets[pad_atoms]
         heuristic = pairs_budget_batch_size(
             pad_atoms,
             per_device_batch_size=per_device_batch_size,
@@ -626,10 +661,15 @@ def resolve_batch_sizes(
         ):
             sizes[pad_atoms] = heuristic
             continue
-        # Probe up to the user cap; ignore the conservative pair heuristic.
+        print(
+            f"  auto-batch probing pad_atoms={pad_atoms} "
+            f"(start B={heuristic}, cap={per_device_batch_size})...",
+            flush=True,
+        )
         probed = probe_max_batch_size(
             pad_atoms=pad_atoms,
             max_batch=per_device_batch_size,
+            start_batch=heuristic,
             data=data,
             candidate_indices=indices,
             n_devices=n_devices,
@@ -637,11 +677,19 @@ def resolve_batch_sizes(
             state=state,
         )
         sizes[pad_atoms] = max(1, probed)
+        committed_bsz.add(sizes[pad_atoms])
         print(
             f"  auto-batch pad_atoms={pad_atoms}: B/device={sizes[pad_atoms]} "
             f"(cap={per_device_batch_size}, pair-heuristic={heuristic})",
             flush=True,
         )
+        # Drop compiled step fns for batch sizes we are not keeping so the next
+        # pad width is not fighting residual executable / allocator pressure.
+        if step_functions is not None:
+            for key in list(step_functions):
+                if key not in committed_bsz:
+                    del step_functions[key]
+        _clear_jax_caches()
     return sizes
 
 
@@ -1629,6 +1677,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         n_devices=args.num_devices,
         steps_for_batch_size=steps_for_batch_size,
         state=state,
+        step_functions=step_functions,
     )
     valid_batch_sizes = {
         pad: train_batch_sizes.get(

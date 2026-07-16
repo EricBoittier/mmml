@@ -174,3 +174,10 @@ def test_cli_defaults_enable_throughput_path(trainer):
     args_off = trainer.build_parser().parse_args(["--no-auto-batch", "--atom-bucket-width", "1"])
     assert args_off.auto_batch is False
     assert args_off.atom_bucket_width == 1
+
+
+def test_is_oom_error_matches_bfc_message(trainer):
+    assert trainer._is_oom_error(
+        RuntimeError("Allocator (GPU_0_bfc) ran out of memory trying to allocate")
+    )
+    assert not trainer._is_oom_error(ValueError("shape mismatch"))
