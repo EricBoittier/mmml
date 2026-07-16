@@ -310,6 +310,7 @@ def print_calculator_summary(
     ensemble: Optional[str] = None,
     checkpoint: Optional[str] = None,
     zbl: Optional[dict] = None,
+    wall: Optional[dict] = None,
     energy_terms: Optional[dict] = None,
     extra: Optional[dict] = None,
     console: Optional[Console] = None,
@@ -407,6 +408,24 @@ def print_calculator_summary(
     table.add_row("ML fully-on range (Å)", f"0 → [bright_blue]{ml_full_end:.3f}[/bright_blue]")
     table.add_row("ML/MM handoff range (Å)", f"[bright_blue]{ml_full_end:.3f}[/bright_blue] → [bright_yellow]{mm_on:.3f}[/bright_yellow]")
     table.add_row("MM tail range (Å)", f"[bright_yellow]{mm_on:.3f}[/bright_yellow] → [bright_red]{mm_outer_end:.3f}[/bright_red]")
+    if wall is not None:
+        table.add_row("─" * 22, "─" * 22)
+        w_on = bool(wall.get("enabled", False))
+        table.add_row(
+            "Short-range wall",
+            "[green]✓[/green]" if w_on else "[dim]off[/dim]",
+        )
+        if w_on:
+            # The MM LJ wall is tapered off below (mm_switch_on - ml_switch_width)
+            # and the ML model has no repulsive prior outside its data, so this is
+            # what stops atoms collapsing at close range. Zero above r_on.
+            table.add_row("wall onset r_on (pair Å)", f"[magenta]{wall['r_on_Å']:.3f}[/magenta]")
+            table.add_row("wall stiffness k (eV·Å²)", f"[magenta]{wall['k_eV_A2']:.3f}[/magenta]")
+            table.add_row(
+                "wall active range (pair Å)",
+                f"0 → [magenta]{wall['r_on_Å']:.3f}[/magenta] (0 above; inter-monomer only)",
+            )
+
     if zbl is not None:
         table.add_row("─" * 22, "─" * 22)
         enabled = bool(zbl.get("enabled", False))
@@ -442,7 +461,8 @@ def print_calculator_summary(
         Text(""),
         Text(f"  ruler scale: 0 → {ruler_max:.1f} Å", style="dim white"),
         Text(
-            "  ZBL cutoffs are pair distances (recorded above), not on this COM ruler.",
+            "  ZBL cutoffs and the short-range wall are pair distances "
+            "(recorded above), not on this COM ruler.",
             style="dim magenta",
         )
         if zbl is not None

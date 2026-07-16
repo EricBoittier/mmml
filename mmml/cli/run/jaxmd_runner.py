@@ -687,6 +687,7 @@ def set_up_nhc_sim_routine(
     flat_bottom_radius = getattr(args, "flat_bottom_radius", None)
     flat_bottom_k = float(getattr(args, "flat_bottom_k", 1.0))
     flat_bottom_mode = str(getattr(args, "flat_bottom_mode", "system")).lower().strip()
+    report_wall = True  # the short-range wall is on by default in the calculator
     use_flat_bottom = (
         flat_bottom_radius is not None and float(flat_bottom_radius) > 0.0
     )
@@ -2028,11 +2029,15 @@ def set_up_nhc_sim_routine(
             border_style="cyan",
         ))
         _fb_hdr = f"\t{_fb_dist_hdr}\tV_fb (eV)" if use_flat_bottom else ""
+        # E_wall reads ~0 in a healthy run. A sustained non-zero value means
+        # monomers are riding the short-range wall rather than being caught by it
+        # occasionally -- the trajectory is leaving the training data.
+        _wall_hdr = "\tE_wall (eV)" if report_wall else ""
         if is_npt:
             hdr = (
                 f"\t\tTime (ps) [of {_total_time_ps:.3f} ps, {total_steps:,} steps, dt={dt_fs:.4f} fs]"
                 "\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)"
-                f"\tP_tgt (atm)\tP_meas (atm){_fb_hdr}\tavg(ns/day)"
+                f"\tP_tgt (atm)\tP_meas (atm){_fb_hdr}{_wall_hdr}\tavg(ns/day)"
             )
             if nbr_monitor:
                 hdr += "\tn_valid\tcapacity\tfill%"
@@ -2040,7 +2045,7 @@ def set_up_nhc_sim_routine(
         else:
             c.print(
                 f"[dim]\t\tTime (ps) [of {_total_time_ps:.3f} ps, {total_steps:,} steps, dt={dt_fs:.4f} fs]"
-                f"\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K){_fb_hdr}\tavg(ns/day)[/dim]"
+                f"\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K){_fb_hdr}{_wall_hdr}\tavg(ns/day)[/dim]"
             )
 
         # ========================================================================
@@ -2292,7 +2297,8 @@ def set_up_nhc_sim_routine(
                 temp = float(T_curr)
                 com_dist_report = float("nan")
                 e_fb_report = float("nan")
-                if use_flat_bottom:
+                e_wall_report = float("nan")
+                if use_flat_bottom or report_wall:
                     if is_npt and npt_pair_idx is not None:
                         box_curr = simulate.npt_box(state)
                         out_dyn = _eval_at_position(
@@ -2309,8 +2315,10 @@ def set_up_nhc_sim_routine(
                             pair_mask=pair_mask,
                         )
                     e_pot = float(out_dyn.energy)
-                    com_dist_report = float(out_dyn.com_dist)
-                    e_fb_report = float(out_dyn.flat_bottom_E)
+                    e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
+                    if use_flat_bottom:
+                        com_dist_report = float(out_dyn.com_dist)
+                        e_fb_report = float(out_dyn.flat_bottom_E)
                 elif is_npt and npt_pair_idx is not None:
                     box_curr = simulate.npt_box(state)
                     e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
@@ -2373,10 +2381,11 @@ def set_up_nhc_sim_routine(
                             if use_flat_bottom
                             else ""
                         )
+                        _wall_cols = f"\t{e_wall_report:11.4f}" if report_wall else ""
                         line = (
                             f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
                             f"{L:8.2f}\t{vol:10.1f}\t{density_g_cm3:8.3f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}"
-                            f"{_fb_cols}\t{avg_speed_ns_per_day:10.4f}"
+                            f"{_fb_cols}{_wall_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
                         if nbr_monitor:
                             nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
@@ -2390,9 +2399,10 @@ def set_up_nhc_sim_routine(
                             if use_flat_bottom
                             else ""
                         )
+                        _wall_cols = f"\t{e_wall_report:11.4f}" if report_wall else ""
                         print(
                             f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}"
-                            f"{_fb_cols}\t{avg_speed_ns_per_day:10.4f}"
+                            f"{_fb_cols}{_wall_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
 
                 # Record to HDF5 every record (NPT: real-space; optional monomer wrap)
