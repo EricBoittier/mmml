@@ -241,15 +241,20 @@ def mm_switch_scale(
 
     At the reported defaults (8.0 / 5.0 / 1.5): 0 below 6.5, ramping to full over
     6.5 -> 8.0, tapering to 0 across the 8.0 -> 13.0 MM tail.
+
+    ``complementary_handoff`` is selected with :func:`jnp.where` rather than a
+    Python ``if`` so the flag may arrive as a traced value (hybrid training
+    passes its config through a jitted ``train_step``).  Both branches are a
+    couple of scalar ``_sharpstep`` calls, so evaluating both is free.
     """
-    if complementary_handoff:
-        handoff = _sharpstep(
-            r_com, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON
-        )
-        mm_taper = 1.0 - _sharpstep(
-            r_com, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_OFF
-        )
-        return handoff * mm_taper
+    handoff = _sharpstep(
+        r_com, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON
+    )
+    mm_taper = 1.0 - _sharpstep(
+        r_com, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_OFF
+    )
+    complementary = handoff * mm_taper
+
     mm_on = _sharpstep(
         r_com, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_ON
     )
@@ -259,7 +264,9 @@ def mm_switch_scale(
         mm_switch_on + 2.0 * mm_switch_width,
         gamma=GAMMA_OFF,
     )
-    return mm_on * (1.0 - mm_off)
+    legacy = mm_on * (1.0 - mm_off)
+
+    return jnp.where(complementary_handoff, complementary, legacy)
 
 
 def indices_of_pairs(

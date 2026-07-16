@@ -239,3 +239,23 @@ def test_monomer_has_no_mm_term():
     assert float(cgenff_mm_energy(pos, tidx, mid, q, sig, eps,
                                   mm_switch_on=8.0, mm_switch_width=5.0,
                                   ml_switch_width=1.5)) == 0.0
+
+
+def test_mm_switch_scale_works_under_jit_with_a_traced_flag():
+    """complementary_handoff must survive being traced (hybrid train_step is jitted)."""
+    import jax
+    import jax.numpy as jnp
+    from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+
+    def f(r, flag):
+        return mm_switch_scale(r, mm_switch_on=8.0, mm_switch_width=5.0,
+                               ml_switch_width=1.5, complementary_handoff=flag)
+
+    jf = jax.jit(f)
+    for flag in (True, False):
+        out = float(jf(jnp.float64(9.0), jnp.asarray(flag)))
+        assert np.isfinite(out)
+    # complementary vs legacy genuinely differ in the handoff
+    a = float(jf(jnp.float64(7.2), jnp.asarray(True)))
+    b = float(jf(jnp.float64(7.2), jnp.asarray(False)))
+    assert a > 0.0 and b == pytest.approx(0.0)   # legacy MM starts only at 8.0
