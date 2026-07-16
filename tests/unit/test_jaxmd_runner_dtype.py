@@ -10,6 +10,7 @@ from mmml.cli.run.jaxmd_runner import (
     as_jaxmd_dtype,
     directional_force_energy_error,
     normalize_jaxmd_state,
+    nve_force_energy_ablation_verdict,
 )
 
 
@@ -66,6 +67,22 @@ def test_directional_force_energy_error_detects_wrong_force():
     assert np.isclose(relerr, 0.5)
 
 
+def test_nve_force_energy_ablation_verdict_ml_path():
+    text = nve_force_energy_ablation_verdict(0.28, 0.30, 0.20)
+    assert "PBC ML-dimer" in text
+    assert "not MM pairs" in text
+
+
+def test_nve_force_energy_ablation_verdict_mm_path():
+    text = nve_force_energy_ablation_verdict(0.28, 0.05, 0.20)
+    assert "suspect MM" in text
+
+
+def test_nve_force_energy_ablation_verdict_both_hybrid_worse():
+    text = nve_force_energy_ablation_verdict(0.50, 0.25, 0.20)
+    assert "MM/hybrid assembly adds" in text
+
+
 def test_jaxmd_suite_nve_preflight_cli_defaults():
     """NVE gates must be wired into jargs (not only suite argparse)."""
     from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
@@ -74,8 +91,10 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
     assert "--nve-etot-drift-abort-eV" in src
     assert "--nve-max-f-start-eVA" in src
     assert "--nve-force-energy-relative-tolerance" in src
+    assert "--nve-force-energy-ml-only-diagnose" in src
     assert "nve_max_f_start_eVA=" in src
     assert "nve_etot_drift_abort_eV=" in src
+    assert "nve_force_energy_ml_only_diagnose=" in src
     assert "default=1000" in src or "default: 1000" in src
     # Early NVE abort must not crash on missing HDF5 path.
     assert '_hdf5 if _hdf5 else' in src or "last_hdf5_path" in src
@@ -87,3 +106,5 @@ def test_nve_requires_float64_message_in_runner():
     src = Path(jr.__file__).read_text()
     assert "NVE requires JAX float64" in src
     assert "jax_enable_x64" in src
+    assert "NVE force–energy ML-only ablation" in src
+    assert "nve_force_energy_ablation_verdict" in src
