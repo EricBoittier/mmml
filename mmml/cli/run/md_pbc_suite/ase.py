@@ -1966,7 +1966,10 @@ def main(argv: list[str] | None = None) -> int:
     L = float(L_resolved) if L_resolved is not None else auto_L
     for msg in box_warnings:
         _tlog(f"Handoff box: {msg}", timing_log)
-    r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
+    if handoff_in is not None or certified_geom:
+        r_pbc = np.asarray(r0, dtype=float)
+    else:
+        r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
@@ -1981,7 +1984,7 @@ def main(argv: list[str] | None = None) -> int:
         composition=composition_summary,
         box_side_A=L,
         use_pbc=True,
-        handoff_present=handoff_in is not None,
+        handoff_present=handoff_in is not None or certified_geom,
         min_intermonomer_distance_A=float(args.min_intermonomer_atom_distance),
         min_box_side_A=cubic_box_length_from_geometry(r_pbc, ml_cutoff=float(args.ml_cutoff)),
     )
