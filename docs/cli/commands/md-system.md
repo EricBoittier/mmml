@@ -248,6 +248,7 @@ usage: mmml md-system [-h]
                       [--handoff-require-cell | --no-handoff-require-cell]
                       [--jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS]
                       [--jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS]
+                      [--jaxmd-fire-skip-max-f-eVA JAXMD_FIRE_SKIP_MAX_F_EVA]
                       [--jax-md-update-interval JAX_MD_UPDATE_INTERVAL]
                       [--jax-md-skin-distance JAX_MD_SKIN_DISTANCE]
                       [--steps-per-recording STEPS_PER_RECORDING]
@@ -920,6 +921,9 @@ options:
   --jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS
                         Additional PBC FIRE steps with molecular wrapping before
                         dynamics (default: 1000; only when a cell is set).
+  --jaxmd-fire-skip-max-f-eVA JAXMD_FIRE_SKIP_MAX_F_EVA
+                        Skip jax-md FIRE when start max|F| ≤ this (eV/Å; default
+                        0.10). Set 0 to always run FIRE backoff stages.
   --jax-md-update-interval JAX_MD_UPDATE_INTERVAL
                         JAX-MD/ASE PBC MM neighbor-list refresh interval in MD
                         steps or calculator calls (default: 1, conservative).

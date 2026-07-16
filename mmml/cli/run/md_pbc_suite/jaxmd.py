@@ -220,6 +220,16 @@ def main(argv: list[str] | None = None) -> int:
         default=1000,
         help="Additional PBC FIRE with molecular wrapping (default: 1000).",
     )
+    p.add_argument(
+        "--jaxmd-fire-skip-max-f-eVA",
+        type=float,
+        default=0.10,
+        help=(
+            "Skip jax-md FIRE (and redundant PBC FIRE) when start max|F| is at or "
+            "below this (eV/Å). Default 0.10 matches typical ASE rescue; use 0 to "
+            "always run FIRE."
+        ),
+    )
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(
         "--packmol",
@@ -1231,6 +1241,9 @@ def main(argv: list[str] | None = None) -> int:
         nsteps_jaxmd=nsteps,
         jaxmd_minimize_steps=args.jaxmd_minimize_steps,
         jaxmd_pbc_minimize_steps=args.jaxmd_pbc_minimize_steps,
+        jaxmd_fire_skip_max_f_eVA=float(
+            getattr(args, "jaxmd_fire_skip_max_f_eVA", 0.10)
+        ),
         min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
         dynamics_overlap_action=args.dynamics_overlap_action,
         traj_export_molecular_wrap=bool(args.traj_export_molecular_wrap),

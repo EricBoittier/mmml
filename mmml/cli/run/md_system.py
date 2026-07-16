@@ -1508,6 +1508,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--jaxmd-fire-skip-max-f-eVA",
+        type=float,
+        default=0.10,
+        help=(
+            "Skip jax-md FIRE when start max|F| ≤ this (eV/Å; default 0.10). "
+            "Set 0 to always run FIRE backoff stages."
+        ),
+    )
+    parser.add_argument(
         "--jax-md-update-interval",
         type=int,
         default=1,
@@ -1941,6 +1950,12 @@ def _append_suite_mmml_handoff_args(
             [
                 "--jaxmd-pbc-minimize-steps",
                 str(getattr(args, "jaxmd_pbc_minimize_steps", 1000)),
+            ]
+        )
+        cmd.extend(
+            [
+                "--jaxmd-fire-skip-max-f-eVA",
+                str(getattr(args, "jaxmd_fire_skip_max_f_eVA", 0.10)),
             ]
         )
         _append_boolean_optional_flag(

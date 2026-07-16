@@ -15,6 +15,7 @@ from mmml.cli.run.jaxmd_runner import (
     resolve_jaxmd_steps_per_loop_call,
     resolve_mm_pair_list_capacity,
     resolve_pre_md_fire_start_positions,
+    should_skip_jaxmd_fire,
 )
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
@@ -171,3 +172,10 @@ def test_jaxmd_fire_dt_backoff_schedule_descends():
     assert sched[0] == pytest.approx(1.0e-4)
     assert len(sched) >= 2
     assert sched[1] < sched[0]
+
+
+def test_should_skip_jaxmd_fire_when_already_soft():
+    assert should_skip_jaxmd_fire(0.086)
+    assert should_skip_jaxmd_fire(0.10)
+    assert not should_skip_jaxmd_fire(0.11)
+    assert not should_skip_jaxmd_fire(0.05, skip_below_eVA=0.0)
