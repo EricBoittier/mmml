@@ -11,7 +11,9 @@ Example:
         --extxyz /path/to/so3lr_train.extxyz \
         --cache-dir /path/to/so3lr_orbax_cache \
         --workdir artifacts/spooky_so3lr \
-        --batch-size-per-device 4 \
+        --batch-size-per-device 64 \
+        --atom-bucket-width 4 \
+        --prefetch-batches 2 \
         --epochs 50
 """
 
@@ -22,8 +24,10 @@ import hashlib
 import json
 import math
 import os
+import queue
+import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -367,44 +371,77 @@ def split_indices(n_items: int, valid_fraction: float, seed: int) -> tuple[np.nd
     return train, valid
 
 
-def bucket_indices_by_natoms(data: dict[str, np.ndarray], indices: np.ndarray) -> dict[int, np.ndarray]:
+def pad_atoms_for_count(n_atoms: int, bucket_width: int) -> int:
+    """Round atom count up to the training pad width for a bucket."""
+    n = int(n_atoms)
+    width = max(1, int(bucket_width))
+    if width == 1:
+        return n
+    return ((n + width - 1) // width) * width
+
+
+def pairs_budget_batch_size(
+    pad_atoms: int,
+    *,
+    per_device_batch_size: int,
+    max_pairs_per_device: int,
+) -> int:
+    """Legacy O(n²) pair-budget cap (used when --no-auto-batch)."""
+    n = max(1, int(pad_atoms))
+    return min(
+        int(per_device_batch_size),
+        max(1, int(max_pairs_per_device) // (n * n)),
+    )
+
+
+def bucket_indices_by_natoms(
+    data: dict[str, np.ndarray],
+    indices: np.ndarray,
+    *,
+    bucket_width: int = 1,
+) -> dict[int, np.ndarray]:
+    """Group molecule indices by pad width (exact n when bucket_width=1)."""
     n_atoms = np.asarray(data["N"], dtype=np.int32).reshape(-1)
     buckets: dict[int, list[int]] = {}
     for idx in np.asarray(indices, dtype=np.int64):
-        buckets.setdefault(int(n_atoms[idx]), []).append(int(idx))
+        pad = pad_atoms_for_count(int(n_atoms[idx]), bucket_width)
+        buckets.setdefault(pad, []).append(int(idx))
     return {n: np.asarray(vals, dtype=np.int64) for n, vals in buckets.items()}
 
 
 def iter_device_batches(
     buckets: dict[int, np.ndarray],
     *,
-    per_device_batch_size: int,
-    max_pairs_per_device: int,
+    batch_sizes: Mapping[int, int],
     n_devices: int,
     rng: np.random.Generator,
-) -> Any:
+) -> Iterator[tuple[int, np.ndarray]]:
+    """Yield ``(pad_atoms, device_indices)`` with shape ``(n_devices, B)``."""
     bucket_keys = list(buckets)
     rng.shuffle(bucket_keys)
-    for n_atoms in bucket_keys:
-        bucket_batch_size = min(
-            per_device_batch_size,
-            max(1, max_pairs_per_device // (n_atoms * n_atoms)),
-        )
+    for pad_atoms in bucket_keys:
+        bucket_batch_size = int(batch_sizes[pad_atoms])
+        if bucket_batch_size < 1:
+            continue
         global_batch = bucket_batch_size * n_devices
-        indices = buckets[n_atoms].copy()
+        indices = buckets[pad_atoms].copy()
         rng.shuffle(indices)
         usable = (len(indices) // global_batch) * global_batch
         for start in range(0, usable, global_batch):
             chunk = indices[start : start + global_batch]
-            yield chunk.reshape(n_devices, bucket_batch_size)
+            yield pad_atoms, chunk.reshape(n_devices, bucket_batch_size)
 
 
 def stack_device_batches(
     data: dict[str, np.ndarray],
     device_indices: np.ndarray,
+    *,
+    pad_atoms: int | None = None,
 ) -> dict[str, Any]:
     batches = [
-        build_spooky_batch_from_flat_data(data, device_indices[i])
+        build_spooky_batch_from_flat_data(
+            data, device_indices[i], pad_atoms=pad_atoms
+        )
         for i in range(device_indices.shape[0])
     ]
     has_mm = "cgenff_master_sigmas" in data and "cgenff_master_epsilons" in data
@@ -423,6 +460,214 @@ def stack_device_batches(
             continue
         stacked[key] = jnp.stack([batch[key] for batch in batches], axis=0)
     return stacked
+
+
+def prefetch_stacked_batches(
+    index_iter: Iterator[tuple[int, np.ndarray]],
+    data: dict[str, np.ndarray],
+    *,
+    depth: int = 2,
+) -> Iterator[tuple[int, int, dict[str, Any]]]:
+    """Build stacked device batches on a background thread.
+
+    Yields ``(pad_atoms, per_device_batch_size, batch)``.
+    Safe to break early (``steps_per_epoch`` / ``valid_steps``): the producer
+    stops and joins instead of blocking forever on a full queue.
+    """
+    depth = max(1, int(depth))
+    out_q: queue.Queue[tuple[int, int, dict[str, Any]] | None] = queue.Queue(
+        maxsize=depth
+    )
+    error: list[BaseException] = []
+    stop = threading.Event()
+
+    def _worker() -> None:
+        try:
+            for pad_atoms, device_indices in index_iter:
+                if stop.is_set():
+                    break
+                batch = stack_device_batches(
+                    data, device_indices, pad_atoms=pad_atoms
+                )
+                item = (pad_atoms, int(device_indices.shape[1]), batch)
+                while not stop.is_set():
+                    try:
+                        out_q.put(item, timeout=0.05)
+                        break
+                    except queue.Full:
+                        continue
+        except BaseException as exc:  # noqa: BLE001 — surface to consumer
+            error.append(exc)
+        finally:
+            try:
+                out_q.put(None, timeout=1.0)
+            except Exception:  # noqa: BLE001
+                pass
+
+    thread = threading.Thread(target=_worker, name="so3lr-batch-prefetch", daemon=True)
+    thread.start()
+    try:
+        while True:
+            item = out_q.get()
+            if item is None:
+                break
+            yield item
+    finally:
+        stop.set()
+        while True:
+            try:
+                out_q.get_nowait()
+            except queue.Empty:
+                break
+        thread.join(timeout=30.0)
+        if error:
+            raise error[0]
+
+
+def _is_oom_error(exc: BaseException) -> bool:
+    text = str(exc).upper()
+    markers = (
+        "RESOURCE_EXHAUSTED",
+        "OUT_OF_MEMORY",
+        "OUT OF MEMORY",
+        "FAILED TO ALLOCATE",
+        "CUDA_ERROR_OUT_OF_MEMORY",
+        "CNDRV_ALLOC",
+    )
+    return any(m in text for m in markers)
+
+
+def probe_max_batch_size(
+    *,
+    pad_atoms: int,
+    max_batch: int,
+    data: dict[str, np.ndarray],
+    candidate_indices: np.ndarray,
+    n_devices: int,
+    steps_for_batch_size: Any,
+    state: Any,
+) -> int:
+    """Binary-search the largest per-device batch that fits for ``pad_atoms``."""
+    max_batch = max(1, int(max_batch))
+    pool = np.asarray(candidate_indices, dtype=np.int64)
+    if pool.size < n_devices:
+        return 1
+
+    def _try(batch_size: int) -> bool:
+        need = batch_size * n_devices
+        if pool.size < need:
+            return False
+        device_indices = pool[:need].reshape(n_devices, batch_size)
+        batch = stack_device_batches(data, device_indices, pad_atoms=pad_atoms)
+        train_step, _ = steps_for_batch_size(batch_size)
+        try:
+            new_state, metrics = train_step(state, batch)
+            jax.block_until_ready(metrics["loss"])
+            # Keep optimizer buffers warm for this shape; caller restores params.
+            del new_state
+            return True
+        except Exception as exc:  # noqa: BLE001 — OOM is raised as various types
+            if not _is_oom_error(exc):
+                raise
+            try:
+                jax.clear_caches()
+            except Exception:  # noqa: BLE001
+                pass
+            return False
+
+    if not _try(1):
+        return 1
+    best = 1
+    trial = 2
+    while trial <= max_batch:
+        if _try(trial):
+            best = trial
+            if trial == max_batch:
+                return best
+            trial = min(max_batch, trial * 2)
+            continue
+        # Failed at `trial`; binary-search (best, trial).
+        lo, hi = best + 1, trial - 1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            if _try(mid):
+                best = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        return best
+    return best
+
+
+def resolve_batch_sizes(
+    buckets: Mapping[int, np.ndarray],
+    *,
+    per_device_batch_size: int,
+    max_pairs_per_device: int,
+    auto_batch: bool,
+    data: dict[str, np.ndarray] | None = None,
+    n_devices: int = 1,
+    steps_for_batch_size: Any | None = None,
+    state: Any | None = None,
+) -> dict[int, int]:
+    """Per-pad-atoms batch sizes: memory probe when enabled, else pair budget."""
+    sizes: dict[int, int] = {}
+    for pad_atoms, indices in buckets.items():
+        heuristic = pairs_budget_batch_size(
+            pad_atoms,
+            per_device_batch_size=per_device_batch_size,
+            max_pairs_per_device=max_pairs_per_device,
+        )
+        if (
+            not auto_batch
+            or data is None
+            or steps_for_batch_size is None
+            or state is None
+        ):
+            sizes[pad_atoms] = heuristic
+            continue
+        # Probe up to the user cap; ignore the conservative pair heuristic.
+        probed = probe_max_batch_size(
+            pad_atoms=pad_atoms,
+            max_batch=per_device_batch_size,
+            data=data,
+            candidate_indices=indices,
+            n_devices=n_devices,
+            steps_for_batch_size=steps_for_batch_size,
+            state=state,
+        )
+        sizes[pad_atoms] = max(1, probed)
+        print(
+            f"  auto-batch pad_atoms={pad_atoms}: B/device={sizes[pad_atoms]} "
+            f"(cap={per_device_batch_size}, pair-heuristic={heuristic})",
+            flush=True,
+        )
+    return sizes
+
+
+def accumulate_metrics(
+    total: dict[str, Any] | None, metrics: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Sum metric trees on-device (no host sync)."""
+    if total is None:
+        return {k: v for k, v in metrics.items()}
+    return {k: total[k] + metrics[k] for k in total}
+
+
+def finalize_metrics(
+    total: Mapping[str, Any] | None, count: int
+) -> dict[str, float]:
+    """Host-sync averaged metrics once (blocks the device pipeline)."""
+    if not total or count <= 0:
+        return {}
+    means = {k: total[k] / float(count) for k in total}
+    leaves = jax.tree_util.tree_leaves(means)
+    if leaves:
+        jax.block_until_ready(leaves)
+    out: dict[str, float] = {}
+    for key, value in means.items():
+        out[key] = float(np.asarray(jax.device_get(value)).reshape(-1)[0])
+    return out
 
 
 def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
@@ -714,13 +959,11 @@ def make_steps(
 
 
 def mean_metrics(metrics: list[dict[str, Any]]) -> dict[str, float]:
-    if not metrics:
-        return {}
-    out: dict[str, float] = {}
-    for key in metrics[0]:
-        values = [float(np.asarray(m[key]).reshape(-1)[0]) for m in metrics]
-        out[key] = float(np.mean(values))
-    return out
+    """Average a list of metric dicts with a single host sync at the end."""
+    total: dict[str, Any] | None = None
+    for m in metrics:
+        total = accumulate_metrics(total, m)
+    return finalize_metrics(total, len(metrics))
 
 
 def init_state(
@@ -731,16 +974,20 @@ def init_state(
 ) -> train_state.TrainState:
     rng = np.random.default_rng(args.seed)
     init_indices = None
-    for n_atoms in sorted(train_buckets, key=lambda n: len(train_buckets[n]), reverse=True):
-        if len(train_buckets[n_atoms]) >= args.batch_size_per_device:
-            init_indices = train_buckets[n_atoms][: args.batch_size_per_device]
+    init_pad = None
+    for pad_atoms in sorted(train_buckets, key=lambda n: len(train_buckets[n]), reverse=True):
+        if len(train_buckets[pad_atoms]) >= args.batch_size_per_device:
+            init_indices = train_buckets[pad_atoms][: args.batch_size_per_device]
+            init_pad = pad_atoms
             break
     if init_indices is None:
         raise ValueError(
             "No atom-count bucket has enough structures for one per-device batch"
         )
     rng.shuffle(init_indices)
-    batch = build_spooky_batch_from_flat_data(data, init_indices)
+    batch = build_spooky_batch_from_flat_data(
+        data, init_indices, pad_atoms=init_pad
+    )
     if (
         not args.no_cgenff_vdw
         and "cgenff_master_sigmas" in data
@@ -1127,8 +1374,12 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     n_molecules = int(np.asarray(data["E"]).shape[0])
     max_atoms = int(np.max(np.asarray(data["N"]).reshape(-1)))
     train_idx, valid_idx = split_indices(n_molecules, args.valid_fraction, args.seed)
-    train_buckets = bucket_indices_by_natoms(data, train_idx)
-    valid_buckets = bucket_indices_by_natoms(data, valid_idx)
+    train_buckets = bucket_indices_by_natoms(
+        data, train_idx, bucket_width=args.atom_bucket_width
+    )
+    valid_buckets = bucket_indices_by_natoms(
+        data, valid_idx, bucket_width=args.atom_bucket_width
+    )
     devices = jax.local_devices()[: args.num_devices]
     if len(devices) != args.num_devices:
         raise RuntimeError(
@@ -1237,22 +1488,22 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 f"--init-checkpoint {restart_path} for a fresh optimizer state."
             )
 
+    # Provisional step count uses the pair heuristic (or the user cap under
+    # auto-batch). Recomputed after probing once step fns exist.
+    provisional_batch_sizes = resolve_batch_sizes(
+        train_buckets,
+        per_device_batch_size=args.batch_size_per_device,
+        max_pairs_per_device=args.max_pairs_per_device,
+        auto_batch=False,
+    )
     batches_per_epoch = sum(
-        math.ceil(
-            len(indices)
-            / (
-                min(
-                    args.batch_size_per_device,
-                    max(1, args.max_pairs_per_device // (n_atoms * n_atoms)),
-                )
-                * args.num_devices
-            )
-        )
-        for n_atoms, indices in train_buckets.items()
+        (len(indices) // (provisional_batch_sizes[pad] * args.num_devices))
+        for pad, indices in train_buckets.items()
+        if provisional_batch_sizes[pad] >= 1
     )
     if args.steps_per_epoch:
         batches_per_epoch = min(batches_per_epoch, args.steps_per_epoch)
-    total_planned_steps = args.epochs * batches_per_epoch
+    total_planned_steps = args.epochs * max(1, batches_per_epoch)
     if args.lr_schedule == "warmup_cosine" and args.lr_decay_steps == 0:
         args.lr_decay_steps = max(args.lr_warmup_steps + 1, total_planned_steps)
     if args.lr_schedule == "warmup_cosine":
@@ -1262,12 +1513,18 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             flush=True,
         )
     print(
-        f"Planned run: {args.epochs} epochs x {batches_per_epoch} steps/epoch "
+        f"Atom buckets: width={args.atom_bucket_width} "
+        f"({len(train_buckets)} train pad widths, max pad={max(train_buckets) if train_buckets else 0})",
+        flush=True,
+    )
+    print(
+        f"Planned run (provisional): {args.epochs} epochs x {batches_per_epoch} steps/epoch "
         f"= {total_planned_steps} total training steps",
         flush=True,
     )
 
-    model = create_model(args, max_atoms=max_atoms)
+    max_pad_atoms = pad_atoms_for_count(max_atoms, args.atom_bucket_width)
+    model = create_model(args, max_atoms=max_pad_atoms)
     mbd_model = None
     mbd_params = None
     if args.mbd_checkpoint is not None:
@@ -1302,7 +1559,10 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     print(f"JAX devices: {devices}")
     print(f"Train structures: {len(train_idx):,}; valid structures: {len(valid_idx):,}")
-    print(f"Max atoms: {max_atoms}; per-device batch: {args.batch_size_per_device}")
+    print(
+        f"Max atoms: {max_atoms}; per-device batch cap: {args.batch_size_per_device}; "
+        f"atom_bucket_width: {args.atom_bucket_width}"
+    )
     print(f"Checkpoint directory: {workdir}")
 
     start_epoch = 1
@@ -1354,36 +1614,90 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             )
         return step_functions[batch_size]
 
+    print(
+        f"Resolving per-bucket batch sizes "
+        f"(auto_batch={args.auto_batch}, cap={args.batch_size_per_device}, "
+        f"prefetch={args.prefetch_batches})...",
+        flush=True,
+    )
+    train_batch_sizes = resolve_batch_sizes(
+        train_buckets,
+        per_device_batch_size=args.batch_size_per_device,
+        max_pairs_per_device=args.max_pairs_per_device,
+        auto_batch=args.auto_batch,
+        data=data,
+        n_devices=args.num_devices,
+        steps_for_batch_size=steps_for_batch_size,
+        state=state,
+    )
+    valid_batch_sizes = {
+        pad: train_batch_sizes.get(
+            pad,
+            pairs_budget_batch_size(
+                pad,
+                per_device_batch_size=args.batch_size_per_device,
+                max_pairs_per_device=args.max_pairs_per_device,
+            ),
+        )
+        for pad in valid_buckets
+    }
+    # Probe may have mutated optimizer state; keep params but that is fine for
+    # warm-start. Recompute steps/epoch from the resolved sizes.
+    batches_per_epoch = sum(
+        (len(indices) // (train_batch_sizes[pad] * args.num_devices))
+        for pad, indices in train_buckets.items()
+        if train_batch_sizes.get(pad, 0) >= 1
+    )
+    if args.steps_per_epoch:
+        batches_per_epoch = min(batches_per_epoch, args.steps_per_epoch)
+    batches_per_epoch = max(1, batches_per_epoch)
+    total_planned_steps = args.epochs * batches_per_epoch
+    print(
+        f"Resolved run: {args.epochs} epochs x {batches_per_epoch} steps/epoch "
+        f"= {total_planned_steps} total training steps",
+        flush=True,
+    )
+    print(
+        "Batch sizes by pad_atoms: "
+        + ", ".join(
+            f"{pad}:{train_batch_sizes[pad]}"
+            for pad in sorted(train_batch_sizes)
+        ),
+        flush=True,
+    )
+
     compiled_shapes: set[tuple[int, int]] = set()
     for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
-        train_metrics = []
-        log_window_metrics = []
-        train_batches = iter_device_batches(
-            train_buckets,
-            per_device_batch_size=args.batch_size_per_device,
-            max_pairs_per_device=args.max_pairs_per_device,
-            n_devices=args.num_devices,
-            rng=rng,
+        train_total: dict[str, Any] | None = None
+        train_count = 0
+        log_total: dict[str, Any] | None = None
+        log_count = 0
+        train_batches = prefetch_stacked_batches(
+            iter_device_batches(
+                train_buckets,
+                batch_sizes=train_batch_sizes,
+                n_devices=args.num_devices,
+                rng=rng,
+            ),
+            data,
+            depth=args.prefetch_batches,
         )
-        for step, device_indices in enumerate(train_batches, start=1):
-            batch_size = int(device_indices.shape[1])
-            n_atoms = int(
-                np.asarray(data["N"])[device_indices[0, 0]].reshape(-1)[0]
-            )
-            shape = (n_atoms, batch_size)
+        for step, (pad_atoms, batch_size, batch) in enumerate(train_batches, start=1):
+            shape = (pad_atoms, batch_size)
             if shape not in compiled_shapes:
                 print(
-                    f"Compiling steps for {n_atoms}-atom structures "
+                    f"Compiling steps for pad_atoms={pad_atoms} "
                     f"with per-device batch {batch_size}",
                     flush=True,
                 )
                 compiled_shapes.add(shape)
             train_step, _ = steps_for_batch_size(batch_size)
-            batch = stack_device_batches(data, device_indices)
             state, metrics = train_step(state, batch)
-            train_metrics.append(metrics)
-            log_window_metrics.append(metrics)
+            train_total = accumulate_metrics(train_total, metrics)
+            train_count += 1
+            log_total = accumulate_metrics(log_total, metrics)
+            log_count += 1
             global_step = (epoch - 1) * batches_per_epoch + step
             if args.save_every_steps and global_step % args.save_every_steps == 0:
                 unreplicated = jax_utils.unreplicate(state)
@@ -1394,12 +1708,13 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     unreplicated,
                     model,
                     args,
-                    {"train": mean_metrics(train_metrics[-args.log_every_steps :])},
+                    {"train": finalize_metrics(log_total, log_count)},
                 )
                 print(f"Saved mid-epoch checkpoint at global step {global_step}", flush=True)
             if step % args.log_every_steps == 0:
-                m = mean_metrics(log_window_metrics)
-                log_window_metrics = []
+                m = finalize_metrics(log_total, log_count)
+                log_total = None
+                log_count = 0
                 pct_done = 100.0 * global_step / max(1, total_planned_steps)
                 line = (
                     f"epoch {epoch:04d} step {step:06d} "
@@ -1416,23 +1731,27 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             if args.steps_per_epoch and step >= args.steps_per_epoch:
                 break
 
-        valid_metrics = []
-        valid_batches = iter_device_batches(
-            valid_buckets,
-            per_device_batch_size=args.batch_size_per_device,
-            max_pairs_per_device=args.max_pairs_per_device,
-            n_devices=args.num_devices,
-            rng=np.random.default_rng(args.seed + epoch),
+        valid_total: dict[str, Any] | None = None
+        valid_count = 0
+        valid_batches = prefetch_stacked_batches(
+            iter_device_batches(
+                valid_buckets,
+                batch_sizes=valid_batch_sizes,
+                n_devices=args.num_devices,
+                rng=np.random.default_rng(args.seed + epoch),
+            ),
+            data,
+            depth=args.prefetch_batches,
         )
-        for step, device_indices in enumerate(valid_batches, start=1):
-            _, eval_step = steps_for_batch_size(int(device_indices.shape[1]))
-            batch = stack_device_batches(data, device_indices)
-            valid_metrics.append(eval_step(state, batch))
+        for step, (pad_atoms, batch_size, batch) in enumerate(valid_batches, start=1):
+            _, eval_step = steps_for_batch_size(batch_size)
+            valid_total = accumulate_metrics(valid_total, eval_step(state, batch))
+            valid_count += 1
             if args.valid_steps and step >= args.valid_steps:
                 break
 
-        train_mean = mean_metrics(train_metrics)
-        valid_mean = mean_metrics(valid_metrics)
+        train_mean = finalize_metrics(train_total, train_count)
+        valid_mean = finalize_metrics(valid_total, valid_count)
         elapsed = time.time() - t0
         print(
             f"epoch {epoch:04d} done in {elapsed:.1f}s "
@@ -1506,15 +1825,51 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-structures", type=int, default=None, help="Optional smoke-test cap")
     parser.add_argument("--valid-fraction", type=float, default=0.05)
     parser.add_argument("--num-devices", type=int, default=2)
-    parser.add_argument("--batch-size-per-device", type=int, default=4)
+    parser.add_argument(
+        "--batch-size-per-device",
+        type=int,
+        default=64,
+        help=(
+            "Maximum structures per device per step. With --auto-batch (default), "
+            "each atom-pad bucket is probed up to this cap."
+        ),
+    )
     parser.add_argument(
         "--max-pairs-per-device",
         type=int,
         default=18000,
         help=(
-            "Approximate per-device batch*n_atoms^2 budget; automatically reduces "
-            "the structure batch for larger molecules"
+            "Fallback per-device batch*n_atoms^2 budget used when --no-auto-batch "
+            "is set (also used for provisional LR-step planning)."
         ),
+    )
+    parser.add_argument(
+        "--atom-bucket-width",
+        type=int,
+        default=4,
+        help=(
+            "Pad molecules up to multiples of this atom count so nearby sizes "
+            "share one compiled shape (1 disables widening)."
+        ),
+    )
+    parser.add_argument(
+        "--prefetch-batches",
+        type=int,
+        default=2,
+        help="Host-side stacked batches to prepare ahead of the training step.",
+    )
+    parser.add_argument(
+        "--auto-batch",
+        dest="auto_batch",
+        action="store_true",
+        default=True,
+        help="Probe max per-device batch per pad width (default: on).",
+    )
+    parser.add_argument(
+        "--no-auto-batch",
+        dest="auto_batch",
+        action="store_false",
+        help="Disable memory probing; use --max-pairs-per-device heuristic.",
     )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument(

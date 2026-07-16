@@ -273,6 +273,7 @@ def build_spooky_batch_from_flat_data(
     data_dict: Dict[str, Any],
     mol_indices: Union[np.ndarray, Any],
     *,
+    pad_atoms: int | None = None,
     rot_augment: bool = False,
     rot_perturbation: float = 1.0,
     rot_key: jax.Array | None = None,
@@ -280,8 +281,11 @@ def build_spooky_batch_from_flat_data(
     """
     Build a spooky batch from flat storage (``mol_offsets`` + concatenated ``R``/``Z``/``F``).
 
-    Pair indices use :func:`e3x.ops.sparse_pairwise_indices` per molecule with real atom
-    counts only (no padding). Use with :func:`prepare_h5_datasets_flat` output.
+    Pair indices use :func:`e3x.ops.sparse_pairwise_indices` per molecule. With
+    ``pad_atoms=None`` (default), each molecule keeps its real atom count and all
+    masks are ones. With ``pad_atoms`` set, every molecule is zero-padded to that
+    length; ``atom_mask`` / ``batch_mask`` drop padding so padded slots at the
+    origin cannot leak into message passing.
 
     Parameters
     ----------
@@ -289,6 +293,8 @@ def build_spooky_batch_from_flat_data(
         Must contain ``mol_offsets``, ``R``, ``Z``, ``F``, ``E``, ``Q``, ``S``.
     mol_indices
         Shape ``(B,)``, indices of molecules within ``data_dict`` (e.g. a batch slice).
+    pad_atoms
+        If set, pad/truncate each molecule to this atom count (must be >= real n).
 
     Returns
     -------
@@ -300,6 +306,8 @@ def build_spooky_batch_from_flat_data(
     mol_indices = np.asarray(mol_indices, dtype=np.int64)
     if mol_indices.size == 0:
         raise ValueError("mol_indices must be non-empty")
+    if pad_atoms is not None and int(pad_atoms) <= 0:
+        raise ValueError(f"pad_atoms must be positive, got {pad_atoms}")
 
     mol_offsets = np.asarray(data_dict["mol_offsets"], dtype=np.int64)
     r_np = np.asarray(data_dict["R"], dtype=np.float64)
@@ -318,11 +326,13 @@ def build_spooky_batch_from_flat_data(
     batch_size = int(mol_indices.shape[0])
     dst_parts: list[np.ndarray] = []
     src_parts: list[np.ndarray] = []
+    mask_parts: list[np.ndarray] = []
     r_parts: list[np.ndarray] = []
     z_parts: list[np.ndarray] = []
     f_parts: list[np.ndarray] = []
     q_parts: list[np.ndarray] = []
     s_parts: list[np.ndarray] = []
+    atom_mask_parts: list[np.ndarray] = []
     seg_parts: list[np.ndarray] = []
     e_rows: list[float] = []
     mol_id_parts: list[np.ndarray] = []
@@ -338,30 +348,77 @@ def build_spooky_batch_from_flat_data(
         n = a1 - a0
         if n <= 0:
             raise ValueError(f"Empty molecule at index {mi}")
-        ld, ls = e3x.ops.sparse_pairwise_indices(n)
-        ld = np.asarray(ld, dtype=np.int32)
-        ls = np.asarray(ls, dtype=np.int32)
-        dst_parts.append(ld + atom_offset)
-        src_parts.append(ls + atom_offset)
-        r_parts.append(r_np[a0:a1])
-        z_parts.append(z_np[a0:a1])
-        f_parts.append(f_np[a0:a1])
-        q_parts.append(np.full((n, 1), q_np[mi], dtype=np.float32))
-        s_parts.append(np.full((n, 1), s_np[mi], dtype=np.float32))
-        seg_parts.append(np.full((n,), b, dtype=np.int32))
-        e_rows.append(e_np[mi])
-        if has_mm:
-            mol_id_parts.append(mol_id_flat[a0:a1])
-            cgenff_parts.append(cgenff_flat[a0:a1])
-        atom_offset += n
+        if pad_atoms is not None and n > int(pad_atoms):
+            raise ValueError(
+                f"Molecule {mi} has {n} atoms but pad_atoms={pad_atoms}"
+            )
+
+        r_mol = np.asarray(r_np[a0:a1], dtype=np.float64)
+        z_mol = np.asarray(z_np[a0:a1], dtype=np.int32)
+        f_mol = np.asarray(f_np[a0:a1], dtype=np.float64)
         if rot_augment:
             rot_b = sample_random_rotations(
                 jax.random.fold_in(key, int(b)),
                 1,
                 perturbation=rot_perturbation,
             )[0]
-            r_parts[-1] = np.asarray(jnp.einsum("ij,nj->ni", rot_b, jnp.asarray(r_parts[-1])))
-            f_parts[-1] = np.asarray(jnp.einsum("ij,nj->ni", rot_b, jnp.asarray(f_parts[-1])))
+            r_mol = np.asarray(jnp.einsum("ij,nj->ni", rot_b, jnp.asarray(r_mol)))
+            f_mol = np.asarray(jnp.einsum("ij,nj->ni", rot_b, jnp.asarray(f_mol)))
+
+        if pad_atoms is None:
+            n_use = n
+            atom_mask_mol = np.ones((n,), dtype=np.float32)
+            ld, ls = e3x.ops.sparse_pairwise_indices(n)
+            ld = np.asarray(ld, dtype=np.int32)
+            ls = np.asarray(ls, dtype=np.int32)
+            pair_mask = np.ones((ld.shape[0],), dtype=np.float32)
+            q_mol = np.full((n, 1), q_np[mi], dtype=np.float32)
+            s_mol = np.full((n, 1), s_np[mi], dtype=np.float32)
+            if has_mm:
+                mol_id_mol = np.asarray(mol_id_flat[a0:a1], dtype=np.int32)
+                cgenff_mol = np.asarray(cgenff_flat[a0:a1], dtype=np.int32)
+        else:
+            n_use = int(pad_atoms)
+            r_pad = np.zeros((n_use, 3), dtype=np.float64)
+            z_pad = np.zeros((n_use,), dtype=np.int32)
+            f_pad = np.zeros((n_use, 3), dtype=np.float64)
+            r_pad[:n] = r_mol
+            z_pad[:n] = z_mol
+            f_pad[:n] = f_mol
+            r_mol, z_mol, f_mol = r_pad, z_pad, f_pad
+            atom_mask_mol = np.zeros((n_use,), dtype=np.float32)
+            atom_mask_mol[:n] = 1.0
+            ld, ls = e3x.ops.sparse_pairwise_indices(n_use)
+            ld = np.asarray(ld, dtype=np.int32)
+            ls = np.asarray(ls, dtype=np.int32)
+            pair_mask = (
+                (atom_mask_mol[ld] > 0) & (atom_mask_mol[ls] > 0)
+            ).astype(np.float32)
+            q_mol = np.zeros((n_use, 1), dtype=np.float32)
+            s_mol = np.zeros((n_use, 1), dtype=np.float32)
+            q_mol[:n, 0] = np.float32(q_np[mi])
+            s_mol[:n, 0] = np.float32(s_np[mi])
+            if has_mm:
+                mol_id_mol = np.full((n_use,), -1, dtype=np.int32)
+                cgenff_mol = np.zeros((n_use,), dtype=np.int32)
+                mol_id_mol[:n] = mol_id_flat[a0:a1]
+                cgenff_mol[:n] = cgenff_flat[a0:a1]
+
+        dst_parts.append(ld + atom_offset)
+        src_parts.append(ls + atom_offset)
+        mask_parts.append(pair_mask)
+        r_parts.append(r_mol)
+        z_parts.append(z_mol)
+        f_parts.append(f_mol)
+        q_parts.append(q_mol)
+        s_parts.append(s_mol)
+        atom_mask_parts.append(atom_mask_mol)
+        seg_parts.append(np.full((n_use,), b, dtype=np.int32))
+        e_rows.append(e_np[mi])
+        if has_mm:
+            mol_id_parts.append(mol_id_mol)
+            cgenff_parts.append(cgenff_mol)
+        atom_offset += n_use
 
     dst_idx_np = np.concatenate(dst_parts, axis=0)
     src_idx_np = np.concatenate(src_parts, axis=0)
@@ -370,6 +427,8 @@ def build_spooky_batch_from_flat_data(
     f_cat = np.concatenate(f_parts, axis=0)
     q_atoms_np = np.concatenate(q_parts, axis=0)
     s_atoms_np = np.concatenate(s_parts, axis=0)
+    atom_mask_np = np.concatenate(atom_mask_parts, axis=0)
+    batch_mask_np = np.concatenate(mask_parts, axis=0)
     batch_segments_np = np.concatenate(seg_parts, axis=0)
     e_batch = np.array(e_rows, dtype=np.float64).reshape(-1, 1)
 
@@ -383,8 +442,8 @@ def build_spooky_batch_from_flat_data(
         "dst_idx": jnp.asarray(dst_idx_np, dtype=jnp.int32),
         "src_idx": jnp.asarray(src_idx_np, dtype=jnp.int32),
         "batch_segments": jnp.asarray(batch_segments_np, dtype=jnp.int32),
-        "batch_mask": jnp.ones(dst_idx_np.shape[0], dtype=jnp.float32),
-        "atom_mask": jnp.ones(z_cat.shape[0], dtype=jnp.float32),
+        "batch_mask": jnp.asarray(batch_mask_np, dtype=jnp.float32),
+        "atom_mask": jnp.asarray(atom_mask_np, dtype=jnp.float32),
         "batch_size": batch_size,
     }
     if has_mm:
