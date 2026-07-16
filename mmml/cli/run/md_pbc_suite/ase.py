@@ -1083,8 +1083,12 @@ def _validate_psf_charges(
     total_atoms: int,
     log_lines: list[str] | None = None,
 ) -> dict:
+    # Import locally: certified-box / artifact load never calls _load_pycharmm_modules(),
+    # so the module-level ``psf`` cache stays None even though CHARMM already has a PSF.
+    import pycharmm.psf as psf_mod
+
     charges = _get_actual_psf_charges(total_atoms)[:total_atoms]
-    atom_types = np.asarray(psf.get_atype(), dtype=str)[:total_atoms]
+    atom_types = np.asarray(psf_mod.get_atype(), dtype=str)[:total_atoms]
     if charges.shape[0] != total_atoms:
         raise RuntimeError(
             f"PSF charge count mismatch: expected {total_atoms}, got {charges.shape[0]}"
