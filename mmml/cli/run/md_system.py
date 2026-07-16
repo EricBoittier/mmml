@@ -978,13 +978,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--from-psf",
         type=Path,
         default=None,
-        help="pycharmm: load PSF instead of rebuilding cluster",
+        help=(
+            "Load PSF instead of rebuilding cluster (pycharmm, ase, jaxmd). "
+            "Requires --from-crd for certified liquid-box / mini handoff."
+        ),
     )
     parser.add_argument(
         "--from-crd",
         type=Path,
         default=None,
-        help="pycharmm: load CRD with --from-psf",
+        help=(
+            "Load CRD with --from-psf (pycharmm, ase, jaxmd). "
+            "Skips Packmol; sibling box.json overrides --box-size when present."
+        ),
     )
     parser.add_argument(
         "--skip-cluster-build",
@@ -2336,6 +2342,9 @@ def _append_packmol_args(cmd: list[str], args: argparse.Namespace) -> None:
         resolve_packmol_use,
     )
 
+    if getattr(args, "from_psf", None) and getattr(args, "from_crd", None):
+        # Certified liquid-box / mini: do not forward Packmol cold-start flags.
+        return
     if not resolve_packmol_use(
         composition=args.composition,
         packmol=getattr(args, "packmol", None),
@@ -3014,8 +3023,6 @@ def _filter_pycharmm_only_extra_argv(argv: list[str]) -> list[str]:
         "--no-charmm-pre-minimize",
         "--max-grms-before-dyn",
         "--no-echeck",
-        "--from-psf",
-        "--from-crd",
         "--skip-cluster-build",
     }
     out: list[str] = []
@@ -3143,6 +3150,8 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     else:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
     _append_optional(cmd, "--builder", getattr(args, "builder", None))
+    _append_optional(cmd, "--from-psf", getattr(args, "from_psf", None))
+    _append_optional(cmd, "--from-crd", getattr(args, "from_crd", None))
     if not skip_box_size_for_cmd:
         _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--checkpoint", args.checkpoint)
