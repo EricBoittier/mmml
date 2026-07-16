@@ -13,7 +13,6 @@ from jax import Array, jit
 
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 PathLike = str | Path
 
@@ -283,6 +282,9 @@ def minimize_bonded_jax_per_monomer_recovery(
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        resolve_monomer_offsets_for_ctx,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
@@ -291,7 +293,12 @@ def minimize_bonded_jax_per_monomer_recovery(
 
     positions = np.asarray(get_charmm_positions_array(), dtype=np.float64)
     n_atoms = int(positions.shape[0])
-    offsets = monomer_offsets(n_atoms, int(n_monomers))
+    # Mixed solvent PSFs (e.g. MEOH=6 + TIP3=3) are not a uniform split.
+    offsets = resolve_monomer_offsets_for_ctx(
+        ctx, n_monomers=int(n_monomers), n_atoms=n_atoms
+    )
+    if offsets is None:
+        offsets = monomer_offsets(n_atoms, int(n_monomers))
     ml_indices = set(int(i) for i in _ml_atom_indices(ctx))
     system, psf_source = load_bonded_system_for_recovery(
         ctx,

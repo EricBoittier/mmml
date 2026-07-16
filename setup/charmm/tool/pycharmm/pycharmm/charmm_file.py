@@ -26,6 +26,35 @@ import ctypes
 import pycharmm.lib as lib
 
 
+def c_api_path_buffer(file_name: str) -> tuple[ctypes.Array, ctypes.c_int]:
+    """Stable path buffer + length for CHARMM ``bind(c)`` file APIs.
+
+    ``ctypes.c_char_p(path.encode())`` is unsafe: the backing bytes can be
+    collected before Fortran reads the pointer (segfault in ``read_rtf_file``).
+    """
+    buf = ctypes.create_string_buffer(file_name.encode())
+    return buf, ctypes.c_int(len(file_name))
+
+
+def c_api_string_buffer(text: str) -> tuple[ctypes.Array, ctypes.c_int]:
+    """Stable buffer + length for arbitrary CHARMM ``bind(c)`` string APIs."""
+    encoded = text.encode()
+    buf = ctypes.create_string_buffer(encoded)
+    return buf, ctypes.c_int(len(encoded))
+
+
+def _resolve_charmm_fortran_path(file_name, *, read_only, append):
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    except ImportError:
+        return file_name, None
+    return charmm_fortran_path(
+        file_name,
+        for_write=not read_only,
+        append=append,
+    )
+
+
 class CharmmFile:
     """
     A class to manipulate files at the fortran level
@@ -46,6 +75,14 @@ class CharmmFile:
         self.append = append
         self.formatted = formatted
         self.is_open = False
+        self._io_alias = None
+        fortran_path, alias = _resolve_charmm_fortran_path(
+            file_name,
+            read_only=read_only,
+            append=append,
+        )
+        self.file_name = fortran_path
+        self._io_alias = alias
         self.open()
 
     def __del__(self):
@@ -116,6 +153,8 @@ class CharmmFile:
 
         if success_bit == 1:
             self.is_open = False
+            if self._io_alias is not None:
+                self._io_alias.finalize()
 
         # otherwise, think about throwing a specific error here
         return not self.is_open

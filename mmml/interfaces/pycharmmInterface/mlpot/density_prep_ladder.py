@@ -837,7 +837,6 @@ def run_density_prep_ladder(
         journal.begin_round(round_idx, grms)
         round_grms_start = float(grms)
         round_pos_start = np.asarray(get_charmm_positions_array(), dtype=np.float64).copy()
-        pos = round_pos_start
 
         step_label = f"round{round_idx + 1}:monomer_repack"
         try:

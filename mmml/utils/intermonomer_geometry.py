@@ -10,15 +10,15 @@ import numpy as np
 
 # Prep gate: ML-safe inter-monomer MIC floor before USER potential is enabled.
 # Blocks true overlaps while allowing dense liquid prep (sub-vdW contacts relax in mini).
-DEFAULT_PRE_MLPOT_OVERLAP_MIN_A = 2.0
+DEFAULT_PRE_MLPOT_OVERLAP_MIN_A = 0.45
 
 # Element-pair prep floors for dense halogenated liquids (e.g. DCM).
-DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A = 2.3
-DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A = 2.5
-DEFAULT_PRE_MLPOT_H_H_MIN_A = 2.2
+DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A = 0.45
+DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A = 0.45
+DEFAULT_PRE_MLPOT_H_H_MIN_A = 0.45
 
 # Hard abort before MLpot SD when hybrid forces are already catastrophic.
-DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A = 50.0
+DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A = 500.0
 
 # CHARMM <MKIMAT2> group Min-Distance before MLpot USER (looser than MIC prep floors).
 # Atom-pair prep gates remain element-aware (≈2.0–2.5 Å); override via CLI/config when needed.

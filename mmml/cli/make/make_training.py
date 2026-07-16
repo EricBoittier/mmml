@@ -100,7 +100,7 @@ def _parse_list_option(val: Any) -> Optional[Sequence[Any]]:
         if val_stripped.startswith("[") or val_stripped.startswith("("):
             try:
                 return json.loads(val_stripped)
-            except Exception as e:
+            except Exception:
                 pass
         if "," in val_stripped:
             return [x.strip() for x in val_stripped.split(",")]
@@ -160,8 +160,28 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         default=None,
         help="Optional model JSON to load instead of creating a new EF model",
     )
-    parser.add_argument("--n-train", "--n_train", type=int, default=1000, dest="n_train")
-    parser.add_argument("--n-valid", "--n_valid", type=int, default=100, dest="n_valid")
+    parser.add_argument(
+        "--n-train",
+        "--n_train",
+        type=int,
+        default=None,
+        dest="n_train",
+        help=(
+            "Training samples to split from --data (default: 1000). Omit when "
+            "--valid-data is set: the full files are used."
+        ),
+    )
+    parser.add_argument(
+        "--n-valid",
+        "--n_valid",
+        type=int,
+        default=None,
+        dest="n_valid",
+        help=(
+            "Validation samples to split from --data (default: 100). Omit when "
+            "--valid-data is set: the full files are used."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--batch-size", "--batch_size", type=int, default=1, dest="batch_size")
     parser.add_argument("--num-epochs", "--num_epochs", type=int, default=100, dest="num_epochs")
@@ -181,6 +201,52 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         "--charges-weight", "--charges_weight", type=float, default=14.39, dest="charges_weight"
     )
     parser.add_argument("--objective", type=str, default="valid_loss")
+    parser.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        action="store_true",
+        dest="mm_charge_correction",
+        help=(
+            "Hybrid MM: use the model's predicted charges as a CORRECTION to the "
+            "fixed CGenFF charges in the MM electrostatics "
+            "(q_eff = q_cgenff + dq_ML, projected net-zero per monomer). "
+            "Requires --charges (a model with a charge head). Off by default: "
+            "MM electrostatics then uses the CGenFF charges alone."
+        ),
+    )
+    parser.add_argument(
+        "--hybrid-mm",
+        "--hybrid_mm",
+        action="store_true",
+        dest="hybrid_mm",
+        help=(
+            "Train on the hybrid ML/MM total the MD calculator evaluates: "
+            "E = (1-s)*(E_A+E_B) + s*E_AB + E_MM, where the taper s(r_com) "
+            "applies to the dimer interaction and E_MM is switched CGenFF LJ + "
+            "electrostatics. Requires a dataset carrying cgenff_type_idx, "
+            "mol_id, cgenff_charge and the cgenff_master_* LJ tables. The "
+            "handoff is controlled by --ml-switch-width/--mm-switch-on/"
+            "--mm-switch-width (same flags and defaults as the MD side)."
+        ),
+    )
+    # ml_switch_width / mm_switch_on / mm_switch_width / --no-complementary-handoff
+    # come from the same helper the MD side uses, so the flags, defaults and
+    # semantics cannot drift between training and deployment.
+    from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+
+    add_handoff_cutoff_args(parser)
+    parser.add_argument(
+        "--ema-decay",
+        "--ema_decay",
+        type=float,
+        default=0.999,
+        dest="ema_decay",
+        help=(
+            "Decay for the parameter EMA (default: 0.999). Validation, "
+            "checkpointing and restart all use the EMA weights. Set 0 to "
+            "disable EMA (saved weights then track the raw parameters)."
+        ),
+    )
     parser.add_argument("--restart", type=str, default=None, help="Checkpoint path to restart from")
 
     parser.add_argument(
@@ -236,6 +302,12 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         help="Disable ZBL repulsion in EF model",
     )
     parser.set_defaults(zbl=False)
+    parser.add_argument(
+        "--trainable-zbl",
+        action="store_true",
+        default=False,
+        help="Opt in to optimizing ZBL screening parameters; fixed ZBL is the default.",
+    )
 
     parser.add_argument(
         "--use-pbc",
@@ -653,15 +725,83 @@ def validate_train_args(args: argparse.Namespace) -> None:
             )
 
     if args.valid_data:
-        if args.n_train > 0 or args.n_valid > 0:
+        # ``n_train``/``n_valid`` default to None so that *omitting* them (what the
+        # example config documents) is not mistaken for an explicit request; only a
+        # positive value actually conflicts with fixed valid_data splits. 0 is
+        # tolerated: it was the workaround while the defaults were 1000/100.
+        if (args.n_train or 0) > 0 or (args.n_valid or 0) > 0:
             raise ValueError(
                 "With --valid-data, do not set --n-train/--n-valid (full files are used)"
             )
         return
+    # Single-file split: fall back to the historical default split sizes.
+    if args.n_train is None:
+        args.n_train = 1000
+    if args.n_valid is None:
+        args.n_valid = 100
     if args.n_train < 0 or args.n_valid < 0:
         raise ValueError("--n-train and --n-valid must be >= 0")
     if args.n_train + args.n_valid <= 0:
         raise ValueError("At least one of --n-train or --n-valid must be > 0")
+
+
+def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> dict | None:
+    """Kwargs for the hybrid ML/MM assembly, or None when the mode is off.
+
+    The ``cgenff_master_*`` LJ tables are ``(n_types,)`` -- not per-sample -- so
+    the batching loader skips them (it drops arrays whose first dim != n_samples).
+    Load them here and hand them to ``train_model`` as closure state instead.
+    """
+    if not getattr(args, "hybrid_mm", False):
+        return None
+
+    import numpy as _np
+
+    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+
+    if not data_paths:
+        raise ValueError("--hybrid-mm requires --data")
+    path = data_paths[0]
+    with _np.load(path, allow_pickle=True) as d:
+        missing = [
+            k
+            for k in (*HYBRID_MM_BATCH_KEYS, "cgenff_master_sigmas", "cgenff_master_epsilons")
+            if k not in d.files
+        ]
+        if missing:
+            raise ValueError(
+                f"--hybrid-mm needs CGenFF fields in {path}; missing: {', '.join(missing)}. "
+                "Prepare the dataset with scripts/prepare_ml_mm_dataset.py (or the "
+                "combined-dataset recipe) so it carries "
+                f"{', '.join(HYBRID_MM_BATCH_KEYS)} + master LJ tables."
+            )
+        sigmas = _np.asarray(d["cgenff_master_sigmas"])
+        epsilons = _np.asarray(d["cgenff_master_epsilons"])
+
+    cfg = {
+        "master_sigmas": sigmas,
+        "master_epsilons": epsilons,
+        "mm_switch_on": float(args.mm_switch_on),
+        "mm_switch_width": float(args.mm_switch_width),
+        "ml_switch_width": float(args.ml_switch_width),
+        "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
+        "charge_correction": bool(getattr(args, "mm_charge_correction", False)),
+    }
+    if cfg["charge_correction"] and not getattr(args, "charges", False):
+        raise ValueError(
+            "--mm-charge-correction needs a model with a charge head; pass --charges "
+            "(without it the model predicts no charges, so there is no correction)."
+        )
+    if not getattr(args, "quiet", False):
+        print(
+            f"Hybrid ML/MM training: E = (1-s)*(E_A+E_B) + s*E_AB + E_MM  "
+            f"({len(sigmas)} CGenFF types; ml_switch_width={cfg['ml_switch_width']}, "
+            f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
+            f"complementary_handoff={cfg['complementary_handoff']}, "
+            f"charge_correction={cfg['charge_correction']})",
+            flush=True,
+        )
+    return cfg
 
 
 def normalize_data_paths(data: Any) -> list[str]:
@@ -950,6 +1090,7 @@ def main_loop(args):
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
             zbl=args.zbl,
+            trainable_zbl=args.trainable_zbl,
             efa=args.efa,
             use_pbc=args.use_pbc,
             use_energy_bias=args.use_energy_bias,
@@ -979,6 +1120,14 @@ def main_loop(args):
     else:
         data_keys = ('R', 'Z', 'F', "N", 'E', 'D', 'batch_segments')
 
+    hybrid_mm = _build_hybrid_mm_config(args, data_paths)
+    if hybrid_mm is not None:
+        from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+
+        data_keys = tuple(data_keys) + tuple(
+            k for k in HYBRID_MM_BATCH_KEYS if k not in data_keys
+        )
+
     ema_params, best_loss, run_ckpt_dir = train_model(
         train_key,
         model,
@@ -992,6 +1141,7 @@ def main_loop(args):
         dipole_weight=args.dipole_weight,
         charges_weight=args.charges_weight,
         restart=args.restart,
+        ema_decay=args.ema_decay,
         conversion=conversion,
         print_freq=args.print_freq,
         name=args.tag,
@@ -1005,6 +1155,7 @@ def main_loop(args):
         batch_method=args.batch_method,
         batch_args_dict=batch_args_dict,
         data_keys=data_keys,
+        hybrid_mm=hybrid_mm,
         num_epochs=args.num_epochs,
         early_stop_patience=args.early_stop_patience,
         init_params=init_params,

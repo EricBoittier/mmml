@@ -146,7 +146,9 @@ nav:
       - Simulation robustness report: simulation-robustness-report.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
+      - Hybrid MM charges (fixed / latent / fixed+latent): hybrid-mm-charges.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
+      - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md
       - Settings: mlpot-settings.md
       - Calculator profiling: calculator-profiling.md
@@ -154,6 +156,7 @@ nav:
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
       - Spatial ML MPI: mlpot-spatial-mpi.md
   - PyCHARMM & cluster:
+      - SciCORE cluster guide: scicore.md
       - Periodic boundaries (IMAGE super system): pbc-super-system.md
       - PyCHARMM C API (box and pressure): pycharmm-c-api-pbc-box-pressure.md
       - MPI operations: pycharmm-mpi.md

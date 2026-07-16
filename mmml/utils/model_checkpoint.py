@@ -36,6 +36,7 @@ Example Usage:
 
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+from collections.abc import Mapping
 import json
 import pickle
 
@@ -94,6 +95,60 @@ def normalize_physnet_config(cfg: dict[str, Any]) -> dict[str, Any]:
 def canonicalize_physnet_config_for_save(cfg: dict[str, Any]) -> dict[str, Any]:
     """Ensure both legacy and canonical PhysNet config keys are written."""
     return normalize_physnet_config(cfg)
+
+
+# Universal short-range ZBL window (Å).  Never reuse the ML neighbor ``cutoff``.
+DEFAULT_ZBL_CUTON_A = 0.1
+DEFAULT_ZBL_CUTOFF_A = 0.6
+# Values at/above this almost always mean the ML cutoff was mistakenly reused.
+_MAX_REASONABLE_ZBL_CUTOFF_A = 1.0
+
+
+def _ensure_sensible_zbl_window(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Force ZBL onto the short collision window (0.1–0.6 Å).
+
+    Older loaders set ``zbl_cutoff`` to the model neighbor cutoff (often 6 Å)
+    for legacy trainable-ZBL checkpoints.  That is physically wrong for ZBL and
+    is clamped here whenever the stored/inferred window is missing or too wide.
+    """
+    out = dict(cfg)
+    if out.get("zbl") is False:
+        return out
+    raw_cutoff = out.get("zbl_cutoff")
+    try:
+        cutoff_f = float(raw_cutoff) if raw_cutoff is not None else None
+    except (TypeError, ValueError):
+        cutoff_f = None
+    raw_cuton = out.get("zbl_cuton")
+    wide_or_missing = (
+        cutoff_f is None
+        or cutoff_f > _MAX_REASONABLE_ZBL_CUTOFF_A
+        or raw_cuton is None
+    )
+    if wide_or_missing:
+        out["zbl_cuton"] = float(DEFAULT_ZBL_CUTON_A)
+        out["zbl_cutoff"] = float(DEFAULT_ZBL_CUTOFF_A)
+    return out
+
+
+def infer_trainable_zbl_config(
+    cfg: dict[str, Any], parameter_tree: Any
+) -> dict[str, Any]:
+    """Infer the legacy ZBL architecture without changing explicit configs.
+
+    New models record ``trainable_zbl`` and default it to ``False``. Older
+    PhysNet-family checkpoints always trained ZBL and can be identified by the
+    four parameter leaves under the Flax ``repulsion`` module.
+
+    ZBL cutoffs are always kept on the short universal window (0.1–0.6 Å).
+    Legacy loaders that reused the ML neighbor cutoff (~6 Å) are corrected.
+    """
+    out = dict(cfg)
+    if "trainable_zbl" not in out:
+        modules = parameter_tree.get("params", parameter_tree)
+        repulsion = modules.get("repulsion", {}) if isinstance(modules, Mapping) else {}
+        out["trainable_zbl"] = bool(repulsion)
+    return _ensure_sensible_zbl_window(out)
 
 
 def physnet_constructor_kwargs(cfg: dict[str, Any], model_cls: type) -> dict[str, Any]:
@@ -527,7 +582,9 @@ def create_model_from_checkpoint(
     checkpoint = load_model_checkpoint(checkpoint_dir)
     
     # Get config
-    config_dict = checkpoint.get('config', {})
+    config_dict = infer_trainable_zbl_config(
+        checkpoint.get('config', {}), checkpoint.get('params') or {}
+    )
     
     # Merge config with provided kwargs (kwargs take precedence)
     model_config = {**config_dict, **model_kwargs}
@@ -535,7 +592,7 @@ def create_model_from_checkpoint(
     # Create model instance
     # Filter out non-model attributes
     model_attrs = ['features', 'max_degree', 'num_iterations', 'num_basis_functions',
-                   'cutoff', 'max_atomic_number', 'n_res', 'n_refinement_blocks', 'zbl', 'efa', 'charges',
+                   'cutoff', 'max_atomic_number', 'n_res', 'n_refinement_blocks', 'zbl', 'trainable_zbl', 'efa', 'charges',
                    'natoms', 'max_padded_atoms', 'total_charge', 'n_dcm', 'include_pseudotensors']
     
     filtered_config = {k: v for k, v in model_config.items() 

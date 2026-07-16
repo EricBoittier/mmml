@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from mmml.cli.run.md_config import (
-    campaign_job_ids,
     expand_repeated_jobs,
     load_yaml_config,
     merge_campaign_job_config,
@@ -48,10 +47,12 @@ def _campaign_needs_pycharmm(campaign: dict[str, Any]) -> bool:
 
 
 def _pycharmm_bonded_mm_mini_enabled(cfg: dict[str, Any], job: dict[str, Any]) -> bool:
-    """PyCHARMM campaign jobs strain-check after heat by default."""
+    """Opt-in only: bonded-mm-mini can stall on PBC crystal free / CGENFF APPEND."""
     if job.get("bonded_mm_mini") is False or cfg.get("bonded_mm_mini") is False:
         return False
-    return True
+    if job.get("bonded_mm_mini") is True or cfg.get("bonded_mm_mini") is True:
+        return True
+    return False
 
 
 def _resolve_output_dir(merged: dict[str, Any], run_id: str, *, rep: int = 0) -> Path:
@@ -543,7 +544,7 @@ def build_benchmark_md_system_argv(
                 "--dynamics-overlap-action",
                 "rescue",
                 "--dynamics-overlap-check-interval",
-                str(cfg.get("dynamics_overlap_check_interval", 100)),
+                str(cfg.get("dynamics_overlap_check_interval", 500)),
                 "--echeck",
                 str(cfg.get("echeck", 500.0)),
                 "--charmm-sd-steps",

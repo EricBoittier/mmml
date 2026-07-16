@@ -254,10 +254,10 @@ def wizard_md_single(out_dir: Path) -> list[Path]:
     if setup == "pycharmm_minimize":
         cfg["md_stages"] = "mini"
         cfg["mini_nstep"] = 500
-        cfg["bonded_mm_mini"] = True
+        cfg["bonded_mm_mini"] = False
     elif backend == "pycharmm" and setup not in ("lambda_ti",):
         cfg.setdefault("md_stages", "mini,heat,nve")
-        cfg["bonded_mm_mini"] = True
+        cfg["bonded_mm_mini"] = False
         cfg["no_echeck"] = True
 
     if setup == "lambda_ti":
@@ -292,9 +292,9 @@ def wizard_md_campaign(out_dir: Path) -> list[Path]:
             "pressure": 1.0,
             "seed": 42,
             "backend": "pycharmm",
-            "bonded_mm_mini": True,
+            "bonded_mm_mini": False,
             "no_echeck": True,
-            "dynamics_overlap_check_interval": 100,
+            "dynamics_overlap_check_interval": 500,
         },
         "runs": {},
     }

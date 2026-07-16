@@ -7,6 +7,7 @@ ckpt_dir: ./ckpts/ama_mp2
 tag: ama_mp2
 
 # Omit n_train/n_valid when valid_data is set (uses full NPZ files as-is).
+# They only apply when splitting a single `data` file (defaults: 1000 / 100).
 # n_train: 24000
 # n_valid: 3000
 seed: 42
@@ -20,6 +21,11 @@ forces_weight: 52.91
 dipole_weight: 27.21
 charges_weight: 14.39
 objective: valid_loss
+
+# Parameter EMA. Validation, checkpointing and restart all use the EMA weights,
+# so this changes the saved model. Set to 0.0 to disable EMA entirely (the saved
+# weights then track the raw trained parameters exactly).
+# ema_decay: 0.999
 
 # Auto-detected from N/R when omitted
 # num_atoms: 40

@@ -1,6 +1,10 @@
-# PBC DCM / ACO burst campaign workflow
+# PBC pure-liquid solvent burst campaign workflow
 
-Snakemake workflow for **DCM** and **ACO** in cubic PBC boxes. Each matrix cell runs one in-process `mmml md-system --run-all` campaign:
+Snakemake workflow for pure solvents in cubic PBC boxes. The default validated
+matrix uses **TIP3 water** and **MEOH methanol**. DCM and ACO remain supported
+for targeted diagnostics, but are excluded from the default campaign because
+their current dimer PES validation fails. Each matrix cell runs one in-process
+`mmml md-system --run-all` campaign:
 
 1. **PyCHARMM init** — MLpot mini + gentle segmented heat (overlap rescue + bonded-MM repair)
 2. **PyCHARMM equi** — 5 × 10 ps NPT equilibration segments (50 ps total)
@@ -34,6 +38,7 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 | Axis | Values (config keys) |
 |------|----------------------|
 | Solvent | `solvents` |
+| Mixtures | `mixtures` — mappings of residue to mole fraction |
 | Bulk density | `bulk_density_fractions` — N = fraction × 298 K liquid count per solvent/box |
 | Legacy fixed N | `cluster_sizes` — use instead of `bulk_density_fractions` (mutually exclusive) |
 | Temperature (K) | `temperatures` (list) |
@@ -41,22 +46,32 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 
 **Bulk reference** (monomers at 100% liquid density):
 
-| L (Å) | DCM N | ACO N |
-|-------|-------|-------|
-| 28 | 206 | 178 |
-| 32 | 308 | 266 |
-| 36 | 439 | 379 |
+| L (Å) | TIP3 N | MEOH N |
+|-------|--------|--------|
+| 28 | 732 | 325 |
+| 30 | 900 | 399 |
+| 32 | 1092 | 484 |
 
-Default fractions `[0.5, 0.75, 1.0]` → e.g. `dcm_103_t200_l28` (50% bulk DCM), `dcm_206_t200_l28` (100%).
+Default fractions `[0.1, 0.25]` keep the first campaign practical while still
+testing condensed environments. For example, the 28 Å cells contain 73/183
+TIP3 waters or 32/81 MEOH molecules.
+
+The default mixed branch adds TIP3:MEOH mole fractions 25:75, 50:50, and
+75:25. Mixture counts use ideal volume mixing and largest-remainder integer
+allocation, so every generated composition has exactly the requested total N
+and retains both components. A representative tag is
+`meohx50_tip3x50_45_t300_l28`, with campaign composition `MEOH:23,TIP3:22`.
 
 Run `scripts/preflight.sh` to print the full table for configured `box_sizes`.
 
-Run tag: `{solvent}_{n}` when there is one temperature and one box (default). When sweeping `temperatures` or `box_sizes`, tags include T/L: `dcm_154_t300_l32`.
+Run tag: `{solvent}_{n}` when there is one temperature and one box. When
+sweeping `temperatures` or `box_sizes`, tags include T/L, for example
+`tip3_90_t300_l30`.
 
 Outputs:
 
 ```
-artifacts/pbc_solvent_burst/dcm_30_t320_l28/
+artifacts/pbc_solvent_burst/tip3_73_t300_l28/
   campaign.yaml
   pycharmm_init/pretreat/ …
   jaxmd_burst_01/ …
@@ -98,7 +113,11 @@ box_sizes: [28, 32, 36]
 
 ### Density warning
 
-N=80–100 in a 32 Å cube is **extremely dense** when using legacy fixed `cluster_sizes`. With **bulk-density** sizing, 0.5× liquid (~154 DCM in L=32) is the moderate tier; 1.0× (~308) is full liquid and may stress Packmol or heat — those cells mark the final JAX burst `optional` via `optional_bulk_fractions: [1.0]`.
+Interpret N relative to the molecule. In a 32 Å cube, full density is about
+1092 TIP3 waters or 484 MEOH molecules. The default 0.1×/0.25× matrix therefore
+uses 109/273 waters or 48/121 methanols. Full-density cells can stress Packmol,
+MLpot pair budgets, and heat recovery; add them only as an explicitly optional
+follow-up tier.
 
 Tune or drop large sizes in `config.yaml` if placement fails.
 
@@ -128,6 +147,9 @@ For heat-only screening with global echeck off, see [dcm_heat_scaling](../dcm_he
 Repair defaults: `dynamics_overlap_action: rescue` (PyCHARMM), bonded-MM after mini/heat, JAX-MD overlap CHARMM rescue + velocity rethermalization + `handoff_quality_gate`.
 
 ## Run
+
+For SciCORE, use the validated module, MPI, QoS, and dependency-gated launch
+procedure in [the SciCORE environment guide](../../docs/scicore.md).
 
 ```bash
 cd workflows/pbc_solvent_burst

@@ -20,9 +20,7 @@ def test_tip3_parameters_follow_permuted_geometry_atom_order() -> None:
     z, r = _water_ohh()
     permutation = np.array([1, 2, 0])  # observed H,H,O instead of template O,H,H
 
-    residue, _, charges = match_cgenff_template_fast(
-        z[permutation], [0, 1, 2], r[permutation]
-    )
+    residue, _, charges = match_cgenff_template_fast(z[permutation], r[permutation])
 
     assert residue == "TIP3"
     np.testing.assert_allclose(charges, [0.417, 0.417, -0.834])
@@ -31,7 +29,7 @@ def test_tip3_parameters_follow_permuted_geometry_atom_order() -> None:
 def test_tip3_parameters_preserve_template_order_geometry() -> None:
     z, r = _water_ohh()
 
-    residue, _, charges = match_cgenff_template_fast(z, [0, 1, 2], r)
+    residue, _, charges = match_cgenff_template_fast(z, r)
 
     assert residue == "TIP3"
     np.testing.assert_allclose(charges, [-0.834, 0.417, 0.417])

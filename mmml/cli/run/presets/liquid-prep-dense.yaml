@@ -20,8 +20,10 @@ defaults:
   charmm_sd_steps: 1000
   charmm_abnr_steps: 1000
   mini_nstep: 500
-  bonded_mm_mini: true
-  bonded_mm_mini_after: mini,heat
-  bonded_mm_mini_steps: 500
+  # bonded-mm-mini is opt-in (default off): PBC crystal free / CGENFF APPEND can stall.
+  # bonded_mm_mini: true
+  # bonded_mm_mini_after: mini,heat
+  # bonded_mm_mini_steps: 500
+
   max_grms_before_dyn: 50.0
   dynamics_overlap_min_distance: 1.5

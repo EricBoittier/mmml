@@ -29,7 +29,6 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*Task was d
 from mmml.models.physnetjax.physnetjax.data.data import print_shapes
 from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
 from mmml.models.physnetjax.physnetjax.restart.restart import (
-    orbax_checkpointer,
     restart_training,
     save_training_checkpoint,
 )
@@ -141,6 +140,8 @@ def train_model(
     teacher_params=None,
     distill_alpha: float = 1.0,
     distill_targets=None,
+    ema_decay: float = 0.999,
+    hybrid_mm=None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -218,7 +219,19 @@ def train_model(
         Useful for warm-starting from transplanted parameters (progressive
         training).  The optimizer and EMA are initialised from these params.
         Ignored when ``restart`` is set.
-        
+    hybrid_mm : HybridMMConfig | dict | None, optional
+        When set, train on the hybrid ML/MM total the MD calculator
+        evaluates: ``E = (1 - s) * (E_A + E_B) + s * E_AB + E_MM``, where the
+        taper ``s(r_com)`` applies to the dimer *interaction* only.  A
+        ``mmml.models.hybrid_energy.HybridMMConfig`` (master LJ tables +
+        switching widths); a plain dict is coerced to one.  Requires the CGenFF
+        per-atom fields in the batch (see ``HYBRID_MM_BATCH_KEYS``).
+    ema_decay : float, optional
+        Decay for the exponential moving average of parameters, by default
+        0.999.  Validation, checkpointing and restart all use the EMA weights,
+        so this affects the saved model.  Set to ``0.0`` to disable EMA
+        entirely (``ema_params`` then tracks the raw parameters exactly).
+
     Returns
     -------
     tuple
@@ -236,6 +249,12 @@ def train_model(
     - Progress monitoring with rich console output
     """
     _ = log_tb  # Deprecated argument retained for backward compatibility.
+
+    # Freeze the hybrid settings here, outside the jit boundary: they are a
+    # static argument (a dict is unhashable and its bools would trace).
+    from mmml.models.hybrid_energy import HybridMMConfig
+
+    hybrid_mm = HybridMMConfig.coerce(hybrid_mm)
     if profile_epoch_timing is None:
         import os
 
@@ -328,7 +347,13 @@ def train_model(
         )
 
     best_loss = float("inf") if (best or save_every_epoch) else None
-    do_charges = model.charges
+    # Snapshot the CLI/constructed model's charge-head flag.  Restart may
+    # rebuild ``model`` from checkpoint ``model_attributes``, which can disagree
+    # (e.g. YAML ``charges: true`` while restarting a charges=False hybrid run).
+    # ``do_charges`` must follow the *restored* model — the loss reads
+    # ``output["sum_charges"]``, which is None without a charge head.
+    cli_charges = bool(getattr(model, "charges", False))
+    do_charges = cli_charges
     # Initialize model parameters and optimizer state.
     key, init_key = jax.random.split(key)
 
@@ -376,6 +401,18 @@ def train_model(
     CKPT_DIR = ckpt_dir / f"{name}-{uuid_}"
     if not restart:
         CKPT_DIR.mkdir(parents=True, exist_ok=True)
+    if hybrid_mm is not None:
+        # Persist Mode A/C metadata next to the run so MD can warn on mismatch.
+        import json
+
+        from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+
+        CKPT_DIR.mkdir(parents=True, exist_ok=True)
+        _meta_path = CKPT_DIR / "hybrid_mm.json"
+        with open(_meta_path, "w") as _mf:
+            json.dump(hybrid_mm_metadata_dict(hybrid_mm), _mf, indent=2)
+            _mf.write("\n")
+        print(f"Wrote hybrid MM metadata to {_meta_path}", flush=True)
 
     # Batches for the validation set need to be prepared only once.
     key, valid_shuffle_key = jax.random.split(key)
@@ -442,6 +479,28 @@ def train_model(
         )
         params = _merge_params(fresh_restart_params, params)
         ema_params = _merge_params(fresh_restart_params, ema_params)
+        do_charges = bool(getattr(model, "charges", False))
+        if do_charges != cli_charges:
+            print(
+                f"WARNING: restart checkpoint has charges={do_charges} but this run "
+                f"was constructed with charges={cli_charges}. Using the checkpoint "
+                f"architecture (doCharges={do_charges}). For a charge head / "
+                f"--mm-charge-correction, start a fresh run (no --restart) with "
+                f"charges=true; you cannot graft a charge head onto a "
+                f"charges=false checkpoint by flipping the YAML flag.",
+                flush=True,
+            )
+        if (
+            hybrid_mm is not None
+            and bool(getattr(hybrid_mm, "charge_correction", False))
+            and not do_charges
+        ):
+            raise ValueError(
+                "hybrid_mm.charge_correction=True requires a model with a charge "
+                "head, but the restart checkpoint has charges=False. Start a fresh "
+                "run with charges=true and mm_charge_correction=true (omit "
+                "--restart / restart: from the charges=false hybrid checkpoint)."
+            )
     # initialize
     else:
         ema_params = params
@@ -465,6 +524,7 @@ def train_model(
     table = print_dict_as_table(model_attributes, title="Model Attributes")
     if console is not None:
         console.print(table)
+    print(f"Training loss will use doCharges={do_charges}", flush=True)
 
 
     live_context = Live(auto_refresh=False) if console is not None else nullcontext()
@@ -537,6 +597,8 @@ def train_model(
                     doCharges=do_charges,
                     params=params,
                     ema_params=ema_params,
+                    ema_decay=ema_decay,
+                    hybrid_mm=hybrid_mm,
                     teacher_params=teacher_params,
                     distill_alpha=distill_alpha,
                     doDistill=do_distill,
@@ -571,6 +633,7 @@ def train_model(
                     charges_weight=charges_weight,
                     charges=do_charges,
                     params=ema_params,
+                    hybrid_mm=hybrid_mm,
                 )
                 # Per-batch sync removed; one sync per validation epoch is enough.
                 valid_loss += (loss - valid_loss) / (i + 1)
@@ -631,6 +694,8 @@ def train_model(
             if should_save:
                 ckpt_t0 = time.perf_counter()
                 model_attributes = model.return_attributes()
+                from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+
                 ckpt = {
                     "model": state,
                     "model_attributes": model_attributes,
@@ -643,6 +708,7 @@ def train_model(
                     "lr_eff": lr_eff,
                     "objectives": obj_res,
                     "training_units": dict(TRAINING_UNITS),
+                    "hybrid_mm": hybrid_mm_metadata_dict(hybrid_mm),
                 }
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)

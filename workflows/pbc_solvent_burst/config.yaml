@@ -1,4 +1,7 @@
-# DCM / ACO PBC burst campaign: gentle PyCHARMM heat + alternating JAX-MD / equil.
+# TIP3 water / MEOH methanol PBC burst campaign: gentle PyCHARMM heat +
+# alternating JAX-MD / equil.  DCM/ACO are intentionally excluded: the
+# validated dimer PES is currently reliable for hydrogen-bonded water/methanol
+# chemistry, but not for halogenated or dispersion-dominated liquids.
 #
 # Output layout (gitignored under repo root or absolute output_root):
 #   artifacts/pbc_solvent_burst/{solvent}_{n}_t{T}_l{L}/
@@ -11,14 +14,23 @@
 # Legacy explicit counts: set cluster_sizes and omit bulk_density_fractions.
 # Override matrix root: output_root: /path/to/runs/pbc_solvent_burst
 
-solvents: [DCM, ACO]
+solvents: [TIP3, MEOH]
+# Mixed-water/methanol cells at three mole ratios. Counts are allocated from
+# ideal volume mixing using the same 298 K pure-liquid density references.
+mixtures:
+  - {TIP3: 0.25, MEOH: 0.75}
+  - {TIP3: 0.50, MEOH: 0.50}
+  - {TIP3: 0.75, MEOH: 0.25}
 # Fractions of 298 K bulk liquid monomer count (per solvent, per box side).
-bulk_density_fractions: [0.25, 0.5, ]
+bulk_density_fractions: [0.1, 0.25]
 bulk_density_n_min: 10
 # cluster_sizes: [10, 30, 50, 80, 100]  # legacy fixed-N matrix
-temperatures: [50.0, 100.0, 150.0,]
+temperatures: [280.0, 300.0, 320.0]
 box_sizes: [28.0, 30.0, 32.0]
-checkpoint: examples/ckpts_json/DESdimers_params.json
+# Require the selected validated checkpoint explicitly.  For the current
+# campaign, use the low-LR continuation from step 2000 (the best proof.html
+# arm), exported as a portable JSON checkpoint.
+checkpoint: ${MMML_CKPT}
 output_root: artifacts/pbc_solvent_burst
 seed_base: 123
 
@@ -92,7 +104,11 @@ spacing: 4.0
 packmol_tolerance: 1.0
 
 ml_gpu_count: 1
-ml_batch_size: 2048
+# Float64 Spooky force compilation for a 204-atom mixed cell exhausts a 24 GB
+# RTX4090 at 512 (and the historical 2048 default is larger still). Keep the
+# portable campaign default conservative; site-specific larger values are
+# opt-in after an on-node compile smoke.
+ml_batch_size: 32
 # Require 64-bit JAX evaluation for all MLpot PBC jobs.  The Slurm wrapper also
 # exports JAX_ENABLE_X64=1; keeping this explicit prevents a silent float32
 # downgrade when a job is launched from another environment.

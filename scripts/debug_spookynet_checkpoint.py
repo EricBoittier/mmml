@@ -21,7 +21,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from ase import Atoms
 from mmml.analysis.dimer_molecules import MOLECULES, make_oriented_scan_geometries
 from mmml.models.spookynet_calc import SpookyNetCalculator, EV_TO_KCAL_MOL
 

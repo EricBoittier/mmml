@@ -17,6 +17,7 @@ from jax import random
 
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
+from mmml.cli.run.summaries import save_calculator_summary_json
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
@@ -32,7 +33,6 @@ from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, 
 from mmml.paths import default_meoh_template_pdb
 
 from .ase import (
-    _cubic_box_length,
     _check_or_charmm_overlap_rescue,
     _enforce_min_com_separation,
     _numpy_wrap_monomers_primary_cell,
@@ -40,7 +40,6 @@ from .ase import (
     _randomize_monomer_com_positions,
     _run_charmm_minimize,
     _validate_psf_charges,
-    build_initial_cluster_from_args,
     resolve_cluster_geometry,
     resolve_cluster_packmol_sphere,
 )
@@ -156,6 +155,36 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ensemble", type=str, default="npt", choices=["nve", "nvt", "npt"])
     p.add_argument("--temperature", type=float, default=300.0)
     p.add_argument("--pressure", type=float, default=1.0, help="atm (for NPT)")
+    p.add_argument(
+        "--nve-force-energy-relative-tolerance",
+        type=float,
+        default=0.20,
+        help=(
+            "Maximum relative mismatch between a finite-difference energy slope "
+            "and the explicit hybrid force before NVE is rejected (<=0 disables)."
+        ),
+    )
+    p.add_argument(
+        "--nve-force-energy-epsilon-A",
+        type=float,
+        default=0.01,
+        help="Directional finite-difference displacement for the NVE force preflight.",
+    )
+    p.add_argument(
+        "--nve-etot-drift-abort-eV",
+        type=float,
+        default=0.5,
+        help="Abort NVE when total-energy drift exceeds this value (<=0 disables).",
+    )
+    p.add_argument(
+        "--nve-max-f-start-eVA",
+        type=float,
+        default=1.0,
+        help=(
+            "Refuse to start NVE when post-FIRE max atomic |F| exceeds this (eV/Å). "
+            "Default 1.0; use <=0 to disable."
+        ),
+    )
     p.add_argument("--nhc-chain-length", type=int, default=3)
     p.add_argument("--nhc-chain-steps", type=int, default=2)
     p.add_argument("--nhc-sy-steps", type=int, default=3)
@@ -175,8 +204,32 @@ def main(argv: list[str] | None = None) -> int:
             "helps visualization). Default off: coordinates match what was accumulated during dynamics."
         ),
     )
-    p.add_argument("--jaxmd-minimize-steps", type=int, default=200)
-    p.add_argument("--jaxmd-pbc-minimize-steps", type=int, default=200)
+    p.add_argument(
+        "--jaxmd-minimize-steps",
+        type=int,
+        default=1000,
+        help=(
+            "Pre-dynamics FIRE steps (default: 1000). "
+            "Free space: COM-centered. PBC: molecular wrapping. "
+            "Best max|F| frame is restored if FIRE wanders."
+        ),
+    )
+    p.add_argument(
+        "--jaxmd-pbc-minimize-steps",
+        type=int,
+        default=1000,
+        help="Additional PBC FIRE with molecular wrapping (default: 1000).",
+    )
+    p.add_argument(
+        "--jaxmd-fire-skip-max-f-eVA",
+        type=float,
+        default=0.10,
+        help=(
+            "Skip jax-md FIRE (and redundant PBC FIRE) when start max|F| is at or "
+            "below this (eV/Å). Default 0.10 matches typical ASE rescue; use 0 to "
+            "always run FIRE."
+        ),
+    )
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(
         "--packmol",
@@ -323,7 +376,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rescue-charmm-sd-steps", type=int, default=100, help="Rescue CHARMM SD steps.")
     p.add_argument("--rescue-charmm-abnr-steps", type=int, default=300, help="Rescue CHARMM ABNR steps.")
     p.add_argument("--max-fmax-after-min", type=float, default=2.0)
-    p.add_argument("--quiet-bfgs", action="store_true")
+    p.add_argument(
+        "--quiet-bfgs",
+        action="store_true",
+        help="Suppress ASE BFGS/FIRE progress lines entirely.",
+    )
+    p.add_argument(
+        "--verbose-bfgs",
+        action="store_true",
+        help="Print the full ASE BFGS/FIRE step table (default: compact progress).",
+    )
+    p.add_argument(
+        "--bfgs-log-every",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Compact BFGS/FIRE log every N steps (default: ~10 lines per run).",
+    )
     p.add_argument(
         "--skip-jit-warmup",
         action="store_true",
@@ -915,6 +984,11 @@ def main(argv: list[str] | None = None) -> int:
             return fmax
 
         def _run_ase_bfgs_rescue(phase: str, *, traj_suffix: str, fmax_key: str, iter_key: str) -> float:
+            from mmml.cli.run.ase_minimize_log import (
+                attach_compact_ase_optimizer_log,
+                resolve_ase_optimizer_logfile,
+            )
+
             print(
                 f"ASE BFGS {phase} starting "
                 f"(max {args.pre_min_steps} steps, fmax={args.pre_min_fmax})"
@@ -922,11 +996,14 @@ def main(argv: list[str] | None = None) -> int:
             traj_path = out_dir / f"{geom_tag}_{args.ensemble}_{traj_suffix}_bfgs_min.traj"
             opt = BFGS(
                 atoms,
-                logfile=None if args.quiet_bfgs else "-",
+                logfile=resolve_ase_optimizer_logfile(args),
                 trajectory=str(traj_path),
                 maxstep=args.bfgs_maxstep,
             )
             record_label = phase.lower().replace(" ", "_").replace("-", "_")
+            attach_compact_ase_optimizer_log(
+                opt, args, label=f"ASE BFGS {phase}", max_steps=args.pre_min_steps
+            )
             opt.attach(lambda: best_frame.record(f"bfgs_{record_label}"), interval=1)
             opt.attach(lambda: _check_pre_min_overlap(f"ASE BFGS {phase}"), interval=1)
             opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
@@ -940,6 +1017,11 @@ def main(argv: list[str] | None = None) -> int:
             return fmax
 
         def _run_ase_fire_rescue(phase: str, *, traj_suffix: str, fmax_key: str) -> float:
+            from mmml.cli.run.ase_minimize_log import (
+                attach_compact_ase_optimizer_log,
+                resolve_ase_optimizer_logfile,
+            )
+
             print(
                 f"ASE FIRE {phase} starting "
                 f"(fmax target {args.pre_min_fmax:.6f})"
@@ -947,11 +1029,14 @@ def main(argv: list[str] | None = None) -> int:
             traj_path = out_dir / f"{geom_tag}_{args.ensemble}_{traj_suffix}_fire_min.traj"
             fire = FIRE(
                 atoms,
-                logfile=None if args.quiet_bfgs else "-",
+                logfile=resolve_ase_optimizer_logfile(args),
                 trajectory=str(traj_path),
                 maxstep=args.fire_min_maxstep,
             )
             record_label = phase.lower().replace(" ", "_").replace("-", "_")
+            attach_compact_ase_optimizer_log(
+                fire, args, label=f"ASE FIRE {phase}", max_steps=args.fire_min_steps
+            )
             fire.attach(lambda: best_frame.record(f"fire_{record_label}"), interval=1)
             fire.attach(lambda: _check_pre_min_overlap(f"ASE FIRE {phase}"), interval=1)
             fire.run(fmax=args.pre_min_fmax, steps=args.fire_min_steps)
@@ -979,12 +1064,20 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return fmax
 
+        from mmml.cli.run.ase_minimize_log import (
+            attach_compact_ase_optimizer_log,
+            resolve_ase_optimizer_logfile,
+        )
+
         bfgs_traj_path = out_dir / f"{geom_tag}_{args.ensemble}_bfgs_min.traj"
         opt = BFGS(
             atoms,
-            logfile=None if args.quiet_bfgs else "-",
+            logfile=resolve_ase_optimizer_logfile(args),
             trajectory=str(bfgs_traj_path),
             maxstep=args.bfgs_maxstep,
+        )
+        attach_compact_ase_optimizer_log(
+            opt, args, label="ASE BFGS", max_steps=args.pre_min_steps
         )
         opt.attach(lambda: best_frame.record("bfgs"), interval=1)
         opt.attach(lambda: _check_pre_min_overlap("ASE BFGS pre-minimization"), interval=1)
@@ -1188,12 +1281,23 @@ def main(argv: list[str] | None = None) -> int:
         nsteps_jaxmd=nsteps,
         jaxmd_minimize_steps=args.jaxmd_minimize_steps,
         jaxmd_pbc_minimize_steps=args.jaxmd_pbc_minimize_steps,
+        jaxmd_fire_skip_max_f_eVA=float(
+            getattr(args, "jaxmd_fire_skip_max_f_eVA", 0.10)
+        ),
         min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
         dynamics_overlap_action=args.dynamics_overlap_action,
         traj_export_molecular_wrap=bool(args.traj_export_molecular_wrap),
         flat_bottom_radius=args.flat_bottom_radius,
         flat_bottom_k=args.flat_bottom_k,
         flat_bottom_mode=args.flat_bottom_mode,
+        nve_force_energy_relative_tolerance=float(
+            getattr(args, "nve_force_energy_relative_tolerance", 0.20)
+        ),
+        nve_force_energy_epsilon_A=float(
+            getattr(args, "nve_force_energy_epsilon_A", 0.01)
+        ),
+        nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
+        nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.0)),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
@@ -1245,7 +1349,10 @@ def main(argv: list[str] | None = None) -> int:
     steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
     run_status = getattr(run_sim, "last_status", "complete")
     run_error = getattr(run_sim, "last_error", None)
-    hdf5_path = Path(getattr(run_sim, "last_hdf5_path", f"{output_prefix}_{args.ensemble}.h5"))
+    _hdf5 = getattr(run_sim, "last_hdf5_path", None)
+    hdf5_path = Path(
+        _hdf5 if _hdf5 else f"{output_prefix}_{args.ensemble}.h5"
+    )
 
     if len(frames) > 0:
         last_xyz = np.asarray(frames[-1], dtype=np.float64)
@@ -1418,6 +1525,41 @@ def main(argv: list[str] | None = None) -> int:
     if run_status != "complete":
         print(f"Partial output saved after {run_status}: {run_error}")
     print(f"Wrote {out_dir / 'suite_summary_jaxmd.json'}")
+
+    # ── Persist calculator summary to run dir and handoff dir ──────────────────
+    _calc_summary_kw = dict(
+        model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
+        n_monomers=n_molecules,
+        n_atoms=len(atoms),
+        doML=True,
+        doMM=bool(getattr(args, "include_mm", True)),
+        doML_dimer=True,
+        ensemble=args.ensemble,
+        checkpoint=str(base_ckpt_dir),
+        nl_skin_distance_A=float(effective_skin),
+        nl_update_interval_steps=int(effective_update_interval),
+        extra={
+            "box_A": float(L) if L is not None else None,
+            "free_space": bool(free_space),
+            "run_status": run_status,
+        },
+    )
+    for _dest in [out_dir / "calculator_summary.json"]:
+        try:
+            save_calculator_summary_json(_dest, cutoff, **_calc_summary_kw)
+            print(f"Wrote {_dest}")
+        except Exception as _e:
+            print(f"[warning] Could not save {_dest}: {_e}")
+    # Also copy into the handoff sub-directory if it was created by set_handoff_out.
+    _handoff_dir = out_dir / "handoff"
+    if _handoff_dir.is_dir():
+        try:
+            _ho_path = _handoff_dir / "calculator_summary.json"
+            save_calculator_summary_json(_ho_path, cutoff, **_calc_summary_kw)
+            print(f"Wrote {_ho_path}")
+        except Exception as _e:
+            print(f"[warning] Could not save handoff calculator_summary.json: {_e}")
+
     if run_status == "interrupted":
         return 130
     if run_status == "error":

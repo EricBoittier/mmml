@@ -24,7 +24,6 @@ Created by Yujin Wu | wyujin@umich.edu
  
 """
 
-import pycharmm
 from pycharmm.script import CommandScript
 
 class FACTS(CommandScript):

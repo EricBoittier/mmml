@@ -1,0 +1,88 @@
+seed 122827
+output /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/repack.pdb
+filetype pdb
+tolerance 5.5
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0000.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0001.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0002.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0003.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0004.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0005.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0006.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0007.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0008.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0009.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0010.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure
+
+structure /scicore/home/meuwly/boitti0000/mmml/artifacts/pbc_solvent_burst_scicore_small/meohx50_tip3x50_12_t300_l18/pycharmm_init/packmol_repack/movable_0011.pdb
+  chain A
+  resnumbers 2
+  number 1
+  inside cube 2.5 2.5 2.5 13.0
+end structure

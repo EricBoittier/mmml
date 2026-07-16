@@ -72,7 +72,7 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
         "dynamics_overlap_min_distance": cfg.get("dynamics_overlap_min_distance", 1.5),
         "dynamics_intra_min_distance": cfg.get("dynamics_intra_min_distance", 0.5),
         "dynamics_overlap_check_interval": cfg.get("dynamics_overlap_check_interval", 500),
-        "bonded_mm_mini": cfg.get("bonded_mm_mini", True),
+        "bonded_mm_mini": cfg.get("bonded_mm_mini", False),
         "bonded_mm_mini_after": cfg.get("bonded_mm_mini_after", "mini,heat"),
         "bonded_mm_mini_steps": cfg.get("bonded_mm_mini_steps", 100),
         "charmm_pre_minimize": cfg.get("charmm_pre_minimize", True),
@@ -100,16 +100,11 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
 
 def dense_cell_mlpot_overrides(cell: Any, cfg: dict[str, Any]) -> dict[str, Any]:
     """Size/density-aware MLpot flags for large or tight PBC burst cells."""
-    from bulk_density import n_monomers_at_bulk_density
+    from campaign_lib import cell_bulk_total
 
     n = int(cell.n_monomers)
     overrides: dict[str, Any] = {}
-    bulk_n = n_monomers_at_bulk_density(
-        cell.solvent,
-        float(cell.box_size),
-        1.0,
-        min_n=1,
-    )
+    bulk_n = cell_bulk_total(cell, 1.0)
     bulk_fraction = float(n) / float(max(1, bulk_n))
     dense = n >= 150 or bulk_fraction >= 0.75
 
@@ -123,7 +118,7 @@ def dense_cell_mlpot_overrides(cell: Any, cfg: dict[str, Any]) -> dict[str, Any]
         overrides["dynamics_overlap_charmm_sd_steps"] = max(400, sd)
 
     if n >= 200:
-        overrides["ml_batch_size"] = min(int(cfg.get("ml_batch_size", 2048)), 1024)
+        overrides["ml_batch_size"] = min(int(cfg.get("ml_batch_size", 32)), 32)
 
     if bulk_fraction >= 0.75 and dense:
         intra = float(cfg.get("dynamics_intra_min_distance", 0.5))
@@ -176,7 +171,7 @@ def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
         "dynamics_overlap_charmm_abnr_steps": int(
             mm.get("overlap_rescue_abnr_steps", ml.get("dynamics_overlap_charmm_abnr_steps", 400))
         ),
-        "bonded_mm_mini": bool(ml.get("bonded_mm_mini", True)),
+        "bonded_mm_mini": bool(ml.get("bonded_mm_mini", False)),
         "bonded_mm_mini_after": str(ml.get("bonded_mm_mini_after", "mini,heat")),
         "bonded_mm_mini_steps": int(ml.get("bonded_mm_mini_steps", 100)),
         "charmm_pre_minimize": bool(ml.get("charmm_pre_minimize", True)),

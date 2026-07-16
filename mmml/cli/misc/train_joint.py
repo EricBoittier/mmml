@@ -118,13 +118,11 @@ except ImportError:
     HAS_MATPLOTLIB = False
 
 # Import PhysNet components
-from mmml.models.physnetjax.physnetjax.models.model import EF
 from mmml.utils.model_checkpoint import build_physnet_from_config
 from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 from mmml.cli.base import BUNDLED_LEGACY_MEOH_REL_PATH, BUNDLED_PORTABLE_MEOH_PATH
 from mmml.models.physnetjax.defaults import (
     JOINT_TRAINING_CATEGORY,
-    list_hf_physnet_models,
     resolve_hf_physnet_model,
 )
 

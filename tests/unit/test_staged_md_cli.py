@@ -281,7 +281,10 @@ def test_resolve_heat_firstt_finalt_dcm9_soft():
     )
 
     args = argparse.Namespace(heat_firstt=0.0, heat_finalt=240.0, heat_mode="ramp")
-    assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (48.0, 240.0)
+    with pytest.raises(ValueError, match="allow-zero-temperature-start"):
+        resolve_heat_firstt_finalt(args, default_temp=300.0)
+    args.allow_zero_temperature_start = True
+    assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (0.0, 240.0)
 
 
 def test_resolve_heat_firstt_finalt_hold_mode():
@@ -434,7 +437,7 @@ def test_build_stage_dynamics_kw_prod_restart_avoids_cold_start():
 
 
 def test_build_stage_dynamics_kw_heat_hoover_vacuum_uses_ihtfrq_fallback():
-    args = argparse.Namespace(heat_thermostat="hoover", heat_firstt=0.0, heat_finalt=240.0)
+    args = argparse.Namespace(heat_thermostat="hoover", heat_firstt=48.0, heat_finalt=240.0)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     kw = _build_stage_dynamics_kw(
         "heat",
@@ -458,7 +461,7 @@ def test_build_stage_dynamics_kw_heat_hoover_vacuum_uses_ihtfrq_fallback():
 def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
     args = argparse.Namespace(
         heat_thermostat="hoover",
-        heat_firstt=0.0,
+        heat_firstt=48.0,
         heat_finalt=240.0,
         heat_mode="ramp",
     )

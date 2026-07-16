@@ -137,5 +137,8 @@ def test_pbc_nbond_cutoffs_from_mlpot_switches_aligns_outer_radius() -> None:
         mm_switch_on=8.0,
         mm_switch_width=5.0,
     )
-    assert cuts.cutnb == pytest.approx(13.0)
+    # The pairlist cutnb sits a skin above the interaction cutoff, so CHARMM's
+    # pair list is a strict superset of the JAX MM outer radius.
+    assert cuts.cutnb >= outer
+    assert cuts.cutnb - cuts.ctofnb == pytest.approx(2.0)
     assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb

@@ -16,7 +16,12 @@ from rich.table import Table
 
 import jax.numpy as jnp
 
-from mmml.cli.run.summaries import print_flat_bottom_summary, print_forces_summary
+from mmml.cli.run.summaries import (
+    print_flat_bottom_summary,
+    print_forces_summary,
+    save_calculator_summary_json,
+)
+from mmml.utils.rich_report import emit_md_system_calculator_report
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
     wrap_groups_by_id_with_weight_sum,
@@ -30,6 +35,22 @@ import ase.io as ase_io
 from typing import Callable, Optional
 
 
+def directional_force_energy_error(
+    energy_plus: float,
+    energy_minus: float,
+    epsilon_A: float,
+    projected_force_eV_A: float,
+) -> tuple[float, float]:
+    """Compare a finite-difference energy slope with ``-F·direction``."""
+    eps = float(epsilon_A)
+    if eps <= 0.0:
+        raise ValueError("epsilon_A must be positive")
+    derivative = (float(energy_plus) - float(energy_minus)) / (2.0 * eps)
+    expected = -float(projected_force_eV_A)
+    scale = max(abs(derivative), abs(expected), 1.0e-3)
+    return derivative, abs(derivative - expected) / scale
+
+
 def _nl_update_positions(positions):
     """Pass JAX arrays to ``update_mm_pairs`` so it can avoid host sync on cache hits."""
     import os
@@ -39,6 +60,199 @@ def _nl_update_positions(positions):
     return np.asarray(positions)
 
 WORSE_COUNT_THRESHOLD = 100
+# jax-md FIRE timesteps are in the metal unit system (ps).  Historical default
+# 1e-3 overshoots once ASE/CHARMM has already reached max|F| ≲ 0.15 eV/Å.
+DEFAULT_JAXMD_FIRE_DT_PS = 1.0e-3
+JAXMD_FIRE_DT_MIN_PS = 1.0e-5
+JAXMD_FIRE_NL_REFRESH_EVERY = 25
+# ASE rescue target is typically 0.1 eV/Å. Below this, jax-md FIRE rarely helps
+# and just burns stages on a flat landscape — skip unless explicitly forced.
+DEFAULT_JAXMD_FIRE_SKIP_MAX_F_EVA = 0.10
+
+
+def should_skip_jaxmd_fire(
+    initial_max_f_eVA: float,
+    *,
+    skip_below_eVA: float = DEFAULT_JAXMD_FIRE_SKIP_MAX_F_EVA,
+) -> bool:
+    """True when the start geometry is already soft enough to skip jax-md FIRE."""
+    thr = float(skip_below_eVA)
+    if thr <= 0.0:
+        return False
+    f = float(initial_max_f_eVA)
+    return bool(np.isfinite(f) and f <= thr)
+
+
+def resolve_jaxmd_fire_dt_start_ps(initial_max_f_eVA: float) -> float:
+    """Choose FIRE ``dt_start`` from how soft the starting geometry already is."""
+    f = float(initial_max_f_eVA)
+    if not np.isfinite(f) or f <= 0.0:
+        return 1.0e-4
+    if f < 0.15:
+        return 1.0e-4
+    if f < 0.5:
+        return 3.0e-4
+    return float(DEFAULT_JAXMD_FIRE_DT_PS)
+
+
+def jaxmd_fire_dt_backoff_schedule(dt_start_ps: float) -> tuple[float, ...]:
+    """Descending FIRE dt schedule (restart colder if the first stage wanders)."""
+    dt = max(float(dt_start_ps), JAXMD_FIRE_DT_MIN_PS)
+    out: list[float] = [dt]
+    for _ in range(2):
+        dt = max(dt * 0.3, JAXMD_FIRE_DT_MIN_PS)
+        if dt >= out[-1] - 1.0e-15:
+            break
+        out.append(dt)
+    return tuple(out)
+
+
+def run_jaxmd_fire_with_dt_backoff(
+    *,
+    force_fn,
+    shift_fn,
+    positions,
+    masses,
+    n_steps: int,
+    dt_schedule: tuple[float, ...] | list[float],
+    worsen_limit: int = WORSE_COUNT_THRESHOLD,
+    nl_refresh_fn=None,
+    nl_refresh_every: int = JAXMD_FIRE_NL_REFRESH_EVERY,
+    log_every: int | None = None,
+    log_fn=None,
+    energy_fn=None,
+):
+    """FIRE minimize with best-force tracking and smaller-dt restarts.
+
+    Each stage rebuilds ``fire_descent`` at a fixed ``dt_start=dt_max``.  If a
+    stage does not improve max|F| vs the geometry it started from, the next
+    colder ``dt`` is tried from the best-force frame so far.
+    """
+    if n_steps <= 0:
+        pos0 = jnp.asarray(positions)
+        f0 = float(jnp.abs(force_fn(pos0)).max())
+        return pos0, f0, {"stages": [], "start_max_f": f0, "best_max_f": f0}
+
+    best_pos = jnp.asarray(positions)
+    best_max_f = float(jnp.abs(force_fn(best_pos)).max())
+    start_max_f = best_max_f
+    stages: list[dict] = []
+    print_every = int(log_every) if log_every is not None else max(1, int(n_steps) // 10)
+
+    for stage_idx, dt_ps in enumerate(dt_schedule):
+        dt_ps = float(dt_ps)
+        stage_start_f = best_max_f
+        init_fn, step_fn = jax_md.minimize.fire_descent(
+            force_fn,
+            shift_fn,
+            dt_start=dt_ps,
+            dt_max=dt_ps,
+        )
+        step_fn = jit(step_fn)
+        if nl_refresh_fn is not None:
+            nl_refresh_fn(best_pos)
+        fire_state = init_fn(best_pos, mass=masses)
+        worsen_count = 0
+        prev_max_f = stage_start_f
+        improved = False
+        steps_run = 0
+        for i in range(int(n_steps)):
+            steps_run = i + 1
+            new_state = step_fn(fire_state)
+            if not jnp.all(jnp.isfinite(new_state.position)):
+                break
+            if nl_refresh_fn is not None and nl_refresh_every > 0 and (i + 1) % int(nl_refresh_every) == 0:
+                nl_refresh_fn(new_state.position)
+            forces = force_fn(new_state.position)
+            max_force = float(jnp.abs(forces).max())
+            if not np.isfinite(max_force):
+                break
+            fire_state = new_state
+            if max_force < best_max_f:
+                best_max_f = max_force
+                best_pos = fire_state.position
+                improved = True
+                worsen_count = 0
+            else:
+                worsen_count = worsen_count + 1 if max_force > prev_max_f else 0
+            prev_max_f = max_force
+            if log_fn is not None and i % print_every == 0:
+                energy = None
+                if energy_fn is not None:
+                    try:
+                        energy = float(energy_fn(fire_state.position))
+                    except Exception:
+                        energy = None
+                log_fn(stage_idx, dt_ps, i, int(n_steps), energy, max_force)
+            if worsen_count >= int(worsen_limit):
+                break
+
+        stages.append(
+            {
+                "dt_ps": dt_ps,
+                "steps_run": steps_run,
+                "stage_start_max_f": stage_start_f,
+                "best_max_f": best_max_f,
+                "improved": bool(improved and best_max_f < stage_start_f - 1.0e-6),
+            }
+        )
+        # Stop backoff once a stage makes real progress, or we are already soft.
+        if stages[-1]["improved"] or best_max_f < 0.05:
+            break
+        # No improvement → next colder dt; keep best_pos.
+        continue
+
+    return best_pos, best_max_f, {
+        "stages": stages,
+        "start_max_f": start_max_f,
+        "best_max_f": best_max_f,
+        "dt_final_ps": stages[-1]["dt_ps"] if stages else None,
+    }
+
+
+def resolve_mm_pair_list_capacity(
+    *,
+    update_fn=None,
+    pair_idx=None,
+) -> int | None:
+    """Return MM pair-list padding capacity (number of pair slots).
+
+    ``pair_idx`` is shaped ``(capacity, 2)``; capacity is axis 0.  Using
+    ``shape[-1]`` (always 2) produced bogus fill fractions like 74400%.
+    Prefer ``update_fn.get_stats()["pair_capacity"]`` when available.
+    """
+    if update_fn is not None and hasattr(update_fn, "get_stats"):
+        try:
+            stats = update_fn.get_stats()
+            cap = int(stats.get("pair_capacity") or 0)
+            if cap > 0:
+                return cap
+        except Exception:
+            pass
+    if pair_idx is not None and hasattr(pair_idx, "shape") and len(pair_idx.shape) >= 1:
+        # (capacity, 2) → capacity on axis 0; never use shape[-1] (== 2).
+        return int(pair_idx.shape[0])
+    return None
+
+
+def resolve_pre_md_fire_start_positions(
+    positions,
+    masses,
+    *,
+    use_pbc: bool,
+):
+    """Starting coordinates for the first JAX-MD FIRE stage.
+
+    Free space: COM-center (historical vacuum FIRE).
+    PBC: keep box-frame coordinates — COM-centering plus per-atom periodic
+    shift can split monomers across the cell and destroy ASE/CHARMM minima.
+    """
+    R = jnp.asarray(positions)
+    if use_pbc:
+        return jnp.asarray(R, dtype=jnp.float32)
+    mass = jnp.asarray(masses)
+    com = jnp.sum(mass[:, None] * R, axis=0) / mass.sum()
+    return jnp.asarray(R - com, dtype=jnp.float32)
 
 
 def resolve_jaxmd_steps_per_loop_call(
@@ -424,6 +638,60 @@ def set_up_nhc_sim_routine(
         "max|COM_m| (Å)" if flat_bottom_mode == "monomer" else "|COM| (Å)"
     )
     c.print(Panel(f"Compilation done in {elapsed:.2f} s", title="[bold green]JAX[/bold green]", border_style="green"))
+
+    # setup_calculator already emitted Track A+B for md-system. After compile we
+    # only refresh the neighbor-list panel with live capacity / fill fractions.
+    _checkpoint_hint = str(getattr(args, "checkpoint", None) or getattr(args, "output_prefix", ""))
+    _nl_n_valid = None
+    _nl_skin = getattr(args, "jax_md_skin_distance", None)
+    _nl_interval = getattr(args, "jax_md_update_interval", None)
+    _nl_capacity = resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx)
+    if pair_mask is not None:
+        try:
+            _nl_n_valid = int(np.sum(np.asarray(pair_mask)))
+        except Exception:
+            _nl_n_valid = None
+    if use_pbc and (pair_idx is not None or _nl_capacity is not None):
+        emit_md_system_calculator_report(
+            cutoff_params=CUTOFF_PARAMS,
+            n_monomers=n_monomers,
+            n_atoms=len(atoms),
+            cell_L_A=float(args.cell) if args.cell is not None else None,
+            mm_cutoff_A=float(CUTOFF_PARAMS.mm_switch_on + CUTOFF_PARAMS.mm_switch_width),
+            capacity_pairs=_nl_capacity,
+            n_valid_pairs=_nl_n_valid,
+            skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
+            update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+            include_hybrid_setup=False,
+            include_calculator_summary=False,
+            include_neighbor_list_summary=True,
+            include_psf_topology=False,
+        )
+
+    # Save calculator summary JSON to run directory
+    _run_prefix = Path(str(getattr(args, "output_prefix", "md")))
+    _calc_json_path = _run_prefix.parent / "calculator_summary.json"
+    try:
+        save_calculator_summary_json(
+            _calc_json_path,
+            CUTOFF_PARAMS,
+            model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
+            n_monomers=n_monomers,
+            n_atoms=len(atoms),
+            doML=True,
+            doMM=getattr(args, "include_mm", True),
+            doML_dimer=not getattr(args, "skip_ml_dimers", False),
+            ensemble=getattr(args, "ensemble", None),
+            checkpoint=_checkpoint_hint,
+            nl_capacity_pairs=_nl_capacity,
+            nl_n_valid_pairs=_nl_n_valid,
+            nl_skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
+            nl_update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+        )
+        c.print(Panel(str(_calc_json_path), title="[bold green]Calculator Summary JSON[/bold green]", border_style="green"))
+    except Exception as _e:
+        c.print(Panel(f"Could not save calculator_summary.json: {_e}", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+
     _eval_label = (
         "post-compile (initial R)"
         if minimization_skipped
@@ -549,16 +817,10 @@ def set_up_nhc_sim_routine(
     else:
         displacement, shift = space.free()
 
-    # Minimization shift: Cartesian + periodic when PBC (matches MIC energy/force)
-    if use_pbc and L_cell_val is not None:
-        _, shift_min = space.periodic(L_cell_val)
-    else:
-        shift_min = shift
-
-    unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
-        wrapped_force_fn, shift_min, dt_start=0.001, dt_max=0.001
-    )
-    unwrapped_step_fn = jit(unwrapped_step_fn)
+    # Free-space FIRE uses free shift.  Under PBC the first FIRE is built inside
+    # run_sim with molecular (monomer-COM) wrapping — never space.periodic, which
+    # wraps atoms individually and can split monomers across the box.
+    shift_min = shift
 
     # ========================================================================
     # SIMULATION PARAMETERS (metal units: eV, Å, ps, amu)
@@ -829,22 +1091,42 @@ def set_up_nhc_sim_routine(
                     ))
                 return None
         fire_positions = []
+        skip_redundant_pbc_fire = False
+        fire_skip_thr = float(
+            getattr(args, "jaxmd_fire_skip_max_f_eVA", DEFAULT_JAXMD_FIRE_SKIP_MAX_F_EVA)
+        )
         if skip_minimization:
             minimized_pos = jnp.asarray(R, dtype=jnp.float32)
             nmin_pbc_planned = int(getattr(args, "jaxmd_pbc_minimize_steps", 0) or 0)
             if use_pbc and nmin_pbc_planned > 0:
                 skip_msg = (
-                    "Skipping vacuum/COM FIRE (handoff positions); "
+                    "Skipping first FIRE (handoff positions); "
                     f"PBC FIRE ({nmin_pbc_planned} steps) follows."
                 )
             else:
                 skip_msg = "Skipping minimization (using input positions)"
             c.print(Panel(skip_msg, title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
         else:
-            # Translate to center of mass before minimization (use actual masses)
-            com = jnp.sum(Si_mass[:, None] * R, axis=0) / Si_mass.sum()
-            initial_pos = jnp.asarray(R - com, dtype=jnp.float32)
-            # Sanity check: ensure energy/gradient are finite at start; else use R directly
+            initial_pos = resolve_pre_md_fire_start_positions(
+                R, Si_mass, use_pbc=bool(use_pbc)
+            )
+            fire_shift_fn = shift_min
+            if use_pbc:
+                # Molecular wrap (same policy as PBC FIRE below). Never use
+                # space.periodic here — per-atom wrap splits monomers.
+                _cell_fire = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+                initial_pos = _wrap_monomers(initial_pos, _cell_fire)
+                if update_fn is not None:
+                    fire_pair_idx, fire_pair_mask = update_fn(
+                        np.asarray(initial_pos), box=pbc_box_nl
+                    )
+                    _pbc_state["pair_idx"] = fire_pair_idx
+                    _pbc_state["pair_mask"] = fire_pair_mask
+
+                def fire_shift_fn(pos, dR, **kwargs):
+                    return _wrap_monomers(pos + dR, _cell_fire)
+
+            # Sanity check: ensure energy/gradient are finite at start
             try:
                 _out0 = jax_md_eval_fn(
                     initial_pos,
@@ -856,82 +1138,130 @@ def set_up_nhc_sim_routine(
                 _f0 = _out0.forces
                 if not (np.isfinite(_e0) and np.all(np.isfinite(np.asarray(_f0)))):
                     initial_pos = jnp.asarray(R, dtype=jnp.float32)
-                    c.print(Panel("Non-finite energy/forces at COM-centered pos; using R directly", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+                    if use_pbc:
+                        initial_pos = _wrap_monomers(
+                            initial_pos, jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+                        )
+                    c.print(Panel(
+                        "Non-finite energy/forces at FIRE start; using wrapped/raw R",
+                        title="[bold yellow]Warning[/bold yellow]",
+                        border_style="yellow",
+                    ))
                 else:
                     print_flat_bottom_summary(
                         _out0,
                         flat_bottom_radius=flat_bottom_radius,
                         flat_bottom_k=flat_bottom_k,
                         flat_bottom_mode=flat_bottom_mode,
-                        label="FIRE start (COM-centered)",
+                        label=(
+                            "FIRE start (molecular wrap, box frame)"
+                            if use_pbc
+                            else "FIRE start (COM-centered)"
+                        ),
                         console=c,
                     )
-                _out_r = jax_md_eval_fn(
-                    R,
-                    mm_pair_idx=_pbc_state["pair_idx"],
-                    mm_pair_mask=_pbc_state["pair_mask"],
-                    box=_pbc_state["box"],
-                )
-                print_flat_bottom_summary(
-                    _out_r,
-                    flat_bottom_radius=flat_bottom_radius,
-                    flat_bottom_k=flat_bottom_k,
-                    flat_bottom_mode=flat_bottom_mode,
-                    label="FIRE reference (raw R, no COM shift)",
-                    console=c,
-                )
-            except Exception:
-                initial_pos = jnp.asarray(R, dtype=jnp.float32)
-                print("Fallback: using R directly for minimization")
-            fire_state = unwrapped_init_fn(initial_pos, mass=Si_mass)
-
-            # FIRE minimization with step rejection (reject steps that produce NaN)
-            NMIN = getattr(args, "jaxmd_minimize_steps", 1000)
-            if NMIN <= 0:
-                c.print(Panel("Skipping first minimization (0 steps requested)", title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
-            else:
-                c.print(Panel(f"FIRE minimization ({NMIN} steps)", title="[bold cyan]JAX-MD Minimization[/bold cyan]", border_style="cyan"))
-            for i in range(NMIN):
-                fire_positions.append(fire_state.position)
-                new_state = unwrapped_step_fn(fire_state)
-                # Reject step if it produces NaN/Inf positions
-                if not jnp.all(jnp.isfinite(new_state.position)):
-                    c.print(Panel("FIRE step produced NaN/Inf positions; rejecting and stopping", title="[bold red]Error[/bold red]", border_style="red"))
-                    break
-                # Check energy/forces at new position before accepting
-                out_step = jax_md_eval_fn(
-                    new_state.position,
-                    mm_pair_idx=_pbc_state["pair_idx"],
-                    mm_pair_mask=_pbc_state["pair_mask"],
-                    box=_pbc_state["box"],
-                )
-                energy = float(out_step.energy)
-                max_force = float(jnp.abs(out_step.forces).max())
-                if not (np.isfinite(energy) and np.isfinite(max_force)):
-                    print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
-                    break
-                fire_state = new_state
-
-                if i % max(1, NMIN // 10) == 0:
-                    c.print(
-                        f"  [dim]{i}/{NMIN}[/dim]: E_total={energy:.6f} eV, "
-                        f"E_hybrid={float(out_step.hybrid_energy):.6f} eV, "
-                        f"E_fb={float(out_step.flat_bottom_E):.6f} eV, "
-                        f"{_fb_dist_hdr}={float(out_step.com_dist):.4f}, max|F|={max_force:.6f}"
+                if not use_pbc:
+                    _out_r = jax_md_eval_fn(
+                        R,
+                        mm_pair_idx=_pbc_state["pair_idx"],
+                        mm_pair_mask=_pbc_state["pair_mask"],
+                        box=_pbc_state["box"],
                     )
                     print_flat_bottom_summary(
-                        out_step,
+                        _out_r,
                         flat_bottom_radius=flat_bottom_radius,
                         flat_bottom_k=flat_bottom_k,
                         flat_bottom_mode=flat_bottom_mode,
-                        label=f"FIRE step {i}/{NMIN}",
+                        label="FIRE reference (raw R, no COM shift)",
                         console=c,
                     )
-            # fire_state always holds last valid position (we reject bad steps)
-            minimized_pos = fire_state.position
-            if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
-                minimized_pos = fire_positions[-1]
-                c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+            except Exception:
+                initial_pos = jnp.asarray(R, dtype=jnp.float32)
+                print("Fallback: using R directly for minimization")
+
+            NMIN = getattr(args, "jaxmd_minimize_steps", 1000)
+            if NMIN <= 0:
+                c.print(Panel("Skipping first minimization (0 steps requested)", title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
+                minimized_pos = initial_pos
+                skip_redundant_pbc_fire = True
+            else:
+                f0_comp = float(jnp.abs(wrapped_force_fn(initial_pos)).max())
+                if should_skip_jaxmd_fire(f0_comp, skip_below_eVA=fire_skip_thr):
+                    minimized_pos = initial_pos
+                    skip_redundant_pbc_fire = True
+                    c.print(
+                        Panel(
+                            f"Skipping jax-md FIRE: start max|F|={f0_comp:.4f} eV/Å "
+                            f"≤ skip gate {fire_skip_thr:.4f} eV/Å "
+                            "(ASE/CHARMM already soft). "
+                            "Use --jaxmd-fire-skip-max-f-eVA 0 to force FIRE.",
+                            title="[bold]JAX-MD Minimization[/bold]",
+                            border_style="yellow",
+                        )
+                    )
+                else:
+                    dt0 = resolve_jaxmd_fire_dt_start_ps(f0_comp)
+                    dt_sched = jaxmd_fire_dt_backoff_schedule(dt0)
+                    fire_label = (
+                        f"FIRE minimization ({NMIN} steps/stage, molecular wrap; "
+                        f"dt schedule={[f'{d:.1e}' for d in dt_sched]} ps)"
+                        if use_pbc
+                        else (
+                            f"FIRE minimization ({NMIN} steps/stage; "
+                            f"dt schedule={[f'{d:.1e}' for d in dt_sched]} ps)"
+                        )
+                    )
+                    c.print(Panel(fire_label, title="[bold cyan]JAX-MD Minimization[/bold cyan]", border_style="cyan"))
+
+                    def _fire_nl_refresh(pos):
+                        if use_pbc and update_fn is not None:
+                            pair_i, pair_m = update_fn(np.asarray(pos), box=pbc_box_nl)
+                            _pbc_state["pair_idx"] = pair_i
+                            _pbc_state["pair_mask"] = pair_m
+
+                    def _fire_log(stage_idx, dt_ps, i, n_tot, energy, max_force):
+                        c.print(
+                            f"  [dim]dt={dt_ps:.1e} stage {stage_idx} {i}/{n_tot}[/dim]: "
+                            f"E={energy if energy is not None else float('nan'):.6f} eV, "
+                            f"max|F|={max_force:.6f}"
+                        )
+
+                    minimized_pos, best_fire_max_f, fire_info = run_jaxmd_fire_with_dt_backoff(
+                        force_fn=wrapped_force_fn,
+                        shift_fn=fire_shift_fn,
+                        positions=initial_pos,
+                        masses=Si_mass,
+                        n_steps=int(NMIN),
+                        dt_schedule=dt_sched,
+                        nl_refresh_fn=_fire_nl_refresh if (use_pbc and update_fn is not None) else None,
+                        energy_fn=wrapped_energy_fn,
+                        log_fn=_fire_log,
+                    )
+                    fire_positions.append(minimized_pos)
+                    if best_fire_max_f < fire_info["start_max_f"] - 1.0e-6:
+                        c.print(
+                            Panel(
+                                f"FIRE improved max|F| "
+                                f"{fire_info['start_max_f']:.4f} → {best_fire_max_f:.4f} "
+                                f"(dt_final={fire_info.get('dt_final_ps')} ps, "
+                                f"stages={len(fire_info['stages'])})",
+                                title="[bold green]JAX-MD Minimization[/bold green]",
+                                border_style="green",
+                            )
+                        )
+                    else:
+                        # First FIRE already used molecular wrap under PBC — PBC FIRE
+                        # would repeat the same no-op backoff.
+                        skip_redundant_pbc_fire = bool(use_pbc)
+                        c.print(
+                            Panel(
+                                f"FIRE did not improve max|F| "
+                                f"(kept {best_fire_max_f:.4f}; tried dt={list(dt_sched)} ps). "
+                                "ASE/CHARMM geometry already soft — continuing.",
+                                title="[bold]JAX-MD Minimization[/bold]",
+                                border_style="yellow",
+                            )
+                        )
         res_overlap = _check_overlap(
             minimized_pos,
             atoms.get_cell()[:] if use_pbc else None,
@@ -958,86 +1288,107 @@ def set_up_nhc_sim_routine(
             atoms.set_positions(np.asarray(md_pos))
         else:
             NMIN_PBC = getattr(args, "jaxmd_pbc_minimize_steps", 1000)
-            if NMIN_PBC > 0:
-                c.print(Panel(f"PBC FIRE minimization ({NMIN_PBC} steps)", title="[bold cyan]PBC Minimization[/bold cyan]", border_style="cyan"))
             # Molecular shift: wrap by monomer after each step so monomers stay intact.
             # space.periodic wraps atoms individually → monomers break across boundaries.
             _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+
             def shift_molecular(R, dR, **kwargs):
                 return _wrap_monomers(R + dR, _cell_jax)
 
-            pbc_unwrapped_init_fn, pbc_unwrapped_step_fn = jax_md.minimize.fire_descent(
-                wrapped_force_fn, shift_molecular, dt_start=0.001, dt_max=0.001
-            )
-            pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
             # Start from wrapped positions so we're in the cell (first min can drift)
             if pbc_map_fn is not None:
                 pbc_start_pos = pbc_map_fn(minimized_pos)
             else:
-                # MIC-only: wrap by monomer into cell
                 pbc_start_pos = _wrap_monomers(jnp.asarray(minimized_pos), _cell_jax)
-            # Recompute neighbor list for wrapped start positions (Fix A)
             if update_fn is not None:
                 pbc_pair_idx, pbc_pair_mask = update_fn(
                     np.asarray(pbc_start_pos), box=pbc_box_nl
                 )
                 _pbc_state["pair_idx"] = pbc_pair_idx
                 _pbc_state["pair_mask"] = pbc_pair_mask
-            pbc_fire_state = pbc_unwrapped_init_fn(pbc_start_pos, mass=Si_mass)
 
-            # Run PBC minimization (track best; stop early if forces increase - FIRE+unwrapped can wander)
-            # Skip when first minimization already failed (minimized_pos invalid)
+            f0_pbc = (
+                float(jnp.abs(wrapped_force_fn(pbc_start_pos)).max())
+                if jnp.all(jnp.isfinite(pbc_start_pos))
+                else float("inf")
+            )
             if NMIN_PBC <= 0 or jnp.any(~jnp.isfinite(pbc_start_pos)):
                 reason = "0 steps requested" if NMIN_PBC <= 0 else "no valid start position"
                 print(f"Skipping PBC minimization ({reason})")
                 md_pos = pbc_start_pos if jnp.all(jnp.isfinite(pbc_start_pos)) else minimized_pos
-            else:
-                max_force_start = float(jnp.abs(wrapped_force_fn(pbc_start_pos)).max())
-                best_pbc_pos = pbc_start_pos
-                best_pbc_max_f = max_force_start
-                worsen_count = 0
-                prev_max_f = max_force_start
-                for i in range(NMIN_PBC):
-                    pbc_fire_positions.append(pbc_fire_state.position)
-                    new_pbc_state = pbc_unwrapped_step_fn(pbc_fire_state)
-                    # Reject step if it produces NaN
-                    if not jnp.all(jnp.isfinite(new_pbc_state.position)):
-                        c.print(Panel("PBC FIRE step produced NaN; using first-min result", title="[bold red]Error[/bold red]", border_style="red"))
-                        break
-                    energy = float(wrapped_energy_fn(new_pbc_state.position))
-                    max_force = float(jnp.abs(wrapped_force_fn(new_pbc_state.position)).max())
-                    if not (np.isfinite(energy) and np.isfinite(max_force)):
-                        print("PBC minimization hit NaN energy/forces; using first-min result")
-                        break
-                    res_pb = _check_overlap(
-                        new_pbc_state.position,
-                        atoms.get_cell()[:],
-                        "during JAX-MD PBC minimization",
+            elif skip_redundant_pbc_fire or should_skip_jaxmd_fire(
+                f0_pbc, skip_below_eVA=fire_skip_thr
+            ):
+                md_pos = pbc_start_pos
+                why = (
+                    "first FIRE already covered molecular-wrap / soft start"
+                    if skip_redundant_pbc_fire
+                    else (
+                        f"start max|F|={f0_pbc:.4f} ≤ skip gate {fire_skip_thr:.4f} eV/Å"
                     )
-                    if res_pb is not None:
-                        new_pbc_state = new_pbc_state.set(
-                            position=jnp.asarray(res_pb, dtype=jnp.float32)
-                        )
-                    pbc_fire_state = new_pbc_state
-                    if max_force < best_pbc_max_f:
-                        best_pbc_max_f = max_force
-                        best_pbc_pos = pbc_fire_state.position
-                        worsen_count = 0
-                    else:
-                        worsen_count = worsen_count + 1 if max_force > prev_max_f else 0
-                    prev_max_f = max_force
-                    if i % max(1, NMIN_PBC // 10) == 0:
-                        c.print(f"  [dim]{i}/{NMIN_PBC}[/dim]: E={energy:.6f} eV, max|F|={max_force:.6f}")
-                    if worsen_count >= WORSE_COUNT_THRESHOLD:
-                        c.print(Panel(f"max|F| increased for {WORSE_COUNT_THRESHOLD} steps; stopping early (best max|F|={best_pbc_max_f:.4f})", title="[bold yellow]PBC Minimization[/bold yellow]", border_style="yellow"))
-                        break
+                )
+                c.print(
+                    Panel(
+                        f"Skipping PBC FIRE ({why}).",
+                        title="[bold]PBC Minimization[/bold]",
+                        border_style="yellow",
+                    )
+                )
+            else:
+                dt0_pbc = resolve_jaxmd_fire_dt_start_ps(f0_pbc)
+                dt_sched_pbc = jaxmd_fire_dt_backoff_schedule(dt0_pbc)
+                c.print(
+                    Panel(
+                        f"PBC FIRE minimization ({NMIN_PBC} steps/stage; "
+                        f"dt schedule={[f'{d:.1e}' for d in dt_sched_pbc]} ps)",
+                        title="[bold cyan]PBC Minimization[/bold cyan]",
+                        border_style="cyan",
+                    )
+                )
 
-                # Use first-min result if PBC minimization worsened structure (max_force increased)
-                if best_pbc_max_f > max_force_start * 1.1:
-                    md_pos = pbc_map_fn(minimized_pos) if pbc_map_fn else minimized_pos
-                    print(f"PBC minimization increased max|F| ({max_force_start:.4f} -> {best_pbc_max_f:.4f}); using first-min wrapped structure")
+                def _pbc_nl_refresh(pos):
+                    if update_fn is not None:
+                        pair_i, pair_m = update_fn(np.asarray(pos), box=pbc_box_nl)
+                        _pbc_state["pair_idx"] = pair_i
+                        _pbc_state["pair_mask"] = pair_m
+
+                def _pbc_log(stage_idx, dt_ps, i, n_tot, energy, max_force):
+                    c.print(
+                        f"  [dim]dt={dt_ps:.1e} stage {stage_idx} {i}/{n_tot}[/dim]: "
+                        f"E={energy if energy is not None else float('nan'):.6f} eV, "
+                        f"max|F|={max_force:.6f}"
+                    )
+
+                md_pos, best_pbc_max_f, pbc_info = run_jaxmd_fire_with_dt_backoff(
+                    force_fn=wrapped_force_fn,
+                    shift_fn=shift_molecular,
+                    positions=pbc_start_pos,
+                    masses=Si_mass,
+                    n_steps=int(NMIN_PBC),
+                    dt_schedule=dt_sched_pbc,
+                    nl_refresh_fn=_pbc_nl_refresh if update_fn is not None else None,
+                    energy_fn=wrapped_energy_fn,
+                    log_fn=_pbc_log,
+                )
+                pbc_fire_positions.append(md_pos)
+                if best_pbc_max_f < pbc_info["start_max_f"] - 1.0e-6:
+                    c.print(
+                        Panel(
+                            f"PBC FIRE improved max|F| "
+                            f"{pbc_info['start_max_f']:.4f} → {best_pbc_max_f:.4f}",
+                            title="[bold green]PBC Minimization[/bold green]",
+                            border_style="green",
+                        )
+                    )
                 else:
-                    md_pos = best_pbc_pos
+                    c.print(
+                        Panel(
+                            f"PBC FIRE kept best max|F|={best_pbc_max_f:.4f} "
+                            f"(start {pbc_info['start_max_f']:.4f})",
+                            title="[bold]PBC Minimization[/bold]",
+                            border_style="yellow",
+                        )
+                    )
 
             # Save PBC minimized structure (md_pos already wrapped by monomer)
             atoms.set_positions(np.asarray(md_pos))
@@ -1144,6 +1495,114 @@ def set_up_nhc_sim_routine(
         else:
             forces_jax = wrapped_force_fn(state.position, neighbor=current_neighbors)
         print_forces_summary(np.asarray(forces_jax), energy_eV=energy_initial, console=c)
+        if args.ensemble == "nve":
+            # float32 energy differences are too coarse for force–energy FD and
+            # for reliable microcanonical conservation on stiff hybrid potentials.
+            x64_on = bool(jax.config.read("jax_enable_x64"))
+            if (not x64_on) or _JAXMD_DTYPE != jnp.float64:
+                msg = (
+                    "NVE requires JAX float64. Export JAX_ENABLE_X64=1 "
+                    "*before* starting Python (and use --ml-compute-dtype float64 "
+                    "or MMML_ML_DTYPE=float64). "
+                    f"Current: jax_enable_x64={x64_on}, "
+                    f"ml_dtype={_JAXMD_DTYPE}."
+                )
+                c.print(
+                    Panel(
+                        msg,
+                        title="[bold red]NVE preflight failed[/bold red]",
+                        border_style="red",
+                    )
+                )
+                run_sim.last_status = "error"
+                run_sim.last_error = msg
+                pos0 = np.asarray(jax.device_get(state.position), dtype=float)
+                return 0, np.stack([pos0]), None
+            max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
+            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.0) or 0.0)
+            if fmax_gate > 0.0 and max_f_start > fmax_gate:
+                msg = (
+                    f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "
+                    f"> gate {fmax_gate:.4f} eV/Å. Improve minimization / packing "
+                    "before microcanonical dynamics (or raise --nve-max-f-start-eVA)."
+                )
+                c.print(
+                    Panel(
+                        msg,
+                        title="[bold red]NVE preflight failed[/bold red]",
+                        border_style="red",
+                    )
+                )
+                run_sim.last_status = "error"
+                run_sim.last_error = msg
+                pos0 = np.asarray(jax.device_get(state.position), dtype=float)
+                return 0, np.stack([pos0]), None
+            # NVE is only meaningful when the explicit calculator forces are
+            # the negative derivative of the reported potential energy.  The
+            # hybrid calculator cannot currently be differentiated end-to-end,
+            # so verify that contract numerically before integrating.
+            fd_tol = float(
+                getattr(args, "nve_force_energy_relative_tolerance", 0.20)
+                or 0.0
+            )
+            if fd_tol > 0.0:
+                fd_eps = float(
+                    getattr(args, "nve_force_energy_epsilon_A", 0.01) or 0.01
+                )
+                ncoord = int(np.prod(state.position.shape))
+                direction_np = np.sin(
+                    np.arange(1, ncoord + 1, dtype=np.float64)
+                ).reshape(tuple(state.position.shape))
+                direction_np /= max(float(np.linalg.norm(direction_np)), 1.0e-12)
+                direction = as_jaxmd_dtype(direction_np)
+                e_plus = float(
+                    wrapped_energy_fn(
+                        state.position + fd_eps * direction,
+                        neighbor=current_neighbors,
+                    )
+                )
+                e_minus = float(
+                    wrapped_energy_fn(
+                        state.position - fd_eps * direction,
+                        neighbor=current_neighbors,
+                    )
+                )
+                projected_force = float(jnp.sum(forces_jax * direction))
+                fd_slope, fd_relerr = directional_force_energy_error(
+                    e_plus,
+                    e_minus,
+                    fd_eps,
+                    projected_force,
+                )
+                c.print(
+                    Panel(
+                        f"directional FD dE/ds={fd_slope:.6f} eV/Å, "
+                        f"-F·d={-projected_force:.6f} eV/Å, "
+                        f"relative error={fd_relerr:.4f} (tol={fd_tol:.4f})",
+                        title="[bold]NVE force–energy preflight[/bold]",
+                        border_style="cyan",
+                    )
+                )
+                if not np.isfinite(fd_relerr) or fd_relerr > fd_tol:
+                    msg = (
+                        "NVE force–energy consistency failed: "
+                        f"finite-difference dE/ds={fd_slope:.6f} eV/Å, "
+                        f"-F·d={-projected_force:.6f} eV/Å, relative error "
+                        f"{fd_relerr:.3f} > {fd_tol:.3f}. The hybrid force is "
+                        "non-conservative for this configuration; NVE would heat "
+                        "and drift."
+                    )
+                    c.print(
+                        Panel(
+                            msg,
+                            title="[bold red]NVE preflight failed[/bold red]",
+                            border_style="red",
+                        )
+                    )
+                    run_sim.last_status = "error"
+                    run_sim.last_error = msg
+                    pos0 = np.asarray(jax.device_get(state.position), dtype=float)
+                    return 0, np.stack([pos0]), None
         # velocity = momentum / mass; position update = R + dt * v (half-step in VV)
         vel = state.momentum / state.mass
         disp_first = dt * vel
@@ -1238,12 +1697,27 @@ def set_up_nhc_sim_routine(
 
         nbr_monitor = getattr(args, "nbr_monitor", False)
         if use_pbc:
-            c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
-        c.print(Panel(f"Starting {args.ensemble.upper()} simulation", title="[bold cyan]JAX-MD[/bold cyan]", border_style="cyan"))
+            c.print(Panel(
+                f"{n_monomers} monomer groups, wrap+NL every {steps_per_loop_call} MD steps "
+                f"(record every {steps_per_recording})",
+                title="[bold]PBC Wrapping[/bold]",
+                border_style="blue",
+            ))
+        _total_time_ps = total_steps * dt
+        c.print(Panel(
+            f"Starting {args.ensemble.upper()} simulation | "
+            f"total steps: {total_steps:,} | "
+            f"total time: {_total_time_ps:.4f} ps | "
+            f"dt: {dt_fs:.4f} fs | "
+            f"recording every {steps_per_recording} steps ({steps_per_recording * dt:.4f} ps)",
+            title="[bold cyan]JAX-MD[/bold cyan]",
+            border_style="cyan",
+        ))
         _fb_hdr = f"\t{_fb_dist_hdr}\tV_fb (eV)" if use_flat_bottom else ""
         if is_npt:
             hdr = (
-                "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)"
+                f"\t\tTime (ps) [of {_total_time_ps:.3f} ps, {total_steps:,} steps, dt={dt_fs:.4f} fs]"
+                "\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)"
                 f"\tP_tgt (atm)\tP_meas (atm){_fb_hdr}\tavg(ns/day)"
             )
             if nbr_monitor:
@@ -1251,7 +1725,8 @@ def set_up_nhc_sim_routine(
             c.print(f"[dim]{hdr}[/dim]")
         else:
             c.print(
-                f"[dim]\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K){_fb_hdr}\tavg(ns/day)[/dim]"
+                f"[dim]\t\tTime (ps) [of {_total_time_ps:.3f} ps, {total_steps:,} steps, dt={dt_fs:.4f} fs]"
+                f"\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K){_fb_hdr}\tavg(ns/day)[/dim]"
             )
 
         # ========================================================================
@@ -1300,6 +1775,12 @@ def set_up_nhc_sim_routine(
         run_status = "complete"
         run_error = None
         rescue_rng = key
+        e_tot_ref: float | None = None
+        # Abort NVE when |E_tot - E_tot_ref| exceeds this (eV). Non-conservative
+        # force bugs otherwise run to multi-1000 K before anyone notices.
+        e_tot_drift_abort_eV = float(
+            getattr(args, "nve_etot_drift_abort_eV", 0.5) or 0.0
+        )
 
         def _state_after_overlap_rescue(
             pos,
@@ -1486,47 +1967,70 @@ def set_up_nhc_sim_routine(
                     atoms_template.set_positions(np.asarray(jax.device_get(pos_real)))
                     show_frame(atoms_template, steps, "jaxmd")
 
-                # Print progress every 10 steps
+                # Energies every record for NVE conservation; print every 10 records.
                 nbr_n_valid = nbr_capacity = nbr_fill_ratio = None
-                if i % 10 == 0:
-                    steps = (i + 1) * steps_per_recording
-                    time_ps = steps * dt
-                    T_curr = jax_md.quantity.temperature(
-                        momentum=state.momentum,
-                        mass=state.mass
-                    ) / unit['temperature']
-                    temp = float(T_curr)
-                    com_dist_report = float("nan")
-                    e_fb_report = float("nan")
-                    if use_flat_bottom:
-                        if is_npt and npt_pair_idx is not None:
-                            box_curr = simulate.npt_box(state)
-                            out_dyn = _eval_at_position(
-                                state.position,
-                                box=box_curr,
-                                pair_idx=npt_pair_idx,
-                                pair_mask=npt_pair_mask,
-                            )
-                        else:
-                            pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
-                            out_dyn = _eval_at_position(
-                                state.position,
-                                pair_idx=pair_idx,
-                                pair_mask=pair_mask,
-                            )
-                        e_pot = float(out_dyn.energy)
-                        com_dist_report = float(out_dyn.com_dist)
-                        e_fb_report = float(out_dyn.flat_bottom_E)
-                    elif is_npt and npt_pair_idx is not None:
+                steps = (i + 1) * steps_per_recording
+                time_ps = steps * dt
+                T_curr = jax_md.quantity.temperature(
+                    momentum=state.momentum,
+                    mass=state.mass
+                ) / unit['temperature']
+                temp = float(T_curr)
+                com_dist_report = float("nan")
+                e_fb_report = float("nan")
+                if use_flat_bottom:
+                    if is_npt and npt_pair_idx is not None:
                         box_curr = simulate.npt_box(state)
-                        e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+                        out_dyn = _eval_at_position(
+                            state.position,
+                            box=box_curr,
+                            pair_idx=npt_pair_idx,
+                            pair_mask=npt_pair_mask,
+                        )
                     else:
-                        e_pot = float(wrapped_energy_fn(state.position, neighbor=current_neighbors))
-                    e_kin = float(jax_md.quantity.kinetic_energy(
-                        momentum=state.momentum,
-                        mass=state.mass
-                    ))
-                    e_tot = e_pot + e_kin
+                        pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
+                        out_dyn = _eval_at_position(
+                            state.position,
+                            pair_idx=pair_idx,
+                            pair_mask=pair_mask,
+                        )
+                    e_pot = float(out_dyn.energy)
+                    com_dist_report = float(out_dyn.com_dist)
+                    e_fb_report = float(out_dyn.flat_bottom_E)
+                elif is_npt and npt_pair_idx is not None:
+                    box_curr = simulate.npt_box(state)
+                    e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+                else:
+                    e_pot = float(wrapped_energy_fn(state.position, neighbor=current_neighbors))
+                e_kin = float(jax_md.quantity.kinetic_energy(
+                    momentum=state.momentum,
+                    mass=state.mass
+                ))
+                e_tot = e_pot + e_kin
+                if (
+                    not is_npt
+                    and args.ensemble == "nve"
+                    and e_tot_drift_abort_eV > 0.0
+                    and np.isfinite(e_tot)
+                ):
+                    if e_tot_ref is None:
+                        e_tot_ref = e_tot
+                    elif abs(e_tot - e_tot_ref) > e_tot_drift_abort_eV:
+                        run_status = "error"
+                        run_error = (
+                            f"NVE E_tot drift {e_tot - e_tot_ref:+.4f} eV "
+                            f"exceeds abort threshold {e_tot_drift_abort_eV:.4f} eV "
+                            f"at step {steps} (E_tot={e_tot:.4f}, ref={e_tot_ref:.4f})"
+                        )
+                        c.print(Panel(
+                            run_error,
+                            title="[bold red]NVE energy conservation failed[/bold red]",
+                            border_style="red",
+                        ))
+                        if len(nhc_positions) > 1:
+                            nhc_positions = nhc_positions[:-1]
+                        break
+                if i % 10 == 0:
                     elapsed_s = time.perf_counter() - jaxmd_loop_start
                     simulated_ns = steps * dt_fs * 1e-6
                     if simulated_ns > 0 and elapsed_s > 0:
@@ -1577,59 +2081,63 @@ def set_up_nhc_sim_routine(
                             f"{_fb_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
 
-                    # Record to HDF5 (NPT: real-space via transform; optional monomer wrap for viewers)
-                    pos_for_h5 = state.position
-                    if is_npt:
-                        box_curr = simulate.npt_box(state)
-                        pos_for_h5 = space.transform(box_curr, state.position)
-                        if traj_export_molecular_wrap:
-                            pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
-                    report_kw = dict(
-                        potential_energy=e_pot,
-                        kinetic_energy=e_kin,
-                        temperature=temp,
-                        invariant=e_tot,
-                        total_energy=e_tot,
-                        time_ps=time_ps,
-                        positions=pos_for_h5,
-                        velocities=state.momentum / state.mass,
+                # Record to HDF5 every record (NPT: real-space; optional monomer wrap)
+                pos_for_h5 = state.position
+                if is_npt:
+                    box_curr = simulate.npt_box(state)
+                    pos_for_h5 = space.transform(box_curr, state.position)
+                    if traj_export_molecular_wrap:
+                        pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
+                report_kw = dict(
+                    potential_energy=e_pot,
+                    kinetic_energy=e_kin,
+                    temperature=temp,
+                    invariant=e_tot,
+                    total_energy=e_tot,
+                    time_ps=time_ps,
+                    positions=pos_for_h5,
+                    velocities=state.momentum / state.mass,
+                )
+                if is_npt:
+                    box_for_density = simulate.npt_box(state)
+                    vol_for_density = float(quantity.volume(3, box_for_density))
+                    report_kw["density_g_cm3"] = (
+                        float(np.sum(Si_mass) * 1.66053906660 / vol_for_density)
+                        if vol_for_density > 0
+                        else float("nan")
                     )
-                    if is_npt:
-                        box_for_density = simulate.npt_box(state)
-                        vol_for_density = float(quantity.volume(3, box_for_density))
-                        report_kw["density_g_cm3"] = (
-                            float(np.sum(Si_mass) * 1.66053906660 / vol_for_density)
-                            if vol_for_density > 0
-                            else float("nan")
-                        )
-                    if nbr_monitor and is_npt and npt_pair_idx is not None and nbr_n_valid is not None:
-                        report_kw["nbr_n_valid"] = nbr_n_valid
-                        report_kw["nbr_capacity"] = nbr_capacity
-                        report_kw["nbr_fill_ratio"] = nbr_fill_ratio
-                    if use_flat_bottom:
-                        report_kw["com_dist_A"] = com_dist_report
-                        report_kw["flat_bottom_E_eV"] = e_fb_report
-                    hdf5_reporter.report(**report_kw)
+                if nbr_monitor and is_npt and npt_pair_idx is not None:
+                    if nbr_n_valid is None:
+                        nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
+                        nbr_capacity = npt_pair_idx.shape[0]
+                        nbr_fill_ratio = nbr_n_valid / nbr_capacity if nbr_capacity > 0 else 0.0
+                    report_kw["nbr_n_valid"] = nbr_n_valid
+                    report_kw["nbr_capacity"] = nbr_capacity
+                    report_kw["nbr_fill_ratio"] = nbr_fill_ratio
+                if use_flat_bottom:
+                    report_kw["com_dist_A"] = com_dist_report
+                    report_kw["flat_bottom_E_eV"] = e_fb_report
+                hdf5_reporter.report(**report_kw)
 
-                    # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
-                    if not np.isfinite(e_pot) or not np.isfinite(temp):
-                        run_status = "error"
-                        run_error = f"numerical instability at step {steps}"
-                        print(f"Numerical instability at step {steps}; stopping.")
-                        if len(nhc_positions) > 1:
-                            nhc_positions = nhc_positions[:-1]
-                            if is_npt:
-                                nhc_boxes = nhc_boxes[:-1]
-                        break
-                    if e_pot >= 0 and energy_initial < 0:
-                        run_status = "error"
-                        run_error = f"energy blow-up at step {steps} (E_pot={e_pot:.4f})"
-                        c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
-                        if len(nhc_positions) > 1:
-                            nhc_positions = nhc_positions[:-1]
-                            if is_npt:
-                                nhc_boxes = nhc_boxes[:-1]
-                        break
+                # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
+                if not np.isfinite(e_pot) or not np.isfinite(temp):
+                    run_status = "error"
+                    run_error = f"numerical instability at step {steps}"
+                    print(f"Numerical instability at step {steps}; stopping.")
+                    if len(nhc_positions) > 1:
+                        nhc_positions = nhc_positions[:-1]
+                        if is_npt:
+                            nhc_boxes = nhc_boxes[:-1]
+                    break
+                if e_pot >= 0 and energy_initial < 0:
+                    run_status = "error"
+                    run_error = f"energy blow-up at step {steps} (E_pot={e_pot:.4f})"
+                    c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
+                    if len(nhc_positions) > 1:
+                        nhc_positions = nhc_positions[:-1]
+                        if is_npt:
+                            nhc_boxes = nhc_boxes[:-1]
+                    break
         except KeyboardInterrupt:
             run_status = "interrupted"
             run_error = "KeyboardInterrupt"

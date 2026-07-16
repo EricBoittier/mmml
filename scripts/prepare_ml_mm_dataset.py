@@ -11,9 +11,7 @@ Multi-threaded Orbax Cache Processor:
 from __future__ import annotations
 
 import argparse
-import json
 import multiprocessing as mp
-import re
 import sys
 import time
 from pathlib import Path
@@ -26,11 +24,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from ase.data import covalent_radii, atomic_numbers, chemical_symbols
+from ase.data import covalent_radii, atomic_numbers
 import ase.units
 
 K_COULOMB_KCAL_ANG = 332.06371  # e^2 / Angstrom -> kcal/mol
-KCAL_TO_EV = 1.0 / ase.units.kcal * ase.units.mol
+# kcal/mol -> eV (0.0433641...). The reciprocal (23.06) is the eV -> kcal/mol factor;
+# using it here inflated E_cgenff_mm/F_cgenff_mm by 531.8x.
+KCAL_TO_EV = ase.units.kcal / ase.units.mol
 
 DEF_RTF_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "top_all36_cgenff.rtf"
 DEF_PRM_PATH = _REPO_ROOT / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
@@ -93,7 +93,7 @@ def load_cgenff_nonbonded_table(prm_path: Path) -> tuple[dict[str, int], np.ndar
     # Post-parse sanity check: warn about any non-DEFAULT types with zero epsilon/sigma
     sig_arr = np.array(sigmas, dtype=np.float64)
     eps_arr = np.array(epsilons, dtype=np.float64)
-    default_idx = nb_map["DEFAULT"]
+    nb_map["DEFAULT"]
     bad_types = [t for t, i in nb_map.items() if t != "DEFAULT" and (sig_arr[i] == 0.0 or eps_arr[i] == 0.0)]
     if bad_types and not _IS_WORKER:
         print(f"[WARNING] {len(bad_types)} CGenFF atom types parsed with zero sigma or epsilon: {bad_types[:10]}")
@@ -408,7 +408,6 @@ def _fmt_comp(z_arr: np.ndarray) -> str:
 
 def match_cgenff_template_fast(
     z_sub: np.ndarray,
-    comp_indices: list[int],
     pos_sub: np.ndarray | None = None,
     target_charge: float = 0.0,
     canonical_smiles: str | None = None,
@@ -599,11 +598,11 @@ def process_single_frame(args_tuple):
         # canonical_smiles=None: use composition lookup (SMILES lookup reserved for future
         # use if source cache provides smiles0/smiles1 keys directly)
         res_a, t_a, q_a = match_cgenff_template_fast(
-            z_struct[comp_a], comp_a, r_struct[comp_a],
+            z_struct[comp_a], r_struct[comp_a],
             target_charge=0.0, canonical_smiles=None
         )
         res_b, t_b, q_b = match_cgenff_template_fast(
-            z_struct[comp_b], comp_b, r_struct[comp_b],
+            z_struct[comp_b], r_struct[comp_b],
             target_charge=0.0, canonical_smiles=None
         )
 

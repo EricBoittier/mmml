@@ -122,6 +122,7 @@ def prepare_batches_md(
         "Z": (batch_size * num_atoms,),
         "D": (batch_size, 3),
         "N": (batch_size,),
+        "N_a": (batch_size,),
         "mono": (batch_size * num_atoms,),
     }
 

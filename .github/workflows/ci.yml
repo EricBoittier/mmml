@@ -23,10 +23,13 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
       - name: Install package and dependencies
         run: uv sync --extra dev --extra all-cpu
-      - name: Lint config sanity
+      - name: Lint
+        run: |
+          make lint
+      - name: Package import sanity
         run: |
           uv run python -V
-          uv run python -c "import mmml; print('pkg import ok')"
+          uv run python -c "import mmml; print('package imports ok')"
       - name: Run tests
         run: uv run pytest -v --color=yes tests/
       - name: Run CHARMM MPI unit suite
@@ -78,4 +81,3 @@ jobs:
         run: uv sync --extra dev --extra all-cpu --extra charmm-interface
       - name: Run PyCHARMM smoke tests
         run: uv run bash scripts/ci/run_pycharmm_smoke_pytest.sh -q
-

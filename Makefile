@@ -212,7 +212,7 @@ test-data:
 # ==============================================================================
 
 lint:
-	uv run ruff check mmml/ scripts/
+	uv run ruff check mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
 
 format:
 	uv run ruff format mmml/ scripts/
@@ -221,8 +221,8 @@ type-check:
 	uv run mypy mmml/
 
 deadcode:
-	uv run ruff check --select F401,F841,F541 mmml/ scripts/
-	uvx vulture mmml scripts --min-confidence 80
+	uv run ruff check --select F401,F841,F541 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	uvx vulture mmml scripts setup/charmm/tool/pycharmm/pycharmm --min-confidence 80
 
 deadcode-fix:
 	uv run ruff check --fix --select F401,F841,F541 mmml/ scripts/

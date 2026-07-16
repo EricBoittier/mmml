@@ -20,7 +20,6 @@ from mmml.cli.misc.fix_and_split import (
 from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 from mmml.interfaces.orca_external.protocol import (
     ExtInpData,
-    natoms_from_xyz,
     read_extinp,
     read_xyz,
     write_engrad,

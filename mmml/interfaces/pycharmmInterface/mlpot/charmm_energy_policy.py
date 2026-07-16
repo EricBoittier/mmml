@@ -367,6 +367,11 @@ def apply_charmm_energy_term_policies_before_pbc_finalize(
 
     This avoids the unsafe sequence seen with all-ML PBC systems:
     finalize image lists -> probe IMNB -> READ PARAM APPEND -> crystal free/hang.
+
+    For VDW/IMNB, ``SCALAR VDW SET 0.0`` alone is not enough after IMAGE lists
+    are built (residual ``IMNB`` often ~1–2 kcal/mol).  Load an ε=0 NONBONDED
+    APPEND overlay first so CHARMM's VDW table is overwritten while crystal is
+    still suspended, then SCALAR as a belt-and-suspenders clear.
     """
     policies = resolve_charmm_energy_term_policies(args)
     if not policies:
@@ -382,14 +387,43 @@ def apply_charmm_energy_term_policies_before_pbc_finalize(
         from mmml.interfaces.pycharmmInterface.charmm_levels import (
             charmm_silent_command,
         )
+        from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+            zeroed_nonbond_prm_text,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+            cgenff_prm_path,
+        )
+        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
+        scratch = _policy_scratch_dir(args)
+        scratch.mkdir(parents=True, exist_ok=True)
+        overlay = scratch / "zeroed_vdw_pre_pbc.prm"
+        src = cgenff_prm_path()
+        body = zeroed_nonbond_prm_text(
+            src.read_text(encoding="utf-8", errors="replace")
+        )
+        if not body.strip():
+            raise RuntimeError(
+                f"empty pre-PBC VDW zero overlay from {src}; "
+                "cannot enforce IMNB≈0 for jax_mic"
+            )
+        overlay.write_text(
+            "* MMML pre-PBC VDW zero overlay (ε=0 READ PARAM APPEND)\n"
+            f"* Source: {src.name}\n"
+            "* --------------------------------------------------------------------------  *\n"
+            + body,
+            encoding="utf-8",
+        )
+        # Crystal is already suspended by register_mlpot before this hook.
+        read_cgenff_prm(overlay, append=True)
         with charmm_silent_command():
             pycharmm.lingo.charmm_script("scalar vdw set 0.0 sele all end")
             pycharmm.lingo.charmm_script("scalar vdw14 set 0.0 sele all end")
         applied.extend(p.name for p in policies if p.zero_nonbond_prm)
         if verbose or not getattr(args, "quiet", False):
             print(
-                "CHARMM energy policy: pre-zeroed VDW/VDW14 before PBC image-list build",
+                "CHARMM energy policy: pre-PBC ε=0 NONBONDED overlay + "
+                f"SCALAR VDW/VDW14 ({overlay.name})",
                 flush=True,
             )
 

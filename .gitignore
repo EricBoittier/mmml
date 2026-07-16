@@ -15,6 +15,21 @@ DCM*LOG
 setup/charmm/*.mod
 setup/charmm/**.mod
 
+# Temporary runtime output folders at root
+/res/
+/dcd/
+/xyz/
+/psf/
+/pdb/
+/pycharmm/
+fort.*
+fftw-wisdom.dat
+domdec_probe_*.txt
+*.out
+profile_git_metadata.json
+args.model.json
+dataset_intel.json
+
 # DCM:5 benchmark workflow outputs (see workflows/dcm5_md_benchmark/.gitignore)
 workflows/dcm5_md_benchmark/results/
 workflows/dcm5_md_benchmark/.snakemake/
@@ -205,6 +220,8 @@ CHARMMSETUP
 !mmml/data/molecules/dcm.xyz
 *.png
 !docs/images/**/*.png
+!docs/plot-style-gallery-assets/*.png
+!docs/robustness-report-assets/*.png
 CHARMMSETUP
 examples/co2/dcmnet_physnet_train/md_ir_long/trajectory.npz
 examples/openqdc/openqdc_packed_memmap/
@@ -285,10 +302,16 @@ MagicMock/
 reports/*.aux
 reports/*.out
 reports/*.toc
+# Test input/output artifacts generated during test runs
+pdb/aco.pdb
+psf/aco-1.psf
+pept.pdb
+pept.psf
 
-# Root-level files generated/modified during test runs
+# Root-level files generated/modified during test runs and setup workflows
 /packmol.inp
 /packmol_out.pdb
+/packmol_repack/
 /peptide.pdb
 /trialanine-water.crd
 /trialanine-water.npy

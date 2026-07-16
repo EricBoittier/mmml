@@ -70,6 +70,11 @@ def cfg() -> dict:
     # config.yaml raises jaxmd_bursts for production campaigns.
     return {
         **raw,
+        # Preserve coverage of the legacy supported solvents independently of
+        # the validated TIP3/MEOH production defaults.
+        "solvents": ["DCM", "ACO"],
+        "mixtures": None,
+        "checkpoint": "examples/ckpts_json/DESdimers_params.json",
         "cluster_sizes": [10, 30, 50, 80, 100],
         "bulk_density_fractions": None,
         "temperatures": [300.0],
@@ -165,7 +170,7 @@ def test_cleanup_strategy_maps_to_pycharmm_and_jaxmd(cfg: dict) -> None:
     init = campaign["runs"]["pycharmm_init"]
     burst = campaign["runs"]["jaxmd_burst_01"]
     assert init["dynamics_overlap_action"] == "rescue"
-    assert init["bonded_mm_mini"] is True
+    assert init["bonded_mm_mini"] is True  # config.yaml opts in explicitly
     assert init["no_echeck_heat"] is True
     assert init["dynamics_overlap_memory_handoff"] is True
     assert init["heat_thermostat"] == "hoover"
@@ -300,12 +305,18 @@ def test_bulk_density_matrix_sizes() -> None:
     assert n_monomers_at_bulk_density("DCM", 28.0, 1.0) == 206
     assert n_monomers_at_bulk_density("ACO", 28.0, 1.0) == 178
     assert n_monomers_at_bulk_density("DCM", 28.0, 0.5) == 103
+    assert n_monomers_at_bulk_density("TIP3", 28.0, 1.0) == 732
+    assert n_monomers_at_bulk_density("MEOH", 28.0, 1.0) == 325
+    assert n_monomers_at_bulk_density("TIP3", 28.0, 0.1) == 73
+    assert n_monomers_at_bulk_density("MEOH", 28.0, 0.25) == 81
 
 
 def test_bulk_density_iter_matrix_cells() -> None:
     raw = yaml.safe_load((WORKFLOW / "config.yaml").read_text(encoding="utf-8"))
     cfg = {
         **raw,
+        "solvents": ["DCM", "ACO"],
+        "mixtures": None,
         "temperatures": [300.0],
         "box_sizes": [28.0],
         "bulk_density_fractions": [0.5, 1.0],
@@ -318,6 +329,76 @@ def test_bulk_density_iter_matrix_cells() -> None:
     assert "aco_89" in tags  # round(0.5 * 178)
     assert "aco_178" in tags
     assert matrix_job_count(cfg) == 4  # 2 solvents × 2 fractions × 1 T × 1 L
+
+
+def test_default_matrix_uses_validated_water_methanol_region() -> None:
+    cfg = load_config(WORKFLOW / "config.yaml")
+    assert cfg["solvents"] == ["TIP3", "MEOH"]
+    assert cfg["temperatures"] == [280.0, 300.0, 320.0]
+    assert cfg["checkpoint"] == "${MMML_CKPT}"
+    cells = list(iter_matrix_cells(cfg))
+    assert {cell.solvent for cell in cells if not cell.is_mixture} == {"TIP3", "MEOH"}
+    assert min(cell.temperature for cell in cells) >= 280.0
+
+
+def test_default_matrix_includes_three_water_methanol_ratios() -> None:
+    cfg = load_config(WORKFLOW / "config.yaml")
+    cells = list(iter_matrix_cells(cfg))
+    mixed = [cell for cell in cells if cell.is_mixture]
+    assert len(mixed) == 54  # 3 ratios × 2 densities × 3 T × 3 boxes
+    ratios = {
+        tuple(round(value, 2) for _solvent, value in cell.mole_fractions)
+        for cell in mixed
+    }
+    assert ratios == {(0.25, 0.75), (0.5, 0.5), (0.75, 0.25)}
+    assert all(len(cell.components) == 2 for cell in mixed)
+    assert all(sum(count for _solvent, count in cell.components) == cell.n_monomers for cell in mixed)
+
+
+def test_mixed_cell_tag_composition_and_ml_atom_count() -> None:
+    cfg = load_config(WORKFLOW / "config.yaml")
+    cell = next(
+        cell
+        for cell in iter_matrix_cells(cfg)
+        if cell.is_mixture
+        and cell.mixture_key == "meohx50_tip3x50"
+        and cell.box_size == 28.0
+        and cell.temperature == 300.0
+        and cell.n_monomers == 45
+    )
+    assert cell_run_tag(cell, cfg) == "meohx50_tip3x50_45_t300_l28"
+    assert composition_string(cell) == "MEOH:23,TIP3:22"
+    assert cl.cell_ml_atoms(cell) == 23 * 6 + 22 * 3
+    assert cell_from_tag(cfg, cell_run_tag(cell, cfg)) == cell
+    campaign = build_campaign(cfg, cell)
+    assert campaign["defaults"]["composition"] == "MEOH:23,TIP3:22"
+    assert campaign["defaults"]["ml_compute_dtype"] == "float64"
+
+
+def test_mixed_dense_cell_cleanup_uses_mixture_bulk_density() -> None:
+    cfg = load_config(WORKFLOW / "config.yaml")
+    cell = max(
+        (
+            cell
+            for cell in iter_matrix_cells(cfg)
+            if cell.is_mixture and cell.mixture_key == "meohx25_tip3x75"
+        ),
+        key=lambda item: item.n_monomers,
+    )
+    assert cell.n_monomers >= 150
+    overrides = dense_cell_mlpot_overrides(cell, cfg)
+    assert overrides["dynamics_overlap_memory_handoff"] is True
+    assert overrides["ml_batch_size"] <= cfg["ml_batch_size"]
+
+
+def test_mixture_integer_allocation_preserves_total_and_components() -> None:
+    from bulk_density import mixture_counts_at_bulk_density
+
+    counts = mixture_counts_at_bulk_density(
+        {"TIP3": 0.25, "MEOH": 0.75}, 28.0, 0.1, min_n=10
+    )
+    assert counts == {"MEOH": 29, "TIP3": 9}
+    assert sum(counts.values()) == 38
 
 
 def test_heat_thermostat_coerced_when_pretreat(cfg: dict, cell: RunCell) -> None:

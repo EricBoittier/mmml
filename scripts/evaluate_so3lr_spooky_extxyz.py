@@ -540,6 +540,9 @@ def create_model_from_config(config: dict[str, Any], max_atoms: int) -> SpookyPh
         max_padded_atoms=max_atoms,
         n_refinement_blocks=n_res,
         zbl=zbl,
+        trainable_zbl=config.get("trainable_zbl", False),
+        zbl_cuton=config.get("zbl_cuton", 0.1),
+        zbl_cutoff=config.get("zbl_cutoff", 0.6),
         efa=config.get("efa", False),
         use_energy_bias=config.get("use_energy_bias", False),
         electrostatics_damping_sigma=config.get("electrostatics_damping_sigma", 4.0),
@@ -890,6 +893,9 @@ def main() -> None:
     checkpoint_path = Path(args.checkpoint).resolve()
     print(f"Restoring checkpoint from: {checkpoint_path}")
     params, config = restore_checkpoint(checkpoint_path)
+    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+
+    config = infer_trainable_zbl_config(config, params)
     
     # Extract prediction config
     predict_charges = config.get("predict_charges", config.get("charges", False))

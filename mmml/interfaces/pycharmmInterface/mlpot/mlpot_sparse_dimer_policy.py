@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 import numpy as np
 
@@ -64,7 +64,7 @@ def build_monomer_dimer_index_arrays(
 
     offsets = np.zeros(int(n_monomers) + 1, dtype=np.int32)
     offsets[1:] = np.cumsum(per)
-    n_atoms = int(offsets[-1])
+    int(offsets[-1])
     max_m = max(per)
     max_d = max(a + b for a, b in ((per[i], per[j]) for i, j in dimer_permutations(n_monomers)))
     if max_atoms is None:
@@ -167,7 +167,7 @@ def dimer_com_distance_numpy(
     cell: Optional[np.ndarray],
 ) -> float:
     pos = positions[dimer_indices]
-    max_n = pos.shape[0]
+    pos.shape[0]
     com_a = pos[:n_a].mean(axis=0)
     com_b = pos[n_a : n_a + n_b].mean(axis=0)
     d = mic_displacement_numpy(com_a, com_b, cell)

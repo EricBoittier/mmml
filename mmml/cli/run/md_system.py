@@ -28,7 +28,9 @@ _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    from mmml.cli.argparse_suggest import SuggestingArgumentParser
+
+    parser = SuggestingArgumentParser(
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
             "lambda TI for arbitrary compositions) for arbitrary residue compositions. "
@@ -81,10 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "Optional learned MBD dispersion checkpoint. Adds a whole-system "
-            "E += mbd_weight * E_mbd correction to the hybrid ML/MM calculator "
-            "(ASE / JAX-MD backends). Required when the model was trained with an "
-            "additive MBD term, else that dispersion physics is silently omitted."
+            "Optional learned MBD dispersion checkpoint. On ASE/JAX-MD and "
+            "PyCHARMM hybrid paths, adds E += mbd_weight * E_mbd. When omitted on "
+            "the hybrid path, auto-loads from the model checkpoint's recorded "
+            "mbd_checkpoint if that path exists locally. With --jaxmd-unified "
+            "--ff zbl-mbd-multipoles, used once at build to freeze per-atom C6/C8/C10 "
+            "for the classical pairwise dispersion term (default: bundled example)."
         ),
     )
     parser.add_argument(
@@ -92,6 +96,37 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="Weight for the --mbd-checkpoint correction (default 1.0; match training).",
+    )
+    parser.add_argument(
+        "--multipole-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional learned multipole checkpoint. With --jaxmd-unified "
+            "--ff zbl-mbd-multipoles, used once at build to freeze fragment multipoles "
+            "for classical pair electrostatics during rigid MC (default: bundled example)."
+        ),
+    )
+    parser.add_argument(
+        "--sampler",
+        choices=["md", "rigid"],
+        default="md",
+        help=(
+            "Propagator for --jaxmd-unified: md (JaxmdDriver) or rigid "
+            "(RigidBodySampler Metropolis MC over whole monomers). Default: md."
+        ),
+    )
+    parser.add_argument(
+        "--ff",
+        choices=["cgenff", "zbl-mbd-multipoles"],
+        default=None,
+        help=(
+            "Intermolecular FF preset for --jaxmd-unified. cgenff: CHARMM/CGenFF "
+            "mm_nonbonded only (default when --sampler rigid and no --checkpoint). "
+            "zbl-mbd-multipoles: intermolecular ZBL (defaults) + fixed multipoles + "
+            "fixed C6 dispersion. Omit for hybrid ml_intra+mm_nonbonded when a "
+            "checkpoint is set."
+        ),
     )
     parser.add_argument(
         "--jaxmd-unified",
@@ -850,10 +885,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--bonded-mm-mini",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
             "pycharmm: bonded-only SD if MM bonded strain exceeds post-MM-pre-min baseline "
-            "(default: on; heat always checked when enabled)"
+            "(default: off — opt in; can stall on PBC crystal free / CGENFF APPEND; "
+            "heat is always checked when enabled)"
         ),
     )
     parser.add_argument(
@@ -997,11 +1033,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dyn-freq-cadence",
         type=int,
-        default=50,
+        default=500,
         metavar="N",
         help=(
             "pycharmm: align heat/print cadence (ihtfrq, nprint, …) to N steps; "
-            "decoupled from DCD nsavc (default: 50). Overlap CPT chunks still "
+            "decoupled from DCD nsavc (default: 500). Overlap CPT chunks still "
             "disable interior inbfrq/imgfrq. Use 0 for legacy behavior."
         ),
     )
@@ -1059,7 +1095,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--quiet-bfgs",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Suppress ASE BFGS/FIRE log output during calculator pre-minimize.",
+        help="Suppress ASE BFGS/FIRE progress lines entirely (default: compact progress).",
+    )
+    parser.add_argument(
+        "--verbose-bfgs",
+        action="store_true",
+        help="Print the full ASE BFGS/FIRE step table instead of compact progress.",
+    )
+    parser.add_argument(
+        "--bfgs-log-every",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Compact BFGS/FIRE log every N steps (default: ~10 lines per run).",
     )
     parser.add_argument(
         "--charmm-pre-minimize",
@@ -1455,14 +1503,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--jaxmd-minimize-steps",
         type=int,
-        default=200,
-        help="FIRE minimization steps in JAX-MD runner before dynamics (default: 200).",
+        default=1000,
+        help=(
+            "Pre-dynamics FIRE steps in the JAX-MD runner (default: 1000). "
+            "Free space: COM-centered. PBC: molecular (monomer-COM) wrapping. "
+            "Best max|F| frame is restored if FIRE wanders."
+        ),
     )
     parser.add_argument(
         "--jaxmd-pbc-minimize-steps",
         type=int,
-        default=200,
-        help="PBC-aware FIRE steps after first minimization (default: 200).",
+        default=1000,
+        help=(
+            "Additional PBC FIRE steps with molecular wrapping before dynamics "
+            "(default: 1000; only when a cell is set)."
+        ),
+    )
+    parser.add_argument(
+        "--jaxmd-fire-skip-max-f-eVA",
+        type=float,
+        default=0.10,
+        help=(
+            "Skip jax-md FIRE when start max|F| ≤ this (eV/Å; default 0.10). "
+            "Set 0 to always run FIRE backoff stages."
+        ),
     )
     parser.add_argument(
         "--jax-md-update-interval",
@@ -1479,6 +1543,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.25,
         help="JAX-MD/ASE PBC MM neighbor-list skin distance in Å (default: 0.25).",
+    )
+    parser.add_argument(
+        "--steps-per-recording",
+        type=int,
+        default=100,
+        help=(
+            "JAX-MD: MD steps between trajectory/HDF5 records "
+            "(default: 100; must be a multiple of --jax-md-update-interval)."
+        ),
     )
     parser.add_argument(
         "--evaluate-npz",
@@ -1861,6 +1934,11 @@ def _append_suite_mmml_handoff_args(
         cmd.extend(["--ml-switch-width", ml_width])
     if getattr(args, "handoff_pre_minimize", False):
         cmd.append("--handoff-pre-minimize")
+    if bool(getattr(args, "quiet_bfgs", False)):
+        cmd.append("--quiet-bfgs")
+    if bool(getattr(args, "verbose_bfgs", False)):
+        cmd.append("--verbose-bfgs")
+    _append_optional(cmd, "--bfgs-log-every", getattr(args, "bfgs_log_every", None))
     _append_boolean_optional_flag(
         cmd, "--continue-velocities", bool(getattr(args, "continue_velocities", True))
     )
@@ -1884,11 +1962,17 @@ def _append_suite_mmml_handoff_args(
         bool(getattr(args, "handoff_require_cell", False)),
     )
     if backend == "jaxmd":
-        cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 200))])
+        cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 1000))])
         cmd.extend(
             [
                 "--jaxmd-pbc-minimize-steps",
-                str(getattr(args, "jaxmd_pbc_minimize_steps", 2000)),
+                str(getattr(args, "jaxmd_pbc_minimize_steps", 1000)),
+            ]
+        )
+        cmd.extend(
+            [
+                "--jaxmd-fire-skip-max-f-eVA",
+                str(getattr(args, "jaxmd_fire_skip_max_f_eVA", 0.10)),
             ]
         )
         _append_boolean_optional_flag(
@@ -1902,6 +1986,13 @@ def _append_suite_mmml_handoff_args(
     cmd.extend(
         ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
     )
+    if backend == "jaxmd":
+        cmd.extend(
+            [
+                "--steps-per-recording",
+                str(getattr(args, "steps_per_recording", 100)),
+            ]
+        )
     _append_boolean_optional_flag(
         cmd,
         "--charmm-pre-minimize",
@@ -2460,6 +2551,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--tag", getattr(args, "tag", None))
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--electrostatics-damping-sigma", getattr(args, "electrostatics_damping_sigma", None))
+    _append_optional(cmd, "--mbd-checkpoint", getattr(args, "mbd_checkpoint", None))
+    _append_optional(cmd, "--mbd-weight", getattr(args, "mbd_weight", None))
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--ps-nve", getattr(args, "ps_nve", None))
@@ -2503,7 +2596,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-pre-nve-charmm-update")
     elif getattr(args, "pre_nve_charmm_update", None) is True:
         cmd.append("--pre-nve-charmm-update")
-    if getattr(args, "bonded_mm_mini", True):
+    if getattr(args, "bonded_mm_mini", False):
         cmd.append("--bonded-mm-mini")
         cmd.extend(
             [
@@ -3144,39 +3237,17 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
     job_name = resolve_job_name(args) or "run"
     if backend == "pycharmm":
         from mmml.cli.run.md_stage_summary import (
-            pycharmm_stage_dcd_frames,
+            finalize_pycharmm_plan_rows,
             pycharmm_trajectory_tag,
         )
 
         plan: list[MdStageSummary] = build_pycharmm_plan_rows(job_name, args)
-        tag = pycharmm_trajectory_tag(args)
-        out_dir = Path(args.output_dir) if args.output_dir is not None else None
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
-
-        for row in plan:
-            if row.stage != "mini":
-                if exit_code == 0 and out_dir is not None:
-                    res = stage_restart(out_dir, row.stage)
-                    if _valid_restart_file(res) is not None:
-                        row.nsteps_completed = row.nsteps_requested
-                        row.ps_completed = row.ps_requested
-                        row.status = "complete"
-                    else:
-                        row.nsteps_completed = 0
-                        row.ps_completed = 0.0
-                        row.status = "planned"
-                elif exit_code == 0:
-                    row.nsteps_completed = row.nsteps_requested
-                    row.ps_completed = row.ps_requested
-                    row.status = "complete"
-                else:
-                    row.nsteps_completed = 0
-                    row.ps_completed = 0.0
-                    row.status = "error"
-                if out_dir is not None and row.stage in {"heat", "equi", "nve", "prod"}:
-                    row.frames_written = pycharmm_stage_dcd_frames(out_dir, row.stage, tag)
-                    row.record_every_steps = max(1, int(row.record_every_steps or 1))
+        finalize_pycharmm_plan_rows(
+            plan,
+            exit_code=exit_code,
+            output_dir=Path(args.output_dir) if args.output_dir is not None else None,
+            trajectory_tag=pycharmm_trajectory_tag(args),
+        )
     else:
         row = build_single_leg_plan_row(job_name, args, backend)
         nsteps = dynamics_nstep_from_ps(float(args.ps), float(args.dt_fs))

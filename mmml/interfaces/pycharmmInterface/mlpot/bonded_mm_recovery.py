@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +14,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     bonded_mm_mini_config_from_namespace,
     charmm_bonded_term_kcalmol,
     charmm_internal_energy_kcalmol,
-    measure_mm_grms_with_full_block,
     minimize_bonded_mm_recovery,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
@@ -407,6 +406,7 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
             ctx,
             health_cfg,
             n_monomers=n_monomers,
+            overlap_config=config,
         )
         if report is not None and not report.baseline_recorded:
             if getattr(health_cfg, "debug_dot_matrix", False) or report.flagged_bad:
@@ -420,10 +420,34 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
                     quiet=not getattr(health_cfg, "verbose", False)
                     and not getattr(health_cfg, "debug_dot_matrix", False),
                 )
-            if report.flagged_bad:
-                to_restore = report.flagged_bad[
-                    : int(getattr(health_cfg, "max_restore_per_check", 4))
-                ]
+            if bool(getattr(health_cfg, "template_restore_requires_geometry", True)):
+                from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                    LEVEL_BAD,
+                )
+
+                restore_candidates = tuple(
+                    int(e.index)
+                    for e in report.entries
+                    if getattr(e, "geometry_level", None) == LEVEL_BAD
+                    or bool(getattr(e, "needs_template_restore", False))
+                )
+            else:
+                restore_candidates = tuple(report.flagged_bad)
+            if restore_candidates:
+                from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                    MonomerHealthReport,
+                    select_flagged_bad_by_highest_grms,
+                )
+
+                to_restore = select_flagged_bad_by_highest_grms(
+                    MonomerHealthReport(
+                        entries=report.entries,
+                        flagged_bad=restore_candidates,
+                        flagged_warn=(),
+                        baseline_recorded=False,
+                    ),
+                    max_select=int(getattr(health_cfg, "max_restore_per_check", 4)),
+                )
                 flagged = tuple(to_restore)
                 if getattr(health_cfg, "template_restore_on_bad", True):
                     restore_flagged_monomers_from_template(
@@ -577,7 +601,6 @@ def _run_hybrid_bonded_mlpot_recovery(
     config: Any | None = None,
 ) -> None:
     """Hybrid recovery: per-monomer JAX, CHARMM bonded-MM SD, then MLpot SD mini."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
 
     if config is not None:
         _maybe_run_per_monomer_bonded_jax_preflight(ctx, config, context=context)
@@ -692,7 +715,6 @@ def run_extent_recovery_from_prior_restart(
 def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | None:
     """Record MM GRMS (+ internal energy when readable) after MM-only pre-minimize."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
 
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
@@ -719,7 +741,6 @@ def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | No
 def measure_mm_bonded_strain_with_full_block(ctx: MlpotContext) -> MmStrainBaseline:
     """GRMS + bonded internal + ANGL after ``ENER`` with full MM block (MLpot detached)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
 
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
@@ -822,7 +843,6 @@ def apply_charmm_position_noise(
 def assert_bonded_mm_energy_active(*, context: str = "bonded-MM rescue") -> None:
     """Raise when CHARMM bonded internals read zero after MM BLOCK setup."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
 
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
@@ -885,7 +905,6 @@ def _run_all_ml_intra_overlap_rescue(
     bonded_cfg: BondedMmMiniConfig,
 ) -> None:
     """Intra-monomer rescue: preflight, then JAX bonded mini or legacy CHARMM BLOCK SD."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
 
     _maybe_run_per_monomer_bonded_jax_preflight(
         ctx, config, context="Intra overlap rescue"
@@ -1232,7 +1251,6 @@ def _copy_mlpot_context_state(dst: MlpotContext, src: MlpotContext) -> None:
 
 def _measure_current_mm_strain() -> MmStrainBaseline:
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
 
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
@@ -1291,7 +1309,6 @@ def _reload_pre_mlpot_topology(
 
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
-    import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
@@ -1634,7 +1651,7 @@ def _bonded_mm_skip_reason_after_heat_overlap(
 
 def bonded_mm_mini_watches_stage(args: argparse.Namespace, stage: str) -> bool:
     """Whether ``maybe_run_bonded_mm_mini_after_stage`` should run for ``stage``."""
-    if not getattr(args, "bonded_mm_mini", True):
+    if not getattr(args, "bonded_mm_mini", False):
         return False
     st = stage.strip().lower()
     if st == "heat":

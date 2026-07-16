@@ -251,18 +251,21 @@ CLEAN=0
 USE_NFS_BUILD=0
 DEBUG=0
 NO_DOMDEC=0
+NO_MPI=0
 SKIP_PACKMOL=0
 NATIVE_EXEC=0
 CHARMM_BUILD_TYPE="${CHARMM_BUILD_TYPE:-Release}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-domdec] [--skip-packmol] [--native-exec]
+Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-domdec] [--no-mpi] [--skip-packmol] [--native-exec]
 
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
+  --no-mpi            CMake -Dmpi=OFF (serial libcharmm; implies --no-domdec). Separate
+                      build dir .../${PLATFORM_TAG}-nompi so MPI and serial caches coexist.
   --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
   --native-exec       Build charmm executable (as_library=OFF) for DOMDEC tier3 smoke; skips Packmol.
 
@@ -270,14 +273,16 @@ Build profile (default): MPI + DOMDEC + COLFFT + KEY_LIBRARY (as_library=ON), do
 Also builds Packmol (mmml/generate/packmol/packmol) unless --skip-packmol or --native-exec.
 MLpot workflows run with DOMDEC compiled in but disabled at runtime (domdec off, mpirun -np 1).
 Use --no-domdec when MLpot SD still segfaults in send_coord_to_recip after JAX warmup.
+Use --no-mpi for day-to-day pytest / bonded parity without mmml-charmm-mpirun.sh.
 Use --native-exec (or scripts/rebuild_charmm_native_exec.sh) for Tier 3 DOMDEC np>1 smoke.
 
 Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
-  CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG})
+  CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG}
+                    or .../${PLATFORM_TAG}-nompi with --no-mpi)
   CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
-  OPENMPI_ROOT      OpenMPI prefix (default: auto-detect from EBROOTOPENMPI, /usr/lib64/openmpi, PATH, cluster /opt)
-  MPI_CC/MPI_CXX/MPI_FC  Override MPI compiler wrappers (default: under OPENMPI_ROOT or PATH)
+  OPENMPI_ROOT      OpenMPI prefix (ignored with --no-mpi; default: auto-detect)
+  MPI_CC/MPI_CXX/MPI_FC  Override MPI compiler wrappers (ignored with --no-mpi)
   FFTW_ROOT         Double-precision FFTW prefix (libfftw3); falls back to EBROOTFFTW.
   FFTWF_ROOT        Single-precision FFTW prefix (libfftw3f); defaults to FFTW_ROOT.
   MMML_FFTW_ROOT    User PIC/shared FFTW prefix (default: ~/.local/fftw-3.3.10-pic).
@@ -294,6 +299,7 @@ while [[ $# -gt 0 ]]; do
     --use-nfs-build) USE_NFS_BUILD=1; shift ;;
     --debug) DEBUG=1; CHARMM_BUILD_TYPE=RelWithDebInfo; shift ;;
     --no-domdec) NO_DOMDEC=1; shift ;;
+    --no-mpi) NO_MPI=1; NO_DOMDEC=1; shift ;;
     --skip-packmol) SKIP_PACKMOL=1; shift ;;
     --native-exec) NATIVE_EXEC=1; SKIP_PACKMOL=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -337,23 +343,25 @@ echo "MLpot limits in source:"
 grep -E 'max_Nml|max_Npr' "$F90" || true
 
 # Match OpenMPI used by the installed libcharmm (not an unrelated system OpenMPI).
-if [[ -d "$OPENMPI_ROOT/bin" ]]; then
-  export PATH="$OPENMPI_ROOT/bin:${PATH}"
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    export DYLD_LIBRARY_PATH="${OPENMPI_ROOT}/lib:${PMIX_LIB}:${DYLD_LIBRARY_PATH:-}"
-  else
-    export LD_LIBRARY_PATH="${OPENMPI_ROOT}/lib:${PMIX_LIB}:${LD_LIBRARY_PATH:-}"
+if [[ "$NO_MPI" != 1 ]]; then
+  if [[ -n "${OPENMPI_ROOT:-}" && -d "${OPENMPI_ROOT}/bin" ]]; then
+    export PATH="$OPENMPI_ROOT/bin:${PATH}"
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      export DYLD_LIBRARY_PATH="${OPENMPI_ROOT}/lib:${PMIX_LIB}:${DYLD_LIBRARY_PATH:-}"
+    else
+      export LD_LIBRARY_PATH="${OPENMPI_ROOT}/lib:${PMIX_LIB}:${LD_LIBRARY_PATH:-}"
+    fi
   fi
-fi
-if command -v python3 >/dev/null 2>&1; then
-  while IFS= read -r line; do
-    [[ -n "$line" ]] && eval "$line"
-  done < <(
-    python3 -c "
+  if command -v python3 >/dev/null 2>&1; then
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && eval "$line"
+    done < <(
+      python3 -c "
 from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_shell_setup_lines
 print('\n'.join(mpi_shell_setup_lines()))
 " 2>/dev/null || true
-  )
+    )
+  fi
 fi
 # mpi_shell_setup_lines prepends /usr/lib64 before the appended gcc libstdc++ path;
 # cmake from /opt/gcc-12.2.0 then fails with GLIBCXX_3.4.30 not found.
@@ -364,13 +372,27 @@ for _libdir in /opt/gcc-12.2.0/build/lib64 /opt/gcc-12.2.0/build/lib/gcc/x86_64-
 done
 
 BUILD_DIR="$LOCAL_BUILD"
+if [[ "$NO_MPI" == 1 && -z "${CHARMM_BUILD_DIR:-}" ]]; then
+  BUILD_DIR="${LOCAL_BUILD}-nompi"
+fi
 if [[ "$NATIVE_EXEC" == 1 && -z "${CHARMM_BUILD_DIR:-}" ]]; then
-  BUILD_DIR="${LOCAL_BUILD}-exec"
+  if [[ "$NO_MPI" == 1 ]]; then
+    BUILD_DIR="${LOCAL_BUILD}-nompi-exec"
+  else
+    BUILD_DIR="${LOCAL_BUILD}-exec"
+  fi
 fi
 if [[ "$USE_NFS_BUILD" == 1 ]]; then
   BUILD_DIR="$NFS_BUILD"
+  if [[ "$NO_MPI" == 1 && -z "${CHARMM_BUILD_DIR:-}" ]]; then
+    BUILD_DIR="${NFS_BUILD}-nompi"
+  fi
   if [[ "$NATIVE_EXEC" == 1 && -z "${CHARMM_BUILD_DIR:-}" ]]; then
-    BUILD_DIR="${NFS_BUILD}-exec"
+    if [[ "$NO_MPI" == 1 ]]; then
+      BUILD_DIR="${NFS_BUILD}-nompi-exec"
+    else
+      BUILD_DIR="${NFS_BUILD}-exec"
+    fi
   fi
 fi
 
@@ -401,6 +423,18 @@ else
     echo "Stale cmake cache (source was $cached_src); reconfiguring in $BUILD_DIR"
     rm -rf "$BUILD_DIR"
     needs_configure=1
+  fi
+  if [[ "$needs_configure" == 0 ]]; then
+    cached_mpi="$(grep '^mpi:BOOL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ "$NO_MPI" == 1 && "${cached_mpi:-ON}" != "OFF" ]]; then
+      echo "CMake cache has mpi=${cached_mpi:-unset}; reconfiguring serial (-Dmpi=OFF) in $BUILD_DIR"
+      rm -rf "$BUILD_DIR"
+      needs_configure=1
+    elif [[ "$NO_MPI" != 1 && "$cached_mpi" == "OFF" ]]; then
+      echo "CMake cache has mpi=OFF; reconfiguring MPI build in $BUILD_DIR"
+      rm -rf "$BUILD_DIR"
+      needs_configure=1
+    fi
   fi
 fi
 
@@ -464,25 +498,29 @@ if [[ -z "$FFTW_ROOT" ]]; then
   fi
 fi
 
-_resolve_mpi_wrappers
-export OPENMPI_ROOT
-export MPI_CC MPI_CXX MPI_FC
-_mpi_missing=0
-for wrapper in MPI_CC MPI_CXX MPI_FC; do
-  val="${!wrapper:-}"
-  if [[ -z "$val" || ! -x "$val" ]]; then
-    _mpi_missing=1
-    echo "rebuild_charmm_mlpot: missing MPI wrapper ${wrapper}=${val:-<unset>}" >&2
+if [[ "$NO_MPI" != 1 ]]; then
+  _resolve_mpi_wrappers
+  export OPENMPI_ROOT
+  export MPI_CC MPI_CXX MPI_FC
+  _mpi_missing=0
+  for wrapper in MPI_CC MPI_CXX MPI_FC; do
+    val="${!wrapper:-}"
+    if [[ -z "$val" || ! -x "$val" ]]; then
+      _mpi_missing=1
+      echo "rebuild_charmm_mlpot: missing MPI wrapper ${wrapper}=${val:-<unset>}" >&2
+    fi
+  done
+  if [[ "$_mpi_missing" == 1 ]]; then
+    echo "Install OpenMPI dev packages (e.g. openmpi-devel / libopenmpi-dev) or set:" >&2
+    echo "  OPENMPI_ROOT=/path/to/openmpi" >&2
+    echo "  MPI_CC MPI_CXX MPI_FC" >&2
+    exit 1
   fi
-done
-if [[ "$_mpi_missing" == 1 ]]; then
-  echo "Install OpenMPI dev packages (e.g. openmpi-devel / libopenmpi-dev) or set:" >&2
-  echo "  OPENMPI_ROOT=/path/to/openmpi" >&2
-  echo "  MPI_CC MPI_CXX MPI_FC" >&2
-  exit 1
+  echo "MPI wrappers: CC=$MPI_CC CXX=$MPI_CXX FC=$MPI_FC" >&2
+  unset _mpi_missing
+else
+  echo "Serial CHARMM build (--no-mpi): skipping OpenMPI wrappers (-Dmpi=OFF -Ddomdec=OFF)" >&2
 fi
-echo "MPI wrappers: CC=$MPI_CC CXX=$MPI_CXX FC=$MPI_FC" >&2
-unset _mpi_missing
 
 # Large max_Npr tiers allocate multi-GB static arrays in api_func.F90 (.bss). On
 # x86_64 the default small code model cannot link libcharmm.so: R_X86_64_PC32
@@ -505,7 +543,11 @@ if [[ "$needs_configure" == 1 ]]; then
   mkdir -p "$BUILD_DIR"
   _as_library=ON
   [[ "$NATIVE_EXEC" == 1 ]] && _as_library=OFF
-  echo "Configuring CHARMM in $BUILD_DIR (OpenMPI: $OPENMPI_ROOT, build: $CHARMM_BUILD_TYPE, as_library=${_as_library}) ..."
+  if [[ "$NO_MPI" == 1 ]]; then
+    echo "Configuring CHARMM in $BUILD_DIR (serial: mpi=OFF, build: $CHARMM_BUILD_TYPE, as_library=${_as_library}) ..."
+  else
+    echo "Configuring CHARMM in $BUILD_DIR (OpenMPI: $OPENMPI_ROOT, build: $CHARMM_BUILD_TYPE, as_library=${_as_library}) ..."
+  fi
   CMAKE_ARGS=(
     -S "$CHARMM_HOME"
     -B "$BUILD_DIR"
@@ -516,10 +558,15 @@ if [[ "$needs_configure" == 1 ]]; then
     -Dopenmm=OFF
     -Dcolfft=ON
     -Ddomdec="$([[ "$NO_DOMDEC" == 1 ]] && echo OFF || echo ON)"
-    -DMPI_C_COMPILER="$MPI_CC"
-    -DMPI_CXX_COMPILER="$MPI_CXX"
-    -DMPI_Fortran_COMPILER="$MPI_FC"
+    -Dmpi="$([[ "$NO_MPI" == 1 ]] && echo OFF || echo ON)"
   )
+  if [[ "$NO_MPI" != 1 ]]; then
+    CMAKE_ARGS+=(
+      -DMPI_C_COMPILER="$MPI_CC"
+      -DMPI_CXX_COMPILER="$MPI_CXX"
+      -DMPI_Fortran_COMPILER="$MPI_FC"
+    )
+  fi
   if [[ "$(uname -s)" == "Darwin" ]]; then
     CMAKE_ARGS+=(
       -Dcuda=OFF
@@ -696,11 +743,12 @@ cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
 cmake --install "$BUILD_DIR" || true
 
 BUILT=""
+# Prefer cmake --install output under lib/ over a stale top-level copy.
 for candidate in \
   "$CHARMM_HOME/lib/$LIB_BASENAME" \
-  "$CHARMM_HOME/$LIB_BASENAME" \
+  "$BUILD_DIR/lib/$LIB_BASENAME" \
   "$BUILD_DIR/$LIB_BASENAME" \
-  "$BUILD_DIR/lib/$LIB_BASENAME"; do
+  "$CHARMM_HOME/$LIB_BASENAME"; do
   if [[ -f "$candidate" ]]; then
     BUILT="$candidate"
     break
@@ -715,7 +763,18 @@ if [[ -z "$BUILT" ]]; then
 fi
 
 cp -f "$BUILT" "$LIB_OUT"
-echo "Installed $LIB_OUT (from $BUILT)"
+# Keep lib/ and top-level in sync so either CHARMM_LIB_DIR works.
+mkdir -p "$CHARMM_HOME/lib"
+cp -f "$BUILT" "$CHARMM_HOME/lib/$LIB_BASENAME"
+echo "Installed $LIB_OUT and $CHARMM_HOME/lib/$LIB_BASENAME (from $BUILT)"
+if [[ "$NO_MPI" == 1 ]]; then
+  if ldd "$CHARMM_HOME/lib/$LIB_BASENAME" 2>/dev/null | grep -qiE 'libmpi|libopen-';|libopen-pal'; then
+    echo "rebuild_charmm_mlpot: ERROR: installed lib still links MPI — check -Dmpi=OFF" >&2
+    ldd "$CHARMM_HOME/lib/$LIB_BASENAME" | grep -iE 'mpi|open-pal|open-rme' || true
+    exit 1
+  fi
+  echo "Serial link check OK: $CHARMM_HOME/lib/$LIB_BASENAME (no libmpi)"
+fi
 if [[ "$SKIP_PACKMOL" != 1 ]]; then
   PACKMOL_ARGS=()
   [[ "$CLEAN" == 1 ]] && PACKMOL_ARGS+=(--clean)
@@ -731,7 +790,25 @@ if [[ "$DEBUG" == 1 ]]; then
     echo "rebuild_charmm_mlpot: warning: no debug sections in $LIB_OUT (gdb backtraces may lack line numbers)" >&2
   fi
 fi
-cat <<EOF
+if [[ "$NO_MPI" == 1 ]]; then
+  cat <<EOF
+Installed serial $LIB_OUT (and $CHARMM_HOME/lib/$LIB_BASENAME).
+MPI cmake cache (if any) remains under \${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}.
+
+Pytest / bonded parity without OpenMPI launcher:
+  export CHARMM_HOME="$CHARMM_HOME"
+  export CHARMM_LIB_DIR="$CHARMM_HOME/lib"
+  export MMML_NO_CHARMM_MPI=1
+  export MMML_NO_MPI_RERUN=1
+  unset OMPI_COMM_WORLD_RANK OMPI_COMM_WORLD_SIZE PMI_RANK PMI_SIZE
+  ldd "\$CHARMM_LIB_DIR/$LIB_BASENAME" | grep -i mpi || echo "OK: no libmpi"
+  uv run pytest tests/functionality/charmm/test_jax_mm_spoof_bonded_pycharmm.py -v
+
+Do not use scripts/mmml-charmm-mpirun.sh with this lib.
+Restore MPI lib later: ./scripts/rebuild_charmm_mlpot.sh --clean
+EOF
+else
+  cat <<EOF
 Verify:
   uv run python -c "from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_message; print(mlpot_limits_message())"
 Expect: max_Nml=50000, max_Npr=8000000, source=api_func.F90 ($LIB_BASENAME is up to date)
@@ -742,3 +819,4 @@ Segfault diagnosis:
   MMML_MPI_GDB=1 ./scripts/mmml-charmm-mpirun.sh md-system --config ...
   (uses OMPI_MCA_orte_abort_print_stack=1 by default; ignore PRRTE Sphinx help noise)
 EOF
+fi

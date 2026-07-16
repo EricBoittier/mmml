@@ -21,6 +21,32 @@ from mmml.models.physnetjax.physnetjax.training.loss import (
 )
 
 
+
+def _eval_forward(model_apply, params, batch, batch_size, hybrid_mm=None):
+    """Validation forward; must score the SAME quantity as training.
+
+    When hybrid mode is on, training optimises E = (1-s)(E_A+E_B) + s E_AB + E_MM.
+    If validation scored raw E_ML instead, the two metrics would measure different
+    things (observed: train energy MAE ~43 vs valid ~1 on the same distribution).
+    """
+    if hybrid_mm is not None:
+        from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
+
+        cfg = HybridMMConfig.coerce(hybrid_mm)
+        return hybrid_forward(model_apply, params, batch, batch_size, **cfg.kwargs())
+    return model_apply(
+        params,
+        atomic_numbers=batch["Z"],
+        positions=batch["R"],
+        dst_idx=batch["dst_idx"],
+        src_idx=batch["src_idx"],
+        batch_segments=batch["batch_segments"],
+        batch_size=batch_size,
+        batch_mask=batch["batch_mask"],
+        atom_mask=batch["atom_mask"],
+    )
+
+
 EVAL_STEP_DOC = """Single evaluation step for PhysNetJax model.
 
 Runs a forward pass and computes losses without updating parameters.
@@ -39,7 +65,7 @@ else:
 
     DTYPE = jnp.float32
 
-    @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "charges"))
+    @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "charges", "hybrid_mm"))
     def eval_step(
         model_apply,
         batch,
@@ -50,20 +76,13 @@ else:
         dipole_weight,
         charges_weight,
         params,
+        hybrid_mm=None,
     ):
         """Implementation of :data:`EVAL_STEP_DOC`."""
 
         if charges:
-            output = model_apply(
-                params,
-                atomic_numbers=batch["Z"],
-                positions=batch["R"],
-                dst_idx=batch["dst_idx"],
-                src_idx=batch["src_idx"],
-                batch_segments=batch["batch_segments"],
-                batch_size=batch_size,
-                batch_mask=batch["batch_mask"],
-                atom_mask=batch["atom_mask"],
+            output = _eval_forward(
+                model_apply, params, batch, batch_size, hybrid_mm
             )
 
             loss = mean_squared_loss_QD(
@@ -91,16 +110,8 @@ else:
             dipole_mae = mean_absolute_error(output["dipoles"], batch["D"], batch_size)
             return loss, energy_mae, forces_mae, dipole_mae
         else:
-            output = model_apply(
-                params,
-                atomic_numbers=batch["Z"],
-                positions=batch["R"],
-                dst_idx=batch["dst_idx"],
-                src_idx=batch["src_idx"],
-                batch_segments=batch["batch_segments"],
-                batch_size=batch_size,
-                batch_mask=batch["batch_mask"],
-                atom_mask=batch["atom_mask"],
+            output = _eval_forward(
+                model_apply, params, batch, batch_size, hybrid_mm
             )
             loss = mean_squared_loss(
                 energy_prediction=output["energy"],

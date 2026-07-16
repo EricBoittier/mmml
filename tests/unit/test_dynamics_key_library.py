@@ -46,7 +46,7 @@ def test_run_dynamics_uses_c_api_when_available():
 
 def test_configure_known_only_skips_integer_io_units():
     block = (
-        Path("pycharmm/dynamics.py")
+        Path("setup/charmm/tool/pycharmm/pycharmm/dynamics.py")
         .read_text(encoding="utf-8")
         .split("def _configure_known_only(")[1]
         .split("\ndef ")[0]
@@ -111,6 +111,13 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
         ),
         patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+            return_value=True,
+        ),
+        patch(
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
         ),
         patch(
@@ -140,6 +147,69 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
     assert run_capi.call_args.kwargs.get("init_velocities") is not None
     passed = run_capi.call_args.kwargs["init_velocities"]
     assert np.allclose(passed["vx"], init["vx"])
+
+
+def test_run_dynamics_syncs_comp_even_when_init_velocities_already_resolved():
+    """Regression: C-API inject alone left COMP as positions → T~1e12 + segfault."""
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    v = np.ones((4, 3), dtype=float) * 42.0
+    init = {"vx": v[:, 0], "vy": v[:, 1], "vz": v[:, 2]}
+    fake_dyn = MagicMock()
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
+    with (
+        patch.dict(sys.modules, {"pycharmm": fake_pycharmm}),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+            return_value=init,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+            return_value=fake_dyn,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+        ) as sync_akma,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        ),
+    ):
+        run_dynamics(
+            {
+                "nstep": 50,
+                "start": False,
+                "iasvel": 0,
+                "_skip_ase_cold_velocity_assign": True,
+            }
+        )
+    assert sync_akma.call_count >= 2
+    synced = sync_akma.call_args_list[0].args[0]
+    assert np.allclose(synced, v)
 
 
 def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh(monkeypatch):

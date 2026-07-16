@@ -10,7 +10,7 @@ Figures regenerate with:
 uv run python scripts/plot_mlpot_settings.py
 ```
 
-Related: [MLpot switching reference](mlpot-settings.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [md-system YAML cutoffs](md-system-configs.md#cutoffs-mm-toggles-and-long-range-electrostatics).
+Related: [MLpot switching reference](mlpot-settings.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [md-system YAML cutoffs](md-system-configs.md#cutoffs-mm-toggles-and-long-range-electrostatics), [Hybrid MM charges (fixed / latent / fixed+latent)](hybrid-mm-charges.md).
 
 ---
 
@@ -103,8 +103,8 @@ With `mm_nonbond_mode: jax_mic` (default), short-range LJ r⁻¹² stays on the 
 
 | `lr_solver` | Best for | Notes |
 |-------------|----------|-------|
-| `mic` | Smoke tests, small clusters | Truncated MIC only; no k-space |
-| `jax_pme` | **Production hybrid liquids** (default `auto`) | Ewald / PME / P3M; cross-monomer full−intra |
+| `mic` | Default (including PBC `jax_mic`) | Truncated MIC only; no k-space |
+| `jax_pme` | Opt-in production / CHARMM PME parity | Ewald / PME / P3M; cross-monomer full−intra |
 | `nvalchemiops_pme` | `periodic_external` benchmarks | Full-box PME via nvalchemiops |
 | `scafacos` | `periodic_external` + Fortran PME | Requires `libfcs.so` |
 

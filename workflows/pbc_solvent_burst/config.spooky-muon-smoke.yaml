@@ -30,7 +30,7 @@ cleanup_strategy:
     dynamics_overlap_action: rescue
     dynamics_overlap_min_distance: 1.5
     dynamics_intra_min_distance: 0.5
-    dynamics_overlap_check_interval: 100
+    dynamics_overlap_check_interval: 500
     dynamics_overlap_memory_handoff: true
     bonded_mm_mini: true
     bonded_mm_mini_after: mini,heat,equi

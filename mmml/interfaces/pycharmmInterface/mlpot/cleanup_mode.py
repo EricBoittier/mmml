@@ -49,7 +49,8 @@ def apply_cleanup_defaults(args: argparse.Namespace) -> None:
     args.calculator_pre_minimize = bool(
         getattr(args, "calculator_pre_minimize", True) is not False
     )
-    args.bonded_mm_mini = bool(getattr(args, "bonded_mm_mini", True) is not False)
+    # Keep caller opt-in; bonded-mm-mini can stall on PBC CGENFF APPEND (default off).
+    args.bonded_mm_mini = bool(getattr(args, "bonded_mm_mini", False))
 
     action = str(getattr(args, "dynamics_overlap_action", "rescue") or "rescue").lower()
     if action in ("off", "warn", "error"):

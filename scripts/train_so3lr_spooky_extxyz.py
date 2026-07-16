@@ -437,9 +437,17 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         max_padded_atoms=max_atoms,
         n_refinement_blocks=args.n_res,
         zbl=not args.no_zbl,
+        trainable_zbl=args.trainable_zbl,
+        zbl_cuton=args.zbl_cuton,
+        zbl_cutoff=args.zbl_cutoff,
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
+        # --fixed-cgenff-vdw pins the CGenFF LJ term at its published parameters, so it
+        # acts as a fixed physical prior the network can only add to, never scale away.
+        learn_cgenff_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
+        predict_atomic_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
+        interaction_trust_map=getattr(args, "interaction_trust_map", False),
     )
 
 
@@ -460,6 +468,7 @@ def make_steps(
     charges_weight = args.charges_weight
     mbd_weight = args.mbd_weight
     multipole_consistency_weight = args.multipole_consistency_weight
+    neural_interaction_l2 = args.neural_interaction_l2
     if (mbd_model is None) != (mbd_params is None):
         raise ValueError("mbd_model and mbd_params must be provided together")
     if mbd_params is not None:
@@ -574,12 +583,91 @@ def make_steps(
                 multipole_dipole_mse = jnp.mean((dipole_pred - multipole_dipole) ** 2)
                 multipole_dipole_mae = jnp.mean(jnp.abs(dipole_pred - multipole_dipole))
                 loss += multipole_consistency_weight * multipole_dipole_mse
+        # Shrinkage of the neural *interaction* energy toward zero.
+        #
+        # The MM terms (CGenFF LJ + electrostatics) are a physical prior, but nothing
+        # stops the neural term from swamping them: measured on the dimer scans, the
+        # neural interaction energy is 4.1x LARGER on pairs with <15 training structures
+        # than on pairs with >=300 -- loudest exactly where there is no evidence for it
+        # (ACE-BENZ, n=2: neural 7.76 kcal/mol vs an LJ prior of 0.007).
+        #
+        # Penalising (E_neural(AB) - E_neural(A) - E_neural(B))^2 is ridge shrinkage
+        # toward the prior: the residual decays to zero by default, and the energy/force
+        # loss overrides it wherever the data actually demands. The zero-evidence limit
+        # becomes CGenFF instead of an invented surface.
+        #
+        # E_neural(A) + E_neural(B) is obtained exactly by masking the inter-monomer
+        # edges out of the pair list: with those cut, every atom only sees its own
+        # monomer, and all pairwise prior terms vanish too, so subtracting the prior
+        # components isolates the neural residual. Forces are not needed for the penalty,
+        # so the extra pass is forward-only.
+        neural_int_mse = jnp.asarray(0.0)
+        if (neural_interaction_l2 > 0.0 or args.interaction_trust_map) and batch.get("mol_id") is not None:
+            mol_id = batch["mol_id"]
+            # edge_mask keeps only intra-monomer message-passing edges AND zeroes the
+            # inter-monomer prior pair terms, so the masked pass equals the two monomers
+            # evaluated in isolation (E_neural(A) + E_neural(B)).
+            intra_edge = (
+                jnp.take(mol_id, batch["dst_idx"]) == jnp.take(mol_id, batch["src_idx"])
+            ).astype(batch["batch_mask"].dtype)
+            out_intra = model.apply(
+                params,
+                atomic_numbers=batch["Z"],
+                charges=batch["Q_atoms"],
+                spins=batch["S_atoms"],
+                positions=batch["R"],
+                dst_idx=batch["dst_idx"],
+                src_idx=batch["src_idx"],
+                batch_segments=batch["batch_segments"],
+                batch_size=per_device_batch_size,
+                batch_mask=batch["batch_mask"] * intra_edge,
+                atom_mask=batch["atom_mask"],
+                mol_id=mol_id,
+                cgenff_type_idx=None if args.no_cgenff_vdw else batch.get("cgenff_type_idx"),
+                cgenff_master_sigmas=None if args.no_cgenff_vdw else batch.get("cgenff_master_sigmas"),
+                cgenff_master_epsilons=None if args.no_cgenff_vdw else batch.get("cgenff_master_epsilons"),
+                edge_mask=intra_edge,
+                compute_forces=False,
+            )
+
+            def _neural_only(o):
+                total = _per_structure(o["energy"], batch["batch_segments"], per_device_batch_size)
+                prior = sum(
+                    _per_structure(o.get(k), batch["batch_segments"], per_device_batch_size)
+                    for k in ("electrostatics", "cgenff_vdw", "repulsion")
+                )
+                return total - prior
+
+            neural_interaction = _neural_only(out) - _neural_only(out_intra)
+            neural_int_mse = jnp.mean(neural_interaction**2)
+            if args.interaction_trust_map:
+                tm_loss, _ = _interaction_trust_map_loss(
+                    neural_interaction,
+                    out["neural_interaction_log_lambda"],
+                    Z=batch["Z"],
+                    R=batch["R"],
+                    dst_idx=batch["dst_idx"],
+                    src_idx=batch["src_idx"],
+                    mol_id=mol_id,
+                    batch_segments=batch["batch_segments"],
+                    batch_mask=batch["batch_mask"],
+                    batch_size=per_device_batch_size,
+                    cutoff=args.cutoff,
+                    evidence=args.trust_map_evidence,
+                    hyperprior=args.trust_map_hyperprior,
+                )
+                loss += neural_interaction_l2 * tm_loss
+            else:
+                loss += neural_interaction_l2 * neural_int_mse
+
         metrics = {
             "loss": loss,
             "energy_mae": energy_mae,
             "forces_mae": force_mae,
             "energy_mse": energy_mse,
             "forces_mse": force_mse,
+            "neural_int_mse": neural_int_mse,
+            "neural_int_rms": jnp.sqrt(neural_int_mse + 1e-12),
             "dipole_mae": dipole_mae,
             "charge_mae": charge_mae,
             "dipole_mse": dipole_mse,
@@ -785,6 +873,104 @@ def _restore_state_from_checkpoint(
     return state, epoch, metrics
 
 
+TRUST_MAP_ELEMENTS = (1, 6, 7, 8, 16, 17)  # H, C, N, O, S, Cl; must match the model
+
+
+def _interaction_trust_map_loss(
+    neural_interaction: jnp.ndarray,   # (B, 1) or (B,) per-structure E_neural(AB)-E_neural(A)-E_neural(B)
+    log_lambda: jnp.ndarray,           # (n_el, n_el) learned raw parameter
+    *,
+    Z: jnp.ndarray,
+    R: jnp.ndarray,
+    dst_idx: jnp.ndarray,
+    src_idx: jnp.ndarray,
+    mol_id: jnp.ndarray,
+    batch_segments: jnp.ndarray,
+    batch_mask: jnp.ndarray,           # (n_edges,) valid-edge mask
+    batch_size: int,
+    cutoff: float,
+    evidence: float,
+    hyperprior: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Evidence-balanced, per-element-pair shrinkage of the neural interaction energy.
+
+    Each dimer's interaction energy is attributed to element-pair buckets by its
+    inter-monomer contacts (weighted by a linear cutoff), giving a per-structure
+    effective shrinkage ``Lambda_s = <lambda_{Zi,Zj}>`` over the interface. The loss is
+    the negative log-likelihood of a zero-mean Gaussian residual with precision Lambda_s:
+
+        0.5 * Lambda_s * r_s^2  -  0.5 * evidence * log(Lambda_s)
+
+    The data term wants Lambda small (let the residual live); the evidence term wants it
+    large (shrink to the prior). The stationary point is Lambda_c ~ evidence / <r^2>_c, so
+    the learned lambda is small exactly where the data justifies a large neural
+    correction and large where it does not -- that matrix is the trust-map fingerprint. A
+    shared hyperprior ties the buckets (var penalty toward their common mean), so
+    data-poor buckets borrow strength instead of drifting.
+
+    Returns (loss_term, lambda_matrix) with lambda symmetric and positive.
+    """
+    elements = jnp.asarray(TRUST_MAP_ELEMENTS)
+    lam = jax.nn.softplus(log_lambda)
+    lam = 0.5 * (lam + lam.T)  # symmetric
+
+    # Z -> slot index in `elements`, or -1 if not one of the tracked elements. Table size
+    # is static (max tracked element + 1) so this traces under jit; any Z beyond it maps
+    # to -1 via the clip+compare below.
+    table_size = max(TRUST_MAP_ELEMENTS) + 1
+    slot_of = -jnp.ones((table_size,), dtype=jnp.int32)
+    slot_of = slot_of.at[elements].set(jnp.arange(elements.shape[0], dtype=jnp.int32))
+    z_dst = jnp.clip(jnp.take(Z, dst_idx), 0, table_size - 1)
+    z_src = jnp.clip(jnp.take(Z, src_idx), 0, table_size - 1)
+
+    r = neural_interaction.reshape(-1)  # (B,)
+    si = slot_of[z_dst]
+    sj = slot_of[z_src]
+    valid = ((si >= 0) & (sj >= 0)).astype(lam.dtype)
+    inter = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(lam.dtype)
+
+    dr = jnp.take(R, dst_idx, axis=0) - jnp.take(R, src_idx, axis=0)
+    dist = jnp.linalg.norm(dr, axis=-1)
+    contact_w = jnp.clip(1.0 - dist / cutoff, 0.0, 1.0)  # linear cutoff weight
+
+    w = batch_mask * inter * valid * contact_w
+    lam_e = lam[jnp.clip(si, 0), jnp.clip(sj, 0)]  # gather; invalid entries zeroed by w
+
+    edge_struct = jnp.take(batch_segments, dst_idx)
+    num = jax.ops.segment_sum(lam_e * w, edge_struct, num_segments=batch_size)
+    den = jax.ops.segment_sum(w, edge_struct, num_segments=batch_size)
+    has_contact = (den > 0).astype(lam.dtype)
+    Lambda_s = num / (den + 1e-8)
+
+    nll = 0.5 * Lambda_s * (r ** 2) - 0.5 * evidence * jnp.log(Lambda_s + 1e-8)
+    data_term = jnp.sum(nll * has_contact) / (jnp.sum(has_contact) + 1e-8)
+
+    # Shared hyperprior: pull buckets toward their common mean so sparse pairs (which get
+    # little gradient from the data term) don't drift.
+    hyper = hyperprior * jnp.mean((log_lambda - jnp.mean(log_lambda)) ** 2)
+    return data_term + hyper, lam
+
+
+def _per_structure(value: Any, batch_segments: jnp.ndarray, batch_size: int) -> jnp.ndarray:
+    """Reduce a model output component to a per-structure (batch_size, 1) energy.
+
+    The model surfaces its energy components in mixed layouts: ``energy`` and the
+    electrostatics/vdW terms already come back per structure, while the ZBL repulsion is
+    per atom. Disabled terms come back as ``None`` or a scalar ``0.0``.
+    """
+    if value is None:
+        return jnp.zeros((batch_size, 1))
+    value = jnp.asarray(value)
+    if value.ndim == 0:
+        return jnp.zeros((batch_size, 1))
+    flat = value.reshape(value.shape[0], -1).sum(axis=-1) if value.ndim > 1 else value
+    if flat.shape[0] == batch_segments.shape[0]:  # per-atom -> sum onto structures
+        return jax.ops.segment_sum(
+            flat, segment_ids=batch_segments, num_segments=batch_size
+        ).reshape(batch_size, 1)
+    return flat.reshape(batch_size, -1).sum(axis=1, keepdims=True)
+
+
 def _merge_compatible_params(
     initialized: Any,
     loaded: Any,
@@ -975,6 +1161,9 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "n_res",
                 "predict_charges",
                 "no_zbl",
+                "trainable_zbl",
+                "zbl_cuton",
+                "zbl_cutoff",
                 "efa",
                 "use_energy_bias",
                 "electrostatics_damping_sigma",
@@ -993,6 +1182,16 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 if current_val != saved_val:
                     print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
                     setattr(args, param, saved_val)
+            if (
+                "trainable_zbl" not in saved_config
+                and not args.no_zbl
+                and not args.force_fixed_zbl
+            ):
+                # Every checkpoint produced before trainable_zbl was recorded
+                # used trainable ZBL parameters. Preserve that architecture for
+                # legacy restart/warm-starts; new runs remain fixed by default.
+                print("  Legacy checkpoint: inferring trainable_zbl=True")
+                args.trainable_zbl = True
             # A true restart must restore the same composite definition and
             # optimizer schedule.  Defaults mean "inherit" here; any explicit
             # non-default CLI value remains an intentional override.
@@ -1422,6 +1621,61 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--neural-interaction-l2",
+        type=float,
+        default=0.0,
+        help=(
+            "Ridge shrinkage of the neural INTERACTION energy toward zero (lambda). "
+            "Penalises lambda * mean[(E_neural(AB) - E_neural(A) - E_neural(B))^2], with "
+            "E_neural(A)+E_neural(B) obtained exactly by masking inter-monomer edges out "
+            "of the pair list (one extra forward-only pass, ~2x step cost). The target "
+            "stays the total energy; this only regularises how loudly the neural term may "
+            "speak on top of the MM prior. Without it the neural interaction is 4.1x "
+            "LARGER on pairs with <15 training structures than on pairs with >=300, i.e. "
+            "loudest where there is no evidence for it. Pairs with --fixed-cgenff-vdw."
+        ),
+    )
+    parser.add_argument(
+        "--interaction-trust-map",
+        action="store_true",
+        help=(
+            "Replace the scalar --neural-interaction-l2 with a LEARNED per-element-pair "
+            "shrinkage (a 6x6 log-lambda matrix over H,C,N,O,S,Cl), fit by empirical Bayes "
+            "so lambda_c ~ evidence/<neural_interaction^2>_c: small where the data justifies "
+            "a large neural correction, large where it does not. --neural-interaction-l2 "
+            "scales the whole term (use ~1.0). The learned matrix is a per-chemistry TRUST "
+            "MAP / data-provenance fingerprint -- dump it with scripts/dump_trust_map.py. "
+            "Pairs with --fixed-cgenff-vdw."
+        ),
+    )
+    parser.add_argument(
+        "--trust-map-evidence",
+        type=float,
+        default=1.0,
+        help="Evidence weight (gamma) in the trust-map NLL; sets the lambda scale via "
+             "lambda ~ gamma/<r^2>. Larger = stronger default shrinkage.",
+    )
+    parser.add_argument(
+        "--trust-map-hyperprior",
+        type=float,
+        default=0.1,
+        help="Shared-hyperprior strength tying the per-element-pair lambdas toward their "
+             "common mean, so data-poor buckets borrow strength.",
+    )
+    parser.add_argument(
+        "--fixed-cgenff-vdw",
+        action="store_true",
+        help=(
+            "Pin the CGenFF Lennard-Jones term at its published parameters: disables the "
+            "learned global/per-element epsilon scaling AND the network-predicted per-atom "
+            "vdW scale. By default the model may rescale the LJ prior freely, and it does — "
+            "a trained checkpoint reached global_vdw_scale=0.14 with element scales of 0.10 "
+            "(C) and 0.24 (H), i.e. carbon-carbon epsilon at ~1.4% of its physical value, "
+            "effectively erasing the force-field prior. With this flag the LJ term becomes "
+            "a fixed physical baseline the network can only correct, never scale away."
+        ),
+    )
+    parser.add_argument(
         "--mbd-weight",
         type=float,
         default=1.0,
@@ -1466,6 +1720,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-res", type=int, default=2)
     parser.add_argument("--predict-charges", action="store_true", help="Also predict atomic charges/dipoles")
     parser.add_argument("--no-zbl", action="store_true")
+    zbl_training = parser.add_mutually_exclusive_group()
+    zbl_training.add_argument(
+        "--trainable-zbl",
+        action="store_true",
+        help="Opt in to optimizing ZBL screening parameters (fixed universal ZBL is the default).",
+    )
+    parser.add_argument(
+        "--zbl-cuton",
+        type=float,
+        default=0.1,
+        help="Distance in Å below which fixed ZBL is fully on (default: 0.1).",
+    )
+    parser.add_argument(
+        "--zbl-cutoff",
+        type=float,
+        default=0.6,
+        help="Distance in Å where fixed ZBL reaches exactly zero (default: 0.6).",
+    )
+    zbl_training.add_argument(
+        "--fixed-zbl",
+        dest="force_fixed_zbl",
+        action="store_true",
+        help=(
+            "Force universal fixed ZBL when warm-starting a legacy checkpoint; "
+            "drops its legacy repulsion parameter leaves during compatible merge."
+        ),
+    )
     parser.add_argument("--efa", action="store_true")
     parser.add_argument("--use-energy-bias", action="store_true")
     parser.add_argument(
@@ -1490,6 +1771,10 @@ def main() -> None:
         raise ValueError("--mbd-weight must be non-negative")
     if args.mbd_ramp_steps < 0:
         raise ValueError("--mbd-ramp-steps must be non-negative")
+    if args.zbl_cutoff <= 0.0:
+        raise ValueError("--zbl-cutoff must be positive")
+    if args.zbl_cuton is not None and not 0.0 <= args.zbl_cuton < args.zbl_cutoff:
+        raise ValueError("--zbl-cuton must satisfy 0 <= cuton < cutoff")
     if args.cache_path is not None:
         if args.mode != "train":
             raise ValueError("--cache-path is only valid with --mode train")

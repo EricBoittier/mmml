@@ -22,6 +22,13 @@ PBC_CTOFNB = 12.0
 PBC_NBOND_BOX_MARGIN_A = 1.0
 PBC_NBOND_MIN_CUTNB_A = 6.0
 
+# Pairlist skin: buffer between the interaction cutoff (``ctofnb``) and the
+# pairlist cutoff (``cutnb``).  With ``inbfrq`` list rebuilds every ~50 steps an
+# atom can drift a long way; too thin a skin lets pairs cross ``ctofnb`` between
+# rebuilds and produces energy discontinuities (~kcal/mol steps) on list rebuild
+# or image retranslation.  2 Å is the CHARMM-conventional default.
+PBC_NBOND_SKIN_A = 2.0
+
 
 @dataclass(frozen=True)
 class PbcNbondCutoffs:
@@ -148,6 +155,7 @@ def pbc_nbond_cutoffs_from_mlpot_switches(
     mm_switch_on: float,
     mm_switch_width: float,
     margin_A: float = PBC_NBOND_BOX_MARGIN_A,
+    skin_A: float = PBC_NBOND_SKIN_A,
 ) -> PbcNbondCutoffs:
     """PBC CHARMM cutoffs aligned with MMML ``mm_switch_on + mm_switch_width``."""
     cutnb_max = mlpot_mm_nl_cutoff_A(
@@ -160,6 +168,7 @@ def pbc_nbond_cutoffs_from_mlpot_switches(
         ctonnb_max=float(ctonnb_max_for_cutnb(cutnb_max)),
         ctofnb_max=float(ctofnb_max_for_cutnb(cutnb_max)),
         margin_A=margin_A,
+        skin_A=skin_A,
     )
 
 
@@ -182,8 +191,15 @@ def pbc_nbond_cutoffs(
     ctonnb_max: float = VACUUM_CTONNB,
     ctofnb_max: float = VACUUM_CTOFNB,
     margin_A: float = PBC_NBOND_BOX_MARGIN_A,
+    skin_A: float = PBC_NBOND_SKIN_A,
 ) -> PbcNbondCutoffs:
     """Return PBC-safe ``cutnb``/``cutim``/switch cutoffs for a cubic cell.
+
+    ``cutnb_max`` is treated as the *interaction* cutoff (where switched MM goes
+    to zero, matching the JAX MM neighbor-list radius); the pairlist ``cutnb`` is
+    then set to ``ctofnb + skin_A`` so pairs cannot cross ``ctofnb`` between list
+    rebuilds without already being in the list.  A too-thin skin causes energy
+    discontinuities on list rebuild / image retranslation.
 
     Defaults like ``cutnb=18`` Å are invalid when ``L/2`` is too small and can
     segfault in CHARMM ``upinb`` during MLpot registration.
@@ -194,17 +210,22 @@ def pbc_nbond_cutoffs(
     half = 0.5 * L
     max_cut = max(float(PBC_NBOND_MIN_CUTNB_A), half - float(margin_A))
 
-    cutnb = min(float(cutnb_max), max_cut)
-    ideal_cutim = float(cutnb_max) + float(VACUUM_CUTIM_OFFSET)
-    cutim = min(ideal_cutim, max_cut)
-    cutim = max(cutim, cutnb)
-
+    # Interaction cutoff (switched MM fully off here); switch radii scale from it.
+    interaction_cut = min(float(cutnb_max), max_cut)
     ctonnb, ctofnb = scale_vacuum_switch_cutoffs(
-        cutnb,
+        interaction_cut,
         cutnb_ref=float(cutnb_max),
         ctonnb_ref=float(ctonnb_max),
         ctofnb_ref=float(ctofnb_max),
     )
+
+    # Pairlist cutoff = interaction cutoff + skin, capped strictly below L/2.
+    cutnb = min(max(interaction_cut, ctofnb + float(skin_A)), max_cut)
+
+    ideal_cutim = cutnb + float(VACUUM_CUTIM_OFFSET)
+    cutim = min(ideal_cutim, max_cut)
+    cutim = max(cutim, cutnb)
+
     cutnb, ctonnb, ctofnb = enforce_switch_cutoff_order(cutnb, ctonnb, ctofnb)
     return PbcNbondCutoffs(
         cubic_box_side_A=L,
@@ -374,7 +395,6 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
 
     toppar = assert_cgenff_toppar_readable()
 

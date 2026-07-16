@@ -355,7 +355,11 @@ def load_physnet_for_hybrid_mlpot(
     charges are not evaluated in the decomposed monomer/dimer path.
     """
     from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-    from mmml.utils.model_checkpoint import normalize_physnet_config, physnet_constructor_kwargs
+    from mmml.utils.model_checkpoint import (
+        infer_trainable_zbl_config,
+        normalize_physnet_config,
+        physnet_constructor_kwargs,
+    )
 
     bundle = load_checkpoint_bundle(Path(checkpoint))
     config = dict(bundle.config)
@@ -365,11 +369,12 @@ def load_physnet_for_hybrid_mlpot(
     else:
         physnet_config = normalize_physnet_config(config)
 
+    params = extract_physnet_params_for_hybrid(bundle.params)
+    physnet_config = infer_trainable_zbl_config(physnet_config, params)
     physnet_config["max_padded_atoms"] = int(max_padded_atoms)
     model = PhysNet(**physnet_constructor_kwargs(physnet_config, PhysNet))
     model.max_padded_atoms = int(max_padded_atoms)
 
-    params = extract_physnet_params_for_hybrid(bundle.params)
     if dtype is not None:
         from mmml.interfaces.pycharmmInterface.ml_dtypes import (
             cast_pytree_to_ml_dtype,
@@ -437,7 +442,11 @@ def _build_physnet_ef_calculator(
     cutoff: float | None,
     electrostatics_damping_sigma: float | None = None,
 ) -> Calculator:
-    from mmml.utils.model_checkpoint import normalize_physnet_config, physnet_constructor_kwargs
+    from mmml.utils.model_checkpoint import (
+        infer_trainable_zbl_config,
+        normalize_physnet_config,
+        physnet_constructor_kwargs,
+    )
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
     from mmml.models.physnetjax.physnetjax.models.model import PhysNet
     from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
@@ -446,7 +455,9 @@ def _build_physnet_ef_calculator(
         model_config = dict(saved_config["physnet_config"])
     else:
         model_config = dict(saved_config)
-    model_config = normalize_physnet_config(model_config)
+    model_config = infer_trainable_zbl_config(
+        normalize_physnet_config(model_config), params
+    )
 
     is_spooky = str(saved_config.get("model_type", model_config.get("model_type", ""))).lower() == "spooky"
     model_cls = SpookyPhysNet if is_spooky else PhysNet

@@ -38,7 +38,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         no_fix=False,
         dyn_nprint=100,
         dyn_iprfrq=500,
-        dyn_freq_cadence=50,
+        dyn_freq_cadence=500,
         dcd_nsavc=100,
         echeck=100.0,
         ps_heat=2.0,
@@ -54,6 +54,12 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         md_stages="mini,heat,equi",
         tag=None,
         checkpoint=None,
+        mbd_checkpoint=None,
+        mbd_weight=1.0,
+        multipole_checkpoint=None,
+        sampler="md",
+        ff=None,
+        jaxmd_unified=False,
         electrostatics_damping_sigma=None,
         output_dir=Path("artifacts/pycharmm_mlpot/dcm20_pbc"),
         job_name=None,
@@ -106,7 +112,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         heat_mode="ramp",
         dynamics_overlap_action="rescue",
         dynamics_overlap_min_distance=1.5,
-        dynamics_overlap_check_interval=50,
+        dynamics_overlap_check_interval=500,
         mm_switch_on=8.0,
         mm_switch_width=5.0,
         ml_switch_width=1.5,
@@ -212,6 +218,52 @@ def test_build_pycharmm_command_forwards_electrostatics_damping_sigma():
     assert cmd[cmd.index("--electrostatics-damping-sigma") + 1] == "0.0"
     parsed = pycharmm_mlpot.parse_args(cmd)
     assert parsed.electrostatics_damping_sigma == pytest.approx(0.0)
+
+
+def test_parse_defaults_forward_500_step_overlap_interval():
+    args = parse_md_system_args(
+        [
+            "--backend",
+            "pycharmm",
+            "--setup",
+            "pbc_nvt",
+            "--composition",
+            "MEOH:1,TIP3:1",
+            "--box-size",
+            "24",
+        ]
+    )
+    cmd = build_pycharmm_command(args)
+
+    assert "--dynamics-overlap-check-interval" in cmd
+    assert cmd[cmd.index("--dynamics-overlap-check-interval") + 1] == "500"
+    assert "--dyn-freq-cadence" in cmd
+    assert cmd[cmd.index("--dyn-freq-cadence") + 1] == "500"
+
+
+def test_build_pycharmm_command_forwards_mbd_override_and_omits_unified_only_flags():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            mbd_checkpoint="/tmp/mbd.json",
+            mbd_weight=0.5,
+            multipole_checkpoint="/tmp/multipole.json",
+            sampler="md",
+            ff="zbl-mbd-multipoles",
+            jaxmd_unified=True,
+        )
+    )
+
+    assert "--mbd-checkpoint" in cmd
+    assert cmd[cmd.index("--mbd-checkpoint") + 1] == "/tmp/mbd.json"
+    assert "--mbd-weight" in cmd
+    assert cmd[cmd.index("--mbd-weight") + 1] == "0.5"
+    assert "--multipole-checkpoint" not in cmd
+    assert "--sampler" not in cmd
+    assert "--ff" not in cmd
+    assert "--jaxmd-unified" not in cmd
+    pycharmm_mlpot.parse_args(cmd)
 
 
 def test_build_pycharmm_command_forwards_include_mm_false():

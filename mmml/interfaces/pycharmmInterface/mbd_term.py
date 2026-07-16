@@ -19,7 +19,7 @@ convention. Periodic MBD would need a different construction and is out of scope
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Tuple
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -33,6 +33,10 @@ HARTREE_TO_EV = _HARTREE_EV
 HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = _HARTREE_EV / _BOHR_A
 
 MBDEnergyForceFn = Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]
+
+
+# Re-export shared companion resolver (also used by SpookyNetCalculator).
+from mmml.models.mbd.calculator import resolve_companion_mbd  # noqa: E402,F401
 
 
 def build_mbd_energy_force_fn(

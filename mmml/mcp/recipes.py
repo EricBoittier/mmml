@@ -213,7 +213,6 @@ def _load_physnet_calc(ckpt: Path, n_atoms: int):
 
 def _fd_hessian_forces(calc, atoms, *, delta: float = 0.005) -> np.ndarray:
     """Central finite-difference Hessian from ASE forces (eV/Å² flat 3N×3N)."""
-    import ase
 
     n_atoms = len(atoms)
     ndof = 3 * n_atoms
@@ -253,7 +252,6 @@ def _stage_ir_harmonic_pointcharge(
     ckpt: Path,
     dry_run: bool,
 ) -> CommandResult:
-    from ase import Atoms
     from ase.data import atomic_masses as ASE_ATOMIC_MASSES
     from ase.io.trajectory import Trajectory
 

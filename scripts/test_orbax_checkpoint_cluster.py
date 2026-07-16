@@ -17,14 +17,11 @@ from pathlib import Path
 
 import ase
 import numpy as np
-import pandas as pd
 from ase.io import write
 
 from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-    CGENFF_PRM,
-    CGENFF_RTF,
     coor,
     pycharmm,
     reset_block,
@@ -41,8 +38,6 @@ from orbax.checkpoint import PyTreeCheckpointer
 
 import pycharmm.psf as psf
 import pycharmm.param as param
-import pycharmm.generate as gen
-import pycharmm.ic as ic
 import pycharmm.energy as energy
 import pycharmm.minimize as minimize
 import pycharmm.read as read

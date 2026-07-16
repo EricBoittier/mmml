@@ -40,7 +40,6 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutation
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (  # noqa: E402
     build_monomer_dimer_index_arrays,
     dimer_com_distance_numpy,
-    resolve_max_active_dimers,
     validate_sparse_dimer_cap,
 )
 from scripts.validate_mlpot_sparse_dimers import (  # noqa: E402
@@ -106,7 +105,7 @@ def _zone_label(
     ml_switch_width: float,
     mm_r_min: float,
 ) -> str:
-    handoff_lo = float(mm_switch_on) - float(ml_switch_width)
+    float(mm_switch_on) - float(ml_switch_width)
     if com_dist < float(mm_r_min):
         return "pure_ML"
     if com_dist < float(mm_switch_on):

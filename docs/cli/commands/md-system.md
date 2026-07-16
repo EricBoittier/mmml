@@ -17,7 +17,10 @@ usage: mmml md-system [-h]
                       [--backend {auto,ase,jaxmd,pycharmm}]
                       [--checkpoint CHECKPOINT]
                       [--mbd-checkpoint MBD_CHECKPOINT]
-                      [--mbd-weight MBD_WEIGHT] [--jaxmd-unified]
+                      [--mbd-weight MBD_WEIGHT]
+                      [--multipole-checkpoint MULTIPOLE_CHECKPOINT]
+                      [--sampler {md,rigid}] [--ff {cgenff,zbl-mbd-multipoles}]
+                      [--jaxmd-unified]
                       [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
                       [--output-dir OUTPUT_DIR] [--job-name JOB_NAME]
                       [--jobs-dir JOBS_DIR] [--template-pdb TEMPLATE_PDB]
@@ -172,6 +175,13 @@ usage: mmml md-system [-h]
                       [--no-dynamics-monomer-velocity-restore]
                       [--dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE]
                       [--dynamics-monomer-velocity-warn-recover-fraction DYNAMICS_MONOMER_VELOCITY_WARN_RECOVER_FRACTION]
+                      [--dynamics-monomer-baseline-floor-fraction DYNAMICS_MONOMER_BASELINE_FLOOR_FRACTION]
+                      [--dynamics-monomer-ratio-without-abs]
+                      [--dynamics-monomer-template-on-force]
+                      [--dynamics-monomer-bond-stretch-factor DYNAMICS_MONOMER_BOND_STRETCH_FACTOR]
+                      [--dynamics-monomer-bond-stretch-abs DYNAMICS_MONOMER_BOND_STRETCH_ABS]
+                      [--dynamics-monomer-com-flyoff DYNAMICS_MONOMER_COM_FLYOFF]
+                      [--no-dynamics-monomer-com-flyoff]
                       [--restart-from RESTART_FROM] [--from-psf FROM_PSF]
                       [--from-crd FROM_CRD] [--skip-cluster-build]
                       [--skip-if-crd-exists] [--no-save-vmd-topology]
@@ -187,7 +197,8 @@ usage: mmml md-system [-h]
                       [--fire-min-steps FIRE_MIN_STEPS]
                       [--fire-min-maxstep FIRE_MIN_MAXSTEP]
                       [--rescue-fire-fmax RESCUE_FIRE_FMAX]
-                      [--quiet-bfgs | --no-quiet-bfgs]
+                      [--quiet-bfgs | --no-quiet-bfgs] [--verbose-bfgs]
+                      [--bfgs-log-every N]
                       [--charmm-pre-minimize | --no-charmm-pre-minimize]
                       [--calculator-pre-minimize | --no-calculator-pre-minimize]
                       [--calculator-safe-grms KCAL] [--pre-min-safe-grms KCAL]
@@ -238,8 +249,10 @@ usage: mmml md-system [-h]
                       [--handoff-require-cell | --no-handoff-require-cell]
                       [--jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS]
                       [--jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS]
+                      [--jaxmd-fire-skip-max-f-eVA JAXMD_FIRE_SKIP_MAX_F_EVA]
                       [--jax-md-update-interval JAX_MD_UPDATE_INTERVAL]
                       [--jax-md-skin-distance JAX_MD_SKIN_DISTANCE]
+                      [--steps-per-recording STEPS_PER_RECORDING]
                       [--evaluate-npz PATH] [--evaluate-output EVALUATE_OUTPUT]
                       [--evaluate-frame EVALUATE_FRAME]
                       [--evaluate-forces-npz PATH] [--evaluate-traj PATH]
@@ -292,14 +305,33 @@ options:
   --checkpoint CHECKPOINT
                         Model checkpoint path.
   --mbd-checkpoint MBD_CHECKPOINT
-                        Optional learned MBD dispersion checkpoint. Adds a
-                        whole-system E += mbd_weight * E_mbd correction to the
-                        hybrid ML/MM calculator (ASE / JAX-MD backends).
-                        Required when the model was trained with an additive MBD
-                        term, else that dispersion physics is silently omitted.
+                        Optional learned MBD dispersion checkpoint. On ASE/JAX-
+                        MD and PyCHARMM hybrid paths, adds E += mbd_weight *
+                        E_mbd. When omitted on the hybrid path, auto-loads from
+                        the model checkpoint's recorded mbd_checkpoint if that
+                        path exists locally. With --jaxmd-unified --ff zbl-mbd-
+                        multipoles, used once at build to freeze per-atom
+                        C6/C8/C10 for the classical pairwise dispersion term
+                        (default: bundled example).
   --mbd-weight MBD_WEIGHT
                         Weight for the --mbd-checkpoint correction (default 1.0;
                         match training).
+  --multipole-checkpoint MULTIPOLE_CHECKPOINT
+                        Optional learned multipole checkpoint. With --jaxmd-
+                        unified --ff zbl-mbd-multipoles, used once at build to
+                        freeze fragment multipoles for classical pair
+                        electrostatics during rigid MC (default: bundled
+                        example).
+  --sampler {md,rigid}  Propagator for --jaxmd-unified: md (JaxmdDriver) or
+                        rigid (RigidBodySampler Metropolis MC over whole
+                        monomers). Default: md.
+  --ff {cgenff,zbl-mbd-multipoles}
+                        Intermolecular FF preset for --jaxmd-unified. cgenff:
+                        CHARMM/CGenFF mm_nonbonded only (default when --sampler
+                        rigid and no --checkpoint). zbl-mbd-multipoles:
+                        intermolecular ZBL (defaults) + fixed multipoles + fixed
+                        C6 dispersion. Omit for hybrid ml_intra+mm_nonbonded
+                        when a checkpoint is set.
   --jaxmd-unified       EXPERIMENTAL: run --backend jaxmd through the unified
                         mmml.md pipeline (mmml.cli.run.md_system_unified)
                         instead of the legacy md_pbc_suite.jaxmd inline loop.
@@ -623,8 +655,9 @@ options:
                         pycharmm: split production into chained restart segments
   --bonded-mm-mini, --no-bonded-mm-mini
                         pycharmm: bonded-only SD if MM bonded strain exceeds
-                        post-MM-pre-min baseline (default: on; heat always
-                        checked when enabled)
+                        post-MM-pre-min baseline (default: off — opt in; can
+                        stall on PBC crystal free / CGENFF APPEND; heat is
+                        always checked when enabled)
   --bonded-mm-mini-after BONDED_MM_MINI_AFTER
                         pycharmm: comma-separated stages to check (default:
                         mini,heat; heat always)
@@ -680,7 +713,7 @@ options:
   --dyn-imgfrq N        pycharmm PBC: image/HB list rebuild every N steps
                         (default 50; larger=faster)
   --dyn-freq-cadence N  pycharmm: align heat/print cadence (ihtfrq, nprint, …)
-                        to N steps; decoupled from DCD nsavc (default: 50).
+                        to N steps; decoupled from DCD nsavc (default: 500).
                         Overlap CPT chunks still disable interior inbfrq/imgfrq.
                         Use 0 for legacy behavior.
   --pre-nve-charmm-update, --no-pre-nve-charmm-update
@@ -712,8 +745,12 @@ options:
                         FIRE force convergence threshold in eV/Å for calculator
                         rescue (default 0.05).
   --quiet-bfgs, --no-quiet-bfgs
-                        Suppress ASE BFGS/FIRE log output during calculator pre-
-                        minimize.
+                        Suppress ASE BFGS/FIRE progress lines entirely (default:
+                        compact progress).
+  --verbose-bfgs        Print the full ASE BFGS/FIRE step table instead of
+                        compact progress.
+  --bfgs-log-every N    Compact BFGS/FIRE log every N steps (default: ~10 lines
+                        per run).
   --charmm-pre-minimize, --no-charmm-pre-minimize
                         lambda_ti: CHARMM SD/ABNR before MMML BFGS (default on).
   --calculator-pre-minimize, --no-calculator-pre-minimize
@@ -882,11 +919,16 @@ options:
                         Require periodic cell in handoff for PBC continuation
                         (default: off).
   --jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS
-                        FIRE minimization steps in JAX-MD runner before dynamics
-                        (default: 200).
+                        Pre-dynamics FIRE steps in the JAX-MD runner (default:
+                        1000). Free space: COM-centered. PBC: molecular
+                        (monomer-COM) wrapping. Best max|F| frame is restored if
+                        FIRE wanders.
   --jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS
-                        PBC-aware FIRE steps after first minimization (default:
-                        200).
+                        Additional PBC FIRE steps with molecular wrapping before
+                        dynamics (default: 1000; only when a cell is set).
+  --jaxmd-fire-skip-max-f-eVA JAXMD_FIRE_SKIP_MAX_F_EVA
+                        Skip jax-md FIRE when start max|F| ≤ this (eV/Å; default
+                        0.10). Set 0 to always run FIRE backoff stages.
   --jax-md-update-interval JAX_MD_UPDATE_INTERVAL
                         JAX-MD/ASE PBC MM neighbor-list refresh interval in MD
                         steps or calculator calls (default: 1, conservative).
@@ -895,6 +937,10 @@ options:
   --jax-md-skin-distance JAX_MD_SKIN_DISTANCE
                         JAX-MD/ASE PBC MM neighbor-list skin distance in Å
                         (default: 0.25).
+  --steps-per-recording STEPS_PER_RECORDING
+                        JAX-MD: MD steps between trajectory/HDF5 records
+                        (default: 100; must be a multiple of --jax-md-update-
+                        interval).
   --evaluate-npz PATH   Single-point evaluation: load positions (and optional
                         charges/LJ types) from an NPZ file, build the selected
                         backend calculator, and write energy/forces to
@@ -1013,8 +1059,9 @@ PBC box sizing:
                         sized L_sim).
   --packmol-box-padding ANG
                         Cold-start margin (Å per side) between Packmol cube and
-                        simulation cell (default: 10; capped at 20% of L_sim for
-                        small boxes).
+                        simulation cell (default: 1.0; thin face birth only —
+                        pack nearly full cell; raise MM pair capacity if NL fill
+                        is high). Capped at 20% of L_sim.
   --box-auto {geometry,density,count}
                         How to choose the cubic box / molecule count:
                         geometry=span+padding (default); density=box side from
@@ -1225,15 +1272,15 @@ Dynamics overlap guard (PyCHARMM MLpot):
   --no-dynamics-max-monomer-extent
                         Disable max monomer extent / fly-off guard.
   --no-dynamics-monomer-health
-                        Disable per-monomer velocity/force/energy bookkeeping
-                        and early template restore during dynamics.
+                        Disable per-monomer velocity/GRMS/geometry bookkeeping
+                        and early intervention during dynamics.
   --dynamics-monomer-health-debug
                         Print per-residue monomer health dot matrix
-                        (green/yellow/red for velocity, force, MM energy) at
-                        each dynamics health check.
+                        (green/yellow/red for velocity, GRMS, geometry) at each
+                        dynamics health check.
   --no-dynamics-monomer-template-restore
-                        Audit monomer health but do not template-restore bad
-                        monomers.
+                        Audit monomer health but do not template-restore
+                        geometry-bad monomers (fly-off / collapse).
   --no-dynamics-monomer-jax-after-restore
                         Skip per-monomer JAX bonded mini after template restore.
   --no-dynamics-monomer-velocity-restore
@@ -1241,11 +1288,35 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         restart velocities (or Maxwell-Boltzmann redraw) onto
                         restored monomers.
   --dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE
-                        Max monomers to template-restore per health check
-                        (default: 4).
+                        Max geometry-bad monomers to template-restore per health
+                        check (default: 4).
   --dynamics-monomer-velocity-warn-recover-fraction DYNAMICS_MONOMER_VELOCITY_WARN_RECOVER_FRACTION
                         Fraction of monomers that must be velocity-warn before
                         velocity-only redraw recovery runs (default: 0.80).
+  --dynamics-monomer-baseline-floor-fraction DYNAMICS_MONOMER_BASELINE_FLOOR_FRACTION
+                        Floor health baselines at this fraction of the warn
+                        absolute cut before ratio math (default: 0.25).
+  --dynamics-monomer-ratio-without-abs
+                        Allow velocity/GRMS ratios to escalate health without
+                        meeting the absolute warn floor (legacy; off by
+                        default).
+  --dynamics-monomer-template-on-force
+                        Allow template+FIRE on GRMS/force-bad monomers without
+                        geometry failure (legacy; off by default — restore is
+                        for fly-off/collapse).
+  --dynamics-monomer-bond-stretch-factor DYNAMICS_MONOMER_BOND_STRETCH_FACTOR
+                        Geometry-bad when a PSF 1–2 bond exceeds this ×
+                        reference length (default: 1.75; also abs floor via
+                        --dynamics-monomer-bond-stretch-abs).
+  --dynamics-monomer-bond-stretch-abs DYNAMICS_MONOMER_BOND_STRETCH_ABS
+                        Absolute bond-length floor (Å) for geometry-bad stretch
+                        (default: 2.50).
+  --dynamics-monomer-com-flyoff DYNAMICS_MONOMER_COM_FLYOFF
+                        Unwrapped COM drift (Å) from health baseline that marks
+                        geometry-bad (default: 0 → max(15, 0.35×box)).
+  --no-dynamics-monomer-com-flyoff
+                        Disable unwrapped COM-drift fly-off checks in monomer
+                        health.
 ```
 
 

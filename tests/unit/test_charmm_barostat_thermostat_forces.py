@@ -141,9 +141,11 @@ def test_charmm_total_forces_negates_gradient():
             "dz": [-3.0, 0.5, 2.0],
         }
     )
-    fake_coor = mock.MagicMock()
-    fake_coor.get_forces.return_value = grad
-    with fake_pycharmm_modules(coor=fake_coor):
+    gradient = np.column_stack([grad["dx"], grad["dy"], grad["dz"]])
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
+        return_value=gradient,
+    ):
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_total_forces_kcalmol_A,
         )
@@ -304,6 +306,7 @@ def test_run_dynamics_mirror_noops_after_ase_cold_assign():
         side_effect=_assign_side_effect,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+        return_value=True,
     ) as sync_from_main, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
@@ -317,7 +320,8 @@ def test_run_dynamics_mirror_noops_after_ase_cold_assign():
         clear=False,
     ):
         run_dynamics({"nstep": 5, "iasvel": 0, "start": True})
-    sync_from_main.assert_not_called()
+    # Post-dyna COMP refresh always runs so the next iasvel=0 chunk is safe.
+    sync_from_main.assert_called()
     passed = fake_pycharmm.DynamicsScript.call_args.kwargs
     assert passed["iasvel"] == 1
     assert passed["start"] is False

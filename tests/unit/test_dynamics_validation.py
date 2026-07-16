@@ -47,9 +47,12 @@ def test_nsavc_for_chunk_preserving_interval():
     )
 
     assert nsavc_for_chunk_preserving_interval(250, 500, 0) == 250
-    assert nsavc_for_chunk_preserving_interval(500, 500, 0) is None
+    # Target exactly at chunk end → one frame via nsavc = n-1.
+    assert nsavc_for_chunk_preserving_interval(500, 500, 0) == 499
     assert nsavc_for_chunk_preserving_interval(500, 250, 0) is None
-    assert nsavc_for_chunk_preserving_interval(500, 250, 250) is None
+    assert nsavc_for_chunk_preserving_interval(500, 250, 250) == 249
+    assert nsavc_for_chunk_preserving_interval(499, 250, 250) == 249
+    assert nsavc_for_chunk_preserving_interval(499, 250, 0) is None
 
 
 def test_install_target_dcd_metadata_from_interval_ps():

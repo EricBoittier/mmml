@@ -46,6 +46,8 @@ __all__ = [
     "epsilon",
     "indices_of_monomer",
     "indices_of_pairs",
+    "ml_switch_scale",
+    "mm_switch_scale",
     "jax_smooth_cutoff_cosine",
     "jax_smooth_switch_linear",
     "ml_switch_simple",
@@ -91,7 +93,32 @@ def monomer_coms_segment(
     *,
     masses: Array | None = None,
 ) -> Array:
-    """Monomer COMs via ``segment_sum`` (JIT-safe; no Python loops over monomers)."""
+    """Monomer COMs via ``segment_sum`` (JIT-safe; no Python loops over monomers).
+
+    .. note::
+
+       Despite the name, this returns an **unweighted centroid** unless
+       ``masses`` is passed, and the codebase is currently inconsistent about
+       which it uses:
+
+       * ML/MM switching (``mm_energy_forces``) and PME
+         (``jax_pme_hybrid_coulomb``) call this **without** masses -> centroid.
+       * Flat-bottom / COM-wall restraints call it **with** masses -> true COM.
+
+       The difference is not cosmetic.  Measured over 724 DCM/acetone dimers:
+       ``|r_centroid - r_COM|`` averages 0.35 A (acetone) to 0.45 A (DCM), up to
+       1.3 A -- because e.g. DCM's two Cl carry ~83% of the mass but only 40% of
+       the centroid weight.  Against a 1.5 A wide handoff that shifted the ML
+       switch on 97/724 dimers and changed the switching regime on 44/724.
+
+       The centroid is a defensible modelling choice (switching is a smooth
+       interpolation between two valid models; only *consistency* across
+       training and every MD backend matters, and all of them go through
+       ``setup_calculator``).  It is kept deliberately: changing it would
+       silently move the effective handoff for existing checkpoints.  Any move
+       to mass weighting should be an explicit, flagged migration with
+       retraining -- not a drive-by "fix".
+    """
     n = int(n_monomers)
     if masses is None:
         weights = jnp.ones(positions.shape[0], dtype=positions.dtype)
@@ -161,6 +188,85 @@ def _sharpstep(r: Array, x0: float, x1: float, gamma: float = GAMMA_ON) -> Array
     s = jnp.clip((r - x0) / _safe_den(x1 - x0), 0.0, 1.0)
     s = s ** gamma
     return _smoothstep01(s)
+
+
+def ml_switch_scale(
+    r_com: Array,
+    *,
+    mm_switch_on: float,
+    ml_switch_width: float,
+    gamma: float = GAMMA_ON,
+) -> Array:
+    """ML taper as a function of monomer COM–COM separation.
+
+    Single source of truth for the ML side of the ML/MM handoff, shared by the
+    MD hybrid calculator and hybrid training.  Returns 1 while the pair is inside
+    the ML-only region, tapering smoothly to 0 at ``mm_switch_on``:
+
+    * ``r <= mm_switch_on - ml_switch_width``  -> 1 (ML fully on)
+    * ``mm_switch_on - ml_switch_width < r < mm_switch_on`` -> smooth handoff
+    * ``r >= mm_switch_on``                    -> 0 (MM tail only)
+
+    With the defaults (``mm_switch_on=8.0``, ``ml_switch_width=1.5``) this is the
+    0 -> 6.5 fully-on / 6.5 -> 8.0 handoff schedule the calculator reports.
+
+    Differentiable and vmap-safe (no dynamic shapes).
+    """
+    return 1.0 - _sharpstep(
+        r_com, mm_switch_on - ml_switch_width, mm_switch_on, gamma=gamma
+    )
+
+
+def mm_switch_scale(
+    r_com: Array,
+    *,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    ml_switch_width: float,
+    complementary_handoff: bool = True,
+) -> Array:
+    """MM taper as a function of monomer COM–COM separation.
+
+    Single source of truth for the MM side of the ML/MM handoff, shared by the
+    MD hybrid calculator and hybrid training.  Applies to **both** the LJ and
+    electrostatic MM terms.
+
+    With ``complementary_handoff`` (the default) MM ramps up exactly as ML ramps
+    down -- ``handoff == 1 - ml_switch_scale(...)`` -- then tapers off across the
+    MM tail::
+
+        handoff  = sharpstep(r, mm_switch_on - ml_switch_width, mm_switch_on)
+        mm_taper = 1 - sharpstep(r, mm_switch_on, mm_switch_on + mm_switch_width)
+        scale    = handoff * mm_taper
+
+    At the reported defaults (8.0 / 5.0 / 1.5): 0 below 6.5, ramping to full over
+    6.5 -> 8.0, tapering to 0 across the 8.0 -> 13.0 MM tail.
+
+    ``complementary_handoff`` is selected with :func:`jnp.where` rather than a
+    Python ``if`` so the flag may arrive as a traced value (hybrid training
+    passes its config through a jitted ``train_step``).  Both branches are a
+    couple of scalar ``_sharpstep`` calls, so evaluating both is free.
+    """
+    handoff = _sharpstep(
+        r_com, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON
+    )
+    mm_taper = 1.0 - _sharpstep(
+        r_com, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_OFF
+    )
+    complementary = handoff * mm_taper
+
+    mm_on = _sharpstep(
+        r_com, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_ON
+    )
+    mm_off = _sharpstep(
+        r_com,
+        mm_switch_on + mm_switch_width,
+        mm_switch_on + 2.0 * mm_switch_width,
+        gamma=GAMMA_OFF,
+    )
+    legacy = mm_on * (1.0 - mm_off)
+
+    return jnp.where(complementary_handoff, complementary, legacy)
 
 
 def indices_of_pairs(

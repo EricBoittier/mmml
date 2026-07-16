@@ -80,6 +80,11 @@ class RunCell:
     n_monomers: int
     temperature: float
     box_size: float
+    # Mixture fields expected by the shared pbc_solvent_burst helpers
+    # (cell_ml_atoms/cell_bulk_total); empty means a pure-solvent cell.
+    components: tuple[tuple[str, int], ...] = ()
+    mole_fractions: tuple[tuple[str, float], ...] = ()
+    mixture_key: str = ""
 
 
 def matrix_temperatures(cfg: dict[str, Any]) -> list[float]:

@@ -42,7 +42,11 @@ def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", help="Run cell tag, e.g. dcm_10_t300_l32")
-    parser.add_argument("solvent", nargs="?", help="Residue prefix (DCM or ACO)")
+    parser.add_argument(
+        "solvent",
+        nargs="?",
+        help="Residue prefix (for example TIP3, MEOH, DCM, or ACO)",
+    )
     parser.add_argument("n_monomers", nargs="?", type=int, help="Monomer count")
     parser.add_argument("--temperature", type=float, default=None, help="Temperature (K)")
     parser.add_argument("--box-size", type=float, default=None, help="Cubic box side (Å)")

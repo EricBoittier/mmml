@@ -26,13 +26,27 @@ pytestmark = pytest.mark.skipif(
 
 def test_per_atom_c6_sqrt_geometric():
     ep = 0.1
-    sig = 3.5
-    expected = np.sqrt(2.0 * ep * sig**6)
+    rmin_half = 1.75
+    expected = np.sqrt(2.0 * ep * (2.0 * rmin_half) ** 6)
     out = per_atom_jax_pme_c6_sqrt(
         np.array([-ep, -ep]),
-        np.array([sig, sig]),
+        np.array([rmin_half, rmin_half]),
     )
     np.testing.assert_allclose(out, [expected, expected], rtol=1e-12)
+
+
+def test_charmm_rmin_half_is_not_treated_as_sigma():
+    """Regression: omitting CHARMM's Rmin/2 -> Rmin conversion loses 64x C6."""
+    ep = 0.2
+    rmin_half = 2.0
+    coefficient = per_atom_jax_pme_c6_sqrt(
+        np.array([ep]), np.array([rmin_half])
+    )[0]
+    c6 = coefficient**2
+    expected = 2.0 * ep * (2.0 * rmin_half) ** 6
+    wrong_old_value = 2.0 * ep * rmin_half**6
+    assert c6 == pytest.approx(expected)
+    assert c6 / wrong_old_value == pytest.approx(64.0)
 
 
 def test_lambda_scales_c6_sqrt_pair_product():
@@ -272,4 +286,3 @@ def test_hybrid_warmup_com_switch_jit_when_pbc_cell(monkeypatch):
     assert counts["com_switch_jit"] == 1
     assert counts["coulomb_cross"] == 1
     assert com_calls == [(6, 3)]
-

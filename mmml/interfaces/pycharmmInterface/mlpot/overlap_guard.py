@@ -233,8 +233,8 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         "--no-dynamics-monomer-health",
         action="store_true",
         help=(
-            "Disable per-monomer velocity/force/energy bookkeeping and early "
-            "template restore during dynamics."
+            "Disable per-monomer velocity/GRMS/geometry bookkeeping and early "
+            "intervention during dynamics."
         ),
     )
     group.add_argument(
@@ -242,13 +242,16 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=(
             "Print per-residue monomer health dot matrix (green/yellow/red for "
-            "velocity, force, MM energy) at each dynamics health check."
+            "velocity, GRMS, geometry) at each dynamics health check."
         ),
     )
     group.add_argument(
         "--no-dynamics-monomer-template-restore",
         action="store_true",
-        help="Audit monomer health but do not template-restore bad monomers.",
+        help=(
+            "Audit monomer health but do not template-restore geometry-bad "
+            "monomers (fly-off / collapse)."
+        ),
     )
     group.add_argument(
         "--no-dynamics-monomer-jax-after-restore",
@@ -267,7 +270,10 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         "--dynamics-monomer-health-max-restore",
         type=int,
         default=4,
-        help="Max monomers to template-restore per health check (default: 4).",
+        help=(
+            "Max geometry-bad monomers to template-restore per health check "
+            "(default: 4)."
+        ),
     )
     group.add_argument(
         "--dynamics-monomer-velocity-warn-recover-fraction",
@@ -277,6 +283,63 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
             "Fraction of monomers that must be velocity-warn before velocity-only "
             "redraw recovery runs (default: 0.80)."
         ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-baseline-floor-fraction",
+        type=float,
+        default=0.25,
+        help=(
+            "Floor health baselines at this fraction of the warn absolute cut "
+            "before ratio math (default: 0.25)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-ratio-without-abs",
+        action="store_true",
+        help=(
+            "Allow velocity/GRMS ratios to escalate health without meeting the "
+            "absolute warn floor (legacy; off by default)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-template-on-force",
+        action="store_true",
+        help=(
+            "Allow template+FIRE on GRMS/force-bad monomers without geometry "
+            "failure (legacy; off by default — restore is for fly-off/collapse)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-bond-stretch-factor",
+        type=float,
+        default=1.75,
+        help=(
+            "Geometry-bad when a PSF 1–2 bond exceeds this × reference length "
+            "(default: 1.75; also abs floor via --dynamics-monomer-bond-stretch-abs)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-bond-stretch-abs",
+        type=float,
+        default=2.50,
+        help=(
+            "Absolute bond-length floor (Å) for geometry-bad stretch "
+            "(default: 2.50)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-com-flyoff",
+        type=float,
+        default=0.0,
+        help=(
+            "Unwrapped COM drift (Å) from health baseline that marks geometry-bad "
+            "(default: 0 → max(15, 0.35×box))."
+        ),
+    )
+    group.add_argument(
+        "--no-dynamics-monomer-com-flyoff",
+        action="store_true",
+        help="Disable unwrapped COM-drift fly-off checks in monomer health.",
     )
 
 
@@ -654,11 +717,26 @@ def resolve_overlap_monomer_offsets(
     config: DynamicsOverlapConfig,
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> np.ndarray:
-    """Monomer offsets from PSF atom counts when available, else uniform split."""
+    """Monomer offsets from PSF / composition / ctx when available, else uniform."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     n_atoms = int(pos.shape[0])
+    # Mixed solvent PSFs have heterogeneous residue sizes.  Consult the
+    # residue boundaries directly before falling back to a uniform split.
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+            atoms_per_monomer_from_psf,
+        )
+
+        per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
+        if len(per_psf) == int(config.n_monomers) and sum(per_psf) == n_atoms:
+            return np.concatenate(([0], np.cumsum(per_psf, dtype=int)))
+    except Exception:
+        pass
     if mlpot_ctx is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
             resolve_monomer_offsets_for_limits,
@@ -671,6 +749,19 @@ def resolve_overlap_monomer_offsets(
         )
         if offsets is not None:
             return offsets
+        args = getattr(mlpot_ctx, "workflow_args", None)
+        if args is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                _cluster_atoms_per_from_composition,
+            )
+
+            comp_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+            if (
+                comp_per is not None
+                and len(comp_per) == int(config.n_monomers)
+                and sum(comp_per) == n_atoms
+            ):
+                return monomer_offsets_from_atoms_per(comp_per)
     return monomer_offsets(n_atoms, int(config.n_monomers))
 
 

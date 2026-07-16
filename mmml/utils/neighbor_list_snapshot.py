@@ -117,7 +117,6 @@ def capture_charmm_inter_monomer_pairs(
             cleanup.cleanup()
 
     if positions is None:
-        import pandas as pd
 
         from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
 
@@ -164,7 +163,6 @@ def capture_charmm_jnb_inter_monomer_pairs(
 
     from mmml.interfaces.pycharmmInterface.nl_reference import (
         apply_mm_pair_filters,
-        filter_pairs_under_cutoff,
         inter_monomer_pair_set,
         walk_charmm_primary_jnb_pair_set,
     )
@@ -177,7 +175,6 @@ def capture_charmm_jnb_inter_monomer_pairs(
     raw = walk_charmm_primary_jnb_pair_set(pair_i, pair_j)
 
     if positions is None:
-        import pandas as pd
 
         from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
 
@@ -301,7 +298,6 @@ def capture_mlpot_mlmm_inter_monomer_pairs(
         primary.add(canonical_half_pair(u, v))
 
     if positions is None:
-        import pandas as pd
 
         from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
 

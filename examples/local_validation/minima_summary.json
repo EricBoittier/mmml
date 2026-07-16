@@ -1,0 +1,135 @@
+{
+  "shared_geometries": 1387,
+  "zbl_max_abs_kcal_mol": 0.0,
+  "cgenff_nonzero_points": 6545,
+  "component_reconstruction_max_error_kcal_mol": 5.640620349273151e-13,
+  "minima": [
+    {
+      "pair": "TIP3-TIP3",
+      "label": "s100",
+      "min_kcal_mol": -3.632948265636595,
+      "r_min_angstrom": 3.25,
+      "reference": -2.25,
+      "error": -1.3829482656365948
+    },
+    {
+      "pair": "TIP3-TIP3",
+      "label": "s1000",
+      "min_kcal_mol": -3.515781827121518,
+      "r_min_angstrom": 3.25,
+      "reference": -2.25,
+      "error": -1.265781827121518
+    },
+    {
+      "pair": "TIP3-TIP3",
+      "label": "s2000",
+      "min_kcal_mol": -3.46559329529812,
+      "r_min_angstrom": 3.25,
+      "reference": -2.25,
+      "error": -1.2155932952981199
+    },
+    {
+      "pair": "TIP3-TIP3",
+      "label": "s5000",
+      "min_kcal_mol": -3.0887248632648605,
+      "r_min_angstrom": 3.25,
+      "reference": -2.25,
+      "error": -0.8387248632648605
+    },
+    {
+      "pair": "TIP3-TIP3",
+      "label": "s10000",
+      "min_kcal_mol": -3.431079707244354,
+      "r_min_angstrom": 3.25,
+      "reference": -2.25,
+      "error": -1.1810797072443542
+    },
+    {
+      "pair": "DCM-DCM",
+      "label": "s100",
+      "min_kcal_mol": -11.181438553916232,
+      "r_min_angstrom": 5.0,
+      "reference": -2.44,
+      "error": -8.741438553916232
+    },
+    {
+      "pair": "DCM-DCM",
+      "label": "s1000",
+      "min_kcal_mol": -7.457763307095944,
+      "r_min_angstrom": 5.0,
+      "reference": -2.44,
+      "error": -5.017763307095944
+    },
+    {
+      "pair": "DCM-DCM",
+      "label": "s2000",
+      "min_kcal_mol": -4.573718744812067,
+      "r_min_angstrom": 5.928571428571429,
+      "reference": -2.44,
+      "error": -2.1337187448120667
+    },
+    {
+      "pair": "DCM-DCM",
+      "label": "s5000",
+      "min_kcal_mol": -0.4566621118667022,
+      "r_min_angstrom": 6.857142857142858,
+      "reference": -2.44,
+      "error": 1.9833378881332977
+    },
+    {
+      "pair": "DCM-DCM",
+      "label": "s10000",
+      "min_kcal_mol": -0.3443984067997864,
+      "r_min_angstrom": 6.857142857142858,
+      "reference": -2.44,
+      "error": 2.0956015932002137
+    },
+    {
+      "pair": "DCM-TIP3",
+      "label": "s100",
+      "min_kcal_mol": -7.825342857475339,
+      "r_min_angstrom": 3.0,
+      "reference": -2.38,
+      "error": -5.445342857475339
+    },
+    {
+      "pair": "DCM-TIP3",
+      "label": "s1000",
+      "min_kcal_mol": -7.860113071843517,
+      "r_min_angstrom": 3.0,
+      "reference": -2.38,
+      "error": -5.480113071843517
+    },
+    {
+      "pair": "DCM-TIP3",
+      "label": "s2000",
+      "min_kcal_mol": -7.916802357572182,
+      "r_min_angstrom": 3.0,
+      "reference": -2.38,
+      "error": -5.536802357572182
+    },
+    {
+      "pair": "DCM-TIP3",
+      "label": "s5000",
+      "min_kcal_mol": -7.230825887567154,
+      "r_min_angstrom": 3.0,
+      "reference": -2.38,
+      "error": -4.850825887567154
+    },
+    {
+      "pair": "DCM-TIP3",
+      "label": "s10000",
+      "min_kcal_mol": -8.414815632698728,
+      "r_min_angstrom": 3.0,
+      "reference": -2.38,
+      "error": -6.034815632698728
+    }
+  ],
+  "ranking_mae": {
+    "s5000": 2.557629546321771,
+    "s2000": 2.96203813256079,
+    "s10000": 3.1038323110477655,
+    "s1000": 3.9212194020203266,
+    "s100": 5.189909892342722
+  }
+}

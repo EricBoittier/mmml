@@ -41,8 +41,15 @@ def main() -> int:
         mm_nonbond_mode="jax_mic",
     )
     lr = resolve_lr_solver_for_mlpot(ns, mlpot_pbc=True, mm_nonbond_mode="jax_mic")
-    if lr != "jax_pme":
-        print(f"FAIL: expected default lr_solver=jax_pme for PBC, got {lr!r}", file=sys.stderr)
+    if lr != "mic":
+        print(f"FAIL: expected default lr_solver=mic for PBC, got {lr!r}", file=sys.stderr)
+        return 1
+    ns_pme = argparse.Namespace(**{**vars(ns), "lr_solver": "jax_pme"})
+    lr_pme = resolve_lr_solver_for_mlpot(
+        ns_pme, mlpot_pbc=True, mm_nonbond_mode="jax_mic"
+    )
+    if lr_pme != "jax_pme":
+        print(f"FAIL: expected opt-in lr_solver=jax_pme, got {lr_pme!r}", file=sys.stderr)
         return 1
     cp = CutoffParameters()
     sr = resolve_jax_pme_sr_cutoff_for_mlpot(ns, cp)

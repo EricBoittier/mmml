@@ -1383,6 +1383,18 @@ def build_decomposed_mlpot_model(
         electrostatics_damping_sigma=(
             getattr(args, "electrostatics_damping_sigma", None) if args is not None else None
         ),
+        mbd_checkpoint=(
+            getattr(args, "mbd_checkpoint", None) if args is not None else None
+        ),
+        mbd_weight=(
+            getattr(args, "mbd_weight", None) if args is not None else None
+        ),
+        mm_charge_correction=bool(
+            getattr(args, "mm_charge_correction", False) if args is not None else False
+        ),
+        mm_charge_mode=(
+            getattr(args, "mm_charge_mode", None) if args is not None else None
+        ),
         mm_atomic_numbers=np.asarray(atomic_numbers, dtype=int),
         min_com_restraint_distance=(
             getattr(args, "min_com_restraint_distance", None) if args is not None else None
@@ -1403,10 +1415,6 @@ def build_decomposed_mlpot_model(
             getattr(args, "jax_mm_spoof_psf", None) if args is not None else None
         ),
     )
-    if verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
-
-        report_charmm_topology_summary()
     if defer_jax_until_mlpot_registered:
         return DecomposedMlpotModel(
             None,

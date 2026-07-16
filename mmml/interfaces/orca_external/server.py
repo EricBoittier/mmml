@@ -11,7 +11,6 @@ import time
 import traceback
 from contextlib import redirect_stdout
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import uvicorn

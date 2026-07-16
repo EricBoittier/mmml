@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-import jax.numpy as jnp
+from types import SimpleNamespace
 
-from mmml.cli.run.jaxmd_runner import _nl_update_positions, resolve_jaxmd_steps_per_loop_call
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from mmml.cli.run.jaxmd_runner import (
+    _nl_update_positions,
+    jaxmd_fire_dt_backoff_schedule,
+    resolve_jaxmd_fire_dt_start_ps,
+    resolve_jaxmd_steps_per_loop_call,
+    resolve_mm_pair_list_capacity,
+    resolve_pre_md_fire_start_positions,
+    should_skip_jaxmd_fire,
+)
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     format_mm_pair_update_stats_summary,
     neighbor_pair_cache_should_reuse,
 )
-import numpy as np
-
 
 PBC_RECORDING_BLOCK_STEPS = 800
 PBC_BOX_A = np.array([40.0, 40.0, 40.0])
@@ -44,6 +54,34 @@ def test_nl_update_positions_force_host_escape_hatch(monkeypatch):
     assert isinstance(out, np.ndarray)
 
 
+def test_resolve_mm_pair_list_capacity_uses_axis0_not_last():
+    """Regression: shape[-1]==2 produced fill fractions like 74400%."""
+    pair_idx = np.zeros((20000, 2), dtype=np.int32)
+    assert resolve_mm_pair_list_capacity(pair_idx=pair_idx) == 20000
+
+
+def test_resolve_mm_pair_list_capacity_prefers_get_stats():
+    update_fn = SimpleNamespace(get_stats=lambda: {"pair_capacity": 12345})
+    pair_idx = np.zeros((20000, 2), dtype=np.int32)
+    assert resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx) == 12345
+
+
+def test_pre_md_fire_start_keeps_box_frame_under_pbc():
+    """PBC FIRE must not COM-center (that plus per-atom wrap splits monomers)."""
+    R = np.array([[10.0, 0.0, 0.0], [12.0, 0.0, 0.0]], dtype=np.float32)
+    masses = np.array([12.0, 1.0], dtype=np.float32)
+    out = resolve_pre_md_fire_start_positions(R, masses, use_pbc=True)
+    np.testing.assert_allclose(np.asarray(out), R, atol=1e-6)
+
+
+def test_pre_md_fire_start_com_centers_in_free_space():
+    R = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32)
+    masses = np.array([1.0, 1.0], dtype=np.float32)
+    out = np.asarray(resolve_pre_md_fire_start_positions(R, masses, use_pbc=False))
+    np.testing.assert_allclose(out.mean(axis=0), [0.0, 0.0, 0.0], atol=1e-6)
+    np.testing.assert_allclose(out[1, 0] - out[0, 0], 2.0, atol=1e-6)
+
+
 def test_skin_zero_interval_one_never_reuses():
     R = np.zeros((4, 3), dtype=np.float64)
     assert not neighbor_pair_cache_should_reuse(
@@ -61,8 +99,24 @@ def test_skin_zero_interval_one_never_reuses():
 def test_default_skin_interval_one_reuses_small_step():
     R0 = np.zeros((4, 3), dtype=np.float64)
     R1 = R0.copy()
-    R1[0, 0] = 0.1
+    R1[0, 0] = 0.05  # < skin/2 for default skin=0.25
     assert neighbor_pair_cache_should_reuse(
+        calls=1,
+        interval=1,
+        skin=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
+        R=R1,
+        last_R=R0,
+        box=PBC_BOX_A,
+        last_box=PBC_BOX_A.copy(),
+        have_cache=True,
+    )
+
+
+def test_default_skin_rejects_disp_beyond_half_skin():
+    R0 = np.zeros((4, 3), dtype=np.float64)
+    R1 = R0.copy()
+    R1[0, 0] = 0.13  # > 0.125 = skin/2
+    assert not neighbor_pair_cache_should_reuse(
         calls=1,
         interval=1,
         skin=DEFAULT_JAX_MD_SKIN_DISTANCE_A,
@@ -105,3 +159,23 @@ def test_jaxmd_and_ase_cli_defaults_use_interval_one_conservative_skin():
     assert "DEFAULT_JAX_MD_SKIN_DISTANCE_A" in ase_src
     assert "default=1," in ase_src.split('"--jax-md-update-interval"')[1][:200]
     assert "default=1.75" in ase_src.split('"--jax-md-capacity-multiplier"')[1][:200]
+
+
+def test_resolve_jaxmd_fire_dt_start_shrinks_for_soft_geometry():
+    assert resolve_jaxmd_fire_dt_start_ps(0.08) == pytest.approx(1.0e-4)
+    assert resolve_jaxmd_fire_dt_start_ps(0.3) == pytest.approx(3.0e-4)
+    assert resolve_jaxmd_fire_dt_start_ps(1.0) == pytest.approx(1.0e-3)
+
+
+def test_jaxmd_fire_dt_backoff_schedule_descends():
+    sched = jaxmd_fire_dt_backoff_schedule(1.0e-4)
+    assert sched[0] == pytest.approx(1.0e-4)
+    assert len(sched) >= 2
+    assert sched[1] < sched[0]
+
+
+def test_should_skip_jaxmd_fire_when_already_soft():
+    assert should_skip_jaxmd_fire(0.086)
+    assert should_skip_jaxmd_fire(0.10)
+    assert not should_skip_jaxmd_fire(0.11)
+    assert not should_skip_jaxmd_fire(0.05, skip_below_eVA=0.0)

@@ -7,8 +7,17 @@ set -euo pipefail
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 RUN_TAG="${1:?usage: job_shell.sh RUN_TAG (e.g. dcm_10_t300_l32)}"
+CONFIG="${MMML_BURST_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 
 cd "$REPO_ROOT"
+
+# SciCORE batch shells do not initialize Lmod or the GCC/OpenMPI runtime used
+# by libcharmm. Detect its shared-home layout and load the repository prolog
+# before Python resolves or imports PyCHARMM.
+if [[ "${HOME:-}" == /scicore/* && -r "$REPO_ROOT/scripts/scicore_env.sh" ]]; then
+  # shellcheck source=../../../scripts/scicore_env.sh
+  source "$REPO_ROOT/scripts/scicore_env.sh"
+fi
 
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
@@ -36,18 +45,17 @@ N_ML="$("$PY" -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
-from campaign_lib import load_config, cell_from_tag
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+from campaign_lib import load_config, cell_from_tag, cell_ml_atoms
+cfg = load_config(Path('${CONFIG}'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
-print(estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent))
+print(cell_ml_atoms(cell))
 ")"
 BOX_SIZE="$("$PY" -c "
 from pathlib import Path
 import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, cell_from_tag
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cfg = load_config(Path('${CONFIG}'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(cell.box_size)
 ")"
@@ -62,11 +70,11 @@ import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, resolve_checkpoint, cell_from_tag
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cfg = load_config(Path('${CONFIG}'))
 resolve_checkpoint(str(cfg['checkpoint']))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print('Preflight OK:', cfg['checkpoint'], cell, flush=True)
 "
 
 exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" --tag "$RUN_TAG" \
-  --config "$WORKFLOW_ROOT/config.yaml"
+  --config "$CONFIG"

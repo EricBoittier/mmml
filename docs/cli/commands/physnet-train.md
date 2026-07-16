@@ -22,16 +22,22 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--forces-weight FORCES_WEIGHT]
                           [--dipole-weight DIPOLE_WEIGHT]
                           [--charges-weight CHARGES_WEIGHT]
-                          [--objective OBJECTIVE] [--restart RESTART]
+                          [--objective OBJECTIVE] [--mm-charge-correction]
+                          [--hybrid-mm] [--ml-switch-width ML_SWITCH_WIDTH]
+                          [--mm-switch-on MM_SWITCH_ON]
+                          [--mm-switch-width MM_SWITCH_WIDTH]
+                          [--no-complementary-handoff]
+                          [--mm-pair-source {jax,charmm_callback}]
+                          [--ema-decay EMA_DECAY] [--restart RESTART]
                           [--num-atoms NUM_ATOMS] [--features FEATURES]
                           [--max-degree MAX_DEGREE]
                           [--num-basis-functions NUM_BASIS_FUNCTIONS]
                           [--num-iterations NUM_ITERATIONS] [--n-res N_RES]
                           [--cutoff CUTOFF]
                           [--max-atomic-number MAX_ATOMIC_NUMBER] [--zbl]
-                          [--no-zbl] [--use-pbc] [--no-pbc] [--no-energy-bias]
-                          [--optimizer OPTIMIZER] [--transform TRANSFORM]
-                          [--schedule-fn SCHEDULE_FN]
+                          [--no-zbl] [--trainable-zbl] [--use-pbc] [--no-pbc]
+                          [--no-energy-bias] [--optimizer OPTIMIZER]
+                          [--transform TRANSFORM] [--schedule-fn SCHEDULE_FN]
                           [--early-stop-patience EARLY_STOP_PATIENCE] [--best]
                           [--no-save-every-epoch] [--profile-epoch-timing]
                           [--print-freq PRINT_FREQ]
@@ -71,7 +77,11 @@ options:
   --model MODEL         Optional model JSON to load instead of creating a new EF
                         model
   --n-train, --n_train N_TRAIN
+                        Training samples to split from --data (default: 1000).
+                        Omit when --valid-data is set: the full files are used.
   --n-valid, --n_valid N_VALID
+                        Validation samples to split from --data (default: 100).
+                        Omit when --valid-data is set: the full files are used.
   --seed SEED
   --batch-size, --batch_size BATCH_SIZE
   --num-epochs, --num_epochs NUM_EPOCHS
@@ -81,6 +91,47 @@ options:
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --charges-weight, --charges_weight CHARGES_WEIGHT
   --objective OBJECTIVE
+  --mm-charge-correction, --mm_charge_correction
+                        Hybrid MM: use the model's predicted charges as a
+                        CORRECTION to the fixed CGenFF charges in the MM
+                        electrostatics (q_eff = q_cgenff + dq_ML, projected net-
+                        zero per monomer). Requires --charges (a model with a
+                        charge head). Off by default: MM electrostatics then
+                        uses the CGenFF charges alone.
+  --hybrid-mm, --hybrid_mm
+                        Train on the hybrid ML/MM total the MD calculator
+                        evaluates: E = (1-s)*(E_A+E_B) + s*E_AB + E_MM, where
+                        the taper s(r_com) applies to the dimer interaction and
+                        E_MM is switched CGenFF LJ + electrostatics. Requires a
+                        dataset carrying cgenff_type_idx, mol_id, cgenff_charge
+                        and the cgenff_master_* LJ tables. The handoff is
+                        controlled by --ml-switch-width/--mm-switch-on/--mm-
+                        switch-width (same flags and defaults as the MD side).
+  --ml-switch-width, --ml-cutoff ML_SWITCH_WIDTH
+                        COM-distance width (Å) of the ML→MM handoff. ML is fully
+                        on below mm_switch_on - width and tapers to zero at
+                        mm_switch_on (default: 1.5).
+  --mm-switch-on MM_SWITCH_ON
+                        COM distance (Å) where the complementary handoff ends:
+                        ML scale reaches 0 and MM scale reaches 1 (default: 8).
+  --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
+                        COM-distance width (Å) of the MM outer tail after
+                        mm_switch_on. Switched MM reaches zero at mm_switch_on +
+                        width (default: 5).
+  --no-complementary-handoff
+                        Legacy MM window: MM starts at mm_switch_on instead of
+                        filling the ML taper handoff.
+  --mm-pair-source {jax,charmm_callback}
+                        Decomposed MLpot MM pair provider: Fortran callback
+                        idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
+                        source jax). All-ML bulk systems with empty callback
+                        lists auto-fall back to JAX. Override with env
+                        MMML_MM_PAIR_SOURCE.
+  --ema-decay, --ema_decay EMA_DECAY
+                        Decay for the parameter EMA (default: 0.999).
+                        Validation, checkpointing and restart all use the EMA
+                        weights. Set 0 to disable EMA (saved weights then track
+                        the raw parameters).
   --restart RESTART     Checkpoint path to restart from
   --num-atoms, --num_atoms NUM_ATOMS
                         Atoms per structure (auto-detected from N/R if omitted)
@@ -95,6 +146,8 @@ options:
   --max-atomic-number, --max_atomic_number MAX_ATOMIC_NUMBER
   --zbl                 Enable ZBL repulsion in EF model
   --no-zbl              Disable ZBL repulsion in EF model
+  --trainable-zbl       Opt in to optimizing ZBL screening parameters; fixed ZBL
+                        is the default.
   --use-pbc, --use_pbc  Use periodic boundary conditions
   --no-pbc              Disable periodic boundary conditions
   --no-energy-bias      Disable per-element energy bias in the model

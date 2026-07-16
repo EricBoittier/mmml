@@ -37,6 +37,72 @@ def test_scrub_stale_openmpi_env_when_charmm_mpi_linked(monkeypatch):
     assert "OMPI_COMM_WORLD_SIZE" not in os.environ
 
 
+def test_disable_ase_mpi_parallel_avoids_mpi4py_import():
+    """ASE Optimizers must not call mpi4py.MPI when libmpi is missing."""
+    import sys
+
+    import ase.parallel as ase_parallel
+
+    # Simulate: mpi4py package imported, but MPI extension unloadable.
+    sys.modules.setdefault("mpi4py", type(sys)("mpi4py"))
+    charmm_mpi.disable_ase_mpi_parallel()
+    assert isinstance(ase_parallel.world.comm, ase_parallel.DummyMPI)
+    assert ase_parallel.world.rank == 0
+    # Must not construct MPI4PY() / import mpi4py.MPI.
+    assert isinstance(ase_parallel._get_comm(), ase_parallel.DummyMPI)
+
+
+def test_mpi_comm_valid_swallows_mpi4py_abi_runtime_error(monkeypatch):
+    """Serial CHARMM must not abort when mpi4py cannot dlopen venv libmpi."""
+    monkeypatch.setattr(charmm_mpi, "_mpi4py_available", lambda: True)
+    monkeypatch.setattr(charmm_mpi, "ensure_mpi4py_libmpi_env", lambda: None)
+
+    def _boom():
+        raise RuntimeError(
+            "cannot load MPI library\n"
+            "/tmp/venv/lib/libmpi.so: cannot open shared object file"
+        )
+
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _import(name, *args, **kwargs):
+        if name == "mpi4py" or name.startswith("mpi4py."):
+            _boom()
+        return real_import(name, *args, **kwargs)
+
+    with mock.patch("builtins.__import__", side_effect=_import):
+        assert charmm_mpi._mpi_comm_valid() is False
+
+
+def test_needs_mpi_setup_false_for_serial_charmm_outside_mpirun(monkeypatch):
+    monkeypatch.setenv("OMPI_COMM_WORLD_SIZE", "4")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ):
+        assert charmm_mpi._needs_mpi_setup() is False
+
+
+def test_recover_mpi_skips_mpi4py_when_serial_charmm(monkeypatch):
+    monkeypatch.setattr(
+        "mmml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm",
+        lambda **kwargs: None,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        side_effect=AssertionError("must not import mpi4py for serial CHARMM"),
+    ):
+        assert charmm_mpi.recover_mpi_for_charmm_after_jax(phase="test") is True
+
+
 def test_ensure_mpi_skips_when_disabled(monkeypatch):
     monkeypatch.setenv("MMML_NO_MPI_INIT", "1")
     assert charmm_mpi.ensure_mpi_for_charmm_domdec() is True
@@ -752,6 +818,26 @@ def test_mpi_openmpi_install_env_defaults(monkeypatch, tmp_path):
     assert os.environ["OMPI_MCA_pmix"] == "^ext3x"
     assert os.environ["OMPI_MCA_shmem"] == "mmap"
     assert os.environ["OMPI_MCA_component_path"] == str(mca)
+
+
+def test_pmix_preload_precedes_opal_for_cuda_tool_subprocesses(monkeypatch, tmp_path):
+    pmix = tmp_path / "libpmix.so.2"
+    opal = tmp_path / "libopen-pal.so.80"
+    pmix.write_bytes(b"")
+    opal.write_bytes(b"")
+    monkeypatch.delenv("MMML_NO_MPI_PMIX_PRELOAD", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_LD_PATH", raising=False)
+    preload_var = "DYLD_INSERT_LIBRARIES" if charmm_mpi._IS_DARWIN else "LD_PRELOAD"
+    monkeypatch.setenv(preload_var, str(opal))
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_pmix_library_path",
+        return_value=pmix,
+    ):
+        charmm_mpi._export_openmpi_pmix_ld_preload()
+    assert os.environ[preload_var].split(os.pathsep) == [
+        str(pmix.resolve()),
+        str(opal),
+    ]
 
 
 def test_mpi_openmpi_install_env_defaults_opal_prefix_when_complete(monkeypatch):

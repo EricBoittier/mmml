@@ -77,11 +77,11 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dyn-freq-cadence",
         type=int,
-        default=50,
+        default=500,
         metavar="N",
         help=(
             "Align heat/print cadence (ihtfrq, nprint, iprfrq, isvfrq) to N steps; "
-            "decoupled from DCD nsavc (default: 50). Overlap CPT chunks still "
+            "decoupled from DCD nsavc (default: 500). Overlap CPT chunks still "
             "disable interior inbfrq/imgfrq (MPI mlpot_update safety). Use 0 for "
             "legacy (ihtfrq≈--dyn-nprint, print≈nsavc)."
         ),
@@ -893,11 +893,11 @@ def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float |
     return kw
 
 
-DEFAULT_DYN_FREQ_CADENCE = 50
+DEFAULT_DYN_FREQ_CADENCE = 500
 
 
 def resolve_dynamics_freq_cadence(args: argparse.Namespace) -> int | None:
-    """Shared heat/print cadence (default 50); decoupled from DCD ``nsavc``.
+    """Shared heat/print cadence (default 500); decoupled from DCD ``nsavc``.
 
     Interior ``inbfrq``/``imgfrq`` on overlap CPT chunks stay disabled separately
     (MPI ``mlpot_update`` safety). Pass ``--dyn-freq-cadence 0`` for legacy behavior.
@@ -4084,11 +4084,12 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--bonded-mm-mini",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
             "Compare MM bonded GRMS to post-MM-pre-min baseline after selected stages; "
             "run bonded-only SD (BLOCK toggle, MLpot stays on) if higher "
-            "(default: on; heat is always checked when enabled)"
+            "(default: off — opt in; can stall on PBC crystal free / CGENFF APPEND; "
+            "heat is always checked when enabled)"
         ),
     )
     group.add_argument(
@@ -4405,12 +4406,13 @@ def resolve_lr_solver_for_mlpot(
 ) -> str:
     """Resolve long-range Coulomb backend for MLpot hybrid MM.
 
-    Explicit ``--lr-solver`` or ``MMML_LR_SOLVER`` wins.  For periodic ML MIC
-    (``pbc_*`` / ``--mlpot-pbc`` with ``jax_mic``), default to ``jax_pme`` so
-    bulk boxes get k-space electrostatics instead of truncated MIC-only Coulomb.
+    Explicit ``--lr-solver`` or ``MMML_LR_SOLVER`` wins.  Otherwise default to
+    truncated ``mic`` (switched-MM pair loop), including periodic ``jax_mic``
+    boxes.  Opt in to k-space with ``--lr-solver jax_pme`` (or env).
     """
     import os
 
+    _ = mlpot_pbc, mm_nonbond_mode  # retained for call-site compatibility
     explicit = None
     if args is not None:
         explicit = getattr(args, "lr_solver", None)
@@ -4419,8 +4421,6 @@ def resolve_lr_solver_for_mlpot(
     env = (os.environ.get("MMML_LR_SOLVER") or "").strip().lower()
     if env:
         return env
-    if mlpot_pbc and str(mm_nonbond_mode).strip().lower() in ("jax_mic", "mic", "jax"):
-        return "jax_pme"
     return "mic"
 
 
@@ -4430,9 +4430,6 @@ def resolve_jax_pme_sr_cutoff_for_mlpot(
 ) -> float:
     """Real-space jax-pme cutoff (Å), aligned with switched-MM outer edge by default."""
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
-        DEFAULT_JAX_PME_SR_CUTOFF_A,
-    )
 
     if args is not None:
         explicit = getattr(args, "jax_pme_sr_cutoff", None)
@@ -4449,23 +4446,19 @@ def warn_if_mic_pbc_without_lr(
     mm_nonbond_mode: str = "jax_mic",
     verbose: bool = False,
 ) -> None:
-    """Emit a loud warning when truncated MIC Coulomb is used under PBC."""
+    """Note truncated MIC under PBC when verbose (mic is the default; jax_pme is opt-in)."""
     from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
+    if not verbose:
+        return
     if not mlpot_pbc:
         return
     if str(mm_nonbond_mode).strip().lower() not in ("jax_mic", "mic", "jax"):
         return
     if pick_lr_solver(lr_solver) != "mic":
         return
-    msg = (
-        "PBC MLpot with lr_solver=mic uses truncated MIC Coulomb (~mm_switch_on+width Å) "
-        "without k-space correction; bulk liquids may drift from CHARMM Ewald/PME. "
-        "Use --lr-solver jax_pme (default for pbc_* when unset)."
+    print(
+        "NOTE: PBC MLpot lr_solver=mic uses truncated MIC Coulomb "
+        "(~mm_switch_on+width Å). Opt in to k-space with --lr-solver jax_pme.",
+        flush=True,
     )
-    if verbose:
-        print(f"WARNING: {msg}", flush=True)
-    else:
-        import warnings
-
-        warnings.warn(msg, stacklevel=2)

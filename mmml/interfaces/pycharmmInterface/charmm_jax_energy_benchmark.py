@@ -340,9 +340,6 @@ def benchmark_total_mm_layer(
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        charmm_total_forces_kcalmol_A,
-    )
     from mmml.interfaces.pycharmmInterface.mm_system_energy import (
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
@@ -489,7 +486,6 @@ def build_tip3_water_box(
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
         _grid_oxygen_sites,
         _load_cgenff_with_trialanine,

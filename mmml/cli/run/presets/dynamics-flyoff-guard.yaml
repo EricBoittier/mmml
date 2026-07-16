@@ -5,5 +5,7 @@ defaults:
   dynamics_overlap_action: rescue
   dynamics_overlap_charmm_sd_steps: 200
   dynamics_overlap_charmm_abnr_steps: 400
-  bonded_mm_mini: true
-  bonded_mm_mini_after: mini,heat
+  # bonded-mm-mini is opt-in (default off); enable explicitly when needed.
+  # bonded_mm_mini: true
+  # bonded_mm_mini_after: mini,heat
+

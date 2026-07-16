@@ -9,18 +9,23 @@ from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     _fractional_positions_for_jax_md_neighbor_list,
     neighbor_pair_cache_should_reuse,
+    resolve_mm_pair_list_cutoff_A,
+    verlet_reuse_displacement_limit_A,
 )
 
 
 def test_default_jax_md_neighbor_tuning_constants() -> None:
     assert DEFAULT_JAX_MD_SKIN_DISTANCE_A == 0.25
     assert DEFAULT_JAX_MD_CAPACITY_MULTIPLIER == 1.75
+    assert verlet_reuse_displacement_limit_A(0.25) == 0.125
+    assert resolve_mm_pair_list_cutoff_A(8.0, 5.0, 0.25) == 13.25
 
 
-def test_skin_zero_interval_reuse_stable_box() -> None:
+def test_skin_zero_never_reuses() -> None:
+    """skin=0 means rebuild every call — interval-only reuse is Verlet-unsafe."""
     R = np.zeros((4, 3), dtype=np.float64)
     box = np.array([40.0, 40.0, 40.0])
-    assert neighbor_pair_cache_should_reuse(
+    assert not neighbor_pair_cache_should_reuse(
         calls=2,
         interval=3,
         skin=0.0,
@@ -50,7 +55,7 @@ def test_skin_zero_box_change_no_reuse() -> None:
 
 def test_skin_positive_small_disp_reuse() -> None:
     R0 = np.zeros((4, 3), dtype=np.float64)
-    R1 = R0 + 0.01
+    R1 = R0 + 0.01  # ≪ skin/2 for skin=0.5
     box = np.array([40.0, 40.0, 40.0])
     assert neighbor_pair_cache_should_reuse(
         calls=1,
@@ -64,16 +69,49 @@ def test_skin_positive_small_disp_reuse() -> None:
     )
 
 
-def test_skin_positive_interval_reuse_skips_displacement_check() -> None:
+def test_skin_positive_disp_beyond_half_skin_forces_rebuild() -> None:
+    R0 = np.zeros((4, 3), dtype=np.float64)
+    R1 = R0.copy()
+    R1[0, 0] = 0.26  # > skin/2 for skin=0.5
+    box = np.array([40.0, 40.0, 40.0])
+    assert not neighbor_pair_cache_should_reuse(
+        calls=1,
+        interval=1,
+        skin=0.5,
+        R=R1,
+        last_R=R0,
+        box=box,
+        last_box=box.copy(),
+        have_cache=True,
+    )
+
+
+def test_large_displacement_never_reused_off_interval() -> None:
+    """Regression: off-interval must not skip the Verlet skin check."""
     R0 = np.zeros((4, 3), dtype=np.float64)
     R1 = R0 + 10.0
     box = np.array([40.0, 40.0, 40.0])
-    assert neighbor_pair_cache_should_reuse(
+    assert not neighbor_pair_cache_should_reuse(
         calls=2,
         interval=3,
         skin=0.5,
         R=R1,
         last_R=R0,
+        box=box,
+        last_box=box.copy(),
+        have_cache=True,
+    )
+
+
+def test_interval_forces_rebuild_even_within_skin() -> None:
+    R = np.zeros((4, 3), dtype=np.float64)
+    box = np.array([40.0, 40.0, 40.0])
+    assert not neighbor_pair_cache_should_reuse(
+        calls=3,
+        interval=3,
+        skin=0.5,
+        R=R,
+        last_R=R.copy(),
         box=box,
         last_box=box.copy(),
         have_cache=True,

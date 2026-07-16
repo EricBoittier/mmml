@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
@@ -228,7 +227,6 @@ def setup_nonbonded_only_charmm() -> None:
     )
 
     _assert_selective_block_safe(context="setup_nonbonded_only_charmm")
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
 #     block = """BLOCK
 # CALL 1 SELE ALL END

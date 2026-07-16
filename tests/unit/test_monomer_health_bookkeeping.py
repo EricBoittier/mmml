@@ -21,9 +21,24 @@ from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
     audit_monomer_health,
     emit_monomer_health_dot_matrix,
     monomer_health_config_from_args,
+    resolve_monomer_offsets_for_ctx,
     select_flagged_bad_by_highest_grms,
     select_systemic_velocity_warn_by_highest_grms,
 )
+
+
+def test_resolve_monomer_offsets_uses_composition_for_mixed_system() -> None:
+    ctx = SimpleNamespace(
+        atoms_per_monomer=None,
+        pyCModel=None,
+        workflow_args=SimpleNamespace(
+            composition="MEOH:1,TIP3:1",
+            _cluster_atoms_per_list=None,
+        ),
+    )
+    offsets = resolve_monomer_offsets_for_ctx(ctx, n_monomers=2, n_atoms=9)
+    assert offsets is not None
+    np.testing.assert_array_equal(offsets, [0, 6, 9])
 
 
 def test_classify_component_absolute_bad() -> None:
@@ -40,17 +55,37 @@ def test_classify_component_absolute_bad() -> None:
     assert reasons
 
 
-def test_classify_component_ratio_warn() -> None:
+def test_classify_component_ratio_alone_does_not_warn() -> None:
+    """Tiny baseline + large ratio must not flag when abs floors are not met."""
     level, reasons = _classify_component(
         4000.0,
-        1000.0,
+        1.0,
         warn_ratio=3.0,
         bad_ratio=6.0,
         warn_abs=50000.0,
         bad_abs=100000.0,
         name="GRMS",
+        baseline_floor=12.5,
+        ratio_requires_abs_warn=True,
+    )
+    assert level == LEVEL_OK
+    assert not reasons
+
+
+def test_classify_component_ratio_annotates_when_abs_warn_met() -> None:
+    level, reasons = _classify_component(
+        40.0,
+        5.0,
+        warn_ratio=2.5,
+        bad_ratio=5.0,
+        warn_abs=30.0,
+        bad_abs=80.0,
+        name="GRMS",
+        baseline_floor=7.5,
+        ratio_requires_abs_warn=True,
     )
     assert level == LEVEL_WARN
+    assert any("abs" in r for r in reasons)
     assert any("ratio" in r for r in reasons)
 
 
@@ -128,10 +163,53 @@ def test_audit_monomer_health_flags_bad_monomer(
         MonomerHealthConfig(),
         n_monomers=2,
         global_step=100,
+        overlap_config=None,
     )
     assert report is not None
     assert 1 in report.flagged_bad
     assert report.entries[1].velocity_level == LEVEL_BAD
+    assert report.entries[1].geometry_level == LEVEL_OK
+    assert report.entries[1].needs_template_restore is False
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.collect_monomer_health_metrics"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 3, 6], dtype=int),
+)
+def test_audit_monomer_health_does_not_flag_normal_high_thermal_draw(
+    _offsets: MagicMock,
+    collect_metrics: MagicMock,
+) -> None:
+    ctx = SimpleNamespace(
+        _monomer_health_baseline=MonomerHealthBaseline(
+            velocity_rms_akma=np.array([9000.0, 9000.0]),
+            velocity_max_akma=np.array([16000.0, 16000.0]),
+            hybrid_grms_kcalmol_A=np.array([5.0, 5.0]),
+            charmm_grms_kcalmol_A=np.array([3.0, 3.0]),
+        ),
+        workflow_args=SimpleNamespace(residue="TIP3"),
+        atoms_per_monomer=[3, 3],
+    )
+    collect_metrics.return_value = (
+        np.array([10000.0, 10000.0]),
+        np.array([18000.0, 18000.0]),
+        np.array([5.0, 5.0]),
+        np.array([3.0, 3.0]),
+    )
+    report = audit_monomer_health(
+        ctx,
+        MonomerHealthConfig(),
+        n_monomers=2,
+        global_step=100,
+        overlap_config=None,
+    )
+    assert report is not None
+    assert report.entries[0].velocity_level == LEVEL_OK
+    assert report.flagged_bad == ()
+    assert report.flagged_warn == ()
 
 
 def test_select_flagged_bad_by_highest_grms() -> None:
@@ -249,7 +327,8 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
                 velocity_level=LEVEL_OK,
                 force_level=LEVEL_WARN,
                 energy_level=LEVEL_BAD,
-                reasons=("MM ratio 5.0× baseline",),
+                geometry_level=LEVEL_BAD,
+                reasons=("extent 20.0 Å > 12.0 Å",),
             ),
         ),
         flagged_bad=(0,),
@@ -260,6 +339,7 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
         emit_monomer_health_dot_matrix(report, context="test", quiet=False)
     out = capsys.readouterr().out
     assert "DCM" in out
+    assert "geometry" in out
     assert "G O R" in out or "G" in out
 
 
@@ -325,6 +405,10 @@ def test_restore_monomer_velocities_splices_template_slice(
 
 
 @patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    return_value=True,
+)
+@patch(
     "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
     return_value=True,
 )
@@ -341,6 +425,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
     audit: MagicMock,
     _offsets: MagicMock,
     redraw: MagicMock,
+    restore_template: MagicMock,
 ) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         maybe_intervene_monomer_health,
@@ -358,6 +443,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
                 velocity_level=LEVEL_WARN,
                 force_level=LEVEL_OK,
                 energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
             ),
             MonomerHealthEntry(
                 index=1,
@@ -369,6 +455,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
                 velocity_level=LEVEL_WARN,
                 force_level=LEVEL_OK,
                 energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
             ),
             MonomerHealthEntry(
                 index=2,
@@ -380,6 +467,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
                 velocity_level=LEVEL_WARN,
                 force_level=LEVEL_OK,
                 energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
             ),
         ),
         flagged_bad=(),
@@ -401,8 +489,210 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
             context="NVE",
             global_step=100,
         )
-
-    assert recovered is True
+    assert recovered
+    assert recovered.velocities_redrawn
+    assert not recovered.geometry_restored
     redraw.assert_called_once()
-    assert redraw.call_args.args[1] == (1, 2, 0)
-    invalidate.assert_called_once_with(ctx)
+    restore_template.assert_not_called()
+    invalidate.assert_called()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 2, 4], dtype=int),
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+)
+@patch("pycharmm.coor.get_natom", return_value=4)
+def test_maybe_intervene_templates_only_geometry_bad(
+    _natom: MagicMock,
+    audit: MagicMock,
+    _offsets: MagicMock,
+    redraw: MagicMock,
+    restore_template: MagicMock,
+    jax_mini: MagicMock,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_intervene_monomer_health,
+    )
+
+    audit.return_value = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="TIP3",
+                velocity_rms_akma=50000.0,
+                velocity_max_akma=80000.0,
+                hybrid_grms_kcalmol_A=90.0,
+                charmm_grms_kcalmol_A=90.0,
+                velocity_level=LEVEL_BAD,
+                force_level=LEVEL_BAD,
+                energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=1,
+                label="TIP3",
+                velocity_rms_akma=100.0,
+                velocity_max_akma=200.0,
+                hybrid_grms_kcalmol_A=5.0,
+                charmm_grms_kcalmol_A=5.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_BAD,
+                geometry_level=LEVEL_BAD,
+                reasons=("extent 20.0 Å > 12.0 Å",),
+            ),
+        ),
+        flagged_bad=(0, 1),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+    ctx = MagicMock(workflow_args=SimpleNamespace(temperature=200.0))
+    overlap = SimpleNamespace(
+        n_monomers=2,
+        monomer_health=MonomerHealthConfig(
+            verbose=False,
+            template_restore_requires_geometry=True,
+            per_monomer_jax_after_restore=True,
+        ),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ):
+        ok = maybe_intervene_monomer_health(
+            ctx, overlap, context="HEAT", global_step=500
+        )
+    assert ok
+    assert ok.geometry_restored
+    assert not ok.velocities_redrawn  # redraw mock returns False
+    restore_template.assert_called_once()
+    restored_idx = restore_template.call_args[0][1]
+    assert restored_idx == (1,)
+    redraw.assert_called_once()
+    redraw_idx = redraw.call_args[0][1]
+    assert 0 in redraw_idx
+    assert 1 not in redraw_idx
+    jax_mini.assert_called_once()
+
+
+def test_maybe_rebaseline_heat_once() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_rebaseline_monomer_health_after_heat_velocities,
+    )
+
+    ctx = SimpleNamespace()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.record_monomer_health_baseline",
+        return_value=object(),
+    ) as rec:
+        assert maybe_rebaseline_monomer_health_after_heat_velocities(
+            ctx, n_monomers=4, context="HEAT chunk", global_step=250
+        )
+        assert maybe_rebaseline_monomer_health_after_heat_velocities(
+            ctx, n_monomers=4, context="HEAT chunk", global_step=500
+        ) is False
+    assert rec.call_count == 1
+
+
+def test_com_unwrap_flags_rigid_flyoff() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        MonomerHealthConfig,
+        _update_com_unwrap_state,
+        flag_geometry_problem_monomers,
+    )
+
+    ctx = SimpleNamespace(_monomer_com_unwrap_reset=False)
+    cell = np.diag([30.0, 30.0, 30.0])
+    coms0 = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=float)
+    _update_com_unwrap_state(ctx, coms0, cell, reset_baseline=True)
+    # Incremental unwrap across the cell (IMAGE would show small wrapped jump).
+    coms1 = np.array([[1.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=float)
+    for _ in range(20):
+        coms1 = coms1.copy()
+        coms1[0, 0] = (coms1[0, 0] + 1.0) % 30.0
+        _update_com_unwrap_state(ctx, coms1, cell, reset_baseline=False)
+    drift = np.linalg.norm(
+        ctx._monomer_com_unwrap_state["unwrapped"][0]
+        - ctx._monomer_com_unwrap_state["baseline_unwrapped"][0]
+    )
+    assert drift > 15.0
+
+    offsets = np.array([0, 3, 6], dtype=int)
+    pos = np.zeros((6, 3), dtype=float)
+    pos[0] = coms1[0]
+    pos[1] = coms1[0] + [0.1, 0.0, 0.0]
+    pos[2] = coms1[0] + [0.0, 0.1, 0.0]
+    pos[3] = coms1[1]
+    pos[4] = coms1[1] + [0.1, 0.0, 0.0]
+    pos[5] = coms1[1] + [0.0, 0.1, 0.0]
+    overlap = SimpleNamespace(
+        max_monomer_extent_A=0.0,
+        intra_min_distance_A=0.0,
+        use_pbc=True,
+        fallback_box_side_A=30.0,
+        intra_exclude_1_3=True,
+    )
+    with (
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            return_value=pos,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_cell",
+            return_value=cell,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+            return_value=np.ones(6),
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._flag_bond_stretch_monomers",
+            return_value={},
+        ),
+    ):
+        flagged = flag_geometry_problem_monomers(
+            ctx,
+            overlap,
+            offsets=offsets,
+            health_config=MonomerHealthConfig(com_flyoff_A=15.0),
+        )
+    assert 0 in flagged
+    assert any("COM drift" in r for r in flagged[0])
+    assert 1 not in flagged
+
+
+def test_bond_stretch_flags_geometry() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        _flag_bond_stretch_monomers,
+    )
+
+    offsets = np.array([0, 3], dtype=int)
+    ref = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=float)
+    pos = ref.copy()
+    pos[1, 0] = 3.0  # 3× stretch of first bond
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.psf_bond_pairs_0based",
+        return_value=[(0, 1), (0, 2)],
+    ):
+        flagged = _flag_bond_stretch_monomers(
+            pos,
+            offsets,
+            stretch_factor=1.75,
+            stretch_abs_A=2.5,
+            ref_positions=ref,
+        )
+    assert 0 in flagged
+    assert any("bond" in r for r in flagged[0])

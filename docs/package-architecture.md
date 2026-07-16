@@ -1,7 +1,7 @@
 # MMML package architecture
 
 Overview of the **mmml** Python package: layout, import dependencies, CLI wiring, and MD runtime paths.  
-Generated from static analysis (AST import scan) of `mmml/` (~291 Python modules), plus vendored `pycharmm/` and deprecated `scripts/` shims.
+Generated from static analysis (AST import scan) of `mmml/` (~291 Python modules), plus the canonical vendored `setup/charmm/tool/pycharmm/pycharmm/` package and deprecated `scripts/` shims.
 
 ---
 
@@ -27,7 +27,7 @@ flowchart TB
   end
 
   subgraph vendor["Bundled / external"]
-    PYCH["pycharmm/\n35 modules"]
+    PYCH["setup/charmm/tool/pycharmm/pycharmm/\n35 modules"]
     EXT["numpy, jax, ase, pycharmm,\npyscf, flax, optax, …"]
   end
 

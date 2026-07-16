@@ -20,7 +20,10 @@ from jax import Array
 # from jax.sharding import PartitionSpec as P
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.zbl import (
+    ZBLRepulsion,
+    geometric_pair_distances,
+)
 
 EFA = efa.EuclideanFastAttention
 import ase.data
@@ -58,6 +61,9 @@ class PhysNet(nn.Module):
     total_charge: float = 0
     n_refinement_blocks: int = 3
     zbl: bool = True
+    trainable_zbl: bool = False
+    zbl_cuton: float | None = 0.1
+    zbl_cutoff: float = 0.6
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = False
@@ -90,8 +96,9 @@ class PhysNet(nn.Module):
         """
         if self.zbl:
             self.repulsion = ZBLRepulsion(
-                cutoff=self.cutoff,
-                trainable=True,
+                cutoff=self.zbl_cutoff,
+                cuton=self.zbl_cuton,
+                trainable=self.trainable_zbl,
             )
         self.efa_final = None
         if self.efa:
@@ -131,6 +138,9 @@ class PhysNet(nn.Module):
             "n_res": self.n_refinement_blocks,
             "n_refinement_blocks": self.n_refinement_blocks,
             "zbl": self.zbl,
+            "trainable_zbl": self.trainable_zbl,
+            "zbl_cuton": self.zbl_cuton,
+            "zbl_cutoff": self.zbl_cutoff,
             "debug": self.debug,
             "efa": self.efa,
             "use_energy_bias": self.use_energy_bias,
@@ -509,6 +519,7 @@ class PhysNet(nn.Module):
             Tuple of (total energy, (atomic energies, charges, electrostatics, repulsion))
         """
         r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
+        zbl_distances = geometric_pair_distances(displacements, batch_mask)
 
         atomic_energies = self._calculate_atomic_energies(x, atomic_numbers, atom_mask)
 
@@ -540,8 +551,8 @@ class PhysNet(nn.Module):
         if self.zbl:
             repulsion = self._calculate_repulsion(
                 atomic_numbers,
-                r,
-                off_dist,
+                zbl_distances,
+                None,
                 eshift,
                 dst_idx,
                 src_idx,

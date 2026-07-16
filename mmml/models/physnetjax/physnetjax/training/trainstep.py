@@ -33,8 +33,20 @@ Supports both standard energy/force prediction and charge/dipole prediction.
 """
 
 
-def _forward(model_apply, params, batch, batch_size):
-    return model_apply(
+def _forward(model_apply, params, batch, batch_size, hybrid_mm=None):
+    """Model forward; optionally assembled into the hybrid ML/MM total.
+
+    ``hybrid_mm`` is a :class:`mmml.models.hybrid_energy.HybridMMConfig` (or a
+    kwargs dict for it: master LJ tables + switching widths).  When set,
+    ``energy``/``forces`` become the hybrid ML/MM total the MD calculator
+    evaluates -- so the loss trains what is deployed::
+
+        E_total = (1 - s) * (E_A + E_B) + s * E_AB + E_MM
+
+    The taper ``s`` applies to the dimer *interaction*, never to the total: the
+    monomers' intramolecular energy is always on.  See :func:`hybrid_forward`.
+    """
+    out = model_apply(
         params,
         atomic_numbers=batch["Z"],
         positions=batch["R"],
@@ -45,6 +57,12 @@ def _forward(model_apply, params, batch, batch_size):
         batch_mask=batch["batch_mask"],
         atom_mask=batch["atom_mask"],
     )
+    if hybrid_mm is not None:
+        from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
+
+        cfg = HybridMMConfig.coerce(hybrid_mm)
+        return hybrid_forward(model_apply, params, batch, batch_size, **cfg.kwargs())
+    return out
 
 
 if jax is None or jnp is None or optax is None or otu is None:  # pragma: no cover
@@ -72,6 +90,9 @@ else:
             "distill_forces",
             "distill_dipole",
             "debug",
+            # Config, not data: fixed for the run. Traced, its bools become
+            # tracers and any Python `if` on one raises. See HybridMMConfig.
+            "hybrid_mm",
         ),
     )
     def train_step(
@@ -96,6 +117,7 @@ else:
         distill_dipole=True,
         debug: bool = False,
         ema_decay: float = 0.999,
+        hybrid_mm=None,
     ):
         """Implementation of :data:`TRAIN_STEP_DOC`."""
 
@@ -108,7 +130,7 @@ else:
         if doCharges:
 
             def loss_fn(params):
-                output = _forward(model_apply, params, batch, batch_size)
+                output = _forward(model_apply, params, batch, batch_size, hybrid_mm=hybrid_mm)
                 if doDistill and teacher_output is not None:
                     loss = mean_squared_loss_QD_distill(
                         energy_prediction=output["energy"],
@@ -158,7 +180,7 @@ else:
         else:
 
             def loss_fn(params):
-                output = _forward(model_apply, params, batch, batch_size)
+                output = _forward(model_apply, params, batch, batch_size, hybrid_mm=hybrid_mm)
                 if doDistill and teacher_output is not None:
                     loss = mean_squared_loss_distill(
                         energy_prediction=output["energy"],

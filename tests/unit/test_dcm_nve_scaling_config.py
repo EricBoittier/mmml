@@ -78,10 +78,12 @@ def test_paths_for_size_dcm3(cfg: dict) -> None:
     assert p["mini_crd"].name == "mini.crd"
 
 
-def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
+def test_build_md_system_argv_per_step_flags(
+    cfg: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ckpt = tmp_path / "ckpt"
     ckpt.mkdir()
-    os.environ["MMML_CKPT"] = str(ckpt)
+    monkeypatch.setenv("MMML_CKPT", str(ckpt))
     argv = build_md_system_argv(cfg, 7)
     assert "--composition" in argv
     assert composition_string(7) in argv

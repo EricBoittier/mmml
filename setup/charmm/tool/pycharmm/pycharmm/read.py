@@ -36,8 +36,19 @@ Read a sequence from a PDB file
 """
 
 import ctypes
+
 import pycharmm.lib as lib
 import pycharmm.script
+from pycharmm.charmm_file import c_api_path_buffer
+
+
+def _resolve_read_path(filename: str) -> str:
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    except ImportError:
+        return filename
+    fortran_path, _alias = charmm_fortran_path(filename, for_write=False)
+    return fortran_path
 
 
 # read a topology file given a bytes filename
@@ -50,11 +61,21 @@ def rtf(filename, **kwargs):
     **kwargs
         additional keyword arguments
     """
-    rtf_script = pycharmm.script.CommandScript('read',
-                                               rtf='card',
-                                               name=filename,
-                                               **kwargs)
-    rtf_script.run()
+    fortran_path = _resolve_read_path(filename)
+    buf, fn_len = c_api_path_buffer(fortran_path)
+    append = ctypes.c_int(1 if kwargs.get("append") else 0)
+    status = int(
+        lib.charmm.read_rtf_file(
+            buf,
+            ctypes.byref(fn_len),
+            ctypes.byref(append),
+        )
+    )
+    if status != 1:
+        raise RuntimeError(
+            f"read_rtf_file failed for {filename!r} "
+            f"(staging={fortran_path!r}, status={status})"
+        )
 
 
 def prm(filename, **kwargs):
@@ -65,11 +86,23 @@ def prm(filename, **kwargs):
     ----------
     filename : str
     """
-    prm_script = pycharmm.script.CommandScript('read',
-                                               param='card',
-                                               name=filename,
-                                               **kwargs)
-    prm_script.run()
+    fortran_path = _resolve_read_path(filename)
+    buf, fn_len = c_api_path_buffer(fortran_path)
+    append = ctypes.c_int(1 if kwargs.get("append") else 0)
+    flex = ctypes.c_int(1 if kwargs.get("flex") else 0)
+    status = int(
+        lib.charmm.read_param_file(
+            buf,
+            ctypes.byref(fn_len),
+            ctypes.byref(append),
+            ctypes.byref(flex),
+        )
+    )
+    if status != 1:
+        raise RuntimeError(
+            f"read_param_file failed for {filename!r} "
+            f"(staging={fortran_path!r}, status={status})"
+        )
 
 
 def psf_card(filename, **kwargs):
@@ -81,7 +114,7 @@ def psf_card(filename, **kwargs):
     filename : str
     """
     psf_script = pycharmm.script.CommandScript('read',
-                                               psf='card',
+                                               psf='CARD',
                                                name=filename,
                                                **kwargs)
     psf_script.run()
@@ -174,10 +207,21 @@ def coor_card(filename, **kwargs):
     filename : str
 
     """
-    read_script = pycharmm.script.CommandScript('read',
-                                                coor='card',
-                                                name=filename,
-                                                **kwargs)
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    except ImportError:
+        fortran_path = filename
+    else:
+        fortran_path, _alias = charmm_fortran_path(filename, for_write=False)
+    # Keyword values must be uppercase: CommandScript uppercases option *keys*
+    # only.  Lowercase ``card`` can leave NINPUT=0 so CREAD takes the binary
+    # FILE path and aborts on an ASCII EXT card under MPI-linked CHARMM.
+    read_script = pycharmm.script.CommandScript(
+        'read',
+        coor='CARD',
+        name=fortran_path,
+        **kwargs,
+    )
     read_script.run()
 
 

@@ -3,6 +3,12 @@
 # Usage: ensure_charmm_mlpot_limits.sh --n-ml 2660 [--pbc]
 set -euo pipefail
 
+if ! command -v flock >/dev/null 2>&1; then
+  flock() {
+    return 0
+  }
+fi
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=resolve_mmml_env.sh
 source "$ROOT/scripts/resolve_mmml_env.sh"

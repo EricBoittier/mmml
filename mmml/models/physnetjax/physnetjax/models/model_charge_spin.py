@@ -16,7 +16,10 @@ import jax.numpy as jnp
 from jax import Array
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.zbl import (
+    ZBLRepulsion,
+    geometric_pair_distances,
+)
 
 EFA = efa.EuclideanFastAttention
 
@@ -91,6 +94,9 @@ class PhysNetChargeSpin(nn.Module):
     total_charge: float = 0
     n_refinement_blocks: int = 3
     zbl: bool = True
+    trainable_zbl: bool = False
+    zbl_cuton: float | None = 0.1
+    zbl_cutoff: float = 0.6
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = True
@@ -122,8 +128,9 @@ class PhysNetChargeSpin(nn.Module):
         # Standard PhysNet components
         if self.zbl:
             self.repulsion = ZBLRepulsion(
-                cutoff=self.cutoff,
-                trainable=True,
+                cutoff=self.zbl_cutoff,
+                cuton=self.zbl_cuton,
+                trainable=self.trainable_zbl,
             )
         
         self.efa_final = None
@@ -156,6 +163,9 @@ class PhysNetChargeSpin(nn.Module):
             "n_res": self.n_refinement_blocks,
             "n_refinement_blocks": self.n_refinement_blocks,
             "zbl": self.zbl,
+            "trainable_zbl": self.trainable_zbl,
+            "zbl_cuton": self.zbl_cuton,
+            "zbl_cutoff": self.zbl_cutoff,
             "debug": self.debug,
             "efa": self.efa,
             "use_energy_bias": self.use_energy_bias,
@@ -465,6 +475,7 @@ class PhysNetChargeSpin(nn.Module):
         """Calculate final energy and related quantities."""
         # Calculate switching functions
         r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
+        zbl_distances = geometric_pair_distances(displacements, batch_mask)
         
         # Predict atomic energies
         energy_per_atom = nn.Dense(1, use_bias=False, dtype=DTYPE, name="energy_dense")(x)
@@ -499,8 +510,8 @@ class PhysNetChargeSpin(nn.Module):
         if self.zbl:
             repulsion = self.repulsion(
                 atomic_numbers,
-                r,
-                off_dist,
+                zbl_distances,
+                None,
                 1 - eshift,  # Note: 1 - eshift as in working model
                 dst_idx,
                 src_idx,
@@ -765,4 +776,3 @@ class PhysNetChargeSpin(nn.Module):
 EF_ChargeSpinConditioned = PhysNetChargeSpin  # deprecated alias
 
 __all__ = ["PhysNetChargeSpin", "EF_ChargeSpinConditioned"]
-

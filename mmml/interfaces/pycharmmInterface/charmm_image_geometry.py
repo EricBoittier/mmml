@@ -14,7 +14,6 @@ import numpy as np
 
 from mmml.utils.intermonomer_geometry import (
     DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A,
-    DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A,
     DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
 )
 
@@ -214,11 +213,7 @@ def assert_charmm_image_mic_fallback(
     min_distance_A: float,
     context: str,
 ) -> float:
-    import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
-        monomer_offsets_from_atoms_per,
-    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
     from mmml.utils.intermonomer_geometry import (
         find_worst_pre_mlpot_mic_violation,

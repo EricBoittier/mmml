@@ -5,10 +5,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mm_system_energy import (
-    nonbonded_energy_and_forces,
     _build_pair_indices,
 )
-from mmml.data.units import KCAL_MOL_TO_EV
 
 
 def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_fn, charges=None, spins=None):

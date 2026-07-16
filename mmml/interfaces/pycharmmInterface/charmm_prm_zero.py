@@ -268,13 +268,18 @@ def build_prm_policy_overlay_text(
     zero_bonded: bool = False,
     zero_nonbond: bool = False,
 ) -> str:
-    """Build a READ PARAM APPEND overlay for selected zeroed sections."""
+    """Build a READ PARAM APPEND overlay for selected zeroed sections.
+
+    For VDW, emit ε=0 NONBONDED/NBFIX rows (``zeroed_nonbond_prm_text``) so an
+    APPEND actually overwrites CHARMM's live VDW table.  Omitting NONBONDED
+    alone cannot clear parameters already loaded from CGenFF.
+    """
     if zero_bonded and zero_nonbond:
         return zero_prm_text(text, bonded_only=False)
     if zero_bonded:
         return bonded_only_prm_text(text, zero_constants=True)
     if zero_nonbond:
-        return nonbond_only_prm_text(text)
+        return zeroed_nonbond_prm_text(text)
     return ""
 
 

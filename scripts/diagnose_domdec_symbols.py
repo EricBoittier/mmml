@@ -26,8 +26,7 @@ import sys
 def find_libcharmm() -> str | None:
     # Try via PyCHARMM
     try:
-        import pycharmm.lib as lib  # noqa: PLC0415
-        handle = lib.charmm._handle
+        __import__("pycharmm.lib")
         # On Linux, /proc/self/maps lets us map the handle back to a path
         try:
             with open("/proc/self/maps") as f:

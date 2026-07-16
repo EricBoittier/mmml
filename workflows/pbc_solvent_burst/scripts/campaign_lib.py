@@ -10,7 +10,13 @@ from typing import Any, Iterator
 
 import yaml
 
-from bulk_density import matrix_cluster_sizes_for_cell, matrix_uses_bulk_density
+from bulk_density import (
+    matrix_cluster_sizes_for_cell,
+    matrix_uses_bulk_density,
+    mixture_counts_at_bulk_density,
+    mixture_total_at_bulk_density,
+    normalize_mole_fractions,
+)
 from cleanup_strategy import (
     dense_cell_mlpot_overrides,
     jaxmd_job_flags,
@@ -102,6 +108,13 @@ class RunCell:
     n_monomers: int
     temperature: float
     box_size: float
+    components: tuple[tuple[str, int], ...] = ()
+    mole_fractions: tuple[tuple[str, float], ...] = ()
+    mixture_key: str = ""
+
+    @property
+    def is_mixture(self) -> bool:
+        return bool(self.components)
 
 
 def matrix_temperatures(cfg: dict[str, Any]) -> list[float]:
@@ -152,6 +165,46 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
                     seen_tags.add(tag)
                     yield cell
 
+    if cfg.get("mixtures"):
+        if not matrix_uses_bulk_density(cfg):
+            raise ValueError("Mixed-solvent cells require bulk_density_fractions")
+        min_n = int(cfg.get("bulk_density_n_min", 1))
+        max_raw = cfg.get("bulk_density_n_max")
+        max_n = int(max_raw) if max_raw is not None else None
+        for raw_mix in cfg["mixtures"]:
+            mole_fractions = normalize_mole_fractions(raw_mix)
+            key = "_".join(
+                f"{sol.lower()}x{int(round(x * 100)):02d}"
+                for sol, x in mole_fractions
+            )
+            for box in matrix_box_sizes(cfg):
+                for frac in cfg.get("bulk_density_fractions") or []:
+                    counts = mixture_counts_at_bulk_density(
+                        mole_fractions,
+                        box,
+                        float(frac),
+                        min_n=min_n,
+                        max_n=max_n,
+                    )
+                    components = tuple(sorted(counts.items()))
+                    for temp in matrix_temperatures(cfg):
+                        cell = RunCell(
+                            solvent=key.upper(),
+                            n_monomers=sum(counts.values()),
+                            temperature=temp,
+                            box_size=box,
+                            components=components,
+                            mole_fractions=mole_fractions,
+                            mixture_key=key,
+                        )
+                        tag = cell_run_tag(cell, cfg)
+                        if tag in skip or tag in seen_tags:
+                            continue
+                        if any(tag.startswith(p) for p in skip_prefixes if p):
+                            continue
+                        seen_tags.add(tag)
+                        yield cell
+
 
 def matrix_tag_includes_TL(cfg: dict[str, Any]) -> bool:
     """True when multiple temperatures or box sizes require T/L in the run tag."""
@@ -164,7 +217,7 @@ def cell_run_tag(cell: RunCell, cfg: dict[str, Any] | None = None) -> str:
     Single T and box in the matrix: ``dcm_10`` (backward compatible).
     Sweeps: ``dcm_10_t300_l32``.
     """
-    sol = solvent_slug(cell.solvent).lower()
+    sol = cell.mixture_key or solvent_slug(cell.solvent).lower()
     base = f"{sol}_{int(cell.n_monomers)}"
     if cfg is not None and not matrix_tag_includes_TL(cfg):
         return base
@@ -175,14 +228,40 @@ def cell_run_tag(cell: RunCell, cfg: dict[str, Any] | None = None) -> str:
 
 def cell_run_tag_long(cell: RunCell) -> str:
     """Always include T/L suffix (for alias lookup)."""
-    sol = solvent_slug(cell.solvent).lower()
+    sol = cell.mixture_key or solvent_slug(cell.solvent).lower()
     t = int(round(cell.temperature))
     box = int(round(cell.box_size))
     return f"{sol}_{int(cell.n_monomers)}_t{t}_l{box}"
 
 
 def composition_string(cell: RunCell) -> str:
+    if cell.components:
+        return ",".join(f"{sol}:{count}" for sol, count in cell.components)
     return f"{solvent_slug(cell.solvent)}:{int(cell.n_monomers)}"
+
+
+def cell_ml_atoms(cell: RunCell) -> int:
+    """Exact ML atom count for pure or mixed campaign cells."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+
+    if cell.components:
+        return sum(
+            estimate_ml_atoms(count, solvent=solvent)
+            for solvent, count in cell.components
+        )
+    return estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent)
+
+
+def cell_bulk_total(cell: RunCell, fraction: float = 1.0) -> int:
+    if cell.mole_fractions:
+        return mixture_total_at_bulk_density(
+            cell.mole_fractions, cell.box_size, fraction, min_n=1
+        )
+    from bulk_density import n_monomers_at_bulk_density
+
+    return n_monomers_at_bulk_density(
+        cell.solvent, cell.box_size, fraction, min_n=1
+    )
 
 
 def run_output_dir(cfg: dict[str, Any], cell: RunCell) -> Path:
@@ -191,7 +270,7 @@ def run_output_dir(cfg: dict[str, Any], cell: RunCell) -> Path:
 
 
 def run_seed(cell: RunCell, *, seed_base: int = 123456) -> int:
-    solvent_off = sum(ord(c) for c in solvent_slug(cell.solvent)) % 1000
+    solvent_off = sum(ord(c) for c in (cell.mixture_key or solvent_slug(cell.solvent))) % 1000
     temp_off = int(round(cell.temperature)) % 100
     box_off = int(round(cell.box_size)) % 100
     return (
@@ -237,19 +316,28 @@ def cell_is_optional(cell: RunCell, cfg: dict[str, Any]) -> bool:
         return True
     if not matrix_uses_bulk_density(cfg):
         return False
-    from bulk_density import n_monomers_at_bulk_density
-
     min_n = int(cfg.get("bulk_density_n_min", 1))
     max_raw = cfg.get("bulk_density_n_max")
     max_n = int(max_raw) if max_raw is not None else None
     for frac in cfg.get("optional_bulk_fractions") or [1.0]:
-        n = n_monomers_at_bulk_density(
-            cell.solvent,
-            cell.box_size,
-            float(frac),
-            min_n=min_n,
-            max_n=max_n,
-        )
+        if cell.mole_fractions:
+            n = mixture_total_at_bulk_density(
+                cell.mole_fractions,
+                cell.box_size,
+                float(frac),
+                min_n=min_n,
+                max_n=max_n,
+            )
+        else:
+            from bulk_density import n_monomers_at_bulk_density
+
+            n = n_monomers_at_bulk_density(
+                cell.solvent,
+                cell.box_size,
+                float(frac),
+                min_n=min_n,
+                max_n=max_n,
+            )
         if n == int(cell.n_monomers):
             return True
     return False

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 # Experimental bulk liquid ~298 K (g/cm³, g/mol). Used only for matrix N sizing.
 BULK_SOLVENTS: dict[str, dict[str, float]] = {
     "DCM": {"rho_g_cm3": 1.326, "mw_g_mol": 84.93},
     "ACO": {"rho_g_cm3": 0.784, "mw_g_mol": 58.08},
+    "TIP3": {"rho_g_cm3": 0.9970, "mw_g_mol": 18.01528},
+    "MEOH": {"rho_g_cm3": 0.7866, "mw_g_mol": 32.04186},
 }
 
 AVOGADRO = 6.02214076e23
@@ -53,6 +55,75 @@ def n_monomers_at_bulk_density(
     if max_n is not None:
         n = min(n, int(max_n))
     return n
+
+
+def normalize_mole_fractions(raw: Mapping[str, float]) -> tuple[tuple[str, float], ...]:
+    """Canonical positive mole fractions for an ideal liquid mixture."""
+    values = {str(key).strip().upper(): float(value) for key, value in raw.items()}
+    if len(values) < 2:
+        raise ValueError("A mixture requires at least two solvent components")
+    unknown = sorted(set(values) - set(BULK_SOLVENTS))
+    if unknown:
+        raise ValueError(
+            f"Unknown mixture solvents {unknown}; supported: {sorted(BULK_SOLVENTS)}"
+        )
+    if any(value <= 0.0 for value in values.values()):
+        raise ValueError("Mixture mole fractions must all be positive")
+    total = sum(values.values())
+    if total <= 0.0:
+        raise ValueError("Mixture mole fractions must have a positive sum")
+    return tuple((key, value / total) for key, value in sorted(values.items()))
+
+
+def mixture_counts_at_bulk_density(
+    mole_fractions: Mapping[str, float] | tuple[tuple[str, float], ...],
+    box_side_A: float,
+    fraction: float,
+    *,
+    min_n: int = 1,
+    max_n: int | None = None,
+) -> dict[str, int]:
+    """Integer component counts using ideal volume mixing at 298 K."""
+    normalized = normalize_mole_fractions(dict(mole_fractions))
+    mean_volume = sum(
+        x
+        * volume_per_molecule_ang3(
+            mw_g_mol=BULK_SOLVENTS[solvent]["mw_g_mol"],
+            rho_g_cm3=BULK_SOLVENTS[solvent]["rho_g_cm3"],
+        )
+        for solvent, x in normalized
+    )
+    n_total = int(round(float(fraction) * float(box_side_A) ** 3 / mean_volume))
+    n_total = max(int(min_n), n_total)
+    if max_n is not None:
+        n_total = min(int(max_n), n_total)
+
+    # Largest-remainder allocation preserves the requested total and avoids
+    # silently dropping a minority component at the practical matrix sizes.
+    exact = [(solvent, x * n_total) for solvent, x in normalized]
+    counts = {solvent: int(value) for solvent, value in exact}
+    remaining = n_total - sum(counts.values())
+    for solvent, _value in sorted(exact, key=lambda item: item[1] % 1.0, reverse=True):
+        if remaining <= 0:
+            break
+        counts[solvent] += 1
+        remaining -= 1
+    if n_total >= len(counts) and any(count == 0 for count in counts.values()):
+        raise ValueError("Mixture allocation dropped a component; increase bulk_density_n_min")
+    return counts
+
+
+def mixture_total_at_bulk_density(
+    mole_fractions: Mapping[str, float] | tuple[tuple[str, float], ...],
+    box_side_A: float,
+    fraction: float,
+    **kwargs: Any,
+) -> int:
+    return sum(
+        mixture_counts_at_bulk_density(
+            mole_fractions, box_side_A, fraction, **kwargs
+        ).values()
+    )
 
 
 def effective_mass_density_g_cm3(*, solvent: str, n_monomers: int, box_side_A: float) -> float:
@@ -105,12 +176,15 @@ def matrix_cluster_sizes_for_cell(
 
 def bulk_reference_table(box_sizes: list[float]) -> str:
     """Human-readable N_bulk per solvent and box (for preflight / docs)."""
-    lines = [
-        f"{'L (Å)':>6}  {'V (Å³)':>10}  {'DCM N_bulk':>12}  {'ACO N_bulk':>12}",
-    ]
+    solvents = tuple(BULK_SOLVENTS)
+    header = f"{'L (Å)':>6}  {'V (Å³)':>10}"
+    header += "".join(f"  {f'{sol} N_bulk':>12}" for sol in solvents)
+    lines = [header]
     for L in box_sizes:
         vol = float(L) ** 3
-        nd = n_monomers_at_bulk_density("DCM", L, 1.0)
-        na = n_monomers_at_bulk_density("ACO", L, 1.0)
-        lines.append(f"{L:6.0f}  {vol:10.0f}  {nd:12d}  {na:12d}")
+        counts = [n_monomers_at_bulk_density(sol, L, 1.0) for sol in solvents]
+        lines.append(
+            f"{L:6.0f}  {vol:10.0f}"
+            + "".join(f"  {count:12d}" for count in counts)
+        )
     return "\n".join(lines)

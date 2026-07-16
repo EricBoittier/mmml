@@ -97,6 +97,74 @@ def pycharmm_stage_dcd_frames(output_dir: Path, stage: str, tag: str) -> int:
     return 0
 
 
+def pycharmm_mini_artifacts_present(output_dir: Path) -> bool:
+    """True when mini wrote a non-empty CRD (``mini.crd`` or ``02_mini.crd``)."""
+    out = Path(output_dir)
+    for name in ("mini.crd", "02_mini.crd"):
+        path = out / name
+        try:
+            if path.is_file() and path.stat().st_size > 0:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def finalize_pycharmm_plan_rows(
+    plan: list[MdStageSummary],
+    *,
+    exit_code: int,
+    output_dir: Path | None,
+    trajectory_tag: str = "",
+) -> list[MdStageSummary]:
+    """Mark planned PyCHARMM stages complete from on-disk artifacts / exit code.
+
+    Mini has no ``.res`` restart; success is inferred from ``mini.crd`` /
+    ``02_mini.crd``. Heat/equi/prod still use stage restarts when present.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+
+    out_dir = Path(output_dir) if output_dir is not None else None
+    tag = str(trajectory_tag or "")
+    for row in plan:
+        if row.stage == "mini":
+            if out_dir is not None and pycharmm_mini_artifacts_present(out_dir):
+                row.nsteps_completed = row.nsteps_requested
+                row.ps_completed = row.ps_requested
+                row.status = "complete"
+            elif exit_code == 0 and out_dir is None:
+                row.nsteps_completed = row.nsteps_requested
+                row.ps_completed = row.ps_requested
+                row.status = "complete"
+            elif exit_code != 0:
+                row.status = "error"
+            continue
+
+        if exit_code == 0 and out_dir is not None:
+            res = stage_restart(out_dir, row.stage)
+            if _valid_restart_file(res) is not None:
+                row.nsteps_completed = row.nsteps_requested
+                row.ps_completed = row.ps_requested
+                row.status = "complete"
+            else:
+                row.nsteps_completed = 0
+                row.ps_completed = 0.0
+                row.status = "planned"
+        elif exit_code == 0:
+            row.nsteps_completed = row.nsteps_requested
+            row.ps_completed = row.ps_requested
+            row.status = "complete"
+        else:
+            row.nsteps_completed = 0
+            row.ps_completed = 0.0
+            row.status = "error"
+        if out_dir is not None and row.stage in {"heat", "equi", "nve", "prod"}:
+            row.frames_written = pycharmm_stage_dcd_frames(out_dir, row.stage, tag)
+            row.record_every_steps = max(1, int(row.record_every_steps or 1))
+    return plan
+
+
 def cubic_box_side_from_cell(cell: Any) -> float | None:
     if cell is None:
         return None

@@ -24,7 +24,10 @@ from jax import Array
 # from jax.sharding import PartitionSpec as P
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.zbl import (
+    ZBLRepulsion,
+    geometric_pair_distances,
+)
 
 EFA = efa.EuclideanFastAttention
 import ase.data
@@ -52,6 +55,9 @@ class SpookyPhysNet(nn.Module):
     total_charge: float = 0
     n_refinement_blocks: int = 2
     zbl: bool = True
+    trainable_zbl: bool = False
+    zbl_cuton: float | None = 0.1
+    zbl_cutoff: float = 0.6
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = False
@@ -83,8 +89,9 @@ class SpookyPhysNet(nn.Module):
         """
         if self.zbl:
             self.repulsion = ZBLRepulsion(
-                cutoff=self.cutoff,
-                trainable=True,
+                cutoff=self.zbl_cutoff,
+                cuton=self.zbl_cuton,
+                trainable=self.trainable_zbl,
             )
         self.efa_final = None
         if self.efa:
@@ -124,6 +131,9 @@ class SpookyPhysNet(nn.Module):
             "n_res": self.n_refinement_blocks,
             "n_refinement_blocks": self.n_refinement_blocks,
             "zbl": self.zbl,
+            "trainable_zbl": self.trainable_zbl,
+            "zbl_cuton": self.zbl_cuton,
+            "zbl_cutoff": self.zbl_cutoff,
             "debug": self.debug,
             "efa": self.efa,
             "use_energy_bias": self.use_energy_bias,
@@ -148,6 +158,7 @@ class SpookyPhysNet(nn.Module):
         cgenff_type_idx: jnp.ndarray | None = None,
         cgenff_master_sigmas: jnp.ndarray | None = None,
         cgenff_master_epsilons: jnp.ndarray | None = None,
+        edge_mask: jnp.ndarray | None = None,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
         """
         Calculate molecular energy and related properties.
@@ -156,7 +167,7 @@ class SpookyPhysNet(nn.Module):
         electrostatic interactions, ZBL repulsion, and optionally CGenFF LJ vdW.
         """
         basis, displacements = self._calculate_geometric_features(
-            positions, dst_idx, src_idx, cell=cell
+            positions, dst_idx, src_idx, cell=cell, edge_mask=edge_mask
         )
 
         graph_mask = jnp.ones(batch_size)
@@ -196,9 +207,15 @@ class SpookyPhysNet(nn.Module):
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
         cell: Optional[jnp.ndarray] = None,
+        edge_mask: Optional[jnp.ndarray] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Calculate geometric features including displacements and basis functions.
+
+        ``edge_mask`` (per-edge 0/1) zeroes the message-passing basis for masked edges,
+        which is how the neural graph is restricted to intra-monomer edges when computing
+        the monomer reference for the interaction-energy penalty. It does not touch the
+        pairwise prior terms (those are gated separately by ``batch_mask``).
         
         Parameters
         ----------
@@ -226,16 +243,16 @@ class SpookyPhysNet(nn.Module):
             displacements = dS_mic @ cell
         else:
             displacements = positions_src - positions_dst
-        return (
-            e3x.nn.basis(
-                displacements,
-                num=self.num_basis_functions,
-                max_degree=self.max_degree,
-                radial_fn=e3x.nn.exponential_chebyshev,
-                cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
-            ),
+        basis = e3x.nn.basis(
             displacements,
+            num=self.num_basis_functions,
+            max_degree=self.max_degree,
+            radial_fn=e3x.nn.exponential_chebyshev,
+            cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
+        if edge_mask is not None:
+            basis = basis * jnp.asarray(edge_mask, dtype=basis.dtype).reshape(-1, 1, 1, 1)
+        return basis, displacements
 
     def _process_atomic_features(
         self,
@@ -498,6 +515,14 @@ class SpookyPhysNet(nn.Module):
     learn_cgenff_vdw_scale: bool = True
     predict_atomic_vdw_scale: bool = True
 
+    # Learned per-element-pair shrinkage ("trust map") for the neural interaction energy.
+    # When enabled, a (n_el, n_el) log-lambda matrix over these elements is created as a
+    # parameter and surfaced in the output; the training loss turns it into an
+    # evidence-balanced per-chemistry shrinkage and can dump it as a data-provenance
+    # fingerprint. Off by default (no parameter, no behavioural change).
+    interaction_trust_map: bool = False
+    trust_map_elements: tuple = (1, 6, 7, 8, 16, 17)  # H, C, N, O, S, Cl
+
     def _calculate_atomic_vdw_scales(
         self, x: jnp.ndarray, atomic_numbers: jnp.ndarray, atom_mask: jnp.ndarray
     ) -> jnp.ndarray:
@@ -514,7 +539,7 @@ class SpookyPhysNet(nn.Module):
 
     def _calculate_cgenff_vdw(
         self,
-        r: jnp.ndarray,
+        displacements: jnp.ndarray,
         off_dist: jnp.ndarray,
         cgenff_type_idx: jnp.ndarray,
         cgenff_master_sigmas: jnp.ndarray,
@@ -535,6 +560,14 @@ class SpookyPhysNet(nn.Module):
             sig_ij = 0.5 * (sig_i + sig_j)
             eps_ij = sqrt(eps_i * eps_j)
         """
+        # Use the actual pair separation in Å.  The ``r`` produced by
+        # ``_calc_switches`` is a damped Coulomb kernel (approximately 1/r),
+        # and using it here forced nearly every active LJ pair onto the
+        # 0.8*sigma clamp.
+        pair_distances = jnp.sqrt(
+            jnp.maximum(jnp.sum(displacements**2, axis=-1), 1.0e-12)
+        )
+
         sig_dst = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=3.5)
         sig_src = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=3.5)
         eps_dst = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=0.05)
@@ -554,12 +587,12 @@ class SpookyPhysNet(nn.Module):
         if self.learn_cgenff_vdw_scale:
             global_scale = self.param(
                 "global_vdw_scale",
-                lambda rng, shape: jnp.ones(shape, dtype=r.dtype),
+                lambda rng, shape: jnp.ones(shape, dtype=pair_distances.dtype),
                 (1,),
             )
             element_scale = self.param(
                 "element_vdw_scale",
-                lambda rng, shape: jnp.ones(shape, dtype=r.dtype),
+                lambda rng, shape: jnp.ones(shape, dtype=pair_distances.dtype),
                 (self.max_atomic_number + 1,),
             )
             elem_dst = jnp.take(element_scale, jnp.take(atomic_numbers, dst_idx))
@@ -568,16 +601,16 @@ class SpookyPhysNet(nn.Module):
             eps_ij = eps_ij * elem_scale
 
         if mol_id is not None:
-            inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(r.dtype)
+            inter_monomer_mask = (jnp.take(mol_id, dst_idx) != jnp.take(mol_id, src_idx)).astype(pair_distances.dtype)
         else:
             inter_monomer_mask = 1.0
 
         # Soft-core distance clamping to cap unphysical LJ 6-12 repulsion spikes at r < 0.8 * sig_ij
-        r_safe = jnp.maximum(r, 0.8 * sig_ij)
+        r_safe = jnp.maximum(pair_distances, 0.8 * sig_ij)
         sr6 = (sig_ij / r_safe) ** 6
         sr12 = sr6 ** 2
         
-        KCAL_TO_EV = jnp.asarray(0.0433641153, dtype=r.dtype)
+        KCAL_TO_EV = jnp.asarray(0.0433641153, dtype=pair_distances.dtype)
         vdw_pair = 4.0 * eps_ij * (sr12 - sr6) * KCAL_TO_EV * off_dist * batch_mask * inter_monomer_mask
         vdw_pair = 0.5 * vdw_pair
 
@@ -606,6 +639,7 @@ class SpookyPhysNet(nn.Module):
         cgenff_master_epsilons: jnp.ndarray | None = None,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
         r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
+        zbl_distances = geometric_pair_distances(displacements, batch_mask)
 
         atomic_energies = self._calculate_atomic_energies(x, atomic_numbers, atom_mask)
 
@@ -645,7 +679,7 @@ class SpookyPhysNet(nn.Module):
                 atomic_vdw_scales = None
 
             atomic_vdw, batch_vdw = self._calculate_cgenff_vdw(
-                r,
+                displacements,
                 off_dist,
                 cgenff_type_idx,
                 cgenff_master_sigmas,
@@ -666,8 +700,8 @@ class SpookyPhysNet(nn.Module):
         if self.zbl:
             repulsion = self._calculate_repulsion(
                 atomic_numbers,
-                r,
-                off_dist,
+                zbl_distances,
+                None,
                 eshift,
                 dst_idx,
                 src_idx,
@@ -690,6 +724,7 @@ class SpookyPhysNet(nn.Module):
             energy,
             atomic_charges,
             batch_electrostatics,
+            batch_vdw,
             repulsion,
             x,
         )
@@ -1056,6 +1091,7 @@ class SpookyPhysNet(nn.Module):
         cgenff_type_idx: jnp.ndarray | None = None,
         cgenff_master_sigmas: jnp.ndarray | None = None,
         cgenff_master_epsilons: jnp.ndarray | None = None,
+        edge_mask: jnp.ndarray | None = None,
     ) -> Dict[str, Optional[jnp.ndarray]]:
         """
         Forward pass of the model.
@@ -1115,7 +1151,7 @@ class SpookyPhysNet(nn.Module):
         # jax.debug.print("atom_mask {x}", x=atom_mask[::])
 
         if not compute_forces:
-            _, (energy, charges, electrostatics, repulsion, state) = self.energy(
+            _, (energy, charges, electrostatics, cgenff_vdw, repulsion, state) = self.energy(
                 atomic_numbers,
                 charges,
                 spins,
@@ -1131,12 +1167,13 @@ class SpookyPhysNet(nn.Module):
                 cgenff_type_idx=cgenff_type_idx,
                 cgenff_master_sigmas=cgenff_master_sigmas,
                 cgenff_master_epsilons=cgenff_master_epsilons,
+                edge_mask=edge_mask,
             )
             forces = None
         else:
             energy_and_forces = jax.value_and_grad(self.energy, argnums=3, has_aux=True)
 
-            (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
+            (_, (energy, charges, electrostatics, cgenff_vdw, repulsion, state)), gradient = energy_and_forces(
                 atomic_numbers,
                 charges,
                 spins,
@@ -1152,6 +1189,7 @@ class SpookyPhysNet(nn.Module):
                 cgenff_type_idx,
                 cgenff_master_sigmas,
                 cgenff_master_epsilons,
+                edge_mask,
             )
             forces = gradient
             forces *= atom_mask[..., None]
@@ -1177,15 +1215,31 @@ class SpookyPhysNet(nn.Module):
             else None
         )
 
+        # Per-element-pair "trust map": a learned log-shrinkage matrix over the neural
+        # interaction energy (used only by the training loss, never by the forward
+        # energy). Living here means it is checkpointed and restarted like any other
+        # parameter; it is surfaced in the output so the loss can read it without
+        # reaching into the params tree. See --interaction-trust-map in the trainer.
+        neural_interaction_log_lambda = None
+        if self.interaction_trust_map:
+            n_el = len(self.trust_map_elements)
+            neural_interaction_log_lambda = self.param(
+                "neural_interaction_log_lambda",
+                lambda rng, shape: jnp.zeros(shape, dtype=DTYPE),
+                (n_el, n_el),
+            )
+
         # Prepare output dictionary
         output = {
             "energy": energy,
             "forces": forces,
             "charges": charges,
             "electrostatics": electrostatics,
+            "cgenff_vdw": cgenff_vdw,
             "repulsion": repulsion,
             "dipoles": dipoles,
             "sum_charges": sum_charges,
+            "neural_interaction_log_lambda": neural_interaction_log_lambda,
             "state": state,
         }
 

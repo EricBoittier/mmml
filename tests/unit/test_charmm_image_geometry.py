@@ -627,7 +627,13 @@ def test_get_iminb_stats_uses_ctypes_out_pointers(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     spec = importlib.util.spec_from_file_location(
         "pycharmm_image_isolated",
-        repo_root / "pycharmm" / "image.py",
+        repo_root
+        / "setup"
+        / "charmm"
+        / "tool"
+        / "pycharmm"
+        / "pycharmm"
+        / "image.py",
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)

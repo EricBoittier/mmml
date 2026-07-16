@@ -183,7 +183,7 @@ For small liquid boxes, start looser than the final density, minimize and heat, 
 - `jaxmd_mini_box_equil_ps`: JAX-MD pre-production box relaxation.
 - `bulk_density_fraction`: quick way to start below full liquid density, for example `0.8`.
 - `dynamics_overlap_action: rescue`: repair close contacts during staged dynamics.
-- `bonded_mm_mini: true`: run bonded-only MM cleanup after selected stages.
+- `bonded_mm_mini: true`: opt-in bonded-only MM cleanup after selected stages (default off; can stall on PBC CGENFF APPEND).
 
 ### Resilient density prep (`liquid_prep: true`)
 

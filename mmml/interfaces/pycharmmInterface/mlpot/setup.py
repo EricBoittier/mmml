@@ -4,7 +4,7 @@ import argparse
 import inspect
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -154,6 +154,8 @@ class MlpotContext:
     pre_mlpot_iblo: list[int] | None = None
     pre_mlpot_inb: list[int] | None = None
     sd_watchdog_baseline_grms: float | None = None
+    # First-heat-chunk hybrid GRMS; later chunks abort on an order-of-magnitude jump.
+    heat_grms_jump_baseline: float | None = None
     # In-memory templates for extent fly-off repack (no disk CRD/restart required).
     geometry_baseline_positions: np.ndarray | None = None
     geometry_mini_positions: np.ndarray | None = None
@@ -1220,7 +1222,6 @@ def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -
     """Temporary nonbond settings for bonded rescue SD (``NBXMOD 2``, VDW on in BLOCK)."""
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         apply_nbonds_script_kwargs,
-        apply_vacuum_nbonds,
         trigger_nbonds_update_script,
         vacuum_nbond_kwargs,
     )
@@ -1331,9 +1332,15 @@ def reconcile_n_monomers_with_psf(
 
         atoms_per = atoms_per_monomer_from_psf()
     except Exception:
+        comp_atoms_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+        if comp_atoms_per is not None:
+            return len(comp_atoms_per), comp_atoms_per
         return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
 
     if sum(atoms_per) != n_atoms:
+        comp_atoms_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+        if comp_atoms_per is not None:
+            return len(comp_atoms_per), comp_atoms_per
         return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
 
     n_psf = len(atoms_per)
@@ -1362,6 +1369,40 @@ def reconcile_n_monomers_with_psf(
         return n_psf, atoms_per
 
     return n_mol, existing
+
+
+def _cluster_atoms_per_from_composition(
+    args: Any | None,
+    *,
+    n_atoms: int,
+) -> list[int] | None:
+    """Resolve heterogeneous monomer sizes from ``--composition`` when PSF resid parsing fails."""
+    if args is None:
+        return None
+    composition = getattr(args, "composition", None)
+    if not composition:
+        return None
+    existing = getattr(args, "_cluster_atoms_per_list", None)
+    if existing is not None:
+        try:
+            per = [int(x) for x in existing]
+        except TypeError:
+            per = []
+        if per and sum(per) == int(n_atoms):
+            return per
+    try:
+        from mmml.cli.run.md_handoff import cluster_layout_from_composition_string
+
+        atoms_per, residue_labels, summary = cluster_layout_from_composition_string(
+            str(composition),
+            n_atoms=int(n_atoms),
+        )
+    except Exception:
+        return None
+    setattr(args, "_cluster_atoms_per_list", list(atoms_per))
+    setattr(args, "_cluster_residue_labels", list(residue_labels))
+    setattr(args, "_cluster_composition_summary", dict(summary))
+    return list(atoms_per)
 
 
 def load_cluster_from_artifacts(
@@ -1493,21 +1534,39 @@ def load_physnet_mlpot_bundle(
         )
 
         if atoms_per_monomer is None:
-            if int(n_atoms) % int(n_monomers) != 0:
-                nres_hint = ""
-                try:
-                    import pycharmm.psf as psf
-
-                    if hasattr(psf, "get_nres"):
-                        nres_hint = f"; PSF has {int(psf.get_nres())} residues"
-                except Exception:
-                    pass
-                raise ValueError(
-                    f"atom count {n_atoms} not divisible by n_monomers={n_monomers}{nres_hint}. "
-                    "Align --composition or --n-molecules with the loaded PSF/box."
+            # Mixed solvent systems have heterogeneous residue sizes.  Use
+            # PSF residue boundaries before applying the legacy uniform split.
+            try:
+                from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+                    atoms_per_monomer_from_psf,
                 )
-            per = int(n_atoms) // int(n_monomers)
-            atoms_per_monomer = [per] * int(n_monomers)
+
+                per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
+                if len(per_psf) == int(n_monomers) and sum(per_psf) == int(n_atoms):
+                    atoms_per_monomer = per_psf
+            except Exception:
+                pass
+            if atoms_per_monomer is None:
+                atoms_per_monomer = _cluster_atoms_per_from_composition(
+                    args,
+                    n_atoms=int(n_atoms),
+                )
+            if atoms_per_monomer is None:
+                if int(n_atoms) % int(n_monomers) != 0:
+                    nres_hint = ""
+                    try:
+                        import pycharmm.psf as psf
+
+                        if hasattr(psf, "get_nres"):
+                            nres_hint = f"; PSF has {int(psf.get_nres())} residues"
+                    except Exception:
+                        pass
+                    raise ValueError(
+                        f"atom count {n_atoms} not divisible by n_monomers={n_monomers}{nres_hint}. "
+                        "Align --composition or --n-molecules with the loaded PSF/box."
+                    )
+                per = int(n_atoms) // int(n_monomers)
+                atoms_per_monomer = [per] * int(n_monomers)
         pyCModel = build_decomposed_mlpot_model(
             ckpt,
             z,
@@ -1907,6 +1966,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 1)",
         )
+        _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
@@ -1927,6 +1987,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 2)",
         )
+        _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,

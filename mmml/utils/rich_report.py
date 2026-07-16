@@ -299,6 +299,113 @@ def emit_dashboard(
         _emit_plain("\n".join(lines))
 
 
+def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
+    """Extract ZBL repulsion cutoffs from a PhysNet/Spooky model when present.
+
+    Returns ``None`` when the model has no ZBL flag (e.g. jax_mm_clone spoof with
+    ``MODEL is None``). Pair-distance cutoffs (Å) are distinct from COM handoff.
+
+    Fixed universal ZBL uses cuton/cutoff ≈ 0.1 / 0.6 Å.  Older trainable-ZBL
+    checkpoints often omit those keys; loaders then infer ``cuton=None`` (switch
+    from 0) and ``cutoff≈model cutoff`` (commonly 6 Å) with ``trainable=True``.
+    """
+    if model is None:
+        return None
+    if not hasattr(model, "zbl"):
+        return None
+    enabled = bool(getattr(model, "zbl", False))
+    cuton = getattr(model, "zbl_cuton", None)
+    cutoff = getattr(model, "zbl_cutoff", None)
+    trainable = getattr(model, "trainable_zbl", None)
+    # Some checkpoints store cutoffs only on the repulsion submodule.
+    repulsion = getattr(model, "repulsion", None)
+    if repulsion is not None:
+        if cuton is None and not hasattr(model, "zbl_cuton"):
+            cuton = getattr(repulsion, "cuton", None)
+        if cutoff is None:
+            cutoff = getattr(repulsion, "cutoff", None)
+        if trainable is None:
+            trainable = getattr(repulsion, "trainable", None)
+    out: dict[str, Any] = {"enabled": enabled}
+    # ``cuton is None`` means switch from 0 → cutoff (legacy trainable window).
+    cuton_effective = 0.0 if cuton is None and enabled else cuton
+    if cuton_effective is not None:
+        try:
+            out["cuton_Å"] = f"{float(cuton_effective):.4f}"
+        except (TypeError, ValueError):
+            out["cuton_Å"] = cuton_effective
+    if cutoff is not None:
+        try:
+            out["cutoff_Å"] = f"{float(cutoff):.4f}"
+        except (TypeError, ValueError):
+            out["cutoff_Å"] = cutoff
+    if trainable is not None:
+        out["trainable"] = bool(trainable)
+    try:
+        cutoff_f = float(cutoff) if cutoff is not None else None
+    except (TypeError, ValueError):
+        cutoff_f = None
+    if enabled and bool(trainable) and (cutoff_f is None or cutoff_f >= 1.0):
+        out["mode"] = "legacy trainable (wide; not fixed 0.1–0.6)"
+    elif enabled and not bool(trainable) and cutoff_f is not None and cutoff_f <= 1.0:
+        out["mode"] = "fixed universal"
+    out["distance"] = "pair r (Å), not COM"
+    return out
+
+
+def collect_ml_energy_terms_mapping(
+    model: Any,
+    *,
+    checkpoint_config: Mapping[str, Any] | None = None,
+    mbd_loaded: bool = False,
+    mbd_checkpoint: str | None = None,
+    mbd_weight: float | None = None,
+    mbd_missing_path: str | None = None,
+) -> dict[str, Any]:
+    """Human-readable which ML energy terms are active vs recorded in the ckpt."""
+    cfg = dict(checkpoint_config or {})
+    charges = False
+    if model is not None and hasattr(model, "charges"):
+        charges = bool(getattr(model, "charges"))
+    elif "charges" in cfg or "predict_charges" in cfg:
+        charges = bool(cfg.get("charges") or cfg.get("predict_charges"))
+    if model is not None and hasattr(model, "include_electrostatics"):
+        include_elec = bool(getattr(model, "include_electrostatics"))
+    elif "include_electrostatics" in cfg:
+        include_elec = bool(cfg["include_electrostatics"])
+    else:
+        include_elec = charges
+    damp = getattr(model, "electrostatics_damping_sigma", None) if model is not None else None
+    if damp is None:
+        damp = cfg.get("electrostatics_damping_sigma")
+    zbl = bool(getattr(model, "zbl", False)) if model is not None else bool(cfg.get("zbl", False))
+    cgenff = not bool(cfg.get("no_cgenff_vdw", False)) if cfg else None
+    cfg_mbd = cfg.get("mbd_checkpoint")
+    out: dict[str, Any] = {
+        "neural ML": "✓ (PhysNet/Spooky atomic)",
+        "electrostatics": (
+            f"✓ predicted charges (σ={float(damp):g} Å)"
+            if include_elec and charges and damp is not None
+            else ("✓ predicted charges" if include_elec and charges else "✗ off")
+        ),
+        "ZBL repulsion": "✓" if zbl else "✗ off",
+    }
+    if cgenff is not None:
+        out["CGenFF LJ (training)"] = "✓ recorded" if cgenff else "✗ off"
+    if mbd_loaded:
+        w = 1.0 if mbd_weight is None else float(mbd_weight)
+        path = mbd_checkpoint or (str(cfg_mbd) if cfg_mbd else "—")
+        out["MBD dispersion"] = f"✓ loaded (weight={w:g})"
+        out["MBD checkpoint"] = path
+    elif cfg_mbd or mbd_missing_path:
+        missing = mbd_missing_path or str(cfg_mbd)
+        out["MBD dispersion"] = "✗ NOT loaded (checkpoint trained with MBD)"
+        out["MBD checkpoint"] = f"missing: {missing}"
+    else:
+        out["MBD dispersion"] = "✗ not configured"
+    return out
+
+
 def emit_hybrid_ml_setup(
     *,
     system: Mapping[str, Any],
@@ -309,6 +416,8 @@ def emit_hybrid_ml_setup(
     ml_flags: Mapping[str, Any] | None = None,
     runtime: Mapping[str, Any] | None = None,
     long_range: Mapping[str, Any] | None = None,
+    zbl: Mapping[str, Any] | None = None,
+    energy_terms: Mapping[str, Any] | None = None,
     quiet: bool = False,
 ) -> None:
     """Single dashboard for hybrid calculator setup (replaces duplicate setup/model panels)."""
@@ -316,12 +425,17 @@ def emit_hybrid_ml_setup(
         ("System", system),
         ("Handoff & cutoffs", handoff),
     ]
+    if energy_terms:
+        sections.append(("ML energy terms", energy_terms))
+    zbl_map = zbl if zbl is not None else collect_zbl_cutoff_mapping(model)
+    if zbl_map:
+        sections.append(("ZBL repulsion", zbl_map))
     if long_range:
         sections.append(("Long-range Coulomb", long_range))
     sections.extend(
         [
             ("Neighbor lists & ML batching", neighbor_lists),
-            ("Model", _model_attributes_mapping(model)),
+            ("Model", _model_attributes_mapping(model) if model is not None else {"class": "—"}),
         ]
     )
     if runtime:
@@ -331,6 +445,147 @@ def emit_hybrid_ml_setup(
     if checkpoint:
         sections.append(("Checkpoint", checkpoint))
     emit_dashboard("Hybrid ML/MM setup", sections, border_style="cyan", quiet=quiet)
+
+
+def emit_md_system_calculator_report(
+    *,
+    system: Mapping[str, Any] | None = None,
+    handoff: Mapping[str, Any] | None = None,
+    neighbor_lists: Mapping[str, Any] | None = None,
+    model: Any = None,
+    checkpoint: Mapping[str, Any] | None = None,
+    ml_flags: Mapping[str, Any] | None = None,
+    runtime: Mapping[str, Any] | None = None,
+    long_range: Mapping[str, Any] | None = None,
+    energy_terms: Mapping[str, Any] | None = None,
+    cutoff_params: Any = None,
+    model_type: str | None = None,
+    n_monomers: int | None = None,
+    n_atoms: int | None = None,
+    doML: bool = True,
+    doMM: bool = True,
+    doML_dimer: bool = True,
+    complementary_handoff: bool | None = None,
+    ensemble: str | None = None,
+    checkpoint_path: str | None = None,
+    cell_L_A: float | None = None,
+    mm_cutoff_A: float | None = None,
+    capacity_pairs: int | None = None,
+    n_valid_pairs: int | None = None,
+    capacity_multiplier: float | None = None,
+    skin_distance_A: float | None = None,
+    update_interval_steps: int | None = None,
+    jax_md_capacity: int | None = None,
+    jax_md_n_valid: int | None = None,
+    neighbor_extra: Mapping[str, Any] | None = None,
+    calculator_extra: Mapping[str, Any] | None = None,
+    zbl: Mapping[str, Any] | None = None,
+    include_hybrid_setup: bool = True,
+    include_calculator_summary: bool = True,
+    include_neighbor_list_summary: bool = True,
+    include_psf_topology: bool = True,
+    quiet: bool = False,
+) -> None:
+    """Unified md-system calculator report: Track A dashboard + Track B ruler/NL + PSF.
+
+    Track A (:func:`emit_hybrid_ml_setup`) covers system/handoff/model/runtime flags.
+    Track B (:func:`mmml.cli.run.summaries.print_calculator_summary`) draws the
+    COM-distance cutoff ruler and optional neighbor-list capacities.
+    PSF/CGenFF topology is appended when CHARMM has a loaded PSF.
+    """
+    if quiet or is_quiet():
+        return
+
+    zbl_map = zbl if zbl is not None else collect_zbl_cutoff_mapping(model)
+    energy_map = energy_terms
+    if energy_map is None and model is not None:
+        energy_map = collect_ml_energy_terms_mapping(model)
+
+    if include_hybrid_setup and system is not None and handoff is not None:
+        emit_hybrid_ml_setup(
+            system=system,
+            handoff=handoff,
+            neighbor_lists=neighbor_lists or {},
+            model=model if model is not None else object(),
+            checkpoint=checkpoint,
+            ml_flags=ml_flags,
+            runtime=runtime,
+            long_range=long_range,
+            zbl=zbl_map,
+            energy_terms=energy_map,
+            quiet=quiet,
+        )
+
+    if include_calculator_summary and cutoff_params is not None:
+        from mmml.cli.run.summaries import print_calculator_summary
+
+        print_calculator_summary(
+            cutoff_params,
+            model_type=model_type,
+            n_monomers=n_monomers,
+            n_atoms=n_atoms,
+            doML=doML,
+            doMM=doMM,
+            doML_dimer=doML_dimer,
+            complementary_handoff=complementary_handoff,
+            ensemble=ensemble,
+            checkpoint=checkpoint_path,
+            zbl=zbl_map,
+            energy_terms=energy_map,
+            extra=dict(calculator_extra) if calculator_extra else None,
+        )
+
+    if include_neighbor_list_summary and n_atoms is not None:
+        has_nl_detail = any(
+            v is not None
+            for v in (
+                cell_L_A,
+                mm_cutoff_A,
+                capacity_pairs,
+                n_valid_pairs,
+                capacity_multiplier,
+                skin_distance_A,
+                update_interval_steps,
+                jax_md_capacity,
+                jax_md_n_valid,
+                neighbor_extra,
+            )
+        )
+        if has_nl_detail or (neighbor_lists and any(neighbor_lists.values())):
+            from mmml.cli.run.summaries import print_neighbor_list_summary
+
+            extra: dict[str, Any] = {}
+            if neighbor_lists:
+                for key in (
+                    "ml_sparse_dimers",
+                    "dimers_total",
+                    "max_active_dimers",
+                    "ml_batch_size",
+                    "ml_gpu_count",
+                    "max_pairs",
+                    "PBC",
+                ):
+                    if key in neighbor_lists:
+                        extra[key] = neighbor_lists[key]
+            if neighbor_extra:
+                extra.update(neighbor_extra)
+            print_neighbor_list_summary(
+                n_atoms=int(n_atoms),
+                n_monomers=n_monomers,
+                cell_L_A=cell_L_A,
+                mm_cutoff_A=mm_cutoff_A,
+                capacity_pairs=capacity_pairs,
+                n_valid_pairs=n_valid_pairs,
+                capacity_multiplier=capacity_multiplier,
+                skin_distance_A=skin_distance_A,
+                update_interval_steps=update_interval_steps,
+                jax_md_capacity=jax_md_capacity,
+                jax_md_n_valid=jax_md_n_valid,
+                extra=extra or None,
+            )
+
+    if include_psf_topology:
+        emit_charmm_topology_summary(quiet=quiet)
 
 
 def collect_psf_topology_mapping(
@@ -517,6 +772,8 @@ def _model_attr_label(name: str) -> str:
 
 
 def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
+    if model is None:
+        return [("class", "—")]
     preferred = (
         "features",
         "max_degree",
@@ -531,6 +788,9 @@ def _model_attribute_rows(model: Any) -> list[tuple[str, Any]]:
         "n_res",
         "n_refinement_blocks",
         "zbl",
+        "zbl_cuton",
+        "zbl_cutoff",
+        "trainable_zbl",
         "debug",
         "efa",
         "use_energy_bias",

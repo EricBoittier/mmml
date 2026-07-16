@@ -39,7 +39,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_charmm_use_pbc,
     resolve_loose_pbc,
     resolve_mlpot_use_pbc,
-    resolve_use_pbc,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
@@ -196,7 +195,6 @@ def _run_charmm_mm_pretreat_cpt_stage(
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         build_cpt_equilibration_dynamics,
         build_cpt_production_dynamics,
-        build_nvt_equilibration_dynamics,
         build_nvt_production_dynamics,
         ps_to_nsteps,
     )
@@ -207,7 +205,6 @@ def _run_charmm_mm_pretreat_cpt_stage(
         _configure_npt_dynamics_start,
         _reset_stage_trajectory,
         _seed_restart_for_memory_handoff,
-        _npt_cpt_builder_options,
     )
 
     nstep = max(1, ps_to_nsteps(timestep_ps, duration_ps))
@@ -607,11 +604,43 @@ def run_charmm_mm_pretreat_before_mlpot(
     return get_charmm_positions_array()
 
 
-def _atoms_per_monomer_list(z: np.ndarray, n_monomers: int) -> list[int]:
+def _atoms_per_monomer_list(
+    z: np.ndarray,
+    n_monomers: int,
+    *,
+    args: Any | None = None,
+) -> list[int]:
     n_atoms = int(len(z))
+    # Mixed solvent cells do not have a uniform atom count per monomer
+    # (e.g. TIP3=3 atoms and MEOH=6 atoms).  Prefer the residue/PSF
+    # boundaries when available instead of assuming a divisible total.
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+            atoms_per_monomer_from_psf,
+        )
+
+        per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
+        if len(per_psf) == int(n_monomers) and sum(per_psf) == n_atoms:
+            return per_psf
+    except Exception:
+        # Keep the legacy uniform fallback for callers without a live PSF.
+        pass
+    if args is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            _cluster_atoms_per_from_composition,
+        )
+
+        comp_per = _cluster_atoms_per_from_composition(args, n_atoms=n_atoms)
+        if (
+            comp_per is not None
+            and len(comp_per) == int(n_monomers)
+            and sum(comp_per) == n_atoms
+        ):
+            return list(comp_per)
     if n_atoms % int(n_monomers) != 0:
         raise ValueError(
-            f"atom count {n_atoms} not divisible by n_monomers={n_monomers}"
+            f"atom count {n_atoms} not divisible by n_monomers={n_monomers}; "
+            "mixed systems require PSF residue boundaries or --composition"
         )
     per = n_atoms // int(n_monomers)
     return [per] * int(n_monomers)
@@ -700,7 +729,7 @@ def _register_mlpot_context(
     apm = (
         list(atoms_per_monomer)
         if atoms_per_monomer is not None
-        else _atoms_per_monomer_list(z, n_monomers)
+        else _atoms_per_monomer_list(z, n_monomers, args=args)
     )
     import sys
 

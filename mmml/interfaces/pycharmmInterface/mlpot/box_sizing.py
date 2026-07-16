@@ -13,15 +13,15 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_length_fro
 
 AVOGADRO = 6.02214076e23
 
-# Margin between Packmol ``inside cube`` and the CHARMM/PBC simulation cell (per side).
-DEFAULT_PACKMOL_BOX_PADDING_A = 10.0
-# When ``--box-size`` and ``--composition`` are both set (density-targeted fixed cell),
-# keep Packmol in an inner cube [margin, L-margin] so MIC checks at full L do not see
-# face-to-face periodic overlaps that Packmol never validated.
-FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A = 2.5
-# Floor for dense periodic liquid prep (DCM-like); Packmol does not enforce MIC.
-MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A = 2.5
-# Cap per-side margin so small cells still fit a Packmol cube (20% of L_sim per side).
+# Margin between Packmol ``inside cube`` and the PBC simulation cell (Å per side).
+# Keep a thin birth layer at the faces so Packmol does not place atoms on the
+# periodic boundary; fill the rest of the cell so neighbor lists start dense.
+DEFAULT_PACKMOL_BOX_PADDING_A = 1.0
+# Fixed ``--box-size`` + ``--composition``: same thin face margin (was 2.5).
+FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A = 1.0
+# Floor when dense-liquid prep is enabled; Packmol does not enforce MIC.
+MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A = 1.0
+# Cap per-side margin so small cells still fit a Packmol cube (20% of L_sim).
 MAX_PACKMOL_MARGIN_FRAC_PER_SIDE = 0.20
 
 # Experimental bulk liquid densities (~298 K) for auto-sizing.
@@ -409,7 +409,12 @@ def resolve_packmol_cube_side_for_sim_cell(
     sim_side_A: float,
     positions: np.ndarray | None = None,
 ) -> float:
-    """Packmol cube edge (Å), strictly below the simulation cell, cubic from extents."""
+    """Packmol cube edge (Å): nearly fill the simulation cell with a thin face margin.
+
+    ``positions`` is accepted for API compatibility but ignored; cold-start packing
+    always targets ``L_sim - 2 * padding`` so neighbor lists start filled.
+    """
+    del positions  # formerly used to shrink the cube from cluster extents
     sim = float(sim_side_A)
     if sim <= 0.0:
         raise ValueError(f"simulation cell side must be positive, got {sim}")
@@ -428,46 +433,8 @@ def resolve_packmol_cube_side_for_sim_cell(
 
     padding = resolve_packmol_box_padding_A(args)
     margin = _effective_packmol_margin_per_side_A(sim, padding)
-    max_packmol = sim - 2.0 * margin
-    ml_cut = float(getattr(args, "ml_cutoff", 12.0))
-    tol = float(getattr(args, "packmol_tolerance", 2.0) or 2.0)
-    space = float(getattr(args, "spacing", 5.0) or 5.0)
-    inner_margin = max(tol, 0.5 * space)
-
-    extent_side: float | None = None
-    if positions is not None and np.asarray(positions).size > 0:
-        extent_side = cubic_side_from_cluster_extent(
-            positions,
-            margin_A=inner_margin,
-            ml_cutoff=ml_cut,
-        )
-    elif resolve_box_auto_mode(args) == "density":
-        extent_side = float(resolve_density_packmol_cube_side(args))
-    elif getattr(args, "box_size", None) is not None:
-        comp = parse_composition_dict(getattr(args, "composition", None))
-        if comp:
-            n_mol = int(getattr(args, "n_molecules", 0) or 0) or int(sum(comp.values()))
-            mass_g = total_mass_g_for_composition(comp)
-            vol_cm3 = (sim * 1.0e-8) ** 3
-            if n_mol > 0 and vol_cm3 > 0.0 and mass_g > 0.0:
-                rho_g_cm3 = float(mass_g) / float(vol_cm3)
-                extent_side = float(
-                    cubic_box_side_from_target_density(
-                        n_molecules=n_mol,
-                        total_mass_g=mass_g,
-                        target_density_g_cm3=rho_g_cm3,
-                    )
-                )
-
-    if extent_side is not None:
-        packmol = min(float(extent_side), max_packmol)
-    else:
-        packmol = max_packmol
-
-    min_packmol = 2.0 * ml_cut + inner_margin
-    if packmol >= sim:
-        packmol = max(min_packmol, sim * 0.85)
-    if packmol >= sim:
+    packmol = sim - 2.0 * margin
+    if packmol <= 0.0 or packmol >= sim:
         raise ValueError(
             f"Cannot fit Packmol cube inside simulation cell: L_sim={sim:.3f} Å, "
             f"padding={padding:.3f} Å per side."
@@ -608,8 +575,9 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         metavar="ANG",
         help=(
             "Cold-start margin (Å per side) between Packmol cube and simulation cell "
-            f"(default: {DEFAULT_PACKMOL_BOX_PADDING_A:.0f}; capped at "
-            f"{int(MAX_PACKMOL_MARGIN_FRAC_PER_SIDE * 100)}%% of L_sim for small boxes)."
+            f"(default: {DEFAULT_PACKMOL_BOX_PADDING_A:.1f}; thin face birth only — "
+            "pack nearly full cell; raise MM pair capacity if NL fill is high). "
+            f"Capped at {int(MAX_PACKMOL_MARGIN_FRAC_PER_SIDE * 100)}%% of L_sim."
         ),
     )
     group.add_argument(

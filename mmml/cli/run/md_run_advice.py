@@ -593,6 +593,30 @@ def _remaining_stages(planned: list[str], completed: set[str]) -> list[str]:
     return []
 
 
+def _read_mini_hybrid_grms(output_dir: Path) -> float | None:
+    """Best-effort hybrid/USER GRMS from mini energy sidecars."""
+    out = Path(output_dir)
+    for name in ("mini_energy.json", "02_mini_energy.json"):
+        path = out / name
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        energy = payload.get("energy_kcal_mol") if isinstance(payload, dict) else None
+        if not isinstance(energy, dict):
+            continue
+        raw = energy.get("GRMS")
+        try:
+            grms = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(grms):
+            return grms
+    return None
+
+
 def _failure_preset_hints(
     output_dir: Path,
     manifest_args: dict[str, Any],
@@ -604,14 +628,32 @@ def _failure_preset_hints(
 
     if failure_mode == "pre_heat_gate":
         notes.append(
-            "Pre-heat gate failed (intra-monomer overlap after MLpot mini). "
-            "Re-run from prep_ladder with md_stages mini,heat,equi."
+            "Failed before heat dynamics (0 heat steps after mini artifacts). "
+            "Typical causes: hybrid GRMS above the MLpot registration limit "
+            "('not ML-safe'), or geometry gates (intra/extent) after mini."
         )
-        current_sd = int(manifest_args.get("dynamics_intra_rescue_sd_steps") or 200)
-        notes.append(
-            f"Try --dynamics-intra-rescue-sd-steps {max(400, current_sd * 2)} "
-            "or relax --dynamics-intra-min-distance slightly (e.g. 0.95)."
-        )
+        mini_grms = _read_mini_hybrid_grms(output_dir)
+        if mini_grms is not None and mini_grms > 25.0:
+            notes.append(
+                f"Last mini USER/hybrid GRMS was {mini_grms:.1f} kcal/mol/Å — "
+                "rebuild packing (increase --spacing / densify liquid-prep) "
+                "instead of forcing intra-rescue alone."
+            )
+        else:
+            notes.append(
+                "Try --dynamics-intra-rescue-sd-steps 400 or slightly relax "
+                "--dynamics-intra-min-distance (e.g. 0.95) if the log shows "
+                "intra contacts; if it shows 'not ML-safe' GRMS, fix spacing/box."
+            )
+        spacing = manifest_args.get("spacing")
+        try:
+            if spacing is not None and float(spacing) < 2.8:
+                notes.append(
+                    f"spacing={float(spacing):.2f} Å is tight for water "
+                    "(O–O ~2.8 Å); prefer ≥3.5 Å or a proper liquid-prep density."
+                )
+        except (TypeError, ValueError):
+            pass
         return includes, notes
 
     cleanup_journal = output_dir / "cleanup" / "journal.json"
@@ -770,7 +812,16 @@ def build_run_advice(
             elif failed_stage and failed_stage in planned:
                 idx = planned.index(failed_stage)
                 overrides["md_stages"] = ",".join(planned[idx:])
-            headline = f"Job failed (exit {exit_code}) — resume from best checkpoint"
+            if int(exit_code) == 0:
+                headline = (
+                    "Incomplete — stage summary has errors; "
+                    "resume from best checkpoint"
+                )
+                notes.append(
+                    "Exit code was 0 but at least one staged workflow row is marked error."
+                )
+            else:
+                headline = f"Job failed (exit {exit_code}) — resume from best checkpoint"
         preset_includes, preset_notes = _failure_preset_hints(
             out_dir, args, failure_mode=failure_mode
         )
@@ -925,7 +976,7 @@ def emit_run_advice(
         if advice.command:
             table.add_row("Script", str(Path(output_dir) / "next_run.sh"))
             table.add_row("One-liner", str(Path(output_dir) / "next_run.command"))
-        border = "red" if advice.exit_code != 0 else "green"
+        border = "red" if advice.exit_code != 0 else ("yellow" if advice.command else "green")
         console.print(Panel(table, title="[bold]Next md-system run[/bold]", border_style=border))
         if advice.command:
             sys.stdout.write("Copy-paste:\n")

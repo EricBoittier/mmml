@@ -180,9 +180,13 @@ def format_top_level_help(prog: str = "mmml") -> str:
 
 def validate_command(name: str, *, allowed: Iterable[str]) -> str | None:
     """Return error message if ``name`` is not a known command."""
-    allowed_set = set(allowed)
-    if name in allowed_set:
+    import difflib
+
+    allowed_list = sorted(set(allowed))
+    if name in allowed_list:
         return None
-    close = [c for c in allowed_set if c.startswith(name[:3])][:5]
+    close = difflib.get_close_matches(name, allowed_list, n=5, cutoff=0.45)
+    if not close and len(name) >= 3:
+        close = [c for c in allowed_list if c.startswith(name[:3])][:5]
     hint = f" Did you mean: {', '.join(close)}?" if close else ""
     return f"Unknown command {name!r}.{hint} Run 'mmml commands'."

@@ -336,17 +336,19 @@ def mlpot_limits_message() -> str:
 
 
 NPR_TIERS: dict[str, int] = {
-    "default": 8_000_000,
-    "large": 8_000_000,
-    "xlarge": 12_000_000,
-    "xxlarge": 36_000_000,
-    "xxxlarge": 56_000_000,
+    "default": 64_000_000,
+    "large": 64_000_000,
+    "xlarge": 128_000_000,
+    "xxlarge": 256_000_000,
+    "xxxlarge": 512_000_000,
 }
 
-# CGenFF all-atom monomer sizes for PBC burst solvents (DCM / ACO campaign).
+# CGenFF all-atom monomer sizes for supported PBC burst solvents.
 PBC_BURST_ML_ATOMS_PER_MONOMER: dict[str, int] = {
     "DCM": 5,
     "ACO": 10,
+    "TIP3": 3,
+    "MEOH": 6,
 }
 
 

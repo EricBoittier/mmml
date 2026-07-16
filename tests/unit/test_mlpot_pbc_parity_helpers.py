@@ -27,7 +27,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
 )
 
 
-def test_resolve_lr_solver_defaults_jax_pme_for_pbc_setup():
+def test_resolve_lr_solver_defaults_mic_for_pbc_setup():
     args = argparse.Namespace(
         setup="pbc_nve",
         lr_solver=None,
@@ -35,7 +35,12 @@ def test_resolve_lr_solver_defaults_jax_pme_for_pbc_setup():
         mlpot_pbc=False,
     )
     assert resolve_mlpot_use_pbc(args) is True
-    assert resolve_lr_solver_for_mlpot(args, mlpot_pbc=True, mm_nonbond_mode="jax_mic") == "jax_pme"
+    assert resolve_lr_solver_for_mlpot(args, mlpot_pbc=True, mm_nonbond_mode="jax_mic") == "mic"
+
+
+def test_resolve_lr_solver_explicit_jax_pme_wins():
+    args = argparse.Namespace(lr_solver="jax_pme")
+    assert resolve_lr_solver_for_mlpot(args, mlpot_pbc=True) == "jax_pme"
 
 
 def test_resolve_lr_solver_explicit_mic_wins():
@@ -48,11 +53,14 @@ def test_jax_pme_sr_cutoff_matches_switched_mm_outer_edge():
     assert resolve_jax_pme_sr_cutoff_for_mlpot(None, cp) == pytest.approx(13.0)
 
 
-def test_warn_if_mic_pbc_without_lr_emits_warning():
+def test_warn_if_mic_pbc_without_lr_is_quiet_by_default(capsys):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         warn_if_mic_pbc_without_lr(lr_solver="mic", mlpot_pbc=True)
-    assert any("truncated MIC Coulomb" in str(w.message) for w in caught)
+    assert not caught
+    assert capsys.readouterr().out == ""
+    warn_if_mic_pbc_without_lr(lr_solver="mic", mlpot_pbc=True, verbose=True)
+    assert "truncated MIC Coulomb" in capsys.readouterr().out
 
 
 def test_image_aware_dimer_com_distance_across_box_face():

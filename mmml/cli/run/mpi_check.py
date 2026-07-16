@@ -42,7 +42,6 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
         charmm_lib_links_mpi,
         charmm_libmpi_path,
         charmm_mpirun_path,
-        mpirun_launch_hint,
         mpi4py_libmpi_path,
         mpi4py_openmpi_mismatch,
         prepare_charmm_mpi_runtime,

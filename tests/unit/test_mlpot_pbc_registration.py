@@ -396,7 +396,11 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
         workflow_args=apply_nb.call_args.kwargs.get("workflow_args"),
         context="MLpot PBC registration (pre-upinb)",
     )
-    install.assert_called_once_with(fake_sel, update=False)
+    # Exclusions are reinstalled before the pre-upinb state and before each of the
+    # two UPDATE passes (exclusion-pointer alignment for <MAKINB>): 3 calls total.
+    assert install.call_count == 3
+    for install_call in install.call_args_list:
+        assert install_call == call(fake_sel, update=False)
     verify.assert_called_once()
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
     assert fake_pycharmm.lingo.charmm_script.call_count == 0

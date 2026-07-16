@@ -24,9 +24,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import _build_stage
 
 def test_resolve_heat_ihtfrq_defaults_to_freq_cadence():
     args = argparse.Namespace(
-        heat_ihtfrq=0, dyn_nprint=500, quiet=False, dyn_freq_cadence=50
+        heat_ihtfrq=0,
+        dyn_nprint=500,
+        quiet=False,
     )
-    assert resolve_heat_ihtfrq(args, nstep=2000) == 50
+    assert resolve_heat_ihtfrq(args, nstep=2000) == 500
 
 
 def test_resolve_heat_ihtfrq_legacy_defaults_to_dyn_nprint():

@@ -44,3 +44,27 @@ def test_main_json(monkeypatch, tmp_path, capsys):
     assert rc == 0
     data = json.loads(capsys.readouterr().out)
     assert data["MMML_CKPT"] == str(ckpt.resolve())
+    assert "model_defaults" in data
+    assert set(data["model_defaults"].keys()) == {"physnet", "spookynet", "mbd", "multipoles"}
+
+
+def test_model_defaults_resolution(monkeypatch, tmp_path):
+    spooky = tmp_path / "spooky.json"
+    mbd = tmp_path / "mbd.json"
+    mult = tmp_path / "mult.json"
+    for p in (spooky, mbd, mult):
+        p.write_text("{}")
+
+    monkeypatch.setenv("SPOOKYNET_CKPT", str(spooky))
+    monkeypatch.setenv("MBD_CKPT", str(mbd))
+    monkeypatch.setenv("MULTIPOLES_CKPT", str(mult))
+
+    report = env_cli.collect_env_report()
+    assert report["SPOOKYNET_CKPT"] == str(spooky.resolve())
+    assert report["MBD_CKPT"] == str(mbd.resolve())
+    assert report["MULTIPOLES_CKPT"] == str(mult.resolve())
+
+    models = report["model_defaults"]
+    assert models["spookynet"]["available"] is True
+    assert models["mbd"]["available"] is True
+    assert models["multipoles"]["available"] is True

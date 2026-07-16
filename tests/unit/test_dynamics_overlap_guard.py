@@ -91,6 +91,38 @@ def test_monomer_offsets_uniform():
     np.testing.assert_array_equal(off, [0, 5, 10])
 
 
+def test_resolve_overlap_monomer_offsets_uses_composition(monkeypatch):
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        resolve_overlap_monomer_offsets,
+    )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: np.zeros((9, 3)),
+    )
+
+    def _boom():
+        raise RuntimeError("psf resid unavailable")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
+        _boom,
+    )
+    ctx = SimpleNamespace(
+        atoms_per_monomer=None,
+        pyCModel=None,
+        workflow_args=SimpleNamespace(
+            composition="MEOH:1,TIP3:1",
+            _cluster_atoms_per_list=None,
+        ),
+    )
+    cfg = DynamicsOverlapConfig(n_monomers=2)
+    off = resolve_overlap_monomer_offsets(cfg, ctx)
+    np.testing.assert_array_equal(off, [0, 6, 9])
+
+
 def test_attach_prior_uses_geometry_fallback_ladder(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
@@ -2223,6 +2255,7 @@ def test_mlpot_overlap_memory_handoff_flag_does_not_skip_readyn_between_chunks(t
 
 
 def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
     """Bussi heat overlap stays in RAM between chunks (no scratch READYN)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
@@ -2859,8 +2892,9 @@ def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     assert not _overlap_should_split_trajectory(n_chunks=7390, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=100, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=9, traj_nsavc=1)
-    assert not _overlap_should_split_trajectory(n_chunks=50, traj_nsavc=100)
-    assert not _overlap_should_split_trajectory(n_chunks=80, traj_nsavc=25)
+    # Sparse HEAT cadence: allow many per-chunk DCDs.
+    assert _overlap_should_split_trajectory(n_chunks=50, traj_nsavc=100)
+    assert _overlap_should_split_trajectory(n_chunks=80, traj_nsavc=25)
     assert _overlap_should_split_trajectory(n_chunks=4, traj_nsavc=100)
     assert _overlap_should_split_trajectory(n_chunks=8, traj_nsavc=1)
     assert _overlap_should_split_trajectory(n_chunks=3, traj_nsavc=100)
@@ -3656,7 +3690,7 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     kw3 = {"nsavc": 40}
     _harmonize_overlap_chunk_frequencies(kw3, 40)
     assert kw3["nsavc"] == 39
-    assert kw3["_suppress_trajectory"] is True
+    assert "_suppress_trajectory" not in kw3
 
     kw3b = {"nsavc": 16, "nprint": 10, "iprfrq": 10, "isvfrq": 10}
     _harmonize_overlap_chunk_frequencies(kw3b, 250)
@@ -3713,12 +3747,22 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw5["_suppress_trajectory"] is True
     assert kw5["nsavv"] == 250
 
+    kw5b = {
+        "nsavc": 499,
+        "_target_dcd_nsavc": 499,
+        "timestep": 0.00025,
+    }
+    _harmonize_overlap_chunk_frequencies(kw5b, 250, global_step_start=250)
+    assert kw5b["nsavc"] == 249
+    assert "_suppress_trajectory" not in kw5b
+
     kw6 = {"nsavc": 1600}
     _harmonize_overlap_chunk_frequencies(
         kw6, 500, global_step_start=0, split_trajectory=True
     )
+    # Mid-chunk without a save boundary still suppresses; Bussi clears this.
     assert kw6["nsavc"] == 499
-    assert "_suppress_trajectory" not in kw6
+    assert kw6["_suppress_trajectory"] is True
 
 
 def test_apply_overlap_chunk_heat_ramp_chunk_zero():
@@ -3968,6 +4012,31 @@ def test_sync_dynamics_io_units_keeps_explicit_iunrea_minus_one():
     assert "iunwri" not in kw
 
 
+def test_sync_dynamics_io_units_forces_iuncrd_minus_one_without_dcd():
+    """Deferred-DCD chunks must not leave IUNCRD aliased to IUNWRI (FORMATTED crash)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
+
+    kw = {
+        "iunrea": -1,
+        "iunwri": "/tmp/heat.res",
+        "nstep": 250,
+        "nsavc": 249,
+        "restart": False,
+    }
+    _sync_dynamics_io_units(kw, {"iunwri": "/tmp/heat.res"})
+    assert kw["iunrea"] == -1
+    assert kw["iuncrd"] == -1
+    assert kw["iunvel"] == -1
+    assert kw["iunwri"] == "/tmp/heat.res"
+
+
+def test_dynamics_writes_dcd_false_when_iuncrd_disabled():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _dynamics_writes_dcd
+
+    assert _dynamics_writes_dcd({"iuncrd": -1, "nsavc": 249}) is False
+    assert _dynamics_writes_dcd({"iuncrd": 51, "nsavc": 249}) is True
+
+
 def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
@@ -4000,6 +4069,7 @@ def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
         )
 
     assert captured[0]["iunrea"] == -1
+    assert captured[0]["iuncrd"] == -1
 
 
 def test_run_dynamics_chunk_clears_iunrea_from_io_when_not_restart():
@@ -4247,6 +4317,32 @@ def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
     assert chunk_kw["iunrea"] == -1
     assert chunk_kw["firstt"] == 63.0
     assert "finalt" not in chunk_kw
+
+
+def test_prepare_post_rescue_velocity_redraw_keeps_iasvel0():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_post_rescue_overlap_handoff,
+    )
+
+    chunk_kw = {
+        "tbath": 200.0,
+        "timestep": 0.0001,
+        "restart": True,
+        "iunrea": 3,
+        "iasvel": 1,
+    }
+    ctx = mock.Mock(
+        use_pbc=True,
+        charmm_cubic_box_side_A=30.0,
+        _overlap_post_rescue_cold_start=False,
+        _overlap_velocity_redraw_memory_handoff=True,
+    )
+    _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
+    assert chunk_kw["restart"] is False
+    assert chunk_kw["start"] is True
+    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iunrea"] == -1
+    assert ctx._overlap_velocity_redraw_memory_handoff is False
 
 
 def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():

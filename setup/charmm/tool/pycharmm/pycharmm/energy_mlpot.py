@@ -44,6 +44,10 @@ class MLpot():
         # ML-MM cutoff radii ctonnb and ctofnb. If None, CHARMM parameter taken
         mlmm_ctonnb=None,
         mlmm_ctofnb=None,
+        # Keep PSF bonds/angles; use CHARMM BLOCK to disable internal MM on ML atoms.
+        preserve_psf_internals=True,
+        # ML exclusions + ``upinb`` were already installed (PBC registration path).
+        skip_iblo_inb_update=False,
         # Additional model keyword arguments
         **kwargs
     ):
@@ -59,12 +63,14 @@ class MLpot():
         # ML atoms - atom number
         self.ml_Natoms = len(ml_indices)
 
-        # ML - Delete bonds, angles, dihedrals, improper - if active
-        pycharmm.psf.delete_bonds(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_angles(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_dihedrals(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_impropers(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_cmaps(ml_selection, ml_selection, psort=True)
+        # Legacy path: strip ML-region connectivity from the PSF. Prefer BLOCK +
+        # preserve_psf_internals=True (mmml default) so VMD/topology stay intact.
+        if not preserve_psf_internals:
+            pycharmm.psf.delete_bonds(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_angles(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_dihedrals(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_impropers(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_cmaps(ml_selection, ml_selection, psort=True)
 
         # ML&MM - psf charges - set ML charges zero when charges and ML-MM
         # interaction are handled by the ML potential
@@ -83,10 +89,11 @@ class MLpot():
                 self.ml_inb.append(jdx + 1)  # + 1 as CHARMM start at index 1
         self.ml_nnb = len(self.ml_inb)
 
-        pycharmm.psf.set_iblo_inb(self.ml_iblo, self.ml_inb)
+        if not skip_iblo_inb_update:
+            pycharmm.psf.set_iblo_inb(self.ml_iblo, self.ml_inb)
 
-        pycharmm.nbonds.update_bnbnd()  # Already executed in set_iblo_inb()
-        pycharmm.image.update_bimag()
+            pycharmm.nbonds.update_bnbnd()  # Already executed in set_iblo_inb()
+            pycharmm.image.update_bimag()
 
         ###################################################
         # START - Potential model dependent part
@@ -178,8 +185,10 @@ class MLpot():
 
         pycharmm.lib.charmm.mlpot_set_func(self.energy_func)
 
-        mlidx = (ctypes.c_int * self.ml_Natoms)(*(self.ml_indices + 1))
-        mlidz = (ctypes.c_int * self.ml_Natoms)(*ml_Z)
+        mlidx = (ctypes.c_int * self.ml_Natoms)()
+        mlidx[:] = self.ml_indices + 1
+        mlidz = (ctypes.c_int * self.ml_Natoms)()
+        mlidz[:] = ml_Z
         Nml = (ctypes.c_int * 1)(self.ml_Natoms)
         pycharmm.lib.charmm.mlpot_set_properties(
             Nml, mlidx, mlidz)
@@ -200,3 +209,78 @@ class MLpot():
         """
         pycharmm.lib.charmm.mlpot_unset()
         self.is_set = False
+
+    def reattach_mlpot(self, *, force: bool = False):
+        """Re-enable MLpot after :meth:`unset_mlpot` without rebuilding exclusion lists.
+
+        Re-running :func:`pycharmm.psf.set_iblo_inb` / :func:`pycharmm.nbonds.update_bnbnd`
+        after long MD can segfault in CHARMM ``upinb``; reuse the existing lists instead.
+
+        When ``force=True``, always re-register the callback even if Python ``is_set``
+        is still True (Fortran ``mlpot_is_set`` may have been cleared by ``mlpot_unset``).
+        """
+        if self.is_set and not force:
+            return
+        pycharmm.lib.charmm.mlpot_set_func(self.energy_func)
+        mlidx = (ctypes.c_int * self.ml_Natoms)()
+        mlidx[:] = self.ml_indices + 1
+        mlidz = (ctypes.c_int * self.ml_Natoms)()
+        mlidz[:] = self.ml_Z
+        nml = (ctypes.c_int * 1)(self.ml_Natoms)
+        pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
+        self.is_set = True
+
+
+def get_mlpot_pair_counts():
+    """Return ``(n_mlml, n_mlmm)`` from the last ``mlpot_update`` call."""
+    try:
+        getter = pycharmm.lib.charmm.mlpot_get_pair_counts
+    except AttributeError:
+        return None
+    out_nmlp = (ctypes.c_int * 1)()
+    out_nmlmmp = (ctypes.c_int * 1)()
+    status = getter(out_nmlp, out_nmlmmp)
+    if not bool(status):
+        raise RuntimeError("mlpot_get_pair_counts failed")
+    return int(out_nmlp[0]), int(out_nmlmmp[0])
+
+
+def export_mlpot_mlmm_pairs(*, max_pairs: int | None = None):
+    """Export Fortran ``idxu/idxv`` (0-based) after ``mlpot_update``."""
+    try:
+        exporter = pycharmm.lib.charmm.mlpot_export_mlmm_pairs
+    except AttributeError:
+        return None
+    _nmlp, nmlmmp = get_mlpot_pair_counts() or (0, 0)
+    cap = int(max_pairs) if max_pairs is not None else int(nmlmmp)
+    if cap <= 0:
+        return [], []
+    out_u = (ctypes.c_int * cap)()
+    out_v = (ctypes.c_int * cap)()
+    out_count = (ctypes.c_int * 1)()
+    status = exporter(out_u, out_v, ctypes.c_int(cap), out_count)
+    if not bool(status):
+        raise RuntimeError("mlpot_export_mlmm_pairs failed")
+    n = int(out_count[0])
+    return [int(out_u[k]) for k in range(n)], [int(out_v[k]) for k in range(n)]
+
+
+def export_mlpot_mlml_pairs(*, max_pairs: int | None = None):
+    """Export Fortran ``idxi/idxj`` (0-based) after ``mlpot_update``."""
+    try:
+        exporter = pycharmm.lib.charmm.mlpot_export_mlml_pairs
+    except AttributeError:
+        return None
+    nmlp, _nmlmmp = get_mlpot_pair_counts() or (0, 0)
+    cap = int(max_pairs) if max_pairs is not None else int(nmlp)
+    if cap <= 0:
+        return [], []
+    out_i = (ctypes.c_int * cap)()
+    out_j = (ctypes.c_int * cap)()
+    out_count = (ctypes.c_int * 1)()
+    status = exporter(out_i, out_j, ctypes.c_int(cap), out_count)
+    if not bool(status):
+        raise RuntimeError("mlpot_export_mlml_pairs failed")
+    n = int(out_count[0])
+    return [int(out_i[k]) for k in range(n)], [int(out_j[k]) for k in range(n)]
+

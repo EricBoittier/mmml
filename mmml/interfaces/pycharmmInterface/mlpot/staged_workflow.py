@@ -46,7 +46,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_charmm_use_pbc,
     resolve_loose_pbc,
     resolve_mlpot_use_pbc,
-    resolve_use_pbc,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
@@ -59,7 +58,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _valid_restart_file,
     build_cpt_equilibration_dynamics,
     build_cpt_production_dynamics,
-    build_heat_dynamics,
     build_nvt_equilibration_dynamics,
     build_nvt_production_dynamics,
     build_nve_dynamics,
@@ -112,13 +110,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
     PACKMOL_CLUSTER,
     legacy_mlpot_mini_paths,
     mirror_legacy_mlpot_files,
-    save_snapshot_from_charmm,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
     verify_mlpot_charmm_atom_consistency,
     ensure_domdec_off_for_mlpot_energy,
-    get_charmm_positions_array,
     load_cluster_from_artifacts,
     save_cluster_topology_for_vmd,
     select_by_resids,
@@ -1241,7 +1237,6 @@ def _load_or_build_cluster(
         get_handoff_in,
     )
     from mmml.cli.run.md_pbc_suite.ase import _parse_composition
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
 
     ho = handoff_in if handoff_in is not None else get_handoff_in()
     if ho is not None:
@@ -1906,7 +1901,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     baseline = None
     if (
-        getattr(args, "bonded_mm_mini", True)
+        getattr(args, "bonded_mm_mini", False)
         and getattr(args, "charmm_pre_minimize", True)
         and not pretreat_mm
     ):
@@ -2028,7 +2023,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     flush=True,
                 )
             _pre_sd_threshold = getattr(args, "pre_sd_recovery_energy_threshold", None)
-            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", True):
+            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", False):
                 # Default: 100 kcal/mol per atom — catches severe Packmol clash energies
                 # (e.g. 17M kcal/mol for 890 atoms) while ignoring normal ML energies.
                 _pre_sd_threshold = 1000.0 * float(n_atoms)
@@ -2294,7 +2289,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
             _pre_sd_threshold = getattr(args, "pre_sd_recovery_energy_threshold", None)
-            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", True):
+            if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", False):
                 _pre_sd_threshold = 100.0 * float(n_atoms)
             _pre_sd_grms = getattr(args, "pre_sd_recovery_grms_threshold", None)
             if _pre_sd_grms is None:
@@ -2422,6 +2417,142 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 if not args.quiet
                 else "",
             )
+
+        # A whole-system RMS can hide a few atoms at multi-eV/Å force.  Measure
+        # the live hybrid force field after every recovery/minimization step and
+        # enforce the independent per-atom ceiling before entering HEAT.
+        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            geometry_safe_for_dynamics,
+            measure_monomer_grms_stats,
+            resolve_grms_thresholds,
+        )
+
+        force_gate = geometry_safe_for_dynamics(
+            measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
+            resolve_grms_thresholds(
+                args,
+                atoms_per_list=atoms_per_list,
+                n_monomers=n_mol,
+                n_atoms=n_atoms,
+                mlpot_ctx=ctx,
+                pbc=charmm_pbc,
+            ),
+        )
+        if not force_gate.ok:
+            # A whole-system minimizer barely feels one or two stressed monomers
+            # (global RMS is dominated by the healthy majority), so before failing
+            # try a targeted per-monomer calculator repair on the bad monomers.
+            if (
+                getattr(args, "monomer_calc_repair", True)
+                and pyCModel is not None
+                and atoms_per_list is not None
+                and len(atoms_per_list) > 1
+            ):
+                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                    repair_stressed_monomers_with_calculator,
+                )
+
+                try:
+                    repair = repair_stressed_monomers_with_calculator(
+                        ctx,
+                        atoms_per_list=atoms_per_list,
+                        fmax_ceiling_ev_a=float(force_gate.max_fmax_before_dyn)
+                        / 23.060541945329334,
+                        max_steps=int(getattr(args, "fire_min_steps", 200) or 200),
+                        fmax_ev_a=float(getattr(args, "pre_min_fmax", 0.05) or 0.05),
+                        fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
+                        verbose=not args.quiet,
+                        context_prefix="Pre-dynamics monomer repair",
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    if not args.quiet:
+                        print(
+                            f"WARN: per-monomer calculator repair failed ({exc})",
+                            flush=True,
+                        )
+                else:
+                    if repair.ran:
+                        sync_charmm_positions(get_charmm_positions_array())
+                        current_grms = refresh_mlpot_energy_and_grms(
+                            ctx,
+                            context="Pre-dynamics gate (post-monomer repair)"
+                            if not args.quiet
+                            else "",
+                        )
+                        force_gate = geometry_safe_for_dynamics(
+                            measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
+                            resolve_grms_thresholds(
+                                args,
+                                atoms_per_list=atoms_per_list,
+                                n_monomers=n_mol,
+                                n_atoms=n_atoms,
+                                mlpot_ctx=ctx,
+                                pbc=charmm_pbc,
+                            ),
+                        )
+                        if (
+                            not force_gate.ok
+                            and repair.repaired_monomers
+                            and getattr(args, "monomer_physnet_mini", True)
+                        ):
+                            # Constrained full-box FIRE can immediately step
+                            # uphill when the stressed intramolecular geometry
+                            # is coupled to the surrounding cluster.  Restore a
+                            # known-good monomer template and minimize the
+                            # selected residues with isolated PhysNet instead.
+                            from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+                                run_selective_monomer_physnet_mini,
+                                selective_monomer_physnet_mini_config_from_args,
+                            )
+
+                            isolated = run_selective_monomer_physnet_mini(
+                                ctx,
+                                config=selective_monomer_physnet_mini_config_from_args(
+                                    args,
+                                    verbose=not args.quiet,
+                                    quiet_bfgs=bool(
+                                        getattr(args, "quiet_bfgs", False)
+                                    ),
+                                ),
+                                context_prefix="Pre-dynamics isolated monomer repair",
+                                flagged=tuple(repair.repaired_monomers),
+                                restart_path=paths.get("geometry_baseline_res"),
+                            )
+                            if isolated.ran:
+                                sync_charmm_positions(get_charmm_positions_array())
+                                current_grms = refresh_mlpot_energy_and_grms(
+                                    ctx,
+                                    context=(
+                                        "Pre-dynamics gate "
+                                        "(post-isolated monomer repair)"
+                                    )
+                                    if not args.quiet
+                                    else "",
+                                )
+                                force_gate = geometry_safe_for_dynamics(
+                                    measure_monomer_grms_stats(
+                                        atoms_per_list, mlpot_ctx=ctx
+                                    ),
+                                    resolve_grms_thresholds(
+                                        args,
+                                        atoms_per_list=atoms_per_list,
+                                        n_monomers=n_mol,
+                                        n_atoms=n_atoms,
+                                        mlpot_ctx=ctx,
+                                        pbc=charmm_pbc,
+                                    ),
+                                )
+
+        if not force_gate.ok:
+            msg = (
+                "Pre-dynamics force gate failed: "
+                f"{force_gate.reason}. Dynamics skipped; continue calculator "
+                "minimization or repair the stressed monomer geometry."
+            )
+            if not getattr(args, "allow_high_grms", False):
+                raise RuntimeError(msg)
+            if not args.quiet:
+                print(f"WARN: {msg}", flush=True)
 
         _auto_echeck_off_grms = 30.0
         if (

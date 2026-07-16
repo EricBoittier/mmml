@@ -11,6 +11,7 @@ one fixed floor that's unsafe for bulky/asymmetric pairs (e.g. ACE+ACE needs
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -55,34 +56,143 @@ CHARMM_RESIDUES = {
 }
 
 
+# CHARMM PSF atom names and CGenFF RTF connectivity for each residue template. The
+# permutation from the ASE/scan atom order to PSF order is *derived* from this
+# connectivity (see ``_solve_psf_permutation``) rather than hand-indexed: matching on
+# element alone is not enough, because it does not fix the ordering *within* an element
+# (which methyl hydrogen belongs to which carbon; the cyclic order of benzene's ring).
+# Getting that wrong leaves CHARMM's RTF bonds pointing at atoms 2.4-3.5 A apart, so the
+# 1-2/1-3 exclusions cover the wrong pairs and the intramolecular VDW explodes
+# (+14,365 kcal/mol for acetone, +41,142 for benzene).
+CHARMM_RESIDUE_ATOMS: dict[str, list[str]] = {
+    "DCM": ["C", "H1", "H2", "CL1", "CL2"],
+    "ACO": ["O1", "C1", "C2", "C3", "H21", "H22", "H23", "H31", "H32", "H33"],
+    "BENZ": ["CG", "HG", "CD1", "HD1", "CD2", "HD2", "CE1", "HE1", "CE2", "HE2", "CZ", "HZ"],
+    "TIP3": ["OH2", "H1", "H2"],
+    "MEOH": ["CB", "OG", "HG1", "HB1", "HB2", "HB3"],
+}
+
+CHARMM_RESIDUE_ELEMENTS: dict[str, np.ndarray] = {
+    "DCM": np.array([6, 1, 1, 17, 17]),
+    "ACO": np.array([8, 6, 6, 6, 1, 1, 1, 1, 1, 1]),
+    "BENZ": np.array([6, 1, 6, 1, 6, 1, 6, 1, 6, 1, 6, 1]),
+    "TIP3": np.array([8, 1, 1]),
+    "MEOH": np.array([6, 8, 1, 1, 1, 1]),
+}
+
+# Bonds as defined by the CGenFF RTF for each RESI.
+CHARMM_RESIDUE_BONDS: dict[str, list[tuple[str, str]]] = {
+    "DCM": [("C", "H1"), ("C", "H2"), ("C", "CL1"), ("C", "CL2")],
+    "ACO": [("C1", "C2"), ("C1", "C3"), ("C2", "H21"), ("C2", "H22"), ("C2", "H23"),
+            ("C3", "H31"), ("C3", "H32"), ("C3", "H33"), ("O1", "C1")],
+    "BENZ": [("CD1", "CG"), ("CD2", "CG"), ("CE1", "CD1"), ("CE2", "CD2"), ("CZ", "CE1"),
+             ("CZ", "CE2"), ("CG", "HG"), ("CD1", "HD1"), ("CD2", "HD2"), ("CE1", "HE1"),
+             ("CE2", "HE2"), ("CZ", "HZ")],
+    "TIP3": [("OH2", "H1"), ("OH2", "H2")],
+    "MEOH": [("CB", "OG"), ("OG", "HG1"), ("CB", "HB1"), ("CB", "HB2"), ("CB", "HB3")],
+}
+
+# Source molecule (scan label) backing each CHARMM residue template.
+_CHARMM_RESIDUE_SOURCE = {"DCM": "DCM", "ACO": "ACE", "BENZ": "BENZ", "TIP3": "TIP3", "MEOH": "MEOH"}
+
+_BOND_TOLERANCE = 1.3  # d < tol * (r_cov_i + r_cov_j) counts as bonded
+
+
+def _covalent_adjacency(z: np.ndarray, positions: np.ndarray) -> np.ndarray:
+    """Boolean adjacency matrix from covalent radii."""
+    from ase.data import covalent_radii
+
+    d = np.linalg.norm(positions[:, None, :] - positions[None, :, :], axis=-1)
+    r = np.asarray([covalent_radii[int(zi)] for zi in z])
+    cutoff = _BOND_TOLERANCE * (r[:, None] + r[None, :])
+    adj = d < cutoff
+    np.fill_diagonal(adj, False)
+    return adj
+
+
+def _solve_psf_permutation(resname: str, z: np.ndarray, positions: np.ndarray) -> list[int]:
+    """Map PSF atom slots onto ASE atom indices by element + connectivity.
+
+    Returns ``perm`` such that ``positions[perm]`` is in PSF order. Raises if the
+    monomer's bond graph cannot be matched to the RTF connectivity.
+    """
+    names = CHARMM_RESIDUE_ATOMS[resname]
+    psf_z = CHARMM_RESIDUE_ELEMENTS[resname]
+    slot = {n: i for i, n in enumerate(names)}
+
+    n = len(names)
+    psf_adj = np.zeros((n, n), dtype=bool)
+    for a, b in CHARMM_RESIDUE_BONDS[resname]:
+        psf_adj[slot[a], slot[b]] = psf_adj[slot[b], slot[a]] = True
+
+    ase_adj = _covalent_adjacency(np.asarray(z), np.asarray(positions))
+    perm: list[int] = [-1] * n
+    used = [False] * n
+
+    def backtrack(i: int) -> bool:
+        if i == n:
+            return True
+        for j in range(n):
+            if used[j] or int(z[j]) != int(psf_z[i]):
+                continue
+            # adjacency to everything already assigned must agree
+            if any(psf_adj[i, k] != ase_adj[j, perm[k]] for k in range(i)):
+                continue
+            perm[i], used[j] = j, True
+            if backtrack(i + 1):
+                return True
+            perm[i], used[j] = -1, False
+        return False
+
+    if not backtrack(0):
+        raise RuntimeError(f"Could not match {resname} geometry to its CGenFF RTF connectivity")
+    return perm
+
+
+def _build_psf_permutations() -> dict[str, list[int]]:
+    return {
+        res: _solve_psf_permutation(
+            res,
+            MOLECULES[src].get_atomic_numbers(),
+            MOLECULES[src].positions,
+        )
+        for res, src in _CHARMM_RESIDUE_SOURCE.items()
+    }
+
+
+CHARMM_PSF_PERMUTATION: dict[str, list[int]] = _build_psf_permutations()
+
+
+def charmm_reorder_fragment(positions: np.ndarray, resname: str) -> np.ndarray:
+    """Reorder one monomer's ASE-ordered coordinates into CHARMM PSF atom order."""
+    return np.asarray(positions)[CHARMM_PSF_PERMUTATION[resname]]
+
+
 def _charmm_residue_geometries() -> dict:
     return {
-        "DCM": (
-            MOLECULES["DCM"].positions[[0, 3, 4, 1, 2]],
-            ["C", "H1", "H2", "CL1", "CL2"],
-            np.array([6, 1, 1, 17, 17]),
-        ),
-        "ACO": (
-            MOLECULES["ACE"].positions[[3, 0, 1, 2, 4, 5, 6, 7, 8, 9]],
-            ["O1", "C1", "C2", "C3", "H21", "H22", "H23", "H31", "H32", "H33"],
-            np.array([8, 6, 6, 6, 1, 1, 1, 1, 1, 1]),
-        ),
-        "BENZ": (
-            MOLECULES["BENZ"].positions[[0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]],
-            ["CG", "HG", "CD1", "HD1", "CD2", "HD2", "CE1", "HE1", "CE2", "HE2", "CZ", "HZ"],
-            np.array([6, 1, 6, 1, 6, 1, 6, 1, 6, 1, 6, 1]),
-        ),
-        "TIP3": (
-            MOLECULES["TIP3"].positions[[0, 1, 2]],
-            ["OH2", "H1", "H2"],
-            np.array([8, 1, 1]),
-        ),
-        "MEOH": (
-            MOLECULES["MEOH"].positions[[0, 1, 2, 3, 4, 5]],
-            ["CB", "OG", "HG1", "HB1", "HB2", "HB3"],
-            np.array([6, 8, 1, 1, 1, 1]),
-        ),
+        res: (
+            charmm_reorder_fragment(MOLECULES[src].positions, res),
+            CHARMM_RESIDUE_ATOMS[res],
+            CHARMM_RESIDUE_ELEMENTS[res],
+        )
+        for res, src in _CHARMM_RESIDUE_SOURCE.items()
     }
+
+
+def charmm_ordered_positions(geom, label_a: str, label_b: str) -> np.ndarray:
+    """Scan-geometry coordinates reordered into the cluster's CHARMM PSF atom order.
+
+    The cluster is built as ``[(res_a, 1), (res_b, 1)]``, so coordinates must be
+    fragment A in PSF order followed by fragment B in PSF order.
+    """
+    positions = np.asarray(geom.atoms.positions)
+    idx_a, idx_b = geom.fragments
+    return np.concatenate(
+        [
+            charmm_reorder_fragment(positions[list(idx_a)], CHARMM_RESIDUES[label_a]),
+            charmm_reorder_fragment(positions[list(idx_b)], CHARMM_RESIDUES[label_b]),
+        ]
+    )
 
 
 def _init_charmm():
@@ -103,8 +213,29 @@ def _init_charmm():
     return _build_cluster_from_composition, setup_default_nbonds, sync_charmm_positions, charmm_energy_row
 
 
+def _charmm_component_rows(
+    common: dict, *, total_kcal: float, elec_kcal: float, vdw_kcal: float
+) -> list[dict]:
+    """Materialize CHARMM nonbond components as plot-compatible backends."""
+    rows: list[dict] = []
+    for backend, component in (
+        ("charmm", total_kcal),
+        ("charmm_electrostatics", elec_kcal),
+        ("charmm_lj", vdw_kcal),
+    ):
+        rows.append(
+            {
+                **common,
+                "energy_ev": component / EV_TO_KCAL_MOL,
+                "energy_kcal_mol": component,
+                "backend": backend,
+            }
+        )
+    return rows
+
+
 def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]:
-    """Evaluate a scan's geometries with CHARMM/CGenFF (PSF built once per pair)."""
+    """Evaluate CHARMM total, electrostatics-only, and LJ-only scan surfaces."""
     build_cluster, setup_nbonds, sync_positions, energy_row = charmm_fns
     res_a = CHARMM_RESIDUES[label_a]
     res_b = CHARMM_RESIDUES[label_b]
@@ -120,25 +251,28 @@ def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]
     rows: list[dict] = []
     for geom in geometries:
         try:
-            sync_positions(geom.atoms.positions)
+            sync_positions(charmm_ordered_positions(geom, label_a, label_b))
             pycharmm.lingo.charmm_script("ENER")
             terms = energy_row()
             elec = float(terms.get("ELEC", np.nan))
             vdw = float(terms.get("VDW", np.nan))
             tot = float(terms.get("ENER", np.nan))
-            rows.append(
-                {
+            common = {
                     "molecule_a": label_a,
                     "molecule_b": label_b,
                     "distance_angstrom": geom.distance_angstrom,
                     "offset_angstrom": geom.offset_angstrom,
-                    "energy_ev": tot / EV_TO_KCAL_MOL,
-                    "energy_kcal_mol": tot,
-                    "backend": "charmm",
                     "charmm_ELEC_kcal": elec,
                     "charmm_VDW_kcal": vdw,
                     "min_contact_angstrom": min_fragment_contact_distance(geom.atoms, geom.fragments),
                 }
+            # Materialize the components as ordinary backends so the existing
+            # reference/interaction-energy and 2D plotting pipeline can render
+            # them with exactly the same geometry masks as the total surface.
+            rows.extend(
+                _charmm_component_rows(
+                    common, total_kcal=tot, elec_kcal=elec, vdw_kcal=vdw
+                )
             )
         except Exception as e:
             print(f"    Warning: CHARMM failed at d={geom.distance_angstrom} Å offset={geom.offset_angstrom} Å: {e}")
@@ -420,6 +554,18 @@ def main():
         print(f"  {len(distances)} distances × {len(offsets)} offsets = {len(distances) * len(offsets)} geometries")
         geometries = list(make_oriented_scan_geometries(label_a, label_b, distances, offsets))
 
+        if use_spookynet:
+            from mmml.analysis.dimer_cgenff import attach_cgenff_dimer_metadata
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+
+            for geometry in geometries:
+                attach_cgenff_dimer_metadata(
+                    geometry.atoms,
+                    geometry.pair,
+                    geometry.fragments,
+                    prm_path=CGENFF_PRM,
+                )
+
         # Evaluate Multipoles
         if use_multipole:
             print(f"  Evaluating learned multipole (max_ell={args.max_ell})...")
@@ -465,6 +611,33 @@ def main():
                 for r in sn_hybrid_rows:
                     r["backend"] = spookynet_hybrid_backend
                 results.extend(sn_hybrid_rows)
+
+                component_backends = {
+                    "electrostatics_energy": "electrostatics",
+                    "cgenff_vdw_energy": "cgenff_lj",
+                    "zbl_repulsion_energy": "zbl",
+                    "neural_energy": "neural",
+                    "mbd_energy": "mbd",
+                }
+                for key, suffix in component_backends.items():
+                    value_key = f"comp_Eint_{key}_ev"
+                    for source in sn_hybrid_rows:
+                        value_ev = float(source.get(value_key, 0.0))
+                        component_row = {
+                            "molecule_a": source["molecule_a"],
+                            "molecule_b": source["molecule_b"],
+                            "distance_angstrom": source["distance_angstrom"],
+                            "offset_angstrom": source["offset_angstrom"],
+                            "energy_ev": value_ev,
+                            "energy_kcal_mol": value_ev * EV_TO_KCAL_MOL,
+                            "min_contact_angstrom": source["min_contact_angstrom"],
+                            "backend": (
+                                f"spookynet_{suffix}_{args.spookynet_tag}"
+                                if args.spookynet_tag
+                                else f"spookynet_{suffix}"
+                            ),
+                        }
+                        results.append(component_row)
             except Exception as e:
                 print(f"    Error: {e}")
 
@@ -515,6 +688,50 @@ def main():
         df = pd.concat([df_prior, df], ignore_index=True).drop_duplicates(subset=key_cols, keep="last")
     df.to_csv(csv_path, index=False)
     print(f"Results saved to {csv_path} ({len(df)} total rows, backends: {sorted(df['backend'].unique())})")
+
+    if use_spookynet:
+        # Proof-of-work for the standalone adapter: this report is written
+        # after evaluation, so it records whether annotated CGenFF inputs were
+        # actually consumed rather than merely supported by the class.
+        spookynet_calc.write_energy_function_report(
+            args.output_dir / "calculator_energy_function.json"
+        )
+        hybrid = df[df["backend"] == spookynet_hybrid_backend].copy()
+        component_columns = [
+            "comp_Eint_neural_energy_ev",
+            "comp_Eint_electrostatics_energy_ev",
+            "comp_Eint_cgenff_vdw_energy_ev",
+            "comp_Eint_zbl_repulsion_energy_ev",
+            "comp_Eint_mbd_energy_ev",
+        ]
+        available = [name for name in component_columns if name in hybrid.columns]
+        reconstructed = hybrid[available].fillna(0.0).sum(axis=1)
+        target = hybrid["comp_Eint_ev"]
+        lj_values = hybrid["comp_Eint_cgenff_vdw_energy_ev"].fillna(0.0)
+        audit = {
+            "checkpoint": str(args.spookynet_checkpoint.resolve()),
+            "backend": spookynet_hybrid_backend,
+            "n_points": int(len(hybrid)),
+            "component_columns": available,
+            "max_abs_component_reconstruction_error_ev": float(
+                np.max(np.abs(reconstructed - target)) if len(hybrid) else np.nan
+            ),
+            "cgenff_lj_nonzero_points": int(np.count_nonzero(np.abs(lj_values) > 1e-12)),
+            "cgenff_lj_min_ev": float(lj_values.min()) if len(hybrid) else np.nan,
+            "cgenff_lj_max_ev": float(lj_values.max()) if len(hybrid) else np.nan,
+            "cgenff_inputs_consumed": bool(spookynet_calc.cgenff_lj_inputs_supplied),
+            "jax_enable_x64": bool(__import__("jax").config.jax_enable_x64),
+            "mmml_ml_dtype": os.environ.get("MMML_ML_DTYPE"),
+        }
+        (args.output_dir / "component_reconstruction_audit.json").write_text(
+            json.dumps(audit, indent=2) + "\n", encoding="utf-8"
+        )
+        print(
+            "Spooky component audit: "
+            f"CGenFF LJ nonzero at {audit['cgenff_lj_nonzero_points']}/{audit['n_points']} points; "
+            "max reconstruction error "
+            f"{audit['max_abs_component_reconstruction_error_ev']:.3e} eV"
+        )
 
     # Generate plots
     print("Generating plots...")

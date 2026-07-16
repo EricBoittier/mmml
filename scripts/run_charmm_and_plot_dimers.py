@@ -13,15 +13,13 @@ import pandas as pd
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from ase import Atoms
 from ase.visualize.plot import plot_atoms
 
 from mmml.analysis.dimer_molecules import (
     MOLECULES,
-    PAIR_SCAN_CONFIG,
     make_oriented_scan_geometries,
 )
-from mmml.analysis.dimer_scans import build_rigid_dimer, distance_scan_geometries
+from mmml.analysis.dimer_scans import build_rigid_dimer
 
 MAP_RESIDUES = {
     "DCM": "DCM",
@@ -143,7 +141,7 @@ def main():
 
         # 2. Get all unique (distance, offset) combinations for this pair
         df_this = df_jax[(df_jax["molecule_a"] == label_a) & (df_jax["molecule_b"] == label_b)]
-        geom_keys = df_this[["distance_angstrom", "offset_angstrom"]].drop_duplicates().values
+        df_this[["distance_angstrom", "offset_angstrom"]].drop_duplicates().values
         offsets = sorted(df_this["offset_angstrom"].unique())
         distances_arr = sorted(df_this["distance_angstrom"].unique())
 
