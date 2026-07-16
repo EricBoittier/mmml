@@ -22,8 +22,10 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--forces-weight FORCES_WEIGHT]
                           [--dipole-weight DIPOLE_WEIGHT]
                           [--charges-weight CHARGES_WEIGHT]
-                          [--objective OBJECTIVE] [--mm-charge-correction]
-                          [--hybrid-mm] [--ml-switch-width ML_SWITCH_WIDTH]
+                          [--objective OBJECTIVE]
+                          [--mm-charge-mode {fixed,latent,fixed_plus_latent}]
+                          [--mm-charge-correction] [--hybrid-mm]
+                          [--ml-switch-width ML_SWITCH_WIDTH]
                           [--mm-switch-on MM_SWITCH_ON]
                           [--mm-switch-width MM_SWITCH_WIDTH]
                           [--no-complementary-handoff]
@@ -91,13 +93,18 @@ options:
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --charges-weight, --charges_weight CHARGES_WEIGHT
   --objective OBJECTIVE
+  --mm-charge-mode, --mm_charge_mode {fixed,latent,fixed_plus_latent}
+                        Hybrid MM Coulomb charges: fixed (q_CGenFF, default),
+                        latent (neutralize(q_ML)), or fixed_plus_latent
+                        (q_CGenFF + neutralize(q_ML)). Modes latent /
+                        fixed_plus_latent require --charges and are dimer-only.
+                        See docs/hybrid-mm-charges.md.
   --mm-charge-correction, --mm_charge_correction
-                        Hybrid MM: use the model's predicted charges as a
-                        CORRECTION to the fixed CGenFF charges in the MM
-                        electrostatics (q_eff = q_cgenff + dq_ML, projected net-
-                        zero per monomer). Requires --charges (a model with a
-                        charge head). Off by default: MM electrostatics then
-                        uses the CGenFF charges alone.
+                        Alias for --mm-charge-mode fixed_plus_latent: use the
+                        model's predicted charges as a CORRECTION to fixed
+                        CGenFF charges in MM electrostatics (q_eff = q_cgenff +
+                        dq_ML, projected net-zero per monomer). Requires
+                        --charges.
   --hybrid-mm, --hybrid_mm
                         Train on the hybrid ML/MM total the MD calculator
                         evaluates: E = (1-s)*(E_A+E_B) + s*E_AB + E_MM, where

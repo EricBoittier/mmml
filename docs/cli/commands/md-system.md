@@ -229,7 +229,9 @@ usage: mmml md-system [-h]
                       [--scafacos-method SCAFACOS_METHOD]
                       [--periodic-charmm-vdw | --no-periodic-charmm-vdw]
                       [--charmm-zero-energy-terms TERMS]
-                      [--include-mm | --no-include-mm] [--jax-mm-spoof]
+                      [--include-mm | --no-include-mm]
+                      [--mm-charge-mode {fixed,latent,fixed_plus_latent}]
+                      [--mm-charge-correction] [--jax-mm-spoof]
                       [--jax-mm-spoof-psf JAX_MM_SPOOF_PSF] [--residue RESIDUE]
                       [--skip-jit-warmup]
                       [--auto-warmup-mlpot-jax | --no-auto-warmup-mlpot-jax]
@@ -847,6 +849,16 @@ options:
                         hybrid calculator. --no-include-mm evaluates PhysNet ML
                         only (doMM=False); cutoff keys are ignored for MM pair
                         lists.
+  --mm-charge-mode, --mm_charge_mode {fixed,latent,fixed_plus_latent}
+                        Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF,
+                        default), latent (neutralize(q_ML)), or
+                        fixed_plus_latent (q_CGenFF + neutralize(q_ML)). Modes
+                        latent / fixed_plus_latent require a charges=True
+                        checkpoint and are dimer-only (see docs/hybrid-mm-
+                        charges.md).
+  --mm-charge-correction, --mm_charge_correction
+                        Alias for --mm-charge-mode fixed_plus_latent on the MD
+                        calculator.
   --jax-mm-spoof        Use JAX CGenFF bonded clone instead of PhysNet for ML
                         terms (no checkpoint; box / calculator infrastructure
                         testing).

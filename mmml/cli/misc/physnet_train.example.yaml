@@ -1,5 +1,8 @@
 # Example PhysNetJAX training config for: mmml physnet-train --config train.yaml
 # CLI flags override values from this file.
+#
+# Hybrid ML/MM + charge modes (fixed / latent / fixed_plus_latent):
+#   examples/hybrid_mm_charges/train_*.yaml
 
 data: output/energies_forces_dipoles_train.npz
 valid_data: output/energies_forces_dipoles_valid.npz

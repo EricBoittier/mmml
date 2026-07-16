@@ -31,9 +31,9 @@ forces) silently breaks energy conservation in the handoff region.
 
 MM Coulomb charges follow the taxonomy in
 :mod:`mmml.models.mm_charge_mode` (and ``docs/hybrid-mm-charges.md``):
-**fixed** (default) or **fixed_plus_latent** when ``charge_correction`` is on.
-**latent** is deferred.  ``include_electrostatics`` inside ``E_ML`` is a
-separate channel.
+**fixed** (Mode A, default), **latent** (Mode B), or **fixed_plus_latent**
+(Mode C).  ``include_electrostatics`` inside ``E_ML`` is a separate channel.
+Dimer-only for B/C; liquids deferred.
 """
 
 from __future__ import annotations
@@ -51,8 +51,10 @@ from mmml.models.cgenff_mm import (
 from mmml.models.mm_charge_mode import (
     MMChargeMode,
     apply_mm_charge_mode,
-    mm_charge_mode_from_charge_correction,
+    mm_charge_mode_needs_q_ml,
+    parse_mm_charge_mode,
     require_charge_head_for_mode,
+    resolve_hybrid_mm_charge_mode,
 )
 
 Array = jnp.ndarray
@@ -98,18 +100,32 @@ class HybridMMConfig:
     mm_switch_width: float
     ml_switch_width: float
     complementary_handoff: bool = True
-    charge_correction: bool = False
+    mm_charge_mode: str = "fixed"
+
+    @property
+    def charge_correction(self) -> bool:
+        """Legacy alias: True iff Mode C (``fixed_plus_latent``)."""
+        return (
+            parse_mm_charge_mode(self.mm_charge_mode)
+            is MMChargeMode.FIXED_PLUS_LATENT
+        )
 
     @classmethod
     def coerce(cls, cfg):
         """Accept a config, a plain kwargs dict, or ``None``.
 
         Call this *outside* the jit boundary (a dict is unhashable and so cannot
-        be a static argument).
+        be a static argument).  Legacy ``charge_correction`` bools are mapped
+        onto ``mm_charge_mode``.
         """
         if cfg is None or isinstance(cfg, cls):
             return cfg
         d = dict(cfg)
+        mode = resolve_hybrid_mm_charge_mode(
+            mm_charge_mode=d.pop("mm_charge_mode", None),
+            charge_correction=bool(d.pop("charge_correction", False)),
+        )
+        d["mm_charge_mode"] = mode.value
         return cls(
             master_sigmas=tuple(float(x) for x in d.pop("master_sigmas")),
             master_epsilons=tuple(float(x) for x in d.pop("master_epsilons")),
@@ -175,6 +191,7 @@ def hybrid_forward(
     mm_switch_width: float,
     ml_switch_width: float,
     complementary_handoff: bool = True,
+    mm_charge_mode: str | None = None,
     charge_correction: bool = False,
 ) -> dict:
     """Model forward assembled into the hybrid ML/MM total the calculator uses.
@@ -199,17 +216,15 @@ def hybrid_forward(
 
     Costs three forwards per step (AB, A, B).
 
-    ``charge_correction`` (opt-in) makes the MM electrostatics use the model's
-    predicted charges as a *correction* to the fixed CGenFF ones::
-
-        q_eff = q_cgenff + neutralize_per_monomer(q_ML)
-
-    so the charge head learns an environment-dependent residual on top of
-    CGenFF's atom-type charges instead of ignoring them.  The correction is
-    projected net-zero per monomer -- see
-    :func:`mmml.models.cgenff_mm.neutralize_per_monomer` for why that is not
-    optional.  Requires a model built with ``charges=True``.
+    ``mm_charge_mode`` selects MM Coulomb charges (see
+    :mod:`mmml.models.mm_charge_mode`).  Legacy ``charge_correction=True`` is
+    Mode C.  Modes B/C require a model built with ``charges=True`` and use
+    AB-context ``q_ML`` (dimer-only).
     """
+    mode = resolve_hybrid_mm_charge_mode(
+        mm_charge_mode=mm_charge_mode,
+        charge_correction=charge_correction,
+    )
 
     def _fwd(atom_mask, batch_mask):
         # NOTE: deliberately does NOT pass cgenff_type_idx / cgenff_master_*.
@@ -236,10 +251,9 @@ def hybrid_forward(
     n_atoms = batch["R"].shape[0] // int(batch_size)
     pos = batch["R"].reshape(batch_size, n_atoms, 3)
 
-    # MM electrostatics charges: Mode A (fixed) or Mode C (fixed+latent).
-    mode = mm_charge_mode_from_charge_correction(charge_correction)
+    # MM electrostatics charges: Mode A / B / C (AB q_ML for B and C).
     q_ml = None
-    if mode is MMChargeMode.FIXED_PLUS_LATENT:
+    if mm_charge_mode_needs_q_ml(mode):
         q_ml = out_ab.get("charges")
         require_charge_head_for_mode(mode, has_charges=q_ml is not None)
         q_ml = jnp.asarray(q_ml).reshape(batch_size, n_atoms)

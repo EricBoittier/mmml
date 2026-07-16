@@ -490,17 +490,26 @@ def train_model(
                 f"charges=false checkpoint by flipping the YAML flag.",
                 flush=True,
             )
-        if (
-            hybrid_mm is not None
-            and bool(getattr(hybrid_mm, "charge_correction", False))
-            and not do_charges
-        ):
-            raise ValueError(
-                "hybrid_mm.charge_correction=True requires a model with a charge "
-                "head, but the restart checkpoint has charges=False. Start a fresh "
-                "run with charges=true and mm_charge_correction=true (omit "
-                "--restart / restart: from the charges=false hybrid checkpoint)."
+        if hybrid_mm is not None and not do_charges:
+            from mmml.models.mm_charge_mode import (
+                mm_charge_mode_needs_q_ml,
+                resolve_hybrid_mm_charge_mode,
             )
+
+            _mode = resolve_hybrid_mm_charge_mode(
+                mm_charge_mode=getattr(hybrid_mm, "mm_charge_mode", None),
+                charge_correction=bool(
+                    getattr(hybrid_mm, "charge_correction", False)
+                ),
+            )
+            if mm_charge_mode_needs_q_ml(_mode):
+                raise ValueError(
+                    f"hybrid_mm.mm_charge_mode={_mode.value} requires a model with "
+                    "a charge head, but the restart checkpoint has charges=False. "
+                    "Start a fresh run with charges=true and the same "
+                    "mm_charge_mode (omit --restart / restart: from the "
+                    "charges=false hybrid checkpoint)."
+                )
     # initialize
     else:
         ema_params = params

@@ -16,7 +16,13 @@ cluster after training:
         --checkpoint /path/to/ckpts/hybrid/hybrid-<uuid> \
         --data /path/to/out_combined_dedup/energies_forces_dipoles_test.npz
 
-    # Mode C (fixed+latent) — only for checkpoints trained with --mm-charge-correction
+    # Mode B (latent) — checkpoint trained with --mm-charge-mode latent
+    python scripts/check_hybrid_train_md_parity.py \
+        --checkpoint /path/to/ckpts/hybrid/hybrid-<uuid> \
+        --data /path/to/out_combined_dedup/energies_forces_dipoles_test.npz \
+        --mm-charge-mode latent
+
+    # Mode C (fixed+latent) — --mm-charge-mode fixed_plus_latent or --mm-charge-correction
     python scripts/check_hybrid_train_md_parity.py \
         --checkpoint /path/to/ckpts/hybrid/hybrid-<uuid> \
         --data /path/to/out_combined_dedup/energies_forces_dipoles_test.npz \
@@ -97,10 +103,16 @@ def main() -> int:
     p.add_argument("--mm-switch-on", type=float, default=8.0)
     p.add_argument("--mm-switch-width", type=float, default=5.0)
     p.add_argument(
+        "--mm-charge-mode",
+        choices=["fixed", "latent", "fixed_plus_latent"],
+        default=None,
+        help="MM Coulomb charge mode (default: fixed). Must match training.",
+    )
+    p.add_argument(
         "--mm-charge-correction",
         action="store_true",
         help=(
-            "Mode C (fixed+latent): q_MM = q_CGenFF + neutralize(q_ML). "
+            "Alias for --mm-charge-mode fixed_plus_latent. "
             "Must match how the checkpoint was trained. Default is Mode A (fixed)."
         ),
     )
@@ -113,6 +125,15 @@ def main() -> int:
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
     from mmml.models.hybrid_energy import hybrid_forward
+    from mmml.models.mm_charge_mode import (
+        mm_charge_mode_needs_q_ml,
+        resolve_hybrid_mm_charge_mode,
+    )
+
+    mode = resolve_hybrid_mm_charge_mode(
+        mm_charge_mode=args.mm_charge_mode,
+        charge_correction=bool(args.mm_charge_correction),
+    )
 
     data = np.load(args.data, allow_pickle=True)
     sigmas = jnp.asarray(data["cgenff_master_sigmas"])
@@ -120,9 +141,9 @@ def main() -> int:
     natoms = int(np.asarray(data["Z"]).shape[1])
 
     _, params, model = _load_physnet_checkpoint(Path(args.checkpoint), natoms)
-    if args.mm_charge_correction and not getattr(model, "charges", False):
+    if mm_charge_mode_needs_q_ml(mode) and not getattr(model, "charges", False):
         print(
-            "--mm-charge-correction needs a checkpoint built with charges=True",
+            f"--mm-charge-mode {mode.value} needs a checkpoint built with charges=True",
             file=sys.stderr,
         )
         return 1
@@ -137,8 +158,7 @@ def main() -> int:
         mm_switch_on=args.mm_switch_on,
         mm_switch_width=args.mm_switch_width,
     )
-    mode_label = "fixed_plus_latent" if args.mm_charge_correction else "fixed"
-    print(f"mm_charge_mode={mode_label}")
+    print(f"mm_charge_mode={mode.value}")
 
     print(f"{'idx':>6} {'species':>9} {'regime':>8} {'E_train':>14} {'E_md':>14} {'diff':>12}  ok")
     worst = 0.0
@@ -156,7 +176,7 @@ def main() -> int:
             mm_switch_on=args.mm_switch_on,
             mm_switch_width=args.mm_switch_width,
             ml_switch_width=args.ml_switch_width,
-            charge_correction=bool(args.mm_charge_correction),
+            mm_charge_mode=mode.value,
         )
         e_train = float(np.asarray(out["energy"]).reshape(-1)[0])
 
@@ -175,7 +195,7 @@ def main() -> int:
             MAX_ATOMS_PER_SYSTEM=n_real,
             ml_energy_conversion_factor=1,
             ml_force_conversion_factor=1,
-            mm_charge_correction=bool(args.mm_charge_correction),
+            mm_charge_mode=mode.value,
         )
         _calc, sc_fn, update_fn_factory = factory(
             atomic_numbers=Z[:n_real],

@@ -260,9 +260,31 @@ def test_charge_correction_is_off_by_default():
     b = _batch(9.0)
     dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
     off = hybrid_forward(_charged_model(dq), {}, b, 1, SIG, EPS, **KW)
-    on = hybrid_forward(_charged_model(dq), {}, b, 1, SIG, EPS, charge_correction=True, **KW)
+    on = hybrid_forward(
+        _charged_model(dq), {}, b, 1, SIG, EPS,
+        mm_charge_mode="fixed_plus_latent", **KW,
+    )
     # in the MM tail the correction must actually change E_MM
     assert _f(off["e_mm"]) != pytest.approx(_f(on["e_mm"]))
+
+
+def test_latent_mode_changes_e_mm_vs_fixed():
+    """Mode B replaces CGenFF charges; energy must differ from Mode A."""
+    from mmml.models.hybrid_energy import hybrid_forward
+
+    b = _batch(9.0)
+    dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
+    fixed = hybrid_forward(_charged_model(dq), {}, b, 1, SIG, EPS, **KW)
+    latent = hybrid_forward(
+        _charged_model(dq), {}, b, 1, SIG, EPS,
+        mm_charge_mode="latent", **KW,
+    )
+    combo = hybrid_forward(
+        _charged_model(dq), {}, b, 1, SIG, EPS,
+        mm_charge_mode="fixed_plus_latent", **KW,
+    )
+    assert _f(fixed["e_mm"]) != pytest.approx(_f(latent["e_mm"]))
+    assert _f(latent["e_mm"]) != pytest.approx(_f(combo["e_mm"]))
 
 
 def test_charge_correction_requires_a_charge_head():
@@ -272,7 +294,12 @@ def test_charge_correction_requires_a_charge_head():
     with pytest.raises(ValueError, match="charges=True"):
         hybrid_forward(
             _fake_model_apply, {}, _batch(9.0), 1, SIG, EPS,
-            charge_correction=True, **KW,
+            mm_charge_mode="fixed_plus_latent", **KW,
+        )
+    with pytest.raises(ValueError, match="charges=True"):
+        hybrid_forward(
+            _fake_model_apply, {}, _batch(9.0), 1, SIG, EPS,
+            mm_charge_mode="latent", **KW,
         )
 
 
@@ -330,7 +357,7 @@ def _cfg(**over):
         **KW,
     )
     kw.update(over)
-    return HybridMMConfig(**kw)
+    return HybridMMConfig.coerce(kw)
 
 
 def test_charge_correction_survives_jit():
@@ -351,15 +378,18 @@ def test_charge_correction_survives_jit():
         static_argnums=(1,),
     )
     e_off = _f(fn(b, _cfg())["energy"])
-    e_on = _f(fn(b, _cfg(charge_correction=True))["energy"])
-    assert np.isfinite(e_off) and np.isfinite(e_on)
+    e_on = _f(fn(b, _cfg(mm_charge_mode="fixed_plus_latent"))["energy"])
+    e_latent = _f(fn(b, _cfg(mm_charge_mode="latent"))["energy"])
+    assert np.isfinite(e_off) and np.isfinite(e_on) and np.isfinite(e_latent)
     assert e_off != pytest.approx(e_on)
+    assert e_off != pytest.approx(e_latent)
 
 
 def test_config_is_hashable_so_it_can_be_a_static_argument():
     """A dict cannot be static (unhashable) -- that is why the flags traced."""
     assert hash(_cfg()) == hash(_cfg())
-    assert hash(_cfg(charge_correction=True)) != hash(_cfg())
+    assert hash(_cfg(mm_charge_mode="fixed_plus_latent")) != hash(_cfg())
+    assert hash(_cfg(mm_charge_mode="latent")) != hash(_cfg())
     assert _cfg() == _cfg()
 
 
@@ -370,7 +400,14 @@ def test_config_coerces_a_plain_kwargs_dict():
     d = dict(master_sigmas=SIG, master_epsilons=EPS, charge_correction=True, **KW)
     cfg = HybridMMConfig.coerce(d)
     assert cfg.charge_correction is True
+    assert cfg.mm_charge_mode == "fixed_plus_latent"
     assert cfg.mm_switch_on == 8.0
     assert np.allclose(np.asarray(cfg.kwargs()["master_sigmas"]), np.asarray(SIG))
     assert HybridMMConfig.coerce(None) is None
     assert HybridMMConfig.coerce(cfg) is cfg
+
+    latent = HybridMMConfig.coerce(
+        dict(master_sigmas=SIG, master_epsilons=EPS, mm_charge_mode="latent", **KW)
+    )
+    assert latent.mm_charge_mode == "latent"
+    assert latent.charge_correction is False

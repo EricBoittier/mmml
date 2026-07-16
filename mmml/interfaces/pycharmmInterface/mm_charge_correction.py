@@ -1,4 +1,4 @@
-"""MD-side helpers for hybrid MM charge Mode C (fixed+latent), dimer-only.
+"""MD-side helpers for hybrid MM charge Modes B/C (dimer-only).
 
 See ``docs/hybrid-mm-charges.md`` and :mod:`mmml.models.mm_charge_mode`.
 """
@@ -14,14 +14,16 @@ from mmml.models.mm_charge_mode import (
     MMChargeMode,
     apply_mm_charge_mode,
     hybrid_mm_metadata_dict,
-    mm_charge_mode_from_charge_correction,
+    mm_charge_mode_needs_q_ml,
     parse_mm_charge_mode,
     require_charge_head_for_mode,
+    resolve_hybrid_mm_charge_mode,
 )
 
 Array = jnp.ndarray
 
 __all__ = [
+    "assert_mm_charge_mode_dimer_supported",
     "assert_mode_c_dimer_supported",
     "hybrid_mm_metadata_dict",
     "load_hybrid_mm_metadata",
@@ -38,18 +40,13 @@ def resolve_mm_charge_mode_arg(
     mm_charge_mode: str | MMChargeMode | None = None,
 ) -> MMChargeMode:
     """Resolve CLI/setup kwargs to a mode (bool aliases Mode C)."""
-    if mm_charge_mode is not None:
-        mode = parse_mm_charge_mode(mm_charge_mode)
-        if mm_charge_correction and mode is MMChargeMode.FIXED:
-            raise ValueError(
-                "Conflicting MM charge settings: --mm-charge-correction with "
-                "mm_charge_mode=fixed."
-            )
-        return mode
-    return mm_charge_mode_from_charge_correction(bool(mm_charge_correction))
+    return resolve_hybrid_mm_charge_mode(
+        mm_charge_mode=mm_charge_mode,
+        charge_correction=bool(mm_charge_correction),
+    )
 
 
-def assert_mode_c_dimer_supported(
+def assert_mm_charge_mode_dimer_supported(
     mode: MMChargeMode,
     *,
     n_monomers: int,
@@ -58,32 +55,33 @@ def assert_mode_c_dimer_supported(
     doML: bool,
     doML_dimer: bool,
 ) -> None:
-    """Raise if Mode C cannot be applied under the current calculator settings."""
+    """Raise if Mode B/C cannot be applied under the current calculator settings."""
+    mode = parse_mm_charge_mode(mode)
     if mode is MMChargeMode.FIXED:
         return
-    if mode is MMChargeMode.LATENT:
-        raise NotImplementedError(
-            "mm_charge_mode=latent is deferred; use fixed or fixed_plus_latent."
-        )
     require_charge_head_for_mode(mode, has_charges=has_charges)
     if int(n_monomers) != 2:
         raise ValueError(
-            "mm_charge_mode=fixed_plus_latent (Mode C) MD support is dimer-only "
+            f"mm_charge_mode={mode.value} MD support is dimer-only "
             f"(n_monomers==2); got n_monomers={n_monomers}. Liquid q_ML context "
             "is undefined — see docs/hybrid-mm-charges.md."
         )
     if not doML or not doML_dimer:
         raise ValueError(
-            "mm_charge_mode=fixed_plus_latent requires doML and doML_dimer so the "
+            f"mm_charge_mode={mode.value} requires doML and doML_dimer so the "
             "AB forward can supply q_ML (same as hybrid training)."
         )
     lr = (lr_solver or "").strip().lower()
     if lr in {"jax_pme", "jax-pme", "pme"}:
         raise ValueError(
-            "mm_charge_mode=fixed_plus_latent is not wired through JAX-PME yet; "
+            f"mm_charge_mode={mode.value} is not wired through JAX-PME yet; "
             "refuse half-applied long-range. Use lr_solver=None / jax_mic for "
-            "Mode C dimer parity."
+            "dimer Mode B/C parity."
         )
+
+
+# Backward-compatible alias (Mode C was the first non-fixed mode).
+assert_mode_c_dimer_supported = assert_mm_charge_mode_dimer_supported
 
 
 def map_padded_fragment_charges_to_global(
@@ -155,7 +153,11 @@ def warn_mm_charge_mode_mismatch(
         return
     msg = (
         f"WARNING: mm_charge_mode={mode.value} but checkpoint hybrid_mm.json "
-        f"records mm_charge_mode={trained.value}. Mode C is opt-in on MD; "
+        f"records mm_charge_mode={trained.value}. Mode B/C are opt-in on MD; "
         "parity requires the same mode on both sides."
     )
     print(msg, file=stream, flush=True)
+
+
+# Re-export for callers that check whether ML charges are needed.
+needs_q_ml = mm_charge_mode_needs_q_ml

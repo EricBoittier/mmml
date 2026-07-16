@@ -15,10 +15,13 @@ from mmml.models.mm_charge_mode import (
     apply_mm_charge_mode,
     hybrid_mm_metadata_dict,
     mm_charge_mode_from_charge_correction,
+    mm_charge_mode_needs_q_ml,
     parse_mm_charge_mode,
     require_charge_head_for_mode,
+    resolve_hybrid_mm_charge_mode,
 )
 from mmml.interfaces.pycharmmInterface.mm_charge_correction import (
+    assert_mm_charge_mode_dimer_supported,
     assert_mode_c_dimer_supported,
     load_hybrid_mm_metadata,
     map_padded_fragment_charges_to_global,
@@ -29,18 +32,39 @@ from mmml.interfaces.pycharmmInterface.mm_charge_correction import (
 
 def test_parse_and_flag_mapping():
     assert parse_mm_charge_mode("fixed") is MMChargeMode.FIXED
+    assert parse_mm_charge_mode("latent") is MMChargeMode.LATENT
     assert parse_mm_charge_mode("fixed_plus_latent") is MMChargeMode.FIXED_PLUS_LATENT
     assert parse_mm_charge_mode("charge_correction") is MMChargeMode.FIXED_PLUS_LATENT
     assert mm_charge_mode_from_charge_correction(False) is MMChargeMode.FIXED
     assert mm_charge_mode_from_charge_correction(True) is MMChargeMode.FIXED_PLUS_LATENT
     assert resolve_mm_charge_mode_arg(mm_charge_correction=True) is MMChargeMode.FIXED_PLUS_LATENT
+    assert resolve_mm_charge_mode_arg(mm_charge_mode="latent") is MMChargeMode.LATENT
+    assert resolve_hybrid_mm_charge_mode(mm_charge_mode="latent") is MMChargeMode.LATENT
+    assert mm_charge_mode_needs_q_ml("latent")
+    assert mm_charge_mode_needs_q_ml("fixed_plus_latent")
+    assert not mm_charge_mode_needs_q_ml("fixed")
 
 
-def test_latent_mode_is_deferred():
-    q = jnp.array([0.1, -0.1, 0.2, -0.2])
+def test_conflicting_correction_and_mode_raises():
+    with pytest.raises(ValueError, match="Conflicting"):
+        resolve_mm_charge_mode_arg(
+            mm_charge_correction=True, mm_charge_mode="fixed"
+        )
+    with pytest.raises(ValueError, match="Conflicting"):
+        resolve_mm_charge_mode_arg(
+            mm_charge_correction=True, mm_charge_mode="latent"
+        )
+
+
+def test_latent_mode_returns_neutralized_ml():
+    q_c = jnp.array([0.1, -0.1, 0.2, -0.2])
+    dq = jnp.array([0.4, -0.1, 0.25, 0.05])
     mid = jnp.array([0, 0, 1, 1])
-    with pytest.raises(NotImplementedError, match="deferred"):
-        apply_mm_charge_mode("latent", q, q, mid)
+    expected = neutralize_per_monomer(dq, mid)
+    out = apply_mm_charge_mode("latent", q_c, dq, mid)
+    assert np.allclose(np.asarray(out), np.asarray(expected), atol=1e-12)
+    for sel in (slice(0, 2), slice(2, 4)):
+        assert float(jnp.sum(out[sel])) == pytest.approx(0.0, abs=1e-12)
 
 
 def test_fixed_mode_returns_cgenff():
@@ -57,7 +81,6 @@ def test_fixed_plus_latent_matches_neutralize_formula():
     expected = q_c + neutralize_per_monomer(dq, mid)
     out = apply_mm_charge_mode("fixed_plus_latent", q_c, dq, mid)
     assert np.allclose(np.asarray(out), np.asarray(expected), atol=1e-12)
-    # Correction adds no net charge per monomer
     for sel in (slice(0, 2), slice(2, 4)):
         assert float(jnp.sum(out[sel] - q_c[sel])) == pytest.approx(0.0, abs=1e-12)
 
@@ -72,10 +95,13 @@ def test_uniform_ml_charge_is_noop_on_correction():
 def test_require_charge_head():
     with pytest.raises(ValueError, match="charges=True"):
         require_charge_head_for_mode(MMChargeMode.FIXED_PLUS_LATENT, has_charges=False)
+    with pytest.raises(ValueError, match="charges=True"):
+        require_charge_head_for_mode(MMChargeMode.LATENT, has_charges=False)
 
 
-def test_assert_mode_c_dimer_gates():
-    assert_mode_c_dimer_supported(
+@pytest.mark.parametrize("mode", [MMChargeMode.LATENT, MMChargeMode.FIXED_PLUS_LATENT])
+def test_assert_mode_b_and_c_dimer_gates(mode):
+    assert_mm_charge_mode_dimer_supported(
         MMChargeMode.FIXED,
         n_monomers=80,
         has_charges=False,
@@ -83,9 +109,17 @@ def test_assert_mode_c_dimer_gates():
         doML=True,
         doML_dimer=True,
     )
+    assert_mm_charge_mode_dimer_supported(
+        mode,
+        n_monomers=2,
+        has_charges=True,
+        lr_solver=None,
+        doML=True,
+        doML_dimer=True,
+    )
     with pytest.raises(ValueError, match="dimer-only"):
-        assert_mode_c_dimer_supported(
-            MMChargeMode.FIXED_PLUS_LATENT,
+        assert_mm_charge_mode_dimer_supported(
+            mode,
             n_monomers=80,
             has_charges=True,
             lr_solver=None,
@@ -93,14 +127,34 @@ def test_assert_mode_c_dimer_gates():
             doML_dimer=True,
         )
     with pytest.raises(ValueError, match="JAX-PME"):
-        assert_mode_c_dimer_supported(
-            MMChargeMode.FIXED_PLUS_LATENT,
+        assert_mm_charge_mode_dimer_supported(
+            mode,
             n_monomers=2,
             has_charges=True,
             lr_solver="jax_pme",
             doML=True,
             doML_dimer=True,
         )
+    with pytest.raises(ValueError, match="doML"):
+        assert_mm_charge_mode_dimer_supported(
+            mode,
+            n_monomers=2,
+            has_charges=True,
+            lr_solver=None,
+            doML=True,
+            doML_dimer=False,
+        )
+
+
+def test_assert_mode_c_alias_still_works():
+    assert_mode_c_dimer_supported(
+        MMChargeMode.FIXED_PLUS_LATENT,
+        n_monomers=2,
+        has_charges=True,
+        lr_solver=None,
+        doML=True,
+        doML_dimer=True,
+    )
 
 
 def test_map_padded_fragment_charges_excludes_padding():
@@ -121,6 +175,7 @@ def test_mm_charges_fixed_plus_latent_helper():
 
 def test_hybrid_mm_metadata_and_sidecar(tmp_path: Path):
     class _Cfg:
+        mm_charge_mode = "fixed_plus_latent"
         charge_correction = True
         mm_switch_on = 8.0
         mm_switch_width = 5.0
@@ -134,3 +189,16 @@ def test_hybrid_mm_metadata_and_sidecar(tmp_path: Path):
     path.write_text(json.dumps(meta))
     loaded = load_hybrid_mm_metadata(tmp_path)
     assert loaded["mm_charge_mode"] == "fixed_plus_latent"
+
+
+def test_hybrid_mm_metadata_latent():
+    class _Cfg:
+        mm_charge_mode = "latent"
+        mm_switch_on = 8.0
+        mm_switch_width = 5.0
+        ml_switch_width = 1.5
+        complementary_handoff = True
+
+    meta = hybrid_mm_metadata_dict(_Cfg())
+    assert meta["mm_charge_mode"] == "latent"
+    assert meta["charge_correction"] is False
