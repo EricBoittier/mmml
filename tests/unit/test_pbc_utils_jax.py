@@ -12,6 +12,8 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     cart_coords,
     frac_coords,
     group_ids_from_groups,
+    vjp_wrap_dimer_monomer_b_forces,
+    wrap_dimer_monomer_b,
     wrap_groups,
     wrap_groups_by_id,
     wrap_groups_by_id_with_weight_sum,
@@ -152,3 +154,83 @@ def test_wrap_groups_by_id_with_weight_sum_matches_reference() -> None:
     expected = _reference_wrap_groups_loop(R, groups, cell, mass=mass)
 
     np.testing.assert_allclose(np.asarray(actual), np.asarray(expected), atol=1e-6)
+
+
+@pytest.mark.unit
+def test_wrap_dimer_monomer_b_brings_b_across_box() -> None:
+    """Opposite-corner monomers: B should land ~1 Å from A after wrap (L=30)."""
+    cell = jnp.diag(jnp.array([30.0, 30.0, 30.0], dtype=jnp.float64))
+    # 2+2 atoms; A near 0, B near 29 → MIC COM sep ≈ 1 Å
+    pos = jnp.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.1, 0.0, 0.0],
+            [29.0, 0.0, 0.0],
+            [29.1, 0.0, 0.0],
+        ],
+        dtype=jnp.float64,
+    )
+    wrapped = wrap_dimer_monomer_b(pos, 2, 2, cell)
+    com_a = wrapped[:2].mean(axis=0)
+    com_b = wrapped[2:].mean(axis=0)
+    sep = float(jnp.linalg.norm(com_b - com_a))
+    assert sep < 2.0
+    # Smooth MIC ≈ exact for this geometry (far from L/2 boundary)
+    np.testing.assert_allclose(sep, 1.0, atol=5e-3)
+
+
+@pytest.mark.unit
+def test_wrap_dimer_monomer_b_vjp_matches_energy_gradient() -> None:
+    """F = VJP(wrap)(-∂E/∂R_wrapped) must match -∇_R E(wrap(R)) for NVE."""
+    cell = jnp.diag(jnp.array([30.0, 30.0, 30.0], dtype=jnp.float64))
+    pos = jnp.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.1, 0.0, 0.0],
+            [29.0, 0.0, 0.0],
+            [29.1, 0.0, 0.0],
+        ],
+        dtype=jnp.float64,
+    )
+
+    def energy_wrapped(p):
+        w = wrap_dimer_monomer_b(p, 2, 2, cell)
+        # Simple pairwise energy on wrapped geometry (atoms 0 and 2)
+        return jnp.linalg.norm(w[0] - w[2])
+
+    f_autograd = -jax.grad(energy_wrapped)(pos)
+
+    wrapped = wrap_dimer_monomer_b(pos, 2, 2, cell)
+
+    def energy_on_wrapped(w):
+        return jnp.linalg.norm(w[0] - w[2])
+
+    f_wrapped = -jax.grad(energy_on_wrapped)(wrapped)
+    f_vjp = vjp_wrap_dimer_monomer_b_forces(pos, 2, 2, f_wrapped, cell)
+
+    np.testing.assert_allclose(
+        np.asarray(f_vjp), np.asarray(f_autograd), rtol=1e-6, atol=1e-6
+    )
+
+
+@pytest.mark.unit
+def test_wrap_dimer_monomer_b_has_no_stop_gradient() -> None:
+    """Wrap Jacobian must be nonzero when B crosses the box (NVE hardening)."""
+    cell = jnp.diag(jnp.array([30.0, 30.0, 30.0], dtype=jnp.float64))
+    pos = jnp.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.1, 0.0, 0.0],
+            [29.0, 0.0, 0.0],
+            [29.1, 0.0, 0.0],
+        ],
+        dtype=jnp.float64,
+    )
+
+    def shift_norm(p):
+        w = wrap_dimer_monomer_b(p, 2, 2, cell)
+        return jnp.sum((w - p) ** 2)
+
+    g = jax.grad(shift_norm)(pos)
+    # With stop_gradient(shift), this gradient would be ~0.
+    assert float(jnp.max(jnp.abs(g))) > 1e-6
