@@ -236,7 +236,13 @@ def main() -> int:
             "Must match how the checkpoint was trained. Default is Mode A (fixed)."
         ),
     )
-    p.add_argument("--tol", type=float, default=1e-3, help="abs energy tolerance (kcal/mol)")
+    p.add_argument("--tol", type=float, default=1e-3, help="abs energy tolerance (eV)")
+    p.add_argument(
+        "--force-tol",
+        type=float,
+        default=1e-2,
+        help="max abs per-component force tolerance (eV/Angstrom)",
+    )
     args = p.parse_args()
 
     import jax.numpy as jnp
@@ -283,9 +289,10 @@ def main() -> int:
     print(
         f"{'idx':>5} {'species':>8} {'regime':>8} {'dE_tot':>10} | "
         f"{'e_mm(tr)':>10} {'mm_E(md)':>10} {'d_mm':>10} | "
-        f"{'s_ml':>6} {'rcom(tr)':>9} {'com(md)':>9}"
+        f"{'s_ml':>6} {'rcom(tr)':>9} | {'dF_max':>9}"
     )
     worst = 0.0
+    worst_f = 0.0
     bad = 0
     current_species = None
     for i, name, regime in sorted(picks, key=lambda t: t[1]):
@@ -315,6 +322,8 @@ def main() -> int:
             mm_charge_mode=mode.value,
         )
         e_train = float(np.asarray(out["energy"]).reshape(-1)[0])
+        # Dataset order; reindexed to PSF order below to match the MD side.
+        f_train = np.asarray(out["forces"]).reshape(-1, 3)[:n_real][_perm]
         e_mm_train = float(np.asarray(out["e_mm"]).reshape(-1)[0])
         s_train = float(np.asarray(out["ml_scale"]).reshape(-1)[0])
         rcom_train = _train_com_dist(data, i)
@@ -366,20 +375,26 @@ def main() -> int:
         )
         e_md = float(np.asarray(out_md.energy).reshape(-1)[0])
         md = _md_parts(out_md)
+        f_md = np.asarray(out_md.forces).reshape(-1, 3)[:n_real]
 
         diff = abs(e_train - e_md)
+        # Forces are what dynamics integrates, and the ds/dR product-rule term in
+        # the handoff appears ONLY here -- an energy-only gate cannot see it.
+        fdiff = float(np.abs(f_train - f_md).max())
         worst = max(worst, diff)
-        ok = diff <= args.tol
+        worst_f = max(worst_f, fdiff)
+        ok = (diff <= args.tol) and (fdiff <= args.force_tol)
         bad += (not ok)
         d_mm = e_mm_train - md["mm_E"]
         print(
             f"{i:>5} {name:>8} {regime:>8} {diff:>10.2e} | "
             f"{e_mm_train:>10.5f} {md['mm_E']:>10.5f} {d_mm:>10.2e} | "
-            f"{s_train:>6.3f} {rcom_train:>9.3f} {md['com_dist']:>9.3f}"
+            f"{s_train:>6.3f} {rcom_train:>9.3f} | {fdiff:>9.2e}"
             f"  {'OK' if ok else 'FAIL'}"
         )
 
-    print(f"\nworst |E_train - E_md| = {worst:.3e} kcal/mol (tol {args.tol})")
+    print(f"\nworst |E_train - E_md| = {worst:.3e} eV (tol {args.tol})")
+    print(f"worst |F_train - F_md| = {worst_f:.3e} eV/A (tol {args.force_tol})")
     if bad:
         print(f"PARITY FAILED on {bad}/{len(picks)} structures", file=sys.stderr)
         return 1

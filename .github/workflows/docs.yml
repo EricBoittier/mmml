@@ -46,7 +46,6 @@ jobs:
       - name: Install PDF dependencies
         run: |
           uv sync --extra dev --extra all-cpu
-          uv pip install reportlab
           npm install --global @mermaid-js/mermaid-cli
       - name: Configure Mermaid renderer
         run: |

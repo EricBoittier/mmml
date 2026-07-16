@@ -762,13 +762,17 @@ if [[ -z "$BUILT" ]]; then
   exit 1
 fi
 
-cp -f "$BUILT" "$LIB_OUT"
+if [[ ! "$BUILT" -ef "$LIB_OUT" ]]; then
+  cp -f "$BUILT" "$LIB_OUT"
+fi
 # Keep lib/ and top-level in sync so either CHARMM_LIB_DIR works.
 mkdir -p "$CHARMM_HOME/lib"
-cp -f "$BUILT" "$CHARMM_HOME/lib/$LIB_BASENAME"
+if [[ ! "$BUILT" -ef "$CHARMM_HOME/lib/$LIB_BASENAME" ]]; then
+  cp -f "$BUILT" "$CHARMM_HOME/lib/$LIB_BASENAME"
+fi
 echo "Installed $LIB_OUT and $CHARMM_HOME/lib/$LIB_BASENAME (from $BUILT)"
 if [[ "$NO_MPI" == 1 ]]; then
-  if ldd "$CHARMM_HOME/lib/$LIB_BASENAME" 2>/dev/null | grep -qiE 'libmpi|libopen-';|libopen-pal'; then
+  if ldd "$CHARMM_HOME/lib/$LIB_BASENAME" 2>/dev/null | grep -qiE 'libmpi|libopen-rte|libopen-pal'; then
     echo "rebuild_charmm_mlpot: ERROR: installed lib still links MPI — check -Dmpi=OFF" >&2
     ldd "$CHARMM_HOME/lib/$LIB_BASENAME" | grep -iE 'mpi|open-pal|open-rme' || true
     exit 1
