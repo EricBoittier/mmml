@@ -1489,19 +1489,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--jaxmd-minimize-steps",
         type=int,
-        default=200,
+        default=1000,
         help=(
-            "Pre-dynamics FIRE steps in the JAX-MD runner (default: 200). "
-            "Free space: COM-centered. PBC: molecular (monomer-COM) wrapping."
+            "Pre-dynamics FIRE steps in the JAX-MD runner (default: 1000). "
+            "Free space: COM-centered. PBC: molecular (monomer-COM) wrapping. "
+            "Best max|F| frame is restored if FIRE wanders."
         ),
     )
     parser.add_argument(
         "--jaxmd-pbc-minimize-steps",
         type=int,
-        default=200,
+        default=1000,
         help=(
             "Additional PBC FIRE steps with molecular wrapping before dynamics "
-            "(default: 200; only when a cell is set)."
+            "(default: 1000; only when a cell is set)."
         ),
     )
     parser.add_argument(
@@ -1924,11 +1925,11 @@ def _append_suite_mmml_handoff_args(
         bool(getattr(args, "handoff_require_cell", False)),
     )
     if backend == "jaxmd":
-        cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 200))])
+        cmd.extend(["--jaxmd-minimize-steps", str(getattr(args, "jaxmd_minimize_steps", 1000))])
         cmd.extend(
             [
                 "--jaxmd-pbc-minimize-steps",
-                str(getattr(args, "jaxmd_pbc_minimize_steps", 2000)),
+                str(getattr(args, "jaxmd_pbc_minimize_steps", 1000)),
             ]
         )
         _append_boolean_optional_flag(

@@ -913,11 +913,12 @@ options:
                         (default: off).
   --jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS
                         Pre-dynamics FIRE steps in the JAX-MD runner (default:
-                        200). Free space: COM-centered. PBC: molecular (monomer-
-                        COM) wrapping.
+                        1000). Free space: COM-centered. PBC: molecular
+                        (monomer-COM) wrapping. Best max|F| frame is restored if
+                        FIRE wanders.
   --jaxmd-pbc-minimize-steps JAXMD_PBC_MINIMIZE_STEPS
                         Additional PBC FIRE steps with molecular wrapping before
-                        dynamics (default: 200; only when a cell is set).
+                        dynamics (default: 1000; only when a cell is set).
   --jax-md-update-interval JAX_MD_UPDATE_INTERVAL
                         JAX-MD/ASE PBC MM neighbor-list refresh interval in MD
                         steps or calculator calls (default: 1, conservative).

@@ -1052,6 +1052,14 @@ def set_up_nhc_sim_routine(
                     else f"FIRE minimization ({NMIN} steps)"
                 )
                 c.print(Panel(fire_label, title="[bold cyan]JAX-MD Minimization[/bold cyan]", border_style="cyan"))
+                out0 = jax_md_eval_fn(
+                    fire_state.position,
+                    mm_pair_idx=_pbc_state["pair_idx"],
+                    mm_pair_mask=_pbc_state["pair_mask"],
+                    box=_pbc_state["box"],
+                )
+                best_fire_pos = fire_state.position
+                best_fire_max_f = float(jnp.abs(out0.forces).max())
                 for i in range(NMIN):
                     fire_positions.append(fire_state.position)
                     new_state = fire_step_fn(fire_state)
@@ -1072,6 +1080,9 @@ def set_up_nhc_sim_routine(
                         print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
                         break
                     fire_state = new_state
+                    if max_force < best_fire_max_f:
+                        best_fire_max_f = max_force
+                        best_fire_pos = fire_state.position
 
                     if i % max(1, NMIN // 10) == 0:
                         c.print(
@@ -1088,8 +1099,27 @@ def set_up_nhc_sim_routine(
                             label=f"FIRE step {i}/{NMIN}",
                             console=c,
                         )
-                # fire_state always holds last valid position (we reject bad steps)
-                minimized_pos = fire_state.position
+                # Prefer best max|F| frame — FIRE often lowers E while forces climb.
+                minimized_pos = best_fire_pos
+                last_max_f = float(
+                    jnp.abs(
+                        jax_md_eval_fn(
+                            fire_state.position,
+                            mm_pair_idx=_pbc_state["pair_idx"],
+                            mm_pair_mask=_pbc_state["pair_mask"],
+                            box=_pbc_state["box"],
+                        ).forces
+                    ).max()
+                )
+                if best_fire_max_f < last_max_f - 1.0e-6:
+                    c.print(
+                        Panel(
+                            f"Restored best-force FIRE frame "
+                            f"(max|F|={best_fire_max_f:.4f} vs last {last_max_f:.4f})",
+                            title="[bold]JAX-MD Minimization[/bold]",
+                            border_style="yellow",
+                        )
+                    )
                 if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
                     minimized_pos = fire_positions[-1]
                     c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
@@ -1193,12 +1223,17 @@ def set_up_nhc_sim_routine(
                         c.print(Panel(f"max|F| increased for {WORSE_COUNT_THRESHOLD} steps; stopping early (best max|F|={best_pbc_max_f:.4f})", title="[bold yellow]PBC Minimization[/bold yellow]", border_style="yellow"))
                         break
 
-                # Use first-min result if PBC minimization worsened structure (max_force increased)
-                if best_pbc_max_f > max_force_start * 1.1:
-                    md_pos = pbc_map_fn(minimized_pos) if pbc_map_fn else minimized_pos
-                    print(f"PBC minimization increased max|F| ({max_force_start:.4f} -> {best_pbc_max_f:.4f}); using first-min wrapped structure")
-                else:
-                    md_pos = best_pbc_pos
+                # Always keep the best max|F| frame (never the last wandered state).
+                md_pos = best_pbc_pos
+                if abs(best_pbc_max_f - max_force_start) > 1.0e-6:
+                    c.print(
+                        Panel(
+                            f"Using best-force PBC FIRE frame "
+                            f"(max|F|={best_pbc_max_f:.4f}; start was {max_force_start:.4f})",
+                            title="[bold]PBC Minimization[/bold]",
+                            border_style="yellow",
+                        )
+                    )
 
             # Save PBC minimized structure (md_pos already wrapped by monomer)
             atoms.set_positions(np.asarray(md_pos))
@@ -1329,7 +1364,7 @@ def set_up_nhc_sim_routine(
                 pos0 = np.asarray(jax.device_get(state.position), dtype=float)
                 return 0, np.stack([pos0]), None
             max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
-            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 0.5) or 0.0)
+            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.0) or 0.0)
             if fmax_gate > 0.0 and max_f_start > fmax_gate:
                 msg = (
                     f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "

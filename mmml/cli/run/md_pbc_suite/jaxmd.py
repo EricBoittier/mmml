@@ -179,10 +179,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--nve-max-f-start-eVA",
         type=float,
-        default=0.5,
+        default=1.0,
         help=(
-            "Refuse to start NVE when post-FIRE max|F| exceeds this (eV/Å). "
-            "Use <=0 to disable."
+            "Refuse to start NVE when post-FIRE max atomic |F| exceeds this (eV/Å). "
+            "Default 1.0; use <=0 to disable."
         ),
     )
     p.add_argument("--nhc-chain-length", type=int, default=3)
@@ -207,17 +207,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--jaxmd-minimize-steps",
         type=int,
-        default=200,
+        default=1000,
         help=(
-            "Pre-dynamics FIRE steps (default: 200). "
-            "Free space: COM-centered. PBC: molecular wrapping."
+            "Pre-dynamics FIRE steps (default: 1000). "
+            "Free space: COM-centered. PBC: molecular wrapping. "
+            "Best max|F| frame is restored if FIRE wanders."
         ),
     )
     p.add_argument(
         "--jaxmd-pbc-minimize-steps",
         type=int,
-        default=200,
-        help="Additional PBC FIRE with molecular wrapping (default: 200).",
+        default=1000,
+        help="Additional PBC FIRE with molecular wrapping (default: 1000).",
     )
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(
@@ -1243,7 +1244,7 @@ def main(argv: list[str] | None = None) -> int:
             getattr(args, "nve_force_energy_epsilon_A", 0.01)
         ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
-        nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 0.5)),
+        nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.0)),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,

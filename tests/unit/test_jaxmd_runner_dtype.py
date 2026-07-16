@@ -76,6 +76,7 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
     assert "--nve-force-energy-relative-tolerance" in src
     assert "nve_max_f_start_eVA=" in src
     assert "nve_etot_drift_abort_eV=" in src
+    assert "default=1000" in src or "default: 1000" in src
     # Early NVE abort must not crash on missing HDF5 path.
     assert '_hdf5 if _hdf5 else' in src or "last_hdf5_path" in src
 
