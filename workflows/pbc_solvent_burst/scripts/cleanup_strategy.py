@@ -69,7 +69,7 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
     }
     mlpot: dict[str, Any] = {
         "dynamics_overlap_action": cfg.get("dynamics_overlap_action", "rescue"),
-        "dynamics_overlap_min_distance": cfg.get("dynamics_overlap_min_distance", 1.5),
+        "dynamics_overlap_min_distance": cfg.get("dynamics_overlap_min_distance", 0.45),
         "dynamics_intra_min_distance": cfg.get("dynamics_intra_min_distance", 0.5),
         "dynamics_overlap_check_interval": cfg.get("dynamics_overlap_check_interval", 500),
         "bonded_mm_mini": cfg.get("bonded_mm_mini", False),
@@ -162,7 +162,7 @@ def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
     flags: dict[str, Any] = {
         "cleanup": bool(ml.get("cleanup", strategy.name != "legacy_flat")),
         "dynamics_overlap_action": str(ml.get("dynamics_overlap_action", "rescue")),
-        "dynamics_overlap_min_distance": float(ml.get("dynamics_overlap_min_distance", 1.5)),
+        "dynamics_overlap_min_distance": float(ml.get("dynamics_overlap_min_distance", 0.45)),
         "dynamics_intra_min_distance": float(ml.get("dynamics_intra_min_distance", 0.5)),
         "dynamics_overlap_check_interval": int(ml.get("dynamics_overlap_check_interval", 500)),
         "dynamics_overlap_charmm_sd_steps": int(

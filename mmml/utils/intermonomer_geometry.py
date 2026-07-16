@@ -26,8 +26,8 @@ DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A = 1.0
 # When MKIMAT2 cannot be captured, MIC must clear the IMAGE floor (no extra slack).
 DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A = 0.0
 
-# Dynamics overlap guard default (CHARMM close-contact scale); looser than vdW sums.
-DYNAMICS_OVERLAP_REFERENCE_A = 1.5
+# Dynamics overlap guard default — same scale as prep MIC floors (dense liquids).
+DYNAMICS_OVERLAP_REFERENCE_A = 0.45
 
 # Representative vdW contact sums (Å) for log context — not hard thresholds.
 _VDW_CONTACT_HINT_A: dict[tuple[str, str], float] = {
@@ -174,9 +174,9 @@ def resolve_mlpot_registration_max_grms(args: argparse.Namespace | None) -> floa
 def resolve_pre_mlpot_overlap_min_distance(args: argparse.Namespace) -> float:
     """Minimum inter-monomer MIC distance for the pre-MLpot geometry gate (Å).
 
-    Intentionally **not** tied to ``--dynamics-overlap-min-distance`` (default 1.5 Å).
-    Structures must be ML-safe before the USER potential is enabled; sub-2.3 Å MIC
-    contacts routinely explode hybrid GRMS at registration.
+    Intentionally **not** tied to ``--dynamics-overlap-min-distance`` (default 0.45 Å).
+    Structures must be ML-safe before the USER potential is enabled; true overlaps
+    below the prep floors routinely explode hybrid GRMS at registration.
     """
     explicit = getattr(args, "pre_mlpot_overlap_min_distance", None)
     if explicit is not None:

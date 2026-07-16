@@ -125,11 +125,11 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-overlap-min-distance",
         type=float,
-        default=1.5,
+        default=0.45,
         metavar="ANG",
         help=(
             "Minimum allowed inter-monomer atom distance in Å during dynamics "
-            "(default: 1.5; CHARMM close-contact warnings often appear near this)."
+            "(default: 0.45; same scale as pre-MLpot MIC prep floors)."
         ),
     )
     group.add_argument(
@@ -448,11 +448,17 @@ def resolve_dynamics_overlap_config(
     if action not in ("error", "warn", "rescue", "off"):
         raise ValueError(f"unknown dynamics_overlap_action: {action!r}")
 
+    from mmml.utils.intermonomer_geometry import DYNAMICS_OVERLAP_REFERENCE_A
+
     min_dist = _workflow_arg(args, "dynamics_overlap_min_distance", None)
     if min_dist is None:
-        min_distance_A = _workflow_arg_float(args, "min_intermonomer_atom_distance", 1.5)
+        min_distance_A = _workflow_arg_float(
+            args, "min_intermonomer_atom_distance", DYNAMICS_OVERLAP_REFERENCE_A
+        )
     else:
-        min_distance_A = _workflow_arg_float(args, "dynamics_overlap_min_distance", 1.5)
+        min_distance_A = _workflow_arg_float(
+            args, "dynamics_overlap_min_distance", DYNAMICS_OVERLAP_REFERENCE_A
+        )
 
     interval = _workflow_arg_int(args, "dynamics_overlap_check_interval", 500)
     if use_pbc and fallback_box_side_A is None:
