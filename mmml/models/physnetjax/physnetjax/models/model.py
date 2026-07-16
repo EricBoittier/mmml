@@ -195,7 +195,7 @@ class PhysNet(nn.Module):
         """
         # Calculate basic geometric features
         basis, displacements = self._calculate_geometric_features(
-            positions, dst_idx, src_idx, cell=cell
+            positions, dst_idx, src_idx, batch_mask=batch_mask, cell=cell
         )
 
         graph_mask = jnp.ones(batch_size)
@@ -228,6 +228,7 @@ class PhysNet(nn.Module):
         positions: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
+        batch_mask: Optional[jnp.ndarray] = None,
         cell: Optional[jnp.ndarray] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
@@ -259,16 +260,39 @@ class PhysNet(nn.Module):
             displacements = dS_mic @ cell
         else:
             displacements = positions_src - positions_dst
-        return (
-            e3x.nn.basis(
-                displacements,
-                num=self.num_basis_functions,
-                max_degree=self.max_degree,
-                radial_fn=e3x.nn.exponential_chebyshev,
-                cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
-            ),
-            displacements,
+
+        # Masked pairs must not reach the basis.  ``atom_mask`` only zeroes a
+        # padding atom's own atomic energy -- it does NOT stop padding from
+        # *sending messages*: MessagePass consumes this basis with no mask of its
+        # own.  Padding sits at the origin, so every real atom within ``cutoff``
+        # of (0,0,0) had its features corrupted, and the predicted energy shifted
+        # with the molecule's absolute position (23 eV for an acetone 0.7 A from
+        # the origin) -- breaking translation invariance, which PhysNet is
+        # supposed to have by construction.  See
+        # tests/unit/test_physnet_padding_invariance.py.
+        basis_displacements = displacements
+        if batch_mask is not None:
+            m = batch_mask.astype(displacements.dtype).reshape(-1, 1)
+            # Shift masked pairs off r=0 BEFORE the basis: padding-padding pairs
+            # are exactly coincident, and zeroing a basis whose gradient is
+            # singular there gives 0 * NaN = NaN in every force.  Same idiom as
+            # _calc_switches.
+            basis_displacements = displacements + (1.0 - m)
+
+        basis = e3x.nn.basis(
+            basis_displacements,
+            num=self.num_basis_functions,
+            max_degree=self.max_degree,
+            radial_fn=e3x.nn.exponential_chebyshev,
+            cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
+        if batch_mask is not None:
+            basis = basis * batch_mask.astype(basis.dtype).reshape(
+                -1, *([1] * (basis.ndim - 1))
+            )
+        # Return the ORIGINAL displacements: _calc_switches applies its own
+        # masking downstream and must not see a doubly-offset vector.
+        return basis, displacements
 
     def _process_atomic_features(
         self,

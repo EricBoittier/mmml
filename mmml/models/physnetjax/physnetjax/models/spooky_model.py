@@ -167,7 +167,12 @@ class SpookyPhysNet(nn.Module):
         electrostatic interactions, ZBL repulsion, and optionally CGenFF LJ vdW.
         """
         basis, displacements = self._calculate_geometric_features(
-            positions, dst_idx, src_idx, cell=cell, edge_mask=edge_mask
+            positions,
+            dst_idx,
+            src_idx,
+            cell=cell,
+            batch_mask=batch_mask,
+            edge_mask=edge_mask,
         )
 
         graph_mask = jnp.ones(batch_size)
@@ -207,15 +212,22 @@ class SpookyPhysNet(nn.Module):
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
         cell: Optional[jnp.ndarray] = None,
+        batch_mask: Optional[jnp.ndarray] = None,
         edge_mask: Optional[jnp.ndarray] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Calculate geometric features including displacements and basis functions.
 
-        ``edge_mask`` (per-edge 0/1) zeroes the message-passing basis for masked edges,
-        which is how the neural graph is restricted to intra-monomer edges when computing
-        the monomer reference for the interaction-energy penalty. It does not touch the
-        pairwise prior terms (those are gated separately by ``batch_mask``).
+        ``batch_mask`` (per-edge 0/1) zeroes the message-passing basis for
+        invalid edges — including real↔padding pairs. Without this, padding
+        atoms at the origin corrupt features of any real atom within
+        ``cutoff``, breaking translation invariance.
+
+        ``edge_mask`` (per-edge 0/1) further zeroes the basis for masked edges,
+        which is how the neural graph is restricted to intra-monomer edges when
+        computing the monomer reference for the interaction-energy penalty. It
+        does not touch the pairwise prior terms (those are gated separately by
+        ``batch_mask``).
         
         Parameters
         ----------
@@ -227,6 +239,10 @@ class SpookyPhysNet(nn.Module):
             Source indices for message passing
         cell : Optional[jnp.ndarray]
             If provided, apply minimum-image convention to displacements (PBC).
+        batch_mask : Optional[jnp.ndarray]
+            Per-edge validity mask (1 for real↔real, 0 for padding edges)
+        edge_mask : Optional[jnp.ndarray]
+            Optional extra per-edge mask (e.g. intra-monomer restriction)
             
         Returns
         -------
@@ -243,15 +259,36 @@ class SpookyPhysNet(nn.Module):
             displacements = dS_mic @ cell
         else:
             displacements = positions_src - positions_dst
+
+        # Masked pairs must not reach MessagePass.  Shift them off r=0 before
+        # the basis (padding-padding is coincident; 0 * NaN force otherwise),
+        # then zero the basis.  Same idiom as PhysNet / _calc_switches.
+        edge_gate = None
+        if batch_mask is not None or edge_mask is not None:
+            edge_gate = jnp.ones(displacements.shape[0], dtype=displacements.dtype)
+            if batch_mask is not None:
+                edge_gate = edge_gate * jnp.asarray(
+                    batch_mask, dtype=displacements.dtype
+                ).reshape(-1)
+            if edge_mask is not None:
+                edge_gate = edge_gate * jnp.asarray(
+                    edge_mask, dtype=displacements.dtype
+                ).reshape(-1)
+        basis_displacements = displacements
+        if edge_gate is not None:
+            basis_displacements = displacements + (1.0 - edge_gate.reshape(-1, 1))
+
         basis = e3x.nn.basis(
-            displacements,
+            basis_displacements,
             num=self.num_basis_functions,
             max_degree=self.max_degree,
             radial_fn=e3x.nn.exponential_chebyshev,
             cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
-        if edge_mask is not None:
-            basis = basis * jnp.asarray(edge_mask, dtype=basis.dtype).reshape(-1, 1, 1, 1)
+        if edge_gate is not None:
+            basis = basis * edge_gate.astype(basis.dtype).reshape(
+                -1, *([1] * (basis.ndim - 1))
+            )
         return basis, displacements
 
     def _process_atomic_features(
