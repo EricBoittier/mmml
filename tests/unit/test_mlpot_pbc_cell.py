@@ -1666,8 +1666,8 @@ def test_apply_nbonds_kwargs_uses_update_script_for_nbxmod():
     update_script.return_value.run.assert_called_once()
 
 
-def test_calculator_dimer_wrap_has_no_stop_gradient():
-    """NVE hardening: ML-dimer MIC wrap must not stop_gradient the lattice shift."""
+def test_calculator_dimer_wrap_detaches_lattice_shift():
+    """MD must keep stop_gradient on the MIC lattice shift (smooth/VJP blows up)."""
     from pathlib import Path
 
     src = (
@@ -1677,9 +1677,8 @@ def test_calculator_dimer_wrap_has_no_stop_gradient():
         / "pycharmmInterface"
         / "mmml_calculator.py"
     ).read_text(encoding="utf-8")
-    assert "wrap_dimer_monomer_b" in src
-    assert "vjp_wrap_dimer_monomer_b_forces" in src
-    assert "stop_gradient(shift_b)" not in src
+    assert "stop_gradient" in src
+    assert "piecewise-constant" in src or "±L/2" in src
 
 
 def test_calculator_wrapping_translation_invariance():

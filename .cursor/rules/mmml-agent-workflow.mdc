@@ -38,3 +38,11 @@ alwaysApply: true
 - `pytest` commands for the user.
 - Copy-paste workflow blocks (shell / Slurm) with minimal smoke parameters.
 - Clear pass/fail criteria (e.g. fixed monomer RMSD ≈ 0 after SD pass 2).
+
+## PBC ML-dimer MIC wrap (do not “fix”)
+
+- **Never** remove `stop_gradient` on the MIC lattice shift that wraps monomer B
+  in `mmml_calculator`, and **never** replace that wrap with smooth-MIC + force
+  VJP to chase NVE force–energy consistency. Exact MIC shifts are
+  piecewise-constant; differentiating them blows up `|F|` near ±L/2 and breaks
+  minimize/NVE. Details: `.cursor/rules/pbc-dimer-mic-wrap.mdc`.

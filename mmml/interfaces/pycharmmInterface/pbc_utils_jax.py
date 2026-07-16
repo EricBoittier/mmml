@@ -182,13 +182,15 @@ def wrap_dimer_monomer_b(
     cell: Array,
     *,
     k: float = SMOOTH_MIC_K,
+    detach_shift: bool = True,
+    smooth: bool = False,
 ) -> Array:
     """MIC-shift monomer B so the dimer uses the minimum-image COM separation.
 
-    Uses **smooth** MIC and is differentiable w.r.t. ``pos_di`` (no
-    ``stop_gradient``). Exact MIC + stopped shift makes
-    ``E = E_model(wrap(R))`` disagree with model forces assigned to unwrapped
-    atoms — the NVE force–energy preflight failure mode for liquid PBC dimers.
+    Production MD (``mmml_calculator``) uses ``smooth=False`` and
+    ``detach_shift=True``: exact MIC lattice shifts are piecewise-constant, so
+    stopping their gradient is correct almost everywhere. Differentiable smooth
+    shifts create large force spikes near ±L/2 and must not be used in MD.
     """
     pos_di = jnp.asarray(pos_di)
     max_n = pos_di.shape[0]
@@ -202,8 +204,14 @@ def wrap_dimer_monomer_b(
     n_b_safe = jnp.maximum(jnp.sum(mask_b), jnp.asarray(1e-10, dtype=dtype))
     com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a_safe
     com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b_safe
-    d = mic_displacement_smooth(com_a, com_b, cell, k=k)
+    d = (
+        mic_displacement_smooth(com_a, com_b, cell, k=k)
+        if smooth
+        else mic_displacement(com_a, com_b, cell)
+    )
     shift_b = com_a + d - com_b
+    if detach_shift:
+        shift_b = jax.lax.stop_gradient(shift_b)
     return pos_di + shift_b * mask_b[:, None]
 
 
@@ -216,13 +224,15 @@ def vjp_wrap_dimer_monomer_b_forces(
     *,
     k: float = SMOOTH_MIC_K,
 ) -> Array:
-    """Map forces on wrapped dimer coords back to unwrapped atom coords.
+    """Map forces through a *smooth, attached* wrap (analysis only — not for MD).
 
-    If ``F_wrapped = -∂E/∂R_wrapped`` and ``R_wrapped = wrap(R)``, then
-    ``F_unwrapped = VJP(wrap)(F_wrapped) = -∂E/∂R``.
+    Demonstrates F = VJP(wrap)(-∂E/∂R_wrapped). Production calculators must not
+    use this path; see ``wrap_dimer_monomer_b`` docstring.
     """
     def _wrap(p: Array) -> Array:
-        return wrap_dimer_monomer_b(p, n_a, n_b, cell, k=k)
+        return wrap_dimer_monomer_b(
+            p, n_a, n_b, cell, k=k, detach_shift=False, smooth=True
+        )
 
     _, vjp_fn = jax.vjp(_wrap, pos_di)
     return vjp_fn(forces_wrapped)[0]
