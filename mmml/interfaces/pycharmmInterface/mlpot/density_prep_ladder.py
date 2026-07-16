@@ -1300,6 +1300,22 @@ def run_pre_mlpot_geometry_gate(
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
     lattice_steps = resolve_density_prep_lattice_abnr_steps(args)
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        density_target_holds_box,
+    )
+
+    hold_density_box = density_target_holds_box(args)
+    held_side = float(side) if (hold_density_box and side is not None) else None
+    if hold_density_box:
+        # Density-sized liquid-box: never let gate MC / lattice expand L
+        # (geometry-floor MC historically blew 34 Å → ~51 Å).
+        lattice_steps = 0
+        if not quiet and held_side is not None:
+            print(
+                f"Pre-MLpot gate: holding density-sized L={held_side:.3f} Å "
+                "(skip MC box resize + lattice ABNR).",
+                flush=True,
+            )
     staged_fraction = float(getattr(args, "liquid_prep_staged_density_fraction", 0.55) or 0.55)
     packmol_tol = getattr(args, "packmol_tolerance", None)
     packmol_tol_f = float(packmol_tol) if packmol_tol is not None else None
@@ -1409,7 +1425,7 @@ def run_pre_mlpot_geometry_gate(
         if not quiet:
             print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
 
-    if charmm_pbc and composition is not None:
+    if charmm_pbc and composition is not None and not hold_density_box:
         for frac, tag in ((staged_fraction, "mc_density_staged"), (1.0, "mc_density_target")):
             step_label = f"pre_mlpot:{tag}"
             try:
@@ -1453,6 +1469,9 @@ def run_pre_mlpot_geometry_gate(
             except Exception as exc:
                 if not quiet:
                     print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
+    elif hold_density_box:
+        result.steps_applied.append("pre_mlpot:mc_density_skipped_hold_box")
+        _record_gate_step("pre_mlpot:mc_density_skipped_hold_box")
 
     if charmm_pbc and lattice_steps > 0:
         for nocoords, tag in _LATTICE_ABNR_PREP_PASSES:
@@ -1694,6 +1713,23 @@ def run_pre_mlpot_geometry_gate(
                     "contact_summary": summary.format_log_line(),
                 }
             )
+    if held_side is not None and (
+        side is None or abs(float(side) - float(held_side)) > 1.0e-3
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            push_charmm_cubic_box_side_A,
+        )
+
+        if not quiet:
+            print(
+                "Pre-MLpot gate: restoring density-sized L="
+                f"{float(held_side):.3f} Å "
+                f"(was {None if side is None else f'{float(side):.3f}'} Å).",
+                flush=True,
+            )
+        push_charmm_cubic_box_side_A(float(held_side), quiet=quiet)
+        side = float(held_side)
+        result.steps_applied.append("pre_mlpot:restore_held_box_side")
     return pos, side, result
 
 
