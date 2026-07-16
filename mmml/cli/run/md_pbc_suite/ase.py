@@ -598,39 +598,62 @@ def _residue_labels_from_loaded_psf(atoms_per_list: list[int]) -> list[str]:
     return ["UNK"] * len(atoms_per_list)
 
 
-def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) -> None:
-    """Prefer sibling ``box.json`` cubic side over a stale YAML ``--box-size``."""
+def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) -> float:
+    """Prefer sibling ``box.json`` cubic side over YAML ``--box-size`` / density auto.
+
+    Returns the certified side (Å). Raises if ``box.json`` is missing or lacks a
+    positive ``box_side_A`` — silent density-auto fallback has previously shrunk
+    liquid-box cells (e.g. 28.17 → 27.75 Å at ρ=1.36).
+    """
     import json
 
     box_json = Path(crd_path).expanduser().resolve().parent / "box.json"
     if not box_json.is_file():
-        return
+        raise FileNotFoundError(
+            f"Certified --from-crd requires sibling box.json next to {crd_path} "
+            f"(expected {box_json}). Pass an explicit --box-size matching the "
+            "liquid-box REPORT if box.json is unavailable."
+        )
     try:
         data = json.loads(box_json.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Failed to read certified box.json {box_json}: {exc}") from exc
     side = data.get("box_side_A")
     if side is None:
         side = data.get("final_cubic_side_A")
     if side is None:
-        return
+        raise ValueError(
+            f"Certified box.json {box_json} has no box_side_A / final_cubic_side_A"
+        )
     side_f = float(side)
     if side_f <= 0.0:
-        return
+        raise ValueError(f"Certified box_side_A must be positive, got {side_f}")
     prev = getattr(args, "box_size", None)
     args.box_size = side_f
+    # Density-auto must not replace the certified cell if box_size is cleared later.
+    args.box_auto = None
+    args.target_density_g_cm3 = None
+    args.bulk_density_fraction = None
+    rho = data.get("density_g_cm3")
     if not getattr(args, "quiet", False):
+        rho_txt = f", ρ={float(rho):.4f} g/cm³" if rho is not None else ""
         if prev is None:
             print(
-                f"Certified box: using L={side_f:.3f} Å from {box_json}",
+                f"Certified box: L={side_f:.3f} Å{rho_txt} from {box_json}",
                 flush=True,
             )
         elif abs(float(prev) - side_f) > 1.0e-3:
             print(
                 f"Certified box: overriding --box-size {float(prev):.3f} → "
-                f"{side_f:.3f} Å from {box_json}",
+                f"{side_f:.3f} Å{rho_txt} from {box_json}",
                 flush=True,
             )
+        else:
+            print(
+                f"Certified box: L={side_f:.3f} Å{rho_txt} (matches --box-size)",
+                flush=True,
+            )
+    return side_f
 
 
 def cluster_geometry_from_certified_artifacts(
@@ -643,7 +666,8 @@ def cluster_geometry_from_certified_artifacts(
     )
 
     crd = Path(getattr(args, "from_crd")).expanduser().resolve()
-    _maybe_apply_certified_box_json(args, crd)
+    certified_side = _maybe_apply_certified_box_json(args, crd)
+    setattr(args, "_certified_box_side_A", float(certified_side))
     z, r0, _n_mol, _tag = load_cluster_from_artifacts(args)
     atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
     if sum(atoms_per_list) != int(len(z)):
