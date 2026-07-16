@@ -261,7 +261,7 @@ def main() -> int:
         charge_correction=bool(args.mm_charge_correction),
     )
 
-    data = np.load(args.data, allow_pickle=True)
+    data = dict(np.load(args.data, allow_pickle=True))
     sigmas = jnp.asarray(data["cgenff_master_sigmas"])
     epsilons = jnp.asarray(data["cgenff_master_epsilons"])
     natoms = int(np.asarray(data["Z"]).shape[1])

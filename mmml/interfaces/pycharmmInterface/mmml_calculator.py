@@ -237,6 +237,8 @@ else:
     ev2kcalmol = 23.060548867
 kcalmol2ev = 1.0 / ev2kcalmol
 
+from mmml.models.short_range_wall import pair_wall_energy
+
 
 # Module-level configuration ------------------------------------------------
 
@@ -346,6 +348,7 @@ def setup_calculator(
     sig_scale=None,
     model_restart_path=None,
     MAX_ATOMS_PER_SYSTEM: int = 20,
+    short_range_wall: bool = True,
     ml_energy_conversion_factor: float = 1.0,
     ml_force_conversion_factor: float = 1.0,
     cell=False,
@@ -1413,6 +1416,43 @@ def setup_calculator(
             ("mbd_correction", f"{Path(mbd_checkpoint)} (weight={float(mbd_weight):g})")
         )
 
+    # Per-atom monomer id, from the same offsets the rest of the calculator uses.
+    _atom_mol_id_np = np.concatenate(
+        [np.full(int(n), m, dtype=np.int32) for m, n in enumerate(atoms_per_monomer_list)]
+    )
+
+    def _short_range_wall_energy(positions: Array, cell: Optional[Array]) -> Array:
+        """Inter-monomer repulsive wall (eV). Zero above WALL_R_ON.
+
+        Why this exists: the hybrid taper switches the MM Lennard-Jones wall OFF
+        below ``mm_switch_on - ml_switch_width`` and hands close range to the ML
+        model, which has no repulsive prior outside its training data (closest
+        inter-monomer contact ever sampled: 1.971 A).  Nothing then holds atoms
+        apart -- a liquid acetone NVT run collapsed by ~5000 eV and heated
+        150 -> 705 K at dt=0.25 fs.  Identically zero above WALL_R_ON, so it
+        cannot perturb the sampled region; it only catches trajectories that
+        leave it.  Shared with training via mmml.models.short_range_wall, so both
+        evaluate the same function.
+        """
+        mol = jnp.asarray(_atom_mol_id_np[: positions.shape[0]])
+        n = positions.shape[0]
+        iu, ju = jnp.triu_indices(n, k=1)
+        d = positions[iu] - positions[ju]
+        if cell is not None:
+            # Exact MIC, piecewise-constant lattice shift held under
+            # stop_gradient. Making the shift differentiable injects huge forces
+            # near +-L/2 -- see .cursor/rules/pbc-dimer-mic-wrap.mdc.
+            cell_diag = jnp.asarray(cell)
+            L = jnp.diag(cell_diag) if cell_diag.ndim == 2 else cell_diag
+            d = d - jax.lax.stop_gradient(jnp.round(d / L)) * L
+        r2 = jnp.sum(d * d, axis=-1)
+        inter = mol[iu] != mol[ju]
+        # Leave the r=0 singularity before the sqrt: masking afterwards still
+        # leaves 0 * NaN = NaN in every force.
+        r2_safe = jnp.where(inter, jnp.maximum(r2, 1e-20), 1.0)
+        e = pair_wall_energy(jnp.sqrt(r2_safe))
+        return jnp.sum(jnp.where(inter, e, 0.0))
+
     @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
     def spherical_cutoff_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
@@ -1625,6 +1665,17 @@ def setup_calculator(
             outputs["mm_F"] = mm_F
             outputs["out_E"] = outputs.get("out_E", 0) + outputs["mm_E"]
             outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_F"]
+
+        # Short-range inter-monomer wall. Deliberately NOT gated on doMM: the MM
+        # taper switching the LJ wall off at close range is exactly the hole this
+        # fills. Zero above WALL_R_ON, so it is a no-op in the sampled region.
+        if short_range_wall:
+            wall_E, wall_dE = jax.value_and_grad(
+                lambda p: _short_range_wall_energy(p, mic_pbc_cell)
+            )(positions)
+            outputs["wall_E"] = wall_E
+            outputs["out_E"] = outputs.get("out_E", 0) + wall_E
+            outputs["out_F"] = outputs.get("out_F", 0) - wall_dE
 
         # Whole-system learned MBD dispersion correction (weight already applied
         # inside the term). Uses PyCHARMM atom ordering directly; no reordering.
