@@ -163,6 +163,30 @@ def test_handoff_temperature_and_displacement_do_not_use_fs_as_ps() -> None:
     )
 
 
+def test_jaxmd_metal_temperature_matches_ase_not_ang_ps_thermometer() -> None:
+    """JAX-MD metal velocities look 'cold' only if scored as Å/ps."""
+    from ase import Atoms
+    from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
+
+    from mmml.cli.run.md_handoff import (
+        kinetic_temperature_k_from_ang_ps_velocities,
+        kinetic_temperature_k_from_jaxmd_metal_velocities,
+    )
+
+    z = np.tile(np.array([8, 6, 6, 6, 1, 1, 1, 1, 1, 1], dtype=np.int32), 20)
+    atoms = Atoms(numbers=z, positions=np.zeros((len(z), 3)))
+    MaxwellBoltzmannDistribution(atoms, temperature_K=150.0, rng=np.random.default_rng(0))
+    Stationary(atoms)
+    v = np.asarray(atoms.get_velocities(), dtype=float)
+    m = np.asarray(atoms.get_masses(), dtype=float)
+
+    t_metal = kinetic_temperature_k_from_jaxmd_metal_velocities(v, m)
+    t_wrong = kinetic_temperature_k_from_ang_ps_velocities(v, m)
+    assert 100.0 < t_metal < 200.0
+    assert t_wrong < 1.0
+    assert t_metal == pytest.approx(atoms.get_temperature(), rel=1e-5)
+
+
 def test_remove_center_of_mass_velocity_preserves_internal_motion() -> None:
     from mmml.cli.run.md_handoff import remove_center_of_mass_velocity_ang_ps
 

@@ -643,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
         get_handoff_in,
         handoff_from_atoms,
         handoff_velocities_as_ang_ps,
-        kinetic_temperature_k_from_ang_ps_velocities,
+        kinetic_temperature_k_from_jaxmd_metal_velocities,
         remove_center_of_mass_velocity_ang_ps,
         handoff_skip_pre_min,
         resolve_jaxmd_minimize_steps_for_handoff,
@@ -1324,7 +1324,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             masses_amu = np.asarray(atoms.get_masses(), dtype=float)
-        handoff_temperature = kinetic_temperature_k_from_ang_ps_velocities(
+        # JAX-MD / ASE metal units (same as state.momentum/state.mass), not Å/ps.
+        handoff_temperature = kinetic_temperature_k_from_jaxmd_metal_velocities(
             initial_velocities, masses_amu
         )
         dt_ps = float(args.dt_fs) * 0.001
@@ -1350,8 +1351,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"at dt={float(args.dt_fs):g} fs"
             )
         if float(handoff_temperature) < cold_floor:
-            # Near-zero handoff momenta (seen after some NVT→NVE chains) must not
-            # enter NVE as "continue velocities" — re-thermalize at target T.
+            # Truly quenched momenta (metal-unit T ≪ target) — re-thermalize.
             if not getattr(args, "quiet", False):
                 print(
                     f"WARN: handoff kinetic T={float(handoff_temperature):.3f} K "
@@ -1365,7 +1365,7 @@ def main(argv: list[str] | None = None) -> int:
         elif not getattr(args, "quiet", False):
             print(
                 f"Using converted handoff velocities ({len(initial_velocities)} atoms): "
-                f"T={handoff_temperature:.3f} K, "
+                f"T={handoff_temperature:.3f} K (JAX-MD metal), "
                 f"max dt*v={max_step_displacement:.6f} Å.",
                 flush=True,
             )
@@ -1391,8 +1391,24 @@ def main(argv: list[str] | None = None) -> int:
         MaxwellBoltzmannDistribution(atoms, temperature_K=mb_temp, rng=rng)
         Stationary(atoms)
         ZeroRotation(atoms)
-        # Prefer explicit Å/ps for jaxmd_runner; ASE stores Å/fs internally.
-        initial_velocities = np.asarray(atoms.get_velocities(), dtype=float) * 1000.0
+        # ASE metal velocities match JAX-MD metal (do NOT scale by 1000 / Å/fs).
+        initial_velocities = np.asarray(atoms.get_velocities(), dtype=float)
+
+    if initial_velocities is not None:
+        masses_amu = np.asarray(atoms.get_masses(), dtype=float)
+        metal_T = kinetic_temperature_k_from_jaxmd_metal_velocities(
+            initial_velocities, masses_amu
+        )
+        # Å/ps-scaled or ASE×1000 velocities look like T ~ 10⁵–10⁸ K in metal units.
+        if not np.isfinite(metal_T) or float(metal_T) > 5000.0:
+            vmax = float(np.max(np.linalg.norm(initial_velocities, axis=1)))
+            raise RuntimeError(
+                "Initial velocities are not JAX-MD metal units: "
+                f"implied T={float(metal_T):.1f} K, max|v|={vmax:.3g}. "
+                "Thermal metal |v| is O(0.1–1) at ~150–300 K; values O(10–100) "
+                "usually mean an erroneous ×1000 (Å/fs↔Å/ps) conversion. "
+                "Pull the latest mmml (ASE Maxwell–Boltzmann must not be ×1000)."
+            )
 
     policy_summary["velocity_policy"] = velocity_policy
     policy_summary["use_handoff_velocities"] = bool(use_handoff_velocities)
@@ -1588,8 +1604,9 @@ def main(argv: list[str] | None = None) -> int:
                     metadata={
                         "backend": "jaxmd",
                         "ensemble": args.ensemble,
-                        # JAX-MD momenta/mass are Å/ps (not ASE Å/fs, not AKMA).
-                        "velocity_units": "ang_ps",
+                        # state.momentum/mass: JAX-MD metal units (ASE-native), not
+                        # Å/ps and not CHARMM AKMA.  Pass through to the next jaxmd leg.
+                        "velocity_units": "jaxmd_metal",
                     },
                 )
             )

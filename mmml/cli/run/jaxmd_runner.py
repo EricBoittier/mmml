@@ -1511,9 +1511,10 @@ def set_up_nhc_sim_routine(
             )
         state = normalize_jaxmd_state(state)
         if initial_velocities is not None:
-            mom_title = "Using handoff velocities"
+            # Caller may pass handoff OR ASE Maxwell–Boltzmann metal velocities.
+            mom_title = "Using provided initial velocities (JAX-MD metal units)"
         else:
-            mom_title = f"Maxwell–Boltzmann momentum at {T} K"
+            mom_title = f"Maxwell–Boltzmann momentum at {T} K (integrator)"
         c.print(Panel(mom_title, title="[bold]JAX-MD[/bold]", border_style="green"))
         nhc_positions = []
         nhc_boxes = []  # NPT: box at each record step (for frac→real when saving)
