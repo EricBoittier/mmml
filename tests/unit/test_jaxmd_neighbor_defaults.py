@@ -6,9 +6,12 @@ from types import SimpleNamespace
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from mmml.cli.run.jaxmd_runner import (
     _nl_update_positions,
+    jaxmd_fire_dt_backoff_schedule,
+    resolve_jaxmd_fire_dt_start_ps,
     resolve_jaxmd_steps_per_loop_call,
     resolve_mm_pair_list_capacity,
     resolve_pre_md_fire_start_positions,
@@ -155,3 +158,16 @@ def test_jaxmd_and_ase_cli_defaults_use_interval_one_conservative_skin():
     assert "DEFAULT_JAX_MD_SKIN_DISTANCE_A" in ase_src
     assert "default=1," in ase_src.split('"--jax-md-update-interval"')[1][:200]
     assert "default=1.75" in ase_src.split('"--jax-md-capacity-multiplier"')[1][:200]
+
+
+def test_resolve_jaxmd_fire_dt_start_shrinks_for_soft_geometry():
+    assert resolve_jaxmd_fire_dt_start_ps(0.08) == pytest.approx(1.0e-4)
+    assert resolve_jaxmd_fire_dt_start_ps(0.3) == pytest.approx(3.0e-4)
+    assert resolve_jaxmd_fire_dt_start_ps(1.0) == pytest.approx(1.0e-3)
+
+
+def test_jaxmd_fire_dt_backoff_schedule_descends():
+    sched = jaxmd_fire_dt_backoff_schedule(1.0e-4)
+    assert sched[0] == pytest.approx(1.0e-4)
+    assert len(sched) >= 2
+    assert sched[1] < sched[0]
