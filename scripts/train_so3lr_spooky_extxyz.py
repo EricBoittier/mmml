@@ -409,16 +409,34 @@ def bucket_indices_by_natoms(
     return {n: np.asarray(vals, dtype=np.int64) for n, vals in buckets.items()}
 
 
+def apply_auto_batch_margin(
+    batch_sizes: Mapping[int, int],
+    margin: int,
+) -> dict[int, int]:
+    """Shrink probed B/device so multi-GPU training has headroom vs a 1-GPU probe."""
+    m = max(0, int(margin))
+    return {int(pad): max(1, int(bsz) - m) for pad, bsz in batch_sizes.items()}
+
+
 def iter_device_batches(
     buckets: dict[int, np.ndarray],
     *,
     batch_sizes: Mapping[int, int],
     n_devices: int,
     rng: np.random.Generator,
+    shuffle_pad_buckets: bool = False,
 ) -> Iterator[tuple[int, np.ndarray]]:
-    """Yield ``(pad_atoms, device_indices)`` with shape ``(n_devices, B)``."""
+    """Yield ``(pad_atoms, device_indices)`` with shape ``(n_devices, B)``.
+
+    Pad widths are sorted (large→small) by default so each shape is trained in
+    a block; shuffling pads interleaves compiles and fragments GPU memory.
+    Indices *within* a pad bucket are always shuffled.
+    """
     bucket_keys = list(buckets)
-    rng.shuffle(bucket_keys)
+    if shuffle_pad_buckets:
+        rng.shuffle(bucket_keys)
+    else:
+        bucket_keys = sorted(bucket_keys, reverse=True)
     for pad_atoms in bucket_keys:
         bucket_batch_size = int(batch_sizes[pad_atoms])
         if bucket_batch_size < 1:
@@ -1839,6 +1857,23 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             auto_batch=False,
         )
 
+    # 1-GPU probe overestimates what fits once many pad/B executables coexist
+    # under 2-GPU pmap (seen: pad=84 B=6 compile OOM → rendezvous hang).
+    margin = int(args.auto_batch_margin)
+    if margin > 0:
+        before = dict(train_batch_sizes)
+        train_batch_sizes = apply_auto_batch_margin(train_batch_sizes, margin)
+        changed = [
+            f"{pad}:{before[pad]}→{train_batch_sizes[pad]}"
+            for pad in sorted(before)
+            if before[pad] != train_batch_sizes[pad]
+        ]
+        print(
+            f"Applied --auto-batch-margin {margin}"
+            + (f" ({', '.join(changed)})" if changed else " (no changes)"),
+            flush=True,
+        )
+
     valid_batch_sizes = {
         pad: train_batch_sizes.get(
             pad,
@@ -1875,6 +1910,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     state = jax_utils.replicate(state, devices=devices)
     step_functions: dict[int, tuple[Any, Any]] = {}
+    active_shape: tuple[int, int] | None = None
 
     def steps_for_batch_size(batch_size: int) -> tuple[Any, Any]:
         if batch_size not in step_functions:
@@ -1892,7 +1928,22 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             )
         return step_functions[batch_size]
 
-    compiled_shapes: set[tuple[int, int]] = set()
+    def _activate_shape(pad_atoms: int, batch_size: int) -> None:
+        """Keep only one pad/B executable resident to avoid multi-GPU OOM hangs."""
+        nonlocal active_shape
+        shape = (pad_atoms, batch_size)
+        if shape == active_shape:
+            return
+        if active_shape is not None:
+            step_functions.clear()
+            _clear_jax_caches()
+        print(
+            f"Compiling steps for pad_atoms={pad_atoms} "
+            f"with per-device batch {batch_size}",
+            flush=True,
+        )
+        active_shape = shape
+
     for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
         train_total: dict[str, Any] | None = None
@@ -1905,19 +1956,13 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 batch_sizes=train_batch_sizes,
                 n_devices=args.num_devices,
                 rng=rng,
+                shuffle_pad_buckets=args.shuffle_pad_buckets,
             ),
             data,
             depth=args.prefetch_batches,
         )
         for step, (pad_atoms, batch_size, batch) in enumerate(train_batches, start=1):
-            shape = (pad_atoms, batch_size)
-            if shape not in compiled_shapes:
-                print(
-                    f"Compiling steps for pad_atoms={pad_atoms} "
-                    f"with per-device batch {batch_size}",
-                    flush=True,
-                )
-                compiled_shapes.add(shape)
+            _activate_shape(pad_atoms, batch_size)
             train_step, _ = steps_for_batch_size(batch_size)
             state, metrics = train_step(state, batch)
             train_total = accumulate_metrics(train_total, metrics)
@@ -1965,11 +2010,13 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 batch_sizes=valid_batch_sizes,
                 n_devices=args.num_devices,
                 rng=np.random.default_rng(args.seed + epoch),
+                shuffle_pad_buckets=args.shuffle_pad_buckets,
             ),
             data,
             depth=args.prefetch_batches,
         )
         for step, (pad_atoms, batch_size, batch) in enumerate(valid_batches, start=1):
+            _activate_shape(pad_atoms, batch_size)
             _, eval_step = steps_for_batch_size(batch_size)
             valid_total = accumulate_metrics(valid_total, eval_step(state, batch))
             valid_count += 1
@@ -2103,6 +2150,23 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Ignore workdir/auto_batch_sizes.json and re-probe all pad widths. "
             "Use after changing GPUs, model size, or --batch-size-per-device cap."
+        ),
+    )
+    parser.add_argument(
+        "--auto-batch-margin",
+        type=int,
+        default=1,
+        help=(
+            "Subtract this from each probed B/device before training (default: 1). "
+            "Gives headroom vs a clean 1-GPU probe once 2-GPU executables accumulate."
+        ),
+    )
+    parser.add_argument(
+        "--shuffle-pad-buckets",
+        action="store_true",
+        help=(
+            "Shuffle atom-pad bucket order each epoch (default: large→small blocks). "
+            "Interleaving pads forces many live compiles and can OOM-hang pmap."
         ),
     )
     parser.add_argument("--epochs", type=int, default=50)
