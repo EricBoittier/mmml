@@ -1173,7 +1173,6 @@ def build_mm_energy_forces_fn(
             q_b = jnp.take(charges, _static_pair_j)
             return q_a * q_b * pair_lambda_mm
 
-        pair_qq = _pair_qq_from_charges(q_per_system)
         pair_rm = rm_a + rm_b
         pair_ep = (ep_a * ep_b) ** 0.5 * pair_lambda_mm
 
