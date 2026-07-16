@@ -171,6 +171,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Directional finite-difference displacement for the NVE force preflight.",
     )
     p.add_argument(
+        "--nve-force-energy-ml-only-diagnose",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "On NVE force–energy preflight, also run the same directional FD with "
+            "doMM=False to separate PBC ML-dimer non-conservatism from MM assembly "
+            "(default: on when --include-mm)."
+        ),
+    )
+    p.add_argument(
         "--nve-etot-drift-abort-eV",
         type=float,
         default=0.5,
@@ -1295,6 +1305,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         nve_force_energy_epsilon_A=float(
             getattr(args, "nve_force_energy_epsilon_A", 0.01)
+        ),
+        nve_force_energy_ml_only_diagnose=bool(
+            getattr(args, "nve_force_energy_ml_only_diagnose", True)
         ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.0)),

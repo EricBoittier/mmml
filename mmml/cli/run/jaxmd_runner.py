@@ -51,6 +51,44 @@ def directional_force_energy_error(
     return derivative, abs(derivative - expected) / scale
 
 
+def nve_force_energy_ablation_verdict(
+    hybrid_relerr: float,
+    ml_only_relerr: float | None,
+    tol: float,
+) -> str:
+    """Interpret hybrid vs ML-only (doMM=False) directional FD relative errors.
+
+    Used when NVE preflight fails to separate PBC ML-dimer / switch issues from
+    MM pair-list / E_MM assembly.
+    """
+    hyb = float(hybrid_relerr)
+    tol = float(tol)
+    if ml_only_relerr is None or not np.isfinite(ml_only_relerr):
+        return "ML-only ablation unavailable"
+    ml = float(ml_only_relerr)
+    hyb_fail = (not np.isfinite(hyb)) or hyb > tol
+    ml_fail = (not np.isfinite(ml)) or ml > tol
+    if not hyb_fail and not ml_fail:
+        return "hybrid and ML-only both within tolerance"
+    if hyb_fail and not ml_fail:
+        return (
+            "ML-only passes → suspect MM / hybrid assembly (pairs, E_MM, handoff mix); "
+            "PBC ML-dimer path looks conservative"
+        )
+    if hyb_fail and ml_fail:
+        # Similar magnitude → same root; much larger hybrid → MM adds damage.
+        if np.isfinite(hyb) and np.isfinite(ml) and hyb > 1.5 * max(ml, 1.0e-12) and hyb > tol:
+            return (
+                "both fail, hybrid worse → MM/hybrid assembly adds non-conservatism on "
+                "top of an already-failing ML path"
+            )
+        return (
+            "ML-only also fails → suspect PBC ML-dimer / MIC wrap / switch forces "
+            "(not MM pairs)"
+        )
+    return "ML-only fails but hybrid passes (unexpected; re-check dtype / neighbors)"
+
+
 def _nl_update_positions(positions):
     """Pass JAX arrays to ``update_mm_pairs`` so it can avoid host sync on cache hits."""
     import os
@@ -1583,6 +1621,69 @@ def set_up_nhc_sim_routine(
                         border_style="cyan",
                     )
                 )
+                # Ablation: same FD with doMM=False to separate PBC ML-dimer
+                # non-conservatism from MM pair-list / E_MM assembly.
+                ml_only_relerr: float | None = None
+                ml_only_slope: float | None = None
+                do_ml_ablation = bool(
+                    getattr(args, "include_mm", True)
+                ) and bool(
+                    getattr(args, "nve_force_energy_ml_only_diagnose", True)
+                )
+                if do_ml_ablation:
+                    pos0_jax = as_jaxmd_dtype(state.position)
+                    box_fd = _pbc_state["box"]
+
+                    def _ml_only_energy(pos):
+                        out = spherical_cutoff_calculator(
+                            atomic_numbers=atomic_numbers,
+                            positions=as_jaxmd_dtype(pos),
+                            n_monomers=n_monomers,
+                            cutoff_params=CUTOFF_PARAMS,
+                            doML=True,
+                            doMM=False,
+                            doML_dimer=not getattr(args, "skip_ml_dimers", False),
+                            debug=False,
+                            box=box_fd,
+                        )
+                        return out.energy.reshape(-1)[0]
+
+                    ml_out0 = spherical_cutoff_calculator(
+                        atomic_numbers=atomic_numbers,
+                        positions=pos0_jax,
+                        n_monomers=n_monomers,
+                        cutoff_params=CUTOFF_PARAMS,
+                        doML=True,
+                        doMM=False,
+                        doML_dimer=not getattr(args, "skip_ml_dimers", False),
+                        debug=False,
+                        box=box_fd,
+                    )
+                    ml_forces = as_jaxmd_dtype(ml_out0.forces)
+                    ml_e_plus = float(_ml_only_energy(pos0_jax + fd_eps * direction))
+                    ml_e_minus = float(_ml_only_energy(pos0_jax - fd_eps * direction))
+                    ml_proj = float(jnp.sum(ml_forces * direction))
+                    ml_only_slope, ml_only_relerr = directional_force_energy_error(
+                        ml_e_plus,
+                        ml_e_minus,
+                        fd_eps,
+                        ml_proj,
+                    )
+                    verdict = nve_force_energy_ablation_verdict(
+                        fd_relerr, ml_only_relerr, fd_tol
+                    )
+                    c.print(
+                        Panel(
+                            f"ML-only (doMM=False): dE/ds={ml_only_slope:.6f} eV/Å, "
+                            f"-F·d={-ml_proj:.6f} eV/Å, "
+                            f"relative error={ml_only_relerr:.4f}\n"
+                            f"hybrid (doMM={bool(getattr(args, 'include_mm', True))}): "
+                            f"relative error={fd_relerr:.4f}\n"
+                            f"verdict: {verdict}",
+                            title="[bold]NVE force–energy ML-only ablation[/bold]",
+                            border_style="magenta",
+                        )
+                    )
                 if not np.isfinite(fd_relerr) or fd_relerr > fd_tol:
                     msg = (
                         "NVE force–energy consistency failed: "
@@ -1592,6 +1693,16 @@ def set_up_nhc_sim_routine(
                         "non-conservative for this configuration; NVE would heat "
                         "and drift."
                     )
+                    if ml_only_relerr is not None:
+                        msg += (
+                            f" ML-only relerr={ml_only_relerr:.3f}"
+                            + (
+                                f" (dE/ds={ml_only_slope:.6f})"
+                                if ml_only_slope is not None
+                                else ""
+                            )
+                            + f". {nve_force_energy_ablation_verdict(fd_relerr, ml_only_relerr, fd_tol)}"
+                        )
                     c.print(
                         Panel(
                             msg,
