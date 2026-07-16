@@ -49,6 +49,11 @@ from mmml.models.cgenff_mm import (
     cgenff_mm_energy,
     monomer_centroids,
 )
+from mmml.models.short_range_wall import (
+    DEFAULT_WALL_K_EV_A2,
+    DEFAULT_WALL_R_ON_A,
+    inter_monomer_wall_energy,
+)
 from mmml.models.mm_charge_mode import (
     MMChargeMode,
     apply_mm_charge_mode,
@@ -194,6 +199,9 @@ def hybrid_forward(
     complementary_handoff: bool = True,
     mm_charge_mode: str | None = None,
     charge_correction: bool = False,
+    short_range_wall: bool = True,
+    wall_r_on: float = DEFAULT_WALL_R_ON_A,
+    wall_k: float = DEFAULT_WALL_K_EV_A2,
 ) -> dict:
     """Model forward assembled into the hybrid ML/MM total the calculator uses.
 
@@ -287,7 +295,7 @@ def hybrid_forward(
             # longer matches the MD calculator, which converts at this same
             # boundary (`mm_E = mm_E * kcalmol2ev`, mmml_calculator.py).
             # Pinned by tests/unit/test_hybrid_mm_units.py.
-            return KCAL_MOL_TO_EV * cgenff_mm_energy(
+            e = KCAL_MOL_TO_EV * cgenff_mm_energy(
                 x,
                 t,
                 m,
@@ -299,6 +307,13 @@ def hybrid_forward(
                 ml_switch_width=ml_switch_width,
                 complementary_handoff=complementary_handoff,
             )
+            if short_range_wall:
+                # Already eV. NOT scaled by the MM taper: the taper is exactly
+                # what removes the LJ wall at close range, which is where this
+                # has to hold. Zero above wall_r_on, so it touches no training
+                # data (closest sampled inter-monomer contact: 1.971 A).
+                e = e + inter_monomer_wall_energy(x, m, r_on=wall_r_on, k=wall_k)
+            return e
 
         s, ds_dR = jax.value_and_grad(_scale)(p)
         e_mm, demm_dR = jax.value_and_grad(_emm)(p)
