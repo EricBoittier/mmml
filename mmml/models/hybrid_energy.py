@@ -43,6 +43,7 @@ import dataclasses
 import jax
 import jax.numpy as jnp
 
+from mmml.data.units import KCAL_MOL_TO_EV
 from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
 from mmml.models.cgenff_mm import (
     cgenff_mm_energy,
@@ -279,7 +280,14 @@ def hybrid_forward(
             )
 
         def _emm(x):
-            return cgenff_mm_energy(
+            # UNITS: cgenff_mm_energy returns kcal/mol -- the CGenFF epsilons are
+            # kcal/mol and COULOMB_CONSTANT is the kcal/mol form (332.06).  The ML
+            # energy, and the training targets, are eV.  Summing them unconverted
+            # inflates E_MM by 23.06x; the model then absorbs the error and no
+            # longer matches the MD calculator, which converts at this same
+            # boundary (`mm_E = mm_E * kcalmol2ev`, mmml_calculator.py).
+            # Pinned by tests/unit/test_hybrid_mm_units.py.
+            return KCAL_MOL_TO_EV * cgenff_mm_energy(
                 x,
                 t,
                 m,
