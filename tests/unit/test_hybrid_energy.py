@@ -315,3 +315,62 @@ def test_corrected_charges_keep_the_dimer_neutral_in_the_mm_term():
         # assert the *correction* added no net charge, not that q_eff sums to 0.
         added = float(jnp.sum(q_eff[sel] - b["cgenff_charge"][0][sel]))
         assert added == pytest.approx(0.0, abs=1e-12)
+
+
+# --------------------------------------------------------------------------
+# The hybrid settings are CONFIG, not data: they must survive jit.
+# --------------------------------------------------------------------------
+
+def _cfg(**over):
+    from mmml.models.hybrid_energy import HybridMMConfig
+
+    kw = dict(
+        master_sigmas=tuple(float(x) for x in SIG),
+        master_epsilons=tuple(float(x) for x in EPS),
+        **KW,
+    )
+    kw.update(over)
+    return HybridMMConfig(**kw)
+
+
+def test_charge_correction_survives_jit():
+    """Regression: `if charge_correction:` on a traced bool raised
+    TracerBoolConversionError and killed the first hybrid training run.
+
+    Only a test that goes through jit can catch this -- the eager tests all
+    passed while training died on step 1.
+    """
+    from mmml.models.physnetjax.physnetjax.training.evalstep import _eval_forward
+
+    dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
+    model = _charged_model(dq)
+    b = _batch(9.0)
+
+    fn = jax.jit(
+        lambda batch, cfg: _eval_forward(model, {}, batch, 1, cfg),
+        static_argnums=(1,),
+    )
+    e_off = _f(fn(b, _cfg())["energy"])
+    e_on = _f(fn(b, _cfg(charge_correction=True))["energy"])
+    assert np.isfinite(e_off) and np.isfinite(e_on)
+    assert e_off != pytest.approx(e_on)
+
+
+def test_config_is_hashable_so_it_can_be_a_static_argument():
+    """A dict cannot be static (unhashable) -- that is why the flags traced."""
+    assert hash(_cfg()) == hash(_cfg())
+    assert hash(_cfg(charge_correction=True)) != hash(_cfg())
+    assert _cfg() == _cfg()
+
+
+def test_config_coerces_a_plain_kwargs_dict():
+    """The CLI builds a dict; coerce() is the jit-boundary adapter."""
+    from mmml.models.hybrid_energy import HybridMMConfig
+
+    d = dict(master_sigmas=SIG, master_epsilons=EPS, charge_correction=True, **KW)
+    cfg = HybridMMConfig.coerce(d)
+    assert cfg.charge_correction is True
+    assert cfg.mm_switch_on == 8.0
+    assert np.allclose(np.asarray(cfg.kwargs()["master_sigmas"]), np.asarray(SIG))
+    assert HybridMMConfig.coerce(None) is None
+    assert HybridMMConfig.coerce(cfg) is cfg

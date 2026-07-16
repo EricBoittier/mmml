@@ -30,9 +30,10 @@ def _eval_forward(model_apply, params, batch, batch_size, hybrid_mm=None):
     things (observed: train energy MAE ~43 vs valid ~1 on the same distribution).
     """
     if hybrid_mm is not None:
-        from mmml.models.hybrid_energy import hybrid_forward
+        from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
 
-        return hybrid_forward(model_apply, params, batch, batch_size, **hybrid_mm)
+        cfg = HybridMMConfig.coerce(hybrid_mm)
+        return hybrid_forward(model_apply, params, batch, batch_size, **cfg.kwargs())
     return model_apply(
         params,
         atomic_numbers=batch["Z"],
@@ -64,7 +65,7 @@ else:
 
     DTYPE = jnp.float32
 
-    @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "charges"))
+    @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "charges", "hybrid_mm"))
     def eval_step(
         model_apply,
         batch,

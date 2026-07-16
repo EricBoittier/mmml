@@ -248,6 +248,12 @@ def train_model(
     - Progress monitoring with rich console output
     """
     _ = log_tb  # Deprecated argument retained for backward compatibility.
+
+    # Freeze the hybrid settings here, outside the jit boundary: they are a
+    # static argument (a dict is unhashable and its bools would trace).
+    from mmml.models.hybrid_energy import HybridMMConfig
+
+    hybrid_mm = HybridMMConfig.coerce(hybrid_mm)
     if profile_epoch_timing is None:
         import os
 

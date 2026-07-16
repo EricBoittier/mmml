@@ -54,9 +54,10 @@ def _forward(model_apply, params, batch, batch_size, hybrid_mm=None):
         atom_mask=batch["atom_mask"],
     )
     if hybrid_mm is not None:
-        from mmml.models.hybrid_energy import hybrid_forward
+        from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
 
-        return hybrid_forward(model_apply, params, batch, batch_size, **hybrid_mm)
+        cfg = HybridMMConfig.coerce(hybrid_mm)
+        return hybrid_forward(model_apply, params, batch, batch_size, **cfg.kwargs())
     return out
 
 
@@ -85,6 +86,9 @@ else:
             "distill_forces",
             "distill_dipole",
             "debug",
+            # Config, not data: fixed for the run. Traced, its bools become
+            # tracers and any Python `if` on one raises. See HybridMMConfig.
+            "hybrid_mm",
         ),
     )
     def train_step(

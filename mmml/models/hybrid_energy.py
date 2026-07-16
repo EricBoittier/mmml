@@ -32,6 +32,8 @@ forces) silently breaks energy conservation in the handoff region.
 
 from __future__ import annotations
 
+import dataclasses
+
 import jax
 import jax.numpy as jnp
 
@@ -46,6 +48,7 @@ Array = jnp.ndarray
 
 __all__ = [
     "HYBRID_MM_BATCH_KEYS",
+    "HybridMMConfig",
     "hybrid_forward",
     "ml_scale_from_positions",
 ]
@@ -56,6 +59,58 @@ __all__ = [
 #: The ``cgenff_master_*`` tables are ``(n_types,)`` -- not per-sample -- so they
 #: are handed in separately rather than batched.
 HYBRID_MM_BATCH_KEYS = ("cgenff_type_idx", "mol_id", "cgenff_charge")
+
+
+@dataclasses.dataclass(frozen=True)
+class HybridMMConfig:
+    """Hybrid ML/MM settings, hashable so they can be a jit **static** argument.
+
+    These are *configuration*, not data: they are fixed for a whole run.  Handed
+    to ``jax.jit`` as an ordinary (traced) pytree instead, every leaf -- floats
+    and bools included -- arrives inside the step as a tracer, and any Python
+    ``if`` on one raises ``TracerBoolConversionError``.  That is not a hypothetical:
+    it is exactly how ``charge_correction`` broke, and ``complementary_handoff``
+    only escaped because it happens to be consumed by a ``jnp.where``.
+
+    Making the settings static removes the whole class of bug (a structural
+    branch like "does the MM term read the charge head?" simply cannot be a
+    tracer) and lets XLA specialise on them.  Since they never change, nothing
+    re-traces.
+
+    The LJ master tables are stored as tuples purely to stay hashable; they are
+    ``(n_types,)`` constants, so baking them into the jaxpr is free.
+    """
+
+    master_sigmas: tuple[float, ...]
+    master_epsilons: tuple[float, ...]
+    mm_switch_on: float
+    mm_switch_width: float
+    ml_switch_width: float
+    complementary_handoff: bool = True
+    charge_correction: bool = False
+
+    @classmethod
+    def coerce(cls, cfg):
+        """Accept a config, a plain kwargs dict, or ``None``.
+
+        Call this *outside* the jit boundary (a dict is unhashable and so cannot
+        be a static argument).
+        """
+        if cfg is None or isinstance(cfg, cls):
+            return cfg
+        d = dict(cfg)
+        return cls(
+            master_sigmas=tuple(float(x) for x in d.pop("master_sigmas")),
+            master_epsilons=tuple(float(x) for x in d.pop("master_epsilons")),
+            **d,
+        )
+
+    def kwargs(self) -> dict:
+        """Keyword arguments for :func:`hybrid_forward`."""
+        d = dataclasses.asdict(self)
+        d["master_sigmas"] = jnp.asarray(self.master_sigmas)
+        d["master_epsilons"] = jnp.asarray(self.master_epsilons)
+        return d
 
 
 def ml_scale_from_positions(
