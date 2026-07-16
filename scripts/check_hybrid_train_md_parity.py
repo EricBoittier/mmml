@@ -28,6 +28,20 @@ cluster after training:
         --data /path/to/out_combined_dedup/energies_forces_dipoles_test.npz \
         --mm-charge-correction
 
+IMPORTANT: point ``--checkpoint`` at a *frozen* checkpoint, not a run that is
+still training.  ``_load_physnet_checkpoint`` resolves ``get_last()`` once at
+startup while ``setup_calculator`` re-resolves it per structure, so against a
+live run this compares two different epochs and reports a spurious ~0.1 eV
+mismatch that scales with molecule size.
+
+Known open discrepancy: ACO+ACO fails by up to 2.4e-2 eV wherever E_MM != 0
+(handoff/MM-tail), while its ML-only case and *all* DCM cases pass at <=3e-4 eV.
+So the ML assembly is confirmed and the gap is in the MM term for acetone only.
+Atom ordering was tested and RULED OUT: the dataset's ACO order differs from the
+PSF's (O first in the PSF, fourth in the dataset), but permuting into PSF order
+moved E_md by only ~2e-5.  Next suspect is the ACO CGenFF LJ parameters
+(dataset master tables vs the PSF's).
+
 Compares, for real DCM+DCM and ACO+ACO dimers spanning the ML-only / handoff /
 MM-tail regimes:
 
@@ -67,6 +81,30 @@ def _pick_dimers(data, n_per_regime=2):
             sel = idx[(r_com >= lo) & (r_com < hi)][:n_per_regime]
             picks += [(int(i), name, label) for i in sel]
     return picks
+
+
+def _setup_charmm_psf(resid: str, n_monomers: int) -> int:
+    """Generate a CHARMM PSF for ``n_monomers`` copies of ``resid``.
+
+    build_mm_energy_forces_fn indexes pycharmm.param.get_atc(), so the MD side
+    needs a live PSF for this exact system -- there is no CHARMM-free shortcut.
+    Returns the atom count per monomer.
+    """
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface import setupRes
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        pycharmm_quiet,
+        reset_block,
+    )
+
+    pycharmm_quiet()
+    reset_block()
+    atoms = setupRes.main(resid)
+    pycharmm.read.sequence_string(" ".join([resid] * n_monomers))
+    pycharmm.gen.new_segment(seg_name=resid, setup_ic=True)
+    pycharmm.ic.prm_fill(replace_all=True)
+    return len(atoms)
 
 
 def _batch_from_structure(data, i):
@@ -163,7 +201,12 @@ def main() -> int:
     print(f"{'idx':>6} {'species':>9} {'regime':>8} {'E_train':>14} {'E_md':>14} {'diff':>12}  ok")
     worst = 0.0
     bad = 0
-    for i, name, regime in picks:
+    current_species = None
+    for i, name, regime in sorted(picks, key=lambda t: t[1]):
+        resid = name.split(",")[0].strip()
+        if resid != current_species:
+            _setup_charmm_psf(resid, 2)
+            current_species = resid
         Z = np.asarray(data["Z"])[i]
         R = np.asarray(data["R"])[i]
         n_real = int(np.asarray(data["N"])[i])
