@@ -22,9 +22,15 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--forces-weight FORCES_WEIGHT]
                           [--dipole-weight DIPOLE_WEIGHT]
                           [--charges-weight CHARGES_WEIGHT]
-                          [--objective OBJECTIVE] [--ema-decay EMA_DECAY]
-                          [--restart RESTART] [--num-atoms NUM_ATOMS]
-                          [--features FEATURES] [--max-degree MAX_DEGREE]
+                          [--objective OBJECTIVE] [--hybrid-mm]
+                          [--ml-switch-width ML_SWITCH_WIDTH]
+                          [--mm-switch-on MM_SWITCH_ON]
+                          [--mm-switch-width MM_SWITCH_WIDTH]
+                          [--no-complementary-handoff]
+                          [--mm-pair-source {jax,charmm_callback}]
+                          [--ema-decay EMA_DECAY] [--restart RESTART]
+                          [--num-atoms NUM_ATOMS] [--features FEATURES]
+                          [--max-degree MAX_DEGREE]
                           [--num-basis-functions NUM_BASIS_FUNCTIONS]
                           [--num-iterations NUM_ITERATIONS] [--n-res N_RES]
                           [--cutoff CUTOFF]
@@ -85,6 +91,34 @@ options:
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --charges-weight, --charges_weight CHARGES_WEIGHT
   --objective OBJECTIVE
+  --hybrid-mm, --hybrid_mm
+                        Train on the hybrid ML/MM total the MD calculator
+                        evaluates: E = ml_switch_scale(r_com)*E_ML + E_MM
+                        (switched CGenFF LJ + electrostatics). Requires a
+                        dataset carrying cgenff_type_idx, mol_id, cgenff_charge
+                        and the cgenff_master_* LJ tables. The handoff is
+                        controlled by --ml-switch-width/--mm-switch-on/--mm-
+                        switch-width (same flags and defaults as the MD side).
+  --ml-switch-width, --ml-cutoff ML_SWITCH_WIDTH
+                        COM-distance width (Å) of the ML→MM handoff. ML is fully
+                        on below mm_switch_on - width and tapers to zero at
+                        mm_switch_on (default: 1.5).
+  --mm-switch-on MM_SWITCH_ON
+                        COM distance (Å) where the complementary handoff ends:
+                        ML scale reaches 0 and MM scale reaches 1 (default: 8).
+  --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
+                        COM-distance width (Å) of the MM outer tail after
+                        mm_switch_on. Switched MM reaches zero at mm_switch_on +
+                        width (default: 5).
+  --no-complementary-handoff
+                        Legacy MM window: MM starts at mm_switch_on instead of
+                        filling the ML taper handoff.
+  --mm-pair-source {jax,charmm_callback}
+                        Decomposed MLpot MM pair provider: Fortran callback
+                        idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
+                        source jax). All-ML bulk systems with empty callback
+                        lists auto-fall back to JAX. Override with env
+                        MMML_MM_PAIR_SOURCE.
   --ema-decay, --ema_decay EMA_DECAY
                         Decay for the parameter EMA (default: 0.999).
                         Validation, checkpointing and restart all use the EMA

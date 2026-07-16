@@ -36,7 +36,20 @@ from mmml.models.cgenff_mm import cgenff_mm_energy, monomer_centroids
 
 Array = jnp.ndarray
 
-__all__ = ["HybridEnergyForces", "hybrid_energy_forces", "ml_scale_from_positions"]
+__all__ = [
+    "HYBRID_MM_BATCH_KEYS",
+    "HybridEnergyForces",
+    "apply_hybrid_mm_to_output",
+    "hybrid_energy_forces",
+    "ml_scale_from_positions",
+]
+
+#: Per-atom dataset fields the hybrid mode needs in each training batch.
+#: ``prepare_batches_jit`` passes these through unreshaped as ``(batch, natoms)``
+#: (only R/F/E/Z get special-cased), which is exactly the layout we want.
+#: The ``cgenff_master_*`` tables are ``(n_types,)`` -- not per-sample -- so they
+#: are handed in separately rather than batched.
+HYBRID_MM_BATCH_KEYS = ("cgenff_type_idx", "mol_id", "cgenff_charge")
 
 
 class HybridEnergyForces(NamedTuple):
@@ -136,3 +149,62 @@ def hybrid_energy_forces(
     forces = jnp.where(valid, forces, 0.0)
 
     return HybridEnergyForces(energy=energy, forces=forces, ml_scale=scale, e_mm=e_mm)
+
+
+def apply_hybrid_mm_to_output(
+    output: dict,
+    batch: dict,
+    batch_size: int,
+    master_sigmas: Array,
+    master_epsilons: Array,
+    *,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    ml_switch_width: float,
+    complementary_handoff: bool = True,
+) -> dict:
+    """Replace a model's ``energy``/``forces`` with the hybrid ML/MM totals.
+
+    ``prepare_batches_jit`` flattens ``R``/``F`` to ``(batch*natoms, 3)`` but
+    leaves the per-atom CGenFF fields as ``(batch, natoms)``, so reshape the
+    former and vmap over structures.  Returns a shallow copy of ``output`` with
+    ``energy``/``forces`` replaced (same shapes) plus ``ml_scale``/``e_mm``.
+    """
+    r_flat = batch["R"]
+    n_atoms = r_flat.shape[0] // int(batch_size)
+
+    pos = r_flat.reshape(batch_size, n_atoms, 3)
+    f_ml = output["forces"].reshape(batch_size, n_atoms, 3)
+    e_ml = output["energy"].reshape(batch_size)
+
+    def _one(e, f, p, t, m, q):
+        return hybrid_energy_forces(
+            e,
+            f,
+            p,
+            t,
+            m,
+            q,
+            master_sigmas,
+            master_epsilons,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            ml_switch_width=ml_switch_width,
+            complementary_handoff=complementary_handoff,
+        )
+
+    hyb = jax.vmap(_one)(
+        e_ml,
+        f_ml,
+        pos,
+        batch["cgenff_type_idx"],
+        batch["mol_id"],
+        batch["cgenff_charge"],
+    )
+
+    out = dict(output)
+    out["energy"] = hyb.energy.reshape(output["energy"].shape)
+    out["forces"] = hyb.forces.reshape(output["forces"].shape)
+    out["ml_scale"] = hyb.ml_scale
+    out["e_mm"] = hyb.e_mm
+    return out

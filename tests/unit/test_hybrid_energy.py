@@ -137,3 +137,40 @@ def test_vmap_over_a_batch():
     out = jax.vmap(f)(batch_pos, e_ml, f_ml)
     assert out.shape == (3,)
     assert bool(jnp.all(jnp.isfinite(out)))
+
+
+def test_apply_hybrid_mm_to_output_respects_the_batch_layout():
+    """prepare_batches_jit flattens R/F but leaves cgenff fields (batch, natoms)."""
+    from mmml.models.hybrid_energy import apply_hybrid_mm_to_output
+
+    batch_size, natoms = 3, 5
+    pos = jnp.stack([_dimer(s)[0] for s in (4.0, 7.2, 15.0)])   # (3,5,3)
+    tidx = jnp.tile(jnp.array([0, 1, 0, 1, -1]), (batch_size, 1))
+    mid = jnp.tile(jnp.array([0, 0, 1, 1, -1]), (batch_size, 1))
+    q = jnp.tile(jnp.array([-0.3, 0.15, -0.3, 0.15, 0.0]), (batch_size, 1))
+
+    batch = {                       # R flat, cgenff fields per-structure
+        "R": pos.reshape(batch_size * natoms, 3),
+        "cgenff_type_idx": tidx,
+        "mol_id": mid,
+        "cgenff_charge": q,
+    }
+    output = {                      # E as (batch,1), F flat -- as the model returns
+        "energy": jnp.array([[-5.0], [-4.0], [-3.0]]),
+        "forces": jnp.zeros((batch_size * natoms, 3)),
+    }
+
+    out = apply_hybrid_mm_to_output(
+        output, batch, batch_size, SIG, EPS, **KW
+    )
+    # shapes preserved
+    assert out["energy"].shape == output["energy"].shape
+    assert out["forces"].shape == output["forces"].shape
+    assert bool(jnp.all(jnp.isfinite(out["forces"])))
+
+    # regimes: 4.0 -> ML only, 7.2 -> handoff, 15.0 -> everything off
+    assert float(out["ml_scale"][0]) == pytest.approx(1.0)
+    assert 0.0 < float(out["ml_scale"][1]) < 1.0
+    assert float(out["ml_scale"][2]) == pytest.approx(0.0)
+    assert float(out["energy"][0, 0]) == pytest.approx(-5.0)   # pure ML
+    assert float(out["energy"][2, 0]) == pytest.approx(0.0, abs=1e-12)  # nothing left

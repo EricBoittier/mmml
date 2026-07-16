@@ -141,6 +141,7 @@ def train_model(
     distill_alpha: float = 1.0,
     distill_targets=None,
     ema_decay: float = 0.999,
+    hybrid_mm=None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -218,6 +219,12 @@ def train_model(
         Useful for warm-starting from transplanted parameters (progressive
         training).  The optimizer and EMA are initialised from these params.
         Ignored when ``restart`` is set.
+    hybrid_mm : dict | None, optional
+        When set, train on the hybrid ML/MM total the MD calculator
+        evaluates: ``E = ml_switch_scale(r_com) * E_ML + E_MM``.  Kwargs for
+        ``mmml.models.hybrid_energy.apply_hybrid_mm_to_output`` (master LJ
+        tables + switching widths).  Requires the CGenFF per-atom fields in
+        the batch (see ``HYBRID_MM_BATCH_KEYS``).
     ema_decay : float, optional
         Decay for the exponential moving average of parameters, by default
         0.999.  Validation, checkpointing and restart all use the EMA weights,
@@ -543,6 +550,7 @@ def train_model(
                     params=params,
                     ema_params=ema_params,
                     ema_decay=ema_decay,
+                    hybrid_mm=hybrid_mm,
                     teacher_params=teacher_params,
                     distill_alpha=distill_alpha,
                     doDistill=do_distill,

@@ -202,6 +202,26 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
     )
     parser.add_argument("--objective", type=str, default="valid_loss")
     parser.add_argument(
+        "--hybrid-mm",
+        "--hybrid_mm",
+        action="store_true",
+        dest="hybrid_mm",
+        help=(
+            "Train on the hybrid ML/MM total the MD calculator evaluates: "
+            "E = ml_switch_scale(r_com)*E_ML + E_MM (switched CGenFF LJ + "
+            "electrostatics). Requires a dataset carrying cgenff_type_idx, "
+            "mol_id, cgenff_charge and the cgenff_master_* LJ tables. The "
+            "handoff is controlled by --ml-switch-width/--mm-switch-on/"
+            "--mm-switch-width (same flags and defaults as the MD side)."
+        ),
+    )
+    # ml_switch_width / mm_switch_on / mm_switch_width / --no-complementary-handoff
+    # come from the same helper the MD side uses, so the flags, defaults and
+    # semantics cannot drift between training and deployment.
+    from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+
+    add_handoff_cutoff_args(parser)
+    parser.add_argument(
         "--ema-decay",
         "--ema_decay",
         type=float,
@@ -711,6 +731,58 @@ def validate_train_args(args: argparse.Namespace) -> None:
         raise ValueError("At least one of --n-train or --n-valid must be > 0")
 
 
+def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> dict | None:
+    """Kwargs for the hybrid ML/MM assembly, or None when the mode is off.
+
+    The ``cgenff_master_*`` LJ tables are ``(n_types,)`` -- not per-sample -- so
+    the batching loader skips them (it drops arrays whose first dim != n_samples).
+    Load them here and hand them to ``train_model`` as closure state instead.
+    """
+    if not getattr(args, "hybrid_mm", False):
+        return None
+
+    import numpy as _np
+
+    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+
+    if not data_paths:
+        raise ValueError("--hybrid-mm requires --data")
+    path = data_paths[0]
+    with _np.load(path, allow_pickle=True) as d:
+        missing = [
+            k
+            for k in (*HYBRID_MM_BATCH_KEYS, "cgenff_master_sigmas", "cgenff_master_epsilons")
+            if k not in d.files
+        ]
+        if missing:
+            raise ValueError(
+                f"--hybrid-mm needs CGenFF fields in {path}; missing: {', '.join(missing)}. "
+                "Prepare the dataset with scripts/prepare_ml_mm_dataset.py (or the "
+                "combined-dataset recipe) so it carries "
+                f"{', '.join(HYBRID_MM_BATCH_KEYS)} + master LJ tables."
+            )
+        sigmas = _np.asarray(d["cgenff_master_sigmas"])
+        epsilons = _np.asarray(d["cgenff_master_epsilons"])
+
+    cfg = {
+        "master_sigmas": sigmas,
+        "master_epsilons": epsilons,
+        "mm_switch_on": float(args.mm_switch_on),
+        "mm_switch_width": float(args.mm_switch_width),
+        "ml_switch_width": float(args.ml_switch_width),
+        "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
+    }
+    if not getattr(args, "quiet", False):
+        print(
+            f"Hybrid ML/MM training: E = ml_switch_scale(r_com)*E_ML + E_MM  "
+            f"({len(sigmas)} CGenFF types; ml_switch_width={cfg['ml_switch_width']}, "
+            f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
+            f"complementary_handoff={cfg['complementary_handoff']})",
+            flush=True,
+        )
+    return cfg
+
+
 def normalize_data_paths(data: Any) -> list[str]:
     """Normalize ``data`` config/CLI value to a list of NPZ paths."""
     if data is None:
@@ -1027,6 +1099,14 @@ def main_loop(args):
     else:
         data_keys = ('R', 'Z', 'F', "N", 'E', 'D', 'batch_segments')
 
+    hybrid_mm = _build_hybrid_mm_config(args, data_paths)
+    if hybrid_mm is not None:
+        from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+
+        data_keys = tuple(data_keys) + tuple(
+            k for k in HYBRID_MM_BATCH_KEYS if k not in data_keys
+        )
+
     ema_params, best_loss, run_ckpt_dir = train_model(
         train_key,
         model,
@@ -1054,6 +1134,7 @@ def main_loop(args):
         batch_method=args.batch_method,
         batch_args_dict=batch_args_dict,
         data_keys=data_keys,
+        hybrid_mm=hybrid_mm,
         num_epochs=args.num_epochs,
         early_stop_patience=args.early_stop_patience,
         init_params=init_params,
