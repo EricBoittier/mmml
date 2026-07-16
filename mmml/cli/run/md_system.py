@@ -1086,6 +1086,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="ASE FIRE max atomic displacement per step in Å (default 0.2).",
     )
     parser.add_argument(
+        "--pre-min-ase-order",
+        choices=("fire-first", "bfgs-first"),
+        default="fire-first",
+        help=(
+            "ASE hybrid pre-min order for jaxmd/ase: fire-first (default) runs FIRE on "
+            "rough surfaces and BFGS only to polish; bfgs-first is legacy."
+        ),
+    )
+    parser.add_argument(
+        "--bfgs-polish-max-fmax",
+        type=float,
+        default=1.0,
+        help=(
+            "With --pre-min-ase-order fire-first: only run BFGS polish when max|F| ≤ this "
+            "(eV/Å; default 1.0)."
+        ),
+    )
+    parser.add_argument(
         "--rescue-fire-fmax",
         type=float,
         default=0.05,
@@ -2797,6 +2815,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--bfgs-maxstep", getattr(args, "bfgs_maxstep", None))
     _append_optional(cmd, "--fire-min-steps", getattr(args, "fire_min_steps", None))
     _append_optional(cmd, "--fire-min-maxstep", getattr(args, "fire_min_maxstep", None))
+    _append_optional(cmd, "--pre-min-ase-order", getattr(args, "pre_min_ase_order", None))
+    _append_optional(cmd, "--bfgs-polish-max-fmax", getattr(args, "bfgs_polish_max_fmax", None))
     _append_optional(cmd, "--rescue-fire-fmax", getattr(args, "rescue_fire_fmax", None))
     if bool(getattr(args, "quiet_bfgs", False)):
         cmd.append("--quiet-bfgs")

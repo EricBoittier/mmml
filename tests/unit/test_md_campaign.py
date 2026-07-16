@@ -61,6 +61,18 @@ def test_campaign_continue_from_h5_honors_frame() -> None:
     assert 'frame=int(merged.get("continue_from_frame"' in src
 
 
+def test_jaxmd_pre_min_defaults_to_fire_first() -> None:
+    """Rough hybrid surfaces should not open with ASE BFGS by default."""
+    from pathlib import Path
+
+    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+
+    src = Path(jaxmd_suite.__file__).read_text(encoding="utf-8")
+    assert 'default="fire-first"' in src
+    assert "ASE FIRE-first pre-minimization" in src
+    assert "_maybe_bfgs_polish" in src
+
+
 def test_unique_output_dir_if_exists_keeps_missing_path(tmp_path) -> None:
     from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
 

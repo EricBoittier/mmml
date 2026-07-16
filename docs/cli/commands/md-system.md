@@ -196,6 +196,8 @@ usage: mmml md-system [-h]
                       [--min-fmax MIN_FMAX] [--bfgs-maxstep BFGS_MAXSTEP]
                       [--fire-min-steps FIRE_MIN_STEPS]
                       [--fire-min-maxstep FIRE_MIN_MAXSTEP]
+                      [--pre-min-ase-order {fire-first,bfgs-first}]
+                      [--bfgs-polish-max-fmax BFGS_POLISH_MAX_FMAX]
                       [--rescue-fire-fmax RESCUE_FIRE_FMAX]
                       [--quiet-bfgs | --no-quiet-bfgs] [--verbose-bfgs]
                       [--bfgs-log-every N]
@@ -743,6 +745,13 @@ options:
   --fire-min-maxstep FIRE_MIN_MAXSTEP
                         ASE FIRE max atomic displacement per step in Å (default
                         0.2).
+  --pre-min-ase-order {fire-first,bfgs-first}
+                        ASE hybrid pre-min order for jaxmd/ase: fire-first
+                        (default) runs FIRE on rough surfaces and BFGS only to
+                        polish; bfgs-first is legacy.
+  --bfgs-polish-max-fmax BFGS_POLISH_MAX_FMAX
+                        With --pre-min-ase-order fire-first: only run BFGS
+                        polish when max|F| ≤ this (eV/Å; default 1.0).
   --rescue-fire-fmax RESCUE_FIRE_FMAX
                         FIRE force convergence threshold in eV/Å for calculator
                         rescue (default 0.05).
