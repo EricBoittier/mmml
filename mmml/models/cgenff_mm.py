@@ -55,6 +55,23 @@ def sigma_to_rmin_half(sigma: Array) -> Array:
     return sigma / RMIN_HALF_TO_SIGMA
 
 
+def _masked_pair_distance(
+    positions: Array, iu: Array, ju: Array, mask: Array
+) -> Array:
+    """Pair distances with NaN-safe gradients for excluded/coincident pairs.
+
+    ``jnp.where`` masks the *energy* but not the *gradient*: padding atoms sit on
+    top of each other (r = 0), where ``d|x|/dx`` is undefined, and the NaN then
+    propagates through the masked branch into every force.  Substitute a dummy
+    squared distance for excluded pairs *before* the sqrt so their gradient is
+    identically zero, and floor the rest away from the singularity.
+    """
+    d = positions[iu] - positions[ju]
+    r2 = jnp.sum(d * d, axis=-1)
+    r2_safe = jnp.where(mask, jnp.maximum(r2, 1e-20), 1.0)
+    return jnp.sqrt(r2_safe)
+
+
 def cgenff_pair_lj(r: Array, pair_rmin: Array, pair_eps: Array) -> Array:
     """CHARMM Lennard-Jones for a pair: ``eps * [(Rmin/r)^12 - 2 (Rmin/r)^6]``.
 
@@ -104,9 +121,6 @@ def cgenff_lj_energy(
     n = positions.shape[0]
     iu, ju = jnp.triu_indices(n, k=1)
 
-    d = positions[iu] - positions[ju]
-    r = jnp.linalg.norm(d, axis=-1)
-
     pair_rmin = rmin_half[iu] + rmin_half[ju]          # arithmetic (CHARMM)
     pair_eps = jnp.sqrt(eps[iu] * eps[ju])             # geometric (CHARMM)
 
@@ -114,6 +128,7 @@ def cgenff_lj_energy(
     if intermolecular_only:
         mask = mask & (mol_id[iu] != mol_id[ju])
 
+    r = _masked_pair_distance(positions, iu, ju, mask)
     e = cgenff_pair_lj(r, pair_rmin, pair_eps)
     return jnp.sum(jnp.where(mask, e, 0.0))
 
@@ -175,7 +190,6 @@ def cgenff_mm_energy(
 
     n = positions.shape[0]
     iu, ju = jnp.triu_indices(n, k=1)
-    r = jnp.linalg.norm(positions[iu] - positions[ju], axis=-1)
 
     pair_rmin = rmin_half[iu] + rmin_half[ju]
     pair_eps = jnp.sqrt(eps[iu] * eps[ju])
@@ -184,11 +198,13 @@ def cgenff_mm_energy(
     # Intermolecular pairs only; padding excluded.
     inter = valid[iu] & valid[ju] & (mol_id[iu] != mol_id[ju])
 
+    r = _masked_pair_distance(positions, iu, ju, inter)
     pair_e = cgenff_pair_lj(r, pair_rmin, pair_eps) + cgenff_pair_coulomb(r, pair_qq)
     e_raw = jnp.sum(jnp.where(inter, pair_e, 0.0))
 
     coms = monomer_centroids(positions, mol_id, n_monomers=2)
-    r_com = jnp.linalg.norm(coms[1] - coms[0])
+    d_com = coms[1] - coms[0]
+    r_com = jnp.sqrt(jnp.maximum(jnp.sum(d_com * d_com), 1e-20))
     scale = mm_switch_scale(
         r_com,
         mm_switch_on=mm_switch_on,
