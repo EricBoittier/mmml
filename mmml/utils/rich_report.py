@@ -353,6 +353,24 @@ def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
     return out
 
 
+def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
+    """Short-range inter-monomer wall settings, for the calculator summary.
+
+    Reads the defaults from the single source of truth so the printout cannot
+    drift from what the calculator actually evaluates.
+    """
+    from mmml.models.short_range_wall import (
+        DEFAULT_WALL_K_EV_A2,
+        DEFAULT_WALL_R_ON_A,
+    )
+
+    return {
+        "enabled": bool(enabled),
+        "r_on_Å": float(DEFAULT_WALL_R_ON_A),
+        "k_eV_A2": float(DEFAULT_WALL_K_EV_A2),
+    }
+
+
 def collect_ml_energy_terms_mapping(
     model: Any,
     *,
@@ -417,6 +435,7 @@ def emit_hybrid_ml_setup(
     runtime: Mapping[str, Any] | None = None,
     long_range: Mapping[str, Any] | None = None,
     zbl: Mapping[str, Any] | None = None,
+    wall: Mapping[str, Any] | None = None,
     energy_terms: Mapping[str, Any] | None = None,
     quiet: bool = False,
 ) -> None:
@@ -480,6 +499,7 @@ def emit_md_system_calculator_report(
     neighbor_extra: Mapping[str, Any] | None = None,
     calculator_extra: Mapping[str, Any] | None = None,
     zbl: Mapping[str, Any] | None = None,
+    wall: Mapping[str, Any] | None = None,
     include_hybrid_setup: bool = True,
     include_calculator_summary: bool = True,
     include_neighbor_list_summary: bool = True,
@@ -497,6 +517,7 @@ def emit_md_system_calculator_report(
         return
 
     zbl_map = zbl if zbl is not None else collect_zbl_cutoff_mapping(model)
+    wall_map = wall if wall is not None else collect_short_range_wall_mapping()
     energy_map = energy_terms
     if energy_map is None and model is not None:
         energy_map = collect_ml_energy_terms_mapping(model)
@@ -531,6 +552,7 @@ def emit_md_system_calculator_report(
             ensemble=ensemble,
             checkpoint=checkpoint_path,
             zbl=zbl_map,
+            wall=wall_map,
             energy_terms=energy_map,
             extra=dict(calculator_extra) if calculator_extra else None,
         )
