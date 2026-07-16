@@ -71,7 +71,11 @@ options:
   --model MODEL         Optional model JSON to load instead of creating a new EF
                         model
   --n-train, --n_train N_TRAIN
+                        Training samples to split from --data (default: 1000).
+                        Omit when --valid-data is set: the full files are used.
   --n-valid, --n_valid N_VALID
+                        Validation samples to split from --data (default: 100).
+                        Omit when --valid-data is set: the full files are used.
   --seed SEED
   --batch-size, --batch_size BATCH_SIZE
   --num-epochs, --num_epochs NUM_EPOCHS

@@ -160,8 +160,28 @@ See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / di
         default=None,
         help="Optional model JSON to load instead of creating a new EF model",
     )
-    parser.add_argument("--n-train", "--n_train", type=int, default=1000, dest="n_train")
-    parser.add_argument("--n-valid", "--n_valid", type=int, default=100, dest="n_valid")
+    parser.add_argument(
+        "--n-train",
+        "--n_train",
+        type=int,
+        default=None,
+        dest="n_train",
+        help=(
+            "Training samples to split from --data (default: 1000). Omit when "
+            "--valid-data is set: the full files are used."
+        ),
+    )
+    parser.add_argument(
+        "--n-valid",
+        "--n_valid",
+        type=int,
+        default=None,
+        dest="n_valid",
+        help=(
+            "Validation samples to split from --data (default: 100). Omit when "
+            "--valid-data is set: the full files are used."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--batch-size", "--batch_size", type=int, default=1, dest="batch_size")
     parser.add_argument("--num-epochs", "--num_epochs", type=int, default=100, dest="num_epochs")
@@ -671,11 +691,20 @@ def validate_train_args(args: argparse.Namespace) -> None:
             )
 
     if args.valid_data:
-        if args.n_train > 0 or args.n_valid > 0:
+        # ``n_train``/``n_valid`` default to None so that *omitting* them (what the
+        # example config documents) is not mistaken for an explicit request; only a
+        # positive value actually conflicts with fixed valid_data splits. 0 is
+        # tolerated: it was the workaround while the defaults were 1000/100.
+        if (args.n_train or 0) > 0 or (args.n_valid or 0) > 0:
             raise ValueError(
                 "With --valid-data, do not set --n-train/--n-valid (full files are used)"
             )
         return
+    # Single-file split: fall back to the historical default split sizes.
+    if args.n_train is None:
+        args.n_train = 1000
+    if args.n_valid is None:
+        args.n_valid = 100
     if args.n_train < 0 or args.n_valid < 0:
         raise ValueError("--n-train and --n-valid must be >= 0")
     if args.n_train + args.n_valid <= 0:
