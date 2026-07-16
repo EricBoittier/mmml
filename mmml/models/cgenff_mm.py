@@ -35,11 +35,18 @@ Array = jnp.ndarray
 # sigma = 2 * (Rmin/2) / 2^(1/6)   <->   Rmin/2 = sigma / (2 / 2^(1/6))
 RMIN_HALF_TO_SIGMA: float = 2.0 / (2.0 ** (1.0 / 6.0))
 
+# mm_energy_forces.coulomb: constant * q_i q_j / r  (kcal/mol with q in e, r in A)
+COULOMB_CONSTANT: float = 3.32063711e2
+
 __all__ = [
+    "COULOMB_CONSTANT",
     "RMIN_HALF_TO_SIGMA",
     "sigma_to_rmin_half",
     "cgenff_pair_lj",
+    "cgenff_pair_coulomb",
     "cgenff_lj_energy",
+    "cgenff_mm_energy",
+    "monomer_centroids",
 ]
 
 
@@ -109,3 +116,86 @@ def cgenff_lj_energy(
 
     e = cgenff_pair_lj(r, pair_rmin, pair_eps)
     return jnp.sum(jnp.where(mask, e, 0.0))
+
+
+def cgenff_pair_coulomb(r: Array, qq: Array) -> Array:
+    """Coulomb for a pair: ``332.063711 * q_i q_j / r`` (mirrors mm_energy_forces)."""
+    r_safe = jnp.maximum(r, 1e-10)
+    return COULOMB_CONSTANT * qq / r_safe
+
+
+def monomer_centroids(positions: Array, mol_id: Array, n_monomers: int = 2) -> Array:
+    """Unweighted monomer centroids, padding-safe.
+
+    Matches ``calculator_utils.monomer_coms_segment`` with ``masses=None`` (the
+    convention the MD calculator's switching uses).
+    """
+    valid = (mol_id >= 0).astype(positions.dtype)
+    out = []
+    for m in range(n_monomers):
+        w = valid * (mol_id == m).astype(positions.dtype)
+        n = jnp.maximum(jnp.sum(w), 1e-10)
+        out.append(jnp.sum(positions * w[:, None], axis=0) / n)
+    return jnp.stack(out)
+
+
+def cgenff_mm_energy(
+    positions: Array,
+    type_idx: Array,
+    mol_id: Array,
+    charges: Array,
+    master_sigmas: Array,
+    master_epsilons: Array,
+    *,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    ml_switch_width: float,
+    complementary_handoff: bool = True,
+) -> Array:
+    """Switched CGenFF MM energy (LJ + electrostatics) for one padded dimer.
+
+    Reproduces the MD calculator's MM term: intermolecular LJ + Coulomb summed
+    over atom pairs, scaled by the **same** COM-based MM taper
+    (``calculator_utils.mm_switch_scale``) that the calculator applies -- the
+    switching multiplies both contributions, exactly as ``_pair_vdw_energies``
+    and ``coulomb`` are scaled by ``mm_scale_expanded`` there.
+
+    Monomers (a single ``mol_id``) have no intermolecular pairs and return 0.
+
+    Returns kcal/mol.  Padding-safe (``type_idx``/``mol_id`` < 0) and vmap-safe.
+    """
+    from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+
+    valid = type_idx >= 0
+    safe_idx = jnp.where(valid, type_idx, 0)
+    sig = jnp.take(master_sigmas, safe_idx)
+    eps = jnp.take(master_epsilons, safe_idx)
+    rmin_half = sigma_to_rmin_half(sig)
+    q = jnp.where(valid, charges, 0.0)
+
+    n = positions.shape[0]
+    iu, ju = jnp.triu_indices(n, k=1)
+    r = jnp.linalg.norm(positions[iu] - positions[ju], axis=-1)
+
+    pair_rmin = rmin_half[iu] + rmin_half[ju]
+    pair_eps = jnp.sqrt(eps[iu] * eps[ju])
+    pair_qq = q[iu] * q[ju]
+
+    # Intermolecular pairs only; padding excluded.
+    inter = valid[iu] & valid[ju] & (mol_id[iu] != mol_id[ju])
+
+    pair_e = cgenff_pair_lj(r, pair_rmin, pair_eps) + cgenff_pair_coulomb(r, pair_qq)
+    e_raw = jnp.sum(jnp.where(inter, pair_e, 0.0))
+
+    coms = monomer_centroids(positions, mol_id, n_monomers=2)
+    r_com = jnp.linalg.norm(coms[1] - coms[0])
+    scale = mm_switch_scale(
+        r_com,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        ml_switch_width=ml_switch_width,
+        complementary_handoff=complementary_handoff,
+    )
+    # No inter pairs (monomer) => 0 regardless of the (meaningless) centroid sep.
+    has_inter = jnp.any(inter)
+    return jnp.where(has_inter, scale * e_raw, 0.0)

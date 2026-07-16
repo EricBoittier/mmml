@@ -130,3 +130,112 @@ def test_lj_energy_is_vmappable_and_differentiable():
     assert g.shape == pos.shape and bool(jnp.all(jnp.isfinite(g)))
     batch = jnp.stack([pos, pos + 0.1])
     assert jax.vmap(f)(batch).shape == (2,)
+
+
+# --------------------------------------------------------------------------
+# TOTAL-energy gate: switched LJ + switched electrostatics vs the MD math.
+# --------------------------------------------------------------------------
+
+def _md_reference_total(pos, tidx, mid, q, sig, eps, *, on, width, mlw):
+    """Independent replication of mm_energy_forces' switched MM total.
+
+        at_ep    = -abs(eps);  pair_ep = sqrt(ep_a*ep_b);  pair_rm = rm_a+rm_b
+        E_pair   = ep*[(rm/r)^12 - 2(rm/r)^6] + 332.063711*qq/r
+        handoff  = sharpstep(r_com, on-mlw, on, gamma=GAMMA_ON)
+        mm_taper = 1 - sharpstep(r_com, on, on+width, gamma=GAMMA_OFF)
+        E        = handoff*mm_taper * sum_inter(E_pair)
+    """
+    from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
+    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from mmml.models.cgenff_mm import RMIN_HALF_TO_SIGMA
+
+    n = len(tidx)
+    rm = np.array([sig[t] / RMIN_HALF_TO_SIGMA if t >= 0 else 0.0 for t in tidx])
+    ep = np.array([-abs(eps[t]) if t >= 0 else 0.0 for t in tidx])  # MD forces negative
+    tot = 0.0
+    for i in range(n):
+        for j in range(i + 1, n):
+            if tidx[i] < 0 or tidx[j] < 0 or mid[i] == mid[j]:
+                continue
+            r = float(np.linalg.norm(pos[i] - pos[j]))
+            pair_rm = rm[i] + rm[j]
+            pair_ep = (ep[i] * ep[j]) ** 0.5          # two negatives -> positive
+            r6 = (pair_rm / max(r, 1e-10)) ** 6
+            tot += pair_ep * (r6**2 - 2 * r6)
+            tot += 3.32063711e2 * q[i] * q[j] / max(r, 1e-10)
+    c0 = pos[np.array(mid) == 0].mean(axis=0)
+    c1 = pos[np.array(mid) == 1].mean(axis=0)
+    r_com = float(np.linalg.norm(c1 - c0))
+    handoff = float(_sharpstep(np.float64(r_com), on - mlw, on, gamma=GAMMA_ON))
+    taper = 1.0 - float(_sharpstep(np.float64(r_com), on, on + width, gamma=GAMMA_OFF))
+    return handoff * taper * tot
+
+
+def _dimer(sep):
+    """DCM-like 2+2 dimer separated along x by `sep`."""
+    pos = np.array(
+        [[0.0, 0, 0], [1.0, 0.2, 0], [sep, 0, 0], [sep + 1.0, 0.2, 0], [0, 0, 0]],
+        dtype=np.float64,
+    )
+    tidx = np.array([0, 1, 0, 1, -1])
+    mid = np.array([0, 0, 1, 1, -1])
+    q = np.array([-0.3, 0.15, -0.3, 0.15, 0.0])
+    return pos, tidx, mid, q
+
+
+def test_total_mm_energy_matches_md_across_the_whole_switching_range():
+    """The gate: switched LJ + electrostatics total == MD math, at every regime."""
+    from mmml.models.cgenff_mm import cgenff_mm_energy
+
+    sig = np.array([3.6527, 2.3876]); eps = np.array([0.0780, 0.0240])
+    on, width, mlw = 8.0, 5.0, 1.5
+    # spans ML-only (<6.5), handoff (6.5-8), MM tail (8-13), and beyond (>13)
+    for sep in (4.0, 5.0, 6.4, 7.0, 7.9, 8.5, 10.0, 12.9, 14.0, 20.0):
+        pos, tidx, mid, q = _dimer(sep)
+        mine = float(
+            cgenff_mm_energy(pos, tidx, mid, q, sig, eps,
+                             mm_switch_on=on, mm_switch_width=width, ml_switch_width=mlw)
+        )
+        ref = _md_reference_total(pos, tidx, mid, q, sig, eps, on=on, width=width, mlw=mlw)
+        assert mine == pytest.approx(ref, rel=1e-8, abs=1e-10), f"sep={sep}"
+
+
+def test_mm_is_off_inside_ml_region_and_beyond_the_tail():
+    """MM must vanish where ML is fully on (<6.5) and past the tail (>=13)."""
+    from mmml.models.cgenff_mm import cgenff_mm_energy
+
+    sig = np.array([3.6527, 2.3876]); eps = np.array([0.0780, 0.0240])
+    kw = dict(mm_switch_on=8.0, mm_switch_width=5.0, ml_switch_width=1.5)
+    for sep in (3.0, 5.0, 6.4):
+        pos, tidx, mid, q = _dimer(sep)
+        assert float(cgenff_mm_energy(pos, tidx, mid, q, sig, eps, **kw)) == pytest.approx(0.0, abs=1e-12)
+    for sep in (13.5, 20.0):
+        pos, tidx, mid, q = _dimer(sep)
+        assert float(cgenff_mm_energy(pos, tidx, mid, q, sig, eps, **kw)) == pytest.approx(0.0, abs=1e-12)
+    # ...and non-zero in the handoff/tail
+    pos, tidx, mid, q = _dimer(9.0)
+    assert abs(float(cgenff_mm_energy(pos, tidx, mid, q, sig, eps, **kw))) > 0.0
+
+
+def test_mm_scale_is_complement_of_ml_scale_at_handoff():
+    """'Complementary handoff': MM ramps up exactly as ML ramps down."""
+    from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale, mm_switch_scale
+
+    for r in (6.5, 6.9, 7.3, 7.7, 8.0):
+        ml = float(ml_switch_scale(np.float64(r), mm_switch_on=8.0, ml_switch_width=1.5))
+        mm = float(mm_switch_scale(np.float64(r), mm_switch_on=8.0, mm_switch_width=5.0,
+                                   ml_switch_width=1.5))
+        # inside the handoff the MM tail is still 1, so mm == 1 - ml exactly
+        assert mm == pytest.approx(1.0 - ml, abs=1e-9), r
+
+
+def test_monomer_has_no_mm_term():
+    """A single monomer has no intermolecular pairs -> exactly 0."""
+    from mmml.models.cgenff_mm import cgenff_mm_energy
+
+    sig = np.array([3.6527, 2.3876]); eps = np.array([0.0780, 0.0240])
+    pos = np.array([[0.0, 0, 0], [1.0, 0, 0], [0, 0, 0]])
+    tidx = np.array([0, 1, -1]); mid = np.array([0, 0, -1]); q = np.array([-0.3, 0.3, 0.0])
+    assert float(cgenff_mm_energy(pos, tidx, mid, q, sig, eps,
+                                  mm_switch_on=8.0, mm_switch_width=5.0,
+                                  ml_switch_width=1.5)) == 0.0

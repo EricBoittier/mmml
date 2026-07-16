@@ -47,6 +47,7 @@ __all__ = [
     "indices_of_monomer",
     "indices_of_pairs",
     "ml_switch_scale",
+    "mm_switch_scale",
     "jax_smooth_cutoff_cosine",
     "jax_smooth_switch_linear",
     "ml_switch_simple",
@@ -189,6 +190,51 @@ def ml_switch_scale(
     return 1.0 - _sharpstep(
         r_com, mm_switch_on - ml_switch_width, mm_switch_on, gamma=gamma
     )
+
+
+def mm_switch_scale(
+    r_com: Array,
+    *,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    ml_switch_width: float,
+    complementary_handoff: bool = True,
+) -> Array:
+    """MM taper as a function of monomer COM–COM separation.
+
+    Single source of truth for the MM side of the ML/MM handoff, shared by the
+    MD hybrid calculator and hybrid training.  Applies to **both** the LJ and
+    electrostatic MM terms.
+
+    With ``complementary_handoff`` (the default) MM ramps up exactly as ML ramps
+    down -- ``handoff == 1 - ml_switch_scale(...)`` -- then tapers off across the
+    MM tail::
+
+        handoff  = sharpstep(r, mm_switch_on - ml_switch_width, mm_switch_on)
+        mm_taper = 1 - sharpstep(r, mm_switch_on, mm_switch_on + mm_switch_width)
+        scale    = handoff * mm_taper
+
+    At the reported defaults (8.0 / 5.0 / 1.5): 0 below 6.5, ramping to full over
+    6.5 -> 8.0, tapering to 0 across the 8.0 -> 13.0 MM tail.
+    """
+    if complementary_handoff:
+        handoff = _sharpstep(
+            r_com, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON
+        )
+        mm_taper = 1.0 - _sharpstep(
+            r_com, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_OFF
+        )
+        return handoff * mm_taper
+    mm_on = _sharpstep(
+        r_com, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_ON
+    )
+    mm_off = _sharpstep(
+        r_com,
+        mm_switch_on + mm_switch_width,
+        mm_switch_on + 2.0 * mm_switch_width,
+        gamma=GAMMA_OFF,
+    )
+    return mm_on * (1.0 - mm_off)
 
 
 def indices_of_pairs(
