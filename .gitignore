@@ -285,3 +285,12 @@ MagicMock/
 reports/*.aux
 reports/*.out
 reports/*.toc
+
+# Root-level files generated/modified during test runs
+/packmol.inp
+/packmol_out.pdb
+/peptide.pdb
+/trialanine-water.crd
+/trialanine-water.npy
+/trialanine-water.psf
+
