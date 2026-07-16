@@ -154,6 +154,32 @@ def test_cluster_geometry_from_certified_requires_matching_atom_counts(monkeypat
         cluster_geometry_from_certified_artifacts(args)
 
 
+def test_validate_psf_charges_works_when_module_psf_cache_is_none(monkeypatch):
+    """Certified-box load never fills ase.psf; validation must import pycharmm.psf."""
+    import types
+
+    import mmml.cli.run.md_pbc_suite.ase as ase_mod
+
+    fake_psf = types.SimpleNamespace(
+        get_atype=lambda: np.array(["CG331", "HGA3", "CG331", "HGA3"], dtype=str),
+    )
+    monkeypatch.setattr(ase_mod, "psf", None)
+    monkeypatch.setitem(sys.modules, "pycharmm.psf", fake_psf)
+    monkeypatch.setattr(
+        ase_mod,
+        "_get_actual_psf_charges",
+        lambda n: np.array([0.1, -0.1, 0.1, -0.1], dtype=float)[:n],
+    )
+
+    summary = ase_mod._validate_psf_charges(
+        monomer_offsets=np.array([0, 2, 4], dtype=int),
+        residue_labels=["ACO", "ACO"],
+        total_atoms=4,
+    )
+    assert summary["total_charge_e"] == pytest.approx(0.0)
+    assert summary["residues"]["ACO"]["n_atoms"] == 2
+
+
 def test_build_command_jaxmd_forwards_from_psf_crd_and_skips_packmol():
     args = parse_md_system_minimal(
         from_psf=Path("boxes/dcm206/model.psf"),
