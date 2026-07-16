@@ -1304,6 +1304,7 @@ def run_pre_mlpot_geometry_gate(
         density_target_holds_box,
     )
 
+    side = box_side
     hold_density_box = density_target_holds_box(args)
     held_side = float(side) if (hold_density_box and side is not None) else None
     if hold_density_box:
@@ -1337,7 +1338,6 @@ def run_pre_mlpot_geometry_gate(
         reason="running",
     )
     pos = np.asarray(positions, dtype=np.float64)
-    side = box_side
     packmol_margin_A: float | None = None
     if side is not None and charmm_pbc:
         from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
