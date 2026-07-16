@@ -1331,6 +1331,12 @@ def main(argv: list[str] | None = None) -> int:
         max_step_displacement = float(
             np.max(np.linalg.norm(initial_velocities, axis=1)) * dt_ps
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            MIN_VELOCITY_ASSIGNMENT_TEMP_K,
+        )
+
+        target_T = float(args.temperature)
+        cold_floor = max(float(MIN_VELOCITY_ASSIGNMENT_TEMP_K), 0.1 * target_T)
         if (
             not np.all(np.isfinite(initial_velocities))
             or not np.isfinite(handoff_temperature)
@@ -1343,24 +1349,36 @@ def main(argv: list[str] | None = None) -> int:
                 f"max one-step displacement={max_step_displacement:.6f} Å "
                 f"at dt={float(args.dt_fs):g} fs"
             )
-        if not getattr(args, "quiet", False):
+        if float(handoff_temperature) < cold_floor:
+            # Near-zero handoff momenta (seen after some NVT→NVE chains) must not
+            # enter NVE as "continue velocities" — re-thermalize at target T.
+            if not getattr(args, "quiet", False):
+                print(
+                    f"WARN: handoff kinetic T={float(handoff_temperature):.3f} K "
+                    f"< floor {cold_floor:.1f} K (target {target_T:.1f} K); "
+                    "re-thermalizing Maxwell–Boltzmann (ignoring dead handoff velocities).",
+                    flush=True,
+                )
+            initial_velocities = None
+            use_handoff_velocities = False
+            velocity_policy = "rethermalize_cold_handoff"
+        elif not getattr(args, "quiet", False):
             print(
                 f"Using converted handoff velocities ({len(initial_velocities)} atoms): "
                 f"T={handoff_temperature:.3f} K, "
                 f"max dt*v={max_step_displacement:.6f} Å.",
                 flush=True,
             )
-    else:
-        if (
-            handoff_in is not None
-            and handoff_in.velocities is not None
-            and not getattr(args, "quiet", False)
-        ):
-            reason = (
-                "pre-minimization changed coordinates"
-                if pre_min_ran
-                else "handoff velocities ignored (--no-continue-velocities)"
-            )
+    if initial_velocities is None:
+        if not getattr(args, "quiet", False):
+            if velocity_policy == "rethermalize_cold_handoff":
+                reason = "cold/dead handoff velocities"
+            elif pre_min_ran:
+                reason = "pre-minimization changed coordinates"
+            elif handoff_in is not None and handoff_in.velocities is not None:
+                reason = "handoff velocities ignored (--no-continue-velocities)"
+            else:
+                reason = "no handoff velocities"
             print(
                 f"Re-initializing velocities (Maxwell–Boltzmann); {reason}.",
                 flush=True,
@@ -1373,6 +1391,8 @@ def main(argv: list[str] | None = None) -> int:
         MaxwellBoltzmannDistribution(atoms, temperature_K=mb_temp, rng=rng)
         Stationary(atoms)
         ZeroRotation(atoms)
+        # Prefer explicit Å/ps for jaxmd_runner; ASE stores Å/fs internally.
+        initial_velocities = np.asarray(atoms.get_velocities(), dtype=float) * 1000.0
 
     policy_summary["velocity_policy"] = velocity_policy
     policy_summary["use_handoff_velocities"] = bool(use_handoff_velocities)
@@ -1565,7 +1585,12 @@ def main(argv: list[str] | None = None) -> int:
                     velocities=final_vel,
                     temperature_K=float(args.temperature),
                     pressure_atm=float(args.pressure) if args.ensemble == "npt" else None,
-                    metadata={"backend": "jaxmd", "ensemble": args.ensemble},
+                    metadata={
+                        "backend": "jaxmd",
+                        "ensemble": args.ensemble,
+                        # JAX-MD momenta/mass are Å/ps (not ASE Å/fs, not AKMA).
+                        "velocity_units": "ang_ps",
+                    },
                 )
             )
         else:
