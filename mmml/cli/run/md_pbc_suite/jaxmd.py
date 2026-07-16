@@ -376,7 +376,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rescue-charmm-sd-steps", type=int, default=100, help="Rescue CHARMM SD steps.")
     p.add_argument("--rescue-charmm-abnr-steps", type=int, default=300, help="Rescue CHARMM ABNR steps.")
     p.add_argument("--max-fmax-after-min", type=float, default=2.0)
-    p.add_argument("--quiet-bfgs", action="store_true")
+    p.add_argument(
+        "--quiet-bfgs",
+        action="store_true",
+        help="Suppress ASE BFGS/FIRE progress lines entirely.",
+    )
+    p.add_argument(
+        "--verbose-bfgs",
+        action="store_true",
+        help="Print the full ASE BFGS/FIRE step table (default: compact progress).",
+    )
+    p.add_argument(
+        "--bfgs-log-every",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Compact BFGS/FIRE log every N steps (default: ~10 lines per run).",
+    )
     p.add_argument(
         "--skip-jit-warmup",
         action="store_true",
@@ -968,6 +984,11 @@ def main(argv: list[str] | None = None) -> int:
             return fmax
 
         def _run_ase_bfgs_rescue(phase: str, *, traj_suffix: str, fmax_key: str, iter_key: str) -> float:
+            from mmml.cli.run.ase_minimize_log import (
+                attach_compact_ase_optimizer_log,
+                resolve_ase_optimizer_logfile,
+            )
+
             print(
                 f"ASE BFGS {phase} starting "
                 f"(max {args.pre_min_steps} steps, fmax={args.pre_min_fmax})"
@@ -975,11 +996,14 @@ def main(argv: list[str] | None = None) -> int:
             traj_path = out_dir / f"{geom_tag}_{args.ensemble}_{traj_suffix}_bfgs_min.traj"
             opt = BFGS(
                 atoms,
-                logfile=None if args.quiet_bfgs else "-",
+                logfile=resolve_ase_optimizer_logfile(args),
                 trajectory=str(traj_path),
                 maxstep=args.bfgs_maxstep,
             )
             record_label = phase.lower().replace(" ", "_").replace("-", "_")
+            attach_compact_ase_optimizer_log(
+                opt, args, label=f"ASE BFGS {phase}", max_steps=args.pre_min_steps
+            )
             opt.attach(lambda: best_frame.record(f"bfgs_{record_label}"), interval=1)
             opt.attach(lambda: _check_pre_min_overlap(f"ASE BFGS {phase}"), interval=1)
             opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
@@ -993,6 +1017,11 @@ def main(argv: list[str] | None = None) -> int:
             return fmax
 
         def _run_ase_fire_rescue(phase: str, *, traj_suffix: str, fmax_key: str) -> float:
+            from mmml.cli.run.ase_minimize_log import (
+                attach_compact_ase_optimizer_log,
+                resolve_ase_optimizer_logfile,
+            )
+
             print(
                 f"ASE FIRE {phase} starting "
                 f"(fmax target {args.pre_min_fmax:.6f})"
@@ -1000,11 +1029,14 @@ def main(argv: list[str] | None = None) -> int:
             traj_path = out_dir / f"{geom_tag}_{args.ensemble}_{traj_suffix}_fire_min.traj"
             fire = FIRE(
                 atoms,
-                logfile=None if args.quiet_bfgs else "-",
+                logfile=resolve_ase_optimizer_logfile(args),
                 trajectory=str(traj_path),
                 maxstep=args.fire_min_maxstep,
             )
             record_label = phase.lower().replace(" ", "_").replace("-", "_")
+            attach_compact_ase_optimizer_log(
+                fire, args, label=f"ASE FIRE {phase}", max_steps=args.fire_min_steps
+            )
             fire.attach(lambda: best_frame.record(f"fire_{record_label}"), interval=1)
             fire.attach(lambda: _check_pre_min_overlap(f"ASE FIRE {phase}"), interval=1)
             fire.run(fmax=args.pre_min_fmax, steps=args.fire_min_steps)
@@ -1032,12 +1064,20 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return fmax
 
+        from mmml.cli.run.ase_minimize_log import (
+            attach_compact_ase_optimizer_log,
+            resolve_ase_optimizer_logfile,
+        )
+
         bfgs_traj_path = out_dir / f"{geom_tag}_{args.ensemble}_bfgs_min.traj"
         opt = BFGS(
             atoms,
-            logfile=None if args.quiet_bfgs else "-",
+            logfile=resolve_ase_optimizer_logfile(args),
             trajectory=str(bfgs_traj_path),
             maxstep=args.bfgs_maxstep,
+        )
+        attach_compact_ase_optimizer_log(
+            opt, args, label="ASE BFGS", max_steps=args.pre_min_steps
         )
         opt.attach(lambda: best_frame.record("bfgs"), interval=1)
         opt.attach(lambda: _check_pre_min_overlap("ASE BFGS pre-minimization"), interval=1)

@@ -1095,7 +1095,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--quiet-bfgs",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Suppress ASE BFGS/FIRE log output during calculator pre-minimize.",
+        help="Suppress ASE BFGS/FIRE progress lines entirely (default: compact progress).",
+    )
+    parser.add_argument(
+        "--verbose-bfgs",
+        action="store_true",
+        help="Print the full ASE BFGS/FIRE step table instead of compact progress.",
+    )
+    parser.add_argument(
+        "--bfgs-log-every",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Compact BFGS/FIRE log every N steps (default: ~10 lines per run).",
     )
     parser.add_argument(
         "--charmm-pre-minimize",
@@ -1922,6 +1934,11 @@ def _append_suite_mmml_handoff_args(
         cmd.extend(["--ml-switch-width", ml_width])
     if getattr(args, "handoff_pre_minimize", False):
         cmd.append("--handoff-pre-minimize")
+    if bool(getattr(args, "quiet_bfgs", False)):
+        cmd.append("--quiet-bfgs")
+    if bool(getattr(args, "verbose_bfgs", False)):
+        cmd.append("--verbose-bfgs")
+    _append_optional(cmd, "--bfgs-log-every", getattr(args, "bfgs_log_every", None))
     _append_boolean_optional_flag(
         cmd, "--continue-velocities", bool(getattr(args, "continue_velocities", True))
     )

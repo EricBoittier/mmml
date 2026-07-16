@@ -1674,7 +1674,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--quiet-bfgs",
         action="store_true",
-        help="Hide ASE BFGS per-step output (default: print steps to stdout; large 10-mers can spend hours here before MD).",
+        help="Suppress ASE BFGS/FIRE progress lines entirely.",
+    )
+    parser.add_argument(
+        "--verbose-bfgs",
+        action="store_true",
+        help="Print the full ASE BFGS/FIRE step table (default: compact progress).",
+    )
+    parser.add_argument(
+        "--bfgs-log-every",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Compact BFGS/FIRE log every N steps (default: ~10 lines per run).",
     )
     parser.add_argument(
         "--handoff-pre-minimize",
@@ -2079,9 +2091,21 @@ def main(argv: list[str] | None = None) -> int:
                 "this is pre-MD minimization, not dynamics yet)",
                 timing_log,
             )
+            from mmml.cli.run.ase_minimize_log import (
+                attach_compact_ase_optimizer_log,
+                resolve_ase_optimizer_logfile,
+            )
+
             min_traj_path = out_dir / f"{key}_min.traj"
-            bfgs_log = None if args.quiet_bfgs else "-"
-            opt = BFGS(atoms, logfile=bfgs_log, trajectory=str(min_traj_path), maxstep=args.bfgs_maxstep)
+            opt = BFGS(
+                atoms,
+                logfile=resolve_ase_optimizer_logfile(args),
+                trajectory=str(min_traj_path),
+                maxstep=args.bfgs_maxstep,
+            )
+            attach_compact_ase_optimizer_log(
+                opt, args, label=f"{key} ASE BFGS", max_steps=args.pre_min_steps
+            )
             opt.attach(
                 lambda: _check_or_charmm_overlap_rescue(
                     atoms,
@@ -2134,13 +2158,24 @@ def main(argv: list[str] | None = None) -> int:
                     nbxmod=args.charmm_nbxmod,
                     timings=run_timings,
                 )
+                from mmml.cli.run.ase_minimize_log import (
+                    attach_compact_ase_optimizer_log,
+                    resolve_ase_optimizer_logfile,
+                )
+
                 rescue_traj_path = out_dir / f"{key}_rescue_fire.traj"
                 t_fire0 = _tmark()
                 fire = FIRE(
                     atoms,
-                    logfile=None if args.quiet_bfgs else "-",
+                    logfile=resolve_ase_optimizer_logfile(args),
                     trajectory=str(rescue_traj_path),
                     maxstep=args.rescue_fire_maxstep,
+                )
+                attach_compact_ase_optimizer_log(
+                    fire,
+                    args,
+                    label=f"{key} ASE FIRE",
+                    max_steps=args.rescue_fire_steps,
                 )
                 fire.attach(
                     lambda: _check_or_charmm_overlap_rescue(

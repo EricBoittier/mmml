@@ -197,7 +197,8 @@ usage: mmml md-system [-h]
                       [--fire-min-steps FIRE_MIN_STEPS]
                       [--fire-min-maxstep FIRE_MIN_MAXSTEP]
                       [--rescue-fire-fmax RESCUE_FIRE_FMAX]
-                      [--quiet-bfgs | --no-quiet-bfgs]
+                      [--quiet-bfgs | --no-quiet-bfgs] [--verbose-bfgs]
+                      [--bfgs-log-every N]
                       [--charmm-pre-minimize | --no-charmm-pre-minimize]
                       [--calculator-pre-minimize | --no-calculator-pre-minimize]
                       [--calculator-safe-grms KCAL] [--pre-min-safe-grms KCAL]
@@ -744,8 +745,12 @@ options:
                         FIRE force convergence threshold in eV/Å for calculator
                         rescue (default 0.05).
   --quiet-bfgs, --no-quiet-bfgs
-                        Suppress ASE BFGS/FIRE log output during calculator pre-
-                        minimize.
+                        Suppress ASE BFGS/FIRE progress lines entirely (default:
+                        compact progress).
+  --verbose-bfgs        Print the full ASE BFGS/FIRE step table instead of
+                        compact progress.
+  --bfgs-log-every N    Compact BFGS/FIRE log every N steps (default: ~10 lines
+                        per run).
   --charmm-pre-minimize, --no-charmm-pre-minimize
                         lambda_ti: CHARMM SD/ABNR before MMML BFGS (default on).
   --calculator-pre-minimize, --no-calculator-pre-minimize
