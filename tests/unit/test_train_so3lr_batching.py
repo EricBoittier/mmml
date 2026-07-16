@@ -181,3 +181,54 @@ def test_is_oom_error_matches_bfc_message(trainer):
         RuntimeError("Allocator (GPU_0_bfc) ran out of memory trying to allocate")
     )
     assert not trainer._is_oom_error(ValueError("shape mismatch"))
+
+
+def test_auto_batch_cache_roundtrip(trainer, tmp_path):
+    args = trainer.build_parser().parse_args(
+        ["--batch-size-per-device", "32", "--atom-bucket-width", "4"]
+    )
+
+    class _FakeDev:
+        device_kind = "gpu"
+
+        def memory_stats(self):
+            return {"bytes_limit": 32 << 30}
+
+    devices = [_FakeDev()]
+    fp = trainer.auto_batch_cache_fingerprint(args, devices, [8, 12, 120])
+    path = tmp_path / "auto_batch_sizes.json"
+    sizes = {8: 32, 12: 24, 120: 2}
+    trainer.save_auto_batch_cache(path, fp, sizes)
+    loaded = trainer.load_auto_batch_cache(path, fp)
+    assert loaded == sizes
+    # Different cap → miss
+    args2 = trainer.build_parser().parse_args(
+        ["--batch-size-per-device", "64", "--atom-bucket-width", "4"]
+    )
+    fp2 = trainer.auto_batch_cache_fingerprint(args2, devices, [8, 12, 120])
+    assert trainer.load_auto_batch_cache(path, fp2) is None
+
+
+def test_resolve_batch_sizes_respects_seed_and_only_pads(trainer):
+    buckets = {8: np.arange(16), 12: np.arange(16), 120: np.arange(16)}
+    sizes = trainer.resolve_batch_sizes(
+        buckets,
+        per_device_batch_size=32,
+        max_pairs_per_device=18000,
+        auto_batch=True,
+        data=None,  # forces heuristic for probed pads
+        only_pads={12},
+        seed_sizes={8: 30, 120: 2},
+    )
+    assert sizes[8] == 30
+    assert sizes[120] == 2
+    # pad 12 was "probed" but data=None → heuristic
+    assert sizes[12] == trainer.pairs_budget_batch_size(
+        12, per_device_batch_size=32, max_pairs_per_device=18000
+    )
+
+
+def test_force_auto_batch_cli(trainer):
+    args = trainer.build_parser().parse_args(["--force-auto-batch"])
+    assert args.force_auto_batch is True
+    assert trainer.build_parser().parse_args([]).force_auto_batch is False
