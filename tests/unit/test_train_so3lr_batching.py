@@ -133,6 +133,40 @@ def test_apply_auto_batch_margin(trainer):
     assert out == {84: 5, 120: 1, 8: 7}
 
 
+def test_shuffle_pad_buckets_mixes_order(trainer):
+    buckets = {
+        8: np.arange(8, dtype=np.int64),
+        120: np.arange(8, 16, dtype=np.int64),
+    }
+    pads = [
+        pad
+        for pad, _ in trainer.iter_device_batches(
+            buckets,
+            batch_sizes={8: 2, 120: 2},
+            n_devices=2,
+            rng=np.random.default_rng(1),
+            shuffle_pad_buckets=True,
+        )
+    ]
+    assert set(pads) == {8, 120}
+    # Sorted default is always large-first; shuffle must sometimes start small.
+    started_small = False
+    for seed in range(20):
+        first = next(
+            trainer.iter_device_batches(
+                buckets,
+                batch_sizes={8: 2, 120: 2},
+                n_devices=2,
+                rng=np.random.default_rng(seed),
+                shuffle_pad_buckets=True,
+            )
+        )[0]
+        if first == 8:
+            started_small = True
+            break
+    assert started_small
+
+
 def test_prefetch_matches_eager_stack(trainer):
     data = _flat_data([3, 3, 3, 3, 3, 3, 3, 3])
     buckets = {4: np.arange(8, dtype=np.int64)}
