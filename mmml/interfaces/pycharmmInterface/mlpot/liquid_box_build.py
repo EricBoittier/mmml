@@ -439,6 +439,21 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     else:
         builder_step = "grid_cluster"
     steps_applied: list[str] = [builder_step]
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        density_target_holds_box,
+    )
+
+    hold_density_box = density_target_holds_box(args)
+    held_box_side_A = float(box_side) if (hold_density_box and box_side is not None) else None
+    if held_box_side_A is not None:
+        target_box_side_A = float(held_box_side_A)
+        if not getattr(args, "quiet", False):
+            print(
+                f"liquid-box: holding density-sized L={held_box_side_A:.3f} Å "
+                "(skip MC box resize / lattice; geometry span must not grow the cell).",
+                flush=True,
+            )
+
     if atoms_per_list is not None and charmm_pbc and box_side is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
             apply_mc_density_equalization,
@@ -453,16 +468,27 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             use_pbc=charmm_pbc,
             handoff_present=False,
             min_intermonomer_distance_A=resolve_pre_mlpot_overlap_min_distance(args),
-            min_box_side_A=cubic_box_length_from_geometry(
-                r,
-                ml_cutoff=float(getattr(args, "ml_cutoff", 12.0)),
+            min_box_side_A=(
+                None
+                if hold_density_box
+                else cubic_box_length_from_geometry(
+                    r,
+                    ml_cutoff=float(getattr(args, "ml_cutoff", 12.0)),
+                )
             ),
+            max_box_side_A=held_box_side_A,
+            hold_box_side=hold_density_box,
         )
         mc_summary = mc_result.to_dict()
         if mc_result.ran:
             steps_applied.append("mc_density_equalize")
-        # Hold this L for the rest of Phase A (lattice ABNR must not expand it).
-        if box_side is not None:
+        elif hold_density_box and mc_result.reason == "hold_box_side":
+            steps_applied.append("mc_density_skipped_hold_box")
+        # Density contract: never adopt an MC-expanded L as the target.
+        if held_box_side_A is not None:
+            box_side = float(held_box_side_A)
+            target_box_side_A = float(held_box_side_A)
+        elif box_side is not None:
             target_box_side_A = float(box_side)
 
     if charmm_pbc and box_side is not None and atoms_per_list is not None:
@@ -555,6 +581,26 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
                 n_atoms=len(z),
                 atomic_numbers=np.asarray(z, dtype=int),
             )
+            if held_box_side_A is not None and (
+                box_side is None
+                or abs(float(box_side) - float(held_box_side_A)) > 1.0e-3
+            ):
+                from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                    push_charmm_cubic_box_side_A,
+                )
+
+                if not getattr(args, "quiet", False):
+                    print(
+                        "liquid-box: restoring density-sized L="
+                        f"{float(held_box_side_A):.3f} Å after geometry gate "
+                        f"(was {None if box_side is None else f'{float(box_side):.3f}'} Å).",
+                        flush=True,
+                    )
+                push_charmm_cubic_box_side_A(
+                    float(held_box_side_A),
+                    quiet=bool(getattr(args, "quiet", False)),
+                )
+                box_side = float(held_box_side_A)
             sync_charmm_positions(r)
             gate_summary = gate_result.to_dict()
             steps_applied.extend(gate_result.steps_applied)

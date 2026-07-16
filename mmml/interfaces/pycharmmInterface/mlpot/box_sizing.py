@@ -299,7 +299,13 @@ def resolve_density_box_side(
     n_molecules: int | None = None,
     ml_cutoff: float = 12.0,
 ) -> float:
-    """Cubic side (Å) from composition + target density, with geometry floor."""
+    """Cubic side (Å) from composition + target density.
+
+    By default a geometry floor prevents an undersized cell when the cluster
+    span exceeds the density box. When a density target is meant to hold ``L``
+    fixed (:func:`density_target_holds_box`), that floor is skipped — otherwise
+    Packmol/COM span quietly replaces the density-sized cell.
+    """
     comp = composition
     if comp is None:
         comp = parse_composition_dict(getattr(args, "composition", None))
@@ -310,15 +316,21 @@ def resolve_density_box_side(
     n_mol = int(n_molecules) if n_molecules is not None else int(sum(comp.values()))
     rho = resolve_target_density_g_cm3(args, comp)
     mass_g = total_mass_g_for_composition(comp)
-    geom_floor = cubic_box_length_from_geometry(
-        positions,
-        ml_cutoff=float(ml_cutoff),
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        density_target_holds_box,
     )
+
+    min_side: float | None = None
+    if not density_target_holds_box(args):
+        min_side = cubic_box_length_from_geometry(
+            positions,
+            ml_cutoff=float(ml_cutoff),
+        )
     return cubic_box_side_from_target_density(
         n_molecules=n_mol,
         total_mass_g=mass_g,
         target_density_g_cm3=rho,
-        min_side_A=geom_floor,
+        min_side_A=min_side,
     )
 
 

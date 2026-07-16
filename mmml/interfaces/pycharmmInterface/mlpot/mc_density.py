@@ -125,13 +125,30 @@ def apply_mc_density_equalization(
     handoff_present: bool = False,
     min_intermonomer_distance_A: float | None = None,
     min_box_side_A: float | None = None,
+    max_box_side_A: float | None = None,
+    hold_box_side: bool = False,
 ) -> tuple[np.ndarray, float | None, McDensityResult]:
-    """Apply default post-build MC density equalization when policy allows it."""
+    """Apply default post-build MC density equalization when policy allows it.
+
+    ``hold_box_side=True`` (density-sized liquid-box) freezes ``L`` — MC would
+    otherwise expand past the target when Packmol span exceeds the density cell.
+    """
     enabled = bool(getattr(args, "mc_density_equalize", True))
     pos = np.asarray(positions, dtype=float)
     comp = composition
     if comp is None:
         comp = parse_composition_dict(getattr(args, "composition", None))
+    if hold_box_side:
+        return pos, box_side_A, McDensityResult(
+            enabled=enabled,
+            ran=False,
+            reason="hold_box_side",
+            initial_box_A=box_side_A,
+            final_box_A=box_side_A,
+            target_density_g_cm3=None,
+            initial_density_g_cm3=None,
+            final_density_g_cm3=None,
+        )
     if not enabled:
         return pos, box_side_A, McDensityResult(
             enabled=False,
@@ -249,6 +266,10 @@ def apply_mc_density_equalization(
     if min_box_side_A is not None:
         min_L = max(min_L, float(min_box_side_A))
     max_L = initial_L * max_scale
+    if max_box_side_A is not None:
+        max_L = min(max_L, float(max_box_side_A))
+    if min_L > max_L:
+        min_L = max_L
     target_L = float(np.clip(target_L, min_L, max_L))
     seed = getattr(args, "mc_density_seed", None)
     if seed is None:

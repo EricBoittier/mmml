@@ -67,6 +67,30 @@ def test_mc_density_equalization_moves_box_toward_target_density():
     assert new_pos.shape == pos.shape
 
 
+def test_mc_density_hold_box_side_freezes_l():
+    """Geometry-floor MC must not expand a density-sized cell (34→51 class bug)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        apply_mc_density_equalization,
+    )
+
+    args = _args(mc_density_target_g_cm3=1.326)
+    pos = np.array([[5.0, 6.0, 6.0], [7.0, 6.0, 6.0]], dtype=float)
+    new_pos, new_L, summary = apply_mc_density_equalization(
+        args,
+        pos,
+        atoms_per_list=[1, 1],
+        composition={"DCM": 2},
+        box_side_A=34.0,
+        use_pbc=True,
+        min_box_side_A=39.0,
+        hold_box_side=True,
+    )
+    assert not summary.ran
+    assert summary.reason == "hold_box_side"
+    assert new_L == pytest.approx(34.0)
+    assert new_pos.shape == pos.shape
+
+
 def test_mc_density_equalization_preserves_intramonomer_geometry():
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
