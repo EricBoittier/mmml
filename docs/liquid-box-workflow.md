@@ -133,13 +133,13 @@ mmml liquid-box \
 cat boxes/dcm206/REPORT.md
 ls boxes/dcm206/prep_ladder/
 
-# Hybrid MD from certified box
+# Hybrid MD from certified box (ase/jaxmd/pycharmm all honor --from-psf/--from-crd)
 mmml md-system \
   --from-psf boxes/dcm206/model.psf \
   --from-crd boxes/dcm206/model.crd \
   --checkpoint /path/to/DESdimers_params.json \
-  --md-stages mini,heat,equi \
-  --output-dir runs/dcm206_equil
+  --backend jaxmd --setup pbc_nve \
+  --output-dir runs/dcm206_nve
 ```
 
 ### Flags (spike)

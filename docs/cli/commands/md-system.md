@@ -698,8 +698,12 @@ options:
                         limits exceeded
   --restart-from RESTART_FROM
                         pycharmm: CHARMM .res restart for first dynamics stage
-  --from-psf FROM_PSF   pycharmm: load PSF instead of rebuilding cluster
-  --from-crd FROM_CRD   pycharmm: load CRD with --from-psf
+  --from-psf FROM_PSF   Load PSF instead of rebuilding cluster (pycharmm, ase,
+                        jaxmd). Requires --from-crd for certified liquid-box /
+                        mini handoff.
+  --from-crd FROM_CRD   Load CRD with --from-psf (pycharmm, ase, jaxmd). Skips
+                        Packmol; sibling box.json overrides --box-size when
+                        present.
   --skip-cluster-build  pycharmm: skip Packmol/IC; use --from-psf/--from-crd or
                         prior mini artifacts
   --skip-if-crd-exists  pycharmm: skip MLpot SD when mini CRD already exists in
