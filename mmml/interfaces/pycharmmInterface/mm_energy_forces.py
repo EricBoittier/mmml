@@ -1715,7 +1715,12 @@ def build_mm_energy_forces_fn(
                 pair_mask_out,
             )
 
-        def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
+        def update_mm_pairs(
+            positions: np.ndarray,
+            box: Optional[np.ndarray] = None,
+            *,
+            force_rebuild: bool = False,
+        ) -> Tuple[Array, Array]:
             """Return padded dynamic MM pairs.
 
             Contract: callers pass Cartesian positions unless ``fractional_coordinates``
@@ -1723,6 +1728,9 @@ def build_mm_energy_forces_fn(
             the current cell. Results have stable shape ``(capacity, 2)`` for
             ``pair_idx`` and ``(capacity,)`` for ``pair_mask`` until an explicit
             capacity grow is required.
+
+            ``force_rebuild=True`` skips Verlet skin / interval cache reuse (used by
+            NVE force–energy preflight rescue).
             """
             positions_jax = positions if hasattr(positions, "__dlpack_device__") else None
             _nbr_debug = debug
@@ -1739,7 +1747,8 @@ def build_mm_energy_forces_fn(
             # Verlet skin check (GPU and host): list is built at Rcut+skin, so
             # reuse is safe only while max per-atom displacement ≤ skin/2.
             if (
-                _use_rebuild_nbrs
+                (not force_rebuild)
+                and _use_rebuild_nbrs
                 and positions_jax is not None
                 and have_cache
                 and skin > 0.0
@@ -1768,7 +1777,7 @@ def build_mm_energy_forces_fn(
 
             # Skin/interval reuse on Cartesian coords (skip fractional wrap + inv on hot path).
             _pair_stats["cache_checks"] += 1
-            if neighbor_pair_cache_should_reuse(
+            if (not force_rebuild) and neighbor_pair_cache_should_reuse(
                 calls=_pair_stats["calls"],
                 interval=interval,
                 skin=skin,

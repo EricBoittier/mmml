@@ -86,7 +86,25 @@ def nve_force_energy_ablation_verdict(
             "ML-only also fails → suspect PBC ML-dimer / MIC wrap / switch forces "
             "(not MM pairs)"
         )
-    return "ML-only fails but hybrid passes (unexpected; re-check dtype / neighbors)"
+    return (
+        "ML-only FD fails but hybrid gate passed — continuing "
+        "(ML-only is diagnostic; NVE uses hybrid forces)"
+    )
+
+
+def nve_force_energy_should_attempt_rescue(
+    hybrid_relerr: float,
+    tol: float,
+    *,
+    rescue_enabled: bool,
+    rescue_already_attempted: bool,
+) -> bool:
+    """True when hybrid FD failed and one NL+FIRE rescue cycle is still available."""
+    if not rescue_enabled or rescue_already_attempted:
+        return False
+    if not np.isfinite(hybrid_relerr):
+        return True
+    return float(hybrid_relerr) > float(tol)
 
 
 def _nl_update_positions(positions):
@@ -1587,57 +1605,49 @@ def set_up_nhc_sim_routine(
                 fd_eps = float(
                     getattr(args, "nve_force_energy_epsilon_A", 0.01) or 0.01
                 )
+                rescue_enabled = bool(
+                    getattr(args, "nve_force_energy_rescue", True)
+                )
+                rescue_fire_steps = int(
+                    getattr(args, "nve_force_energy_rescue_fire_steps", 50) or 0
+                )
                 ncoord = int(np.prod(state.position.shape))
                 direction_np = np.sin(
                     np.arange(1, ncoord + 1, dtype=np.float64)
                 ).reshape(tuple(state.position.shape))
                 direction_np /= max(float(np.linalg.norm(direction_np)), 1.0e-12)
                 direction = as_jaxmd_dtype(direction_np)
-                e_plus = float(
-                    wrapped_energy_fn(
-                        state.position + fd_eps * direction,
-                        neighbor=current_neighbors,
+
+                def _hybrid_fd_check(pos, forces, neighbors):
+                    e_plus = float(
+                        wrapped_energy_fn(
+                            pos + fd_eps * direction,
+                            neighbor=neighbors,
+                        )
                     )
-                )
-                e_minus = float(
-                    wrapped_energy_fn(
-                        state.position - fd_eps * direction,
-                        neighbor=current_neighbors,
+                    e_minus = float(
+                        wrapped_energy_fn(
+                            pos - fd_eps * direction,
+                            neighbor=neighbors,
+                        )
                     )
-                )
-                projected_force = float(jnp.sum(forces_jax * direction))
-                fd_slope, fd_relerr = directional_force_energy_error(
-                    e_plus,
-                    e_minus,
-                    fd_eps,
-                    projected_force,
-                )
-                c.print(
-                    Panel(
-                        f"directional FD dE/ds={fd_slope:.6f} eV/Å, "
-                        f"-F·d={-projected_force:.6f} eV/Å, "
-                        f"relative error={fd_relerr:.4f} (tol={fd_tol:.4f})",
-                        title="[bold]NVE force–energy preflight[/bold]",
-                        border_style="cyan",
+                    projected = float(jnp.sum(forces * direction))
+                    slope, relerr = directional_force_energy_error(
+                        e_plus,
+                        e_minus,
+                        fd_eps,
+                        projected,
                     )
-                )
-                # Ablation: same FD with doMM=False to separate PBC ML-dimer
-                # non-conservatism from MM pair-list / E_MM assembly.
-                ml_only_relerr: float | None = None
-                ml_only_slope: float | None = None
-                do_ml_ablation = bool(
-                    getattr(args, "include_mm", True)
-                ) and bool(
-                    getattr(args, "nve_force_energy_ml_only_diagnose", True)
-                )
-                if do_ml_ablation:
-                    pos0_jax = as_jaxmd_dtype(state.position)
+                    return slope, relerr, projected
+
+                def _ml_only_fd_check(pos):
+                    pos0_jax = as_jaxmd_dtype(pos)
                     box_fd = _pbc_state["box"]
 
-                    def _ml_only_energy(pos):
+                    def _ml_only_energy(p):
                         out = spherical_cutoff_calculator(
                             atomic_numbers=atomic_numbers,
-                            positions=as_jaxmd_dtype(pos),
+                            positions=as_jaxmd_dtype(p),
                             n_monomers=n_monomers,
                             cutoff_params=CUTOFF_PARAMS,
                             doML=True,
@@ -1663,12 +1673,39 @@ def set_up_nhc_sim_routine(
                     ml_e_plus = float(_ml_only_energy(pos0_jax + fd_eps * direction))
                     ml_e_minus = float(_ml_only_energy(pos0_jax - fd_eps * direction))
                     ml_proj = float(jnp.sum(ml_forces * direction))
-                    ml_only_slope, ml_only_relerr = directional_force_energy_error(
+                    return directional_force_energy_error(
                         ml_e_plus,
                         ml_e_minus,
                         fd_eps,
                         ml_proj,
+                    ) + (ml_proj,)
+
+                fd_slope, fd_relerr, projected_force = _hybrid_fd_check(
+                    state.position, forces_jax, current_neighbors
+                )
+                ml_only_relerr: float | None = None
+                ml_only_slope: float | None = None
+                do_ml_ablation = bool(
+                    getattr(args, "include_mm", True)
+                ) and bool(
+                    getattr(args, "nve_force_energy_ml_only_diagnose", True)
+                )
+                if do_ml_ablation:
+                    ml_only_slope, ml_only_relerr, ml_proj = _ml_only_fd_check(
+                        state.position
                     )
+                else:
+                    ml_proj = None
+                c.print(
+                    Panel(
+                        f"directional FD dE/ds={fd_slope:.6f} eV/Å, "
+                        f"-F·d={-projected_force:.6f} eV/Å, "
+                        f"relative error={fd_relerr:.4f} (tol={fd_tol:.4f})",
+                        title="[bold]NVE force–energy preflight[/bold]",
+                        border_style="cyan",
+                    )
+                )
+                if do_ml_ablation and ml_only_relerr is not None:
                     verdict = nve_force_energy_ablation_verdict(
                         fd_relerr, ml_only_relerr, fd_tol
                     )
@@ -1684,6 +1721,170 @@ def set_up_nhc_sim_routine(
                             border_style="magenta",
                         )
                     )
+
+                rescue_attempted = False
+                if nve_force_energy_should_attempt_rescue(
+                    fd_relerr,
+                    fd_tol,
+                    rescue_enabled=rescue_enabled,
+                    rescue_already_attempted=False,
+                ):
+                    rescue_attempted = True
+                    c.print(
+                        Panel(
+                            "Hybrid force–energy FD failed — attempting rescue: "
+                            "force MM neighbor-list rebuild"
+                            + (
+                                f" + short jax-md FIRE ({rescue_fire_steps} steps)"
+                                if rescue_fire_steps > 0
+                                else ""
+                            )
+                            + ", then re-check.",
+                            title="[bold yellow]NVE preflight rescue[/bold yellow]",
+                            border_style="yellow",
+                        )
+                    )
+                    pos_rescue = state.position
+                    if use_pbc and update_fn is not None:
+                        try:
+                            pair_i, pair_m = update_fn(
+                                _nl_update_positions(pos_rescue),
+                                box=pbc_box_nl,
+                                force_rebuild=True,
+                            )
+                        except TypeError:
+                            # Older update_fn closures without force_rebuild kwarg.
+                            pair_i, pair_m = update_fn(
+                                _nl_update_positions(pos_rescue),
+                                box=pbc_box_nl,
+                            )
+                        _pbc_state["pair_idx"] = pair_i
+                        _pbc_state["pair_mask"] = pair_m
+                        current_neighbors = (pair_i, pair_m)
+                    if rescue_fire_steps > 0:
+                        def _rescue_nl_refresh(pos):
+                            if use_pbc and update_fn is not None:
+                                try:
+                                    pair_i, pair_m = update_fn(
+                                        _nl_update_positions(pos),
+                                        box=pbc_box_nl,
+                                        force_rebuild=True,
+                                    )
+                                except TypeError:
+                                    pair_i, pair_m = update_fn(
+                                        _nl_update_positions(pos),
+                                        box=pbc_box_nl,
+                                    )
+                                _pbc_state["pair_idx"] = pair_i
+                                _pbc_state["pair_mask"] = pair_m
+
+                        rescue_shift_fn = shift_min
+                        if use_pbc:
+                            _cell_rescue = jnp.asarray(
+                                atoms.get_cell()[:], dtype=jnp.float32
+                            )
+
+                            def rescue_shift_fn(pos, dR, **kwargs):
+                                return _wrap_monomers(pos + dR, _cell_rescue)
+
+                        dt_rescue = resolve_jaxmd_fire_dt_start_ps(
+                            float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
+                        )
+                        pos_rescue, best_f, fire_info = run_jaxmd_fire_with_dt_backoff(
+                            force_fn=wrapped_force_fn,
+                            shift_fn=rescue_shift_fn,
+                            positions=pos_rescue,
+                            masses=Si_mass,
+                            n_steps=int(rescue_fire_steps),
+                            dt_schedule=(dt_rescue,),
+                            nl_refresh_fn=(
+                                _rescue_nl_refresh
+                                if (use_pbc and update_fn is not None)
+                                else None
+                            ),
+                            energy_fn=wrapped_energy_fn,
+                        )
+                        c.print(
+                            Panel(
+                                f"Rescue FIRE: max|F| "
+                                f"{fire_info['start_max_f']:.4f} → {best_f:.4f} eV/Å "
+                                f"({rescue_fire_steps} steps)",
+                                title="[bold]NVE preflight rescue[/bold]",
+                                border_style="yellow",
+                            )
+                        )
+                    state = state.set(position=as_jaxmd_dtype(pos_rescue))
+                    state = normalize_jaxmd_state(state)
+                    if use_pbc and update_fn is not None:
+                        try:
+                            pair_i, pair_m = update_fn(
+                                _nl_update_positions(state.position),
+                                box=pbc_box_nl,
+                                force_rebuild=True,
+                            )
+                        except TypeError:
+                            pair_i, pair_m = update_fn(
+                                _nl_update_positions(state.position),
+                                box=pbc_box_nl,
+                            )
+                        _pbc_state["pair_idx"] = pair_i
+                        _pbc_state["pair_mask"] = pair_m
+                        current_neighbors = (pair_i, pair_m)
+                    forces_jax = wrapped_force_fn(
+                        state.position, neighbor=current_neighbors
+                    )
+                    energy_initial = float(
+                        wrapped_energy_fn(
+                            state.position, neighbor=current_neighbors
+                        )
+                    )
+                    print_forces_summary(
+                        np.asarray(forces_jax),
+                        energy_eV=energy_initial,
+                        console=c,
+                    )
+                    fd_slope, fd_relerr, projected_force = _hybrid_fd_check(
+                        state.position, forces_jax, current_neighbors
+                    )
+                    if do_ml_ablation:
+                        ml_only_slope, ml_only_relerr, ml_proj = _ml_only_fd_check(
+                            state.position
+                        )
+                    c.print(
+                        Panel(
+                            f"directional FD dE/ds={fd_slope:.6f} eV/Å, "
+                            f"-F·d={-projected_force:.6f} eV/Å, "
+                            f"relative error={fd_relerr:.4f} (tol={fd_tol:.4f})",
+                            title="[bold]NVE force–energy preflight (after rescue)[/bold]",
+                            border_style="cyan",
+                        )
+                    )
+                    if do_ml_ablation and ml_only_relerr is not None:
+                        verdict = nve_force_energy_ablation_verdict(
+                            fd_relerr, ml_only_relerr, fd_tol
+                        )
+                        c.print(
+                            Panel(
+                                f"ML-only (doMM=False): dE/ds={ml_only_slope:.6f} eV/Å, "
+                                f"-F·d={-ml_proj:.6f} eV/Å, "
+                                f"relative error={ml_only_relerr:.4f}\n"
+                                f"hybrid (doMM={bool(getattr(args, 'include_mm', True))}): "
+                                f"relative error={fd_relerr:.4f}\n"
+                                f"verdict: {verdict}",
+                                title="[bold]NVE force–energy ML-only ablation[/bold]",
+                                border_style="magenta",
+                            )
+                        )
+                    if np.isfinite(fd_relerr) and fd_relerr <= fd_tol:
+                        c.print(
+                            Panel(
+                                f"Rescue succeeded: hybrid relative error "
+                                f"{fd_relerr:.4f} ≤ {fd_tol:.4f}; continuing NVE.",
+                                title="[bold green]NVE preflight rescue[/bold green]",
+                                border_style="green",
+                            )
+                        )
+
                 if not np.isfinite(fd_relerr) or fd_relerr > fd_tol:
                     msg = (
                         "NVE force–energy consistency failed: "
@@ -1693,6 +1894,8 @@ def set_up_nhc_sim_routine(
                         "non-conservative for this configuration; NVE would heat "
                         "and drift."
                     )
+                    if rescue_attempted:
+                        msg += " Rescue (NL rebuild + short FIRE) did not recover."
                     if ml_only_relerr is not None:
                         msg += (
                             f" ML-only relerr={ml_only_relerr:.3f}"
