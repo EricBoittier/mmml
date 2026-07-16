@@ -2,6 +2,14 @@
 
 Mixed-composition MD (ASE/JAX-MD/PyCHARMM).
 
+ASE and JAX-MD command routing can be imported and inspected without a local
+`libcharmm`. PyCHARMM is loaded lazily only when a CHARMM-backed builder,
+minimizer, or backend operation is requested. Those operations require
+`CHARMM_LIB_DIR` to point to the directory containing `libcharmm.so` on Linux
+(`libcharmm.dylib` on macOS). Certified `--from-psf`/`--from-crd` geometry can
+therefore be routed and unit-tested on ordinary CI runners without initializing
+the native CHARMM runtime.
+
 
 ## Usage
 

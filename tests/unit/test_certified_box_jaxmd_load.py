@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -16,6 +19,26 @@ from mmml.cli.run.md_pbc_suite.ase import (
     resolve_cluster_geometry,
 )
 from mmml.cli.run.md_system import build_command
+
+
+def test_ase_suite_import_does_not_eagerly_load_pycharmm():
+    env = os.environ.copy()
+    env["MMML_WARMUP_MLPOT_JAX_ONLY"] = "1"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import mmml.cli.run.md_pbc_suite.ase as suite; "
+                "assert suite.read is None"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_certified_box_geometry_requested_requires_both():
