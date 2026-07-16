@@ -348,8 +348,9 @@ def render_liquid_box_report(
                 f"  --from-psf {result.model_psf} \\",
                 f"  --from-crd {result.model_crd} \\",
                 "  --checkpoint /path/to/checkpoint.json \\",
-                '  --md-stages mini,heat,equi \\',
-                f"  --output-dir runs/{result.out_dir.name}_equil",
+                "  --backend jaxmd --setup pbc_nve \\",
+                f"  --output-dir runs/{result.out_dir.name}_nve",
+                "# or: --backend pycharmm --md-stages mini,heat,equi",
                 "```",
             ]
         )
