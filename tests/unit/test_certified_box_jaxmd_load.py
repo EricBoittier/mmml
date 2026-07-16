@@ -34,12 +34,31 @@ def test_maybe_apply_certified_box_json_overrides_box_size(tmp_path: Path):
     crd = tmp_path / "model.crd"
     crd.write_text("dummy\n", encoding="utf-8")
     (tmp_path / "box.json").write_text(
-        json.dumps({"box_side_A": 28.167}),
+        json.dumps({"box_side_A": 28.167, "density_g_cm3": 1.30}),
         encoding="utf-8",
     )
-    args = argparse.Namespace(box_size=28.0, quiet=True)
-    _maybe_apply_certified_box_json(args, crd)
+    args = argparse.Namespace(
+        box_size=28.0,
+        box_auto="density",
+        target_density_g_cm3=1.36,
+        bulk_density_fraction=None,
+        quiet=True,
+    )
+    side = _maybe_apply_certified_box_json(args, crd)
+    assert side == pytest.approx(28.167)
     assert args.box_size == pytest.approx(28.167)
+    assert args.box_auto is None
+    assert args.target_density_g_cm3 is None
+
+
+def test_maybe_apply_certified_box_json_requires_box_json(tmp_path: Path):
+    from mmml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
+
+    crd = tmp_path / "model.crd"
+    crd.write_text("dummy\n", encoding="utf-8")
+    args = argparse.Namespace(box_size=28.0, quiet=True)
+    with pytest.raises(FileNotFoundError, match="box.json"):
+        _maybe_apply_certified_box_json(args, crd)
 
 
 def test_resolve_cluster_geometry_uses_certified_artifacts(monkeypatch):
@@ -66,7 +85,7 @@ def test_resolve_cluster_geometry_uses_certified_artifacts(monkeypatch):
     )
     monkeypatch.setattr(
         "mmml.cli.run.md_pbc_suite.ase._maybe_apply_certified_box_json",
-        lambda *_a, **_k: None,
+        lambda *_a, **_k: 28.167,
     )
     packmol_calls = {"n": 0}
 
@@ -106,7 +125,7 @@ def test_cluster_geometry_from_certified_requires_matching_atom_counts(monkeypat
     )
     monkeypatch.setattr(
         "mmml.cli.run.md_pbc_suite.ase._maybe_apply_certified_box_json",
-        lambda *_a, **_k: None,
+        lambda *_a, **_k: 28.0,
     )
     with pytest.raises(ValueError, match="resid atom counts"):
         cluster_geometry_from_certified_artifacts(args)

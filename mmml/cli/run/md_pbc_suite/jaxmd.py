@@ -722,6 +722,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     for msg in box_warnings:
         print(f"Handoff box: {msg}", flush=True)
+    certified_side = getattr(args, "_certified_box_side_A", None)
+    if (
+        certified_geom
+        and not free_space
+        and certified_side is not None
+        and L is not None
+        and abs(float(L) - float(certified_side)) > 0.05
+    ):
+        raise RuntimeError(
+            f"Certified liquid-box L={float(certified_side):.3f} Å was overridden by "
+            f"resolved cell L={float(L):.3f} Å (source={box_source}). "
+            "Refuse to run denser/wrong cell; check --box-size vs boxes/*/box.json."
+        )
+    if not free_space and L is not None and not getattr(args, "quiet", False):
+        print(
+            f"PBC cell: L={float(L):.3f} Å (source={box_source})",
+            flush=True,
+        )
     jax_equil_ps = float(getattr(args, "jaxmd_mini_box_equil_ps", 0.0) or 0.0)
     if jax_equil_ps > 0.0 and not free_space:
         print(
