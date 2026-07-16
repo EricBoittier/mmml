@@ -2004,13 +2004,17 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
         valid_total: dict[str, Any] | None = None
         valid_count = 0
+        valid_pads_seen: list[int] = []
+        # Always shuffle validation pad order. Training uses large→small blocks for
+        # GPU memory, but with --valid-steps (default 100) a sorted valid pass would
+        # only score the largest molecules and inflate valid_loss / E_MAE.
         valid_batches = prefetch_stacked_batches(
             iter_device_batches(
                 valid_buckets,
                 batch_sizes=valid_batch_sizes,
                 n_devices=args.num_devices,
                 rng=np.random.default_rng(args.seed + epoch),
-                shuffle_pad_buckets=args.shuffle_pad_buckets,
+                shuffle_pad_buckets=True,
             ),
             data,
             depth=args.prefetch_batches,
@@ -2020,12 +2024,16 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             _, eval_step = steps_for_batch_size(batch_size)
             valid_total = accumulate_metrics(valid_total, eval_step(state, batch))
             valid_count += 1
+            valid_pads_seen.append(int(pad_atoms))
             if args.valid_steps and step >= args.valid_steps:
                 break
 
         train_mean = finalize_metrics(train_total, train_count)
         valid_mean = finalize_metrics(valid_total, valid_count)
         elapsed = time.time() - t0
+        valid_pad_hist = {
+            pad: valid_pads_seen.count(pad) for pad in sorted(set(valid_pads_seen))
+        }
         print(
             f"epoch {epoch:04d} done in {elapsed:.1f}s "
             f"train_loss={train_mean.get('loss', float('nan')):.6g} "
@@ -2036,6 +2044,10 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"valid_Q_MAE={valid_mean.get('charge_mae', float('nan')):.6g} "
             f"MBD_|E|={valid_mean.get('mbd_energy_abs_mean', 0.0):.6g} "
             f"MBD_|F|={valid_mean.get('mbd_force_abs_mean', 0.0):.6g}"
+        )
+        print(
+            f"  valid coverage: {valid_count} batches, pads {valid_pad_hist}",
+            flush=True,
         )
 
         should_save = epoch % args.save_every == 0

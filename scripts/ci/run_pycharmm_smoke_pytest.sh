@@ -19,5 +19,14 @@ fi
 
 MARK_EXPR="${MMML_PYTEST_MARK:-pycharmm and not gpu and not charmm_serial}"
 MPI_NP="${MMML_MPI_NP:-1}"
+PYCHARMM_RES_SMOKE="$ROOT/tests/functionality/pycharmmETC/test_res.py"
 
-exec mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes -m "$MARK_EXPR" "$@"
+# CHARMM owns process-global PSF/topology/parameter state.  setupRes reads CGenFF
+# parameters and can segfault if it follows other live tests in the same process,
+# even though it is reliable in a fresh rank.  Keep that smoke coverage, but give
+# it its own MPI process before running the remaining selection.
+mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
+  -m "$MARK_EXPR" "$PYCHARMM_RES_SMOKE" "$@"
+
+exec mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
+  -m "$MARK_EXPR" --ignore="$PYCHARMM_RES_SMOKE" "$@"
