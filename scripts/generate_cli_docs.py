@@ -160,6 +160,15 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
 }
 
 META_BODY: dict[str, str] = {
+    "md-system": """
+ASE and JAX-MD command routing can be imported and inspected without a local
+`libcharmm`. PyCHARMM is loaded lazily only when a CHARMM-backed builder,
+minimizer, or backend operation is requested. Those operations require
+`CHARMM_LIB_DIR` to point to the directory containing `libcharmm.so` on Linux
+(`libcharmm.dylib` on macOS). Certified `--from-psf`/`--from-crd` geometry can
+therefore be routed and unit-tested on ordinary CI runners without initializing
+the native CHARMM runtime.
+""",
     "commands": """
 `mmml commands` lists every subcommand grouped by task area — a browsable
 alternative to the compact top-level `mmml -h`.
