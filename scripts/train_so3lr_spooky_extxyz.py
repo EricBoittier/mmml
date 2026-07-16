@@ -554,31 +554,32 @@ def probe_max_batch_size(
     start_batch: int = 1,
     data: dict[str, np.ndarray],
     candidate_indices: np.ndarray,
-    n_devices: int,
     steps_for_batch_size: Any,
     state: Any,
 ) -> int:
     """Find the largest per-device batch that fits for ``pad_atoms``.
 
-    Starts at ``start_batch`` (typically the pair-budget heuristic) and grows
-    upward, so large-molecule buckets do not immediately request multi‑GiB
-    allocations at B=64/128.
+    Probes on a **single** device only. Multi-device ``pmap`` probing is unsafe:
+    when one GPU OOMs mid-collective the other hangs at the NCCL/XLA rendezvous
+    (seen: ``Acquire clique`` wait after B=4 OOM while B=3 is tried).
+
+    Starts at ``start_batch`` (pair-budget heuristic) and grows upward.
     """
     max_batch = max(1, int(max_batch))
     start_batch = max(1, min(max_batch, int(start_batch)))
     pool = np.asarray(candidate_indices, dtype=np.int64)
-    if pool.size < n_devices:
+    if pool.size < 1:
         return 1
 
     def _try(batch_size: int) -> bool:
-        need = batch_size * n_devices
-        if pool.size < need:
+        if pool.size < batch_size:
             return False
         print(
-            f"    probe pad_atoms={pad_atoms} B/device={batch_size} ...",
+            f"    probe pad_atoms={pad_atoms} B/device={batch_size} (1-GPU) ...",
             flush=True,
         )
-        device_indices = pool[:need].reshape(n_devices, batch_size)
+        # Leading axis size 1: single-device pmap / stacked batch layout.
+        device_indices = pool[:batch_size].reshape(1, batch_size)
         batch = stack_device_batches(data, device_indices, pad_atoms=pad_atoms)
         train_step, _ = steps_for_batch_size(batch_size)
         try:
@@ -610,8 +611,7 @@ def probe_max_batch_size(
     if _try(start_batch):
         best = start_batch
     else:
-        best = _search(1, start_batch - 1, 1)
-        return best
+        return _search(1, start_batch - 1, 1)
 
     # Grow upward from the floor toward max_batch.
     trial = min(max_batch, max(best + 1, best * 2))
@@ -635,12 +635,11 @@ def resolve_batch_sizes(
     max_pairs_per_device: int,
     auto_batch: bool,
     data: dict[str, np.ndarray] | None = None,
-    n_devices: int = 1,
     steps_for_batch_size: Any | None = None,
     state: Any | None = None,
     step_functions: dict[int, Any] | None = None,
 ) -> dict[int, int]:
-    """Per-pad-atoms batch sizes: memory probe when enabled, else pair budget."""
+    """Per-pad-atoms batch sizes: single-GPU memory probe when enabled."""
     sizes: dict[int, int] = {}
     # Largest pads first: they force small B and avoid leaving huge compiled
     # small-molecule kernels resident while probing 100+ atom buckets.
@@ -663,7 +662,7 @@ def resolve_batch_sizes(
             continue
         print(
             f"  auto-batch probing pad_atoms={pad_atoms} "
-            f"(start B={heuristic}, cap={per_device_batch_size})...",
+            f"(start B={heuristic}, cap={per_device_batch_size}, single-GPU)...",
             flush=True,
         )
         probed = probe_max_batch_size(
@@ -672,7 +671,6 @@ def resolve_batch_sizes(
             start_batch=heuristic,
             data=data,
             candidate_indices=indices,
-            n_devices=n_devices,
             steps_for_batch_size=steps_for_batch_size,
             state=state,
         )
@@ -1642,43 +1640,59 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             )
             return
 
-    state = jax_utils.replicate(state, devices=devices)
     rng = np.random.default_rng(args.seed)
-    step_functions: dict[int, tuple[Any, Any]] = {}
 
-    def steps_for_batch_size(batch_size: int) -> tuple[Any, Any]:
-        if batch_size not in step_functions:
+    # Auto-batch on a single GPU *before* multi-device replicate. Probing with
+    # 2-GPU pmap OOMs one device mid-collective and deadlocks the other
+    # (rendezvous / Acquire clique hang).
+    print(
+        f"Resolving per-bucket batch sizes "
+        f"(auto_batch={args.auto_batch}, cap={args.batch_size_per_device}, "
+        f"prefetch={args.prefetch_batches}, probe_devices=1)...",
+        flush=True,
+    )
+    probe_devices = devices[:1]
+    probe_step_functions: dict[int, tuple[Any, Any]] = {}
+
+    def probe_steps_for_batch_size(batch_size: int) -> tuple[Any, Any]:
+        if batch_size not in probe_step_functions:
             step_args = argparse.Namespace(
                 **{**vars(args), "batch_size_per_device": batch_size}
             )
-            step_functions[batch_size] = make_steps(
+            probe_step_functions[batch_size] = make_steps(
                 model,
                 step_args,
-                devices,
+                probe_devices,
                 mbd_model=mbd_model,
                 mbd_params=mbd_params,
                 multipole_model=multipole_model,
                 multipole_params=multipole_params,
             )
-        return step_functions[batch_size]
+        return probe_step_functions[batch_size]
 
-    print(
-        f"Resolving per-bucket batch sizes "
-        f"(auto_batch={args.auto_batch}, cap={args.batch_size_per_device}, "
-        f"prefetch={args.prefetch_batches})...",
-        flush=True,
-    )
-    train_batch_sizes = resolve_batch_sizes(
-        train_buckets,
-        per_device_batch_size=args.batch_size_per_device,
-        max_pairs_per_device=args.max_pairs_per_device,
-        auto_batch=args.auto_batch,
-        data=data,
-        n_devices=args.num_devices,
-        steps_for_batch_size=steps_for_batch_size,
-        state=state,
-        step_functions=step_functions,
-    )
+    if args.auto_batch:
+        probe_state = jax_utils.replicate(state, devices=probe_devices)
+        train_batch_sizes = resolve_batch_sizes(
+            train_buckets,
+            per_device_batch_size=args.batch_size_per_device,
+            max_pairs_per_device=args.max_pairs_per_device,
+            auto_batch=True,
+            data=data,
+            steps_for_batch_size=probe_steps_for_batch_size,
+            state=probe_state,
+            step_functions=probe_step_functions,
+        )
+        del probe_state
+        probe_step_functions.clear()
+        _clear_jax_caches()
+    else:
+        train_batch_sizes = resolve_batch_sizes(
+            train_buckets,
+            per_device_batch_size=args.batch_size_per_device,
+            max_pairs_per_device=args.max_pairs_per_device,
+            auto_batch=False,
+        )
+
     valid_batch_sizes = {
         pad: train_batch_sizes.get(
             pad,
@@ -1690,8 +1704,6 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         )
         for pad in valid_buckets
     }
-    # Probe may have mutated optimizer state; keep params but that is fine for
-    # warm-start. Recompute steps/epoch from the resolved sizes.
     batches_per_epoch = sum(
         (len(indices) // (train_batch_sizes[pad] * args.num_devices))
         for pad, indices in train_buckets.items()
@@ -1714,6 +1726,25 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         ),
         flush=True,
     )
+
+    state = jax_utils.replicate(state, devices=devices)
+    step_functions: dict[int, tuple[Any, Any]] = {}
+
+    def steps_for_batch_size(batch_size: int) -> tuple[Any, Any]:
+        if batch_size not in step_functions:
+            step_args = argparse.Namespace(
+                **{**vars(args), "batch_size_per_device": batch_size}
+            )
+            step_functions[batch_size] = make_steps(
+                model,
+                step_args,
+                devices,
+                mbd_model=mbd_model,
+                mbd_params=mbd_params,
+                multipole_model=multipole_model,
+                multipole_params=multipole_params,
+            )
+        return step_functions[batch_size]
 
     compiled_shapes: set[tuple[int, int]] = set()
     for epoch in range(start_epoch, args.epochs + 1):
