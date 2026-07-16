@@ -39,17 +39,20 @@ forces near ±L/2.
 - Prefer NVT/NPT for liquids; do not “fix conservation” by differentiating the
   MIC lattice shift.
 
-## Mid-run T spikes with flat E_tot (often NL cadence — not MIC wrap)
+## Mid-run T spikes with flat E_tot (not MIC wrap)
 
-Signature: preflight green; then at some later record `E_pot` drops tens of eV,
-`T` jumps to ~1000 K, but `E_tot` stays flat (PE→KE dump from a discontinuous
-force). Check whether the step index is a multiple of the wrap+NL block
-(`steps_per_loop_call` / `jax_md_update_interval`, often 20). Known failure
-mode: stale MM pairs (interval too large / skin too small) or wrap+rebuild
-boundary — **not** a missing MIC-wrap Jacobian.
+Signature: preflight green; later `E_pot` drops tens–hundreds of eV, `T` →
+thousands K, `E_tot` nearly flat then may drift past
+`--nve-etot-drift-abort-eV`. **Not** a missing MIC-wrap Jacobian.
 
-Smoke: `--jax-md-update-interval 1` (and/or larger `--jax-md-skin-distance`).
-Docs: `docs/md-system-configs.md` § Neighbor-list requirements.
+Falsified as sole cause (ACO/DCM liquid NVE, 2026-07): same PE→KE dump with
+`--jax-md-update-interval 1` (wrap+NL every step). NL cadence can still worsen
+stale-pair cases; it is not sufficient to explain the crash.
+
+Check suite JSON: `dynamics_min_intermonomer_distance_A` (e.g. ~0.4 Å) vs
+`--min-intermonomer-atom-distance` (default **0.1 Å** — too loose; guard stays
+silent). Prefer `--dynamics-overlap-action error` and a physical threshold
+(~1.5–2.0 Å) or NVT; inspect HDF5 frames around the spike.
 
 ## Tests that lock this in
 
