@@ -251,7 +251,8 @@ Examples: mmml physnet-train \ --data output/energies_forces_dipoles_train.npz \
 --config train.yaml YAML keys match CLI flags (with optional aliases: train,
 output, max_epochs). See mmml/cli/misc/physnet_train.example.yaml for a
 template. See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer
-learning / distillation.
+learning / distillation. See examples/hybrid_mm_charges/ for hybrid-mm +
+mm_charge_mode (fixed/latent/fixed_plus_latent).
 ```
 
 
