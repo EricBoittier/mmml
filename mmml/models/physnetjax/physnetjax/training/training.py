@@ -347,7 +347,13 @@ def train_model(
         )
 
     best_loss = float("inf") if (best or save_every_epoch) else None
-    do_charges = model.charges
+    # Snapshot the CLI/constructed model's charge-head flag.  Restart may
+    # rebuild ``model`` from checkpoint ``model_attributes``, which can disagree
+    # (e.g. YAML ``charges: true`` while restarting a charges=False hybrid run).
+    # ``do_charges`` must follow the *restored* model — the loss reads
+    # ``output["sum_charges"]``, which is None without a charge head.
+    cli_charges = bool(getattr(model, "charges", False))
+    do_charges = cli_charges
     # Initialize model parameters and optimizer state.
     key, init_key = jax.random.split(key)
 
@@ -473,6 +479,28 @@ def train_model(
         )
         params = _merge_params(fresh_restart_params, params)
         ema_params = _merge_params(fresh_restart_params, ema_params)
+        do_charges = bool(getattr(model, "charges", False))
+        if do_charges != cli_charges:
+            print(
+                f"WARNING: restart checkpoint has charges={do_charges} but this run "
+                f"was constructed with charges={cli_charges}. Using the checkpoint "
+                f"architecture (doCharges={do_charges}). For a charge head / "
+                f"--mm-charge-correction, start a fresh run (no --restart) with "
+                f"charges=true; you cannot graft a charge head onto a "
+                f"charges=false checkpoint by flipping the YAML flag.",
+                flush=True,
+            )
+        if (
+            hybrid_mm is not None
+            and bool(getattr(hybrid_mm, "charge_correction", False))
+            and not do_charges
+        ):
+            raise ValueError(
+                "hybrid_mm.charge_correction=True requires a model with a charge "
+                "head, but the restart checkpoint has charges=False. Start a fresh "
+                "run with charges=true and mm_charge_correction=true (omit "
+                "--restart / restart: from the charges=false hybrid checkpoint)."
+            )
     # initialize
     else:
         ema_params = params
@@ -496,6 +524,7 @@ def train_model(
     table = print_dict_as_table(model_attributes, title="Model Attributes")
     if console is not None:
         console.print(table)
+    print(f"Training loss will use doCharges={do_charges}", flush=True)
 
 
     live_context = Live(auto_refresh=False) if console is not None else nullcontext()
