@@ -141,7 +141,11 @@ def _add_wall_probe(data, picks, target_sep):
     """
     mol = np.asarray(data["mol_id"])
     res = np.array([str(x) for x in data["res_name"]])
-    cand = [k for k in range(len(res)) if "," in res[k] and (mol[k] == 1).any()]
+    taken = {int(t[0]) for t in picks}
+    cand = [
+        k for k in range(len(res))
+        if "," in res[k] and (mol[k] == 1).any() and k not in taken
+    ]
     if not cand:
         return picks
     i = cand[0]
@@ -175,7 +179,10 @@ def _md_parts(res) -> dict:
         return float(arr.sum()) if arr.size else float("nan")
 
     return {
-        "mm_E": g("mm_E"),
+        # Training folds the wall into e_mm (it lives inside _emm); MD reports it
+        # separately as wall_E. Fold it back in so the columns compare like for like.
+        "mm_E": g("mm_E") + (g("wall_E") if not np.isnan(g("wall_E")) else 0.0),
+        "wall_E": g("wall_E"),
         "mm_vdw": g("mm_vdw_E"),
         "mm_elec": g("mm_elec_E"),
         "internal": g("internal_E"),
@@ -424,7 +431,15 @@ def main() -> int:
         fdiff = float(np.abs(f_train - f_md).max())
         worst = max(worst, diff)
         worst_f = max(worst_f, fdiff)
-        ok = (diff <= args.tol) and (fdiff <= args.force_tol)
+        # The wall probe carries a ~7 eV / ~24 eV/A term, where float32 noise
+        # alone exceeds tolerances tuned for ~1 eV/A forces: judge it relatively.
+        if regime == "WALL":
+            fscale = max(float(np.abs(f_md).max()), 1.0)
+            ok = (diff <= max(args.tol, 1e-3 * abs(e_md))) and (
+                fdiff <= args.force_tol * fscale
+            )
+        else:
+            ok = (diff <= args.tol) and (fdiff <= args.force_tol)
         bad += (not ok)
         d_mm = e_mm_train - md["mm_E"]
         print(
