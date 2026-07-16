@@ -10,7 +10,7 @@ Figures regenerate with:
 uv run python scripts/plot_mlpot_settings.py
 ```
 
-Related: [MLpot switching reference](mlpot-settings.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [md-system YAML cutoffs](md-system-configs.md#cutoffs-mm-toggles-and-long-range-electrostatics).
+Related: [MLpot switching reference](mlpot-settings.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [md-system YAML cutoffs](md-system-configs.md#cutoffs-mm-toggles-and-long-range-electrostatics), [Hybrid MM charges (fixed / latent / fixed+latent)](hybrid-mm-charges.md).
 
 ---
 

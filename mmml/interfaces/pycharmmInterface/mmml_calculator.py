@@ -390,6 +390,8 @@ def setup_calculator(
     mbd_weight: float | None = None,
     mbd_charge: float = 0.0,
     mbd_spin: float = 1.0,
+    mm_charge_correction: bool = False,
+    mm_charge_mode: str | None = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -417,6 +419,11 @@ def setup_calculator(
             mm_switch_on COM-COM distance. Saves compute in dilute systems.
         ml_batch_size: Max systems per ML forward pass. When None, process all
             monomers+dimers in one batch. Set to reduce memory for large systems.
+        mm_charge_correction: Opt-in Mode C (fixed+latent) MM charges:
+            ``q_MM = q_CGenFF + neutralize(q_ML)`` with ``q_ML`` from the AB
+            dimer forward.  Dimer-only in v1; see ``docs/hybrid-mm-charges.md``.
+        mm_charge_mode: Explicit mode string (``fixed`` / ``fixed_plus_latent``).
+            ``latent`` is deferred.  Overrides the bool when set.
         ml_gpu_count: Parallel PhysNet chunks across this many local JAX GPUs
             (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``MMML_MLPOT_N_GPUS``.
         ml_max_active_dimers: Cap on sparse ML dimer slots per step. Periodic
@@ -869,6 +876,44 @@ def setup_calculator(
     if not _jax_mm_spoof_mode:
         MODEL.max_padded_atoms = max_atoms
 
+    from mmml.interfaces.pycharmmInterface.mm_charge_correction import (
+        assert_mode_c_dimer_supported,
+        load_hybrid_mm_metadata,
+        map_padded_fragment_charges_to_global,
+        mm_charges_fixed_plus_latent,
+        resolve_mm_charge_mode_arg,
+        warn_mm_charge_mode_mismatch,
+    )
+    from mmml.models.mm_charge_mode import MMChargeMode
+
+    _mm_charge_mode = resolve_mm_charge_mode_arg(
+        mm_charge_correction=bool(mm_charge_correction),
+        mm_charge_mode=mm_charge_mode,
+    )
+    _model_has_charges = bool(
+        getattr(MODEL, "charges", False)
+        if not _jax_mm_spoof_mode
+        else False
+    )
+    assert_mode_c_dimer_supported(
+        _mm_charge_mode,
+        n_monomers=n_monomers,
+        has_charges=_model_has_charges,
+        lr_solver=lr_solver,
+        doML=doML,
+        doML_dimer=doML_dimer,
+    )
+    _hybrid_mm_meta = load_hybrid_mm_metadata(model_restart_path)
+    warn_mm_charge_mode_mismatch(_mm_charge_mode, _hybrid_mm_meta)
+    _mode_c = _mm_charge_mode is MMChargeMode.FIXED_PLUS_LATENT
+    if _mode_c:
+        setup_rows.append(
+            (
+                "mm_charge_mode",
+                "fixed_plus_latent (q_CGenFF + neutralize(q_ML from AB); dimer-only)",
+            )
+        )
+
     from mmml.utils.rich_report import (
         collect_ml_energy_terms_mapping,
         collect_zbl_cutoff_mapping,
@@ -1247,6 +1292,8 @@ def setup_calculator(
     # Must be built once with *concrete* positions (outside JIT) so that
     # the cell-list path can call NumPy without hitting TracerArrayConversion.
     _cached_mm_fn = [None]          # [0] = MM energy/force callable (dynamic or static)
+    _q_cgenff_for_mode_c = [None]   # PSF baseline charges for Mode C (fixed+latent)
+    _monomer_id_for_mode_c = [None]
     _cached_update_mm_pairs = [None]  # [0] = update_mm_pairs | None (jax_md path)
     _cached_mm_cutoff_key = [None]  # hashable key to detect cutoff-param changes
     _lambda_version = [0]
@@ -1319,6 +1366,22 @@ def setup_calculator(
             _cached_mm_fn[0] = mm_result
             _cached_update_mm_pairs[0] = update_fn
             _cached_mm_cutoff_key[0] = key
+            if _mode_c and _q_cgenff_for_mode_c[0] is None:
+                from mmml.interfaces.pycharmmInterface.long_range_backend import (
+                    per_atom_monomer_ids,
+                )
+                from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+                    _get_actual_psf_charges,
+                )
+
+                q_np = np.asarray(
+                    _get_actual_psf_charges(total_atoms)[:total_atoms], dtype=np.float64
+                )
+                mid_np = per_atom_monomer_ids(
+                    total_atoms, monomer_offsets, n_monomers
+                )
+                _q_cgenff_for_mode_c[0] = jnp.asarray(q_np, dtype=ml_jnp_dtype)
+                _monomer_id_for_mode_c[0] = jnp.asarray(mid_np, dtype=jnp.int32)
 
     # Optional whole-system learned MBD dispersion correction. Checkpoints
     # trained as E = E_spooky + mbd_weight * E_mbd must add the same term at
@@ -1501,8 +1564,24 @@ def setup_calculator(
             outputs["dH"] = ml_out.get("dH", 0)
             outputs["internal_E"] = ml_out.get("internal_E", 0)
             outputs["ml_2b_E"] = ml_out.get("ml_2b_E", 0)
+            if ml_out.get("q_ml_global") is not None:
+                outputs["q_ml_global"] = ml_out["q_ml_global"]
 
         if doMM:
+            mm_charges = None
+            if _mode_c:
+                q_ml = outputs.get("q_ml_global")
+                if q_ml is None:
+                    raise ValueError(
+                        "mm_charge_mode=fixed_plus_latent requires ML charges from "
+                        "the AB forward; enable doML/doML_dimer and a charges=True model."
+                    )
+                mm_charges = mm_charges_fixed_plus_latent(
+                    _q_cgenff_for_mode_c[0],
+                    q_ml,
+                    _monomer_id_for_mode_c[0],
+                    n_monomers=n_monomers,
+                )
             mm_out = calculate_mm_contributions(
                 positions,
                 cutoff_params=cutoff_params,
@@ -1510,6 +1589,7 @@ def setup_calculator(
                 mm_pair_idx=mm_pair_idx,
                 mm_pair_mask=mm_pair_mask,
                 box=mic_pbc_cell,
+                mm_charges=mm_charges,
             )
             # Preserve separate MM terms and add to totals instead of overwriting
             mm_E = mm_out.get("mm_E", 0)
@@ -1861,8 +1941,17 @@ def setup_calculator(
                             atom_mask=chunk_batches["atom_mask"],
                             cell=pbc_cell,
                         )
+                    if _mode_c:
+                        return out["energy"], out["forces"], out.get("charges")
                     return out["energy"], out["forces"]
 
+                if _mode_c:
+                    # Chunked multi-GPU path does not yet scatter Mode C charges;
+                    # dimers used for parity are small and use the non-chunked path.
+                    raise NotImplementedError(
+                        "mm_charge_mode=fixed_plus_latent is not supported with "
+                        "chunked ML apply; reduce system size or disable chunking."
+                    )
                 e_out, f_out = run_chunked_model_apply(
                     R_chunks=R_chunks,
                     Z_chunks=Z_chunks,
@@ -1938,6 +2027,27 @@ def setup_calculator(
 
         f = output["forces"] * ml_force_conversion_factor
         e = output["energy"] * ml_energy_conversion_factor
+        q_ml_global = None
+        if _mode_c and output.get("charges") is not None:
+            # Batch layout: [monomers..., dimers...]; training uses AB charges.
+            # Mode C v1 is dimer-only (n_monomers==2) so the sole dimer is slot 0.
+            n_mono_local = n_monomers
+            if batches.get("_spatial_monomer_indices") is not None:
+                n_mono_local = batches["_spatial_monomer_indices"].shape[0]
+            if batches.get("_sparse_active_indices") is not None:
+                n_dimer_local = batches["_sparse_active_indices"].shape[0]
+            else:
+                n_dimer_local = n_dimers
+            q_flat = jnp.asarray(output["charges"]).reshape(
+                n_mono_local + n_dimer_local, max_atoms, -1
+            )[..., 0]
+            q_dimer_pad = q_flat[n_mono_local]
+            q_ml_global = map_padded_fragment_charges_to_global(
+                q_dimer_pad,
+                dimer_idx_arr_jnp[0],
+                dimer_atom_mask_jnp[0],
+                total_atoms,
+            )
 
         sparse_active = batches.get("_sparse_active_indices")
         # Scatter sparse dimer output back to full format when applicable
@@ -1984,11 +2094,14 @@ def setup_calculator(
         # No dimer pairs exist for a single monomer (n_monomers < 2); skip ML 2-body
         # path to avoid empty np.concatenate in segment bookkeeping.
         if not doML_dimer or n_dimers == 0:
-            return {
+            out = {
                 **monomer_contribs,
                 "ml_2b_E": 0,
                 "ml_2b_F": jnp.zeros((total_atoms, 3)),
             }
+            if q_ml_global is not None:
+                out["q_ml_global"] = q_ml_global
+            return out
 
         # Calculate dimer contributions
         dimer_contribs = calculate_dimer_contributions(
@@ -2023,7 +2136,7 @@ def setup_calculator(
         combined_forces = monomer_forces_safe + dimer_forces_safe
         combined_forces = jnp.where(jnp.isfinite(combined_forces), combined_forces, 0.0)
                
-        return {
+        out = {
             "out_E": monomer_contribs["out_E"] + dimer_contribs["out_E"],
             "out_F": combined_forces,
             "dH": dimer_contribs["dH"],
@@ -2032,6 +2145,9 @@ def setup_calculator(
             "ml_2b_E": dimer_contribs["ml_2b_E"],
             "ml_2b_F": dimer_contribs["ml_2b_F"]
         }
+        if q_ml_global is not None:
+            out["q_ml_global"] = q_ml_global
+        return out
 
     def calculate_monomer_contributions(
         e: Array, 
@@ -2091,6 +2207,7 @@ def setup_calculator(
         mm_pair_idx: Optional[Array] = None,
         mm_pair_mask: Optional[Array] = None,
         box: Optional[Array] = None,
+        mm_charges: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate MM energy and force contributions (converted to eV).
 
@@ -2098,6 +2215,9 @@ def setup_calculator(
         outside JIT by ``_ensure_mm_fn``) so that cell-list pair generation
         never runs inside a JAX trace. When box is provided (NPT), rebuild
         with that box (no cache).
+
+        ``mm_charges`` (optional): per-atom charges for Coulomb (Mode C).
+        When omitted, the MM fn uses fixed PSF CGenFF charges (Mode A).
         """
         
         from mmml.interfaces.pycharmmInterface.mm_energy_forces import _unpack_mm_energy_forces
@@ -2121,11 +2241,17 @@ def setup_calculator(
                 )
             mm_E, mm_grad, mm_vdw, mm_elec = _unpack_mm_energy_forces(
                 mm_fn_val(
-                positions, mm_pair_idx, mm_pair_mask, box_override=box
-            )
+                    positions,
+                    mm_pair_idx,
+                    mm_pair_mask,
+                    box_override=box,
+                    charges=mm_charges,
+                )
             )
         else:
-            mm_E, mm_grad, mm_vdw, mm_elec = _unpack_mm_energy_forces(mm_fn_val(positions))
+            mm_E, mm_grad, mm_vdw, mm_elec = _unpack_mm_energy_forces(
+                mm_fn_val(positions, charges=mm_charges)
+            )
         
         # Check for NaN/Inf in MM energy and forces
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)

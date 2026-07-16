@@ -1138,7 +1138,11 @@ def build_mm_energy_forces_fn(
     if not _use_dynamic_nbrs and (_n_static_pairs == 0 or int(q_per_system.shape[0]) == 0):
 
         @jax.jit
-        def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array, Array, Array]:
+        def calculate_mm_energy_and_forces(
+            positions: Array,
+            charges: Optional[Array] = None,
+        ) -> Tuple[Array, Array, Array, Array]:
+            del charges  # Mode A/C unused when there are no pairs
             return jnp.array(0.0, dtype=ml_jnp_dtype), jnp.zeros(
                 (total_atoms, 3), dtype=ml_jnp_dtype
             ), jnp.array(0.0, dtype=ml_jnp_dtype), jnp.array(0.0, dtype=ml_jnp_dtype)
@@ -1146,8 +1150,6 @@ def build_mm_energy_forces_fn(
         return calculate_mm_energy_and_forces
 
     if not _use_dynamic_nbrs:
-        q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
-        q_b = jnp.take(q_per_system, pair_idx_atom_atom[:, 1])
         rm_a = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 0])
         rm_b = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 1])
         ep_a = jnp.take(epsilons_per_system, pair_idx_atom_atom[:, 0])
@@ -1161,7 +1163,17 @@ def build_mm_energy_forces_fn(
             _lam_b = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[_pair_j])
             pair_lambda_mm = _lam_a * _lam_b
 
-        pair_qq = q_a * q_b * pair_lambda_mm
+        # Coulomb qq is rebuilt from per-call charges when Mode C
+        # (fixed+latent) supplies q_eff; default is fixed PSF q_per_system.
+        _static_pair_i = pair_idx_atom_atom[:, 0]
+        _static_pair_j = pair_idx_atom_atom[:, 1]
+
+        def _pair_qq_from_charges(charges: Array) -> Array:
+            q_a = jnp.take(charges, _static_pair_i)
+            q_b = jnp.take(charges, _static_pair_j)
+            return q_a * q_b * pair_lambda_mm
+
+        pair_qq = _pair_qq_from_charges(q_per_system)
         pair_rm = rm_a + rm_b
         pair_ep = (ep_a * ep_b) ** 0.5 * pair_lambda_mm
 
@@ -1273,7 +1285,10 @@ def build_mm_energy_forces_fn(
 
     apply_switching_function = get_switching_function()
 
-    def calculate_mm_pair_energies(positions: Array) -> Tuple[Array, Array, Array, Array]:
+    def calculate_mm_pair_energies(
+        positions: Array,
+        charges: Optional[Array] = None,
+    ) -> Tuple[Array, Array, Array, Array]:
         if pbc_cell is not None:
             pos_dst = positions[pair_idx_atom_atom[:, 1]]
             pos_src = positions[pair_idx_atom_atom[:, 0]]
@@ -1295,22 +1310,30 @@ def build_mm_energy_forces_fn(
         if _use_jax_pme_coulomb:
             zeros = jnp.zeros_like(vdw_energies)
             return vdw_energies, zeros, vdw_energies, distances
-        electrostatic_energies = coulomb(distances, pair_qq) * pair_mask
+        q_use = q_per_system if charges is None else charges
+        qq = _pair_qq_from_charges(q_use)
+        electrostatic_energies = coulomb(distances, qq) * pair_mask
         return vdw_energies, electrostatic_energies, vdw_energies + electrostatic_energies, distances
 
-    def switched_mm_energy(positions: Array) -> Array:
-        _, _, pair_energies, distances = calculate_mm_pair_energies(positions)
+    def switched_mm_energy(positions: Array, charges: Optional[Array] = None) -> Array:
+        _, _, pair_energies, distances = calculate_mm_pair_energies(positions, charges)
         return apply_switching_function(positions, pair_energies, distances=distances)
 
-    switched_mm_grad = jax.grad(switched_mm_energy)
+    # Frozen-q forces: differentiate E_MM w.r.t. positions only (matches hybrid_forward).
+    switched_mm_grad = jax.grad(switched_mm_energy, argnums=0)
 
     @jax.jit
-    def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array, Array, Array]:
-        vdw_pe, elec_pe, pair_energies, distances = calculate_mm_pair_energies(positions)
+    def calculate_mm_energy_and_forces(
+        positions: Array,
+        charges: Optional[Array] = None,
+    ) -> Tuple[Array, Array, Array, Array]:
+        vdw_pe, elec_pe, pair_energies, distances = calculate_mm_pair_energies(
+            positions, charges
+        )
         switched_energy = apply_switching_function(positions, pair_energies, distances=distances)
         switched_vdw = apply_switching_function(positions, vdw_pe, distances=distances)
         switched_elec = apply_switching_function(positions, elec_pe, distances=distances)
-        forces = -1.0 * switched_mm_grad(positions)
+        forces = -1.0 * switched_mm_grad(positions, charges)
         forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
         switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
         switched_vdw = jnp.where(jnp.isfinite(switched_vdw), switched_vdw, 0.0)
@@ -1374,6 +1397,7 @@ def build_mm_energy_forces_fn(
             pair_idx: Array,
             pair_mask: Array,
             cell_for_mic: Optional[Array] = None,
+            charges: Optional[Array] = None,
         ) -> Tuple[Array, Array]:
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
@@ -1381,8 +1405,9 @@ def build_mm_energy_forces_fn(
             lam_b = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[pair_j])
             pair_lambda_mm_dyn = lam_a * lam_b * pair_mask
 
-            q_a = jnp.take(q_per_system, pair_i)
-            q_b = jnp.take(q_per_system, pair_j)
+            q_use = q_per_system if charges is None else charges
+            q_a = jnp.take(q_use, pair_i)
+            q_b = jnp.take(q_use, pair_j)
             rm_a = jnp.take(rmins_per_system, pair_i)
             rm_b = jnp.take(rmins_per_system, pair_j)
             ep_a = jnp.take(epsilons_per_system, pair_i)
@@ -1417,6 +1442,7 @@ def build_mm_energy_forces_fn(
             pair_idx: Array,
             pair_mask: Array,
             cell_for_mic: Array,
+            charges: Optional[Array] = None,
         ) -> Array:
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
@@ -1424,7 +1450,11 @@ def build_mm_energy_forces_fn(
             mid_j = _monomer_id_jnp[pair_j]
             pair_dimer_idx_dyn = _dimer_lookup_arr[mid_i, mid_j]
             pair_energies, distances = calculate_mm_pair_energies_dynamic(
-                positions, pair_idx, pair_mask, cell_for_mic=cell_for_mic
+                positions,
+                pair_idx,
+                pair_mask,
+                cell_for_mic=cell_for_mic,
+                charges=charges,
             )
             return apply_switching_function(
                 positions,
@@ -1444,6 +1474,7 @@ def build_mm_energy_forces_fn(
             pair_idx: Array,
             pair_mask: Array,
             box_override: Optional[Array] = None,
+            charges: Optional[Array] = None,
         ) -> Tuple[Array, Array]:
             _cell_raw = box_override if box_override is not None else _pbc_cell_jnp
             _cell_for_mic = _box_to_cell_3x3(_cell_raw)
@@ -1452,6 +1483,7 @@ def build_mm_energy_forces_fn(
                 pair_idx,
                 pair_mask,
                 _cell_for_mic,
+                charges,
             )
             forces = -1.0 * grad
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)

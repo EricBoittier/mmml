@@ -28,6 +28,12 @@ so the product rule contributes a term the model's own forces do not contain::
 
 Dropping that ``ds/dR`` term (tempting, since the model already hands back
 forces) silently breaks energy conservation in the handoff region.
+
+MM Coulomb charges follow the taxonomy in
+:mod:`mmml.models.mm_charge_mode` (and ``docs/hybrid-mm-charges.md``):
+**fixed** (default) or **fixed_plus_latent** when ``charge_correction`` is on.
+**latent** is deferred.  ``include_electrostatics`` inside ``E_ML`` is a
+separate channel.
 """
 
 from __future__ import annotations
@@ -41,7 +47,12 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
 from mmml.models.cgenff_mm import (
     cgenff_mm_energy,
     monomer_centroids,
-    neutralize_per_monomer,
+)
+from mmml.models.mm_charge_mode import (
+    MMChargeMode,
+    apply_mm_charge_mode,
+    mm_charge_mode_from_charge_correction,
+    require_charge_head_for_mode,
 )
 
 Array = jnp.ndarray
@@ -225,17 +236,20 @@ def hybrid_forward(
     n_atoms = batch["R"].shape[0] // int(batch_size)
     pos = batch["R"].reshape(batch_size, n_atoms, 3)
 
-    # MM electrostatics charges: fixed CGenFF, optionally corrected by the model.
-    charges = batch["cgenff_charge"]
-    if charge_correction:
+    # MM electrostatics charges: Mode A (fixed) or Mode C (fixed+latent).
+    mode = mm_charge_mode_from_charge_correction(charge_correction)
+    q_ml = None
+    if mode is MMChargeMode.FIXED_PLUS_LATENT:
         q_ml = out_ab.get("charges")
-        if q_ml is None:
-            raise ValueError(
-                "charge_correction requires a model built with charges=True "
-                "(the charge head is absent, so there is nothing to correct with)."
-            )
-        dq = jnp.asarray(q_ml).reshape(batch_size, n_atoms)
-        charges = charges + jax.vmap(neutralize_per_monomer)(dq, batch["mol_id"])
+        require_charge_head_for_mode(mode, has_charges=q_ml is not None)
+        q_ml = jnp.asarray(q_ml).reshape(batch_size, n_atoms)
+    charges = apply_mm_charge_mode(
+        mode,
+        batch["cgenff_charge"],
+        q_ml,
+        batch["mol_id"],
+        n_monomers=2,
+    )
 
     e_ab = out_ab["energy"].reshape(batch_size)
     e_a = out_a["energy"].reshape(batch_size)
