@@ -57,7 +57,7 @@ options:
                         mm_switch_on (default: 1.5).
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where the complementary handoff ends:
-                        ML scale reaches 0 and MM scale reaches 1 (default: 8).
+                        ML scale reaches 0 and MM scale reaches 1 (default: 6).
   --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
                         COM-distance width (Å) of the MM outer tail after
                         mm_switch_on. Switched MM reaches zero at mm_switch_on +

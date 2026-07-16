@@ -92,7 +92,7 @@ options:
                         to zero at mm_switch_on (default: 0.1).
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where ML→0 and MM→1 in complementary
-                        handoff (default: 8).
+                        handoff (default: 6).
   --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
                         COM-distance width (Å) of the MM outer tail past
                         mm_switch_on (default: 5).

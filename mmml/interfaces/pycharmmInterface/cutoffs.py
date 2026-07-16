@@ -38,8 +38,23 @@ GAMMA_ON: float = 1.0
 GAMMA_OFF: float = 3.0
 
 # Default ML/MM handoff widths (Å); used by md-system, PyCHARMM MLpot, and calculators.
-# extended_mm5 (8 / 5 / 1.5): DCM:3 NVE cutoff sweep @ 5 ps (workflows/dcm3_nve_cutoff_sweep).
-DEFAULT_MM_SWITCH_ON: float = 8.0
+#
+# 6 / 5 / 1.5 (was 8 / 5 / 1.5).  Measured over the 5785 real acodcm training
+# dimers, the ML contributes -- on top of MM -- only 0.0024 eV on average beyond
+# r_com 6.0 A (p90 0.0066), i.e. ~20x below the model's own ~0.05 eV fit error;
+# by 5.0 A that rises to a p90 of 0.023 and a max of 0.152 eV, so 6.0 is the knee.
+# Buys ~2.4x fewer pairs ((6/8)^3) in both training and MD.
+#
+# CAVEAT: the previous 8.0 came from an NVE *energy-conservation* sweep
+# (workflows/dcm3_nve_cutoff_sweep), a stricter criterion than the energy-accuracy
+# measurement above -- a shorter handoff tapers forces more steeply. If NVE drift
+# regresses, this default is the first suspect.
+#
+# Checkpoints record the handoff they were trained with (see
+# hybrid_mm_metadata_dict), and the calculator warns when the active handoff
+# disagrees -- so changing this default cannot silently re-point an existing
+# model at a different PES.
+DEFAULT_MM_SWITCH_ON: float = 6.0
 DEFAULT_MM_SWITCH_WIDTH: float = 5.0
 DEFAULT_ML_SWITCH_WIDTH: float = 1.5
 

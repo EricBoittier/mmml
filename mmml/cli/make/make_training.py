@@ -295,7 +295,17 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         dest="n_res",
         help="Number of refinement residual blocks (not CHARMM residues)",
     )
-    parser.add_argument("--cutoff", type=float, default=8.0)
+    parser.add_argument(
+        "--cutoff",
+        type=float,
+        default=6.0,
+        help=(
+            "PhysNet radial basis cutoff (Angstrom, atom-pair distance). Must be "
+            ">= --mm-switch-on: the ML has to be able to see the interaction out "
+            "to wherever MM takes over, or it is silently truncated inside the "
+            "handoff. Baked into the checkpoint; MD reads it back automatically."
+        ),
+    )
     parser.add_argument(
         "--max-atomic-number",
         "--max_atomic_number",
@@ -708,9 +718,31 @@ def save_train_config(args: argparse.Namespace, path: str | Path) -> None:
         yaml.safe_dump(payload, handle, sort_keys=False, default_flow_style=False)
 
 
+def _validate_handoff_within_cutoff(args: argparse.Namespace) -> None:
+    """The ML basis must reach as far as the handoff, or the fit has a hole.
+
+    ``--cutoff`` is an atom-pair radial cutoff; ``--mm-switch-on`` is a COM
+    distance at which MM takes over. If mm_switch_on > cutoff the model is asked
+    to carry the dimer interaction out to a separation its basis cannot see, and
+    the interaction does not error -- it silently truncates inside the handoff.
+    """
+    if not getattr(args, "hybrid_mm", False):
+        return
+    cutoff = float(getattr(args, "cutoff", 0.0))
+    mm_on = float(getattr(args, "mm_switch_on", 0.0))
+    if mm_on > cutoff:
+        raise ValueError(
+            f"--mm-switch-on ({mm_on:g} A) exceeds --cutoff ({cutoff:g} A): the ML "
+            f"basis dies before MM takes over, so the dimer interaction is silently "
+            f"truncated in the handoff. Set --cutoff >= {mm_on:g}, or lower "
+            f"--mm-switch-on to <= {cutoff:g}."
+        )
+
+
 def validate_train_args(args: argparse.Namespace) -> None:
     if not args.data:
         raise ValueError("--data is required (or set 'data' / 'train' in --config)")
+    _validate_handoff_within_cutoff(args)
     data_paths = normalize_data_paths(args.data)
     if not data_paths:
         raise ValueError("--data must contain at least one NPZ path")

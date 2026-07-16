@@ -979,14 +979,55 @@ def setup_calculator(
                 "Save Time": "—",
             }
         checkpoint_training_units = config.get("training_units") or checkpoint.get("training_units")
+        _ckpt_hybrid_mm = config.get("hybrid_mm") or checkpoint.get("hybrid_mm")
     else:
         try:
             from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
 
             restored = orbax_checkpointer.restore(restart)
             checkpoint_training_units = restored.get("training_units")
+            _ckpt_hybrid_mm = restored.get("hybrid_mm")
         except Exception:
             checkpoint_training_units = None
+            _ckpt_hybrid_mm = None
+
+    # A hybrid model is only valid on the handoff it was trained with: the ML term
+    # learned to COMPLEMENT MM under that specific taper. Deploying it on a
+    # different one silently evaluates a different PES -- exactly what the
+    # train/MD parity gate exists to catch, so say so loudly rather than let a
+    # changed default re-point an old checkpoint. (The default moved 8.0 -> 6.0;
+    # every checkpoint trained before that recorded 8.0.)
+    if isinstance(_ckpt_hybrid_mm, dict) and _ckpt_hybrid_mm.get("hybrid_mm"):
+        _trained = {
+            "mm_switch_on": _ckpt_hybrid_mm.get("mm_switch_on"),
+            "ml_switch_width": _ckpt_hybrid_mm.get("ml_switch_width"),
+            "mm_switch_width": _ckpt_hybrid_mm.get("mm_switch_width"),
+        }
+        _active = {
+            "mm_switch_on": float(mm_switch_on),
+            "ml_switch_width": float(ml_switch_width),
+            "mm_switch_width": float(mm_switch_width),
+        }
+        _bad = {
+            k: (v, _active[k])
+            for k, v in _trained.items()
+            if v is not None and abs(float(v) - _active[k]) > 1e-6
+        }
+        if _bad:
+            import warnings
+
+            _detail = ", ".join(
+                f"{k}: trained={t:g} active={a:g}" for k, (t, a) in _bad.items()
+            )
+            warnings.warn(
+                "Hybrid ML/MM handoff MISMATCH: this checkpoint was trained with a "
+                f"different taper than the one now active ({_detail}). The ML term "
+                "learned to complement MM under the trained handoff, so this "
+                "evaluates a DIFFERENT potential than the model was fit to. Pass "
+                "--mm-switch-on/--ml-switch-width/--mm-switch-width to match the "
+                "checkpoint, or retrain at the new handoff.",
+                stacklevel=2,
+            )
     if (
         ml_energy_conversion_factor == 1.0
         and checkpoint_training_units is not None

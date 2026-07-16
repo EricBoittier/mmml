@@ -829,7 +829,7 @@ options:
                         not affect lambda_ti (see --ml-cutoff).
   --mm-switch-on MM_SWITCH_ON
                         COM handoff distance (Å); ML→0 / MM→1 at this separation
-                        (default: 8).
+                        (default: 6).
   --mm-cutoff, --mm-switch-width MM_SWITCH_WIDTH
                         COM-distance width (Å) of the MM outer tail past
                         mm_switch_on (default: 5).

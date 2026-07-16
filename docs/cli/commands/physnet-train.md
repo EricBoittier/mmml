@@ -120,7 +120,7 @@ options:
                         mm_switch_on (default: 1.5).
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where the complementary handoff ends:
-                        ML scale reaches 0 and MM scale reaches 1 (default: 8).
+                        ML scale reaches 0 and MM scale reaches 1 (default: 6).
   --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
                         COM-distance width (Å) of the MM outer tail after
                         mm_switch_on. Switched MM reaches zero at mm_switch_on +
@@ -149,7 +149,12 @@ options:
   --n-res, --n_res N_RES
                         Number of refinement residual blocks (not CHARMM
                         residues)
-  --cutoff CUTOFF
+  --cutoff CUTOFF       PhysNet radial basis cutoff (Angstrom, atom-pair
+                        distance). Must be >= --mm-switch-on: the ML has to be
+                        able to see the interaction out to wherever MM takes
+                        over, or it is silently truncated inside the handoff.
+                        Baked into the checkpoint; MD reads it back
+                        automatically.
   --max-atomic-number, --max_atomic_number MAX_ATOMIC_NUMBER
   --zbl                 Enable ZBL repulsion in EF model
   --no-zbl              Disable ZBL repulsion in EF model
