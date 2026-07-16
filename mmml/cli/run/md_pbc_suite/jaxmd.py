@@ -1295,7 +1295,10 @@ def main(argv: list[str] | None = None) -> int:
     steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
     run_status = getattr(run_sim, "last_status", "complete")
     run_error = getattr(run_sim, "last_error", None)
-    hdf5_path = Path(getattr(run_sim, "last_hdf5_path", f"{output_prefix}_{args.ensemble}.h5"))
+    _hdf5 = getattr(run_sim, "last_hdf5_path", None)
+    hdf5_path = Path(
+        _hdf5 if _hdf5 else f"{output_prefix}_{args.ensemble}.h5"
+    )
 
     if len(frames) > 0:
         last_xyz = np.asarray(frames[-1], dtype=np.float64)

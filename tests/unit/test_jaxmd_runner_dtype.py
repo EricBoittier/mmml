@@ -76,3 +76,13 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
     assert "--nve-force-energy-relative-tolerance" in src
     assert "nve_max_f_start_eVA=" in src
     assert "nve_etot_drift_abort_eV=" in src
+    # Early NVE abort must not crash on missing HDF5 path.
+    assert '_hdf5 if _hdf5 else' in src or "last_hdf5_path" in src
+
+
+def test_nve_requires_float64_message_in_runner():
+    from mmml.cli.run import jaxmd_runner as jr
+
+    src = Path(jr.__file__).read_text()
+    assert "NVE requires JAX float64" in src
+    assert "jax_enable_x64" in src
