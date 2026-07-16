@@ -63,27 +63,48 @@ from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
-import pycharmm as _pycharmm_mod
-import pycharmm.param as param
-import pycharmm.psf as psf
-import pycharmm.read as read
-import pycharmm.settings as settings
-import pycharmm.coor as coor
-import pycharmm.generate as gen
-import pycharmm.ic as ic
-import pycharmm.minimize as charmm_minimize
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 from mmml.paths import default_meoh_template_pdb
 
-# Direct pycharmm imports succeed even when import_pycharmm deferred libcharmm
-# (MMML_WARMUP_MLPOT_JAX_ONLY); keep pyci globals in sync for helpers.
-pyci.pycharmm = _pycharmm_mod
-pyci.read = read
-
 _parse_composition = parse_composition
-pyci.settings = settings
-pyci.psf = psf
+
+# PyCHARMM loads libcharmm as an import side effect.  Keep this ASE/JAX-MD module
+# importable on hosts without that optional native runtime and cross the boundary
+# only when a CHARMM-backed builder/minimizer is actually used.
+param = psf = read = settings = coor = gen = ic = charmm_minimize = None
+
+
+def _load_pycharmm_modules() -> None:
+    """Load and cache PyCHARMM modules for CHARMM-backed operations."""
+    global param, psf, read, settings, coor, gen, ic, charmm_minimize
+
+    if read is not None:
+        return
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+
+    if not ensure_pycharmm_loaded():
+        raise RuntimeError(
+            "This operation requires the optional CHARMM runtime. Set CHARMM_LIB_DIR "
+            "to the directory containing libcharmm before using CHARMM-backed builders "
+            "or minimization."
+        )
+    import pycharmm as _pycharmm
+    import pycharmm.coor as _coor
+    import pycharmm.generate as _gen
+    import pycharmm.ic as _ic
+    import pycharmm.minimize as _minimize
+    import pycharmm.param as _param
+    import pycharmm.psf as _psf
+    import pycharmm.read as _read
+    import pycharmm.settings as _settings
+
+    param, psf, read, settings = _param, _psf, _read, _settings
+    coor, gen, ic, charmm_minimize = _coor, _gen, _ic, _minimize
+    pyci.pycharmm = _pycharmm
+    pyci.read = _read
+    pyci.settings = _settings
+    pyci.psf = _psf
 
 reset_block()
 reset_block_no_internal()
@@ -103,12 +124,7 @@ def _read_cgenff_toppar(*, enable_drude: bool = False) -> None:
 
 
 def _reset_pycharmm_system() -> None:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-
-    if not ensure_pycharmm_loaded() or pyci.pycharmm is None:
-        import pycharmm as _pycharmm
-
-        pyci.pycharmm = _pycharmm
+    _load_pycharmm_modules()
     pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
     reset_block_no_internal()

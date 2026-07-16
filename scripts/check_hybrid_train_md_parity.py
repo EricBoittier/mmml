@@ -83,6 +83,88 @@ def _pick_dimers(data, n_per_regime=2):
     return picks
 
 
+def _psf_permutation(ds_Z, ds_q, psf_Z, psf_q):
+    """Permutation putting dataset-ordered atoms into PSF order.
+
+    Matched on (Z, charge). Atoms identical in both (e.g. the six methyl H) are
+    interchangeable for the MM term, so any consistent choice among them is fine.
+    """
+    used, perm = set(), []
+    for z, q in zip(psf_Z, psf_q):
+        for j in range(len(ds_Z)):
+            if j in used or int(ds_Z[j]) != int(z) or abs(float(ds_q[j]) - float(q)) > 1e-6:
+                continue
+            perm.append(j)
+            used.add(j)
+            break
+        else:
+            raise ValueError(f"no dataset atom matches PSF atom (Z={z}, q={q})")
+    return np.array(perm)
+
+
+def _to_psf_order(data, i, n_real):
+    """Reindex structure ``i``'s real atoms into PSF order, per monomer.
+
+    The dataset carries CGenFF types/charges matched to each structure's OWN
+    atom order (graph isomorphism at prep time); for ACO that is NOT the PSF
+    order -- the PSF lists O first, the dataset fourth. Training is
+    self-consistent in dataset order and MD is self-consistent in PSF order,
+    but handing dataset-ordered coordinates to a PSF-ordered CHARMM system
+    assigns the right charges to the wrong atoms. DCM's two orders coincide,
+    which is exactly why only ACO failed parity (d_mm ~1e-9 for DCM vs ~2.4e-2
+    for ACO).
+    """
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    psf_q = np.asarray(pycharmm.psf.get_charges())[:n_real]
+    psf_Z = np.asarray(get_Z_from_psf())[:n_real]
+    mol = np.asarray(data["mol_id"])[i][:n_real]
+    ds_Z = np.asarray(data["Z"])[i][:n_real]
+    ds_q = np.asarray(data["cgenff_charge"])[i][:n_real]
+
+    perm = np.empty(n_real, dtype=int)
+    for m in sorted({int(x) for x in mol if x >= 0}):
+        sel = np.where(mol == m)[0]
+        lo, hi = m * len(sel), (m + 1) * len(sel)
+        perm[lo:hi] = sel[_psf_permutation(ds_Z[sel], ds_q[sel], psf_Z[lo:hi], psf_q[lo:hi])]
+    return perm
+
+
+def _md_parts(res) -> dict:
+    """Pull the MD calculator's per-term decomposition out of its ModelOutput.
+
+    Comparing only totals cannot say WHICH term disagrees; ModelOutput already
+    carries the pieces, so read them directly rather than inferring.
+    """
+
+    def g(name):
+        v = getattr(res, name, None)
+        if v is None:
+            return float("nan")
+        arr = np.asarray(v)
+        return float(arr.sum()) if arr.size else float("nan")
+
+    return {
+        "mm_E": g("mm_E"),
+        "mm_vdw": g("mm_vdw_E"),
+        "mm_elec": g("mm_elec_E"),
+        "internal": g("internal_E"),
+        "ml_2b": g("ml_2b_E"),
+        "com_dist": g("com_dist"),
+    }
+
+
+def _train_com_dist(data, i) -> float:
+    """Centroid separation, the switching input on the training side."""
+    mol = np.asarray(data["mol_id"])[i]
+    R = np.asarray(data["R"])[i]
+    if not (mol == 1).any():
+        return float("nan")
+    return float(np.linalg.norm(R[mol == 0].mean(0) - R[mol == 1].mean(0)))
+
+
 def _setup_charmm_psf(resid: str, n_monomers: int) -> int:
     """Generate a CHARMM PSF for ``n_monomers`` copies of ``resid``.
 
@@ -198,7 +280,11 @@ def main() -> int:
     )
     print(f"mm_charge_mode={mode.value}")
 
-    print(f"{'idx':>6} {'species':>9} {'regime':>8} {'E_train':>14} {'E_md':>14} {'diff':>12}  ok")
+    print(
+        f"{'idx':>5} {'species':>8} {'regime':>8} {'dE_tot':>10} | "
+        f"{'e_mm(tr)':>10} {'mm_E(md)':>10} {'d_mm':>10} | "
+        f"{'s_ml':>6} {'rcom(tr)':>9} {'com(md)':>9}"
+    )
     worst = 0.0
     bad = 0
     current_species = None
@@ -212,6 +298,13 @@ def main() -> int:
         n_real = int(np.asarray(data["N"])[i])
         per_mono = n_real // 2
 
+        # The MD side indexes MM types/charges by PSF position, so it must be
+        # handed PSF-ordered coordinates. The training side reads `data`
+        # directly and is unaffected (the model is permutation-equivariant).
+        _perm = _to_psf_order(data, i, n_real)
+        Z = Z[:n_real][_perm]
+        R = R[:n_real][_perm]
+
         # --- training path -------------------------------------------------
         batch = _batch_from_structure(data, i)
         out = hybrid_forward(
@@ -222,6 +315,9 @@ def main() -> int:
             mm_charge_mode=mode.value,
         )
         e_train = float(np.asarray(out["energy"]).reshape(-1)[0])
+        e_mm_train = float(np.asarray(out["e_mm"]).reshape(-1)[0])
+        s_train = float(np.asarray(out["ml_scale"]).reshape(-1)[0])
+        rcom_train = _train_com_dist(data, i)
 
         # --- MD path -------------------------------------------------------
         factory = setup_calculator(
@@ -269,12 +365,19 @@ def main() -> int:
             mm_pair_mask=mm_pair_mask,
         )
         e_md = float(np.asarray(out_md.energy).reshape(-1)[0])
+        md = _md_parts(out_md)
 
         diff = abs(e_train - e_md)
         worst = max(worst, diff)
         ok = diff <= args.tol
         bad += (not ok)
-        print(f"{i:>6} {name:>9} {regime:>8} {e_train:>14.6f} {e_md:>14.6f} {diff:>12.2e}  {'OK' if ok else 'FAIL'}")
+        d_mm = e_mm_train - md["mm_E"]
+        print(
+            f"{i:>5} {name:>8} {regime:>8} {diff:>10.2e} | "
+            f"{e_mm_train:>10.5f} {md['mm_E']:>10.5f} {d_mm:>10.2e} | "
+            f"{s_train:>6.3f} {rcom_train:>9.3f} {md['com_dist']:>9.3f}"
+            f"  {'OK' if ok else 'FAIL'}"
+        )
 
     print(f"\nworst |E_train - E_md| = {worst:.3e} kcal/mol (tol {args.tol})")
     if bad:
