@@ -130,6 +130,11 @@ def hybrid_forward(
     """
 
     def _fwd(atom_mask, batch_mask):
+        # NOTE: deliberately does NOT pass cgenff_type_idx / cgenff_master_*.
+        # The Spooky model has its own in-model CGenFF VdW gated on exactly those
+        # (all default to None), and this function adds E_MM itself -- passing
+        # them would count MM twice.  Pinned by
+        # tests/unit/test_hybrid_energy.py::test_hybrid_forward_never_passes_cgenff_to_the_model
         return model_apply(
             params,
             atomic_numbers=batch["Z"],

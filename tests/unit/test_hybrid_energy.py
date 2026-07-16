@@ -205,3 +205,34 @@ def test_monomer_restricted_masks_isolate_each_monomer():
     dst, src = np.asarray(b["dst_idx"]), np.asarray(b["src_idx"])
     kept = np.asarray(bm) > 0
     assert set(dst[kept].tolist()) <= {0, 1} and set(src[kept].tolist()) <= {0, 1}
+
+
+def test_hybrid_forward_never_passes_cgenff_to_the_model():
+    """Guard against double-counting the MM term.
+
+    The Spooky model has its own in-model CGenFF VdW, gated on
+    cgenff_type_idx/cgenff_master_sigmas/cgenff_master_epsilons -- all of which
+    default to None. hybrid_forward adds E_MM itself, so it must NOT hand those
+    to the model, or MM would be counted twice. Pin the forward's kwargs.
+    """
+    from mmml.models.hybrid_energy import hybrid_forward
+
+    seen = []
+
+    def spy_apply(params, **kw):
+        seen.append(set(kw))
+        n = kw["positions"].shape[0]
+        bs = kw["batch_size"]
+        return {
+            "energy": jnp.zeros((bs, 1)),
+            "forces": jnp.zeros((n, 3)),
+        }
+
+    hybrid_forward(spy_apply, {}, _batch(7.0), 1, SIG, EPS, **KW)
+
+    assert seen, "model was never called"
+    forbidden = {"cgenff_type_idx", "cgenff_master_sigmas", "cgenff_master_epsilons"}
+    for kw in seen:
+        assert not (kw & forbidden), f"hybrid_forward leaked MM args to the model: {kw & forbidden}"
+    # and it really did run the three forwards (AB, A, B)
+    assert len(seen) == 3
