@@ -110,6 +110,29 @@ def test_iter_device_batches_uses_resolved_sizes(trainer):
     assert device_indices.shape == (2, 4)
 
 
+def test_iter_device_batches_sorted_pads_by_default(trainer):
+    buckets = {
+        8: np.arange(8, dtype=np.int64),
+        12: np.arange(8, 16, dtype=np.int64),
+    }
+    pads = [
+        pad
+        for pad, _ in trainer.iter_device_batches(
+            buckets,
+            batch_sizes={8: 2, 12: 2},
+            n_devices=2,
+            rng=np.random.default_rng(0),
+            shuffle_pad_buckets=False,
+        )
+    ]
+    assert pads == [12, 12, 8, 8]
+
+
+def test_apply_auto_batch_margin(trainer):
+    out = trainer.apply_auto_batch_margin({84: 6, 120: 2, 8: 8}, margin=1)
+    assert out == {84: 5, 120: 1, 8: 7}
+
+
 def test_prefetch_matches_eager_stack(trainer):
     data = _flat_data([3, 3, 3, 3, 3, 3, 3, 3])
     buckets = {4: np.arange(8, dtype=np.int64)}
