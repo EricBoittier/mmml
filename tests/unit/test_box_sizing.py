@@ -35,7 +35,9 @@ def test_cubic_box_side_from_target_density_dcm60():
 
 def test_resolve_initial_pbc_box_side_density_mode():
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        cubic_box_side_from_target_density,
         resolve_initial_pbc_box_side,
+        total_mass_g_for_composition,
     )
 
     pos = np.array([[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]])
@@ -47,10 +49,22 @@ def test_resolve_initial_pbc_box_side_density_mode():
         composition="DCM:8",
         n_molecules=8,
         ml_cutoff=12.0,
+        mini_lattice_abnr_allow_density_resize=False,
     )
     side, source = resolve_initial_pbc_box_side(args, pos)
     assert source == "density"
-    assert side > 15.0
+    # Density target holds L: no geometry floor (span must not replace ρ-sized cell).
+    expected = cubic_box_side_from_target_density(
+        n_molecules=8,
+        total_mass_g=total_mass_g_for_composition({"DCM": 8}),
+        target_density_g_cm3=1.326,
+    )
+    assert side == pytest.approx(expected, rel=1e-6)
+
+    # Opt-in resize restores the geometry floor.
+    args.mini_lattice_abnr_allow_density_resize = True
+    side_floor, _ = resolve_initial_pbc_box_side(args, pos)
+    assert side_floor > expected
 
 
 def test_resolve_density_packmol_cube_side_from_composition():
