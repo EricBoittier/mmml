@@ -93,14 +93,20 @@ def hybrid_ewald_coulomb_energy(
     # directly (pbc_utils_jax.pairwise_mic mis-shapes frac_coords's batched
     # solve for this (N,N,3) case -- a pre-existing bug, unrelated to this
     # module; tracked separately rather than relied on here).
-    n_at = pos.shape[0]
     disp = jax.vmap(jax.vmap(lambda a, b: mic_displacement(a, b, cell), in_axes=(None, 0)), in_axes=(0, None))(pos, pos)
-    dij = jnp.linalg.norm(disp, axis=-1)
-    eye = jnp.eye(n_at, dtype=bool)
-    r_safe = jnp.where(eye, 1.0, dij)
+    disp_sq = jnp.sum(disp * disp, axis=-1)
+    # padding atoms are all placed at the same (0, 0, 0) -- clamp the SQUARED
+    # distance before sqrt, not after: jnp.linalg.norm's gradient is 0/0 (NaN)
+    # exactly at disp=0, so sqrt must never see a true zero on any traced
+    # path, even one whose *value* later gets masked to zero by qq=0. Masking
+    # only the output (dij/energy) does not stop the NaN subgradient from
+    # propagating through the unmasked branch during backprop.
+    coincident = disp_sq < 1e-18
+    safe_sq = jnp.where(coincident, 1.0, disp_sq)
+    dij = jnp.sqrt(safe_sq)
     qq = q_full[:, None] * q_full[None, :]
-    real_mat = qq * jax.scipy.special.erfc(alpha * r_safe) / r_safe
-    real_mat = jnp.where(eye, 0.0, real_mat)
+    real_mat = qq * jax.scipy.special.erfc(alpha * dij) / dij
+    real_mat = jnp.where(coincident, 0.0, real_mat)
     if real_space_cutoff_A is not None:
         real_mat = jnp.where(dij < float(real_space_cutoff_A), real_mat, 0.0)
     e_real = 0.5 * jnp.sum(real_mat) * COULOMB_KCAL

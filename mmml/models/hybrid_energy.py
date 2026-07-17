@@ -49,6 +49,9 @@ from mmml.models.cgenff_mm import (
     cgenff_mm_energy,
     monomer_centroids,
 )
+from mmml.models.ewald_hybrid_coulomb import (
+    hybrid_ewald_coulomb_energy,
+)
 from mmml.models.nvalchemiops_hybrid_coulomb import (
     hybrid_nvalchemiops_pme_coulomb_energy,
 )
@@ -143,17 +146,19 @@ class HybridMMConfig:
         lr = str(d.get("lr_solver", "mic") or "mic").strip().lower()
         if lr in ("nvalchemiops", "nval_pme"):
             lr = "nvalchemiops_pme"
-        if lr not in ("mic", "nvalchemiops_pme"):
+        if lr in ("native_ewald", "jit_ewald"):
+            lr = "ewald"
+        if lr not in ("mic", "nvalchemiops_pme", "ewald"):
             raise ValueError(
-                f"hybrid lr_solver must be mic|nvalchemiops_pme; got {lr!r}"
+                f"hybrid lr_solver must be mic|nvalchemiops_pme|ewald; got {lr!r}"
             )
         d["lr_solver"] = lr
-        if lr == "nvalchemiops_pme":
+        if lr in ("nvalchemiops_pme", "ewald"):
             d["include_lj"] = False
             box = d.get("pme_box_length", None)
             if box is None or float(box) <= 0.0:
                 raise ValueError(
-                    "lr_solver=nvalchemiops_pme requires pme_box_length > 0"
+                    f"lr_solver={lr!r} requires pme_box_length > 0"
                 )
             d["pme_box_length"] = float(box)
         else:
