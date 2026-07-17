@@ -192,3 +192,106 @@ def test_ase_face_jax_pme_differs_from_mic_and_is_finite():
     # periodic Ewald/PME) must give a different energy -- if these matched,
     # the lr_solver kwarg would not actually be reaching the reference call.
     assert e_pme != pytest.approx(e_mic, rel=1e-6)
+
+
+# --- lr_solver="ewald" (jit-native, closes the jax_pme/jax.pure_callback gap) ---
+
+
+def _ewald_system_and_ref(seed=7):
+    """Box well above 2*cutnb (no MIC-boundary ambiguity), no exclusions (the
+    jax_pme reference has no exclusions parameter at all -- see
+    ewald_native.py's module docstring -- so this is the only apples-to-apples
+    comparison available)."""
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        CharmmNbondSettings,
+        NonbondedSystemData,
+    )
+
+    rng = np.random.default_rng(seed)
+    box = np.diag([26.0, 26.0, 26.0])
+    n_mol, n_per_mol = 6, 3
+    n = n_mol * n_per_mol
+    pos = rng.uniform(0.5, 25.5, size=(n, 3))
+    mol_id = np.repeat(np.arange(n_mol), n_per_mol).astype(np.int32)
+    charges = rng.uniform(-0.5, 0.5, size=n)
+    for m in range(n_mol):
+        sel = mol_id == m
+        charges[sel] -= charges[sel].mean()
+    epsilon = rng.uniform(0.05, 0.2, size=n)
+    rmin_half = rng.uniform(1.2, 2.0, size=n)
+    at_codes = np.arange(n, dtype=np.int32)
+
+    ff = FFParams(
+        charges=charges, epsilon=epsilon, rmin_half=rmin_half, at_codes=at_codes,
+        exclusions=np.empty((0, 2), dtype=np.int32), e14_pairs=np.empty((0, 2), dtype=np.int32),
+    )
+    system = MolecularSystem(R=pos, Z=at_codes, box=box, mol_id=mol_id, ff_params=ff)
+    settings = CharmmNbondSettings(cutnb=9.0, ctonnb=7.5, ctofnb=9.0)
+    nbdata = NonbondedSystemData(
+        charges=charges, at_codes=at_codes, epsilon=epsilon, rmin=rmin_half,
+        excluded_pairs=frozenset(), e14_pairs=frozenset(),
+    )
+    return system, settings, nbdata
+
+
+def test_ewald_matches_jax_pme_reference():
+    """The jit-native lr_solver="ewald" must agree with the trusted jax_pme
+    host path (nonbonded_energy_and_forces, lr_solver="jax_pme") to tight
+    tolerance -- this is the actual physics check, not just "it runs"."""
+    pytest.importorskip("jaxpme")
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        nonbonded_energy_and_forces,
+    )
+
+    system, settings, nbdata = _ewald_system_and_ref()
+    terms_ref, forces_ref = nonbonded_energy_and_forces(
+        np.asarray(system.R), nbdata, np.asarray(system.box), settings,
+        molecule_id=np.asarray(system.mol_id), lr_solver="jax_pme",
+        jax_pme_method="ewald", jax_pme_sr_cutoff_A=settings.cutnb,
+        jax_pme_dispersion=False,
+    )
+    e_ref = float(terms_ref["total"])
+
+    term = MMNonbondedTerm(settings, lr_solver="ewald")
+    fns = term.make(system, EnergyContext())
+    pi, pj, e14, vdw14 = term._host_pairs(np.asarray(system.R), settings, system.ff_params, system.mol_id)
+    R = jnp.asarray(system.R)
+    kw = dict(pair_i=jnp.asarray(pi), pair_j=jnp.asarray(pj),
+              e14_scale=jnp.asarray(e14), vdw14_scale=jnp.asarray(vdw14))
+
+    e_new = float(fns.jax_energy_fn(R, **kw)) / KCAL_MOL_TO_EV
+    assert e_new == pytest.approx(e_ref, rel=1e-3)
+
+    forces_new = -jax.grad(lambda r: fns.jax_energy_fn(r, **kw))(R)
+    forces_new_kcal = np.asarray(forces_new) / KCAL_MOL_TO_EV
+    assert np.allclose(forces_new_kcal, np.asarray(forces_ref), atol=1e-2)
+
+
+def test_ewald_jit_and_grad_are_finite():
+    """The whole point of lr_solver="ewald": jax.jit + jax.grad must both work
+    end-to-end (jax_pme cannot do this -- jax.pure_callback has no VJP)."""
+    system, settings, nbdata = _ewald_system_and_ref(seed=13)
+    term = MMNonbondedTerm(settings, lr_solver="ewald")
+    fns = term.make(system, EnergyContext())
+    pi, pj, e14, vdw14 = term._host_pairs(np.asarray(system.R), settings, system.ff_params, system.mol_id)
+    R = jnp.asarray(system.R)
+
+    def f(r, pi, pj, e14, vdw14):
+        return fns.jax_energy_fn(r, pair_i=pi, pair_j=pj, e14_scale=e14, vdw14_scale=vdw14)
+
+    args = (R, jnp.asarray(pi), jnp.asarray(pj), jnp.asarray(e14), jnp.asarray(vdw14))
+    e_plain = float(f(*args))
+    e_jit = float(jax.jit(f)(*args))
+    assert e_jit == pytest.approx(e_plain, rel=1e-9)
+
+    forces = jax.jit(jax.grad(f))(*args)
+    assert forces.shape == R.shape
+    assert bool(jnp.all(jnp.isfinite(forces)))
+
+
+def test_ewald_rejected_paths_still_raise():
+    """jax_pme/nvalchemiops_pme/scafacos are unaffected by adding "ewald"."""
+    system, settings, nbdata = _ewald_system_and_ref()
+    fn = MMNonbondedTerm(settings, lr_solver="jax_pme").make(system, EnergyContext()).jax_energy_fn
+    with pytest.raises(NotImplementedError, match="lr_solver"):
+        fn(jnp.asarray(system.R))
