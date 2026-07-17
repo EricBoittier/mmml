@@ -462,12 +462,20 @@ def test_nvalchemiops_pme_eval_defaults_to_gpu(monkeypatch):
     assert lrb.nvalchemiops_pme_device_name() == "cpu"
 
 
-def test_nvalchemiops_pme_train_isolate_defaults_on(monkeypatch):
+def test_nvalchemiops_pme_train_isolate_defaults_cpu_train(monkeypatch):
     from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
 
     monkeypatch.delenv("MMML_NVALCHEMIOPS_PME_ISOLATE", raising=False)
+    assert lrb.nvalchemiops_pme_train_isolate_mode() == "cpu_train"
+    assert lrb.nvalchemiops_pme_train_wants_cpu_steps() is True
     assert lrb.nvalchemiops_pme_train_isolate_enabled() is True
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "1")
+    assert lrb.nvalchemiops_pme_train_isolate_mode() == "cpu_train"
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "spawn")
+    assert lrb.nvalchemiops_pme_train_isolate_mode() == "spawn"
+    assert lrb.nvalchemiops_pme_train_wants_cpu_steps() is False
     monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "0")
+    assert lrb.nvalchemiops_pme_train_isolate_mode() == "off"
     assert lrb.nvalchemiops_pme_train_isolate_enabled() is False
 
 
@@ -560,10 +568,10 @@ def test_nvalchemiops_pme_energy_jittable_with_force_vjp(monkeypatch):
         assert rel < 1e-5, f"fd={fd}, dE={analytic}, rel={rel}, E={e}"
 
 
-def test_train_callback_uses_isolated_path_when_enabled(monkeypatch):
+def test_train_callback_uses_isolated_path_when_spawn(monkeypatch):
     from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "1")
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "spawn")
     called = {}
 
     def _isolated(pos, chg, **kwargs):
@@ -583,4 +591,30 @@ def test_train_callback_uses_isolated_path_when_enabled(monkeypatch):
         )
     assert called["yes"] is True
     assert e == 1.0
+    assert f.shape == (2, 3)
+
+
+def test_train_callback_uses_concrete_path_for_cpu_train(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "cpu_train")
+    called = {}
+
+    def _concrete(pos, chg, **kwargs):
+        called["yes"] = True
+        n = np.asarray(pos).shape[0]
+        return 2.0, np.zeros((n, 3), dtype=np.float64)
+
+    with mock.patch.object(
+        lrb, "_nvalchemiops_pme_energy_forces_concrete", side_effect=_concrete
+    ):
+        e, f = lrb._nvalchemiops_pme_energy_forces_for_train_callback(
+            np.zeros((2, 3)),
+            np.array([1.0, -1.0]),
+            box_length_A=20.0,
+            accuracy=1e-4,
+            real_space_cutoff_A=8.0,
+        )
+    assert called["yes"] is True
+    assert e == 2.0
     assert f.shape == (2, 3)

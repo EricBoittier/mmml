@@ -302,8 +302,8 @@ The **Hybrid ML/MM setup** dashboard (always printed at calculator init) include
 | Segfault under MPI + ScaFaCoS                | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML)          |
 | `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses `jax.pure_callback` inside JIT)      |
 | `No FFI handler … _compute_naive_num_shifts_* on … Host` under `nvalchemiops_pme` train | Warp NL is CUDA-only; train on a GPU node with CUDA jaxlib. Do **not** set `MMML_NVALCHEMIOPS_PME_DEVICE=cpu`. |
-| `time+` frozen / first `jit_train_step` never returns with `nvalchemiops_pme` | Nested CUDA JAX inside `pure_callback` deadlocks the parent XLA executor. Pull latest MMML (spawn-isolated PME worker; look for `Warming nvalchemiops PME spawn worker`). Keep `MMML_NVALCHEMIOPS_PME_ISOLATE=1` (default). Or train with `--lr-solver ewald` (same full-box contract, jit-native). |
-| `CUDA_ERROR_DEVICE_UNAVAILABLE` in nvalchemiops PME spawn worker | Parent already owns GPU 0 (often `CUDA_VISIBLE_DEVICES=0`). Point the worker at a free GPU: `MMML_NVALCHEMIOPS_PME_WORKER_GPU=1` (default on multi-GPU nodes is the last physical GPU). Do not rely on the child inheriting `CUDA_VISIBLE_DEVICES=0`. |
+| `time+` frozen / first `jit_train_step` never returns with `nvalchemiops_pme` | Nested CUDA JAX inside `pure_callback` deadlocks the parent GPU XLA executor. Default isolate mode is `cpu_train`: jit train/eval on CPU, PME callback on GPU. Look for `jit train/eval on CPU; PME callback on GPU`. Or use `--lr-solver ewald` (same full-box contract, fully jit-native). |
+| `CUDA_ERROR_DEVICE_UNAVAILABLE` in nvalchemiops PME spawn worker | Spawn after the parent has initialized CUDA often fails on Exclusive_Process / multi-GPU nodes. Leave `MMML_NVALCHEMIOPS_PME_ISOLATE` unset (default `cpu_train`). Do not set `=spawn` unless you start the worker before any JAX CUDA init. |
 
 
 ---

@@ -642,17 +642,44 @@ def nvalchemiops_pme_device_name() -> str:
     return (os.environ.get("MMML_NVALCHEMIOPS_PME_DEVICE") or "gpu").strip().lower()
 
 
-def nvalchemiops_pme_train_isolate_enabled() -> bool:
-    """Whether train-step PME runs in a spawn worker (default on).
+def nvalchemiops_pme_train_isolate_mode() -> str:
+    """How to avoid nested-GPU XLA deadlock for nvalchemiops train PME.
 
-    Nested CUDA JAX inside ``jax.pure_callback`` while the parent ``jit_train_step``
-    holds the GPU XLA executor stalls forever (``time+`` frozen).  Isolation
-    gives the Warp PME path its own process/JAX runtime.  Set
-    ``MMML_NVALCHEMIOPS_PME_ISOLATE=0`` only for debugging (will deadlock under
-    GPU train).
+    Returns one of:
+
+    * ``cpu_train`` (default) — jitted train/eval steps run on CPU; the PME
+      ``pure_callback`` evaluates nvalchemiops on GPU **in-process**.  Avoids
+      both the nested-GPU deadlock and spawn-child
+      ``CUDA_ERROR_DEVICE_UNAVAILABLE`` (common once the parent has already
+      initialized CUDA, including Exclusive_Process nodes).
+    * ``spawn`` — separate process on
+      ``MMML_NVALCHEMIOPS_PME_WORKER_GPU`` (often fails if parent already
+      touched CUDA).
+    * ``off`` — in-process GPU PME while train stays on GPU (deadlocks).
+
+    Set ``MMML_NVALCHEMIOPS_PME_ISOLATE`` to ``cpu_train`` / ``spawn`` /
+    ``0``.
     """
-    raw = (os.environ.get("MMML_NVALCHEMIOPS_PME_ISOLATE") or "1").strip().lower()
-    return raw not in ("0", "false", "no", "off")
+    raw = (os.environ.get("MMML_NVALCHEMIOPS_PME_ISOLATE") or "cpu_train").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return "off"
+    # Explicit spawn only — bare "1"/"true" keep the safe cpu_train default
+    # (older docs said ISOLATE=1 meaning "enabled").
+    if raw == "spawn":
+        return "spawn"
+    if raw in ("1", "true", "yes", "on", "cpu", "cpu_train", "host_train"):
+        return "cpu_train"
+    return "cpu_train"
+
+
+def nvalchemiops_pme_train_isolate_enabled() -> bool:
+    """True unless isolate mode is explicitly ``off``."""
+    return nvalchemiops_pme_train_isolate_mode() != "off"
+
+
+def nvalchemiops_pme_train_wants_cpu_steps() -> bool:
+    """True when jitted train/eval should run on CPU (PME callback uses GPU)."""
+    return nvalchemiops_pme_train_isolate_mode() == "cpu_train"
 
 
 # Persistent spawn worker for train-callback PME (avoids nested-GPU XLA deadlock).
@@ -858,8 +885,8 @@ def _nvalchemiops_pme_energy_forces_for_train_callback(
     accuracy: float | None = None,
     real_space_cutoff_A: float | None = None,
 ) -> tuple[float, np.ndarray]:
-    """Train-callback entry: isolated by default, in-process when isolate=0."""
-    if nvalchemiops_pme_train_isolate_enabled():
+    """Train-callback entry: spawn worker or in-process GPU PME."""
+    if nvalchemiops_pme_train_isolate_mode() == "spawn":
         return _nvalchemiops_pme_energy_forces_isolated(
             positions_A,
             charges_e,
@@ -883,8 +910,9 @@ def warmup_nvalchemiops_pme_train_worker(
     accuracy: float | None = None,
     real_space_cutoff_A: float | None = None,
 ) -> None:
-    """Start + compile the spawn PME worker before the first train step."""
-    if not nvalchemiops_pme_train_isolate_enabled():
+    """Warm PME before the first train step (spawn worker or in-process GPU)."""
+    mode = nvalchemiops_pme_train_isolate_mode()
+    if mode == "off":
         return
     n = max(2, int(n_atoms))
     pos = np.zeros((n, 3), dtype=np.float64)
@@ -892,24 +920,39 @@ def warmup_nvalchemiops_pme_train_worker(
     chg = np.zeros(n, dtype=np.float64)
     chg[0] = 1.0
     chg[1] = -1.0
-    gpu = nvalchemiops_pme_worker_cuda_visible()
+    if mode == "spawn":
+        gpu = nvalchemiops_pme_worker_cuda_visible()
+        print(
+            "Warming nvalchemiops PME spawn worker "
+            f"(CUDA_VISIBLE_DEVICES={gpu}; avoids nested-GPU deadlock in "
+            "jit_train_step)...",
+            flush=True,
+        )
+        _nvalchemiops_pme_energy_forces_isolated(
+            pos,
+            chg,
+            box_length_A=float(box_length_A),
+            accuracy=accuracy,
+            real_space_cutoff_A=real_space_cutoff_A,
+        )
+        print(
+            f"nvalchemiops PME spawn worker ready (physical GPU {gpu}).",
+            flush=True,
+        )
+        return
     print(
-        "Warming nvalchemiops PME spawn worker "
-        f"(CUDA_VISIBLE_DEVICES={gpu}; avoids nested-GPU deadlock in "
-        "jit_train_step)...",
+        "Warming nvalchemiops PME on GPU "
+        "(jit train/eval will run on CPU; PME callback stays on GPU)...",
         flush=True,
     )
-    _nvalchemiops_pme_energy_forces_isolated(
+    _nvalchemiops_pme_energy_forces_concrete(
         pos,
         chg,
         box_length_A=float(box_length_A),
         accuracy=accuracy,
         real_space_cutoff_A=real_space_cutoff_A,
     )
-    print(
-        f"nvalchemiops PME spawn worker ready (physical GPU {gpu}).",
-        flush=True,
-    )
+    print("nvalchemiops PME GPU warmup done.", flush=True)
 
 
 def _nvalchemiops_pme_resolve_device():

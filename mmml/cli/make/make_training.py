@@ -1296,45 +1296,73 @@ def main_loop(args):
             k for k in HYBRID_MM_BATCH_KEYS if k not in data_keys
         )
 
-    ema_params, best_loss, run_ckpt_dir = train_model(
-        train_key,
-        model,
-        train_data,
-        valid_data, 
-        learning_rate=args.learning_rate,
-        batch_size=args.batch_size,
-        num_atoms=natoms,
-        energy_weight=args.energy_weight,
-        forces_weight=args.forces_weight,
-        dipole_weight=args.dipole_weight,
-        charges_weight=args.charges_weight,
-        restart=args.restart,
-        ema_decay=args.ema_decay,
-        conversion=conversion,
-        print_freq=args.print_freq,
-        name=args.tag,
-        best=args.best,
-        optimizer=args.optimizer,
-        transform=args.transform,
-        schedule_fn=args.schedule_fn,
-        objective=args.objective,
-        ckpt_dir=ckpt_dir,
-        log_tb=False,
-        batch_method=args.batch_method,
-        batch_args_dict=batch_args_dict,
-        data_keys=data_keys,
-        hybrid_mm=hybrid_mm,
-        num_epochs=args.num_epochs,
-        early_stop_patience=args.early_stop_patience,
-        init_params=init_params,
-        rot_augment=args.rot_augment,
-        rot_perturbation=args.rot_perturbation,
-        save_every_epoch=args.save_every_epoch,
-        profile_epoch_timing=args.profile_epoch_timing,
-        teacher_params=teacher_params if args.distill else None,
-        distill_alpha=args.distill_alpha,
-        distill_targets=distill_targets,
+    # nvalchemiops PME cannot nest on the same GPU XLA executor as jit_train_step
+    # (deadlock), and a spawn child often gets CUDA_ERROR_DEVICE_UNAVAILABLE after
+    # the parent has already initialized CUDA.  Default isolate mode runs the
+    # jitted train/eval steps on CPU while the PME pure_callback uses GPU.
+    from contextlib import nullcontext
+
+    import jax
+
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        nvalchemiops_pme_train_wants_cpu_steps,
     )
+
+    _cpu_train = bool(
+        hybrid_mm is not None
+        and str(hybrid_mm.get("lr_solver", "mic")).lower() == "nvalchemiops_pme"
+        and nvalchemiops_pme_train_wants_cpu_steps()
+    )
+    _train_device_ctx = (
+        jax.default_device(jax.devices("cpu")[0]) if _cpu_train else nullcontext()
+    )
+    if _cpu_train:
+        print(
+            "nvalchemiops_pme: jit train/eval on CPU; PME callback on GPU "
+            "(set MMML_NVALCHEMIOPS_PME_ISOLATE=spawn to try a second-GPU worker).",
+            flush=True,
+        )
+
+    with _train_device_ctx:
+        ema_params, best_loss, run_ckpt_dir = train_model(
+            train_key,
+            model,
+            train_data,
+            valid_data,
+            learning_rate=args.learning_rate,
+            batch_size=args.batch_size,
+            num_atoms=natoms,
+            energy_weight=args.energy_weight,
+            forces_weight=args.forces_weight,
+            dipole_weight=args.dipole_weight,
+            charges_weight=args.charges_weight,
+            restart=args.restart,
+            ema_decay=args.ema_decay,
+            conversion=conversion,
+            print_freq=args.print_freq,
+            name=args.tag,
+            best=args.best,
+            optimizer=args.optimizer,
+            transform=args.transform,
+            schedule_fn=args.schedule_fn,
+            objective=args.objective,
+            ckpt_dir=ckpt_dir,
+            log_tb=False,
+            batch_method=args.batch_method,
+            batch_args_dict=batch_args_dict,
+            data_keys=data_keys,
+            hybrid_mm=hybrid_mm,
+            num_epochs=args.num_epochs,
+            early_stop_patience=args.early_stop_patience,
+            init_params=init_params,
+            rot_augment=args.rot_augment,
+            rot_perturbation=args.rot_perturbation,
+            save_every_epoch=args.save_every_epoch,
+            profile_epoch_timing=args.profile_epoch_timing,
+            teacher_params=teacher_params if args.distill else None,
+            distill_alpha=args.distill_alpha,
+            distill_targets=distill_targets,
+        )
 
     if args.metrics_plot and run_ckpt_dir is not None:
         try:
