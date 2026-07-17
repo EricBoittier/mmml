@@ -3965,18 +3965,19 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "MM nonbond backend for MLpot. jax_mic (default): switched JAX LJ+Coulomb "
             "to ~13 Å; use --lr-solver jax_pme for jax-pme Coulomb instead of MIC. "
-            "periodic_external: external Coulomb (jax_pme, nvalchemiops_pme, or scafacos) "
-            "+ CHARMM IMAGE VDW."
+            "periodic_external: external Coulomb (jax_pme, nvalchemiops_pme, ewald, or "
+            "scafacos) + CHARMM IMAGE VDW."
         ),
     )
     group.add_argument(
         "--lr-solver",
         type=str,
-        choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme"),
+        choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme", "ewald"),
         default=None,
         help=(
             "Long-range Coulomb solver (default: mic; env MMML_LR_SOLVER overrides). "
-            "Opt in: jax_pme, scafacos, nvalchemiops_pme. Legacy alias: auto (= mic)."
+            "Opt in: jax_pme, scafacos, nvalchemiops_pme, ewald (pure JAX, no "
+            "external PME library / CUDA requirement). Legacy alias: auto (= mic)."
         ),
     )
     group.add_argument(
