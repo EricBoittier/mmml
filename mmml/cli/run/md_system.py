@@ -1103,14 +1103,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-bfgs",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=(
-            "Never run ASE BFGS during pre-minimization (FIRE only). Plain ASE BFGS "
-            "trusts a quadratic model of the surface and takes long steps; on an ML "
-            "PES it can walk downhill into a hole outside the training data -- "
-            "observed: E -7427.7 -> -7545.8 eV while max|F| rose 0.199 -> 36.3, at "
-            "0 K, so no thermal barrier crossing is needed. FIRE stayed well-behaved "
-            "on the same system. Overrides --pre-min-ase-order."
+            "Skip ASE BFGS during pre-minimization (FIRE only). Default ON: plain ASE BFGS trusts a quadratic model and takes long steps; on a hybrid ML PES it descends into a hole outside the training data. Observed at 0 K on a real acetone box: E -7427.7 -> -7545.8 eV while max|F| rose 0.199 -> 36.3, i.e. reachable from the relaxed structure by following forces, no thermal barrier needed. FIRE converged cleanly on the same system (1.40 -> 0.17). Pass --no-skip-bfgs to re-enable once BFGS is fixed (the line search + force-spike abort in mlpot/calculator_minimize.py are the likely fix). Overrides --pre-min-ase-order."
         ),
     )
     parser.add_argument(
