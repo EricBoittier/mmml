@@ -26,8 +26,10 @@ usage: mmml run [-h] --pdbfile PDBFILE --checkpoint CHECKPOINT [--validate]
                 [--mm-switch-width MM_SWITCH_WIDTH] [--no-complementary-handoff]
                 [--include-mm] [--skip-ml-dimers] [--mm-r-min Å]
                 [--ml-batch-size N] [--ml-gpu-count N]
-                [--use-ema | --no-use-ema] [--debug] [--temperature TEMPERATURE]
-                [--timestep TIMESTEP] [--nsteps_jaxmd NSTEPS_JAXMD]
+                [--use-ema | --no-use-ema]
+                [--lr-solver {auto,mic,jax_pme,nvalchemiops_pme,ewald,scafacos}]
+                [--debug] [--temperature TEMPERATURE] [--timestep TIMESTEP]
+                [--nsteps_jaxmd NSTEPS_JAXMD]
                 [--steps-per-recording STEPS_PER_RECORDING]
                 [--output-prefix OUTPUT_PREFIX] [--nsteps_ase NSTEPS_ASE]
                 [--optimize-monomers] [--ensemble ENSEMBLE]
@@ -116,6 +118,15 @@ options:
   --use-ema, --no-use-ema
                         Deploy the checkpoint's EMA params (default: on; Orbax
                         only). Use --no-use-ema for the live training weights.
+  --lr-solver, --lr_solver {auto,mic,jax_pme,nvalchemiops_pme,ewald,scafacos}
+                        Long-range Coulomb backend (default: mic, the switched
+                        pair loop). ewald: jit-native, pure JAX full-box Ewald
+                        over ALL atoms (no exclusions, no switching, no LJ) --
+                        the same operator physnet-train --lr-solver ewald trains
+                        against; use this to deploy a checkpoint trained that
+                        way with --backend jaxmd/ase (no CHARMM callback in the
+                        loop, so --mm-nonbond-mode periodic_external does not
+                        apply here -- this flag alone is enough).
   --debug               Enable verbose debug output inside the calculator
                         factory.
   --temperature TEMPERATURE
