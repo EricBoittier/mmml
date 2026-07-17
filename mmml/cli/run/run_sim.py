@@ -244,6 +244,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Parallel PhysNet chunks on N local GPUs (default 1; or MMML_MLPOT_N_GPUS).",
     )
     parser.add_argument(
+        "--use-ema",
+        action="store_true",
+        help="Deploy the checkpoint's EMA params instead of the live training "
+        "params (Orbax checkpoints only). Live params can swing several-fold "
+        "epoch-to-epoch in the unconstrained extrapolation region MD visits; "
+        "EMA smooths that out.",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable verbose debug output inside the calculator factory.",
@@ -578,6 +586,7 @@ def run(args: argparse.Namespace) -> int:
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=_resolve_ml_gpu_count(getattr(args, "ml_gpu_count", None)),
         mm_r_min=getattr(args, "mm_r_min", None),
+        ml_use_ema=getattr(args, "use_ema", False),
     )
     
 

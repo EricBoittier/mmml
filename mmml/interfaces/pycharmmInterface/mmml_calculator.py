@@ -395,6 +395,7 @@ def setup_calculator(
     mbd_spin: float = 1.0,
     mm_charge_correction: bool = False,
     mm_charge_mode: str | None = None,
+    ml_use_ema: bool = False,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -428,6 +429,11 @@ def setup_calculator(
         mm_charge_mode: Explicit mode string
             (``fixed`` / ``latent`` / ``fixed_plus_latent``).  Overrides the
             bool when set.  Modes B/C are dimer-only.
+        ml_use_ema: Load the checkpoint's EMA params instead of the live
+            training params (Orbax checkpoints only). Live params can swing
+            several-fold epoch-to-epoch in the unconstrained extrapolation
+            region MD visits; EMA smooths that out. Default False so existing
+            deployments are unaffected.
         ml_gpu_count: Parallel PhysNet chunks across this many local JAX GPUs
             (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``MMML_MLPOT_N_GPUS``.
         ml_max_active_dimers: Cap on sparse ML dimer slots per step. Periodic
@@ -874,7 +880,7 @@ def setup_calculator(
             ) from e
         # Setup monomer model using orbax
         params, MODEL, checkpoint_meta = get_params_model(
-            restart, natoms=max_atoms, quiet=True, return_meta=True
+            restart, natoms=max_atoms, quiet=True, return_meta=True, prefer_ema=ml_use_ema
         )
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
     if not _jax_mm_spoof_mode:
