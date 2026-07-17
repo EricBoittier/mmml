@@ -369,6 +369,134 @@ def _uhat_exchange_pairs(
     return np.asarray(xs), np.asarray(ys)
 
 
+def _mean_center_xy(
+    xs: np.ndarray, ys: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Subtract one scalar mean from both axes (preserves the y=x diagonal)."""
+    if xs.size == 0:
+        return xs, ys, 0.0
+    mu = float(np.mean(np.concatenate([xs, ys])))
+    return xs - mu, ys - mu, mu
+
+
+def _draw_exchange_symmetry_scatter(
+    ax,
+    *,
+    rays: dict[str, np.ndarray],
+    dirs: np.ndarray,
+    tags: list[tuple[str, int, str]],
+    tag_dirs: dict[str, int],
+    tag_color: dict[str, str],
+    ref_rays: dict[str, np.ndarray] | None,
+    lims: list[float] | None,
+    mean_center: bool = False,
+) -> None:
+    """û/−û exchange scatter; optional per-dataset mean centering."""
+    e_map, _ = _ray_lookup_maps(rays)
+    xs, ys = _uhat_exchange_pairs(rays, dirs)
+    mu_pri = 0.0
+    if mean_center and xs.size:
+        xs, ys, mu_pri = _mean_center_xy(xs, ys)
+    xr = yr = np.asarray([])
+    if xs.size:
+        ax.scatter(xs, ys, s=10, c="#5D6D7E", alpha=0.45, edgecolors="none", label="ML")
+    if ref_rays is not None:
+        xr, yr = _uhat_exchange_pairs(ref_rays, dirs)
+        if mean_center and xr.size:
+            xr, yr, _ = _mean_center_xy(xr, yr)
+        if xr.size:
+            ax.scatter(
+                xr, yr, s=14, marker="*",
+                facecolors="#F7DC6F", edgecolors="black", linewidths=0.3, alpha=0.8,
+                label="ref",
+            )
+    for tag, ori, _ in tags:
+        di = tag_dirs[tag]
+        anti = _antipode_dir(dirs, di)
+        e1 = e_map.get((ori, di))
+        e2 = e_map.get((ori, anti))
+        if e1 is not None and e2 is not None:
+            if mean_center:
+                e1 = float(e1) - mu_pri
+                e2 = float(e2) - mu_pri
+            ax.scatter(
+                [e1], [e2], s=70, facecolors=tag_color[tag],
+                edgecolors="black", linewidths=0.6, zorder=5,
+            )
+            ax.text(e1, e2, f" {tag}", color=tag_color[tag], fontsize=8, fontweight="bold")
+    if lims is None:
+        all_xy: list[float] = []
+        if xs.size:
+            all_xy.extend(
+                [float(xs.min()), float(xs.max()), float(ys.min()), float(ys.max())]
+            )
+        if xr.size:
+            all_xy.extend(
+                [float(xr.min()), float(xr.max()), float(yr.min()), float(yr.max())]
+            )
+        if all_xy:
+            pad = 0.05 * (max(all_xy) - min(all_xy) + 1e-6)
+            lims = [min(all_xy) - pad, max(all_xy) + pad]
+        else:
+            lims = [-1.0, 1.0]
+    ax.plot(lims, lims, color=STATUS_COLORS["neutral"], lw=0.8, ls="--")
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
+    ax.set_aspect("equal")
+    if mean_center:
+        ax.set_xlabel("e_min(+u) − μ")
+        ax.set_ylabel("e_min(−u) − μ")
+        title = "exchange symmetry (mean-centered)"
+        if xs.size:
+            title += f"\nμ_ML={mu_pri:.2f} kcal/mol (each set centered)"
+        ax.set_title(title)
+        ax.legend(fontsize=6, frameon=False, loc="best")
+    else:
+        ax.set_xlabel("e_min(+u)")
+        ax.set_ylabel("e_min(-u)")
+        ax.set_title("exchange symmetry")
+    ax.tick_params(labelsize=7)
+
+
+def plot_exchange_symmetry_xy(
+    *,
+    rays: dict[str, np.ndarray],
+    out: Path,
+    how: str = "min",
+    shared: SharedScales | None = None,
+    ref_rays: dict[str, np.ndarray] | None = None,
+    mean_center: bool = False,
+) -> None:
+    """Standalone û/−û scatter (raw or mean-centered per dataset)."""
+    apply_plot_style("icml")
+    quats = super_fibonacci(24)
+    dirs = fibonacci_sphere(10)
+    sc = scales_for_rays(rays, how=how, shared=shared)
+    ymin, ymax = sc.e_ylim
+    tag_source = ref_rays if ref_rays is not None else rays
+    tags, tag_dirs = _select_surface_minima_tags(
+        tag_source, quats=quats, dirs=dirs, n_tags=4,
+    )
+    tag_color = _tag_style(tags)
+    fig, ax = plt.subplots(figsize=(4.2, 4.0))
+    lims = None if mean_center else [ymin, ymax]
+    _draw_exchange_symmetry_scatter(
+        ax,
+        rays=rays,
+        dirs=dirs,
+        tags=tags,
+        tag_dirs=tag_dirs,
+        tag_color=tag_color,
+        ref_rays=ref_rays,
+        lims=lims,
+        mean_center=mean_center,
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=170, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  wrote {out}")
+
+
 def _tag_style(tags: list[tuple[str, int, str]] | None = None) -> dict[str, str]:
     tags = tags if tags is not None else REF_TAGS
     style = apply_plot_style("icml")
@@ -1850,38 +1978,17 @@ def plot_path_atlas(
     )
 
     ax_sym = fig.add_subplot(maps[0, 3])
-    xs, ys = _uhat_exchange_pairs(rays, dirs)
-    if xs.size:
-        ax_sym.scatter(xs, ys, s=10, c="#5D6D7E", alpha=0.45, edgecolors="none")
-    if ref_rays is not None:
-        xr, yr = _uhat_exchange_pairs(ref_rays, dirs)
-        if xr.size:
-            ax_sym.scatter(
-                xr, yr, s=14, marker="*",
-                facecolors="#F7DC6F", edgecolors="black", linewidths=0.3, alpha=0.8,
-                label="ref",
-            )
-    # tag points
-    for tag, ori, _ in tags:
-        di = tag_dirs[tag]
-        anti = _antipode_dir(dirs, di)
-        e1 = e_map.get((ori, di))
-        e2 = e_map.get((ori, anti))
-        if e1 is not None and e2 is not None:
-            ax_sym.scatter(
-                [e1], [e2], s=70, facecolors=tag_color[tag],
-                edgecolors="black", linewidths=0.6, zorder=5,
-            )
-            ax_sym.text(e1, e2, f" {tag}", color=tag_color[tag], fontsize=8, fontweight="bold")
-    lims = [ymin, ymax]
-    ax_sym.plot(lims, lims, color=STATUS_COLORS["neutral"], lw=0.8, ls="--")
-    ax_sym.set_xlim(lims)
-    ax_sym.set_ylim(lims)
-    ax_sym.set_aspect("equal")
-    ax_sym.set_xlabel("e_min(+u)")
-    ax_sym.set_ylabel("e_min(-u)")
-    ax_sym.set_title("exchange symmetry")
-    ax_sym.tick_params(labelsize=7)
+    _draw_exchange_symmetry_scatter(
+        ax_sym,
+        rays=rays,
+        dirs=dirs,
+        tags=tags,
+        tag_dirs=tag_dirs,
+        tag_color=tag_color,
+        ref_rays=ref_rays,
+        lims=[ymin, ymax],
+        mean_center=False,
+    )
 
     # ── Filmstrip rows: 3 edges per row, each A | mid | B ─────────────────
     for fr in range(n_film_rows):
@@ -2154,6 +2261,15 @@ def main() -> int:
             ref_top_n=args.ref_top_n,
             validate=args.validate,
         )
+        # Standalone copy of the û/−û xy scatter with each dataset mean-centered
+        plot_exchange_symmetry_xy(
+            rays=rays,
+            out=_labeled(args.out / "exchange_symmetry_mean_centered.png", label),
+            how=args.how,
+            shared=shared,
+            ref_rays=ref_rays,
+            mean_center=True,
+        )
         if not args.atlas_only:
             plot_projection_explainer(
                 out=_labeled(args.out / "projection_explainer.png", label)
@@ -2209,6 +2325,7 @@ def main() -> int:
                 "Physical minima (*) from `--ref-rays` (typically GFN2) when provided.",
                 "",
                 f"- path_atlas_{label}.png",
+                f"- exchange_symmetry_mean_centered_{label}.png",
                 f"- equirectangular_maps_{label}.png",
                 f"- hemisphere_ase_ring_{label}.png",
                 f"- perspectives_gallery_{label}.png",
