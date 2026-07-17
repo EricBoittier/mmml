@@ -126,6 +126,7 @@ def analyse(name: str, d: dict, args) -> dict:
         return {"name": name, "ok": True, "n_min": n_min, "verdicts": verdicts}
 
     print(f"  VERDICT: SPURIOUS -- {n_min} minima where a rigid scan admits one")
+<<<<<<< HEAD
     # Report a cause PER feature: a scan can have several, with different fixes.
     # Collapsing them into one verdict hides that.
     for r_i, reg, car in verdicts:
@@ -140,6 +141,20 @@ def analyse(name: str, d: dict, args) -> dict:
             print("           model is a function of the cutoff it was TRAINED at: rerun this")
             print("           check on a checkpoint trained at a longer cutoff before")
             print("           concluding the artifact is inherent (--compare-dir).")
+=======
+    regions = {v[1] for v in verdicts}
+    carriers = {v[2] for v in verdicts}
+    if regions <= {"HANDOFF"} or carriers == {"mm"}:
+        print("    cause: HANDOFF. Move --mm-switch-on outward (and --cutoff with it),")
+        print("           or widen --ml-switch-width for a gentler blend.")
+    elif "ML-only" in regions and "ml_2b" in carriers:
+        print("    cause: MODEL-INTRINSIC. The feature sits where the taper is ~1 and is")
+        print("           carried by ml_2b, so moving --mm-switch-on CANNOT fix it.")
+        print("           Mitigate by retraining: denser/short-range data, a repulsive")
+        print("           prior (ZBL), or a smoothness penalty. Cutoff tuning is a no-op.")
+    elif "wall" in carriers:
+        print("    cause: WALL. Soften k or lower r_on in mmml/models/short_range_wall.py.")
+>>>>>>> 8cd5d69b4 (spur)
     return {"name": name, "ok": False, "n_min": n_min, "verdicts": verdicts}
 
 
