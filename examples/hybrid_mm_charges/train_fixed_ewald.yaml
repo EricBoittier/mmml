@@ -1,0 +1,53 @@
+# Mode A + jit-native Ewald Coulomb (LJ off) for hybrid training
+#   E_MM = E_ewald(all atoms, q_CGenFF)   # full-box many-to-many; no exclusions
+#
+# Pure JAX (mmml.interfaces.pycharmmInterface.ewald_native) -- no external PME
+# library, no CUDA requirement. Same operator as fast MD periodic_external
+# --lr-solver ewald, and the same contract as train_fixed_nvalchemiops_pme.yaml
+# (drop-in alternative wherever nvalchemiops isn't installed, e.g. CPU-only
+# clusters).
+#
+#   mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_ewald.yaml
+#
+# Requires: NPZ with CGenFF fields, cubic box length. Same keys work on the
+# CLI (--lr-solver, --pme-box-length, ...).
+
+data: /path/to/out_combined_dedup/energies_forces_dipoles_train.npz
+valid_data: /path/to/out_combined_dedup/energies_forces_dipoles_valid.npz
+ckpt_dir: ./ckpts/hybrid_mm_fixed_ewald
+tag: hybrid_mm_fixed_ewald
+
+hybrid_mm: true
+mm_charge_mode: fixed
+
+# Long-range Coulomb for hybrid E_MM (training)
+lr_solver: ewald
+pme_box_length: 30.0          # Å, cubic; required for ewald
+pme_accuracy: 1.0e-6          # optional
+mm_include_lj: false          # forced off for ewald anyway
+
+# Handoff (same defaults as MD)
+ml_switch_width: 1.5
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+
+charges: true
+batch_size: 16
+num_epochs: 500
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+
+features: 64
+max_degree: 0
+num_basis_functions: 32
+num_iterations: 2
+n_res: 2
+cutoff: 8.0
+max_atomic_number: 35
+use_energy_bias: true

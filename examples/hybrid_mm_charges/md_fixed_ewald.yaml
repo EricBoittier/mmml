@@ -1,0 +1,40 @@
+# Mode A + full-box jit-native Ewald (matches train_fixed_ewald.yaml)
+#   E_Coulomb = E_ewald(all atoms, q_CGenFF)   # many-to-many; no exclusions
+#
+# Pure JAX -- no external PME library, no CUDA requirement (unlike
+# nvalchemiops_pme). Same operator the checkpoint was trained against.
+#
+#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald.yaml --run-all
+#
+# Requires: PBC setup, Mode A hybrid checkpoint trained with lr_solver: ewald.
+# --no-periodic-charmm-vdw keeps LJ off (same as train mm_include_lj: false).
+
+defaults:
+  composition: "DCM:20"
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_ewald/<run>/params.json
+  box_size: 30.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+
+  # Full-box many-to-many Ewald (train lr_solver: ewald)
+  mm_nonbond_mode: periodic_external
+  lr_solver: ewald
+  periodic_charmm_vdw: false   # Coulomb-only; matches train LJ off
+
+campaign_output: results/hybrid_mm_fixed_ewald
+runs:
+  box_nvt_smoke:
+    description: PBC NVT smoke — Mode A + native Ewald full-box Coulomb, no CHARMM VDW
+    backend: pycharmm
+    setup: pbc_nvt
+    ps: 0.05
+    output_dir: results/hybrid_mm_fixed_ewald/box_nvt_smoke
+    extra_args:
+      - --skip-jit-warmup
+      - --quiet

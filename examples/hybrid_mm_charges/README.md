@@ -6,7 +6,8 @@ See [`docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md).
 | Mode | Formula | Train YAML | MD YAML |
 |------|---------|------------|---------|
 | A `fixed` | `q_MM = q_CGenFF` | [`train_fixed.yaml`](train_fixed.yaml) | [`md_fixed.yaml`](md_fixed.yaml) |
-| A + PME | fixed + `nvalchemiops_pme` Coulomb (LJ off) | [`train_fixed_nvalchemiops_pme.yaml`](train_fixed_nvalchemiops_pme.yaml) | [`md_fixed_nvalchemiops_pme.yaml`](md_fixed_nvalchemiops_pme.yaml) |
+| A + PME (nvalchemiops) | fixed + `nvalchemiops_pme` Coulomb (LJ off) | [`train_fixed_nvalchemiops_pme.yaml`](train_fixed_nvalchemiops_pme.yaml) | [`md_fixed_nvalchemiops_pme.yaml`](md_fixed_nvalchemiops_pme.yaml) |
+| A + PME (native ewald) | fixed + `ewald` Coulomb (LJ off, pure JAX, no CUDA) | [`train_fixed_ewald.yaml`](train_fixed_ewald.yaml) | [`md_fixed_ewald.yaml`](md_fixed_ewald.yaml) |
 | B `latent` | `q_MM = neutralize(q_ML)` | [`train_latent.yaml`](train_latent.yaml) | [`md_latent.yaml`](md_latent.yaml) |
 | C `fixed_plus_latent` | `q_CGenFF + neutralize(q_ML)` | [`train_fixed_plus_latent.yaml`](train_fixed_plus_latent.yaml) | [`md_fixed_plus_latent.yaml`](md_fixed_plus_latent.yaml) |
 
@@ -21,6 +22,7 @@ YAML keys match CLI flags (`lr_solver`, `pme_box_length`, `pme_accuracy`,
 ```bash
 mmml physnet-train --config examples/hybrid_mm_charges/train_fixed.yaml
 mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_nvalchemiops_pme.yaml
+mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_ewald.yaml
 mmml physnet-train --config examples/hybrid_mm_charges/train_latent.yaml
 mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_plus_latent.yaml
 ```
@@ -35,6 +37,7 @@ boxes with `mm_charge_mode: latent` / `fixed_plus_latent` yet. Use
 # After training + orbax-to-json (or point checkpoint at an existing JSON)
 mmml md-system --config examples/hybrid_mm_charges/md_fixed.yaml --run-all
 mmml md-system --config examples/hybrid_mm_charges/md_fixed_nvalchemiops_pme.yaml --run-all
+mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald.yaml --run-all
 mmml md-system --config examples/hybrid_mm_charges/md_latent.yaml --run-all
 mmml md-system --config examples/hybrid_mm_charges/md_fixed_plus_latent.yaml --run-all
 ```
@@ -46,6 +49,19 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 30 \
   --mm-nonbond-mode periodic_external \
   --lr-solver nvalchemiops_pme \
+  --no-periodic-charmm-vdw \
+  --mm-charge-mode fixed \
+  --checkpoint /path/to/params.json
+```
+
+Same, with the pure-JAX native Ewald solver (no external PME library, no CUDA
+requirement — drop-in wherever `nvalchemiops` isn't installed)::
+
+```bash
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 30 \
+  --mm-nonbond-mode periodic_external \
+  --lr-solver ewald \
   --no-periodic-charmm-vdw \
   --mm-charge-mode fixed \
   --checkpoint /path/to/params.json
@@ -71,6 +87,15 @@ layers)::
 
 ```bash
 python scripts/check_nvalchemiops_train_md_pme_parity.py \
+  --data /path/to/energies_forces_dipoles_test.npz \
+  --pme-box-length 30
+```
+
+Full-box native Ewald (train `lr_solver: ewald` ↔ MD `periodic_external`
+many-to-many; pure JAX, no external package needed at all)::
+
+```bash
+python scripts/check_ewald_train_md_pme_parity.py \
   --data /path/to/energies_forces_dipoles_test.npz \
   --pme-box-length 30
 ```

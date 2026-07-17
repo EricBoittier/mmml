@@ -1,7 +1,8 @@
 # Tutorial: long-range Coulomb solvers in MMML
 
 This guide shows how to run **MIC**, **jax-pme** (Ewald / PME / P3M),
-**nvalchemiops PME**, and **ScaFaCoS** Coulomb backends in hybrid ML/MM workflows,
+**nvalchemiops PME**, **native ewald** (pure JAX, no external library or CUDA
+requirement), and **ScaFaCoS** Coulomb backends in hybrid ML/MM workflows,
 using the DCM liquid box as a concrete example.
 
 ![Long-range solver comparison (mm_nonbond_mode and k-space)](images/mlpot-settings/lr_solvers_overview.png)
@@ -12,8 +13,11 @@ Related:
 
 - `scripts/run_dcm_liquid_workflow.sh` — baseline DCM liquid pipeline
 - `scripts/run_dcm_long_range_workflow.sh` — solver comparison sweep
+- `scripts/check_ewald_train_md_pme_parity.py` — train↔MD parity gate for native ewald
+- `scripts/check_nvalchemiops_train_md_pme_parity.py` — train↔MD parity gate for nvalchemiops PME
 - `tests/functionality/long_range/` — standalone validation
 - `mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md` — architecture
+- `examples/hybrid_mm_charges/` — end-to-end train + MD YAMLs per charge mode / solver
 
 ---
 
@@ -25,7 +29,7 @@ Related:
 | Mode                | LJ                         | Coulomb                                                     | When to use                                                  |
 | ------------------- | -------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ |
 | `jax_mic` (default) | Switched JAX pairs (~13 Å) | MIC in pair loop, or **jax-pme** with `--lr-solver jax_pme` | Standard hybrid MLpot; jax-pme Coulomb + r⁻⁶ LJ when enabled |
-| `periodic_external` | CHARMM IMAGE VDW           | **jax-pme**, **nvalchemiops PME**, or **ScaFaCoS** full-box Coulomb | Large boxes where JAX MM is off; requires `pbc_`* setup      |
+| `periodic_external` | CHARMM IMAGE VDW           | **jax-pme**, **nvalchemiops PME**, **native ewald**, or **ScaFaCoS** full-box Coulomb | Large boxes where JAX MM is off; requires `pbc_`* setup      |
 
 
 In `jax_mic` + `jax_pme` mode: **r⁻¹²** repulsion stays on the switched pair list (exact Lorentz–Berthelot σ_ij, ε_ij, hybrid λ); **Coulomb** and the **r⁻⁶** LJ tail use jax-pme (Ewald/PME/P3M) with per-atom √C6 and geometric k-space combining (GROMACS-style LJ-PME reciprocal rule). Each jax-pme MM term is `scale × (E_pme_full − E_intra)` so intra-monomer electrostatics and dispersion remain in the ML region (same COM switching as the pair loop).
@@ -34,6 +38,22 @@ In `jax_mic` + `jax_pme` mode: **r⁻¹²** repulsion stays on the switched pair
 `periodic_external` and standalone backend comparisons. It does not replace the
 `jax_mic` Coulomb+r⁻⁶ handoff yet because MMML's existing switched-MM path also
 relies on jax-pme's r⁻⁶ dispersion support.
+
+`ewald` (`mmml.interfaces.pycharmmInterface.ewald_native`) is a jit-native,
+fully differentiable Ewald summation implemented directly in JAX — no
+external PME library, no CUDA requirement. It's the same operator at both
+training time (`lr_solver: ewald` in `physnet-train`) and MD time
+(`--mm-nonbond-mode periodic_external --lr-solver ewald`), so a checkpoint
+trained against it deploys with an exactly consistent MM electrostatics term.
+Unlike `jax_pme`/`nvalchemiops_pme` (both host-orchestrated via `ase.Atoms` /
+`jax.pure_callback`, which have no gradient rule), `ewald`'s energy is plain
+JAX all the way through, so `jax.grad` works on it directly — this is also
+what makes it usable inside the jit-compiled `mmml/md/` `JaxmdDriver` loop
+(`lr_solver="ewald"` on `MMNonbondedTerm`), where `jax_pme`/`nvalchemiops_pme`
+cannot go. Trade-off: it's a true Ewald sum (O(N·K) reciprocal-space cost),
+not a mesh-based PME (O(N log N)) — fine for training-batch-sized structures
+and moderate MD boxes, but not yet the right choice for very large liquid
+boxes where PME's asymptotic scaling matters.
 
 ---
 
@@ -45,7 +65,7 @@ relies on jax-pme's r⁻⁶ dispersion support.
 | Flag                               | Values                               | Default      | Meaning                         |
 | ---------------------------------- | ------------------------------------ | ------------ | ------------------------------- |
 | `--mm-nonbond-mode`                | `jax_mic`, `periodic_external`       | `jax_mic`    | MM stack selection              |
-| `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `nvalchemiops_pme`, `scafacos` | `mic` | Default: truncated MIC; opt in jax_pme / ScaFaCoS / nvalchemiops |
+| `--lr-solver`                      | `auto`, `mic`, `jax_pme`, `nvalchemiops_pme`, `ewald`, `scafacos` | `mic` | Default: truncated MIC; opt in jax_pme / ScaFaCoS / nvalchemiops / ewald |
 | `--jax-pme-method`                 | `ewald`, `pme`, `p3m`                | `ewald`      | jax-pme variant                 |
 | `--jax-pme-sr-cutoff`              | float (Å)                            | `6.0`        | jax-pme real-space cutoff       |
 | `--jax-pme-dispersion` / `--no-jax-pme-dispersion` | bool                 | env / on     | Include r⁻⁶ LJ-PME tail; off = Coulomb-only LR |
@@ -56,7 +76,7 @@ relies on jax-pme's r⁻⁶ dispersion support.
 Environment mirrors:
 
 ```bash
-export MMML_LR_SOLVER=jax_pme      # default mic; opt in: jax_pme | scafacos | nvalchemiops_pme
+export MMML_LR_SOLVER=jax_pme      # default mic; opt in: jax_pme | scafacos | nvalchemiops_pme | ewald
 export JAX_PME_METHOD=pme          # ewald | pme | p3m
 export JAX_PME_SR_CUTOFF=6.0
 export MMML_JAX_PME_DISPERSION=1  # set 0 for Coulomb-only timing/smokes
@@ -162,6 +182,14 @@ runtime):
   --lr-solver nvalchemiops_pme
 ```
 
+Native ewald variant (pure JAX — no external package, no CUDA requirement;
+same operator `physnet-train --lr-solver ewald` trains against, so a
+checkpoint trained with it deploys consistently here):
+
+```bash
+  --lr-solver ewald
+```
+
 ---
 
 
@@ -190,8 +218,8 @@ JAX_PME_DISPERSION=0 \
 # Validation only (no MD)
 SKIP_MD=1 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 
-# Include nvalchemiops PME / ScaFaCoS when installed
-LR_SOLVERS=mic,jax_pme,nvalchemiops_pme,scafacos \
+# Include nvalchemiops PME / native ewald / ScaFaCoS when installed
+LR_SOLVERS=mic,jax_pme,nvalchemiops_pme,ewald,scafacos \
 SCAFACOS_METHODS=ewald,p3m \
 ~/mmml/scripts/run_dcm_long_range_workflow.sh
 ```
@@ -244,7 +272,8 @@ Expectations:
 | **MIC vs jax-pme** on large periodic box | |E_jax_pme| ≥ |E_mic| (truncated MIC underestimates Coulomb)                       |
 | **ewald vs pme vs p3m** (jax-pme)        | Energies agree to ~0.1–1% on neutral crystals; P3M may need tuning                 |
 | **LJ r^-12 (pair loop)**                 | Identical LB mixing with/without jax_pme; **total vdw** differs (r^-6 via k-space) |
-| **nvalchemiops PME / ScaFaCoS vs jax-pme** | Similar full-box Coulomb totals on neutral periodic systems after unit conversion |
+| **nvalchemiops PME / native ewald / ScaFaCoS vs jax-pme** | Similar full-box Coulomb totals on neutral periodic systems after unit conversion |
+| **native ewald vs nvalchemiops PME** | Agree to ~1e-4 kcal/mol on the same geometry (verify with `scripts/check_ewald_train_md_pme_parity.py`) |
 | **Hybrid GRMS** (same certified box)     | jax-pme methods within ~10% rtol; MIC may differ (see §6 force validation)         |
 
 
