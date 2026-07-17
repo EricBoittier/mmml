@@ -49,6 +49,9 @@ from mmml.models.cgenff_mm import (
     cgenff_mm_energy,
     monomer_centroids,
 )
+from mmml.models.nvalchemiops_hybrid_coulomb import (
+    hybrid_nvalchemiops_pme_coulomb_energy,
+)
 from mmml.models.short_range_wall import (
     DEFAULT_WALL_K_EV_A2,
     DEFAULT_WALL_R_ON_A,
@@ -107,6 +110,11 @@ class HybridMMConfig:
     ml_switch_width: float
     complementary_handoff: bool = True
     mm_charge_mode: str = "fixed"
+    lr_solver: str = "mic"
+    include_lj: bool = True
+    pme_box_length: float | None = None
+    pme_accuracy: float = 1e-6
+    pme_real_space_cutoff: float | None = None
 
     @property
     def charge_correction(self) -> bool:
@@ -132,6 +140,28 @@ class HybridMMConfig:
             charge_correction=bool(d.pop("charge_correction", False)),
         )
         d["mm_charge_mode"] = mode.value
+        lr = str(d.get("lr_solver", "mic") or "mic").strip().lower()
+        if lr in ("nvalchemiops", "nval_pme"):
+            lr = "nvalchemiops_pme"
+        if lr not in ("mic", "nvalchemiops_pme"):
+            raise ValueError(
+                f"hybrid lr_solver must be mic|nvalchemiops_pme; got {lr!r}"
+            )
+        d["lr_solver"] = lr
+        if lr == "nvalchemiops_pme":
+            d["include_lj"] = False
+            box = d.get("pme_box_length", None)
+            if box is None or float(box) <= 0.0:
+                raise ValueError(
+                    "lr_solver=nvalchemiops_pme requires pme_box_length > 0"
+                )
+            d["pme_box_length"] = float(box)
+        else:
+            d["include_lj"] = bool(d.get("include_lj", True))
+        if "pme_accuracy" in d and d["pme_accuracy"] is not None:
+            d["pme_accuracy"] = float(d["pme_accuracy"])
+        if d.get("pme_real_space_cutoff", None) is not None:
+            d["pme_real_space_cutoff"] = float(d["pme_real_space_cutoff"])
         return cls(
             master_sigmas=tuple(float(x) for x in d.pop("master_sigmas")),
             master_epsilons=tuple(float(x) for x in d.pop("master_epsilons")),
@@ -202,6 +232,11 @@ def hybrid_forward(
     short_range_wall: bool = True,
     wall_r_on: float = DEFAULT_WALL_R_ON_A,
     wall_k: float = DEFAULT_WALL_K_EV_A2,
+    lr_solver: str = "mic",
+    include_lj: bool = True,
+    pme_box_length: float | None = None,
+    pme_accuracy: float = 1e-6,
+    pme_real_space_cutoff: float | None = None,
 ) -> dict:
     """Model forward assembled into the hybrid ML/MM total the calculator uses.
 
@@ -288,25 +323,37 @@ def hybrid_forward(
             )
 
         def _emm(x):
-            # UNITS: cgenff_mm_energy returns kcal/mol -- the CGenFF epsilons are
-            # kcal/mol and COULOMB_CONSTANT is the kcal/mol form (332.06).  The ML
-            # energy, and the training targets, are eV.  Summing them unconverted
-            # inflates E_MM by 23.06x; the model then absorbs the error and no
-            # longer matches the MD calculator, which converts at this same
-            # boundary (`mm_E = mm_E * kcalmol2ev`, mmml_calculator.py).
-            # Pinned by tests/unit/test_hybrid_mm_units.py.
-            e = KCAL_MOL_TO_EV * cgenff_mm_energy(
-                x,
-                t,
-                m,
-                q,
-                master_sigmas,
-                master_epsilons,
-                mm_switch_on=mm_switch_on,
-                mm_switch_width=mm_switch_width,
-                ml_switch_width=ml_switch_width,
-                complementary_handoff=complementary_handoff,
-            )
+            # UNITS: MM helpers return kcal/mol; training targets are eV. Convert
+            # at this boundary (same as mmml_calculator). Pinned by
+            # tests/unit/test_hybrid_mm_units.py.
+            if lr_solver == "nvalchemiops_pme":
+                # Coulomb-only PME: fixed CGenFF charges, LJ omitted for now.
+                e = KCAL_MOL_TO_EV * hybrid_nvalchemiops_pme_coulomb_energy(
+                    x,
+                    m,
+                    q,
+                    box_length_A=float(pme_box_length),
+                    accuracy=float(pme_accuracy),
+                    real_space_cutoff_A=pme_real_space_cutoff,
+                    mm_switch_on=mm_switch_on,
+                    mm_switch_width=mm_switch_width,
+                    ml_switch_width=ml_switch_width,
+                    complementary_handoff=complementary_handoff,
+                )
+            else:
+                eps = master_epsilons if include_lj else jnp.zeros_like(master_epsilons)
+                e = KCAL_MOL_TO_EV * cgenff_mm_energy(
+                    x,
+                    t,
+                    m,
+                    q,
+                    master_sigmas,
+                    eps,
+                    mm_switch_on=mm_switch_on,
+                    mm_switch_width=mm_switch_width,
+                    ml_switch_width=ml_switch_width,
+                    complementary_handoff=complementary_handoff,
+                )
             if short_range_wall:
                 # Already eV. NOT scaled by the MM taper: the taper is exactly
                 # what removes the LJ wall at close range, which is where this

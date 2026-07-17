@@ -30,6 +30,10 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--mm-switch-width MM_SWITCH_WIDTH]
                           [--no-complementary-handoff]
                           [--mm-pair-source {jax,charmm_callback}]
+                          [--lr-solver {mic,nvalchemiops_pme}]
+                          [--pme-box-length PME_BOX_LENGTH]
+                          [--pme-accuracy PME_ACCURACY]
+                          [--mm-include-lj | --no-mm-include-lj | --mm_include_lj | --no-mm_include_lj]
                           [--ema-decay EMA_DECAY] [--restart RESTART]
                           [--num-atoms NUM_ATOMS] [--features FEATURES]
                           [--max-degree MAX_DEGREE]
@@ -134,6 +138,20 @@ options:
                         source jax). All-ML bulk systems with empty callback
                         lists auto-fall back to JAX. Override with env
                         MMML_MM_PAIR_SOURCE.
+  --lr-solver, --lr_solver {mic,nvalchemiops_pme}
+                        Hybrid-MM long-range Coulomb for training (default:
+                        mic). mic: switched CGenFF LJ+Coulomb pairs.
+                        nvalchemiops_pme: periodic PME Coulomb on fixed CGenFF
+                        charges with LJ omitted (requires --pme-box-length and
+                        mmml[nvalchemiops-pme]).
+  --pme-box-length, --pme_box_length PME_BOX_LENGTH
+                        Cubic box length (Å) for --lr-solver nvalchemiops_pme
+                        (required for that solver).
+  --pme-accuracy, --pme_accuracy PME_ACCURACY
+                        nvalchemiops PME accuracy target (default: 1e-6).
+  --mm-include-lj, --no-mm-include-lj, --mm_include_lj, --no-mm_include_lj
+                        Include CGenFF LJ in hybrid E_MM (default: on for mic).
+                        Forced off when --lr-solver nvalchemiops_pme.
   --ema-decay, --ema_decay EMA_DECAY
                         Decay for the parameter EMA (default: 0.999).
                         Validation, checkpointing and restart all use the EMA

@@ -11,9 +11,13 @@ Two faces:
 - **jax** — a jittable padded-pair energy: the driver's neighbor list supplies
   ``pair_i`` / ``pair_j`` (+ optional ``pair_mask`` / ``e14_scale`` /
   ``vdw14_scale``) as kwargs each step (decision B). Masked/padded pairs are
-  distance-clamped to avoid NaN gradients. Real-space, minimum-image only
-  (``lr_solver="mic"``) — this is the only long-range electrostatics backend
-  that is jit-compatible in this term (see ``lr_solver`` below).
+  distance-clamped to avoid NaN gradients. Supports ``lr_solver="mic"``
+  (real-space minimum-image) and ``lr_solver="ewald"`` (jit-native Ewald
+  summation — see ``ewald_native.py`` — real-space erfc term over the same
+  pair list plus a reciprocal-space structure-factor sum, self-energy, and
+  exclusion correction, all differentiable via plain ``jax.grad``). These are
+  the only long-range electrostatics backends that are jit-compatible in this
+  term (see ``lr_solver`` below for why the others aren't).
 - **ASE** — wraps ``nonbonded_energy_and_forces`` (rebuilds the pair list each
   call), matching ``JAXIntermolecularCalculator``. Supports every
   ``lr_solver`` the reference function does (``mic``, ``jax_pme``,
@@ -24,15 +28,16 @@ A); the CHARMM cutoffs/switch modes come from a ``CharmmNbondSettings`` passed i
 the constructor or via ``ctx.options``.
 
 ``lr_solver`` (default ``"mic"``): selects the long-range electrostatics
-backend. Only ``"mic"`` (real-space minimum-image, the padded-pair kernel
-above) is available through the jax/jit face — ``"jax_pme"`` /
-``"nvalchemiops_pme"`` / ``"scafacos"`` are host-orchestrated (e.g. jax-pme's
-evaluator builds an ASE ``Atoms`` and its own neighbor list on the host, then
-returns plain numpy), which is fundamentally incompatible with tracing inside
-an existing ``jax.jit`` graph — not merely unimplemented. Requesting a
-non-``"mic"`` solver therefore raises ``NotImplementedError`` if the jax
-energy function is actually called; use ``as_ase_calculator()`` instead, which
-supports all four solvers (see ``docs/hybrid-mlmm-decomposition.md`` and
+backend. ``"mic"`` (real-space minimum-image) and ``"ewald"`` (jit-native
+Ewald, ``ewald_native.py``) are available through the jax/jit face.
+``"jax_pme"`` / ``"nvalchemiops_pme"`` / ``"scafacos"`` remain host-orchestrated
+(e.g. jax-pme's evaluator builds an ASE ``Atoms`` and its own neighbor list on
+the host via ``jax.pure_callback``, which has no VJP -- incompatible with the
+``jax.grad``-derived forces ``jax_md``'s integrators require inside an
+existing ``jax.jit`` graph, not merely unimplemented). Requesting one of
+those three still raises ``NotImplementedError`` if the jax energy function is
+actually called; use ``as_ase_calculator()`` instead, which supports all
+solvers including those three (see ``docs/hybrid-mlmm-decomposition.md`` and
 ``docs/md-cg-unification-design.md`` §11 for the underlying limitation).
 """
 
@@ -80,11 +85,15 @@ class MMNonbondedTerm:
         lr_solver: str = "mic",
         jax_pme_method: str | None = None,
         jax_pme_sr_cutoff_A: float = 6.0,
+        ewald_alpha: float | None = None,
+        ewald_accuracy_exponent: float = 3.5,
     ):
         self.settings = settings
         self.lr_solver = str(lr_solver)
         self.jax_pme_method = jax_pme_method
         self.jax_pme_sr_cutoff_A = float(jax_pme_sr_cutoff_A)
+        self.ewald_alpha = ewald_alpha
+        self.ewald_accuracy_exponent = float(ewald_accuracy_exponent)
 
     def _resolve_settings(self, ctx: EnergyContext):
         if self.settings is not None:
@@ -135,6 +144,7 @@ class MMNonbondedTerm:
         import jax.numpy as jnp
 
         from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+            COULOMB_KCAL,
             _pair_elec_energy,
             _pair_lj_epsilon,
             _pair_vdw_energy,
@@ -154,6 +164,28 @@ class MMNonbondedTerm:
         fs = charmm_fswitch_coeffs(settings)
         c2of = settings.c2ofnb
         eps_scale = float(settings.eps)
+
+        if self.lr_solver == "ewald":
+            from mmml.interfaces.pycharmmInterface.ewald_native import (
+                build_kspace_integers,
+                default_ewald_alpha,
+                ewald_exclusion_correction,
+                ewald_reciprocal_energy,
+                ewald_self_energy,
+            )
+
+            ewald_alpha = float(
+                self.ewald_alpha
+                if self.ewald_alpha is not None
+                else default_ewald_alpha(settings.cutnb, accuracy_exponent=self.ewald_accuracy_exponent)
+            )
+            n_int_np = build_kspace_integers(
+                self._cell_np, ewald_alpha, accuracy_exponent=self.ewald_accuracy_exponent
+            )
+            n_int = jnp.asarray(n_int_np)
+            excl_i = jnp.asarray(ff.exclusions[:, 0], dtype=jnp.int32)
+            excl_j = jnp.asarray(ff.exclusions[:, 1], dtype=jnp.int32)
+            ewald_self = ewald_self_energy(q, ewald_alpha) * COULOMB_KCAL
 
         def _pair_energy(R, pi, pj, e14, vdw14, mask, cell_used):
             ri = R[pi]
@@ -175,6 +207,37 @@ class MMNonbondedTerm:
             vdw = jnp.where(within, vdw, 0.0)
             elec = jnp.where(within, elec, 0.0)
             return (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
+
+        if self.lr_solver == "ewald":
+
+            def _pair_energy_ewald(R, pi, pj, e14, vdw14, mask, cell_used):
+                import jax.scipy.special as jsp
+
+                ri = R[pi]
+                rj = R[pj]
+                disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_used))(ri, rj)
+                disp_sq = jnp.sum(disp * disp, axis=-1)
+                safe_sq = jnp.where(mask > 0.5, disp_sq, 1.0)
+                dist = jnp.sqrt(jnp.maximum(safe_sq, 1e-12))
+                within = (dist * dist < c2of) * mask
+                safe_dist = jnp.where(mask > 0.5, dist, 1.0)
+
+                ep = _pair_lj_epsilon(eps_tbl[pi], eps_tbl[pj])
+                sig = rm_tbl[pi] + rm_tbl[pj]
+                qq = q[pi] * q[pj] * e14 / eps_scale
+                vdw = _pair_vdw_energy(safe_dist, ep, sig, settings, vf, use_jax_pme_dispersion=False)
+                vdw = vdw * vdw14
+                # real-space Ewald term: erfc-damped Coulomb, natural (fast) decay
+                # to ~0 by rcut given `ewald_alpha` -- no CHARMM switching needed.
+                elec_real = qq * jsp.erfc(ewald_alpha * safe_dist) / safe_dist * COULOMB_KCAL
+                vdw = jnp.where(within, vdw, 0.0)
+                elec_real = jnp.where(within, elec_real, 0.0)
+
+                recip = ewald_reciprocal_energy(R, q, cell_used, n_int, ewald_alpha) * COULOMB_KCAL
+                excl_corr = (
+                    ewald_exclusion_correction(R, q, cell_used, excl_i, excl_j, ewald_alpha) * COULOMB_KCAL
+                )
+                return (jnp.sum(vdw) + jnp.sum(elec_real) + recip + ewald_self + excl_corr) * KCAL_MOL_TO_EV
 
         def energy_fn(
             R,
@@ -208,17 +271,19 @@ class MMNonbondedTerm:
                 e14 = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if e14_scale is None else jnp.asarray(e14_scale)
                 vdw14 = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if vdw14_scale is None else jnp.asarray(vdw14_scale)
                 mask = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if pair_mask is None else jnp.asarray(pair_mask).astype(COMPUTE_DTYPE)
-            if self.lr_solver != "mic":
-                # jax_pme/nvalchemiops_pme/scafacos are host-orchestrated (e.g.
-                # jax-pme's evaluator builds an ASE Atoms + its own neighbor list
-                # on the host) -- not jit-traceable, so fail loudly here rather
-                # than silently falling back to mic under the driver's jit.
-                raise NotImplementedError(
-                    f"mm_nonbonded's jax/jit face only supports lr_solver='mic'; "
-                    f"got {self.lr_solver!r}. Use as_ase_calculator() instead, which "
-                    "supports mic/jax_pme/nvalchemiops_pme/scafacos."
-                )
-            return _pair_energy(R, pi, pj, e14, vdw14, mask, cell_used)
+            if self.lr_solver == "mic":
+                return _pair_energy(R, pi, pj, e14, vdw14, mask, cell_used)
+            if self.lr_solver == "ewald":
+                return _pair_energy_ewald(R, pi, pj, e14, vdw14, mask, cell_used)
+            # jax_pme/nvalchemiops_pme/scafacos are host-orchestrated (e.g.
+            # jax-pme's evaluator builds an ASE Atoms + its own neighbor list
+            # on the host) -- not jit-traceable, so fail loudly here rather
+            # than silently falling back to mic under the driver's jit.
+            raise NotImplementedError(
+                f"mm_nonbonded's jax/jit face only supports lr_solver='mic' or "
+                f"'ewald'; got {self.lr_solver!r}. Use as_ase_calculator() instead, "
+                "which supports mic/jax_pme/nvalchemiops_pme/scafacos."
+            )
 
         def ase_contribution(atoms):
             from mmml.interfaces.pycharmmInterface.mm_system_energy import (

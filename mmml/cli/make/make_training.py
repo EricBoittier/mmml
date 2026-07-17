@@ -250,6 +250,50 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
 
     add_handoff_cutoff_args(parser)
     parser.add_argument(
+        "--lr-solver",
+        "--lr_solver",
+        type=str,
+        default="mic",
+        dest="lr_solver",
+        choices=["mic", "nvalchemiops_pme"],
+        help=(
+            "Hybrid-MM long-range Coulomb for training (default: mic). "
+            "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: periodic "
+            "PME Coulomb on fixed CGenFF charges with LJ omitted "
+            "(requires --pme-box-length and mmml[nvalchemiops-pme])."
+        ),
+    )
+    parser.add_argument(
+        "--pme-box-length",
+        "--pme_box_length",
+        type=float,
+        default=None,
+        dest="pme_box_length",
+        help=(
+            "Cubic box length (Å) for --lr-solver nvalchemiops_pme "
+            "(required for that solver)."
+        ),
+    )
+    parser.add_argument(
+        "--pme-accuracy",
+        "--pme_accuracy",
+        type=float,
+        default=1e-6,
+        dest="pme_accuracy",
+        help="nvalchemiops PME accuracy target (default: 1e-6).",
+    )
+    parser.add_argument(
+        "--mm-include-lj",
+        "--mm_include_lj",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="mm_include_lj",
+        help=(
+            "Include CGenFF LJ in hybrid E_MM (default: on for mic). "
+            "Forced off when --lr-solver nvalchemiops_pme."
+        ),
+    )
+    parser.add_argument(
         "--ema-decay",
         "--ema_decay",
         type=float,
@@ -823,6 +867,12 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             )
         sigmas = _np.asarray(d["cgenff_master_sigmas"])
         epsilons = _np.asarray(d["cgenff_master_epsilons"])
+        if "N" in d.files:
+            n_atoms_est = int(_np.asarray(d["N"]).max())
+        elif "R" in d.files:
+            n_atoms_est = int(_np.asarray(d["R"]).shape[1])
+        else:
+            n_atoms_est = 32
 
     from mmml.models.mm_charge_mode import (
         mm_charge_mode_needs_q_ml,
@@ -833,6 +883,34 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
         charge_correction=bool(getattr(args, "mm_charge_correction", False)),
     )
+    lr_solver = str(getattr(args, "lr_solver", "mic") or "mic").strip().lower()
+    include_lj = bool(getattr(args, "mm_include_lj", True))
+    pme_box_length = getattr(args, "pme_box_length", None)
+    pme_accuracy = float(getattr(args, "pme_accuracy", 1e-6) or 1e-6)
+    pme_real_space_cutoff = None
+    if lr_solver == "nvalchemiops_pme":
+        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+            estimate_nvalchemiops_pme_real_space_cutoff,
+            have_nvalchemiops_pme,
+        )
+
+        if not have_nvalchemiops_pme():
+            raise ValueError(
+                "--lr-solver nvalchemiops_pme requires the nvalchemiops package "
+                "(install mmml[nvalchemiops-pme])."
+            )
+        if pme_box_length is None or float(pme_box_length) <= 0.0:
+            raise ValueError(
+                "--lr-solver nvalchemiops_pme requires --pme-box-length > 0"
+            )
+        include_lj = False
+        pme_box_length = float(pme_box_length)
+        # Static cutoff for jitted train steps (PME params fixed for the run).
+        pme_real_space_cutoff = estimate_nvalchemiops_pme_real_space_cutoff(
+            box_length_A=pme_box_length,
+            accuracy=pme_accuracy,
+            n_atoms=n_atoms_est,
+        )
     cfg = {
         "master_sigmas": sigmas,
         "master_epsilons": epsilons,
@@ -841,6 +919,11 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "ml_switch_width": float(args.ml_switch_width),
         "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
         "mm_charge_mode": mode.value,
+        "lr_solver": lr_solver,
+        "include_lj": include_lj,
+        "pme_box_length": pme_box_length,
+        "pme_accuracy": pme_accuracy,
+        "pme_real_space_cutoff": pme_real_space_cutoff,
     }
     if mm_charge_mode_needs_q_ml(mode) and not getattr(args, "charges", False):
         raise ValueError(
@@ -848,12 +931,21 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             "pass --charges (without it the model predicts no charges)."
         )
     if not getattr(args, "quiet", False):
+        lj_txt = "LJ+Coulomb" if include_lj else "Coulomb-only"
+        pme_txt = ""
+        if lr_solver == "nvalchemiops_pme":
+            pme_txt = (
+                f", pme_box_length={pme_box_length}, "
+                f"pme_accuracy={pme_accuracy}, "
+                f"pme_real_space_cutoff={pme_real_space_cutoff}"
+            )
         print(
             f"Hybrid ML/MM training: E = (1-s)*(E_A+E_B) + s*E_AB + E_MM  "
             f"({len(sigmas)} CGenFF types; ml_switch_width={cfg['ml_switch_width']}, "
             f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
             f"complementary_handoff={cfg['complementary_handoff']}, "
-            f"mm_charge_mode={cfg['mm_charge_mode']})",
+            f"mm_charge_mode={cfg['mm_charge_mode']}, "
+            f"lr_solver={lr_solver}, E_MM={lj_txt}{pme_txt})",
             flush=True,
         )
     return cfg
