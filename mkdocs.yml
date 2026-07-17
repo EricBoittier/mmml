@@ -150,6 +150,7 @@ nav:
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
       - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md
+      - Orientation scan plots (path atlas): functionality/orient_scan_plots.md
       - Settings: mlpot-settings.md
       - Calculator profiling: calculator-profiling.md
       - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
