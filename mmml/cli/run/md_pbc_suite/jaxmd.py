@@ -696,6 +696,23 @@ def main(argv: list[str] | None = None) -> int:
         help="Require periodic cell in handoff for PBC runs.",
     )
     p.add_argument(
+        "--lr-solver",
+        "--lr_solver",
+        dest="lr_solver",
+        type=str,
+        default=None,
+        choices=("auto", "mic", "jax_pme", "nvalchemiops_pme", "ewald", "scafacos"),
+        help=(
+            "Long-range Coulomb backend (default: mic, the switched pair loop). "
+            "ewald: jit-native, pure JAX full-box Ewald over ALL atoms (no "
+            "exclusions, no switching, no LJ) -- the same operator "
+            "physnet-train --lr-solver ewald trains against; use this to deploy "
+            "a checkpoint trained that way (no CHARMM callback in this "
+            "in-process loop, so --mm-nonbond-mode periodic_external does not "
+            "apply here -- this flag alone is enough)."
+        ),
+    )
+    p.add_argument(
         "--quiet",
         action="store_true",
         help="Reduce console output.",
@@ -962,6 +979,7 @@ def main(argv: list[str] | None = None) -> int:
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
         mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
         mbd_weight=getattr(args, "mbd_weight", 1.0),
+        lr_solver=getattr(args, "lr_solver", None),
     )
     cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
     calc_result = factory(
