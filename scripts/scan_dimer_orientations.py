@@ -115,11 +115,10 @@ def main() -> int:
     p.add_argument("--out", default="orient_scan")
     p.add_argument(
         "--use-ema",
-        action="store_true",
-        help="Gate the checkpoint's EMA params instead of the live training "
-        "params. Live params swing between adjacent epochs in the "
-        "unconstrained extrapolation region this scan probes; EMA smooths "
-        "that out and gives a more reproducible verdict.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Gate the checkpoint's EMA params (default: on). "
+        "Use --no-use-ema for the live training weights.",
     )
     args = p.parse_args()
 

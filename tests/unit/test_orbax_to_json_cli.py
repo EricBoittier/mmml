@@ -113,7 +113,36 @@ def test_orbax_to_json_merges_model_attributes_into_training_config(tmp_path: Pa
     with output.open() as handle:
         payload = json.load(handle)
 
+    # Default params_key is ema_params; falls back to params when EMA absent.
+    assert payload["params"]["weight"] == [1.0, 1.0]
     assert payload["config"]["batch_size"] == 4
     assert payload["config"]["model_type"] == "spooky"
     assert payload["config"]["cutoff"] == 6.0
     assert payload["config"]["max_padded_atoms"] == 32
+
+
+def test_orbax_to_json_prefers_ema_params(tmp_path: Path) -> None:
+    import orbax.checkpoint as ocp
+
+    from mmml.utils.model_checkpoint import orbax_to_json
+
+    checkpoint = tmp_path / "epoch-0003"
+    ocp.PyTreeCheckpointer().save(
+        str(checkpoint),
+        {
+            "params": {"weight": np.zeros(2, dtype=np.float32)},
+            "ema_params": {"weight": np.ones(2, dtype=np.float32)},
+        },
+    )
+
+    output = orbax_to_json(checkpoint, tmp_path / "ema.json")
+    with output.open() as handle:
+        payload = json.load(handle)
+    assert payload["params"]["weight"] == [1.0, 1.0]
+
+    live = orbax_to_json(
+        checkpoint, tmp_path / "live.json", params_key="params"
+    )
+    with live.open() as handle:
+        payload = json.load(handle)
+    assert payload["params"]["weight"] == [0.0, 0.0]

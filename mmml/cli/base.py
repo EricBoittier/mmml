@@ -261,6 +261,7 @@ def load_physnet_params_and_ef_model(
     natoms: int,
     *,
     orbax_epoch_dir: Path | None = None,
+    prefer_ema: bool = True,
 ) -> Tuple[Any, Any]:
     """Return ``(params, EF)`` for :func:`get_ase_calc`.
 
@@ -273,6 +274,10 @@ def load_physnet_params_and_ef_model(
     orbax_epoch_dir
         When ``resolved_checkpoint`` is Orbax, pass ``_latest_epoch_dir(root)`` (or any
         epoch directory). Ignored for ``.json`` checkpoints.
+    prefer_ema
+        For Orbax checkpoints, load ``ema_params`` when present (default True).
+        Portable JSON files already store whatever was exported (training's
+        end-of-run JSON writes EMA under the ``"params"`` key).
     """
     p = resolved_checkpoint
     if p.is_file() and p.suffix == ".json":
@@ -294,7 +299,9 @@ def load_physnet_params_and_ef_model(
         )
     from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
-    return get_params_model(str(orbax_epoch_dir), natoms=natoms)
+    return get_params_model(
+        str(orbax_epoch_dir), natoms=natoms, prefer_ema=prefer_ema
+    )
 
 
 def resolve_desdimers_checkpoint(script_file: str | Path | None = None) -> Path:

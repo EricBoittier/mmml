@@ -29,6 +29,7 @@ def test_export_embedding_checkpoint_calls_orbax_to_json(tmp_path: Path) -> None
         path = export_embedding_checkpoint(epoch, out_json)
     assert path == out_json
     orbax_fn.assert_called_once()
+    assert orbax_fn.call_args.kwargs["params_key"] == "ema_params"
 
 
 def test_validate_embedding_monomer_potential_parses_metrics(tmp_path: Path) -> None:

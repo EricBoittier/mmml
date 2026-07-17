@@ -75,7 +75,10 @@ def _run_ase_replica(args: Dict[str, Any]) -> tuple[int, Path]:
     printfreq = args["printfreq"]
 
     restart = get_last(str(checkpoint))
-    params, model = get_params_model(str(restart), natoms=len(Z))
+    prefer_ema = bool(args.get("use_ema", True))
+    params, model = get_params_model(
+        str(restart), natoms=len(Z), prefer_ema=prefer_ema
+    )
 
     atoms = Atoms(numbers=Z, positions=R)
     atoms.center(vacuum=5.0)
@@ -193,6 +196,13 @@ def build_parser() -> argparse.ArgumentParser:
         "ASE: ProcessPoolExecutor; JAX-MD: batched GPU. "
         "With --data, uses first B structures as initial geometries if available. (default: 1)",
     )
+    parser.add_argument(
+        "--use-ema",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Deploy the checkpoint's EMA params (default: on). "
+        "Use --no-use-ema for the live training weights.",
+    )
     return parser
 
 
@@ -236,7 +246,9 @@ def main() -> int:
     import jax.numpy as jnp
 
     restart = get_last(str(args.checkpoint))
-    params, model = get_params_model(str(restart), natoms=n_atoms)
+    params, model = get_params_model(
+        str(restart), natoms=n_atoms, prefer_ema=args.use_ema
+    )
 
     from ase import Atoms, units
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
@@ -279,6 +291,7 @@ def main() -> int:
                 "timestep": args.timestep,
                 "nsteps": args.nsteps_ase,
                 "printfreq": args.printfreq,
+                "use_ema": args.use_ema,
             }
             for k in range(n_replicas)
         ]

@@ -33,8 +33,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--params-key",
-        default="params",
-        help='Key to extract from restored checkpoint dict (default: "params")',
+        default="ema_params",
+        help='Key to extract from restored checkpoint dict (default: '
+        '"ema_params"; falls back to "params" if EMA is absent). '
+        'Use --params-key params for live training weights.',
     )
     return parser
 

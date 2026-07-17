@@ -25,9 +25,9 @@ usage: mmml run [-h] --pdbfile PDBFILE --checkpoint CHECKPOINT [--validate]
                 [--mm-switch-on MM_SWITCH_ON]
                 [--mm-switch-width MM_SWITCH_WIDTH] [--no-complementary-handoff]
                 [--include-mm] [--skip-ml-dimers] [--mm-r-min Å]
-                [--ml-batch-size N] [--ml-gpu-count N] [--debug]
-                [--temperature TEMPERATURE] [--timestep TIMESTEP]
-                [--nsteps_jaxmd NSTEPS_JAXMD]
+                [--ml-batch-size N] [--ml-gpu-count N]
+                [--use-ema | --no-use-ema] [--debug] [--temperature TEMPERATURE]
+                [--timestep TIMESTEP] [--nsteps_jaxmd NSTEPS_JAXMD]
                 [--steps-per-recording STEPS_PER_RECORDING]
                 [--output-prefix OUTPUT_PREFIX] [--nsteps_ase NSTEPS_ASE]
                 [--optimize-monomers] [--ensemble ENSEMBLE]
@@ -113,6 +113,9 @@ options:
                         Suggested: 256–512 for 8–16 GB GPU, 512–1024 for 24 GB+.
   --ml-gpu-count N      Parallel PhysNet chunks on N local GPUs (default 1; or
                         MMML_MLPOT_N_GPUS).
+  --use-ema, --no-use-ema
+                        Deploy the checkpoint's EMA params (default: on; Orbax
+                        only). Use --no-use-ema for the live training weights.
   --debug               Enable verbose debug output inside the calculator
                         factory.
   --temperature TEMPERATURE

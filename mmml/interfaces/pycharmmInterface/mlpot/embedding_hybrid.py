@@ -63,9 +63,9 @@ def export_embedding_checkpoint(
     epoch_dir: Path | str,
     output_json: Path | str,
     *,
-    params_key: str = "params",
+    params_key: str = "ema_params",
 ) -> Path:
-    """Export Orbax ``epoch-*`` checkpoint to portable JSON."""
+    """Export Orbax ``epoch-*`` checkpoint to portable JSON (EMA by default)."""
     from mmml.cli.base import resolve_checkpoint_paths
     from mmml.utils.model_checkpoint import orbax_to_json
 

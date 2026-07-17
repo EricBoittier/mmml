@@ -52,6 +52,38 @@ def test_get_params_model_robustness(tmp_path: Path) -> None:
         assert meta["best_loss"] == float("inf")
 
 
+def test_get_params_model_prefers_ema_by_default(tmp_path: Path) -> None:
+    epoch_dir = tmp_path / "epoch-10"
+    epoch_dir.mkdir(parents=True)
+    restored_mock = {
+        "params": {"weights": 1.0},
+        "ema_params": {"weights": 9.0},
+        "model_attributes": {
+            "features": 32,
+            "max_degree": 2,
+            "num_iterations": 2,
+            "num_basis_functions": 32,
+            "cutoff": 8.0,
+            "max_atomic_number": 35,
+            "charges": False,
+            "natoms": 20,
+            "total_charge": 0.0,
+            "zbl": False,
+        },
+    }
+    with patch(
+        "mmml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer"
+    ) as mock_checkpointer:
+        mock_checkpointer.restore.return_value = restored_mock
+        params, _model = get_params_model(str(epoch_dir), natoms=20, quiet=True)
+        assert params == {"weights": 9.0}
+
+        live, _model = get_params_model(
+            str(epoch_dir), natoms=20, quiet=True, prefer_ema=False
+        )
+        assert live == {"weights": 1.0}
+
+
 def test_restart_training_robustness(tmp_path: Path) -> None:
     # Set up a dummy folder for restart
     restart_dir = tmp_path / "run"

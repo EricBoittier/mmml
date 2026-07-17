@@ -17,6 +17,7 @@ usage: mmml physnet-md [-h] --checkpoint CHECKPOINT (--structure STRUCTURE |
                        [--timestep TIMESTEP] [--nsteps-ase NSTEPS_ASE]
                        [--nsteps-jaxmd NSTEPS_JAXMD] [--printfreq PRINTFREQ]
                        [--skip-jaxmd] [--n-replicas B]
+                       [--use-ema | --no-use-ema]
 
 PhysNet MD sampling with ASE and JAX-MD.
 
@@ -45,6 +46,9 @@ options:
                         ProcessPoolExecutor; JAX-MD: batched GPU. With --data,
                         uses first B structures as initial geometries if
                         available. (default: 1)
+  --use-ema, --no-use-ema
+                        Deploy the checkpoint's EMA params (default: on). Use
+                        --no-use-ema for the live training weights.
 
 CLI for PhysNet molecular dynamics sampling with ASE and JAX-MD. Runs NVT
 Langevin (ASE) and NVT Nose-Hoover (JAX-MD) using a trained PhysNet checkpoint

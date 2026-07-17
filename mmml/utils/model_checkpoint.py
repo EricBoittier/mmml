@@ -645,7 +645,7 @@ def quick_save(
 def orbax_to_json(
     orbax_checkpoint_dir: Union[str, Path],
     output_path: Union[str, Path],
-    params_key: str = "params",
+    params_key: str = "ema_params",
     config: Optional[Dict[str, Any]] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
@@ -663,8 +663,11 @@ def orbax_to_json(
         Can be a flat params checkpoint or a dict with 'params' key.
     output_path : Union[str, Path]
         Path to output JSON file (e.g. params.json).
-    params_key : str, default="params"
-        Key to extract params from restored dict. Use "params" for standard format.
+    params_key : str, default="ema_params"
+        Key to extract params from restored dict. Defaults to EMA (what
+        validation uses). If ``ema_params`` is absent, falls back to
+        ``params``. Pass ``params_key="params"`` for live weights.
+        Flat param trees (no wrapper keys) are exported as-is.
     config : Optional[Dict[str, Any]], optional
         Model config to include in the JSON (saved under "config" key).
     metadata : Optional[Dict[str, Any]], optional
@@ -696,20 +699,39 @@ def orbax_to_json(
     checkpointer = ocp.PyTreeCheckpointer()
     restored = checkpointer.restore(str(orbax_checkpoint_dir))
 
-    if isinstance(restored, dict) and params_key in restored:
-        params = restored[params_key]
-        if config is None:
-            checkpoint_config = restored.get("config")
-            model_attributes = restored.get("model_attributes")
-            if isinstance(checkpoint_config, dict) or isinstance(model_attributes, dict):
-                config = {
-                    **(checkpoint_config if isinstance(checkpoint_config, dict) else {}),
-                    **(model_attributes if isinstance(model_attributes, dict) else {}),
-                }
-        if metadata is None and "metadata" in restored:
-            metadata = restored["metadata"]
-    elif isinstance(restored, dict):
-        params = restored
+    keys_to_try = [params_key]
+    if params_key == "ema_params":
+        keys_to_try.append("params")
+
+    params = None
+    if isinstance(restored, dict):
+        for key in keys_to_try:
+            if key in restored:
+                params = restored[key]
+                if config is None:
+                    checkpoint_config = restored.get("config")
+                    model_attributes = restored.get("model_attributes")
+                    if isinstance(checkpoint_config, dict) or isinstance(
+                        model_attributes, dict
+                    ):
+                        config = {
+                            **(
+                                checkpoint_config
+                                if isinstance(checkpoint_config, dict)
+                                else {}
+                            ),
+                            **(
+                                model_attributes
+                                if isinstance(model_attributes, dict)
+                                else {}
+                            ),
+                        }
+                if metadata is None and "metadata" in restored:
+                    metadata = restored["metadata"]
+                break
+        if params is None:
+            # Flat params tree (no wrapper keys).
+            params = restored
     else:
         params = restored
 

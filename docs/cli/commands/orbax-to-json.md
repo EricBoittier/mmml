@@ -84,7 +84,8 @@ options:
   -o, --output OUTPUT   Output JSON path (e.g. DESdimers_params.json)
   --params-key PARAMS_KEY
                         Key to extract from restored checkpoint dict (default:
-                        "params")
+                        "ema_params"; falls back to "params" if EMA is absent).
+                        Use --params-key params for live training weights.
 
 CLI: export an Orbax checkpoint to a portable JSON file. Usage: mmml orbax-to-
 json path/to/epoch-1985 -o DESdimers_params.json
