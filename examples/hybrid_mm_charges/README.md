@@ -6,7 +6,7 @@ See [`docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md).
 | Mode | Formula | Train YAML | MD YAML |
 |------|---------|------------|---------|
 | A `fixed` | `q_MM = q_CGenFF` | [`train_fixed.yaml`](train_fixed.yaml) | [`md_fixed.yaml`](md_fixed.yaml) |
-| A + PME | fixed + `nvalchemiops_pme` Coulomb (LJ off) | [`train_fixed_nvalchemiops_pme.yaml`](train_fixed_nvalchemiops_pme.yaml) | — |
+| A + PME | fixed + `nvalchemiops_pme` Coulomb (LJ off) | [`train_fixed_nvalchemiops_pme.yaml`](train_fixed_nvalchemiops_pme.yaml) | [`md_fixed_nvalchemiops_pme.yaml`](md_fixed_nvalchemiops_pme.yaml) |
 | B `latent` | `q_MM = neutralize(q_ML)` | [`train_latent.yaml`](train_latent.yaml) | [`md_latent.yaml`](md_latent.yaml) |
 | C `fixed_plus_latent` | `q_CGenFF + neutralize(q_ML)` | [`train_fixed_plus_latent.yaml`](train_fixed_plus_latent.yaml) | [`md_fixed_plus_latent.yaml`](md_fixed_plus_latent.yaml) |
 
@@ -34,8 +34,21 @@ boxes with `mm_charge_mode: latent` / `fixed_plus_latent` yet. Use
 ```bash
 # After training + orbax-to-json (or point checkpoint at an existing JSON)
 mmml md-system --config examples/hybrid_mm_charges/md_fixed.yaml --run-all
+mmml md-system --config examples/hybrid_mm_charges/md_fixed_nvalchemiops_pme.yaml --run-all
 mmml md-system --config examples/hybrid_mm_charges/md_latent.yaml --run-all
 mmml md-system --config examples/hybrid_mm_charges/md_fixed_plus_latent.yaml --run-all
+```
+
+Full-box PME MD flags (CLI equivalent of the nvalchemiops train config)::
+
+```bash
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 30 \
+  --mm-nonbond-mode periodic_external \
+  --lr-solver nvalchemiops_pme \
+  --no-periodic-charmm-vdw \
+  --mm-charge-mode fixed \
+  --checkpoint /path/to/params.json
 ```
 
 Edit `defaults.checkpoint` to your Mode A/B/C checkpoint. Train and MD modes

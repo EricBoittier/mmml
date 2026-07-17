@@ -449,3 +449,50 @@ def test_cli_exposes_lr_solver_flags():
     assert '"--lr-solver"' in src
     assert '"--pme-box-length"' in src
     assert "nvalchemiops_pme" in src
+
+
+def test_nvalchemiops_pme_energy_jittable_with_force_vjp():
+    """Train path must survive jit + value_and_grad (no NL concretization)."""
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        CHARMM_COULOMB_KCAL,
+        nvalchemiops_pme_coulomb_energy_jax,
+    )
+
+    pos0 = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
+    chg = jnp.array([1.0, -1.0], dtype=jnp.float64)
+
+    def _concrete(pos_np, chg_np, **kwargs):
+        # Analytic Coulomb so VJP is exact: E = k q_i q_j / r, F_phys = -dE/dR
+        p = np.asarray(pos_np, dtype=np.float64)
+        q = np.asarray(chg_np, dtype=np.float64).reshape(-1)
+        d = p[1] - p[0]
+        r = float(np.linalg.norm(d))
+        e = CHARMM_COULOMB_KCAL * float(q[0] * q[1]) / r
+        # F_phys = -dE/dR for E = k q0 q1 / |R1-R0|
+        f0 = -CHARMM_COULOMB_KCAL * float(q[0] * q[1]) * d / (r**3)
+        f1 = CHARMM_COULOMB_KCAL * float(q[0] * q[1]) * d / (r**3)
+        return e, np.stack([f0, f1], axis=0)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend._nvalchemiops_pme_energy_forces_concrete",
+        side_effect=_concrete,
+    ):
+        def e_fn(p):
+            return nvalchemiops_pme_coulomb_energy_jax(
+                p,
+                chg,
+                box_length_A=40.0,
+                accuracy=1e-4,
+                real_space_cutoff_A=10.0,
+                compute_forces=False,
+            )
+
+        e, g = jax.jit(jax.value_and_grad(e_fn))(pos0)
+        # Physical force from hybrid convention uses -grad E; check grad matches FD
+        d = jnp.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]], dtype=jnp.float64)
+        d = d / jnp.linalg.norm(d)
+        eps = 1e-5
+        fd = (e_fn(pos0 + eps * d) - e_fn(pos0 - eps * d)) / (2.0 * eps)
+        analytic = jnp.sum(g * d)
+        rel = abs(float(fd - analytic)) / max(abs(float(analytic)), 1e-12)
+        assert rel < 1e-5, f"fd={fd}, dE={analytic}, rel={rel}, E={e}"

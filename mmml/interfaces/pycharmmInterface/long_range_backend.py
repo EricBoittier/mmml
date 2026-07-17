@@ -647,6 +647,75 @@ def estimate_nvalchemiops_pme_real_space_cutoff(
     return float(np.asarray(jax.device_get(params.real_space_cutoff[0]), dtype=np.float64))
 
 
+def _nvalchemiops_pme_energy_forces_concrete(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    *,
+    box_length_A: float,
+    accuracy: float | None = None,
+    real_space_cutoff_A: float | None = None,
+) -> tuple[float, np.ndarray]:
+    """Eager host PME (kcal/mol). Safe outside ``jax.jit`` (concrete NL sizes)."""
+    import jax
+    import jax.numpy as jnp
+    from nvalchemiops.jax.interactions.electrostatics import (
+        estimate_pme_parameters,
+        particle_mesh_ewald,
+    )
+    from nvalchemiops.jax.neighbors import neighbor_list
+
+    pos_np = np.asarray(positions_A, dtype=np.float64)
+    chg_np = np.asarray(charges_e, dtype=np.float64).reshape(-1)
+    if pos_np.ndim != 2 or pos_np.shape[1] != 3:
+        raise ValueError(f"positions must be (n_atoms, 3); got {pos_np.shape}")
+    if chg_np.shape[0] != pos_np.shape[0]:
+        raise ValueError(
+            f"charges length {chg_np.shape[0]} != n_atoms {pos_np.shape[0]}"
+        )
+
+    L = float(box_length_A)
+    acc = _nvalchemiops_pme_accuracy(accuracy)
+    with jax.disable_jit():
+        pos = jnp.asarray(pos_np)
+        chg = jnp.asarray(chg_np)
+        cell = (jnp.eye(3, dtype=jnp.float64) * L)[None, ...]
+        pbc = jnp.array([[True, True, True]])
+        if real_space_cutoff_A is None:
+            params = estimate_pme_parameters(pos, cell, accuracy=acc)
+            cutoff = float(
+                np.asarray(jax.device_get(params.real_space_cutoff[0]), dtype=np.float64)
+            )
+        else:
+            cutoff = float(real_space_cutoff_A)
+        nl, nptr, ns = neighbor_list(
+            pos,
+            cutoff,
+            cell=cell,
+            pbc=pbc,
+            return_neighbor_list=True,
+        )
+        energies, forces = particle_mesh_ewald(
+            positions=pos,
+            charges=chg,
+            cell=cell,
+            neighbor_list=nl,
+            neighbor_ptr=nptr,
+            neighbor_shifts=ns,
+            compute_forces=True,
+            accuracy=acc,
+        )
+        jax.block_until_ready(energies)
+        jax.block_until_ready(forces)
+        energy = float(
+            CHARMM_COULOMB_KCAL
+            * float(np.asarray(jax.device_get(jnp.sum(energies)), dtype=np.float64))
+        )
+        forces_out = CHARMM_COULOMB_KCAL * np.asarray(
+            jax.device_get(forces), dtype=np.float64
+        )
+    return energy, forces_out
+
+
 def nvalchemiops_pme_coulomb_energy_jax(
     positions,
     charges,
@@ -656,67 +725,103 @@ def nvalchemiops_pme_coulomb_energy_jax(
     real_space_cutoff_A: float | None = None,
     compute_forces: bool = False,
 ):
-    """Pure JAX nvalchemiops PME Coulomb (kcal/mol).
+    """nvalchemiops PME Coulomb (kcal/mol), train- and MD-safe.
 
-    Returns a scalar energy, or ``(energy, forces)`` when ``compute_forces``.
-    Discrete neighbor-list indices are ``stop_gradient``'d so autodiff flows
-    through the continuous PME kernels only. Prefer a static
-    ``real_space_cutoff_A`` (from :func:`estimate_nvalchemiops_pme_real_space_cutoff`)
-    inside jitted training steps.
+    The nvalchemiops neighbor list concretizes shift counts with ``int(...)``,
+    which cannot run under ``jax.jit``.  Training therefore uses
+    ``pure_callback`` + ``custom_vjp`` (analytic PME forces for the VJP).
+    ``compute_forces=True`` runs the eager host path (MD / parity scripts).
     """
     import jax
     import jax.numpy as jnp
-    from nvalchemiops.jax.interactions.electrostatics import (
-        estimate_pme_parameters,
-        particle_mesh_ewald,
-    )
-    from nvalchemiops.jax.neighbors import neighbor_list
 
     pos = jnp.asarray(positions)
     chg = jnp.asarray(charges).reshape(-1)
-    if pos.ndim != 2 or int(pos.shape[1]) != 3:
-        raise ValueError(f"positions must be (n_atoms, 3); got {pos.shape}")
-    if int(chg.shape[0]) != int(pos.shape[0]):
+    if pos.ndim != 2 or pos.shape[1] != 3:
+        raise ValueError(f"positions must be (n_atoms, 3); got {tuple(pos.shape)}")
+    if chg.shape[0] != pos.shape[0]:
         raise ValueError(f"charges length {chg.shape[0]} != n_atoms {pos.shape[0]}")
 
     L = float(box_length_A)
     acc = _nvalchemiops_pme_accuracy(accuracy)
-    dtype = pos.dtype
-    cell = (jnp.eye(3, dtype=dtype) * jnp.asarray(L, dtype=dtype))[None, ...]
-    pbc = jnp.array([[True, True, True]])
-    if real_space_cutoff_A is None:
-        params = estimate_pme_parameters(pos, cell, accuracy=acc)
-        cutoff = float(np.asarray(jax.device_get(params.real_space_cutoff[0]), dtype=np.float64))
-    else:
-        cutoff = float(real_space_cutoff_A)
+    cut = None if real_space_cutoff_A is None else float(real_space_cutoff_A)
 
-    nl, nptr, ns = neighbor_list(
-        pos,
-        cutoff,
-        cell=cell,
-        pbc=pbc,
-        return_neighbor_list=True,
-    )
-    nl = jax.lax.stop_gradient(nl)
-    nptr = jax.lax.stop_gradient(nptr)
-    ns = jax.lax.stop_gradient(ns)
-
-    out = particle_mesh_ewald(
-        positions=pos,
-        charges=chg,
-        cell=cell,
-        neighbor_list=nl,
-        neighbor_ptr=nptr,
-        neighbor_shifts=ns,
-        compute_forces=bool(compute_forces),
-        accuracy=acc,
-    )
     if compute_forces:
-        energies, forces = out
-        energy = CHARMM_COULOMB_KCAL * jnp.sum(energies)
-        return energy, CHARMM_COULOMB_KCAL * forces
-    energies = out
-    return CHARMM_COULOMB_KCAL * jnp.sum(energies)
+        e_np, f_np = _nvalchemiops_pme_energy_forces_concrete(
+            np.asarray(jax.device_get(pos), dtype=np.float64),
+            np.asarray(jax.device_get(chg), dtype=np.float64),
+            box_length_A=L,
+            accuracy=acc,
+            real_space_cutoff_A=cut,
+        )
+        return jnp.asarray(e_np, dtype=pos.dtype), jnp.asarray(f_np, dtype=pos.dtype)
+
+    return _nvalchemiops_pme_energy_train_vjp(pos, chg, L, acc, cut)
+
+
+def _nvalchemiops_pme_energy_train_vjp(
+    positions,
+    charges,
+    box_length_A: float,
+    accuracy: float,
+    real_space_cutoff_A: float | None,
+):
+    """Differentiable PME energy for jitted train steps (callback + force VJP)."""
+    import jax
+    import jax.numpy as jnp
+
+    box = float(box_length_A)
+    acc = float(accuracy)
+    cut = None if real_space_cutoff_A is None else float(real_space_cutoff_A)
+
+    def _host(args):
+        pos_h, chg_h = args
+        e_h, f_h = _nvalchemiops_pme_energy_forces_concrete(
+            pos_h,
+            chg_h,
+            box_length_A=box,
+            accuracy=acc,
+            real_space_cutoff_A=cut,
+        )
+        return (
+            np.asarray(e_h, dtype=np.float64),
+            np.asarray(f_h, dtype=np.float64),
+        )
+
+    @jax.custom_vjp
+    def _energy(pos, chg):
+        e, _f = jax.pure_callback(
+            _host,
+            (
+                jax.ShapeDtypeStruct((), jnp.float64),
+                jax.ShapeDtypeStruct(pos.shape, jnp.float64),
+            ),
+            (pos, chg),
+            vmap_method="sequential",
+        )
+        return jnp.asarray(e, dtype=pos.dtype)
+
+    def _energy_fwd(pos, chg):
+        e, f = jax.pure_callback(
+            _host,
+            (
+                jax.ShapeDtypeStruct((), jnp.float64),
+                jax.ShapeDtypeStruct(pos.shape, jnp.float64),
+            ),
+            (pos, chg),
+            vmap_method="sequential",
+        )
+        e = jnp.asarray(e, dtype=pos.dtype)
+        f = jnp.asarray(f, dtype=pos.dtype)
+        return e, (f, chg)
+
+    def _energy_bwd(res, g):
+        f_phys, chg = res
+        # nvalchemiops forces are physical F = -∂E/∂R → ∂E/∂R = -F.
+        return (-g * f_phys, jnp.zeros_like(chg))
+
+    _energy.defvjp(_energy_fwd, _energy_bwd)
+    return _energy(positions, charges)
 
 
 def compute_nvalchemiops_pme_coulomb(
@@ -732,23 +837,15 @@ def compute_nvalchemiops_pme_coulomb(
     charges and Å coordinates; MMML converts to CHARMM kcal/mol with
     ``CHARMM_COULOMB_KCAL``.
     """
-    import jax
-    import jax.numpy as jnp
-
-    pos = jnp.asarray(np.asarray(positions_A, dtype=np.float64), dtype=jnp.float64)
-    chg = jnp.asarray(np.asarray(charges_e, dtype=np.float64).reshape(-1), dtype=jnp.float64)
-    energy, forces = nvalchemiops_pme_coulomb_energy_jax(
-        pos,
-        chg,
+    energy, forces = _nvalchemiops_pme_energy_forces_concrete(
+        np.asarray(positions_A, dtype=np.float64),
+        np.asarray(charges_e, dtype=np.float64),
         box_length_A=float(box_length_A),
         accuracy=accuracy,
-        compute_forces=True,
     )
-    jax.block_until_ready(energy)
-    jax.block_until_ready(forces)
     return LongRangeInteractionResult(
-        energy_kcalmol=float(np.asarray(jax.device_get(energy), dtype=np.float64)),
-        forces_kcalmol_A=np.asarray(jax.device_get(forces), dtype=np.float64),
+        energy_kcalmol=float(energy),
+        forces_kcalmol_A=np.asarray(forces, dtype=np.float64),
     )
 
 
