@@ -328,10 +328,11 @@ def _validate_tables(path: Path) -> dict[int, dict]:
     return out
 
 
-def _tag_style() -> dict[str, str]:
+def _tag_style(tags: list[tuple[str, int, str]] | None = None) -> dict[str, str]:
+    tags = tags if tags is not None else REF_TAGS
     style = apply_plot_style("icml")
-    cols = comparison_colors(style, n=len(REF_TAGS))
-    return {tag: cols[i] for i, (tag, _, _) in enumerate(REF_TAGS)}
+    cols = comparison_colors(style, n=max(len(tags), 1))
+    return {tag: cols[i] for i, (tag, _, _) in enumerate(tags)}
 
 
 def _render_tag_overlay(
@@ -349,8 +350,9 @@ def _render_tag_overlay(
     rotation: str,
     highlight_axis: int | None = None,
     title: str | None = None,
+    tag_dirs: dict[str, int] | None = None,
 ) -> None:
-    d_idx = TAG_DIRS.get(tag, 0)
+    d_idx = (tag_dirs or TAG_DIRS).get(tag, 0)
     r_use = _r_for_tag(rays, ori, d_idx)
     dim, frags, com_a, com_b = _dimer_atoms(
         mono, direction=dirs[d_idx], quat=quats[ori], r=r_use
@@ -1126,13 +1128,87 @@ def _slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
     return (np.sin((1.0 - t) * theta) * q0 + np.sin(t * theta) * q1) / s
 
 
-# Path graph among tags (matches filmstrip reading order)
-PATH_EDGES: tuple[tuple[str, str], ...] = (("A", "B"), ("C", "D"), ("A", "C"), ("B", "C"))
+# Default path graph (atlas overrides with A-B, B-C, C-D chain)
+PATH_EDGES: tuple[tuple[str, str], ...] = (("A", "B"), ("B", "C"), ("C", "D"))
 
 
-def _tag_lookup() -> dict[str, tuple[int, int]]:
+def _tag_lookup(
+    tags: list[tuple[str, int, str]] | None = None,
+    tag_dirs: dict[str, int] | None = None,
+) -> dict[str, tuple[int, int]]:
     """tag → (orientation, direction)."""
-    return {t: (o, TAG_DIRS[t]) for t, o, _ in REF_TAGS}
+    tags = tags if tags is not None else REF_TAGS
+    tag_dirs = tag_dirs if tag_dirs is not None else TAG_DIRS
+    return {t: (o, tag_dirs[t]) for t, o, _ in tags}
+
+
+def _select_surface_minima_tags(
+    rays: dict[str, np.ndarray],
+    *,
+    quats: np.ndarray,
+    dirs: np.ndarray,
+    n_tags: int = 4,
+    min_sep: float = 0.65,
+) -> tuple[list[tuple[str, int, str]], dict[str, int]]:
+    """Pick well-separated physical minima as tags A.., ordered by e0 longitude."""
+    Rs = np.stack([quat_to_matrix(q) for q in quats], axis=0)
+    phys = _physical_minima(rays)
+    idx = np.flatnonzero(phys)
+    if idx.size == 0:
+        # fall back to legacy fixed tags
+        return list(REF_TAGS), dict(TAG_DIRS)
+
+    order = np.argsort(rays["e_min_kcal"][idx])
+    picked: list[tuple[int, int, float, np.ndarray]] = []
+    feats: list[np.ndarray] = []
+    used_ori: set[int] = set()
+
+    def _try_pick(require_new_ori: bool) -> None:
+        for i in idx[order]:
+            if len(picked) >= n_tags:
+                return
+            ori = int(rays["orientation"][i])
+            di = int(rays["direction"][i])
+            if require_new_ori and ori in used_ori:
+                continue
+            tip = Rs[ori][:, 0]
+            u = dirs[di]
+            feat = np.concatenate([tip, u])
+            if feats and min(float(np.linalg.norm(feat - f)) for f in feats) < min_sep:
+                continue
+            picked.append((ori, di, float(rays["e_min_kcal"][i]), tip))
+            feats.append(feat)
+            used_ori.add(ori)
+
+    _try_pick(require_new_ori=True)
+    _try_pick(require_new_ori=False)
+    # pad with next-deepest if still short
+    if len(picked) < n_tags:
+        have = {(o, d) for o, d, _, _ in picked}
+        for i in idx[order]:
+            ori = int(rays["orientation"][i])
+            di = int(rays["direction"][i])
+            if (ori, di) in have:
+                continue
+            tip = Rs[ori][:, 0]
+            picked.append((ori, di, float(rays["e_min_kcal"][i]), tip))
+            have.add((ori, di))
+            if len(picked) >= n_tags:
+                break
+
+    # Order A..D by e0 tip longitude so the filmstrip chain walks the surface
+    lons = [_xyz_to_lonlat(p[3][None, :])[0][0] for p in picked]
+    order_lon = np.argsort(lons)
+    picked = [picked[int(k)] for k in order_lon]
+
+    labels = "ABCDEFGH"
+    tags: list[tuple[str, int, str]] = []
+    tag_dirs: dict[str, int] = {}
+    for k, (ori, di, e, _tip) in enumerate(picked[:n_tags]):
+        lab = labels[k]
+        tags.append((lab, ori, f"min {e:.2f} kcal/mol"))
+        tag_dirs[lab] = di
+    return tags, tag_dirs
 
 
 def _physical_minima(rays: dict[str, np.ndarray]) -> np.ndarray:
@@ -1262,9 +1338,11 @@ def _path_samples(
     dirs: np.ndarray,
     rays: dict[str, np.ndarray],
     n: int,
+    tags: list[tuple[str, int, str]] | None = None,
+    tag_dirs: dict[str, int] | None = None,
 ) -> list[tuple[float, np.ndarray, np.ndarray, float, np.ndarray]]:
     """SLERP/lerp samples along a tag→tag path: (t, quat, û, r, R)."""
-    lookup = _tag_lookup()
+    lookup = _tag_lookup(tags, tag_dirs)
     o0, d0 = lookup[tag0]
     o1, d1 = lookup[tag1]
     q0, q1 = quats[o0], quats[o1]
@@ -1295,7 +1373,10 @@ def _draw_axis_ball(
     azim: float = -55,
     path_edges: tuple[tuple[str, str], ...] | None = None,
     path_n: int = 24,
+    tags: list[tuple[str, int, str]] | None = None,
+    tag_dirs: dict[str, int] | None = None,
 ) -> None:
+    tags = tags if tags is not None else REF_TAGS
     u = np.linspace(0, 2 * np.pi, 40)
     v = np.linspace(0, np.pi, 24)
     xs = np.outer(np.cos(u), np.sin(v))
@@ -1310,7 +1391,7 @@ def _draw_axis_ball(
         edgecolors="white", linewidths=0.3,
     )
 
-    lookup = _tag_lookup()
+    lookup = _tag_lookup(tags, tag_dirs)
     if path_edges:
         for t0, t1 in path_edges:
             o0, o1 = lookup[t0][0], lookup[t1][0]
@@ -1323,7 +1404,7 @@ def _draw_axis_ball(
             mid = mcolors.to_hex(0.5 * (c0 + c1))
             ax.plot(curve[:, 0], curve[:, 1], curve[:, 2], color=mid, lw=2.2, alpha=0.9)
 
-    for tag, ori, _ in REF_TAGS:
+    for tag, ori, _ in tags:
         p = pts[ori]
         ax.scatter(
             [p[0]], [p[1]], [p[2]],
@@ -1352,6 +1433,20 @@ def _draw_axis_ball(
     ax.set_axis_off()
 
 
+def _draw_symmetry_guides(ax) -> None:
+    """Mark lab-frame equator / meridians on an equirectangular S2 map."""
+    ax.axhline(0.0, color="#1C2833", ls="--", lw=0.7, alpha=0.55, zorder=2)
+    for lon in (-90.0, 0.0, 90.0):
+        ax.axvline(lon, color="#1C2833", ls=":", lw=0.6, alpha=0.45, zorder=2)
+    ax.plot([0], [90], "k+", ms=7, zorder=3)
+    ax.plot([0], [-90], "k+", ms=7, zorder=3)
+    ax.text(4, 4, "eq", fontsize=6, color="#1C2833", alpha=0.7)
+    ax.text(4, 82, "+z", fontsize=6, color="#1C2833", alpha=0.7)
+    ax.text(4, -88, "-z", fontsize=6, color="#1C2833", alpha=0.7)
+    ax.text(92, 4, "+y", fontsize=6, color="#1C2833", alpha=0.7)
+    ax.text(-178, 4, "-x/+x", fontsize=6, color="#1C2833", alpha=0.7)
+
+
 def _draw_filmstrip(
     fig: plt.Figure,
     cell,
@@ -1367,10 +1462,13 @@ def _draw_filmstrip(
     n_frames: int,
     orientation: str,
     rotation: str = "16x,-28y,0z",
+    tags: list[tuple[str, int, str]] | None = None,
+    tag_dirs: dict[str, int] | None = None,
 ) -> None:
     """ASE morph frames along one path edge (horizontal or vertical strip)."""
     samples = _path_samples(
         tag0=tag0, tag1=tag1, quats=quats, dirs=dirs, rays=rays, n=n_frames,
+        tags=tags, tag_dirs=tag_dirs,
     )
     if orientation == "horizontal":
         inner = cell.subgridspec(1, n_frames, wspace=0.18)
@@ -1403,20 +1501,47 @@ def _draw_filmstrip(
             spine.set_visible(True)
             spine.set_color(blend)
             spine.set_linewidth(1.5)
-    # path name + morph key under the strip
     mid = axes[n_frames // 2]
     mid.text(
-        0.5, -0.08, f"{tag0}–{tag1}",
+        0.5, -0.10, f"{tag0}-{tag1}",
         transform=mid.transAxes, ha="center", va="top",
-        fontsize=8, fontweight="bold",
+        fontsize=9, fontweight="bold",
         color=mcolors.to_hex(0.5 * (c0 + c1)),
         clip_on=False,
     )
-    mid.text(
-        0.5, -0.22, "morph: slerp(R) · lerp(û) · lerp(r*)",
-        transform=mid.transAxes, ha="center", va="top",
-        fontsize=6, color=STATUS_COLORS["neutral"], clip_on=False,
+
+
+def _draw_path_chord(
+    ax,
+    *,
+    tips: np.ndarray,
+    tag0: str,
+    tag1: str,
+    lookup: dict[str, tuple[int, int]],
+    tag_color: dict[str, str],
+    lw: float = 2.2,
+    n: int = 48,
+) -> None:
+    o0, o1 = lookup[tag0][0], lookup[tag1][0]
+    if tips.shape[0] < max(o0, o1) + 1:
+        return
+    p0, p1 = tips[o0], tips[o1]
+    ts = np.linspace(0, 1, n)
+    chord = np.stack([(1 - t) * p0 + t * p1 for t in ts], axis=0)
+    chord = chord / np.linalg.norm(chord, axis=1, keepdims=True)
+    lon_c, lat_c = _xyz_to_lonlat(chord)
+    dlon = np.abs(np.diff(lon_c))
+    breaks = np.where(dlon > 180)[0]
+    start = 0
+    mid = mcolors.to_hex(
+        0.5 * (np.array(mcolors.to_rgb(tag_color[tag0])) + np.array(mcolors.to_rgb(tag_color[tag1])))
     )
+    for b in list(breaks) + [len(lon_c) - 1]:
+        ax.plot(
+            lon_c[start : b + 1], lat_c[start : b + 1],
+            color=mid, lw=lw, alpha=0.95, zorder=4,
+        )
+        start = b + 1
 
 
 def _draw_equirect_panel(
@@ -1433,10 +1558,22 @@ def _draw_equirect_panel(
     ylabel: bool = False,
     ref_tip_indices: np.ndarray | None = None,
     tip_index_mode: str = "orientation",
+    tags: list[tuple[str, int, str]] | None = None,
+    tag_dirs: dict[str, int] | None = None,
+    path_edges: tuple[tuple[str, str], ...] | None = None,
+    highlight_edge: tuple[str, str] | None = None,
+    show_symmetry: bool = False,
+    mark_path_samples: list[np.ndarray] | None = None,
 ) -> object:
     """Equirectangular field. ``ref_tip_indices`` are tip-row indices to star."""
+    tags = tags if tags is not None else REF_TAGS
+    tag_dirs = tag_dirs if tag_dirs is not None else TAG_DIRS
+    path_edges = path_edges if path_edges is not None else PATH_EDGES
+
     lon_g, lat_g, field = _equirect_field(tips, evals)
     im = ax.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=norm, shading="auto")
+    if show_symmetry:
+        _draw_symmetry_guides(ax)
     lon_s, lat_s = _xyz_to_lonlat(tips)
     ax.scatter(
         lon_s, lat_s, c=evals, cmap=cmap, norm=norm,
@@ -1449,15 +1586,13 @@ def _draw_equirect_panel(
                 continue
             lo, la = _xyz_to_lonlat(tips[i : i + 1])
             ax.scatter(
-                lo, la, s=70, marker="*",
-                facecolors="#F7DC6F", edgecolors="black", linewidths=0.6, zorder=6,
+                lo, la, s=55, marker="*",
+                facecolors="#F7DC6F", edgecolors="black", linewidths=0.5, zorder=6,
             )
     if mark_tags:
-        for tag, ori, _ in REF_TAGS:
-            if tip_index_mode == "orientation":
-                idx = ori
-            else:
-                idx = TAG_DIRS[tag]
+        lookup = _tag_lookup(tags, tag_dirs)
+        for tag, ori, _ in tags:
+            idx = ori if tip_index_mode == "orientation" else tag_dirs[tag]
             if idx >= tips.shape[0]:
                 continue
             lo, la = _xyz_to_lonlat(tips[idx : idx + 1])
@@ -1467,75 +1602,32 @@ def _draw_equirect_panel(
             )
             ax.text(lo[0] + 4, la[0] + 4, tag, color=tag_color[tag], fontsize=8, fontweight="bold")
         if tip_index_mode == "orientation":
-            lookup = _tag_lookup()
-            for t0, t1 in PATH_EDGES:
-                o0, o1 = lookup[t0][0], lookup[t1][0]
-                if tips.shape[0] < max(o0, o1) + 1:
-                    continue
-                p0 = tips[o0]
-                p1 = tips[o1]
-                ts = np.linspace(0, 1, 40)
-                chord = np.stack([(1 - t) * p0 + t * p1 for t in ts], axis=0)
-                chord = chord / np.linalg.norm(chord, axis=1, keepdims=True)
-                lon_c, lat_c = _xyz_to_lonlat(chord)
-                dlon = np.abs(np.diff(lon_c))
-                breaks = np.where(dlon > 180)[0]
-                start = 0
-                mid = mcolors.to_hex(
-                    0.5 * (
-                        np.array(mcolors.to_rgb(tag_color[t0]))
-                        + np.array(mcolors.to_rgb(tag_color[t1]))
-                    )
+            for t0, t1 in path_edges:
+                bold = highlight_edge == (t0, t1)
+                _draw_path_chord(
+                    ax, tips=tips, tag0=t0, tag1=t1, lookup=lookup,
+                    tag_color=tag_color, lw=2.8 if bold else 1.0,
                 )
-                for b in list(breaks) + [len(lon_c) - 1]:
-                    ax.plot(
-                        lon_c[start : b + 1], lat_c[start : b + 1],
-                        color=mid, lw=1.4, alpha=0.85, zorder=4,
-                    )
-                    start = b + 1
+                if not bold:
+                    # dim non-highlighted edges
+                    pass
+        if mark_path_samples:
+            for tip in mark_path_samples:
+                lo, la = _xyz_to_lonlat(np.asarray(tip).reshape(1, 3))
+                ax.scatter(
+                    lo, la, s=22, facecolors="white", edgecolors="#2C3E50",
+                    linewidths=0.5, zorder=7,
+                )
     ax.set_xlim(-180, 180)
     ax.set_ylim(-90, 90)
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=9)
     ax.tick_params(labelsize=7)
-    ax.set_xlabel("lon (deg)", fontsize=8)
     if ylabel:
-        ax.set_ylabel("lat (deg)", fontsize=8)
+        ax.set_ylabel("lat", fontsize=8)
     if spine_color:
         ax.spines["bottom"].set_color(spine_color)
         ax.spines["bottom"].set_linewidth(2.0)
     return im
-
-
-def _draw_manifold_legend(ax) -> None:
-    """Text key for the mixed coordinate systems on the atlas."""
-    ax.set_axis_off()
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.text(
-        0.02, 0.96, "What each panel shows",
-        fontsize=9, fontweight="bold", va="top", transform=ax.transAxes,
-    )
-    lines = [
-        "e0 map: tip of body axis e0 of B on S2 after R=[e0 e1 e2].",
-        "  Spin about e0 is invisible. Lon/lat are not Euler angles.",
-        "approach u-hat: COM->COM ray on S2 (Fibonacci dirs).",
-        "  Colour = well depth aggregated over orientations.",
-        "SO(3) ball: axis-angle p=(theta/pi) n-hat of quat only;",
-        "  paths ignore u-hat and r*.",
-        "Filmstrips: morph slerp(R) . lerp(u) . lerp(r*).",
-        "Path 1D: nearest-ray e_min along that morph.",
-        "",
-        "*  = ref physical min (GFN2 --ref-rays)",
-        "o  = this method single-min ray",
-        "x  = this method spurious (n_min>1)",
-        "colour = well depth (kcal/mol)",
-    ]
-    ax.text(
-        0.02, 0.88, "\n".join(lines),
-        fontsize=6.5, va="top", ha="left", family="monospace",
-        transform=ax.transAxes, linespacing=1.25,
-        color="#2C3E50",
-    )
 
 
 def plot_path_atlas(
@@ -1544,17 +1636,17 @@ def plot_path_atlas(
     mono: Atoms,
     out: Path,
     how: str = "min",
-    n_h: int = 6,
+    n_h: int = 7,
     n_v: int = 5,
     shared: SharedScales | None = None,
     ref_rays: dict[str, np.ndarray] | None = None,
     ref_top_n: int = 12,
     validate: Path | None = None,
 ) -> None:
-    """Path-framed atlas: filmstrips around maps, path 1D curves, minima."""
+    """Row atlas: surface | filmstrip | annotated surface | other view per edge."""
+    del n_v, validate  # unused in this layout
     plot_utils = _load_plot_utils()
     apply_plot_style("icml")
-    tag_color = _tag_style()
     quats = super_fibonacci(24)
     dirs = fibonacci_sphere(10)
     Rs = np.stack([quat_to_matrix(q) for q in quats], axis=0)
@@ -1564,10 +1656,19 @@ def plot_path_atlas(
     sc = scales_for_rays(rays, how=how, shared=shared)
     cmap = sc.energy_cmap()
     norm = sc.energy_norm()
-    style = apply_plot_style("icml")
-    edge_colors = comparison_colors(style, n=len(PATH_EDGES))
-    highlight_dirs = sorted(set(TAG_DIRS.values()))
     ymin, ymax = sc.e_ylim
+
+    # Tags = surface minima (prefer ref physical wells so flip pages share A-D)
+    tag_source = ref_rays if ref_rays is not None else rays
+    tags, tag_dirs = _select_surface_minima_tags(
+        tag_source, quats=quats, dirs=dirs, n_tags=4,
+    )
+    path_edges: tuple[tuple[str, str], ...] = tuple(
+        (tags[i][0], tags[i + 1][0]) for i in range(len(tags) - 1)
+    )
+    tag_color = _tag_style(tags)
+    style = apply_plot_style("icml")
+    edge_colors = comparison_colors(style, n=max(len(path_edges), 1))
 
     ref_top = (
         _top_physical_indices(ref_rays, top_n=ref_top_n)
@@ -1577,294 +1678,158 @@ def plot_path_atlas(
     ref_ori_tips = (
         np.asarray(ref_rays["orientation"][ref_top], dtype=int) if ref_top.size else None
     )
-    ref_dir_tips = (
-        np.asarray(ref_rays["direction"][ref_top], dtype=int) if ref_top.size else None
-    )
 
-    fig = plt.figure(figsize=(24.0, 20.0))
+    n_edge = len(path_edges)
+    fig = plt.figure(figsize=(22.0, 4.2 * (n_edge + 0.85)))
     outer = GridSpec(
-        3, 3, figure=fig,
-        height_ratios=[1.15, 4.6, 1.15],
-        width_ratios=[1.15, 5.2, 1.15],
-        hspace=0.28,
-        wspace=0.22,
+        n_edge + 1, 4, figure=fig,
+        height_ratios=[0.85] + [1.35] * n_edge,
+        width_ratios=[1.35, 2.4, 1.35, 1.25],
+        hspace=0.32,
+        wspace=0.18,
     )
 
-    corner_specs = (
-        (0, 0, "A", 0, PERSPECTIVES[0][1]),
-        (0, 2, "B", 2, PERSPECTIVES[1][1]),
-        (2, 0, "C", 11, PERSPECTIVES[0][1]),
-        (2, 2, "D", 17, PERSPECTIVES[1][1]),
-    )
-    for row, col, tag, ori, rot in corner_specs:
-        ax = fig.add_subplot(outer[row, col])
+    # ── Top: endpoint ASE for A..D ────────────────────────────────────────
+    for j, (tag, ori, note) in enumerate(tags):
+        ax = fig.add_subplot(outer[0, j])
         _render_tag_overlay(
             ax, plot_utils, mono=mono, rays=rays, quats=quats, dirs=dirs, Rs=Rs,
             tag=tag, ori=ori, tag_color=tag_color[tag],
-            rotation=rot, title=tag,
+            rotation=PERSPECTIVES[j % len(PERSPECTIVES)][1],
+            title=f"{tag}  {note}",
+            tag_dirs=tag_dirs,
         )
 
-    _draw_filmstrip(
-        fig, outer[0, 1], plot_utils=plot_utils, mono=mono, rays=rays,
-        quats=quats, dirs=dirs, tag0="A", tag1="B", tag_color=tag_color,
-        n_frames=n_h, orientation="horizontal",
-    )
-    _draw_filmstrip(
-        fig, outer[2, 1], plot_utils=plot_utils, mono=mono, rays=rays,
-        quats=quats, dirs=dirs, tag0="C", tag1="D", tag_color=tag_color,
-        n_frames=n_h, orientation="horizontal",
-    )
-    _draw_filmstrip(
-        fig, outer[1, 0], plot_utils=plot_utils, mono=mono, rays=rays,
-        quats=quats, dirs=dirs, tag0="A", tag1="C", tag_color=tag_color,
-        n_frames=n_v, orientation="vertical", rotation="25x,-20y,0z",
-    )
-    _draw_filmstrip(
-        fig, outer[1, 2], plot_utils=plot_utils, mono=mono, rays=rays,
-        quats=quats, dirs=dirs, tag0="B", tag1="C", tag_color=tag_color,
-        n_frames=n_v, orientation="vertical", rotation="25x,30y,0z",
-    )
-
-    center = outer[1, 1].subgridspec(
-        3, 4,
-        height_ratios=[1.20, 1.05, 1.15],
-        hspace=0.48,
-        wspace=0.34,
-    )
-
-    # ── Row 0: e0 map | approach | legend | SO(3) ball ─────────────────────
-    last_im = _draw_equirect_panel(
-        fig.add_subplot(center[0, 0]),
-        tips=axis_tips[0],
-        evals=energy,
-        title="body e0 tip on S2 (spin about e0 lost)",
-        cmap=cmap,
-        norm=norm,
-        tag_color=tag_color,
-        mark_tags=True,
-        spine_color=AXIS_COLORS[0],
-        ylabel=True,
-        ref_tip_indices=ref_ori_tips,
-        tip_index_mode="orientation",
-    )
-    _draw_equirect_panel(
-        fig.add_subplot(center[0, 1]),
-        tips=dirs,
-        evals=e_dir,
-        title="approach u-hat (COM->COM); colour = well vs ori",
-        cmap=cmap,
-        norm=norm,
-        tag_color=tag_color,
-        mark_tags=True,
-        tip_index_mode="direction",
-        ref_tip_indices=ref_dir_tips,
-    )
-    _draw_manifold_legend(fig.add_subplot(center[0, 2]))
-    _draw_axis_ball(
-        fig.add_subplot(center[0, 3], projection="3d"),
-        quats=quats,
-        energy=energy,
-        tag_color=tag_color,
-        cmap=cmap,
-        norm=norm,
-        title="SO(3) axis-angle ball (orientation only)",
-        elev=22,
-        azim=-55,
-        path_edges=PATH_EDGES,
-    )
-
-    # ── Row 1: four path well-depth curves ────────────────────────────────
-    for j, ((t0, t1), col) in enumerate(zip(PATH_EDGES, edge_colors, strict=True)):
-        ax = fig.add_subplot(center[1, j])
-        ts, es, _rs, _keys = _path_energy_profile(
-            tag0=t0, tag1=t1, quats=quats, dirs=dirs, rays=rays, n=32,
+    last_im = None
+    for row, ((t0, t1), ecol) in enumerate(zip(path_edges, edge_colors, strict=True)):
+        r = row + 1
+        samples = _path_samples(
+            tag0=t0, tag1=t1, quats=quats, dirs=dirs, rays=rays, n=n_h,
+            tags=tags, tag_dirs=tag_dirs,
         )
-        ax.plot(ts, es, color=col, lw=2.0, label="this method")
-        if ref_rays is not None:
-            ts_r, es_r, _rs_r, _ = _path_energy_profile(
-                tag0=t0, tag1=t1, quats=quats, dirs=dirs, rays=ref_rays, n=32,
-            )
-            ax.plot(ts_r, es_r, color=col, lw=1.4, ls="--", alpha=0.85, label="ref")
-            for t_star, e_star in _ref_ticks_on_path(
-                tag0=t0,
-                tag1=t1,
-                quats=quats,
-                dirs=dirs,
-                rays_path=rays,
-                ref_rays=ref_rays,
-                n=32,
-            ):
-                ax.scatter(
-                    [t_star], [e_star], s=55, marker="*",
-                    facecolors="#F7DC6F", edgecolors="black", linewidths=0.5, zorder=5,
-                )
-        ax.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
-        ax.set_ylim(ymin, ymax)
-        ax.set_xlim(0.0, 1.0)
-        ax.set_xlabel(f"t along {t0}–{t1}", fontsize=8)
-        if j == 0:
-            ax.set_ylabel("e_min (kcal/mol)", fontsize=8)
-        ax.set_title(f"path {t0}–{t1}: nearest-ray well", fontsize=8)
-        ax.tick_params(labelsize=7)
-        if j == 0 and ref_rays is not None:
-            ax.legend(fontsize=6, loc="best", frameon=False)
+        sample_tips = [axis_tips[0][_nearest_ori(quats, q)] for _t, q, _u, _r, _R in samples]
 
-    # ── Row 2: dense e_min(ori) | (r,e) | E(r) or note ─────────────────────
-    ax_ori = fig.add_subplot(center[2, 0:2])
-    oris = np.arange(24)
-    all_dirs = np.sort(np.unique(rays["direction"]))
-    hi_cols = {d: comparison_colors(style, n=max(len(highlight_dirs), 1))[i]
-               for i, d in enumerate(highlight_dirs)}
-    for di in all_dirs:
-        e_row = np.full(24, np.nan)
-        for o in oris:
-            m = (rays["direction"] == di) & (rays["orientation"] == o)
-            if m.any():
-                e_row[o] = rays["e_min_kcal"][m][0]
-        bold = int(di) in highlight_dirs
-        ax_ori.plot(
-            oris,
-            e_row,
-            color=hi_cols[int(di)] if bold else "#95A5A6",
-            lw=1.8 if bold else 0.7,
-            alpha=0.95 if bold else 0.35,
-            label=f"dir {int(di)}" if bold else None,
+        # col 0: e0 surface + symmetry + full chain (thin)
+        ax_s = fig.add_subplot(outer[r, 0])
+        last_im = _draw_equirect_panel(
+            ax_s,
+            tips=axis_tips[0],
+            evals=energy,
+            title="e0 surface",
+            cmap=cmap,
+            norm=norm,
+            tag_color=tag_color,
+            mark_tags=True,
+            spine_color=AXIS_COLORS[0],
+            ylabel=True,
+            ref_tip_indices=ref_ori_tips,
+            tags=tags,
+            tag_dirs=tag_dirs,
+            path_edges=path_edges,
+            highlight_edge=None,
+            show_symmetry=True,
         )
-    if ref_rays is not None:
-        for di in highlight_dirs:
-            for o in oris:
-                m = (
-                    (ref_rays["direction"] == di)
-                    & (ref_rays["orientation"] == o)
-                    & _physical_minima(ref_rays)
-                )
-                if m.any():
-                    ax_ori.scatter(
-                        [o],
-                        [ref_rays["e_min_kcal"][m][0]],
-                        s=28,
-                        marker="*",
-                        facecolors="#F7DC6F",
-                        edgecolors="black",
-                        linewidths=0.4,
-                        zorder=4,
-                    )
-    ax_ori.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
-    ax_ori.set_ylim(ymin, ymax)
-    for tag, ori, _ in REF_TAGS:
-        ax_ori.axvline(ori, color=tag_color[tag], ls=":", lw=1.0)
-        ax_ori.text(
-            ori, ymax - 0.06 * (ymax - ymin), tag,
-            color=tag_color[tag], fontsize=8, fontweight="bold", ha="center", va="top",
-        )
-    ax_ori.set_xlabel("orientation index")
-    ax_ori.set_ylabel("well depth (kcal/mol)")
-    ax_ori.set_title("e_min(orientation) | all dirs (grey) · tag dirs bold · * ref")
-    legend_outside(ax_ori, side="right")
 
-    ax_re = fig.add_subplot(center[2, 2])
-    phys = _physical_minima(rays)
-    spur = ~phys
-    ax_re.scatter(
-        rays["r_at_min"][phys], rays["e_min_kcal"][phys],
-        c=STATUS_COLORS["good"], s=14, alpha=0.65, label="o single-min",
-        edgecolors="none",
-    )
-    ax_re.scatter(
-        rays["r_at_min"][spur], rays["e_min_kcal"][spur],
-        c=status_color("critical"), s=16, alpha=0.55, marker="x", label="x spurious",
-    )
-    if ref_rays is not None:
-        rphys = _physical_minima(ref_rays)
-        ax_re.scatter(
-            ref_rays["r_at_min"][rphys],
-            ref_rays["e_min_kcal"][rphys],
-            s=36,
-            marker="*",
-            facecolors="#F7DC6F",
-            edgecolors="black",
-            linewidths=0.45,
-            alpha=0.9,
-            label="* ref physical",
-            zorder=4,
+        # col 1: filmstrip
+        _draw_filmstrip(
+            fig, outer[r, 1], plot_utils=plot_utils, mono=mono, rays=rays,
+            quats=quats, dirs=dirs, tag0=t0, tag1=t1, tag_color=tag_color,
+            n_frames=n_h, orientation="horizontal",
+            tags=tags, tag_dirs=tag_dirs,
         )
-    for tag, ori, _ in REF_TAGS:
-        d_idx = TAG_DIRS[tag]
-        m = (rays["orientation"] == ori) & (rays["direction"] == d_idx)
-        if m.any():
-            ax_re.scatter(
-                [rays["r_at_min"][m][0]], [rays["e_min_kcal"][m][0]],
-                s=70, facecolors=tag_color[tag], edgecolors="black", linewidths=0.8, zorder=5,
-            )
-            ax_re.text(
-                rays["r_at_min"][m][0] + 0.05, rays["e_min_kcal"][m][0],
-                tag, color=tag_color[tag], fontsize=8, fontweight="bold",
-            )
-    ax_re.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
-    ax_re.set_xlim(*sc.r_xlim)
-    ax_re.set_ylim(ymin, ymax)
-    ax_re.set_xlabel("r at min (Å)")
-    ax_re.set_ylabel("well depth")
-    ax_re.set_title("(r*, e_min) all rays")
-    legend_outside(ax_re, side="right")
 
-    ax_er = fig.add_subplot(center[2, 3])
-    if validate is not None and Path(validate).is_file():
-        tables = _validate_tables(Path(validate))
-        r_hi = np.linspace(3.5, 8.0, 200)
-        for tag, ori, _ in REF_TAGS:
-            t = tables.get(ori)
-            if t is None:
-                continue
-            e_hi = CubicSpline(t["r"], t["e_xtb"], bc_type="natural")(r_hi)
-            ax_er.plot(r_hi, e_hi, color=tag_color[tag], lw=1.8, label=f"{tag} xTB")
-            ax_er.plot(
-                t["r"], t["e_ml"], color=tag_color[tag], lw=1.0, ls="--", alpha=0.75,
-            )
-            i_min = int(np.argmin(t["e_xtb"]))
-            ax_er.scatter(
-                [t["r"][i_min]], [t["e_xtb"][i_min]],
-                s=50, marker="*", facecolors="#F7DC6F", edgecolors="black",
-                linewidths=0.5, zorder=5,
-            )
-        ax_er.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
-        ax_er.set_xlim(3.5, 8.0)
-        ax_er.set_ylim(ymin, ymax)
-        ax_er.set_xlabel("r_COM (Å)")
-        ax_er.set_ylabel("E_int (kcal/mol)")
-        ax_er.set_title("E(r) tags A–D (xTB solid, ML dashed)")
-        legend_outside(ax_er, side="right")
-    else:
-        ax_er.set_axis_off()
-        ax_er.text(
-            0.5, 0.55,
-            "E(r) for tags A–D\n(pass --validate for full curves)",
-            ha="center", va="center", fontsize=9, color=STATUS_COLORS["neutral"],
-            transform=ax_er.transAxes,
+        # col 2: surface with this edge bold + filmstrip sample dots
+        ax_a = fig.add_subplot(outer[r, 2])
+        _draw_equirect_panel(
+            ax_a,
+            tips=axis_tips[0],
+            evals=energy,
+            title=f"{t0}-{t1}",
+            cmap=cmap,
+            norm=norm,
+            tag_color=tag_color,
+            mark_tags=True,
+            spine_color=ecol,
+            ref_tip_indices=None,
+            tags=tags,
+            tag_dirs=tag_dirs,
+            path_edges=path_edges,
+            highlight_edge=(t0, t1),
+            show_symmetry=True,
+            mark_path_samples=sample_tips,
         )
-        if ref_rays is not None:
-            ax_er.text(
-                0.5, 0.28,
-                f"* ref: {ref_top.size} deepest of "
-                f"{int(_physical_minima(ref_rays).sum())} physical wells",
-                ha="center", va="center", fontsize=7, color="#7D6608",
-                transform=ax_er.transAxes,
+
+        # col 3: other view — approach / SO(3) / path e(t)
+        mode = row % 3
+        if mode == 0:
+            ax_o = fig.add_subplot(outer[r, 3])
+            _draw_equirect_panel(
+                ax_o,
+                tips=dirs,
+                evals=e_dir,
+                title="approach",
+                cmap=cmap,
+                norm=norm,
+                tag_color=tag_color,
+                mark_tags=True,
+                tip_index_mode="direction",
+                tags=tags,
+                tag_dirs=tag_dirs,
+                path_edges=(),
+                show_symmetry=True,
             )
+        elif mode == 1:
+            ax_o = fig.add_subplot(outer[r, 3], projection="3d")
+            _draw_axis_ball(
+                ax_o, quats=quats, energy=energy, tag_color=tag_color,
+                cmap=cmap, norm=norm, title="SO(3)",
+                elev=22, azim=-55, path_edges=path_edges,
+                tags=tags, tag_dirs=tag_dirs,
+            )
+        else:
+            ax_o = fig.add_subplot(outer[r, 3])
+            samples_e = _path_samples(
+                tag0=t0, tag1=t1, quats=quats, dirs=dirs, rays=rays, n=32,
+                tags=tags, tag_dirs=tag_dirs,
+            )
+            e_map, _ = _ray_lookup_maps(rays)
+            ts = np.array([s[0] for s in samples_e])
+            es = np.array([
+                e_map.get((_nearest_ori(quats, q), _nearest_dir(dirs, u)), np.nan)
+                for _t, q, u, _r, _R in samples_e
+            ])
+            ax_o.plot(ts, es, color=ecol, lw=2.0)
+            if ref_rays is not None:
+                e_map_r, _ = _ray_lookup_maps(ref_rays)
+                es_r = np.array([
+                    e_map_r.get((_nearest_ori(quats, q), _nearest_dir(dirs, u)), np.nan)
+                    for _t, q, u, _r, _R in samples_e
+                ])
+                ax_o.plot(ts, es_r, color=ecol, lw=1.3, ls="--", alpha=0.85)
+            ax_o.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.5)
+            ax_o.set_ylim(ymin, ymax)
+            ax_o.set_xlim(0.0, 1.0)
+            ax_o.set_xlabel("t", fontsize=8)
+            ax_o.set_title(f"{t0}-{t1}", fontsize=9)
+            ax_o.tick_params(labelsize=7)
 
     if last_im is not None:
-        cax = fig.add_axes([0.935, 0.38, 0.012, 0.28])
-        fig.colorbar(last_im, cax=cax, label=f"{how} well depth (kcal/mol)")
+        cax = fig.add_axes([0.92, 0.20, 0.012, 0.55])
+        fig.colorbar(last_im, cax=cax, label=f"{how} well (kcal/mol)")
 
+    tag_line = "  ".join(
+        f"{t}=ori{o}/dir{tag_dirs[t]}" for t, o, _ in tags
+    )
     fig.suptitle(
-        "Path atlas: A–B (top) · C–D (bottom) · A–C (left) · B–C (right)  |  "
-        "maps + path 1D wells in center",
-        fontsize=12,
+        f"Path atlas  A-B-C-D  |  {tag_line}",
+        fontsize=11,
         y=0.995,
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=170, bbox_inches="tight")
     plt.close(fig)
     print(f"  wrote {out}")
+    print(f"  tags: {tag_line}")
 
 
 def plot_concentric_atlas(**kwargs) -> None:
@@ -1982,46 +1947,46 @@ def main() -> int:
             ref_top_n=args.ref_top_n,
             validate=args.validate,
         )
-
-        plot_projection_explainer(
-            out=_labeled(args.out / "projection_explainer.png", label)
-        )
-        plot_map_projections(
-            rays=rays,
-            mono=mono,
-            out=_labeled(args.out / "equirectangular_maps.png", label),
-            how=args.how,
-            shared=shared,
-        )
-        plot_hemispheres_with_ase_ring(
-            rays=rays,
-            mono=mono,
-            out=_labeled(args.out / "hemisphere_ase_ring.png", label),
-            how=args.how,
-            shared=shared,
-        )
-        plot_perspective_gallery(
-            rays=rays,
-            mono=mono,
-            out=_labeled(args.out / "perspectives_gallery.png", label),
-        )
-        plot_annotated_dashboard(
-            rays=rays,
-            mono=mono,
-            validate=args.validate,
-            out=_labeled(args.out / "hemisphere_annotated_dashboard.png", label),
-            how=args.how,
-            shared=shared,
-        )
-        for d in (0, 2, 8):
-            plot_slice_strip(
+        if not args.atlas_only:
+            plot_projection_explainer(
+                out=_labeled(args.out / "projection_explainer.png", label)
+            )
+            plot_map_projections(
                 rays=rays,
                 mono=mono,
-                out=_labeled(args.out / f"slice_dir{d}_with_ase.png", label),
-                direction=d,
-                shared=shared,
+                out=_labeled(args.out / "equirectangular_maps.png", label),
                 how=args.how,
+                shared=shared,
             )
+            plot_hemispheres_with_ase_ring(
+                rays=rays,
+                mono=mono,
+                out=_labeled(args.out / "hemisphere_ase_ring.png", label),
+                how=args.how,
+                shared=shared,
+            )
+            plot_perspective_gallery(
+                rays=rays,
+                mono=mono,
+                out=_labeled(args.out / "perspectives_gallery.png", label),
+            )
+            plot_annotated_dashboard(
+                rays=rays,
+                mono=mono,
+                validate=args.validate,
+                out=_labeled(args.out / "hemisphere_annotated_dashboard.png", label),
+                how=args.how,
+                shared=shared,
+            )
+            for d in (0, 2, 8):
+                plot_slice_strip(
+                    rays=rays,
+                    mono=mono,
+                    out=_labeled(args.out / f"slice_dir{d}_with_ase.png", label),
+                    direction=d,
+                    shared=shared,
+                    how=args.how,
+                )
     finally:
         plt.Figure.savefig = _orig_savefig  # type: ignore[method-assign]
 
@@ -2034,7 +1999,7 @@ def main() -> int:
                 "",
                 f"Flip pair: open the matching `*_ML.png` / `*_xTB.png` side by side.",
                 "Colour/axis scales locked via `--match-rays` when provided (`shared_scales.json`).",
-                "Physical minima ★ from `--ref-rays` (typically GFN2) when provided.",
+                "Physical minima (*) from `--ref-rays` (typically GFN2) when provided.",
                 "",
                 f"- path_atlas_{label}.png",
                 f"- equirectangular_maps_{label}.png",
