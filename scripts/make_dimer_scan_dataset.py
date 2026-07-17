@@ -138,6 +138,42 @@ def nms_conformers(Z, R0, n_samples, temperature_K, rng, freq_min_cm=200.0):
     return R_eq, out, freqs
 
 
+def fit_atom_refs(E, Z_all, N_all):
+    """Per-element reference energies fitted from the data (least squares).
+
+    A NN asked to predict a -666 eV total, when the physics of interest is
+    ~0.05 eV, spends all its capacity on a composition-dependent constant. The
+    standard fix is to subtract per-element references so the target becomes an
+    atomization-like energy of order eV.
+
+    Fitted here rather than taken from the repo's ATOM_ENERGIES_HARTREE: those
+    are referenced at a different level of theory, and subtracting DFT atom
+    energies from GFN2 totals leaves a residual that is neither an atomization
+    energy nor small. Fitting keeps the reference self-consistent with the data.
+
+    NOTE the composition space is rank-deficient: dimers are exactly 2x their
+    monomers, so with only two species there are 2 independent compositions for
+    4 elements. lstsq returns the minimum-norm solution -- non-unique, but the
+    RESIDUALS are unique, and those are all the model sees. It is equivalent to
+    per-species referencing for this dataset, and will NOT extrapolate to a new
+    composition.
+
+    Safe for the hybrid assembly: E_AB - E_A - E_B cancels the references
+    exactly, and (1-s)(E_A+E_B) + s*E_AB carries the same A+B reference at
+    either end of the taper, so the handoff is unaffected.
+    """
+    elems = np.unique(Z_all[Z_all > 0])
+    C = np.zeros((len(E), len(elems)))
+    for i in range(len(E)):
+        z = Z_all[i][: N_all[i]]
+        for j, e in enumerate(elems):
+            C[i, j] = (z == e).sum()
+    coef, *_ = np.linalg.lstsq(C, E, rcond=None)
+    refs = np.zeros(int(elems.max()) + 1)
+    refs[elems] = coef
+    return refs, C @ coef, elems
+
+
 def _mono_energy(Z, R):
     """GFN2 energy (eV) of one geometry -- used only for the equipartition check."""
     from tblite.interface import Calculator
@@ -405,11 +441,34 @@ def main() -> int:
         T_out[j, :len(Z)] = t; Q_out[j, :len(Z)] = q
         N_out[j] = len(Z); names.append(rn); j += 1
 
+    # --- per-element reference subtraction ---------------------------------
+    E_raw = E[keep]
+    refs, fitted, elems = fit_atom_refs(E_raw, Z_out, N_out)
+    E_ref = E_raw - fitted
+    print(f"\nper-element refs (eV, fitted): "
+          + ", ".join(f"Z={int(z)}:{refs[int(z)]:.3f}" for z in elems))
+    print("  (rank-deficient fit: these are a minimum-norm split, NOT physical atom "
+          "energies -- only the residuals are meaningful)")
+    print(f"  E before: {E_raw.min():10.2f} .. {E_raw.max():10.2f}  "
+          f"(spread {np.ptp(E_raw):.1f} eV)")
+    print(f"  E after : {E_ref.min():10.2f} .. {E_ref.max():10.2f}  "
+          f"(spread {np.ptp(E_ref):.1f} eV)")
+    # Per-species residual spread is the number that matters: it is what the model
+    # must actually learn, once the composition constant is gone.
+    for sp in sorted(set(names)):
+        m = np.array([x == sp for x in names])
+        if m.sum():
+            print(f"    {sp:9s} n={int(m.sum()):5d}  E_ref {E_ref[m].min():8.2f} .. "
+                  f"{E_ref[m].max():8.2f} eV")
+
     common = dict(
+        atom_ref_energies=refs,
         cgenff_master_sigmas=np.asarray(raw["cgenff_master_sigmas"]),
         cgenff_master_epsilons=np.asarray(raw["cgenff_master_epsilons"]),
         _mmml_units=np.array(["energy=eV", "forces=eV/Angstrom", "coords=Angstrom",
-                              "dipole=e*Angstrom", f"method={label}"]),
+                              "dipole=e*Angstrom", f"method={label}",
+                              "E=atom-referenced (add atom_ref_energies back for totals)",
+                              "E_total=raw"]),
     )
     rng = np.random.default_rng(0)
     perm = rng.permutation(nk)
@@ -419,7 +478,8 @@ def main() -> int:
                      ("test", perm[n_tr + n_va:])):
         f = Path(f"{base}_{tag}.npz")
         np.savez(f, R=R_out[sel], Z=Z_out[sel], N=N_out[sel],
-                 E=E[keep][sel].reshape(-1, 1), F=F[keep][sel], D=D[keep][sel],
+                 E=E_ref[sel].reshape(-1, 1), E_total=E_raw[sel].reshape(-1, 1),
+                 F=F[keep][sel], D=D[keep][sel],
                  mol_id=M_out[sel], cgenff_type_idx=T_out[sel], cgenff_charge=Q_out[sel],
                  res_name=np.array(names)[sel], **common)
         print(f"-> {f}  ({len(sel)} structures)")

@@ -20,7 +20,9 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.util
+import json
 import sys
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -46,6 +48,7 @@ from mmml.utils.plotting.styles import (  # noqa: E402
     status_color,
 )
 from scripts.plot_orient_hemisphere_surfaces import (  # noqa: E402
+    _aggregate_by_direction,
     _aggregate_by_orientation,
     _draw_hemisphere,
     _energy_norm,
@@ -60,9 +63,9 @@ EV_TO_KCAL = 23.0605
 
 def _robust_lim(
     *arrays: np.ndarray,
-    lo: float = 2.0,
-    hi: float = 98.0,
-    pad_frac: float = 0.08,
+    lo: float = 5.0,
+    hi: float = 95.0,
+    pad_frac: float = 0.10,
     include_zero: bool = False,
 ) -> tuple[float, float]:
     """Axis limits from percentiles so a few outliers don't dominate the view."""
@@ -79,6 +82,102 @@ def _robust_lim(
     if span < 1e-9:
         span = max(abs(hi_v), 1.0) * 0.1
     return lo_v - pad_frac * span, hi_v + pad_frac * span
+
+
+def _robust_lim_drop_spurious(
+    rays: dict[str, np.ndarray],
+    key: str,
+    *,
+    include_zero: bool = False,
+) -> tuple[float, float]:
+    """Prefer single-minimum rays for axis limits; fall back to all if too few."""
+    vals = np.asarray(rays[key], dtype=float)
+    spur = np.asarray(rays["n_min_ml"], dtype=int) > 1
+    clean = vals[~spur]
+    if np.isfinite(clean).sum() >= 8:
+        return _robust_lim(clean, include_zero=include_zero)
+    return _robust_lim(vals, include_zero=include_zero)
+
+
+def _norm_from_limits(vmin: float, vmax: float) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
+    if vmin < 0.0 < vmax:
+        return mcolors.TwoSlopeNorm(vcenter=0.0, vmin=vmin, vmax=vmax)
+    return mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+
+@dataclass(frozen=True)
+class SharedScales:
+    """Fixed colour + axis limits so ML / xTB flip pairs are comparable."""
+
+    e_vmin: float
+    e_vmax: float
+    e_ymin: float
+    e_ymax: float
+    r_xmin: float
+    r_xmax: float
+
+    def energy_norm(self) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
+        return _norm_from_limits(self.e_vmin, self.e_vmax)
+
+    def energy_cmap(self):
+        if self.e_vmin < 0.0 < self.e_vmax:
+            return default_cmap("diverging")
+        return default_cmap("sequential")
+
+    @property
+    def e_ylim(self) -> tuple[float, float]:
+        return self.e_ymin, self.e_ymax
+
+    @property
+    def r_xlim(self) -> tuple[float, float]:
+        return self.r_xmin, self.r_xmax
+
+
+def _clean_vals(rays: dict[str, np.ndarray], key: str) -> np.ndarray:
+    vals = np.asarray(rays[key], dtype=float)
+    spur = np.asarray(rays["n_min_ml"], dtype=int) > 1
+    clean = vals[~spur]
+    clean = clean[np.isfinite(clean)]
+    if clean.size >= 8:
+        return clean
+    return vals[np.isfinite(vals)]
+
+
+def build_shared_scales(
+    *ray_sets: dict[str, np.ndarray],
+    how: str = "min",
+) -> SharedScales:
+    """Joint robust colour/axis limits across one or more rays.csv tables."""
+    color_chunks: list[np.ndarray] = []
+    e_chunks: list[np.ndarray] = []
+    r_chunks: list[np.ndarray] = []
+    for rays in ray_sets:
+        e_ori, _ = _aggregate_by_orientation(rays, how)
+        e_dir = _aggregate_by_direction(rays, how)
+        color_chunks.extend([e_ori, e_dir, _clean_vals(rays, "e_min_kcal")])
+        e_chunks.append(_clean_vals(rays, "e_min_kcal"))
+        r_chunks.append(_clean_vals(rays, "r_at_min"))
+
+    color_norm = _energy_norm(np.concatenate(color_chunks))
+    e_ymin, e_ymax = _robust_lim(*e_chunks, include_zero=True)
+    r_xmin, r_xmax = _robust_lim(*r_chunks)
+    return SharedScales(
+        e_vmin=float(color_norm.vmin),
+        e_vmax=float(color_norm.vmax),
+        e_ymin=e_ymin,
+        e_ymax=e_ymax,
+        r_xmin=r_xmin,
+        r_xmax=r_xmax,
+    )
+
+
+def scales_for_rays(
+    rays: dict[str, np.ndarray],
+    *,
+    how: str = "min",
+    shared: SharedScales | None = None,
+) -> SharedScales:
+    return shared if shared is not None else build_shared_scales(rays, how=how)
 
 
 REF_TAGS: list[tuple[str, int, str]] = [
@@ -261,6 +360,7 @@ def plot_hemispheres_with_ase_ring(
     mono: Atoms,
     out: Path,
     how: str = "min",
+    shared: SharedScales | None = None,
 ) -> None:
     """Six hemispheres, each surrounded by ASE overlays for tags on that hemi."""
     plot_utils = _load_plot_utils()
@@ -271,13 +371,12 @@ def plot_hemispheres_with_ase_ring(
     Rs = np.stack([quat_to_matrix(q) for q in quats], axis=0)
     axis_tips = [Rs[:, :, k] for k in range(3)]
     energy, _ = _aggregate_by_orientation(rays, how)
-    cmap = default_cmap("diverging") if (energy.min() < 0 < energy.max()) else default_cmap(
-        "sequential"
-    )
-    norm = _energy_norm(energy)
+    sc = scales_for_rays(rays, how=how, shared=shared)
+    cmap = sc.energy_cmap()
+    norm = sc.energy_norm()
 
-    fig = plt.figure(figsize=(20.0, 14.0))
-    outer = GridSpec(2, 3, figure=fig, hspace=0.45, wspace=0.32)
+    fig = plt.figure(figsize=(22.0, 15.5))
+    outer = GridSpec(2, 3, figure=fig, hspace=0.58, wspace=0.40)
     axis_names = ("e0", "e1", "e2")
 
     for col, (tips, name, acolor) in enumerate(zip(axis_tips, axis_names, AXIS_COLORS, strict=True)):
@@ -391,10 +490,10 @@ def plot_perspective_gallery(
     fig, axes = plt.subplots(
         n_tag,
         n_persp,
-        figsize=(4.2 * n_persp, 3.8 * n_tag),
+        figsize=(4.8 * n_persp, 4.2 * n_tag),
         squeeze=False,
     )
-    fig.subplots_adjust(hspace=0.45, wspace=0.35)
+    fig.subplots_adjust(hspace=0.58, wspace=0.45)
     for i, (tag, ori, note) in enumerate(REF_TAGS):
         for j, (pname, prot) in enumerate(PERSPECTIVES):
             ax = axes[i][j]
@@ -450,6 +549,7 @@ def plot_annotated_dashboard(
     out: Path,
     how: str = "min",
     slice_dirs: tuple[int, ...] = (0, 2, 8),
+    shared: SharedScales | None = None,
 ) -> None:
     """Compact dashboard: legend, hemispheres+tags, 1D slices (ASE on E(r))."""
     plot_utils = _load_plot_utils()
@@ -460,18 +560,17 @@ def plot_annotated_dashboard(
     Rs = np.stack([quat_to_matrix(q) for q in quats], axis=0)
     axis_tips = [Rs[:, :, k] for k in range(3)]
     energy, _ = _aggregate_by_orientation(rays, how)
-    cmap = default_cmap("diverging") if (energy.min() < 0 < energy.max()) else default_cmap(
-        "sequential"
-    )
-    norm = _energy_norm(energy)
+    sc = scales_for_rays(rays, how=how, shared=shared)
+    cmap = sc.energy_cmap()
+    norm = sc.energy_norm()
     co = _co_bond_axis(mono)
     val = _validate_tables(validate) if validate is not None else {}
 
-    fig = plt.figure(figsize=(18.0, 15.5))
+    fig = plt.figure(figsize=(20.0, 17.0))
     gs = GridSpec(
         4, 6, figure=fig,
         height_ratios=[1.0, 1.15, 1.15, 1.35],
-        hspace=0.55, wspace=0.42,
+        hspace=0.68, wspace=0.48,
     )
 
     ax_leg = fig.add_subplot(gs[0, 0:2])
@@ -571,7 +670,7 @@ def plot_annotated_dashboard(
         ax_s1.scatter(oris[spur], e_row[spur], color=status_color("critical"), s=16, zorder=3)
         s1_rows.append(e_row)
     ax_s1.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.7)
-    ymin, ymax = _robust_lim(*s1_rows, include_zero=True)
+    ymin, ymax = sc.e_ylim
     ax_s1.set_ylim(ymin, ymax)
     for tag, ori, _ in REF_TAGS:
         ax_s1.axvline(ori, color=tag_color[tag], ls=":", lw=1.0)
@@ -612,13 +711,8 @@ def plot_annotated_dashboard(
                 arrowprops=dict(arrowstyle="-", color=tag_color[tag], lw=0.8),
             )
         ax_s2.plot([], [], color="k", ls="--", lw=1.0, label="ML (dashed)")
-        y_vals = []
-        for tag, ori, _ in REF_TAGS:
-            if ori in val:
-                y_vals.append(val[ori]["e_xtb"])
-                y_vals.append(val[ori]["e_ml"])
-        if y_vals:
-            ax_s2.set_ylim(*_robust_lim(*y_vals, include_zero=True))
+        # Keep validate E(r) panel on the shared energy scale when available
+        ax_s2.set_ylim(*sc.e_ylim)
         ax_s2.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.7)
         ax_s2.set_xlabel("r_COM (A)")
         ax_s2.set_ylabel("binding E (kcal/mol)")
@@ -679,14 +773,13 @@ def plot_map_projections(
     mono: Atoms,
     out: Path,
     how: str = "min",
+    shared: SharedScales | None = None,
 ) -> None:
     """Flat equirectangular maps — 3 body-axis spheres (+ approach). ASE tags kept.
 
     Six hemispheres were only a 3D viewing split of *three* S²'s.  One map per
     sphere shows the whole surface without the N/S cut.
     """
-    from scripts.plot_orient_hemisphere_surfaces import _aggregate_by_direction
-
     plot_utils = _load_plot_utils()
     apply_plot_style("icml")
     tag_color = _tag_style()
@@ -696,19 +789,18 @@ def plot_map_projections(
     axis_tips = [Rs[:, :, k] for k in range(3)]
     energy, _ = _aggregate_by_orientation(rays, how)
     e_dir = _aggregate_by_direction(rays, how)
-    cmap = default_cmap("diverging") if (energy.min() < 0 < energy.max()) else default_cmap(
-        "sequential"
-    )
-    norm = _energy_norm(energy)
+    sc = scales_for_rays(rays, how=how, shared=shared)
+    cmap = sc.energy_cmap()
+    norm = sc.energy_norm()
 
-    fig = plt.figure(figsize=(18.0, 13.5))
+    fig = plt.figure(figsize=(20.0, 15.0))
     gs = GridSpec(
         3,
         4,
         figure=fig,
         height_ratios=[1.15, 1.15, 1.1],
-        hspace=0.55,
-        wspace=0.38,
+        hspace=0.68,
+        wspace=0.45,
     )
 
     body_panels = [
@@ -753,14 +845,13 @@ def plot_map_projections(
     if last_im is not None:
         fig.colorbar(last_im, ax=ax_c, fraction=0.8, pad=0.05, label=f"{how} well depth (kcal/mol)")
 
-    # approach map
+    # approach map (same colourscale as body-axis maps for flip parity)
     ax_u = fig.add_subplot(gs[1, 0])
     lon_g, lat_g, field = _equirect_field(dirs, e_dir)
-    nrm_u = _energy_norm(e_dir)
-    im_u = ax_u.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=nrm_u, shading="auto")
+    im_u = ax_u.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=norm, shading="auto")
     lon_s, lat_s = _xyz_to_lonlat(dirs)
     ax_u.scatter(
-        lon_s, lat_s, c=e_dir, cmap=cmap, norm=nrm_u,
+        lon_s, lat_s, c=e_dir, cmap=cmap, norm=norm,
         s=36, edgecolors="white", linewidths=0.5, zorder=3,
     )
     for d_idx, lab in ((0, "d0"), (2, "d2"), (8, "d8")):
@@ -909,6 +1000,8 @@ def plot_slice_strip(
     mono: Atoms,
     out: Path,
     direction: int = 2,
+    shared: SharedScales | None = None,
+    how: str = "min",
 ) -> None:
     plot_utils = _load_plot_utils()
     apply_plot_style("icml")
@@ -925,19 +1018,20 @@ def plot_slice_strip(
             e_row[o] = rays["e_min_kcal"][m][0]
             spur[o] = rays["n_min_ml"][m][0] > 1
 
-    fig, ax = plt.subplots(figsize=(14.0, 5.2))
+    sc = scales_for_rays(rays, how=how, shared=shared)
+    fig, ax = plt.subplots(figsize=(16.0, 6.0))
     ax.plot(oris, e_row, color=STATUS_COLORS["neutral"], lw=1.8)
     ax.scatter(
         oris[~spur], e_row[~spur],
-        c=e_row[~spur], cmap=default_cmap("diverging"),
-        norm=_energy_norm(e_row), s=28, zorder=3,
+        c=e_row[~spur], cmap=sc.energy_cmap(),
+        norm=sc.energy_norm(), s=28, zorder=3,
     )
     ax.scatter(
         oris[spur], e_row[spur], facecolors="none",
         edgecolors=status_color("critical"), s=40, linewidths=1.0, zorder=4, label="spurious",
     )
     ax.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.7)
-    ax.set_ylim(*_robust_lim(e_row, include_zero=True))
+    ax.set_ylim(*sc.e_ylim)
     ax.set_xlabel("orientation index")
     ax.set_ylabel("well depth (kcal/mol)")
     ax.set_title(f"Direction {direction} — e_min(orientation) with ASE + COM")
@@ -1086,10 +1180,9 @@ def plot_concentric_atlas(
     out: Path,
     how: str = "min",
     n_morph: int = 12,
+    shared: SharedScales | None = None,
 ) -> None:
     """Layered atlas: concentric cubes + axis ball, flat maps, cuts, morph strip."""
-    from scripts.plot_orient_hemisphere_surfaces import _aggregate_by_direction
-
     plot_utils = _load_plot_utils()
     apply_plot_style("icml")
     tag_color = _tag_style()
@@ -1099,26 +1192,25 @@ def plot_concentric_atlas(
     axis_tips = [Rs[:, :, k] for k in range(3)]
     energy, _ = _aggregate_by_orientation(rays, how)
     e_dir = _aggregate_by_direction(rays, how)
-    cmap = default_cmap("diverging") if (energy.min() < 0 < energy.max()) else default_cmap(
-        "sequential"
-    )
-    norm = _energy_norm(energy)
+    sc = scales_for_rays(rays, how=how, shared=shared)
+    cmap = sc.energy_cmap()
+    norm = sc.energy_norm()
     style = apply_plot_style("icml")
     cut_colors = comparison_colors(style, n=4)
 
-    fig = plt.figure(figsize=(20.5, 18.0))
+    fig = plt.figure(figsize=(22.5, 20.0))
     gs = GridSpec(
         4,
         6,
         figure=fig,
-        height_ratios=[2.55, 1.35, 1.25, 1.35],
-        hspace=0.55,
-        wspace=0.40,
+        height_ratios=[2.55, 1.35, 1.25, 1.45],
+        hspace=0.72,
+        wspace=0.48,
     )
 
     # ── Row 0: annotations around concentric cubes + ball ─────────────────
-    left = gs[0, 0].subgridspec(2, 1, hspace=0.40)
-    right = gs[0, 5].subgridspec(2, 1, hspace=0.40)
+    left = gs[0, 0].subgridspec(2, 1, hspace=0.55)
+    right = gs[0, 5].subgridspec(2, 1, hspace=0.55)
     for i, (tag, ori, _) in enumerate((REF_TAGS[0], REF_TAGS[2])):
         ax = fig.add_subplot(left[i, 0])
         _render_tag_overlay(
@@ -1135,7 +1227,7 @@ def plot_concentric_atlas(
         )
 
     # Center: concentric cubes hosting the axis-angle ball (3 views in a row)
-    center = gs[0, 1:5].subgridspec(1, 3, wspace=0.22)
+    center = gs[0, 1:5].subgridspec(1, 3, wspace=0.32)
     ball_views = (
         ("axis-angle ball · view 1", 22, -55),
         ("axis-angle ball · view 2", 18, 35),
@@ -1177,15 +1269,14 @@ def plot_concentric_atlas(
         rotation=PERSPECTIVES[2][1], title="D top",
     )
 
-    mid_maps = gs[1, 1:5].subgridspec(1, 4, wspace=0.32)
+    mid_maps = gs[1, 1:5].subgridspec(1, 4, wspace=0.42)
     last_im = None
     for j, (title, tips, evals) in enumerate(zip(map_titles, map_tips, map_evals, strict=True)):
         ax = fig.add_subplot(mid_maps[0, j])
         lon_g, lat_g, field = _equirect_field(tips, evals)
-        nrm = norm if j < 3 else _energy_norm(evals)
-        last_im = ax.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=nrm, shading="auto")
+        last_im = ax.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=norm, shading="auto")
         lon_s, lat_s = _xyz_to_lonlat(tips)
-        ax.scatter(lon_s, lat_s, c=evals, cmap=cmap, norm=nrm, s=14, edgecolors="white", linewidths=0.3, zorder=3)
+        ax.scatter(lon_s, lat_s, c=evals, cmap=cmap, norm=norm, s=14, edgecolors="white", linewidths=0.3, zorder=3)
         if j < 3:
             for tag, ori, _ in REF_TAGS:
                 lo, la = _xyz_to_lonlat(tips[ori : ori + 1])
@@ -1215,7 +1306,7 @@ def plot_concentric_atlas(
         ax_c1.plot(oris, e_row, color=cut_colors[k], lw=1.5, label=f"dir {di}")
         c1_rows.append(e_row)
     ax_c1.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
-    ymin, ymax = _robust_lim(*c1_rows, include_zero=True)
+    ymin, ymax = sc.e_ylim
     ax_c1.set_ylim(ymin, ymax)
     for tag, ori, _ in REF_TAGS:
         ax_c1.axvline(ori, color=tag_color[tag], ls=":", lw=1.0)
@@ -1233,7 +1324,7 @@ def plot_concentric_atlas(
     pts = np.stack([_quat_to_ball(q) for q in quats], axis=0)
     # project to xy; size by |z| proximity to equator
     w = np.exp(-((pts[:, 2]) ** 2) / 0.08)
-    sc = ax_c2.scatter(
+    scat = ax_c2.scatter(
         pts[:, 0], pts[:, 1], c=energy, cmap=cmap, norm=norm,
         s=20 + 80 * w, alpha=0.35 + 0.65 * w, edgecolors="white", linewidths=0.3,
     )
@@ -1249,7 +1340,7 @@ def plot_concentric_atlas(
     ax_c2.set_xlabel("ball x = (θ/π) n_x")
     ax_c2.set_ylabel("ball y = (θ/π) n_y")
     ax_c2.set_title("2D cut: axis-angle ball equator (weight ~ exp(-z^2))")
-    fig.colorbar(sc, ax=ax_c2, fraction=0.046, pad=0.04)
+    fig.colorbar(scat, ax=ax_c2, fraction=0.046, pad=0.04)
 
     # cut 3: r_at_min vs e_min scatter, coloured by spuriosity
     ax_c3 = fig.add_subplot(gs[2, 4:6])
@@ -1275,6 +1366,8 @@ def plot_concentric_atlas(
                 tag, color=tag_color[tag], fontsize=9, fontweight="bold",
             )
     ax_c3.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
+    ax_c3.set_xlim(*sc.r_xlim)
+    ax_c3.set_ylim(*sc.e_ylim)
     ax_c3.set_xlabel("r at minimum (A)")
     ax_c3.set_ylabel("well depth (kcal/mol)")
     ax_c3.set_title("2D cut: (r_min, e_min) all rays")
@@ -1286,7 +1379,7 @@ def plot_concentric_atlas(
     # n_morph frames along the polyline of waypoints
     segs = len(waypoints) - 1
     frames_per = max(n_morph // segs, 2)
-    morph_ax = gs[3, :].subgridspec(1, segs * frames_per + 1, wspace=0.08)
+    morph_ax = gs[3, :].subgridspec(1, segs * frames_per + 1, wspace=0.22)
     frame_i = 0
     for s in range(segs):
         t0, o0, d0 = waypoints[s]
@@ -1382,6 +1475,12 @@ def main() -> int:
         help="Source badge + filename suffix (e.g. ML or xTB) for flip-pairs",
     )
     p.add_argument(
+        "--match-rays",
+        type=Path,
+        default=None,
+        help="Second rays.csv used to lock shared colour/axis scales (flip pairs)",
+    )
+    p.add_argument(
         "--atlas-only",
         action="store_true",
         help="Only write the concentric-cube atlas figure",
@@ -1392,6 +1491,17 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     rays = _load_rays(args.rays)
     mono = _load_monomer(args.monomer)
+    if args.match_rays is not None:
+        shared = build_shared_scales(rays, _load_rays(args.match_rays), how=args.how)
+        scale_path = args.out / "shared_scales.json"
+        scale_path.write_text(json.dumps(asdict(shared), indent=2) + "\n")
+        print(
+            f"  shared scales: e_color=[{shared.e_vmin:.3f},{shared.e_vmax:.3f}]  "
+            f"e_ylim=[{shared.e_ymin:.3f},{shared.e_ymax:.3f}]  "
+            f"r_xlim=[{shared.r_xmin:.3f},{shared.r_xmax:.3f}]  -> {scale_path}"
+        )
+    else:
+        shared = None
 
     _orig_savefig = plt.Figure.savefig
 
@@ -1410,6 +1520,7 @@ def main() -> int:
             mono=mono,
             out=_labeled(args.out / "concentric_atlas.png", label),
             how=args.how,
+            shared=shared,
         )
         if args.atlas_only:
             return 0
@@ -1422,12 +1533,14 @@ def main() -> int:
             mono=mono,
             out=_labeled(args.out / "equirectangular_maps.png", label),
             how=args.how,
+            shared=shared,
         )
         plot_hemispheres_with_ase_ring(
             rays=rays,
             mono=mono,
             out=_labeled(args.out / "hemisphere_ase_ring.png", label),
             how=args.how,
+            shared=shared,
         )
         plot_perspective_gallery(
             rays=rays,
@@ -1440,6 +1553,7 @@ def main() -> int:
             validate=args.validate,
             out=_labeled(args.out / "hemisphere_annotated_dashboard.png", label),
             how=args.how,
+            shared=shared,
         )
         for d in (0, 2, 8):
             plot_slice_strip(
@@ -1447,6 +1561,8 @@ def main() -> int:
                 mono=mono,
                 out=_labeled(args.out / f"slice_dir{d}_with_ase.png", label),
                 direction=d,
+                shared=shared,
+                how=args.how,
             )
     finally:
         plt.Figure.savefig = _orig_savefig  # type: ignore[method-assign]
@@ -1459,6 +1575,7 @@ def main() -> int:
                 f"# {label} orientation figures",
                 "",
                 f"Flip pair: open the matching `*_ML.png` / `*_xTB.png` side by side.",
+                "Colour/axis scales locked via `--match-rays` when provided (`shared_scales.json`).",
                 "",
                 f"- concentric_atlas_{label}.png",
                 f"- equirectangular_maps_{label}.png",
@@ -1468,6 +1585,7 @@ def main() -> int:
                 f"- slice_dir{{0,2,8}}_with_ase_{label}.png",
                 "",
                 f"Source rays: `{args.rays}`",
+                f"Match rays: `{args.match_rays}`" if args.match_rays else "Match rays: (none)",
                 "",
             ]
         )

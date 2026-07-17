@@ -137,8 +137,8 @@ def _rbf_on_sphere(points: np.ndarray, values: np.ndarray, mesh_xyz: np.ndarray)
 def _energy_norm(
     vals: np.ndarray,
     *,
-    lo: float = 2.0,
-    hi: float = 98.0,
+    lo: float = 5.0,
+    hi: float = 95.0,
 ) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
     """Colourscale from robust percentiles (drop outliers before setting limits)."""
     finite = np.asarray(vals, dtype=float)
