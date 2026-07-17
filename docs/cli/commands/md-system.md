@@ -108,6 +108,7 @@ usage: mmml md-system [-h]
                       [--heat-thermostat {bussi,scale,hoover}] [--heat-firstt K]
                       [--heat-finalt K] [--heat-mode {ramp,hold}]
                       [--heat-hoover-tmass M] [--nve-boltzmann-temp K]
+                      [--nve-max-f-start-eVA EV_PER_A]
                       [--heat-comp-damp | --no-heat-comp-damp]
                       [--heat-comp-hydrogen-only | --no-heat-comp-hydrogen-only]
                       [--heat-comp-force-min KCAL]
@@ -507,6 +508,9 @@ options:
                         pycharmm: Boltzmann velocity temperature before NVE
                         after mini. Default 0.2×--temperature; use 50–100 K for
                         a gentler start than 300 K.
+  --nve-max-f-start-eVA EV_PER_A
+                        jaxmd: refuse to start NVE when post-FIRE max atomic |F|
+                        exceeds this value in eV/Å (default: 1.0; <=0 disables).
   --heat-comp-damp, --no-heat-comp-damp
                         pycharmm: experimental COMP force copy before heat
                         (default: off).

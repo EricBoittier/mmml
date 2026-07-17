@@ -122,6 +122,26 @@ def test_md_system_parser_single_box_size_flag() -> None:
     assert args.box_size == pytest.approx(32.0)
 
 
+def test_md_system_forwards_nve_start_force_gate_to_jaxmd() -> None:
+    from mmml.cli.run.md_system import build_command, parse_args
+
+    args = parse_args(
+        [
+            "--backend",
+            "jaxmd",
+            "--setup",
+            "pbc_nve",
+            "--nve-max-f-start-eVA",
+            "1000.0",
+        ]
+    )
+    backend, cmd = build_command(args)
+
+    assert backend == "jaxmd"
+    index = cmd.index("--nve-max-f-start-eVA")
+    assert cmd[index + 1] == "1000.0"
+
+
 def test_apply_mapping_hyphen_keys() -> None:
     from mmml.cli.run.md_system import parse_args
 
