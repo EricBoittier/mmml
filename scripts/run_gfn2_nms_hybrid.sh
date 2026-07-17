@@ -46,9 +46,15 @@ echo "frozen at epoch-$EP"
 # the verdict between models.
 for RES in DCM ACO; do
   echo "=== orientation scan: $RES ==="
+  # PIN the monomer source. The scan takes its rigid monomer from --data, and the
+  # reference table below was computed from out_combined_dedup. Passing a
+  # different npz silently changes the monomer's ORIENTATION (same molecule, rmsd
+  # 0.248 A unaligned), which rotates the whole Fibonacci direction set and makes
+  # the numbers incomparable. This bit me: a gate run against gfn2_nms_test gave
+  # ACO 8.3%/mean +10.65 vs 4.6%/-1.05 here, for the same checkpoint.
   "$PY" "$MMML/scripts/scan_dimer_orientations.py" \
       --checkpoint "$FROZEN" \
-      --data "$ACODCM/gfn2_nms_test.npz" \
+      --data "$ACODCM/out_combined_dedup/energies_forces_dipoles_test.npz" \
       --resid "$RES" --n-directions 10 --n-orientations 24 --n-r 36 \
       --mm-switch-on 6.0 --out "$ACODCM/gate_${RES}"
 done
@@ -63,6 +69,13 @@ echo "  7721fa95 (new)     23.3%        -14.75         50.4%         -33.64  <- 
 echo "  GFN2 truth          n/a          ~-5           n/a            ~-1.5"
 echo
 echo "DCM deepest well is the sharpest discriminator: -2.44 (ok) vs -33.6 (broken)."
+echo
+echo "DO NOT read the spurious FRACTION as quality: it conflates a harmless"
+echo "sub-kcal wiggle with an 8x overbound hole. Measured on the GFN2-dense model:"
+echo "  DCM 32.9% 'spurious' -> flagged rays -2.25/-2.16 vs xTB -2.85/-2.83  (fine)"
+echo "  ACO  4.6% 'spurious' -> deepest ray -10.87 vs xTB -1.28              (a hole)"
+echo "The count said DCM regressed 2x and ACO was best; xTB said the opposite."
+echo "Rank by |ML - xTB| at the deepest well instead -- that is what MD feels."
 echo "If the spurious fraction collapses, dense coverage was the cause and the"
 echo "same recipe at MP2 is the production run. If it does not, coverage was not"
 echo "the problem and the architecture/loss is next."
