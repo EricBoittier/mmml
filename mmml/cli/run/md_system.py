@@ -3256,6 +3256,14 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
             else:
                 raise ValueError(f"Unsupported setup: {args.setup}")
 
+    # lr_solver applies to both jaxmd and ase backends: run_sim.py's own
+    # setup_calculator() call already accepts it (jax_pme works here today;
+    # ewald was added to build_mm_energy_forces_fn's static path so a
+    # checkpoint trained with lr_solver=ewald deploys consistently without
+    # needing --mm-nonbond-mode periodic_external, which only exists for the
+    # pycharmm-callback backend and never fires in this in-process loop).
+    _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
+
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])
     else:

@@ -1075,6 +1075,48 @@ def build_mm_energy_forces_fn(
             )
         at_codes = at_codes_override_arr
 
+    if pick_lr_solver(lr_solver) == "ewald":
+        # Full-box, no-exclusion, no-switch Ewald -- the SAME operator training
+        # used (mmml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy,
+        # lr_solver="ewald" in hybrid_forward). Bypasses the switched-pair /
+        # LJ / cell-list machinery entirely (this checkpoint's E_MM has no LJ
+        # term at all -- mm_include_lj is forced off for this lr_solver at
+        # training time too). Static box only (NVE/NVT); NPT would need the
+        # k-space integer grid rebuilt per box, not supported here yet.
+        if pbc_cell is None:
+            raise ValueError(
+                "lr_solver=ewald requires a PBC cell when building MM forces."
+            )
+        from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+
+        _ewald_box_L = float(box_length_from_cell(np.asarray(pbc_cell, dtype=np.float64)))
+        _ewald_mol_id = jnp.asarray(
+            per_atom_monomer_ids(total_atoms, monomer_offsets, n_monomers), dtype=jnp.int32
+        )
+        _ewald_charges_default = jnp.asarray(charges, dtype=ml_jnp_dtype)
+
+        def _ewald_energy(positions: Array, charges_arg: Array) -> Array:
+            return hybrid_ewald_coulomb_energy(
+                positions, _ewald_mol_id, charges_arg, box_length_A=_ewald_box_L,
+            )
+
+        @jax.jit
+        def calculate_mm_energy_and_forces_ewald(
+            positions: Array,
+            pair_idx: Optional[Array] = None,
+            pair_mask: Optional[Array] = None,
+            box_override: Optional[Array] = None,
+            charges: Optional[Array] = None,
+        ) -> Tuple[Array, Array, Array, Array]:
+            del pair_idx, pair_mask, box_override  # static box; no pair list needed
+            q = _ewald_charges_default if charges is None else jnp.asarray(charges, dtype=ml_jnp_dtype)
+            e, grad = jax.value_and_grad(_ewald_energy, argnums=0)(positions, q)
+            forces = -grad
+            zero = jnp.array(0.0, dtype=ml_jnp_dtype)
+            return e, forces, zero, e
+
+        return calculate_mm_energy_and_forces_ewald, None
+
     if debug:
         atc_eps_arr = np.array(atc_epsilons)
         missing_eps_codes = np.where(atc_eps_arr == 0.0)[0]

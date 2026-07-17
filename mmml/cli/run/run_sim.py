@@ -251,6 +251,23 @@ def build_parser() -> argparse.ArgumentParser:
         "Use --no-use-ema for the live training weights.",
     )
     parser.add_argument(
+        "--lr-solver",
+        "--lr_solver",
+        dest="lr_solver",
+        type=str,
+        default=None,
+        choices=("auto", "mic", "jax_pme", "nvalchemiops_pme", "ewald", "scafacos"),
+        help=(
+            "Long-range Coulomb backend (default: mic, the switched pair loop). "
+            "ewald: jit-native, pure JAX full-box Ewald over ALL atoms (no "
+            "exclusions, no switching, no LJ) -- the same operator "
+            "physnet-train --lr-solver ewald trains against; use this to deploy "
+            "a checkpoint trained that way with --backend jaxmd/ase (no CHARMM "
+            "callback in the loop, so --mm-nonbond-mode periodic_external does "
+            "not apply here -- this flag alone is enough)."
+        ),
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable verbose debug output inside the calculator factory.",
@@ -586,6 +603,7 @@ def run(args: argparse.Namespace) -> int:
         ml_gpu_count=_resolve_ml_gpu_count(getattr(args, "ml_gpu_count", None)),
         mm_r_min=getattr(args, "mm_r_min", None),
         ml_use_ema=getattr(args, "use_ema", True),
+        lr_solver=getattr(args, "lr_solver", None),
     )
     
 
