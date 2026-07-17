@@ -2888,7 +2888,6 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--fire-min-maxstep", getattr(args, "fire_min_maxstep", None))
     _append_optional(cmd, "--pre-min-ase-order", getattr(args, "pre_min_ase_order", None))
     _append_optional(cmd, "--bfgs-polish-max-fmax", getattr(args, "bfgs_polish_max_fmax", None))
-    _append_boolean_optional_flag(cmd, "--skip-bfgs", bool(getattr(args, "skip_bfgs", False)))
     _append_optional(cmd, "--rescue-fire-fmax", getattr(args, "rescue_fire_fmax", None))
     if bool(getattr(args, "quiet_bfgs", False)):
         cmd.append("--quiet-bfgs")
@@ -3162,6 +3161,9 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         ]
         _append_optional(
             cmd, "--nve-max-f-start-eVA", getattr(args, "nve_max_f_start_eVA", None)
+        )
+        _append_boolean_optional_flag(
+            cmd, "--skip-bfgs", bool(getattr(args, "skip_bfgs", True))
         )
         _append_optional(
             cmd,

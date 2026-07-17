@@ -29,6 +29,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import surv
 from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
     merge_partial_forces,
 )
+from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
 
 
 def _fixture_geometry(
@@ -46,7 +47,7 @@ def _fixture_geometry(
 
 def test_resolve_halo_radius_default():
     r = resolve_halo_radius()
-    assert r > 14.0
+    assert r == pytest.approx(13.5)
     assert r < 20.0
 
 
@@ -90,9 +91,15 @@ def test_deduplicated_dimer_union_covers_global_near():
     halo = resolve_halo_radius()
     grid = SpatialDomainGrid(box_side_A=box, n_ranks=4, halo_radius_A=halo)
     active_sets = build_all_rank_active_sets(
-        pos, n_monomers, atoms_per, grid, mm_switch_on=8.0
+        pos, n_monomers, atoms_per, grid, mm_switch_on=DEFAULT_MM_SWITCH_ON
     )
-    pairs, near = global_near_dimer_mask(pos, n_monomers, atoms_per, box_side_A=box)
+    pairs, near = global_near_dimer_mask(
+        pos,
+        n_monomers,
+        atoms_per,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        box_side_A=box,
+    )
     near_ids = np.nonzero(near)[0].astype(np.int32)
     assert verify_unique_dimer_coverage(active_sets, near_ids)
 
@@ -105,9 +112,15 @@ def test_each_near_dimer_owned_by_exactly_one_rank():
     halo = resolve_halo_radius()
     grid = SpatialDomainGrid(box_side_A=box, n_ranks=4, halo_radius_A=halo)
     active_sets = build_all_rank_active_sets(
-        pos, n_monomers, atoms_per, grid, mm_switch_on=8.0
+        pos, n_monomers, atoms_per, grid, mm_switch_on=DEFAULT_MM_SWITCH_ON
     )
-    pairs, near = global_near_dimer_mask(pos, n_monomers, atoms_per, box_side_A=box)
+    pairs, near = global_near_dimer_mask(
+        pos,
+        n_monomers,
+        atoms_per,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        box_side_A=box,
+    )
     coms = compute_monomer_coms(pos, n_monomers, atoms_per)
     cell = np.diag([box, box, box])
     for di in np.nonzero(near)[0]:
@@ -123,9 +136,15 @@ def test_force_conservation_vs_global_reference():
     halo = resolve_halo_radius()
     grid = SpatialDomainGrid(box_side_A=box, n_ranks=2, halo_radius_A=halo)
     active_sets = build_all_rank_active_sets(
-        pos, n_monomers, atoms_per, grid, mm_switch_on=8.0
+        pos, n_monomers, atoms_per, grid, mm_switch_on=DEFAULT_MM_SWITCH_ON
     )
-    pairs, near = global_near_dimer_mask(pos, n_monomers, atoms_per, box_side_A=box)
+    pairs, near = global_near_dimer_mask(
+        pos,
+        n_monomers,
+        atoms_per,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        box_side_A=box,
+    )
     _, dimer_idx, dimer_n_a, dimer_n_b, _ = build_monomer_dimer_index_arrays(
         n_monomers, atoms_per
     )
