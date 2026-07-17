@@ -1,0 +1,71 @@
+# Hybrid ML/MM training on the GFN2 normal-mode dimer-scan dataset.
+#
+# This is a DIFFERENT POTENTIAL from the old MP2 set -- GFN2-xTB, with dipoles
+# in e*Angstrom rather than the old set's unexplained convention. So: no
+# `restart:` from an MP2 checkpoint, and do not mix the two datasets. Those
+# weights encode a different PES and different dipole targets.
+#
+# Purpose: test whether dense coverage of the binding region removes the
+# spurious minima. The old data had median DCM contact 7.71 A and 0.4% of dimers
+# below 2.5 A; this has median 3.32 A and 29.9%. If the coverage hypothesis is
+# right, the orientation scan's spurious fraction should collapse from 15-50%.
+
+data:       /mmhome/boittier/home/mmml_tutorial/acodcm/gfn2_nms_train.npz
+valid_data: /mmhome/boittier/home/mmml_tutorial/acodcm/gfn2_nms_valid.npz
+ckpt_dir:   ./ckpts/gfn2_nms
+tag:        gfn2nms
+
+# --- architecture ------------------------------------------------------------
+# num_iterations: 3, NOT 1. The from-scratch model 7721fa95 used 1 message-passing
+# step and produced -33 kcal/mol DCM wells (GFN2 says -0.5) across 50% of
+# orientations, with best_loss 0.42 vs 0.015. One step cannot see past a single
+# neighbour shell; width does not substitute for range.
+num_iterations: 3
+features: 128
+n_res: 2
+num_basis_functions: 32
+
+# cutoff >= mm_switch_on is enforced by the trainer: the ML basis must reach as
+# far as the handoff or the dimer interaction is silently truncated inside the
+# taper. Both default to 6.0 now. The orientation scan found the cutoff is NOT
+# the lever for spurious minima (6.0 and 8.0 models fail comparably, and which
+# is better flips by species), so there is no reason to move it.
+cutoff: 6.0
+max_atomic_number: 35   # Cl is 17
+num_atoms: 20           # 2 x 10 (ACO dimer); DCM dimers pad to this
+
+# --- charges / dipoles -------------------------------------------------------
+# Enabled because GFN2's dipoles are trustworthy: |D| = 0.368 (DCM) / 0.712 e*A
+# (ACO) vs 0.333 / 0.600 expected -- ~10-20% over, GFN2's known behaviour. The
+# OLD set's 0.141 / 0.207 were off by 2.4-2.9x in inconsistent directions, so
+# its dipole loss was fitting noise. Now the term is worth carrying.
+charges: true
+include_electrostatics: true
+
+# --- hybrid ML/MM ------------------------------------------------------------
+hybrid_mm: true
+ml_switch_width: 1.5
+mm_switch_on: 6.0
+mm_switch_width: 5.0
+# mm_charge_correction: true    # needs charges: true; leave off for the first run
+                                # so the ML and MM terms are not co-adapting while
+                                # we are still testing the data
+
+# --- optimisation ------------------------------------------------------------
+seed: 42
+batch_size: 32
+num_epochs: 3000
+learning_rate: 0.001
+optimizer: amsgrad
+objective: valid_loss
+ema_decay: 0.0          # off, as in your previous runs
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+
+# WATCH: DCM forces reach 253 eV/A at the 1.1 A contact floor -- real GFN2
+# repulsion, but ~50x typical, and forces_weight 52.91 will let those few points
+# dominate the loss. If the loss plateaus high or the force MAE refuses to drop,
+# this is the first suspect: rebuild with --min-contact 1.4, or clip.
