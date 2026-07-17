@@ -88,3 +88,4 @@ runs:
     calculator_pre_minimize: false
     jaxmd_minimize_steps: 500
     jaxmd_pbc_minimize_steps: 500
+    nve_max_f_start_eVA: 1.5
