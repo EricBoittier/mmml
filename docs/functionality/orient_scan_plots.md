@@ -191,3 +191,28 @@ CLI knobs worth knowing:
 Pass criteria for a healthy gate are project-specific; the scan summary’s
 `frac_rays_spurious` and `deepest_kcal` are the usual first look before reading
 the path atlas.
+
+## 4. Evaluate the test set (same UUID)
+
+Pin the frozen epoch (do not pass the live run root — that picks the latest
+epoch) and evaluate the in-distribution NPZ. GFN2-NMS energies are already
+relative — do **not** pass `--subtract-atom-energies`.
+
+```bash
+UUID=f448e34c-cca7-43f6-8b8e-f4986b9403eb
+ACODCM=/mmhome/boittier/home/mmml_tutorial/acodcm
+FROZEN=$ACODCM/ckpts/_gate_frozen_e222   # contains only epoch-222
+OUT=$ACODCM/eval_gfn2nms_${UUID}
+
+mmml physnet-evaluate \
+  --checkpoint "$FROZEN" \
+  --data "$ACODCM/gfn2_nms_test.npz" \
+  -o "$OUT/gfn2_nms_test_e222" \
+  --batch-size 16 --plots --use-ema
+```
+
+Sync locally:
+
+```bash
+rsync -avz studix:$OUT/ artifacts/orient_plots/${UUID}/eval/
+```
