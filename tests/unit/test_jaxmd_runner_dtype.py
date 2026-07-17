@@ -4,6 +4,7 @@ from pathlib import Path
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from mmml.cli.run.jaxmd_runner import (
     _JAXMD_DTYPE,

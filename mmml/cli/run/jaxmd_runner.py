@@ -1143,6 +1143,8 @@ def set_up_nhc_sim_routine(
         R=R,
         skip_minimization=False,
     ):
+        # May be rebound mid-NVE on E_tot drift dt_halve rescue.
+        nonlocal init_fn, apply_fn, sim, dt, dt_fs, steps_per_loop_call
         run_sim.last_status = "running"
         run_sim.last_error = None
         run_sim.last_hdf5_path = None
@@ -2645,7 +2647,6 @@ def set_up_nhc_sim_routine(
                             and args.ensemble == "nve"
                             and not is_npt
                         ):
-                            nonlocal init_fn, apply_fn, sim, dt, dt_fs, steps_per_loop_call
                             dt_old = float(dt)
                             dt_new = nve_etot_drift_halved_dt_ps(
                                 dt_old,
