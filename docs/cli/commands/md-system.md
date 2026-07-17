@@ -812,8 +812,9 @@ options:
                         mlpot/calculator_minimize.py are the likely fix).
                         Overrides --pre-min-ase-order.
   --bfgs-polish-max-fmax BFGS_POLISH_MAX_FMAX
-                        With --pre-min-ase-order fire-first: only run BFGS
-                        polish when max|F| ≤ this (eV/Å; default 1.0).
+                        Soft hybrid max|F| gate (eV/Å; default 1.0): BFGS polish
+                        only at/below this with fire-first; also skip MM CHARMM
+                        rescue when already soft.
   --rescue-fire-fmax RESCUE_FIRE_FMAX
                         FIRE force convergence threshold in eV/Å for calculator
                         rescue (default 0.05).

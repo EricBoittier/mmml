@@ -1174,8 +1174,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help=(
-            "With --pre-min-ase-order fire-first: only run BFGS polish when max|F| ≤ this "
-            "(eV/Å; default 1.0)."
+            "Soft hybrid max|F| gate (eV/Å; default 1.0): BFGS polish only at/below this "
+            "with fire-first; also skip MM CHARMM rescue when already soft."
         ),
     )
     parser.add_argument(

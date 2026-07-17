@@ -65,6 +65,28 @@ def _compatible_h5_per_atom_array(
     return arr
 
 
+def should_skip_charmm_hybrid_rescue(
+    *,
+    hybrid_fmax: float,
+    soft_gate_eVA: float,
+) -> bool:
+    """True when hybrid max|F| is already soft enough that MM CHARMM rescue hurts.
+
+    CHARMM SD/ABNR minimizes the MM surface. On a near-relaxed hybrid geometry
+    that typically *raises* hybrid max|F| (e.g. 0.28 → 1.8 eV/Å) and forces a
+    wasteful ASE re-descent. Soft gate reuses the BFGS polish threshold.
+    """
+    return float(hybrid_fmax) <= float(soft_gate_eVA)
+
+
+def charmm_hybrid_rescue_accepted(
+    fmax_before: float,
+    fmax_after: float,
+) -> bool:
+    """Accept CHARMM rescue only when hybrid max|F| did not get worse."""
+    return float(fmax_after) <= float(fmax_before) + 1e-12
+
+
 class _BestMinimizationFrame:
     def __init__(self, atoms: Atoms) -> None:
         self.atoms = atoms
@@ -492,8 +514,9 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=1.0,
         help=(
-            "With fire-first: run ASE BFGS polish only when current max|F| is at or below "
-            "this (eV/Å; default 1.0). Skip BFGS while the hybrid surface is still rough."
+            "Soft hybrid max|F| gate (eV/Å; default 1.0). With fire-first: run ASE BFGS "
+            "polish only at/below this. Also skip MM CHARMM rescue when hybrid max|F| is "
+            "already at/below this (CHARMM thrashs soft hybrid minima)."
         ),
     )
     p.add_argument(
@@ -501,8 +524,9 @@ def main(argv: list[str] | None = None) -> int:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "If post-ASE fmax stays above --pre-min-fmax, alternate CHARMM SD/ABNR with "
-            "ASE FIRE (and BFGS polish when soft) until fmax converges or rounds are exhausted."
+            "If post-ASE fmax stays above --pre-min-fmax and hybrid max|F| is still rough "
+            "(above --bfgs-polish-max-fmax), try CHARMM SD/ABNR then ASE FIRE. CHARMM is "
+            "skipped when already soft and rejected if it worsens hybrid max|F|."
         ),
     )
     p.add_argument("--rescue-charmm-sd-steps", type=int, default=100, help="Rescue CHARMM SD steps.")
@@ -1119,10 +1143,14 @@ def main(argv: list[str] | None = None) -> int:
 
         charmm_cubic_box = float(L) if not free_space else None
 
-        def _run_charmm_rescue(phase: str, *, fmax_key: str) -> float:
+        def _run_charmm_rescue(phase: str, *, fmax_key: str) -> tuple[float, bool]:
+            """Run MM CHARMM rescue; reject and restore if hybrid max|F| worsens."""
+            fmax_before = float(np.abs(atoms.get_forces()).max())
+            pos_before = np.asarray(atoms.get_positions(), dtype=float).copy()
             print(
                 f"CHARMM {phase} rescue starting "
-                f"(SD={args.rescue_charmm_sd_steps}, ABNR={args.rescue_charmm_abnr_steps})"
+                f"(SD={args.rescue_charmm_sd_steps}, ABNR={args.rescue_charmm_abnr_steps}; "
+                f"hybrid fmax={fmax_before:.6f} eV/Å)"
             )
             _run_charmm_minimize(
                 atoms,
@@ -1137,10 +1165,20 @@ def main(argv: list[str] | None = None) -> int:
             record_label = phase.lower().replace(" ", "_").replace("-", "_")
             best_frame.record(f"charmm_{record_label}")
             _check_pre_min_overlap(f"after CHARMM rescue ({phase})")
-            fmax = float(np.abs(atoms.get_forces()).max())
-            minimization_summary[fmax_key] = fmax
-            print(f"CHARMM {phase} rescue complete, fmax={fmax:.6f} eV/A")
-            return fmax
+            fmax_after = float(np.abs(atoms.get_forces()).max())
+            minimization_summary[fmax_key] = fmax_after
+            minimization_summary[f"{fmax_key}_before"] = fmax_before
+            if not charmm_hybrid_rescue_accepted(fmax_before, fmax_after):
+                atoms.set_positions(pos_before)
+                minimization_summary[f"{fmax_key}_rejected"] = True
+                print(
+                    f"CHARMM {phase} rescue rejected: hybrid fmax "
+                    f"{fmax_before:.6f} → {fmax_after:.6f} eV/Å; "
+                    "restored pre-CHARMM geometry (MM rescue worsened hybrid forces)."
+                )
+                return fmax_before, False
+            print(f"CHARMM {phase} rescue complete, fmax={fmax_after:.6f} eV/A")
+            return fmax_after, True
 
         def _run_ase_bfgs_rescue(phase: str, *, traj_suffix: str, fmax_key: str, iter_key: str) -> float:
             from mmml.cli.run.ase_minimize_log import (
@@ -1263,6 +1301,38 @@ def main(argv: list[str] | None = None) -> int:
         polish_gate = float(getattr(args, "bfgs_polish_max_fmax", 1.0))
         minimization_summary["bfgs_polish_max_fmax"] = polish_gate
 
+        def _maybe_charmm_then_hybrid(
+            phase_charmm: str,
+            phase_hybrid: str,
+            traj_suffix: str,
+            *,
+            fmax_key: str,
+            current_fmax: float,
+            soft_gate_eVA: float,
+        ) -> float:
+            """CHARMM only on a rough hybrid surface; skip ASE re-descent if rejected."""
+            if should_skip_charmm_hybrid_rescue(
+                hybrid_fmax=current_fmax,
+                soft_gate_eVA=soft_gate_eVA,
+            ):
+                print(
+                    f"Skipping CHARMM {phase_charmm} rescue: hybrid fmax="
+                    f"{current_fmax:.6f} ≤ soft gate {soft_gate_eVA:.6f} eV/Å "
+                    "(MM rescue is for rough surfaces; would thrash a soft hybrid min)."
+                )
+                minimization_summary[f"{fmax_key}_skipped_soft"] = True
+                return float(current_fmax)
+            print(
+                f"Starting CHARMM/ML rescue from current frame "
+                f"(fmax={current_fmax:.6f} eV/Å)"
+            )
+            fmax_after, accepted = _run_charmm_rescue(phase_charmm, fmax_key=fmax_key)
+            if not accepted:
+                return float(fmax_after)
+            if fmax_after > args.pre_min_fmax:
+                return _run_mmml_after_charmm(phase_hybrid, traj_suffix)
+            return float(fmax_after)
+
         if ase_order == "bfgs-first":
             from mmml.cli.run.ase_minimize_log import (
                 attach_compact_ase_optimizer_log,
@@ -1293,15 +1363,28 @@ def main(argv: list[str] | None = None) -> int:
                 bfgs_best_fmax = best_frame.restore_best_force()
                 minimization_summary["bfgs_best_force_fmax_eVA"] = bfgs_best_fmax
                 print(
-                    f"Starting CHARMM/ML rescue from best BFGS frame "
-                    f"({best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f})"
+                    f"Best BFGS frame for rescue: "
+                    f"{best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f}"
                 )
-                fmin = _run_charmm_rescue("pre-FIRE", fmax_key="charmm_rescue_pre_fire_fmax_eVA")
-                fmin = _run_mmml_after_charmm("rescue (pre-FIRE)", "rescue")
+                fmin = _maybe_charmm_then_hybrid(
+                    "pre-FIRE",
+                    "rescue (pre-FIRE)",
+                    "rescue",
+                    fmax_key="charmm_rescue_pre_fire_fmax_eVA",
+                    current_fmax=bfgs_best_fmax,
+                    soft_gate_eVA=polish_gate,
+                )
                 minimization_summary["fire_fmax_eVA"] = fmin
                 if fmin > args.pre_min_fmax:
-                    fmin = _run_charmm_rescue("post-FIRE", fmax_key="charmm_rescue_post_fire_fmax_eVA")
-                    fmin = _run_mmml_after_charmm("rescue (post-CHARMM)", "post_charmm_rescue")
+                    fmin = best_frame.restore_best_force()
+                    fmin = _maybe_charmm_then_hybrid(
+                        "post-FIRE",
+                        "rescue (post-CHARMM)",
+                        "post_charmm_rescue",
+                        fmax_key="charmm_rescue_post_fire_fmax_eVA",
+                        current_fmax=fmin,
+                        soft_gate_eVA=polish_gate,
+                    )
                     minimization_summary["post_charmm_rescue_fire_fmax_eVA"] = fmin
             elif fmin > args.pre_min_fmax:
                 print(
@@ -1315,7 +1398,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"(max|F|={pre_bfgs_fmax:.4f} eV/Å; BFGS polish if ≤ {polish_gate:.4f})"
             )
             if pre_bfgs_fmax > polish_gate and args.rescue_minimize:
-                fmin = _run_charmm_rescue(
+                fmin, _accepted = _run_charmm_rescue(
                     "pre-FIRE", fmax_key="charmm_rescue_pre_fire_fmax_eVA"
                 )
             else:
@@ -1331,11 +1414,17 @@ def main(argv: list[str] | None = None) -> int:
                 best_fmax = best_frame.restore_best_force()
                 minimization_summary["premin_best_force_fmax_eVA"] = best_fmax
                 print(
-                    f"Starting CHARMM/ML rescue from best frame "
-                    f"({best_frame.best_force_label}, fmax={best_fmax:.6f})"
+                    f"Best frame for rescue: "
+                    f"{best_frame.best_force_label}, fmax={best_fmax:.6f}"
                 )
-                fmin = _run_charmm_rescue("post-FIRE", fmax_key="charmm_rescue_post_fire_fmax_eVA")
-                fmin = _run_mmml_after_charmm("rescue (post-CHARMM)", "post_charmm_rescue")
+                fmin = _maybe_charmm_then_hybrid(
+                    "post-FIRE",
+                    "rescue (post-CHARMM)",
+                    "post_charmm_rescue",
+                    fmax_key="charmm_rescue_post_fire_fmax_eVA",
+                    current_fmax=best_fmax,
+                    soft_gate_eVA=polish_gate,
+                )
                 minimization_summary["post_charmm_rescue_fire_fmax_eVA"] = fmin
             elif fmin > args.pre_min_fmax:
                 print(
