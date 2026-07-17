@@ -139,6 +139,25 @@ def should_skip_jaxmd_fire(
     return bool(np.isfinite(f) and f <= thr)
 
 
+def should_skip_redundant_pbc_fire(
+    *,
+    first_fire_steps: int,
+    first_fire_skipped_soft: bool = False,
+    first_fire_ran_without_improvement: bool = False,
+    use_pbc: bool = True,
+) -> bool:
+    """Whether PBC FIRE would duplicate work already done by the first FIRE pass.
+
+    Handoff zeros ``jaxmd_minimize_steps`` but keeps ``jaxmd_pbc_minimize_steps``.
+    In that case PBC FIRE must still run (``first_fire_steps == 0``).
+    """
+    if not use_pbc:
+        return False
+    if int(first_fire_steps) <= 0:
+        return False
+    return bool(first_fire_skipped_soft or first_fire_ran_without_improvement)
+
+
 def resolve_jaxmd_fire_dt_start_ps(initial_max_f_eVA: float) -> float:
     """Choose FIRE ``dt_start`` from how soft the starting geometry already is."""
     f = float(initial_max_f_eVA)
@@ -1240,12 +1259,18 @@ def set_up_nhc_sim_routine(
             if NMIN <= 0:
                 c.print(Panel("Skipping first minimization (0 steps requested)", title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
                 minimized_pos = initial_pos
-                skip_redundant_pbc_fire = True
+                skip_redundant_pbc_fire = should_skip_redundant_pbc_fire(
+                    first_fire_steps=0, use_pbc=bool(use_pbc)
+                )
             else:
                 f0_comp = float(jnp.abs(wrapped_force_fn(initial_pos)).max())
                 if should_skip_jaxmd_fire(f0_comp, skip_below_eVA=fire_skip_thr):
                     minimized_pos = initial_pos
-                    skip_redundant_pbc_fire = True
+                    skip_redundant_pbc_fire = should_skip_redundant_pbc_fire(
+                        first_fire_steps=int(NMIN),
+                        first_fire_skipped_soft=True,
+                        use_pbc=bool(use_pbc),
+                    )
                     c.print(
                         Panel(
                             f"Skipping jax-md FIRE: start max|F|={f0_comp:.4f} eV/Å "
@@ -1309,7 +1334,11 @@ def set_up_nhc_sim_routine(
                     else:
                         # First FIRE already used molecular wrap under PBC — PBC FIRE
                         # would repeat the same no-op backoff.
-                        skip_redundant_pbc_fire = bool(use_pbc)
+                        skip_redundant_pbc_fire = should_skip_redundant_pbc_fire(
+                            first_fire_steps=int(NMIN),
+                            first_fire_ran_without_improvement=True,
+                            use_pbc=bool(use_pbc),
+                        )
                         c.print(
                             Panel(
                                 f"FIRE did not improve max|F| "
