@@ -90,9 +90,7 @@ def hybrid_ewald_coulomb_energy(
     n_int = jnp.asarray(build_kspace_integers(cell_np, alpha, accuracy_exponent=accuracy_exponent))
 
     # all-pairs MIC distance matrix, built from the single-pair primitive
-    # directly (pbc_utils_jax.pairwise_mic mis-shapes frac_coords's batched
-    # solve for this (N,N,3) case -- a pre-existing bug, unrelated to this
-    # module; tracked separately rather than relied on here).
+    # directly (equivalent to pbc_utils_jax.pairwise_mic).
     disp = jax.vmap(jax.vmap(lambda a, b: mic_displacement(a, b, cell), in_axes=(None, 0)), in_axes=(0, None))(pos, pos)
     disp_sq = jnp.sum(disp * disp, axis=-1)
     # padding atoms are all placed at the same (0, 0, 0) -- clamp the SQUARED
