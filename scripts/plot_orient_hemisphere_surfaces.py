@@ -139,41 +139,46 @@ def _energy_norm(
     *,
     lo: float = 5.0,
     hi: float = 95.0,
+    n_mad: float = 1.5,
     min_span: float | None = None,
 ) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
-    """Colourscale from robust percentiles so data variance fills the map.
+    """Colourscale matched to data variance (median ± ``n_mad``·MAD).
 
-    Outliers outside ``lo``/``hi`` are ignored.  The colour pivot is the
-    **median** of the retained values (or 0 when the window straddles zero),
-    via ``TwoSlopeNorm``, so each side of the typical well depth gets a full
-    half of the colour ramp — important when one dataset is deeper than the
-    other but both should still show contrast.
+    Falls back to ``lo``/``hi`` percentiles if MAD is degenerate.  Pivot is 0
+    when the window straddles zero, otherwise the data median, so deeper- and
+    shallower-than-typical wells each get a full half of a diverging ramp.
     """
     finite = np.asarray(vals, dtype=float)
     finite = finite[np.isfinite(finite)]
     if finite.size == 0:
         return mcolors.Normalize(vmin=-1.0, vmax=1.0)
-    vmin = float(np.percentile(finite, lo))
-    vmax = float(np.percentile(finite, hi))
+
+    median = float(np.median(finite))
+    mad = float(np.median(np.abs(finite - median)))
+    sigma = 1.4826 * mad  # MAD → approx. σ for normal data
+    if sigma > 1e-9:
+        vmin = median - n_mad * sigma
+        vmax = median + n_mad * sigma
+    else:
+        vmin = float(np.percentile(finite, lo))
+        vmax = float(np.percentile(finite, hi))
+
     if abs(vmax - vmin) < 1e-9:
         vmin, vmax = float(finite.min()), float(finite.max())
     span = vmax - vmin
-    sigma = float(np.std(finite))
     if min_span is None:
-        min_span = max(0.5, 2.5 * sigma if sigma > 0 else 0.5)
+        min_span = max(0.5, 2.0 * float(np.std(finite)) if finite.size > 1 else 0.5)
     if span < min_span:
-        mid = 0.5 * (vmin + vmax)
-        vmin, vmax = mid - 0.5 * min_span, mid + 0.5 * min_span
+        vmin, vmax = median - 0.5 * min_span, median + 0.5 * min_span
         span = min_span
-    pad = 0.04 * span
+    pad = 0.03 * span
     vmin, vmax = vmin - pad, vmax + pad
+
     if vmin < 0.0 < vmax:
         vcenter = 0.0
     else:
-        vcenter = float(np.median(finite))
-        # Keep the pivot strictly inside the window so TwoSlopeNorm is valid.
         eps = 1e-6 * max(span, 1e-6)
-        vcenter = float(np.clip(vcenter, vmin + eps, vmax - eps))
+        vcenter = float(np.clip(median, vmin + eps, vmax - eps))
     return mcolors.TwoSlopeNorm(vcenter=vcenter, vmin=vmin, vmax=vmax)
 
 
