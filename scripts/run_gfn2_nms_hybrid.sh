@@ -22,7 +22,7 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}"
 
 echo "=== training: $CFG ==="
-"$MMML/.venv/bin/mmml" physnet-train --config "$CFG"
+#"$MMML/.venv/bin/mmml" physnet-train --config "$CFG"
 
 CKPT=$(ls -dt "$ACODCM"/ckpts/gfn2_nms/gfn2nms-*/ 2>/dev/null | head -1)
 if [ -z "$CKPT" ]; then

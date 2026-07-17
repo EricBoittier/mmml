@@ -107,7 +107,11 @@ def _resolve_physnet_json_path(checkpoint: Path) -> Path | None:
     return None
 
 
+<<<<<<< HEAD
 def _load_physnet_checkpoint(checkpoint: Path, natoms: int, *, use_ema: bool = True):
+=======
+def _load_physnet_checkpoint(checkpoint: Path, natoms: int, *, use_ema: bool = False):
+>>>>>>> 3c2950bde (asdf)
     """Load (checkpoint_path, params, model) from Orbax or portable/legacy JSON."""
     import json
 
@@ -241,10 +245,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--use-ema",
+<<<<<<< HEAD
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Evaluate the checkpoint's EMA params (default: on). "
         "Use --no-use-ema for the live training weights.",
+=======
+        action="store_true",
+        help="Evaluate the checkpoint's EMA params instead of the live training "
+        "params. Live params can swing epoch-to-epoch in extrapolation regions "
+        "the loss never visits; EMA smooths that out.",
+>>>>>>> 3c2950bde (asdf)
     )
     return parser
 

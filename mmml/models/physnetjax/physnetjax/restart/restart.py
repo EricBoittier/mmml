@@ -123,7 +123,11 @@ def get_params_model(
     *,
     quiet: bool = False,
     return_meta: bool = False,
+<<<<<<< HEAD
     prefer_ema: bool = True,
+=======
+    prefer_ema: bool = False,
+>>>>>>> 3c2950bde (asdf)
 ):
     """
     Load parameters and model from checkpoint.
@@ -138,9 +142,16 @@ def get_params_model(
         Whether to return everything from the checkpoint, by default False
     prefer_ema : bool, optional
         Use the checkpoint's ``ema_params`` instead of the live ``params``,
+<<<<<<< HEAD
         by default True. Live params can swing several-fold between adjacent
         epochs in extrapolation regions the loss never visits; EMA smooths
         that out. Falls back to ``params`` when ``ema_params`` is absent.
+=======
+        by default False. The live params can swing several-fold between
+        adjacent epochs in extrapolation regions the loss never visits; EMA
+        smooths that out. Off by default so existing callers keep deploying
+        what they always have -- flip it deliberately.
+>>>>>>> 3c2950bde (asdf)
 
     Returns
     -------
