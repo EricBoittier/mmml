@@ -244,7 +244,7 @@ usage: mmml md-system [-h]
                       [--mm-cutoff MM_SWITCH_WIDTH]
                       [--mlpot-mm-internal-scale W]
                       [--mm-nonbond-mode {jax_mic,periodic_external}]
-                      [--lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme}]
+                      [--lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme,ewald}]
                       [--jax-pme-method {ewald,pme,p3m}] [--jax-pme-sr-cutoff A]
                       [--jax-pme-dispersion | --no-jax-pme-dispersion]
                       [--scafacos-method SCAFACOS_METHOD]
@@ -890,11 +890,13 @@ options:
                         pycharmm MLpot MM nonbonds: jax_mic (default) or
                         periodic_external (external Coulomb + CHARMM IMAGE VDW;
                         requires pbc_*).
-  --lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme}
+  --lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme,ewald}
                         Long-range Coulomb backend. Default: truncated MIC in
                         the switched-MM pair loop. Opt in: jax_pme, scafacos,
-                        nvalchemiops_pme (periodic_external for full-box
-                        Coulomb). Legacy alias: auto (= mic).
+                        nvalchemiops_pme, ewald (periodic_external for full-box
+                        Coulomb; ewald is pure JAX, no external PME library or
+                        CUDA requirement, and is the same operator --lr-solver
+                        ewald trains against). Legacy alias: auto (= mic).
   --jax-pme-method {ewald,pme,p3m}
                         jax-pme method when --lr-solver=jax_pme (default: env
                         JAX_PME_METHOD or ewald).
