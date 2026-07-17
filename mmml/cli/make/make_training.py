@@ -896,6 +896,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         from mmml.interfaces.pycharmmInterface.long_range_backend import (
             estimate_nvalchemiops_pme_real_space_cutoff,
             have_nvalchemiops_pme,
+            warmup_nvalchemiops_pme_train_worker,
         )
 
         if not have_nvalchemiops_pme():
@@ -914,6 +915,14 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             box_length_A=pme_box_length,
             accuracy=pme_accuracy,
             n_atoms=n_atoms_est,
+        )
+        # Compile Warp PME in a spawn child before jit_train_step; nested CUDA
+        # JAX inside pure_callback deadlocks the parent GPU XLA executor.
+        warmup_nvalchemiops_pme_train_worker(
+            n_atoms=int(n_atoms_est),
+            box_length_A=pme_box_length,
+            accuracy=pme_accuracy,
+            real_space_cutoff_A=pme_real_space_cutoff,
         )
     elif lr_solver == "ewald":
         if pme_box_length is None or float(pme_box_length) <= 0.0:

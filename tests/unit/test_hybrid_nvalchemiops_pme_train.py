@@ -140,6 +140,8 @@ def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.estimate_nvalchemiops_pme_real_space_cutoff",
         return_value=9.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.warmup_nvalchemiops_pme_train_worker",
     ):
         cfg = _build_hybrid_mm_config(args, [str(path)])
     assert cfg["lr_solver"] == "nvalchemiops_pme"
@@ -460,6 +462,15 @@ def test_nvalchemiops_pme_eval_defaults_to_gpu(monkeypatch):
     assert lrb.nvalchemiops_pme_device_name() == "cpu"
 
 
+def test_nvalchemiops_pme_train_isolate_defaults_on(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.delenv("MMML_NVALCHEMIOPS_PME_ISOLATE", raising=False)
+    assert lrb.nvalchemiops_pme_train_isolate_enabled() is True
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "0")
+    assert lrb.nvalchemiops_pme_train_isolate_enabled() is False
+
+
 def test_nvalchemiops_pme_eval_context_errors_without_gpu(monkeypatch):
     import jax
 
@@ -482,12 +493,15 @@ def test_nvalchemiops_pme_eval_context_yields_device(monkeypatch):
         assert device == jax.devices("cpu")[0]
 
 
-def test_nvalchemiops_pme_energy_jittable_with_force_vjp():
+def test_nvalchemiops_pme_energy_jittable_with_force_vjp(monkeypatch):
     """Train path must survive jit + value_and_grad (no NL concretization)."""
     from mmml.interfaces.pycharmmInterface.long_range_backend import (
         CHARMM_COULOMB_KCAL,
         nvalchemiops_pme_coulomb_energy_jax,
     )
+
+    # In-process mock path (spawn worker would not see the patch).
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "0")
 
     pos0 = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
     chg = jnp.array([1.0, -1.0], dtype=jnp.float64)
@@ -505,7 +519,7 @@ def test_nvalchemiops_pme_energy_jittable_with_force_vjp():
         return e, np.stack([f0, f1], axis=0)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend._nvalchemiops_pme_energy_forces_concrete",
+        "mmml.interfaces.pycharmmInterface.long_range_backend._nvalchemiops_pme_energy_forces_for_train_callback",
         side_effect=_concrete,
     ):
         def e_fn(p):
@@ -527,3 +541,29 @@ def test_nvalchemiops_pme_energy_jittable_with_force_vjp():
         analytic = jnp.sum(g * d)
         rel = abs(float(fd - analytic)) / max(abs(float(analytic)), 1e-12)
         assert rel < 1e-5, f"fd={fd}, dE={analytic}, rel={rel}, E={e}"
+
+
+def test_train_callback_uses_isolated_path_when_enabled(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "1")
+    called = {}
+
+    def _isolated(pos, chg, **kwargs):
+        called["yes"] = True
+        n = np.asarray(pos).shape[0]
+        return 1.0, np.zeros((n, 3), dtype=np.float64)
+
+    with mock.patch.object(
+        lrb, "_nvalchemiops_pme_energy_forces_isolated", side_effect=_isolated
+    ):
+        e, f = lrb._nvalchemiops_pme_energy_forces_for_train_callback(
+            np.zeros((2, 3)),
+            np.array([1.0, -1.0]),
+            box_length_A=20.0,
+            accuracy=1e-4,
+            real_space_cutoff_A=8.0,
+        )
+    assert called["yes"] is True
+    assert e == 1.0
+    assert f.shape == (2, 3)

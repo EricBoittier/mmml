@@ -272,7 +272,8 @@ The **Hybrid ML/MM setup** dashboard (always printed at calculator init) include
 | `periodic_external` fails                    | Need `--setup pbc_*`, positive `--box-size`, and an installed external Coulomb backend |
 | Segfault under MPI + ScaFaCoS                | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML)          |
 | `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses `jax.pure_callback` inside JIT)      |
-| `No FFI handler … _compute_naive_num_shifts_* on … Host` under `nvalchemiops_pme` train | Warp NL is CUDA-only; train on a GPU node with CUDA jaxlib. Pull latest MMML (host callback `device_put`s onto GPU). Do **not** set `MMML_NVALCHEMIOPS_PME_DEVICE=cpu`. |
+| `No FFI handler … _compute_naive_num_shifts_* on … Host` under `nvalchemiops_pme` train | Warp NL is CUDA-only; train on a GPU node with CUDA jaxlib. Do **not** set `MMML_NVALCHEMIOPS_PME_DEVICE=cpu`. |
+| `time+` frozen / first `jit_train_step` never returns with `nvalchemiops_pme` | Nested CUDA JAX inside `pure_callback` deadlocks the parent XLA executor. Pull latest MMML (spawn-isolated PME worker; look for `Warming nvalchemiops PME spawn worker`). Keep `MMML_NVALCHEMIOPS_PME_ISOLATE=1` (default). Or train with `--lr-solver ewald` (same full-box contract, jit-native). |
 
 
 ---

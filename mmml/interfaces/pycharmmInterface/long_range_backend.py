@@ -630,11 +630,213 @@ def _nvalchemiops_pme_accuracy(accuracy: float | None = None) -> float:
 def nvalchemiops_pme_device_name() -> str:
     """Device for nvalchemiops/Warp PME (default CUDA).
 
-    Warp's neighbor-list FFI is registered on GPU, not Host.  ``pure_callback``
-    from a jitted train step runs on CPU unless we re-dispatch here.
+    Warp's neighbor-list FFI is registered on GPU, not Host.  Eager / MD
+    evaluation ``device_put``s onto this device.  Jitted train steps must **not**
+    run nested JAX+Warp on the same GPU as the parent XLA executable (deadlock);
+    they use a spawn-isolated worker instead (see
+    ``nvalchemiops_pme_train_isolate_enabled``).
     Override with ``MMML_NVALCHEMIOPS_PME_DEVICE=cpu`` only for debugging.
     """
     return (os.environ.get("MMML_NVALCHEMIOPS_PME_DEVICE") or "gpu").strip().lower()
+
+
+def nvalchemiops_pme_train_isolate_enabled() -> bool:
+    """Whether train-step PME runs in a spawn worker (default on).
+
+    Nested CUDA JAX inside ``jax.pure_callback`` while the parent ``jit_train_step``
+    holds the GPU XLA executor stalls forever (``time+`` frozen).  Isolation
+    gives the Warp PME path its own process/JAX runtime.  Set
+    ``MMML_NVALCHEMIOPS_PME_ISOLATE=0`` only for debugging (will deadlock under
+    GPU train).
+    """
+    raw = (os.environ.get("MMML_NVALCHEMIOPS_PME_ISOLATE") or "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+# Persistent spawn worker for train-callback PME (avoids nested-GPU XLA deadlock).
+_NVAL_PME_WORKER = None
+_NVAL_PME_WORKER_LOCK = None
+
+
+def _nval_pme_worker_lock():
+    global _NVAL_PME_WORKER_LOCK
+    if _NVAL_PME_WORKER_LOCK is None:
+        import threading
+
+        _NVAL_PME_WORKER_LOCK = threading.Lock()
+    return _NVAL_PME_WORKER_LOCK
+
+
+def _nvalchemiops_pme_worker_main(q_in, q_out) -> None:
+    """Child process: eager CUDA PME with a private JAX runtime."""
+    import traceback
+
+    while True:
+        msg = q_in.get()
+        if msg is None:
+            break
+        try:
+            pos, chg, box, acc, cut = msg
+            # Import inside the child so the parent XLA state is not shared.
+            from mmml.interfaces.pycharmmInterface.long_range_backend import (
+                _nvalchemiops_pme_energy_forces_concrete,
+            )
+
+            e, f = _nvalchemiops_pme_energy_forces_concrete(
+                pos,
+                chg,
+                box_length_A=float(box),
+                accuracy=float(acc),
+                real_space_cutoff_A=cut,
+            )
+            q_out.put(
+                (
+                    "ok",
+                    float(e),
+                    np.asarray(f, dtype=np.float64),
+                )
+            )
+        except BaseException as exc:
+            q_out.put(("err", f"{type(exc).__name__}: {exc}", traceback.format_exc()))
+
+
+def _nvalchemiops_pme_ensure_worker():
+    """Start the spawn PME worker once per parent process."""
+    global _NVAL_PME_WORKER
+    import atexit
+    import multiprocessing as mp
+
+    if _NVAL_PME_WORKER is not None:
+        proc, q_in, q_out = _NVAL_PME_WORKER
+        if proc.is_alive():
+            return _NVAL_PME_WORKER
+    ctx = mp.get_context("spawn")
+    q_in = ctx.Queue()
+    q_out = ctx.Queue()
+    proc = ctx.Process(
+        target=_nvalchemiops_pme_worker_main,
+        args=(q_in, q_out),
+        name="mmml-nvalchemiops-pme",
+        daemon=True,
+    )
+    proc.start()
+
+    def _shutdown() -> None:
+        global _NVAL_PME_WORKER
+        state = _NVAL_PME_WORKER
+        if state is None:
+            return
+        p, qi, _qo = state
+        try:
+            qi.put(None)
+        except Exception:
+            pass
+        try:
+            p.join(timeout=5.0)
+        except Exception:
+            pass
+        if p.is_alive():
+            try:
+                p.kill()
+            except Exception:
+                pass
+        _NVAL_PME_WORKER = None
+
+    atexit.register(_shutdown)
+    _NVAL_PME_WORKER = (proc, q_in, q_out)
+    return _NVAL_PME_WORKER
+
+
+def _nvalchemiops_pme_energy_forces_isolated(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    *,
+    box_length_A: float,
+    accuracy: float | None = None,
+    real_space_cutoff_A: float | None = None,
+) -> tuple[float, np.ndarray]:
+    """PME in a spawn child (safe under jitted train ``pure_callback``)."""
+    with _nval_pme_worker_lock():
+        proc, q_in, q_out = _nvalchemiops_pme_ensure_worker()
+        q_in.put(
+            (
+                np.asarray(positions_A, dtype=np.float64),
+                np.asarray(charges_e, dtype=np.float64).reshape(-1),
+                float(box_length_A),
+                float(_nvalchemiops_pme_accuracy(accuracy)),
+                None if real_space_cutoff_A is None else float(real_space_cutoff_A),
+            )
+        )
+        if not proc.is_alive():
+            raise RuntimeError(
+                "nvalchemiops PME spawn worker died before returning "
+                "(check CUDA/OOM in the child process)."
+            )
+        status, *payload = q_out.get()
+        if status == "ok":
+            e, f = payload
+            return float(e), np.asarray(f, dtype=np.float64)
+        err, tb = payload
+        raise RuntimeError(
+            f"nvalchemiops PME spawn worker failed: {err}\n{tb}"
+        )
+
+
+def _nvalchemiops_pme_energy_forces_for_train_callback(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    *,
+    box_length_A: float,
+    accuracy: float | None = None,
+    real_space_cutoff_A: float | None = None,
+) -> tuple[float, np.ndarray]:
+    """Train-callback entry: isolated by default, in-process when isolate=0."""
+    if nvalchemiops_pme_train_isolate_enabled():
+        return _nvalchemiops_pme_energy_forces_isolated(
+            positions_A,
+            charges_e,
+            box_length_A=box_length_A,
+            accuracy=accuracy,
+            real_space_cutoff_A=real_space_cutoff_A,
+        )
+    return _nvalchemiops_pme_energy_forces_concrete(
+        positions_A,
+        charges_e,
+        box_length_A=box_length_A,
+        accuracy=accuracy,
+        real_space_cutoff_A=real_space_cutoff_A,
+    )
+
+
+def warmup_nvalchemiops_pme_train_worker(
+    *,
+    n_atoms: int,
+    box_length_A: float,
+    accuracy: float | None = None,
+    real_space_cutoff_A: float | None = None,
+) -> None:
+    """Start + compile the spawn PME worker before the first train step."""
+    if not nvalchemiops_pme_train_isolate_enabled():
+        return
+    n = max(2, int(n_atoms))
+    pos = np.zeros((n, 3), dtype=np.float64)
+    pos[1, 0] = 2.0
+    chg = np.zeros(n, dtype=np.float64)
+    chg[0] = 1.0
+    chg[1] = -1.0
+    print(
+        "Warming nvalchemiops PME spawn worker "
+        "(avoids nested-GPU deadlock in jit_train_step)...",
+        flush=True,
+    )
+    _nvalchemiops_pme_energy_forces_isolated(
+        pos,
+        chg,
+        box_length_A=float(box_length_A),
+        accuracy=accuracy,
+        real_space_cutoff_A=real_space_cutoff_A,
+    )
+    print("nvalchemiops PME spawn worker ready.", flush=True)
 
 
 def _nvalchemiops_pme_resolve_device():
@@ -848,7 +1050,9 @@ def _nvalchemiops_pme_energy_train_vjp(
 
     def _host(args):
         pos_h, chg_h = args
-        e_h, f_h = _nvalchemiops_pme_energy_forces_concrete(
+        # Never call concrete CUDA JAX here in-process: the parent
+        # jit_train_step still holds the GPU XLA executor → deadlock.
+        e_h, f_h = _nvalchemiops_pme_energy_forces_for_train_callback(
             pos_h,
             chg_h,
             box_length_A=box,
