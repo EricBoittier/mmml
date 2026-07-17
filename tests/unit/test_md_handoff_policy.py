@@ -19,6 +19,30 @@ from mmml.cli.run.md_handoff import (
 )
 
 
+def test_handoff_zero_first_fire_does_not_skip_pbc_fire() -> None:
+    from mmml.cli.run.jaxmd_runner import should_skip_redundant_pbc_fire
+
+    assert (
+        should_skip_redundant_pbc_fire(first_fire_steps=0, use_pbc=True) is False
+    )
+    assert (
+        should_skip_redundant_pbc_fire(
+            first_fire_steps=500,
+            first_fire_skipped_soft=True,
+            use_pbc=True,
+        )
+        is True
+    )
+    assert (
+        should_skip_redundant_pbc_fire(
+            first_fire_steps=500,
+            first_fire_ran_without_improvement=True,
+            use_pbc=True,
+        )
+        is True
+    )
+
+
 def test_resolve_jaxmd_minimize_steps_keeps_pbc_fire_on_handoff() -> None:
     vac, pbc = resolve_jaxmd_minimize_steps_for_handoff(
         skip_pre_min=True,
