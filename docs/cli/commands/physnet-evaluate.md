@@ -17,7 +17,7 @@ usage: mmml physnet-evaluate [-h] --checkpoint CHECKPOINT --data DATA
                              [--batch-size BATCH_SIZE] [--seed SEED]
                              [--num-samples NUM_SAMPLES]
                              [--subtract-atom-energies] [--subtract-mean]
-                             [--plots] [--no-save-npz]
+                             [--plots] [--no-save-npz] [--use-ema]
 
 Evaluate PhysNetJAX checkpoint on NPZ (energies, forces, dipoles).
 
@@ -46,6 +46,10 @@ options:
   --subtract-mean       Subtract mean energy from E (training-style).
   --plots               Write parity plots (requires matplotlib).
   --no-save-npz         Do not write predictions.npz (default: save).
+  --use-ema             Evaluate the checkpoint's EMA params instead of the live
+                        training params. Live params can swing epoch-to-epoch in
+                        extrapolation regions the loss never visits; EMA smooths
+                        that out.
 
 Evaluate a trained PhysNet (PhysNetJAX) checkpoint on an NPZ dataset. Runs real
 model inference (orbax checkpoint + EF forward), reports energy / force / dipole

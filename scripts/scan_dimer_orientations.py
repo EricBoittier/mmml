@@ -113,6 +113,14 @@ def main() -> int:
     p.add_argument("--mm-switch-width", type=float, default=DEFAULT_MM_SWITCH_WIDTH)
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--out", default="orient_scan")
+    p.add_argument(
+        "--use-ema",
+        action="store_true",
+        help="Gate the checkpoint's EMA params instead of the live training "
+        "params. Live params swing between adjacent epochs in the "
+        "unconstrained extrapolation region this scan probes; EMA smooths "
+        "that out and gives a more reproducible verdict.",
+    )
     args = p.parse_args()
 
     import jax
@@ -197,7 +205,7 @@ def main() -> int:
         Q_all = np.concatenate([Q_all, np.repeat(Q_all[:1], extra, 0)])
         M_all = np.concatenate([M_all, np.repeat(M_all[:1], extra, 0)])
 
-    _, params, model = _load_physnet_checkpoint(Path(args.checkpoint), pad)
+    _, params, model = _load_physnet_checkpoint(Path(args.checkpoint), pad, use_ema=args.use_ema)
     sig = jnp.asarray(raw["cgenff_master_sigmas"])
     eps = jnp.asarray(raw["cgenff_master_epsilons"])
 
@@ -278,7 +286,7 @@ def main() -> int:
 
     frac = n_bad / max(n_ok + n_bad, 1)
     summary = {
-        "resid": args.resid, "checkpoint": args.checkpoint,
+        "resid": args.resid, "checkpoint": args.checkpoint, "use_ema": args.use_ema,
         "mm_switch_on": args.mm_switch_on, "ml_switch_width": args.ml_switch_width,
         "n_rays": n_rays, "n_evaluated": n_ok + n_bad, "n_dropped": n_skip,
         "n_rays_spurious": n_bad, "frac_rays_spurious": frac,

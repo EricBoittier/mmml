@@ -107,7 +107,7 @@ def _resolve_physnet_json_path(checkpoint: Path) -> Path | None:
     return None
 
 
-def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
+def _load_physnet_checkpoint(checkpoint: Path, natoms: int, *, use_ema: bool = False):
     """Load (checkpoint_path, params, model) from Orbax or portable/legacy JSON."""
     import json
 
@@ -158,7 +158,7 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int):
     from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
 
     restart_path = get_last(str(ckpt))
-    params, model = get_params_model(str(restart_path), natoms=natoms)
+    params, model = get_params_model(str(restart_path), natoms=natoms, prefer_ema=use_ema)
     if model is None:
         raise ValueError(
             f"Orbax checkpoint {restart_path} has no model_attributes. "
@@ -239,6 +239,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not write predictions.npz (default: save).",
     )
+    parser.add_argument(
+        "--use-ema",
+        action="store_true",
+        help="Evaluate the checkpoint's EMA params instead of the live training "
+        "params. Live params can swing epoch-to-epoch in extrapolation regions "
+        "the loss never visits; EMA smooths that out.",
+    )
     return parser
 
 
@@ -283,7 +290,9 @@ def main() -> int:
         from mmml.models.physnetjax.physnetjax.analysis.analysis import plot_stats
 
         try:
-            restart_path, params, model = _load_physnet_checkpoint(args.checkpoint, natoms)
+            restart_path, params, model = _load_physnet_checkpoint(
+                args.checkpoint, natoms, use_ema=args.use_ema
+            )
         except (ValueError, FileNotFoundError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1

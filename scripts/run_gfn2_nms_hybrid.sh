@@ -52,11 +52,15 @@ for RES in DCM ACO; do
   # 0.248 A unaligned), which rotates the whole Fibonacci direction set and makes
   # the numbers incomparable. This bit me: a gate run against gfn2_nms_test gave
   # ACO 8.3%/mean +10.65 vs 4.6%/-1.05 here, for the same checkpoint.
+  # --use-ema: live params swing epoch-to-epoch in this scan's unconstrained
+  # extrapolation region (measured: DCM spurious fraction 12.5% -> 8.3% between
+  # adjacent epochs on live params, flat at 4.2% on ema_params, same checkpoints).
+  # Gate on ema_params for a reproducible verdict.
   "$PY" "$MMML/scripts/scan_dimer_orientations.py" \
       --checkpoint "$FROZEN" \
       --data "$ACODCM/out_combined_dedup/energies_forces_dipoles_test.npz" \
       --resid "$RES" --n-directions 10 --n-orientations 24 --n-r 36 \
-      --mm-switch-on 6.0 --out "$ACODCM/gate_${RES}"
+      --mm-switch-on 6.0 --use-ema --out "$ACODCM/gate_${RES}"
 done
 
 echo

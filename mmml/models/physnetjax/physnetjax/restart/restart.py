@@ -123,10 +123,11 @@ def get_params_model(
     *,
     quiet: bool = False,
     return_meta: bool = False,
+    prefer_ema: bool = False,
 ):
     """
     Load parameters and model from checkpoint.
-    
+
     Parameters
     ----------
     restart : str
@@ -135,6 +136,12 @@ def get_params_model(
         Number of atoms to set in model, by default None
     return_everything : bool, optional
         Whether to return everything from the checkpoint, by default False
+    prefer_ema : bool, optional
+        Use the checkpoint's ``ema_params`` instead of the live ``params``,
+        by default False. The live params can swing several-fold between
+        adjacent epochs in extrapolation regions the loss never visits; EMA
+        smooths that out. Off by default so existing callers keep deploying
+        what they always have -- flip it deliberately.
 
     Returns
     -------
@@ -146,7 +153,12 @@ def get_params_model(
     modification_time = os.path.getmtime(restart)
     modification_date = datetime.fromtimestamp(modification_time)
 
-    params = restored.get("params")
+    params = None
+    if prefer_ema:
+        params = restored.get("ema_params")
+
+    if params is None:
+        params = restored.get("params")
     if params is None and "model" in restored:
         model_state = restored["model"]
         if hasattr(model_state, "params"):
