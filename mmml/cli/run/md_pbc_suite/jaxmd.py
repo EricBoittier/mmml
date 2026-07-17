@@ -434,6 +434,19 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--skip-bfgs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Never run ASE BFGS during pre-minimization (FIRE only). Plain ASE BFGS "
+            "trusts a quadratic model of the surface and takes long steps; on an ML "
+            "PES it can walk downhill straight into a hole outside the training data "
+            "-- observed: E -7427.7 -> -7545.8 eV while max|F| rose 0.199 -> 36.3. "
+            "FIRE is far more conservative and stayed well-behaved on the same system. "
+            "Overrides --pre-min-ase-order."
+        ),
+    )
+    p.add_argument(
         "--bfgs-polish-max-fmax",
         type=float,
         default=1.0,
@@ -1155,6 +1168,9 @@ def main(argv: list[str] | None = None) -> int:
 
         def _maybe_bfgs_polish(phase: str, traj_suffix: str, fmax: float) -> float:
             """BFGS only when the surface is soft enough (fire-first policy)."""
+            if bool(getattr(args, "skip_bfgs", False)):
+                print(f"Skipping ASE BFGS polish ({phase}): --skip-bfgs")
+                return fmax
             polish_gate = float(getattr(args, "bfgs_polish_max_fmax", 1.0))
             if fmax <= args.pre_min_fmax:
                 return fmax
@@ -1174,6 +1190,8 @@ def main(argv: list[str] | None = None) -> int:
         def _run_mmml_after_charmm(phase: str, traj_suffix: str) -> float:
             """Relax CHARMM coords on hybrid MMML: FIRE first, BFGS polish if soft."""
             order = str(getattr(args, "pre_min_ase_order", "fire-first"))
+            if bool(getattr(args, "skip_bfgs", False)):
+                order = "fire-first"
             if order == "bfgs-first":
                 fmax = _run_ase_bfgs_rescue(
                     phase,
@@ -1196,6 +1214,10 @@ def main(argv: list[str] | None = None) -> int:
             return _maybe_bfgs_polish(phase, traj_suffix, fmax)
 
         ase_order = str(getattr(args, "pre_min_ase_order", "fire-first"))
+        if bool(getattr(args, "skip_bfgs", False)) and ase_order == "bfgs-first":
+            print("--skip-bfgs overrides --pre-min-ase-order bfgs-first: using FIRE only")
+            ase_order = "fire-first"
+        minimization_summary["skip_bfgs"] = bool(getattr(args, "skip_bfgs", False))
         minimization_summary["pre_min_ase_order"] = ase_order
         polish_gate = float(getattr(args, "bfgs_polish_max_fmax", 1.0))
         minimization_summary["bfgs_polish_max_fmax"] = polish_gate
