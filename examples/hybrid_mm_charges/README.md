@@ -43,9 +43,21 @@ must match (`hybrid_mm.json` sidecar records the training mode).
 
 ## Parity gate (cluster / live CHARMM)
 
+MIC LJ+Coulomb hybrid (default train/MD)::
+
 ```bash
 python scripts/check_hybrid_train_md_parity.py \
   --checkpoint /path/to/ckpts/hybrid/... \
   --data /path/to/energies_forces_dipoles_test.npz \
   --mm-charge-mode fixed   # or latent / fixed_plus_latent
+```
+
+Full-box nvalchemiops PME (train `lr_solver: nvalchemiops_pme` ↔ MD
+`periodic_external` many-to-many; no CHARMM needed for the PME kernel / `e_mm`
+layers)::
+
+```bash
+python scripts/check_nvalchemiops_train_md_pme_parity.py \
+  --data /path/to/energies_forces_dipoles_test.npz \
+  --pme-box-length 30
 ```

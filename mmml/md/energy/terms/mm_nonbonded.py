@@ -14,10 +14,17 @@ Two faces:
   distance-clamped to avoid NaN gradients. Supports ``lr_solver="mic"``
   (real-space minimum-image) and ``lr_solver="ewald"`` (jit-native Ewald
   summation — see ``ewald_native.py`` — real-space erfc term over the same
-  pair list plus a reciprocal-space structure-factor sum, self-energy, and
-  exclusion correction, all differentiable via plain ``jax.grad``). These are
-  the only long-range electrostatics backends that are jit-compatible in this
-  term (see ``lr_solver`` below for why the others aren't).
+  pair list plus a reciprocal-space structure-factor sum and self-energy, all
+  differentiable via plain ``jax.grad``). No exclusion correction: real-space
+  MM is already intermolecular-only (the ML model owns intramolecular
+  interactions; ``mol_id`` filtering already drops those pairs from the pair
+  list), so there is no bonded-exclusion list to reconcile the reciprocal-space
+  sum against. This leaves a small, uncorrected leak of intramolecular
+  electrostatics through k-space (which has no notion of molecules) — an
+  accepted tradeoff; see ``ewald_native.ewald_exclusion_correction`` if that
+  needs revisiting. These are the only long-range electrostatics backends that
+  are jit-compatible in this term (see ``lr_solver`` below for why the others
+  aren't).
 - **ASE** — wraps ``nonbonded_energy_and_forces`` (rebuilds the pair list each
   call), matching ``JAXIntermolecularCalculator``. Supports every
   ``lr_solver`` the reference function does (``mic``, ``jax_pme``,
@@ -169,11 +176,17 @@ class MMNonbondedTerm:
             from mmml.interfaces.pycharmmInterface.ewald_native import (
                 build_kspace_integers,
                 default_ewald_alpha,
-                ewald_exclusion_correction,
                 ewald_reciprocal_energy,
                 ewald_self_energy,
             )
 
+            # No exclusion correction: real-space MM is already intermolecular
+            # -only (mol_id filter in _host_pairs / the driver's neighbor list),
+            # so there is no formal bonded-exclusion list to reconcile against.
+            # This does leave a small, uncorrected leak of intramolecular
+            # electrostatics through the reciprocal-space sum (which has no
+            # notion of molecules) -- accepted tradeoff for now; see
+            # ewald_native.ewald_exclusion_correction if that needs revisiting.
             ewald_alpha = float(
                 self.ewald_alpha
                 if self.ewald_alpha is not None
@@ -183,8 +196,6 @@ class MMNonbondedTerm:
                 self._cell_np, ewald_alpha, accuracy_exponent=self.ewald_accuracy_exponent
             )
             n_int = jnp.asarray(n_int_np)
-            excl_i = jnp.asarray(ff.exclusions[:, 0], dtype=jnp.int32)
-            excl_j = jnp.asarray(ff.exclusions[:, 1], dtype=jnp.int32)
             ewald_self = ewald_self_energy(q, ewald_alpha) * COULOMB_KCAL
 
         def _pair_energy(R, pi, pj, e14, vdw14, mask, cell_used):
@@ -234,10 +245,7 @@ class MMNonbondedTerm:
                 elec_real = jnp.where(within, elec_real, 0.0)
 
                 recip = ewald_reciprocal_energy(R, q, cell_used, n_int, ewald_alpha) * COULOMB_KCAL
-                excl_corr = (
-                    ewald_exclusion_correction(R, q, cell_used, excl_i, excl_j, ewald_alpha) * COULOMB_KCAL
-                )
-                return (jnp.sum(vdw) + jnp.sum(elec_real) + recip + ewald_self + excl_corr) * KCAL_MOL_TO_EV
+                return (jnp.sum(vdw) + jnp.sum(elec_real) + recip + ewald_self) * KCAL_MOL_TO_EV
 
         def energy_fn(
             R,
