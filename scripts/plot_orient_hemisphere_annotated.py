@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ase import Atoms
 from ase.io import read
+from matplotlib import colors as mcolors
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import FancyBboxPatch
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
@@ -929,6 +930,399 @@ def plot_slice_strip(
     print(f"  wrote {out}")
 
 
+def _quat_to_axis_angle(q: np.ndarray) -> tuple[np.ndarray, float]:
+    x, y, z, w = (float(v) for v in q)
+    n = np.sqrt(x * x + y * y + z * z + w * w)
+    x, y, z, w = x / n, y / n, z / n, w / n
+    if w < 0.0:
+        x, y, z, w = -x, -y, -z, -w
+    w = float(np.clip(w, -1.0, 1.0))
+    theta = 2.0 * float(np.arccos(w))
+    s = np.sqrt(max(1.0 - w * w, 0.0))
+    if s < 1e-8:
+        axis = np.array([1.0, 0.0, 0.0])
+    else:
+        axis = np.array([x, y, z]) / s
+    return axis, theta
+
+
+def _quat_to_ball(q: np.ndarray) -> np.ndarray:
+    """SO(3) → unit ball via axis-angle: p = (θ/π) n̂."""
+    axis, theta = _quat_to_axis_angle(q)
+    return (theta / np.pi) * axis
+
+
+def _slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
+    q0 = np.asarray(q0, dtype=float)
+    q1 = np.asarray(q1, dtype=float)
+    q0 = q0 / np.linalg.norm(q0)
+    q1 = q1 / np.linalg.norm(q1)
+    dot = float(np.clip(np.dot(q0, q1), -1.0, 1.0))
+    if dot < 0.0:
+        q1 = -q1
+        dot = -dot
+    if dot > 0.9995:
+        out = q0 + t * (q1 - q0)
+        return out / np.linalg.norm(out)
+    theta = float(np.arccos(dot))
+    s = np.sin(theta)
+    return (np.sin((1.0 - t) * theta) * q0 + np.sin(t * theta) * q1) / s
+
+
+def _draw_wire_cube(ax, scale: float, *, color: str, lw: float = 0.9, alpha: float = 0.7) -> None:
+    s = scale
+    corners = np.array(
+        [[x, y, z] for x in (-s, s) for y in (-s, s) for z in (-s, s)], dtype=float
+    )
+    # 12 edges
+    for i, a in enumerate(corners):
+        for b in corners[i + 1 :]:
+            if np.count_nonzero(np.abs(a - b) > 1e-12) == 1:
+                ax.plot(
+                    [a[0], b[0]], [a[1], b[1]], [a[2], b[2]],
+                    color=color, lw=lw, alpha=alpha,
+                )
+
+
+def _draw_axis_ball(
+    ax,
+    *,
+    quats: np.ndarray,
+    energy: np.ndarray,
+    tag_color: dict[str, str],
+    cmap,
+    norm,
+    title: str,
+    elev: float = 22,
+    azim: float = -55,
+) -> None:
+    # translucent unit sphere shell
+    u = np.linspace(0, 2 * np.pi, 40)
+    v = np.linspace(0, np.pi, 24)
+    xs = np.outer(np.cos(u), np.sin(v))
+    ys = np.outer(np.sin(u), np.sin(v))
+    zs = np.outer(np.ones_like(u), np.cos(v))
+    ax.plot_surface(xs, ys, zs, color="#D5D8DC", alpha=0.12, linewidth=0, shade=False)
+
+    pts = np.stack([_quat_to_ball(q) for q in quats], axis=0)
+    ax.scatter(
+        pts[:, 0], pts[:, 1], pts[:, 2],
+        c=energy, cmap=cmap, norm=norm, s=36, depthshade=False, edgecolors="white", linewidths=0.3,
+    )
+    for tag, ori, _ in REF_TAGS:
+        p = pts[ori]
+        ax.scatter(
+            [p[0]], [p[1]], [p[2]],
+            s=140, facecolors=tag_color[tag], edgecolors="white",
+            linewidths=1.1, depthshade=False, zorder=5,
+        )
+        ax.text(p[0] * 1.15, p[1] * 1.15, p[2] * 1.15, tag, color=tag_color[tag], fontsize=10, fontweight="bold")
+
+    # coordinate axes through the ball
+    for vec, col, lab in (
+        ([1.05, 0, 0], AXIS_COLORS[0], "x"),
+        ([0, 1.05, 0], AXIS_COLORS[1], "y"),
+        ([0, 0, 1.05], AXIS_COLORS[2], "z"),
+    ):
+        ax.plot([0, vec[0]], [0, vec[1]], [0, vec[2]], color=col, lw=1.2)
+        ax.text(vec[0], vec[1], vec[2], lab, color=col, fontsize=8)
+
+    ax.set_xlim(-1.15, 1.15)
+    ax.set_ylim(-1.15, 1.15)
+    ax.set_zlim(-1.15, 1.15)
+    ax.set_box_aspect((1, 1, 1))
+    ax.view_init(elev=elev, azim=azim)
+    ax.set_title(title, fontsize=9)
+    ax.set_axis_off()
+
+
+def plot_concentric_atlas(
+    *,
+    rays: dict[str, np.ndarray],
+    mono: Atoms,
+    out: Path,
+    how: str = "min",
+    n_morph: int = 12,
+) -> None:
+    """Layered atlas: concentric cubes + axis ball, flat maps, cuts, morph strip."""
+    from scripts.plot_orient_hemisphere_surfaces import _aggregate_by_direction
+
+    plot_utils = _load_plot_utils()
+    apply_plot_style("icml")
+    tag_color = _tag_style()
+    quats = super_fibonacci(24)
+    dirs = fibonacci_sphere(10)
+    Rs = np.stack([quat_to_matrix(q) for q in quats], axis=0)
+    axis_tips = [Rs[:, :, k] for k in range(3)]
+    energy, _ = _aggregate_by_orientation(rays, how)
+    e_dir = _aggregate_by_direction(rays, how)
+    cmap = default_cmap("diverging") if (energy.min() < 0 < energy.max()) else default_cmap(
+        "sequential"
+    )
+    norm = _energy_norm(energy)
+    style = apply_plot_style("icml")
+    cut_colors = comparison_colors(style, n=4)
+
+    fig = plt.figure(figsize=(16.5, 14.5))
+    gs = GridSpec(
+        4,
+        6,
+        figure=fig,
+        height_ratios=[2.55, 1.35, 1.25, 1.35],
+        hspace=0.38,
+        wspace=0.28,
+    )
+
+    # ── Row 0: annotations around concentric cubes + ball ─────────────────
+    left = gs[0, 0].subgridspec(2, 1, hspace=0.25)
+    right = gs[0, 5].subgridspec(2, 1, hspace=0.25)
+    for i, (tag, ori, _) in enumerate((REF_TAGS[0], REF_TAGS[2])):
+        ax = fig.add_subplot(left[i, 0])
+        _render_tag_overlay(
+            ax, plot_utils, mono=mono, rays=rays, quats=quats, dirs=dirs, Rs=Rs,
+            tag=tag, ori=ori, tag_color=tag_color[tag],
+            rotation=PERSPECTIVES[0][1], title=f"{tag} front",
+        )
+    for i, (tag, ori, _) in enumerate((REF_TAGS[1], REF_TAGS[3])):
+        ax = fig.add_subplot(right[i, 0])
+        _render_tag_overlay(
+            ax, plot_utils, mono=mono, rays=rays, quats=quats, dirs=dirs, Rs=Rs,
+            tag=tag, ori=ori, tag_color=tag_color[tag],
+            rotation=PERSPECTIVES[1][1], title=f"{tag} side",
+        )
+
+    # Center: concentric cubes hosting the axis-angle ball (3 views in a row)
+    center = gs[0, 1:5].subgridspec(1, 3, wspace=0.12)
+    ball_views = (
+        ("axis-angle ball · view 1", 22, -55),
+        ("axis-angle ball · view 2", 18, 35),
+        ("axis-angle ball · view 3", 55, -20),
+    )
+    for j, (title, elev, azim) in enumerate(ball_views):
+        ax = fig.add_subplot(center[0, j], projection="3d")
+        # concentric cubes: outer = approach/context, middle = map shell, inner = SO(3)
+        _draw_wire_cube(ax, 1.35, color=STATUS_COLORS["neutral"], lw=0.7, alpha=0.35)
+        _draw_wire_cube(ax, 1.05, color="#5D6D7E", lw=1.0, alpha=0.55)
+        _draw_wire_cube(ax, 0.72, color=AXIS_COLORS[j % 3], lw=1.2, alpha=0.75)
+        _draw_axis_ball(
+            ax, quats=quats, energy=energy, tag_color=tag_color,
+            cmap=cmap, norm=norm, title=title, elev=elev, azim=azim,
+        )
+        # label cube shells once on the middle panel
+        if j == 1:
+            ax.text2D(
+                0.02, 0.02,
+                "cubes: outer context / middle map shell / inner SO(3) ball",
+                transform=ax.transAxes, fontsize=6.5, color=STATUS_COLORS["neutral"],
+            )
+
+    # ── Row 1: flattened 2D surfaces (middle band) ────────────────────────
+    map_titles = ("e0 flat map", "e1 flat map", "e2 flat map", "approach u-hat map")
+    map_tips = (axis_tips[0], axis_tips[1], axis_tips[2], dirs)
+    map_evals = (energy, energy, energy, e_dir)
+
+    ax_a_top = fig.add_subplot(gs[1, 0])
+    _render_tag_overlay(
+        ax_a_top, plot_utils, mono=mono, rays=rays, quats=quats, dirs=dirs, Rs=Rs,
+        tag="A", ori=0, tag_color=tag_color["A"],
+        rotation=PERSPECTIVES[2][1], title="A top",
+    )
+    ax_d_top = fig.add_subplot(gs[1, 5])
+    _render_tag_overlay(
+        ax_d_top, plot_utils, mono=mono, rays=rays, quats=quats, dirs=dirs, Rs=Rs,
+        tag="D", ori=17, tag_color=tag_color["D"],
+        rotation=PERSPECTIVES[2][1], title="D top",
+    )
+
+    mid_maps = gs[1, 1:5].subgridspec(1, 4, wspace=0.22)
+    last_im = None
+    for j, (title, tips, evals) in enumerate(zip(map_titles, map_tips, map_evals, strict=True)):
+        ax = fig.add_subplot(mid_maps[0, j])
+        lon_g, lat_g, field = _equirect_field(tips, evals)
+        nrm = norm if j < 3 else _energy_norm(evals)
+        last_im = ax.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=nrm, shading="auto")
+        lon_s, lat_s = _xyz_to_lonlat(tips)
+        ax.scatter(lon_s, lat_s, c=evals, cmap=cmap, norm=nrm, s=14, edgecolors="white", linewidths=0.3, zorder=3)
+        if j < 3:
+            for tag, ori, _ in REF_TAGS:
+                lo, la = _xyz_to_lonlat(tips[ori : ori + 1])
+                ax.scatter(lo, la, s=55, facecolors=tag_color[tag], edgecolors="white", linewidths=0.8, zorder=5)
+                ax.text(lo[0] + 4, la[0] + 4, tag, color=tag_color[tag], fontsize=8, fontweight="bold")
+            ax.spines["bottom"].set_color(AXIS_COLORS[j])
+            ax.spines["bottom"].set_linewidth(2.0)
+        ax.set_xlim(-180, 180)
+        ax.set_ylim(-90, 90)
+        ax.set_title(title, fontsize=9)
+        ax.tick_params(labelsize=7)
+        if j == 0:
+            ax.set_ylabel("lat (deg)", fontsize=8)
+        ax.set_xlabel("lon (deg)", fontsize=8)
+
+    # ── Row 2: choice 2D cuts ─────────────────────────────────────────────
+    # cut 1: e_min(ori) for dirs 0,2,5,8
+    ax_c1 = fig.add_subplot(gs[2, 0:2])
+    oris = np.arange(24)
+    for k, di in enumerate((0, 2, 5, 8)):
+        e_row = np.full(24, np.nan)
+        for o in oris:
+            m = (rays["direction"] == di) & (rays["orientation"] == o)
+            if m.any():
+                e_row[o] = rays["e_min_kcal"][m][0]
+        ax_c1.plot(oris, e_row, color=cut_colors[k], lw=1.5, label=f"dir {di}")
+    ax_c1.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
+    ymin, ymax = ax_c1.get_ylim()
+    for tag, ori, _ in REF_TAGS:
+        ax_c1.axvline(ori, color=tag_color[tag], ls=":", lw=1.0)
+        ax_c1.text(
+            ori, ymax - 0.06 * (ymax - ymin), tag,
+            color=tag_color[tag], fontsize=8, fontweight="bold", ha="center", va="top",
+        )
+    ax_c1.set_xlabel("orientation index")
+    ax_c1.set_ylabel("well depth (kcal/mol)")
+    ax_c1.set_title("2D cut: e_min(orientation) | fixed approach dirs")
+    legend_outside(ax_c1, side="right")
+
+    # cut 2: equatorial slice of axis-angle ball (z≈0 disk)
+    ax_c2 = fig.add_subplot(gs[2, 2:4])
+    pts = np.stack([_quat_to_ball(q) for q in quats], axis=0)
+    # project to xy; size by |z| proximity to equator
+    w = np.exp(-((pts[:, 2]) ** 2) / 0.08)
+    sc = ax_c2.scatter(
+        pts[:, 0], pts[:, 1], c=energy, cmap=cmap, norm=norm,
+        s=20 + 80 * w, alpha=0.35 + 0.65 * w, edgecolors="white", linewidths=0.3,
+    )
+    for tag, ori, _ in REF_TAGS:
+        p = pts[ori]
+        ax_c2.scatter([p[0]], [p[1]], s=90, facecolors=tag_color[tag], edgecolors="white", linewidths=1.0, zorder=5)
+        ax_c2.text(p[0] + 0.04, p[1] + 0.04, tag, color=tag_color[tag], fontsize=9, fontweight="bold")
+    circ = plt.Circle((0, 0), 1.0, fill=False, color=STATUS_COLORS["neutral"], lw=0.8)
+    ax_c2.add_patch(circ)
+    ax_c2.set_aspect("equal")
+    ax_c2.set_xlim(-1.15, 1.15)
+    ax_c2.set_ylim(-1.15, 1.15)
+    ax_c2.set_xlabel("ball x = (θ/π) n_x")
+    ax_c2.set_ylabel("ball y = (θ/π) n_y")
+    ax_c2.set_title("2D cut: axis-angle ball equator (weight ~ exp(-z^2))")
+    fig.colorbar(sc, ax=ax_c2, fraction=0.046, pad=0.04)
+
+    # cut 3: r_at_min vs e_min scatter, coloured by spuriosity
+    ax_c3 = fig.add_subplot(gs[2, 4:6])
+    spur = rays["n_min_ml"] > 1
+    ax_c3.scatter(
+        rays["r_at_min"][~spur], rays["e_min_kcal"][~spur],
+        c=STATUS_COLORS["good"], s=18, alpha=0.7, label="single min", edgecolors="none",
+    )
+    ax_c3.scatter(
+        rays["r_at_min"][spur], rays["e_min_kcal"][spur],
+        c=status_color("critical"), s=22, alpha=0.7, label="spurious", edgecolors="none",
+    )
+    for tag, ori, _ in REF_TAGS:
+        d_idx = TAG_DIRS[tag]
+        m = (rays["orientation"] == ori) & (rays["direction"] == d_idx)
+        if m.any():
+            ax_c3.scatter(
+                [rays["r_at_min"][m][0]], [rays["e_min_kcal"][m][0]],
+                s=80, facecolors=tag_color[tag], edgecolors="black", linewidths=0.8, zorder=5,
+            )
+            ax_c3.text(
+                rays["r_at_min"][m][0] + 0.05, rays["e_min_kcal"][m][0],
+                tag, color=tag_color[tag], fontsize=9, fontweight="bold",
+            )
+    ax_c3.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
+    ax_c3.set_xlabel("r at minimum (A)")
+    ax_c3.set_ylabel("well depth (kcal/mol)")
+    ax_c3.set_title("2D cut: (r_min, e_min) all rays")
+    legend_outside(ax_c3, side="right")
+
+    # ── Row 3: morph filmstrip A -> B -> C -> D ───────────────────────────
+    # build waypoint list
+    waypoints: list[tuple[str, int, int]] = [(t, o, TAG_DIRS[t]) for t, o, _ in REF_TAGS]
+    # n_morph frames along the polyline of waypoints
+    segs = len(waypoints) - 1
+    frames_per = max(n_morph // segs, 2)
+    morph_ax = gs[3, :].subgridspec(1, segs * frames_per + 1, wspace=0.08)
+    frame_i = 0
+    for s in range(segs):
+        t0, o0, d0 = waypoints[s]
+        t1, o1, d1 = waypoints[s + 1]
+        q0, q1 = quats[o0], quats[o1]
+        u0, u1 = dirs[d0], dirs[d1]
+        r0 = _r_for_tag(rays, o0, d0)
+        r1 = _r_for_tag(rays, o1, d1)
+        n_here = frames_per + (1 if s == segs - 1 else 0)
+        for k in range(n_here if s < segs - 1 else frames_per + 1):
+            if s < segs - 1 and k == frames_per:
+                continue
+            t = k / frames_per
+            if s == segs - 1 and k == frames_per:
+                t = 1.0
+            q = _slerp(q0, q1, t)
+            # direction: slerp on sphere
+            u = (1.0 - t) * u0 + t * u1
+            u = u / np.linalg.norm(u)
+            r = (1.0 - t) * r0 + t * r1
+            R = quat_to_matrix(q)
+            dim, frags, com_a, com_b = _dimer_atoms(mono, direction=u, quat=q, r=r)
+            ax = fig.add_subplot(morph_ax[0, frame_i])
+            # colour blend between endpoint tags
+            c0 = np.array(mcolors.to_rgb(tag_color[t0]))
+            c1 = np.array(mcolors.to_rgb(tag_color[t1]))
+            blend = c0 * (1 - t) + c1 * t
+            blend_hex = mcolors.to_hex(blend)
+            lab = t0 if t < 0.15 else (t1 if t > 0.85 else f"{t0}->{t1}")
+            plot_utils.render_dimer_atoms(
+                ax, dim, frags,
+                rotation="16x,-28y,0z",
+                segment_arrows=_annotation_arrows(com_a, com_b, R, axis_scale=1.35),
+                title=lab if (t < 0.05 or t > 0.95 or abs(t - 0.5) < 0.08) else f"{t:.1f}",
+                title_fontsize=7,
+                label_color=blend_hex,
+                radii_scale=0.34,
+            )
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_color(blend_hex)
+                spine.set_linewidth(1.6)
+            frame_i += 1
+
+    # colourbar for ball/maps
+    if last_im is not None:
+        cax = fig.add_axes([0.92, 0.55, 0.012, 0.2])
+        fig.colorbar(last_im, cax=cax, label=f"{how} well depth (kcal/mol)")
+
+    fig.suptitle(
+        "Concentric-cube atlas: SO(3) axis-angle ball + flat maps + 2D cuts + morph A-B-C-D",
+        fontsize=12,
+        y=0.995,
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=170, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  wrote {out}")
+
+
+def _labeled(path: Path, label: str) -> Path:
+    """``foo.png`` + label ``xTB`` → ``foo_xTB.png`` (flip-pair friendly)."""
+    return path.with_name(f"{path.stem}_{label}{path.suffix}")
+
+
+def _stamp_label(fig: plt.Figure, label: str) -> None:
+    """Large corner badge so ML / xTB pages are obvious when flipping."""
+    color = "#1A5276" if label.upper() in ("ML", "HYBRID", "6A", "8A") else "#943126"
+    fig.text(
+        0.01,
+        0.99,
+        label,
+        ha="left",
+        va="top",
+        fontsize=16,
+        fontweight="bold",
+        color="white",
+        bbox=dict(boxstyle="round,pad=0.35", fc=color, ec="none", alpha=0.95),
+        zorder=100,
+    )
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--rays", type=Path, required=True)
@@ -936,33 +1330,104 @@ def main() -> int:
     p.add_argument("--validate", type=Path, default=None)
     p.add_argument("--how", choices=("min", "mean"), default="min")
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument(
+        "--label",
+        default="ML",
+        help="Source badge + filename suffix (e.g. ML or xTB) for flip-pairs",
+    )
+    p.add_argument(
+        "--atlas-only",
+        action="store_true",
+        help="Only write the concentric-cube atlas figure",
+    )
     args = p.parse_args()
+    label = str(args.label).strip()
 
     args.out.mkdir(parents=True, exist_ok=True)
     rays = _load_rays(args.rays)
     mono = _load_monomer(args.monomer)
 
-    plot_projection_explainer(out=args.out / "projection_explainer.png")
-    plot_map_projections(
-        rays=rays, mono=mono, out=args.out / "equirectangular_maps.png", how=args.how
-    )
-    plot_hemispheres_with_ase_ring(
-        rays=rays, mono=mono, out=args.out / "hemisphere_ase_ring.png", how=args.how
-    )
-    plot_perspective_gallery(
-        rays=rays, mono=mono, out=args.out / "perspectives_gallery.png"
-    )
-    plot_annotated_dashboard(
-        rays=rays,
-        mono=mono,
-        validate=args.validate,
-        out=args.out / "hemisphere_annotated_dashboard.png",
-        how=args.how,
-    )
-    for d in (0, 2, 8):
-        plot_slice_strip(
-            rays=rays, mono=mono, out=args.out / f"slice_dir{d}_with_ase.png", direction=d
+    _orig_savefig = plt.Figure.savefig
+
+    def _savefig_with_badge(self, *a, **k):
+        _stamp_label(self, label)
+        if getattr(self, "_suptitle", None) is not None:
+            old = self._suptitle.get_text()
+            if f"[{label}]" not in old:
+                self.suptitle(f"[{label}]  {old}", fontsize=self._suptitle.get_fontsize())
+        return _orig_savefig(self, *a, **k)
+
+    plt.Figure.savefig = _savefig_with_badge  # type: ignore[method-assign]
+    try:
+        plot_concentric_atlas(
+            rays=rays,
+            mono=mono,
+            out=_labeled(args.out / "concentric_atlas.png", label),
+            how=args.how,
         )
+        if args.atlas_only:
+            return 0
+
+        plot_projection_explainer(
+            out=_labeled(args.out / "projection_explainer.png", label)
+        )
+        plot_map_projections(
+            rays=rays,
+            mono=mono,
+            out=_labeled(args.out / "equirectangular_maps.png", label),
+            how=args.how,
+        )
+        plot_hemispheres_with_ase_ring(
+            rays=rays,
+            mono=mono,
+            out=_labeled(args.out / "hemisphere_ase_ring.png", label),
+            how=args.how,
+        )
+        plot_perspective_gallery(
+            rays=rays,
+            mono=mono,
+            out=_labeled(args.out / "perspectives_gallery.png", label),
+        )
+        plot_annotated_dashboard(
+            rays=rays,
+            mono=mono,
+            validate=args.validate,
+            out=_labeled(args.out / "hemisphere_annotated_dashboard.png", label),
+            how=args.how,
+        )
+        for d in (0, 2, 8):
+            plot_slice_strip(
+                rays=rays,
+                mono=mono,
+                out=_labeled(args.out / f"slice_dir{d}_with_ase.png", label),
+                direction=d,
+            )
+    finally:
+        plt.Figure.savefig = _orig_savefig  # type: ignore[method-assign]
+
+    # index for flipping
+    index = args.out / f"FLIP_{label}.md"
+    index.write_text(
+        "\n".join(
+            [
+                f"# {label} orientation figures",
+                "",
+                f"Flip pair: open the matching `*_ML.png` / `*_xTB.png` side by side.",
+                "",
+                f"- concentric_atlas_{label}.png",
+                f"- equirectangular_maps_{label}.png",
+                f"- hemisphere_ase_ring_{label}.png",
+                f"- perspectives_gallery_{label}.png",
+                f"- hemisphere_annotated_dashboard_{label}.png",
+                f"- slice_dir{{0,2,8}}_with_ase_{label}.png",
+                "",
+                f"Source rays: `{args.rays}`",
+                "",
+            ]
+        )
+        + "\n"
+    )
+    print(f"  wrote {index}")
     return 0
 
 
