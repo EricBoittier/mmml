@@ -134,12 +134,26 @@ def _rbf_on_sphere(points: np.ndarray, values: np.ndarray, mesh_xyz: np.ndarray)
     return rbf(mesh_xyz)
 
 
-def _energy_norm(vals: np.ndarray) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
-    vmin, vmax = float(np.min(vals)), float(np.max(vals))
+def _energy_norm(
+    vals: np.ndarray,
+    *,
+    lo: float = 2.0,
+    hi: float = 98.0,
+) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
+    """Colourscale from robust percentiles (drop outliers before setting limits)."""
+    finite = np.asarray(vals, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return mcolors.Normalize(vmin=-1.0, vmax=1.0)
+    vmin = float(np.percentile(finite, lo))
+    vmax = float(np.percentile(finite, hi))
+    if abs(vmax - vmin) < 1e-9:
+        vmin, vmax = float(finite.min()), float(finite.max())
+    pad = 0.05 * (vmax - vmin + 1e-6)
+    vmin, vmax = vmin - pad, vmax + pad
     if vmin < 0.0 < vmax:
         return mcolors.TwoSlopeNorm(vcenter=0.0, vmin=vmin, vmax=vmax)
-    pad = 0.05 * (vmax - vmin + 1e-6)
-    return mcolors.Normalize(vmin=vmin - pad, vmax=vmax + pad)
+    return mcolors.Normalize(vmin=vmin, vmax=vmax)
 
 
 def _draw_hemisphere(

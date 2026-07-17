@@ -13,6 +13,7 @@ import pandas as pd
 from ase.data import covalent_radii
 from ase.data.colors import jmol_colors
 from ase.io.utils import rotate as _ase_rotate
+from matplotlib.colors import to_rgba
 from matplotlib.patches import Circle
 
 # ── Backend metadata ─────────────────────────────────────────────────────────
@@ -407,12 +408,16 @@ def render_dimer_atoms(
     """
     ax.set_axis_off()
     ax.set_aspect("equal")
+    # Text overlays (title + axis/COM labels) stay readable but 50% transparent
+    # so they don't bury the structure.
+    _text_alpha = 0.5
     if title:
+        base = label_color if label_color else "black"
         ax.set_title(
             title,
             fontsize=title_fontsize,
-            pad=1,
-            color=label_color if label_color else "black",
+            pad=2,
+            color=to_rgba(base, _text_alpha),
             fontweight="bold" if label_color else "normal",
         )
     if atoms is None or len(atoms) == 0:
@@ -500,8 +505,14 @@ def render_dimer_atoms(
             if label:
                 label_pos = origin + v_hat * arrow_len * 1.25
                 ax.text(
-                    label_pos[0], label_pos[1], label, color=color,
+                    label_pos[0], label_pos[1], label, color=to_rgba(color, _text_alpha),
                     fontsize=6, fontweight="bold", ha="center", va="center", zorder=11,
+                    bbox=dict(
+                        boxstyle="round,pad=0.12",
+                        fc=(1, 1, 1, _text_alpha),
+                        ec=to_rgba(color, _text_alpha),
+                        lw=0.5,
+                    ),
                 )
                 xlo, xhi = min(xlo, label_pos[0]), max(xhi, label_pos[0])
                 ylo, yhi = min(ylo, label_pos[1]), max(yhi, label_pos[1])
@@ -538,13 +549,18 @@ def render_dimer_atoms(
                     lp[0],
                     lp[1],
                     label,
-                    color=color,
+                    color=to_rgba(color, _text_alpha),
                     fontsize=7,
                     fontweight="bold",
                     ha="center",
                     va="center",
                     zorder=13,
-                    bbox=dict(boxstyle="round,pad=0.15", fc="white", ec=color, lw=0.6, alpha=0.9),
+                    bbox=dict(
+                        boxstyle="round,pad=0.15",
+                        fc=(1, 1, 1, _text_alpha),
+                        ec=to_rgba(color, _text_alpha),
+                        lw=0.5,
+                    ),
                 )
                 xlo, xhi = min(xlo, lp[0], s[0], e[0]), max(xhi, lp[0], s[0], e[0])
                 ylo, yhi = min(ylo, lp[1], s[1], e[1]), max(yhi, lp[1], s[1], e[1])

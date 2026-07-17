@@ -57,6 +57,30 @@ from scripts.plot_orient_hemisphere_surfaces import (  # noqa: E402
 
 EV_TO_KCAL = 23.0605
 
+
+def _robust_lim(
+    *arrays: np.ndarray,
+    lo: float = 2.0,
+    hi: float = 98.0,
+    pad_frac: float = 0.08,
+    include_zero: bool = False,
+) -> tuple[float, float]:
+    """Axis limits from percentiles so a few outliers don't dominate the view."""
+    vals = np.concatenate([np.asarray(a, dtype=float).ravel() for a in arrays])
+    vals = vals[np.isfinite(vals)]
+    if vals.size == 0:
+        return (-1.0, 1.0)
+    lo_v = float(np.percentile(vals, lo))
+    hi_v = float(np.percentile(vals, hi))
+    if include_zero:
+        lo_v = min(lo_v, 0.0)
+        hi_v = max(hi_v, 0.0)
+    span = hi_v - lo_v
+    if span < 1e-9:
+        span = max(abs(hi_v), 1.0) * 0.1
+    return lo_v - pad_frac * span, hi_v + pad_frac * span
+
+
 REF_TAGS: list[tuple[str, int, str]] = [
     ("A", 0, "clean-ish (validate ray 0)"),
     ("B", 2, "clean-ish (validate ray 2)"),
@@ -252,14 +276,14 @@ def plot_hemispheres_with_ase_ring(
     )
     norm = _energy_norm(energy)
 
-    fig = plt.figure(figsize=(16.5, 11.5))
-    outer = GridSpec(2, 3, figure=fig, hspace=0.28, wspace=0.18)
+    fig = plt.figure(figsize=(20.0, 14.0))
+    outer = GridSpec(2, 3, figure=fig, hspace=0.45, wspace=0.32)
     axis_names = ("e0", "e1", "e2")
 
     for col, (tips, name, acolor) in enumerate(zip(axis_tips, axis_names, AXIS_COLORS, strict=True)):
         for row, hemi in enumerate(("north", "south")):
             cell = outer[row, col]
-            inner = cell.subgridspec(3, 3, wspace=0.08, hspace=0.18)
+            inner = cell.subgridspec(3, 3, wspace=0.18, hspace=0.28)
             ax3d = fig.add_subplot(inner[1, 1], projection="3d")
             _draw_hemisphere(
                 ax3d,
@@ -367,9 +391,10 @@ def plot_perspective_gallery(
     fig, axes = plt.subplots(
         n_tag,
         n_persp,
-        figsize=(3.4 * n_persp, 3.1 * n_tag),
+        figsize=(4.2 * n_persp, 3.8 * n_tag),
         squeeze=False,
     )
+    fig.subplots_adjust(hspace=0.45, wspace=0.35)
     for i, (tag, ori, note) in enumerate(REF_TAGS):
         for j, (pname, prot) in enumerate(PERSPECTIVES):
             ax = axes[i][j]
@@ -442,8 +467,12 @@ def plot_annotated_dashboard(
     co = _co_bond_axis(mono)
     val = _validate_tables(validate) if validate is not None else {}
 
-    fig = plt.figure(figsize=(14.5, 12.0))
-    gs = GridSpec(4, 6, figure=fig, height_ratios=[1.0, 1.15, 1.15, 1.35], hspace=0.4, wspace=0.32)
+    fig = plt.figure(figsize=(18.0, 15.5))
+    gs = GridSpec(
+        4, 6, figure=fig,
+        height_ratios=[1.0, 1.15, 1.15, 1.35],
+        hspace=0.55, wspace=0.42,
+    )
 
     ax_leg = fig.add_subplot(gs[0, 0:2])
     com0 = np.zeros(3)
@@ -529,6 +558,7 @@ def plot_annotated_dashboard(
     style = apply_plot_style("icml")
     dcols = comparison_colors(style, n=len(slice_dirs))
     oris = np.arange(24)
+    s1_rows: list[np.ndarray] = []
     for di, dcol in zip(slice_dirs, dcols, strict=True):
         e_row = np.full(24, np.nan)
         spur = np.zeros(24, dtype=bool)
@@ -539,8 +569,10 @@ def plot_annotated_dashboard(
                 spur[o] = rays["n_min_ml"][m][0] > 1
         ax_s1.plot(oris, e_row, color=dcol, lw=1.6, label=f"dir {di}")
         ax_s1.scatter(oris[spur], e_row[spur], color=status_color("critical"), s=16, zorder=3)
+        s1_rows.append(e_row)
     ax_s1.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.7)
-    ymin, ymax = ax_s1.get_ylim()
+    ymin, ymax = _robust_lim(*s1_rows, include_zero=True)
+    ax_s1.set_ylim(ymin, ymax)
     for tag, ori, _ in REF_TAGS:
         ax_s1.axvline(ori, color=tag_color[tag], ls=":", lw=1.0)
         ax_s1.text(
@@ -580,7 +612,13 @@ def plot_annotated_dashboard(
                 arrowprops=dict(arrowstyle="-", color=tag_color[tag], lw=0.8),
             )
         ax_s2.plot([], [], color="k", ls="--", lw=1.0, label="ML (dashed)")
-        ax_s2.set_ylim(-3.0, 5.0)
+        y_vals = []
+        for tag, ori, _ in REF_TAGS:
+            if ori in val:
+                y_vals.append(val[ori]["e_xtb"])
+                y_vals.append(val[ori]["e_ml"])
+        if y_vals:
+            ax_s2.set_ylim(*_robust_lim(*y_vals, include_zero=True))
         ax_s2.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.7)
         ax_s2.set_xlabel("r_COM (A)")
         ax_s2.set_ylabel("binding E (kcal/mol)")
@@ -663,14 +701,14 @@ def plot_map_projections(
     )
     norm = _energy_norm(energy)
 
-    fig = plt.figure(figsize=(14.0, 10.5))
+    fig = plt.figure(figsize=(18.0, 13.5))
     gs = GridSpec(
         3,
         4,
         figure=fig,
         height_ratios=[1.15, 1.15, 1.1],
-        hspace=0.4,
-        wspace=0.28,
+        hspace=0.55,
+        wspace=0.38,
     )
 
     body_panels = [
@@ -887,14 +925,19 @@ def plot_slice_strip(
             e_row[o] = rays["e_min_kcal"][m][0]
             spur[o] = rays["n_min_ml"][m][0] > 1
 
-    fig, ax = plt.subplots(figsize=(11.5, 4.0))
+    fig, ax = plt.subplots(figsize=(14.0, 5.2))
     ax.plot(oris, e_row, color=STATUS_COLORS["neutral"], lw=1.8)
-    ax.scatter(oris[~spur], e_row[~spur], c=e_row[~spur], cmap=default_cmap("diverging"), s=28, zorder=3)
+    ax.scatter(
+        oris[~spur], e_row[~spur],
+        c=e_row[~spur], cmap=default_cmap("diverging"),
+        norm=_energy_norm(e_row), s=28, zorder=3,
+    )
     ax.scatter(
         oris[spur], e_row[spur], facecolors="none",
         edgecolors=status_color("critical"), s=40, linewidths=1.0, zorder=4, label="spurious",
     )
     ax.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.7)
+    ax.set_ylim(*_robust_lim(e_row, include_zero=True))
     ax.set_xlabel("orientation index")
     ax.set_ylabel("well depth (kcal/mol)")
     ax.set_title(f"Direction {direction} — e_min(orientation) with ASE + COM")
@@ -1063,19 +1106,19 @@ def plot_concentric_atlas(
     style = apply_plot_style("icml")
     cut_colors = comparison_colors(style, n=4)
 
-    fig = plt.figure(figsize=(16.5, 14.5))
+    fig = plt.figure(figsize=(20.5, 18.0))
     gs = GridSpec(
         4,
         6,
         figure=fig,
         height_ratios=[2.55, 1.35, 1.25, 1.35],
-        hspace=0.38,
-        wspace=0.28,
+        hspace=0.55,
+        wspace=0.40,
     )
 
     # ── Row 0: annotations around concentric cubes + ball ─────────────────
-    left = gs[0, 0].subgridspec(2, 1, hspace=0.25)
-    right = gs[0, 5].subgridspec(2, 1, hspace=0.25)
+    left = gs[0, 0].subgridspec(2, 1, hspace=0.40)
+    right = gs[0, 5].subgridspec(2, 1, hspace=0.40)
     for i, (tag, ori, _) in enumerate((REF_TAGS[0], REF_TAGS[2])):
         ax = fig.add_subplot(left[i, 0])
         _render_tag_overlay(
@@ -1092,7 +1135,7 @@ def plot_concentric_atlas(
         )
 
     # Center: concentric cubes hosting the axis-angle ball (3 views in a row)
-    center = gs[0, 1:5].subgridspec(1, 3, wspace=0.12)
+    center = gs[0, 1:5].subgridspec(1, 3, wspace=0.22)
     ball_views = (
         ("axis-angle ball · view 1", 22, -55),
         ("axis-angle ball · view 2", 18, 35),
@@ -1134,7 +1177,7 @@ def plot_concentric_atlas(
         rotation=PERSPECTIVES[2][1], title="D top",
     )
 
-    mid_maps = gs[1, 1:5].subgridspec(1, 4, wspace=0.22)
+    mid_maps = gs[1, 1:5].subgridspec(1, 4, wspace=0.32)
     last_im = None
     for j, (title, tips, evals) in enumerate(zip(map_titles, map_tips, map_evals, strict=True)):
         ax = fig.add_subplot(mid_maps[0, j])
@@ -1162,6 +1205,7 @@ def plot_concentric_atlas(
     # cut 1: e_min(ori) for dirs 0,2,5,8
     ax_c1 = fig.add_subplot(gs[2, 0:2])
     oris = np.arange(24)
+    c1_rows: list[np.ndarray] = []
     for k, di in enumerate((0, 2, 5, 8)):
         e_row = np.full(24, np.nan)
         for o in oris:
@@ -1169,8 +1213,10 @@ def plot_concentric_atlas(
             if m.any():
                 e_row[o] = rays["e_min_kcal"][m][0]
         ax_c1.plot(oris, e_row, color=cut_colors[k], lw=1.5, label=f"dir {di}")
+        c1_rows.append(e_row)
     ax_c1.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.6)
-    ymin, ymax = ax_c1.get_ylim()
+    ymin, ymax = _robust_lim(*c1_rows, include_zero=True)
+    ax_c1.set_ylim(ymin, ymax)
     for tag, ori, _ in REF_TAGS:
         ax_c1.axvline(ori, color=tag_color[tag], ls=":", lw=1.0)
         ax_c1.text(
