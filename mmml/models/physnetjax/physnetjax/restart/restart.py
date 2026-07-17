@@ -22,6 +22,24 @@ from mmml.models.physnetjax.physnetjax.utils.utils import get_files
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
 
+def _safe_float(val, default=float("inf")):
+    if val is None:
+        return default
+    try:
+        return float(np.asarray(val))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_int(val, default=0):
+    if val is None:
+        return default
+    try:
+        return int(np.asarray(val))
+    except (ValueError, TypeError):
+        return default
+
+
 def save_training_checkpoint(
     path: Path | str,
     ckpt: dict,
@@ -128,9 +146,24 @@ def get_params_model(
     modification_time = os.path.getmtime(restart)
     modification_date = datetime.fromtimestamp(modification_time)
 
-    params = restored["params"]
-    if not quiet:
-        print(restored["model"].keys())
+    params = restored.get("params")
+    if params is None and "model" in restored:
+        model_state = restored["model"]
+        if hasattr(model_state, "params"):
+            params = model_state.params
+        elif isinstance(model_state, dict) and "params" in model_state:
+            params = model_state["params"]
+
+    if params is None:
+        params = restored.get("ema_params")
+
+    if not quiet and "model" in restored:
+        model_state = restored["model"]
+        if hasattr(model_state, "keys"):
+            print(model_state.keys())
+        elif isinstance(model_state, dict):
+            print(model_state.keys())
+
     if "model_attributes" not in restored.keys():
         if return_everything:
             return params, None, restored
@@ -153,8 +186,8 @@ def get_params_model(
     checkpoint_meta = {
         "Checkpoint": str(restart),
         "name": Path(restart).name,
-        "epoch": int(restored["epoch"]),
-        "best_loss": float(np.asarray(restored["best_loss"])),
+        "epoch": _safe_int(restored.get("epoch")),
+        "best_loss": _safe_float(restored.get("best_loss")),
         "Save Time": modification_date,
     }
     if not quiet:
@@ -222,10 +255,10 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
     restored = orbax_checkpointer.restore(restart)
     print("Restoring from", restart)
     print("Restored keys:", restored.keys())
-    state = restored["model"]
+    state = restored.get("model")
     # print(state)
     params = _  # restored["params"]
-    ema_params = restored["ema_params"]
+    ema_params = restored.get("ema_params", params)
     # opt_state = restored["opt_state"]
     # print("Opt state", opt_state)
     transform_state = transform.init(params)
@@ -243,8 +276,8 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
     # )
     # # opt_state = (o_a, (_, o_b[1]))
     # Set training variables
-    step = int(restored["epoch"]) + 1
-    best_loss = float(np.asarray(restored["best_loss"]))
+    step = _safe_int(restored.get("epoch")) + 1
+    best_loss = _safe_float(restored.get("best_loss"))
     print(f"Training resumed from step {step - 1}, best_loss {best_loss:.6f}")
     CKPT_DIR = Path(restart).parent.resolve()  # Orbax requires absolute paths
     return (
