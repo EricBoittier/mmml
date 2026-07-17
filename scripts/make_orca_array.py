@@ -58,6 +58,12 @@ RUNNER = """#!/bin/bash
 
 # One task handles a contiguous chunk of geometries, sequentially: job startup
 # (~seconds) would otherwise be a large fraction of a 29 s calculation.
+#
+# sbatch inherits the submitting shell's environment; the `module` function is
+# only defined for interactive login shells (sourced from /etc/profile.d), so
+# a job submitted from a non-interactive shell (e.g. a plain `ssh host sbatch
+# ...`) silently lacks it. Source it explicitly so this works either way.
+source /etc/profile.d/00-module.sh 2>/dev/null || true
 module load {module}
 ORCA=$(which orca)
 if [ -z "$ORCA" ]; then echo "orca not on PATH after module load" >&2; exit 1; fi
