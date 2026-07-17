@@ -30,7 +30,7 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--mm-switch-width MM_SWITCH_WIDTH]
                           [--no-complementary-handoff]
                           [--mm-pair-source {jax,charmm_callback}]
-                          [--lr-solver {mic,nvalchemiops_pme}]
+                          [--lr-solver {mic,nvalchemiops_pme,ewald}]
                           [--pme-box-length PME_BOX_LENGTH]
                           [--pme-accuracy PME_ACCURACY]
                           [--mm-include-lj | --no-mm-include-lj | --mm_include_lj | --no-mm_include_lj]
@@ -138,22 +138,25 @@ options:
                         source jax). All-ML bulk systems with empty callback
                         lists auto-fall back to JAX. Override with env
                         MMML_MM_PAIR_SOURCE.
-  --lr-solver, --lr_solver {mic,nvalchemiops_pme}
+  --lr-solver, --lr_solver {mic,nvalchemiops_pme,ewald}
                         Hybrid-MM long-range Coulomb for training (default:
                         mic). mic: switched CGenFF LJ+Coulomb pairs.
                         nvalchemiops_pme: full-box many-to-many PME on fixed
                         CGenFF charges (no exclusions / no intra subtract; LJ
                         omitted; requires --pme-box-length and
-                        mmml[nvalchemiops-pme]). Matches fast MD
-                        periodic_external.
+                        mmml[nvalchemiops-pme]). ewald: same full-box/no-
+                        exclusion contract as nvalchemiops_pme, pure JAX (no
+                        external PME library, no CUDA requirement); requires
+                        --pme-box-length. Matches fast MD periodic_external.
   --pme-box-length, --pme_box_length PME_BOX_LENGTH
-                        Cubic box length (Å) for --lr-solver nvalchemiops_pme
-                        (required for that solver).
+                        Cubic box length (Å) for --lr-solver
+                        nvalchemiops_pme|ewald (required for those solvers).
   --pme-accuracy, --pme_accuracy PME_ACCURACY
-                        nvalchemiops PME accuracy target (default: 1e-6).
+                        nvalchemiops_pme/ewald PME accuracy target (default:
+                        1e-6).
   --mm-include-lj, --no-mm-include-lj, --mm_include_lj, --no-mm_include_lj
                         Include CGenFF LJ in hybrid E_MM (default: on for mic).
-                        Forced off when --lr-solver nvalchemiops_pme.
+                        Forced off when --lr-solver nvalchemiops_pme or ewald.
   --ema-decay, --ema_decay EMA_DECAY
                         Decay for the parameter EMA (default: 0.999).
                         Validation, checkpointing and restart all use the EMA
