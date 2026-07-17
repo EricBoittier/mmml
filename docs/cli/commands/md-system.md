@@ -207,6 +207,7 @@ usage: mmml md-system [-h]
                       [--fire-min-steps FIRE_MIN_STEPS]
                       [--fire-min-maxstep FIRE_MIN_MAXSTEP]
                       [--pre-min-ase-order {fire-first,bfgs-first}]
+                      [--skip-bfgs | --no-skip-bfgs]
                       [--bfgs-polish-max-fmax BFGS_POLISH_MAX_FMAX]
                       [--rescue-fire-fmax RESCUE_FIRE_FMAX]
                       [--quiet-bfgs | --no-quiet-bfgs] [--verbose-bfgs]
@@ -763,6 +764,15 @@ options:
                         ASE hybrid pre-min order for jaxmd/ase: fire-first
                         (default) runs FIRE on rough surfaces and BFGS only to
                         polish; bfgs-first is legacy.
+  --skip-bfgs, --no-skip-bfgs
+                        Never run ASE BFGS during pre-minimization (FIRE only).
+                        Plain ASE BFGS trusts a quadratic model of the surface
+                        and takes long steps; on an ML PES it can walk downhill
+                        into a hole outside the training data -- observed: E
+                        -7427.7 -> -7545.8 eV while max|F| rose 0.199 -> 36.3,
+                        at 0 K, so no thermal barrier crossing is needed. FIRE
+                        stayed well-behaved on the same system. Overrides --pre-
+                        min-ase-order.
   --bfgs-polish-max-fmax BFGS_POLISH_MAX_FMAX
                         With --pre-min-ase-order fire-first: only run BFGS
                         polish when max|F| ≤ this (eV/Å; default 1.0).
