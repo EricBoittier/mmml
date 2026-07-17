@@ -2242,6 +2242,9 @@ def set_up_nhc_sim_routine(
         e_tot_drift_rescue_count = 0
         e_tot_drift_threshold_eV = e_tot_drift_abort_eV
         last_good_pos = None
+        force_progress_print = False
+        md_steps_completed = 0
+        sim_time_ps = 0.0
 
         def _state_after_overlap_rescue(
             pos,
@@ -2670,13 +2673,46 @@ def set_up_nhc_sim_routine(
                                     steps_per_loop_call = int(steps_per_loop_call) // 2
                                 dt = dt_new
                                 dt_fs = dt * 1000.0
+                                c.print(
+                                    Panel(
+                                        f"Rebuilding NVE integrator: dt "
+                                        f"{dt_old * 1000:.4f} → {dt_new * 1000:.4f} fs. "
+                                        "First post-rescue block recompiles JAX "
+                                        "(often minutes) — progress lines resume after that.",
+                                        title="[bold yellow]NVE dt backoff[/bold yellow]",
+                                        border_style="yellow",
+                                    )
+                                )
                                 init_fn, apply_fn = simulate.nve(
-                                    wrapped_force_fn, shift, dt
+                                    wrapped_force_fn, shift, dt_new
                                 )
                                 apply_fn = jit(apply_fn)
                                 sim = _bind_sim(apply_fn)
+                                dt = dt_new
+                                dt_fs = dt * 1000.0
                                 # Re-init momenta at new integrator with repaired geometry.
                                 state = _state_after_overlap_rescue(state.position)
+                                # Compile single-step apply_fn now (does not advance
+                                # production state). The multi-step ``sim`` loop still
+                                # compiles on the next recording block.
+                                try:
+                                    _warm = apply_fn(
+                                        state, neighbor=current_neighbors
+                                    )
+                                    block_jax_values(
+                                        _warm.position, _warm.momentum
+                                    )
+                                    c.print(
+                                        "[yellow]drift rescue: apply_fn compiled; "
+                                        "multi-step loop compiles on the next "
+                                        f"record ({steps_per_recording} steps @ "
+                                        f"{dt_fs:.4f} fs) — expect a pause[/yellow]"
+                                    )
+                                except Exception as exc:
+                                    c.print(
+                                        f"[yellow]drift rescue: warmup compile deferred "
+                                        f"({type(exc).__name__}: {exc})[/yellow]"
+                                    )
                                 c.print(
                                     f"[yellow]drift rescue: MD dt "
                                     f"{dt_old * 1000:.4f} → {dt_fs:.4f} fs; "
@@ -2713,10 +2749,13 @@ def set_up_nhc_sim_routine(
                         # Fresh microcanonical reference after geometry/velocity repair.
                         e_tot_ref = None
                         last_good_pos = state.position
+                        force_progress_print = True
                         c.print(
                             Panel(
                                 "Repair applied — continuing NVE from last-good geometry "
-                                "with re-initialized velocities; E_tot reference reset.",
+                                "with re-initialized velocities; E_tot reference reset. "
+                                "Next progress line prints as soon as the following "
+                                "recording block finishes (may be slow if dt just changed).",
                                 title="[bold green]NVE E_tot drift rescue[/bold green]",
                                 border_style="green",
                             )
@@ -2724,9 +2763,15 @@ def set_up_nhc_sim_routine(
                         continue
                     else:
                         last_good_pos = state.position
-                if i % 10 == 0:
+                # Cumulative MD progress (survives mid-run dt / steps_per_recording changes).
+                md_steps_completed += int(steps_per_recording)
+                sim_time_ps += float(steps_per_recording) * float(dt)
+                steps = md_steps_completed
+                time_ps = sim_time_ps
+                if i % 10 == 0 or force_progress_print:
+                    force_progress_print = False
                     elapsed_s = time.perf_counter() - jaxmd_loop_start
-                    simulated_ns = steps * dt_fs * 1e-6
+                    simulated_ns = sim_time_ps * 1e-3
                     if simulated_ns > 0 and elapsed_s > 0:
                         avg_speed_ns_per_day = simulated_ns * 86400.0 / elapsed_s
                     else:
@@ -2852,7 +2897,9 @@ def set_up_nhc_sim_routine(
                 c.print(Panel(close_error, title="[bold red]HDF5 close failed[/bold red]", border_style="red"))
         c.print(Panel(str(hdf5_path), title="[bold green]HDF5 trajectory saved[/bold green]", border_style="green"))
 
-        steps_completed = len(nhc_positions) * steps_per_recording
+        steps_completed = int(md_steps_completed) if md_steps_completed > 0 else (
+            len(nhc_positions) * int(steps_per_recording)
+        )
         run_sim.last_status = run_status
         run_sim.last_error = run_error
         run_sim.last_overlap_warning_count = overlap_warning_count
@@ -2875,7 +2922,11 @@ def set_up_nhc_sim_routine(
         except Exception:
             run_sim.last_velocities = None
         completion_title = "Simulation complete" if run_status == "complete" else "Partial simulation saved"
-        c.print(Panel(f"{steps_completed} steps ({steps_completed * dt:.2f} ps)", title=f"[bold]{completion_title}[/bold]", border_style="green"))
+        c.print(Panel(
+            f"{steps_completed} steps ({sim_time_ps:.2f} ps; dt={dt_fs:.4f} fs)",
+            title=f"[bold]{completion_title}[/bold]",
+            border_style="green",
+        ))
 
         nhc_positions_out = []
         nhc_boxes_out = []  # NPT: real-space box per frame for trajectory cell
