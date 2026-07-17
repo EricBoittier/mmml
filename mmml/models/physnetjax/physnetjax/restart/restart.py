@@ -106,7 +106,9 @@ def get_last(path: str) -> Path:
             f"No checkpoint directories (epoch-*/) found in '{path}'. "
             "Cannot restart training without an existing checkpoint."
         )
-    if "tmp" in str(dirs[-1]):
+    # get_files already drops names containing "tmp"; keep a name-only
+    # guard here for callers that pass a pre-filtered list edge case.
+    while dirs and "tmp" in dirs[-1].name:
         dirs.pop()
     if not dirs:
         raise FileNotFoundError(

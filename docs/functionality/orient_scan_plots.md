@@ -162,6 +162,7 @@ Open `path_atlas_gfn2nms-<uuid>.png`, `path_atlas_ML.png`, and
 | File | Content |
 |------|---------|
 | `path_atlas_*.png` | Tags A–D from physical surface minima (prefer `--ref-rays`); complete graph among tags; 3-frame filmstrips `A \| mid \| B`; maps + `E(r)` panels |
+| `exchange_symmetry_mean_centered_*.png` | Standalone û/−û xy scatter with **each** dataset (ML and ref) mean-centered by its own μ (preserves the y=x diagonal) |
 | `equirectangular_maps_*.png` | Energy on approach / orientation projections |
 | `hemisphere_annotated_dashboard_*.png` | Six hemispheres + legend + tags |
 | `hemisphere_ase_ring_*.png` | ASE overlays around hemispheres |

@@ -239,15 +239,24 @@ def _load_monomer(path: Path) -> Atoms:
     return atoms
 
 
-def _co_bond_axis(atoms: Atoms) -> np.ndarray:
+def _co_bond_axis(atoms: Atoms) -> np.ndarray | None:
+    """Unit C→O vector, or ``None`` when the monomer has no oxygen (e.g. DCM)."""
     z = atoms.get_atomic_numbers()
     pos = atoms.get_positions()
-    o_idx = int(np.where(z == 8)[0][0])
+    o_hits = np.where(z == 8)[0]
+    if o_hits.size == 0:
+        return None
+    o_idx = int(o_hits[0])
     c_idx = [i for i in range(len(z)) if z[i] == 6]
+    if not c_idx:
+        return None
     d = np.linalg.norm(pos[c_idx] - pos[o_idx], axis=1)
     c = c_idx[int(np.argmin(d))]
     v = pos[o_idx] - pos[c]
-    return v / np.linalg.norm(v)
+    n = float(np.linalg.norm(v))
+    if n < 1e-8:
+        return None
+    return v / n
 
 
 def _dimer_atoms(
@@ -766,16 +775,18 @@ def plot_annotated_dashboard(
 
     ax_leg = fig.add_subplot(gs[0, 0:2])
     com0 = np.zeros(3)
+    arrows = [
+        (com0, 1.8 * np.array([1.0, 0, 0]), AXIS_COLORS[0], "e0"),
+        (com0, 1.8 * np.array([0, 1.0, 0]), AXIS_COLORS[1], "e1"),
+        (com0, 1.8 * np.array([0, 0, 1.0]), AXIS_COLORS[2], "e2"),
+    ]
+    if co is not None:
+        arrows.append((com0, 1.8 * co, STATUS_COLORS["warning"], "C=O"))
     plot_utils.render_dimer_atoms(
         ax_leg,
         mono,
         rotation="25x,-35y,10z",
-        segment_arrows=[
-            (com0, 1.8 * np.array([1.0, 0, 0]), AXIS_COLORS[0], "e0"),
-            (com0, 1.8 * np.array([0, 1.0, 0]), AXIS_COLORS[1], "e1"),
-            (com0, 1.8 * np.array([0, 0, 1.0]), AXIS_COLORS[2], "e2"),
-            (com0, 1.8 * co, STATUS_COLORS["warning"], "C=O"),
-        ],
+        segment_arrows=arrows,
         title="Monomer B @ COM (identity)",
         title_fontsize=9,
     )

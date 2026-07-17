@@ -51,9 +51,18 @@ def sort_names_safe(x) -> int:
     return -1
 
 def get_files(path: str) -> List[Path]:
-    """Get sorted epoch checkpoint directories, ignoring orbax-internal dirs."""
+    """Get sorted epoch checkpoint directories, ignoring orbax-internal dirs.
+
+    Temporary / tfevent markers are matched on the directory *name* only so
+    valid checkpoints under system temp roots (e.g. pytest's ``/tmp/...``) are
+    not discarded.
+    """
     dirs = list(Path(path).glob("epoch-*/"))
-    dirs = [d for d in dirs if "tfevent" not in str(d) and "tmp" not in str(d)]
+    dirs = [
+        d
+        for d in dirs
+        if "tfevent" not in d.name and "tmp" not in d.name
+    ]
     dirs.sort(key=lambda x: sort_names_safe(str(x)))
     return dirs
 

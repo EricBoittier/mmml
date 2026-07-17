@@ -7,9 +7,25 @@ import pytest
 import numpy as np
 
 from mmml.models.physnetjax.physnetjax.restart.restart import (
+    get_last,
     get_params_model,
     restart_training,
 )
+from mmml.models.physnetjax.physnetjax.utils.utils import get_files
+
+
+def test_get_files_keeps_epochs_under_system_tmp(tmp_path: Path) -> None:
+    """Regression: parents named ``tmp`` must not drop valid ``epoch-N`` dirs."""
+    # Mimic CI's /tmp/pytest-of-runner/... layout (substring "tmp" in the path).
+    run = tmp_path / "tmp" / "pytest-of-runner" / "run"
+    good = run / "epoch-10"
+    junk = run / "epoch-11-tmp"
+    good.mkdir(parents=True)
+    junk.mkdir(parents=True)
+    assert "tmp" in str(good)
+    found = get_files(str(run))
+    assert [p.name for p in found] == ["epoch-10"]
+    assert get_last(str(run)).name == "epoch-10"
 
 def test_get_params_model_robustness(tmp_path: Path) -> None:
     # Set up a dummy folder for restart
