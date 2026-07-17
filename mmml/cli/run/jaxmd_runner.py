@@ -107,6 +107,32 @@ def nve_force_energy_should_attempt_rescue(
     return float(hybrid_relerr) > float(tol)
 
 
+def nve_etot_drift_should_attempt_rescue(
+    *,
+    rescue_enabled: bool,
+    attempts_used: int,
+    max_attempts: int,
+) -> bool:
+    """True when mid-run NVE E_tot drift still has rescue budget."""
+    if not rescue_enabled:
+        return False
+    return int(attempts_used) < int(max_attempts)
+
+
+def nve_etot_drift_rescue_tricks(attempt_index: int) -> tuple[str, ...]:
+    """Ordered repair tricks for one E_tot-drift rescue attempt (0-based).
+
+    Escalates from cheap NL/velocity fixes to CHARMM geometry + longer FIRE.
+    """
+    i = int(attempt_index)
+    if i <= 0:
+        return ("nl_rebuild", "rethermalize")
+    if i == 1:
+        return ("nl_rebuild", "fire", "rethermalize")
+    # Attempt 2+: throw everything we have.
+    return ("charmm_rescue", "nl_rebuild", "fire", "rethermalize", "grace")
+
+
 def _nl_update_positions(positions):
     """Pass JAX arrays to ``update_mm_pairs`` so it can avoid host sync on cache hits."""
     import os
@@ -2150,6 +2176,21 @@ def set_up_nhc_sim_routine(
         e_tot_drift_abort_eV = float(
             getattr(args, "nve_etot_drift_abort_eV", 0.5) or 0.0
         )
+        e_tot_drift_rescue = bool(getattr(args, "nve_etot_drift_rescue", True))
+        e_tot_drift_rescue_attempts = int(
+            getattr(args, "nve_etot_drift_rescue_attempts", 3) or 0
+        )
+        e_tot_drift_rescue_fire_steps = int(
+            getattr(args, "nve_etot_drift_rescue_fire_steps", 100) or 0
+        )
+        e_tot_drift_rescue_grace_eV = float(
+            getattr(args, "nve_etot_drift_rescue_grace_eV", 1.0) or 0.0
+        )
+        e_tot_drift_rescue_count = 0
+        e_tot_drift_threshold_eV = e_tot_drift_abort_eV
+        last_good_state = None
+        last_good_neighbors = current_neighbors
+        last_good_pos = None
 
         def _state_after_overlap_rescue(
             pos,
@@ -2382,26 +2423,215 @@ def set_up_nhc_sim_routine(
                 if (
                     not is_npt
                     and args.ensemble == "nve"
-                    and e_tot_drift_abort_eV > 0.0
+                    and e_tot_drift_threshold_eV > 0.0
                     and np.isfinite(e_tot)
                 ):
                     if e_tot_ref is None:
                         e_tot_ref = e_tot
-                    elif abs(e_tot - e_tot_ref) > e_tot_drift_abort_eV:
-                        run_status = "error"
-                        run_error = (
-                            f"NVE E_tot drift {e_tot - e_tot_ref:+.4f} eV "
-                            f"exceeds abort threshold {e_tot_drift_abort_eV:.4f} eV "
-                            f"at step {steps} (E_tot={e_tot:.4f}, ref={e_tot_ref:.4f})"
-                        )
-                        c.print(Panel(
-                            run_error,
-                            title="[bold red]NVE energy conservation failed[/bold red]",
-                            border_style="red",
-                        ))
+                        last_good_state = state
+                        last_good_neighbors = current_neighbors
+                        last_good_pos = state.position
+                    elif abs(e_tot - e_tot_ref) > e_tot_drift_threshold_eV:
+                        drift = float(e_tot - e_tot_ref)
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
-                        break
+                        can_rescue = (
+                            last_good_pos is not None
+                            and nve_etot_drift_should_attempt_rescue(
+                                rescue_enabled=e_tot_drift_rescue,
+                                attempts_used=e_tot_drift_rescue_count,
+                                max_attempts=e_tot_drift_rescue_attempts,
+                            )
+                        )
+                        if not can_rescue:
+                            run_status = "error"
+                            run_error = (
+                                f"NVE E_tot drift {drift:+.4f} eV "
+                                f"exceeds abort threshold {e_tot_drift_threshold_eV:.4f} eV "
+                                f"at step {steps} (E_tot={e_tot:.4f}, ref={e_tot_ref:.4f})"
+                            )
+                            c.print(Panel(
+                                run_error,
+                                title="[bold red]NVE energy conservation failed[/bold red]",
+                                border_style="red",
+                            ))
+                            break
+
+                        tricks = nve_etot_drift_rescue_tricks(e_tot_drift_rescue_count)
+                        e_tot_drift_rescue_count += 1
+                        c.print(Panel(
+                            f"E_tot drift {drift:+.4f} eV at step {steps} "
+                            f"(ref={e_tot_ref:.4f}, gate={e_tot_drift_threshold_eV:.4f}).\n"
+                            f"Rescue attempt {e_tot_drift_rescue_count}/"
+                            f"{e_tot_drift_rescue_attempts}: {', '.join(tricks)}",
+                            title="[bold yellow]NVE E_tot drift → repair & restart[/bold yellow]",
+                            border_style="yellow",
+                        ))
+                        pos_rescue = last_good_pos
+                        if use_pbc:
+                            pos_rescue = _wrap_monomers(
+                                jnp.asarray(pos_rescue), _cell_jax
+                            )
+                        cell_for_rescue = (
+                            np.asarray(jax.device_get(_cell_jax), dtype=float)
+                            if use_pbc
+                            else None
+                        )
+                        if "charmm_rescue" in tricks and overlap_charmm_rescue_fn is not None:
+                            try:
+                                pos_np = np.asarray(
+                                    jax.device_get(pos_rescue), dtype=float
+                                )
+                                new_pos = overlap_charmm_rescue_fn(
+                                    pos_np, cell_for_rescue
+                                )
+                                if new_pos is not None:
+                                    pos_rescue = as_jaxmd_dtype(new_pos)
+                                    charmm_overlap_rescue_count += 1
+                                    c.print(
+                                        "[yellow]drift rescue: CHARMM SD/ABNR applied[/yellow]"
+                                    )
+                            except Exception as exc:
+                                c.print(
+                                    f"[yellow]drift rescue: CHARMM skipped ({exc})[/yellow]"
+                                )
+                        if "nl_rebuild" in tricks and use_pbc and update_fn is not None:
+                            try:
+                                pair_i, pair_m = update_fn(
+                                    _nl_update_positions(pos_rescue),
+                                    box=pbc_box_nl,
+                                    force_rebuild=True,
+                                )
+                            except TypeError:
+                                pair_i, pair_m = update_fn(
+                                    _nl_update_positions(pos_rescue),
+                                    box=pbc_box_nl,
+                                )
+                            _pbc_state["pair_idx"] = pair_i
+                            _pbc_state["pair_mask"] = pair_m
+                            current_neighbors = (pair_i, pair_m)
+                        fire_steps_this = (
+                            e_tot_drift_rescue_fire_steps
+                            if "fire" in tricks
+                            else 0
+                        )
+                        if "fire" in tricks and e_tot_drift_rescue_count >= 3:
+                            fire_steps_this = max(fire_steps_this, 200)
+                        if fire_steps_this > 0:
+                            def _drift_nl_refresh(pos):
+                                if use_pbc and update_fn is not None:
+                                    try:
+                                        pair_i, pair_m = update_fn(
+                                            _nl_update_positions(pos),
+                                            box=pbc_box_nl,
+                                            force_rebuild=True,
+                                        )
+                                    except TypeError:
+                                        pair_i, pair_m = update_fn(
+                                            _nl_update_positions(pos),
+                                            box=pbc_box_nl,
+                                        )
+                                    _pbc_state["pair_idx"] = pair_i
+                                    _pbc_state["pair_mask"] = pair_m
+
+                            rescue_shift_fn = shift_min
+                            if use_pbc:
+                                def rescue_shift_fn(pos, dR, **kwargs):
+                                    return _wrap_monomers(pos + dR, _cell_jax)
+
+                            f0_drift = float(
+                                jnp.max(
+                                    jnp.linalg.norm(
+                                        wrapped_force_fn(
+                                            pos_rescue, neighbor=current_neighbors
+                                        ),
+                                        axis=-1,
+                                    )
+                                )
+                            )
+                            dt_rescue = resolve_jaxmd_fire_dt_start_ps(f0_drift)
+                            pos_rescue, best_f, fire_info = run_jaxmd_fire_with_dt_backoff(
+                                force_fn=wrapped_force_fn,
+                                shift_fn=rescue_shift_fn,
+                                positions=pos_rescue,
+                                masses=Si_mass,
+                                n_steps=int(fire_steps_this),
+                                dt_schedule=(dt_rescue,),
+                                nl_refresh_fn=(
+                                    _drift_nl_refresh
+                                    if (use_pbc and update_fn is not None)
+                                    else None
+                                ),
+                                energy_fn=wrapped_energy_fn,
+                            )
+                            c.print(
+                                Panel(
+                                    f"Drift-rescue FIRE: max|F| "
+                                    f"{fire_info['start_max_f']:.4f} → {best_f:.4f} eV/Å "
+                                    f"({fire_steps_this} steps)",
+                                    title="[bold]NVE E_tot drift rescue[/bold]",
+                                    border_style="yellow",
+                                )
+                            )
+                        if "rethermalize" in tricks:
+                            state = _state_after_overlap_rescue(pos_rescue)
+                        else:
+                            state = state.set(position=as_jaxmd_dtype(pos_rescue))
+                            state = normalize_jaxmd_state(state)
+                        if use_pbc and update_fn is not None:
+                            try:
+                                pair_i, pair_m = update_fn(
+                                    _nl_update_positions(state.position),
+                                    box=pbc_box_nl,
+                                    force_rebuild=True,
+                                )
+                            except TypeError:
+                                pair_i, pair_m = update_fn(
+                                    _nl_update_positions(state.position),
+                                    box=pbc_box_nl,
+                                )
+                            _pbc_state["pair_idx"] = pair_i
+                            _pbc_state["pair_mask"] = pair_m
+                            current_neighbors = (pair_i, pair_m)
+                        if not _rescued_state_energy_finite(state):
+                            run_status = "error"
+                            run_error = (
+                                f"NVE E_tot drift rescue produced non-finite energy "
+                                f"at step {steps} (attempt {e_tot_drift_rescue_count})"
+                            )
+                            c.print(Panel(
+                                run_error,
+                                title="[bold red]NVE energy conservation failed[/bold red]",
+                                border_style="red",
+                            ))
+                            break
+                        if "grace" in tricks and e_tot_drift_rescue_grace_eV > 0.0:
+                            e_tot_drift_threshold_eV = max(
+                                e_tot_drift_threshold_eV,
+                                float(e_tot_drift_rescue_grace_eV),
+                            )
+                            c.print(
+                                f"[yellow]drift rescue: widened E_tot gate to "
+                                f"{e_tot_drift_threshold_eV:.4f} eV[/yellow]"
+                            )
+                        # Fresh microcanonical reference after geometry/velocity repair.
+                        e_tot_ref = None
+                        last_good_state = state
+                        last_good_neighbors = current_neighbors
+                        last_good_pos = state.position
+                        c.print(
+                            Panel(
+                                "Repair applied — continuing NVE from last-good geometry "
+                                "with re-initialized velocities; E_tot reference reset.",
+                                title="[bold green]NVE E_tot drift rescue[/bold green]",
+                                border_style="green",
+                            )
+                        )
+                        continue
+                    else:
+                        last_good_state = state
+                        last_good_neighbors = current_neighbors
+                        last_good_pos = state.position
                 if i % 10 == 0:
                     elapsed_s = time.perf_counter() - jaxmd_loop_start
                     simulated_ns = steps * dt_fs * 1e-6
@@ -2536,6 +2766,16 @@ def set_up_nhc_sim_routine(
         run_sim.last_overlap_warning_count = overlap_warning_count
         run_sim.last_overlap_min_distance = overlap_min_seen
         run_sim.last_charmm_overlap_rescue_count = charmm_overlap_rescue_count
+        run_sim.last_etot_drift_rescue_count = e_tot_drift_rescue_count
+        if e_tot_drift_rescue_count > 0 and run_status == "complete":
+            c.print(
+                Panel(
+                    f"NVE completed after {e_tot_drift_rescue_count} E_tot drift "
+                    f"repair/restart cycle(s).",
+                    title="[bold green]NVE E_tot drift rescue[/bold green]",
+                    border_style="green",
+                )
+            )
         try:
             run_sim.last_velocities = np.asarray(
                 jax.device_get(state.momentum / state.mass), dtype=float

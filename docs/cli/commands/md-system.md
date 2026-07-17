@@ -109,6 +109,11 @@ usage: mmml md-system [-h]
                       [--heat-finalt K] [--heat-mode {ramp,hold}]
                       [--heat-hoover-tmass M] [--nve-boltzmann-temp K]
                       [--nve-max-f-start-eVA EV_PER_A]
+                      [--nve-etot-drift-abort-eV EV]
+                      [--nve-etot-drift-rescue | --no-nve-etot-drift-rescue]
+                      [--nve-etot-drift-rescue-attempts NVE_ETOT_DRIFT_RESCUE_ATTEMPTS]
+                      [--nve-etot-drift-rescue-fire-steps NVE_ETOT_DRIFT_RESCUE_FIRE_STEPS]
+                      [--nve-etot-drift-rescue-grace-eV EV]
                       [--heat-comp-damp | --no-heat-comp-damp]
                       [--heat-comp-hydrogen-only | --no-heat-comp-hydrogen-only]
                       [--heat-comp-force-min KCAL]
@@ -513,6 +518,21 @@ options:
                         exceeds this value in eV/Å (default: 1.5; <=0 disables).
                         Hybrid liquid handoffs often land near ~1 eV/Å after
                         FIRE.
+  --nve-etot-drift-abort-eV EV
+                        jaxmd: abort NVE when |E_tot| drift exceeds this (eV;
+                        <=0 disables).
+  --nve-etot-drift-rescue, --no-nve-etot-drift-rescue
+                        jaxmd: on NVE E_tot drift, rewind and try
+                        NL/FIRE/CHARMM/rethermalize before aborting (default:
+                        on).
+  --nve-etot-drift-rescue-attempts NVE_ETOT_DRIFT_RESCUE_ATTEMPTS
+                        jaxmd: max mid-run E_tot drift repair attempts (default:
+                        3).
+  --nve-etot-drift-rescue-fire-steps NVE_ETOT_DRIFT_RESCUE_FIRE_STEPS
+                        jaxmd: FIRE steps per E_tot drift rescue (default: 100).
+  --nve-etot-drift-rescue-grace-eV EV
+                        jaxmd: after full-escalation drift rescue, widen E_tot
+                        gate to at least this value (default: 1.0).
   --heat-comp-damp, --no-heat-comp-damp
                         pycharmm: experimental COMP force copy before heat
                         (default: off).
