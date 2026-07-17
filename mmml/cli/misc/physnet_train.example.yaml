@@ -3,6 +3,12 @@
 #
 # Hybrid ML/MM + charge modes (fixed / latent / fixed_plus_latent):
 #   examples/hybrid_mm_charges/train_*.yaml
+# Periodic PME Coulomb (LJ off) for hybrid train:
+#   examples/hybrid_mm_charges/train_fixed_nvalchemiops_pme.yaml
+#   lr_solver: nvalchemiops_pme
+#   pme_box_length: 30.0
+#   pme_accuracy: 1.0e-6
+#   mm_include_lj: false
 
 data: output/energies_forces_dipoles_train.npz
 valid_data: output/energies_forces_dipoles_valid.npz

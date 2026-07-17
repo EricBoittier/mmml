@@ -141,9 +141,11 @@ options:
   --lr-solver, --lr_solver {mic,nvalchemiops_pme}
                         Hybrid-MM long-range Coulomb for training (default:
                         mic). mic: switched CGenFF LJ+Coulomb pairs.
-                        nvalchemiops_pme: periodic PME Coulomb on fixed CGenFF
-                        charges with LJ omitted (requires --pme-box-length and
-                        mmml[nvalchemiops-pme]).
+                        nvalchemiops_pme: full-box many-to-many PME on fixed
+                        CGenFF charges (no exclusions / no intra subtract; LJ
+                        omitted; requires --pme-box-length and
+                        mmml[nvalchemiops-pme]). Matches fast MD
+                        periodic_external.
   --pme-box-length, --pme_box_length PME_BOX_LENGTH
                         Cubic box length (Å) for --lr-solver nvalchemiops_pme
                         (required for that solver).

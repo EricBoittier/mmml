@@ -369,8 +369,8 @@ def test_real_nvalchemiops_pme_energy_fd_conserves():
     assert rel < 2e-2, f"fd={fd}, -F·d={analytic}, rel={rel}, E={e0}"
 
 
-def test_hybrid_intra_subtraction_zero_for_single_monomer():
-    """With only monomer 0 occupied, hybrid PME cross term is 0."""
+def test_full_box_pme_keeps_intra_monomer_coulomb():
+    """Full-box many-to-many: single monomer still contributes E_PME (no subtract)."""
     from mmml.models.nvalchemiops_hybrid_coulomb import (
         hybrid_nvalchemiops_pme_coulomb_energy,
     )
@@ -391,7 +391,53 @@ def test_hybrid_intra_subtraction_zero_for_single_monomer():
             real_space_cutoff_A=10.0,
             **KW,
         )
-    assert float(e) == pytest.approx(0.0, abs=1e-12)
+    # Analytic pair Coulomb for this dimer: k * (0.5)*(-0.5) / 1.0
+    from mmml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
+
+    assert float(e) == pytest.approx(CHARMM_COULOMB_KCAL * (-0.25), rel=1e-10)
+
+
+def test_full_box_pme_ignores_com_switch_kwargs():
+    """COM MM taper is not applied (matches untapered MD many-to-many Ewald)."""
+    from mmml.models.nvalchemiops_hybrid_coulomb import (
+        hybrid_nvalchemiops_pme_coulomb_energy,
+    )
+
+    pos = jnp.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [20.0, 0.0, 0.0], [21.0, 0.0, 0.0]],
+        dtype=jnp.float64,
+    )
+    mid = jnp.array([0, 0, 1, 1])
+    q = jnp.array([0.5, -0.5, -0.5, 0.5], dtype=jnp.float64)
+
+    with mock.patch(
+        "mmml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
+        side_effect=_analytic_pair_coulomb_kcal,
+    ) as pme:
+        e_near = hybrid_nvalchemiops_pme_coulomb_energy(
+            pos,
+            mid,
+            q,
+            box_length_A=40.0,
+            real_space_cutoff_A=10.0,
+            mm_switch_on=8.0,
+            mm_switch_width=5.0,
+            ml_switch_width=1.5,
+            complementary_handoff=True,
+        )
+        e_far_kwargs = hybrid_nvalchemiops_pme_coulomb_energy(
+            pos,
+            mid,
+            q,
+            box_length_A=40.0,
+            real_space_cutoff_A=10.0,
+            mm_switch_on=100.0,
+            mm_switch_width=1.0,
+            ml_switch_width=1.0,
+            complementary_handoff=False,
+        )
+    assert float(e_near) == pytest.approx(float(e_far_kwargs), rel=0, abs=0)
+    assert pme.call_count == 2
 
 
 def test_cli_exposes_lr_solver_flags():

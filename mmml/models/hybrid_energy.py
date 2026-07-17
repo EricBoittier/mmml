@@ -327,7 +327,9 @@ def hybrid_forward(
             # at this boundary (same as mmml_calculator). Pinned by
             # tests/unit/test_hybrid_mm_units.py.
             if lr_solver == "nvalchemiops_pme":
-                # Coulomb-only PME: fixed CGenFF charges, LJ omitted for now.
+                # Full-box many-to-many PME (no exclusions / no intra subtract):
+                # same operator as fast MD periodic_external nvalchemiops.
+                # Fixed CGenFF charges; LJ omitted for now.
                 e = KCAL_MOL_TO_EV * hybrid_nvalchemiops_pme_coulomb_energy(
                     x,
                     m,

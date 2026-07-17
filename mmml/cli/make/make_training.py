@@ -258,9 +258,10 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         choices=["mic", "nvalchemiops_pme"],
         help=(
             "Hybrid-MM long-range Coulomb for training (default: mic). "
-            "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: periodic "
-            "PME Coulomb on fixed CGenFF charges with LJ omitted "
-            "(requires --pme-box-length and mmml[nvalchemiops-pme])."
+            "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: full-box "
+            "many-to-many PME on fixed CGenFF charges (no exclusions / no "
+            "intra subtract; LJ omitted; requires --pme-box-length and "
+            "mmml[nvalchemiops-pme]). Matches fast MD periodic_external."
         ),
     )
     parser.add_argument(

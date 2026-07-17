@@ -41,6 +41,28 @@ max_atomic_number: 35
     assert args.max_atomic_number == 35
 
 
+def test_namespace_from_yaml_nvalchemiops_pme_keys(tmp_path: Path):
+    """Hybrid PME train flags are valid YAML keys (same as CLI dest names)."""
+    cfg = tmp_path / "train_pme.yaml"
+    cfg.write_text(
+        """
+data: train.npz
+hybrid_mm: true
+mm_charge_mode: fixed
+lr_solver: nvalchemiops_pme
+pme_box_length: 30.0
+pme_accuracy: 1.0e-4
+mm_include_lj: false
+""".strip()
+    )
+    args = namespace_from_yaml(cfg)
+    assert args.hybrid_mm is True
+    assert args.lr_solver == "nvalchemiops_pme"
+    assert args.pme_box_length == pytest.approx(30.0)
+    assert args.pme_accuracy == pytest.approx(1.0e-4)
+    assert args.mm_include_lj is False
+
+
 def test_cli_overrides_yaml(tmp_path: Path):
     cfg = tmp_path / "train.yaml"
     cfg.write_text("data: from_yaml.npz\nbatch_size: 4\n")

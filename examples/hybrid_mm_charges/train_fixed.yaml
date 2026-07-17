@@ -14,6 +14,13 @@ tag: hybrid_mm_fixed
 hybrid_mm: true
 mm_charge_mode: fixed
 
+# Long-range Coulomb for hybrid E_MM (default mic = switched LJ+Coulomb pairs).
+# For periodic PME Coulomb (LJ off), see train_fixed_nvalchemiops_pme.yaml:
+#   lr_solver: nvalchemiops_pme
+#   pme_box_length: 30.0
+#   pme_accuracy: 1.0e-6
+#   mm_include_lj: false
+
 # Handoff (same defaults as MD)
 ml_switch_width: 1.5
 mm_switch_on: 8.0
