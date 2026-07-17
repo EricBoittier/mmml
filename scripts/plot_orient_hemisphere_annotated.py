@@ -163,8 +163,12 @@ def build_shared_scales(
     for rays in ray_sets:
         e_ori, _ = _aggregate_by_orientation(rays, how)
         e_dir = _aggregate_by_direction(rays, how)
+        # Drop clash spikes so a few 10^3 kcal wall hits don't set the window
+        e_ori = e_ori[np.isfinite(e_ori) & (e_ori < 20.0)]
+        e_dir = e_dir[np.isfinite(e_dir) & (e_dir < 20.0)]
         color_chunks.extend([e_ori, e_dir])
-        e_chunks.append(_clean_vals(rays, "e_min_kcal"))
+        e_clean = _clean_vals(rays, "e_min_kcal")
+        e_chunks.append(e_clean[e_clean < 20.0] if e_clean.size else e_clean)
         r_chunks.append(_clean_vals(rays, "r_at_min"))
 
     color_vals = np.concatenate(color_chunks)
@@ -290,10 +294,15 @@ def _annotation_arrows(
 def _r_for_tag(rays: dict[str, np.ndarray], ori: int, direction: int) -> float:
     m = (rays["orientation"] == ori) & (rays["direction"] == direction)
     if m.any():
-        return float(rays["r_at_min"][m][0])
+        r = float(rays["r_at_min"][m][0])
+        if np.isfinite(r):
+            return r
     m2 = rays["orientation"] == ori
     if m2.any():
-        return float(np.median(rays["r_at_min"][m2]))
+        vals = np.asarray(rays["r_at_min"][m2], dtype=float)
+        vals = vals[np.isfinite(vals)]
+        if vals.size:
+            return float(np.median(vals))
     return 5.5
 
 
@@ -1603,8 +1612,16 @@ def _labeled(path: Path, label: str) -> Path:
 
 
 def _stamp_label(fig: plt.Figure, label: str) -> None:
-    """Large corner badge so ML / xTB pages are obvious when flipping."""
-    color = "#1A5276" if label.upper() in ("ML", "HYBRID", "6A", "8A") else "#943126"
+    """Large corner badge so flip pages are obvious (ML / GFN2 / gfn2nms / …)."""
+    key = label.upper().replace("-", "").replace("_", "")
+    if key in ("ML", "HYBRID", "6A", "8A"):
+        color = "#1A5276"  # blue
+    elif key in ("GFN2", "XTB", "GFN2XTB"):
+        color = "#1E8449"  # green — reference GFN2-xTB
+    elif "GFN2NMS" in key or key.startswith("NMS"):
+        color = "#943126"  # brick — NMS-trained hybrid
+    else:
+        color = "#5D6D7E"
     fig.text(
         0.01,
         0.99,
@@ -1634,8 +1651,9 @@ def main() -> int:
     p.add_argument(
         "--match-rays",
         type=Path,
+        action="append",
         default=None,
-        help="Second rays.csv used to lock shared colour/axis scales (flip pairs)",
+        help="Extra rays.csv used to lock shared colour/axis scales (repeatable)",
     )
     p.add_argument(
         "--atlas-only",
@@ -1648,8 +1666,10 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     rays = _load_rays(args.rays)
     mono = _load_monomer(args.monomer)
-    if args.match_rays is not None:
-        shared = build_shared_scales(rays, _load_rays(args.match_rays), how=args.how)
+    if args.match_rays:
+        shared = build_shared_scales(
+            rays, *[_load_rays(p) for p in args.match_rays], how=args.how
+        )
         scale_path = args.out / "shared_scales.json"
         scale_path.write_text(json.dumps(asdict(shared), indent=2) + "\n")
         print(
@@ -1743,7 +1763,11 @@ def main() -> int:
                 f"- slice_dir{{0,2,8}}_with_ase_{label}.png",
                 "",
                 f"Source rays: `{args.rays}`",
-                f"Match rays: `{args.match_rays}`" if args.match_rays else "Match rays: (none)",
+                (
+                    "Match rays: " + ", ".join(f"`{p}`" for p in args.match_rays)
+                    if args.match_rays
+                    else "Match rays: (none)"
+                ),
                 "",
             ]
         )

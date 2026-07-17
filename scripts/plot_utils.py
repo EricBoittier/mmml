@@ -431,9 +431,16 @@ def render_dimer_atoms(
     proj = pos @ R
     x, y, z = proj[:, 0], proj[:, 1], proj[:, 2]
 
-    zmin, zmax = z.min(), z.max()
-    depth_t = np.zeros(n) if zmax - zmin < 1e-9 else (z - zmin) / (zmax - zmin)
-    alphas = depth_alpha_range[0] + depth_t * (depth_alpha_range[1] - depth_alpha_range[0])
+    zmin, zmax = float(np.nanmin(z)), float(np.nanmax(z))
+    if not np.isfinite(zmin) or not np.isfinite(zmax) or zmax - zmin < 1e-9:
+        depth_t = np.zeros(n)
+    else:
+        depth_t = (np.nan_to_num(z, nan=zmin) - zmin) / (zmax - zmin)
+    alphas = np.clip(
+        depth_alpha_range[0] + depth_t * (depth_alpha_range[1] - depth_alpha_range[0]),
+        0.0,
+        1.0,
+    )
 
     radii = covalent_radii[Z] * radii_scale
     colors = jmol_colors[Z]
