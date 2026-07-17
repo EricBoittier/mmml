@@ -599,6 +599,271 @@ def plot_annotated_dashboard(
     print(f"  wrote {out}")
 
 
+def _xyz_to_lonlat(xyz: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Unit vectors → lon/lat in degrees (equirectangular)."""
+    x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+    lon = np.degrees(np.arctan2(y, x))
+    lat = np.degrees(np.arcsin(np.clip(z, -1.0, 1.0)))
+    return lon, lat
+
+
+def _equirect_field(
+    tips: np.ndarray,
+    energy: np.ndarray,
+    *,
+    n_lon: int = 180,
+    n_lat: int = 90,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """RBF on the sphere, sampled onto an equirectangular lon/lat grid."""
+    from scipy.interpolate import RBFInterpolator
+
+    lon = np.linspace(-180.0, 180.0, n_lon)
+    lat = np.linspace(-90.0, 90.0, n_lat)
+    lon_g, lat_g = np.meshgrid(lon, lat)
+    lon_r = np.radians(lon_g)
+    lat_r = np.radians(lat_g)
+    xyz = np.column_stack(
+        [
+            np.cos(lat_r.ravel()) * np.cos(lon_r.ravel()),
+            np.cos(lat_r.ravel()) * np.sin(lon_r.ravel()),
+            np.sin(lat_r.ravel()),
+        ]
+    )
+    rbf = RBFInterpolator(tips, energy, kernel="thin_plate_spline", smoothing=0.15)
+    field = rbf(xyz).reshape(lat_g.shape)
+    return lon_g, lat_g, field
+
+
+def plot_map_projections(
+    *,
+    rays: dict[str, np.ndarray],
+    mono: Atoms,
+    out: Path,
+    how: str = "min",
+) -> None:
+    """Flat equirectangular maps — 3 body-axis spheres (+ approach). ASE tags kept.
+
+    Six hemispheres were only a 3D viewing split of *three* S²'s.  One map per
+    sphere shows the whole surface without the N/S cut.
+    """
+    from scripts.plot_orient_hemisphere_surfaces import _aggregate_by_direction
+
+    plot_utils = _load_plot_utils()
+    apply_plot_style("icml")
+    tag_color = _tag_style()
+    quats = super_fibonacci(24)
+    dirs = fibonacci_sphere(10)
+    Rs = np.stack([quat_to_matrix(q) for q in quats], axis=0)
+    axis_tips = [Rs[:, :, k] for k in range(3)]
+    energy, _ = _aggregate_by_orientation(rays, how)
+    e_dir = _aggregate_by_direction(rays, how)
+    cmap = default_cmap("diverging") if (energy.min() < 0 < energy.max()) else default_cmap(
+        "sequential"
+    )
+    norm = _energy_norm(energy)
+
+    fig = plt.figure(figsize=(14.0, 10.5))
+    gs = GridSpec(
+        3,
+        4,
+        figure=fig,
+        height_ratios=[1.15, 1.15, 1.1],
+        hspace=0.4,
+        wspace=0.28,
+    )
+
+    body_panels = [
+        ("e0 — equirectangular map", axis_tips[0], energy, 0),
+        ("e1 — equirectangular map", axis_tips[1], energy, 1),
+        ("e2 — equirectangular map", axis_tips[2], energy, 2),
+    ]
+    last_im = None
+    for col, (title, tips, evals, ax_i) in enumerate(body_panels):
+        ax = fig.add_subplot(gs[0, col])
+        lon_g, lat_g, field = _equirect_field(tips, evals)
+        last_im = ax.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=norm, shading="auto")
+        lon_s, lat_s = _xyz_to_lonlat(tips)
+        ax.scatter(
+            lon_s, lat_s, c=evals, cmap=cmap, norm=norm,
+            s=22, edgecolors="white", linewidths=0.4, zorder=3,
+        )
+        for tag, ori, _ in REF_TAGS:
+            lo, la = _xyz_to_lonlat(tips[ori : ori + 1])
+            ax.scatter(
+                lo, la, s=90, facecolors=tag_color[tag],
+                edgecolors="white", linewidths=1.0, zorder=5,
+            )
+            ax.annotate(
+                tag, (lo[0], la[0]), textcoords="offset points", xytext=(5, 5),
+                color=tag_color[tag], fontsize=11, fontweight="bold",
+            )
+        ax.set_xlim(-180, 180)
+        ax.set_ylim(-90, 90)
+        ax.set_xlabel("longitude (deg)")
+        ax.set_ylabel("latitude (deg)" if col == 0 else "")
+        ax.set_title(title, fontsize=10, color=AXIS_COLORS[ax_i])
+        ax.axhline(0.0, color=STATUS_COLORS["neutral"], lw=0.5, ls=":")
+        ax.axvline(0.0, color=STATUS_COLORS["neutral"], lw=0.5, ls=":")
+        for side in ("bottom", "top", "left", "right"):
+            ax.spines[side].set_color(AXIS_COLORS[ax_i])
+            ax.spines[side].set_linewidth(1.5)
+
+    # colourbar in the spare top-right cell
+    ax_c = fig.add_subplot(gs[0, 3])
+    ax_c.set_axis_off()
+    if last_im is not None:
+        fig.colorbar(last_im, ax=ax_c, fraction=0.8, pad=0.05, label=f"{how} well depth (kcal/mol)")
+
+    # approach map
+    ax_u = fig.add_subplot(gs[1, 0])
+    lon_g, lat_g, field = _equirect_field(dirs, e_dir)
+    nrm_u = _energy_norm(e_dir)
+    im_u = ax_u.pcolormesh(lon_g, lat_g, field, cmap=cmap, norm=nrm_u, shading="auto")
+    lon_s, lat_s = _xyz_to_lonlat(dirs)
+    ax_u.scatter(
+        lon_s, lat_s, c=e_dir, cmap=cmap, norm=nrm_u,
+        s=36, edgecolors="white", linewidths=0.5, zorder=3,
+    )
+    for d_idx, lab in ((0, "d0"), (2, "d2"), (8, "d8")):
+        lo, la = _xyz_to_lonlat(dirs[d_idx : d_idx + 1])
+        ax_u.annotate(
+            lab, (lo[0], la[0]), textcoords="offset points", xytext=(4, 4),
+            fontsize=8, fontweight="bold", color=STATUS_COLORS["serious"],
+        )
+    ax_u.set_xlim(-180, 180)
+    ax_u.set_ylim(-90, 90)
+    ax_u.set_xlabel("longitude (deg)")
+    ax_u.set_ylabel("latitude (deg)")
+    ax_u.set_title("approach û — equirectangular (+1 optional)", fontsize=10)
+    fig.colorbar(im_u, ax=ax_u, fraction=0.046, pad=0.04, label=f"{how} well depth")
+
+    ax_note = fig.add_subplot(gs[1, 1:4])
+    ax_note.set_axis_off()
+    ax_note.set_xlim(0, 1)
+    ax_note.set_ylim(0, 1)
+    ax_note.text(0.0, 0.95, "How many maps do you need?", fontsize=12, fontweight="bold", va="top")
+    ax_note.text(
+        0.0,
+        0.70,
+        "• 6 hemispheres = 3 spheres x N/S view split (3D display only).\n"
+        "• 3 flat maps (e0, e1, e2) cover the same SO(3) projection — usually enough.\n"
+        "• +1 approach map (u-hat on S2) if direction-of-approach structure matters.\n"
+        "• Still lost per axis-map: spin about that axis (twist DOF).\n"
+        "• r is collapsed into the colour (well depth), not a map axis.\n"
+        "• True SO(3) without that loss needs a 3D axis-angle ball or more panels.",
+        fontsize=9,
+        va="top",
+    )
+    ax_note.text(
+        0.0,
+        0.08,
+        "Equirectangular: lon = atan2(y,x), lat = arcsin(z). "
+        "Poles are stretched — read colours near +/-90 deg lat with care.",
+        fontsize=8,
+        color=STATUS_COLORS["neutral"],
+        va="bottom",
+    )
+
+    for j, (tag, ori, _) in enumerate(REF_TAGS):
+        ax = fig.add_subplot(gs[2, j])
+        _render_tag_overlay(
+            ax, plot_utils, mono=mono, rays=rays, quats=quats, dirs=dirs, Rs=Rs,
+            tag=tag, ori=ori, tag_color=tag_color[tag],
+            rotation=PERSPECTIVES[0][1],
+            title=f"{tag}: map marker (front)",
+        )
+
+    fig.suptitle(
+        "Flat map projections of the orientation spheres (3 enough; +1 for approach)",
+        fontsize=12,
+        y=0.98,
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  wrote {out}")
+
+
+def plot_projection_explainer(*, out: Path) -> None:
+    """Backup diagram: 6D → what the maps are, and what 3 vs 6 means."""
+    apply_plot_style("icml")
+    fig, ax = plt.subplots(figsize=(11.0, 6.2))
+    ax.set_xlim(0, 12)
+    ax.set_ylim(0, 7)
+    ax.set_axis_off()
+    ax.set_title("Orientation maps - what they are (and are not)", fontsize=13, loc="left")
+
+    def box(x, y, w, h, text, fc="#F4F6F7", ec="#5D6D7E"):
+        ax.add_patch(
+            FancyBboxPatch(
+                (x, y), w, h, boxstyle="round,pad=0.15", facecolor=fc, edgecolor=ec, lw=1.2
+            )
+        )
+        ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=8.5, wrap=True)
+
+    def arrow(x0, y0, x1, y1):
+        ax.annotate(
+            "",
+            xy=(x1, y1),
+            xytext=(x0, y0),
+            arrowprops=dict(arrowstyle="-|>", color=STATUS_COLORS["neutral"], lw=1.4),
+        )
+
+    box(0.3, 5.2, 2.4, 1.3, "6D rigid dimer\nr + û(S²) + R(SO(3))", fc="#EAF2F8")
+    arrow(2.8, 5.85, 3.5, 5.85)
+    box(3.5, 5.2, 2.6, 1.3, "Scan collapses r\nto well-depth colour", fc="#FEF9E7")
+    arrow(6.2, 5.85, 6.9, 5.85)
+    box(6.9, 5.2, 2.4, 1.3, "R = [e0 e1 e2]\n3 tips on S2", fc="#E8F8F5")
+    arrow(9.4, 5.85, 10.1, 5.85)
+    box(10.1, 5.2, 1.6, 1.3, "colour\n= e_min", fc="#F5EEF8")
+
+    # two paths
+    box(0.3, 2.8, 3.5, 1.8,
+        "Path A - 6 hemispheres\n"
+        "3 spheres x north/south\n"
+        "(3D bowls; same data twice\n"
+        "if you already have maps)",
+        fc="#FDEDEC")
+    box(4.3, 2.8, 3.5, 1.8,
+        "Path B - 3 flat maps  *\n"
+        "equirectangular e0,e1,e2\n"
+        "whole sphere, no N/S split\n"
+        "+ optional approach map",
+        fc="#E9F7EF")
+    box(8.3, 2.8, 3.4, 1.8,
+        "Still lost on each map\n"
+        "* spin about that axis\n"
+        "* full SO(3) is 3D\n"
+        "* r not a spatial axis",
+        fc="#FCF3CF")
+
+    arrow(2.0, 5.2, 2.0, 4.7)
+    arrow(6.0, 5.2, 6.0, 4.7)
+
+    ax.text(
+        0.3,
+        1.6,
+        "How many do you really need?",
+        fontsize=11,
+        fontweight="bold",
+    )
+    ax.text(
+        0.3,
+        0.35,
+        "Minimum useful set: 3 body-axis maps (+ ASE tag overlays).\n"
+        "Add the approach map if direction-of-approach structure matters (your dirs 2/5/6/8 story).\n"
+        "Keep 6 hemispheres only if the 3D bowl view helps intuition - they are not extra information.\n"
+        "For a single atlas page: 3 equirectangular maps + one perspective gallery of tags A-D.",
+        fontsize=9,
+        va="bottom",
+    )
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  wrote {out}")
+
+
 def plot_slice_strip(
     *,
     rays: dict[str, np.ndarray],
@@ -677,6 +942,10 @@ def main() -> int:
     rays = _load_rays(args.rays)
     mono = _load_monomer(args.monomer)
 
+    plot_projection_explainer(out=args.out / "projection_explainer.png")
+    plot_map_projections(
+        rays=rays, mono=mono, out=args.out / "equirectangular_maps.png", how=args.how
+    )
     plot_hemispheres_with_ase_ring(
         rays=rays, mono=mono, out=args.out / "hemisphere_ase_ring.png", how=args.how
     )

@@ -54,7 +54,7 @@ from scripts.scan_dimer_orientations import (  # noqa: E402
 )
 
 
-def nms_conformers(Z, R0, n_samples, temperature_K, rng, eig_min=1e-4):
+def nms_conformers(Z, R0, n_samples, temperature_K, rng, freq_min_cm=200.0):
     """Thermal normal-mode samples around a GFN2-relaxed geometry.
 
     Why not uniform random noise: isotropic displacement is chemically blind --
@@ -101,23 +101,49 @@ def nms_conformers(Z, R0, n_samples, temperature_K, rng, eig_min=1e-4):
     H = np.asarray(data.get_hessian_2d())            # eV / A^2
     m = atoms.get_masses()
     w = np.repeat(m, 3) ** -0.5
-    H_mw = H * w[:, None] * w[None, :]
-    lam, V = np.linalg.eigh(H_mw)
+    H_mw = H * w[:, None] * w[None, :]               # eV / (A^2 amu)
+    lam, V = np.linalg.eigh(H_mw)                    # lam = omega^2
 
-    keep = lam > eig_min                             # drops trans/rot + noise
-    lam, V = lam[keep], V[:, keep]
-    if lam.size == 0:
-        raise RuntimeError("no positive modes -- optimisation failed?")
+    # Drop translation+rotation by COUNT, not by threshold: a threshold let a
+    # near-zero mode through for DCM (10 modes where 5 atoms have 3N-6=9) and its
+    # 1/lambda amplitude produced a 2.1 A rmsd.
+    n_tr = 6 if len(Z) > 2 else 5
+    order = np.argsort(lam)
+    lam, V = lam[order][n_tr:], V[:, order][:, n_tr:]
+    if np.any(lam <= 0):
+        raise RuntimeError(f"{(lam <= 0).sum()} non-positive modes after dropping "
+                           f"{n_tr} -- not a minimum")
+    # lambda [eV/(A^2 amu)] -> wavenumber: sqrt(eV/(A^2 amu) -> s^-2) / (2 pi c).
+    # Derived once rather than trusted: 9.6485e27 = (eV->J)/((A->m)^2 (amu->kg)).
+    CM_PER_SQRT_LAM = np.sqrt(9.6485e27) / (2 * np.pi * 2.99792458e10)   # ~521.5
+    freqs = CM_PER_SQRT_LAM * np.sqrt(lam)
+
+    # Near-free rotors (acetone's 112 cm^-1 methyl torsion) are NOT harmonic. The
+    # harmonic amplitude sqrt(kT/lambda) diverges as lambda->0 and tears the
+    # molecule apart -- SCF then fails to converge. Drop them; MD samples those
+    # motions properly if they are ever needed.
+    soft = freqs < freq_min_cm
+    if soft.any():
+        print(f"  (dropping {soft.sum()} mode(s) below {freq_min_cm:g} cm^-1: "
+              f"{np.round(freqs[soft], 0)} -- near-free rotors, not harmonic)")
+    lam, V, freqs = lam[~soft], V[:, ~soft], freqs[~soft]
 
     kT = u.kB * temperature_K                        # eV
     sigma = np.sqrt(kT / lam)                        # A sqrt(amu)
-    freqs = np.sqrt(lam) * 1e10 / (2 * np.pi * u._c) * np.sqrt(u._e / u._amu)  # cm^-1
 
     out = np.empty((n_samples, len(Z), 3))
     for k in range(n_samples):
         Q = rng.normal(0.0, sigma)
         out[k] = R_eq + (V @ Q * w).reshape(-1, 3)
     return R_eq, out, freqs
+
+
+def _mono_energy(Z, R):
+    """GFN2 energy (eV) of one geometry -- used only for the equipartition check."""
+    from tblite.interface import Calculator
+    c = Calculator("GFN2-xTB", np.asarray(Z), np.asarray(R) * 1.8897261254535)
+    c.set("verbosity", 0)
+    return float(c.singlepoint().get("energy")) * 27.211386
 
 
 def r_grid(r_min: float, r_max: float, n: int, r_dense_to: float) -> np.ndarray:
@@ -176,6 +202,13 @@ def main() -> int:
                    ))
     p.add_argument("--nms-temperature", type=float, default=300.0,
                    help="temperature (K) setting the normal-mode amplitudes")
+    p.add_argument("--nms-freq-min", type=float, default=200.0,
+                   help=(
+                       "Exclude modes below this (cm^-1). They are near-free rotors "
+                       "(acetone's 112 cm^-1 methyl torsion), not harmonic oscillators: "
+                       "the harmonic amplitude diverges as omega->0 and breaks the "
+                       "molecule (SCF stops converging)."
+                   ))
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="dimer_scan_hf.npz")
     p.add_argument("--checkpoint-every", type=int, default=200,
@@ -217,10 +250,19 @@ def main() -> int:
         t1 = np.asarray(raw["cgenff_type_idx"][k])[:n]
         q1 = np.asarray(raw["cgenff_charge"][k])[:n]
         R_eq, confs, freqs = nms_conformers(
-            Z1, R1, args.monomer_conformers, args.nms_temperature, rng)
+            Z1, R1, args.monomer_conformers, args.nms_temperature, rng,
+            freq_min_cm=args.nms_freq_min)
         # rmsd vs the EQUILIBRIUM: ~0.1 A at 300 K. If this is angstroms, the
         # amplitude formula is wrong and the molecules are being destroyed.
         rmsd = float(np.sqrt(((confs - R_eq) ** 2).sum(-1).mean()))
+        # Equipartition is the real check on the amplitudes: a classical harmonic
+        # sample at T must sit (3N-6)/2 * kT above the minimum. rmsd alone cannot
+        # tell a correct soft-mode excursion from a broken formula.
+        e_eq = _mono_energy(Z1, R_eq)
+        e_conf = np.array([_mono_energy(Z1, c) for c in confs[: min(16, len(confs))]])
+        expect = 0.5 * len(freqs) * 8.617333e-5 * args.nms_temperature  # only sampled modes
+        print(f"{resid}: <E-E_min> = {(e_conf - e_eq).mean():.3f} eV  "
+              f"(equipartition expects {expect:.3f} eV)")
         confs = confs - confs.mean(axis=1, keepdims=True)
         print(f"{resid}: relaxed, {len(freqs)} modes {freqs.min():.0f}-{freqs.max():.0f} cm^-1, "
               f"{len(confs)} conformers @ {args.nms_temperature:g} K (rmsd {rmsd:.3f} A)")
