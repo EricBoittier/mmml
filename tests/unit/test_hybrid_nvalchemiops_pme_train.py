@@ -451,6 +451,37 @@ def test_cli_exposes_lr_solver_flags():
     assert "nvalchemiops_pme" in src
 
 
+def test_nvalchemiops_pme_eval_defaults_to_gpu(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.delenv("MMML_NVALCHEMIOPS_PME_DEVICE", raising=False)
+    assert lrb.nvalchemiops_pme_device_name() == "gpu"
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_DEVICE", "cpu")
+    assert lrb.nvalchemiops_pme_device_name() == "cpu"
+
+
+def test_nvalchemiops_pme_eval_context_errors_without_gpu(monkeypatch):
+    import jax
+
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_DEVICE", "gpu")
+    with mock.patch.object(jax, "devices", side_effect=RuntimeError("no gpu")):
+        with pytest.raises(RuntimeError, match="CUDA GPU"):
+            with lrb.nvalchemiops_pme_eval_context():
+                pass
+
+
+def test_nvalchemiops_pme_eval_context_yields_device(monkeypatch):
+    import jax
+
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_DEVICE", "cpu")
+    with lrb.nvalchemiops_pme_eval_context() as device:
+        assert device == jax.devices("cpu")[0]
+
+
 def test_nvalchemiops_pme_energy_jittable_with_force_vjp():
     """Train path must survive jit + value_and_grad (no NL concretization)."""
     from mmml.interfaces.pycharmmInterface.long_range_backend import (

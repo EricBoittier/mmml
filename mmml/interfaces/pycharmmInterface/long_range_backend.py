@@ -627,6 +627,58 @@ def _nvalchemiops_pme_accuracy(accuracy: float | None = None) -> float:
     return float(raw)
 
 
+def nvalchemiops_pme_device_name() -> str:
+    """Device for nvalchemiops/Warp PME (default CUDA).
+
+    Warp's neighbor-list FFI is registered on GPU, not Host.  ``pure_callback``
+    from a jitted train step runs on CPU unless we re-dispatch here.
+    Override with ``MMML_NVALCHEMIOPS_PME_DEVICE=cpu`` only for debugging.
+    """
+    return (os.environ.get("MMML_NVALCHEMIOPS_PME_DEVICE") or "gpu").strip().lower()
+
+
+def _nvalchemiops_pme_resolve_device():
+    """Return the JAX device used for Warp PME (CUDA by default)."""
+    import jax
+
+    prefer = nvalchemiops_pme_device_name()
+    if prefer in ("cpu", "host"):
+        return jax.devices("cpu")[0]
+    try:
+        return jax.devices("gpu")[0]
+    except RuntimeError as exc:
+        raise RuntimeError(
+            "nvalchemiops PME requires a CUDA GPU (Warp NL FFI is not "
+            "registered on Host). Train on a GPU node, or set "
+            "MMML_NVALCHEMIOPS_PME_DEVICE=cpu only for debugging (Warp "
+            "neighbor lists will still fail without a Host FFI handler)."
+        ) from exc
+
+
+@contextmanager
+def nvalchemiops_pme_eval_context() -> Iterator[object]:
+    """Eager nvalchemiops PME on CUDA (disable nested JIT); yields the device.
+
+    ``jax.pure_callback`` host code defaults to the Host platform.  Warp's
+    ``_compute_naive_num_shifts_*`` FFI is CUDA-only, so callers must
+    ``device_put`` inputs onto the yielded device (``default_device`` alone is
+    not always enough inside a callback).
+    """
+    import jax
+
+    device = _nvalchemiops_pme_resolve_device()
+    with jax.disable_jit(), jax.default_device(device):
+        yield device
+
+
+def _nvalchemiops_pme_on_device(value, device):
+    """Place ``value`` on ``device`` (required for Warp FFI inside callbacks)."""
+    import jax
+    import jax.numpy as jnp
+
+    return jax.device_put(jnp.asarray(value), device)
+
+
 def estimate_nvalchemiops_pme_real_space_cutoff(
     *,
     box_length_A: float,
@@ -641,10 +693,15 @@ def estimate_nvalchemiops_pme_real_space_cutoff(
     L = float(box_length_A)
     acc = _nvalchemiops_pme_accuracy(accuracy)
     n = max(1, int(n_atoms))
-    pos = jnp.zeros((n, 3), dtype=jnp.float64)
-    cell = (jnp.eye(3, dtype=jnp.float64) * L)[None, ...]
-    params = estimate_pme_parameters(pos, cell, accuracy=acc)
-    return float(np.asarray(jax.device_get(params.real_space_cutoff[0]), dtype=np.float64))
+    with nvalchemiops_pme_eval_context() as device:
+        pos = _nvalchemiops_pme_on_device(jnp.zeros((n, 3), dtype=jnp.float64), device)
+        cell = _nvalchemiops_pme_on_device(
+            (jnp.eye(3, dtype=jnp.float64) * L)[None, ...], device
+        )
+        params = estimate_pme_parameters(pos, cell, accuracy=acc)
+        return float(
+            np.asarray(jax.device_get(params.real_space_cutoff[0]), dtype=np.float64)
+        )
 
 
 def _nvalchemiops_pme_energy_forces_concrete(
@@ -655,7 +712,7 @@ def _nvalchemiops_pme_energy_forces_concrete(
     accuracy: float | None = None,
     real_space_cutoff_A: float | None = None,
 ) -> tuple[float, np.ndarray]:
-    """Eager host PME (kcal/mol). Safe outside ``jax.jit`` (concrete NL sizes)."""
+    """Eager PME (kcal/mol) on CUDA. Safe outside ``jax.jit`` (concrete NL sizes)."""
     import jax
     import jax.numpy as jnp
     from nvalchemiops.jax.interactions.electrostatics import (
@@ -675,11 +732,15 @@ def _nvalchemiops_pme_energy_forces_concrete(
 
     L = float(box_length_A)
     acc = _nvalchemiops_pme_accuracy(accuracy)
-    with jax.disable_jit():
-        pos = jnp.asarray(pos_np)
-        chg = jnp.asarray(chg_np)
-        cell = (jnp.eye(3, dtype=jnp.float64) * L)[None, ...]
-        pbc = jnp.array([[True, True, True]])
+    with nvalchemiops_pme_eval_context() as device:
+        pos = _nvalchemiops_pme_on_device(pos_np, device)
+        chg = _nvalchemiops_pme_on_device(chg_np, device)
+        cell = _nvalchemiops_pme_on_device(
+            (jnp.eye(3, dtype=jnp.float64) * L)[None, ...], device
+        )
+        pbc = _nvalchemiops_pme_on_device(
+            jnp.array([[True, True, True]], dtype=jnp.bool_), device
+        )
         if real_space_cutoff_A is None:
             params = estimate_pme_parameters(pos, cell, accuracy=acc)
             cutoff = float(
@@ -687,13 +748,24 @@ def _nvalchemiops_pme_energy_forces_concrete(
             )
         else:
             cutoff = float(real_space_cutoff_A)
-        nl, nptr, ns = neighbor_list(
-            pos,
-            cutoff,
-            cell=cell,
-            pbc=pbc,
-            return_neighbor_list=True,
-        )
+        try:
+            nl, nptr, ns = neighbor_list(
+                pos,
+                cutoff,
+                cell=cell,
+                pbc=pbc,
+                return_neighbor_list=True,
+            )
+        except Exception as exc:
+            msg = str(exc)
+            if "FFI handler" in msg and "Host" in msg:
+                raise RuntimeError(
+                    "nvalchemiops Warp neighbor-list FFI ran on Host instead of "
+                    f"CUDA (device={device}). Ensure jaxlib CUDA is installed and "
+                    "MMML_NVALCHEMIOPS_PME_DEVICE is unset or 'gpu'. "
+                    f"Original error: {msg}"
+                ) from exc
+            raise
         energies, forces = particle_mesh_ewald(
             positions=pos,
             charges=chg,

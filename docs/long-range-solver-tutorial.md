@@ -272,6 +272,7 @@ The **Hybrid ML/MM setup** dashboard (always printed at calculator init) include
 | `periodic_external` fails                    | Need `--setup pbc_*`, positive `--box-size`, and an installed external Coulomb backend |
 | Segfault under MPI + ScaFaCoS                | Ensure mpi4py uses `COMM_WORLD.handle` (fixed in recent MMML)          |
 | `TracerArrayConversionError` under `jax_pme` | Upgrade MMML (hybrid jax-pme uses `jax.pure_callback` inside JIT)      |
+| `No FFI handler … _compute_naive_num_shifts_* on … Host` under `nvalchemiops_pme` train | Warp NL is CUDA-only; train on a GPU node with CUDA jaxlib. Pull latest MMML (host callback `device_put`s onto GPU). Do **not** set `MMML_NVALCHEMIOPS_PME_DEVICE=cpu`. |
 
 
 ---
