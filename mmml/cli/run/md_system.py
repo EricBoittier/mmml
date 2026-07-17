@@ -1101,6 +1101,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--skip-bfgs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Never run ASE BFGS during pre-minimization (FIRE only). Plain ASE BFGS "
+            "trusts a quadratic model of the surface and takes long steps; on an ML "
+            "PES it can walk downhill into a hole outside the training data -- "
+            "observed: E -7427.7 -> -7545.8 eV while max|F| rose 0.199 -> 36.3, at "
+            "0 K, so no thermal barrier crossing is needed. FIRE stayed well-behaved "
+            "on the same system. Overrides --pre-min-ase-order."
+        ),
+    )
+    parser.add_argument(
         "--bfgs-polish-max-fmax",
         type=float,
         default=1.0,
@@ -2831,6 +2844,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--fire-min-maxstep", getattr(args, "fire_min_maxstep", None))
     _append_optional(cmd, "--pre-min-ase-order", getattr(args, "pre_min_ase_order", None))
     _append_optional(cmd, "--bfgs-polish-max-fmax", getattr(args, "bfgs_polish_max_fmax", None))
+    _append_boolean_optional_flag(cmd, "--skip-bfgs", bool(getattr(args, "skip_bfgs", False)))
     _append_optional(cmd, "--rescue-fire-fmax", getattr(args, "rescue_fire_fmax", None))
     if bool(getattr(args, "quiet_bfgs", False)):
         cmd.append("--quiet-bfgs")
