@@ -12,8 +12,10 @@ from __future__ import annotations
 
 
 
-def test_jaxmd_exposes_skip_bfgs_defaulting_off():
-    """The runner builds its parser inside main(), so drive it the way a user does.
+def test_jaxmd_exposes_skip_bfgs_defaulting_on():
+    """BFGS is skipped by DEFAULT: it descends into holes in the ML PES at 0 K.
+
+    The runner builds its parser inside main(), so drive it the way a user does.
 
     Parsing the real argv is the only non-vacuous check that the flag exists and
     defaults off; a source grep would pass on a flag that never reaches argparse.
@@ -28,8 +30,8 @@ def test_jaxmd_exposes_skip_bfgs_defaulting_off():
 
     # rebuild just the flag the way the runner does and confirm the tri-state
     p = argparse.ArgumentParser()
-    p.add_argument("--skip-bfgs", action=argparse.BooleanOptionalAction, default=False)
-    assert p.parse_args([]).skip_bfgs is False
+    p.add_argument("--skip-bfgs", action=argparse.BooleanOptionalAction, default=True)
+    assert p.parse_args([]).skip_bfgs is True, "BFGS must be OFF by default until it is fixed"
     assert p.parse_args(["--skip-bfgs"]).skip_bfgs is True
     assert p.parse_args(["--no-skip-bfgs"]).skip_bfgs is False
 
