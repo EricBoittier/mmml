@@ -520,6 +520,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--nve-max-f-start-eVA",
+        type=float,
+        default=1.0,
+        metavar="EV_PER_A",
+        help=(
+            "jaxmd: refuse to start NVE when post-FIRE max atomic |F| exceeds "
+            "this value in eV/Å (default: 1.0; <=0 disables)."
+        ),
+    )
+    parser.add_argument(
         "--heat-comp-damp",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -3111,6 +3121,9 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
             "--traj-chunk-frames",
             str(args.traj_chunk_frames),
         ]
+        _append_optional(
+            cmd, "--nve-max-f-start-eVA", getattr(args, "nve_max_f_start_eVA", None)
+        )
         if jaxmd_free:
             cmd.append("--free-space")
             skip_box_size_for_cmd = True

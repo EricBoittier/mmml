@@ -1583,6 +1583,26 @@ def set_up_nhc_sim_routine(
             forces_jax = wrapped_force_fn(state.position, neighbor=current_neighbors)
         print_forces_summary(np.asarray(forces_jax), energy_eV=energy_initial, console=c)
         if args.ensemble == "nve":
+            max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
+            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.0) or 0.0)
+            if fmax_gate > 0.0 and max_f_start > fmax_gate:
+                msg = (
+                    f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "
+                    f"> gate {fmax_gate:.4f} eV/Å. Improve minimization / packing "
+                    "before microcanonical dynamics, raise --nve-max-f-start-eVA, "
+                    "or use a value <=0 to disable the gate."
+                )
+                c.print(
+                    Panel(
+                        msg,
+                        title="[bold red]NVE preflight failed[/bold red]",
+                        border_style="red",
+                    )
+                )
+                run_sim.last_status = "error"
+                run_sim.last_error = msg
+                pos0 = np.asarray(jax.device_get(state.position), dtype=float)
+                return 0, np.stack([pos0]), None
             # float32 energy differences are too coarse for force–energy FD and
             # for reliable microcanonical conservation on stiff hybrid potentials.
             x64_on = bool(jax.config.read("jax_enable_x64"))
