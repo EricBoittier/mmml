@@ -139,8 +139,16 @@ def _energy_norm(
     *,
     lo: float = 5.0,
     hi: float = 95.0,
+    min_span: float | None = None,
 ) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
-    """Colourscale from robust percentiles (drop outliers before setting limits)."""
+    """Colourscale from robust percentiles so data variance fills the map.
+
+    Outliers outside ``lo``/``hi`` are ignored.  The colour pivot is the
+    **median** of the retained values (or 0 when the window straddles zero),
+    via ``TwoSlopeNorm``, so each side of the typical well depth gets a full
+    half of the colour ramp — important when one dataset is deeper than the
+    other but both should still show contrast.
+    """
     finite = np.asarray(vals, dtype=float)
     finite = finite[np.isfinite(finite)]
     if finite.size == 0:
@@ -149,11 +157,24 @@ def _energy_norm(
     vmax = float(np.percentile(finite, hi))
     if abs(vmax - vmin) < 1e-9:
         vmin, vmax = float(finite.min()), float(finite.max())
-    pad = 0.05 * (vmax - vmin + 1e-6)
+    span = vmax - vmin
+    sigma = float(np.std(finite))
+    if min_span is None:
+        min_span = max(0.5, 2.5 * sigma if sigma > 0 else 0.5)
+    if span < min_span:
+        mid = 0.5 * (vmin + vmax)
+        vmin, vmax = mid - 0.5 * min_span, mid + 0.5 * min_span
+        span = min_span
+    pad = 0.04 * span
     vmin, vmax = vmin - pad, vmax + pad
     if vmin < 0.0 < vmax:
-        return mcolors.TwoSlopeNorm(vcenter=0.0, vmin=vmin, vmax=vmax)
-    return mcolors.Normalize(vmin=vmin, vmax=vmax)
+        vcenter = 0.0
+    else:
+        vcenter = float(np.median(finite))
+        # Keep the pivot strictly inside the window so TwoSlopeNorm is valid.
+        eps = 1e-6 * max(span, 1e-6)
+        vcenter = float(np.clip(vcenter, vmin + eps, vmax - eps))
+    return mcolors.TwoSlopeNorm(vcenter=vcenter, vmin=vmin, vmax=vmax)
 
 
 def _draw_hemisphere(

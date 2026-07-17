@@ -111,18 +111,21 @@ class SharedScales:
 
     e_vmin: float
     e_vmax: float
+    e_vcenter: float
     e_ymin: float
     e_ymax: float
     r_xmin: float
     r_xmax: float
 
     def energy_norm(self) -> mcolors.TwoSlopeNorm | mcolors.Normalize:
-        return _norm_from_limits(self.e_vmin, self.e_vmax)
+        eps = 1e-6 * max(self.e_vmax - self.e_vmin, 1e-6)
+        vcenter = float(np.clip(self.e_vcenter, self.e_vmin + eps, self.e_vmax - eps))
+        return mcolors.TwoSlopeNorm(vcenter=vcenter, vmin=self.e_vmin, vmax=self.e_vmax)
 
     def energy_cmap(self):
-        if self.e_vmin < 0.0 < self.e_vmax:
-            return default_cmap("diverging")
-        return default_cmap("sequential")
+        # Always diverging about the colour pivot (0 or the data median) so
+        # deeper-than-typical and shallower-than-typical wells get distinct hues.
+        return default_cmap("diverging")
 
     @property
     def e_ylim(self) -> tuple[float, float]:
@@ -147,23 +150,31 @@ def build_shared_scales(
     *ray_sets: dict[str, np.ndarray],
     how: str = "min",
 ) -> SharedScales:
-    """Joint robust colour/axis limits across one or more rays.csv tables."""
+    """Joint robust colour/axis limits across one or more rays.csv tables.
+
+    Colour limits come from the **map aggregates** (per-orientation / per-
+    direction well depths) only.  Mixing in raw per-ray ``e_min`` pulls the
+    window through zero (repulsive outliers) and collapses both ML and xTB
+    onto a narrow band of a diverging colourbar.
+    """
     color_chunks: list[np.ndarray] = []
     e_chunks: list[np.ndarray] = []
     r_chunks: list[np.ndarray] = []
     for rays in ray_sets:
         e_ori, _ = _aggregate_by_orientation(rays, how)
         e_dir = _aggregate_by_direction(rays, how)
-        color_chunks.extend([e_ori, e_dir, _clean_vals(rays, "e_min_kcal")])
+        color_chunks.extend([e_ori, e_dir])
         e_chunks.append(_clean_vals(rays, "e_min_kcal"))
         r_chunks.append(_clean_vals(rays, "r_at_min"))
 
-    color_norm = _energy_norm(np.concatenate(color_chunks))
+    color_vals = np.concatenate(color_chunks)
+    color_norm = _energy_norm(color_vals, lo=5.0, hi=95.0)
     e_ymin, e_ymax = _robust_lim(*e_chunks, include_zero=True)
     r_xmin, r_xmax = _robust_lim(*r_chunks)
     return SharedScales(
         e_vmin=float(color_norm.vmin),
         e_vmax=float(color_norm.vmax),
+        e_vcenter=float(color_norm.vcenter),
         e_ymin=e_ymin,
         e_ymax=e_ymax,
         r_xmin=r_xmin,
@@ -1642,7 +1653,8 @@ def main() -> int:
         scale_path = args.out / "shared_scales.json"
         scale_path.write_text(json.dumps(asdict(shared), indent=2) + "\n")
         print(
-            f"  shared scales: e_color=[{shared.e_vmin:.3f},{shared.e_vmax:.3f}]  "
+            f"  shared scales: e_color=[{shared.e_vmin:.3f},{shared.e_vcenter:.3f},"
+            f"{shared.e_vmax:.3f}]  "
             f"e_ylim=[{shared.e_ymin:.3f},{shared.e_ymax:.3f}]  "
             f"r_xlim=[{shared.r_xmin:.3f},{shared.r_xmax:.3f}]  -> {scale_path}"
         )
