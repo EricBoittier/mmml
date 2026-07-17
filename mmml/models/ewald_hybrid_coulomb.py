@@ -34,7 +34,7 @@ from mmml.interfaces.pycharmmInterface.ewald_native import (
     ewald_reciprocal_energy,
     ewald_self_energy,
 )
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import pairwise_mic
+from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 Array = jnp.ndarray
 COULOMB_KCAL = 332.063711
@@ -89,8 +89,13 @@ def hybrid_ewald_coulomb_energy(
     alpha = default_ewald_alpha(rcut_for_alpha, accuracy_exponent=accuracy_exponent)
     n_int = jnp.asarray(build_kspace_integers(cell_np, alpha, accuracy_exponent=accuracy_exponent))
 
-    dR_mic, dij = pairwise_mic(pos, cell)
+    # all-pairs MIC distance matrix, built from the single-pair primitive
+    # directly (pbc_utils_jax.pairwise_mic mis-shapes frac_coords's batched
+    # solve for this (N,N,3) case -- a pre-existing bug, unrelated to this
+    # module; tracked separately rather than relied on here).
     n_at = pos.shape[0]
+    disp = jax.vmap(jax.vmap(lambda a, b: mic_displacement(a, b, cell), in_axes=(None, 0)), in_axes=(0, None))(pos, pos)
+    dij = jnp.linalg.norm(disp, axis=-1)
     eye = jnp.eye(n_at, dtype=bool)
     r_safe = jnp.where(eye, 1.0, dij)
     qq = q_full[:, None] * q_full[None, :]
