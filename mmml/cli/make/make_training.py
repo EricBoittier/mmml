@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
@@ -1300,10 +1301,6 @@ def main_loop(args):
     # (deadlock), and a spawn child often gets CUDA_ERROR_DEVICE_UNAVAILABLE after
     # the parent has already initialized CUDA.  Default isolate mode runs the
     # jitted train/eval steps on CPU while the PME pure_callback uses GPU.
-    from contextlib import nullcontext
-
-    import jax
-
     from mmml.interfaces.pycharmmInterface.long_range_backend import (
         nvalchemiops_pme_train_wants_cpu_steps,
     )
