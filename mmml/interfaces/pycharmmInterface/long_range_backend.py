@@ -658,6 +658,7 @@ def nvalchemiops_pme_train_isolate_enabled() -> bool:
 # Persistent spawn worker for train-callback PME (avoids nested-GPU XLA deadlock).
 _NVAL_PME_WORKER = None
 _NVAL_PME_WORKER_LOCK = None
+_NVAL_PME_WORKER_CUDA_VISIBLE = None
 
 
 def _nval_pme_worker_lock():
@@ -669,9 +670,56 @@ def _nval_pme_worker_lock():
     return _NVAL_PME_WORKER_LOCK
 
 
-def _nvalchemiops_pme_worker_main(q_in, q_out) -> None:
-    """Child process: eager CUDA PME with a private JAX runtime."""
+def _physical_nvidia_gpu_indices() -> list[str]:
+    """Physical GPU indices from nvidia-smi (ignores parent CUDA_VISIBLE_DEVICES)."""
+    import subprocess
+
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def nvalchemiops_pme_worker_cuda_visible() -> str:
+    """Physical ``CUDA_VISIBLE_DEVICES`` value for the spawn PME worker.
+
+    The parent train process typically already owns GPU 0 (and may set
+    ``CUDA_VISIBLE_DEVICES=0`` + a large ``XLA_PYTHON_CLIENT_MEM_FRACTION``).
+    A spawn child that inherits that env then fails with
+    ``CUDA_ERROR_DEVICE_UNAVAILABLE``.  Default: use the **last** physical GPU
+    when two or more are present.  Override with
+    ``MMML_NVALCHEMIOPS_PME_WORKER_GPU`` (e.g. ``1``).
+    """
+    override = (os.environ.get("MMML_NVALCHEMIOPS_PME_WORKER_GPU") or "").strip()
+    if override:
+        return override
+    ids = _physical_nvidia_gpu_indices()
+    if len(ids) >= 2:
+        return ids[-1]
+    if len(ids) == 1:
+        return ids[0]
+    return "0"
+
+
+def _nvalchemiops_pme_worker_main(q_in, q_out, cuda_visible: str) -> None:
+    """Child process: eager CUDA PME with a private JAX runtime.
+
+    ``cuda_visible`` is applied **before** any JAX import so the child does not
+    inherit the parent's single-GPU ``CUDA_VISIBLE_DEVICES`` lock-in.
+    """
     import traceback
+
+    # Must run before importing jax / mmml CUDA paths.
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_visible)
+    os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+    os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", "0.25")
+    # Fresh process should only see the worker GPU as cuda:0.
+    os.environ.pop("JAX_PLATFORMS", None)
 
     while True:
         msg = q_in.get()
@@ -704,7 +752,7 @@ def _nvalchemiops_pme_worker_main(q_in, q_out) -> None:
 
 def _nvalchemiops_pme_ensure_worker():
     """Start the spawn PME worker once per parent process."""
-    global _NVAL_PME_WORKER
+    global _NVAL_PME_WORKER, _NVAL_PME_WORKER_CUDA_VISIBLE
     import atexit
     import multiprocessing as mp
 
@@ -712,12 +760,14 @@ def _nvalchemiops_pme_ensure_worker():
         proc, q_in, q_out = _NVAL_PME_WORKER
         if proc.is_alive():
             return _NVAL_PME_WORKER
+    cuda_visible = nvalchemiops_pme_worker_cuda_visible()
+    _NVAL_PME_WORKER_CUDA_VISIBLE = cuda_visible
     ctx = mp.get_context("spawn")
     q_in = ctx.Queue()
     q_out = ctx.Queue()
     proc = ctx.Process(
         target=_nvalchemiops_pme_worker_main,
-        args=(q_in, q_out),
+        args=(q_in, q_out, cuda_visible),
         name="mmml-nvalchemiops-pme",
         daemon=True,
     )
@@ -779,8 +829,24 @@ def _nvalchemiops_pme_energy_forces_isolated(
             e, f = payload
             return float(e), np.asarray(f, dtype=np.float64)
         err, tb = payload
+        gpu = _NVAL_PME_WORKER_CUDA_VISIBLE or nvalchemiops_pme_worker_cuda_visible()
+        hint = ""
+        err_l = str(err).lower()
+        if (
+            "device_unavailable" in err_l
+            or "no supported devices" in err_l
+            or "cuda gpu" in err_l
+        ):
+            hint = (
+                "\nHint: the train process already owns a GPU; the PME worker "
+                f"needs its own. Set MMML_NVALCHEMIOPS_PME_WORKER_GPU to a free "
+                f"physical index (tried {gpu!r}). On a 2-GPU node: "
+                "MMML_NVALCHEMIOPS_PME_WORKER_GPU=1. Or use --lr-solver ewald "
+                "(same full-box contract, no spawn worker)."
+            )
         raise RuntimeError(
-            f"nvalchemiops PME spawn worker failed: {err}\n{tb}"
+            f"nvalchemiops PME spawn worker failed (CUDA_VISIBLE_DEVICES={gpu}): "
+            f"{err}\n{tb}{hint}"
         )
 
 
@@ -826,9 +892,11 @@ def warmup_nvalchemiops_pme_train_worker(
     chg = np.zeros(n, dtype=np.float64)
     chg[0] = 1.0
     chg[1] = -1.0
+    gpu = nvalchemiops_pme_worker_cuda_visible()
     print(
         "Warming nvalchemiops PME spawn worker "
-        "(avoids nested-GPU deadlock in jit_train_step)...",
+        f"(CUDA_VISIBLE_DEVICES={gpu}; avoids nested-GPU deadlock in "
+        "jit_train_step)...",
         flush=True,
     )
     _nvalchemiops_pme_energy_forces_isolated(
@@ -838,7 +906,10 @@ def warmup_nvalchemiops_pme_train_worker(
         accuracy=accuracy,
         real_space_cutoff_A=real_space_cutoff_A,
     )
-    print("nvalchemiops PME spawn worker ready.", flush=True)
+    print(
+        f"nvalchemiops PME spawn worker ready (physical GPU {gpu}).",
+        flush=True,
+    )
 
 
 def _nvalchemiops_pme_resolve_device():

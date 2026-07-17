@@ -23,6 +23,8 @@ def test_resolve_lr_solver_accepts_known_names():
     assert resolve_lr_solver("scafacos") == "scafacos"
     assert resolve_lr_solver("nvalchemiops_pme") == "nvalchemiops_pme"
     assert resolve_lr_solver("nval_pme") == "nvalchemiops_pme"
+    assert resolve_lr_solver("ewald") == "ewald"
+    assert resolve_lr_solver("native_ewald") == "ewald"
     assert resolve_lr_solver(None) == "mic"
 
 
@@ -32,7 +34,7 @@ def test_resolve_lr_solver_auto_alias():
 
 def test_resolve_lr_solver_rejects_unknown():
     with pytest.raises(ValueError, match="lr_solver must be"):
-        resolve_lr_solver("ewald")
+        resolve_lr_solver("not_a_real_solver")
 
 
 def test_resolve_jax_pme_dispersion_env(monkeypatch):

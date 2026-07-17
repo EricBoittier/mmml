@@ -471,6 +471,23 @@ def test_nvalchemiops_pme_train_isolate_defaults_on(monkeypatch):
     assert lrb.nvalchemiops_pme_train_isolate_enabled() is False
 
 
+def test_nvalchemiops_pme_worker_cuda_visible_override(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_WORKER_GPU", "1")
+    assert lrb.nvalchemiops_pme_worker_cuda_visible() == "1"
+
+
+def test_nvalchemiops_pme_worker_cuda_visible_picks_last_gpu(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+
+    monkeypatch.delenv("MMML_NVALCHEMIOPS_PME_WORKER_GPU", raising=False)
+    with mock.patch.object(
+        lrb, "_physical_nvidia_gpu_indices", return_value=["0", "1"]
+    ):
+        assert lrb.nvalchemiops_pme_worker_cuda_visible() == "1"
+
+
 def test_nvalchemiops_pme_eval_context_errors_without_gpu(monkeypatch):
     import jax
 
