@@ -549,8 +549,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--nve-etot-drift-rescue-attempts",
         type=int,
-        default=3,
-        help="jaxmd: max mid-run E_tot drift repair attempts (default: 3).",
+        default=5,
+        help="jaxmd: max mid-run E_tot drift repair attempts (default: 5).",
     )
     parser.add_argument(
         "--nve-etot-drift-rescue-fire-steps",
@@ -561,12 +561,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--nve-etot-drift-rescue-grace-eV",
         type=float,
-        default=1.0,
+        default=2.5,
         metavar="EV",
         help=(
-            "jaxmd: after full-escalation drift rescue, widen E_tot gate to at "
-            "least this value (default: 1.0)."
+            "jaxmd: base E_tot gate after each drift rescue (progressive "
+            "g→1.5g→2g…; default: 2.5)."
         ),
+    )
+    parser.add_argument(
+        "--nve-etot-drift-rescue-dt-scale",
+        type=float,
+        default=0.5,
+        help="jaxmd: multiply MD dt on drift-rescue dt_halve (default: 0.5).",
+    )
+    parser.add_argument(
+        "--nve-etot-drift-rescue-min-dt-fs",
+        type=float,
+        default=0.05,
+        help="jaxmd: minimum MD dt (fs) when backing off (default: 0.05).",
     )
     parser.add_argument(
         "--heat-comp-damp",
@@ -3188,6 +3200,16 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
             cmd,
             "--nve-etot-drift-rescue-grace-eV",
             getattr(args, "nve_etot_drift_rescue_grace_eV", None),
+        )
+        _append_optional(
+            cmd,
+            "--nve-etot-drift-rescue-dt-scale",
+            getattr(args, "nve_etot_drift_rescue_dt_scale", None),
+        )
+        _append_optional(
+            cmd,
+            "--nve-etot-drift-rescue-min-dt-fs",
+            getattr(args, "nve_etot_drift_rescue_min_dt_fs", None),
         )
         if jaxmd_free:
             cmd.append("--free-space")

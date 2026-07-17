@@ -107,26 +107,37 @@ def test_nve_force_energy_should_attempt_rescue():
 
 def test_nve_etot_drift_rescue_helpers():
     from mmml.cli.run.jaxmd_runner import (
+        nve_etot_drift_grace_threshold_eV,
+        nve_etot_drift_halved_dt_ps,
         nve_etot_drift_rescue_tricks,
         nve_etot_drift_should_attempt_rescue,
     )
 
     assert nve_etot_drift_should_attempt_rescue(
-        rescue_enabled=True, attempts_used=0, max_attempts=3
+        rescue_enabled=True, attempts_used=0, max_attempts=5
     )
     assert nve_etot_drift_should_attempt_rescue(
-        rescue_enabled=True, attempts_used=2, max_attempts=3
+        rescue_enabled=True, attempts_used=4, max_attempts=5
     )
     assert not nve_etot_drift_should_attempt_rescue(
-        rescue_enabled=True, attempts_used=3, max_attempts=3
+        rescue_enabled=True, attempts_used=5, max_attempts=5
     )
     assert not nve_etot_drift_should_attempt_rescue(
-        rescue_enabled=False, attempts_used=0, max_attempts=3
+        rescue_enabled=False, attempts_used=0, max_attempts=5
     )
-    assert nve_etot_drift_rescue_tricks(0) == ("nl_rebuild", "rethermalize")
-    assert "fire" in nve_etot_drift_rescue_tricks(1)
+    assert "grace" in nve_etot_drift_rescue_tricks(0)
+    assert "dt_halve" in nve_etot_drift_rescue_tricks(1)
     assert "charmm_rescue" in nve_etot_drift_rescue_tricks(2)
-    assert "grace" in nve_etot_drift_rescue_tricks(2)
+    assert nve_etot_drift_grace_threshold_eV(
+        current_threshold_eV=0.5, grace_eV=2.5, attempt_1_based=1
+    ) == pytest.approx(2.5)
+    assert nve_etot_drift_grace_threshold_eV(
+        current_threshold_eV=2.5, grace_eV=2.5, attempt_1_based=3
+    ) == pytest.approx(5.0)
+    assert nve_etot_drift_halved_dt_ps(0.00025) == pytest.approx(0.000125)
+    assert nve_etot_drift_halved_dt_ps(0.00008, min_dt_fs=0.05) == pytest.approx(
+        0.00005
+    )
 
 
 def test_jaxmd_suite_nve_preflight_cli_defaults():

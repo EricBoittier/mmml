@@ -90,6 +90,8 @@ runs:
     nve_max_f_start_eVA: 1.5
     nve_etot_drift_abort_eV: 0.5
     nve_etot_drift_rescue: true
-    nve_etot_drift_rescue_attempts: 3
+    nve_etot_drift_rescue_attempts: 5
     nve_etot_drift_rescue_fire_steps: 100
-    nve_etot_drift_rescue_grace_eV: 1.0
+    nve_etot_drift_rescue_grace_eV: 2.5
+    nve_etot_drift_rescue_dt_scale: 0.5
+    nve_etot_drift_rescue_min_dt_fs: 0.05

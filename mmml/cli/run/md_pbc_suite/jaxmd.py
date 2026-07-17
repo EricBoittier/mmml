@@ -230,14 +230,15 @@ def main(argv: list[str] | None = None) -> int:
         default=True,
         help=(
             "On NVE E_tot drift, rewind to last-good frame and try NL rebuild / "
-            "FIRE / CHARMM rescue / rethermalize before aborting (default: on)."
+            "FIRE / CHARMM rescue / rethermalize / dt backoff before aborting "
+            "(default: on)."
         ),
     )
     p.add_argument(
         "--nve-etot-drift-rescue-attempts",
         type=int,
-        default=3,
-        help="Max mid-run E_tot drift repair attempts (default: 3).",
+        default=5,
+        help="Max mid-run E_tot drift repair attempts (default: 5).",
     )
     p.add_argument(
         "--nve-etot-drift-rescue-fire-steps",
@@ -251,11 +252,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--nve-etot-drift-rescue-grace-eV",
         type=float,
-        default=1.0,
+        default=2.5,
         help=(
-            "After a full-escalation drift rescue, widen the E_tot abort gate to "
-            "at least this value (eV; default: 1.0; <=0 keeps original gate)."
+            "Base E_tot gate after each drift rescue (eV; progressive: "
+            "g, 1.5g, 2g, …; default: 2.5; <=0 keeps original gate)."
         ),
+    )
+    p.add_argument(
+        "--nve-etot-drift-rescue-dt-scale",
+        type=float,
+        default=0.5,
+        help="Multiply MD dt by this factor on dt_halve rescue tricks (default: 0.5).",
+    )
+    p.add_argument(
+        "--nve-etot-drift-rescue-min-dt-fs",
+        type=float,
+        default=0.05,
+        help="Floor for MD dt (fs) when backing off on drift rescue (default: 0.05).",
     )
     p.add_argument(
         "--nve-max-f-start-eVA",
@@ -1565,13 +1578,19 @@ def main(argv: list[str] | None = None) -> int:
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
         nve_etot_drift_rescue=bool(getattr(args, "nve_etot_drift_rescue", True)),
         nve_etot_drift_rescue_attempts=int(
-            getattr(args, "nve_etot_drift_rescue_attempts", 3)
+            getattr(args, "nve_etot_drift_rescue_attempts", 5)
         ),
         nve_etot_drift_rescue_fire_steps=int(
             getattr(args, "nve_etot_drift_rescue_fire_steps", 100)
         ),
         nve_etot_drift_rescue_grace_eV=float(
-            getattr(args, "nve_etot_drift_rescue_grace_eV", 1.0)
+            getattr(args, "nve_etot_drift_rescue_grace_eV", 2.5)
+        ),
+        nve_etot_drift_rescue_dt_scale=float(
+            getattr(args, "nve_etot_drift_rescue_dt_scale", 0.5)
+        ),
+        nve_etot_drift_rescue_min_dt_fs=float(
+            getattr(args, "nve_etot_drift_rescue_min_dt_fs", 0.05)
         ),
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.5)),
     )
