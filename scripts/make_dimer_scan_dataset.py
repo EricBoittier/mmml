@@ -54,6 +54,72 @@ from scripts.scan_dimer_orientations import (  # noqa: E402
 )
 
 
+def nms_conformers(Z, R0, n_samples, temperature_K, rng, eig_min=1e-4):
+    """Thermal normal-mode samples around a GFN2-relaxed geometry.
+
+    Why not uniform random noise: isotropic displacement is chemically blind --
+    it stretches stiff bonds as readily as soft torsions, so most samples are
+    absurd, high in energy, and say nothing about what the molecule does. Normal
+    modes displace along the actual vibrations with thermal amplitudes: soft
+    modes move far, stiff bonds barely move. (This is what ANI-1 used.)
+
+    Sampling is the classical harmonic ensemble, done in mass-weighted
+    coordinates so the units close:
+
+        H_mw = H / sqrt(m_i m_j)                    eV / (A^2 amu)
+        lambda_i, v_i = eig(H_mw)                   lambda_i = omega_i^2
+        <Q_i^2> = kT / lambda_i                     -> A sqrt(amu)
+        dR = sum_i Q_i v_i / sqrt(m)                -> A
+
+    (Doing this from mode *energies* instead -- sqrt(kT)/E -- is dimensionally
+    sqrt(eV)/eV, not a length, and produces ~3.5 A displacements that destroy the
+    molecule. The rmsd printed by the caller is the check on that.)
+
+    The input is an MD snapshot, NOT a stationary point, and a Hessian there
+    gives meaningless modes -- so it is relaxed first. The 6 near-zero
+    eigenvalues (translation/rotation) are dropped; their 1/lambda amplitude
+    would blow up.
+    """
+    import tempfile
+
+    import ase.units as u
+    from ase import Atoms
+    from ase.optimize import BFGS
+    from ase.vibrations import Vibrations
+    from tblite.ase import TBLite
+
+    atoms = Atoms(numbers=Z, positions=R0)
+    atoms.calc = TBLite(method="GFN2-xTB", verbosity=0)
+    BFGS(atoms, logfile=None).run(fmax=0.005, steps=500)
+    R_eq = atoms.get_positions()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        vib = Vibrations(atoms, name=f"{tmp}/vib")
+        vib.run()
+        data = vib.get_vibrations()
+
+    H = np.asarray(data.get_hessian_2d())            # eV / A^2
+    m = atoms.get_masses()
+    w = np.repeat(m, 3) ** -0.5
+    H_mw = H * w[:, None] * w[None, :]
+    lam, V = np.linalg.eigh(H_mw)
+
+    keep = lam > eig_min                             # drops trans/rot + noise
+    lam, V = lam[keep], V[:, keep]
+    if lam.size == 0:
+        raise RuntimeError("no positive modes -- optimisation failed?")
+
+    kT = u.kB * temperature_K                        # eV
+    sigma = np.sqrt(kT / lam)                        # A sqrt(amu)
+    freqs = np.sqrt(lam) * 1e10 / (2 * np.pi * u._c) * np.sqrt(u._e / u._amu)  # cm^-1
+
+    out = np.empty((n_samples, len(Z), 3))
+    for k in range(n_samples):
+        Q = rng.normal(0.0, sigma)
+        out[k] = R_eq + (V @ Q * w).reshape(-1, 3)
+    return R_eq, out, freqs
+
+
 def r_grid(r_min: float, r_max: float, n: int, r_dense_to: float) -> np.ndarray:
     """Separations weighted toward the binding/repulsive region.
 
@@ -100,6 +166,17 @@ def main() -> int:
                    ))
     p.add_argument("--include-monomers", action="store_true", default=True,
                    help="monomers carry the intramolecular energy the model must learn")
+    p.add_argument("--monomer-conformers", type=int, default=64,
+                   help=(
+                       "Thermal normal-mode conformers per species. Rigid monomers "
+                       "(=1) leave the intramolecular ML term untrained: it sees one "
+                       "geometry and learns a constant. Each dimer draws two "
+                       "conformers independently, and the conformers also enter the "
+                       "set as monomer structures."
+                   ))
+    p.add_argument("--nms-temperature", type=float, default=300.0,
+                   help="temperature (K) setting the normal-mode amplitudes")
+    p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="dimer_scan_hf.npz")
     p.add_argument("--checkpoint-every", type=int, default=200,
                    help="write partial results this often; the run is resumable")
@@ -110,40 +187,63 @@ def main() -> int:
     # Must precede the tblite import: OpenMP reads it at load time.
     os.environ.setdefault("OMP_NUM_THREADS", str(args.omp_threads))
 
-    from mmml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM, HARTREE_TO_EV
+    from mmml.data.units import (
+        BOHR_TO_ANGSTROM,
+        HARTREE_BOHR_TO_EV_ANGSTROM,
+        HARTREE_TO_EV,
+    )
 
     raw = dict(np.load(args.data, allow_pickle=True))
     res = np.array([str(x) for x in raw["res_name"]])
     resids = [r.strip() for r in args.resids.split(",") if r.strip()]
 
+    rng = np.random.default_rng(args.seed)
     dirs = fibonacci_sphere(args.n_directions)
     quats = super_fibonacci(args.n_orientations)
     rs = r_grid(args.r_min, args.r_max, args.n_r, args.r_dense_to)
 
     # --- build every geometry (cheap; the QM is the cost) -------------------
-    geoms = []  # (res_name, Z, R, mol_id)
+    geoms = []  # (res_name, Z, R, mol_id, cgenff_type_idx, cgenff_charge)
     for resid in resids:
         k = int(np.where(res == resid)[0][0])
         n = int(raw["N"][k])
         Z1 = np.asarray(raw["Z"][k])[:n]
         R1 = np.asarray(raw["R"][k])[:n]
         R1 = R1 - R1.mean(axis=0)
+        # Built from a monomer whose CGenFF assignment the source dataset already
+        # carries (graph-isomorphism-validated at prep time), so carry it through
+        # rather than re-deriving. Atom order is the monomer's own, which is what
+        # hybrid_forward expects (the MD calculator wants PSF order instead).
+        t1 = np.asarray(raw["cgenff_type_idx"][k])[:n]
+        q1 = np.asarray(raw["cgenff_charge"][k])[:n]
+        R_eq, confs, freqs = nms_conformers(
+            Z1, R1, args.monomer_conformers, args.nms_temperature, rng)
+        # rmsd vs the EQUILIBRIUM: ~0.1 A at 300 K. If this is angstroms, the
+        # amplitude formula is wrong and the molecules are being destroyed.
+        rmsd = float(np.sqrt(((confs - R_eq) ** 2).sum(-1).mean()))
+        confs = confs - confs.mean(axis=1, keepdims=True)
+        print(f"{resid}: relaxed, {len(freqs)} modes {freqs.min():.0f}-{freqs.max():.0f} cm^-1, "
+              f"{len(confs)} conformers @ {args.nms_temperature:g} K (rmsd {rmsd:.3f} A)")
         if args.include_monomers:
-            geoms.append((resid, Z1, R1.copy(), np.zeros(n, np.int32)))
+            for c in confs:
+                geoms.append((resid, Z1, c.copy(), np.zeros(n, np.int32), t1, q1))
         skipped = 0
         for d in dirs:
             for q in quats:
-                Rb0 = R1 @ quat_to_matrix(q).T
                 for r in rs:
-                    a = R1 - 0.5 * r * d
-                    b = Rb0 + 0.5 * r * d
+                    # independent conformers per monomer, so the dimer term cannot
+                    # memorise one frozen intramolecular geometry
+                    a = confs[rng.integers(len(confs))] - 0.5 * r * d
+                    b = confs[rng.integers(len(confs))] @ quat_to_matrix(q).T + 0.5 * r * d
                     if np.linalg.norm(a[:, None] - b[None, :], axis=-1).min() < args.min_contact:
                         skipped += 1
                         continue
                     geoms.append((f"{resid},{resid}",
                                   np.concatenate([Z1, Z1]),
                                   np.concatenate([a, b]),
-                                  np.concatenate([np.zeros(n, np.int32), np.ones(n, np.int32)])))
+                                  np.concatenate([np.zeros(n, np.int32), np.ones(n, np.int32)]),
+                                  np.concatenate([t1, t1]),
+                                  np.concatenate([q1, q1])))
         print(f"{resid}: {len(dirs)}x{len(quats)}x{len(rs)} = "
               f"{len(dirs) * len(quats) * len(rs)} dimers, {skipped} skipped "
               f"(contact < {args.min_contact} A)")
@@ -185,7 +285,12 @@ def main() -> int:
             e = float(r.get("energy"))
             g = np.asarray(r.get("gradient"))  # Hartree/Bohr
             try:
-                d = np.asarray(r.get("dipole"), dtype=float) * 2.541746  # a.u. -> Debye
+                # a.u. (e*bohr) -> e*Angstrom, matching how the model forms its
+                # own dipole (sum q_i r_i). The existing dataset's D does NOT
+                # agree: its ACO monomer |D| is 0.207 where 2.88 D = 0.600 e*A,
+                # and DCM is off by a different factor -- so it is not a unit
+                # conversion. Do not train dipoles against both sets.
+                d = np.asarray(r.get("dipole"), dtype=float) * BOHR_TO_ANGSTROM
             except Exception:
                 d = np.zeros(3)
             return (e * HARTREE_TO_EV,
@@ -194,7 +299,7 @@ def main() -> int:
 
     sample = geoms[:: max(1, n_tot // 3)][:3]
     t0 = time.time()
-    for _, Z, R, _m in sample:
+    for _, Z, R, _m, _t, _q in sample:
         run_one(Z, R)
     per = (time.time() - t0) / max(len(sample), 1)
     print(f"timed {len(sample)} geometries: {per:.2f}s each (first includes JIT warmup)")
@@ -222,7 +327,7 @@ def main() -> int:
     t0 = time.time()
     n_fail = 0
     for i in range(done, n_tot):
-        _res, Z, R, _m = geoms[i]
+        _res, Z, R, _m, _t, _q = geoms[i]
         r = run_one(Z, R)
         if r is None:
             n_fail += 1  # SCF did not converge; left as NaN and dropped at the end
@@ -241,27 +346,45 @@ def main() -> int:
     keep = ~np.isnan(E)
     print(f"\n{keep.sum()}/{n_tot} converged ({n_fail} SCF failures dropped)")
     n_at = F.shape[1]
-    R_out = np.zeros((int(keep.sum()), n_at, 3))
-    Z_out = np.zeros((int(keep.sum()), n_at), np.int32)
-    M_out = np.full((int(keep.sum()), n_at), -1, np.int32)
-    N_out = np.zeros(int(keep.sum()), np.int32)
+    nk = int(keep.sum())
+    R_out = np.zeros((nk, n_at, 3))
+    Z_out = np.zeros((nk, n_at), np.int32)
+    M_out = np.full((nk, n_at), -1, np.int32)
+    T_out = np.full((nk, n_at), -1, np.int32)
+    Q_out = np.zeros((nk, n_at))
+    N_out = np.zeros(nk, np.int32)
     names = []
     j = 0
     for i in range(n_tot):
         if not keep[i]:
             continue
-        rn, Z, R, m = geoms[i]
+        rn, Z, R, m, t, q = geoms[i]
         R_out[j, :len(Z)] = R; Z_out[j, :len(Z)] = Z; M_out[j, :len(Z)] = m
+        T_out[j, :len(Z)] = t; Q_out[j, :len(Z)] = q
         N_out[j] = len(Z); names.append(rn); j += 1
 
-    np.savez(
-        out, R=R_out, Z=Z_out, N=N_out, E=E[keep].reshape(-1, 1), F=F[keep],
-        D=D[keep], mol_id=M_out, res_name=np.array(names),
+    common = dict(
+        cgenff_master_sigmas=np.asarray(raw["cgenff_master_sigmas"]),
+        cgenff_master_epsilons=np.asarray(raw["cgenff_master_epsilons"]),
         _mmml_units=np.array(["energy=eV", "forces=eV/Angstrom", "coords=Angstrom",
-                              f"method={label}"]),
+                              "dipole=e*Angstrom", f"method={label}"]),
     )
-    print(f"-> {out}  ({keep.sum()} structures, {label}, eV & eV/A)")
-    print("\nNext: scripts/prepare_ml_mm_dataset.py to attach CGenFF fields + split.")
+    rng = np.random.default_rng(0)
+    perm = rng.permutation(nk)
+    n_tr, n_va = int(0.8 * nk), int(0.1 * nk)
+    base = str(out.with_suffix(""))
+    for tag, sel in (("train", perm[:n_tr]), ("valid", perm[n_tr:n_tr + n_va]),
+                     ("test", perm[n_tr + n_va:])):
+        f = Path(f"{base}_{tag}.npz")
+        np.savez(f, R=R_out[sel], Z=Z_out[sel], N=N_out[sel],
+                 E=E[keep][sel].reshape(-1, 1), F=F[keep][sel], D=D[keep][sel],
+                 mol_id=M_out[sel], cgenff_type_idx=T_out[sel], cgenff_charge=Q_out[sel],
+                 res_name=np.array(names)[sel], **common)
+        print(f"-> {f}  ({len(sel)} structures)")
+    print(f"\n{label}; eV, eV/A, dipole e*A. CGenFF types/charges carried from the "
+          f"source monomers; master tables ({len(common['cgenff_master_sigmas'])} types) copied.")
+    print("Ready for: mmml physnet-train --hybrid-mm --data <base>_train.npz "
+          "--valid-data <base>_valid.npz")
     if args.method == "hf":
         print("NOTE: HF has NO dispersion and this applies no counterpoise correction. "
               "For DCM the attraction is largely dispersion, so these wells are "

@@ -381,8 +381,10 @@ def render_dimer_atoms(
     force_scale: float = 1.5,
     force_color: str = "crimson",
     coord_axes: list[tuple[np.ndarray, str, str]] | None = None,
+    segment_arrows: list[tuple[np.ndarray, np.ndarray, str, str]] | None = None,
     title: str | None = None,
     title_fontsize: float = 7,
+    label_color: str | None = None,
 ) -> None:
     """Ball-and-stick render of an ASE ``Atoms`` object onto *ax*.
 
@@ -397,11 +399,22 @@ def render_dimer_atoms(
     lateral offset) points, projected through the same camera rotation as
     everything else — so the arrows genuinely reflect the 3D geometry rather
     than being a flat, angle-independent annotation.
+
+    *segment_arrows* is a list of ``(start3, end3, color, label)`` in the same
+    unrotated frame — use this for COM→COM approach vectors or body axes
+    drawn from a real molecular origin rather than the corner glyph.
+    *label_color* optionally colours the title (e.g. a tag colour).
     """
     ax.set_axis_off()
     ax.set_aspect("equal")
     if title:
-        ax.set_title(title, fontsize=title_fontsize, pad=1)
+        ax.set_title(
+            title,
+            fontsize=title_fontsize,
+            pad=1,
+            color=label_color if label_color else "black",
+            fontweight="bold" if label_color else "normal",
+        )
     if atoms is None or len(atoms) == 0:
         return
 
@@ -492,6 +505,52 @@ def render_dimer_atoms(
                 )
                 xlo, xhi = min(xlo, label_pos[0]), max(xhi, label_pos[0])
                 ylo, yhi = min(ylo, label_pos[1]), max(yhi, label_pos[1])
+
+    if segment_arrows:
+        for start3, end3, color, label in segment_arrows:
+            s = np.asarray(start3, dtype=float) @ R
+            e = np.asarray(end3, dtype=float) @ R
+            ax.annotate(
+                "",
+                xy=(e[0], e[1]),
+                xytext=(s[0], s[1]),
+                arrowprops=dict(
+                    arrowstyle="-|>",
+                    color=color,
+                    lw=2.0,
+                    shrinkA=0,
+                    shrinkB=0,
+                    mutation_scale=12,
+                ),
+                zorder=12,
+            )
+            if label:
+                mid = 0.5 * (s[:2] + e[:2])
+                # nudge label slightly off the segment
+                tang = e[:2] - s[:2]
+                nrm = np.linalg.norm(tang)
+                if nrm > 1e-9:
+                    perp = np.array([-tang[1], tang[0]]) / nrm * (pad * 0.25)
+                else:
+                    perp = np.array([0.0, pad * 0.25])
+                lp = mid + perp
+                ax.text(
+                    lp[0],
+                    lp[1],
+                    label,
+                    color=color,
+                    fontsize=7,
+                    fontweight="bold",
+                    ha="center",
+                    va="center",
+                    zorder=13,
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white", ec=color, lw=0.6, alpha=0.9),
+                )
+                xlo, xhi = min(xlo, lp[0], s[0], e[0]), max(xhi, lp[0], s[0], e[0])
+                ylo, yhi = min(ylo, lp[1], s[1], e[1]), max(yhi, lp[1], s[1], e[1])
+            else:
+                xlo, xhi = min(xlo, s[0], e[0]), max(xhi, s[0], e[0])
+                ylo, yhi = min(ylo, s[1], e[1]), max(yhi, s[1], e[1])
 
     ax.set_xlim(xlo, xhi)
     ax.set_ylim(ylo, yhi)
