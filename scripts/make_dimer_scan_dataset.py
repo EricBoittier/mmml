@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a dimer-scan dataset with batched HF on GPU (gpu4pyscf).
+"""Build a dimer-scan dataset: GFN2-xTB (default) or HF on GPU (gpu4pyscf).
 
 WHY this exists. The current dimer data are MD snapshots of a liquid, so they
 are overwhelmingly *separated* pairs: DCM,DCM has a median r_com of 9.76 A and a
