@@ -30,12 +30,23 @@ def _npz(tmp_path, *, with_cgenff=True, n=4, natoms=6):
 
 def test_hybrid_mm_defaults_off_and_flags_match_the_md_side():
     from mmml.cli.make.make_training import parse_args
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
 
     assert parse_args(["--data", "x.npz"]).hybrid_mm is False
     a = parse_args(["--data", "x.npz", "--hybrid-mm"])
     assert a.hybrid_mm is True
-    # identical defaults to the MD Calculator Summary (shared add_handoff_cutoff_args)
-    assert (a.ml_switch_width, a.mm_switch_on, a.mm_switch_width) == (1.5, 8.0, 5.0)
+    # The point of this test is that training and MD share ONE default, so assert
+    # against the shared constant -- a literal here would just re-pin whatever
+    # number happened to be current and would go stale on every retune.
+    assert (a.ml_switch_width, a.mm_switch_on, a.mm_switch_width) == (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
 
 
 def test_config_builder_returns_none_when_off(tmp_path):
@@ -48,6 +59,11 @@ def test_config_builder_returns_none_when_off(tmp_path):
 
 def test_config_builder_loads_master_tables_and_switching(tmp_path):
     from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
 
     p = _npz(tmp_path)
     args = parse_args(["--data", str(p), "--hybrid-mm", "--quiet"])
@@ -56,9 +72,9 @@ def test_config_builder_loads_master_tables_and_switching(tmp_path):
     # tables come from the npz (they are (n_types,), so batching can't carry them)
     assert np.allclose(cfg["master_sigmas"], [3.6, 2.4])
     assert np.allclose(cfg["master_epsilons"], [0.078, 0.024])
-    assert cfg["mm_switch_on"] == 8.0
-    assert cfg["mm_switch_width"] == 5.0
-    assert cfg["ml_switch_width"] == 1.5
+    assert cfg["mm_switch_on"] == DEFAULT_MM_SWITCH_ON
+    assert cfg["mm_switch_width"] == DEFAULT_MM_SWITCH_WIDTH
+    assert cfg["ml_switch_width"] == DEFAULT_ML_SWITCH_WIDTH
     assert cfg["complementary_handoff"] is True
 
 

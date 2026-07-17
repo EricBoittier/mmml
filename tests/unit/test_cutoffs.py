@@ -28,9 +28,18 @@ def default_cp() -> CutoffParameters:
 
 
 def test_cutoff_defaults() -> None:
+    """Pins the shipped handoff. Deliberately fails if someone retunes it.
+
+    mm_switch_on moved 8.0 -> 6.0: measured over the 5785 real acodcm training
+    dimers, the ML adds only 0.0024 eV on top of MM beyond r_com 6.0 A (p90
+    0.0066) vs a ~0.05 eV fit error, so 6.0 is the knee and buys ~2.4x fewer
+    pairs. The prior 8.0 came from an NVE energy-conservation sweep
+    (workflows/dcm3_nve_cutoff_sweep) -- a stricter criterion -- so if NVE drift
+    regresses, look here first.
+    """
     cp = CutoffParameters()
     assert cp.ml_switch_width == 1.5
-    assert cp.mm_switch_on == 8.0
+    assert cp.mm_switch_on == 6.0
     assert cp.mm_switch_width == 5.0
     assert cp.complementary_handoff is True
 
