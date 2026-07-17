@@ -36,6 +36,7 @@ and make the splits -- that path is already proven; do not reimplement it here.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -82,7 +83,21 @@ def main() -> int:
     p.add_argument("--min-contact", type=float, default=1.1,
                    help="skip geometries closer than this (SCF stops converging; "
                         "and nothing physical needs them)")
-    p.add_argument("--basis", default="def2-SVP")
+    p.add_argument("--method", default="gfn2", choices=("gfn2", "hf"),
+                   help=(
+                       "gfn2 (default): GFN2-xTB via tblite. ~0.010 s/geom with OpenMP set, "
+                       "and it HAS D4 dispersion. hf: HF via gpu4pyscf, ~1.2 s/geom (120x "
+                       "slower) and NO dispersion at all -- for DCM, whose attraction is "
+                       "largely dispersion, HF barely binds, so an HF set teaches a "
+                       "qualitatively wrong PES. Neither is MP2: see the note at the end."
+                   ))
+    p.add_argument("--basis", default="def2-SVP", help="HF only")
+    p.add_argument("--omp-threads", type=int, default=8,
+                   help=(
+                       "OpenMP threads for tblite. NOT optional: left unset, tblite "
+                       "oversubscribes every core and runs 166x slower (1.666 vs 0.010 "
+                       "s/geom measured on 32 cores). Must be set before tblite is imported."
+                   ))
     p.add_argument("--include-monomers", action="store_true", default=True,
                    help="monomers carry the intramolecular energy the model must learn")
     p.add_argument("--out", default="dimer_scan_hf.npz")
@@ -91,6 +106,9 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true",
                    help="count geometries and time a real sample, then stop")
     args = p.parse_args()
+
+    # Must precede the tblite import: OpenMP reads it at load time.
+    os.environ.setdefault("OMP_NUM_THREADS", str(args.omp_threads))
 
     from mmml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM, HARTREE_TO_EV
 
@@ -135,22 +153,44 @@ def main() -> int:
           f"{(rs < args.r_dense_to).sum()}/{len(rs)} below {args.r_dense_to:g}")
 
     # --- time a real sample rather than guessing ---------------------------
-    from gpu4pyscf.scf import RHF
-    from pyscf import gto
+    if args.method == "hf":
+        from gpu4pyscf.scf import RHF
+        from pyscf import gto
 
-    def run_one(Z, R):
-        mol = gto.M(atom=[(int(z), tuple(float(x) for x in r)) for z, r in zip(Z, R)],
-                    basis=args.basis, verbose=0)
-        mf = RHF(mol).density_fit()
-        e = mf.kernel()
-        if not mf.converged:
-            return None
-        g = mf.nuc_grad_method().kernel()
-        d = mf.dip_moment(unit="Debye", verbose=0)
-        # Hartree -> eV, Hartree/Bohr -> eV/A, and force = -gradient
-        return (float(e) * HARTREE_TO_EV,
-                -np.asarray(g) * HARTREE_BOHR_TO_EV_ANGSTROM,
-                np.asarray(d, dtype=float))
+        def run_one(Z, R):
+            mol = gto.M(atom=[(int(z), tuple(float(x) for x in r)) for z, r in zip(Z, R)],
+                        basis=args.basis, verbose=0)
+            mf = RHF(mol).density_fit()
+            e = mf.kernel()
+            if not mf.converged:
+                return None
+            g = mf.nuc_grad_method().kernel()
+            d = mf.dip_moment(unit="Debye", verbose=0)
+            # Hartree -> eV, Hartree/Bohr -> eV/A, force = -gradient
+            return (float(e) * HARTREE_TO_EV,
+                    -np.asarray(g) * HARTREE_BOHR_TO_EV_ANGSTROM,
+                    np.asarray(d, dtype=float))
+    else:
+        from tblite.interface import Calculator
+
+        BOHR = 1.8897261254535  # Angstrom -> Bohr; tblite works in Bohr
+
+        def run_one(Z, R):
+            try:
+                c = Calculator("GFN2-xTB", np.asarray(Z), np.asarray(R) * BOHR)
+                c.set("verbosity", 0)
+                r = c.singlepoint()
+            except Exception:
+                return None  # non-convergence surfaces as an exception here
+            e = float(r.get("energy"))
+            g = np.asarray(r.get("gradient"))  # Hartree/Bohr
+            try:
+                d = np.asarray(r.get("dipole"), dtype=float) * 2.541746  # a.u. -> Debye
+            except Exception:
+                d = np.zeros(3)
+            return (e * HARTREE_TO_EV,
+                    -g * HARTREE_BOHR_TO_EV_ANGSTROM,
+                    d)
 
     sample = geoms[:: max(1, n_tot // 3)][:3]
     t0 = time.time()
@@ -158,7 +198,9 @@ def main() -> int:
         run_one(Z, R)
     per = (time.time() - t0) / max(len(sample), 1)
     print(f"timed {len(sample)} geometries: {per:.2f}s each (first includes JIT warmup)")
-    print(f"ESTIMATE: {n_tot} x {per:.2f}s = {n_tot * per / 3600:.2f} h at {args.basis}")
+    label = f"HF/{args.basis}" if args.method == "hf" else "GFN2-xTB"
+    print(f"ESTIMATE: {n_tot} x {per:.3f}s = {n_tot * per / 60:.1f} min at {label} "
+          f"(OMP_NUM_THREADS={os.environ.get('OMP_NUM_THREADS')})")
     if args.dry_run:
         print("\n--dry-run: stopping before the QM.")
         return 0
@@ -216,13 +258,20 @@ def main() -> int:
         out, R=R_out, Z=Z_out, N=N_out, E=E[keep].reshape(-1, 1), F=F[keep],
         D=D[keep], mol_id=M_out, res_name=np.array(names),
         _mmml_units=np.array(["energy=eV", "forces=eV/Angstrom", "coords=Angstrom",
-                              f"method=HF/{args.basis}"]),
+                              f"method={label}"]),
     )
-    print(f"-> {out}  ({keep.sum()} structures, HF/{args.basis}, eV & eV/A)")
+    print(f"-> {out}  ({keep.sum()} structures, {label}, eV & eV/A)")
     print("\nNext: scripts/prepare_ml_mm_dataset.py to attach CGenFF fields + split.")
-    print("NOTE: no counterpoise correction -- HF/def2-SVP overbinds by BSSE. The "
-          "model learns TOTAL energy, so this biases the well depth; add CP (or a "
-          "larger basis) before treating these depths as reference-quality.")
+    if args.method == "hf":
+        print("NOTE: HF has NO dispersion and this applies no counterpoise correction. "
+              "For DCM the attraction is largely dispersion, so these wells are "
+              "qualitatively wrong. Do not mix with the existing MP2 data.")
+    else:
+        print("NOTE: GFN2-xTB is semi-empirical. A model trained on this reproduces "
+              "GFN2, not MP2, so do NOT mix it with the existing MP2 data -- the two "
+              "are different potentials. It is the right tool for proving the pipeline "
+              "(dense coverage -> no spurious minima) cheaply; re-run at MP2 for a "
+              "production set.")
     return 0
 
 
