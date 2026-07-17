@@ -347,6 +347,23 @@ def hybrid_forward(
                     ml_switch_width=ml_switch_width,
                     complementary_handoff=complementary_handoff,
                 )
+            elif lr_solver == "ewald":
+                # Same full-box, no-exclusion contract as nvalchemiops_pme, but
+                # pure JAX (jit-native Ewald, ewald_native.py) -- no external
+                # PME library / no CUDA requirement. Useful wherever
+                # nvalchemiops isn't installed (e.g. CPU-only clusters).
+                e = KCAL_MOL_TO_EV * hybrid_ewald_coulomb_energy(
+                    x,
+                    m,
+                    q,
+                    box_length_A=float(pme_box_length),
+                    accuracy=float(pme_accuracy),
+                    real_space_cutoff_A=pme_real_space_cutoff,
+                    mm_switch_on=mm_switch_on,
+                    mm_switch_width=mm_switch_width,
+                    ml_switch_width=ml_switch_width,
+                    complementary_handoff=complementary_handoff,
+                )
             else:
                 eps = master_epsilons if include_lj else jnp.zeros_like(master_epsilons)
                 e = KCAL_MOL_TO_EV * cgenff_mm_energy(

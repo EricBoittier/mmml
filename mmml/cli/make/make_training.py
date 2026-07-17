@@ -255,13 +255,16 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         type=str,
         default="mic",
         dest="lr_solver",
-        choices=["mic", "nvalchemiops_pme"],
+        choices=["mic", "nvalchemiops_pme", "ewald"],
         help=(
             "Hybrid-MM long-range Coulomb for training (default: mic). "
             "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: full-box "
             "many-to-many PME on fixed CGenFF charges (no exclusions / no "
             "intra subtract; LJ omitted; requires --pme-box-length and "
-            "mmml[nvalchemiops-pme]). Matches fast MD periodic_external."
+            "mmml[nvalchemiops-pme]). ewald: same full-box/no-exclusion "
+            "contract as nvalchemiops_pme, pure JAX (no external PME library, "
+            "no CUDA requirement); requires --pme-box-length. Matches fast MD "
+            "periodic_external."
         ),
     )
     parser.add_argument(
@@ -271,8 +274,8 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         default=None,
         dest="pme_box_length",
         help=(
-            "Cubic box length (Å) for --lr-solver nvalchemiops_pme "
-            "(required for that solver)."
+            "Cubic box length (Å) for --lr-solver nvalchemiops_pme|ewald "
+            "(required for those solvers)."
         ),
     )
     parser.add_argument(
@@ -281,7 +284,7 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         type=float,
         default=1e-6,
         dest="pme_accuracy",
-        help="nvalchemiops PME accuracy target (default: 1e-6).",
+        help="nvalchemiops_pme/ewald PME accuracy target (default: 1e-6).",
     )
     parser.add_argument(
         "--mm-include-lj",
@@ -291,7 +294,7 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         dest="mm_include_lj",
         help=(
             "Include CGenFF LJ in hybrid E_MM (default: on for mic). "
-            "Forced off when --lr-solver nvalchemiops_pme."
+            "Forced off when --lr-solver nvalchemiops_pme or ewald."
         ),
     )
     parser.add_argument(
@@ -912,6 +915,14 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             accuracy=pme_accuracy,
             n_atoms=n_atoms_est,
         )
+    elif lr_solver == "ewald":
+        if pme_box_length is None or float(pme_box_length) <= 0.0:
+            raise ValueError("--lr-solver ewald requires --pme-box-length > 0")
+        include_lj = False
+        pme_box_length = float(pme_box_length)
+        # No external-package / cutoff-estimation step needed: ewald_hybrid_
+        # coulomb.py defaults real_space_cutoff_A to box_length/2 internally
+        # when left None, already validated at that setting.
     cfg = {
         "master_sigmas": sigmas,
         "master_epsilons": epsilons,
@@ -934,7 +945,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     if not getattr(args, "quiet", False):
         lj_txt = "LJ+Coulomb" if include_lj else "Coulomb-only"
         pme_txt = ""
-        if lr_solver == "nvalchemiops_pme":
+        if lr_solver in ("nvalchemiops_pme", "ewald"):
             pme_txt = (
                 f", pme_box_length={pme_box_length}, "
                 f"pme_accuracy={pme_accuracy}, "
