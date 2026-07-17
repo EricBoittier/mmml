@@ -1584,7 +1584,7 @@ def set_up_nhc_sim_routine(
         print_forces_summary(np.asarray(forces_jax), energy_eV=energy_initial, console=c)
         if args.ensemble == "nve":
             max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
-            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.0) or 0.0)
+            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.5) or 0.0)
             if fmax_gate > 0.0 and max_f_start > fmax_gate:
                 msg = (
                     f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "
@@ -1626,7 +1626,7 @@ def set_up_nhc_sim_routine(
                 pos0 = np.asarray(jax.device_get(state.position), dtype=float)
                 return 0, np.stack([pos0]), None
             max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
-            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.0) or 0.0)
+            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.5) or 0.0)
             if fmax_gate > 0.0 and max_f_start > fmax_gate:
                 msg = (
                     f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "

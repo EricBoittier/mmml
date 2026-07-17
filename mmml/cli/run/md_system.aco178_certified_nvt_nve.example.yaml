@@ -86,3 +86,5 @@ runs:
     calculator_pre_minimize: false
     jaxmd_minimize_steps: 500
     jaxmd_pbc_minimize_steps: 500
+    # Hybrid liquid post-FIRE |F| often ~1.0–1.1 eV/Å; default gate is 1.5.
+    nve_max_f_start_eVA: 1.5

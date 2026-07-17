@@ -510,7 +510,9 @@ options:
                         a gentler start than 300 K.
   --nve-max-f-start-eVA EV_PER_A
                         jaxmd: refuse to start NVE when post-FIRE max atomic |F|
-                        exceeds this value in eV/Å (default: 1.0; <=0 disables).
+                        exceeds this value in eV/Å (default: 1.5; <=0 disables).
+                        Hybrid liquid handoffs often land near ~1 eV/Å after
+                        FIRE.
   --heat-comp-damp, --no-heat-comp-damp
                         pycharmm: experimental COMP force copy before heat
                         (default: off).

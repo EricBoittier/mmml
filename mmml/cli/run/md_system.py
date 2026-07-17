@@ -522,11 +522,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--nve-max-f-start-eVA",
         type=float,
-        default=1.0,
+        default=1.5,
         metavar="EV_PER_A",
         help=(
             "jaxmd: refuse to start NVE when post-FIRE max atomic |F| exceeds "
-            "this value in eV/Å (default: 1.0; <=0 disables)."
+            "this value in eV/Å (default: 1.5; <=0 disables). "
+            "Hybrid liquid handoffs often land near ~1 eV/Å after FIRE."
         ),
     )
     parser.add_argument(

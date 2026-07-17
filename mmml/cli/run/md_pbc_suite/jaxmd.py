@@ -227,10 +227,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--nve-max-f-start-eVA",
         type=float,
-        default=1.0,
+        default=1.5,
         help=(
             "Refuse to start NVE when post-FIRE max atomic |F| exceeds this (eV/Å). "
-            "Default 1.0; use <=0 to disable."
+            "Default 1.5; use <=0 to disable."
         ),
     )
     p.add_argument("--nhc-chain-length", type=int, default=3)
@@ -1530,7 +1530,7 @@ def main(argv: list[str] | None = None) -> int:
             getattr(args, "nve_force_energy_rescue_fire_steps", 50)
         ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
-        nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.0)),
+        nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.5)),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
