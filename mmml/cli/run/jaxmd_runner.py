@@ -122,15 +122,50 @@ def nve_etot_drift_should_attempt_rescue(
 def nve_etot_drift_rescue_tricks(attempt_index: int) -> tuple[str, ...]:
     """Ordered repair tricks for one E_tot-drift rescue attempt (0-based).
 
-    Escalates from cheap NL/velocity fixes to CHARMM geometry + longer FIRE.
+    Escalates from cheap NL/velocity fixes to CHARMM geometry, FIRE, and
+    MD timestep backoff.  Grace widens the E_tot gate after every attempt.
     """
     i = int(attempt_index)
     if i <= 0:
-        return ("nl_rebuild", "rethermalize")
+        return ("nl_rebuild", "rethermalize", "grace")
     if i == 1:
-        return ("nl_rebuild", "fire", "rethermalize")
+        return ("nl_rebuild", "fire", "rethermalize", "dt_halve", "grace")
     # Attempt 2+: throw everything we have.
-    return ("charmm_rescue", "nl_rebuild", "fire", "rethermalize", "grace")
+    return (
+        "charmm_rescue",
+        "nl_rebuild",
+        "fire",
+        "rethermalize",
+        "dt_halve",
+        "grace",
+    )
+
+
+def nve_etot_drift_grace_threshold_eV(
+    *,
+    current_threshold_eV: float,
+    grace_eV: float,
+    attempt_1_based: int,
+) -> float:
+    """Progressive E_tot gate after rescue attempt ``attempt_1_based`` (1, 2, …)."""
+    g = float(grace_eV)
+    if g <= 0.0:
+        return float(current_threshold_eV)
+    # attempt 1 → g, 2 → 1.5 g, 3 → 2 g, …
+    widened = g * (1.0 + 0.5 * max(0, int(attempt_1_based) - 1))
+    return max(float(current_threshold_eV), float(widened))
+
+
+def nve_etot_drift_halved_dt_ps(
+    dt_ps: float,
+    *,
+    scale: float = 0.5,
+    min_dt_fs: float = 0.05,
+) -> float:
+    """Next MD timestep (ps) after a drift-rescue halve, floored at ``min_dt_fs``."""
+    dt_new = float(dt_ps) * float(scale)
+    min_ps = float(min_dt_fs) * 0.001
+    return max(dt_new, min_ps)
 
 
 def _nl_update_positions(positions):
@@ -952,23 +987,32 @@ def set_up_nhc_sim_routine(
         border_style="cyan",
     ))
 
-    @jit
-    def sim(state, neighbor=None, pressure=None):
-        """Step function: pass neighbor and pressure to apply_fn if available."""
+    def _bind_sim(apply_fn_local):
+        """(Re)build the jitted multi-step integrator bound to ``apply_fn_local``."""
 
-        def _cast_state(s):
-            return normalize_jaxmd_state(s)
+        @jit
+        def _sim(state, neighbor=None, pressure=None):
+            def _cast_state(s):
+                return normalize_jaxmd_state(s)
 
-        def step_nve(i, s):
-            if neighbor is not None:
-                return _cast_state(apply_fn(s, neighbor=neighbor))
-            return _cast_state(apply_fn(s))
+            def step_nve(i, s):
+                if neighbor is not None:
+                    return _cast_state(apply_fn_local(s, neighbor=neighbor))
+                return _cast_state(apply_fn_local(s))
 
-        def step_npt(i, s):
-            return _cast_state(apply_fn(s, neighbor=neighbor, pressure=pressure))
+            def step_npt(i, s):
+                return _cast_state(
+                    apply_fn_local(s, neighbor=neighbor, pressure=pressure)
+                )
 
-        step_fn = step_npt if (neighbor is not None and pressure is not None) else step_nve
-        return lax.fori_loop(0, steps_per_loop_call, step_fn, state)
+            step_fn = (
+                step_npt
+                if (neighbor is not None and pressure is not None)
+                else step_nve
+            )
+            return lax.fori_loop(0, steps_per_loop_call, step_fn, state)
+
+        return _sim
 
     # Select integrator based on ensemble
     if args.ensemble == "npt" and use_pbc:
@@ -1090,6 +1134,7 @@ def set_up_nhc_sim_routine(
     else:  # nve
         init_fn, apply_fn = simulate.nve(wrapped_force_fn, shift, dt)
     apply_fn = jit(apply_fn)
+    sim = _bind_sim(apply_fn)
 
     def run_sim(
         key,
@@ -2178,13 +2223,19 @@ def set_up_nhc_sim_routine(
         )
         e_tot_drift_rescue = bool(getattr(args, "nve_etot_drift_rescue", True))
         e_tot_drift_rescue_attempts = int(
-            getattr(args, "nve_etot_drift_rescue_attempts", 3) or 0
+            getattr(args, "nve_etot_drift_rescue_attempts", 5) or 0
         )
         e_tot_drift_rescue_fire_steps = int(
             getattr(args, "nve_etot_drift_rescue_fire_steps", 100) or 0
         )
         e_tot_drift_rescue_grace_eV = float(
-            getattr(args, "nve_etot_drift_rescue_grace_eV", 1.0) or 0.0
+            getattr(args, "nve_etot_drift_rescue_grace_eV", 2.5) or 0.0
+        )
+        e_tot_drift_rescue_dt_scale = float(
+            getattr(args, "nve_etot_drift_rescue_dt_scale", 0.5) or 0.5
+        )
+        e_tot_drift_rescue_min_dt_fs = float(
+            getattr(args, "nve_etot_drift_rescue_min_dt_fs", 0.05) or 0.05
         )
         e_tot_drift_rescue_count = 0
         e_tot_drift_threshold_eV = e_tot_drift_abort_eV
@@ -2589,6 +2640,53 @@ def set_up_nhc_sim_routine(
                             _pbc_state["pair_idx"] = pair_i
                             _pbc_state["pair_mask"] = pair_m
                             current_neighbors = (pair_i, pair_m)
+                        if (
+                            "dt_halve" in tricks
+                            and args.ensemble == "nve"
+                            and not is_npt
+                        ):
+                            nonlocal init_fn, apply_fn, sim, dt, dt_fs, steps_per_loop_call
+                            dt_old = float(dt)
+                            dt_new = nve_etot_drift_halved_dt_ps(
+                                dt_old,
+                                scale=e_tot_drift_rescue_dt_scale,
+                                min_dt_fs=e_tot_drift_rescue_min_dt_fs,
+                            )
+                            if dt_new < dt_old * 0.999:
+                                # Preserve physical time per recording block.
+                                ratio = dt_old / dt_new
+                                steps_per_recording = int(
+                                    max(
+                                        int(steps_per_loop_call),
+                                        round(int(steps_per_recording) * ratio),
+                                    )
+                                )
+                                # Keep loop call a divisor of the new recording stride.
+                                while (
+                                    steps_per_recording % int(steps_per_loop_call) != 0
+                                    and int(steps_per_loop_call) > 1
+                                ):
+                                    steps_per_loop_call = int(steps_per_loop_call) // 2
+                                dt = dt_new
+                                dt_fs = dt * 1000.0
+                                init_fn, apply_fn = simulate.nve(
+                                    wrapped_force_fn, shift, dt
+                                )
+                                apply_fn = jit(apply_fn)
+                                sim = _bind_sim(apply_fn)
+                                # Re-init momenta at new integrator with repaired geometry.
+                                state = _state_after_overlap_rescue(state.position)
+                                c.print(
+                                    f"[yellow]drift rescue: MD dt "
+                                    f"{dt_old * 1000:.4f} → {dt_fs:.4f} fs; "
+                                    f"steps/record → {steps_per_recording} "
+                                    f"(physical record stride unchanged)[/yellow]"
+                                )
+                            else:
+                                c.print(
+                                    f"[yellow]drift rescue: dt already at floor "
+                                    f"{dt_fs:.4f} fs[/yellow]"
+                                )
                         if not _rescued_state_energy_finite(state):
                             run_status = "error"
                             run_error = (
@@ -2601,10 +2699,11 @@ def set_up_nhc_sim_routine(
                                 border_style="red",
                             ))
                             break
-                        if "grace" in tricks and e_tot_drift_rescue_grace_eV > 0.0:
-                            e_tot_drift_threshold_eV = max(
-                                e_tot_drift_threshold_eV,
-                                float(e_tot_drift_rescue_grace_eV),
+                        if "grace" in tricks:
+                            e_tot_drift_threshold_eV = nve_etot_drift_grace_threshold_eV(
+                                current_threshold_eV=e_tot_drift_threshold_eV,
+                                grace_eV=e_tot_drift_rescue_grace_eV,
+                                attempt_1_based=e_tot_drift_rescue_count,
                             )
                             c.print(
                                 f"[yellow]drift rescue: widened E_tot gate to "
