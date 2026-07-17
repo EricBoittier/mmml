@@ -2188,8 +2188,6 @@ def set_up_nhc_sim_routine(
         )
         e_tot_drift_rescue_count = 0
         e_tot_drift_threshold_eV = e_tot_drift_abort_eV
-        last_good_state = None
-        last_good_neighbors = current_neighbors
         last_good_pos = None
 
         def _state_after_overlap_rescue(
@@ -2428,8 +2426,6 @@ def set_up_nhc_sim_routine(
                 ):
                     if e_tot_ref is None:
                         e_tot_ref = e_tot
-                        last_good_state = state
-                        last_good_neighbors = current_neighbors
                         last_good_pos = state.position
                     elif abs(e_tot - e_tot_ref) > e_tot_drift_threshold_eV:
                         drift = float(e_tot - e_tot_ref)
@@ -2616,8 +2612,6 @@ def set_up_nhc_sim_routine(
                             )
                         # Fresh microcanonical reference after geometry/velocity repair.
                         e_tot_ref = None
-                        last_good_state = state
-                        last_good_neighbors = current_neighbors
                         last_good_pos = state.position
                         c.print(
                             Panel(
@@ -2629,8 +2623,6 @@ def set_up_nhc_sim_routine(
                         )
                         continue
                     else:
-                        last_good_state = state
-                        last_good_neighbors = current_neighbors
                         last_good_pos = state.position
                 if i % 10 == 0:
                     elapsed_s = time.perf_counter() - jaxmd_loop_start

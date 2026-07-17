@@ -42,15 +42,20 @@ def test_md_system_exposes_and_forwards_skip_bfgs():
     A flag that parses but is not forwarded is worse than no flag: it looks
     honoured and silently is not.
     """
-    import inspect
+    from mmml.cli.run.md_system import build_command, parse_args
 
-    from mmml.cli.run import md_system
+    jax_args = parse_args(["--backend", "jaxmd", "--setup", "pbc_nve"])
+    backend, jax_cmd = build_command(jax_args)
+    assert backend == "jaxmd"
+    assert "--skip-bfgs" in jax_cmd
 
-    src = inspect.getsource(md_system)
-    assert '"--skip-bfgs"' in src, "md-system must expose --skip-bfgs"
-    assert '_append_boolean_optional_flag(cmd, "--skip-bfgs"' in src, (
-        "--skip-bfgs must be FORWARDED to the runner, not just parsed"
+    pycharmm_args = parse_args(
+        ["--backend", "pycharmm", "--setup", "pycharmm_full"]
     )
+    backend, pycharmm_cmd = build_command(pycharmm_args)
+    assert backend == "pycharmm"
+    assert "--skip-bfgs" not in pycharmm_cmd
+    assert "--no-skip-bfgs" not in pycharmm_cmd
 
 
 def test_skip_bfgs_overrides_bfgs_first_order():

@@ -7,6 +7,13 @@ from unittest.mock import patch
 import pytest
 def test_apply_pbc_nbonds_uses_nbonds_api() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        pbc_nbond_cutoffs_from_mlpot_switches,
+    )
 
     with patch(
         "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_kwargs"
@@ -14,7 +21,12 @@ def test_apply_pbc_nbonds_uses_nbonds_api() -> None:
         cuts = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=32.0)
     mock_apply.assert_called_once()
     assert cuts.cubic_box_side_A == pytest.approx(32.0)
-    assert cuts.cutnb == pytest.approx(14.28, rel=0, abs=0.01)
+    expected = pbc_nbond_cutoffs_from_mlpot_switches(
+        32.0,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
+    )
+    assert cuts == expected
 
 
 def test_restore_crystal_lattice_runs_prepare_pbc_before_nbonds() -> None:

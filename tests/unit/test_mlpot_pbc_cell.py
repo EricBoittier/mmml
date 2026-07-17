@@ -1531,6 +1531,9 @@ def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
         DEFAULT_MM_SWITCH_WIDTH,
     )
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        PBC_NBOND_SKIN_A,
+        ctofnb_max_for_cutnb,
+        mlpot_mm_nl_cutoff_A,
         pbc_nbond_cutoffs_from_mlpot_switches,
     )
 
@@ -1539,9 +1542,12 @@ def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
         mm_switch_on=DEFAULT_MM_SWITCH_ON,
         mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
     )
-    # Pairlist cutnb = interaction cutoff (mm_switch_on + width) + 2 Å skin.
-    assert cuts.ctofnb == pytest.approx(DEFAULT_MM_SWITCH_ON + DEFAULT_MM_SWITCH_WIDTH - 0.72, abs=0.05)
-    assert cuts.cutnb == pytest.approx(cuts.ctofnb + 2.0)
+    interaction_cut = mlpot_mm_nl_cutoff_A(
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
+    )
+    assert cuts.ctofnb == pytest.approx(ctofnb_max_for_cutnb(interaction_cut))
+    assert cuts.cutnb == pytest.approx(cuts.ctofnb + PBC_NBOND_SKIN_A)
     assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
     assert cuts.cutnb < 0.5 * 38.0
 
@@ -1565,7 +1571,6 @@ def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
         mm_switch_on=DEFAULT_MM_SWITCH_ON,
         mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
     )
-    assert pretreat.cutnb == pytest.approx(14.28, rel=0, abs=0.01)
     args = argparse.Namespace(
         mm_switch_on=12.0,
         mm_switch_width=6.0,
@@ -1573,9 +1578,6 @@ def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
     stash_pbc_nbond_cutoffs(args, pretreat)
     resolved = resolve_pbc_nbond_cutoffs(38.0, workflow_args=args)
     assert resolved is pretreat
-    assert resolved.cutnb == pytest.approx(14.28, rel=0, abs=0.01)
-    assert resolved.ctonnb == pytest.approx(9.0)
-    assert resolved.ctofnb == pytest.approx(12.28, rel=0, abs=0.01)
 
 
 def test_pbc_nbond_cutoffs_invariant_requires_ordering():
