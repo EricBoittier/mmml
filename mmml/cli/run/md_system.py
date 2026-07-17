@@ -531,6 +531,44 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--nve-etot-drift-abort-eV",
+        type=float,
+        default=0.5,
+        metavar="EV",
+        help="jaxmd: abort NVE when |E_tot| drift exceeds this (eV; <=0 disables).",
+    )
+    parser.add_argument(
+        "--nve-etot-drift-rescue",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "jaxmd: on NVE E_tot drift, rewind and try NL/FIRE/CHARMM/rethermalize "
+            "before aborting (default: on)."
+        ),
+    )
+    parser.add_argument(
+        "--nve-etot-drift-rescue-attempts",
+        type=int,
+        default=3,
+        help="jaxmd: max mid-run E_tot drift repair attempts (default: 3).",
+    )
+    parser.add_argument(
+        "--nve-etot-drift-rescue-fire-steps",
+        type=int,
+        default=100,
+        help="jaxmd: FIRE steps per E_tot drift rescue (default: 100).",
+    )
+    parser.add_argument(
+        "--nve-etot-drift-rescue-grace-eV",
+        type=float,
+        default=1.0,
+        metavar="EV",
+        help=(
+            "jaxmd: after full-escalation drift rescue, widen E_tot gate to at "
+            "least this value (default: 1.0)."
+        ),
+    )
+    parser.add_argument(
         "--heat-comp-damp",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -3124,6 +3162,30 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         ]
         _append_optional(
             cmd, "--nve-max-f-start-eVA", getattr(args, "nve_max_f_start_eVA", None)
+        )
+        _append_optional(
+            cmd,
+            "--nve-etot-drift-abort-eV",
+            getattr(args, "nve_etot_drift_abort_eV", None),
+        )
+        if getattr(args, "nve_etot_drift_rescue", True):
+            cmd.append("--nve-etot-drift-rescue")
+        else:
+            cmd.append("--no-nve-etot-drift-rescue")
+        _append_optional(
+            cmd,
+            "--nve-etot-drift-rescue-attempts",
+            getattr(args, "nve_etot_drift_rescue_attempts", None),
+        )
+        _append_optional(
+            cmd,
+            "--nve-etot-drift-rescue-fire-steps",
+            getattr(args, "nve_etot_drift_rescue_fire_steps", None),
+        )
+        _append_optional(
+            cmd,
+            "--nve-etot-drift-rescue-grace-eV",
+            getattr(args, "nve_etot_drift_rescue_grace_eV", None),
         )
         if jaxmd_free:
             cmd.append("--free-space")

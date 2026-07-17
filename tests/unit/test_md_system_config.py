@@ -142,6 +142,28 @@ def test_md_system_forwards_nve_start_force_gate_to_jaxmd() -> None:
     assert cmd[index + 1] == "1000.0"
 
 
+def test_md_system_forwards_nve_etot_drift_rescue_flags() -> None:
+    from mmml.cli.run.md_system import build_command, parse_args
+
+    args = parse_args(
+        [
+            "--backend",
+            "jaxmd",
+            "--setup",
+            "pbc_nve",
+            "--nve-etot-drift-rescue-attempts",
+            "5",
+            "--nve-etot-drift-rescue-fire-steps",
+            "150",
+        ]
+    )
+    backend, cmd = build_command(args)
+    assert backend == "jaxmd"
+    assert "--nve-etot-drift-rescue" in cmd
+    assert cmd[cmd.index("--nve-etot-drift-rescue-attempts") + 1] == "5"
+    assert cmd[cmd.index("--nve-etot-drift-rescue-fire-steps") + 1] == "150"
+
+
 def test_apply_mapping_hyphen_keys() -> None:
     from mmml.cli.run.md_system import parse_args
 

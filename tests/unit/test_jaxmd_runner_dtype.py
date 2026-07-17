@@ -105,12 +105,38 @@ def test_nve_force_energy_should_attempt_rescue():
     )
 
 
+def test_nve_etot_drift_rescue_helpers():
+    from mmml.cli.run.jaxmd_runner import (
+        nve_etot_drift_rescue_tricks,
+        nve_etot_drift_should_attempt_rescue,
+    )
+
+    assert nve_etot_drift_should_attempt_rescue(
+        rescue_enabled=True, attempts_used=0, max_attempts=3
+    )
+    assert nve_etot_drift_should_attempt_rescue(
+        rescue_enabled=True, attempts_used=2, max_attempts=3
+    )
+    assert not nve_etot_drift_should_attempt_rescue(
+        rescue_enabled=True, attempts_used=3, max_attempts=3
+    )
+    assert not nve_etot_drift_should_attempt_rescue(
+        rescue_enabled=False, attempts_used=0, max_attempts=3
+    )
+    assert nve_etot_drift_rescue_tricks(0) == ("nl_rebuild", "rethermalize")
+    assert "fire" in nve_etot_drift_rescue_tricks(1)
+    assert "charmm_rescue" in nve_etot_drift_rescue_tricks(2)
+    assert "grace" in nve_etot_drift_rescue_tricks(2)
+
+
 def test_jaxmd_suite_nve_preflight_cli_defaults():
     """NVE gates must be wired into jargs (not only suite argparse)."""
     from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
 
     src = Path(jaxmd_suite.__file__).read_text()
     assert "--nve-etot-drift-abort-eV" in src
+    assert "--nve-etot-drift-rescue" in src
+    assert "--nve-etot-drift-rescue-attempts" in src
     assert "--nve-max-f-start-eVA" in src
     assert "--nve-force-energy-relative-tolerance" in src
     assert "--nve-force-energy-ml-only-diagnose" in src
@@ -118,6 +144,7 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
     assert "--nve-force-energy-rescue-fire-steps" in src
     assert "nve_max_f_start_eVA=" in src
     assert "nve_etot_drift_abort_eV=" in src
+    assert "nve_etot_drift_rescue=" in src
     assert "nve_force_energy_ml_only_diagnose=" in src
     assert "nve_force_energy_rescue=" in src
     assert "nve_force_energy_rescue_fire_steps=" in src
@@ -136,3 +163,5 @@ def test_nve_requires_float64_message_in_runner():
     assert "nve_force_energy_ablation_verdict" in src
     assert "NVE preflight rescue" in src
     assert "force_rebuild=True" in src
+    assert "NVE E_tot drift → repair & restart" in src
+    assert "nve_etot_drift_rescue_tricks" in src

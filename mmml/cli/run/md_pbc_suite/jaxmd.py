@@ -225,6 +225,39 @@ def main(argv: list[str] | None = None) -> int:
         help="Abort NVE when total-energy drift exceeds this value (<=0 disables).",
     )
     p.add_argument(
+        "--nve-etot-drift-rescue",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "On NVE E_tot drift, rewind to last-good frame and try NL rebuild / "
+            "FIRE / CHARMM rescue / rethermalize before aborting (default: on)."
+        ),
+    )
+    p.add_argument(
+        "--nve-etot-drift-rescue-attempts",
+        type=int,
+        default=3,
+        help="Max mid-run E_tot drift repair attempts (default: 3).",
+    )
+    p.add_argument(
+        "--nve-etot-drift-rescue-fire-steps",
+        type=int,
+        default=100,
+        help=(
+            "jax-md FIRE steps per E_tot drift rescue (escalates to ≥200 on "
+            "later attempts; 0 skips FIRE; default: 100)."
+        ),
+    )
+    p.add_argument(
+        "--nve-etot-drift-rescue-grace-eV",
+        type=float,
+        default=1.0,
+        help=(
+            "After a full-escalation drift rescue, widen the E_tot abort gate to "
+            "at least this value (eV; default: 1.0; <=0 keeps original gate)."
+        ),
+    )
+    p.add_argument(
         "--nve-max-f-start-eVA",
         type=float,
         default=1.5,
@@ -1530,6 +1563,16 @@ def main(argv: list[str] | None = None) -> int:
             getattr(args, "nve_force_energy_rescue_fire_steps", 50)
         ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
+        nve_etot_drift_rescue=bool(getattr(args, "nve_etot_drift_rescue", True)),
+        nve_etot_drift_rescue_attempts=int(
+            getattr(args, "nve_etot_drift_rescue_attempts", 3)
+        ),
+        nve_etot_drift_rescue_fire_steps=int(
+            getattr(args, "nve_etot_drift_rescue_fire_steps", 100)
+        ),
+        nve_etot_drift_rescue_grace_eV=float(
+            getattr(args, "nve_etot_drift_rescue_grace_eV", 1.0)
+        ),
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.5)),
     )
     run_sim = set_up_nhc_sim_routine(
