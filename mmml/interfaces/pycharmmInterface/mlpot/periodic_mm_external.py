@@ -57,6 +57,18 @@ def compute_periodic_coulomb_kcalmol(
         )
         return float(result.energy_kcalmol), np.asarray(result.forces_kcalmol_A, dtype=np.float64)
 
+    if cfg.uses_ewald:
+        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+            compute_native_ewald_coulomb,
+        )
+
+        result = compute_native_ewald_coulomb(
+            pos,
+            chg,
+            box_length_A=float(box_side_A),
+        )
+        return float(result.energy_kcalmol), np.asarray(result.forces_kcalmol_A, dtype=np.float64)
+
     from mmml.interfaces.scafacosInterface.scafacos_session import compute_scafacos_coulomb
 
     result = compute_scafacos_coulomb(

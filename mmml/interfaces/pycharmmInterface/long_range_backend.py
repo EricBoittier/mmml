@@ -27,7 +27,7 @@ from typing import Iterator, Literal, Protocol
 
 import numpy as np
 
-LrSolverName = Literal["auto", "mic", "jax_pme", "nvalchemiops_pme", "scafacos"]
+LrSolverName = Literal["auto", "mic", "jax_pme", "nvalchemiops_pme", "ewald", "scafacos"]
 JaxPmeMethod = Literal["ewald", "pme", "p3m"]
 
 CHARMM_COULOMB_KCAL = 332.063711
@@ -330,10 +330,12 @@ def resolve_lr_solver(name: str | None = None) -> LrSolverName:
     raw = (name or os.environ.get("MMML_LR_SOLVER", "mic")).strip().lower()
     if raw in ("nvalchemiops", "nvalchemiops_pme", "nval_pme"):
         return "nvalchemiops_pme"
-    if raw in ("auto", "mic", "jax_pme", "nvalchemiops_pme", "scafacos"):
+    if raw in ("native_ewald", "jit_ewald"):
+        raw = "ewald"
+    if raw in ("auto", "mic", "jax_pme", "nvalchemiops_pme", "ewald", "scafacos"):
         return raw  # type: ignore[return-value]
     raise ValueError(
-        f"lr_solver must be auto|mic|jax_pme|nvalchemiops_pme|scafacos; got {name!r}"
+        f"lr_solver must be auto|mic|jax_pme|nvalchemiops_pme|ewald|scafacos; got {name!r}"
     )
 
 
@@ -1122,6 +1124,47 @@ def compute_nvalchemiops_pme_coulomb(
     return LongRangeInteractionResult(
         energy_kcalmol=float(energy),
         forces_kcalmol_A=np.asarray(forces, dtype=np.float64),
+    )
+
+
+def compute_native_ewald_coulomb(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    *,
+    box_length_A: float,
+    accuracy: float = 1e-6,
+    real_space_cutoff_A: float | None = None,
+) -> LongRangeInteractionResult:
+    """Full periodic Coulomb via the jit-native Ewald summation (ewald_native.py).
+
+    Pure JAX (no external PME library, no CUDA requirement) -- the same
+    operator ``lr_solver="ewald"`` trains against
+    (:func:`mmml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy`), so
+    train and MD stay consistent. Called eagerly from the CHARMM callback
+    (outside any jax.jit trace), so forces come from a plain ``jax.grad`` --
+    no pure_callback/custom_vjp bridging needed here.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+
+    pos = jnp.asarray(positions_A, dtype=jnp.float64)
+    chg = jnp.asarray(charges_e, dtype=jnp.float64)
+    mol_id = jnp.zeros(pos.shape[0], dtype=jnp.int32)  # all atoms real, none padded
+
+    def _e(p):
+        return hybrid_ewald_coulomb_energy(
+            p, mol_id, chg,
+            box_length_A=float(box_length_A),
+            accuracy=float(accuracy),
+            real_space_cutoff_A=real_space_cutoff_A,
+        )
+
+    energy, grad = jax.value_and_grad(_e)(pos)
+    return LongRangeInteractionResult(
+        energy_kcalmol=float(energy),
+        forces_kcalmol_A=np.asarray(-grad, dtype=np.float64),
     )
 
 

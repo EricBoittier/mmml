@@ -1365,12 +1365,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--lr-solver",
         type=str,
-        choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme"),
+        choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme", "ewald"),
         default=None,
         help=(
             "Long-range Coulomb backend. Default: truncated MIC in the switched-MM "
-            "pair loop. Opt in: jax_pme, scafacos, nvalchemiops_pme (periodic_external "
-            "for full-box Coulomb). Legacy alias: auto (= mic)."
+            "pair loop. Opt in: jax_pme, scafacos, nvalchemiops_pme, ewald "
+            "(periodic_external for full-box Coulomb; ewald is pure JAX, no "
+            "external PME library or CUDA requirement, and is the same operator "
+            "--lr-solver ewald trains against). Legacy alias: auto (= mic)."
         ),
     )
     parser.add_argument(

@@ -47,6 +47,10 @@ class PeriodicMmConfig:
     def uses_nvalchemiops_pme(self) -> bool:
         return self.lr_solver == "nvalchemiops_pme"
 
+    @property
+    def uses_ewald(self) -> bool:
+        return self.lr_solver == "ewald"
+
 
 def resolve_mm_nonbond_mode(args: Any | None) -> MmNonbondMode:
     raw = "jax_mic"
@@ -107,11 +111,11 @@ def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
     from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
     lr = pick_lr_solver(resolve_lr_solver_arg(args))
-    if lr not in ("scafacos", "jax_pme", "nvalchemiops_pme"):
+    if lr not in ("scafacos", "jax_pme", "nvalchemiops_pme", "ewald"):
         raise ValueError(
-            f"periodic_external requires jax_pme, nvalchemiops_pme, or ScaFaCoS "
-            f"(lr_solver resolved to {lr!r}; set --lr-solver jax_pme, "
-            "nvalchemiops_pme, or scafacos)"
+            f"periodic_external requires jax_pme, nvalchemiops_pme, ewald, or "
+            f"ScaFaCoS (lr_solver resolved to {lr!r}; set --lr-solver jax_pme, "
+            "nvalchemiops_pme, ewald, or scafacos)"
         )
     scafacos_method = str(
         getattr(args, "scafacos_method", None)
@@ -252,6 +256,8 @@ def periodic_mm_status_line(cfg: PeriodicMmConfig, *, box_side_A: float) -> str:
         coulomb = f"jax_pme ({cfg.jax_pme_method})"
     elif cfg.uses_nvalchemiops_pme:
         coulomb = "nvalchemiops_pme"
+    elif cfg.uses_ewald:
+        coulomb = "ewald (native)"
     elif cfg.uses_scafacos:
         coulomb = f"scafacos ({cfg.scafacos_method})"
     else:
