@@ -12,6 +12,7 @@ liquid-compatible). See
 | B `latent` | `q_MM = neutralize(q_ML)` | [`train_latent.yaml`](train_latent.yaml) | [`md_latent.yaml`](md_latent.yaml) |
 | C `fixed_plus_latent` | `q_CGenFF + neutralize(q_ML)` | [`train_fixed_plus_latent.yaml`](train_fixed_plus_latent.yaml) | [`md_fixed_plus_latent.yaml`](md_fixed_plus_latent.yaml) |
 | D `latent_mean` (liquid) | `q_MM = tile(mean(neutralize(q_ML)))` | same checkpoint as B | `--mm-charge-mode latent_mean --mm-latent-charge-template <path>` (see below) |
+| E `latent_dynamic` (liquid) | `q_MM = neutralize(weighted_mean_over_active_dimers(q_ML))` | same checkpoint as B | `--mm-charge-mode latent_dynamic` (no precompute) |
 
 ## Train
 
@@ -100,6 +101,26 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
 See [Mode D in `docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md#mode-d--latent_mean-md-only-liquid-compatible)
 for the v1 limitation (homogeneous liquids only) and what it is not (a live,
 geometry-dependent charge model).
+
+### Mode E: live latent-charge liquid MD (no precompute)
+
+`latent_dynamic` recomputes charges every step instead of freezing them:
+each monomer's charge is a live, `ml_switch_scale`-weighted average of
+`q_ML` over every currently active ML-dimer partner (no template to
+generate first). Trade-off: no training-set averaging to smooth out
+per-pair noise, and atoms with no active partner within `mm_switch_on` get
+charge 0 (only appropriate where every monomer reliably has neighbors —
+see [Mode E's v1 limitation](../../docs/hybrid-mm-charges.md#mode-e--latent_dynamic-md-only-liquid-compatible-live)):
+
+```bash
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 30 \
+  --mm-nonbond-mode periodic_external \
+  --lr-solver ewald \
+  --no-periodic-charmm-vdw \
+  --mm-charge-mode latent_dynamic \
+  --checkpoint /path/to/params.json
+```
 
 Edit `defaults.checkpoint` to your Mode A/B/C checkpoint. Train and MD modes
 must match (`hybrid_mm.json` sidecar records the training mode).

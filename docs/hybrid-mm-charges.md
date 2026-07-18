@@ -1,4 +1,4 @@
-# Hybrid MM charges: fixed, latent, fixed+latent, and latent_mean
+# Hybrid MM charges: fixed, latent, fixed+latent, latent_mean, latent_dynamic
 
 How per-atom charges enter **intermolecular `E_MM` Coulomb** in hybrid ML/MM
 training and deployment.  Implementation:
@@ -17,7 +17,7 @@ Related: [Hybrid potential regions](hybrid-potential-regions.md),
 
 | Axis | What it controls | Unrelated to |
 |------|------------------|--------------|
-| **MM charge Mode A/B/C/D** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
+| **MM charge Mode A/B/C/D/E** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
 | Energy assembly | `doML`, `doML_dimer`, `doMM` | Charge taxonomy |
 | Handoff / cutoffs | complementary vs legacy COM switches | Charge taxonomy |
 | `lr_solver` | MIC vs jax-pme long-range Coulomb | Charge taxonomy (B/C + PME refused) |
@@ -152,15 +152,55 @@ wired into `setup_calculator` in
 
 ---
 
-## Live liquid charges (still not implemented)
+## Mode E — `latent_dynamic` (MD-only, liquid-compatible, live)
 
-Mode D answers "L1" below with a *frozen* template. A live, geometry-
-dependent per-step liquid charge model is still open:
+```text
+q_MM = neutralize_per_monomer( weighted_mean_over_active_dimers(q_ML) )
+```
 
-| Option | Idea |
-|--------|------|
-| **L1** | Per-monomer `q_ML` (environment-free) + Mode B/C — Mode D implements this, but as an offline-averaged, frozen template rather than a live per-step forward |
-| **L2** | Aggregate charges from active ML dimer slots — closer to train, expensive and ambiguous |
-| **L3** | Train liquid-aware charge correction before deploying |
+Mode D freezes the charges offline. Mode E instead answers "L2" below live:
+every MD step, for each monomer, average the per-atom `q_ML` it gets from
+**every currently active** ML-dimer forward it participates in (a monomer in
+a liquid can have several neighbors inside `mm_switch_on` at once), weighted
+by `ml_switch_scale` of that pair's COM separation — the same smooth weight
+that already blends the pair's ML energy into the total, so a partner
+leaving the cutoff fades its charge influence exactly as smoothly as its
+energy contribution.
 
-Do not build L2/L3 inside an unrelated "pass charges into `mm_fn`" change.
+- **No precompute step** — unlike Mode D, there's no template to generate;
+  `--mm-charge-mode latent_dynamic` on its own is enough (same checkpoint as
+  Mode B, `charges=True`).
+- **Costs no extra model forwards** — the per-dimer `charges` output already
+  comes out of the sparse ML-dimer batch computed for the energy every step;
+  Mode E just stops discarding it. (Previously the code only ever read one
+  fixed dimer slot's charges, hardcoded for the `n_monomers==2` case — see
+  `calculate_ml_contributions` / `_aggregate_dynamic_latent_charges` in
+  `mmml_calculator.py`.)
+- **Aggregation core is pure and unit-tested**: the generic "weighted
+  scatter-average" reduction lives in
+  [`mmml/models/dynamic_latent_charges.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/dynamic_latent_charges.py)
+  (`weighted_scatter_average`), separate from the MD-calculator-specific
+  geometry/padding code that feeds it.
+- **v1 limitation — zero-weight atoms get charge 0, not an isolated-monomer
+  fallback.** An atom with no active dimer partner within the switch radius
+  (an isolated monomer, or a transient gap in a dilute region) gets `q_MM =
+  0` under this mode, since Mode E replaces CGenFF entirely. This is a real
+  gap for genuinely isolated molecules, not just a rounding detail — Mode E
+  is only appropriate for boxes where every monomer reliably has neighbors
+  inside `mm_switch_on`.
+- **It is a heuristic, not a trained quantity**: the model was trained on
+  isolated AB-dimer forwards, never on a weighted average of several. Treat
+  Mode E's charges as a physically-motivated approximation, not something
+  with the same guarantees as Mode B's in-distribution dimer charges.
+
+## Live liquid charges — what's left (L3)
+
+| Option | Idea | Status |
+|--------|------|--------|
+| **L1** | Per-monomer `q_ML` (environment-free) + Mode B/C | Implemented as Mode D — offline-averaged, frozen template |
+| **L2** | Aggregate charges from active ML dimer slots | Implemented as Mode E — live, per-step, `ml_switch_scale`-weighted average |
+| **L3** | Train liquid-aware charge correction before deploying | Not implemented — needs multi-neighbor liquid training data, not a plumbing change |
+
+L3 is the only remaining gap: a charge head that is actually a function of
+liquid-density context, rather than an offline/live aggregate of pairwise
+predictions never seen together during training.

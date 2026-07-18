@@ -251,7 +251,7 @@ usage: mmml md-system [-h]
                       [--periodic-charmm-vdw | --no-periodic-charmm-vdw]
                       [--charmm-zero-energy-terms TERMS]
                       [--include-mm | --no-include-mm]
-                      [--mm-charge-mode {fixed,latent,fixed_plus_latent,latent_mean}]
+                      [--mm-charge-mode {fixed,latent,fixed_plus_latent,latent_mean,latent_dynamic}]
                       [--mm-charge-correction]
                       [--mm-latent-charge-template MM_LATENT_CHARGE_TEMPLATE]
                       [--jax-mm-spoof] [--jax-mm-spoof-psf JAX_MM_SPOOF_PSF]
@@ -924,15 +924,18 @@ options:
                         hybrid calculator. --no-include-mm evaluates PhysNet ML
                         only (doMM=False); cutoff keys are ignored for MM pair
                         lists.
-  --mm-charge-mode, --mm_charge_mode {fixed,latent,fixed_plus_latent,latent_mean}
+  --mm-charge-mode, --mm_charge_mode {fixed,latent,fixed_plus_latent,latent_mean,latent_dynamic}
                         Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF,
                         default), latent (neutralize(q_ML)), fixed_plus_latent
-                        (q_CGenFF + neutralize(q_ML)), or latent_mean (a
+                        (q_CGenFF + neutralize(q_ML)), latent_mean (a
                         precomputed per-monomer latent charge template tiled
-                        across the box; see --mm-latent-charge-template). Modes
-                        latent / fixed_plus_latent require a charges=True
-                        checkpoint and are dimer-only; latent_mean works for any
-                        n_monomers (liquids) (see docs/hybrid-mm-charges.md).
+                        across the box; see --mm-latent-charge-template), or
+                        latent_dynamic (live, per-step weighted average of q_ML
+                        over every active ML-dimer partner -- no precompute
+                        needed). Modes latent / fixed_plus_latent require a
+                        charges=True checkpoint and are dimer-only;
+                        latent_mean/latent_dynamic work for any n_monomers
+                        (liquids) (see docs/hybrid-mm-charges.md).
   --mm-charge-correction, --mm_charge_correction
                         Alias for --mm-charge-mode fixed_plus_latent on the MD
                         calculator.
