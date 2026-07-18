@@ -912,6 +912,7 @@ def setup_calculator(
     from mmml.models.mm_charge_mode import (
         MMChargeMode,
         apply_mm_charge_mode,
+        mm_charge_mode_is_q0,
         mm_charge_mode_is_static_template,
         mm_charge_mode_needs_q_ml,
     )
@@ -976,13 +977,25 @@ def setup_calculator(
         )
     elif _needs_ml_mm_charges:
         _mode_labels = {
-            MMChargeMode.LATENT: "latent (neutralize(q_ML from AB); dimer-only)",
+            MMChargeMode.Q0: (
+                "q0 / Q⁰ (neutralize(q_ML from isolated monomers); "
+                "train+liquid)"
+            ),
+            MMChargeMode.LATENT: (
+                "latent / q1 / Q¹ (neutralize(q_ML from AB); dimer-only)"
+            ),
             MMChargeMode.FIXED_PLUS_LATENT: (
-                "fixed_plus_latent (q_CGenFF + neutralize(q_ML from AB); dimer-only)"
+                "fixed_plus_latent (q_CGenFF + neutralize(Q¹ from AB); dimer-only)"
+            ),
+            MMChargeMode.LATENT_DYNAMIC: (
+                "latent_dynamic (weighted mean of Q¹ over active dimers; liquid)"
             ),
         }
         setup_rows.append(
-            ("mm_charge_mode", _mode_labels[_mm_charge_mode])
+            (
+                "mm_charge_mode",
+                _mode_labels.get(_mm_charge_mode, _mm_charge_mode.value),
+            )
         )
 
     from mmml.utils.rich_report import (
@@ -1727,9 +1740,10 @@ def setup_calculator(
                 q_ml = outputs.get("q_ml_global")
                 if q_ml is None:
                     raise ValueError(
-                        f"mm_charge_mode={_mm_charge_mode.value} requires ML charges "
-                        "from the AB forward; enable doML/doML_dimer and a "
-                        "charges=True model."
+                        f"mm_charge_mode={_mm_charge_mode.value} requires ML "
+                        "charges (Q⁰ from monomer slots or Q¹ from AB/dimer "
+                        "slots); enable doML (and doML_dimer for q1/latent/"
+                        "latent_dynamic) and a charges=True model."
                     )
                 mm_charges = apply_mm_charge_mode(
                     _mm_charge_mode,
@@ -2283,7 +2297,27 @@ def setup_calculator(
                 n_mono_local + n_dimer_local, max_atoms, -1
             )[..., 0]
 
-            if _mm_charge_mode is MMChargeMode.LATENT_DYNAMIC:
+            if mm_charge_mode_is_q0(_mm_charge_mode):
+                # Q⁰: unperturbed charges from isolated monomer slots
+                # (batch layout [monomers…, dimers…]).  Same operator as
+                # hybrid_forward assemble_q0_from_monomer_forwards.
+                q_mono = q_flat[:n_mono_local]
+                if batches.get("_spatial_monomer_indices") is not None:
+                    mono_gids = batches["_spatial_monomer_indices"]
+                    mono_idx = monomer_idx_arr_jnp[mono_gids]
+                    mono_mask = monomer_atom_mask_jnp[mono_gids]
+                else:
+                    mono_idx = monomer_idx_arr_jnp
+                    mono_mask = monomer_atom_mask_jnp
+                # Monomers do not share atoms → weight-1 scatter-average == copy.
+                q_ml_global = weighted_scatter_average(
+                    q_mono,
+                    mono_idx,
+                    jnp.ones((q_mono.shape[0],), dtype=q_mono.dtype),
+                    mono_mask,
+                    total_atoms,
+                )
+            elif _mm_charge_mode is MMChargeMode.LATENT_DYNAMIC:
                 # Mode E: live weighted average of q_ML over every currently
                 # active dimer partner, instead of a single fixed AB slot.
                 q_ml_global = _aggregate_dynamic_latent_charges(

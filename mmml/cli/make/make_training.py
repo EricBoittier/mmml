@@ -209,11 +209,13 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         type=str,
         default=None,
         dest="mm_charge_mode",
-        choices=["fixed", "latent", "fixed_plus_latent"],
+        choices=["fixed", "q0", "latent", "q1", "fixed_plus_latent"],
         help=(
-            "Hybrid MM Coulomb charges: fixed (q_CGenFF, default), latent "
-            "(neutralize(q_ML)), or fixed_plus_latent (q_CGenFF + neutralize(q_ML)). "
-            "Modes latent / fixed_plus_latent require --charges and are dimer-only. "
+            "Hybrid MM Coulomb charges: fixed (q_CGenFF, default), q0 / Q⁰ "
+            "(neutralize unperturbed monomer q_ML; train+liquid), latent / q1 / Q¹ "
+            "(neutralize AB-perturbed q_ML; dimer-only), or fixed_plus_latent "
+            "(q_CGenFF + neutralize(Q¹)). Modes q0/latent/q1/fixed_plus_latent "
+            "require --charges. latent/q1/fixed_plus_latent are dimer-only. "
             "See docs/hybrid-mm-charges.md."
         ),
     )

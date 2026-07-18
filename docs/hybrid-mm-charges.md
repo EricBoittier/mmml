@@ -1,4 +1,4 @@
-# Hybrid MM charges: fixed, latent, fixed+latent, latent_mean, latent_dynamic
+# Hybrid MM charges: fixed, q0 (Q⁰), latent/q1 (Q¹), …
 
 How per-atom charges enter **intermolecular `E_MM` Coulomb** in hybrid ML/MM
 training and deployment.  Implementation:
@@ -11,13 +11,23 @@ Related: [Hybrid potential regions](hybrid-potential-regions.md),
 [`examples/hybrid_mm_charges/`](https://github.com/EricBoittier/mmml/tree/main/examples/hybrid_mm_charges)
 — see that folder’s `README.md` for the table and copy-paste commands.
 
+### Perturbative nomenclature (Q⁰ / Q¹)
+
+Hybrid ML energy already uses an E(AB)−E(A)−E(B) split (monomers ≈ E⁰,
+switched dimer interaction ≈ E¹).  MM charges follow the same language:
+
+| Symbol | CLI | `q_ML` source | Liquid MD |
+|--------|-----|---------------|-----------|
+| **Q⁰** | `q0` | Isolated monomer forwards | yes |
+| **Q¹** | `q1` / `latent` | AB dimer forward | no (dimer-only) |
+
 ---
 
 ## Do not confuse these axes
 
 | Axis | What it controls | Unrelated to |
 |------|------------------|--------------|
-| **MM charge Mode A/B/C/D/E** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
+| **MM charge mode** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
 | Energy assembly | `doML`, `doML_dimer`, `doMM` | Charge taxonomy |
 | Handoff / cutoffs | complementary vs legacy COM switches | Charge taxonomy |
 | `lr_solver` | MIC vs jax-pme long-range Coulomb | Charge taxonomy (B/C + PME refused) |
@@ -58,15 +68,35 @@ q_MM = q_CGenFF
 
 ---
 
-## Mode B — `latent` (dimer-only)
+## Q⁰ — `q0` (unperturbed monomers; train + liquid)
 
 ```text
-q_MM = neutralize_per_monomer(q_ML)
+q_MM = neutralize_per_monomer(Q⁰)
 ```
 
-Replace CGenFF in `E_MM`; do not add.
+Q⁰ is the charge head evaluated on **isolated** monomers (no partner in the
+ML graph) — the same A/B forwards already used for E⁰ in hybrid training.
 
-- **Train:** `--hybrid-mm --mm-charge-mode latent --charges`
+- **Train:** `--hybrid-mm --mm-charge-mode q0 --charges`
+  — assembles Q⁰ from `out_a` / `out_b` via
+  `assemble_q0_from_monomer_forwards`
+- **MD:** `--mm-charge-mode q0` — reads monomer slots in the PhysNet batch
+  (`[monomers…, dimers…]`), any `n_monomers`
+- **Train/MD parity:** same operator (unlike `latent_mean` / `latent_dynamic`)
+- Requires `doML` and `charges=True`; does **not** require `doML_dimer`
+- Recommended starting point for ACO liquid with a latent-capable checkpoint
+
+---
+
+## Mode B / Q¹ — `latent` / `q1` (dimer-only)
+
+```text
+q_MM = neutralize_per_monomer(Q¹)
+```
+
+Replace CGenFF in `E_MM`; do not add.  Q¹ is partner-perturbed (AB context).
+
+- **Train:** `--hybrid-mm --mm-charge-mode latent` (or `q1`) `--charges`
   — YAML: [`train_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_latent.yaml)
 - **MD:** `--mm-charge-mode latent` (dimer-only; same gates as Mode C)
   — YAML: [`md_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_latent.yaml)
@@ -197,8 +227,8 @@ energy contribution.
 
 | Option | Idea | Status |
 |--------|------|--------|
-| **L1** | Per-monomer `q_ML` (environment-free) + Mode B/C | Implemented as Mode D — offline-averaged, frozen template |
-| **L2** | Aggregate charges from active ML dimer slots | Implemented as Mode E — live, per-step, `ml_switch_scale`-weighted average |
+| **L1 / Q⁰** | Per-monomer unperturbed `q_ML` | **`q0`** — live train+MD (preferred). Mode D `latent_mean` = frozen offline mean of AB charges (not Q⁰). |
+| **L2 / multi-Q¹** | Aggregate charges from active ML dimer slots | Mode E `latent_dynamic` — live heuristic; not train-identical to Mode B |
 | **L3** | Train liquid-aware charge correction before deploying | Not implemented — needs multi-neighbor liquid training data, not a plumbing change |
 
 L3 is the only remaining gap: a charge head that is actually a function of

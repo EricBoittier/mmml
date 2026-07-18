@@ -6,58 +6,40 @@ These modes control **only** the per-atom ``q`` that enters intermolecular
 * ``--charges`` / the PhysNet charge head (may exist for dipoles even in Mode A)
 * ``include_electrostatics`` (Coulomb from ``q_ML`` **inside** ``E_ML``)
 
+Perturbative nomenclature
+-------------------------
+Hybrid ML energy already follows an E(AB)−E(A)−E(B) split (monomers = E⁰,
+switched dimer interaction ≈ E¹).  MM charges use the same language:
+
+* **Q⁰** (``q0``) — unperturbed monomer charges from *isolated* monomer
+  forwards (train: ``out_a``/``out_b``; MD: monomer slots in the PhysNet
+  batch).  Liquid-capable; train and MD share the same operator.
+* **Q¹** (``q1`` / ``latent``) — partner-perturbed charges from the AB dimer
+  forward.  Dimer-only (the AB context is undefined for N>2).
+
 Modes
 -----
 **fixed** (Mode A)
     ``q_MM = q_CGenFF``.  Default hybrid train and MD calculator.
 
-**latent** (Mode B)
-    ``q_MM = neutralize_per_monomer(q_ML)``.  Dimer-only (train + MD); liquids
-    deferred (no multi-neighbor ``q_ML`` context).
+**q0** (Q⁰; unperturbed monomers)
+    ``q_MM = neutralize_per_monomer(Q⁰)``.  Train + MD; any ``n_monomers``.
+
+**latent** / **q1** (Mode B / Q¹)
+    ``q_MM = neutralize_per_monomer(Q¹)`` with Q¹ from the AB dimer forward.
+    Dimer-only (train + MD).
 
 **fixed_plus_latent** (Mode C)
-    ``q_MM = q_CGenFF + neutralize_per_monomer(q_ML)``.
-    Train: ``--mm-charge-mode fixed_plus_latent`` or ``--mm-charge-correction``.
-    ``q_ML`` comes from the **AB dimer** forward.  MD v1 is dimer-only
-    (``n_monomers == 2``); liquid ``q_ML`` context is undefined.
+    ``q_MM = q_CGenFF + neutralize_per_monomer(Q¹)``.  AB-context Q¹.
+    Dimer-only.
 
 **latent_mean** (Mode D, MD-only)
-    ``q_MM = tile(mean_over_dataset(neutralize_per_monomer(q_ML)))``.  A fixed,
-    precomputed per-atom charge *template* -- one monomer's worth of latent
-    charges, averaged over many training-set dimer forwards offline (see
-    ``scripts/compute_latent_monomer_charges.py``) -- tiled across every
-    monomer in a homogeneous liquid box.  Unlike Modes B/C it needs **no**
-    live ``q_ML`` at MD time (no AB-dimer forward, no ``n_monomers == 2``
-    restriction), so it is the liquid-compatible answer to the L1/L2 question
-    below: it is Wallace & Boittier's L1 (monomer-context charges), computed
-    once and frozen.  Not selectable in training (``hybrid_forward`` /
-    ``apply_mm_charge_mode`` reject it) -- it is a static array the MD
-    calculator loads via ``mm_latent_charge_template`` and injects directly,
-    bypassing this module's per-step composition entirely.
+    Frozen offline mean of neutralize(q_ML) over training homo-dimers, tiled
+    across the box.  See ``scripts/compute_latent_monomer_charges.py``.
 
-**latent_dynamic** (Mode E, MD-only, liquid-compatible, live)
-    ``q_MM = neutralize_per_monomer( weighted_mean_over_active_dimers(q_ML) )``.
-    The live answer to the L2 question below: every MD step, for each
-    monomer, average the per-atom ``q_ML`` it gets from *every currently
-    active* ML-dimer forward it participates in (there can be several
-    neighbors within ``mm_switch_on``), weighted by that pair's
-    ``ml_switch_scale`` (the same smooth COM-distance weight that already
-    blends the pair's ML energy into the total -- so a partner leaving the
-    cutoff fades out its charge influence exactly as smoothly as its energy
-    contribution). Atoms with no currently-active partner (no neighbor
-    within the switch radius) get charge 0 -- a known v1 gap, not a
-    liquid-appropriate limit, since it discards that atom's electrostatics
-    rather than falling back to an isolated-monomer estimate.  Costs no
-    extra model forwards: the per-dimer charges already come out of the
-    sparse ML-dimer batch computed for the energy every step.  See
-    ``mmml/interfaces/pycharmmInterface/mmml_calculator.py``
-    (``calculate_ml_contributions``) for the aggregation.
-
-Liquid follow-up for training-consistent charges (still not implemented):
-L3, train a charge head on multi-neighbor liquid environments instead of
-isolated dimers, so ``q_ML`` is a genuine function of local density rather
-than a pairwise artifact aggregated post hoc. ``latent_mean``/``latent_dynamic``
-are both workarounds around live/frozen pairwise charges, not that.
+**latent_dynamic** (Mode E, MD-only)
+    Live weighted mean of Q¹ over active ML-dimer slots (L2).  Heuristic;
+    not train-identical to Mode B.
 """
 
 from __future__ import annotations
@@ -74,9 +56,11 @@ Array = jnp.ndarray
 __all__ = [
     "MMChargeMode",
     "apply_mm_charge_mode",
+    "assemble_q0_from_monomer_forwards",
     "hybrid_mm_metadata_dict",
     "mm_charge_mode_from_charge_correction",
     "mm_charge_mode_is_dynamic_liquid",
+    "mm_charge_mode_is_q0",
     "mm_charge_mode_is_static_template",
     "mm_charge_mode_needs_q_ml",
     "parse_mm_charge_mode",
@@ -89,7 +73,8 @@ class MMChargeMode(str, Enum):
     """How ``E_MM`` Coulomb gets its per-atom charges."""
 
     FIXED = "fixed"
-    LATENT = "latent"
+    Q0 = "q0"
+    LATENT = "latent"  # Q¹ (AB-perturbed); keep value for checkpoint compat
     FIXED_PLUS_LATENT = "fixed_plus_latent"
     LATENT_MEAN = "latent_mean"
     LATENT_DYNAMIC = "latent_dynamic"
@@ -102,11 +87,24 @@ def parse_mm_charge_mode(value: str | MMChargeMode | None) -> MMChargeMode:
     if isinstance(value, MMChargeMode):
         return value
     key = str(value).strip().lower().replace("-", "_").replace("+", "_plus_")
+    # Unicode / ASCII superscripts → plain digits for Q⁰ / Q¹ aliases.
+    key = key.replace("⁰", "0").replace("¹", "1").replace("q⁰", "q0").replace("q¹", "q1")
     aliases = {
         "fixed": MMChargeMode.FIXED,
         "a": MMChargeMode.FIXED,
         "mode_a": MMChargeMode.FIXED,
+        # Q⁰ — unperturbed monomer charges (train + liquid MD).
+        "q0": MMChargeMode.Q0,
+        "q_0": MMChargeMode.Q0,
+        "latent_q0": MMChargeMode.Q0,
+        "unperturbed": MMChargeMode.Q0,
+        "monomer": MMChargeMode.Q0,
+        "monomer_charges": MMChargeMode.Q0,
+        # Q¹ — AB-perturbed (Mode B); ``latent`` is the historical name.
         "latent": MMChargeMode.LATENT,
+        "q1": MMChargeMode.LATENT,
+        "q_1": MMChargeMode.LATENT,
+        "latent_q1": MMChargeMode.LATENT,
         "b": MMChargeMode.LATENT,
         "mode_b": MMChargeMode.LATENT,
         "fixed_plus_latent": MMChargeMode.FIXED_PLUS_LATENT,
@@ -128,7 +126,8 @@ def parse_mm_charge_mode(value: str | MMChargeMode | None) -> MMChargeMode:
     if key not in aliases:
         raise ValueError(
             f"Unknown mm_charge_mode={value!r}. "
-            f"Expected one of: {', '.join(m.value for m in MMChargeMode)}."
+            f"Expected one of: {', '.join(m.value for m in MMChargeMode)} "
+            "(aliases: q0/q1/latent/...)."
         )
     return aliases[key]
 
@@ -144,10 +143,16 @@ def mm_charge_mode_needs_q_ml(mode: str | MMChargeMode) -> bool:
     """True when the mode reads the ML charge head for ``E_MM`` Coulomb."""
     mode = parse_mm_charge_mode(mode)
     return mode in (
+        MMChargeMode.Q0,
         MMChargeMode.LATENT,
         MMChargeMode.FIXED_PLUS_LATENT,
         MMChargeMode.LATENT_DYNAMIC,
     )
+
+
+def mm_charge_mode_is_q0(mode: str | MMChargeMode) -> bool:
+    """True for Q⁰ — unperturbed monomer charges (train + liquid MD)."""
+    return parse_mm_charge_mode(mode) is MMChargeMode.Q0
 
 
 def mm_charge_mode_is_dynamic_liquid(mode: str | MMChargeMode) -> bool:
@@ -167,6 +172,26 @@ def mm_charge_mode_is_static_template(mode: str | MMChargeMode) -> bool:
     ``mmml.models.latent_charge_template``) and are injected once.
     """
     return parse_mm_charge_mode(mode) is MMChargeMode.LATENT_MEAN
+
+
+def assemble_q0_from_monomer_forwards(
+    q_a: Array,
+    q_b: Array,
+    mol_id: Array,
+    *,
+    batch_size: int,
+    n_atoms: int,
+) -> Array:
+    """Build Q⁰ on the padded dimer layout from isolated A/B charge heads.
+
+    Training evaluates ``out_a`` / ``out_b`` with monomer-restricted masks
+    (same forwards as E⁰).  Atoms with ``mol_id == 0`` take ``q_a``; ``== 1``
+    take ``q_b``; padding (``mol_id < 0``) is zero.
+    """
+    mid = jnp.asarray(mol_id).reshape(batch_size, n_atoms)
+    qa = jnp.asarray(q_a).reshape(batch_size, n_atoms)
+    qb = jnp.asarray(q_b).reshape(batch_size, n_atoms)
+    return jnp.where(mid == 0, qa, jnp.where(mid == 1, qb, jnp.zeros_like(qa)))
 
 
 def resolve_hybrid_mm_charge_mode(
@@ -212,12 +237,14 @@ def apply_mm_charge_mode(
     Parameters
     ----------
     mode
-        ``fixed``, ``latent``, or ``fixed_plus_latent``.
+        ``fixed``, ``q0``, ``latent``/``q1``, or ``fixed_plus_latent``.
     q_cgenff
         Fixed CGenFF / PSF charges, shape ``(..., n_atoms)``.
     q_ml
         Charge-head output (same shape as ``q_cgenff``).  Required for
-        ``latent`` and ``fixed_plus_latent``; ignored for ``fixed``.
+        ``q0`` / ``latent`` / ``fixed_plus_latent``; ignored for ``fixed``.
+        For ``q0`` this must already be assembled from isolated monomer
+        forwards (:func:`assemble_q0_from_monomer_forwards`).
     mol_id
         Per-atom monomer id (``< 0`` = padding), same trailing shape as charges.
     n_monomers
@@ -256,10 +283,13 @@ def apply_mm_charge_mode(
 
         dq_proj = jax.vmap(_project)(dq, mol_id)
 
-    if mode in (MMChargeMode.LATENT, MMChargeMode.LATENT_DYNAMIC):
-        # Both are "replace CGenFF with neutralize(q_ML)" -- they differ only
-        # in how q_ML was obtained upstream (live AB-dimer forward vs live
-        # weighted aggregation over active dimers), not in this projection.
+    if mode in (
+        MMChargeMode.Q0,
+        MMChargeMode.LATENT,
+        MMChargeMode.LATENT_DYNAMIC,
+    ):
+        # Replace CGenFF with neutralize(q_ML).  Modes differ only in how q_ML
+        # was obtained upstream (Q⁰ monomers / Q¹ AB / multi-dimer avg).
         return dq_proj
 
     # Mode C

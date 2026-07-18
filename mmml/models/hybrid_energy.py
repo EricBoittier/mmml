@@ -31,9 +31,9 @@ forces) silently breaks energy conservation in the handoff region.
 
 MM Coulomb charges follow the taxonomy in
 :mod:`mmml.models.mm_charge_mode` (and ``docs/hybrid-mm-charges.md``):
-**fixed** (Mode A, default), **latent** (Mode B), or **fixed_plus_latent**
-(Mode C).  ``include_electrostatics`` inside ``E_ML`` is a separate channel.
-Dimer-only for B/C; liquids deferred.
+**fixed**, **q0** (Q⁰ unperturbed monomers; train+liquid), **latent**/``q1``
+(Q¹ AB-perturbed; dimer-only), **fixed_plus_latent**.
+``include_electrostatics`` inside ``E_ML`` is a separate channel.
 """
 
 from __future__ import annotations
@@ -61,8 +61,9 @@ from mmml.models.short_range_wall import (
     inter_monomer_wall_energy,
 )
 from mmml.models.mm_charge_mode import (
-    MMChargeMode,
     apply_mm_charge_mode,
+    assemble_q0_from_monomer_forwards,
+    mm_charge_mode_is_q0,
     mm_charge_mode_needs_q_ml,
     parse_mm_charge_mode,
     require_charge_head_for_mode,
@@ -267,8 +268,9 @@ def hybrid_forward(
 
     ``mm_charge_mode`` selects MM Coulomb charges (see
     :mod:`mmml.models.mm_charge_mode`).  Legacy ``charge_correction=True`` is
-    Mode C.  Modes B/C require a model built with ``charges=True`` and use
-    AB-context ``q_ML`` (dimer-only).
+    Mode C.  ``q0`` (Q⁰) uses isolated A/B charge heads — same operator as
+    liquid MD monomer slots.  ``latent``/``q1`` (Q¹) and Mode C use AB-context
+    ``q_ML`` (dimer-only).
     """
     mode = resolve_hybrid_mm_charge_mode(
         mm_charge_mode=mm_charge_mode,
@@ -300,9 +302,22 @@ def hybrid_forward(
     n_atoms = batch["R"].shape[0] // int(batch_size)
     pos = batch["R"].reshape(batch_size, n_atoms, 3)
 
-    # MM electrostatics charges: Mode A / B / C (AB q_ML for B and C).
+    # MM electrostatics charges: Q⁰ from A/B monomers; Q¹ / Mode C from AB.
     q_ml = None
-    if mm_charge_mode_needs_q_ml(mode):
+    if mm_charge_mode_is_q0(mode):
+        q_a = out_a.get("charges")
+        q_b = out_b.get("charges")
+        require_charge_head_for_mode(
+            mode, has_charges=q_a is not None and q_b is not None
+        )
+        q_ml = assemble_q0_from_monomer_forwards(
+            q_a,
+            q_b,
+            batch["mol_id"],
+            batch_size=batch_size,
+            n_atoms=n_atoms,
+        )
+    elif mm_charge_mode_needs_q_ml(mode):
         q_ml = out_ab.get("charges")
         require_charge_head_for_mode(mode, has_charges=q_ml is not None)
         q_ml = jnp.asarray(q_ml).reshape(batch_size, n_atoms)

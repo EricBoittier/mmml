@@ -1443,18 +1443,23 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         dest="mm_charge_mode",
-        choices=["fixed", "latent", "fixed_plus_latent", "latent_mean", "latent_dynamic"],
+        choices=[
+            "fixed",
+            "q0",
+            "latent",
+            "q1",
+            "fixed_plus_latent",
+            "latent_mean",
+            "latent_dynamic",
+        ],
         help=(
             "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
-            "latent (neutralize(q_ML)), fixed_plus_latent "
-            "(q_CGenFF + neutralize(q_ML)), latent_mean (a precomputed "
-            "per-monomer latent charge template tiled across the box; see "
-            "--mm-latent-charge-template), or latent_dynamic (live, "
-            "per-step weighted average of q_ML over every active ML-dimer "
-            "partner -- no precompute needed). Modes latent / "
-            "fixed_plus_latent require a charges=True checkpoint and are "
-            "dimer-only; latent_mean/latent_dynamic work for any n_monomers "
-            "(liquids) (see docs/hybrid-mm-charges.md)."
+            "q0 / Q⁰ (neutralize unperturbed monomer q_ML; train+liquid), "
+            "latent / q1 / Q¹ (AB-perturbed q_ML; dimer-only), "
+            "fixed_plus_latent, latent_mean (frozen template; see "
+            "--mm-latent-charge-template), or latent_dynamic (live weighted "
+            "mean of Q¹ over active dimers). q0/latent_mean/latent_dynamic "
+            "work for any n_monomers; see docs/hybrid-mm-charges.md."
         ),
     )
     parser.add_argument(

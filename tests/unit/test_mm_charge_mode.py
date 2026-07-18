@@ -327,3 +327,67 @@ def test_latent_mean_bypasses_dimer_only_gate_for_liquids():
         doML=False,
         doML_dimer=False,
     )
+
+
+# --- Q⁰ (`q0`): unperturbed monomer charges (train + liquid) ----------------
+
+
+def test_parse_q0_and_q1_aliases():
+    from mmml.models.mm_charge_mode import mm_charge_mode_is_q0
+
+    for alias in ("q0", "q_0", "latent_q0", "unperturbed", "monomer"):
+        assert parse_mm_charge_mode(alias) is MMChargeMode.Q0
+        assert mm_charge_mode_is_q0(alias)
+    for alias in ("q1", "q_1", "latent_q1", "latent"):
+        assert parse_mm_charge_mode(alias) is MMChargeMode.LATENT
+    assert mm_charge_mode_needs_q_ml("q0")
+    assert not mm_charge_mode_is_q0("latent")
+
+
+def test_assemble_q0_from_monomer_forwards():
+    from mmml.models.mm_charge_mode import assemble_q0_from_monomer_forwards
+
+    # One padded dimer: A=[0.5,-0.5], B=[0.2,-0.2], pad zeros.
+    q_a = jnp.array([[0.5, -0.5, 9.0, 9.0]])  # B/pad slots ignored
+    q_b = jnp.array([[9.0, 9.0, 0.2, -0.2]])
+    mid = jnp.array([[0, 0, 1, 1]])
+    q0 = assemble_q0_from_monomer_forwards(q_a, q_b, mid, batch_size=1, n_atoms=4)
+    assert np.allclose(np.asarray(q0), [[0.5, -0.5, 0.2, -0.2]])
+
+
+def test_apply_mm_charge_mode_q0_matches_latent_projection():
+    q_c = jnp.array([0.1, -0.1, 0.2, -0.2])
+    dq = jnp.array([0.4, -0.1, 0.25, 0.05])
+    mid = jnp.array([0, 0, 1, 1])
+    expected = neutralize_per_monomer(dq, mid)
+    out = apply_mm_charge_mode("q0", q_c, dq, mid)
+    assert np.allclose(np.asarray(out), np.asarray(expected), atol=1e-12)
+
+
+def test_q0_liquid_gate_needs_doml_not_dimer():
+    assert_mm_charge_mode_dimer_supported(
+        MMChargeMode.Q0,
+        n_monomers=178,
+        has_charges=True,
+        lr_solver="ewald",
+        doML=True,
+        doML_dimer=False,
+    )
+    with pytest.raises(ValueError, match="doML"):
+        assert_mm_charge_mode_dimer_supported(
+            MMChargeMode.Q0,
+            n_monomers=178,
+            has_charges=True,
+            lr_solver="ewald",
+            doML=False,
+            doML_dimer=False,
+        )
+    with pytest.raises(ValueError, match="JAX-PME"):
+        assert_mm_charge_mode_dimer_supported(
+            MMChargeMode.Q0,
+            n_monomers=178,
+            has_charges=True,
+            lr_solver="jax_pme",
+            doML=True,
+            doML_dimer=False,
+        )

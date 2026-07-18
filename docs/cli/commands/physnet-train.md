@@ -23,7 +23,7 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--dipole-weight DIPOLE_WEIGHT]
                           [--charges-weight CHARGES_WEIGHT]
                           [--objective OBJECTIVE]
-                          [--mm-charge-mode {fixed,latent,fixed_plus_latent}]
+                          [--mm-charge-mode {fixed,q0,latent,q1,fixed_plus_latent}]
                           [--mm-charge-correction] [--hybrid-mm]
                           [--ml-switch-width ML_SWITCH_WIDTH]
                           [--mm-switch-on MM_SWITCH_ON]
@@ -97,12 +97,14 @@ options:
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --charges-weight, --charges_weight CHARGES_WEIGHT
   --objective OBJECTIVE
-  --mm-charge-mode, --mm_charge_mode {fixed,latent,fixed_plus_latent}
-                        Hybrid MM Coulomb charges: fixed (q_CGenFF, default),
-                        latent (neutralize(q_ML)), or fixed_plus_latent
-                        (q_CGenFF + neutralize(q_ML)). Modes latent /
-                        fixed_plus_latent require --charges and are dimer-only.
-                        See docs/hybrid-mm-charges.md.
+  --mm-charge-mode, --mm_charge_mode {fixed,q0,latent,q1,fixed_plus_latent}
+                        Hybrid MM Coulomb charges: fixed (q_CGenFF, default), q0
+                        / Q⁰ (neutralize unperturbed monomer q_ML;
+                        train+liquid), latent / q1 / Q¹ (neutralize AB-perturbed
+                        q_ML; dimer-only), or fixed_plus_latent (q_CGenFF +
+                        neutralize(Q¹)). Modes q0/latent/q1/fixed_plus_latent
+                        require --charges. latent/q1/fixed_plus_latent are
+                        dimer-only. See docs/hybrid-mm-charges.md.
   --mm-charge-correction, --mm_charge_correction
                         Alias for --mm-charge-mode fixed_plus_latent: use the
                         model's predicted charges as a CORRECTION to fixed
