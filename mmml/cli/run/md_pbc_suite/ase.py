@@ -996,6 +996,9 @@ def _factory_mmml(
     at_codes_override: np.ndarray | None = None,
     mbd_checkpoint: str | Path | None = None,
     mbd_weight: float = 1.0,
+    lr_solver: str | None = None,
+    mm_charge_mode: str | None = None,
+    mm_charge_correction: bool = False,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1045,6 +1048,9 @@ def _factory_mmml(
         electrostatics_damping_sigma=electrostatics_damping_sigma,
         mbd_checkpoint=mbd_checkpoint,
         mbd_weight=mbd_weight,
+        lr_solver=lr_solver,
+        mm_charge_mode=mm_charge_mode,
+        mm_charge_correction=mm_charge_correction,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(
@@ -1899,6 +1905,43 @@ def main(argv: list[str] | None = None) -> int:
         help="Require periodic cell in handoff for PBC continuation.",
     )
     parser.add_argument(
+        "--lr-solver",
+        "--lr_solver",
+        dest="lr_solver",
+        type=str,
+        default=None,
+        choices=("auto", "mic", "jax_pme", "nvalchemiops_pme", "ewald", "scafacos"),
+        help=(
+            "Long-range Coulomb backend (default: mic, the switched pair loop). "
+            "ewald: jit-native, pure JAX full-box Ewald over ALL atoms (no "
+            "exclusions, no switching, no LJ) -- the same operator "
+            "physnet-train --lr-solver ewald trains against."
+        ),
+    )
+    parser.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        dest="mm_charge_mode",
+        type=str,
+        default=None,
+        choices=("fixed", "latent", "fixed_plus_latent"),
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
+            "latent (neutralize(q_ML), no CGenFF charges at all), or "
+            "fixed_plus_latent (q_CGenFF + neutralize(q_ML)). latent/"
+            "fixed_plus_latent require a checkpoint trained with charges=True "
+            "and the matching --mm-charge-mode at train time."
+        ),
+    )
+    parser.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        dest="mm_charge_correction",
+        action="store_true",
+        default=False,
+        help="Alias for --mm-charge-mode fixed_plus_latent.",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Reduce console output.",
@@ -2199,6 +2242,9 @@ def main(argv: list[str] | None = None) -> int:
             electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
             mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
             mbd_weight=getattr(args, "mbd_weight", 1.0),
+            lr_solver=getattr(args, "lr_solver", None),
+            mm_charge_mode=getattr(args, "mm_charge_mode", None),
+            mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
         )
         atoms.calc = calc
         _save_cutoff_plot(

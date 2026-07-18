@@ -105,6 +105,50 @@ def test_build_command_jaxmd_forwards_default_cutoffs_from_namespace() -> None:
     assert "--handoff-pre-minimize" not in argv
 
 
+def test_build_command_jaxmd_forwards_lr_solver_and_mm_charge_mode() -> None:
+    """Regression: these were silently dropped for jaxmd/ase (only pycharmm
+    got --lr-solver; --mm-charge-mode was forwarded nowhere at all), so a
+    YAML defaults: {lr_solver: ewald, mm_charge_mode: latent} campaign job
+    silently ran with mic + fixed CGenFF charges instead."""
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(lr_solver="ewald", mm_charge_mode="latent", mm_charge_correction=False)
+    )
+    assert backend == "jaxmd"
+    assert "--lr-solver" in argv
+    assert argv[argv.index("--lr-solver") + 1] == "ewald"
+    assert "--mm-charge-mode" in argv
+    assert argv[argv.index("--mm-charge-mode") + 1] == "latent"
+    assert "--mm-charge-correction" not in argv
+
+    backend, argv = build_command(_jaxmd_args(mm_charge_correction=True))
+    assert "--mm-charge-correction" in argv
+
+
+def test_jaxmd_and_ase_suites_accept_lr_solver_and_mm_charge_mode_flags() -> None:
+    """The actual downstream parsers (md_pbc_suite/{jaxmd,ase}.py) must
+    recognize these flags -- build_command forwarding them is necessary but
+    not sufficient if the consuming argparse doesn't define them too."""
+    from mmml.cli.run.md_pbc_suite import ase as ase_suite
+    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+
+    common_argv = [
+        "--lr-solver", "ewald",
+        "--mm-charge-mode", "latent",
+        "--composition", "ACO:2",
+        "--checkpoint", "/tmp/definitely-not-a-real-checkpoint",
+        "--output-dir", "/tmp/out",
+    ]
+    for suite in (jaxmd_suite, ase_suite):
+        with pytest.raises(SystemExit) as exc:
+            suite.main(common_argv)
+        # argparse rejection raises SystemExit(2) with a stderr usage dump;
+        # getting *past* parsing means the failure is the (expected) missing
+        # checkpoint, not "unrecognized arguments".
+        assert "not found" in str(exc.value) or "Checkpoint" in str(exc.value)
+
+
 def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
     from pathlib import Path
 

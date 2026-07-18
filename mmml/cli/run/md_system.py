@@ -3256,13 +3256,20 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
             else:
                 raise ValueError(f"Unsupported setup: {args.setup}")
 
-    # lr_solver applies to both jaxmd and ase backends: run_sim.py's own
-    # setup_calculator() call already accepts it (jax_pme works here today;
-    # ewald was added to build_mm_energy_forces_fn's static path so a
-    # checkpoint trained with lr_solver=ewald deploys consistently without
-    # needing --mm-nonbond-mode periodic_external, which only exists for the
+    # lr_solver / mm_charge_mode apply to both jaxmd and ase backends: their
+    # own md_pbc_suite/{jaxmd,ase}.py setup_calculator() calls accept both
+    # (jax_pme and ewald work here today; ewald was added to
+    # build_mm_energy_forces_fn's static path so a checkpoint trained with
+    # lr_solver=ewald deploys consistently without needing
+    # --mm-nonbond-mode periodic_external, which only exists for the
     # pycharmm-callback backend and never fires in this in-process loop).
+    # NOTE: mm_charge_mode/mm_charge_correction are NOT yet forwarded for the
+    # pycharmm backend (build_pycharmm_command) -- that path uses a different
+    # calculator-setup mechanism (hybrid_mlpot.py) not audited here.
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
+    _append_optional(cmd, "--mm-charge-mode", getattr(args, "mm_charge_mode", None))
+    if bool(getattr(args, "mm_charge_correction", False)):
+        cmd.append("--mm-charge-correction")
 
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])

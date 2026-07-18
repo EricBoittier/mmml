@@ -696,6 +696,30 @@ def main(argv: list[str] | None = None) -> int:
         help="Require periodic cell in handoff for PBC runs.",
     )
     p.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        dest="mm_charge_mode",
+        type=str,
+        default=None,
+        choices=("fixed", "latent", "fixed_plus_latent"),
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
+            "latent (neutralize(q_ML), no CGenFF charges at all -- fluctuating, "
+            "geometry-dependent MM charges predicted by the model), or "
+            "fixed_plus_latent (q_CGenFF + neutralize(q_ML)). latent/"
+            "fixed_plus_latent require a checkpoint trained with charges=True "
+            "and the matching --mm-charge-mode at train time."
+        ),
+    )
+    p.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        dest="mm_charge_correction",
+        action="store_true",
+        default=False,
+        help="Alias for --mm-charge-mode fixed_plus_latent.",
+    )
+    p.add_argument(
         "--lr-solver",
         "--lr_solver",
         dest="lr_solver",
@@ -980,6 +1004,8 @@ def main(argv: list[str] | None = None) -> int:
         mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
         mbd_weight=getattr(args, "mbd_weight", 1.0),
         lr_solver=getattr(args, "lr_solver", None),
+        mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
     )
     cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
     calc_result = factory(
