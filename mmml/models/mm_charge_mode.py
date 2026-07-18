@@ -35,10 +35,29 @@ Modes
     calculator loads via ``mm_latent_charge_template`` and injects directly,
     bypassing this module's per-step composition entirely.
 
-Liquid follow-up for *live*, geometry-dependent latent charges (still not
-implemented): L2 aggregate active-dimer charges, or L3 liquid-aware training
-before ``md-system`` deployment. ``latent_mean`` sidesteps this by freezing
-the charges instead of recomputing them per step.
+**latent_dynamic** (Mode E, MD-only, liquid-compatible, live)
+    ``q_MM = neutralize_per_monomer( weighted_mean_over_active_dimers(q_ML) )``.
+    The live answer to the L2 question below: every MD step, for each
+    monomer, average the per-atom ``q_ML`` it gets from *every currently
+    active* ML-dimer forward it participates in (there can be several
+    neighbors within ``mm_switch_on``), weighted by that pair's
+    ``ml_switch_scale`` (the same smooth COM-distance weight that already
+    blends the pair's ML energy into the total -- so a partner leaving the
+    cutoff fades out its charge influence exactly as smoothly as its energy
+    contribution). Atoms with no currently-active partner (no neighbor
+    within the switch radius) get charge 0 -- a known v1 gap, not a
+    liquid-appropriate limit, since it discards that atom's electrostatics
+    rather than falling back to an isolated-monomer estimate.  Costs no
+    extra model forwards: the per-dimer charges already come out of the
+    sparse ML-dimer batch computed for the energy every step.  See
+    ``mmml/interfaces/pycharmmInterface/mmml_calculator.py``
+    (``calculate_ml_contributions``) for the aggregation.
+
+Liquid follow-up for training-consistent charges (still not implemented):
+L3, train a charge head on multi-neighbor liquid environments instead of
+isolated dimers, so ``q_ML`` is a genuine function of local density rather
+than a pairwise artifact aggregated post hoc. ``latent_mean``/``latent_dynamic``
+are both workarounds around live/frozen pairwise charges, not that.
 """
 
 from __future__ import annotations
@@ -57,6 +76,7 @@ __all__ = [
     "apply_mm_charge_mode",
     "hybrid_mm_metadata_dict",
     "mm_charge_mode_from_charge_correction",
+    "mm_charge_mode_is_dynamic_liquid",
     "mm_charge_mode_is_static_template",
     "mm_charge_mode_needs_q_ml",
     "parse_mm_charge_mode",
@@ -72,6 +92,7 @@ class MMChargeMode(str, Enum):
     LATENT = "latent"
     FIXED_PLUS_LATENT = "fixed_plus_latent"
     LATENT_MEAN = "latent_mean"
+    LATENT_DYNAMIC = "latent_dynamic"
 
 
 def parse_mm_charge_mode(value: str | MMChargeMode | None) -> MMChargeMode:
@@ -98,6 +119,11 @@ def parse_mm_charge_mode(value: str | MMChargeMode | None) -> MMChargeMode:
         "latent-mean": MMChargeMode.LATENT_MEAN,
         "d": MMChargeMode.LATENT_MEAN,
         "mode_d": MMChargeMode.LATENT_MEAN,
+        "latent_dynamic": MMChargeMode.LATENT_DYNAMIC,
+        "latent-dynamic": MMChargeMode.LATENT_DYNAMIC,
+        "dynamic": MMChargeMode.LATENT_DYNAMIC,
+        "e": MMChargeMode.LATENT_DYNAMIC,
+        "mode_e": MMChargeMode.LATENT_DYNAMIC,
     }
     if key not in aliases:
         raise ValueError(
@@ -117,7 +143,20 @@ def mm_charge_mode_from_charge_correction(charge_correction: bool) -> MMChargeMo
 def mm_charge_mode_needs_q_ml(mode: str | MMChargeMode) -> bool:
     """True when the mode reads the ML charge head for ``E_MM`` Coulomb."""
     mode = parse_mm_charge_mode(mode)
-    return mode in (MMChargeMode.LATENT, MMChargeMode.FIXED_PLUS_LATENT)
+    return mode in (
+        MMChargeMode.LATENT,
+        MMChargeMode.FIXED_PLUS_LATENT,
+        MMChargeMode.LATENT_DYNAMIC,
+    )
+
+
+def mm_charge_mode_is_dynamic_liquid(mode: str | MMChargeMode) -> bool:
+    """True for ``latent_dynamic`` -- live, per-step aggregation over active
+    ML-dimer partners (see ``mmml_calculator.calculate_ml_contributions``),
+    as opposed to ``latent``/``fixed_plus_latent``'s single AB-dimer forward
+    (dimer-only) or ``latent_mean``'s frozen offline template.
+    """
+    return parse_mm_charge_mode(mode) is MMChargeMode.LATENT_DYNAMIC
 
 
 def mm_charge_mode_is_static_template(mode: str | MMChargeMode) -> bool:
@@ -217,7 +256,10 @@ def apply_mm_charge_mode(
 
         dq_proj = jax.vmap(_project)(dq, mol_id)
 
-    if mode is MMChargeMode.LATENT:
+    if mode in (MMChargeMode.LATENT, MMChargeMode.LATENT_DYNAMIC):
+        # Both are "replace CGenFF with neutralize(q_ML)" -- they differ only
+        # in how q_ML was obtained upstream (live AB-dimer forward vs live
+        # weighted aggregation over active dimers), not in this projection.
         return dq_proj
 
     # Mode C

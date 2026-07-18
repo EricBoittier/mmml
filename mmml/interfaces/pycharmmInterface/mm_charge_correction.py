@@ -64,7 +64,11 @@ def assert_mm_charge_mode_dimer_supported(
         # restrictions below apply. It is the liquid-compatible mode.
         return
     require_charge_head_for_mode(mode, has_charges=has_charges)
-    if int(n_monomers) != 2:
+    if mode is not MMChargeMode.LATENT_DYNAMIC and int(n_monomers) != 2:
+        # latent_dynamic aggregates q_ML live over every currently-active
+        # ML-dimer partner (weighted by ml_switch_scale), not a single AB
+        # dimer -- it's designed for n_monomers > 2 and needs no dimer-count
+        # restriction. latent/fixed_plus_latent still are (single AB slot).
         raise ValueError(
             f"mm_charge_mode={mode.value} MD support is dimer-only "
             f"(n_monomers==2); got n_monomers={n_monomers}. Liquid q_ML context "

@@ -237,6 +237,7 @@ else:
     ev2kcalmol = 23.060548867
 kcalmol2ev = 1.0 / ev2kcalmol
 
+from mmml.models.dynamic_latent_charges import weighted_scatter_average
 from mmml.models.short_range_wall import pair_wall_energy
 
 
@@ -428,13 +429,17 @@ def setup_calculator(
             ``q_MM = q_CGenFF + neutralize(q_ML)`` with ``q_ML`` from the AB
             dimer forward.  Dimer-only in v1; see ``docs/hybrid-mm-charges.md``.
         mm_charge_mode: Explicit mode string
-            (``fixed`` / ``latent`` / ``fixed_plus_latent`` / ``latent_mean``).
-            Overrides the bool when set.  Modes B/C are dimer-only.
-            ``latent_mean`` (Mode D) is the liquid-compatible mode: it tiles a
-            precomputed per-monomer charge template (see
-            ``mm_latent_charge_template`` and
-            ``scripts/compute_latent_monomer_charges.py``) across every
-            monomer, so it works for any ``n_monomers`` and any ``lr_solver``.
+            (``fixed`` / ``latent`` / ``fixed_plus_latent`` / ``latent_mean`` /
+            ``latent_dynamic``). Overrides the bool when set. Modes B/C are
+            dimer-only. ``latent_mean`` (Mode D) and ``latent_dynamic``
+            (Mode E) are the liquid-compatible modes (any ``n_monomers``, any
+            ``lr_solver``): D tiles a precomputed, frozen per-monomer charge
+            template (see ``mm_latent_charge_template`` and
+            ``scripts/compute_latent_monomer_charges.py``); E instead
+            recomputes ``q_ML`` live every step as a weighted average over
+            every currently-active ML-dimer partner (same weight that
+            blends that pair's ML energy) -- no precompute step, but no
+            training-set averaging to smooth out per-pair noise either.
         mm_latent_charge_template: Path to a ``.npz`` template written by
             ``scripts/compute_latent_monomer_charges.py``.  Required when
             ``mm_charge_mode="latent_mean"``.  All monomers in the box must
@@ -2162,6 +2167,77 @@ def setup_calculator(
 
         return apply_model, batches
 
+    def _aggregate_dynamic_latent_charges(
+        *,
+        positions: Array,
+        q_dimer_local: Array,
+        active_ids: Array,
+        n_dimers_dense: int,
+        mic_pbc_cell: Optional[Array],
+        cutoff_params: CutoffParameters,
+    ) -> Array:
+        """Mode E (``latent_dynamic``): weighted average of ``q_ML`` over every
+        currently active ML-dimer partner, scattered onto global atoms.
+
+        For each active dimer slot ``k`` (dense id ``active_ids[k]``), the
+        AB-dimer forward already gives ``q_dimer_local[k]`` -- per-atom charges
+        for BOTH monomers of that pair, padded to ``max_atoms`` and covering
+        global atom indices ``dimer_idx_arr_jnp[active_ids[k]]``.  A monomer
+        with several active partners gets several independent estimates of its
+        own atoms' charges (one per pairwise context); this weights each by
+        ``ml_switch_scale`` of that pair's COM separation -- the SAME smooth
+        weight that already blends the pair's ML energy into the total, so a
+        partner leaving the switch radius fades its charge influence exactly
+        as smoothly as its energy contribution -- and averages.
+
+        Atoms with zero total weight (no active partner within the switch
+        radius -- an isolated monomer, or a transient gap in a dilute region)
+        get charge 0: a known v1 limitation, not a liquid-appropriate limit,
+        since Mode E replaces CGenFF entirely rather than falling back to an
+        isolated-monomer estimate for those atoms.
+        """
+        idx = jnp.asarray(active_ids, dtype=jnp.int32)
+        in_range = idx < n_dimers_dense
+        idx_safe = jnp.where(in_range, idx, 0)
+
+        na_arr = dimer_n_atoms_a_jnp[idx_safe]
+        nb_arr = dimer_n_atoms_b_jnp[idx_safe]
+        global_idx = dimer_idx_arr_jnp[idx_safe]  # (n_active, max_atoms) int32
+        atom_mask = dimer_atom_mask_jnp[idx_safe] & in_range[:, None]  # (n_active, max_atoms) bool
+        dimer_pos = positions[global_idx]  # (n_active, max_atoms, 3)
+
+        cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
+        mic_fn = (
+            (mic_displacement_smooth if use_smooth_mic else mic_displacement)
+            if cell_for_mic is not None
+            else None
+        )
+
+        def _com_sep(pos_di, na, nb):
+            max_n = pos_di.shape[0]
+            i = jnp.arange(max_n, dtype=jnp.int32)
+            mask_a = (i < na).astype(pos_di.dtype)
+            mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+            n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+            n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+            com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+            com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
+            if mic_fn is not None:
+                return jnp.linalg.norm(mic_fn(com_a, com_b, cell_for_mic))
+            return jnp.linalg.norm(com_b - com_a)
+
+        com_seps = jax.vmap(_com_sep, in_axes=(0, 0, 0))(dimer_pos, na_arr, nb_arr)
+        weights = ml_switch_scale(
+            com_seps,
+            mm_switch_on=cutoff_params.mm_switch_on,
+            ml_switch_width=cutoff_params.ml_switch_width,
+        )  # (n_active,) in [0, 1] -- same weight blending this pair's ML energy
+        weights = jnp.where(in_range, weights, 0.0)
+
+        return weighted_scatter_average(
+            q_dimer_local, global_idx, weights, atom_mask, total_atoms
+        )
+
     def calculate_ml_contributions(
         positions: Array,
         atomic_numbers: Array, 
@@ -2194,24 +2270,39 @@ def setup_calculator(
         q_ml_global = None
         if _needs_ml_mm_charges and output.get("charges") is not None:
             # Batch layout: [monomers..., dimers...]; training uses AB charges.
-            # Mode B/C v1 is dimer-only (n_monomers==2) so the sole dimer is slot 0.
             n_mono_local = n_monomers
             if batches.get("_spatial_monomer_indices") is not None:
                 n_mono_local = batches["_spatial_monomer_indices"].shape[0]
             if batches.get("_sparse_active_indices") is not None:
-                n_dimer_local = batches["_sparse_active_indices"].shape[0]
+                active_ids_local = batches["_sparse_active_indices"]
+                n_dimer_local = active_ids_local.shape[0]
             else:
+                active_ids_local = jnp.arange(n_dimers, dtype=jnp.int32)
                 n_dimer_local = n_dimers
             q_flat = jnp.asarray(output["charges"]).reshape(
                 n_mono_local + n_dimer_local, max_atoms, -1
             )[..., 0]
-            q_dimer_pad = q_flat[n_mono_local]
-            q_ml_global = map_padded_fragment_charges_to_global(
-                q_dimer_pad,
-                dimer_idx_arr_jnp[0],
-                dimer_atom_mask_jnp[0],
-                total_atoms,
-            )
+
+            if _mm_charge_mode is MMChargeMode.LATENT_DYNAMIC:
+                # Mode E: live weighted average of q_ML over every currently
+                # active dimer partner, instead of a single fixed AB slot.
+                q_ml_global = _aggregate_dynamic_latent_charges(
+                    positions=positions,
+                    q_dimer_local=q_flat[n_mono_local:],
+                    active_ids=active_ids_local,
+                    n_dimers_dense=n_dimers,
+                    mic_pbc_cell=mic_pbc_cell,
+                    cutoff_params=cutoff_params,
+                )
+            else:
+                # Mode B/C v1 is dimer-only (n_monomers==2) so the sole dimer is slot 0.
+                q_dimer_pad = q_flat[n_mono_local]
+                q_ml_global = map_padded_fragment_charges_to_global(
+                    q_dimer_pad,
+                    dimer_idx_arr_jnp[0],
+                    dimer_atom_mask_jnp[0],
+                    total_atoms,
+                )
 
         sparse_active = batches.get("_sparse_active_indices")
         # Scatter sparse dimer output back to full format when applicable
