@@ -1,7 +1,8 @@
 # Hybrid MM charge modes — example YAMLs
 
-Example configs for the three MM Coulomb charge modes (dimer-only for B/C).
-See [`docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md).
+Example configs for the MM Coulomb charge modes (dimer-only for B/C; D is
+liquid-compatible). See
+[`docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md).
 
 | Mode | Formula | Train YAML | MD YAML |
 |------|---------|------------|---------|
@@ -10,6 +11,7 @@ See [`docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md).
 | A + PME (native ewald) | fixed + `ewald` Coulomb (LJ off, pure JAX, no CUDA) | [`train_fixed_ewald.yaml`](train_fixed_ewald.yaml) | [`md_fixed_ewald.yaml`](md_fixed_ewald.yaml) |
 | B `latent` | `q_MM = neutralize(q_ML)` | [`train_latent.yaml`](train_latent.yaml) | [`md_latent.yaml`](md_latent.yaml) |
 | C `fixed_plus_latent` | `q_CGenFF + neutralize(q_ML)` | [`train_fixed_plus_latent.yaml`](train_fixed_plus_latent.yaml) | [`md_fixed_plus_latent.yaml`](md_fixed_plus_latent.yaml) |
+| D `latent_mean` (liquid) | `q_MM = tile(mean(neutralize(q_ML)))` | same checkpoint as B | `--mm-charge-mode latent_mean --mm-latent-charge-template <path>` (see below) |
 
 ## Train
 
@@ -30,8 +32,9 @@ mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_plus_latent.y
 ## MD (dimer vacuum smoke)
 
 Modes B/C are **dimer-only** (`composition: "DCM:2"`). Do not use liquid
-boxes with `mm_charge_mode: latent` / `fixed_plus_latent` yet. Use
-`lr_solver: mic` (or omit) — jax-pme is refused for B/C.
+boxes with `mm_charge_mode: latent` / `fixed_plus_latent` — use `latent_mean`
+(Mode D, below) for liquids instead. Use `lr_solver: mic` (or omit) for B/C —
+jax-pme is refused for B/C (Mode D has no such restriction).
 
 ```bash
 # After training + orbax-to-json (or point checkpoint at an existing JSON)
@@ -66,6 +69,37 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
   --mm-charge-mode fixed \
   --checkpoint /path/to/params.json
 ```
+
+### Mode D: latent-charge liquid MD with native Ewald
+
+`latent`/`fixed_plus_latent` (B/C) cannot run on a 20-monomer liquid box —
+their `q_ML` needs a live AB-dimer forward, undefined once there are more
+than 2 monomers. Mode D uses a checkpoint trained with `--mm-charge-mode
+latent --charges` (Mode B), but instead of a live forward, precomputes one
+monomer's mean latent charge offline and tiles it across the box:
+
+```bash
+# 1) Precompute the template once, from the checkpoint + its training data
+python scripts/compute_latent_monomer_charges.py \
+  --checkpoint ./ckpts/mp2_nms/mp2nms_ewald \
+  --data /path/to/mp2_nms15_clean_train.npz \
+  --resid DCM \
+  --out ./ckpts/mp2_nms/latent_charge_template_DCM.npz
+
+# 2) Run the liquid box with it, same lr_solver as training (ewald)
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 30 \
+  --mm-nonbond-mode periodic_external \
+  --lr-solver ewald \
+  --no-periodic-charmm-vdw \
+  --mm-charge-mode latent_mean \
+  --mm-latent-charge-template ./ckpts/mp2_nms/latent_charge_template_DCM.npz \
+  --checkpoint /path/to/params.json
+```
+
+See [Mode D in `docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md#mode-d--latent_mean-md-only-liquid-compatible)
+for the v1 limitation (homogeneous liquids only) and what it is not (a live,
+geometry-dependent charge model).
 
 Edit `defaults.checkpoint` to your Mode A/B/C checkpoint. Train and MD modes
 must match (`hybrid_mm.json` sidecar records the training mode).

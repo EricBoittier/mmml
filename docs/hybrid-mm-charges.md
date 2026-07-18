@@ -1,4 +1,4 @@
-# Hybrid MM charges: fixed, latent, and fixed+latent
+# Hybrid MM charges: fixed, latent, fixed+latent, and latent_mean
 
 How per-atom charges enter **intermolecular `E_MM` Coulomb** in hybrid ML/MM
 training and deployment.  Implementation:
@@ -17,7 +17,7 @@ Related: [Hybrid potential regions](hybrid-potential-regions.md),
 
 | Axis | What it controls | Unrelated to |
 |------|------------------|--------------|
-| **MM charge Mode A/B/C** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
+| **MM charge Mode A/B/C/D** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
 | Energy assembly | `doML`, `doML_dimer`, `doMM` | Charge taxonomy |
 | Handoff / cutoffs | complementary vs legacy COM switches | Charge taxonomy |
 | `lr_solver` | MIC vs jax-pme long-range Coulomb | Charge taxonomy (B/C + PME refused) |
@@ -103,15 +103,64 @@ mismatch but still requires explicit opt-in.
 
 ---
 
-## Liquid follow-up (blocked until dimer Mode B/C parity is green)
+## Mode D — `latent_mean` (MD-only, liquid-compatible)
 
-Training never saw multi-neighbor charge environments.  Before `md-system`
-liquid boxes:
+```text
+q_MM = tile( mean_over_dataset( neutralize_per_monomer(q_ML) ) )
+```
+
+Modes B/C need a **live** `q_ML` from an AB-dimer forward at every MD step —
+that has no meaning once there are more than 2 monomers ("the AB dimer" is
+undefined in a liquid).  Mode D sidesteps this by freezing the charges: it
+averages Mode B's `neutralize_per_monomer(q_ML)` over many training-set
+homo-dimer forwards of one species **offline**, once, then tiles that single
+monomer's charge template across every monomer copy in the box at MD setup
+time. No AB forward, no `n_monomers == 2` gate, no `doML_dimer` requirement,
+and it composes with any `lr_solver` (`mic`, `ewald`, `nvalchemiops_pme`)
+since it is just a fixed per-atom charges array handed to the same
+`mm_charges` override Modes B/C already use.
+
+- **Precompute (once per checkpoint + species):**
+  ```bash
+  python scripts/compute_latent_monomer_charges.py \
+      --checkpoint ./ckpts/mp2_nms/mp2nms_ewald \
+      --data /path/to/mp2_nms15_clean_train.npz \
+      --resid DCM \
+      --out ckpts/mp2_nms/latent_charge_template_DCM.npz
+  ```
+  This runs the trained model over `--max-samples` `DCM,DCM` homo-dimers,
+  reads `out_ab["charges"]` for monomer A of each, projects it net-zero with
+  `neutralize_per_monomer`, and averages. The saved `.npz`
+  (`mmml.models.latent_charge_template.LatentChargeTemplate`) records the
+  mean, the per-atom std (diagnostic — large values mean a single frozen
+  template is a poor fit for that species), sample count, and provenance.
+  Loading refuses a template whose net charge exceeds `1e-3 e` (a non-neutral
+  monomer makes the tiled box non-neutral, which breaks the Ewald sum).
+- **MD:** `--mm-charge-mode latent_mean --mm-latent-charge-template <path>`
+  on `mmml/cli/run/md_system.py` or the `md-pbc-suite` `jaxmd`/`ase` backends.
+- **v1 limitation:** homogeneous liquids only (every monomer the same size
+  and species as the template) — `setup_calculator` raises if
+  `ATOMS_PER_MONOMER` is heterogeneous. Mixed-species liquids need one
+  template per species and per-species tiling, not implemented yet.
+- **What it is not:** a live, geometry-dependent liquid charge model. The
+  charges are fixed for the whole run (same value regardless of local
+  environment) — see Mode D vs L2/L3 below.
+
+Implementation: [`mmml/models/latent_charge_template.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/latent_charge_template.py),
+wired into `setup_calculator` in
+[`mmml/interfaces/pycharmmInterface/mmml_calculator.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mmml_calculator.py).
+
+---
+
+## Live liquid charges (still not implemented)
+
+Mode D answers "L1" below with a *frozen* template. A live, geometry-
+dependent per-step liquid charge model is still open:
 
 | Option | Idea |
 |--------|------|
-| **L1** | Per-monomer `q_ML` (environment-free) + Mode B/C — simple, systematically unlike train AB context |
+| **L1** | Per-monomer `q_ML` (environment-free) + Mode B/C — Mode D implements this, but as an offline-averaged, frozen template rather than a live per-step forward |
 | **L2** | Aggregate charges from active ML dimer slots — closer to train, expensive and ambiguous |
 | **L3** | Train liquid-aware charge correction before deploying |
 
-Do not pick L1 inside an unrelated "pass charges into `mm_fn`" change.
+Do not build L2/L3 inside an unrelated "pass charges into `mm_fn`" change.

@@ -251,10 +251,11 @@ usage: mmml md-system [-h]
                       [--periodic-charmm-vdw | --no-periodic-charmm-vdw]
                       [--charmm-zero-energy-terms TERMS]
                       [--include-mm | --no-include-mm]
-                      [--mm-charge-mode {fixed,latent,fixed_plus_latent}]
-                      [--mm-charge-correction] [--jax-mm-spoof]
-                      [--jax-mm-spoof-psf JAX_MM_SPOOF_PSF] [--residue RESIDUE]
-                      [--skip-jit-warmup]
+                      [--mm-charge-mode {fixed,latent,fixed_plus_latent,latent_mean}]
+                      [--mm-charge-correction]
+                      [--mm-latent-charge-template MM_LATENT_CHARGE_TEMPLATE]
+                      [--jax-mm-spoof] [--jax-mm-spoof-psf JAX_MM_SPOOF_PSF]
+                      [--residue RESIDUE] [--skip-jit-warmup]
                       [--auto-warmup-mlpot-jax | --no-auto-warmup-mlpot-jax]
                       [--resume] [--config CONFIG] [--job-id JOB_ID] [--run-all]
                       [--resume-campaign]
@@ -923,16 +924,22 @@ options:
                         hybrid calculator. --no-include-mm evaluates PhysNet ML
                         only (doMM=False); cutoff keys are ignored for MM pair
                         lists.
-  --mm-charge-mode, --mm_charge_mode {fixed,latent,fixed_plus_latent}
+  --mm-charge-mode, --mm_charge_mode {fixed,latent,fixed_plus_latent,latent_mean}
                         Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF,
-                        default), latent (neutralize(q_ML)), or
-                        fixed_plus_latent (q_CGenFF + neutralize(q_ML)). Modes
+                        default), latent (neutralize(q_ML)), fixed_plus_latent
+                        (q_CGenFF + neutralize(q_ML)), or latent_mean (a
+                        precomputed per-monomer latent charge template tiled
+                        across the box; see --mm-latent-charge-template). Modes
                         latent / fixed_plus_latent require a charges=True
-                        checkpoint and are dimer-only (see docs/hybrid-mm-
-                        charges.md).
+                        checkpoint and are dimer-only; latent_mean works for any
+                        n_monomers (liquids) (see docs/hybrid-mm-charges.md).
   --mm-charge-correction, --mm_charge_correction
                         Alias for --mm-charge-mode fixed_plus_latent on the MD
                         calculator.
+  --mm-latent-charge-template, --mm_latent_charge_template MM_LATENT_CHARGE_TEMPLATE
+                        Path to a .npz template from
+                        scripts/compute_latent_monomer_charges.py. Required with
+                        --mm-charge-mode latent_mean.
   --jax-mm-spoof        Use JAX CGenFF bonded clone instead of PhysNet for ML
                         terms (no checkpoint; box / calculator infrastructure
                         testing).
