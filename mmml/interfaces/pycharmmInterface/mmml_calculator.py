@@ -395,6 +395,7 @@ def setup_calculator(
     mbd_spin: float = 1.0,
     mm_charge_correction: bool = False,
     mm_charge_mode: str | None = None,
+    mm_latent_charge_template: str | Path | None = None,
     ml_use_ema: bool = True,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
@@ -427,8 +428,18 @@ def setup_calculator(
             ``q_MM = q_CGenFF + neutralize(q_ML)`` with ``q_ML`` from the AB
             dimer forward.  Dimer-only in v1; see ``docs/hybrid-mm-charges.md``.
         mm_charge_mode: Explicit mode string
-            (``fixed`` / ``latent`` / ``fixed_plus_latent``).  Overrides the
-            bool when set.  Modes B/C are dimer-only.
+            (``fixed`` / ``latent`` / ``fixed_plus_latent`` / ``latent_mean``).
+            Overrides the bool when set.  Modes B/C are dimer-only.
+            ``latent_mean`` (Mode D) is the liquid-compatible mode: it tiles a
+            precomputed per-monomer charge template (see
+            ``mm_latent_charge_template`` and
+            ``scripts/compute_latent_monomer_charges.py``) across every
+            monomer, so it works for any ``n_monomers`` and any ``lr_solver``.
+        mm_latent_charge_template: Path to a ``.npz`` template written by
+            ``scripts/compute_latent_monomer_charges.py``.  Required when
+            ``mm_charge_mode="latent_mean"``.  All monomers in the box must
+            be the same size and species as the template (homogeneous
+            liquid; heterogeneous mixtures are not supported in v1).
         ml_use_ema: Load the checkpoint's EMA params instead of the live
             training params (Orbax checkpoints only; default True). Live
             params can swing several-fold epoch-to-epoch in the unconstrained
@@ -896,6 +907,7 @@ def setup_calculator(
     from mmml.models.mm_charge_mode import (
         MMChargeMode,
         apply_mm_charge_mode,
+        mm_charge_mode_is_static_template,
         mm_charge_mode_needs_q_ml,
     )
 
@@ -919,7 +931,45 @@ def setup_calculator(
     _hybrid_mm_meta = load_hybrid_mm_metadata(model_restart_path)
     warn_mm_charge_mode_mismatch(_mm_charge_mode, _hybrid_mm_meta)
     _needs_ml_mm_charges = mm_charge_mode_needs_q_ml(_mm_charge_mode)
-    if _needs_ml_mm_charges:
+    _latent_mean_charges_static: Optional[Array] = None
+    if mm_charge_mode_is_static_template(_mm_charge_mode):
+        from mmml.models.latent_charge_template import (
+            load_latent_charge_template,
+            tile_latent_charge_template,
+        )
+
+        if mm_latent_charge_template is None:
+            raise ValueError(
+                "mm_charge_mode=latent_mean requires mm_latent_charge_template "
+                "(a .npz from scripts/compute_latent_monomer_charges.py)."
+            )
+        if ATOMS_PER_MONOMER_UNIFORM is None:
+            raise ValueError(
+                "mm_charge_mode=latent_mean v1 requires a homogeneous liquid "
+                "(all monomers the same size); got heterogeneous "
+                f"atoms_per_monomer={atoms_per_monomer_list}."
+            )
+        _latent_template = load_latent_charge_template(mm_latent_charge_template)
+        if _latent_template.charges.shape[0] != ATOMS_PER_MONOMER_UNIFORM:
+            raise ValueError(
+                f"mm_latent_charge_template {mm_latent_charge_template} has "
+                f"{_latent_template.charges.shape[0]} atoms/monomer, but this "
+                f"system has {ATOMS_PER_MONOMER_UNIFORM} atoms/monomer."
+            )
+        _latent_mean_charges_static = jnp.asarray(
+            tile_latent_charge_template(_latent_template, n_monomers),
+            dtype=ml_jnp_dtype,
+        )
+        setup_rows.append(
+            (
+                "mm_charge_mode",
+                f"latent_mean (template={Path(mm_latent_charge_template).name}, "
+                f"resid={_latent_template.resid}, "
+                f"n_samples={_latent_template.n_samples}, "
+                f"tiled x{n_monomers})",
+            )
+        )
+    elif _needs_ml_mm_charges:
         _mode_labels = {
             MMChargeMode.LATENT: "latent (neutralize(q_ML from AB); dimer-only)",
             MMChargeMode.FIXED_PLUS_LATENT: (
@@ -1666,7 +1716,9 @@ def setup_calculator(
 
         if doMM:
             mm_charges = None
-            if _needs_ml_mm_charges:
+            if _latent_mean_charges_static is not None:
+                mm_charges = _latent_mean_charges_static
+            elif _needs_ml_mm_charges:
                 q_ml = outputs.get("q_ml_global")
                 if q_ml is None:
                     raise ValueError(

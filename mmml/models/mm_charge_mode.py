@@ -21,9 +21,24 @@ Modes
     ``q_ML`` comes from the **AB dimer** forward.  MD v1 is dimer-only
     (``n_monomers == 2``); liquid ``q_ML`` context is undefined.
 
-Liquid follow-up (not implemented): choose L1 monomer-context charges, L2
-aggregate active-dimer charges, or L3 liquid-aware training before
-``md-system`` deployment.
+**latent_mean** (Mode D, MD-only)
+    ``q_MM = tile(mean_over_dataset(neutralize_per_monomer(q_ML)))``.  A fixed,
+    precomputed per-atom charge *template* -- one monomer's worth of latent
+    charges, averaged over many training-set dimer forwards offline (see
+    ``scripts/compute_latent_monomer_charges.py``) -- tiled across every
+    monomer in a homogeneous liquid box.  Unlike Modes B/C it needs **no**
+    live ``q_ML`` at MD time (no AB-dimer forward, no ``n_monomers == 2``
+    restriction), so it is the liquid-compatible answer to the L1/L2 question
+    below: it is Wallace & Boittier's L1 (monomer-context charges), computed
+    once and frozen.  Not selectable in training (``hybrid_forward`` /
+    ``apply_mm_charge_mode`` reject it) -- it is a static array the MD
+    calculator loads via ``mm_latent_charge_template`` and injects directly,
+    bypassing this module's per-step composition entirely.
+
+Liquid follow-up for *live*, geometry-dependent latent charges (still not
+implemented): L2 aggregate active-dimer charges, or L3 liquid-aware training
+before ``md-system`` deployment. ``latent_mean`` sidesteps this by freezing
+the charges instead of recomputing them per step.
 """
 
 from __future__ import annotations
@@ -42,6 +57,7 @@ __all__ = [
     "apply_mm_charge_mode",
     "hybrid_mm_metadata_dict",
     "mm_charge_mode_from_charge_correction",
+    "mm_charge_mode_is_static_template",
     "mm_charge_mode_needs_q_ml",
     "parse_mm_charge_mode",
     "require_charge_head_for_mode",
@@ -55,6 +71,7 @@ class MMChargeMode(str, Enum):
     FIXED = "fixed"
     LATENT = "latent"
     FIXED_PLUS_LATENT = "fixed_plus_latent"
+    LATENT_MEAN = "latent_mean"
 
 
 def parse_mm_charge_mode(value: str | MMChargeMode | None) -> MMChargeMode:
@@ -77,6 +94,10 @@ def parse_mm_charge_mode(value: str | MMChargeMode | None) -> MMChargeMode:
         "mode_c": MMChargeMode.FIXED_PLUS_LATENT,
         "charge_correction": MMChargeMode.FIXED_PLUS_LATENT,
         "mm_charge_correction": MMChargeMode.FIXED_PLUS_LATENT,
+        "latent_mean": MMChargeMode.LATENT_MEAN,
+        "latent-mean": MMChargeMode.LATENT_MEAN,
+        "d": MMChargeMode.LATENT_MEAN,
+        "mode_d": MMChargeMode.LATENT_MEAN,
     }
     if key not in aliases:
         raise ValueError(
@@ -97,6 +118,16 @@ def mm_charge_mode_needs_q_ml(mode: str | MMChargeMode) -> bool:
     """True when the mode reads the ML charge head for ``E_MM`` Coulomb."""
     mode = parse_mm_charge_mode(mode)
     return mode in (MMChargeMode.LATENT, MMChargeMode.FIXED_PLUS_LATENT)
+
+
+def mm_charge_mode_is_static_template(mode: str | MMChargeMode) -> bool:
+    """True when the mode's charges are a precomputed, per-step-static array.
+
+    ``latent_mean`` needs neither a live ``q_ML`` forward nor the dimer-only
+    gate: its charges were fixed offline (see
+    ``mmml.models.latent_charge_template``) and are injected once.
+    """
+    return parse_mm_charge_mode(mode) is MMChargeMode.LATENT_MEAN
 
 
 def resolve_hybrid_mm_charge_mode(
@@ -159,6 +190,14 @@ def apply_mm_charge_mode(
 
     if mode is MMChargeMode.FIXED:
         return q_cgenff
+
+    if mode is MMChargeMode.LATENT_MEAN:
+        raise ValueError(
+            "mm_charge_mode=latent_mean has no per-step composition -- it is a "
+            "precomputed template injected directly by the MD calculator via "
+            "mm_latent_charge_template, not a mode this function (training or "
+            "live q_ML composition) can apply."
+        )
 
     if q_ml is None:
         require_charge_head_for_mode(mode, has_charges=False)

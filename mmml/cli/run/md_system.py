@@ -1443,12 +1443,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         dest="mm_charge_mode",
-        choices=["fixed", "latent", "fixed_plus_latent"],
+        choices=["fixed", "latent", "fixed_plus_latent", "latent_mean"],
         help=(
             "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
-            "latent (neutralize(q_ML)), or fixed_plus_latent "
-            "(q_CGenFF + neutralize(q_ML)). Modes latent / fixed_plus_latent "
-            "require a charges=True checkpoint and are dimer-only "
+            "latent (neutralize(q_ML)), fixed_plus_latent "
+            "(q_CGenFF + neutralize(q_ML)), or latent_mean (a precomputed "
+            "per-monomer latent charge template tiled across the box; see "
+            "--mm-latent-charge-template). Modes latent / fixed_plus_latent "
+            "require a charges=True checkpoint and are dimer-only; "
+            "latent_mean works for any n_monomers (liquids) "
             "(see docs/hybrid-mm-charges.md)."
         ),
     )
@@ -1459,6 +1462,17 @@ def build_parser() -> argparse.ArgumentParser:
         dest="mm_charge_correction",
         help=(
             "Alias for --mm-charge-mode fixed_plus_latent on the MD calculator."
+        ),
+    )
+    parser.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        type=str,
+        default=None,
+        dest="mm_latent_charge_template",
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
         ),
     )
     parser.add_argument(
@@ -3270,6 +3284,9 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     _append_optional(cmd, "--mm-charge-mode", getattr(args, "mm_charge_mode", None))
     if bool(getattr(args, "mm_charge_correction", False)):
         cmd.append("--mm-charge-correction")
+    _append_optional(
+        cmd, "--mm-latent-charge-template", getattr(args, "mm_latent_charge_template", None)
+    )
 
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])

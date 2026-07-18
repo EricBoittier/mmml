@@ -57,7 +57,11 @@ def assert_mm_charge_mode_dimer_supported(
 ) -> None:
     """Raise if Mode B/C cannot be applied under the current calculator settings."""
     mode = parse_mm_charge_mode(mode)
-    if mode is MMChargeMode.FIXED:
+    if mode in (MMChargeMode.FIXED, MMChargeMode.LATENT_MEAN):
+        # latent_mean's charges are a precomputed template injected once at
+        # setup (see mmml.models.latent_charge_template) -- no live q_ML, no
+        # AB-dimer forward, so none of the dimer-only/doML/lr_solver
+        # restrictions below apply. It is the liquid-compatible mode.
         return
     require_charge_head_for_mode(mode, has_charges=has_charges)
     if int(n_monomers) != 2:

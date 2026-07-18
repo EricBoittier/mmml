@@ -701,14 +701,17 @@ def main(argv: list[str] | None = None) -> int:
         dest="mm_charge_mode",
         type=str,
         default=None,
-        choices=("fixed", "latent", "fixed_plus_latent"),
+        choices=("fixed", "latent", "fixed_plus_latent", "latent_mean"),
         help=(
             "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
             "latent (neutralize(q_ML), no CGenFF charges at all -- fluctuating, "
-            "geometry-dependent MM charges predicted by the model), or "
-            "fixed_plus_latent (q_CGenFF + neutralize(q_ML)). latent/"
+            "geometry-dependent MM charges predicted by the model), "
+            "fixed_plus_latent (q_CGenFF + neutralize(q_ML)), or latent_mean "
+            "(a precomputed per-monomer latent charge template tiled across "
+            "the box; see --mm-latent-charge-template). latent/"
             "fixed_plus_latent require a checkpoint trained with charges=True "
-            "and the matching --mm-charge-mode at train time."
+            "and the matching --mm-charge-mode at train time and are "
+            "dimer-only; latent_mean works for any n_monomers (liquids)."
         ),
     )
     p.add_argument(
@@ -718,6 +721,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         default=False,
         help="Alias for --mm-charge-mode fixed_plus_latent.",
+    )
+    p.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        dest="mm_latent_charge_template",
+        type=str,
+        default=None,
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
+        ),
     )
     p.add_argument(
         "--lr-solver",
@@ -1006,6 +1020,7 @@ def main(argv: list[str] | None = None) -> int:
         lr_solver=getattr(args, "lr_solver", None),
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
         mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
+        mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
     )
     cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
     calc_result = factory(

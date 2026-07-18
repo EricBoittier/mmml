@@ -999,6 +999,7 @@ def _factory_mmml(
     lr_solver: str | None = None,
     mm_charge_mode: str | None = None,
     mm_charge_correction: bool = False,
+    mm_latent_charge_template: str | Path | None = None,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1051,6 +1052,7 @@ def _factory_mmml(
         lr_solver=lr_solver,
         mm_charge_mode=mm_charge_mode,
         mm_charge_correction=mm_charge_correction,
+        mm_latent_charge_template=mm_latent_charge_template,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(
@@ -1924,13 +1926,16 @@ def main(argv: list[str] | None = None) -> int:
         dest="mm_charge_mode",
         type=str,
         default=None,
-        choices=("fixed", "latent", "fixed_plus_latent"),
+        choices=("fixed", "latent", "fixed_plus_latent", "latent_mean"),
         help=(
             "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
-            "latent (neutralize(q_ML), no CGenFF charges at all), or "
-            "fixed_plus_latent (q_CGenFF + neutralize(q_ML)). latent/"
+            "latent (neutralize(q_ML), no CGenFF charges at all), "
+            "fixed_plus_latent (q_CGenFF + neutralize(q_ML)), or latent_mean "
+            "(a precomputed per-monomer latent charge template tiled across "
+            "the box; see --mm-latent-charge-template). latent/"
             "fixed_plus_latent require a checkpoint trained with charges=True "
-            "and the matching --mm-charge-mode at train time."
+            "and the matching --mm-charge-mode at train time and are "
+            "dimer-only; latent_mean works for any n_monomers (liquids)."
         ),
     )
     parser.add_argument(
@@ -1940,6 +1945,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         default=False,
         help="Alias for --mm-charge-mode fixed_plus_latent.",
+    )
+    parser.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        dest="mm_latent_charge_template",
+        type=str,
+        default=None,
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
+        ),
     )
     parser.add_argument(
         "--quiet",
@@ -2245,6 +2261,7 @@ def main(argv: list[str] | None = None) -> int:
             lr_solver=getattr(args, "lr_solver", None),
             mm_charge_mode=getattr(args, "mm_charge_mode", None),
             mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
+            mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
         )
         atoms.calc = calc
         _save_cutoff_plot(
