@@ -893,11 +893,12 @@ options:
                         requires pbc_*).
   --lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme,ewald}
                         Long-range Coulomb backend. Default: truncated MIC in
-                        the switched-MM pair loop. Opt in: jax_pme, scafacos,
-                        nvalchemiops_pme, ewald (periodic_external for full-box
-                        Coulomb; ewald is pure JAX, no external PME library or
-                        CUDA requirement, and is the same operator --lr-solver
-                        ewald trains against). Legacy alias: auto (= mic).
+                        the switched-MM pair loop. Opt in: ewald (full-box
+                        hybrid_ewald on jax_mic; same operator as train --lr-
+                        solver ewald; pure JAX, no PME lib), jax_pme (jax_mic
+                        k-space + switched SR), nvalchemiops_pme / scafacos
+                        (require --mm-nonbond-mode periodic_external). Legacy
+                        alias: auto (= mic).
   --jax-pme-method {ewald,pme,p3m}
                         jax-pme method when --lr-solver=jax_pme (default: env
                         JAX_PME_METHOD or ewald).

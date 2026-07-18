@@ -1239,12 +1239,17 @@ def setup_calculator(
             "enabled": False,
             "note": "n/a (jax_mm_clone spoof; no PhysNet ZBL)",
         }
+    _mm_charge_mode_dashboard = next(
+        (label for key, label in setup_rows if key == "mm_charge_mode"),
+        _mm_charge_mode.value,
+    )
     emit_md_system_calculator_report(
         system={
             "n_monomers": n_monomers,
             "atoms_per_monomer": atoms_per_monomer_list,
             "total_atoms": total_atoms,
             "max_atoms": max_atoms,
+            "mm_charge_mode": _mm_charge_mode_dashboard,
             "ml_compute_dtype": str(ml_jnp_dtype),
             "checkpoint_dir": _checkpoint_dir,
         },

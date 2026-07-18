@@ -281,6 +281,23 @@ def test_collect_lr_solver_mapping_nvalchemiops_in_jax_mic_is_mic():
     assert "not wired in jax_mic" in mapping["note"]
 
 
+def test_collect_lr_solver_mapping_ewald_in_jax_mic_is_active():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="ewald",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="ewald",
+    ):
+        mapping = collect_lr_solver_mapping(
+            lr_solver="ewald", mm_nonbond_mode="jax_mic", do_mm=True
+        )
+    assert mapping["lr_solver"] == "ewald"
+    assert mapping["lr_solver_active"] == "ewald"
+    assert "hybrid_ewald" in mapping["coulomb_mode"]
+    assert "note" not in mapping
+
+
 def test_collect_lr_solver_mapping_nvalchemiops_ml_only_is_inactive():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",

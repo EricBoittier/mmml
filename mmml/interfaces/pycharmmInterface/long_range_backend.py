@@ -1516,6 +1516,12 @@ def collect_lr_solver_mapping(
             mapping["scafacos_method"] = str(
                 scafacos_method or os.environ.get("SCAFACOS_METHOD", "ewald")
             ).strip()
+        elif chosen == "ewald":
+            # Same JAX operator as jax_mic + ewald; CHARMM IMAGE VDW optional.
+            mapping["lr_solver_active"] = "ewald"
+            mapping["coulomb_mode"] = (
+                "full-box Ewald Coulomb (hybrid_ewald; no switch / no LJ; train-matched)"
+            )
         else:
             active = chosen
             mapping["lr_solver_active"] = active
@@ -1528,10 +1534,21 @@ def collect_lr_solver_mapping(
         mapping["coulomb_mode"] = "none (ML only; LR settings inactive)"
         if chosen == "nvalchemiops_pme":
             mapping["note"] = "nvalchemiops_pme applies only with periodic_external"
+        elif chosen == "ewald":
+            mapping["note"] = "lr_solver=ewald applies only when doMM=true"
         elif chosen not in ("mic", "jax_pme"):
             mapping["note"] = (
                 f"lr_solver={chosen} applies only with periodic_external or doMM=true"
             )
+        return mapping
+
+    # jax_mic path: mic (default), jax_pme (k-space + switched SR), or ewald
+    # (full-box hybrid_ewald_coulomb_energy — same operator as train --lr-solver ewald).
+    if chosen == "ewald":
+        mapping["lr_solver_active"] = "ewald"
+        mapping["coulomb_mode"] = (
+            "full-box Ewald Coulomb (hybrid_ewald; no switch / no LJ; train-matched)"
+        )
         return mapping
 
     active = "jax_pme" if chosen == "jax_pme" else "mic"
