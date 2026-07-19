@@ -1,0 +1,86 @@
+{
+  "h5": "scratch/spooky_muon3_nve/pbc_nve_jaxmd_nve_18ps.h5",
+  "n_frames": 72341,
+  "n_molecules": 20,
+  "box_A": 23.0,
+  "mm_charge_mode": "q0",
+  "frame_dt_fs": 0.25,
+  "duration_ps": 18.08499999999534,
+  "energy": {
+    "E_tot_drift_kcal_mol": 1.1355896912691605,
+    "E_tot_slope_kcal_mol_per_ps": -0.020094502670088936,
+    "E_tot_std_kcal_mol": 2.0773058716511605,
+    "E_pot_std_kcal_mol": 2.83241670049049,
+    "E_kin_std_kcal_mol": 2.73973645819661,
+    "T_mean_K": 179.7849339319208,
+    "T_std_K": 15.318770781813756,
+    "corr_Epot_Ekin": -0.7225149311655044,
+    "E_kin_psd_peak_cm": 32.738074894000356
+  },
+  "charges": {
+    "q_O_mean": -0.5027098091405588,
+    "q_O_std": 0.001668681747209118,
+    "q_H_mean": 0.2513549045612676,
+    "q_H_std": 0.0008548533460373481,
+    "corr_qO_vs_r_sym": 0.44151159403653445,
+    "corr_qH_vs_r_sym": -0.44151160553419994,
+    "corr_qO_vs_angle": -0.7032231147817914,
+    "corr_qH_vs_angle": 0.7032231226344736
+  },
+  "geometry": {
+    "r_OH_mean_A": 0.9095911003471229,
+    "r_OH_std_A": 0.01940392309275838,
+    "r_sym_mean_A": 0.9095911003471229,
+    "r_sym_std_A": 0.015880678830119094,
+    "angle_HOH_mean_deg": 109.10391208409575,
+    "angle_HOH_std_deg": 4.1652451091700895,
+    "power_spectra": {
+      "r_OH_psd_peak_ge500_cm": 75.62034200867687,
+      "r_sym_psd_peak_ge500_cm": 77.00364094785998,
+      "r_asym_psd_peak_ge500_cm": 74.69814271588812,
+      "angle_psd_peak_ge500_cm": 53.48755898174705,
+      "r_OH_power_frac_0_500": 0.9999999999357538,
+      "r_OH_power_frac_1400_1800": 6.414007404374228e-12,
+      "r_OH_power_frac_3000_3800": 1.2733972372562711e-11,
+      "artifact": "scratch/spooky_muon3_nve/analysis_18ps/geometry_power_spectra.png"
+    }
+  },
+  "ir": {
+    "temperature_K_qcf": 300.0,
+    "primary_method": "molecular_dipole_velocity",
+    "methods": [
+      "molecular_dipole_velocity",
+      "atomic_charge_current"
+    ],
+    "qm_correction": "omega*(1-exp(-beta*hbar*omega))",
+    "ir_min_cm": 50.0,
+    "ir_max_cm": 4500.0,
+    "units": "arbitrary",
+    "cut_before_smooth": true,
+    "smooth_hwhm_cm": 15.0,
+    "smooth_wide_hwhm_cm": 60.0,
+    "rolling_frames": 100,
+    "qm_correction_freq_dependent": true,
+    "tip3_fixed_charges_e": [
+      -0.834,
+      0.417,
+      0.417
+    ],
+    "note": "frame_dt_fs=0.250. Frequencies <50 cm^-1 removed before smooth. QM factor omega*(1-exp(-beta*hbar*omega)) is frequency-dependent. See ir_q0_vs_tip3.png for fluctuating q0 vs fixed TIP3 charges."
+  },
+  "artifacts": [
+    "nve_validation_dashboard.png",
+    "energy_fluctuations.png",
+    "charge_distributions.png",
+    "charge_variance_per_atom.png",
+    "geometry_distributions.png",
+    "charge_vs_geometry_scatter.png",
+    "charge_variance_vs_geometry_scatter.png",
+    "geometry_power_spectra.png",
+    "ir_spectrum.png",
+    "ir_processing_variants.png",
+    "ir_q0_vs_tip3.png",
+    "ir_noise_floor_blowup.png",
+    "ir_spectrum.npz"
+  ]
+}
