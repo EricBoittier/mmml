@@ -2,10 +2,10 @@
 """Analyze a TIP3 NVE HDF5 from jaxmd (positions, charges, energies).
 
 Produces:
+  - NVE validation dashboard (time series + rotated marginals + Fourier)
   - IR from atomic charge-current ACF with harmonic QM correction
     I(w) ~ w (1 - exp(-beta hbar w)) C_mm(w), normalized on [0, 4500] cm^-1
-  - Per-element charge variance
-  - 2D fluctuation surfaces: Delta q vs Delta r_OH (per bond, not mean)
+  - Charge vs (r_sym, angle) scatters (Reds/Blues)
   - Twin-axis E_tot / E_kin with matched axis spans
 
 Example
@@ -24,11 +24,380 @@ from pathlib import Path
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from mmml.spectra.spectra_md import autocorrelation, correlation_to_spectrum
+from matplotlib.gridspec import GridSpec
+from mmml.spectra.spectra_md import (
+    FS_INV_TO_CM_INV,
+    autocorrelation,
+    correlation_to_spectrum,
+)
 
 EV_TO_KCAL_MOL = 23.06054783061903
 # hc/k_B in cm*K — converts w[cm^-1] -> beta*hbar*w at temperature T
 HC_OVER_K_CM_K = 1.4387769
+
+
+def _periodogram_density(
+    signal: np.ndarray,
+    dt_fs: float,
+    *,
+    zero_pad: int = 4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """One-sided power spectral density of a 1-D signal (Hann window).
+
+    Returns ``(freq_cm, psd)`` with freq in cm^-1.  PSD is |FT|^2 normalized
+    so Parseval holds approximately on the positive-frequency axis.
+    """
+    x = np.asarray(signal, dtype=np.float64).ravel()
+    x = x - x.mean()
+    n = x.size
+    w = np.hanning(n)
+    n_fft = max(n * zero_pad, 8)
+    ft = np.fft.rfft(x * w, n=n_fft)
+    freq_cm = np.fft.rfftfreq(n_fft, d=dt_fs) * FS_INV_TO_CM_INV
+    # Window power correction
+    psd = (np.abs(ft) ** 2) / (np.sum(w**2))
+    return freq_cm, psd
+
+
+def _running_linear_slope(
+    t: np.ndarray, y: np.ndarray, *, window: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Sliding-window linear slope of y(t). Returns mid-times and slopes."""
+    t = np.asarray(t, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if window < 8 or window >= len(t):
+        window = max(8, len(t) // 10)
+    half = window // 2
+    mids, slopes = [], []
+    for i in range(half, len(t) - half):
+        sl = slice(i - half, i + half)
+        slopes.append(float(np.polyfit(t[sl], y[sl], 1)[0]))
+        mids.append(float(t[i]))
+    return np.asarray(mids), np.asarray(slopes)
+
+
+def _ts_with_rotated_hist(
+    ax_ts,
+    ax_hist,
+    t: np.ndarray,
+    y: np.ndarray,
+    *,
+    color: str,
+    ylabel: str,
+    bins: int = 48,
+    lw: float = 0.8,
+    label: str | None = None,
+    href: float | None = None,
+) -> None:
+    """Time series on ``ax_ts`` with a matching rotated marginal on ``ax_hist``."""
+    ax_ts.plot(t, y, color=color, lw=lw, label=label)
+    if href is not None:
+        ax_ts.axhline(href, color="0.55", ls="--", lw=0.7)
+    ax_ts.set_ylabel(ylabel, color=color)
+    ax_ts.tick_params(axis="y", colors=color)
+    ax_ts.grid(True, axis="x", alpha=0.2, lw=0.5)
+
+    counts, edges = np.histogram(y, bins=bins, density=True)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    ax_hist.barh(
+        centers,
+        counts,
+        height=np.diff(edges),
+        color=color,
+        alpha=0.75,
+        align="center",
+    )
+    ax_hist.set_ylim(ax_ts.get_ylim())
+    ax_hist.set_xlabel("dens.")
+    ax_hist.tick_params(axis="y", labelleft=False)
+    ax_hist.grid(True, axis="x", alpha=0.2, lw=0.5)
+
+
+def write_nve_validation_dashboard(
+    path: Path,
+    *,
+    t_ps: np.ndarray,
+    e_tot_kcal: np.ndarray,
+    e_pot_kcal: np.ndarray,
+    e_kin_kcal: np.ndarray,
+    temp: np.ndarray,
+    r_sym: np.ndarray,
+    ang: np.ndarray,
+    q_o: np.ndarray,
+    q_h_mean: np.ndarray,
+    freq_cm: np.ndarray,
+    ir_smooth: np.ndarray,
+    ir_vib: np.ndarray,
+    frame_dt_fs: float,
+    mm_mode: str,
+    box: float,
+    n_mol: int,
+    ir_method: str,
+    t_ir: float,
+) -> dict:
+    """Composite NVE validation figure: TS + rotated marginals + Fourier."""
+    drift = float(e_tot_kcal[-1] - e_tot_kcal[0])
+    slope = float(np.polyfit(t_ps, e_tot_kcal, 1)[0])
+    t_mean = float(np.mean(temp))
+    corr_pk = float(np.corrcoef(e_pot_kcal, e_kin_kcal)[0, 1])
+    de = e_tot_kcal - e_tot_kcal.mean()
+    dk = e_kin_kcal - e_kin_kcal.mean()
+
+    # Frequency content of conservation / kinetics (cm^-1)
+    f_e, psd_e = _periodogram_density(de, frame_dt_fs)
+    f_k, psd_k = _periodogram_density(dk, frame_dt_fs)
+    f_t, psd_t = _periodogram_density(temp - t_mean, frame_dt_fs)
+    # Bond symmetric-stretch DOS proxy (mean over molecules)
+    r_sym_mean_t = r_sym.mean(axis=1)
+    f_r, psd_r = _periodogram_density(r_sym_mean_t, frame_dt_fs)
+
+    # Running drift of E_tot
+    win = max(64, len(t_ps) // 20)
+    t_run, slope_run = _running_linear_slope(t_ps, e_tot_kcal, window=win)
+
+    # Molecule-averaged geometry / charge traces
+    r_t = r_sym.mean(axis=1)
+    a_t = ang.mean(axis=1)
+    qo_t = q_o.mean(axis=1)
+    qh_t = q_h_mean.mean(axis=1)
+
+    fig = plt.figure(figsize=(14.5, 16.5), constrained_layout=False)
+    gs = GridSpec(
+        6,
+        4,
+        figure=fig,
+        height_ratios=[0.55, 1.05, 1.05, 1.15, 1.0, 1.15],
+        width_ratios=[1.0, 1.0, 1.0, 0.32],
+        hspace=0.42,
+        wspace=0.28,
+        left=0.07,
+        right=0.98,
+        top=0.94,
+        bottom=0.04,
+    )
+
+    # --- metrics banner ---
+    ax_m = fig.add_subplot(gs[0, :])
+    ax_m.axis("off")
+    banner = (
+        f"NVE validation dashboard   ·   TIP3:{n_mol}   ·   "
+        f"mm_charge_mode={mm_mode}   ·   L={box:.1f} A   ·   "
+        f"frame Δt={frame_dt_fs:.3f} fs   ·   T={t_ps[-1] - t_ps[0]:.2f} ps\n"
+        f"E_tot drift={drift:+.3f} kcal/mol   ·   "
+        f"slope={slope:+.3f} kcal/mol/ps   ·   "
+        f"σ(E_tot)={np.std(e_tot_kcal):.3f}   ·   "
+        f"⟨T⟩={t_mean:.1f}±{np.std(temp):.1f} K   ·   "
+        f"corr(E_pot,E_kin)={corr_pk:.3f}"
+    )
+    ax_m.text(
+        0.0,
+        0.55,
+        banner,
+        transform=ax_m.transAxes,
+        va="center",
+        ha="left",
+        fontsize=10,
+        family="monospace",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="#f4f4f4", edgecolor="#cccccc"),
+    )
+
+    # --- Row 1: energies + twin + rotated ΔE marginal ---
+    ax_e = fig.add_subplot(gs[1, :3])
+    ax_e2 = ax_e.twinx()
+    ax_eh = fig.add_subplot(gs[1, 3], sharey=None)
+    (ln1,) = ax_e.plot(t_ps, e_tot_kcal, color="#1f4e79", lw=0.75, label=r"$E_\mathrm{tot}$")
+    (ln2,) = ax_e2.plot(t_ps, e_kin_kcal, color="#2a6f3b", lw=0.75, label=r"$E_\mathrm{kin}$")
+    ax_e.set_ylabel(r"$E_\mathrm{tot}$ (kcal/mol)", color="#1f4e79")
+    ax_e2.set_ylabel(r"$E_\mathrm{kin}$ (kcal/mol)", color="#2a6f3b")
+    ax_e.tick_params(axis="y", colors="#1f4e79")
+    ax_e2.tick_params(axis="y", colors="#2a6f3b")
+    ax_e.set_title("Energy conservation (twin axes, equal span)")
+    ax_e.legend(handles=[ln1, ln2], loc="upper right", frameon=False, fontsize=8)
+    _twin_equal_span(ax_e, ax_e2, e_tot_kcal, e_kin_kcal)
+    ax_e.grid(True, axis="x", alpha=0.2, lw=0.5)
+    # Marginal of demeaned energies (same kcal scale for visual comparison)
+    c_de, e_de = np.histogram(de, bins=50, density=True)
+    c_dk, e_dk = np.histogram(dk, bins=50, density=True)
+    ax_eh.barh(
+        0.5 * (e_de[:-1] + e_de[1:]),
+        c_de,
+        height=np.diff(e_de),
+        color="#1f4e79",
+        alpha=0.65,
+        label=r"$\Delta E_\mathrm{tot}$",
+    )
+    ax_eh.barh(
+        0.5 * (e_dk[:-1] + e_dk[1:]),
+        c_dk,
+        height=np.diff(e_dk),
+        color="#2a6f3b",
+        alpha=0.45,
+        label=r"$\Delta E_\mathrm{kin}$",
+    )
+    ax_eh.set_xlabel("dens.")
+    ax_eh.set_title(r"$\Delta E$", fontsize=9)
+    ax_eh.legend(fontsize=7, frameon=False, loc="upper right")
+    ax_eh.tick_params(axis="y", labelleft=False)
+
+    # --- Row 2: temperature + marginal ---
+    ax_t = fig.add_subplot(gs[2, :3], sharex=ax_e)
+    ax_th = fig.add_subplot(gs[2, 3])
+    _ts_with_rotated_hist(
+        ax_t,
+        ax_th,
+        t_ps,
+        temp,
+        color="#5a3d7a",
+        ylabel="T (K)",
+        href=300.0,
+        label="T",
+    )
+    ax_t.set_title("Kinetic temperature")
+    ax_t.set_xlabel("time (ps)")
+
+    # --- Row 3: Fourier / tendency ---
+    ax_psd = fig.add_subplot(gs[3, 0:2])
+    # Show low-frequency conservation band + kinetic content (log y)
+    for f, p, c, lab in (
+        (f_e, psd_e, "#1f4e79", r"$E_\mathrm{tot}$"),
+        (f_k, psd_k, "#2a6f3b", r"$E_\mathrm{kin}$"),
+        (f_t, psd_t, "#5a3d7a", "T"),
+        (f_r, psd_r, "#c45c26", r"$\langle r_\mathrm{sym}\rangle$"),
+    ):
+        m = (f > 0) & (f <= 500)
+        # Normalize each PSD to its max in-band for shape comparison
+        pn = p[m] / max(float(p[m].max()), 1e-30)
+        ax_psd.plot(f[m], pn, color=c, lw=1.0, label=lab)
+    ax_psd.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax_psd.set_ylabel("PSD (peak-norm.)")
+    ax_psd.set_title("Fluctuation spectra (0–500 cm$^{-1}$)")
+    ax_psd.set_yscale("log")
+    ax_psd.legend(fontsize=7, frameon=False, ncol=2)
+    ax_psd.grid(True, alpha=0.25, which="both", lw=0.5)
+
+    ax_run = fig.add_subplot(gs[3, 2])
+    ax_run.plot(t_run, slope_run, color="#1f4e79", lw=0.9)
+    ax_run.axhline(0.0, color="0.5", ls="--", lw=0.7)
+    ax_run.axhline(slope, color="#c0392b", ls=":", lw=0.8, label="global slope")
+    ax_run.set_xlabel("time (ps)")
+    ax_run.set_ylabel("local dE/dt")
+    ax_run.set_title(f"Running E_tot drift (win={win})")
+    ax_run.legend(fontsize=7, frameon=False)
+
+    ax_xy = fig.add_subplot(gs[3, 3])
+    ax_xy.scatter(
+        e_pot_kcal - e_pot_kcal.mean(),
+        e_kin_kcal - e_kin_kcal.mean(),
+        s=3,
+        alpha=0.25,
+        c="#444444",
+        rasterized=True,
+        linewidths=0,
+    )
+    ax_xy.set_xlabel(r"$\Delta E_\mathrm{pot}$")
+    ax_xy.set_ylabel(r"$\Delta E_\mathrm{kin}$")
+    ax_xy.set_title(f"exchange\ncorr={corr_pk:.2f}", fontsize=9)
+    ax_xy.set_aspect("equal", adjustable="datalim")
+    ax_xy.axhline(0, color="0.7", lw=0.5)
+    ax_xy.axvline(0, color="0.7", lw=0.5)
+
+    # --- Row 4: geometry ---
+    ax_g = fig.add_subplot(gs[4, :3], sharex=ax_e)
+    ax_g2 = ax_g.twinx()
+    ax_gh = fig.add_subplot(gs[4, 3])
+    (lg1,) = ax_g.plot(t_ps, r_t, color="#16a085", lw=0.8, label=r"$\langle r_\mathrm{sym}\rangle$")
+    (lg2,) = ax_g2.plot(t_ps, a_t, color="#8e44ad", lw=0.8, label=r"$\langle\angle\rangle$")
+    ax_g.set_ylabel(r"$\langle r_\mathrm{sym}\rangle$ (A)", color="#16a085")
+    ax_g2.set_ylabel(r"$\langle\angle\mathrm{HOH}\rangle$ (deg)", color="#8e44ad")
+    ax_g.tick_params(axis="y", colors="#16a085")
+    ax_g2.tick_params(axis="y", colors="#8e44ad")
+    ax_g.set_title("Mean intramolecular geometry")
+    ax_g.legend(handles=[lg1, lg2], loc="upper right", frameon=False, fontsize=8)
+    ax_g.set_xlabel("time (ps)")
+    # Rotated hist for r_sym (all mols) — denser structural metric
+    counts, edges = np.histogram(r_sym.ravel(), bins=40, density=True)
+    ax_gh.barh(
+        0.5 * (edges[:-1] + edges[1:]),
+        counts,
+        height=np.diff(edges),
+        color="#16a085",
+        alpha=0.75,
+    )
+    ax_gh.set_xlabel("dens.")
+    ax_gh.set_title(r"$r_\mathrm{sym}$", fontsize=9)
+    ax_gh.tick_params(axis="y", labelleft=False)
+
+    # --- Row 5: charges + IR + geom-charge map ---
+    # Split bottom into: charge TS+hist | IR | O scatter | H scatter — use nested gs
+    gs5 = gs[5, :].subgridspec(1, 4, width_ratios=[1.35, 1.15, 1.0, 1.0], wspace=0.35)
+
+    ax_q = fig.add_subplot(gs5[0, 0])
+    ax_q2 = ax_q.twinx()
+    (lq1,) = ax_q.plot(t_ps, qo_t, color="#c0392b", lw=0.8, label=r"$\langle q_\mathrm{O}\rangle$")
+    (lq2,) = ax_q2.plot(t_ps, qh_t, color="#2980b9", lw=0.8, label=r"$\langle q_\mathrm{H}\rangle$")
+    ax_q.set_ylabel(r"$\langle q_\mathrm{O}\rangle$ (e)", color="#c0392b")
+    ax_q2.set_ylabel(r"$\langle q_\mathrm{H}\rangle$ (e)", color="#2980b9")
+    ax_q.tick_params(axis="y", colors="#c0392b")
+    ax_q2.tick_params(axis="y", colors="#2980b9")
+    ax_q.set_title("Mean MM charges")
+    ax_q.set_xlabel("time (ps)")
+    ax_q.legend(handles=[lq1, lq2], loc="best", frameon=False, fontsize=7)
+
+    ax_ir = fig.add_subplot(gs5[0, 1])
+    m400 = (freq_cm >= 400) & (freq_cm <= 4500)
+    ax_ir.plot(freq_cm[m400], ir_vib[m400], color="#111111", lw=1.1)
+    ax_ir.set_xlabel(r"cm$^{-1}$")
+    ax_ir.set_ylabel("I (norm. 400–4500)")
+    ax_ir.set_title(f"IR · {ir_method.split('_')[0]}… · T={t_ir:.0f}K", fontsize=9)
+    ax_ir.set_xlim(400, 4500)
+    ax_ir.set_ylim(bottom=0)
+
+    ax_so = fig.add_subplot(gs5[0, 2])
+    sc = ax_so.scatter(
+        r_sym.ravel()[::2],
+        ang.ravel()[::2],
+        c=q_o.ravel()[::2],
+        s=2,
+        alpha=0.3,
+        cmap="Reds",
+        linewidths=0,
+        rasterized=True,
+    )
+    ax_so.set_xlabel(r"$r_\mathrm{sym}$ (A)")
+    ax_so.set_ylabel(r"$\angle$ (deg)")
+    ax_so.set_title(r"$q_\mathrm{O}$", fontsize=9)
+    plt.colorbar(sc, ax=ax_so, fraction=0.046, pad=0.04)
+
+    ax_sh = fig.add_subplot(gs5[0, 3])
+    sc2 = ax_sh.scatter(
+        r_sym.ravel()[::2],
+        ang.ravel()[::2],
+        c=q_h_mean.ravel()[::2],
+        s=2,
+        alpha=0.3,
+        cmap="Blues",
+        linewidths=0,
+        rasterized=True,
+    )
+    ax_sh.set_xlabel(r"$r_\mathrm{sym}$ (A)")
+    ax_sh.set_ylabel(r"$\angle$ (deg)")
+    ax_sh.set_title(r"$\langle q_\mathrm{H}\rangle$", fontsize=9)
+    plt.colorbar(sc2, ax=ax_sh, fraction=0.046, pad=0.04)
+
+    fig.suptitle("Hybrid ML/MM NVE validation", fontsize=13, fontweight="bold", y=0.985)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+    # Peak of kinetic PSD in the far-IR band (diagnostic)
+    m_far = (f_k > 5) & (f_k < 400)
+    k_peak = float(f_k[m_far][np.argmax(psd_k[m_far])]) if np.any(m_far) else float("nan")
+
+    return {
+        "corr_Epot_Ekin": corr_pk,
+        "E_tot_running_drift_window": int(win),
+        "E_kin_psd_peak_cm": k_peak,
+        "dashboard": str(path),
+    }
 
 
 def _mic(d: np.ndarray, box: float) -> np.ndarray:
@@ -242,11 +611,14 @@ def main() -> None:
     slope = float(np.polyfit(t_ps, e_tot_kcal, 1)[0])
     t_mean = float(np.mean(temp))
 
-    # --- energies: twin axes with matched spans ---
-    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.2), sharex=True)
-
-    ax_l = axes[0]
+    # --- energies: twin axes + rotated marginals ---
+    fig = plt.figure(figsize=(11.0, 7.2))
+    gs_e = GridSpec(
+        2, 2, figure=fig, width_ratios=[4.2, 1.0], wspace=0.08, hspace=0.28
+    )
+    ax_l = fig.add_subplot(gs_e[0, 0])
     ax_r = ax_l.twinx()
+    ax_eh = fig.add_subplot(gs_e[0, 1])
     (ln1,) = ax_l.plot(
         t_ps, e_tot_kcal, color="#1f4e79", lw=0.85, label=r"$E_\mathrm{tot}$"
     )
@@ -263,20 +635,44 @@ def main() -> None:
     )
     ax_l.legend(handles=[ln1, ln2], loc="upper right", frameon=False)
     _twin_equal_span(ax_l, ax_r, e_tot_kcal, e_kin_kcal)
-
-    ax_l2 = axes[1]
-    ax_r2 = ax_l2.twinx()
-    (ln3,) = ax_l2.plot(
-        t_ps, e_pot_kcal, color="#c45c26", lw=0.85, label=r"$E_\mathrm{pot}$"
+    de = e_tot_kcal - e_tot_kcal.mean()
+    dk = e_kin_kcal - e_kin_kcal.mean()
+    c_de, e_de = np.histogram(de, bins=50, density=True)
+    c_dk, e_dk = np.histogram(dk, bins=50, density=True)
+    ax_eh.barh(
+        0.5 * (e_de[:-1] + e_de[1:]),
+        c_de,
+        height=np.diff(e_de),
+        color="#1f4e79",
+        alpha=0.7,
+        label=r"$\Delta E_\mathrm{tot}$",
     )
-    (ln4,) = ax_r2.plot(t_ps, temp, color="#5a3d7a", lw=0.85, label="T")
-    ax_l2.set_ylabel(r"$E_\mathrm{pot}$ (kcal/mol)", color="#c45c26")
-    ax_r2.set_ylabel("T (K)", color="#5a3d7a")
-    ax_l2.tick_params(axis="y", colors="#c45c26")
-    ax_r2.tick_params(axis="y", colors="#5a3d7a")
-    ax_r2.axhline(300.0, color="gray", ls="--", lw=0.7)
+    ax_eh.barh(
+        0.5 * (e_dk[:-1] + e_dk[1:]),
+        c_dk,
+        height=np.diff(e_dk),
+        color="#2a6f3b",
+        alpha=0.45,
+        label=r"$\Delta E_\mathrm{kin}$",
+    )
+    ax_eh.set_xlabel("dens.")
+    ax_eh.set_title(r"$\Delta E$", fontsize=9)
+    ax_eh.legend(fontsize=7, frameon=False)
+    ax_eh.tick_params(axis="y", labelleft=False)
+
+    ax_l2 = fig.add_subplot(gs_e[1, 0], sharex=ax_l)
+    ax_th = fig.add_subplot(gs_e[1, 1])
+    _ts_with_rotated_hist(
+        ax_l2,
+        ax_th,
+        t_ps,
+        temp,
+        color="#5a3d7a",
+        ylabel="T (K)",
+        href=300.0,
+    )
     ax_l2.set_xlabel("time (ps)")
-    ax_l2.legend(handles=[ln3, ln4], loc="upper right", frameon=False)
+    ax_l2.set_title("Kinetic temperature")
 
     fig.tight_layout()
     fig.savefig(out / "energy_fluctuations.png", dpi=170)
@@ -503,6 +899,28 @@ def main() -> None:
         method=ir_method,
     )
 
+    dash_meta = write_nve_validation_dashboard(
+        out / "nve_validation_dashboard.png",
+        t_ps=t_ps,
+        e_tot_kcal=e_tot_kcal,
+        e_pot_kcal=e_pot_kcal,
+        e_kin_kcal=e_kin_kcal,
+        temp=temp,
+        r_sym=r_sym,
+        ang=ang,
+        q_o=q_o,
+        q_h_mean=q_h_mean_mol,
+        freq_cm=freq_cm,
+        ir_smooth=ir_smooth,
+        ir_vib=ir_vib,
+        frame_dt_fs=frame_dt_fs,
+        mm_mode=mm_mode,
+        box=box,
+        n_mol=n_mol,
+        ir_method=ir_method,
+        t_ir=t_ir,
+    )
+
     summary = {
         "h5": str(args.h5),
         "n_frames": int(n_frames),
@@ -519,6 +937,8 @@ def main() -> None:
             "E_kin_std_kcal_mol": float(np.std(e_kin_kcal)),
             "T_mean_K": t_mean,
             "T_std_K": float(np.std(temp)),
+            "corr_Epot_Ekin": dash_meta["corr_Epot_Ekin"],
+            "E_kin_psd_peak_cm": dash_meta["E_kin_psd_peak_cm"],
         },
         "charges": {
             "q_O_mean": float(q[:, o_idx].mean()),
@@ -550,6 +970,7 @@ def main() -> None:
             ),
         },
         "artifacts": [
+            "nve_validation_dashboard.png",
             "energy_fluctuations.png",
             "charge_distributions.png",
             "charge_variance_per_atom.png",

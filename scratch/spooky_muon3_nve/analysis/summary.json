@@ -13,7 +13,9 @@
     "E_pot_std_kcal_mol": 2.7683709310649363,
     "E_kin_std_kcal_mol": 3.1438449180468,
     "T_mean_K": 174.12837805861446,
-    "T_std_K": 17.578274555951072
+    "T_std_K": 17.578274555951072,
+    "corr_Epot_Ekin": -0.7455854717709106,
+    "E_kin_psd_peak_cm": 33.35640951981521
   },
   "charges": {
     "q_O_mean": -0.5026952090144158,
@@ -42,6 +44,7 @@
     "note": "OH stretch needs dense sampling; use --steps-per-recording 1 (current frame_dt_fs=2.500)."
   },
   "artifacts": [
+    "nve_validation_dashboard.png",
     "energy_fluctuations.png",
     "charge_distributions.png",
     "charge_variance_per_atom.png",
