@@ -59,6 +59,157 @@ def _periodogram_density(
     return freq_cm, psd
 
 
+def _average_periodogram(
+    signals: np.ndarray,
+    dt_fs: float,
+    *,
+    zero_pad: int = 4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Mean PSD over columns of ``signals`` with shape (n_frames, n_series)."""
+    signals = np.asarray(signals, dtype=np.float64)
+    if signals.ndim == 1:
+        signals = signals[:, None]
+    freq = None
+    acc = None
+    for j in range(signals.shape[1]):
+        f, p = _periodogram_density(signals[:, j], dt_fs, zero_pad=zero_pad)
+        if freq is None:
+            freq = f
+            acc = np.zeros_like(p)
+        acc += p
+    assert freq is not None and acc is not None
+    return freq, acc / signals.shape[1]
+
+
+def _smooth_spectrum(
+    freq_cm: np.ndarray,
+    intensity: np.ndarray,
+    smooth_cm: float,
+) -> np.ndarray:
+    if smooth_cm <= 0.0 or freq_cm.size < 4:
+        return intensity.copy()
+    df = float(np.median(np.diff(freq_cm)))
+    sigma = max(smooth_cm / (2.0 * np.sqrt(2.0 * np.log(2.0))), df)
+    half = int(max(3, np.ceil(4.0 * sigma / df)))
+    x = np.arange(-half, half + 1) * df
+    ker = np.exp(-0.5 * (x / sigma) ** 2)
+    ker /= ker.sum()
+    return np.convolve(intensity, ker, mode="same")
+
+
+def write_geometry_power_spectra(
+    path: Path,
+    *,
+    r_oh1: np.ndarray,
+    r_oh2: np.ndarray,
+    ang: np.ndarray,
+    frame_dt_fs: float,
+    min_cm: float = 500.0,
+    max_cm: float = 4500.0,
+    smooth_cm: float = 15.0,
+) -> dict:
+    """Power spectra of intramolecular coordinates (diagnostic for IR)."""
+    r_oh = np.concatenate([r_oh1, r_oh2], axis=1)
+    r_sym = 0.5 * (r_oh1 + r_oh2)
+    r_asym = 0.5 * (r_oh1 - r_oh2)
+
+    series = {
+        r"$r_\mathrm{O-H}$ (all bonds)": r_oh,
+        r"$r_\mathrm{sym}=(r_a+r_b)/2$": r_sym,
+        r"$r_\mathrm{asym}=(r_a-r_b)/2$": r_asym,
+        r"$\angle\mathrm{HOH}$": ang,
+    }
+    colors = {
+        r"$r_\mathrm{O-H}$ (all bonds)": "#16a085",
+        r"$r_\mathrm{sym}=(r_a+r_b)/2$": "#1f4e79",
+        r"$r_\mathrm{asym}=(r_a-r_b)/2$": "#c45c26",
+        r"$\angle\mathrm{HOH}$": "#8e44ad",
+    }
+
+    spectra: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for name, sig in series.items():
+        spectra[name] = _average_periodogram(sig, frame_dt_fs, zero_pad=4)
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.2), sharex=False)
+
+    # Top: full band, log scale (shows far-IR dominance clearly)
+    ax = axes[0]
+    for name, (f, p) in spectra.items():
+        m = (f > 0) & (f <= max_cm)
+        ax.plot(f[m], p[m], color=colors[name], lw=1.0, label=name)
+    ax.set_yscale("log")
+    ax.set_xlim(0, max_cm)
+    ax.set_ylabel("PSD (arb. u.)")
+    ax.set_title(
+        f"Intramolecular power spectra (log) · frame Δt={frame_dt_fs:.3f} fs"
+    )
+    ax.legend(frameon=False, fontsize=8)
+    ax.grid(True, which="both", alpha=0.25, lw=0.5)
+
+    # Bottom: cut < min_cm before smooth; peak-norm each curve (shape compare)
+    ax = axes[1]
+    peaks: dict[str, float] = {}
+    for name, (f, p) in spectra.items():
+        m = (f >= min_cm) & (f <= max_cm)
+        fc, pc = f[m], p[m]
+        ps = _smooth_spectrum(fc, pc, smooth_cm)
+        scale = float(np.max(ps)) if ps.size and np.max(ps) > 0 else 1.0
+        ax.plot(fc, pc / scale, color=colors[name], lw=0.5, alpha=0.35)
+        ax.plot(fc, ps / scale, color=colors[name], lw=1.35, label=name)
+        if ps.size:
+            peaks[name] = float(fc[int(np.argmax(ps))])
+    ax.set_xlim(min_cm, max_cm)
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("PSD (peak-norm., arb.)")
+    ax.set_title(
+        f"cut <{min_cm:g} cm$^{{-1}}$ before smooth (HWHM={smooth_cm:g}) · "
+        "each series peak-normalized"
+    )
+    ax.legend(frameon=False, fontsize=8)
+    ax.axvline(1600, color="0.7", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.7", ls=":", lw=0.8)
+    fig.tight_layout()
+    ymin, ymax = axes[1].get_ylim()
+    if ymax > ymin:
+        axes[1].text(
+            1600,
+            ymin + 0.92 * (ymax - ymin),
+            "bend",
+            ha="center",
+            fontsize=7,
+            color="0.45",
+        )
+        axes[1].text(
+            3400,
+            ymin + 0.92 * (ymax - ymin),
+            "stretch",
+            ha="center",
+            fontsize=7,
+            color="0.45",
+        )
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+
+    # Band power fractions for r_OH (diagnostic)
+    f, p = spectra[r"$r_\mathrm{O-H}$ (all bonds)"]
+    def _band(lo: float, hi: float) -> float:
+        m = (f >= lo) & (f <= hi)
+        return float(np.trapezoid(p[m], f[m])) if np.any(m) else 0.0
+
+    tot = _band(0, max_cm) or 1.0
+    return {
+        "r_OH_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{O-H}$ (all bonds)"),
+        "r_sym_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{sym}=(r_a+r_b)/2$"),
+        "r_asym_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{asym}=(r_a-r_b)/2$"),
+        "angle_psd_peak_ge500_cm": peaks.get(r"$\angle\mathrm{HOH}$"),
+        "r_OH_power_frac_0_500": _band(0, 500) / tot,
+        "r_OH_power_frac_1400_1800": _band(1400, 1800) / tot,
+        "r_OH_power_frac_3000_3800": _band(3000, 3800) / tot,
+        "artifact": str(path),
+    }
+
+
 def _running_linear_slope(
     t: np.ndarray, y: np.ndarray, *, window: int
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -820,6 +971,17 @@ def main() -> None:
     corr_qo_a = float(np.corrcoef(ang.ravel(), q_o.ravel())[0, 1])
     corr_qh_a = float(np.corrcoef(ang.ravel(), q_h_mean_mol.ravel())[0, 1])
 
+    geom_psd = write_geometry_power_spectra(
+        out / "geometry_power_spectra.png",
+        r_oh1=r_oh1,
+        r_oh2=r_oh2,
+        ang=ang,
+        frame_dt_fs=frame_dt_fs,
+        min_cm=float(args.ir_min_cm),
+        max_cm=float(args.ir_max_cm),
+        smooth_cm=float(args.ir_smooth_cm),
+    )
+
     # --- IR ---
     mu = molecular_dipoles(pos, q, z, box)
     if velocities is not None:
@@ -939,6 +1101,7 @@ def main() -> None:
             "r_sym_std_A": float(r_sym.std()),
             "angle_HOH_mean_deg": float(ang.mean()),
             "angle_HOH_std_deg": float(ang.std()),
+            "power_spectra": geom_psd,
         },
         "ir": {
             "temperature_K_qcf": t_ir,
@@ -962,6 +1125,7 @@ def main() -> None:
             "geometry_distributions.png",
             "charge_vs_geometry_scatter.png",
             "charge_variance_vs_geometry_scatter.png",
+            "geometry_power_spectra.png",
             "ir_spectrum.png",
             "ir_spectrum.npz",
         ],

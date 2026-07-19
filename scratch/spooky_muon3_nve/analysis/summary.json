@@ -33,7 +33,17 @@
     "r_sym_mean_A": 0.9095308698906888,
     "r_sym_std_A": 0.015791754845122276,
     "angle_HOH_mean_deg": 109.00448507992094,
-    "angle_HOH_std_deg": 4.152810814179216
+    "angle_HOH_std_deg": 4.152810814179216,
+    "power_spectra": {
+      "r_OH_psd_peak_ge500_cm": 4167.88336950091,
+      "r_sym_psd_peak_ge500_cm": 3383.1738355472576,
+      "r_asym_psd_peak_ge500_cm": 4166.21554902492,
+      "angle_psd_peak_ge500_cm": 3253.083838419978,
+      "r_OH_power_frac_0_500": 0.999999999936195,
+      "r_OH_power_frac_1400_1800": 6.311394831417935e-12,
+      "r_OH_power_frac_3000_3800": 1.2861808043098365e-11,
+      "artifact": "scratch/spooky_muon3_nve/analysis/geometry_power_spectra.png"
+    }
   },
   "ir": {
     "temperature_K_qcf": 300.0,
@@ -54,6 +64,7 @@
     "geometry_distributions.png",
     "charge_vs_geometry_scatter.png",
     "charge_variance_vs_geometry_scatter.png",
+    "geometry_power_spectra.png",
     "ir_spectrum.png",
     "ir_spectrum.npz"
   ]
