@@ -20,31 +20,34 @@
     "q_O_std": 0.0016436133171979876,
     "q_H_mean": 0.25134760445719584,
     "q_H_std": 0.000841198007569015,
-    "corr_qO_vs_rOH_per_bond": 0.3625342521905269,
-    "corr_qH_vs_rOH_per_bond": -0.4267735942353498,
+    "corr_qO_vs_r_sym": 0.44234998966520245,
+    "corr_qH_vs_r_sym": -0.4423499940965421,
     "corr_qO_vs_angle": -0.6775376105991264,
     "corr_qH_vs_angle": 0.6775376477039411
   },
   "geometry": {
     "r_OH_mean_A": 0.9095317267611174,
     "r_OH_std_A": 0.01926903017725744,
+    "r_sym_mean_A": 0.9095317267611175,
+    "r_sym_std_A": 0.015792208904618556,
     "angle_HOH_mean_deg": 109.0043947333361,
     "angle_HOH_std_deg": 4.1529320010414965
   },
   "ir": {
     "temperature_K_qcf": 300.0,
-    "method": "dipole_velocity_acf",
+    "method": "atomic_charge_current_acf",
     "qm_correction": "omega*(1-exp(-beta*hbar*omega))",
     "normalized_0_4500": true,
-    "smooth_hwhm_cm": 15.0
+    "smooth_hwhm_cm": 15.0,
+    "note": "OH stretch needs dense sampling; use --steps-per-recording 1 (current frame_dt_fs=2.500)."
   },
   "artifacts": [
     "energy_fluctuations.png",
     "charge_distributions.png",
     "charge_variance_per_atom.png",
     "geometry_distributions.png",
-    "charge_vs_bond_surface.png",
-    "charge_vs_angle_surface.png",
+    "charge_vs_geometry_scatter.png",
+    "charge_variance_vs_geometry_scatter.png",
     "ir_spectrum.png",
     "ir_spectrum.npz"
   ]
