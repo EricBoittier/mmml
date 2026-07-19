@@ -126,6 +126,21 @@ def test_build_command_jaxmd_forwards_lr_solver_and_mm_charge_mode() -> None:
     assert "--mm-charge-correction" in argv
 
 
+def test_jaxmd_jargs_forwards_mm_charge_mode_into_runner() -> None:
+    """NVE Hellmann–Feynman preflight reads args.mm_charge_mode on the
+    SimpleNamespace passed to set_up_nhc_sim_routine. If missing, it defaults
+    to fixed and never freezes q_MM — the gate then fails for q0/latent*."""
+    from pathlib import Path
+
+    src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    assert "jargs = SimpleNamespace(" in src
+    jargs_start = src.index("jargs = SimpleNamespace(")
+    # End at the call that consumes jargs (avoids nested-paren fragility).
+    jargs_end = src.index("set_up_nhc_sim_routine(", jargs_start)
+    jargs_block = src[jargs_start:jargs_end]
+    assert 'mm_charge_mode=getattr(args, "mm_charge_mode"' in jargs_block
+
+
 def test_jaxmd_and_ase_suites_accept_lr_solver_and_mm_charge_mode_flags() -> None:
     """The actual downstream parsers (md_pbc_suite/{jaxmd,ase}.py) must
     recognize these flags -- build_command forwarding them is necessary but

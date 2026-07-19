@@ -1759,6 +1759,8 @@ def main(argv: list[str] | None = None) -> int:
             getattr(args, "nve_etot_drift_rescue_min_dt_fs", 0.05)
         ),
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.5)),
+        # Required for NVE Hellmann–Feynman preflight (freeze q_MM for q0/latent*).
+        mm_charge_mode=getattr(args, "mm_charge_mode", None),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
