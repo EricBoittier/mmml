@@ -109,6 +109,7 @@ usage: mmml md-system [-h]
                       [--heat-finalt K] [--heat-mode {ramp,hold}]
                       [--heat-hoover-tmass M] [--nve-boltzmann-temp K]
                       [--nve-max-f-start-eVA EV_PER_A]
+                      [--nve-force-energy-freeze-charges | --no-nve-force-energy-freeze-charges]
                       [--nve-etot-drift-abort-eV EV]
                       [--nve-etot-drift-rescue | --no-nve-etot-drift-rescue]
                       [--nve-etot-drift-rescue-attempts NVE_ETOT_DRIFT_RESCUE_ATTEMPTS]
@@ -521,6 +522,11 @@ options:
                         exceeds this value in eV/Å (default: 1.5; <=0 disables).
                         Hybrid liquid handoffs often land near ~1 eV/Å after
                         FIRE.
+  --nve-force-energy-freeze-charges, --no-nve-force-energy-freeze-charges
+                        jaxmd NVE preflight: freeze MM Coulomb charges at R0
+                        when checking force–energy FD (Hellmann–Feynman).
+                        Default: on for q0/latent* (train-matched); off for
+                        fixed CGenFF.
   --nve-etot-drift-abort-eV EV
                         jaxmd: abort NVE when |E_tot| drift exceeds this (eV;
                         <=0 disables).

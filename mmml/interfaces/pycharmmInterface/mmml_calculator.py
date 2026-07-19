@@ -1575,7 +1575,18 @@ def setup_calculator(
         e = pair_wall_energy(jnp.sqrt(r2_safe))
         return jnp.sum(jnp.where(inter, e, 0.0))
 
-    @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
+    @partial(
+        jax.jit,
+        static_argnames=[
+            "n_monomers",
+            "cutoff_params",
+            "doML",
+            "doMM",
+            "doML_dimer",
+            "debug",
+            "use_mm_charges_override",
+        ],
+    )
     def spherical_cutoff_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
         atomic_numbers: Array,  # Shape: (n_atoms,)
@@ -1590,6 +1601,8 @@ def setup_calculator(
         box: Optional[Array] = None,
         spatial_monomer_indices: Optional[Array] = None,
         spatial_dimer_indices: Optional[Array] = None,
+        use_mm_charges_override: bool = False,
+        mm_charges_override: Optional[Array] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -1602,6 +1615,10 @@ def setup_calculator(
             doMM: Whether to include MM potential
             doML_dimer: Whether to include ML dimer interactions
             debug: Whether to enable debug output
+            use_mm_charges_override: If True, use ``mm_charges_override`` for
+                ``E_MM`` Coulomb instead of assembling charges from the ML head
+                (Hellmann–Feynman NVE preflight / frozen-q diagnostics).
+            mm_charges_override: Per-atom charges (e), shape ``(n_atoms,)``.
             
         Returns:
             ModelOutput containing total energy and forces
@@ -1741,7 +1758,15 @@ def setup_calculator(
 
         if doMM:
             mm_charges = None
-            if _latent_mean_charges_static is not None:
+            if use_mm_charges_override:
+                if mm_charges_override is None:
+                    raise ValueError(
+                        "use_mm_charges_override=True requires mm_charges_override"
+                    )
+                mm_charges = jnp.asarray(mm_charges_override, dtype=ml_jnp_dtype).reshape(
+                    -1
+                )
+            elif _latent_mean_charges_static is not None:
                 mm_charges = _latent_mean_charges_static
             elif _needs_ml_mm_charges:
                 q_ml = outputs.get("q_ml_global")
@@ -1765,11 +1790,12 @@ def setup_calculator(
             if mm_charges is not None:
                 outputs["mm_charges"] = mm_charges
             # Mode A: MM fn keeps baked-in PSF charges (None override).
-            # Q⁰ / latent* / latent_mean: pass the assembled per-atom vector.
+            # Q⁰ / latent* / latent_mean / frozen-q override: pass the vector.
             mm_charges_for_fn = (
                 mm_charges
                 if (
-                    _needs_ml_mm_charges
+                    use_mm_charges_override
+                    or _needs_ml_mm_charges
                     or _latent_mean_charges_static is not None
                 )
                 else None

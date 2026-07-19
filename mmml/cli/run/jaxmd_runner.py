@@ -55,6 +55,9 @@ def nve_force_energy_ablation_verdict(
     hybrid_relerr: float,
     ml_only_relerr: float | None,
     tol: float,
+    *,
+    mm_charge_mode: str | None = None,
+    used_frozen_mm_charges: bool = False,
 ) -> str:
     """Interpret hybrid vs ML-only (doMM=False) directional FD relative errors.
 
@@ -71,6 +74,16 @@ def nve_force_energy_ablation_verdict(
     if not hyb_fail and not ml_fail:
         return "hybrid and ML-only both within tolerance"
     if hyb_fail and not ml_fail:
+        mode = (mm_charge_mode or "").strip().lower()
+        if mode in {"q0", "latent", "q1", "fixed_plus_latent", "latent_dynamic"} and (
+            not used_frozen_mm_charges
+        ):
+            return (
+                "ML-only passes → likely Hellmann–Feynman mismatch: E_MM uses "
+                f"position-dependent MM charges (mm_charge_mode={mode}) while MM "
+                "forces hold q fixed (train-matched). Re-run with frozen-q NVE "
+                "preflight (default for these modes) or use --mm-charge-mode fixed"
+            )
         return (
             "ML-only passes → suspect MM / hybrid assembly (pairs, E_MM, handoff mix); "
             "PBC ML-dimer path looks conservative"
@@ -1742,19 +1755,85 @@ def set_up_nhc_sim_routine(
                 direction_np /= max(float(np.linalg.norm(direction_np)), 1.0e-12)
                 direction = as_jaxmd_dtype(direction_np)
 
-                def _hybrid_fd_check(pos, forces, neighbors):
-                    e_plus = float(
-                        wrapped_energy_fn(
-                            pos + fd_eps * direction,
-                            neighbor=neighbors,
-                        )
+                _mm_charge_mode = str(
+                    getattr(args, "mm_charge_mode", None) or "fixed"
+                ).strip().lower()
+                # Q⁰ / latent* MM charges depend on R, but MM forces are
+                # Hellmann–Feynman (∂E_MM/∂R|_q) — same as hybrid_forward training.
+                # FD of E(R, q(R)) therefore disagrees with F unless q is frozen.
+                try:
+                    from mmml.models.mm_charge_mode import mm_charge_mode_needs_q_ml
+
+                    _freeze_q_for_fd = bool(
+                        getattr(args, "include_mm", True)
+                    ) and mm_charge_mode_needs_q_ml(_mm_charge_mode)
+                except Exception:
+                    _freeze_q_for_fd = _mm_charge_mode in {
+                        "q0",
+                        "latent",
+                        "q1",
+                        "fixed_plus_latent",
+                        "latent_dynamic",
+                    }
+                if getattr(args, "nve_force_energy_freeze_charges", None) is not None:
+                    _freeze_q_for_fd = bool(
+                        getattr(args, "nve_force_energy_freeze_charges")
                     )
-                    e_minus = float(
-                        wrapped_energy_fn(
-                            pos - fd_eps * direction,
-                            neighbor=neighbors,
+
+                def _hybrid_fd_check(pos, forces, neighbors, *, freeze_mm_charges: bool):
+                    pair_i = neighbors[0] if neighbors is not None else None
+                    pair_m = neighbors[1] if neighbors is not None else None
+                    box_fd = _pbc_state["box"]
+                    pos0 = as_jaxmd_dtype(pos)
+                    if freeze_mm_charges:
+                        out0 = spherical_cutoff_calculator(
+                            atomic_numbers=atomic_numbers,
+                            positions=pos0,
+                            n_monomers=n_monomers,
+                            cutoff_params=CUTOFF_PARAMS,
+                            doML=True,
+                            doMM=True,
+                            doML_dimer=not getattr(args, "skip_ml_dimers", False),
+                            debug=False,
+                            mm_pair_idx=pair_i,
+                            mm_pair_mask=pair_m,
+                            box=box_fd,
                         )
-                    )
+                        q_freeze = jax.lax.stop_gradient(out0.mm_charges)
+
+                        def _e_hf(p):
+                            out = spherical_cutoff_calculator(
+                                atomic_numbers=atomic_numbers,
+                                positions=as_jaxmd_dtype(p),
+                                n_monomers=n_monomers,
+                                cutoff_params=CUTOFF_PARAMS,
+                                doML=True,
+                                doMM=True,
+                                doML_dimer=not getattr(args, "skip_ml_dimers", False),
+                                debug=False,
+                                mm_pair_idx=pair_i,
+                                mm_pair_mask=pair_m,
+                                box=box_fd,
+                                use_mm_charges_override=True,
+                                mm_charges_override=q_freeze,
+                            )
+                            return out.energy.reshape(-1)[0]
+
+                        e_plus = float(_e_hf(pos0 + fd_eps * direction))
+                        e_minus = float(_e_hf(pos0 - fd_eps * direction))
+                    else:
+                        e_plus = float(
+                            wrapped_energy_fn(
+                                pos + fd_eps * direction,
+                                neighbor=neighbors,
+                            )
+                        )
+                        e_minus = float(
+                            wrapped_energy_fn(
+                                pos - fd_eps * direction,
+                                neighbor=neighbors,
+                            )
+                        )
                     projected = float(jnp.sum(forces * direction))
                     slope, relerr = directional_force_energy_error(
                         e_plus,
@@ -1805,7 +1884,10 @@ def set_up_nhc_sim_routine(
                     ) + (ml_proj,)
 
                 fd_slope, fd_relerr, projected_force = _hybrid_fd_check(
-                    state.position, forces_jax, current_neighbors
+                    state.position,
+                    forces_jax,
+                    current_neighbors,
+                    freeze_mm_charges=_freeze_q_for_fd,
                 )
                 ml_only_relerr: float | None = None
                 ml_only_slope: float | None = None
@@ -1820,19 +1902,29 @@ def set_up_nhc_sim_routine(
                     )
                 else:
                     ml_proj = None
+                _fd_title = "NVE force–energy preflight"
+                if _freeze_q_for_fd:
+                    _fd_title += " (Hellmann–Feynman: q_MM frozen)"
                 c.print(
                     Panel(
                         f"directional FD dE/ds={fd_slope:.6f} eV/Å, "
                         f"-F·d={-projected_force:.6f} eV/Å, "
                         f"relative error={fd_relerr:.4f} (tol={fd_tol:.4f})",
-                        title="[bold]NVE force–energy preflight[/bold]",
+                        title=f"[bold]{_fd_title}[/bold]",
                         border_style="cyan",
                     )
                 )
-                if do_ml_ablation and ml_only_relerr is not None:
-                    verdict = nve_force_energy_ablation_verdict(
-                        fd_relerr, ml_only_relerr, fd_tol
+                def _ablation_verdict(hyb_err, ml_err):
+                    return nve_force_energy_ablation_verdict(
+                        hyb_err,
+                        ml_err,
+                        fd_tol,
+                        mm_charge_mode=_mm_charge_mode,
+                        used_frozen_mm_charges=_freeze_q_for_fd,
                     )
+
+                if do_ml_ablation and ml_only_relerr is not None:
+                    verdict = _ablation_verdict(fd_relerr, ml_only_relerr)
                     c.print(
                         Panel(
                             f"ML-only (doMM=False): dE/ds={ml_only_slope:.6f} eV/Å, "
@@ -1968,25 +2060,29 @@ def set_up_nhc_sim_routine(
                         console=c,
                     )
                     fd_slope, fd_relerr, projected_force = _hybrid_fd_check(
-                        state.position, forces_jax, current_neighbors
+                        state.position,
+                        forces_jax,
+                        current_neighbors,
+                        freeze_mm_charges=_freeze_q_for_fd,
                     )
                     if do_ml_ablation:
                         ml_only_slope, ml_only_relerr, ml_proj = _ml_only_fd_check(
                             state.position
                         )
+                    _fd_title_rescue = "NVE force–energy preflight (after rescue)"
+                    if _freeze_q_for_fd:
+                        _fd_title_rescue += " (Hellmann–Feynman: q_MM frozen)"
                     c.print(
                         Panel(
                             f"directional FD dE/ds={fd_slope:.6f} eV/Å, "
                             f"-F·d={-projected_force:.6f} eV/Å, "
                             f"relative error={fd_relerr:.4f} (tol={fd_tol:.4f})",
-                            title="[bold]NVE force–energy preflight (after rescue)[/bold]",
+                            title=f"[bold]{_fd_title_rescue}[/bold]",
                             border_style="cyan",
                         )
                     )
                     if do_ml_ablation and ml_only_relerr is not None:
-                        verdict = nve_force_energy_ablation_verdict(
-                            fd_relerr, ml_only_relerr, fd_tol
-                        )
+                        verdict = _ablation_verdict(fd_relerr, ml_only_relerr)
                         c.print(
                             Panel(
                                 f"ML-only (doMM=False): dE/ds={ml_only_slope:.6f} eV/Å, "
@@ -2028,7 +2124,7 @@ def set_up_nhc_sim_routine(
                                 if ml_only_slope is not None
                                 else ""
                             )
-                            + f". {nve_force_energy_ablation_verdict(fd_relerr, ml_only_relerr, fd_tol)}"
+                            + f". {_ablation_verdict(fd_relerr, ml_only_relerr)}"
                         )
                     c.print(
                         Panel(

@@ -80,6 +80,19 @@ def test_nve_force_energy_ablation_verdict_mm_path():
     assert "suspect MM" in text
 
 
+def test_nve_force_energy_ablation_verdict_q0_hellmann_feynman():
+    text = nve_force_energy_ablation_verdict(
+        1.2, 0.001, 0.20, mm_charge_mode="q0", used_frozen_mm_charges=False
+    )
+    assert "Hellmann–Feynman" in text
+    assert "q0" in text
+    # Once the preflight freezes q, fall back to the generic MM verdict.
+    text_frozen = nve_force_energy_ablation_verdict(
+        0.28, 0.05, 0.20, mm_charge_mode="q0", used_frozen_mm_charges=True
+    )
+    assert "suspect MM" in text_frozen
+
+
 def test_nve_force_energy_ablation_verdict_both_hybrid_worse():
     text = nve_force_energy_ablation_verdict(0.50, 0.25, 0.20)
     assert "MM/hybrid assembly adds" in text

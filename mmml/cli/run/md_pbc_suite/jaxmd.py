@@ -241,6 +241,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--nve-force-energy-freeze-charges",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "NVE force–energy FD: freeze MM Coulomb charges at R0 (Hellmann–Feynman). "
+            "Default: on for q0/latent*/fixed_plus_latent (train-matched MM forces "
+            "hold q fixed); off for fixed CGenFF charges."
+        ),
+    )
+    p.add_argument(
         "--nve-etot-drift-abort-eV",
         type=float,
         default=0.5,
@@ -1727,6 +1737,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         nve_force_energy_rescue_fire_steps=int(
             getattr(args, "nve_force_energy_rescue_fire_steps", 50)
+        ),
+        nve_force_energy_freeze_charges=getattr(
+            args, "nve_force_energy_freeze_charges", None
         ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
         nve_etot_drift_rescue=bool(getattr(args, "nve_etot_drift_rescue", True)),

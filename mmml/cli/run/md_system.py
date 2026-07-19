@@ -531,6 +531,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--nve-force-energy-freeze-charges",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "jaxmd NVE preflight: freeze MM Coulomb charges at R0 when checking "
+            "force–energy FD (Hellmann–Feynman). Default: on for q0/latent* "
+            "(train-matched); off for fixed CGenFF."
+        ),
+    )
+    parser.add_argument(
         "--nve-etot-drift-abort-eV",
         type=float,
         default=0.5,
@@ -3197,6 +3207,11 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         _append_optional(
             cmd, "--nve-max-f-start-eVA", getattr(args, "nve_max_f_start_eVA", None)
         )
+        _freeze_q = getattr(args, "nve_force_energy_freeze_charges", None)
+        if _freeze_q is not None:
+            _append_boolean_optional_flag(
+                cmd, "--nve-force-energy-freeze-charges", bool(_freeze_q)
+            )
         _append_boolean_optional_flag(
             cmd, "--skip-bfgs", bool(getattr(args, "skip_bfgs", True))
         )

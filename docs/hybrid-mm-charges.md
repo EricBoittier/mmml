@@ -85,6 +85,12 @@ ML graph) — the same A/B forwards already used for E⁰ in hybrid training.
 - **Train/MD parity:** same operator (unlike `latent_mean` / `latent_dynamic`)
 - Requires `doML` and `charges=True`; does **not** require `doML_dimer`
 - Recommended starting point for ACO liquid with a latent-capable checkpoint
+- **NVE forces:** MM Coulomb uses Hellmann–Feynman gradients
+  (`∂E_MM/∂R` at fixed `q_MM`). That matches hybrid training. The NVE
+  force–energy preflight therefore freezes `q_MM` at `R0` when checking FD
+  consistency (`--nve-force-energy-freeze-charges`, default on for `q0`).
+  Short NVE is still useful; expect mild `E_tot` drift versus a fully
+  charge-responsive force if you monitor `E(R, q(R))`.
 
 ---
 

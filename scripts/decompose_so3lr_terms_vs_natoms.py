@@ -188,6 +188,15 @@ def main() -> int:
         f_true = ev._get_forces(atoms, args.forces_key, 0, default=np.zeros((n_real, 3)))
         f_rmse = float(np.sqrt(np.mean((f_pred - f_true) ** 2)))
 
+        # Per-atom predicted charges ("charges" key, per-atom like "repulsion" --
+        # NOT batch-summed) and the model's own total ("sum_charges", batch-summed).
+        charges_arr = np.asarray(out["charges"]).reshape(max_atoms, -1)[:n_real, 0]
+        charges_abs_max = float(np.max(np.abs(charges_arr)))
+        charges_mean_abs = float(np.mean(np.abs(charges_arr)))
+        charges_sum_manual = float(np.sum(charges_arr))
+        sum_charges_pred = _batch_scalar("sum_charges")
+        target_charge = float(atoms.info.get(args.charge_key, 0.0))
+
         rows.append(
             {
                 "dataset": dataset,
@@ -203,12 +212,19 @@ def main() -> int:
                 "atomic_energy": atomic_e,
                 "electrostatics_per_atom": elec / n_real,
                 "repulsion_per_atom": rep / n_real,
+                "charges_abs_max": charges_abs_max,
+                "charges_mean_abs": charges_mean_abs,
+                "charges_sum_manual": charges_sum_manual,
+                "sum_charges_pred": sum_charges_pred,
+                "target_charge": target_charge,
             }
         )
         print(
             f"{dataset:<28} n={n_real:>4} dE/N={rows[-1]['dE_per_atom']:>10.4f} "
             f"F_rmse={f_rmse:>8.4f} elec/N={rows[-1]['electrostatics_per_atom']:>10.4f} "
-            f"rep/N={rows[-1]['repulsion_per_atom']:>10.4f}"
+            f"rep/N={rows[-1]['repulsion_per_atom']:>10.4f} "
+            f"|q|max={charges_abs_max:>8.4f} |q|mean={charges_mean_abs:>8.4f} "
+            f"sum_q={sum_charges_pred:>8.4f} (target={target_charge:g})"
         )
 
     args.out_csv.parent.mkdir(parents=True, exist_ok=True)
