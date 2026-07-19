@@ -4,7 +4,7 @@
 Produces:
   - NVE validation dashboard (time series + rotated marginals + Fourier)
   - IR from atomic charge-current ACF with harmonic QM correction
-    I(w) ~ w (1 - exp(-beta hbar w)) C_mm(w), normalized on [0, 4500] cm^-1
+    I(w) ~ w (1 - exp(-beta hbar w)) C_mm(w); cut <500 cm^-1 before smooth (arb. u.)
   - Charge vs (r_sym, angle) scatters (Reds/Blues)
   - Twin-axis E_tot / E_kin with matched axis spans
 
@@ -134,6 +134,7 @@ def write_nve_validation_dashboard(
     n_mol: int,
     ir_method: str,
     t_ir: float,
+    ir_min_cm: float = 500.0,
 ) -> dict:
     """Composite NVE validation figure: TS + rotated marginals + Fourier."""
     drift = float(e_tot_kcal[-1] - e_tot_kcal[0])
@@ -344,12 +345,14 @@ def write_nve_validation_dashboard(
     ax_q.legend(handles=[lq1, lq2], loc="best", frameon=False, fontsize=7)
 
     ax_ir = fig.add_subplot(gs5[0, 1])
-    m400 = (freq_cm >= 400) & (freq_cm <= 4500)
-    ax_ir.plot(freq_cm[m400], ir_vib[m400], color="#111111", lw=1.1)
+    ax_ir.plot(freq_cm, ir_smooth, color="#111111", lw=1.1)
     ax_ir.set_xlabel(r"cm$^{-1}$")
-    ax_ir.set_ylabel("I (norm. 400–4500)")
-    ax_ir.set_title(f"IR · {ir_method.split('_')[0]}… · T={t_ir:.0f}K", fontsize=9)
-    ax_ir.set_xlim(400, 4500)
+    ax_ir.set_ylabel("I (arb. u.)")
+    ax_ir.set_title(
+        f"IR (≥{ir_min_cm:g}) · T={t_ir:.0f}K", fontsize=9
+    )
+    if freq_cm.size:
+        ax_ir.set_xlim(float(freq_cm[0]), float(freq_cm[-1]))
     ax_ir.set_ylim(bottom=0)
 
     ax_so = fig.add_subplot(gs5[0, 2])
@@ -475,6 +478,8 @@ def ir_spectrum_qm_corrected(
     *,
     zero_pad: int = 8,
     smooth_cm: float = 15.0,
+    min_cm: float = 500.0,
+    max_cm: float = 4500.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Charge-current ACF -> IR with harmonic / experimental QM correction.
 
@@ -484,10 +489,10 @@ def ir_spectrum_qm_corrected(
         I(w) ~ [(1 - exp(-beta hbar w)) / w] C_JJ(w)
              = w (1 - exp(-beta hbar w)) C_mm(w)
 
-    (physnetjax intensity_correction form; beta hbar w via hc/k_B T).
-    Normalized so integral_0^4500 I(w) dw = 1.
+    Frequencies below ``min_cm`` are discarded *before* smoothing.  Intensities
+    are left in arbitrary units (no integral normalization).
 
-    Returns (freq_cm, I_raw_norm, I_smooth_norm).
+    Returns ``(freq_cm, I_raw, I_smooth)`` restricted to [min_cm, max_cm].
     """
     J = np.asarray(current, dtype=np.float64)
     J = J - J.mean(axis=0, keepdims=True)
@@ -504,24 +509,21 @@ def ir_spectrum_qm_corrected(
     pos = freq_cm > 0.0
     intensity[pos] = (exp_corr[pos] / freq_cm[pos]) * c_jj[pos]
 
-    band = (freq_cm > 0.0) & (freq_cm <= 4500.0)
-    norm = float(np.trapezoid(intensity[band], freq_cm[band]))
-    if norm > 0.0:
-        intensity = intensity / norm
+    # Cut far-IR pedestal before any smooth / display scaling.
+    band = (freq_cm >= float(min_cm)) & (freq_cm <= float(max_cm))
+    freq_cm = freq_cm[band]
+    intensity = intensity[band]
 
     if smooth_cm > 0.0 and freq_cm.size > 3:
-        df = float(np.median(np.diff(freq_cm[freq_cm > 0])))
+        df = float(np.median(np.diff(freq_cm)))
         sigma = max(smooth_cm / (2.0 * np.sqrt(2.0 * np.log(2.0))), df)
         half = int(max(3, np.ceil(4.0 * sigma / df)))
         x = np.arange(-half, half + 1) * df
         ker = np.exp(-0.5 * (x / sigma) ** 2)
         ker /= ker.sum()
         smooth = np.convolve(intensity, ker, mode="same")
-        norm_s = float(np.trapezoid(smooth[band], freq_cm[band]))
-        if norm_s > 0.0:
-            smooth = smooth / norm_s
     else:
-        smooth = intensity
+        smooth = intensity.copy()
 
     return freq_cm, intensity, smooth
 
@@ -565,6 +567,12 @@ def main() -> None:
     p.add_argument("--h5", type=Path, required=True)
     p.add_argument("--box-A", type=float, default=None, help="Cubic box side (A).")
     p.add_argument("--output-dir", type=Path, required=True)
+    p.add_argument(
+        "--ir-min-cm",
+        type=float,
+        default=500.0,
+        help="Discard frequencies below this (cm^-1) before smooth/scale.",
+    )
     p.add_argument("--ir-max-cm", type=float, default=4500.0)
     p.add_argument(
         "--ir-temperature-K",
@@ -830,61 +838,32 @@ def main() -> None:
         frame_dt_fs,
         t_ir,
         smooth_cm=float(args.ir_smooth_cm),
+        min_cm=float(args.ir_min_cm),
+        max_cm=float(args.ir_max_cm),
     )
-    mask = (freq_cm > 0) & (freq_cm <= args.ir_max_cm)
-    mask_vib = (freq_cm >= 400.0) & (freq_cm <= args.ir_max_cm)
 
-    # Renormalize vibrational window for a readable y-scale.
-    ir_vib = ir_smooth.copy()
-    vib_norm = float(np.trapezoid(ir_vib[mask_vib], freq_cm[mask_vib]))
-    if vib_norm > 0.0:
-        ir_vib = ir_vib / vib_norm
-    ir_vib_raw = ir_raw.copy()
-    vib_norm_r = float(np.trapezoid(ir_vib_raw[mask_vib], freq_cm[mask_vib]))
-    if vib_norm_r > 0.0:
-        ir_vib_raw = ir_vib_raw / vib_norm_r
-
-    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.0), sharex=False)
-    axes[0].plot(freq_cm[mask], ir_raw[mask], color="#b0b0b0", lw=0.7, label="raw")
-    axes[0].plot(
-        freq_cm[mask],
-        ir_smooth[mask],
+    fig, ax = plt.subplots(figsize=(9.5, 4.2))
+    ax.plot(freq_cm, ir_raw, color="#b0b0b0", lw=0.7, label="raw")
+    ax.plot(
+        freq_cm,
+        ir_smooth,
         color="#111111",
         lw=1.35,
         label=f"smoothed (HWHM={args.ir_smooth_cm:g} cm$^{{-1}}$)",
     )
-    axes[0].set_ylabel(r"I (norm. 0-4500)")
-    axes[0].set_title("full band (integral 0-4500 = 1)")
-    axes[0].set_xlim(0, args.ir_max_cm)
-    axes[0].set_ylim(bottom=0)
-    axes[0].legend(frameon=False, loc="upper right")
-
-    axes[1].plot(
-        freq_cm[mask_vib], ir_vib_raw[mask_vib], color="#b0b0b0", lw=0.7, label="raw"
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("intensity (arb. u.)")
+    ax.set_title(
+        f"IR from {ir_method} · QM corr. omega*(1-exp(-beta hbar omega)) "
+        f"at T={t_ir:.0f} K\n"
+        f"cut <{args.ir_min_cm:g} cm$^{{-1}}$ before smooth · "
+        f"frame dt={frame_dt_fs:.3f} fs · {n_frames} frames · {n_mol} TIP3"
     )
-    axes[1].plot(
-        freq_cm[mask_vib],
-        ir_vib[mask_vib],
-        color="#111111",
-        lw=1.35,
-        label=f"smoothed (HWHM={args.ir_smooth_cm:g} cm$^{{-1}}$)",
-    )
-    axes[1].set_ylabel(r"I (norm. 400-4500)")
-    axes[1].set_title(r"vibrational window (renormalized on 400-4500 cm$^{-1}$)")
-    axes[1].set_xlim(400, args.ir_max_cm)
-    axes[1].set_ylim(bottom=0)
-    axes[1].set_xlabel(r"wavenumber (cm$^{-1}$)")
-    axes[1].legend(frameon=False, loc="upper right")
-    fig.suptitle(
-        (
-            f"IR from {ir_method} · QM corr. omega*(1-exp(-beta hbar omega)) "
-            f"at T={t_ir:.0f} K\n"
-            f"frame dt={frame_dt_fs:.3f} fs · {n_frames} frames · {n_mol} TIP3"
-        ),
-        y=1.02,
-    )
+    ax.set_xlim(float(args.ir_min_cm), float(args.ir_max_cm))
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, loc="upper right")
     fig.tight_layout()
-    fig.savefig(out / "ir_spectrum.png", dpi=170, bbox_inches="tight")
+    fig.savefig(out / "ir_spectrum.png", dpi=170)
     plt.close(fig)
 
     np.savez_compressed(
@@ -892,11 +871,13 @@ def main() -> None:
         freq_cm=freq_cm,
         intensity=ir_raw,
         intensity_smooth=ir_smooth,
-        intensity_vib_renorm=ir_vib,
         frame_dt_fs=frame_dt_fs,
         temperature_K_qcf=t_ir,
+        ir_min_cm=float(args.ir_min_cm),
+        ir_max_cm=float(args.ir_max_cm),
         qm_correction="(1-exp(-beta*hbar*omega))/omega * C_JJ",
         method=ir_method,
+        units="arbitrary",
     )
 
     dash_meta = write_nve_validation_dashboard(
@@ -912,13 +893,14 @@ def main() -> None:
         q_h_mean=q_h_mean_mol,
         freq_cm=freq_cm,
         ir_smooth=ir_smooth,
-        ir_vib=ir_vib,
+        ir_vib=ir_smooth,
         frame_dt_fs=frame_dt_fs,
         mm_mode=mm_mode,
         box=box,
         n_mol=n_mol,
         ir_method=ir_method,
         t_ir=t_ir,
+        ir_min_cm=float(args.ir_min_cm),
     )
 
     summary = {
@@ -962,11 +944,14 @@ def main() -> None:
             "temperature_K_qcf": t_ir,
             "method": ir_method,
             "qm_correction": "omega*(1-exp(-beta*hbar*omega))",
-            "normalized_0_4500": True,
+            "ir_min_cm": float(args.ir_min_cm),
+            "ir_max_cm": float(args.ir_max_cm),
+            "units": "arbitrary",
+            "cut_before_smooth": True,
             "smooth_hwhm_cm": float(args.ir_smooth_cm),
             "note": (
-                "OH stretch needs dense sampling; use --steps-per-recording 1 "
-                f"(current frame_dt_fs={frame_dt_fs:.3f})."
+                f"frame_dt_fs={frame_dt_fs:.3f}. "
+                f"Frequencies <{args.ir_min_cm:g} cm^-1 removed before smooth."
             ),
         },
         "artifacts": [
