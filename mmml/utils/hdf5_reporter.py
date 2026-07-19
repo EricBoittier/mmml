@@ -402,6 +402,7 @@ def make_jaxmd_reporter(
     include_positions: bool = True,
     include_velocities: bool = False,
     include_forces: bool = False,
+    include_charges: bool = False,
     include_box: bool = False,
     box_shape: Tuple[int, ...] = (3, 3),
     scalar_quantities: Optional[Sequence[str]] = None,
@@ -433,6 +434,8 @@ def make_jaxmd_reporter(
         Record velocities ``(n_atoms, 3)``.
     include_forces : bool
         Record forces ``(n_atoms, 3)``.
+    include_charges : bool
+        Record per-atom MM Coulomb charges ``(n_atoms,)`` (elementary charge).
     include_box : bool
         Record simulation box.
     box_shape : tuple
@@ -476,6 +479,10 @@ def make_jaxmd_reporter(
     if include_forces:
         datasets["forces"] = DatasetSpec(
             shape=(n_atoms, 3), dtype=pos_dtype, **spec_kwargs
+        )
+    if include_charges:
+        datasets["charges"] = DatasetSpec(
+            shape=(n_atoms,), dtype=pos_dtype, **spec_kwargs
         )
     if include_box:
         datasets["box"] = DatasetSpec(

@@ -1499,7 +1499,9 @@ def setup_calculator(
             _cached_mm_fn[0] = mm_result
             _cached_update_mm_pairs[0] = update_fn
             _cached_mm_cutoff_key[0] = key
-            if _needs_ml_mm_charges and _q_cgenff_for_ml_mm[0] is None:
+            # Always cache PSF charges (+ monomer ids): Mode A reporting, and
+            # Mode B/C/Q⁰ assembly of q_MM for E_MM Coulomb.
+            if _q_cgenff_for_ml_mm[0] is None:
                 from mmml.interfaces.pycharmmInterface.long_range_backend import (
                     per_atom_monomer_ids,
                 )
@@ -1757,6 +1759,21 @@ def setup_calculator(
                     _monomer_id_for_ml_mm[0],
                     n_monomers=n_monomers,
                 )
+            else:
+                # Mode A: MM closure uses PSF CGenFF; expose the same vector.
+                mm_charges = _q_cgenff_for_ml_mm[0]
+            if mm_charges is not None:
+                outputs["mm_charges"] = mm_charges
+            # Mode A: MM fn keeps baked-in PSF charges (None override).
+            # Q⁰ / latent* / latent_mean: pass the assembled per-atom vector.
+            mm_charges_for_fn = (
+                mm_charges
+                if (
+                    _needs_ml_mm_charges
+                    or _latent_mean_charges_static is not None
+                )
+                else None
+            )
             mm_out = calculate_mm_contributions(
                 positions,
                 cutoff_params=cutoff_params,
@@ -1764,7 +1781,7 @@ def setup_calculator(
                 mm_pair_idx=mm_pair_idx,
                 mm_pair_mask=mm_pair_mask,
                 box=mic_pbc_cell,
-                mm_charges=mm_charges,
+                mm_charges=mm_charges_for_fn,
             )
             # Preserve separate MM terms and add to totals instead of overwriting
             mm_E = mm_out.get("mm_E", 0)
@@ -1871,6 +1888,14 @@ def setup_calculator(
             energy_sum = final_energy
             hybrid_sum = hybrid_energy
         
+        _mm_charges_out = outputs.get("mm_charges")
+        if _mm_charges_out is None:
+            _mm_charges_out = jnp.zeros((n_atoms,), dtype=ml_jnp_dtype)
+        else:
+            _mm_charges_out = jnp.asarray(_mm_charges_out, dtype=ml_jnp_dtype).reshape(-1)
+            if _mm_charges_out.shape[0] != n_atoms:
+                _mm_charges_out = jnp.zeros((n_atoms,), dtype=ml_jnp_dtype)
+
         return ModelOutput(
             energy=energy_sum,
             forces=final_forces,
@@ -1891,6 +1916,7 @@ def setup_calculator(
             mm_elec_E=outputs.get("mm_elec_E", 0),
             mbd_E=outputs.get("mbd_E", 0.0),
             wall_E=outputs.get("wall_E", 0.0),
+            mm_charges=_mm_charges_out,
         )
 
     def get_ML_energy_fn(

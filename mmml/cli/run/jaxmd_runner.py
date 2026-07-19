@@ -2184,12 +2184,15 @@ def set_up_nhc_sim_routine(
             scalar_quantities.extend(["nbr_n_valid", "nbr_capacity", "nbr_fill_ratio"])
         if use_flat_bottom:
             scalar_quantities.extend(["com_dist_A", "flat_bottom_E_eV"])
+        _mm_charge_mode_attr = getattr(args, "mm_charge_mode", None)
         hdf5_reporter = make_jaxmd_reporter(
             str(hdf5_path),
             n_atoms=len(atoms),
             buffer_size=min(100, total_records),
             include_positions=True,
             include_velocities=True,
+            # Per-frame MM Coulomb charges (Q⁰ / latent / PSF) from ModelOutput.
+            include_charges=True,
             scalar_quantities=scalar_quantities,
             attrs={
                 "ensemble": args.ensemble,
@@ -2198,6 +2201,13 @@ def set_up_nhc_sim_routine(
                 "steps_per_recording": int(steps_per_recording),
                 "n_atoms": len(atoms),
                 "atomic_numbers": np.asarray(atoms.get_atomic_numbers(), dtype=np.int32),
+                "charges_units": "e",
+                "charges_meaning": "per-atom q used for E_MM Coulomb (ModelOutput.mm_charges)",
+                **(
+                    {"mm_charge_mode": str(_mm_charge_mode_attr)}
+                    if _mm_charge_mode_attr is not None
+                    else {}
+                ),
                 **(
                     {
                         "flat_bottom_radius_A": float(flat_bottom_radius),
@@ -2432,6 +2442,7 @@ def set_up_nhc_sim_routine(
                     show_frame(atoms_template, steps, "jaxmd")
 
                 # Energies every record for NVE conservation; print every 10 records.
+                # Prefer a full ModelOutput eval so mm_charges land in the HDF5.
                 nbr_n_valid = nbr_capacity = nbr_fill_ratio = None
                 steps = (i + 1) * steps_per_recording
                 time_ps = steps * dt
@@ -2443,32 +2454,31 @@ def set_up_nhc_sim_routine(
                 com_dist_report = float("nan")
                 e_fb_report = float("nan")
                 e_wall_report = float("nan")
-                if use_flat_bottom or report_wall:
-                    if is_npt and npt_pair_idx is not None:
-                        box_curr = simulate.npt_box(state)
-                        out_dyn = _eval_at_position(
-                            state.position,
-                            box=box_curr,
-                            pair_idx=npt_pair_idx,
-                            pair_mask=npt_pair_mask,
-                        )
-                    else:
-                        pair_idx, pair_mask = current_neighbors if current_neighbors is not None else (None, None)
-                        out_dyn = _eval_at_position(
-                            state.position,
-                            pair_idx=pair_idx,
-                            pair_mask=pair_mask,
-                        )
-                    e_pot = float(out_dyn.energy)
-                    e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
-                    if use_flat_bottom:
-                        com_dist_report = float(out_dyn.com_dist)
-                        e_fb_report = float(out_dyn.flat_bottom_E)
-                elif is_npt and npt_pair_idx is not None:
+                out_dyn = None
+                if is_npt and npt_pair_idx is not None:
                     box_curr = simulate.npt_box(state)
-                    e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+                    out_dyn = _eval_at_position(
+                        state.position,
+                        box=box_curr,
+                        pair_idx=npt_pair_idx,
+                        pair_mask=npt_pair_mask,
+                    )
                 else:
-                    e_pot = float(wrapped_energy_fn(state.position, neighbor=current_neighbors))
+                    pair_idx, pair_mask = (
+                        current_neighbors
+                        if current_neighbors is not None
+                        else (None, None)
+                    )
+                    out_dyn = _eval_at_position(
+                        state.position,
+                        pair_idx=pair_idx,
+                        pair_mask=pair_mask,
+                    )
+                e_pot = float(out_dyn.energy)
+                e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
+                if use_flat_bottom:
+                    com_dist_report = float(out_dyn.com_dist)
+                    e_fb_report = float(out_dyn.flat_bottom_E)
                 e_kin = float(jax_md.quantity.kinetic_energy(
                     momentum=state.momentum,
                     mass=state.mass
@@ -2838,6 +2848,7 @@ def set_up_nhc_sim_routine(
                     time_ps=time_ps,
                     positions=pos_for_h5,
                     velocities=state.momentum / state.mass,
+                    charges=out_dyn.mm_charges,
                 )
                 if is_npt:
                     box_for_density = simulate.npt_box(state)
