@@ -97,6 +97,88 @@ def _smooth_spectrum(
     return np.convolve(intensity, ker, mode="same")
 
 
+def _rolling_avg(y: np.ndarray, window: int) -> np.ndarray:
+    """Centered rolling mean (odd window preferred); edges use partial windows."""
+    y = np.asarray(y, dtype=np.float64)
+    w = int(window)
+    if w < 2 or y.size < 2:
+        return y.copy()
+    if w % 2 == 0:
+        w += 1
+    ker = np.ones(w, dtype=np.float64) / w
+    return np.convolve(y, ker, mode="same")
+
+
+def _apply_qm_factor(
+    freq_cm: np.ndarray,
+    spectrum: np.ndarray,
+    temperature_K: float,
+    *,
+    mode: str,
+) -> np.ndarray:
+    """Frequency-dependent intensity / quantum correction factors.
+
+    Modes
+    -----
+    none : identity
+    harmonic : I ∝ ω · S(ω)
+    classical : I ∝ ω² · S(ω)
+    exp_qm : I ∝ ω (1 − exp(−βℏω)) · S(ω)   (dipole ACF form)
+    exp_qm_from_JJ : I ∝ (1 − exp(−βℏω))/ω · S_JJ(ω)
+        (current ACF form; equivalent to exp_qm on C_μμ)
+    """
+    s = np.asarray(spectrum, dtype=np.float64)
+    f = np.asarray(freq_cm, dtype=np.float64)
+    out = np.zeros_like(s)
+    pos = f > 0.0
+    t_k = max(float(temperature_K), 1.0)
+    beta_hbar_w = (HC_OVER_K_CM_K / t_k) * f
+    exp_corr = 1.0 - np.exp(-np.clip(beta_hbar_w, 0.0, 100.0))
+    if mode == "none":
+        out[pos] = np.maximum(s[pos], 0.0)
+    elif mode == "harmonic":
+        out[pos] = np.maximum(f[pos] * s[pos], 0.0)
+    elif mode == "classical":
+        out[pos] = np.maximum((f[pos] ** 2) * s[pos], 0.0)
+    elif mode == "exp_qm":
+        out[pos] = np.maximum(f[pos] * exp_corr[pos] * s[pos], 0.0)
+    elif mode == "exp_qm_from_JJ":
+        out[pos] = np.maximum((exp_corr[pos] / f[pos]) * s[pos], 0.0)
+    else:
+        raise ValueError(f"unknown QM mode: {mode}")
+    return out
+
+
+def _spectrum_from_signal(
+    signal: np.ndarray,
+    frame_dt_fs: float,
+    *,
+    kind: str,
+    zero_pad: int = 8,
+) -> tuple[np.ndarray, np.ndarray]:
+    """FT route: ``acf`` of signal, or direct ``periodogram`` of signal."""
+    x = np.asarray(signal, dtype=np.float64)
+    x = x - x.mean(axis=0, keepdims=True)
+    if kind == "acf":
+        acf = autocorrelation(x)
+        freq_cm, spec = correlation_to_spectrum(
+            acf, frame_dt_fs, window="blackman", zero_pad=zero_pad, qcf=None
+        )
+        return freq_cm, np.abs(spec)
+    if kind == "periodogram":
+        # Sum of |FT|^2 over Cartesian components (dipole fluctuation IR style)
+        n = len(x)
+        w = np.blackman(n)
+        n_fft = n * zero_pad
+        spec = np.zeros(n_fft // 2 + 1, dtype=np.float64)
+        for a in range(x.shape[1]):
+            ft = np.fft.rfft(x[:, a] * w, n=n_fft)
+            spec += np.abs(ft) ** 2
+        freq_cm = np.fft.rfftfreq(n_fft, d=frame_dt_fs) * FS_INV_TO_CM_INV
+        return freq_cm, spec
+    raise ValueError(kind)
+
+
 def write_geometry_power_spectra(
     path: Path,
     *,
@@ -629,7 +711,7 @@ def ir_spectrum_qm_corrected(
     *,
     zero_pad: int = 8,
     smooth_cm: float = 15.0,
-    min_cm: float = 500.0,
+    min_cm: float = 50.0,
     max_cm: float = 4500.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Charge-current ACF -> IR with harmonic / experimental QM correction.
@@ -721,7 +803,7 @@ def main() -> None:
     p.add_argument(
         "--ir-min-cm",
         type=float,
-        default=500.0,
+        default=50.0,
         help="Discard frequencies below this (cm^-1) before smooth/scale.",
     )
     p.add_argument("--ir-max-cm", type=float, default=4500.0)
@@ -736,6 +818,18 @@ def main() -> None:
         type=float,
         default=15.0,
         help="Gaussian HWHM (cm^-1) for display smoothing (0 disables).",
+    )
+    p.add_argument(
+        "--ir-smooth-wide-cm",
+        type=float,
+        default=60.0,
+        help="Wider Gaussian HWHM (cm^-1) shown as dashed overlay.",
+    )
+    p.add_argument(
+        "--ir-rolling-frames",
+        type=int,
+        default=100,
+        help="Rolling-average window (spectrum bins) overlaid on IR plots.",
     )
     args = p.parse_args()
     out = args.output_dir
@@ -982,108 +1076,210 @@ def main() -> None:
         smooth_cm=float(args.ir_smooth_cm),
     )
 
-    # --- IR: compare total-box atomic current vs molecular-dipole velocity ---
-    mu_mol = molecular_dipoles(pos, q, z, box)
-    J_mol = np.gradient(mu_mol, frame_dt_fs, axis=0)
-    ir_specs: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
-    ir_specs["molecular_dipole_velocity"] = ir_spectrum_qm_corrected(
-        J_mol,
-        frame_dt_fs,
-        float(args.ir_temperature_K) if args.ir_temperature_K else (
-            300.0 if t_mean < 250.0 else t_mean
-        ),
-        smooth_cm=float(args.ir_smooth_cm),
-        min_cm=float(args.ir_min_cm),
-        max_cm=float(args.ir_max_cm),
-    )
-    if velocities is not None:
-        J_box = np.sum(q[..., None] * velocities, axis=1)
-        ir_specs["atomic_charge_current"] = ir_spectrum_qm_corrected(
-            J_box,
-            frame_dt_fs,
-            float(args.ir_temperature_K) if args.ir_temperature_K else (
-                300.0 if t_mean < 250.0 else t_mean
-            ),
-            smooth_cm=float(args.ir_smooth_cm),
-            min_cm=float(args.ir_min_cm),
-            max_cm=float(args.ir_max_cm),
-        )
-
+    # --- IR: mol vs box + alternate processing recipes ---
     t_ir = float(args.ir_temperature_K) if args.ir_temperature_K else t_mean
     if args.ir_temperature_K is None and t_mean < 250.0:
         t_ir = 300.0
+    smooth_n = float(args.ir_smooth_cm)
+    smooth_w = float(args.ir_smooth_wide_cm)
+    roll_n = int(args.ir_rolling_frames)
+    fmin = float(args.ir_min_cm)
+    fmax = float(args.ir_max_cm)
 
-    colors_ir = {
-        "molecular_dipole_velocity": "#1f4e79",
-        "atomic_charge_current": "#c0392b",
-    }
-    labels_ir = {
-        "molecular_dipole_velocity": r"$\dot\mu_\mathrm{mol}$ (sum of MIC mol. dipoles)",
-        "atomic_charge_current": r"$J=\sum q_i v_i$ (total-box current)",
-    }
+    mu_mol = molecular_dipoles(pos, q, z, box)
+    J_mol = np.gradient(mu_mol, frame_dt_fs, axis=0)
+    f_mol, raw_mol, _ = ir_spectrum_qm_corrected(
+        J_mol, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+    )
+    sm_mol = _smooth_spectrum(f_mol, raw_mol, smooth_n)
+    sm_mol_w = _smooth_spectrum(f_mol, raw_mol, smooth_w)
+    roll_mol = _rolling_avg(raw_mol, roll_n)
 
-    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.0), sharex=True)
-    # Absolute arb. intensities
+    has_box = velocities is not None
+    if has_box:
+        J_box = np.sum(q[..., None] * velocities, axis=1)
+        f_box, raw_box, _ = ir_spectrum_qm_corrected(
+            J_box, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+        )
+        sm_box = _smooth_spectrum(f_box, raw_box, smooth_n)
+        sm_box_w = _smooth_spectrum(f_box, raw_box, smooth_w)
+        roll_box = _rolling_avg(raw_box, roll_n)
+    else:
+        f_box = raw_box = sm_box = sm_box_w = roll_box = None
+
+    def _peak_norm(y: np.ndarray) -> np.ndarray:
+        m = float(np.max(np.abs(y))) if y.size else 0.0
+        return y / m if m > 0.0 else y
+
+    def _cut(f: np.ndarray, s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        m = (f >= fmin) & (f <= fmax)
+        return f[m], s[m]
+
+    fig, axes = plt.subplots(3, 1, figsize=(9.5, 9.5), sharex=True)
     ax = axes[0]
-    for name, (f, raw, sm) in ir_specs.items():
-        ax.plot(f, raw, color=colors_ir[name], lw=0.5, alpha=0.35)
-        ax.plot(f, sm, color=colors_ir[name], lw=1.4, label=labels_ir[name])
+    ax.plot(f_mol, raw_mol, color="#1f4e79", lw=0.35, alpha=0.25)
+    ax.plot(f_mol, sm_mol, color="#1f4e79", lw=1.3, label=rf"$\dot\mu$ HWHM={smooth_n:g}")
+    ax.plot(f_mol, sm_mol_w, color="#1f4e79", lw=1.45, ls="--", label=rf"$\dot\mu$ HWHM={smooth_w:g}")
+    ax.plot(f_mol, roll_mol, color="#5dade2", lw=1.2, ls="-.", label=rf"$\dot\mu$ roll-{roll_n}")
+    if has_box:
+        ax.plot(f_box, raw_box, color="#c0392b", lw=0.35, alpha=0.25)
+        ax.plot(f_box, sm_box, color="#c0392b", lw=1.3, label=rf"$J$ HWHM={smooth_n:g}")
+        ax.plot(f_box, sm_box_w, color="#c0392b", lw=1.45, ls="--", label=rf"$J$ HWHM={smooth_w:g}")
+        ax.plot(f_box, roll_box, color="#e74c3c", lw=1.2, ls="-.", label=rf"$J$ roll-{roll_n}")
     ax.set_ylabel("intensity (arb. u.)")
     ax.set_title(
-        f"IR comparison · QM corr. at T={t_ir:.0f} K · "
-        f"cut <{args.ir_min_cm:g} cm$^{{-1}}$ before smooth"
+        f"IR · QM corr. omega*(1-exp(-beta hbar omega)) at T={t_ir:.0f} K · "
+        f"cut <{fmin:g} cm$^{{-1}}$"
     )
     ax.set_ylim(bottom=0)
-    ax.legend(frameon=False, fontsize=8)
-    # Peak-normalized shapes
+    ax.legend(frameon=False, fontsize=7, ncol=3)
+
     ax = axes[1]
-    for name, (f, raw, sm) in ir_specs.items():
-        scale = float(np.max(sm)) if sm.size and np.max(sm) > 0 else 1.0
-        ax.plot(f, raw / scale, color=colors_ir[name], lw=0.5, alpha=0.35)
-        ax.plot(
-            f,
-            sm / scale,
-            color=colors_ir[name],
-            lw=1.4,
-            label=labels_ir[name],
-        )
-    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.plot(f_mol, _peak_norm(sm_mol), color="#1f4e79", lw=1.3, label=rf"$\dot\mu$ HWHM={smooth_n:g}")
+    ax.plot(f_mol, _peak_norm(sm_mol_w), color="#1f4e79", lw=1.45, ls="--", label=rf"$\dot\mu$ HWHM={smooth_w:g}")
+    ax.plot(f_mol, _peak_norm(roll_mol), color="#5dade2", lw=1.2, ls="-.", label=rf"$\dot\mu$ roll-{roll_n}")
+    if has_box:
+        ax.plot(f_box, _peak_norm(sm_box), color="#c0392b", lw=1.3, label=rf"$J$ HWHM={smooth_n:g}")
+        ax.plot(f_box, _peak_norm(sm_box_w), color="#c0392b", lw=1.45, ls="--", label=rf"$J$ HWHM={smooth_w:g}")
+        ax.plot(f_box, _peak_norm(roll_box), color="#e74c3c", lw=1.2, ls="-.", label=rf"$J$ roll-{roll_n}")
     ax.set_ylabel("intensity (peak-norm.)")
-    ax.set_title(
-        f"same spectra, peak-normalized · frame dt={frame_dt_fs:.3f} fs · "
-        f"{n_frames} frames · {n_mol} TIP3"
-    )
-    ax.set_xlim(float(args.ir_min_cm), float(args.ir_max_cm))
+    ax.set_title("peak-normalized")
     ax.set_ylim(bottom=0)
-    ax.legend(frameon=False, fontsize=8)
+    ax.legend(frameon=False, fontsize=7, ncol=3)
+
+    ax = axes[2]
+    if has_box:
+        if f_box.shape != f_mol.shape or not np.allclose(f_box, f_mol):
+            sm_box_i = np.interp(f_mol, f_box, sm_box)
+            sm_box_w_i = np.interp(f_mol, f_box, sm_box_w)
+            roll_box_i = np.interp(f_mol, f_box, roll_box)
+        else:
+            sm_box_i, sm_box_w_i, roll_box_i = sm_box, sm_box_w, roll_box
+        diff_n = _peak_norm(sm_mol) - _peak_norm(sm_box_i)
+        diff_w = _peak_norm(sm_mol_w) - _peak_norm(sm_box_w_i)
+        diff_r = _peak_norm(roll_mol) - _peak_norm(roll_box_i)
+        ax.axhline(0.0, color="0.6", lw=0.7)
+        ax.plot(f_mol, diff_n, color="#2c3e50", lw=1.3, label=rf"Δ peak-norm HWHM={smooth_n:g}")
+        ax.plot(f_mol, diff_w, color="#2c3e50", lw=1.5, ls="--", label=rf"Δ peak-norm HWHM={smooth_w:g}")
+        ax.plot(f_mol, diff_r, color="#8e44ad", lw=1.3, ls="-.", label=rf"Δ peak-norm roll-{roll_n}")
+        ax.set_ylabel(r"$\Delta I$ (peak-norm.)")
+        ax.set_title(r"peak-norm($\dot\mu_\mathrm{mol}$) − peak-norm($J$)")
+        ax.legend(frameon=False, fontsize=8)
+    else:
+        ax.text(0.5, 0.5, "no velocities → no box current", transform=ax.transAxes,
+                ha="center", va="center")
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_xlim(fmin, fmax)
+    fig.suptitle(
+        f"frame dt={frame_dt_fs:.3f} fs · {n_frames} frames · {n_mol} TIP3",
+        fontsize=10,
+        y=1.01,
+    )
     fig.tight_layout()
-    fig.savefig(out / "ir_spectrum.png", dpi=170)
+    fig.savefig(out / "ir_spectrum.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
 
-    # Primary series for dashboard / summary: molecular dipole (requested comparison focus)
+    # Alternate processing on molecular dipole (same cut / arb. / peak-norm overlay)
+    variants: list[tuple[str, np.ndarray, np.ndarray]] = []
+    # 1) μ̇ ACF + exp QM (reference)
+    variants.append(("mu_dot ACF + exp QM", f_mol, raw_mol))
+    # 2) μ ACF + harmonic ω
+    f1, s1 = _spectrum_from_signal(mu_mol, frame_dt_fs, kind="acf")
+    s1 = _apply_qm_factor(f1, s1, t_ir, mode="harmonic")
+    f1, s1 = _cut(f1, s1)
+    variants.append(("mu ACF + harmonic ω", f1, s1))
+    # 3) μ ACF + full exp QM
+    f2, s2 = _spectrum_from_signal(mu_mol, frame_dt_fs, kind="acf")
+    s2 = _apply_qm_factor(f2, s2, t_ir, mode="exp_qm")
+    f2, s2 = _cut(f2, s2)
+    variants.append(("mu ACF + exp QM", f2, s2))
+    # 4) periodogram |FT μ|² + exp QM
+    f3, s3 = _spectrum_from_signal(mu_mol, frame_dt_fs, kind="periodogram")
+    s3 = _apply_qm_factor(f3, s3, t_ir, mode="exp_qm")
+    f3, s3 = _cut(f3, s3)
+    variants.append(("mu periodogram + exp QM", f3, s3))
+    # 5) μ̇ ACF, no QM
+    f4, s4 = _spectrum_from_signal(J_mol, frame_dt_fs, kind="acf")
+    s4 = _apply_qm_factor(f4, s4, t_ir, mode="none")
+    f4, s4 = _cut(f4, s4)
+    variants.append(("mu_dot ACF, no QM", f4, s4))
+    # 6) time-domain 100-frame rolling on μ before spectrum (low-pass)
+    ker = np.ones(roll_n) / roll_n
+    mu_roll = np.stack(
+        [np.convolve(mu_mol[:, a], ker, mode="same") for a in range(3)], axis=1
+    )
+    J_roll = np.gradient(mu_roll, frame_dt_fs, axis=0)
+    f5, s5 = _spectrum_from_signal(J_roll, frame_dt_fs, kind="acf")
+    s5 = _apply_qm_factor(f5, s5, t_ir, mode="exp_qm_from_JJ")
+    f5, s5 = _cut(f5, s5)
+    variants.append((f"mu roll-{roll_n} then mu_dot ACF + exp QM", f5, s5))
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.5), sharex=True)
+    cmap = plt.get_cmap("tab10")
+    ax = axes[0]
+    for i, (name, f, s) in enumerate(variants):
+        ax.plot(f, _smooth_spectrum(f, s, smooth_w), color=cmap(i), lw=1.2, label=name)
+    ax.set_yscale("log")
+    ax.set_ylabel("I (arb. u., log)")
+    ax.set_title(
+        f"IR processing variants on $μ_\\mathrm{{mol}}$ · cut <{fmin:g} · "
+        f"wide smooth HWHM={smooth_w:g}"
+    )
+    ax.legend(frameon=False, fontsize=7)
+    ax.grid(True, which="both", alpha=0.25, lw=0.5)
+
+    ax = axes[1]
+    for i, (name, f, s) in enumerate(variants):
+        sm = _smooth_spectrum(f, s, smooth_w)
+        ax.plot(f, _peak_norm(sm), color=cmap(i), lw=1.25, label=name)
+        ax.plot(f, _peak_norm(_rolling_avg(s, roll_n)), color=cmap(i), lw=1.0, ls=":", alpha=0.8)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("I (peak-norm.)")
+    ax.set_title(f"peak-norm · solid=HWHM {smooth_w:g} · dotted=roll-{roll_n}")
+    ax.set_xlim(fmin, fmax)
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=7, ncol=2)
+    fig.tight_layout()
+    fig.savefig(out / "ir_processing_variants.png", dpi=170)
+    plt.close(fig)
+
     ir_method = "molecular_dipole_velocity"
-    freq_cm, ir_raw, ir_smooth = ir_specs[ir_method]
+    ir_specs = {"molecular_dipole_velocity": (f_mol, raw_mol, sm_mol)}
+    if has_box:
+        ir_specs["atomic_charge_current"] = (f_box, raw_box, sm_box)
+    freq_cm, ir_raw, ir_smooth = f_mol, raw_mol, sm_mol
     save_kw: dict = {
-        "freq_cm_mol": ir_specs["molecular_dipole_velocity"][0],
-        "intensity_mol": ir_specs["molecular_dipole_velocity"][1],
-        "intensity_smooth_mol": ir_specs["molecular_dipole_velocity"][2],
+        "freq_cm_mol": f_mol,
+        "intensity_mol": raw_mol,
+        "intensity_smooth_mol": sm_mol,
+        "intensity_smooth_wide_mol": sm_mol_w,
+        "intensity_rolling_mol": roll_mol,
         "frame_dt_fs": frame_dt_fs,
         "temperature_K_qcf": t_ir,
-        "ir_min_cm": float(args.ir_min_cm),
-        "ir_max_cm": float(args.ir_max_cm),
-        "qm_correction": "(1-exp(-beta*hbar*omega))/omega * C_JJ",
+        "ir_min_cm": fmin,
+        "ir_max_cm": fmax,
+        "smooth_hwhm_cm": smooth_n,
+        "smooth_wide_hwhm_cm": smooth_w,
+        "rolling_frames": roll_n,
+        "qm_correction": "omega*(1-exp(-beta*hbar*omega))  [freq-dependent]",
+        "qm_correction_freq_dependent": True,
         "methods": np.array(list(ir_specs.keys())),
+        "variant_names": np.array([v[0] for v in variants]),
         "units": "arbitrary",
+        "freq_cm": freq_cm,
+        "intensity": ir_raw,
+        "intensity_smooth": ir_smooth,
+        "method": ir_method,
     }
-    if "atomic_charge_current" in ir_specs:
-        save_kw["freq_cm_box"] = ir_specs["atomic_charge_current"][0]
-        save_kw["intensity_box"] = ir_specs["atomic_charge_current"][1]
-        save_kw["intensity_smooth_box"] = ir_specs["atomic_charge_current"][2]
-    # Back-compat keys
-    save_kw["freq_cm"] = freq_cm
-    save_kw["intensity"] = ir_raw
-    save_kw["intensity_smooth"] = ir_smooth
-    save_kw["method"] = ir_method
+    if has_box:
+        save_kw["freq_cm_box"] = f_box
+        save_kw["intensity_box"] = raw_box
+        save_kw["intensity_smooth_box"] = sm_box
+        save_kw["intensity_smooth_wide_box"] = sm_box_w
+        save_kw["intensity_rolling_box"] = roll_box
+        save_kw["diff_peaknorm_mol_minus_box"] = diff_n
+        save_kw["diff_peaknorm_mol_minus_box_wide"] = diff_w
+        save_kw["diff_peaknorm_mol_minus_box_roll"] = diff_r
     np.savez_compressed(out / "ir_spectrum.npz", **save_kw)
 
     dash_meta = write_nve_validation_dashboard(
@@ -1157,10 +1353,14 @@ def main() -> None:
             "units": "arbitrary",
             "cut_before_smooth": True,
             "smooth_hwhm_cm": float(args.ir_smooth_cm),
+            "smooth_wide_hwhm_cm": float(args.ir_smooth_wide_cm),
+            "rolling_frames": int(args.ir_rolling_frames),
+            "qm_correction_freq_dependent": True,
             "note": (
                 f"frame_dt_fs={frame_dt_fs:.3f}. "
                 f"Frequencies <{args.ir_min_cm:g} cm^-1 removed before smooth. "
-                "Compared molecular MIC dipole velocity vs total-box Σ q v."
+                "QM factor omega*(1-exp(-beta*hbar*omega)) is frequency-dependent. "
+                "See ir_processing_variants.png for alternate recipes."
             ),
         },
         "artifacts": [
@@ -1173,6 +1373,7 @@ def main() -> None:
             "charge_variance_vs_geometry_scatter.png",
             "geometry_power_spectra.png",
             "ir_spectrum.png",
+            "ir_processing_variants.png",
             "ir_spectrum.npz",
         ],
     }

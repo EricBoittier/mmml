@@ -35,10 +35,10 @@
     "angle_HOH_mean_deg": 109.00448507992094,
     "angle_HOH_std_deg": 4.152810814179216,
     "power_spectra": {
-      "r_OH_psd_peak_ge500_cm": 4167.88336950091,
-      "r_sym_psd_peak_ge500_cm": 3383.1738355472576,
-      "r_asym_psd_peak_ge500_cm": 4166.21554902492,
-      "angle_psd_peak_ge500_cm": 3253.083838419978,
+      "r_OH_psd_peak_ge500_cm": 75.05192141958422,
+      "r_sym_psd_peak_ge500_cm": 76.71974189557497,
+      "r_asym_psd_peak_ge500_cm": 74.21801118158884,
+      "angle_psd_peak_ge500_cm": 53.370255231704334,
       "r_OH_power_frac_0_500": 0.999999999936195,
       "r_OH_power_frac_1400_1800": 6.311394831417935e-12,
       "r_OH_power_frac_3000_3800": 1.2861808043098365e-11,
@@ -53,12 +53,15 @@
       "atomic_charge_current"
     ],
     "qm_correction": "omega*(1-exp(-beta*hbar*omega))",
-    "ir_min_cm": 500.0,
+    "ir_min_cm": 50.0,
     "ir_max_cm": 4500.0,
     "units": "arbitrary",
     "cut_before_smooth": true,
     "smooth_hwhm_cm": 15.0,
-    "note": "frame_dt_fs=0.250. Frequencies <500 cm^-1 removed before smooth. Compared molecular MIC dipole velocity vs total-box \u03a3 q v."
+    "smooth_wide_hwhm_cm": 60.0,
+    "rolling_frames": 100,
+    "qm_correction_freq_dependent": true,
+    "note": "frame_dt_fs=0.250. Frequencies <50 cm^-1 removed before smooth. QM factor omega*(1-exp(-beta*hbar*omega)) is frequency-dependent. See ir_processing_variants.png for alternate recipes."
   },
   "artifacts": [
     "nve_validation_dashboard.png",
@@ -70,6 +73,7 @@
     "charge_variance_vs_geometry_scatter.png",
     "geometry_power_spectra.png",
     "ir_spectrum.png",
+    "ir_processing_variants.png",
     "ir_spectrum.npz"
   ]
 }
