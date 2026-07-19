@@ -47,14 +47,18 @@
   },
   "ir": {
     "temperature_K_qcf": 300.0,
-    "method": "atomic_charge_current_acf",
+    "primary_method": "molecular_dipole_velocity",
+    "methods": [
+      "molecular_dipole_velocity",
+      "atomic_charge_current"
+    ],
     "qm_correction": "omega*(1-exp(-beta*hbar*omega))",
     "ir_min_cm": 500.0,
     "ir_max_cm": 4500.0,
     "units": "arbitrary",
     "cut_before_smooth": true,
     "smooth_hwhm_cm": 15.0,
-    "note": "frame_dt_fs=0.250. Frequencies <500 cm^-1 removed before smooth."
+    "note": "frame_dt_fs=0.250. Frequencies <500 cm^-1 removed before smooth. Compared molecular MIC dipole velocity vs total-box \u03a3 q v."
   },
   "artifacts": [
     "nve_validation_dashboard.png",

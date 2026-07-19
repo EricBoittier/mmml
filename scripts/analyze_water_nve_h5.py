@@ -982,65 +982,109 @@ def main() -> None:
         smooth_cm=float(args.ir_smooth_cm),
     )
 
-    # --- IR ---
-    mu = molecular_dipoles(pos, q, z, box)
+    # --- IR: compare total-box atomic current vs molecular-dipole velocity ---
+    mu_mol = molecular_dipoles(pos, q, z, box)
+    J_mol = np.gradient(mu_mol, frame_dt_fs, axis=0)
+    ir_specs: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+    ir_specs["molecular_dipole_velocity"] = ir_spectrum_qm_corrected(
+        J_mol,
+        frame_dt_fs,
+        float(args.ir_temperature_K) if args.ir_temperature_K else (
+            300.0 if t_mean < 250.0 else t_mean
+        ),
+        smooth_cm=float(args.ir_smooth_cm),
+        min_cm=float(args.ir_min_cm),
+        max_cm=float(args.ir_max_cm),
+    )
     if velocities is not None:
-        J = np.sum(q[..., None] * velocities, axis=1)
-        ir_method = "atomic_charge_current_acf"
-    else:
-        J = np.gradient(mu, frame_dt_fs, axis=0)
-        ir_method = "dipole_velocity_acf"
+        J_box = np.sum(q[..., None] * velocities, axis=1)
+        ir_specs["atomic_charge_current"] = ir_spectrum_qm_corrected(
+            J_box,
+            frame_dt_fs,
+            float(args.ir_temperature_K) if args.ir_temperature_K else (
+                300.0 if t_mean < 250.0 else t_mean
+            ),
+            smooth_cm=float(args.ir_smooth_cm),
+            min_cm=float(args.ir_min_cm),
+            max_cm=float(args.ir_max_cm),
+        )
 
     t_ir = float(args.ir_temperature_K) if args.ir_temperature_K else t_mean
     if args.ir_temperature_K is None and t_mean < 250.0:
         t_ir = 300.0
 
-    freq_cm, ir_raw, ir_smooth = ir_spectrum_qm_corrected(
-        J,
-        frame_dt_fs,
-        t_ir,
-        smooth_cm=float(args.ir_smooth_cm),
-        min_cm=float(args.ir_min_cm),
-        max_cm=float(args.ir_max_cm),
-    )
+    colors_ir = {
+        "molecular_dipole_velocity": "#1f4e79",
+        "atomic_charge_current": "#c0392b",
+    }
+    labels_ir = {
+        "molecular_dipole_velocity": r"$\dot\mu_\mathrm{mol}$ (sum of MIC mol. dipoles)",
+        "atomic_charge_current": r"$J=\sum q_i v_i$ (total-box current)",
+    }
 
-    fig, ax = plt.subplots(figsize=(9.5, 4.2))
-    ax.plot(freq_cm, ir_raw, color="#b0b0b0", lw=0.7, label="raw")
-    ax.plot(
-        freq_cm,
-        ir_smooth,
-        color="#111111",
-        lw=1.35,
-        label=f"smoothed (HWHM={args.ir_smooth_cm:g} cm$^{{-1}}$)",
-    )
-    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.0), sharex=True)
+    # Absolute arb. intensities
+    ax = axes[0]
+    for name, (f, raw, sm) in ir_specs.items():
+        ax.plot(f, raw, color=colors_ir[name], lw=0.5, alpha=0.35)
+        ax.plot(f, sm, color=colors_ir[name], lw=1.4, label=labels_ir[name])
     ax.set_ylabel("intensity (arb. u.)")
     ax.set_title(
-        f"IR from {ir_method} · QM corr. omega*(1-exp(-beta hbar omega)) "
-        f"at T={t_ir:.0f} K\n"
-        f"cut <{args.ir_min_cm:g} cm$^{{-1}}$ before smooth · "
-        f"frame dt={frame_dt_fs:.3f} fs · {n_frames} frames · {n_mol} TIP3"
+        f"IR comparison · QM corr. at T={t_ir:.0f} K · "
+        f"cut <{args.ir_min_cm:g} cm$^{{-1}}$ before smooth"
+    )
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=8)
+    # Peak-normalized shapes
+    ax = axes[1]
+    for name, (f, raw, sm) in ir_specs.items():
+        scale = float(np.max(sm)) if sm.size and np.max(sm) > 0 else 1.0
+        ax.plot(f, raw / scale, color=colors_ir[name], lw=0.5, alpha=0.35)
+        ax.plot(
+            f,
+            sm / scale,
+            color=colors_ir[name],
+            lw=1.4,
+            label=labels_ir[name],
+        )
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("intensity (peak-norm.)")
+    ax.set_title(
+        f"same spectra, peak-normalized · frame dt={frame_dt_fs:.3f} fs · "
+        f"{n_frames} frames · {n_mol} TIP3"
     )
     ax.set_xlim(float(args.ir_min_cm), float(args.ir_max_cm))
     ax.set_ylim(bottom=0)
-    ax.legend(frameon=False, loc="upper right")
+    ax.legend(frameon=False, fontsize=8)
     fig.tight_layout()
     fig.savefig(out / "ir_spectrum.png", dpi=170)
     plt.close(fig)
 
-    np.savez_compressed(
-        out / "ir_spectrum.npz",
-        freq_cm=freq_cm,
-        intensity=ir_raw,
-        intensity_smooth=ir_smooth,
-        frame_dt_fs=frame_dt_fs,
-        temperature_K_qcf=t_ir,
-        ir_min_cm=float(args.ir_min_cm),
-        ir_max_cm=float(args.ir_max_cm),
-        qm_correction="(1-exp(-beta*hbar*omega))/omega * C_JJ",
-        method=ir_method,
-        units="arbitrary",
-    )
+    # Primary series for dashboard / summary: molecular dipole (requested comparison focus)
+    ir_method = "molecular_dipole_velocity"
+    freq_cm, ir_raw, ir_smooth = ir_specs[ir_method]
+    save_kw: dict = {
+        "freq_cm_mol": ir_specs["molecular_dipole_velocity"][0],
+        "intensity_mol": ir_specs["molecular_dipole_velocity"][1],
+        "intensity_smooth_mol": ir_specs["molecular_dipole_velocity"][2],
+        "frame_dt_fs": frame_dt_fs,
+        "temperature_K_qcf": t_ir,
+        "ir_min_cm": float(args.ir_min_cm),
+        "ir_max_cm": float(args.ir_max_cm),
+        "qm_correction": "(1-exp(-beta*hbar*omega))/omega * C_JJ",
+        "methods": np.array(list(ir_specs.keys())),
+        "units": "arbitrary",
+    }
+    if "atomic_charge_current" in ir_specs:
+        save_kw["freq_cm_box"] = ir_specs["atomic_charge_current"][0]
+        save_kw["intensity_box"] = ir_specs["atomic_charge_current"][1]
+        save_kw["intensity_smooth_box"] = ir_specs["atomic_charge_current"][2]
+    # Back-compat keys
+    save_kw["freq_cm"] = freq_cm
+    save_kw["intensity"] = ir_raw
+    save_kw["intensity_smooth"] = ir_smooth
+    save_kw["method"] = ir_method
+    np.savez_compressed(out / "ir_spectrum.npz", **save_kw)
 
     dash_meta = write_nve_validation_dashboard(
         out / "nve_validation_dashboard.png",
@@ -1105,7 +1149,8 @@ def main() -> None:
         },
         "ir": {
             "temperature_K_qcf": t_ir,
-            "method": ir_method,
+            "primary_method": ir_method,
+            "methods": list(ir_specs.keys()),
             "qm_correction": "omega*(1-exp(-beta*hbar*omega))",
             "ir_min_cm": float(args.ir_min_cm),
             "ir_max_cm": float(args.ir_max_cm),
@@ -1114,7 +1159,8 @@ def main() -> None:
             "smooth_hwhm_cm": float(args.ir_smooth_cm),
             "note": (
                 f"frame_dt_fs={frame_dt_fs:.3f}. "
-                f"Frequencies <{args.ir_min_cm:g} cm^-1 removed before smooth."
+                f"Frequencies <{args.ir_min_cm:g} cm^-1 removed before smooth. "
+                "Compared molecular MIC dipole velocity vs total-box Σ q v."
             ),
         },
         "artifacts": [
