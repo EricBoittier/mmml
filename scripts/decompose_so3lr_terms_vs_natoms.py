@@ -197,6 +197,39 @@ def main() -> int:
         sum_charges_pred = _batch_scalar("sum_charges")
         target_charge = float(atoms.info.get(args.charge_key, 0.0))
 
+        # Eval-time-only charge-neutrality enforcement (NOT applied during
+        # training): uniformly shift the raw predicted per-atom charges so
+        # they sum exactly to target_charge, then recompute ONLY the
+        # electrostatics energy with the model's OWN _calc_switches /
+        # _calculate_electrostatics methods (pure functions, no learned
+        # params -- validated to reproduce the model's own reported
+        # "electrostatics" value exactly when fed the raw, uncorrected
+        # charges, so this recomputation carries zero reimplementation risk).
+        # Note: this yields a corrected ENERGY only -- forces are not
+        # re-differentiated through the correction here.
+        correction = (charges_sum_manual - target_charge) / n_real
+        charges_corrected_real = charges_arr - correction
+        charges_corrected_full = np.zeros((max_atoms, 1, 1, 1), dtype=np.float32)
+        charges_corrected_full[:n_real, 0, 0, 0] = charges_corrected_real
+        displacements = pos[src_idx_np] - pos[dst_idx_np]
+        r_sw, off_dist_sw, eshift_sw = model._calc_switches(
+            jnp.asarray(displacements), jnp.asarray(batch_mask)
+        )
+        _, batch_elec_corrected = model._calculate_electrostatics(
+            jnp.asarray(charges_corrected_full),
+            r_sw,
+            off_dist_sw,
+            eshift_sw,
+            dst_idx,
+            src_idx,
+            jnp.asarray(atom_mask),
+            jnp.asarray(batch_mask),
+            batch_segments,
+            1,
+        )
+        elec_corrected = float(np.asarray(batch_elec_corrected).reshape(-1)[0])
+        e_pred_corrected = atomic_e + elec_corrected + rep + cgenff
+
         rows.append(
             {
                 "dataset": dataset,
@@ -217,10 +250,15 @@ def main() -> int:
                 "charges_sum_manual": charges_sum_manual,
                 "sum_charges_pred": sum_charges_pred,
                 "target_charge": target_charge,
+                "electrostatics_corrected": elec_corrected,
+                "E_pred_corrected": e_pred_corrected,
+                "dE_corrected": e_pred_corrected - e_true,
+                "dE_corrected_per_atom": (e_pred_corrected - e_true) / n_real,
             }
         )
         print(
             f"{dataset:<28} n={n_real:>4} dE/N={rows[-1]['dE_per_atom']:>10.4f} "
+            f"dE_corrected/N={rows[-1]['dE_corrected_per_atom']:>10.4f} "
             f"F_rmse={f_rmse:>8.4f} elec/N={rows[-1]['electrostatics_per_atom']:>10.4f} "
             f"rep/N={rows[-1]['repulsion_per_atom']:>10.4f} "
             f"|q|max={charges_abs_max:>8.4f} |q|mean={charges_mean_abs:>8.4f} "
