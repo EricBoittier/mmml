@@ -61,7 +61,12 @@
     "smooth_wide_hwhm_cm": 60.0,
     "rolling_frames": 100,
     "qm_correction_freq_dependent": true,
-    "note": "frame_dt_fs=0.250. Frequencies <50 cm^-1 removed before smooth. QM factor omega*(1-exp(-beta*hbar*omega)) is frequency-dependent. See ir_processing_variants.png for alternate recipes."
+    "tip3_fixed_charges_e": [
+      -0.834,
+      0.417,
+      0.417
+    ],
+    "note": "frame_dt_fs=0.250. Frequencies <50 cm^-1 removed before smooth. QM factor omega*(1-exp(-beta*hbar*omega)) is frequency-dependent. See ir_q0_vs_tip3.png for fluctuating q0 vs fixed TIP3 charges."
   },
   "artifacts": [
     "nve_validation_dashboard.png",
@@ -74,6 +79,8 @@
     "geometry_power_spectra.png",
     "ir_spectrum.png",
     "ir_processing_variants.png",
+    "ir_q0_vs_tip3.png",
+    "ir_noise_floor_blowup.png",
     "ir_spectrum.npz"
   ]
 }

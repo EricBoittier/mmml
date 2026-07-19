@@ -34,6 +34,20 @@ from mmml.spectra.spectra_md import (
 EV_TO_KCAL_MOL = 23.06054783061903
 # hc/k_B in cm*K — converts w[cm^-1] -> beta*hbar*w at temperature T
 HC_OVER_K_CM_K = 1.4387769
+# CHARMM TIP3P partial charges (e)
+TIP3_Q_O = -0.834
+TIP3_Q_H = 0.417
+
+
+def tip3_fixed_charges(z: np.ndarray) -> np.ndarray:
+    """Per-atom TIP3 charges from atomic numbers (O,H,H repeating)."""
+    z = np.asarray(z, dtype=np.int32)
+    q = np.zeros(z.shape[0], dtype=np.float64)
+    q[z == 8] = TIP3_Q_O
+    q[z == 1] = TIP3_Q_H
+    if not np.all((z == 8) | (z == 1)):
+        raise ValueError("tip3_fixed_charges expects only O/H atomic numbers")
+    return q
 
 
 def _periodogram_density(
@@ -1280,6 +1294,154 @@ def main() -> None:
         save_kw["diff_peaknorm_mol_minus_box"] = diff_n
         save_kw["diff_peaknorm_mol_minus_box_wide"] = diff_w
         save_kw["diff_peaknorm_mol_minus_box_roll"] = diff_r
+    # Fixed TIP3 charges vs fluctuating q0 (same geometry / velocities)
+    q_tip3_1d = tip3_fixed_charges(z)
+    q_tip3 = np.broadcast_to(q_tip3_1d[None, :], q.shape).copy()
+    mu_tip3 = molecular_dipoles(pos, q_tip3, z, box)
+    J_tip3 = np.gradient(mu_tip3, frame_dt_fs, axis=0)
+    f_t3, raw_t3, _ = ir_spectrum_qm_corrected(
+        J_tip3, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+    )
+    sm_t3 = _smooth_spectrum(f_t3, raw_t3, smooth_n)
+    sm_t3_w = _smooth_spectrum(f_t3, raw_t3, smooth_w)
+    if has_box:
+        J_box_t3 = np.sum(q_tip3[..., None] * velocities, axis=1)
+        f_bt3, raw_bt3, _ = ir_spectrum_qm_corrected(
+            J_box_t3, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+        )
+        sm_bt3 = _smooth_spectrum(f_bt3, raw_bt3, smooth_n)
+        sm_bt3_w = _smooth_spectrum(f_bt3, raw_bt3, smooth_w)
+    else:
+        f_bt3 = raw_bt3 = sm_bt3 = sm_bt3_w = None
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.2), sharex=True)
+    ax = axes[0]
+    ax.plot(f_mol, sm_mol, color="#1f4e79", lw=1.35, label=r"$q^0$ fluct. $\dot\mu_\mathrm{mol}$")
+    ax.plot(f_t3, sm_t3, color="#16a085", lw=1.35, label=r"TIP3 fixed $\dot\mu_\mathrm{mol}$")
+    ax.plot(f_mol, sm_mol_w, color="#1f4e79", lw=1.4, ls="--", alpha=0.85)
+    ax.plot(f_t3, sm_t3_w, color="#16a085", lw=1.4, ls="--", alpha=0.85)
+    if has_box:
+        ax.plot(f_box, sm_box, color="#c0392b", lw=1.1, alpha=0.85, label=r"$q^0$ fluct. $J$")
+        ax.plot(f_bt3, sm_bt3, color="#e67e22", lw=1.1, alpha=0.85, label=r"TIP3 fixed $J$")
+    ax.set_ylabel("intensity (arb. u.)")
+    ax.set_title(
+        f"IR: fluctuating $q^0$ vs fixed TIP3 ({TIP3_Q_O}/{TIP3_Q_H}/{TIP3_Q_H}) · "
+        f"T_QCF={t_ir:.0f} K · cut <{fmin:g} · solid HWHM={smooth_n:g}, dashed {smooth_w:g}"
+    )
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=8)
+
+    ax = axes[1]
+    ax.plot(f_mol, _peak_norm(sm_mol), color="#1f4e79", lw=1.35, label=r"$q^0$ $\dot\mu$")
+    ax.plot(f_t3, _peak_norm(sm_t3), color="#16a085", lw=1.35, label=r"TIP3 $\dot\mu$")
+    ax.plot(f_mol, _peak_norm(sm_mol_w), color="#1f4e79", lw=1.4, ls="--", alpha=0.85)
+    ax.plot(f_t3, _peak_norm(sm_t3_w), color="#16a085", lw=1.4, ls="--", alpha=0.85)
+    if has_box:
+        ax.plot(f_box, _peak_norm(sm_box), color="#c0392b", lw=1.1, label=r"$q^0$ $J$")
+        ax.plot(f_bt3, _peak_norm(sm_bt3), color="#e67e22", lw=1.1, label=r"TIP3 $J$")
+    if f_t3.shape != f_mol.shape or not np.allclose(f_t3, f_mol):
+        sm_t3_i = np.interp(f_mol, f_t3, sm_t3_w)
+    else:
+        sm_t3_i = sm_t3_w
+    d_qt = _peak_norm(sm_mol_w) - _peak_norm(sm_t3_i)
+    ax2 = ax.twinx()
+    ax2.plot(
+        f_mol,
+        d_qt,
+        color="#8e44ad",
+        lw=1.2,
+        ls=":",
+        label=r"peak-norm $\Delta\dot\mu$ ($q^0-$TIP3)",
+    )
+    ax2.set_ylabel(r"$\Delta I_{\dot\mu}$ (peak-norm)", color="#8e44ad")
+    ax2.tick_params(axis="y", colors="#8e44ad")
+    ax2.axhline(0.0, color="#8e44ad", lw=0.5, alpha=0.4)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("intensity (peak-norm.)")
+    ax.set_xlim(fmin, fmax)
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=8, loc="upper right")
+    fig.tight_layout()
+    fig.savefig(out / "ir_q0_vs_tip3.png", dpi=170)
+    plt.close(fig)
+
+    # Blow up the mid/high-frequency floor (exclude far-IR spike from y-scale)
+    floor_lo = 800.0
+    m_floor = (f_mol >= floor_lo) & (f_mol <= fmax)
+
+    def _on_mol_grid(f: np.ndarray, s: np.ndarray) -> np.ndarray:
+        if f.shape == f_mol.shape and np.allclose(f, f_mol):
+            return s
+        return np.interp(f_mol, f, s)
+
+    floor_series = [
+        (f_mol, sm_mol, "#1f4e79", r"$q^0$ $\dot\mu$ HWHM=15", "-"),
+        (f_t3, sm_t3, "#16a085", r"TIP3 $\dot\mu$ HWHM=15", "-"),
+        (f_mol, sm_mol_w, "#1f4e79", r"$q^0$ $\dot\mu$ HWHM=60", "--"),
+        (f_t3, sm_t3_w, "#16a085", r"TIP3 $\dot\mu$ HWHM=60", "--"),
+    ]
+    if has_box:
+        floor_series += [
+            (f_box, sm_box, "#c0392b", r"$q^0$ $J$ HWHM=15", "-"),
+            (f_bt3, sm_bt3, "#e67e22", r"TIP3 $J$ HWHM=15", "-"),
+            (f_box, sm_box_w, "#c0392b", r"$q^0$ $J$ HWHM=60", "--"),
+            (f_bt3, sm_bt3_w, "#e67e22", r"TIP3 $J$ HWHM=60", "--"),
+        ]
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.2), sharex=True)
+
+    ax = axes[0]
+    ymax = 0.0
+    for f, s, c, lab, ls in floor_series:
+        y = _on_mol_grid(f, s)
+        ax.plot(f_mol[m_floor], y[m_floor], color=c, lw=1.25, ls=ls, label=lab)
+        ymax = max(ymax, float(np.max(y[m_floor])) if np.any(m_floor) else 0.0)
+    ax.axvline(1600, color="0.65", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.65", ls=":", lw=0.8)
+    ax.set_ylabel("intensity (arb. u.)")
+    ax.set_title(
+        f"absolute · y-scale from ≥{floor_lo:g} cm$^{{-1}}$ only (far-IR spike excluded)"
+    )
+    ax.set_ylim(0, ymax * 1.15 if ymax > 0 else 1.0)
+    ax.legend(frameon=False, fontsize=7, ncol=2)
+    ax.grid(True, alpha=0.2, lw=0.5)
+
+    ax = axes[1]
+    for f, s, c, lab, ls in floor_series:
+        if "HWHM=15" in lab:
+            continue  # keep panel readable: wide smooth only
+        y = _on_mol_grid(f, s)[m_floor]
+        scale = float(np.max(np.abs(y))) if y.size and np.max(np.abs(y)) > 0 else 1.0
+        ax.plot(f_mol[m_floor], y / scale, color=c, lw=1.45, ls=ls, label=lab)
+    ax.axvline(1600, color="0.65", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.65", ls=":", lw=0.8)
+    ax.text(1600, 0.92, "bend", ha="center", fontsize=8, color="0.45")
+    ax.text(3400, 0.92, "stretch", ha="center", fontsize=8, color="0.45")
+    ax.set_xlim(floor_lo, fmax)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel(f"intensity (re-norm. on ≥{floor_lo:g} cm$^{{-1}}$)")
+    ax.set_title("each curve / max in this window")
+    ax.legend(frameon=False, fontsize=8)
+    ax.grid(True, alpha=0.2, lw=0.5)
+
+    fig.suptitle(
+        f"IR noise-floor blow-up · display ≥{floor_lo:g} cm$^{{-1}}$",
+        fontsize=11,
+        y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(out / "ir_noise_floor_blowup.png", dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+    save_kw["freq_cm_tip3_mol"] = f_t3
+    save_kw["intensity_tip3_mol"] = raw_t3
+    save_kw["intensity_smooth_tip3_mol"] = sm_t3
+    save_kw["tip3_charges_e"] = np.array([TIP3_Q_O, TIP3_Q_H, TIP3_Q_H])
+    if has_box:
+        save_kw["freq_cm_tip3_box"] = f_bt3
+        save_kw["intensity_tip3_box"] = raw_bt3
+        save_kw["intensity_smooth_tip3_box"] = sm_bt3
     np.savez_compressed(out / "ir_spectrum.npz", **save_kw)
 
     dash_meta = write_nve_validation_dashboard(
@@ -1356,11 +1518,12 @@ def main() -> None:
             "smooth_wide_hwhm_cm": float(args.ir_smooth_wide_cm),
             "rolling_frames": int(args.ir_rolling_frames),
             "qm_correction_freq_dependent": True,
+            "tip3_fixed_charges_e": [TIP3_Q_O, TIP3_Q_H, TIP3_Q_H],
             "note": (
                 f"frame_dt_fs={frame_dt_fs:.3f}. "
                 f"Frequencies <{args.ir_min_cm:g} cm^-1 removed before smooth. "
                 "QM factor omega*(1-exp(-beta*hbar*omega)) is frequency-dependent. "
-                "See ir_processing_variants.png for alternate recipes."
+                "See ir_q0_vs_tip3.png for fluctuating q0 vs fixed TIP3 charges."
             ),
         },
         "artifacts": [
@@ -1374,6 +1537,8 @@ def main() -> None:
             "geometry_power_spectra.png",
             "ir_spectrum.png",
             "ir_processing_variants.png",
+            "ir_q0_vs_tip3.png",
+            "ir_noise_floor_blowup.png",
             "ir_spectrum.npz",
         ],
     }
