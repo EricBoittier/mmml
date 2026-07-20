@@ -6821,8 +6821,16 @@ def _bussi_subchunk_grms_blocks_continuation(
     overlap_context: str,
     global_step: int,
     max_grms_kcalmol_A: float = BUSSI_SUBCHUNK_CONTINUE_MAX_GRMS_KCALMOL_A,
+    mlpot_ctx: Any | None = None,
+    microchunk_series: list[dict[str, Any]] | None = None,
+    restart_path: Path | str | None = None,
 ) -> bool:
-    """True when post-subchunk CHARMM GRMS is too hot to continue Bussi heat."""
+    """True when post-subchunk CHARMM GRMS is too hot to continue Bussi heat.
+
+    On trip, writes a structured force/bond dump under ``cleanup/`` when an
+    output directory is available (see
+    :mod:`bussi_continuation_gate_diagnostics`).
+    """
     limit = float(max_grms_kcalmol_A)
     if limit <= 0.0:
         return False
@@ -6841,6 +6849,25 @@ def _bussi_subchunk_grms_blocks_continuation(
         "next micro-chunk",
         flush=True,
     )
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
+            dump_bussi_continuation_gate_diagnostics,
+        )
+
+        dump_bussi_continuation_gate_diagnostics(
+            mlpot_ctx,
+            overlap_context=overlap_context,
+            global_step=int(global_step),
+            gate_grms_kcalmol_A=float(grms),
+            gate_limit_kcalmol_A=float(limit),
+            microchunk_series=microchunk_series,
+            restart_path=restart_path,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"{overlap_context}: WARN Bussi gate diagnostics failed ({exc})",
+            flush=True,
+        )
     return True
 
 
@@ -7028,8 +7055,12 @@ def _run_bussi_heat_subchunked(
     global_step_offset: int = 0,
     quiet_bussi: bool = False,
     split_trajectory: bool = False,
+    mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> Any:
     """Integrate Verlet heat in short segments with ASE Bussi rescales between them."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
+        sample_bussi_microchunk_metrics,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         append_bussi_rescale_ase_frame,
         apply_bussi_velocity_rescale,
@@ -7076,6 +7107,7 @@ def _run_bussi_heat_subchunked(
             f"{overlap_context}: ASE Bussi rescale trajectory → {ase_traj_path.name}",
             flush=True,
         )
+    microchunk_series: list[dict[str, Any]] = []
     while steps_done < total:
         n = min(chunk_nstep, total - steps_done)
         sub_kw = dict(kw)
@@ -7184,12 +7216,21 @@ def _run_bussi_heat_subchunked(
                 (p for p in candidates if p.is_file() and p.stat().st_size > 0),
                 sub_io.restart_write,
             )
+        microchunk_series.append(
+            sample_bussi_microchunk_metrics(
+                global_step=global_after,
+                target_temperature_K=float(target_k),
+            )
+        )
         if _dynamics_chunk_state_corrupt(
             overlap_context=f"{overlap_context} Bussi sub-chunk ending step {global_after}",
             restart_path=restart_path,
         ) or _bussi_subchunk_grms_blocks_continuation(
             overlap_context=overlap_context,
             global_step=global_after,
+            mlpot_ctx=mlpot_ctx,
+            microchunk_series=microchunk_series,
+            restart_path=restart_path,
         ):
             kw["_bussi_subchunk_abort_global_step"] = global_after
             kw["_bussi_subchunk_aborted_corrupt"] = True
@@ -8056,6 +8097,7 @@ def run_dynamics_with_io(
                         global_step_offset=steps_before_chunk,
                         quiet_bussi=bool(chunk_kw.get("_quiet_bussi_rescale", False)),
                         split_trajectory=split_trajectory,
+                        mlpot_ctx=mlpot_ctx,
                     )
                 else:
                     if "_numbered_restart_stage_path" in chunk_kw:
