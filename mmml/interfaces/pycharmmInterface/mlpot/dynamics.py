@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -4121,7 +4122,7 @@ def _drop_unsafe_bussi_init_velocities_for_dcd(
         else:
             print(
                 "run_dynamics: DCD output with C-API init_velocities is unsafe on this "
-                "CHARMM build; using iasvel=1 Bussi continuation instead",
+                "CHARMM build; using iasvel=1 Boltzmann at bath FIRSTT instead",
                 flush=True,
             )
     _apply_bussi_iasvel_one_at_ramp_target(kw)
@@ -4171,12 +4172,39 @@ def _bussi_ramp_target_k_for_kw(kw: dict[str, Any]) -> float | None:
     )
 
 
+def _bath_temperature_k_from_dyn_kw(kw: dict[str, Any], *, default_K: float = 300.0) -> float:
+    """Resolve CHARMM Boltzmann / bath target (K) from dynamics kwargs."""
+    for key in (
+        "hoover reft",
+        "treference",
+        "tbath",
+        "tstruct",
+        "finalt",
+        "firstt",
+    ):
+        if key not in kw:
+            continue
+        try:
+            val = float(kw[key])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(val) and val > 0.0:
+            return val
+    return float(default_K)
+
+
 def _apply_bussi_iasvel_one_at_ramp_target(kw: dict[str, Any]) -> None:
-    """Boltzmann at ramp target when ``dynopt`` cannot take ``init_velocities`` (COMP path unsafe)."""
+    """Boltzmann at bath target when ``dynopt`` cannot take ``init_velocities``.
+
+    Used for Bussi heat *and* CPT/DCD fallbacks that drop C-API inject. Without
+    an explicit ``FIRSTT``, CHARMM assigns at 0 K (seen on CPT equi chunk
+    continuations after ``no readable velocities``).
+    """
     target = _bussi_ramp_target_k_for_kw(kw)
-    if target is not None:
-        kw["firstt"] = float(target)
-        kw["tstruct"] = float(target)
+    if target is None:
+        target = _bath_temperature_k_from_dyn_kw(kw)
+    kw["firstt"] = float(target)
+    kw["tstruct"] = float(target)
     kw["iasvel"] = 1
     kw["iasors"] = 0
     kw["start"] = False

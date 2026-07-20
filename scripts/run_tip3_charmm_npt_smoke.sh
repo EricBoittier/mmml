@@ -158,16 +158,12 @@ mmml md-system \
 rc=$?
 set -e
 
-# Accept PRRTE exit 1 when equi produced a restart (same pattern as box_opt).
-EQUI_RES="$(find "$OUT_DIR" -name 'equi*.res' -o -name '*equi*.res' 2>/dev/null | head -1 || true)"
-if [[ "$rc" -ne 0 && -z "${EQUI_RES:-}" ]]; then
-  echo "FAILED (exit $rc). No equi restart under $OUT_DIR." >&2
-  echo "Do not resume next_run from a gate fail — wipe and re-run:" >&2
+# Partial equi*.res after ECHECK/ABNORMAL is not success (unlike box_opt PRRTE).
+if [[ "$rc" -ne 0 ]]; then
+  echo "FAILED (exit $rc). Do not resume next_run / --no-echeck-heat from a CPT abort." >&2
+  echo "  Wipe and re-run after git pull:" >&2
   echo "  rm -rf $OUT_DIR && re-run this script" >&2
   exit "$rc"
-fi
-if [[ "$rc" -ne 0 ]]; then
-  echo "note: md-system exit=$rc but equi restart present ($EQUI_RES); treating as pass"
 fi
 
 echo "Pass: CHARMM CPT NpT smoke under $OUT_DIR"

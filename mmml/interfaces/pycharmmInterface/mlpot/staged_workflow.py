@@ -1042,8 +1042,13 @@ def _configure_npt_dynamics_start(
     if use_pbc and use_cpt and box_side is not None:
         ensure_charmm_crystal_for_cpt(float(box_side), quiet=quiet)
     # Single CPT dyna: Boltzmann at target T + barostat init (no nstep=0 assign).
+    # ``include_firstt`` is often False when the stage builder thinks this is a
+    # restart handoff; without FIRSTT, IASVEL=1 assigns at 0 K (KEY_LIBRARY
+    # banner: VELOCITIES ASSIGNED AT TEMPERATURE = 0).
     kw["iasvel"] = 1
     kw["start"] = True
+    kw["firstt"] = target
+    kw["tstruct"] = target
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
     if not quiet:

@@ -152,7 +152,9 @@ p_yy = lingo.get_energy_value("PIYY")
 p_zz = lingo.get_energy_value("PIZZ")
 ```
 
-MMML’s `report_instantaneous_pressure_tensor` (before equi/prod) currently calls the **`pressure instantaneous` script**, which may be unavailable on KEY_LIBRARY. Prefer the `eval_get_energy_value` path above for programmatic reads.
+MMML’s `report_instantaneous_pressure_tensor` (before equi/prod) uses the
+`get_energy_value` path (`PRSI` / `PIXX–PIZZ`) — not the `pressure` script
+(KEY_LIBRARY would warn `Unrecognized command: pres`).
 
 ### Get — time series during NPT
 

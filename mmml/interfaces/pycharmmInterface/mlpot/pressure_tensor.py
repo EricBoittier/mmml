@@ -232,11 +232,12 @@ def report_instantaneous_pressure_tensor(
     quiet: bool = False,
     mlpot_ctx: Any | None = None,
 ) -> None:
-    """Run CHARMM ``PRESSure INSTantaneous`` after an energy evaluation.
+    """Report CHARMM virial pressure after an energy evaluation (KEY_LIBRARY-safe).
 
-    Requires coordinates and virials in CHARMM memory (call after ``energy`` /
-    MLpot refresh). Output goes to the CHARMM log.
+    Uses ``get_energy_value`` for ``PRSI`` / ``PIXX–PIZZ`` — not the ``pressure``
+    script command (unrecognized as ``pres`` on KEY_LIBRARY builds).
     """
+    del temp  # bath T kept for API compat; virial tensor is T-independent here
     if mlpot_ctx is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             refresh_mlpot_energy_and_grms,
@@ -252,19 +253,43 @@ def report_instantaneous_pressure_tensor(
 
         safe_energy_show()
 
-    import pycharmm
+    import pycharmm.lingo as lingo
 
-    t = float(temp)
-    noprint = " noprint" if quiet else ""
-    pycharmm.lingo.charmm_script(
-        f"pressure instantaneous temperature {t:.6g}{noprint}\n"
-    )
+    get = lingo.get_energy_value
+    components: dict[str, float] = {}
+    for name in ("PIXX", "PIYY", "PIZZ", "PIXY", "PIXZ", "PIYZ", "PRSI"):
+        try:
+            val = float(get(name))
+        except Exception:
+            continue
+        if math.isfinite(val):
+            components[name] = val
     if not quiet:
-        print(
-            f"{context}: CHARMM instantaneous pressure tensor "
-            f"(T={t:.2f} K; see log above)",
-            flush=True,
-        )
+        if components:
+            prsi = components.get("PRSI")
+            if prsi is None and all(k in components for k in ("PIXX", "PIYY", "PIZZ")):
+                prsi = (
+                    components["PIXX"] + components["PIYY"] + components["PIZZ"]
+                ) / 3.0
+            diag = ", ".join(
+                f"{k}={components[k]:.2f}"
+                for k in ("PIXX", "PIYY", "PIZZ")
+                if k in components
+            )
+            prsi_txt = f"{prsi:.2f} atm" if prsi is not None else "n/a"
+            print(
+                f"{context}: CHARMM instantaneous pressure "
+                f"(PRSI={prsi_txt}"
+                + (f"; {diag}" if diag else "")
+                + ")",
+                flush=True,
+            )
+        else:
+            print(
+                f"{context}: CHARMM instantaneous pressure unavailable "
+                "(PRSI / PIXX–PIZZ)",
+                flush=True,
+            )
 
 
 def maybe_report_instantaneous_pressure_tensor(

@@ -1219,6 +1219,8 @@ def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
     assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["iunrea"] == -1
+    assert kw["firstt"] == pytest.approx(280.0)
+    assert kw["tstruct"] == pytest.approx(280.0)
     assert io.restart_read is None
 
 

@@ -132,28 +132,44 @@ def test_maybe_report_skips_when_disabled():
     report.assert_not_called()
 
 
-def test_report_instantaneous_pressure_tensor_calls_charmm():
+def test_report_instantaneous_pressure_tensor_uses_energy_getters(capsys):
+    """KEY_LIBRARY: no ``pressure`` script (would warn Unrecognized command: pres)."""
+    import sys
+
     ctx = MagicMock()
     mock_lingo = MagicMock()
-    mock_pycharmm = MagicMock()
-    mock_pycharmm.lingo = mock_lingo
+    values = {
+        "PRSI": 1.5,
+        "PIXX": 1.0,
+        "PIYY": 2.0,
+        "PIZZ": 1.5,
+        "PIXY": 0.0,
+        "PIXZ": 0.0,
+        "PIYZ": 0.0,
+    }
+    mock_lingo.get_energy_value.side_effect = lambda name: values[name]
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.lingo = mock_lingo
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms"
-    ) as refresh, patch.dict("sys.modules", {"pycharmm": mock_pycharmm}):
+    ) as refresh, patch.dict(
+        sys.modules,
+        {"pycharmm": fake_pycharmm, "pycharmm.lingo": mock_lingo},
+    ):
         report_instantaneous_pressure_tensor(
             280.0,
             context="EQUI",
-            quiet=True,
+            quiet=False,
             mlpot_ctx=ctx,
         )
     refresh.assert_called_once_with(
         ctx,
         context="EQUI instantaneous pressure",
-        silent_charmm=True,
+        silent_charmm=False,
     )
-    mock_lingo.charmm_script.assert_called_once()
-    assert "pressure instantaneous" in mock_lingo.charmm_script.call_args[0][0].lower()
-    assert "280" in mock_lingo.charmm_script.call_args[0][0]
+    mock_lingo.charmm_script.assert_not_called()
+    assert mock_lingo.get_energy_value.called
+    assert "PRSI=1.50 atm" in capsys.readouterr().out
 
 
 def test_apply_npt_cpt_kwargs_with_tensor():
