@@ -7222,16 +7222,19 @@ def _run_bussi_heat_subchunked(
                 target_temperature_K=float(target_k),
             )
         )
-        if _dynamics_chunk_state_corrupt(
+        chunk_corrupt = _dynamics_chunk_state_corrupt(
             overlap_context=f"{overlap_context} Bussi sub-chunk ending step {global_after}",
             restart_path=restart_path,
-        ) or _bussi_subchunk_grms_blocks_continuation(
+        )
+        # Evaluate GRMS gate even when corrupt so the cleanup/ dump still runs.
+        grms_blocks = _bussi_subchunk_grms_blocks_continuation(
             overlap_context=overlap_context,
             global_step=global_after,
             mlpot_ctx=mlpot_ctx,
             microchunk_series=microchunk_series,
             restart_path=restart_path,
-        ):
+        )
+        if chunk_corrupt or grms_blocks:
             kw["_bussi_subchunk_abort_global_step"] = global_after
             kw["_bussi_subchunk_aborted_corrupt"] = True
             print(
