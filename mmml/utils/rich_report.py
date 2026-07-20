@@ -126,6 +126,7 @@ def print_colored_json(
     console: Any | None = None,
     indent: int = 2,
     sort_keys: bool = False,
+    default: Any = None,
     quiet: bool = False,
     stderr: bool = False,
 ) -> None:
@@ -151,6 +152,7 @@ def print_colored_json(
         ensure_ascii=False,
         allow_nan=False,
         sort_keys=sort_keys,
+        default=default,
     )
     normalized = json.loads(serialized)
     if not rich_enabled(quiet=quiet):
@@ -257,7 +259,7 @@ class CompactReporter:
         if not self._can_render():
             self._plain(plain)
             return
-        table = _compact_table(show_header=False)
+        table = make_compact_table(show_header=False)
         table.add_column(style="dim cyan", no_wrap=True)
         table.add_column()
         for key, value in items:
@@ -288,7 +290,7 @@ class CompactReporter:
             lines.extend("  ".join(_format_cell(value) for value in row) for row in materialized)
             self._plain("\n".join(lines))
             return
-        table = _compact_table(show_header=True)
+        table = make_compact_table(show_header=True)
         styles = column_styles or (None,) * len(columns)
         for column, style in zip(columns, styles, strict=True):
             table.add_column(str(column), style=style)
@@ -299,7 +301,7 @@ class CompactReporter:
         console.print(table)
 
 
-def _compact_table(*, show_header: bool):
+def make_compact_table(*, show_header: bool = True):
     """Construct the single canonical copy-friendly Rich table style."""
 
     from rich.table import Table

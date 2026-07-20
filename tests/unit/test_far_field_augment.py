@@ -22,6 +22,7 @@ from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
 from scripts.train_so3lr_spooky_extxyz import (
     _per_fragment_charge_conservation_mse,
     probe_max_batch_size,
+    resolve_batch_sizes,
 )
 
 
@@ -65,6 +66,81 @@ def test_eligible_source_indices_empty_when_none_qualify():
     data["Q"] = np.array([1.0])
     data["S"] = np.array([2.0])
     assert eligible_source_indices(data).size == 0
+
+
+def _make_flat_data_variable_sizes(sizes: list[int], rng: np.random.Generator | None = None) -> dict:
+    """Like _make_flat_data, but each structure has its own atom count and
+    every structure is neutral/singlet (eligible) -- for max_fragment_atoms tests."""
+    rng = rng or np.random.default_rng(0)
+    n_structures = len(sizes)
+    mol_offsets = np.concatenate([[0], np.cumsum(sizes)]).astype(np.int64)
+    n_atoms = int(mol_offsets[-1])
+    R = rng.normal(scale=0.5, size=(n_atoms, 3))
+    Z = np.full(n_atoms, 6, dtype=np.int32)
+    F = rng.normal(scale=0.1, size=(n_atoms, 3))
+    E = rng.normal(loc=-10.0, scale=1.0, size=n_structures)
+    D = rng.normal(scale=0.5, size=(n_structures, 3))
+    N = np.asarray(sizes, dtype=np.int32)
+    Q = np.zeros(n_structures)
+    S = np.ones(n_structures)
+    return {
+        "mol_offsets": mol_offsets,
+        "R": R,
+        "Z": Z,
+        "F": F,
+        "E": E,
+        "Q": Q,
+        "S": S,
+        "D": D,
+        "N": N,
+    }
+
+
+def test_eligible_source_indices_max_fragment_atoms_excludes_large_structures():
+    data = _make_flat_data_variable_sizes([10, 20, 30, 120])
+    eligible = eligible_source_indices(data, max_fragment_atoms=25)
+    np.testing.assert_array_equal(eligible, np.array([0, 1]))
+
+
+def test_eligible_source_indices_max_fragment_atoms_none_keeps_all():
+    data = _make_flat_data_variable_sizes([10, 20, 30, 120])
+    eligible = eligible_source_indices(data, max_fragment_atoms=None)
+    np.testing.assert_array_equal(eligible, np.array([0, 1, 2, 3]))
+
+
+def test_resolve_composite_max_atoms_is_exact_product():
+    assert resolve_composite_max_atoms(k_max=6, max_fragment_atoms=20) == 120
+    assert resolve_composite_max_atoms(k_max=1, max_fragment_atoms=120) == 120
+
+
+def test_build_far_field_composites_respects_max_fragment_atoms_worst_case():
+    """A heavy-tailed size distribution (many small fragments, one huge
+    outlier) must never produce a composite exceeding
+    resolve_composite_max_atoms(k_max, max_fragment_atoms), even though
+    k_max alone (with no cap) provably can -- this is the exact bug
+    observed in production: k_max=6 with no cap produced a 394-atom
+    composite from a population with median fragment size 18."""
+    sizes = [10] * 50 + [500]  # one extreme outlier among many small fragments
+    data = _make_flat_data_variable_sizes(sizes)
+    max_fragment_atoms = 15
+    k_max = 6
+    worst_case = resolve_composite_max_atoms(k_max=k_max, max_fragment_atoms=max_fragment_atoms)
+
+    rng = np.random.default_rng(3)
+    composites = build_far_field_composites(
+        data,
+        rng,
+        n_composites=200,
+        k_min=k_max,
+        k_max=k_max,
+        safe_separation=12.0,
+        max_fragment_atoms=max_fragment_atoms,
+    )
+    for comp in composites:
+        # If the 500-atom outlier had been drawn even once, N would exceed
+        # worst_case (90), since no combination of <=15-atom fragments can
+        # reach it -- this is the load-bearing assertion.
+        assert comp["N"] <= worst_case
 
 
 def test_compute_safe_separation_uses_binding_constraint():
@@ -173,6 +249,84 @@ def test_append_far_field_composites_to_data_preserves_originals_and_flags_compo
     # build_spooky_batch_from_flat_data -- must never reference a real vdW
     # table entry.
     assert (out["cgenff_type_idx"] == 0).all()
+
+
+def test_probe_max_batch_size_returns_zero_when_batch_size_one_ooms(monkeypatch):
+    """Regression test for the bug where OOM at batch size 1 was silently
+    reported as a verified, working batch size of 1 (the empty binary-search
+    range [1, start_batch-1] returned its unverified `best` seed instead of
+    signalling failure). probe_max_batch_size must return 0, not 1, so
+    resolve_batch_sizes can fail loudly instead of deferring the same OOM to
+    the first real training step on that bucket."""
+    import scripts.train_so3lr_spooky_extxyz as train_mod
+
+    monkeypatch.setattr(train_mod, "stack_device_batches", lambda *a, **k: {})
+
+    def always_oom_step(state, batch):
+        raise RuntimeError("RESOURCE_EXHAUSTED: simulated OOM")
+
+    result = probe_max_batch_size(
+        pad_atoms=400,
+        max_batch=8,
+        start_batch=1,
+        data={},
+        candidate_indices=np.arange(8),
+        steps_for_batch_size=lambda batch_size: (always_oom_step, None),
+        state=None,
+    )
+    assert result == 0
+
+
+def test_probe_max_batch_size_binary_searches_correctly_when_some_fit(monkeypatch):
+    """Sanity check that the fix doesn't break the ordinary case: batch
+    sizes 1-3 fit, 4+ OOM -- must find exactly 3."""
+    import scripts.train_so3lr_spooky_extxyz as train_mod
+
+    monkeypatch.setattr(train_mod, "stack_device_batches", lambda *a, **k: {})
+
+    def steps_for_batch_size(batch_size):
+        def step(state, batch):
+            if batch_size > 3:
+                raise RuntimeError("RESOURCE_EXHAUSTED: simulated OOM")
+            return state, {"loss": jnp.asarray(0.0)}
+
+        return step, None
+
+    result = probe_max_batch_size(
+        pad_atoms=100,
+        max_batch=8,
+        start_batch=1,
+        data={},
+        candidate_indices=np.arange(8),
+        steps_for_batch_size=steps_for_batch_size,
+        state=None,
+    )
+    assert result == 3
+
+
+def test_resolve_batch_sizes_raises_instead_of_silently_flooring_to_one(monkeypatch):
+    """resolve_batch_sizes must surface an infeasible pad width as a loud,
+    immediate failure during probing (seconds), not silently accept an
+    unverified batch size of 1 that then OOMs the first real training step
+    hours later mid-epoch."""
+    import scripts.train_so3lr_spooky_extxyz as train_mod
+
+    monkeypatch.setattr(train_mod, "stack_device_batches", lambda *a, **k: {})
+
+    def always_oom_step(state, batch):
+        raise RuntimeError("RESOURCE_EXHAUSTED: simulated OOM")
+
+    buckets = {400: np.arange(8)}
+    with pytest.raises(RuntimeError, match="no batch size"):
+        resolve_batch_sizes(
+            buckets,
+            per_device_batch_size=8,
+            max_pairs_per_device=18000,
+            auto_batch=True,
+            data={},
+            steps_for_batch_size=lambda batch_size: (always_oom_step, None),
+            state=object(),
+        )
 
 
 def test_per_fragment_charge_mse_excludes_single_fragment_structures():

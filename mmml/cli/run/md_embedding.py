@@ -179,7 +179,9 @@ def _cmd_train(args: argparse.Namespace) -> int:
         use_fix_and_split=not args.simple_split,
         write_plots=not args.no_plot,
     )
-    print(json.dumps(result.report, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(result.report)
     print(f"Wrote {result.manifest_path}")
     return 0
 

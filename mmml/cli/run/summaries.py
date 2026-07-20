@@ -15,6 +15,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from mmml.utils.rich_report import make_compact_table
+
 
 def _ensure_np(arr: Any) -> np.ndarray:
     """Convert JAX/other arrays to numpy for stats."""
@@ -377,7 +379,7 @@ def print_calculator_summary(
     legend.append(" inactive", style="dim white")
 
     # ── Scale table ──────────────────────────────────────────────────────────
-    table = Table(title="[bold green]Calculator Configuration[/bold green]", show_header=True)
+    table = make_compact_table(show_header=True)
     table.add_column("Parameter", style="bright_cyan", no_wrap=True)
     table.add_column("Value", style="white")
 
@@ -448,7 +450,7 @@ def print_calculator_summary(
         for k, v in extra.items():
             table.add_row(str(k), str(v))
 
-    # Assemble panel content
+    # Keep the scientifically useful ruler, without nested panels or borders.
     from rich.console import Group
     inner = Group(
         table,
@@ -468,7 +470,8 @@ def print_calculator_summary(
         if zbl is not None
         else Text(""),
     )
-    c.print(Panel(inner, title="[bold green]Calculator Summary[/bold green]", border_style="green"))
+    c.print("[bold green]Calculator Summary[/bold green]")
+    c.print(inner)
 
 
 def print_neighbor_list_summary(
@@ -490,7 +493,7 @@ def print_neighbor_list_summary(
     """Print a rich summary of neighbor-list configuration and initial capacities."""
     c = console or Console()
 
-    table = Table(title="[bold magenta]Neighbor List Configuration[/bold magenta]", show_header=True)
+    table = make_compact_table(show_header=True)
     table.add_column("Property", style="bright_magenta", no_wrap=True)
     table.add_column("Value", style="white")
 
@@ -548,7 +551,8 @@ def print_neighbor_list_summary(
 
     from rich.console import Group
     inner_parts: list[Any] = [table] + bar_lines
-    c.print(Panel(Group(*inner_parts), title="[bold magenta]Neighbor Lists[/bold magenta]", border_style="magenta"))
+    c.print("[bold magenta]Neighbor Lists[/bold magenta]")
+    c.print(Group(*inner_parts))
 
 
 def build_calculator_summary_dict(
@@ -617,4 +621,3 @@ def save_calculator_summary_json(
     d = build_calculator_summary_dict(cutoff_params, **kwargs)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(json.dumps(d, indent=2), encoding="utf-8")
-

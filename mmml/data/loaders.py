@@ -468,8 +468,8 @@ if __name__ == '__main__':
         stats = get_data_statistics(data)
         
         print("\nDataset Statistics:")
-        import json
-        print(json.dumps(stats, indent=2))
+        from mmml.utils.rich_report import print_colored_json
+
+        print_colored_json(stats)
     else:
         print("Usage: python loaders.py <npz_file>")
-

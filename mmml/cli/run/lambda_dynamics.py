@@ -1564,9 +1564,11 @@ def merge_mbar_into_summary(run_dir: Path, mbar_block: dict[str, Any], write_plo
 
 
 def print_lambda_summary(summary: dict[str, Any]) -> None:
+    from mmml.utils.rich_report import print_colored_json
+
     delta_f_ev = summary.get("delta_F_couple_eV", float("nan"))
     delta_f_kcal = summary.get("delta_F_couple_kcal_mol", float("nan"))
-    print(json.dumps(summary.get("description", {}), indent=2))
+    print_colored_json(summary.get("description", {}))
     sys = summary.get("system")
     if sys:
         print(

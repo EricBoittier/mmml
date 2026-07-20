@@ -188,7 +188,9 @@ def _main_pbc_fd(args: argparse.Namespace) -> int:
         fd_check_dx=float(args.fd_dx),
     )
     path = write_fd_result(result, Path(args.output))
-    print(json.dumps(result, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(result)
     print(f"Wrote {path}")
     return 0
 

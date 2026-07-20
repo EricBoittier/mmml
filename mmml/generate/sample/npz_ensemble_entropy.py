@@ -119,7 +119,9 @@ def main() -> None:
     row = {k: v for k, v in r.items() if k != "soap_array"}
 
     # Human-readable summary
-    print(json.dumps(row, indent=2, default=str))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(row, default=str)
 
     if args.out_json:
         args.out_json.parent.mkdir(parents=True, exist_ok=True)

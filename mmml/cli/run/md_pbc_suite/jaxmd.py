@@ -2015,7 +2015,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(summary_line, flush=True)
     (out_dir / "suite_summary_jaxmd.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    print(json.dumps(summary, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(summary)
     for traj_path in traj_paths:
         print(f"Wrote {traj_path}")
     if run_status != "complete":

@@ -2543,7 +2543,9 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "suite_timing.json").write_text(json.dumps(timing_payload, indent=2))
     (out_dir / "suite_summary.json").write_text(json.dumps(suite_summary, indent=2))
     (out_dir / "timing_log.txt").write_text("\n".join(timing_log) + "\n", encoding="utf-8")
-    print(json.dumps(suite_summary["runs"], indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(suite_summary["runs"])
     print(f"Wrote {out_dir / 'suite_summary.json'}")
     print(f"Wrote {out_dir / 'suite_timing.json'} and {out_dir / 'timing_log.txt'}")
     return 0

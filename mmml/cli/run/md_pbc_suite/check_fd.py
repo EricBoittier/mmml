@@ -90,7 +90,9 @@ def main(argv: list[str] | None = None) -> int:
         jax_md_skin_distance=args.jax_md_skin_distance,
     )
     write_fd_result(result, args.output)
-    print(json.dumps(result, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(result)
     print(f"Wrote {args.output}")
     return 0
 
