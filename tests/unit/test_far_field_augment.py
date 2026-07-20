@@ -17,8 +17,12 @@ from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
     build_one_far_field_composite,
     compute_safe_separation,
     eligible_source_indices,
+    resolve_composite_max_atoms,
 )
-from scripts.train_so3lr_spooky_extxyz import _per_fragment_charge_conservation_mse
+from scripts.train_so3lr_spooky_extxyz import (
+    _per_fragment_charge_conservation_mse,
+    probe_max_batch_size,
+)
 
 
 def _make_flat_data(n_structures: int = 6, rng: np.random.Generator | None = None) -> dict:

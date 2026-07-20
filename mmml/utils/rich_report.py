@@ -163,6 +163,42 @@ def print_colored_json(
     target.print(_colored_json_text(normalized, indent=indent), soft_wrap=True)
 
 
+def print_colored_python_repr(
+    value: Any,
+    *,
+    console: Any | None = None,
+    max_length: int | None = 20,
+    max_string: int | None = 240,
+    expand_all: bool = False,
+    quiet: bool = False,
+    stderr: bool = False,
+) -> None:
+    """Print a compact, colored Python representation of an object.
+
+    This is intended for calculators, dataclasses, configuration objects, and
+    other Python-native diagnostics where JSON would lose type information.
+    Rich honors ``__rich_repr__`` when a class provides it and otherwise falls
+    back to a bounded ``repr``. Plain mode prints ``repr(value)``.
+    """
+
+    if quiet or is_quiet():
+        return
+    if not rich_enabled(quiet=quiet):
+        _emit_plain(repr(value), stderr=stderr)
+        return
+    from rich.pretty import Pretty
+
+    target = console if console is not None else _console(stderr=stderr)
+    target.print(
+        Pretty(
+            value,
+            max_length=max_length,
+            max_string=max_string,
+            expand_all=expand_all,
+        )
+    )
+
+
 @dataclass(frozen=True)
 class CompactReporter:
     """Small, semantic Rich reports without panels or table borders.

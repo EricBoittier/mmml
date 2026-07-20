@@ -715,7 +715,24 @@ def resolve_batch_sizes(
             steps_for_batch_size=steps_for_batch_size,
             state=state,
         )
-        sizes[pad_atoms] = max(1, probed)
+        if probed < 1:
+            # Do not silently floor to 1 -- probe_max_batch_size returning 0
+            # means even batch size 1 OOM'd, so this pad width cannot be
+            # trained at all with the current model/hardware/memory budget.
+            # Failing here (seconds into probing) instead of deferring to
+            # the first real training step on this bucket (potentially
+            # hours later, mid-epoch) is the whole point of probing.
+            raise RuntimeError(
+                f"pad_atoms={pad_atoms}: no batch size (not even 1) fits in "
+                "device memory during auto-batch probing. This structure "
+                "size cannot be trained with the current model/hardware "
+                "memory budget. For far-field composite structures, lower "
+                "--far-field-max-k and/or set --far-field-max-fragment-atoms "
+                "to keep composites within a size that fits; otherwise "
+                "reduce --features/--num-basis-functions or free more GPU "
+                "memory."
+            )
+        sizes[pad_atoms] = probed
         committed_bsz.add(sizes[pad_atoms])
         print(
             f"  auto-batch pad_atoms={pad_atoms}: B/device={sizes[pad_atoms]} "
