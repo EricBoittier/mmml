@@ -4,10 +4,10 @@ This page inventories calculator implementations and states where they are
 actually supported. It also separates calculator choice from hybrid energy
 assembly, MM charge mode, MM nonbond mode, long-range solver, and MD driver.
 
-**Scope:** repository state on 2026-07-20. “Implemented” does not automatically
-mean “supported by every CLI.” The narrowest public interface wins: for
-example, `mmml dimer-scan --calculator` currently accepts only `physnet` and
-`xtb`, even though other ASE calculators exist elsewhere in MMML.
+“Implemented” does not automatically mean “supported by every CLI.” The
+narrowest public interface wins. The canonical dimer calculator surface is
+checked directly against its parser and factory tests rather than copied from a
+dated snapshot. `[evidence: dimer_calculator_surface]`
 
 ## The independent axes
 
@@ -37,6 +37,10 @@ independently in scientific provenance.
 ## Canonical 1D dimer scan calculators
 
 These calculator names are accepted by `mmml dimer-scan`.
+
+The artifact contract is tested independently of calculator choice:
+successful runs preserve a versioned manifest, extxyz trajectory, and ASE
+trajectory containing energy and forces. `[evidence: dimer_artifact_contract]`
 
 | `--calculator` | Implementation | Checkpoint | Properties used | Charge inputs | Where supported |
 |---|---|---|---|---|---|
@@ -70,12 +74,12 @@ and should be migrated by representing those inputs in `DimerScanConfig`.
 | SpookyNet + frozen MBD correction | Energy, forces | `SpookyNetCalculator` with `mbd_checkpoint` and `mbd_weight` | Python ASE evaluation; checkpoint-matched evaluation paths; PyCHARMM hybrid setup also accepts an MBD correction | Recorded cluster-local checkpoint paths may need explicit remapping. Weight must match training. |
 | Learned QCML MBD surrogate | Energy, forces | `mmml.models.mbd.QCMLMBDCalculator` | Python ASE use; standalone evaluation; optional correction in hybrid paths | Requires MBD checkpoint; molecular charge and multiplicity are explicit inputs. |
 | Learned molecular multipole electrostatics | Energy and finite-difference forces | `mmml.models.multipoles.LearnedMolecularMultipoleElectrostatics` | Canonical dimer scan; Python ASE use; multipole analysis; JAX-MD unified force-field build can freeze learned fragment multipoles | Forces differentiate predicted moments, origins, and interaction energy by central differences; accurate but substantially slower than an eventual JAX autodiff kernel. |
-| E-field PhysNet | Energy, forces, dipole, polarizability | `mmml.models.efield.ase_calc_EF.EFieldCalculator` | `efield-evaluate`, `efield-md`, and Python use | Requires the external-field model/input contract; not wired to hybrid MLpot or canonical dimer scan. |
+| E-field PhysNet | Energy, forces, dipole, polarizability | `mmml.models.efield.ase_calc_EF.EFieldCalculator` | Canonical dimer scan, `efield-evaluate`, `efield-md`, and Python use | Requires the external-field model/input contract; not wired to every hybrid MLpot assembly. |
 | DCMNet property calculator | Charges, dipole, multipoles | `mmml.models.dcmnet.dcmnet_ase.DCMNetCalculator` | Python/property evaluation and joint-model workflows | Property-only: no standalone energy/forces. The joint PhysNet+DCMNet loader supplies E/F through PhysNet. |
 | PySCF CPU ASE calculator | Energy, forces, dipole | `mmml.interfaces.pyscf4gpuInterface.cpu.PYSCF` | Python ASE use and QC scripts | Requires a configured PySCF mean-field/post-HF object; method-dependent runtime and gradients. |
 | GPU4PySCF ASE calculator | Public declaration currently energy-only; calculation code has method-specific gradient paths | `mmml.interfaces.pyscf4gpuInterface.aseInterface.PYSCF` | GPU PySCF CLI/campaign paths and Python use | Do not assume generic ASE force support from `implemented_properties`; use the dedicated PySCF evaluation commands for supported E/F workflows. |
 | xTB / tblite | Energy and forces through upstream ASE adapter | `make_xtb_calculator` | Canonical dimer scan, cross-check workflow, Python use | Optional dependency/runtime; method defaults to GFN2-xTB. |
-| DFTB3-D4 | Energy/forces through ASE DFTB+ adapter | `mmml.analysis.dimer_scans.make_dftb3_d4_calculator` | Dimer/reference campaigns and Python use | Requires external DFTB+ executable, complete 3ob-3-1 Slater–Koster files, and explicit scratch directory. Not canonical dimer CLI yet. |
+| DFTB3-D4 | Energy/forces through ASE DFTB+ adapter | `mmml.analysis.dimer_scans.make_dftb3_d4_calculator` | Canonical dimer scan, reference campaigns, and Python use | Requires external DFTB+ executable, complete 3ob-3-1 Slater–Koster files, and explicit scratch directory. |
 | Molecular/monomer-sum PhysNet composition | Energy, forces | `MolecularPhysNetCalculator`, `MonomerSumCalculator` | Python ASE composition workflows | Intramolecular sum only; intermolecular terms require another calculator/assembly layer. |
 | JAX intermolecular CGenFF nonbonded | Energy, forces | `JAXIntermolecularCalculator` | Python ASE hybrid composition and internal hybrid paths | Needs prepared nonbond parameters, cell, molecule IDs, and explicit units. |
 | Full hybrid ML/MM MLpot | Energy, forces, decomposition/diagnostics | `mmml.interfaces.pycharmmInterface.mmml_calculator.setup_calculator` and `DecomposedMlpotCalculator` | `mmml md-system` with ASE, JAX-MD, or PyCHARMM routes; lambda TI; specialized dimer/PBC campaigns | Compatibility depends on energy assembly, MM charge mode, nonbond mode, LR solver, PBC, checkpoint charge head, and system size. See matrices below. |

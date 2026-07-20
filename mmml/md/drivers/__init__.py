@@ -1,9 +1,8 @@
 """Drivers: integrator engines that propagate a system under a hybrid energy.
 
-One driver per engine — ``AseDriver``, ``JaxmdDriver``, ``CharmmDriver``,
-``ApoCharmmDriver`` — each consuming a :class:`~mmml.md.energy.registry.HybridEnergy`
-and an :class:`~mmml.md.config.EnsembleSpec` and producing a
-:class:`~mmml.md.results.Trajectory`.
+The maintained unified driver is currently ``JaxmdDriver``. Proposed
+``AseDriver``, ``CharmmDriver``, and ``ApoCharmmDriver`` names appear in the
+architecture design but are not implementations in this package.
 
 The ``on_overlap`` hook is the explicit, impure escape hatch for CHARMM
 repair/minimize (decision, §10) so energy terms stay pure. Concrete drivers

@@ -10,13 +10,19 @@
 #   BOX_OPT_OUT=./scratch/.../tip3_90_box_opt WIPE=0 ./scripts/run_tip3_charmm_npt_smoke.sh
 #   CUDA_VISIBLE_DEVICES=0,1 ML_GPU_COUNT=2 ML_BATCH_SIZE=256 ./scripts/run_tip3_charmm_npt_smoke.sh
 #
-# Default stages: mini,equi — straight into CPT NpT (pmass>0). Skip the Hoover
-# fixed-volume heat (pmass=0). Opt back in with MD_STAGES=mini,heat,equi.
+# Default stages: mini,heat,equi
+#   - heat: Hoover NVT (pmass=0), gentle FIRSTT→FINALT ramp (default 40→200 K)
+#   - equi: CPT NpT (pmass>0) at bath temperature (default 200 K)
+# Skip heat with MD_STAGES=mini,equi (not recommended after cold CPT ECHECK).
 #
-# Heat resilience (when heat is enabled): --no-echeck-heat, INTRA_RESCUE_SD_STEPS
-# (default 400), N_HEAT_SEGMENTS (default 4).
+# DYNA list cadence: DYN_INBFRQ / DYN_IMGFRQ default 25 (was CHARMM 50). More
+# frequent IMAGE/NB/MLpot updates during early barostat motion; still cheap vs
+# every step. Override with DYN_INBFRQ=10 DYN_IMGFRQ=10 for tighter lists.
 #
-# Pass: exit 0 (or PRRTE exit 1 with equi restart present), L still ~30 Å.
+# Heat resilience: --no-echeck-heat on the heat leg only; EQUI keeps ECHECK.
+# Do not resume next_run / --no-echeck-heat after a CPT abort.
+#
+# Pass: exit 0 with equi restart present; L still ~30 Å.
 
 set -euo pipefail
 
@@ -29,18 +35,31 @@ LIQUID_DIR="${LIQUID_DIR:-$BOX_OPT_OUT/liquid_box}"
 OPT_DIR="${OPT_DIR:-$BOX_OPT_OUT/box_pressure_opt}"
 OUT_DIR="${OUT_DIR:-$BOX_OPT_OUT/npt_charmm}"
 MM_CHARGE_MODE="${MM_CHARGE_MODE:-fixed}"
-TEMP_K="${TEMP_K:-300}"
+# Staging bath (K). Keep ≤200 until CPT is stable; raise TEMP_K later for 300 K.
+TEMP_K="${TEMP_K:-200}"
+# Gentle heat ramp start (K). Default ~0.2×TEMP_K; override with HEAT_FIRSTT.
+HEAT_FIRSTT="${HEAT_FIRSTT:-}"
 TARGET_P_ATM="${TARGET_P_ATM:-1.0}"
 SEED="${SEED:-42}"
 DT_FS="${DT_FS:-0.5}"
-PS_HEAT="${PS_HEAT:-1.0}"
+PS_HEAT="${PS_HEAT:-2.0}"
 PS_EQUI="${PS_EQUI:-2.0}"
 WIPE="${WIPE:-1}"
-# Straight CPT NpT by default (no pmass=0 Hoover heat). Use mini,heat,equi to ramp.
-MD_STAGES="${MD_STAGES:-mini,equi}"
+# NVT ramp then CPT (avoid cold start straight into 300 K barostat).
+MD_STAGES="${MD_STAGES:-mini,heat,equi}"
+N_HEAT_SEGMENTS="${N_HEAT_SEGMENTS:-8}"
+# Tighter than CHARMM default 50 during early NpT / heat.
+DYN_INBFRQ="${DYN_INBFRQ:-25}"
+DYN_IMGFRQ="${DYN_IMGFRQ:-25}"
 # Tier-1 local multi-GPU PhysNet chunks (not spatial MPI). Default 1.
 ML_GPU_COUNT="${ML_GPU_COUNT:-1}"
 ML_BATCH_SIZE="${ML_BATCH_SIZE:-}"
+
+if [[ -z "$HEAT_FIRSTT" ]]; then
+  HEAT_FIRSTT="$(
+    uv run python -c "print(f'{float(\"$TEMP_K\") * 0.2:.1f}')"
+  )"
+fi
 
 ML_ARGS=(--ml-gpu-count "$ML_GPU_COUNT")
 if [[ -n "$ML_BATCH_SIZE" ]]; then
@@ -51,8 +70,10 @@ if [[ ",$MD_STAGES," == *",heat,"* ]]; then
   HEAT_ARGS=(
     --ps-heat "$PS_HEAT"
     --heat-thermostat hoover
+    --heat-firstt "$HEAT_FIRSTT"
+    --heat-finalt "$TEMP_K"
     --no-echeck-heat
-    --n-heat-segments "${N_HEAT_SEGMENTS:-4}"
+    --n-heat-segments "$N_HEAT_SEGMENTS"
   )
 fi
 
@@ -111,8 +132,9 @@ echo "  handoff:    $HAND_OFF_SRC  N=$N_MOL  L=${BOX_SIDE} Å  ρ=${RHO} g/cm³"
 echo "  output:     $OUT_DIR"
 echo "  stages:     $MD_STAGES  (CPT equi @ ${TARGET_P_ATM} atm; pmass>0)"
 echo "  equi:       ${PS_EQUI} ps   dt=${DT_FS} fs"
+echo "  dyn lists:  inbfrq=${DYN_INBFRQ}  imgfrq=${DYN_IMGFRQ}"
 if [[ ",$MD_STAGES," == *",heat,"* ]]; then
-  echo "  heat:       ${PS_HEAT} ps Hoover NVT (pmass=0) before CPT"
+  echo "  heat:       ${PS_HEAT} ps Hoover NVT (pmass=0) ramp ${HEAT_FIRSTT}→${TEMP_K} K (${N_HEAT_SEGMENTS} segments)"
 fi
 echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
 echo "  ml-gpus:    $ML_GPU_COUNT  batch=${ML_BATCH_SIZE:-auto}  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
@@ -137,6 +159,8 @@ mmml md-system \
   --dt-fs "$DT_FS" \
   --ps-equi "$PS_EQUI" \
   --npt-thermostat hoover \
+  --dyn-inbfrq "$DYN_INBFRQ" \
+  --dyn-imgfrq "$DYN_IMGFRQ" \
   --include-mm \
   --mm-charge-mode "$MM_CHARGE_MODE" \
   --lr-solver ewald \

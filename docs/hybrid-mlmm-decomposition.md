@@ -291,8 +291,8 @@ implemented in `mmml/md/energy/capacity.py`.
 3. **Rebuild the neighbor list every N steps, not every step** *(accepted;
    driver-level)*. A Verlet skin lets you reuse `(pi, pj, mask)` and the active
    slots across several steps; rebuild cost (`get_intermolecular_pairs`) is
-   host-side and not jitted. This lives in the `JaxmdDriver` (not yet built), not
-   in the terms.
+   host-side and not jitted. `JaxmdDriver` is implemented for minimization,
+   NVE, NVT, and NPT. `[evidence: jaxmd_driver_surface]`
 4. **Prefer masking over resizing** *(accepted)*. Growing an array forces
    recompilation and a pipeline stall; a mask reuses the cached graph.
 5. **Dtype policy: f64 for all float math; low precision only for indices and

@@ -1,0 +1,56 @@
+schema_version: 1
+claims:
+  dimer_calculator_surface:
+    status: verified
+    claim: The canonical dimer CLI exposes physnet, spookynet, mbd, multipoles, efield, xtb, dftb3-d4, and pyscf.
+    evidence:
+      - tests/unit/test_dimer_scan_cli.py::test_documented_calculator_choices_are_parser_choices
+      - tests/unit/test_dimer_scan_calculator_factory.py
+      - workflows/validation_campaign/pcstudix_smoke_matrix.yaml
+  dimer_artifact_contract:
+    status: verified
+    claim: Successful dimer scans write a manifest, extxyz trajectory, and ASE trajectory with energy and forces.
+    evidence:
+      - tests/unit/test_dimer_scan_result.py
+      - tests/unit/test_smoke_matrix.py
+  learned_multipole_forces:
+    status: verified
+    claim: Learned multipoles expose complete central-finite-difference forces.
+    evidence:
+      - tests/unit/test_multipole_calculator_forces.py
+  jaxmd_driver_surface:
+    status: verified
+    claim: JaxmdDriver implements minimization, NVE, NVT, and NPT dispatch.
+    evidence:
+      - mmml/md/drivers/jaxmd.py
+      - workflows/unified_backend_sweep/config.yaml
+  long_range_solver_surface:
+    status: verified
+    claim: MMML implements MIC, native Ewald, JAX-PME, NValChemI/Ops PME, and ScaFaCoS on their documented execution faces.
+    evidence:
+      - tests/unit/test_mm_energy_forces_native_ewald.py
+      - tests/unit/test_jax_pme_lr_solver.py
+      - tests/unit/test_long_range_backend.py
+      - tests/unit/test_md_mm_nonbonded.py
+  validation_campaign_state:
+    status: generated
+    claim: Validation task state is generated from receipts and campaign configuration rather than copied into prose.
+    evidence:
+      - workflows/validation_campaign/scripts/campaign.py
+      - workflows/validation_campaign/scripts/campaign_lib.py
+  package_architecture_counts:
+    status: generated
+    claim: Package/module and CLI-command counts are generated from the current tree.
+    evidence:
+      - scripts/generate_package_architecture.py
+      - tests/unit/test_package_architecture_docs.py
+  pcstudix_npt_reliability:
+    status: unverified
+    claim: JAX-MD NPT fails deterministically on the current pc-studix software stack.
+    evidence: []
+    needed: Re-run the versioned pc-studix smoke-matrix NPT case and attach its receipt and software provenance.
+  pycharmm_velocity_handoff_blocker:
+    status: unverified
+    claim: PyCHARMM-to-JAX-MD velocity handoff remains blocked by the dynamics ABI.
+    evidence: []
+    needed: Re-run backend parity using the current COMP/restart/cold-start implementation and attach the receipt.
