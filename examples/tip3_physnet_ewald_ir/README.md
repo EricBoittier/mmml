@@ -28,7 +28,7 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 |-------|------|------|
 | `fd` | `mode-check --pbc-fd --residue TIP3` | `fd_force_max_abs_diff_eVA < 0.05` |
 | `scan` | TIP3:2 COM scan `pbc_hybrid_ewald_omit_self` | `scan_1d.npz` written |
-| `box_opt` | CHARMM-default prep: `liquid-box` → pressure MC + 1D `L` refine → `box_pressure_opt/box.json` | `box.json` with `final_cubic_side_A` |
+| `box_opt` | **Pinned:** count@30 Å → ~903 TIP3, ρ≈1.0 → pressure MC/1D → `box_pressure_opt/box.json` | `status=pass`, ρ≈1.0, then opt `box.json` |
 | `smoke` | TIP3:90 / 30 Å Packmol + CHARMM MM pretreat → hybrid heat/NVE; `--mlpot-pbc`, density-prep off, `--no-monomer-physnet-mini` | exit 0 |
 | `prod` | TIP3:90 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
 | `analyze` | `scripts/analyze_water_nve_h5.py` | OH power peak **~2800–3600 cm⁻¹** (not ~40) |
@@ -41,16 +41,17 @@ Default NpT path is **PyCHARMM CPT** (not jaxmd). The first slice runs
 (`mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt`). Offline CI uses a
 synthetic `P∝1/L³` model; pass `charmm_pressure_fn` for live virial `PRSI`.
 
-**Density:** `TIP3:90` @ 30 Å is **~0.1 g/cm³**, not 1 g/cm³ (need ~903 waters
-at 30 Å, or `L≈13.9` Å for 90 waters). `box_opt` defaults to
-`BOX_MODE=count` (fill 30 Å at 1 g/cm³). Wipe the out dir before re-runs so a
-stale fail `box.json` is not reused.
+**Pinned liquid recipe (gpu09-validated):** `BOX_MODE=count` `BOX_SIZE=30`
+`TARGET_DENSITY=1.0` → **N≈903**, **L=30 Å**, **ρ≈1.00 g/cm³**, MM GRMS≈0.04.
+OpenMPI/PRRTE may still print exit 1; the script trusts `box.json` `status=pass`.
+
+`TIP3:90` @ 30 Å is only ~0.1 g/cm³ (smoke wiring). Densified alt: `BOX_MODE=density N_MOL=90` → L≈13.9 Å.
 
 ```bash
-rm -rf scratch/tip3_physnet_ewald_ir/tip3_90_box_opt
-STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
-# or smaller densified N=90 box:
-BOX_MODE=density N_MOL=90 ./scripts/run_tip3_box_pressure_opt.sh
+# continue from certified liquid_box without Packmol rebuild:
+WIPE=0 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
+# full rebuild:
+WIPE=1 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 ```
 
 ## Density / packing note
@@ -78,7 +79,7 @@ and **no** `90 PhysNet group(s)`.
 scratch/tip3_physnet_ewald_ir/
   pbc_fd_tip3.json
   dimer_scan/.../scan_1d.npz
-  tip3_90_box_opt/{liquid_box/,box_pressure_opt/box.json}
+  tip3_30A_box_opt/{liquid_box/,box_pressure_opt/box.json}  # pinned ~903@30Å
   tip3_90_smoke/
   tip3_90_nve/*.h5
   analysis/{ir_spectrum.png,oh_bond_power_spectra.png,summary.json}

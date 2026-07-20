@@ -34,7 +34,9 @@ MPIRUN="${MMML_MPIRUN_WRAPPER:-$ROOT/scripts/mmml-charmm-mpirun.sh}"
 # True ~1 g/cm³ liquid: ~903 waters @ 30 Å, or L≈13.9 Å for 90 waters.
 BOX_SMOKE="${BOX_SMOKE:-30}"
 N_SMOKE="${N_SMOKE:-90}"
-BOX_OPT_MODE="${BOX_OPT_MODE:-count}"  # count@30Å ~903 waters; density@90 → L≈14 Å
+# box_opt pinned: count@30 Å → ~903 TIP3, ρ≈1.0 (gpu09-validated).
+BOX_OPT_MODE="${BOX_OPT_MODE:-count}"
+BOX_OPT_SIZE="${BOX_OPT_SIZE:-30}"
 PS_HEAT_SMOKE="${PS_HEAT_SMOKE:-2.0}"
 PS_NVE_SMOKE="${PS_NVE_SMOKE:-2.0}"
 
@@ -50,7 +52,7 @@ SEED="${SEED:-42}"
 
 SCAN_OUT="${SCAN_OUT:-$OUT_ROOT/dimer_scan}"
 SMOKE_OUT="${SMOKE_OUT:-$OUT_ROOT/tip3_${N_SMOKE}_smoke}"
-BOX_OPT_OUT="${BOX_OPT_OUT:-$OUT_ROOT/tip3_${N_SMOKE}_box_opt}"
+BOX_OPT_OUT="${BOX_OPT_OUT:-$OUT_ROOT/tip3_30A_box_opt}"
 PROD_OUT="${PROD_OUT:-$OUT_ROOT/tip3_${N_PROD}_nve}"
 FD_OUT="${FD_OUT:-$OUT_ROOT/pbc_fd_tip3.json}"
 ANALYZE_OUT="${ANALYZE_OUT:-$OUT_ROOT/analysis}"
@@ -133,8 +135,7 @@ if _want box_opt; then
   echo ""
   echo "=== [box_opt] TIP3:${N_SMOKE} liquid-box → pressure MC/1D → box.json ==="
   OUT_DIR="$BOX_OPT_OUT" \
-  N_MOL="$N_SMOKE" \
-  BOX_SIZE="$BOX_SMOKE" \
+  BOX_SIZE="$BOX_OPT_SIZE" \
   BOX_MODE="$BOX_OPT_MODE" \
   TARGET_P_ATM="$TARGET_P_ATM" \
   TEMP_K="$TEMP_K" \

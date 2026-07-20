@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
-# TIP3 CHARMM-default box pressure opt prep:
-#   liquid-box (MM certify at target density) → pressure MC + 1D refine → box.json
+# TIP3 CHARMM-default box pressure opt prep (pinned liquid recipe):
+#   liquid-box (MM certify) → pressure MC + 1D refine → box_pressure_opt/box.json
 #
-# Offline default uses a synthetic P∝1/L³ model calibrated to the certified side
-# (pipeline smoke without a live CHARMM virial loop). On gpu09, set
-# USE_CHARMM_PRESSURE=1 once the CHARMM pressure adapter session is wired for
-# this entry point.
+# PINNED (gpu09-validated):
+#   BOX_MODE=count  BOX_SIZE=30  TARGET_DENSITY=1.0  →  N≈903, L=30 Å, ρ≈1.00
+#   MM GRMS ~0.04 kcal/mol/Å; worst inter-monomer ~1.17 Å (above prep floor).
+#   Trust box.json status=pass over OpenMPI/PRRTE process exit codes.
 #
-# Density note: TIP3:90 @ 30 Å is ~0.1 g/cm³, not 1 g/cm³ (~900 waters @ 30 Å,
-# or L≈14 Å for 90 waters). This script sizes the cell from N + target density
-# (--box-auto density). To fill a fixed cube instead:
-#   BOX_MODE=count BOX_SIZE=30 ./scripts/run_tip3_box_pressure_opt.sh
+# Offline pressure step uses synthetic P∝1/L³ calibrated to the certified side.
+# Pass charmm_pressure_fn for live virial PRSI when wiring the CHARMM adapter.
 #
 # Usage:
 #   ./scripts/run_tip3_box_pressure_opt.sh
-#   N_MOL=90 TARGET_DENSITY=1.0 OUT_DIR=./scratch/tip3_box_opt ./scripts/run_tip3_box_pressure_opt.sh
+#   WIPE=0 ./scripts/run_tip3_box_pressure_opt.sh   # reuse existing liquid_box/
+#   BOX_MODE=density N_MOL=90 ./scripts/run_tip3_box_pressure_opt.sh  # L≈14 Å alt
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-OUT_DIR="${OUT_DIR:-./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt}"
-N_MOL="${N_MOL:-90}"
+# --- pinned defaults (do not change without re-validating liquid-box) --------
+OUT_DIR="${OUT_DIR:-./scratch/tip3_physnet_ewald_ir/tip3_30A_box_opt}"
 BOX_SIZE="${BOX_SIZE:-30}"
-# Default count@30 Å (~903 waters @ 1 g/cm³). density@TIP3:90 → L≈13.9 Å works
-# after nbond small-box capping, but cutoffs are aggressively short.
-BOX_MODE="${BOX_MODE:-count}"   # count | density
+BOX_MODE="${BOX_MODE:-count}"          # pinned: count @ 30 Å → ~903 TIP3
+TARGET_DENSITY="${TARGET_DENSITY:-1.0}"
 TARGET_P_ATM="${TARGET_P_ATM:-1.0}"
 TEMP_K="${TEMP_K:-300}"
 SEED="${SEED:-42}"
-TARGET_DENSITY="${TARGET_DENSITY:-1.0}"
+# density-mode override only (ignored for BOX_MODE=count)
+N_MOL="${N_MOL:-90}"
+# Wipe rebuilds Packmol; set WIPE=0 to continue from a certified liquid_box/
 WIPE="${WIPE:-1}"
 
 mkdir -p "$OUT_DIR"
@@ -38,21 +38,19 @@ LIQUID_DIR="$OUT_DIR/liquid_box"
 OPT_DIR="$OUT_DIR/box_pressure_opt"
 
 if [[ "$WIPE" == "1" ]]; then
-  # Avoid reading a previous fail's box.json (L=30 underdense) after a crash.
   rm -rf "$LIQUID_DIR" "$OPT_DIR"
 fi
 mkdir -p "$LIQUID_DIR"
 
 echo "== TIP3 box pressure opt (CHARMM-default NpT prep) =="
+echo "  pinned: BOX_MODE=count BOX_SIZE=30 ρ=1.0 → N≈903 @ L=30 Å"
 echo "  liquid-box → $LIQUID_DIR"
 echo "  pressure opt → $OPT_DIR"
 echo "  target P = ${TARGET_P_ATM} atm   T = ${TEMP_K} K   ρ_target = ${TARGET_DENSITY} g/cm³"
-echo "  BOX_MODE=$BOX_MODE"
+echo "  BOX_MODE=$BOX_MODE  WIPE=$WIPE"
 
 echo ""
 echo "=== [1/2] mmml liquid-box (MM certify) ==="
-# Do not pass --box-size together with --target-density-g-cm3 unless N matches ρ:
-# liquid-box holds L and then density-certify fails (TIP3:90@30Å → ~0.1 g/cm³).
 LB_ARGS=(
   --output-dir "$LIQUID_DIR"
   --seed "$SEED"
@@ -66,7 +64,7 @@ if [[ "$BOX_MODE" == "density" ]]; then
     --box-auto density
   )
 else
-  echo "  mode=count: scale TIP3:1 to ρ=${TARGET_DENSITY} in L=${BOX_SIZE} Å"
+  echo "  mode=count (pinned): TIP3:1 → ρ=${TARGET_DENSITY} in L=${BOX_SIZE} Å"
   LB_ARGS+=(
     --composition "TIP3:1"
     --box-auto count
@@ -84,33 +82,39 @@ if [[ ! -f "$LIQUID_DIR/box.json" ]]; then
   exit 1
 fi
 
-# Surface liquid-box status from *this* run's box.json only.
 uv run python - <<PY
 import json
 from pathlib import Path
+
 p = Path("$LIQUID_DIR/box.json")
 d = json.loads(p.read_text())
 status = str(d.get("status", "?"))
-side = d.get("box_side_A", d.get("final_cubic_side_A"))
-rho = d.get("density_g_cm3")
-n_mol = d.get("n_molecules")
+side = float(d.get("box_side_A", d.get("final_cubic_side_A")))
+rho = float(d.get("density_g_cm3") or 0.0)
+n_mol = int(d.get("n_molecules") or 0)
 msg = d.get("message") or ""
-print(f"liquid-box status={status}  N={n_mol}  L={side} Å  ρ={rho} g/cm³")
+print(f"liquid-box status={status}  N={n_mol}  L={side:.4f} Å  ρ={rho:.6f} g/cm³")
 if msg:
     print(f"  message: {msg}")
 if status != "pass":
     raise SystemExit(
-        "liquid-box certification failed — see REPORT.md / box.json message. "
-        "Tip: BOX_MODE=count BOX_SIZE=30 for ~1 g/cm³ water; or BOX_MODE=density "
-        "for densified N waters (L≈14 Å for TIP3:90)."
+        "liquid-box certification failed — see REPORT.md / box.json message."
     )
-# OpenMPI/PRRTE sometimes returns exit 1 after a successful CHARMM job
-# ("This help section is empty because PRRTE was built without Sphinx").
-# Trust box.json status over the process exit code.
+# Pinned acceptance band for the count@30 recipe (gpu09-validated).
+if str("$BOX_MODE") == "count":
+    if abs(side - float("$BOX_SIZE")) > 0.05:
+        raise SystemExit(f"pinned recipe expects L≈{float('$BOX_SIZE'):.1f} Å, got {side}")
+    if abs(rho - float("$TARGET_DENSITY")) > 0.05:
+        raise SystemExit(
+            f"pinned recipe expects ρ≈{float('$TARGET_DENSITY'):.2f} g/cm³, got {rho}"
+        )
+    if n_mol < 800:
+        raise SystemExit(f"pinned recipe expects N≳800 waters @ 30 Å, got {n_mol}")
 lb_rc = int("$lb_rc")
 if lb_rc != 0:
     print(
-        f"note: liquid-box process exit={lb_rc} but box.json status=pass; continuing",
+        f"note: liquid-box process exit={lb_rc} but box.json status=pass; continuing "
+        "(OpenMPI/PRRTE often returns 1 after success)",
         flush=True,
     )
 PY
@@ -129,7 +133,7 @@ cfg = BoxPressureOptConfig(
     temperature_K=float("$TEMP_K"),
     seed=int("$SEED"),
     run_1d_refine=True,
-    run_cpt_refine=False,  # short CPT refine: enable when CHARMM CPT runner is wired
+    run_cpt_refine=False,
 )
 result = run_box_pressure_opt_from_box_json(
     Path("$LIQUID_DIR"),
