@@ -74,6 +74,8 @@ if [[ ",$MD_STAGES," == *",heat,"* ]]; then
     --heat-finalt "$TEMP_K"
     --no-echeck-heat
     --n-heat-segments "$N_HEAT_SEGMENTS"
+    # One DYNA per heat segment (no mid-segment velocity redraw).
+    --heat-overlap-segment-boundary-only
   )
 fi
 

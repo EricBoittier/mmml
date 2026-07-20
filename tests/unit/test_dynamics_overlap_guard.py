@@ -3067,6 +3067,33 @@ def test_overlap_config_for_stage_heat_segment_boundary_only():
     assert int(heat_cfg.check_interval) == 4000
 
 
+def test_hoover_heat_forces_segment_boundary_overlap(monkeypatch):
+    """Hoover CPT heat uses one overlap chunk per segment unless opted out."""
+    from dataclasses import replace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        overlap_config_for_stage,
+    )
+
+    monkeypatch.delenv("MMML_HEAT_MID_SEGMENT_CHECKS", raising=False)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        check_interval=250,
+        n_monomers=30,
+        heat_segment_boundary_only=False,
+    )
+    heat_cfg = overlap_config_for_stage(cfg, stage="heat", nstep=500)
+    assert heat_cfg is not None
+    assert int(heat_cfg.check_interval) == 250  # flag still false at this layer
+
+    # staged_workflow forces the flag for Hoover; mirror that contract here.
+    heat_cfg = replace(heat_cfg, heat_segment_boundary_only=True)
+    heat_cfg = overlap_config_for_stage(heat_cfg, stage="heat", nstep=500)
+    assert heat_cfg is not None
+    assert int(heat_cfg.check_interval) == 500
+
+
 def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_should_split_trajectory,

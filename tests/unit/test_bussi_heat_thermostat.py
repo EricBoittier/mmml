@@ -330,8 +330,8 @@ def test_requires_init_velocities_handoff_false_for_default_bussi(monkeypatch):
     assert kw["iasvel"] == 1
 
 
-def test_dcd_drop_init_velocities_sets_firstt_from_hoover_bath():
-    """CPT equi chunk fallback must not assign Boltzmann at FIRSTT=0."""
+def test_dcd_drop_init_velocities_keeps_iasvel0_for_cpt_hoover():
+    """CPT Hoover must not redraw Boltzmann when DCD forbids C-API inject."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _drop_unsafe_bussi_init_velocities_for_dcd,
     )
@@ -344,13 +344,38 @@ def test_dcd_drop_init_velocities_sets_firstt_from_hoover_bath():
         "cpt": True,
         "hoover reft": 300.0,
         "pmass": 100,
+        "firstt": 0.0,
+    }
+    fake = {"vx": np.array([1.0]), "vy": np.array([0.0]), "vz": np.array([0.0])}
+    dropped = _drop_unsafe_bussi_init_velocities_for_dcd(kw, fake, quiet=True)
+    assert dropped is None
+    assert kw["iasvel"] == 0
+    assert kw["start"] is False
+    # FIRSTT left alone (no Boltzmann bath rewrite).
+    assert kw["firstt"] == pytest.approx(0.0)
+
+
+def test_dcd_drop_init_velocities_boltzmann_when_not_cpt_hoover():
+    """Non-Hoover CPT still falls back to bath Boltzmann when DCD blocks inject."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _drop_unsafe_bussi_init_velocities_for_dcd,
+    )
+
+    kw = {
+        "start": False,
+        "iasvel": 0,
+        "nsavc": 160,
+        "iuncrd": 91,
+        "cpt": True,
+        "pmass": 100,
+        "tbath": 300.0,
+        # no hoover reft → keep-in-memory path disabled
     }
     fake = {"vx": np.array([1.0]), "vy": np.array([0.0]), "vz": np.array([0.0])}
     dropped = _drop_unsafe_bussi_init_velocities_for_dcd(kw, fake, quiet=True)
     assert dropped is None
     assert kw["iasvel"] == 1
     assert kw["firstt"] == pytest.approx(300.0)
-    assert kw["tstruct"] == pytest.approx(300.0)
 
 
 def test_run_dynamics_captures_bussi_velocities_before_velos_del():

@@ -4092,6 +4092,28 @@ def _bussi_allows_iasvel0_continuation() -> bool:
     return os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") == "1"
 
 
+def _cpt_hoover_keeps_in_memory_velocities_without_c_api_inject(
+    kw: dict[str, Any],
+    init_velocities: dict[str, np.ndarray],
+) -> bool:
+    """True when CPT Hoover can continue with COMP / in-memory ``iasvel=0``.
+
+    DCD forbids C-API ``init_velocities`` on this CHARMM build.  Redrawing
+    Boltzmann every overlap chunk (heat or equi) destroys the trajectory; when
+    handoff arrays are present (already validated + COMP-synced by the caller),
+    keep ``iasvel=0`` instead of ``iasvel=1`` redraw.
+    """
+    if not init_velocities:
+        return False
+    if _bussi_heat_ramp_active(kw):
+        return False
+    if not bool(kw.get("cpt")) or "hoover reft" not in kw:
+        return False
+    if bool(kw.get("start")) or int(kw.get("iasvel", 0) or 0) != 0:
+        return False
+    return True
+
+
 def _drop_unsafe_bussi_init_velocities_for_dcd(
     kw: dict[str, Any],
     init_velocities: dict[str, np.ndarray] | None,
@@ -4103,6 +4125,9 @@ def _drop_unsafe_bussi_init_velocities_for_dcd(
     Drops handoff arrays when writing DCD (dynopt segfault) **or** when Bussi heat
     is active without ``MMML_BUSSI_IASVEL0_CONTINUATION`` (deferred-DCD micro-chunks
     previously kept inject + ``iasvel=0`` → T ≫ 10¹² K).
+
+    CPT Hoover (heat/equi) with valid handoff arrays keeps ``iasvel=0`` and relies
+    on COMP sync instead of a Boltzmann redraw.
     """
     if init_velocities is None:
         return None
@@ -4112,6 +4137,19 @@ def _drop_unsafe_bussi_init_velocities_for_dcd(
     dcd_blocks_inject = _dynamics_writes_dcd(kw)
     if not bussi_blocks_inject and not dcd_blocks_inject:
         return init_velocities
+    if dcd_blocks_inject and _cpt_hoover_keeps_in_memory_velocities_without_c_api_inject(
+        kw, init_velocities
+    ):
+        if not quiet:
+            print(
+                "run_dynamics: DCD forbids C-API init_velocities; "
+                "CPT Hoover keeps iasvel=0 in-memory / COMP velocities "
+                "(no Boltzmann redraw)",
+                flush=True,
+            )
+        kw["iasvel"] = 0
+        kw["start"] = False
+        return None
     if not quiet:
         if bussi_blocks_inject:
             print(
@@ -4738,7 +4776,12 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             or post_dyna_restart_write
         )
     # Capture in-memory velocities before ``velos_del`` frees the dynamics buffers.
-    if bussi_active:
+    # Hoover CPT heat/equi needs the same cache: mid-segment overlap chunks cannot
+    # re-read live CHARMM buffers after release, and DCD forbids C-API inject.
+    capture_for_handoff = bussi_active or (
+        bool(kw.get("cpt")) and "hoover reft" in kw
+    )
+    if capture_for_handoff:
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             capture_charmm_velocities_for_bussi,
         )

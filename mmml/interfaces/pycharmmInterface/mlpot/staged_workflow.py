@@ -2888,6 +2888,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         n_segments=n_heat_segments,
                     )
+                    # Hoover CPT heat: one DYNA per segment (no mid-segment Bussi /
+                    # Boltzmann redraw when DCD forbids C-API velocity inject).
+                    # Opt out with MMML_HEAT_MID_SEGMENT_CHECKS=1 for debugging.
+                    if heat_thermostat == "hoover" and stage_overlap is not None:
+                        from dataclasses import replace
+
+                        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                            _truthy_env,
+                        )
+
+                        if not _truthy_env("MMML_HEAT_MID_SEGMENT_CHECKS"):
+                            stage_overlap = replace(
+                                stage_overlap, heat_segment_boundary_only=True
+                            )
                     stage_overlap = attach_prior_segment_restart(
                         stage_overlap,
                         segment_index=seg_i,
