@@ -1521,6 +1521,7 @@ def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocitie
     """Extent fly-off arms cold-start: ASE MB + iasvel=1, not Bussi COMP continuation."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_overlap_handoff,
+        _requires_init_velocities_handoff,
         prepare_bussi_heat_dynamics_kw,
     )
 
@@ -1558,6 +1559,30 @@ def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocitie
     assert chunk_kw["restart"] is False
     assert chunk_kw["iunrea"] == -1
     assert ctx._overlap_post_rescue_cold_start is False
+    # Must not take the C-API / COMP inject path (that yielded T~1e12 K).
+    assert _requires_init_velocities_handoff(chunk_kw) is False
+
+
+def test_bussi_skip_scratch_restart_write_on_intermediate_mem_handoff():
+    """Bussi drops restart_write mid-HEAT; rescue must still cold-start without it."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _bussi_overlap_skip_scratch_restart_write,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    chunk_kw = {"firstt": 10.0, "finalt": 300.0, "timestep": 0.0001, "nstep": 250}
+    prepare_bussi_heat_dynamics_kw(
+        chunk_kw, nstep=2000, ihtfrq=250, timestep_ps=0.0001
+    )
+    assert (
+        _bussi_overlap_skip_scratch_restart_write(
+            mem_handoff=True,
+            chunk_kw=chunk_kw,
+            chunk_index=0,
+            n_chunks=8,
+        )
+        is True
+    )
 
 
 def test_restore_bussi_velocities_skips_when_extent_cold_start_armed():

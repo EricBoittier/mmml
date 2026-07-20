@@ -7764,8 +7764,21 @@ def run_dynamics_with_io(
                         False,
                     ) is True
                 )
+                # Extent fly-off arms ``_overlap_post_rescue_cold_start`` even when
+                # Bussi skipped scratch ``restart_write`` (so the rescued-block
+                # below never sets ``post_rescue_in_memory_mode``). Consume it here
+                # so the next chunk still gets ASE MB + iasvel=1 instead of
+                # COMP-as-velocity continuation.
+                extent_cold_start_pending = bool(
+                    mlpot_ctx is not None
+                    and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False)
+                )
                 if (
-                    (post_rescue_memory_this_chunk or velocity_redraw_pending)
+                    (
+                        post_rescue_memory_this_chunk
+                        or velocity_redraw_pending
+                        or extent_cold_start_pending
+                    )
                     and not post_rescue_handoff_applied
                 ):
                     _prepare_post_rescue_overlap_handoff(
@@ -8391,7 +8404,7 @@ def run_dynamics_with_io(
                             overlap,
                             restart_path=refresh_path,
                         )
-                    if rescued and chunk_io is not None and chunk_io.restart_write is not None:
+                    if rescued and chunk_io is not None:
                         from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                             finalize_overlap_rescue_for_dynamics,
                         )
@@ -8399,14 +8412,17 @@ def run_dynamics_with_io(
                             patch_restart_global_step,
                         )
 
-                        _refresh_restart_write_after_chunk(
-                            chunk_io.restart_write,
-                            final_restart=final_restart,
-                        )
-                        patch_restart_global_step(
-                            Path(chunk_io.restart_write),
-                            steps_done,
-                        )
+                        # Bussi in-memory legs often drop scratch restart_write
+                        # before the extent check; still finalize + arm handoff.
+                        if chunk_io.restart_write is not None:
+                            _refresh_restart_write_after_chunk(
+                                chunk_io.restart_write,
+                                final_restart=final_restart,
+                            )
+                            patch_restart_global_step(
+                                Path(chunk_io.restart_write),
+                                steps_done,
+                            )
                         if mlpot_ctx is not None and overlap is not None:
                             finalize_overlap_rescue_for_dynamics(
                                 mlpot_ctx,
@@ -8429,22 +8445,41 @@ def run_dynamics_with_io(
                                 label=f"{overlap_context} at step {steps_done}",
                             )
                         if chunk_index + 1 < n_chunks:
-                            chunk_io, in_memory = _apply_post_rescue_overlap_handoff(
-                                chunk_io,
-                                chunk_kw,
-                                steps_done=steps_done,
-                                mlpot_ctx=mlpot_ctx,
-                                overlap=overlap,
-                                overlap_context=overlap_context,
-                            )
-                            if in_memory:
+                            if (
+                                chunk_io.restart_write is None
+                                and (
+                                    _bussi_heat_ramp_active(chunk_kw)
+                                    or bool(chunk_kw.get("cpt"))
+                                )
+                            ):
+                                # No scratch WRIDYN path — keep velocities in RAM
+                                # and force the next chunk through post-rescue
+                                # handoff (cold-start when extent fly-off armed).
                                 post_rescue_in_memory_mode = True
+                                print(
+                                    f"overlap ({overlap_context}): post-rescue "
+                                    f"in-memory handoff scheduled at global step "
+                                    f"{max(0, int(steps_done))} (no scratch "
+                                    f"restart_write on this Bussi/CPT leg)",
+                                    flush=True,
+                                )
                             else:
-                                pending_readyn_chunk_io = chunk_io
-                            post_rescue_handoff_applied = True
-                            if not in_memory:
-                                any_post_rescue_restart_handoff = True
-                        else:
+                                chunk_io, in_memory = _apply_post_rescue_overlap_handoff(
+                                    chunk_io,
+                                    chunk_kw,
+                                    steps_done=steps_done,
+                                    mlpot_ctx=mlpot_ctx,
+                                    overlap=overlap,
+                                    overlap_context=overlap_context,
+                                )
+                                if in_memory:
+                                    post_rescue_in_memory_mode = True
+                                else:
+                                    pending_readyn_chunk_io = chunk_io
+                                post_rescue_handoff_applied = True
+                                if not in_memory:
+                                    any_post_rescue_restart_handoff = True
+                        elif chunk_io.restart_write is not None:
                             _refresh_segment_restart_after_overlap_rescue(
                                 chunk_io.restart_write,
                                 chunk_kw,
