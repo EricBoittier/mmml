@@ -12,7 +12,6 @@ suite launchers.
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 from mmml.mode_check.forces import force_fd_check

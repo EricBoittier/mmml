@@ -14,11 +14,21 @@ from mmml.cli.registry import COMMAND_REGISTRY, command_by_name
 def _module_defines_build_parser(module_path: str) -> bool:
     """Fast static check (no import) — used by ``mmml commands --audit``."""
     try:
-        spec = importlib.util.find_spec(module_path)
-        if spec is None or spec.origin is None or spec.origin.endswith("__init__.py"):
-            return False
-        source = Path(spec.origin).read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=spec.origin)
+        if module_path == "mmml" or module_path.startswith("mmml."):
+            package_root = Path(__file__).resolve().parents[1]
+            relative = module_path.split(".")[1:]
+            module_file = package_root.joinpath(*relative).with_suffix(".py")
+            if not module_file.is_file():
+                module_file = package_root.joinpath(*relative, "__init__.py")
+            if not module_file.is_file():
+                return False
+        else:
+            spec = importlib.util.find_spec(module_path)
+            if spec is None or spec.origin is None:
+                return False
+            module_file = Path(spec.origin)
+        source = module_file.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(module_file))
     except Exception:
         return False
     return any(
