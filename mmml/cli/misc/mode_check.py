@@ -12,6 +12,10 @@ from mmml.mode_check import (
     build_psf_and_attach_hybrid,
     run_mode_check,
 )
+from mmml.mode_check.config import (
+    DEFAULT_MONOMER_SEPARATION_A,
+    FAR_MONOMER_SEPARATION_A,
+)
 from mmml.mode_check.geometry import parse_composition_spec
 from mmml.mode_check.pbc_fd import run_pbc_cluster_fd, write_fd_result
 
@@ -95,7 +99,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ml-switch-width", type=float, default=1.5)
     parser.add_argument("--mm-switch-on", type=float, default=6.0)
     parser.add_argument("--mm-switch-width", type=float, default=5.0)
-    parser.add_argument("--monomer-separation", type=float, default=2.8)
+    parser.add_argument(
+        "--monomer-separation",
+        type=float,
+        default=None,
+        help=(
+            f"COM spacing between monomers in Å (default: "
+            f"{DEFAULT_MONOMER_SEPARATION_A:g}; use --far for "
+            f"{FAR_MONOMER_SEPARATION_A:g} Å numerical / monomer-parity)"
+        ),
+    )
+    parser.add_argument(
+        "--far",
+        action="store_true",
+        help=(
+            f"Place monomers at {FAR_MONOMER_SEPARATION_A:g} Å COM separation "
+            "(beyond default MM handoff) for FD/position numerical checks; "
+            "conflicts with --monomer-separation"
+        ),
+    )
     parser.add_argument("--fd-atoms", type=int, default=3)
     parser.add_argument("--fd-dx", type=float, default=1e-3)
     parser.add_argument("--minimize-fmax", type=float, default=0.05)
@@ -147,6 +169,18 @@ def _main_pbc_fd(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_monomer_separation_A(args: argparse.Namespace) -> float:
+    if args.far and args.monomer_separation is not None:
+        raise SystemExit(
+            "mmml mode-check: use only one of --far and --monomer-separation"
+        )
+    if args.far:
+        return float(FAR_MONOMER_SEPARATION_A)
+    if args.monomer_separation is not None:
+        return float(args.monomer_separation)
+    return float(DEFAULT_MONOMER_SEPARATION_A)
+
+
 def _main_vacuum(args: argparse.Namespace) -> int:
     if not args.composition:
         build_parser().error("--composition is required for vacuum mode-check")
@@ -158,6 +192,7 @@ def _main_vacuum(args: argparse.Namespace) -> int:
     composition = parse_composition_spec(args.composition)
     out = Path(args.output_dir).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
+    sep = _resolve_monomer_separation_A(args)
 
     setup = HybridModeCheckSetup(
         composition=tuple((str(r), int(n)) for r, n in composition),
@@ -170,13 +205,17 @@ def _main_vacuum(args: argparse.Namespace) -> int:
         mm_switch_width=float(args.mm_switch_width),
         mm_charge_mode=str(args.mm_charge_mode),
         lr_solver=str(args.lr_solver),
-        monomer_separation_A=float(args.monomer_separation),
+        monomer_separation_A=sep,
         xyz=Path(args.xyz) if args.xyz is not None else None,
     )
     atoms, apm, meta = build_psf_and_attach_hybrid(
         setup,
         write_psf_to=out / "cluster.psf",
     )
+    # Persist the exact geometry used for numerical / position audits.
+    from ase.io import write as ase_write
+
+    ase_write(str(out / "cluster_initial.xyz"), atoms)
     cfg = ModeCheckConfig(
         checks=tuple(args.checks),  # type: ignore[arg-type]
         fd_atoms=int(args.fd_atoms),
@@ -193,11 +232,15 @@ def _main_vacuum(args: argparse.Namespace) -> int:
         output_dir=out,
         setup_meta=meta,
     )
+    # Write post-minimize geometry when minimize ran (atoms mutated in place).
+    ase_write(str(out / "cluster_final.xyz"), atoms)
 
     print(
         json.dumps(
             {
                 "summary": str(out / "mode_check_summary.json"),
+                "monomer_separation_A": meta.get("monomer_separation_A", sep),
+                "com_separations_A": meta.get("com_separations_A"),
                 "energy_eV": result.energy_eV,
                 "max_force_eVA": result.max_force_eVA,
                 "do_mm_effective": meta.get("do_mm_effective"),

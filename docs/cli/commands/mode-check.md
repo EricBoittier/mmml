@@ -21,7 +21,7 @@ usage: mmml mode-check [-h] [--pbc-fd] [--composition COMPOSITION]
                        [--ml-switch-width ML_SWITCH_WIDTH]
                        [--mm-switch-on MM_SWITCH_ON]
                        [--mm-switch-width MM_SWITCH_WIDTH]
-                       [--monomer-separation MONOMER_SEPARATION]
+                       [--monomer-separation MONOMER_SEPARATION] [--far]
                        [--fd-atoms FD_ATOMS] [--fd-dx FD_DX]
                        [--minimize-fmax MINIMIZE_FMAX]
                        [--minimize-steps MINIMIZE_STEPS]
@@ -66,6 +66,11 @@ options:
   --mm-switch-on MM_SWITCH_ON
   --mm-switch-width MM_SWITCH_WIDTH
   --monomer-separation MONOMER_SEPARATION
+                        COM spacing between monomers in Å (default: 2.8; use
+                        --far for 15 Å numerical / monomer-parity)
+  --far                 Place monomers at 15 Å COM separation (beyond default MM
+                        handoff) for FD/position numerical checks; conflicts
+                        with --monomer-separation
   --fd-atoms FD_ATOMS
   --fd-dx FD_DX
   --minimize-fmax MINIMIZE_FMAX

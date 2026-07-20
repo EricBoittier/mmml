@@ -8,8 +8,21 @@ from typing import Any
 import numpy as np
 from ase import Atoms
 
+from .bonds import monomer_slices
 from .config import HybridModeCheckSetup
 from .geometry import composition_n_monomers, load_atoms_xyz
+
+
+def com_separations_along_chain(
+    positions: np.ndarray,
+    atoms_per_monomer: list[int],
+) -> list[float]:
+    """Nearest-neighbor COM distances for monomers placed along a chain."""
+    pos = np.asarray(positions, dtype=float)
+    coms = [pos[sl].mean(axis=0) for sl in monomer_slices(atoms_per_monomer)]
+    return [
+        float(np.linalg.norm(coms[i + 1] - coms[i])) for i in range(len(coms) - 1)
+    ]
 
 
 def place_monomers_along_x(
@@ -190,11 +203,14 @@ def build_psf_and_attach_hybrid(
         backprop=True,
     )
     atoms.calc = calc
+    com_seps = com_separations_along_chain(atoms.get_positions(), atoms_per_list)
     meta = {
         "composition": composition,
         "residue_labels": [str(x) for x in residue_labels],
         "atoms_per_monomer": atoms_per_list,
         "n_monomers": n_mol,
+        "monomer_separation_A": float(setup.monomer_separation_A),
+        "com_separations_A": com_seps,
         "do_mm_effective": do_mm,
         "do_ml": bool(setup.do_ml),
         "do_ml_dimer": bool(setup.do_ml_dimer),

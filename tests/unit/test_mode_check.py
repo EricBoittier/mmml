@@ -145,6 +145,7 @@ def test_hybrid_setup_disables_mm_for_monomer():
 def test_place_monomers_along_x_and_reject_collapsed_geometry():
     from mmml.mode_check.hybrid import (
         assert_resolved_vacuum_geometry,
+        com_separations_along_chain,
         place_monomers_along_x,
     )
 
@@ -160,7 +161,27 @@ def test_place_monomers_along_x_and_reject_collapsed_geometry():
     assert np.linalg.norm(placed[1] - placed[0]) == pytest.approx(0.96, abs=1e-6)
     # Second monomer COM near x=2.8
     assert placed[3:6].mean(axis=0)[0] == pytest.approx(2.8, abs=1e-6)
+    assert com_separations_along_chain(placed, [3, 3]) == pytest.approx([2.8], abs=1e-6)
     assert_resolved_vacuum_geometry(placed, [3, 3])
 
     with pytest.raises(RuntimeError, match="collapsed|coincident|intramolecular"):
         assert_resolved_vacuum_geometry(np.zeros((3, 3)), [3])
+
+
+def test_mode_check_far_vs_separation_cli():
+    from mmml.cli.misc.mode_check import build_parser, _resolve_monomer_separation_A
+    from mmml.mode_check.config import (
+        DEFAULT_MONOMER_SEPARATION_A,
+        FAR_MONOMER_SEPARATION_A,
+    )
+
+    p = build_parser()
+    assert _resolve_monomer_separation_A(p.parse_args([])) == DEFAULT_MONOMER_SEPARATION_A
+    assert _resolve_monomer_separation_A(p.parse_args(["--far"])) == FAR_MONOMER_SEPARATION_A
+    assert _resolve_monomer_separation_A(
+        p.parse_args(["--monomer-separation", "12.5"])
+    ) == pytest.approx(12.5)
+    with pytest.raises(SystemExit):
+        _resolve_monomer_separation_A(
+            p.parse_args(["--far", "--monomer-separation", "3.0"])
+        )

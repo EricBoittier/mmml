@@ -15,6 +15,12 @@ DEFAULT_BOND_DELTAS: tuple[float, ...] = tuple(
     round(-0.08 + i * 0.01, 12) for i in range(17)
 )
 
+# Interacting H-bond-ish dimer COM spacing (Å).
+DEFAULT_MONOMER_SEPARATION_A: float = 2.8
+# Beyond default MM handoff (mm_switch_on + mm_switch_width ≈ 11 Å) so
+# dimer ML/MM cross-terms are off — numerical / monomer-parity checks.
+FAR_MONOMER_SEPARATION_A: float = 15.0
+
 
 @dataclass(frozen=True)
 class ModeCheckConfig:
@@ -68,7 +74,7 @@ class HybridModeCheckSetup:
     mm_switch_width: float = 5.0
     mm_charge_mode: str = "q0"
     lr_solver: str = "mic"
-    monomer_separation_A: float = 2.8
+    monomer_separation_A: float = DEFAULT_MONOMER_SEPARATION_A
     xyz: Path | None = None
     max_pairs: int = 20_000
 
@@ -79,6 +85,8 @@ class HybridModeCheckSetup:
         n_mol = sum(int(c) for _, c in self.composition)
         if n_mol < 1:
             raise ValueError("composition must include at least one monomer")
+        if float(self.monomer_separation_A) <= 0.0:
+            raise ValueError("monomer_separation_A must be positive")
         if self.do_ml_dimer is None:
             object.__setattr__(self, "do_ml_dimer", n_mol >= 2)
         # MM is cross-monomer only; n=1 must not request doMM.
