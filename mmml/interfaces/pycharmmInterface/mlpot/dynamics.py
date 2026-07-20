@@ -5698,22 +5698,17 @@ def _prepare_post_rescue_overlap_handoff(
     if mlpot_ctx is not None and getattr(
         mlpot_ctx, "_overlap_velocity_redraw_memory_handoff", False
     ) is True:
-        # Keep Maxwell–Boltzmann redraws in CHARMM RAM; do not IASVEL=1 reassign.
+        # Selective monomer redraw already wrote warm velocities into main, but
+        # ``start=True`` + ``iasvel=0`` makes lingering START read COMP
+        # *coordinates* as velocities (T ≫ 10¹² K → ECHECK). Use the same ASE
+        # Maxwell–Boltzmann + one-shot ``iasvel=1`` cold-start as extent fly-off.
         setattr(mlpot_ctx, "_overlap_velocity_redraw_memory_handoff", False)
-        chunk_kw["restart"] = False
-        chunk_kw["new"] = False
-        chunk_kw["start"] = True
-        chunk_kw["iasvel"] = 0
-        chunk_kw.pop("iunrea", None)
-        chunk_kw["iunrea"] = -1
-        _strip_stale_heat_ramp_keywords(chunk_kw)
-        if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
-            chunk_kw["ihtfrq"] = 0
         print(
-            "overlap: post-velocity-redraw in-memory handoff "
-            "(iasvel=0; no READYN / no MLpot rescue mini)",
+            "overlap: post-velocity-redraw → ASE cold-start "
+            "(iasvel=1; avoid COMP-as-velocity continuation)",
             flush=True,
         )
+        _prepare_post_rescue_cold_start_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
         return
     if _bussi_heat_ramp_active(chunk_kw):
         _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
