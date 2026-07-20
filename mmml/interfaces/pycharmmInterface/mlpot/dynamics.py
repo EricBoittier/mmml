@@ -4626,7 +4626,6 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     allow_zero_temperature_start = bool(
         kw.pop("_allow_zero_temperature_start", False)
     )
-    skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
     restart_read_unit = int(kw.pop("_restart_read_unit", 3) or 3)
@@ -4648,6 +4647,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         and int(kw.get("iasvel", 0) or 0) == 0
     ):
         _apply_bussi_iasvel_one_at_ramp_target(kw)
+    # Pop *after* Bussi/CPT continuation helpers may arm the flag.
+    skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     nstep = int(kw.get("nstep", 0) or 0)
     if nstep < 1:
         raise ValueError(

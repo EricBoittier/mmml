@@ -100,15 +100,26 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
             return_value=True,
         ),
         patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_safe_for_kw",
+            return_value=True,
+        ),
+        patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
             return_value=init,
         ) as resolve_init,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
+            return_value=init,
+        ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
             return_value=fake_dyn,
         ) as run_capi,
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_dynamics_list_frequencies",
         ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
@@ -133,13 +144,15 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        ),
     ):
         run_dynamics(
             {
                 "nstep": 50,
                 "start": False,
                 "iasvel": 0,
-                "_skip_ase_cold_velocity_assign": True,
             }
         )
     resolve_init.assert_called_once()
@@ -168,7 +181,15 @@ def test_run_dynamics_syncs_comp_even_when_init_velocities_already_resolved():
             return_value=True,
         ),
         patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_safe_for_kw",
+            return_value=True,
+        ),
+        patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+            return_value=init,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
             return_value=init,
         ),
         patch(
@@ -177,6 +198,9 @@ def test_run_dynamics_syncs_comp_even_when_init_velocities_already_resolved():
         ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_dynamics_list_frequencies",
         ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
@@ -198,13 +222,15 @@ def test_run_dynamics_syncs_comp_even_when_init_velocities_already_resolved():
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        ),
     ):
         run_dynamics(
             {
                 "nstep": 50,
                 "start": False,
                 "iasvel": 0,
-                "_skip_ase_cold_velocity_assign": True,
             }
         )
     assert sync_akma.call_count >= 2
@@ -212,18 +238,17 @@ def test_run_dynamics_syncs_comp_even_when_init_velocities_already_resolved():
     assert np.allclose(synced, v)
 
 
-def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh(monkeypatch):
+def test_run_dynamics_bussi_iasvel0_uses_cpt_comp_handoff(monkeypatch):
+    """Bussi iasvel=0 opt-in uses COMP velocity handoff (no Maxwell redraw)."""
     import sys
     from unittest.mock import MagicMock, patch
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
-    v = np.ones((4, 3), dtype=float) * 42.0
-    init = {"vx": v[:, 0], "vy": v[:, 1], "vz": v[:, 2]}
     fake_dyn = MagicMock()
     fake_pycharmm = MagicMock()
     fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
-    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
+    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
     with (
         patch.dict(sys.modules, {"pycharmm": fake_pycharmm}),
         patch(
@@ -231,53 +256,52 @@ def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh(monkeypatc
             return_value=True,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
-            return_value=init,
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_safe_for_kw",
+            return_value=True,
         ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        ) as resolve_init,
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
             return_value=fake_dyn,
-        ) as run_capi,
+        ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_dynamics_list_frequencies",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
-        ) as refresh_comp,
-        patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
-            return_value=True,
-        ),
-        patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
-        ),
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_cpt_iasvel0_comp_velocity_handoff",
+        ) as ensure_comp,
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        ) as ase_cold,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        ),
     ):
-        run_dynamics(
-            {
-                "nstep": 50,
-                "start": False,
-                "iasvel": 0,
-                "_skip_ase_cold_velocity_assign": True,
-                "_bussi_ramp": {
-                    "firstt": 20.0,
-                    "finalt": 100.0,
-                    "teminc": 0.08,
-                    "ihtfrq": 50,
-                },
-            }
-        )
-    refresh_comp.assert_called_once()
-    passed = run_capi.call_args.kwargs.get("init_velocities")
-    assert passed is not None
-    assert np.allclose(passed["vx"], init["vx"])
-    assert np.allclose(passed["vy"], init["vy"])
-    assert np.allclose(passed["vz"], init["vz"])
+        kw = {
+            "nstep": 50,
+            "start": False,
+            "iasvel": 0,
+            "_heat_thermostat": "bussi",
+            "_bussi_ramp": {
+                "firstt": 20.0,
+                "finalt": 100.0,
+                "teminc": 0.08,
+                "ihtfrq": 50,
+            },
+        }
+        run_dynamics(kw)
+    resolve_init.assert_not_called()
+    ase_cold.assert_not_called()
+    ensure_comp.assert_called_once()
+    assert kw["iasvel"] == 0
 
 
 def test_run_dynamics_bussi_dcd_drops_unsafe_init_velocities(monkeypatch):
