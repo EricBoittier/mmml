@@ -608,6 +608,19 @@ def test_build_pycharmm_command_forwards_mc_density_flags():
     assert parsed.mc_density_steps == 12
 
 
+def test_build_pycharmm_command_forwards_density_prep_off():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            density_prep_mode="off",
+            density_prep_ladder=False,
+            mc_density_equalize=False,
+        )
+    )
+    assert cmd[cmd.index("--density-prep-mode") + 1] == "off"
+    assert "--no-density-prep-ladder" in cmd
+    assert "--no-mc-density-equalize" in cmd
+
+
 def test_build_pycharmm_command_forwards_flat_bottom_selection():
     cmd = build_pycharmm_command(
         _pycharmm_args(flat_bottom_radius=15.0, flat_bottom_selection="TYPE C*")

@@ -2381,7 +2381,9 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.append("--cleanup")
     else:
         mode = getattr(args, "density_prep_mode", None)
-        if mode is not None and str(mode).strip().lower() != "off":
+        # Forward explicit off as well (pycharmm defaults off, but resilient
+        # / liquid-prep paths must be able to opt out from the outer CLI).
+        if mode is not None and str(mode).strip():
             cmd.extend(["--density-prep-mode", str(mode)])
     ladder_flag = getattr(args, "density_prep_ladder", None)
     if ladder_flag is not None:
