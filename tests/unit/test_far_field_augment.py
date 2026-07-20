@@ -169,3 +169,72 @@ def test_append_far_field_composites_to_data_preserves_originals_and_flags_compo
     # build_spooky_batch_from_flat_data -- must never reference a real vdW
     # table entry.
     assert (out["cgenff_type_idx"] == 0).all()
+
+
+def test_per_fragment_charge_mse_excludes_single_fragment_structures():
+    """A single-fragment structure with nonzero net charge must NOT contribute
+    -- that signal already comes from the whole-structure charge_mse term, so
+    including it here would silently double its effective weight."""
+    k_max = 3
+    atomic_charges = jnp.array([0.6, 0.4], dtype=jnp.float32)  # sums to 1.0
+    mol_id = jnp.array([0, 0], dtype=jnp.int32)
+    atom_mask = jnp.ones(2, dtype=jnp.float32)
+    batch_segments = jnp.array([0, 0], dtype=jnp.int32)
+
+    mse = _per_fragment_charge_conservation_mse(
+        atomic_charges, mol_id, atom_mask, batch_segments, batch_size=1, k_max=k_max
+    )
+    assert float(mse) == pytest.approx(0.0)
+
+
+def test_per_fragment_charge_mse_penalizes_multi_fragment_imbalance():
+    """Two-fragment composite with fragment sums [+0.3, -0.3]: MSE must equal
+    the mean of the two squared per-fragment sums, computed independently."""
+    k_max = 3
+    # Structure 0: fragment 0 -> atoms 0,1 (sum 0.3); fragment 1 -> atom 2 (sum -0.3)
+    atomic_charges = jnp.array([0.2, 0.1, -0.3], dtype=jnp.float32)
+    mol_id = jnp.array([0, 0, 1], dtype=jnp.int32)
+    atom_mask = jnp.ones(3, dtype=jnp.float32)
+    batch_segments = jnp.array([0, 0, 0], dtype=jnp.int32)
+
+    mse = _per_fragment_charge_conservation_mse(
+        atomic_charges, mol_id, atom_mask, batch_segments, batch_size=1, k_max=k_max
+    )
+    expected = ((0.3**2) + (0.3**2)) / 2.0
+    assert float(mse) == pytest.approx(expected, abs=1e-6)
+
+
+def test_per_fragment_charge_mse_ignores_masked_padding_atoms():
+    """Padding atoms (atom_mask=0) must not perturb the per-fragment sum."""
+    k_max = 3
+    atomic_charges = jnp.array([0.3, -0.3, 999.0], dtype=jnp.float32)
+    mol_id = jnp.array([0, 1, 1], dtype=jnp.int32)
+    atom_mask = jnp.array([1.0, 1.0, 0.0], dtype=jnp.float32)  # atom 2 is padding
+    batch_segments = jnp.array([0, 0, 0], dtype=jnp.int32)
+
+    mse = _per_fragment_charge_conservation_mse(
+        atomic_charges, mol_id, atom_mask, batch_segments, batch_size=1, k_max=k_max
+    )
+    # Both fragments sum to 0 once the masked padding atom is excluded.
+    assert float(mse) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_per_fragment_charge_mse_averages_across_batch_and_structures():
+    """Mixed batch: one single-fragment structure (excluded) and one
+    two-fragment composite (included) -- verifies batch_segments correctly
+    routes each structure's atoms to its own k_max-sized fragment block."""
+    k_max = 2
+    atomic_charges = jnp.array(
+        [1.0, 0.5, -0.4],  # struct 0 (single fragment, excluded), struct 1 frags
+        dtype=jnp.float32,
+    )
+    mol_id = jnp.array([0, 0, 1], dtype=jnp.int32)
+    atom_mask = jnp.ones(3, dtype=jnp.float32)
+    batch_segments = jnp.array([0, 1, 1], dtype=jnp.int32)
+
+    mse = _per_fragment_charge_conservation_mse(
+        atomic_charges, mol_id, atom_mask, batch_segments, batch_size=2, k_max=k_max
+    )
+    # Struct 1's fragments sum to 0.5 and -0.4 respectively.
+    expected = ((0.5**2) + (0.4**2)) / 2.0
+    assert float(mse) == pytest.approx(expected, abs=1e-6)

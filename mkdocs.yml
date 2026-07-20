@@ -138,6 +138,7 @@ nav:
       - Cross-backend handoff: handoff.md
       - Remote MD runs + live streaming: remote-md-streaming.md
       - md-system / cg_jaxmd capabilities checklist: md-cg-capabilities-checklist.md
+      - Species-aware ML/MM interaction policies: md-interaction-policies.md
       - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
       - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md

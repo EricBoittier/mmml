@@ -21,7 +21,8 @@ flowchart LR
   P --> R["Run manifest"]
 ```
 
-See [`examples/interaction_policy_peptide_water.yaml`](../examples/interaction_policy_peptide_water.yaml)
+See the checked-in
+[`interaction_policy_peptide_water.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/interaction_policy_peptide_water.yaml)
 for a peptide/water/salt example. Exact species rules take precedence over
 one-wildcard rules, which take precedence over `* + *`. Equal-specificity
 matches are errors. Missing species labels, monomer assignments, pair rules,
