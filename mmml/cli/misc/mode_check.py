@@ -129,13 +129,23 @@ def build_parser() -> argparse.ArgumentParser:
             "For n≥2: run mode-check at every COM station on the hybrid handoff "
             "ruler (pure ML, handoff mid, mm_switch_on, MM tail, beyond). "
             "Writes cutoff_sweep_summary.json. Conflicts with --far / "
-            "--monomer-separation. Default checks: fd,bond-scan (no minimize)."
+            "--monomer-separation. Default checks: minimize,fd,bond-scan with "
+            "per-monomer COM frozen."
         ),
     )
     parser.add_argument("--fd-atoms", type=int, default=3)
     parser.add_argument("--fd-dx", type=float, default=1e-3)
     parser.add_argument("--minimize-fmax", type=float, default=0.05)
     parser.add_argument("--minimize-steps", type=int, default=400)
+    parser.add_argument(
+        "--minimize-freeze-coms",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "During minimize, freeze each monomer COM (intramolecular relax only). "
+            "Default: on for --cutoff-sweep, off otherwise."
+        ),
+    )
     parser.add_argument("--kick-steps", type=int, default=500)
     parser.add_argument("--kick-delta", type=float, default=0.03)
     # PBC FD cluster options (check_fd parity)
@@ -228,7 +238,14 @@ def _main_vacuum(args: argparse.Namespace) -> int:
                 "--cutoff-sweep repositions monomers; omit --xyz "
                 "(or use a single-distance run)"
             )
-        checks = tuple(args.checks) if args.checks is not None else ("fd", "bond-scan")
+        checks = (
+            tuple(args.checks)
+            if args.checks is not None
+            else ("minimize", "fd", "bond-scan")
+        )
+        freeze_coms = (
+            True if args.minimize_freeze_coms is None else bool(args.minimize_freeze_coms)
+        )
         setup = HybridModeCheckSetup(
             composition=tuple((str(r), int(n)) for r, n in composition),
             checkpoint=Path(args.checkpoint),
@@ -248,6 +265,7 @@ def _main_vacuum(args: argparse.Namespace) -> int:
             fd_dx_A=float(args.fd_dx),
             minimize_fmax=float(args.minimize_fmax),
             minimize_steps=int(args.minimize_steps),
+            minimize_freeze_monomer_coms=freeze_coms,
             kick_steps=int(args.kick_steps),
             kick_delta_A=float(args.kick_delta),
         )
@@ -321,12 +339,16 @@ def _main_vacuum(args: argparse.Namespace) -> int:
         if args.checks is not None
         else ("minimize", "fd", "bond-scan", "vibrations")
     )
+    freeze_coms = (
+        False if args.minimize_freeze_coms is None else bool(args.minimize_freeze_coms)
+    )
     cfg = ModeCheckConfig(
         checks=checks,  # type: ignore[arg-type]
         fd_atoms=int(args.fd_atoms),
         fd_dx_A=float(args.fd_dx),
         minimize_fmax=float(args.minimize_fmax),
         minimize_steps=int(args.minimize_steps),
+        minimize_freeze_monomer_coms=freeze_coms,
         kick_steps=int(args.kick_steps),
         kick_delta_A=float(args.kick_delta),
         atoms_per_monomer=tuple(apm),

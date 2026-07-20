@@ -33,6 +33,9 @@ class ModeCheckConfig:
     bond_fit_abs_delta_max: float = 0.03
     minimize_fmax: float = 0.05
     minimize_steps: int = 400
+    # When True, FIRE uses FixMonomerCOMs so intramolecular relax does not
+    # drift inter-monomer COM separations (needed for cutoff-sweep stations).
+    minimize_freeze_monomer_coms: bool = False
     vib_delta_A: float = 0.01
     vib_nfree: int = 2
     kick_delta_A: float = 0.03

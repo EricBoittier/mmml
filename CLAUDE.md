@@ -40,6 +40,10 @@ ordinary reporting; reserve panels for genuinely interactive/live displays
 where a visual boundary carries information. Migrate older direct Rich usage
 incrementally when touching its call site rather than doing formatting-only
 repo-wide rewrites.
+Use `print_colored_json()` for JSON-shaped diagnostic output instead of
+constructing a table or applying Rich markup to serialized JSON manually. It
+keeps the output valid and copyable while styling paths, numbers, booleans,
+empty containers, and errors consistently.
 
 ## Scientific functionality
 

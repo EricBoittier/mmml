@@ -48,10 +48,26 @@ def run_mode_check(
             log = None
             if paths is not None:
                 log = str(paths.output_dir / "fire.log")
-            FIRE(atoms, logfile=log).run(
-                fmax=float(cfg.minimize_fmax),
-                steps=int(cfg.minimize_steps),
-            )
+            prior_constraints = list(atoms.constraints) if atoms.constraints else []
+            if cfg.minimize_freeze_monomer_coms:
+                apm = cfg.atoms_per_monomer
+                if apm is None:
+                    raise ValueError(
+                        "minimize_freeze_monomer_coms requires "
+                        "ModeCheckConfig.atoms_per_monomer"
+                    )
+                from .constraints import FixMonomerCOMs
+
+                atoms.set_constraint(
+                    [*prior_constraints, FixMonomerCOMs(atoms, list(apm))]
+                )
+            try:
+                FIRE(atoms, logfile=log).run(
+                    fmax=float(cfg.minimize_fmax),
+                    steps=int(cfg.minimize_steps),
+                )
+            finally:
+                atoms.set_constraint(prior_constraints)
         except Exception as exc:  # pragma: no cover - optimizer failures are env-dependent
             result.errors["minimize"] = f"{type(exc).__name__}: {exc}"
 

@@ -199,6 +199,90 @@ def test_mode_check_far_vs_separation_cli():
         )
 
 
+def test_fix_monomer_coms_preserves_com_under_forces():
+    from ase import Atoms
+
+    from mmml.mode_check.constraints import FixMonomerCOMs
+
+    atoms = Atoms(
+        numbers=[8, 1, 1, 8, 1, 1],
+        positions=[
+            [0.0, 0.0, 0.0],
+            [0.96, 0.0, 0.0],
+            [-0.24, 0.93, 0.0],
+            [6.0, 0.0, 0.0],
+            [6.96, 0.0, 0.0],
+            [5.76, 0.93, 0.0],
+        ],
+        masses=[16.0, 1.0, 1.0, 16.0, 1.0, 1.0],
+    )
+    # Place COMs exactly on the x-axis spacing used below.
+    cons = FixMonomerCOMs(atoms, [3, 3])
+    com0 = atoms.get_center_of_mass(indices=[0, 1, 2])
+    com1 = atoms.get_center_of_mass(indices=[3, 4, 5])
+    forces = np.zeros((6, 3))
+    forces[0] = [1.0, 0.0, 0.0]
+    forces[3] = [-2.0, 0.0, 0.0]
+    cons.adjust_forces(atoms, forces)
+    # Net force on each monomer must vanish (mass-weighted).
+    m = atoms.get_masses()
+    assert (m[:3] @ forces[:3]) == pytest.approx(0.0, abs=1e-12)
+    assert (m[3:] @ forces[3:]) == pytest.approx(0.0, abs=1e-12)
+    new = atoms.get_positions() + np.array([[0.1, 0, 0]] * 6)
+    cons.adjust_positions(atoms, new)
+    atoms2 = atoms.copy()
+    atoms2.set_positions(new)
+    assert atoms2.get_center_of_mass(indices=[0, 1, 2]) == pytest.approx(com0, abs=1e-9)
+    assert atoms2.get_center_of_mass(indices=[3, 4, 5]) == pytest.approx(com1, abs=1e-9)
+
+
+def test_minimize_with_frozen_coms_keeps_separation():
+    from ase import Atoms
+    from ase.calculators.calculator import Calculator
+
+    from mmml.mode_check import ModeCheckConfig, run_mode_check
+
+    class SoftSpring(Calculator):
+        implemented_properties = ["energy", "forces"]
+
+        def calculate(self, atoms=None, properties=None, system_changes=None):
+            Calculator.calculate(self, atoms, properties, system_changes)
+            pos = atoms.get_positions()
+            # Pull every atom toward origin (would collapse COM without constraint).
+            forces = -0.5 * pos
+            energy = 0.25 * float(np.sum(pos**2))
+            self.results = {"energy": energy, "forces": forces}
+
+    atoms = Atoms(
+        numbers=[8, 1, 8, 1],
+        positions=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [6.0, 0.0, 0.0]],
+        masses=[16.0, 1.0, 16.0, 1.0],
+    )
+    atoms.calc = SoftSpring()
+    com_sep0 = float(
+        np.linalg.norm(
+            atoms.get_center_of_mass(indices=[0, 1])
+            - atoms.get_center_of_mass(indices=[2, 3])
+        )
+    )
+    cfg = ModeCheckConfig(
+        checks=("minimize",),
+        minimize_fmax=0.05,
+        minimize_steps=50,
+        minimize_freeze_monomer_coms=True,
+        atoms_per_monomer=(2, 2),
+    )
+    result = run_mode_check(atoms, cfg)
+    assert "minimize" not in result.errors
+    com_sep1 = float(
+        np.linalg.norm(
+            atoms.get_center_of_mass(indices=[0, 1])
+            - atoms.get_center_of_mass(indices=[2, 3])
+        )
+    )
+    assert com_sep1 == pytest.approx(com_sep0, abs=1e-6)
+
+
 def test_cutoff_region_stations_cover_handoff_ruler():
     from mmml.mode_check.cutoff_ladder import cutoff_region_stations, region_boundaries
 

@@ -25,6 +25,7 @@ usage: mmml mode-check [-h] [--pbc-fd] [--composition COMPOSITION]
                        [--cutoff-sweep] [--fd-atoms FD_ATOMS] [--fd-dx FD_DX]
                        [--minimize-fmax MINIMIZE_FMAX]
                        [--minimize-steps MINIMIZE_STEPS]
+                       [--minimize-freeze-coms | --no-minimize-freeze-coms]
                        [--kick-steps KICK_STEPS] [--kick-delta KICK_DELTA]
                        [--residue RESIDUE] [--n-molecules N_MOLECULES]
                        [--spacing SPACING]
@@ -77,12 +78,16 @@ options:
                         hybrid handoff ruler (pure ML, handoff mid,
                         mm_switch_on, MM tail, beyond). Writes
                         cutoff_sweep_summary.json. Conflicts with --far /
-                        --monomer-separation. Default checks: fd,bond-scan (no
-                        minimize).
+                        --monomer-separation. Default checks: minimize,fd,bond-
+                        scan with per-monomer COM frozen.
   --fd-atoms FD_ATOMS
   --fd-dx FD_DX
   --minimize-fmax MINIMIZE_FMAX
   --minimize-steps MINIMIZE_STEPS
+  --minimize-freeze-coms, --no-minimize-freeze-coms
+                        During minimize, freeze each monomer COM (intramolecular
+                        relax only). Default: on for --cutoff-sweep, off
+                        otherwise.
   --kick-steps KICK_STEPS
   --kick-delta KICK_DELTA
   --residue RESIDUE     Residue for --pbc-fd

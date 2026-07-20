@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from mmml.utils import rich_report
@@ -39,6 +41,36 @@ def test_compact_reporter_validates_shape_and_status():
         report.status("maybe", "ambiguous")
     with pytest.raises(ValueError, match="same length"):
         report.table("Bad", ("a", "b"), ((1,),))
+
+
+def test_print_colored_json_is_valid_json_and_has_semantic_styles(monkeypatch):
+    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    console = _recording_console()
+    payload = {
+        "summary": "/tmp/cutoff_sweep_summary.json",
+        "station": {"energy_eV": -23.3, "skipped": False, "errors": {}},
+    }
+
+    rich_report.print_colored_json(payload, console=console)
+
+    rendered = console.export_text(styles=False)
+    assert json.loads(rendered) == payload
+    styled = rich_report._colored_json_text(payload)
+    styles = {str(span.style) for span in styled.spans}
+    assert "bold blue underline" in styles
+    assert "bright_magenta" in styles
+    assert "bold red" in styles
+    assert "bold green" in styles
+
+
+def test_print_colored_json_plain_fallback_and_validation(capsys):
+    payload = {"ok": True, "errors": {"point": "SCF failed"}}
+    rich_report.print_colored_json(payload, sort_keys=True)
+    assert json.loads(capsys.readouterr().out) == payload
+    with pytest.raises(ValueError, match="Out of range float"):
+        rich_report.print_colored_json({"energy": float("nan")})
+    with pytest.raises(ValueError, match="indent"):
+        rich_report.print_colored_json({}, indent=-1)
 
 
 @pytest.fixture(autouse=True)

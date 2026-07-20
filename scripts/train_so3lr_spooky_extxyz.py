@@ -582,6 +582,10 @@ def probe_max_batch_size(
     (seen: ``Acquire clique`` wait after B=4 OOM while B=3 is tried).
 
     Starts at ``start_batch`` (pair-budget heuristic) and grows upward.
+
+    Returns 0 if not even batch size 1 fits in device memory for this
+    ``pad_atoms`` -- callers must treat that as "this pad width cannot be
+    trained on this hardware," not silently floor it back up to 1.
     """
     max_batch = max(1, int(max_batch))
     start_batch = max(1, min(max_batch, int(start_batch)))
@@ -625,11 +629,19 @@ def probe_max_batch_size(
                 hi = mid - 1
         return best
 
-    # Establish a feasible floor at/below start_batch.
+    # Establish a feasible floor at/below start_batch. `best=0` here is a
+    # genuine "nothing verified yet" sentinel, not a batch size -- if no
+    # size in [1, start_batch) fits either (including the start_batch==1
+    # case, where the search range is empty), 0 propagates out to signal
+    # this pad width doesn't fit at any batch size on this hardware. A
+    # previous version of this function passed `best=1` here, which meant
+    # an empty search range silently returned an UNVERIFIED "1" even when
+    # _try(1) itself had just OOM'd -- the failure was deferred to the
+    # first real training step on that bucket instead of being caught here.
     if _try(start_batch):
         best = start_batch
     else:
-        return _search(1, start_batch - 1, 1)
+        return _search(1, start_batch - 1, 0)
 
     # Grow upward from the floor toward max_batch.
     trial = min(max_batch, max(best + 1, best * 2))
@@ -1627,13 +1639,19 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             k_min=args.far_field_min_k,
             k_max=args.far_field_max_k,
             safe_separation=safe_separation,
+            max_fragment_atoms=args.far_field_max_fragment_atoms,
         )
         composite_sizes = [c["N"] for c in composites]
+        fragment_cap_msg = (
+            f", fragments capped at {args.far_field_max_fragment_atoms} atoms"
+            if args.far_field_max_fragment_atoms is not None
+            else ""
+        )
         data = append_far_field_composites_to_data(data, composites)
         print(
             f"Far-field augmentation: added {n_composites} synthetic composite "
             f"structures (K={args.far_field_min_k}-{args.far_field_max_k} fragments "
-            f"each, sizes {min(composite_sizes)}-{max(composite_sizes)} atoms, "
+            f"each{fragment_cap_msg}, sizes {min(composite_sizes)}-{max(composite_sizes)} atoms, "
             f">={safe_separation:g} A apart [computed from cutoff={args.cutoff:g}, "
             f"electrostatics_off_end={args.electrostatics_off_end:g}], exact "
             f"E=sum(E_fragment) by construction) — "
@@ -2438,6 +2456,25 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Seed for far-field composite sampling (default: --seed).",
+    )
+    parser.add_argument(
+        "--far-field-max-fragment-atoms",
+        type=int,
+        default=None,
+        help=(
+            "Exclude source structures above this atom count from far-field "
+            "fragment sampling (default: no cap). Source structure sizes are "
+            "heavy-tailed, so --far-field-max-k alone only bounds composite "
+            "size in EXPECTATION, not the worst case -- a handful of large "
+            "outlier fragments can still produce a composite far bigger than "
+            "k_max times the typical fragment size (observed: k_max=6 with "
+            "no cap produced a 394-atom composite from a population with "
+            "median fragment size 18, which OOM'd auto-batch probing). Set "
+            "this so k_max * max_fragment_atoms stays within a known-safe "
+            "atom count (e.g. the largest already-probed auto-batch pad "
+            "width) for a guaranteed bound -- see "
+            "far_field_augment.resolve_composite_max_atoms."
+        ),
     )
     parser.add_argument(
         "--mbd-checkpoint",

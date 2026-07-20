@@ -62,7 +62,10 @@ def run_cutoff_sweep(
     """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    cfg = config or ModeCheckConfig(checks=("fd", "bond-scan"))
+    cfg = config or ModeCheckConfig(
+        checks=("minimize", "fd", "bond-scan"),
+        minimize_freeze_monomer_coms=True,
+    )
 
     if stations is None:
         stations = cutoff_region_stations(
@@ -92,6 +95,11 @@ def run_cutoff_sweep(
         write_psf_to=out / "cluster.psf",
     )
     ase_write(str(out / "cluster_attach.xyz"), atoms)
+    # Freeze-COM minimize needs the monomer layout on the config.
+    object.__setattr__(cfg, "atoms_per_monomer", tuple(int(n) for n in apm))
+    if "minimize" in cfg.checks and not cfg.minimize_freeze_monomer_coms:
+        # Cutoff stations are meaningless if FIRE can collapse COM.
+        object.__setattr__(cfg, "minimize_freeze_monomer_coms", True)
 
     # Restore rigid monomer templates from the attach geometry (pre-minimize).
     template_pos = np.asarray(atoms.get_positions(), dtype=float).copy()
@@ -169,6 +177,7 @@ def run_cutoff_sweep(
         ),
         "stations": [s.to_dict() for s in sorted(stations, key=lambda s: s.com_A)],
         "checks": list(cfg.checks),
+        "minimize_freeze_monomer_coms": bool(cfg.minimize_freeze_monomer_coms),
         "base_meta": {
             k: base_meta[k]
             for k in (

@@ -86,16 +86,46 @@ def _fragment_radius(positions: np.ndarray) -> float:
     return float(np.max(np.linalg.norm(positions - centroid, axis=1))) if len(positions) else 0.0
 
 
-def eligible_source_indices(data: Dict[str, Any]) -> np.ndarray:
+def eligible_source_indices(
+    data: Dict[str, Any], *, max_fragment_atoms: int | None = None
+) -> np.ndarray:
     """Indices of structures usable as far-field-composite fragments.
 
     Restricted to exactly neutral, singlet structures -- see module
     docstring for why that's what makes the construction exact.
+
+    ``max_fragment_atoms``, if given, additionally excludes any structure
+    with more atoms than this. Source structure sizes are heavy-tailed (in
+    practice: median ~18 atoms, but a long tail up to the largest real
+    training structures, e.g. 120-atom proteins, that happen to be exactly
+    neutral and singlet) -- without this cap, ``build_far_field_composites``
+    can only bound the EXPECTED composite size, not the worst case, since a
+    handful of unlucky draws from the tail is enough to produce a composite
+    far larger than ``k_max`` times the typical fragment size. Callers that
+    need a hard, exact worst-case bound on composite atom count (e.g. to
+    stay within a known-safe pad-width range and avoid probing/OOMing on
+    novel shapes -- see the resolve_composite_max_atoms) must set this.
     """
     q = np.asarray(data["Q"], dtype=np.float64).reshape(-1)
     s = np.asarray(data["S"], dtype=np.float64).reshape(-1)
     mask = (np.abs(q) < NEUTRAL_TOL) & (np.abs(s - SINGLET_SPIN) < 1e-9)
+    if max_fragment_atoms is not None:
+        n = np.asarray(data["N"], dtype=np.int64).reshape(-1)
+        mask = mask & (n <= int(max_fragment_atoms))
     return np.flatnonzero(mask)
+
+
+def resolve_composite_max_atoms(*, k_max: int, max_fragment_atoms: int) -> int:
+    """Exact worst-case atom count for a composite of up to ``k_max`` fragments,
+    each capped at ``max_fragment_atoms`` atoms by :func:`eligible_source_indices`.
+
+    Use this to choose ``max_fragment_atoms`` so composites stay within a
+    known-safe atom-count ceiling (e.g. the largest already-probed
+    auto-batch pad width), guaranteeing no novel, unprobed shape is ever
+    produced -- rather than hoping ``k_max`` alone keeps composites small,
+    which the heavy-tailed fragment-size distribution makes unreliable.
+    """
+    return int(k_max) * int(max_fragment_atoms)
 
 
 def _place_fragments_on_grid(radii: list[float], safe_separation: float) -> list[np.ndarray]:
@@ -195,17 +225,32 @@ def build_far_field_composites(
     k_min: int = 5,
     k_max: int = 50,
     safe_separation: float = SAFE_SEPARATION_ANGSTROM,
+    max_fragment_atoms: int | None = None,
 ) -> list[Dict[str, Any]]:
     """Sample ``n_composites`` synthetic far-field structures.
 
     Fragment counts are drawn uniformly from ``[k_min, k_max]``; fragments
     are sampled with replacement from :func:`eligible_source_indices`.
+
+    ``max_fragment_atoms``, if given, is forwarded to
+    :func:`eligible_source_indices` so every composite's worst-case atom
+    count is bounded exactly by ``k_max * max_fragment_atoms`` (see
+    :func:`resolve_composite_max_atoms`) -- without it, composite size is
+    only bounded in expectation, and a heavy-tailed fragment-size
+    distribution can produce composites far larger than ``k_max`` times the
+    typical fragment size (observed: k_max=6 with no cap produced a
+    394-atom composite from a population with median fragment size 18).
     """
-    eligible = eligible_source_indices(data)
+    eligible = eligible_source_indices(data, max_fragment_atoms=max_fragment_atoms)
     if eligible.size == 0:
         raise ValueError(
-            "No exactly-neutral, singlet structures found in this cache -- "
-            "far-field composites need at least one eligible source structure."
+            "No exactly-neutral, singlet structures found in this cache "
+            + (
+                f"with <= {max_fragment_atoms} atoms "
+                if max_fragment_atoms is not None
+                else ""
+            )
+            + "-- far-field composites need at least one eligible source structure."
         )
     composites = []
     for _ in range(n_composites):
