@@ -29,14 +29,19 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run a reproducible rigid 1D dimer energy/force scan.",
     )
     parser.add_argument(
+        "--config",
+        type=Path,
+        help="YAML/JSON DimerScanConfig; command-line output/failure flags remain available",
+    )
+    parser.add_argument(
         "residues",
-        nargs="+",
+        nargs="*",
         metavar="RESIDUE",
         help="One residue for a homodimer or two for a heterodimer",
     )
     parser.add_argument(
         "--calculator",
-        required=True,
+        required=False,
         choices=(
             "physnet",
             "spookynet",
@@ -98,39 +103,70 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if len(args.residues) not in (1, 2):
-        build_parser().error("provide one residue for a homodimer or two for a heterodimer")
-    residues = (
-        (args.residues[0], args.residues[0])
-        if len(args.residues) == 1
-        else tuple(args.residues)
-    )
-    config = DimerScanConfig(
-        residues=residues,
-        calculator=args.calculator,
-        checkpoint=args.checkpoint,
-        distances_angstrom=args.distance,
-        energy_definition=args.energy_definition,
-        failure_policy="allow_partial" if args.allow_partial else "fail",
-        charge=args.charge,
-        spin=args.spin,
-        method=args.method,
-        basis=args.basis,
-        xc=args.xc,
-        calculator_config=args.calculator_config,
-        electric_field_au=(
-            tuple(args.electric_field) if args.electric_field is not None else None
-        ),
-        slako_dir=args.slako_dir,
-        workdir=args.calculator_workdir,
-        executable=args.calculator_executable,
-        multipole_force_step_angstrom=args.multipole_force_step,
-        seed=args.seed,
-    )
+    if args.config is not None:
+        import json
+        import os
+
+        path = args.config.expanduser().resolve()
+        if path.suffix.lower() == ".json":
+            data = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            import yaml
+
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            build_parser().error("--config document must contain a mapping")
+        for key in ("checkpoint", "calculator_config", "interaction_policy", "slako_dir", "workdir"):
+            value = data.get(key)
+            if value:
+                expanded = os.path.expandvars(str(value))
+                if "$" in expanded:
+                    build_parser().error(f"unresolved environment variable in config field {key}")
+                candidate = Path(expanded).expanduser()
+                if not candidate.is_absolute():
+                    candidate = path.parent / candidate
+                data[key] = str(candidate)
+        config = DimerScanConfig.from_dict(data)
+        if args.allow_partial and config.failure_policy != "allow_partial":
+            from dataclasses import replace
+
+            config = replace(config, failure_policy="allow_partial")
+    else:
+        if args.calculator is None:
+            build_parser().error("--calculator is required unless --config is provided")
+        if len(args.residues) not in (1, 2):
+            build_parser().error("provide one residue for a homodimer or two for a heterodimer")
+        residues = (
+            (args.residues[0], args.residues[0])
+            if len(args.residues) == 1
+            else tuple(args.residues)
+        )
+        config = DimerScanConfig(
+            residues=residues,
+            calculator=args.calculator,
+            checkpoint=args.checkpoint,
+            distances_angstrom=args.distance,
+            energy_definition=args.energy_definition,
+            failure_policy="allow_partial" if args.allow_partial else "fail",
+            charge=args.charge,
+            spin=args.spin,
+            method=args.method,
+            basis=args.basis,
+            xc=args.xc,
+            calculator_config=args.calculator_config,
+            electric_field_au=(
+                tuple(args.electric_field) if args.electric_field is not None else None
+            ),
+            slako_dir=args.slako_dir,
+            workdir=args.calculator_workdir,
+            executable=args.calculator_executable,
+            multipole_force_step_angstrom=args.multipole_force_step,
+            seed=args.seed,
+        )
     result = run_dimer_scan(config)
     paths = result.write(args.output, overwrite=args.overwrite)
     print(f"Wrote {len(result.records)} scan points to {paths['manifest']}")
-    if result.has_failures and not args.allow_partial:
+    if result.has_failures and config.failure_policy != "allow_partial":
         print("One or more requested scan points failed; see data.csv for diagnostics.")
         return 1
     return 0

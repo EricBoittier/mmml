@@ -34,6 +34,7 @@ class DimerScanConfig:
     basis: str | None = None
     xc: str | None = None
     calculator_config: Path | None = None
+    interaction_policy: Path | None = None
     electric_field_au: tuple[float, float, float] | None = None
     slako_dir: Path | None = None
     workdir: Path | None = None
@@ -65,7 +66,7 @@ class DimerScanConfig:
         object.__setattr__(self, "calculator", str(self.calculator).lower())
         if self.checkpoint is not None:
             object.__setattr__(self, "checkpoint", Path(self.checkpoint).expanduser())
-        for name in ("calculator_config", "slako_dir", "workdir"):
+        for name in ("calculator_config", "interaction_policy", "slako_dir", "workdir"):
             value = getattr(self, name)
             if value is not None:
                 object.__setattr__(self, name, Path(value).expanduser())
@@ -86,7 +87,7 @@ class DimerScanConfig:
         if self.checkpoint is not None:
             path = self.checkpoint.resolve() if resolve_paths else self.checkpoint
             data["checkpoint"] = str(path)
-        for name in ("calculator_config", "slako_dir", "workdir"):
+        for name in ("calculator_config", "interaction_policy", "slako_dir", "workdir"):
             value = getattr(self, name)
             if value is not None:
                 data[name] = str(value.resolve() if resolve_paths else value)
@@ -101,7 +102,7 @@ class DimerScanConfig:
         values["distances_angstrom"] = tuple(values["distances_angstrom"])
         if values.get("checkpoint") is not None:
             values["checkpoint"] = Path(values["checkpoint"])
-        for name in ("calculator_config", "slako_dir", "workdir"):
+        for name in ("calculator_config", "interaction_policy", "slako_dir", "workdir"):
             if values.get(name) is not None:
                 values[name] = Path(values[name])
         if values.get("electric_field_au") is not None:

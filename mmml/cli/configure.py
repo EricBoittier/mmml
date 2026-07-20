@@ -17,7 +17,7 @@ from mmml.cli.configure_presets import (
     apply_preset,
     list_presets_text,
 )
-from mmml.utils.rich_report import get_reporter
+from mmml.utils.rich_report import get_reporter, print_colored_json
 
 
 class ConfigureCancelled(Exception):
@@ -70,6 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
             "md-campaign",
             "physnet-train",
             "snakemake-md",
+            "interaction-policy",
             "preset-menu",
         ),
         default=None,
@@ -197,6 +198,101 @@ def _report_written_files(
         report.status("info", "Next", detail=next_hint)
 
 
+def validate_wizard_config(workflow: str, data: dict[str, Any]) -> None:
+    """Validate one generated document before preview or filesystem writes."""
+
+    if workflow == "interaction-policy":
+        from mmml.md.interactions import InteractionPolicy
+
+        InteractionPolicy.from_mapping(data)
+        return
+    if workflow == "dimer-scan":
+        from mmml.dimer_scan import DimerScanConfig
+
+        DimerScanConfig.from_dict(data)
+        return
+    if workflow == "md-single":
+        required = {"setup", "backend", "composition", "output_dir", "temperature"}
+        missing = sorted(required - set(data))
+        if missing:
+            raise ValueError(f"MD configuration is missing required keys: {missing}")
+        if float(data["temperature"]) <= 0:
+            raise ValueError("MD temperature must be positive")
+        return
+    if workflow == "md-campaign":
+        defaults = data.get("defaults")
+        runs = data.get("runs")
+        if not isinstance(defaults, dict) or not isinstance(runs, dict) or not runs:
+            raise ValueError("MD campaign requires defaults and at least one run")
+        unknown = sorted(
+            str(run.get("depends_on"))
+            for run in runs.values()
+            if run.get("depends_on") is not None and run.get("depends_on") not in runs
+        )
+        if unknown:
+            raise ValueError(f"campaign contains unknown dependencies: {unknown}")
+        return
+    if workflow == "physnet-train":
+        for key in ("data", "ckpt_dir", "tag"):
+            if not data.get(key):
+                raise ValueError(f"PhysNet configuration requires {key}")
+        for key in ("batch_size", "num_epochs", "learning_rate", "cutoff"):
+            if float(data[key]) <= 0:
+                raise ValueError(f"PhysNet {key} must be positive")
+        return
+    if workflow == "snakemake-md":
+        if not isinstance(data.get("jobs"), dict) or not data["jobs"]:
+            raise ValueError("Snakemake MD workflow requires at least one backend job")
+        return
+    raise ValueError(f"no wizard validator registered for {workflow!r}")
+
+
+def _preview_and_confirm(workflow: str, title: str, data: dict[str, Any]) -> None:
+    """Validate, preview, and obtain confirmation before writing a document."""
+
+    _preview_documents_and_confirm(((workflow, title, data),))
+
+
+def _preview_documents_and_confirm(
+    documents: tuple[tuple[str, str, dict[str, Any]], ...],
+) -> None:
+    """Validate and preview one wizard output bundle, then confirm once."""
+
+    preview: dict[str, Any] = {}
+    for workflow, title, data in documents:
+        validate_wizard_config(workflow, data)
+        preview[title] = data
+    get_reporter().status(
+        "success", "Validation passed", detail=", ".join(preview)
+    )
+    print_colored_json(preview, default=str)
+    if not _prompt_yes_no("Write this configuration?", default=True):
+        raise ConfigureCancelled
+
+
+def _csv_names(raw: str) -> list[str]:
+    names = [part.strip().upper() for part in raw.split(",") if part.strip()]
+    if not names or len(names) != len(set(names)):
+        raise ValueError("species must be a non-empty, unique comma-separated list")
+    return names
+
+
+def _pair_names(raw: str, species: list[str]) -> list[tuple[str, str]]:
+    if not raw.strip():
+        return []
+    known = set(species)
+    pairs: list[tuple[str, str]] = []
+    for token in raw.split(","):
+        parts = tuple(part.strip().upper() for part in token.split("+"))
+        if len(parts) != 2 or not all(parts) or not set(parts) <= known:
+            raise ValueError(f"invalid species pair {token!r}; use A+B with declared species")
+        canonical = tuple(sorted(parts))
+        if canonical in pairs:
+            raise ValueError(f"duplicate species pair {token!r}")
+        pairs.append(canonical)
+    return pairs
+
+
 # ---------------------------------------------------------------------------
 # Wizards
 # ---------------------------------------------------------------------------
@@ -292,6 +388,7 @@ def wizard_md_single(out_dir: Path) -> list[Path]:
         cfg["lambda_md_mode"] = "free_nve"
         cfg["pre_min_steps"] = 50
 
+    _preview_and_confirm("md-single", "Single MD run", cfg)
     path = out_dir / "md_system.yaml"
     _write_yaml(path, cfg, header="Generated by mmml configure (single MD run)")
     _report_written(path, next_hint=f"mmml md-system --config {path}")
@@ -388,6 +485,7 @@ def wizard_md_campaign(out_dir: Path) -> list[Path]:
             },
         }
 
+    _preview_and_confirm("md-campaign", "MD campaign", cfg)
     path = out_dir / "md_campaign.yaml"
     _write_yaml(path, cfg, header="Generated by mmml configure (MD campaign)")
     _report_written(path, next_hint=f"mmml md-system --config {path} --run-all")
@@ -433,6 +531,7 @@ def wizard_physnet_train(out_dir: Path) -> list[Path]:
         "cutoff": 8.0,
     }
 
+    _preview_and_confirm("physnet-train", "PhysNet training", cfg)
     path = out_dir / "physnet_train.yaml"
     _write_yaml(path, cfg, header="Generated by mmml configure (PhysNet training)")
     _report_written(path, next_hint=f"mmml physnet-train --config {path}")
@@ -561,6 +660,7 @@ def wizard_snakemake_md(out_dir: Path) -> list[Path]:
             "md_stages": "mini,heat,nve",
         }
 
+    _preview_and_confirm("snakemake-md", "Snakemake MD workflow", cfg)
     written: list[Path] = []
     wf_dir.mkdir(parents=True, exist_ok=True)
     (wf_dir / "Snakefile").write_text(_SNAKEFILE_TEMPLATE, encoding="utf-8")
@@ -622,11 +722,187 @@ def wizard_snakemake_md(out_dir: Path) -> list[Path]:
     return written
 
 
+def wizard_interaction_policy(out_dir: Path) -> list[Path]:
+    """Build one canonical species policy plus an optional workflow companion."""
+
+    target = _prompt_choice(
+        "Use this interaction policy with",
+        [
+            ("policy", "Policy only", "Write a reusable interaction_policy.yaml"),
+            ("md", "md-system", "Also write an MD configuration that references the policy"),
+            ("dimer", "dimer-scan", "Also write a dimer scan configuration with policy provenance"),
+        ],
+        default_index=1,
+    )
+    species = _csv_names(_prompt_line("Species (comma-separated)", "PEP,TIP3,SOD,CLA"))
+    ml_species = set(
+        _csv_names(_prompt_line("ML monomer species", species[0]))
+    )
+    unknown_ml = sorted(ml_species - set(species))
+    if unknown_ml:
+        raise ValueError(f"ML monomer species were not declared: {unknown_ml}")
+    ml_calculator = _prompt_choice(
+        "ML calculator",
+        [
+            ("physnet", "PhysNet", "PhysNet or joint checkpoint"),
+            ("spookynet", "SpookyNet", "Charge/spin-aware SpookyNet checkpoint"),
+        ],
+        default_index=0,
+    )
+    ml_checkpoint = _resolve_checkpoint(
+        _prompt_line("ML checkpoint", "${MMML_CKPT}")
+    )
+    qm_raw = _prompt_line("QM-only monomer species (comma-separated; blank for none)", "")
+    qm_species = set(_csv_names(qm_raw)) if qm_raw.strip() else set()
+    if qm_species & ml_species:
+        raise ValueError("a species cannot have both ML and QM monomer providers")
+    unknown_qm = sorted(qm_species - set(species))
+    if unknown_qm:
+        raise ValueError(f"QM monomer species were not declared: {unknown_qm}")
+
+    default_pair = f"{species[0]}+{species[1]}" if len(species) > 1 else f"{species[0]}+{species[0]}"
+    near_pairs = _pair_names(
+        _prompt_line("Near-ML pairs (comma-separated A+B; blank for all-MM)", default_pair),
+        species,
+    )
+    switch_start = float(_prompt_line("Near/far switch start (Å)", "5.0"))
+    switch_stop = float(_prompt_line("Near/far switch stop (Å)", "7.0"))
+
+    providers: dict[str, Any] = {
+        "cgenff": {"kind": "mm", "calculator": "cgenff"},
+        "ml": {
+            "kind": "ml",
+            "calculator": ml_calculator,
+            "checkpoint": ml_checkpoint,
+        },
+    }
+    if qm_species:
+        providers["qm"] = {
+            "kind": "qm",
+            "calculator": _prompt_choice(
+                "QM calculator",
+                [
+                    ("pyscf", "PySCF", "Ab initio monomer provider"),
+                    ("xtb", "xTB", "Semiempirical QM monomer provider"),
+                    ("dftb3-d4", "DFTB3-D4", "DFTB+ 3ob with D4"),
+                ],
+                default_index=0,
+            ),
+        }
+    monomers = {
+        name: ("qm" if name in qm_species else "ml" if name in ml_species else "cgenff")
+        for name in species
+    }
+    pair_rules: list[dict[str, Any]] = [
+        {
+            "species": list(pair),
+            "near_provider": "ml",
+            "far_provider": "cgenff",
+            "switch": {"start_A": switch_start, "stop_A": switch_stop},
+        }
+        for pair in near_pairs
+    ]
+    pair_rules.append({"species": ["*", "*"], "provider": "cgenff"})
+    policy_data = {
+        "schema_version": 1,
+        "providers": providers,
+        "monomers": monomers,
+        "pairs": pair_rules,
+    }
+
+    documents: list[tuple[str, str, dict[str, Any]]] = [
+        ("interaction-policy", "Interaction policy", policy_data)
+    ]
+    companion_name: str | None = None
+    companion_data: dict[str, Any] | None = None
+    next_hint: str | None = None
+    if target == "md":
+        composition = _prompt_line(
+            "MD composition",
+            ",".join(f"{name}:{10 if name in {'TIP3', 'HOH', 'WAT'} else 1}" for name in species),
+        )
+        companion_name = "md_system.yaml"
+        companion_data = {
+            "setup": "pbc_nvt",
+            "backend": "jaxmd",
+            "composition": composition,
+            "checkpoint": ml_checkpoint,
+            "interaction_policy": "interaction_policy.yaml",
+            "output_dir": "artifacts/md_policy_run",
+            "temperature": 300.0,
+            "box_size": 30.0,
+            "seed": 42,
+        }
+        documents.append(("md-single", "MD companion", companion_data))
+        next_hint = f"mmml md-system --config {out_dir / companion_name}"
+    elif target == "dimer":
+        dimer_residues = [
+            part.strip().upper()
+            for part in _prompt_line(
+                "Dimer residues (one or two comma-separated)",
+                default_pair.replace("+", ","),
+            ).split(",")
+            if part.strip()
+        ]
+        if len(dimer_residues) == 1:
+            dimer_residues *= 2
+        if len(dimer_residues) != 2 or not set(dimer_residues) <= set(species):
+            raise ValueError("dimer residues must be one or two declared species")
+        calculator = _prompt_choice(
+            "Dimer calculator",
+            [
+                ("physnet", "PhysNet", "Use the configured ML checkpoint"),
+                ("spookynet", "SpookyNet", "Use the configured ML checkpoint"),
+                ("xtb", "xTB", "Semiempirical reference scan"),
+                ("pyscf", "PySCF", "Ab initio reference scan"),
+            ],
+            default_index=0 if ml_calculator == "physnet" else 1,
+        )
+        start = float(_prompt_line("Scan start (Å)", "2.5"))
+        stop = float(_prompt_line("Scan stop (Å)", "6.0"))
+        step = float(_prompt_line("Scan step (Å)", "0.1"))
+        count = int(round((stop - start) / step)) if step > 0 else -1
+        distances = [round(start + index * step, 12) for index in range(count + 1)]
+        companion_name = "dimer_scan.yaml"
+        companion_data = {
+            "residues": dimer_residues,
+            "calculator": calculator,
+            "checkpoint": ml_checkpoint if calculator in {"physnet", "spookynet"} else None,
+            "distances_angstrom": distances,
+            "energy_definition": "interaction",
+            "failure_policy": "fail",
+            "interaction_policy": "interaction_policy.yaml",
+            "seed": 0,
+        }
+        documents.append(("dimer-scan", "Dimer companion", companion_data))
+        next_hint = (
+            f"mmml dimer-scan --config {out_dir / companion_name} "
+            f"--output {out_dir / 'dimer_scan_results'}"
+        )
+
+    _preview_documents_and_confirm(tuple(documents))
+    policy_path = out_dir / "interaction_policy.yaml"
+    _write_yaml(policy_path, policy_data, header="Generated by mmml configure (interaction policy)")
+    written = [policy_path]
+    if companion_name is not None and companion_data is not None:
+        companion_path = out_dir / companion_name
+        _write_yaml(companion_path, companion_data, header="Generated by mmml configure")
+        written.append(companion_path)
+    _report_written_files(
+        out_dir,
+        written,
+        title="Wrote interaction-policy workflow",
+        next_hint=next_hint,
+    )
+    return written
+
+
 _WIZARDS = {
     "md-single": wizard_md_single,
     "md-campaign": wizard_md_campaign,
     "physnet-train": wizard_physnet_train,
     "snakemake-md": wizard_snakemake_md,
+    "interaction-policy": wizard_interaction_policy,
 }
 
 
@@ -656,7 +932,10 @@ def configure_main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.non_interactive:
-        print("Workflows: md-single, md-campaign, physnet-train, snakemake-md, preset-menu")
+        print(
+            "Workflows: md-single, md-campaign, physnet-train, snakemake-md, "
+            "interaction-policy, preset-menu"
+        )
         print("Presets:   mmml configure --list-presets")
         return 0
 
@@ -678,6 +957,11 @@ def _configure_interactive(args: argparse.Namespace, out_dir: Path) -> int:
                 ("md-campaign", "MD campaign", "Multi-stage YAML with depends_on handoffs"),
                 ("physnet-train", "PhysNet training", "physnet-train YAML from NPZ splits"),
                 ("snakemake-md", "Snakemake MD workflow (custom)", "config.yaml + Snakefile + job scripts"),
+                (
+                    "interaction-policy",
+                    "Species interaction policy",
+                    "Shared ML/MM/QM ownership for md-system and dimer scans",
+                ),
             ],
             default_index=0,
         )

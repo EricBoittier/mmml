@@ -94,6 +94,7 @@ def test_configure_md_single_writes_yaml(tmp_path: Path):
             "260",
             "artifacts/test_run",
             "30",
+            "",  # accept validated preview
         ]
     )
     with patch("builtins.input", lambda _p="": next(answers)):
@@ -113,6 +114,7 @@ def test_configure_physnet_train(tmp_path: Path):
             "./ckpts/x",
             "tag1",
             "2",  # medium scale
+            "",  # accept validated preview
         ]
     )
     with patch("builtins.input", lambda _p="": next(answers)):
@@ -129,6 +131,7 @@ def test_configure_snakemake_scaffold(tmp_path: Path):
             "DCM:5",
             "y",  # pycharmm
             "n",  # jaxmd
+            "",  # accept validated preview
         ]
     )
     with patch("builtins.input", lambda _p="": next(answers)):
