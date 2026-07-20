@@ -249,6 +249,10 @@ def main():
         sys.argv = ["mmml normal-mode-sample"] + args.args
         return normal_mode_sample.main()
 
+    elif command == "dimer-scan":
+        from .misc import dimer_scan
+        return dimer_scan.main(args.args)
+
     elif command == "physnet-train":
         from .make import make_training
         sys.argv = ["mmml physnet-train"] + args.args

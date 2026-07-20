@@ -55,6 +55,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "validate",
             "verify-esp-alignment",
             "normal-mode-sample",
+            "dimer-scan",
             "compare-npz",
             "cross-check",
         ),
@@ -141,6 +142,10 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "commands": [("CLI overview", "../index.md")],
     "examples": [("CLI overview", "../index.md")],
     "env": [("CLI overview", "../index.md")],
+    "dimer-scan": [
+        ("1D dimer scan design", "../../dimer-scan-design.md"),
+        ("Scientific code policy", "../../scientific-code.md"),
+    ],
 }
 
 # Static figures under docs/images/ (see scripts/generate_docs_figures.py).

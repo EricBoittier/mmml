@@ -92,6 +92,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     CommandSpec("pyscf-evaluate-mp2", "mmml.cli.misc.pyscf_evaluate_mp2", "Batch MP2 evaluation"),
     CommandSpec("verify-esp-alignment", "mmml.cli.misc.verify_esp_alignment", "Verify ESP grid alignment in NPZ"),
     CommandSpec("normal-mode-sample", "mmml.cli.misc.normal_mode_sample", "Sample along vibrational modes"),
+    CommandSpec(
+        "dimer-scan",
+        "mmml.cli.misc.dimer_scan",
+        "Reproducible rigid 1D dimer energy/force scan",
+    ),
     CommandSpec("physnet-train", "mmml.cli.make.make_training", "Train PhysNet message-passing model (E/F)"),
     CommandSpec("physnet-md", "mmml.cli.misc.physnet_md", "PhysNet MD sampling"),
     CommandSpec("physnet-evaluate", "mmml.cli.misc.physnet_evaluate", "Evaluate PhysNet checkpoint"),

@@ -173,4 +173,6 @@ nav:
       - API reference: api.md
   - Development:
       - Contributor guide: development.md
+      - Scientific code policy: scientific-code.md
+      - 1D dimer scan design: dimer-scan-design.md
       - Releasing: releasing.md

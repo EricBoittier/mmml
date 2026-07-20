@@ -29,6 +29,30 @@ gitignore exceptions for `docs/*-assets/` directories).
 - Never set env vars in tests via `os.environ[...] =` — use
   `monkeypatch.setenv` so state can't leak into later tests.
 
+## Scientific functionality
+
+Follow [`docs/scientific-code.md`](docs/scientific-code.md) for scientific
+features, evaluations, scans, simulations, models, and data transformations.
+In particular:
+
+- Search `mmml/`, `scripts/`, `workflows/`, tests, and docs before adding a new
+  tool. Promote or reuse existing package code instead of adding a parallel
+  standalone implementation.
+- Supported reusable behavior belongs in `mmml/`; CLIs and scripts should be
+  thin callers of one canonical Python API.
+- Make units, scientific conventions, resolved defaults, provenance, and input
+  content hashes explicit.
+- Never silently skip failures. Preserve a structured failure record and fail
+  the command by default when requested work is incomplete.
+- Keep numerical evaluation, artifact writing, and plotting separate. A plot
+  must be reproducible from saved machine-readable results.
+- Do not mutate the environment, select devices, execute calculations, or
+  write files at import time. Never hard-code personal or cluster paths in
+  package code.
+
+The proposed canonical 1D scan architecture is documented in
+[`docs/dimer-scan-design.md`](docs/dimer-scan-design.md).
+
 ## PBC ML-dimer MIC wrap — do not “fix” stop_gradient
 
 If NVE force–energy preflight fails on a liquid box, **do not** remove

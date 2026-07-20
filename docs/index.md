@@ -18,6 +18,8 @@ Use this site for installation, the **CLI reference**, MD workflow guides, and d
 - [PyCHARMM on clusters](pycharmm-mpi.md) — MPI launcher, threading, FFTW
 - [PyCHARMM C API: PBC box & pressure](pycharmm-c-api-pbc-box-pressure.md) — KEY_LIBRARY get/set for cell side and CPT pressure tensor
 - [Package architecture](package-architecture.md) — module layout and import graph
+- [Scientific code policy](scientific-code.md) — reproducibility, provenance, failure integrity, and review checklist
+- [1D dimer scan design](dimer-scan-design.md) — canonical modular API and self-describing result bundle
 
 ## External resources
 
