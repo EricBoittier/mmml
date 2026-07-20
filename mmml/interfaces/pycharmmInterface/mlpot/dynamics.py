@@ -5659,8 +5659,14 @@ def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | 
         return None
     for attr in ("charmm_cubic_box_side_A", "cubic_box_side_A"):
         side = getattr(mlpot_ctx, attr, None)
-        if side is not None and float(side) > 0.0:
-            return float(side)
+        # Mock/spec-less proxy objects fabricate attributes on demand.  Only
+        # accept actual scalar numbers as scientific box metadata.
+        if isinstance(side, (int, float, np.integer, np.floating)) and not isinstance(
+            side, (bool, np.bool_)
+        ):
+            numeric_side = float(side)
+            if np.isfinite(numeric_side) and numeric_side > 0.0:
+                return numeric_side
     return None
 
 
@@ -5731,7 +5737,10 @@ def _prepare_post_rescue_overlap_handoff(
     Also used for ASE Bussi heat so COMP-mirrored velocities and dynamics buffers
     stay in RAM instead of reloading stale scratch ``WRIDYN`` state.
     """
-    if mlpot_ctx is not None and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False):
+    if (
+        mlpot_ctx is not None
+        and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False) is True
+    ):
         _prepare_post_rescue_cold_start_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
         return
     if mlpot_ctx is not None and getattr(
@@ -5827,8 +5836,9 @@ def _materialize_post_rescue_restart_handoff(
     )
 
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
-    cold_start = mlpot_ctx is not None and getattr(
-        mlpot_ctx, "_overlap_post_rescue_cold_start", False
+    cold_start = (
+        mlpot_ctx is not None
+        and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False) is True
     )
     if cold_start:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -6306,8 +6316,9 @@ def _restore_bussi_velocities_after_overlap_recovery(
     """
     if not _bussi_heat_ramp_active(chunk_kw):
         return
-    if mlpot_ctx is not None and getattr(
-        mlpot_ctx, "_overlap_post_rescue_cold_start", False
+    if (
+        mlpot_ctx is not None
+        and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False) is True
     ):
         return
     spec = bussi_heat_ramp_spec_from_kw(chunk_kw)
@@ -7924,7 +7935,10 @@ def run_dynamics_with_io(
                 # COMP-as-velocity continuation.
                 extent_cold_start_pending = bool(
                     mlpot_ctx is not None
-                    and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False)
+                    and getattr(
+                        mlpot_ctx, "_overlap_post_rescue_cold_start", False
+                    )
+                    is True
                 )
                 if (
                     (
