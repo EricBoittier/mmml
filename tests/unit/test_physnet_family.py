@@ -135,7 +135,6 @@ def test_vdw_soft_core_fraction_gates_lj_clamp():
     """A smaller vdw_soft_core_fraction must relax the short-range LJ clamp,
     changing the CGenFF vdW energy for an atom pair placed inside the clamp
     radius (proving the field is load-bearing, not dead)."""
-    import jax
     import jax.numpy as jnp
 
     def cgenff_vdw_energy(soft_core_fraction: float) -> float:
