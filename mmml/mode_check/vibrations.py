@@ -28,7 +28,8 @@ def run_ase_vibrations(
         name = str(output_dir / "vib")
     vib = Vibrations(atoms, name=name, delta=float(delta), nfree=int(nfree))
     vib.run()
-    freqs = np.asarray(vib.get_frequencies(), dtype=float)
+    # ASE may return complex frequencies for imaginary modes; keep the real part.
+    freqs = np.real(np.asarray(vib.get_frequencies(), dtype=np.complex128)).astype(float)
     real = np.asarray([float(x) for x in freqs if np.isfinite(x) and float(x) > 1.0])
     summary_path = None
     if output_dir is not None:
@@ -36,7 +37,7 @@ def run_ase_vibrations(
         vib.summary(log=str(summary_path))
     return {
         "frequencies_cm": [float(x) for x in freqs],
-        "max_cm": float(np.max(np.real(freqs))) if freqs.size else float("nan"),
+        "max_cm": float(np.max(freqs)) if freqs.size else float("nan"),
         "real_gt_1_cm": [float(x) for x in real],
         "summary_path": str(summary_path) if summary_path is not None else None,
     }

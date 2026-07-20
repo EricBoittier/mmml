@@ -1000,6 +1000,7 @@ def _factory_mmml(
     mm_charge_mode: str | None = None,
     mm_charge_correction: bool = False,
     mm_latent_charge_template: str | Path | None = None,
+    backprop: bool = False,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1068,7 +1069,7 @@ def _factory_mmml(
         doML=do_ml,
         doMM=do_mm,
         doML_dimer=do_ml_dimer,
-        backprop=False,
+        backprop=bool(backprop),
         debug=False,
         energy_conversion_factor=1.0,
         force_conversion_factor=1.0,

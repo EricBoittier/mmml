@@ -140,3 +140,27 @@ def test_hybrid_setup_disables_mm_for_monomer():
     )
     assert setup.do_mm is False
     assert setup.do_ml_dimer is False
+
+
+def test_place_monomers_along_x_and_reject_collapsed_geometry():
+    from mmml.mode_check.hybrid import (
+        assert_resolved_vacuum_geometry,
+        place_monomers_along_x,
+    )
+
+    tip3 = np.array(
+        [[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [-0.24, 0.93, 0.0]],
+        dtype=float,
+    )
+    geoms = {"TIP3": (tip3, ["OH2", "H1", "H2"], np.array([8, 1, 1]))}
+    placed = place_monomers_along_x(
+        geoms, ["TIP3", "TIP3"], [3, 3], separation_A=2.8
+    )
+    assert placed.shape == (6, 3)
+    assert np.linalg.norm(placed[1] - placed[0]) == pytest.approx(0.96, abs=1e-6)
+    # Second monomer COM near x=2.8
+    assert placed[3:6].mean(axis=0)[0] == pytest.approx(2.8, abs=1e-6)
+    assert_resolved_vacuum_geometry(placed, [3, 3])
+
+    with pytest.raises(RuntimeError, match="collapsed|coincident|intramolecular"):
+        assert_resolved_vacuum_geometry(np.zeros((3, 3)), [3])

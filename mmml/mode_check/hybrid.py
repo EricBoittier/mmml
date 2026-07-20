@@ -12,6 +12,70 @@ from .config import HybridModeCheckSetup
 from .geometry import composition_n_monomers, load_atoms_xyz
 
 
+def place_monomers_along_x(
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]],
+    ordered_residue_names: list[str],
+    atoms_per_monomer: list[int],
+    *,
+    separation_A: float,
+) -> np.ndarray:
+    """Stack PSF-ordered monomer templates along +x (COM separation).
+
+    ``residue_geometries[res]`` is ``(coords, atom_names, Z)`` in PSF atom order.
+    """
+    offsets = np.cumsum([0, *[int(n) for n in atoms_per_monomer]])
+    n_atoms = int(offsets[-1])
+    placed = np.zeros((n_atoms, 3), dtype=float)
+    sep = float(separation_A)
+    for i, residue in enumerate(ordered_residue_names):
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        block = np.asarray(residue_geometries[residue][0], dtype=float).copy()
+        if block.shape != (e - s, 3):
+            raise RuntimeError(
+                f"Geometry shape mismatch for {residue} monomer {i}: "
+                f"{block.shape} vs expected ({e - s}, 3)"
+            )
+        com = block.mean(axis=0)
+        placed[s:e] = block - com + np.array([sep * i, 0.0, 0.0], dtype=float)
+    return placed
+
+
+def assert_resolved_vacuum_geometry(
+    positions: np.ndarray,
+    atoms_per_monomer: list[int],
+    *,
+    min_intramolecular_distance_A: float = 0.2,
+) -> None:
+    """Fail fast if CHARMM/IC left coincident atoms (null IC table symptom)."""
+    pos = np.asarray(positions, dtype=float)
+    if pos.ndim != 2 or pos.shape[1] != 3:
+        raise RuntimeError(f"expected (N,3) positions, got shape {pos.shape}")
+    if not np.all(np.isfinite(pos)):
+        raise RuntimeError("non-finite coordinates in vacuum cluster geometry")
+    if float(np.max(np.ptp(pos, axis=0))) <= 1.0e-4 and int(sum(atoms_per_monomer)) > 1:
+        raise RuntimeError(
+            "Unresolved vacuum cluster geometry (all atoms coincident). "
+            "CHARMM IC build likely returned a null table; monomer templates "
+            "must be placed explicitly after PSF generation."
+        )
+    offsets = np.cumsum([0, *[int(n) for n in atoms_per_monomer]])
+    for i in range(len(atoms_per_monomer)):
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        block = pos[s:e]
+        if block.shape[0] < 2:
+            continue
+        # Pairwise distances within the monomer (upper triangle).
+        d = np.linalg.norm(block[:, None, :] - block[None, :, :], axis=-1)
+        iu = np.triu_indices(block.shape[0], k=1)
+        min_d = float(np.min(d[iu])) if iu[0].size else float("inf")
+        if min_d < float(min_intramolecular_distance_A):
+            raise RuntimeError(
+                f"Monomer {i} has min intramolecular distance {min_d:.3e} Å "
+                f"(<{min_intramolecular_distance_A} Å). Geometry is collapsed; "
+                "refusing to run mode-check."
+            )
+
+
 def build_psf_and_attach_hybrid(
     setup: HybridModeCheckSetup,
     *,
@@ -21,14 +85,15 @@ def build_psf_and_attach_hybrid(
 
     Returns ``(atoms, atoms_per_monomer, meta)``.
 
-    When ``setup.xyz`` is unset, geometries come from the md-pbc-suite residue
-    builders (PSF atom order). When ``xyz`` is set, composition must match that
-    atom order.
+    When ``setup.xyz`` is unset, monomer templates come from the md-pbc-suite
+    make-res geometries (PSF atom order), placed along +x. When ``xyz`` is set,
+    composition must match that atom order.
     """
     from mmml.cli.base import resolve_checkpoint_paths
     from mmml.cli.run.md_pbc_suite.ase import (
         _build_cluster_psf_from_composition,
         _factory_mmml,
+        _residue_geometries_for_composition,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import write_charmm_psf
     from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
@@ -41,8 +106,11 @@ def build_psf_and_attach_hybrid(
     if n_mol < 2:
         do_mm = False
 
+    # make-res geometries first (each call resets CHARMM), then build the cluster PSF.
+    residue_geometries = _residue_geometries_for_composition(composition)
     z_psf, _atom_names, atoms_per, residue_labels = _build_cluster_psf_from_composition(
-        composition
+        composition,
+        residue_geometries=residue_geometries,
     )
     apply_vacuum_nbonds(nbxmod=5)
 
@@ -58,20 +126,22 @@ def build_psf_and_attach_hybrid(
             raise RuntimeError(
                 f"XYZ natoms={len(atoms)} != PSF layout sum={int(sum(atoms_per))}"
             )
+        placed = np.asarray(atoms.get_positions(), dtype=float)
     else:
-        # Place each monomer COM along +x using the PSF-built coordinates.
-        # ``_build_cluster_psf_from_composition`` already wrote IC coords into CHARMM;
-        # read them back and separate monomers.
-        pos = coor.get_positions().to_numpy(dtype=float)
-        offsets = np.cumsum([0, *atoms_per])
-        sep = float(setup.monomer_separation_A)
-        placed = pos.copy()
-        for i in range(n_mol):
-            s, e = int(offsets[i]), int(offsets[i + 1])
-            block = placed[s:e]
-            com = block.mean(axis=0)
-            placed[s:e] = block - com + np.array([sep * i, 0.0, 0.0])
+        # Do NOT read CHARMM coords after ic.build(): TIP3/CGENFF often has a null
+        # IC table (BILDC warning), leaving all atoms at the origin. Place the
+        # already-relaxed make-res templates explicitly (same as
+        # ``_build_cluster_from_composition``).
+        placed = place_monomers_along_x(
+            residue_geometries,
+            [str(x) for x in residue_labels],
+            [int(n) for n in atoms_per],
+            separation_A=float(setup.monomer_separation_A),
+        )
         atoms = Atoms(numbers=np.asarray(z_psf, dtype=int), positions=placed, pbc=False)
+
+    assert_resolved_vacuum_geometry(placed, [int(n) for n in atoms_per])
+    atoms.set_positions(placed)
 
     coor.set_positions(
         pd.DataFrame(np.asarray(atoms.get_positions(), float), columns=["x", "y", "z"])
@@ -115,6 +185,9 @@ def build_psf_and_attach_hybrid(
         timings={},
         lr_solver=str(setup.lr_solver),
         mm_charge_mode=str(setup.mm_charge_mode),
+        # Mode-check needs trustworthy forces for FIRE / FD / vib; MD keeps
+        # analytical forces (backprop=False) for throughput.
+        backprop=True,
     )
     atoms.calc = calc
     meta = {
@@ -130,5 +203,6 @@ def build_psf_and_attach_hybrid(
         "mm_charge_mode": str(setup.mm_charge_mode),
         "lr_solver": str(setup.lr_solver),
         "vacuum": True,
+        "backprop": True,
     }
     return atoms, atoms_per_list, meta
