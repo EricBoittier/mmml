@@ -735,36 +735,11 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
     assert resolve_heat_thermostat(args) == "bussi"
 
 
-def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_one(monkeypatch):
+def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_zero(monkeypatch):
     from unittest.mock import patch
 
     monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
-    kw = {
-        "firstt": 10.0,
-        "finalt": 50.0,
-        "tstruct": 10.0,
-        "tbath": 10.0,
-        "timestep": 0.0001,
-        "nstep": 50,
-    }
-    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
-        return_value=True,
-    ):
-        _apply_bussi_in_memory_continuation_kw(kw)
-    assert kw["iasvel"] == 1
-    assert kw["start"] is False
-    assert kw["iunrea"] == -1
-    assert kw.get("_skip_ase_cold_velocity_assign") is None
-    assert kw["firstt"] == pytest.approx(10.0)
-    assert kw["tstruct"] == pytest.approx(10.0)
-
-
-def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
-    from unittest.mock import patch
-
-    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
+    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -786,6 +761,32 @@ def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
     assert "firstt" not in kw
     assert "finalt" not in kw
     assert "tstruct" not in kw
+
+
+def test_apply_bussi_in_memory_continuation_opt_in_iasvel_one_redraw(monkeypatch):
+    from unittest.mock import patch
+
+    monkeypatch.setenv("MMML_BUSSI_IASVEL1_REDRAW", "1")
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "tstruct": 10.0,
+        "tbath": 10.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ):
+        _apply_bussi_in_memory_continuation_kw(kw)
+    assert kw["iasvel"] == 1
+    assert kw["start"] is False
+    assert kw["iunrea"] == -1
+    assert kw.get("_skip_ase_cold_velocity_assign") is None
+    assert kw["firstt"] == pytest.approx(10.0)
+    assert kw["tstruct"] == pytest.approx(10.0)
 
 
 def test_normalize_dynamics_heat_ramp_kw_strips_bussi_continuation_bath():
