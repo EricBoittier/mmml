@@ -4723,9 +4723,16 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
                 restart_read_path=restart_read_path,
             )
     elif skip_ase_cold and int(kw.get("iasvel", 0) or 0) == 0:
-        # CPT Hoover sub-chunk: no inject; refresh COMP from main so lingering
-        # START cannot read stale comparison *coordinates* as velocities.
-        sync_comparison_velocities_from_main()
+        # CPT Hoover in-memory continuation: no Maxwell redraw / no C-API inject.
+        # After ENER between overlap chunks, live main buffers are often empty while
+        # COMP still holds coordinates — syncing from the post-dyna cache (or
+        # falling back to iasvel=1) prevents T≈10¹² COMP-as-velocity blow-ups.
+        _ensure_cpt_iasvel0_comp_velocity_handoff(
+            kw,
+            restart_read_path=restart_read_path,
+            fallback_paths=bussi_restart_fallbacks,
+            quiet=quiet_ase,
+        )
     if not skip_ase_cold:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     if "echeck" in kw:
@@ -6188,6 +6195,77 @@ def _cpt_subchunk_use_in_memory_handoff() -> bool:
     if _truthy_env("MMML_CPT_READYN_SUBCHUNK"):
         return False
     return True
+
+
+def _ensure_cpt_iasvel0_comp_velocity_handoff(
+    kw: dict[str, Any],
+    *,
+    restart_read_path: Path | str | None,
+    fallback_paths: Any = None,
+    quiet: bool = True,
+) -> None:
+    """Keep ``iasvel=0`` only when COMP holds warm AKMA velocities, else Boltzmann.
+
+    CPT in-memory legs set ``_skip_ase_cold_velocity_assign`` so we do not redraw
+    Maxwell–Boltzmann or inject C-API velocities (DCD-unsafe on gfortran).  That
+    path *requires* COMP to hold velocities.  After mid-segment ENER / list
+    rebuilds, live main buffers are often cold while COMP still matches main
+    coordinates — continuing would yield T≈10¹² K.  Prefer the post-dyna velocity
+    cache; if COMP cannot be made safe, fall back to ``iasvel=1`` at the bath
+    target (barostat state stays in RAM).
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        capture_charmm_velocities_for_bussi,
+        last_synced_velocities_akma_raw,
+        velocities_are_cold,
+        velocities_are_pathological,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        assert_comparison_holds_velocities_not_positions,
+        comparison_matches_main_positions,
+        sync_comparison_velocities_akma,
+        sync_comparison_velocities_from_main,
+    )
+
+    synced = False
+    raw = last_synced_velocities_akma_raw()
+    if (
+        raw is not None
+        and not velocities_are_cold(raw)
+        and not velocities_are_pathological(raw)
+    ):
+        sync_comparison_velocities_akma(raw)
+        synced = True
+    if not synced:
+        synced = bool(sync_comparison_velocities_from_main())
+    if not synced:
+        capture_charmm_velocities_for_bussi(
+            restart_path=restart_read_path,
+            fallback_paths=fallback_paths,
+            quiet=quiet,
+        )
+        raw = last_synced_velocities_akma_raw()
+        if (
+            raw is not None
+            and not velocities_are_cold(raw)
+            and not velocities_are_pathological(raw)
+        ):
+            sync_comparison_velocities_akma(raw)
+            synced = True
+        else:
+            synced = bool(sync_comparison_velocities_from_main())
+    if synced and not comparison_matches_main_positions():
+        assert_comparison_holds_velocities_not_positions(
+            context="run_dynamics CPT iasvel=0 handoff"
+        )
+        return
+    print(
+        "run_dynamics: CPT iasvel=0 COMP handoff unsafe "
+        "(no warm velocities / COMP matches positions); "
+        "falling back to iasvel=1 at bath target",
+        flush=True,
+    )
+    _apply_bussi_iasvel_one_at_ramp_target(kw)
 
 
 def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:

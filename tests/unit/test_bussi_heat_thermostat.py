@@ -471,9 +471,8 @@ def test_cpt_skip_ase_cold_does_not_resolve_or_redraw_velocities():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
         resolve,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
-        return_value=True,
-    ) as sync_comp, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_cpt_iasvel0_comp_velocity_handoff",
+    ) as ensure_comp, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ) as ase_cold, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
@@ -482,9 +481,75 @@ def test_cpt_skip_ase_cold_does_not_resolve_or_redraw_velocities():
 
     resolve.assert_not_called()
     ase_cold.assert_not_called()
-    sync_comp.assert_called()
+    ensure_comp.assert_called_once()
     assert kw["iasvel"] == 0
     assert kw["start"] is False
+
+
+def test_ensure_cpt_iasvel0_comp_handoff_uses_cached_velocities():
+    from unittest import mock
+
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _ensure_cpt_iasvel0_comp_velocity_handoff,
+    )
+
+    kw = {"iasvel": 0, "start": False, "hoover reft": 120.0, "firstt": 120.0}
+    raw = np.ones((3, 3), dtype=float) * 0.01
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
+        return_value=raw,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+    ) as sync_akma, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.assert_comparison_holds_velocities_not_positions",
+    ):
+        _ensure_cpt_iasvel0_comp_velocity_handoff(kw, restart_read_path=None)
+
+    sync_akma.assert_called_once()
+    assert kw["iasvel"] == 0
+
+
+def test_ensure_cpt_iasvel0_comp_handoff_falls_back_to_iasvel_one():
+    from unittest import mock
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _ensure_cpt_iasvel0_comp_velocity_handoff,
+    )
+
+    kw = {
+        "iasvel": 0,
+        "start": False,
+        "hoover reft": 120.0,
+        "firstt": 120.0,
+        "finalt": 200.0,
+    }
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        return_value=True,
+    ):
+        _ensure_cpt_iasvel0_comp_velocity_handoff(kw, restart_read_path=None)
+
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == pytest.approx(120.0)
 
 
 def test_post_dyna_restart_write_path_prefers_staging_alias(tmp_path):
