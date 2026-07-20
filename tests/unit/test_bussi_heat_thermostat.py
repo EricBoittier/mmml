@@ -287,7 +287,8 @@ def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one(
         "firstt": 10.0,
         "_heat_thermostat": "bussi",
         "_bussi_ramp": {"firstt": 10.0, "finalt": 50.0, "teminc": 0.8, "ihtfrq": 50},
-        "_skip_ase_cold_velocity_assign": True,
+        # No ``_skip_ase_cold_velocity_assign``: that flag disables the handoff
+        # path entirely (``_requires_init_velocities_handoff`` returns False).
     }
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
@@ -735,11 +736,38 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
     assert resolve_heat_thermostat(args) == "bussi"
 
 
-def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_zero(monkeypatch):
+def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_one(monkeypatch):
     from unittest.mock import patch
 
     monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("MMML_BUSSI_IASVEL0_CONTINUATION", raising=False)
     monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "tstruct": 10.0,
+        "tbath": 10.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ):
+        _apply_bussi_in_memory_continuation_kw(kw)
+    assert kw["iasvel"] == 1
+    assert kw["start"] is False
+    assert kw["iunrea"] == -1
+    assert kw.get("_skip_ase_cold_velocity_assign") is None
+    assert kw["firstt"] == 10.0
+
+
+def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
+    from unittest.mock import patch
+
+    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
+    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -756,11 +784,8 @@ def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_zero(monkeypatch)
         _apply_bussi_in_memory_continuation_kw(kw)
     assert kw["iasvel"] == 0
     assert kw["start"] is False
-    assert kw["iunrea"] == -1
     assert kw["_skip_ase_cold_velocity_assign"] is True
     assert "firstt" not in kw
-    assert "finalt" not in kw
-    assert "tstruct" not in kw
 
 
 def test_apply_bussi_in_memory_continuation_opt_in_iasvel_one_redraw(monkeypatch):
@@ -1359,7 +1384,9 @@ def test_run_bussi_heat_subchunked_consumes_force_iasvel_one_after_first_microch
         )
 
     assert seen_iasvel[0] == 1
-    assert seen_iasvel[1] == 0
+    # Safe default after consuming the one-shot force flag is still iasvel=1
+    # (iasvel=0 COMP continuation is opt-in via MMML_BUSSI_IASVEL0_CONTINUATION).
+    assert seen_iasvel[1] == 1
     assert "_bussi_force_iasvel_one" not in kw
 
 
@@ -1633,11 +1660,11 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw(monkeypatch
     assert restore_vel.call_args.kwargs["mlpot_ctx"] is ctx
 
     assert chunk_kw["restart"] is False
-    # Default Bussi continuation keeps in-memory velocities (iasvel=0).
-    assert chunk_kw["iasvel"] == 0
+    # Safe default Bussi continuation is iasvel=1 Boltzmann (COMP path unsafe).
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
     assert chunk_kw["iunrea"] == -1
-    assert chunk_kw.get("_skip_ase_cold_velocity_assign") is True
+    assert chunk_kw.get("_skip_ase_cold_velocity_assign") is None
 
 
 def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocities():

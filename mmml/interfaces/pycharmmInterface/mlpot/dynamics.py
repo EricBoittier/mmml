@@ -4177,40 +4177,37 @@ def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
 
 
 def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
-    """Continue Bussi micro-chunks with the current in-memory velocities.
+    """Continue Bussi micro-chunks with safe velocity assignment.
 
-    Do not inject C pointers and do not redraw Maxwell-Boltzmann velocities:
-    both change or destabilize the trajectory. ``start=False, iasvel=0`` keeps
-    CHARMM's current velocities and lets the ASE Bussi rescale persist.
+    Default is ``iasvel=1`` Boltzmann at the ramp target. Lingering CHARMM START
+    makes ``iasvel=0`` read COMP *coordinates* as velocities (T ≫ 10¹² K) on
+    typical gfortran builds — even when C-API ``init_velocities`` is injected.
 
-    ``MMML_BUSSI_IASVEL1_REDRAW=1`` retains the legacy per-chunk Boltzmann
-    redraw only as an explicit diagnostic fallback.
+    Opt in to experimental in-memory continuation with
+    ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` (optionally plus
+    ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1``). ``MMML_BUSSI_IASVEL1_REDRAW=1``
+    is accepted as an explicit alias of the safe default.
     """
     if bool(kw.pop("_bussi_force_iasvel_one", False)):
         # One-shot: only the first post-rescue dyna may force IASVEL=1.
-        # Leaving the flag set re-Boltzmanns every Bussi micro-chunk (discards
-        # ASE rescale) and ECHECKs immediately on a mid-chunk fly-off.
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     if os.environ.get("MMML_BUSSI_IASVEL1_REDRAW") == "1":
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
+    if os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") != "1":
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
     use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
-    if not use_c_api_handoff:
+    if not use_c_api_handoff or not _dynamics_c_api_available():
         _apply_bussi_iasvel_zero_continuation(kw)
         return
-    if not _dynamics_c_api_available():
-        _apply_bussi_iasvel_zero_continuation(kw)
-        return
-    # WARNING: This path passes velocity arrays to Fortran bind(c) optional
-    # assumed-shape arguments via raw ctypes pointers.  Most gfortran builds
-    # segfault inside dynopt because gfortran's CFI array descriptor ABI is
-    # not satisfied by plain C pointers.  Use iasvel=1 (default) instead.
+    # WARNING: velocity arrays via ctypes → often ignored; COMP coords → T~1e12.
     print(
-        "WARN: MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1 — C-API velocity injection enabled. "
-        "This path is known to segfault in dynopt on gfortran builds (bind(c) optional "
-        "assumed-shape array ABI mismatch). Unset MMML_BUSSI_INIT_VELOCITIES_HANDOFF "
-        "to use the safe iasvel=1 Boltzmann continuation instead.",
+        "WARN: MMML_BUSSI_IASVEL0_CONTINUATION=1 with "
+        "MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1 — C-API velocity injection enabled. "
+        "gfortran builds often ignore init_velocities and read COMP coordinates "
+        "(T ≫ 10¹² K). Unset both flags for safe iasvel=1 Boltzmann continuation.",
         flush=True,
     )
     kw["iasvel"] = 0
@@ -4582,6 +4579,10 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             restart_read_path=restart_read_path,
             fallback_paths=bussi_restart_fallbacks,
         )
+    # Preserve skip across strip: otherwise stripping ``_skip_ase_cold_*``
+    # re-enables ``_requires_init_velocities_handoff`` and injects into a COMP
+    # path that gfortran still fills from coordinates (T ≫ 10¹² K).
+    needs_init_velocities_handoff = _requires_init_velocities_handoff(kw)
     _bussi_handoff_preserve = frozenset({"_bussi_ramp", "_bussi_global_step"})
     _strip_non_charmm_dynamics_keywords(
         kw,
@@ -4599,7 +4600,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     # Lingering START + iasvel=0 still reads COMP. Always keep COMP in sync with
     # handoff / main velocities — even when C-API init_velocities is also injected
     # (gfortran builds often ignore those arrays and keep using COMP).
-    if _requires_init_velocities_handoff(kw):
+    if needs_init_velocities_handoff:
         if handoff_vel is not None:
             sync_comparison_velocities_akma(handoff_vel)
         else:
@@ -4615,7 +4616,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     if int(kw.get("ihtfrq", 0) or 0) > 0:
         apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
     _release_charmm_dynamics_api_buffers()
-    if _requires_init_velocities_handoff(kw):
+    if needs_init_velocities_handoff:
         if not _dynamics_c_api_available():
             raise RuntimeError(
                 "run_dynamics: iasvel=0 in-memory continuation requires "
