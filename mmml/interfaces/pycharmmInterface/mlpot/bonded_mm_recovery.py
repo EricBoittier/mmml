@@ -948,6 +948,19 @@ def _run_all_ml_intra_overlap_rescue(
     bonded_cfg: BondedMmMiniConfig,
 ) -> None:
     """Intra-monomer rescue: preflight, then JAX bonded mini or legacy CHARMM BLOCK SD."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
+
+    # Belt-and-suspenders: all-ML PBC liquids must recover via template restore +
+    # mini/baseline checkpoint ladder + cold start (overlap_guard), never SD.
+    if (
+        bool(getattr(config, "use_pbc", False))
+        and bool(getattr(ctx, "use_pbc", False))
+        and _is_all_ml_pbc_context(ctx)
+    ):
+        raise RuntimeError(
+            "Intra overlap rescue: all-ML PBC refuses MLpot/bonded SD polish; "
+            "use template restore + 02_mini/baseline checkpoint ladder + cold start"
+        )
 
     _maybe_run_per_monomer_bonded_jax_preflight(
         ctx, config, context="Intra overlap rescue"

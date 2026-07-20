@@ -1781,6 +1781,144 @@ def test_check_intra_monomer_template_then_separation_skips_bonded_mini():
     assert dmin >= 0.5
 
 
+def test_all_ml_pbc_intra_template_restore_skips_mlpot_sd():
+    """All-ML PBC: selective template restore + cold start; never bonded/MLpot SD."""
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=1.0,
+        n_monomers=1,
+        use_pbc=True,
+        fallback_box_side_A=30.0,
+        rescue=OverlapRescueConfig(nstep_sd=25, nstep_abnr=0, verbose=False),
+    )
+    pos_bad = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.03, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.36, 1.03, 0.0],
+        ],
+        dtype=float,
+    )
+    excluded = frozenset({(0, 1), (1, 2)})
+    ctx = mock.MagicMock()
+    ctx.use_pbc = True
+    positions = {"current": pos_bad}
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=lambda: positions["current"],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        return_value=excluded,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
+        "restore_monomer_from_template_for_violation",
+        side_effect=lambda *_a, **_k: positions.update(current=pos_ok) or True,
+    ) as restore, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_run_intramonomer_bonded_rescue",
+    ) as rescue, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_try_flyoff_checkpoint_ladder_rescue",
+    ) as ladder:
+        dmin, rescued = check_dynamics_overlap(
+            cfg, context="heat", step=500, mlpot_ctx=ctx
+        )
+
+    restore.assert_called_once()
+    rescue.assert_not_called()
+    ladder.assert_not_called()
+    assert rescued
+    assert dmin >= 1.0
+    assert ctx._overlap_post_rescue_cold_start is True
+
+
+def test_all_ml_pbc_intra_falls_back_to_checkpoint_ladder_not_mlpot_sd(tmp_path):
+    """All-ML PBC: when template restore is insufficient, use ladder; never SD."""
+    mini_crd = tmp_path / "02_mini.crd"
+    write_minimal_restart(mini_crd)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=1.0,
+        n_monomers=1,
+        use_pbc=True,
+        fallback_box_side_A=30.0,
+        geometry_fallback_restarts=(mini_crd,),
+        rescue=OverlapRescueConfig(nstep_sd=25, nstep_abnr=0, verbose=False),
+    )
+    pos_bad = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.03, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.36, 1.03, 0.0],
+        ],
+        dtype=float,
+    )
+    excluded = frozenset({(0, 1), (1, 2)})
+    ctx = mock.MagicMock()
+    ctx.use_pbc = True
+    positions = {"current": pos_bad.copy()}
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=lambda: positions["current"],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        return_value=excluded,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
+        "restore_monomer_from_template_for_violation",
+        return_value=False,
+    ) as restore, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_try_flyoff_checkpoint_ladder_rescue",
+        side_effect=lambda *_a, **_k: positions.update(current=pos_ok.copy()) or 1.05,
+    ) as ladder, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_run_intramonomer_bonded_rescue",
+    ) as rescue, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
+        "polish_after_extent_repack",
+    ) as polish:
+        dmin, rescued = check_dynamics_overlap(
+            cfg, context="heat", step=500, mlpot_ctx=ctx
+        )
+
+    restore.assert_called()
+    ladder.assert_called_once()
+    assert ladder.call_args.kwargs.get("require_intra") is True
+    rescue.assert_not_called()
+    polish.assert_not_called()
+    assert rescued
+    assert dmin >= 1.0
+
+
 def test_check_overlap_rescue_runs_minimize_and_rechecks():
     cfg = DynamicsOverlapConfig(
         action="rescue",

@@ -1446,6 +1446,34 @@ def test_run_intra_overlap_rescue_all_ml_uses_bonded_sd_path(tmp_path):
     intra.assert_called_once()
 
 
+def test_run_all_ml_intra_overlap_rescue_refuses_all_ml_pbc_sd():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _run_all_ml_intra_overlap_rescue,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+
+    ctx = MagicMock()
+    ctx.use_pbc = True
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=1.0,
+        n_monomers=9,
+        use_pbc=True,
+        rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
+    )
+    bonded = BondedMmMiniConfig(nstep_sd=50, verbose=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), pytest.raises(RuntimeError, match="refuses MLpot/bonded SD polish"):
+        _run_all_ml_intra_overlap_rescue(ctx, cfg, bonded)
+
+
 def test_run_inter_overlap_rescue_all_ml_uses_bonded_vdw_path(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_inter_monomer_overlap_rescue,
