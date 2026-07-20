@@ -29,17 +29,16 @@ MM_CHARGE_MODE="${MM_CHARGE_MODE:-fixed}"
 STAGE="${STAGE:-all}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$ROOT/scripts/mmml-charmm-mpirun.sh}"
 
-# Geometry / timing knobs
+# Geometry / timing knobs — liquid density (~1 g/cm³) at 30 Å ⇒ ~90 waters.
 BOX_SMOKE="${BOX_SMOKE:-30}"
-N_SMOKE="${N_SMOKE:-50}"
+N_SMOKE="${N_SMOKE:-90}"
 PS_HEAT_SMOKE="${PS_HEAT_SMOKE:-2.0}"
 PS_NVE_SMOKE="${PS_NVE_SMOKE:-2.0}"
 
 # Production IR (jaxmd H5 → analyze_water_nve_h5). Defaults match spooky-scale
 # sampling (dt 0.25 fs, record every 10 → frame_dt 2.5 fs; Nyquist ~6670 cm^-1).
-# TIP3:50 @ 30 Å is dilute (~0.055 g/cm³); for denser liquid set N_PROD/BOX_PROD.
 BOX_PROD="${BOX_PROD:-30}"
-N_PROD="${N_PROD:-50}"
+N_PROD="${N_PROD:-90}"
 PS_PROD="${PS_PROD:-50}"
 DT_FS_PROD="${DT_FS_PROD:-0.25}"
 STEPS_PER_REC="${STEPS_PER_REC:-10}"
@@ -47,7 +46,7 @@ TEMP_K="${TEMP_K:-300}"
 SEED="${SEED:-42}"
 
 SCAN_OUT="${SCAN_OUT:-$OUT_ROOT/dimer_scan}"
-SMOKE_OUT="${SMOKE_OUT:-$OUT_ROOT/tip3_50_smoke}"
+SMOKE_OUT="${SMOKE_OUT:-$OUT_ROOT/tip3_${N_SMOKE}_smoke}"
 PROD_OUT="${PROD_OUT:-$OUT_ROOT/tip3_${N_PROD}_nve}"
 FD_OUT="${FD_OUT:-$OUT_ROOT/pbc_fd_tip3.json}"
 ANALYZE_OUT="${ANALYZE_OUT:-$OUT_ROOT/analysis}"
@@ -129,6 +128,8 @@ if _want smoke; then
   echo ""
   echo "=== [smoke] TIP3:${N_SMOKE} PyCHARMM heat+NVE ==="
   OUT_DIR="$SMOKE_OUT" \
+  N_MOL="$N_SMOKE" \
+  BOX_SIZE="$BOX_SMOKE" \
   PS_HEAT="$PS_HEAT_SMOKE" \
   PS_NVE="$PS_NVE_SMOKE" \
   MM_CHARGE_MODE="$MM_CHARGE_MODE" \

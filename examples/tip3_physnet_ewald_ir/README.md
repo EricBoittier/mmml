@@ -28,14 +28,14 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 |-------|------|------|
 | `fd` | `mode-check --pbc-fd --residue TIP3` | `fd_force_max_abs_diff_eVA < 0.05` |
 | `scan` | TIP3:2 COM scan `pbc_hybrid_ewald_omit_self` | `scan_1d.npz` written |
-| `smoke` | TIP3:50 / 30 Å PyCHARMM mini→heat→NVE (2+2 ps; `--mlpot-pbc` for Ewald cell) | exit 0 |
-| `prod` | TIP3:50 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
+| `smoke` | TIP3:90 / 30 Å (~1 g/cm³) PyCHARMM mini→heat→NVE; `--mlpot-pbc`, density-prep off | exit 0 |
+| `prod` | TIP3:90 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
 | `analyze` | `scripts/analyze_water_nve_h5.py` | OH power peak **~2800–3600 cm⁻¹** (not ~40) |
 
 ## Density note
 
-TIP3:50 in 30 Å is dilute (~0.055 g/cm³) — good for Ewald/smoke, not bulk liquid.
-For denser liquid IR later: e.g. `N_PROD=90 BOX_PROD=30` (~1 g/cm³) once cutoffs fit.
+TIP3:50 @ 30 Å (~0.055 g/cm³) thrashes hybrid FIRE/SD (GRMS spikes). Defaults are
+TIP3:90 @ 30 Å (~1 g/cm³) with `--density-prep-mode off` for the Ewald wiring smoke.
 
 ## Artifacts
 
@@ -43,7 +43,7 @@ For denser liquid IR later: e.g. `N_PROD=90 BOX_PROD=30` (~1 g/cm³) once cutoff
 scratch/tip3_physnet_ewald_ir/
   pbc_fd_tip3.json
   dimer_scan/.../scan_1d.npz
-  tip3_50_smoke/
-  tip3_50_nve/*.h5
+  tip3_90_smoke/
+  tip3_90_nve/*.h5
   analysis/{ir_spectrum.png,oh_bond_power_spectra.png,summary.json}
 ```

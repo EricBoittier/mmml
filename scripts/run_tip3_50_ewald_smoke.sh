@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# TIP3:50 on a cubic grid in a 30 Å PBC box (random monomer rotations),
-# then short heat + NVE with hybrid Ewald (self term omitted).
+# TIP3 liquid-density Ewald smoke: cubic grid + random rotations, then short
+# heat + NVE with hybrid Ewald (self term omitted).
+#
+# Default geometry is TIP3:90 in 30 Å (~1 g/cm³). The old TIP3:50/30 Å grid
+# is dilute (~0.055 g/cm³) and thrash the density-prep / FIRE ladder.
 #
 # Usage (gpu09 / CHARMM+JAX env):
 #   export CKPT=/path/to/physnet_or_spooky.json
@@ -8,6 +11,7 @@
 #
 # Optional env:
 #   OUT_DIR, SEED, PS_HEAT, PS_NVE, TEMP_K, DT_FS, MM_CHARGE_MODE
+#   N_MOL (default 90), BOX_SIZE (default 30)
 
 set -euo pipefail
 
@@ -22,26 +26,31 @@ PS_NVE="${PS_NVE:-2.0}"
 TEMP_K="${TEMP_K:-300}"
 DT_FS="${DT_FS:-0.5}"
 MM_CHARGE_MODE="${MM_CHARGE_MODE:-fixed}"
+N_MOL="${N_MOL:-90}"
+BOX_SIZE="${BOX_SIZE:-30}"
 
 mkdir -p "$OUT_DIR"
 
-echo "== TIP3:50 / 30 Å grid + random rotations → heat ${PS_HEAT} ps → NVE ${PS_NVE} ps =="
+echo "== TIP3:${N_MOL} / ${BOX_SIZE} Å grid + random rotations → heat ${PS_HEAT} ps → NVE ${PS_NVE} ps =="
 echo "  checkpoint: $CKPT"
 echo "  output:     $OUT_DIR"
-echo "  lr-solver:  ewald --ewald-omit-self"
+echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
 echo "  mm-charge:  $MM_CHARGE_MODE"
+echo "  density:    prep ladder OFF (ewald wiring smoke; not density campaign)"
 
 # Grid builder (skips Packmol): even COM lattice in --box-size, SO(3) from --seed.
 # Stages: mini → heat → nve. Ewald self omitted for MIC/non-Ewald-trained models.
+# --mlpot-pbc: hybrid calculator gets the cell (required for lr_solver=ewald).
+# --density-prep-mode off: avoid FIRE/BFGS thrash on this smoke path.
 set +e
 mmml md-system \
   --backend pycharmm \
   --setup pycharmm_full \
   --md-stages mini,heat,nve \
-  --composition TIP3:50 \
+  --composition "TIP3:${N_MOL}" \
   --builder liquid \
   --no-packmol \
-  --box-size 30 \
+  --box-size "$BOX_SIZE" \
   --mlpot-pbc \
   --seed "$SEED" \
   --checkpoint "$CKPT" \
@@ -58,6 +67,9 @@ mmml md-system \
   --ml-switch-width 1.5 \
   --mm-switch-on 6.0 \
   --mm-switch-width 5.0 \
+  --density-prep-mode off \
+  --no-density-prep-ladder \
+  --no-mc-density-equalize \
   "$@"
 rc=$?
 set -e
