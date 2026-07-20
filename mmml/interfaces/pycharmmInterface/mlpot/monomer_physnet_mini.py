@@ -323,6 +323,54 @@ def _selected_atom_indices(
     return np.concatenate(chunks)
 
 
+def _cap_flagged_monomers(
+    flagged: tuple[int, ...],
+    *,
+    max_select: int,
+    mlpot_ctx: Any,
+    atoms_per_list: list[int],
+    positions: np.ndarray,
+    context_prefix: str,
+    verbose: bool,
+) -> tuple[int, ...]:
+    """Keep at most ``max_select`` monomers, preferring highest hybrid fmax."""
+    if max_select <= 0 or not flagged:
+        return ()
+    unique = tuple(dict.fromkeys(int(i) for i in flagged))
+    if len(unique) <= max_select:
+        return unique
+
+    scores = np.full(len(unique), -np.inf, dtype=np.float64)
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            per_monomer_fmax_from_forces,
+        )
+        from mmml.utils.monomer_force_diag import mlpot_hybrid_forces_kcalmol_A
+
+        forces = mlpot_hybrid_forces_kcalmol_A(mlpot_ctx, positions=positions)
+        if forces is not None:
+            per_mono = per_monomer_fmax_from_forces(forces, atoms_per_list)
+            for j, mi in enumerate(unique):
+                if 0 <= int(mi) < int(per_mono.size):
+                    scores[j] = float(per_mono[int(mi)])
+    except Exception:  # noqa: BLE001 — fall back to input order
+        pass
+
+    order = sorted(
+        range(len(unique)),
+        key=lambda j: (-scores[j], j),
+    )
+    kept = tuple(unique[j] for j in order[:max_select])
+    if verbose:
+        print(
+            f"{context_prefix}: capping isolated PhysNet mini "
+            f"{len(unique)} → {len(kept)} monomer(s) (max_select={max_select}); "
+            f"kept [{', '.join(str(i) for i in kept)}]",
+            flush=True,
+        )
+    return kept
+
+
 def run_selective_monomer_physnet_mini(
     mlpot_ctx: Any,
     *,
@@ -380,7 +428,23 @@ def run_selective_monomer_physnet_mini(
 
     selected: tuple[int, ...]
     if flagged is not None:
-        selected = tuple(int(i) for i in flagged)
+        # Explicit lists from pre-dynamics repair can include every monomer when
+        # intermolecular force spikes dominate (common in dense liquids). Cap to
+        # max_select — vacuum PhysNet on the whole box destroys packing.
+        selected = _cap_flagged_monomers(
+            tuple(int(i) for i in flagged),
+            max_select=int(config.max_select),
+            mlpot_ctx=mlpot_ctx,
+            atoms_per_list=atoms_per_list,
+            positions=pos,
+            context_prefix=context_prefix,
+            verbose=bool(config.verbose),
+        )
+        if not selected:
+            grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+            if grms is None or not np.isfinite(grms):
+                grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
+            return SelectiveMonomerPhysnetMiniResult(grms=float(grms), ran=False)
     else:
         diag = resolve_selective_repack_monomers(
             mlpot_ctx,

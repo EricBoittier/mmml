@@ -621,6 +621,22 @@ def test_build_pycharmm_command_forwards_density_prep_off():
     assert "--no-mc-density-equalize" in cmd
 
 
+def test_build_pycharmm_command_forwards_no_monomer_physnet_mini():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            monomer_physnet_mini=False,
+            monomer_physnet_mini_max_select=2,
+        )
+    )
+    assert "--no-monomer-physnet-mini" in cmd
+    assert cmd[cmd.index("--monomer-physnet-mini-max-select") + 1] == "2"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.monomer_physnet_mini is False
+    assert parsed.monomer_physnet_mini_max_select == 2
+
+
 def test_build_pycharmm_command_forwards_flat_bottom_selection():
     cmd = build_pycharmm_command(
         _pycharmm_args(flat_bottom_radius=15.0, flat_bottom_selection="TYPE C*")

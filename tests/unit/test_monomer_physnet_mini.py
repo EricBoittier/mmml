@@ -10,6 +10,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
     SelectiveMonomerPhysnetMiniConfig,
+    _cap_flagged_monomers,
     monomer_physnet_mini_enabled,
     resolve_monomer_template_reference_positions,
     run_selective_monomer_physnet_mini,
@@ -309,6 +310,88 @@ def test_run_selective_monomer_physnet_mini_runs_bfgs_on_flagged(monkeypatch):
     assert result.grms == pytest.approx(8.5)
     assert len(synced) == 1
     assert synced[0][3, 0] == pytest.approx(10.1)
+
+
+def test_cap_flagged_monomers_keeps_highest_fmax(monkeypatch):
+    pos = np.zeros((9, 3), dtype=np.float64)
+    ctx = _ctx(positions=pos, atoms_per=[3, 3, 3], z=np.array([8, 1, 1] * 3, dtype=int))
+    # Monomer 2 has the largest max force; then 0; then 1.
+    forces = np.zeros((9, 3), dtype=np.float64)
+    forces[0, 0] = 5.0
+    forces[3, 0] = 2.0
+    forces[6, 0] = 9.0
+    monkeypatch.setattr(
+        "mmml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
+        lambda _ctx, positions=None: forces,
+    )
+    kept = _cap_flagged_monomers(
+        (0, 1, 2),
+        max_select=2,
+        mlpot_ctx=ctx,
+        atoms_per_list=[3, 3, 3],
+        positions=pos,
+        context_prefix="test",
+        verbose=False,
+    )
+    assert kept == (2, 0)
+
+
+def test_run_selective_monomer_physnet_mini_caps_explicit_flagged(monkeypatch):
+    pos = np.zeros((9, 3), dtype=np.float64)
+    ctx = _ctx(positions=pos, atoms_per=[3, 3, 3], z=np.array([8, 1, 1] * 3, dtype=int))
+    forces = np.zeros((9, 3), dtype=np.float64)
+    forces[0, 0] = 5.0
+    forces[3, 0] = 2.0
+    forces[6, 0] = 9.0
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
+        lambda _ctx: __import__("pathlib").Path("/tmp/fake.ckpt"),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
+        lambda *a, **k: MagicMock(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: ctx._positions,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda arr: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        lambda _ctx: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
+        lambda _ctx, context="": 4.0,
+    )
+    monkeypatch.setattr(
+        "mmml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
+        lambda _ctx, positions=None: forces,
+    )
+
+    import ase
+    import ase.optimize as ase_opt
+
+    monkeypatch.setattr(ase, "Atoms", _FakeAtoms)
+    monkeypatch.setattr(ase_opt, "FIRE", _FakeBFGS)
+
+    result = run_selective_monomer_physnet_mini(
+        ctx,
+        config=SelectiveMonomerPhysnetMiniConfig(
+            max_select=2,
+            verbose=False,
+            quiet_bfgs=True,
+            optimize_dimers=False,
+        ),
+        flagged=(0, 1, 2),
+        context_prefix="test",
+    )
+    assert result.ran is True
+    assert result.flagged == (2, 0)
 
 
 def test_run_selective_monomer_physnet_mini_explicit_flagged(monkeypatch):

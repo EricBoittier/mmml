@@ -14,7 +14,7 @@
 # Pass/fail (quick):
 #   fd      — fd_force_max_abs_diff_eVA < 0.05
 #   scan    — scan_1d.npz written under SCAN_OUT
-#   smoke   — tip3_50 heat+NVE exit 0
+#   smoke   — tip3_90 heat+NVE exit 0 (wipe dir if prior vacuum-repair gate fail)
 #   prod    — jaxmd H5 exists; NVE finishes
 #   analyze — ir_spectrum.png + OH power with peak in 2800–3600 cm^-1 (PhysNet)
 
@@ -123,10 +123,11 @@ if _want scan; then
   echo "scan NPZ under $SCAN_OUT"
 fi
 
-# --- 3) tip3_50 PyCHARMM smoke ---------------------------------------------
+# --- 3) tip3_90 PyCHARMM smoke ---------------------------------------------
 if _want smoke; then
   echo ""
   echo "=== [smoke] TIP3:${N_SMOKE} PyCHARMM heat+NVE ==="
+  echo "  (wipe $SMOKE_OUT first if a prior run hit isolated PhysNet repair)"
   OUT_DIR="$SMOKE_OUT" \
   N_MOL="$N_SMOKE" \
   BOX_SIZE="$BOX_SMOKE" \

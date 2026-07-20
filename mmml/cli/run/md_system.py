@@ -1182,6 +1182,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="ASE FIRE max atomic displacement per step in Å (default 0.2).",
     )
     parser.add_argument(
+        "--monomer-physnet-mini",
+        dest="monomer_physnet_mini",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "pycharmm: after hybrid FIRE/repair, optionally FIRE-minimize a few "
+            "flagged monomers with an isolated PhysNet calculator (default: on). "
+            "Disable for dense liquids — vacuum monomer repair wrecks packing."
+        ),
+    )
+    parser.add_argument(
+        "--monomer-physnet-mini-max-select",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "pycharmm: max monomers for selective isolated PhysNet mini "
+            "(default: inherit pycharmm CLI, usually 2)."
+        ),
+    )
+    parser.add_argument(
         "--pre-min-ase-order",
         choices=("fire-first", "bfgs-first"),
         default="fire-first",
@@ -2974,6 +2995,16 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--pre-min-ase-order", getattr(args, "pre_min_ase_order", None))
     _append_optional(cmd, "--bfgs-polish-max-fmax", getattr(args, "bfgs_polish_max_fmax", None))
     _append_optional(cmd, "--rescue-fire-fmax", getattr(args, "rescue_fire_fmax", None))
+    _append_boolean_optional_flag(
+        cmd,
+        "--monomer-physnet-mini",
+        bool(getattr(args, "monomer_physnet_mini", True)),
+    )
+    _append_optional(
+        cmd,
+        "--monomer-physnet-mini-max-select",
+        getattr(args, "monomer_physnet_mini_max_select", None),
+    )
     if bool(getattr(args, "quiet_bfgs", False)):
         cmd.append("--quiet-bfgs")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])

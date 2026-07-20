@@ -217,6 +217,8 @@ usage: mmml md-system [-h]
                       [--min-fmax MIN_FMAX] [--bfgs-maxstep BFGS_MAXSTEP]
                       [--fire-min-steps FIRE_MIN_STEPS]
                       [--fire-min-maxstep FIRE_MIN_MAXSTEP]
+                      [--monomer-physnet-mini | --no-monomer-physnet-mini]
+                      [--monomer-physnet-mini-max-select N]
                       [--pre-min-ase-order {fire-first,bfgs-first}]
                       [--skip-bfgs | --no-skip-bfgs]
                       [--bfgs-polish-max-fmax BFGS_POLISH_MAX_FMAX]
@@ -776,8 +778,10 @@ options:
                         setups are vacuum by default; use to override when
                         --box-size is also set.
   --mlpot-pbc           pycharmm: enable ML MIC / periodic dimer lists (default
-                        for pbc_* setups). With free_* + --box-size, CHARMM uses
-                        loose PBC unless this flag is set.
+                        for pbc_* setups; also auto-enabled when --lr-solver
+                        ewald with a CHARMM box). With free_* + --box-size and
+                        no ewald, CHARMM uses loose PBC (open ML) unless this
+                        flag is set.
   --dyn-inbfrq DYN_INBFRQ
                         pycharmm: CHARMM inbfrq for dynamics (-1=heuristic,
                         50=vacuum default)
@@ -812,6 +816,14 @@ options:
   --fire-min-maxstep FIRE_MIN_MAXSTEP
                         ASE FIRE max atomic displacement per step in Å (default
                         0.2).
+  --monomer-physnet-mini, --no-monomer-physnet-mini
+                        pycharmm: after hybrid FIRE/repair, optionally FIRE-
+                        minimize a few flagged monomers with an isolated PhysNet
+                        calculator (default: on). Disable for dense liquids —
+                        vacuum monomer repair wrecks packing.
+  --monomer-physnet-mini-max-select N
+                        pycharmm: max monomers for selective isolated PhysNet
+                        mini (default: inherit pycharmm CLI, usually 2).
   --pre-min-ase-order {fire-first,bfgs-first}
                         ASE hybrid pre-min order for jaxmd/ase: fire-first
                         (default) runs FIRE on rough surfaces and BFGS only to
