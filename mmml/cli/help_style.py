@@ -151,7 +151,9 @@ def print_cli_text(message: str, *, stream: TextIO | None = None) -> None:
         return
     from rich.console import Console
 
-    Console(file=target, force_terminal=True).print(styled_help_text(message), end="")
+    Console(file=target, force_terminal=True, color_system="standard").print(
+        styled_help_text(message), end=""
+    )
     if message and not message.endswith("\n"):
         target.write("\n")
 
@@ -179,4 +181,3 @@ def install_colored_argparse() -> None:
     argparse.ArgumentParser.format_help = format_help
     argparse.ArgumentParser._print_message = print_message
     _INSTALLED = True
-

@@ -510,6 +510,9 @@ def generate(*, check: bool = False) -> int:
 
 
 def main() -> int:
+    from mmml.cli.help_style import install_colored_argparse
+
+    install_colored_argparse()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",
