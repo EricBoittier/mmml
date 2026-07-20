@@ -48,6 +48,12 @@ All `mmml configure` wizards must route generated documents through the shared
 `validate_wizard_config()` and preview/confirmation pipeline before performing
 filesystem writes. New workflow companions should reference canonical policy
 or configuration files rather than duplicate their scientific settings.
+CLI parsers dispatched by `mmml` use `mmml.cli.help_style`; do not embed ANSI
+escapes or create per-command help color schemes. Give genuinely specialized
+parsers explicit `add_argument_group()` sections. Otherwise the shared help
+renderer groups flat options by input/configuration, scientific model,
+execution, output/artifacts, and diagnostics/safety while preserving plain
+redirected output.
 
 ## Scientific functionality
 

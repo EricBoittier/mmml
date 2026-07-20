@@ -32,27 +32,26 @@ Run a reproducible rigid 1D dimer energy/force scan.
 positional arguments:
   RESIDUE               One residue for a homodimer or two for a heterodimer
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --config CONFIG       YAML/JSON DimerScanConfig; command-line output/failure
                         flags remain available
-  --calculator {physnet,spookynet,mbd,multipoles,efield,xtb,dftb3-d4,pyscf}
-                        Explicit ASE calculator type
   --checkpoint CHECKPOINT
                         Model checkpoint/parameter path
   --calculator-config CALCULATOR_CONFIG
                         Calculator model config JSON
+  --slako-dir SLAKO_DIR
+                        DFTB+ 3ob-3-1 directory
+  --calculator-executable CALCULATOR_EXECUTABLE
+                        External calculator executable
+
+Scientific model:
+  --calculator {physnet,spookynet,mbd,multipoles,efield,xtb,dftb3-d4,pyscf}
+                        Explicit ASE calculator type
   --method METHOD       Calculator method (for example pyscf: dft or hf)
   --basis BASIS         PySCF basis (default: def2-svp)
   --xc XC               PySCF DFT functional (default: pbe0)
   --electric-field EX EY EZ
                         EField vector in atomic units
-  --slako-dir SLAKO_DIR
-                        DFTB+ 3ob-3-1 directory
-  --calculator-workdir CALCULATOR_WORKDIR
-                        External calculator scratch directory
-  --calculator-executable CALCULATOR_EXECUTABLE
-                        External calculator executable
   --multipole-force-step ANGSTROM
                         Central finite-difference step for learned-multipole
                         forces
@@ -62,10 +61,19 @@ options:
   --energy-definition {interaction,total}
   --charge CHARGE
   --spin SPIN           Spin multiplicity for calculators that require it
+
+Execution:
   --seed SEED
-  --allow-partial
+
+Output & artifacts:
+  --calculator-workdir CALCULATOR_WORKDIR
+                        External calculator scratch directory
   --overwrite
   --output OUTPUT
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --allow-partial
 ```
 
 

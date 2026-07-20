@@ -67,6 +67,25 @@ def test_scan_parser_accepts_lr_solver_flags():
     assert args.jax_pme_method == "pme"
     assert args.scan_1d is True
 
+    args_ewald = mod._parse_args(
+        [
+            "DCM:2",
+            "--scan-tag",
+            "pbc_hybrid_ewald_omit_self",
+            "--lr-solver",
+            "ewald",
+            "--ewald-omit-self",
+            "--box-size",
+            "36",
+            "--mlpot-pbc",
+            "--scan-1d",
+            "--output",
+            "/tmp/scan_ewald.npz",
+        ]
+    )
+    assert args_ewald.lr_solver == "ewald"
+    assert args_ewald.ewald_omit_self is True
+
 
 def test_resolve_output_path_includes_scan_tag():
     mod = _load_scan_module()

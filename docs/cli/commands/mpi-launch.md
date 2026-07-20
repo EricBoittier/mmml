@@ -26,15 +26,19 @@ through 'uv run', the active uv interpreter is used on every rank.
 positional arguments:
   command
 
-options:
-  -h, --help            show this help message and exit
+Execution:
   --mpi-ranks MPI_RANKS
-  --jax-mode {cpu-threaded,gpu-single,gpu-per-rank,rank0,spatial}
   --jax-cpu-threads JAX_CPU_THREADS
   --charmm-omp-threads CHARMM_OMP_THREADS
   --preset {single,cpu,spatial}
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
   --strict-resources
   --dry-run
+
+Other options:
+  --jax-mode {cpu-threaded,gpu-single,gpu-per-rank,rank0,spatial}
 ```
 
 

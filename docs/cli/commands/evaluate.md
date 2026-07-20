@@ -22,20 +22,30 @@ usage: mmml evaluate [-h] --model MODEL [MODEL ...] --data DATA
 
 Evaluate MMML models
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
+  --data DATA           Test data NPZ file
+
+Scientific model:
   --model MODEL [MODEL ...]
                         Path(s) to model checkpoint(s)
-  --data DATA           Test data NPZ file
-  --properties PROPERTIES [PROPERTIES ...]
-                        Properties to evaluate (default: energy)
+
+Execution:
   --batch-size BATCH_SIZE
                         Batch size for prediction (default: 32)
+
+Output & artifacts:
   --output OUTPUT       Output directory (default: results)
   --report              Generate markdown report
   --save-predictions    Save predictions to file
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
   --verbose, -v         Verbose output
   --quiet, -q           Quiet mode
+
+Other options:
+  --properties PROPERTIES [PROPERTIES ...]
+                        Properties to evaluate (default: energy)
 
 Examples: # Basic evaluation mmml evaluate --model checkpoint.pkl --data
 test.npz # Evaluate specific properties mmml evaluate --model checkpoint.pkl

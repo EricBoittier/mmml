@@ -29,20 +29,24 @@ usage: mmml configure [-h] [--non-interactive] [--list-presets]
 Interactive, multiple-choice setup for md-system YAML, PhysNet training configs,
 Snakemake workflow scaffolding, and bundled cpu_tests presets.
 
-options:
+Execution:
+  --preset {cpu-spatial-mpi-mini,cpu-dense-liquid-prep,cpu-md-benchmark,cpu-heat-scaling-smoke,cpu-nve-cutoff-sweep,qm-physnet-pipeline}
+                        Apply a bundled preset non-interactively (see --list-
+                        presets)
+  --workflow {md-single,md-campaign,physnet-train,snakemake-md,interaction-policy,preset-menu}
+                        Skip menu and run a specific wizard (still prompts for
+                        details unless --preset)
+
+Output & artifacts:
+  -o, --output-dir OUTPUT_DIR
+                        Directory to write generated files (default: current
+                        directory)
+
+Diagnostics & safety:
   -h, --help            show this help message and exit
   --non-interactive     Print menu only (for tests); do not read stdin
   --list-presets        List bundled presets (cpu_tests / tutorial layouts) and
                         exit
-  --preset {cpu-spatial-mpi-mini,cpu-dense-liquid-prep,cpu-md-benchmark,cpu-heat-scaling-smoke,cpu-nve-cutoff-sweep,qm-physnet-pipeline}
-                        Apply a bundled preset non-interactively (see --list-
-                        presets)
-  -o, --output-dir OUTPUT_DIR
-                        Directory to write generated files (default: current
-                        directory)
-  --workflow {md-single,md-campaign,physnet-train,snakemake-md,interaction-policy,preset-menu}
-                        Skip menu and run a specific wizard (still prompts for
-                        details unless --preset)
 ```
 
 

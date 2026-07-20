@@ -21,29 +21,37 @@ usage: mmml compare-npz [-h] [--reference REFERENCE] [--predictions PREDICTIONS]
 
 Compare reference and model NPZ data (metrics + plots).
 
-options:
-  -h, --help            show this help message and exit
-  --reference REFERENCE
-                        Reference NPZ (PySCF / QM labels)
-  --predictions PREDICTIONS
-                        Model prediction NPZ (E, F, D, ...)
+Input & configuration:
   --checkpoint CHECKPOINT
                         Model checkpoint JSON/pkl/dir; run inference on --data
   --data DATA           Labeled NPZ for --checkpoint mode (R,Z,E,F,...)
-  -o, --output-dir OUTPUT_DIR
-                        Output directory for metrics and plots
-  --max-frames MAX_FRAMES
-                        Max structures to compare (default: all)
-  --stride STRIDE       Frame stride for --checkpoint mode (default: 1)
+
+Scientific model:
   --cutoff CUTOFF       Model cutoff override for checkpoint inference
-  --use-dcmnet-dipole   Use DCMNet dipole from joint checkpoint
   --energy-unit ENERGY_UNIT
                         Energy unit label for plots (default: infer from
                         reference NPZ)
   --force-unit FORCE_UNIT
                         Force unit label for plots (default: eV/Å)
+
+Output & artifacts:
+  -o, --output-dir OUTPUT_DIR
+                        Output directory for metrics and plots
   --no-plots            Skip matplotlib plots
   --save-predictions    With --checkpoint, save inference NPZ to output dir
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
+  --reference REFERENCE
+                        Reference NPZ (PySCF / QM labels)
+  --predictions PREDICTIONS
+                        Model prediction NPZ (E, F, D, ...)
+  --max-frames MAX_FRAMES
+                        Max structures to compare (default: all)
+  --stride STRIDE       Frame stride for --checkpoint mode (default: 1)
+  --use-dcmnet-dipole   Use DCMNet dipole from joint checkpoint
 
 Compare reference (PySCF/QM) and model NPZ trajectories with metrics and plots.
 Modes ----- 1. Two NPZ files (reference labels vs model predictions): mmml

@@ -23,6 +23,7 @@ _TOKENS: dict[str, frozenset[str]] = {
             "config", "input", "checkpoint", "residue", "residues", "composition",
             "template", "dataset", "data", "structure", "pdb", "psf", "crd", "manifest",
             "interaction_policy", "calculator_config", "from_psf", "from_crd",
+            "slako", "executable",
         }
     ),
     "Scientific model": frozenset(
@@ -83,7 +84,16 @@ def _words(action: argparse.Action) -> set[str]:
 
 def _classify(action: argparse.Action) -> str:
     words = _words(action)
-    for group in _GROUP_ORDER[:-1]:
+    # Classification priority is independent of display order: a compound flag
+    # such as --calculator-workdir is an artifact path, not a model choice.
+    priority = (
+        "Input & configuration",
+        "Output & artifacts",
+        "Diagnostics & safety",
+        "Execution",
+        "Scientific model",
+    )
+    for group in priority:
         tokens = _TOKENS[group]
         if words & tokens or any(token in word for token in tokens for word in words):
             return group
@@ -117,11 +127,15 @@ def styled_help_text(message: str):
     offset = 0
     for line in message.splitlines(keepends=True):
         bare = line.rstrip("\r\n")
-        if _HEADING_RE.match(bare.strip()):
+        if _HEADING_RE.match(bare.strip()) or (
+            bare.endswith(":") and not bare.startswith((" ", "\t"))
+        ):
             start = offset + len(bare) - len(bare.lstrip())
             text.stylize("bold cyan", start, offset + len(bare))
         elif bare.lower().startswith("usage:"):
             text.stylize("bold cyan", offset, offset + len("usage:"))
+        if "error:" in bare.lower():
+            text.stylize("bold red", offset, offset + len(bare))
         for pattern, style in (
             (_FLAG_RE, "bold green"),
             (_CHOICE_RE, "yellow"),

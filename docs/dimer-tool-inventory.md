@@ -36,7 +36,7 @@ the tools present on 2026-07-20.
 | `scripts/run_dimer_scan_campaign_gpu.sh` | Wrapper | GPU launcher for the campaign above. Keep scientific defaults in a serializable campaign config. |
 | `workflows/des_dimer_pair_scans/` | Campaign | Reproducible DES pair-scan Snakemake campaign. Preserve as a workflow; progressively delegate geometry/evaluation/result semantics to package APIs. |
 | `scripts/scan_mlpot_dimer_2d_pycharmm.py` | Campaign | Specialized 1D/2D hybrid PyCHARMM and long-range scan. Retain until its decompositions and solver semantics have canonical equivalents. |
-| `scripts/run_dcm_aco_dimer_lr_scans.sh` | Wrapper | Launch matrix for the specialized long-range campaign. |
+| `scripts/run_dcm_aco_dimer_lr_scans.sh` | Wrapper | Launch matrix for the specialized long-range campaign (includes hybrid-native `ewald` / `--ewald-omit-self` tags alongside jax-pme / ScaFaCoS). |
 | `scripts/run_mlpot_dimer_2d_scans.sh` | Wrapper | Legacy 2D/cutoff campaign launcher. |
 | `scripts/run_corrected_cache_step23200_dimer_scan.slurm` | Wrapper | Checkpoint-specific historical Slurm launcher; freeze inputs and mark complete when no longer used. |
 | `scripts/run_corrected_cache_step5400_dimer_scan.slurm` | Wrapper | Checkpoint-specific historical Slurm launcher; freeze inputs and mark complete when no longer used. |
@@ -71,7 +71,7 @@ the tools present on 2026-07-20.
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.mode_check` | Canonical | Monomer **and** small-cluster local diagnostics (FD forces, X–H stretch, ASE vib, kick). `--cutoff-sweep` samples COM stations on the hybrid handoff ruler. Not a binding-energy COM scan — that remains `mmml.dimer_scan`. |
+| `mmml.mode_check` | Canonical | Monomer **and** small-cluster local diagnostics (FD forces, X–H stretch, ASE vib, kick). `--cutoff-sweep` samples COM stations on the hybrid handoff ruler. Not a binding-energy COM scan — that remains `mmml.dimer_scan`. Vacuum defaults to `--lr-solver mic`; hybrid-native `ewald` is opt-in via `--pbc-fd --lr-solver ewald [--ewald-omit-self]`. |
 | `mmml.cli.misc.mode_check` | Canonical | Thin `mmml mode-check` adapter (`--pbc-fd` covers the former unregistered `check_fd.py` path; `--cutoff-sweep` for region ladder). |
 | `mmml.cli.run.md_pbc_suite.check_fd` | Wrapper | Legacy script entry; delegates to `mmml.mode_check.pbc_fd`. Do not extend scientific logic here. |
 | `scripts/validate_dimer_rays.py` | Validation | Geometry/ray validation, not scan execution. |

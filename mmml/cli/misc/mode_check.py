@@ -98,7 +98,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable ML dimer term (default: on when n_monomers>=2)",
     )
     parser.add_argument("--mm-charge-mode", default="q0")
-    parser.add_argument("--lr-solver", default="mic")
+    parser.add_argument(
+        "--lr-solver",
+        default="mic",
+        help=(
+            "Long-range Coulomb backend (default: mic). Vacuum local checks "
+            "should stay on mic; use ewald only with --pbc-fd (hybrid-native "
+            "full-box Ewald, train↔MD path). Not the same as jax_pme "
+            "--jax-pme-method ewald."
+        ),
+    )
+    parser.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald (typically --pbc-fd): omit the Gaussian "
+            "self term (−α/√π Σ q²). Opt in for MIC/non-Ewald-trained models "
+            "(forces unchanged; energy offset)."
+        ),
+    )
     parser.add_argument("--ml-switch-width", type=float, default=1.5)
     parser.add_argument("--mm-switch-on", type=float, default=6.0)
     parser.add_argument("--mm-switch-width", type=float, default=5.0)
@@ -186,6 +204,9 @@ def _main_pbc_fd(args: argparse.Namespace) -> int:
         mm_cutoff=float(args.pbc_mm_cutoff),
         fd_check_atoms=int(args.fd_atoms),
         fd_check_dx=float(args.fd_dx),
+        lr_solver=str(args.lr_solver),
+        ewald_omit_self=bool(args.ewald_omit_self),
+        mm_charge_mode=str(args.mm_charge_mode),
     )
     path = write_fd_result(result, Path(args.output))
     from mmml.utils.rich_report import print_colored_json
@@ -259,6 +280,7 @@ def _main_vacuum(args: argparse.Namespace) -> int:
             mm_switch_width=float(args.mm_switch_width),
             mm_charge_mode=str(args.mm_charge_mode),
             lr_solver=str(args.lr_solver),
+            ewald_omit_self=bool(args.ewald_omit_self),
             monomer_separation_A=float(FAR_MONOMER_SEPARATION_A),
         )
         cfg = ModeCheckConfig(
@@ -325,6 +347,7 @@ def _main_vacuum(args: argparse.Namespace) -> int:
         mm_switch_width=float(args.mm_switch_width),
         mm_charge_mode=str(args.mm_charge_mode),
         lr_solver=str(args.lr_solver),
+        ewald_omit_self=bool(args.ewald_omit_self),
         monomer_separation_A=sep,
         xyz=Path(args.xyz) if args.xyz is not None else None,
     )

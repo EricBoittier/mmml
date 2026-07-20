@@ -140,6 +140,40 @@ def test_hybrid_setup_disables_mm_for_monomer():
     )
     assert setup.do_mm is False
     assert setup.do_ml_dimer is False
+    assert setup.ewald_omit_self is False
+
+
+def test_mode_check_cli_accepts_ewald_omit_self():
+    from mmml.cli.misc.mode_check import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "--pbc-fd",
+            "--lr-solver",
+            "ewald",
+            "--ewald-omit-self",
+            "--mm-charge-mode",
+            "fixed",
+            "--output",
+            "/tmp/fd.json",
+        ]
+    )
+    assert args.lr_solver == "ewald"
+    assert args.ewald_omit_self is True
+    assert args.mm_charge_mode == "fixed"
+
+
+def test_vacuum_hybrid_rejects_ewald_without_box():
+    from mmml.mode_check import HybridModeCheckSetup
+    from mmml.mode_check.hybrid import build_psf_and_attach_hybrid
+
+    setup = HybridModeCheckSetup(
+        composition=(("TIP3", 1),),
+        checkpoint=Path("/tmp/fake.json"),
+        lr_solver="ewald",
+    )
+    with pytest.raises(ValueError, match="pbc-fd"):
+        build_psf_and_attach_hybrid(setup)
 
 
 def test_place_monomers_along_x_and_reject_collapsed_geometry():

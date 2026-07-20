@@ -69,34 +69,36 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
 
 Train a PhysNetJAX EF model from NPZ data.
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --config CONFIG       YAML file with training options (CLI flags override file
                         values)
   --data DATA           Training NPZ file
   --valid-data, --valid_data VALID_DATA
                         Optional validation NPZ (use full files; no random re-
                         split)
-  --ckpt-dir, --ckpt_dir CKPT_DIR
-                        Checkpoint directory (absolute path used for Orbax)
-  --tag TAG             Run name for checkpoints
+  --data-keys, --data_keys DATA_KEYS [DATA_KEYS ...]
+                        Keys to load from NPZ file
+  --physnet-checkpoint, --physnet_checkpoint PHYSNET_CHECKPOINT
+                        PhysNet checkpoint path (JSON or Orbax) for warm-start
+                        transfer learning
+  --match-checkpoint-architecture
+                        Override EF hyperparameters from transfer checkpoint
+                        config (default: on)
+  --no-match-checkpoint-architecture
+                        Do not override EF hyperparameters from transfer
+                        checkpoint config
+  --teacher-checkpoint, --teacher_checkpoint TEACHER_CHECKPOINT
+                        Teacher checkpoint for distillation (defaults to warm-
+                        start checkpoint)
+  --save-config, --save_config SAVE_CONFIG
+                        Write resolved training options to YAML and exit
+
+Scientific model:
   --model MODEL         Optional model JSON to load instead of creating a new EF
                         model
-  --n-train, --n_train N_TRAIN
-                        Training samples to split from --data (default: 1000).
-                        Omit when --valid-data is set: the full files are used.
-  --n-valid, --n_valid N_VALID
-                        Validation samples to split from --data (default: 100).
-                        Omit when --valid-data is set: the full files are used.
-  --seed SEED
-  --batch-size, --batch_size BATCH_SIZE
-  --num-epochs, --num_epochs NUM_EPOCHS
-  --learning-rate, --learning_rate LEARNING_RATE
   --energy-weight, --energy_weight ENERGY_WEIGHT
   --forces-weight, --forces_weight FORCES_WEIGHT
-  --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --charges-weight, --charges_weight CHARGES_WEIGHT
-  --objective OBJECTIVE
   --mm-charge-mode, --mm_charge_mode {fixed,q0,latent,q1,fixed_plus_latent}
                         Hybrid MM Coulomb charges: fixed (q_CGenFF, default), q0
                         / Q⁰ (neutralize unperturbed monomer q_ML;
@@ -111,6 +113,86 @@ options:
                         CGenFF charges in MM electrostatics (q_eff = q_cgenff +
                         dq_ML, projected net-zero per monomer). Requires
                         --charges.
+  --mm-switch-on MM_SWITCH_ON
+                        COM distance (Å) where the complementary handoff ends:
+                        ML scale reaches 0 and MM scale reaches 1 (default: 6).
+  --no-complementary-handoff
+                        Legacy MM window: MM starts at mm_switch_on instead of
+                        filling the ML taper handoff.
+  --pme-box-length, --pme_box_length PME_BOX_LENGTH
+                        Cubic box length (Å) for --lr-solver
+                        nvalchemiops_pme|ewald (required for those solvers).
+  --pme-accuracy, --pme_accuracy PME_ACCURACY
+                        nvalchemiops_pme/ewald PME accuracy target (default:
+                        1e-6).
+  --num-basis-functions, --num_basis_functions NUM_BASIS_FUNCTIONS
+  --cutoff CUTOFF       PhysNet radial basis cutoff (Angstrom, atom-pair
+                        distance). Must be >= --mm-switch-on: the ML has to be
+                        able to see the interaction out to wherever MM takes
+                        over, or it is silently truncated inside the handoff.
+                        Baked into the checkpoint; MD reads it back
+                        automatically.
+  --no-energy-bias      Disable per-element energy bias in the model
+  --physnet-transfer-model, --physnet_transfer_model PHYSNET_TRANSFER_MODEL
+                        Bundled PhysNet transfer model ID, file stem, or
+                        category. Defaults to 'joint-training-defaults' when
+                        distillation is enabled.
+  --charges             Predict atomic charges (useful for dipoles and
+                        electrostatics)
+  --no-charges          Do not predict atomic charges
+  --total-charge, --total_charge TOTAL_CHARGE
+                        Total charge constraint of the molecular system
+
+Execution:
+  --seed SEED
+  --batch-size, --batch_size BATCH_SIZE
+  --num-epochs, --num_epochs NUM_EPOCHS
+  --ml-switch-width, --ml-cutoff ML_SWITCH_WIDTH
+                        COM-distance width (Å) of the ML→MM handoff. ML is fully
+                        on below mm_switch_on - width and tapers to zero at
+                        mm_switch_on (default: 1.5).
+  --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
+                        COM-distance width (Å) of the MM outer tail after
+                        mm_switch_on. Switched MM reaches zero at mm_switch_on +
+                        width (default: 5).
+  --batch-method, --batch_method BATCH_METHOD
+                        Batching method ('default' or 'advanced')
+  --batch-args-dict, --batch_args_dict BATCH_ARGS_DICT
+                        JSON string or file path for advanced batch arguments
+
+Output & artifacts:
+  --no-save-every-epoch
+                        Disable saving a checkpoint at every epoch
+  --metrics-plot, --metrics_plot METRICS_PLOT
+                        After training, write learning-curve plot to this path
+                        via Orbax checkpoints
+  --log-loss            Use log scale on loss axes when generating --metrics-
+                        plot
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --profile-epoch-timing
+                        Print per-epoch timing breakdown (batch prep / train /
+                        valid / checkpoint)
+  --list-physnet-transfer-models
+                        List bundled PhysNet transfer-learning models and exit
+  --debug               Enable debug flags in EF model
+  --no-debug            Disable debug flags in EF model
+  --quiet, -q           Suppress JAX device summary
+
+Other options:
+  --ckpt-dir, --ckpt_dir CKPT_DIR
+                        Checkpoint directory (absolute path used for Orbax)
+  --tag TAG             Run name for checkpoints
+  --n-train, --n_train N_TRAIN
+                        Training samples to split from --data (default: 1000).
+                        Omit when --valid-data is set: the full files are used.
+  --n-valid, --n_valid N_VALID
+                        Validation samples to split from --data (default: 100).
+                        Omit when --valid-data is set: the full files are used.
+  --learning-rate, --learning_rate LEARNING_RATE
+  --dipole-weight, --dipole_weight DIPOLE_WEIGHT
+  --objective OBJECTIVE
   --hybrid-mm, --hybrid_mm
                         Train on the hybrid ML/MM total the MD calculator
                         evaluates: E = (1-s)*(E_A+E_B) + s*E_AB + E_MM, where
@@ -120,20 +202,6 @@ options:
                         and the cgenff_master_* LJ tables. The handoff is
                         controlled by --ml-switch-width/--mm-switch-on/--mm-
                         switch-width (same flags and defaults as the MD side).
-  --ml-switch-width, --ml-cutoff ML_SWITCH_WIDTH
-                        COM-distance width (Å) of the ML→MM handoff. ML is fully
-                        on below mm_switch_on - width and tapers to zero at
-                        mm_switch_on (default: 1.5).
-  --mm-switch-on MM_SWITCH_ON
-                        COM distance (Å) where the complementary handoff ends:
-                        ML scale reaches 0 and MM scale reaches 1 (default: 6).
-  --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
-                        COM-distance width (Å) of the MM outer tail after
-                        mm_switch_on. Switched MM reaches zero at mm_switch_on +
-                        width (default: 5).
-  --no-complementary-handoff
-                        Legacy MM window: MM starts at mm_switch_on instead of
-                        filling the ML taper handoff.
   --mm-pair-source {jax,charmm_callback}
                         Decomposed MLpot MM pair provider: Fortran callback
                         idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
@@ -150,12 +218,6 @@ options:
                         exclusion contract as nvalchemiops_pme, pure JAX (no
                         external PME library, no CUDA requirement); requires
                         --pme-box-length. Matches fast MD periodic_external.
-  --pme-box-length, --pme_box_length PME_BOX_LENGTH
-                        Cubic box length (Å) for --lr-solver
-                        nvalchemiops_pme|ewald (required for those solvers).
-  --pme-accuracy, --pme_accuracy PME_ACCURACY
-                        nvalchemiops_pme/ewald PME accuracy target (default:
-                        1e-6).
   --mm-include-lj, --no-mm-include-lj, --mm_include_lj, --no-mm_include_lj
                         Include CGenFF LJ in hybrid E_MM (default: on for mic).
                         Forced off when --lr-solver nvalchemiops_pme or ewald.
@@ -169,17 +231,10 @@ options:
                         Atoms per structure (auto-detected from N/R if omitted)
   --features FEATURES
   --max-degree, --max_degree MAX_DEGREE
-  --num-basis-functions, --num_basis_functions NUM_BASIS_FUNCTIONS
   --num-iterations, --num_iterations NUM_ITERATIONS
   --n-res, --n_res N_RES
                         Number of refinement residual blocks (not CHARMM
                         residues)
-  --cutoff CUTOFF       PhysNet radial basis cutoff (Angstrom, atom-pair
-                        distance). Must be >= --mm-switch-on: the ML has to be
-                        able to see the interaction out to wherever MM takes
-                        over, or it is silently truncated inside the handoff.
-                        Baked into the checkpoint; MD reads it back
-                        automatically.
   --max-atomic-number, --max_atomic_number MAX_ATOMIC_NUMBER
   --zbl                 Enable ZBL repulsion in EF model
   --no-zbl              Disable ZBL repulsion in EF model
@@ -187,7 +242,6 @@ options:
                         is the default.
   --use-pbc, --use_pbc  Use periodic boundary conditions
   --no-pbc              Disable periodic boundary conditions
-  --no-energy-bias      Disable per-element energy bias in the model
   --optimizer OPTIMIZER
                         Optimizer string (e.g. 'adam', 'adamw', 'amsgrad')
   --transform TRANSFORM
@@ -198,19 +252,8 @@ options:
                         Number of epochs to wait for improvement before stopping
                         training
   --best                Only save checkpoint when objective improves
-  --no-save-every-epoch
-                        Disable saving a checkpoint at every epoch
-  --profile-epoch-timing
-                        Print per-epoch timing breakdown (batch prep / train /
-                        valid / checkpoint)
   --print-freq, --print_freq PRINT_FREQ
                         Printing frequency in epochs
-  --batch-method, --batch_method BATCH_METHOD
-                        Batching method ('default' or 'advanced')
-  --batch-args-dict, --batch_args_dict BATCH_ARGS_DICT
-                        JSON string or file path for advanced batch arguments
-  --data-keys, --data_keys DATA_KEYS [DATA_KEYS ...]
-                        Keys to load from NPZ file
   --conversion CONVERSION
                         Display-only MAE scaling for energy/forces (JSON string
                         or .json/.yaml path). Multiplies reported train/valid
@@ -225,55 +268,22 @@ options:
                         physnet-train --conversion.
   --init-params, --init_params INIT_PARAMS
                         JSON string or file path to initialize flax parameters
-  --physnet-checkpoint, --physnet_checkpoint PHYSNET_CHECKPOINT
-                        PhysNet checkpoint path (JSON or Orbax) for warm-start
-                        transfer learning
-  --physnet-transfer-model, --physnet_transfer_model PHYSNET_TRANSFER_MODEL
-                        Bundled PhysNet transfer model ID, file stem, or
-                        category. Defaults to 'joint-training-defaults' when
-                        distillation is enabled.
-  --list-physnet-transfer-models
-                        List bundled PhysNet transfer-learning models and exit
   --physnet-transfer-category, --physnet_transfer_category PHYSNET_TRANSFER_CATEGORY
                         Filter --list-physnet-transfer-models by manifest
                         category
-  --match-checkpoint-architecture
-                        Override EF hyperparameters from transfer checkpoint
-                        config (default: on)
-  --no-match-checkpoint-architecture
-                        Do not override EF hyperparameters from transfer
-                        checkpoint config
   --distill             Enable teacher distillation loss during training
   --distill-alpha, --distill_alpha DISTILL_ALPHA
                         Ground-truth loss weight (1.0=GT only, 0.0=teacher only)
   --distill-targets, --distill_targets DISTILL_TARGETS [DISTILL_TARGETS ...]
                         Distillation targets: energy forces dipole (default: all
                         three)
-  --teacher-checkpoint, --teacher_checkpoint TEACHER_CHECKPOINT
-                        Teacher checkpoint for distillation (defaults to warm-
-                        start checkpoint)
-  --metrics-plot, --metrics_plot METRICS_PLOT
-                        After training, write learning-curve plot to this path
-                        via Orbax checkpoints
-  --log-loss            Use log scale on loss axes when generating --metrics-
-                        plot
   --rot-augment, --rot_augment
                         Apply random rotation augmentation to inputs
   --rot-perturbation, --rot_perturbation ROT_PERTURBATION
                         Magnitude of rotation perturbation
-  --charges             Predict atomic charges (useful for dipoles and
-                        electrostatics)
-  --no-charges          Do not predict atomic charges
-  --total-charge, --total_charge TOTAL_CHARGE
-                        Total charge constraint of the molecular system
   --no-electrostatics   Disable electrostatics layer in EF model
   --efa                 Enable Euclidean Fast Attention (EFA) in the model
   --no-efa              Disable Euclidean Fast Attention (EFA)
-  --debug               Enable debug flags in EF model
-  --no-debug            Disable debug flags in EF model
-  --save-config, --save_config SAVE_CONFIG
-                        Write resolved training options to YAML and exit
-  --quiet, -q           Suppress JAX device summary
 
 Examples: mmml physnet-train \ --data output/energies_forces_dipoles_train.npz \
 --ckpt-dir ./ckpts/ama_mp2 \ --tag ama_mp2 \ --n-train 24000 --n-valid 3000 \

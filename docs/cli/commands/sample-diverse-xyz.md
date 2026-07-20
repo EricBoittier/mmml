@@ -24,18 +24,26 @@ positional arguments:
   inputs                One or more multi-frame XYZ files (same stoichiometry
                         and atom order).
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   -n, --n-structures N  Number of diverse structures to keep.
-  -o, --output OUTPUT   Output NPZ path (default: sampled.npz).
+
+Execution:
   --seed SEED           RNG seed for the first farthest-point seed (default: 0).
+
+Output & artifacts:
+  -o, --output OUTPUT   Output NPZ path (default: sampled.npz).
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  -v, --verbose
+
+Other options:
   --species SPECIES     Comma-separated chemical symbols for SOAP (default:
                         H,C,O).
   --r-cut R_CUT
   --n-max N_MAX
   --l-max L_MAX
   --sigma SIGMA
-  -v, --verbose
 ```
 
 

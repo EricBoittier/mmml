@@ -36,6 +36,9 @@ def run_pbc_cluster_fd(
     jax_md_overflow_fallback_to_cell_list: bool = True,
     jax_md_update_interval: int = 1,
     jax_md_skin_distance: float = 0.2,
+    lr_solver: str = "mic",
+    ewald_omit_self: bool = False,
+    mm_charge_mode: str | None = None,
 ) -> dict[str, Any]:
     """Build a PBC residue cluster, attach hybrid calc, run ``force_fd_check``."""
     from mmml.cli.base import resolve_checkpoint_paths
@@ -102,6 +105,10 @@ def run_pbc_cluster_fd(
         jax_md_skin_distance=float(jax_md_skin_distance),
         max_pairs=int(max_pairs),
         timings={},
+        lr_solver=str(lr_solver),
+        ewald_include_self=not bool(ewald_omit_self),
+        mm_charge_mode=mm_charge_mode,
+        backprop=True,
     )
     atoms.calc = calc
     result = force_fd_check(atoms, int(fd_check_atoms), float(fd_check_dx))
@@ -109,6 +116,8 @@ def run_pbc_cluster_fd(
     result["n_molecules"] = float(n_molecules)
     result["residue"] = str(residue).upper()
     result["checkpoint"] = str(base_ckpt_dir)
+    result["lr_solver"] = str(lr_solver)
+    result["ewald_omit_self"] = bool(ewald_omit_self)
     return result
 
 

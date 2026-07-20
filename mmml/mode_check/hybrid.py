@@ -140,6 +140,13 @@ def assert_resolved_vacuum_geometry(
         )
 
 
+def _normalize_mode_check_lr_solver(lr_solver: str) -> str:
+    lr = str(lr_solver).strip().lower()
+    if lr in ("native_ewald", "jit_ewald"):
+        return "ewald"
+    return lr
+
+
 def build_psf_and_attach_hybrid(
     setup: HybridModeCheckSetup,
     *,
@@ -153,6 +160,14 @@ def build_psf_and_attach_hybrid(
     make-res geometries (PSF atom order), placed along +x. When ``xyz`` is set,
     composition must match that atom order.
     """
+    lr = _normalize_mode_check_lr_solver(setup.lr_solver)
+    if lr == "ewald":
+        raise ValueError(
+            "mode-check vacuum hybrid has no PBC cell; lr_solver=ewald needs a box. "
+            "Keep the default --lr-solver mic for vacuum FD/vib, or use "
+            "`mmml mode-check --pbc-fd --lr-solver ewald [--ewald-omit-self]`."
+        )
+
     from mmml.cli.base import resolve_checkpoint_paths
     from mmml.cli.run.md_pbc_suite.ase import (
         _build_cluster_psf_from_composition,
@@ -247,7 +262,8 @@ def build_psf_and_attach_hybrid(
         do_ml_dimer=bool(setup.do_ml_dimer),
         do_mm=do_mm,
         timings={},
-        lr_solver=str(setup.lr_solver),
+        lr_solver=lr,
+        ewald_include_self=not bool(setup.ewald_omit_self),
         mm_charge_mode=str(setup.mm_charge_mode),
         # Mode-check needs trustworthy forces for FIRE / FD / vib; MD keeps
         # analytical forces (backprop=False) for throughput.
@@ -270,7 +286,8 @@ def build_psf_and_attach_hybrid(
         "checkpoint": str(Path(setup.checkpoint)),
         "psf_path": str(psf_path) if psf_path is not None else None,
         "mm_charge_mode": str(setup.mm_charge_mode),
-        "lr_solver": str(setup.lr_solver),
+        "lr_solver": lr,
+        "ewald_omit_self": bool(setup.ewald_omit_self),
         "vacuum": True,
         "backprop": True,
     }

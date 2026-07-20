@@ -39,6 +39,9 @@ def _load_npz_meta(path: Path) -> dict[str, Any]:
         "jax_pme_method": str(data["jax_pme_method"].item())
         if "jax_pme_method" in data
         else "",
+        "ewald_omit_self": bool(data["ewald_omit_self"].item())
+        if "ewald_omit_self" in data
+        else False,
     }
     d1 = np.asarray(data["scan_2d_d01_A"], dtype=float).reshape(-1)
     hybrid = np.asarray(data["scan_2d_hybrid_energy_kcal"], dtype=float)

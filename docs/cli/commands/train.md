@@ -33,21 +33,42 @@ usage: mmml train [-h] [--config CONFIG] [--save-config SAVE_CONFIG]
 
 Train MMML models (DCMNet or PhysNetJAX)
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --config CONFIG       Path to configuration YAML file
   --save-config SAVE_CONFIG
                         Save configuration to YAML file and exit
-  --model {dcmnet,physnetjax}
-                        Model to train (default: dcmnet)
   --physnet-checkpoint PHYSNET_CHECKPOINT
                         PhysNet checkpoint path for transfer learning
+
+Scientific model:
+  --model {dcmnet,physnetjax}
+                        Model to train (default: dcmnet)
   --physnet-transfer-model PHYSNET_TRANSFER_MODEL
                         Bundled PhysNet transfer model ID, file stem, or
                         category. Defaults to the 'joint-training-defaults'
                         charged model for physnetjax training.
+  --normalize-energy    Normalize energies
+
+Execution:
+  --batch-size BATCH_SIZE
+                        Batch size (default: 32)
+  --max-epochs MAX_EPOCHS
+                        Maximum number of epochs (default: 1000)
+
+Output & artifacts:
+  --output OUTPUT       Output directory for checkpoints (default: checkpoints)
+  --log-interval LOG_INTERVAL
+                        Log interval in epochs (default: 10)
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
   --list-physnet-transfer-models
                         List bundled PhysNet transfer-learning models and exit
+  --verbose, -v         Verbose output
+  --quiet, -q           Quiet mode
+  --dry-run             Prepare data but do not train
+
+Other options:
   --physnet-transfer-category PHYSNET_TRANSFER_CATEGORY
                         Filter --list-physnet-transfer-models by manifest
                         category
@@ -56,27 +77,16 @@ options:
   --train-fraction TRAIN_FRACTION
                         Fraction for train split if --valid not provided
                         (default: 0.8)
-  --batch-size BATCH_SIZE
-                        Batch size (default: 32)
-  --max-epochs MAX_EPOCHS
-                        Maximum number of epochs (default: 1000)
   --learning-rate LEARNING_RATE
                         Learning rate (default: 0.001)
   --early-stopping EARLY_STOPPING
                         Early stopping patience (default: 50)
   --targets TARGETS [TARGETS ...]
                         Training targets (default: energy)
-  --output OUTPUT       Output directory for checkpoints (default: checkpoints)
-  --log-interval LOG_INTERVAL
-                        Log interval in epochs (default: 10)
   --center-coords       Center coordinates at origin
-  --normalize-energy    Normalize energies
   --rot-augment         Enable SO(3) rotational augmentation in batch builders
   --rot-perturbation ROT_PERTURBATION
                         Rotation perturbation strength in [0,1] (default: 1.0)
-  --verbose, -v         Verbose output
-  --quiet, -q           Quiet mode
-  --dry-run             Prepare data but do not train
 
 Examples: # Train with config file mmml train --config config.yaml # Train
 DCMNet from command line mmml train --model dcmnet \ --train train.npz \ --valid

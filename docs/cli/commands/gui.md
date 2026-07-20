@@ -19,11 +19,23 @@ usage: mmml gui [-h] [--data-dir DATA_DIR | --file FILE] [--port PORT]
 
 Start the MMML molecular viewer server
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --data-dir, -d DATA_DIR
                         Directory containing molecular data files (default:
                         current directory)
+  --model-config MODEL_CONFIG
+                        Optional path to model config JSON for hidden-state
+                        inspection
+
+Scientific model:
+  --model-params MODEL_PARAMS
+                        Path to model parameters JSON for hidden-state
+                        inspection
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
   --file, -f FILE       Single molecular file to view (pre-load instead of
                         browsing)
   --port, -p PORT       Port to run the server on (default: 8000)
@@ -31,12 +43,6 @@ options:
   --dev                 Development mode: only serve API (use npm run dev for
                         frontend)
   --no-browser          Do not open browser automatically
-  --model-params MODEL_PARAMS
-                        Path to model parameters JSON for hidden-state
-                        inspection
-  --model-config MODEL_CONFIG
-                        Optional path to model config JSON for hidden-state
-                        inspection
   --enable-runner       Enable the job runner: launch and live-stream `mmml md-
                         system` runs on this host via /api/jobs (SSE). Intended
                         for remote/HPC use behind an SSH port-forward. Executes

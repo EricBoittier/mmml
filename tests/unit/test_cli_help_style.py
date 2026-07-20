@@ -66,6 +66,10 @@ def test_cli_text_is_colored_only_when_enabled(monkeypatch):
     assert "\x1b[" in colored.getvalue()
     assert "--config" in colored.getvalue()
 
+    error = io.StringIO()
+    print_cli_text("mmml demo: error: bad option\n", stream=error)
+    assert "\x1b[" in error.getvalue()
+
 
 def test_argparse_install_groups_help_without_changing_plain_content(monkeypatch):
     monkeypatch.setenv("MMML_NO_RICH", "1")

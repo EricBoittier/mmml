@@ -77,6 +77,7 @@ class HybridModeCheckSetup:
     mm_switch_width: float = 5.0
     mm_charge_mode: str = "q0"
     lr_solver: str = "mic"
+    ewald_omit_self: bool = False
     monomer_separation_A: float = DEFAULT_MONOMER_SEPARATION_A
     xyz: Path | None = None
     max_pairs: int = 20_000

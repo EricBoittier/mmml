@@ -15,14 +15,20 @@ mmml make-box --help
 usage: mmml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH]
                      [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
 
-options:
+Input & configuration:
+  --pdb PDB
+
+Scientific model:
+  --density DENSITY
+
+Diagnostics & safety:
   -h, --help            show this help message and exit
+
+Other options:
   --n N
   --res RES
   --side_length SIDE_LENGTH
-  --pdb PDB
   --solvent SOLVENT
-  --density DENSITY
 ```
 
 ## Example structures

@@ -152,7 +152,7 @@ method change that belongs in the manifest.
 |---|---|:---:|:---:|---|
 | `auto` | Legacy alias resolving to `mic` | yes | Not a meaningful external choice | Record the resolved active solver, not only `auto` |
 | `mic` | Truncated/switched minimum-image Coulomb | yes, default | No supported full-box external MIC mode | No external PME library |
-| `ewald` | MMML pure-JAX full-box Ewald operator, train-matched | yes | yes | Requires PBC; no external PME package or CUDA requirement |
+| `ewald` | MMML pure-JAX full-box Ewald operator, train-matched | yes | yes | Requires PBC; no external PME package or CUDA requirement. Optional `--ewald-omit-self` drops the Gaussian self term (energy offset only). Distinct from `jax_pme --jax-pme-method ewald`. Dimer LR campaign tags: `pbc_hybrid_ewald` / `pbc_hybrid_ewald_omit_self`. |
 | `jax_pme` | jax-pme Ewald, PME, or P3M; optional reciprocal r⁻⁶ dispersion in `jax_mic` | yes | yes | Optional `--jax-pme-method ewald|pme|p3m`; package availability checked at runtime |
 | `nvalchemiops_pme` | nvalchemiops full-box PME | Not wired; resolves/notes MIC behavior in `jax_mic` | yes | Optional GPU-oriented dependency; use `periodic_external` |
 | `scafacos` | ScaFaCoS full-box Coulomb | Not wired; resolves/notes MIC behavior in `jax_mic` | yes | Requires `libfcs`; method defaults to Ewald |

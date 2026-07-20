@@ -26,9 +26,18 @@ positional arguments:
   input                 Input trajectory (.traj/.xyz/.extxyz/etc.) or .h5/.hdf5
                         file
 
-options:
-  -h, --help            show this help message and exit
+Execution:
+  --n-groups N_GROUPS   Number of equal contiguous molecule/groups for molecule-
+                        wise unwrapping
+
+Output & artifacts:
   -o, --output OUTPUT   Output file
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --quiet               Suppress summary output
+
+Other options:
   --format {auto,traj,xyz,extxyz,dcd}
                         Output format (default: infer from suffix)
   --fast                Use direct streaming writer for xyz/extxyz outputs
@@ -38,8 +47,6 @@ options:
   --group-size GROUP_SIZE
                         Atoms per contiguous molecule/group for molecule-wise
                         unwrapping
-  --n-groups N_GROUPS   Number of equal contiguous molecule/groups for molecule-
-                        wise unwrapping
   --no-molecules        Disable automatic bonded-fragment grouping; unwrap atoms
                         independently
   --reference REFERENCE
@@ -53,7 +60,6 @@ options:
                         Z/atomic_numbers/numbers)
   --cell-key CELL_KEY   HDF5 cell dataset key (default:
                         cell/cells/lattice/lattices/box/boxes)
-  --quiet               Suppress summary output
 
 Unwrap periodic trajectories and write ASE/XYZ outputs. Examples: mmml unwrap-
 traj in.traj -o unwrapped.traj mmml unwrap-traj in.traj -o unwrapped.xyz
