@@ -56,6 +56,8 @@ SMOKE_OUT="${SMOKE_OUT:-$OUT_ROOT/tip3_${N_SMOKE}_smoke}"
 BOX_OPT_OUT="${BOX_OPT_OUT:-$OUT_ROOT/tip3_30A_box_opt}"
 NPT_OUT="${NPT_OUT:-$BOX_OPT_OUT/npt_charmm}"
 # NVT Hoover ramp length before CPT (smoke defaults: mini,heat,equi; FIRSTT~0.2×T).
+# Staging bath for CPT smoke (do not inherit campaign TEMP_K=300).
+TEMP_K_NPT="${TEMP_K_NPT:-200}"
 PS_HEAT_NPT="${PS_HEAT_NPT:-2.0}"
 PS_EQUI_NPT="${PS_EQUI_NPT:-2.0}"
 PROD_OUT="${PROD_OUT:-$OUT_ROOT/tip3_${N_PROD}_nve}"
@@ -162,7 +164,7 @@ if _want npt; then
   BOX_OPT_OUT="$BOX_OPT_OUT" \
   OUT_DIR="$NPT_OUT" \
   TARGET_P_ATM="$TARGET_P_ATM" \
-  TEMP_K="$TEMP_K" \
+  TEMP_K="$TEMP_K_NPT" \
   SEED="$SEED" \
   PS_HEAT="$PS_HEAT_NPT" \
   PS_EQUI="$PS_EQUI_NPT" \
