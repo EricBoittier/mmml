@@ -42,12 +42,13 @@ echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
 echo "  mm-charge:  $MM_CHARGE_MODE"
 echo "  density:    prep ladder OFF (ewald wiring smoke; not density campaign)"
 echo "  builder:    Packmol cube (not lattice grid)"
-echo "  repair:     --no-monomer-physnet-mini (keep liquid packing)"
+echo "  repair:     shared PhysNet water template (preserve liquid COM/orientation)"
 
 # Packmol liquid in --box-size, then CHARMM MM mini/heat before MLpot.
 # Grid builders at ~1 g/cm³ leave every water "stressed" (fmax~5 eV/Å); hybrid
 # FIRE cannot reach the 2 eV/Å pre-heat gate and MLpot SD spikes catastrophically.
-# --no-monomer-physnet-mini: vacuum PhysNet on waters wrecks H-bond packing.
+# Homogeneous monomer repair optimizes one water template and transfers only its
+# internal geometry, preserving every Packmol COM and orientation.
 # --density-prep-mode off: avoid FIRE/BFGS thrash on this smoke path.
 set +e
 mmml md-system \
@@ -78,7 +79,7 @@ mmml md-system \
   --density-prep-mode off \
   --no-density-prep-ladder \
   --no-mc-density-equalize \
-  --no-monomer-physnet-mini \
+  --monomer-physnet-mini \
   --charmm-mm-pretreat \
   --charmm-mm-pretreat-heat-nstep 4000 \
   --charmm-mm-pretreat-ps-equi 0.5 \

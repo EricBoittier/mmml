@@ -323,6 +323,51 @@ def _selected_atom_indices(
     return np.concatenate(chunks)
 
 
+def _systematic_homogeneous_targets(
+    flagged: tuple[int, ...],
+    atoms_per_list: list[int],
+    atomic_numbers: np.ndarray,
+) -> tuple[int, ...]:
+    """Return every monomer when the complete homogeneous box is stressed."""
+    n_monomers = len(atoms_per_list)
+    unique = tuple(dict.fromkeys(int(i) for i in flagged))
+    if set(unique) != set(range(n_monomers)) or n_monomers < 3:
+        return ()
+    if len(set(atoms_per_list)) != 1:
+        return ()
+    atoms_per = int(atoms_per_list[0])
+    z = np.asarray(atomic_numbers, dtype=int)
+    reference = z[:atoms_per]
+    if any(
+        not np.array_equal(reference, z[mi * atoms_per : (mi + 1) * atoms_per])
+        for mi in range(1, n_monomers)
+    ):
+        return ()
+    return tuple(range(n_monomers))
+
+
+def transfer_internal_geometry_preserving_pose(
+    source_initial: np.ndarray,
+    source_optimized: np.ndarray,
+    target_initial: np.ndarray,
+) -> np.ndarray:
+    """Transfer optimized internal geometry while preserving target COM/orientation."""
+    src0 = np.asarray(source_initial, dtype=np.float64)
+    src1 = np.asarray(source_optimized, dtype=np.float64)
+    target = np.asarray(target_initial, dtype=np.float64)
+    if src0.shape != src1.shape or src0.shape != target.shape:
+        raise ValueError("source and target monomer shapes must match")
+    src0_centered = src0 - src0.mean(axis=0)
+    src1_centered = src1 - src1.mean(axis=0)
+    target_centered = target - target.mean(axis=0)
+    u, _singular_values, vt = np.linalg.svd(src0_centered.T @ target_centered)
+    rotation = u @ vt
+    if np.linalg.det(rotation) < 0.0:
+        u[:, -1] *= -1.0
+        rotation = u @ vt
+    return src1_centered @ rotation + target.mean(axis=0)
+
+
 def _cap_flagged_monomers(
     flagged: tuple[int, ...],
     *,
@@ -427,12 +472,19 @@ def run_selective_monomer_physnet_mini(
     z_arr = np.asarray(z_full, dtype=int)
 
     selected: tuple[int, ...]
+    systematic_targets: tuple[int, ...] = ()
     if flagged is not None:
         # Explicit lists from pre-dynamics repair can include every monomer when
         # intermolecular force spikes dominate (common in dense liquids). Cap to
         # max_select — vacuum PhysNet on the whole box destroys packing.
+        raw_flagged = tuple(int(i) for i in flagged)
+        systematic_targets = _systematic_homogeneous_targets(
+            raw_flagged,
+            atoms_per_list,
+            z_arr,
+        )
         selected = _cap_flagged_monomers(
-            tuple(int(i) for i in flagged),
+            raw_flagged,
             max_select=int(config.max_select),
             mlpot_ctx=mlpot_ctx,
             atoms_per_list=atoms_per_list,
@@ -440,6 +492,17 @@ def run_selective_monomer_physnet_mini(
             context_prefix=context_prefix,
             verbose=bool(config.verbose),
         )
+        if systematic_targets:
+            # Optimize one worst representative, then transfer only its
+            # internal geometry to the homogeneous box below.
+            selected = selected[:1]
+            if config.verbose:
+                print(
+                    f"{context_prefix}: systematic homogeneous stress on "
+                    f"{len(systematic_targets)} monomers; optimizing one shared "
+                    "internal template while preserving every COM/orientation",
+                    flush=True,
+                )
         if not selected:
             grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
             if grms is None or not np.isfinite(grms):
@@ -572,6 +635,19 @@ def run_selective_monomer_physnet_mini(
         opt.run(fmax=float(config.fmax_ev_a), steps=max(1, int(config.max_steps)))
         pos[atom_idx] = np.asarray(sel_atoms.get_positions(), dtype=np.float64)
 
+    if systematic_targets and selected:
+        representative = int(selected[0])
+        rep_start, rep_end = int(offsets[representative]), int(offsets[representative + 1])
+        source_initial = rollback_positions[rep_start:rep_end]
+        source_optimized = pos[rep_start:rep_end]
+        for mi in systematic_targets:
+            start, end = int(offsets[mi]), int(offsets[mi + 1])
+            pos[start:end] = transfer_internal_geometry_preserving_pose(
+                source_initial,
+                source_optimized,
+                rollback_positions[start:end],
+            )
+
     sync_charmm_positions(pos)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
     grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
@@ -594,16 +670,17 @@ def run_selective_monomer_physnet_mini(
         return SelectiveMonomerPhysnetMiniResult(
             grms=float(restored_grms),
             ran=False,
-            flagged=selected,
+            flagged=systematic_targets or selected,
         )
     if config.verbose:
         print(
             f"{context_prefix}: done — hybrid GRMS={grms:.4f} kcal/mol/Å "
-            f"({len(selected)} monomer(s), {len(groups)} PhysNet group(s))",
+            f"({len(systematic_targets) if systematic_targets else len(selected)} "
+            f"monomer(s), {len(groups)} PhysNet group(s))",
             flush=True,
         )
     return SelectiveMonomerPhysnetMiniResult(
         grms=float(grms),
         ran=True,
-        flagged=selected,
+        flagged=systematic_targets or selected,
     )

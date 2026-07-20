@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -15,7 +15,36 @@ from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
     resolve_monomer_template_reference_positions,
     run_selective_monomer_physnet_mini,
     selective_monomer_physnet_mini_config_from_args,
+    transfer_internal_geometry_preserving_pose,
 )
+
+
+def test_transfer_internal_geometry_preserves_target_pose_and_new_bonds():
+    source_initial = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+    )
+    source_optimized = np.array(
+        [[0.0, 0.0, 0.0], [1.2, 0.0, 0.0], [0.0, 0.8, 0.0]]
+    )
+    target_initial = np.array(
+        [[4.0, 5.0, 6.0], [4.0, 6.0, 6.0], [3.0, 5.0, 6.0]]
+    )
+
+    transferred = transfer_internal_geometry_preserving_pose(
+        source_initial,
+        source_optimized,
+        target_initial,
+    )
+
+    np.testing.assert_allclose(transferred.mean(axis=0), target_initial.mean(axis=0))
+    np.testing.assert_allclose(
+        np.linalg.norm(transferred[1] - transferred[0]),
+        np.linalg.norm(source_optimized[1] - source_optimized[0]),
+    )
+    np.testing.assert_allclose(
+        np.linalg.norm(transferred[2] - transferred[0]),
+        np.linalg.norm(source_optimized[2] - source_optimized[0]),
+    )
 
 
 def _ctx(
@@ -391,7 +420,7 @@ def test_run_selective_monomer_physnet_mini_caps_explicit_flagged(monkeypatch):
         context_prefix="test",
     )
     assert result.ran is True
-    assert result.flagged == (2, 0)
+    assert result.flagged == (0, 1, 2)
 
 
 def test_run_selective_monomer_physnet_mini_explicit_flagged(monkeypatch):
