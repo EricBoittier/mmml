@@ -4106,6 +4106,8 @@ def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
     """
     if bool(kw.get("restart")):
         return False
+    if bool(kw.get("_skip_ase_cold_velocity_assign")):
+        return False
     return not bool(kw.get("start")) and int(kw.get("iasvel", 0) or 0) == 0
 
 
@@ -4169,23 +4171,24 @@ def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
 
 
 def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
-    """Use safe ``iasvel=1`` Bussi continuation unless a handoff is explicitly requested.
+    """Continue Bussi micro-chunks with the current in-memory velocities.
 
-    Some libcharmm builds expose ``dynamics_run_kw`` but segfault in ``dynopt`` when
-    `init_velocities` are injected on an in-memory continuation.  The stable default
-    is therefore a ramp-target Boltzmann continuation.  Two opt-in alternatives:
+    Do not inject C pointers and do not redraw Maxwell-Boltzmann velocities:
+    both change or destabilize the trajectory. ``start=False, iasvel=0`` keeps
+    CHARMM's current velocities and lets the ASE Bussi rescale persist.
 
-    * ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` — keep CHARMM in-memory velocities
-      (``iasvel=0``); experimental, see :func:`_apply_bussi_iasvel_zero_continuation`.
-    * ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1`` — legacy C-API velocity injection
-      (known to segfault on gfortran).
+    ``MMML_BUSSI_IASVEL1_REDRAW=1`` retains the legacy per-chunk Boltzmann
+    redraw only as an explicit diagnostic fallback.
     """
-    if os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") == "1":
-        _apply_bussi_iasvel_zero_continuation(kw)
+    if os.environ.get("MMML_BUSSI_IASVEL1_REDRAW") == "1":
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
-    if not use_c_api_handoff or not _dynamics_c_api_available():
-        _apply_bussi_iasvel_one_at_ramp_target(kw)
+    if not use_c_api_handoff:
+        _apply_bussi_iasvel_zero_continuation(kw)
+        return
+    if not _dynamics_c_api_available():
+        _apply_bussi_iasvel_zero_continuation(kw)
         return
     # WARNING: This path passes velocity arrays to Fortran bind(c) optional
     # assumed-shape arguments via raw ctypes pointers.  Most gfortran builds
@@ -8859,7 +8862,11 @@ def minimize_with_mlpot(
                             calc_result = minimize_hybrid_calculator_fire_before_sd(
                                 config.mlpot_ctx,
                                 max_steps=int(config.calculator_fire_steps),
-                                fmax_ev_a=float(config.calculator_fire_fmax_ev_a),
+                                fmax_ev_a=(
+                                    float(config.calculator_fire_fmax_ev_a)
+                                    if config.calculator_fire_fmax_ev_a is not None
+                                    else float(config.calculator_minimize_fmax_ev_a)
+                                ),
                                 fire_maxstep=float(config.calculator_fire_maxstep),
                                 verbose=config.verbose,
                                 context_prefix="Post-SD-plateau",
