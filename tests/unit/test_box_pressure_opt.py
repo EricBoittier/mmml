@@ -185,3 +185,42 @@ def test_write_box_json_roundtrip(tmp_path: Path):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["final_cubic_side_A"] == pytest.approx(29.5)
     assert data["composition"] == "TIP3:90"
+
+
+def test_from_box_json_offline_smoke(tmp_path: Path):
+    from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
+        run_box_pressure_opt_from_box_json,
+    )
+
+    liquid = tmp_path / "liquid_box"
+    liquid.mkdir()
+    (liquid / "box.json").write_text(
+        json.dumps(
+            {
+                "status": "pass",
+                "composition": "TIP3:8",
+                "n_molecules": 8,
+                "n_atoms": 24,
+                "box_side_A": 12.0,
+                "final_cubic_side_A": 12.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = BoxPressureOptConfig(
+        target_pressure_atm=1.0,
+        mc_steps=40,
+        seed=5,
+        run_1d_refine=True,
+        min_intermonomer_distance_A=0.05,
+    )
+    result = run_box_pressure_opt_from_box_json(
+        liquid,
+        output_dir=tmp_path / "box_pressure_opt",
+        config=cfg,
+    )
+    assert result.status == "pass"
+    assert result.box_json_path is not None
+    assert result.box_json_path.is_file()
+    # Synthetic model is calibrated to certified L → stay near 12 Å.
+    assert result.box_side_A == pytest.approx(12.0, rel=0.05)

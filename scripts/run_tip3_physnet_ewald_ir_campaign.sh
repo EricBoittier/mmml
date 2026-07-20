@@ -9,11 +9,12 @@
 #   STAGE=fd ./scripts/run_tip3_physnet_ewald_ir_campaign.sh     # one stage
 #   STAGE=scan,smoke ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 #
-# Stages: fd | scan | smoke | prod | analyze | all
+# Stages: fd | scan | box_opt | smoke | prod | analyze | all
 #
 # Pass/fail (quick):
 #   fd      — fd_force_max_abs_diff_eVA < 0.05
 #   scan    — scan_1d.npz written under SCAN_OUT
+#   box_opt — liquid-box + pressure MC/1D refine → box_pressure_opt/box.json
 #   smoke   — tip3_90 heat+NVE exit 0 (wipe dir if prior vacuum-repair gate fail)
 #   prod    — jaxmd H5 exists; NVE finishes
 #   analyze — ir_spectrum.png + OH power with peak in 2800–3600 cm^-1 (PhysNet)
@@ -47,9 +48,11 @@ SEED="${SEED:-42}"
 
 SCAN_OUT="${SCAN_OUT:-$OUT_ROOT/dimer_scan}"
 SMOKE_OUT="${SMOKE_OUT:-$OUT_ROOT/tip3_${N_SMOKE}_smoke}"
+BOX_OPT_OUT="${BOX_OPT_OUT:-$OUT_ROOT/tip3_${N_SMOKE}_box_opt}"
 PROD_OUT="${PROD_OUT:-$OUT_ROOT/tip3_${N_PROD}_nve}"
 FD_OUT="${FD_OUT:-$OUT_ROOT/pbc_fd_tip3.json}"
 ANALYZE_OUT="${ANALYZE_OUT:-$OUT_ROOT/analysis}"
+TARGET_P_ATM="${TARGET_P_ATM:-1.0}"
 
 mkdir -p "$OUT_ROOT"
 
@@ -123,7 +126,21 @@ if _want scan; then
   echo "scan NPZ under $SCAN_OUT"
 fi
 
-# --- 3) tip3_90 PyCHARMM smoke ---------------------------------------------
+# --- 3) CHARMM-default box pressure opt (prep for NpT) ----------------------
+if _want box_opt; then
+  echo ""
+  echo "=== [box_opt] TIP3:${N_SMOKE} liquid-box → pressure MC/1D → box.json ==="
+  OUT_DIR="$BOX_OPT_OUT" \
+  N_MOL="$N_SMOKE" \
+  BOX_SIZE="$BOX_SMOKE" \
+  TARGET_P_ATM="$TARGET_P_ATM" \
+  TEMP_K="$TEMP_K" \
+  SEED="$SEED" \
+  ./scripts/run_tip3_box_pressure_opt.sh
+  test -f "$BOX_OPT_OUT/box_pressure_opt/box.json"
+fi
+
+# --- 4) tip3_90 PyCHARMM smoke ---------------------------------------------
 if _want smoke; then
   echo ""
   echo "=== [smoke] TIP3:${N_SMOKE} Packmol + MM pretreat → hybrid heat+NVE ==="
@@ -139,7 +156,7 @@ if _want smoke; then
   ./scripts/run_tip3_50_ewald_smoke.sh
 fi
 
-# --- 4) Production jaxmd NVE (H5 for IR) ------------------------------------
+# --- 5) Production jaxmd NVE (H5 for IR) ------------------------------------
 if _want prod; then
   echo ""
   echo "=== [prod] TIP3:${N_PROD} jaxmd NVE ${PS_PROD} ps (IR trajectory) ==="
@@ -176,7 +193,7 @@ if _want prod; then
   echo "H5=$H5" | tee "$PROD_OUT/h5_path.txt"
 fi
 
-# --- 5) IR + OH bond analysis ----------------------------------------------
+# --- 6) IR + OH bond analysis ----------------------------------------------
 if _want analyze; then
   echo ""
   echo "=== [analyze] IR / OH power from jaxmd H5 ==="
