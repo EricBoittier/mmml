@@ -35,6 +35,7 @@ runs:
     output_dir: scratch/tip3_50_ewald_smoke/heat_nve
     extra_args:
       - --ewald-omit-self
+      - --mlpot-pbc
       - --no-packmol
       - --builder
       - liquid

@@ -146,6 +146,19 @@ def test_mlpot_pbc_flag_enables_mic_on_free_setup_with_box():
     assert resolve_mlpot_use_pbc(args) is True
 
 
+def test_ewald_auto_enables_mlpot_pbc_with_charmm_box():
+    """lr_solver=ewald needs a cell; do not leave open-boundary loose PBC."""
+    args = argparse.Namespace(
+        setup="pycharmm_full",
+        free_space=False,
+        box_size=30.0,
+        mlpot_pbc=False,
+        lr_solver="ewald",
+    )
+    assert resolve_charmm_use_pbc(args) is True
+    assert resolve_mlpot_use_pbc(args) is True
+
+
 def test_pbc_setup_enables_both():
     args = argparse.Namespace(setup="pbc_nve", free_space=False, box_size=None)
     assert resolve_charmm_use_pbc(args) is True

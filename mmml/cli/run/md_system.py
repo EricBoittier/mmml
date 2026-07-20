@@ -1107,8 +1107,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--mlpot-pbc",
         action="store_true",
         help=(
-            "pycharmm: enable ML MIC / periodic dimer lists (default for pbc_* setups). "
-            "With free_* + --box-size, CHARMM uses loose PBC unless this flag is set."
+            "pycharmm: enable ML MIC / periodic dimer lists (default for pbc_* setups; "
+            "also auto-enabled when --lr-solver ewald with a CHARMM box). "
+            "With free_* + --box-size and no ewald, CHARMM uses loose PBC (open ML) "
+            "unless this flag is set."
         ),
     )
     parser.add_argument(

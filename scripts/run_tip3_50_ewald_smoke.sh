@@ -42,6 +42,7 @@ mmml md-system \
   --builder liquid \
   --no-packmol \
   --box-size 30 \
+  --mlpot-pbc \
   --seed "$SEED" \
   --checkpoint "$CKPT" \
   --output-dir "$OUT_DIR" \

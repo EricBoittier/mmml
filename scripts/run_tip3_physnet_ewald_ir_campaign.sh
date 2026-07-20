@@ -64,7 +64,7 @@ _want() {
 echo "== TIP3 PhysNet Ewald IR campaign =="
 echo "  CKPT=$CKPT"
 echo "  OUT_ROOT=$OUT_ROOT"
-echo "  STAGE=$STAGE  mm-charge=$MM_CHARGE_MODE  lr=ewald --ewald-omit-self"
+echo "  STAGE=$STAGE  mm-charge=$MM_CHARGE_MODE  lr=ewald --ewald-omit-self --mlpot-pbc"
 
 # --- 1) TIP3 PBC FD ---------------------------------------------------------
 if _want fd; then

@@ -4428,7 +4428,15 @@ def resolve_mlpot_use_pbc(args: argparse.Namespace) -> bool:
     if getattr(args, "mlpot_pbc", False):
         return True
     setup = (getattr(args, "setup", None) or "").strip().lower()
-    return setup.startswith("pbc_")
+    if setup.startswith("pbc_"):
+        return True
+    # Full-box Ewald needs a PBC cell on the hybrid calculator. With CHARMM
+    # crystal on (--box-size / pbc setups) but without --mlpot-pbc, the default
+    # is "loose PBC" (open ML boundary) — auto-enable MIC/cell for ewald.
+    lr = str(getattr(args, "lr_solver", None) or "").strip().lower()
+    if lr in ("ewald", "native_ewald", "jit_ewald") and resolve_charmm_use_pbc(args):
+        return True
+    return False
 
 
 def resolve_loose_pbc(charmm_pbc: bool, mlpot_pbc: bool) -> bool:
