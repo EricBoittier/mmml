@@ -42,3 +42,16 @@ def test_learned_multipole_calculator_returns_conservative_fd_forces():
     assert forces[0, 0] > 0.0
     np.testing.assert_allclose(forces[:, 1:], 0.0, atol=1.0e-8)
     assert atoms.calc.results["force_method"] == "central_finite_difference"
+
+
+def test_learned_multipole_forces_with_atoms_none_restores_geometry():
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    calc = FixedChargeMultipoles()
+    calc.atoms = atoms.copy()
+    original = atoms.get_positions().copy()
+
+    calc.calculate(atoms=None, properties=("energy", "forces"))
+
+    np.testing.assert_allclose(calc.atoms.get_positions(), original)
+    assert "forces" in calc.results
+    assert calc.results["forces"].shape == (2, 3)
