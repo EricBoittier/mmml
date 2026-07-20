@@ -1099,6 +1099,23 @@ def flyoff_checkpoint_geometry_acceptable(
     return str(diag.kind) != "both_high"
 
 
+def _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+    config: DynamicsOverlapConfig,
+    mlpot_ctx: "MlpotContext",
+) -> bool:
+    """True for all-ML PBC liquid: restore mini/baseline + cold start; never Packmol."""
+    if not bool(config.use_pbc) or not bool(getattr(mlpot_ctx, "use_pbc", False)):
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
+
+    return bool(_is_all_ml_pbc_context(mlpot_ctx))
+
+
+def _is_pbc_lattice_ready_failure(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "lattice-ready" in msg or "not lattice-ready" in msg
+
+
 def _try_flyoff_checkpoint_ladder_rescue(
     config: DynamicsOverlapConfig,
     *,
@@ -1139,11 +1156,25 @@ def _try_flyoff_checkpoint_ladder_rescue(
     setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
     setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", False)
     invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
-    polish_after_extent_repack(
-        mlpot_ctx,
-        config,
-        label=f"{label} after {path.name}",
+    checkpoint_only = _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+        config, mlpot_ctx
     )
+    try:
+        polish_after_extent_repack(
+            mlpot_ctx,
+            config,
+            label=f"{label} after {path.name}",
+        )
+    except RuntimeError as polish_exc:
+        if checkpoint_only and _is_pbc_lattice_ready_failure(polish_exc):
+            print(
+                f"{label} after {path.name}: skipping polish — CHARMM PBC crystal "
+                "is not lattice-ready; cold-starting from restored checkpoint "
+                "(all-ML PBC; Packmol cleanup disabled)",
+                flush=True,
+            )
+        else:
+            raise
     setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     return _extent_check(config, context=f"{label} after checkpoint ladder ({path.name})")
 
@@ -1546,6 +1577,60 @@ def _load_extent_reference_positions(
     )
 
 
+def _restore_extent_from_memory_checkpoint_only(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    """Restore in-memory mini/baseline geometry + cold start (no Packmol)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        polish_after_extent_repack,
+        resolve_extent_reference_positions,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        invalidate_mlpot_pre_sd_ener_probe,
+        sync_charmm_positions,
+    )
+
+    ref_pos, ref_path = resolve_extent_reference_positions([], mlpot_ctx)
+    sync_charmm_positions(ref_pos)
+    sync_charmm_velocities_akma(
+        np.zeros((int(ref_pos.shape[0]), 3), dtype=np.float64)
+    )
+    setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
+    setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", False)
+    invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
+    print(
+        f"{exc}\nRestored in-memory reference {ref_path.name} "
+        "(all-ML PBC checkpoint-only; Packmol disabled)",
+        flush=True,
+    )
+    try:
+        polish_after_extent_repack(
+            mlpot_ctx,
+            config,
+            label=f"{label} after {ref_path.name}",
+        )
+    except RuntimeError as polish_exc:
+        if _is_pbc_lattice_ready_failure(polish_exc):
+            print(
+                f"{label} after {ref_path.name}: skipping polish — CHARMM PBC "
+                "crystal is not lattice-ready; cold-starting from restored geometry",
+                flush=True,
+            )
+        else:
+            raise
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
+    return _extent_check(
+        config, context=f"{label} after memory checkpoint ({ref_path.name})"
+    )
+
+
 def _handle_extent_cleanup_rescue(
     config: DynamicsOverlapConfig,
     *,
@@ -1553,7 +1638,25 @@ def _handle_extent_cleanup_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
-    """Rebuild fly-off monomer(s) from mini checkpoint, then minimize + cold restart."""
+    """Rebuild fly-off monomer(s) from mini checkpoint, then minimize + cold restart.
+
+    All-ML PBC liquids never enter Packmol here: checkpoint ladder + cold start only.
+    """
+    if _prefer_all_ml_pbc_checkpoint_only_extent_rescue(config, mlpot_ctx):
+        print(
+            f"{exc}\nAll-ML PBC: refusing Packmol cleanup extent rescue; "
+            "restoring 02_mini/baseline checkpoint ladder + cold start...",
+            flush=True,
+        )
+        try:
+            return _try_flyoff_checkpoint_ladder_rescue(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+        except RuntimeError:
+            return _restore_extent_from_memory_checkpoint_only(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
     )
@@ -1694,9 +1797,15 @@ def _escalate_extent_rescue(
     recovery_path: Path | None = None,
     sd_steps: int | None = None,
 ) -> float:
-    """Try density prep ladder, then monomer repack, before aborting extent rescue."""
+    """Try density prep ladder, then monomer repack, before aborting extent rescue.
+
+    All-ML PBC liquid never Packmol-repacks: checkpoint ladder + cold start only.
+    """
     exc: RuntimeError = still_bad
-    if config.density_prep_ladder_fallback:
+    checkpoint_only = _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+        config, mlpot_ctx
+    )
+    if config.density_prep_ladder_fallback and not checkpoint_only:
         try:
             return _try_density_prep_ladder_after_extent_failure(
                 config,
@@ -1716,8 +1825,21 @@ def _escalate_extent_rescue(
             exc=exc,
             mlpot_ctx=mlpot_ctx,
         )
-    except RuntimeError:
-        pass
+    except RuntimeError as ladder_exc:
+        if checkpoint_only:
+            sd_txt = f" (SD={sd_steps})" if sd_steps is not None else ""
+            src = (
+                f" from {recovery_path.name}{sd_txt}"
+                if recovery_path is not None
+                else ""
+            )
+            raise RuntimeError(
+                f"{ladder_exc}; all-ML PBC extent rescue refused Packmol / density "
+                f"prep after fly-off recovery{src} — restore 02_mini/baseline and "
+                f"cold-start only (monomer extent must be "
+                f"<= {config.max_monomer_extent_A:.2f} A)"
+            ) from ladder_exc
+        exc = ladder_exc
 
     try:
         return _handle_extent_cleanup_rescue(
@@ -1750,10 +1872,27 @@ def _handle_extent_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
-    if config.cleanup_mode:
+    checkpoint_only = _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+        config, mlpot_ctx
+    )
+    if config.cleanup_mode and not checkpoint_only:
         return _handle_extent_cleanup_rescue(
             config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
         )
+    if config.cleanup_mode and checkpoint_only:
+        print(
+            f"{exc}\nAll-ML PBC: cleanup/Packmol extent rescue disabled; "
+            "restoring 02_mini/baseline checkpoint ladder + cold start...",
+            flush=True,
+        )
+        try:
+            return _try_flyoff_checkpoint_ladder_rescue(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+        except RuntimeError:
+            return _restore_extent_from_memory_checkpoint_only(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
 
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
@@ -1771,6 +1910,15 @@ def _handle_extent_rescue(
             f"mini/baseline coordinates on MlpotContext"
         ) from exc
     if not candidates:
+        if checkpoint_only:
+            print(
+                f"{exc}\nAll-ML PBC: no disk geometry checkpoint; restoring "
+                "in-memory mini/baseline without Packmol...",
+                flush=True,
+            )
+            return _restore_extent_from_memory_checkpoint_only(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
         print(
             f"{exc}\nNo disk geometry checkpoint; repacking from in-memory "
             "mini/baseline snapshot...",

@@ -1348,6 +1348,186 @@ def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(t
     assert ctx._overlap_post_rescue_cold_start is True
 
 
+def test_all_ml_pbc_extent_rescue_skips_packmol_on_lattice_ready_failure(tmp_path):
+    """Certified all-ML liquid: lattice-ready fail → mini/baseline + cold start, never Packmol."""
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        check_dynamics_overlap,
+    )
+
+    mini_crd = tmp_path / "02_mini.crd"
+    write_minimal_restart(mini_crd)
+    good_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.0, 1.0, 0.0],
+            [5.5, 0.5, 0.0],
+        ],
+        dtype=float,
+    )
+    # Stretch must exceed max extent under MIC (L=30 Å); |Δx|=15 is not a box wrap.
+    bad_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [15.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.0,
+        max_monomer_extent_A=12.0,
+        n_monomers=2,
+        use_pbc=True,
+        fallback_box_side_A=30.0,
+        cleanup_mode=False,
+        density_prep_ladder_fallback=True,
+        geometry_fallback_restarts=(mini_crd,),
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+    )
+    ctx = mock.MagicMock()
+    ctx.use_pbc = True
+    ctx.cubic_box_side_A = 30.0
+    positions = {"current": bad_pos.copy()}
+
+    def _get_pos():
+        return positions["current"]
+
+    def _sync_pos(new_pos):
+        positions["current"] = np.asarray(new_pos, dtype=float)
+
+    def _flyoff_fail(*_a, **_k):
+        raise RuntimeError(
+            "Fly-off recovery: MLpot SD pass 1: CHARMM PBC crystal is not "
+            "lattice-ready (workflow L=30.000 Å)"
+        )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=_get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=_sync_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery."
+        "run_extent_recovery_from_prior_restart",
+        side_effect=_flyoff_fail,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint."
+        "try_recovery_from_checkpoint_ladder",
+        side_effect=lambda *_a, **_k: positions.update(current=good_pos.copy())
+        or mini_crd,
+    ) as ladder, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
+        "polish_after_extent_repack",
+        side_effect=RuntimeError(
+            "EQUI after 02_mini.crd: CHARMM PBC crystal is not lattice-ready"
+        ),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_handle_extent_cleanup_rescue",
+    ) as packmol, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_try_density_prep_ladder_after_extent_failure",
+    ) as density:
+        extent, rescued = check_dynamics_overlap(
+            cfg, context="EQUI", step=500, mlpot_ctx=ctx
+        )
+
+    ladder.assert_called_once()
+    packmol.assert_not_called()
+    density.assert_not_called()
+    assert rescued is True
+    assert extent < 12.0
+    assert ctx._overlap_post_rescue_cold_start is True
+
+
+def test_all_ml_pbc_cleanup_mode_refuses_packmol(tmp_path):
+    """cleanup_mode must not Packmol-rebuild an all-ML PBC liquid box."""
+    mini_crd = tmp_path / "02_mini.crd"
+    write_minimal_restart(mini_crd)
+    good_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.0, 1.0, 0.0],
+            [5.5, 0.5, 0.0],
+        ],
+        dtype=float,
+    )
+    bad_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [15.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.0,
+        max_monomer_extent_A=12.0,
+        n_monomers=2,
+        use_pbc=True,
+        fallback_box_side_A=30.0,
+        cleanup_mode=True,
+        geometry_fallback_restarts=(mini_crd,),
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+    )
+    ctx = mock.MagicMock()
+    ctx.use_pbc = True
+    positions = {"current": bad_pos.copy()}
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=lambda: positions["current"],
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=lambda p: positions.update(current=np.asarray(p, dtype=float)),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint."
+        "try_recovery_from_checkpoint_ladder",
+        side_effect=lambda *_a, **_k: positions.update(current=good_pos.copy())
+        or mini_crd,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
+        "polish_after_extent_repack",
+        return_value=1.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "_handle_extent_cleanup_rescue",
+    ) as cleanup:
+        extent, rescued = check_dynamics_overlap(
+            cfg, context="EQUI", step=500, mlpot_ctx=ctx
+        )
+
+    cleanup.assert_not_called()
+    assert rescued is True
+    assert extent < 12.0
+    assert ctx._overlap_post_rescue_cold_start is True
+
+
 def test_check_extent_rescue_repack_from_memory_only():
     """Repack works with in-memory mini snapshot when disk ladder is empty."""
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (

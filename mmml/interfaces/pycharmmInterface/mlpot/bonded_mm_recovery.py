@@ -534,6 +534,28 @@ def _run_mlpot_recovery_mini(
         minimize_with_mlpot,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
+
+    # All-ML PBC liquid: do not enter MLpot SD when the CHARMM crystal/IMAGE
+    # tables are unusable. Keep restored mini/baseline geometry and cold-start
+    # instead of failing into Packmol cleanup.
+    if _is_all_ml_pbc_context(ctx):
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            charmm_crystal_abnr_ready,
+            charmm_crystal_lattice_ready,
+        )
+
+        box = getattr(ctx, "cubic_box_side_A", None)
+        if not charmm_crystal_lattice_ready() and not charmm_crystal_abnr_ready(
+            float(box) if box is not None else None
+        ):
+            print(
+                f"{context}: skipping MLpot SD mini — CHARMM PBC crystal is not "
+                "lattice-ready; keeping restored geometry for cold start "
+                "(all-ML PBC; Packmol cleanup disabled)",
+                flush=True,
+            )
+            return
 
     steps = max(1, int(nstep if nstep is not None else bonded_cfg.nstep_sd))
     if bonded_cfg.verbose:
