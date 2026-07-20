@@ -4085,21 +4085,45 @@ def _dynamics_writes_dcd(kw: dict[str, Any]) -> bool:
     return nsavc > 0
 
 
+def _bussi_allows_iasvel0_continuation() -> bool:
+    """Experimental in-memory ``iasvel=0`` path (COMP / C-API inject). Off by default."""
+    return os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") == "1"
+
+
 def _drop_unsafe_bussi_init_velocities_for_dcd(
     kw: dict[str, Any],
     init_velocities: dict[str, np.ndarray] | None,
     *,
     quiet: bool = False,
 ) -> dict[str, np.ndarray] | None:
-    """Avoid ``dynamics_run_kw`` dynopt segfault with DCD + init_velocities."""
-    if init_velocities is None or not _dynamics_writes_dcd(kw):
+    """Refuse C-API ``init_velocities`` when gfortran would still read COMP coords.
+
+    Drops handoff arrays when writing DCD (dynopt segfault) **or** when Bussi heat
+    is active without ``MMML_BUSSI_IASVEL0_CONTINUATION`` (deferred-DCD micro-chunks
+    previously kept inject + ``iasvel=0`` → T ≫ 10¹² K).
+    """
+    if init_velocities is None:
+        return None
+    bussi_blocks_inject = (
+        _bussi_heat_ramp_active(kw) and not _bussi_allows_iasvel0_continuation()
+    )
+    dcd_blocks_inject = _dynamics_writes_dcd(kw)
+    if not bussi_blocks_inject and not dcd_blocks_inject:
         return init_velocities
     if not quiet:
-        print(
-            "run_dynamics: DCD output with C-API init_velocities is unsafe on this "
-            "CHARMM build; using iasvel=1 Bussi continuation instead",
-            flush=True,
-        )
+        if bussi_blocks_inject:
+            print(
+                "run_dynamics: Bussi default refuses C-API init_velocities "
+                "(COMP-as-velocity unsafe on gfortran; deferred-DCD path); "
+                "using iasvel=1 Boltzmann continuation instead",
+                flush=True,
+            )
+        else:
+            print(
+                "run_dynamics: DCD output with C-API init_velocities is unsafe on this "
+                "CHARMM build; using iasvel=1 Bussi continuation instead",
+                flush=True,
+            )
     _apply_bussi_iasvel_one_at_ramp_target(kw)
     return None
 
@@ -4109,10 +4133,15 @@ def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
 
     When ``restart=True``, READYN loads velocities from the restart file; do not
     inject COMP / C-API handoff or fall back to ``iasvel=1`` Boltzmann.
+
+    Bussi heat never takes this path unless ``MMML_BUSSI_IASVEL0_CONTINUATION=1``:
+    gfortran builds ignore injected arrays and fill velocities from COMP coordinates.
     """
     if bool(kw.get("restart")):
         return False
     if bool(kw.get("_skip_ase_cold_velocity_assign")):
+        return False
+    if _bussi_heat_ramp_active(kw) and not _bussi_allows_iasvel0_continuation():
         return False
     return not bool(kw.get("start")) and int(kw.get("iasvel", 0) or 0) == 0
 
@@ -4195,7 +4224,7 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     if os.environ.get("MMML_BUSSI_IASVEL1_REDRAW") == "1":
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
-    if os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") != "1":
+    if not _bussi_allows_iasvel0_continuation():
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
@@ -4543,6 +4572,15 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
     bussi_active = _bussi_heat_ramp_active(kw)
     _ensure_bussi_heat_continuation_iasvel(kw)
+    # Defense: outer-chunk / subchunk callers can leave iasvel=0; never enter the
+    # COMP/C-API inject path for Bussi without explicit opt-in (deferred DCD).
+    if (
+        bussi_active
+        and not _bussi_allows_iasvel0_continuation()
+        and not bool(kw.get("start"))
+        and int(kw.get("iasvel", 0) or 0) == 0
+    ):
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
     nstep = int(kw.get("nstep", 0) or 0)
     if nstep < 1:
         raise ValueError(
@@ -7050,6 +7088,10 @@ def _run_bussi_heat_subchunked(
             sub_kw.pop("_bussi_force_iasvel_one", None)
             kw.pop("_bussi_force_iasvel_one", None)
             _apply_bussi_in_memory_continuation_kw(sub_kw)
+        elif not bool(sub_kw.get("start")):
+            # Outer overlap chunk > 0 enters with start=False; do not inherit a
+            # stale iasvel=0 from the previous leg (deferred-DCD COMP crash).
+            _configure_bussi_in_memory_continuation_iasvel(sub_kw)
         global_start = int(global_step_offset) + steps_done
         global_end = global_start + n
         sub_kw["_bussi_global_step"] = global_start

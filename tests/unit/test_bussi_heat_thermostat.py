@@ -270,7 +270,9 @@ def test_resolve_dynamics_init_velocities_falls_back_to_iasvel_one_when_cold():
     assert kw["firstt"] == pytest.approx(12.0)
 
 
-def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one():
+def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one(
+    monkeypatch,
+):
     from unittest.mock import patch
 
     import numpy as np
@@ -279,6 +281,8 @@ def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one(
         _resolve_dynamics_init_velocities,
     )
 
+    # Opt-in COMP/C-API inject path (default Bussi refuses handoff entirely).
+    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
     cold = np.zeros((3, 3), dtype=float)
     warm = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=float)
     kw = {
@@ -302,6 +306,28 @@ def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one(
     assert out is not None
     assert kw["iasvel"] == 0
     assert out["vx"].shape == (3,)
+
+
+def test_requires_init_velocities_handoff_false_for_default_bussi(monkeypatch):
+    """Deferred-DCD Bussi must not take COMP inject (gpu09 T≃1e12 K crash)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _drop_unsafe_bussi_init_velocities_for_dcd,
+        _requires_init_velocities_handoff,
+    )
+
+    monkeypatch.delenv("MMML_BUSSI_IASVEL0_CONTINUATION", raising=False)
+    kw = {
+        "start": False,
+        "iasvel": 0,
+        "iuncrd": -1,  # deferred DCD — previously kept unsafe inject
+        "_heat_thermostat": "bussi",
+        "_bussi_ramp": {"firstt": 60.0, "finalt": 300.0, "teminc": 15.0, "ihtfrq": 500},
+    }
+    assert _requires_init_velocities_handoff(kw) is False
+    fake = {"vx": np.array([1.0]), "vy": np.array([0.0]), "vz": np.array([0.0])}
+    dropped = _drop_unsafe_bussi_init_velocities_for_dcd(kw, fake, quiet=True)
+    assert dropped is None
+    assert kw["iasvel"] == 1
 
 
 def test_run_dynamics_captures_bussi_velocities_before_velos_del():
@@ -1540,7 +1566,9 @@ def test_overlap_chunk_bussi_ramp_prep_strips_bath():
     assert "twindh" not in chunk_kw
 
 
-def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder():
+def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder(
+    monkeypatch,
+):
     from unittest.mock import patch
 
     import numpy as np
@@ -1550,6 +1578,7 @@ def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder
         _resolve_dynamics_init_velocities,
     )
 
+    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
     warm = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=float)
     kw = {
         "start": False,
@@ -1566,6 +1595,28 @@ def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder
     assert np.allclose(out["vx"], expected["vx"])
     assert np.allclose(out["vy"], expected["vy"])
     assert np.allclose(out["vz"], expected["vz"])
+
+
+def test_resolve_dynamics_init_velocities_default_bussi_skips_handoff(monkeypatch):
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _resolve_dynamics_init_velocities,
+    )
+
+    monkeypatch.delenv("MMML_BUSSI_IASVEL0_CONTINUATION", raising=False)
+    kw = {
+        "start": False,
+        "iasvel": 0,
+        "_heat_thermostat": "bussi",
+        "_bussi_ramp": {"firstt": 60.0, "finalt": 300.0, "teminc": 15.0, "ihtfrq": 500},
+    }
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+    ) as resolve:
+        out = _resolve_dynamics_init_velocities(kw, restart_read_path=None)
+    resolve.assert_not_called()
+    assert out is None
 
 
 def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk(monkeypatch):
