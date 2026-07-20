@@ -210,13 +210,13 @@ def write_geometry_power_spectra(
     r_asym = 0.5 * (r_oh1 - r_oh2)
 
     series = {
-        r"$r_\mathrm{O-H}$ (all bonds)": r_oh,
+        r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)": r_oh,
         r"$r_\mathrm{sym}=(r_a+r_b)/2$": r_sym,
         r"$r_\mathrm{asym}=(r_a-r_b)/2$": r_asym,
         r"$\angle\mathrm{HOH}$": ang,
     }
     colors = {
-        r"$r_\mathrm{O-H}$ (all bonds)": "#16a085",
+        r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)": "#16a085",
         r"$r_\mathrm{sym}=(r_a+r_b)/2$": "#1f4e79",
         r"$r_\mathrm{asym}=(r_a-r_b)/2$": "#c45c26",
         r"$\angle\mathrm{HOH}$": "#8e44ad",
@@ -288,14 +288,14 @@ def write_geometry_power_spectra(
     plt.close(fig)
 
     # Band power fractions for r_OH (diagnostic)
-    f, p = spectra[r"$r_\mathrm{O-H}$ (all bonds)"]
+    f, p = spectra[r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)"]
     def _band(lo: float, hi: float) -> float:
         m = (f >= lo) & (f <= hi)
         return float(np.trapezoid(p[m], f[m])) if np.any(m) else 0.0
 
     tot = _band(0, max_cm) or 1.0
     return {
-        "r_OH_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{O-H}$ (all bonds)"),
+        "r_OH_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)"),
         "r_sym_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{sym}=(r_a+r_b)/2$"),
         "r_asym_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{asym}=(r_a-r_b)/2$"),
         "angle_psd_peak_ge500_cm": peaks.get(r"$\angle\mathrm{HOH}$"),
@@ -303,6 +303,166 @@ def write_geometry_power_spectra(
         "r_OH_power_frac_1400_1800": _band(1400, 1800) / tot,
         "r_OH_power_frac_3000_3800": _band(3000, 3800) / tot,
         "artifact": str(path),
+    }
+
+
+def write_oh_bond_power_spectra(
+    path: Path,
+    *,
+    r_oh1: np.ndarray,
+    r_oh2: np.ndarray,
+    frame_dt_fs: float,
+    min_cm: float = 50.0,
+    max_cm: float = 4500.0,
+    smooth_cm: float = 15.0,
+    zero_pad: int = 4,
+) -> dict:
+    """PSD of every O–H bond separately, then mean (±std) across bonds.
+
+    Each bond time series is mean-centered and Hann-windowed independently;
+    the reported spectrum is the average of those per-bond PSDs (not the PSD of
+    the concatenated or mean bond length).
+    """
+    r_oh = np.concatenate(
+        [np.asarray(r_oh1, dtype=np.float64), np.asarray(r_oh2, dtype=np.float64)],
+        axis=1,
+    )
+    n_bonds = int(r_oh.shape[1])
+    freq = None
+    stack = []
+    for j in range(n_bonds):
+        f, p = _periodogram_density(r_oh[:, j], frame_dt_fs, zero_pad=zero_pad)
+        if freq is None:
+            freq = f
+        stack.append(p)
+    assert freq is not None
+    psd = np.stack(stack, axis=0)  # (n_bonds, n_freq)
+    mean_p = psd.mean(axis=0)
+    std_p = psd.std(axis=0)
+    med_p = np.median(psd, axis=0)
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.8, 7.4), sharex=False)
+
+    # Top: log PSD — faint individuals + mean ± 1σ
+    ax = axes[0]
+    m_full = (freq > 0) & (freq <= max_cm)
+    for j in range(n_bonds):
+        ax.plot(
+            freq[m_full],
+            psd[j, m_full],
+            color="#16a085",
+            lw=0.35,
+            alpha=0.12,
+            zorder=1,
+        )
+    ax.plot([], [], color="#16a085", lw=0.8, alpha=0.5, label="individual bonds")
+    ax.fill_between(
+        freq[m_full],
+        np.maximum(mean_p[m_full] - std_p[m_full], 1e-30),
+        mean_p[m_full] + std_p[m_full],
+        color="#1f4e79",
+        alpha=0.22,
+        zorder=2,
+        label=r"mean $\pm 1\sigma$",
+    )
+    ax.plot(
+        freq[m_full],
+        mean_p[m_full],
+        color="#1f4e79",
+        lw=1.6,
+        zorder=3,
+        label=rf"mean of {n_bonds} per-bond PSDs",
+    )
+    ax.set_yscale("log")
+    ax.set_xlim(0, max_cm)
+    ax.set_ylabel("PSD (arb. u.)")
+    ax.set_title(
+        f"O–H bond power spectra · per-bond then average · "
+        f"Δt={frame_dt_fs:.3f} fs · {n_bonds} bonds"
+    )
+    ax.legend(frameon=False, fontsize=8, loc="upper right")
+    ax.grid(True, which="both", alpha=0.25, lw=0.5)
+
+    # Bottom: cut low-ω, smooth mean; peak-norm for shape; show individuals peak-normed faintly
+    ax = axes[1]
+    m = (freq >= min_cm) & (freq <= max_cm)
+    fc = freq[m]
+    mean_c = mean_p[m]
+    med_c = med_p[m]
+    mean_s = _smooth_spectrum(fc, mean_c, smooth_cm)
+    med_s = _smooth_spectrum(fc, med_c, smooth_cm)
+    scale = float(np.max(mean_s)) if mean_s.size and np.max(mean_s) > 0 else 1.0
+    for j in range(n_bonds):
+        pj = _smooth_spectrum(fc, psd[j, m], smooth_cm)
+        sj = float(np.max(pj)) if pj.size and np.max(pj) > 0 else 1.0
+        ax.plot(fc, pj / sj, color="#16a085", lw=0.4, alpha=0.12, zorder=1)
+    ax.plot(fc, mean_c / scale, color="#1f4e79", lw=0.6, alpha=0.4, zorder=2)
+    ax.plot(
+        fc,
+        mean_s / scale,
+        color="#1f4e79",
+        lw=1.7,
+        zorder=3,
+        label="mean (smooth, peak-norm)",
+    )
+    ax.plot(
+        fc,
+        med_s / (float(np.max(med_s)) if np.max(med_s) > 0 else 1.0),
+        color="#c45c26",
+        lw=1.2,
+        ls="--",
+        zorder=3,
+        label="median (smooth, peak-norm)",
+    )
+    ax.set_xlim(min_cm, max_cm)
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("PSD (peak-norm., arb.)")
+    ax.set_title(
+        f"cut <{min_cm:g} cm$^{{-1}}$ · smooth HWHM={smooth_cm:g} · "
+        "each individual peak-normalized before overlay"
+    )
+    ax.legend(frameon=False, fontsize=8)
+    ax.axvline(1600, color="0.7", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.7", ls=":", lw=0.8)
+    fig.tight_layout()
+    ymin, ymax = ax.get_ylim()
+    if ymax > ymin:
+        ax.text(1600, ymin + 0.92 * (ymax - ymin), "bend", ha="center", fontsize=7, color="0.45")
+        ax.text(3400, ymin + 0.92 * (ymax - ymin), "stretch", ha="center", fontsize=7, color="0.45")
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+
+    def _band(lo: float, hi: float) -> float:
+        mm = (freq >= lo) & (freq <= hi)
+        return float(np.trapezoid(mean_p[mm], freq[mm])) if np.any(mm) else 0.0
+
+    tot = _band(0, max_cm) or 1.0
+    peak_ge = float("nan")
+    m_pk = (freq >= min_cm) & (freq <= max_cm)
+    if np.any(m_pk):
+        ps = _smooth_spectrum(freq[m_pk], mean_p[m_pk], smooth_cm)
+        peak_ge = float(freq[m_pk][int(np.argmax(ps))])
+
+    npz_path = path.with_suffix(".npz")
+    np.savez_compressed(
+        npz_path,
+        freq_cm=freq,
+        psd_mean=mean_p,
+        psd_std=std_p,
+        psd_median=med_p,
+        n_bonds=np.int32(n_bonds),
+        frame_dt_fs=np.float64(frame_dt_fs),
+    )
+
+    return {
+        "n_bonds": n_bonds,
+        "psd_peak_ge_min_cm": peak_ge,
+        "power_frac_0_500": _band(0, 500) / tot,
+        "power_frac_1400_1800": _band(1400, 1800) / tot,
+        "power_frac_3000_3800": _band(3000, 3800) / tot,
+        "artifact": str(path),
+        "npz": str(npz_path),
     }
 
 
@@ -983,7 +1143,7 @@ def main() -> None:
         (r"$E_\mathrm{pot}$", de_pot, "#c45c26", "E_pot"),
         (r"$E_\mathrm{kin}$", de_kin, "#2a6f3b", "E_kin"),
     ):
-        ax2.hist(dlt, bins=60, density=True, color=col, alpha=0.28, label=f"{lab} hist")
+        ax2.hist(dlt, bins=60, density=True, color=col, alpha=0.28)
         mu1 = float(np.mean(dlt))
         mu2 = float(np.var(dlt))  # second central moment
         sig = float(np.sqrt(mu2)) if mu2 > 0 else 1e-12
@@ -1014,9 +1174,9 @@ def main() -> None:
     x = np.arange(len(labels))
     w = 0.35
     # Scale mu1 for visibility (near zero); plot std on twin for second moment
-    bars1 = ax3.bar(x - w / 2, mu1s, w, color=colors_m, alpha=0.85, label=r"$\mu_1=\langle\Delta E\rangle$")
+    ax3.bar(x - w / 2, mu1s, w, color=colors_m, alpha=0.85, label=r"$\mu_1=\langle\Delta E\rangle$")
     ax3b = ax3.twinx()
-    bars2 = ax3b.bar(
+    ax3b.bar(
         x + w / 2,
         [np.sqrt(v) for v in mu2s],
         w,
@@ -1200,6 +1360,15 @@ def main() -> None:
         r_oh1=r_oh1,
         r_oh2=r_oh2,
         ang=ang,
+        frame_dt_fs=frame_dt_fs,
+        min_cm=float(args.ir_min_cm),
+        max_cm=float(args.ir_max_cm),
+        smooth_cm=float(args.ir_smooth_cm),
+    )
+    oh_psd = write_oh_bond_power_spectra(
+        out / "oh_bond_power_spectra.png",
+        r_oh1=r_oh1,
+        r_oh2=r_oh2,
         frame_dt_fs=frame_dt_fs,
         min_cm=float(args.ir_min_cm),
         max_cm=float(args.ir_max_cm),
@@ -1621,6 +1790,7 @@ def main() -> None:
             "angle_HOH_mean_deg": float(ang.mean()),
             "angle_HOH_std_deg": float(ang.std()),
             "power_spectra": geom_psd,
+            "oh_bond_power_spectra": oh_psd,
         },
         "ir": {
             "temperature_K_qcf": t_ir,
@@ -1652,6 +1822,8 @@ def main() -> None:
             "charge_vs_geometry_scatter.png",
             "charge_variance_vs_geometry_scatter.png",
             "geometry_power_spectra.png",
+            "oh_bond_power_spectra.png",
+            "oh_bond_power_spectra.npz",
             "ir_spectrum.png",
             "ir_processing_variants.png",
             "ir_q0_vs_tip3.png",

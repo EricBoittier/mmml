@@ -69,6 +69,15 @@
       "r_OH_power_frac_1400_1800": 2.3165522685436303e-12,
       "r_OH_power_frac_3000_3800": 4.995046356281096e-12,
       "artifact": "scratch/spooky_muon3_nve/analysis_30ps/geometry_power_spectra.png"
+    },
+    "oh_bond_power_spectra": {
+      "n_bonds": 40,
+      "psd_peak_ge_min_cm": 76.44177181624318,
+      "power_frac_0_500": 0.9999999999755325,
+      "power_frac_1400_1800": 2.3165522685436303e-12,
+      "power_frac_3000_3800": 4.995046356281096e-12,
+      "artifact": "scratch/spooky_muon3_nve/analysis_30ps/oh_bond_power_spectra.png",
+      "npz": "scratch/spooky_muon3_nve/analysis_30ps/oh_bond_power_spectra.npz"
     }
   },
   "ir": {
@@ -107,6 +116,8 @@
     "ir_processing_variants.png",
     "ir_q0_vs_tip3.png",
     "ir_noise_floor_blowup.png",
-    "ir_spectrum.npz"
+    "ir_spectrum.npz",
+    "oh_bond_power_spectra.png",
+    "oh_bond_power_spectra.npz"
   ]
 }
