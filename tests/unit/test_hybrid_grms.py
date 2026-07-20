@@ -94,6 +94,9 @@ def test_mlpot_hybrid_grms_uses_spherical_fn():
     [
         (3.0, 2.0, "ok"),
         (0.5, 1.15, "ok"),
+        # Matching moderate GRMS (TIP3 liquid post-mini) must not look like desync.
+        (6.0888, 6.0888, "ok"),
+        (10.9, 10.8, "ok"),
         (9.0, 1.15, "geometry_stress"),
         (7.0, 2.0, "geometry_stress"),
         (472.0, 1.15, "geometry_stress"),

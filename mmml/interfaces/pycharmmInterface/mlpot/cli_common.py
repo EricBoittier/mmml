@@ -2272,9 +2272,11 @@ def classify_hybrid_charmm_grms_mismatch(
     ``get_grms()`` often stays ~1 kcal/mol/Å with ELEC/VDW blocked on ML atoms,
     so a high hybrid/CHARMM ratio with low CHARMM is healthy, not desync.
 
-    When hybrid is modest (``<= hybrid_desync_ok_max``) but CHARMM GRMS is very
-    high, treat as ``desync_suspected`` (stale ``get_grms()`` after deferred
-    ENER or a session-best geometry rollback), not ``both_high``.
+    When hybrid is modest (``<= hybrid_desync_ok_max``) but CHARMM GRMS is
+    *much higher* than hybrid (``> hybrid * warn_ratio``), treat as
+    ``desync_suspected`` (stale ``get_grms()`` after deferred ENER or a
+    session-best geometry rollback), not ``both_high``. Matching values
+    (ratio ≈ 1) are ``ok`` even when both sit above ``charmm_bonded_ok_max``.
     """
     if not (np.isfinite(hybrid) and np.isfinite(charmm)):
         return "unknown"
@@ -2284,7 +2286,12 @@ def classify_hybrid_charmm_grms_mismatch(
         return "ok"
     if charmm <= charmm_bonded_ok_max:
         return "geometry_stress"
-    if hybrid <= hybrid_desync_ok_max and charmm > charmm_bonded_ok_max:
+    # Stale CHARMM GRMS: hybrid still modest, CHARMM far above hybrid.
+    if (
+        hybrid <= hybrid_desync_ok_max
+        and charmm > charmm_bonded_ok_max
+        and charmm > hybrid * warn_ratio
+    ):
         return "desync_suspected"
     ratio = float(max(hybrid / charmm, charmm / hybrid))
     if ratio <= warn_ratio:

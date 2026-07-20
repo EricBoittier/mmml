@@ -43,6 +43,22 @@ def test_emit_hybrid_grms_diag_plain_desync(capsys) -> None:
     )
     out = capsys.readouterr().out
     assert "possible hybrid/CHARMM desync" in out
+    assert "ratio=3.0" in out
+    # Avoid the old duplicated Diag/Note sentence with ratio=1.0 on matching GRMS.
+    assert out.count("possible hybrid/CHARMM desync") == 1
+
+
+def test_emit_hybrid_grms_diag_plain_ok_no_false_desync(capsys) -> None:
+    prep_ladder_report.emit_hybrid_grms_diag(
+        "Pre-dynamics gate",
+        hybrid=6.0888,
+        charmm=6.0888,
+        kind="ok",
+        ratio=1.0,
+    )
+    out = capsys.readouterr().out
+    assert "consistent" in out
+    assert "desync" not in out.lower()
 
 
 def test_emit_hybrid_grms_diag_does_not_probe_live_energy(monkeypatch, capsys) -> None:
