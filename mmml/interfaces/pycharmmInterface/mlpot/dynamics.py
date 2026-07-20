@@ -2497,8 +2497,10 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["tstruct"] = target
     chunk_kw["hoover reft"] = target
-    # Chunk 0 at segment start: single dyna with ``start`` + ``iasvel=1`` (see
-    # ``_configure_heat_dynamics_start``).  Later chunks / retries keep RAM vel.
+    # Always ``iasvel=1`` at the ramp target. CPT in-memory ``iasvel=0`` + COMP
+    # velocity handoff is unreliable on this CHARMM/gfortran build (T≈10¹² even
+    # after ``coor_set_comparison`` sync). Barostat piston state stays in RAM;
+    # only particle velocities are redrawn each overlap chunk.
     if _hoover_cpt_overlap_chunk_needs_cold_start(
         chunk_kw,
         chunk_index=chunk_index,
@@ -2506,10 +2508,11 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
         steps_done=int(steps_done),
     ):
         chunk_kw["start"] = True
-        chunk_kw["iasvel"] = 1
     else:
-        chunk_kw["iasvel"] = 0
         chunk_kw["start"] = False
+    chunk_kw["iasvel"] = 1
+    chunk_kw["iasors"] = 0
+    chunk_kw.pop("_skip_ase_cold_velocity_assign", None)
 
 
 def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
@@ -6274,18 +6277,21 @@ def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
 
     Preserves Hoover CPT barostat state in RAM between sub-chunks.  Plain
     ``write restart`` / ``READYN`` handoffs do not restore piston internals.
+
+    Particle velocities use ``iasvel=1`` at the bath target — not ``iasvel=0`` /
+    COMP — because COMP-as-velocity continues to yield T≈10¹² on this build even
+    after post-dyna velocity-cache sync into comparison coordinates.
     """
     kw["restart"] = False
     kw["new"] = False
     kw["start"] = False
-    kw["iasvel"] = 0
-    kw.pop("firstt", None)
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
-    kw["_skip_ase_cold_velocity_assign"] = True
+    kw.pop("_skip_ase_cold_velocity_assign", None)
     _strip_stale_heat_ramp_keywords(kw)
     if int(kw.get("ihtfrq", 0) or 0) != 0:
         kw["ihtfrq"] = 0
+    _apply_bussi_iasvel_one_at_ramp_target(kw)
 
 
 def _apply_cpt_restart_continuation_kw(kw: dict[str, Any]) -> None:

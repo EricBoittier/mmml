@@ -3862,20 +3862,22 @@ def test_apply_cpt_in_memory_continuation_kw():
         "restart": True,
         "new": True,
         "start": True,
-        "iasvel": 1,
+        "iasvel": 0,
         "firstt": 6.0,
         "iunrea": 3,
         "finalt": 30.0,
+        "hoover reft": 12.0,
         "ihtfrq": 50,
+        "_skip_ase_cold_velocity_assign": True,
     }
     _apply_cpt_in_memory_continuation_kw(kw)
     assert kw["restart"] is False
     assert kw["start"] is False
-    assert kw["iasvel"] == 0
+    assert kw["iasvel"] == 1
     assert kw["iunrea"] == -1
-    assert "firstt" not in kw
-    assert "finalt" not in kw
+    assert kw["firstt"] == pytest.approx(12.0)
     assert kw["ihtfrq"] == 0
+    assert "_skip_ase_cold_velocity_assign" not in kw
 
 
 def _write_test_restart(path: Path, global_step: int) -> None:
@@ -4853,9 +4855,9 @@ def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
     assert len(calls) == 4
     assert sum(int(c["nstep"]) for c in calls) == 1000
     assert all(c["restart"] is False for c in calls)
-    assert calls[1].get("_skip_ase_cold_velocity_assign") is True
-    assert calls[2].get("_skip_ase_cold_velocity_assign") is True
-    assert calls[3].get("_skip_ase_cold_velocity_assign") is True
+    # Continuations redraw at bath target (iasvel=1); never COMP iasvel=0.
+    assert all(int(c.get("iasvel", 0) or 0) == 1 for c in calls[1:])
+    assert all(c.get("_skip_ase_cold_velocity_assign") is not True for c in calls)
     materialize.assert_not_called()
 
 
