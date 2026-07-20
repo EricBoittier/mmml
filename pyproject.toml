@@ -309,6 +309,7 @@ mmml = [
     "data/external/aaa_ama_dataset_summary.json",
     "data/charmm/alad_reference.pdb",
     "data/charmm/alad_reference.psf",
+    "data/charmm/tip3.pdb",
     "data/structures/make-box-aco-8x22A.pdb",
     "data/molecules/dcm.xyz",
     "data/molecules/dcm_monomer.pdb",

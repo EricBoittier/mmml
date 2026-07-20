@@ -50,17 +50,15 @@ def run_pbc_cluster_fd(
         _run_charmm_minimize,
     )
     from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
-    from mmml.paths import default_meoh_template_pdb
 
     if checkpoint is None:
         base_ckpt_dir, _ = resolve_checkpoint_paths(None)
     else:
         base_ckpt_dir, _ = resolve_checkpoint_paths(Path(checkpoint).expanduser().resolve())
 
+    # None → residue-aware bundled template (TIP3/MEOH/ACO); do not force MEOH.
     pdb = (
-        Path(template_pdb).expanduser().resolve()
-        if template_pdb is not None
-        else default_meoh_template_pdb()
+        Path(template_pdb).expanduser().resolve() if template_pdb is not None else None
     )
     z, r0 = _build_psf_ordered_cluster(
         str(residue).upper(),

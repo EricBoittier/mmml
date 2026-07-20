@@ -24,6 +24,11 @@ def default_aco_template_pdb() -> Path:
     return bundled_file("generate", "sample", "pdb", "aco_monomer.pdb")
 
 
+def default_tip3_template_pdb() -> Path:
+    """Default TIP3 water monomer PDB (OH2, H1, H2) for cluster builders."""
+    return bundled_file("data", "charmm", "tip3.pdb")
+
+
 def crystal_image_str_source() -> Path:
     """CHARMM periodic-image helper copied into the working directory when needed."""
     return bundled_file("data", "charmm", "crystal_image.str")

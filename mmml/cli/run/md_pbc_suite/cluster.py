@@ -155,13 +155,20 @@ def _build_psf_ordered_cluster(
 def _default_template_pdb_for_residue(residue: str) -> Path | None:
     """Bundled 3D monomer templates keyed by CGenFF residue name."""
     residue = residue.upper()
-    from mmml.paths import default_aco_template_pdb, default_meoh_template_pdb
+    from mmml.paths import (
+        default_aco_template_pdb,
+        default_meoh_template_pdb,
+        default_tip3_template_pdb,
+    )
 
     if residue == "ACO":
         path = default_aco_template_pdb()
         return path if path.is_file() else None
     if residue == "MEOH":
         path = default_meoh_template_pdb()
+        return path if path.is_file() else None
+    if residue in ("TIP3", "HOH", "WAT"):
+        path = default_tip3_template_pdb()
         return path if path.is_file() else None
     return None
 

@@ -70,7 +70,7 @@ echo "  STAGE=$STAGE  mm-charge=$MM_CHARGE_MODE  lr=ewald --ewald-omit-self"
 if _want fd; then
   echo ""
   echo "=== [fd] mode-check --pbc-fd TIP3 + ewald omit-self ==="
-  mmml mode-check --pbc-fd \
+  if ! mmml mode-check --pbc-fd \
     --residue TIP3 \
     --n-molecules 10 \
     --checkpoint "$CKPT" \
@@ -78,6 +78,14 @@ if _want fd; then
     --ewald-omit-self \
     --mm-charge-mode "$MM_CHARGE_MODE" \
     --output "$FD_OUT"
+  then
+    echo "FAILED: mode-check --pbc-fd (TIP3)." >&2
+    exit 1
+  fi
+  if [[ ! -f "$FD_OUT" ]]; then
+    echo "FAILED: missing $FD_OUT" >&2
+    exit 1
+  fi
   uv run python - <<PY
 import json
 from pathlib import Path

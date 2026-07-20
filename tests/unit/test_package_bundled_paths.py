@@ -15,6 +15,7 @@ from mmml.paths import (
     default_dcm_crystal_cif,
     default_dcm_molecule_xyz,
     default_meoh_template_pdb,
+    default_tip3_template_pdb,
 )
 
 
@@ -38,6 +39,21 @@ def test_default_aco_template_pdb_is_bundled() -> None:
     assert path.is_file(), f"missing bundled acetone template PDB: {path}"
     text = path.read_text(encoding="utf-8")
     assert "O1" in text and "ACO" in text
+
+
+def test_default_tip3_template_pdb_is_bundled() -> None:
+    path = default_tip3_template_pdb()
+    assert path.is_file(), f"missing bundled TIP3 template PDB: {path}"
+    text = path.read_text(encoding="utf-8")
+    assert "OH2" in text and "TIP3" in text
+
+
+def test_default_template_pdb_for_residue_tip3():
+    from mmml.cli.run.md_pbc_suite.cluster import _default_template_pdb_for_residue
+
+    path = _default_template_pdb_for_residue("TIP3")
+    assert path is not None and path.is_file()
+    assert "OH2" in path.read_text(encoding="utf-8")
 
 
 def test_crystal_image_str_is_bundled() -> None:
