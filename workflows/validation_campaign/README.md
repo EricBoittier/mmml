@@ -98,6 +98,11 @@ Building those drivers is the next piece of work. Each one must write a
 
 ## Commands
 
+For the maintained pc-studix calculator/backend smoke matrix, including
+PhysNet, SpookyNet, learned MBD/multipoles, EField, xTB, PySCF, DFTB3-D4,
+PyCHARMM, JAX-MD, rigid MC, charge modes, and long-range solvers, see
+[`PCSTUDIX_SMOKE_MATRIX.md`](PCSTUDIX_SMOKE_MATRIX.md).
+
 List the campaign and current proof state:
 
 ```bash
@@ -139,4 +144,3 @@ handoff boundary. Text/native restart attempts start at 0 K, while direct
 `dynamics_run_kw(init_velocities=...)` currently SIGSEGVs in `dynopt` due to
 the gfortran `bind(c)` assumed-shape-array ABI. This blocker must remain visible
 in the summary and must gate solvent-burst production that alternates backends.
-
