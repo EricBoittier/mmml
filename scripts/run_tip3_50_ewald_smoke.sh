@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# TIP3 liquid-density Ewald smoke: cubic grid + random rotations, then short
-# heat + NVE with hybrid Ewald (self term omitted).
+# TIP3 liquid-density Ewald smoke: Packmol liquid + CHARMM MM pretreat, then
+# short hybrid heat + NVE with Ewald (self term omitted).
 #
-# Default geometry is TIP3:90 in 30 Å (~1 g/cm³). The old TIP3:50/30 Å grid
-# is dilute (~0.055 g/cm³) and thrash the density-prep / FIRE ladder.
+# Default geometry is TIP3:90 in 30 Å (~1 g/cm³). A cubic grid + random
+# rotations at this density leaves hybrid FIRE stuck at fmax≈5–6 eV/Å and
+# MLpot SD can spike to 1e5+ GRMS — Packmol + MM pretreat avoid that.
 #
-# Important: do NOT resume a failed tip3_*_smoke next_run that already ran
-# isolated vacuum PhysNet on every water — wipe the output dir and restart.
+# Important: do NOT resume a failed tip3_*_smoke next_run / baseline.res.
+# Wipe the output dir and restart from this script.
 #
 # Usage (gpu09 / CHARMM+JAX env):
 #   export CKPT=/path/to/physnet_or_spooky.json
@@ -34,30 +35,30 @@ BOX_SIZE="${BOX_SIZE:-30}"
 
 mkdir -p "$OUT_DIR"
 
-echo "== TIP3:${N_MOL} / ${BOX_SIZE} Å grid + random rotations → heat ${PS_HEAT} ps → NVE ${PS_NVE} ps =="
+echo "== TIP3:${N_MOL} / ${BOX_SIZE} Å Packmol → MM pretreat → heat ${PS_HEAT} ps → NVE ${PS_NVE} ps =="
 echo "  checkpoint: $CKPT"
 echo "  output:     $OUT_DIR"
 echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
 echo "  mm-charge:  $MM_CHARGE_MODE"
 echo "  density:    prep ladder OFF (ewald wiring smoke; not density campaign)"
+echo "  builder:    Packmol cube (not lattice grid)"
 echo "  repair:     --no-monomer-physnet-mini (keep liquid packing)"
 
-# Grid builder (skips Packmol): even COM lattice in --box-size, SO(3) from --seed.
-# Stages: mini → heat → nve. Ewald self omitted for MIC/non-Ewald-trained models.
-# --mlpot-pbc: hybrid calculator gets the cell (required for lr_solver=ewald).
+# Packmol liquid in --box-size, then CHARMM MM mini/heat before MLpot.
+# Grid builders at ~1 g/cm³ leave every water "stressed" (fmax~5 eV/Å); hybrid
+# FIRE cannot reach the 2 eV/Å pre-heat gate and MLpot SD spikes catastrophically.
+# --no-monomer-physnet-mini: vacuum PhysNet on waters wrecks H-bond packing.
 # --density-prep-mode off: avoid FIRE/BFGS thrash on this smoke path.
-# --no-monomer-physnet-mini: vacuum PhysNet on all waters wrecks H-bond packing
-#   and trips the pre-heat max-|F| gate (~7 eV/Å) after "successful" monomer FIRE.
-# --charmm-mm-pretreat: short MM heat to settle contacts before hybrid dynamics.
 set +e
 mmml md-system \
   --backend pycharmm \
   --setup pycharmm_full \
   --md-stages mini,heat,nve \
   --composition "TIP3:${N_MOL}" \
-  --builder liquid \
-  --no-packmol \
+  --packmol \
+  --packmol-placement cube \
   --box-size "$BOX_SIZE" \
+  --rebuild-packmol \
   --mlpot-pbc \
   --seed "$SEED" \
   --checkpoint "$CKPT" \
@@ -79,9 +80,12 @@ mmml md-system \
   --no-mc-density-equalize \
   --no-monomer-physnet-mini \
   --charmm-mm-pretreat \
-  --charmm-mm-pretreat-heat-nstep 2000 \
-  --charmm-sd-steps 200 \
-  --charmm-abnr-steps 500 \
+  --charmm-mm-pretreat-heat-nstep 4000 \
+  --charmm-mm-pretreat-ps-equi 0.5 \
+  --charmm-mm-pretreat-mini-sd 200 \
+  --charmm-mm-pretreat-mini-abnr 500 \
+  --charmm-sd-steps 100 \
+  --charmm-abnr-steps 200 \
   --fire-min-steps 400 \
   --fire-min-maxstep 0.05 \
   "$@"
@@ -90,7 +94,7 @@ set -e
 
 if [[ "$rc" -ne 0 ]]; then
   echo "FAILED (exit $rc). See $OUT_DIR/next_run.command if present." >&2
-  echo "If this dir already has a broken baseline from isolated PhysNet repair, wipe it:" >&2
+  echo "Do not resume next_run/baseline from a failed gate — wipe and restart:" >&2
   echo "  rm -rf $OUT_DIR && re-run this script" >&2
   exit "$rc"
 fi

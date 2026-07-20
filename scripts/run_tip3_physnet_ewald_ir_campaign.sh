@@ -126,8 +126,8 @@ fi
 # --- 3) tip3_90 PyCHARMM smoke ---------------------------------------------
 if _want smoke; then
   echo ""
-  echo "=== [smoke] TIP3:${N_SMOKE} PyCHARMM heat+NVE ==="
-  echo "  (wipe $SMOKE_OUT first if a prior run hit isolated PhysNet repair)"
+  echo "=== [smoke] TIP3:${N_SMOKE} Packmol + MM pretreat → hybrid heat+NVE ==="
+  echo "  (wipe $SMOKE_OUT first — do not resume next_run/baseline after a gate fail)"
   OUT_DIR="$SMOKE_OUT" \
   N_MOL="$N_SMOKE" \
   BOX_SIZE="$BOX_SMOKE" \
@@ -150,9 +150,10 @@ if _want prod; then
     --backend jaxmd \
     --setup pbc_nve \
     --composition "TIP3:${N_PROD}" \
-    --builder liquid \
-    --no-packmol \
+    --packmol \
+    --packmol-placement cube \
     --box-size "$BOX_PROD" \
+    --rebuild-packmol \
     --seed "$SEED" \
     --checkpoint "$CKPT" \
     --output-dir "$PROD_OUT" \

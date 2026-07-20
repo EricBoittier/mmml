@@ -28,23 +28,28 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 |-------|------|------|
 | `fd` | `mode-check --pbc-fd --residue TIP3` | `fd_force_max_abs_diff_eVA < 0.05` |
 | `scan` | TIP3:2 COM scan `pbc_hybrid_ewald_omit_self` | `scan_1d.npz` written |
-| `smoke` | TIP3:90 / 30 Å (~1 g/cm³) PyCHARMM mini→heat→NVE; `--mlpot-pbc`, density-prep off, `--no-monomer-physnet-mini`, short MM pretreat | exit 0 |
+| `smoke` | TIP3:90 / 30 Å Packmol + CHARMM MM pretreat → hybrid heat/NVE; `--mlpot-pbc`, density-prep off, `--no-monomer-physnet-mini` | exit 0 |
 | `prod` | TIP3:90 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
 | `analyze` | `scripts/analyze_water_nve_h5.py` | OH power peak **~2800–3600 cm⁻¹** (not ~40) |
 
-## Density / repair note
+## Density / packing note
 
-TIP3:50 @ 30 Å (~0.055 g/cm³) thrashes hybrid FIRE/SD (GRMS spikes). Defaults are
-TIP3:90 @ 30 Å (~1 g/cm³) with `--density-prep-mode off` for the Ewald wiring smoke.
+TIP3:50 @ 30 Å (~0.055 g/cm³) thrashes hybrid FIRE/SD. A **lattice grid** at
+TIP3:90 / 30 Å (~1 g/cm³) is also too hard for hybrid FIRE (stalls at
+fmax≈5–6 eV/Å) and can spike MLpot SD to 1e5+ GRMS. Smoke uses **Packmol +
+CHARMM MM pretreat**, density-prep off, and `--no-monomer-physnet-mini`.
 
-Do **not** resume a failed `tip3_90_smoke/next_run` after isolated vacuum PhysNet
-repaired every water — that leaves max\|F\| ~7 eV/Å and trips the pre-heat gate.
-Wipe the smoke dir and re-run:
+Do **not** resume `tip3_90_smoke/next_run` / `baseline.res` after a gate fail.
+Wipe and re-run:
 
 ```bash
 rm -rf scratch/tip3_physnet_ewald_ir/tip3_90_smoke
+git pull
 STAGE=smoke ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 ```
+
+In a good smoke log, confirm Packmol + `CHARMM MM pretreat` before hybrid FIRE,
+and **no** `90 PhysNet group(s)`.
 
 ## Artifacts
 
