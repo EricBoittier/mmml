@@ -873,10 +873,13 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
-        switch_start=args.switch_start,
-        switch_end=args.switch_end,
-        electrostatics_off_start=args.electrostatics_off_start,
-        electrostatics_off_end=args.electrostatics_off_end,
+        # Keep create_model usable from notebooks/tests and older campaign code
+        # whose Namespace predates these CLI options.  These values are the
+        # historical model defaults and match the parser defaults below.
+        switch_start=getattr(args, "switch_start", 1.0),
+        switch_end=getattr(args, "switch_end", 10.0),
+        electrostatics_off_start=getattr(args, "electrostatics_off_start", 8.0),
+        electrostatics_off_end=getattr(args, "electrostatics_off_end", 10.0),
         # --fixed-cgenff-vdw pins the CGenFF LJ term at its published parameters, so it
         # acts as a fixed physical prior the network can only add to, never scale away.
         learn_cgenff_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
