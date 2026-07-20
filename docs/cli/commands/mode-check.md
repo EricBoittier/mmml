@@ -22,7 +22,7 @@ usage: mmml mode-check [-h] [--pbc-fd] [--composition COMPOSITION]
                        [--mm-switch-on MM_SWITCH_ON]
                        [--mm-switch-width MM_SWITCH_WIDTH]
                        [--monomer-separation MONOMER_SEPARATION] [--far]
-                       [--fd-atoms FD_ATOMS] [--fd-dx FD_DX]
+                       [--cutoff-sweep] [--fd-atoms FD_ATOMS] [--fd-dx FD_DX]
                        [--minimize-fmax MINIMIZE_FMAX]
                        [--minimize-steps MINIMIZE_STEPS]
                        [--kick-steps KICK_STEPS] [--kick-delta KICK_DELTA]
@@ -54,7 +54,8 @@ options:
   --xyz XYZ             Optional geometry (XYZ/PDB); otherwise build from named
                         monomers
   --checks CHECKS       Comma-separated: minimize,fd,bond-scan,vibrations,kick
-                        (default: minimize,fd,bond-scan,vibrations)
+                        (default: minimize,fd,bond-scan,vibrations; for
+                        --cutoff-sweep: fd,bond-scan so COM does not drift)
   --include-mm, --no-include-mm
                         Enable hybrid MM (auto-disabled for single monomer;
                         default: true)
@@ -66,11 +67,18 @@ options:
   --mm-switch-on MM_SWITCH_ON
   --mm-switch-width MM_SWITCH_WIDTH
   --monomer-separation MONOMER_SEPARATION
-                        COM spacing between monomers in Å (default: 2.8; use
-                        --far for 15 Å numerical / monomer-parity)
-  --far                 Place monomers at 15 Å COM separation (beyond default MM
-                        handoff) for FD/position numerical checks; conflicts
-                        with --monomer-separation
+                        COM spacing between monomers in Å (default: 15 for n≥2,
+                        2.8 unused for monomers; pass 2.8 only with an oriented
+                        --xyz)
+  --far                 Place monomers at 15 Å COM separation (default for n≥2;
+                        beyond MM handoff for numerical / monomer-parity);
+                        conflicts with --monomer-separation / --cutoff-sweep
+  --cutoff-sweep        For n≥2: run mode-check at every COM station on the
+                        hybrid handoff ruler (pure ML, handoff mid,
+                        mm_switch_on, MM tail, beyond). Writes
+                        cutoff_sweep_summary.json. Conflicts with --far /
+                        --monomer-separation. Default checks: fd,bond-scan (no
+                        minimize).
   --fd-atoms FD_ATOMS
   --fd-dx FD_DX
   --minimize-fmax MINIMIZE_FMAX

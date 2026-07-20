@@ -176,12 +176,113 @@ def test_mode_check_far_vs_separation_cli():
     )
 
     p = build_parser()
-    assert _resolve_monomer_separation_A(p.parse_args([])) == DEFAULT_MONOMER_SEPARATION_A
-    assert _resolve_monomer_separation_A(p.parse_args(["--far"])) == FAR_MONOMER_SEPARATION_A
+    assert (
+        _resolve_monomer_separation_A(p.parse_args([]), n_monomers=1)
+        == DEFAULT_MONOMER_SEPARATION_A
+    )
+    # Dimers default far (unoriented 2.8 Å COM often clashes).
+    assert (
+        _resolve_monomer_separation_A(p.parse_args([]), n_monomers=2)
+        == FAR_MONOMER_SEPARATION_A
+    )
+    assert (
+        _resolve_monomer_separation_A(p.parse_args(["--far"]), n_monomers=2)
+        == FAR_MONOMER_SEPARATION_A
+    )
     assert _resolve_monomer_separation_A(
-        p.parse_args(["--monomer-separation", "12.5"])
+        p.parse_args(["--monomer-separation", "12.5"]), n_monomers=2
     ) == pytest.approx(12.5)
     with pytest.raises(SystemExit):
         _resolve_monomer_separation_A(
-            p.parse_args(["--far", "--monomer-separation", "3.0"])
+            p.parse_args(["--far", "--monomer-separation", "3.0"]),
+            n_monomers=2,
         )
+
+
+def test_cutoff_region_stations_cover_handoff_ruler():
+    from mmml.mode_check.cutoff_ladder import cutoff_region_stations, region_boundaries
+
+    stations = cutoff_region_stations(
+        ml_switch_width=1.5, mm_switch_on=6.0, mm_switch_width=5.0
+    )
+    labels = [s.label for s in stations]
+    assert labels == [
+        "ml_interior",
+        "ml_edge",
+        "handoff_mid",
+        "mm_switch_on",
+        "mm_tail_mid",
+        "mm_off",
+        "beyond",
+    ]
+    by_label = {s.label: s.com_A for s in stations}
+    assert by_label["ml_edge"] == pytest.approx(4.5)
+    assert by_label["handoff_mid"] == pytest.approx(5.25)
+    assert by_label["mm_switch_on"] == pytest.approx(6.0)
+    assert by_label["mm_tail_mid"] == pytest.approx(8.5)
+    assert by_label["mm_off"] == pytest.approx(11.0)
+    assert by_label["beyond"] == pytest.approx(15.0)
+    # Strictly increasing
+    coms = [s.com_A for s in stations]
+    assert coms == sorted(coms)
+    bounds = region_boundaries(
+        ml_switch_width=1.5, mm_switch_on=6.0, mm_switch_width=5.0
+    )
+    assert bounds["r_ml_edge_A"] == pytest.approx(4.5)
+    assert bounds["r_mm_off_A"] == pytest.approx(11.0)
+
+
+def test_reposition_monomers_preserves_internal_geometry():
+    from ase import Atoms
+
+    from mmml.mode_check.hybrid import (
+        com_separations_along_chain,
+        reposition_monomers_along_x,
+    )
+
+    atoms = Atoms(
+        numbers=[8, 1, 1, 8, 1, 1],
+        positions=[
+            [0.0, 0.0, 0.0],
+            [0.96, 0.0, 0.0],
+            [-0.24, 0.93, 0.0],
+            [10.0, 0.0, 0.0],
+            [10.96, 0.0, 0.0],
+            [9.76, 0.93, 0.0],
+        ],
+    )
+    r_oh0 = float(np.linalg.norm(atoms.positions[1] - atoms.positions[0]))
+    reposition_monomers_along_x(atoms, [3, 3], separation_A=6.0)
+    assert com_separations_along_chain(atoms.positions, [3, 3]) == pytest.approx(
+        [6.0], abs=1e-6
+    )
+    assert float(np.linalg.norm(atoms.positions[1] - atoms.positions[0])) == pytest.approx(
+        r_oh0, abs=1e-6
+    )
+
+
+def test_intermolecular_clash_rejected_at_close_com():
+    from mmml.mode_check.hybrid import (
+        assert_resolved_vacuum_geometry,
+        min_intermolecular_distance_A,
+        place_monomers_along_x,
+    )
+
+    # Elongated "water" so COM=2.8 Å still has atom clashes.
+    tip3 = np.array(
+        [[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [-1.5, 0.0, 0.0]],
+        dtype=float,
+    )
+    geoms = {"TIP3": (tip3, ["OH2", "H1", "H2"], np.array([8, 1, 1]))}
+    placed = place_monomers_along_x(
+        geoms, ["TIP3", "TIP3"], [3, 3], separation_A=2.8
+    )
+    d_ij = min_intermolecular_distance_A(placed, [3, 3])
+    assert d_ij is not None and d_ij < 1.2
+    with pytest.raises(RuntimeError, match="inter-monomer"):
+        assert_resolved_vacuum_geometry(placed, [3, 3])
+    # Far placement is fine.
+    far = place_monomers_along_x(
+        geoms, ["TIP3", "TIP3"], [3, 3], separation_A=15.0
+    )
+    assert_resolved_vacuum_geometry(far, [3, 3])

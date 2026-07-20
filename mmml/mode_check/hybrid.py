@@ -25,6 +25,25 @@ def com_separations_along_chain(
     ]
 
 
+def reposition_monomers_along_x(
+    atoms: Atoms,
+    atoms_per_monomer: list[int],
+    *,
+    separation_A: float,
+) -> np.ndarray:
+    """Re-center each monomer COM along +x at the requested spacing (in-place)."""
+    pos = np.asarray(atoms.get_positions(), dtype=float).copy()
+    offsets = np.cumsum([0, *[int(n) for n in atoms_per_monomer]])
+    sep = float(separation_A)
+    for i in range(len(atoms_per_monomer)):
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        block = pos[s:e]
+        com = block.mean(axis=0)
+        pos[s:e] = block - com + np.array([sep * i, 0.0, 0.0], dtype=float)
+    atoms.set_positions(pos)
+    return pos
+
+
 def place_monomers_along_x(
     residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]],
     ordered_residue_names: list[str],
@@ -53,13 +72,37 @@ def place_monomers_along_x(
     return placed
 
 
+def min_intermolecular_distance_A(
+    positions: np.ndarray,
+    atoms_per_monomer: list[int],
+) -> float | None:
+    """Minimum atom–atom distance between different monomers (Å)."""
+    if len(atoms_per_monomer) < 2:
+        return None
+    pos = np.asarray(positions, dtype=float)
+    slices = monomer_slices(atoms_per_monomer)
+    min_d = float("inf")
+    for i in range(len(slices)):
+        for j in range(i + 1, len(slices)):
+            a = pos[slices[i]]
+            b = pos[slices[j]]
+            d = np.linalg.norm(a[:, None, :] - b[None, :, :], axis=-1)
+            min_d = min(min_d, float(np.min(d)))
+    return None if not np.isfinite(min_d) else min_d
+
+
 def assert_resolved_vacuum_geometry(
     positions: np.ndarray,
     atoms_per_monomer: list[int],
     *,
     min_intramolecular_distance_A: float = 0.2,
+    min_intermolecular_distance_threshold_A: float = 1.2,
 ) -> None:
-    """Fail fast if CHARMM/IC left coincident atoms (null IC table symptom)."""
+    """Fail fast if CHARMM/IC left coincident atoms (null IC table symptom).
+
+    Also rejects unoriented close dimers whose atom–atom contacts fall below
+    ``min_intermolecular_distance_threshold_A`` (COM spacing ≠ safe spacing).
+    """
     pos = np.asarray(positions, dtype=float)
     if pos.ndim != 2 or pos.shape[1] != 3:
         raise RuntimeError(f"expected (N,3) positions, got shape {pos.shape}")
@@ -87,6 +130,14 @@ def assert_resolved_vacuum_geometry(
                 f"(<{min_intramolecular_distance_A} Å). Geometry is collapsed; "
                 "refusing to run mode-check."
             )
+    d_ij = min_intermolecular_distance_A(pos, [int(n) for n in atoms_per_monomer])
+    if d_ij is not None and d_ij < float(min_intermolecular_distance_threshold_A):
+        raise RuntimeError(
+            f"Min inter-monomer atom distance is {d_ij:.3f} Å "
+            f"(<{min_intermolecular_distance_threshold_A} Å). Unoriented templates "
+            "at small COM spacing often clash; use --far / --monomer-separation 15 "
+            "for numerical checks, or pass an oriented --xyz for interacting dimers."
+        )
 
 
 def build_psf_and_attach_hybrid(
@@ -204,6 +255,7 @@ def build_psf_and_attach_hybrid(
     )
     atoms.calc = calc
     com_seps = com_separations_along_chain(atoms.get_positions(), atoms_per_list)
+    d_ij = min_intermolecular_distance_A(atoms.get_positions(), atoms_per_list)
     meta = {
         "composition": composition,
         "residue_labels": [str(x) for x in residue_labels],
@@ -211,6 +263,7 @@ def build_psf_and_attach_hybrid(
         "n_monomers": n_mol,
         "monomer_separation_A": float(setup.monomer_separation_A),
         "com_separations_A": com_seps,
+        "min_intermolecular_distance_A": d_ij,
         "do_mm_effective": do_mm,
         "do_ml": bool(setup.do_ml),
         "do_ml_dimer": bool(setup.do_ml_dimer),
