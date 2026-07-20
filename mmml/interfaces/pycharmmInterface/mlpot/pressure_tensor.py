@@ -164,6 +164,34 @@ def maybe_configure_stage_pressure_tensor_io(
     )
 
 
+def scalar_pressure_atm_from_energy_getters(
+    get_energy_value: Any,
+) -> float:
+    """Resolve scalar internal pressure (atm) from CHARMM ``get_energy_value``.
+
+    Prefers ``PRSI``; falls back to the mean of ``PIXX/PIYY/PIZZ``.
+    """
+    try:
+        prsi = float(get_energy_value("PRSI"))
+        if math.isfinite(prsi):
+            return prsi
+    except Exception:
+        pass
+    components: list[float] = []
+    for name in ("PIXX", "PIYY", "PIZZ"):
+        try:
+            val = float(get_energy_value(name))
+        except Exception:
+            continue
+        if math.isfinite(val):
+            components.append(val)
+    if not components:
+        raise RuntimeError(
+            "CHARMM instantaneous pressure unavailable (PRSI / PIXX–PIZZ)"
+        )
+    return float(sum(components) / len(components))
+
+
 def read_instantaneous_scalar_pressure_atm(
     *,
     refresh_energy: bool = True,
@@ -188,31 +216,13 @@ def read_instantaneous_scalar_pressure_atm(
                 silent_charmm=quiet,
             )
         else:
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import safe_energy_show
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 
             safe_energy_show()
 
     import pycharmm.lingo as lingo
 
-    try:
-        prsi = float(lingo.get_energy_value("PRSI"))
-        if math.isfinite(prsi):
-            return prsi
-    except Exception:
-        pass
-    components: list[float] = []
-    for name in ("PIXX", "PIYY", "PIZZ"):
-        try:
-            val = float(lingo.get_energy_value(name))
-        except Exception:
-            continue
-        if math.isfinite(val):
-            components.append(val)
-    if not components:
-        raise RuntimeError(
-            "CHARMM instantaneous pressure unavailable (PRSI / PIXX–PIZZ)"
-        )
-    return float(sum(components) / len(components))
+    return scalar_pressure_atm_from_energy_getters(lingo.get_energy_value)
 
 
 def report_instantaneous_pressure_tensor(
@@ -238,7 +248,7 @@ def report_instantaneous_pressure_tensor(
             silent_charmm=quiet,
         )
     else:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import safe_energy_show
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 
         safe_energy_show()
 
