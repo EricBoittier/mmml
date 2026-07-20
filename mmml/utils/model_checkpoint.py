@@ -644,6 +644,27 @@ def quick_save(
     return save_model_checkpoint(params, model, save_dir, **kwargs)
 
 
+_TENSOR_LEAF_METADATA_TYPES = ("ScalarMetadata", "ArrayMetadata")
+
+
+def _choose_cpu_safe_restore_args(leaf_metadata: Any) -> Any:
+    """Pick orbax RestoreArgs for one checkpoint leaf, dispatched by its
+    metadata type -- tensor leaves (scalars/arrays) get a device-agnostic
+    numpy restore; everything else (e.g. strings) gets the default, since
+    they use a different on-disk backend and error under array restore args.
+
+    Split out from :func:`_restore_pytree_cpu_safe` so the dispatch logic
+    itself (the actual bug: blanket-applying array restore args to string
+    leaves broke on a zarr "metadata not found" error) is unit-testable
+    without needing real orbax checkpoint I/O or non-CPU devices.
+    """
+    import orbax.checkpoint as ocp
+
+    if type(leaf_metadata).__name__ in _TENSOR_LEAF_METADATA_TYPES:
+        return ocp.RestoreArgs(restore_type=np.ndarray)
+    return ocp.RestoreArgs()
+
+
 def _restore_pytree_cpu_safe(checkpointer: Any, path: str) -> Any:
     """Restore an orbax PyTree checkpoint without needing its original device
     topology to be available.
@@ -664,8 +685,6 @@ def _restore_pytree_cpu_safe(checkpointer: Any, path: str) -> Any:
     "metadata not found" error. Leaf type is dispatched via the metadata
     class name (``ScalarMetadata``/``ArrayMetadata`` vs. everything else).
     """
-    import orbax.checkpoint as ocp
-
     meta = checkpointer.metadata(path)
     item_metadata = getattr(meta, "item_metadata", None)
     if item_metadata is None:
@@ -673,13 +692,8 @@ def _restore_pytree_cpu_safe(checkpointer: Any, path: str) -> Any:
         # metadata: no way to build safe restore_args, fall back to default.
         return checkpointer.restore(path)
 
-    def _choose_restore_args(leaf_metadata: Any) -> Any:
-        if type(leaf_metadata).__name__ in ("ScalarMetadata", "ArrayMetadata"):
-            return ocp.RestoreArgs(restore_type=np.ndarray)
-        return ocp.RestoreArgs()
-
     restore_args = jax.tree_util.tree_map(
-        _choose_restore_args,
+        _choose_cpu_safe_restore_args,
         item_metadata,
         is_leaf=lambda x: type(x).__name__.endswith("Metadata"),
     )

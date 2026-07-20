@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from mmml.utils.model_checkpoint import (
+    _choose_cpu_safe_restore_args,
     json_to_params,
     load_model_checkpoint,
     normalize_flax_params_for_apply,
@@ -90,6 +91,38 @@ def test_orbax_to_json_and_json_to_params_roundtrip(temp_dir):
     np.testing.assert_allclose(
         loaded_params["dense"]["kernel"], params["dense"]["kernel"]
     )
+
+
+def test_choose_cpu_safe_restore_args_dispatches_by_leaf_type():
+    """Unit test for the actual bug: blanket-applying array RestoreArgs to
+    every leaf breaks on non-tensor leaves (e.g. strings), which use a
+    different on-disk backend. Only Scalar/ArrayMetadata leaves should get
+    a numpy-typed restore; everything else must get the untouched default.
+
+    This is deliberately environment-independent (fake metadata classes, no
+    real orbax I/O or device topology needed) so it exercises the dispatch
+    logic itself, since the actual cross-GPU-topology failure this fixes
+    can't be reproduced on a CPU-only test machine.
+    """
+    import orbax.checkpoint as ocp
+
+    class ScalarMetadata:
+        pass
+
+    class ArrayMetadata:
+        pass
+
+    class StringMetadata:
+        pass
+
+    for tensor_cls in (ScalarMetadata, ArrayMetadata):
+        args = _choose_cpu_safe_restore_args(tensor_cls())
+        assert isinstance(args, ocp.RestoreArgs)
+        assert args.restore_type is np.ndarray
+
+    non_tensor_args = _choose_cpu_safe_restore_args(StringMetadata())
+    assert isinstance(non_tensor_args, ocp.RestoreArgs)
+    assert non_tensor_args.restore_type is not np.ndarray
 
 
 def test_orbax_to_json_handles_checkpoint_with_string_leaves(temp_dir):
