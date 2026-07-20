@@ -952,6 +952,7 @@ def make_steps(
         charge_mse = jnp.asarray(0.0)
         multipole_dipole_mae = jnp.asarray(0.0)
         multipole_dipole_mse = jnp.asarray(0.0)
+        far_field_charge_mse = jnp.asarray(0.0)
         if args.predict_charges:
             dipole_pred = out["dipoles"].reshape(batch["D"].shape)
             charge_pred = out["sum_charges"].reshape(batch["Q_total"].shape)
@@ -986,7 +987,6 @@ def make_steps(
                 multipole_dipole_mse = jnp.mean((dipole_pred - multipole_dipole) ** 2)
                 multipole_dipole_mae = jnp.mean(jnp.abs(dipole_pred - multipole_dipole))
                 loss += multipole_consistency_weight * multipole_dipole_mse
-            far_field_charge_mse = jnp.asarray(0.0)
             if far_field_charge_weight > 0.0 and batch.get("mol_id") is not None:
                 # Auxiliary size-extensivity signal, active only on synthetic
                 # far-field composite structures (see
@@ -1103,6 +1103,8 @@ def make_steps(
             "mbd_scale": mbd_scale,
             "multipole_dipole_mae": multipole_dipole_mae,
             "multipole_dipole_mse": multipole_dipole_mse,
+            "far_field_charge_mse": far_field_charge_mse,
+            "far_field_charge_rms": jnp.sqrt(far_field_charge_mse + 1e-12),
         }
         return loss, metrics
 
@@ -1591,6 +1593,41 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             )
     else:
         print("No CGenFF LJ data in cache — training a plain ML potential", flush=True)
+
+    if args.far_field_augment_fraction > 0.0:
+        from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
+            append_far_field_composites_to_data,
+            build_far_field_composites,
+        )
+
+        frac = args.far_field_augment_fraction
+        if not 0.0 < frac < 1.0:
+            raise ValueError(f"--far-field-augment-fraction must be in (0, 1), got {frac}")
+        n_structures_before = int(np.asarray(data["E"]).shape[0])
+        # Solve for n_composites so composites make up `frac` of the resulting
+        # pool: n_composites / (n_structures_before + n_composites) = frac.
+        n_composites = max(1, int(round(frac * n_structures_before / (1.0 - frac))))
+        far_field_seed = args.far_field_seed if args.far_field_seed is not None else args.seed
+        rng = np.random.default_rng(far_field_seed)
+        composites = build_far_field_composites(
+            data,
+            rng,
+            n_composites=n_composites,
+            k_min=args.far_field_min_k,
+            k_max=args.far_field_max_k,
+        )
+        composite_sizes = [c["N"] for c in composites]
+        data = append_far_field_composites_to_data(data, composites)
+        print(
+            f"Far-field augmentation: added {n_composites} synthetic composite "
+            f"structures (K={args.far_field_min_k}-{args.far_field_max_k} fragments "
+            f"each, sizes {min(composite_sizes)}-{max(composite_sizes)} atoms, "
+            f">=12 A apart, exact E=sum(E_fragment) by construction) — "
+            f"{n_structures_before} -> {n_structures_before + n_composites} total "
+            f"structures ({100.0 * n_composites / (n_structures_before + n_composites):.1f}% of pool)",
+            flush=True,
+        )
+
     n_molecules = int(np.asarray(data["E"]).shape[0])
     max_atoms = int(np.max(np.asarray(data["N"]).reshape(-1)))
     train_idx, valid_idx = split_indices(n_molecules, args.valid_fraction, args.seed)
@@ -2062,6 +2099,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     line += f" MBD_λ={m['mbd_scale']:.3f}"
                 if multipole_model is not None:
                     line += f" MultipoleD_MAE={m['multipole_dipole_mae']:.6g}"
+                if args.far_field_augment_fraction > 0.0:
+                    line += f" FarFieldQ_RMS={m['far_field_charge_rms']:.6g}"
                 print(line)
             if args.steps_per_epoch and step >= args.steps_per_epoch:
                 break

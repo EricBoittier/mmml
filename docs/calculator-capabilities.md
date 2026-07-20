@@ -40,7 +40,7 @@ These are the only calculator names accepted by `mmml dimer-scan`.
 
 | `--calculator` | Implementation | Checkpoint | Properties used | Charge inputs | Where supported |
 |---|---|---|---|---|---|
-| `physnet` | `mmml.interfaces.calculators.checkpoint_loading.create_calculator_from_checkpoint` | Required: portable JSON, joint pickle, or Orbax/directory formats understood by the centralized loader | Energy and forces; interaction energy/forces are dimer minus isolated monomers | Optional total `--charge` and `--spin`; these are molecular model inputs, not `mm_charge_mode` | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
+| `physnet` | `mmml.interfaces.calculators.checkpoint_loading.create_calculator_from_checkpoint` | Required: portable JSON, joint pickle, or Orbax/directory formats understood by the centralized loader | Energy and forces; interaction energy/forces are dimer minus isolated monomers | Optional total `--charge` and `--spin` are supported by the joint `SimpleInferenceCalculator` path; standalone PhysNet checkpoints currently reject explicit values | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
 | `xtb` | `mmml.analysis.dimer_scans.make_xtb_calculator` | None; uses `xtb-python`, falling back to `tblite` | Energy and forces through ASE | Method-native electronic state; the current dimer CLI does not expose xTB-specific charge/UHF options | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
 
 The `physnet` loader supports standalone PhysNet energy/force checkpoints and

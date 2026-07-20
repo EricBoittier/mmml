@@ -489,6 +489,8 @@ def create_calculator_from_checkpoint(
     use_dcmnet_dipole: bool = False,
     disable_physnet_point_coulomb: bool = False,
     electrostatics_damping_sigma: float | None = None,
+    charge: float | None = None,
+    spin: float | None = None,
 ) -> Calculator:
     """Load a trained MMML model and return an ASE calculator."""
     bundle = load_checkpoint_bundle(Path(checkpoint_path))
@@ -510,8 +512,15 @@ def create_calculator_from_checkpoint(
             params=params,
             cutoff=effective_cutoff,
             use_dcmnet_dipole=use_dcmnet_dipole,
+            charge=charge,
+            spin=spin,
         )
 
+    if charge is not None or spin is not None:
+        raise ValueError(
+            "explicit charge/spin inputs are currently supported only by the "
+            "joint SimpleInferenceCalculator checkpoint path"
+        )
     return _build_physnet_ef_calculator(
         bundle.config,
         bundle.params,
