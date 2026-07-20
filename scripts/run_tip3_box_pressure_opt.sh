@@ -101,12 +101,18 @@ if msg:
 if status != "pass":
     raise SystemExit(
         "liquid-box certification failed — see REPORT.md / box.json message. "
-        "Tip: BOX_MODE=count BOX_SIZE=30 for ~1 g/cm³ water; or pull nbond "
-        "small-box cutoff fix for BOX_MODE=density (L≈14 Å)."
+        "Tip: BOX_MODE=count BOX_SIZE=30 for ~1 g/cm³ water; or BOX_MODE=density "
+        "for densified N waters (L≈14 Å for TIP3:90)."
     )
+# OpenMPI/PRRTE sometimes returns exit 1 after a successful CHARMM job
+# ("This help section is empty because PRRTE was built without Sphinx").
+# Trust box.json status over the process exit code.
 lb_rc = int("$lb_rc")
 if lb_rc != 0:
-    raise SystemExit(f"liquid-box exited {lb_rc} despite status=pass")
+    print(
+        f"note: liquid-box process exit={lb_rc} but box.json status=pass; continuing",
+        flush=True,
+    )
 PY
 
 echo ""
