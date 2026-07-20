@@ -166,6 +166,8 @@ if _want npt; then
   PS_HEAT="$PS_HEAT_NPT" \
   PS_EQUI="$PS_EQUI_NPT" \
   MM_CHARGE_MODE="$MM_CHARGE_MODE" \
+  ML_GPU_COUNT="${ML_GPU_COUNT:-1}" \
+  ML_BATCH_SIZE="${ML_BATCH_SIZE:-}" \
   ./scripts/run_tip3_charmm_npt_smoke.sh
 fi
 

@@ -8,6 +8,7 @@
 #   export CKPT=/path/to/physnet_portable.json
 #   ./scripts/run_tip3_charmm_npt_smoke.sh
 #   BOX_OPT_OUT=./scratch/.../tip3_90_box_opt WIPE=0 ./scripts/run_tip3_charmm_npt_smoke.sh
+#   CUDA_VISIBLE_DEVICES=0,1 ML_GPU_COUNT=2 ML_BATCH_SIZE=256 ./scripts/run_tip3_charmm_npt_smoke.sh
 #
 # Pass: exit 0 (or PRRTE exit 1 with equi restart present), L still ~30 Å.
 
@@ -29,6 +30,14 @@ DT_FS="${DT_FS:-0.5}"
 PS_HEAT="${PS_HEAT:-1.0}"
 PS_EQUI="${PS_EQUI:-2.0}"
 WIPE="${WIPE:-1}"
+# Tier-1 local multi-GPU PhysNet chunks (not spatial MPI). Default 1.
+ML_GPU_COUNT="${ML_GPU_COUNT:-1}"
+ML_BATCH_SIZE="${ML_BATCH_SIZE:-}"
+
+ML_ARGS=(--ml-gpu-count "$ML_GPU_COUNT")
+if [[ -n "$ML_BATCH_SIZE" ]]; then
+  ML_ARGS+=(--ml-batch-size "$ML_BATCH_SIZE")
+fi
 
 # Prefer pressure-opt handoff (post-CPT L) when present; else liquid_box.
 if [[ -f "$OPT_DIR/model.crd" && -f "$OPT_DIR/model.psf" && -f "$OPT_DIR/box.json" ]]; then
@@ -86,6 +95,7 @@ echo "  output:     $OUT_DIR"
 echo "  stages:     mini,heat,equi  (Hoover heat + CPT equi @ ${TARGET_P_ATM} atm)"
 echo "  heat/equi:  ${PS_HEAT} / ${PS_EQUI} ps   dt=${DT_FS} fs"
 echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
+echo "  ml-gpus:    $ML_GPU_COUNT  batch=${ML_BATCH_SIZE:-auto}  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
 
 set +e
 mmml md-system \
@@ -123,6 +133,7 @@ mmml md-system \
   --no-monomer-physnet-mini \
   --no-charmm-pre-minimize \
   --npt-pressure-log-interval 50 \
+  "${ML_ARGS[@]}" \
   "$@"
 rc=$?
 set -e

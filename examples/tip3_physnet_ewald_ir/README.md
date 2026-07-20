@@ -57,6 +57,7 @@ WIPE=0 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 WIPE=1 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 
 # CHARMM CPT NpT after box_opt (density goal; prefers box_pressure_opt):
+# Two GPUs: CUDA_VISIBLE_DEVICES=0,1 ML_GPU_COUNT=2 ML_BATCH_SIZE=256
 STAGE=npt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 
 # Hybrid smoke at fixed L (CONTINUE_TO_NPT after heat*.res):
