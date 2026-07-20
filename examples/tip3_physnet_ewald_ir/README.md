@@ -29,8 +29,8 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 | `fd` | `mode-check --pbc-fd --residue TIP3` | `fd_force_max_abs_diff_eVA < 0.05` |
 | `scan` | TIP3:2 COM scan `pbc_hybrid_ewald_omit_self` | `scan_1d.npz` written |
 | `box_opt` | **Pinned:** count@30 Å → ~903 TIP3, ρ≈1.0 → live CHARMM `PRSI` MC/1D + CPT refine → `box_pressure_opt/{box.json,model.psf,model.crd}` | `status=pass`, handoff CRD present |
-| `npt` | **Default NpT = PyCHARMM CPT** from certified handoff (`mini,heat,equi`, Hoover, `pref=1 atm`) | equi restart under `npt_charmm/` |
-| `smoke` | Hybrid heat/NVE at **fixed L** from certified CRD (Packmol fallback if no handoff) | exit 0 |
+| `npt` | **Density goal = PyCHARMM CPT** from certified handoff (`mini,heat,equi`, Hoover, `pref=1 atm`) | equi restart under `npt_charmm/` |
+| `smoke` | Optional hybrid wiring at **fixed L**; with certified handoff, `CONTINUE_TO_NPT=1` advances to CPT once `heat*.res` exists (NVE failure does not block) | heat restart and/or exit 0 |
 | `prod` | TIP3:90 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
 | `analyze` | `scripts/analyze_water_nve_h5.py` | OH power peak **~2800–3600 cm⁻¹** (not ~40) |
 
@@ -56,16 +56,20 @@ WIPE=0 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 # full rebuild + live CHARMM pressure + CPT refine:
 WIPE=1 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 
-# CHARMM CPT NpT after box_opt (prefers box_pressure_opt handoff):
+# CHARMM CPT NpT after box_opt (density goal; prefers box_pressure_opt):
 STAGE=npt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 
-# Hybrid smoke at fixed L from certified CRD:
+# Hybrid smoke at fixed L (CONTINUE_TO_NPT after heat*.res):
 STAGE=smoke ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 
-# reuse an older box_opt dir:
-BOX_OPT_OUT=./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt STAGE=npt,smoke \
+# reuse an older box_opt dir — prefer npt first; smoke is optional wiring:
+BOX_OPT_OUT=./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt STAGE=npt \
   ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 ```
+
+Once `box_pressure_opt/` exists, **run `STAGE=npt`** — do not keep thrashing
+hybrid NVE gates. Hybrid smoke is only a fixed-L wiring check; CPT is the
+density path.
 
 ## Density / packing note
 

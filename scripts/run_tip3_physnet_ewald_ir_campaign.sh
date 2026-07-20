@@ -15,8 +15,8 @@
 #   fd      — fd_force_max_abs_diff_eVA < 0.05
 #   scan    — scan_1d.npz written under SCAN_OUT
 #   box_opt — liquid-box + live CHARMM PRSI MC/1D/CPT → box_pressure_opt/{box.json,model.*}
-#   npt     — CHARMM CPT from certified handoff (pinned ~903@30Å)
-#   smoke   — hybrid heat+NVE at fixed L from certified CRD (Packmol fallback)
+#   npt     — density goal: CHARMM CPT from certified handoff (~903@30Å)
+#   smoke   — optional hybrid wiring; CONTINUE_TO_NPT after heat*.res
 #   prod    — jaxmd H5 exists; NVE finishes
 #   analyze — ir_spectrum.png + OH power with peak in 2800–3600 cm^-1 (PhysNet)
 
@@ -150,12 +150,12 @@ if _want box_opt; then
   test -f "$BOX_OPT_OUT/box_pressure_opt/box.json"
 fi
 
-# --- 4) CHARMM CPT NpT from certified liquid-box ----------------------------
+# --- 4) CHARMM CPT NpT from certified handoff (density goal) ----------------
 if _want npt; then
   echo ""
-  echo "=== [npt] CHARMM CPT from $BOX_OPT_OUT/liquid_box (default NpT path) ==="
-  if [[ ! -f "$BOX_OPT_OUT/liquid_box/box.json" ]]; then
-    echo "FAILED: run STAGE=box_opt first (missing $BOX_OPT_OUT/liquid_box/box.json)" >&2
+  echo "=== [npt] CHARMM CPT (default density path; prefers box_pressure_opt) ==="
+  if [[ ! -f "$BOX_OPT_OUT/box_pressure_opt/box.json" && ! -f "$BOX_OPT_OUT/liquid_box/box.json" ]]; then
+    echo "FAILED: run STAGE=box_opt first (missing handoff under $BOX_OPT_OUT)" >&2
     exit 1
   fi
   BOX_OPT_OUT="$BOX_OPT_OUT" \
@@ -169,7 +169,7 @@ if _want npt; then
   ./scripts/run_tip3_charmm_npt_smoke.sh
 fi
 
-# --- 5) tip3 hybrid smoke (certified box handoff preferred) -----------------
+# --- 5) tip3 hybrid smoke (optional wiring; CONTINUE_TO_NPT after heat) ------
 if _want smoke; then
   echo ""
   CERT_DIR=""
@@ -179,14 +179,21 @@ if _want smoke; then
     CERT_DIR="$BOX_OPT_OUT/liquid_box"
   fi
   if [[ -n "$CERT_DIR" ]]; then
-    echo "=== [smoke] certified handoff @ fixed L → hybrid heat+NVE ==="
+    echo "=== [smoke] certified handoff @ fixed L → hybrid heat(+NVE); then CHARMM NpT ==="
     echo "  CERTIFIED_BOX_DIR=$CERT_DIR"
     echo "  (wipe $SMOKE_OUT first — do not resume next_run/baseline after a gate fail)"
+    echo "  (density goal: CONTINUE_TO_NPT=1 when heat*.res exists — skip thrashing on NVE)"
     rm -rf "$SMOKE_OUT"
     OUT_DIR="$SMOKE_OUT" \
     CERTIFIED_BOX_DIR="$CERT_DIR" \
+    BOX_OPT_OUT="$BOX_OPT_OUT" \
+    NPT_OUT="$NPT_OUT" \
+    CONTINUE_TO_NPT="${CONTINUE_TO_NPT:-1}" \
     PS_HEAT="$PS_HEAT_SMOKE" \
     PS_NVE="$PS_NVE_SMOKE" \
+    PS_HEAT_NPT="$PS_HEAT_NPT" \
+    PS_EQUI_NPT="$PS_EQUI_NPT" \
+    TARGET_P_ATM="$TARGET_P_ATM" \
     MM_CHARGE_MODE="$MM_CHARGE_MODE" \
     TEMP_K="$TEMP_K" \
     SEED="$SEED" \
