@@ -4670,24 +4670,33 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         kw,
         allow_zero_temperature_start=allow_zero_temperature_start,
     )
-    # Resolve / assign warm AKMA velocities before COMP mirror (post-rescue CGENFF
-    # reregister clears CHARMM memory; MB fallback must run before mirror can raise).
-    if required_handoff_velocity_restart is not None:
+    # CPT in-memory continuation sets ``_skip_ase_cold_velocity_assign`` then we
+    # pop it above.  Re-apply for handoff gates: otherwise ``iasvel=0`` looks like
+    # a COMP-inject path, ``_resolve_dynamics_init_velocities`` redraws Maxwell–
+    # Boltzmann ("ASE Bussi rescale: no readable velocities"), and DCD forces
+    # another ``iasvel=1`` redraw — the heat T=40→20→40 treadmill.
+    if skip_ase_cold:
+        init_velocities = None
+        needs_init_velocities_handoff = False
+    elif required_handoff_velocity_restart is not None:
         init_velocities = _required_handoff_init_velocities(
             required_handoff_velocity_restart,
             quiet=quiet_ase,
         )
         skip_ase_cold = True
+        needs_init_velocities_handoff = False
     else:
+        # Resolve / assign warm AKMA velocities before COMP mirror (post-rescue
+        # CGENFF reregister clears CHARMM memory; MB fallback must run before
+        # mirror can raise).
         init_velocities = _resolve_dynamics_init_velocities(
             kw,
             restart_read_path=restart_read_path,
             fallback_paths=bussi_restart_fallbacks,
         )
-    # Preserve skip across strip: otherwise stripping ``_skip_ase_cold_*``
-    # re-enables ``_requires_init_velocities_handoff`` and injects into a COMP
-    # path that gfortran still fills from coordinates (T ≫ 10¹² K).
-    needs_init_velocities_handoff = _requires_init_velocities_handoff(kw)
+        # Preserve skip across strip: otherwise stripping ``_skip_ase_cold_*``
+        # re-enables inject into a COMP path that gfortran fills from coordinates.
+        needs_init_velocities_handoff = _requires_init_velocities_handoff(kw)
     _bussi_handoff_preserve = frozenset({"_bussi_ramp", "_bussi_global_step"})
     _strip_non_charmm_dynamics_keywords(
         kw,
@@ -4713,6 +4722,10 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
                 kw,
                 restart_read_path=restart_read_path,
             )
+    elif skip_ase_cold and int(kw.get("iasvel", 0) or 0) == 0:
+        # CPT Hoover sub-chunk: no inject; refresh COMP from main so lingering
+        # START cannot read stale comparison *coordinates* as velocities.
+        sync_comparison_velocities_from_main()
     if not skip_ase_cold:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     if "echeck" in kw:

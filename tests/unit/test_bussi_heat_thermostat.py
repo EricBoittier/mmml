@@ -427,6 +427,66 @@ def test_run_dynamics_captures_bussi_velocities_before_velos_del():
     assert call_order == ["release", "capture", "release"]
 
 
+def test_cpt_skip_ase_cold_does_not_resolve_or_redraw_velocities():
+    """CPT in-memory sub-chunk must keep iasvel=0 (pop of skip must not re-enable inject)."""
+    from unittest import mock
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    resolve = mock.Mock(return_value=None)
+    kw = {
+        "nstep": 250,
+        "start": False,
+        "iasvel": 0,
+        "cpt": True,
+        "hoover reft": 40.0,
+        "pmass": 0,
+        "nsavc": 80,
+        "iuncrd": 91,
+        "timestep": 0.0005,
+        "_skip_ase_cold_velocity_assign": True,
+    }
+    fake_dyn = mock.MagicMock()
+    fake_pycharmm = mock.MagicMock()
+    fake_pycharmm.DynamicsScript = mock.MagicMock(return_value=fake_dyn)
+    with mock.patch.dict("sys.modules", {"pycharmm": fake_pycharmm}), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        return_value=fake_dyn,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_safe_for_kw",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_dynamics_list_frequencies",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        resolve,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+        return_value=True,
+    ) as sync_comp, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+    ) as ase_cold, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+    ):
+        run_dynamics(kw)
+
+    resolve.assert_not_called()
+    ase_cold.assert_not_called()
+    sync_comp.assert_called()
+    assert kw["iasvel"] == 0
+    assert kw["start"] is False
+
+
 def test_post_dyna_restart_write_path_prefers_staging_alias(tmp_path):
     from mmml.interfaces.pycharmmInterface.charmm_paths import CharmmIoAlias
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
