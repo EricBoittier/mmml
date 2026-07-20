@@ -4037,6 +4037,46 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        type=str,
+        default=None,
+        dest="mm_charge_mode",
+        choices=(
+            "fixed",
+            "q0",
+            "latent",
+            "q1",
+            "fixed_plus_latent",
+            "latent_mean",
+            "latent_dynamic",
+        ),
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF; use for "
+            "charge-less PhysNet), q0 / Q⁰, latent / q1 / Q¹ (dimer-only), "
+            "fixed_plus_latent, latent_mean, or latent_dynamic. Default: fixed "
+            "unless the calculator resolves another mode."
+        ),
+    )
+    group.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        action="store_true",
+        dest="mm_charge_correction",
+        help="Alias for --mm-charge-mode fixed_plus_latent on the MD calculator.",
+    )
+    group.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        type=str,
+        default=None,
+        dest="mm_latent_charge_template",
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
+        ),
+    )
+    group.add_argument(
         "--jax-mm-spoof",
         action="store_true",
         help=(

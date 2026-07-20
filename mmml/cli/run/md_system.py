@@ -2929,6 +2929,14 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         "--charmm-zero-energy-terms",
         getattr(args, "charmm_zero_energy_terms", None),
     )
+    _append_optional(cmd, "--mm-charge-mode", getattr(args, "mm_charge_mode", None))
+    if bool(getattr(args, "mm_charge_correction", False)):
+        cmd.append("--mm-charge-correction")
+    _append_optional(
+        cmd,
+        "--mm-latent-charge-template",
+        getattr(args, "mm_latent_charge_template", None),
+    )
     if not bool(getattr(args, "include_mm", True)):
         cmd.append("--no-include-mm")
     if bool(getattr(args, "jax_mm_spoof", False)):
@@ -3327,9 +3335,6 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     # lr_solver=ewald deploys consistently without needing
     # --mm-nonbond-mode periodic_external, which only exists for the
     # pycharmm-callback backend and never fires in this in-process loop).
-    # NOTE: mm_charge_mode/mm_charge_correction are NOT yet forwarded for the
-    # pycharmm backend (build_pycharmm_command) -- that path uses a different
-    # calculator-setup mechanism (hybrid_mlpot.py) not audited here.
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
     if bool(getattr(args, "ewald_omit_self", False)):
         cmd.append("--ewald-omit-self")

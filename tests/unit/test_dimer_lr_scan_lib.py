@@ -75,6 +75,8 @@ def test_scan_parser_accepts_lr_solver_flags():
             "--lr-solver",
             "ewald",
             "--ewald-omit-self",
+            "--mm-charge-mode",
+            "fixed",
             "--box-size",
             "36",
             "--mlpot-pbc",
@@ -85,6 +87,7 @@ def test_scan_parser_accepts_lr_solver_flags():
     )
     assert args_ewald.lr_solver == "ewald"
     assert args_ewald.ewald_omit_self is True
+    assert args_ewald.mm_charge_mode == "fixed"
 
 
 def test_resolve_output_path_includes_scan_tag():
@@ -154,6 +157,8 @@ def test_add_mlpot_lr_nonbond_args_on_parser():
             "--lr-solver",
             "ewald",
             "--ewald-omit-self",
+            "--mm-charge-mode",
+            "fixed",
             "--pre-min-ase-order",
             "fire-first",
             "--bfgs-polish-max-fmax",
@@ -161,5 +166,6 @@ def test_add_mlpot_lr_nonbond_args_on_parser():
         ]
     )
     assert args2.ewald_omit_self is True
+    assert args2.mm_charge_mode == "fixed"
     assert args2.pre_min_ase_order == "fire-first"
     assert args2.bfgs_polish_max_fmax == 1.0

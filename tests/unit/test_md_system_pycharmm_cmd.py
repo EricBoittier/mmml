@@ -666,6 +666,14 @@ def test_build_pycharmm_command_forwards_ewald_omit_self():
     assert "--ewald-omit-self" not in cmd_default
 
 
+def test_build_pycharmm_command_forwards_mm_charge_mode():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(mm_charge_mode="fixed", lr_solver="ewald")
+    )
+    assert "--mm-charge-mode" in cmd
+    assert cmd[cmd.index("--mm-charge-mode") + 1] == "fixed"
+
+
 def test_build_pycharmm_command_forwards_no_periodic_charmm_vdw():
     cmd = build_pycharmm_command(
         _pycharmm_args(

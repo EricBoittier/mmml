@@ -451,6 +451,9 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         "lr_solver_requested": np.array("" if lr_requested is None else str(lr_requested)),
         "lr_solver_active": np.array(str(lr_active)),
         "ewald_omit_self": np.bool_(bool(getattr(args, "ewald_omit_self", False))),
+        "mm_charge_mode": np.array(
+            str(getattr(args, "mm_charge_mode", None) or "fixed")
+        ),
         "jax_pme_method": np.array(
             str(getattr(args, "jax_pme_method", None) or os.environ.get("JAX_PME_METHOD", "ewald"))
         ),

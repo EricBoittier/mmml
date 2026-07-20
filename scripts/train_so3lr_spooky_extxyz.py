@@ -1138,6 +1138,12 @@ def make_steps(
             "multipole_dipole_mse": multipole_dipole_mse,
             "far_field_charge_mse": far_field_charge_mse,
             "far_field_charge_rms": jnp.sqrt(far_field_charge_mse + 1e-12),
+            # Real (unpadded) atom count, averaged over the structures in this
+            # batch -- printed alongside the loss/MAE metrics so a bucket's
+            # elevated values (e.g. multi-fragment far-field composites,
+            # whose whole-structure energy error naturally scales with
+            # fragment count) can be told apart from genuine regressions.
+            "avg_n_atoms": jnp.sum(batch["atom_mask"]) / per_device_batch_size,
         }
         return loss, metrics
 
@@ -2142,7 +2148,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     f"[{pct_done:5.1f}% of {total_planned_steps}] "
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
                     f"F_MAE={m['forces_mae']:.6g} "
-                    f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g}"
+                    f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g} "
+                    f"avg_N={m['avg_n_atoms']:.1f}"
                 )
                 if mbd_model is not None:
                     line += f" MBD_λ={m['mbd_scale']:.3f}"
