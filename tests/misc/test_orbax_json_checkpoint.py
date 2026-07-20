@@ -92,6 +92,49 @@ def test_orbax_to_json_and_json_to_params_roundtrip(temp_dir):
     )
 
 
+def test_orbax_to_json_handles_checkpoint_with_string_leaves(temp_dir):
+    """orbax_to_json must restore checkpoints containing string leaves
+    alongside array leaves (e.g. a config dict with both numeric fields and
+    a string path), not just pure-array trees.
+
+    Regression test: blanket-applying array RestoreArgs to every leaf
+    (instead of dispatching by leaf metadata type) makes orbax try to open
+    a string leaf through the zarr array backend, raising a
+    "metadata not found" error -- this is exactly the shape of checkpoint
+    produced by scripts/train_so3lr_spooky_extxyz.py's save_step_checkpoint,
+    whose "config" dict includes a string cache_path field.
+    """
+    pytest.importorskip("orbax")
+
+    import orbax.checkpoint as ocp
+
+    checkpoint_tree = {
+        "params": _create_synthetic_params(),
+        "config": {
+            "features": 64,
+            "cutoff": 6.0,
+            "cache_path": "/some/data/cache/path",
+        },
+        "global_step": 12345,
+    }
+    orbax_dir = temp_dir / "orbax_ckpt_with_strings"
+    checkpointer = ocp.PyTreeCheckpointer()
+    checkpointer.save(str(orbax_dir), checkpoint_tree)
+
+    json_path = temp_dir / "params.json"
+    orbax_to_json(orbax_checkpoint_dir=orbax_dir, output_path=json_path, params_key="params")
+
+    with open(json_path) as f:
+        data = json.load(f)
+    assert "params" in data
+    assert "embedding" in data["params"]
+    # The string/scalar config leaves that live alongside the params tree in
+    # this checkpoint must have restored correctly too, not just the arrays.
+    assert data["config"]["cache_path"] == "/some/data/cache/path"
+    assert data["config"]["features"] == 64
+    assert data["config"]["cutoff"] == 6.0
+
+
 def test_json_to_params_float64(temp_dir):
     """json_to_params with dtype=float64 produces float64 arrays."""
     params = _create_synthetic_params()

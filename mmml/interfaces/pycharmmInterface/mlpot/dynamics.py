@@ -15,6 +15,12 @@ HeatThermostat = Literal["scale", "hoover"]
 # Long single segments can NaN the barostat/crystal and segfault in Fortran ``upimag``.
 DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP = 250
 
+# Stop Bussi heat micro-chunk continuation when CHARMM GRMS indicates liquid/PBC
+# breakdown (group extent / fly-off) that is still below the hard 250 kcal/mol/Å
+# blow-up ceiling. Matches fly-off checkpoint hybrid GRMS gate; prevents the next
+# micro-chunk from IASVEL=1 redraw / ECHECK on already-wrecked geometry.
+BUSSI_SUBCHUNK_CONTINUE_MAX_GRMS_KCALMOL_A = 50.0
+
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
@@ -4180,7 +4186,10 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     ``MMML_BUSSI_IASVEL1_REDRAW=1`` retains the legacy per-chunk Boltzmann
     redraw only as an explicit diagnostic fallback.
     """
-    if bool(kw.get("_bussi_force_iasvel_one")):
+    if bool(kw.pop("_bussi_force_iasvel_one", False)):
+        # One-shot: only the first post-rescue dyna may force IASVEL=1.
+        # Leaving the flag set re-Boltzmanns every Bussi micro-chunk (discards
+        # ASE rescale) and ECHECKs immediately on a mid-chunk fly-off.
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     if os.environ.get("MMML_BUSSI_IASVEL1_REDRAW") == "1":
@@ -5735,9 +5744,10 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
 ) -> None:
     """Assign ASE Maxwell-Boltzmann velocities before IHTFRQ heat ramp continuation.
 
-    Sets ``_bussi_force_iasvel_one`` so ``run_dynamics`` /
+    Sets ``_bussi_force_iasvel_one`` (one-shot) so the first ``run_dynamics`` /
     ``_ensure_bussi_heat_continuation_iasvel`` cannot flip back to ``iasvel=0``
     (COMP-as-velocity / C-API inject path that yields T ≫ 10¹² K after fly-off).
+    Later Bussi micro-chunks clear the flag and continue with in-memory velocities.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         assign_maxwell_boltzmann_velocities_via_ase,
@@ -6299,7 +6309,8 @@ def _ensure_bussi_heat_continuation_iasvel(chunk_kw: dict[str, Any]) -> None:
         return
     if bool(chunk_kw.get("start")):
         return
-    if bool(chunk_kw.get("_bussi_force_iasvel_one")):
+    if bool(chunk_kw.pop("_bussi_force_iasvel_one", False)):
+        # One-shot (see ``_configure_bussi_in_memory_continuation_iasvel``).
         _apply_bussi_iasvel_one_at_ramp_target(chunk_kw)
         return
     if int(chunk_kw.get("iasvel", 0) or 0) == 1:
@@ -6771,6 +6782,34 @@ def _dynamics_chunk_state_corrupt(
     return False
 
 
+def _bussi_subchunk_grms_blocks_continuation(
+    *,
+    overlap_context: str,
+    global_step: int,
+    max_grms_kcalmol_A: float = BUSSI_SUBCHUNK_CONTINUE_MAX_GRMS_KCALMOL_A,
+) -> bool:
+    """True when post-subchunk CHARMM GRMS is too hot to continue Bussi heat."""
+    limit = float(max_grms_kcalmol_A)
+    if limit <= 0.0:
+        return False
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+        grms = float(charmm_grms())
+    except Exception:
+        return False
+    if not np.isfinite(grms) or grms <= limit:
+        return False
+    print(
+        f"WARN: {overlap_context}: CHARMM GRMS {grms:.4f} kcal/mol/Å after Bussi "
+        f"sub-chunk ending step {global_step} exceeds continuation gate "
+        f"{limit:.1f} kcal/mol/Å (liquid/PBC breakdown) — stopping before the "
+        "next micro-chunk",
+        flush=True,
+    )
+    return True
+
+
 def _run_cpt_stability_subchunked(
     kw: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
@@ -7102,8 +7141,12 @@ def _run_bussi_heat_subchunked(
         if _dynamics_chunk_state_corrupt(
             overlap_context=f"{overlap_context} Bussi sub-chunk ending step {global_after}",
             restart_path=restart_path,
+        ) or _bussi_subchunk_grms_blocks_continuation(
+            overlap_context=overlap_context,
+            global_step=global_after,
         ):
             kw["_bussi_subchunk_abort_global_step"] = global_after
+            kw["_bussi_subchunk_aborted_corrupt"] = True
             print(
                 f"{overlap_context}: stopping Bussi heat sub-chunks at step "
                 f"{global_after} before continuation; overlap recovery will run",
@@ -7996,7 +8039,7 @@ def run_dynamics_with_io(
                         f"overlap ({overlap_context}) chunk {chunk_index + 1}/{n_chunks}"
                     ),
                     restart_path=chunk_restart_path,
-                )
+                ) or bool(chunk_kw.pop("_bussi_subchunk_aborted_corrupt", False))
                 if chunk_io is not None and getattr(chunk_io, "restart_write", None) is not None:
                     _refresh_restart_write_after_chunk(
                         chunk_io.restart_write,

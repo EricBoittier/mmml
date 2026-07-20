@@ -1338,6 +1338,60 @@ def test_run_bussi_heat_subchunked_stops_before_continuation_on_bad_state():
 
     assert chunk_calls == 1
     assert kw["_bussi_subchunk_abort_global_step"] == 50
+    assert kw["_bussi_subchunk_aborted_corrupt"] is True
+    rescale.assert_not_called()
+
+
+def test_run_bussi_heat_subchunked_stops_on_high_grms_before_next_microchunk():
+    """Fly-off can leave finite coords with GRMS~80; do not IASVEL=1 the wreck."""
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _run_bussi_heat_subchunked,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.00025,
+        "nstep": 100,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=100, ihtfrq=50, timestep_ps=0.00025)
+    chunk_calls = 0
+
+    def fake_chunk(*_a, **_k):
+        nonlocal chunk_calls
+        chunk_calls += 1
+        return mock.Mock()
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics."
+        "_bussi_subchunk_grms_blocks_continuation",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+    ) as rescale:
+        _run_bussi_heat_subchunked(
+            kw,
+            None,
+            overlap_context="overlap (HEAT) chunk 4/8",
+            rng_base=None,
+            chunk_nstep=50,
+            total_nstep=100,
+            log_banner=False,
+            quiet_bussi=True,
+        )
+
+    assert chunk_calls == 1
+    assert kw["_bussi_subchunk_abort_global_step"] == 50
+    assert kw["_bussi_subchunk_aborted_corrupt"] is True
     rescale.assert_not_called()
 
 
@@ -1563,7 +1617,12 @@ def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocitie
     assert ctx._overlap_post_rescue_cold_start is False
     # Must not take the C-API / COMP inject path (that yielded T~1e12 K).
     assert _requires_init_velocities_handoff(chunk_kw) is False
-    # run_dynamics calls this and must not flip back to iasvel=0.
+    # run_dynamics calls this and must not flip back to iasvel=0; force flag
+    # is one-shot so later Bussi micro-chunks do not re-Boltzmann.
+    _ensure_bussi_heat_continuation_iasvel(chunk_kw)
+    assert chunk_kw["iasvel"] == 1
+    assert "_bussi_force_iasvel_one" not in chunk_kw
+    assert _requires_init_velocities_handoff(chunk_kw) is False
     _ensure_bussi_heat_continuation_iasvel(chunk_kw)
     assert chunk_kw["iasvel"] == 1
     assert _requires_init_velocities_handoff(chunk_kw) is False
