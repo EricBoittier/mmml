@@ -10,8 +10,11 @@
 #   BOX_OPT_OUT=./scratch/.../tip3_90_box_opt WIPE=0 ./scripts/run_tip3_charmm_npt_smoke.sh
 #   CUDA_VISIBLE_DEVICES=0,1 ML_GPU_COUNT=2 ML_BATCH_SIZE=256 ./scripts/run_tip3_charmm_npt_smoke.sh
 #
-# Heat resilience (dense TIP3): --no-echeck-heat, INTRA_RESCUE_SD_STEPS (default 400),
-# N_HEAT_SEGMENTS (default 4) so crushed waters get more rescue checkpoints.
+# Default stages: mini,equi — straight into CPT NpT (pmass>0). Skip the Hoover
+# fixed-volume heat (pmass=0). Opt back in with MD_STAGES=mini,heat,equi.
+#
+# Heat resilience (when heat is enabled): --no-echeck-heat, INTRA_RESCUE_SD_STEPS
+# (default 400), N_HEAT_SEGMENTS (default 4).
 #
 # Pass: exit 0 (or PRRTE exit 1 with equi restart present), L still ~30 Å.
 
@@ -33,6 +36,8 @@ DT_FS="${DT_FS:-0.5}"
 PS_HEAT="${PS_HEAT:-1.0}"
 PS_EQUI="${PS_EQUI:-2.0}"
 WIPE="${WIPE:-1}"
+# Straight CPT NpT by default (no pmass=0 Hoover heat). Use mini,heat,equi to ramp.
+MD_STAGES="${MD_STAGES:-mini,equi}"
 # Tier-1 local multi-GPU PhysNet chunks (not spatial MPI). Default 1.
 ML_GPU_COUNT="${ML_GPU_COUNT:-1}"
 ML_BATCH_SIZE="${ML_BATCH_SIZE:-}"
@@ -40,6 +45,15 @@ ML_BATCH_SIZE="${ML_BATCH_SIZE:-}"
 ML_ARGS=(--ml-gpu-count "$ML_GPU_COUNT")
 if [[ -n "$ML_BATCH_SIZE" ]]; then
   ML_ARGS+=(--ml-batch-size "$ML_BATCH_SIZE")
+fi
+HEAT_ARGS=()
+if [[ ",$MD_STAGES," == *",heat,"* ]]; then
+  HEAT_ARGS=(
+    --ps-heat "$PS_HEAT"
+    --heat-thermostat hoover
+    --no-echeck-heat
+    --n-heat-segments "${N_HEAT_SEGMENTS:-4}"
+  )
 fi
 
 # Prefer pressure-opt handoff (post-CPT L) when present; else liquid_box.
@@ -95,8 +109,11 @@ mkdir -p "$OUT_DIR"
 echo "== TIP3 CHARMM CPT NpT smoke (pinned liquid → hybrid CPT) =="
 echo "  handoff:    $HAND_OFF_SRC  N=$N_MOL  L=${BOX_SIDE} Å  ρ=${RHO} g/cm³"
 echo "  output:     $OUT_DIR"
-echo "  stages:     mini,heat,equi  (Hoover heat + CPT equi @ ${TARGET_P_ATM} atm)"
-echo "  heat/equi:  ${PS_HEAT} / ${PS_EQUI} ps   dt=${DT_FS} fs"
+echo "  stages:     $MD_STAGES  (CPT equi @ ${TARGET_P_ATM} atm; pmass>0)"
+echo "  equi:       ${PS_EQUI} ps   dt=${DT_FS} fs"
+if [[ ",$MD_STAGES," == *",heat,"* ]]; then
+  echo "  heat:       ${PS_HEAT} ps Hoover NVT (pmass=0) before CPT"
+fi
 echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
 echo "  ml-gpus:    $ML_GPU_COUNT  batch=${ML_BATCH_SIZE:-auto}  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
 
@@ -104,7 +121,7 @@ set +e
 mmml md-system \
   --backend pycharmm \
   --setup pbc_npt \
-  --md-stages mini,heat,equi \
+  --md-stages "$MD_STAGES" \
   --composition "$COMPOSITION" \
   --from-psf "$PSF" \
   --from-crd "$CRD" \
@@ -118,9 +135,7 @@ mmml md-system \
   --npt-pressure "$TARGET_P_ATM" \
   --pressure "$TARGET_P_ATM" \
   --dt-fs "$DT_FS" \
-  --ps-heat "$PS_HEAT" \
   --ps-equi "$PS_EQUI" \
-  --heat-thermostat hoover \
   --npt-thermostat hoover \
   --include-mm \
   --mm-charge-mode "$MM_CHARGE_MODE" \
@@ -136,9 +151,8 @@ mmml md-system \
   --no-monomer-physnet-mini \
   --no-charmm-pre-minimize \
   --npt-pressure-log-interval 50 \
-  --no-echeck-heat \
   --dynamics-intra-rescue-sd-steps "${INTRA_RESCUE_SD_STEPS:-400}" \
-  --n-heat-segments "${N_HEAT_SEGMENTS:-4}" \
+  "${HEAT_ARGS[@]}" \
   "${ML_ARGS[@]}" \
   "$@"
 rc=$?

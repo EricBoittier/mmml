@@ -29,7 +29,7 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 | `fd` | `mode-check --pbc-fd --residue TIP3` | `fd_force_max_abs_diff_eVA < 0.05` |
 | `scan` | TIP3:2 COM scan `pbc_hybrid_ewald_omit_self` | `scan_1d.npz` written |
 | `box_opt` | **Pinned:** count@30 Å → ~903 TIP3, ρ≈1.0 → live CHARMM `PRSI` MC/1D + CPT refine → `box_pressure_opt/{box.json,model.psf,model.crd}` | `status=pass`, handoff CRD present |
-| `npt` | **Density goal = PyCHARMM CPT** from certified handoff (`mini,heat,equi`, Hoover, `pref=1 atm`) | equi restart under `npt_charmm/` |
+| `npt` | **Density goal = PyCHARMM CPT** from certified handoff (default `mini,equi` straight CPT; opt in heat with `MD_STAGES=mini,heat,equi`) | equi restart under `npt_charmm/` |
 | `smoke` | Optional hybrid wiring at **fixed L**; with certified handoff, `CONTINUE_TO_NPT=1` advances to CPT once `heat*.res` exists (NVE failure does not block) | heat restart and/or exit 0 |
 | `prod` | TIP3:90 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
 | `analyze` | `scripts/analyze_water_nve_h5.py` | OH power peak **~2800–3600 cm⁻¹** (not ~40) |
