@@ -159,6 +159,9 @@ usage: mmml md-system [-h]
                       [--ps-equi PS_EQUI] [--ps-prod PS_PROD]
                       [--npt-thermostat {hoover,berendsen}]
                       [--npt-pressure NPT_PRESSURE] [--npt-pgamma NPT_PGAMMA]
+                      [--npt-pressure-tensor NPT_PRESSURE_TENSOR]
+                      [--npt-pressure-log-interval NPT_PRESSURE_LOG_INTERVAL]
+                      [--skip-npt-pressure-report]
                       [--n-heat-segments N_HEAT_SEGMENTS]
                       [--n-equi-segments N_EQUI_SEGMENTS]
                       [--n-prod-segments N_PROD_SEGMENTS]
@@ -714,6 +717,17 @@ options:
   --npt-pgamma NPT_PGAMMA
                         pycharmm: CPT barostat Langevin collision frequency in
                         1/ps (default: 5; 0 disables barostat coupling)
+  --npt-pressure-tensor NPT_PRESSURE_TENSOR
+                        pycharmm: anisotropic NPT reference pressure tensor as
+                        xx,yy,zz,xy,xz,yz in atm (omit for isotropic --npt-
+                        pressure)
+  --npt-pressure-log-interval NPT_PRESSURE_LOG_INTERVAL
+                        pycharmm: write CPT piston pressure tensor every N
+                        dynamics steps to equi/prod *_pressure_tensor.dat via
+                        CHARMM IUPTEN (0=off)
+  --skip-npt-pressure-report
+                        pycharmm: skip CHARMM 'pressure instantaneous' virial
+                        report before equi and prod stages
   --n-heat-segments N_HEAT_SEGMENTS
                         pycharmm: split heating into short chained restart
                         segments

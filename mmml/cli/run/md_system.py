@@ -953,6 +953,32 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--npt-pressure-tensor",
+        type=str,
+        default=None,
+        help=(
+            "pycharmm: anisotropic NPT reference pressure tensor as "
+            "xx,yy,zz,xy,xz,yz in atm (omit for isotropic --npt-pressure)"
+        ),
+    )
+    parser.add_argument(
+        "--npt-pressure-log-interval",
+        type=int,
+        default=0,
+        help=(
+            "pycharmm: write CPT piston pressure tensor every N dynamics steps "
+            "to equi/prod *_pressure_tensor.dat via CHARMM IUPTEN (0=off)"
+        ),
+    )
+    parser.add_argument(
+        "--skip-npt-pressure-report",
+        action="store_true",
+        help=(
+            "pycharmm: skip CHARMM 'pressure instantaneous' virial report "
+            "before equi and prod stages"
+        ),
+    )
+    parser.add_argument(
         "--n-heat-segments",
         type=int,
         default=1,

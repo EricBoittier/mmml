@@ -408,7 +408,14 @@ def test_parse_md_system_config_accepts_thermalize_setup(tmp_path):
 
 def test_build_pycharmm_command_forwards_npt_cpt_flags():
     cmd = build_pycharmm_command(
-        _pycharmm_args(npt_thermostat="berendsen", npt_pressure=2.5, npt_pgamma=0.0)
+        _pycharmm_args(
+            npt_thermostat="berendsen",
+            npt_pressure=2.5,
+            npt_pgamma=0.0,
+            npt_pressure_log_interval=50,
+            npt_pressure_tensor="2,1,1,0,0,0",
+            skip_npt_pressure_report=True,
+        )
     )
     idx = cmd.index("--npt-thermostat")
     assert cmd[idx + 1] == "berendsen"
@@ -416,6 +423,18 @@ def test_build_pycharmm_command_forwards_npt_cpt_flags():
     assert cmd[idx + 1] == "2.5"
     idx = cmd.index("--npt-pgamma")
     assert cmd[idx + 1] == "0.0"
+    idx = cmd.index("--npt-pressure-log-interval")
+    assert cmd[idx + 1] == "50"
+    idx = cmd.index("--npt-pressure-tensor")
+    assert cmd[idx + 1] == "2,1,1,0,0,0"
+    assert "--skip-npt-pressure-report" in cmd
+
+
+def test_parse_md_system_accepts_npt_pressure_log_interval():
+    args = parse_md_system_args(
+        ["--backend", "pycharmm", "--npt-pressure-log-interval", "50"]
+    )
+    assert args.npt_pressure_log_interval == 50
 
 
 def test_build_pycharmm_command_includes_ml_switch_width_default():
