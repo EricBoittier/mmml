@@ -11,7 +11,10 @@ import argparse
 
 from mmml.cli.completion import completion_main, try_autocomplete
 from mmml.cli.help_text import format_top_level_help, validate_command
+from mmml.cli.help_style import install_colored_argparse
 from mmml.cli.registry import _DISPATCH_COMMANDS
+
+install_colored_argparse()
 
 
 def _hard_exit(code: int | None) -> None:

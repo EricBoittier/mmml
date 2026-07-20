@@ -33,6 +33,7 @@ echo "  mm-charge:  $MM_CHARGE_MODE"
 
 # Grid builder (skips Packmol): even COM lattice in --box-size, SO(3) from --seed.
 # Stages: mini → heat → nve. Ewald self omitted for MIC/non-Ewald-trained models.
+set +e
 mmml md-system \
   --backend pycharmm \
   --setup pycharmm_full \
@@ -57,5 +58,11 @@ mmml md-system \
   --mm-switch-on 6.0 \
   --mm-switch-width 5.0 \
   "$@"
+rc=$?
+set -e
 
+if [[ "$rc" -ne 0 ]]; then
+  echo "FAILED (exit $rc). See $OUT_DIR/next_run.command if present." >&2
+  exit "$rc"
+fi
 echo "Done. Artifacts under $OUT_DIR"

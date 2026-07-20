@@ -3981,6 +3981,14 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
+            "Opt in for MIC/non-Ewald-trained models (forces unchanged; energy offset)."
+        ),
+    )
+    group.add_argument(
         "--jax-pme-method",
         type=str,
         choices=("ewald", "pme", "p3m"),
@@ -4210,6 +4218,24 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=0.2,
         help="ASE FIRE max atomic displacement per step in Å (default: 0.2).",
+    )
+    group.add_argument(
+        "--pre-min-ase-order",
+        choices=("fire-first", "bfgs-first"),
+        default="fire-first",
+        help=(
+            "ASE hybrid pre-min order: fire-first (default) runs FIRE then optional "
+            "BFGS polish; bfgs-first is legacy. Accepted for md-system argv parity."
+        ),
+    )
+    group.add_argument(
+        "--bfgs-polish-max-fmax",
+        type=float,
+        default=1.0,
+        help=(
+            "Soft hybrid max|F| gate (eV/Å; default 1.0) for BFGS polish / MM rescue "
+            "skip when already soft. Accepted for md-system argv parity."
+        ),
     )
     group.add_argument(
         "--rescue-fire-fmax",
