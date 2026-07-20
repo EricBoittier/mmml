@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 from ase import Atoms
 
 from .forces import force_fd_check

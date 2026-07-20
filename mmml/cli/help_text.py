@@ -111,6 +111,9 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmml fix-and-split --efd data.npz --output-dir ./splits",
             "mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp",
             "mmml physnet-train --config train.yaml",
+            "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
+            "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",
+            "mmml mode-check --pbc-fd --checkpoint \"$MMML_CKPT\" --output artifacts/fd_force_check.json",
         ),
     ),
 )

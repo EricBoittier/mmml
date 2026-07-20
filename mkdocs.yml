@@ -83,6 +83,7 @@ nav:
           - verify-esp-alignment: cli/commands/verify-esp-alignment.md
           - normal-mode-sample: cli/commands/normal-mode-sample.md
           - dimer-scan: cli/commands/dimer-scan.md
+          - mode-check: cli/commands/mode-check.md
           - compare-npz: cli/commands/compare-npz.md
           - cross-check: cli/commands/cross-check.md
       - ML training & sampling:
