@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import combinations
+from pathlib import Path
 from typing import Any, Mapping
 
 from mmml.md.system import MolecularSystem
@@ -24,6 +25,7 @@ __all__ = [
     "PairAssignment",
     "InteractionPlan",
     "compile_interaction_policy",
+    "load_interaction_policy",
 ]
 
 INTERACTION_POLICY_SCHEMA_VERSION = 1
@@ -125,6 +127,42 @@ class InteractionPolicy:
             default_pair_provider=data.get("default_pair_provider"),
         )
 
+    def to_mapping(self) -> dict[str, Any]:
+        """Return a stable, manifest-safe representation for JSON/YAML output."""
+
+        providers = {
+            name: {
+                "kind": spec.kind,
+                **({"checkpoint": spec.checkpoint} if spec.checkpoint is not None else {}),
+                **({"calculator": spec.calculator} if spec.calculator is not None else {}),
+                **({"options": dict(spec.options)} if spec.options else {}),
+            }
+            for name, spec in sorted(self.providers.items())
+        }
+        pairs = []
+        for rule in self.pairs:
+            item: dict[str, Any] = {"species": list(rule.species)}
+            if rule.provider is not None:
+                item["provider"] = rule.provider
+            else:
+                item.update(
+                    near_provider=rule.near_provider,
+                    far_provider=rule.far_provider,
+                    switch={"start_A": rule.switch.start_A, "stop_A": rule.switch.stop_A},
+                )
+            pairs.append(item)
+        return {
+            "schema_version": self.schema_version,
+            "providers": providers,
+            "monomers": dict(sorted(self.monomers.items())),
+            "pairs": pairs,
+            **(
+                {"default_pair_provider": self.default_pair_provider}
+                if self.default_pair_provider is not None
+                else {}
+            ),
+        }
+
 
 @dataclass(frozen=True)
 class MonomerAssignment:
@@ -192,3 +230,25 @@ def compile_interaction_policy(system: MolecularSystem, policy: InteractionPolic
         else:
             raise ValueError(f"no pair provider for species pair {a}+{b}")
     return InteractionPlan(1, policy.schema_version, monomers, tuple(pairs))
+
+
+def load_interaction_policy(path: str | Path) -> InteractionPolicy:
+    """Load a JSON or YAML policy; format is selected by file suffix."""
+
+    import json
+
+    source = Path(path)
+    text = source.read_text(encoding="utf-8")
+    if source.suffix.lower() == ".json":
+        data = json.loads(text)
+    elif source.suffix.lower() in {".yaml", ".yml"}:
+        try:
+            import yaml
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("loading YAML interaction policies requires PyYAML") from exc
+        data = yaml.safe_load(text)
+    else:
+        raise ValueError("interaction policy path must end in .json, .yaml, or .yml")
+    if not isinstance(data, Mapping):
+        raise ValueError("interaction policy document must contain a mapping")
+    return InteractionPolicy.from_mapping(data)

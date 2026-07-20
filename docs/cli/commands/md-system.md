@@ -36,6 +36,8 @@ usage: mmml md-system [-h]
                       [--spacing SPACING] [--ps PS] [--dt-fs DT_FS]
                       [--traj-chunk-frames TRAJ_CHUNK_FRAMES]
                       [--traj-export-molecular-wrap] [--temperature TEMPERATURE]
+                      [--temperature-schedule TEMPERATURE_SCHEDULE]
+                      [--interaction-policy INTERACTION_POLICY]
                       [--nvt-integrator {auto,nhc,langevin}]
                       [--pressure PRESSURE] [--seed SEED]
                       [--builder {gas,liquid,crystal}]
@@ -393,6 +395,14 @@ options:
                         (slower).
   --temperature TEMPERATURE
                         Target temperature in K (NVT/NPT).
+  --temperature-schedule TEMPERATURE_SCHEDULE
+                        Shared NVT/NPT schedule, e.g. '200->300' or
+                        '200->300:0.25,300:0.75'. Overrides the fixed thermostat
+                        target.
+  --interaction-policy INTERACTION_POLICY
+                        Versioned YAML/JSON species interaction policy. The
+                        unified runner validates complete, unambiguous monomer
+                        and molecular-pair ownership.
   --nvt-integrator {auto,nhc,langevin}
                         Integrator for NVT in ASE route. auto=nhc for
                         homogeneous, langevin for mixed composition.

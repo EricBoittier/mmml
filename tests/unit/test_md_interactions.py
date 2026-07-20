@@ -1,7 +1,9 @@
+import json
+
 import numpy as np
 import pytest
 
-from mmml.md.interactions import InteractionPolicy, compile_interaction_policy
+from mmml.md.interactions import InteractionPolicy, compile_interaction_policy, load_interaction_policy
 from mmml.md.system import MolecularSystem
 
 
@@ -84,3 +86,10 @@ def test_policy_rejects_unknown_provider_and_schema():
 def test_topology_labels_are_mandatory_and_aligned():
     with pytest.raises(ValueError, match="aligned"):
         compile_interaction_policy(_system(names=("PEP",)), _policy())
+
+
+def test_policy_json_round_trip(tmp_path):
+    policy = _policy()
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(policy.to_mapping()), encoding="utf-8")
+    assert load_interaction_policy(path).to_mapping() == policy.to_mapping()

@@ -53,6 +53,16 @@ In particular:
 The proposed canonical 1D scan architecture is documented in
 [`docs/dimer-scan-design.md`](docs/dimer-scan-design.md).
 
+For MD, species-aware monomer/pair ownership is defined by the versioned policy
+in [`docs/md-interaction-policies.md`](docs/md-interaction-policies.md). Do not
+add peptide/water positional special cases or a second interaction selector.
+Every molecule and unordered molecular pair must compile to exactly one owner
+(or one complementary near/far partition), and unsupported provider lowering
+must fail before propagation rather than fall back to a legacy energy split.
+Reusable restraints belong in `mmml/md/restraints/`; temperature schedules
+belong in `mmml/md/temperature.py`; enhanced-sampling protocols such as SMD
+belong in their own protocol modules.
+
 ## No magic numbers
 
 Every scientifically meaningful numeric literal (distance, cutoff, threshold,

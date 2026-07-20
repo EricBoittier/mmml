@@ -1,0 +1,32 @@
+schema_version: 1
+
+providers:
+  peptide_ml:
+    kind: ml
+    checkpoint: checkpoints/peptide.pkl
+  dimer_ml:
+    kind: ml
+    checkpoint: checkpoints/peptide_water_dimer.pkl
+  cgenff:
+    kind: mm
+    calculator: cgenff
+
+monomers:
+  PEP: peptide_ml
+  TIP3: cgenff
+  SOD: cgenff
+  CLA: cgenff
+
+pairs:
+  - species: [PEP, TIP3]
+    near_provider: dimer_ml
+    far_provider: cgenff
+    switch:
+      start_A: 5.0
+      stop_A: 7.0
+  - species: [SOD, "*"]
+    provider: cgenff
+  - species: [CLA, "*"]
+    provider: cgenff
+  - species: ["*", "*"]
+    provider: cgenff

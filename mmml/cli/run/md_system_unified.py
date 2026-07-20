@@ -211,19 +211,9 @@ def run_unified_jaxmd(args: Any) -> int:
     system = build_packmol_system_with_ffparams(run_config.system)
     policy_path = getattr(args, "interaction_policy", None)
     if policy_path is not None:
-        import json
+        from mmml.md.interactions import compile_interaction_policy, load_interaction_policy
 
-        from mmml.md.interactions import InteractionPolicy, compile_interaction_policy
-
-        path = Path(policy_path)
-        text = path.read_text(encoding="utf-8")
-        if path.suffix.lower() == ".json":
-            raw_policy = json.loads(text)
-        else:
-            import yaml
-
-            raw_policy = yaml.safe_load(text)
-        plan = compile_interaction_policy(system, InteractionPolicy.from_mapping(raw_policy))
+        plan = compile_interaction_policy(system, load_interaction_policy(policy_path))
         # Ownership validation is useful immediately, but scoring a non-legacy
         # plan requires provider-specific terms. Never pretend the old fixed
         # ml_intra/mm_nonbonded decomposition implements an arbitrary policy.
