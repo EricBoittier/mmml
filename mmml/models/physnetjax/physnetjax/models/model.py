@@ -20,6 +20,12 @@ from jax import Array
 # from jax.sharding import PartitionSpec as P
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
+from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+    calc_electrostatics_switches,
+    pair_displacements,
+    pair_electrostatics_energy,
+    radial_spherical_basis,
+)
 from mmml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,

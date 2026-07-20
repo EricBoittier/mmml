@@ -179,4 +179,5 @@ nav:
       - Scientific code policy: scientific-code.md
       - 1D dimer scan design: dimer-scan-design.md
       - Dimer tool inventory: dimer-tool-inventory.md
+      - MPNN tool inventory: mpnn-tool-inventory.md
       - Releasing: releasing.md
