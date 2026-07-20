@@ -48,6 +48,8 @@ supported API, but production package code must not import from `scripts/` or
 
 The current ownership and migration status of related tools is tracked in the
 [dimer tool inventory](dimer-tool-inventory.md).
+Calculator availability and hybrid compatibility are tracked separately in the
+[calculator capability matrix](calculator-capabilities.md).
 
 ## Public interface
 

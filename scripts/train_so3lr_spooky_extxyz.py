@@ -870,6 +870,8 @@ def make_steps(
     mbd_weight = args.mbd_weight
     multipole_consistency_weight = args.multipole_consistency_weight
     neural_interaction_l2 = args.neural_interaction_l2
+    far_field_charge_weight = args.far_field_charge_weight
+    far_field_max_k = args.far_field_max_k
     if (mbd_model is None) != (mbd_params is None):
         raise ValueError("mbd_model and mbd_params must be provided together")
     if mbd_params is not None:
@@ -984,6 +986,28 @@ def make_steps(
                 multipole_dipole_mse = jnp.mean((dipole_pred - multipole_dipole) ** 2)
                 multipole_dipole_mae = jnp.mean(jnp.abs(dipole_pred - multipole_dipole))
                 loss += multipole_consistency_weight * multipole_dipole_mse
+            far_field_charge_mse = jnp.asarray(0.0)
+            if far_field_charge_weight > 0.0 and batch.get("mol_id") is not None:
+                # Auxiliary size-extensivity signal, active only on synthetic
+                # far-field composite structures (see
+                # far_field_augment.py / _per_fragment_charge_conservation_mse):
+                # penalise each FRAGMENT's own net charge deviating from 0,
+                # not just the whole structure's. This is what the eval-time
+                # post-hoc "enforce sum(q)=target" correction (used for
+                # diagnosis only, never fed back into gradients per the
+                # earlier decision that a hard in-model renormalization risks
+                # poisoning gradients) cannot reach: a whole-structure charge
+                # sum can look conserved by cancellation between fragments
+                # while individual fragments are still wrong.
+                far_field_charge_mse = _per_fragment_charge_conservation_mse(
+                    out["charges"].reshape(-1),
+                    batch["mol_id"],
+                    batch["atom_mask"],
+                    batch["batch_segments"],
+                    per_device_batch_size,
+                    far_field_max_k,
+                )
+                loss += far_field_charge_weight * far_field_charge_mse
         # Shrinkage of the neural *interaction* energy toward zero.
         #
         # The MM terms (CGenFF LJ + electrostatics) are a physical prior, but nothing
@@ -1372,6 +1396,46 @@ def _per_structure(value: Any, batch_segments: jnp.ndarray, batch_size: int) -> 
             flat, segment_ids=batch_segments, num_segments=batch_size
         ).reshape(batch_size, 1)
     return flat.reshape(batch_size, -1).sum(axis=1, keepdims=True)
+
+
+def _per_fragment_charge_conservation_mse(
+    atomic_charges: jnp.ndarray,
+    mol_id: jnp.ndarray,
+    atom_mask: jnp.ndarray,
+    batch_segments: jnp.ndarray,
+    batch_size: int,
+    k_max: int,
+) -> jnp.ndarray:
+    """Mean squared per-fragment net charge, over MULTI-fragment structures only.
+
+    ``mol_id`` is a per-atom LOCAL fragment index within its own structure (0
+    for every atom of an ordinary single-molecule structure; 0..K-1 for a
+    synthetic far-field composite's K fragments -- see
+    mmml/models/physnetjax/physnetjax/training/far_field_augment.py). Target
+    charge per fragment is always 0.0: far-field composites are only ever
+    built from exactly-neutral source structures.
+
+    Ordinary single-fragment structures are EXCLUDED (not just trivially
+    zero): they already get this exact signal from the whole-structure
+    ``charges_weight * charge_mse`` term against ``Q_total`` in ``loss_fn``,
+    so including them here would silently double that term's effective
+    weight. Only structures where more than one fragment slot is actually
+    populated (i.e. genuine multi-fragment composites) contribute.
+    """
+    global_fragment_id = batch_segments * k_max + jnp.clip(mol_id, 0, k_max - 1)
+    num_segments = batch_size * k_max
+    frag_charge_sum = jax.ops.segment_sum(
+        atomic_charges * atom_mask, global_fragment_id, num_segments=num_segments
+    ).reshape(batch_size, k_max)
+    frag_atom_count = jax.ops.segment_sum(
+        atom_mask, global_fragment_id, num_segments=num_segments
+    ).reshape(batch_size, k_max)
+    frag_used = frag_atom_count > 0
+    is_multi_fragment_structure = jnp.sum(frag_used, axis=1, keepdims=True) > 1
+    contributing = frag_used & is_multi_fragment_structure
+    sq_err = jnp.where(contributing, frag_charge_sum**2, 0.0)
+    denom = jnp.maximum(jnp.sum(contributing), 1)
+    return jnp.sum(sq_err) / denom
 
 
 def _merge_compatible_params(
@@ -2265,6 +2329,63 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--forces-weight", type=float, default=52.91)
     parser.add_argument("--dipole-weight", type=float, default=1.0)
     parser.add_argument("--charges-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--far-field-augment-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Fraction of the TRAINING STRUCTURE POOL that is synthetic "
+            "'far-field replica' composites (0 disables; try 0.1-0.2). Each "
+            "composite concatenates --far-field-min-k..--far-field-max-k "
+            "real (exactly neutral, singlet) training structures, placed "
+            ">= 12 A apart atom-to-atom -- exactly beyond both the "
+            "electrostatics switch (hard zero at 10 A) and the "
+            "message-passing cutoff, so E_composite = sum(E_fragment) is "
+            "exact by construction, not approximate. Trains size "
+            "extensivity from data already in the cache -- no new "
+            "structures or QM calculations needed. Note: because "
+            "composites are large (many atoms/structure) while ordinary "
+            "structures are small, this is a fraction of STRUCTURES, not "
+            "of training STEPS -- composites will occupy a "
+            "disproportionately higher fraction of steps than of the pool "
+            "(smaller per-device batch sizes at large pad widths)."
+        ),
+    )
+    parser.add_argument(
+        "--far-field-min-k",
+        type=int,
+        default=5,
+        help="Minimum fragments per synthetic far-field composite (default: 5).",
+    )
+    parser.add_argument(
+        "--far-field-max-k",
+        type=int,
+        default=50,
+        help=(
+            "Maximum fragments per synthetic far-field composite (default: 50) -- "
+            "also the static k_max bound used for the per-fragment charge-"
+            "conservation loss's segment_sum indexing."
+        ),
+    )
+    parser.add_argument(
+        "--far-field-charge-weight",
+        type=float,
+        default=1.0,
+        help=(
+            "Weight for the auxiliary per-fragment charge-conservation loss "
+            "on far-field composite structures only (penalises each "
+            "fragment's own net predicted charge deviating from 0; ordinary "
+            "single-fragment structures are excluded to avoid double-"
+            "counting the existing whole-structure charges_weight term). "
+            "No effect when --far-field-augment-fraction is 0."
+        ),
+    )
+    parser.add_argument(
+        "--far-field-seed",
+        type=int,
+        default=None,
+        help="Seed for far-field composite sampling (default: --seed).",
+    )
     parser.add_argument(
         "--mbd-checkpoint",
         type=str,

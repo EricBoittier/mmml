@@ -166,6 +166,7 @@ nav:
       - Threading & launchers: pycharmm-threading.md
       - FFTW for CHARMM: fftw-build.md
   - QC & calculators:
+      - Calculator capability matrix: calculator-capabilities.md
       - QC cross-check: qc-cross-check.md
       - DCMNet calculators: dcmnet_calculators.md
   - Reference:
