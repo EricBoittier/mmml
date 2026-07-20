@@ -61,6 +61,7 @@ from mmml.models.short_range_wall import (
     inter_monomer_wall_energy,
 )
 from mmml.models.mm_charge_mode import (
+    MMChargeMode,
     apply_mm_charge_mode,
     assemble_q0_from_monomer_forwards,
     mm_charge_mode_is_q0,
