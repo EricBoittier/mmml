@@ -339,7 +339,14 @@ def restore_charmm_state_from_restart(
 
 
 def restore_charmm_state_from_crd(crd_path: PathLike) -> None:
-    """Load coordinates from a CHARMM CRD card into memory."""
+    """Load coordinates from a CHARMM CRD card into memory.
+
+    CRD cards are geometry-only: clear leftover CHARMM / COMP velocities so
+    monomer-health preflight does not treat prior fly-off ``|v|`` as current.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import load_minimized_coordinates
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
@@ -350,6 +357,7 @@ def restore_charmm_state_from_crd(crd_path: PathLike) -> None:
     pos = get_charmm_positions_array()
     if pos is None or not np.all(np.isfinite(pos)):
         raise RuntimeError(f"CRD {path.name} did not yield finite CHARMM coordinates")
+    sync_charmm_velocities_akma(np.zeros((int(pos.shape[0]), 3), dtype=np.float64))
 
 
 def charmm_memory_coordinates_usable() -> bool:
@@ -643,9 +651,22 @@ def _run_all_ml_extent_recovery(
             f"(topology {Path(topo).name})",
             flush=True,
         )
-    sync_charmm_positions(np.asarray(positions, dtype=float))
+    pos = np.asarray(positions, dtype=float)
+    sync_charmm_positions(pos)
+    # Geometry-only handoff: drop fly-off velocities before health preflight.
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
+
+    sync_charmm_velocities_akma(np.zeros((int(pos.shape[0]), 3), dtype=np.float64))
+    if bonded_cfg.verbose:
+        print(
+            "Fly-off recovery: cleared velocities after geometry restore "
+            "(CRD/coords have no valid velocities; cold-start comes later)",
+            flush=True,
+        )
     clear_mmfp_restraints()
-    _maybe_run_per_monomer_bonded_jax_preflight(ctx, config, context="Fly-off recovery")
+    # Preflight runs once inside hybrid recovery (avoid duplicate 900-row dumps).
     _run_hybrid_bonded_mlpot_recovery(
         ctx,
         bonded_cfg,

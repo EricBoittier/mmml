@@ -343,6 +343,42 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
     assert "G O R" in out or "G" in out
 
 
+def test_emit_monomer_health_summarizes_systemic_velocity_only(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Geometry-restore leftover |v| must not dump O(10³) identical rows."""
+    entries = tuple(
+        MonomerHealthEntry(
+            index=i,
+            label="TIP3",
+            velocity_rms_akma=1.0e4 + i,
+            velocity_max_akma=5.0e4 + 10 * i,
+            hybrid_grms_kcalmol_A=6.0,
+            charmm_grms_kcalmol_A=6.0,
+            velocity_level=LEVEL_BAD,
+            force_level=LEVEL_OK,
+            energy_level=LEVEL_OK,
+            geometry_level=LEVEL_OK,
+            reasons=(f"|v| abs {5.0e4 + 10 * i:.1f} ≥ 15000.0",),
+        )
+        for i in range(40)
+    )
+    report = MonomerHealthReport(
+        entries=entries,
+        flagged_bad=tuple(range(40)),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+    with patch("mmml.utils.rich_report.rich_enabled", return_value=False):
+        emit_monomer_health_dot_matrix(
+            report, context="Fly-off", quiet=False, max_detail_rows=8
+        )
+    out = capsys.readouterr().out
+    assert "40/40 velocity-bad" in out
+    assert "full grid suppressed" in out
+    assert out.count("TIP3") <= 10
+
+
 @patch(
     "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma"
 )
