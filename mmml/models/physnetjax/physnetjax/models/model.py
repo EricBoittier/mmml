@@ -4,7 +4,7 @@ PhysNet message-passing neural network for molecular energies and forces.
 E(3)-equivariant model using message passing and equivariant transformations.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import e3x
 import flax.linen as nn
@@ -19,26 +19,20 @@ from jax import Array
 # from jax.sharding import PartitionSpec as P
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
-    calc_electrostatics_switches,
-    pair_displacements,
-    pair_electrostatics_energy,
-    radial_spherical_basis,
-)
+from mmml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
 from mmml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,
 )
 
 EFA = efa.EuclideanFastAttention
-import ase.data
 
 # Constants
 DTYPE = jnp.float32
 HARTREE_TO_KCAL_MOL = 627.509  # Conversion factor for energy units
 
 
-class PhysNet(nn.Module):
+class PhysNet(PhysNetFamilyMixin, nn.Module):
     """PhysNet message-passing model for molecular energies and forces.
 
     Attributes:
@@ -85,6 +79,12 @@ class PhysNet(nn.Module):
     switch_end: float = 10.0
     electrostatics_off_start: float = 8.0
     electrostatics_off_end: float = 10.0
+    # Euclidean Fast Attention (EFA) hyperparameters, only used when efa=True.
+    # Defaults reproduce the values every checkpoint trained before these
+    # fields existed was implicitly hardcoded to.
+    efa_lebedev_num: int = 194
+    efa_max_length: float = 20.0  # maximum distance (Angstrom) for the EPE
+    efa_ti_degree_scaling_base: float = 0.5
 
     @property
     def natoms(self) -> int:
@@ -120,13 +120,13 @@ class PhysNet(nn.Module):
             b_max = 4 * jnp.pi
             # We now initialize an EFA module.
             self.efa_final = EFA(
-                lebedev_num=194,
+                lebedev_num=self.efa_lebedev_num,
                 parametrized=False,
                 epe_max_frequency=b_max,
-                epe_max_length=20.0,  # maximum distance in Angstroms for the EPE
+                epe_max_length=self.efa_max_length,
                 tensor_integration=True,
                 ti_degree_scaling_constants=[
-                    0.5**i for i in range(self.max_degree + 1)
+                    self.efa_ti_degree_scaling_base**i for i in range(self.max_degree + 1)
                 ],
             )
 
@@ -166,6 +166,9 @@ class PhysNet(nn.Module):
             "switch_end": self.switch_end,
             "electrostatics_off_start": self.electrostatics_off_start,
             "electrostatics_off_end": self.electrostatics_off_end,
+            "efa_lebedev_num": self.efa_lebedev_num,
+            "efa_max_length": self.efa_max_length,
+            "efa_ti_degree_scaling_base": self.efa_ti_degree_scaling_base,
         }
 
     def energy(
@@ -240,54 +243,6 @@ class PhysNet(nn.Module):
             batch_mask,
             batch_segments,
             batch_size,
-        )
-
-    def _calculate_geometric_features(
-        self,
-        positions: jnp.ndarray,
-        dst_idx: jnp.ndarray,
-        src_idx: jnp.ndarray,
-        batch_mask: Optional[jnp.ndarray] = None,
-        cell: Optional[jnp.ndarray] = None,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Calculate geometric features including displacements and basis functions.
-        
-        Parameters
-        ----------
-        positions : jnp.ndarray
-            Atomic positions
-        dst_idx : jnp.ndarray
-            Destination indices for message passing
-        src_idx : jnp.ndarray
-            Source indices for message passing
-        batch_mask : Optional[jnp.ndarray]
-            Per-edge validity mask (1 for real↔real, 0 for padding edges).
-            Zeroes the message-passing basis for invalid edges.
-        cell : Optional[jnp.ndarray]
-            If provided, apply minimum-image convention to displacements (PBC).
-            
-        Returns
-        -------
-        Tuple[jnp.ndarray, jnp.ndarray]
-            Tuple of (basis functions, displacements)
-        """
-        # Masked pairs must not reach the basis (padding at origin corrupts
-        # MessagePass). Shared with SpookyPhysNet via mpnn_kernels; see
-        # tests/unit/test_physnet_padding_invariance.py.
-        displacements = pair_displacements(
-            positions,
-            dst_idx,
-            src_idx,
-            cell=cell,
-            use_pbc=bool(self.use_pbc),
-        )
-        return radial_spherical_basis(
-            displacements,
-            num_basis_functions=self.num_basis_functions,
-            max_degree=self.max_degree,
-            cutoff=self.cutoff,
-            batch_mask=batch_mask,
         )
 
     def _process_atomic_features(
@@ -751,161 +706,8 @@ class PhysNet(nn.Module):
 
         return atomic_energies
 
-    def _calc_switches(self, displacements: jnp.ndarray, batch_mask: jnp.ndarray):
-        """
-        Calculate switching functions for smooth interactions.
-        
-        Parameters
-        ----------
-        displacements : jnp.ndarray
-            Interatomic displacements
-        batch_mask : jnp.ndarray
-            Batch mask
-            
-        Returns
-        -------
-        tuple
-            Tuple of (r, off_dist, eshift) switching factors
-        """
-        return calc_electrostatics_switches(
-            displacements,
-            batch_mask,
-            switch_start=self.switch_start,
-            switch_end=self.switch_end,
-            electrostatics_off_start=self.electrostatics_off_start,
-            electrostatics_off_end=self.electrostatics_off_end,
-            electrostatics_damping_sigma=self.electrostatics_damping_sigma,
-        )
-
-    def _calculate_electrostatics(
-        self,
-        atomic_charges: jnp.ndarray,
-        r: jnp.ndarray,
-        off_dist: jnp.ndarray,
-        eshift: jnp.ndarray,
-        dst_idx: jnp.ndarray,
-        src_idx: jnp.ndarray,
-        atom_mask: jnp.ndarray,
-        batch_mask: jnp.ndarray,
-        batch_segments: jnp.ndarray,
-        batch_size: int,
-    ) -> Tuple[jnp.ndarray, jnp.array]:
-        """
-        Calculate electrostatic interactions between atoms.
-
-        Uses a smoothly switched combination of short-range and long-range electrostatics
-        to avoid numerical instabilities at zero distance while maintaining accuracy.
-
-        Parameters
-        ----------
-        atomic_charges : jnp.ndarray
-            Predicted atomic charges
-        r : jnp.ndarray
-            Distance factors
-        off_dist : jnp.ndarray
-            Distance cutoff factors
-        eshift : jnp.ndarray
-            Energy shift factors
-        dst_idx : jnp.ndarray
-            Destination indices for pair interactions
-        src_idx : jnp.ndarray
-            Source indices for pair interactions
-        atom_mask : jnp.ndarray
-            Atom mask
-        batch_mask : jnp.ndarray
-            Batch mask
-        batch_segments : jnp.ndarray
-            Batch assignment for each atom
-        batch_size : int
-            Number of molecules in batch
-
-        Returns
-        -------
-        Tuple[jnp.ndarray, jnp.array]
-            Tuple of (atomic electrostatic energies, batch electrostatic energies)
-        """
-        del atom_mask  # retained for call-site compatibility
-        return pair_electrostatics_energy(
-            atomic_charges,
-            r,
-            off_dist,
-            eshift,
-            dst_idx,
-            src_idx,
-            batch_mask,
-            batch_segments,
-            batch_size,
-        )
-
-    def _calculate_dipole(
-        self,
-        positions: jnp.ndarray,
-        atomic_numbers: jnp.ndarray,
-        charges: jnp.ndarray,
-        batch_segments: jnp.ndarray,
-        batch_size: int,
-    ) -> jnp.ndarray:
-        """
-        Calculate dipoles for a batch of molecules.
-
-        Computes molecular dipole moments from atomic charges and positions
-        relative to the center of mass of each molecule.
-
-        Parameters
-        ----------
-        positions : jnp.ndarray
-            Atomic positions
-        atomic_numbers : jnp.ndarray
-            Atomic numbers
-        charges : jnp.ndarray
-            Atomic charges
-        batch_segments : jnp.ndarray
-            Batch segment indices
-        batch_size : int
-            Number of molecules in the batch
-
-        Returns
-        -------
-        jnp.ndarray
-            Calculated dipoles for each molecule in the batch
-        """
-        charges = charges.squeeze()
-        positions = positions.squeeze()
-        atomic_numbers = atomic_numbers.squeeze()
-        
-        # Get atomic masses
-        masses = jnp.take(ase.data.atomic_masses, atomic_numbers)
-        
-        # Calculate COM for each molecule: COM = Σ(m_i * r_i) / Σ(m_i)
-        # Use segment_sum to handle batches
-        mass_weighted_pos = positions * masses[..., None]  # (natoms, 3)
-        total_mass_weighted_pos = jax.ops.segment_sum(
-            mass_weighted_pos, 
-            segment_ids=batch_segments, 
-            num_segments=batch_size
-        )  # (batch_size, 3)
-        total_mass = jax.ops.segment_sum(
-            masses, 
-            segment_ids=batch_segments, 
-            num_segments=batch_size
-        )  # (batch_size,)
-        
-        com = total_mass_weighted_pos / total_mass[..., None]  # (batch_size, 3)
-        
-        # Get COM for each atom (broadcast back)
-        com_per_atom = jnp.take(com, batch_segments, axis=0)  # (natoms, 3)
-        
-        # Positions relative to COM
-        pos_com = positions - com_per_atom  # (natoms, 3)
-        
-        # Dipole = Σ(q_i * (r_i - r_COM)) per molecule
-        dipoles = jax.ops.segment_sum(
-            pos_com * charges[..., None],
-            segment_ids=batch_segments,
-            num_segments=batch_size,
-        )  # (batch_size, 3)
-        
-        return dipoles
+    # _calculate_geometric_features / _calc_switches / _calculate_electrostatics /
+    # _calculate_dipole: PhysNetFamilyMixin → mpnn_kernels
 
     @nn.compact
     def __call__(

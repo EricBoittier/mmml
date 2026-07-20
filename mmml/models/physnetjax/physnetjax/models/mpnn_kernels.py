@@ -1,17 +1,22 @@
-"""Shared numerical kernels for PhysNet-family message-passing models.
+"""Shared numerical kernels for PhysNet-family and related e3x models.
 
-These helpers are the first harmonization layer between :class:`PhysNet` and
-:class:`SpookyPhysNet`. They must stay **checkpoint-neutral**: no Flax module
-names, no parameter trees — pure functions of arrays and scalar hyperparameters.
+These helpers are the harmonization layer between :class:`PhysNet`,
+:class:`SpookyPhysNet`, DCMNet, and EFieldPhysNet for **non-parametric**
+geometry / basis / electrostatics work. They must stay **checkpoint-neutral**:
+no Flax module names, no parameter trees.
 
-See ``docs/mpnn-tool-inventory.md``.
+Parametric encode (``Embed`` / ``MessagePass``) stays inside each Flax module so
+Orbax / portable JSON parameter paths remain stable. See
+``docs/mpnn-tool-inventory.md`` and :mod:`physnet_family`.
 """
 
 from __future__ import annotations
 
 import functools
-from typing import Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional, Tuple
 
+import ase.data
 import e3x
 import jax
 import jax.numpy as jnp
@@ -24,6 +29,11 @@ COULOMB_PAIR_FACTOR_EV_A = 7.199822675975274
 # Numerical floors for switch / distance kernels (not physical cutoffs).
 _SWITCH_EPS = 1e-6
 _MIN_DIST_A = 0.01
+
+# Charge-magnitude clamp applied before pairwise Coulomb energy assembly, to
+# guard against runaway predicted charges producing non-physical energies
+# during early/unstable training. Not a physical bound on real atomic charges.
+_CHARGE_CLIP_MAGNITUDE = 10.0
 
 
 def pair_displacements(
@@ -53,12 +63,16 @@ def radial_spherical_basis(
     cutoff: float,
     batch_mask: Optional[Array] = None,
     edge_mask: Optional[Array] = None,
+    radial_fn: Callable[..., Any] | None = None,
 ) -> Tuple[Array, Array]:
-    """Build e3x radial/spherical basis with padding-safe edge gating.
+    """Build e3x radial/spherical basis with optional padding-safe edge gating.
 
-    Masked pairs are shifted off ``r=0`` before the basis (padding–padding pairs
-    are coincident; zeroing a singular gradient otherwise yields ``0 * NaN`` in
-    forces), then the basis is multiplied by the edge gate.
+    Parameters
+    ----------
+    radial_fn
+        e3x radial basis callable. Defaults to ``exponential_chebyshev``
+        (PhysNet / Spooky). DCMNet and EFieldPhysNet use
+        ``reciprocal_bernstein``.
 
     Returns
     -------
@@ -66,6 +80,9 @@ def radial_spherical_basis(
         ``displacements`` are the **original** (unshifted) vectors so downstream
         electrostatic switches can apply their own masking.
     """
+    if radial_fn is None:
+        radial_fn = e3x.nn.exponential_chebyshev
+
     edge_gate = None
     if batch_mask is not None or edge_mask is not None:
         edge_gate = jnp.ones(displacements.shape[0], dtype=displacements.dtype)
@@ -86,7 +103,7 @@ def radial_spherical_basis(
         basis_displacements,
         num=int(num_basis_functions),
         max_degree=int(max_degree),
-        radial_fn=e3x.nn.exponential_chebyshev,
+        radial_fn=radial_fn,
         cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=float(cutoff)),
     )
     if edge_gate is not None:
@@ -94,6 +111,39 @@ def radial_spherical_basis(
             -1, *([1] * (basis.ndim - 1))
         )
     return basis, displacements
+
+
+def encode_geometry_and_basis(
+    positions: Array,
+    dst_idx: Array,
+    src_idx: Array,
+    *,
+    num_basis_functions: int,
+    max_degree: int,
+    cutoff: float,
+    radial_fn: Callable[..., Any] | None = None,
+    batch_mask: Optional[Array] = None,
+    edge_mask: Optional[Array] = None,
+    cell: Optional[Array] = None,
+    use_pbc: bool = False,
+) -> Tuple[Array, Array]:
+    """Shared non-parametric encode step: displacements + radial/spherical basis.
+
+    Parametric ``Embed`` / ``MessagePass`` remain in each model head so Flax
+    parameter names stay checkpoint-compatible.
+    """
+    displacements = pair_displacements(
+        positions, dst_idx, src_idx, cell=cell, use_pbc=use_pbc
+    )
+    return radial_spherical_basis(
+        displacements,
+        num_basis_functions=num_basis_functions,
+        max_degree=max_degree,
+        cutoff=cutoff,
+        batch_mask=batch_mask,
+        edge_mask=edge_mask,
+        radial_fn=radial_fn,
+    )
 
 
 def calc_electrostatics_switches(
@@ -158,8 +208,8 @@ def pair_electrostatics_energy(
     Returns ``(atomic_electrostatics, batch_electrostatics)`` with trailing
     singleton axes ``(..., 1, 1, 1)`` matching PhysNet energy layouts.
     """
-    q1 = jnp.clip(jnp.take(atomic_charges, dst_idx, fill_value=0.0), -10.0, 10.0)
-    q2 = jnp.clip(jnp.take(atomic_charges, src_idx, fill_value=0.0), -10.0, 10.0)
+    q1 = jnp.clip(jnp.take(atomic_charges, dst_idx, fill_value=0.0), -_CHARGE_CLIP_MAGNITUDE, _CHARGE_CLIP_MAGNITUDE)
+    q2 = jnp.clip(jnp.take(atomic_charges, src_idx, fill_value=0.0), -_CHARGE_CLIP_MAGNITUDE, _CHARGE_CLIP_MAGNITUDE)
     electrostatics = COULOMB_PAIR_FACTOR_EV_A * q1 * q2 * (r + eshift) * batch_mask
     electrostatics *= off_dist
     num_atoms_actual = atomic_charges.shape[0]
@@ -179,9 +229,44 @@ def pair_electrostatics_energy(
     return atomic_electrostatics, batch_electrostatics
 
 
+def molecular_dipole_from_charges(
+    positions: Array,
+    atomic_numbers: Array,
+    charges: Array,
+    batch_segments: Array,
+    batch_size: int,
+) -> Array:
+    """COM-referenced molecular dipoles from atomic charges (PhysNet / Spooky)."""
+    charges = charges.squeeze()
+    positions = positions.squeeze()
+    atomic_numbers = atomic_numbers.squeeze()
+    masses = jnp.take(ase.data.atomic_masses, atomic_numbers)
+    mass_weighted_pos = positions * masses[..., None]
+    total_mass_weighted_pos = jax.ops.segment_sum(
+        mass_weighted_pos,
+        segment_ids=batch_segments,
+        num_segments=batch_size,
+    )
+    total_mass = jax.ops.segment_sum(
+        masses,
+        segment_ids=batch_segments,
+        num_segments=batch_size,
+    )
+    com = total_mass_weighted_pos / total_mass[..., None]
+    com_per_atom = jnp.take(com, batch_segments, axis=0)
+    pos_com = positions - com_per_atom
+    return jax.ops.segment_sum(
+        pos_com * charges[..., None],
+        segment_ids=batch_segments,
+        num_segments=batch_size,
+    )
+
+
 __all__ = [
     "COULOMB_PAIR_FACTOR_EV_A",
     "calc_electrostatics_switches",
+    "encode_geometry_and_basis",
+    "molecular_dipole_from_charges",
     "pair_displacements",
     "pair_electrostatics_energy",
     "radial_spherical_basis",

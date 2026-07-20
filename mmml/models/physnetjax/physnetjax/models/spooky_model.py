@@ -8,7 +8,7 @@ The spooky model is trained on positions R, atomic numbers Z, and forces F, ener
 and Charge Q and Spin (Multiplicity) S.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import e3x
 import flax.linen as nn
@@ -23,26 +23,20 @@ from jax import Array
 # from jax.sharding import PartitionSpec as P
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
-    calc_electrostatics_switches,
-    pair_displacements,
-    pair_electrostatics_energy,
-    radial_spherical_basis,
-)
+from mmml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
 from mmml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,
 )
 
 EFA = efa.EuclideanFastAttention
-import ase.data
 
 # Constants
 DTYPE = jnp.float32
 HARTREE_TO_KCAL_MOL = 627.509  # Conversion factor for energy units
 
 
-class SpookyPhysNet(nn.Module):
+class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
     """SpookyNet-style PhysNet with charge and spin conditioning inputs.
 
     Trained on positions R, atomic numbers Z, forces F, energies E,
@@ -82,6 +76,24 @@ class SpookyPhysNet(nn.Module):
     switch_end: float = 10.0
     electrostatics_off_start: float = 8.0
     electrostatics_off_end: float = 10.0
+    # Euclidean Fast Attention (EFA) hyperparameters, only used when efa=True.
+    # Defaults reproduce the values every checkpoint trained before these
+    # fields existed was implicitly hardcoded to.
+    efa_lebedev_num: int = 194
+    efa_max_length: float = 20.0  # maximum distance (Angstrom) for the EPE
+    efa_ti_degree_scaling_base: float = 0.5
+    # Soft-core LJ clamp: r_safe = max(r, vdw_soft_core_fraction * sig_ij),
+    # caps unphysical 6-12 repulsion spikes at short range. Only used when
+    # CGenFF vdW is active (cgenff_type_idx passed in).
+    vdw_soft_core_fraction: float = 0.8
+    # Bounds for the learned per-atom vdW scale factor gamma_i:
+    # gamma_i in [vdw_scale_center - vdw_scale_range, vdw_scale_center + vdw_scale_range].
+    vdw_scale_center: float = 1.0
+    vdw_scale_range: float = 0.5
+    # Fallback CGenFF sigma/epsilon (kcal/mol convention) used when an atom's
+    # cgenff_type_idx has no entry in the master tables.
+    cgenff_fallback_sigma: float = 3.5
+    cgenff_fallback_epsilon: float = 0.05
 
     @property
     def natoms(self) -> int:
@@ -117,13 +129,13 @@ class SpookyPhysNet(nn.Module):
             b_max = 4 * jnp.pi
             # We now initialize an EFA module.
             self.efa_final = EFA(
-                lebedev_num=194,
+                lebedev_num=self.efa_lebedev_num,
                 parametrized=False,
                 epe_max_frequency=b_max,
-                epe_max_length=20.0,  # maximum distance in Angstroms for the EPE
+                epe_max_length=self.efa_max_length,
                 tensor_integration=True,
                 ti_degree_scaling_constants=[
-                    0.5**i for i in range(self.max_degree + 1)
+                    self.efa_ti_degree_scaling_base**i for i in range(self.max_degree + 1)
                 ],
             )
 
@@ -162,6 +174,14 @@ class SpookyPhysNet(nn.Module):
             "switch_end": self.switch_end,
             "electrostatics_off_start": self.electrostatics_off_start,
             "electrostatics_off_end": self.electrostatics_off_end,
+            "efa_lebedev_num": self.efa_lebedev_num,
+            "efa_max_length": self.efa_max_length,
+            "efa_ti_degree_scaling_base": self.efa_ti_degree_scaling_base,
+            "vdw_soft_core_fraction": self.vdw_soft_core_fraction,
+            "vdw_scale_center": self.vdw_scale_center,
+            "vdw_scale_range": self.vdw_scale_range,
+            "cgenff_fallback_sigma": self.cgenff_fallback_sigma,
+            "cgenff_fallback_epsilon": self.cgenff_fallback_epsilon,
         }
 
     def energy(
@@ -227,65 +247,6 @@ class SpookyPhysNet(nn.Module):
             cgenff_type_idx=cgenff_type_idx,
             cgenff_master_sigmas=cgenff_master_sigmas,
             cgenff_master_epsilons=cgenff_master_epsilons,
-        )
-
-    def _calculate_geometric_features(
-        self,
-        positions: jnp.ndarray,
-        dst_idx: jnp.ndarray,
-        src_idx: jnp.ndarray,
-        cell: Optional[jnp.ndarray] = None,
-        batch_mask: Optional[jnp.ndarray] = None,
-        edge_mask: Optional[jnp.ndarray] = None,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Calculate geometric features including displacements and basis functions.
-
-        ``batch_mask`` (per-edge 0/1) zeroes the message-passing basis for
-        invalid edges — including real↔padding pairs. Without this, padding
-        atoms at the origin corrupt features of any real atom within
-        ``cutoff``, breaking translation invariance.
-
-        ``edge_mask`` (per-edge 0/1) further zeroes the basis for masked edges,
-        which is how the neural graph is restricted to intra-monomer edges when
-        computing the monomer reference for the interaction-energy penalty. It
-        does not touch the pairwise prior terms (those are gated separately by
-        ``batch_mask``).
-        
-        Parameters
-        ----------
-        positions : jnp.ndarray
-            Atomic positions
-        dst_idx : jnp.ndarray
-            Destination indices for message passing
-        src_idx : jnp.ndarray
-            Source indices for message passing
-        cell : Optional[jnp.ndarray]
-            If provided, apply minimum-image convention to displacements (PBC).
-        batch_mask : Optional[jnp.ndarray]
-            Per-edge validity mask (1 for real↔real, 0 for padding edges)
-        edge_mask : Optional[jnp.ndarray]
-            Optional extra per-edge mask (e.g. intra-monomer restriction)
-            
-        Returns
-        -------
-        Tuple[jnp.ndarray, jnp.ndarray]
-            Tuple of (basis functions, displacements)
-        """
-        displacements = pair_displacements(
-            positions,
-            dst_idx,
-            src_idx,
-            cell=cell,
-            use_pbc=bool(self.use_pbc),
-        )
-        return radial_spherical_basis(
-            displacements,
-            num_basis_functions=self.num_basis_functions,
-            max_degree=self.max_degree,
-            cutoff=self.cutoff,
-            batch_mask=batch_mask,
-            edge_mask=edge_mask,
         )
 
     def _process_atomic_features(
@@ -567,7 +528,7 @@ class SpookyPhysNet(nn.Module):
         scale_raw = nn.Dense(
             1, use_bias=True, kernel_init=jax.nn.initializers.zeros, dtype=DTYPE
         )(x)
-        atomic_vdw_scale = 1.0 + 0.5 * jnp.tanh(scale_raw)
+        atomic_vdw_scale = self.vdw_scale_center + self.vdw_scale_range * jnp.tanh(scale_raw)
         atomic_vdw_scale *= atom_mask[..., None, None, None]
         return atomic_vdw_scale.reshape(-1)
 
@@ -602,10 +563,10 @@ class SpookyPhysNet(nn.Module):
             jnp.maximum(jnp.sum(displacements**2, axis=-1), 1.0e-12)
         )
 
-        sig_dst = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=3.5)
-        sig_src = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=3.5)
-        eps_dst = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=0.05)
-        eps_src = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=0.05)
+        sig_dst = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=self.cgenff_fallback_sigma)
+        sig_src = jnp.take(cgenff_master_sigmas, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=self.cgenff_fallback_sigma)
+        eps_dst = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, dst_idx, fill_value=0), fill_value=self.cgenff_fallback_epsilon)
+        eps_src = jnp.take(cgenff_master_epsilons, jnp.take(cgenff_type_idx, src_idx, fill_value=0), fill_value=self.cgenff_fallback_epsilon)
 
         sig_ij = 0.5 * (sig_dst + sig_src)
         eps_ij = jnp.sqrt(eps_dst * eps_src)
@@ -639,8 +600,9 @@ class SpookyPhysNet(nn.Module):
         else:
             inter_monomer_mask = 1.0
 
-        # Soft-core distance clamping to cap unphysical LJ 6-12 repulsion spikes at r < 0.8 * sig_ij
-        r_safe = jnp.maximum(pair_distances, 0.8 * sig_ij)
+        # Soft-core distance clamping to cap unphysical LJ 6-12 repulsion spikes
+        # at r < vdw_soft_core_fraction * sig_ij
+        r_safe = jnp.maximum(pair_distances, self.vdw_soft_core_fraction * sig_ij)
         sr6 = (sig_ij / r_safe) ** 6
         sr12 = sr6 ** 2
         
@@ -901,161 +863,8 @@ class SpookyPhysNet(nn.Module):
 
         return atomic_energies
 
-    def _calc_switches(self, displacements: jnp.ndarray, batch_mask: jnp.ndarray):
-        """
-        Calculate switching functions for smooth interactions.
-        
-        Parameters
-        ----------
-        displacements : jnp.ndarray
-            Interatomic displacements
-        batch_mask : jnp.ndarray
-            Batch mask
-            
-        Returns
-        -------
-        tuple
-            Tuple of (r, off_dist, eshift) switching factors
-        """
-        return calc_electrostatics_switches(
-            displacements,
-            batch_mask,
-            switch_start=self.switch_start,
-            switch_end=self.switch_end,
-            electrostatics_off_start=self.electrostatics_off_start,
-            electrostatics_off_end=self.electrostatics_off_end,
-            electrostatics_damping_sigma=self.electrostatics_damping_sigma,
-        )
-
-    def _calculate_electrostatics(
-        self,
-        atomic_charges: jnp.ndarray,
-        r: jnp.ndarray,
-        off_dist: jnp.ndarray,
-        eshift: jnp.ndarray,
-        dst_idx: jnp.ndarray,
-        src_idx: jnp.ndarray,
-        atom_mask: jnp.ndarray,
-        batch_mask: jnp.ndarray,
-        batch_segments: jnp.ndarray,
-        batch_size: int,
-    ) -> Tuple[jnp.ndarray, jnp.array]:
-        """
-        Calculate electrostatic interactions between atoms.
-
-        Uses a smoothly switched combination of short-range and long-range electrostatics
-        to avoid numerical instabilities at zero distance while maintaining accuracy.
-
-        Parameters
-        ----------
-        atomic_charges : jnp.ndarray
-            Predicted atomic charges
-        r : jnp.ndarray
-            Distance factors
-        off_dist : jnp.ndarray
-            Distance cutoff factors
-        eshift : jnp.ndarray
-            Energy shift factors
-        dst_idx : jnp.ndarray
-            Destination indices for pair interactions
-        src_idx : jnp.ndarray
-            Source indices for pair interactions
-        atom_mask : jnp.ndarray
-            Atom mask
-        batch_mask : jnp.ndarray
-            Batch mask
-        batch_segments : jnp.ndarray
-            Batch assignment for each atom
-        batch_size : int
-            Number of molecules in batch
-
-        Returns
-        -------
-        Tuple[jnp.ndarray, jnp.array]
-            Tuple of (atomic electrostatic energies, batch electrostatic energies)
-        """
-        del atom_mask  # retained for call-site compatibility
-        return pair_electrostatics_energy(
-            atomic_charges,
-            r,
-            off_dist,
-            eshift,
-            dst_idx,
-            src_idx,
-            batch_mask,
-            batch_segments,
-            batch_size,
-        )
-
-    def _calculate_dipole(
-        self,
-        positions: jnp.ndarray,
-        atomic_numbers: jnp.ndarray,
-        charges: jnp.ndarray,
-        batch_segments: jnp.ndarray,
-        batch_size: int,
-    ) -> jnp.ndarray:
-        """
-        Calculate dipoles for a batch of molecules.
-
-        Computes molecular dipole moments from atomic charges and positions
-        relative to the center of mass of each molecule.
-
-        Parameters
-        ----------
-        positions : jnp.ndarray
-            Atomic positions
-        atomic_numbers : jnp.ndarray
-            Atomic numbers
-        charges : jnp.ndarray
-            Atomic charges
-        batch_segments : jnp.ndarray
-            Batch segment indices
-        batch_size : int
-            Number of molecules in the batch
-
-        Returns
-        -------
-        jnp.ndarray
-            Calculated dipoles for each molecule in the batch
-        """
-        charges = charges.squeeze()
-        positions = positions.squeeze()
-        atomic_numbers = atomic_numbers.squeeze()
-        
-        # Get atomic masses
-        masses = jnp.take(ase.data.atomic_masses, atomic_numbers)
-        
-        # Calculate COM for each molecule: COM = Σ(m_i * r_i) / Σ(m_i)
-        # Use segment_sum to handle batches
-        mass_weighted_pos = positions * masses[..., None]  # (natoms, 3)
-        total_mass_weighted_pos = jax.ops.segment_sum(
-            mass_weighted_pos, 
-            segment_ids=batch_segments, 
-            num_segments=batch_size
-        )  # (batch_size, 3)
-        total_mass = jax.ops.segment_sum(
-            masses, 
-            segment_ids=batch_segments, 
-            num_segments=batch_size
-        )  # (batch_size,)
-        
-        com = total_mass_weighted_pos / total_mass[..., None]  # (batch_size, 3)
-        
-        # Get COM for each atom (broadcast back)
-        com_per_atom = jnp.take(com, batch_segments, axis=0)  # (natoms, 3)
-        
-        # Positions relative to COM
-        pos_com = positions - com_per_atom  # (natoms, 3)
-        
-        # Dipole = Σ(q_i * (r_i - r_COM)) per molecule
-        dipoles = jax.ops.segment_sum(
-            pos_com * charges[..., None],
-            segment_ids=batch_segments,
-            num_segments=batch_size,
-        )  # (batch_size, 3)
-        
-        return dipoles
+    # _calculate_geometric_features / _calc_switches / _calculate_electrostatics /
+    # _calculate_dipole: PhysNetFamilyMixin → mpnn_kernels
 
     @nn.compact
     def __call__(

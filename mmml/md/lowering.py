@@ -21,6 +21,7 @@ from typing import Any, Mapping
 
 from mmml.md.config import EnsembleSpec, RunConfig
 from mmml.md.system import SystemSpec
+from mmml.md.temperature import parse_temperature_schedule
 
 __all__ = [
     "terms_from_cg_config",
@@ -83,10 +84,12 @@ def runconfig_from_cg_config(cfg: Mapping[str, Any], phase: str = "nve") -> RunC
         seed=int(cfg.get("seed", 0)),
         params={k: cfg[k] for k in ("sequence", "workdir", "initial_peptide_pdb") if k in cfg},
     )
+    schedule_text = cfg.get("temperature_schedule") or cfg.get("temp_schedule")
     ensemble = EnsembleSpec(
         ensemble=ensemble_name,
         space="pbc",
         temperature_K=float(cfg.get("temperature", 300.0)),
+        temperature_schedule=(parse_temperature_schedule(str(schedule_text)) if schedule_text else None),
         dt_fs=dt_fs,
         n_steps=n_steps,
         params={"block_steps": cfg.get(f"{phase}_block_steps")},
@@ -165,10 +168,12 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
         box_size=getattr(args, "box_size", None),
         seed=int(getattr(args, "seed", 0)),
     )
+    schedule_text = getattr(args, "temperature_schedule", None)
     ensemble = EnsembleSpec(
         ensemble=ensemble_name,
         space=space,
         temperature_K=float(getattr(args, "temperature", 300.0)),
+        temperature_schedule=(parse_temperature_schedule(schedule_text) if schedule_text else None),
         pressure_bar=float(getattr(args, "pressure", 1.0)),
         dt_fs=dt_fs,
         n_steps=_nsteps_from_ps(ps, dt_fs),
@@ -193,6 +198,7 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
                 "mbd_checkpoint": getattr(args, "mbd_checkpoint", None),
                 "mbd_weight": getattr(args, "mbd_weight", 1.0),
                 "multipole_checkpoint": getattr(args, "multipole_checkpoint", None),
+                "interaction_policy": getattr(args, "interaction_policy", None),
             }.items()
             if v is not None
         },

@@ -1,12 +1,16 @@
 """
 PhysNet model with Total Charge and Total Spin conditioning.
 
-This module implements an enhanced PhysNet that accepts molecular properties
-(total charge and total spin) as additional inputs, enabling charge and spin
-state-dependent energy and force predictions.
+.. deprecated::
+    Prefer :class:`~mmml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet`
+    for Q/S-conditioned training and hybrid MD. This fork remains only for
+    loading historical checkpoints; do not extend it.
 """
 
+from __future__ import annotations
+
 import functools
+import warnings
 from typing import Dict, List, Optional, Tuple
 
 import e3x
@@ -16,6 +20,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
+from mmml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
 from mmml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,
@@ -28,13 +33,11 @@ DTYPE = jnp.float32
 HARTREE_TO_KCAL_MOL = 627.509
 
 
-class PhysNetChargeSpin(nn.Module):
-    """PhysNet with total charge and total spin conditioning.
-    
-    This model extends the standard PhysNet to accept total molecular charge
-    and total spin as additional inputs. These properties are embedded and
-    used to condition the atomic feature representations, allowing the model
-    to predict charge and spin state-dependent energies and forces.
+class PhysNetChargeSpin(PhysNetFamilyMixin, nn.Module):
+    """PhysNet with total charge and total spin conditioning (deprecated).
+
+    Prefer :class:`SpookyPhysNet` for new work. This fork remains for loading
+    historical checkpoints only.
     
     Key differences from standard PhysNet:
     - Accepts total_charge and total_spin as inputs
@@ -110,6 +113,12 @@ class PhysNetChargeSpin(nn.Module):
     switch_end: float = 10.0
     electrostatics_off_start: float = 8.0
     electrostatics_off_end: float = 10.0
+    # Euclidean Fast Attention (EFA) hyperparameters, only used when efa=True.
+    # Defaults reproduce the values every checkpoint trained before these
+    # fields existed was implicitly hardcoded to.
+    efa_lebedev_num: int = 194
+    efa_max_length: float = 20.0  # maximum distance (Angstrom) for the EPE
+    efa_ti_degree_scaling_base: float = 0.5
 
     @property
     def natoms(self) -> int:
@@ -147,18 +156,24 @@ class PhysNetChargeSpin(nn.Module):
         if self.efa:
             b_max = 4 * jnp.pi
             self.efa_final = EFA(
-                lebedev_num=194,
+                lebedev_num=self.efa_lebedev_num,
                 parametrized=False,
                 epe_max_frequency=b_max,
-                epe_max_length=20.0,
+                epe_max_length=self.efa_max_length,
                 tensor_integration=True,
                 ti_degree_scaling_constants=[
-                    0.5**i for i in range(self.max_degree + 1)
+                    self.efa_ti_degree_scaling_base**i for i in range(self.max_degree + 1)
                 ],
             )
     
     def return_attributes(self) -> Dict:
         """Return model attributes for checkpointing."""
+        warnings.warn(
+            "PhysNetChargeSpin is deprecated; use SpookyPhysNet for Q/S-conditioned "
+            "models (see docs/mpnn-tool-inventory.md).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return {
             "features": self.features,
             "max_degree": self.max_degree,
@@ -187,6 +202,9 @@ class PhysNetChargeSpin(nn.Module):
             "switch_end": self.switch_end,
             "electrostatics_off_start": self.electrostatics_off_start,
             "electrostatics_off_end": self.electrostatics_off_end,
+            "efa_lebedev_num": self.efa_lebedev_num,
+            "efa_max_length": self.efa_max_length,
+            "efa_ti_degree_scaling_base": self.efa_ti_degree_scaling_base,
         }
     
     def _embed_molecular_properties(
@@ -459,42 +477,9 @@ class PhysNetChargeSpin(nn.Module):
         # Simplified attention - can be expanded
         return x
     
-    def _calc_switches(
-        self,
-        displacements: jnp.ndarray,
-        batch_mask: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        """Calculate switching functions for electrostatics and repulsion."""
-        # Pure numerical-stability floors -- unlike switch_start/switch_end/
-        # electrostatics_off_start/electrostatics_off_end (below), these
-        # don't determine WHERE any physical behavior turns on or off, so
-        # they stay internal rather than exposed as model fields.
-        eps = 1e-6
-        min_dist = 0.01
-        switch_start = self.switch_start
-        switch_end = self.switch_end
+    # _calc_switches / geometric features / electrostatics / dipole via mixin
+    # (electrostatics_damping_sigma defaults to 0 — ChargeSpin never had erf damping)
 
-        displacements = displacements + (1 - batch_mask)[..., None]
-        squared_distances = jnp.sum(displacements**2, axis=1)
-        distances = jnp.sqrt(jnp.maximum(squared_distances, min_dist**2))
-
-        switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
-        off_dist = 1.0 - e3x.nn.smooth_switch(
-            distances, self.electrostatics_off_start, self.electrostatics_off_end
-        )
-        one_minus_switch_dist = 1 - switch_dist
-        
-        safe_distances = distances + eps
-        r1 = switch_dist / jnp.sqrt(squared_distances + 1.0)
-        r2 = one_minus_switch_dist / safe_distances
-        r = r1 + r2
-        eshift = safe_distances / (switch_end**2) - 2.0 / switch_end
-        
-        off_dist *= batch_mask
-        eshift *= batch_mask
-        
-        return r, off_dist, eshift
-    
     def _calculate(
         self,
         x: jnp.ndarray,

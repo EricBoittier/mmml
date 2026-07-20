@@ -53,6 +53,16 @@ In particular:
 The proposed canonical 1D scan architecture is documented in
 [`docs/dimer-scan-design.md`](docs/dimer-scan-design.md).
 
+## No magic numbers
+
+Every scientifically meaningful numeric literal (distance, cutoff, threshold,
+switch point, weight, tolerance) must be a named, documented constant or
+configurable field — never a bare literal, and never a second copy of a
+value that should track an existing configurable parameter. This applies
+repo-wide: models, training, evaluation, and workflow code alike. See
+[“No magic numbers”](docs/scientific-code.md#no-magic-numbers) for the full
+rule and the electrostatics-switch bug that established it.
+
 ## PBC ML-dimer MIC wrap — do not “fix” stop_gradient
 
 If NVE force–energy preflight fails on a liquid box, **do not** remove

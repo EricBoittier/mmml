@@ -8,27 +8,14 @@ constructor arguments so the term is reusable across systems.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Sequence
 
 from mmml.md.energy.registry import EnergyContext, TermFns, register_term
 from mmml.md.energy.terms._common import ase_contribution_from_jax
 from mmml.md.system import MolecularSystem
+from mmml.md.restraints.dihedral import DihedralRestraint
 
 __all__ = ["DihedralRestraint", "DihedralRestraintTerm"]
-
-
-@dataclass(frozen=True)
-class DihedralRestraint:
-    """One harmonic restraint ``0.5 k (Δθ)²`` on a signed dihedral.
-
-    ``indices`` are the four atom indices defining the dihedral, ``target_deg``
-    the restraint center, and ``k_ev`` the force constant (eV / rad²).
-    """
-
-    indices: tuple[int, int, int, int]
-    target_deg: float
-    k_ev: float
 
 
 def _dihedral_angle_rad(r, atom_indices):

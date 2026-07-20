@@ -193,6 +193,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target temperature in K (NVT/NPT).",
     )
     parser.add_argument(
+        "--temperature-schedule",
+        default=None,
+        help=(
+            "Shared NVT/NPT schedule, e.g. '200->300' or "
+            "'200->300:0.25,300:0.75'. Overrides the fixed thermostat target."
+        ),
+    )
+    parser.add_argument(
+        "--interaction-policy",
+        type=Path,
+        default=None,
+        help=(
+            "Versioned YAML/JSON species interaction policy. The unified runner "
+            "validates complete, unambiguous monomer and molecular-pair ownership."
+        ),
+    )
+    parser.add_argument(
         "--nvt-integrator",
         choices=["auto", "nhc", "langevin"],
         default="auto",

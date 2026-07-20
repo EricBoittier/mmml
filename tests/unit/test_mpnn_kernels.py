@@ -13,6 +13,7 @@ import pytest
 from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
     COULOMB_PAIR_FACTOR_EV_A,
     calc_electrostatics_switches,
+    encode_geometry_and_basis,
     pair_displacements,
     pair_electrostatics_energy,
     radial_spherical_basis,
@@ -207,6 +208,22 @@ def test_physnet_and_spooky_delegate_switches(water_edges):
         got = model._calc_switches(disp, batch_mask)
         for a, b in zip(got, shared):
             np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=0.0, atol=0.0)
+
+
+def test_encode_geometry_and_basis_reciprocal_bernstein(water_edges):
+    positions, dst, src, batch_mask = water_edges
+    basis, disp = encode_geometry_and_basis(
+        positions,
+        dst,
+        src,
+        num_basis_functions=8,
+        max_degree=1,
+        cutoff=5.0,
+        radial_fn=e3x.nn.reciprocal_bernstein,
+        batch_mask=batch_mask,
+    )
+    assert basis.shape[0] == disp.shape[0]
+    assert np.all(np.isfinite(np.asarray(basis)))
 
 
 def test_edge_mask_zeros_basis(water_edges):

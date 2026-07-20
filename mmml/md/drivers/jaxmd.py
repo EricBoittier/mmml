@@ -154,6 +154,14 @@ class JaxmdDriver:
                 return init_fn(jax.random.PRNGKey(seed + offset), pos, box=box, mass=masses, **dyn)
             return init_fn(jax.random.PRNGKey(seed + offset), pos, mass=masses, **dyn)
 
+        schedule = ensemble.temperature_schedule
+        target_temperatures: list[float] = []
+
+        def _target_temperature(step: int) -> float:
+            if schedule is None:
+                return float(ensemble.temperature_K)
+            return float(schedule.temperature_at(step, ensemble.n_steps))
+
         kT = None
         if ensemble.ensemble == "min":
             init_fn, step_fn = minimize.fire_descent(energy_fn, shift_fn, dt_start=dt_ps)
@@ -163,9 +171,7 @@ class JaxmdDriver:
             # float64 while positions/box are float32 -- the integrator scan then
             # rejects the mixed carry. Matching kT to ``dtype`` keeps all
             # integrator state in one precision (NVE/NVT benefit too).
-            kT = jnp.asarray(
-                float(ensemble.temperature_K) * unit_system["temperature"], dtype=dtype
-            )
+            kT = jnp.asarray(_target_temperature(0) * unit_system["temperature"], dtype=dtype)
             if ensemble.ensemble == "nvt":
                 init_fn, step_fn = simulate.nvt_nose_hoover(
                     energy_fn, shift_fn, dt_ps, kT,
@@ -191,6 +197,7 @@ class JaxmdDriver:
         frames = [np.asarray(jax.device_get(_real_of(state)))]
         boxes = [None if box is None else np.asarray(jax.device_get(_box_of(state)))]
         energies = [_record_energy(state, dynamic_kwargs)]
+        target_temperatures.append(_target_temperature(0))
         block_size = int(self.record_every if self.block_size is None else self.block_size)
 
         completed = 0
@@ -202,6 +209,24 @@ class JaxmdDriver:
                 ensemble.n_steps - completed,
                 next_record - completed,
             )
+            # jax-md captures kT in the thermostat step closure. Rebuilding the
+            # closure at block boundaries changes the target without resetting
+            # positions, momenta, or thermostat/barostat state.
+            if schedule is not None and ensemble.ensemble in {"nvt", "npt"}:
+                block_kT = jnp.asarray(
+                    _target_temperature(completed) * unit_system["temperature"], dtype=dtype
+                )
+                if is_npt:
+                    _, step_fn = simulate.npt_nose_hoover(
+                        energy_fn, shift_fn, dt_ps, pressure, block_kT,
+                        barostat_kwargs=options.get("barostat_kwargs", {}),
+                        thermostat_kwargs=options.get("thermostat_kwargs", {}),
+                    )
+                else:
+                    _, step_fn = simulate.nvt_nose_hoover(
+                        energy_fn, shift_fn, dt_ps, block_kT,
+                        thermostat_kwargs=options.get("thermostat_kwargs", {}),
+                    )
             for _ in range(count):
                 state = step_fn(state, **dynamic_kwargs)
             state.position.block_until_ready()
@@ -235,6 +260,7 @@ class JaxmdDriver:
                 frames.append(np.asarray(jax.device_get(_real_of(state))))
                 boxes.append(None if box is None else np.asarray(jax.device_get(_box_of(state))))
                 energies.append(_record_energy(state, dynamic_kwargs))
+                target_temperatures.append(_target_temperature(completed))
                 next_record = min(completed + self.record_every, ensemble.n_steps)
 
         frames = [np.asarray(f) for f in frames]
@@ -249,6 +275,7 @@ class JaxmdDriver:
             npz_kwargs: dict[str, Any] = dict(
                 positions=np.asarray(frames),
                 energies=np.asarray(energies),
+                target_temperatures_K=np.asarray(target_temperatures),
                 Z=np.asarray(system.Z),
             )
             if box is not None and not is_npt:
@@ -261,6 +288,7 @@ class JaxmdDriver:
             "steps": completed,
             "positions": np.asarray(frames),
             "energies": np.asarray(energies),
+            "target_temperatures_K": np.asarray(target_temperatures),
         }
         if is_npt:
             metadata["boxes"] = np.asarray(boxes)

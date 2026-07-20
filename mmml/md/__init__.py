@@ -18,6 +18,8 @@ from mmml.md.assemble import (
     get_builder,
 )
 from mmml.md.config import EnsembleSpec, RunConfig
+from mmml.md.interactions import InteractionPolicy, compile_interaction_policy
+from mmml.md.temperature import TemperatureSchedule, parse_temperature_schedule
 from mmml.md.lowering import (
     runconfig_from_cg_config,
     runconfig_from_md_system_args,
@@ -34,6 +36,10 @@ __all__ = [
     "SystemSpec",
     "EnsembleSpec",
     "RunConfig",
+    "InteractionPolicy",
+    "compile_interaction_policy",
+    "TemperatureSchedule",
+    "parse_temperature_schedule",
     "Trajectory",
     "assemble_and_run",
     "available_builders",

@@ -1,9 +1,13 @@
+import e3x
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import jax.scipy.special
-import flax.linen as nn
-import functools
-import e3x
+
+from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+    encode_geometry_and_basis,
+)
+
 # -------------------------
 # Model
 # -------------------------
@@ -46,11 +50,16 @@ class EFieldPhysNet(nn.Module):
                 # Basic dims: use static values (CUDA-graph-friendly)
         B = batch_size  # Static - known at compile time
         N = atomic_numbers_flat.shape[0] // B   # Static - constant number of atoms per molecule
-        # Compute displacements using e3x gather operations (CUDA-graph-friendly)
-        # Must use flattened indices to get (B*E, 3) displacements matching MessagePass
-        positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx_flat)
-        positions_src = e3x.ops.gather_src(positions_flat, src_idx=src_idx_flat)
-        displacements = positions_src - positions_dst  # (B*E, 3)
+        # Shared non-parametric encode; Embed / MessagePass / field coupling stay local.
+        basis, displacements = encode_geometry_and_basis(
+            positions_flat,
+            dst_idx_flat,
+            src_idx_flat,
+            num_basis_functions=self.num_basis_functions,
+            max_degree=self.max_degree,
+            cutoff=self.cutoff,
+            radial_fn=e3x.nn.reciprocal_bernstein,
+        )
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
         # e3x format is (num_atoms, parity, (lmax+1)^2, features)
@@ -72,15 +81,6 @@ class EFieldPhysNet(nn.Module):
         xEF = e3x.nn.change_max_degree_or_type(xEF, max_degree=self.max_degree,
          include_pseudotensors=self.include_pseudotensors)
 
-        # Use pre-computed flattened indices (passed from batch dict, computed outside JIT)
-        # This avoids creating traced index arrays inside the JIT function
-        basis = e3x.nn.basis(
-            displacements,
-            num=self.num_basis_functions,
-            max_degree=self.max_degree,
-            radial_fn=e3x.nn.reciprocal_bernstein,
-            cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff)
-        )
         # Embed atoms (flattened) - atomic_numbers_flat is already ensured to be 1D above
         x = e3x.nn.Embed(num_embeddings=self.max_atomic_number + 1, features=self.features)(atomic_numbers_flat)
 
