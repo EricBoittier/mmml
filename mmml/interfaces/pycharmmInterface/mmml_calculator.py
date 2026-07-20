@@ -17,6 +17,10 @@ physics functionality is unchanged when the third-party libraries are present.
 from __future__ import annotations
 
 import os
+# Module-level only: a conditional `import warnings` inside setup_calculator
+# makes `warnings` a local cell, so nested AseDimerCalculator.calculate() fails
+# with NameError when those branches do not run.
+import warnings
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -1022,8 +1026,6 @@ def setup_calculator(
                 )
             )
     if _mbd_missing_path:
-        import warnings
-
         warnings.warn(
             f"Checkpoint was trained with mbd_checkpoint={_mbd_missing_path} "
             "but that path doesn't exist here and no local twin was found — "
@@ -1088,8 +1090,6 @@ def setup_calculator(
             if v is not None and abs(float(v) - _active[k]) > 1e-6
         }
         if _bad:
-            import warnings
-
             _detail = ", ".join(
                 f"{k}: trained={t:g} active={a:g}" for k, (t, a) in _bad.items()
             )
@@ -1107,8 +1107,6 @@ def setup_calculator(
         and checkpoint_training_units is not None
         and str(checkpoint_training_units.get("energy", "eV")).lower() in {"hartree", "ha"}
     ):
-        import warnings
-
         warnings.warn(
             "Legacy Hartree-trained checkpoint detected; applying HARTREE_TO_EV at ML output boundary.",
             stacklevel=2,
@@ -2712,8 +2710,6 @@ def setup_calculator(
                         f"lambda_monomer must have shape ({n_monomers},), got {new_arr.shape}"
                     )
                 if _hybrid_jit_warmed[0]:
-                    import warnings
-
                     warnings.warn(
                         "set_lambda_monomer after hybrid JIT warmup invalidates the MM "
                         "cache and may trigger recompilation on the next step.",
