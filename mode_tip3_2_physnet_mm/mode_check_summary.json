@@ -1,0 +1,196 @@
+{
+  "schema_version": "1.0",
+  "config": {
+    "checks": [
+      "minimize",
+      "fd",
+      "bond-scan",
+      "vibrations",
+      "kick"
+    ],
+    "fd_atoms": 3,
+    "fd_dx_A": 0.001,
+    "bond_deltas": [
+      -0.08,
+      -0.07,
+      -0.06,
+      -0.05,
+      -0.04,
+      -0.03,
+      -0.02,
+      -0.01,
+      0.0,
+      0.01,
+      0.02,
+      0.03,
+      0.04,
+      0.05,
+      0.06,
+      0.07,
+      0.08
+    ],
+    "bond_fit_abs_delta_max": 0.03,
+    "minimize_fmax": 0.05,
+    "minimize_steps": 400,
+    "vib_delta_A": 0.01,
+    "vib_nfree": 2,
+    "kick_delta_A": 0.03,
+    "kick_timestep_fs": 0.1,
+    "kick_steps": 500,
+    "atoms_per_monomer": [
+      3,
+      3
+    ]
+  },
+  "setup": {
+    "composition": [
+      [
+        "TIP3",
+        2
+      ]
+    ],
+    "residue_labels": [
+      "TIP3",
+      "TIP3"
+    ],
+    "atoms_per_monomer": [
+      3,
+      3
+    ],
+    "n_monomers": 2,
+    "do_mm_effective": true,
+    "do_ml": true,
+    "do_ml_dimer": true,
+    "checkpoint": "/mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json",
+    "psf_path": "/mmhome/boittier/home/mmml/mode_tip3_2_physnet_mm/cluster.psf",
+    "mm_charge_mode": "fixed",
+    "lr_solver": "mic",
+    "vacuum": true,
+    "backprop": true
+  },
+  "energy_eV": -22.603837425489235,
+  "max_force_eVA": 0.21136577665261427,
+  "r_bonds_A": [
+    0.8203887048236731,
+    0.9221212176133642,
+    0.4229545312656558,
+    0.9802935072619807
+  ],
+  "bond_pairs": [
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      3,
+      4
+    ],
+    [
+      3,
+      5
+    ]
+  ],
+  "fd": {
+    "fd_atoms_checked": 3.0,
+    "fd_dx_A": 0.001,
+    "fd_force_max_abs_diff_eVA": 0.000675260933154398,
+    "fd_force_rms_diff_eVA": 0.0003029628097604917
+  },
+  "bond_scans": {
+    "XH0": {
+      "atom_i": 0,
+      "atom_j": 1,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 270.8395889827255,
+      "k_from_F_eV_A2": 445.05698512507564,
+      "nu_cm_from_E": 8812.9908754739,
+      "nu_cm_from_F": 11297.31031830483
+    },
+    "XH1": {
+      "atom_i": 0,
+      "atom_j": 2,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 41.81646165394167,
+      "k_from_F_eV_A2": 54.845935434712096,
+      "nu_cm_from_E": 3462.9074787438803,
+      "nu_cm_from_F": 3965.879108205798
+    },
+    "XH2": {
+      "atom_i": 3,
+      "atom_j": 4,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 233.78485725039891,
+      "k_from_F_eV_A2": 536.4792174775066,
+      "nu_cm_from_E": 8187.954793626578,
+      "nu_cm_from_F": 12403.484228229801
+    },
+    "XH3": {
+      "atom_i": 3,
+      "atom_j": 5,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 104.91750735298805,
+      "k_from_F_eV_A2": 201.09624804005105,
+      "nu_cm_from_E": 5485.184365333415,
+      "nu_cm_from_F": 7593.976193932251
+    }
+  },
+  "vibrations": {
+    "frequencies_cm": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      24.30353300141146,
+      46.19708246341881,
+      97.59471953401668,
+      152.7701624609542,
+      311.4232599057164,
+      369.7146172324574,
+      550.1055302033769,
+      607.8162943150508,
+      821.1643408087976,
+      911.7194674114859,
+      3272.977142720714,
+      5315.950694801753,
+      8050.004976091705,
+      9537.310813431142
+    ],
+    "max_cm": 9537.310813431142,
+    "real_gt_1_cm": [
+      24.30353300141146,
+      46.19708246341881,
+      97.59471953401668,
+      152.7701624609542,
+      311.4232599057164,
+      369.7146172324574,
+      550.1055302033769,
+      607.8162943150508,
+      821.1643408087976,
+      911.7194674114859,
+      3272.977142720714,
+      5315.950694801753,
+      8050.004976091705,
+      9537.310813431142
+    ],
+    "summary_path": "/mmhome/boittier/home/mmml/mode_tip3_2_physnet_mm/vibrations/vib_summary.txt"
+  },
+  "kick": {
+    "atom_i": 0,
+    "atom_j": 1,
+    "fft_peak_cm": 2668.5127615852166,
+    "r_std": 0.07985132519687199,
+    "r_min": 0.7973687079468325,
+    "r_max": 1.161390926958994,
+    "n_steps": 500,
+    "timestep_fs": 0.1,
+    "kick_delta_A": 0.03,
+    "ASE_FS": 0.09822694788464063,
+    "r_path": "/mmhome/boittier/home/mmml/mode_tip3_2_physnet_mm/kick_r.npy"
+  },
+  "notes": [],
+  "errors": {}
+}

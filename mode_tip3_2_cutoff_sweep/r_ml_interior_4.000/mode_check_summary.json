@@ -1,0 +1,150 @@
+{
+  "schema_version": "1.0",
+  "config": {
+    "checks": [
+      "fd",
+      "bond-scan"
+    ],
+    "fd_atoms": 3,
+    "fd_dx_A": 0.001,
+    "bond_deltas": [
+      -0.08,
+      -0.07,
+      -0.06,
+      -0.05,
+      -0.04,
+      -0.03,
+      -0.02,
+      -0.01,
+      0.0,
+      0.01,
+      0.02,
+      0.03,
+      0.04,
+      0.05,
+      0.06,
+      0.07,
+      0.08
+    ],
+    "bond_fit_abs_delta_max": 0.03,
+    "minimize_fmax": 0.05,
+    "minimize_steps": 400,
+    "vib_delta_A": 0.01,
+    "vib_nfree": 2,
+    "kick_delta_A": 0.03,
+    "kick_timestep_fs": 0.1,
+    "kick_steps": 500,
+    "atoms_per_monomer": null
+  },
+  "setup": {
+    "composition": [
+      [
+        "TIP3",
+        2
+      ]
+    ],
+    "residue_labels": [
+      "TIP3",
+      "TIP3"
+    ],
+    "atoms_per_monomer": [
+      3,
+      3
+    ],
+    "n_monomers": 2,
+    "monomer_separation_A": 4.0,
+    "com_separations_A": [
+      4.000000000000001
+    ],
+    "min_intermolecular_distance_A": 3.7520866943536517,
+    "do_mm_effective": true,
+    "do_ml": true,
+    "do_ml_dimer": true,
+    "checkpoint": "/mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json",
+    "psf_path": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep/cluster.psf",
+    "mm_charge_mode": "fixed",
+    "lr_solver": "mic",
+    "vacuum": true,
+    "backprop": true,
+    "cutoff_station": {
+      "label": "ml_interior",
+      "com_A": 4.0,
+      "region": "pure_ml",
+      "description": "Interior of ML-full region (s_ML\u22481, MM off)"
+    }
+  },
+  "energy_eV": -23.301087617874146,
+  "max_force_eVA": 1.0667721781507151,
+  "r_bonds_A": [
+    0.9574096671348724,
+    0.9527866127133554,
+    0.9574096671348724,
+    0.9527866127133554
+  ],
+  "bond_pairs": [
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      3,
+      4
+    ],
+    [
+      3,
+      5
+    ]
+  ],
+  "fd": {
+    "fd_atoms_checked": 3.0,
+    "fd_dx_A": 0.001,
+    "fd_force_max_abs_diff_eVA": 0.0003103227327037883,
+    "fd_force_rms_diff_eVA": 0.00018557727730592248
+  },
+  "bond_scans": {
+    "XH0": {
+      "atom_i": 0,
+      "atom_j": 1,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 13.688575653808485,
+      "k_from_F_eV_A2": 27.217003451820318,
+      "nu_cm_from_E": 1981.2823820794092,
+      "nu_cm_from_F": 2793.7491068701415
+    },
+    "XH1": {
+      "atom_i": 0,
+      "atom_j": 2,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 13.774633407589679,
+      "k_from_F_eV_A2": 27.28090820671007,
+      "nu_cm_from_E": 1987.500617316225,
+      "nu_cm_from_F": 2797.027005867279
+    },
+    "XH2": {
+      "atom_i": 3,
+      "atom_j": 4,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 14.362335205081736,
+      "k_from_F_eV_A2": 28.525390885250083,
+      "nu_cm_from_E": 2029.4566392107563,
+      "nu_cm_from_F": 2860.1120623262714
+    },
+    "XH3": {
+      "atom_i": 3,
+      "atom_j": 5,
+      "mu_amu": 0.948256129828894,
+      "k_from_E_eV_A2": 15.843822842552846,
+      "k_from_F_eV_A2": 31.33676149233443,
+      "nu_cm_from_E": 2131.5584021712566,
+      "nu_cm_from_F": 2997.7423510674175
+    }
+  },
+  "vibrations": null,
+  "kick": null,
+  "notes": [],
+  "errors": {}
+}

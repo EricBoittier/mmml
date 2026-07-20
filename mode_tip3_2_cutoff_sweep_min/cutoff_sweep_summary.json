@@ -1,0 +1,285 @@
+{
+  "schema": "mode_check_cutoff_sweep/1.0",
+  "boundaries": {
+    "ml_switch_width": 1.5,
+    "mm_switch_on": 6.0,
+    "mm_switch_width": 5.0,
+    "r_ml_edge_A": 4.5,
+    "r_mm_off_A": 11.0
+  },
+  "stations": [
+    {
+      "label": "ml_interior",
+      "com_A": 4.0,
+      "region": "pure_ml",
+      "description": "Interior of ML-full region (s_ML\u22481, MM off)"
+    },
+    {
+      "label": "ml_edge",
+      "com_A": 4.5,
+      "region": "pure_ml_edge",
+      "description": "End of ML-full / start of complementary handoff"
+    },
+    {
+      "label": "handoff_mid",
+      "com_A": 5.25,
+      "region": "handoff",
+      "description": "Mid complementary handoff (s_ML + s_MM = 1)"
+    },
+    {
+      "label": "mm_switch_on",
+      "com_A": 6.0,
+      "region": "handoff_end",
+      "description": "Handoff end: ML\u21920, MM\u21921"
+    },
+    {
+      "label": "mm_tail_mid",
+      "com_A": 8.5,
+      "region": "mm_tail",
+      "description": "Mid MM outer taper (ML off)"
+    },
+    {
+      "label": "mm_off",
+      "com_A": 11.0,
+      "region": "mm_off",
+      "description": "Switched MM reaches zero"
+    },
+    {
+      "label": "beyond",
+      "com_A": 15.0,
+      "region": "beyond",
+      "description": "Past all switched two-body cutoffs (numerical / monomer-parity)"
+    }
+  ],
+  "checks": [
+    "minimize",
+    "fd",
+    "bond-scan"
+  ],
+  "minimize_freeze_monomer_coms": true,
+  "base_meta": {
+    "composition": [
+      [
+        "TIP3",
+        2
+      ]
+    ],
+    "checkpoint": "/mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json",
+    "mm_charge_mode": "fixed",
+    "do_mm_effective": true,
+    "do_ml_dimer": true
+  },
+  "results": [
+    {
+      "label": "ml_interior",
+      "region": "pure_ml",
+      "description": "Interior of ML-full region (s_ML\u22481, MM off)",
+      "com_A_requested": 4.0,
+      "com_separations_A": [
+        4.000000000000001
+      ],
+      "min_intermolecular_distance_A": 3.7520866943536517,
+      "energy_eV": -23.397661447525024,
+      "max_force_eVA": 0.0704415316849754,
+      "fd": {
+        "fd_atoms_checked": 3.0,
+        "fd_dx_A": 0.001,
+        "fd_force_max_abs_diff_eVA": 0.00021873441169542596,
+        "fd_force_rms_diff_eVA": 0.00010556859047329304
+      },
+      "bond_nu_cm_from_E": {
+        "XH0": 2982.6054872035857,
+        "XH1": 2931.082248833815,
+        "XH2": 2793.481571922871,
+        "XH3": 2823.88985028744
+      },
+      "vib_max_cm": null,
+      "kick_fft_peak_cm": null,
+      "errors": {},
+      "notes": [],
+      "skipped": false,
+      "summary": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep_min/r_ml_interior_4.000/mode_check_summary.json"
+    },
+    {
+      "label": "ml_edge",
+      "region": "pure_ml_edge",
+      "description": "End of ML-full / start of complementary handoff",
+      "com_A_requested": 4.5,
+      "com_separations_A": [
+        4.500000000000001
+      ],
+      "min_intermolecular_distance_A": 4.239628355294624,
+      "energy_eV": -23.414685249328613,
+      "max_force_eVA": 0.06283788825525545,
+      "fd": {
+        "fd_atoms_checked": 3.0,
+        "fd_dx_A": 0.001,
+        "fd_force_max_abs_diff_eVA": 0.00032288819606551833,
+        "fd_force_rms_diff_eVA": 0.00014445758850906848
+      },
+      "bond_nu_cm_from_E": {
+        "XH0": 2990.1579138238467,
+        "XH1": 2935.9848753547612,
+        "XH2": 2864.0921290383058,
+        "XH3": 2897.3452537753747
+      },
+      "vib_max_cm": null,
+      "kick_fft_peak_cm": null,
+      "errors": {},
+      "notes": [],
+      "skipped": false,
+      "summary": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep_min/r_ml_edge_4.500/mode_check_summary.json"
+    },
+    {
+      "label": "handoff_mid",
+      "region": "handoff",
+      "description": "Mid complementary handoff (s_ML + s_MM = 1)",
+      "com_A_requested": 5.25,
+      "com_separations_A": [
+        5.250000000000001
+      ],
+      "min_intermolecular_distance_A": 4.975579326533437,
+      "energy_eV": -23.455173141112613,
+      "max_force_eVA": 0.03919296196022639,
+      "fd": {
+        "fd_atoms_checked": 3.0,
+        "fd_dx_A": 0.001,
+        "fd_force_max_abs_diff_eVA": 0.00017649699256461204,
+        "fd_force_rms_diff_eVA": 0.00012603489505466986
+      },
+      "bond_nu_cm_from_E": {
+        "XH0": 2997.1804784466917,
+        "XH1": 3001.540659389494,
+        "XH2": 3000.7409918826725,
+        "XH3": 2999.44689329557
+      },
+      "vib_max_cm": null,
+      "kick_fft_peak_cm": null,
+      "errors": {},
+      "notes": [],
+      "skipped": false,
+      "summary": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep_min/r_handoff_mid_5.250/mode_check_summary.json"
+    },
+    {
+      "label": "mm_switch_on",
+      "region": "handoff_end",
+      "description": "Handoff end: ML\u21920, MM\u21921",
+      "com_A_requested": 6.0,
+      "com_separations_A": [
+        6.0
+      ],
+      "min_intermolecular_distance_A": 5.7151842208485,
+      "energy_eV": -23.459141921684807,
+      "max_force_eVA": 0.03693894843400713,
+      "fd": {
+        "fd_atoms_checked": 3.0,
+        "fd_dx_A": 0.001,
+        "fd_force_max_abs_diff_eVA": 0.00022043608656445793,
+        "fd_force_rms_diff_eVA": 0.0001576717699955294
+      },
+      "bond_nu_cm_from_E": {
+        "XH0": 3003.7113498722942,
+        "XH1": 3006.2708049735315,
+        "XH2": 3006.5774762412943,
+        "XH3": 3006.2867704024397
+      },
+      "vib_max_cm": null,
+      "kick_fft_peak_cm": null,
+      "errors": {},
+      "notes": [],
+      "skipped": false,
+      "summary": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep_min/r_mm_switch_on_6.000/mode_check_summary.json"
+    },
+    {
+      "label": "mm_tail_mid",
+      "region": "mm_tail",
+      "description": "Mid MM outer taper (ML off)",
+      "com_A_requested": 8.5,
+      "com_separations_A": [
+        8.5
+      ],
+      "min_intermolecular_distance_A": 8.1941931160791,
+      "energy_eV": -23.462397172039967,
+      "max_force_eVA": 0.02039016734085978,
+      "fd": {
+        "fd_atoms_checked": 3.0,
+        "fd_dx_A": 0.001,
+        "fd_force_max_abs_diff_eVA": 0.00024009720163006235,
+        "fd_force_rms_diff_eVA": 0.00014835076750307043
+      },
+      "bond_nu_cm_from_E": {
+        "XH0": 3001.7302029640687,
+        "XH1": 3005.0017130258652,
+        "XH2": 3002.4777793628696,
+        "XH3": 3005.094182850834
+      },
+      "vib_max_cm": null,
+      "kick_fft_peak_cm": null,
+      "errors": {},
+      "notes": [],
+      "skipped": false,
+      "summary": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep_min/r_mm_tail_mid_8.500/mode_check_summary.json"
+    },
+    {
+      "label": "mm_off",
+      "region": "mm_off",
+      "description": "Switched MM reaches zero",
+      "com_A_requested": 11.0,
+      "com_separations_A": [
+        11.0
+      ],
+      "min_intermolecular_distance_A": 10.682989795415915,
+      "energy_eV": -23.465229034423828,
+      "max_force_eVA": 0.013027232329080936,
+      "fd": {
+        "fd_atoms_checked": 3.0,
+        "fd_dx_A": 0.001,
+        "fd_force_max_abs_diff_eVA": 0.00030743484814776956,
+        "fd_force_rms_diff_eVA": 0.000152925149805474
+      },
+      "bond_nu_cm_from_E": {
+        "XH0": 3000.4894204534753,
+        "XH1": 3004.5042652266848,
+        "XH2": 3000.4894204537686,
+        "XH3": 3004.50426542999
+      },
+      "vib_max_cm": null,
+      "kick_fft_peak_cm": null,
+      "errors": {},
+      "notes": [],
+      "skipped": false,
+      "summary": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep_min/r_mm_off_11.000/mode_check_summary.json"
+    },
+    {
+      "label": "beyond",
+      "region": "beyond",
+      "description": "Past all switched two-body cutoffs (numerical / monomer-parity)",
+      "com_A_requested": 15.0,
+      "com_separations_A": [
+        15.0
+      ],
+      "min_intermolecular_distance_A": 14.672989579548554,
+      "energy_eV": -23.465229034423828,
+      "max_force_eVA": 0.013027232329080936,
+      "fd": {
+        "fd_atoms_checked": 3.0,
+        "fd_dx_A": 0.001,
+        "fd_force_max_abs_diff_eVA": 0.00030743484814776956,
+        "fd_force_rms_diff_eVA": 0.00015292514980547024
+      },
+      "bond_nu_cm_from_E": {
+        "XH0": 3000.4894204534753,
+        "XH1": 3004.5042564007467,
+        "XH2": 3000.4894204534753,
+        "XH3": 3004.5042564007467
+      },
+      "vib_max_cm": null,
+      "kick_fft_peak_cm": null,
+      "errors": {},
+      "notes": [],
+      "skipped": false,
+      "summary": "/mmhome/boittier/home/mmml/mode_tip3_2_cutoff_sweep_min/r_beyond_15.000/mode_check_summary.json"
+    }
+  ],
+  "ok": true
+}
