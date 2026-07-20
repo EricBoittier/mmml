@@ -577,8 +577,15 @@ def _commit_hybrid_calculator_mini_result(
     step_count: int,
     verbose: bool,
     stopped_on_safe_grms: bool = False,
+    allow_historical_restore: bool = True,
 ) -> float:
-    """Sync CHARMM, update historical best, and return hybrid GRMS (kcal/mol/Å)."""
+    """Sync CHARMM, update historical best, and return hybrid GRMS (kcal/mol/Å).
+
+    When ``allow_historical_restore`` is false (constrained monomer repair), keep
+    the just-relaxed frame even if an older whole-box mini has a slightly better
+    recorded fmax — restoring that frame reintroduces the stressed monomers the
+    repair just fixed (seen: TIP3:903 gate 3.59 eV/Å after a successful 0.9 repair).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot import cli_common
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
@@ -637,15 +644,19 @@ def _commit_hybrid_calculator_mini_result(
         label=best_frame.restored_label(),
         context=context_prefix,
     )
-    fmax, energy_ev, grms1, restored_hist = _maybe_restore_calculator_mini_historical_best(
-        mlpot_ctx,
-        atoms,
-        fmax_ev_a=fmax,
-        energy_ev=energy_ev,
-        grms_kcalmol_A=float(grms1),
-        context_prefix=context_prefix,
-        verbose=verbose,
-    )
+    restored_hist = False
+    if allow_historical_restore:
+        fmax, energy_ev, grms1, restored_hist = (
+            _maybe_restore_calculator_mini_historical_best(
+                mlpot_ctx,
+                atoms,
+                fmax_ev_a=fmax,
+                energy_ev=energy_ev,
+                grms_kcalmol_A=float(grms1),
+                context_prefix=context_prefix,
+                verbose=verbose,
+            )
+        )
     if restored_hist:
         sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
         _invalidate_deferred_ener_probe()
@@ -1462,8 +1473,17 @@ def repair_stressed_monomers_with_calculator(
         step_count=int(opt.get_number_of_steps()),
         verbose=verbose,
         stopped_on_safe_grms=stopped_on_safe_grms,
+        # Do not roll back to a whole-box mini that still has the stressed monomers.
+        allow_historical_restore=False,
     )
 
+    # Re-measure on CHARMM-synced coords (commit may have refreshed caches).
+    pos1 = get_charmm_positions_array()
+    atoms.set_positions(np.asarray(pos1, dtype=np.float64))
+    try:
+        atoms.calc.results.clear()
+    except Exception:
+        pass
     forces1 = np.asarray(atoms.get_forces(), dtype=np.float64)
     fmax_after = atomic_fmax_kcalmol_A(forces1)
     if verbose:
