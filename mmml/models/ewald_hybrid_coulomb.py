@@ -8,12 +8,11 @@ clusters) or a dependency-free reference is preferred::
 
     E_MM = E_ewald(all atoms, q_CGenFF)
 
-No exclusion lists, no intra-monomer subtraction, no COM MM taper on this
-term -- one Ewald sum over the whole charged (padded) structure, all pairs
-included via O(N^2) minimum-image distances (cheap at training-time batch
-sizes; not intended for large liquid boxes). Intramolecular Coulomb is
-intentionally left in (the model trains against that same operator) -- see
-``mm_nonbonded.py``'s docstring for the same design choice at MD time.
+The default is one full Ewald sum over the charged structure, matching models
+trained against that operator. ``include_intramolecular=False`` provides the
+cross-monomer operator needed when adding periodic electrostatics to a vacuum-
+or MIC-trained monomer model; it removes both real- and reciprocal-space
+within-monomer contributions without a per-monomer Ewald loop.
 
 Forces come from ``jax.value_and_grad`` of this energy (see
 :func:`mmml.models.hybrid_energy.hybrid_forward`) -- unlike ``jax_pme``, this
@@ -58,7 +57,7 @@ def hybrid_ewald_coulomb_energy(
     include_self_energy: bool = True,
     include_intramolecular: bool = True,
 ) -> Array:
-    """Full-box Ewald Coulomb for one padded structure (kcal/mol).
+    """Full-box or cross-monomer Ewald Coulomb (kcal/mol).
 
     Padding atoms (``mol_id < 0``) contribute zero charge. Switch / monomer
     kwargs are accepted for call-site compatibility with the MIC hybrid path
@@ -66,9 +65,9 @@ def hybrid_ewald_coulomb_energy(
     Ewald does not taper this term.
 
     ``include_self_energy`` (default True) adds the usual Gaussian self term
-    ``-α/√π Σ q²``. Set False for checkpoints / MIC-trained models that never
-    saw that constant (opt-in via ``--ewald-omit-self`` on md-system). Forces
-    are unaffected either way (self term is geometry-independent).
+    ``-α/√π Σ q²``. ``include_intramolecular=False`` removes all within-monomer
+    real/reciprocal terms and therefore also omits self energy. This is the
+    compatibility operator selected for MIC/non-Ewald-trained checkpoints.
 
     ``box_length_A``/``accuracy``/``real_space_cutoff_A`` must all be static
     Python values (part of the frozen ``HybridConfig``, a jit static arg) --

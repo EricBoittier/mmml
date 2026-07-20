@@ -928,10 +928,10 @@ options:
                         k-space + switched SR), nvalchemiops_pme / scafacos
                         (require --mm-nonbond-mode periodic_external). Legacy
                         alias: auto (= mic).
-  --ewald-omit-self     With --lr-solver ewald: omit the Gaussian self term
-                        (−α/√π Σ q²). Opt in for MIC/non-Ewald-trained models
-                        where that constant is not in the training operator
-                        (forces unchanged; energy offset only).
+  --ewald-omit-self     With --lr-solver ewald: use the MIC/non-Ewald-trained
+                        compatibility operator (cross-monomer Ewald only; omit
+                        intramolecular and Gaussian self terms). Default full-
+                        box Ewald retains both for Ewald-trained models.
   --jax-pme-method {ewald,pme,p3m}
                         jax-pme method when --lr-solver=jax_pme (default: env
                         JAX_PME_METHOD or ewald).

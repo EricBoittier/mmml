@@ -1429,9 +1429,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--ewald-omit-self",
         action="store_true",
         help=(
-            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
-            "Opt in for MIC/non-Ewald-trained models where that constant is not "
-            "in the training operator (forces unchanged; energy offset only)."
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
         ),
     )
     parser.add_argument(
