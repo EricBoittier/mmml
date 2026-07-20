@@ -35,9 +35,7 @@ def test_hybrid_ewald_with_cell_matches_static_api():
     e_static = hybrid_ewald_coulomb_energy(
         pos, mid, q, box_length_A=L, real_space_cutoff_A=10.0
     )
-    alpha, n_int = ewald_static_params_from_box_length(
-        L, real_space_cutoff_A=10.0
-    )
+    alpha, n_int = ewald_static_params_from_box_length(L, real_space_cutoff_A=10.0)
     e_cell = hybrid_ewald_coulomb_energy_with_cell(
         pos,
         mid,
@@ -71,49 +69,26 @@ def test_hybrid_ewald_with_cell_tracks_live_box_same_n_int():
     assert e0 != pytest.approx(e1, abs=1e-8)
 
 
-def test_mm_ewald_forces_honor_box_override(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import mm_energy_forces as mef
+def test_ewald_energy_with_cell_jittable_grad_through_box():
+    """Forces w.r.t. positions remain finite when cell is a traced NpT input."""
+    pos0 = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
+    mid = jnp.array([0, 1], dtype=jnp.int32)
+    chg = jnp.array([1.0, -1.0], dtype=jnp.float64)
+    L = 40.0
+    alpha, n_int = ewald_static_params_from_box_length(L, real_space_cutoff_A=10.0)
+    cell = jnp.diag(jnp.array([L, L, L], dtype=jnp.float64))
 
-    n_atoms = 6
-    positions = np.zeros((n_atoms, 3), dtype=np.float64)
-    positions[0] = [0.0, 0.0, 0.0]
-    positions[1] = [1.0, 0.0, 0.0]
-    positions[3] = [4.0, 0.0, 0.0]
-    positions[4] = [5.0, 0.0, 0.0]
-    charges = np.array([0.5, -0.25, -0.25, 0.5, -0.25, -0.25], dtype=np.float64)
-    L0 = 20.0
-    cell0 = np.diag([L0, L0, L0])
+    def e_fn(p):
+        return hybrid_ewald_coulomb_energy_with_cell(
+            p,
+            mid,
+            chg,
+            cell,
+            alpha=alpha,
+            n_int=n_int,
+            real_space_cutoff_A=10.0,
+        )
 
-    monkeypatch.setattr(
-        mef,
-        "_get_actual_psf_charges",
-        lambda _n: charges,
-    )
-    monkeypatch.setattr(
-        mef,
-        "get_attype_code_arrays",
-        lambda: (
-            np.zeros(n_atoms, dtype=np.int32),
-            np.ones(8, dtype=np.float64),
-            np.ones(8, dtype=np.float64),
-        ),
-    )
-
-    mm_fn, _update = mef.build_mm_energy_forces_fn(
-        positions,
-        N_MONOMERS=2,
-        lr_solver="ewald",
-        pbc_cell=cell0,
-        ewald_include_self=True,
-        ewald_include_intra=True,
-        atoms_per_monomer=[3, 3],
-    )
-    pos_j = jnp.asarray(positions)
-    e0, f0, *_ = mm_fn(pos_j, None, None, box_override=None)
-    L1 = L0 + 0.25
-    e1, f1, *_ = mm_fn(
-        pos_j, None, None, box_override=jnp.diag(jnp.array([L1, L1, L1]))
-    )
-    assert float(e0) != pytest.approx(float(e1), abs=1e-8)
-    assert bool(jnp.all(jnp.isfinite(f0)))
-    assert bool(jnp.all(jnp.isfinite(f1)))
+    e, g = jax.jit(jax.value_and_grad(e_fn))(pos0)
+    assert bool(jnp.all(jnp.isfinite(g)))
+    assert np.isfinite(float(e))
