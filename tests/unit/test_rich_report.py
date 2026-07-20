@@ -251,6 +251,20 @@ def test_startup_reports_are_borderless_and_collapse_repeated_sizes(
     assert not any(character in out for character in "╭╮╰╯┏┓┗┛┃━│─")
 
 
+def test_physnet_dictionary_report_is_vertical_and_keeps_all_model_fields() -> None:
+    from mmml.models.physnetjax.physnetjax.utils.pretty_printer import (
+        print_dict_as_table,
+    )
+
+    attributes = {f"model_field_{index}": index for index in range(15)}
+    table = print_dict_as_table(attributes, title="Model Attributes")
+
+    assert len(table.columns) == 2
+    assert len(table.rows) == 15
+    assert table.box is None
+    assert table.show_edge is False
+
+
 def test_collect_zbl_cutoff_mapping_from_model() -> None:
     class _Model:
         zbl = True

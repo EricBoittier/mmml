@@ -1106,7 +1106,7 @@ def emit_model_loaded(
     runtime_natoms: int | None = None,
     quiet: bool = False,
 ) -> None:
-    """Pretty-print a loaded PhysNet model summary (horizontal table)."""
+    """Pretty-print a loaded PhysNet model as a compact field/value summary."""
     mapping = _model_attributes_mapping(model)
     if checkpoint is not None:
         mapping["checkpoint"] = checkpoint
