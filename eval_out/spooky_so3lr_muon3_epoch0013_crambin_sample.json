@@ -1,0 +1,12 @@
+{
+  "gems_crambin.extxyz": {
+    "charge_mae": 1639.1244360923768,
+    "charge_rmse": 3719.8990514897764,
+    "dipole_mae": NaN,
+    "dipole_rmse": NaN,
+    "energy_mae": 78265.44152526856,
+    "energy_rmse": 164221.1676990962,
+    "forces_mae": 2296.3234687558916,
+    "forces_rmse": 7840.093056963996
+  }
+}
