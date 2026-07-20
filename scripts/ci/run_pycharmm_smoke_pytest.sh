@@ -20,13 +20,25 @@ fi
 MARK_EXPR="${MMML_PYTEST_MARK:-pycharmm and not gpu and not charmm_serial}"
 MPI_NP="${MMML_MPI_NP:-1}"
 PYCHARMM_RES_SMOKE="$ROOT/tests/functionality/pycharmmETC/test_res.py"
+MPI_LIVE_ENERGY_SMOKE="$ROOT/tests/charmm_mpi/test_mpi_live_energy.py"
+COMP_VELOCITIES_SMOKE="$ROOT/tests/functionality/mlpot/test_comp_velocities_integration.py"
 
-# CHARMM owns process-global PSF/topology/parameter state.  setupRes reads CGenFF
-# parameters and can segfault if it follows other live tests in the same process,
-# even though it is reliable in a fresh rank.  Keep that smoke coverage, but give
-# it its own MPI process before running the remaining selection.
-mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
-  -m "$MARK_EXPR" "$PYCHARMM_RES_SMOKE" "$@"
+# CHARMM owns process-global PSF/topology/parameter state.  Any smoke module that
+# initializes or rebuilds that state must run in a fresh interpreter: re-reading
+# CGenFF after the MPI live-energy fixture can segfault inside pycharmm.read.prm.
+# Keep each stateful module isolated, then run the non-stateful remainder.
+for smoke_path in \
+  "$PYCHARMM_RES_SMOKE" \
+  "$MPI_LIVE_ENERGY_SMOKE" \
+  "$COMP_VELOCITIES_SMOKE"
+do
+  mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
+    -m "$MARK_EXPR" "$smoke_path" "$@"
+done
 
 exec mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
-  -m "$MARK_EXPR" --ignore="$PYCHARMM_RES_SMOKE" "$@"
+  -m "$MARK_EXPR" \
+  --ignore="$PYCHARMM_RES_SMOKE" \
+  --ignore="$MPI_LIVE_ENERGY_SMOKE" \
+  --ignore="$COMP_VELOCITIES_SMOKE" \
+  "$@"
