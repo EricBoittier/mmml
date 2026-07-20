@@ -1083,32 +1083,53 @@ def build_mm_energy_forces_fn(
         # lr_solver="ewald" in hybrid_forward). Bypasses the switched-pair /
         # LJ / cell-list machinery entirely (this checkpoint's E_MM has no LJ
         # term at all -- mm_include_lj is forced off for this lr_solver at
-        # training time too). Static box only (NVE/NVT); NPT would need the
-        # k-space integer grid rebuilt per box, not supported here yet.
+        # training time too).
+        #
+        # NpT: host ``alpha`` / ``n_int`` are frozen for the MM factory lifetime;
+        # the live cubic cell comes from ``box_override`` each call (MIC +
+        # reciprocal B(cell)). The calculator cache rebuilds this factory only
+        # when L crosses EWALD_NPT_KGRID_REBUILD_TOLERANCE_A bins.
         if pbc_cell is None:
             raise ValueError(
                 "lr_solver=ewald requires a PBC cell when building MM forces."
             )
-        from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+        from mmml.models.ewald_hybrid_coulomb import (
+            ewald_static_params_from_box_length,
+            hybrid_ewald_coulomb_energy_with_cell,
+        )
 
         _ewald_box_L = float(box_length_from_cell(np.asarray(pbc_cell, dtype=np.float64)))
+        _ewald_alpha, _ewald_n_int_np = ewald_static_params_from_box_length(_ewald_box_L)
+        _ewald_n_int = jnp.asarray(_ewald_n_int_np, dtype=jnp.int32)
+        _ewald_default_cell = jnp.asarray(
+            np.diag([_ewald_box_L, _ewald_box_L, _ewald_box_L]), dtype=ml_jnp_dtype
+        )
         _ewald_mol_id = jnp.asarray(
             per_atom_monomer_ids(total_atoms, monomer_offsets, n_monomers), dtype=jnp.int32
         )
         _ewald_charges_default = jnp.asarray(charges, dtype=ml_jnp_dtype)
         _ewald_include_self = bool(ewald_include_self)
         _ewald_include_intra = bool(ewald_include_intra)
+        _ewald_n_monomers = int(n_monomers)
 
-        def _ewald_energy(positions: Array, charges_arg: Array) -> Array:
-            return hybrid_ewald_coulomb_energy(
+        def _ewald_energy(
+            positions: Array, charges_arg: Array, cell: Array
+        ) -> Array:
+            return hybrid_ewald_coulomb_energy_with_cell(
                 positions,
                 _ewald_mol_id,
                 charges_arg,
-                box_length_A=_ewald_box_L,
+                cell,
+                alpha=_ewald_alpha,
+                n_int=_ewald_n_int,
                 include_self_energy=_ewald_include_self,
                 include_intramolecular=_ewald_include_intra,
-                n_monomers=int(n_monomers),
+                n_monomers=_ewald_n_monomers,
             )
+
+        _ewald_value_and_grad = jax.jit(
+            jax.value_and_grad(_ewald_energy, argnums=0),
+        )
 
         @jax.jit
         def calculate_mm_energy_and_forces_ewald(
@@ -1118,9 +1139,18 @@ def build_mm_energy_forces_fn(
             box_override: Optional[Array] = None,
             charges: Optional[Array] = None,
         ) -> Tuple[Array, Array, Array, Array]:
-            del pair_idx, pair_mask, box_override  # static box; no pair list needed
-            q = _ewald_charges_default if charges is None else jnp.asarray(charges, dtype=ml_jnp_dtype)
-            e, grad = jax.value_and_grad(_ewald_energy, argnums=0)(positions, q)
+            del pair_idx, pair_mask  # many-to-many Ewald; no real-space pair list
+            cell = (
+                _box_to_cell_3x3(box_override)
+                if box_override is not None
+                else _ewald_default_cell
+            )
+            q = (
+                _ewald_charges_default
+                if charges is None
+                else jnp.asarray(charges, dtype=ml_jnp_dtype)
+            )
+            e, grad = _ewald_value_and_grad(positions, q, cell)
             forces = -grad
             zero = jnp.array(0.0, dtype=ml_jnp_dtype)
             return e, forces, zero, e

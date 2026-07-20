@@ -37,12 +37,35 @@ from __future__ import annotations
 import numpy as np
 
 __all__ = [
+    "EWALD_NPT_KGRID_REBUILD_TOLERANCE_A",
     "build_kspace_integers",
+    "ewald_npt_kgrid_cache_bin",
     "ewald_reciprocal_energy",
     "ewald_self_energy",
     "ewald_exclusion_correction",
     "default_ewald_alpha",
 ]
+
+# Absolute cubic-box change (Å) that forces a host-side rebuild of the static
+# reciprocal-integer grid ``n_int`` / Ewald ``alpha`` under CPT. Within a bin the
+# live cell still updates every step via ``box_override``; only the integer
+# k-shell set is reused (same idea as a fixed neighbor-list capacity).
+EWALD_NPT_KGRID_REBUILD_TOLERANCE_A = 0.5
+
+
+def ewald_npt_kgrid_cache_bin(
+    box_length_A: float,
+    *,
+    tolerance_A: float = EWALD_NPT_KGRID_REBUILD_TOLERANCE_A,
+) -> int:
+    """Bin index for MM-factory cache keys under NpT (nearest tolerance bin)."""
+    L = float(box_length_A)
+    tol = float(tolerance_A)
+    if not np.isfinite(L) or L <= 0.0:
+        raise ValueError(f"box_length_A must be a positive finite length, got {box_length_A!r}")
+    if not np.isfinite(tol) or tol <= 0.0:
+        raise ValueError(f"tolerance_A must be a positive finite length, got {tolerance_A!r}")
+    return int(np.floor(L / tol + 0.5))
 
 
 def default_ewald_alpha(rcut: float, *, accuracy_exponent: float = 3.5) -> float:

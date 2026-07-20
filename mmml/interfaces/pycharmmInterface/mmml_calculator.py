@@ -1474,11 +1474,29 @@ def setup_calculator(
     def _ensure_mm_fn(positions_concrete, cutoff_params, pbc_cell_override=None):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
         cell_for_build = pbc_cell_override if pbc_cell_override is not None else pbc_cell
-        cell_key = (
-            None
-            if cell_for_build is None
-            else tuple(np.asarray(cell_for_build, dtype=np.float64).reshape(-1).tolist())
-        )
+        # Native Ewald: live box is applied via box_override each step; only rebuild
+        # the host k-grid when cubic L crosses EWALD_NPT_KGRID_REBUILD_TOLERANCE_A.
+        # Other LR solvers still key on the full cell (pair-list / mesh capacity).
+        if cell_for_build is None:
+            cell_key = None
+        elif pick_lr_solver(lr_solver) == "ewald":
+            from mmml.interfaces.pycharmmInterface.ewald_native import (
+                ewald_npt_kgrid_cache_bin,
+            )
+            from mmml.interfaces.pycharmmInterface.long_range_backend import (
+                box_length_from_cell,
+            )
+
+            cell_key = (
+                "ewald_npt_bin",
+                ewald_npt_kgrid_cache_bin(
+                    box_length_from_cell(np.asarray(cell_for_build, dtype=np.float64))
+                ),
+            )
+        else:
+            cell_key = tuple(
+                np.asarray(cell_for_build, dtype=np.float64).reshape(-1).tolist()
+            )
         key = (
             cutoff_params.ml_switch_width,
             cutoff_params.mm_switch_on,
