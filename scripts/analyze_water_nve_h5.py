@@ -878,70 +878,186 @@ def main() -> None:
     slope = float(np.polyfit(t_ps, e_tot_kcal, 1)[0])
     t_mean = float(np.mean(temp))
 
-    # --- energies: twin axes + rotated marginals ---
-    fig = plt.figure(figsize=(11.0, 7.2))
+    # --- energies: TS including E_pot + mean-centered fits / moments ---
+    de_tot = e_tot_kcal - float(np.mean(e_tot_kcal))
+    de_pot = e_pot_kcal - float(np.mean(e_pot_kcal))
+    de_kin = e_kin_kcal - float(np.mean(e_kin_kcal))
+    energy_moments = {
+        "E_tot": {
+            "mean_kcal_mol": float(np.mean(e_tot_kcal)),
+            "delta_mean_kcal_mol": float(np.mean(de_tot)),
+            "delta_var_kcal_mol2": float(np.var(de_tot)),
+            "delta_std_kcal_mol": float(np.std(de_tot)),
+        },
+        "E_pot": {
+            "mean_kcal_mol": float(np.mean(e_pot_kcal)),
+            "delta_mean_kcal_mol": float(np.mean(de_pot)),
+            "delta_var_kcal_mol2": float(np.var(de_pot)),
+            "delta_std_kcal_mol": float(np.std(de_pot)),
+        },
+        "E_kin": {
+            "mean_kcal_mol": float(np.mean(e_kin_kcal)),
+            "delta_mean_kcal_mol": float(np.mean(de_kin)),
+            "delta_var_kcal_mol2": float(np.var(de_kin)),
+            "delta_std_kcal_mol": float(np.std(de_kin)),
+        },
+    }
+
+    fig = plt.figure(figsize=(12.0, 9.0))
     gs_e = GridSpec(
-        2, 2, figure=fig, width_ratios=[4.2, 1.0], wspace=0.08, hspace=0.28
+        3,
+        2,
+        figure=fig,
+        height_ratios=[1.15, 1.0, 0.95],
+        width_ratios=[3.4, 1.15],
+        hspace=0.35,
+        wspace=0.18,
+        left=0.08,
+        right=0.98,
+        top=0.93,
+        bottom=0.07,
     )
-    ax_l = fig.add_subplot(gs_e[0, 0])
-    ax_r = ax_l.twinx()
-    ax_eh = fig.add_subplot(gs_e[0, 1])
-    (ln1,) = ax_l.plot(
-        t_ps, e_tot_kcal, color="#1f4e79", lw=0.85, label=r"$E_\mathrm{tot}$"
-    )
-    (ln2,) = ax_r.plot(
-        t_ps, e_kin_kcal, color="#2a6f3b", lw=0.85, label=r"$E_\mathrm{kin}$"
-    )
-    ax_l.set_ylabel(r"$E_\mathrm{tot}$ (kcal/mol)", color="#1f4e79")
-    ax_r.set_ylabel(r"$E_\mathrm{kin}$ (kcal/mol)", color="#2a6f3b")
-    ax_l.tick_params(axis="y", colors="#1f4e79")
-    ax_r.tick_params(axis="y", colors="#2a6f3b")
-    ax_l.set_title(
-        f"NVE energy (mm_charge_mode={mm_mode}, L={box:.1f} A)  "
+
+    # Row 0: E_tot (absolute, left) + mean-subtracted pot/kin (right, shared scale)
+    ax0 = fig.add_subplot(gs_e[0, 0])
+    ax0b = ax0.twinx()
+    (ln_t,) = ax0.plot(t_ps, e_tot_kcal, color="#1f4e79", lw=0.75, label=r"$E_\mathrm{tot}$")
+    (ln_p,) = ax0b.plot(t_ps, de_pot, color="#c45c26", lw=0.7, label=r"$\Delta E_\mathrm{pot}$")
+    (ln_k,) = ax0b.plot(t_ps, de_kin, color="#2a6f3b", lw=0.7, label=r"$\Delta E_\mathrm{kin}$")
+    ax0.set_ylabel(r"$E_\mathrm{tot}$ (kcal/mol)", color="#1f4e79")
+    ax0b.set_ylabel(r"$\Delta E_\mathrm{pot},\,\Delta E_\mathrm{kin}$ (kcal/mol)")
+    ax0.tick_params(axis="y", colors="#1f4e79")
+    lo = min(float(de_pot.min()), float(de_kin.min()))
+    hi = max(float(de_pot.max()), float(de_kin.max()))
+    pad = 0.06 * (hi - lo + 1e-12)
+    ax0b.set_ylim(lo - pad, hi + pad)
+    ax0.set_title(
+        f"NVE energies (mm_charge_mode={mm_mode}, L={box:.1f} A)  "
         f"drift={drift:.3f} kcal/mol, slope={slope:.3f} kcal/mol/ps"
     )
-    ax_l.legend(handles=[ln1, ln2], loc="upper right", frameon=False)
-    _twin_equal_span(ax_l, ax_r, e_tot_kcal, e_kin_kcal)
-    de = e_tot_kcal - e_tot_kcal.mean()
-    dk = e_kin_kcal - e_kin_kcal.mean()
-    c_de, e_de = np.histogram(de, bins=50, density=True)
-    c_dk, e_dk = np.histogram(dk, bins=50, density=True)
-    ax_eh.barh(
-        0.5 * (e_de[:-1] + e_de[1:]),
-        c_de,
-        height=np.diff(e_de),
-        color="#1f4e79",
-        alpha=0.7,
-        label=r"$\Delta E_\mathrm{tot}$",
+    ax0.legend(handles=[ln_t, ln_p, ln_k], loc="upper right", frameon=False, fontsize=8)
+    ax0.grid(True, axis="x", alpha=0.2, lw=0.5)
+
+    # Mean-centered rotated hist (all three)
+    ax0h = fig.add_subplot(gs_e[0, 1])
+    for lab, dlt, col in (
+        (r"$\Delta E_\mathrm{tot}$", de_tot, "#1f4e79"),
+        (r"$\Delta E_\mathrm{pot}$", de_pot, "#c45c26"),
+        (r"$\Delta E_\mathrm{kin}$", de_kin, "#2a6f3b"),
+    ):
+        c, edges = np.histogram(dlt, bins=55, density=True)
+        ax0h.barh(
+            0.5 * (edges[:-1] + edges[1:]),
+            c,
+            height=np.diff(edges),
+            color=col,
+            alpha=0.45,
+            label=lab,
+        )
+    ax0h.set_xlabel("dens.")
+    ax0h.set_title(r"$\Delta E=E-\langle E\rangle$", fontsize=9)
+    ax0h.legend(fontsize=7, frameon=False)
+    ax0h.tick_params(axis="y", labelleft=False)
+    ax0h.axhline(0.0, color="0.5", lw=0.6)
+
+    # Row 1: mean-centered time series (same scale)
+    ax1 = fig.add_subplot(gs_e[1, :])
+    ax1.plot(t_ps, de_tot, color="#1f4e79", lw=0.7, label=r"$\Delta E_\mathrm{tot}$")
+    ax1.plot(t_ps, de_pot, color="#c45c26", lw=0.7, label=r"$\Delta E_\mathrm{pot}$")
+    ax1.plot(t_ps, de_kin, color="#2a6f3b", lw=0.7, label=r"$\Delta E_\mathrm{kin}$")
+    ax1.axhline(0.0, color="0.55", lw=0.7)
+    ax1.set_ylabel(r"$\Delta E$ (kcal/mol)")
+    ax1.set_title(r"Mean-subtracted energies (common scale)")
+    ax1.legend(frameon=False, fontsize=8, ncol=3)
+    ax1.grid(True, alpha=0.2, lw=0.5)
+
+    # Row 2: fitted Gaussians on ΔE + moment comparison
+    ax2 = fig.add_subplot(gs_e[2, 0])
+    x_grid = np.linspace(
+        min(de_tot.min(), de_pot.min(), de_kin.min()),
+        max(de_tot.max(), de_pot.max(), de_kin.max()),
+        400,
     )
-    ax_eh.barh(
-        0.5 * (e_dk[:-1] + e_dk[1:]),
-        c_dk,
-        height=np.diff(e_dk),
-        color="#2a6f3b",
+    for lab, dlt, col, key in (
+        (r"$E_\mathrm{tot}$", de_tot, "#1f4e79", "E_tot"),
+        (r"$E_\mathrm{pot}$", de_pot, "#c45c26", "E_pot"),
+        (r"$E_\mathrm{kin}$", de_kin, "#2a6f3b", "E_kin"),
+    ):
+        ax2.hist(dlt, bins=60, density=True, color=col, alpha=0.28, label=f"{lab} hist")
+        mu1 = float(np.mean(dlt))
+        mu2 = float(np.var(dlt))  # second central moment
+        sig = float(np.sqrt(mu2)) if mu2 > 0 else 1e-12
+        # Normal fit with sample moments (after mean subtraction μ1≈0)
+        pdf = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(
+            -0.5 * ((x_grid - mu1) / sig) ** 2
+        )
+        ax2.plot(
+            x_grid,
+            pdf,
+            color=col,
+            lw=1.6,
+            label=rf"{lab} $\mathcal{{N}}$($\mu_1$={mu1:.2e}, $\sigma$={sig:.3f})",
+        )
+        energy_moments[key]["gauss_fit_mu1"] = mu1
+        energy_moments[key]["gauss_fit_mu2"] = mu2
+    ax2.set_xlabel(r"$\Delta E$ (kcal/mol)")
+    ax2.set_ylabel("density")
+    ax2.set_title(r"Distributions of $E-\langle E\rangle$ + Gaussian fits")
+    ax2.legend(frameon=False, fontsize=7)
+    ax2.axvline(0.0, color="0.5", lw=0.6)
+
+    ax3 = fig.add_subplot(gs_e[2, 1])
+    labels = ["E_tot", "E_pot", "E_kin"]
+    colors_m = ["#1f4e79", "#c45c26", "#2a6f3b"]
+    mu1s = [energy_moments[k]["delta_mean_kcal_mol"] for k in labels]
+    mu2s = [energy_moments[k]["delta_var_kcal_mol2"] for k in labels]
+    x = np.arange(len(labels))
+    w = 0.35
+    # Scale mu1 for visibility (near zero); plot std on twin for second moment
+    bars1 = ax3.bar(x - w / 2, mu1s, w, color=colors_m, alpha=0.85, label=r"$\mu_1=\langle\Delta E\rangle$")
+    ax3b = ax3.twinx()
+    bars2 = ax3b.bar(
+        x + w / 2,
+        [np.sqrt(v) for v in mu2s],
+        w,
+        color=colors_m,
         alpha=0.45,
-        label=r"$\Delta E_\mathrm{kin}$",
+        hatch="//",
+        label=r"$\sqrt{\mu_2}=\sigma$",
     )
-    ax_eh.set_xlabel("dens.")
-    ax_eh.set_title(r"$\Delta E$", fontsize=9)
-    ax_eh.legend(fontsize=7, frameon=False)
-    ax_eh.tick_params(axis="y", labelleft=False)
-
-    ax_l2 = fig.add_subplot(gs_e[1, 0], sharex=ax_l)
-    ax_th = fig.add_subplot(gs_e[1, 1])
-    _ts_with_rotated_hist(
-        ax_l2,
-        ax_th,
-        t_ps,
-        temp,
-        color="#5a3d7a",
-        ylabel="T (K)",
-        href=300.0,
+    ax3.axhline(0.0, color="0.5", lw=0.6)
+    ax3.set_xticks(x)
+    ax3.set_xticklabels([r"$E_\mathrm{tot}$", r"$E_\mathrm{pot}$", r"$E_\mathrm{kin}$"])
+    ax3.set_ylabel(r"$\mu_1$ (kcal/mol)")
+    ax3b.set_ylabel(r"$\sigma=\sqrt{\mu_2}$ (kcal/mol)")
+    ax3.set_title(r"Moments of $\Delta E$")
+    # Combined legend
+    h1, l1 = ax3.get_legend_handles_labels()
+    h2, l2 = ax3b.get_legend_handles_labels()
+    ax3.legend(h1 + h2, l1 + l2, frameon=False, fontsize=7, loc="upper left")
+    # Annotate numeric moments
+    txt = "\n".join(
+        f"{k}: μ1={energy_moments[k]['delta_mean_kcal_mol']:.2e}, "
+        f"μ2={energy_moments[k]['delta_var_kcal_mol2']:.3f}, "
+        f"σ={energy_moments[k]['delta_std_kcal_mol']:.3f}"
+        for k in labels
     )
-    ax_l2.set_xlabel("time (ps)")
-    ax_l2.set_title("Kinetic temperature")
+    ax3.text(
+        0.02,
+        0.02,
+        txt,
+        transform=ax3.transAxes,
+        fontsize=6.5,
+        family="monospace",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.25", facecolor="white", alpha=0.85, edgecolor="#ccc"),
+    )
 
-    fig.tight_layout()
+    fig.suptitle(
+        f"Energy fluctuations · {n_frames} frames · {t_ps[-1]-t_ps[0]:.2f} ps",
+        fontsize=12,
+        y=0.98,
+    )
     fig.savefig(out / "energy_fluctuations.png", dpi=170)
     plt.close(fig)
 
@@ -1485,6 +1601,7 @@ def main() -> None:
             "T_std_K": float(np.std(temp)),
             "corr_Epot_Ekin": dash_meta["corr_Epot_Ekin"],
             "E_kin_psd_peak_cm": dash_meta["E_kin_psd_peak_cm"],
+            "moments_mean_centered": energy_moments,
         },
         "charges": {
             "q_O_mean": float(q[:, o_idx].mean()),
