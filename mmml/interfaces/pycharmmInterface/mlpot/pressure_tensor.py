@@ -164,6 +164,57 @@ def maybe_configure_stage_pressure_tensor_io(
     )
 
 
+def read_instantaneous_scalar_pressure_atm(
+    *,
+    refresh_energy: bool = True,
+    mlpot_ctx: Any | None = None,
+    quiet: bool = True,
+) -> float:
+    """Return CHARMM scalar internal pressure (atm) after an energy evaluation.
+
+    Prefers ``PRSI``; falls back to the mean of ``PIXX/PIYY/PIZZ``. Call after
+    coordinates/forces are current. Does not require the ``pressure instantaneous``
+    script (KEY_LIBRARY-safe).
+    """
+    if refresh_energy:
+        if mlpot_ctx is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                refresh_mlpot_energy_and_grms,
+            )
+
+            refresh_mlpot_energy_and_grms(
+                mlpot_ctx,
+                context="instantaneous pressure read",
+                silent_charmm=quiet,
+            )
+        else:
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import safe_energy_show
+
+            safe_energy_show()
+
+    import pycharmm.lingo as lingo
+
+    try:
+        prsi = float(lingo.get_energy_value("PRSI"))
+        if math.isfinite(prsi):
+            return prsi
+    except Exception:
+        pass
+    components: list[float] = []
+    for name in ("PIXX", "PIYY", "PIZZ"):
+        try:
+            val = float(lingo.get_energy_value(name))
+        except Exception:
+            continue
+        if math.isfinite(val):
+            components.append(val)
+    if not components:
+        raise RuntimeError(
+            "CHARMM instantaneous pressure unavailable (PRSI / PIXX–PIZZ)"
+        )
+    return float(sum(components) / len(components))
+
+
 def report_instantaneous_pressure_tensor(
     temp: float,
     *,
