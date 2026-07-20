@@ -10,7 +10,10 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import validate_cluster_geometry
+from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    DEFAULT_MIN_MONOMER_EXTENT_A,
+    validate_cluster_geometry,
+)
 
 
 def test_validate_cluster_geometry_rejects_empty_positions():
@@ -21,6 +24,34 @@ def test_validate_cluster_geometry_rejects_empty_positions():
 def test_validate_cluster_geometry_rejects_placeholder_coordinates():
     with pytest.raises(ValueError, match="9999 sentinel"):
         validate_cluster_geometry(np.full((5, 3), 9999.0), n_molecules=1)
+
+
+def test_validate_cluster_geometry_accepts_tip3_extent_below_legacy_threshold():
+    tip3 = np.array(
+        [
+            [0.000, 0.000, 0.000],
+            [0.776, 0.437, 0.243],
+            [-0.485, 0.582, 0.534],
+        ]
+    )
+
+    stats = validate_cluster_geometry(tip3, n_molecules=1)
+
+    assert stats["n_molecules"] == 1.0
+
+
+def test_validate_cluster_geometry_rejects_collapsed_monomer():
+    collapsed_extent_A = DEFAULT_MIN_MONOMER_EXTENT_A / 10.0
+    collapsed = np.array(
+        [
+            [0.00, 0.00, 0.00],
+            [collapsed_extent_A, 0.00, 0.00],
+            [0.00, collapsed_extent_A, collapsed_extent_A],
+        ]
+    )
+
+    with pytest.raises(ValueError, match="Monomer 1 extent"):
+        validate_cluster_geometry(collapsed, min_axis_span=0.0, n_molecules=1)
 
 
 def test_load_cluster_from_artifacts_uses_xplor_psf_reader(tmp_path: Path, monkeypatch):
