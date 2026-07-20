@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import itertools
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -17,6 +18,7 @@ from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
     compute_safe_separation,
     eligible_source_indices,
 )
+from scripts.train_so3lr_spooky_extxyz import _per_fragment_charge_conservation_mse
 
 
 def _make_flat_data(n_structures: int = 6, rng: np.random.Generator | None = None) -> dict:
