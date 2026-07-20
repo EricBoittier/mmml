@@ -1120,9 +1120,10 @@ def setup_calculator(
 
     mlpot_device = mlpot_jax_device_name()
     if not defer_xla_gpu_warmup and ensure_xla_gpu_warmed():
-        emit_tagged(
-            "setup_calculator",
-            "Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)",
+        from mmml.utils.rich_report import get_reporter
+
+        get_reporter().status(
+            "info", "JAX warmup", detail="generic GPU kernels; hybrid compile follows setup"
         )
     elif defer_xla_gpu_warmup and verbose:
         detail = (

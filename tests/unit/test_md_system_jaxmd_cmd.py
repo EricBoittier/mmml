@@ -121,6 +121,13 @@ def test_build_command_jaxmd_forwards_lr_solver_and_mm_charge_mode() -> None:
     assert "--mm-charge-mode" in argv
     assert argv[argv.index("--mm-charge-mode") + 1] == "latent"
     assert "--mm-charge-correction" not in argv
+    assert "--ewald-omit-self" not in argv
+
+    backend, argv = build_command(
+        _jaxmd_args(lr_solver="ewald", ewald_omit_self=True, mm_charge_mode="fixed")
+    )
+    assert "--ewald-omit-self" in argv
+    assert argv[argv.index("--mm-charge-mode") + 1] == "fixed"
 
     backend, argv = build_command(_jaxmd_args(mm_charge_correction=True))
     assert "--mm-charge-correction" in argv
@@ -150,6 +157,7 @@ def test_jaxmd_and_ase_suites_accept_lr_solver_and_mm_charge_mode_flags() -> Non
 
     common_argv = [
         "--lr-solver", "ewald",
+        "--ewald-omit-self",
         "--mm-charge-mode", "latent",
         "--composition", "ACO:2",
         "--checkpoint", "/tmp/definitely-not-a-real-checkpoint",
@@ -172,3 +180,11 @@ def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
     warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:400]
     assert "doMM=include_mm" in warmup_block
     assert 'getattr(args, "include_mm", True)' in jaxmd_src
+
+
+def test_jaxmd_setup_calculator_forwards_ewald_include_self() -> None:
+    from pathlib import Path
+
+    src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    assert "--ewald-omit-self" in src
+    assert "ewald_include_self=not bool(getattr(args, \"ewald_omit_self\"" in src

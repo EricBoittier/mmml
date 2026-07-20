@@ -550,7 +550,9 @@ def load_model_checkpoint(
         if json_params_path is not None and json_params_path.is_file()
         else checkpoint_dir
     )
-    print(f"✓ Loaded checkpoint from {load_source}")
+    from mmml.utils.rich_report import get_reporter
+
+    get_reporter().status("success", "Loaded checkpoint", detail=str(load_source))
     if "config" in result and isinstance(result["config"], dict):
         result["config"] = normalize_physnet_config(result["config"])
     return result

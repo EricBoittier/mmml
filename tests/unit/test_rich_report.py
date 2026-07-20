@@ -171,7 +171,7 @@ def test_emit_model_loaded_runtime_max_padded_atoms(capsys) -> None:
 
     rich_report.emit_model_loaded(_Model(), runtime_max_padded_atoms=34)
     out = capsys.readouterr().out
-    assert "runtime_max_padded_atoms=34" in out
+    assert "runtime_max_padded_atoms" in out and "34" in out
 
 
 def test_model_attribute_rows_from_object() -> None:
@@ -215,6 +215,40 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
     assert "Runtime threads" in out
     assert "XLA_FLAGS" in out
     assert "features" in out
+
+
+def test_startup_reports_are_borderless_and_collapse_repeated_sizes(
+    monkeypatch, capsys
+) -> None:
+    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    monkeypatch.setenv("MMML_RICH", "1")
+    rich_report._console.cache_clear()
+
+    class _Model:
+        features = 32
+        cutoff = 8.0
+
+    rich_report.emit_charmm_env(
+        cgenff_rtf="/repo/mmml/data/charmm/top.rtf",
+        cgenff_prm="/repo/mmml/data/charmm/par.prm",
+        charmm_home="/repo/setup/charmm",
+        charmm_lib_dir="/repo/setup/charmm",
+    )
+    rich_report.emit_hybrid_ml_setup(
+        system={
+            "n_monomers": 10,
+            "atoms_per_monomer": [6] * 10,
+            "total_atoms": 60,
+        },
+        handoff={"mm_switch_on_Å": 6.0},
+        neighbor_lists={"capacity": 100},
+        model=_Model(),
+    )
+    out = capsys.readouterr().out
+    assert "PyCHARMM environment" in out
+    assert "top.rtf, par.prm" in out
+    assert "6 × 10" in out
+    assert not any(character in out for character in "╭╮╰╯┏┓┗┛┃━│─")
 
 
 def test_collect_zbl_cutoff_mapping_from_model() -> None:

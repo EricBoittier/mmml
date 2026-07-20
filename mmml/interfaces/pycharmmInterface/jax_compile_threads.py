@@ -123,16 +123,13 @@ def jax_compile_threads_context(*, quiet: bool = False) -> Iterator[int]:
     for key in _OPENMP_LIKE_VARS:
         os.environ[key] = thread_s
     if not quiet and not _truthy("MMML_QUIET"):
-        from mmml.utils.rich_report import emit_tagged
-
         prev_omp = saved.get("OMP_NUM_THREADS")
-        emit_tagged(
-            "mmml",
-            (
-                f"JAX compile-time thread env={n} "
-                f"(OMP {prev_omp!r} -> {thread_s}; restored after compile context)"
-            ),
-            tag_style="bold magenta",
+        from mmml.utils.rich_report import get_reporter
+
+        get_reporter().status(
+            "info",
+            "JAX compile threads",
+            detail=f"{n} (OMP {prev_omp or 'unset'} temporarily; restored afterward)",
         )
     try:
         yield n

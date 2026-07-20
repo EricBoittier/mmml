@@ -37,6 +37,7 @@ the tools present on 2026-07-20.
 | `workflows/des_dimer_pair_scans/` | Campaign | Reproducible DES pair-scan Snakemake campaign. Preserve as a workflow; progressively delegate geometry/evaluation/result semantics to package APIs. |
 | `scripts/scan_mlpot_dimer_2d_pycharmm.py` | Campaign | Specialized 1D/2D hybrid PyCHARMM and long-range scan. Retain until its decompositions and solver semantics have canonical equivalents. |
 | `scripts/run_dcm_aco_dimer_lr_scans.sh` | Wrapper | Launch matrix for the specialized long-range campaign (includes hybrid-native `ewald` / `--ewald-omit-self` tags alongside jax-pme / ScaFaCoS). |
+| `scripts/run_tip3_physnet_ewald_ir_campaign.sh` | Campaign | TIP3 PhysNet staged path: PBC FD → hybrid Ewald dimer scan → tip3_50 smoke → jaxmd NVE → `analyze_water_nve_h5` IR. |
 | `scripts/run_mlpot_dimer_2d_scans.sh` | Wrapper | Legacy 2D/cutoff campaign launcher. |
 | `scripts/run_corrected_cache_step23200_dimer_scan.slurm` | Wrapper | Checkpoint-specific historical Slurm launcher; freeze inputs and mark complete when no longer used. |
 | `scripts/run_corrected_cache_step5400_dimer_scan.slurm` | Wrapper | Checkpoint-specific historical Slurm launcher; freeze inputs and mark complete when no longer used. |
