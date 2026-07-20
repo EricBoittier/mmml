@@ -28,6 +28,57 @@ make lint
 Unit tests run in the normal CI job. The separate `charmm` CI job is the
 integration boundary for a compiled CHARMM/PyCHARMM runtime.
 
+## CLI UX conventions
+
+Use the shared CLI helpers instead of ad hoc Rich or `print()` formatting when
+adding or touching command output:
+
+- Import `get_reporter()` from `mmml.utils.rich_report` for compact reports.
+  Choose `status()` for one event, `summary()` for key/value metadata, and
+  `table()` for repeated records.
+- Use `print_colored_json()` for JSON-shaped diagnostics. It validates through
+  the standard JSON encoder first, rejects non-finite floats, and falls back to
+  plain indented JSON when Rich is disabled.
+- Keep ordinary reports borderless and copy-friendly. Reserve Rich panels for
+  interactive/live displays or exceptional diagnostics where the visual boundary
+  carries information.
+- Respect the existing quiet/color controls: `quiet=True` and `MMML_QUIET=1`
+  suppress helper output, `MMML_NO_RICH=1` disables Rich, and `MMML_RICH=1`
+  forces terminal color.
+
+```python
+from mmml.utils.rich_report import get_reporter, print_colored_json
+
+report = get_reporter()
+report.status("success", "Validated input", detail=str(config_path))
+report.summary("Resolved run", {"backend": backend, "output_dir": output_dir})
+print_colored_json({"output_dir": str(output_dir), "errors": {}})
+```
+
+Commands dispatched by the top-level `mmml` entry point also share the
+`mmml.cli.help_style` argparse hook. Flat parsers are grouped automatically by
+input/configuration, scientific model, execution, output/artifacts, and
+diagnostics/safety. If a command genuinely needs different sections, define
+explicit `add_argument_group()` blocks in its parser instead of embedding ANSI
+escapes or custom color schemes.
+
+### Configure wizards
+
+All new or modified `mmml configure` workflows must validate and preview their
+generated documents before writing files:
+
+1. build plain Python dictionaries for the documents;
+2. register validation in `validate_wizard_config()` when the document type is
+   new;
+3. route output through `_preview_and_confirm()` or
+   `_preview_documents_and_confirm()`; and
+4. write files only after confirmation succeeds.
+
+Workflow companions should reference canonical policy/configuration files. For
+example, the interaction-policy wizard writes `interaction_policy.yaml` and
+companion `md_system.yaml` or `dimer_scan.yaml` files that point back to that
+policy instead of copying its species ownership rules.
+
 ## Docs workflow
 
 Documentation has its own GitHub Actions workflow (`.github/workflows/docs.yml`):
