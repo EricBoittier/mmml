@@ -29,6 +29,18 @@ gitignore exceptions for `docs/*-assets/` directories).
 - Never set env vars in tests via `os.environ[...] =` — use
   `monkeypatch.setenv` so state can't leak into later tests.
 
+## CLI reporting
+
+Use `mmml.utils.rich_report.get_reporter()` for new or modified terminal
+reports. Select the method from the information shape: `status()` for one-line
+events, `summary()` for key/value metadata, and `table()` for repeated records.
+These methods provide the canonical colored, borderless, copy-friendly layout
+and plain-text fallback. Do not add Rich `Panel` wrappers or bordered tables for
+ordinary reporting; reserve panels for genuinely interactive/live displays
+where a visual boundary carries information. Migrate older direct Rich usage
+incrementally when touching its call site rather than doing formatting-only
+repo-wide rewrites.
+
 ## Scientific functionality
 
 Follow [`docs/scientific-code.md`](docs/scientific-code.md) for scientific

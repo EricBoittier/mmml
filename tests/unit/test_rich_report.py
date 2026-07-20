@@ -2,11 +2,43 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from mmml.utils import rich_report
+
+
+def _recording_console():
+    from rich.console import Console
+
+    return Console(record=True, force_terminal=True, color_system="standard", width=100)
+
+
+def test_compact_reporter_mixes_status_summary_and_table_without_borders(monkeypatch):
+    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    console = _recording_console()
+    report = rich_report.get_reporter(console=console)
+
+    report.status("success", "scan complete", detail="40/40 points")
+    report.summary("Run", {"Calculator": "PhysNet", "Output": "scan.extxyz"})
+    report.table(
+        "Calculators",
+        ("Name", "Energy", "Forces"),
+        (("PhysNet", "yes", "yes"), ("Multipoles", "yes", "no")),
+    )
+
+    rendered = console.export_text(styles=False)
+    assert "OK" in rendered and "scan complete  40/40 points" in rendered
+    assert "Run" in rendered and "Calculator PhysNet" in rendered
+    assert "Calculators" in rendered and "Multipoles" in rendered
+    assert not any(character in rendered for character in "┏┓┗┛┃━│─")
+
+
+def test_compact_reporter_validates_shape_and_status():
+    report = rich_report.get_reporter(console=_recording_console())
+    with pytest.raises(ValueError, match="unknown status"):
+        report.status("maybe", "ambiguous")
+    with pytest.raises(ValueError, match="same length"):
+        report.table("Bad", ("a", "b"), ((1,),))
 
 
 @pytest.fixture(autouse=True)
