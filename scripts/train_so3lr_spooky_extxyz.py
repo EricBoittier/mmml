@@ -2096,9 +2096,22 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         if active_shape is not None:
             step_functions.clear()
             _clear_jax_caches()
+        # A bucket's structure count and its step count are only proportional
+        # when batch_size is constant across buckets -- it isn't (auto-batch
+        # gives large pad_atoms far smaller B/device, e.g. B=1 vs B=6). A
+        # bucket with the same structure count as another can take ~6x more
+        # steps just because its batch size collapsed, which is easy to
+        # mistake for that bucket dominating training when it's really a
+        # throughput artifact. Print both counts so this is visible directly
+        # instead of inferred from how long the loss stays elevated.
+        n_structures = len(train_buckets.get(pad_atoms, ()))
+        global_batch = batch_size * args.num_devices
+        expected_steps = n_structures // global_batch if global_batch else 0
         print(
             f"Compiling steps for pad_atoms={pad_atoms} "
-            f"with per-device batch {batch_size}",
+            f"with per-device batch {batch_size} "
+            f"(bucket: {n_structures} structures, ~{expected_steps} steps "
+            f"at global batch {global_batch})",
             flush=True,
         )
         active_shape = shape

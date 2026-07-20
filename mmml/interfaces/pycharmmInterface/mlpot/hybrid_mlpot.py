@@ -1411,6 +1411,11 @@ def build_decomposed_mlpot_model(
             if args is not None
             else True
         ),
+        ewald_include_intra=(
+            not bool(getattr(args, "ewald_omit_self", False))
+            if args is not None
+            else True
+        ),
         mm_nonbond_mode=mm_nonbond_mode,
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True

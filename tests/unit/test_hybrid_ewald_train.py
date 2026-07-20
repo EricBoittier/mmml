@@ -188,6 +188,24 @@ def test_full_box_ewald_keeps_intra_monomer_coulomb():
     assert float(e) != 0.0  # not subtracted away like the mic hybrid path would
 
 
+def test_cross_monomer_ewald_removes_single_monomer_coulomb():
+    """MIC-trained compatibility mode must not double-count monomer Coulomb."""
+    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+
+    pos = jnp.array([[0.0, 0.0, 0.0], [0.96, 0.0, 0.0]], dtype=jnp.float64)
+    energy = hybrid_ewald_coulomb_energy(
+        pos,
+        jnp.array([0, 0]),
+        jnp.array([-0.8, 0.8], dtype=jnp.float64),
+        box_length_A=20.0,
+        n_monomers=1,
+        include_self_energy=False,
+        include_intramolecular=False,
+    )
+
+    assert float(energy) == pytest.approx(0.0, abs=1.0e-5)
+
+
 def test_ewald_omit_self_drops_geometry_independent_offset():
     from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
     from mmml.interfaces.pycharmmInterface.ewald_native import (

@@ -390,6 +390,7 @@ def setup_calculator(
     jax_pme_sr_cutoff_A: float = 6.0,
     jax_pme_dispersion: bool | None = None,
     ewald_include_self: bool = True,
+    ewald_include_intra: bool = True,
     mm_nonbond_mode: str = "jax_mic",
     periodic_charmm_vdw: bool = True,
     ml_potential_mode: str = "physnet",
@@ -1416,6 +1417,7 @@ def setup_calculator(
             jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
             jax_pme_dispersion=jax_pme_dispersion,
             ewald_include_self=ewald_include_self,
+            ewald_include_intra=ewald_include_intra,
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd

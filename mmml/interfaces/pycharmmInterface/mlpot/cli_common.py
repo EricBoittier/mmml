@@ -3995,8 +3995,9 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         "--ewald-omit-self",
         action="store_true",
         help=(
-            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
-            "Opt in for MIC/non-Ewald-trained models (forces unchanged; energy offset)."
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
         ),
     )
     group.add_argument(

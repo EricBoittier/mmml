@@ -56,6 +56,7 @@ def hybrid_ewald_coulomb_energy(
     complementary_handoff: bool = True,
     n_monomers: int = 2,
     include_self_energy: bool = True,
+    include_intramolecular: bool = True,
 ) -> Array:
     """Full-box Ewald Coulomb for one padded structure (kcal/mol).
 
@@ -74,8 +75,6 @@ def hybrid_ewald_coulomb_energy(
     the k-space integer grid is built once, host-side, from them.
     """
     del mm_switch_on, mm_switch_width, ml_switch_width, complementary_handoff
-    del n_monomers
-
     mid = jnp.asarray(mol_id).reshape(-1)
     q = jnp.asarray(charges).reshape(-1)
     pos = jnp.asarray(positions)
@@ -111,13 +110,41 @@ def hybrid_ewald_coulomb_energy(
     safe_sq = jnp.where(coincident, 1.0, disp_sq)
     dij = jnp.sqrt(safe_sq)
     qq = q_full[:, None] * q_full[None, :]
+    if not include_intramolecular:
+        qq = jnp.where(mid[:, None] != mid[None, :], qq, 0.0)
     real_mat = qq * jax.scipy.special.erfc(alpha * dij) / dij
     real_mat = jnp.where(coincident, 0.0, real_mat)
     if real_space_cutoff_A is not None:
         real_mat = jnp.where(dij < float(real_space_cutoff_A), real_mat, 0.0)
     e_real = 0.5 * jnp.sum(real_mat) * COULOMB_KCAL
 
-    e_recip = ewald_reciprocal_energy(pos, q_full, cell, n_int, alpha) * COULOMB_KCAL
+    if include_intramolecular:
+        e_recip = ewald_reciprocal_energy(pos, q_full, cell, n_int, alpha)
+    else:
+        volume = jnp.abs(jnp.linalg.det(cell))
+        recip = 2.0 * jnp.pi * jnp.linalg.inv(cell).T
+        k = jnp.asarray(n_int, dtype=cell.dtype) @ recip
+        k2 = jnp.sum(k * k, axis=-1)
+        phase = pos @ k.T
+        atom_re = q_full[:, None] * jnp.cos(phase)
+        atom_im = q_full[:, None] * jnp.sin(phase)
+        total_re = jnp.sum(atom_re, axis=0)
+        total_im = jnp.sum(atom_im, axis=0)
+        membership = jax.nn.one_hot(
+            jnp.maximum(mid, 0), int(n_monomers), dtype=pos.dtype
+        ) * valid[:, None]
+        mono_re = membership.T @ atom_re
+        mono_im = membership.T @ atom_im
+        cross_s2 = (
+            total_re * total_re
+            + total_im * total_im
+            - jnp.sum(mono_re * mono_re + mono_im * mono_im, axis=0)
+        )
+        weight = jnp.exp(-k2 / (4.0 * alpha * alpha)) / k2
+        e_recip = (2.0 * jnp.pi / volume) * jnp.sum(weight * cross_s2)
+    e_recip = e_recip * COULOMB_KCAL
+    if not include_intramolecular:
+        return e_real + e_recip
     if include_self_energy:
         e_self = ewald_self_energy(q_full, alpha) * COULOMB_KCAL
         return e_real + e_recip + e_self

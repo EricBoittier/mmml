@@ -38,6 +38,7 @@ class SelectiveMonomerPhysnetMiniConfig:
     optimize_dimers: bool = True
     verbose: bool = True
     quiet_bfgs: bool = False
+    max_grms_regression_ratio: float = 1.02
 
 
 def monomer_physnet_mini_enabled(args: Any | None) -> bool:
@@ -651,11 +652,10 @@ def run_selective_monomer_physnet_mini(
     sync_charmm_positions(pos)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
     grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
-    rollback_limit = max(
-        50.0,
-        5.0 * float(initial_grms)
+    rollback_limit = (
+        float(initial_grms) * float(config.max_grms_regression_ratio)
         if initial_grms is not None and np.isfinite(initial_grms)
-        else 50.0,
+        else 50.0
     )
     if not np.isfinite(grms) or grms > rollback_limit:
         sync_charmm_positions(rollback_positions)
