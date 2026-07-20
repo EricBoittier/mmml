@@ -1617,17 +1617,45 @@ def _expected_ml_ml_exclusion_pairs(n_ml: int) -> int:
     return n * (n - 1) // 2
 
 
+def should_skip_dense_ml_ml_exclusions(
+    ml_selection: Any,
+    *,
+    periodic_external: bool = False,
+    n_total: int | None = None,
+) -> bool:
+    """Skip O(N²) ML–ML PSF exclusions when CHARMM nonbond lists are unused.
+
+    All-ML + ``jax_mic`` (``periodic_external=False``) evaluates MM pairs in JAX;
+    CHARMM VDW/ELEC are zeroed at registration. Installing ``N(N-1)/2`` exclusions
+    (~3.7M for TIP3:903) segfaults MPI ``libcharmm`` in ``psf_set_iblo_inb`` /
+    ``resize_psf(NNB)`` on large PBC boxes. Topology bonded exclusions remain.
+    """
+    if bool(periodic_external):
+        return False
+    try:
+        n_ml = len(ml_selection.get_atom_indexes())
+        if n_total is None:
+            n_total = int(_import_pycharmm().coor.get_natom())
+    except Exception:
+        return False
+    n_tot = int(n_total)
+    return n_tot > 0 and int(n_ml) >= n_tot
+
+
 def _verify_ml_exclusion_lists_installed(
     ml_selection: Any,
     *,
     context: str = "MLpot PBC exclusions",
+    require_dense_ml_ml: bool = True,
 ) -> int:
     """Raise when PSF ``inb`` lacks ML–ML exclusions (``upinb`` would see PSF-only ~1k)."""
     pycharmm = _import_pycharmm()
+    nnb = int(pycharmm.psf.get_nnb())
+    if not require_dense_ml_ml:
+        return nnb
     ml_indices = ml_selection.get_atom_indexes()
     n_ml = len(ml_indices)
     min_nnb = _expected_ml_ml_exclusion_pairs(n_ml)
-    nnb = int(pycharmm.psf.get_nnb())
     if nnb >= min_nnb:
         return nnb
     raise RuntimeError(
@@ -1652,20 +1680,36 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
     since registration, run the same order as
     :func:`_finalize_pbc_mlpot_exclusions_after_param_read`: crystal/IMAGE,
     cutoffs (no rebuild), ML ``iblo/inb``, then one ``update_bnbnd``/``upinb``.
+
+    All-ML + ``jax_mic`` skips dense ML–ML install (see
+    :func:`should_skip_dense_ml_ml_exclusions`).
     """
     if not bool(getattr(mlpot_ctx, "use_pbc", False)):
         return 0
     ml_selection = getattr(mlpot_ctx, "ml_selection", None)
     if ml_selection is None:
         return 0
+    skip_dense = should_skip_dense_ml_ml_exclusions(
+        ml_selection,
+        periodic_external=bool(getattr(mlpot_ctx, "periodic_external", False)),
+    )
     ml_indices = ml_selection.get_atom_indexes()
     n_ml = len(ml_indices)
-    min_nnb = _expected_ml_ml_exclusion_pairs(n_ml)
-    if min_nnb <= 0:
+    min_nnb = 0 if skip_dense else _expected_ml_ml_exclusion_pairs(n_ml)
+    if min_nnb <= 0 and not skip_dense:
         return 0
     pycharmm = _import_pycharmm()
     nnb = int(pycharmm.psf.get_nnb())
-    needs_install = nnb < min_nnb
+    if skip_dense:
+        # Topology exclusions only; do not force a second upinb just to densify.
+        if not force_rebuild and bool(
+            getattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
+        ):
+            return nnb
+        # Still allow force_rebuild to refresh IMAGE/nbonds without dense iblo/inb.
+        needs_install = False
+    else:
+        needs_install = nnb < min_nnb
     if not needs_install and not force_rebuild:
         return nnb
     # One ``prepare_charmm_pbc`` + ``upinb`` per coordinate/box regime is enough;
@@ -1683,6 +1727,7 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
             nnb = _verify_ml_exclusion_lists_installed(
                 ml_selection,
                 context=context,
+                require_dense_ml_ml=not skip_dense,
             )
             pycharmm.image.update_bimag()
         return nnb
@@ -1714,13 +1759,12 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
             workflow_args=workflow_args,
             context=f"{context} (pre-upinb)",
         )
-    # Always reinstall ML iblo/inb before upinb (same as registration finalize).
-    # prepare_charmm_pbc / READ PARAM can leave PSF-only ~1k bonded exclusions while
-    # psf_get_nnb() still reports the pre-clear count.
-    _install_ml_exclusions(ml_selection, update=False)
+    if needs_install or (force_rebuild and not skip_dense):
+        _install_ml_exclusions(ml_selection, update=False)
     nnb = _verify_ml_exclusion_lists_installed(
         ml_selection,
         context=context,
+        require_dense_ml_ml=not skip_dense,
     )
     print(
         f"{context}: rebuilding PBC nonbond lists (upinb, nnb={nnb}, L={side:.3f} Å)…",
@@ -1810,6 +1854,7 @@ def _apply_mlpot_psf_mm_off_and_pbc(ctx: MlpotContext, *, verbose: bool = False)
                 cubic_box_side_A=float(box_side),
                 verbose=verbose,
                 workflow_args=getattr(ctx, "workflow_args", None),
+                periodic_external=bool(getattr(ctx, "periodic_external", False)),
             )
     return block_tag
 
@@ -1897,6 +1942,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     cubic_box_side_A: float,
     verbose: bool = False,
     workflow_args: argparse.Namespace | None = None,
+    periodic_external: bool = False,
 ) -> None:
     """Rebuild crystal/nb lists after READ PARAM, then apply ML exclusions once.
 
@@ -1905,8 +1951,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
 
     1. Crystal build + ``image byres`` (repopulate NATIM; no ``upinb`` yet).
     2. PBC nonbond **cutoffs only** (no ``update_bnbnd`` — it rebuilds PSF-only lists).
-    3. ML ``iblo/inb`` via ``set_iblo_inb_no_update``.
-    4. One ``update_bnbnd`` / ``upinb`` with ML exclusions installed.
+    3. ML ``iblo/inb`` via ``set_iblo_inb_no_update`` (skipped for all-ML ``jax_mic``).
+    4. One ``update_bnbnd`` / ``upinb`` with ML exclusions installed (when required).
 
     Installing exclusions before ``apply_pbc_nbonds`` left PSF-only exclusions (~1000
     for DCM:100) and ``MAKINB`` resize segfaults at the first MLpot SD ``ENER``.
@@ -1922,6 +1968,10 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     )
 
     side = float(cubic_box_side_A)
+    skip_dense = should_skip_dense_ml_ml_exclusions(
+        ml_selection,
+        periodic_external=bool(periodic_external),
+    )
     rewrap_charmm_coords_for_mlpot_pbc(
         cubic_box_side_A=side,
         workflow_args=workflow_args,
@@ -1934,10 +1984,19 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC crystal/IMAGE build",
     )
-    print(
-        f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
-        flush=True,
-    )
+    if skip_dense:
+        n_ml = len(ml_selection.get_atom_indexes())
+        print(
+            f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); "
+            f"skipping dense ML–ML exclusions for all-ML jax_mic "
+            f"(n_ml={n_ml}, would need {_expected_ml_ml_exclusion_pairs(n_ml)} pairs)",
+            flush=True,
+        )
+    else:
+        print(
+            f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
+            flush=True,
+        )
     print("MLpot PBC: configuring PBC nonbond cutoffs (defer upinb)…", flush=True)
     with charmm_relaxed_bomlev():
         reassert_pbc_nbond_cutoffs(
@@ -1946,10 +2005,12 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (pre-upinb)",
         )
-    _install_ml_exclusions(ml_selection, update=False)
+    if not skip_dense:
+        _install_ml_exclusions(ml_selection, update=False)
     nnb = _verify_ml_exclusion_lists_installed(
         ml_selection,
         context="MLpot PBC registration",
+        require_dense_ml_ml=not skip_dense,
     )
     print(
         f"MLpot PBC: rebuilding nonbond lists (upinb, nnb={nnb})…",
@@ -1966,7 +2027,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 1)",
         )
-        _install_ml_exclusions(ml_selection, update=False)
+        if not skip_dense:
+            _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
@@ -1987,7 +2049,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 2)",
         )
-        _install_ml_exclusions(ml_selection, update=False)
+        if not skip_dense:
+            _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
@@ -2154,6 +2217,7 @@ def register_mlpot(
                 cubic_box_side_A=box_side,
                 verbose=verbose,
                 workflow_args=workflow_args,
+                periodic_external=bool(periodic_external),
             )
             skip_iblo_inb_update = True
         else:

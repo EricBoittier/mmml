@@ -16,7 +16,7 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = [0, 1, 2, 3]
 
-    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None):
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None, **_kw):
         call_order.append("finalize_pbc_exclusions")
 
     def _suspend(*, verbose=False):
@@ -89,7 +89,7 @@ def test_register_mlpot_pbc_applies_policy_before_finalize():
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = [0, 1, 2, 3]
 
-    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None):
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None, **_kw):
         call_order.append("finalize_pbc_exclusions")
 
     def _block(*args, **kwargs):
@@ -181,7 +181,7 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         call_order.append("block")
         return "all"
 
-    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None):
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None, **_kw):
         call_order.append("finalize_pbc_exclusions")
 
     def _install(_sel, *, update=True):
@@ -385,6 +385,7 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
             cubic_box_side_A=32.0,
             verbose=False,
             workflow_args=MagicMock(),
+            periodic_external=True,
         )
     prepare.assert_called_once_with(
         32.0,
@@ -412,6 +413,70 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
         ]
     )
     assert fake_pycharmm.image.update_bimag.call_count == 2
+
+
+def test_finalize_pbc_skips_dense_exclusions_for_all_ml_jax_mic():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = list(range(12))
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reassert_pbc_nbond_cutoffs",
+    ), patch.object(
+        mlpot_setup,
+        "rewrap_charmm_coords_for_mlpot_pbc",
+        return_value=0,
+    ), patch.object(
+        mlpot_setup,
+        "_install_ml_exclusions",
+    ) as install, patch.object(
+        mlpot_setup,
+        "_verify_ml_exclusion_lists_installed",
+        return_value=12,
+    ) as verify, patch.object(
+        mlpot_setup,
+        "_import_pycharmm",
+    ) as import_py, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.capture_charmm_script_output",
+        return_value="",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.stash_mkimat2_registration_log",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ):
+        fake_pycharmm = MagicMock()
+        fake_pycharmm.coor.get_natom.return_value = 12
+        import_py.return_value = fake_pycharmm
+        mlpot_setup._finalize_pbc_mlpot_exclusions_after_param_read(
+            fake_sel,
+            cubic_box_side_A=30.0,
+            verbose=False,
+            workflow_args=MagicMock(),
+            periodic_external=False,
+        )
+    install.assert_not_called()
+    verify.assert_called_once()
+    assert verify.call_args.kwargs.get("require_dense_ml_ml") is False
+
+
+def test_should_skip_dense_ml_ml_exclusions():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        should_skip_dense_ml_ml_exclusions,
+    )
+
+    sel = MagicMock()
+    sel.get_atom_indexes.return_value = list(range(100))
+    assert should_skip_dense_ml_ml_exclusions(
+        sel, periodic_external=False, n_total=100
+    )
+    assert not should_skip_dense_ml_ml_exclusions(
+        sel, periodic_external=True, n_total=100
+    )
+    assert not should_skip_dense_ml_ml_exclusions(
+        sel, periodic_external=False, n_total=200
+    )
 
 
 def test_register_mlpot_context_skips_user_check_when_jax_deferred():

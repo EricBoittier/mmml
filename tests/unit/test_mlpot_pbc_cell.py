@@ -1362,7 +1362,12 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
-    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=40.0)
+    ctx = MagicMock(
+        use_pbc=True,
+        ml_selection=fake_sel,
+        cubic_box_side_A=40.0,
+        periodic_external=True,
+    )
     fake_psf = MagicMock()
     fake_psf.get_nnb.side_effect = [5, 6]
 
@@ -1411,7 +1416,12 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
-    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=42.0)
+    ctx = MagicMock(
+        use_pbc=True,
+        ml_selection=fake_sel,
+        cubic_box_side_A=42.0,
+        periodic_external=True,
+    )
     ctx._mlpot_pbc_exclusions_upinb_done = False
     fake_psf = MagicMock()
     fake_psf.get_nnb.return_value = 6
