@@ -21,6 +21,11 @@ DEFAULT_SPACING = 4.0
 ACO_ATOMS_PER_MONOMER = 10
 NVE_TIMESTEP_PS = 0.00025
 
+# This is only a coarse guard against collapsed/repeated monomer coordinates.
+# It must remain below the physical size of supported small monomers; detailed,
+# species-aware geometry validation is handled by ``monomer_geometry_limits``.
+DEFAULT_MIN_MONOMER_EXTENT_A = 1.0
+
 
 def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     """CLI flags for CHARMM console verbosity."""
@@ -1278,9 +1283,15 @@ def validate_cluster_geometry(
     positions: np.ndarray,
     *,
     min_axis_span: float = 0.3,
-    min_monomer_extent: float = 1.5,
+    min_monomer_extent: float = DEFAULT_MIN_MONOMER_EXTENT_A,
     n_molecules: int | None = None,
 ) -> dict[str, float]:
+    """Validate coarse cluster geometry before calculator setup.
+
+    ``min_monomer_extent`` is a collapse sentinel in angstrom, not a
+    species-specific equilibrium-geometry criterion. More detailed limits are
+    derived from reference geometry later in the MD setup.
+    """
     r = np.asarray(positions, dtype=float)
     if r.ndim != 2 or r.shape[1] != 3:
         raise ValueError(f"positions must be (N, 3), got {r.shape}")
