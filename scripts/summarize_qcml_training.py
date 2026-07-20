@@ -172,7 +172,9 @@ def main() -> None:
             output_dir = args.output_dir / run_dir.name
         summary = summarize_run(run_dir, output_dir)
         summaries.append(summary)
-        print(json.dumps(summary, indent=2, sort_keys=True))
+        from mmml.utils.rich_report import print_colored_json
+
+        print_colored_json(summary, sort_keys=True)
         print(f"Wrote training summary to {output_dir}")
 
     if args.output_dir is not None and len(args.run_dirs) > 1:

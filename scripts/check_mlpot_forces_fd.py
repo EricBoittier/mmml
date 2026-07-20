@@ -458,7 +458,9 @@ def main(argv: list[str] | None = None) -> int:
             {k: v for k, v in r.items() if k != "components"} for r in report["sweep"]
         ]
     worst = report["worst"] if "worst" in report else None
-    print(json.dumps(display_report, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(display_report)
     if worst is not None:
         print(
             "Worst component: atom {atom} {axis}, analytic={analytic_force_kcalmol_A:.6f}, "

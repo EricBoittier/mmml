@@ -168,7 +168,9 @@ def main() -> int:
         else:
             np.savez_compressed(args.npz, n_frames=np.array(0))
 
-    print(json.dumps({k: v for k, v in summary.items() if k != "notes"}, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json({k: v for k, v in summary.items() if k != "notes"})
     print(f"Wrote {args.output}")
     return 0 if summary.get("status") == "pass" else 1
 

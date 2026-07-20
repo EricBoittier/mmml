@@ -541,7 +541,9 @@ def main() -> None:
         json.dumps(summary, indent=2, sort_keys=True),
         encoding="utf-8",
     )
-    print(json.dumps(summary, indent=2, sort_keys=True))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(summary, sort_keys=True)
     print(f"Wrote component plots to {args.output_dir}")
 
 

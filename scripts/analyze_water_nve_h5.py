@@ -1832,7 +1832,9 @@ def main() -> None:
         ],
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(summary)
 
 
 if __name__ == "__main__":

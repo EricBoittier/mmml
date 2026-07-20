@@ -98,7 +98,15 @@ def main() -> None:
     out = Path(args.output).expanduser()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2))
-    print(json.dumps({"water": report["water"], "targets": report["targets"], "largest_absolute": report.get("largest_absolute", {})}, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(
+        {
+            "water": report["water"],
+            "targets": report["targets"],
+            "largest_absolute": report.get("largest_absolute", {}),
+        }
+    )
     print(f"Wrote {out}")
 
 

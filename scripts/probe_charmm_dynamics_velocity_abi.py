@@ -56,7 +56,9 @@ def main() -> int:
     report = probe(args.library, args.n)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    print(json.dumps(report, indent=2, sort_keys=True))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(report, sort_keys=True)
     return 0 if report["passed"] else 1
 
 
