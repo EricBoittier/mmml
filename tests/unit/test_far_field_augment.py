@@ -205,17 +205,20 @@ def test_per_fragment_charge_mse_penalizes_multi_fragment_imbalance():
 
 
 def test_per_fragment_charge_mse_ignores_masked_padding_atoms():
-    """Padding atoms (atom_mask=0) must not perturb the per-fragment sum."""
-    k_max = 3
-    atomic_charges = jnp.array([0.3, -0.3, 999.0], dtype=jnp.float32)
-    mol_id = jnp.array([0, 1, 1], dtype=jnp.int32)
-    atom_mask = jnp.array([1.0, 1.0, 0.0], dtype=jnp.float32)  # atom 2 is padding
-    batch_segments = jnp.array([0, 0, 0], dtype=jnp.int32)
+    """Padding atoms (atom_mask=0) must not perturb the per-fragment sum:
+    fragment 0 (atoms 0,1) is exactly balanced; fragment 1 is a real,
+    exactly-neutral atom plus a masked padding atom carrying a huge charge
+    that must be excluded from the sum."""
+    k_max = 2
+    atomic_charges = jnp.array([0.3, -0.3, 0.0, 999.0], dtype=jnp.float32)
+    mol_id = jnp.array([0, 0, 1, 1], dtype=jnp.int32)
+    atom_mask = jnp.array([1.0, 1.0, 1.0, 0.0], dtype=jnp.float32)  # atom 3 is padding
+    batch_segments = jnp.array([0, 0, 0, 0], dtype=jnp.int32)
 
     mse = _per_fragment_charge_conservation_mse(
         atomic_charges, mol_id, atom_mask, batch_segments, batch_size=1, k_max=k_max
     )
-    # Both fragments sum to 0 once the masked padding atom is excluded.
+    # Both fragments' real (unmasked) atoms sum to exactly 0.
     assert float(mse) == pytest.approx(0.0, abs=1e-6)
 
 
