@@ -71,6 +71,9 @@ the tools present on 2026-07-20.
 
 | Path | Class | Ownership and next action |
 |---|---|---|
+| `mmml.mode_check` | Canonical | Monomer **and** small-cluster local diagnostics (FD forces, X–H stretch, ASE vib, kick). Not a COM interaction scan — that remains `mmml.dimer_scan`. |
+| `mmml.cli.misc.mode_check` | Canonical | Thin `mmml mode-check` adapter (`--pbc-fd` covers the former unregistered `check_fd.py` path). |
+| `mmml.cli.run.md_pbc_suite.check_fd` | Wrapper | Legacy script entry; delegates to `mmml.mode_check.pbc_fd`. Do not extend scientific logic here. |
 | `scripts/validate_dimer_rays.py` | Validation | Geometry/ray validation, not scan execution. |
 | `scripts/validate_mlpot_sparse_dimers.py` | Validation | Production preflight for sparse dimer selection. |
 | `tests/functionality/dimer_scans/` | Validation | Environment-dependent functional scan checks. |

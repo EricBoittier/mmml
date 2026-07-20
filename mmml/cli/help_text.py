@@ -44,6 +44,11 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("fix-and-split", "Unit fixes + train/valid/test splits"),
             CommandInfo("xml2npz", "Molpro XML → NPZ"),
             CommandInfo("validate", "Validate NPZ against schema"),
+            CommandInfo("dimer-scan", "Rigid 1D dimer energy/force scan"),
+            CommandInfo(
+                "mode-check",
+                "Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD)",
+            ),
         ),
     ),
     (

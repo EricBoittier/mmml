@@ -56,6 +56,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "verify-esp-alignment",
             "normal-mode-sample",
             "dimer-scan",
+            "mode-check",
             "compare-npz",
             "cross-check",
         ),

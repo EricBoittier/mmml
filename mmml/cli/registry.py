@@ -97,6 +97,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "mmml.cli.misc.dimer_scan",
         "Reproducible rigid 1D dimer energy/force scan",
     ),
+    CommandSpec(
+        "mode-check",
+        "mmml.cli.misc.mode_check",
+        "Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD)",
+    ),
     CommandSpec("physnet-train", "mmml.cli.make.make_training", "Train PhysNet message-passing model (E/F)"),
     CommandSpec("physnet-md", "mmml.cli.misc.physnet_md", "PhysNet MD sampling"),
     CommandSpec("physnet-evaluate", "mmml.cli.misc.physnet_evaluate", "Evaluate PhysNet checkpoint"),

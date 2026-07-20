@@ -253,6 +253,10 @@ def main():
         from .misc import dimer_scan
         return dimer_scan.main(args.args)
 
+    elif command == "mode-check":
+        from .misc import mode_check
+        return mode_check.main(args.args)
+
     elif command == "physnet-train":
         from .make import make_training
         sys.argv = ["mmml physnet-train"] + args.args
