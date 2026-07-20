@@ -24,15 +24,24 @@ cd "$ROOT"
 OUT_DIR="${OUT_DIR:-./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt}"
 N_MOL="${N_MOL:-90}"
 BOX_SIZE="${BOX_SIZE:-30}"
-BOX_MODE="${BOX_MODE:-density}"   # density | count
+# Default count@30 Å (~903 waters @ 1 g/cm³). density@TIP3:90 → L≈13.9 Å works
+# after nbond small-box capping, but cutoffs are aggressively short.
+BOX_MODE="${BOX_MODE:-count}"   # count | density
 TARGET_P_ATM="${TARGET_P_ATM:-1.0}"
 TEMP_K="${TEMP_K:-300}"
 SEED="${SEED:-42}"
 TARGET_DENSITY="${TARGET_DENSITY:-1.0}"
+WIPE="${WIPE:-1}"
 
 mkdir -p "$OUT_DIR"
 LIQUID_DIR="$OUT_DIR/liquid_box"
 OPT_DIR="$OUT_DIR/box_pressure_opt"
+
+if [[ "$WIPE" == "1" ]]; then
+  # Avoid reading a previous fail's box.json (L=30 underdense) after a crash.
+  rm -rf "$LIQUID_DIR" "$OPT_DIR"
+fi
+mkdir -p "$LIQUID_DIR"
 
 echo "== TIP3 box pressure opt (CHARMM-default NpT prep) =="
 echo "  liquid-box → $LIQUID_DIR"
@@ -48,30 +57,34 @@ LB_ARGS=(
   --output-dir "$LIQUID_DIR"
   --seed "$SEED"
   --target-density-g-cm3 "$TARGET_DENSITY"
+  --rebuild-packmol
 )
-if [[ "$BOX_MODE" == "count" ]]; then
+if [[ "$BOX_MODE" == "density" ]]; then
+  echo "  mode=density: TIP3:${N_MOL} → L from ρ=${TARGET_DENSITY} g/cm³"
+  LB_ARGS+=(
+    --composition "TIP3:${N_MOL}"
+    --box-auto density
+  )
+else
   echo "  mode=count: scale TIP3:1 to ρ=${TARGET_DENSITY} in L=${BOX_SIZE} Å"
   LB_ARGS+=(
     --composition "TIP3:1"
     --box-auto count
     --box-size "$BOX_SIZE"
   )
-else
-  echo "  mode=density: TIP3:${N_MOL} → L from ρ=${TARGET_DENSITY} g/cm³"
-  LB_ARGS+=(
-    --composition "TIP3:${N_MOL}"
-    --box-auto density
-  )
 fi
 
+set +e
 mmml liquid-box "${LB_ARGS[@]}"
+lb_rc=$?
+set -e
 
 if [[ ! -f "$LIQUID_DIR/box.json" ]]; then
-  echo "FAILED: missing $LIQUID_DIR/box.json" >&2
+  echo "FAILED: missing $LIQUID_DIR/box.json (liquid-box exit $lb_rc)" >&2
   exit 1
 fi
 
-# Surface liquid-box status (box.json is written even on fail).
+# Surface liquid-box status from *this* run's box.json only.
 uv run python - <<PY
 import json
 from pathlib import Path
@@ -80,15 +93,20 @@ d = json.loads(p.read_text())
 status = str(d.get("status", "?"))
 side = d.get("box_side_A", d.get("final_cubic_side_A"))
 rho = d.get("density_g_cm3")
+n_mol = d.get("n_molecules")
 msg = d.get("message") or ""
-print(f"liquid-box status={status}  L={side} Å  ρ={rho} g/cm³")
+print(f"liquid-box status={status}  N={n_mol}  L={side} Å  ρ={rho} g/cm³")
 if msg:
     print(f"  message: {msg}")
 if status != "pass":
     raise SystemExit(
-        "liquid-box certification failed — see REPORT.md / box.json message "
-        "(usually density gate: N and L must match --target-density-g-cm3)."
+        "liquid-box certification failed — see REPORT.md / box.json message. "
+        "Tip: BOX_MODE=count BOX_SIZE=30 for ~1 g/cm³ water; or pull nbond "
+        "small-box cutoff fix for BOX_MODE=density (L≈14 Å)."
     )
+lb_rc = int("$lb_rc")
+if lb_rc != 0:
+    raise SystemExit(f"liquid-box exited {lb_rc} despite status=pass")
 PY
 
 echo ""

@@ -20,7 +20,12 @@ PBC_CTOFNB = 12.0
 
 # CHARMM requires primary/image cutoffs strictly below half the cubic box side.
 PBC_NBOND_BOX_MARGIN_A = 1.0
+# Preferred floor for ``ctonnb`` on large boxes. Must not be forced when
+# ``L/2 - margin`` is smaller (density-sized TIP3:90 ≈ 13.9 Å → L/2≈7 Å).
 PBC_NBOND_MIN_CUTNB_A = 6.0
+# Minimum viable pairlist cutoff after L/2 capping (needs room for
+# ``ctonnb < ctofnb < cutnb`` with 0.5 Å gaps).
+PBC_NBOND_MIN_VIABLE_CUTNB_A = 2.0
 
 # Pairlist skin: buffer between the interaction cutoff (``ctofnb``) and the
 # pairlist cutoff (``cutnb``).  With ``inbfrq`` list rebuilds every ~50 steps an
@@ -28,6 +33,8 @@ PBC_NBOND_MIN_CUTNB_A = 6.0
 # rebuilds and produces energy discontinuities (~kcal/mol steps) on list rebuild
 # or image retranslation.  2 Å is the CHARMM-conventional default.
 PBC_NBOND_SKIN_A = 2.0
+# Switch ladder gaps used when shrinking cutoffs under a tight L/2 cap.
+PBC_NBOND_SWITCH_GAP_A = 0.5
 
 
 @dataclass(frozen=True)
@@ -101,6 +108,15 @@ def charm_ctexnb_A(
     return base
 
 
+def _min_ctonnb_for_cutnb(cutnb: float) -> float:
+    """Preferred ``ctonnb`` floor that still leaves room under ``cutnb``."""
+    nb = float(cutnb)
+    gap = float(PBC_NBOND_SWITCH_GAP_A)
+    # Need ctonnb + 2*gap <= cutnb so ctofnb and cutnb can sit above.
+    room_limited = max(gap, nb - 2.0 * gap)
+    return min(float(PBC_NBOND_MIN_CUTNB_A), room_limited)
+
+
 def scale_vacuum_switch_cutoffs(
     cutnb: float,
     *,
@@ -114,11 +130,12 @@ def scale_vacuum_switch_cutoffs(
     scale = nb / ref if ref > 0.0 else 1.0
     ctonnb = float(ctonnb_ref) * scale
     ctofnb = float(ctofnb_ref) * scale
+    gap = float(PBC_NBOND_SWITCH_GAP_A)
     ctonnb = min(ctonnb, nb - 4.0)
-    ctofnb = min(ctofnb, nb - 0.5)
-    ctofnb = max(ctofnb, ctonnb + 0.5)
-    ctonnb = max(float(PBC_NBOND_MIN_CUTNB_A), min(ctonnb, ctofnb - 0.5))
-    ctofnb = max(ctonnb + 0.5, min(ctofnb, nb - 0.5))
+    ctofnb = min(ctofnb, nb - gap)
+    ctofnb = max(ctofnb, ctonnb + gap)
+    ctonnb = max(_min_ctonnb_for_cutnb(nb), min(ctonnb, ctofnb - gap))
+    ctofnb = max(ctonnb + gap, min(ctofnb, nb - gap))
     _nb, ctonnb, ctofnb = enforce_switch_cutoff_order(nb, ctonnb, ctofnb)
     return ctonnb, ctofnb
 
@@ -128,15 +145,22 @@ def enforce_switch_cutoff_order(
     ctonnb: float,
     ctofnb: float,
 ) -> tuple[float, float, float]:
-    """Guarantee ``ctonnb < ctofnb < cutnb`` for CHARMM nbonds setters."""
+    """Guarantee ``ctonnb < ctofnb < cutnb`` without raising ``cutnb`` past input.
+
+    Older logic bumped ``cutnb`` to satisfy switch gaps, which could push it
+    above ``L/2`` on density-sized cells (~14 Å). Shrink switches instead.
+    """
     nb = float(cutnb)
     on = float(ctonnb)
     of = float(ctofnb)
-    of = min(of, nb - 0.5)
-    on = min(on, of - 0.5)
-    on = max(float(PBC_NBOND_MIN_CUTNB_A), on)
-    of = max(on + 0.5, of)
-    nb = max(of + 0.5, nb)
+    gap = float(PBC_NBOND_SWITCH_GAP_A)
+    of = min(of, nb - gap)
+    on = min(on, of - gap)
+    on = max(_min_ctonnb_for_cutnb(nb), on)
+    of = max(on + gap, of)
+    of = min(of, nb - gap)
+    on = min(on, of - gap)
+    on = max(gap, on)
     return nb, on, of
 
 
@@ -208,7 +232,16 @@ def pbc_nbond_cutoffs(
     if L <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {L}")
     half = 0.5 * L
-    max_cut = max(float(PBC_NBOND_MIN_CUTNB_A), half - float(margin_A))
+    # Strict L/2 cap — do not floor at PBC_NBOND_MIN_CUTNB_A (that exceeds L/2
+    # for density-sized TIP3:90 ≈ 13.9 Å boxes).
+    max_cut = half - float(margin_A)
+    min_viable = float(PBC_NBOND_MIN_VIABLE_CUTNB_A)
+    if max_cut < min_viable:
+        raise ValueError(
+            f"cubic box L={L:.3f} Å is too small for PBC nbonds "
+            f"(L/2 − margin = {max_cut:.3f} Å < {min_viable:.3f} Å). "
+            f"Increase N or L (e.g. BOX_MODE=count BOX_SIZE=30 for ~1 g/cm³ water)."
+        )
 
     # Interaction cutoff (switched MM fully off here); switch radii scale from it.
     interaction_cut = min(float(cutnb_max), max_cut)
@@ -227,6 +260,11 @@ def pbc_nbond_cutoffs(
     cutim = max(cutim, cutnb)
 
     cutnb, ctonnb, ctofnb = enforce_switch_cutoff_order(cutnb, ctonnb, ctofnb)
+    # Final hard re-cap: enforce must never leave cutnb >= L/2.
+    if cutnb > max_cut:
+        cutnb = float(max_cut)
+        cutnb, ctonnb, ctofnb = enforce_switch_cutoff_order(cutnb, ctonnb, ctofnb)
+        cutim = max(min(cutim, max_cut), cutnb)
     return PbcNbondCutoffs(
         cubic_box_side_A=L,
         cutnb=cutnb,

@@ -670,8 +670,13 @@ def plot_force_parity(
 
 
 def restore_checkpoint(checkpoint_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
+
     checkpointer = ocp.PyTreeCheckpointer()
-    restored = checkpointer.restore(checkpoint_path)
+    # Device-agnostic restore: a checkpoint saved on one multi-GPU node's
+    # specific device topology must still load when evaluating on different
+    # (or busy) GPUs -- see _restore_pytree_cpu_safe's docstring.
+    restored = _restore_pytree_cpu_safe(checkpointer, str(checkpoint_path))
     
     params = restored.get("params")
     if params is None and "model" in restored:

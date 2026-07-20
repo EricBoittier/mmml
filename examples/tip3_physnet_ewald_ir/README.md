@@ -43,14 +43,14 @@ synthetic `P∝1/L³` model; pass `charmm_pressure_fn` for live virial `PRSI`.
 
 **Density:** `TIP3:90` @ 30 Å is **~0.1 g/cm³**, not 1 g/cm³ (need ~903 waters
 at 30 Å, or `L≈13.9` Å for 90 waters). `box_opt` defaults to
-`--box-auto density` so liquid-box certification can pass. For a fixed 30 Å
-liquid cube: `BOX_MODE=count BOX_SIZE=30`.
+`BOX_MODE=count` (fill 30 Å at 1 g/cm³). Wipe the out dir before re-runs so a
+stale fail `box.json` is not reused.
 
 ```bash
-STAGE=box_opt TARGET_P_ATM=1.0 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
-# or:
-./scripts/run_tip3_box_pressure_opt.sh
-BOX_MODE=count BOX_SIZE=30 ./scripts/run_tip3_box_pressure_opt.sh
+rm -rf scratch/tip3_physnet_ewald_ir/tip3_90_box_opt
+STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
+# or smaller densified N=90 box:
+BOX_MODE=density N_MOL=90 ./scripts/run_tip3_box_pressure_opt.sh
 ```
 
 ## Density / packing note

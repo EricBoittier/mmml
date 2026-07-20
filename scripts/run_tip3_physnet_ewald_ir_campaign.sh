@@ -34,7 +34,7 @@ MPIRUN="${MMML_MPIRUN_WRAPPER:-$ROOT/scripts/mmml-charmm-mpirun.sh}"
 # True ~1 g/cm³ liquid: ~903 waters @ 30 Å, or L≈13.9 Å for 90 waters.
 BOX_SMOKE="${BOX_SMOKE:-30}"
 N_SMOKE="${N_SMOKE:-90}"
-BOX_OPT_MODE="${BOX_OPT_MODE:-density}"  # density | count (for STAGE=box_opt)
+BOX_OPT_MODE="${BOX_OPT_MODE:-count}"  # count@30Å ~903 waters; density@90 → L≈14 Å
 PS_HEAT_SMOKE="${PS_HEAT_SMOKE:-2.0}"
 PS_NVE_SMOKE="${PS_NVE_SMOKE:-2.0}"
 
