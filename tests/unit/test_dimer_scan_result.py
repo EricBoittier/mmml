@@ -138,7 +138,7 @@ def test_bundle_detects_modified_artifact(tmp_path: Path):
 
 
 def test_schema_versions_are_public_and_serialized(tmp_path: Path):
-    assert RESULT_SCHEMA_VERSION == "1.0"
+    assert RESULT_SCHEMA_VERSION == "1.1"
     assert ORIENTATION_SCHEMA_VERSION == "1.0"
     scan_config = config(distances=(2.0,))
     assert scan_config.to_dict()["orientation_schema_version"] == "1.0"
@@ -159,6 +159,27 @@ def test_checkpoint_provenance_uses_content_identity(tmp_path: Path):
     assert captured.checkpoint is not None
     assert captured.checkpoint["path"] == str(checkpoint.resolve())
     assert captured.checkpoint["sha256"] == hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+
+
+def test_calculator_config_and_parameter_directory_are_hashed(tmp_path: Path):
+    model_config = tmp_path / "efield-config.json"
+    model_config.write_text("{}")
+    slako = tmp_path / "3ob"
+    slako.mkdir()
+    (slako / "H-H.skf").write_text("parameter data")
+    scan_config = DimerScanConfig(
+        residues=("H", "H"),
+        calculator="fake",
+        distances_angstrom=(2.0,),
+        calculator_config=model_config,
+        slako_dir=slako,
+    )
+
+    captured = Provenance.capture(scan_config)
+
+    assert set(captured.calculator_inputs) == {"calculator_config", "slako_dir"}
+    assert captured.calculator_inputs["calculator_config"]["sha256"]
+    assert captured.calculator_inputs["slako_dir"]["sha256"]
 
 
 def test_public_run_api_is_importable():

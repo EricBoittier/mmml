@@ -37,10 +37,40 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--calculator",
         required=True,
-        choices=("physnet", "xtb"),
+        choices=(
+            "physnet",
+            "spookynet",
+            "mbd",
+            "multipoles",
+            "efield",
+            "xtb",
+            "dftb3-d4",
+            "pyscf",
+        ),
         help="Explicit ASE calculator type",
     )
-    parser.add_argument("--checkpoint", type=Path, help="PhysNet checkpoint path")
+    parser.add_argument("--checkpoint", type=Path, help="Model checkpoint/parameter path")
+    parser.add_argument("--calculator-config", type=Path, help="Calculator model config JSON")
+    parser.add_argument("--method", help="Calculator method (for example pyscf: dft or hf)")
+    parser.add_argument("--basis", help="PySCF basis (default: def2-svp)")
+    parser.add_argument("--xc", help="PySCF DFT functional (default: pbe0)")
+    parser.add_argument(
+        "--electric-field",
+        nargs=3,
+        type=float,
+        metavar=("EX", "EY", "EZ"),
+        help="EField vector in atomic units",
+    )
+    parser.add_argument("--slako-dir", type=Path, help="DFTB+ 3ob-3-1 directory")
+    parser.add_argument("--calculator-workdir", type=Path, help="External calculator scratch directory")
+    parser.add_argument("--calculator-executable", help="External calculator executable")
+    parser.add_argument(
+        "--multipole-force-step",
+        type=float,
+        default=1.0e-4,
+        metavar="ANGSTROM",
+        help="Central finite-difference step for learned-multipole forces",
+    )
     parser.add_argument(
         "--distance",
         type=_distance_grid,
@@ -54,7 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="interaction",
     )
     parser.add_argument("--charge", type=float)
-    parser.add_argument("--spin", type=float)
+    parser.add_argument(
+        "--spin",
+        type=float,
+        help="Spin multiplicity for calculators that require it",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--allow-partial", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
@@ -80,6 +114,17 @@ def main(argv: list[str] | None = None) -> int:
         failure_policy="allow_partial" if args.allow_partial else "fail",
         charge=args.charge,
         spin=args.spin,
+        method=args.method,
+        basis=args.basis,
+        xc=args.xc,
+        calculator_config=args.calculator_config,
+        electric_field_au=(
+            tuple(args.electric_field) if args.electric_field is not None else None
+        ),
+        slako_dir=args.slako_dir,
+        workdir=args.calculator_workdir,
+        executable=args.calculator_executable,
+        multipole_force_step_angstrom=args.multipole_force_step,
         seed=args.seed,
     )
     result = run_dimer_scan(config)

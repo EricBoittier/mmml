@@ -527,7 +527,7 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
     extension.
     """
 
-    implemented_properties = ["energy"]
+    implemented_properties = ["energy", "forces"]
 
     def __init__(
         self,
@@ -540,6 +540,7 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
         mol_id_array: str = "mol_id",
         softening_bohr: float = 0.0,
         max_ell: int = 3,
+        force_step_angstrom: float = 1.0e-4,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -554,6 +555,9 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
         self.mol_id_array = mol_id_array
         self.softening_bohr = float(softening_bohr)
         self.max_ell = int(max_ell)
+        self.force_step_angstrom = float(force_step_angstrom)
+        if self.force_step_angstrom <= 0.0:
+            raise ValueError("force_step_angstrom must be positive")
         self._predict = jax.jit(self._predict_impl)
 
     def _predict_impl(self, batch: dict[str, jax.Array]) -> jax.Array:
@@ -725,6 +729,41 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
             "octupoles_bohr": octupoles,
         }
         self.results.update(masked_prediction)
+
+        if "forces" in properties:
+            # Differentiate the complete learned-multipole energy, including
+            # geometry-dependent predicted moments and origins. Central finite
+            # differences are intentionally used until this diagnostic-heavy
+            # NumPy energy path is fully JAX-native.
+            baseline_results = dict(self.results)
+            # Capture before finite-difference displacements mutate self.atoms.
+            # ASE calculate() allows atoms=None when self.atoms is already set.
+            baseline_atoms = atoms if atoms is not None else self.atoms
+            step = self.force_step_angstrom
+            positions = np.asarray(baseline_atoms.get_positions(), dtype=np.float64)
+            forces = np.zeros_like(positions)
+            for atom_index in range(len(baseline_atoms)):
+                for component in range(3):
+                    displaced = baseline_atoms.copy()
+                    plus = positions.copy()
+                    plus[atom_index, component] += step
+                    displaced.set_positions(plus)
+                    self.calculate(displaced, properties=("energy",))
+                    energy_plus = float(self.results["energy"])
+
+                    minus = positions.copy()
+                    minus[atom_index, component] -= step
+                    displaced.set_positions(minus)
+                    self.calculate(displaced, properties=("energy",))
+                    energy_minus = float(self.results["energy"])
+                    forces[atom_index, component] = -(
+                        energy_plus - energy_minus
+                    ) / (2.0 * step)
+            self.atoms = baseline_atoms.copy()
+            self.results = baseline_results
+            self.results["forces"] = forces
+            self.results["force_method"] = "central_finite_difference"
+            self.results["force_step_angstrom"] = step
 
 
 def field_on_slice(

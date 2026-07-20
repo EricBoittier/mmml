@@ -32,22 +32,52 @@ from typing import Any, Dict
 
 import numpy as np
 
-# Both binding constraints on interaction range are HARD (exactly zero, not
-# just small), verified numerically against this checkpoint family's model
-# code (mmml/models/physnetjax/physnetjax/models/spooky_model.py):
-#   - message-passing radial basis: e3x.nn.smooth_cutoff(d, cutoff=6.0) is
-#     piecewise-defined as exactly 0 for d >= cutoff (not just small) -- and
-#     since disjoint fragments have NO edge between them once every
-#     cross-fragment pair exceeds this cutoff, num_iterations (multi-hop
-#     propagation) is irrelevant: there is no chain of <=6A hops that can
-#     ever bridge two fragments with zero direct edges to begin with.
-#   - electrostatics gating (_calc_switches' off_dist = 1 - smooth_switch(d,
-#     8, 10)) reaches exactly 0 at d >= 10.0 A -- the actual binding
-#     constraint, since 10 > 6.
-# 12.0 A = 10.0 A (hard zero) + 2.0 A safety margin.
-SAFE_SEPARATION_ANGSTROM = 12.0
 NEUTRAL_TOL = 1e-6
 SINGLET_SPIN = 1.0
+DEFAULT_SAFETY_MARGIN_ANGSTROM = 2.0
+
+
+def compute_safe_separation(
+    *,
+    cutoff: float,
+    electrostatics_off_end: float,
+    safety_margin: float = DEFAULT_SAFETY_MARGIN_ANGSTROM,
+) -> float:
+    """Minimum atom-atom separation guaranteeing exactly zero cross-fragment interaction.
+
+    Deliberately takes the model's ACTUAL configured ``cutoff`` and
+    ``electrostatics_off_end`` as explicit arguments rather than a hardcoded
+    constant -- a bare module-level number here would silently go stale if
+    either of those changes (this happened once already: this module used to
+    hardcode 12.0, derived from an undocumented assumption of cutoff=6.0 and
+    electrostatics_off_end=10.0 that nothing checked against the model's
+    actual configuration -- see spooky_model.py's SpookyPhysNet.switch_end /
+    electrostatics_off_end fields, now themselves configurable for the same
+    reason instead of being hardcoded inside _calc_switches).
+
+    Both binding constraints on interaction range are HARD (exactly zero,
+    not just small), verified numerically against this model family's code:
+      - message-passing radial basis (e3x.nn.smooth_cutoff(d, cutoff=...))
+        is piecewise-defined as exactly 0 for d >= cutoff -- and since
+        disjoint fragments have NO edge between them once every
+        cross-fragment pair exceeds this cutoff, num_iterations (multi-hop
+        propagation) is irrelevant: there is no chain of <=cutoff-length
+        hops that can ever bridge two fragments with zero direct edges to
+        begin with.
+      - electrostatics gating (_calc_switches' off_dist) reaches exactly 0
+        at d >= electrostatics_off_end.
+
+    Returns ``max(cutoff, electrostatics_off_end) + safety_margin``: the
+    larger of the two hard-zero points, whichever one is currently binding,
+    plus a numerical safety margin.
+    """
+    return max(float(cutoff), float(electrostatics_off_end)) + float(safety_margin)
+
+
+# Kept ONLY for callers that haven't been updated to pass explicit model
+# parameters; matches the current SpookyPhysNet defaults
+# (cutoff=6.0, electrostatics_off_end=10.0). Prefer compute_safe_separation().
+SAFE_SEPARATION_ANGSTROM = compute_safe_separation(cutoff=6.0, electrostatics_off_end=10.0)
 
 
 def _fragment_radius(positions: np.ndarray) -> float:

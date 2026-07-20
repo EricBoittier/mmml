@@ -70,6 +70,16 @@ class PhysNet(nn.Module):
     use_pbc: bool = False
     include_electrostatics: bool = True
     electrostatics_damping_sigma: float = 4.0
+    # Electrostatics/short-vs-long-range switch distances (Angstrom), used by
+    # _calc_switches. Defaults reproduce the values every checkpoint trained
+    # before this field existed was implicitly hardcoded to -- changing them
+    # changes electrostatics behavior and is NOT backward compatible with
+    # checkpoints trained under the old defaults. See the identical fix (and
+    # full rationale) on mmml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet.
+    switch_start: float = 1.0
+    switch_end: float = 10.0
+    electrostatics_off_start: float = 8.0
+    electrostatics_off_end: float = 10.0
 
     @property
     def natoms(self) -> int:
@@ -147,6 +157,10 @@ class PhysNet(nn.Module):
             "use_pbc": self.use_pbc,
             "include_electrostatics": self.include_electrostatics,
             "electrostatics_damping_sigma": self.electrostatics_damping_sigma,
+            "switch_start": self.switch_start,
+            "switch_end": self.switch_end,
+            "electrostatics_off_start": self.electrostatics_off_start,
+            "electrostatics_off_end": self.electrostatics_off_end,
         }
 
     def energy(
@@ -774,11 +788,14 @@ class PhysNet(nn.Module):
         tuple
             Tuple of (r, off_dist, eshift) switching factors
         """
-        # Numerical stability constants
+        # Pure numerical-stability floors -- unlike switch_start/switch_end/
+        # electrostatics_off_start/electrostatics_off_end (below), these
+        # don't determine WHERE any physical behavior turns on or off, so
+        # they stay internal rather than exposed as model fields.
         eps = 1e-6
         min_dist = 0.01  # Minimum distance in Angstroms
-        switch_start = 1.0  # Start switching at 2 Angstroms
-        switch_end = 10.0  # Complete switch by 10 Angstroms
+        switch_start = self.switch_start
+        switch_end = self.switch_end
         # Calculate distances between atom pairs
         displacements = jnp.nan_to_num(displacements, nan=0.0, posinf=0.0, neginf=0.0)
         displacements = displacements + (1 - batch_mask)[..., None]
@@ -787,7 +804,9 @@ class PhysNet(nn.Module):
         distances = jnp.sqrt(jnp.maximum(squared_distances, min_dist**2))
         # Improved switching function
         switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
-        off_dist = 1.0 - e3x.nn.smooth_switch(distances, 8.0, 10.0)
+        off_dist = 1.0 - e3x.nn.smooth_switch(
+            distances, self.electrostatics_off_start, self.electrostatics_off_end
+        )
         switch_dist = jnp.clip(switch_dist, 0.0, 1.0)
         off_dist = jnp.clip(off_dist, 0.0, 1.0)
         one_minus_switch_dist = 1 - switch_dist

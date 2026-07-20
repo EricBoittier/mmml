@@ -844,6 +844,10 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
+        switch_start=args.switch_start,
+        switch_end=args.switch_end,
+        electrostatics_off_start=args.electrostatics_off_start,
+        electrostatics_off_end=args.electrostatics_off_end,
         # --fixed-cgenff-vdw pins the CGenFF LJ term at its published parameters, so it
         # acts as a fixed physical prior the network can only add to, never scale away.
         learn_cgenff_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
@@ -1598,11 +1602,18 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
             append_far_field_composites_to_data,
             build_far_field_composites,
+            compute_safe_separation,
         )
 
         frac = args.far_field_augment_fraction
         if not 0.0 < frac < 1.0:
             raise ValueError(f"--far-field-augment-fraction must be in (0, 1), got {frac}")
+        # Computed from THIS run's actual --cutoff/--electrostatics-off-end,
+        # not a hardcoded assumption -- see compute_safe_separation's
+        # docstring for why a bare constant here was a latent bug.
+        safe_separation = compute_safe_separation(
+            cutoff=args.cutoff, electrostatics_off_end=args.electrostatics_off_end
+        )
         n_structures_before = int(np.asarray(data["E"]).shape[0])
         # Solve for n_composites so composites make up `frac` of the resulting
         # pool: n_composites / (n_structures_before + n_composites) = frac.
@@ -1615,6 +1626,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             n_composites=n_composites,
             k_min=args.far_field_min_k,
             k_max=args.far_field_max_k,
+            safe_separation=safe_separation,
         )
         composite_sizes = [c["N"] for c in composites]
         data = append_far_field_composites_to_data(data, composites)
@@ -1622,7 +1634,9 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"Far-field augmentation: added {n_composites} synthetic composite "
             f"structures (K={args.far_field_min_k}-{args.far_field_max_k} fragments "
             f"each, sizes {min(composite_sizes)}-{max(composite_sizes)} atoms, "
-            f">=12 A apart, exact E=sum(E_fragment) by construction) — "
+            f">={safe_separation:g} A apart [computed from cutoff={args.cutoff:g}, "
+            f"electrostatics_off_end={args.electrostatics_off_end:g}], exact "
+            f"E=sum(E_fragment) by construction) — "
             f"{n_structures_before} -> {n_structures_before + n_composites} total "
             f"structures ({100.0 * n_composites / (n_structures_before + n_composites):.1f}% of pool)",
             flush=True,
@@ -2579,6 +2593,40 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=4.0,
         help="Apply erf(r/sigma) damping to the learned-charge Coulomb term; set 0 to disable.",
+    )
+    parser.add_argument(
+        "--switch-start",
+        type=float,
+        default=1.0,
+        help=(
+            "Distance (A) where the short-range/long-range electrostatics blend begins "
+            "(default: 1.0, matches every checkpoint trained before this was configurable -- "
+            "changing it changes electrostatics behavior, not backward compatible with "
+            "existing checkpoints)."
+        ),
+    )
+    parser.add_argument(
+        "--switch-end",
+        type=float,
+        default=10.0,
+        help="Distance (A) where the short-range/long-range electrostatics blend completes (default: 10.0).",
+    )
+    parser.add_argument(
+        "--electrostatics-off-start",
+        type=float,
+        default=8.0,
+        help="Distance (A) where the electrostatics term begins switching off (default: 8.0).",
+    )
+    parser.add_argument(
+        "--electrostatics-off-end",
+        type=float,
+        default=10.0,
+        help=(
+            "Distance (A) where the electrostatics term reaches EXACTLY zero (default: 10.0). "
+            "far_field_augment.py's safe-separation calculation depends on this being an exact "
+            "hard-zero point -- if you change it, any --far-field-augment-fraction run must be "
+            "using the SAME value the checkpoint's own switch was configured with."
+        ),
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--log-every", type=int, default=10000, help="Structure interval while parsing extxyz")

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 
-RESULT_SCHEMA_VERSION = "1.0"
+RESULT_SCHEMA_VERSION = "1.1"
 ORIENTATION_SCHEMA_VERSION = "1.0"
 
 EnergyDefinition = Literal["total", "interaction"]
@@ -30,6 +30,15 @@ class DimerScanConfig:
     failure_policy: FailurePolicy = "fail"
     charge: float | None = None
     spin: float | None = None
+    method: str | None = None
+    basis: str | None = None
+    xc: str | None = None
+    calculator_config: Path | None = None
+    electric_field_au: tuple[float, float, float] | None = None
+    slako_dir: Path | None = None
+    workdir: Path | None = None
+    executable: str | None = None
+    multipole_force_step_angstrom: float = 1.0e-4
     seed: int = 0
 
     def __post_init__(self) -> None:
@@ -56,6 +65,17 @@ class DimerScanConfig:
         object.__setattr__(self, "calculator", str(self.calculator).lower())
         if self.checkpoint is not None:
             object.__setattr__(self, "checkpoint", Path(self.checkpoint).expanduser())
+        for name in ("calculator_config", "slako_dir", "workdir"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, Path(value).expanduser())
+        if self.electric_field_au is not None:
+            field = tuple(float(value) for value in self.electric_field_au)
+            if len(field) != 3 or any(not math.isfinite(value) for value in field):
+                raise ValueError("electric_field_au must contain three finite values")
+            object.__setattr__(self, "electric_field_au", field)
+        if self.multipole_force_step_angstrom <= 0.0:
+            raise ValueError("multipole_force_step_angstrom must be positive")
 
     def to_dict(self, *, resolve_paths: bool = False) -> dict[str, Any]:
         """Return a JSON-safe representation including all resolved defaults."""
@@ -66,6 +86,12 @@ class DimerScanConfig:
         if self.checkpoint is not None:
             path = self.checkpoint.resolve() if resolve_paths else self.checkpoint
             data["checkpoint"] = str(path)
+        for name in ("calculator_config", "slako_dir", "workdir"):
+            value = getattr(self, name)
+            if value is not None:
+                data[name] = str(value.resolve() if resolve_paths else value)
+        if self.electric_field_au is not None:
+            data["electric_field_au"] = list(self.electric_field_au)
         return data
 
     @classmethod
@@ -75,4 +101,9 @@ class DimerScanConfig:
         values["distances_angstrom"] = tuple(values["distances_angstrom"])
         if values.get("checkpoint") is not None:
             values["checkpoint"] = Path(values["checkpoint"])
+        for name in ("calculator_config", "slako_dir", "workdir"):
+            if values.get(name) is not None:
+                values[name] = Path(values[name])
+        if values.get("electric_field_au") is not None:
+            values["electric_field_au"] = tuple(values["electric_field_au"])
         return cls(**values)

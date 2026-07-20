@@ -100,6 +100,16 @@ class PhysNetChargeSpin(nn.Module):
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = True
+    # Electrostatics/short-vs-long-range switch distances (Angstrom), used by
+    # _calc_switches. Defaults reproduce the values every checkpoint trained
+    # before this field existed was implicitly hardcoded to -- changing them
+    # changes electrostatics behavior and is NOT backward compatible with
+    # checkpoints trained under the old defaults. See the identical fix (and
+    # full rationale) on mmml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet.
+    switch_start: float = 1.0
+    switch_end: float = 10.0
+    electrostatics_off_start: float = 8.0
+    electrostatics_off_end: float = 10.0
 
     @property
     def natoms(self) -> int:
@@ -173,6 +183,10 @@ class PhysNetChargeSpin(nn.Module):
             "spin_embed_dim": self.spin_embed_dim,
             "charge_range": self.charge_range,
             "spin_range": self.spin_range,
+            "switch_start": self.switch_start,
+            "switch_end": self.switch_end,
+            "electrostatics_off_start": self.electrostatics_off_start,
+            "electrostatics_off_end": self.electrostatics_off_end,
         }
     
     def _embed_molecular_properties(
@@ -451,17 +465,23 @@ class PhysNetChargeSpin(nn.Module):
         batch_mask: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Calculate switching functions for electrostatics and repulsion."""
+        # Pure numerical-stability floors -- unlike switch_start/switch_end/
+        # electrostatics_off_start/electrostatics_off_end (below), these
+        # don't determine WHERE any physical behavior turns on or off, so
+        # they stay internal rather than exposed as model fields.
         eps = 1e-6
         min_dist = 0.01
-        switch_start = 1.0
-        switch_end = 10.0
-        
+        switch_start = self.switch_start
+        switch_end = self.switch_end
+
         displacements = displacements + (1 - batch_mask)[..., None]
         squared_distances = jnp.sum(displacements**2, axis=1)
         distances = jnp.sqrt(jnp.maximum(squared_distances, min_dist**2))
-        
+
         switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
-        off_dist = 1.0 - e3x.nn.smooth_switch(distances, 8.0, 10.0)
+        off_dist = 1.0 - e3x.nn.smooth_switch(
+            distances, self.electrostatics_off_start, self.electrostatics_off_end
+        )
         one_minus_switch_dist = 1 - switch_dist
         
         safe_distances = distances + eps

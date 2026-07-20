@@ -59,6 +59,46 @@ Use unit-bearing names at file and API boundaries, such as `energy_ev`,
 `force_ev_per_angstrom`, and `distance_angstrom`. Do not rely on comments or
 ambient convention to distinguish units.
 
+## No untracked duplicate constants
+
+A hardcoded number that duplicates, or should logically track, an existing
+configurable parameter is a latent bug, not a style issue: whoever changes
+the configurable parameter has no way to know a second, unlinked copy exists
+and needs updating too. It is easy to remain correct by coincidence for a
+long time, then fail silently the day someone changes the "real" parameter.
+
+Concrete case: `SpookyPhysNet`/`PhysNet`/`PhysNetChargeSpin`'s
+`_calc_switches` hardcoded the electrostatics switch distances
+(`switch_start=1.0`, `switch_end=10.0`, and an `off_dist` window `8.0`/`10.0`)
+as bare literals, completely decoupled from the model's own configurable
+`cutoff` field. A downstream tool
+(`mmml/models/physnetjax/physnetjax/training/far_field_augment.py`, which
+needs to know the exact distance beyond which electrostatics and
+message-passing are both provably zero) had no way to discover this
+relationship except by reading the model source and hardcoding a *third*,
+independently-drifting copy of the same assumption. Fixed by promoting the
+four constants to model fields (with defaults that exactly reproduce the old
+hardcoded values, verified numerically, so existing checkpoints are
+unaffected) and having the downstream tool take them as explicit arguments
+instead of assuming a number.
+
+Rule of thumb before hardcoding any numeric literal that represents a
+distance, cutoff, threshold, or switch point:
+
+- If it is a genuine physical/unit constant (e.g. an eV-to-kcal/mol
+  conversion factor, a screening exponent from the underlying physics), a
+  bare literal is fine — it will never need to change independently.
+- If it determines *where* some behavior turns on or off and there is
+  already a configurable parameter in scope that it could plausibly need to
+  move together with, it must be derived from that parameter (or exposed as
+  its own configurable field/argument) — never a second, silently-hardcoded
+  copy. When two constants happen to share a value today (e.g. one switch's
+  upper bound equalling another switch's endpoint), do not assume that
+  coincidence going forward; give each an explicit name and default.
+- Numerical-stability floors/epsilons (guarding against `sqrt(0)`,
+  division by zero) are usually the first case, not the second — they don't
+  determine physical behavior, just prevent NaNs, so they can stay internal.
+
 ## Provenance and identity
 
 For a computational result, record enough metadata to identify:

@@ -11,7 +11,7 @@ import platform
 import shutil
 import subprocess
 import tempfile
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -112,9 +112,23 @@ class Provenance:
     platform: dict[str, str]
     git: dict[str, Any]
     checkpoint: dict[str, Any] | None
+    calculator_inputs: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @classmethod
     def capture(cls, config: DimerScanConfig) -> Provenance:
+        calculator_inputs = {}
+        for name in ("calculator_config", "slako_dir"):
+            value = getattr(config, name)
+            if value is not None:
+                provenance = _checkpoint_provenance(value)
+                if provenance is not None:
+                    calculator_inputs[name] = provenance
+        if config.executable:
+            executable = shutil.which(config.executable)
+            if executable is not None:
+                provenance = _checkpoint_provenance(Path(executable))
+                if provenance is not None:
+                    calculator_inputs["executable"] = provenance
         return cls(
             created_utc=datetime.now(UTC).isoformat(),
             software={
@@ -131,6 +145,7 @@ class Provenance:
             },
             git=_git_state(),
             checkpoint=_checkpoint_provenance(config.checkpoint),
+            calculator_inputs=calculator_inputs,
         )
 
 

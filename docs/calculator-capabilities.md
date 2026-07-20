@@ -36,23 +36,30 @@ independently in scientific provenance.
 
 ## Canonical 1D dimer scan calculators
 
-These are the only calculator names accepted by `mmml dimer-scan`.
+These calculator names are accepted by `mmml dimer-scan`.
 
 | `--calculator` | Implementation | Checkpoint | Properties used | Charge inputs | Where supported |
 |---|---|---|---|---|---|
 | `physnet` | `mmml.interfaces.calculators.checkpoint_loading.create_calculator_from_checkpoint` | Required: portable JSON, joint pickle, or Orbax/directory formats understood by the centralized loader | Energy and forces; interaction energy/forces are dimer minus isolated monomers | Optional total `--charge` and `--spin` are supported by the joint `SimpleInferenceCalculator` path; standalone PhysNet checkpoints currently reject explicit values | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
-| `xtb` | `mmml.analysis.dimer_scans.make_xtb_calculator` | None; uses `xtb-python`, falling back to `tblite` | Energy and forces through ASE | Method-native electronic state; the current dimer CLI does not expose xTB-specific charge/UHF options | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
+| `xtb` | `mmml.analysis.dimer_scans.make_xtb_calculator` | None; uses `xtb-python`, falling back to `tblite` | Energy and forces through ASE | `--method` selects the xTB method (default GFN2-xTB); the current dimer CLI does not expose backend-specific UHF options | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
+| `spookynet` | `SpookyNetCalculator` | Required | Energy and forces | `--charge`; `--spin` is multiplicity | Canonical dimer scan |
+| `mbd` | `QCMLMBDCalculator` | Required | Learned MBD energy and forces | `--charge`; `--spin` is multiplicity | Canonical dimer scan |
+| `multipoles` | `LearnedMolecularMultipoleElectrostatics` | Required | Energy and complete central-finite-difference forces | Fragment charges/multiplicities currently default to neutral singlets | Canonical dimer scan; finite-difference step is recorded |
+| `efield` | `EFieldCalculator` | Parameter JSON required; optional model config JSON | Energy, forces, dipole; scan requests E/F | Explicit `--electric-field EX EY EZ` in atomic units | Canonical dimer scan |
+| `dftb3-d4` | ASE DFTB+ adapter | No model checkpoint; requires DFTB+ and 3ob-3-1 Slater–Koster directory | Energy and forces | DFTB method state | Canonical dimer scan with explicit scratch directory |
+| `pyscf` | Lazy `PySCFDimerCalculator` | None; requires PySCF | HF or DFT energy and analytic nuclear-gradient forces | `--charge`; `--spin` is multiplicity | Canonical dimer scan; `--method hf|dft`, `--basis`, and `--xc` |
 
 The `physnet` loader supports standalone PhysNet energy/force checkpoints and
 joint PhysNet + DCMNet/non-equilibrium checkpoints. For joint checkpoints the
 ASE adapter still supplies the energy/force path; optional dipole, charge, and
 multipole results depend on the checkpoint architecture.
 
-The following calculators are **not yet valid** values for
-`mmml dimer-scan`: `spookynet`, `mbd`, `multipoles`, `pyscf`, `dftb3-d4`, and
-hybrid ML/MM. Adding one requires a factory adapter, provenance fields, and an
-energy/force contract test. Energy-only calculators cannot satisfy the current
-scan requirement without an explicit policy for missing forces.
+Hybrid ML/MM and JAX CGenFF spoof remain on the specialized PyCHARMM scan path,
+not the canonical calculator factory. They require residue-specific PSF/CGenFF
+state, MLpot handoff configuration, and often a periodic runtime; treating them
+as checkpoint-only ASE calculators would hide scientifically material inputs.
+The existing `scan_mlpot_dimer_2d_pycharmm.py --scan-1d` path supports both,
+and should be migrated by representing those inputs in `DimerScanConfig`.
 
 ## Calculator implementations elsewhere in MMML
 
@@ -62,7 +69,7 @@ scan requirement without an explicit policy for missing forces.
 | SpookyNet / SpookyPhysNet | Energy, forces | `mmml.models.spookynet_calc.SpookyNetCalculator` | Python ASE use; Spooky evaluation/training scripts; hybrid MLpot when checkpoint architecture resolves as Spooky | Standalone adapter does not provide the dynamic CGenFF arrays used by every hybrid architecture. Optional frozen MBD is loaded when recorded/configured. |
 | SpookyNet + frozen MBD correction | Energy, forces | `SpookyNetCalculator` with `mbd_checkpoint` and `mbd_weight` | Python ASE evaluation; checkpoint-matched evaluation paths; PyCHARMM hybrid setup also accepts an MBD correction | Recorded cluster-local checkpoint paths may need explicit remapping. Weight must match training. |
 | Learned QCML MBD surrogate | Energy, forces | `mmml.models.mbd.QCMLMBDCalculator` | Python ASE use; standalone evaluation; optional correction in hybrid paths | Requires MBD checkpoint; molecular charge and multiplicity are explicit inputs. |
-| Learned molecular multipole electrostatics | Energy only | `mmml.models.multipoles.LearnedMolecularMultipoleElectrostatics` | Python ASE use; multipole analysis; JAX-MD unified force-field build can freeze learned fragment multipoles | Current ASE energy uses the implemented low-order multipole terms and has no ASE force property. Not eligible for force-required dimer scan as-is. |
+| Learned molecular multipole electrostatics | Energy and finite-difference forces | `mmml.models.multipoles.LearnedMolecularMultipoleElectrostatics` | Canonical dimer scan; Python ASE use; multipole analysis; JAX-MD unified force-field build can freeze learned fragment multipoles | Forces differentiate predicted moments, origins, and interaction energy by central differences; accurate but substantially slower than an eventual JAX autodiff kernel. |
 | E-field PhysNet | Energy, forces, dipole, polarizability | `mmml.models.efield.ase_calc_EF.EFieldCalculator` | `efield-evaluate`, `efield-md`, and Python use | Requires the external-field model/input contract; not wired to hybrid MLpot or canonical dimer scan. |
 | DCMNet property calculator | Charges, dipole, multipoles | `mmml.models.dcmnet.dcmnet_ase.DCMNetCalculator` | Python/property evaluation and joint-model workflows | Property-only: no standalone energy/forces. The joint PhysNet+DCMNet loader supplies E/F through PhysNet. |
 | PySCF CPU ASE calculator | Energy, forces, dipole | `mmml.interfaces.pyscf4gpuInterface.cpu.PYSCF` | Python ASE use and QC scripts | Requires a configured PySCF mean-field/post-HF object; method-dependent runtime and gradients. |
@@ -73,6 +80,7 @@ scan requirement without an explicit policy for missing forces.
 | JAX intermolecular CGenFF nonbonded | Energy, forces | `JAXIntermolecularCalculator` | Python ASE hybrid composition and internal hybrid paths | Needs prepared nonbond parameters, cell, molecule IDs, and explicit units. |
 | Full hybrid ML/MM MLpot | Energy, forces, decomposition/diagnostics | `mmml.interfaces.pycharmmInterface.mmml_calculator.setup_calculator` and `DecomposedMlpotCalculator` | `mmml md-system` with ASE, JAX-MD, or PyCHARMM routes; lambda TI; specialized dimer/PBC campaigns | Compatibility depends on energy assembly, MM charge mode, nonbond mode, LR solver, PBC, checkpoint charge head, and system size. See matrices below. |
 | JAX CGenFF “ML spoof” | Energy, forces | hybrid setup with `--jax-mm-spoof` / `ml_potential_mode="jax_mm_clone"` | `md-system` infrastructure and parity testing | Validation/infrastructure mode, not a learned potential or scientific replacement for PhysNet. |
+| JAX CGenFF spoof dimer scan | Energy, forces, hybrid decomposition | `scan_mlpot_dimer_2d_pycharmm.py --scan-1d --jax-mm-spoof` and MLpot setup | Specialized 1D/2D PyCHARMM scan campaigns | Requires PSF/CGenFF construction and handoff/MM settings; not yet represented by canonical `DimerScanConfig`. |
 | Pure CHARMM/CGenFF | CHARMM energy/forces | PyCHARMM runtime and MLpot setup with ML disabled or separate pure-MM routes | `md-system --backend pycharmm`, liquid-box preparation, validation workflows | Requires compiled CHARMM/PyCHARMM and topology/parameter assets. |
 
 Legacy `mmml.interfaces.aseInterface.dimers` is excluded from supported

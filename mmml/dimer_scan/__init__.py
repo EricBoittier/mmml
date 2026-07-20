@@ -19,6 +19,12 @@ def run_dimer_scan(config: DimerScanConfig) -> ScanResult:
 
     if config.orientation != "campaign-default":
         raise ValueError("only orientation='campaign-default' is currently supported")
+    if config.energy_definition == "interaction":
+        if config.charge not in (None, 0.0) or config.spin not in (None, 1.0):
+            raise ValueError(
+                "charged/open-shell interaction scans require explicit per-fragment "
+                "charge and multiplicity support; use total energy for now"
+            )
     geometries = make_oriented_scan_geometries(
         config.residues[0],
         config.residues[1],
