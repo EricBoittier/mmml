@@ -147,4 +147,4 @@ if result.box_json_path is None or not Path(result.box_json_path).is_file():
 PY
 
 echo "Pass: $OPT_DIR/box.json (final_cubic_side_A + pressure provenance)"
-echo "Next: hybrid smoke from certified CRD/box.json (fixed L), then CHARMM CPT equi."
+echo "Next: STAGE=npt (CHARMM CPT from liquid_box PSF/CRD)."

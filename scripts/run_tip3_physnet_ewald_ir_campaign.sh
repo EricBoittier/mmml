@@ -9,12 +9,13 @@
 #   STAGE=fd ./scripts/run_tip3_physnet_ewald_ir_campaign.sh     # one stage
 #   STAGE=scan,smoke ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 #
-# Stages: fd | scan | box_opt | smoke | prod | analyze | all
+# Stages: fd | scan | box_opt | npt | smoke | prod | analyze | all
 #
 # Pass/fail (quick):
 #   fd      — fd_force_max_abs_diff_eVA < 0.05
 #   scan    — scan_1d.npz written under SCAN_OUT
 #   box_opt — liquid-box + pressure MC/1D refine → box_pressure_opt/box.json
+#   npt     — CHARMM CPT from certified liquid-box (pinned ~903@30Å)
 #   smoke   — tip3_90 heat+NVE exit 0 (wipe dir if prior vacuum-repair gate fail)
 #   prod    — jaxmd H5 exists; NVE finishes
 #   analyze — ir_spectrum.png + OH power with peak in 2800–3600 cm^-1 (PhysNet)
@@ -53,6 +54,9 @@ SEED="${SEED:-42}"
 SCAN_OUT="${SCAN_OUT:-$OUT_ROOT/dimer_scan}"
 SMOKE_OUT="${SMOKE_OUT:-$OUT_ROOT/tip3_${N_SMOKE}_smoke}"
 BOX_OPT_OUT="${BOX_OPT_OUT:-$OUT_ROOT/tip3_30A_box_opt}"
+NPT_OUT="${NPT_OUT:-$BOX_OPT_OUT/npt_charmm}"
+PS_HEAT_NPT="${PS_HEAT_NPT:-1.0}"
+PS_EQUI_NPT="${PS_EQUI_NPT:-2.0}"
 PROD_OUT="${PROD_OUT:-$OUT_ROOT/tip3_${N_PROD}_nve}"
 FD_OUT="${FD_OUT:-$OUT_ROOT/pbc_fd_tip3.json}"
 ANALYZE_OUT="${ANALYZE_OUT:-$OUT_ROOT/analysis}"
@@ -144,7 +148,26 @@ if _want box_opt; then
   test -f "$BOX_OPT_OUT/box_pressure_opt/box.json"
 fi
 
-# --- 4) tip3_90 PyCHARMM smoke ---------------------------------------------
+# --- 4) CHARMM CPT NpT from certified liquid-box ----------------------------
+if _want npt; then
+  echo ""
+  echo "=== [npt] CHARMM CPT from $BOX_OPT_OUT/liquid_box (default NpT path) ==="
+  if [[ ! -f "$BOX_OPT_OUT/liquid_box/box.json" ]]; then
+    echo "FAILED: run STAGE=box_opt first (missing $BOX_OPT_OUT/liquid_box/box.json)" >&2
+    exit 1
+  fi
+  BOX_OPT_OUT="$BOX_OPT_OUT" \
+  OUT_DIR="$NPT_OUT" \
+  TARGET_P_ATM="$TARGET_P_ATM" \
+  TEMP_K="$TEMP_K" \
+  SEED="$SEED" \
+  PS_HEAT="$PS_HEAT_NPT" \
+  PS_EQUI="$PS_EQUI_NPT" \
+  MM_CHARGE_MODE="$MM_CHARGE_MODE" \
+  ./scripts/run_tip3_charmm_npt_smoke.sh
+fi
+
+# --- 5) tip3_90 PyCHARMM smoke ---------------------------------------------
 if _want smoke; then
   echo ""
   echo "=== [smoke] TIP3:${N_SMOKE} Packmol + MM pretreat → hybrid heat+NVE ==="
@@ -160,7 +183,7 @@ if _want smoke; then
   ./scripts/run_tip3_50_ewald_smoke.sh
 fi
 
-# --- 5) Production jaxmd NVE (H5 for IR) ------------------------------------
+# --- 6) Production jaxmd NVE (H5 for IR) ------------------------------------
 if _want prod; then
   echo ""
   echo "=== [prod] TIP3:${N_PROD} jaxmd NVE ${PS_PROD} ps (IR trajectory) ==="
@@ -197,7 +220,7 @@ if _want prod; then
   echo "H5=$H5" | tee "$PROD_OUT/h5_path.txt"
 fi
 
-# --- 6) IR + OH bond analysis ----------------------------------------------
+# --- 7) IR + OH bond analysis ----------------------------------------------
 if _want analyze; then
   echo ""
   echo "=== [analyze] IR / OH power from jaxmd H5 ==="

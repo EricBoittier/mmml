@@ -29,6 +29,7 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 | `fd` | `mode-check --pbc-fd --residue TIP3` | `fd_force_max_abs_diff_eVA < 0.05` |
 | `scan` | TIP3:2 COM scan `pbc_hybrid_ewald_omit_self` | `scan_1d.npz` written |
 | `box_opt` | **Pinned:** count@30 Å → ~903 TIP3, ρ≈1.0 → pressure MC/1D → `box_pressure_opt/box.json` | `status=pass`, ρ≈1.0, then opt `box.json` |
+| `npt` | **Default NpT = PyCHARMM CPT** from certified liquid-box (`mini,heat,equi`, Hoover, `pref=1 atm`) | equi restart under `npt_charmm/` |
 | `smoke` | TIP3:90 / 30 Å Packmol + CHARMM MM pretreat → hybrid heat/NVE; `--mlpot-pbc`, density-prep off, `--no-monomer-physnet-mini` | exit 0 |
 | `prod` | TIP3:90 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
 | `analyze` | `scripts/analyze_water_nve_h5.py` | OH power peak **~2800–3600 cm⁻¹** (not ~40) |
@@ -52,6 +53,12 @@ OpenMPI/PRRTE may still print exit 1; the script trusts `box.json` `status=pass`
 WIPE=0 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 # full rebuild:
 WIPE=1 STAGE=box_opt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
+
+# CHARMM CPT NpT after box_opt (uses liquid_box PSF/CRD):
+STAGE=npt ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
+# or reuse an older box_opt dir:
+BOX_OPT_OUT=./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt STAGE=npt \
+  ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 ```
 
 ## Density / packing note
@@ -79,7 +86,7 @@ and **no** `90 PhysNet group(s)`.
 scratch/tip3_physnet_ewald_ir/
   pbc_fd_tip3.json
   dimer_scan/.../scan_1d.npz
-  tip3_30A_box_opt/{liquid_box/,box_pressure_opt/box.json}  # pinned ~903@30Å
+  tip3_30A_box_opt/{liquid_box/,box_pressure_opt/box.json,npt_charmm/}
   tip3_90_smoke/
   tip3_90_nve/*.h5
   analysis/{ir_spectrum.png,oh_bond_power_spectra.png,summary.json}
