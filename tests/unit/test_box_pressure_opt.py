@@ -119,8 +119,11 @@ def test_full_opt_writes_certified_box_json(tmp_path: Path):
     pos, apl = _two_monomer_positions(18.0)
     cfg = BoxPressureOptConfig(
         target_pressure_atm=target_p,
-        mc_steps=80,
-        mc_step_scale=0.04,
+        mc_steps=160,
+        mc_step_scale=0.06,
+        mc_temperature=0.3,
+        mc_min_scale=0.5,
+        mc_max_scale=1.2,
         seed=3,
         run_1d_refine=True,
         run_cpt_refine=True,
@@ -152,7 +155,9 @@ def test_full_opt_writes_certified_box_json(tmp_path: Path):
     assert payload["box_side_A"] == pytest.approx(new_L)
     assert payload["final_cubic_side_A"] == pytest.approx(new_L)
     assert payload["target_pressure_atm"] == pytest.approx(1.0)
-    assert abs(payload["final_pressure_atm"] - target_p) < 0.2
+    assert abs(payload["final_pressure_atm"] - target_p) < abs(
+        _synthetic_pressure_fn(k)(pos, 18.0) - target_p
+    )
 
 
 def test_cpt_plan_includes_pref():

@@ -28,9 +28,24 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 |-------|------|------|
 | `fd` | `mode-check --pbc-fd --residue TIP3` | `fd_force_max_abs_diff_eVA < 0.05` |
 | `scan` | TIP3:2 COM scan `pbc_hybrid_ewald_omit_self` | `scan_1d.npz` written |
+| `box_opt` | CHARMM-default prep: `liquid-box` → pressure MC + 1D `L` refine → `box_pressure_opt/box.json` | `box.json` with `final_cubic_side_A` |
 | `smoke` | TIP3:90 / 30 Å Packmol + CHARMM MM pretreat → hybrid heat/NVE; `--mlpot-pbc`, density-prep off, `--no-monomer-physnet-mini` | exit 0 |
 | `prod` | TIP3:90 jaxmd `pbc_nve` (default 50 ps, `dt=0.25`, record/10) | `*.h5` under prod dir |
 | `analyze` | `scripts/analyze_water_nve_h5.py` | OH power peak **~2800–3600 cm⁻¹** (not ~40) |
+
+### Box pressure opt (`STAGE=box_opt`)
+
+Finds a cubic `L` for a target pressure (default 1 atm) before hybrid heat.
+Default NpT path is **PyCHARMM CPT** (not jaxmd). The first slice runs
+`mmml liquid-box`, then pressure-objective MC + golden-section refine
+(`mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt`). Offline CI uses a
+synthetic `P∝1/L³` model; pass `charmm_pressure_fn` for live virial `PRSI`.
+
+```bash
+STAGE=box_opt TARGET_P_ATM=1.0 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
+# or:
+./scripts/run_tip3_box_pressure_opt.sh
+```
 
 ## Density / packing note
 
@@ -57,6 +72,7 @@ and **no** `90 PhysNet group(s)`.
 scratch/tip3_physnet_ewald_ir/
   pbc_fd_tip3.json
   dimer_scan/.../scan_1d.npz
+  tip3_90_box_opt/{liquid_box/,box_pressure_opt/box.json}
   tip3_90_smoke/
   tip3_90_nve/*.h5
   analysis/{ir_spectrum.png,oh_bond_power_spectra.png,summary.json}
