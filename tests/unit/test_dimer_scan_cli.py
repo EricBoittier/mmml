@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
 
 from mmml.cli.__main__ import main as mmml_main
-from mmml.cli.misc.dimer_scan import _distance_grid, build_parser
+from mmml.cli.misc.dimer_scan import _distance_grid, build_parser, main
 from mmml.cli.registry import command_by_name
 
 
@@ -41,3 +44,36 @@ def test_distance_grid_requires_an_exact_inclusive_stop():
 def test_documented_calculator_choices_are_parser_choices():
     action = next(item for item in build_parser()._actions if item.dest == "calculator")
     assert set(action.choices) == EXPECTED_CALCULATORS
+
+
+def test_dimer_scan_accepts_validated_yaml_config_with_policy_provenance(
+    tmp_path: Path, monkeypatch
+):
+    config_path = tmp_path / "dimer_scan.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "residues": ["TIP3", "TIP3"],
+                "calculator": "xtb",
+                "distances_angstrom": [2.5, 3.0],
+                "interaction_policy": "interaction_policy.yaml",
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    class _Result:
+        records = (1, 2)
+        has_failures = False
+
+        def write(self, output, *, overwrite=False):
+            return {"manifest": Path(output) / "manifest.json"}
+
+    def fake_run(config):
+        captured["config"] = config
+        return _Result()
+
+    monkeypatch.setattr("mmml.cli.misc.dimer_scan.run_dimer_scan", fake_run)
+    assert main(["--config", str(config_path), "--output", str(tmp_path / "out")]) == 0
+    assert captured["config"].interaction_policy == tmp_path / "interaction_policy.yaml"
