@@ -41,10 +41,16 @@ Default NpT path is **PyCHARMM CPT** (not jaxmd). The first slice runs
 (`mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt`). Offline CI uses a
 synthetic `P∝1/L³` model; pass `charmm_pressure_fn` for live virial `PRSI`.
 
+**Density:** `TIP3:90` @ 30 Å is **~0.1 g/cm³**, not 1 g/cm³ (need ~903 waters
+at 30 Å, or `L≈13.9` Å for 90 waters). `box_opt` defaults to
+`--box-auto density` so liquid-box certification can pass. For a fixed 30 Å
+liquid cube: `BOX_MODE=count BOX_SIZE=30`.
+
 ```bash
 STAGE=box_opt TARGET_P_ATM=1.0 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 # or:
 ./scripts/run_tip3_box_pressure_opt.sh
+BOX_MODE=count BOX_SIZE=30 ./scripts/run_tip3_box_pressure_opt.sh
 ```
 
 ## Density / packing note

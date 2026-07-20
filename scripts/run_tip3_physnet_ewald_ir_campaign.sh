@@ -30,9 +30,11 @@ MM_CHARGE_MODE="${MM_CHARGE_MODE:-fixed}"
 STAGE="${STAGE:-all}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$ROOT/scripts/mmml-charmm-mpirun.sh}"
 
-# Geometry / timing knobs — liquid density (~1 g/cm³) at 30 Å ⇒ ~90 waters.
+# Geometry / timing knobs — TIP3:90 @ 30 Å is ~0.1 g/cm³ (smoke wiring).
+# True ~1 g/cm³ liquid: ~903 waters @ 30 Å, or L≈13.9 Å for 90 waters.
 BOX_SMOKE="${BOX_SMOKE:-30}"
 N_SMOKE="${N_SMOKE:-90}"
+BOX_OPT_MODE="${BOX_OPT_MODE:-density}"  # density | count (for STAGE=box_opt)
 PS_HEAT_SMOKE="${PS_HEAT_SMOKE:-2.0}"
 PS_NVE_SMOKE="${PS_NVE_SMOKE:-2.0}"
 
@@ -133,6 +135,7 @@ if _want box_opt; then
   OUT_DIR="$BOX_OPT_OUT" \
   N_MOL="$N_SMOKE" \
   BOX_SIZE="$BOX_SMOKE" \
+  BOX_MODE="$BOX_OPT_MODE" \
   TARGET_P_ATM="$TARGET_P_ATM" \
   TEMP_K="$TEMP_K" \
   SEED="$SEED" \
