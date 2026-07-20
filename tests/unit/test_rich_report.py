@@ -73,6 +73,30 @@ def test_print_colored_json_plain_fallback_and_validation(capsys):
         rich_report.print_colored_json({}, indent=-1)
 
 
+def test_print_colored_json_supports_explicit_serializer(capsys):
+    from pathlib import Path
+
+    rich_report.print_colored_json({"output": Path("result.json")}, default=str)
+    assert json.loads(capsys.readouterr().out) == {"output": "result.json"}
+
+
+def test_print_colored_python_repr_rich_and_plain(monkeypatch, capsys):
+    from dataclasses import dataclass
+
+    @dataclass
+    class CalculatorConfig:
+        cutoff_A: float
+        enabled: bool
+
+    value = CalculatorConfig(6.0, True)
+    rich_report.print_colored_python_repr(value)
+    assert "CalculatorConfig" in capsys.readouterr().out
+
+    monkeypatch.setenv("MMML_NO_RICH", "1")
+    rich_report.print_colored_python_repr(value)
+    assert "cutoff_A=6.0" in capsys.readouterr().out
+
+
 @pytest.fixture(autouse=True)
 def _no_rich(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MMML_NO_RICH", "1")
