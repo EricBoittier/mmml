@@ -1809,6 +1809,10 @@ def _handle_extent_rescue(
             recovery_path=recovery_path,
             sd_steps=sd_steps,
         )
+    # Geometry-only checkpoints (baseline.res / 02_mini.crd) have no usable
+    # velocities. Arm ASE Maxwell–Boltzmann + iasvel=1 so the next Bussi chunk
+    # does not continue with COMP coordinates-as-velocities (T ≫ 10^12 K).
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     try:
         return _extent_check(config, context=f"{label} after fly-off recovery")
     except RuntimeError as still_bad:
@@ -1899,6 +1903,9 @@ def _try_density_prep_ladder_after_extent_failure(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(sync_positions)
+    # Density ladder rewrites liquid geometry; force velocity cold-start like
+    # other extent fly-off rescues (avoid COMP-as-velocity Bussi continuation).
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     return _extent_check(config, context=f"{label} after density prep ladder")
 
 

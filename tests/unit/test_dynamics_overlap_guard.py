@@ -1063,6 +1063,8 @@ def test_extent_rescue_uses_geometry_baseline_when_prior_unset(tmp_path):
     assert rescued is True
     extent_recovery.assert_called_once()
     assert extent_recovery.call_args.kwargs["candidates"][0] == baseline.resolve()
+    # Geometry-only restore → next Bussi chunk must cold-start velocities.
+    assert ctx._overlap_post_rescue_cold_start is True
 
 
 def test_resolve_intra_min_distance_zero_disables_intra_only():
@@ -1187,6 +1189,7 @@ def test_check_extent_rescue_restores_prior_restart(tmp_path):
     extent_recovery.assert_called_once()
     assert rescued is True
     assert extent == pytest.approx(np.sqrt(2.0))
+    assert ctx._overlap_post_rescue_cold_start is True
 
 
 def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):

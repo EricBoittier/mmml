@@ -1470,12 +1470,14 @@ def test_overlap_chunk_uses_memory_handoff_for_bussi(monkeypatch):
     )
 
 
-def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw():
+def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_overlap_handoff,
         prepare_bussi_heat_dynamics_kw,
     )
 
+    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
     chunk_kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -1504,12 +1506,81 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw():
 
     restore_vel.assert_called_once()
     assert restore_vel.call_args.kwargs["global_step"] == 0
+    assert restore_vel.call_args.kwargs["mlpot_ctx"] is ctx
 
     assert chunk_kw["restart"] is False
-    assert chunk_kw["iasvel"] == 1
+    # Default Bussi continuation keeps in-memory velocities (iasvel=0).
+    assert chunk_kw["iasvel"] == 0
     assert chunk_kw["start"] is False
     assert chunk_kw["iunrea"] == -1
-    assert chunk_kw.get("_skip_ase_cold_velocity_assign") is None
+    assert chunk_kw.get("_skip_ase_cold_velocity_assign") is True
+
+
+def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocities():
+    """Extent fly-off arms cold-start: ASE MB + iasvel=1, not Bussi COMP continuation."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_post_rescue_overlap_handoff,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    chunk_kw = {
+        "firstt": 10.0,
+        "finalt": 300.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+        "restart": True,
+        "iunrea": 3,
+    }
+    prepare_bussi_heat_dynamics_kw(
+        chunk_kw, nstep=50, ihtfrq=50, timestep_ps=0.0001
+    )
+    ctx = mock.Mock(
+        use_pbc=True,
+        charmm_cubic_box_side_A=30.0,
+        _overlap_post_rescue_cold_start=True,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "assign_maxwell_boltzmann_velocities_via_ase",
+    ) as assign_mb, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics."
+        "_restore_bussi_velocities_after_overlap_recovery",
+    ) as restore_vel:
+        _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
+
+    assign_mb.assert_called_once()
+    restore_vel.assert_not_called()
+    assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["start"] is False
+    assert chunk_kw["restart"] is False
+    assert chunk_kw["iunrea"] == -1
+    assert ctx._overlap_post_rescue_cold_start is False
+
+
+def test_restore_bussi_velocities_skips_when_extent_cold_start_armed():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _restore_bussi_velocities_after_overlap_recovery,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    chunk_kw = {"firstt": 10.0, "finalt": 300.0, "timestep": 0.0001, "nstep": 50}
+    prepare_bussi_heat_dynamics_kw(
+        chunk_kw, nstep=50, ihtfrq=50, timestep_ps=0.0001
+    )
+    ctx = mock.Mock(_overlap_post_rescue_cold_start=True)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "ensure_bussi_velocities_after_overlap_recovery",
+    ) as ensure:
+        _restore_bussi_velocities_after_overlap_recovery(
+            chunk_kw,
+            restart_path=None,
+            global_step=500,
+            mlpot_ctx=ctx,
+        )
+    ensure.assert_not_called()
 
 
 def test_apply_post_rescue_overlap_handoff_bussi_returns_in_memory():
