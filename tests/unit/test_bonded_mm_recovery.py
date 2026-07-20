@@ -2335,3 +2335,39 @@ def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
             finalize_overlap_rescue_for_dynamics(
                 ctx, cfg, context="EQUI at step 2500"
             )
+
+
+def test_run_mlpot_recovery_mini_skips_when_all_ml_pbc_lattice_not_ready():
+    """All-ML PBC: keep restored geometry rather than failing MLpot SD into Packmol."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        BondedMmMiniConfig,
+        _run_mlpot_recovery_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.use_pbc = True
+    ctx.cubic_box_side_A = 30.0
+    bonded = BondedMmMiniConfig(nstep_sd=10, verbose=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
+    ) as mini, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.clear_mmfp_restraints",
+    ) as clear:
+        _run_mlpot_recovery_mini(
+            ctx,
+            bonded,
+            pyCModel=MagicMock(),
+            context="Fly-off recovery",
+        )
+    mini.assert_not_called()
+    clear.assert_not_called()
