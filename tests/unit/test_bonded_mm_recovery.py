@@ -2149,6 +2149,77 @@ def test_finalize_overlap_rescue_skips_duplicate_mlpot_sd_after_extent_polish():
     assert grms == 28.9
 
 
+def test_finalize_overlap_rescue_all_ml_pbc_skips_mlpot_sd_mini():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        finalize_overlap_rescue_for_dynamics,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.use_pbc = True
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=900,
+        use_pbc=True,
+        rescue=OverlapRescueConfig(verbose=False, nstep_sd=1000),
+        mlpot_rescue_mini_nstep=1000,
+        pyCModel=MagicMock(),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        return_value=4.3,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=4.3,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+    ) as mini:
+        grms = finalize_overlap_rescue_for_dynamics(
+            ctx, cfg, context="heat segment 1/2 at step 500"
+        )
+    mini.assert_not_called()
+    assert grms == 4.3
+    assert ctx._overlap_post_rescue_cold_start is True
+
+
+def test_run_mlpot_recovery_mini_skips_all_ml_pbc():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _run_mlpot_recovery_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+
+    ctx = MagicMock()
+    ctx.use_pbc = True
+    bonded = BondedMmMiniConfig(nstep_sd=1000, verbose=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
+    ) as mini:
+        _run_mlpot_recovery_mini(
+            ctx,
+            bonded,
+            pyCModel=MagicMock(),
+            context="heat at step 500",
+            nstep=1000,
+        )
+    mini.assert_not_called()
+
+
 def test_finalize_overlap_rescue_retries_near_miss_grms_gate():
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
@@ -2366,11 +2437,11 @@ def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
 
 
 def test_run_mlpot_recovery_mini_skips_when_all_ml_pbc_lattice_not_ready():
-    """All-ML PBC: keep restored geometry rather than failing MLpot SD into Packmol."""
+    """All-ML PBC: keep restored geometry; never MLpot SD polish (even if lattice-ready)."""
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        BondedMmMiniConfig,
         _run_mlpot_recovery_mini,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
@@ -2382,10 +2453,7 @@ def test_run_mlpot_recovery_mini_skips_when_all_ml_pbc_lattice_not_ready():
         return_value=True,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
-        return_value=False,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
-        return_value=False,
+        return_value=True,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
     ) as mini, patch(

@@ -536,26 +536,16 @@ def _run_mlpot_recovery_mini(
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
     from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
 
-    # All-ML PBC liquid: do not enter MLpot SD when the CHARMM crystal/IMAGE
-    # tables are unusable. Keep restored mini/baseline geometry and cold-start
-    # instead of failing into Packmol cleanup.
-    if _is_all_ml_pbc_context(ctx):
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-            charmm_crystal_abnr_ready,
-            charmm_crystal_lattice_ready,
+    # All-ML PBC liquid: never MLpot SD polish after geometry rescue. Restored
+    # mini/baseline (or selective template) geometry + cold start only — SD can
+    # re-crush O–H with no CHARMM bonded topology (seen mid-heat).
+    if _is_all_ml_pbc_context(ctx) and bool(getattr(ctx, "use_pbc", False)):
+        print(
+            f"{context}: skipping MLpot SD mini — keeping restored geometry for "
+            "cold start (all-ML PBC; MLpot SD polish disabled)",
+            flush=True,
         )
-
-        box = getattr(ctx, "cubic_box_side_A", None)
-        if not charmm_crystal_lattice_ready() and not charmm_crystal_abnr_ready(
-            float(box) if box is not None else None
-        ):
-            print(
-                f"{context}: skipping MLpot SD mini — CHARMM PBC crystal is not "
-                "lattice-ready; keeping restored geometry for cold start "
-                "(all-ML PBC; Packmol cleanup disabled)",
-                flush=True,
-            )
-            return
+        return
 
     steps = max(1, int(nstep if nstep is not None else bonded_cfg.nstep_sd))
     if bonded_cfg.verbose:
@@ -1125,7 +1115,10 @@ def finalize_overlap_rescue_for_dynamics(
         refresh_mlpot_energy_and_grms,
         resolve_mlpot_grms_kcalmol_A,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _is_all_ml_pbc_context,
+        assert_mlpot_user_active,
+    )
 
     verbose = bool(getattr(getattr(config, "rescue", None), "verbose", False))
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -1133,6 +1126,11 @@ def finalize_overlap_rescue_for_dynamics(
         sync_charmm_lists_after_mini,
     )
 
+    all_ml_pbc = bool(
+        getattr(config, "use_pbc", False)
+        and getattr(ctx, "use_pbc", False)
+        and _is_all_ml_pbc_context(ctx)
+    )
     # Mid-HEAT rescue must not roll back to pre-heat calculator mini geometry.
     clear_calculator_mini_historical_best(ctx)
     # Template / bonded rescue often lands on mini or baseline coordinates without
@@ -1161,10 +1159,15 @@ def finalize_overlap_rescue_for_dynamics(
         context=context,
         evaluate=False,
     )
-
     mini_n = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
     if mini_n > 0:
-        if bool(getattr(ctx, "_overlap_extent_polish_mlpot_sd_done", False)):
+        if all_ml_pbc:
+            print(
+                f"{context}: skip post-rescue MLpot SD mini "
+                f"({mini_n} steps) — all-ML PBC cold start only",
+                flush=True,
+            )
+        elif bool(getattr(ctx, "_overlap_extent_polish_mlpot_sd_done", False)):
             if verbose:
                 print(
                     f"{context}: skip duplicate MLpot SD mini "
@@ -1202,6 +1205,15 @@ def finalize_overlap_rescue_for_dynamics(
         ctx,
         context=f"{context} post-rescue gate",
     )
+    if all_ml_pbc and grms > limit:
+        # Do not retry with MLpot SD; cold-start from restored geometry.
+        print(
+            f"WARN: {context}: post-rescue GRMS {grms:.4f} kcal/mol/Å > "
+            f"{float(limit):.4f}; continuing with cold start "
+            "(all-ML PBC; MLpot SD polish disabled)",
+            flush=True,
+        )
+        return grms
     if grms > limit:
         retry_factor = float(
             getattr(config, "post_rescue_grms_retry_factor", 3.0) or 3.0
