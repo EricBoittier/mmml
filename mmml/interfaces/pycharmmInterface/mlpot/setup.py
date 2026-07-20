@@ -1501,6 +1501,21 @@ def load_cluster_from_artifacts(
     if not getattr(args, "quiet", False):
         report_charmm_topology_summary()
     n_mol, _ = reconcile_n_monomers_with_psf(args, z, n_mol)
+    # Certified --from-psf handoffs often leave --residue at the ACO default;
+    # seed labels from composition / PSF so monomer-health grids are not wrong.
+    if getattr(args, "_cluster_residue_labels", None) is None or len(
+        getattr(args, "_cluster_residue_labels", []) or []
+    ) != int(n_mol):
+        fake_ctx = type("Ctx", (), {"workflow_args": args, "atoms_per_monomer": getattr(
+            args, "_cluster_atoms_per_list", None
+        )})()
+        from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+            resolve_cluster_residue_labels,
+        )
+
+        labels = resolve_cluster_residue_labels(fake_ctx, int(n_mol))
+        if labels:
+            setattr(args, "_cluster_residue_labels", list(labels))
     return z, r, n_mol, tag
 
 

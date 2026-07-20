@@ -921,9 +921,10 @@ def emit_monomer_health_dot_matrix(
     from mmml.utils.rich_report import emit, rich_enabled
 
     use_rich = rich_enabled(quiet=quiet)
+    # Avoid Rich markup tags like [v]/[f]/[g] (they strip to "=velocity").
     header = (
-        "Monomer health  [v]=velocity [f]=GRMS "
-        "[g]=geometry (extent/bond/COM-drift/intra)"
+        "Monomer health  (v)=velocity (f)=GRMS "
+        "(g)=geometry (extent/bond/COM-drift/intra)"
     )
     lines = [header, " idx   v f g  residue"]
     for entry in report.entries:

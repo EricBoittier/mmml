@@ -10,7 +10,24 @@ import pytest
 from mmml.interfaces.pycharmmInterface.cluster_geometry import (
     atoms_from_reference_npz,
     reference_frame_geometry,
+    resolve_cluster_residue_labels,
 )
+
+
+def test_resolve_cluster_residue_labels_prefers_composition_over_default_aco():
+    """Certified TIP3:N handoffs must not report ACO (argparse residue default)."""
+    args = type(
+        "Args",
+        (),
+        {
+            "composition": "TIP3:4",
+            "residue": "ACO",
+            "_cluster_residue_labels": None,
+            "_cluster_atoms_per_list": [3, 3, 3, 3],
+        },
+    )()
+    ctx = type("Ctx", (), {"workflow_args": args, "atoms_per_monomer": [3, 3, 3, 3]})()
+    assert resolve_cluster_residue_labels(ctx, 4) == ["TIP3", "TIP3", "TIP3", "TIP3"]
 
 
 def test_reference_frame_geometry_trajectory_npz(tmp_path: Path) -> None:

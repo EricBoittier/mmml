@@ -10,6 +10,9 @@
 #   BOX_OPT_OUT=./scratch/.../tip3_90_box_opt WIPE=0 ./scripts/run_tip3_charmm_npt_smoke.sh
 #   CUDA_VISIBLE_DEVICES=0,1 ML_GPU_COUNT=2 ML_BATCH_SIZE=256 ./scripts/run_tip3_charmm_npt_smoke.sh
 #
+# Heat resilience (dense TIP3): --no-echeck-heat, INTRA_RESCUE_SD_STEPS (default 400),
+# N_HEAT_SEGMENTS (default 4) so crushed waters get more rescue checkpoints.
+#
 # Pass: exit 0 (or PRRTE exit 1 with equi restart present), L still ~30 Å.
 
 set -euo pipefail
@@ -133,6 +136,9 @@ mmml md-system \
   --no-monomer-physnet-mini \
   --no-charmm-pre-minimize \
   --npt-pressure-log-interval 50 \
+  --no-echeck-heat \
+  --dynamics-intra-rescue-sd-steps "${INTRA_RESCUE_SD_STEPS:-400}" \
+  --n-heat-segments "${N_HEAT_SEGMENTS:-4}" \
   "${ML_ARGS[@]}" \
   "$@"
 rc=$?
