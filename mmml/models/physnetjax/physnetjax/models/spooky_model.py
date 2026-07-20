@@ -182,6 +182,10 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
             "vdw_scale_range": self.vdw_scale_range,
             "cgenff_fallback_sigma": self.cgenff_fallback_sigma,
             "cgenff_fallback_epsilon": self.cgenff_fallback_epsilon,
+            "learn_cgenff_vdw_scale": self.learn_cgenff_vdw_scale,
+            "predict_atomic_vdw_scale": self.predict_atomic_vdw_scale,
+            "interaction_trust_map": self.interaction_trust_map,
+            "trust_map_elements": self.trust_map_elements,
         }
 
     def energy(
