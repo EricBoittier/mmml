@@ -46,6 +46,9 @@ These should be promoted and connected. Scripts and workflows may call the
 supported API, but production package code must not import from `scripts/` or
 `workflows/`.
 
+The current ownership and migration status of related tools is tracked in the
+[dimer tool inventory](dimer-tool-inventory.md).
+
 ## Public interface
 
 The primary interface is a frozen configuration passed to one function:
@@ -53,13 +56,13 @@ The primary interface is a frozen configuration passed to one function:
 ```python
 from pathlib import Path
 
-from mmml.dimer_scan import DimerScanConfig, DistanceGrid, run_dimer_scan
+from mmml.dimer_scan import DimerScanConfig, run_dimer_scan
 
 config = DimerScanConfig(
     residues=("MEOH", "MEOH"),
     calculator="physnet",
     checkpoint=Path("checkpoints/model.json"),
-    distances=DistanceGrid(start=2.5, stop=6.0, step=0.1),
+    distances_angstrom=(2.5, 2.6, 2.7, 2.8, 2.9, 3.0),
     orientation="hbond",
     energy_definition="interaction",
 )
@@ -193,7 +196,6 @@ meoh_dimer/
     trajectory.extxyz
     trajectory.traj
     energy.png
-    environment.txt
 ```
 
 `trajectory.extxyz` is the archival geometry/force representation because it
@@ -201,6 +203,10 @@ is portable and inspectable. Each successful frame stores energy and scan
 metadata in `Atoms.info`, forces and fragment IDs in `Atoms.arrays`, and a
 stable scan-point ID connecting it to `data.csv`. ASE `.traj` is a convenience
 output, not the sole record.
+
+Runtime and dependency information is stored in `manifest.json` rather than a
+free-form environment dump, which keeps provenance machine-readable and avoids
+capturing unrelated secrets.
 
 The plot is derived from `ScanResult` or a reloaded result bundle. Plot code
 must not construct geometries, load checkpoints, or run calculations.

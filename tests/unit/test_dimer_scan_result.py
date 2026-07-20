@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 
 import numpy as np
 import pytest
@@ -141,6 +142,23 @@ def test_schema_versions_are_public_and_serialized(tmp_path: Path):
     assert ORIENTATION_SCHEMA_VERSION == "1.0"
     scan_config = config(distances=(2.0,))
     assert scan_config.to_dict()["orientation_schema_version"] == "1.0"
+
+
+def test_checkpoint_provenance_uses_content_identity(tmp_path: Path):
+    checkpoint = tmp_path / "checkpoint.json"
+    checkpoint.write_bytes(b'{"params": [1, 2, 3]}')
+    scan_config = DimerScanConfig(
+        residues=("H", "H"),
+        calculator="fake",
+        checkpoint=checkpoint,
+        distances_angstrom=(2.0,),
+    )
+
+    captured = Provenance.capture(scan_config)
+
+    assert captured.checkpoint is not None
+    assert captured.checkpoint["path"] == str(checkpoint.resolve())
+    assert captured.checkpoint["sha256"] == hashlib.sha256(checkpoint.read_bytes()).hexdigest()
 
 
 def test_public_run_api_is_importable():

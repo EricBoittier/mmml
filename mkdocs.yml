@@ -82,6 +82,7 @@ nav:
           - validate: cli/commands/validate.md
           - verify-esp-alignment: cli/commands/verify-esp-alignment.md
           - normal-mode-sample: cli/commands/normal-mode-sample.md
+          - dimer-scan: cli/commands/dimer-scan.md
           - compare-npz: cli/commands/compare-npz.md
           - cross-check: cli/commands/cross-check.md
       - ML training & sampling:
@@ -175,4 +176,5 @@ nav:
       - Contributor guide: development.md
       - Scientific code policy: scientific-code.md
       - 1D dimer scan design: dimer-scan-design.md
+      - Dimer tool inventory: dimer-tool-inventory.md
       - Releasing: releasing.md
