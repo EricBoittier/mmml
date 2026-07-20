@@ -1062,6 +1062,9 @@ def finalize_overlap_rescue_for_dynamics(
     max_grms: float | None = None,
 ) -> float:
     """Re-register MLpot, optional SD polish, and hybrid GRMS gate before continuing MD."""
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        clear_calculator_mini_historical_best,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         refresh_mlpot_energy_and_grms,
         resolve_mlpot_grms_kcalmol_A,
@@ -1074,6 +1077,12 @@ def finalize_overlap_rescue_for_dynamics(
         sync_charmm_lists_after_mini,
     )
 
+    # Mid-HEAT rescue must not roll back to pre-heat calculator mini geometry.
+    clear_calculator_mini_historical_best(ctx)
+    # Template / bonded rescue often lands on mini or baseline coordinates without
+    # usable velocities. Arm ASE Maxwell–Boltzmann + iasvel=1 for the next Bussi
+    # chunk (same as extent fly-off); otherwise iasvel=0 reads COMP as velocities.
+    setattr(ctx, "_overlap_post_rescue_cold_start", True)
     sync_charmm_lists_after_mini(quiet=True)
     write_overlap_recovery_trace(
         ctx,

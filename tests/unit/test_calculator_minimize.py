@@ -418,6 +418,38 @@ def test_historical_best_restores_when_later_mini_regresses():
     atoms.set_positions.assert_called_once()
 
 
+def test_clear_calculator_mini_historical_best_drops_preheat_frame():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        CalculatorMiniHistoricalBest,
+        _maybe_restore_calculator_mini_historical_best,
+        clear_calculator_mini_historical_best,
+    )
+
+    ctx = MagicMock()
+    ctx.calculator_mini_historical_best = CalculatorMiniHistoricalBest(
+        positions=np.ones((1, 3)),
+        fmax_ev_a=1.11,
+        energy_ev=-1093.13,
+        grms_kcalmol_A=1.85,
+        label="initial",
+        context="Pre-SD",
+    )
+    clear_calculator_mini_historical_best(ctx)
+    atoms = MagicMock()
+    fmax, energy, grms, restored = _maybe_restore_calculator_mini_historical_best(
+        ctx,
+        atoms,
+        fmax_ev_a=3.48,
+        energy_ev=-1088.88,
+        grms_kcalmol_A=9.76,
+        context_prefix="Pre-SD (pre-recovery)",
+        verbose=False,
+    )
+    assert restored is False
+    assert fmax == pytest.approx(3.48)
+    atoms.set_positions.assert_not_called()
+
+
 def test_run_hybrid_calculator_fire_stops_on_spike():
     atoms = MagicMock()
     atoms.get_forces.side_effect = [

@@ -494,6 +494,19 @@ def _get_calculator_mini_historical_best(mlpot_ctx: Any) -> CalculatorMiniHistor
     return hist
 
 
+def clear_calculator_mini_historical_best(mlpot_ctx: Any) -> None:
+    """Drop session-best mini geometry (call when entering heat or mid-heat rescue).
+
+    Pre-heat / pretreat mini frames often have much lower fmax/energy than a
+    mid-HEAT rescue on a liquid configuration. Keeping them as session-best
+    makes spike-abort FIRE roll the box back to t≈0 mini geometry and wipe
+    picoseconds of dynamics.
+    """
+    if mlpot_ctx is None:
+        return
+    mlpot_ctx.calculator_mini_historical_best = CalculatorMiniHistoricalBest()
+
+
 def _update_calculator_mini_historical_best(
     mlpot_ctx: Any,
     positions: np.ndarray,

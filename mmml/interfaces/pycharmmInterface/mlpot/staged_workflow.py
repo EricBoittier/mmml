@@ -3463,6 +3463,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
                 sync_charmm_lists_after_mini(quiet=bool(args.quiet))
             if stage == "heat":
+                # Drop pretreat/pre-heat calculator mini best so mid-HEAT rescue
+                # FIRE cannot roll geometry back to the t≈0 mini frame.
+                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                    clear_calculator_mini_historical_best,
+                )
+
+                clear_calculator_mini_historical_best(ctx)
                 heat_thermostat = resolve_heat_thermostat(args)
                 if (
                     charmm_pbc

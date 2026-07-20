@@ -2076,6 +2076,7 @@ def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
     ctx.reregister_mlpot.assert_called_once_with(verbose=False, reregister_params=False)
     assert refresh.call_count == 1
     assert grms == 12.0
+    assert ctx._overlap_post_rescue_cold_start is True
 
 
 def test_finalize_overlap_rescue_skips_duplicate_mlpot_sd_after_extent_polish():
