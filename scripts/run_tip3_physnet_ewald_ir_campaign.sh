@@ -35,7 +35,8 @@ MPIRUN="${MMML_MPIRUN_WRAPPER:-$ROOT/scripts/mmml-charmm-mpirun.sh}"
 # True ~1 g/cm³ liquid: ~903 waters @ 30 Å, or L≈13.9 Å for 90 waters.
 BOX_SMOKE="${BOX_SMOKE:-30}"
 N_SMOKE="${N_SMOKE:-90}"
-# box_opt pinned: count@30 Å → ~903 TIP3, ρ≈1.0 (gpu09-validated).
+# UNVERIFIED historical gpu09 recipe [evidence: tip3_count30_recipe].
+# count@30 Å → ~903 TIP3, ρ≈1.0.
 BOX_OPT_MODE="${BOX_OPT_MODE:-count}"
 BOX_OPT_SIZE="${BOX_OPT_SIZE:-30}"
 PS_HEAT_SMOKE="${PS_HEAT_SMOKE:-2.0}"

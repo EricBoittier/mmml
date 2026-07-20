@@ -62,7 +62,7 @@ def apply_mlpot_jax_compilation_cache_env(*, quiet: bool = False) -> Path | None
         return None
     cache_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", str(cache_dir))
-    # Reuse GPU autotuning across runs (safe default for MLpot PhysNet JIT).
+    # UNVERIFIED HEURISTIC [evidence: jax_persistent_cache_policy]. User env wins.
     os.environ.setdefault(
         "JAX_PERSISTENT_CACHE_ENABLE_XLA_CACHES",
         "xla_gpu_per_fusion_autotune_cache_dir",

@@ -1690,7 +1690,8 @@ def set_up_nhc_sim_routine(
                 pos0 = np.asarray(jax.device_get(state.position), dtype=float)
                 return 0, np.stack([pos0]), None
             # float32 energy differences are too coarse for force–energy FD and
-            # for reliable microcanonical conservation on stiff hybrid potentials.
+            # to reduce integration error on stiff hybrid potentials. Conservation
+            # must be established from each run's energy-drift receipt.
             x64_on = bool(jax.config.read("jax_enable_x64"))
             if (not x64_on) or _JAXMD_DTYPE != jnp.float64:
                 msg = (

@@ -30,3 +30,8 @@ Heuristics embedded in code must be named as heuristics and expose their inputs
 as configuration. Calling a number “safe,” “recommended,” “validated,” or
 “optimal” requires an evidence ID in the nearby docstring/comment; otherwise it
 must be labeled `UNVERIFIED HEURISTIC`.
+
+CI also runs the focused
+[hard-coded recommendation audit](hardcoded-recommendations-audit.md). Its
+phrase scan is intentionally conservative and does not replace scientific
+review; statements outside its vocabulary still require registry entries.

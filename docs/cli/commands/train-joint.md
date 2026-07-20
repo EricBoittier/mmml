@@ -178,8 +178,8 @@ Other options:
                         Weight decay/L2 regularization (default: auto-select
                         based on optimizer)
   --use-recommended-hparams
-                        Use recommended hyperparameters based on dataset
-                        properties (overrides manual settings)
+                        Use the unverified legacy heuristic preset
+                        (compatibility flag; overrides manual settings)
   --dipole-weight DIPOLE_WEIGHT
                         Dipole loss weight
   --esp-weight ESP_WEIGHT

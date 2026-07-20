@@ -54,3 +54,38 @@ claims:
     claim: PyCHARMM-to-JAX-MD velocity handoff remains blocked by the dynamics ABI.
     evidence: []
     needed: Re-run backend parity using the current COMP/restart/cold-start implementation and attach the receipt.
+  joint_optimizer_hyperparameters:
+    status: unverified
+    claim: Dataset/model-size thresholds select generally suitable optimizer hyperparameters for joint training.
+    evidence: []
+    needed: Benchmark the presets against explicit baselines across representative datasets and publish validation loss/convergence receipts.
+  cluster_echeck_scaling:
+    status: unverified
+    claim: Linear atom/monomer ECHECK floors distinguish numerical failure from normal hybrid heat transients.
+    evidence: []
+    needed: Sweep ECHECK against labeled stable and unstable trajectories and record false-positive/false-negative rates.
+  dcm_liquid_shell_defaults:
+    status: unverified
+    claim: The shell-script DCM box, density, MIC, and cutoff defaults form a generally safe liquid recipe.
+    evidence: []
+    needed: Replace the shell defaults with a versioned configuration backed by density, overlap, energy, and force receipts.
+  jax_persistent_cache_policy:
+    status: unverified
+    claim: Enabling the XLA GPU autotune persistent cache is safe across supported JAX/XLA environments.
+    evidence: []
+    needed: Test cache reuse and invalidation across supported JAX, CUDA, GPU, and checkpoint combinations.
+  pre_sd_recovery_threshold:
+    status: unverified
+    claim: A 1e5 kcal/mol pre-SD bonded-energy threshold reliably separates severe clashes from recoverable structures.
+    evidence: []
+    needed: Calibrate the threshold on labeled recoverable and unrecoverable structures and retain the run receipts.
+  tip3_count30_recipe:
+    status: unverified
+    claim: The count-at-30-A TIP3 recipe and its acceptance bands are transferable beyond the original gpu09 run.
+    evidence: []
+    needed: Archive the original receipt and repeat the recipe on each supported environment profile.
+  solvent_burst_default_matrix:
+    status: unverified
+    claim: The default TIP3 and MEOH solvent-burst matrix is scientifically validated.
+    evidence: []
+    needed: Run every default matrix cell and publish versioned receipts including checkpoint, environment, energy, force, and stability criteria.

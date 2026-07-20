@@ -3419,10 +3419,11 @@ def resolve_charmm_mm_pretreat_cpt_echeck(
 
 
 def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
-    """Size-aware ECHECK floor for MLpot clusters (kcal/mol).
+    """Legacy size-scaled ECHECK heuristic for MLpot clusters (kcal/mol).
 
-    Single-monomer smoke tests keep 100 kcal/mol. Multi-monomer clusters (e.g.
-    DCM:9) scale with size so ML heat/nonbond updates do not trip ECHECK.
+    UNVERIFIED HEURISTIC [evidence: cluster_echeck_scaling]. This is retained
+    for compatibility and is user-overridable; it is not a validated stability
+    boundary.
     """
     n_mol = max(1, int(n_monomers))
     n_at = max(1, int(n_atoms))
@@ -3434,7 +3435,7 @@ def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
 
 
 def recommend_heat_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
-    """Looser ECHECK floor for MLpot heat (MLpot UPDATE spikes, no SHAKE)."""
+    """Looser legacy heat heuristic; see ``cluster_echeck_scaling`` evidence claim."""
     return max(5000.0, 2.0 * recommend_echeck_kcal(n_monomers, n_atoms))
 
 
@@ -3456,7 +3457,7 @@ def resolve_echeck_for_cluster(
         print(
             f"echeck loosened {base} -> {scaled:.0f} kcal/mol for "
             f"{n_monomers} monomer(s) / {n_atoms} atoms "
-            f"(recommended floor {recommended:.0f}; --no-scale-echeck to keep {base})",
+            f"(legacy heuristic floor {recommended:.0f}; --no-scale-echeck to keep {base})",
             flush=True,
         )
     return scaled

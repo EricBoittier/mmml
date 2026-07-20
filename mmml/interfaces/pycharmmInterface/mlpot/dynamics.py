@@ -965,7 +965,8 @@ class MinimizeWithMlpotConfig:
     nstep_abnr: Optional[int] = None
     # When the MLpot USER energy before SD exceeds this threshold (kcal/mol),
     # run a bonded-MM rescue pass (MLpot detached) before the main MLpot SD.
-    # None disables the check; 1e5 is a safe default for catching severe clashes.
+    # None disables the check. 1e5 is a legacy, unverified heuristic threshold;
+    # see [evidence: pre_sd_recovery_threshold].
     pre_sd_bonded_recovery_energy_kcalmol: Optional[float] = None
     # Number of bonded-MM SD steps to use for the pre-SD recovery pass.
     pre_sd_bonded_recovery_nstep: int = 200
@@ -4234,7 +4235,7 @@ def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
 
 
 def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
-    """Continue Bussi micro-chunks with safe velocity assignment.
+    """Continue Bussi micro-chunks with the guarded velocity assignment.
 
     Default is ``iasvel=1`` Boltzmann at the ramp target. Lingering CHARMM START
     makes ``iasvel=0`` read COMP *coordinates* as velocities (T ≫ 10¹² K) on
@@ -4243,7 +4244,7 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     Opt in to experimental in-memory continuation with
     ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` (optionally plus
     ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1``). ``MMML_BUSSI_IASVEL1_REDRAW=1``
-    is accepted as an explicit alias of the safe default.
+    is accepted as an explicit alias of the default.
     """
     if bool(kw.pop("_bussi_force_iasvel_one", False)):
         # One-shot: only the first post-rescue dyna may force IASVEL=1.

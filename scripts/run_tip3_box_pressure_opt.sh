@@ -3,7 +3,7 @@
 #   liquid-box (MM certify) → live CHARMM PRSI MC/1D (+ CPT refine) → handoff
 #   box_pressure_opt/{box.json,model.psf,model.crd}
 #
-# PINNED (gpu09-validated):
+# UNVERIFIED historical gpu09 recipe [evidence: tip3_count30_recipe]:
 #   BOX_MODE=count  BOX_SIZE=30  TARGET_DENSITY=1.0  →  N≈903, L=30 Å, ρ≈1.00
 #   MM GRMS ~0.04 kcal/mol/Å; worst inter-monomer ~1.17 Å (above prep floor).
 #   Trust box.json status=pass over OpenMPI/PRRTE process exit codes.
@@ -107,7 +107,7 @@ if status != "pass":
     raise SystemExit(
         "liquid-box certification failed — see REPORT.md / box.json message."
     )
-# Pinned acceptance band for the count@30 recipe (gpu09-validated).
+# UNVERIFIED historical acceptance band [evidence: tip3_count30_recipe].
 if str("$BOX_MODE") == "count":
     if abs(side - float("$BOX_SIZE")) > 0.05:
         raise SystemExit(f"pinned recipe expects L≈{float('$BOX_SIZE'):.1f} Å, got {side}")

@@ -1,5 +1,11 @@
 # Hybrid ML/MM energy: how the term arrays line up with PyCHARMM & MLpot
 
+!!! warning "Design record"
+    This page mixes accepted architecture decisions with historical migration
+    notes. Unmarked performance and scaling recommendations are hypotheses, not
+    current validation claims; consult the evidence registry before treating
+    them as production guidance.
+
 This page explains how the parameters of the extracted energy terms —
 `n_core_atoms`, `group_indices`, `active_group_slots` / `active_group_mask`, and
 the `lj_epsilon` / `lj_rmin_half` tables — map onto **PyCHARMM** (the PSF and its

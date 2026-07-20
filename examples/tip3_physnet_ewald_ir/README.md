@@ -43,7 +43,8 @@ Default NpT path is **PyCHARMM CPT** (not jaxmd). The first slice runs
 `box_pressure_opt/{box.json,model.psf,model.crd}` for fixed-L hybrid smoke.
 Offline CI: `USE_CHARMM_PRESSURE=0` → synthetic `P∝1/L³`.
 
-**Pinned liquid recipe (gpu09-validated):** `BOX_MODE=count` `BOX_SIZE=30`
+**⚠ UNVERIFIED historical gpu09 recipe:** `BOX_MODE=count` `BOX_SIZE=30`
+[evidence: tip3_count30_recipe]
 `TARGET_DENSITY=1.0` → **N≈903**, **L=30 Å**, **ρ≈1.00 g/cm³**, MM GRMS≈0.04.
 OpenMPI/PRRTE may still print exit 1; the script trusts `box.json` `status=pass`.
 

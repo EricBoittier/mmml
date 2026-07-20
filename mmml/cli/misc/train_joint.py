@@ -159,7 +159,7 @@ def _count_tree_parameters(tree: Any) -> int:
 
 
 # ============================================================================
-# Optimizer Configuration and Recommendations
+# Optimizer configuration and legacy heuristic presets
 # ============================================================================
 
 def get_recommended_optimizer_config(
@@ -169,7 +169,11 @@ def get_recommended_optimizer_config(
     optimizer_name: str = 'adam'
 ) -> Dict[str, Any]:
     """
-    Get recommended optimizer hyperparameters based on dataset properties.
+    Return legacy heuristic optimizer hyperparameters.
+
+    UNVERIFIED HEURISTIC: these thresholds are not backed by a repository
+    benchmark and must not be described as generally optimal. See evidence
+    registry claim ``joint_optimizer_hyperparameters``.
     
     Args:
         dataset_size: Number of training samples
@@ -178,9 +182,9 @@ def get_recommended_optimizer_config(
         optimizer_name: One of 'adam', 'adamw', 'rmsprop', 'muon'
     
     Returns:
-        Dictionary with recommended hyperparameters
+        Dictionary containing the legacy heuristic preset
     """
-    # Heuristics based on dataset complexity
+    # UNVERIFIED HEURISTIC [evidence: joint_optimizer_hyperparameters]
     is_small_dataset = dataset_size < 1000
     is_large_model = num_features > 256 or num_atoms > 50
     
@@ -196,7 +200,7 @@ def get_recommended_optimizer_config(
     
     elif optimizer_name.lower() == 'adamw':
         base_lr = 0.001 if is_small_dataset else 0.0005
-        # Larger models benefit from more regularization
+        # Heuristic branch; no general regularization benefit has been proven.
         wd = 1e-3 if is_large_model else 1e-4
         return {
             'learning_rate': base_lr * (0.5 if is_large_model else 1.0),
@@ -218,7 +222,7 @@ def get_recommended_optimizer_config(
     
     elif optimizer_name.lower() == 'muon':
         # Muon (Momentum Orthogonalized by Newton's method)
-        # Typically works well with higher learning rates
+        # Historical preset, not an evidence-backed learning-rate recommendation.
         base_lr = 0.01 if is_small_dataset else 0.005
         return {
             'learning_rate': base_lr * (0.5 if is_large_model else 1.0),
@@ -3716,7 +3720,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--weight-decay', type=float, default=None,
                        help='Weight decay/L2 regularization (default: auto-select based on optimizer)')
     parser.add_argument('--use-recommended-hparams', action='store_true', default=False,
-                       help='Use recommended hyperparameters based on dataset properties (overrides manual settings)')
+                       help='Use the unverified legacy heuristic preset (compatibility flag; overrides manual settings)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
     
@@ -3962,11 +3966,12 @@ def main():
     print(f"  Padded to: {args.natoms} atoms")
     print(f"  Max actual atoms: {max_actual_atoms}")
     
-    # Setup optimizer hyperparameters (before building model to use in recommendations)
+    # Set up optimizer hyperparameters before building the model.
     dataset_size = len(train_data['E'])
     total_features = args.physnet_features + args.dcmnet_features
     
-    # Get recommended config if requested or if params not specified
+    # Preserve the historical auto-selection behavior for compatibility. This
+    # preset is unverified; see [evidence: joint_optimizer_hyperparameters].
     if args.use_recommended_hparams or args.learning_rate is None or args.weight_decay is None:
         recommended_config = get_recommended_optimizer_config(
             dataset_size=dataset_size,
@@ -3976,7 +3981,7 @@ def main():
         )
         
         if args.use_recommended_hparams:
-            print(f"\n🔧 Using recommended hyperparameters for {args.optimizer.upper()}:")
+            print(f"\nUsing unverified legacy heuristic preset for {args.optimizer.upper()}:")
             for key, value in recommended_config.items():
                 print(f"  {key}: {value}")
         
