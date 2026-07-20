@@ -694,13 +694,11 @@ def _hybrid_mlpot_ase_calculator_class():
             super().calculate(atoms, properties, system_changes)
             pos = np.asarray(atoms.get_positions(), dtype=np.float64)
             # Pair-list preparation may call CHARMM UPDATE/ENER internally.
-            # Keep those implementation details quiet while retaining warnings
-            # and the explicit MMML optimizer/stage reports around this call.
-            from mmml.interfaces.pycharmmInterface.charmm_levels import (
-                charmm_quiet_prnlev,
-            )
+            # Keep those implementation details quiet; Python exceptions still
+            # propagate and explicit MMML optimizer/stage reports remain visible.
+            from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
-            with charmm_quiet_prnlev():
+            with charmm_quiet_output():
                 evald = mlpot_spherical_energy_forces_ev_angstrom(
                     self._pyCModel,
                     positions=pos,
