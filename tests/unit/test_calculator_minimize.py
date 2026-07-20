@@ -72,6 +72,56 @@ def test_dual_unit_logfile_is_treated_as_open_by_ase():
         assert opened is log
 
 
+def test_hybrid_minimize_atoms_rewraps_charmm_pbc_molecules():
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _hybrid_minimize_atoms,
+    )
+
+    box_side_A = 10.0
+    ctx = SimpleNamespace(
+        use_pbc=True,
+        cubic_box_side_A=box_side_A,
+        atoms_per_monomer=[2, 2],
+    )
+    positions = np.array(
+        [
+            [5.2, 0.0, 0.0],
+            [5.7, 0.0, 0.0],
+            [-5.6, 1.0, 0.0],
+            [-5.1, 1.0, 0.0],
+        ]
+    )
+
+    atoms = _hybrid_minimize_atoms(ctx, [1, 1, 1, 1], positions)
+
+    assert atoms.pbc.all()
+    np.testing.assert_allclose(atoms.cell.array, np.eye(3) * box_side_A)
+    wrapped = atoms.get_positions()
+    assert np.all(np.abs(wrapped[:, 0]) < box_side_A / 2.0)
+    np.testing.assert_allclose(wrapped[1] - wrapped[0], [0.5, 0.0, 0.0])
+    np.testing.assert_allclose(wrapped[3] - wrapped[2], [0.5, 0.0, 0.0])
+
+
+def test_hybrid_minimize_atoms_leaves_open_boundary_coordinates_unchanged():
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _hybrid_minimize_atoms,
+    )
+
+    positions = np.array([[12.0, -3.0, 1.0], [13.0, -3.0, 1.0]])
+    atoms = _hybrid_minimize_atoms(
+        SimpleNamespace(use_pbc=False),
+        [1, 1],
+        positions,
+    )
+
+    assert not atoms.pbc.any()
+    np.testing.assert_allclose(atoms.get_positions(), positions)
+
+
 def test_should_abort_bfgs_fmax_running_best_spike():
     assert should_abort_bfgs_fmax(
         1470.0,

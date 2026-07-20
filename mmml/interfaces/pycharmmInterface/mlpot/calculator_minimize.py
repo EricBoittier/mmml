@@ -693,12 +693,20 @@ def _hybrid_mlpot_ase_calculator_class():
         ) -> None:
             super().calculate(atoms, properties, system_changes)
             pos = np.asarray(atoms.get_positions(), dtype=np.float64)
-            evald = mlpot_spherical_energy_forces_ev_angstrom(
-                self._pyCModel,
-                positions=pos,
-                use_pbc=self.use_pbc,
-                box_A=self._box_A,
+            # Pair-list preparation may call CHARMM UPDATE/ENER internally.
+            # Keep those implementation details quiet while retaining warnings
+            # and the explicit MMML optimizer/stage reports around this call.
+            from mmml.interfaces.pycharmmInterface.charmm_levels import (
+                charmm_quiet_prnlev,
             )
+
+            with charmm_quiet_prnlev():
+                evald = mlpot_spherical_energy_forces_ev_angstrom(
+                    self._pyCModel,
+                    positions=pos,
+                    use_pbc=self.use_pbc,
+                    box_A=self._box_A,
+                )
             if evald is None:
                 raise RuntimeError(
                     "hybrid spherical_fn evaluation failed during calculator mini"
@@ -708,6 +716,38 @@ def _hybrid_mlpot_ase_calculator_class():
             self.results["forces"] = np.asarray(forces_ev, dtype=np.float64)
 
     return HybridMlpotAseCalculator
+
+
+def _hybrid_minimize_atoms(mlpot_ctx: Any, z: Any, positions: np.ndarray) -> Any:
+    """Build ASE atoms in the same periodic coordinate convention as CHARMM.
+
+    CHARMM uses a cell centered at the origin. Before calculator minimization,
+    rigidly rewrap whole monomers into that cell so a molecule cannot enter the
+    JAX MIC path through a stale CHARMM image. The custom calculator still owns
+    the exact MIC energy convention; ASE's cell metadata makes the boundary
+    condition explicit to optimizers and constraints.
+    """
+    import ase
+
+    pos = np.asarray(positions, dtype=np.float64)
+    use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+    box_side_A = getattr(mlpot_ctx, "cubic_box_side_A", None)
+    if box_side_A is None:
+        box_side_A = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+    atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if use_pbc and box_side_A is not None and atoms_per is not None:
+        from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+
+        pos = rewrap_charmm_pbc_molecules(
+            pos,
+            [int(count) for count in atoms_per],
+            float(box_side_A),
+        )
+    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos)
+    if use_pbc and box_side_A is not None:
+        atoms.set_cell(np.eye(3, dtype=np.float64) * float(box_side_A))
+        atoms.set_pbc(True)
+    return atoms
 
 
 def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> None:
@@ -1076,8 +1116,6 @@ def minimize_hybrid_calculator_before_sd(
     context_prefix: str = "Pre-SD",
 ) -> HybridMinimizeResult:
     """Relax CHARMM coordinates with ASE BFGS on the hybrid calculator."""
-    import ase
-
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
@@ -1114,7 +1152,7 @@ def minimize_hybrid_calculator_before_sd(
             flush=True,
         )
 
-    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms = _hybrid_minimize_atoms(mlpot_ctx, z, pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     initial_fmax = float(np.abs(atoms.get_forces()).max())
     if initial_fmax > float(config.max_initial_fmax_ev_a):
@@ -1197,8 +1235,6 @@ def minimize_hybrid_calculator_fire_before_sd(
     context_prefix: str = "Pre-SD",
 ) -> HybridMinimizeResult:
     """Relax CHARMM coordinates with guarded ASE FIRE on the hybrid calculator."""
-    import ase
-
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
@@ -1234,7 +1270,7 @@ def minimize_hybrid_calculator_fire_before_sd(
             )
         return HybridMinimizeResult(grms=float(grms0), ran=False)
 
-    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms = _hybrid_minimize_atoms(mlpot_ctx, z, pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     initial_fmax = float(np.abs(atoms.get_forces()).max())
     initial_energy = float(atoms.get_potential_energy())
@@ -1338,7 +1374,6 @@ def repair_stressed_monomers_with_calculator(
     guarded FIRE so the optimizer spends its steps on the atoms that actually
     need it, then re-checks the max force.
     """
-    import ase
     from ase.constraints import FixAtoms
 
     from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
@@ -1356,7 +1391,7 @@ def repair_stressed_monomers_with_calculator(
 
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=verbose)
     pos0 = get_charmm_positions_array()
-    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms = _hybrid_minimize_atoms(mlpot_ctx, z, pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     forces0 = np.asarray(atoms.get_forces(), dtype=np.float64)  # eV/Å
     fmax_before = atomic_fmax_kcalmol_A(forces0)  # norm-based, eV/Å here
