@@ -20,6 +20,8 @@
 #   OUT_DIR, SEED, PS_HEAT, PS_NVE, TEMP_K, DT_FS, MM_CHARGE_MODE
 #   N_MOL (default 90), BOX_SIZE (default 30)
 #   CERTIFIED_BOX_DIR, FROM_PSF, FROM_CRD, BOX_JSON
+#   ML_GPU_COUNT (default 1), ML_BATCH_SIZE (default auto: 256 on GPU for n>=40)
+#   CUDA_VISIBLE_DEVICES — set to the GPU ids (e.g. 0,1 with ML_GPU_COUNT=2)
 
 set -euo pipefail
 
@@ -40,8 +42,17 @@ CERTIFIED_BOX_DIR="${CERTIFIED_BOX_DIR:-}"
 FROM_PSF="${FROM_PSF:-}"
 FROM_CRD="${FROM_CRD:-}"
 BOX_JSON="${BOX_JSON:-}"
+# Multi-GPU PhysNet chunks (Tier-1 local pmap). Default 1; use 2 with CUDA_VISIBLE_DEVICES=0,1.
+ML_GPU_COUNT="${ML_GPU_COUNT:-1}"
+# Chunk size for PhysNet; empty → auto (256 GPU / 64 CPU for n>=40).
+ML_BATCH_SIZE="${ML_BATCH_SIZE:-}"
 
 mkdir -p "$OUT_DIR"
+
+ML_ARGS=(--ml-gpu-count "$ML_GPU_COUNT")
+if [[ -n "$ML_BATCH_SIZE" ]]; then
+  ML_ARGS+=(--ml-batch-size "$ML_BATCH_SIZE")
+fi
 
 # Resolve certified handoff (box_pressure_opt preferred over liquid_box).
 if [[ -n "$CERTIFIED_BOX_DIR" ]]; then
@@ -92,6 +103,7 @@ if [[ "$USE_CERTIFIED" == "1" ]]; then
   echo "  output:     $OUT_DIR"
   echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
   echo "  mm-charge:  $MM_CHARGE_MODE"
+  echo "  ml-gpus:    $ML_GPU_COUNT  batch=${ML_BATCH_SIZE:-auto}  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
   echo "  mode:       fixed-L hybrid smoke (no Packmol rebuild)"
 
   set +e
@@ -129,6 +141,7 @@ if [[ "$USE_CERTIFIED" == "1" ]]; then
     --charmm-abnr-steps 100 \
     --fire-min-steps 200 \
     --fire-min-maxstep 0.05 \
+    "${ML_ARGS[@]}" \
     "$@"
   rc=$?
   set -e
@@ -138,6 +151,7 @@ else
   echo "  output:     $OUT_DIR"
   echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
   echo "  mm-charge:  $MM_CHARGE_MODE"
+  echo "  ml-gpus:    $ML_GPU_COUNT  batch=${ML_BATCH_SIZE:-auto}  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
   echo "  density:    prep ladder OFF (ewald wiring smoke; not density campaign)"
   echo "  builder:    Packmol cube (not lattice grid)"
   echo "  repair:     shared PhysNet water template (preserve liquid COM/orientation)"
@@ -182,6 +196,7 @@ else
     --charmm-abnr-steps 200 \
     --fire-min-steps 400 \
     --fire-min-maxstep 0.05 \
+    "${ML_ARGS[@]}" \
     "$@"
   rc=$?
   set -e
