@@ -176,6 +176,27 @@ def test_vacuum_hybrid_rejects_ewald_without_box():
         build_psf_and_attach_hybrid(setup)
 
 
+def test_pbc_fd_com_separation_uses_monomer_offsets():
+    """Regression: pbc_fd must pass offsets, not (n_mol, atoms_per)."""
+    from mmml.cli.run.md_pbc_suite.ase import _enforce_min_com_separation
+
+    n_mol, atoms_per = 3, 3
+    # Two monomers nearly overlapping on x; third far away.
+    pos = np.zeros((n_mol * atoms_per, 3), dtype=float)
+    for i in range(n_mol):
+        pos[i * atoms_per : (i + 1) * atoms_per, 0] = 0.1 * i
+        pos[i * atoms_per : (i + 1) * atoms_per, 1] = np.arange(atoms_per)
+    offsets = np.arange(0, n_mol + 1, dtype=int) * atoms_per
+    out = _enforce_min_com_separation(
+        pos, monomer_offsets=offsets, min_com_distance=6.0
+    )
+    coms = np.array(
+        [out[s:e].mean(axis=0) for s, e in zip(offsets[:-1], offsets[1:], strict=True)]
+    )
+    d01 = float(np.linalg.norm(coms[1] - coms[0]))
+    assert d01 >= 6.0 - 1e-6
+
+
 def test_place_monomers_along_x_and_reject_collapsed_geometry():
     from mmml.mode_check.hybrid import (
         assert_resolved_vacuum_geometry,
