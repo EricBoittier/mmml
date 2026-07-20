@@ -1294,6 +1294,75 @@ def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
     assert captured[1]["traj"] is None
 
 
+def test_run_bussi_heat_subchunked_consumes_force_iasvel_one_after_first_microchunk(
+    monkeypatch,
+):
+    """Parent kw force flag must not re-Boltzmann every Bussi micro-chunk."""
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _run_bussi_heat_subchunked,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.00025,
+        "nstep": 100,
+        "_bussi_force_iasvel_one": True,
+        "iasvel": 1,
+        "start": False,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=100, ihtfrq=50, timestep_ps=0.00025)
+    kw["_bussi_force_iasvel_one"] = True
+    kw["iasvel"] = 1
+    seen_iasvel: list[int] = []
+
+    def fake_chunk(dynamics_kwargs, *_a, **_k):
+        seen_iasvel.append(int(dynamics_kwargs.get("iasvel", -1)))
+        return mock.Mock()
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics."
+        "_bussi_subchunk_grms_blocks_continuation",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        return_value=(50.0, 1.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "charmm_velocities_akma_for_thermostat",
+        return_value=None,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "estimate_kinetic_temperature_k",
+        return_value=50.0,
+    ):
+        _run_bussi_heat_subchunked(
+            kw,
+            None,
+            overlap_context="overlap (HEAT) chunk 1/4",
+            rng_base=None,
+            chunk_nstep=50,
+            total_nstep=100,
+            log_banner=False,
+            quiet_bussi=True,
+        )
+
+    assert seen_iasvel[0] == 1
+    assert seen_iasvel[1] == 0
+    assert "_bussi_force_iasvel_one" not in kw
+
+
 def test_run_bussi_heat_subchunked_stops_before_continuation_on_bad_state():
     from unittest.mock import patch
 

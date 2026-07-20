@@ -7042,6 +7042,12 @@ def _run_bussi_heat_subchunked(
         sub_kw = dict(kw)
         sub_kw["nstep"] = n
         if steps_done > 0:
+            # Parent ``kw`` may still carry ``_bussi_force_iasvel_one`` from a
+            # post-rescue cold-start: ``run_dynamics`` only pops it on a copy, so
+            # later ``dict(kw)`` sub-chunks would keep forcing IASVEL=1 Boltzmann
+            # every micro-chunk (discarding ASE Bussi rescale).
+            sub_kw.pop("_bussi_force_iasvel_one", None)
+            kw.pop("_bussi_force_iasvel_one", None)
             _apply_bussi_in_memory_continuation_kw(sub_kw)
         global_start = int(global_step_offset) + steps_done
         global_end = global_start + n
@@ -7116,6 +7122,8 @@ def _run_bussi_heat_subchunked(
             rng_base=rng_base,
             rng_salt=rng_salt_base + steps_done,
         )
+        # Consume one-shot force on the parent after the first micro-chunk.
+        kw.pop("_bussi_force_iasvel_one", None)
         global_after = int(global_step_offset) + steps_done + n
         target_k = heat_ramp_bath_target_K(
             firstt=float(spec["firstt"]),
