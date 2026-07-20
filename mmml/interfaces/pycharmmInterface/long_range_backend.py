@@ -1248,6 +1248,7 @@ def compute_native_ewald_coulomb(
     box_length_A: float,
     accuracy: float = 1e-6,
     real_space_cutoff_A: float | None = None,
+    include_self_energy: bool = True,
 ) -> LongRangeInteractionResult:
     """Full periodic Coulomb via the jit-native Ewald summation (ewald_native.py).
 
@@ -1266,6 +1267,7 @@ def compute_native_ewald_coulomb(
     pos = jnp.asarray(positions_A, dtype=jnp.float64)
     chg = jnp.asarray(charges_e, dtype=jnp.float64)
     mol_id = jnp.zeros(pos.shape[0], dtype=jnp.int32)  # all atoms real, none padded
+    _include_self = bool(include_self_energy)
 
     def _e(p):
         return hybrid_ewald_coulomb_energy(
@@ -1273,6 +1275,7 @@ def compute_native_ewald_coulomb(
             box_length_A=float(box_length_A),
             accuracy=float(accuracy),
             real_space_cutoff_A=real_space_cutoff_A,
+            include_self_energy=_include_self,
         )
 
     energy, grad = jax.value_and_grad(_e)(pos)

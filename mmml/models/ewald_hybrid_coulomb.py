@@ -55,6 +55,7 @@ def hybrid_ewald_coulomb_energy(
     ml_switch_width: float = 0.0,
     complementary_handoff: bool = True,
     n_monomers: int = 2,
+    include_self_energy: bool = True,
 ) -> Array:
     """Full-box Ewald Coulomb for one padded structure (kcal/mol).
 
@@ -62,6 +63,11 @@ def hybrid_ewald_coulomb_energy(
     kwargs are accepted for call-site compatibility with the MIC hybrid path
     (and the nvalchemiops variant) but are **not** applied -- many-to-many
     Ewald does not taper this term.
+
+    ``include_self_energy`` (default True) adds the usual Gaussian self term
+    ``-α/√π Σ q²``. Set False for checkpoints / MIC-trained models that never
+    saw that constant (opt-in via ``--ewald-omit-self`` on md-system). Forces
+    are unaffected either way (self term is geometry-independent).
 
     ``box_length_A``/``accuracy``/``real_space_cutoff_A`` must all be static
     Python values (part of the frozen ``HybridConfig``, a jit static arg) --
@@ -112,6 +118,7 @@ def hybrid_ewald_coulomb_energy(
     e_real = 0.5 * jnp.sum(real_mat) * COULOMB_KCAL
 
     e_recip = ewald_reciprocal_energy(pos, q_full, cell, n_int, alpha) * COULOMB_KCAL
-    e_self = ewald_self_energy(q_full, alpha) * COULOMB_KCAL
-
-    return e_real + e_recip + e_self
+    if include_self_energy:
+        e_self = ewald_self_energy(q_full, alpha) * COULOMB_KCAL
+        return e_real + e_recip + e_self
+    return e_real + e_recip

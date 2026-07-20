@@ -1403,6 +1403,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
+            "Opt in for MIC/non-Ewald-trained models where that constant is not "
+            "in the training operator (forces unchanged; energy offset only)."
+        ),
+    )
+    parser.add_argument(
         "--jax-pme-method",
         type=str,
         choices=("ewald", "pme", "p3m"),
@@ -2898,6 +2907,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         ["--mm-nonbond-mode", str(getattr(args, "mm_nonbond_mode", "jax_mic"))]
     )
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
+    if bool(getattr(args, "ewald_omit_self", False)):
+        cmd.append("--ewald-omit-self")
     _append_optional(cmd, "--jax-pme-method", getattr(args, "jax_pme_method", None))
     _append_optional(cmd, "--jax-pme-sr-cutoff", getattr(args, "jax_pme_sr_cutoff", None))
     jax_pme_dispersion = getattr(args, "jax_pme_dispersion", None)
@@ -3320,6 +3331,8 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     # pycharmm backend (build_pycharmm_command) -- that path uses a different
     # calculator-setup mechanism (hybrid_mlpot.py) not audited here.
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
+    if bool(getattr(args, "ewald_omit_self", False)):
+        cmd.append("--ewald-omit-self")
     _append_optional(cmd, "--mm-charge-mode", getattr(args, "mm_charge_mode", None))
     if bool(getattr(args, "mm_charge_correction", False)):
         cmd.append("--mm-charge-correction")

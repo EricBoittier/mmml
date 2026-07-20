@@ -46,6 +46,9 @@ Current command-line seams:
 
 - `--interaction-policy PATH` loads and compiles a versioned YAML/JSON policy.
 - `--temperature-schedule '200->300:0.25,300:0.75'` uses the shared schedule.
+- `mmml configure --workflow interaction-policy` interactively validates and
+  previews a policy before writing it. It can also emit an `md-system` or
+  `dimer-scan` companion configuration referencing the same policy.
 - A valid policy that cannot yet be represented by the current JAX terms raises
   `NotImplementedError`; it never falls back to the legacy peptide/water mask.
 

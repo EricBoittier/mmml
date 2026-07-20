@@ -120,6 +120,8 @@ class HybridMMConfig:
     pme_box_length: float | None = None
     pme_accuracy: float = 1e-6
     pme_real_space_cutoff: float | None = None
+    # Ewald Gaussian self term (−α/√π Σ q²). Default on (train-matched).
+    ewald_include_self: bool = True
 
     @property
     def charge_correction(self) -> bool:
@@ -169,6 +171,8 @@ class HybridMMConfig:
             d["pme_accuracy"] = float(d["pme_accuracy"])
         if d.get("pme_real_space_cutoff", None) is not None:
             d["pme_real_space_cutoff"] = float(d["pme_real_space_cutoff"])
+        if "ewald_include_self" in d and d["ewald_include_self"] is not None:
+            d["ewald_include_self"] = bool(d["ewald_include_self"])
         return cls(
             master_sigmas=tuple(float(x) for x in d.pop("master_sigmas")),
             master_epsilons=tuple(float(x) for x in d.pop("master_epsilons")),
@@ -244,6 +248,7 @@ def hybrid_forward(
     pme_box_length: float | None = None,
     pme_accuracy: float = 1e-6,
     pme_real_space_cutoff: float | None = None,
+    ewald_include_self: bool = True,
 ) -> dict:
     """Model forward assembled into the hybrid ML/MM total the calculator uses.
 
@@ -379,6 +384,7 @@ def hybrid_forward(
                     mm_switch_width=mm_switch_width,
                     ml_switch_width=ml_switch_width,
                     complementary_handoff=complementary_handoff,
+                    include_self_energy=bool(ewald_include_self),
                 )
             else:
                 eps = master_epsilons if include_lj else jnp.zeros_like(master_epsilons)

@@ -12,8 +12,8 @@ mmml dimer-scan --help
 ## Options
 
 ```text
-usage: mmml dimer-scan [-h]
-                       --calculator {physnet,spookynet,mbd,multipoles,efield,xtb,dftb3-d4,pyscf}
+usage: mmml dimer-scan [-h] [--config CONFIG]
+                       [--calculator {physnet,spookynet,mbd,multipoles,efield,xtb,dftb3-d4,pyscf}]
                        [--checkpoint CHECKPOINT]
                        [--calculator-config CALCULATOR_CONFIG] [--method METHOD]
                        [--basis BASIS] [--xc XC] [--electric-field EX EY EZ]
@@ -25,7 +25,7 @@ usage: mmml dimer-scan [-h]
                        [--energy-definition {interaction,total}]
                        [--charge CHARGE] [--spin SPIN] [--seed SEED]
                        [--allow-partial] [--overwrite] --output OUTPUT
-                       RESIDUE [RESIDUE ...]
+                       [RESIDUE ...]
 
 Run a reproducible rigid 1D dimer energy/force scan.
 
@@ -34,6 +34,8 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
+  --config CONFIG       YAML/JSON DimerScanConfig; command-line output/failure
+                        flags remain available
   --calculator {physnet,spookynet,mbd,multipoles,efield,xtb,dftb3-d4,pyscf}
                         Explicit ASE calculator type
   --checkpoint CHECKPOINT

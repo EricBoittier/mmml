@@ -24,7 +24,7 @@ mmml configure --help
 usage: mmml configure [-h] [--non-interactive] [--list-presets]
                       [--preset {cpu-spatial-mpi-mini,cpu-dense-liquid-prep,cpu-md-benchmark,cpu-heat-scaling-smoke,cpu-nve-cutoff-sweep,qm-physnet-pipeline}]
                       [-o OUTPUT_DIR]
-                      [--workflow {md-single,md-campaign,physnet-train,snakemake-md,preset-menu}]
+                      [--workflow {md-single,md-campaign,physnet-train,snakemake-md,interaction-policy,preset-menu}]
 
 Interactive, multiple-choice setup for md-system YAML, PhysNet training configs,
 Snakemake workflow scaffolding, and bundled cpu_tests presets.
@@ -40,7 +40,7 @@ options:
   -o, --output-dir OUTPUT_DIR
                         Directory to write generated files (default: current
                         directory)
-  --workflow {md-single,md-campaign,physnet-train,snakemake-md,preset-menu}
+  --workflow {md-single,md-campaign,physnet-train,snakemake-md,interaction-policy,preset-menu}
                         Skip menu and run a specific wizard (still prompts for
                         details unless --preset)
 ```

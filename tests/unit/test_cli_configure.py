@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 from unittest.mock import patch
 
@@ -136,7 +135,7 @@ def test_configure_snakemake_scaffold(tmp_path: Path):
         ]
     )
     with patch("builtins.input", lambda _p="": next(answers)):
-        paths = run_wizard("snakemake-md", tmp_path)
+        run_wizard("snakemake-md", tmp_path)
     wf = tmp_path / "wf_test"
     assert (wf / "Snakefile").is_file()
     assert (wf / "config.yaml").is_file()

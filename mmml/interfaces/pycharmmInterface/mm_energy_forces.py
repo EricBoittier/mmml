@@ -774,6 +774,7 @@ def build_mm_energy_forces_fn(
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
     jax_pme_dispersion: bool | None = None,
+    ewald_include_self: bool = True,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
@@ -1094,10 +1095,15 @@ def build_mm_energy_forces_fn(
             per_atom_monomer_ids(total_atoms, monomer_offsets, n_monomers), dtype=jnp.int32
         )
         _ewald_charges_default = jnp.asarray(charges, dtype=ml_jnp_dtype)
+        _ewald_include_self = bool(ewald_include_self)
 
         def _ewald_energy(positions: Array, charges_arg: Array) -> Array:
             return hybrid_ewald_coulomb_energy(
-                positions, _ewald_mol_id, charges_arg, box_length_A=_ewald_box_L,
+                positions,
+                _ewald_mol_id,
+                charges_arg,
+                box_length_A=_ewald_box_L,
+                include_self_energy=_ewald_include_self,
             )
 
         @jax.jit

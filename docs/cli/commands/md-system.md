@@ -248,7 +248,8 @@ usage: mmml md-system [-h]
                       [--mlpot-mm-internal-scale W]
                       [--mm-nonbond-mode {jax_mic,periodic_external}]
                       [--lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme,ewald}]
-                      [--jax-pme-method {ewald,pme,p3m}] [--jax-pme-sr-cutoff A]
+                      [--ewald-omit-self] [--jax-pme-method {ewald,pme,p3m}]
+                      [--jax-pme-sr-cutoff A]
                       [--jax-pme-dispersion | --no-jax-pme-dispersion]
                       [--scafacos-method SCAFACOS_METHOD]
                       [--periodic-charmm-vdw | --no-periodic-charmm-vdw]
@@ -915,6 +916,10 @@ options:
                         k-space + switched SR), nvalchemiops_pme / scafacos
                         (require --mm-nonbond-mode periodic_external). Legacy
                         alias: auto (= mic).
+  --ewald-omit-self     With --lr-solver ewald: omit the Gaussian self term
+                        (−α/√π Σ q²). Opt in for MIC/non-Ewald-trained models
+                        where that constant is not in the training operator
+                        (forces unchanged; energy offset only).
   --jax-pme-method {ewald,pme,p3m}
                         jax-pme method when --lr-solver=jax_pme (default: env
                         JAX_PME_METHOD or ewald).

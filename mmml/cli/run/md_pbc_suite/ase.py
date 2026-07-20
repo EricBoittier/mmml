@@ -948,14 +948,25 @@ def _build_cluster_from_composition(
             seed=seed,
         )
 
+    # Random SO(3) per monomer when a seed is provided (evenly spaced COMs,
+    # randomized orientations — preferred for dilute PBC smokes).
+    rng = np.random.default_rng(int(seed)) if seed is not None else None
+    if rng is not None:
+        from mmml.utils.geometry_checks import _oriented_repack_template
+
     for i in range(n_molecules):
         s = int(offsets[i])
         e = int(offsets[i + 1])
         residue = ordered_residue_names[i]
         residue_coords, _residue_atom_names, _residue_z = residue_geometries[residue]
-        shifted[s:e] = residue_coords
-        com = shifted[s:e].mean(axis=0)
-        shifted[s:e] = shifted[s:e] - com + centers[i]
+        block = np.asarray(residue_coords, dtype=float).copy()
+        com0 = block.mean(axis=0)
+        internal = block - com0
+        if rng is not None:
+            internal = _oriented_repack_template(
+                internal, random_rotations=True, rng=rng
+            )
+        shifted[s:e] = internal + centers[i]
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     return z, shifted, atoms_per_list, ordered_residue_names
 
@@ -997,6 +1008,7 @@ def _factory_mmml(
     mbd_checkpoint: str | Path | None = None,
     mbd_weight: float = 1.0,
     lr_solver: str | None = None,
+    ewald_include_self: bool = True,
     mm_charge_mode: str | None = None,
     mm_charge_correction: bool = False,
     mm_latent_charge_template: str | Path | None = None,
@@ -1051,6 +1063,7 @@ def _factory_mmml(
         mbd_checkpoint=mbd_checkpoint,
         mbd_weight=mbd_weight,
         lr_solver=lr_solver,
+        ewald_include_self=bool(ewald_include_self),
         mm_charge_mode=mm_charge_mode,
         mm_charge_correction=mm_charge_correction,
         mm_latent_charge_template=mm_latent_charge_template,
@@ -1922,6 +1935,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
+            "For models not trained with that constant."
+        ),
+    )
+    parser.add_argument(
         "--mm-charge-mode",
         "--mm_charge_mode",
         dest="mm_charge_mode",
@@ -2266,6 +2287,7 @@ def main(argv: list[str] | None = None) -> int:
             mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
             mbd_weight=getattr(args, "mbd_weight", 1.0),
             lr_solver=getattr(args, "lr_solver", None),
+            ewald_include_self=not bool(getattr(args, "ewald_omit_self", False)),
             mm_charge_mode=getattr(args, "mm_charge_mode", None),
             mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
             mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),

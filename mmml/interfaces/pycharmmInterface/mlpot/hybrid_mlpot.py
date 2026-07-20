@@ -1406,6 +1406,11 @@ def build_decomposed_mlpot_model(
         jax_pme_method=jax_pme_method,
         jax_pme_sr_cutoff_A=jax_pme_sr_cutoff,
         jax_pme_dispersion=jax_pme_dispersion,
+        ewald_include_self=(
+            not bool(getattr(args, "ewald_omit_self", False))
+            if args is not None
+            else True
+        ),
         mm_nonbond_mode=mm_nonbond_mode,
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True

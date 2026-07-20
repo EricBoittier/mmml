@@ -188,6 +188,36 @@ def test_full_box_ewald_keeps_intra_monomer_coulomb():
     assert float(e) != 0.0  # not subtracted away like the mic hybrid path would
 
 
+def test_ewald_omit_self_drops_geometry_independent_offset():
+    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from mmml.interfaces.pycharmmInterface.ewald_native import (
+        default_ewald_alpha,
+        ewald_self_energy,
+    )
+
+    pos = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
+    mid = jnp.array([0, 1])
+    q = jnp.array([1.0, -1.0], dtype=jnp.float64)
+    e_full = float(
+        hybrid_ewald_coulomb_energy(
+            pos, mid, q, box_length_A=40.0, real_space_cutoff_A=10.0, include_self_energy=True
+        )
+    )
+    e_noself = float(
+        hybrid_ewald_coulomb_energy(
+            pos, mid, q, box_length_A=40.0, real_space_cutoff_A=10.0, include_self_energy=False
+        )
+    )
+    import math
+
+    from mmml.models.ewald_hybrid_coulomb import COULOMB_KCAL
+
+    alpha = default_ewald_alpha(10.0, accuracy_exponent=math.sqrt(max(-math.log(1e-6), 1.0)))
+    e_self = float(ewald_self_energy(q, alpha) * COULOMB_KCAL)
+    assert e_full == pytest.approx(e_noself + e_self, rel=0, abs=1e-8)
+    assert e_noself != pytest.approx(e_full, abs=1e-6)
+
+
 def test_full_box_ewald_ignores_com_switch_kwargs():
     """COM MM taper is not applied (matches untapered MD many-to-many Ewald)."""
     from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy

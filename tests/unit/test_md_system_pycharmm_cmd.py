@@ -656,6 +656,16 @@ def test_build_pycharmm_command_forwards_jax_pme_flags():
     assert "--no-jax-pme-dispersion" in cmd
 
 
+def test_build_pycharmm_command_forwards_ewald_omit_self():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(lr_solver="ewald", ewald_omit_self=True)
+    )
+    assert cmd[cmd.index("--lr-solver") + 1] == "ewald"
+    assert "--ewald-omit-self" in cmd
+    cmd_default = build_pycharmm_command(_pycharmm_args(lr_solver="ewald"))
+    assert "--ewald-omit-self" not in cmd_default
+
+
 def test_build_pycharmm_command_forwards_no_periodic_charmm_vdw():
     cmd = build_pycharmm_command(
         _pycharmm_args(

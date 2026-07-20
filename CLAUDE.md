@@ -44,6 +44,10 @@ Use `print_colored_json()` for JSON-shaped diagnostic output instead of
 constructing a table or applying Rich markup to serialized JSON manually. It
 keeps the output valid and copyable while styling paths, numbers, booleans,
 empty containers, and errors consistently.
+All `mmml configure` wizards must route generated documents through the shared
+`validate_wizard_config()` and preview/confirmation pipeline before performing
+filesystem writes. New workflow companions should reference canonical policy
+or configuration files rather than duplicate their scientific settings.
 
 ## Scientific functionality
 
