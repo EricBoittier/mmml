@@ -47,6 +47,10 @@ DEFAULT_BOX_PRESSURE_CPT_TIMESTEP_PS = 0.001
 DEFAULT_BOX_PRESSURE_CPT_TEMPERATURE_K = 300.0
 DEFAULT_BOX_PRESSURE_TARGET_ATM = 1.0
 DEFAULT_BOX_PRESSURE_CPT_PGAMMA = 5.0
+# Sample cubic side this many times during CPT; return the mean as certified L.
+DEFAULT_BOX_PRESSURE_CPT_L_SAMPLES = 5
+# Soft echeck for short CPT refine (MM-only; avoid abort on first spike).
+DEFAULT_BOX_PRESSURE_CPT_ECHECK = 500.0
 
 # Geometry guard during volume proposals.
 DEFAULT_BOX_PRESSURE_MIN_INTERMONOMER_A = 0.8
@@ -81,6 +85,8 @@ class BoxPressureOptConfig:
     cpt_nstep: int = DEFAULT_BOX_PRESSURE_CPT_NSTEP
     cpt_timestep_ps: float = DEFAULT_BOX_PRESSURE_CPT_TIMESTEP_PS
     cpt_pgamma: float = DEFAULT_BOX_PRESSURE_CPT_PGAMMA
+    cpt_l_samples: int = DEFAULT_BOX_PRESSURE_CPT_L_SAMPLES
+    cpt_echeck: float = DEFAULT_BOX_PRESSURE_CPT_ECHECK
     seed: int = 123
     min_box_side_A: float | None = None
     max_box_side_A: float | None = None
@@ -144,6 +150,8 @@ class BoxPressureOptResult:
     steps_applied: list[str] = field(default_factory=list)
     message: str = ""
     box_json_path: Path | None = None
+    artifacts: dict[str, str | None] = field(default_factory=dict)
+    pressure_source: str | None = None
 
     def to_box_json(self) -> dict[str, Any]:
         side = self.box_side_A
@@ -161,10 +169,12 @@ class BoxPressureOptResult:
             "target_pressure_atm": self.target_pressure_atm,
             "final_pressure_atm": self.final_pressure_atm,
             "temperature_K": self.temperature_K,
+            "pressure_source": self.pressure_source,
             "mc_pressure": self.mc,
             "refine_1d": self.refine_1d,
             "cpt": self.cpt,
             "steps_applied": list(self.steps_applied),
+            "artifacts": dict(self.artifacts) if self.artifacts else {},
             "message": self.message,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -580,14 +590,24 @@ def run_box_pressure_opt_from_box_json(
     config: BoxPressureOptConfig | None = None,
     pressure_fn: PressureFn | None = None,
     cpt_refine_fn: CptRefineFn | None = None,
+    use_charmm_pressure: bool = False,
 ) -> BoxPressureOptResult:
     """Load certified ``box.json`` (+ optional CRD) and run pressure box-opt.
 
-    When ``pressure_fn`` is omitted, uses
+    When ``pressure_fn`` is omitted and ``use_charmm_pressure`` is false, uses
     :func:`synthetic_inverse_cube_pressure_fn` calibrated to the certified side
-    (pipeline smoke). Pass :func:`charmm_pressure_fn` for real virial pressure.
+    (pipeline smoke). Set ``use_charmm_pressure=True`` (gpu09) to open a CHARMM
+    MM+PBC session, evaluate live virial ``PRSI``, optionally run CPT refine, and
+    write handoff ``model.psf`` / ``model.crd`` under ``output_dir``.
     """
     root = Path(liquid_box_dir).expanduser().resolve()
+    if use_charmm_pressure and pressure_fn is None and cpt_refine_fn is None:
+        return run_box_pressure_opt_charmm_live(
+            root,
+            output_dir=output_dir,
+            config=config,
+        )
+
     box_path = root / "box.json"
     if not box_path.is_file():
         raise FileNotFoundError(f"missing certified box.json under {root}")
@@ -652,6 +672,11 @@ def run_box_pressure_opt_from_box_json(
         cpt_refine_fn=cpt_refine_fn,
         output_dir=out,
     )
+    result.pressure_source = (
+        "injected" if pressure_fn is not None else "synthetic_inverse_cube"
+    )
+    if result.box_json_path is not None:
+        write_box_pressure_opt_json(result, result.box_json_path)
     return result
 
 
@@ -718,3 +743,283 @@ def charmm_pressure_fn(
         )
 
     return _fn
+
+
+def make_charmm_cpt_box_refine_fn(
+    config: BoxPressureOptConfig,
+    *,
+    atoms_per_list: Sequence[int],
+    work_dir: Path | str | None = None,
+) -> CptRefineFn:
+    """Build a ``cpt_refine_fn`` that runs short CHARMM CPT and returns mean ``L``.
+
+    Chunks the refine into ``cpt_l_samples`` legs, records cubic side after each
+    leg, then adopts the sample mean as the certified box length (COM-rescaled
+    from the final CHARMM frame when mean ≠ final).
+    """
+    offsets = monomer_offsets_from_atoms_per(atoms_per_list)
+    work = Path(work_dir).expanduser().resolve() if work_dir is not None else None
+
+    def _refine(
+        positions: np.ndarray, box_side_A: float
+    ) -> tuple[np.ndarray, float, Mapping[str, Any]]:
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            build_cpt_equilibration_dynamics,
+            run_dynamics,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            get_charmm_cubic_box_side_A,
+            push_charmm_cubic_box_side_A,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            get_charmm_positions_array,
+            sync_charmm_positions,
+        )
+
+        L0 = float(box_side_A)
+        push_charmm_cubic_box_side_A(L0, quiet=True)
+        sync_charmm_positions(np.asarray(positions, dtype=np.float64))
+
+        nstep_total = max(1, int(config.cpt_nstep))
+        n_samples = max(1, int(config.cpt_l_samples))
+        chunk = max(1, int(np.ceil(nstep_total / float(n_samples))))
+        dt = float(config.cpt_timestep_ps)
+        sides: list[float] = []
+        remaining = nstep_total
+        first = True
+        while remaining > 0:
+            this_n = min(chunk, remaining)
+            duration_ps = float(this_n) * dt
+            kw = build_cpt_equilibration_dynamics(
+                timestep_ps=dt,
+                duration_ps=duration_ps,
+                save_interval_ps=max(dt, duration_ps),
+                temp=float(config.temperature_K),
+                restart=False,
+                echeck=float(config.cpt_echeck),
+                thermostat="hoover",
+                pref=float(config.target_pressure_atm),
+                pgamma=float(config.cpt_pgamma),
+                include_firstt=first,
+            )
+            if first:
+                # Fresh CPT: assign Boltzmann velocities; no restart file.
+                kw["new"] = True
+                kw["start"] = True
+                kw["restart"] = False
+                kw["iasvel"] = 1
+                kw["iasors"] = 1
+            else:
+                # In-memory continuation across sample chunks (no restart I/O).
+                kw["new"] = False
+                kw["start"] = False
+                kw["restart"] = False
+                kw["iasvel"] = 0
+            if work is not None:
+                work.mkdir(parents=True, exist_ok=True)
+            kw["nsavc"] = 0
+            kw["nprint"] = max(1, this_n)
+            run_dynamics(kw)
+            live_L = float(
+                get_charmm_cubic_box_side_A(fallback_side_A=sides[-1] if sides else L0)
+            )
+            sides.append(live_L)
+            remaining -= this_n
+            first = False
+
+        final_pos = np.asarray(get_charmm_positions_array(), dtype=np.float64)
+        final_L = float(sides[-1])
+        mean_L = float(np.mean(np.asarray(sides, dtype=np.float64)))
+        out_pos = final_pos
+        out_L = mean_L
+        if abs(mean_L - final_L) > 1.0e-6 and mean_L > 0.0 and final_L > 0.0:
+            out_pos = scale_molecule_coms_with_cubic_box(
+                final_pos,
+                offsets,
+                old_box_A=final_L,
+                new_box_A=mean_L,
+            )
+            push_charmm_cubic_box_side_A(mean_L, quiet=True)
+            sync_charmm_positions(out_pos)
+        summary: dict[str, Any] = {
+            "ran": True,
+            "reason": "charmm_cpt_refine",
+            "mean_box_A": mean_L,
+            "final_box_A": final_L,
+            "box_samples_A": sides,
+            "nstep": nstep_total,
+            "timestep_ps": dt,
+            "plan": build_cpt_box_refine_dynamics_kw(config),
+        }
+        return out_pos, out_L, summary
+
+    return _refine
+
+
+def open_charmm_mm_pbc_from_liquid_box(
+    liquid_box_dir: Path | str,
+    *,
+    box_side_A: float | None = None,
+) -> dict[str, Any]:
+    """Load certified liquid-box PSF/CRD into CHARMM and install cubic PBC.
+
+    Returns positions, ``atoms_per_list``, composition string, and resolved ``L``.
+    Does **not** register MLpot (MM-only pressure / CPT refine).
+    """
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        load_cluster_from_artifacts,
+        sync_charmm_positions,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        atoms_per_monomer_from_psf,
+    )
+
+    root = Path(liquid_box_dir).expanduser().resolve()
+    box_path = root / "box.json"
+    if not box_path.is_file():
+        raise FileNotFoundError(f"missing certified box.json under {root}")
+    payload = json.loads(box_path.read_text(encoding="utf-8"))
+    side = box_side_A
+    if side is None:
+        raw = payload.get("box_side_A", payload.get("final_cubic_side_A"))
+        if raw is None:
+            raise ValueError(f"{box_path} has no box_side_A / final_cubic_side_A")
+        side = float(raw)
+    L = float(side)
+    if L <= 0.0:
+        raise ValueError(f"box_side_A must be positive, got {L}")
+
+    psf = root / "model.psf"
+    crd = root / "model.crd"
+    artifacts = payload.get("artifacts") or {}
+    if not psf.is_file() and artifacts.get("model_psf"):
+        psf = Path(str(artifacts["model_psf"]))
+    if not crd.is_file() and artifacts.get("model_crd"):
+        crd = Path(str(artifacts["model_crd"]))
+    if not psf.is_file() or not crd.is_file():
+        raise FileNotFoundError(
+            f"need model.psf + model.crd under {root} (or artifacts paths in box.json)"
+        )
+
+    composition = payload.get("composition")
+    if not isinstance(composition, str) or ":" not in composition:
+        n_mol = int(payload.get("n_molecules") or 0)
+        composition = f"TIP3:{n_mol}" if n_mol > 0 else "TIP3:1"
+
+    args = SimpleNamespace(
+        from_psf=str(psf),
+        from_crd=str(crd),
+        composition=composition,
+        output_dir=str(root),
+        quiet=False,
+        n_molecules=int(payload.get("n_molecules") or 0),
+        tag=None,
+        residue="TIP3",
+        restart_from=None,
+    )
+    _z, r, _n_mol, _tag = load_cluster_from_artifacts(args)
+    setup_charmm_environment(use_pbc=True, cubic_box_side_A=L, workflow_args=args)
+    sync_charmm_positions(np.asarray(r, dtype=np.float64))
+    atoms_per = [int(x) for x in atoms_per_monomer_from_psf()]
+    pos = np.asarray(get_charmm_positions_array(), dtype=np.float64)
+    return {
+        "positions": pos,
+        "atoms_per_list": atoms_per,
+        "box_side_A": L,
+        "composition": composition,
+        "psf_path": psf.resolve(),
+        "crd_path": crd.resolve(),
+        "payload": payload,
+    }
+
+
+def write_box_pressure_opt_handoff(
+    result: BoxPressureOptResult,
+    *,
+    positions: np.ndarray,
+    output_dir: Path | str,
+    source_psf: Path | str,
+) -> BoxPressureOptResult:
+    """Write certified ``box.json`` + ``model.crd`` and copy ``model.psf`` for smoke."""
+    import shutil
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import write_charmm_crd_from_charmm
+
+    out = Path(output_dir).expanduser().resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    psf_src = Path(source_psf).expanduser().resolve()
+    psf_dst = out / "model.psf"
+    if psf_src.is_file():
+        if psf_dst.resolve() != psf_src:
+            shutil.copy2(psf_src, psf_dst)
+    crd_dst = out / "model.crd"
+    write_charmm_crd_from_charmm(crd_dst, positions=np.asarray(positions, dtype=np.float64))
+    result.artifacts = {
+        "model_psf": str(psf_dst) if psf_dst.is_file() else None,
+        "model_crd": str(crd_dst) if crd_dst.is_file() else None,
+    }
+    write_box_pressure_opt_json(result, out / "box.json")
+    return result
+
+
+def run_box_pressure_opt_charmm_live(
+    liquid_box_dir: Path | str,
+    *,
+    output_dir: Path | str | None = None,
+    config: BoxPressureOptConfig | None = None,
+) -> BoxPressureOptResult:
+    """Live CHARMM path: virial ``PRSI`` MC/1D + optional CPT refine → handoff CRD.
+
+    Requires libcharmm (gpu09). Opens MM+PBC from certified liquid-box artifacts,
+    injects :func:`charmm_pressure_fn`, and when ``config.run_cpt_refine`` is true
+    runs :func:`make_charmm_cpt_box_refine_fn`.
+    """
+    cfg = config or BoxPressureOptConfig(run_cpt_refine=True)
+    session = open_charmm_mm_pbc_from_liquid_box(liquid_box_dir)
+    L0 = float(session["box_side_A"])
+    atoms_per_list = list(session["atoms_per_list"])
+    out = (
+        Path(output_dir).expanduser().resolve()
+        if output_dir is not None
+        else Path(liquid_box_dir).expanduser().resolve() / "box_pressure_opt"
+    )
+    out.mkdir(parents=True, exist_ok=True)
+
+    p_fn = charmm_pressure_fn(temperature_K=float(cfg.temperature_K))
+    cpt_fn: CptRefineFn | None = None
+    if cfg.run_cpt_refine:
+        cpt_fn = make_charmm_cpt_box_refine_fn(
+            cfg,
+            atoms_per_list=atoms_per_list,
+            work_dir=out / "cpt_refine",
+        )
+
+    pos, L, result = run_box_pressure_opt(
+        session["positions"],
+        atoms_per_list=atoms_per_list,
+        box_side_A=L0,
+        pressure_fn=p_fn,
+        config=cfg,
+        composition=session["composition"],
+        cpt_refine_fn=cpt_fn,
+        output_dir=None,
+    )
+    result.pressure_source = "charmm_prsi"
+    # Sync final frame into CHARMM before CRD write (CPT path already synced).
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        push_charmm_cubic_box_side_A,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    push_charmm_cubic_box_side_A(float(L), quiet=True)
+    sync_charmm_positions(np.asarray(pos, dtype=np.float64))
+    return write_box_pressure_opt_handoff(
+        result,
+        positions=pos,
+        output_dir=out,
+        source_psf=session["psf_path"],
+    )

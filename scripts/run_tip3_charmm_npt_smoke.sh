@@ -19,6 +19,7 @@ cd "$ROOT"
 CKPT="${CKPT:?set CKPT to PhysNet portable JSON}"
 BOX_OPT_OUT="${BOX_OPT_OUT:-./scratch/tip3_physnet_ewald_ir/tip3_30A_box_opt}"
 LIQUID_DIR="${LIQUID_DIR:-$BOX_OPT_OUT/liquid_box}"
+OPT_DIR="${OPT_DIR:-$BOX_OPT_OUT/box_pressure_opt}"
 OUT_DIR="${OUT_DIR:-$BOX_OPT_OUT/npt_charmm}"
 MM_CHARGE_MODE="${MM_CHARGE_MODE:-fixed}"
 TEMP_K="${TEMP_K:-300}"
@@ -29,13 +30,22 @@ PS_HEAT="${PS_HEAT:-1.0}"
 PS_EQUI="${PS_EQUI:-2.0}"
 WIPE="${WIPE:-1}"
 
-PSF="$LIQUID_DIR/model.psf"
-CRD="$LIQUID_DIR/model.crd"
-BOX_JSON="$LIQUID_DIR/box.json"
+# Prefer pressure-opt handoff (post-CPT L) when present; else liquid_box.
+if [[ -f "$OPT_DIR/model.crd" && -f "$OPT_DIR/model.psf" && -f "$OPT_DIR/box.json" ]]; then
+  PSF="$OPT_DIR/model.psf"
+  CRD="$OPT_DIR/model.crd"
+  BOX_JSON="$OPT_DIR/box.json"
+  HAND_OFF_SRC="box_pressure_opt"
+else
+  PSF="$LIQUID_DIR/model.psf"
+  CRD="$LIQUID_DIR/model.crd"
+  BOX_JSON="$LIQUID_DIR/box.json"
+  HAND_OFF_SRC="liquid_box"
+fi
 
 if [[ ! -f "$PSF" || ! -f "$CRD" || ! -f "$BOX_JSON" ]]; then
-  echo "FAILED: need certified liquid-box under $LIQUID_DIR" >&2
-  echo "  (model.psf, model.crd, box.json). Run STAGE=box_opt first." >&2
+  echo "FAILED: need certified PSF/CRD/box.json under $OPT_DIR or $LIQUID_DIR" >&2
+  echo "  Run STAGE=box_opt first (USE_CHARMM_PRESSURE=1 writes handoff CRD)." >&2
   exit 1
 fi
 
@@ -71,7 +81,7 @@ fi
 mkdir -p "$OUT_DIR"
 
 echo "== TIP3 CHARMM CPT NpT smoke (pinned liquid → hybrid CPT) =="
-echo "  liquid-box: N=$N_MOL  L=${BOX_SIDE} Å  ρ=${RHO} g/cm³"
+echo "  handoff:    $HAND_OFF_SRC  N=$N_MOL  L=${BOX_SIDE} Å  ρ=${RHO} g/cm³"
 echo "  output:     $OUT_DIR"
 echo "  stages:     mini,heat,equi  (Hoover heat + CPT equi @ ${TARGET_P_ATM} atm)"
 echo "  heat/equi:  ${PS_HEAT} / ${PS_EQUI} ps   dt=${DT_FS} fs"

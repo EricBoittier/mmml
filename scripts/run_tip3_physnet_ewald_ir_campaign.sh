@@ -14,9 +14,9 @@
 # Pass/fail (quick):
 #   fd      — fd_force_max_abs_diff_eVA < 0.05
 #   scan    — scan_1d.npz written under SCAN_OUT
-#   box_opt — liquid-box + pressure MC/1D refine → box_pressure_opt/box.json
-#   npt     — CHARMM CPT from certified liquid-box (pinned ~903@30Å)
-#   smoke   — tip3_90 heat+NVE exit 0 (wipe dir if prior vacuum-repair gate fail)
+#   box_opt — liquid-box + live CHARMM PRSI MC/1D/CPT → box_pressure_opt/{box.json,model.*}
+#   npt     — CHARMM CPT from certified handoff (pinned ~903@30Å)
+#   smoke   — hybrid heat+NVE at fixed L from certified CRD (Packmol fallback)
 #   prod    — jaxmd H5 exists; NVE finishes
 #   analyze — ir_spectrum.png + OH power with peak in 2800–3600 cm^-1 (PhysNet)
 
@@ -137,13 +137,15 @@ fi
 # --- 3) CHARMM-default box pressure opt (prep for NpT) ----------------------
 if _want box_opt; then
   echo ""
-  echo "=== [box_opt] TIP3:${N_SMOKE} liquid-box → pressure MC/1D → box.json ==="
+  echo "=== [box_opt] liquid-box → live CHARMM PRSI MC/1D/CPT → handoff ==="
   OUT_DIR="$BOX_OPT_OUT" \
   BOX_SIZE="$BOX_OPT_SIZE" \
   BOX_MODE="$BOX_OPT_MODE" \
   TARGET_P_ATM="$TARGET_P_ATM" \
   TEMP_K="$TEMP_K" \
   SEED="$SEED" \
+  USE_CHARMM_PRESSURE="${USE_CHARMM_PRESSURE:-1}" \
+  RUN_CPT_REFINE="${RUN_CPT_REFINE:-1}" \
   ./scripts/run_tip3_box_pressure_opt.sh
   test -f "$BOX_OPT_OUT/box_pressure_opt/box.json"
 fi
@@ -167,20 +169,42 @@ if _want npt; then
   ./scripts/run_tip3_charmm_npt_smoke.sh
 fi
 
-# --- 5) tip3_90 PyCHARMM smoke ---------------------------------------------
+# --- 5) tip3 hybrid smoke (certified box handoff preferred) -----------------
 if _want smoke; then
   echo ""
-  echo "=== [smoke] TIP3:${N_SMOKE} Packmol + MM pretreat → hybrid heat+NVE ==="
-  echo "  (wipe $SMOKE_OUT first — do not resume next_run/baseline after a gate fail)"
-  OUT_DIR="$SMOKE_OUT" \
-  N_MOL="$N_SMOKE" \
-  BOX_SIZE="$BOX_SMOKE" \
-  PS_HEAT="$PS_HEAT_SMOKE" \
-  PS_NVE="$PS_NVE_SMOKE" \
-  MM_CHARGE_MODE="$MM_CHARGE_MODE" \
-  TEMP_K="$TEMP_K" \
-  SEED="$SEED" \
-  ./scripts/run_tip3_50_ewald_smoke.sh
+  CERT_DIR=""
+  if [[ -f "$BOX_OPT_OUT/box_pressure_opt/model.crd" && -f "$BOX_OPT_OUT/box_pressure_opt/box.json" ]]; then
+    CERT_DIR="$BOX_OPT_OUT/box_pressure_opt"
+  elif [[ -f "$BOX_OPT_OUT/liquid_box/model.crd" && -f "$BOX_OPT_OUT/liquid_box/box.json" ]]; then
+    CERT_DIR="$BOX_OPT_OUT/liquid_box"
+  fi
+  if [[ -n "$CERT_DIR" ]]; then
+    echo "=== [smoke] certified handoff @ fixed L → hybrid heat+NVE ==="
+    echo "  CERTIFIED_BOX_DIR=$CERT_DIR"
+    echo "  (wipe $SMOKE_OUT first — do not resume next_run/baseline after a gate fail)"
+    rm -rf "$SMOKE_OUT"
+    OUT_DIR="$SMOKE_OUT" \
+    CERTIFIED_BOX_DIR="$CERT_DIR" \
+    PS_HEAT="$PS_HEAT_SMOKE" \
+    PS_NVE="$PS_NVE_SMOKE" \
+    MM_CHARGE_MODE="$MM_CHARGE_MODE" \
+    TEMP_K="$TEMP_K" \
+    SEED="$SEED" \
+    ./scripts/run_tip3_50_ewald_smoke.sh
+  else
+    echo "=== [smoke] TIP3:${N_SMOKE} Packmol + MM pretreat → hybrid heat+NVE ==="
+    echo "  (no certified box under $BOX_OPT_OUT; Packmol fallback)"
+    echo "  (wipe $SMOKE_OUT first — do not resume next_run/baseline after a gate fail)"
+    OUT_DIR="$SMOKE_OUT" \
+    N_MOL="$N_SMOKE" \
+    BOX_SIZE="$BOX_SMOKE" \
+    PS_HEAT="$PS_HEAT_SMOKE" \
+    PS_NVE="$PS_NVE_SMOKE" \
+    MM_CHARGE_MODE="$MM_CHARGE_MODE" \
+    TEMP_K="$TEMP_K" \
+    SEED="$SEED" \
+    ./scripts/run_tip3_50_ewald_smoke.sh
+  fi
 fi
 
 # --- 6) Production jaxmd NVE (H5 for IR) ------------------------------------

@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # TIP3 CHARMM-default box pressure opt prep (pinned liquid recipe):
-#   liquid-box (MM certify) → pressure MC + 1D refine → box_pressure_opt/box.json
+#   liquid-box (MM certify) → live CHARMM PRSI MC/1D (+ CPT refine) → handoff
+#   box_pressure_opt/{box.json,model.psf,model.crd}
 #
 # PINNED (gpu09-validated):
 #   BOX_MODE=count  BOX_SIZE=30  TARGET_DENSITY=1.0  →  N≈903, L=30 Å, ρ≈1.00
 #   MM GRMS ~0.04 kcal/mol/Å; worst inter-monomer ~1.17 Å (above prep floor).
 #   Trust box.json status=pass over OpenMPI/PRRTE process exit codes.
 #
-# Offline pressure step uses synthetic P∝1/L³ calibrated to the certified side.
-# Pass charmm_pressure_fn for live virial PRSI when wiring the CHARMM adapter.
+# Default on gpu09: USE_CHARMM_PRESSURE=1 (live virial PRSI + CPT refine).
+# Offline/CI: USE_CHARMM_PRESSURE=0 → synthetic P∝1/L³ (no libcharmm).
 #
 # Usage:
 #   ./scripts/run_tip3_box_pressure_opt.sh
 #   WIPE=0 ./scripts/run_tip3_box_pressure_opt.sh   # reuse existing liquid_box/
+#   USE_CHARMM_PRESSURE=0 ./scripts/run_tip3_box_pressure_opt.sh  # synthetic P
 #   BOX_MODE=density N_MOL=90 ./scripts/run_tip3_box_pressure_opt.sh  # L≈14 Å alt
 
 set -euo pipefail
@@ -32,6 +34,11 @@ SEED="${SEED:-42}"
 N_MOL="${N_MOL:-90}"
 # Wipe rebuilds Packmol; set WIPE=0 to continue from a certified liquid_box/
 WIPE="${WIPE:-1}"
+# Live CHARMM path (gpu09 default). Set 0 for offline synthetic pressure.
+USE_CHARMM_PRESSURE="${USE_CHARMM_PRESSURE:-1}"
+RUN_CPT_REFINE="${RUN_CPT_REFINE:-1}"
+MC_STEPS="${MC_STEPS:-32}"
+CPT_NSTEP="${CPT_NSTEP:-500}"
 
 mkdir -p "$OUT_DIR"
 LIQUID_DIR="$OUT_DIR/liquid_box"
@@ -120,7 +127,11 @@ if lb_rc != 0:
 PY
 
 echo ""
-echo "=== [2/2] pressure MC + 1D refine → box.json ==="
+if [[ "$USE_CHARMM_PRESSURE" == "1" ]]; then
+  echo "=== [2/2] live CHARMM PRSI MC/1D + CPT refine → handoff CRD/box.json ==="
+else
+  echo "=== [2/2] synthetic pressure MC/1D → box.json (offline) ==="
+fi
 uv run python - <<PY
 from pathlib import Path
 from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
@@ -128,23 +139,39 @@ from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
     run_box_pressure_opt_from_box_json,
 )
 
+use_charmm = str("$USE_CHARMM_PRESSURE") == "1"
 cfg = BoxPressureOptConfig(
     target_pressure_atm=float("$TARGET_P_ATM"),
     temperature_K=float("$TEMP_K"),
     seed=int("$SEED"),
+    mc_steps=int("$MC_STEPS"),
     run_1d_refine=True,
-    run_cpt_refine=False,
+    run_cpt_refine=(use_charmm and str("$RUN_CPT_REFINE") == "1"),
+    cpt_nstep=int("$CPT_NSTEP"),
 )
 result = run_box_pressure_opt_from_box_json(
     Path("$LIQUID_DIR"),
     output_dir=Path("$OPT_DIR"),
     config=cfg,
+    use_charmm_pressure=use_charmm,
 )
 print(result.message)
+print(f"pressure_source={result.pressure_source}")
 print(f"wrote {result.box_json_path}")
+arts = result.artifacts or {}
+if arts:
+    print(f"artifacts: psf={arts.get('model_psf')} crd={arts.get('model_crd')}")
 if result.box_json_path is None or not Path(result.box_json_path).is_file():
     raise SystemExit(1)
+if use_charmm:
+    crd = Path("$OPT_DIR") / "model.crd"
+    psf = Path("$OPT_DIR") / "model.psf"
+    if not crd.is_file() or not psf.is_file():
+        raise SystemExit(f"live CHARMM path must write {psf} + {crd}")
 PY
 
 echo "Pass: $OPT_DIR/box.json (final_cubic_side_A + pressure provenance)"
-echo "Next: STAGE=npt (CHARMM CPT from liquid_box PSF/CRD)."
+if [[ "$USE_CHARMM_PRESSURE" == "1" ]]; then
+  echo "Handoff: $OPT_DIR/{model.psf,model.crd,box.json} → STAGE=smoke at fixed L"
+fi
+echo "Next: STAGE=npt (CHARMM CPT) or STAGE=smoke (hybrid heat/NVE at fixed L)."
