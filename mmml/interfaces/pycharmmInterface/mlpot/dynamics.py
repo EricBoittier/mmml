@@ -4180,6 +4180,9 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     ``MMML_BUSSI_IASVEL1_REDRAW=1`` retains the legacy per-chunk Boltzmann
     redraw only as an explicit diagnostic fallback.
     """
+    if bool(kw.get("_bussi_force_iasvel_one")):
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
     if os.environ.get("MMML_BUSSI_IASVEL1_REDRAW") == "1":
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
@@ -5730,7 +5733,12 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     *,
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Assign ASE Maxwell-Boltzmann velocities before IHTFRQ heat ramp continuation."""
+    """Assign ASE Maxwell-Boltzmann velocities before IHTFRQ heat ramp continuation.
+
+    Sets ``_bussi_force_iasvel_one`` so ``run_dynamics`` /
+    ``_ensure_bussi_heat_continuation_iasvel`` cannot flip back to ``iasvel=0``
+    (COMP-as-velocity / C-API inject path that yields T ≫ 10¹² K after fly-off).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         assign_maxwell_boltzmann_velocities_via_ase,
         resolve_assignment_temperature_k,
@@ -5744,6 +5752,8 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     chunk_kw["start"] = False
     chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
+    chunk_kw["_bussi_force_iasvel_one"] = True
+    chunk_kw.pop("_skip_ase_cold_velocity_assign", None)
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     if mlpot_ctx is not None:
@@ -6279,10 +6289,20 @@ def _restore_bussi_velocities_after_overlap_recovery(
 
 
 def _ensure_bussi_heat_continuation_iasvel(chunk_kw: dict[str, Any]) -> None:
-    """Bussi continuation: ``iasvel=0`` + ``init_velocities``, or ``iasvel=1`` when C API absent."""
+    """Bussi continuation: ``iasvel=0`` + ``init_velocities``, or ``iasvel=1`` when C API absent.
+
+    Do not clobber an explicit ``iasvel=1`` cold-start / Boltzmann redraw (extent
+    fly-off sets this before ``run_dynamics``; overwriting to ``iasvel=0`` makes
+    CHARMM read COMP coordinates as velocities → T ≫ 10¹² K).
+    """
     if not _bussi_heat_ramp_active(chunk_kw):
         return
     if bool(chunk_kw.get("start")):
+        return
+    if bool(chunk_kw.get("_bussi_force_iasvel_one")):
+        _apply_bussi_iasvel_one_at_ramp_target(chunk_kw)
+        return
+    if int(chunk_kw.get("iasvel", 0) or 0) == 1:
         return
     _configure_bussi_in_memory_continuation_iasvel(chunk_kw)
 

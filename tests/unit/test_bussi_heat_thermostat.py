@@ -1520,6 +1520,7 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw(monkeypatch
 def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocities():
     """Extent fly-off arms cold-start: ASE MB + iasvel=1, not Bussi COMP continuation."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _ensure_bussi_heat_continuation_iasvel,
         _prepare_post_rescue_overlap_handoff,
         _requires_init_velocities_handoff,
         prepare_bussi_heat_dynamics_kw,
@@ -1555,12 +1556,35 @@ def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocitie
     assign_mb.assert_called_once()
     restore_vel.assert_not_called()
     assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["_bussi_force_iasvel_one"] is True
     assert chunk_kw["start"] is False
     assert chunk_kw["restart"] is False
     assert chunk_kw["iunrea"] == -1
     assert ctx._overlap_post_rescue_cold_start is False
     # Must not take the C-API / COMP inject path (that yielded T~1e12 K).
     assert _requires_init_velocities_handoff(chunk_kw) is False
+    # run_dynamics calls this and must not flip back to iasvel=0.
+    _ensure_bussi_heat_continuation_iasvel(chunk_kw)
+    assert chunk_kw["iasvel"] == 1
+    assert _requires_init_velocities_handoff(chunk_kw) is False
+
+
+def test_ensure_bussi_continuation_preserves_iasvel_one_without_force_flag(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _ensure_bussi_heat_continuation_iasvel,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
+    chunk_kw = {"firstt": 10.0, "finalt": 300.0, "timestep": 0.0001, "nstep": 50}
+    prepare_bussi_heat_dynamics_kw(
+        chunk_kw, nstep=50, ihtfrq=50, timestep_ps=0.0001
+    )
+    chunk_kw["start"] = False
+    chunk_kw["iasvel"] = 1
+    _ensure_bussi_heat_continuation_iasvel(chunk_kw)
+    assert chunk_kw["iasvel"] == 1
 
 
 def test_bussi_skip_scratch_restart_write_on_intermediate_mem_handoff():
