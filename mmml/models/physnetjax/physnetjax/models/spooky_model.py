@@ -8,7 +8,6 @@ The spooky model is trained on positions R, atomic numbers Z, and forces F, ener
 and Charge Q and Spin (Multiplicity) S.
 """
 
-import functools
 from typing import Dict, List, Optional, Tuple
 
 import e3x
@@ -273,47 +272,21 @@ class SpookyPhysNet(nn.Module):
         Tuple[jnp.ndarray, jnp.ndarray]
             Tuple of (basis functions, displacements)
         """
-        positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
-        positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
-        if self.use_pbc and cell is not None:
-            # Minimum-image convention for PBC (only traced when use_pbc=True)
-            dR = positions_src - positions_dst
-            dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a='gen').T
-            dS_mic = dS - jnp.round(dS)
-            displacements = dS_mic @ cell
-        else:
-            displacements = positions_src - positions_dst
-
-        # Masked pairs must not reach MessagePass.  Shift them off r=0 before
-        # the basis (padding-padding is coincident; 0 * NaN force otherwise),
-        # then zero the basis.  Same idiom as PhysNet / _calc_switches.
-        edge_gate = None
-        if batch_mask is not None or edge_mask is not None:
-            edge_gate = jnp.ones(displacements.shape[0], dtype=displacements.dtype)
-            if batch_mask is not None:
-                edge_gate = edge_gate * jnp.asarray(
-                    batch_mask, dtype=displacements.dtype
-                ).reshape(-1)
-            if edge_mask is not None:
-                edge_gate = edge_gate * jnp.asarray(
-                    edge_mask, dtype=displacements.dtype
-                ).reshape(-1)
-        basis_displacements = displacements
-        if edge_gate is not None:
-            basis_displacements = displacements + (1.0 - edge_gate.reshape(-1, 1))
-
-        basis = e3x.nn.basis(
-            basis_displacements,
-            num=self.num_basis_functions,
-            max_degree=self.max_degree,
-            radial_fn=e3x.nn.exponential_chebyshev,
-            cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
+        displacements = pair_displacements(
+            positions,
+            dst_idx,
+            src_idx,
+            cell=cell,
+            use_pbc=bool(self.use_pbc),
         )
-        if edge_gate is not None:
-            basis = basis * edge_gate.astype(basis.dtype).reshape(
-                -1, *([1] * (basis.ndim - 1))
-            )
-        return basis, displacements
+        return radial_spherical_basis(
+            displacements,
+            num_basis_functions=self.num_basis_functions,
+            max_degree=self.max_degree,
+            cutoff=self.cutoff,
+            batch_mask=batch_mask,
+            edge_mask=edge_mask,
+        )
 
     def _process_atomic_features(
         self,
@@ -944,47 +917,15 @@ class SpookyPhysNet(nn.Module):
         tuple
             Tuple of (r, off_dist, eshift) switching factors
         """
-        # Pure numerical-stability floors -- unlike switch_start/switch_end/
-        # electrostatics_off_start/electrostatics_off_end (below), these
-        # don't determine WHERE any physical behavior turns on or off, so
-        # they stay internal rather than exposed as model fields.
-        eps = 1e-6
-        min_dist = 0.01  # Minimum distance in Angstroms
-        switch_start = self.switch_start
-        switch_end = self.switch_end
-        # Calculate distances between atom pairs
-        displacements = jnp.nan_to_num(displacements, nan=0.0, posinf=0.0, neginf=0.0)
-        displacements = displacements + (1 - batch_mask)[..., None]
-        # Safe distance calculation with minimum cutoff
-        squared_distances = jnp.sum(displacements**2, axis=1)
-        distances = jnp.sqrt(jnp.maximum(squared_distances, min_dist**2))
-        # Improved switching function
-        switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
-        off_dist = 1.0 - e3x.nn.smooth_switch(
-            distances, self.electrostatics_off_start, self.electrostatics_off_end
+        return calc_electrostatics_switches(
+            displacements,
+            batch_mask,
+            switch_start=self.switch_start,
+            switch_end=self.switch_end,
+            electrostatics_off_start=self.electrostatics_off_start,
+            electrostatics_off_end=self.electrostatics_off_end,
+            electrostatics_damping_sigma=self.electrostatics_damping_sigma,
         )
-        switch_dist = jnp.clip(switch_dist, 0.0, 1.0)
-        off_dist = jnp.clip(off_dist, 0.0, 1.0)
-        one_minus_switch_dist = 1 - switch_dist
-        # Calculate interaction potential with improved stability
-        safe_distances = distances + eps
-        # R1: Short-range regularized potential
-        r1 = switch_dist / jnp.sqrt(squared_distances + 1.0)
-        # R2: Long-range Coulomb potential with safe distance
-        r2 = one_minus_switch_dist / safe_distances
-        r = r1 + r2
-        if self.electrostatics_damping_sigma > 0.0:
-            sigma = jnp.asarray(self.electrostatics_damping_sigma, dtype=distances.dtype)
-            r *= jax.scipy.special.erf(distances / sigma)
-        eshift = safe_distances / (switch_end**2) - 2.0 / switch_end
-        # r *= batch_mask[..., None]
-        off_dist *= batch_mask
-        eshift *= batch_mask
-        # Final NaN/Inf guards
-        r = jnp.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0)
-        off_dist = jnp.nan_to_num(off_dist, nan=0.0, posinf=0.0, neginf=0.0)
-        eshift = jnp.nan_to_num(eshift, nan=0.0, posinf=0.0, neginf=0.0)
-        return r, off_dist, eshift
 
     def _calculate_electrostatics(
         self,
@@ -1033,40 +974,18 @@ class SpookyPhysNet(nn.Module):
         Tuple[jnp.ndarray, jnp.array]
             Tuple of (atomic electrostatic energies, batch electrostatic energies)
         """
-        # Get charges for interacting pairs with safe bounds
-        q1 = jnp.clip(jnp.take(atomic_charges, dst_idx, fill_value=0.0), -10.0, 10.0)
-        q2 = jnp.clip(jnp.take(atomic_charges, src_idx, fill_value=0.0), -10.0, 10.0)
-        # Calculate electrostatic energy (in Hartree)
-        # Calculate electrostatic energy with shifted force truncation scheme
-        # Conversion factor 7.199822675975274 is (e^2 / 4πε₀) / 2 in eV * Å
-        electrostatics = 7.199822675975274 * q1 * q2 * (r + eshift) * batch_mask
-        electrostatics *= off_dist
-        # Sum contributions for each atom
-        # Use actual number of atoms from atomic_charges to match atomic_energies shape
-        num_atoms_actual = atomic_charges.shape[0]
-        # Use num_atoms_actual for num_segments to handle all possible indices (static for JIT)
-        # Then truncate to match atomic_energies shape (atomic_energies has shape (num_atoms_actual, 1, 1, 1))
-        atomic_electrostatics = jax.ops.segment_sum(
-            electrostatics,
-            segment_ids=dst_idx,
-            num_segments=num_atoms_actual,
+        del atom_mask  # retained for call-site compatibility
+        return pair_electrostatics_energy(
+            atomic_charges,
+            r,
+            off_dist,
+            eshift,
+            dst_idx,
+            src_idx,
+            batch_mask,
+            batch_segments,
+            batch_size,
         )
-        # Truncate to match atomic_energies shape
-        atomic_electrostatics = atomic_electrostatics[:num_atoms_actual]
-        # atomic_electrostatics *= atom_mask
-        # Use batch_segments as-is (it should match num_atoms_actual)
-        batch_electrostatics = jax.ops.segment_sum(
-            atomic_electrostatics,
-            segment_ids=batch_segments,
-            num_segments=batch_size,
-        )
-        atomic_electrostatics = atomic_electrostatics[..., None, None, None]
-        batch_electrostatics = batch_electrostatics[..., None, None, None]
-        # if not self.debug and "ele" in self.debug:
-        #     jax.debug.print(
-        #         f"{atomic_electrostatics}", atomic_electrostatics=atomic_electrostatics
-        #     )
-        return atomic_electrostatics, batch_electrostatics
 
     def _calculate_dipole(
         self,
