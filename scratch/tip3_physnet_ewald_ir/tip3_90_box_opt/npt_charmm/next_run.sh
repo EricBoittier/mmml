@@ -10,7 +10,7 @@ CMD=(
   --backend
   pycharmm
   --restart-from
-  scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.res
+  scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.0002.res
   --md-stages
   equi
   --no-echeck-heat

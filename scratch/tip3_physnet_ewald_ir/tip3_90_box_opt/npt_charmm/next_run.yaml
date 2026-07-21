@@ -8,4 +8,4 @@ defaults:
   md_stages: 'equi'
   no_echeck_heat: true
   output_dir: 'scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm'
-  restart_from: 'scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.res'
+  restart_from: 'scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.0002.res'
