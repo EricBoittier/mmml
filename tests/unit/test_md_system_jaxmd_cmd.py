@@ -202,3 +202,14 @@ def test_build_command_jaxmd_forwards_ml_gpu_and_profile_flags() -> None:
     assert "--ml-batch-size" in argv
     assert argv[argv.index("--ml-batch-size") + 1] == "256"
     assert "--mlpot-profile" in argv
+
+
+def test_build_command_jaxmd_forwards_fire_min_steps() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(_jaxmd_args(fire_min_steps=1000, fire_min_maxstep=0.05))
+    assert backend == "jaxmd"
+    assert "--fire-min-steps" in argv
+    assert argv[argv.index("--fire-min-steps") + 1] == "1000"
+    assert "--fire-min-maxstep" in argv
+    assert argv[argv.index("--fire-min-maxstep") + 1] == "0.05"

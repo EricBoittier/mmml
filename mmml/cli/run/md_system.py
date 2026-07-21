@@ -2242,6 +2242,8 @@ def _append_suite_mmml_handoff_args(
     )
     cmd.extend(["--pre-min-fmax", str(getattr(args, "pre_min_fmax", 0.1))])
     cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
+    cmd.extend(["--fire-min-steps", str(getattr(args, "fire_min_steps", 200))])
+    _append_optional(cmd, "--fire-min-maxstep", getattr(args, "fire_min_maxstep", None))
     if getattr(args, "ml_batch_size", None) is not None:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
     if getattr(args, "ml_gpu_count", None) is not None:
