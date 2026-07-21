@@ -28,6 +28,7 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 )
 from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.utils.geometry_checks import (
+    TEMPLATE_DONOR_IDEAL_TIP3,
     assert_no_intermonomer_atom_overlap,
     rebuild_high_force_monomers_from_peers,
 )

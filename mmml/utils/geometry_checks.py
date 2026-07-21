@@ -508,6 +508,21 @@ def rebuild_monomers_from_reference(
     return pos
 
 
+# Sentinel donor indices for rebuild_high_force_monomers_from_peers.
+TEMPLATE_DONOR_NONE = -1
+TEMPLATE_DONOR_IDEAL_TIP3 = -2
+
+# CHARMM TIP3P-like reference geometry (Å / deg). Used to gate peer donors and
+# as the synthetic template when every peer fails intramolecular health checks.
+TIP3_TEMPLATE_HOH_ANGLE_DEG = 104.52
+TIP3_TEMPLATE_OH_BOND_A = 0.9572
+# Peer donors must be this close to the TIP3 reference (else copy a crushed shape).
+TEMPLATE_DONOR_MAX_HOH_DEV_DEG = 12.0
+TEMPLATE_DONOR_MAX_OH_DEV_A = 0.12
+# Non-water peers: refuse donors still this hard (eV/Å max atom |F|).
+TEMPLATE_DONOR_MAX_FORCE_EVA = 2.0
+
+
 def monomer_max_force_magnitudes(
     forces: np.ndarray,
     monomer_offsets: np.ndarray,
@@ -525,6 +540,126 @@ def monomer_max_force_magnitudes(
     return out
 
 
+def tip3_hoh_angle_deg(chunk: np.ndarray) -> float:
+    """H–O–H angle (deg) for a 3-atom water chunk ordered O, H, H."""
+    o = np.asarray(chunk[0], dtype=float)
+    h1 = np.asarray(chunk[1], dtype=float)
+    h2 = np.asarray(chunk[2], dtype=float)
+    v1 = h1 - o
+    v2 = h2 - o
+    n1 = float(np.linalg.norm(v1))
+    n2 = float(np.linalg.norm(v2))
+    if n1 < 1.0e-12 or n2 < 1.0e-12:
+        return float("nan")
+    c = float(np.clip(np.dot(v1, v2) / (n1 * n2), -1.0, 1.0))
+    return float(np.degrees(np.arccos(c)))
+
+
+def tip3_oh_bonds_A(chunk: np.ndarray) -> tuple[float, float]:
+    """O–H distances (Å) for a 3-atom water chunk ordered O, H, H."""
+    o = np.asarray(chunk[0], dtype=float)
+    h1 = np.asarray(chunk[1], dtype=float)
+    h2 = np.asarray(chunk[2], dtype=float)
+    return float(np.linalg.norm(h1 - o)), float(np.linalg.norm(h2 - o))
+
+
+def is_tip3_like_monomer(
+    size: int,
+    atomic_numbers_slice: np.ndarray | None = None,
+) -> bool:
+    """True for 3-atom OHH waters (TIP3 order); size-3 alone if Z unknown."""
+    if int(size) != 3:
+        return False
+    if atomic_numbers_slice is None:
+        return True
+    z = sorted(int(x) for x in np.asarray(atomic_numbers_slice, dtype=int).ravel())
+    return z == [1, 1, 8]
+
+
+def tip3_geometry_deviations(chunk: np.ndarray) -> tuple[float, float]:
+    """Return ``(|ΔHOH| deg, max|ΔOH| Å)`` vs :data:`TIP3_TEMPLATE_*`."""
+    hoh = tip3_hoh_angle_deg(chunk)
+    oh1, oh2 = tip3_oh_bonds_A(chunk)
+    if not np.isfinite(hoh):
+        return float("inf"), float("inf")
+    hoh_dev = abs(hoh - float(TIP3_TEMPLATE_HOH_ANGLE_DEG))
+    oh_dev = max(
+        abs(oh1 - float(TIP3_TEMPLATE_OH_BOND_A)),
+        abs(oh2 - float(TIP3_TEMPLATE_OH_BOND_A)),
+    )
+    return float(hoh_dev), float(oh_dev)
+
+
+def tip3_peer_donor_acceptable(chunk: np.ndarray) -> bool:
+    """True when intramolecular geometry is healthy enough to copy as a template."""
+    hoh_dev, oh_dev = tip3_geometry_deviations(chunk)
+    return (
+        hoh_dev <= float(TEMPLATE_DONOR_MAX_HOH_DEV_DEG)
+        and oh_dev <= float(TEMPLATE_DONOR_MAX_OH_DEV_A)
+    )
+
+
+def load_bundled_tip3_template_A() -> np.ndarray:
+    """COM-centered TIP3 coordinates (Å) from bundled ``tip3.pdb`` (OH2, H1, H2)."""
+    from mmml.paths import default_tip3_template_pdb
+
+    tip3_pdb = default_tip3_template_pdb()
+    coords: list[list[float]] = []
+    for line in tip3_pdb.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("ATOM"):
+            continue
+        coords.append([float(line[30:38]), float(line[38:46]), float(line[46:54])])
+    if len(coords) != 3:
+        raise ValueError(f"Expected 3 TIP3 atoms in {tip3_pdb}, found {len(coords)}")
+    arr = np.asarray(coords, dtype=float)
+    return arr - arr.mean(axis=0)
+
+
+def select_template_donor_monomer(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    mol_f: np.ndarray,
+    *,
+    size: int,
+    atomic_numbers: np.ndarray | None = None,
+    exclude: int | None = None,
+) -> int:
+    """Pick a same-size peer donor, or a sentinel when none is healthy.
+
+    TIP3-like monomers: require HOH/OH within
+    :data:`TEMPLATE_DONOR_MAX_*`; among acceptable peers prefer lowest max|F|.
+    If none pass, return :data:`TEMPLATE_DONOR_IDEAL_TIP3`.
+
+    Other sizes: softest same-size peer only if its max|F| is below
+    :data:`TEMPLATE_DONOR_MAX_FORCE_EVA`; otherwise :data:`TEMPLATE_DONOR_NONE`.
+    """
+    pos = np.asarray(positions, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    z_all = None if atomic_numbers is None else np.asarray(atomic_numbers, dtype=int)
+    candidates: list[int] = []
+    tip3_mode = False
+    for j in range(n_monomers):
+        if exclude is not None and int(j) == int(exclude):
+            continue
+        s, e = int(offsets[j]), int(offsets[j + 1])
+        if int(e - s) != int(size):
+            continue
+        z_slice = None if z_all is None else z_all[s:e]
+        if is_tip3_like_monomer(size, z_slice):
+            tip3_mode = True
+            if tip3_peer_donor_acceptable(pos[s:e]):
+                candidates.append(int(j))
+        elif float(mol_f[j]) <= float(TEMPLATE_DONOR_MAX_FORCE_EVA):
+            candidates.append(int(j))
+    if candidates:
+        return int(min(candidates, key=lambda j: float(mol_f[j])))
+    # Every TIP3 peer failed the intramolecular gate → synthetic reference.
+    if tip3_mode:
+        return int(TEMPLATE_DONOR_IDEAL_TIP3)
+    return int(TEMPLATE_DONOR_NONE)
+
+
 def rebuild_high_force_monomers_from_peers(
     positions: np.ndarray,
     forces: np.ndarray,
@@ -533,14 +668,24 @@ def rebuild_high_force_monomers_from_peers(
     force_percentile: float = 90.0,
     max_rebuild: int = 64,
     min_force_eVA: float = 1.0,
+    atomic_numbers: np.ndarray | None = None,
 ) -> tuple[np.ndarray, list[int], int]:
-    """Replace internals of high-|F| monomers with a Kabsch-aligned healthy peer.
+    """Replace internals of high-|F| monomers with a Kabsch-aligned healthy template.
 
-    Donor is the same-sized monomer with the lowest max-atom |F|.  Victims are
-    monomers at/above ``force_percentile`` of the per-monomer max-|F| distribution
-    and at least ``min_force_eVA``.  COMs of victims are preserved.
+    Victims are monomers at/above ``force_percentile`` of the per-monomer max-|F|
+    distribution and at least ``min_force_eVA``.  COMs of victims are preserved.
 
-    Returns ``(new_positions, rebuilt_monomer_indices, donor_monomer_index)``.
+    Donor selection (not softest-by-force alone):
+
+    * TIP3-like (3-atom OHH): peer with healthy HOH/OH geometry and lowest
+      max|F|; if every peer fails the geometry gate, use the bundled ideal
+      TIP3 template (:data:`TEMPLATE_DONOR_IDEAL_TIP3`).
+    * Other sizes: softest same-size peer only if max|F| ≤
+      :data:`TEMPLATE_DONOR_MAX_FORCE_EVA`; otherwise skip.
+
+    Returns ``(new_positions, rebuilt_monomer_indices, donor_id)`` where
+    ``donor_id`` is a monomer index, :data:`TEMPLATE_DONOR_IDEAL_TIP3`, or
+    :data:`TEMPLATE_DONOR_NONE`.
     """
     from mmml.utils.structure_align import kabsch_rotation
 
@@ -548,7 +693,7 @@ def rebuild_high_force_monomers_from_peers(
     offsets = np.asarray(monomer_offsets, dtype=int)
     n_monomers = int(len(offsets) - 1)
     if n_monomers <= 1:
-        return pos, [], -1
+        return pos, [], int(TEMPLATE_DONOR_NONE)
 
     mol_f = monomer_max_force_magnitudes(forces, offsets)
     sizes = np.array(
@@ -560,33 +705,49 @@ def rebuild_high_force_monomers_from_peers(
     victims = [i for i in range(n_monomers) if float(mol_f[i]) >= thr]
     victims = sorted(victims, key=lambda i: -float(mol_f[i]))[: max(0, int(max_rebuild))]
     if not victims:
-        return pos, [], -1
+        return pos, [], int(TEMPLATE_DONOR_NONE)
 
-    # Prefer a single global donor when all monomers share a size (TIP3 liquid).
-    donor = int(np.argmin(mol_f))
+    # Cache one donor (or ideal/none) per monomer size present among victims.
+    donor_by_size: dict[int, int] = {}
+    ideal_local: np.ndarray | None = None
     rebuilt: list[int] = []
+    primary_donor = int(TEMPLATE_DONOR_NONE)
+
     for mi in victims:
-        if mi == donor:
-            continue
         size = int(sizes[mi])
-        # If donor size mismatches, pick the softest same-size peer.
-        if int(sizes[donor]) != size:
-            same = [j for j in range(n_monomers) if int(sizes[j]) == size]
-            if not same:
-                continue
-            donor_i = int(min(same, key=lambda j: float(mol_f[j])))
-        else:
-            donor_i = donor
-        if donor_i == mi:
+        if size not in donor_by_size:
+            donor_by_size[size] = select_template_donor_monomer(
+                pos,
+                offsets,
+                mol_f,
+                size=size,
+                atomic_numbers=atomic_numbers,
+                exclude=None,
+            )
+        donor_i = int(donor_by_size[size])
+        if donor_i == int(TEMPLATE_DONOR_NONE):
             continue
-        s_d, e_d = int(offsets[donor_i]), int(offsets[donor_i + 1])
+        if donor_i >= 0 and donor_i == int(mi):
+            # Softest healthy peer is itself — skip; do not copy self.
+            continue
+
         s_v, e_v = int(offsets[mi]), int(offsets[mi + 1])
-        donor_chunk = pos[s_d:e_d]
         victim_chunk = pos[s_v:e_v]
-        donor_com = donor_chunk.mean(axis=0)
         victim_com = victim_chunk.mean(axis=0)
-        donor_local = donor_chunk - donor_com
         victim_local = victim_chunk - victim_com
+
+        if donor_i == int(TEMPLATE_DONOR_IDEAL_TIP3):
+            if ideal_local is None:
+                ideal_local = load_bundled_tip3_template_A()
+            donor_local = ideal_local
+            primary_donor = int(TEMPLATE_DONOR_IDEAL_TIP3)
+        else:
+            s_d, e_d = int(offsets[donor_i]), int(offsets[donor_i + 1])
+            donor_chunk = pos[s_d:e_d]
+            donor_local = donor_chunk - donor_chunk.mean(axis=0)
+            if primary_donor < 0:
+                primary_donor = int(donor_i)
+
         if size >= 3:
             rot = kabsch_rotation(donor_local, victim_local)
             placed = donor_local @ rot + victim_com
@@ -594,7 +755,8 @@ def rebuild_high_force_monomers_from_peers(
             placed = donor_local + victim_com
         pos[s_v:e_v] = placed
         rebuilt.append(int(mi))
-    return pos, rebuilt, int(donor)
+
+    return pos, rebuilt, int(primary_donor if rebuilt else TEMPLATE_DONOR_NONE)
 
 
 def repack_monomers_clear_overlap(
