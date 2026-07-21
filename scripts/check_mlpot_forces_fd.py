@@ -226,7 +226,16 @@ def _ml_energy_and_force(
     *,
     do_ml_dimer: bool,
 ) -> tuple[float, np.ndarray]:
-    """Return ML-only decomposed energy/forces from the scalar energy gradient."""
+    """Return ML-only decomposed energy/forces from the model's own analytic forces.
+
+    Uses ``out.forces`` directly (a single forward pass) rather than an outer
+    ``jax.value_and_grad`` over ``out.energy``. SpookyPhysNet computes its own
+    forces internally via a nested ``jax.value_and_grad`` (``compute_forces=True``
+    by default); wrapping another grad around its energy output re-differentiates
+    through that nested-AD trace and silently produces a wrong outer gradient
+    instead of an error. ``out.forces`` is unaffected by this and is the same
+    value used directly by production (non-``backprop``) call sites.
+    """
     import jax
     import jax.numpy as jnp
 
@@ -242,22 +251,18 @@ def _ml_energy_and_force(
         positions_jax = jnp.asarray(pos)
         atomic_numbers_jax = jnp.asarray(calc.atomic_numbers[:n])
 
-        def energy_scalar(p):
-            out = calc.spherical_fn(
-                positions=p,
-                atomic_numbers=atomic_numbers_jax,
-                n_monomers=calc.n_monomers,
-                cutoff_params=calc.cutoff_params,
-                doML=True,
-                doMM=False,
-                doML_dimer=do_ml_dimer,
-                box=box,
-            )
-            return jnp.reshape(out.energy, (-1,))[0]
-
-        energy_raw, grad = jax.value_and_grad(energy_scalar)(positions_jax)
-        energy = float(jax.device_get(energy_raw)) * float(calc.ev2kcal)
-        forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * float(calc.ev2kcal)
+        out = calc.spherical_fn(
+            positions=positions_jax,
+            atomic_numbers=atomic_numbers_jax,
+            n_monomers=calc.n_monomers,
+            cutoff_params=calc.cutoff_params,
+            doML=True,
+            doMM=False,
+            doML_dimer=do_ml_dimer,
+            box=box,
+        )
+        energy = float(jax.device_get(jnp.reshape(out.energy, (-1,))[0])) * float(calc.ev2kcal)
+        forces = np.asarray(jax.device_get(out.forces), dtype=np.float64) * float(calc.ev2kcal)
     return energy, forces
 
 
