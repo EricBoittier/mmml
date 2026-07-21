@@ -33,6 +33,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _prior_restart_for_stage,
     _seed_charmm_coords_from_dynamics_restart,
     _should_seed_heat_prior_restart,
+    _should_skip_pre_dyn_fmax_gate,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
@@ -243,6 +244,19 @@ def test_seed_charmm_coords_from_dynamics_restart_skips_handoff_seed(tmp_path: P
     ) as read_coords:
         assert _seed_charmm_coords_from_dynamics_restart(seed, quiet=True) is False
     read_coords.assert_not_called()
+
+
+def test_should_skip_pre_dyn_fmax_gate_for_equi_from_heat():
+    """Equi-from-heat must not apply the 2 eV/Å cold-start |F|max ceiling."""
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=True, dyn_stages=["equi"]
+    )
+    assert not _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False, dyn_stages=["equi"]
+    )
+    assert not _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=True, dyn_stages=["heat"]
+    )
 
 
 def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):

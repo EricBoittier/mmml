@@ -208,6 +208,24 @@ def _equi_restart_name(tag: str, n_equi_segments: int) -> str:
     return "equi.res"
 
 
+# Cold-start |F|max≈2 eV/Å is for Packmol/clash geometries, not finite-T liquids
+# that already completed heat/NVE.
+_POST_DYNAMICS_RESUME_STAGES = frozenset({"equi", "nve", "prod"})
+
+
+def _should_skip_pre_dyn_fmax_gate(
+    *,
+    seeded_from_dynamics_restart: bool,
+    dyn_stages: list[str] | tuple[str, ...],
+) -> bool:
+    """True when equi/NVE/prod resume was seeded from a finished dynamics restart."""
+    return bool(
+        seeded_from_dynamics_restart
+        and dyn_stages
+        and dyn_stages[0] in _POST_DYNAMICS_RESUME_STAGES
+    )
+
+
 def _seed_charmm_coords_from_dynamics_restart(
     restart_path: Path | str | None,
     *,
@@ -2278,6 +2296,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         # Equi/NVE/prod-only resumes still load --from-crd into CHARMM during
         # setup. Seed the stage restart (heat.N.res, …) before GRMS/fmax gates
         # so we do not reject the certified handoff while intending post-heat CPT.
+        seeded_from_dynamics_restart = False
         if "mini" not in stages:
             seed_restart = restart_from
             if seed_restart is None and dyn_stages:
@@ -2288,11 +2307,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     tag=tag,
                     n_heat_segments=n_heat_segments_early,
                 )
-            _seed_charmm_coords_from_dynamics_restart(
+            seeded_from_dynamics_restart = _seed_charmm_coords_from_dynamics_restart(
                 seed_restart,
                 quiet=bool(args.quiet),
                 context="Pre-dynamics",
             )
+        skip_pre_dyn_fmax_gate = _should_skip_pre_dyn_fmax_gate(
+            seeded_from_dynamics_restart=seeded_from_dynamics_restart,
+            dyn_stages=dyn_stages,
+        )
         max_grms = resolve_max_grms_before_dyn(
             args,
             n_mol,
@@ -2497,22 +2520,41 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         # the live hybrid force field after every recovery/minimization step and
         # enforce the independent per-atom ceiling before entering HEAT.
         from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            DynamicsGateResult,
             geometry_safe_for_dynamics,
             measure_monomer_grms_stats,
             resolve_grms_thresholds,
         )
 
-        force_gate = geometry_safe_for_dynamics(
-            measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
-            resolve_grms_thresholds(
-                args,
-                atoms_per_list=atoms_per_list,
-                n_monomers=n_mol,
-                n_atoms=n_atoms,
-                mlpot_ctx=ctx,
-                pbc=charmm_pbc,
-            ),
-        )
+        if skip_pre_dyn_fmax_gate:
+            if not args.quiet:
+                print(
+                    "Pre-dynamics force gate: skipped "
+                    f"(seeded dynamics restart → {dyn_stages[0]}; "
+                    "finite-T liquid |F|max often exceeds the 2 eV/Å cold-start "
+                    "ceiling — do not re-FIRE a finished heat geometry)",
+                    flush=True,
+                )
+            force_gate = DynamicsGateResult(
+                ok=True,
+                reason="skipped for post-dynamics restart resume",
+                hybrid_total_grms=float(current_grms),
+                fmax_kcalmol_A=None,
+                max_grms_before_dyn=float(max_grms),
+                max_fmax_before_dyn=0.0,
+            )
+        else:
+            force_gate = geometry_safe_for_dynamics(
+                measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
+                resolve_grms_thresholds(
+                    args,
+                    atoms_per_list=atoms_per_list,
+                    n_monomers=n_mol,
+                    n_atoms=n_atoms,
+                    mlpot_ctx=ctx,
+                    pbc=charmm_pbc,
+                ),
+            )
         if not force_gate.ok:
             # A whole-system minimizer barely feels one or two stressed monomers
             # (global RMS is dominated by the healthy majority), so before failing

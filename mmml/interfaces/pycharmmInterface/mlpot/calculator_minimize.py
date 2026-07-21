@@ -151,6 +151,18 @@ def _hybrid_grms_from_ase_atoms(atoms: Any) -> float:
     return forces_grms_kcalmol_A(forces_ev * EV_TO_KCAL_MOL)
 
 
+def _atomic_fmax_ev_a(forces_ev_a: np.ndarray) -> float:
+    """Largest per-atom Euclidean force magnitude (eV/Å)."""
+    f = np.asarray(forces_ev_a, dtype=np.float64).reshape(-1, 3)
+    if f.size == 0:
+        return 0.0
+    mags = np.linalg.norm(f, axis=1)
+    mags = mags[np.isfinite(mags)]
+    if mags.size == 0:
+        return 0.0
+    return float(np.max(mags))
+
+
 def hybrid_calculators_synced(diag_kind: str) -> bool:
     """True when hybrid ASE mini is safe (hybrid/CHARMM GRMS are not desynced)."""
     return str(diag_kind) != "desync_suspected"
@@ -889,7 +901,9 @@ def _run_hybrid_calculator_bfgs(
         nonlocal stopped_on_spike, stopped_on_safe_grms
         if stopped_on_spike or stopped_on_safe_grms:
             return
-        fmax = float(np.abs(atoms.get_forces()).max())
+        forces_ev = np.asarray(atoms.get_forces(), dtype=np.float64)
+        fmax = float(np.abs(forces_ev).max())
+        fmax_atom = _atomic_fmax_ev_a(forces_ev)
         safe_grms = config.safe_grms_kcalmol_A
         if safe_grms is not None:
             try:
@@ -897,12 +911,12 @@ def _run_hybrid_calculator_bfgs(
             except Exception:
                 grms = float("inf")
             # RMS force alone can hide one catastrophically stressed atom or
-            # monomer.  Only use the relaxed GRMS shortcut once the maximum
-            # component is also in the optimizer's soft-force region.
+            # monomer.  Only use the relaxed GRMS shortcut once the max atomic
+            # |F| is also in the optimizer's soft-force region.
             safe_fmax = float(config.fmax_ev_a) * float(config.stall_soft_fmax_factor)
             if safe_grms_stop_allowed(
                 grms,
-                fmax,
+                fmax_atom,
                 safe_grms_kcalmol_A=float(safe_grms),
                 safe_fmax_ev_a=safe_fmax,
             ):
@@ -911,8 +925,8 @@ def _run_hybrid_calculator_bfgs(
                     print(
                         f"{context_prefix} hybrid calculator BFGS: "
                         f"safe GRMS reached ({grms:.4f} <= {float(safe_grms):.4f} "
-                        f"kcal/mol/Å; fmax={fmax:.4f} <= {safe_fmax:.4f} eV/Å); "
-                        "stopping early",
+                        f"kcal/mol/Å; atomic fmax={fmax_atom:.4f} <= "
+                        f"{safe_fmax:.4f} eV/Å); stopping early",
                         flush=True,
                     )
                 return
@@ -1027,9 +1041,14 @@ def _run_hybrid_calculator_fire(
         if stopped_on_spike or stopped_on_safe_grms:
             return
         try:
-            fmax = float(np.abs(atoms.get_forces()).max())
+            forces_ev = np.asarray(atoms.get_forces(), dtype=np.float64)
+            # Spike / ASE irun guards use max |component|; safe-GRMS uses
+            # Euclidean per-atom |F| so it matches the pre-dynamics fmax gate.
+            fmax = float(np.abs(forces_ev).max())
+            fmax_atom = _atomic_fmax_ev_a(forces_ev)
         except Exception:
             fmax = float("inf")
+            fmax_atom = float("inf")
         safe_grms = config.safe_grms_kcalmol_A
         if safe_grms is not None:
             try:
@@ -1037,12 +1056,12 @@ def _run_hybrid_calculator_fire(
             except Exception:
                 grms = float("inf")
             # A low RMS can hide a handful of atoms at multi-eV/Å; only take the
-            # safe-GRMS shortcut once the max component is also in the soft-force
+            # safe-GRMS shortcut once the max atomic |F| is also in the soft-force
             # region, otherwise FIRE stops at step 0 leaving stressed atoms.
             safe_fmax = float(config.fmax_ev_a) * float(config.stall_soft_fmax_factor)
             if safe_grms_stop_allowed(
                 grms,
-                fmax,
+                fmax_atom,
                 safe_grms_kcalmol_A=float(safe_grms),
                 safe_fmax_ev_a=safe_fmax,
             ):
@@ -1051,8 +1070,8 @@ def _run_hybrid_calculator_fire(
                     print(
                         f"{context_prefix} hybrid calculator FIRE: "
                         f"safe GRMS reached ({grms:.4f} <= {float(safe_grms):.4f} "
-                        f"kcal/mol/Å; fmax={fmax:.4f} <= {safe_fmax:.4f} eV/Å); "
-                        "stopping early",
+                        f"kcal/mol/Å; atomic fmax={fmax_atom:.4f} <= "
+                        f"{safe_fmax:.4f} eV/Å); stopping early",
                         flush=True,
                     )
                 return
@@ -1399,7 +1418,6 @@ def repair_stressed_monomers_with_calculator(
     from ase.constraints import FixAtoms
 
     from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
-        atomic_fmax_kcalmol_A,
         per_monomer_fmax_from_forces,
         select_stressed_monomers,
     )
@@ -1416,7 +1434,7 @@ def repair_stressed_monomers_with_calculator(
     atoms = _hybrid_minimize_atoms(mlpot_ctx, z, pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     forces0 = np.asarray(atoms.get_forces(), dtype=np.float64)  # eV/Å
-    fmax_before = atomic_fmax_kcalmol_A(forces0)  # norm-based, eV/Å here
+    fmax_before = _atomic_fmax_ev_a(forces0)
 
     per_mono = per_monomer_fmax_from_forces(forces0, atoms_per_list)
     stressed = select_stressed_monomers(per_mono, float(fmax_ceiling_ev_a))
@@ -1485,7 +1503,7 @@ def repair_stressed_monomers_with_calculator(
     except Exception:
         pass
     forces1 = np.asarray(atoms.get_forces(), dtype=np.float64)
-    fmax_after = atomic_fmax_kcalmol_A(forces1)
+    fmax_after = _atomic_fmax_ev_a(forces1)
     if verbose:
         print(
             f"{context_prefix}: max atomic force {fmax_before:.2f} -> "
