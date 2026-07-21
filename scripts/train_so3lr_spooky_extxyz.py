@@ -425,18 +425,48 @@ def iter_device_batches(
     n_devices: int,
     rng: np.random.Generator,
     shuffle_pad_buckets: bool = False,
+    max_batches_per_bucket_visit: int | None = None,
 ) -> Iterator[tuple[int, np.ndarray]]:
     """Yield ``(pad_atoms, device_indices)`` with shape ``(n_devices, B)``.
 
     Pad widths are sorted (large→small) by default so each shape is trained in
     a block; shuffling pads interleaves compiles and fragments GPU memory.
     Indices *within* a pad bucket are always shuffled.
+
+    ``max_batches_per_bucket_visit``, if set, bounds how many consecutive
+    batches are drawn from one bucket before moving on to the next, cycling
+    back to any bucket with leftover batches once every other bucket has had
+    its turn (round-robin), instead of fully draining one bucket before
+    starting the next.
+
+    Without this bound, bucket *visit order* being shuffled does not bound
+    bucket *visit duration*: a single disproportionately large bucket (e.g.
+    one atom-count bin holding a large majority of the training pool) can
+    still monopolize well over a million consecutive optimizer steps once
+    it's picked, giving zero gradient signal from every other structure
+    population (composites, other sizes) for that whole stretch. Observed in
+    practice: two checkpoints saved back-to-back while stuck in one such
+    bucket for >1M steps both showed broad eval regressions across nearly
+    every test set relative to a checkpoint saved before that bucket became
+    active, then recovered once training moved on -- consistent with drift
+    from prolonged single-population training, not a real capability loss.
+
+    This still switches the active compiled shape only at bucket-visit
+    boundaries (same cost profile as the unbounded version), but a small
+    bound means more total switches over an epoch (each bucket may be
+    revisited many times to fully drain it) -- shape recompilation is paid
+    per switch (`_activate_shape` evicts the previous compiled executable to
+    avoid multi-GPU OOM), so this trades some extra compile overhead for
+    bounding cross-population staleness. Choose a bound large enough that
+    this overhead stays small relative to an epoch's total step count.
     """
     bucket_keys = list(buckets)
     if shuffle_pad_buckets:
         rng.shuffle(bucket_keys)
     else:
         bucket_keys = sorted(bucket_keys, reverse=True)
+
+    per_bucket_chunks: dict[int, list[np.ndarray]] = {}
     for pad_atoms in bucket_keys:
         bucket_batch_size = int(batch_sizes[pad_atoms])
         if bucket_batch_size < 1:
@@ -445,9 +475,34 @@ def iter_device_batches(
         indices = buckets[pad_atoms].copy()
         rng.shuffle(indices)
         usable = (len(indices) // global_batch) * global_batch
-        for start in range(0, usable, global_batch):
-            chunk = indices[start : start + global_batch]
-            yield pad_atoms, chunk.reshape(n_devices, bucket_batch_size)
+        chunks = [
+            indices[start : start + global_batch].reshape(n_devices, bucket_batch_size)
+            for start in range(0, usable, global_batch)
+        ]
+        if chunks:
+            per_bucket_chunks[pad_atoms] = chunks
+
+    if max_batches_per_bucket_visit is None:
+        for pad_atoms in bucket_keys:
+            for chunk in per_bucket_chunks.get(pad_atoms, []):
+                yield pad_atoms, chunk
+        return
+
+    cursors = {pad_atoms: 0 for pad_atoms in per_bucket_chunks}
+    remaining = set(per_bucket_chunks)
+    while remaining:
+        order = list(remaining)
+        if shuffle_pad_buckets:
+            rng.shuffle(order)
+        for pad_atoms in order:
+            chunks = per_bucket_chunks[pad_atoms]
+            start = cursors[pad_atoms]
+            end = min(start + max_batches_per_bucket_visit, len(chunks))
+            for chunk in chunks[start:end]:
+                yield pad_atoms, chunk
+            cursors[pad_atoms] = end
+            if end >= len(chunks):
+                remaining.discard(pad_atoms)
 
 
 def stack_device_batches(
