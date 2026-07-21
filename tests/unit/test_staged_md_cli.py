@@ -31,6 +31,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _overlap_for_stage,
     _publish_staged_handoff,
     _prior_restart_for_stage,
+    _seed_charmm_coords_from_dynamics_restart,
     _should_seed_heat_prior_restart,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
