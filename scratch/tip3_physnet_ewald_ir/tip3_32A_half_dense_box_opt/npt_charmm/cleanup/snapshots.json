@@ -637,6 +637,19 @@
         "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/58_rescue_58.pdb"
       },
       "grms_kcalmol_A": 4.177182008412284
+    },
+    {
+      "seq": 59,
+      "slug": "rescue_59",
+      "stem": "59_rescue_59",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 14000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/59_rescue_59.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/59_rescue_59_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/59_rescue_59.pdb"
+      },
+      "grms_kcalmol_A": 4.185533422802078
     }
   ]
 }
