@@ -308,8 +308,9 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=1.5,
         help=(
-            "Refuse to start NVE when post-FIRE max atomic |F| exceeds this (eV/Å). "
-            "Default 1.5; use <=0 to disable."
+            "Base ceiling (eV/Å) for post-FIRE max atomic |F| before NVE "
+            "(default 1.5 at N_ref=100 atoms; <=0 disables). "
+            "Effective gate = base×sqrt(N/N_ref), capped at 15 eV/Å."
         ),
     )
     p.add_argument("--nhc-chain-length", type=int, default=3)

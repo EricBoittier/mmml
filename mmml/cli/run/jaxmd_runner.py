@@ -123,6 +123,38 @@ def nve_force_energy_should_attempt_rescue(
     return float(hybrid_relerr) > float(tol)
 
 
+# Post-FIRE NVE start max|F| gate.  The historical 1.5 eV/Å ceiling was tuned on
+# small clusters; dense liquids (TIP3:903, N≈2700) routinely finish FIRE near
+# 5–7 eV/Å while still passing force–energy FD.  Scale the configured base with
+# sqrt(N / N_ref) so large systems get a higher ceiling without disabling the gate.
+NVE_MAX_F_START_BASE_EVA = 1.5
+NVE_MAX_F_START_N_ATOMS_REF = 100
+NVE_MAX_F_START_SCALE_EXP = 0.5
+NVE_MAX_F_START_MAX_EVA = 15.0
+
+
+def resolve_nve_max_f_start_gate_eVA(
+    configured_eVA: float | None,
+    *,
+    n_atoms: int,
+    n_atoms_ref: int = NVE_MAX_F_START_N_ATOMS_REF,
+    scale_exp: float = NVE_MAX_F_START_SCALE_EXP,
+    max_eVA: float = NVE_MAX_F_START_MAX_EVA,
+) -> tuple[float, float]:
+    """Return ``(effective_gate_eVA, size_scale)`` for the NVE start max|F| check.
+
+    ``configured_eVA <= 0`` disables the gate (returns ``(0.0, 1.0)``).
+    Otherwise ``effective = min(max_eVA, configured * max(1, (N / N_ref)^exp))``.
+    """
+    base = float(NVE_MAX_F_START_BASE_EVA if configured_eVA is None else configured_eVA)
+    if base <= 0.0:
+        return 0.0, 1.0
+    n = max(int(n_atoms), 1)
+    n_ref = max(int(n_atoms_ref), 1)
+    scale = max(1.0, (float(n) / float(n_ref)) ** float(scale_exp))
+    return float(min(float(max_eVA), base * scale)), float(scale)
+
+
 def nve_etot_drift_should_attempt_rescue(
     *,
     rescue_enabled: bool,
@@ -1959,13 +1991,33 @@ def set_up_nhc_sim_routine(
         print_forces_summary(np.asarray(forces_jax), energy_eV=energy_initial, console=c)
         if args.ensemble == "nve":
             max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
-            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.5) or 0.0)
+            n_atoms_gate = int(np.asarray(forces_jax).shape[0])
+            fmax_gate, fmax_scale = resolve_nve_max_f_start_gate_eVA(
+                getattr(args, "nve_max_f_start_eVA", NVE_MAX_F_START_BASE_EVA),
+                n_atoms=n_atoms_gate,
+            )
+            if fmax_gate > 0.0:
+                base_cfg = float(
+                    getattr(args, "nve_max_f_start_eVA", NVE_MAX_F_START_BASE_EVA) or 0.0
+                )
+                c.print(
+                    Panel(
+                        f"NVE start max|F| gate: {fmax_gate:.4f} eV/Å "
+                        f"(base {base_cfg:.4f} × size scale {fmax_scale:.3f} "
+                        f"for N={n_atoms_gate}, ref N={NVE_MAX_F_START_N_ATOMS_REF}; "
+                        f"live max|F|={max_f_start:.4f})",
+                        title="[bold]NVE start force gate[/bold]",
+                        border_style="cyan",
+                    )
+                )
             if fmax_gate > 0.0 and max_f_start > fmax_gate:
                 msg = (
                     f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "
-                    f"> gate {fmax_gate:.4f} eV/Å. Improve minimization / packing "
-                    "before microcanonical dynamics, raise --nve-max-f-start-eVA, "
-                    "or use a value <=0 to disable the gate."
+                    f"> size-scaled gate {fmax_gate:.4f} eV/Å "
+                    f"(base {float(getattr(args, 'nve_max_f_start_eVA', NVE_MAX_F_START_BASE_EVA) or 0.0):.4f} "
+                    f"× {fmax_scale:.3f} for N={n_atoms_gate}). "
+                    "Improve minimization / packing before microcanonical dynamics, "
+                    "raise --nve-max-f-start-eVA, or use a value <=0 to disable."
                 )
                 c.print(
                     Panel(
@@ -1989,25 +2041,6 @@ def set_up_nhc_sim_routine(
                     "or MMML_ML_DTYPE=float64). "
                     f"Current: jax_enable_x64={x64_on}, "
                     f"ml_dtype={_JAXMD_DTYPE}."
-                )
-                c.print(
-                    Panel(
-                        msg,
-                        title="[bold red]NVE preflight failed[/bold red]",
-                        border_style="red",
-                    )
-                )
-                run_sim.last_status = "error"
-                run_sim.last_error = msg
-                pos0 = np.asarray(jax.device_get(state.position), dtype=float)
-                return 0, np.stack([pos0]), None
-            max_f_start = float(jnp.max(jnp.linalg.norm(forces_jax, axis=-1)))
-            fmax_gate = float(getattr(args, "nve_max_f_start_eVA", 1.5) or 0.0)
-            if fmax_gate > 0.0 and max_f_start > fmax_gate:
-                msg = (
-                    f"NVE refused: post-FIRE max|F|={max_f_start:.4f} eV/Å "
-                    f"> gate {fmax_gate:.4f} eV/Å. Improve minimization / packing "
-                    "before microcanonical dynamics (or raise --nve-max-f-start-eVA)."
                 )
                 c.print(
                     Panel(

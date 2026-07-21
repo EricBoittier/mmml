@@ -702,9 +702,10 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
             pair_idx: Array,
             pair_mask: Array,
             box_override: Optional[Array] = None,
+            charges: Optional[Array] = None,
         ) -> Tuple[Array, Array, Array, Array]:
             e_sr, f_sr, vdw_sr, elec_sr = _unpack_mm_energy_forces(
-                mm_fn(positions, pair_idx, pair_mask, box_override=box_override)
+                mm_fn(positions, pair_idx, pair_mask, box_override=box_override, charges=charges)
             )
             e_lr, f_lr = _jax_pme_hybrid_mm_pure_callback(
                 positions,
@@ -718,8 +719,8 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
 
         return wrapped
 
-    def wrapped(positions: Array) -> Tuple[Array, Array, Array, Array]:
-        e_sr, f_sr, vdw_sr, elec_sr = _unpack_mm_energy_forces(mm_fn(positions))
+    def wrapped(positions: Array, charges: Optional[Array] = None) -> Tuple[Array, Array, Array, Array]:
+        e_sr, f_sr, vdw_sr, elec_sr = _unpack_mm_energy_forces(mm_fn(positions, charges=charges))
         e_lr, f_lr = _jax_pme_hybrid_mm_pure_callback(
             positions,
             None,

@@ -542,9 +542,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=1.5,
         metavar="EV_PER_A",
         help=(
-            "jaxmd: refuse to start NVE when post-FIRE max atomic |F| exceeds "
-            "this value in eV/Å (default: 1.5; <=0 disables). "
-            "Hybrid liquid handoffs often land near ~1 eV/Å after FIRE."
+            "jaxmd: base ceiling (eV/Å) for post-FIRE max atomic |F| before NVE "
+            "(default: 1.5 at N_ref=100 atoms; <=0 disables). "
+            "Effective gate scales as base×sqrt(N/N_ref), capped at 15 eV/Å, "
+            "so dense liquids (N~2700) get ~8 eV/Å without a manual raise."
         ),
     )
     parser.add_argument(

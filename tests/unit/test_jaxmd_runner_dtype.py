@@ -178,6 +178,34 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
     assert '_hdf5 if _hdf5 else' in src or "last_hdf5_path" in src
 
 
+def test_resolve_nve_max_f_start_gate_scales_with_system_size():
+    from mmml.cli.run.jaxmd_runner import (
+        NVE_MAX_F_START_BASE_EVA,
+        resolve_nve_max_f_start_gate_eVA,
+    )
+
+    g_small, s_small = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=50)
+    assert s_small == pytest.approx(1.0)
+    assert g_small == pytest.approx(1.5)
+
+    g_ref, s_ref = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=100)
+    assert s_ref == pytest.approx(1.0)
+    assert g_ref == pytest.approx(NVE_MAX_F_START_BASE_EVA)
+
+    g_liq, s_liq = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=2709)
+    assert s_liq == pytest.approx((2709 / 100) ** 0.5)
+    # TIP3:903: size-scaled default clears a ~6.7 eV/Å post-FIRE start.
+    assert g_liq == pytest.approx(1.5 * s_liq)
+    assert g_liq > 6.7
+
+    g_off, s_off = resolve_nve_max_f_start_gate_eVA(0.0, n_atoms=2709)
+    assert g_off == 0.0
+    assert s_off == pytest.approx(1.0)
+
+    g_cap, _ = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=1_000_000)
+    assert g_cap == pytest.approx(15.0)
+
+
 def test_nve_requires_float64_message_in_runner():
     from mmml.cli.run import jaxmd_runner as jr
 
