@@ -168,12 +168,15 @@ def test_shuffle_pad_buckets_mixes_order(trainer):
 
 
 def test_max_batches_per_bucket_visit_bounds_consecutive_run(trainer):
-    """A disproportionately large bucket must not monopolize more than
-    max_batches_per_bucket_visit consecutive batches -- regression test for
-    the observed failure mode where a >1M-step bucket gave the model zero
-    exposure to other structure populations for well over a million steps."""
+    """Neither bucket may monopolize more than max_batches_per_bucket_visit
+    consecutive batches while the other still has work left -- regression
+    test for the observed failure mode where a >1M-step bucket gave the
+    model zero exposure to other structure populations for well over a
+    million steps. (Both buckets are sized well above the cap here so
+    neither exhausts early -- once a bucket legitimately runs out, the
+    other finishing its tail alone is expected, not a bound violation.)"""
     buckets = {
-        8: np.arange(4, dtype=np.int64),  # 2 batches at B=2
+        8: np.arange(40, dtype=np.int64),  # 20 batches at B=2
         120: np.arange(40, dtype=np.int64),  # 20 batches at B=2 -- the "huge" one
     }
     pads = [
@@ -193,7 +196,7 @@ def test_max_batches_per_bucket_visit_bounds_consecutive_run(trainer):
         run_len = run_len + 1 if cur == prev else 1
         assert run_len <= 3
     # All batches from both buckets still get produced exactly once overall.
-    assert pads.count(8) == 2
+    assert pads.count(8) == 20
     assert pads.count(120) == 20
 
 
