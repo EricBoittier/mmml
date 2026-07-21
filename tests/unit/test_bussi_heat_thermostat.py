@@ -1872,6 +1872,9 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw(monkeypatch
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(None, None),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), mock.patch(
@@ -1918,6 +1921,9 @@ def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocitie
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(None, None),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
         "assign_maxwell_boltzmann_velocities_via_ase",

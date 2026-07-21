@@ -4658,7 +4658,10 @@ def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
-    ) as ensure_crystal:
+    ) as ensure_crystal, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(None, None),
+    ):
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 
     ensure_crystal.assert_called_once_with(180.0, quiet=True)
@@ -4668,6 +4671,31 @@ def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
     assert chunk_kw["iunrea"] == -1
     assert chunk_kw["firstt"] == 63.0
     assert "finalt" not in chunk_kw
+
+
+def test_prepare_post_rescue_bath_prefers_live_npt_cell_over_stale_ctx():
+    """Post-rescue must not snap NPT L back to the certified-handoff ctx side."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_post_rescue_bath_and_crystal,
+    )
+
+    chunk_kw = {"cpt": True, "hoover reft": 200.0, "firstt": 200.0, "tbath": 200.0}
+    ctx = mock.Mock(
+        use_pbc=True,
+        charmm_cubic_box_side_A=30.307,
+        cubic_box_side_A=30.307,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ) as ensure_crystal, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(30.280, "pbound"),
+    ):
+        _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=ctx)
+
+    ensure_crystal.assert_called_once_with(30.280, quiet=True)
+    assert ctx.cubic_box_side_A == pytest.approx(30.280)
+    assert ctx.charmm_cubic_box_side_A == pytest.approx(30.280)
 
 
 def test_prepare_post_rescue_velocity_redraw_uses_ase_cold_start():
@@ -4699,6 +4727,9 @@ def test_prepare_post_rescue_velocity_redraw_uses_ase_cold_start():
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(None, None),
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
         "assign_maxwell_boltzmann_velocities_via_ase",
@@ -4736,6 +4767,9 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(None, None),
     ):
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 

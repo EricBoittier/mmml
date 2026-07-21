@@ -531,17 +531,18 @@ def ensure_charmm_crystal_for_cpt(
     CGENFF pre-minimize via :func:`minimize_charmm_mm_only` suspends PBC with
     ``crystal free`` during ``READ PARAM APPEND``. Restore the lattice when
     ``xtltyp``/IMAGE are gone but pbound still looks active.
+
+    When the crystal is already lattice-ready, keep the live cell — including
+    NPT-evolved ``L``. Do **not** snap back to a stale workflow
+    ``cubic_box_side_A`` (overlap post-rescue used to wipe barostat progress).
+    Callers that intentionally change the box must use
+    :func:`restore_charmm_cubic_crystal_lattice` (or ``prepare_charmm_pbc``).
     """
     side = float(cubic_box_side_A)
     if side <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {side}")
     if charmm_crystal_lattice_ready():
-        try:
-            live, _ = resolve_charmm_cubic_box_side_A(fallback_side_A=side)
-            if abs(live - side) <= max(1e-3, 1e-4 * side):
-                return
-        except Exception:
-            pass
+        return
     restore_charmm_cubic_crystal_lattice(side, quiet=quiet)
 
 

@@ -5793,13 +5793,25 @@ def _prepare_post_rescue_bath_and_crystal(
         mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
     )
     if use_pbc and bool(chunk_kw.get("cpt")):
-        side = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
-        if side is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-                ensure_charmm_crystal_for_cpt,
-            )
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            ensure_charmm_crystal_for_cpt,
+            probe_charmm_cubic_box_side_A,
+        )
 
-            ensure_charmm_crystal_for_cpt(side, quiet=True)
+        fallback = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
+        live, source = probe_charmm_cubic_box_side_A(fallback_side_A=fallback)
+        # Prefer the live NPT cell so post-rescue does not reinstall the
+        # certified-handoff L from stale ctx metadata.
+        side = live if live is not None else fallback
+        if side is not None:
+            ensure_charmm_crystal_for_cpt(float(side), quiet=True)
+            if (
+                mlpot_ctx is not None
+                and live is not None
+                and source in ("pbound", "xucell")
+            ):
+                mlpot_ctx.cubic_box_side_A = float(live)
+                mlpot_ctx.charmm_cubic_box_side_A = float(live)
 
 
 def _assign_post_rescue_velocities_and_crystal(

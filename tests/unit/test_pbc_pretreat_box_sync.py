@@ -524,3 +524,34 @@ def test_sync_charmm_crystal_after_mm_pretreat_noop_when_active() -> None:
     ) as ensure:
         assert sync_charmm_crystal_after_mm_pretreat(28.0, quiet=True) is False
     ensure.assert_not_called()
+
+
+def test_ensure_charmm_crystal_for_cpt_keeps_live_cell_when_lattice_ready() -> None:
+    """NPT-evolved L must not be overwritten by a stale workflow side."""
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        ensure_charmm_crystal_for_cpt,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+    ) as restore:
+        ensure_charmm_crystal_for_cpt(30.307, quiet=True)
+    restore.assert_not_called()
+
+
+def test_ensure_charmm_crystal_for_cpt_restores_when_lattice_not_ready() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        ensure_charmm_crystal_for_cpt,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+    ) as restore:
+        ensure_charmm_crystal_for_cpt(30.307, quiet=True)
+    restore.assert_called_once_with(30.307, quiet=True)
