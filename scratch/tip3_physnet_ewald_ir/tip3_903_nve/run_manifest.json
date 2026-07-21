@@ -1,9 +1,9 @@
 {
   "job_name": "tip3_903_nve",
-  "started_at": "2026-07-21T08:48:07.577077+00:00",
-  "finished_at": "2026-07-21T08:55:54.949603+00:00",
+  "started_at": "2026-07-21T09:00:54.059769+00:00",
+  "finished_at": "2026-07-21T09:04:11.026183+00:00",
   "exit_code": 2,
-  "command": "mmml md-system --backend jaxmd --setup pbc_nve --continue-from ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/handoff/state.npz --no-continue-velocities --handoff-pre-minimize --composition TIP3:903 --checkpoint /mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json --output-dir ./scratch/tip3_physnet_ewald_ir/tip3_903_nve --temperature 300 --dt-fs 0.25 --ps 50 --steps-per-recording 10 --include-mm --mm-charge-mode fixed --lr-solver ewald --ewald-omit-self --ml-switch-width 1.5 --mm-switch-on 6.0 --mm-switch-width 5.0",
+  "command": "mmml md-system --backend jaxmd --setup pbc_nve --continue-from ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/handoff/state.npz --no-continue-velocities --handoff-pre-minimize --composition TIP3:903 --checkpoint /mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json --output-dir ./scratch/tip3_physnet_ewald_ir/tip3_903_nve --temperature 300 --dt-fs 0.25 --ps 50 --steps-per-recording 10 --include-mm --mm-charge-mode fixed --lr-solver ewald --ewald-omit-self --ml-switch-width 1.5 --mm-switch-on 6.0 --mm-switch-width 5.0 --fire-min-steps 1000 --mlpot-profile --handoff-pre-minimize",
   "setup": "pbc_nve",
   "backend": "jaxmd",
   "output_dir": "scratch/tip3_physnet_ewald_ir/tip3_903_nve",
@@ -272,7 +272,7 @@
     "min_steps": null,
     "min_fmax": null,
     "bfgs_maxstep": 0.05,
-    "fire_min_steps": 200,
+    "fire_min_steps": 1000,
     "fire_min_maxstep": 0.2,
     "monomer_physnet_mini": true,
     "monomer_physnet_mini_max_select": null,
@@ -377,8 +377,9 @@
     "max_frames": null,
     "no_run_advice": false,
     "no_stage_summary": false,
-    "mlpot_profile": false,
-    "_cli_explicit": "{'composition', 'mm_switch_on', 'mm_charge_mode', 'ml_switch_width', 'ewald_omit_self', 'continue_from', 'temperature', 'mm_switch_width', 'setup', 'backend', 'checkpoint', 'handoff_pre_minimize', 'include_mm', 'output_dir', 'lr_solver', 'continue_velocities', 'dt_fs', 'ps', 'steps_per_recording'}",
+    "mlpot_profile": true,
+    "jax_profiler_dir": null,
+    "_cli_explicit": "{'mm_switch_on', 'ml_switch_width', 'continue_velocities', 'mm_switch_width', 'composition', 'mlpot_profile', 'lr_solver', 'ps', 'backend', 'mm_charge_mode', 'fire_min_steps', 'steps_per_recording', 'setup', 'handoff_pre_minimize', 'continue_from', 'checkpoint', 'ewald_omit_self', 'output_dir', 'dt_fs', 'temperature', 'include_mm'}",
     "_cold_start_sim_cell_side_A": 20.0,
     "_cold_start_packmol_padding_A": 1.0,
     "_cold_start_box_sizing_source": "geometry"
@@ -480,6 +481,7 @@
     "--pre-min-fmax",
     "0.1",
     "--pre-min-steps",
-    "50"
+    "50",
+    "--mlpot-profile"
   ]
 }
