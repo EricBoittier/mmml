@@ -184,9 +184,15 @@ def build_physnet_from_config(
 ) -> Any:
     """Construct a PhysNet-family model from checkpoint config (legacy keys OK)."""
     if model_cls is None:
-        from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+        merged_type = str({**config, **overrides}.get("model_type", "")).lower()
+        if merged_type == "spooky":
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
-        model_cls = PhysNet
+            model_cls = SpookyPhysNet
+        else:
+            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+
+            model_cls = PhysNet
     merged = normalize_physnet_config({**config, **overrides})
     return model_cls(**physnet_constructor_kwargs(merged, model_cls))
 

@@ -222,13 +222,20 @@ def get_params_model(
     if model.zbl:
         n = natoms if natoms is not None else getattr(model, "natoms", 10) or 10
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n)
-        init_params = model.init(
-            jax.random.PRNGKey(0),
+        init_kwargs = dict(
             atomic_numbers=jnp.ones(n, dtype=jnp.int32),
             positions=jnp.zeros((n, 3)),
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
+        if type(model).__name__ == "SpookyPhysNet":
+            # SpookyPhysNet.__call__ additionally requires charges/spins;
+            # values are irrelevant here (only used to discover init_params'
+            # tree structure for _merge_params), so a neutral singlet dummy
+            # matches the shape convention used at real inference call sites.
+            init_kwargs["charges"] = jnp.zeros((n, 1))
+            init_kwargs["spins"] = jnp.ones((n, 1))
+        init_params = model.init(jax.random.PRNGKey(0), **init_kwargs)
         params = _merge_params(init_params, params)
 
     if return_everything:

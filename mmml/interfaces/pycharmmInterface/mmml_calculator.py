@@ -2848,31 +2848,38 @@ def setup_calculator(
                         kwargs["box"] = box_jax
                     return spherical_cutoff_calculator(**kwargs)
 
-                if self.backprop:
-                    R_jax = jnp.asarray(R)
+                # First FIRE/MD force eval often JIT-compiles the chunked ML path
+                # after warmup restored OMP=1 for CHARMM; bump compile threads here.
+                from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+                    jax_compile_threads_context,
+                )
 
-                    if self.verbose:
-                        def _energy_with_aux(positions_jax):
-                            model_out = _spherical_eval(positions_jax)
-                            energy = jnp.reshape(model_out.energy, (-1,))[0]
-                            return energy, model_out
+                with jax_compile_threads_context(quiet=True):
+                    if self.backprop:
+                        R_jax = jnp.asarray(R)
 
-                        (E, out), grad_R = jax.value_and_grad(
-                            _energy_with_aux, has_aux=True
-                        )(R_jax)
+                        if self.verbose:
+                            def _energy_with_aux(positions_jax):
+                                model_out = _spherical_eval(positions_jax)
+                                energy = jnp.reshape(model_out.energy, (-1,))[0]
+                                return energy, model_out
+
+                            (E, out), grad_R = jax.value_and_grad(
+                                _energy_with_aux, has_aux=True
+                            )(R_jax)
+                        else:
+                            def _energy_scalar(positions_jax):
+                                return jnp.reshape(
+                                    _spherical_eval(positions_jax).energy, (-1,)
+                                )[0]
+
+                            E, grad_R = jax.value_and_grad(_energy_scalar)(R_jax)
+                            out = None
+                        F = -grad_R
                     else:
-                        def _energy_scalar(positions_jax):
-                            return jnp.reshape(
-                                _spherical_eval(positions_jax).energy, (-1,)
-                            )[0]
-
-                        E, grad_R = jax.value_and_grad(_energy_scalar)(R_jax)
-                        out = None
-                    F = -grad_R
-                else:
-                    out = _spherical_eval(jnp.asarray(R))
-                    E = out.energy
-                    F = out.forces
+                        out = _spherical_eval(jnp.asarray(R))
+                        E = out.energy
+                        F = out.forces
 
                 # Ensure forces are finite
                 E = jnp.where(jnp.isfinite(E), E, 0.0)
