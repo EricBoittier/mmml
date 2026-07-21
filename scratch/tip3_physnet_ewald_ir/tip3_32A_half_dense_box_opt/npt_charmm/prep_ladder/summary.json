@@ -39,6 +39,6 @@
     ],
     "worst_intermonomer_A": 1.5432504870248436,
     "aborted": false,
-    "contact_summary": "worst inter-monomer contact 1.543 \u00c5 (monomers 239/278, atoms H\u2013O; prep floor 0.45 \u00c5, typical vdW 2.7 \u00c5); OK: above dynamics guard (0.5 \u00c5); H\u2013heavy contact: equilibrium liquid distances are usually \u22652.5 \u00c5; short prep contacts often involve rotatable methylenes"
+    "contact_summary": "worst inter-monomer contact 1.543 \u00c5 (monomers 239/278, atoms H\u2013O; prep floor 0.45 \u00c5, typical vdW 2.7 \u00c5); OK: above dynamics guard (0.5 \u00c5)"
   }
 }
