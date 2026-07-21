@@ -2184,6 +2184,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 n_devices=args.num_devices,
                 rng=rng,
                 shuffle_pad_buckets=args.shuffle_pad_buckets,
+                max_batches_per_bucket_visit=args.max_batches_per_bucket_visit,
             ),
             data,
             depth=args.prefetch_batches,
@@ -2409,6 +2410,25 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Shuffle atom-pad bucket order each epoch (default: large→small blocks). "
             "Interleaving pads forces many live compiles and can OOM-hang pmap."
+        ),
+    )
+    parser.add_argument(
+        "--max-batches-per-bucket-visit",
+        type=int,
+        default=None,
+        help=(
+            "Cap consecutive training batches drawn from one atom-pad bucket "
+            "before round-robining to the next (default: none -- fully drain "
+            "each bucket before moving on, same as before this flag existed). "
+            "Bucket visit ORDER being shuffled (--shuffle-pad-buckets) does not "
+            "bound visit DURATION: a disproportionately large bucket can still "
+            "monopolize well over a million consecutive steps, giving zero "
+            "gradient signal from every other structure population (e.g. "
+            "far-field composites) for that whole stretch -- observed to cause "
+            "broad eval regressions that recovered once training moved past "
+            "such a bucket. Setting this (e.g. a few thousand) bounds that "
+            "staleness at the cost of more shape recompiles (each bucket may "
+            "be revisited many times to fully drain it)."
         ),
     )
     parser.add_argument("--epochs", type=int, default=50)
