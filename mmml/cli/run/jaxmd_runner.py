@@ -29,6 +29,7 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.utils.geometry_checks import (
     TEMPLATE_DONOR_IDEAL_TIP3,
+    TEMPLATE_DONOR_MAX_FORCE_EVA,
     assert_no_intermonomer_atom_overlap,
     rebuild_high_force_monomers_from_peers,
 )
@@ -438,17 +439,40 @@ def maybe_fire_monomer_template_rebuild_retry(
         min_force_eVA=JAXMD_FIRE_FMAX_HIGH_EVA,
         atomic_numbers=z_np,
     )
+    c = console or Console()
     if not victims:
-        return positions, best_max_f, fire_info
+        merged = dict(fire_info)
+        merged["template_rebuild"] = {
+            "skipped": True,
+            "reason": (
+                "no force-soft healthy donor "
+                f"(gate max|F|<={TEMPLATE_DONOR_MAX_FORCE_EVA:g} eV/Å); "
+                "intramolecular template copy will not fix systemic forces"
+            ),
+            "max_f_before_retry": float(best_max_f),
+        }
+        c.print(
+            Panel(
+                f"FIRE still hard (max|F|={best_max_f:.4f} eV/Å): "
+                f"skipped template rebuild — no peer with max|F|≤"
+                f"{TEMPLATE_DONOR_MAX_FORCE_EVA:g} eV/Å and healthy geometry "
+                "(forces look systemic, not crushed monomers).",
+                title="[bold yellow]JAX-MD FIRE template rebuild[/bold yellow]",
+                border_style="yellow",
+            )
+        )
+        return positions, best_max_f, merged
 
     if int(donor) == int(TEMPLATE_DONOR_IDEAL_TIP3):
-        donor_desc = "ideal TIP3 template (no geometrically healthy peer)"
+        donor_desc = "ideal TIP3 template (crushed waters; no force-soft peer)"
         donor_source = "ideal_tip3"
     else:
-        donor_desc = f"peer template (donor={donor})"
+        donor_desc = (
+            f"peer template (donor={donor}, "
+            f"max|F|≤{TEMPLATE_DONOR_MAX_FORCE_EVA:g} eV/Å gate)"
+        )
         donor_source = "peer"
 
-    c = console or Console()
     c.print(
         Panel(
             f"FIRE still hard (max|F|={best_max_f:.4f} eV/Å"

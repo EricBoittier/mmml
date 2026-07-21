@@ -7,6 +7,7 @@ import pytest
 
 from mmml.utils.geometry_checks import (
     TEMPLATE_DONOR_IDEAL_TIP3,
+    TEMPLATE_DONOR_NONE,
     monomer_max_force_magnitudes,
     rebuild_high_force_monomers_from_peers,
     select_template_donor_monomer,
@@ -56,9 +57,10 @@ def test_donor_prefers_healthy_geometry_over_softest_force():
     pos = np.vstack([soft_crushed, hard_healthy, victim])
     offsets = np.array([0, 3, 6, 9], dtype=int)
     forces = np.zeros_like(pos)
-    forces[0:3] = 1.0  # softest but bad HOH
-    forces[3:6] = 3.0  # harder but healthy geometry
-    forces[6:9] = 10.0
+    # Per-atom |F| is the vector norm — set one component only.
+    forces[0, 0] = 0.5  # softest but bad HOH
+    forces[3, 0] = 1.5  # under force gate, healthy geometry
+    forces[6, 0] = 10.0
 
     mol_f = monomer_max_force_magnitudes(forces, offsets)
     assert int(np.argmin(mol_f)) == 0
@@ -108,6 +110,32 @@ def test_all_peers_crushed_falls_back_to_ideal_tip3():
     for mi in victims:
         s, e = int(offsets[mi]), int(offsets[mi + 1])
         assert tip3_peer_donor_acceptable(new_pos[s:e])
+
+
+def test_systemic_high_force_with_ok_geometry_skips_rebuild():
+    """Uniformly hard liquid with healthy HOH: do not copy a still-hard peer."""
+    waters = [_water([5.0 * i, 0.0, 0.0], angle_deg=104.5) for i in range(5)]
+    pos = np.vstack(waters)
+    offsets = np.arange(0, 16, 3)
+    forces = np.ones_like(pos) * 7.0
+    # Softest monomer still far above the donor force gate.
+    forces[0:3] = 6.9
+
+    mol_f = monomer_max_force_magnitudes(forces, offsets)
+    assert select_template_donor_monomer(pos, offsets, mol_f, size=3) == (
+        TEMPLATE_DONOR_NONE
+    )
+    new_pos, victims, donor = rebuild_high_force_monomers_from_peers(
+        pos,
+        forces,
+        offsets,
+        force_percentile=50.0,
+        max_rebuild=4,
+        min_force_eVA=1.0,
+    )
+    assert victims == []
+    assert donor == TEMPLATE_DONOR_NONE
+    assert np.allclose(new_pos, pos)
 
 
 def test_monomer_max_force_magnitudes():
