@@ -1,12 +1,12 @@
 {
-  "job_name": "npt_charmm",
-  "started_at": "2026-07-21T08:02:10.505220+00:00",
-  "finished_at": "2026-07-21T08:02:48.282443+00:00",
+  "job_name": "npt_charmm2",
+  "started_at": "2026-07-21T08:03:53.881630+00:00",
+  "finished_at": "2026-07-21T08:04:33.808253+00:00",
   "exit_code": 2,
-  "command": "mmml md-system --output-dir scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm --backend pycharmm --restart-from scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.res --md-stages equi --no-echeck-heat",
+  "command": "mmml md-system --output-dir scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2 --backend pycharmm --restart-from scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.res --md-stages equi --no-echeck-heat",
   "setup": "pbc_nve",
   "backend": "pycharmm",
-  "output_dir": "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm",
+  "output_dir": "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2",
   "args": {
     "setup": "pbc_nve",
     "backend": "pycharmm",
@@ -18,7 +18,7 @@
     "ff": null,
     "jaxmd_unified": false,
     "electrostatics_damping_sigma": null,
-    "output_dir": "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm",
+    "output_dir": "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2",
     "job_name": null,
     "template_pdb": null,
     "n_molecules": 10,
@@ -378,7 +378,7 @@
     "no_run_advice": false,
     "no_stage_summary": false,
     "mlpot_profile": false,
-    "_cli_explicit": "{'restart_from', 'backend', 'output_dir', 'md_stages', 'no_echeck_heat'}"
+    "_cli_explicit": "{'output_dir', 'md_stages', 'backend', 'no_echeck_heat', 'restart_from'}"
   },
   "backend_argv": [
     "--phase",
@@ -440,7 +440,7 @@
     "--mbd-weight",
     "1.0",
     "--output-dir",
-    "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm",
+    "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2",
     "--restart-from",
     "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.res",
     "--continue-velocities",

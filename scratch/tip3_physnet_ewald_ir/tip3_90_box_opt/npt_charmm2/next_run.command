@@ -1,0 +1,1 @@
+mmml md-system --output-dir scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2 --backend pycharmm --restart-from scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2/baseline.res --md-stages equi

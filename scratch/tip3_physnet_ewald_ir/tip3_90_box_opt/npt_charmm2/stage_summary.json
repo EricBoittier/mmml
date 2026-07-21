@@ -1,5 +1,5 @@
 {
-  "job_id": "npt_charmm",
+  "job_id": "npt_charmm2",
   "backend": "pycharmm",
   "setup": "pbc_nve",
   "exit_code": 2,
@@ -8,7 +8,7 @@
   "stages": [
     {
       "stage": "equi",
-      "job_id": "npt_charmm",
+      "job_id": "npt_charmm2",
       "backend": "pycharmm",
       "setup": "pbc_nve",
       "nsteps_requested": 200000,
@@ -27,7 +27,7 @@
       "box_A_initial": null,
       "box_A_final": null,
       "volume_A3_final": null,
-      "frames_written": 1,
+      "frames_written": 0,
       "record_every_steps": 8000,
       "integrator": "equi",
       "artifacts": {},
