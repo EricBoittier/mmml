@@ -12,7 +12,7 @@
         "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/10_rescue_10_energy.json",
         "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/10_rescue_10.pdb"
       },
-      "grms_kcalmol_A": 6.222085879773456
+      "grms_kcalmol_A": 7.638632130090184
     },
     {
       "seq": 11,
@@ -25,7 +25,7 @@
         "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/11_rescue_11_energy.json",
         "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/11_rescue_11.pdb"
       },
-      "grms_kcalmol_A": 16.655103338280497
+      "grms_kcalmol_A": 7.697492588571637
     },
     {
       "seq": 12,
@@ -38,7 +38,33 @@
         "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/12_rescue_12_energy.json",
         "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/12_rescue_12.pdb"
       },
-      "grms_kcalmol_A": 18.278412273586373
+      "grms_kcalmol_A": 29.64205686763608
+    },
+    {
+      "seq": 13,
+      "slug": "rescue_13",
+      "stem": "13_rescue_13",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 2000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/13_rescue_13.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/13_rescue_13_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/13_rescue_13.pdb"
+      },
+      "grms_kcalmol_A": 7.808084854778927
+    },
+    {
+      "seq": 14,
+      "slug": "rescue_14",
+      "stem": "14_rescue_14",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 2500",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/14_rescue_14.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/14_rescue_14_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/cleanup/14_rescue_14.pdb"
+      },
+      "grms_kcalmol_A": 7.944964682831066
     }
   ]
 }

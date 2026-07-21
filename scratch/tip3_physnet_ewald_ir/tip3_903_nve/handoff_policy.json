@@ -13,7 +13,7 @@
   "box_warnings": [],
   "velocities_in_handoff": false,
   "continue_velocities": false,
-  "velocity_policy": "maxwell_boltzmann",
+  "velocity_policy": "pending",
   "use_handoff_velocities": false,
   "skip_pre_min": false,
   "handoff_pre_minimize": true,
@@ -24,6 +24,6 @@
     "mm_switch_on": 6.0,
     "mm_switch_width": 5.0
   },
-  "initial_mmml_energy_eV": -16904.11443763445,
-  "initial_mmml_fmax_eVA": 7.7501717773603644
+  "initial_mmml_energy_eV": -16925.954776222872,
+  "initial_mmml_fmax_eVA": 6.898019908718185
 }
