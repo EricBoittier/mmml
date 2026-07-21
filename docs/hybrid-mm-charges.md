@@ -109,6 +109,44 @@ Replace CGenFF in `E_MM`; do not add.  Q¹ is partner-perturbed (AB context).
 - **`q_ML` source:** AB dimer forward (train `out_ab["charges"]`; MD sole dimer slot)
 - Liquids / JAX-PME / chunked multi-GPU apply: refused
 
+### Minimal runnable example — native Ewald, `fixed` vs `latent`, small system
+
+[`examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py)
+exercises **Mode A** and **Mode B** together with `lr_solver="ewald"` on a
+tiny synthetic 2-monomer/5-atom system — no checkpoint, no CHARMM:
+
+```bash
+python examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
+```
+
+The two monomers are placed past the ML→MM handoff tail
+(`mm_switch_on + mm_switch_width`), so the switched ML-dimer correction
+`s(r_com) * dE_ML` is ~0 for both modes and `E_total` collapses to
+`E_ML(A) + E_ML(B) + E_MM` — the **Monomer ML + MM** assembly from
+[`docs/calculator-capabilities.md`](calculator-capabilities.md#monomer-ml-mm-with-native-ewald-fixed-vs-latent),
+reached here by separation rather than `--skip-ml-dimers` (that MD-only
+calculator flag has no equivalent on the training-side `hybrid_forward`, and
+Mode B needs a live AB-dimer forward for its charges regardless). Each
+mode's `e_mm` is cross-checked against the independent MD-side
+`compute_native_ewald_coulomb` kernel, mirroring
+`scripts/check_ewald_train_md_pme_parity.py`'s methodology but adding the
+`latent` leg that script's headless model can't produce. Fast/mocked
+regression: `tests/unit/test_hybrid_energy.py::test_ewald_monomer_ml_plus_mm_fixed_and_latent`.
+
+#### Optional: same assembly under PyCHARMM (CHARMM bonded retained)
+
+The analytic script is Coulomb-only. For a small **DCM:2** PBC smoke where
+CHARMM still evaluates BOND/ANGL/DIHE while USER owns ML monomers + native
+Ewald Coulomb, use:
+
+```bash
+mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
+mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
+```
+
+Point `defaults.checkpoint` at a matching Mode A / Mode B hybrid checkpoint
+(`lr_solver: ewald` for energy-meaningful runs). Mode B remains dimer-only.
+
 ---
 
 ## Mode C — `fixed_plus_latent` (dimer-only)

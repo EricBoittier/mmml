@@ -40,8 +40,11 @@ No CHARMM, no checkpoint required::
 
     python examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
 
-Registered in ``docs/hybrid-mm-charges.md`` and
-``examples/hybrid_mm_charges/README.md``.
+Registered in ``docs/calculator-capabilities.md`` (Monomer ML + MM with
+native Ewald), ``docs/hybrid-mm-charges.md``, and
+``examples/hybrid_mm_charges/README.md``. Optional PyCHARMM ``DCM:2`` YAMLs
+with CHARMM bonded retained:
+``md_fixed_ewald_dimer.yaml`` / ``md_latent_ewald_dimer.yaml``.
 """
 
 from __future__ import annotations

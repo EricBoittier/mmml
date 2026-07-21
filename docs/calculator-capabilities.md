@@ -99,7 +99,7 @@ These booleans control energy terms, independently of `mm_charge_mode`.
 |---|:---:|:---:|:---:|---|---|
 | Full hybrid | yes | yes | yes | Isolated ML monomers + switched ML dimer correction + MM intermolecular terms | Default hybrid `md-system`, lambda TI, MLpot campaigns |
 | ML-only hybrid decomposition | yes | yes | no | ML monomers and ML dimer interaction; no MM pair term | `--no-include-mm`, force/energy diagnosis |
-| Monomer ML + MM | yes | no | yes | ML intramolecular monomers plus MM intermolecular interaction; skips ML dimer correction | Legacy `--skip-ml-dimers` paths and diagnostics |
+| Monomer ML + MM | yes | no | yes | ML intramolecular monomers plus MM intermolecular interaction; skips ML dimer correction | `--skip-ml-dimers`, or a dimer placed past the ML→MM handoff (see [small-system Ewald example](#monomer-ml-mm-with-native-ewald-fixed-vs-latent)) |
 | Monomer ML only | yes | no | no | Sum of isolated molecular ML energies only | Decomposition/testing, not a complete condensed-phase potential |
 | MM-only | no | no | yes | CGenFF/JAX/PyCHARMM MM terms without model evaluation | Pure-MM preparation/validation paths; not the default hybrid CLI assembly |
 | JAX MM spoof | clone | clone | configurable | JAX CGenFF bonded clone occupies the ML slots for infrastructure parity | `--jax-mm-spoof` validation |
@@ -107,6 +107,34 @@ These booleans control energy terms, independently of `mm_charge_mode`.
 `--include-mm/--no-include-mm` is the main public switch for `doMM`.
 `doML_dimer` is exposed by older/specialized runners as
 `--skip-ml-dimers`; the unified `md-system` paths normally keep it enabled.
+
+### Monomer ML + MM with native Ewald (fixed vs latent)
+
+This is the smallest supported check that the **Monomer ML + MM** assembly
+composes with `--lr-solver ewald` for both Mode A (`fixed`) and Mode B
+(`latent` / `q1`) charges. It does **not** require a liquid box (Mode B is
+dimer-only) and does not need a trained checkpoint for the kernel-level smoke.
+
+| Surface | System | What it proves | Location |
+|---|---|---|---|
+| Analytic / no CHARMM | 2 monomers × 2 atoms (+1 pad), 30 Å box | `hybrid_forward(..., lr_solver="ewald")` for `fixed` and `latent`; `e_mm` matches `compute_native_ewald_coulomb` | [`examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py) |
+| Unit regression | Same geometry, mocked charge head | Finite distinct `e_mm`; `ml_scale → 0` past the handoff | `tests/unit/test_hybrid_energy.py::test_ewald_monomer_ml_plus_mm_fixed_and_latent` |
+| PyCHARMM MD (optional bonded) | `DCM:2` PBC smoke | Same assembly under `md-system` with CHARMM bonded left on | [`md_fixed_ewald_dimer.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml), [`md_latent_ewald_dimer.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml) |
+
+```bash
+# No checkpoint / no CHARMM — preferred first check
+python examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
+
+# Fast regression (mocked)
+uv run pytest tests/unit/test_hybrid_energy.py::test_ewald_monomer_ml_plus_mm_fixed_and_latent -q
+```
+
+Charge-mode taxonomy and train/MD YAML pairs live in
+[Hybrid MM charges](hybrid-mm-charges.md#minimal-runnable-example--native-ewald-fixed-vs-latent-small-system).
+MM bonded terms are orthogonal: native Ewald owns intermolecular Coulomb in
+`E_MM`, while PyCHARMM may still evaluate BOND/ANGL/DIHE on the PSF. The
+`DCM:2` YAMLs keep that bonded contribution; the analytic example above is
+Coulomb-only (`include_lj=False`, no bonded topology).
 
 ## Charge concepts: four different things
 
@@ -156,7 +184,7 @@ method change that belongs in the manifest.
 |---|---|:---:|:---:|---|
 | `auto` | Legacy alias resolving to `mic` | yes | Not a meaningful external choice | Record the resolved active solver, not only `auto` |
 | `mic` | Truncated/switched minimum-image Coulomb | yes, default | No supported full-box external MIC mode | No external PME library |
-| `ewald` | MMML pure-JAX full-box Ewald operator, train-matched | yes | yes | Requires PBC; no external PME package or CUDA requirement. Optional `--ewald-omit-self` drops the Gaussian self term (energy offset only). Distinct from `jax_pme --jax-pme-method ewald`. Dimer LR campaign tags: `pbc_hybrid_ewald` / `pbc_hybrid_ewald_omit_self`. |
+| `ewald` | MMML pure-JAX full-box Ewald operator, train-matched | yes | yes | Requires PBC; no external PME package or CUDA requirement. Optional `--ewald-omit-self` drops the Gaussian self term (energy offset only). Distinct from `jax_pme --jax-pme-method ewald`. Dimer LR campaign tags: `pbc_hybrid_ewald` / `pbc_hybrid_ewald_omit_self`. Small-system **Monomer ML + MM** check for `fixed`/`latent`: [below](#monomer-ml-mm-with-native-ewald-fixed-vs-latent). |
 | `jax_pme` | jax-pme Ewald, PME, or P3M; optional reciprocal r⁻⁶ dispersion in `jax_mic` | yes | yes | Optional `--jax-pme-method ewald|pme|p3m`; package availability checked at runtime |
 | `nvalchemiops_pme` | nvalchemiops full-box PME | Not wired; resolves/notes MIC behavior in `jax_mic` | yes | Optional GPU-oriented dependency; use `periodic_external` |
 | `scafacos` | ScaFaCoS full-box Coulomb | Not wired; resolves/notes MIC behavior in `jax_mic` | yes | Requires `libfcs`; method defaults to Ewald |

@@ -1,0 +1,48 @@
+# Mode A + native Ewald on a small system (DCM:2)
+#   Monomer ML + MM(Ewald) with q_MM = q_CGenFF
+#
+# Companion to the analytic smoke
+#   examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
+# and the capability-matrix entry in docs/calculator-capabilities.md
+# ("Monomer ML + MM + native Ewald").
+#
+# CHARMM bonded terms (BOND/ANGL/DIHE) stay on via the usual PyCHARMM PSF
+# path; USER owns ML monomers + MM Ewald Coulomb. --no-periodic-charmm-vdw
+# keeps LJ off so Coulomb ownership matches train_fixed_ewald.yaml.
+#
+#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
+#
+# Requires a Mode A hybrid checkpoint trained with lr_solver: ewald
+# (or any Mode A checkpoint if you only need a wiring smoke — energies
+# will not match an Ewald-trained model).
+
+defaults:
+  composition: "DCM:2"
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_ewald/<run>/params.json
+  box_size: 20.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+
+  mm_nonbond_mode: periodic_external
+  lr_solver: ewald
+  periodic_charmm_vdw: false
+
+campaign_output: results/hybrid_mm_fixed_ewald_dimer
+runs:
+  dimer_nvt_smoke:
+    description: >
+      Small PBC NVT — Mode A fixed charges + native Ewald Coulomb;
+      CHARMM bonded retained
+    backend: pycharmm
+    setup: pbc_nvt
+    ps: 0.05
+    output_dir: results/hybrid_mm_fixed_ewald_dimer/dimer_nvt_smoke
+    extra_args:
+      - --skip-jit-warmup
+      - --quiet
