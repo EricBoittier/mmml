@@ -1,8 +1,8 @@
 {
   "ensemble": "nve",
-  "nsteps_requested": 200000,
-  "nsteps_completed": 560,
-  "frames": 56,
+  "nsteps_requested": 10000,
+  "nsteps_completed": 7000,
+  "frames": 6,
   "status": "interrupted",
   "error": "KeyboardInterrupt",
   "h5": "pbc_nve_jaxmd_nve.h5",
@@ -51,11 +51,11 @@
   "placement": "random_3d",
   "placement_seed": 123,
   "neighbor_update_interval_steps": 1,
-  "neighbor_expected_updates": 200000,
+  "neighbor_expected_updates": 10000,
   "neighbor_internal_update_interval_calls": 1,
   "neighbor_internal_skin_distance_A": 0.25,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 3.0763774658553302
+    "charmm_min_wall_s": 2.8710932140238583
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,
@@ -64,5 +64,5 @@
   "dynamics_overlap_charmm_rescue_count": 0,
   "traj_export_molecular_wrap": false,
   "dynamics_overlap_warning_count": 0,
-  "dynamics_min_intermonomer_distance_A": 1.6635129040565808
+  "dynamics_min_intermonomer_distance_A": 1.48586297808936
 }
