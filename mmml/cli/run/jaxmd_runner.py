@@ -410,20 +410,25 @@ def maybe_fire_monomer_template_rebuild_retry(
     shift_fn,
     masses,
     monomer_offsets,
+    atomic_numbers=None,
     nl_refresh_fn=None,
     log_fn=None,
     console: Console | None = None,
 ):
-    """Rebuild high-|F| monomers from a healthy peer, then one cold FIRE retry.
+    """Rebuild high-|F| monomers from a healthy template, then one cold FIRE retry.
 
-    Returns ``(positions, best_max_f, fire_info)`` unchanged when the gate is off
-    or no monomers are selected.
+    Donor is geometry-gated (TIP3 HOH/OH); if every peer fails, the bundled
+    ideal TIP3 template is used. Returns ``(positions, best_max_f, fire_info)``
+    unchanged when the gate is off or no monomers are selected.
     """
     if not should_attempt_fire_template_rebuild(fire_info, best_max_f):
         return positions, best_max_f, fire_info
 
     pos_np = np.asarray(jax.device_get(positions), dtype=float)
     forces = np.asarray(jax.device_get(force_fn(positions)), dtype=float)
+    z_np = None
+    if atomic_numbers is not None:
+        z_np = np.asarray(jax.device_get(atomic_numbers), dtype=int)
     rebuilt_pos, victims, donor = rebuild_high_force_monomers_from_peers(
         pos_np,
         forces,
@@ -431,17 +436,25 @@ def maybe_fire_monomer_template_rebuild_retry(
         force_percentile=JAXMD_FIRE_TEMPLATE_REBUILD_FORCE_PERCENTILE,
         max_rebuild=JAXMD_FIRE_TEMPLATE_REBUILD_MAX_MONOMERS,
         min_force_eVA=JAXMD_FIRE_FMAX_HIGH_EVA,
+        atomic_numbers=z_np,
     )
     if not victims:
         return positions, best_max_f, fire_info
+
+    if int(donor) == int(TEMPLATE_DONOR_IDEAL_TIP3):
+        donor_desc = "ideal TIP3 template (no geometrically healthy peer)"
+        donor_source = "ideal_tip3"
+    else:
+        donor_desc = f"peer template (donor={donor})"
+        donor_source = "peer"
 
     c = console or Console()
     c.print(
         Panel(
             f"FIRE still hard (max|F|={best_max_f:.4f} eV/Å"
             f"{', blew up' if fire_info.get('blew_up') else ''}): "
-            f"rebuilt {len(victims)} monomer(s) from peer template "
-            f"(donor={donor}). Cold FIRE retry ({JAXMD_FIRE_TEMPLATE_REBUILD_RETRY_STEPS} steps).",
+            f"rebuilt {len(victims)} monomer(s) from {donor_desc}. "
+            f"Cold FIRE retry ({JAXMD_FIRE_TEMPLATE_REBUILD_RETRY_STEPS} steps).",
             title="[bold yellow]JAX-MD FIRE template rebuild[/bold yellow]",
             border_style="yellow",
         )
@@ -467,6 +480,7 @@ def maybe_fire_monomer_template_rebuild_retry(
     merged["template_rebuild"] = {
         "n_rebuilt": len(victims),
         "donor": int(donor),
+        "donor_source": donor_source,
         "victims": list(victims),
         "max_f_before_retry": float(best_max_f),
         "max_f_after_retry": float(retry_f),
@@ -1690,6 +1704,7 @@ def set_up_nhc_sim_routine(
                             shift_fn=fire_shift_fn,
                             masses=Si_mass,
                             monomer_offsets=monomer_offsets,
+                            atomic_numbers=atomic_numbers,
                             nl_refresh_fn=(
                                 _fire_nl_refresh if (use_pbc and update_fn is not None) else None
                             ),
@@ -1859,6 +1874,7 @@ def set_up_nhc_sim_routine(
                     shift_fn=shift_molecular,
                     masses=Si_mass,
                     monomer_offsets=monomer_offsets,
+                    atomic_numbers=atomic_numbers,
                     nl_refresh_fn=_pbc_nl_refresh if update_fn is not None else None,
                     log_fn=_pbc_log,
                     console=c,
