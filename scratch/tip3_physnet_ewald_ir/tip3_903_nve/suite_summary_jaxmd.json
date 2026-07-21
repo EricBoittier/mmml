@@ -4,7 +4,7 @@
   "nsteps_completed": 0,
   "frames": 1,
   "status": "error",
-  "error": "NVE refused: post-FIRE max|F|=8.1743 eV/\u00c5 > gate 1.5000 eV/\u00c5. Improve minimization / packing before microcanonical dynamics, raise --nve-max-f-start-eVA, or use a value <=0 to disable the gate.",
+  "error": "NVE refused: post-FIRE max|F|=6.7127 eV/\u00c5 > gate 1.5000 eV/\u00c5. Improve minimization / packing before microcanonical dynamics, raise --nve-max-f-start-eVA, or use a value <=0 to disable the gate.",
   "h5": "pbc_nve_jaxmd_nve.h5",
   "traj": "pbc_nve.traj",
   "traj_parts": [
@@ -55,7 +55,7 @@
   "neighbor_internal_update_interval_calls": 1,
   "neighbor_internal_skin_distance_A": 0.25,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 9.441474182996899
+    "charmm_min_wall_s": 5.083113824017346
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,

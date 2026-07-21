@@ -1,19 +1,21 @@
 {
   "handoff_active": true,
-  "source_path": null,
-  "handoff_format": null,
+  "source_path": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.0001.res",
+  "handoff_format": "res",
   "n_atoms": 2709,
-  "prior_backend": null,
+  "prior_backend": "pycharmm",
   "prior_stages": null,
   "box_side_source": null,
   "velocities_source": null,
   "restart_path": null,
   "box_side_A": 30.307409163768842,
-  "box_source": "handoff_cell",
-  "box_warnings": [],
+  "box_source": "yaml_fallback",
+  "box_warnings": [
+    "Handoff has no periodic cell; using campaign --box-size 30.3074 \u00c5."
+  ],
   "velocities_in_handoff": false,
   "continue_velocities": false,
-  "velocity_policy": "pending",
+  "velocity_policy": "maxwell_boltzmann",
   "use_handoff_velocities": false,
   "skip_pre_min": false,
   "handoff_pre_minimize": true,
@@ -24,6 +26,6 @@
     "mm_switch_on": 6.0,
     "mm_switch_width": 5.0
   },
-  "initial_mmml_energy_eV": -16925.954776222872,
-  "initial_mmml_fmax_eVA": 6.898019908718185
+  "initial_mmml_energy_eV": -16931.193422534627,
+  "initial_mmml_fmax_eVA": 6.917193617975963
 }

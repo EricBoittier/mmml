@@ -24,7 +24,7 @@
       "pressure_mean_atm": null,
       "density_g_cm3_mean": null,
       "density_g_cm3_final": null,
-      "box_A_initial": null,
+      "box_A_initial": 30.307409163768842,
       "box_A_final": null,
       "volume_A3_final": null,
       "frames_written": 0,
