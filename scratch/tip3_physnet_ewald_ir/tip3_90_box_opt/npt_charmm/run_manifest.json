@@ -1,9 +1,9 @@
 {
   "job_name": "npt_charmm",
-  "started_at": "2026-07-21T00:40:10.504892+00:00",
-  "finished_at": "2026-07-21T00:41:33.118212+00:00",
-  "exit_code": 2,
-  "command": "mmml md-system --backend pycharmm --setup pbc_npt --md-stages equi --composition TIP3:903 --from-psf ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/box_pressure_opt/model.psf --from-crd ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/box_pressure_opt/model.crd --skip-cluster-build --box-size 30.307409163768845 --mlpot-pbc --seed 42 --checkpoint /mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json --output-dir ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm --temperature 200 --npt-pressure 1.0 --pressure 1.0 --dt-fs 0.25 --ps-equi 2.0 --npt-thermostat hoover --dyn-inbfrq 25 --dyn-imgfrq 25 --include-mm --mm-charge-mode fixed --lr-solver ewald --ewald-omit-self --mm-nonbond-mode jax_mic --ml-switch-width 1.5 --mm-switch-on 6.0 --mm-switch-width 5.0 --density-prep-mode off --no-density-prep-ladder --no-mc-density-equalize --no-monomer-physnet-mini --no-charmm-pre-minimize --npt-pressure-log-interval 50 --dynamics-intra-rescue-sd-steps 400 --n-heat-segments 8 --ml-gpu-count 1 --restart-from ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/heat.7.res",
+  "started_at": "2026-07-21T00:41:52.283090+00:00",
+  "finished_at": "2026-07-21T00:58:36.213672+00:00",
+  "exit_code": 1,
+  "command": "mmml md-system --backend pycharmm --setup pbc_npt --md-stages equi --composition TIP3:903 --from-psf ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/box_pressure_opt/model.psf --from-crd ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/box_pressure_opt/model.crd --skip-cluster-build --box-size 30.307409163768845 --mlpot-pbc --seed 42 --checkpoint /mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json --output-dir ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm --temperature 200 --npt-pressure 1.0 --pressure 1.0 --dt-fs 0.25 --ps-equi 2.0 --npt-thermostat hoover --dyn-inbfrq 25 --dyn-imgfrq 25 --include-mm --mm-charge-mode fixed --lr-solver ewald --ewald-omit-self --mm-nonbond-mode jax_mic --ml-switch-width 1.5 --mm-switch-on 6.0 --mm-switch-width 5.0 --density-prep-mode off --no-density-prep-ladder --no-mc-density-equalize --no-monomer-physnet-mini --no-charmm-pre-minimize --npt-pressure-log-interval 50 --dynamics-intra-rescue-sd-steps 400 --n-heat-segments 8 --ml-gpu-count 1 --restart-from ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/heat.7.res --allow-high-grms",
   "setup": "pbc_npt",
   "backend": "pycharmm",
   "output_dir": "scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm",
@@ -151,7 +151,7 @@
     "forces_npz_interval": 1,
     "no_scale_mini_nstep": false,
     "no_scale_echeck": false,
-    "allow_high_grms": false,
+    "allow_high_grms": true,
     "no_scale_max_grms": false,
     "max_grms_before_dyn": 50.0,
     "test_first": false,
@@ -378,7 +378,7 @@
     "no_run_advice": false,
     "no_stage_summary": false,
     "mlpot_profile": false,
-    "_cli_explicit": "{'mlpot_pbc', 'npt_thermostat', 'dt_fs', 'ps_equi', 'density_prep_ladder', 'mm_charge_mode', 'dyn_imgfrq', 'from_psf', 'ml_switch_width', 'output_dir', 'from_crd', 'dyn_inbfrq', 'include_mm', 'composition', 'npt_pressure_log_interval', 'mm_switch_width', 'n_heat_segments', 'npt_pressure', 'ewald_omit_self', 'restart_from', 'temperature', 'monomer_physnet_mini', 'charmm_pre_minimize', 'density_prep_mode', 'backend', 'seed', 'checkpoint', 'box_size', 'md_stages', 'dynamics_intra_rescue_sd_steps', 'ml_gpu_count', 'lr_solver', 'skip_cluster_build', 'mc_density_equalize', 'pressure', 'mm_switch_on', 'setup', 'mm_nonbond_mode'}"
+    "_cli_explicit": "{'restart_from', 'npt_pressure_log_interval', 'n_heat_segments', 'dyn_imgfrq', 'lr_solver', 'npt_pressure', 'skip_cluster_build', 'mm_charge_mode', 'setup', 'ps_equi', 'ml_switch_width', 'monomer_physnet_mini', 'mm_nonbond_mode', 'from_psf', 'from_crd', 'density_prep_ladder', 'mm_switch_width', 'dynamics_intra_rescue_sd_steps', 'composition', 'allow_high_grms', 'mc_density_equalize', 'npt_thermostat', 'ml_gpu_count', 'pressure', 'dyn_inbfrq', 'temperature', 'include_mm', 'density_prep_mode', 'output_dir', 'md_stages', 'seed', 'mm_switch_on', 'ewald_omit_self', 'checkpoint', 'backend', 'mlpot_pbc', 'charmm_pre_minimize', 'dt_fs', 'box_size'}"
   },
   "backend_argv": [
     "--phase",
@@ -530,6 +530,7 @@
     "1.0",
     "--ml-gpu-count",
     "1",
+    "--allow-high-grms",
     "--max-grms-before-dyn",
     "50.0",
     "--seed",

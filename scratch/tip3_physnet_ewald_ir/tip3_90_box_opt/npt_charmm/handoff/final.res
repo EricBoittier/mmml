@@ -1,6 +1,6 @@
-REST     1  8000      
+REST     1     0      
  !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL
-      2709         0      8000         1         0      8000         0         0         0
+      2709         0         0         1         0         0         0         0         0
        1 !NTITLE followed by title
 * MMML snapshot
  !X, Y, Z

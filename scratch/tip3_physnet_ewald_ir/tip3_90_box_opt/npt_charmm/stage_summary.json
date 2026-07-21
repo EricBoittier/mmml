@@ -2,7 +2,7 @@
   "job_id": "npt_charmm",
   "backend": "pycharmm",
   "setup": "pbc_npt",
-  "exit_code": 2,
+  "exit_code": 0,
   "wall_time_s": 0.0,
   "handoff": {},
   "stages": [
@@ -12,10 +12,10 @@
       "backend": "pycharmm",
       "setup": "pbc_npt",
       "nsteps_requested": 8000,
-      "nsteps_completed": 0,
+      "nsteps_completed": 8000,
       "dt_fs": 0.25,
       "ps_requested": 2.0,
-      "ps_completed": 0.0,
+      "ps_completed": 2.0,
       "temperature_K": 200.0,
       "temperature_mean_K": null,
       "temperature_final_K": null,
@@ -31,7 +31,7 @@
       "record_every_steps": 320,
       "integrator": "equi",
       "artifacts": {},
-      "status": "error",
+      "status": "complete",
       "wall_time_s": 0.0,
       "description": null
     }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Suggested resume (wrap with ./scripts/mmml-charmm-mpirun.sh on GPU nodes).
-# prior job: npt_charmm exit=2
+# prior job: npt_charmm exit=1
 CMD=(
   mmml
   md-system
