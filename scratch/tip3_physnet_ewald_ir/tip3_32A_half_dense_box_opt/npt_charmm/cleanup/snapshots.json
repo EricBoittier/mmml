@@ -195,6 +195,19 @@
         "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/24_rescue_24.pdb"
       },
       "grms_kcalmol_A": 5.738836603894224
+    },
+    {
+      "seq": 25,
+      "slug": "rescue_25",
+      "stem": "25_rescue_25",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: heat segment 8/8 at step 1000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/25_rescue_25.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/25_rescue_25_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/25_rescue_25.pdb"
+      },
+      "grms_kcalmol_A": 5.738836603894224
     }
   ]
 }
