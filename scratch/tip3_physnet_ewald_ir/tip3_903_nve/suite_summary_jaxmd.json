@@ -1,8 +1,8 @@
 {
   "ensemble": "nve",
   "nsteps_requested": 200000,
-  "nsteps_completed": 460,
-  "frames": 46,
+  "nsteps_completed": 180,
+  "frames": 18,
   "status": "interrupted",
   "error": "KeyboardInterrupt",
   "h5": "pbc_nve_jaxmd_nve.h5",
@@ -55,7 +55,7 @@
   "neighbor_internal_update_interval_calls": 1,
   "neighbor_internal_skin_distance_A": 0.25,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 4.711300908122212
+    "charmm_min_wall_s": 4.76196656585671
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,
