@@ -1,1 +1,0 @@
-mmml md-system --output-dir scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm --backend pycharmm --restart-from scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/prep_ladder/002_pre_mlpot_monomer_repack_skipped_clean.crd --md-stages mini,heat,equi
