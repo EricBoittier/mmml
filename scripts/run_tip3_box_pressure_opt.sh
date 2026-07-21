@@ -16,6 +16,7 @@
 #   WIPE=0 ./scripts/run_tip3_box_pressure_opt.sh   # reuse existing liquid_box/
 #   USE_CHARMM_PRESSURE=0 ./scripts/run_tip3_box_pressure_opt.sh  # synthetic P
 #   BOX_MODE=density N_MOL=90 ./scripts/run_tip3_box_pressure_opt.sh  # L≈14 Å alt
+#   BOX_SIZE=32 TARGET_DENSITY=0.5 ./scripts/run_tip3_box_pressure_opt.sh  # N≈548, half-dense @ 32 Å
 
 set -euo pipefail
 
@@ -107,16 +108,33 @@ if status != "pass":
     raise SystemExit(
         "liquid-box certification failed — see REPORT.md / box.json message."
     )
-# UNVERIFIED historical acceptance band [evidence: tip3_count30_recipe].
+# BOX_MODE=count sanity checks: box.json must match the requested BOX_SIZE /
+# TARGET_DENSITY, and N must match the analytic count for that (L, ρ) pair —
+# not a fixed floor from the historical 903@30Å/ρ=1.0 recipe [evidence:
+# tip3_count30_recipe], so BOX_SIZE/TARGET_DENSITY overrides (e.g. a less
+# dense box) are validated on their own terms.
 if str("$BOX_MODE") == "count":
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        n_molecules_for_target_density_in_fixed_box,
+    )
+
     if abs(side - float("$BOX_SIZE")) > 0.05:
-        raise SystemExit(f"pinned recipe expects L≈{float('$BOX_SIZE'):.1f} Å, got {side}")
+        raise SystemExit(f"count mode expects L≈{float('$BOX_SIZE'):.1f} Å, got {side}")
     if abs(rho - float("$TARGET_DENSITY")) > 0.05:
         raise SystemExit(
-            f"pinned recipe expects ρ≈{float('$TARGET_DENSITY'):.2f} g/cm³, got {rho}"
+            f"count mode expects ρ≈{float('$TARGET_DENSITY'):.2f} g/cm³, got {rho}"
         )
-    if n_mol < 800:
-        raise SystemExit(f"pinned recipe expects N≳800 waters @ 30 Å, got {n_mol}")
+    expected = n_molecules_for_target_density_in_fixed_box(
+        composition={"TIP3": 1},
+        box_side_A=float("$BOX_SIZE"),
+        target_density_g_cm3=float("$TARGET_DENSITY"),
+    )
+    n_expected = int(sum(expected.values()))
+    if n_mol != n_expected:
+        raise SystemExit(
+            f"count mode expects N={n_expected} waters @ L={float('$BOX_SIZE'):.1f} Å "
+            f"ρ={float('$TARGET_DENSITY'):.2f} g/cm³, got {n_mol}"
+        )
 lb_rc = int("$lb_rc")
 if lb_rc != 0:
     print(
