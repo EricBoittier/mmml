@@ -22,7 +22,7 @@ def max_dimer_pairs(n_monomers: int) -> int:
 # density (see box_volume/active_radius below). Guards against density
 # fluctuations (clustering, non-uniform packing) between cap-resolution time
 # and the frames actually sampled during a run.
-SPARSE_DIMER_CAP_SAFETY_MARGIN = 1.5
+SPARSE_DIMER_CAP_SAFETY_MARGIN = 1.1
 
 # Fallback per-monomer neighbor-count heuristic used only when no box
 # density is available (free-space clusters, or callers that don't pass
