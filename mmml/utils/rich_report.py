@@ -621,6 +621,10 @@ def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
 
     Reads the defaults from the single source of truth so the printout cannot
     drift from what the calculator actually evaluates.
+
+    This term is an MD safety prior on **pair** distance. It is not a COM
+    handoff parameter and is outside the region probed by the usual 2D dimer
+    scan (COM ≥ ~3.5 Å).
     """
     from mmml.models.short_range_wall import (
         DEFAULT_WALL_K_EV_A2,
@@ -631,6 +635,8 @@ def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
         "enabled": bool(enabled),
         "r_on_Å": float(DEFAULT_WALL_R_ON_A),
         "k_eV_A2": float(DEFAULT_WALL_K_EV_A2),
+        "distance": "pair r (Å), not COM",
+        "role": "md_safety_net",
     }
 
 

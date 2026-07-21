@@ -469,6 +469,7 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
     assert "ML energy terms" in out or "electrostatics" in out
     assert "MBD" in out
     assert "predicted charges" in out or "electrostatics" in out
+    assert "MD safety" in out or "pair-Å" in out or "not on COM" in out
 
 
 def test_emit_md_system_calculator_report_nl_only_refresh(capsys) -> None:
