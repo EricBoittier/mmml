@@ -287,6 +287,40 @@ def test_latent_mode_changes_e_mm_vs_fixed():
     assert _f(latent["e_mm"]) != pytest.approx(_f(combo["e_mm"]))
 
 
+def test_ewald_monomer_ml_plus_mm_fixed_and_latent():
+    """Monomer ML + MM(Ewald): well-separated dimer so s(r_com) -> 0, both
+    mm_charge_mode legs that don't need a liquid box (fixed, latent).
+
+    This is the fast/mocked regression for
+    ``examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`` (see
+    ``docs/hybrid-mm-charges.md``): past the ML->MM handoff tail, the switched
+    ML-dimer correction vanishes on its own, so ``E_total`` is effectively
+    "ML monomers + MM" regardless of ``lr_solver``. Locks in that both charge
+    modes actually run with the native Ewald solver and give distinct, finite
+    ``e_mm``.
+    """
+    from mmml.models.hybrid_energy import hybrid_forward
+
+    sep = KW["mm_switch_on"] + KW["mm_switch_width"] + 10.0  # well past the tail
+    b = _batch(sep)
+    dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
+    ewald_kw = dict(lr_solver="ewald", include_lj=False, pme_box_length=30.0)
+
+    fixed = hybrid_forward(_charged_model(dq), {}, b, 1, SIG, EPS, **KW, **ewald_kw)
+    latent = hybrid_forward(
+        _charged_model(dq), {}, b, 1, SIG, EPS,
+        mm_charge_mode="latent", **KW, **ewald_kw,
+    )
+
+    for out in (fixed, latent):
+        assert np.isfinite(_f(out["energy"]))
+        assert np.isfinite(_f(out["e_mm"]))
+        # Past the handoff tail the dimer switch is fully off.
+        assert _f(out["ml_scale"]) == pytest.approx(0.0, abs=1e-8)
+
+    assert _f(fixed["e_mm"]) != pytest.approx(_f(latent["e_mm"]))
+
+
 def test_charge_correction_requires_a_charge_head():
     """A model without charges=True must fail loudly, not silently no-op."""
     from mmml.models.hybrid_energy import hybrid_forward
