@@ -208,6 +208,54 @@ def _equi_restart_name(tag: str, n_equi_segments: int) -> str:
     return "equi.res"
 
 
+def _seed_charmm_coords_from_dynamics_restart(
+    restart_path: Path | str | None,
+    *,
+    quiet: bool = False,
+    context: str = "Pre-dynamics",
+) -> bool:
+    """Load finite dynamics-restart coordinates into CHARMM before force gates.
+
+    ``md-system --from-crd`` leaves the certified handoff geometry in memory.
+    Equi-only resume must measure the post-heat (or other stage) restart, not
+    that cold CRD — otherwise the pre-dynamics fmax gate rejects a geometry
+    that never enters the CPT leg.
+    """
+    if restart_path is None:
+        return False
+    path = Path(restart_path).expanduser().resolve()
+    if not path.is_file():
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_handoff_seed_restart_path,
+        is_pretreat_mm_restart_path,
+    )
+
+    if is_handoff_seed_restart_path(path) or is_pretreat_mm_restart_path(path):
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    pos = read_restart_coordinates(path)
+    if pos is None:
+        return False
+    sync_charmm_positions(pos)
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        clear_comparison_coordinates,
+    )
+
+    clear_comparison_coordinates()
+    if not quiet:
+        print(
+            f"{context}: seeded CHARMM coordinates from {path.name} "
+            "(skip cold --from-crd geometry for force gate)",
+            flush=True,
+        )
+    return True
+
+
 def _heat_restart_path(paths: dict[str, Path], tag: str, n_heat_segments: int) -> Path:
     from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
 
@@ -2227,6 +2275,24 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
 
         assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
+        # Equi/NVE/prod-only resumes still load --from-crd into CHARMM during
+        # setup. Seed the stage restart (heat.N.res, …) before GRMS/fmax gates
+        # so we do not reject the certified handoff while intending post-heat CPT.
+        if "mini" not in stages:
+            seed_restart = restart_from
+            if seed_restart is None and dyn_stages:
+                seed_restart = _prior_restart_for_stage(
+                    dyn_stages[0],
+                    paths,
+                    restart_from=None,
+                    tag=tag,
+                    n_heat_segments=n_heat_segments_early,
+                )
+            _seed_charmm_coords_from_dynamics_restart(
+                seed_restart,
+                quiet=bool(args.quiet),
+                context="Pre-dynamics",
+            )
         max_grms = resolve_max_grms_before_dyn(
             args,
             n_mol,

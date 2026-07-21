@@ -216,6 +216,34 @@ def test_prior_restart_for_equi_prefers_final_heat_segment(tmp_path: Path):
     assert got == heat_final
 
 
+def test_seed_charmm_coords_from_dynamics_restart_loads_heat(tmp_path: Path):
+    heat = tmp_path / "heat.7.res"
+    heat.write_text("heat\n", encoding="utf-8")
+    pos = np.zeros((9, 3), dtype=np.float64)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+        return_value=pos,
+    ) as read_coords, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as sync, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+    ):
+        assert _seed_charmm_coords_from_dynamics_restart(heat, quiet=True) is True
+    read_coords.assert_called_once()
+    sync.assert_called_once()
+    np.testing.assert_array_equal(sync.call_args[0][0], pos)
+
+
+def test_seed_charmm_coords_from_dynamics_restart_skips_handoff_seed(tmp_path: Path):
+    seed = tmp_path / "continue_seed.res"
+    seed.write_text("seed\n", encoding="utf-8")
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+    ) as read_coords:
+        assert _seed_charmm_coords_from_dynamics_restart(seed, quiet=True) is False
+    read_coords.assert_not_called()
+
+
 def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
     paths = _artifact_paths(tmp_path, "dcm_60")
     paths["heat_res"].write_text("heat\n", encoding="utf-8")

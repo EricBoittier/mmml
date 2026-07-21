@@ -20,6 +20,7 @@
 #     --restart-from "$OUT_DIR/heat.7.res"
 # Or omit --restart-from when heat.7.res (or heat.res) is already under OUT_DIR.
 # Do not use MD_STAGES=mini,equi for that resume — mini drops the heat restart.
+# Do not use next_run.sh / equi.res / --no-echeck-heat after a CPT abort.
 #
 # DYNA list cadence: DYN_INBFRQ / DYN_IMGFRQ default 25 (was CHARMM 50). More
 # frequent IMAGE/NB/MLpot updates during early barostat motion; still cheap vs
