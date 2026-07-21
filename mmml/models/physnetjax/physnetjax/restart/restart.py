@@ -89,17 +89,26 @@ def _merge_params(init_params, loaded_params):
 def get_last(path: str) -> Path:
     """
     Get the last checkpoint directory.
-    
+
+    ``path`` may either be an experiment root containing multiple
+    ``epoch-*/`` checkpoints (the traditional layout, latest picked by
+    name), or a single flat Orbax checkpoint directory (e.g. a
+    ``step-NNNNNNN/`` directory saved directly with no ``epoch-*/``
+    wrapper). The latter is returned as-is.
+
     Parameters
     ----------
     path : str
         Path to checkpoint directory
-        
+
     Returns
     -------
     Path
         Path to the most recent checkpoint directory
     """
+    p = Path(path)
+    if (p / "manifest.ocdbt").exists() or (p / "_CHECKPOINT_METADATA").exists():
+        return p
     dirs = get_files(path)
     if not dirs:
         raise FileNotFoundError(
@@ -149,7 +158,9 @@ def get_params_model(
     tuple
         Tuple of (parameters, model)
     """
-    restored = orbax_checkpointer.restore(restart)
+    from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
+
+    restored = _restore_pytree_cpu_safe(orbax_checkpointer, str(restart))
     # print(f"Restoring from {restart}")
     modification_time = os.path.getmtime(restart)
     modification_date = datetime.fromtimestamp(modification_time)

@@ -1001,6 +1001,7 @@ def _factory_mmml(
     min_com_restraint_force_const: float = 1.0,
     defer_xla_gpu_warmup: bool = False,
     ml_batch_size: Optional[int] = None,
+    ml_gpu_count: int = 1,
     ml_max_active_dimers: Optional[int] = None,
     ml_compute_dtype: Optional[str] = None,
     electrostatics_damping_sigma: float | None = None,
@@ -1057,6 +1058,7 @@ def _factory_mmml(
         min_com_restraint_force_const=min_com_restraint_force_const,
         defer_xla_gpu_warmup=defer_xla_gpu_warmup,
         ml_batch_size=ml_batch_size,
+        ml_gpu_count=int(ml_gpu_count or 1),
         ml_max_active_dimers=ml_max_active_dimers,
         ml_compute_dtype=ml_compute_dtype,
         electrostatics_damping_sigma=electrostatics_damping_sigma,
@@ -1839,11 +1841,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40)."
     )
     parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Parallel PhysNet chunks across N local GPUs (default 1; "
+            "or MMML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
+        ),
+    )
+    parser.add_argument(
         "--ml-max-active-dimers",
         type=int,
         default=None,
         metavar="N",
         help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+    )
+    parser.add_argument(
+        "--mlpot-profile",
+        action="store_true",
+        help="Enable ASE calculator / chunk-apply wall-time profiling.",
     )
     from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
     add_ml_compute_dtype_args(parser)
@@ -2281,6 +2298,7 @@ def main(argv: list[str] | None = None) -> int:
             min_com_restraint_force_const=args.min_com_restraint_k,
             defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
             ml_batch_size=getattr(args, "ml_batch_size", None),
+            ml_gpu_count=int(getattr(args, "ml_gpu_count", None) or 1),
             ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
             ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
             electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),

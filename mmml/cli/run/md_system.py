@@ -768,8 +768,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help=(
-            "pycharmm: parallel PhysNet chunks on N local GPUs (default 1; "
-            "or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the GPU ids to use."
+            "Parallel PhysNet chunks on N local GPUs for pycharmm/ASE/jaxmd "
+            "(default 1; or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the "
+            "GPU ids to use. Requires --ml-batch-size so work splits into chunks."
         ),
     )
     parser.add_argument(
@@ -1936,7 +1937,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mlpot-profile",
         action="store_true",
-        help="Enable profiling of MLpot callbacks and JAX/XLA compilation timers",
+        help=(
+            "Enable ASE/MLpot wall-time profiling (writes mlpot_profile.json; "
+            "sets MMML_MLPOT_PROFILE=1 and MMML_JAX_COMPILE_TIMERS=1)"
+        ),
+    )
+    parser.add_argument(
+        "--jax-profiler-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Optional TensorBoard JAX profiler trace directory for jaxmd/ASE "
+            "(also MMML_JAX_PROFILER_DIR). Prefer short --ps when tracing."
+        ),
     )
 
     return parser
@@ -2230,10 +2244,17 @@ def _append_suite_mmml_handoff_args(
     cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
     if getattr(args, "ml_batch_size", None) is not None:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
+    if getattr(args, "ml_gpu_count", None) is not None:
+        cmd.extend(["--ml-gpu-count", str(args.ml_gpu_count)])
     if getattr(args, "ml_max_active_dimers", None) is not None:
         cmd.extend(["--ml-max-active-dimers", str(args.ml_max_active_dimers)])
     if getattr(args, "ml_compute_dtype", None) is not None:
         cmd.extend(["--ml-compute-dtype", str(args.ml_compute_dtype)])
+    if getattr(args, "mlpot_profile", False):
+        cmd.append("--mlpot-profile")
+    _append_optional(cmd, "--jax-profiler-dir", getattr(args, "jax_profiler_dir", None))
+
+
 def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
     if value is None:
         return
@@ -3595,9 +3616,11 @@ def main() -> int:
     args = parse_md_system_args()
     if getattr(args, "mlpot_profile", False):
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            enable_mlpot_profiling,
             write_profile_git_metadata,
         )
 
+        enable_mlpot_profiling()
         metadata_path = write_profile_git_metadata(
             getattr(args, "output_dir", None),
             argv=sys.argv[1:],
@@ -3610,10 +3633,16 @@ def main() -> int:
                     "steps_per_recording": getattr(args, "steps_per_recording", None),
                     "ps": getattr(args, "ps", None),
                     "dt_fs": getattr(args, "dt_fs", None),
+                    "ml_gpu_count": getattr(args, "ml_gpu_count", None),
+                    "ml_batch_size": getattr(args, "ml_batch_size", None),
                 }
             },
         )
         print(f"mmml md-system: wrote profiling git metadata {metadata_path}", flush=True)
+    if getattr(args, "jax_profiler_dir", None) is not None:
+        os.environ["MMML_JAX_PROFILER_DIR"] = str(
+            Path(args.jax_profiler_dir).expanduser().resolve()
+        )
     started_at = datetime.now(timezone.utc).isoformat()
     backend: str | None = None
     argv: list[str] | None = None

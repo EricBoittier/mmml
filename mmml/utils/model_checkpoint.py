@@ -409,7 +409,7 @@ def load_model_checkpoint(
     if use_orbax is None:
         if json_params_path is not None and json_params_path.exists():
             use_orbax = False
-        elif (checkpoint_dir / "params").exists() or (checkpoint_dir / "default").exists() or (checkpoint_dir / "_checkpoint").exists() or (checkpoint_dir / "manifest.ocp").exists():
+        elif (checkpoint_dir / "params").exists() or (checkpoint_dir / "default").exists() or (checkpoint_dir / "_checkpoint").exists() or (checkpoint_dir / "manifest.ocp").exists() or (checkpoint_dir / "manifest.ocdbt").exists():
             use_orbax = True
         else:
             use_orbax = False
@@ -446,7 +446,7 @@ def load_model_checkpoint(
                 for path in params_candidates:
                     if path.exists():
                         try:
-                            restored = checkpointer.restore(path)
+                            restored = _restore_pytree_cpu_safe(checkpointer, str(path))
                             if restored is not None:
                                 break
                         except Exception:

@@ -306,6 +306,7 @@ usage: mmml md-system [-h]
                       [--energy-weight ENERGY_WEIGHT]
                       [--force-weight FORCE_WEIGHT] [--max-frames MAX_FRAMES]
                       [--no-run-advice] [--no-stage-summary] [--mlpot-profile]
+                      [--jax-profiler-dir DIR]
 
 Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT,
 lambda TI for arbitrary compositions) for arbitrary residue compositions. Runs
@@ -619,9 +620,10 @@ options:
   --ml-batch-size N     pycharmm: chunk PhysNet batches (auto: 256 on GPU / 64
                         on CPU for n>=40; or MMML_MLPOT_ML_BATCH_SIZE). DCM:90
                         try 256-512 on one GPU.
-  --ml-gpu-count N      pycharmm: parallel PhysNet chunks on N local GPUs
-                        (default 1; or MMML_MLPOT_N_GPUS). Set
-                        CUDA_VISIBLE_DEVICES to the GPU ids to use.
+  --ml-gpu-count N      Parallel PhysNet chunks on N local GPUs for
+                        pycharmm/ASE/jaxmd (default 1; or MMML_MLPOT_N_GPUS).
+                        Set CUDA_VISIBLE_DEVICES to the GPU ids to use. Requires
+                        --ml-batch-size so work splits into chunks.
   --max-pairs N         PBC: cell-list MM pair buffer size (auto from N and box
                         when unset). Increase if you see 'MM Pair List
                         Truncated' during MLpot mini/MD.
@@ -1157,8 +1159,13 @@ options:
   --no-run-advice       Do not print or write next-run guidance (next_run.yaml /
                         next_run.sh) when a job finishes or fails.
   --no-stage-summary    Do not write stage_summary.json (campaigns).
-  --mlpot-profile       Enable profiling of MLpot callbacks and JAX/XLA
-                        compilation timers
+  --mlpot-profile       Enable ASE/MLpot wall-time profiling (writes
+                        mlpot_profile.json; sets MMML_MLPOT_PROFILE=1 and
+                        MMML_JAX_COMPILE_TIMERS=1)
+  --jax-profiler-dir DIR
+                        Optional TensorBoard JAX profiler trace directory for
+                        jaxmd/ASE (also MMML_JAX_PROFILER_DIR). Prefer short
+                        --ps when tracing.
 
 PyXtal crystal placement (requires mmml[chem]):
   --pyxtal, --no-pyxtal

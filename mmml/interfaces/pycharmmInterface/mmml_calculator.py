@@ -17,6 +17,7 @@ physics functionality is unchanged when the third-party libraries are present.
 from __future__ import annotations
 
 import os
+import time
 # Module-level only: a conditional `import warnings` inside setup_calculator
 # makes `warnings` a local cell, so nested AseDimerCalculator.calculate() fails
 # with NameError when those branches do not run.
@@ -2763,6 +2764,13 @@ def setup_calculator(
                 """Calculate energy and forces for given atomic configuration"""
 
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
+                from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                    get_mlpot_profile_stats,
+                    mlpot_profiling_enabled,
+                )
+
+                _profile_calc = mlpot_profiling_enabled()
+                _t_calc0 = time.perf_counter() if _profile_calc else None
                 if not getattr(self, "_xla_gpu_warmed", False):
                     ensure_xla_gpu_warmed(force=True)
                     self._xla_gpu_warmed = True
@@ -3126,6 +3134,10 @@ def setup_calculator(
                             print(f"  Atom {idx}: force={forces_final[idx]}, mag={force_mags_final[idx]:.6e}")
                 
                 self.results["forces"] = forces_final
+                if _profile_calc and _t_calc0 is not None:
+                    get_mlpot_profile_stats().record_calculate(
+                        time.perf_counter() - _t_calc0
+                    )
 
         def get_spherical_cutoff_calculator(
             atomic_numbers: Array,

@@ -188,3 +188,17 @@ def test_jaxmd_setup_calculator_forwards_ewald_include_self() -> None:
     src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
     assert "--ewald-omit-self" in src
     assert "ewald_include_self=not bool(getattr(args, \"ewald_omit_self\"" in src
+
+
+def test_build_command_jaxmd_forwards_ml_gpu_and_profile_flags() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(ml_gpu_count=2, ml_batch_size=256, mlpot_profile=True)
+    )
+    assert backend == "jaxmd"
+    assert "--ml-gpu-count" in argv
+    assert argv[argv.index("--ml-gpu-count") + 1] == "2"
+    assert "--ml-batch-size" in argv
+    assert argv[argv.index("--ml-batch-size") + 1] == "256"
+    assert "--mlpot-profile" in argv

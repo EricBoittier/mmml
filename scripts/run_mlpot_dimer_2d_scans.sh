@@ -51,6 +51,11 @@ fi
 for ckpt in "${CKPT_LIST[@]}"; do
   for comp in "${COMPOSITIONS[@]}"; do
     echo "=== 2D scan: checkpoint=${ckpt} composition=${comp} ==="
+    ckpt_out_dir="${OUT_ROOT}/$(basename "$ckpt")"
+    mkdir -p "$ckpt_out_dir"
+    marker="$(mktemp "${ckpt_out_dir}/.scan-marker.XXXXXX")"
+
+    set +e
     "$MPIRUN" python scripts/scan_mlpot_dimer_2d_pycharmm.py \
       --composition "$comp" \
       --checkpoint "$ckpt" \
@@ -64,6 +69,21 @@ for ckpt in "${CKPT_LIST[@]}"; do
       --angle-02-deg "$ANGLE_02_DEG" \
       --skip-energy-show \
       --seed 123
+    rc=$?
+    set -e
+
+    # mpirun/CHARMM's native exit path has been observed to report success
+    # even when the Python scan raised before writing output (the crash
+    # traceback prints, but the process still exits 0) -- so exit code
+    # alone is not trustworthy here. Require the expected NPZ to actually
+    # exist and postdate this invocation.
+    written=$(find "$ckpt_out_dir" -newer "$marker" \( -name 'scan_2d.npz' -o -name 'scan_1d.npz' \) 2>/dev/null)
+    rm -f "$marker"
+    if [[ $rc -ne 0 || -z "$written" ]]; then
+      echo "=== 2D scan FAILED: checkpoint=${ckpt} composition=${comp} (exit=${rc}, no new scan npz under ${ckpt_out_dir}) ===" >&2
+      exit 1
+    fi
+    echo "=== 2D scan OK: wrote ${written} ==="
   done
 done
 

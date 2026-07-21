@@ -1482,6 +1482,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     apply_condensed_phase_md_defaults(args)
     if getattr(args, "mlpot_profile", False):
         import os
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            enable_mlpot_profiling,
+        )
+
+        enable_mlpot_profiling()
         os.environ["MMML_MLPOT_PROFILE"] = "1"
         os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
     from mmml.cli.run.md_handoff import get_handoff_in
