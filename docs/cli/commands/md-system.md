@@ -535,10 +535,11 @@ options:
                         after mini. Default 0.2×--temperature; use 50–100 K for
                         a gentler start than 300 K.
   --nve-max-f-start-eVA EV_PER_A
-                        jaxmd: refuse to start NVE when post-FIRE max atomic |F|
-                        exceeds this value in eV/Å (default: 1.5; <=0 disables).
-                        Hybrid liquid handoffs often land near ~1 eV/Å after
-                        FIRE.
+                        jaxmd: base ceiling (eV/Å) for post-FIRE max atomic |F|
+                        before NVE (default: 1.5 at N_ref=100 atoms; <=0
+                        disables). Effective gate scales as base×sqrt(N/N_ref),
+                        capped at 15 eV/Å, so dense liquids (N~2700) get ~8 eV/Å
+                        without a manual raise.
   --nve-force-energy-freeze-charges, --no-nve-force-energy-freeze-charges
                         jaxmd NVE preflight: freeze MM Coulomb charges at R0
                         when checking force–energy FD (Hellmann–Feynman).

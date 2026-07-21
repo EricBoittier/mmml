@@ -218,3 +218,23 @@ def test_nve_requires_float64_message_in_runner():
     assert "force_rebuild=True" in src
     assert "NVE E_tot drift → repair & restart" in src
     assert "nve_etot_drift_rescue_tricks" in src
+
+
+def test_nve_pbc_does_not_write_molecular_wrap_into_integrator_state():
+    """Whole-monomer ±L wraps in state caused ~0.1 eV E_tot jumps at image crossings.
+
+    NL binning may use a wrapped copy; energy/forces must see continuous unwrapped R.
+    """
+    from mmml.cli.run import jaxmd_runner as jr
+
+    src = Path(jr.__file__).read_text(encoding="utf-8")
+    assert "wrapped_for_nl" in src
+    assert "Do NOT write" in src or "do NOT write" in src
+    # The old hot-path pattern must stay gone.
+    assert "Wrap coordinates first so neighbor list binning" not in src
+    # Still wrap for NL / export, not as the NVE state update before sim().
+    step_block = src.split("elif use_pbc and update_fn is not None:")[1].split(
+        "else:\n                        state = sim"
+    )[0]
+    assert "wrapped_for_nl" in step_block
+    assert "state.set(position=as_jaxmd_dtype(wrapped" not in step_block

@@ -2555,9 +2555,10 @@ def set_up_nhc_sim_routine(
         nbr_monitor = getattr(args, "nbr_monitor", False)
         if use_pbc:
             c.print(Panel(
-                f"{n_monomers} monomer groups, wrap+NL every {steps_per_loop_call} MD steps "
-                f"(record every {steps_per_recording})",
-                title="[bold]PBC Wrapping[/bold]",
+                f"{n_monomers} monomer groups: NL rebuild every {steps_per_loop_call} MD steps "
+                f"from a wrapped copy (integrator positions stay unwrapped / MIC); "
+                f"record every {steps_per_recording}",
+                title="[bold]PBC neighbor lists[/bold]",
                 border_style="blue",
             ))
         _total_time_ps = total_steps * dt
@@ -2736,12 +2737,15 @@ def set_up_nhc_sim_routine(
                         current_neighbors = (npt_pair_idx, npt_pair_mask)
                         state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
                     elif use_pbc and update_fn is not None:
-                        # Wrap coordinates first so neighbor list binning (cell list) is correct!
-                        wrapped_pos = _wrap_monomers(state.position, _cell_jax)
-                        state = state.set(position=as_jaxmd_dtype(wrapped_pos))
+                        # Cell-list binning needs primary-cell coords, but do NOT write
+                        # the wrap into integrator state. Whole-monomer ±L jumps make
+                        # the hybrid energy discontinuous (~0.1 eV) even though MIC
+                        # pair distances are invariant — see mmml_calculator ASE note
+                        # ("Do NOT wrap positions during energy/force evaluation").
+                        wrapped_for_nl = _wrap_monomers(state.position, _cell_jax)
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
                             print(f"[nbr] NVT/NVE record {i} (step {steps_done}): updating neighbor list")
-                        nvt_neighbors = update_fn(state.position, box=pbc_box_nl)
+                        nvt_neighbors = update_fn(wrapped_for_nl, box=pbc_box_nl)
                         _pbc_state["pair_idx"] = nvt_neighbors[0]
                         _pbc_state["pair_mask"] = nvt_neighbors[1]
                         current_neighbors = nvt_neighbors
@@ -2797,15 +2801,16 @@ def set_up_nhc_sim_routine(
                                 ))
                                 break
                     else:
-                        wrapped_pos = _wrap_monomers(state.position, _cell_jax)
-                        state = state.set(position=as_jaxmd_dtype(wrapped_pos))
-                        rescued = _check_overlap(state.position, _cell_jax, f"JAX-MD dynamics record {i + 1}")
+                        # Overlap check on a wrapped copy; keep unwrapped state for energy.
+                        pos_for_overlap = _wrap_monomers(state.position, _cell_jax)
+                        rescued = _check_overlap(
+                            pos_for_overlap, _cell_jax, f"JAX-MD dynamics record {i + 1}"
+                        )
                         if rescued is not None:
                             state = _state_after_overlap_rescue(rescued)
                             if update_fn is not None:
-                                pp_i, pp_m = update_fn(
-                                    state.position, box=pbc_box_nl
-                                )
+                                wrapped_rescue = _wrap_monomers(state.position, _cell_jax)
+                                pp_i, pp_m = update_fn(wrapped_rescue, box=pbc_box_nl)
                                 _pbc_state["pair_idx"] = pp_i
                                 _pbc_state["pair_mask"] = pp_m
                                 current_neighbors = (pp_i, pp_m)
@@ -3251,13 +3256,16 @@ def set_up_nhc_sim_routine(
                             f"{_fb_cols}{_wall_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
 
-                # Record to HDF5 every record (NPT: real-space; optional monomer wrap)
+                # Record to HDF5 every record (NPT: real-space; optional monomer wrap).
+                # NVE/NVT integrator coords stay unwrapped; wrap only for viz export.
                 pos_for_h5 = state.position
                 if is_npt:
                     box_curr = simulate.npt_box(state)
                     pos_for_h5 = space.transform(box_curr, state.position)
                     if traj_export_molecular_wrap:
                         pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
+                elif use_pbc and traj_export_molecular_wrap:
+                    pos_for_h5 = _wrap_monomers(state.position, _cell_jax)
                 report_kw = dict(
                     potential_energy=e_pot,
                     kinetic_energy=e_kin,
