@@ -1,12 +1,12 @@
 {
   "by_element_total_F": {
     "1": {
-      "max_abs_eVA": 5.296320545790163,
-      "mean_abs_eVA": 3.9322001242782973,
+      "max_abs_eVA": 5.29632054579016,
+      "mean_abs_eVA": 3.932200124278298,
       "n_atoms": 1806
     },
     "8": {
-      "max_abs_eVA": 6.815112756417433,
+      "max_abs_eVA": 6.815112756417455,
       "mean_abs_eVA": 5.9224800466040834,
       "n_atoms": 903
     }
@@ -28,26 +28,26 @@
   "terms": [
     {
       "energy_eV": -10501.1322183609,
-      "max_abs_eVA": 1.5937592645547047,
-      "max_vs_total_max": 0.23385662446361516,
+      "max_abs_eVA": 1.593759264554705,
+      "max_vs_total_max": 0.23385662446361444,
       "mean_abs_eVA": 1.3357092604258798,
-      "mean_align_with_total": 0.9813179239709677,
+      "mean_align_with_total": 0.981317923970968,
       "name": "internal_ML",
       "rms_eVA": 1.3398520863619987
     },
     {
       "energy_eV": 150.2722742484998,
-      "max_abs_eVA": 1.6143689167644235,
-      "max_vs_total_max": 0.23688073469426568,
-      "mean_abs_eVA": 0.8148538554855185,
-      "mean_align_with_total": -0.8527857614359109,
+      "max_abs_eVA": 1.6143689167644164,
+      "max_vs_total_max": 0.23688073469426385,
+      "mean_abs_eVA": 0.8148538554855177,
+      "mean_align_with_total": -0.8527857614359099,
       "name": "ml_dimer",
-      "rms_eVA": 0.8476676847380006
+      "rms_eVA": 0.8476676847379998
     },
     {
       "energy_eV": -6454.801197292233,
       "max_abs_eVA": 5.773681595851816,
-      "max_vs_total_max": 0.8471879779854037,
+      "max_vs_total_max": 0.8471879779854009,
       "mean_abs_eVA": 3.989299750443609,
       "mean_align_with_total": 0.9983828911905646,
       "name": "mm",
@@ -65,12 +65,12 @@
   ],
   "total": {
     "energy_eV": -16805.661141404635,
-    "max_abs_eVA": 6.815112756417433,
+    "max_abs_eVA": 6.815112756417455,
     "max_vs_total_max": null,
-    "mean_abs_eVA": 4.5956267650535585,
+    "mean_abs_eVA": 4.59562676505356,
     "mean_align_with_total": null,
     "name": "total",
-    "rms_eVA": 4.69606389087437
+    "rms_eVA": 4.696063890874371
   },
   "units": {
     "energy": "eV",

@@ -14,7 +14,7 @@
         "psf": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/02_mini.psf",
         "xyz": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/02_mini.xyz"
       },
-      "grms_kcalmol_A": 4.070015519843586
+      "grms_kcalmol_A": 4.070015519843594
     }
   ]
 }
