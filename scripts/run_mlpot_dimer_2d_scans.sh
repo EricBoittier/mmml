@@ -30,6 +30,10 @@ SCAN_2D_MAX="${SCAN_2D_MAX:-10.0}"
 SCAN_2D_STEPS="${SCAN_2D_STEPS:-15}"
 ANGLE_02_DEG="${ANGLE_02_DEG:-60.0}"
 PACKMOL_R="${PACKMOL_R:-8.0}"
+MM_PAIR_SOURCE_ARGS=()
+if [[ -n "${MM_PAIR_SOURCE:-}" ]]; then
+  MM_PAIR_SOURCE_ARGS=(--mm-pair-source "$MM_PAIR_SOURCE")
+fi
 
 if [[ -n "${CHECKPOINTS:-}" ]]; then
   # shellcheck disable=SC2206
@@ -67,6 +71,7 @@ for ckpt in "${CKPT_LIST[@]}"; do
       --scan-2d-max "$SCAN_2D_MAX" \
       --scan-2d-steps "$SCAN_2D_STEPS" \
       --angle-02-deg "$ANGLE_02_DEG" \
+      "${MM_PAIR_SOURCE_ARGS[@]}" \
       --skip-energy-show \
       --seed 123
     rc=$?
