@@ -32,5 +32,5 @@
   "jax_md_n_valid": null,
   "box_A": 30.307409163768842,
   "free_space": false,
-  "run_status": "error"
+  "run_status": "interrupted"
 }

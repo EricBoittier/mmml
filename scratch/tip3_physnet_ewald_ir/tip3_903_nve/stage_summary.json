@@ -2,7 +2,7 @@
   "job_id": "tip3_903_nve",
   "backend": "jaxmd",
   "setup": "pbc_nve",
-  "exit_code": 1,
+  "exit_code": 130,
   "wall_time_s": 0.0,
   "handoff": {},
   "stages": [
