@@ -251,12 +251,32 @@ def test_should_skip_pre_dyn_fmax_gate_for_equi_from_heat():
     assert _should_skip_pre_dyn_fmax_gate(
         seeded_from_dynamics_restart=True, dyn_stages=["equi"]
     )
+    # Seed may fail (unreadable restart) but --restart-from heat.N.res still skips.
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["equi"],
+        restart_from="heat.7.res",
+    )
     assert not _should_skip_pre_dyn_fmax_gate(
-        seeded_from_dynamics_restart=False, dyn_stages=["equi"]
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["equi"],
+        restart_from=None,
     )
     assert not _should_skip_pre_dyn_fmax_gate(
         seeded_from_dynamics_restart=True, dyn_stages=["heat"]
     )
+
+
+def test_is_dynamics_stage_restart_path():
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _is_dynamics_stage_restart_path,
+    )
+
+    assert _is_dynamics_stage_restart_path("heat.7.res")
+    assert _is_dynamics_stage_restart_path("heat.res")
+    assert _is_dynamics_stage_restart_path("/tmp/nve.res")
+    assert not _is_dynamics_stage_restart_path("continue_seed.res")
+    assert not _is_dynamics_stage_restart_path("pretreat/charmm_mm_equi.res")
 
 
 def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
