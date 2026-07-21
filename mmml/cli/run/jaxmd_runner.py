@@ -211,9 +211,13 @@ JAXMD_FIRE_FMAX_MILD_EVA = 0.5
 JAXMD_FIRE_FMAX_HIGH_EVA = 1.0
 JAXMD_FIRE_FMAX_VERY_HIGH_EVA = 5.0
 # Abort a FIRE stage when live max|F| exceeds best (and stage start) by this factor.
-JAXMD_FIRE_BLOWUP_FACTOR = 3.0
+JAXMD_FIRE_BLOWUP_FACTOR = 2.0
 # Soft floor so a near-zero best cannot trip blow-up on numerical noise.
 JAXMD_FIRE_BLOWUP_ABS_FLOOR_EVA = 0.5
+# Also abort when live max|F| rises by this absolute amount vs stage start (eV/Å).
+JAXMD_FIRE_BLOWUP_ABS_RISE_EVA = 5.0
+# Cap steps/stage on hard starts so a hot inertial stage cannot burn 1000 steps.
+JAXMD_FIRE_HARD_START_MAX_STEPS_PER_STAGE = 100
 # After FIRE stages still this hard (or blew up without real progress): rebuild
 # high-|F| monomers from a healthier peer template, then retry a cold FIRE stage.
 JAXMD_FIRE_TEMPLATE_REBUILD_MIN_FMAX_EVA = 2.0
@@ -236,6 +240,23 @@ def should_skip_jaxmd_fire(
     return bool(np.isfinite(f) and f <= thr)
 
 
+def should_skip_first_fire_when_pbc_fire_follows(
+    *,
+    use_pbc: bool,
+    first_fire_steps: int,
+    pbc_fire_steps: int,
+) -> bool:
+    """Skip the first FIRE when PBC FIRE will run the same molecular-wrap path.
+
+    Under PBC both stages use monomer wrap + the hybrid force; running the first
+    1000-step hot stage then repeating as "PBC FIRE" just wastes wall time
+    (seen: max|F| 7→80 for a full stage, then PBC restarts from the early best).
+    """
+    return bool(
+        use_pbc and int(first_fire_steps) > 0 and int(pbc_fire_steps) > 0
+    )
+
+
 def should_skip_redundant_pbc_fire(
     *,
     first_fire_steps: int,
@@ -253,6 +274,23 @@ def should_skip_redundant_pbc_fire(
     if int(first_fire_steps) <= 0:
         return False
     return bool(first_fire_skipped_soft or first_fire_ran_without_improvement)
+
+
+def resolve_jaxmd_fire_stage_steps(
+    n_steps: int,
+    initial_max_f_eVA: float,
+    *,
+    hard_cap: int = JAXMD_FIRE_HARD_START_MAX_STEPS_PER_STAGE,
+    hard_fmax_eVA: float = JAXMD_FIRE_FMAX_HIGH_EVA,
+) -> int:
+    """Cap steps/stage when the start is already hard so blow-ups bail quickly."""
+    n = max(0, int(n_steps))
+    if n <= 0:
+        return 0
+    f = float(initial_max_f_eVA)
+    if np.isfinite(f) and f >= float(hard_fmax_eVA):
+        return int(min(n, max(1, int(hard_cap))))
+    return n
 
 
 def resolve_jaxmd_fire_dt_start_ps(initial_max_f_eVA: float) -> float:
@@ -299,13 +337,17 @@ def fire_stage_blew_up(
     stage_start_max_f_eVA: float,
     blowup_factor: float = JAXMD_FIRE_BLOWUP_FACTOR,
     abs_floor_eVA: float = JAXMD_FIRE_BLOWUP_ABS_FLOOR_EVA,
+    abs_rise_eVA: float = JAXMD_FIRE_BLOWUP_ABS_RISE_EVA,
 ) -> bool:
     """True when live max|F| has exploded vs the stage's best / start."""
     live = float(live_max_f_eVA)
     if not np.isfinite(live):
         return True
-    anchor = max(float(best_max_f_eVA), float(stage_start_max_f_eVA), float(abs_floor_eVA))
-    return bool(live > float(blowup_factor) * anchor)
+    start = float(stage_start_max_f_eVA)
+    anchor = max(float(best_max_f_eVA), start, float(abs_floor_eVA))
+    if live > float(blowup_factor) * anchor:
+        return True
+    return bool(live > start + float(abs_rise_eVA))
 
 
 def should_attempt_fire_template_rebuild(
@@ -1524,8 +1566,25 @@ def set_up_nhc_sim_routine(
                 print("Fallback: using R directly for minimization")
 
             NMIN = getattr(args, "jaxmd_minimize_steps", 1000)
-            if NMIN <= 0:
-                c.print(Panel("Skipping first minimization (0 steps requested)", title="[bold]JAX-MD Minimization[/bold]", border_style="yellow"))
+            NMIN_PBC_PLANNED = int(getattr(args, "jaxmd_pbc_minimize_steps", 0) or 0)
+            skip_first_for_pbc = should_skip_first_fire_when_pbc_fire_follows(
+                use_pbc=bool(use_pbc),
+                first_fire_steps=int(NMIN),
+                pbc_fire_steps=NMIN_PBC_PLANNED,
+            )
+            if NMIN <= 0 or skip_first_for_pbc:
+                why = (
+                    "PBC FIRE follows with the same molecular-wrap path"
+                    if skip_first_for_pbc
+                    else "0 steps requested"
+                )
+                c.print(
+                    Panel(
+                        f"Skipping first minimization ({why}).",
+                        title="[bold]JAX-MD Minimization[/bold]",
+                        border_style="yellow",
+                    )
+                )
                 minimized_pos = initial_pos
                 skip_redundant_pbc_fire = should_skip_redundant_pbc_fire(
                     first_fire_steps=0, use_pbc=bool(use_pbc)
@@ -1550,14 +1609,15 @@ def set_up_nhc_sim_routine(
                         )
                     )
                 else:
+                    n_fire = resolve_jaxmd_fire_stage_steps(int(NMIN), f0_comp)
                     dt0 = resolve_jaxmd_fire_dt_start_ps(f0_comp)
                     dt_sched = jaxmd_fire_dt_backoff_schedule(dt0)
                     fire_label = (
-                        f"FIRE minimization ({NMIN} steps/stage, molecular wrap; "
+                        f"FIRE minimization ({n_fire} steps/stage, molecular wrap; "
                         f"dt schedule={[f'{d:.1e}' for d in dt_sched]} ps)"
                         if use_pbc
                         else (
-                            f"FIRE minimization ({NMIN} steps/stage; "
+                            f"FIRE minimization ({n_fire} steps/stage; "
                             f"dt schedule={[f'{d:.1e}' for d in dt_sched]} ps)"
                         )
                     )
@@ -1581,7 +1641,7 @@ def set_up_nhc_sim_routine(
                         shift_fn=fire_shift_fn,
                         positions=initial_pos,
                         masses=Si_mass,
-                        n_steps=int(NMIN),
+                        n_steps=int(n_fire),
                         dt_schedule=dt_sched,
                         nl_refresh_fn=_fire_nl_refresh if (use_pbc and update_fn is not None) else None,
                         energy_fn=wrapped_energy_fn,
@@ -1721,11 +1781,12 @@ def set_up_nhc_sim_routine(
                     )
                 )
             else:
+                n_pbc_fire = resolve_jaxmd_fire_stage_steps(int(NMIN_PBC), f0_pbc)
                 dt0_pbc = resolve_jaxmd_fire_dt_start_ps(f0_pbc)
                 dt_sched_pbc = jaxmd_fire_dt_backoff_schedule(dt0_pbc)
                 c.print(
                     Panel(
-                        f"PBC FIRE minimization ({NMIN_PBC} steps/stage; "
+                        f"PBC FIRE minimization ({n_pbc_fire} steps/stage; "
                         f"dt schedule={[f'{d:.1e}' for d in dt_sched_pbc]} ps)",
                         title="[bold cyan]PBC Minimization[/bold cyan]",
                         border_style="cyan",
@@ -1750,7 +1811,7 @@ def set_up_nhc_sim_routine(
                     shift_fn=shift_molecular,
                     positions=pbc_start_pos,
                     masses=Si_mass,
-                    n_steps=int(NMIN_PBC),
+                    n_steps=int(n_pbc_fire),
                     dt_schedule=dt_sched_pbc,
                     nl_refresh_fn=_pbc_nl_refresh if update_fn is not None else None,
                     energy_fn=wrapped_energy_fn,

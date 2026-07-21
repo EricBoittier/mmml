@@ -11,15 +11,18 @@ import pytest
 from mmml.cli.run.jaxmd_runner import (
     JAXMD_FIRE_DT_HIGH_F_PS,
     JAXMD_FIRE_DT_VERY_HIGH_F_PS,
+    JAXMD_FIRE_HARD_START_MAX_STEPS_PER_STAGE,
     _nl_update_positions,
     fire_stage_blew_up,
     jaxmd_fire_dt_backoff_schedule,
     resolve_jaxmd_fire_dt_start_ps,
+    resolve_jaxmd_fire_stage_steps,
     resolve_jaxmd_steps_per_loop_call,
     resolve_mm_pair_list_capacity,
     resolve_pre_md_fire_start_positions,
     run_jaxmd_fire_with_dt_backoff,
     should_attempt_fire_template_rebuild,
+    should_skip_first_fire_when_pbc_fire_follows,
     should_skip_jaxmd_fire,
 )
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
@@ -186,9 +189,28 @@ def test_jaxmd_fire_dt_backoff_schedule_descends():
     assert sched[1] < sched[0]
 
 
-def test_fire_stage_blew_up_factor():
+def test_fire_stage_blew_up_factor_and_abs_rise():
     assert fire_stage_blew_up(85.0, best_max_f_eVA=6.5, stage_start_max_f_eVA=7.7)
+    # Absolute rise vs stage start (5 eV/Å) catches mid-stage spikes sooner.
+    assert fire_stage_blew_up(13.0, best_max_f_eVA=6.5, stage_start_max_f_eVA=7.7)
     assert not fire_stage_blew_up(8.0, best_max_f_eVA=6.5, stage_start_max_f_eVA=7.7)
+
+
+def test_should_skip_first_fire_when_pbc_fire_follows():
+    assert should_skip_first_fire_when_pbc_fire_follows(
+        use_pbc=True, first_fire_steps=1000, pbc_fire_steps=500
+    )
+    assert not should_skip_first_fire_when_pbc_fire_follows(
+        use_pbc=True, first_fire_steps=1000, pbc_fire_steps=0
+    )
+    assert not should_skip_first_fire_when_pbc_fire_follows(
+        use_pbc=False, first_fire_steps=1000, pbc_fire_steps=500
+    )
+
+
+def test_resolve_jaxmd_fire_stage_steps_caps_hard_starts():
+    assert resolve_jaxmd_fire_stage_steps(1000, 7.0) == JAXMD_FIRE_HARD_START_MAX_STEPS_PER_STAGE
+    assert resolve_jaxmd_fire_stage_steps(1000, 0.2) == 1000
 
 
 def test_should_attempt_fire_template_rebuild_on_blowup_or_stall():
