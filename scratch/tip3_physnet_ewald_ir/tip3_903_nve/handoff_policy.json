@@ -13,7 +13,7 @@
   "box_warnings": [],
   "velocities_in_handoff": false,
   "continue_velocities": false,
-  "velocity_policy": "pending",
+  "velocity_policy": "maxwell_boltzmann",
   "use_handoff_velocities": false,
   "skip_pre_min": false,
   "handoff_pre_minimize": true,
