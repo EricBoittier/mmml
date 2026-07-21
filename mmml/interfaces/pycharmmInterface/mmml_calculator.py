@@ -1152,25 +1152,12 @@ def setup_calculator(
         resolve_max_active_dimers,
     )
 
-    # Sparse dimers: max active for JIT (cap for memory)
+    # Sparse dimers: max active for JIT (cap for memory). Box volume/active
+    # radius are not known yet at this point (cell is normalized below) --
+    # the actual cap is (re)computed density-aware right after cell
+    # normalization; this early value is only used if ml_sparse_dimers is
+    # False, in which case it's ignored anyway.
     _free_space_dimers = cell is False or cell is None
-    _max_active_dimers = (
-        resolve_max_active_dimers(
-            n_monomers,
-            n_dimers_total,
-            ml_max_active_dimers,
-            free_space=_free_space_dimers,
-        )
-        if ml_sparse_dimers
-        else n_dimers_total
-    )
-    _cached_sparse_batch_structure = None
-    if ml_sparse_dimers and _max_active_dimers < n_dimers_total:
-        try:
-            _cached_sparse_batch_structure = prepare_batch_structure(n_monomers + _max_active_dimers, max_atoms)
-        except Exception:
-            pass
-
 
     if use_smooth_mic is None:
         # Exact MIC for MD. Smooth MIC is for PBC minimization gradients only —
@@ -1199,6 +1186,30 @@ def setup_calculator(
     else:
         pbc_cell = None
         pbc_map = do_pbc_map = False
+
+    # Sparse-dimer active-set capacity: density-aware when the box volume is
+    # known (PBC), since a fixed per-monomer heuristic badly undersizes
+    # dense periodic liquids (see mlpot_sparse_dimer_policy.resolve_max_active_dimers).
+    _dimer_active_radius = cutoff_params.mm_switch_on + cutoff_params.ml_switch_width
+    _box_volume = float(jnp.linalg.det(pbc_cell)) if pbc_cell is not None else None
+    _max_active_dimers = (
+        resolve_max_active_dimers(
+            n_monomers,
+            n_dimers_total,
+            ml_max_active_dimers,
+            free_space=_free_space_dimers,
+            box_volume=_box_volume,
+            active_radius=_dimer_active_radius,
+        )
+        if ml_sparse_dimers
+        else n_dimers_total
+    )
+    _cached_sparse_batch_structure = None
+    if ml_sparse_dimers and _max_active_dimers < n_dimers_total:
+        try:
+            _cached_sparse_batch_structure = prepare_batch_structure(n_monomers + _max_active_dimers, max_atoms)
+        except Exception:
+            pass
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
@@ -2104,6 +2115,26 @@ def setup_calculator(
             com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
                 dimer_positions, dimer_n_a, dimer_n_b)
             active_mask = com_dists < active_radius
+            _n_active_true = jnp.sum(active_mask)
+            jax.lax.cond(
+                _n_active_true > _max_active_dimers,
+                lambda n: jax.debug.print(
+                    "mmml WARNING: sparse active-dimer cap saturated: "
+                    "{n_true} in-range dimer pairs > cap={cap}. "
+                    "{dropped} pairs are being silently truncated by "
+                    "jnp.nonzero's fixed-size selection (first-by-enumeration-"
+                    "order, not nearest); this can discontinuously toggle "
+                    "unrelated pairs on/off as any atom moves and inject "
+                    "spurious forces. Raise ml_max_active_dimers / "
+                    "MMML_MLPOT_MAX_ACTIVE_DIMERS well above {n_true}, or "
+                    "increase box_volume awareness in resolve_max_active_dimers.",
+                    n_true=n,
+                    cap=_max_active_dimers,
+                    dropped=n - _max_active_dimers,
+                ),
+                lambda n: None,
+                _n_active_true,
+            )
             active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
             active_indices_safe = jnp.where(active_indices < n_dimers, active_indices, 0)
             sparse_dimer_positions = dimer_positions[active_indices_safe]
