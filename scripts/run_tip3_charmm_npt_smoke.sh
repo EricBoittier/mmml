@@ -15,6 +15,12 @@
 #   - equi: CPT NpT (pmass>0) at bath temperature (default 200 K)
 # Skip heat with MD_STAGES=mini,equi (not recommended after cold CPT ECHECK).
 #
+# Resume CPT equi from a finished heat (keep heat*.res; do not WIPE):
+#   WIPE=0 MD_STAGES=equi N_HEAT_SEGMENTS=8 ./scripts/run_tip3_charmm_npt_smoke.sh \
+#     --restart-from "$OUT_DIR/heat.7.res"
+# Or omit --restart-from when heat.7.res (or heat.res) is already under OUT_DIR.
+# Do not use MD_STAGES=mini,equi for that resume — mini drops the heat restart.
+#
 # DYNA list cadence: DYN_INBFRQ / DYN_IMGFRQ default 25 (was CHARMM 50). More
 # frequent IMAGE/NB/MLpot updates during early barostat motion; still cheap vs
 # every step. Override with DYN_INBFRQ=10 DYN_IMGFRQ=10 for tighter lists.
@@ -65,15 +71,15 @@ ML_ARGS=(--ml-gpu-count "$ML_GPU_COUNT")
 if [[ -n "$ML_BATCH_SIZE" ]]; then
   ML_ARGS+=(--ml-batch-size "$ML_BATCH_SIZE")
 fi
-HEAT_ARGS=()
+# Always pass segment count so MD_STAGES=equi can find heat.{N-1}.res.
+HEAT_ARGS=(--n-heat-segments "$N_HEAT_SEGMENTS")
 if [[ ",$MD_STAGES," == *",heat,"* ]]; then
-  HEAT_ARGS=(
+  HEAT_ARGS+=(
     --ps-heat "$PS_HEAT"
     --heat-thermostat hoover
     --heat-firstt "$HEAT_FIRSTT"
     --heat-finalt "$TEMP_K"
     --no-echeck-heat
-    --n-heat-segments "$N_HEAT_SEGMENTS"
     # One DYNA per heat segment (no mid-segment velocity redraw).
     --heat-overlap-segment-boundary-only
   )

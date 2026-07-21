@@ -258,6 +258,10 @@ def _prior_restart_for_stage(
     if stage == "equi":
         if paths["nve_res"].is_file():
             return paths["nve_res"]
+        # Segmented heat writes heat.{N-1}.res, not heat.res.
+        heat_restart = _heat_restart_path(paths, tag or "", n_heat_segments)
+        if heat_restart.is_file():
+            return heat_restart
         if paths["heat_res"].is_file():
             return paths["heat_res"]
         return None
@@ -2974,7 +2978,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
             if stage == "equi" and n_equi_segments > 1:
                 initial = prev_restart or _prior_restart_for_stage(
-                    "equi", paths, restart_from=None
+                    "equi",
+                    paths,
+                    restart_from=None,
+                    tag=tag,
+                    n_heat_segments=n_heat_segments,
                 )
                 seg_chain = npt_restart_chain(
                     out_dir,

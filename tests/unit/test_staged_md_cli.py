@@ -200,6 +200,22 @@ def test_prior_restart_for_equi_falls_back_to_heat_without_nve(tmp_path: Path):
     assert got == paths["heat_res"]
 
 
+def test_prior_restart_for_equi_prefers_final_heat_segment(tmp_path: Path):
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        stage_segment_restart,
+    )
+
+    paths = _artifact_paths(tmp_path, "dcm_60")
+    heat_final = stage_segment_restart(tmp_path, "heat", 7)
+    heat_final.write_text("heat-seg\n", encoding="utf-8")
+    paths["heat_res"].write_text("heat-legacy\n", encoding="utf-8")
+
+    got = _prior_restart_for_stage(
+        "equi", paths, restart_from=None, n_heat_segments=8
+    )
+    assert got == heat_final
+
+
 def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
     paths = _artifact_paths(tmp_path, "dcm_60")
     paths["heat_res"].write_text("heat\n", encoding="utf-8")
