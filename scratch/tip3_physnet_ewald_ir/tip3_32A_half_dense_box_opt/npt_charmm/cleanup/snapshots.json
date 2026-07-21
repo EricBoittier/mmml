@@ -1,0 +1,18 @@
+{
+  "tag": "model",
+  "snapshots": [
+    {
+      "seq": 10,
+      "slug": "rescue_10",
+      "stem": "10_rescue_10",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: heat segment 1/8 at step 500",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/10_rescue_10.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/10_rescue_10_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/10_rescue_10.pdb"
+      },
+      "grms_kcalmol_A": 38.00987408912293
+    }
+  ]
+}

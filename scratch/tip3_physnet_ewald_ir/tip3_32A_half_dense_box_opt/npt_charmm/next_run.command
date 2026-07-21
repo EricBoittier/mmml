@@ -1,0 +1,1 @@
+mmml md-system --output-dir scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm --backend pycharmm --restart-from scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/baseline.res --md-stages mini,heat,equi
