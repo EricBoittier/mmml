@@ -49,6 +49,54 @@ def test_mlpot_jax_device_context_falls_back_to_cpu_when_no_gpu(monkeypatch):
             assert dev == cpu_dev
 
 
+def test_mlpot_jax_device_context_cpu_fallback_warns_loudly(monkeypatch, capsys):
+    """The GPU->CPU fallback must never be silent: it should be observable via
+    both the fallback-tracking flag and a printed warning, so a stale/
+    misconfigured run can't quietly compute on CPU while claiming GPU."""
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    jax = pytest.importorskip("jax")
+    cpu_dev = jax.devices("cpu")[0]
+
+    def devices_side_effect(name=None):
+        if name == "gpu":
+            raise RuntimeError("no gpu")
+        return [cpu_dev]
+
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    jax_device_policy.reset_mlpot_device_fallback_flag()
+    with mock.patch("jax.devices", side_effect=devices_side_effect):
+        assert jax_device_policy.mlpot_device_context_fell_back_to_cpu() is False
+        with jax_device_policy.mlpot_jax_device_context():
+            pass
+        assert jax_device_policy.mlpot_device_context_fell_back_to_cpu() is True
+
+    out = capsys.readouterr()
+    combined = out.out + out.err
+    assert "WARNING" in combined
+    assert "no GPU device" in combined
+
+
+def test_mlpot_jax_device_context_no_fallback_when_gpu_available(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    jax = pytest.importorskip("jax")
+    gpu_dev = mock.MagicMock()
+    cpu_dev = jax.devices("cpu")[0]
+
+    def devices_side_effect(name=None):
+        return [gpu_dev] if name == "gpu" else [cpu_dev]
+
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    jax_device_policy.reset_mlpot_device_fallback_flag()
+    with mock.patch("jax.devices", side_effect=devices_side_effect), mock.patch(
+        "jax.default_device"
+    ):
+        with jax_device_policy.mlpot_jax_device_context() as dev:
+            assert dev is gpu_dev
+        assert jax_device_policy.mlpot_device_context_fell_back_to_cpu() is False
+
+
 def test_mlpot_jax_compilation_cache_default(monkeypatch, tmp_path):
     monkeypatch.delenv("JAX_COMPILATION_CACHE_DIR", raising=False)
     monkeypatch.delenv("MMML_NO_JAX_COMPILATION_CACHE", raising=False)

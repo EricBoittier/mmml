@@ -855,8 +855,17 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
                     verbose=False,
                 )
         if verbose:
+            # `_jax_on_gpu` reflects the device actually used after promotion
+            # (mlpot_jax_device_context falls back to CPU -- with a warning --
+            # when GPU was requested but unavailable); report reality, not the
+            # request, so this line can't claim GPU while nvidia-smi shows 0%.
+            now_gpu = bool(getattr(pyCModel, "_jax_on_gpu", False))
             print(
-                "Pre-SD hybrid calculator minimize: promoted JAX factory to GPU",
+                "Pre-SD hybrid calculator minimize: promoted JAX factory to GPU"
+                if now_gpu
+                else "Pre-SD hybrid calculator minimize: JAX factory promotion "
+                "requested GPU but no CUDA device is visible; continuing on CPU "
+                "(see WARNING above)",
                 flush=True,
             )
         return

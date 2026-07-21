@@ -930,8 +930,10 @@ class DecomposedMlpotModel:
         )
         from mmml.interfaces.pycharmmInterface.jax_device_policy import (
             jax_cpu_until_mlpot_registered,
+            mlpot_device_context_fell_back_to_cpu,
             mlpot_jax_device_context,
             mlpot_jax_device_name,
+            reset_mlpot_device_fallback_flag,
         )
 
         cpu_only = not gpu and (
@@ -959,6 +961,8 @@ class DecomposedMlpotModel:
                     "(MPI defer path; ignoring registration-time CPU env)",
                     flush=True,
                 )
+            if not cpu_only:
+                reset_mlpot_device_fallback_flag()
             with device_ctx():
                 _, spherical_fn, get_update_fn = unpack_factory_result(
                     self._pending_factory(
@@ -976,7 +980,14 @@ class DecomposedMlpotModel:
         self._spherical_fn = spherical_fn
         if self._do_mm:
             self._get_update_fn = get_update_fn
-        self._jax_on_gpu = not cpu_only
+        # Track the device actually used, not the request: mlpot_jax_device_context
+        # silently fell back to CPU when GPU was requested but unavailable (see its
+        # docstring), so `not cpu_only` alone previously left `_jax_on_gpu=True` while
+        # the compute ran on CPU (the "promoted to GPU" message with 0% nvidia-smi
+        # utilization bug this fixes). `reset_mlpot_device_fallback_flag` right before
+        # `device_ctx()` means a test-mocked `mlpot_jax_device_context` (which never
+        # touches the flag) is correctly read as "no fallback".
+        self._jax_on_gpu = (not cpu_only) and not mlpot_device_context_fell_back_to_cpu()
         if not cpu_only:
             self._pending_factory = None
             self._pending_factory_z = None
