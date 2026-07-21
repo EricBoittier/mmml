@@ -324,6 +324,51 @@ def test_finalize_jax_factory_gpu_promote_ignores_defer_cpu_env(monkeypatch):
     assert model._jax_on_gpu is True
 
 
+def test_finalize_jax_factory_real_gpu_fallback_does_not_claim_gpu(monkeypatch, capsys):
+    """Regression: a GPU request that silently falls back to CPU inside the real
+    ``mlpot_jax_device_context`` must leave ``_jax_on_gpu`` False, not True -- so
+    callers (e.g. the "promoted JAX factory to GPU" print) never claim GPU while
+    actually computing on CPU. Uses the real (unmocked) device-context function,
+    with only ``jax.devices`` faked to simulate no visible GPU."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        None,
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=False,
+        pending_factory=MagicMock(return_value=(0.0, MagicMock(), None)),
+        pending_factory_z=z,
+    )
+    model._verbose = False
+
+    cpu_dev = jax.devices("cpu")[0]
+
+    def devices_side_effect(name=None):
+        if name == "gpu":
+            raise RuntimeError("no gpu")
+        return [cpu_dev]
+
+    with patch("jax.devices", side_effect=devices_side_effect), patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
+        new=lambda: __import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(0.0, MagicMock(), None),
+    ):
+        model._finalize_jax_factory(gpu=True)
+
+    assert model._jax_on_gpu is False
+    combined = capsys.readouterr().out
+    assert "WARNING" in combined
+
+
 def test_promote_jax_factory_to_gpu_blocked_during_charmm_sd():
     z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
     model = DecomposedMlpotModel(
