@@ -508,6 +508,95 @@ def rebuild_monomers_from_reference(
     return pos
 
 
+def monomer_max_force_magnitudes(
+    forces: np.ndarray,
+    monomer_offsets: np.ndarray,
+) -> np.ndarray:
+    """Per-monomer max atom |F| (eV/Å) from an (N, 3) force array."""
+    f = np.asarray(forces, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    out = np.zeros(n_monomers, dtype=float)
+    atom_f = np.linalg.norm(f, axis=-1)
+    for mi in range(n_monomers):
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        if e > s:
+            out[mi] = float(np.max(atom_f[s:e]))
+    return out
+
+
+def rebuild_high_force_monomers_from_peers(
+    positions: np.ndarray,
+    forces: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    force_percentile: float = 90.0,
+    max_rebuild: int = 64,
+    min_force_eVA: float = 1.0,
+) -> tuple[np.ndarray, list[int], int]:
+    """Replace internals of high-|F| monomers with a Kabsch-aligned healthy peer.
+
+    Donor is the same-sized monomer with the lowest max-atom |F|.  Victims are
+    monomers at/above ``force_percentile`` of the per-monomer max-|F| distribution
+    and at least ``min_force_eVA``.  COMs of victims are preserved.
+
+    Returns ``(new_positions, rebuilt_monomer_indices, donor_monomer_index)``.
+    """
+    from mmml.utils.structure_align import kabsch_rotation
+
+    pos = np.asarray(positions, dtype=float).copy()
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    if n_monomers <= 1:
+        return pos, [], -1
+
+    mol_f = monomer_max_force_magnitudes(forces, offsets)
+    sizes = np.array(
+        [int(offsets[i + 1]) - int(offsets[i]) for i in range(n_monomers)],
+        dtype=int,
+    )
+    thr = float(np.percentile(mol_f, float(force_percentile)))
+    thr = max(thr, float(min_force_eVA))
+    victims = [i for i in range(n_monomers) if float(mol_f[i]) >= thr]
+    victims = sorted(victims, key=lambda i: -float(mol_f[i]))[: max(0, int(max_rebuild))]
+    if not victims:
+        return pos, [], -1
+
+    # Prefer a single global donor when all monomers share a size (TIP3 liquid).
+    donor = int(np.argmin(mol_f))
+    rebuilt: list[int] = []
+    for mi in victims:
+        if mi == donor:
+            continue
+        size = int(sizes[mi])
+        # If donor size mismatches, pick the softest same-size peer.
+        if int(sizes[donor]) != size:
+            same = [j for j in range(n_monomers) if int(sizes[j]) == size]
+            if not same:
+                continue
+            donor_i = int(min(same, key=lambda j: float(mol_f[j])))
+        else:
+            donor_i = donor
+        if donor_i == mi:
+            continue
+        s_d, e_d = int(offsets[donor_i]), int(offsets[donor_i + 1])
+        s_v, e_v = int(offsets[mi]), int(offsets[mi + 1])
+        donor_chunk = pos[s_d:e_d]
+        victim_chunk = pos[s_v:e_v]
+        donor_com = donor_chunk.mean(axis=0)
+        victim_com = victim_chunk.mean(axis=0)
+        donor_local = donor_chunk - donor_com
+        victim_local = victim_chunk - victim_com
+        if size >= 3:
+            rot = kabsch_rotation(donor_local, victim_local)
+            placed = donor_local @ rot + victim_com
+        else:
+            placed = donor_local + victim_com
+        pos[s_v:e_v] = placed
+        rebuilt.append(int(mi))
+    return pos, rebuilt, int(donor)
+
+
 def repack_monomers_clear_overlap(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
