@@ -1358,12 +1358,25 @@ def maybe_intervene_monomer_health(
     context: str,
     global_step: int | None = None,
     restart_path: Any | None = None,
+    temperature_K: float | None = None,
 ) -> MonomerHealthIntervention:
     """Audit health; template+FIRE only for geometry; redraw hot velocities otherwise.
 
     Only ``geometry_restored`` should enter the overlap MLpot-SD / READYN rescue chain.
     Velocity redraws keep state in RAM for the next chunk.
+
+    ``temperature_K``, when given, is the caller's *current* dynamics-segment
+    bath target (e.g. the live heat-ramp value for the active chunk) and takes
+    precedence over ``_resolve_health_velocity_temperature_K``, which only
+    knows the workflow's overall ``heat_firstt``/``heat_finalt``/``temperature``
+    and would otherwise redraw mid-ramp velocities at the *final* heat target
+    instead of the segment's current one.
     """
+    resolved_temperature_K = (
+        float(temperature_K)
+        if temperature_K is not None and float(temperature_K) > 0.0
+        else _resolve_health_velocity_temperature_K(mlpot_ctx)
+    )
     health_cfg = getattr(overlap_config, "monomer_health", None)
     if health_cfg is None:
         args = getattr(mlpot_ctx, "workflow_args", None)
@@ -1437,7 +1450,7 @@ def maybe_intervene_monomer_health(
                 restart_path=restart_path,
                 verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
                 velocity_restore=bool(health_cfg.velocity_restore_on_template),
-                temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
+                temperature_K=resolved_temperature_K,
             )
             if restored:
                 geometry_restored = True
@@ -1473,7 +1486,7 @@ def maybe_intervene_monomer_health(
             mlpot_ctx,
             to_redraw,
             offsets=offsets,
-            temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
+            temperature_K=resolved_temperature_K,
             verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
             context=context,
         )

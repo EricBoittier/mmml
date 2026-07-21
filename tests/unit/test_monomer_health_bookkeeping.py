@@ -534,6 +534,80 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
 
 
 @patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 2, 4, 6], dtype=int),
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+)
+@patch("pycharmm.coor.get_natom", return_value=6)
+def test_maybe_intervene_monomer_health_uses_caller_ramp_temperature(
+    _natom: MagicMock,
+    audit: MagicMock,
+    _offsets: MagicMock,
+    redraw: MagicMock,
+    _restore_template: MagicMock,
+) -> None:
+    """A caller-supplied ``temperature_K`` (live heat-ramp target) must win over
+    ``workflow_args.temperature`` — the overall/final heat target used only as a
+    fallback — so a mid-ramp redraw does not inject velocities far hotter than
+    the segment actually being run.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_intervene_monomer_health,
+    )
+
+    audit.return_value = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="TIP3",
+                velocity_rms_akma=40000.0,
+                velocity_max_akma=50000.0,
+                hybrid_grms_kcalmol_A=2.0,
+                charmm_grms_kcalmol_A=1.0,
+                velocity_level=LEVEL_BAD,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
+            ),
+        ),
+        flagged_bad=(0,),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+    # Overall workflow target is 200 K, but the active heat segment is only
+    # ramping through ~80 K right now — that is what the redraw should use.
+    ctx = MagicMock(workflow_args=SimpleNamespace(heat_finalt=200.0))
+    overlap = SimpleNamespace(
+        n_monomers=1,
+        monomer_health=MonomerHealthConfig(verbose=False),
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ):
+        recovered = maybe_intervene_monomer_health(
+            ctx,
+            overlap,
+            context="HEAT",
+            global_step=2000,
+            temperature_K=80.0,
+        )
+    assert recovered.velocities_redrawn
+    redraw.assert_called_once()
+    assert redraw.call_args.kwargs["temperature_K"] == pytest.approx(80.0)
+
+
+@patch(
     "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
 )
 @patch(

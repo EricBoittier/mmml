@@ -8699,6 +8699,15 @@ def run_dynamics_with_io(
                             maybe_intervene_monomer_health,
                         )
 
+                        # Redraw at the *current* segment's live bath target, not
+                        # the workflow's overall heat_finalt — a mid-ramp redraw
+                        # at the final heat temperature would inject velocities
+                        # far hotter than the chunk actually being run.
+                        health_temperature_K = _bussi_ramp_target_k_for_kw(chunk_kw)
+                        if health_temperature_K is None:
+                            health_temperature_K = _bath_temperature_k_from_dyn_kw(
+                                chunk_kw, default_K=0.0
+                            )
                         health_action = maybe_intervene_monomer_health(
                             mlpot_ctx,
                             overlap,
@@ -8707,6 +8716,7 @@ def run_dynamics_with_io(
                             restart_path=(
                                 chunk_io.restart_write if chunk_io is not None else None
                             ),
+                            temperature_K=health_temperature_K,
                         )
                     geometry_health_rescued = bool(
                         getattr(health_action, "geometry_restored", False)
