@@ -1143,6 +1143,38 @@ def set_up_nhc_sim_routine(
         else "post-compile (ASE-minimized R)"
     )
     print_forces_summary(init_forces, energy_eV=float(init_energy), console=c)
+    try:
+        from mmml.analysis.hybrid_force_breakdown import (
+            hybrid_force_term_breakdown,
+            print_hybrid_force_term_breakdown,
+            write_hybrid_force_term_breakdown_json,
+        )
+
+        _fbreak = hybrid_force_term_breakdown(
+            result,
+            atomic_numbers=np.asarray(atoms.get_atomic_numbers(), dtype=int),
+        )
+        print_hybrid_force_term_breakdown(
+            _fbreak,
+            title=f"Hybrid force-term breakdown ({_eval_label})",
+        )
+        _fbreak_path = _run_prefix.parent / "force_term_breakdown.json"
+        write_hybrid_force_term_breakdown_json(_fbreak, _fbreak_path)
+        c.print(
+            Panel(
+                str(_fbreak_path),
+                title="[bold green]Force-term breakdown JSON[/bold green]",
+                border_style="green",
+            )
+        )
+    except Exception as _fbreak_err:
+        c.print(
+            Panel(
+                f"Could not build force-term breakdown: {_fbreak_err}",
+                title="[bold yellow]Warning[/bold yellow]",
+                border_style="yellow",
+            )
+        )
     print_flat_bottom_summary(
         result,
         flat_bottom_radius=flat_bottom_radius,
