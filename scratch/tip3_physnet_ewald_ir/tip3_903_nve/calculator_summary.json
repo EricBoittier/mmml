@@ -1,6 +1,6 @@
 {
   "model_type": "Hybrid ML/MM (spherical_cutoff_calculator)",
-  "checkpoint": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_903_nve/pbc_nve_jaxmd",
+  "checkpoint": "/mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json",
   "ensemble": "nve",
   "n_monomers": 903,
   "n_atoms": 2709,
@@ -29,5 +29,8 @@
   "nl_skin_distance_A": 0.25,
   "nl_update_interval_steps": 1,
   "jax_md_capacity": null,
-  "jax_md_n_valid": null
+  "jax_md_n_valid": null,
+  "box_A": 30.307409163768842,
+  "free_space": false,
+  "run_status": "interrupted"
 }

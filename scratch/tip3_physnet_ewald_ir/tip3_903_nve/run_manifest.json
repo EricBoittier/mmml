@@ -1,7 +1,7 @@
 {
   "job_name": "tip3_903_nve",
-  "started_at": "2026-07-21T10:41:52.485663+00:00",
-  "finished_at": "2026-07-21T10:48:40.342241+00:00",
+  "started_at": "2026-07-21T10:51:02.958414+00:00",
+  "finished_at": "2026-07-21T10:57:08.129372+00:00",
   "exit_code": 130,
   "command": "mmml md-system --backend jaxmd --setup pbc_nve --continue-from ./scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm/equi.0001.res --no-continue-velocities --handoff-pre-minimize --fire-min-steps 1000 --ml-gpu-count 1 --ml-batch-size 256 --composition TIP3:903 --checkpoint /mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json --output-dir ./scratch/tip3_physnet_ewald_ir/tip3_903_nve --temperature 300 --dt-fs 0.25 --ps 50 --steps-per-recording 10 --include-mm --mm-charge-mode fixed --lr-solver ewald --ewald-omit-self --ml-switch-width 1.5 --mm-switch-on 6.0 --mm-switch-width 5.0 --no-calculator-pre-minimize --jaxmd-minimize-steps 1000 --jaxmd-pbc-minimize-steps 500 --box-size 30.307409163768842 --nve-max-f-start-eVA 10",
   "setup": "pbc_nve",
@@ -379,7 +379,7 @@
     "no_stage_summary": false,
     "mlpot_profile": false,
     "jax_profiler_dir": null,
-    "_cli_explicit": "{'ml_switch_width', 'setup', 'mm_switch_width', 'jaxmd_minimize_steps', 'steps_per_recording', 'continue_velocities', 'checkpoint', 'ps', 'temperature', 'ewald_omit_self', 'output_dir', 'include_mm', 'lr_solver', 'calculator_pre_minimize', 'continue_from', 'ml_batch_size', 'nve_max_f_start_eVA', 'mm_charge_mode', 'handoff_pre_minimize', 'fire_min_steps', 'box_size', 'composition', 'ml_gpu_count', 'jaxmd_pbc_minimize_steps', 'mm_switch_on', 'backend', 'dt_fs'}",
+    "_cli_explicit": "{'composition', 'ps', 'checkpoint', 'dt_fs', 'setup', 'jaxmd_minimize_steps', 'continue_velocities', 'temperature', 'ml_batch_size', 'calculator_pre_minimize', 'fire_min_steps', 'steps_per_recording', 'handoff_pre_minimize', 'mm_switch_on', 'ml_gpu_count', 'box_size', 'ml_switch_width', 'lr_solver', 'backend', 'nve_max_f_start_eVA', 'include_mm', 'mm_switch_width', 'output_dir', 'mm_charge_mode', 'continue_from', 'jaxmd_pbc_minimize_steps', 'ewald_omit_self'}",
     "_cold_start_sim_cell_side_A": 30.307409163768842,
     "_cold_start_packmol_padding_A": 1.0,
     "_cold_start_box_sizing_source": "explicit"
