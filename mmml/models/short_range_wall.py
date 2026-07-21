@@ -22,10 +22,13 @@ A COM wall is therefore *geometrically incapable* of preventing this failure;
 an atom-pair wall is, and it subsumes the COM case (atoms that cannot overlap
 cannot let monomers merge).
 
-Placement.  ``r_on`` sits at 1.9 A, just under the 1.97 A closest contact the
-data ever samples, so the wall is identically zero on **every** training point:
-it cannot perturb the fit.  Its only jobs are to catch trajectories outside the
-data and to keep training and MD evaluating the same energy.
+Placement.  ``r_on`` must sit **below** chemically normal intermolecular
+contacts (water H-bonds: H···O ~1.5–1.9 A) and **above** the ZBL prior
+(cutoff 0.6 A).  An earlier 1.9 A onset was just under the DCM training
+minimum (1.97 A) but actively pushed on liquid-water H-bonds (~10³ pairs / box
+inside the wall).  ``r_on = 1.0 A`` is identically zero on every training
+dimer and on normal H-bonded liquids; it only catches trajectories that leave
+that region.  ZBL still owns the deep core.
 
 Form::
 
@@ -53,14 +56,16 @@ __all__ = [
     "inter_monomer_wall_energy",
 ]
 
-#: Onset (Angstrom).  Below the 1.971 A closest inter-monomer contact in the
-#: training data, so the wall is exactly zero on every training structure.
-DEFAULT_WALL_R_ON_A: float = 1.9
+#: Onset (Angstrom).  Below water H-bond contacts (~1.5 A) and the 1.971 A
+#: closest inter-monomer contact in the DCM training data, and above the ZBL
+#: cutoff (0.6 A).  Identically zero on every training structure and on
+#: chemically normal liquid contacts.
+DEFAULT_WALL_R_ON_A: float = 1.0
 
-#: Stiffness (eV * Angstrom^2).  With r_on = 1.9 A this gives ~14.6 eV at 1.0 A
-#: and ~304 eV at 0.28 A (the observed overlap), while at 1.8 A it is 0.011 eV
-#: and at 1.97 A exactly 0.
-DEFAULT_WALL_K_EV_A2: float = 20.0
+#: Stiffness (eV * Angstrom^2).  Scaled with the lower onset so the observed
+#: 0.28 A collapse still costs >100 eV (k=80 -> ~105 eV at 0.28 A), while the
+#: wall remains exactly 0 at and above ``r_on``.
+DEFAULT_WALL_K_EV_A2: float = 80.0
 
 
 def pair_wall_energy(
@@ -89,7 +94,8 @@ def inter_monomer_wall_energy(
 
     Sums :func:`pair_wall_energy` over inter-monomer atom pairs only.  Pairs
     inside a monomer are excluded -- their bonded geometry lives at 1.0-1.5 A,
-    far inside ``r_on``, and is the model's business, not the wall's.
+    which can sit near or inside ``r_on``, and is the model's business, not the
+    wall's.
 
     ``mol_id < 0`` marks padding and is excluded.  Monomers (a single
     ``mol_id``) have no inter-monomer pairs and return 0.  Padding-safe and

@@ -403,8 +403,8 @@ def hybrid_forward(
             if short_range_wall:
                 # Already eV. NOT scaled by the MM taper: the taper is exactly
                 # what removes the LJ wall at close range, which is where this
-                # has to hold. Zero above wall_r_on, so it touches no training
-                # data (closest sampled inter-monomer contact: 1.971 A).
+                # has to hold. Zero above wall_r_on (1.0 A default: below water
+                # H-bonds / DCM train min 1.971 A), so it touches no training data.
                 e = e + inter_monomer_wall_energy(x, m, r_on=wall_r_on, k=wall_k)
             return e
 

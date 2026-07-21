@@ -135,7 +135,7 @@ def _to_psf_order(data, i, n_real):
 def _add_wall_probe(data, picks, target_sep):
     """Append a dimer squeezed to ``target_sep`` closest inter-monomer contact.
 
-    Every real dimer sits above the 1.9 A wall onset, so the wall term is zero
+    Every real dimer sits above the 1.0 A wall onset, so the wall term is zero
     on all of them and they would pass whether the MD wall were wired correctly,
     wired wrong, or absent. This makes the term live so the gate can fail.
     """

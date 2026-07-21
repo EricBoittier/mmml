@@ -1573,10 +1573,10 @@ def setup_calculator(
         model, which has no repulsive prior outside its training data (closest
         inter-monomer contact ever sampled: 1.971 A).  Nothing then holds atoms
         apart -- a liquid acetone NVT run collapsed by ~5000 eV and heated
-        150 -> 705 K at dt=0.25 fs.  Identically zero above WALL_R_ON, so it
-        cannot perturb the sampled region; it only catches trajectories that
-        leave it.  Shared with training via mmml.models.short_range_wall, so both
-        evaluate the same function.
+        150 -> 705 K at dt=0.25 fs.  Identically zero above WALL_R_ON (1.0 A:
+        below water H-bonds, above ZBL), so it cannot perturb the sampled
+        region or normal liquid contacts; it only catches trajectories that
+        leave them.  Shared with training via mmml.models.short_range_wall.
         """
         mol = jnp.asarray(_atom_mol_id_np[: positions.shape[0]])
         n = positions.shape[0]
