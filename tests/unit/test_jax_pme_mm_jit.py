@@ -24,7 +24,12 @@ _MONOMER_ID = np.array([0, 0, 0, 1, 1], dtype=np.int32)
 _LAMBDA = np.array([1.0, 1.0], dtype=np.float64)
 
 
-def _lj_only_mm_fn(positions: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+def _lj_only_mm_fn(
+    positions: jnp.ndarray, charges=None
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    # Production MM callables accept optional per-call charges (Q⁰–Q³ modes);
+    # the jax-pme wrapper forwards charges= into mm_fn.
+    del charges
     return jnp.asarray(1.0, dtype=positions.dtype), jnp.zeros_like(positions)
 
 
@@ -33,8 +38,9 @@ def _lj_only_mm_fn_dynamic(
     pair_idx: jnp.ndarray,
     pair_mask: jnp.ndarray,
     box_override=None,
+    charges=None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    del pair_idx, pair_mask, box_override
+    del pair_idx, pair_mask, box_override, charges
     return jnp.asarray(1.0, dtype=positions.dtype), jnp.zeros_like(positions)
 
 

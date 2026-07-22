@@ -1776,7 +1776,10 @@ def test_calculator_wrapping_translation_invariance():
             "natoms": 8,
             "total_charge": 0,
             "n_res": 3,
-            "zbl": True,
+            # Isolate MIC wrap: ZBL / wall are pair-Å priors and sit on the
+            # MIC contact (~1 Å) in this geometry, which is not what this
+            # test is checking.
+            "zbl": False,
             "debug": False,
             "efa": False,
             "use_energy_bias": False,
@@ -1811,6 +1814,7 @@ def test_calculator_wrapping_translation_invariance():
             cell=30.0,
             model_restart_path=restart_path,
             doMM=False,
+            short_range_wall=False,
         )
         calculator, configured_spherical_cutoff, update_fn_factory = factory(
             atomic_numbers,
