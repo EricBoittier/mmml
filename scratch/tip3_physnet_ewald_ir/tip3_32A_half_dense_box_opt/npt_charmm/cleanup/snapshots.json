@@ -650,6 +650,149 @@
         "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/59_rescue_59.pdb"
       },
       "grms_kcalmol_A": 4.185533422802078
+    },
+    {
+      "seq": 60,
+      "slug": "rescue_60",
+      "stem": "60_rescue_60",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 14500",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/60_rescue_60.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/60_rescue_60_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/60_rescue_60.pdb"
+      },
+      "grms_kcalmol_A": 21.743827324233525
+    },
+    {
+      "seq": 61,
+      "slug": "rescue_61",
+      "stem": "61_rescue_61",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 15000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/61_rescue_61.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/61_rescue_61_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/61_rescue_61.pdb"
+      },
+      "grms_kcalmol_A": 59.05602147248276
+    },
+    {
+      "seq": 62,
+      "slug": "rescue_62",
+      "stem": "62_rescue_62",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 15500",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/62_rescue_62.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/62_rescue_62_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/62_rescue_62.pdb"
+      },
+      "grms_kcalmol_A": 4.247257017335475
+    },
+    {
+      "seq": 63,
+      "slug": "rescue_63",
+      "stem": "63_rescue_63",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 16000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/63_rescue_63.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/63_rescue_63_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/63_rescue_63.pdb"
+      },
+      "grms_kcalmol_A": 22.531414991986193
+    },
+    {
+      "seq": 64,
+      "slug": "rescue_64",
+      "stem": "64_rescue_64",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 16500",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/64_rescue_64.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/64_rescue_64_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/64_rescue_64.pdb"
+      },
+      "grms_kcalmol_A": 51.97933474777068
+    },
+    {
+      "seq": 65,
+      "slug": "rescue_65",
+      "stem": "65_rescue_65",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 17000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/65_rescue_65.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/65_rescue_65_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/65_rescue_65.pdb"
+      },
+      "grms_kcalmol_A": 4.299186485585346
+    },
+    {
+      "seq": 66,
+      "slug": "rescue_66",
+      "stem": "66_rescue_66",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 17500",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/66_rescue_66.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/66_rescue_66_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/66_rescue_66.pdb"
+      },
+      "grms_kcalmol_A": 22.968552531123002
+    },
+    {
+      "seq": 67,
+      "slug": "rescue_67",
+      "stem": "67_rescue_67",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 18000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/67_rescue_67.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/67_rescue_67_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/67_rescue_67.pdb"
+      },
+      "grms_kcalmol_A": 4.324564250315764
+    },
+    {
+      "seq": 68,
+      "slug": "rescue_68",
+      "stem": "68_rescue_68",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 19000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/68_rescue_68.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/68_rescue_68_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/68_rescue_68.pdb"
+      },
+      "grms_kcalmol_A": 55.99777640461665
+    },
+    {
+      "seq": 69,
+      "slug": "rescue_69",
+      "stem": "69_rescue_69",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 19500",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/69_rescue_69.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/69_rescue_69_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/69_rescue_69.pdb"
+      },
+      "grms_kcalmol_A": 4.409728822663903
+    },
+    {
+      "seq": 70,
+      "slug": "rescue_70",
+      "stem": "70_rescue_70",
+      "kind": "intra_rescue",
+      "label": "Geometry rescue: EQUI at step 20000",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/70_rescue_70.crd",
+        "energy_json": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/70_rescue_70_energy.json",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/npt_charmm/cleanup/70_rescue_70.pdb"
+      },
+      "grms_kcalmol_A": 28.693702201513386
     }
   ]
 }
