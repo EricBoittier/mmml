@@ -1,36 +1,23 @@
 # mmml
 
-[![GitHub Actions Build Status](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
+[![CI](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/EricBoittier/mmml/branch/main/graph/badge.svg)](https://codecov.io/gh/EricBoittier/mmml/branch/main)
+[![Docs](https://readthedocs.org/projects/mmml/badge/?version=latest)](https://mmml.readthedocs.io/en/latest/)
+[![Python](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
 
 **Molecular Mechanics + Machine-Learned Force-Field Toolkit**
 
-MMML combines CHARMM/OpenMM workflows with JAX-based neural models for electrostatics and force prediction.
+MMML combines CHARMM/OpenMM workflows with JAX-based neural models for electrostatics and force prediction, for building and running hybrid ML/MM condensed-phase simulations.
 
-## Auto-prediction CLI
-```bash
-uv sync --extra all-cpu --extra cli 
-eval "$(register-python-argcomplete mmml)"
-```
+## Status
 
-
-## 📚 Documentation
-
-**For complete documentation, tutorials, and guides, please visit:**
-
-**[Read the Docs](https://mmml.readthedocs.io/en/latest/)**
-
-The documentation includes:
-- Installation instructions
-- Quick start guides
-- `mmml md-system` YAML config and campaign guide for condensed-phase workflows
-- API reference
-- Tutorials and examples
-- Troubleshooting guides
+MMML is in **alpha**. The core calculator, CLI, and `md-system` YAML workflow are usable today, but interfaces are still settling and may change without notice ahead of a first tagged release. Feedback and issues are very welcome — see [Getting Help](#getting-help).
 
 ## Quick Installation
 
-### Using `uv` (Recommended)
+### Using `uv` (recommended)
 
 ```bash
 git clone https://github.com/EricBoittier/mmml.git
@@ -57,6 +44,13 @@ conda activate mmml-gpu
 ```bash
 docker-compose up -d mmml-cpu
 docker-compose exec mmml-cpu bash
+```
+
+### Auto-prediction CLI
+
+```bash
+uv sync --extra all-cpu --extra cli
+eval "$(register-python-argcomplete mmml)"
 ```
 
 ## Quick Example
@@ -94,6 +88,18 @@ atoms.calc = calc
 print("Energy (kcal/mol):", atoms.get_potential_energy())
 ```
 
+## 📚 Documentation
+
+**For complete documentation, tutorials, and guides, please visit [Read the Docs](https://mmml.readthedocs.io/en/latest/).**
+
+The documentation includes:
+- Installation instructions
+- Quick start guides
+- `mmml md-system` YAML config and campaign guide for condensed-phase workflows
+- API reference
+- Tutorials and examples
+- Troubleshooting guides
+
 ## Getting Help
 
 - **Full Documentation**: [Read the Docs](https://mmml.readthedocs.io/en/latest/)
@@ -101,7 +107,7 @@ print("Energy (kcal/mol):", atoms.get_potential_energy())
 
 ## License
 
-Copyright (c) 2025, Eric Boittier
+MIT License, Copyright (c) 2025, Eric Boittier. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
 
