@@ -4,20 +4,21 @@
 # Companion to the analytic smoke
 #   examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
 # and the capability-matrix entry in docs/calculator-capabilities.md
-# ("Monomer ML + MM + native Ewald").
+# ("Monomer ML + MM with native Ewald").
 #
 # Mode B needs exactly two monomers and a charges=True checkpoint trained
-# with mm_charge_mode: latent. CHARMM bonded terms stay on via the PSF;
-# USER owns ML monomers + MM Ewald Coulomb. --no-periodic-charmm-vdw keeps
-# LJ off (Coulomb-only E_MM, same as the analytic example).
+# with mm_charge_mode: latent (or at least a charge head for a wiring smoke).
+# CHARMM bonded terms stay on via the PSF; USER owns ML monomers + MM Ewald
+# Coulomb. periodic_charmm_vdw: false keeps LJ off.
 #
+#   export MMML_CKPT=/path/to/latent_or_charges_params.json
 #   mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
 #
 # Do not use n_monomers != 2 or lr_solver: jax_pme with Mode B.
 
 defaults:
   composition: "DCM:2"
-  checkpoint: /path/to/ckpts/hybrid_mm_latent/<run>/params.json
+  checkpoint: ${MMML_CKPT}
   box_size: 20.0
   dt_fs: 0.5
   temperature: 300.0
@@ -32,6 +33,10 @@ defaults:
   lr_solver: ewald
   periodic_charmm_vdw: false
 
+  # Parent md-system keys (not forwarded into the PyCHARMM staged parser).
+  skip_jit_warmup: true
+  quiet: true
+
 campaign_output: results/hybrid_mm_latent_ewald_dimer
 runs:
   dimer_nvt_smoke:
@@ -42,6 +47,3 @@ runs:
     setup: pbc_nvt
     ps: 0.05
     output_dir: results/hybrid_mm_latent_ewald_dimer/dimer_nvt_smoke
-    extra_args:
-      - --skip-jit-warmup
-      - --quiet

@@ -134,6 +134,19 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+def test_pycharmm_extra_args_strip_skip_jit_warmup():
+    """Campaign YAML often puts --skip-jit-warmup in extra_args; PyCHARMM rejects it."""
+    from mmml.cli.run.md_system import _suite_extra_argv
+
+    args = _pycharmm_args(
+        extra_args=["--skip-jit-warmup", "--quiet", "--no-auto-warmup-mlpot-jax"]
+    )
+    extra = _suite_extra_argv(args, "pycharmm")
+    assert "--skip-jit-warmup" not in extra
+    assert "--no-auto-warmup-mlpot-jax" not in extra
+    assert "--quiet" in extra
+
+
 def test_build_pycharmm_command_forwards_pre_mlpot_pair_floors():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 

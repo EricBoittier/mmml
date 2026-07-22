@@ -3260,11 +3260,37 @@ def _filter_pycharmm_only_extra_argv(argv: list[str]) -> list[str]:
     return out
 
 
+def _filter_md_system_only_extra_argv(argv: list[str]) -> list[str]:
+    """Drop parent ``md-system`` flags that the PyCHARMM staged parser rejects.
+
+    Campaign YAML often puts ``--skip-jit-warmup`` in ``extra_args``; that flag
+    is handled by the md-system / ASE / JAX-MD faces, not by
+    ``md_pbc_suite.pycharmm_mlpot`` (which owns BOND/heat/equi argv).
+    """
+    skip = {
+        "--skip-jit-warmup",
+        "--auto-warmup-mlpot-jax",
+        "--no-auto-warmup-mlpot-jax",
+    }
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok in skip:
+            i += 2 if i + 1 < len(argv) and not str(argv[i + 1]).startswith("-") else 1
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
+
 def _suite_extra_argv(args: argparse.Namespace, backend: str) -> list[str]:
     if not args.extra_args:
         return []
     extra = _filter_campaign_flags_from_argv(list(args.extra_args))
-    if backend != "pycharmm":
+    if backend == "pycharmm":
+        extra = _filter_md_system_only_extra_argv(extra)
+    else:
         extra = _filter_pycharmm_only_extra_argv(extra)
     return extra
 

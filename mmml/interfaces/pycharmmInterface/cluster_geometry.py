@@ -31,12 +31,13 @@ def ensure_charmm_session_ready(
         apply_charmm_verbosity,
         prepare_charmm_vacuum,
     )
-    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
 
     if _charmm_session_ready and not force:
         return
 
-    set_up_directories()
+    # Do not mkdir CWD pdb/res/dcd/psf/xyz here. md-system / MLpot write under
+    # --output-dir; make-res / make-box / generate_coordinates call
+    # set_up_directories() themselves when those legacy layouts are needed.
     apply_charmm_verbosity(prnlev=int(prnlev), warnlev=int(warnlev), bomlev=int(bomlev))
     prepare_charmm_vacuum()
     reset_block()

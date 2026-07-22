@@ -140,6 +140,7 @@ CHARMM still evaluates BOND/ANGL/DIHE while USER owns ML monomers + native
 Ewald Coulomb, use:
 
 ```bash
+export MMML_CKPT=/path/to/params.json   # Mode B: charges=True / latent-trained
 mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
 mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
 ```

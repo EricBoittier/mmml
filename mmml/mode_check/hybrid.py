@@ -264,6 +264,7 @@ def build_psf_and_attach_hybrid(
         timings={},
         lr_solver=lr,
         ewald_include_self=not bool(setup.ewald_omit_self),
+        ewald_include_intra=not bool(setup.ewald_omit_self),
         mm_charge_mode=str(setup.mm_charge_mode),
         # Mode-check needs trustworthy forces for FIRE / FD / vib; MD keeps
         # analytical forces (backprop=False) for throughput.

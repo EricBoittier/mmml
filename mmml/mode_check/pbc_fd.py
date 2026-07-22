@@ -110,6 +110,7 @@ def run_pbc_cluster_fd(
         timings={},
         lr_solver=str(lr_solver),
         ewald_include_self=not bool(ewald_omit_self),
+        ewald_include_intra=not bool(ewald_omit_self),
         mm_charge_mode=mm_charge_mode,
         backprop=True,
     )

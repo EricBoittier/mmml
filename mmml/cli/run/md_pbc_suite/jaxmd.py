@@ -799,8 +799,9 @@ def main(argv: list[str] | None = None) -> int:
         "--ewald-omit-self",
         action="store_true",
         help=(
-            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
-            "Opt in for MIC/non-Ewald-trained models (forces unchanged; energy offset)."
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
         ),
     )
     p.add_argument(
@@ -1090,6 +1091,7 @@ def main(argv: list[str] | None = None) -> int:
         mbd_weight=getattr(args, "mbd_weight", 1.0),
         lr_solver=getattr(args, "lr_solver", None),
         ewald_include_self=not bool(getattr(args, "ewald_omit_self", False)),
+        ewald_include_intra=not bool(getattr(args, "ewald_omit_self", False)),
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
         mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
         mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),

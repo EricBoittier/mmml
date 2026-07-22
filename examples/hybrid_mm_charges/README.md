@@ -37,6 +37,7 @@ for what it checks and why `--skip-ml-dimers` isn't the mechanism used.
 | B `latent` + Ewald | [`md_latent_ewald_dimer.yaml`](md_latent_ewald_dimer.yaml) | Dimer-only; same bonded ownership |
 
 ```bash
+export MMML_CKPT=/path/to/params.json   # Mode B needs charges=True / latent-trained
 mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
 mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
 ```

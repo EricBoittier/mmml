@@ -188,7 +188,18 @@ def test_jaxmd_setup_calculator_forwards_ewald_include_self() -> None:
     src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
     assert "--ewald-omit-self" in src
     assert "ewald_include_self=not bool(getattr(args, \"ewald_omit_self\"" in src
+    assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in src
 
+
+def test_ase_setup_calculator_forwards_ewald_include_intra() -> None:
+    """jaxmd/ase must match hybrid_mlpot: --ewald-omit-self drops intra Coulomb."""
+    from pathlib import Path
+
+    ase_src = Path("mmml/cli/run/md_pbc_suite/ase.py").read_text(encoding="utf-8")
+    assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in ase_src
+    assert "ewald_include_intra=bool(ewald_include_intra)" in ase_src
+    # Signature must accept the kwarg (not only the call site).
+    assert "ewald_include_intra: bool = True" in ase_src
 
 def test_build_command_jaxmd_forwards_ml_gpu_and_profile_flags() -> None:
     from mmml.cli.run.md_system import build_command

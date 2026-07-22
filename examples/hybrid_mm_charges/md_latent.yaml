@@ -22,6 +22,9 @@ defaults:
   mm_switch_width: 5.0
   # Do NOT set lr_solver: jax_pme for Mode B/C
 
+  skip_jit_warmup: true
+  quiet: true
+
 campaign_output: results/hybrid_mm_latent
 runs:
   dimer_nve:
@@ -30,6 +33,3 @@ runs:
     setup: free_nve
     ps: 0.05
     output_dir: results/hybrid_mm_latent/dimer_nve
-    extra_args:
-      - --skip-jit-warmup
-      - --quiet

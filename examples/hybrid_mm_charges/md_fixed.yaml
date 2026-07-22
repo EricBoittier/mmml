@@ -22,6 +22,9 @@ defaults:
   mm_switch_width: 5.0
   # lr_solver: mic   # default; jax_pme OK for Mode A only
 
+  skip_jit_warmup: true
+  quiet: true
+
 campaign_output: results/hybrid_mm_fixed
 runs:
   dimer_nve:
@@ -30,6 +33,3 @@ runs:
     setup: free_nve
     ps: 0.05
     output_dir: results/hybrid_mm_fixed/dimer_nve
-    extra_args:
-      - --skip-jit-warmup
-      - --quiet

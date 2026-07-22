@@ -4,21 +4,21 @@
 # Companion to the analytic smoke
 #   examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
 # and the capability-matrix entry in docs/calculator-capabilities.md
-# ("Monomer ML + MM + native Ewald").
+# ("Monomer ML + MM with native Ewald").
 #
 # CHARMM bonded terms (BOND/ANGL/DIHE) stay on via the usual PyCHARMM PSF
-# path; USER owns ML monomers + MM Ewald Coulomb. --no-periodic-charmm-vdw
+# path; USER owns ML monomers + MM Ewald Coulomb. periodic_charmm_vdw: false
 # keeps LJ off so Coulomb ownership matches train_fixed_ewald.yaml.
 #
+#   export MMML_CKPT=/path/to/params.json   # or rely on mmml env default
 #   mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
 #
-# Requires a Mode A hybrid checkpoint trained with lr_solver: ewald
-# (or any Mode A checkpoint if you only need a wiring smoke — energies
-# will not match an Ewald-trained model).
+# Mode A wiring smoke works with any hybrid checkpoint; energy-meaningful
+# Ewald parity needs a checkpoint trained with lr_solver: ewald.
 
 defaults:
   composition: "DCM:2"
-  checkpoint: /path/to/ckpts/hybrid_mm_fixed_ewald/<run>/params.json
+  checkpoint: ${MMML_CKPT}
   box_size: 20.0
   dt_fs: 0.5
   temperature: 300.0
@@ -33,6 +33,10 @@ defaults:
   lr_solver: ewald
   periodic_charmm_vdw: false
 
+  # Parent md-system keys (not forwarded into the PyCHARMM staged parser).
+  skip_jit_warmup: true
+  quiet: true
+
 campaign_output: results/hybrid_mm_fixed_ewald_dimer
 runs:
   dimer_nvt_smoke:
@@ -43,6 +47,3 @@ runs:
     setup: pbc_nvt
     ps: 0.05
     output_dir: results/hybrid_mm_fixed_ewald_dimer/dimer_nvt_smoke
-    extra_args:
-      - --skip-jit-warmup
-      - --quiet
