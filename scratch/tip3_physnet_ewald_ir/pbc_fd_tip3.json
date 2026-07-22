@@ -1,8 +1,8 @@
 {
   "fd_atoms_checked": 3.0,
   "fd_dx_A": 0.001,
-  "fd_force_max_abs_diff_eVA": 0.0003405104456910557,
-  "fd_force_rms_diff_eVA": 0.00020655424192027707,
+  "fd_force_max_abs_diff_eVA": 0.00034332864899633275,
+  "fd_force_rms_diff_eVA": 0.0002069106625906545,
   "box_A": 50.0,
   "n_molecules": 10.0,
   "residue": "TIP3",
