@@ -2681,7 +2681,9 @@ def set_up_nhc_sim_routine(
         hdf5_reporter = make_jaxmd_reporter(
             str(hdf5_path),
             n_atoms=len(atoms),
-            buffer_size=min(100, total_records),
+            # Short smokes (e.g. --ps 0.001 with record every 100) can have
+            # total_records=0; HDF5 chunks must stay positive.
+            buffer_size=max(1, min(100, max(int(total_records), 1))),
             include_positions=True,
             include_velocities=True,
             # Per-frame MM Coulomb charges (Q⁰ / latent / PSF) from ModelOutput.
