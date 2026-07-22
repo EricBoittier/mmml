@@ -1,8 +1,8 @@
 """Unit tests for the pure-numeric helpers in mmml.spectra.spectra_md.
 
 Covers autocorrelation/spectrum math that has no CHARMM/GPU/ML-calculator
-dependency; ASE-trajectory/HDF5 extraction paths are left to manual/
-integration testing (see docs/scientific-code.md).
+dependency. The ASE-trajectory/HDF5 extraction paths and the ML-calculator
+batched inference paths are covered separately in test_spectra_md_extraction.py.
 """
 
 from __future__ import annotations

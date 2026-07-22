@@ -739,8 +739,13 @@ class DecomposedMlpotCalculator:
             from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
                 add_periodic_coulomb_to_callback,
             )
+            from mmml.interfaces.pycharmmInterface.nl_reference import (
+                monomer_id_from_offsets,
+            )
 
             side = float(self._cell)
+            offsets = _monomer_offsets_from_atoms_per_monomer(self._atoms_per_monomer)
+            mid = monomer_id_from_offsets(offsets, int(n))
             try:
                 e_kcal, forces = add_periodic_coulomb_to_callback(
                     pos,
@@ -748,6 +753,8 @@ class DecomposedMlpotCalculator:
                     cfg=periodic_cfg,
                     energy_kcal=float(e_kcal),
                     forces_kcal=np.asarray(forces, dtype=np.float64),
+                    mol_id=mid,
+                    n_monomers=int(self.n_monomers),
                 )
             except Exception as exc:
                 # ScaFaCoS/MPI failures inside the CHARMM callback must not zero the

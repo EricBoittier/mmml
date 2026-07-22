@@ -1249,6 +1249,9 @@ def compute_native_ewald_coulomb(
     accuracy: float = 1e-6,
     real_space_cutoff_A: float | None = None,
     include_self_energy: bool = True,
+    include_intramolecular: bool = True,
+    mol_id: np.ndarray | None = None,
+    n_monomers: int | None = None,
 ) -> LongRangeInteractionResult:
     """Full periodic Coulomb via the jit-native Ewald summation (ewald_native.py).
 
@@ -1258,6 +1261,10 @@ def compute_native_ewald_coulomb(
     train and MD stay consistent. Called eagerly from the CHARMM callback
     (outside any jax.jit trace), so forces come from a plain ``jax.grad`` --
     no pure_callback/custom_vjp bridging needed here.
+
+    ``include_intramolecular=False`` (with per-atom ``mol_id``) is the
+    MIC/non-Ewald-trained compatibility operator selected by
+    ``--ewald-omit-self``.
     """
     import jax
     import jax.numpy as jnp
@@ -1266,16 +1273,28 @@ def compute_native_ewald_coulomb(
 
     pos = jnp.asarray(positions_A, dtype=jnp.float64)
     chg = jnp.asarray(charges_e, dtype=jnp.float64)
-    mol_id = jnp.zeros(pos.shape[0], dtype=jnp.int32)  # all atoms real, none padded
+    if mol_id is None:
+        mid = jnp.zeros(pos.shape[0], dtype=jnp.int32)  # all atoms real, none padded
+        n_mono = 1
+    else:
+        mid = jnp.asarray(mol_id, dtype=jnp.int32).reshape(-1)
+        if mid.shape[0] != pos.shape[0]:
+            raise ValueError(
+                f"mol_id length {mid.shape[0]} != n_atoms {pos.shape[0]}"
+            )
+        n_mono = int(n_monomers) if n_monomers is not None else int(max(int(mid.max()) + 1, 1))
     _include_self = bool(include_self_energy)
+    _include_intra = bool(include_intramolecular)
 
     def _e(p):
         return hybrid_ewald_coulomb_energy(
-            p, mol_id, chg,
+            p, mid, chg,
             box_length_A=float(box_length_A),
             accuracy=float(accuracy),
             real_space_cutoff_A=real_space_cutoff_A,
             include_self_energy=_include_self,
+            include_intramolecular=_include_intra,
+            n_monomers=n_mono,
         )
 
     energy, grad = jax.value_and_grad(_e)(pos)

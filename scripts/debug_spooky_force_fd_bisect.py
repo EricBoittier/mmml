@@ -30,7 +30,6 @@ def _check_model(
     atoms: list[tuple[int, int]],
     h: float = 1e-4,
 ) -> dict:
-    import jax
     import jax.numpy as jnp
 
     pos = batch["positions"]
@@ -99,9 +98,6 @@ def _random_batch(*, spooky_kwargs, n_real: int = 4, max_atoms: int = 8, key):
 
 
 def _load_ckpt(path: Path):
-    import jax
-    import jax.numpy as jnp
-
     from mmml.utils.model_checkpoint import load_model_from_checkpoint
 
     model, params, _meta = load_model_from_checkpoint(path)

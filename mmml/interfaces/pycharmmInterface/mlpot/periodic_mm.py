@@ -34,6 +34,9 @@ class PeriodicMmConfig:
     jax_pme_method: str = "ewald"
     jax_pme_sr_cutoff_A: float = 6.0
     charmm_vdw: bool = True
+    # Native ewald only: match hybrid_mlpot / jaxmd --ewald-omit-self semantics.
+    ewald_include_self: bool = True
+    ewald_include_intra: bool = True
 
     @property
     def uses_scafacos(self) -> bool:
@@ -135,6 +138,8 @@ def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
         jax_pme_method=jax_pme_method,
         jax_pme_sr_cutoff_A=float(jax_pme_sr),
         charmm_vdw=resolve_periodic_charmm_vdw(args),
+        ewald_include_self=not bool(getattr(args, "ewald_omit_self", False)),
+        ewald_include_intra=not bool(getattr(args, "ewald_omit_self", False)),
     )
 
 
