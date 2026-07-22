@@ -83,23 +83,28 @@ def test_polarizability_autocorrelation_shapes_and_isotropic_zero_lag():
 
 def test_correlation_to_spectrum_freq_axis_and_nonneg_harmonic():
     dt_fs = 0.5
-    n = 128
+    n = 2048
     t = np.arange(n) * dt_fs
-    # a damped cosine at a known frequency
+    # a lightly-damped cosine at a known frequency, long enough for good
+    # frequency resolution (~30 cycles) despite the zero-padded rfft.
     freq_fs_inv = 0.01
-    corr = np.cos(2 * np.pi * freq_fs_inv * t) * np.exp(-t / 50.0)
+    corr = np.cos(2 * np.pi * freq_fs_inv * t) * np.exp(-t / 500.0)
 
-    freq_cm, spec = correlation_to_spectrum(corr, dt_fs, window="hann", zero_pad=4, qcf="harmonic")
+    freq_cm, spec_raw = correlation_to_spectrum(corr, dt_fs, window="hann", zero_pad=4, qcf=None)
+    _, spec = correlation_to_spectrum(corr, dt_fs, window="hann", zero_pad=4, qcf="harmonic")
 
     assert freq_cm[0] == pytest.approx(0.0)
     # rfftfreq is monotonically increasing
     assert np.all(np.diff(freq_cm) > 0)
     # harmonic QCF forces non-negativity
     assert np.all(spec >= 0.0)
-    # peak should sit near the expected wavenumber
+    # raw (unweighted) spectrum should peak near the expected wavenumber
     expected_cm = freq_fs_inv * FS_INV_TO_CM_INV
-    peak_cm = freq_cm[np.argmax(spec)]
+    peak_cm = freq_cm[np.argmax(spec_raw)]
     assert peak_cm == pytest.approx(expected_cm, rel=0.1)
+    # harmonic spectrum is the raw one weighted by omega (clamped at 0)
+    expected_harmonic = np.maximum(spec_raw * np.where(freq_cm > 0, freq_cm, 0), 0.0)
+    np.testing.assert_allclose(spec, expected_harmonic, rtol=1e-6)
 
 
 def test_correlation_to_spectrum_classical_qcf_scales_by_omega_squared():
