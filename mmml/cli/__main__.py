@@ -197,20 +197,10 @@ def main():
         from .misc import validate_cli
         return validate_cli.main(args.args)
 
-    elif command == "train":
-        from . import train
-        sys.argv = ["mmml train"] + args.args
-        return train.main()
-
     elif command == "train-joint":
         from .misc import train_joint
         sys.argv = ["mmml train-joint"] + args.args
         return train_joint.main()
-
-    elif command == "evaluate":
-        from . import evaluate
-        sys.argv = ["mmml evaluate"] + args.args
-        return evaluate.main()
 
     elif command == "downstream":
         from . import downstream
@@ -299,21 +289,6 @@ def main():
         from .misc import efield_md
         sys.argv = ["mmml efield-md"] + args.args
         return efield_md.main()
-
-    elif command == "ef-train":
-        from .misc import ef_train
-        sys.argv = ["mmml ef-train"] + args.args
-        return ef_train.main()
-
-    elif command == "ef-evaluate":
-        from .misc import ef_evaluate
-        sys.argv = ["mmml ef-evaluate"] + args.args
-        return ef_evaluate.main()
-
-    elif command == "ef-md":
-        from .misc import ef_md
-        sys.argv = ["mmml ef-md"] + args.args
-        return ef_md.main()
 
     elif command == "active-learning":
         from .misc import active_learning
