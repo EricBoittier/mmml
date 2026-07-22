@@ -295,7 +295,31 @@ def test_collect_lr_solver_mapping_ewald_in_jax_mic_is_active():
     assert mapping["lr_solver"] == "ewald"
     assert mapping["lr_solver_active"] == "ewald"
     assert "hybrid_ewald" in mapping["coulomb_mode"]
+    assert "train-matched" in mapping["coulomb_mode"]
+    assert mapping["ewald_include_intra"] == "yes"
+    assert mapping["ewald_include_self"] == "yes"
     assert "note" not in mapping
+
+
+def test_collect_lr_solver_mapping_ewald_omit_self_is_cross_monomer():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="ewald",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        return_value="ewald",
+    ):
+        mapping = collect_lr_solver_mapping(
+            lr_solver="ewald",
+            mm_nonbond_mode="jax_mic",
+            do_mm=True,
+            ewald_include_self=False,
+            ewald_include_intra=False,
+        )
+    assert mapping["lr_solver_active"] == "ewald"
+    assert "cross-monomer" in mapping["coulomb_mode"]
+    assert mapping["ewald_include_intra"] == "no"
+    assert mapping["ewald_include_self"] == "no"
 
 
 def test_collect_lr_solver_mapping_nvalchemiops_ml_only_is_inactive():

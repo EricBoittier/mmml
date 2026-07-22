@@ -535,9 +535,41 @@ def print_neighbor_list_summary(
             table.add_row("JAX-MD fill fraction", f"{fill_jax * 100:.1f}%")
             bars.append(("JAX-MD NL", jax_md_n_valid, jax_md_capacity, "bright_green"))
 
+    # Sparse ML-dimer slot budget vs all monomer pairs (always known at setup,
+    # unlike jax_md_n_valid which is often still null when this summary prints).
+    sparse_cap = None
+    dimers_total = None
+    if extra:
+        if "max_active_dimers" in extra and extra["max_active_dimers"] is not None:
+            try:
+                sparse_cap = int(extra["max_active_dimers"])
+            except (TypeError, ValueError):
+                sparse_cap = None
+        if "dimers_total" in extra and extra["dimers_total"] is not None:
+            try:
+                dimers_total = int(extra["dimers_total"])
+            except (TypeError, ValueError):
+                dimers_total = None
+    if (
+        sparse_cap is not None
+        and dimers_total is not None
+        and dimers_total > 0
+        and sparse_cap > 0
+    ):
+        table.add_row("─" * 22, "─" * 22)
+        table.add_row("Sparse ML dimer cap", f"{sparse_cap:,}")
+        table.add_row("Monomer dimer pairs", f"{dimers_total:,}")
+        table.add_row(
+            "Sparse cap / all pairs",
+            f"{100.0 * sparse_cap / dimers_total:.1f}%",
+        )
+        bars.append(("Sparse ML dimers", sparse_cap, dimers_total, "bright_yellow"))
+
     if extra:
         table.add_row("─" * 22, "─" * 22)
         for k, v in extra.items():
+            if k in ("max_active_dimers", "dimers_total"):
+                continue  # already shown above when both present
             table.add_row(str(k), str(v))
 
     # Build bar chart rows

@@ -1205,11 +1205,25 @@ def build_decomposed_mlpot_model(
 
     n_dimers_total = int(n_monomers) * (int(n_monomers) - 1) // 2
     free_space = cell is False or cell is None
+    _box_volume = None
+    _active_radius = None
+    if not free_space and cell is not None:
+        try:
+            side = float(cell)
+            if side > 0.0:
+                _box_volume = side**3
+                _active_radius = float(cutoff_params.mm_switch_on) + float(
+                    cutoff_params.ml_switch_width
+                )
+        except (TypeError, ValueError):
+            pass
     dimer_cap = resolve_max_active_dimers(
         int(n_monomers),
         n_dimers_total,
         ml_max_active_dimers,
         free_space=free_space,
+        box_volume=_box_volume,
+        active_radius=_active_radius,
     )
     max_pairs = None
     if args is not None:

@@ -105,6 +105,26 @@ def test_resolve_max_active_dimers_density_aware_covers_real_liquid_water():
     assert margin > 0.2, f"expected a healthy safety margin, got {margin:.1%}"
 
 
+def test_resolve_max_active_dimers_density_aware_covers_tip3_548_liquid():
+    """TIP3:548 @ ~32 Å had ~10780 in-range pairs vs ~8200 uniform estimate.
+
+    The 1.4 safety margin must clear that undercount without an explicit cap.
+    """
+    n_monomers = 548
+    box_side_A = 31.86819225525291
+    box_volume = box_side_A**3
+    active_radius = 6.0 + 1.5
+    n_dimers_total = max_dimer_pairs(n_monomers)
+    real_measured_near_pairs = 10786
+
+    cap = resolve_max_active_dimers(
+        n_monomers, n_dimers_total, box_volume=box_volume, active_radius=active_radius
+    )
+    assert cap >= real_measured_near_pairs
+    # Old 1.1 margin gave ~9020 and saturated; keep a clear gap above measured.
+    assert cap > 11000
+
+
 def test_resolve_max_active_dimers_density_aware_never_below_flat_fallback():
     """The density-aware branch must not regress a caller relying on the old
     floor for a sparse/dilute PBC system (e.g. a solute in a huge box)."""

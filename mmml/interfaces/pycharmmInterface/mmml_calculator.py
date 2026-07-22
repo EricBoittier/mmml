@@ -1296,6 +1296,8 @@ def setup_calculator(
             mm_nonbond_mode=mm_nonbond_mode,
             do_mm=doMM,
             periodic_charmm_vdw=periodic_charmm_vdw,
+            ewald_include_self=ewald_include_self,
+            ewald_include_intra=ewald_include_intra,
         ),
         cutoff_params=cutoff_params,
         model_type=(

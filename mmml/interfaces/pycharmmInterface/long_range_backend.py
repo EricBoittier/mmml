@@ -1498,6 +1498,8 @@ def collect_lr_solver_mapping(
     mm_nonbond_mode: str = "jax_mic",
     do_mm: bool = True,
     periodic_charmm_vdw: bool = True,
+    ewald_include_self: bool = True,
+    ewald_include_intra: bool = True,
 ) -> dict[str, str]:
     """Key/value rows for the Hybrid ML/MM setup long-range Coulomb section."""
     requested = resolve_lr_solver(lr_solver)
@@ -1516,6 +1518,17 @@ def collect_lr_solver_mapping(
     }
     if requested != chosen:
         mapping["lr_solver_requested"] = requested
+
+    def _ewald_coulomb_mode() -> str:
+        if bool(ewald_include_intra) and bool(ewald_include_self):
+            return (
+                "full-box Ewald Coulomb (hybrid_ewald; no switch / no LJ; "
+                "train-matched)"
+            )
+        return (
+            "cross-monomer Ewald Coulomb (hybrid_ewald; omit intra + self; "
+            "MIC/non-Ewald-trained compatibility)"
+        )
 
     if periodic_external:
         if chosen == "jax_pme":
@@ -1541,9 +1554,9 @@ def collect_lr_solver_mapping(
         elif chosen == "ewald":
             # Same JAX operator as jax_mic + ewald; CHARMM IMAGE VDW optional.
             mapping["lr_solver_active"] = "ewald"
-            mapping["coulomb_mode"] = (
-                "full-box Ewald Coulomb (hybrid_ewald; no switch / no LJ; train-matched)"
-            )
+            mapping["coulomb_mode"] = _ewald_coulomb_mode()
+            mapping["ewald_include_intra"] = "yes" if ewald_include_intra else "no"
+            mapping["ewald_include_self"] = "yes" if ewald_include_self else "no"
         else:
             active = chosen
             mapping["lr_solver_active"] = active
@@ -1568,9 +1581,9 @@ def collect_lr_solver_mapping(
     # (full-box hybrid_ewald_coulomb_energy — same operator as train --lr-solver ewald).
     if chosen == "ewald":
         mapping["lr_solver_active"] = "ewald"
-        mapping["coulomb_mode"] = (
-            "full-box Ewald Coulomb (hybrid_ewald; no switch / no LJ; train-matched)"
-        )
+        mapping["coulomb_mode"] = _ewald_coulomb_mode()
+        mapping["ewald_include_intra"] = "yes" if ewald_include_intra else "no"
+        mapping["ewald_include_self"] = "yes" if ewald_include_self else "no"
         return mapping
 
     active = "jax_pme" if chosen == "jax_pme" else "mic"

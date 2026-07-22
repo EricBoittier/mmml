@@ -22,7 +22,11 @@ def max_dimer_pairs(n_monomers: int) -> int:
 # density (see box_volume/active_radius below). Guards against density
 # fluctuations (clustering, non-uniform packing) between cap-resolution time
 # and the frames actually sampled during a run.
-SPARSE_DIMER_CAP_SAFETY_MARGIN = 1.1
+#
+# 1.1 under-covered dense TIP3 liquids in practice (TIP3:548 @ ~32 Å had
+# ~10780 in-range pairs vs density estimate ~8200 → silent truncation). 1.4
+# covers that ~32% undercount plus headroom for local clustering.
+SPARSE_DIMER_CAP_SAFETY_MARGIN = 1.4
 
 # Fallback per-monomer neighbor-count heuristic used only when no box
 # density is available (free-space clusters, or callers that don't pass
