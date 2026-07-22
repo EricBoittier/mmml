@@ -18,7 +18,11 @@
 
 defaults:
   composition: "DCM:2"
+<<<<<<< HEAD
   checkpoint: ${MMML_CKPT}
+=======
+    #  checkpoint: /path/to/ckpts/hybrid_mm_fixed_ewald/<run>/params.json
+>>>>>>> 6c66e68e6 (asdf)
   box_size: 20.0
   dt_fs: 0.5
   temperature: 300.0
