@@ -79,6 +79,7 @@ nav:
           - pyscf-evaluate-mp2: cli/commands/pyscf-evaluate-mp2.md
           - fix-and-split: cli/commands/fix-and-split.md
           - xml2npz: cli/commands/xml2npz.md
+          - npz2traj: cli/commands/npz2traj.md
           - validate: cli/commands/validate.md
           - verify-esp-alignment: cli/commands/verify-esp-alignment.md
           - normal-mode-sample: cli/commands/normal-mode-sample.md

@@ -62,7 +62,7 @@ Highlights:
 **MD & campaigns** — `md-system` (see also [md-system YAML configs](../md-system-configs.md)),
 `warmup-mlpot-jax`, `mpi-check`, `health-check`
 
-**QM & data** — `pyscf-dft`, `pyscf-evaluate`, `fix-and-split`, `xml2npz`
+**QM & data** — `pyscf-dft`, `pyscf-evaluate`, `fix-and-split`, `xml2npz`, `npz2traj`
 
 **ML training & sampling** — `physnet-train`, `physnet-evaluate`, `physnet-md`,
 `dmc`, `efield-train`

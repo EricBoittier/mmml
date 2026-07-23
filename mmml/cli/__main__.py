@@ -193,6 +193,10 @@ def main():
         sys.argv = ["mmml xml2npz"] + args.args
         return xml2npz.main()
 
+    elif command == "npz2traj":
+        from .misc import convert_npz_traj
+        return convert_npz_traj.main(args.args)
+
     elif command == "validate":
         from .misc import validate_cli
         return validate_cli.main(args.args)

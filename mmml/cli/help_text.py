@@ -43,6 +43,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("pyscf-evaluate", "Batch E/F/D/ESP evaluation"),
             CommandInfo("fix-and-split", "Unit fixes + train/valid/test splits"),
             CommandInfo("xml2npz", "Molpro XML → NPZ"),
+            CommandInfo("npz2traj", "NPZ → ASE trajectory (E/F/dipole/charges)"),
             CommandInfo("validate", "Validate NPZ against schema"),
             CommandInfo("dimer-scan", "Rigid 1D dimer energy/force scan"),
             CommandInfo(
@@ -110,6 +111,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "QM pipeline",
         (
             "mmml fix-and-split --efd data.npz --output-dir ./splits",
+            "mmml npz2traj data.npz -o trajectory.traj",
             "mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp",
             "mmml physnet-train --config train.yaml",
             "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",

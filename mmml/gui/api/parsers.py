@@ -421,12 +421,32 @@ class MolecularFileParser:
         n_frames = len(frames)
         n_atoms = len(frames[0]) if frames else 0
         
-        # Available properties
+        # Available properties (info/arrays or SinglePointCalculator results)
         properties = ['structure']
-        if frames and 'energy' in frames[0].info:
+        frame0 = frames[0] if frames else None
+        calc_results = getattr(getattr(frame0, 'calc', None), 'results', None) or {}
+        if frame0 is not None and (
+            'energy' in frame0.info or 'energy' in calc_results
+        ):
             properties.append('energy')
-        if frames and 'forces' in frames[0].arrays:
+        if frame0 is not None and (
+            'forces' in frame0.arrays or 'forces' in calc_results
+        ):
             properties.append('forces')
+        if frame0 is not None and (
+            'dipole' in frame0.info
+            or 'D' in frame0.info
+            or 'Dxyz' in frame0.info
+            or 'dipole' in calc_results
+        ):
+            properties.append('dipole')
+        if frame0 is not None and (
+            'charges' in frame0.arrays
+            or 'mono' in frame0.arrays
+            or 'ml_charges' in frame0.arrays
+            or 'charges' in calc_results
+        ):
+            properties.append('charges')
         
         # Elements
         elements = []
@@ -801,11 +821,50 @@ class MolecularFileParser:
         """Get frame from ASE trajectory or PDB file."""
         atoms = self._data[index]
         pdb_string = atoms_to_pdb(atoms) if include_pdb else ""
-        
+
         energy = atoms.info.get('energy')
+        if energy is None and atoms.calc is not None:
+            try:
+                energy = float(atoms.get_potential_energy())
+            except Exception:
+                energy = None
+
         forces = atoms.arrays.get('forces')
+        if forces is None and atoms.calc is not None:
+            try:
+                forces = atoms.get_forces()
+            except Exception:
+                forces = None
         if forces is not None:
-            forces = forces.tolist()
+            forces = np.asarray(forces, dtype=np.float64).tolist()
+
+        dipole = None
+        for dkey in ('dipole', 'D', 'Dxyz', 'dipole_debye'):
+            if dkey not in atoms.info:
+                continue
+            d_raw = np.asarray(atoms.info[dkey], dtype=np.float64).ravel()
+            if d_raw.size >= 3:
+                dipole = d_raw[:3].tolist()
+                break
+        if dipole is None and atoms.calc is not None:
+            try:
+                d_raw = np.asarray(atoms.get_dipole_moment(), dtype=np.float64).ravel()
+                if d_raw.size >= 3:
+                    dipole = d_raw[:3].tolist()
+            except Exception:
+                dipole = None
+
+        charges = None
+        for ckey in ('charges', 'mono', 'ml_charges', 'Q'):
+            if ckey not in atoms.arrays:
+                continue
+            charges = np.asarray(atoms.arrays[ckey], dtype=np.float64).tolist()
+            break
+        if charges is None and atoms.calc is not None:
+            try:
+                charges = np.asarray(atoms.get_charges(), dtype=np.float64).tolist()
+            except Exception:
+                charges = None
         
         # Extract positions and atomic numbers for 3D visualization
         positions = atoms.get_positions().tolist()
@@ -816,8 +875,8 @@ class MolecularFileParser:
             n_atoms=len(atoms),
             energy=energy,
             forces=forces,
-            dipole=None,
-            charges=None,
+            dipole=dipole,
+            charges=charges,
             positions=positions,
             atomic_numbers=atomic_numbers,
         )
@@ -1570,21 +1629,58 @@ class MolecularFileParser:
         for f in frames:
             if 'energy' in f.info:
                 energies.append(f.info['energy'])
-        if energies:
+            elif f.calc is not None:
+                try:
+                    energies.append(float(f.get_potential_energy()))
+                except Exception:
+                    pass
+        if energies and len(energies) == len(frames):
             properties['energy'] = energies
         
         # Collect force magnitudes
         max_forces = []
         mean_forces = []
         for f in frames:
-            if 'forces' in f.arrays:
-                forces = f.arrays['forces']
-                force_mags = np.linalg.norm(forces, axis=1)
+            forces = f.arrays.get('forces')
+            if forces is None and f.calc is not None:
+                try:
+                    forces = f.get_forces()
+                except Exception:
+                    forces = None
+            if forces is not None:
+                force_mags = np.linalg.norm(np.asarray(forces), axis=1)
                 max_forces.append(float(np.max(force_mags)))
                 mean_forces.append(float(np.mean(force_mags)))
-        if max_forces:
+        if max_forces and len(max_forces) == len(frames):
             properties['force_max'] = max_forces
             properties['force_mean'] = mean_forces
+
+        # Dipole components / magnitude (info or calculator)
+        dipoles = []
+        for f in frames:
+            d_vec = None
+            for dkey in ('dipole', 'D', 'Dxyz', 'dipole_debye'):
+                if dkey not in f.info:
+                    continue
+                d_raw = np.asarray(f.info[dkey], dtype=np.float64).ravel()
+                if d_raw.size >= 3:
+                    d_vec = d_raw[:3]
+                    break
+            if d_vec is None and f.calc is not None:
+                try:
+                    d_raw = np.asarray(f.get_dipole_moment(), dtype=np.float64).ravel()
+                    if d_raw.size >= 3:
+                        d_vec = d_raw[:3]
+                except Exception:
+                    d_vec = None
+            if d_vec is not None:
+                dipoles.append(d_vec)
+        if dipoles and len(dipoles) == len(frames):
+            D_plot = np.asarray(dipoles, dtype=np.float64)
+            properties['dipole_magnitude'] = np.linalg.norm(D_plot, axis=1).tolist()
+            properties['dipole_x'] = D_plot[:, 0].tolist()
+            properties['dipole_y'] = D_plot[:, 1].tolist()
+            properties['dipole_z'] = D_plot[:, 2].tolist()
         
         return properties
     

@@ -66,6 +66,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Restrained sampling for two-residue CHARMM system",
     ),
     CommandSpec("xml2npz", "mmml.cli.misc.xml2npz", "Molpro XML → NPZ"),
+    CommandSpec(
+        "npz2traj",
+        "mmml.cli.misc.convert_npz_traj",
+        "NPZ → ASE trajectory (E/F/dipole/charges)",
+    ),
     CommandSpec("validate", "mmml.cli.misc.validate_cli", "Validate NPZ against schema"),
     CommandSpec("train-joint", "mmml.cli.misc.train_joint", "Joint PhysNet+DCMNet training"),
     CommandSpec("downstream", "mmml.cli.misc.downstream", "Downstream analysis utilities"),

@@ -52,6 +52,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "pyscf-evaluate-mp2",
             "fix-and-split",
             "xml2npz",
+            "npz2traj",
             "validate",
             "verify-esp-alignment",
             "normal-mode-sample",
