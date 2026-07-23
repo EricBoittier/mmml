@@ -46,7 +46,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         fromfile_prefix_chars="@",
-        epilog=__doc__,
+        epilog=(
+            "Example (acetone dimer smoke):\n"
+            "  mmml dmc --natm 20 --nwalker 64 --stepsize 5e-4 --nstep 200 "
+            "--eqstep 50 --alpha 1200.0 \\\n"
+            "    --checkpoint \"$MMML_CKPT\" \\\n"
+            "    --input mmml/generate/dmc/examples/acetone_dmc.extxyz \\\n"
+            "    --output-dir runs/dmc_acetone_smoke\n"
+            "\n"
+            "Docs: docs/dmc.md  |  mmml dmc --help"
+        ),
     )
     parser.add_argument(
         "--natm",

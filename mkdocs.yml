@@ -90,6 +90,7 @@ nav:
           - physnet-train: cli/commands/physnet-train.md
           - physnet-evaluate: cli/commands/physnet-evaluate.md
           - physnet-md: cli/commands/physnet-md.md
+          - dmc: cli/commands/dmc.md
           - efield-train: cli/commands/efield-train.md
           - efield-evaluate: cli/commands/efield-evaluate.md
           - efield-md: cli/commands/efield-md.md
@@ -115,7 +116,6 @@ nav:
           - orca-client: cli/commands/orca-client.md
           - orca-external: cli/commands/orca-external.md
       - Other utilities:
-          - dmc: cli/commands/dmc.md
           - doctor: cli/commands/doctor.md
           - md-embedding: cli/commands/md-embedding.md
           - mpi-launch: cli/commands/mpi-launch.md
@@ -123,6 +123,7 @@ nav:
       # CLI_NAV_END
   - MD workflows:
       - md-system YAML configs: md-system-configs.md
+      - Diffusion Monte Carlo (DMC): dmc.md
       - Packmol placement: packmol-placement.md
       - Protein force fields (CHARMM + jax-md): protein-force-fields.md
       - Tri-alanine water box: trialanine-water-box.md

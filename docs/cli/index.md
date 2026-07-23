@@ -64,7 +64,8 @@ Highlights:
 
 **QM & data** — `pyscf-dft`, `pyscf-evaluate`, `fix-and-split`, `xml2npz`
 
-**ML training** — `physnet-train`, `physnet-evaluate`, `efield-train`
+**ML training & sampling** — `physnet-train`, `physnet-evaluate`, `physnet-md`,
+`dmc`, `efield-train`
 
 **Workflow helpers** — `configure`, `env`, `commands`, `examples`
 
@@ -90,6 +91,19 @@ mmml fix-and-split --efd data.npz --output-dir splits/
 mmml physnet-train --config train.yaml
 mmml physnet-evaluate --checkpoint ckpts/run --test splits/test.npz
 ```
+
+### Diffusion Monte Carlo (PhysNetJax)
+
+```bash
+mmml dmc \
+  --natm 20 --nwalker 64 --stepsize 5e-4 --nstep 200 --eqstep 50 \
+  --alpha 1200.0 --max-batch 64 --seed 0 \
+  --checkpoint "$MMML_CKPT" \
+  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --output-dir runs/dmc_acetone_smoke
+```
+
+See the [DMC guide](../dmc.md) for a longer production example and output files.
 
 ## Regenerating CLI reference pages
 

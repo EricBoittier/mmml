@@ -3,6 +3,59 @@
 Diffusion Monte Carlo with PhysNetJax (batched walkers).
 
 
+Diffusion Monte Carlo on a PhysNetJax potential. Walker energies are evaluated
+in parallel with `jax.vmap` (chunked by `--max-batch`).
+
+## Example (acetone dimer)
+
+Bundled geometry: `mmml/generate/dmc/examples/acetone_dmc.extxyz` (20 atoms).
+
+Smoke run (short equilibration, few production steps):
+
+```bash
+mmml env   # resolve $MMML_CKPT if you use the bundled checkpoint
+
+mmml dmc \
+  --natm 20 \
+  --nwalker 64 \
+  --stepsize 5e-4 \
+  --nstep 200 \
+  --eqstep 50 \
+  --alpha 1200.0 \
+  --max-batch 64 \
+  --seed 0 \
+  --checkpoint "$MMML_CKPT" \
+  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --output-dir runs/dmc_acetone_smoke
+```
+
+Production-style settings (more walkers / longer averaging):
+
+```bash
+mmml dmc \
+  --natm 20 \
+  --nwalker 512 \
+  --stepsize 5e-4 \
+  --nstep 5000 \
+  --eqstep 1000 \
+  --alpha 1200.0 \
+  --max-batch 512 \
+  --seed 0 \
+  --checkpoint "$MMML_CKPT" \
+  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --output-dir runs/dmc_acetone
+```
+
+Outputs under `--output-dir` (or CWD):
+
+- `acetone_dmc.pot` — reference energy vs step (hartree and cm⁻¹)
+- `acetone_dmc.log` — run metadata + average energy
+- `configs_acetone_dmc.traj` — last 10 steps of surviving walkers
+- `defective_acetone_dmc.xyz` — geometries flagged below the reference minimum
+
+See the [Diffusion Monte Carlo guide](../../dmc.md) for inputs, units, and
+memory tips.
+
 ## Usage
 
 ```bash
@@ -63,16 +116,16 @@ Other options:
                         Gaussian noise (Å) applied to the minimised geometry for
                         x0 (default: 0.02).
 
-Diffusion Monte Carlo driver using PhysNetJax energies. Originally adapted from
-the TensorFlow-based implementation by Silvan Kaeser. This version evaluates
-walker energies with the PhysNetJax model (batched via ``jax.vmap``) to stay
-consistent with the rest of the MMML tooling. CLI:: mmml dmc \ --natm 20
---nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \ --alpha 1200.0
---checkpoint path/to/epoch-NNNNNN \ --input
-mmml/generate/dmc/examples/acetone_dmc.extxyz
+Example (acetone dimer smoke): mmml dmc --natm 20 --nwalker 64 --stepsize 5e-4
+--nstep 200 --eqstep 50 --alpha 1200.0 \ --checkpoint "$MMML_CKPT" \ --input
+mmml/generate/dmc/examples/acetone_dmc.extxyz \ --output-dir
+runs/dmc_acetone_smoke Docs: docs/dmc.md | mmml dmc --help
 ```
 
 
+## Related docs
+
+- [Diffusion Monte Carlo guide](../../dmc.md)
 
 ---
 

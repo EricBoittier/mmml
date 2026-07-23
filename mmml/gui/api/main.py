@@ -5,7 +5,7 @@ FastAPI application for MMML molecular viewer.
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 from typing import Optional
 
@@ -484,10 +484,29 @@ def create_app(
         @app.get("/")
         async def serve_index():
             return FileResponse(Path(static_dir) / "index.html")
-        
+
         # Mount static files
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-    
+    else:
+        # No built frontend: explain why instead of a bare 404 on every route,
+        # which otherwise reads as "the GUI doesn't work" (see GH #127).
+        @app.get("/", response_class=HTMLResponse)
+        async def frontend_not_built():
+            return HTMLResponse(
+                status_code=503,
+                content=(
+                    "<h1>MMML viewer frontend is not built</h1>"
+                    "<p>The API server is running, but no built frontend was found "
+                    "(looked for <code>mmml/gui/viewer/dist/index.html</code>).</p>"
+                    "<p>Build it once with:</p>"
+                    "<pre>cd mmml/gui/viewer &amp;&amp; npm install &amp;&amp; npm run build</pre>"
+                    "<p>then restart <code>mmml gui</code>, or run "
+                    "<code>mmml gui --dev</code> and use the Vite dev server "
+                    "(<code>npm run dev</code> in <code>mmml/gui/viewer/</code>) instead.</p>"
+                    "<p>API endpoints under <code>/api/*</code> are available now.</p>"
+                ),
+            )
+
     return app
 
 
