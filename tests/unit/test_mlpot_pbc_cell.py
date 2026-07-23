@@ -236,31 +236,40 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_without_jax_pme():
 
 def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
     """jax-pme mesh defer still promotes on first hybrid ENER."""
-    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
-    model = DecomposedMlpotModel(
-        MagicMock(),
-        CutoffParameters(),
-        2,
-        z,
-        cell=40.0,
-        do_mm=True,
-        defer_jax_until_after_sd=True,
-        lr_solver="jax_pme",
-        jax_pme_method="pme",
-    )
-    model._jax_on_gpu = False
-    calc = MagicMock(spec=DecomposedMlpotCalculator)
-    calc._spherical_forward_fn = "cached"
-    calc._forward_cache_key = ("k",)
-    calc.spherical_fn = MagicMock()
-    calc._get_update_fn = None
-    calc._cached_update_fn = "cached_update"
+    # jax-pme is an optional extra (see pyproject.toml's jax-pme-solver);
+    # this test exercises the mesh-defer logic regardless of whether it's
+    # actually installed in the test environment.
+    with patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+        model = DecomposedMlpotModel(
+            MagicMock(),
+            CutoffParameters(),
+            2,
+            z,
+            cell=40.0,
+            do_mm=True,
+            defer_jax_until_after_sd=True,
+            lr_solver="jax_pme",
+            jax_pme_method="pme",
+        )
+        model._jax_on_gpu = False
+        calc = MagicMock(spec=DecomposedMlpotCalculator)
+        calc._spherical_forward_fn = "cached"
+        calc._forward_cache_key = ("k",)
+        calc.spherical_fn = MagicMock()
+        calc._get_update_fn = None
+        calc._cached_update_fn = "cached_update"
 
-    def _fake_promote(**_kwargs: object) -> None:
-        model._jax_on_gpu = True
+        def _fake_promote(**_kwargs: object) -> None:
+            model._jax_on_gpu = True
 
-    with patch.object(model, "promote_jax_factory_to_gpu", side_effect=_fake_promote) as mock_promote:
-        model._maybe_promote_deferred_jax_on_hybrid_eval(calc)
+        with patch.object(
+            model, "promote_jax_factory_to_gpu", side_effect=_fake_promote
+        ) as mock_promote:
+            model._maybe_promote_deferred_jax_on_hybrid_eval(calc)
 
     mock_promote.assert_called_once()
     assert calc._spherical_forward_fn is None

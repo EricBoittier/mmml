@@ -57,6 +57,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("physnet-train", "Train PhysNetJAX EF from NPZ"),
             CommandInfo("physnet-evaluate", "Evaluate PhysNet checkpoint"),
             CommandInfo("physnet-md", "PhysNet MD sampling"),
+            CommandInfo("dmc", "Diffusion Monte Carlo (batched PhysNetJax walkers)"),
             CommandInfo("ef-train", "Train EF equivariant model"),
             CommandInfo("ef-evaluate", "Evaluate EF model"),
             CommandInfo("ef-md", "MD with trained EF model"),
@@ -114,6 +115,9 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
             "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",
             "mmml mode-check --pbc-fd --checkpoint \"$MMML_CKPT\" --output artifacts/fd_force_check.json",
+            "mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 "
+            "--alpha 1200.0 --checkpoint \"$MMML_CKPT\" "
+            "--input mmml/generate/dmc/examples/acetone_dmc.extxyz",
         ),
     ),
 )

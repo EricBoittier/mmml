@@ -25,11 +25,12 @@ dependencies = [
     "pandas",
     "matplotlib>=3.5.0",
     # JAX ecosystem (CPU version by default).
-    # jax-md 0.2.29+ / flax 0.12.1+ use jax.Ref (not jax._src.core.mutable_array, gone in JAX 0.10).
+    # flax>=0.12.1 (below) uses jax.Ref instead of jax._src.core.mutable_array,
+    # which is gone in JAX 0.10 — that's what actually gates JAX-0.10 compat,
+    # not the jax-md version. jax-md>=0.2.29 is just the current PyPI release.
     "jax>=0.10.0",
     "jaxlib>=0.10.0",
-    "jax-md",
-    "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
+    "jax-md>=0.2.29",
     "flax>=0.12.1",
     "optax",
     "jaxtyping",
@@ -102,6 +103,14 @@ scafacos-interface = [
 # nvalchemiops JAX PME long-range Coulomb backend (CUDA-backed runtime recommended).
 nvalchemiops-pme = [
     "nvalchemi-toolkit-ops[jax]",
+]
+
+# jax-pme long-range Coulomb backend (--lr-solver jax_pme). Not on PyPI under
+# this name yet (lab-cosmo/jax-pme upstream); the native "mic"/ewald path is
+# the default and does not need this. pick_lr_solver() falls back cleanly to
+# mic/nvalchemiops_pme/scafacos when jax-pme isn't installed.
+jax-pme-solver = [
+    "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
 ]
 
 # CPU MD smoke testing: neighbor-list parity (Vesin), trajectory I/O, no CUDA.
@@ -269,11 +278,6 @@ all-cuda13 = [
 all-cpu = [
     "mmml[quantum,ml,viz,md,md-cpu,chem,data,notebooks,experiments,plotting]",
 ]
-
-[tool.uv.sources]
-# jax-md 0.2.29+ (type-checking / API cleanup, PR #408)
-jax-md = { git = "https://github.com/google/jax-md.git", rev = "a722def5f2c30bd9dceb5fcc5c2a8d19f3cba2b6" }
-jax-pme = { git = "https://github.com/EricBoittier/jax-pme.git", rev = "c5f82726840de0abe29e3074adfaac8c826ffb85" }
 
 [[tool.uv.index]]
 name = "jax-cuda"

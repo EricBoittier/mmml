@@ -246,6 +246,10 @@ def main():
         from .misc import dimer_scan
         return dimer_scan.main(args.args)
 
+    elif command == "dmc":
+        from mmml.generate.dmc.dmc import main as dmc_main
+        return dmc_main(args.args)
+
     elif command == "mode-check":
         from .misc import mode_check
         return mode_check.main(args.args)

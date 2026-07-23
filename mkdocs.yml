@@ -115,6 +115,7 @@ nav:
           - orca-client: cli/commands/orca-client.md
           - orca-external: cli/commands/orca-external.md
       - Other utilities:
+          - dmc: cli/commands/dmc.md
           - doctor: cli/commands/doctor.md
           - md-embedding: cli/commands/md-embedding.md
           - mpi-launch: cli/commands/mpi-launch.md

@@ -82,6 +82,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Reproducible rigid 1D dimer energy/force scan",
     ),
     CommandSpec(
+        "dmc",
+        "mmml.generate.dmc.dmc",
+        "Diffusion Monte Carlo with PhysNetJax (batched walkers)",
+    ),
+    CommandSpec(
         "mode-check",
         "mmml.cli.misc.mode_check",
         "Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD)",
