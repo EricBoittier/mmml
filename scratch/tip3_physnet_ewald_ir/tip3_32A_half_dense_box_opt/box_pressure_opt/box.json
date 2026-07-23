@@ -1,0 +1,73 @@
+{
+  "artifacts": {
+    "model_crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/box_pressure_opt/model.crd",
+    "model_psf": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_32A_half_dense_box_opt/box_pressure_opt/model.psf"
+  },
+  "box_side_A": 31.86819225525291,
+  "composition": "TIP3:548",
+  "cpt": {
+    "box_samples_A": [
+      31.95296312963411,
+      31.77021599625505,
+      31.896520361589946,
+      31.869437563727093,
+      31.85182422505834
+    ],
+    "final_box_A": 31.85182422505834,
+    "mean_box_A": 31.86819225525291,
+    "nstep": 500,
+    "plan": {
+      "cpt": true,
+      "finalt": 300.0,
+      "firstt": 300.0,
+      "nstep": 500,
+      "pgamma": 5.0,
+      "pint pconst pref": 1.0,
+      "thermostat": "hoover",
+      "timestep": 0.001
+    },
+    "ran": true,
+    "reason": "charmm_cpt_refine",
+    "timestep_ps": 0.001
+  },
+  "density_g_cm3": 0.5065142137384286,
+  "final_cubic_side_A": 31.86819225525291,
+  "final_pressure_atm": 1366.722464606363,
+  "generated_at": "2026-07-21T11:37:19.646025+00:00",
+  "mc_pressure": {
+    "accepted_moves": 32,
+    "attempted_moves": 32,
+    "best_objective": 1.0,
+    "final_box_A": 32.0,
+    "final_pressure_atm": 0.0,
+    "initial_box_A": 32.0,
+    "initial_pressure_atm": 0.0,
+    "min_intermonomer_distance_A": 1.6728060392695014,
+    "ran": true,
+    "reason": "pressure_mc",
+    "target_pressure_atm": 1.0
+  },
+  "message": "box pressure opt: L=31.8682 \u00c5, P\u22481367 atm (target 1 atm)",
+  "n_atoms": 1644,
+  "n_molecules": 548,
+  "pressure_source": "charmm_prsi",
+  "refine_1d": {
+    "best_objective": 1.0,
+    "final_box_A": 31.39566597760054,
+    "final_pressure_atm": 0.0,
+    "initial_box_A": 32.0,
+    "initial_pressure_atm": 0.0,
+    "n_evals": 20,
+    "ran": true,
+    "reason": "golden_section"
+  },
+  "schema": "mmml.box_pressure_opt.v1",
+  "status": "pass",
+  "steps_applied": [
+    "mc_pressure",
+    "refine_1d",
+    "cpt_refine"
+  ],
+  "target_pressure_atm": 1.0,
+  "temperature_K": 300.0
+}

@@ -17,13 +17,51 @@ def max_dimer_pairs(n_monomers: int) -> int:
     return max(0, n * (n - 1) // 2)
 
 
+# Safety multiplier applied on top of the theoretical expected in-range
+# dimer-pair count when sizing the sparse active-dimer cap from actual box
+# density (see box_volume/active_radius below). Guards against density
+# fluctuations (clustering, non-uniform packing) between cap-resolution time
+# and the frames actually sampled during a run.
+#
+# 1.1 under-covered dense TIP3 liquids in practice (TIP3:548 @ ~32 Å had
+# ~10780 in-range pairs vs density estimate ~8200 → silent truncation). 1.4
+# covers that ~32% undercount plus headroom for local clustering.
+SPARSE_DIMER_CAP_SAFETY_MARGIN = 1.4
+
+# Fallback per-monomer neighbor-count heuristic used only when no box
+# density is available (free-space clusters, or callers that don't pass
+# box_volume/active_radius). This assumes a sparse, gas-phase-like cluster;
+# it silently and badly undersizes the cap for dense periodic liquids (see
+# the investigation that established this constant: a 903-monomer TIP3
+# liquid box at ~1 g/cm^3 has ~29 in-range neighbors per monomer within a
+# 7.5 A active radius, ~5x this heuristic's assumption of 6 -- do not raise
+# this value to "fix" liquids; pass box_volume/active_radius instead so the
+# density-aware branch below is used).
+_FALLBACK_NEIGHBORS_PER_MONOMER = 6
+
+
 def resolve_max_active_dimers(
     n_monomers: int,
     n_dimers_total: Optional[int] = None,
     explicit: Optional[int] = None,
     *,
     free_space: bool = False,
+    box_volume: Optional[float] = None,
+    active_radius: Optional[float] = None,
 ) -> int:
+    """Resolve the sparse active-dimer capacity for one MLpot registration.
+
+    When ``box_volume`` and ``active_radius`` are both provided (the PBC
+    case), the cap is sized from the actual expected in-range dimer-pair
+    count for this system's density -- ``n_monomers`` uniformly distributed
+    in ``box_volume`` gives an expected
+    ``n_monomers * (4/3 pi active_radius^3 / box_volume)`` neighbors per
+    monomer, hence ``n_monomers * that / 2`` expected pairs -- scaled by
+    :data:`SPARSE_DIMER_CAP_SAFETY_MARGIN`. Without density info, falls back
+    to the previous fixed per-monomer heuristic (:data:`_FALLBACK_NEIGHBORS_PER_MONOMER`),
+    which is only appropriate for sparse/free-space clusters, not periodic
+    liquids.
+    """
     if n_dimers_total is None:
         n_dimers_total = max_dimer_pairs(n_monomers)
     n_dimers_total = int(n_dimers_total)
@@ -40,8 +78,15 @@ def resolve_max_active_dimers(
                 cap = all_pairs_cap
             elif n_dimers_total <= 4005:
                 cap = n_dimers_total
+            elif box_volume is not None and active_radius is not None and box_volume > 0:
+                sphere_volume = (4.0 / 3.0) * np.pi * float(active_radius) ** 3
+                expected_neighbors_per_monomer = int(n_monomers) * sphere_volume / float(box_volume)
+                expected_pairs = int(n_monomers) * expected_neighbors_per_monomer / 2.0
+                density_aware_cap = int(np.ceil(expected_pairs * SPARSE_DIMER_CAP_SAFETY_MARGIN))
+                fallback_cap = max(4005, _FALLBACK_NEIGHBORS_PER_MONOMER * int(n_monomers))
+                cap = max(density_aware_cap, fallback_cap)
             else:
-                cap = max(4005, 6 * int(n_monomers))
+                cap = max(4005, _FALLBACK_NEIGHBORS_PER_MONOMER * int(n_monomers))
     if free_space:
         cap = max(cap, all_pairs_cap)
     cap = min(all_pairs_cap, cap)

@@ -1001,6 +1001,7 @@ def _factory_mmml(
     min_com_restraint_force_const: float = 1.0,
     defer_xla_gpu_warmup: bool = False,
     ml_batch_size: Optional[int] = None,
+    ml_gpu_count: int = 1,
     ml_max_active_dimers: Optional[int] = None,
     ml_compute_dtype: Optional[str] = None,
     electrostatics_damping_sigma: float | None = None,
@@ -1009,6 +1010,7 @@ def _factory_mmml(
     mbd_weight: float = 1.0,
     lr_solver: str | None = None,
     ewald_include_self: bool = True,
+    ewald_include_intra: bool = True,
     mm_charge_mode: str | None = None,
     mm_charge_correction: bool = False,
     mm_latent_charge_template: str | Path | None = None,
@@ -1057,6 +1059,7 @@ def _factory_mmml(
         min_com_restraint_force_const=min_com_restraint_force_const,
         defer_xla_gpu_warmup=defer_xla_gpu_warmup,
         ml_batch_size=ml_batch_size,
+        ml_gpu_count=int(ml_gpu_count or 1),
         ml_max_active_dimers=ml_max_active_dimers,
         ml_compute_dtype=ml_compute_dtype,
         electrostatics_damping_sigma=electrostatics_damping_sigma,
@@ -1064,6 +1067,7 @@ def _factory_mmml(
         mbd_weight=mbd_weight,
         lr_solver=lr_solver,
         ewald_include_self=bool(ewald_include_self),
+        ewald_include_intra=bool(ewald_include_intra),
         mm_charge_mode=mm_charge_mode,
         mm_charge_correction=mm_charge_correction,
         mm_latent_charge_template=mm_latent_charge_template,
@@ -1839,11 +1843,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40)."
     )
     parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Parallel PhysNet chunks across N local GPUs (default 1; "
+            "or MMML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
+        ),
+    )
+    parser.add_argument(
         "--ml-max-active-dimers",
         type=int,
         default=None,
         metavar="N",
         help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+    )
+    parser.add_argument(
+        "--mlpot-profile",
+        action="store_true",
+        help="Enable ASE calculator / chunk-apply wall-time profiling.",
     )
     from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
     add_ml_compute_dtype_args(parser)
@@ -1938,8 +1957,9 @@ def main(argv: list[str] | None = None) -> int:
         "--ewald-omit-self",
         action="store_true",
         help=(
-            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
-            "For models not trained with that constant."
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
         ),
     )
     parser.add_argument(
@@ -2281,6 +2301,7 @@ def main(argv: list[str] | None = None) -> int:
             min_com_restraint_force_const=args.min_com_restraint_k,
             defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
             ml_batch_size=getattr(args, "ml_batch_size", None),
+            ml_gpu_count=int(getattr(args, "ml_gpu_count", None) or 1),
             ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
             ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
             electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
@@ -2288,6 +2309,7 @@ def main(argv: list[str] | None = None) -> int:
             mbd_weight=getattr(args, "mbd_weight", 1.0),
             lr_solver=getattr(args, "lr_solver", None),
             ewald_include_self=not bool(getattr(args, "ewald_omit_self", False)),
+            ewald_include_intra=not bool(getattr(args, "ewald_omit_self", False)),
             mm_charge_mode=getattr(args, "mm_charge_mode", None),
             mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
             mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),

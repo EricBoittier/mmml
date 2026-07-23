@@ -170,6 +170,16 @@ def test_scan_mlpot_dimer_2d_pycharmm_batch_parse() -> None:
     assert mod._parse_batch_compositions("DCM:2, ACO:4") == ["DCM:2", "ACO:4"]
 
 
+def test_default_scan_2d_metric_keys_include_wall_E() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        default_scan_2d_metric_keys,
+    )
+
+    keys = default_scan_2d_metric_keys(include_mm=True)
+    assert "wall_E_kcal" in keys
+    assert "mm_E_kcal" in keys
+
+
 def test_scan_mlpot_dimer_2d_pycharmm_help_accepts_dimer_example(capsys) -> None:
     mod = _load_scan_script()
     with pytest.raises(SystemExit) as exc:

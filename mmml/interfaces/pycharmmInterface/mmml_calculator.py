@@ -17,6 +17,7 @@ physics functionality is unchanged when the third-party libraries are present.
 from __future__ import annotations
 
 import os
+import time
 # Module-level only: a conditional `import warnings` inside setup_calculator
 # makes `warnings` a local cell, so nested AseDimerCalculator.calculate() fails
 # with NameError when those branches do not run.
@@ -390,6 +391,7 @@ def setup_calculator(
     jax_pme_sr_cutoff_A: float = 6.0,
     jax_pme_dispersion: bool | None = None,
     ewald_include_self: bool = True,
+    ewald_include_intra: bool = True,
     mm_nonbond_mode: str = "jax_mic",
     periodic_charmm_vdw: bool = True,
     ml_potential_mode: str = "physnet",
@@ -1120,9 +1122,10 @@ def setup_calculator(
 
     mlpot_device = mlpot_jax_device_name()
     if not defer_xla_gpu_warmup and ensure_xla_gpu_warmed():
-        emit_tagged(
-            "setup_calculator",
-            "Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)",
+        from mmml.utils.rich_report import get_reporter
+
+        get_reporter().status(
+            "info", "JAX warmup", detail="generic GPU kernels; hybrid compile follows setup"
         )
     elif defer_xla_gpu_warmup and verbose:
         detail = (
@@ -1149,25 +1152,12 @@ def setup_calculator(
         resolve_max_active_dimers,
     )
 
-    # Sparse dimers: max active for JIT (cap for memory)
+    # Sparse dimers: max active for JIT (cap for memory). Box volume/active
+    # radius are not known yet at this point (cell is normalized below) --
+    # the actual cap is (re)computed density-aware right after cell
+    # normalization; this early value is only used if ml_sparse_dimers is
+    # False, in which case it's ignored anyway.
     _free_space_dimers = cell is False or cell is None
-    _max_active_dimers = (
-        resolve_max_active_dimers(
-            n_monomers,
-            n_dimers_total,
-            ml_max_active_dimers,
-            free_space=_free_space_dimers,
-        )
-        if ml_sparse_dimers
-        else n_dimers_total
-    )
-    _cached_sparse_batch_structure = None
-    if ml_sparse_dimers and _max_active_dimers < n_dimers_total:
-        try:
-            _cached_sparse_batch_structure = prepare_batch_structure(n_monomers + _max_active_dimers, max_atoms)
-        except Exception:
-            pass
-
 
     if use_smooth_mic is None:
         # Exact MIC for MD. Smooth MIC is for PBC minimization gradients only —
@@ -1196,6 +1186,30 @@ def setup_calculator(
     else:
         pbc_cell = None
         pbc_map = do_pbc_map = False
+
+    # Sparse-dimer active-set capacity: density-aware when the box volume is
+    # known (PBC), since a fixed per-monomer heuristic badly undersizes
+    # dense periodic liquids (see mlpot_sparse_dimer_policy.resolve_max_active_dimers).
+    _dimer_active_radius = cutoff_params.mm_switch_on + cutoff_params.ml_switch_width
+    _box_volume = float(jnp.linalg.det(pbc_cell)) if pbc_cell is not None else None
+    _max_active_dimers = (
+        resolve_max_active_dimers(
+            n_monomers,
+            n_dimers_total,
+            ml_max_active_dimers,
+            free_space=_free_space_dimers,
+            box_volume=_box_volume,
+            active_radius=_dimer_active_radius,
+        )
+        if ml_sparse_dimers
+        else n_dimers_total
+    )
+    _cached_sparse_batch_structure = None
+    if ml_sparse_dimers and _max_active_dimers < n_dimers_total:
+        try:
+            _cached_sparse_batch_structure = prepare_batch_structure(n_monomers + _max_active_dimers, max_atoms)
+        except Exception:
+            pass
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
@@ -1282,6 +1296,8 @@ def setup_calculator(
             mm_nonbond_mode=mm_nonbond_mode,
             do_mm=doMM,
             periodic_charmm_vdw=periodic_charmm_vdw,
+            ewald_include_self=ewald_include_self,
+            ewald_include_intra=ewald_include_intra,
         ),
         cutoff_params=cutoff_params,
         model_type=(
@@ -1415,6 +1431,7 @@ def setup_calculator(
             jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
             jax_pme_dispersion=jax_pme_dispersion,
             ewald_include_self=ewald_include_self,
+            ewald_include_intra=ewald_include_intra,
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd
@@ -1471,11 +1488,29 @@ def setup_calculator(
     def _ensure_mm_fn(positions_concrete, cutoff_params, pbc_cell_override=None):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
         cell_for_build = pbc_cell_override if pbc_cell_override is not None else pbc_cell
-        cell_key = (
-            None
-            if cell_for_build is None
-            else tuple(np.asarray(cell_for_build, dtype=np.float64).reshape(-1).tolist())
-        )
+        # Native Ewald: live box is applied via box_override each step; only rebuild
+        # the host k-grid when cubic L crosses EWALD_NPT_KGRID_REBUILD_TOLERANCE_A.
+        # Other LR solvers still key on the full cell (pair-list / mesh capacity).
+        if cell_for_build is None:
+            cell_key = None
+        elif pick_lr_solver(lr_solver) == "ewald":
+            from mmml.interfaces.pycharmmInterface.ewald_native import (
+                ewald_npt_kgrid_cache_bin,
+            )
+            from mmml.interfaces.pycharmmInterface.long_range_backend import (
+                box_length_from_cell,
+            )
+
+            cell_key = (
+                "ewald_npt_bin",
+                ewald_npt_kgrid_cache_bin(
+                    box_length_from_cell(np.asarray(cell_for_build, dtype=np.float64))
+                ),
+            )
+        else:
+            cell_key = tuple(
+                np.asarray(cell_for_build, dtype=np.float64).reshape(-1).tolist()
+            )
         key = (
             cutoff_params.ml_switch_width,
             cutoff_params.mm_switch_on,
@@ -1551,10 +1586,10 @@ def setup_calculator(
         model, which has no repulsive prior outside its training data (closest
         inter-monomer contact ever sampled: 1.971 A).  Nothing then holds atoms
         apart -- a liquid acetone NVT run collapsed by ~5000 eV and heated
-        150 -> 705 K at dt=0.25 fs.  Identically zero above WALL_R_ON, so it
-        cannot perturb the sampled region; it only catches trajectories that
-        leave it.  Shared with training via mmml.models.short_range_wall, so both
-        evaluate the same function.
+        150 -> 705 K at dt=0.25 fs.  Identically zero above WALL_R_ON (1.0 A:
+        below water H-bonds, above ZBL), so it cannot perturb the sampled
+        region or normal liquid contacts; it only catches trajectories that
+        leave them.  Shared with training via mmml.models.short_range_wall.
         """
         mol = jnp.asarray(_atom_mol_id_np[: positions.shape[0]])
         n = positions.shape[0]
@@ -2082,6 +2117,26 @@ def setup_calculator(
             com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
                 dimer_positions, dimer_n_a, dimer_n_b)
             active_mask = com_dists < active_radius
+            _n_active_true = jnp.sum(active_mask)
+            jax.lax.cond(
+                _n_active_true > _max_active_dimers,
+                lambda n: jax.debug.print(
+                    "mmml WARNING: sparse active-dimer cap saturated: "
+                    "{n_true} in-range dimer pairs > cap={cap}. "
+                    "{dropped} pairs are being silently truncated by "
+                    "jnp.nonzero's fixed-size selection (first-by-enumeration-"
+                    "order, not nearest); this can discontinuously toggle "
+                    "unrelated pairs on/off as any atom moves and inject "
+                    "spurious forces. Raise ml_max_active_dimers / "
+                    "MMML_MLPOT_MAX_ACTIVE_DIMERS well above {n_true}, or "
+                    "increase box_volume awareness in resolve_max_active_dimers.",
+                    n_true=n,
+                    cap=_max_active_dimers,
+                    dropped=n - _max_active_dimers,
+                ),
+                lambda n: None,
+                _n_active_true,
+            )
             active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
             active_indices_safe = jnp.where(active_indices < n_dimers, active_indices, 0)
             sparse_dimer_positions = dimer_positions[active_indices_safe]
@@ -2742,6 +2797,13 @@ def setup_calculator(
                 """Calculate energy and forces for given atomic configuration"""
 
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
+                from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                    get_mlpot_profile_stats,
+                    mlpot_profiling_enabled,
+                )
+
+                _profile_calc = mlpot_profiling_enabled()
+                _t_calc0 = time.perf_counter() if _profile_calc else None
                 if not getattr(self, "_xla_gpu_warmed", False):
                     ensure_xla_gpu_warmed(force=True)
                     self._xla_gpu_warmed = True
@@ -2819,31 +2881,38 @@ def setup_calculator(
                         kwargs["box"] = box_jax
                     return spherical_cutoff_calculator(**kwargs)
 
-                if self.backprop:
-                    R_jax = jnp.asarray(R)
+                # First FIRE/MD force eval often JIT-compiles the chunked ML path
+                # after warmup restored OMP=1 for CHARMM; bump compile threads here.
+                from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+                    jax_compile_threads_context,
+                )
 
-                    if self.verbose:
-                        def _energy_with_aux(positions_jax):
-                            model_out = _spherical_eval(positions_jax)
-                            energy = jnp.reshape(model_out.energy, (-1,))[0]
-                            return energy, model_out
+                with jax_compile_threads_context(quiet=True):
+                    if self.backprop:
+                        R_jax = jnp.asarray(R)
 
-                        (E, out), grad_R = jax.value_and_grad(
-                            _energy_with_aux, has_aux=True
-                        )(R_jax)
+                        if self.verbose:
+                            def _energy_with_aux(positions_jax):
+                                model_out = _spherical_eval(positions_jax)
+                                energy = jnp.reshape(model_out.energy, (-1,))[0]
+                                return energy, model_out
+
+                            (E, out), grad_R = jax.value_and_grad(
+                                _energy_with_aux, has_aux=True
+                            )(R_jax)
+                        else:
+                            def _energy_scalar(positions_jax):
+                                return jnp.reshape(
+                                    _spherical_eval(positions_jax).energy, (-1,)
+                                )[0]
+
+                            E, grad_R = jax.value_and_grad(_energy_scalar)(R_jax)
+                            out = None
+                        F = -grad_R
                     else:
-                        def _energy_scalar(positions_jax):
-                            return jnp.reshape(
-                                _spherical_eval(positions_jax).energy, (-1,)
-                            )[0]
-
-                        E, grad_R = jax.value_and_grad(_energy_scalar)(R_jax)
-                        out = None
-                    F = -grad_R
-                else:
-                    out = _spherical_eval(jnp.asarray(R))
-                    E = out.energy
-                    F = out.forces
+                        out = _spherical_eval(jnp.asarray(R))
+                        E = out.energy
+                        F = out.forces
 
                 # Ensure forces are finite
                 E = jnp.where(jnp.isfinite(E), E, 0.0)
@@ -3105,6 +3174,10 @@ def setup_calculator(
                             print(f"  Atom {idx}: force={forces_final[idx]}, mag={force_mags_final[idx]:.6e}")
                 
                 self.results["forces"] = forces_final
+                if _profile_calc and _t_calc0 is not None:
+                    get_mlpot_profile_stats().record_calculate(
+                        time.perf_counter() - _t_calc0
+                    )
 
         def get_spherical_cutoff_calculator(
             atomic_numbers: Array,

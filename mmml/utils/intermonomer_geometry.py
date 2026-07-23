@@ -281,25 +281,7 @@ class IntermonomerContactSummary:
                 "verify element-pair floors before MLpot registration"
             )
 
-        chem = _chemical_note(self.label_i, self.label_j, d, vdw)
-        return f"{head}; {status}; {chem}"
-
-
-def _chemical_note(label_i: str, label_j: str, distance_A: float, vdw: float | None) -> str:
-    if "H" in (label_i, label_j):
-        other = label_j if label_i == "H" else label_i
-        if other in ("Cl", "C", "O", "N"):
-            return (
-                "H–heavy contact: equilibrium liquid distances are usually ≥2.5 Å; "
-                "short prep contacts often involve rotatable methylenes"
-            )
-    if label_i == "H" and label_j == "H":
-        return "H–H: equilibrium ~2.4 Å; sub-2 Å in prep is strained but usually relaxes in mini"
-    if vdw is not None and distance_A < 0.85 * vdw:
-        return "substantially inside summed vdW radii — worth watching through pre-SD mini"
-    if vdw is not None and distance_A < vdw:
-        return "inside typical vdW contact — acceptable at prep if GRMS mini succeeds"
-    return "contact spacing plausible for dense liquid prep"
+        return f"{head}; {status}"
 
 
 def summarize_worst_intermonomer_contact(

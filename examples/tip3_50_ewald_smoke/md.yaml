@@ -1,4 +1,4 @@
-# TIP3:50 evenly spaced in a 30 Å cube (grid builder + random rotations via --seed),
+# TIP3:90 in a 30 Å cube (~1 g/cm³; grid + random rotations via --seed),
 # short heat + NVE with hybrid Ewald, self term omitted (MIC-trained PhysNet).
 #
 #   export CKPT=/path/to/checkpoint.json
@@ -7,7 +7,7 @@
 # Or: ./scripts/run_tip3_50_ewald_smoke.sh
 
 defaults:
-  composition: "TIP3:50"
+  composition: "TIP3:90"
   builder: liquid
   packmol: false
   box_size: 30.0
@@ -24,17 +24,21 @@ defaults:
   mm_switch_width: 5.0
   ps_heat: 2.0
   ps_nve: 2.0
+  density_prep_mode: off
+  mc_density_equalize: false
 
 campaign_output: scratch/tip3_50_ewald_smoke
 runs:
   heat_nve:
-    description: Grid TIP3:50 / 30 Å — mini → 2 ps heat → 2 ps NVE (Ewald, no self)
+    description: Grid TIP3:90 / 30 Å — mini → 2 ps heat → 2 ps NVE (Ewald, no self)
     backend: pycharmm
     setup: pycharmm_full
     md_stages: mini,heat,nve
     output_dir: scratch/tip3_50_ewald_smoke/heat_nve
     extra_args:
       - --ewald-omit-self
+      - --mlpot-pbc
       - --no-packmol
+      - --no-density-prep-ladder
       - --builder
       - liquid

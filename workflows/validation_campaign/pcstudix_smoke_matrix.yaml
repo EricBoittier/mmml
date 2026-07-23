@@ -1,0 +1,126 @@
+schema_version: 1
+
+# Every case runs in a fresh process and writes request/status/stdout/stderr receipts.
+# BLOCKED means a declared optional dependency is absent; it is never reported as PASS.
+cases:
+  - id: physnet_joint_neutral
+    category: calculator
+    description: PhysNet/joint checkpoint, inferred neutral charge and spin
+    tags: [gpu, ase, calculator]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "physnet", "--checkpoint", "{repo}/examples/ckpts_json/DESdimers_params.json", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz", "scan/trajectory.traj"]
+
+  - id: physnet_joint_explicit_charge_spin
+    category: calculator
+    description: PhysNet/joint explicit charge/spin forwarding
+    tags: [gpu, ase, calculator, charge]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "physnet", "--checkpoint", "{repo}/examples/ckpts_json/DESdimers_params.json", "--charge", "0", "--spin", "1", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: spookynet
+    category: calculator
+    description: SpookyNet energy and analytic forces
+    tags: [gpu, ase, calculator]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "spookynet", "--checkpoint", "{repo}/examples/sppoky-epoch-0010_params.json", "--charge", "0", "--spin", "1", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: learned_mbd
+    category: calculator
+    description: Learned many-body dispersion energy and forces
+    tags: [gpu, ase, calculator]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "mbd", "--checkpoint", "{repo}/examples/mbd_20260711-100037_epoch-0100.json", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: learned_multipoles
+    category: calculator
+    description: Learned multipoles with finite-difference force contract
+    tags: [gpu, ase, calculator]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "multipoles", "--checkpoint", "{repo}/examples/multipoles_20260711-100037_epoch-0100.json", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: efield
+    category: calculator
+    description: Electric-field wrapper with an explicit external field
+    tags: [gpu, ase, calculator]
+    requires_env: [MMML_SMOKE_EFIELD_CHECKPOINT, MMML_SMOKE_EFIELD_CONFIG]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "efield", "--checkpoint", "$MMML_SMOKE_EFIELD_CHECKPOINT", "--calculator-config", "$MMML_SMOKE_EFIELD_CONFIG", "--electric-field", "0.0", "0.0", "0.001", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: xtb_tblite
+    category: calculator
+    description: GFN2-xTB through xtb-python or tblite
+    tags: [cpu, ase, calculator, quantum]
+    requires_any_modules: [xtb, tblite]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "xtb", "--method", "GFN2-xTB", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: pyscf_hf
+    category: calculator
+    description: PySCF HF energy and nuclear-gradient forces
+    tags: [cpu, ase, calculator, quantum]
+    requires_modules: [pyscf]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "TIP3", "--calculator", "pyscf", "--method", "hf", "--basis", "sto-3g", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: dftb3_d4
+    category: calculator
+    description: External DFTB+ DFTB3/3ob-3-1 with D4
+    tags: [cpu, ase, calculator, quantum]
+    requires_env: [MMML_SMOKE_DFTB_SLAKO_DIR]
+    requires_commands: [dftb+]
+    command: ["{python}", "-m", "mmml.cli.__main__", "dimer-scan", "DCM", "--calculator", "dftb3-d4", "--slako-dir", "$MMML_SMOKE_DFTB_SLAKO_DIR", "--calculator-workdir", "{output_dir}/dftb", "--distance", "4.0:4.0:0.1", "--energy-definition", "total", "--output", "{output_dir}/scan"]
+    expected_artifacts: ["scan/manifest.json", "scan/trajectory.extxyz"]
+
+  - id: jax_cgenff_spoof
+    category: calculator
+    description: JAX CGenFF clone calculator with finite energy and forces
+    tags: [gpu, calculator, mm]
+    command: ["{python}", "-m", "pytest", "-q", "tests/unit/test_dcm_box27_calculator.py::test_dcm_box27_hybrid_calculator_jax_mm_spoof"]
+
+  - id: pycharmm_live
+    category: backend
+    description: Isolated live PyCHARMM smoke suite under the CHARMM MPI launcher
+    tags: [cpu, backend, pycharmm, mm]
+    requires_commands: [mpirun]
+    command: ["{repo}/scripts/ci/run_pycharmm_smoke_pytest.sh", "-q"]
+
+  - id: jaxmd_min
+    category: backend
+    description: Unified JAX-MD FIRE minimization
+    tags: [gpu, backend, hybrid]
+    command: ["{repo}/scripts/mmml-charmm-mpirun.sh", "{python}", "{repo}/workflows/unified_backend_sweep/scripts/run_setting.py", "--workflow-config", "{repo}/workflows/unified_backend_sweep/config.yaml", "--backend", "jaxmd_min", "--seed", "1", "--output-dir", "{output_dir}/run", "--repo-root", "{repo}"]
+    expected_artifacts: ["run/status.json", "run/run_config.json"]
+
+  - id: jaxmd_nve
+    category: backend
+    description: Unified JAX-MD NVE propagation
+    tags: [gpu, backend, hybrid]
+    command: ["{repo}/scripts/mmml-charmm-mpirun.sh", "{python}", "{repo}/workflows/unified_backend_sweep/scripts/run_setting.py", "--workflow-config", "{repo}/workflows/unified_backend_sweep/config.yaml", "--backend", "jaxmd_nve", "--seed", "1", "--output-dir", "{output_dir}/run", "--repo-root", "{repo}"]
+    expected_artifacts: ["run/status.json", "run/run_config.json"]
+
+  - id: jaxmd_nvt
+    category: backend
+    description: Unified JAX-MD Nose-Hoover-chain NVT propagation
+    tags: [gpu, backend, hybrid]
+    command: ["{repo}/scripts/mmml-charmm-mpirun.sh", "{python}", "{repo}/workflows/unified_backend_sweep/scripts/run_setting.py", "--workflow-config", "{repo}/workflows/unified_backend_sweep/config.yaml", "--backend", "jaxmd_nvt", "--seed", "1", "--output-dir", "{output_dir}/run", "--repo-root", "{repo}"]
+    expected_artifacts: ["run/status.json", "run/run_config.json"]
+
+  - id: jaxmd_npt
+    category: backend
+    description: Unified JAX-MD Nose-Hoover NPT propagation (known pc-studix diagnostic)
+    tags: [gpu, backend, hybrid, known_pcstudix_risk]
+    command: ["{repo}/scripts/mmml-charmm-mpirun.sh", "{python}", "{repo}/workflows/unified_backend_sweep/scripts/run_setting.py", "--workflow-config", "{repo}/workflows/unified_backend_sweep/config.yaml", "--backend", "jaxmd_npt", "--seed", "1", "--output-dir", "{output_dir}/run", "--repo-root", "{repo}"]
+    expected_artifacts: ["run/status.json", "run/run_config.json"]
+
+  - id: rigid_mc
+    category: backend
+    description: Unified rigid-body Metropolis sampler
+    tags: [gpu, backend, hybrid]
+    command: ["{repo}/scripts/mmml-charmm-mpirun.sh", "{python}", "{repo}/workflows/unified_backend_sweep/scripts/run_setting.py", "--workflow-config", "{repo}/workflows/unified_backend_sweep/config.yaml", "--backend", "rigid_mc", "--seed", "1", "--output-dir", "{output_dir}/run", "--repo-root", "{repo}"]
+    expected_artifacts: ["run/status.json", "run/run_config.json"]
+
+  - id: charge_and_lr_modes
+    category: policy
+    description: Fixed, latent, fixed-plus-latent charges and MIC/Ewald/PME lowering contracts
+    tags: [cpu, policy, charge, long_range]
+    command: ["{python}", "-m", "pytest", "-q", "tests/unit/test_mm_charge_mode.py", "tests/unit/test_long_range_backend.py", "tests/unit/test_jax_pme_lr_solver.py", "tests/unit/test_md_mm_nonbonded.py"]

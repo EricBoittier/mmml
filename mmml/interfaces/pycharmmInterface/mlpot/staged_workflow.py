@@ -208,6 +208,156 @@ def _equi_restart_name(tag: str, n_equi_segments: int) -> str:
     return "equi.res"
 
 
+# Cold-start |F|max≈2 eV/Å is for Packmol/clash geometries, not finite-T liquids
+# that already completed heat/NVE.
+_POST_DYNAMICS_RESUME_STAGES = frozenset({"equi", "nve", "prod"})
+
+
+def _is_dynamics_stage_restart_path(path: Path | str | None) -> bool:
+    """True for heat/nve/equi/prod stage restarts (not handoff/pretreat seeds)."""
+    if path is None:
+        return False
+    p = Path(path)
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_handoff_seed_restart_path,
+        is_heat_segment_restart_path,
+        is_pretreat_mm_restart_path,
+    )
+
+    if is_handoff_seed_restart_path(p) or is_pretreat_mm_restart_path(p):
+        return False
+    name = p.name.lower()
+    if name in {"heat.res", "nve.res", "equi.res", "prod.res"}:
+        return True
+    if is_heat_segment_restart_path(p):
+        return True
+    # Segmented equi/prod: equi.0.res, prod.3.res
+    import re
+
+    return bool(re.fullmatch(r"(equi|prod|nve)\.\d+\.res", name))
+
+
+def _should_skip_pre_dyn_fmax_gate(
+    *,
+    seeded_from_dynamics_restart: bool,
+    dyn_stages: list[str] | tuple[str, ...],
+    restart_from: Path | str | None = None,
+) -> bool:
+    """True when equi/NVE/prod resumes a finished dynamics restart.
+
+    Skip even when offline coord seeding fails: the cold-start 2 eV/Å ceiling
+    still must not FIRE a post-heat liquid, and EQUI CPT start loads coords
+    from the restart before ``dyna``.
+    """
+    if not dyn_stages or dyn_stages[0] not in _POST_DYNAMICS_RESUME_STAGES:
+        return False
+    if seeded_from_dynamics_restart:
+        return True
+    return _is_dynamics_stage_restart_path(restart_from)
+
+
+def _restart_coord_read_candidates(path: Path) -> list[Path]:
+    """User path plus CHARMM IO staging alias (may hold the only full copy)."""
+    candidates: list[Path] = []
+    seen: set[str] = set()
+
+    def _add(candidate: Path | None) -> None:
+        if candidate is None:
+            return
+        try:
+            key = str(candidate.expanduser().resolve())
+        except OSError:
+            key = str(candidate)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(Path(candidate))
+
+    _add(path)
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            _staging_alias_for_restart,
+        )
+
+        _add(_staging_alias_for_restart(Path(path)))
+    except Exception:
+        pass
+    return candidates
+
+
+def _seed_charmm_coords_from_dynamics_restart(
+    restart_path: Path | str | None,
+    *,
+    quiet: bool = False,
+    context: str = "Pre-dynamics",
+) -> bool:
+    """Load finite dynamics-restart coordinates into CHARMM before force gates.
+
+    ``md-system --from-crd`` leaves the certified handoff geometry in memory.
+    Equi-only resume must measure the post-heat (or other stage) restart, not
+    that cold CRD — otherwise the pre-dynamics fmax gate rejects a geometry
+    that never enters the CPT leg.
+    """
+    if restart_path is None:
+        if not quiet:
+            print(
+                f"{context}: WARN coord seed skipped — no dynamics restart path",
+                flush=True,
+            )
+        return False
+    path = Path(restart_path).expanduser()
+    try:
+        path = path.resolve()
+    except OSError:
+        pass
+    if not _is_dynamics_stage_restart_path(path):
+        if not quiet:
+            print(
+                f"{context}: WARN coord seed skipped — not a dynamics stage "
+                f"restart ({path.name})",
+                flush=True,
+            )
+        return False
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    pos = None
+    used: Path | None = None
+    for candidate in _restart_coord_read_candidates(path):
+        if not candidate.is_file():
+            continue
+        pos = read_restart_coordinates(candidate)
+        if pos is not None:
+            used = candidate
+            break
+    if pos is None or used is None:
+        if not quiet:
+            print(
+                f"{context}: WARN could not parse coordinates from {path} "
+                "(tried staging aliases); force gate may still be skipped for "
+                "equi/nve/prod resume — EQUI CPT start will reload the restart",
+                flush=True,
+            )
+        return False
+    sync_charmm_positions(pos)
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        clear_comparison_coordinates,
+    )
+
+    clear_comparison_coordinates()
+    if not quiet:
+        src = used.name if used == path else f"{used} (staging)"
+        print(
+            f"{context}: seeded CHARMM coordinates from {src} "
+            "(skip cold --from-crd geometry for force gate)",
+            flush=True,
+        )
+    return True
+
+
 def _heat_restart_path(paths: dict[str, Path], tag: str, n_heat_segments: int) -> Path:
     from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
 
@@ -258,6 +408,10 @@ def _prior_restart_for_stage(
     if stage == "equi":
         if paths["nve_res"].is_file():
             return paths["nve_res"]
+        # Segmented heat writes heat.{N-1}.res, not heat.res.
+        heat_restart = _heat_restart_path(paths, tag or "", n_heat_segments)
+        if heat_restart.is_file():
+            return heat_restart
         if paths["heat_res"].is_file():
             return paths["heat_res"]
         return None
@@ -1042,8 +1196,13 @@ def _configure_npt_dynamics_start(
     if use_pbc and use_cpt and box_side is not None:
         ensure_charmm_crystal_for_cpt(float(box_side), quiet=quiet)
     # Single CPT dyna: Boltzmann at target T + barostat init (no nstep=0 assign).
+    # ``include_firstt`` is often False when the stage builder thinks this is a
+    # restart handoff; without FIRSTT, IASVEL=1 assigns at 0 K (KEY_LIBRARY
+    # banner: VELOCITIES ASSIGNED AT TEMPERATURE = 0).
     kw["iasvel"] = 1
     kw["start"] = True
+    kw["firstt"] = target
+    kw["tstruct"] = target
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
     if not quiet:
@@ -1323,6 +1482,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     apply_condensed_phase_md_defaults(args)
     if getattr(args, "mlpot_profile", False):
         import os
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            enable_mlpot_profiling,
+        )
+
+        enable_mlpot_profiling()
         os.environ["MMML_MLPOT_PROFILE"] = "1"
         os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
     from mmml.cli.run.md_handoff import get_handoff_in
@@ -2218,6 +2382,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
 
         assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
+        # Equi/NVE/prod-only resumes still load --from-crd into CHARMM during
+        # setup. Seed the stage restart (heat.N.res, …) before GRMS/fmax gates
+        # so we do not reject the certified handoff while intending post-heat CPT.
+        seeded_from_dynamics_restart = False
+        seed_restart = restart_from
+        if "mini" not in stages:
+            if seed_restart is None and dyn_stages:
+                seed_restart = _prior_restart_for_stage(
+                    dyn_stages[0],
+                    paths,
+                    restart_from=None,
+                    tag=tag,
+                    n_heat_segments=n_heat_segments_early,
+                )
+            seeded_from_dynamics_restart = _seed_charmm_coords_from_dynamics_restart(
+                seed_restart,
+                quiet=bool(args.quiet),
+                context="Pre-dynamics",
+            )
+        skip_pre_dyn_fmax_gate = _should_skip_pre_dyn_fmax_gate(
+            seeded_from_dynamics_restart=seeded_from_dynamics_restart,
+            dyn_stages=dyn_stages,
+            restart_from=seed_restart,
+        )
         max_grms = resolve_max_grms_before_dyn(
             args,
             n_mol,
@@ -2422,22 +2610,41 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         # the live hybrid force field after every recovery/minimization step and
         # enforce the independent per-atom ceiling before entering HEAT.
         from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+            DynamicsGateResult,
             geometry_safe_for_dynamics,
             measure_monomer_grms_stats,
             resolve_grms_thresholds,
         )
 
-        force_gate = geometry_safe_for_dynamics(
-            measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
-            resolve_grms_thresholds(
-                args,
-                atoms_per_list=atoms_per_list,
-                n_monomers=n_mol,
-                n_atoms=n_atoms,
-                mlpot_ctx=ctx,
-                pbc=charmm_pbc,
-            ),
-        )
+        if skip_pre_dyn_fmax_gate:
+            if not args.quiet:
+                print(
+                    "Pre-dynamics force gate: skipped "
+                    f"(seeded dynamics restart → {dyn_stages[0]}; "
+                    "finite-T liquid |F|max often exceeds the 2 eV/Å cold-start "
+                    "ceiling — do not re-FIRE a finished heat geometry)",
+                    flush=True,
+                )
+            force_gate = DynamicsGateResult(
+                ok=True,
+                reason="skipped for post-dynamics restart resume",
+                hybrid_total_grms=float(current_grms),
+                fmax_kcalmol_A=None,
+                max_grms_before_dyn=float(max_grms),
+                max_fmax_before_dyn=0.0,
+            )
+        else:
+            force_gate = geometry_safe_for_dynamics(
+                measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
+                resolve_grms_thresholds(
+                    args,
+                    atoms_per_list=atoms_per_list,
+                    n_monomers=n_mol,
+                    n_atoms=n_atoms,
+                    mlpot_ctx=ctx,
+                    pbc=charmm_pbc,
+                ),
+            )
         if not force_gate.ok:
             # A whole-system minimizer barely feels one or two stressed monomers
             # (global RMS is dominated by the healthy majority), so before failing
@@ -2883,6 +3090,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         n_segments=n_heat_segments,
                     )
+                    # Hoover CPT heat: one DYNA per segment (no mid-segment Bussi /
+                    # Boltzmann redraw when DCD forbids C-API velocity inject).
+                    # Opt out with MMML_HEAT_MID_SEGMENT_CHECKS=1 for debugging.
+                    if heat_thermostat == "hoover" and stage_overlap is not None:
+                        from dataclasses import replace
+
+                        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                            _truthy_env,
+                        )
+
+                        if not _truthy_env("MMML_HEAT_MID_SEGMENT_CHECKS"):
+                            stage_overlap = replace(
+                                stage_overlap, heat_segment_boundary_only=True
+                            )
                     stage_overlap = attach_prior_segment_restart(
                         stage_overlap,
                         segment_index=seg_i,
@@ -2955,7 +3176,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
             if stage == "equi" and n_equi_segments > 1:
                 initial = prev_restart or _prior_restart_for_stage(
-                    "equi", paths, restart_from=None
+                    "equi",
+                    paths,
+                    restart_from=None,
+                    tag=tag,
+                    n_heat_segments=n_heat_segments,
                 )
                 seg_chain = npt_restart_chain(
                     out_dir,
@@ -3463,6 +3688,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
                 sync_charmm_lists_after_mini(quiet=bool(args.quiet))
             if stage == "heat":
+                # Drop pretreat/pre-heat calculator mini best so mid-HEAT rescue
+                # FIRE cannot roll geometry back to the t≈0 mini frame.
+                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                    clear_calculator_mini_historical_best,
+                )
+
+                clear_calculator_mini_historical_best(ctx)
                 heat_thermostat = resolve_heat_thermostat(args)
                 if (
                     charmm_pbc

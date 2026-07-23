@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from ase import Atoms
 
 from .forces import force_fd_check
@@ -49,17 +50,15 @@ def run_pbc_cluster_fd(
         _run_charmm_minimize,
     )
     from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
-    from mmml.paths import default_meoh_template_pdb
 
     if checkpoint is None:
         base_ckpt_dir, _ = resolve_checkpoint_paths(None)
     else:
         base_ckpt_dir, _ = resolve_checkpoint_paths(Path(checkpoint).expanduser().resolve())
 
+    # None → residue-aware bundled template (TIP3/MEOH/ACO); do not force MEOH.
     pdb = (
-        Path(template_pdb).expanduser().resolve()
-        if template_pdb is not None
-        else default_meoh_template_pdb()
+        Path(template_pdb).expanduser().resolve() if template_pdb is not None else None
     )
     z, r0 = _build_psf_ordered_cluster(
         str(residue).upper(),
@@ -67,9 +66,13 @@ def run_pbc_cluster_fd(
         float(spacing),
         template_pdb=pdb,
     )
-    atoms_per = len(z) // int(n_molecules)
+    n_mol = int(n_molecules)
+    atoms_per = len(z) // n_mol
+    monomer_offsets = np.arange(0, n_mol + 1, dtype=int) * int(atoms_per)
     r0 = _enforce_min_com_separation(
-        r0, int(n_molecules), atoms_per, float(min_com_start_distance)
+        r0,
+        monomer_offsets=monomer_offsets,
+        min_com_distance=float(min_com_start_distance),
     )
     L = _cubic_box_length(r0, float(ml_cutoff))
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
@@ -107,6 +110,7 @@ def run_pbc_cluster_fd(
         timings={},
         lr_solver=str(lr_solver),
         ewald_include_self=not bool(ewald_omit_self),
+        ewald_include_intra=not bool(ewald_omit_self),
         mm_charge_mode=mm_charge_mode,
         backprop=True,
     )

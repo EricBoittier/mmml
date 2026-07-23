@@ -54,6 +54,29 @@ def test_model_output_mm_charges_default_and_field():
     assert bare.mm_charges == 0.0
 
 
+def test_make_jaxmd_reporter_accepts_zero_buffer_size(tmp_path: Path):
+    """Short smokes can compute buffer_size=min(100, total_records)=0."""
+    path = tmp_path / "traj_zero_buf.h5"
+    reporter = make_jaxmd_reporter(
+        path,
+        n_atoms=2,
+        buffer_size=0,
+        include_positions=True,
+        include_velocities=False,
+        include_charges=False,
+    )
+    assert reporter._buffer_size == 1
+    reporter.report(
+        potential_energy=-1.0,
+        kinetic_energy=0.1,
+        temperature=300.0,
+        invariant=-0.9,
+        positions=np.zeros((2, 3), dtype=np.float32),
+    )
+    reporter.close()
+    assert path.is_file()
+
+
 def test_make_jaxmd_reporter_writes_charges(tmp_path: Path):
     path = tmp_path / "traj.h5"
     n_atoms = 3

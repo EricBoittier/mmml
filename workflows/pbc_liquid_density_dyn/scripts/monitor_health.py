@@ -541,13 +541,6 @@ def _driver_subprocess_env(cfg_path: Path) -> dict[str, str]:
     env["PATH"] = ":".join(p for p in path_parts if p)
     env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
     env.setdefault("JAX_ENABLE_X64", "1")
-    if not env.get("MMML_CKPT"):
-        default_ckpt = (
-            "/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/"
-            "dcm1-c137fb42-1f65-4748-880b-8f8184a20f70"
-        )
-        if Path(default_ckpt).is_dir():
-            env["MMML_CKPT"] = default_ckpt
     if not env.get("MMML_UV"):
         import shutil
 

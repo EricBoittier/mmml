@@ -1,0 +1,16 @@
+{
+  "tag": "meoh_10mer",
+  "snapshots": [
+    {
+      "seq": 0,
+      "slug": "pack",
+      "stem": "00_pack",
+      "kind": "packmol",
+      "label": "Packmol sphere placement (pre-minimize)",
+      "files": {
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2/model.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/npt_charmm2/model.psf"
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "fd_atoms_checked": 3.0,
+  "fd_dx_A": 0.001,
+  "fd_force_max_abs_diff_eVA": 0.00034332864899633275,
+  "fd_force_rms_diff_eVA": 0.0002069106625906545,
+  "box_A": 50.0,
+  "n_molecules": 10.0,
+  "residue": "TIP3",
+  "checkpoint": "/mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json",
+  "lr_solver": "ewald",
+  "ewald_omit_self": true
+}

@@ -415,17 +415,21 @@ def print_calculator_summary(
         w_on = bool(wall.get("enabled", False))
         table.add_row(
             "Short-range wall",
-            "[green]✓[/green]" if w_on else "[dim]off[/dim]",
+            "[green]✓[/green] MD safety net" if w_on else "[dim]off[/dim]",
         )
         if w_on:
-            # The MM LJ wall is tapered off below (mm_switch_on - ml_switch_width)
-            # and the ML model has no repulsive prior outside its data, so this is
-            # what stops atoms collapsing at close range. Zero above r_on.
+            # Pair-distance prior for catastrophic overlap when MM LJ is tapered
+            # off. Not part of the COM handoff, and not what the 2D dimer scan
+            # (COM ≥ ~3.5 Å) validates — see wall_E on scan NPZs when present.
             table.add_row("wall onset r_on (pair Å)", f"[magenta]{wall['r_on_Å']:.3f}[/magenta]")
             table.add_row("wall stiffness k (eV·Å²)", f"[magenta]{wall['k_eV_A2']:.3f}[/magenta]")
             table.add_row(
                 "wall active range (pair Å)",
                 f"0 → [magenta]{wall['r_on_Å']:.3f}[/magenta] (0 above; inter-monomer only)",
+            )
+            table.add_row(
+                "wall vs dimer scan",
+                "[dim]pair Å prior; not on COM ruler / not a scanned handoff term[/dim]",
             )
 
     if zbl is not None:
@@ -452,6 +456,12 @@ def print_calculator_summary(
 
     # Keep the scientifically useful ruler, without nested panels or borders.
     from rich.console import Group
+    pair_note = Text(
+        "  Note: ZBL and the short-range wall are pair-Å MD priors "
+        "(not COM handoff). The 2D dimer scan validates COM switching; "
+        "it does not place those terms on this ruler.",
+        style="dim magenta",
+    )
     inner = Group(
         table,
         Text(""),
@@ -462,13 +472,7 @@ def print_calculator_summary(
         Text("  ") + legend,
         Text(""),
         Text(f"  ruler scale: 0 → {ruler_max:.1f} Å", style="dim white"),
-        Text(
-            "  ZBL cutoffs and the short-range wall are pair distances "
-            "(recorded above), not on this COM ruler.",
-            style="dim magenta",
-        )
-        if zbl is not None
-        else Text(""),
+        pair_note if (zbl is not None or wall is not None) else Text(""),
     )
     c.print("[bold green]Calculator Summary[/bold green]")
     c.print(inner)
@@ -531,9 +535,41 @@ def print_neighbor_list_summary(
             table.add_row("JAX-MD fill fraction", f"{fill_jax * 100:.1f}%")
             bars.append(("JAX-MD NL", jax_md_n_valid, jax_md_capacity, "bright_green"))
 
+    # Sparse ML-dimer slot budget vs all monomer pairs (always known at setup,
+    # unlike jax_md_n_valid which is often still null when this summary prints).
+    sparse_cap = None
+    dimers_total = None
+    if extra:
+        if "max_active_dimers" in extra and extra["max_active_dimers"] is not None:
+            try:
+                sparse_cap = int(extra["max_active_dimers"])
+            except (TypeError, ValueError):
+                sparse_cap = None
+        if "dimers_total" in extra and extra["dimers_total"] is not None:
+            try:
+                dimers_total = int(extra["dimers_total"])
+            except (TypeError, ValueError):
+                dimers_total = None
+    if (
+        sparse_cap is not None
+        and dimers_total is not None
+        and dimers_total > 0
+        and sparse_cap > 0
+    ):
+        table.add_row("─" * 22, "─" * 22)
+        table.add_row("Sparse ML dimer cap", f"{sparse_cap:,}")
+        table.add_row("Monomer dimer pairs", f"{dimers_total:,}")
+        table.add_row(
+            "Sparse cap / all pairs",
+            f"{100.0 * sparse_cap / dimers_total:.1f}%",
+        )
+        bars.append(("Sparse ML dimers", sparse_cap, dimers_total, "bright_yellow"))
+
     if extra:
         table.add_row("─" * 22, "─" * 22)
         for k, v in extra.items():
+            if k in ("max_active_dimers", "dimers_total"):
+                continue  # already shown above when both present
             table.add_row(str(k), str(v))
 
     # Build bar chart rows

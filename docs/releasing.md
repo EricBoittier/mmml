@@ -22,10 +22,10 @@ and [Getting started](getting-started.md).
 1. Make sure `main` is green and the working tree is clean.
 2. Choose a PEP 440 pre-release version and tag it (annotated):
    ```bash
-   git tag -a v1.0.0a1 -m "mmml 1.0.0a1 (alpha)"
-   git push origin v1.0.0a1
+   git tag -a v0.1.0a1 -m "mmml 0.1.0a1 (alpha)"
+   git push origin v0.1.0a1
    ```
-   `versioningit` turns `v1.0.0a1` into version `1.0.0a1`.
+   `versioningit` turns `v0.1.0a1` into version `0.1.0a1`.
 3. Build and check the artifacts:
    ```bash
    uv build                       # writes dist/*.whl and dist/*.tar.gz

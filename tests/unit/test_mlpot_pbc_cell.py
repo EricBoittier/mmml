@@ -324,6 +324,51 @@ def test_finalize_jax_factory_gpu_promote_ignores_defer_cpu_env(monkeypatch):
     assert model._jax_on_gpu is True
 
 
+def test_finalize_jax_factory_real_gpu_fallback_does_not_claim_gpu(monkeypatch, capsys):
+    """Regression: a GPU request that silently falls back to CPU inside the real
+    ``mlpot_jax_device_context`` must leave ``_jax_on_gpu`` False, not True -- so
+    callers (e.g. the "promoted JAX factory to GPU" print) never claim GPU while
+    actually computing on CPU. Uses the real (unmocked) device-context function,
+    with only ``jax.devices`` faked to simulate no visible GPU."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        None,
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=False,
+        pending_factory=MagicMock(return_value=(0.0, MagicMock(), None)),
+        pending_factory_z=z,
+    )
+    model._verbose = False
+
+    cpu_dev = jax.devices("cpu")[0]
+
+    def devices_side_effect(name=None):
+        if name == "gpu":
+            raise RuntimeError("no gpu")
+        return [cpu_dev]
+
+    with patch("jax.devices", side_effect=devices_side_effect), patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
+        new=lambda: __import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(0.0, MagicMock(), None),
+    ):
+        model._finalize_jax_factory(gpu=True)
+
+    assert model._jax_on_gpu is False
+    combined = capsys.readouterr().out
+    assert "WARNING" in combined
+
+
 def test_promote_jax_factory_to_gpu_blocked_during_charmm_sd():
     z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
     model = DecomposedMlpotModel(
@@ -1362,7 +1407,12 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
-    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=40.0)
+    ctx = MagicMock(
+        use_pbc=True,
+        ml_selection=fake_sel,
+        cubic_box_side_A=40.0,
+        periodic_external=True,
+    )
     fake_psf = MagicMock()
     fake_psf.get_nnb.side_effect = [5, 6]
 
@@ -1411,7 +1461,12 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
-    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=42.0)
+    ctx = MagicMock(
+        use_pbc=True,
+        ml_selection=fake_sel,
+        cubic_box_side_A=42.0,
+        periodic_external=True,
+    )
     ctx._mlpot_pbc_exclusions_upinb_done = False
     fake_psf = MagicMock()
     fake_psf.get_nnb.return_value = 6
@@ -1721,7 +1776,10 @@ def test_calculator_wrapping_translation_invariance():
             "natoms": 8,
             "total_charge": 0,
             "n_res": 3,
-            "zbl": True,
+            # Isolate MIC wrap: ZBL / wall are pair-Å priors and sit on the
+            # MIC contact (~1 Å) in this geometry, which is not what this
+            # test is checking.
+            "zbl": False,
             "debug": False,
             "efa": False,
             "use_energy_bias": False,
@@ -1756,6 +1814,7 @@ def test_calculator_wrapping_translation_invariance():
             cell=30.0,
             model_restart_path=restart_path,
             doMM=False,
+            short_range_wall=False,
         )
         calculator, configured_spherical_cutoff, update_fn_factory = factory(
             atomic_numbers,

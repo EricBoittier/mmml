@@ -134,6 +134,19 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+def test_pycharmm_extra_args_strip_skip_jit_warmup():
+    """Campaign YAML often puts --skip-jit-warmup in extra_args; PyCHARMM rejects it."""
+    from mmml.cli.run.md_system import _suite_extra_argv
+
+    args = _pycharmm_args(
+        extra_args=["--skip-jit-warmup", "--quiet", "--no-auto-warmup-mlpot-jax"]
+    )
+    extra = _suite_extra_argv(args, "pycharmm")
+    assert "--skip-jit-warmup" not in extra
+    assert "--no-auto-warmup-mlpot-jax" not in extra
+    assert "--quiet" in extra
+
+
 def test_build_pycharmm_command_forwards_pre_mlpot_pair_floors():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 
@@ -408,7 +421,14 @@ def test_parse_md_system_config_accepts_thermalize_setup(tmp_path):
 
 def test_build_pycharmm_command_forwards_npt_cpt_flags():
     cmd = build_pycharmm_command(
-        _pycharmm_args(npt_thermostat="berendsen", npt_pressure=2.5, npt_pgamma=0.0)
+        _pycharmm_args(
+            npt_thermostat="berendsen",
+            npt_pressure=2.5,
+            npt_pgamma=0.0,
+            npt_pressure_log_interval=50,
+            npt_pressure_tensor="2,1,1,0,0,0",
+            skip_npt_pressure_report=True,
+        )
     )
     idx = cmd.index("--npt-thermostat")
     assert cmd[idx + 1] == "berendsen"
@@ -416,6 +436,18 @@ def test_build_pycharmm_command_forwards_npt_cpt_flags():
     assert cmd[idx + 1] == "2.5"
     idx = cmd.index("--npt-pgamma")
     assert cmd[idx + 1] == "0.0"
+    idx = cmd.index("--npt-pressure-log-interval")
+    assert cmd[idx + 1] == "50"
+    idx = cmd.index("--npt-pressure-tensor")
+    assert cmd[idx + 1] == "2,1,1,0,0,0"
+    assert "--skip-npt-pressure-report" in cmd
+
+
+def test_parse_md_system_accepts_npt_pressure_log_interval():
+    args = parse_md_system_args(
+        ["--backend", "pycharmm", "--npt-pressure-log-interval", "50"]
+    )
+    assert args.npt_pressure_log_interval == 50
 
 
 def test_build_pycharmm_command_includes_ml_switch_width_default():
@@ -608,6 +640,35 @@ def test_build_pycharmm_command_forwards_mc_density_flags():
     assert parsed.mc_density_steps == 12
 
 
+def test_build_pycharmm_command_forwards_density_prep_off():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            density_prep_mode="off",
+            density_prep_ladder=False,
+            mc_density_equalize=False,
+        )
+    )
+    assert cmd[cmd.index("--density-prep-mode") + 1] == "off"
+    assert "--no-density-prep-ladder" in cmd
+    assert "--no-mc-density-equalize" in cmd
+
+
+def test_build_pycharmm_command_forwards_no_monomer_physnet_mini():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            monomer_physnet_mini=False,
+            monomer_physnet_mini_max_select=2,
+        )
+    )
+    assert "--no-monomer-physnet-mini" in cmd
+    assert cmd[cmd.index("--monomer-physnet-mini-max-select") + 1] == "2"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.monomer_physnet_mini is False
+    assert parsed.monomer_physnet_mini_max_select == 2
+
+
 def test_build_pycharmm_command_forwards_flat_bottom_selection():
     cmd = build_pycharmm_command(
         _pycharmm_args(flat_bottom_radius=15.0, flat_bottom_selection="TYPE C*")
@@ -664,6 +725,14 @@ def test_build_pycharmm_command_forwards_ewald_omit_self():
     assert "--ewald-omit-self" in cmd
     cmd_default = build_pycharmm_command(_pycharmm_args(lr_solver="ewald"))
     assert "--ewald-omit-self" not in cmd_default
+
+
+def test_build_pycharmm_command_forwards_mm_charge_mode():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(mm_charge_mode="fixed", lr_solver="ewald")
+    )
+    assert "--mm-charge-mode" in cmd
+    assert cmd[cmd.index("--mm-charge-mode") + 1] == "fixed"
 
 
 def test_build_pycharmm_command_forwards_no_periodic_charmm_vdw():

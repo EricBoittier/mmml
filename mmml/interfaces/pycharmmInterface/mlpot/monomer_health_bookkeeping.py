@@ -26,6 +26,11 @@ _DOT_RICH = {
     LEVEL_BAD: "[red]○[/red]",
 }
 
+# Cap per-residue dumps; liquid boxes can have O(10³) monomers. Systemic
+# velocity-only failures (leftover fly-off |v| on restored geometry) summarize.
+MONOMER_HEALTH_DOT_MATRIX_MAX_DETAIL_ROWS = 24
+MONOMER_HEALTH_SYSTEMIC_VELOCITY_ONLY_FRACTION = 0.50
+
 
 @dataclass(frozen=True)
 class MonomerHealthConfig:
@@ -909,37 +914,98 @@ def audit_monomer_health(
     )
 
 
+def _entry_geometry_level(entry: MonomerHealthEntry) -> MonomerHealthLevel:
+    return getattr(entry, "geometry_level", entry.energy_level)
+
+
+def _format_health_entry_line(entry: MonomerHealthEntry, *, use_rich: bool) -> str:
+    g_level = _entry_geometry_level(entry)
+    if use_rich:
+        v_dot = _DOT_RICH[entry.velocity_level]
+        f_dot = _DOT_RICH[entry.force_level]
+        g_dot = _DOT_RICH[g_level]
+    else:
+        v_dot = _DOT_PLAIN[entry.velocity_level]
+        f_dot = _DOT_PLAIN[entry.force_level]
+        g_dot = _DOT_PLAIN[g_level]
+    dots = f"{v_dot} {f_dot} {g_dot}"
+    return (
+        f" {entry.index:3d}  {dots}  {entry.label}"
+        + (f"  ({'; '.join(entry.reasons)})" if entry.reasons else "")
+    )
+
+
 def emit_monomer_health_dot_matrix(
     report: MonomerHealthReport,
     *,
     context: str,
     quiet: bool = False,
+    max_detail_rows: int = MONOMER_HEALTH_DOT_MATRIX_MAX_DETAIL_ROWS,
 ) -> None:
-    """Print residue grid: green/yellow/red dots for velocity, GRMS, geometry."""
+    """Print residue grid: green/yellow/red dots for velocity, GRMS, geometry.
+
+    Large liquid boxes summarize systemic velocity-only failures instead of
+    dumping every monomer (common after geometry-only CRD restore).
+    """
     if not report.entries:
         return
     from mmml.utils.rich_report import emit, rich_enabled
 
     use_rich = rich_enabled(quiet=quiet)
+    # Avoid Rich markup tags like [v]/[f]/[g] (they strip to "=velocity").
     header = (
-        "Monomer health  [v]=velocity [f]=GRMS "
-        "[g]=geometry (extent/bond/COM-drift/intra)"
+        "Monomer health  (v)=velocity (f)=GRMS "
+        "(g)=geometry (extent/bond/COM-drift/intra)"
     )
-    lines = [header, " idx   v f g  residue"]
-    for entry in report.entries:
-        g_level = getattr(entry, "geometry_level", entry.energy_level)
-        if use_rich:
-            v_dot = _DOT_RICH[entry.velocity_level]
-            f_dot = _DOT_RICH[entry.force_level]
-            g_dot = _DOT_RICH[g_level]
-        else:
-            v_dot = _DOT_PLAIN[entry.velocity_level]
-            f_dot = _DOT_PLAIN[entry.force_level]
-            g_dot = _DOT_PLAIN[g_level]
-        dots = f"{v_dot} {f_dot} {g_dot}"
+    n = len(report.entries)
+    velocity_only_bad = [
+        e
+        for e in report.entries
+        if e.velocity_level == LEVEL_BAD
+        and e.force_level != LEVEL_BAD
+        and _entry_geometry_level(e) != LEVEL_BAD
+    ]
+    systemic_v_only = (
+        n >= max(1, int(max_detail_rows))
+        and (len(velocity_only_bad) / float(n))
+        >= float(MONOMER_HEALTH_SYSTEMIC_VELOCITY_ONLY_FRACTION)
+    )
+    lines = [header]
+    if systemic_v_only:
+        ranked = sorted(
+            velocity_only_bad,
+            key=lambda e: float(getattr(e, "velocity_max_akma", 0.0) or 0.0),
+            reverse=True,
+        )
+        show = ranked[: max(1, int(max_detail_rows))]
         lines.append(
-            f" {entry.index:3d}  {dots}  {entry.label}"
-            + (f"  ({'; '.join(entry.reasons)})" if entry.reasons else "")
+            f" summary: {len(velocity_only_bad)}/{n} velocity-bad with "
+            f"geometry/force OK (likely leftover dyna |v| after geometry "
+            f"restore) — showing top {len(show)} by |v|; full grid suppressed"
+        )
+        lines.append(" idx   v f g  residue")
+        lines.extend(_format_health_entry_line(e, use_rich=use_rich) for e in show)
+    elif n > int(max_detail_rows):
+        interesting = [
+            e
+            for e in report.entries
+            if e.velocity_level != LEVEL_OK
+            or e.force_level != LEVEL_OK
+            or _entry_geometry_level(e) != LEVEL_OK
+        ]
+        if not interesting:
+            interesting = list(report.entries[: int(max_detail_rows)])
+        show = interesting[: int(max_detail_rows)]
+        lines.append(
+            f" summary: {n} monomers; showing {len(show)} non-OK "
+            f"(cap {int(max_detail_rows)})"
+        )
+        lines.append(" idx   v f g  residue")
+        lines.extend(_format_health_entry_line(e, use_rich=use_rich) for e in show)
+    else:
+        lines.append(" idx   v f g  residue")
+        lines.extend(
+            _format_health_entry_line(e, use_rich=use_rich) for e in report.entries
         )
     body = "\n".join(lines)
     if use_rich:
@@ -1292,12 +1358,25 @@ def maybe_intervene_monomer_health(
     context: str,
     global_step: int | None = None,
     restart_path: Any | None = None,
+    temperature_K: float | None = None,
 ) -> MonomerHealthIntervention:
     """Audit health; template+FIRE only for geometry; redraw hot velocities otherwise.
 
     Only ``geometry_restored`` should enter the overlap MLpot-SD / READYN rescue chain.
     Velocity redraws keep state in RAM for the next chunk.
+
+    ``temperature_K``, when given, is the caller's *current* dynamics-segment
+    bath target (e.g. the live heat-ramp value for the active chunk) and takes
+    precedence over ``_resolve_health_velocity_temperature_K``, which only
+    knows the workflow's overall ``heat_firstt``/``heat_finalt``/``temperature``
+    and would otherwise redraw mid-ramp velocities at the *final* heat target
+    instead of the segment's current one.
     """
+    resolved_temperature_K = (
+        float(temperature_K)
+        if temperature_K is not None and float(temperature_K) > 0.0
+        else _resolve_health_velocity_temperature_K(mlpot_ctx)
+    )
     health_cfg = getattr(overlap_config, "monomer_health", None)
     if health_cfg is None:
         args = getattr(mlpot_ctx, "workflow_args", None)
@@ -1371,7 +1450,7 @@ def maybe_intervene_monomer_health(
                 restart_path=restart_path,
                 verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
                 velocity_restore=bool(health_cfg.velocity_restore_on_template),
-                temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
+                temperature_K=resolved_temperature_K,
             )
             if restored:
                 geometry_restored = True
@@ -1407,7 +1486,7 @@ def maybe_intervene_monomer_health(
             mlpot_ctx,
             to_redraw,
             offsets=offsets,
-            temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
+            temperature_K=resolved_temperature_K,
             verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
             context=context,
         )

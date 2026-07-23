@@ -542,9 +542,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=1.5,
         metavar="EV_PER_A",
         help=(
-            "jaxmd: refuse to start NVE when post-FIRE max atomic |F| exceeds "
-            "this value in eV/Å (default: 1.5; <=0 disables). "
-            "Hybrid liquid handoffs often land near ~1 eV/Å after FIRE."
+            "jaxmd: base ceiling (eV/Å) for post-FIRE max atomic |F| before NVE "
+            "(default: 1.5 at N_ref=100 atoms; <=0 disables). "
+            "Effective gate scales as base×sqrt(N/N_ref), capped at 15 eV/Å, "
+            "so dense liquids (N~2700) get ~8 eV/Å without a manual raise."
         ),
     )
     parser.add_argument(
@@ -768,8 +769,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help=(
-            "pycharmm: parallel PhysNet chunks on N local GPUs (default 1; "
-            "or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the GPU ids to use."
+            "Parallel PhysNet chunks on N local GPUs for pycharmm/ASE/jaxmd "
+            "(default 1; or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the "
+            "GPU ids to use. Requires --ml-batch-size so work splits into chunks."
         ),
     )
     parser.add_argument(
@@ -953,6 +955,32 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--npt-pressure-tensor",
+        type=str,
+        default=None,
+        help=(
+            "pycharmm: anisotropic NPT reference pressure tensor as "
+            "xx,yy,zz,xy,xz,yz in atm (omit for isotropic --npt-pressure)"
+        ),
+    )
+    parser.add_argument(
+        "--npt-pressure-log-interval",
+        type=int,
+        default=0,
+        help=(
+            "pycharmm: write CPT piston pressure tensor every N dynamics steps "
+            "to equi/prod *_pressure_tensor.dat via CHARMM IUPTEN (0=off)"
+        ),
+    )
+    parser.add_argument(
+        "--skip-npt-pressure-report",
+        action="store_true",
+        help=(
+            "pycharmm: skip CHARMM 'pressure instantaneous' virial report "
+            "before equi and prod stages"
+        ),
+    )
+    parser.add_argument(
         "--n-heat-segments",
         type=int,
         default=1,
@@ -1107,8 +1135,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--mlpot-pbc",
         action="store_true",
         help=(
-            "pycharmm: enable ML MIC / periodic dimer lists (default for pbc_* setups). "
-            "With free_* + --box-size, CHARMM uses loose PBC unless this flag is set."
+            "pycharmm: enable ML MIC / periodic dimer lists (default for pbc_* setups; "
+            "also auto-enabled when --lr-solver ewald with a CHARMM box). "
+            "With free_* + --box-size and no ewald, CHARMM uses loose PBC (open ML) "
+            "unless this flag is set."
         ),
     )
     parser.add_argument(
@@ -1178,6 +1208,27 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.2,
         help="ASE FIRE max atomic displacement per step in Å (default 0.2).",
+    )
+    parser.add_argument(
+        "--monomer-physnet-mini",
+        dest="monomer_physnet_mini",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "pycharmm: after hybrid FIRE/repair, optionally FIRE-minimize a few "
+            "flagged monomers with an isolated PhysNet calculator (default: on). "
+            "Disable for dense liquids — vacuum monomer repair wrecks packing."
+        ),
+    )
+    parser.add_argument(
+        "--monomer-physnet-mini-max-select",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "pycharmm: max monomers for selective isolated PhysNet mini "
+            "(default: inherit pycharmm CLI, usually 2)."
+        ),
     )
     parser.add_argument(
         "--pre-min-ase-order",
@@ -1406,9 +1457,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--ewald-omit-self",
         action="store_true",
         help=(
-            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
-            "Opt in for MIC/non-Ewald-trained models where that constant is not "
-            "in the training operator (forces unchanged; energy offset only)."
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
         ),
     )
     parser.add_argument(
@@ -1887,7 +1938,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mlpot-profile",
         action="store_true",
-        help="Enable profiling of MLpot callbacks and JAX/XLA compilation timers",
+        help=(
+            "Enable ASE/MLpot wall-time profiling (writes mlpot_profile.json; "
+            "sets MMML_MLPOT_PROFILE=1 and MMML_JAX_COMPILE_TIMERS=1)"
+        ),
+    )
+    parser.add_argument(
+        "--jax-profiler-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Optional TensorBoard JAX profiler trace directory for jaxmd/ASE "
+            "(also MMML_JAX_PROFILER_DIR). Prefer short --ps when tracing."
+        ),
     )
 
     return parser
@@ -2179,12 +2243,21 @@ def _append_suite_mmml_handoff_args(
     )
     cmd.extend(["--pre-min-fmax", str(getattr(args, "pre_min_fmax", 0.1))])
     cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
+    cmd.extend(["--fire-min-steps", str(getattr(args, "fire_min_steps", 200))])
+    _append_optional(cmd, "--fire-min-maxstep", getattr(args, "fire_min_maxstep", None))
     if getattr(args, "ml_batch_size", None) is not None:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
+    if getattr(args, "ml_gpu_count", None) is not None:
+        cmd.extend(["--ml-gpu-count", str(args.ml_gpu_count)])
     if getattr(args, "ml_max_active_dimers", None) is not None:
         cmd.extend(["--ml-max-active-dimers", str(args.ml_max_active_dimers)])
     if getattr(args, "ml_compute_dtype", None) is not None:
         cmd.extend(["--ml-compute-dtype", str(args.ml_compute_dtype)])
+    if getattr(args, "mlpot_profile", False):
+        cmd.append("--mlpot-profile")
+    _append_optional(cmd, "--jax-profiler-dir", getattr(args, "jax_profiler_dir", None))
+
+
 def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
     if value is None:
         return
@@ -2379,7 +2452,9 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.append("--cleanup")
     else:
         mode = getattr(args, "density_prep_mode", None)
-        if mode is not None and str(mode).strip().lower() != "off":
+        # Forward explicit off as well (pycharmm defaults off, but resilient
+        # / liquid-prep paths must be able to opt out from the outer CLI).
+        if mode is not None and str(mode).strip():
             cmd.extend(["--density-prep-mode", str(mode)])
     ladder_flag = getattr(args, "density_prep_ladder", None)
     if ladder_flag is not None:
@@ -2929,6 +3004,14 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         "--charmm-zero-energy-terms",
         getattr(args, "charmm_zero_energy_terms", None),
     )
+    _append_optional(cmd, "--mm-charge-mode", getattr(args, "mm_charge_mode", None))
+    if bool(getattr(args, "mm_charge_correction", False)):
+        cmd.append("--mm-charge-correction")
+    _append_optional(
+        cmd,
+        "--mm-latent-charge-template",
+        getattr(args, "mm_latent_charge_template", None),
+    )
     if not bool(getattr(args, "include_mm", True)):
         cmd.append("--no-include-mm")
     if bool(getattr(args, "jax_mm_spoof", False)):
@@ -2962,6 +3045,16 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--pre-min-ase-order", getattr(args, "pre_min_ase_order", None))
     _append_optional(cmd, "--bfgs-polish-max-fmax", getattr(args, "bfgs_polish_max_fmax", None))
     _append_optional(cmd, "--rescue-fire-fmax", getattr(args, "rescue_fire_fmax", None))
+    _append_boolean_optional_flag(
+        cmd,
+        "--monomer-physnet-mini",
+        bool(getattr(args, "monomer_physnet_mini", True)),
+    )
+    _append_optional(
+        cmd,
+        "--monomer-physnet-mini-max-select",
+        getattr(args, "monomer_physnet_mini_max_select", None),
+    )
     if bool(getattr(args, "quiet_bfgs", False)):
         cmd.append("--quiet-bfgs")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
@@ -3167,11 +3260,37 @@ def _filter_pycharmm_only_extra_argv(argv: list[str]) -> list[str]:
     return out
 
 
+def _filter_md_system_only_extra_argv(argv: list[str]) -> list[str]:
+    """Drop parent ``md-system`` flags that the PyCHARMM staged parser rejects.
+
+    Campaign YAML often puts ``--skip-jit-warmup`` in ``extra_args``; that flag
+    is handled by the md-system / ASE / JAX-MD faces, not by
+    ``md_pbc_suite.pycharmm_mlpot`` (which owns BOND/heat/equi argv).
+    """
+    skip = {
+        "--skip-jit-warmup",
+        "--auto-warmup-mlpot-jax",
+        "--no-auto-warmup-mlpot-jax",
+    }
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok in skip:
+            i += 2 if i + 1 < len(argv) and not str(argv[i + 1]).startswith("-") else 1
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
+
 def _suite_extra_argv(args: argparse.Namespace, backend: str) -> list[str]:
     if not args.extra_args:
         return []
     extra = _filter_campaign_flags_from_argv(list(args.extra_args))
-    if backend != "pycharmm":
+    if backend == "pycharmm":
+        extra = _filter_md_system_only_extra_argv(extra)
+    else:
         extra = _filter_pycharmm_only_extra_argv(extra)
     return extra
 
@@ -3327,9 +3446,6 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     # lr_solver=ewald deploys consistently without needing
     # --mm-nonbond-mode periodic_external, which only exists for the
     # pycharmm-callback backend and never fires in this in-process loop).
-    # NOTE: mm_charge_mode/mm_charge_correction are NOT yet forwarded for the
-    # pycharmm backend (build_pycharmm_command) -- that path uses a different
-    # calculator-setup mechanism (hybrid_mlpot.py) not audited here.
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
     if bool(getattr(args, "ewald_omit_self", False)):
         cmd.append("--ewald-omit-self")
@@ -3529,9 +3645,11 @@ def main() -> int:
     args = parse_md_system_args()
     if getattr(args, "mlpot_profile", False):
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            enable_mlpot_profiling,
             write_profile_git_metadata,
         )
 
+        enable_mlpot_profiling()
         metadata_path = write_profile_git_metadata(
             getattr(args, "output_dir", None),
             argv=sys.argv[1:],
@@ -3544,10 +3662,16 @@ def main() -> int:
                     "steps_per_recording": getattr(args, "steps_per_recording", None),
                     "ps": getattr(args, "ps", None),
                     "dt_fs": getattr(args, "dt_fs", None),
+                    "ml_gpu_count": getattr(args, "ml_gpu_count", None),
+                    "ml_batch_size": getattr(args, "ml_batch_size", None),
                 }
             },
         )
         print(f"mmml md-system: wrote profiling git metadata {metadata_path}", flush=True)
+    if getattr(args, "jax_profiler_dir", None) is not None:
+        os.environ["MMML_JAX_PROFILER_DIR"] = str(
+            Path(args.jax_profiler_dir).expanduser().resolve()
+        )
     started_at = datetime.now(timezone.utc).isoformat()
     backend: str | None = None
     argv: list[str] | None = None

@@ -24,6 +24,9 @@ defaults:
   lr_solver: nvalchemiops_pme
   periodic_charmm_vdw: false   # Coulomb-only; matches train LJ off
 
+  skip_jit_warmup: true
+  quiet: true
+
 campaign_output: results/hybrid_mm_fixed_nval_pme
 runs:
   box_nvt_smoke:
@@ -32,6 +35,3 @@ runs:
     setup: pbc_nvt
     ps: 0.05
     output_dir: results/hybrid_mm_fixed_nval_pme/box_nvt_smoke
-    extra_args:
-      - --skip-jit-warmup
-      - --quiet

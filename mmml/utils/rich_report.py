@@ -429,14 +429,9 @@ def emit_panel(
     if not rich_enabled(quiet=quiet):
         _emit_plain(f"{title}\n{body}", stderr=stderr)
         return
-    try:
-        from rich.panel import Panel
-
-        _console(stderr=stderr).print(
-            Panel(body, title=f"[bold]{title}[/bold]", border_style=border_style)
-        )
-    except Exception:
-        _emit_plain(f"{title}\n{body}", stderr=stderr)
+    console = _console(stderr=stderr)
+    console.print(f"[bold {border_style}]{title}[/bold {border_style}]")
+    console.print(body)
 
 
 def emit_table(
@@ -449,27 +444,12 @@ def emit_table(
 ) -> None:
     if quiet or is_quiet():
         return
-    plain_lines = [title, *(f"  {k}: {v}" for k, v in rows)]
-    if not rich_enabled(quiet=quiet):
-        _emit_plain("\n".join(plain_lines), stderr=stderr)
-        return
-    try:
-        from rich.panel import Panel
-        from rich.table import Table
-
-        table = Table(show_header=True, header_style="bold", expand=True)
-        table.add_column("Field", style="cyan", no_wrap=True)
-        table.add_column("Value", style="white")
-        for key, value in rows:
-            table.add_row(str(key), _format_cell(value))
-        _console(stderr=stderr).print(
-            Panel(table, title=f"[bold]{title}[/bold]", border_style=border_style)
-        )
-    except Exception:
-        _emit_plain("\n".join(plain_lines), stderr=stderr)
+    get_reporter(quiet=quiet, stderr=stderr).summary(title, rows)
 
 
 def _format_cell(value: Any) -> str:
+    if isinstance(value, (list, tuple)) and len(value) >= 4 and len(set(map(repr, value))) == 1:
+        return f"{value[0]!r} × {len(value)}"
     if isinstance(value, (list, tuple)) and len(value) > 12:
         head = ", ".join(repr(x) for x in value[:6])
         return f"[{head}, …] ({len(value)} items)"
@@ -540,22 +520,7 @@ def emit_horizontal_table(
     """Model-Attributes style table: field names as columns, one value row."""
     if quiet or is_quiet() or not mapping:
         return
-    plain = [title, "  " + "  ".join(f"{k}={_format_cell(v)}" for k, v in mapping.items())]
-    if not rich_enabled(quiet=quiet):
-        _emit_plain("\n".join(plain), stderr=stderr)
-        return
-    try:
-        from rich.panel import Panel
-
-        _console(stderr=stderr).print(
-            Panel(
-                _horizontal_table_from_mapping(mapping, title=None),
-                title=f"[bold]{title}[/bold]",
-                border_style="blue",
-            )
-        )
-    except Exception:
-        _emit_plain("\n".join(plain), stderr=stderr)
+    get_reporter(quiet=quiet, stderr=stderr).summary(title, mapping)
 
 
 def _model_attributes_mapping(model: Any) -> dict[str, Any]:
@@ -569,7 +534,7 @@ def emit_dashboard(
     border_style: str = "cyan",
     quiet: bool = False,
 ) -> None:
-    """Multi-section Rich panel (plain-text fallback when Rich is disabled)."""
+    """Render a compact multi-section report with a plain-text fallback."""
     if quiet or is_quiet():
         return
 
@@ -580,44 +545,21 @@ def emit_dashboard(
     if not rich_enabled(quiet=quiet):
         lines = [title]
         for section_title, mapping in active:
-            lines.append(f"[{section_title}]")
-            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
+            lines.append(section_title)
+            lines.extend(f"  {k}  {_format_cell(v)}" for k, v in mapping.items())
         _emit_plain("\n".join(lines))
         return
 
-    try:
-        from rich.console import Group
-        from rich.panel import Panel
-
-        vertical_sections = {"System", "Runtime threads", "Checkpoint"}
-        blocks = []
-        for section_title, mapping in active:
-            table = (
-                _vertical_table_from_mapping(mapping)
-                if section_title in vertical_sections
-                else _horizontal_table_from_mapping(mapping)
-            )
-            blocks.append(
-                Panel(
-                    table,
-                    title=f"[bold]{section_title}[/bold]",
-                    border_style="dim",
-                    padding=(0, 1),
-                )
-            )
-        _console().print(
-            Panel(
-                Group(*blocks),
-                title=f"[bold {border_style}]{title}[/bold {border_style}]",
-                border_style=border_style,
-            )
-        )
-    except Exception:
-        lines = [title]
-        for section_title, mapping in active:
-            lines.append(f"[{section_title}]")
-            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
-        _emit_plain("\n".join(lines))
+    console = _console()
+    console.print(f"[bold {border_style}]{title}[/bold {border_style}]")
+    for section_title, mapping in active:
+        console.print(f"[bold dim]{section_title}[/bold dim]")
+        table = make_compact_table(show_header=False)
+        table.add_column(style="cyan", no_wrap=True)
+        table.add_column()
+        for key, value in mapping.items():
+            table.add_row(str(key), _format_cell(value))
+        console.print(table)
 
 
 def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
@@ -679,6 +621,10 @@ def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
 
     Reads the defaults from the single source of truth so the printout cannot
     drift from what the calculator actually evaluates.
+
+    This term is an MD safety prior on **pair** distance. It is not a COM
+    handoff parameter and is outside the region probed by the usual 2D dimer
+    scan (COM ≥ ~3.5 Å).
     """
     from mmml.models.short_range_wall import (
         DEFAULT_WALL_K_EV_A2,
@@ -689,6 +635,8 @@ def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
         "enabled": bool(enabled),
         "r_on_Å": float(DEFAULT_WALL_R_ON_A),
         "k_eV_A2": float(DEFAULT_WALL_K_EV_A2),
+        "distance": "pair r (Å), not COM",
+        "role": "md_safety_net",
     }
 
 
@@ -1164,7 +1112,7 @@ def emit_model_loaded(
     runtime_natoms: int | None = None,
     quiet: bool = False,
 ) -> None:
-    """Pretty-print a loaded PhysNet model summary (horizontal table)."""
+    """Pretty-print a loaded PhysNet model as a compact field/value summary."""
     mapping = _model_attributes_mapping(model)
     if checkpoint is not None:
         mapping["checkpoint"] = checkpoint
@@ -1212,12 +1160,20 @@ def emit_charmm_env(
 ) -> None:
     if quiet or is_quiet():
         return
-    rows = [
-        ("CGENFF RTF", cgenff_rtf),
-        ("CGENFF PRM", cgenff_prm),
-        ("CHARMM_HOME", charmm_home),
-        ("CHARMM_LIB_DIR", charmm_lib_dir),
-    ]
+    from pathlib import Path
+
+    rtf = Path(cgenff_rtf)
+    prm = Path(cgenff_prm)
+    cgenff_root = rtf.parent if rtf.parent == prm.parent else None
+    rows: list[tuple[str, Any]] = []
+    if cgenff_root is not None:
+        rows.append(("CGenFF", f"{cgenff_root}  ({rtf.name}, {prm.name})"))
+    else:
+        rows.extend((("CGenFF RTF", rtf), ("CGenFF PRM", prm)))
+    if Path(charmm_home) == Path(charmm_lib_dir):
+        rows.append(("CHARMM", charmm_home))
+    else:
+        rows.extend((("CHARMM home", charmm_home), ("CHARMM library", charmm_lib_dir)))
     emit_table("PyCHARMM environment", rows, border_style="dim", quiet=quiet)
 
 

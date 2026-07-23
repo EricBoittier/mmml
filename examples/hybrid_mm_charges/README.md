@@ -14,6 +14,37 @@ liquid-compatible). See
 | D `latent_mean` (liquid) | `q_MM = tile(mean(neutralize(q_ML)))` | same checkpoint as B | `--mm-charge-mode latent_mean --mm-latent-charge-template <path>` (see below) |
 | E `latent_dynamic` (liquid) | `q_MM = neutralize(weighted_mean_over_active_dimers(q_ML))` | same checkpoint as B | `--mm-charge-mode latent_dynamic` (no precompute) |
 
+## Minimal example: native Ewald, `fixed` vs `latent`, small system, no checkpoint
+
+[`monomer_ml_mm_ewald_example.py`](monomer_ml_mm_ewald_example.py) runs the
+**Monomer ML + MM** assembly (ML monomers + MM electrostatics; see
+[`docs/calculator-capabilities.md`](../../docs/calculator-capabilities.md#monomer-ml-mm-with-native-ewald-fixed-vs-latent))
+with `lr_solver="ewald"` for both Mode A (`fixed`) and Mode B (`latent`) on a
+tiny synthetic 2-monomer/5-atom system — no checkpoint, no CHARMM:
+
+```bash
+python examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
+```
+
+See [Mode B in `docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md#minimal-runnable-example--native-ewald-fixed-vs-latent-small-system)
+for what it checks and why `--skip-ml-dimers` isn't the mechanism used.
+
+### Same assembly under PyCHARMM (`DCM:2`, CHARMM bonded retained)
+
+| Mode | YAML | Notes |
+|------|------|-------|
+| A `fixed` + Ewald | [`md_fixed_ewald_dimer.yaml`](md_fixed_ewald_dimer.yaml) | Small PBC NVT; CHARMM BOND/ANGL/DIHE on |
+| B `latent` + Ewald | [`md_latent_ewald_dimer.yaml`](md_latent_ewald_dimer.yaml) | Dimer-only; same bonded ownership |
+
+```bash
+export MMML_CKPT=/path/to/params.json   # Mode B needs charges=True / latent-trained
+mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
+mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
+```
+
+For a larger liquid Mode A Ewald smoke see [`md_fixed_ewald.yaml`](md_fixed_ewald.yaml)
+(`DCM:20`). Mode B cannot use liquids — use Mode D/E instead.
+
 ## Train
 
 NPZ must carry CGenFF fields (`cgenff_type_idx`, `mol_id`, `cgenff_charge`,

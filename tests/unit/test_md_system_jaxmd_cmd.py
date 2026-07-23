@@ -121,6 +121,13 @@ def test_build_command_jaxmd_forwards_lr_solver_and_mm_charge_mode() -> None:
     assert "--mm-charge-mode" in argv
     assert argv[argv.index("--mm-charge-mode") + 1] == "latent"
     assert "--mm-charge-correction" not in argv
+    assert "--ewald-omit-self" not in argv
+
+    backend, argv = build_command(
+        _jaxmd_args(lr_solver="ewald", ewald_omit_self=True, mm_charge_mode="fixed")
+    )
+    assert "--ewald-omit-self" in argv
+    assert argv[argv.index("--mm-charge-mode") + 1] == "fixed"
 
     backend, argv = build_command(_jaxmd_args(mm_charge_correction=True))
     assert "--mm-charge-correction" in argv
@@ -150,6 +157,7 @@ def test_jaxmd_and_ase_suites_accept_lr_solver_and_mm_charge_mode_flags() -> Non
 
     common_argv = [
         "--lr-solver", "ewald",
+        "--ewald-omit-self",
         "--mm-charge-mode", "latent",
         "--composition", "ACO:2",
         "--checkpoint", "/tmp/definitely-not-a-real-checkpoint",
@@ -172,3 +180,47 @@ def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
     warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:400]
     assert "doMM=include_mm" in warmup_block
     assert 'getattr(args, "include_mm", True)' in jaxmd_src
+
+
+def test_jaxmd_setup_calculator_forwards_ewald_include_self() -> None:
+    from pathlib import Path
+
+    src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    assert "--ewald-omit-self" in src
+    assert "ewald_include_self=not bool(getattr(args, \"ewald_omit_self\"" in src
+    assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in src
+
+
+def test_ase_setup_calculator_forwards_ewald_include_intra() -> None:
+    """jaxmd/ase must match hybrid_mlpot: --ewald-omit-self drops intra Coulomb."""
+    from pathlib import Path
+
+    ase_src = Path("mmml/cli/run/md_pbc_suite/ase.py").read_text(encoding="utf-8")
+    assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in ase_src
+    assert "ewald_include_intra=bool(ewald_include_intra)" in ase_src
+    # Signature must accept the kwarg (not only the call site).
+    assert "ewald_include_intra: bool = True" in ase_src
+
+def test_build_command_jaxmd_forwards_ml_gpu_and_profile_flags() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(ml_gpu_count=2, ml_batch_size=256, mlpot_profile=True)
+    )
+    assert backend == "jaxmd"
+    assert "--ml-gpu-count" in argv
+    assert argv[argv.index("--ml-gpu-count") + 1] == "2"
+    assert "--ml-batch-size" in argv
+    assert argv[argv.index("--ml-batch-size") + 1] == "256"
+    assert "--mlpot-profile" in argv
+
+
+def test_build_command_jaxmd_forwards_fire_min_steps() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(_jaxmd_args(fire_min_steps=1000, fire_min_maxstep=0.05))
+    assert backend == "jaxmd"
+    assert "--fire-min-steps" in argv
+    assert argv[argv.index("--fire-min-steps") + 1] == "1000"
+    assert "--fire-min-maxstep" in argv
+    assert argv[argv.index("--fire-min-maxstep") + 1] == "0.05"

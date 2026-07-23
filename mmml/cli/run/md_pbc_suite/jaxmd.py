@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -307,8 +308,9 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=1.5,
         help=(
-            "Refuse to start NVE when post-FIRE max atomic |F| exceeds this (eV/Å). "
-            "Default 1.5; use <=0 to disable."
+            "Base ceiling (eV/Å) for post-FIRE max atomic |F| before NVE "
+            "(default 1.5 at N_ref=100 atoms; <=0 disables). "
+            "Effective gate = base×sqrt(N/N_ref), capped at 15 eV/Å."
         ),
     )
     p.add_argument("--nhc-chain-length", type=int, default=3)
@@ -489,11 +491,39 @@ def main(argv: list[str] | None = None) -> int:
         help="Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40)."
     )
     p.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Parallel PhysNet chunks across N local GPUs (default 1; "
+            "or MMML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
+        ),
+    )
+    p.add_argument(
         "--ml-max-active-dimers",
         type=int,
         default=None,
         metavar="N",
         help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+    )
+    p.add_argument(
+        "--mlpot-profile",
+        action="store_true",
+        help=(
+            "Enable ASE calculator / chunk-apply wall-time profiling "
+            "(writes mlpot_profile.json under --output-dir)."
+        ),
+    )
+    p.add_argument(
+        "--jax-profiler-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Write a TensorBoard JAX profiler trace under DIR "
+            "(also MMML_JAX_PROFILER_DIR). Prefer short --ps."
+        ),
     )
     from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
     add_ml_compute_dtype_args(p)
@@ -766,6 +796,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
+        ),
+    )
+    p.add_argument(
         "--quiet",
         action="store_true",
         help="Reduce console output.",
@@ -775,6 +814,23 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
+
+    if getattr(args, "mlpot_profile", False):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            enable_mlpot_profiling,
+            reset_mlpot_profile_stats,
+        )
+
+        enable_mlpot_profiling()
+        reset_mlpot_profile_stats()
+
+    profiler_dir_raw = getattr(args, "jax_profiler_dir", None)
+    if profiler_dir_raw is None:
+        env_prof = (os.environ.get("MMML_JAX_PROFILER_DIR") or "").strip()
+        profiler_dir = Path(env_prof) if env_prof else None
+    else:
+        profiler_dir = Path(profiler_dir_raw).expanduser().resolve()
+        os.environ["MMML_JAX_PROFILER_DIR"] = str(profiler_dir)
 
     out_dir = (Path.cwd() / args.output_dir.expanduser()).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1027,12 +1083,15 @@ def main(argv: list[str] | None = None) -> int:
         min_com_restraint_force_const=args.min_com_restraint_k,
         defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        ml_gpu_count=int(getattr(args, "ml_gpu_count", None) or 1),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
         mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
         mbd_weight=getattr(args, "mbd_weight", 1.0),
         lr_solver=getattr(args, "lr_solver", None),
+        ewald_include_self=not bool(getattr(args, "ewald_omit_self", False)),
+        ewald_include_intra=not bool(getattr(args, "ewald_omit_self", False)),
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
         mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
         mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
@@ -1515,6 +1574,23 @@ def main(argv: list[str] | None = None) -> int:
             f"E={best_frame.best_force_energy:.6f} eV)"
         )
         if fmin > args.max_fmax_after_min:
+            if getattr(args, "mlpot_profile", False):
+                from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                    maybe_log_mlpot_profile,
+                    write_mlpot_profile_summary,
+                )
+
+                maybe_log_mlpot_profile(quiet=bool(getattr(args, "quiet", False)))
+                write_mlpot_profile_summary(
+                    out_dir,
+                    extra={
+                        "backend": "jaxmd",
+                        "phase": "pre_md_minimize",
+                        "fmax_eVA": float(fmin),
+                        "ml_gpu_count": int(getattr(args, "ml_gpu_count", None) or 1),
+                        "ml_batch_size": getattr(args, "ml_batch_size", None),
+                    },
+                )
             raise RuntimeError(
                 f"post-calculator minimization fmax={fmin:.6f} eV/A exceeds "
                 f"--max-fmax-after-min={args.max_fmax_after_min:.6f}. "
@@ -1804,12 +1880,29 @@ def main(argv: list[str] | None = None) -> int:
                     "expected_neighbor_updates": int(expected_nbr_updates),
                     "skin_distance_A": float(effective_skin),
                     "free_space": bool(free_space),
+                    "ml_gpu_count": int(getattr(args, "ml_gpu_count", None) or 1),
+                    "ml_batch_size": getattr(args, "ml_batch_size", None),
                 }
             },
         )
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)
-    steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
+    _jax_trace_started = False
+    if profiler_dir is not None:
+        import jax
+
+        profiler_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[jaxmd] starting JAX profiler trace → {profiler_dir}", flush=True)
+        jax.profiler.start_trace(str(profiler_dir))
+        _jax_trace_started = True
+    try:
+        steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
+    finally:
+        if _jax_trace_started:
+            import jax
+
+            jax.profiler.stop_trace()
+            print(f"[jaxmd] stopped JAX profiler trace → {profiler_dir}", flush=True)
     run_status = getattr(run_sim, "last_status", "complete")
     run_error = getattr(run_sim, "last_error", None)
     _hdf5 = getattr(run_sim, "last_hdf5_path", None)
@@ -2057,6 +2150,30 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Wrote {_ho_path}")
         except Exception as _e:
             print(f"[warning] Could not save handoff calculator_summary.json: {_e}")
+
+    if getattr(args, "mlpot_profile", False):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            maybe_log_mlpot_profile,
+            write_mlpot_profile_summary,
+        )
+
+        maybe_log_mlpot_profile(quiet=bool(getattr(args, "quiet", False)))
+        profile_path = write_mlpot_profile_summary(
+            out_dir,
+            extra={
+                "backend": "jaxmd",
+                "ensemble": args.ensemble,
+                "ml_gpu_count": int(getattr(args, "ml_gpu_count", None) or 1),
+                "ml_batch_size": getattr(args, "ml_batch_size", None),
+                "box_A": float(L) if L is not None else None,
+                "n_atoms": int(len(atoms)),
+                "nsteps_completed": int(steps_completed),
+                "run_status": run_status,
+                "jax_profiler_dir": str(profiler_dir) if profiler_dir is not None else None,
+            },
+        )
+        if profile_path is not None and not getattr(args, "quiet", False):
+            print(f"Wrote {profile_path}", flush=True)
 
     if run_status == "interrupted":
         return 130

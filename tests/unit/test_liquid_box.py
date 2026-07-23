@@ -158,6 +158,25 @@ def test_estimate_density_g_cm3_round_trip():
     assert rho == pytest.approx(target, rel=1e-6)
 
 
+def test_estimate_density_scales_stale_stoichiometry_with_n_molecules():
+    """box-auto count bug: composition left as TIP3:1 while N=903 was built."""
+    rho = estimate_density_g_cm3(
+        composition={"TIP3": 1},
+        box_side_A=30.0,
+        n_molecules=903,
+    )
+    assert rho is not None
+    assert rho == pytest.approx(1.0, rel=0.02)
+
+    rho_unit = estimate_density_g_cm3(
+        composition={"TIP3": 1},
+        box_side_A=30.0,
+        n_molecules=1,
+    )
+    assert rho_unit is not None
+    assert rho_unit == pytest.approx(1.0 / 903.0, rel=0.05)
+
+
 def test_certify_intermonomer_geometry_pass_and_fail():
     atoms_per = [2, 2]
     pos_ok = np.array(

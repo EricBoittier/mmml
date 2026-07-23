@@ -1,0 +1,91 @@
+schema_version: 1
+claims:
+  dimer_calculator_surface:
+    status: verified
+    claim: The canonical dimer CLI exposes physnet, spookynet, mbd, multipoles, efield, xtb, dftb3-d4, and pyscf.
+    evidence:
+      - tests/unit/test_dimer_scan_cli.py::test_documented_calculator_choices_are_parser_choices
+      - tests/unit/test_dimer_scan_calculator_factory.py
+      - workflows/validation_campaign/pcstudix_smoke_matrix.yaml
+  dimer_artifact_contract:
+    status: verified
+    claim: Successful dimer scans write a manifest, extxyz trajectory, and ASE trajectory with energy and forces.
+    evidence:
+      - tests/unit/test_dimer_scan_result.py
+      - tests/unit/test_smoke_matrix.py
+  learned_multipole_forces:
+    status: verified
+    claim: Learned multipoles expose complete central-finite-difference forces.
+    evidence:
+      - tests/unit/test_multipole_calculator_forces.py
+  jaxmd_driver_surface:
+    status: verified
+    claim: JaxmdDriver implements minimization, NVE, NVT, and NPT dispatch.
+    evidence:
+      - mmml/md/drivers/jaxmd.py
+      - workflows/unified_backend_sweep/config.yaml
+  long_range_solver_surface:
+    status: verified
+    claim: MMML implements MIC, native Ewald, JAX-PME, NValChemI/Ops PME, and ScaFaCoS on their documented execution faces.
+    evidence:
+      - tests/unit/test_mm_energy_forces_native_ewald.py
+      - tests/unit/test_jax_pme_lr_solver.py
+      - tests/unit/test_long_range_backend.py
+      - tests/unit/test_md_mm_nonbonded.py
+  validation_campaign_state:
+    status: generated
+    claim: Validation task state is generated from receipts and campaign configuration rather than copied into prose.
+    evidence:
+      - workflows/validation_campaign/scripts/campaign.py
+      - workflows/validation_campaign/scripts/campaign_lib.py
+  package_architecture_counts:
+    status: generated
+    claim: Package/module and CLI-command counts are generated from the current tree.
+    evidence:
+      - scripts/generate_package_architecture.py
+      - tests/unit/test_package_architecture_docs.py
+  pcstudix_npt_reliability:
+    status: unverified
+    claim: JAX-MD NPT fails deterministically on the current pc-studix software stack.
+    evidence: []
+    needed: Re-run the versioned pc-studix smoke-matrix NPT case and attach its receipt and software provenance.
+  pycharmm_velocity_handoff_blocker:
+    status: unverified
+    claim: PyCHARMM-to-JAX-MD velocity handoff remains blocked by the dynamics ABI.
+    evidence: []
+    needed: Re-run backend parity using the current COMP/restart/cold-start implementation and attach the receipt.
+  joint_optimizer_hyperparameters:
+    status: unverified
+    claim: Dataset/model-size thresholds select generally suitable optimizer hyperparameters for joint training.
+    evidence: []
+    needed: Benchmark the presets against explicit baselines across representative datasets and publish validation loss/convergence receipts.
+  cluster_echeck_scaling:
+    status: unverified
+    claim: Linear atom/monomer ECHECK floors distinguish numerical failure from normal hybrid heat transients.
+    evidence: []
+    needed: Sweep ECHECK against labeled stable and unstable trajectories and record false-positive/false-negative rates.
+  dcm_liquid_shell_defaults:
+    status: unverified
+    claim: The shell-script DCM box, density, MIC, and cutoff defaults form a generally safe liquid recipe.
+    evidence: []
+    needed: Replace the shell defaults with a versioned configuration backed by density, overlap, energy, and force receipts.
+  jax_persistent_cache_policy:
+    status: unverified
+    claim: Enabling the XLA GPU autotune persistent cache is safe across supported JAX/XLA environments.
+    evidence: []
+    needed: Test cache reuse and invalidation across supported JAX, CUDA, GPU, and checkpoint combinations.
+  pre_sd_recovery_threshold:
+    status: unverified
+    claim: A 1e5 kcal/mol pre-SD bonded-energy threshold reliably separates severe clashes from recoverable structures.
+    evidence: []
+    needed: Calibrate the threshold on labeled recoverable and unrecoverable structures and retain the run receipts.
+  tip3_count30_recipe:
+    status: unverified
+    claim: The count-at-30-A TIP3 recipe and its acceptance bands are transferable beyond the original gpu09 run.
+    evidence: []
+    needed: Archive the original receipt and repeat the recipe on each supported environment profile.
+  solvent_burst_default_matrix:
+    status: unverified
+    claim: The default TIP3 and MEOH solvent-burst matrix is scientifically validated.
+    evidence: []
+    needed: Run every default matrix cell and publish versioned receipts including checkpoint, environment, energy, force, and stability criteria.

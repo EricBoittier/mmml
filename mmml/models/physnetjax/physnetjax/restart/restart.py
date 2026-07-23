@@ -89,17 +89,26 @@ def _merge_params(init_params, loaded_params):
 def get_last(path: str) -> Path:
     """
     Get the last checkpoint directory.
-    
+
+    ``path`` may either be an experiment root containing multiple
+    ``epoch-*/`` checkpoints (the traditional layout, latest picked by
+    name), or a single flat Orbax checkpoint directory (e.g. a
+    ``step-NNNNNNN/`` directory saved directly with no ``epoch-*/``
+    wrapper). The latter is returned as-is.
+
     Parameters
     ----------
     path : str
         Path to checkpoint directory
-        
+
     Returns
     -------
     Path
         Path to the most recent checkpoint directory
     """
+    p = Path(path)
+    if (p / "manifest.ocdbt").exists() or (p / "_CHECKPOINT_METADATA").exists():
+        return p
     dirs = get_files(path)
     if not dirs:
         raise FileNotFoundError(
@@ -149,7 +158,9 @@ def get_params_model(
     tuple
         Tuple of (parameters, model)
     """
-    restored = orbax_checkpointer.restore(restart)
+    from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
+
+    restored = _restore_pytree_cpu_safe(orbax_checkpointer, str(restart))
     # print(f"Restoring from {restart}")
     modification_time = os.path.getmtime(restart)
     modification_date = datetime.fromtimestamp(modification_time)
@@ -211,13 +222,20 @@ def get_params_model(
     if model.zbl:
         n = natoms if natoms is not None else getattr(model, "natoms", 10) or 10
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n)
-        init_params = model.init(
-            jax.random.PRNGKey(0),
+        init_kwargs = dict(
             atomic_numbers=jnp.ones(n, dtype=jnp.int32),
             positions=jnp.zeros((n, 3)),
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
+        if type(model).__name__ == "SpookyPhysNet":
+            # SpookyPhysNet.__call__ additionally requires charges/spins;
+            # values are irrelevant here (only used to discover init_params'
+            # tree structure for _merge_params), so a neutral singlet dummy
+            # matches the shape convention used at real inference call sites.
+            init_kwargs["charges"] = jnp.zeros((n, 1))
+            init_kwargs["spins"] = jnp.ones((n, 1))
+        init_params = model.init(jax.random.PRNGKey(0), **init_kwargs)
         params = _merge_params(init_params, params)
 
     if return_everything:

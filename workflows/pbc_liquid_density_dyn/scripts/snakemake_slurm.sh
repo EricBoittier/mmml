@@ -40,13 +40,6 @@ if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
   )"
 fi
 export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib}"
-if [[ -z "${MMML_CKPT:-}" ]]; then
-  _default_ckpt="/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70"
-  if [[ -d "$_default_ckpt" ]]; then
-    export MMML_CKPT="$_default_ckpt"
-  fi
-fi
-
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
 import sys

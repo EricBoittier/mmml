@@ -159,6 +159,9 @@ usage: mmml md-system [-h]
                       [--ps-equi PS_EQUI] [--ps-prod PS_PROD]
                       [--npt-thermostat {hoover,berendsen}]
                       [--npt-pressure NPT_PRESSURE] [--npt-pgamma NPT_PGAMMA]
+                      [--npt-pressure-tensor NPT_PRESSURE_TENSOR]
+                      [--npt-pressure-log-interval NPT_PRESSURE_LOG_INTERVAL]
+                      [--skip-npt-pressure-report]
                       [--n-heat-segments N_HEAT_SEGMENTS]
                       [--n-equi-segments N_EQUI_SEGMENTS]
                       [--n-prod-segments N_PROD_SEGMENTS]
@@ -217,6 +220,8 @@ usage: mmml md-system [-h]
                       [--min-fmax MIN_FMAX] [--bfgs-maxstep BFGS_MAXSTEP]
                       [--fire-min-steps FIRE_MIN_STEPS]
                       [--fire-min-maxstep FIRE_MIN_MAXSTEP]
+                      [--monomer-physnet-mini | --no-monomer-physnet-mini]
+                      [--monomer-physnet-mini-max-select N]
                       [--pre-min-ase-order {fire-first,bfgs-first}]
                       [--skip-bfgs | --no-skip-bfgs]
                       [--bfgs-polish-max-fmax BFGS_POLISH_MAX_FMAX]
@@ -301,6 +306,7 @@ usage: mmml md-system [-h]
                       [--energy-weight ENERGY_WEIGHT]
                       [--force-weight FORCE_WEIGHT] [--max-frames MAX_FRAMES]
                       [--no-run-advice] [--no-stage-summary] [--mlpot-profile]
+                      [--jax-profiler-dir DIR]
 
 Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT,
 lambda TI for arbitrary compositions) for arbitrary residue compositions. Runs
@@ -529,10 +535,11 @@ options:
                         after mini. Default 0.2×--temperature; use 50–100 K for
                         a gentler start than 300 K.
   --nve-max-f-start-eVA EV_PER_A
-                        jaxmd: refuse to start NVE when post-FIRE max atomic |F|
-                        exceeds this value in eV/Å (default: 1.5; <=0 disables).
-                        Hybrid liquid handoffs often land near ~1 eV/Å after
-                        FIRE.
+                        jaxmd: base ceiling (eV/Å) for post-FIRE max atomic |F|
+                        before NVE (default: 1.5 at N_ref=100 atoms; <=0
+                        disables). Effective gate scales as base×sqrt(N/N_ref),
+                        capped at 15 eV/Å, so dense liquids (N~2700) get ~8 eV/Å
+                        without a manual raise.
   --nve-force-energy-freeze-charges, --no-nve-force-energy-freeze-charges
                         jaxmd NVE preflight: freeze MM Coulomb charges at R0
                         when checking force–energy FD (Hellmann–Feynman).
@@ -614,9 +621,10 @@ options:
   --ml-batch-size N     pycharmm: chunk PhysNet batches (auto: 256 on GPU / 64
                         on CPU for n>=40; or MMML_MLPOT_ML_BATCH_SIZE). DCM:90
                         try 256-512 on one GPU.
-  --ml-gpu-count N      pycharmm: parallel PhysNet chunks on N local GPUs
-                        (default 1; or MMML_MLPOT_N_GPUS). Set
-                        CUDA_VISIBLE_DEVICES to the GPU ids to use.
+  --ml-gpu-count N      Parallel PhysNet chunks on N local GPUs for
+                        pycharmm/ASE/jaxmd (default 1; or MMML_MLPOT_N_GPUS).
+                        Set CUDA_VISIBLE_DEVICES to the GPU ids to use. Requires
+                        --ml-batch-size so work splits into chunks.
   --max-pairs N         PBC: cell-list MM pair buffer size (auto from N and box
                         when unset). Increase if you see 'MM Pair List
                         Truncated' during MLpot mini/MD.
@@ -712,6 +720,17 @@ options:
   --npt-pgamma NPT_PGAMMA
                         pycharmm: CPT barostat Langevin collision frequency in
                         1/ps (default: 5; 0 disables barostat coupling)
+  --npt-pressure-tensor NPT_PRESSURE_TENSOR
+                        pycharmm: anisotropic NPT reference pressure tensor as
+                        xx,yy,zz,xy,xz,yz in atm (omit for isotropic --npt-
+                        pressure)
+  --npt-pressure-log-interval NPT_PRESSURE_LOG_INTERVAL
+                        pycharmm: write CPT piston pressure tensor every N
+                        dynamics steps to equi/prod *_pressure_tensor.dat via
+                        CHARMM IUPTEN (0=off)
+  --skip-npt-pressure-report
+                        pycharmm: skip CHARMM 'pressure instantaneous' virial
+                        report before equi and prod stages
   --n-heat-segments N_HEAT_SEGMENTS
                         pycharmm: split heating into short chained restart
                         segments
@@ -776,8 +795,10 @@ options:
                         setups are vacuum by default; use to override when
                         --box-size is also set.
   --mlpot-pbc           pycharmm: enable ML MIC / periodic dimer lists (default
-                        for pbc_* setups). With free_* + --box-size, CHARMM uses
-                        loose PBC unless this flag is set.
+                        for pbc_* setups; also auto-enabled when --lr-solver
+                        ewald with a CHARMM box). With free_* + --box-size and
+                        no ewald, CHARMM uses loose PBC (open ML) unless this
+                        flag is set.
   --dyn-inbfrq DYN_INBFRQ
                         pycharmm: CHARMM inbfrq for dynamics (-1=heuristic,
                         50=vacuum default)
@@ -812,6 +833,14 @@ options:
   --fire-min-maxstep FIRE_MIN_MAXSTEP
                         ASE FIRE max atomic displacement per step in Å (default
                         0.2).
+  --monomer-physnet-mini, --no-monomer-physnet-mini
+                        pycharmm: after hybrid FIRE/repair, optionally FIRE-
+                        minimize a few flagged monomers with an isolated PhysNet
+                        calculator (default: on). Disable for dense liquids —
+                        vacuum monomer repair wrecks packing.
+  --monomer-physnet-mini-max-select N
+                        pycharmm: max monomers for selective isolated PhysNet
+                        mini (default: inherit pycharmm CLI, usually 2).
   --pre-min-ase-order {fire-first,bfgs-first}
                         ASE hybrid pre-min order for jaxmd/ase: fire-first
                         (default) runs FIRE on rough surfaces and BFGS only to
@@ -916,10 +945,10 @@ options:
                         k-space + switched SR), nvalchemiops_pme / scafacos
                         (require --mm-nonbond-mode periodic_external). Legacy
                         alias: auto (= mic).
-  --ewald-omit-self     With --lr-solver ewald: omit the Gaussian self term
-                        (−α/√π Σ q²). Opt in for MIC/non-Ewald-trained models
-                        where that constant is not in the training operator
-                        (forces unchanged; energy offset only).
+  --ewald-omit-self     With --lr-solver ewald: use the MIC/non-Ewald-trained
+                        compatibility operator (cross-monomer Ewald only; omit
+                        intramolecular and Gaussian self terms). Default full-
+                        box Ewald retains both for Ewald-trained models.
   --jax-pme-method {ewald,pme,p3m}
                         jax-pme method when --lr-solver=jax_pme (default: env
                         JAX_PME_METHOD or ewald).
@@ -1131,8 +1160,13 @@ options:
   --no-run-advice       Do not print or write next-run guidance (next_run.yaml /
                         next_run.sh) when a job finishes or fails.
   --no-stage-summary    Do not write stage_summary.json (campaigns).
-  --mlpot-profile       Enable profiling of MLpot callbacks and JAX/XLA
-                        compilation timers
+  --mlpot-profile       Enable ASE/MLpot wall-time profiling (writes
+                        mlpot_profile.json; sets MMML_MLPOT_PROFILE=1 and
+                        MMML_JAX_COMPILE_TIMERS=1)
+  --jax-profiler-dir DIR
+                        Optional TensorBoard JAX profiler trace directory for
+                        jaxmd/ASE (also MMML_JAX_PROFILER_DIR). Prefer short
+                        --ps when tracing.
 
 PyXtal crystal placement (requires mmml[chem]):
   --pyxtal, --no-pyxtal

@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from mmml.utils.model_checkpoint import (
+    _choose_cpu_safe_restore_args,
     json_to_params,
     load_model_checkpoint,
     normalize_flax_params_for_apply,
@@ -90,6 +91,81 @@ def test_orbax_to_json_and_json_to_params_roundtrip(temp_dir):
     np.testing.assert_allclose(
         loaded_params["dense"]["kernel"], params["dense"]["kernel"]
     )
+
+
+def test_choose_cpu_safe_restore_args_dispatches_by_leaf_type():
+    """Unit test for the actual bug: blanket-applying array RestoreArgs to
+    every leaf breaks on non-tensor leaves (e.g. strings), which use a
+    different on-disk backend. Only Scalar/ArrayMetadata leaves should get
+    a numpy-typed restore; everything else must get the untouched default.
+
+    This is deliberately environment-independent (fake metadata classes, no
+    real orbax I/O or device topology needed) so it exercises the dispatch
+    logic itself, since the actual cross-GPU-topology failure this fixes
+    can't be reproduced on a CPU-only test machine.
+    """
+    import orbax.checkpoint as ocp
+
+    class ScalarMetadata:
+        pass
+
+    class ArrayMetadata:
+        pass
+
+    class StringMetadata:
+        pass
+
+    for tensor_cls in (ScalarMetadata, ArrayMetadata):
+        args = _choose_cpu_safe_restore_args(tensor_cls())
+        assert isinstance(args, ocp.RestoreArgs)
+        assert args.restore_type is np.ndarray
+
+    non_tensor_args = _choose_cpu_safe_restore_args(StringMetadata())
+    assert isinstance(non_tensor_args, ocp.RestoreArgs)
+    assert non_tensor_args.restore_type is not np.ndarray
+
+
+def test_orbax_to_json_handles_checkpoint_with_string_leaves(temp_dir):
+    """orbax_to_json must restore checkpoints containing string leaves
+    alongside array leaves (e.g. a config dict with both numeric fields and
+    a string path), not just pure-array trees.
+
+    Regression test: blanket-applying array RestoreArgs to every leaf
+    (instead of dispatching by leaf metadata type) makes orbax try to open
+    a string leaf through the zarr array backend, raising a
+    "metadata not found" error -- this is exactly the shape of checkpoint
+    produced by scripts/train_so3lr_spooky_extxyz.py's save_step_checkpoint,
+    whose "config" dict includes a string cache_path field.
+    """
+    pytest.importorskip("orbax")
+
+    import orbax.checkpoint as ocp
+
+    checkpoint_tree = {
+        "params": _create_synthetic_params(),
+        "config": {
+            "features": 64,
+            "cutoff": 6.0,
+            "cache_path": "/some/data/cache/path",
+        },
+        "global_step": 12345,
+    }
+    orbax_dir = temp_dir / "orbax_ckpt_with_strings"
+    checkpointer = ocp.PyTreeCheckpointer()
+    checkpointer.save(str(orbax_dir), checkpoint_tree)
+
+    json_path = temp_dir / "params.json"
+    orbax_to_json(orbax_checkpoint_dir=orbax_dir, output_path=json_path, params_key="params")
+
+    with open(json_path) as f:
+        data = json.load(f)
+    assert "params" in data
+    assert "embedding" in data["params"]
+    # The string/scalar config leaves that live alongside the params tree in
+    # this checkpoint must have restored correctly too, not just the arrays.
+    assert data["config"]["cache_path"] == "/some/data/cache/path"
+    assert data["config"]["features"] == 64
+    assert data["config"]["cutoff"] == 6.0
 
 
 def test_json_to_params_float64(temp_dir):

@@ -1,5 +1,9 @@
 # MD sweep plotting improvements (2026-07-13)
 
+!!! note "Historical implementation record"
+    This dated document records one plotting campaign. It is not a current
+    support or validation matrix.
+
 Summary of the visualization/analysis pass over
 `workflows/unified_backend_sweep/` and `workflows/mixed_calculator_sweep/`,
 following feedback that the initial `plot_results.py` scripts used the wrong

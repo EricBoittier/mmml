@@ -28,8 +28,8 @@ def test_parser_coverage_major_commands():
         "configure",
         "liquid-box",
         "warmup-mlpot-jax",
-        "ef-train",
-        "ef-evaluate",
+        "efield-train",
+        "efield-evaluate",
         "validate",
     }
     missing = sorted(c for c in must_have_flags if not parser_available(c))

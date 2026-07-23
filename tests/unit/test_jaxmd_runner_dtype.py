@@ -178,6 +178,34 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
     assert '_hdf5 if _hdf5 else' in src or "last_hdf5_path" in src
 
 
+def test_resolve_nve_max_f_start_gate_scales_with_system_size():
+    from mmml.cli.run.jaxmd_runner import (
+        NVE_MAX_F_START_BASE_EVA,
+        resolve_nve_max_f_start_gate_eVA,
+    )
+
+    g_small, s_small = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=50)
+    assert s_small == pytest.approx(1.0)
+    assert g_small == pytest.approx(1.5)
+
+    g_ref, s_ref = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=100)
+    assert s_ref == pytest.approx(1.0)
+    assert g_ref == pytest.approx(NVE_MAX_F_START_BASE_EVA)
+
+    g_liq, s_liq = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=2709)
+    assert s_liq == pytest.approx((2709 / 100) ** 0.5)
+    # TIP3:903: size-scaled default clears a ~6.7 eV/Å post-FIRE start.
+    assert g_liq == pytest.approx(1.5 * s_liq)
+    assert g_liq > 6.7
+
+    g_off, s_off = resolve_nve_max_f_start_gate_eVA(0.0, n_atoms=2709)
+    assert g_off == 0.0
+    assert s_off == pytest.approx(1.0)
+
+    g_cap, _ = resolve_nve_max_f_start_gate_eVA(1.5, n_atoms=1_000_000)
+    assert g_cap == pytest.approx(15.0)
+
+
 def test_nve_requires_float64_message_in_runner():
     from mmml.cli.run import jaxmd_runner as jr
 
@@ -190,3 +218,23 @@ def test_nve_requires_float64_message_in_runner():
     assert "force_rebuild=True" in src
     assert "NVE E_tot drift → repair & restart" in src
     assert "nve_etot_drift_rescue_tricks" in src
+
+
+def test_nve_pbc_does_not_write_molecular_wrap_into_integrator_state():
+    """Whole-monomer ±L wraps in state caused ~0.1 eV E_tot jumps at image crossings.
+
+    NL binning may use a wrapped copy; energy/forces must see continuous unwrapped R.
+    """
+    from mmml.cli.run import jaxmd_runner as jr
+
+    src = Path(jr.__file__).read_text(encoding="utf-8")
+    assert "wrapped_for_nl" in src
+    assert "Do NOT write" in src or "do NOT write" in src
+    # The old hot-path pattern must stay gone.
+    assert "Wrap coordinates first so neighbor list binning" not in src
+    # Still wrap for NL / export, not as the NVE state update before sim().
+    step_block = src.split("elif use_pbc and update_fn is not None:")[1].split(
+        "else:\n                        state = sim"
+    )[0]
+    assert "wrapped_for_nl" in step_block
+    assert "state.set(position=as_jaxmd_dtype(wrapped" not in step_block

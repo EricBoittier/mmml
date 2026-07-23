@@ -325,7 +325,7 @@ def wizard_md_single(out_dir: Path) -> list[Path]:
             ("free_nvt", "free_nvt", "NVT in open boundary (flat-bottom)"),
             ("pbc_nve", "pbc_nve", "Fixed-volume periodic NVE"),
             ("pbc_nvt", "pbc_nvt", "Fixed-volume periodic NVT"),
-            ("pbc_npt", "pbc_npt", "NPT — recommended for liquids"),
+            ("pbc_npt", "pbc_npt", "NPT — variable-cell liquid workflow"),
             ("pycharmm_minimize", "pycharmm_minimize", "Minimize only (PyCHARMM)"),
             ("lambda_ti", "lambda_ti", "Lambda thermodynamic integration"),
         ],

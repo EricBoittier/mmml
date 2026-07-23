@@ -1,5 +1,11 @@
 # Unifying `md-system` and `cg_jaxmd`: calculator & builder schema
 
+!!! warning "Architecture history, not a current support matrix"
+    This document preserves decisions, experiments, and phased implementation
+    notes. Statements such as “currently,” “not yet,” and cluster observations
+    are historical unless they carry an `[evidence: ...]` marker. Use the
+    maintained capability and validation pages for current behavior.
+
 **Status:** In progress — the shared stack is built and tested; both
 front-end entrypoint swaps are landed (opt-in for `md-system`); apocharmm and
 RDF validation remain (see §0 and §11).

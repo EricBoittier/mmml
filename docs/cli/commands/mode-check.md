@@ -49,9 +49,11 @@ Input & configuration:
 
 Scientific model:
   --mm-charge-mode MM_CHARGE_MODE
-  --ewald-omit-self     With --lr-solver ewald (typically --pbc-fd): omit the
-                        Gaussian self term (−α/√π Σ q²). Opt in for MIC/non-
-                        Ewald-trained models (forces unchanged; energy offset).
+  --ewald-omit-self     With --lr-solver ewald (typically --pbc-fd): use the
+                        MIC/non-Ewald-trained compatibility operator (cross-
+                        monomer Ewald only; omit intramolecular and Gaussian
+                        self terms). Default full-box Ewald retains both for
+                        Ewald-trained models.
   --mm-switch-on MM_SWITCH_ON
   --cutoff-sweep        For n≥2: run mode-check at every COM station on the
                         hybrid handoff ruler (pure ML, handoff mid,

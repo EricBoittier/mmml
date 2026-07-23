@@ -85,7 +85,7 @@ def resolve_mc_density_target_g_cm3(
     return None, "no_density_target"
 
 
-def _scale_molecule_coms(
+def scale_molecule_coms_with_cubic_box(
     positions: np.ndarray,
     offsets: np.ndarray,
     *,
@@ -302,7 +302,7 @@ def apply_mc_density_equalization(
         if step_scale > 0.0:
             proposal_log_L += float(rng.normal(0.0, step_scale))
         proposal_L = float(np.clip(np.exp(proposal_log_L), min_L, max_L))
-        proposal_pos = _scale_molecule_coms(
+        proposal_pos = scale_molecule_coms_with_cubic_box(
             current_pos,
             offsets,
             old_box_A=current_L,

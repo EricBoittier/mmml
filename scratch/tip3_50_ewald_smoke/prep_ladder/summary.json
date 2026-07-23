@@ -1,0 +1,70 @@
+{
+  "category": "prep_ladder",
+  "title": "Pre-MLpot geometry gate",
+  "root": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder",
+  "steps": [
+    {
+      "index": 1,
+      "label": "initial",
+      "slug": "initial",
+      "stem": "001_initial",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/001_initial.crd",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/001_initial.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/001_initial.psf"
+      },
+      "box_side_A": 30.0,
+      "note": "worst inter-monomer 1.714 \u00c5"
+    },
+    {
+      "index": 2,
+      "label": "pre_mlpot:monomer_repack_skipped_clean",
+      "slug": "pre_mlpot_monomer_repack_skipped_clean",
+      "stem": "002_pre_mlpot_monomer_repack_skipped_clean",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/002_pre_mlpot_monomer_repack_skipped_clean.crd",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/002_pre_mlpot_monomer_repack_skipped_clean.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/002_pre_mlpot_monomer_repack_skipped_clean.psf"
+      },
+      "box_side_A": 30.0,
+      "note": "worst inter-monomer 1.714 \u00c5 >= floor 0.450 \u00c5"
+    },
+    {
+      "index": 3,
+      "label": "pre_mlpot:mc_density_staged",
+      "slug": "pre_mlpot_mc_density_staged",
+      "stem": "003_pre_mlpot_mc_density_staged",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/003_pre_mlpot_mc_density_staged.crd",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/003_pre_mlpot_mc_density_staged.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/003_pre_mlpot_mc_density_staged.psf"
+      },
+      "box_side_A": 30.0
+    },
+    {
+      "index": 4,
+      "label": "pre_mlpot:mc_density_target",
+      "slug": "pre_mlpot_mc_density_target",
+      "stem": "004_pre_mlpot_mc_density_target",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/004_pre_mlpot_mc_density_target.crd",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/004_pre_mlpot_mc_density_target.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_50_ewald_smoke/prep_ladder/004_pre_mlpot_mc_density_target.psf"
+      },
+      "box_side_A": 30.0
+    }
+  ],
+  "summary": {
+    "enabled": true,
+    "ran": true,
+    "reason": "ok",
+    "steps_applied": [
+      "pre_mlpot:monomer_repack_skipped_clean",
+      "pre_mlpot:mc_density_staged",
+      "pre_mlpot:mc_density_target"
+    ],
+    "worst_intermonomer_A": 1.7136118113461045,
+    "aborted": false,
+    "contact_summary": "worst inter-monomer contact 1.692 \u00c5 (monomers 14/40, atoms O\u2013H; prep floor 0.45 \u00c5, typical vdW 2.7 \u00c5); OK: above dynamics guard (0.5 \u00c5)"
+  }
+}

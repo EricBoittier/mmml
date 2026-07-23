@@ -739,8 +739,13 @@ class DecomposedMlpotCalculator:
             from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
                 add_periodic_coulomb_to_callback,
             )
+            from mmml.interfaces.pycharmmInterface.nl_reference import (
+                monomer_id_from_offsets,
+            )
 
             side = float(self._cell)
+            offsets = _monomer_offsets_from_atoms_per_monomer(self._atoms_per_monomer)
+            mid = monomer_id_from_offsets(offsets, int(n))
             try:
                 e_kcal, forces = add_periodic_coulomb_to_callback(
                     pos,
@@ -748,6 +753,8 @@ class DecomposedMlpotCalculator:
                     cfg=periodic_cfg,
                     energy_kcal=float(e_kcal),
                     forces_kcal=np.asarray(forces, dtype=np.float64),
+                    mol_id=mid,
+                    n_monomers=int(self.n_monomers),
                 )
             except Exception as exc:
                 # ScaFaCoS/MPI failures inside the CHARMM callback must not zero the
@@ -930,8 +937,10 @@ class DecomposedMlpotModel:
         )
         from mmml.interfaces.pycharmmInterface.jax_device_policy import (
             jax_cpu_until_mlpot_registered,
+            mlpot_device_context_fell_back_to_cpu,
             mlpot_jax_device_context,
             mlpot_jax_device_name,
+            reset_mlpot_device_fallback_flag,
         )
 
         cpu_only = not gpu and (
@@ -959,6 +968,8 @@ class DecomposedMlpotModel:
                     "(MPI defer path; ignoring registration-time CPU env)",
                     flush=True,
                 )
+            if not cpu_only:
+                reset_mlpot_device_fallback_flag()
             with device_ctx():
                 _, spherical_fn, get_update_fn = unpack_factory_result(
                     self._pending_factory(
@@ -976,7 +987,14 @@ class DecomposedMlpotModel:
         self._spherical_fn = spherical_fn
         if self._do_mm:
             self._get_update_fn = get_update_fn
-        self._jax_on_gpu = not cpu_only
+        # Track the device actually used, not the request: mlpot_jax_device_context
+        # silently fell back to CPU when GPU was requested but unavailable (see its
+        # docstring), so `not cpu_only` alone previously left `_jax_on_gpu=True` while
+        # the compute ran on CPU (the "promoted to GPU" message with 0% nvidia-smi
+        # utilization bug this fixes). `reset_mlpot_device_fallback_flag` right before
+        # `device_ctx()` means a test-mocked `mlpot_jax_device_context` (which never
+        # touches the flag) is correctly read as "no fallback".
+        self._jax_on_gpu = (not cpu_only) and not mlpot_device_context_fell_back_to_cpu()
         if not cpu_only:
             self._pending_factory = None
             self._pending_factory_z = None
@@ -1187,11 +1205,25 @@ def build_decomposed_mlpot_model(
 
     n_dimers_total = int(n_monomers) * (int(n_monomers) - 1) // 2
     free_space = cell is False or cell is None
+    _box_volume = None
+    _active_radius = None
+    if not free_space and cell is not None:
+        try:
+            side = float(cell)
+            if side > 0.0:
+                _box_volume = side**3
+                _active_radius = float(cutoff_params.mm_switch_on) + float(
+                    cutoff_params.ml_switch_width
+                )
+        except (TypeError, ValueError):
+            pass
     dimer_cap = resolve_max_active_dimers(
         int(n_monomers),
         n_dimers_total,
         ml_max_active_dimers,
         free_space=free_space,
+        box_volume=_box_volume,
+        active_radius=_active_radius,
     )
     max_pairs = None
     if args is not None:
@@ -1407,6 +1439,11 @@ def build_decomposed_mlpot_model(
         jax_pme_sr_cutoff_A=jax_pme_sr_cutoff,
         jax_pme_dispersion=jax_pme_dispersion,
         ewald_include_self=(
+            not bool(getattr(args, "ewald_omit_self", False))
+            if args is not None
+            else True
+        ),
+        ewald_include_intra=(
             not bool(getattr(args, "ewald_omit_self", False))
             if args is not None
             else True

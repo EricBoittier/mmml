@@ -114,12 +114,6 @@ nav:
           - orca-server: cli/commands/orca-server.md
           - orca-client: cli/commands/orca-client.md
           - orca-external: cli/commands/orca-external.md
-      - Deprecated & legacy:
-          - train: cli/commands/train.md
-          - evaluate: cli/commands/evaluate.md
-          - ef-train: cli/commands/ef-train.md
-          - ef-evaluate: cli/commands/ef-evaluate.md
-          - ef-md: cli/commands/ef-md.md
       - Other utilities:
           - doctor: cli/commands/doctor.md
           - md-embedding: cli/commands/md-embedding.md
@@ -168,6 +162,8 @@ nav:
       - FFTW for CHARMM: fftw-build.md
   - QC & calculators:
       - Calculator capability matrix: calculator-capabilities.md
+      - Scientific claim evidence policy: evidence-policy.md
+      - Hard-coded recommendation audit: hardcoded-recommendations-audit.md
       - QC cross-check: qc-cross-check.md
       - DCMNet calculators: dcmnet_calculators.md
   - Reference:

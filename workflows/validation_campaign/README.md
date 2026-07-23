@@ -85,18 +85,20 @@ workflows/validation_campaign/launch/pcbach.slurm.sh prepare --tier static
 
 ## What is proven today
 
-Run `campaign.py status` for the live answer. As of the last run, only
-`platform.static` and `force_energy.unit` are `PASS`, and only on
-`local_laptop`. Everything under `pure_liquids`, `peptide_gas`, and
-`peptide_solution` is `NEEDS_DRIVER`: the systems, methods, and acceptance
-checks are catalogued, but the scientific drivers that would compute them are
-not written yet. They currently dispatch to `scripts/task_placeholder.py`, which
-writes `NEEDS_DRIVER` and exits 2 rather than inventing a result.
+Do not copy campaign state into this README. Run `campaign.py status` for the
+live answer; it derives task state from configuration and accumulated receipts.
+`[evidence: validation_campaign_state]`
 
-Building those drivers is the next piece of work. Each one must write a
-`proof.json` whose checks it actually computed.
+`pure_liquids.smoke` and `peptide_gas.smoke` have scientific drivers. Tasks
+that still invoke `task_placeholder.py` remain explicitly `NEEDS_DRIVER` in
+`campaign.yaml`; their placeholder can never manufacture a passing receipt.
 
 ## Commands
+
+For the maintained pc-studix calculator/backend smoke matrix, including
+PhysNet, SpookyNet, learned MBD/multipoles, EField, xTB, PySCF, DFTB3-D4,
+PyCHARMM, JAX-MD, rigid MC, charge modes, and long-range solvers, see
+[`PCSTUDIX_SMOKE_MATRIX.md`](PCSTUDIX_SMOKE_MATRIX.md).
 
 List the campaign and current proof state:
 
@@ -134,9 +136,8 @@ python workflows/validation_campaign/scripts/campaign.py status --write
 
 ## Current hard blocker
 
-`backend_parity.dcm10_pycharmm_jaxmd` is blocked at the PyCHARMM velocity
-handoff boundary. Text/native restart attempts start at 0 K, while direct
-`dynamics_run_kw(init_velocities=...)` currently SIGSEGVs in `dynopt` due to
-the gfortran `bind(c)` assumed-shape-array ABI. This blocker must remain visible
-in the summary and must gate solvent-burst production that alternates backends.
-
+**⚠ UNVERIFIED:** `campaign.yaml` retains
+`backend_parity.dcm10_pycharmm_jaxmd` as blocked at the PyCHARMM velocity
+handoff boundary, but the claim predates the current COMP/restart/cold-start
+implementation. Re-run backend parity before using it as a production gate.
+`[evidence: pycharmm_velocity_handoff_blocker]`

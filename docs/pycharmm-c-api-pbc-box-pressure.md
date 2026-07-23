@@ -60,6 +60,11 @@ side, source = push_charmm_cubic_box_side_A(32.0, quiet=True)
 
 **Do not** call `prepare_charmm_pbc` / `push_charmm` after MLpot is registered — crystal/IMAGE rebuild with MLpot active can segfault in `libcharmm`. After registration, only **read** CHARMM’s box and sync the JAX MIC cell (`sync_mlpot_pbc_cell_from_charmm`).
 
+Native `--lr-solver ewald` under CPT: each USER eval passes the live cell as
+`box_override` (MIC + reciprocal `B(cell)`). The host k-integer grid / `alpha`
+rebuild only when cubic `L` crosses
+`EWALD_NPT_KGRID_REBUILD_TOLERANCE_A` (0.5 Å) bins — not every float tick.
+
 ### Get
 
 Resolution order in `resolve_charmm_cubic_box_side_A`:
@@ -147,7 +152,9 @@ p_yy = lingo.get_energy_value("PIYY")
 p_zz = lingo.get_energy_value("PIZZ")
 ```
 
-MMML’s `report_instantaneous_pressure_tensor` (before equi/prod) currently calls the **`pressure instantaneous` script**, which may be unavailable on KEY_LIBRARY. Prefer the `eval_get_energy_value` path above for programmatic reads.
+MMML’s `report_instantaneous_pressure_tensor` (before equi/prod) uses the
+`get_energy_value` path (`PRSI` / `PIXX–PIZZ`) — not the `pressure` script
+(KEY_LIBRARY would warn `Unrecognized command: pres`).
 
 ### Get — time series during NPT
 

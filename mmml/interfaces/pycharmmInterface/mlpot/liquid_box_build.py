@@ -183,6 +183,12 @@ def estimate_density_g_cm3(
     box_side_A: float | None,
     n_molecules: int,
 ) -> float | None:
+    """Mass density for ``composition`` in a cubic cell.
+
+    When ``n_molecules`` differs from ``sum(composition.values())`` (e.g. stale
+    stoichiometry before ``--box-auto count`` scaling), scale the mass so density
+    tracks the built system size.
+    """
     if box_side_A is None or box_side_A <= 0.0 or composition is None:
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import total_mass_g_for_composition
@@ -191,6 +197,10 @@ def estimate_density_g_cm3(
         total_mass_g = total_mass_g_for_composition(composition)
     except ValueError:
         return None
+    n_comp = int(sum(int(v) for v in composition.values()))
+    n_sys = int(n_molecules)
+    if n_comp > 0 and n_sys > 0 and n_sys != n_comp:
+        total_mass_g *= float(n_sys) / float(n_comp)
     volume_cm3 = (float(box_side_A) * 1.0e-8) ** 3
     if volume_cm3 <= 0.0:
         return None
@@ -397,9 +407,11 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     )
     from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
+    # Build first: ``--box-auto count`` mutates ``args.composition`` (e.g. TIP3:1 →
+    # TIP3:903). Re-parse afterward so density certification uses the scaled system.
+    z, r, n_mol, tag = build_cluster_from_args_with_tag(args)
     composition_str = getattr(args, "composition", None)
     comp = parse_composition_dict(composition_str)
-    z, r, n_mol, tag = build_cluster_from_args_with_tag(args)
     print_cluster_geometry_summary(r, n_mol)
 
     paths = staged_artifact_paths(out_dir, tag)

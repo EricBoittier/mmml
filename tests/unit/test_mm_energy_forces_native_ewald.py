@@ -113,3 +113,67 @@ def test_ewald_branch_requires_pbc_cell():
                 lr_solver="ewald",
                 defer_xla_gpu_warmup=True,
             )
+
+
+def test_ewald_include_intra_false_zeroes_single_tip3_forces():
+    """``ewald_include_intra`` must reach the native Ewald kernel (not just CLI strings).
+
+    One TIP3P in a box: with ``include_intramolecular=False`` (``--ewald-omit-self``
+    path) there is no cross-monomer Coulomb, so max|F| must be ~0. With the default
+    full-box Ewald, intramolecular O–H Coulomb yields large forces
+    (~100 kcal/mol/Å ≈ 5 eV/Å). A wiring bug that forgets to forward
+    ``ewald_include_intra=False`` into ``build_mm_energy_forces_fn`` would leave
+    those intramolecular forces on.
+    """
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+
+    # Bundled tip3.pdb geometry (OH2, H1, H2) + TIP3P charges.
+    R = np.array(
+        [
+            [1.160, 1.590, 0.942],
+            [0.666, 0.833, 1.255],
+            [2.041, 1.464, 1.293],
+        ],
+        dtype=np.float64,
+    )
+    charges = np.array([-0.834, 0.417, 0.417], dtype=np.float64)
+    L = 20.0
+    box = np.diag([L, L, L])
+    fake_psf = MagicMock()
+    fake_psf.get_charges.return_value = charges
+    fake_psf.get_iac.return_value = np.ones(3, dtype=np.int32)
+
+    def _max_force(*, include_intra: bool) -> float:
+        with patch("pycharmm.psf", fake_psf), patch(
+            "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
+            return_value=charges,
+        ):
+            mm_fn = build_mm_energy_forces_fn(
+                R,
+                total_atoms=3,
+                n_monomers=1,
+                monomer_offsets=np.array([0, 3], dtype=np.int32),
+                atoms_per_monomer_list=[3],
+                lambda_monomer=np.ones(1, dtype=np.float64),
+                ml_switch_width=1.0,
+                mm_switch_on=6.0,
+                mm_switch_width=4.0,
+                pbc_cell=box,
+                lr_solver="ewald",
+                # Match --ewald-omit-self: drop self + intra together.
+                ewald_include_self=False,
+                ewald_include_intra=include_intra,
+                defer_xla_gpu_warmup=True,
+                debug=False,
+            )
+        fn, update_fn = mm_fn
+        assert update_fn is None
+        _e, forces, _vdw, _elec = fn(jnp.asarray(R), charges=jnp.asarray(charges))
+        return float(np.max(np.abs(np.asarray(forces))))
+
+    max_f_omit = _max_force(include_intra=False)
+    max_f_full = _max_force(include_intra=True)
+
+    assert max_f_omit < 1.0e-6, f"omit-intra should zero single-TIP3 forces, got {max_f_omit}"
+    # ~116 kcal/mol/Å on this geometry; keep a soft floor so CI catches silent drops.
+    assert max_f_full > 50.0, f"full Ewald TIP3 intramolecular |F| too small: {max_f_full}"

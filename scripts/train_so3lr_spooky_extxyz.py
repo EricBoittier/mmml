@@ -425,18 +425,48 @@ def iter_device_batches(
     n_devices: int,
     rng: np.random.Generator,
     shuffle_pad_buckets: bool = False,
+    max_batches_per_bucket_visit: int | None = None,
 ) -> Iterator[tuple[int, np.ndarray]]:
     """Yield ``(pad_atoms, device_indices)`` with shape ``(n_devices, B)``.
 
     Pad widths are sorted (large→small) by default so each shape is trained in
     a block; shuffling pads interleaves compiles and fragments GPU memory.
     Indices *within* a pad bucket are always shuffled.
+
+    ``max_batches_per_bucket_visit``, if set, bounds how many consecutive
+    batches are drawn from one bucket before moving on to the next, cycling
+    back to any bucket with leftover batches once every other bucket has had
+    its turn (round-robin), instead of fully draining one bucket before
+    starting the next.
+
+    Without this bound, bucket *visit order* being shuffled does not bound
+    bucket *visit duration*: a single disproportionately large bucket (e.g.
+    one atom-count bin holding a large majority of the training pool) can
+    still monopolize well over a million consecutive optimizer steps once
+    it's picked, giving zero gradient signal from every other structure
+    population (composites, other sizes) for that whole stretch. Observed in
+    practice: two checkpoints saved back-to-back while stuck in one such
+    bucket for >1M steps both showed broad eval regressions across nearly
+    every test set relative to a checkpoint saved before that bucket became
+    active, then recovered once training moved on -- consistent with drift
+    from prolonged single-population training, not a real capability loss.
+
+    This still switches the active compiled shape only at bucket-visit
+    boundaries (same cost profile as the unbounded version), but a small
+    bound means more total switches over an epoch (each bucket may be
+    revisited many times to fully drain it) -- shape recompilation is paid
+    per switch (`_activate_shape` evicts the previous compiled executable to
+    avoid multi-GPU OOM), so this trades some extra compile overhead for
+    bounding cross-population staleness. Choose a bound large enough that
+    this overhead stays small relative to an epoch's total step count.
     """
     bucket_keys = list(buckets)
     if shuffle_pad_buckets:
         rng.shuffle(bucket_keys)
     else:
         bucket_keys = sorted(bucket_keys, reverse=True)
+
+    per_bucket_chunks: dict[int, list[np.ndarray]] = {}
     for pad_atoms in bucket_keys:
         bucket_batch_size = int(batch_sizes[pad_atoms])
         if bucket_batch_size < 1:
@@ -445,9 +475,34 @@ def iter_device_batches(
         indices = buckets[pad_atoms].copy()
         rng.shuffle(indices)
         usable = (len(indices) // global_batch) * global_batch
-        for start in range(0, usable, global_batch):
-            chunk = indices[start : start + global_batch]
-            yield pad_atoms, chunk.reshape(n_devices, bucket_batch_size)
+        chunks = [
+            indices[start : start + global_batch].reshape(n_devices, bucket_batch_size)
+            for start in range(0, usable, global_batch)
+        ]
+        if chunks:
+            per_bucket_chunks[pad_atoms] = chunks
+
+    if max_batches_per_bucket_visit is None:
+        for pad_atoms in bucket_keys:
+            for chunk in per_bucket_chunks.get(pad_atoms, []):
+                yield pad_atoms, chunk
+        return
+
+    cursors = {pad_atoms: 0 for pad_atoms in per_bucket_chunks}
+    remaining = set(per_bucket_chunks)
+    while remaining:
+        order = list(remaining)
+        if shuffle_pad_buckets:
+            rng.shuffle(order)
+        for pad_atoms in order:
+            chunks = per_bucket_chunks[pad_atoms]
+            start = cursors[pad_atoms]
+            end = min(start + max_batches_per_bucket_visit, len(chunks))
+            for chunk in chunks[start:end]:
+                yield pad_atoms, chunk
+            cursors[pad_atoms] = end
+            if end >= len(chunks):
+                remaining.discard(pad_atoms)
 
 
 def stack_device_batches(
@@ -873,10 +928,13 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
-        switch_start=args.switch_start,
-        switch_end=args.switch_end,
-        electrostatics_off_start=args.electrostatics_off_start,
-        electrostatics_off_end=args.electrostatics_off_end,
+        # Keep create_model usable from notebooks/tests and older campaign code
+        # whose Namespace predates these CLI options.  These values are the
+        # historical model defaults and match the parser defaults below.
+        switch_start=getattr(args, "switch_start", 1.0),
+        switch_end=getattr(args, "switch_end", 10.0),
+        electrostatics_off_start=getattr(args, "electrostatics_off_start", 8.0),
+        electrostatics_off_end=getattr(args, "electrostatics_off_end", 10.0),
         # --fixed-cgenff-vdw pins the CGenFF LJ term at its published parameters, so it
         # acts as a fixed physical prior the network can only add to, never scale away.
         learn_cgenff_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
@@ -1138,6 +1196,12 @@ def make_steps(
             "multipole_dipole_mse": multipole_dipole_mse,
             "far_field_charge_mse": far_field_charge_mse,
             "far_field_charge_rms": jnp.sqrt(far_field_charge_mse + 1e-12),
+            # Real (unpadded) atom count, averaged over the structures in this
+            # batch -- printed alongside the loss/MAE metrics so a bucket's
+            # elevated values (e.g. multi-fragment far-field composites,
+            # whose whole-structure energy error naturally scales with
+            # fragment count) can be told apart from genuine regressions.
+            "avg_n_atoms": jnp.sum(batch["atom_mask"]) / per_device_batch_size,
         }
         return loss, metrics
 
@@ -2087,9 +2151,22 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         if active_shape is not None:
             step_functions.clear()
             _clear_jax_caches()
+        # A bucket's structure count and its step count are only proportional
+        # when batch_size is constant across buckets -- it isn't (auto-batch
+        # gives large pad_atoms far smaller B/device, e.g. B=1 vs B=6). A
+        # bucket with the same structure count as another can take ~6x more
+        # steps just because its batch size collapsed, which is easy to
+        # mistake for that bucket dominating training when it's really a
+        # throughput artifact. Print both counts so this is visible directly
+        # instead of inferred from how long the loss stays elevated.
+        n_structures = len(train_buckets.get(pad_atoms, ()))
+        global_batch = batch_size * args.num_devices
+        expected_steps = n_structures // global_batch if global_batch else 0
         print(
             f"Compiling steps for pad_atoms={pad_atoms} "
-            f"with per-device batch {batch_size}",
+            f"with per-device batch {batch_size} "
+            f"(bucket: {n_structures} structures, ~{expected_steps} steps "
+            f"at global batch {global_batch})",
             flush=True,
         )
         active_shape = shape
@@ -2107,6 +2184,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 n_devices=args.num_devices,
                 rng=rng,
                 shuffle_pad_buckets=args.shuffle_pad_buckets,
+                max_batches_per_bucket_visit=args.max_batches_per_bucket_visit,
             ),
             data,
             depth=args.prefetch_batches,
@@ -2142,7 +2220,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     f"[{pct_done:5.1f}% of {total_planned_steps}] "
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
                     f"F_MAE={m['forces_mae']:.6g} "
-                    f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g}"
+                    f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g} "
+                    f"avg_N={m['avg_n_atoms']:.1f}"
                 )
                 if mbd_model is not None:
                     line += f" MBD_λ={m['mbd_scale']:.3f}"
@@ -2331,6 +2410,25 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Shuffle atom-pad bucket order each epoch (default: large→small blocks). "
             "Interleaving pads forces many live compiles and can OOM-hang pmap."
+        ),
+    )
+    parser.add_argument(
+        "--max-batches-per-bucket-visit",
+        type=int,
+        default=None,
+        help=(
+            "Cap consecutive training batches drawn from one atom-pad bucket "
+            "before round-robining to the next (default: none -- fully drain "
+            "each bucket before moving on, same as before this flag existed). "
+            "Bucket visit ORDER being shuffled (--shuffle-pad-buckets) does not "
+            "bound visit DURATION: a disproportionately large bucket can still "
+            "monopolize well over a million consecutive steps, giving zero "
+            "gradient signal from every other structure population (e.g. "
+            "far-field composites) for that whole stretch -- observed to cause "
+            "broad eval regressions that recovered once training moved past "
+            "such a bucket. Setting this (e.g. a few thousand) bounds that "
+            "staleness at the cost of more shape recompiles (each bucket may "
+            "be revisited many times to fully drain it)."
         ),
     )
     parser.add_argument("--epochs", type=int, default=50)

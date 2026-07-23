@@ -1,107 +1,172 @@
 # mmml
 
-[![GitHub Actions Build Status](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
+[![CI](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/EricBoittier/mmml/branch/main/graph/badge.svg)](https://codecov.io/gh/EricBoittier/mmml/branch/main)
+[![Docs](https://readthedocs.org/projects/mmml/badge/?version=latest)](https://mmml.readthedocs.io/en/latest/)
+[![Python](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
 
 **Molecular Mechanics + Machine-Learned Force-Field Toolkit**
 
-MMML combines CHARMM/OpenMM workflows with JAX-based neural models for electrostatics and force prediction.
+MMML combines CHARMM/OpenMM workflows with JAX-based neural models for electrostatics and force prediction, for building and running hybrid ML/MM condensed-phase simulations.
 
-## Auto-prediction CLI
-```bash
-uv sync --extra all-cpu --extra cli 
-eval "$(register-python-argcomplete mmml)"
-```
+## Status
 
-
-## 📚 Documentation
-
-**For complete documentation, tutorials, and guides, please visit:**
-
-**[Read the Docs](https://mmml.readthedocs.io/en/latest/)**
-
-The documentation includes:
-- Installation instructions
-- Quick start guides
-- `mmml md-system` YAML config and campaign guide for condensed-phase workflows
-- API reference
-- Tutorials and examples
-- Troubleshooting guides
+MMML is in **alpha**. The core calculator, CLI, and `md-system` YAML workflow are usable today, but interfaces are still settling and may change without notice ahead of a first tagged release. Feedback and issues are welcome — see [Getting Help](#getting-help).
 
 ## Quick Installation
 
-### Using `uv` (Recommended)
+Requires **Python 3.13**. Prefer [`uv`](https://docs.astral.sh/uv/).
+
+### Using `uv` (recommended)
 
 ```bash
 git clone https://github.com/EricBoittier/mmml.git
 cd mmml
 uv sync
 
-# For GPU support
-make install-gpu
+# Optional extras
+uv sync --extra cli      # shell tab completion (argcomplete)
+uv sync --extra md-cpu   # Vesin NL + MDAnalysis (CPU MD smokes)
+uv sync --extra dev      # pytest, MkDocs, ruff
+make install-gpu         # JAX CUDA 13 + CuPy (GPU nodes; SM 7.5+)
+# make install-gpu-cuda12  # older GPUs / CUDA 12
 ```
 
-### Using Conda
+For PyCHARMM / Packmol (native libs, not installed by `uv`):
 
 ```bash
+make install-native   # builds libcharmm + packmol under setup/charmm
+make doctor           # mmml doctor — env / CHARMM readiness
+```
+
+Or from a fresh clone: `make install-full` (`uv sync` + native build).
+
+### Using Conda / micromamba
+
+```bash
+# Conda
 conda env create -f setup/environment.yml
 conda activate mmml
 
-# For GPU support
-conda env create -f setup/environment-gpu.yml
-conda activate mmml-gpu
+# Or Makefile micromamba targets (preferred on clusters)
+make micromamba-create
+make micromamba-create-gpu        # CUDA 12 env file
+make micromamba-create-gpu-cuda13
 ```
+
+GPU env files: `setup/environment-gpu.yml`, `setup/environment-gpu-cuda13.yml`.
 
 ### Using Docker
 
+Dockerfile and Compose live under [`devtools/docker/`](devtools/docker/):
+
 ```bash
-docker-compose up -d mmml-cpu
-docker-compose exec mmml-cpu bash
+cd devtools/docker
+docker compose up -d mmml-cpu
+docker compose exec mmml-cpu bash
+# GPU: docker compose up -d mmml-gpu
 ```
+
+### CLI tab completion
+
+```bash
+uv sync --extra cli
+eval "$(register-python-argcomplete mmml)"
+# or: eval "$(mmml completion bash)"
+```
+
+## CLI quick start
+
+```bash
+mmml -h                 # compact top-level help
+mmml commands           # all subcommands by category
+mmml examples           # copy-paste invocations
+mmml configure          # interactive YAML / Snakemake wizard
+mmml env                # checkpoints + CHARMM paths
+mmml md-system --help   # condensed-phase MD flags
+mmml doctor             # environment health check
+```
+
+Condensed-phase campaigns: start from
+[`mmml/cli/run/md_system.example.yaml`](mmml/cli/run/md_system.example.yaml)
+and the [`md-system` YAML config guide](docs/md-system-configs.md).
+
+CPU MD smokes (no CUDA; bundled DESdimers JSON checkpoint):
+
+```bash
+make install-md-cpu
+source examples/md_cpu/_env.sh
+bash examples/md_cpu/run_all.sh
+```
+
+See [`examples/md_cpu/README.md`](examples/md_cpu/README.md).
 
 ## Quick Example
 
-For config-driven condensed-phase MD campaigns, start with
-[`mmml/cli/run/md_system.example.yaml`](mmml/cli/run/md_system.example.yaml) and the
-[`md-system` YAML config guide](https://mmml.readthedocs.io/en/latest/md-system-configs/).
+ML-only energy/forces via ASE using the bundled ACO/DESdimers checkpoint
+(`examples/ckpts_json/DESdimers_params.json`):
 
 ```python
-import numpy as np
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
 import ase
+import numpy as np
+from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
 ATOMS_PER_MONOMER = 10
 N_MONOMERS = 2
-Z = np.array([6, 1, 1, 1, 6, 1, 1, 1, 8, 1] * N_MONOMERS, dtype=int)
-R = np.zeros((ATOMS_PER_MONOMER * N_MONOMERS, 3), dtype=float)
+Z = np.array([6, 1, 1, 1, 6, 1, 1, 1, 8, 1] * N_MONOMERS, dtype=np.int32)
+R = np.zeros((ATOMS_PER_MONOMER * N_MONOMERS, 3), dtype=np.float64)
+# Place monomers apart so the dimer is non-overlapping
+R[ATOMS_PER_MONOMER:, 0] = 5.0
 
-ckpt = Path("mmml/physnetjax/ckpts")
+ckpt = Path("examples/ckpts_json/DESdimers_params.json")
 factory = setup_calculator(
     ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
     N_MONOMERS=N_MONOMERS,
     doML=True,
     doMM=False,
-    model_restart_path=ckpt,
+    model_restart_path=str(ckpt),
     MAX_ATOMS_PER_SYSTEM=ATOMS_PER_MONOMER * N_MONOMERS,
-    ml_energy_conversion_factor=1,
-    ml_force_conversion_factor=1,
+    defer_xla_gpu_warmup=True,
+    verbose=False,
 )
-
-calc, _ = factory(atomic_numbers=Z, atomic_positions=R, n_monomers=N_MONOMERS)
-atoms = ase.Atoms(Z, R)
+calc, _, _ = unpack_factory_result(
+    factory(atomic_numbers=Z, atomic_positions=R, n_monomers=N_MONOMERS)
+)
+atoms = ase.Atoms(numbers=Z, positions=R)
 atoms.calc = calc
 print("Energy (kcal/mol):", atoms.get_potential_energy())
 ```
 
+For a geometry-aware version of the same path, run
+`uv run python examples/md_cpu/02_ml_energy_ase.py`.
+
+## Documentation
+
+Published site: [Read the Docs](https://mmml.readthedocs.io/en/latest/).  
+Serve the current MkDocs tree locally: `uv sync --extra dev && make docs-serve` → http://127.0.0.1:8000.
+
+Highlights (in-repo):
+
+- [Getting started](docs/getting-started.md) — install, CLI, local docs
+- [CLI overview](docs/cli/index.md) — `mmml commands`, examples, tab completion
+- [`md-system` YAML configs](docs/md-system-configs.md) — campaigns and condensed-phase builders
+- [Calculator capability matrix](docs/calculator-capabilities.md) — calculators, hybrid assembly, LR solvers
+- [PyCHARMM + MM/ML checklist](docs/md-cg-capabilities-checklist.md) — status, examples, diagrams
+- [MLpot settings](docs/mlpot-settings.md) — COM handoff, medium PBC, spatial MPI
+
 ## Getting Help
 
-- **Full Documentation**: [Read the Docs](https://mmml.readthedocs.io/en/latest/)
+- **Documentation**: [Read the Docs](https://mmml.readthedocs.io/en/latest/)
 - **Issues**: [GitHub Issues](https://github.com/EricBoittier/mmml/issues)
 
 ## License
 
-Copyright (c) 2025, Eric Boittier
+MIT License, Copyright (c) 2025, Eric Boittier. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
 

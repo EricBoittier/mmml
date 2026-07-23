@@ -81,19 +81,22 @@ class MLpot():
             _ = pycharmm.psf.set_charge(self.mlmm_charges)
 
         # ML - set non-bond exclusion list for ML atom pairs
+        # When skip_iblo_inb_update, exclusions were already installed (or skipped for
+        # all-ML jax_mic); do not build an O(N²) list that is never written.
         self.ml_iblo = np.zeros(self.Natoms, dtype=int)
         self.ml_inb = []
-        for ii, idx in enumerate(ml_indices):
-            self.ml_iblo[idx:] += self.ml_Natoms - ii - 1
-            for jdx in self.ml_indices[(ii + 1):]:
-                self.ml_inb.append(jdx + 1)  # + 1 as CHARMM start at index 1
-        self.ml_nnb = len(self.ml_inb)
-
         if not skip_iblo_inb_update:
+            for ii, idx in enumerate(ml_indices):
+                self.ml_iblo[idx:] += self.ml_Natoms - ii - 1
+                for jdx in self.ml_indices[(ii + 1):]:
+                    self.ml_inb.append(jdx + 1)  # + 1 as CHARMM start at index 1
+            self.ml_nnb = len(self.ml_inb)
             pycharmm.psf.set_iblo_inb(self.ml_iblo, self.ml_inb)
 
             pycharmm.nbonds.update_bnbnd()  # Already executed in set_iblo_inb()
             pycharmm.image.update_bimag()
+        else:
+            self.ml_nnb = 0
 
         ###################################################
         # START - Potential model dependent part

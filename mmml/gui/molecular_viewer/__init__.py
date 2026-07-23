@@ -12,7 +12,6 @@ from .molecule import (
     load_xyz,
     load_xyz_trajectory,
 )
-from .viewer import run_viewer
 
 __all__ = [
     "run_viewer",
@@ -29,3 +28,13 @@ __all__ = [
     "CPK_COLORS",
     "VDW_RADII",
 ]
+
+
+def __getattr__(name: str):
+    """Lazily import ``run_viewer`` so this package stays importable (e.g. for
+    ``molecule.py``'s pure parsers) without the GL/GLFW/OpenXR stack installed."""
+    if name == "run_viewer":
+        from .viewer import run_viewer
+
+        return run_viewer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

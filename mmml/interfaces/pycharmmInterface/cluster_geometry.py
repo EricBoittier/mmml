@@ -31,12 +31,13 @@ def ensure_charmm_session_ready(
         apply_charmm_verbosity,
         prepare_charmm_vacuum,
     )
-    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
 
     if _charmm_session_ready and not force:
         return
 
-    set_up_directories()
+    # Do not mkdir CWD pdb/res/dcd/psf/xyz here. md-system / MLpot write under
+    # --output-dir; make-res / make-box / generate_coordinates call
+    # set_up_directories() themselves when those legacy layouts are needed.
     apply_charmm_verbosity(prnlev=int(prnlev), warnlev=int(warnlev), bomlev=int(bomlev))
     prepare_charmm_vacuum()
     reset_block()
@@ -294,15 +295,63 @@ def packmol_template_reference_from_ctx(
 
 
 def resolve_cluster_residue_labels(mlpot_ctx: Any, n_monomers: int) -> list[str]:
+    """Per-monomer residue names for health / template reporting.
+
+    Prefer cached labels, then ``--composition``, then live PSF resnames. Do **not**
+    fall back to the argparse default ``--residue ACO`` when ``--composition`` is
+    set (certified TIP3 handoffs used to look like acetone in monomer-health grids).
+    """
+    n = int(n_monomers)
+    if n <= 0:
+        return []
     args = getattr(mlpot_ctx, "workflow_args", None)
     if args is not None:
         labels = getattr(args, "_cluster_residue_labels", None)
-        if labels is not None and len(labels) == n_monomers:
+        if labels is not None and len(labels) == n:
             return [str(x).upper() for x in labels]
+
+        composition = getattr(args, "composition", None)
+        if composition:
+            try:
+                from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+
+                labels = [
+                    str(res).upper()
+                    for res, cnt in _parse_composition(str(composition))
+                    for _ in range(int(cnt))
+                ]
+                if len(labels) == n:
+                    setattr(args, "_cluster_residue_labels", list(labels))
+                    return labels
+            except Exception:
+                pass
+
+        atoms_per = getattr(args, "_cluster_atoms_per_list", None)
+        if atoms_per is None:
+            atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+        if atoms_per is not None:
+            try:
+                per = [int(x) for x in atoms_per]
+            except TypeError:
+                per = []
+            if len(per) == n:
+                try:
+                    from mmml.cli.run.md_pbc_suite.ase import (
+                        _residue_labels_from_loaded_psf,
+                    )
+
+                    labels = _residue_labels_from_loaded_psf(per)
+                    if len(labels) == n and any(lab != "UNK" for lab in labels):
+                        setattr(args, "_cluster_residue_labels", list(labels))
+                        return [str(x).upper() for x in labels]
+                except Exception:
+                    pass
+
+        # Only use --residue when composition was not requested (legacy single-res).
         residue = getattr(args, "residue", None)
-        if residue is not None:
-            return [str(residue).upper()] * n_monomers
-    return ["UNK"] * n_monomers
+        if residue is not None and not composition:
+            return [str(residue).upper()] * n
+    return ["UNK"] * n
 
 
 def same_residue_cluster_reference_from_ctx(

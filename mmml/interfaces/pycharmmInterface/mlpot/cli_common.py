@@ -21,6 +21,11 @@ DEFAULT_SPACING = 4.0
 ACO_ATOMS_PER_MONOMER = 10
 NVE_TIMESTEP_PS = 0.00025
 
+# This is only a coarse guard against collapsed/repeated monomer coordinates.
+# It must remain below the physical size of supported small monomers; detailed,
+# species-aware geometry validation is handled by ``monomer_geometry_limits``.
+DEFAULT_MIN_MONOMER_EXTENT_A = 1.0
+
 
 def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     """CLI flags for CHARMM console verbosity."""
@@ -1278,9 +1283,15 @@ def validate_cluster_geometry(
     positions: np.ndarray,
     *,
     min_axis_span: float = 0.3,
-    min_monomer_extent: float = 1.5,
+    min_monomer_extent: float = DEFAULT_MIN_MONOMER_EXTENT_A,
     n_molecules: int | None = None,
 ) -> dict[str, float]:
+    """Validate coarse cluster geometry before calculator setup.
+
+    ``min_monomer_extent`` is a collapse sentinel in angstrom, not a
+    species-specific equilibrium-geometry criterion. More detailed limits are
+    derived from reference geometry later in the MD setup.
+    """
     r = np.asarray(positions, dtype=float)
     if r.ndim != 2 or r.shape[1] != 3:
         raise ValueError(f"positions must be (N, 3), got {r.shape}")
@@ -2261,9 +2272,11 @@ def classify_hybrid_charmm_grms_mismatch(
     ``get_grms()`` often stays ~1 kcal/mol/Å with ELEC/VDW blocked on ML atoms,
     so a high hybrid/CHARMM ratio with low CHARMM is healthy, not desync.
 
-    When hybrid is modest (``<= hybrid_desync_ok_max``) but CHARMM GRMS is very
-    high, treat as ``desync_suspected`` (stale ``get_grms()`` after deferred
-    ENER or a session-best geometry rollback), not ``both_high``.
+    When hybrid is modest (``<= hybrid_desync_ok_max``) but CHARMM GRMS is
+    *much higher* than hybrid (``> hybrid * warn_ratio``), treat as
+    ``desync_suspected`` (stale ``get_grms()`` after deferred ENER or a
+    session-best geometry rollback), not ``both_high``. Matching values
+    (ratio ≈ 1) are ``ok`` even when both sit above ``charmm_bonded_ok_max``.
     """
     if not (np.isfinite(hybrid) and np.isfinite(charmm)):
         return "unknown"
@@ -2273,7 +2286,12 @@ def classify_hybrid_charmm_grms_mismatch(
         return "ok"
     if charmm <= charmm_bonded_ok_max:
         return "geometry_stress"
-    if hybrid <= hybrid_desync_ok_max and charmm > charmm_bonded_ok_max:
+    # Stale CHARMM GRMS: hybrid still modest, CHARMM far above hybrid.
+    if (
+        hybrid <= hybrid_desync_ok_max
+        and charmm > charmm_bonded_ok_max
+        and charmm > hybrid * warn_ratio
+    ):
         return "desync_suspected"
     ratio = float(max(hybrid / charmm, charmm / hybrid))
     if ratio <= warn_ratio:
@@ -3401,10 +3419,11 @@ def resolve_charmm_mm_pretreat_cpt_echeck(
 
 
 def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
-    """Size-aware ECHECK floor for MLpot clusters (kcal/mol).
+    """Legacy size-scaled ECHECK heuristic for MLpot clusters (kcal/mol).
 
-    Single-monomer smoke tests keep 100 kcal/mol. Multi-monomer clusters (e.g.
-    DCM:9) scale with size so ML heat/nonbond updates do not trip ECHECK.
+    UNVERIFIED HEURISTIC [evidence: cluster_echeck_scaling]. This is retained
+    for compatibility and is user-overridable; it is not a validated stability
+    boundary.
     """
     n_mol = max(1, int(n_monomers))
     n_at = max(1, int(n_atoms))
@@ -3416,7 +3435,7 @@ def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
 
 
 def recommend_heat_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
-    """Looser ECHECK floor for MLpot heat (MLpot UPDATE spikes, no SHAKE)."""
+    """Looser legacy heat heuristic; see ``cluster_echeck_scaling`` evidence claim."""
     return max(5000.0, 2.0 * recommend_echeck_kcal(n_monomers, n_atoms))
 
 
@@ -3438,7 +3457,7 @@ def resolve_echeck_for_cluster(
         print(
             f"echeck loosened {base} -> {scaled:.0f} kcal/mol for "
             f"{n_monomers} monomer(s) / {n_atoms} atoms "
-            f"(recommended floor {recommended:.0f}; --no-scale-echeck to keep {base})",
+            f"(legacy heuristic floor {recommended:.0f}; --no-scale-echeck to keep {base})",
             flush=True,
         )
     return scaled
@@ -3984,8 +4003,9 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         "--ewald-omit-self",
         action="store_true",
         help=(
-            "With --lr-solver ewald: omit the Gaussian self term (−α/√π Σ q²). "
-            "Opt in for MIC/non-Ewald-trained models (forces unchanged; energy offset)."
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
         ),
     )
     group.add_argument(
@@ -4034,6 +4054,46 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Include JAX switched MM LJ+Coulomb pairs in the hybrid MLpot calculator "
             "(default: on). Use --no-include-mm for ML-only (PhysNet terms only)."
+        ),
+    )
+    group.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        type=str,
+        default=None,
+        dest="mm_charge_mode",
+        choices=(
+            "fixed",
+            "q0",
+            "latent",
+            "q1",
+            "fixed_plus_latent",
+            "latent_mean",
+            "latent_dynamic",
+        ),
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF; use for "
+            "charge-less PhysNet), q0 / Q⁰, latent / q1 / Q¹ (dimer-only), "
+            "fixed_plus_latent, latent_mean, or latent_dynamic. Default: fixed "
+            "unless the calculator resolves another mode."
+        ),
+    )
+    group.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        action="store_true",
+        dest="mm_charge_correction",
+        help="Alias for --mm-charge-mode fixed_plus_latent on the MD calculator.",
+    )
+    group.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        type=str,
+        default=None,
+        dest="mm_latent_charge_template",
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
         ),
     )
     group.add_argument(
@@ -4388,7 +4448,15 @@ def resolve_mlpot_use_pbc(args: argparse.Namespace) -> bool:
     if getattr(args, "mlpot_pbc", False):
         return True
     setup = (getattr(args, "setup", None) or "").strip().lower()
-    return setup.startswith("pbc_")
+    if setup.startswith("pbc_"):
+        return True
+    # Full-box Ewald needs a PBC cell on the hybrid calculator. With CHARMM
+    # crystal on (--box-size / pbc setups) but without --mlpot-pbc, the default
+    # is "loose PBC" (open ML boundary) — auto-enable MIC/cell for ewald.
+    lr = str(getattr(args, "lr_solver", None) or "").strip().lower()
+    if lr in ("ewald", "native_ewald", "jit_ewald") and resolve_charmm_use_pbc(args):
+        return True
+    return False
 
 
 def resolve_loose_pbc(charmm_pbc: bool, mlpot_pbc: bool) -> bool:

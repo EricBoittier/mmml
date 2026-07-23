@@ -171,6 +171,7 @@ def default_scan_2d_metric_keys(*, include_mm: bool = True) -> tuple[str, ...]:
         "dH_kcal",
         "flat_bottom_E_kcal",
         "com_restraint_E_kcal",
+        "wall_E_kcal",
         "com_restraint_min_dist_A",
         "charmm_ENER_kcal",
         "charmm_USER_kcal",

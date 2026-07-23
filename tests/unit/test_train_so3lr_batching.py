@@ -9,7 +9,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -165,6 +164,76 @@ def test_shuffle_pad_buckets_mixes_order(trainer):
             started_small = True
             break
     assert started_small
+
+
+def test_max_batches_per_bucket_visit_bounds_consecutive_run(trainer):
+    """Neither bucket may monopolize more than max_batches_per_bucket_visit
+    consecutive batches while the other still has work left -- regression
+    test for the observed failure mode where a >1M-step bucket gave the
+    model zero exposure to other structure populations for well over a
+    million steps. (Both buckets are sized well above the cap here so
+    neither exhausts early -- once a bucket legitimately runs out, the
+    other finishing its tail alone is expected, not a bound violation.)"""
+    buckets = {
+        8: np.arange(40, dtype=np.int64),  # 20 batches at B=2
+        120: np.arange(40, dtype=np.int64),  # 20 batches at B=2 -- the "huge" one
+    }
+    pads = [
+        pad
+        for pad, _ in trainer.iter_device_batches(
+            buckets,
+            batch_sizes={8: 2, 120: 2},
+            n_devices=1,
+            rng=np.random.default_rng(0),
+            shuffle_pad_buckets=False,
+            max_batches_per_bucket_visit=3,
+        )
+    ]
+    # Every maximal run of one pad value must be <= 3 batches long.
+    run_len = 1
+    for prev, cur in zip(pads, pads[1:]):
+        run_len = run_len + 1 if cur == prev else 1
+        assert run_len <= 3
+    # All batches from both buckets still get produced exactly once overall.
+    assert pads.count(8) == 20
+    assert pads.count(120) == 20
+
+
+def test_max_batches_per_bucket_visit_none_matches_unbounded_default(trainer):
+    """max_batches_per_bucket_visit=None (the default) must reproduce the
+    original fully-drain-one-bucket-then-move-on behavior exactly."""
+    buckets = {
+        8: np.arange(8, dtype=np.int64),
+        12: np.arange(8, 16, dtype=np.int64),
+    }
+    kwargs = dict(
+        buckets=buckets,
+        batch_sizes={8: 2, 12: 2},
+        n_devices=2,
+        shuffle_pad_buckets=False,
+    )
+    unbounded = list(
+        trainer.iter_device_batches(rng=np.random.default_rng(0), **kwargs)
+    )
+    explicit_none = list(
+        trainer.iter_device_batches(
+            rng=np.random.default_rng(0),
+            max_batches_per_bucket_visit=None,
+            **kwargs,
+        )
+    )
+    pads_unbounded = [p for p, _ in unbounded]
+    pads_explicit = [p for p, _ in explicit_none]
+    assert pads_unbounded == pads_explicit == [12, 12, 8, 8]
+
+
+def test_max_batches_per_bucket_visit_cli_default_is_none(trainer):
+    args = trainer.build_parser().parse_args([])
+    assert args.max_batches_per_bucket_visit is None
+    args_set = trainer.build_parser().parse_args(
+        ["--max-batches-per-bucket-visit", "2000"]
+    )
+    assert args_set.max_batches_per_bucket_visit == 2000
 
 
 def test_prefetch_matches_eager_stack(trainer):

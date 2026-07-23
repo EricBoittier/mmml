@@ -1,0 +1,57 @@
+{
+  "category": "prep_ladder",
+  "title": "Pre-MLpot geometry gate",
+  "root": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder",
+  "steps": [
+    {
+      "index": 1,
+      "label": "initial",
+      "slug": "initial",
+      "stem": "001_initial",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/001_initial.crd",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/001_initial.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/001_initial.psf"
+      },
+      "box_side_A": 30.0,
+      "note": "worst inter-monomer 1.670 \u00c5"
+    },
+    {
+      "index": 2,
+      "label": "pre_mlpot:monomer_repack_skipped_clean",
+      "slug": "pre_mlpot_monomer_repack_skipped_clean",
+      "stem": "002_pre_mlpot_monomer_repack_skipped_clean",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/002_pre_mlpot_monomer_repack_skipped_clean.crd",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/002_pre_mlpot_monomer_repack_skipped_clean.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/002_pre_mlpot_monomer_repack_skipped_clean.psf"
+      },
+      "box_side_A": 30.0,
+      "note": "worst inter-monomer 1.670 \u00c5 >= floor 0.450 \u00c5"
+    },
+    {
+      "index": 3,
+      "label": "pre_mlpot:mc_density_skipped_hold_box",
+      "slug": "pre_mlpot_mc_density_skipped_hold_box",
+      "stem": "003_pre_mlpot_mc_density_skipped_hold_box",
+      "files": {
+        "crd": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/003_pre_mlpot_mc_density_skipped_hold_box.crd",
+        "pdb": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/003_pre_mlpot_mc_density_skipped_hold_box.pdb",
+        "psf": "/mmhome/boittier/home/mmml/scratch/tip3_physnet_ewald_ir/tip3_90_box_opt/liquid_box/prep_ladder/003_pre_mlpot_mc_density_skipped_hold_box.psf"
+      },
+      "box_side_A": 30.0
+    }
+  ],
+  "summary": {
+    "enabled": true,
+    "ran": true,
+    "reason": "ok",
+    "steps_applied": [
+      "pre_mlpot:monomer_repack_skipped_clean",
+      "pre_mlpot:mc_density_skipped_hold_box"
+    ],
+    "worst_intermonomer_A": 1.6704692958194693,
+    "aborted": false,
+    "contact_summary": "worst inter-monomer contact 1.169 \u00c5 (monomers 22/308, atoms O\u2013H; prep floor 0.45 \u00c5, typical vdW 2.7 \u00c5); OK: above dynamics guard (0.5 \u00c5); H\u2013heavy contact: equilibrium liquid distances are usually \u22652.5 \u00c5; short prep contacts often involve rotatable methylenes"
+  }
+}
