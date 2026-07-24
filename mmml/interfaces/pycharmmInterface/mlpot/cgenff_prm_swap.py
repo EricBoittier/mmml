@@ -55,7 +55,16 @@ def _read_cgenff_prm(path: Path) -> None:
 def psf_bond_count() -> int:
     import pycharmm.psf as psf
 
-    return int(psf.get_nbond())
+    get_nbond = getattr(psf, "get_nbond", None)
+    if get_nbond is not None:
+        return int(get_nbond())
+
+    import pycharmm
+    import pycharmm.lingo as lingo
+
+    lingo.charmm_script("SET __mmml_nbond ?NBOND")
+    value = pycharmm.get_charmm_variable("__MMML_NBOND")
+    return int(value) if value is not None else 0
 
 
 def assert_psf_bonds_present(*, min_bonds: int = 1, context: str = "CGENFF MM") -> int:
