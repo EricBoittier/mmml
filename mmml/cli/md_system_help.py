@@ -262,11 +262,42 @@ _COMMON_FLAGS = (
 
 
 def category_titles() -> dict[int, str]:
-    return {num: title for num, title in MD_SYSTEM_HELP_CATEGORIES}
+    return {num: title for num, title, _aliases in MD_SYSTEM_HELP_CATEGORIES}
+
+
+def category_aliases() -> dict[int, tuple[str, ...]]:
+    return {num: aliases for num, _title, aliases in MD_SYSTEM_HELP_CATEGORIES}
+
+
+def _alias_to_category() -> dict[str, int]:
+    mapping: dict[str, int] = {}
+    for num, _title, aliases in MD_SYSTEM_HELP_CATEGORIES:
+        mapping[str(num)] = num
+        for alias in aliases:
+            mapping[alias.lower()] = num
+    return mapping
+
+
+def resolve_help_category(token: str) -> int | None:
+    """Resolve a category number or alias (e.g. ``4``, ``pycharmm``) to an int."""
+    return _alias_to_category().get(str(token).strip().lower())
+
+
+def format_valid_help_categories() -> str:
+    """Human-readable list of ``-hN`` / ``-halias`` choices for errors."""
+    parts: list[str] = []
+    for num, _title, aliases in MD_SYSTEM_HELP_CATEGORIES:
+        alias_txt = ", ".join(f"-h{a}" for a in aliases)
+        parts.append(f"-h{num} ({alias_txt})" if alias_txt else f"-h{num}")
+    return "; ".join(parts)
 
 
 def parse_help_mode(argv: Sequence[str] | None) -> str | int | None:
-    """Return ``'index'``, ``'all'``, a category ``int``, or ``None`` if not help."""
+    """Return ``'index'``, ``'all'``, a category ``int``, or ``None`` if not help.
+
+    Unknown ``-hfoo`` tokens still count as a help request; callers should
+    resolve via :func:`resolve_help_category` and error if missing.
+    """
     if argv is None:
         return None
     for arg in argv:
@@ -278,13 +309,19 @@ def parse_help_mode(argv: Sequence[str] | None) -> str | int | None:
         if arg in ("-h", "--help") or arg.lower() == "--help":
             return "index"
         for group in match.groups():
-            if group is not None:
-                return int(group)
+            if group is None:
+                continue
+            resolved = resolve_help_category(group)
+            if resolved is not None:
+                return resolved
+            # Preserve a distinguishable failure for unknown aliases.
+            return f"?{group}"
     return None
 
 
 def argv_requests_help(argv: Sequence[str] | None) -> bool:
-    return parse_help_mode(argv) is not None
+    mode = parse_help_mode(argv)
+    return mode is not None
 
 
 def _action_group_title(parser: argparse.ArgumentParser, action: argparse.Action) -> str | None:
@@ -342,7 +379,9 @@ def classify_action(parser: argparse.ArgumentParser, action: argparse.Action) ->
 def iter_categorized_actions(
     parser: argparse.ArgumentParser,
 ) -> dict[int, list[argparse.Action]]:
-    buckets: dict[int, list[argparse.Action]] = {num: [] for num, _ in MD_SYSTEM_HELP_CATEGORIES}
+    buckets: dict[int, list[argparse.Action]] = {
+        num: [] for num, _title, _aliases in MD_SYSTEM_HELP_CATEGORIES
+    }
     seen: set[int] = set()
     for action in parser._actions:
         if id(action) in seen:
@@ -367,17 +406,19 @@ def format_help_index(parser: argparse.ArgumentParser) -> str:
         "Mixed-composition MD (ASE / JAX-MD / PyCHARMM). Help is split by category:",
         "",
     ]
-    for num, title in MD_SYSTEM_HELP_CATEGORIES:
-        lines.append(f"  -h{num:<4} {title}")
+    for num, title, aliases in MD_SYSTEM_HELP_CATEGORIES:
+        alias_txt = ", ".join(aliases)
+        lines.append(f"  -h{num}  {alias_txt:<32} {title}")
     lines.extend(
         [
             "",
-            "  --help-all   full dump (all categories)",
+            "  --help-all                      full dump (all categories)",
+            "  Forms: -hN, -halias, --help-alias, --help=alias",
             "",
             "Common flags:",
             "  " + " ".join(_COMMON_FLAGS),
             "",
-            f"Example:  {prog} -h1",
+            f"Example:  {prog} -hcore    or    {prog} -h4",
             "",
         ]
     )
@@ -398,12 +439,18 @@ def _format_category_section(
 ) -> str:
     titles = category_titles()
     if category not in titles:
-        valid = ", ".join(str(n) for n, _ in MD_SYSTEM_HELP_CATEGORIES)
-        raise ValueError(f"unknown help category {category}; choose one of: {valid}")
+        raise ValueError(
+            f"unknown help category {category}; choose one of: {format_valid_help_categories()}"
+        )
+    aliases = category_aliases().get(category, ())
+    alias_hint = ", ".join(f"-h{a}" for a in aliases)
     formatter = parser._get_formatter()
     if include_usage:
         _add_short_usage(formatter, parser)
-        formatter.add_text(f"Category {category}/{len(MD_SYSTEM_HELP_CATEGORIES)} — {titles[category]}")
+        label = f"Category {category}/{len(MD_SYSTEM_HELP_CATEGORIES)} — {titles[category]}"
+        if alias_hint:
+            label = f"{label}  ({alias_hint})"
+        formatter.add_text(label)
     title = f"{category}. {titles[category]}"
     formatter.start_section(title)
     if actions:
@@ -424,7 +471,7 @@ def format_help_category(parser: argparse.ArgumentParser, category: int) -> str:
     )
     footer = (
         f"\nSee also: {_prog(parser)} -h  (index)  |  "
-        f"-hN  (other categories)  |  --help-all\n"
+        f"-hN / -halias  |  --help-all\n"
     )
     return body.rstrip() + footer
 
@@ -434,10 +481,13 @@ def format_help_all(parser: argparse.ArgumentParser) -> str:
     formatter = parser._get_formatter()
     _add_short_usage(formatter, parser)
     formatter.add_text(
-        "Full help (all categories). Short index: -h    One category: -hN"
+        "Full help (all categories). Short index: -h    "
+        "One category: -hN or -halias (see -h)"
     )
-    for num, title in MD_SYSTEM_HELP_CATEGORIES:
-        formatter.start_section(f"{num}. {title}")
+    for num, title, aliases in MD_SYSTEM_HELP_CATEGORIES:
+        alias_txt = ", ".join(f"-h{a}" for a in aliases)
+        heading = f"{num}. {title}" if not alias_txt else f"{num}. {title}  ({alias_txt})"
+        formatter.start_section(heading)
         actions = buckets.get(num, [])
         if actions:
             formatter.add_arguments(list(actions))
@@ -478,9 +528,17 @@ class MdSystemArgumentParser(SuggestingArgumentParser):
         argv = list(sys.argv[1:] if args is None else args)
         mode = parse_help_mode(argv)
         if mode is not None:
+            if isinstance(mode, str) and mode.startswith("?"):
+                bad = mode[1:]
+                self.error(
+                    f"unknown help category {bad!r}; "
+                    f"choose one of: {format_valid_help_categories()}, or --help-all"
+                )
             if isinstance(mode, int) and mode not in category_titles():
-                valid = ", ".join(f"-h{n}" for n, _ in MD_SYSTEM_HELP_CATEGORIES)
-                self.error(f"unknown help category {mode}; choose one of: {valid}, or --help-all")
+                self.error(
+                    f"unknown help category {mode}; "
+                    f"choose one of: {format_valid_help_categories()}, or --help-all"
+                )
             self._mmml_help_mode = mode
             self.print_help()
             self.exit(0)

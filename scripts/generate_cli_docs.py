@@ -448,9 +448,10 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
     usage_lines = [f"mmml {name} --help"]
     if name == "md-system":
         usage_lines = [
-            "mmml md-system -h          # category index",
-            "mmml md-system -h4         # one category",
-            "mmml md-system --help-all  # full option dump",
+            "mmml md-system -h              # category index",
+            "mmml md-system -h4             # category by number",
+            "mmml md-system -hpycharmm      # same via alias",
+            "mmml md-system --help-all      # full option dump",
         ]
     lines.extend(
         [

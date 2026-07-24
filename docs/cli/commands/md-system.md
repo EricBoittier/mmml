@@ -14,9 +14,10 @@ the native CHARMM runtime.
 ## Usage
 
 ```bash
-mmml md-system -h          # category index
-mmml md-system -h4         # one category
-mmml md-system --help-all  # full option dump
+mmml md-system -h              # category index
+mmml md-system -h4             # category by number
+mmml md-system -hpycharmm      # same via alias
+mmml md-system --help-all      # full option dump
 ```
 
 ## Options
@@ -24,9 +25,10 @@ mmml md-system --help-all  # full option dump
 ```text
 usage: mmml md-system [options]
 
-Full help (all categories). Short index: -h One category: -hN
+Full help (all categories). Short index: -h One category: -hN or -halias (see
+-h)
 
-1. Core setup, composition & ensemble:
+1. Core setup, composition & ensemble  (-hcore):
   --setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}
                         Simulation setup preset. lambda_ti: alchemical TI with
                         CHARMM+MMML minimization per λ window (--lambda-md-mode,
@@ -134,7 +136,7 @@ Full help (all categories). Short index: -h One category: -hN
                         (ignored when --composition is set; lambda_ti default
                         MEOH).
 
-2. Builders, PBC box & density prep:
+2. Builders, PBC box & density prep  (-hbuilders, -hbox):
   --builder {gas,liquid,crystal}
                         Grid-based builder (skips Packmol): gas=open grid,
                         liquid=cube/sphere grid plus CHARMM refinement,
@@ -365,7 +367,7 @@ Full help (all categories). Short index: -h One category: -hN
                         Mutually exclusive with --from-psf/--from-crd and with
                         multi-token Packmol compositions.
 
-3. Restraints & fixed monomers:
+3. Restraints & fixed monomers  (-hrestraints):
   --flat-bottom-radius Å
                         Harmonic flat-bottom on system COM: V=0 inside radius R,
                         V=k(|d|-R)^2 outside. Independent of --packmol-radius.
@@ -396,7 +398,7 @@ Full help (all categories). Short index: -h One category: -hN
                         separated)
   --no-fix              pycharmm: skip constrained SD pass 2
 
-4. PyCHARMM stages, DCD & pretreat:
+4. PyCHARMM stages, DCD & pretreat  (-hpycharmm, -hstages):
   --save-run-state      pycharmm: after staged MD, save positions/velocities +
                         metadata (Orbax if installed, else NPZ; PhysNet stays in
                         --checkpoint).
@@ -674,7 +676,7 @@ Full help (all categories). Short index: -h One category: -hN
                         pycharmm: ENER+UPDATE after mini before vacuum NVE
                         (default: on)
 
-5. Dynamics overlap & monomer health:
+5. Dynamics overlap & monomer health  (-hoverlap, -hhealth):
   --dynamics-overlap-action {error,warn,rescue,off}
                         On inter-monomer overlap during MD: rescue=CHARMM
                         bonded+VDW mini, then monomer repack (re-place COMs) if
@@ -784,7 +786,7 @@ Full help (all categories). Short index: -h One category: -hN
                         Disable unwrapped COM-drift fly-off checks in monomer
                         health.
 
-6. Minimization (FIRE / BFGS / CHARMM):
+6. Minimization (FIRE / BFGS / CHARMM)  (-hminimize, -hmin):
   --pre-min-steps PRE_MIN_STEPS
                         lambda_ti: MMML BFGS steps per window.
   --pre-min-fmax PRE_MIN_FMAX
@@ -866,7 +868,7 @@ Full help (all categories). Short index: -h One category: -hN
                         lambda_ti: ASE FIRE if BFGS fmax stays high.
   --max-fmax-after-min MAX_FMAX_AFTER_MIN
 
-7. Hybrid ML/MM physics & batching:
+7. Hybrid ML/MM physics & batching  (-hhybrid, -hphysics):
   --nve-max-f-start-eVA EV_PER_A
                         jaxmd: base ceiling (eV/Å) for post-FIRE max atomic |F|
                         before NVE (default: 1.5 at N_ref=100 atoms; <=0
@@ -1036,7 +1038,7 @@ Full help (all categories). Short index: -h One category: -hN
   --mm-switch-width-grid, --mm-cutoff-grid MM_SWITCH_WIDTH_GRID
                         Comma-separated MM outer taper width grid (Å).
 
-8. Campaign, handoff, lambda TI & evaluate:
+8. Campaign, handoff, lambda TI & evaluate  (-hcampaign, -hevaluate, -hlambda):
   --lambda-md-mode {free_nve,free_nvt,pbc_nve,pbc_nvt}
                         lambda_ti: MD ensemble (vacuum/PBC × NVE/NVT); use
                         --backend ase or jaxmd.
@@ -1201,7 +1203,7 @@ Full help (all categories). Short index: -h One category: -hN
                         jaxmd/ASE (also MMML_JAX_PROFILER_DIR). Prefer short
                         --ps when tracing.
 
-9. Other options:
+9. Other options  (-hother):
   (no options in this category)
 ```
 

@@ -10,6 +10,7 @@ import pytest
 from mmml.cli.md_system_help import (
     MD_SYSTEM_HELP_CATEGORIES,
     _CORE_DESTS,
+    category_titles,
     classify_action,
     format_help_all,
     format_help_category,
@@ -31,10 +32,24 @@ def test_parse_help_mode_tokens():
     assert parse_help_mode(["--setup", "pbc_nve"]) is None
 
 
+def test_parse_help_mode_aliases():
+    assert parse_help_mode(["-hcore"]) == 1
+    assert parse_help_mode(["-hbuilders"]) == 2
+    assert parse_help_mode(["-hbox"]) == 2
+    assert parse_help_mode(["--help-pycharmm"]) == 4
+    assert parse_help_mode(["--help=overlap"]) == 5
+    assert parse_help_mode(["-hmin"]) == 6
+    assert parse_help_mode(["-hhybrid"]) == 7
+    assert parse_help_mode(["--help-lambda"]) == 8
+    assert parse_help_mode(["-hnope"]) == "?nope"
+
+
 def test_help_index_is_short():
     parser = md_system.build_parser()
     text = format_help_index(parser)
     assert "-h1" in text
+    assert "core" in text
+    assert "pycharmm" in text
     assert "Core setup" in text
     assert "--help-all" in text
     assert text.count("--dynamics-overlap-action") == 0
@@ -93,8 +108,10 @@ def test_longest_prefix_wins_for_nested_dests():
 def test_help_all_contains_every_category_heading():
     parser = md_system.build_parser()
     text = format_help_all(parser)
-    for num, title in MD_SYSTEM_HELP_CATEGORIES:
+    for num, title, aliases in MD_SYSTEM_HELP_CATEGORIES:
         assert f"{num}. {title}" in text
+        for alias in aliases:
+            assert f"-h{alias}" in text
     assert "--setup" in text
     assert "--dynamics-overlap-action" in text
     assert "--box-size" in text
@@ -111,7 +128,7 @@ def test_every_option_is_classified():
             continue
         assert id(action) in classified, f"unclassified: {action.option_strings}"
         cat = classify_action(parser, action)
-        assert cat in dict(MD_SYSTEM_HELP_CATEGORIES)
+        assert cat in category_titles()
 
 
 def test_build_parser_h_prints_index(capsys):
@@ -131,6 +148,15 @@ def test_build_parser_h4_prints_pycharmm_category(capsys):
     out = capsys.readouterr().out
     assert "4. PyCHARMM" in out
     assert "--md-stages" in out or "--ps-heat" in out or "--echeck" in out
+
+
+def test_build_parser_halias_matches_number(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        md_system.build_parser().parse_args(["-hpycharmm"])
+    assert excinfo.value.code == 0
+    out = capsys.readouterr().out
+    assert "4. PyCHARMM" in out
+    assert "-hpycharmm" in out
 
 
 def test_main_help_short_circuits_to_index(monkeypatch, capsys):
