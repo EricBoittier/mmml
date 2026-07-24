@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -18,6 +19,9 @@ CGENFF_RESIDUE_ALIASES: dict[str, str] = {
     "OCTANOL": "OCOH",
 }
 
+# Colon- or comma-separated append RTF paths (extra RESI records + CHARMM append).
+_EXTRA_RTF_ENV = "MMML_CGENFF_EXTRA_RTF"
+
 
 @dataclass(frozen=True, slots=True)
 class CgenffResidue:
@@ -30,6 +34,23 @@ def default_cgenff_rtf_path() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "charmm" / "top_all36_cgenff.rtf"
 
 
+def extra_cgenff_rtf_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
+    """Append-topology RTF paths from ``MMML_CGENFF_EXTRA_RTF`` (``:`` / ``,`` separated)."""
+    environ = env if env is not None else os.environ
+    raw = (environ.get(_EXTRA_RTF_ENV) or "").strip()
+    if not raw:
+        return ()
+    out: list[Path] = []
+    for tok in re.split(r"[:,]", raw):
+        part = tok.strip()
+        if not part:
+            continue
+        path = Path(os.path.expandvars(part)).expanduser().resolve()
+        if path.is_file():
+            out.append(path)
+    return tuple(out)
+
+
 def normalize_cgenff_residue_name(name: str) -> str:
     """Return an uppercase CGenFF residue name, applying common aliases."""
     key = str(name).strip().upper()
@@ -38,18 +59,25 @@ def normalize_cgenff_residue_name(name: str) -> str:
     return CGENFF_RESIDUE_ALIASES.get(key, key)
 
 
-@lru_cache(maxsize=4)
-def cgenff_residue_name_set(rtf_path: str | None = None) -> frozenset[str]:
-    """Uppercase RESI names from the bundled (or given) CGenFF RTF."""
+@lru_cache(maxsize=8)
+def cgenff_residue_name_set(
+    rtf_path: str | None = None,
+    extra_rtf_paths: tuple[str, ...] = (),
+) -> frozenset[str]:
+    """Uppercase RESI names from the bundled (or given) CGenFF RTF plus extras."""
     path = Path(rtf_path) if rtf_path is not None else default_cgenff_rtf_path()
-    return frozenset(r.name.upper() for r in parse_cgenff_residues(path))
+    names = {r.name.upper() for r in parse_cgenff_residues(path)}
+    for extra in extra_rtf_paths:
+        names.update(r.name.upper() for r in parse_cgenff_residues(extra))
+    return frozenset(names)
 
 
 def is_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> bool:
     """True if *name* (after alias normalization) is a RESI in the CGenFF RTF."""
     key = normalize_cgenff_residue_name(name)
     path = None if rtf_path is None else str(Path(rtf_path))
-    return key in cgenff_residue_name_set(path)
+    extras = tuple(str(p) for p in extra_cgenff_rtf_paths())
+    return key in cgenff_residue_name_set(path, extras)
 
 
 def require_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> str:
@@ -58,7 +86,8 @@ def require_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None
     if not is_cgenff_residue_name(key, rtf_path=rtf_path):
         raise ValueError(
             f"Unknown CGenFF residue {name!r} (normalized {key!r}). "
-            "List valid names with: mmml make-res --list-residues"
+            "List valid names with: mmml make-res --list-residues "
+            f"(or append via {_EXTRA_RTF_ENV})"
         )
     return key
 

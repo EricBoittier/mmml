@@ -1,0 +1,13 @@
+# Vacuum NVT (PyCHARMM heat/NVT, ML-only) — AMM1 + CH3CL
+setup: free_nvt
+backend: pycharmm
+composition: AMM1:1,CH3CL:1
+spacing: 4.0
+checkpoint: examples/m/kl.json
+ps: 0.1
+dt_fs: 0.5
+temperature: 300
+include_mm: false
+skip_jit_warmup: true
+output_dir: artifacts/nh3_ch3cl/md_system_free_nvt_pycharmm
+quiet: true

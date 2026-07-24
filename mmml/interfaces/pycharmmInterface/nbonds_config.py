@@ -428,9 +428,15 @@ def ic_prm_fill(*, replace_all: bool = True) -> None:
 
 
 def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
-    """Load CGENFF RTF/PRM under relaxed BOMBlev; restore the prior level on exit."""
+    """Load CGENFF RTF/PRM under relaxed BOMBlev; restore the prior level on exit.
+
+    Extra append RTFs from ``MMML_CGENFF_EXTRA_RTF`` (colon/comma-separated paths)
+    are read after the main topology so custom residues (e.g. example CH3CL) are
+    available to Packmol / ``md-system`` compositions.
+    """
     import pycharmm.read as read
 
+    from mmml.interfaces.pycharmmInterface.cgenff_residues import extra_cgenff_rtf_paths
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
 
@@ -441,6 +447,9 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
             read.rtf(str(toppar.rtf))
         else:
             read.rtf(_rtf_path_without_drude_autogen(toppar.rtf))
+        for extra in extra_cgenff_rtf_paths():
+            # Append mode: keep base CGenFF MASS/RESI tables.
+            read.rtf(str(extra), append=True)
         read_cgenff_prm(prm_path=toppar.prm, bomlev=False)
 
 
