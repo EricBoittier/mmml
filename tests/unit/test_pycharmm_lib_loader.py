@@ -9,15 +9,37 @@ auto-discovery (``.dylib`` on macOS, ``.so`` on Linux).
 
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
+
+# MMML ships its cross-platform resolver in the vendored pycharmm ``lib.py``.
+# The active ``import pycharmm`` may resolve to a different CHARMM build that
+# lacks these helpers, so exercise the vendored source directly and
+# deterministically instead of whatever happens to be installed.
+_VENDORED_LIB = (
+    Path(__file__).resolve().parents[2]
+    / "setup/charmm/tool/pycharmm/pycharmm/lib.py"
+)
 
 
 def _lib():
+    if not _VENDORED_LIB.is_file():
+        pytest.skip(f"vendored pycharmm lib.py not found at {_VENDORED_LIB}")
+    ns: dict = {"__file__": str(_VENDORED_LIB)}
+    # The module instantiates ``CharmmLib()`` at import scope (loads CHARMM);
+    # the resolver helpers are defined before that, so an OSError there is
+    # expected and harmless — the functions we test are already bound.
     try:
-        import pycharmm.lib as lib
+        exec(compile(_VENDORED_LIB.read_text(encoding="utf-8"), str(_VENDORED_LIB), "exec"), ns)
     except OSError:
-        pytest.skip("libcharmm not available in this environment")
-    return lib
+        pass
+    required = ("charmm_lib_suffix", "resolve_charmm_lib_path", "_discover_repo_charmm_lib")
+    missing = [name for name in required if name not in ns]
+    if missing:
+        pytest.skip(f"vendored pycharmm lib.py missing helpers: {missing}")
+    return SimpleNamespace(**{k: v for k, v in ns.items() if not k.startswith("__")})
 
 
 def test_suffix_is_platform_correct():
