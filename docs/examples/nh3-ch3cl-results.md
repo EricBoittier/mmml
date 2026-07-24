@@ -55,8 +55,12 @@ Also keep `umbrella` `temp` near the thermostat target, and open
 `ADUMB-WUNI.DAT` / `UMBCOR` / `RXNCOR_TRACE.DAT` under the job `output_dir`
 (YAML uses basename `OPEN` names; lingo runs with `cwd=output_dir`).
 
-Wipe `{output_dir}` (or at least `next_run.*`) before switching smoke ↔ long
-heat so a leftover resume does not re-launch the wrong schedule.
+Wipe `{output_dir}` (or at least `next_run.*` **and**
+`pycharmm_pre_dynamics_lingo.inp`) before switching smoke ↔ long heat so a
+leftover resume does not re-launch the wrong schedule. Stale staged lingo is a
+common cause of `UM1RXN` `reaction coordinate out of range` after editing
+`umbrella rxncor min`/`max` in the YAML — confirm the staged file has
+`min 0.0` before trusting a long heat.
 
 ### Expected artifacts (smoke)
 

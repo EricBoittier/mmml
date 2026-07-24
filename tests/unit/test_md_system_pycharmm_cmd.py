@@ -166,6 +166,32 @@ def test_build_pycharmm_command_forwards_pre_dynamics_lingo(tmp_path: Path):
     assert Path(parsed.pycharmm_pre_dynamics_lingo_file) == path
 
 
+def test_build_pycharmm_command_overwrites_stale_staging_lingo(tmp_path: Path):
+    """YAML inline must replace leftover output_dir lingo (not append it)."""
+    out = tmp_path / "run"
+    out.mkdir(parents=True)
+    stale = out / "pycharmm_pre_dynamics_lingo.inp"
+    stale.write_text(
+        "umbrella rxncor nresol 40 trig 0 poly 6 min 2.0 max 6.0 name r_nc\n",
+        encoding="utf-8",
+    )
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=out,
+            pycharmm_pre_dynamics_lingo=(
+                "umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 12.0 name r_nc"
+            ),
+            # Simulate a resume that also points --lingo-file at the staging path.
+            pycharmm_pre_dynamics_lingo_file=stale,
+        )
+    )
+    path = Path(cmd[cmd.index("--pycharmm-pre-dynamics-lingo-file") + 1])
+    body = path.read_text(encoding="utf-8")
+    assert "min 0.0" in body
+    assert "min 2.0" not in body
+    assert body.count("umbrella rxncor") == 1
+
+
 def test_build_pycharmm_command_forwards_pre_dynamics_lingo_list(tmp_path: Path):
     out = tmp_path / "run"
     cmd = build_pycharmm_command(

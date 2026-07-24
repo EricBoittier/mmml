@@ -38,11 +38,13 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
 fi
 
 mkdir -p "${OUT}"
-# Drop stale Packmol / pretreat / next_run state from earlier failed attempts
-# (a leftover next_run can re-launch a 1000 ps heat instead of the smoke).
+# Drop stale Packmol / pretreat / next_run / lingo state from earlier attempts.
+# A leftover pycharmm_pre_dynamics_lingo.inp can keep old umbrella min/max
+# (e.g. min 2 max 6 → UM1RXN "out of range") after YAML edits.
 rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT}/cleanup"
 rm -f "${OUT}/stage_summary.json" \
-  "${OUT}/next_run.yaml" "${OUT}/next_run.sh" "${OUT}/next_run.command"
+  "${OUT}/next_run.yaml" "${OUT}/next_run.sh" "${OUT}/next_run.command" \
+  "${OUT}/pycharmm_pre_dynamics_lingo.inp"
 
 echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXNCOR / ?ADUMBRXN; RXNCOR distance umbrella)"
@@ -82,6 +84,11 @@ if ! grep -q "umbrella rxncor" "${LINGO}"; then
 fi
 if ! grep -q "r_nc" "${LINGO}"; then
   echo "FAIL: ${LINGO} missing r_nc reaction coordinate"
+  exit 1
+fi
+# Guard against stale staged lingo after YAML edits (min 2 max 6 → out of range).
+if grep -E 'umbrella[[:space:]]+rxncor' "${LINGO}" | grep -Eq 'min[[:space:]]+2([.]0*)?[[:space:]]'; then
+  echo "FAIL: ${LINGO} still has umbrella rxncor min 2 — wipe output_dir and re-run"
   exit 1
 fi
 # Lingo is staged before dynamics; require an ADUMB output so a soft-failed

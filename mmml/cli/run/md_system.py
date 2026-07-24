@@ -2343,9 +2343,19 @@ def _append_pycharmm_pre_dynamics_lingo(
         path = out_dir / "pycharmm_pre_dynamics_lingo.inp"
         chunks: list[str] = [inline]
         if file_set:
-            existing = Path(lingo_file).read_text(encoding="utf-8").strip()
-            if existing:
-                chunks.append(existing)
+            file_path = Path(str(lingo_file)).expanduser()
+            # Never append the staging path to itself — a leftover
+            # ``output_dir/pycharmm_pre_dynamics_lingo.inp`` would re-inject
+            # stale umbrella cards (e.g. old ``min 2 max 6``) after YAML edits.
+            same_staging = False
+            try:
+                same_staging = file_path.resolve() == path.resolve()
+            except OSError:
+                same_staging = str(file_path) == str(path)
+            if not same_staging and file_path.is_file():
+                existing = file_path.read_text(encoding="utf-8").strip()
+                if existing:
+                    chunks.append(existing)
         path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
         cmd.extend(["--pycharmm-pre-dynamics-lingo-file", str(path)])
         return

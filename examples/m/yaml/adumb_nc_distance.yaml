@@ -80,7 +80,7 @@ dcd_max_frames: 200
 # OPEN names are basenames: lingo runs with cwd=output_dir (mxcmsz-safe).
 pycharmm_pre_dynamics_lingo: |
   ! Keep the complex near the origin during vacuum heat
-  cons hmcm force 5.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+  cons hmcm force 15.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
   ! Filenames uppercased: library eval_charmm_script uppercases the whole card.
   open unit 44 write card name ADUMB-WUNI.DAT
@@ -98,7 +98,8 @@ pycharmm_pre_dynamics_lingo: |
   ! unpatched UM1RXN wrongly treated the upper edge as (max-min) when min>0,
   ! so min 2 max 6 aborted once r_nc > 4 Å. mmml patches eadumb.F90; still
   ! keep min 0 for robustness across libcharmm ages.
-  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 8.0 name r_nc
+  ! After YAML edits, wipe output_dir/pycharmm_pre_dynamics_lingo.inp (09 script does).
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 12.0 name r_nc
 
   ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
   umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 300 wuni 44 ucun 50
