@@ -92,6 +92,21 @@ def read_pdb_cryst1_side_A(pdb_path: Path | str) -> float | None:
     return None
 
 
+def _element_symbol_from_pdb_atom_name(atom_name: str) -> str:
+    """Best-effort element symbol from a CHARMM PDB atom name."""
+    letters = "".join(c for c in str(atom_name) if c.isalpha())
+    if not letters:
+        return "C"
+    upper = letters.upper()
+    if upper.startswith("CL"):
+        return "Cl"
+    if upper.startswith("BR"):
+        return "Br"
+    if upper.startswith("H"):
+        return "H"
+    return letters[0].upper()
+
+
 def load_monomer_geometry_from_pdb(
     pdb_path: Path | str,
 ) -> tuple[str, object, list[str], object]:
@@ -100,9 +115,9 @@ def load_monomer_geometry_from_pdb(
     Returns ``(resname, coords, atom_names, atomic_numbers)``.
     """
     import numpy as np
+    from ase.data import atomic_numbers, chemical_symbols
 
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
-        _element_symbol,
         _parse_pdb_atom_records,
     )
 
@@ -130,53 +145,30 @@ def load_monomer_geometry_from_pdb(
 
     resname = require_cgenff_residue_name(next(iter(unique_resn)))
 
-    # Prefer PDB element column when present; else infer from atom name.
     elements: list[str] = []
     with path.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             if not line.startswith(("ATOM  ", "HETATM")):
                 continue
             elem = line[76:78].strip() if len(line) >= 78 else ""
-            if not elem:
-                aname = line[12:16].strip()
-                elem = "".join(c for c in aname if c.isalpha())[:2] or "C"
-                if len(elem) > 1 and elem[1:].islower() is False:
-                    # CHARMM names like "CL1" / "HG1" — take leading letters.
-                    letters = "".join(c for c in aname if c.isalpha())
-                    elem = letters[0] if letters.startswith("H") else letters[:2]
-                    if letters.upper().startswith("CL"):
-                        elem = "Cl"
-                    elif letters.upper().startswith("BR"):
-                        elem = "Br"
-                    elif letters[0].upper() == "H":
-                        elem = "H"
-                    else:
-                        elem = letters[0]
-            elements.append(elem)
+            if elem:
+                if len(elem) == 2:
+                    elements.append(elem[0].upper() + elem[1].lower())
+                else:
+                    elements.append(elem.upper())
+            else:
+                elements.append(
+                    _element_symbol_from_pdb_atom_name(line[12:16].strip())
+                )
 
-    from ase.data import atomic_numbers, chemical_symbols
-
+    sym_map = {s.upper(): n for n, s in enumerate(chemical_symbols) if s}
     z_list: list[int] = []
     for elem in elements:
         key = str(elem).strip()
-        if not key:
-            z_list.append(6)
-            continue
-        # Normalize Cl/CL etc.
-        if len(key) == 2:
-            key = key[0].upper() + key[1].lower()
-        else:
-            key = key.upper()
         if key in atomic_numbers:
             z_list.append(int(atomic_numbers[key]))
-        elif key.upper() in {s.upper(): n for n, s in enumerate(chemical_symbols) if s}:
-            # Fallback via ASE symbol table
-            sym_map = {s.upper(): n for n, s in enumerate(chemical_symbols) if s}
-            z_list.append(int(sym_map[key.upper()]))
         else:
-            # Last resort: first letter
-            sym_map = {s.upper(): n for n, s in enumerate(chemical_symbols) if s}
-            z_list.append(int(sym_map.get(key[0].upper(), 6)))
+            z_list.append(int(sym_map.get(key.upper(), 6)))
 
     coords = np.asarray(positions, dtype=float)
     z_arr = np.asarray(z_list, dtype=int)
@@ -184,8 +176,6 @@ def load_monomer_geometry_from_pdb(
         raise RuntimeError(
             f"Element count ({z_arr.shape[0]}) != coords ({coords.shape[0]}) in {path}"
         )
-    # Silence unused import if type checkers complain about _element_symbol
-    _ = _element_symbol
     return resname, coords, [str(n) for n in names], z_arr
 
 
@@ -304,22 +294,14 @@ def reject_pdb_composition_for_builder(
     packmol: bool | None = None,
     pyxtal: bool | None = None,
 ) -> None:
-    """Raise when PDB composition tokens are incompatible with the selected builder."""
+    """Raise when Packmol-mix PDB tokens are incompatible with the selected builder."""
     mode = composition_mode(entries)
-    if mode == "cgenff":
+    if mode != "packmol_pdb":
         return
-    if mode == "full_system_pdb":
-        return
-    # packmol_pdb
     if pyxtal is True or (builder or "").lower() == "crystal":
         raise ValueError(
             "PDB composition tokens require Packmol (or a lone full-system PDB); "
             "not compatible with PyXtal / --builder crystal"
-        )
-    if packmol is False or (builder or "").lower() in {"gas", "liquid"} and packmol is False:
-        raise ValueError(
-            "PDB composition tokens require Packmol; "
-            "unset --no-packmol and avoid --builder gas with --no-packmol"
         )
     if packmol is False:
         raise ValueError(
