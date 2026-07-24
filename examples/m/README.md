@@ -189,15 +189,17 @@ Requires CHARMM built with **ADUMB** and **ADUMBRXN**.
 
 ```bash
 source examples/m/_env.sh
-# Vacuum dimer smoke (Packmol templates):
+# Vacuum dimer smoke (Packmol sphere r=6 Å — keep N⋯C near the umbrella window):
 bash examples/m/09_adumb_nc_distance.sh
 
-# Coordinates from the NPZ-exported PDB (overrides YAML composition):
+# Preferred: coordinates from the NPZ-exported PDB (overrides YAML composition):
 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 
 # Solvated TIP3 (PBC); combine with USE_NPZ_PDB=1 for NPZ solute + TIP3:
 SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
 ```
+If a prior cube Packmol run left monomers ~box-length apart, the script clears
+`{output_dir}/.packmol_cache` before launching.
 
 Configs: `yaml/adumb_nc_distance.yaml`, `yaml/adumb_nc_distance_tip3.yaml`.
 

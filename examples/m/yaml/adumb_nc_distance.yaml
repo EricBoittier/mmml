@@ -36,7 +36,13 @@ temperature: 300
 dt_fs: 1.0
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
 ps_heat: 0.2
-flat_bottom_radius: 15.0
+# Keep Packmol dimer compact for the N⋯C umbrella window [2, 6] Å.
+# (Default cube placement can park monomers ~box-length apart along one axis.)
+packmol_placement: sphere
+packmol_radius: 6.0
+reuse_packmol_cache: false
+# MMFP wall; cons hmcm in pre-dynamics lingo is the primary COM restraint.
+flat_bottom_radius: 20.0
 mini_nstep: 40
 skip_energy_show: true
 skip_jit_warmup: true

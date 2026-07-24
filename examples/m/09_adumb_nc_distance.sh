@@ -37,6 +37,9 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
 fi
 
 mkdir -p "${OUT}"
+# Drop stale elongated Packmol caches from earlier cube runs.
+rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster"
+
 echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXN; RXNCOR distance umbrella)"
 echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"

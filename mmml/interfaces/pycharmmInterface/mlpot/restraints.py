@@ -31,17 +31,40 @@ def _import_pycharmm():
     return pycharmm
 
 
+def _positions_xyz() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    import pycharmm.coor as coor
+
+    return coor.get_positions_array()
+
+
+def _set_positions_xyz(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> None:
+    import pycharmm.coor as coor
+
+    coor.set_positions_array(x, y, z)
+
+
 def center_cluster_at_origin(*, orient: bool = True) -> None:
-    """``coor orient`` and translate so the cluster COM is at the origin (non-PBC)."""
+    """Translate so the cluster geometric COM is at the origin (non-PBC).
+
+    Uses the PyCHARMM ``coor`` API rather than lingo ``coor …`` scripts.
+    Some CHARMM/PyCHARMM builds reject ``coor`` as an unrecognized lingo
+    command (LEVEL 0 warning) even when the coordinate API works — that
+    previously left MMFP droff untuned and walls fighting elongated Packmol
+    clouds.
+    """
     pycharmm = _import_pycharmm()
     if orient:
-        pycharmm.lingo.charmm_script("coor orient sele all end")
-    pycharmm.lingo.charmm_script(
-        """
-coor stat sele all end
-coor translate xdir -?xave ydir -?yave zdir -?zave sele all end
-"""
-    )
+        # Optional; ignore failures (unrecognized ``coor`` / missing CORMAN).
+        try:
+            pycharmm.lingo.charmm_script("coor orient sele all end")
+        except Exception:
+            pass
+
+    x, y, z = _positions_xyz()
+    cx = float(np.mean(x))
+    cy = float(np.mean(y))
+    cz = float(np.mean(z))
+    _set_positions_xyz(x - cx, y - cy, z - cz)
 
 
 def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
@@ -78,9 +101,22 @@ END
 
 
 def _selected_max_radius(selection: str, *, xref: float, yref: float, zref: float) -> float | None:
-    """Conservative max selected distance using CHARMM's own selection parser."""
-    pycharmm = _import_pycharmm()
+    """Conservative max selected distance from the MMFP reference point."""
     sel = (selection or "all").strip() or "all"
+    if sel.lower() == "all":
+        try:
+            x, y, z = _positions_xyz()
+            r2 = (x - float(xref)) ** 2 + (y - float(yref)) ** 2 + (z - float(zref)) ** 2
+            return float(np.sqrt(np.max(r2)))
+        except Exception as exc:
+            print(
+                f"WARN: could not estimate MMFP droff from selection {sel!r}: {exc}",
+                flush=True,
+            )
+            return None
+
+    # Non-trivial selections: fall back to CHARMM ``coor stat`` substitutions.
+    pycharmm = _import_pycharmm()
     try:
         pycharmm.lingo.charmm_script(f"coor stat sele {sel} end")
         xmin = float(pycharmm.lingo.get_energy_value("XMIN"))

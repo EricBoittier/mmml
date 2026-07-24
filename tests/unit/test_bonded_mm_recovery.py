@@ -227,6 +227,39 @@ def test_selected_max_radius_uses_charmm_selection_bounds():
     assert radius == pytest.approx((4.0**2 + 5.0**2 + 6.0**2) ** 0.5)
 
 
+def test_selected_max_radius_all_uses_coor_api():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    x = np.array([0.0, 3.0])
+    y = np.array([0.0, 4.0])
+    z = np.array([0.0, 0.0])
+    with patch.object(restraints, "_positions_xyz", return_value=(x, y, z)):
+        radius = restraints._selected_max_radius("all", xref=0.0, yref=0.0, zref=0.0)
+    assert radius == pytest.approx(5.0)
+
+
+def test_center_cluster_at_origin_uses_coor_api_not_lingo_translate():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    pycharmm = MagicMock()
+    x = np.array([1.0, 3.0], dtype=np.float64)
+    y = np.array([2.0, 4.0], dtype=np.float64)
+    z = np.array([0.0, 0.0], dtype=np.float64)
+    set_xyz = MagicMock()
+
+    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm), patch.object(
+        restraints, "_positions_xyz", return_value=(x, y, z)
+    ), patch.object(restraints, "_set_positions_xyz", set_xyz):
+        restraints.center_cluster_at_origin(orient=False)
+
+    set_xyz.assert_called_once()
+    args = set_xyz.call_args.args
+    assert float(np.mean(args[0])) == pytest.approx(0.0)
+    assert float(np.mean(args[1])) == pytest.approx(0.0)
+    assert float(np.mean(args[2])) == pytest.approx(0.0)
+    pycharmm.lingo.charmm_script.assert_not_called()
+
+
 def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
     from mmml.interfaces.pycharmmInterface.mlpot import restraints
 
