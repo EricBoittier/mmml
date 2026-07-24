@@ -156,7 +156,10 @@ def test_require_adumbrxncor_raises_when_disabled(monkeypatch: pytest.MonkeyPatc
     import types
 
     mock_lingo = mock.Mock()
-    mock_lingo.get_energy_value.return_value = 0
+    mock_lingo.get_energy_value.side_effect = lambda name: {
+        "ADUMBRXN": 0,
+        "ADUMB": 1,
+    }.get(str(name).upper())
     fake = types.ModuleType("pycharmm")
     fake.lingo = mock_lingo
     monkeypatch.setitem(sys.modules, "pycharmm", fake)
@@ -166,14 +169,53 @@ def test_require_adumbrxncor_raises_when_disabled(monkeypatch: pytest.MonkeyPatc
         )
 
 
+def test_require_adumbrxncor_raises_when_unset_but_adumb_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+    import types
+
+    mock_lingo = mock.Mock()
+    mock_lingo.get_energy_value.side_effect = lambda name: {
+        "ADUMB": 1,
+    }.get(str(name).upper())
+    mock_lingo.get_charmm_builtins.return_value = {"ADUMB": 1}
+    fake = types.ModuleType("pycharmm")
+    fake.lingo = mock_lingo
+    monkeypatch.setitem(sys.modules, "pycharmm", fake)
+    with pytest.raises(RuntimeError, match="KEY_ADUMBRXNCOR"):
+        require_adumbrxncor_for_umbrella_rxncor(
+            "umbrella rxncor nresol 40 name r_nc"
+        )
+
+
+def test_require_adumbrxncor_skips_when_unqueryable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import sys
+    import types
+
+    mock_lingo = mock.Mock()
+    mock_lingo.get_energy_value.return_value = None
+    mock_lingo.get_charmm_builtins.return_value = {}
+    fake = types.ModuleType("pycharmm")
+    fake.lingo = mock_lingo
+    monkeypatch.setitem(sys.modules, "pycharmm", fake)
+    require_adumbrxncor_for_umbrella_rxncor("umbrella rxncor nresol 40 name r_nc")
+    assert "skipping KEY_ADUMBRXNCOR preflight" in capsys.readouterr().out
+
+
 def test_require_adumbrxncor_ok_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     import sys
     import types
 
     mock_lingo = mock.Mock()
-    mock_lingo.get_energy_value.return_value = 1
+    mock_lingo.get_energy_value.side_effect = lambda name: {
+        "ADUMBRXN": 1,
+        "ADUMB": 1,
+    }.get(str(name).upper())
     fake = types.ModuleType("pycharmm")
     fake.lingo = mock_lingo
     monkeypatch.setitem(sys.modules, "pycharmm", fake)
     require_adumbrxncor_for_umbrella_rxncor("umbrella rxncor nresol 40 name r_nc")
-    mock_lingo.get_energy_value.assert_called_with("ADUMBRXN")
+    mock_lingo.get_energy_value.assert_any_call("ADUMBRXN")

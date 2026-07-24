@@ -1821,6 +1821,35 @@ def script_uses_umbrella_rxncor(script: str) -> bool:
     return bool(re.search(r"(?im)^\s*umbrella\s+rxncor\b", str(script or "")))
 
 
+def _charmm_int_builtin(lingo: Any, name: str) -> int | None:
+    """Return a CHARMM ``?NAME`` integer builtin, or None if not queryable."""
+    key = str(name).strip().upper()
+    flag = None
+    try:
+        flag = lingo.get_energy_value(key)
+    except Exception:
+        flag = None
+    if flag is None:
+        try:
+            builtins = lingo.get_charmm_builtins()
+            # Names are stored at most 8 chars; tolerate padding / case.
+            if isinstance(builtins, dict):
+                for raw, val in builtins.items():
+                    if str(raw).strip().upper() == key:
+                        flag = val
+                        break
+        except Exception:
+            flag = None
+    if flag is None:
+        return None
+    if isinstance(flag, bool):
+        return 1 if flag else 0
+    try:
+        return int(flag)
+    except (TypeError, ValueError):
+        return None
+
+
 def require_adumbrxncor_for_umbrella_rxncor(script: str) -> None:
     """Fail fast if ``umbrella rxncor`` is used without CHARMM KEY_ADUMBRXNCOR.
 
@@ -1829,6 +1858,10 @@ def require_adumbrxncor_for_umbrella_rxncor(script: str) -> None:
     ``ADUMBRXNCOR``; substitution ``?ADUMBRXN``). Without it CHARMM prints
     ``Unknown umbrella specified``, ``umbrella init`` proceeds half-initialized,
     and dynamics often SIGSEGV under MLpot/MPI.
+
+    Only raise when the keyword table is queryable (``?ADUMB`` works) and
+    ``?ADUMBRXN`` is explicitly off — avoid false negatives when the lingo
+    getter cannot see pref keys.
     """
     if not script_uses_umbrella_rxncor(script):
         return
@@ -1836,34 +1869,33 @@ def require_adumbrxncor_for_umbrella_rxncor(script: str) -> None:
         from pycharmm import lingo
     except Exception:
         return
-    flag = None
-    try:
-        # Pref key ADUMBRXNCOR truncates to 8 chars for ``?`` substitutions.
-        flag = lingo.get_energy_value("ADUMBRXN")
-    except Exception:
-        flag = None
-    if flag is None:
-        try:
-            builtins = lingo.get_charmm_builtins()
-            flag = builtins.get("ADUMBRXN")
-        except Exception:
-            flag = None
-    enabled = False
-    if isinstance(flag, bool):
-        enabled = flag
-    elif flag is not None:
-        try:
-            enabled = int(flag) == 1
-        except (TypeError, ValueError):
-            enabled = False
-    if enabled:
+    # Pref key ADUMBRXNCOR truncates to 8 chars for ``?`` substitutions.
+    adumbrxn = _charmm_int_builtin(lingo, "ADUMBRXN")
+    if adumbrxn == 1:
         return
-    raise RuntimeError(
-        "pycharmm_pre_dynamics_lingo uses 'umbrella rxncor' but this libcharmm "
-        "was built without KEY_ADUMBRXNCOR (?ADUMBRXN != 1). "
-        "Rebuild with: bash scripts/rebuild_charmm_mlpot.sh "
-        "(passes -Dadd_keywords=ADUMBRXNCOR; reconfigures if pref.dat lacks it)."
-    )
+    adumb = _charmm_int_builtin(lingo, "ADUMB")
+    if adumbrxn is None and adumb is None:
+        print(
+            "WARN: cannot query CHARMM ?ADUMBRXN / ?ADUMB; skipping "
+            "KEY_ADUMBRXNCOR preflight for umbrella rxncor",
+            flush=True,
+        )
+        return
+    if adumbrxn is None and adumb == 1:
+        # Keyword table works but ADUMBRXNCOR was not compiled in.
+        raise RuntimeError(
+            "pycharmm_pre_dynamics_lingo uses 'umbrella rxncor' but this "
+            "libcharmm was built without KEY_ADUMBRXNCOR (?ADUMBRXN unset, "
+            "?ADUMB=1). Rebuild with: bash scripts/rebuild_charmm_mlpot.sh "
+            "(pref keyword ADUMBRXNCOR; confirm keywords.inc contains it)."
+        )
+    if adumbrxn == 0:
+        raise RuntimeError(
+            "pycharmm_pre_dynamics_lingo uses 'umbrella rxncor' but this "
+            "libcharmm was built without KEY_ADUMBRXNCOR (?ADUMBRXN=0). "
+            "Rebuild with: bash scripts/rebuild_charmm_mlpot.sh "
+            "(pref keyword ADUMBRXNCOR; confirm keywords.inc contains it)."
+        )
 
 
 def run_charmm_lingo_script(

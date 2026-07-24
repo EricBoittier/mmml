@@ -438,11 +438,16 @@ else
       needs_configure=1
     fi
   fi
-  # ADUMB + RXNCOR alone is not enough for ``umbrella rxncor``; need ADUMBRXNCOR.
+  # ADUMB + RXNCOR alone is not enough for ``umbrella rxncor``; need ADUMBRXNCOR
+  # in both pref.dat and the generated keywords.inc (compile-time KEY_ list).
   if [[ "$needs_configure" == 0 ]]; then
     pref_dat="$BUILD_DIR/pref.dat"
+    keywords_inc="$BUILD_DIR/keywords.inc"
     if [[ -f "$pref_dat" ]] && ! grep -qx 'ADUMBRXNCOR' "$pref_dat"; then
       echo "pref.dat missing ADUMBRXNCOR; reconfiguring for KEY_ADUMBRXNCOR (umbrella rxncor)"
+      needs_configure=1
+    elif [[ -f "$keywords_inc" ]] && ! grep -q '"ADUMBRXNCOR"' "$keywords_inc"; then
+      echo "keywords.inc missing ADUMBRXNCOR; reconfiguring for KEY_ADUMBRXNCOR (umbrella rxncor)"
       needs_configure=1
     fi
   fi
@@ -677,6 +682,15 @@ if [[ "$needs_configure" == 1 ]]; then
   fi
   cmake "${CMAKE_ARGS[@]}"
   _assert_charmm_domdec_cmake_flags
+  if [[ -f "$BUILD_DIR/pref.dat" ]] && ! grep -qx 'ADUMBRXNCOR' "$BUILD_DIR/pref.dat"; then
+    echo "rebuild_charmm_mlpot: ERROR: configure finished but pref.dat lacks ADUMBRXNCOR" >&2
+    echo "  Expected KEY_ADUMBRXNCOR for umbrella rxncor. Check tool/cmake/prefx_keywords.cmake." >&2
+    exit 1
+  fi
+  if [[ -f "$BUILD_DIR/keywords.inc" ]] && ! grep -q '"ADUMBRXNCOR"' "$BUILD_DIR/keywords.inc"; then
+    echo "rebuild_charmm_mlpot: ERROR: configure finished but keywords.inc lacks ADUMBRXNCOR" >&2
+    exit 1
+  fi
 fi
 
 # Re-check an existing cache before native-exec builds (configure may have been skipped).
