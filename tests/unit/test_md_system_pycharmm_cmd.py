@@ -341,6 +341,21 @@ def test_build_pycharmm_command_forwards_include_mm_false():
     assert "--no-include-mm" in cmd
 
 
+def test_build_pycharmm_command_forwards_mm_pair_source():
+    cmd = build_pycharmm_command(_pycharmm_args(mm_pair_source="jax"))
+    assert "--mm-pair-source" in cmd
+    assert cmd[cmd.index("--mm-pair-source") + 1] == "jax"
+
+
+def test_adumb_yaml_accepts_mm_pair_source():
+    args = parse_md_system_args(
+        ["--config", "examples/m/yaml/adumb_nc_distance.yaml"]
+    )
+    assert args.mm_pair_source == "jax"
+    cmd = build_pycharmm_command(args)
+    assert cmd[cmd.index("--mm-pair-source") + 1] == "jax"
+
+
 def test_build_pycharmm_command_omits_include_mm_when_default_true():
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--include-mm" not in cmd

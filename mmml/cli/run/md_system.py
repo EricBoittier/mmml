@@ -1472,6 +1472,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--mm-pair-source",
+        choices=("jax", "charmm_callback"),
+        default=None,
+        help=(
+            "pycharmm decomposed MLpot MM pair provider: Fortran callback idxu/idxv "
+            "or JAX neighbor rebuild. All-ML jax_mic hybrids (empty CHARMM lists) "
+            "default to jax; override with MMML_MM_PAIR_SOURCE."
+        ),
+    )
+    parser.add_argument(
         "--lr-solver",
         type=str,
         choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme", "ewald"),
@@ -3076,6 +3086,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(
         ["--mm-nonbond-mode", str(getattr(args, "mm_nonbond_mode", "jax_mic"))]
     )
+    _append_optional(cmd, "--mm-pair-source", getattr(args, "mm_pair_source", None))
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
     if bool(getattr(args, "ewald_omit_self", False)):
         cmd.append("--ewald-omit-self")
