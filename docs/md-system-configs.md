@@ -145,11 +145,24 @@ sequenceDiagram
 
 ## Builders for condensed phase
 
-`composition` uses `RES:N` entries such as `DCM:60` or `DCM:40,ACO:20`. A bare `RES` means one molecule. The builder determines the initial coordinates before minimization.
+`composition` uses `RES:N` entries such as `DCM:60` or `DCM:40,ACO:20`. A bare `RES` means one molecule. Residue names are validated against the bundled CGenFF RTF (aliases: `water`→`TIP3`, `octanol`→`OCOH`). The builder determines the initial coordinates before minimization.
 
-**Packmol is the default for `composition`.** When `composition` is set, MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
+**PDB tokens in composition.** Paths ending in `.pdb` (or containing `/`) are allowed:
 
-**Grid placement is the fast alternative.** Set `packmol: false` and `builder: liquid` (or `--no-packmol --builder liquid`) to place whole molecules on a cubic/spherical grid without the Packmol binary. Useful for CI smoke tests and quick JAX-MD probes.
+```yaml
+# Packmol mix: user monomer PDB (single CGenFF residue) + CGenFF solvent
+composition: "solute.pdb:1,DCM:200"
+
+# Full-system cold start (CHARMM READ SEQU PDB; no Packmol)
+composition: "system.pdb"
+# equivalent CLI: --from-pdb system.pdb
+```
+
+PDB files must carry CGenFF residue and atom names (for example from `mmml make-res`). Packmol-mix PDB monomers must be a single residue; a lone `system.pdb` (count 1) may contain many residues. `--from-pdb` is mutually exclusive with `--from-psf`/`--from-crd`.
+
+**Packmol is the default for `composition`.** When `composition` is set (CGenFF-only or Packmol-mix PDB), MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
+
+**Grid placement is the fast alternative.** Set `packmol: false` and `builder: liquid` (or `--no-packmol --builder liquid`) to place whole molecules on a cubic/spherical grid without the Packmol binary. Useful for CI smoke tests and quick JAX-MD probes. PDB composition tokens require Packmol (or a lone full-system PDB); they are not compatible with `--no-packmol` or PyXtal.
 
 **Spherical liquid/cluster starts.** Use `packmol_placement: sphere` plus `packmol_radius` for finite clusters or flat-bottom restraints. For PBC liquids, prefer cube packing (`packmol_placement: cube`, default) so the initial geometry matches the periodic cell.
 
