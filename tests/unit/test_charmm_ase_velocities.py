@@ -193,13 +193,21 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
     np.testing.assert_allclose(sync_comp.call_args[0][0], vel)
 
 
-def test_run_dynamics_ensures_bussi_iasvel_zero(monkeypatch):
+def test_run_dynamics_preserves_explicit_bussi_iasvel_one(monkeypatch):
+    """Explicit ``iasvel=1`` must not be overwritten to ``iasvel=0``.
+
+    Extent fly-off / cold-start arms Boltzmann redraw before ``run_dynamics``.
+    Clobbering to ``iasvel=0`` makes lingering START read COMP *coordinates*
+    as velocities (T ≫ 10¹² K). See ``_ensure_bussi_heat_continuation_iasvel``.
+    """
     import sys
     from unittest.mock import MagicMock, patch
 
     import numpy as np
 
+    # Even with the experimental handoff env, explicit iasvel=1 wins.
     monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
+    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
@@ -245,4 +253,4 @@ def test_run_dynamics_ensures_bussi_iasvel_zero(monkeypatch):
     ):
         run_dynamics(kw)
     passed_kw = run_capi.call_args[0][0]
-    assert passed_kw["iasvel"] == 0
+    assert passed_kw["iasvel"] == 1

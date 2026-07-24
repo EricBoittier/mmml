@@ -7,49 +7,45 @@ os.environ["JAX_ENABLE_X64"] = "1"
 
 
 def _sanitize_jax_platforms_env() -> None:
-    """Drop GPU-class JAX backends whose plugins are absent from ``JAX_PLATFORMS``.
+    """Drop GPU-class JAX backends that cannot initialize from ``JAX_PLATFORMS``.
 
     A stale ``JAX_PLATFORMS=rocm`` (or ``cuda`` / ``gpu``) inherited from the
-    shell makes ``jax.default_backend()`` raise at import / collection time on a
-    machine without that plugin ("Unable to initialize backend 'rocm': ... not
-    in the list of known backends"). Strip any GPU backend whose plugin is not
-    installed so JAX can fall back to CPU; leave real GPU machines untouched.
+    shell makes ``jax.default_backend()`` raise at import / collection time
+    ("Unable to initialize backend 'rocm': ... not in the list of known
+    backends") whenever that backend is not usable here — the plugin may be
+    absent *or* pip-installed but non-functional (no ROCm/CUDA runtime). We
+    can't just check whether the plugin dist is installed, so probe the backend
+    for real in a subprocess (importing jax in-process would crash the
+    collector on a bad backend). If it fails, keep only ``cpu`` / ``tpu`` so the
+    suite runs on CPU; real GPU machines pass the probe and are left untouched.
     """
     raw = (os.environ.get("JAX_PLATFORMS") or "").strip()
     if not raw:
         return
-    try:
-        from importlib.metadata import distributions
-
-        installed = {
-            (dist.metadata.get("Name") or "").strip().lower()
-            for dist in distributions()
-        }
-    except Exception:
-        installed = set()
-
-    def _plugin_present(prefix: str) -> bool:
-        return any(n.startswith(prefix) and "plugin" in n for n in installed)
-
-    have_cuda = _plugin_present("jax-cuda")
-    have_rocm = _plugin_present("jax-rocm")
-    kept: list[str] = []
-    for token in (part.strip() for part in raw.split(",")):
-        low = token.lower()
-        if not low:
-            continue
-        if low == "cuda" and not have_cuda:
-            continue
-        if low == "rocm" and not have_rocm:
-            continue
-        if low == "gpu" and not (have_cuda or have_rocm):
-            continue
-        kept.append(token)
-    new = ",".join(kept)
-    if new == raw:
+    tokens = [part.strip() for part in raw.split(",") if part.strip()]
+    # Only GPU-class backends can fail to initialize; cpu/tpu need no probe.
+    if not any(t.lower() in ("gpu", "cuda", "rocm") for t in tokens):
         return
-    if new:
-        os.environ["JAX_PLATFORMS"] = new
+
+    import subprocess
+    import sys
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", "import jax; jax.default_backend()"],
+            env={**os.environ, "JAX_PLATFORMS": raw},
+            capture_output=True,
+            timeout=180,
+        )
+        backend_ok = proc.returncode == 0
+    except Exception:
+        backend_ok = False
+    if backend_ok:
+        return
+
+    safe = [t for t in tokens if t.lower() in ("cpu", "tpu")]
+    if safe:
+        os.environ["JAX_PLATFORMS"] = ",".join(safe)
     else:
         # Nothing usable was requested; let JAX auto-select an available backend.
         os.environ.pop("JAX_PLATFORMS", None)
