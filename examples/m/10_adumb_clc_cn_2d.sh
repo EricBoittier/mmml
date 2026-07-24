@@ -74,8 +74,9 @@ if ! grep -q "nrxn 2" "${LINGO}"; then
   echo "FAIL: ${LINGO} missing 'rxncor set nrxn 2'"
   exit 1
 fi
-if grep -E 'umbrella[[:space:]]+rxncor' "${LINGO}" | grep -Eq 'min[[:space:]]+2([.]0*)?[[:space:]]'; then
-  echo "FAIL: ${LINGO} still has umbrella rxncor min 2 — wipe output_dir and re-run"
+# Unpatched UM1RXN: min>0 shrinks the upper edge to (max-min). Prefer min 0.0.
+if grep -E 'umbrella[[:space:]]+rxncor' "${LINGO}" | grep -Eq 'min[[:space:]]+[1-9]'; then
+  echo "FAIL: ${LINGO} has umbrella rxncor min>0 — use min 0.0 (or rebuild with UM1RXN patch)"
   exit 1
 fi
 if [[ ! -f "${OUT}/ADUMB-WUNI.DAT" && ! -f "${OUT}/adumb-wuni.dat" ]]; then

@@ -75,9 +75,11 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcn unit 46
 
   ! 2D adaptive umbrella — one card per RXNCOR name, then shared init.
-  ! min 0 / wide max: vacuum fly-off + UM1RXN robustness (see 1D example).
-  umbrella rxncor nresol 20 min 1.0 max 12.0 name rcl
-  umbrella rxncor nresol 20 min 1.0 max 12.0 name rcn
+  ! MUST use min 0.0 unless libcharmm has the mmml UM1RXN patch (eadumb.F90):
+  ! unpatched code treats the upper edge as (max-min), so min 1 max 5 only
+  ! allows [1, 4] Å and aborts with "reaction coordinate out of range".
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name rcl
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name rcn
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200 here)
   umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
