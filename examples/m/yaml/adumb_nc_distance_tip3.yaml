@@ -35,14 +35,15 @@ output_dir: artifacts/nh3_ch3cl/adumb_nc_distance_tip3
 dcd_nsavc: 20
 dcd_max_frames: 200
 
+# OPEN names are basenames: lingo runs with cwd=output_dir (mxcmsz-safe).
 pycharmm_pre_dynamics_lingo: |
-  ! Soft COM restraint on the solute (resid 1–2); leave solvent free
+  ! Soft COM restraint on the solute (resid 1-2); leave solvent free
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 -
     sele (resid 1 .or. resid 2) end
 
-  open unit 44 write card name artifacts/nh3_ch3cl/adumb_nc_distance_tip3/adumb-wuni.dat
-  open unit 50 write card name artifacts/nh3_ch3cl/adumb_nc_distance_tip3/umbcor
-  open unit 45 write card name artifacts/nh3_ch3cl/adumb_nc_distance_tip3/rxncor_trace.dat
+  open unit 44 write card name adumb-wuni.dat
+  open unit 50 write card name umbcor
+  open unit 45 write card name rxncor_trace.dat
 
   rxncor define p_n point select atom SYS 1 N1 end
   rxncor define p_c point select atom SYS 2 C1 end

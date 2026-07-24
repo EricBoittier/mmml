@@ -15,8 +15,14 @@ mmml make-box --help
 usage: mmml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH]
                      [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
 
+Pack a solute into a periodic box (vacuum copies or explicit solvent). Stages
+--pdb to pdb/initial.pdb when given, then runs Packmol + CHARMM.
+
 Input & configuration:
-  --pdb PDB
+  --pdb PDB             Solute PDB (CGenFF residue/atom names). Copied to
+                        pdb/initial.pdb before Packmol. When omitted,
+                        pdb/initial.pdb must already exist (e.g. from mmml make-
+                        res).
 
 Scientific model:
   --density DENSITY     Solvent (or neat liquid) density in kg/m³. Built-in for
@@ -28,13 +34,14 @@ Diagnostics & safety:
 
 Other options:
   --n N
-  --res RES
+  --res RES             Tag for output files (psf/system-<res>.psf,
+                        pdb/init-<res>.pdb).
   --side_length, --box-size SIDE_LENGTH
                         Cubic box side length in Å. '--box-size' is an alias,
                         matching the naming used elsewhere in the CLI suite.
   --solvent SOLVENT     CGenFF solvent residue name (any RESI in
-                        top_all36_cgenff.rtf), e.g. TIP3, MEOH, ACO, OCOH.
-                        Aliases: water→TIP3, octanol→OCOH.
+                        top_all36_cgenff.rtf), e.g. TIP3, MEOH, ACO, OCOH, ACN,
+                        DMSO. Aliases: water→TIP3, octanol→OCOH.
 ```
 
 ## Example structures

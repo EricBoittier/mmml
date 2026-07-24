@@ -1204,7 +1204,18 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         --ps when tracing.
 
 9. Other options  (-hother):
-  (no options in this category)
+  --pycharmm-pre-dynamics-lingo PYCHARMM_PRE_DYNAMICS_LINGO
+                        pycharmm: CHARMM lingo run once after setup/constraints
+                        and before scheduled dynamics (YAML may use a multiline
+                        string or list of lines; e.g. CONS/UMBR/ADUMB)
+  --pycharmm-pre-dynamics-lingo-file PYCHARMM_PRE_DYNAMICS_LINGO_FILE
+                        pycharmm: path to a CHARMM script file run once before
+                        dynamics
+  --mm-pair-source {jax,charmm_callback}
+                        pycharmm decomposed MLpot MM pair provider: Fortran
+                        callback idxu/idxv or JAX neighbor rebuild. All-ML
+                        jax_mic hybrids (empty CHARMM lists) default to jax;
+                        override with MMML_MM_PAIR_SOURCE.
 ```
 
 

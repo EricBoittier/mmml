@@ -26,7 +26,6 @@ sys.path.append(str(Path(CHARMM_HOME) / "tool" / "pycharmm"))
 # CHARMM imports
 import pycharmm
 import pycharmm.minimize as minimize
-import pycharmm.read as read
 import pycharmm.write as write
 import pycharmm.lingo
 
