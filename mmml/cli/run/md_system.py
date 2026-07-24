@@ -17,13 +17,15 @@ _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
 def _argv_requests_help(argv: list[str]) -> bool:
-    return any(arg in ("-h", "--help") for arg in argv)
+    from mmml.cli.md_system_help import argv_requests_help
+
+    return argv_requests_help(argv)
 
 
 def build_parser() -> argparse.ArgumentParser:
     # Import argparse helpers here (not at module import) so ``mmml md-system -h``
     # does not pull JAX / the large cli_common runtime module.
-    from mmml.cli.argparse_suggest import SuggestingArgumentParser
+    from mmml.cli.md_system_help import MdSystemArgumentParser
     from mmml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
@@ -35,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
         add_charmm_mm_pretreat_physics_args,
     )
 
-    parser = SuggestingArgumentParser(
+    parser = MdSystemArgumentParser(
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
             "lambda TI for arbitrary compositions) for arbitrary residue compositions. "

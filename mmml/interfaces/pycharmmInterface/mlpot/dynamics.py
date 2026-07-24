@@ -413,8 +413,27 @@ def _charmm_eterm_value(name: str) -> float | None:
     """Read one CHARMM energy term by name (after ``ENER``)."""
     import pycharmm.energy as energy
 
+    get_term_by_name = getattr(energy, "get_term_by_name", None)
+    if get_term_by_name is not None:
+        try:
+            return float(get_term_by_name(name.upper()))
+        except ValueError:
+            return None
+
+    import pycharmm
+    import pycharmm.lingo as lingo
+
+    lingo.charmm_script(f"SET __mmml_eterm ?{name.upper()}")
+    raw = pycharmm.get_charmm_variable("__MMML_ETERM")
+    if raw is None:
+        return None
+    if isinstance(raw, bytes):
+        raw = raw.decode(errors="replace")
+    text = str(raw).strip()
+    if not text or text.startswith("?"):
+        return None
     try:
-        return float(energy.get_term_by_name(name.upper()))
+        return float(text)
     except ValueError:
         return None
 

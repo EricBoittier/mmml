@@ -388,6 +388,9 @@ def _parser_help(command: str, get_subcommand_parser) -> str | None:
         return None
     parser.prog = f"mmml {command}"
     parser.formatter_class = lambda prog: argparse.HelpFormatter(prog, width=80)
+    # md-system defaults to a short category index for -h; docs need the full dump.
+    if hasattr(parser, "_mmml_help_mode"):
+        parser._mmml_help_mode = "all"
     buf = io.StringIO()
     parser.print_help(buf)
     return buf.getvalue().rstrip()

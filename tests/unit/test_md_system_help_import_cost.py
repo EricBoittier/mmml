@@ -34,8 +34,11 @@ def test_md_system_help_does_not_import_jax_or_cli_common():
             md_system.build_parser().parse_args(["-h"])
     assert excinfo.value.code == 0
     help_text = buf.getvalue()
-    assert "--setup" in help_text
-    assert "--backend" in help_text
+    # Default -h is a category index (not the full flag wall).
+    assert "Help is split into categories" in help_text
+    assert "-h1" in help_text
+    assert "--setup" in help_text  # listed under common starting flags
+    assert "--help-all" in help_text
 
     if not jax_before:
         assert "jax" not in sys.modules
@@ -54,7 +57,8 @@ def test_md_system_main_help_short_circuits(monkeypatch, capsys):
     assert excinfo.value.code == 0
     out = capsys.readouterr().out
     assert "usage:" in out
-    assert "--setup" in out
+    assert "Help is split into categories" in out
+    assert "--help-all" in out
 
 
 def test_ml_dtypes_add_args_does_not_import_jax():
