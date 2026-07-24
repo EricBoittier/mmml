@@ -307,6 +307,14 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"pycharmm_mlpot: error: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:
+        # Surface unexpected failures (e.g. import / CHARMM abort wrappers) with
+        # a traceback — otherwise MPI re-launch only shows exit 2.
+        import traceback
+
+        print(f"pycharmm_mlpot: error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

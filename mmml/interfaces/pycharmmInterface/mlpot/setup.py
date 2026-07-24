@@ -1491,9 +1491,17 @@ def load_cluster_from_pdb(
         setattr(args, "_cold_start_sim_cell_side_A", side)
         setattr(args, "_cold_start_box_sizing_source", "from_pdb")
 
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+    # Cold start: only wipe a pre-existing PSF. DELETE ATOM on an empty
+    # system can abort MPI-linked libcharmm (exit 2, no Python traceback).
+    try:
+        import pycharmm.coor as coor
 
-    CLEAR_CHARMM()
+        if int(coor.get_natom()) > 0:
+            from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+
+            CLEAR_CHARMM()
+    except Exception:
+        pass
     read_cgenff_toppar()
     header = f"""OPEN UNIT 1 READ FORM NAME {path}
 READ SEQU PDB UNIT 1

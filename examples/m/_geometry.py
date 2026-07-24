@@ -121,6 +121,7 @@ def write_solute_pdb(
             _pdb_atom_line(serial, name, "AMM1", 1, r[idx], elem)
         )
         serial += 1
+    lines.append("TER")
     for name, idx in zip(_CH3CL_ATOMS, _CH3CL_NPZ_IDX, strict=True):
         if name.startswith("CL"):
             elem = "Cl"

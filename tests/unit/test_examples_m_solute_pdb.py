@@ -33,6 +33,7 @@ def test_write_solute_pdb_amm1_ch3cl(tmp_path: Path) -> None:
     assert len(atom_lines) == 9
     assert sum("AMM1" in ln for ln in atom_lines) == 4
     assert sum("CH3CL" in ln for ln in atom_lines) == 5
+    assert "TER" in text.splitlines()
     # Atom names expected by CGenFF / make-box
     assert any("N1" in ln for ln in atom_lines)
     assert any("CL1" in ln for ln in atom_lines)

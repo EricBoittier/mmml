@@ -32,13 +32,15 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   if [[ "${SOLVATED}" == "1" ]]; then
     EXTRA+=(--composition "${SOLUTE}:1,TIP3:12")
   else
-    EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}")
+    # Lone full-system PDB; do not Packmol-rebuild over the NPZ geometry.
+    EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}" --no-packmol)
   fi
 fi
 
 mkdir -p "${OUT}"
-# Drop stale elongated Packmol caches from earlier cube runs.
-rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster"
+# Drop stale Packmol / pretreat state from earlier failed attempts.
+rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT}/cleanup"
+rm -f "${OUT}/stage_summary.json"
 
 echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXN; RXNCOR distance umbrella)"
