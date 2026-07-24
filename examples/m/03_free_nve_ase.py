@@ -19,7 +19,7 @@ if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
 
 from _geometry import DEFAULT_NPZ, load_dimer_frame  # noqa: E402
-from _io import attach_ase_trajectory, write_final_geometry, write_xyz_frames  # noqa: E402
+from md_io import attach_ase_trajectory, write_final_geometry, write_xyz_frames  # noqa: E402
 
 
 def main() -> int:

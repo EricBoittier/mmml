@@ -60,6 +60,17 @@ uv run python examples/m/05_free_nve_jaxmd.py --n-steps 40
 uv run python examples/m/06_free_nvt_jaxmd.py --n-steps 40
 ```
 
+Each run writes under `artifacts/nh3_ch3cl/free_*_{ase,jaxmd}/`:
+
+| File | Format |
+|------|--------|
+| `md.traj` | ASE trajectory |
+| `md.xyz` | multi-frame XYZ |
+| `final.xyz` / `final.npz` | last frame |
+| `md_summary.json` | energies / temperatures + artifact paths |
+
+Use `--traj-interval N` to thin frames (default every step).
+
 **`md-system` Packmol** (`AMM1:1,CH3CL:1`, `--include-mm` off; needs PyCHARMM for PSF):
 
 ```bash
@@ -80,5 +91,6 @@ or `RUN_PYCHARMM=0` to keep ASE/JAX-MD `md-system` only when PyCHARMM is present
 | Check | Criterion |
 |-------|-----------|
 | Evaluate | `artifacts/nh3_ch3cl/evaluate/metrics.json` written; finite MAE/RMSE |
-| ASE/JAX-MD smokes | `md_summary.json` with finite `E1`; NVE ΔE reported |
+| ASE/JAX-MD smokes | `md_summary.json` with finite `E1`; `md.traj` + `md.xyz` present |
+| PyCHARMM `md-system` | DCD under the job `output_dir` (PSF from cluster build) |
 | Docs | `docs/examples/nh3-ch3cl-results.md` + PNGs under `docs/images/examples/nh3-ch3cl/` |

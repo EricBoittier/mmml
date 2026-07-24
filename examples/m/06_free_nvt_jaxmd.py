@@ -16,6 +16,7 @@ if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
 
 from _geometry import DEFAULT_NPZ, load_dimer_frame  # noqa: E402
+from md_io import write_final_geometry, write_jaxmd_trajectory  # noqa: E402
 
 
 def main() -> int:
@@ -26,6 +27,12 @@ def main() -> int:
     parser.add_argument("--n-steps", type=int, default=100)
     parser.add_argument("--dt-fs", type=float, default=0.5)
     parser.add_argument("--temperature", type=float, default=300.0)
+    parser.add_argument(
+        "--traj-interval",
+        type=int,
+        default=1,
+        help="Save every N MD steps to .traj / .xyz (default: 1).",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -102,6 +109,7 @@ def main() -> int:
     state = init_fn(key, pos0, mass=mass)
     e0 = energy_at(state.position)
     energies = [e0]
+    frames = [np.asarray(state.position, dtype=np.float64)]
 
     def _temp_K(st) -> float:
         # Use state.mass (not the init vector) so shapes match momentum (N, 3).
@@ -116,16 +124,21 @@ def main() -> int:
     def step(state):
         return apply_fn(state)
 
-    log_every = max(1, int(args.n_steps) // 20)
+    traj_every = max(1, int(args.traj_interval))
     for i in range(int(args.n_steps)):
         state = step(state)
-        if (i + 1) % log_every == 0:
+        if (i + 1) % traj_every == 0:
             energies.append(energy_at(state.position))
             temps.append(_temp_K(state))
+            frames.append(np.asarray(state.position, dtype=np.float64))
     e1 = energy_at(state.position)
     t1 = _temp_K(state)
     energies.append(e1)
     temps.append(t1)
+    frames.append(np.asarray(state.position, dtype=np.float64))
+
+    traj_paths = write_jaxmd_trajectory(out, z, frames)
+    geom = write_final_geometry(out, z, state.position)
 
     summary = {
         "backend": "jaxmd",
@@ -141,19 +154,15 @@ def main() -> int:
         "T_mean_K": float(np.mean(temps)),
         "E_trace_kcal_mol": energies,
         "T_trace_K": temps,
+        "artifacts": {**traj_paths, **geom},
     }
     (out / "md_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    np.savez(
-        out / "final.npz",
-        Z=z,
-        R=np.asarray(state.position, dtype=np.float64),
-    )
 
     print(
         f"JAX-MD NVT  E0={e0:.6f}  E1={e1:.6f}  T_final={t1:.1f} K  "
         f"T_mean={np.mean(temps):.1f} K  steps={args.n_steps}"
     )
-    print(f"Wrote {out / 'md_summary.json'}")
+    print(f"Wrote {out / 'md.traj'}, {out / 'md.xyz'}, {out / 'final.xyz'}")
     if not np.isfinite(e1):
         print("FAIL: non-finite energy after JAX-MD NVT", file=sys.stderr)
         return 1

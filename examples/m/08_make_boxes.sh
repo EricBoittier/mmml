@@ -19,12 +19,13 @@ if [[ -n "${FRAME}" ]]; then
 fi
 "${EXPORT_ARGS[@]}"
 
-# Densities (kg/m³) for make-box --density when sizing from density; smoke uses --n.
+# Optional: USE_DENSITY=1 sizes N from bulk density (overrides --n). Smoke keeps --n.
 declare -A DENSITY=(
   [ACN]=786
   [TIP3]=1000
   [DMSO]=1100
 )
+USE_DENSITY="${USE_DENSITY:-0}"
 
 has_pycharmm=0
 if uv run python -c "import pycharmm" >/dev/null 2>&1; then
@@ -47,13 +48,19 @@ make_one() {
   (
     cd "${work}"
     echo "=== make-box --solvent ${solvent} (n=${N_SOLVENT}, L=${BOX_SIZE}) ==="
-    uv run mmml make-box \
-      --pdb "${SOLUTE_PDB}" \
-      --res "nh3ch3cl_${tag}" \
-      --n "${N_SOLVENT}" \
-      --box-size "${BOX_SIZE}" \
-      --solvent "${solvent}" \
-      --density "${DENSITY[${solvent}]}"
+    cmd=(
+      uv run mmml make-box
+      --pdb "${SOLUTE_PDB}"
+      --res "nh3ch3cl_${tag}"
+      --box-size "${BOX_SIZE}"
+      --solvent "${solvent}"
+    )
+    if [[ "${USE_DENSITY}" == "1" ]]; then
+      cmd+=(--density "${DENSITY[${solvent}]}")
+    else
+      cmd+=(--n "${N_SOLVENT}")
+    fi
+    "${cmd[@]}"
     # Collect Packmol + CHARMM products
     cp -f "pdb/init-${tag}box.pdb" "${out}/packmol_${tag}box.pdb" 2>/dev/null || true
     cp -f "pdb/init-nh3ch3cl_${tag}.pdb" "${out}/model.pdb"
@@ -65,7 +72,15 @@ from pathlib import Path
 out = Path("${out}")
 side = float("${BOX_SIZE}")
 (out / "box.json").write_text(
-    json.dumps({"box_size": side, "side_length_A": side, "solvent": "${solvent}", "n_solvent": int("${N_SOLVENT}")}, indent=2),
+    json.dumps(
+        {
+            "box_size": side,
+            "side_length_A": side,
+            "solvent": "${solvent}",
+            "n_solvent": int("${N_SOLVENT}"),
+        },
+        indent=2,
+    ),
     encoding="utf-8",
 )
 print(f"Wrote {out / 'box.json'}")

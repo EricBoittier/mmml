@@ -1,0 +1,33 @@
+# Mechanical embedding from make-box DMSO box (after 08_make_boxes.sh).
+#   uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_dmso.yaml --run-all
+
+defaults:
+  from_pdb: artifacts/nh3_ch3cl/boxes/dmso/model.pdb
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/mech_embed_from_box_dmso
+
+runs:
+  ase:
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/mech_embed_from_box_dmso/ase
+
+  jaxmd:
+    backend: jaxmd
+    output_dir: artifacts/nh3_ch3cl/mech_embed_from_box_dmso/jaxmd
+
+  pycharmm:
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/mech_embed_from_box_dmso/pycharmm

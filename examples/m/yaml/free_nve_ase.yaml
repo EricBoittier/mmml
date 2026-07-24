@@ -12,3 +12,7 @@ include_mm: false
 skip_jit_warmup: true
 output_dir: artifacts/nh3_ch3cl/md_system_free_nve_ase
 quiet: true
+
+# Trajectory output (PyCHARMM → DCD+PSF; ASE/jaxmd → .traj under output_dir)
+dcd_nsavc: 1
+dcd_max_frames: 50
