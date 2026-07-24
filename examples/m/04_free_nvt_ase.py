@@ -19,6 +19,7 @@ if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
 
 from _geometry import DEFAULT_NPZ, load_dimer_frame  # noqa: E402
+from _io import attach_ase_trajectory, write_final_geometry, write_xyz_frames  # noqa: E402
 
 
 def main() -> int:
@@ -30,6 +31,12 @@ def main() -> int:
     parser.add_argument("--dt-fs", type=float, default=0.5)
     parser.add_argument("--temperature", type=float, default=300.0)
     parser.add_argument("--friction", type=float, default=0.01)
+    parser.add_argument(
+        "--traj-interval",
+        type=int,
+        default=1,
+        help="Save every N MD steps to .traj / .xyz (default: 1).",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -67,6 +74,7 @@ def main() -> int:
 
     temps: list[float] = []
     energies: list[float] = []
+    xyz_frames: list[np.ndarray] = [np.asarray(atoms.get_positions(), dtype=np.float64)]
     e0 = float(atoms.get_potential_energy())
     energies.append(e0)
     temps.append(float(atoms.get_temperature()))
@@ -77,17 +85,26 @@ def main() -> int:
         temperature_K=float(args.temperature),
         friction=float(args.friction),
     )
+    traj = attach_ase_trajectory(
+        dyn, atoms, out / "md.traj", interval=int(args.traj_interval)
+    )
 
     def _log(_atoms=atoms) -> None:
         energies.append(float(_atoms.get_potential_energy()))
         temps.append(float(_atoms.get_temperature()))
+        xyz_frames.append(np.asarray(_atoms.get_positions(), dtype=np.float64))
 
-    dyn.attach(_log, interval=max(1, int(args.n_steps) // 20))
+    dyn.attach(_log, interval=max(1, int(args.traj_interval)))
     dyn.run(int(args.n_steps))
+    traj.close()
     e1 = float(atoms.get_potential_energy())
     t1 = float(atoms.get_temperature())
     energies.append(e1)
     temps.append(t1)
+    xyz_frames.append(np.asarray(atoms.get_positions(), dtype=np.float64))
+
+    geom = write_final_geometry(out, z, atoms.get_positions())
+    write_xyz_frames(out / "md.xyz", z, xyz_frames)
 
     summary = {
         "backend": "ase",
@@ -103,15 +120,19 @@ def main() -> int:
         "T_mean_K": float(np.mean(temps)),
         "E_trace_kcal_mol": energies,
         "T_trace_K": temps,
+        "artifacts": {
+            "traj": "md.traj",
+            "xyz": "md.xyz",
+            **geom,
+        },
     }
     (out / "md_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    np.savez(out / "final.npz", Z=z, R=np.asarray(atoms.get_positions(), dtype=np.float64))
 
     print(
         f"ASE NVT  E0={e0:.6f}  E1={e1:.6f}  T_final={t1:.1f} K  "
         f"T_mean={np.mean(temps):.1f} K  steps={args.n_steps}"
     )
-    print(f"Wrote {out / 'md_summary.json'}")
+    print(f"Wrote {out / 'md.traj'}, {out / 'md.xyz'}, {out / 'final.xyz'}")
     if not np.isfinite(e1):
         print("FAIL: non-finite energy after NVT", file=sys.stderr)
         return 1

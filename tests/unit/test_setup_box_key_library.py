@@ -32,3 +32,21 @@ def test_make_box_cli_uses_density_for_neat_liquid() -> None:
     neat = src.split("if args.solvent is None:")[1].split("else:")[0]
     assert "args.density is not None" in neat
     assert "determine_n_molecules_from_density" in neat
+
+
+def test_make_box_cli_stages_pdb_before_packmol() -> None:
+    """``--pdb`` must stage to pdb/initial.pdb and still run Packmol solvation."""
+    src = Path("mmml/cli/make/make_box.py").read_text(encoding="utf-8")
+    assert "_stage_solute_pdb" in src
+    assert "run_packmol_solvation" in src
+    # Staging must not short-circuit packing (old bug: --pdb skipped Packmol).
+    assert "pdb_path = args.pdb" not in src
+
+
+def test_setup_box_generic_uses_read_cgenff_toppar() -> None:
+    src = Path("mmml/interfaces/pycharmmInterface/setupBox.py").read_text(
+        encoding="utf-8"
+    )
+    body = src.split("def setup_box_generic")[1].split("\ndef ")[0]
+    assert "read_cgenff_toppar" in body
+    assert "read.rtf(rtf)" not in body

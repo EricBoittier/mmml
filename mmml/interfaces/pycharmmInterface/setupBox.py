@@ -446,17 +446,20 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     Args:
         skip_energy_show: If True, skip energy.show() to avoid slow CHARMM energy evaluation
             (Drude setup). Use for faster startup when validation is not needed.
+        rtf, prm: Retained for API compatibility; topology is loaded via
+            ``read_cgenff_toppar()`` so ``MMML_CGENFF_EXTRA_RTF`` append residues
+            (e.g. CH3CL) are available.
     """
     from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
+    _ = (rtf, prm)  # API compat; EXTRA_RTF comes from the env via read_cgenff_toppar
     _ensure_crystal_image_str()
     CLEAR_CHARMM()
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev, charmm_silent_command
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
-    with charmm_relaxed_bomlev():
-        read.rtf(rtf)
-        read.prm(prm)
+    read_cgenff_toppar()
     header = f"""OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
