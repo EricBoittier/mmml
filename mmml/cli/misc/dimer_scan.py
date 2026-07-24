@@ -37,7 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
         "residues",
         nargs="*",
         metavar="RESIDUE",
-        help="One residue for a homodimer or two for a heterodimer",
+        help=(
+            "One residue for a homodimer or two for a heterodimer. "
+            "Accepts campaign labels (DCM, ACE, BENZ, TIP3, MEOH) or any "
+            "CGenFF RESI name (e.g. ACO, CYBZ); non-campaign pairs use a "
+            "generic centroid–centroid orientation."
+        ),
     )
     parser.add_argument(
         "--calculator",

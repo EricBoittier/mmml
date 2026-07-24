@@ -220,12 +220,18 @@ def setup_box(mol: Atoms) -> None:
 
 
 def determine_n_molecules_from_density(
-    density: float, mol: Atoms, side_length: float = 35,
-    solvent: str = None
+    density: float,
+    mol: Atoms,
+    side_length: float = 35,
+    solvent: str = None,
 ) -> float:
     """
     Determine number of molecules from density.
-    
+
+    *density* is in kg/m³.  For a known solvent (TIP3/water, OCOH/octanol), a
+    built-in density is used when *density* is omitted upstream; otherwise the
+    provided value is used for any CGenFF solvent residue.
+
     Requires pint to be installed for unit conversions.
     Install with: pip install pint or conda install -c conda-forge pint
     """
@@ -234,12 +240,14 @@ def determine_n_molecules_from_density(
             "pint is required for determine_n_molecules_from_density. "
             "Please install pint with: pip install pint or conda install -c conda-forge pint"
         )
-    
+
     if solvent is not None:
-        atoms = solvents_ase[solvent]
-        density = solvents_density[solvent]
+        name = _normalize_solvent_key(solvent)
+        atoms = _resolve_solvent_atoms(name)
+        density_value = _resolve_solvent_density_kg_m3(name, density)
     else:
         atoms = mol
+        density_value = float(density)
     masses = atoms.get_masses()
 
     molecular_weight = masses.sum()
@@ -254,11 +262,11 @@ def determine_n_molecules_from_density(
 
     print("Volume of the box: ", volume)
 
-    density = density * (ureg.kilogram / ureg.meter**3)
+    density_q = density_value * (ureg.kilogram / ureg.meter**3)
     molecular_weight = molecular_weight * (ureg.gram / ureg.mole)  # g/mol
 
     # Calculate mass of the substance in the box
-    mass = density * volume  # mass = density * volume
+    mass = density_q * volume  # mass = density * volume
     print(mass.to("g"))
     # Calculate moles in the box
     moles = mass.to("g") / molecular_weight.to("g/mol")
@@ -283,18 +291,25 @@ def run_packmol_solvation(
     outer_radius: float | None = None,
     solute_buffer: float = 1.0,
     solvent_buffer: float = 1.0,
+    density_kg_m3: float | None = None,
 ) -> None:
     """
     Pack 1 solute molecule surrounded by n_molecules of solvent in a spherical shell.
 
+    *solvent* may be any CGenFF RESI name (plus aliases ``water``/``octanol``).
     Radii are computed from solute geometry and solvent density unless overridden.
+    When density is unavailable, the shell extends to the box inscribed sphere.
     """
-    if solvent not in solvents_ase:
-        raise ValueError(f"Solvent {solvent} not found in {solvents_ase.keys()}")
+    from mmml.analysis.residue_geometry import ensure_residue_pdb
 
-    solvent_pdb = solvents_ase[solvent]
-    solvent_pdb_path = f"pdb/{solvent}.pdb"
-    solvent_pdb.write(solvent_pdb_path)
+    name = _normalize_solvent_key(solvent)
+    solvent_atoms = _resolve_solvent_atoms(name)
+    solvent_pdb_path = ensure_residue_pdb(name, generate=True)
+    # Keep a stable path name for the packmol input (resi lower-case).
+    solvent_tag = name.lower()
+    if Path(solvent_pdb_path).resolve() != Path(f"pdb/{solvent_tag}.pdb").resolve():
+        Path("pdb").mkdir(exist_ok=True)
+        ase.io.write(f"pdb/{solvent_tag}.pdb", solvent_atoms)
 
     center = side_length / 2
     cx, cy, cz = center, center, center
@@ -304,9 +319,23 @@ def run_packmol_solvation(
             solute_mol = read_initial_pdb(Path.cwd())
         inner_radius = solute_radius_from_mol(solute_mol, buffer=solute_buffer)
     if outer_radius is None:
-        outer_radius = outer_radius_from_n_solvent(
-            n_molecules, inner_radius, solvent, buffer=solvent_buffer
-        )
+        max_radius = center - 0.5
+        try:
+            dens = _resolve_solvent_density_kg_m3(name, density_kg_m3)
+            outer_radius = outer_radius_from_n_solvent(
+                n_molecules,
+                inner_radius,
+                name,
+                buffer=solvent_buffer,
+                density_kg_m3=dens,
+                atoms=solvent_atoms,
+            )
+        except ValueError:
+            print(
+                f"No density for solvent {name}; using box-limited outer radius "
+                f"{max_radius:.2f} Å. Pass --density (kg/m³) for a denser shell estimate."
+            )
+            outer_radius = max_radius
 
     max_radius = center - 0.5
     if outer_radius > max_radius:
@@ -320,7 +349,7 @@ def run_packmol_solvation(
 
     packmol_input = f"""
 
-    output pdb/init-{solvent}box.pdb
+    output pdb/init-{solvent_tag}box.pdb
     filetype pdb
     tolerance 2.0
     structure pdb/initial.pdb 
@@ -329,7 +358,7 @@ def run_packmol_solvation(
     chain A
     inside sphere {cx} {cy} {cz} {inner_radius}
     end structure
-    structure pdb/{solvent}.pdb 
+    structure pdb/{solvent_tag}.pdb 
     number {n_molecules}
     resnumbers 2
     chain A
@@ -345,21 +374,21 @@ def run_packmol_solvation(
     packmol_script = packmol_input.split("\n")
     packmol_script[1] = f"seed {randint}"
     packmol_script = "\n".join(packmol_script)
-    with open(f"packmol/packmol-{solvent}.inp", "w") as f:
+    with open(f"packmol/packmol-{solvent_tag}.inp", "w") as f:
         f.writelines(packmol_script)
 
     import os
     from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
 
     packmol_bin = packmol_executable()
-    print(f"{packmol_bin} < packmol/packmol-{solvent}.inp")
+    print(f"{packmol_bin} < packmol/packmol-{solvent_tag}.inp")
     output = os.system(
         " ".join(
-            [packmol_bin, " < ", f"packmol/packmol-{solvent}.inp"]
+            [packmol_bin, " < ", f"packmol/packmol-{solvent_tag}.inp"]
         )
     )
     print(output)
-    print(f"Generated init-{solvent}box.pdb")
+    print(f"Generated init-{solvent_tag}box.pdb")
 
 
 def run_packmol(n_molecules: int, side_length: float) -> None:

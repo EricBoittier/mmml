@@ -4,7 +4,11 @@ CLI for make_box: pack molecules into a periodic box (vacuum or solvated).
 
 Usage:
     mmml make-box --res CYBZ --n 50 --box-size 25.0
-    mmml make-box --res CYBZ --n 50 --box-size 25.0 --solvent TIP3 --density 1.0
+    mmml make-box --res CYBZ --n 50 --box-size 25.0 --solvent TIP3
+    mmml make-box --res CYBZ --n 200 --box-size 30.0 --solvent MEOH --density 792
+
+--solvent accepts any CGenFF RESI name (TIP3, MEOH, ACO, …); aliases water/octanol
+map to TIP3/OCOH. --density is kg/m³ (built-in for TIP3/OCOH).
 
 Requires: CHARMM, PyCHARMM, PackMol (charmm-interface)
 """

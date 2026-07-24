@@ -6,8 +6,11 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.cgenff_residues import (
     format_cgenff_residue_list,
+    is_cgenff_residue_name,
+    normalize_cgenff_residue_name,
     parse_cgenff_residue_line,
     parse_cgenff_residues,
+    require_cgenff_residue_name,
 )
 
 
@@ -52,6 +55,14 @@ def test_format_cgenff_residue_list_columns() -> None:
     assert "ACO" in text
     assert "Acetone" in text
     assert "mmml make-res --res RESIDUE" in text
+
+
+def test_normalize_and_require_cgenff_names() -> None:
+    assert normalize_cgenff_residue_name("water") == "TIP3"
+    assert is_cgenff_residue_name("ACO")
+    assert require_cgenff_residue_name("octanol") == "OCOH"
+    with pytest.raises(ValueError, match="Unknown CGenFF"):
+        require_cgenff_residue_name("ZZZZZ")
 
 
 def test_make_res_validate_args_list_residues() -> None:

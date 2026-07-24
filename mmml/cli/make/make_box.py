@@ -26,8 +26,25 @@ def build_parser() -> argparse.ArgumentParser:
         "naming used elsewhere in the CLI suite.",
     )
     parser.add_argument("--pdb", type=str, default=None)
-    parser.add_argument("--solvent", type=str, default=None)
-    parser.add_argument("--density", type=float, default=None)
+    parser.add_argument(
+        "--solvent",
+        type=str,
+        default=None,
+        help=(
+            "CGenFF solvent residue name (any RESI in top_all36_cgenff.rtf), "
+            "e.g. TIP3, MEOH, ACO, OCOH. Aliases: water→TIP3, octanol→OCOH."
+        ),
+    )
+    parser.add_argument(
+        "--density",
+        type=float,
+        default=None,
+        help=(
+            "Solvent (or neat liquid) density in kg/m³. Built-in for TIP3/water "
+            "(1000) and OCOH/octanol (824); required for other solvents when "
+            "sizing N from density."
+        ),
+    )
     return parser
 
 
@@ -61,16 +78,25 @@ def main_loop(args):
             setupBox.run_packmol(n_molecules, args.side_length)
             pdb_path = "pdb/init-packmol.pdb"
         else:
+            from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+                require_cgenff_residue_name,
+            )
+
+            solvent = require_cgenff_residue_name(args.solvent)
             if args.density is not None:
                 n_molecules = setupBox.determine_n_molecules_from_density(
-                    args.density, mol, args.side_length, args.solvent
+                    args.density, mol, args.side_length, solvent
                 )
             else:
                 n_molecules = args.n
             setupBox.run_packmol_solvation(
-                n_molecules, args.side_length, args.solvent, solute_mol=mol
+                n_molecules,
+                args.side_length,
+                solvent,
+                solute_mol=mol,
+                density_kg_m3=args.density,
             )
-            pdb_path = f"pdb/init-{args.solvent}box.pdb"
+            pdb_path = f"pdb/init-{solvent.lower()}box.pdb"
     setupBox.setup_box_generic(pdb_path, side_length=args.side_length, tag=str(args.res).lower())
     
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
