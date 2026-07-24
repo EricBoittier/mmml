@@ -93,7 +93,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "mmml make-res --list-residues",
             "mmml make-res --res CYBZ",
-            "mmml make-box --res CYBZ --n 50 --side_length 25.0",
+            "mmml make-box --res CYBZ --n 50 --box-size 25.0",
             "mmml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 -o boxes/dcm206",
             "mmml health-check --require-gpu",
         ),

@@ -78,7 +78,7 @@ Packs copies of a residue into a cubic periodic cell (optionally with explicit s
 
 ```bash
 mmml make-res --res ACO
-mmml make-box --res ACO --n 50 --side_length 25.0
+mmml make-box --res ACO --n 50 --box-size 25.0
 ```
 
 ### More Packmol examples

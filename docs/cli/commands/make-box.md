@@ -27,7 +27,9 @@ Diagnostics & safety:
 Other options:
   --n N
   --res RES
-  --side_length SIDE_LENGTH
+  --side_length, --box-size SIDE_LENGTH
+                        Cubic box side length in Å. '--box-size' is an alias,
+                        matching the naming used elsewhere in the CLI suite.
   --solvent SOLVENT
 ```
 

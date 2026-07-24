@@ -191,7 +191,7 @@ Lower-level Packmol + PyCHARMM box build without MLpot:
 
 ```bash
 mmml make-res --res ACO --skip-energy-show
-mmml make-box --res ACO --n 50 --side_length 25.0
+mmml make-box --res ACO --n 50 --box-size 25.0
 ```
 
 Writes `pdb/init-packmol.pdb`, builds PSF, applies PBC, minimizes contacts. See [make-box](cli/commands/make-box.md).
