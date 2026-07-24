@@ -1821,25 +1821,27 @@ def script_uses_umbrella_rxncor(script: str) -> bool:
     return bool(re.search(r"(?im)^\s*umbrella\s+rxncor\b", str(script or "")))
 
 
-def _charmm_int_builtin(lingo: Any, name: str) -> int | None:
-    """Return a CHARMM ``?NAME`` integer builtin, or None if not queryable."""
+def _charmm_pref_keyword_flag(lingo: Any, name: str) -> int | None:
+    """Return a CHARMM pref-keyword ``?NAME`` flag (0/1), or None if absent.
+
+    Must **not** use ``lingo.get_energy_value``: that API matches energy-term
+    labels on the first four characters, so ``ADUMBRXN`` / ``ADUMB`` collide
+    with the adaptive-umbrella energy term ``ADUM`` (usually 0.0) and false-fail
+    KEY_ADUMBRXNCOR preflights. Use exact ``get_charmm_builtins`` names only
+    (param_store; pref keys truncated to 8 chars).
+    """
     key = str(name).strip().upper()
-    flag = None
     try:
-        flag = lingo.get_energy_value(key)
+        builtins = lingo.get_charmm_builtins()
     except Exception:
-        flag = None
-    if flag is None:
-        try:
-            builtins = lingo.get_charmm_builtins()
-            # Names are stored at most 8 chars; tolerate padding / case.
-            if isinstance(builtins, dict):
-                for raw, val in builtins.items():
-                    if str(raw).strip().upper() == key:
-                        flag = val
-                        break
-        except Exception:
-            flag = None
+        return None
+    if not isinstance(builtins, dict):
+        return None
+    flag = None
+    for raw, val in builtins.items():
+        if str(raw).strip().upper() == key:
+            flag = val
+            break
     if flag is None:
         return None
     if isinstance(flag, bool):
@@ -1860,8 +1862,8 @@ def require_adumbrxncor_for_umbrella_rxncor(script: str) -> None:
     and dynamics often SIGSEGV under MLpot/MPI.
 
     Only raise when the keyword table is queryable (``?ADUMB`` works) and
-    ``?ADUMBRXN`` is explicitly off — avoid false negatives when the lingo
-    getter cannot see pref keys.
+    ``?ADUMBRXN`` is explicitly missing/off — avoid false negatives when
+    builtins cannot be listed.
     """
     if not script_uses_umbrella_rxncor(script):
         return
@@ -1870,19 +1872,18 @@ def require_adumbrxncor_for_umbrella_rxncor(script: str) -> None:
     except Exception:
         return
     # Pref key ADUMBRXNCOR truncates to 8 chars for ``?`` substitutions.
-    adumbrxn = _charmm_int_builtin(lingo, "ADUMBRXN")
+    adumbrxn = _charmm_pref_keyword_flag(lingo, "ADUMBRXN")
     if adumbrxn == 1:
         return
-    adumb = _charmm_int_builtin(lingo, "ADUMB")
+    adumb = _charmm_pref_keyword_flag(lingo, "ADUMB")
     if adumbrxn is None and adumb is None:
         print(
-            "WARN: cannot query CHARMM ?ADUMBRXN / ?ADUMB; skipping "
-            "KEY_ADUMBRXNCOR preflight for umbrella rxncor",
+            "WARN: cannot query CHARMM pref builtins ?ADUMBRXN / ?ADUMB; "
+            "skipping KEY_ADUMBRXNCOR preflight for umbrella rxncor",
             flush=True,
         )
         return
     if adumbrxn is None and adumb == 1:
-        # Keyword table works but ADUMBRXNCOR was not compiled in.
         raise RuntimeError(
             "pycharmm_pre_dynamics_lingo uses 'umbrella rxncor' but this "
             "libcharmm was built without KEY_ADUMBRXNCOR (?ADUMBRXN unset, "
