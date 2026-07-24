@@ -1864,8 +1864,28 @@ def check_mlpot_symbols() -> list[str]:
     return missing
 
 
+def charmm_system_is_evaluable() -> bool:
+    """True when CHARMM has atoms loaded, so ``ENER`` can run safely.
+
+    Running ``ENER`` / ``ENER FORCE`` on an empty session aborts CHARMM fatally
+    ("Nonbond data structure is not defined" → BOMLEV TERMINATING). That abort
+    is a native Fortran exit, not a catchable Python exception, so callers that
+    might run against a torn-down or never-populated session must gate on this.
+    """
+    try:
+        import pycharmm.psf as psf
+
+        return int(psf.get_natom()) > 0
+    except Exception:
+        return False
+
+
 def charmm_energy_row() -> dict[str, float]:
     import pycharmm.energy as energy
+
+    # ``get_energy`` runs ``ENER``; guard the empty-session fatal abort.
+    if not charmm_system_is_evaluable():
+        return {}
 
     df = energy.get_energy()
     row = df.iloc[0].to_dict()
@@ -1891,6 +1911,11 @@ def charmm_grms_after_ener_force(*, silent: bool = True) -> float:
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
+
+    # ``ENER FORCE`` on an empty session aborts CHARMM fatally; return a benign
+    # 0.0 GRMS instead of killing the process.
+    if not charmm_system_is_evaluable():
+        return 0.0
 
     if silent:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
