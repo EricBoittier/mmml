@@ -15,9 +15,7 @@ from ase import Atoms
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 )
-from mmml.interfaces.pycharmmInterface.pycharmmCommands import (
-    pbcset, pbcs
-)
+from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
@@ -450,6 +448,7 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
             (Drude setup). Use for faster startup when validation is not needed.
     """
     from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
 
     _ensure_crystal_image_str()
     CLEAR_CHARMM()
@@ -470,12 +469,9 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     """
     with charmm_silent_command():
         pycharmm.lingo.charmm_script(header)
-    pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
-    # Set nbonds with fswitch before IMAGE (in pbcs) to avoid bus error on macOS
-    pycharmm.lingo.charmm_script(
-        "nbonds atom cutnb 14.0 ctofnb 12.0 ctonnb 10.0 fswitch vswitch NBXMOD 5 inbfrq -1 imgfrq -1"
-    )
-    pycharmm.lingo.charmm_script(pbcs)
+    # KEY_LIBRARY builds do not parse lingo ``nbonds`` / ``open`` / ``crystal``;
+    # use the C API path (define_cubic + build + NonBondedScript).
+    prepare_charmm_pbc(float(side_length))
     if not skip_energy_show:
         safe_energy_show()
     write.psf_card(f"psf/system-{tag}.psf")
@@ -545,19 +541,10 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
 
 
 def minimize_box(skip_energy_show: bool = False, nbxmod: int = 3):
-    nbonds = f"""!#########################################
-! Bonded/Non-bonded Options & Constraints
-!#########################################
-
-! Non-bonding parameters
-nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
-fswitch vswitch NBXMOD {nbxmod} -
-inbfrq 50 imgfrq 50
-"""
-    pycharmm.lingo.charmm_script(nbonds)
-    # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
+    # Nonbonds come from prepare_charmm_pbc (KEY_LIBRARY has no lingo ``nbonds``).
+    # nbxmod retained for API compatibility; CGENFF NONBONDED sets it at param read.
+    _ = nbxmod
     minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)
-    # equivalent CHARMM scripting command: energy
     if skip_energy_show:
         print("Skipping energy.show() (--skip-energy-show).")
     else:

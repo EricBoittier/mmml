@@ -74,7 +74,12 @@ def main_loop(args):
         print(mol.get_chemical_symbols())
 
         if args.solvent is None:
-            n_molecules = args.n
+            if args.density is not None:
+                n_molecules = setupBox.determine_n_molecules_from_density(
+                    args.density, mol, args.side_length, solvent=None
+                )
+            else:
+                n_molecules = args.n
             setupBox.run_packmol(n_molecules, args.side_length)
             pdb_path = "pdb/init-packmol.pdb"
         else:
