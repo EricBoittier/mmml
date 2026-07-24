@@ -13,11 +13,12 @@ from ase import Atoms, units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
 from ase.md.verlet import VelocityVerlet
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+EXAMPLE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = EXAMPLE_DIR.parent.parent
+if str(EXAMPLE_DIR) not in sys.path:
+    sys.path.insert(0, str(EXAMPLE_DIR))
 
-from examples.m._geometry import DEFAULT_NPZ, load_dimer_frame  # noqa: E402
+from _geometry import DEFAULT_NPZ, load_dimer_frame  # noqa: E402
 
 
 def main() -> int:
