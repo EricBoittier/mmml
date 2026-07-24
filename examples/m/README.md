@@ -180,10 +180,10 @@ Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
 ### ADUMB (PyCHARMM adaptive umbrella)
 
 Yes — the NPZ can drive a PyCHARMM ADUMB job after you have a CGenFF system
-(Packmol `AMM1:1,CH3CL:1`, or `07_export_solute_pdb.py` → `--from-pdb`).
-There are **no φ/ψ dihedrals** on AMM1/CH3CL; use an **N⋯C distance** reaction
-coordinate via RXNCOR + `umbrella rxncor` (same pattern as
-`setup/charmm/test/c38test/adumbrxncor.inp`).
+(Packmol `AMM1:1,CH3CL:1`, or `07_export_solute_pdb.py` as a lone full-system
+PDB / Packmol monomer). There are **no φ/ψ dihedrals** on AMM1/CH3CL; use an
+**N⋯C distance** reaction coordinate via RXNCOR + `umbrella rxncor` (same pattern
+as `setup/charmm/test/c38test/adumbrxncor.inp`).
 
 Requires CHARMM built with **ADUMB** and **ADUMBRXN**.
 
@@ -192,10 +192,10 @@ source examples/m/_env.sh
 # Vacuum dimer smoke (Packmol templates):
 bash examples/m/09_adumb_nc_distance.sh
 
-# Coordinates from the NPZ-exported PDB:
+# Coordinates from the NPZ-exported PDB (overrides YAML composition):
 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 
-# Solvated TIP3 (PBC):
+# Solvated TIP3 (PBC); combine with USE_NPZ_PDB=1 for NPZ solute + TIP3:
 SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
 ```
 

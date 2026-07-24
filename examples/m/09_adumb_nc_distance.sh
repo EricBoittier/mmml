@@ -21,13 +21,19 @@ if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
   exit 0
 fi
 
-# Optional: feed coordinates from the NPZ-exported CGenFF PDB
+# Optional: feed coordinates from the NPZ-exported CGenFF PDB.
+# YAML still has Packmol composition (AMM1:1,CH3CL:1[…]); --from-pdb alone
+# cannot mix with that — override --composition to a lone PDB (vacuum) or
+# solute.pdb:1,TIP3:N (solvated).
 EXTRA=()
 if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   SOLUTE="${ARTIFACTS_DIR}/solute_amm1_ch3cl.pdb"
   uv run python examples/m/07_export_solute_pdb.py -o "${SOLUTE}"
-  # Lone full-system PDB (overrides YAML composition)
-  EXTRA+=(--from-pdb "${SOLUTE}")
+  if [[ "${SOLVATED}" == "1" ]]; then
+    EXTRA+=(--composition "${SOLUTE}:1,TIP3:12")
+  else
+    EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}")
+  fi
 fi
 
 mkdir -p "${OUT}"
