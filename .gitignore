@@ -313,6 +313,8 @@ pept.psf
 /packmol_out.pdb
 /packmol_repack/
 /peptide.pdb
+/tip3.pdb
+/ocoh.pdb
 /trialanine-water.crd
 /trialanine-water.npy
 /trialanine-water.psf

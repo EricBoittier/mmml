@@ -13,22 +13,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
-    DEFAULT_ML_SWITCH_WIDTH,
-    DEFAULT_MM_SWITCH_ON,
-    DEFAULT_MM_SWITCH_WIDTH,
-    add_handoff_cutoff_grid_args,
-)
-from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-    DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
-)
-
 _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
+def _argv_requests_help(argv: list[str]) -> bool:
+    return any(arg in ("-h", "--help") for arg in argv)
+
+
 def build_parser() -> argparse.ArgumentParser:
+    # Import argparse helpers here (not at module import) so ``mmml md-system -h``
+    # does not pull JAX / the large cli_common runtime module.
     from mmml.cli.argparse_suggest import SuggestingArgumentParser
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+        add_handoff_cutoff_grid_args,
+    )
+    from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+    from mmml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
+        add_charmm_mm_pretreat_physics_args,
+    )
 
     parser = SuggestingArgumentParser(
         description=(
