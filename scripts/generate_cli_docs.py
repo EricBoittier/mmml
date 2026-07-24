@@ -445,12 +445,19 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
     has_parser = parser_available(name, import_module=False)
     help_text = _parser_help(name, get_subcommand_parser)
 
+    usage_lines = [f"mmml {name} --help"]
+    if name == "md-system":
+        usage_lines = [
+            "mmml md-system -h          # category index",
+            "mmml md-system -h4         # one category",
+            "mmml md-system --help-all  # full option dump",
+        ]
     lines.extend(
         [
             "## Usage",
             "",
             "```bash",
-            f"mmml {name} --help",
+            *usage_lines,
             "```",
             "",
         ]

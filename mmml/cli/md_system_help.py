@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from mmml.cli.argparse_suggest import SuggestingArgumentParser
@@ -39,8 +39,9 @@ _GROUP_TITLE_CATEGORY: tuple[tuple[str, int], ...] = (
 # dest / option token → category (first match wins; more specific prefixes first).
 _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("dynamics_", 5),
-    ("packmol_", 2),
-    ("pyxtal_", 2),
+    ("packmol", 2),  # packmol, packmol_*, --no-packmol
+    ("pyxtal", 2),
+    ("builder", 2),
     ("box_", 2),
     ("density_", 2),
     ("mc_density_", 2),
@@ -215,7 +216,6 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("nvt_integrator", 1),
     ("pressure", 1),
     ("seed", 1),
-    ("builder", 1),
     ("min_intermonomer_", 2),
     ("optimize_pyxtal", 2),
     ("residue", 1),
@@ -352,6 +352,13 @@ def format_help_index(parser: argparse.ArgumentParser) -> str:
     return "\n".join(lines)
 
 
+def _add_short_usage(formatter: argparse.HelpFormatter, parser: argparse.ArgumentParser) -> None:
+    """Avoid argparse's default usage line (it lists every option)."""
+    formatter.add_text(f"usage: {_prog(parser)} [options]")
+    if parser.description:
+        formatter.add_text(parser.description)
+
+
 def _format_category_section(
     parser: argparse.ArgumentParser,
     category: int,
@@ -365,9 +372,7 @@ def _format_category_section(
         raise ValueError(f"unknown help category {category}; choose one of: {valid}")
     formatter = parser._get_formatter()
     if include_usage:
-        formatter.add_usage(parser.usage, parser._actions, parser._mutually_exclusive_groups)
-        if parser.description:
-            formatter.add_text(parser.description)
+        _add_short_usage(formatter, parser)
     title = f"{category}. {titles[category]}"
     formatter.start_section(title)
     if actions:
@@ -396,9 +401,7 @@ def format_help_category(parser: argparse.ArgumentParser, category: int) -> str:
 def format_help_all(parser: argparse.ArgumentParser) -> str:
     buckets = iter_categorized_actions(parser)
     formatter = parser._get_formatter()
-    formatter.add_usage(parser.usage, parser._actions, parser._mutually_exclusive_groups)
-    if parser.description:
-        formatter.add_text(parser.description)
+    _add_short_usage(formatter, parser)
     formatter.add_text(
         "Full help (all categories). For a short index: -h   "
         "For one category: -hN   (see -h for the list)."
