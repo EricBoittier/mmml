@@ -502,11 +502,18 @@ def sample_bussi_microchunk_metrics(
         "energy_kcalmol": None,
     }
     try:
+        import pycharmm.psf as psf
+
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_energy_row,
             charmm_grms,
         )
 
+        # ``charmm_energy_row`` runs ``ENER`` which fatally aborts CHARMM
+        # ("Nonbond data structure is not defined") when no system is loaded;
+        # that abort is not a catchable Python exception, so skip sampling.
+        if int(psf.get_natom()) <= 0:
+            return row
         row["grms_kcalmol_A"] = float(charmm_grms())
         ener = charmm_energy_row()
         for key in ("ENER", "energy", "TOTE", "totener"):

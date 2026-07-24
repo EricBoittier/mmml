@@ -13,12 +13,16 @@ def test_mlpot_defaults_to_gpu_for_mpi_charmm(monkeypatch):
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
+    ), mock.patch(
+        "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+        return_value=["jax-cuda12-plugin"],
     ):
         from mmml.interfaces.pycharmmInterface import jax_device_policy
 
         assert jax_device_policy.mlpot_jax_device_name() == "gpu"
         assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
-        assert __import__("os").environ.get("JAX_PLATFORMS") == "gpu"
+        # GPU primary + CPU kept for defer/fallback (Unknown backend cpu).
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "gpu,cpu"
 
 
 def test_mlpot_cpu_override(monkeypatch):
@@ -30,6 +34,47 @@ def test_mlpot_cpu_override(monkeypatch):
         from mmml.interfaces.pycharmmInterface import jax_device_policy
 
         assert jax_device_policy.mlpot_jax_device_name() == "cpu"
+
+
+def test_mlpot_jax_platforms_helpers():
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    with mock.patch(
+        "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+        return_value=["jax-cuda12-plugin"],
+    ):
+        assert jax_device_policy.mlpot_jax_platforms_for_device("gpu") == "gpu,cpu"
+    with mock.patch(
+        "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+        return_value=[],
+    ):
+        assert jax_device_policy.mlpot_jax_platforms_for_device("gpu") == "cpu"
+    assert jax_device_policy.mlpot_jax_platforms_for_device("cpu") == "cpu"
+    assert jax_device_policy._expand_gpu_platforms_to_include_cpu("cuda") == "cuda,cpu"
+    assert jax_device_policy._expand_gpu_platforms_to_include_cpu("gpu") == "gpu,cpu"
+    assert jax_device_policy._expand_gpu_platforms_to_include_cpu("gpu,cpu") is None
+    assert jax_device_policy._expand_gpu_platforms_to_include_cpu("cpu") is None
+
+
+def test_mlpot_expands_gpu_only_jax_platforms_before_import(monkeypatch):
+    import sys
+
+    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.setenv("JAX_PLATFORMS", "cuda")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    saved = sys.modules.pop("jax", None)
+    try:
+        with mock.patch(
+            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            return_value=["jax-cuda12-plugin"],
+        ):
+            assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "cuda,cpu"
+    finally:
+        if saved is not None:
+            sys.modules["jax"] = saved
+        monkeypatch.setenv("JAX_PLATFORMS", "cpu")
 
 
 def test_mlpot_jax_device_context_falls_back_to_cpu_when_no_gpu(monkeypatch):

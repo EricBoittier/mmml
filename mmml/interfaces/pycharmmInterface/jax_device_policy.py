@@ -6,6 +6,9 @@ GPU selection
 - ``CUDA_VISIBLE_DEVICES``: restrict which physical GPUs JAX sees (e.g. ``0`` or ``0,1``).
 - ``MMML_MLPOT_N_GPUS`` / ``--ml-gpu-count``: parallel PhysNet *chunks* across local GPUs
   (default 1). Does not split CHARMM integration across devices.
+- ``JAX_PLATFORMS``: default ``gpu,cpu`` when ``MMML_MLPOT_DEVICE=gpu`` (CPU kept for
+  MPI defer / fallback). GPU-only values like ``cuda`` are expanded to ``cuda,cpu``
+  before the first ``import jax``.
 """
 
 from __future__ import annotations
@@ -72,6 +75,41 @@ def apply_mlpot_jax_compilation_cache_env(*, quiet: bool = False) -> Path | None
     return cache_dir
 
 
+def mlpot_jax_platforms_for_device(device: str) -> str:
+    """``JAX_PLATFORMS`` value for ``cpu`` / ``gpu`` MLpot device selection.
+
+    GPU mode keeps ``cpu`` registered as well: MPI-defer registration,
+    jax-pme host paths, and GPU→CPU fallback all call ``jax.devices("cpu")``.
+    With ``JAX_PLATFORMS=gpu`` alone, JAX reports only ``['cuda']`` and those
+    calls raise ``Unknown backend cpu``.
+
+    When no ``jax-cuda*-plugin`` is installed, return ``cpu`` even if GPU was
+    requested so CPU-only envs do not hard-fail on a missing CUDA backend.
+    """
+    name = (device or "gpu").strip().lower()
+    if name == "cpu":
+        return "cpu"
+    try:
+        from mmml.utils.jax_gpu_warmup import _installed_jax_cuda_plugins
+
+        if not _installed_jax_cuda_plugins():
+            return "cpu"
+    except Exception:
+        return "cpu"
+    # GPU first so it remains the default device; CPU stays available.
+    return "gpu,cpu"
+
+
+def _expand_gpu_platforms_to_include_cpu(existing: str) -> str | None:
+    """If ``existing`` is GPU-only, return an expanded ``gpu|cuda,cpu`` string."""
+    parts = [p.strip().lower() for p in existing.split(",") if p.strip()]
+    if not parts or "cpu" in parts:
+        return None
+    if not any(p in ("gpu", "cuda") for p in parts):
+        return None
+    return f"{existing},cpu"
+
+
 def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
     """Set ``JAX_PLATFORMS`` and compilation cache before the first ``import jax``."""
     from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
@@ -80,7 +118,32 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
 
     apply_jax_compile_xla_flags(quiet=quiet)
     device = mlpot_jax_device_name()
-    os.environ.setdefault("JAX_PLATFORMS", device)
+    wanted = mlpot_jax_platforms_for_device(device)
+    existing = (os.environ.get("JAX_PLATFORMS") or "").strip()
+    if not existing:
+        os.environ["JAX_PLATFORMS"] = wanted
+    elif device == "gpu" and wanted != "cpu":
+        expanded = _expand_gpu_platforms_to_include_cpu(existing)
+        if expanded is not None:
+            import sys
+
+            if "jax" in sys.modules:
+                if not quiet and not _truthy("MMML_QUIET"):
+                    print(
+                        "mmml WARNING: JAX_PLATFORMS="
+                        f"{existing!r} is GPU-only and jax is already imported; "
+                        "cannot register the CPU backend. Restart with "
+                        f"JAX_PLATFORMS={expanded!r} (or unset it).",
+                        flush=True,
+                    )
+            else:
+                os.environ["JAX_PLATFORMS"] = expanded
+                if not quiet and not _truthy("MMML_QUIET"):
+                    print(
+                        f"mmml: JAX_PLATFORMS expanded {existing!r} → {expanded!r} "
+                        "(CPU kept for MLpot defer/fallback)",
+                        flush=True,
+                    )
     apply_mlpot_jax_compilation_cache_env(quiet=quiet)
     if not quiet and not _truthy("MMML_QUIET") and device == "cpu":
         print(
@@ -184,6 +247,14 @@ def jax_cpu_until_mlpot_registered() -> Iterator[Any]:
     """Keep JAX array placement on CPU until CHARMM MLpot ``upinb`` completes."""
     import jax
 
-    cpu = jax.devices("cpu")
+    try:
+        cpu = jax.devices("cpu")
+    except RuntimeError as exc:
+        platforms = (os.environ.get("JAX_PLATFORMS") or "").strip() or "(unset)"
+        raise RuntimeError(
+            "MLpot deferred/CPU path needs the JAX CPU backend, but it is not "
+            f"registered (JAX_PLATFORMS={platforms!r}). Restart with "
+            "JAX_PLATFORMS=gpu,cpu (GPU runs) or JAX_PLATFORMS=cpu (CPU-only)."
+        ) from exc
     with jax.default_device(cpu[0]):
         yield cpu[0]

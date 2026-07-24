@@ -713,8 +713,12 @@ def _register_mlpot_context(
         defer_jax_warmup = defer_jax_warmup_until_after_mlpot_sd()
 
     if defer_jax_warmup and charmm_lib_links_mpi():
-        # Keep JAX off GPU until after MLpot registration upinb (MPI-linked CHARMM).
-        os.environ["JAX_PLATFORMS"] = "cpu"
+        # Keep placement on CPU until after MLpot registration upinb (MPI-linked
+        # CHARMM), but register both backends so post-SD GPU promote works.
+        import sys
+
+        if "jax" not in sys.modules:
+            os.environ["JAX_PLATFORMS"] = "cpu,gpu"
         os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
 
     if verbose and charmm_lib_links_mpi() and not _under_mpirun():
@@ -734,7 +738,8 @@ def _register_mlpot_context(
     import sys
 
     if "jax" not in sys.modules:
-        os.environ["JAX_PLATFORMS"] = "cpu"
+        # CPU-first for MLpot upinb; keep GPU plugin loaded for later promote.
+        os.environ["JAX_PLATFORMS"] = "cpu,gpu"
         os.environ["MMML_MLPOT_DEVICE"] = "cpu"
     _, _, pyCModel = load_physnet_mlpot_bundle(
         ckpt,
