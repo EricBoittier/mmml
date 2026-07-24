@@ -7,9 +7,16 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 _RESI_LINE = re.compile(r"^RESI\s+(\S+)\s+(\S+)")
+
+# Common non-RESI spellings → CGenFF RESI names.
+CGENFF_RESIDUE_ALIASES: dict[str, str] = {
+    "WATER": "TIP3",
+    "OCTANOL": "OCOH",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +28,39 @@ class CgenffResidue:
 
 def default_cgenff_rtf_path() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "charmm" / "top_all36_cgenff.rtf"
+
+
+def normalize_cgenff_residue_name(name: str) -> str:
+    """Return an uppercase CGenFF residue name, applying common aliases."""
+    key = str(name).strip().upper()
+    if not key:
+        raise ValueError("residue name must not be empty")
+    return CGENFF_RESIDUE_ALIASES.get(key, key)
+
+
+@lru_cache(maxsize=4)
+def cgenff_residue_name_set(rtf_path: str | None = None) -> frozenset[str]:
+    """Uppercase RESI names from the bundled (or given) CGenFF RTF."""
+    path = Path(rtf_path) if rtf_path is not None else default_cgenff_rtf_path()
+    return frozenset(r.name.upper() for r in parse_cgenff_residues(path))
+
+
+def is_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> bool:
+    """True if *name* (after alias normalization) is a RESI in the CGenFF RTF."""
+    key = normalize_cgenff_residue_name(name)
+    path = None if rtf_path is None else str(Path(rtf_path))
+    return key in cgenff_residue_name_set(path)
+
+
+def require_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> str:
+    """Normalize and validate a CGenFF residue name; raise ``ValueError`` if unknown."""
+    key = normalize_cgenff_residue_name(name)
+    if not is_cgenff_residue_name(key, rtf_path=rtf_path):
+        raise ValueError(
+            f"Unknown CGenFF residue {name!r} (normalized {key!r}). "
+            "List valid names with: mmml make-res --list-residues"
+        )
+    return key
 
 
 def parse_cgenff_residue_line(line: str) -> CgenffResidue | None:

@@ -359,65 +359,136 @@ for _pair, _cfg in PAIR_SCAN_CONFIG.items():
 # Convenience Factory
 # ---------------------------------------------------------------------------
 
+def _to_campaign_label(label: str) -> str:
+    """Map a user/CGenFF residue name onto a campaign ``MOLECULES`` key when possible."""
+    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+        normalize_cgenff_residue_name,
+    )
+
+    key = str(label).strip().upper()
+    if key in {"ACE", "ACO"}:
+        return "ACE"
+    try:
+        key = normalize_cgenff_residue_name(key)
+    except ValueError:
+        pass
+    return key
+
+
+def _report_residue_label(label: str) -> str:
+    """Prefer canonical CGenFF spelling in scan metadata when applicable."""
+    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+        is_cgenff_residue_name,
+        normalize_cgenff_residue_name,
+    )
+
+    key = str(label).strip().upper()
+    if key == "ACE":
+        return "ACE"
+    if is_cgenff_residue_name(key) or key in {"WATER", "OCTANOL"}:
+        return normalize_cgenff_residue_name(key)
+    return key
+
+
 def make_oriented_scan_geometries(
     label_a: str,
     label_b: str,
     distances_angstrom,
     offsets_angstrom=None,
+    *,
+    generate_missing: bool = True,
 ):
     """Yield DimerGeometry objects for a pre-oriented (A, B) pair.
 
-    Uses the chemically motivated orientations from ``PAIR_SCAN_CONFIG``.
-    If *offsets_angstrom* is ``None``, uses the config defaults (2D scan).
-    Pass ``[0.0]`` for a 1D on-axis scan only.
+    Uses the chemically motivated orientations from ``PAIR_SCAN_CONFIG`` when
+    available.  Any other CGenFF residue (or pair) falls back to a generic
+    centroid-to-centroid approach along +Z with no special chemical orientation.
 
-    The lookup is **symmetric**: if ``(label_a, label_b)`` is not in the
+    If *offsets_angstrom* is ``None``, uses the config defaults (2D scan) for
+    campaign pairs, or ``[0.0]`` for generic pairs.  Pass ``[0.0]`` for a 1D
+    on-axis scan only.
+
+    The campaign lookup is **symmetric**: if ``(label_a, label_b)`` is not in the
     config but ``(label_b, label_a)`` is, the roles are swapped automatically
     so the result is still physically correct (just with A/B swapped).
 
     Parameters
     ----------
     label_a, label_b:
-        Molecule labels (must be keys of ``MOLECULES``).
+        Molecule / CGenFF residue labels.
     distances_angstrom:
         Iterable of centre-to-centre distances (Å) along Z.
     offsets_angstrom:
-        Iterable of lateral displacements (Å); ``None`` → config defaults.
+        Iterable of lateral displacements (Å); ``None`` → config/generic defaults.
+    generate_missing:
+        When True, unknown residues may be built via ``make-res`` (PyCHARMM).
     """
     from mmml.analysis.dimer_scans import distance_scan_geometries_2d
+    from mmml.analysis.residue_geometry import load_residue_monomer_atoms
+    from mmml.interfaces.pycharmmInterface.cgenff_residues import is_cgenff_residue_name
 
-    pair = (label_a, label_b)
+    reported = (_report_residue_label(label_a), _report_residue_label(label_b))
+    camp_a = _to_campaign_label(label_a)
+    camp_b = _to_campaign_label(label_b)
+
+    pair = (camp_a, camp_b)
     swapped = False
     if pair not in PAIR_SCAN_CONFIG:
-        reversed_pair = (label_b, label_a)
+        reversed_pair = (camp_b, camp_a)
         if reversed_pair in PAIR_SCAN_CONFIG:
             pair = reversed_pair
             swapped = True
         else:
+            pair = None
+
+    if pair is not None:
+        cfg = PAIR_SCAN_CONFIG[pair]
+        monomers = ORIENTED_MONOMERS[pair]
+        if offsets_angstrom is None:
+            offsets_angstrom = cfg["offsets_angstrom"]
+        mon_a = monomers["b"] if swapped else monomers["a"]
+        mon_b = monomers["a"] if swapped else monomers["b"]
+        yield from distance_scan_geometries_2d(
+            mon_a,
+            mon_b,
+            distances_angstrom,
+            offsets_angstrom,
+            pair=reported,
+            axis=(0.0, 0.0, 1.0),
+            transverse_axis=cfg["transverse_axis"],
+            center="none",
+            mol_id_array="mol_id",
+        )
+        return
+
+    # Generic CGenFF (or other) residues: centroid–centroid along Z.
+    for label, camp in ((label_a, camp_a), (label_b, camp_b)):
+        if camp in MOLECULES:
+            continue
+        key = str(label).strip().upper()
+        if not is_cgenff_residue_name(key) and key not in {"WATER", "OCTANOL"}:
             raise KeyError(
-                f"Pair {(label_a, label_b)!r} not in PAIR_SCAN_CONFIG "
-                f"(tried both orderings)."
+                f"Residue {label!r} is not a known campaign molecule or CGenFF "
+                "RESI. List names with: mmml make-res --list-residues"
             )
 
-    cfg = PAIR_SCAN_CONFIG[pair]
-    monomers = ORIENTED_MONOMERS[pair]
-
+    mon_a = centered_atoms(
+        load_residue_monomer_atoms(label_a, generate=generate_missing)
+    )
+    mon_b = centered_atoms(
+        load_residue_monomer_atoms(label_b, generate=generate_missing)
+    )
     if offsets_angstrom is None:
-        offsets_angstrom = cfg["offsets_angstrom"]
-
-    # When the pair was swapped, swap the monomer roles too
-    mon_a = monomers["b"] if swapped else monomers["a"]
-    mon_b = monomers["a"] if swapped else monomers["b"]
-    out_pair = (label_a, label_b)  # always report in the requested order
+        offsets_angstrom = [0.0]
 
     yield from distance_scan_geometries_2d(
         mon_a,
         mon_b,
         distances_angstrom,
         offsets_angstrom,
-        pair=out_pair,
-        axis=(0.0, 0.0, 1.0),           # approach along Z
-        transverse_axis=cfg["transverse_axis"],
-        center="none",                   # monomers already centred and oriented
+        pair=reported,
+        axis=(0.0, 0.0, 1.0),
+        transverse_axis=(1.0, 0.0, 0.0),
+        center="none",
         mol_id_array="mol_id",
     )

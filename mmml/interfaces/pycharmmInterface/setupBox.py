@@ -77,14 +77,55 @@ def correct_names(atoms: Atoms) -> Atoms:
 water = correct_names(ase_water)    
 octanol = correct_names(ase_octanol)
 
+# Legacy keys kept for backward compatibility; prefer CGenFF RESI names (TIP3, OCOH, …).
 solvents_ase = {
     "water": water,
     "octanol": octanol,
+    "TIP3": water,
+    "OCOH": octanol,
 }
 solvents_density = {
     "water": 1000,
     "octanol": 824,
+    "TIP3": 1000,
+    "OCOH": 824,
 }
+
+
+def _normalize_solvent_key(solvent: str) -> str:
+    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+        require_cgenff_residue_name,
+    )
+
+    return require_cgenff_residue_name(solvent)
+
+
+def _resolve_solvent_atoms(solvent: str) -> Atoms:
+    """Return solvent monomer atoms for any CGenFF residue name."""
+    from mmml.analysis.residue_geometry import load_residue_monomer_atoms
+
+    name = _normalize_solvent_key(solvent)
+    if name in solvents_ase:
+        return solvents_ase[name].copy()
+    # Legacy lowercase aliases still present in solvents_ase.
+    legacy = {"TIP3": "water", "OCOH": "octanol"}.get(name)
+    if legacy is not None and legacy in solvents_ase:
+        return solvents_ase[legacy].copy()
+    return load_residue_monomer_atoms(name, generate=True)
+
+
+def _resolve_solvent_density_kg_m3(solvent: str, density: float | None) -> float:
+    from mmml.analysis.residue_geometry import resolve_solvent_density_kg_m3
+
+    name = _normalize_solvent_key(solvent)
+    if density is not None:
+        return resolve_solvent_density_kg_m3(name, density)
+    if name in solvents_density:
+        return float(solvents_density[name])
+    legacy = {"TIP3": "water", "OCOH": "octanol"}.get(name)
+    if legacy is not None and legacy in solvents_density:
+        return float(solvents_density[legacy])
+    return resolve_solvent_density_kg_m3(name, None)
 
 def read_initial_pdb(cwd: Path) -> Atoms:
     """Reads the initial PDB file and returns an ASE Atoms object"""
@@ -127,15 +168,19 @@ def solute_radius_from_mol(mol: Atoms, buffer: float = 1.0) -> float:
     return float(np.max(radii)) + buffer
 
 
-def volume_per_solvent_molecule_ang3(solvent: str) -> float:
+def volume_per_solvent_molecule_ang3(
+    solvent: str,
+    density_kg_m3: float | None = None,
+    atoms: Atoms | None = None,
+) -> float:
     """
     Approximate volume per solvent molecule in Å³ from density and molecular weight.
     """
-    if solvent not in solvents_ase:
-        raise ValueError(f"Solvent {solvent} not found in {solvents_ase.keys()}")
-    atoms = solvents_ase[solvent]
-    density_kg_m3 = solvents_density[solvent]
-    density_g_cm3 = density_kg_m3 / 1000.0
+    name = _normalize_solvent_key(solvent)
+    if atoms is None:
+        atoms = _resolve_solvent_atoms(name)
+    density = _resolve_solvent_density_kg_m3(name, density_kg_m3)
+    density_g_cm3 = density / 1000.0
     mw = atoms.get_masses().sum()
     # cm³/mol -> Å³/molecule: (MW/density) / N_A * 1e24
     molar_vol_cm3 = mw / density_g_cm3
@@ -148,6 +193,8 @@ def outer_radius_from_n_solvent(
     inner_radius: float,
     solvent: str,
     buffer: float = 1.0,
+    density_kg_m3: float | None = None,
+    atoms: Atoms | None = None,
 ) -> float:
     """
     Outer radius of solvent shell to fit n_molecules around a solute.
@@ -155,7 +202,9 @@ def outer_radius_from_n_solvent(
     Solvent occupies a spherical shell between inner_radius and outer_radius.
     Volume of shell = (4/3)*pi*(R_outer³ - R_inner³) = n * V_solvent
     """
-    vol_per_mol = volume_per_solvent_molecule_ang3(solvent)
+    vol_per_mol = volume_per_solvent_molecule_ang3(
+        solvent, density_kg_m3=density_kg_m3, atoms=atoms
+    )
     shell_volume = n_molecules * vol_per_mol
     # (4/3)*pi*R_outer³ = shell_volume + (4/3)*pi*R_inner³
     inner_vol = (4.0 / 3.0) * np.pi * (inner_radius**3)
