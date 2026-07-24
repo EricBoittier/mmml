@@ -914,10 +914,6 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="pycharmm: pretreat CHARMM ABNR steps (default: --charmm-abnr-steps)",
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        add_charmm_mm_pretreat_physics_args,
-    )
-
     add_charmm_mm_pretreat_physics_args(parser)
     parser.add_argument(
         "--ps-nve",
