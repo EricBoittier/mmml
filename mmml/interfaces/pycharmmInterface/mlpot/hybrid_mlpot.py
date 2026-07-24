@@ -936,6 +936,7 @@ class DecomposedMlpotModel:
             jax_compile_threads_context,
         )
         from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+            jax_cpu_backend_available,
             jax_cpu_until_mlpot_registered,
             mlpot_device_context_fell_back_to_cpu,
             mlpot_jax_device_context,
@@ -946,6 +947,15 @@ class DecomposedMlpotModel:
         cpu_only = not gpu and (
             self._defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
         )
+        if cpu_only and not jax_cpu_backend_available():
+            if self._verbose:
+                print(
+                    "Decomposed MLpot: CPU defer requested but JAX CPU backend is "
+                    "unavailable (jax likely imported with GPU-only platforms); "
+                    "compiling on GPU instead",
+                    flush=True,
+                )
+            cpu_only = False
 
         with jax_compile_threads_context():
             if not cpu_only:

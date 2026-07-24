@@ -319,3 +319,10 @@ pept.psf
 /trialanine-water.npy
 /trialanine-water.psf
 examples/notebooks/Untitled.ipynb
+tests/packmol.inp
+tests/peptide.pdb
+tests/tip3.pdb
+tests/pdb/benz_crystal_1x1x1.pdb
+tests/pdb/benz_crystal_6x6x4.pdb
+tests/pdb/dcm_crystal_1x1x1.pdb
+tests/pdb/dcm_crystal_2x2x2.pdb

@@ -150,6 +150,48 @@ def test_mlpot_jax_device_context_no_fallback_when_gpu_available(monkeypatch):
         assert jax_device_policy.mlpot_device_context_fell_back_to_cpu() is False
 
 
+def test_mlpot_jax_cpu_until_falls_back_to_gpu_when_cpu_missing(monkeypatch, capsys):
+    """GPU-only JAX init must not abort MLpot defer — use GPU with a warning."""
+    monkeypatch.setenv("JAX_PLATFORMS", "gpu,cpu")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    gpu_dev = mock.MagicMock(name="gpu0")
+
+    def devices_side_effect(name=None):
+        if name == "cpu":
+            raise RuntimeError("Unknown backend cpu. Available backends are ['cuda']")
+        if name in ("gpu", "cuda", None):
+            return [gpu_dev]
+        raise RuntimeError(f"Unknown backend {name}")
+
+    with mock.patch("jax.devices", side_effect=devices_side_effect), mock.patch(
+        "jax.default_device"
+    ) as default_device:
+        default_device.return_value.__enter__ = mock.Mock(return_value=gpu_dev)
+        default_device.return_value.__exit__ = mock.Mock(return_value=False)
+        with jax_device_policy.jax_cpu_until_mlpot_registered() as dev:
+            assert dev is gpu_dev
+
+    out = capsys.readouterr().out + capsys.readouterr().err
+    assert "WARNING" in out
+    assert "Using GPU instead" in out
+
+
+def test_jax_cpu_backend_available_false_when_devices_raise(monkeypatch):
+    monkeypatch.setenv("JAX_PLATFORMS", "gpu,cpu")
+    import sys
+
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    monkeypatch.setitem(sys.modules, "jax", mock.MagicMock())
+
+    def devices_side_effect(name=None):
+        raise RuntimeError("Unknown backend cpu")
+
+    with mock.patch("jax.devices", side_effect=devices_side_effect):
+        assert jax_device_policy.jax_cpu_backend_available() is False
+
+
 def test_mlpot_jax_compilation_cache_default(monkeypatch, tmp_path):
     monkeypatch.delenv("JAX_COMPILATION_CACHE_DIR", raising=False)
     monkeypatch.delenv("MMML_NO_JAX_COMPILATION_CACHE", raising=False)

@@ -719,7 +719,22 @@ def _register_mlpot_context(
 
         if "jax" not in sys.modules:
             os.environ["JAX_PLATFORMS"] = "cpu,gpu"
-        os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+            os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+        else:
+            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                jax_cpu_backend_available,
+            )
+
+            if jax_cpu_backend_available():
+                os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+            elif verbose:
+                print(
+                    "mmml WARNING: MPI MLpot CPU defer skipped — JAX has no CPU "
+                    "backend (imported earlier with GPU-only platforms). Continuing "
+                    "on GPU. Restart with JAX_PLATFORMS=gpu,cpu before import jax "
+                    "to restore CPU defer.",
+                    flush=True,
+                )
 
     if verbose and charmm_lib_links_mpi() and not _under_mpirun():
         print(

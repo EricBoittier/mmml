@@ -242,19 +242,111 @@ def _warn_gpu_requested_but_unavailable() -> None:
         print(f"mmml WARNING: {message}", flush=True)
 
 
+def jax_registered_backend_names() -> list[str]:
+    """Backend names JAX actually registered (empty if jax is not imported yet)."""
+    import sys
+
+    if "jax" not in sys.modules:
+        return []
+    try:
+        import jax
+
+        # Prefer the public-ish bridge helper when present.
+        from jax._src import xla_bridge
+
+        return sorted(xla_bridge.backends().keys())
+    except Exception:
+        names: list[str] = []
+        for platform in ("cpu", "gpu", "cuda", "tpu"):
+            try:
+                import jax
+
+                if jax.devices(platform):
+                    names.append(platform)
+            except Exception:
+                continue
+        return names
+
+
+def jax_cpu_backend_available() -> bool:
+    """True when ``jax.devices('cpu')`` works with the already-initialized runtime."""
+    import sys
+
+    if "jax" not in sys.modules:
+        # Not initialized yet — CPU will be available unless platforms exclude it.
+        platforms = (os.environ.get("JAX_PLATFORMS") or "").strip().lower()
+        if not platforms:
+            return True
+        return "cpu" in {p.strip() for p in platforms.split(",") if p.strip()}
+    try:
+        import jax
+
+        return bool(jax.devices("cpu"))
+    except Exception:
+        return False
+
+
+def jax_gpu_backend_available() -> bool:
+    """True when at least one JAX GPU/CUDA device is visible."""
+    import sys
+
+    if "jax" not in sys.modules:
+        return False
+    try:
+        import jax
+
+        return bool(jax.devices("gpu"))
+    except Exception:
+        try:
+            import jax
+
+            return bool(jax.devices("cuda"))
+        except Exception:
+            return False
+
+
 @contextmanager
 def jax_cpu_until_mlpot_registered() -> Iterator[Any]:
-    """Keep JAX array placement on CPU until CHARMM MLpot ``upinb`` completes."""
+    """Keep JAX array placement on CPU until CHARMM MLpot ``upinb`` completes.
+
+    If JAX was already initialized without a CPU backend (common when an early
+    import used ``JAX_PLATFORMS=gpu`` / ``cuda`` only, then the env was later
+    expanded to ``gpu,cpu``), fall back to GPU instead of aborting. MPI defer
+    prefers CPU to keep XLA off-GPU during ``upinb``, but a working GPU is
+    safer than a hard failure when CPU is unreachable.
+    """
     import jax
 
     try:
         cpu = jax.devices("cpu")
     except RuntimeError as exc:
         platforms = (os.environ.get("JAX_PLATFORMS") or "").strip() or "(unset)"
+        registered = jax_registered_backend_names()
+        gpu: list[Any] = []
+        try:
+            gpu = list(jax.devices("gpu"))
+        except Exception:
+            try:
+                gpu = list(jax.devices("cuda"))
+            except Exception:
+                gpu = []
+        if gpu:
+            print(
+                "mmml WARNING: MLpot deferred/CPU path requested, but the JAX CPU "
+                f"backend is not registered (JAX_PLATFORMS={platforms!r}, "
+                f"registered={registered or ['?']}). Using GPU instead. "
+                "Restart the process with JAX_PLATFORMS=gpu,cpu *before* any "
+                "import jax if CPU defer is required.",
+                flush=True,
+            )
+            with jax.default_device(gpu[0]):
+                yield gpu[0]
+            return
         raise RuntimeError(
             "MLpot deferred/CPU path needs the JAX CPU backend, but it is not "
-            f"registered (JAX_PLATFORMS={platforms!r}). Restart with "
-            "JAX_PLATFORMS=gpu,cpu (GPU runs) or JAX_PLATFORMS=cpu (CPU-only)."
+            f"registered (JAX_PLATFORMS={platforms!r}, registered="
+            f"{registered or ['?']}). Restart with JAX_PLATFORMS=gpu,cpu "
+            "(GPU runs) or JAX_PLATFORMS=cpu (CPU-only) before importing jax."
         ) from exc
     with jax.default_device(cpu[0]):
         yield cpu[0]
