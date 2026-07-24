@@ -160,6 +160,8 @@ composition: "system.pdb"
 
 PDB files must carry CGenFF residue and atom names (for example from `mmml make-res`). Packmol-mix PDB monomers must be a single residue; a lone `system.pdb` (count 1) may contain many residues. `--from-pdb` is mutually exclusive with `--from-psf`/`--from-crd`.
 
+**Runnable PDB → backend examples.** Smoke shell scripts and YAML for `--from-pdb`, Packmol monomer PDBs, and certified PSF/CRD across `ase` / `jaxmd` / `pycharmm` live in [`examples/md_system_from_pdb/`](../examples/md_system_from_pdb/README.md).
+
 **Packmol is the default for `composition`.** When `composition` is set (CGenFF-only or Packmol-mix PDB), MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
 
 **Grid placement is the fast alternative.** Set `packmol: false` and `builder: liquid` (or `--no-packmol --builder liquid`) to place whole molecules on a cubic/spherical grid without the Packmol binary. Useful for CI smoke tests and quick JAX-MD probes. PDB composition tokens require Packmol (or a lone full-system PDB); they are not compatible with `--no-packmol` or PyXtal.

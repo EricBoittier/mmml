@@ -326,3 +326,8 @@ tests/pdb/benz_crystal_1x1x1.pdb
 tests/pdb/benz_crystal_6x6x4.pdb
 tests/pdb/dcm_crystal_1x1x1.pdb
 tests/pdb/dcm_crystal_2x2x2.pdb
+tests/packmol_repack/fixed_0000.pdb
+tests/packmol_repack/fixed_0001.pdb
+tests/packmol_repack/movable_0000.pdb
+tests/packmol_repack/movable_0001.pdb
+tests/packmol_repack/repack.inp

@@ -1,0 +1,42 @@
+# Certified liquid-box (PSF/CRD) → JAX-MD NVT → NVE.
+#
+# Edit from_psf / from_crd / checkpoint, then:
+#   uv run mmml md-system \
+#     --config examples/md_system_from_pdb/yaml/pbc_certified_jaxmd.yaml \
+#     --run-all
+#
+# Build a tiny box first if needed:
+#   uv run mmml liquid-box --composition DCM:8 \
+#     --output-dir artifacts/md_system_from_pdb/box_dcm8
+
+defaults:
+  checkpoint: examples/ckpts_json/DESdimers_params.json
+  from_psf: artifacts/md_system_from_pdb/box_dcm8/model.psf
+  from_crd: artifacts/md_system_from_pdb/box_dcm8/model.crd
+  temperature: 250.0
+  pressure: 1.0
+  dt_fs: 0.5
+  seed: 22
+  skip_jit_warmup: true
+  continue_velocities: true
+  handoff_write_res: true
+  mc_density_equalize: false
+
+campaign_output: artifacts/md_system_from_pdb/yaml_pbc_certified
+
+runs:
+  jaxmd_nvt:
+    description: "Short NVT thermalization from certified box"
+    backend: jaxmd
+    setup: pbc_nvt
+    ps: 0.2
+    continue_velocities: false
+    output_dir: artifacts/md_system_from_pdb/yaml_pbc_certified/nvt
+
+  jaxmd_nve:
+    description: "Short NVE from NVT handoff"
+    backend: jaxmd
+    setup: pbc_nve
+    depends_on: jaxmd_nvt
+    ps: 0.1
+    output_dir: artifacts/md_system_from_pdb/yaml_pbc_certified/nve
