@@ -20,7 +20,7 @@ Usage from Python::
 
 CLI::
 
-    python -m mmml.cli.make_mixed_box --residues MEOH ACET --counts 10 10 --side_length 23.0
+    python -m mmml.cli.make_mixed_box --residues MEOH ACET --counts 10 10 --box-size 23.0
 """
 
 from __future__ import annotations

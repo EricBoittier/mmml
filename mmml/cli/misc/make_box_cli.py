@@ -3,8 +3,8 @@
 CLI for make_box: pack molecules into a periodic box (vacuum or solvated).
 
 Usage:
-    mmml make-box --res CYBZ --n 50 --side_length 25.0
-    mmml make-box --res CYBZ --n 50 --side_length 25.0 --solvent TIP3 --density 1.0
+    mmml make-box --res CYBZ --n 50 --box-size 25.0
+    mmml make-box --res CYBZ --n 50 --box-size 25.0 --solvent TIP3 --density 1.0
 
 Requires: CHARMM, PyCHARMM, PackMol (charmm-interface)
 """

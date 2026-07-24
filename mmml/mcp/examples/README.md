@@ -155,7 +155,7 @@ mmml md-system --config mmml/mcp/examples/hybrid_pbc_jaxmd.yaml --run-all
 ```bash
 mmml make-res --res DCM --skip-energy-show
 mmml liquid-box --composition DCM:12 -o boxes/liquid --profile standard --box-size 24
-mmml make-box --res DCM --n 12 --side_length 24
+mmml make-box --res DCM --n 12 --box-size 24
 ```
 
 ## See also
