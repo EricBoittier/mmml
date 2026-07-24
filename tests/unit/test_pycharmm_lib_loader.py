@@ -28,13 +28,16 @@ def _lib():
     if not _VENDORED_LIB.is_file():
         pytest.skip(f"vendored pycharmm lib.py not found at {_VENDORED_LIB}")
     ns: dict = {"__file__": str(_VENDORED_LIB)}
-    # The module instantiates ``CharmmLib()`` at import scope (loads CHARMM);
-    # the resolver helpers are defined before that, so an OSError there is
-    # expected and harmless — the functions we test are already bound.
-    try:
-        exec(compile(_VENDORED_LIB.read_text(encoding="utf-8"), str(_VENDORED_LIB), "exec"), ns)
-    except OSError:
-        pass
+    # The module instantiates ``CharmmLib()`` at import scope, which loads (and
+    # would init) the CHARMM shared library — a second, in-process CHARMM load
+    # that can hang or crash the test. The resolver helpers we exercise are all
+    # defined above that line, so truncate the source before it and exec only
+    # the pure-Python definitions.
+    source = _VENDORED_LIB.read_text(encoding="utf-8")
+    marker = "\ncharmm_lib = CharmmLib("
+    if marker in source:
+        source = source.split(marker, 1)[0]
+    exec(compile(source, str(_VENDORED_LIB), "exec"), ns)
     required = ("charmm_lib_suffix", "resolve_charmm_lib_path", "_discover_repo_charmm_lib")
     missing = [name for name in required if name not in ns]
     if missing:

@@ -31,6 +31,7 @@ run_step 01_from_pdb_pycharmm_minimize.sh 1
 run_step 04_from_pdb_free_nve_pycharmm.sh 1
 run_step 05_packmol_mix_pdb_monomer.sh 1
 run_step 06_from_pdb_nvt_fix_resids.sh 1
+run_step 08_from_pdb_pre_dynamics_lingo.sh 1
 run_step 07_certified_psf_crd_pbc.sh 0
 
 echo

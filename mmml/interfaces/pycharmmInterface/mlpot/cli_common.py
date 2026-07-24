@@ -242,6 +242,29 @@ def resolve_show_energy(args: argparse.Namespace) -> bool:
     return False
 
 
+def add_pre_dynamics_lingo_args(parser: argparse.ArgumentParser) -> None:
+    """Free-form CHARMM lingo executed once before scheduled dynamics."""
+    group = parser.add_argument_group("Pre-dynamics CHARMM lingo")
+    group.add_argument(
+        "--pycharmm-pre-dynamics-lingo",
+        type=str,
+        default="",
+        metavar="SCRIPT",
+        help=(
+            "CHARMM lingo to run once after setup/constraints and before dynamics "
+            "(e.g. CONS/UMBR/ADUMB). Prefer --pycharmm-pre-dynamics-lingo-file for "
+            "multiline scripts."
+        ),
+    )
+    group.add_argument(
+        "--pycharmm-pre-dynamics-lingo-file",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Path to a CHARMM script file run once before dynamics.",
+    )
+
+
 def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:
     """CHARMM MMFP flat-bottom spherical potential (non-PBC)."""
     group = parser.add_argument_group("Flat-bottom sphere (CHARMM MMFP)")
@@ -1715,6 +1738,77 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
             f"center=({cfg.xref:.2f}, {cfg.yref:.2f}, {cfg.zref:.2f}) "
             f"selection='{cfg.selection}'"
         )
+
+
+def normalize_pycharmm_pre_dynamics_lingo(value: Any) -> str:
+    """Normalize YAML/CLI lingo to a single CHARMM script string (empty = no-op)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return ""
+        parts: list[str] = []
+        for i, item in enumerate(value):
+            if not isinstance(item, str):
+                raise ValueError(
+                    "pycharmm_pre_dynamics_lingo list items must be strings; "
+                    f"got {type(item).__name__} at index {i}"
+                )
+            text = item.strip()
+            if text:
+                parts.append(text)
+        return "\n".join(parts).strip()
+    raise ValueError(
+        "pycharmm_pre_dynamics_lingo must be a string, list of strings, or empty; "
+        f"got {type(value).__name__}"
+    )
+
+
+def resolve_pre_dynamics_lingo_script(args: argparse.Namespace) -> str:
+    """Resolve inline and/or file-based pre-dynamics CHARMM lingo."""
+    inline = normalize_pycharmm_pre_dynamics_lingo(
+        getattr(args, "pycharmm_pre_dynamics_lingo", None)
+    )
+    file_raw = getattr(args, "pycharmm_pre_dynamics_lingo_file", None)
+    file_text = ""
+    if file_raw is not None and str(file_raw).strip():
+        path = Path(file_raw)
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"pycharmm_pre_dynamics_lingo_file not found: {path}"
+            )
+        file_text = path.read_text(encoding="utf-8").strip()
+    if inline and file_text:
+        return f"{inline}\n{file_text}".strip()
+    return inline or file_text
+
+
+def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
+    """Run free-form CHARMM lingo once before scheduled dynamics (no-op if empty)."""
+    script = resolve_pre_dynamics_lingo_script(args)
+    if not script:
+        return
+    if not bool(getattr(args, "quiet", False)):
+        n_lines = script.count("\n") + 1
+        src = "inline"
+        if getattr(args, "pycharmm_pre_dynamics_lingo_file", None):
+            src = (
+                "file"
+                if not normalize_pycharmm_pre_dynamics_lingo(
+                    getattr(args, "pycharmm_pre_dynamics_lingo", None)
+                )
+                else "inline+file"
+            )
+        print(
+            f"Pre-dynamics CHARMM lingo ({src}, {n_lines} line(s)):",
+            flush=True,
+        )
+        print(script, flush=True)
+    import pycharmm
+
+    pycharmm.lingo.charmm_script(script)
 
 
 def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:

@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_charmm_output_from_args,
     apply_dynamics_print_kwargs,
     apply_flat_bottom_from_args,
+    apply_pre_dynamics_lingo_from_args,
     assert_dynamics_ready,
     build_cluster_from_args_with_tag,
     charmm_grms,
@@ -2817,6 +2818,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
+        apply_pre_dynamics_lingo_from_args(args)
 
         n_heat_segments = max(1, int(getattr(args, "n_heat_segments", 1)))
         n_equi_segments = max(1, int(getattr(args, "n_equi_segments", 1)))

@@ -1380,6 +1380,42 @@ python scripts/validate_mlpot_sparse_dimers.py \
 
 Exit code `0` means the sparse dimer cap covers the near dimers. Exit code `1` means the cap is saturated; raise `ml_max_active_dimers`, enlarge the box, or reduce the system.
 
+### Pre-dynamics CHARMM lingo (PyCHARMM only)
+
+For umbrella sampling, extra `CONS`/`UMBR`/`ADUMB` blocks, or other free-form CHARMM setup that must run after minimize/constraints and immediately before scheduled dynamics, set:
+
+```yaml
+backend: pycharmm
+pycharmm_pre_dynamics_lingo: |
+  cons fix sele resid 1 end
+  umbr
+  ...
+  end
+```
+
+A YAML list of lines is also accepted. `md-system` writes the script to
+`{output_dir}/pycharmm_pre_dynamics_lingo.inp` and forwards
+`--pycharmm-pre-dynamics-lingo-file` to the PyCHARMM backend. Execution happens
+once per job after `constrain_resids` / MMFP setup and before the heat/nve/equi/prod
+loop (skipped for mini-only runs). This option is rejected for ASE/JAX-MD backends.
+
+**Smoke example** (acetone monomer PDB → short vacuum NVE with `cons fix`):
+
+```bash
+uv run mmml md-system \
+  --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
+# or:
+bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
+```
+
+Pass checks:
+
+1. Job exits 0.
+2. `artifacts/md_system_from_pdb/08_pre_dynamics_lingo/pycharmm_pre_dynamics_lingo.inp` contains `cons fix sele resid 1 end`.
+3. Log prints `Pre-dynamics CHARMM lingo` before the NVE stage (example sets `quiet: false`).
+
+Replace the YAML lingo block with your `UMBR`/`ADUMB` script when ready for umbrella sampling.
+
 ## Template improvements
 
 Use this structure when turning ad hoc configs into reusable campaign templates:
@@ -1493,6 +1529,8 @@ min_com_restraint_k: 1.0
 extra_args: []
 fix_resids: ''
 constrain_resids: ''
+pycharmm_pre_dynamics_lingo: ''
+pycharmm_pre_dynamics_lingo_file: null
 no_fix: false
 mini_nstep: 20
 no_pre_minimize: false

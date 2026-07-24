@@ -27,6 +27,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_heat_ihtfrq,
     resolve_heat_firstt_finalt,
     apply_flat_bottom_from_args,
+    apply_pre_dynamics_lingo_from_args,
     assert_dynamics_ready,
     charmm_grms,
     resolve_echeck_for_cluster,
@@ -1272,6 +1273,7 @@ def run_dynamics_workflow(
 
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
+        apply_pre_dynamics_lingo_from_args(args)
 
         label = ensemble.upper()
         print(

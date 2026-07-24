@@ -46,6 +46,7 @@ Each job has a matching YAML under `yaml/` (shell wrappers call `--config`).
 | 05 | `yaml/05_packmol_mix_pdb_monomer.yaml` | pycharmm | `free_nve` | `monomer.pdb:4` Packmol sphere |
 | 06 | `yaml/06_from_pdb_nvt_fix_resids.yaml` | pycharmm | `free_nvt` | Constrained SD (`fix_resids`) |
 | 07 | `yaml/07_certified_psf_crd_pbc.yaml` | jaxmd | `pbc_nve` | Needs certified PSF/CRD |
+| 08 | `yaml/08_from_pdb_pre_dynamics_lingo.yaml` | pycharmm | `free_nve` | Pre-dynamics CHARMM lingo (`cons fix`) |
 
 Extra campaigns:
 
@@ -109,7 +110,23 @@ uv run mmml md-system \
 Pass criteria for `fix_resids`: fixed-monomer RMSD ≈ 0 after SD pass 2
 (`tests/functionality/constraints/README.md`).
 
-### 5. Certified PBC box (PSF/CRD, not lone PDB)
+### 5. Pre-dynamics CHARMM lingo (PyCHARMM)
+
+Runs free-form CHARMM lingo once after mini/constraints and before NVE
+(e.g. `CONS` / `UMBR` / `ADUMB`). Smoke uses `cons fix` on resid 1:
+
+```bash
+uv run mmml md-system \
+  --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
+# or:
+bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
+```
+
+Pass checks: exit 0; `{output_dir}/pycharmm_pre_dynamics_lingo.inp` contains the
+script; log prints `Pre-dynamics CHARMM lingo` before dynamics. See
+[`docs/md-system-configs.md`](../../docs/md-system-configs.md#pre-dynamics-charmm-lingo-pycharmm-only).
+
+### 6. Certified PBC box (PSF/CRD, not lone PDB)
 
 `liquid-box` writes `model.pdb` / `model.psf` / `model.crd` / `box.json`. Prefer
 PSF+CRD for PBC MD so the cell comes from `box.json`:

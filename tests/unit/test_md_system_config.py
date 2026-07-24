@@ -281,6 +281,44 @@ def test_apply_mapping_prep_gate_keys() -> None:
     assert args.charmm_image_mlpot_min_distance == pytest.approx(4.0)
 
 
+def test_pycharmm_pre_dynamics_lingo_yaml_string(tmp_path: Path) -> None:
+    cfg = tmp_path / "md.yaml"
+    cfg.write_text(
+        """
+setup: pbc_nvt
+backend: pycharmm
+composition: DCM:2
+box_size: 20.0
+pycharmm_pre_dynamics_lingo: |
+  cons fix sele resid 1 end
+""".strip()
+    )
+    args = parse_md_system_args(["--config", str(cfg)])
+    assert "cons fix sele resid 1 end" in str(args.pycharmm_pre_dynamics_lingo)
+
+
+def test_pycharmm_pre_dynamics_lingo_yaml_list(tmp_path: Path) -> None:
+    cfg = tmp_path / "md.yaml"
+    cfg.write_text(
+        """
+setup: pbc_nvt
+backend: pycharmm
+composition: DCM:2
+box_size: 20.0
+pycharmm_pre_dynamics_lingo:
+  - "cons fix sele resid 1 end"
+  - "umbr"
+  - "end"
+""".strip()
+    )
+    args = parse_md_system_args(["--config", str(cfg)])
+    assert args.pycharmm_pre_dynamics_lingo == [
+        "cons fix sele resid 1 end",
+        "umbr",
+        "end",
+    ]
+
+
 def test_validate_packmol_skips_certified_box_handoff() -> None:
     from mmml.cli.run.md_system import _validate_packmol_args, parse_args
 

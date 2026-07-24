@@ -148,6 +148,62 @@ def test_pycharmm_extra_args_strip_skip_jit_warmup():
     assert "--quiet" in extra
 
 
+def test_build_pycharmm_command_forwards_pre_dynamics_lingo(tmp_path: Path):
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    out = tmp_path / "run"
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=out,
+            pycharmm_pre_dynamics_lingo="cons fix sele resid 1 end",
+        )
+    )
+    assert "--pycharmm-pre-dynamics-lingo-file" in cmd
+    path = Path(cmd[cmd.index("--pycharmm-pre-dynamics-lingo-file") + 1])
+    assert path == out / "pycharmm_pre_dynamics_lingo.inp"
+    assert path.read_text(encoding="utf-8").strip() == "cons fix sele resid 1 end"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert Path(parsed.pycharmm_pre_dynamics_lingo_file) == path
+
+
+def test_build_pycharmm_command_forwards_pre_dynamics_lingo_list(tmp_path: Path):
+    out = tmp_path / "run"
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=out,
+            pycharmm_pre_dynamics_lingo=["cons fix sele resid 1 end", "umbr", "end"],
+        )
+    )
+    path = Path(cmd[cmd.index("--pycharmm-pre-dynamics-lingo-file") + 1])
+    assert path.read_text(encoding="utf-8").strip() == (
+        "cons fix sele resid 1 end\numbr\nend"
+    )
+
+
+def test_build_pycharmm_command_omits_empty_pre_dynamics_lingo(tmp_path: Path):
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=tmp_path / "run",
+            pycharmm_pre_dynamics_lingo="",
+            pycharmm_pre_dynamics_lingo_file=None,
+        )
+    )
+    assert "--pycharmm-pre-dynamics-lingo-file" not in cmd
+    assert "--pycharmm-pre-dynamics-lingo" not in cmd
+
+
+def test_build_command_rejects_pre_dynamics_lingo_for_non_pycharmm():
+    from mmml.cli.run.md_system import build_command
+
+    args = _pycharmm_args(
+        backend="jaxmd",
+        setup="pbc_nvt",
+        pycharmm_pre_dynamics_lingo="cons fix sele resid 1 end",
+    )
+    with pytest.raises(ValueError, match="require --backend pycharmm"):
+        build_command(args)
+
+
 def test_build_pycharmm_command_forwards_pre_mlpot_pair_floors():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 

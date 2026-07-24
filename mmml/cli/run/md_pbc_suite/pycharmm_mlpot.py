@@ -16,6 +16,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_flat_bottom_args,
     add_monomer_constraint_args,
     add_packmol_cache_args,
+    add_pre_dynamics_lingo_args,
     add_run_state_checkpoint_args,
     add_staged_md_args,
     add_test_first_args,
@@ -70,6 +71,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_dynamics_overlap_args(parser)
     add_dynamics_stability_args(parser)
     add_flat_bottom_args(parser)
+    add_pre_dynamics_lingo_args(parser)
     add_monomer_constraint_args(parser, for_dynamics=True)
     add_test_first_args(parser)
     add_staged_md_args(parser)

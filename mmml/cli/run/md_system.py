@@ -411,6 +411,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: freeze these resids during MD (comma-separated)",
     )
     parser.add_argument(
+        "--pycharmm-pre-dynamics-lingo",
+        type=str,
+        default="",
+        help=(
+            "pycharmm: CHARMM lingo run once after setup/constraints and before "
+            "scheduled dynamics (YAML may use a multiline string or list of lines; "
+            "e.g. CONS/UMBR/ADUMB)"
+        ),
+    )
+    parser.add_argument(
+        "--pycharmm-pre-dynamics-lingo-file",
+        type=Path,
+        default=None,
+        help="pycharmm: path to a CHARMM script file run once before dynamics",
+    )
+    parser.add_argument(
         "--no-fix",
         action="store_true",
         help="pycharmm: skip constrained SD pass 2",
@@ -2279,6 +2295,53 @@ def _append_suite_mmml_handoff_args(
     _append_optional(cmd, "--jax-profiler-dir", getattr(args, "jax_profiler_dir", None))
 
 
+def _pycharmm_pre_dynamics_lingo_requested(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        normalize_pycharmm_pre_dynamics_lingo,
+    )
+
+    if normalize_pycharmm_pre_dynamics_lingo(
+        getattr(args, "pycharmm_pre_dynamics_lingo", None)
+    ):
+        return True
+    file_raw = getattr(args, "pycharmm_pre_dynamics_lingo_file", None)
+    return bool(file_raw is not None and str(file_raw).strip())
+
+
+def _append_pycharmm_pre_dynamics_lingo(
+    cmd: list[str], args: argparse.Namespace
+) -> None:
+    """Write inline YAML/CLI lingo to output_dir and forward ``--*-lingo-file``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        normalize_pycharmm_pre_dynamics_lingo,
+    )
+
+    inline = normalize_pycharmm_pre_dynamics_lingo(
+        getattr(args, "pycharmm_pre_dynamics_lingo", None)
+    )
+    lingo_file = getattr(args, "pycharmm_pre_dynamics_lingo_file", None)
+    file_set = lingo_file is not None and str(lingo_file).strip()
+    if not inline and not file_set:
+        return
+    if inline:
+        out_dir = (
+            Path(args.output_dir)
+            if getattr(args, "output_dir", None) is not None
+            else Path("artifacts/pycharmm_mlpot")
+        )
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / "pycharmm_pre_dynamics_lingo.inp"
+        chunks: list[str] = [inline]
+        if file_set:
+            existing = Path(lingo_file).read_text(encoding="utf-8").strip()
+            if existing:
+                chunks.append(existing)
+        path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
+        cmd.extend(["--pycharmm-pre-dynamics-lingo-file", str(path)])
+        return
+    cmd.extend(["--pycharmm-pre-dynamics-lingo-file", str(lingo_file)])
+
+
 def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
     if value is None:
         return
@@ -2831,6 +2894,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if not args.no_fix:
         _append_if_nonempty(cmd, "--fix-resids", args.fix_resids)
     _append_if_nonempty(cmd, "--constrain-resids", args.constrain_resids)
+    _append_pycharmm_pre_dynamics_lingo(cmd, args)
     if args.md_stage:
         cmd.extend(["--md-stage", str(args.md_stage)])
     elif args.md_stages:
@@ -3337,6 +3401,12 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
                 f"--backend pycharmm supports {_pycharmm_setups()}; got {args.setup!r}"
             )
         return "pycharmm", build_pycharmm_command(args)
+
+    if _pycharmm_pre_dynamics_lingo_requested(args):
+        raise ValueError(
+            "pycharmm_pre_dynamics_lingo / pycharmm_pre_dynamics_lingo_file "
+            f"require --backend pycharmm (got {backend!r})"
+        )
 
     skip_box_size_for_cmd = False
     if backend == "jaxmd":
