@@ -160,7 +160,7 @@ composition: "system.pdb"
 
 PDB files must carry CGenFF residue and atom names (for example from `mmml make-res`). Packmol-mix PDB monomers must be a single residue; a lone `system.pdb` (count 1) may contain many residues. `--from-pdb` is mutually exclusive with `--from-psf`/`--from-crd`.
 
-**Runnable PDB → backend examples.** Numbered YAML jobs (`yaml/01_*.yaml` … `07_*.yaml`) plus matching shell wrappers for `--from-pdb`, Packmol monomer PDBs, and certified PSF/CRD across `ase` / `jaxmd` / `pycharmm` live in [`examples/md_system_from_pdb/`](../examples/md_system_from_pdb/README.md).
+**Runnable PDB → backend examples.** Numbered YAML jobs (`yaml/01_*.yaml` … `07_*.yaml`) plus matching shell wrappers for `--from-pdb`, Packmol monomer PDBs, and certified PSF/CRD across `ase` / `jaxmd` / `pycharmm` live in [`examples/md_system_from_pdb/`](https://github.com/EricBoittier/mmml/blob/main/examples/md_system_from_pdb/README.md).
 
 **Packmol is the default for `composition`.** When `composition` is set (CGenFF-only or Packmol-mix PDB), MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
 
@@ -1446,7 +1446,7 @@ pycharmm_pre_dynamics_lingo: |
 
 Commented full-job skeleton (peptide PSF paths left for you to fill in):
 
-[`examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml`](../examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml)
+[`examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml)
 
 **Alignment tip:** classic `calc NSTEP = @NRUN * @UPDATE` must match the prod
 `nstep` that md-system derives from `ps_prod` and `dt_fs`. If they disagree,
