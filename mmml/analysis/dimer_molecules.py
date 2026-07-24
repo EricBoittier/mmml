@@ -1,17 +1,22 @@
-"""Reference molecular geometries and scan configurations for the 5-molecule dimer campaign.
+"""Reference molecular geometries and scan configurations for dimer scans.
 
-Molecules
----------
+Campaign molecules
+------------------
 DCM  – dichloromethane (CH₂Cl₂), NIST/literature geometry
-ACE  – acetone (CH₃COCH₃), ASE experimental geometry
+ACE  – acetone (CH₃COCH₃), ASE experimental geometry (CGenFF name: ACO)
 BENZ – benzene (C₆H₆), ASE (D₆ₕ, ring in XY plane)
 TIP3 – water (H₂O), ASE
 MEOH – methanol (CH₃OH), ASE
 
+Any other CGenFF RESI name is also supported: geometries are loaded from
+bundled/cwd ``make-res`` PDBs (or generated via PyCHARMM), with a generic
+centroid–centroid orientation along Z when the pair is not in
+``PAIR_SCAN_CONFIG``.
+
 Scan design
 -----------
 All scans use Z as the approach axis (A centred at −d/2, B at +d/2).
-Each pair has a chemically motivated pre-orientation:
+Campaign pairs have a chemically motivated pre-orientation:
   • A is rotated so its interaction vector points toward +Z (toward B).
   • B is rotated so its interaction vector points toward −Z (toward A).
 The 2D scan sweeps a lateral offset along ``transverse_axis`` in addition

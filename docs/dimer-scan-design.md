@@ -36,8 +36,10 @@ MMML already contains useful package-level components:
 - `mmml.analysis.dimer_scans` builds deterministic dimer geometries, records
   fragments, checks minimum contacts, and evaluates total or
   monomer-decomposed energies.
-- `mmml.analysis.dimer_molecules` holds named monomers and chemically motivated
-  orientations.
+- `mmml.analysis.dimer_molecules` holds campaign monomers and chemically
+  motivated orientations, and resolves any other CGenFF RESI via
+  `mmml.analysis.residue_geometry` (bundled/cwd/`make-res` PDBs) with a
+  generic centroid–centroid fallback orientation.
 - `mmml.interfaces.calculators.checkpoint_loading` centralizes supported
   checkpoint loading.
 - ASE calculators provide a common energy/force interface.
@@ -89,6 +91,31 @@ mmml dimer-scan MEOH \
 A single residue denotes a homodimer. The Python representation and manifest
 always use an explicit two-item residue tuple. A heterodimer can be supplied as
 two residue arguments.
+
+### Residue names
+
+Residue arguments accept:
+
+- **Campaign labels** with chemically motivated orientations in
+  `PAIR_SCAN_CONFIG`: `DCM`, `ACE`, `BENZ`, `TIP3`, `MEOH` (CGenFF acetone is
+  `ACO` and reuses the `ACE` campaign orientation).
+- **Any other CGenFF RESI** (list with `mmml make-res --list-residues`). Geometry
+  comes from bundled templates, a working-directory `pdb/<resi>.pdb`, or
+  `make-res`. Pairs outside the campaign set use a generic
+  centroid–centroid approach along +Z (no special chemical pre-orientation).
+
+Aliases `water` → `TIP3` and `octanol` → `OCOH` are accepted for consistency
+with `make-box --solvent`.
+
+```bash
+# Campaign pair (chemically motivated orientation)
+mmml dimer-scan TIP3 MEOH --calculator xtb --distance 2.5:4.0:0.5 \
+  --energy-definition total --output results/tip3_meoh
+
+# Arbitrary CGenFF residues (generic orientation)
+mmml dimer-scan ACO CYBZ --calculator xtb --distance 3.5:5.0:0.5 \
+  --energy-definition total --output results/aco_cybz
+```
 
 ## Proposed package layout
 

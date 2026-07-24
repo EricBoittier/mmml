@@ -81,6 +81,23 @@ mmml make-res --res ACO
 mmml make-box --res ACO --n 50 --box-size 25.0
 ```
 
+### Solvation (`--solvent`)
+
+`--solvent` accepts **any CGenFF RESI** from `top_all36_cgenff.rtf` (same names as
+`mmml make-res --list-residues`). Common aliases: `water` → `TIP3`, `octanol` → `OCOH`.
+
+Solvent monomer geometry is taken from a bundled template when available, else
+from a prior `make-res` PDB in the working directory, else generated via
+`make-res`. `--density` is in **kg/m³**; TIP3/water (1000) and OCOH/octanol (824)
+have built-in defaults. Other solvents need an explicit density when sizing `N`
+from density.
+
+```bash
+mmml make-res --res CYBZ --skip-energy-show
+mmml make-box --res CYBZ --n 50 --box-size 25.0 --solvent TIP3
+mmml make-box --res CYBZ --n 200 --box-size 30.0 --solvent MEOH --density 792
+```
+
 ### More Packmol examples
 
 Mixed-solvent cube:

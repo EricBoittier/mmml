@@ -1,7 +1,6 @@
 # `mmml npz2traj`
 
-Convert MMML NPZ datasets to ASE trajectories with energy, forces, dipole,
-charges, and extra fields attached for GUI inspection.
+NPZ → ASE trajectory (E/F/dipole/charges).
 
 
 ## Usage
@@ -23,39 +22,36 @@ charges, and extra fields attached for GUI inspection.
 positional arguments:
   input                 Input NPZ file
 
-options:
-  -h, --help            show this help message and exit
-  -o, --output OUTPUT   Output trajectory (.traj, .extxyz, .xyz, …)
+Input & configuration:
   --max-structures MAX_STRUCTURES
                         Maximum number of structures to convert
+
+Scientific model:
+  --ase-units           Convert E/F/D from NPZ schema units to ASE calculator
+                        units (eV, eV/Å, e·Å). Without this flag, values stay in
+                        NPZ units and unit labels are stored in atoms.info.
+
+Output & artifacts:
+  -o, --output OUTPUT   Output trajectory (.traj, .extxyz, .xyz, …)
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --quiet               Suppress progress output
+
+Other options:
   --stride STRIDE       Use every Nth structure (default: 1)
   --start START         First structure index (default: 0)
-  --ase-units           Convert E/F/D from NPZ schema units to ASE calculator
-                        units (eV, eV/Å, e·Å). Without this flag, values stay
-                        in NPZ units and unit labels are stored in atoms.info.
-  --quiet               Suppress progress output
+
+Examples: mmml npz2traj data.npz -o trajectory.traj mmml npz2traj data.npz -o
+subset.traj --max-structures 100 --stride 10 mmml npz2traj data.npz -o
+frames.extxyz mmml npz2traj data.npz -o ase.traj --ase-units Schema keys: R/Z
+required; E, F, D/Dxyz, N, mono, cell optional. Default units follow NPZ schema
+(E Hartree, F Hartree/Bohr, D Debye). Use --ase-units to convert calculator +
+info energy/forces/dipole to ASE conventions (eV, eV/Å, e·Å).
 ```
 
-## What gets attached
 
-| NPZ key | ASE destination | Notes |
-|---------|-----------------|-------|
-| `R`, `Z` | positions / numbers | Padding removed via `N` and `Z>0` |
-| `E` | `atoms.info['energy']` + calculator | Default Hartree |
-| `F` | `atoms.arrays['forces']` + calculator | Default Hartree/Bohr |
-| `D` / `Dxyz` | `atoms.info['dipole']` + calculator | Default Debye |
-| `mono` / `Q` | `atoms.arrays['charges']` | Also kept under original key |
-| `cell` / `box` | `atoms.cell` + PBC | Optional |
-| metadata | `atoms.info['npz_*']` | method, units, source path, … |
 
-Use `--ase-units` when opening the trajectory in ASE’s GUI and you want force
-arrows / energies in eV and eV/Å.
+---
 
-## Examples
-
-```bash
-mmml npz2traj data.npz -o trajectory.traj
-mmml npz2traj data.npz -o subset.traj --max-structures 100 --stride 10
-mmml npz2traj data.npz -o frames.extxyz
-mmml npz2traj data.npz -o ase.traj --ase-units
-```
+[← CLI overview](../index.md) · [All commands](../index.md#command-index)

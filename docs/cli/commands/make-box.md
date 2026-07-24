@@ -19,7 +19,9 @@ Input & configuration:
   --pdb PDB
 
 Scientific model:
-  --density DENSITY
+  --density DENSITY     Solvent (or neat liquid) density in kg/m³. Built-in for
+                        TIP3/water (1000) and OCOH/octanol (824); required for
+                        other solvents when sizing N from density.
 
 Diagnostics & safety:
   -h, --help            show this help message and exit
@@ -30,7 +32,9 @@ Other options:
   --side_length, --box-size SIDE_LENGTH
                         Cubic box side length in Å. '--box-size' is an alias,
                         matching the naming used elsewhere in the CLI suite.
-  --solvent SOLVENT
+  --solvent SOLVENT     CGenFF solvent residue name (any RESI in
+                        top_all36_cgenff.rtf), e.g. TIP3, MEOH, ACO, OCOH.
+                        Aliases: water→TIP3, octanol→OCOH.
 ```
 
 ## Example structures

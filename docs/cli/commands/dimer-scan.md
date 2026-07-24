@@ -30,7 +30,10 @@ usage: mmml dimer-scan [-h] [--config CONFIG]
 Run a reproducible rigid 1D dimer energy/force scan.
 
 positional arguments:
-  RESIDUE               One residue for a homodimer or two for a heterodimer
+  RESIDUE               One residue for a homodimer or two for a heterodimer.
+                        Accepts campaign labels (DCM, ACE, BENZ, TIP3, MEOH) or
+                        any CGenFF RESI name (e.g. ACO, CYBZ); non-campaign
+                        pairs use a generic centroid–centroid orientation.
 
 Input & configuration:
   --config CONFIG       YAML/JSON DimerScanConfig; command-line output/failure
