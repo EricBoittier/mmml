@@ -900,13 +900,15 @@ def _overlap_cell(
     if not use_pbc:
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        resolve_charmm_cubic_box_side_A,
+        probe_charmm_cubic_box_side_A,
     )
 
-    side, _ = resolve_charmm_cubic_box_side_A(
+    # Non-raising: vacuum / free_* mis-flagged as PBC must not abort heat.
+    # Fall back to open-boundary distances when no cubic cell is available.
+    side, _ = probe_charmm_cubic_box_side_A(
         fallback_side_A=fallback_box_side_A,
     )
-    return float(side)
+    return float(side) if side is not None else None
 
 
 def measure_worst_intermonomer_distance(

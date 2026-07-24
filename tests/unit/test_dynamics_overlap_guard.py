@@ -1111,6 +1111,50 @@ def test_overlap_cell_uses_fallback_when_pbound_zero():
     assert dmin > 1.5
 
 
+def test_overlap_cell_returns_none_when_vacuum_has_no_box():
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _overlap_cell
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        return_value=(None, None),
+    ):
+        assert _overlap_cell(use_pbc=True, fallback_box_side_A=None) is None
+
+
+def test_prepare_overlap_chunk_after_restart_skips_pbc_sync_in_vacuum():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_overlap_chunk_after_restart,
+    )
+
+    mlpot_ctx = mock.MagicMock()
+    mlpot_ctx.use_pbc = False
+    mlpot_ctx.pyCModel = mock.MagicMock()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+    ) as sync:
+        _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
+    sync.assert_not_called()
+
+
+def test_prepare_overlap_chunk_after_restart_syncs_pbc_when_periodic():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_overlap_chunk_after_restart,
+    )
+
+    mlpot_ctx = mock.MagicMock()
+    mlpot_ctx.use_pbc = True
+    mlpot_ctx.pyCModel = mock.MagicMock()
+    mlpot_ctx.cubic_box_side_A = 30.0
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+        return_value=31.5,
+    ) as sync:
+        _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
+    sync.assert_called_once()
+    assert mlpot_ctx.cubic_box_side_A == pytest.approx(31.5)
+    assert mlpot_ctx.charmm_cubic_box_side_A == pytest.approx(31.5)
+
+
 def test_check_overlap_raises_on_close_contact():
     cfg = DynamicsOverlapConfig(
         action="error",

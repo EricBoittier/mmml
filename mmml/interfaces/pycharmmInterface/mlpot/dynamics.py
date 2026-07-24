@@ -6169,13 +6169,15 @@ def _prepare_overlap_chunk_after_restart(
     long MD (same as ``reregister_mlpot`` / ``refresh_nbonds_after_mlpot*``).
     ``READYN`` on the scratch restart restores coordinates, velocities, and lists.
 
-    When MLpot is active, refresh the JAX MIC cell from the upcoming scratch restart
-    (or live CHARMM pbound) so ``calculate_charmm`` does not keep using a stale
-    pretreat ``.res`` path set at registration time.
+    When MLpot is active **and periodic**, refresh the JAX MIC cell from the
+    upcoming scratch restart (or live CHARMM pbound) so ``calculate_charmm``
+    does not keep using a stale pretreat ``.res`` path set at registration time.
+    Vacuum / ``free_*`` setups skip the box sync (no crystal / pbound).
     """
     if mlpot_ctx is not None:
         pyCModel = getattr(mlpot_ctx, "pyCModel", None)
-        if pyCModel is not None:
+        use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+        if use_pbc and pyCModel is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
                 sync_mlpot_pbc_cell_from_charmm,
             )
