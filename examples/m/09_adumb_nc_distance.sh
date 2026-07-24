@@ -49,10 +49,17 @@ if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
   echo "WARN: MMML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
 fi
 
+set +e
 uv run mmml md-system \
   --config "${CFG}" \
   --output-dir "${OUT}" \
   "${EXTRA[@]}"
+md_rc=$?
+set -e
+if [[ "${md_rc}" -ne 0 ]]; then
+  echo "FAIL: md-system exited ${md_rc}"
+  exit "${md_rc}"
+fi
 
 LINGO="${OUT}/pycharmm_pre_dynamics_lingo.inp"
 if [[ ! -f "${LINGO}" ]]; then
@@ -67,6 +74,12 @@ if ! grep -q "r_nc" "${LINGO}"; then
   echo "FAIL: ${LINGO} missing r_nc reaction coordinate"
   exit 1
 fi
+# Lingo is staged before dynamics; require an ADUMB output so a soft-failed
+# md-system (exit 0 + error stages) does not report PASS.
+if [[ ! -f "${OUT}/adumb-wuni.dat" ]]; then
+  echo "FAIL: missing ${OUT}/adumb-wuni.dat (ADUMB did not produce output)"
+  exit 1
+fi
 
 echo "PASS: ADUMB wiring -> ${OUT}"
-echo "      Check adumb-wuni.dat / umbcor / rxncor_trace.dat under ${OUT}"
+echo "      adumb-wuni.dat / umbcor / rxncor_trace.dat under ${OUT}"

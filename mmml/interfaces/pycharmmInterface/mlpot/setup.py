@@ -1491,7 +1491,7 @@ def load_cluster_from_pdb(
         setattr(args, "_cold_start_sim_cell_side_A", side)
         setattr(args, "_cold_start_box_sizing_source", "from_pdb")
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CLEAR_CHARMM
+    from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
     CLEAR_CHARMM()
     read_cgenff_toppar()
