@@ -1415,6 +1415,66 @@ def _vacuum_from_pdb_allows_missing_box(args: Any) -> bool:
     )
 
 
+def _parse_pdb_atoms_whitespace(
+    pdb_path: Path | str,
+) -> tuple[list[str], list[str], list[int], np.ndarray]:
+    """Parse ATOM records with ``str.split`` (safe for 4–5 char CGenFF RESN).
+
+    Classic PDB columns 17–20 cannot hold ``CH3CL``. Examples/m solute PDBs use a
+    chain-less, space-delimited layout; fixed-column parsers truncate RESN and
+    shift coordinates.
+    """
+    path = Path(pdb_path)
+    names: list[str] = []
+    resnames: list[str] = []
+    resids: list[int] = []
+    positions: list[list[float]] = []
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line.startswith(("ATOM  ", "HETATM")):
+                continue
+            parts = line.split()
+            if len(parts) < 8:
+                raise RuntimeError(f"Truncated PDB ATOM record in {path}: {line!r}")
+            # ATOM serial name resname [chain] resid x y z ...
+            try:
+                if len(parts[4]) == 1 and parts[4].isalpha() and not parts[4].isdigit():
+                    name, resn, resid_s = parts[2], parts[3], parts[5]
+                    xyz = parts[6:9]
+                else:
+                    name, resn, resid_s = parts[2], parts[3], parts[4]
+                    xyz = parts[5:8]
+                resid = int(resid_s)
+                x, y, z = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
+            except (ValueError, IndexError) as exc:
+                raise RuntimeError(
+                    f"Could not parse PDB ATOM record in {path}: {line!r}"
+                ) from exc
+            names.append(str(name))
+            resnames.append(str(resn).strip().upper())
+            resids.append(int(resid))
+            positions.append([x, y, z])
+    if not names:
+        raise RuntimeError(f"No ATOM/HETATM records found in {path}")
+    return names, resnames, resids, np.asarray(positions, dtype=float)
+
+
+def _residue_sequence_from_pdb(pdb_path: Path | str) -> list[str]:
+    """Ordered residue names (one per resid) for ``read.sequence_string``."""
+    _names, resnames, resids, _pos = _parse_pdb_atoms_whitespace(pdb_path)
+    seq: list[str] = []
+    seen: set[int] = set()
+    for resid, resn in zip(resids, resnames, strict=True):
+        rid = int(resid)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        seq.append(str(resn).strip().upper())
+    if not seq:
+        raise RuntimeError(f"No residues found in {pdb_path}")
+    return seq
+
+
 def load_cluster_from_pdb(
     args: Any,
     *,
@@ -1422,11 +1482,11 @@ def load_cluster_from_pdb(
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
     """Cold-start from a full-system PDB (CGenFF names).
 
-    Builds the PSF with ``read.sequence_pdb`` + ``generate.new_segment``, then
-    loads coordinates with ``read.pdb(..., resid=True)``. Avoids lingo
-    ``READ SEQU PDB`` / ``DELETE ATOM``, which can hard-abort MPI-linked
-    CHARMM. For PBC setups, box side prefers CRYST1, then sibling ``box.json``,
-    then ``--box-size``. Vacuum ``free_*`` / ``--free-space`` may omit the box.
+    Builds the PSF with ``read.sequence_string`` + ``generate.new_segment``,
+    then overlays PDB coordinates via the coor API. Avoids ``sequence_pdb`` /
+    lingo ``READ SEQU PDB``, which abort some MPI-linked CHARMM builds.
+    For PBC setups, box side prefers CRYST1, then sibling ``box.json``, then
+    ``--box-size``. Vacuum ``free_*`` / ``--free-space`` may omit the box.
     """
     from mmml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_relaxed_bomlev,
@@ -1489,36 +1549,49 @@ def load_cluster_from_pdb(
         setattr(args, "_cold_start_sim_cell_side_A", side)
         setattr(args, "_cold_start_box_sizing_source", "from_pdb")
 
-    # Prefer the PyCHARMM read/generate API over lingo ``READ SEQU PDB`` /
-    # ``DELETE ATOM``. On MPI-linked libcharmm those lingo paths can abort the
-    # process with exit 2 and no Python traceback (seen on vacuum --from-pdb).
+    # Use sequence_string + generate + Python coordinate overlay.
+    # ``read.sequence_pdb`` / lingo ``READ SEQU PDB`` abort this CHARMM build
+    # (ABNORMAL TERMINATION, level 0) under mpirun. Whitespace PDB parse keeps
+    # full CGenFF names (e.g. CH3CL) that fixed columns 17–20 would truncate.
+    res_seq = _residue_sequence_from_pdb(path)
+    _atom_names, _resnames, _resids, pdb_xyz = _parse_pdb_atoms_whitespace(path)
     if not getattr(args, "quiet", False):
-        print(f"Loading full-system PDB {path.name} via sequence_pdb/generate…", flush=True)
+        print(
+            f"Loading full-system PDB {path.name} "
+            f"(sequence_string {' '.join(res_seq)}, {len(pdb_xyz)} atoms)…",
+            flush=True,
+        )
     read_cgenff_toppar()
     import pycharmm.generate as generate
     import pycharmm.read as read
 
     with charmm_relaxed_bomlev():
-        # Do not wrap in charmm_silent_command — hide FATAL messages and make
-        # topology/coordinate failures look like a silent MPI exit 2.
-        read.sequence_pdb(str(path))
+        read.sequence_string(" ".join(res_seq))
         status = generate.new_segment(
             seg_name="SYS",
             first_patch="NONE",
             last_patch="NONE",
             setup_ic=True,
         )
-        if int(status) != 1:
+        if status is not None and int(status) not in (0, 1):
             raise RuntimeError(
                 f"GENERATE SYS failed for full-system PDB {path.name} "
-                f"(status={status}). Check CGenFF residue names and "
-                "MMML_CGENFF_EXTRA_RTF for append topologies."
+                f"(status={status}; sequence={res_seq}). Check CGenFF residue "
+                "names and MMML_CGENFF_EXTRA_RTF for append topologies (e.g. CH3CL)."
             )
-        read.pdb(str(path), resid=True)
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
+    if int(z.size) != int(pdb_xyz.shape[0]):
+        raise ValueError(
+            f"PSF atom count ({int(z.size)}) != PDB atom count "
+            f"({int(pdb_xyz.shape[0])}) for {path.name}. "
+            "Atom order must match CGenFF RTF residue order."
+        )
+    # PDB atom order is assumed to match GENERATE/RTF order (true for
+    # examples/m solute export and Packmol CHARMM-named monomers).
+    sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
     r = get_charmm_positions_array()
-    if int(z.size) == 0 or int(r.shape[0]) == 0 or np.allclose(r, 0.0):
+    if int(r.shape[0]) == 0 or np.allclose(r, 0.0):
         raise ValueError(
             f"Full-system PDB load produced 0/undefined atoms ({path}). "
             "Ensure the PDB has CGenFF RESN/atom names readable by CHARMM "

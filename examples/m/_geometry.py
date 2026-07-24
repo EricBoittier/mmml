@@ -78,12 +78,15 @@ def _pdb_atom_line(
     xyz: np.ndarray,
     element: str,
 ) -> str:
-    """Format one CHARMM-friendly PDB ATOM record (left-aligned atom name)."""
+    """Format one whitespace-stable PDB ATOM record for CGenFF names.
+
+    AMM1 (4) and CH3CL (5) do not fit classic PDB columns 17–20. Emit a
+    chain-less, space-delimited layout that ``load_cluster_from_pdb`` parses
+    with ``str.split`` (and that CHARMM ``read.pdb`` still accepts).
+    """
     x, y, z = (float(v) for v in xyz)
-    # CHARMM expects atom names left-justified in columns 13–16 for ≤3-char names.
-    name_field = f"{name:<4}"[:4]
     return (
-        f"ATOM  {serial:5d} {name_field} {resname:>3} A{resid:4d}    "
+        f"ATOM  {serial:5d} {name:<4s} {resname:<5s} {resid:4d}    "
         f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2}"
     )
 

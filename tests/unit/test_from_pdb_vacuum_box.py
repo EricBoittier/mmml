@@ -39,3 +39,32 @@ def test_resolve_charmm_use_pbc_stays_off_when_vacuum_from_pdb_omits_box():
     assert resolve_charmm_use_pbc(args) is True
     args.free_space = True
     assert resolve_charmm_use_pbc(args) is False
+
+
+def test_residue_sequence_from_pdb_preserves_resid_order(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _parse_pdb_atoms_whitespace,
+        _residue_sequence_from_pdb,
+    )
+
+    pdb = tmp_path / "dimer.pdb"
+    # Chain-less layout matching examples/m/_geometry.write_solute_pdb
+    pdb.write_text(
+        "\n".join(
+            [
+                "ATOM      1 N1   AMM1     1       0.000   0.000   0.000  1.00  0.00           N",
+                "ATOM      2 H11  AMM1     1       1.000   0.000   0.000  1.00  0.00           H",
+                "TER",
+                "ATOM      3 C1   CH3CL    2       2.000   0.000   0.000  1.00  0.00           C",
+                "ATOM      4 CL1  CH3CL    2       3.800   0.000   0.000  1.00  0.00          Cl",
+                "END",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert _residue_sequence_from_pdb(pdb) == ["AMM1", "CH3CL"]
+    _n, resn, resids, xyz = _parse_pdb_atoms_whitespace(pdb)
+    assert resn == ["AMM1", "AMM1", "CH3CL", "CH3CL"]
+    assert resids == [1, 1, 2, 2]
+    assert float(xyz[3, 0]) == pytest.approx(3.8)
