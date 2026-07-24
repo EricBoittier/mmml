@@ -34,6 +34,21 @@ mmml md-system --help
 mmml env --json
 ```
 
+## Output conventions
+
+CLI output is designed to stay readable in terminals and copyable in logs:
+
+- `mmml <command> --help` uses shared argparse grouping for commands dispatched
+  through `mmml`. Flat option lists are grouped by input/configuration,
+  scientific model, execution, output/artifacts, and diagnostics/safety.
+- Rich color is supplemental. Redirected output remains plain text, while
+  `MMML_NO_RICH=1` disables Rich formatting and `MMML_RICH=1` forces it for
+  terminal demos.
+- JSON-shaped diagnostics use valid JSON even when color is enabled, so output
+  from commands such as `mmml env --json` can still be copied into a parser.
+- Long-running and setup commands should honor quiet modes where provided; the
+  shared reporting helpers also respect `MMML_QUIET=1`.
+
 ## Tab completion
 
 With `argcomplete` installed (`mmml[cli]`), completion covers subcommand names
@@ -71,6 +86,23 @@ Highlights:
 
 Run `mmml commands --audit` locally to see which commands are **deprecated** or
 **legacy** and what to use instead.
+
+## Configure safety model
+
+`mmml configure` is the interactive entry point for YAML and workflow scaffolds.
+For the interactive workflows (`md-single`, `md-campaign`, `physnet-train`,
+`snakemake-md`, and `interaction-policy`) the wizard:
+
+1. collects answers through numbered prompts;
+2. validates the generated document before writing it;
+3. prints a JSON preview of the exact configuration bundle; and
+4. asks for confirmation before creating files.
+
+The `interaction-policy` workflow can also write companion `md-system` or
+`dimer-scan` configs that reference the generated `interaction_policy.yaml`
+rather than duplicating ownership policy. Bundled presets (`--preset` or the
+preset menu) copy maintained examples and then report the files plus the next
+command to run.
 
 ## Typical workflows
 
