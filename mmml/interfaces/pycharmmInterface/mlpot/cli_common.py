@@ -1736,7 +1736,8 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
             "MMFP flat-bottom sphere: "
             f"droff={cfg.radius:.2f} Å force={cfg.force:.2f} "
             f"center=({cfg.xref:.2f}, {cfg.yref:.2f}, {cfg.zref:.2f}) "
-            f"selection='{cfg.selection}'"
+            f"selection='{cfg.selection}'",
+            flush=True,
         )
 
 

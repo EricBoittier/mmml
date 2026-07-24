@@ -8,6 +8,7 @@ Checkpoint and filtered dataset from commit
 | `kl.json` | Portable PhysNet params (`natoms=9`, charges + ZBL, vacuum) |
 | `nh3_ch3cl_filtered.npz` | 16 000 frames (`N=9` dimers + NH₃ / CH₃Cl monomers) |
 | `top_ch3cl.rtf` | Append topology for CGenFF residue `CH3CL` (used by Packmol `md-system`) |
+| `par_ch3cl.prm` | Append bonded params for `CG331`–`CLGA1` (missing from stock CGenFF) |
 
 Docs report (after running the pipeline):
 [`docs/examples/nh3-ch3cl-results.md`](../../docs/examples/nh3-ch3cl-results.md).
@@ -24,6 +25,7 @@ source examples/m/_env.sh
 | `MMML_CKPT` | `examples/m/kl.json` | Checkpoint |
 | `MMML_DATA` | `examples/m/nh3_ch3cl_filtered.npz` | Eval NPZ |
 | `MMML_CGENFF_EXTRA_RTF` | `examples/m/top_ch3cl.rtf` | Enables `CH3CL` in compositions |
+| `MMML_CGENFF_EXTRA_PRM` | `examples/m/par_ch3cl.prm` | Bonded params for append `CH3CL` |
 | `ARTIFACTS_DIR` | `artifacts/nh3_ch3cl` | Outputs |
 
 ## Quick run (full report)

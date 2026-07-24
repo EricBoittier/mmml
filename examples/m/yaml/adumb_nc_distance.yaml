@@ -41,8 +41,9 @@ ps_heat: 0.2
 packmol_placement: sphere
 packmol_radius: 6.0
 reuse_packmol_cache: false
-# MMFP wall; cons hmcm in pre-dynamics lingo is the primary COM restraint.
-flat_bottom_radius: 20.0
+# COM restraint is ``cons hmcm`` in pre-dynamics lingo (below). Skip MMFP here:
+# post-MMFP CHARMM ENER under mpirun can hang on MPI-linked builds.
+# flat_bottom_radius: 20.0
 mini_nstep: 40
 skip_energy_show: true
 skip_jit_warmup: true

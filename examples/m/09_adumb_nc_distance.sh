@@ -45,10 +45,14 @@ rm -f "${OUT}/stage_summary.json"
 echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXN; RXNCOR distance umbrella)"
 echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
+echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"
 
-# Ensure CH3CL append RTF is visible (sourced from examples/m/_env.sh).
+# Ensure CH3CL append RTF/PRM are visible (sourced from examples/m/_env.sh).
 if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
   echo "WARN: MMML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
+fi
+if [[ -z "${MMML_CGENFF_EXTRA_PRM:-}" ]]; then
+  echo "WARN: MMML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
 fi
 
 set +e

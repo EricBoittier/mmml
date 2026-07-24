@@ -272,6 +272,10 @@ def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
         return_value=8.0,
     ), patch.object(
         restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=False,
+    ), patch.object(
+        restraints,
         "_current_charmm_energy_kcalmol",
         side_effect=[100.0, 100.0],
     ) as energy, patch(
@@ -286,6 +290,41 @@ def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
     )
 
 
+def test_apply_flat_bottom_workflow_skips_ener_under_mpi():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    with patch.object(restraints, "center_cluster_at_origin"), patch.object(
+        restraints,
+        "setup_flat_bottom_sphere_mmfp",
+    ) as setup, patch.object(
+        restraints,
+        "_selected_max_radius",
+        return_value=4.0,
+    ), patch.object(
+        restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=True,
+    ), patch.object(
+        restraints,
+        "_current_charmm_energy_kcalmol",
+    ) as energy, patch(
+        "builtins.print",
+    ) as mock_print:
+        cfg = restraints.apply_flat_bottom_workflow(
+            radius=10.0,
+            force=0.01,
+            selection="all",
+        )
+
+    assert cfg is not None
+    setup.assert_called_once()
+    energy.assert_not_called()
+    assert any(
+        "skipping CHARMM ENER" in str(call.args[0])
+        for call in mock_print.call_args_list
+    )
+
+
 def test_apply_flat_bottom_workflow_retries_until_energy_unchanged():
     from mmml.interfaces.pycharmmInterface.mlpot import restraints
 
@@ -296,6 +335,10 @@ def test_apply_flat_bottom_workflow_retries_until_energy_unchanged():
         restraints,
         "_selected_max_radius",
         return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=False,
     ), patch.object(
         restraints,
         "_current_charmm_energy_kcalmol",
@@ -332,6 +375,10 @@ def test_apply_flat_bottom_workflow_warns_when_energy_never_converges():
         restraints,
         "_selected_max_radius",
         return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=False,
     ), patch.object(
         restraints,
         "_current_charmm_energy_kcalmol",

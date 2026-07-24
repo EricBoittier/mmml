@@ -21,6 +21,8 @@ CGENFF_RESIDUE_ALIASES: dict[str, str] = {
 
 # Colon- or comma-separated append RTF paths (extra RESI records + CHARMM append).
 _EXTRA_RTF_ENV = "MMML_CGENFF_EXTRA_RTF"
+# Colon- or comma-separated append PRM paths (bonded params for append residues).
+_EXTRA_PRM_ENV = "MMML_CGENFF_EXTRA_PRM"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,10 +36,9 @@ def default_cgenff_rtf_path() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "charmm" / "top_all36_cgenff.rtf"
 
 
-def extra_cgenff_rtf_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
-    """Append-topology RTF paths from ``MMML_CGENFF_EXTRA_RTF`` (``:`` / ``,`` separated)."""
+def _extra_paths_from_env(env_key: str, *, env: os._Environ | None = None) -> tuple[Path, ...]:
     environ = env if env is not None else os.environ
-    raw = (environ.get(_EXTRA_RTF_ENV) or "").strip()
+    raw = (environ.get(env_key) or "").strip()
     if not raw:
         return ()
     out: list[Path] = []
@@ -49,6 +50,16 @@ def extra_cgenff_rtf_paths(*, env: os._Environ | None = None) -> tuple[Path, ...
         if path.is_file():
             out.append(path)
     return tuple(out)
+
+
+def extra_cgenff_rtf_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
+    """Append-topology RTF paths from ``MMML_CGENFF_EXTRA_RTF`` (``:`` / ``,`` separated)."""
+    return _extra_paths_from_env(_EXTRA_RTF_ENV, env=env)
+
+
+def extra_cgenff_prm_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
+    """Append-parameter PRM paths from ``MMML_CGENFF_EXTRA_PRM`` (``:`` / ``,`` separated)."""
+    return _extra_paths_from_env(_EXTRA_PRM_ENV, env=env)
 
 
 def normalize_cgenff_residue_name(name: str) -> str:

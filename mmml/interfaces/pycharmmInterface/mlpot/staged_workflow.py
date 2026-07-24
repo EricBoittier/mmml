@@ -2074,8 +2074,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     if not mlpot_pbc:
         # Install MMFP once after Packmol / CHARMM pretreat / pre-MLpot mini so
         # droff tuning and coor orient are not repeated (stacked walls / COM shifts).
+        if not args.quiet:
+            print(
+                "\n=== Progress: vacuum MMFP flat-bottom (before MLpot registration) ===",
+                flush=True,
+            )
         apply_flat_bottom_from_args(args)
         r = get_charmm_positions_array()
+        if not args.quiet:
+            print("=== Progress: MMFP done; continuing toward MLpot registration ===", flush=True)
 
     baseline = None
     if (
@@ -2127,6 +2134,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             atomic_numbers=np.asarray(z, dtype=int),
         )
 
+    if not args.quiet:
+        print(
+            f"\n=== Progress: registering MLpot ({n_atoms} atoms, ckpt={ckpt}) ===\n"
+            "    (first JAX compile / USER registration can take minutes; "
+            "watch GPU with nvidia-smi)",
+            flush=True,
+        )
     ctx, pyCModel = _register_mlpot_context(
         z,
         r,
@@ -2143,6 +2157,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         args=args,
         topology_psf=recovery_topology_psf,
     )
+    if not args.quiet:
+        print("=== Progress: MLpot registration complete ===", flush=True)
     if pretreat_mm and mlpot_pbc and pretreat_restart_path is not None:
         box_side = sync_mlpot_pbc_cell_from_charmm(
             pyCModel,

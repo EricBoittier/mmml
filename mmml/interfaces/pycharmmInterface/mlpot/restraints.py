@@ -137,12 +137,35 @@ def _selected_max_radius(selection: str, *, xref: float, yref: float, zref: floa
     return float(np.sqrt(dx * dx + dy * dy + dz * dz))
 
 
+def _skip_mmfp_energy_verify() -> bool:
+    """Skip post-MMFP ``ENER`` on MPI-linked CHARMM (can hang after GEO install)."""
+    import os
+
+    flag = (os.environ.get("MMML_MMFP_ENERGY_VERIFY") or "").strip().lower()
+    if flag in ("0", "no", "false", "off"):
+        return True
+    if flag in ("1", "yes", "true", "on"):
+        return False
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            charmm_lib_links_mpi,
+        )
+
+        return bool(charmm_lib_links_mpi() and _under_mpirun())
+    except Exception:
+        return False
+
+
 def _current_charmm_energy_kcalmol() -> float | None:
+    if _skip_mmfp_energy_verify():
+        return None
     try:
         import pycharmm.energy as energy
 
         from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
+        print("MMFP: running CHARMM ENER for zero-wall check…", flush=True)
         run_charmm_script_quiet("ENER")
         row = energy.get_energy().iloc[0].to_dict()
         for key in ("ENER", "ENERgy", "ENERGY"):
@@ -199,9 +222,23 @@ def apply_flat_bottom_workflow(
     """Optionally center the cluster and set up MMFP flat-bottom sphere."""
     if radius is None or radius <= 0:
         return None
+    print(
+        f"MMFP: installing flat-bottom sphere (requested droff={float(radius):.2f} Å)…",
+        flush=True,
+    )
     if center_at_origin:
+        print("MMFP: centering cluster COM at origin…", flush=True)
         center_cluster_at_origin()
-    energy_before = _current_charmm_energy_kcalmol()
+    skip_ener = _skip_mmfp_energy_verify()
+    if skip_ener:
+        print(
+            "MMFP: skipping CHARMM ENER zero-wall verify "
+            "(MPI-linked CHARMM under mpirun; set MMML_MMFP_ENERGY_VERIFY=1 to force)",
+            flush=True,
+        )
+        energy_before = None
+    else:
+        energy_before = _current_charmm_energy_kcalmol()
     requested_radius = float(radius)
     current_radius = _selected_max_radius(selection, xref=xref, yref=yref, zref=zref)
     effective_radius = requested_radius
@@ -223,9 +260,20 @@ def apply_flat_bottom_workflow(
         selection=selection,
     )
     for attempt in range(1, _DROFF_TUNE_MAX_ATTEMPTS + 1):
+        print(
+            f"MMFP: GEO sphere harm droff={cfg.radius:.3f} Å "
+            f"(attempt {attempt}/{_DROFF_TUNE_MAX_ATTEMPTS})…",
+            flush=True,
+        )
         setup_flat_bottom_sphere_mmfp(cfg)
+        print("MMFP: GEO install returned to Python", flush=True)
         delta = _energy_delta_after_install(energy_before)
         if delta is None:
+            print(
+                "MMFP: flat-bottom installed "
+                f"(droff={cfg.radius:.2f} Å, force={cfg.force:.2f}; no ENER verify)",
+                flush=True,
+            )
             return cfg
         if abs(delta) <= _ENERGY_VERIFY_TOL_KCAL:
             print(

@@ -83,6 +83,17 @@ def test_extra_rtf_env_registers_ch3cl(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert not is_cgenff_residue_name("CH3CL")
 
 
+def test_extra_prm_env_resolves_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface import cgenff_residues as cr
+
+    prm = tmp_path / "extra.prm"
+    prm.write_text("* test\n*\nBONDS\nEND\n", encoding="utf-8")
+    monkeypatch.setenv("MMML_CGENFF_EXTRA_PRM", str(prm))
+    assert cr.extra_cgenff_prm_paths() == (prm.resolve(),)
+    monkeypatch.delenv("MMML_CGENFF_EXTRA_PRM", raising=False)
+    assert cr.extra_cgenff_prm_paths() == ()
+
+
 def test_make_res_validate_args_list_residues() -> None:
     import argparse
 

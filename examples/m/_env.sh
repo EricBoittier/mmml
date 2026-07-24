@@ -32,6 +32,7 @@ export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-cpu}"
 export MMML_CKPT="${MMML_CKPT:-${EXAMPLE_DIR}/kl.json}"
 export MMML_DATA="${MMML_DATA:-${EXAMPLE_DIR}/nh3_ch3cl_filtered.npz}"
 export MMML_CGENFF_EXTRA_RTF="${MMML_CGENFF_EXTRA_RTF:-${EXAMPLE_DIR}/top_ch3cl.rtf}"
+export MMML_CGENFF_EXTRA_PRM="${MMML_CGENFF_EXTRA_PRM:-${EXAMPLE_DIR}/par_ch3cl.prm}"
 
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/nh3_ch3cl}"
 mkdir -p "${ARTIFACTS_DIR}"

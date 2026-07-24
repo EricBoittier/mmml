@@ -432,11 +432,15 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
 
     Extra append RTFs from ``MMML_CGENFF_EXTRA_RTF`` (colon/comma-separated paths)
     are read after the main topology so custom residues (e.g. example CH3CL) are
-    available to Packmol / ``md-system`` compositions.
+    available to Packmol / ``md-system`` compositions. Extra append PRMs from
+    ``MMML_CGENFF_EXTRA_PRM`` are read after the base CGenFF parameter file.
     """
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import extra_cgenff_rtf_paths
+    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+        extra_cgenff_prm_paths,
+        extra_cgenff_rtf_paths,
+    )
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
 
@@ -453,6 +457,8 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
             # CHARMM level-1 abort (see examples/m/top_ch3cl.rtf).
             read.rtf(_rtf_path_for_append(extra), append=True)
         read_cgenff_prm(prm_path=toppar.prm, bomlev=False)
+        for extra_prm in extra_cgenff_prm_paths():
+            read_cgenff_prm(prm_path=extra_prm, append=True, bomlev=False)
 
 
 def _rtf_path_for_append(rtf_path: str | Path) -> str:
