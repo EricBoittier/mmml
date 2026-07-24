@@ -34,9 +34,11 @@ def main() -> int:
         index=args.frame,
         seed=int(args.seed),
     )
-    text = out.read_text(encoding="utf-8")
-    n_amm1 = text.count("AMM1")
-    n_ch3cl = text.count("CH3CL")
+    atom_lines = [
+        ln for ln in out.read_text(encoding="utf-8").splitlines() if ln.startswith("ATOM")
+    ]
+    n_amm1 = sum("AMM1" in ln for ln in atom_lines)
+    n_ch3cl = sum("CH3CL" in ln for ln in atom_lines)
     print(f"Wrote {out}")
     print(f"  AMM1 atom records: {n_amm1}  CH3CL atom records: {n_ch3cl}")
     if n_amm1 != 4 or n_ch3cl != 5:
