@@ -35,6 +35,7 @@ import argparse
 import json
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -480,6 +481,7 @@ def _build_cluster_from_composition_packmol(
     prep_gate_settings: dict[str, Any] | None = None,
     quiet: bool = False,
     geometry_store: Any | None = None,
+    monomer_pdb_templates: dict[str, Path] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
@@ -507,6 +509,7 @@ def _build_cluster_from_composition_packmol(
         prep_gate_settings=prep_gate_settings,
         quiet=quiet,
         geometry_store=geometry_store,
+        monomer_pdb_templates=monomer_pdb_templates,
     )
 
 
@@ -744,6 +747,29 @@ def resolve_cluster_geometry(
             "--from-psf and --from-crd must be provided together to load a "
             "certified liquid-box (or mini) geometry on ase/jaxmd."
         )
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        apply_from_pdb_alias,
+        composition_mode,
+        parse_composition_entries,
+    )
+
+    apply_from_pdb_alias(args)
+    if getattr(args, "composition", None):
+        entries = parse_composition_entries(str(args.composition))
+        if composition_mode(entries) == "full_system_pdb":
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+
+            z, r0, n_mol, _tag = load_cluster_from_pdb(args)
+            atoms_per_list = list(getattr(args, "_cluster_atoms_per_list", []) or [])
+            residue_labels = list(getattr(args, "_cluster_residue_labels", []) or [])
+            composition_summary = dict(
+                getattr(args, "_cluster_composition_summary", {}) or {}
+            )
+            if not atoms_per_list:
+                atoms_per_list = [int(len(z) // max(n_mol, 1))] * int(n_mol)
+            if not residue_labels:
+                residue_labels = ["UNK"] * int(n_mol)
+            return z, r0, atoms_per_list, residue_labels, composition_summary or None
     return build_initial_cluster_from_args(args)
 
 
@@ -770,7 +796,21 @@ def build_initial_cluster_from_args(
         )
 
     if args.composition:
-        composition = _parse_composition(args.composition)
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            resolve_composition_plan,
+        )
+
+        _entries, mode, composition, monomer_pdb_templates = resolve_composition_plan(
+            str(args.composition),
+            builder=getattr(args, "builder", None),
+            packmol=getattr(args, "packmol", None),
+            pyxtal=getattr(args, "pyxtal", None) if use_pyxtal else False,
+        )
+        if mode == "full_system_pdb":
+            raise RuntimeError(
+                "full-system PDB composition should be handled before "
+                "build_initial_cluster_from_args"
+            )
         composition_summary = {res: int(cnt) for res, cnt in composition}
         if use_pyxtal:
             supercell_reps = None
@@ -852,12 +892,17 @@ def build_initial_cluster_from_args(
                 spacing=float(getattr(args, "spacing", 5.0)),
                 prep_gate_settings=packmol_prep_settings_from_namespace(args),
                 quiet=bool(getattr(args, "quiet", False)),
+                monomer_pdb_templates=monomer_pdb_templates,
             )
         else:
             placement = resolve_packmol_placement_mode(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
             )
+            if mode == "packmol_pdb":
+                raise ValueError(
+                    "PDB composition tokens require Packmol; remove --no-packmol"
+                )
             center = packmol_center_for_cold_start(args)
             cube_side: float | None = None
             radius: float | None = None

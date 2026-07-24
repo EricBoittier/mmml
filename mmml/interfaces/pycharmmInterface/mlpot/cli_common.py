@@ -935,7 +935,12 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         "--composition",
         type=str,
         default=None,
-        help="Comma-separated RES:N entries (e.g. ACO:4,MEOH:2)",
+        help=(
+            "Comma-separated RES:N and/or PDB path tokens "
+            "(e.g. ACO:4,MEOH:2 or solute.pdb:1,DCM:200). "
+            "A lone system.pdb (count 1) loads the full system via CHARMM READ SEQU PDB. "
+            "CGenFF residue names are validated against top_all36_cgenff.rtf."
+        ),
     )
     parser.add_argument(
         "--packmol",
@@ -1384,24 +1389,34 @@ def prepare_notebook_kernel(*, jax_required: bool = True) -> None:
 
 
 def parse_composition(spec: str) -> list[tuple[str, int]]:
-    """Parse ``RES:count`` composition strings (e.g. ``DCM:52,MEOH:10``)."""
-    out: list[tuple[str, int]] = []
-    for tok in spec.split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        if ":" in tok:
-            residue, count_str = tok.split(":", 1)
-            count = int(count_str)
-        else:
-            residue, count = tok, 1
-        residue = residue.strip().upper()
-        if not residue or count <= 0:
-            raise ValueError(f"Invalid composition token: '{tok}'")
-        out.append((residue, count))
-    if not out:
-        raise ValueError("Empty composition")
-    return out
+    """Parse ``RES:count`` / PDB composition strings (e.g. ``DCM:52,MEOH:10``).
+
+    PDB path tokens are allowed (``solute.pdb:1,DCM:200`` or lone ``system.pdb``).
+    CGenFF residue names are validated against the bundled RTF.  Returns
+    ``[(resolved_RESN, count), ...]``; use ``parse_composition_entries`` when
+    monomer PDB paths are needed.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        composition_as_pairs,
+        composition_mode,
+        ensure_packmol_pdb_monomers,
+        parse_composition_entries,
+    )
+
+    entries = parse_composition_entries(spec)
+    mode = composition_mode(entries)
+    if mode == "packmol_pdb":
+        entries = ensure_packmol_pdb_monomers(entries)
+    return composition_as_pairs(entries)
+
+
+def parse_composition_entries(spec: str, **kwargs):
+    """Parse composition into ``CompositionEntry`` rows (including PDB paths)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        parse_composition_entries as _parse_entries,
+    )
+
+    return _parse_entries(spec, **kwargs)
 
 
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:

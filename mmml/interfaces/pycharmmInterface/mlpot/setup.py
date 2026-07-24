@@ -1405,6 +1405,144 @@ def _cluster_atoms_per_from_composition(
     return list(atoms_per)
 
 
+def load_cluster_from_pdb(
+    args: Any,
+    *,
+    pdb_path: str | Path | None = None,
+) -> tuple[np.ndarray, np.ndarray, int, str]:
+    """Cold-start from a full-system PDB via CHARMM ``READ SEQU PDB``.
+
+    The PDB must carry CGenFF residue and atom names (e.g. from ``make-res`` /
+    liquid-box / Packmol). Box side prefers CRYST1, then sibling ``box.json``,
+    then ``--box-size``.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        charmm_relaxed_bomlev,
+        charmm_silent_command,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        read_pdb_cryst1_side_A,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        atoms_per_monomer_from_psf,
+    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    _import_pycharmm()
+    from pycharmm import lingo
+
+    raw = pdb_path if pdb_path is not None else getattr(args, "from_pdb", None)
+    if raw is None and getattr(args, "composition", None):
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            composition_mode,
+            parse_composition_entries,
+        )
+
+        entries = parse_composition_entries(str(args.composition))
+        if composition_mode(entries) == "full_system_pdb" and entries[0].pdb_path:
+            raw = entries[0].pdb_path
+    if raw is None:
+        raise ValueError("load_cluster_from_pdb requires a PDB path")
+    path = Path(str(raw)).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Full-system PDB not found: {path}")
+
+    side: float | None = read_pdb_cryst1_side_A(path)
+    if side is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            resolve_box_size_from_certified_artifacts,
+        )
+
+        # Temporarily point from_crd-like lookup at the PDB parent for box.json
+        prev_crd = getattr(args, "from_crd", None)
+        try:
+            setattr(args, "from_crd", path)
+            side = resolve_box_size_from_certified_artifacts(args)
+        finally:
+            setattr(args, "from_crd", prev_crd)
+    if side is None:
+        box_size = getattr(args, "box_size", None)
+        if box_size is not None and float(box_size) > 0.0:
+            side = float(box_size)
+    if side is None or float(side) <= 0.0:
+        raise ValueError(
+            f"Full-system PDB {path.name} needs a positive box side: set CRYST1, "
+            "place box.json next to the PDB, or pass --box-size"
+        )
+    side = float(side)
+    setattr(args, "box_size", side)
+    setattr(args, "_cold_start_sim_cell_side_A", side)
+    setattr(args, "_cold_start_box_sizing_source", "from_pdb")
+
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CLEAR_CHARMM
+
+    CLEAR_CHARMM()
+    read_cgenff_toppar()
+    header = f"""OPEN UNIT 1 READ FORM NAME {path}
+READ SEQU PDB UNIT 1
+CLOSE UNIT 1
+GENERATE SYS FIRST NONE LAST NONE SETUP
+
+OPEN UNIT 1 READ FORM NAME {path}
+READ COOR PDB UNIT 1
+CLOSE UNIT 1
+"""
+    with charmm_relaxed_bomlev():
+        with charmm_silent_command():
+            lingo.charmm_script(header)
+
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    r = get_charmm_positions_array()
+    if int(z.size) == 0 or int(r.shape[0]) == 0:
+        raise ValueError(
+            f"Full-system PDB load produced 0 atoms ({path}). "
+            "Ensure the PDB has CGenFF RESN/atom names readable by CHARMM."
+        )
+
+    atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
+    n_mol = int(len(atoms_per_list))
+    # Residue labels from PSF when available
+    residue_labels: list[str] = []
+    try:
+        import pycharmm.psf as psf_mod
+
+        if hasattr(psf_mod, "get_res"):
+            res_all = [str(x).strip().upper() for x in psf_mod.get_res()]
+            offset = 0
+            for n in atoms_per_list:
+                residue_labels.append(
+                    res_all[offset] if 0 <= offset < len(res_all) else "UNK"
+                )
+                offset += int(n)
+    except Exception:
+        residue_labels = ["UNK"] * n_mol
+    if len(residue_labels) != n_mol:
+        residue_labels = ["UNK"] * n_mol
+
+    summary: dict[str, int] = {}
+    for lab in residue_labels:
+        summary[lab] = summary.get(lab, 0) + 1
+
+    tag = str(
+        getattr(args, "tag", None)
+        or path.stem
+        or f"from_pdb_{n_mol}mer"
+    )
+    setattr(args, "_cluster_atoms_per_list", list(atoms_per_list))
+    setattr(args, "_cluster_residue_labels", list(residue_labels))
+    setattr(args, "_cluster_composition_summary", dict(summary))
+    setattr(args, "n_molecules", n_mol)
+    if not getattr(args, "quiet", False):
+        print(
+            f"Loading full-system PDB {path.name} "
+            f"({n_mol} residues, {int(z.size)} atoms, box={side:.3f} Å)",
+            flush=True,
+        )
+    sync_charmm_positions(r)
+    return z, np.asarray(r, dtype=float), n_mol, tag
+
+
 def load_cluster_from_artifacts(
     args: Any,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:

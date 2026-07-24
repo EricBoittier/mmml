@@ -1435,6 +1435,19 @@ def _load_or_build_cluster(
         return z, np.asarray(r0, dtype=np.float64), n_mol, tag
     if getattr(args, "skip_cluster_build", False) or getattr(args, "from_psf", None):
         return load_cluster_from_artifacts(args)
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        apply_from_pdb_alias,
+        composition_mode,
+        parse_composition_entries,
+    )
+
+    apply_from_pdb_alias(args)
+    if getattr(args, "composition", None):
+        entries = parse_composition_entries(str(args.composition))
+        if composition_mode(entries) == "full_system_pdb":
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+
+            return load_cluster_from_pdb(args)
     return build_cluster_from_args_with_tag(args)
 
 

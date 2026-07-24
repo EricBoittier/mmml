@@ -39,22 +39,30 @@ BoxAutoMode = Literal["geometry", "density", "count"]
 
 
 def parse_composition_dict(spec: str | None) -> dict[str, int] | None:
-    """Parse ``RES:N,RES:N`` into a residue count map."""
+    """Parse ``RES:N`` / PDB composition into a residue-count map keyed by RESN.
+
+    PDB path tokens resolve to the CGenFF residue name read from the file.
+    A lone full-system PDB (mode ``full_system_pdb``) returns ``None`` because
+    stoichiometry is defined by the PDB sequence, not by composition counts.
+    """
     if spec is None or not str(spec).strip():
         return None
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        composition_mode,
+        ensure_packmol_pdb_monomers,
+        parse_composition_entries,
+    )
+
+    entries = parse_composition_entries(str(spec))
+    mode = composition_mode(entries)
+    if mode == "full_system_pdb":
+        return None
+    if mode == "packmol_pdb":
+        entries = ensure_packmol_pdb_monomers(entries)
     out: dict[str, int] = {}
-    for tok in str(spec).split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        if ":" not in tok:
-            raise ValueError(f"Invalid composition token: {tok!r}")
-        residue, count_s = tok.split(":", 1)
-        residue = residue.strip().upper()
-        count = int(count_s.strip())
-        if not residue or count <= 0:
-            raise ValueError(f"Invalid composition token: {tok!r}")
-        out[residue] = out.get(residue, 0) + int(count)
+    for entry in entries:
+        key = str(entry.residue).upper()
+        out[key] = out.get(key, 0) + int(entry.count)
     return out or None
 
 

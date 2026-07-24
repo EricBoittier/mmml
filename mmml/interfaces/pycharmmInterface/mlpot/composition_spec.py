@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from mmml.interfaces.pycharmmInterface.cgenff_residues import require_cgenff_residue_name
 
@@ -307,3 +307,53 @@ def reject_pdb_composition_for_builder(
         raise ValueError(
             "PDB composition tokens require Packmol; remove --no-packmol"
         )
+
+
+def apply_from_pdb_alias(args: Any) -> None:
+    """If ``--from-pdb`` is set, treat it as a lone full-system composition PDB."""
+    from_pdb = getattr(args, "from_pdb", None)
+    if from_pdb is None:
+        return
+    path = Path(str(from_pdb)).expanduser()
+    if getattr(args, "from_psf", None) or getattr(args, "from_crd", None):
+        raise ValueError("--from-pdb is mutually exclusive with --from-psf/--from-crd")
+    comp = getattr(args, "composition", None)
+    if comp is not None and str(comp).strip():
+        # Allow identical lone-PDB composition; reject mixes.
+        entries = parse_composition_entries(str(comp), resolve_pdb_files=True)
+        mode = composition_mode(entries)
+        if mode != "full_system_pdb":
+            raise ValueError(
+                "--from-pdb cannot be combined with a multi-token / Packmol composition; "
+                "use composition path tokens alone (e.g. solute.pdb:1,DCM:200) without --from-pdb"
+            )
+        # Prefer explicit --from-pdb path
+    setattr(args, "composition", str(path))
+    setattr(args, "from_pdb", path)
+
+
+def resolve_composition_plan(
+    composition_spec: str,
+    *,
+    builder: str | None = None,
+    packmol: bool | None = None,
+    pyxtal: bool | None = None,
+) -> tuple[list[CompositionEntry], CompositionMode, list[tuple[str, int]], dict[str, Path] | None]:
+    """Parse composition and return entries, mode, RES:N pairs, and PDB templates."""
+    entries = parse_composition_entries(composition_spec)
+    mode = composition_mode(entries)
+    if mode == "packmol_pdb":
+        entries = ensure_packmol_pdb_monomers(entries)
+        reject_pdb_composition_for_builder(
+            entries, builder=builder, packmol=packmol, pyxtal=pyxtal
+        )
+    elif mode == "full_system_pdb":
+        reject_pdb_composition_for_builder(
+            entries, builder=builder, packmol=packmol, pyxtal=pyxtal
+        )
+    elif mode == "cgenff":
+        pass
+    pairs = composition_as_pairs(entries)
+    templates = composition_pdb_templates(entries) if mode == "packmol_pdb" else None
+    return entries, mode, pairs, templates
+

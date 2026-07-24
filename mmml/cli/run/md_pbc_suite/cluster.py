@@ -322,6 +322,50 @@ def build_minimized_monomer_for_packmol(
     return coords, atom_names, z
 
 
+def _residue_geometry_for_packmol(
+    residue: str,
+    *,
+    monomer_pdb_templates: dict[str, Path] | None,
+    charmm_sd_steps: int,
+    charmm_abnr_steps: int,
+    charmm_tolenr: float,
+    charmm_tolgrd: float,
+    verbose: bool,
+) -> tuple[np.ndarray, list[str], np.ndarray]:
+    """Load user PDB monomer template or CHARMM-minimize via make-res."""
+    key = str(residue).upper()
+    if monomer_pdb_templates and key in monomer_pdb_templates:
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            load_monomer_geometry_from_pdb,
+        )
+
+        resname, coords, names, mon_z = load_monomer_geometry_from_pdb(
+            monomer_pdb_templates[key]
+        )
+        if str(resname).upper() != key:
+            raise RuntimeError(
+                f"Monomer PDB for {key} has RESN {resname} (path={monomer_pdb_templates[key]})"
+            )
+        if verbose:
+            print(
+                f"Packmol monomer {key}: using user PDB {monomer_pdb_templates[key]}",
+                flush=True,
+            )
+        return (
+            np.asarray(coords, dtype=float),
+            [str(n) for n in names],
+            np.asarray(mon_z, dtype=int),
+        )
+    return build_minimized_monomer_for_packmol(
+        key,
+        nstep_sd=int(charmm_sd_steps),
+        nstep_abnr=int(charmm_abnr_steps),
+        tolenr=float(charmm_tolenr),
+        tolgrd=float(charmm_tolgrd),
+        verbose=verbose,
+    )
+
+
 def build_packmol_composition_cluster(
     *,
     composition: list[tuple[str, int]],
@@ -347,6 +391,7 @@ def build_packmol_composition_cluster(
     prep_gate_settings: dict[str, Any] | None = None,
     quiet: bool = False,
     geometry_store: Any | None = None,
+    monomer_pdb_templates: dict[str, Path] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, Packmol cube/sphere pack, cluster PSF, then cluster MM relax."""
     from mmml.cli.run.md_pbc_suite.ase import (
@@ -361,6 +406,11 @@ def build_packmol_composition_cluster(
         CharmmMmMinimizeConfig,
         minimize_charmm_mm_only,
     )
+
+    templates = {
+        str(k).upper(): Path(v)
+        for k, v in (monomer_pdb_templates or {}).items()
+    } or None
 
     scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/packmol_cluster")
     cache_root = packmol_cache.packmol_cache_root(
@@ -385,6 +435,7 @@ def build_packmol_composition_cluster(
             spacing=spacing,
             sim_cell_side=sim_cell_side,
             prep_gate_settings=prep_gate_settings,
+            monomer_pdb_templates=templates,
         )
         if cached is not None:
             z = cached["z"]
@@ -397,12 +448,13 @@ def build_packmol_composition_cluster(
                 for residue, _count in composition:
                     key = residue.upper()
                     if key not in residue_geometries:
-                        residue_geometries[key] = build_minimized_monomer_for_packmol(
+                        residue_geometries[key] = _residue_geometry_for_packmol(
                             key,
-                            nstep_sd=int(charmm_sd_steps),
-                            nstep_abnr=int(charmm_abnr_steps),
-                            tolenr=float(charmm_tolenr),
-                            tolgrd=float(charmm_tolgrd),
+                            monomer_pdb_templates=templates,
+                            charmm_sd_steps=int(charmm_sd_steps),
+                            charmm_abnr_steps=int(charmm_abnr_steps),
+                            charmm_tolenr=float(charmm_tolenr),
+                            charmm_tolgrd=float(charmm_tolgrd),
                             verbose=False,
                         )
             _psf_z, atom_names, _, _ = _build_cluster_psf_from_composition(
@@ -453,12 +505,13 @@ def build_packmol_composition_cluster(
     for residue, _count in composition:
         key = residue.upper()
         if key not in residue_geometries:
-            residue_geometries[key] = build_minimized_monomer_for_packmol(
+            residue_geometries[key] = _residue_geometry_for_packmol(
                 key,
-                nstep_sd=int(charmm_sd_steps),
-                nstep_abnr=int(charmm_abnr_steps),
-                tolenr=float(charmm_tolenr),
-                tolgrd=float(charmm_tolgrd),
+                monomer_pdb_templates=templates,
+                charmm_sd_steps=int(charmm_sd_steps),
+                charmm_abnr_steps=int(charmm_abnr_steps),
+                charmm_tolenr=float(charmm_tolenr),
+                charmm_tolgrd=float(charmm_tolgrd),
                 verbose=verbose,
             )
 
@@ -601,6 +654,7 @@ def build_packmol_composition_cluster(
             spacing=spacing,
             sim_cell_side=sim_cell_side,
             prep_gate_settings=prep_gate_settings,
+            monomer_pdb_templates=templates,
         )
         fingerprint = packmol_cache.packmol_cache_fingerprint(
             composition=composition,
@@ -618,6 +672,7 @@ def build_packmol_composition_cluster(
             spacing=spacing,
             sim_cell_side=sim_cell_side,
             prep_gate_settings=prep_gate_settings,
+            monomer_pdb_templates=templates,
         )
         entry = cache_root / cache_key
         manifest = {
