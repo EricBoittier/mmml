@@ -2168,6 +2168,12 @@ def _append_suite_mmml_handoff_args(
     cmd: list[str], args: argparse.Namespace, *, backend: str
 ) -> None:
     """Forward MMML cutoffs and handoff/minimize flags to ASE/JAX-MD suite CLIs."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+
     mm_width = str(
         getattr(
             args,
