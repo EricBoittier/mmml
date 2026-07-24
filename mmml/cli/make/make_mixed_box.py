@@ -53,9 +53,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--side_length",
+        "--box-size",
+        dest="side_length",
         type=float,
         default=30.0,
-        help="Cubic box side length in Å (default: 30.0).",
+        help="Cubic box side length in Å (default: 30.0). "
+        "'--box-size' is an alias, matching the naming used elsewhere in the CLI suite.",
     )
     parser.add_argument(
         "--skip-energy-show",
@@ -121,7 +124,7 @@ def _run_packmol_mixed(
 
     Returns the path to the output PDB.
     """
-    from mmml.interfaces.pycharmmInterface.setupBox import PACKMOL_PATH
+    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
 
     os.makedirs("packmol", exist_ok=True)
     os.makedirs(str(Path(output_pdb).parent), exist_ok=True)
@@ -151,7 +154,7 @@ def _run_packmol_mixed(
     inp_path = Path("packmol") / "packmol_mixed.inp"
     inp_path.write_text(packmol_input)
 
-    packmol_bin = os.path.expanduser(PACKMOL_PATH)
+    packmol_bin = packmol_executable()
     cmd = f"{packmol_bin} < {inp_path}"
     print(f"[make_mixed_box] Running: {cmd}")
     ret = os.system(cmd)

@@ -153,7 +153,7 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms, T=300, dt=5e-3, step
         nhc_positions = []
 
         print("*" * 10 + "\nNVT\n" + "*" * 10)
-        print("\t\tTime (ps)\tEnergy (eV)\tTemperature (K)")
+        print("Time (ps)\tEnergy (eV)\tTemperature (K)")
         
         for i in range(total_records):
             state, nbrs = sim(state, nbrs)

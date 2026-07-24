@@ -16,7 +16,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--n", type=int, default=1)
     parser.add_argument("--res", type=str)
-    parser.add_argument("--side_length", type=float, default=300)
+    parser.add_argument(
+        "--side_length",
+        "--box-size",
+        dest="side_length",
+        type=float,
+        default=300,
+        help="Cubic box side length in Å. '--box-size' is an alias, matching the "
+        "naming used elsewhere in the CLI suite.",
+    )
     parser.add_argument("--pdb", type=str, default=None)
     parser.add_argument("--solvent", type=str, default=None)
     parser.add_argument("--density", type=float, default=None)

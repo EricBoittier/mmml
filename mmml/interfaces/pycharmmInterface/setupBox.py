@@ -57,7 +57,6 @@ except ImportError:
 
 cwd = Path(__file__).parent
 
-PACKMOL_PATH = Path("~/mmml/mmml/generate/packmol/packmol").expanduser()
 water_pdb_path = cwd / ".." / ".." / "data" / "charmm" / "tip3.pdb"
 octanol_pdb_path = cwd / ".." / ".." / "data" / "charmm" / "ocoh.pdb"
 ase_water = ase.io.read(str(water_pdb_path))
@@ -301,11 +300,13 @@ def run_packmol_solvation(
         f.writelines(packmol_script)
 
     import os
+    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
 
-    print(f"{PACKMOL_PATH} < packmol/packmol-{solvent}.inp")
+    packmol_bin = packmol_executable()
+    print(f"{packmol_bin} < packmol/packmol-{solvent}.inp")
     output = os.system(
         " ".join(
-            [str(PACKMOL_PATH), " < ", f"packmol/packmol-{solvent}.inp"]
+            [packmol_bin, " < ", f"packmol/packmol-{solvent}.inp"]
         )
     )
     print(output)
@@ -332,10 +333,13 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     with open("packmol/packmol.inp", "w") as f:
         f.writelines(packmol_script)
 
-    print(f"{PACKMOL_PATH} < packmol/packmol.inp")
+    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+
+    packmol_bin = packmol_executable()
+    print(f"{packmol_bin} < packmol/packmol.inp")
     output = os.system(
         " ".join(
-            [str(PACKMOL_PATH), " < ", "packmol/packmol.inp"]
+            [packmol_bin, " < ", "packmol/packmol.inp"]
         )
     )
     print(output)
@@ -371,25 +375,23 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
 
     _ensure_crystal_image_str()
     CLEAR_CHARMM()
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev, charmm_silent_command
 
     with charmm_relaxed_bomlev():
         read.rtf(rtf)
         read.prm(prm)
-    header = f"""bomlev -2
-    prnlev 0
-    wrnlev 0
-    OPEN UNIT 1 READ FORM NAME {pdb_path}
+    header = f"""OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
-    GENERATE SYS FIRST NONE LAST NONE SETUP 
+    GENERATE SYS FIRST NONE LAST NONE SETUP
 
     OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ COOR PDB UNIT 1
     CLOSE UNIT 1
-    
+
     """
-    pycharmm.lingo.charmm_script(header)
+    with charmm_silent_command():
+        pycharmm.lingo.charmm_script(header)
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
     # Set nbonds with fswitch before IMAGE (in pbcs) to avoid bus error on macOS
     pycharmm.lingo.charmm_script(
@@ -435,20 +437,20 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
         " ".join([resid.upper()]*n_molecules)
         pdb_path = pdbfilename
 
-    header = f"""bomlev -2
-    prnlev 0
-    wrnlev 0
-    OPEN UNIT 1 READ FORM NAME {pdb_path}
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+    header = f"""OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
-    GENERATE SYS FIRST NONE LAST NONE SETUP 
+    GENERATE SYS FIRST NONE LAST NONE SETUP
 
     OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ COOR PDB UNIT 1
     CLOSE UNIT 1
-    
+
     """
-    pycharmm.lingo.charmm_script(header)
+    with charmm_silent_command():
+        pycharmm.lingo.charmm_script(header)
     print("read header")
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
     print("read pbcset")
