@@ -109,23 +109,49 @@ def main() -> int:
     e0 = energy_at(state.position)
     energies = [e0]
     frames = [np.asarray(state.position, dtype=np.float64)]
+    # Metal-unit velocities (same convention as ASE/JAX-MD handoff): p / m.
+    mass_b = np.asarray(state.mass, dtype=np.float64).reshape(n_atoms, -1)
+    forces_list = [np.asarray(force_fn(state.position), dtype=np.float64)]
+    velocities_list = [
+        np.asarray(state.momentum, dtype=np.float64) / mass_b
+    ]
 
     @jax.jit
     def step(state):
         return apply_fn(state)
 
+    def _sample(st):
+        energies.append(energy_at(st.position))
+        frames.append(np.asarray(st.position, dtype=np.float64))
+        forces_list.append(np.asarray(force_fn(st.position), dtype=np.float64))
+        m = np.asarray(st.mass, dtype=np.float64).reshape(n_atoms, -1)
+        velocities_list.append(np.asarray(st.momentum, dtype=np.float64) / m)
+
     traj_every = max(1, int(args.traj_interval))
     for i in range(int(args.n_steps)):
         state = step(state)
         if (i + 1) % traj_every == 0:
-            energies.append(energy_at(state.position))
-            frames.append(np.asarray(state.position, dtype=np.float64))
+            _sample(state)
     e1 = energy_at(state.position)
+    f1 = np.asarray(force_fn(state.position), dtype=np.float64)
+    m1 = np.asarray(state.mass, dtype=np.float64).reshape(n_atoms, -1)
+    v1 = np.asarray(state.momentum, dtype=np.float64) / m1
     energies.append(e1)
     frames.append(np.asarray(state.position, dtype=np.float64))
+    forces_list.append(f1)
+    velocities_list.append(v1)
 
-    traj_paths = write_jaxmd_trajectory(out, z, frames)
-    geom = write_final_geometry(out, z, state.position)
+    traj_paths = write_jaxmd_trajectory(
+        out,
+        z,
+        frames,
+        energies=energies,
+        forces=forces_list,
+        velocities=velocities_list,
+    )
+    geom = write_final_geometry(
+        out, z, state.position, energy=e1, forces=f1, velocities=v1
+    )
 
     summary = {
         "backend": "jaxmd",

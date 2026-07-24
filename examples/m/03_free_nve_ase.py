@@ -88,11 +88,15 @@ def main() -> int:
     dyn.run(int(args.n_steps))
     traj.close()
     e1 = float(atoms.get_potential_energy())
+    f1 = np.asarray(atoms.get_forces(), dtype=np.float64)
+    v1 = np.asarray(atoms.get_velocities(), dtype=np.float64)
     energies.append(e1)
     xyz_frames.append(np.asarray(atoms.get_positions(), dtype=np.float64))
 
-    geom = write_final_geometry(out, z, atoms.get_positions())
-    write_xyz_frames(out / "md.xyz", z, xyz_frames)
+    geom = write_final_geometry(
+        out, z, atoms.get_positions(), energy=e1, forces=f1, velocities=v1
+    )
+    write_xyz_frames(out / "md.xyz", z, xyz_frames, energies=energies)
 
     summary = {
         "backend": "ase",
