@@ -1,0 +1,83 @@
+# ADUMB 2D on NH3–CH3Cl: Cl⋯C and C⋯N distances (RXNCOR) — PyCHARMM only.
+#
+# Menshutkin / SN2-like reaction coordinates on the vacuum dimer:
+#   r_cl = CH3CL CL1⋯C1
+#   r_cn = CH3CL C1⋯AMM1 N1
+# Same system as adumb_nc_distance.yaml; two ``umbrella rxncor`` cards then one
+# ``umbrella init`` (CHARMM ADUMBRXNCOR multi-dimensional WHAM).
+#
+# Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
+# Prefer min 0.0 (UM1RXN quirk when min>0); wipe staged lingo after YAML edits.
+#
+#   source examples/m/_env.sh
+#   USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
+#
+# Alignment (smoke):
+#   dt_fs=1.0, ps_heat=0.2 → heat nstep ≈ 200
+#   umbrella init: nsim=4 × update=50 = 200; equi=25
+# Medium: ps_heat=100 → nstep=100_000; nsim=100 update=1000 equi=200
+#
+# Pass checks: exit 0; lingo has both ``r_cl`` and ``r_cn`` umbrella cards;
+# ADUMB-WUNI.DAT under output_dir.
+#
+# Docs: docs/examples/nh3-ch3cl-results.md (ADUMB 2D section).
+
+setup: free_nvt
+backend: pycharmm
+composition: "AMM1:1,CH3CL:1"
+spacing: 4.0
+checkpoint: examples/m/kl.json
+include_mm: true
+mm_charge_mode: fixed
+mm_nonbond_mode: jax_mic
+mm_pair_source: jax
+temperature: 300
+dt_fs: 1.0
+md_stages: "mini,heat"
+ps_heat: 0.2
+packmol_placement: sphere
+packmol_radius: 6.0
+reuse_packmol_cache: false
+dynamics_overlap_check_interval: 200
+mini_nstep: 40
+skip_energy_show: true
+skip_jit_warmup: true
+no_echeck_heat: true
+quiet: false
+seed: 0
+mc_density_equalize: false
+output_dir: artifacts/nh3_ch3cl/adumb_clc_cn_2d
+
+dcd_nsavc: 10
+dcd_max_frames: 100
+
+# Packmol/composition: SYS resid 1 = AMM1, resid 2 = CH3CL.
+# RXNCOR NAME tokens are ≤4 chars in ADUMB (param_store).
+pycharmm_pre_dynamics_lingo: |
+  ! Keep the complex near the origin during vacuum heat
+  cons hmcm force 15.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+
+  open unit 44 write card name ADUMB-WUNI.DAT
+  open unit 50 write card name UMBCOR
+  open unit 45 write card name RXNCOR_RCL.DAT
+  open unit 46 write card name RXNCOR_RCN.DAT
+
+  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1
+  rxncor define p_n point select atom SYS 1 N1 end
+  rxncor define p_c point select atom SYS 2 C1 end
+  rxncor define p_cl point select atom SYS 2 CL1 end
+
+  ! Distances (Angstrom): Cl-C and C-N
+  rxncor define r_cl distance p_cl p_c
+  rxncor define r_cn distance p_c p_n
+  rxncor set nrxn 2 r_cl r_cn
+  rxncor trace r_cl unit 45
+  rxncor trace r_cn unit 46
+
+  ! 2D adaptive umbrella — one card per RXNCOR name, then shared init.
+  ! min 0 / wide max: vacuum fly-off + UM1RXN robustness (see 1D example).
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name r_cl
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name r_cn
+
+  ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200 here)
+  umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50

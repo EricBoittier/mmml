@@ -11,14 +11,18 @@ See [`examples/m/README.md`](../../examples/m/README.md). Checkpoint and dataset
 commit `30eb7a01f7fcf1d42a795f188526a80e547110fd` (`examples/m/kl.json`,
 `examples/m/nh3_ch3cl_filtered.npz`).
 
-## ADUMB N⋯C distance (PyCHARMM)
+## ADUMB (PyCHARMM)
 
-Vacuum smoke: `examples/m/yaml/adumb_nc_distance.yaml` via
-`bash examples/m/09_adumb_nc_distance.sh` (optional `USE_NPZ_PDB=1`).
-Solvated TIP3 skeleton: `yaml/adumb_nc_distance_tip3.yaml`.
+| Example | RCs | Config | Script |
+|---------|-----|--------|--------|
+| 1D N⋯C | `r_nc` = N1⋯C1 | `examples/m/yaml/adumb_nc_distance.yaml` | `09_adumb_nc_distance.sh` |
+| 2D Cl⋯C / C⋯N | `r_cl` = CL1⋯C1, `r_cn` = C1⋯N1 | `yaml/adumb_clc_cn_2d.yaml` | `10_adumb_clc_cn_2d.sh` |
+| 1D + TIP3 | `r_nc` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` | `SOLVATED=1` on `09_*.sh` |
 
-Reaction coordinate is the AMM1 N1⋯CH₃Cl C1 distance (`rxncor` +
-`umbrella rxncor`), not a peptide dihedral.
+Optional `USE_NPZ_PDB=1` feeds `07_export_solute_pdb.py` geometry. Coordinates are
+RXNCOR distances + `umbrella rxncor` (not peptide dihedrals). For 2D, define two
+distances, `rxncor set nrxn 2 r_cl r_cn`, two `umbrella rxncor … name …` cards,
+then one `umbrella init`. ADUMB **NAME** tokens are ≤4 characters.
 
 ### CHARMM build
 
@@ -64,18 +68,23 @@ common cause of `UM1RXN` `reaction coordinate out of range` after editing
 
 ### Expected artifacts (smoke)
 
-Under `artifacts/nh3_ch3cl/adumb_nc_distance/` (or `ARTIFACTS_DIR`):
+**1D** — `artifacts/nh3_ch3cl/adumb_nc_distance/`:
 
-- `pycharmm_pre_dynamics_lingo.inp` containing `umbrella rxncor`
-- `ADUMB-WUNI.DAT` / `adumb-wuni.dat`, `UMBCOR` / `umbcor`,
-  `RXNCOR_TRACE.DAT` / `rxncor_trace.dat`
-- heat restart / DCD from the short heat leg
+- `pycharmm_pre_dynamics_lingo.inp` containing `umbrella rxncor` + `r_nc`
+- `ADUMB-WUNI.DAT`, `UMBCOR`, `RXNCOR_TRACE.DAT` (or lowercase)
+- heat restart / DCD
+
+**2D** — `artifacts/nh3_ch3cl/adumb_clc_cn_2d/`:
+
+- lingo with `nrxn 2`, two `umbrella rxncor` cards (`r_cl`, `r_cn`)
+- `ADUMB-WUNI.DAT`, `UMBCOR`, `RXNCOR_RCL.DAT`, `RXNCOR_RCN.DAT`
+- heat restart / DCD
 
 ### Results (fill in after a successful run)
 
-_Pending — paste pass criteria, \(r_\mathrm{NC}\) trace summary, and figure
-paths here once smoke or production heat completes._
+_Pending — paste pass criteria, RC trace summary, and figure paths here once
+smoke or production heat completes._
 
-| Run | Config | \(ps_\mathrm{heat}\) | Exit | Notes / figures |
-|-----|--------|----------------------|------|-----------------|
-| | | | | |
+| Run | Config | RCs | \(ps_\mathrm{heat}\) | Exit | Notes / figures |
+|-----|--------|-----|----------------------|------|-----------------|
+| | 1D / 2D | | | | |

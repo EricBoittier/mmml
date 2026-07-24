@@ -183,15 +183,22 @@ Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
 
 Yes — the NPZ can drive a PyCHARMM ADUMB job after you have a CGenFF system
 (Packmol `AMM1:1,CH3CL:1`, or `07_export_solute_pdb.py` as a lone full-system
-PDB / Packmol monomer). There are **no φ/ψ dihedrals** on AMM1/CH3CL; use an
-**N⋯C distance** reaction coordinate via RXNCOR + `umbrella rxncor` (same pattern
-as `setup/charmm/test/c38test/adumbrxncor.inp`).
+PDB / Packmol monomer). There are **no φ/ψ dihedrals** on AMM1/CH3CL; use
+RXNCOR distances + `umbrella rxncor` (same pattern as
+`setup/charmm/test/c38test/adumbrxncor.inp`).
+
+| Example | Coordinates | Config / script |
+|---------|-------------|-----------------|
+| 1D | N⋯C (`r_nc`) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
+| 2D | Cl⋯C + C⋯N (`r_cl`, `r_cn`) | `yaml/adumb_clc_cn_2d.yaml`, `10_adumb_clc_cn_2d.sh` |
+| 1D + TIP3 | N⋯C (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
 
 Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 `scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
 `umbrella rxncor` prints `Unknown umbrella specified` and heat often SIGSEGVs.
 Use `umbrella rxncor … min 0.0 max …` (not `min 2`) unless libcharmm includes the
-mmml `UM1RXN` range-check patch in `eadumb.F90`.
+mmml `UM1RXN` range-check patch in `eadumb.F90`. RXNCOR **NAME** tokens for ADUMB
+are at most **4 characters** (`r_cl`, `r_cn`).
 
 **Production heat:** keep `min 0` (or rebuild with the patch), and set
 `umbrella init` so `nsim * update == heat nstep`
@@ -210,13 +217,14 @@ bash examples/m/09_adumb_nc_distance.sh
 # Preferred: coordinates from the NPZ-exported PDB (overrides YAML composition):
 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 
+# 2D Cl⋯C + C⋯N adaptive umbrella (smoke ps_heat=0.2):
+USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
+
 # Solvated TIP3 (PBC); combine with USE_NPZ_PDB=1 for NPZ solute + TIP3:
 SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
 ```
 If a prior cube Packmol run left monomers ~box-length apart, the script clears
 `{output_dir}/.packmol_cache` before launching.
-
-Configs: `yaml/adumb_nc_distance.yaml`, `yaml/adumb_nc_distance_tip3.yaml`.
 
 ## Pass / fail
 
@@ -230,5 +238,6 @@ Configs: `yaml/adumb_nc_distance.yaml`, `yaml/adumb_nc_distance_tip3.yaml`.
 | Mech. embed | campaign exit 0 under `artifacts/nh3_ch3cl/mech_embed_*` |
 | ES embed | campaign exit 0 under `artifacts/nh3_ch3cl/es_embed_*` |
 | Ewald LR | core `mic_*` / `ewald_*` jobs exit 0; optional libs may SKIP |
-| ADUMB | exit 0; `pycharmm_pre_dynamics_lingo.inp` has `umbrella rxncor`; ADUMB files under `adumb_nc_distance/` |
+| ADUMB 1D | exit 0; lingo has `umbrella rxncor` / `r_nc`; ADUMB files under `adumb_nc_distance/` |
+| ADUMB 2D | exit 0; lingo has `nrxn 2` + `r_cl`/`r_cn`; ADUMB files under `adumb_clc_cn_2d/` |
 | Docs | `docs/examples/nh3-ch3cl-results.md` + PNGs under `docs/images/examples/nh3-ch3cl/` |
