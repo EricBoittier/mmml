@@ -63,6 +63,8 @@ def test_mlpot_expands_gpu_only_jax_platforms_before_import(monkeypatch):
     monkeypatch.setenv("JAX_PLATFORMS", "cuda")
     from mmml.interfaces.pycharmmInterface import jax_device_policy
 
+    # Do not import/init jax while platforms list includes cuda on CPU-only
+    # agents — that sticks process-wide. Only exercise env mutation.
     saved = sys.modules.pop("jax", None)
     try:
         with mock.patch(
@@ -72,13 +74,17 @@ def test_mlpot_expands_gpu_only_jax_platforms_before_import(monkeypatch):
             assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
         assert __import__("os").environ.get("JAX_PLATFORMS") == "cuda,cpu"
     finally:
+        # Force a CPU-only platform list before restoring jax so later tests
+        # that call jax.devices() do not try to init a missing cuda plugin.
+        os = __import__("os")
+        os.environ["JAX_PLATFORMS"] = "cpu"
         if saved is not None:
             sys.modules["jax"] = saved
-        monkeypatch.setenv("JAX_PLATFORMS", "cpu")
 
 
 def test_mlpot_jax_device_context_falls_back_to_cpu_when_no_gpu(monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu")
     jax = pytest.importorskip("jax")
     cpu_dev = jax.devices("cpu")[0]
 
@@ -99,6 +105,7 @@ def test_mlpot_jax_device_context_cpu_fallback_warns_loudly(monkeypatch, capsys)
     both the fallback-tracking flag and a printed warning, so a stale/
     misconfigured run can't quietly compute on CPU while claiming GPU."""
     monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu")
     jax = pytest.importorskip("jax")
     cpu_dev = jax.devices("cpu")[0]
 
@@ -124,6 +131,7 @@ def test_mlpot_jax_device_context_cpu_fallback_warns_loudly(monkeypatch, capsys)
 
 def test_mlpot_jax_device_context_no_fallback_when_gpu_available(monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu")
     jax = pytest.importorskip("jax")
     gpu_dev = mock.MagicMock()
     cpu_dev = jax.devices("cpu")[0]
