@@ -1112,6 +1112,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--from-pdb",
+        type=Path,
+        default=None,
+        help=(
+            "Full-system cold start from a CGenFF-named PDB (CHARMM READ SEQU PDB). "
+            "Equivalent to composition: path.pdb. Mutually exclusive with "
+            "--from-psf/--from-crd and with multi-token Packmol compositions."
+        ),
+    )
+    parser.add_argument(
         "--skip-cluster-build",
         action="store_true",
         help="pycharmm: skip Packmol/IC; use --from-psf/--from-crd or prior mini artifacts",
@@ -2844,6 +2854,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     _append_optional(cmd, "--from-psf", getattr(args, "from_psf", None))
     _append_optional(cmd, "--from-crd", getattr(args, "from_crd", None))
+    _append_optional(cmd, "--from-pdb", getattr(args, "from_pdb", None))
     if args.no_fix:
         cmd.append("--no-fix")
     if args.no_pre_minimize:
@@ -3475,6 +3486,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     _append_optional(cmd, "--builder", getattr(args, "builder", None))
     _append_optional(cmd, "--from-psf", getattr(args, "from_psf", None))
     _append_optional(cmd, "--from-crd", getattr(args, "from_crd", None))
+    _append_optional(cmd, "--from-pdb", getattr(args, "from_pdb", None))
     if not skip_box_size_for_cmd:
         _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--checkpoint", args.checkpoint)

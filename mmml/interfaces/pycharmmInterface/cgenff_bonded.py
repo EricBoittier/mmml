@@ -137,15 +137,15 @@ def bonded_energy_components(
             positions[idx[:, 2]],
             positions[idx[:, 3]],
         )
-        phase = jnp.where(
-            improper_n == 0,
-            psi - bonded.improper_gamma,
-            improper_n * psi - bonded.improper_gamma,
-        )
-        prefactor = jnp.where(improper_n == 0, 2.0, 1.0)
-        return jnp.sum(
-            prefactor * bonded.improper_k * (1.0 + jnp.cos(phase))
-        )
+        # n=0 impropers are harmonic in CHARMM: E = k*(psi - psi0)^2.  The cosine
+        # form 2k(1+cos(psi-gamma)) only matches to O(delta^2); its minimum sits at
+        # psi-gamma = pi, so the harmonic deviation is wrap(psi - gamma - pi).
+        two_pi = 2.0 * jnp.pi
+        delta = jnp.mod(psi - bonded.improper_gamma, two_pi) - jnp.pi
+        e_harmonic = bonded.improper_k * delta * delta
+        phase = improper_n * psi - bonded.improper_gamma
+        e_periodic = bonded.improper_k * (1.0 + jnp.cos(phase))
+        return jnp.sum(jnp.where(improper_n == 0, e_harmonic, e_periodic))
 
     e_bond = bond_energy()
     e_angle = angle_energy()

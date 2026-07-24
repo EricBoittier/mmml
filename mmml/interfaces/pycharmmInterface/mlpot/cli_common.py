@@ -1479,10 +1479,24 @@ def build_cluster_from_args_with_tag(
             apply_box_auto_count_composition,
             resolve_box_auto_mode,
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            apply_from_pdb_alias,
+            resolve_composition_plan,
+        )
 
+        apply_from_pdb_alias(args)
         if resolve_box_auto_mode(args) == "count":
             apply_box_auto_count_composition(args)
-        composition = _parse_composition(args.composition)
+        _entries, mode, composition, monomer_pdb_templates = resolve_composition_plan(
+            str(args.composition),
+            builder=getattr(args, "builder", None),
+            packmol=getattr(args, "packmol", None),
+            pyxtal=getattr(args, "pyxtal", None),
+        )
+        if mode == "full_system_pdb":
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+
+            return load_cluster_from_pdb(args)
         if use_pyxtal_placement(args):
             import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
             from mmml.interfaces.pyxtal_placement import parse_supercell_reps
@@ -1565,8 +1579,13 @@ def build_cluster_from_args_with_tag(
                 prep_gate_settings=packmol_prep_settings_from_namespace(args),
                 quiet=bool(getattr(args, "quiet", False)),
                 geometry_store=args,
+                monomer_pdb_templates=monomer_pdb_templates,
             )
         else:
+            if mode == "packmol_pdb":
+                raise ValueError(
+                    "PDB composition tokens require Packmol; remove --no-packmol"
+                )
             from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
 
             builder = resolve_system_builder(
@@ -3858,6 +3877,15 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         type=Path,
         default=None,
         help="Load coordinates from CRD (with --from-psf)",
+    )
+    group.add_argument(
+        "--from-pdb",
+        type=Path,
+        default=None,
+        help=(
+            "Full-system cold start from a CGenFF-named PDB (CHARMM READ SEQU PDB). "
+            "Equivalent to a lone composition PDB token."
+        ),
     )
     group.add_argument(
         "--skip-cluster-build",

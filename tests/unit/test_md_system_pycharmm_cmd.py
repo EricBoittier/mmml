@@ -70,6 +70,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         restart_from=None,
         from_psf=None,
         from_crd=None,
+        from_pdb=None,
         no_pre_minimize=False,
         skip_cluster_build=False,
         skip_if_crd_exists=False,
@@ -320,7 +321,13 @@ def test_build_pycharmm_command_fire_min_flags_parse_in_pycharmm_backend():
     assert parsed.rescue_fire_fmax == pytest.approx(0.05)
 
 
-def test_build_pycharmm_command_omits_residue_when_composition_set():
+def test_build_pycharmm_command_forwards_from_pdb():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(from_pdb=Path("system.pdb"), composition=None)
+    )
+    assert "--from-pdb" in cmd
+    assert "system.pdb" in cmd
+
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--composition" in cmd
     assert "DCM:20" in cmd

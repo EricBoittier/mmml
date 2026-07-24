@@ -372,6 +372,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Load certified/liquid-box CRD with --from-psf (skips Packmol rebuild).",
     )
     p.add_argument(
+        "--from-pdb",
+        type=Path,
+        default=None,
+        help=(
+            "Full-system cold start from a CGenFF-named PDB (CHARMM READ SEQU PDB). "
+            "Equivalent to a lone composition PDB token."
+        ),
+    )
+    p.add_argument(
         "--packmol",
         action=argparse.BooleanOptionalAction,
         default=None,
