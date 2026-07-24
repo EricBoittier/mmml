@@ -1405,6 +1405,16 @@ def _cluster_atoms_per_from_composition(
     return list(atoms_per)
 
 
+def _vacuum_from_pdb_allows_missing_box(args: Any) -> bool:
+    """``free_*`` / ``--free-space`` cold-starts do not need CRYST1 / box.json."""
+    if bool(getattr(args, "free_space", False)):
+        return True
+    setup = str(getattr(args, "setup", None) or "").strip().lower()
+    return setup in {"free_nve", "free_nvt", "free_thermalize"} or setup.startswith(
+        "free_"
+    )
+
+
 def load_cluster_from_pdb(
     args: Any,
     *,
@@ -1413,8 +1423,10 @@ def load_cluster_from_pdb(
     """Cold-start from a full-system PDB via CHARMM ``READ SEQU PDB``.
 
     The PDB must carry CGenFF residue and atom names (e.g. from ``make-res`` /
-    liquid-box / Packmol). Box side prefers CRYST1, then sibling ``box.json``,
-    then ``--box-size``.
+    liquid-box / Packmol). For PBC setups, box side prefers CRYST1, then sibling
+    ``box.json``, then ``--box-size``. Vacuum ``free_*`` / ``--free-space`` runs
+    may omit the box (do **not** invent ``box_size`` — that would enable CHARMM
+    crystal via ``resolve_charmm_use_pbc``).
     """
     from mmml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_relaxed_bomlev,
@@ -1466,14 +1478,18 @@ def load_cluster_from_pdb(
         if box_size is not None and float(box_size) > 0.0:
             side = float(box_size)
     if side is None or float(side) <= 0.0:
-        raise ValueError(
-            f"Full-system PDB {path.name} needs a positive box side: set CRYST1, "
-            "place box.json next to the PDB, or pass --box-size"
-        )
-    side = float(side)
-    setattr(args, "box_size", side)
-    setattr(args, "_cold_start_sim_cell_side_A", side)
-    setattr(args, "_cold_start_box_sizing_source", "from_pdb")
+        if not _vacuum_from_pdb_allows_missing_box(args):
+            raise ValueError(
+                f"Full-system PDB {path.name} needs a positive box side: set CRYST1, "
+                "place box.json next to the PDB, or pass --box-size"
+            )
+        side = None
+        setattr(args, "_cold_start_box_sizing_source", "from_pdb_vacuum")
+    else:
+        side = float(side)
+        setattr(args, "box_size", side)
+        setattr(args, "_cold_start_sim_cell_side_A", side)
+        setattr(args, "_cold_start_box_sizing_source", "from_pdb")
 
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CLEAR_CHARMM
 
@@ -1534,9 +1550,10 @@ CLOSE UNIT 1
     setattr(args, "_cluster_composition_summary", dict(summary))
     setattr(args, "n_molecules", n_mol)
     if not getattr(args, "quiet", False):
+        box_msg = f"box={side:.3f} Å" if side is not None else "vacuum (no box)"
         print(
             f"Loading full-system PDB {path.name} "
-            f"({n_mol} residues, {int(z.size)} atoms, box={side:.3f} Å)",
+            f"({n_mol} residues, {int(z.size)} atoms, {box_msg})",
             flush=True,
         )
     sync_charmm_positions(r)

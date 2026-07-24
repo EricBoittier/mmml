@@ -43,18 +43,17 @@ def _set_positions_xyz(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> None:
     coor.set_positions_array(x, y, z)
 
 
-def center_cluster_at_origin(*, orient: bool = True) -> None:
+def center_cluster_at_origin(*, orient: bool = False) -> None:
     """Translate so the cluster geometric COM is at the origin (non-PBC).
 
     Uses the PyCHARMM ``coor`` API rather than lingo ``coor …`` scripts.
     Some CHARMM/PyCHARMM builds reject ``coor`` as an unrecognized lingo
-    command (LEVEL 0 warning) even when the coordinate API works — that
-    previously left MMFP droff untuned and walls fighting elongated Packmol
-    clouds.
+    command (LEVEL 0 warning, no Python exception) even when the coordinate
+    API works — that previously left MMFP droff untuned and walls fighting
+    elongated Packmol clouds. ``orient`` is off by default for the same reason.
     """
-    pycharmm = _import_pycharmm()
     if orient:
-        # Optional; ignore failures (unrecognized ``coor`` / missing CORMAN).
+        pycharmm = _import_pycharmm()
         try:
             pycharmm.lingo.charmm_script("coor orient sele all end")
         except Exception:

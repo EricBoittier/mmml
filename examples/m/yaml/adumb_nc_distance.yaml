@@ -56,7 +56,7 @@ output_dir: artifacts/nh3_ch3cl/adumb_nc_distance
 #   composition: artifacts/nh3_ch3cl/solute_amm1_ch3cl.pdb
 #   from_pdb: artifacts/nh3_ch3cl/solute_amm1_ch3cl.pdb
 # Or: USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
-# (script overrides composition to the lone PDB).
+# Vacuum free_nvt does not need CRYST1 / box.json / --box-size.
 
 dcd_nsavc: 10
 dcd_max_frames: 100
