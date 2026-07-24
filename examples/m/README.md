@@ -177,6 +177,30 @@ uv run mmml md-system --config examples/m/yaml/ewald_all_tip3.yaml --job-id ewal
 Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
 `RUN_ACN=0 RUN_DMSO=0` to run only the TIP3 matrix.
 
+### ADUMB (PyCHARMM adaptive umbrella)
+
+Yes — the NPZ can drive a PyCHARMM ADUMB job after you have a CGenFF system
+(Packmol `AMM1:1,CH3CL:1`, or `07_export_solute_pdb.py` → `--from-pdb`).
+There are **no φ/ψ dihedrals** on AMM1/CH3CL; use an **N⋯C distance** reaction
+coordinate via RXNCOR + `umbrella rxncor` (same pattern as
+`setup/charmm/test/c38test/adumbrxncor.inp`).
+
+Requires CHARMM built with **ADUMB** and **ADUMBRXN**.
+
+```bash
+source examples/m/_env.sh
+# Vacuum dimer smoke (Packmol templates):
+bash examples/m/09_adumb_nc_distance.sh
+
+# Coordinates from the NPZ-exported PDB:
+USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
+
+# Solvated TIP3 (PBC):
+SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
+```
+
+Configs: `yaml/adumb_nc_distance.yaml`, `yaml/adumb_nc_distance_tip3.yaml`.
+
 ## Pass / fail
 
 | Check | Criterion |
@@ -189,4 +213,5 @@ Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
 | Mech. embed | campaign exit 0 under `artifacts/nh3_ch3cl/mech_embed_*` |
 | ES embed | campaign exit 0 under `artifacts/nh3_ch3cl/es_embed_*` |
 | Ewald LR | core `mic_*` / `ewald_*` jobs exit 0; optional libs may SKIP |
+| ADUMB | exit 0; `pycharmm_pre_dynamics_lingo.inp` has `umbrella rxncor`; ADUMB files under `adumb_nc_distance/` |
 | Docs | `docs/examples/nh3-ch3cl-results.md` + PNGs under `docs/images/examples/nh3-ch3cl/` |

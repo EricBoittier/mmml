@@ -1,0 +1,54 @@
+# ADUMB N⋯C distance in explicit TIP3 (PBC) — edit/extend after vacuum smoke works.
+#
+#   source examples/m/_env.sh
+#   uv run mmml md-system --config examples/m/yaml/adumb_nc_distance_tip3.yaml
+#
+# Or load a make-box artifact:
+#   from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb
+#   (then comment out composition / box_size if box.json is present)
+#
+# Alignment: dt_fs=1.0, ps_prod=1.0 → prod nstep=1000
+#   umbrella: nsim=10 × update=100 = 1000; equi=100
+
+setup: pbc_nvt
+backend: pycharmm
+composition: "AMM1:1,CH3CL:1,TIP3:12"
+box_size: 20.0
+checkpoint: examples/m/kl.json
+include_mm: true
+mm_charge_mode: fixed
+mm_nonbond_mode: jax_mic
+lr_solver: mic
+temperature: 300
+dt_fs: 1.0
+md_stages: "mini,heat,prod"
+ps_heat: 0.2
+ps_prod: 1.0
+mini_nstep: 40
+skip_energy_show: true
+skip_jit_warmup: true
+quiet: false
+seed: 0
+mc_density_equalize: false
+output_dir: artifacts/nh3_ch3cl/adumb_nc_distance_tip3
+
+dcd_nsavc: 20
+dcd_max_frames: 200
+
+pycharmm_pre_dynamics_lingo: |
+  ! Soft COM restraint on the solute (resid 1–2); leave solvent free
+  cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 -
+    sele (resid 1 .or. resid 2) end
+
+  open unit 44 write card name artifacts/nh3_ch3cl/adumb_nc_distance_tip3/adumb-wuni.dat
+  open unit 50 write card name artifacts/nh3_ch3cl/adumb_nc_distance_tip3/umbcor
+  open unit 45 write card name artifacts/nh3_ch3cl/adumb_nc_distance_tip3/rxncor_trace.dat
+
+  rxncor define p_n point select atom SYS 1 N1 end
+  rxncor define p_c point select atom SYS 2 C1 end
+  rxncor define r_nc distance p_n p_c
+  rxncor set nrxn 1 r_nc
+  rxncor trace r_nc unit 45
+
+  umbrella rxncor nresol 40 trig 0 poly 6 min 2.0 max 6.0 name r_nc
+  umbrella init nsim 10 update 100 equi 100 thresh 10 temp 300 wuni 44 ucun 50
