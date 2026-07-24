@@ -6,22 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/examples/md_system_from_pdb/_env.sh"
 cd "${ROOT}"
 
+CFG="${ROOT}/examples/md_system_from_pdb/yaml/05_packmol_mix_pdb_monomer.yaml"
 OUT="${ARTIFACTS_DIR}/05_packmol_4mer"
 
-echo "=== composition ${PDB_MONOMER}:4 → free_nve (pycharmm) ==="
+echo "=== config $(basename "${CFG}") (${PDB_MONOMER}:4) ==="
 uv run mmml md-system \
+  --config "${CFG}" \
   --composition "${PDB_MONOMER}:4" \
-  --backend pycharmm \
-  --setup free_nve \
   --checkpoint "${CKPT_JSON}" \
-  --packmol-radius 15 \
-  --flat-bottom-radius 12 \
-  --ps 0.1 \
-  --dt-fs 0.5 \
-  --mini-nstep 20 \
-  --fix-resids 1 \
-  --skip-energy-show \
-  --output-dir "${OUT}" \
-  --quiet
+  --output-dir "${OUT}"
 
 echo "PASS: Packmol PDB monomer mix -> ${OUT}"

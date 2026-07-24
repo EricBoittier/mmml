@@ -6,18 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/examples/md_system_from_pdb/_env.sh"
 cd "${ROOT}"
 
+CFG="${ROOT}/examples/md_system_from_pdb/yaml/02_from_pdb_free_nve_ase.yaml"
 OUT="${ARTIFACTS_DIR}/02_free_nve_ase"
 
-echo "=== from-pdb → free_nve (ASE, 0.1 ps) ==="
+echo "=== config $(basename "${CFG}") ==="
 uv run mmml md-system \
+  --config "${CFG}" \
   --from-pdb "${PDB_MONOMER}" \
-  --backend ase \
-  --setup free_nve \
   --checkpoint "${CKPT_JSON}" \
-  --ps 0.1 \
-  --dt-fs 0.5 \
-  --skip-jit-warmup \
-  --output-dir "${OUT}" \
-  --quiet
+  --output-dir "${OUT}"
 
 echo "PASS: ASE NVE smoke -> ${OUT}"

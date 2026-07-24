@@ -6,18 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/examples/md_system_from_pdb/_env.sh"
 cd "${ROOT}"
 
+CFG="${ROOT}/examples/md_system_from_pdb/yaml/03_from_pdb_free_nve_jaxmd.yaml"
 OUT="${ARTIFACTS_DIR}/03_free_nve_jaxmd"
 
-echo "=== from-pdb → free_nve (jaxmd, 0.1 ps) ==="
+echo "=== config $(basename "${CFG}") ==="
 uv run mmml md-system \
+  --config "${CFG}" \
   --from-pdb "${PDB_MONOMER}" \
-  --backend jaxmd \
-  --setup free_nve \
   --checkpoint "${CKPT_JSON}" \
-  --ps 0.1 \
-  --dt-fs 0.5 \
-  --skip-jit-warmup \
-  --output-dir "${OUT}" \
-  --quiet
+  --output-dir "${OUT}"
 
 echo "PASS: jaxmd NVE smoke -> ${OUT}"

@@ -6,17 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/examples/md_system_from_pdb/_env.sh"
 cd "${ROOT}"
 
+CFG="${ROOT}/examples/md_system_from_pdb/yaml/01_from_pdb_pycharmm_minimize.yaml"
 OUT="${ARTIFACTS_DIR}/01_mini_pycharmm"
 
-echo "=== from-pdb → pycharmm_minimize (${PDB_MONOMER}) ==="
+echo "=== config $(basename "${CFG}") (${PDB_MONOMER}) ==="
 uv run mmml md-system \
+  --config "${CFG}" \
   --from-pdb "${PDB_MONOMER}" \
-  --backend pycharmm \
-  --setup pycharmm_minimize \
   --checkpoint "${CKPT_JSON}" \
-  --mini-nstep 30 \
-  --skip-energy-show \
-  --output-dir "${OUT}" \
-  --quiet
+  --output-dir "${OUT}"
 
 echo "PASS: pycharmm minimize -> ${OUT}"

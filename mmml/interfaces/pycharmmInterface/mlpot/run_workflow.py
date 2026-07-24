@@ -750,12 +750,24 @@ def _register_mlpot_context(
         if atoms_per_monomer is not None
         else _atoms_per_monomer_list(z, n_monomers, args=args)
     )
-    import sys
+    # Platforms + MMML_MLPOT_DEVICE must be set *before* the first jax import
+    # inside load_physnet_mlpot_bundle. A later apply is a no-op for backends.
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        apply_mlpot_jax_platform_env,
+        mlpot_jax_device_name,
+    )
 
-    if "jax" not in sys.modules:
-        # CPU-first for MLpot upinb; keep GPU plugin loaded for later promote.
-        os.environ["JAX_PLATFORMS"] = "cpu,gpu"
-        os.environ["MMML_MLPOT_DEVICE"] = "cpu"
+    apply_mlpot_jax_platform_env(quiet=not verbose)
+    if verbose:
+        print(
+            f"MLpot device policy: MMML_MLPOT_DEVICE={mlpot_jax_device_name()} "
+            f"JAX_PLATFORMS={os.environ.get('JAX_PLATFORMS', '(unset)')}",
+            flush=True,
+        )
+    # Do **not** force MMML_MLPOT_DEVICE=cpu here. That used to run whenever jax
+    # was not yet imported, which pinned PhysNet/SD to host CPU for the whole
+    # job (nvidia-smi idle) even though defer-until-after-SD is opt-in and off
+    # by default. CPU pinning belongs only in the defer branch above.
     _, _, pyCModel = load_physnet_mlpot_bundle(
         ckpt,
         n_atoms,
@@ -815,9 +827,6 @@ def _register_mlpot_context(
         **registration_kwargs,
     )
     recover_mpi_for_charmm_after_jax(phase="after MLpot registration")
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
-
-    apply_mlpot_jax_platform_env(quiet=not verbose)
     from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         pin_cuda_for_spatial_mpi,
         spatial_mpi_enabled,

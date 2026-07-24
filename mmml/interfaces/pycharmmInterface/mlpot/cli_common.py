@@ -1460,7 +1460,6 @@ def build_cluster_from_args_with_tag(
         _build_cluster_from_composition,
         _build_cluster_from_composition_packmol,
         _build_cluster_from_composition_pyxtal,
-        _parse_composition,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
     from mmml.interfaces.pycharmmInterface.packmol_cache import (

@@ -1,6 +1,7 @@
-# Monomer PDB template packed with Packmol (4 copies) → PyCHARMM free_nve.
+# 05 — Monomer PDB + Packmol (4-mer) → PyCHARMM free_nve
 #
-#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/packmol_mix_pdb.yaml
+#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/05_packmol_mix_pdb_monomer.yaml
+#   bash examples/md_system_from_pdb/05_packmol_mix_pdb_monomer.sh
 #
 # Solute + solvent mix (edit composition):
 #   composition: "/path/to/solute.pdb:1,DCM:20"
@@ -19,5 +20,6 @@ dt_fs: 0.5
 mini_nstep: 20
 fix_resids: "1"
 skip_energy_show: true
-output_dir: artifacts/md_system_from_pdb/yaml_packmol_4mer
+quiet: true
+output_dir: artifacts/md_system_from_pdb/05_packmol_4mer
 seed: 42

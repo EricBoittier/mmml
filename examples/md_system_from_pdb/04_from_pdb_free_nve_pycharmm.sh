@@ -6,20 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/examples/md_system_from_pdb/_env.sh"
 cd "${ROOT}"
 
+CFG="${ROOT}/examples/md_system_from_pdb/yaml/04_from_pdb_free_nve_pycharmm.yaml"
 OUT="${ARTIFACTS_DIR}/04_free_nve_pycharmm"
 
-echo "=== from-pdb → free_nve (pycharmm, 0.1 ps) ==="
+echo "=== config $(basename "${CFG}") ==="
 uv run mmml md-system \
+  --config "${CFG}" \
   --from-pdb "${PDB_MONOMER}" \
-  --backend pycharmm \
-  --setup free_nve \
   --checkpoint "${CKPT_JSON}" \
-  --flat-bottom-radius 20 \
-  --ps 0.1 \
-  --dt-fs 0.5 \
-  --mini-nstep 20 \
-  --skip-energy-show \
-  --output-dir "${OUT}" \
-  --quiet
+  --output-dir "${OUT}"
 
 echo "PASS: pycharmm NVE smoke -> ${OUT}"

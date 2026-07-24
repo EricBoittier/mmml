@@ -1,0 +1,14 @@
+# 01 — Full-system PDB → PyCHARMM SD minimize
+#
+#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/01_from_pdb_pycharmm_minimize.yaml
+#   bash examples/md_system_from_pdb/01_from_pdb_pycharmm_minimize.sh
+
+setup: pycharmm_minimize
+backend: pycharmm
+from_pdb: mmml/generate/sample/pdb/aco_monomer.pdb
+checkpoint: examples/ckpts_json/DESdimers_params.json
+mini_nstep: 30
+skip_energy_show: true
+quiet: true
+output_dir: artifacts/md_system_from_pdb/01_mini_pycharmm
+seed: 42
