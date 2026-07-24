@@ -189,10 +189,10 @@ docker-clean:
 # ==============================================================================
 
 test:
-	cd tests && uv run pytest . -m "not pycharmm and not gpu and not mlpot"
+	uv run pytest tests -m "not pycharmm and not gpu and not mlpot"
 
 test-all:
-	cd tests && uv run pytest .
+	uv run pytest tests
 
 test-quick:
 	uv run pytest -q tests/functionality/mmml_tests/test_mmml_calc.py::test_ev2kcalmol_constant
