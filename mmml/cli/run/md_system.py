@@ -174,9 +174,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help=(
-            "Residue composition: comma-separated RES:N entries, e.g. MEOH:5,TIP3:5. "
-            "A bare RES (no ':N') implies a single copy (N=1); when this option is set, "
-            "--n-molecules is not passed to the backend (use DCM:10 for ten DCM)."
+            "Residue composition: comma-separated RES:N and/or PDB path tokens, "
+            "e.g. MEOH:5,TIP3:5 or solute.pdb:1,DCM:200. "
+            "A bare RES (no ':N') implies N=1. A lone system.pdb (or --from-pdb) "
+            "loads the full system via CHARMM READ SEQU PDB. "
+            "CGenFF names are validated against top_all36_cgenff.rtf."
         ),
     )
     parser.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
