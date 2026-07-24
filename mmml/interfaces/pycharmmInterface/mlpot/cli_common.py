@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Optional, Sequence, Tuple
@@ -1815,6 +1816,56 @@ def split_charmm_lingo_commands(script: str) -> list[str]:
     return commands
 
 
+def script_uses_umbrella_rxncor(script: str) -> bool:
+    """True when lingo requests ADUMB ``umbrella rxncor`` (needs KEY_ADUMBRXNCOR)."""
+    return bool(re.search(r"(?im)^\s*umbrella\s+rxncor\b", str(script or "")))
+
+
+def require_adumbrxncor_for_umbrella_rxncor(script: str) -> None:
+    """Fail fast if ``umbrella rxncor`` is used without CHARMM KEY_ADUMBRXNCOR.
+
+    ``ADUMB`` + ``RXNCOR`` alone compile RXNCOR define/trace, but
+    ``umbrella rxncor`` is gated on ``KEY_ADUMBRXNCOR`` (pref keyword
+    ``ADUMBRXNCOR``; substitution ``?ADUMBRXN``). Without it CHARMM prints
+    ``Unknown umbrella specified``, ``umbrella init`` proceeds half-initialized,
+    and dynamics often SIGSEGV under MLpot/MPI.
+    """
+    if not script_uses_umbrella_rxncor(script):
+        return
+    try:
+        from pycharmm import lingo
+    except Exception:
+        return
+    flag = None
+    try:
+        # Pref key ADUMBRXNCOR truncates to 8 chars for ``?`` substitutions.
+        flag = lingo.get_energy_value("ADUMBRXN")
+    except Exception:
+        flag = None
+    if flag is None:
+        try:
+            builtins = lingo.get_charmm_builtins()
+            flag = builtins.get("ADUMBRXN")
+        except Exception:
+            flag = None
+    enabled = False
+    if isinstance(flag, bool):
+        enabled = flag
+    elif flag is not None:
+        try:
+            enabled = int(flag) == 1
+        except (TypeError, ValueError):
+            enabled = False
+    if enabled:
+        return
+    raise RuntimeError(
+        "pycharmm_pre_dynamics_lingo uses 'umbrella rxncor' but this libcharmm "
+        "was built without KEY_ADUMBRXNCOR (?ADUMBRXN != 1). "
+        "Rebuild with: bash scripts/rebuild_charmm_mlpot.sh "
+        "(passes -Dadd_keywords=ADUMBRXNCOR; reconfigures if pref.dat lacks it)."
+    )
+
+
 def run_charmm_lingo_script(
     script: str,
     *,
@@ -1832,6 +1883,8 @@ def run_charmm_lingo_script(
     text = str(script or "").strip()
     if not text:
         return
+
+    require_adumbrxncor_for_umbrella_rxncor(text)
 
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _bootstrap_workdir,

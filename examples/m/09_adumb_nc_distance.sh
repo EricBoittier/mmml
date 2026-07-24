@@ -43,7 +43,8 @@ rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT
 rm -f "${OUT}/stage_summary.json"
 
 echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
-echo "     (needs CHARMM ADUMB + ADUMBRXN; RXNCOR distance umbrella)"
+echo "     (needs CHARMM ADUMB + ADUMBRXNCOR / ?ADUMBRXN; RXNCOR distance umbrella)"
+echo "     If Unknown umbrella / SIGSEGV at heat: rebuild_charmm_mlpot.sh (adds ADUMBRXNCOR)"
 echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
 echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"
 

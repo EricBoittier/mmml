@@ -187,9 +187,13 @@ PDB / Packmol monomer). There are **no φ/ψ dihedrals** on AMM1/CH3CL; use an
 **N⋯C distance** reaction coordinate via RXNCOR + `umbrella rxncor` (same pattern
 as `setup/charmm/test/c38test/adumbrxncor.inp`).
 
-Requires CHARMM built with **ADUMB** and **ADUMBRXN**.
+Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
+`scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
+`umbrella rxncor` prints `Unknown umbrella specified` and heat often SIGSEGVs.
 
 ```bash
+# One-time if your libcharmm predates ADUMBRXNCOR in pref.dat:
+#   bash scripts/rebuild_charmm_mlpot.sh
 source examples/m/_env.sh
 # Vacuum dimer smoke (Packmol sphere r=6 Å — keep N⋯C near the umbrella window):
 bash examples/m/09_adumb_nc_distance.sh

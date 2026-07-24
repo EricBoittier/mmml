@@ -8,7 +8,8 @@
 # reaction coordinate is the heavy-atom separation (N1–C1), via RXNCOR +
 # ADUMB RXNCOR (see setup/charmm/test/c38test/adumbrxncor.inp).
 #
-# Requires CHARMM built with ADUMB + ADUMBRXN (``?ADUMBRXN == 1``).
+# Requires CHARMM built with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
+# rebuild_charmm_mlpot.sh passes -Dadd_keywords=ADUMBRXNCOR by default.
 #
 #   source examples/m/_env.sh
 #   uv run mmml md-system --config examples/m/yaml/adumb_nc_distance.yaml

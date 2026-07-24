@@ -11,8 +11,10 @@ import pytest
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_pre_dynamics_lingo_from_args,
     normalize_pycharmm_pre_dynamics_lingo,
+    require_adumbrxncor_for_umbrella_rxncor,
     resolve_pre_dynamics_lingo_script,
     run_charmm_lingo_script,
+    script_uses_umbrella_rxncor,
     split_charmm_lingo_commands,
 )
 
@@ -136,3 +138,42 @@ def test_run_charmm_lingo_uses_line_commands_not_inp_api(tmp_path: Path) -> None
     body = inp.read_text(encoding="utf-8")
     assert body.startswith("* MMML pre-dynamics")
     assert "cons fix sele resid 1 end" in body
+
+
+def test_script_uses_umbrella_rxncor_detects_command() -> None:
+    assert script_uses_umbrella_rxncor(
+        "umbrella rxncor nresol 40 trig 0 poly 6 min 2.0 max 6.0 name r_nc"
+    )
+    assert script_uses_umbrella_rxncor(
+        "  UMBRELLA   RXNCOR nresol 10 name dist\n"
+    )
+    assert not script_uses_umbrella_rxncor("umbrella dihe nresol 72")
+    assert not script_uses_umbrella_rxncor("! umbrella rxncor commented")
+
+
+def test_require_adumbrxncor_raises_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    mock_lingo = mock.Mock()
+    mock_lingo.get_energy_value.return_value = 0
+    fake = types.ModuleType("pycharmm")
+    fake.lingo = mock_lingo
+    monkeypatch.setitem(sys.modules, "pycharmm", fake)
+    with pytest.raises(RuntimeError, match="KEY_ADUMBRXNCOR"):
+        require_adumbrxncor_for_umbrella_rxncor(
+            "umbrella rxncor nresol 40 name r_nc"
+        )
+
+
+def test_require_adumbrxncor_ok_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    mock_lingo = mock.Mock()
+    mock_lingo.get_energy_value.return_value = 1
+    fake = types.ModuleType("pycharmm")
+    fake.lingo = mock_lingo
+    monkeypatch.setitem(sys.modules, "pycharmm", fake)
+    require_adumbrxncor_for_umbrella_rxncor("umbrella rxncor nresol 40 name r_nc")
+    mock_lingo.get_energy_value.assert_called_with("ADUMBRXN")
