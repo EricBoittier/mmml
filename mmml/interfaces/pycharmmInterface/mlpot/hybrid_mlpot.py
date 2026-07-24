@@ -1401,6 +1401,14 @@ def build_decomposed_mlpot_model(
             "(Fortran idxu/idxv primary pairs for parity diagnostics)",
             flush=True,
         )
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
+
+    # Only pin setup_calculator onto CPU when we intentionally defer GPU work.
+    # Default GPU runs used to always pass defer_xla_gpu_warmup=True, which
+    # called jax_cpu_until_mlpot_registered during Orbax restore and spammed
+    # "CPU backend is not registered" whenever jax had already initialized
+    # CUDA-only — while PhysNet still belonged on GPU.
+    _cpu_load = defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -1416,7 +1424,7 @@ def build_decomposed_mlpot_model(
         cell=cell,
         max_pairs=max_pairs,
         ml_compute_dtype=ml_compute_dtype,
-        defer_xla_gpu_warmup=defer_jax_until_mlpot_registered,
+        defer_xla_gpu_warmup=_cpu_load and defer_jax_until_mlpot_registered,
         ml_switch_width=cutoff_params.ml_switch_width,
         mm_switch_on=cutoff_params.mm_switch_on,
         mm_switch_width=cutoff_params.mm_switch_width,

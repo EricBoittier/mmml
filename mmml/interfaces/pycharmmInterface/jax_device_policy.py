@@ -331,12 +331,16 @@ def jax_cpu_until_mlpot_registered() -> Iterator[Any]:
             except Exception:
                 gpu = []
         if gpu:
+            # Default GPU policy: CPU defer is best-effort. Missing CPU usually
+            # means jax was imported earlier with a GPU-only platform list; the
+            # env may already say gpu,cpu but that cannot be fixed in-process.
+            want_cpu = mlpot_jax_device_name() == "cpu"
+            level = "WARNING" if want_cpu else "NOTE"
             print(
-                "mmml WARNING: MLpot deferred/CPU path requested, but the JAX CPU "
-                f"backend is not registered (JAX_PLATFORMS={platforms!r}, "
-                f"registered={registered or ['?']}). Using GPU instead. "
-                "Restart the process with JAX_PLATFORMS=gpu,cpu *before* any "
-                "import jax if CPU defer is required.",
+                f"mmml {level}: JAX CPU backend not registered "
+                f"(JAX_PLATFORMS={platforms!r}, registered={registered or ['?']}); "
+                "using GPU. To register CPU as well, restart with "
+                "JAX_PLATFORMS=gpu,cpu before any import jax.",
                 flush=True,
             )
             with jax.default_device(gpu[0]):

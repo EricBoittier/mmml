@@ -4,6 +4,59 @@ from __future__ import annotations
 
 import os
 os.environ["JAX_ENABLE_X64"] = "1"
+
+
+def _sanitize_jax_platforms_env() -> None:
+    """Drop GPU-class JAX backends whose plugins are absent from ``JAX_PLATFORMS``.
+
+    A stale ``JAX_PLATFORMS=rocm`` (or ``cuda`` / ``gpu``) inherited from the
+    shell makes ``jax.default_backend()`` raise at import / collection time on a
+    machine without that plugin ("Unable to initialize backend 'rocm': ... not
+    in the list of known backends"). Strip any GPU backend whose plugin is not
+    installed so JAX can fall back to CPU; leave real GPU machines untouched.
+    """
+    raw = (os.environ.get("JAX_PLATFORMS") or "").strip()
+    if not raw:
+        return
+    try:
+        from importlib.metadata import distributions
+
+        installed = {
+            (dist.metadata.get("Name") or "").strip().lower()
+            for dist in distributions()
+        }
+    except Exception:
+        installed = set()
+
+    def _plugin_present(prefix: str) -> bool:
+        return any(n.startswith(prefix) and "plugin" in n for n in installed)
+
+    have_cuda = _plugin_present("jax-cuda")
+    have_rocm = _plugin_present("jax-rocm")
+    kept: list[str] = []
+    for token in (part.strip() for part in raw.split(",")):
+        low = token.lower()
+        if not low:
+            continue
+        if low == "cuda" and not have_cuda:
+            continue
+        if low == "rocm" and not have_rocm:
+            continue
+        if low == "gpu" and not (have_cuda or have_rocm):
+            continue
+        kept.append(token)
+    new = ",".join(kept)
+    if new == raw:
+        return
+    if new:
+        os.environ["JAX_PLATFORMS"] = new
+    else:
+        # Nothing usable was requested; let JAX auto-select an available backend.
+        os.environ.pop("JAX_PLATFORMS", None)
+
+
+_sanitize_jax_platforms_env()
+
 import shutil
 from pathlib import Path
 

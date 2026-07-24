@@ -173,8 +173,8 @@ def test_mlpot_jax_cpu_until_falls_back_to_gpu_when_cpu_missing(monkeypatch, cap
             assert dev is gpu_dev
 
     out = capsys.readouterr().out + capsys.readouterr().err
-    assert "WARNING" in out
-    assert "Using GPU instead" in out
+    assert "using gpu" in out.lower()
+    assert "jax cpu backend not registered" in out.lower()
 
 
 def test_jax_cpu_backend_available_false_when_devices_raise(monkeypatch):

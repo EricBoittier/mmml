@@ -3679,6 +3679,16 @@ def main() -> int:
         # Skip YAML/config merge and heavy post-parse imports used by a real run.
         build_parser().parse_args(argv)
         return 0
+    # Set JAX_PLATFORMS before prep / any transitive import jax (mmml_calculator,
+    # hybrid_mlpot, orbax). Too late once backends are locked to CUDA-only.
+    try:
+        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+            apply_mlpot_jax_platform_env,
+        )
+
+        apply_mlpot_jax_platform_env(quiet=True)
+    except Exception:
+        pass
     args = parse_md_system_args(argv)
     if getattr(args, "mlpot_profile", False):
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
