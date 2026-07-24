@@ -65,6 +65,24 @@ def test_normalize_and_require_cgenff_names() -> None:
         require_cgenff_residue_name("ZZZZZ")
 
 
+def test_extra_rtf_env_registers_ch3cl(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface import cgenff_residues as cr
+
+    extra = tmp_path / "extra.rtf"
+    extra.write_text(
+        "* test\n*\n36 1\nRESI CH3CL 0.00 ! chloromethane\nEND\n",
+        encoding="utf-8",
+    )
+    cr.cgenff_residue_name_set.cache_clear()
+    monkeypatch.setenv("MMML_CGENFF_EXTRA_RTF", str(extra))
+    assert cr.extra_cgenff_rtf_paths() == (extra.resolve(),)
+    assert is_cgenff_residue_name("CH3CL")
+    assert require_cgenff_residue_name("ch3cl") == "CH3CL"
+    monkeypatch.delenv("MMML_CGENFF_EXTRA_RTF", raising=False)
+    cr.cgenff_residue_name_set.cache_clear()
+    assert not is_cgenff_residue_name("CH3CL")
+
+
 def test_make_res_validate_args_list_residues() -> None:
     import argparse
 

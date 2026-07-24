@@ -131,6 +131,7 @@ nav:
       - Liquid box workflow: liquid-box-workflow.md
       - MD embedding (solvated peptide): examples/md-embedding-design.md
       - md-embedding smoke results: examples/md-embedding-results.md
+      - NH₃–CH₃Cl PhysNet results: examples/nh3-ch3cl-results.md
       - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
       - Cross-backend handoff: handoff.md
       - Remote MD runs + live streaming: remote-md-streaming.md

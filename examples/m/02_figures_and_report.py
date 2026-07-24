@@ -210,11 +210,19 @@ def _write_results_md(summary: dict) -> None:
         ]
         for m in md_rows:
             if m.get("ensemble") == "nve":
-                metric = f"ΔE={m.get('dE_kcal_mol', '—'):.4g} kcal/mol" if isinstance(
-                    m.get("dE_kcal_mol"), (int, float)
-                ) else f"ΔE={m.get('dE_kcal_mol', '—')}"
+                de = m.get("dE_kcal_mol", "—")
+                metric = (
+                    f"ΔE={de:.4g} kcal/mol"
+                    if isinstance(de, (int, float))
+                    else f"ΔE={de}"
+                )
             else:
-                metric = f"⟨T⟩={m.get('T_mean_K', '—')} K"
+                tmean = m.get("T_mean_K", "—")
+                metric = (
+                    f"⟨T⟩={tmean:.1f} K"
+                    if isinstance(tmean, (int, float))
+                    else f"⟨T⟩={tmean} K"
+                )
             lines.append(
                 f"| {m.get('backend', '—')} | {m.get('ensemble', '—')} | "
                 f"{m.get('n_steps', '—')} | {metric} | `{m.get('source', '')}` |"
