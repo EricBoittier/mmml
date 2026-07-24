@@ -2692,6 +2692,15 @@ def _apply_charmm_omp_threads_env(args: argparse.Namespace) -> str | None:
 
 
 def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_ML_SWITCH_WIDTH,
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
+        DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
+    )
+
     _phase_for_setup = {
         "pycharmm_minimize": "minimize",
         "free_nve": "staged",
@@ -3647,7 +3656,12 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    args = parse_md_system_args()
+    argv = sys.argv[1:]
+    if _argv_requests_help(argv):
+        # Skip YAML/config merge and heavy post-parse imports used by a real run.
+        build_parser().parse_args(argv)
+        return 0
+    args = parse_md_system_args(argv)
     if getattr(args, "mlpot_profile", False):
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             enable_mlpot_profiling,
