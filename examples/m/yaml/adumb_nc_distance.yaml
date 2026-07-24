@@ -34,13 +34,16 @@ include_mm: true
 mm_charge_mode: fixed
 temperature: 300
 dt_fs: 1.0
-ps: 0.2
+# free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
+ps_heat: 0.2
 flat_bottom_radius: 15.0
 mini_nstep: 40
 skip_energy_show: true
 skip_jit_warmup: true
+no_echeck_heat: true
 quiet: false
 seed: 0
+mc_density_equalize: false
 output_dir: artifacts/nh3_ch3cl/adumb_nc_distance
 
 # Optional: start from the NPZ-exported solute instead of Packmol templates:

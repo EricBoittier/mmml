@@ -448,9 +448,52 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
         else:
             read.rtf(_rtf_path_without_drude_autogen(toppar.rtf))
         for extra in extra_cgenff_rtf_paths():
-            # Append mode: keep base CGenFF MASS/RESI tables.
-            read.rtf(str(extra), append=True)
+            # Append mode: keep base CGenFF MASS/RESI tables. Strip a leading
+            # version line (``36 1``) — a second version under ``append`` is a
+            # CHARMM level-1 abort (see examples/m/top_ch3cl.rtf).
+            read.rtf(_rtf_path_for_append(extra), append=True)
         read_cgenff_prm(prm_path=toppar.prm, bomlev=False)
+
+
+def _rtf_path_for_append(rtf_path: str | Path) -> str:
+    """Return an RTF path safe for ``read.rtf(..., append=True)``.
+
+    Removes a leading CHARMM version record (two integers, e.g. ``36  1``)
+    that is only valid on the primary topology read. Comments (``*`` / ``!``)
+    and blank lines before the version are preserved; the version line itself
+    is dropped. Files with no version line are returned unchanged.
+    """
+    import tempfile
+
+    path = Path(rtf_path).expanduser().resolve()
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    found_version = False
+    past_header = False
+    for line in lines:
+        if not past_header:
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("*", "!")):
+                out.append(line)
+                continue
+            parts = stripped.split()
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                found_version = True
+                past_header = True
+                continue  # drop version line
+            past_header = True
+            out.append(line)
+            continue
+        out.append(line)
+    if not found_version:
+        return str(path)
+    fd, tmp = tempfile.mkstemp(suffix=".rtf", prefix="cgenff_append_")
+    import os
+
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.writelines(out)
+    return tmp
 
 
 def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:

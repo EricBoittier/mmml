@@ -33,6 +33,12 @@ fi
 mkdir -p "${OUT}"
 echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXN; RXNCOR distance umbrella)"
+echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
+
+# Ensure CH3CL append RTF is visible (sourced from examples/m/_env.sh).
+if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
+  echo "WARN: MMML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
+fi
 
 uv run mmml md-system \
   --config "${CFG}" \
