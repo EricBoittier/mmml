@@ -52,5 +52,6 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 r_nc
   rxncor trace r_nc unit 45
 
-  umbrella rxncor nresol 40 trig 0 poly 6 min 2.0 max 6.0 name r_nc
+  ! min 0: see adumb_nc_distance.yaml (UM1RXN upper-bound quirk when min>0)
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 8.0 name r_nc
   umbrella init nsim 10 update 100 equi 100 thresh 10 temp 300 wuni 44 ucun 50

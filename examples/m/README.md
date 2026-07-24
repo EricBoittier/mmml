@@ -190,11 +190,14 @@ as `setup/charmm/test/c38test/adumbrxncor.inp`).
 Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 `scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
 `umbrella rxncor` prints `Unknown umbrella specified` and heat often SIGSEGVs.
+Use `umbrella rxncor … min 0.0 max …` (not `min 2`) unless libcharmm includes the
+mmml `UM1RXN` range-check patch in `eadumb.F90`.
 
 ```bash
-# One-time if your libcharmm predates ADUMBRXNCOR in pref.dat:
+# One-time if your libcharmm predates ADUMBRXNCOR / UM1RXN fix:
 #   bash scripts/rebuild_charmm_mlpot.sh
 source examples/m/_env.sh
+rm -rf artifacts/nh3_ch3cl/adumb_nc_distance   # avoid stale next_run / long heat
 # Vacuum dimer smoke (Packmol sphere r=6 Å — keep N⋯C near the umbrella window):
 bash examples/m/09_adumb_nc_distance.sh
 

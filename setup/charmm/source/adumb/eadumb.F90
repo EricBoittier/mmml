@@ -573,7 +573,11 @@ end SUBROUTINE UM4NOE
         value=delval(1,index)
         a=umbmin(irxncor)
         b=umbmax(irxncor)-a
-        if ((value.lt.a).or.(value.gt.b)) call wrndie(-2,'<um1rxn>',&
+        ! Valid physical window is [umbmin, umbmax] = [a, a+b].
+        ! Older code compared value.gt.b (i.e. max-min), which is only correct
+        ! when umbmin==0 (as in test/c38test/adumbrxncor.inp). With min>0 the
+        ! upper edge was truncated and healthy RCs aborted as "out of range".
+        if ((value.lt.a).or.(value.gt.(a+b))) call wrndie(-2,'<um1rxn>',&
           'reaction coordinate out of range')
 ! Internal coordinat in range [0,1)
         ICRD(umbindex(irxncor))=(value-a)/b

@@ -38,13 +38,16 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
 fi
 
 mkdir -p "${OUT}"
-# Drop stale Packmol / pretreat state from earlier failed attempts.
+# Drop stale Packmol / pretreat / next_run state from earlier failed attempts
+# (a leftover next_run can re-launch a 1000 ps heat instead of the smoke).
 rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT}/cleanup"
-rm -f "${OUT}/stage_summary.json"
+rm -f "${OUT}/stage_summary.json" \
+  "${OUT}/next_run.yaml" "${OUT}/next_run.sh" "${OUT}/next_run.command"
 
 echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXNCOR / ?ADUMBRXN; RXNCOR distance umbrella)"
-echo "     If Unknown umbrella / SIGSEGV at heat: rebuild_charmm_mlpot.sh (adds ADUMBRXNCOR)"
+echo "     If Unknown umbrella / SIGSEGV / 'out of range': rebuild_charmm_mlpot.sh"
+echo "     Smoke: ps_heat=0.2 (wipe output_dir if a prior 1000 ps next_run remains)"
 echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
 echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"
 

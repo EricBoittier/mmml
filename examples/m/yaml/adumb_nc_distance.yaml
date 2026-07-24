@@ -16,7 +16,7 @@
 #   # or: bash examples/m/09_adumb_nc_distance.sh
 #
 # Alignment (smoke):
-#   dt_fs=1.0, ps=0.2 → heat nstep ≈ 200
+#   dt_fs=1.0, ps_heat=0.2 → heat nstep ≈ 200
 #   umbrella init: nsim=4 × update=50 = 200 steps; equi=25
 #
 # Pass checks:
@@ -24,6 +24,10 @@
 #   2. {output_dir}/pycharmm_pre_dynamics_lingo.inp contains ``umbrella rxncor``
 #   3. Log prints ``Pre-dynamics CHARMM lingo`` before heat
 #   4. adumb-wuni.dat / umbcor / rxncor_trace.dat appear under output_dir
+#
+# Do not resume via next_run.* from a failed long heat — wipe output_dir first.
+# For production-length heat, raise ps_heat and retune umbrella nsim*update
+# to match nstep (and keep min 0.0 unless libcharmm has the UM1RXN patch).
 
 setup: free_nvt
 backend: pycharmm
@@ -37,10 +41,11 @@ mm_charge_mode: fixed
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
 temperature: 300
-dt_fs: 0.5
+dt_fs: 1.0
+md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
-ps_heat: 1000.0
-# Keep Packmol dimer compact for the N⋯C umbrella window [2, 6] Å.
+ps_heat: 0.2
+# Keep Packmol dimer compact near a typical N⋯C contact (~3–4 Å).
 # (Default cube placement can park monomers ~box-length apart along one axis.)
 packmol_placement: sphere
 packmol_radius: 6.0
@@ -48,6 +53,8 @@ reuse_packmol_cache: false
 # COM restraint is ``cons hmcm`` in pre-dynamics lingo (below). Skip MMFP here:
 # post-MMFP CHARMM ENER under mpirun can hang on MPI-linked builds.
 # flat_bottom_radius: 20.0
+# Short smoke: one overlap chunk for the whole heat leg.
+dynamics_overlap_check_interval: 200
 mini_nstep: 40
 skip_energy_show: true
 skip_jit_warmup: true
@@ -63,8 +70,8 @@ output_dir: artifacts/nh3_ch3cl/adumb_nc_distance
 # Or: USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # Vacuum free_nvt does not need CRYST1 / box.json / --box-size.
 
-dcd_nsavc: 100
-dcd_max_frames: 1000
+dcd_nsavc: 10
+dcd_max_frames: 100
 
 # Do NOT put PSF/PBC/nbonds/SHAKE/DYNAmics here — md-system owns those.
 # Packmol/composition builds segment SYS: resid 1 = AMM1, resid 2 = CH3CL.
@@ -85,8 +92,11 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 r_nc
   rxncor trace r_nc unit 45
 
-  ! Adaptive umbrella on r_nc over [2.0, 6.0] Angstrom
-  umbrella rxncor nresol 40 trig 0 poly 6 min 2.0 max 6.0 name r_nc
+  ! Adaptive umbrella on r_nc. Prefer min 0 (CHARMM c38 adumbrxncor.inp style):
+  ! unpatched UM1RXN wrongly treated the upper edge as (max-min) when min>0,
+  ! so min 2 max 6 aborted once r_nc > 4 Å. mmml patches eadumb.F90; still
+  ! keep min 0 for smoke robustness across libcharmm ages.
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 8.0 name r_nc
 
-  ! nsim * update must match heat nstep (ps*1000/dt_fs ~ 200 here)
+  ! nsim * update must match heat nstep (ps_heat*1000/dt_fs ~ 200 here)
   umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
