@@ -1786,6 +1786,117 @@ def resolve_pre_dynamics_lingo_script(args: argparse.Namespace) -> str:
     return inline or file_text
 
 
+def split_charmm_lingo_commands(script: str) -> list[str]:
+    """Split CHARMM lingo into executable command strings (join ``-`` continuations).
+
+    Blank lines and ``!`` / ``*`` comment lines are dropped. Each returned command
+    is suitable for a single ``eval_charmm_script`` call (library builds truncate
+    multi-line blobs to ``mxcmsz``).
+    """
+    commands: list[str] = []
+    pending: list[str] = []
+    for raw in script.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(("!", "*")):
+            continue
+        pending.append(line)
+        if line.endswith("-"):
+            continue
+        joined = " ".join(part.rstrip("- ").strip() for part in pending if part.rstrip("- ").strip())
+        pending = []
+        if joined:
+            commands.append(joined)
+    if pending:
+        joined = " ".join(part.rstrip("- ").strip() for part in pending if part.rstrip("- ").strip())
+        if joined:
+            commands.append(joined)
+    return commands
+
+
+def run_charmm_lingo_script(
+    script: str,
+    *,
+    inp_path: Path | None = None,
+    workdir: Path | None = None,
+) -> None:
+    """Execute multi-line CHARMM lingo safely under library PyCHARMM.
+
+    Prefers ``eval_charmm_inp_file`` (line loop in Fortran). Falls back to one
+    ``charmm_script`` call per command — never pass a multi-line blob to
+    ``eval_charmm_script`` (it truncates to ``mxcmsz`` / mishandles newlines).
+    """
+    text = str(script or "").strip()
+    if not text:
+        return
+
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        _bootstrap_workdir,
+        _eval_charmm_inp_file_available,
+        _invoke_charmm_inp_file,
+        mpi_charmm_script,
+    )
+
+    path = Path(inp_path) if inp_path is not None else None
+    cleanup_tmp = False
+    if path is None:
+        import tempfile
+
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            suffix="_pre_dyn.inp",
+            delete=False,
+            prefix="mmml-",
+        )
+        with tmp:
+            tmp.write("* MMML pre-dynamics CHARMM lingo\n*\n")
+            tmp.write(text.rstrip() + "\n")
+        path = Path(tmp.name)
+        cleanup_tmp = True
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "* MMML pre-dynamics CHARMM lingo\n*\n" + text.rstrip() + "\n",
+            encoding="utf-8",
+        )
+
+    cwd = Path(workdir) if workdir is not None else path.parent
+    try:
+        if _eval_charmm_inp_file_available():
+            with _bootstrap_workdir(cwd):
+                # Basename when cwd is the file's parent (keeps the path short).
+                target = (
+                    Path(path.name)
+                    if path.parent.resolve() == cwd.resolve()
+                    else path.resolve()
+                )
+                ok = _invoke_charmm_inp_file(target)
+            if not ok:
+                raise RuntimeError(
+                    f"eval_charmm_inp_file failed for pre-dynamics lingo: {path}"
+                )
+            return
+
+        commands = split_charmm_lingo_commands(text)
+        with _bootstrap_workdir(cwd):
+            for cmd in commands:
+                if len(cmd) > 78:
+                    print(
+                        f"WARN: CHARMM lingo command length {len(cmd)} may exceed "
+                        f"mxcmsz (~80); shorten paths/tokens: {cmd[:60]}…",
+                        flush=True,
+                    )
+                mpi_charmm_script(cmd, barriers="none")
+    finally:
+        if cleanup_tmp:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
     """Run free-form CHARMM lingo once before scheduled dynamics (no-op if empty)."""
     script = resolve_pre_dynamics_lingo_script(args)
@@ -1807,9 +1918,15 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
             flush=True,
         )
         print(script, flush=True)
-    import pycharmm
 
-    pycharmm.lingo.charmm_script(script)
+    out_dir = getattr(args, "output_dir", None)
+    workdir = Path(out_dir) if out_dir is not None else Path.cwd()
+    workdir.mkdir(parents=True, exist_ok=True)
+    file_raw = getattr(args, "pycharmm_pre_dynamics_lingo_file", None)
+    inp_path = Path(file_raw) if file_raw is not None and str(file_raw).strip() else (
+        workdir / "pycharmm_pre_dynamics_lingo.inp"
+    )
+    run_charmm_lingo_script(script, inp_path=inp_path, workdir=workdir)
 
 
 def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:

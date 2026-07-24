@@ -67,23 +67,24 @@ dcd_max_frames: 100
 
 # Do NOT put PSF/PBC/nbonds/SHAKE/DYNAmics here — md-system owns those.
 # Packmol/composition builds segment SYS: resid 1 = AMM1, resid 2 = CH3CL.
+# OPEN names are basenames: lingo runs with cwd=output_dir (mxcmsz-safe).
 pycharmm_pre_dynamics_lingo: |
   ! Keep the complex near the origin during vacuum heat
   cons hmcm force 5.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
-  open unit 44 write card name artifacts/nh3_ch3cl/adumb_nc_distance/adumb-wuni.dat
-  open unit 50 write card name artifacts/nh3_ch3cl/adumb_nc_distance/umbcor
-  open unit 45 write card name artifacts/nh3_ch3cl/adumb_nc_distance/rxncor_trace.dat
+  open unit 44 write card name adumb-wuni.dat
+  open unit 50 write card name umbcor
+  open unit 45 write card name rxncor_trace.dat
 
-  ! Reaction coordinate: AMM1 N1 ⋯ CH3CL C1 (Å)
+  ! Reaction coordinate: AMM1 N1 ... CH3CL C1 (Angstrom)
   rxncor define p_n point select atom SYS 1 N1 end
   rxncor define p_c point select atom SYS 2 C1 end
   rxncor define r_nc distance p_n p_c
   rxncor set nrxn 1 r_nc
   rxncor trace r_nc unit 45
 
-  ! Adaptive umbrella on r_nc over [2.0, 6.0] Å
+  ! Adaptive umbrella on r_nc over [2.0, 6.0] Angstrom
   umbrella rxncor nresol 40 trig 0 poly 6 min 2.0 max 6.0 name r_nc
 
-  ! nsim * update must match heat nstep (ps*1000/dt_fs ≈ 200 here)
+  ! nsim * update must match heat nstep (ps*1000/dt_fs ~ 200 here)
   umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
