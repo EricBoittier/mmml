@@ -177,6 +177,11 @@ def _write_results_md(summary: dict) -> None:
         "",
         "## Validation metrics (PhysNet vs NPZ labels)",
         "",
+        f"Energy reference: `{ev.get('energy_reference', 'as stored in NPZ')}` "
+        f"on `{ev.get('data_subset', 'dataset')}` "
+        "(NPZ stores absolute QM totals; this checkpoint’s energy scale is "
+        "mean-centered — forces/dipoles are absolute).",
+        "",
         "| Metric | Value |",
         "|--------|-------|",
         row("Energy MAE", f"{e.get('mae_kcal_mol', '—')} kcal/mol"),

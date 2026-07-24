@@ -45,6 +45,10 @@ NUM_SAMPLES=256 bash examples/m/01_evaluate.sh
 uv run python examples/m/02_figures_and_report.py
 ```
 
+`01_evaluate.sh` builds a dimer-only (`N=9`) NPZ and runs
+`physnet-evaluate --subtract-mean` (absolute QM energies in the NPZ are not on
+the checkpoint’s energy scale; force/dipole errors are absolute).
+
 ### MD smokes
 
 **ML-only Python** (no CHARMM; geometry from a dataset dimer frame):
