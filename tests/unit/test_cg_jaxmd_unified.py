@@ -120,6 +120,7 @@ def test_term_kwargs_smd(cg_unified):
 # --- end-to-end integration (real CHARMM build + real checkpoint) ----------
 
 
+@pytest.mark.pycharmm
 def test_end_to_end_fire_phase(cg_unified):
     try:
         import pycharmm  # noqa: F401  (triggers libcharmm load)
@@ -145,6 +146,7 @@ def test_end_to_end_fire_phase(cg_unified):
     assert abs(energies[-1]) < 1e4  # sane MD/MM energy scale, not a blow-up
 
 
+@pytest.mark.pycharmm
 def test_end_to_end_phase_chaining_carries_positions(cg_unified):
     try:
         import pycharmm  # noqa: F401
@@ -171,6 +173,7 @@ def test_end_to_end_phase_chaining_carries_positions(cg_unified):
     assert nvt_initial == pytest.approx(fire_final, rel=1e-6)
 
 
+@pytest.mark.pycharmm
 def test_end_to_end_peptide_water_ml_no_double_counting(cg_unified):
     """Regression: mm_nonbonded must exclude peptide-water pairs when
     ml_pep_water handles them, or energies double-count that interaction."""

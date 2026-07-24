@@ -100,6 +100,7 @@ def _pycharmm_or_skip():
         pytest.skip(f"checkpoint {CKPT.name} not present")
 
 
+@pytest.mark.pycharmm
 def test_end_to_end_pbc_nve(capsys):
     _pycharmm_or_skip()
     rc = run_unified_jaxmd(_args(setup="pbc_nve", seed=21))
@@ -108,6 +109,7 @@ def test_end_to_end_pbc_nve(capsys):
     assert "jaxmd-unified" in out
 
 
+@pytest.mark.pycharmm
 def test_end_to_end_pbc_nvt(capsys):
     _pycharmm_or_skip()
     rc = run_unified_jaxmd(_args(setup="pbc_nvt", seed=22, ps=0.02))
@@ -116,6 +118,7 @@ def test_end_to_end_pbc_nvt(capsys):
     assert "jaxmd-unified" in out
 
 
+@pytest.mark.pycharmm
 def test_end_to_end_builds_ffparams():
     """The packmol+PSF helper must produce FFParams, or mm_nonbonded can't run."""
     _pycharmm_or_skip()

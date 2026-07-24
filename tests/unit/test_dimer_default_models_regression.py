@@ -157,6 +157,7 @@ def test_hybrid_composite_dimer_regression(h2o_meoh_dimer_atoms):
     assert e_int_kcal == pytest.approx(328.52, abs=5.0)
 
 
+@pytest.mark.pycharmm
 def test_pycharmm_cgenff_dimer_regression(h2o_meoh_dimer_atoms):
     try:
         import pycharmm

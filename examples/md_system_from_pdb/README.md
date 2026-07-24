@@ -47,6 +47,7 @@ Each job has a matching YAML under `yaml/` (shell wrappers call `--config`).
 | 06 | `yaml/06_from_pdb_nvt_fix_resids.yaml` | pycharmm | `free_nvt` | Constrained SD (`fix_resids`) |
 | 07 | `yaml/07_certified_psf_crd_pbc.yaml` | jaxmd | `pbc_nve` | Needs certified PSF/CRD |
 | 08 | `yaml/08_from_pdb_pre_dynamics_lingo.yaml` | pycharmm | `free_nve` | Pre-dynamics CHARMM lingo (`cons fix`) |
+| 08b | `yaml/08_umbrella_adumb.example.yaml` | pycharmm | `pbc_npt` | ADUMB skeleton (edit PEPT/PSF; not a smoke) |
 
 Extra campaigns:
 
@@ -125,6 +126,12 @@ bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
 Pass checks: exit 0; `{output_dir}/pycharmm_pre_dynamics_lingo.inp` contains the
 script; log prints `Pre-dynamics CHARMM lingo` before dynamics. See
 [`docs/md-system-configs.md`](../../docs/md-system-configs.md#pre-dynamics-charmm-lingo-pycharmm-only).
+
+For adaptive umbrella (`umbrella dihe` + `umbrella init`), copy the commented
+skeleton and point it at your peptide PSF — do **not** paste PSF/PBC/`DYNAmics`
+into the lingo block:
+
+[`yaml/08_umbrella_adumb.example.yaml`](yaml/08_umbrella_adumb.example.yaml)
 
 ### 6. Certified PBC box (PSF/CRD, not lone PDB)
 

@@ -1388,9 +1388,6 @@ For umbrella sampling, extra `CONS`/`UMBR`/`ADUMB` blocks, or other free-form CH
 backend: pycharmm
 pycharmm_pre_dynamics_lingo: |
   cons fix sele resid 1 end
-  umbr
-  ...
-  end
 ```
 
 A YAML list of lines is also accepted. `md-system` writes the script to
@@ -1414,7 +1411,47 @@ Pass checks:
 2. `artifacts/md_system_from_pdb/08_pre_dynamics_lingo/pycharmm_pre_dynamics_lingo.inp` contains `cons fix sele resid 1 end`.
 3. Log prints `Pre-dynamics CHARMM lingo` before the NVE stage (example sets `quiet: false`).
 
-Replace the YAML lingo block with your `UMBR`/`ADUMB` script when ready for umbrella sampling.
+#### Mapping a classic ADUMB / umbrella input
+
+A full CHARMM umbrella script usually mixes system setup and dynamics. With
+`md-system`, keep only the **umbrella setup** in `pycharmm_pre_dynamics_lingo`;
+leave topology, PBC, nbonds, SHAKE, and `DYNAmics` to the normal PyCHARMM path.
+
+| Classic input | Where it goes |
+|---------------|---------------|
+| `DIMENS` / `stream toppar` / `read psf` / `read coor` | md-system (`from_psf`/`from_crd`/`from_pdb`, checkpoint) |
+| `crystal` / `image` / `nbonds` … PME | md-system (`pbc_*` setups + cutoff knobs) |
+| `cons hmcm …` | optional: `pycharmm_pre_dynamics_lingo` |
+| `shake bonh …` | md-system dynamics path (do not duplicate unless you know you need it) |
+| `open unit … adumb-dihe.dat` / `umbcor` | `pycharmm_pre_dynamics_lingo` (paths relative to process CWD; prefer under `output_dir`) |
+| `umbrella dihe …` / `umbrella init …` | `pycharmm_pre_dynamics_lingo` |
+| `dynamics cpt leap …` / DCD+restart opens | md-system stages (`md_stages`, `ps_prod`, `dt_fs`, …) — **not** in the lingo |
+
+Minimal ADUMB fragment for the lingo block (edit atom specs / numbers):
+
+```yaml
+pycharmm_pre_dynamics_lingo: |
+  cons hmcm force 1.0 refx 0.0 refy 0.0 refz 0.0 sele .not. (segid WAT) end
+
+  open unit 44 write card name artifacts/my_umbrella/adumb-dihe.dat
+  open unit 50 write card name artifacts/my_umbrella/umbcor
+
+  umbrella dihe nresol 72 trig 12 poly 1 PEPT 1 C  PEPT 2 N  PEPT 2 CA PEPT 2 C
+  umbrella dihe nresol 72 trig 12 poly 1 PEPT 1 N  PEPT 1 CA PEPT 1 C  PEPT 2 N
+
+  ! Align nsim / update / equi with prod length (dt_fs and ps_prod).
+  ! Classic script: ts=0.001 ps, update=10/ts, equi=2/ts, nsim=500.
+  umbrella init nsim 500 update 10000 equi 2000 thresh 10 temp 300 wuni 44 ucun 50
+```
+
+Commented full-job skeleton (peptide PSF paths left for you to fill in):
+
+[`examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml`](../examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml)
+
+**Alignment tip:** classic `calc NSTEP = @NRUN * @UPDATE` must match the prod
+`nstep` that md-system derives from `ps_prod` and `dt_fs`. If they disagree,
+ADUMB bookkeeping (`nsim` / `update` / `equi`) will not line up with the
+trajectory CHARMM actually runs.
 
 ## Template improvements
 
