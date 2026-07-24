@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 from mmml.cli.argparse_suggest import SuggestingArgumentParser
@@ -270,11 +270,16 @@ def _action_group_title(parser: argparse.ArgumentParser, action: argparse.Action
 
 
 def _dest_category(dest: str) -> int | None:
+    """Match ``dest`` exactly or as ``prefix_*``; longest prefix wins."""
     name = dest.lower()
+    best_len = -1
+    best_cat: int | None = None
     for prefix, cat in _DEST_PREFIX_CATEGORY:
-        if name == prefix or name.startswith(prefix):
-            return cat
-    return None
+        if name == prefix or name.startswith(prefix + "_"):
+            if len(prefix) > best_len:
+                best_len = len(prefix)
+                best_cat = cat
+    return best_cat
 
 
 def classify_action(parser: argparse.ArgumentParser, action: argparse.Action) -> int | None:
@@ -456,11 +461,3 @@ class MdSystemArgumentParser(SuggestingArgumentParser):
             self.exit(0)
         return super().parse_known_args(argv, namespace)
 
-
-def attach_md_system_help(parser: argparse.ArgumentParser) -> Callable[[str | int], str]:
-    """Bind categorized help helpers onto an existing parser (testing / docs)."""
-
-    def _format(mode: str | int = "index") -> str:
-        return format_md_system_help(parser, mode)
-
-    return _format

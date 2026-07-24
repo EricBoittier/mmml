@@ -67,6 +67,17 @@ def test_help_all_contains_every_category_heading():
     assert "--box-size" in text
 
 
+def test_longest_prefix_wins_for_nested_dests():
+    parser = md_system.build_parser()
+    by_dest = {a.dest: a for a in parser._actions if a.option_strings}
+    assert classify_action(parser, by_dest["quiet"]) == 4
+    assert classify_action(parser, by_dest["quiet_bfgs"]) == 6
+    assert classify_action(parser, by_dest["verbose"]) == 4
+    assert classify_action(parser, by_dest["verbose_bfgs"]) == 6
+    assert classify_action(parser, by_dest["ps"]) == 1
+    assert classify_action(parser, by_dest["ps_heat"]) == 4
+
+
 def test_every_option_is_classified():
     parser = md_system.build_parser()
     buckets = iter_categorized_actions(parser)
