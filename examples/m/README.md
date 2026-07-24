@@ -64,7 +64,7 @@ Each run writes under `artifacts/nh3_ch3cl/free_*_{ase,jaxmd}/`:
 
 | File | Format |
 |------|--------|
-| `md.traj` | ASE trajectory |
+| `md.traj` | ASE trajectory (energy, forces, velocities per frame) |
 | `md.xyz` | multi-frame XYZ |
 | `final.xyz` / `final.npz` | last frame |
 | `md_summary.json` | energies / temperatures + artifact paths |

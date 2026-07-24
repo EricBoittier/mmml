@@ -1420,17 +1420,16 @@ def load_cluster_from_pdb(
     *,
     pdb_path: str | Path | None = None,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
-    """Cold-start from a full-system PDB via CHARMM ``READ SEQU PDB``.
+    """Cold-start from a full-system PDB (CGenFF names).
 
-    The PDB must carry CGenFF residue and atom names (e.g. from ``make-res`` /
-    liquid-box / Packmol). For PBC setups, box side prefers CRYST1, then sibling
-    ``box.json``, then ``--box-size``. Vacuum ``free_*`` / ``--free-space`` runs
-    may omit the box (do **not** invent ``box_size`` — that would enable CHARMM
-    crystal via ``resolve_charmm_use_pbc``).
+    Builds the PSF with ``read.sequence_pdb`` + ``generate.new_segment``, then
+    loads coordinates with ``read.pdb(..., resid=True)``. Avoids lingo
+    ``READ SEQU PDB`` / ``DELETE ATOM``, which can hard-abort MPI-linked
+    CHARMM. For PBC setups, box side prefers CRYST1, then sibling ``box.json``,
+    then ``--box-size``. Vacuum ``free_*`` / ``--free-space`` may omit the box.
     """
     from mmml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_relaxed_bomlev,
-        charmm_silent_command,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         read_pdb_cryst1_side_A,
@@ -1442,7 +1441,6 @@ def load_cluster_from_pdb(
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     _import_pycharmm()
-    from pycharmm import lingo
 
     raw = pdb_path if pdb_path is not None else getattr(args, "from_pdb", None)
     if raw is None and getattr(args, "composition", None):
@@ -1491,37 +1489,40 @@ def load_cluster_from_pdb(
         setattr(args, "_cold_start_sim_cell_side_A", side)
         setattr(args, "_cold_start_box_sizing_source", "from_pdb")
 
-    # Cold start: only wipe a pre-existing PSF. DELETE ATOM on an empty
-    # system can abort MPI-linked libcharmm (exit 2, no Python traceback).
-    try:
-        import pycharmm.coor as coor
-
-        if int(coor.get_natom()) > 0:
-            from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
-
-            CLEAR_CHARMM()
-    except Exception:
-        pass
+    # Prefer the PyCHARMM read/generate API over lingo ``READ SEQU PDB`` /
+    # ``DELETE ATOM``. On MPI-linked libcharmm those lingo paths can abort the
+    # process with exit 2 and no Python traceback (seen on vacuum --from-pdb).
+    if not getattr(args, "quiet", False):
+        print(f"Loading full-system PDB {path.name} via sequence_pdb/generate…", flush=True)
     read_cgenff_toppar()
-    header = f"""OPEN UNIT 1 READ FORM NAME {path}
-READ SEQU PDB UNIT 1
-CLOSE UNIT 1
-GENERATE SYS FIRST NONE LAST NONE SETUP
+    import pycharmm.generate as generate
+    import pycharmm.read as read
 
-OPEN UNIT 1 READ FORM NAME {path}
-READ COOR PDB UNIT 1
-CLOSE UNIT 1
-"""
     with charmm_relaxed_bomlev():
-        with charmm_silent_command():
-            lingo.charmm_script(header)
+        # Do not wrap in charmm_silent_command — hide FATAL messages and make
+        # topology/coordinate failures look like a silent MPI exit 2.
+        read.sequence_pdb(str(path))
+        status = generate.new_segment(
+            seg_name="SYS",
+            first_patch="NONE",
+            last_patch="NONE",
+            setup_ic=True,
+        )
+        if int(status) != 1:
+            raise RuntimeError(
+                f"GENERATE SYS failed for full-system PDB {path.name} "
+                f"(status={status}). Check CGenFF residue names and "
+                "MMML_CGENFF_EXTRA_RTF for append topologies."
+            )
+        read.pdb(str(path), resid=True)
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
     r = get_charmm_positions_array()
-    if int(z.size) == 0 or int(r.shape[0]) == 0:
+    if int(z.size) == 0 or int(r.shape[0]) == 0 or np.allclose(r, 0.0):
         raise ValueError(
-            f"Full-system PDB load produced 0 atoms ({path}). "
-            "Ensure the PDB has CGenFF RESN/atom names readable by CHARMM."
+            f"Full-system PDB load produced 0/undefined atoms ({path}). "
+            "Ensure the PDB has CGenFF RESN/atom names readable by CHARMM "
+            "and MMML_CGENFF_EXTRA_RTF is set for append residues (e.g. CH3CL)."
         )
 
     atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
