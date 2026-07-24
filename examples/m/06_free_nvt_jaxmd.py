@@ -96,12 +96,21 @@ def main() -> int:
     kT = float(args.temperature) * unit["temperature"]
     init_fn, apply_fn = simulate.nvt_nose_hoover(force_fn, shift, dt, kT)
     key = jax.random.PRNGKey(0)
+    # Per-atom masses; NVT state stores a broadcastable copy (often (N, 1)).
     mass = jnp.ones((n_atoms,))
     pos0 = jnp.array(r, dtype=jnp.float32)
     state = init_fn(key, pos0, mass=mass)
     e0 = energy_at(state.position)
     energies = [e0]
-    temps = [float(quantity.temperature(momentum=state.momentum, mass=mass) / unit["temperature"])]
+
+    def _temp_K(st) -> float:
+        # Use state.mass (not the init vector) so shapes match momentum (N, 3).
+        return float(
+            quantity.temperature(momentum=st.momentum, mass=st.mass)
+            / unit["temperature"]
+        )
+
+    temps = [_temp_K(state)]
 
     @jax.jit
     def step(state):
@@ -112,14 +121,9 @@ def main() -> int:
         state = step(state)
         if (i + 1) % log_every == 0:
             energies.append(energy_at(state.position))
-            temps.append(
-                float(
-                    quantity.temperature(momentum=state.momentum, mass=mass)
-                    / unit["temperature"]
-                )
-            )
+            temps.append(_temp_K(state))
     e1 = energy_at(state.position)
-    t1 = float(quantity.temperature(momentum=state.momentum, mass=mass) / unit["temperature"])
+    t1 = _temp_K(state)
     energies.append(e1)
     temps.append(t1)
 
