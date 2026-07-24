@@ -35,7 +35,7 @@ def test_md_system_help_does_not_import_jax_or_cli_common():
     assert excinfo.value.code == 0
     help_text = buf.getvalue()
     # Default -h is a category index (not the full flag wall).
-    assert "Help is split into categories" in help_text
+    assert "Help is split by category" in help_text
     assert "-h1" in help_text
     assert "--setup" in help_text  # listed under common starting flags
     assert "--help-all" in help_text
@@ -57,7 +57,7 @@ def test_md_system_main_help_short_circuits(monkeypatch, capsys):
     assert excinfo.value.code == 0
     out = capsys.readouterr().out
     assert "usage:" in out
-    assert "Help is split into categories" in out
+    assert "Help is split by category" in out
     assert "--help-all" in out
 
 

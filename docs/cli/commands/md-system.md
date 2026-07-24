@@ -24,14 +24,7 @@ mmml md-system --help-all  # full option dump
 ```text
 usage: mmml md-system [options]
 
-Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT,
-lambda TI for arbitrary compositions) for arbitrary residue compositions. Runs
-mmml.cli.run.md_pbc_suite (ASE, JAX-MD, or CHARMM MLpot) and
-mmml.cli.run.lambda_dynamics (lambda_ti). MBAR: mmml lambda-mbar --run-dir
-<output-dir>.
-
-Full help (all categories). For a short index: -h For one category: -hN (see -h
-for the list).
+Full help (all categories). Short index: -h One category: -hN
 
 1. Core setup, composition & ensemble:
   --setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}
@@ -105,10 +98,12 @@ for the list).
   --n-molecules N_MOLECULES
                         Number of molecules for single-residue runs.
   --composition COMPOSITION
-                        Residue composition: comma-separated RES:N entries, e.g.
-                        MEOH:5,TIP3:5. A bare RES (no ':N') implies a single
-                        copy (N=1); when this option is set, --n-molecules is
-                        not passed to the backend (use DCM:10 for ten DCM).
+                        Residue composition: comma-separated RES:N and/or PDB
+                        path tokens, e.g. MEOH:5,TIP3:5 or solute.pdb:1,DCM:200.
+                        A bare RES (no ':N') implies N=1. A lone system.pdb (or
+                        --from-pdb) loads the full system via CHARMM READ SEQU
+                        PDB. CGenFF names are validated against
+                        top_all36_cgenff.rtf.
   --spacing SPACING     Target minimum random COM spacing in Angstrom.
   --ps PS               Simulation length in ps.
   --dt-fs DT_FS         Timestep in fs.
@@ -133,21 +128,11 @@ for the list).
                         homogeneous, langevin for mixed composition.
   --pressure PRESSURE   Target pressure in atm (NPT).
   --seed SEED           Random seed for initial placement and velocities.
-  --reuse-packmol-cache, --no-reuse-packmol-cache
-                        pycharmm: reuse disk cache for Packmol cluster builds
-                        (default: on).
-  --rebuild-packmol     pycharmm: ignore Packmol cache and rebuild placement.
   --extra-args ...      Additional raw args forwarded to the underlying script;
                         put this option last.
-  --skip-npt-pressure-report
-                        pycharmm: skip CHARMM 'pressure instantaneous' virial
-                        report before equi and prod stages
   --residue RESIDUE     Single-residue name when --composition is not set
                         (ignored when --composition is set; lambda_ti default
                         MEOH).
-  --no-evaluate-save-artifacts
-                        Do not write evaluate.npz / evaluate.extxyz alongside
-                        evaluate.json.
 
 2. Builders, PBC box & density prep:
   --builder {gas,liquid,crystal}
@@ -174,6 +159,10 @@ for the list).
   --packmol-tolerance PACKMOL_TOLERANCE
                         Packmol distance tolerance (Å) for cluster placement
                         (default: 2.0).
+  --reuse-packmol-cache, --no-reuse-packmol-cache
+                        pycharmm: reuse disk cache for Packmol cluster builds
+                        (default: on).
+  --rebuild-packmol     pycharmm: ignore Packmol cache and rebuild placement.
   --packmol-cache-dir PACKMOL_CACHE_DIR
                         pycharmm: Packmol cache root (default: output-
                         dir/.packmol_cache or MMML_PACKMOL_CACHE).
@@ -371,6 +360,10 @@ for the list).
                         trajectories where time-series correlations matter.
                         Superset of --liquid-prep; individual recovery flags
                         remain overridable.
+  --from-pdb FROM_PDB   Full-system cold start from a CGenFF-named PDB (CHARMM
+                        READ SEQU PDB). Equivalent to composition: path.pdb.
+                        Mutually exclusive with --from-psf/--from-crd and with
+                        multi-token Packmol compositions.
 
 3. Restraints & fixed monomers:
   --flat-bottom-radius Å
@@ -402,8 +395,6 @@ for the list).
                         pycharmm: freeze these resids during MD (comma-
                         separated)
   --no-fix              pycharmm: skip constrained SD pass 2
-  --no-fix-com          lambda_ti: disable ASE FixCom (COM position can drift
-                        during MD).
 
 4. PyCHARMM stages, DCD & pretreat:
   --save-run-state      pycharmm: after staged MD, save positions/velocities +
@@ -599,6 +590,9 @@ for the list).
                         pycharmm: write CPT piston pressure tensor every N
                         dynamics steps to equi/prod *_pressure_tensor.dat via
                         CHARMM IUPTEN (0=off)
+  --skip-npt-pressure-report
+                        pycharmm: skip CHARMM 'pressure instantaneous' virial
+                        report before equi and prod stages
   --n-heat-segments N_HEAT_SEGMENTS
                         pycharmm: split heating into short chained restart
                         segments
@@ -679,11 +673,6 @@ for the list).
   --pre-nve-charmm-update, --no-pre-nve-charmm-update
                         pycharmm: ENER+UPDATE after mini before vacuum NVE
                         (default: on)
-  --quiet-bfgs, --no-quiet-bfgs
-                        Suppress ASE BFGS/FIRE progress lines entirely (default:
-                        compact progress).
-  --verbose-bfgs        Print the full ASE BFGS/FIRE step table instead of
-                        compact progress.
 
 5. Dynamics overlap & monomer health:
   --dynamics-overlap-action {error,warn,rescue,off}
@@ -842,6 +831,11 @@ for the list).
   --rescue-fire-fmax RESCUE_FIRE_FMAX
                         FIRE force convergence threshold in eV/Å for calculator
                         rescue (default 0.05).
+  --quiet-bfgs, --no-quiet-bfgs
+                        Suppress ASE BFGS/FIRE progress lines entirely (default:
+                        compact progress).
+  --verbose-bfgs        Print the full ASE BFGS/FIRE step table instead of
+                        compact progress.
   --bfgs-log-every N    Compact BFGS/FIRE log every N steps (default: ~10 lines
                         per run).
   --charmm-pre-minimize, --no-charmm-pre-minimize
@@ -1064,6 +1058,8 @@ for the list).
   --min-com-start-distance MIN_COM_START_DISTANCE
                         lambda_ti: minimum inter-monomer COM distance after
                         placement (Å).
+  --no-fix-com          lambda_ti: disable ASE FixCom (COM position can drift
+                        during MD).
   --no-stationary       lambda_ti: skip Stationary/ZeroRotation on velocity init
                         (with --no-fix-com, COM can translate).
   --skip-jit-warmup     Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU compile
@@ -1143,6 +1139,9 @@ for the list).
                         <output-dir>/evaluate.npz).
   --evaluate-traj PATH  Extended XYZ with attached energy/forces for ASE/Ovito
                         (default: <output-dir>/evaluate.extxyz).
+  --no-evaluate-save-artifacts
+                        Do not write evaluate.npz / evaluate.extxyz alongside
+                        evaluate.json.
   --evaluate-reference-npz PATH
                         MP2/QM reference trajectory NPZ (keys R, E, optional F)
                         for on-the-fly comparison; writes evaluate_compare.json.
@@ -1201,6 +1200,9 @@ for the list).
                         Optional TensorBoard JAX profiler trace directory for
                         jaxmd/ASE (also MMML_JAX_PROFILER_DIR). Prefer short
                         --ps when tracing.
+
+9. Other options:
+  (no options in this category)
 ```
 
 

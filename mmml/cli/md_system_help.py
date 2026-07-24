@@ -10,21 +10,61 @@ from typing import Any
 
 from mmml.cli.argparse_suggest import SuggestingArgumentParser
 
-# (number, title) — shown by ``-h`` / ``--help``; details via ``-hN``.
-MD_SYSTEM_HELP_CATEGORIES: tuple[tuple[int, str], ...] = (
-    (1, "Core setup, composition & ensemble"),
-    (2, "Builders, PBC box & density prep"),
-    (3, "Restraints & fixed monomers"),
-    (4, "PyCHARMM stages, DCD & pretreat"),
-    (5, "Dynamics overlap & monomer health"),
-    (6, "Minimization (FIRE / BFGS / CHARMM)"),
-    (7, "Hybrid ML/MM physics & batching"),
-    (8, "Campaign, handoff, lambda TI & evaluate"),
+# (number, title, aliases) — ``-hN`` / ``-halias`` / ``--help-alias``.
+MD_SYSTEM_HELP_CATEGORIES: tuple[tuple[int, str, tuple[str, ...]], ...] = (
+    (1, "Core setup, composition & ensemble", ("core",)),
+    (2, "Builders, PBC box & density prep", ("builders", "box")),
+    (3, "Restraints & fixed monomers", ("restraints",)),
+    (4, "PyCHARMM stages, DCD & pretreat", ("pycharmm", "stages")),
+    (5, "Dynamics overlap & monomer health", ("overlap", "health")),
+    (6, "Minimization (FIRE / BFGS / CHARMM)", ("minimize", "min")),
+    (7, "Hybrid ML/MM physics & batching", ("hybrid", "physics")),
+    (8, "Campaign, handoff, lambda TI & evaluate", ("campaign", "evaluate", "lambda")),
+    (9, "Other options", ("other",)),
 )
 
 _HELP_TOKEN_RE = re.compile(
-    r"^(?:-h|--help)$|^-h(\d+)$|^--help-(\d+)$|^--help=(\d+)$|^(?:--help-all|-ha)$",
+    r"^(?:-h|--help)$"
+    r"|^-h(\d+|[A-Za-z][\w-]*)$"
+    r"|^--help-(\d+|[A-Za-z][\w-]*)$"
+    r"|^--help=(\d+|[A-Za-z][\w-]*)$"
+    r"|^(?:--help-all|-ha)$",
     re.IGNORECASE,
+)
+
+# Keep category 1 tiny: only these dests (no prefix catch-all into core).
+_CORE_DESTS = frozenset(
+    {
+        "setup",
+        "backend",
+        "checkpoint",
+        "mbd_checkpoint",
+        "mbd_weight",
+        "multipole_checkpoint",
+        "sampler",
+        "ff",
+        "jaxmd_unified",
+        "electrostatics_damping_sigma",
+        "output_dir",
+        "job_name",
+        "jobs_dir",
+        "template_pdb",
+        "n_molecules",
+        "composition",
+        "spacing",
+        "ps",
+        "dt_fs",
+        "traj_chunk_frames",
+        "traj_export_molecular_wrap",
+        "temperature",
+        "temperature_schedule",
+        "interaction_policy",
+        "nvt_integrator",
+        "pressure",
+        "seed",
+        "residue",
+        "extra_args",
+    }
 )
 
 # Explicit argparse group titles → category number (helpers already create these).
@@ -36,11 +76,17 @@ _GROUP_TITLE_CATEGORY: tuple[tuple[str, int], ...] = (
     ("Dynamics overlap guard", 5),
 )
 
-# dest / option token → category (first match wins; more specific prefixes first).
+# dest prefix → category (longest match wins). Trailing ``_`` means ``prefix*``;
+# otherwise match exact dest or ``prefix_*``.
 _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
+    # 5 — overlap / monomer health
     ("dynamics_", 5),
-    ("packmol", 2),  # packmol, packmol_*, --no-packmol
+    # 2 — builders / box / prep
+    ("packmol", 2),
+    ("reuse_packmol", 2),
+    ("rebuild_packmol", 2),
     ("pyxtal", 2),
+    ("optimize_pyxtal", 2),
     ("builder", 2),
     ("box_", 2),
     ("density_", 2),
@@ -54,11 +100,15 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("prep_ladder_", 2),
     ("cleanup", 2),
     ("no_recovery_", 2),
+    ("min_intermonomer_", 2),
+    ("from_pdb", 2),
+    # 3 — restraints
     ("flat_bottom_", 3),
     ("min_com_restraint_", 3),
     ("fix_resids", 3),
     ("constrain_resids", 3),
     ("no_fix", 3),
+    # 4 — PyCHARMM staged MD
     ("charmm_mm_pretreat", 4),
     ("bonded_mm_", 4),
     ("bonded_recovery_", 4),
@@ -70,7 +120,9 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("ps_equi", 4),
     ("ps_prod", 4),
     ("npt_", 4),
-    ("md_stage", 4),
+    ("skip_npt_", 4),
+    ("md_stage", 4),  # md_stage / md_stages
+    ("md_stages", 4),
     ("n_heat_segments", 4),
     ("n_equi_segments", 4),
     ("n_prod_segments", 4),
@@ -109,6 +161,7 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("tag", 4),
     ("quiet", 4),
     ("verbose", 4),
+    # 6 — minimization
     ("bfgs_", 6),
     ("fire_", 6),
     ("pre_min_", 6),
@@ -129,6 +182,7 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("quiet_bfgs", 6),
     ("verbose_bfgs", 6),
     ("geometry_packing_", 6),
+    # 7 — hybrid physics
     ("ml_cutoff", 7),
     ("ml_switch_", 7),
     ("mm_switch_", 7),
@@ -160,6 +214,7 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("jaxmd_fire_", 7),
     ("jax_md_", 7),
     ("steps_per_recording", 7),
+    # 8 — campaign / lambda / evaluate
     ("lambda_", 8),
     ("couple_residues", 8),
     ("n_equil", 8),
@@ -171,7 +226,7 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("min_com_start_", 8),
     ("no_fix_com", 8),
     ("no_stationary", 8),
-    ("skip_jit_", 8),
+    ("skip_jit", 8),
     ("auto_warmup_", 8),
     ("resume", 8),
     ("config", 8),
@@ -181,6 +236,7 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("continue_", 8),
     ("handoff_", 8),
     ("evaluate_", 8),
+    ("no_evaluate_", 8),
     ("dyna_probe", 8),
     ("optimize_", 8),
     ("reference_npz", 8),
@@ -191,35 +247,6 @@ _DEST_PREFIX_CATEGORY: tuple[tuple[str, int], ...] = (
     ("no_stage_summary", 8),
     ("mlpot_profile", 8),
     ("jax_profiler_", 8),
-    # Core (catch-all for remaining common flags)
-    ("setup", 1),
-    ("backend", 1),
-    ("checkpoint", 1),
-    ("mbd_", 1),
-    ("multipole_", 1),
-    ("sampler", 1),
-    ("ff", 1),
-    ("jaxmd_unified", 1),
-    ("electrostatics_", 1),
-    ("output_dir", 1),
-    ("job_name", 1),
-    ("jobs_dir", 1),
-    ("template_pdb", 1),
-    ("n_molecules", 1),
-    ("composition", 1),
-    ("spacing", 1),
-    ("ps", 1),
-    ("dt_fs", 1),
-    ("traj_", 1),
-    ("temperature", 1),
-    ("interaction_policy", 1),
-    ("nvt_integrator", 1),
-    ("pressure", 1),
-    ("seed", 1),
-    ("min_intermonomer_", 2),
-    ("optimize_pyxtal", 2),
-    ("residue", 1),
-    ("extra_args", 1),
 )
 
 _COMMON_FLAGS = (
@@ -269,16 +296,24 @@ def _action_group_title(parser: argparse.ArgumentParser, action: argparse.Action
     return None
 
 
+def _prefix_matches(name: str, prefix: str) -> bool:
+    """Exact dest, or ``prefix*`` when ``prefix`` ends with ``_``, else ``prefix_*``."""
+    if name == prefix:
+        return True
+    if prefix.endswith("_"):
+        return name.startswith(prefix)
+    return name.startswith(prefix + "_")
+
+
 def _dest_category(dest: str) -> int | None:
-    """Match ``dest`` exactly or as ``prefix_*``; longest prefix wins."""
+    """Match ``dest`` by longest registered prefix."""
     name = dest.lower()
     best_len = -1
     best_cat: int | None = None
     for prefix, cat in _DEST_PREFIX_CATEGORY:
-        if name == prefix or name.startswith(prefix + "_"):
-            if len(prefix) > best_len:
-                best_len = len(prefix)
-                best_cat = cat
+        if _prefix_matches(name, prefix) and len(prefix) > best_len:
+            best_len = len(prefix)
+            best_cat = cat
     return best_cat
 
 
@@ -286,29 +321,22 @@ def classify_action(parser: argparse.ArgumentParser, action: argparse.Action) ->
     """Map an argparse action to a help category number, or None if suppressed."""
     if getattr(action, "help", None) is argparse.SUPPRESS:
         return None
-    if not getattr(action, "option_strings", None) and action.dest in (
-        argparse.SUPPRESS,
-        "help",
-    ):
+    if not action.option_strings:
         return None
-    # Skip positional-only / non-option noise
-    if not action.option_strings and action.dest == "help":
+    dest = str(getattr(action, "dest", "") or "")
+    if dest in ("help", "help_category"):
         return None
     title = _action_group_title(parser, action)
     if title:
         for prefix, cat in _GROUP_TITLE_CATEGORY:
             if title.startswith(prefix):
                 return cat
-    dest = str(getattr(action, "dest", "") or "")
-    if dest in ("help", "help_category"):
-        return None
+    if dest in _CORE_DESTS:
+        return 1
     cat = _dest_category(dest)
     if cat is not None:
         return cat
-    # Unclassified options with flags still appear under core
-    if action.option_strings:
-        return 1
-    return None
+    return 9
 
 
 def iter_categorized_actions(
@@ -336,32 +364,29 @@ def format_help_index(parser: argparse.ArgumentParser) -> str:
     lines = [
         f"usage: {prog} [options]",
         "",
+        "Mixed-composition MD (ASE / JAX-MD / PyCHARMM). Help is split by category:",
+        "",
     ]
-    if parser.description:
-        lines.append(str(parser.description).strip())
-        lines.append("")
-    lines.append("Help is split into categories (this index is the default for -h / --help):")
-    lines.append("")
     for num, title in MD_SYSTEM_HELP_CATEGORIES:
-        lines.append(f"  -h{num}   {title}")
-        lines.append(f"         (same: --help-{num})")
-    lines.append("")
-    lines.append("  --help-all   Full option dump (all categories)")
-    lines.append("  -ha          Alias for --help-all")
-    lines.append("")
-    lines.append("Common starting flags:")
-    lines.append("  " + " ".join(_COMMON_FLAGS))
-    lines.append("")
-    lines.append(f"Example: {prog} -h4")
-    lines.append("")
+        lines.append(f"  -h{num:<4} {title}")
+    lines.extend(
+        [
+            "",
+            "  --help-all   full dump (all categories)",
+            "",
+            "Common flags:",
+            "  " + " ".join(_COMMON_FLAGS),
+            "",
+            f"Example:  {prog} -h1",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
 def _add_short_usage(formatter: argparse.HelpFormatter, parser: argparse.ArgumentParser) -> None:
     """Avoid argparse's default usage line (it lists every option)."""
     formatter.add_text(f"usage: {_prog(parser)} [options]")
-    if parser.description:
-        formatter.add_text(parser.description)
 
 
 def _format_category_section(
@@ -378,6 +403,7 @@ def _format_category_section(
     formatter = parser._get_formatter()
     if include_usage:
         _add_short_usage(formatter, parser)
+        formatter.add_text(f"Category {category}/{len(MD_SYSTEM_HELP_CATEGORIES)} — {titles[category]}")
     title = f"{category}. {titles[category]}"
     formatter.start_section(title)
     if actions:
@@ -397,7 +423,7 @@ def format_help_category(parser: argparse.ArgumentParser, category: int) -> str:
         include_usage=True,
     )
     footer = (
-        f"\nSee also: {_prog(parser)} -h  (category index)  |  "
+        f"\nSee also: {_prog(parser)} -h  (index)  |  "
         f"-hN  (other categories)  |  --help-all\n"
     )
     return body.rstrip() + footer
@@ -408,8 +434,7 @@ def format_help_all(parser: argparse.ArgumentParser) -> str:
     formatter = parser._get_formatter()
     _add_short_usage(formatter, parser)
     formatter.add_text(
-        "Full help (all categories). For a short index: -h   "
-        "For one category: -hN   (see -h for the list)."
+        "Full help (all categories). Short index: -h    One category: -hN"
     )
     for num, title in MD_SYSTEM_HELP_CATEGORIES:
         formatter.start_section(f"{num}. {title}")
@@ -460,4 +485,3 @@ class MdSystemArgumentParser(SuggestingArgumentParser):
             self.print_help()
             self.exit(0)
         return super().parse_known_args(argv, namespace)
-

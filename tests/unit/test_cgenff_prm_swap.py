@@ -105,9 +105,10 @@ def test_read_cgenff_prm_append_suspends_pbc_before_read():
 
 
 def test_crystal_free_prefers_c_api():
-    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
-        encoding="utf-8"
-    )
+    repo_root = Path(__file__).resolve().parents[2]
+    source = (
+        repo_root / "mmml/interfaces/pycharmmInterface/import_pycharmm.py"
+    ).read_text(encoding="utf-8")
     fn = source.split("def _run_crystal_free")[1].split("\ndef ")[0]
     assert "crystal_free_available" in fn
     assert "free_crystal" in fn

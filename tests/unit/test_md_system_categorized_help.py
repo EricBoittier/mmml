@@ -9,6 +9,7 @@ import pytest
 
 from mmml.cli.md_system_help import (
     MD_SYSTEM_HELP_CATEGORIES,
+    _CORE_DESTS,
     classify_action,
     format_help_all,
     format_help_category,
@@ -30,24 +31,33 @@ def test_parse_help_mode_tokens():
     assert parse_help_mode(["--setup", "pbc_nve"]) is None
 
 
-def test_help_index_lists_categories_not_flag_wall():
+def test_help_index_is_short():
     parser = md_system.build_parser()
     text = format_help_index(parser)
     assert "-h1" in text
     assert "Core setup" in text
     assert "--help-all" in text
-    # Index must stay short: no full option dump.
     assert text.count("--dynamics-overlap-action") == 0
-    assert "--setup" in text  # listed under common starting flags
+    # Index must stay a short menu, not the old description wall.
+    assert len(text.splitlines()) < 30
+    assert "lambda TI for arbitrary" not in text
 
 
-def test_help_category_one_has_core_flags():
+def test_help_category_one_is_core_only():
     parser = md_system.build_parser()
     text = format_help_category(parser, 1)
     assert "1. Core setup" in text
     assert "--setup" in text
     assert "--backend" in text
     assert "--composition" in text
+    # Must not swallow other categories (the double-underscore prefix bug).
+    assert "--heat-thermostat" not in text
+    assert "--dynamics-overlap-action" not in text
+    assert "--evaluate-npz" not in text
+    assert "--flat-bottom-radius" not in text
+    buckets = iter_categorized_actions(parser)
+    assert len(buckets[1]) <= len(_CORE_DESTS)
+    assert len(buckets[1]) <= 30
 
 
 def test_help_category_five_has_overlap_guard():
@@ -57,14 +67,16 @@ def test_help_category_five_has_overlap_guard():
     assert "--setup" not in text
 
 
-def test_help_all_contains_every_category_heading():
+def test_prefix_trailing_underscore_matches():
+    """``heat_`` must match ``heat_ihtfrq`` (not ``heat__ihtfrq``)."""
     parser = md_system.build_parser()
-    text = format_help_all(parser)
-    for num, title in MD_SYSTEM_HELP_CATEGORIES:
-        assert f"{num}. {title}" in text
-    assert "--setup" in text
-    assert "--dynamics-overlap-action" in text
-    assert "--box-size" in text
+    by_dest = {a.dest: a for a in parser._actions if a.option_strings}
+    assert classify_action(parser, by_dest["heat_ihtfrq"]) == 4
+    assert classify_action(parser, by_dest["flat_bottom_radius"]) == 3
+    assert classify_action(parser, by_dest["dcd_nsavc"]) == 4
+    assert classify_action(parser, by_dest["bonded_mm_mini"]) == 4
+    assert classify_action(parser, by_dest["ml_batch_size"]) == 7
+    assert classify_action(parser, by_dest["evaluate_npz"]) == 8
 
 
 def test_longest_prefix_wins_for_nested_dests():
@@ -76,6 +88,16 @@ def test_longest_prefix_wins_for_nested_dests():
     assert classify_action(parser, by_dest["verbose_bfgs"]) == 6
     assert classify_action(parser, by_dest["ps"]) == 1
     assert classify_action(parser, by_dest["ps_heat"]) == 4
+
+
+def test_help_all_contains_every_category_heading():
+    parser = md_system.build_parser()
+    text = format_help_all(parser)
+    for num, title in MD_SYSTEM_HELP_CATEGORIES:
+        assert f"{num}. {title}" in text
+    assert "--setup" in text
+    assert "--dynamics-overlap-action" in text
+    assert "--box-size" in text
 
 
 def test_every_option_is_classified():
@@ -97,7 +119,7 @@ def test_build_parser_h_prints_index(capsys):
         md_system.build_parser().parse_args(["-h"])
     assert excinfo.value.code == 0
     out = capsys.readouterr().out
-    assert "Help is split into categories" in out
+    assert "Help is split by category" in out
     assert "-h1" in out
     assert out.count("--dynamics-overlap-action") == 0
 
@@ -119,7 +141,7 @@ def test_main_help_short_circuits_to_index(monkeypatch, capsys):
         md_system.main()
     assert excinfo.value.code == 0
     out = capsys.readouterr().out
-    assert "Help is split into categories" in out
+    assert "Help is split by category" in out
 
 
 def test_unknown_help_category_errors():
