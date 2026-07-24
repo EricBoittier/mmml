@@ -193,6 +193,12 @@ Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 Use `umbrella rxncor … min 0.0 max …` (not `min 2`) unless libcharmm includes the
 mmml `UM1RXN` range-check patch in `eadumb.F90`.
 
+**Production heat:** keep `min 0` (or rebuild with the patch), and set
+`umbrella init` so `nsim * update == heat nstep`
+(`nstep ≈ ps_heat * 1000 / dt_fs`). Full notes + results table:
+[`docs/examples/nh3-ch3cl-results.md`](../../docs/examples/nh3-ch3cl-results.md)
+(ADUMB section).
+
 ```bash
 # One-time if your libcharmm predates ADUMBRXNCOR / UM1RXN fix:
 #   bash scripts/rebuild_charmm_mlpot.sh

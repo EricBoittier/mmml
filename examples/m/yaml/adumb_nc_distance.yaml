@@ -15,9 +15,10 @@
 #   uv run mmml md-system --config examples/m/yaml/adumb_nc_distance.yaml
 #   # or: bash examples/m/09_adumb_nc_distance.sh
 #
-# Alignment (smoke):
-#   dt_fs=1.0, ps_heat=0.2 → heat nstep ≈ 200
-#   umbrella init: nsim=4 × update=50 = 200 steps; equi=25
+# Alignment (this file — medium heat):
+#   dt_fs=1.0, ps_heat=100 → heat nstep = 100_000
+#   umbrella init: nsim=100 × update=1000 = 100_000; equi=200
+# Smoke (short): ps_heat=0.2 → nstep=200; nsim=4 update=50 equi=25
 #
 # Pass checks:
 #   1. exit 0
@@ -26,8 +27,8 @@
 #   4. adumb-wuni.dat / umbcor / rxncor_trace.dat appear under output_dir
 #
 # Do not resume via next_run.* from a failed long heat — wipe output_dir first.
-# For production-length heat, raise ps_heat and retune umbrella nsim*update
-# to match nstep (and keep min 0.0 unless libcharmm has the UM1RXN patch).
+# Keep min 0.0 unless libcharmm has the UM1RXN [min,max] patch (eadumb.F90).
+# Docs: docs/examples/nh3-ch3cl-results.md (ADUMB section).
 
 setup: free_nvt
 backend: pycharmm
@@ -44,7 +45,7 @@ temperature: 300
 dt_fs: 1.0
 md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
-ps_heat: 0.2
+ps_heat: 100.0
 # Keep Packmol dimer compact near a typical N⋯C contact (~3–4 Å).
 # (Default cube placement can park monomers ~box-length apart along one axis.)
 packmol_placement: sphere
@@ -53,8 +54,8 @@ reuse_packmol_cache: false
 # COM restraint is ``cons hmcm`` in pre-dynamics lingo (below). Skip MMFP here:
 # post-MMFP CHARMM ENER under mpirun can hang on MPI-linked builds.
 # flat_bottom_radius: 20.0
-# Short smoke: one overlap chunk for the whole heat leg.
-dynamics_overlap_check_interval: 200
+# Geometry check every 1 ps at dt_fs=1.0 (100 chunks over 100 ps heat).
+dynamics_overlap_check_interval: 1000
 mini_nstep: 40
 skip_energy_show: true
 skip_jit_warmup: true
@@ -70,8 +71,9 @@ output_dir: artifacts/nh3_ch3cl/adumb_nc_distance
 # Or: USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # Vacuum free_nvt does not need CRYST1 / box.json / --box-size.
 
-dcd_nsavc: 10
-dcd_max_frames: 100
+# ~100 frames over 100_000 steps
+dcd_nsavc: 1000
+dcd_max_frames: 200
 
 # Do NOT put PSF/PBC/nbonds/SHAKE/DYNAmics here — md-system owns those.
 # Packmol/composition builds segment SYS: resid 1 = AMM1, resid 2 = CH3CL.
@@ -95,8 +97,8 @@ pycharmm_pre_dynamics_lingo: |
   ! Adaptive umbrella on r_nc. Prefer min 0 (CHARMM c38 adumbrxncor.inp style):
   ! unpatched UM1RXN wrongly treated the upper edge as (max-min) when min>0,
   ! so min 2 max 6 aborted once r_nc > 4 Å. mmml patches eadumb.F90; still
-  ! keep min 0 for smoke robustness across libcharmm ages.
+  ! keep min 0 for robustness across libcharmm ages.
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 8.0 name r_nc
 
-  ! nsim * update must match heat nstep (ps_heat*1000/dt_fs ~ 200 here)
-  umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
+  ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
+  umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 300 wuni 44 ucun 50
