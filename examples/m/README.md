@@ -126,6 +126,57 @@ uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_dmso.yaml --r
 One-shot: `bash examples/m/run_mech_embed_smokes.sh`  
 (`RUN_MAKE_BOX=0` / `RUN_FROM_BOX=0` to skip those legs).
 
+### Electrostatic embedding
+
+MM Coulomb uses **ML charges** (cg_jax `peptide_water_electrostatic_embedding`
+analogue). `kl.json` has `charges: true`.
+
+| Config | Charge mode | System |
+|--------|-------------|--------|
+| `yaml/es_embed_{tip3,acn,dmso}.yaml` | `q0` (Q⁰, liquid-safe) | solute + solvent |
+| `yaml/es_embed_dimer_latent.yaml` | `latent` / Q¹ | **dimer only** AMM1+CH3CL |
+| `yaml/es_embed_tip3_latent_dynamic.yaml` | `latent_dynamic` | liquid heuristic |
+| `yaml/es_embed_tip3_ewald.yaml` | `q0` + `lr_solver: ewald` | TIP3 |
+| `yaml/es_embed_from_box_tip3.yaml` | `q0` from make-box PDB | after `08_make_boxes.sh` |
+
+```bash
+uv run mmml md-system --config examples/m/yaml/es_embed_tip3.yaml --run-all
+uv run mmml md-system --config examples/m/yaml/es_embed_dimer_latent.yaml --run-all
+bash examples/m/run_es_embed_smokes.sh
+```
+
+`q0` / `latent*` are refused with `jax_pme` — use `mic` or `ewald` (see
+[`docs/calculator-capabilities.md`](../../docs/calculator-capabilities.md)).
+
+### Ewald / long-range Coulomb (all options)
+
+Full matrix on TIP3 (`yaml/ewald_all_tip3.yaml`); ACN/DMSO subsets in
+`ewald_all_{acn,dmso}.yaml`. Fixed charges (`mm_charge_mode: fixed`).
+
+| Job id pattern | `lr_solver` / mode | Backends |
+|----------------|--------------------|----------|
+| `mic_*` | `mic` (truncated MIC) | ase, jaxmd, pycharmm |
+| `ewald_*` | `ewald` full-box hybrid | ase, jaxmd, pycharmm |
+| `ewald_omit_self_*` | `ewald` + `--ewald-omit-self` | ase, jaxmd, pycharmm |
+| `jax_pme_ewald_*` | `jax_pme` method=`ewald` | ase, jaxmd, pycharmm |
+| `jax_pme_pme_pycharmm` | `jax_pme` method=`pme` | pycharmm |
+| `jax_pme_p3m_pycharmm` | `jax_pme` method=`p3m` | pycharmm |
+| `pe_ewald_pycharmm` | `periodic_external` + `ewald` | pycharmm |
+| `pe_ewald_coulomb_only_pycharmm` | same, `periodic_charmm_vdw: false` | pycharmm |
+| `pe_nvalchemiops_pycharmm` | `periodic_external` + `nvalchemiops_pme` | pycharmm (opt) |
+| `pe_scafacos_pycharmm` | `periodic_external` + `scafacos` | pycharmm (opt) |
+
+```bash
+# Full TIP3 matrix (skips missing jax-pme / nvalchemiops / ScaFaCoS):
+bash examples/m/run_ewald_smokes.sh
+
+# One job:
+uv run mmml md-system --config examples/m/yaml/ewald_all_tip3.yaml --job-id ewald_pycharmm
+```
+
+Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
+`RUN_ACN=0 RUN_DMSO=0` to run only the TIP3 matrix.
+
 ## Pass / fail
 
 | Check | Criterion |
@@ -136,4 +187,6 @@ One-shot: `bash examples/m/run_mech_embed_smokes.sh`
 | Solute PDB | `solute_amm1_ch3cl.pdb` with 4×AMM1 + 5×CH3CL ATOM lines |
 | make-box | `boxes/{acn,tip3,dmso}/model.pdb` + `model.psf` + `box.json` |
 | Mech. embed | campaign exit 0 under `artifacts/nh3_ch3cl/mech_embed_*` |
+| ES embed | campaign exit 0 under `artifacts/nh3_ch3cl/es_embed_*` |
+| Ewald LR | core `mic_*` / `ewald_*` jobs exit 0; optional libs may SKIP |
 | Docs | `docs/examples/nh3-ch3cl-results.md` + PNGs under `docs/images/examples/nh3-ch3cl/` |

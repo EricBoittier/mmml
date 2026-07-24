@@ -1,0 +1,43 @@
+# Electrostatic embedding (cg_jax peptide_water_electrostatic_embedding analogue):
+# MM Coulomb uses neutralized ML charges (Q⁰) instead of fixed CGenFF only.
+# kl.json has charges=True. q0 is refused with jax_pme — use mic/ewald LR.
+#
+#   uv run mmml md-system --config examples/m/yaml/es_embed_tip3.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,TIP3:12"
+  box_size: 20.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_charge_mode: q0
+  lr_solver: mic
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/es_embed_tip3
+
+runs:
+  ase:
+    description: "Electrostatic embedding (q0) PBC NVE — ASE"
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3/ase
+
+  jaxmd:
+    description: "Electrostatic embedding (q0) PBC NVE — JAX-MD (legacy hybrid)"
+    backend: jaxmd
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3/jaxmd
+
+  pycharmm:
+    description: "Electrostatic embedding (q0) PBC NVE — PyCHARMM MLpot"
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3/pycharmm

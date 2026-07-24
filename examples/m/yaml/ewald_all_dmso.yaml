@@ -1,0 +1,68 @@
+# LR smoke subset for AMM1+CH3CL in DMSO (full matrix: ewald_all_tip3.yaml).
+#   uv run mmml md-system --config examples/m/yaml/ewald_all_dmso.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,DMSO:10"
+  box_size: 22.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+  mini_nstep: 20
+  skip_energy_show: true
+
+campaign_output: artifacts/nh3_ch3cl/ewald_all_dmso
+
+runs:
+  mic_pycharmm:
+    backend: pycharmm
+    lr_solver: mic
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_dmso/mic_pycharmm
+
+  ewald_ase:
+    backend: ase
+    lr_solver: ewald
+    output_dir: artifacts/nh3_ch3cl/ewald_all_dmso/ewald_ase
+
+  ewald_jaxmd:
+    backend: jaxmd
+    lr_solver: ewald
+    output_dir: artifacts/nh3_ch3cl/ewald_all_dmso/ewald_jaxmd
+
+  ewald_pycharmm:
+    backend: pycharmm
+    lr_solver: ewald
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_dmso/ewald_pycharmm
+
+  ewald_omit_self_pycharmm:
+    backend: pycharmm
+    lr_solver: ewald
+    ewald_omit_self: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_dmso/ewald_omit_self_pycharmm
+
+  jax_pme_ewald_pycharmm:
+    backend: pycharmm
+    lr_solver: jax_pme
+    jax_pme_method: ewald
+    jax_pme_sr_cutoff: 6.0
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_dmso/jax_pme_ewald_pycharmm
+
+  pe_ewald_pycharmm:
+    backend: pycharmm
+    mm_nonbond_mode: periodic_external
+    lr_solver: ewald
+    periodic_charmm_vdw: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_dmso/pe_ewald_pycharmm

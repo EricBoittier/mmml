@@ -1,0 +1,37 @@
+# Electrostatic embedding (q0) — AMM1+CH3CL in ACN.
+#   uv run mmml md-system --config examples/m/yaml/es_embed_acn.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,ACN:12"
+  box_size: 20.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_charge_mode: q0
+  lr_solver: mic
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/es_embed_acn
+
+runs:
+  ase:
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/es_embed_acn/ase
+
+  jaxmd:
+    backend: jaxmd
+    output_dir: artifacts/nh3_ch3cl/es_embed_acn/jaxmd
+
+  pycharmm:
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/es_embed_acn/pycharmm

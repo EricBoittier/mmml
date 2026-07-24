@@ -1,0 +1,48 @@
+# Electrostatic embedding (q0) + native hybrid Ewald (lr_solver=ewald).
+# Combines es_embed_tip3 with the train-matched Ewald operator.
+#
+#   uv run mmml md-system --config examples/m/yaml/es_embed_tip3_ewald.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,TIP3:12"
+  box_size: 20.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_charge_mode: q0
+  lr_solver: ewald
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/es_embed_tip3_ewald
+
+runs:
+  ase:
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3_ewald/ase
+
+  jaxmd:
+    backend: jaxmd
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3_ewald/jaxmd
+
+  pycharmm:
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3_ewald/pycharmm
+
+  ewald_omit_self_pycharmm:
+    description: "q0 + ewald-omit-self (MIC-trained compatibility)"
+    backend: pycharmm
+    ewald_omit_self: true
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3_ewald/omit_self_pycharmm

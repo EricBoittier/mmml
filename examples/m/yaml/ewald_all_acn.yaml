@@ -1,0 +1,71 @@
+# Same LR matrix as ewald_all_tip3.yaml but solvent = ACN.
+# Smoke subset: MIC / native Ewald / jax-pme(ewald) / periodic_external+ewald.
+# For the full tip3 matrix copy, change composition and re-use job-ids from tip3.
+#
+#   uv run mmml md-system --config examples/m/yaml/ewald_all_acn.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,ACN:12"
+  box_size: 20.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+  mini_nstep: 20
+  skip_energy_show: true
+
+campaign_output: artifacts/nh3_ch3cl/ewald_all_acn
+
+runs:
+  mic_pycharmm:
+    backend: pycharmm
+    lr_solver: mic
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_acn/mic_pycharmm
+
+  ewald_ase:
+    backend: ase
+    lr_solver: ewald
+    output_dir: artifacts/nh3_ch3cl/ewald_all_acn/ewald_ase
+
+  ewald_jaxmd:
+    backend: jaxmd
+    lr_solver: ewald
+    output_dir: artifacts/nh3_ch3cl/ewald_all_acn/ewald_jaxmd
+
+  ewald_pycharmm:
+    backend: pycharmm
+    lr_solver: ewald
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_acn/ewald_pycharmm
+
+  ewald_omit_self_pycharmm:
+    backend: pycharmm
+    lr_solver: ewald
+    ewald_omit_self: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_acn/ewald_omit_self_pycharmm
+
+  jax_pme_ewald_pycharmm:
+    backend: pycharmm
+    lr_solver: jax_pme
+    jax_pme_method: ewald
+    jax_pme_sr_cutoff: 6.0
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_acn/jax_pme_ewald_pycharmm
+
+  pe_ewald_pycharmm:
+    backend: pycharmm
+    mm_nonbond_mode: periodic_external
+    lr_solver: ewald
+    periodic_charmm_vdw: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_acn/pe_ewald_pycharmm
