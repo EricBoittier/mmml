@@ -1190,6 +1190,13 @@ def _invoke_charmm_script(
         charmm_relaxed_bomlev,
     )
 
+    # Library ``eval_charmm_script`` does not uppercase (unlike ``rdcmnd``), so
+    # ``cons``/``open`` miss the Fortran ``CONS``/``OPEN`` cases. Match legacy
+    # pycharmm ``_charmm_script_line`` and pass uppercase cards.
+    card = str(script or "").strip().upper()
+    if not card:
+        return True
+
     if relaxed_bomlev:
         ctx = charmm_relaxed_bomlev()
     elif quiet:
@@ -1197,7 +1204,7 @@ def _invoke_charmm_script(
     else:
         ctx = nullcontext()
     with ctx:
-        return bool(lingo.charmm_script(script))
+        return bool(lingo.charmm_script(card))
 
 
 def configure_mpi_bootstrap_env() -> None:

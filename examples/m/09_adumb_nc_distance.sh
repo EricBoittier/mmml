@@ -82,10 +82,11 @@ if ! grep -q "r_nc" "${LINGO}"; then
 fi
 # Lingo is staged before dynamics; require an ADUMB output so a soft-failed
 # md-system (exit 0 + error stages) does not report PASS.
-if [[ ! -f "${OUT}/adumb-wuni.dat" ]]; then
-  echo "FAIL: missing ${OUT}/adumb-wuni.dat (ADUMB did not produce output)"
+# Library lingo uppercases OPEN names → ADUMB-WUNI.DAT (also accept lowercase).
+if [[ ! -f "${OUT}/ADUMB-WUNI.DAT" && ! -f "${OUT}/adumb-wuni.dat" ]]; then
+  echo "FAIL: missing ${OUT}/ADUMB-WUNI.DAT (ADUMB did not produce output)"
   exit 1
 fi
 
 echo "PASS: ADUMB wiring -> ${OUT}"
-echo "      adumb-wuni.dat / umbcor / rxncor_trace.dat under ${OUT}"
+echo "      ADUMB-WUNI.DAT / UMBCOR / RXNCOR_TRACE.DAT under ${OUT}"

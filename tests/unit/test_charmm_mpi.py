@@ -508,6 +508,23 @@ def test_mpi_charmm_script_all_ranks_under_mpirun():
     assert mock_barrier.call_count == 0
 
 
+def test_invoke_charmm_script_uppercases_card():
+    """Library eval_charmm_script is case-sensitive; lowercase cons/open fail."""
+    fake_lingo = mock.Mock()
+    fake_lingo.charmm_script.return_value = True
+    with mock.patch.dict("sys.modules", {"pycharmm.lingo": fake_lingo}), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        mock.MagicMock(),
+    ):
+        ok = charmm_mpi._invoke_charmm_script(
+            "cons hmcm force 5.0 sele all end"
+        )
+    assert ok is True
+    fake_lingo.charmm_script.assert_called_once_with(
+        "CONS HMCM FORCE 5.0 SELE ALL END"
+    )
+
+
 def test_mpi_charmm_script_barriers_both():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
