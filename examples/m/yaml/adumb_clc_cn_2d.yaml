@@ -63,21 +63,21 @@ pycharmm_pre_dynamics_lingo: |
   open unit 46 write card name RXNCOR_RCN.DAT
 
   ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1
-  rxncor define p_n point select atom SYS 1 N1 end
-  rxncor define p_c point select atom SYS 2 C1 end
-  rxncor define p_cl point select atom SYS 2 CL1 end
+  rxncor define pn point select atom SYS 1 N1 end
+  rxncor define pc point select atom SYS 2 C1 end
+  rxncor define pcl point select atom SYS 2 CL1 end
 
   ! Distances (Angstrom): Cl-C and C-N
-  rxncor define r_cl distance p_cl p_c
-  rxncor define r_cn distance p_c p_n
-  rxncor set nrxn 2 r_cl r_cn
-  rxncor trace r_cl unit 45
-  rxncor trace r_cn unit 46
+  rxncor define rcl distance pcl pc
+  rxncor define rcn distance pc pn
+  rxncor set nrxn 2 rcl rcn
+  rxncor trace rcl unit 45
+  rxncor trace rcn unit 46
 
   ! 2D adaptive umbrella — one card per RXNCOR name, then shared init.
   ! min 0 / wide max: vacuum fly-off + UM1RXN robustness (see 1D example).
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name r_cl
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name r_cn
+  umbrella rxncor nresol 20 min 1.0 max 12.0 name rcl
+  umbrella rxncor nresol 20 min 1.0 max 12.0 name rcn
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200 here)
   umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
