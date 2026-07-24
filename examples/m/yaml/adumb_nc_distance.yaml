@@ -32,6 +32,9 @@ checkpoint: examples/m/kl.json
 # Mechanical embedding style for the dimer (ML + MM); use include_mm: false for ML-only.
 include_mm: true
 mm_charge_mode: fixed
+# jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
+mm_nonbond_mode: jax_mic
+mm_pair_source: jax
 temperature: 300
 dt_fs: 1.0
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).

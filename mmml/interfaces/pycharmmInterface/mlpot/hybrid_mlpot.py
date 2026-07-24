@@ -54,14 +54,18 @@ class _CallbackPairListUnavailable(RuntimeError):
 def resolve_mm_pair_source(
     args: Any | None = None,
     *,
-    all_ml_pbc_jax_mic: bool = False,
+    all_ml_jax_mic: bool = False,
+    all_ml_pbc_jax_mic: bool | None = None,
 ) -> MmPairSource:
     """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback).
 
     Default is ``charmm_callback`` (Fortran ``idxu/idxv`` primary pairs). All-ML
-    bulk systems with empty callback lists fall back to JAX rebuild automatically.
+    ``jax_mic`` hybrids (vacuum or PBC) zero CHARMM ELEC/VDW via energy policy, so
+    the Fortran primary list is empty — those runs default to JAX neighbor rebuild.
     Set ``MMML_MM_PAIR_SOURCE=jax`` or ``--mm-pair-source jax`` to force Vesin/cell-list.
     """
+    if all_ml_pbc_jax_mic is not None:
+        all_ml_jax_mic = bool(all_ml_pbc_jax_mic) or bool(all_ml_jax_mic)
     if args is not None:
         src = getattr(args, "mm_pair_source", None)
         if src is not None:
@@ -80,7 +84,7 @@ def resolve_mm_pair_source(
         raise ValueError(
             f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
         )
-    if all_ml_pbc_jax_mic:
+    if all_ml_jax_mic:
         return "jax"
     return _DEFAULT_MM_PAIR_SOURCE
 
@@ -1379,11 +1383,12 @@ def build_decomposed_mlpot_model(
             f"r^-6 dispersion={disp_text} when lr_solver=jax_pme)",
             flush=True,
         )
+    # Energy policy zeroes CHARMM ELEC/VDW on ML atoms for jax_mic hybrids, so
+    # Fortran primary lists are empty in vacuum and PBC — use JAX pairs.
     mm_pair_source = resolve_mm_pair_source(
         args,
-        all_ml_pbc_jax_mic=(
-            bool(cell)
-            and bool(do_mm)
+        all_ml_jax_mic=(
+            bool(do_mm)
             and int(n_monomers) > 1
             and str(mm_nonbond_mode) == "jax_mic"
         ),
@@ -1392,7 +1397,7 @@ def build_decomposed_mlpot_model(
     if verbose and mm_pair_source == "jax":
         print(
             "Decomposed MLpot: mm_pair_source=jax "
-            "(all-ML/PBC JAX-MIC; CHARMM callback lists are fully excluded)",
+            "(all-ML jax_mic; CHARMM callback lists are fully excluded)",
             flush=True,
         )
     if verbose and mm_pair_source == "charmm_callback":
