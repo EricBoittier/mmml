@@ -37,9 +37,9 @@ mm_charge_mode: fixed
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
 temperature: 300
-dt_fs: 1.0
+dt_fs: 0.5
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
-ps_heat: 0.2
+ps_heat: 1000.0
 # Keep Packmol dimer compact for the N⋯C umbrella window [2, 6] Å.
 # (Default cube placement can park monomers ~box-length apart along one axis.)
 packmol_placement: sphere
@@ -63,8 +63,8 @@ output_dir: artifacts/nh3_ch3cl/adumb_nc_distance
 # Or: USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # Vacuum free_nvt does not need CRYST1 / box.json / --box-size.
 
-dcd_nsavc: 10
-dcd_max_frames: 100
+dcd_nsavc: 100
+dcd_max_frames: 1000
 
 # Do NOT put PSF/PBC/nbonds/SHAKE/DYNAmics here — md-system owns those.
 # Packmol/composition builds segment SYS: resid 1 = AMM1, resid 2 = CH3CL.
