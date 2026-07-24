@@ -1,33 +1,27 @@
-# ADUMB on NH3–CH3Cl N⋯C distance (RXNCOR) — PyCHARMM only.
+# ADUMB on NH3–CH3Cl bond ratio (RXNCOR) — PyCHARMM only.
 #
-# Yes: the examples/m NPZ can feed this path after export to a CGenFF PDB
-# (07_export_solute_pdb.py) or via Packmol composition AMM1:1,CH3CL:1
-# (same residues; geometry from CGenFF templates unless you --from-pdb).
+# Menshutkin / SN2-like 1D coordinate: ξ = r(Cl⋯C) / r(C⋯N)
+# (CHARMM ``rxncor define … ratio`` of two distances; see rxnene.F90 RATIO_TYPE).
+# Window 0.125–5.0 covers reactant-like (ξ small) through product-like (ξ large).
 #
-# Why not umbrella dihe? AMM1/CH3CL have no peptide φ/ψ. The natural
-# reaction coordinate is the heavy-atom separation (N1–C1), via RXNCOR +
-# ADUMB RXNCOR (see setup/charmm/test/c38test/adumbrxncor.inp).
-#
-# Requires CHARMM built with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
-# rebuild_charmm_mlpot.sh passes -Dadd_keywords=ADUMBRXNCOR by default.
+# Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
+# For min>0, prefer the mmml UM1RXN patch in eadumb.F90 (exact [min,max]);
+# unpatched treats the upper edge as (max−min) → ~[0.125, 4.875] here.
 #
 #   source examples/m/_env.sh
-#   uv run mmml md-system --config examples/m/yaml/adumb_nc_distance.yaml
-#   # or: bash examples/m/09_adumb_nc_distance.sh
+#   USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 #
-# Alignment (this file — medium heat):
+# Alignment (this file — 100 ps heat):
 #   dt_fs=1.0, ps_heat=100 → heat nstep = 100_000
 #   umbrella init: nsim=100 × update=1000 = 100_000; equi=200
 # Smoke (short): ps_heat=0.2 → nstep=200; nsim=4 update=50 equi=25
 #
 # Pass checks:
 #   1. exit 0
-#   2. {output_dir}/pycharmm_pre_dynamics_lingo.inp contains ``umbrella rxncor``
-#   3. Log prints ``Pre-dynamics CHARMM lingo`` before heat
-#   4. adumb-wuni.dat / umbcor / rxncor_trace.dat appear under output_dir
+#   2. staged lingo has ``ratio`` + ``umbrella rxncor`` name rrat
+#   3. ADUMB-WUNI.DAT / UMBCOR / RXNCOR_TRACE.DAT under output_dir
 #
-# Do not resume via next_run.* from a failed long heat — wipe output_dir first.
-# Keep min 0.0 unless libcharmm has the UM1RXN [min,max] patch (eadumb.F90).
+# Wipe output_dir/pycharmm_pre_dynamics_lingo.inp after YAML edits (09 script does).
 # Docs: docs/examples/nh3-ch3cl-results.md (ADUMB section).
 
 setup: free_nvt
@@ -47,13 +41,9 @@ md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
 ps_heat: 100.0
 # Keep Packmol dimer compact near a typical N⋯C contact (~3–4 Å).
-# (Default cube placement can park monomers ~box-length apart along one axis.)
 packmol_placement: sphere
 packmol_radius: 6.0
 reuse_packmol_cache: false
-# COM restraint is ``cons hmcm`` in pre-dynamics lingo (below). Skip MMFP here:
-# post-MMFP CHARMM ENER under mpirun can hang on MPI-linked builds.
-# flat_bottom_radius: 20.0
 # Geometry check every 1 ps at dt_fs=1.0 (100 chunks over 100 ps heat).
 dynamics_overlap_check_interval: 1000
 mini_nstep: 40
@@ -65,19 +55,17 @@ seed: 0
 mc_density_equalize: false
 output_dir: artifacts/nh3_ch3cl/adumb_nc_distance
 
-# Optional NPZ geometry (do not keep multi-token composition with from_pdb):
-#   composition: artifacts/nh3_ch3cl/solute_amm1_ch3cl.pdb
-#   from_pdb: artifacts/nh3_ch3cl/solute_amm1_ch3cl.pdb
-# Or: USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
-# Vacuum free_nvt does not need CRYST1 / box.json / --box-size.
+# Optional NPZ geometry:
+#   USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 
 # ~100 frames over 100_000 steps
 dcd_nsavc: 1000
 dcd_max_frames: 200
 
 # Do NOT put PSF/PBC/nbonds/SHAKE/DYNAmics here — md-system owns those.
-# Packmol/composition builds segment SYS: resid 1 = AMM1, resid 2 = CH3CL.
+# Packmol/composition: SYS resid 1 = AMM1, resid 2 = CH3CL.
 # OPEN names are basenames: lingo runs with cwd=output_dir (mxcmsz-safe).
+# ADUMB NAME tokens are ≤4 chars (rrat).
 pycharmm_pre_dynamics_lingo: |
   ! Keep the complex near the origin during vacuum heat
   cons hmcm force 15.0 refx 0.0 refy 0.0 refz 0.0 sele all end
@@ -87,19 +75,21 @@ pycharmm_pre_dynamics_lingo: |
   open unit 50 write card name UMBCOR
   open unit 45 write card name RXNCOR_TRACE.DAT
 
-  ! Reaction coordinate: AMM1 N1 ... CH3CL C1 (Angstrom)
-  rxncor define p_n point select atom SYS 1 N1 end
-  rxncor define p_c point select atom SYS 2 C1 end
-  rxncor define r_nc distance p_n p_c
-  rxncor set nrxn 1 r_nc
-  rxncor trace r_nc unit 45
+  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1
+  rxncor define pn point select atom SYS 1 N1 end
+  rxncor define pc point select atom SYS 2 C1 end
+  rxncor define pcl point select atom SYS 2 CL1 end
 
-  ! Adaptive umbrella on r_nc. Prefer min 0 (CHARMM c38 adumbrxncor.inp style):
-  ! unpatched UM1RXN wrongly treated the upper edge as (max-min) when min>0,
-  ! so min 2 max 6 aborted once r_nc > 4 Å. mmml patches eadumb.F90; still
-  ! keep min 0 for robustness across libcharmm ages.
-  ! After YAML edits, wipe output_dir/pycharmm_pre_dynamics_lingo.inp (09 script does).
-  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 12.0 name r_nc
+  ! Bond distances, then SN2-like ratio ξ = r(Cl-C) / r(C-N)
+  rxncor define rcl distance pcl pc
+  rxncor define rcn distance pc pn
+  rxncor define rrat ratio rcl rcn
+  rxncor set nrxn 1 rrat
+  rxncor trace rrat unit 45
+
+  ! Adaptive umbrella on ξ ∈ [0.125, 5.0] (dimensionless).
+  ! min>0 needs UM1RXN [min,max] patch for the exact upper edge (see header).
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat
 
   ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
   umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 300 wuni 44 ucun 50

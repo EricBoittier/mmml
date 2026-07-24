@@ -184,24 +184,23 @@ Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
 Yes — the NPZ can drive a PyCHARMM ADUMB job after you have a CGenFF system
 (Packmol `AMM1:1,CH3CL:1`, or `07_export_solute_pdb.py` as a lone full-system
 PDB / Packmol monomer). There are **no φ/ψ dihedrals** on AMM1/CH3CL; use
-RXNCOR distances + `umbrella rxncor` (same pattern as
+RXNCOR + `umbrella rxncor` (same ADUMB path as
 `setup/charmm/test/c38test/adumbrxncor.inp`).
 
 | Example | Coordinates | Config / script |
 |---------|-------------|-----------------|
-| 1D | N⋯C (`r_nc`) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
-| 2D | Cl⋯C + C⋯N (`r_cl`, `r_cn`) | `yaml/adumb_clc_cn_2d.yaml`, `10_adumb_clc_cn_2d.sh` |
-| 1D + TIP3 | N⋯C (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
+| 1D | ξ = \(r_{\mathrm{ClC}}/r_{\mathrm{CN}}\) (`rrat`), [0.125, 5], 100 ps | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
+| 2D | Cl⋯C + C⋯N (`rcl`, `rcn`) | `yaml/adumb_clc_cn_2d.yaml`, `10_adumb_clc_cn_2d.sh` |
+| 1D + TIP3 | same `rrat` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
 
 Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 `scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
 `umbrella rxncor` prints `Unknown umbrella specified` and heat often SIGSEGVs.
-Use `umbrella rxncor … min 0.0 max …` (not `min 2`) unless libcharmm includes the
-mmml `UM1RXN` range-check patch in `eadumb.F90`. RXNCOR **NAME** tokens for ADUMB
-are at most **4 characters** (`r_cl`, `r_cn`).
+The 1D ratio window uses `min 0.125` — rebuild with the mmml `UM1RXN` patch
+in `eadumb.F90` so the upper edge is exactly 5.0 (unpatched ≈ 4.875). RXNCOR
+**NAME** tokens for ADUMB are at most **4 characters** (`rrat`, `rcl`, `rcn`).
 
-**Production heat:** keep `min 0` (or rebuild with the patch), and set
-`umbrella init` so `nsim * update == heat nstep`
+**Production heat:** set `umbrella init` so `nsim * update == heat nstep`
 (`nstep ≈ ps_heat * 1000 / dt_fs`). Full notes + results table:
 [`docs/examples/nh3-ch3cl-results.md`](../../docs/examples/nh3-ch3cl-results.md)
 (ADUMB section).
@@ -210,11 +209,9 @@ are at most **4 characters** (`r_cl`, `r_cn`).
 # One-time if your libcharmm predates ADUMBRXNCOR / UM1RXN fix:
 #   bash scripts/rebuild_charmm_mlpot.sh
 source examples/m/_env.sh
-rm -rf artifacts/nh3_ch3cl/adumb_nc_distance   # avoid stale next_run / long heat
-# Vacuum dimer smoke (Packmol sphere r=6 Å — keep N⋯C near the umbrella window):
-bash examples/m/09_adumb_nc_distance.sh
+rm -rf artifacts/nh3_ch3cl/adumb_nc_distance   # avoid stale next_run / old r_nc lingo
 
-# Preferred: coordinates from the NPZ-exported PDB (overrides YAML composition):
+# 100 ps vacuum ADUMB on bond ratio (NPZ geometry preferred):
 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 
 # 2D Cl⋯C + C⋯N adaptive umbrella (smoke ps_heat=0.2):

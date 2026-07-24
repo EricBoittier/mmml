@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PyCHARMM ADUMB on NH3–CH3Cl N⋯C distance (from examples/m NPZ / Packmol).
+# PyCHARMM ADUMB on NH3–CH3Cl bond ratio ξ=r(Cl-C)/r(C-N) (NPZ / Packmol).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -46,10 +46,10 @@ rm -f "${OUT}/stage_summary.json" \
   "${OUT}/next_run.yaml" "${OUT}/next_run.sh" "${OUT}/next_run.command" \
   "${OUT}/pycharmm_pre_dynamics_lingo.inp"
 
-echo "=== ADUMB N–C distance: $(basename "${CFG}") ==="
-echo "     (needs CHARMM ADUMB + ADUMBRXNCOR / ?ADUMBRXN; RXNCOR distance umbrella)"
+echo "=== ADUMB Cl–C / C–N ratio: $(basename "${CFG}") ==="
+echo "     (needs CHARMM ADUMB + ADUMBRXNCOR / ?ADUMBRXN; RXNCOR ratio umbrella)"
 echo "     If Unknown umbrella / SIGSEGV / 'out of range': rebuild_charmm_mlpot.sh"
-echo "     Smoke: ps_heat=0.2 (wipe output_dir if a prior 1000 ps next_run remains)"
+echo "     Default YAML: ps_heat=100, ξ in [0.125, 5.0] (needs UM1RXN patch for min>0)"
 echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
 echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"
 
@@ -82,13 +82,17 @@ if ! grep -q "umbrella rxncor" "${LINGO}"; then
   echo "FAIL: ${LINGO} missing 'umbrella rxncor'"
   exit 1
 fi
-if ! grep -q "r_nc" "${LINGO}"; then
-  echo "FAIL: ${LINGO} missing r_nc reaction coordinate"
+if ! grep -Eqi 'ratio[[:space:]]+rcl[[:space:]]+rcn|define[[:space:]]+rrat[[:space:]]+ratio' "${LINGO}"; then
+  echo "FAIL: ${LINGO} missing rrat = ratio rcl rcn"
   exit 1
 fi
-# Guard against stale staged lingo after YAML edits (min 2 max 6 → out of range).
-if grep -E 'umbrella[[:space:]]+rxncor' "${LINGO}" | grep -Eq 'min[[:space:]]+2([.]0*)?[[:space:]]'; then
-  echo "FAIL: ${LINGO} still has umbrella rxncor min 2 — wipe output_dir and re-run"
+if ! grep -q "rrat" "${LINGO}"; then
+  echo "FAIL: ${LINGO} missing rrat reaction coordinate"
+  exit 1
+fi
+# Stale distance-only lingo after switching to ratio.
+if grep -Eq 'name[[:space:]]+r_nc|define[[:space:]]+r_nc[[:space:]]+distance' "${LINGO}"; then
+  echo "FAIL: ${LINGO} still has old r_nc distance RC — wipe output_dir and re-run"
   exit 1
 fi
 # Lingo is staged before dynamics; require an ADUMB output so a soft-failed

@@ -1,11 +1,8 @@
-# ADUMB N⋯C distance in explicit TIP3 (PBC) — edit/extend after vacuum smoke works.
+# ADUMB Cl⋯C / C⋯N bond ratio in explicit TIP3 (PBC) — after vacuum smoke works.
+# Same ξ = r(Cl-C)/r(C-N) as adumb_nc_distance.yaml (smoke lengths here).
 #
 #   source examples/m/_env.sh
-#   uv run mmml md-system --config examples/m/yaml/adumb_nc_distance_tip3.yaml
-#
-# Or load a make-box artifact:
-#   from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb
-#   (then comment out composition / box_size if box.json is present)
+#   SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
 #
 # Alignment: dt_fs=1.0, ps_prod=1.0 → prod nstep=1000
 #   umbrella: nsim=10 × update=100 = 1000; equi=100
@@ -46,12 +43,15 @@ pycharmm_pre_dynamics_lingo: |
   open unit 50 write card name UMBCOR
   open unit 45 write card name RXNCOR_TRACE.DAT
 
-  rxncor define p_n point select atom SYS 1 N1 end
-  rxncor define p_c point select atom SYS 2 C1 end
-  rxncor define r_nc distance p_n p_c
-  rxncor set nrxn 1 r_nc
-  rxncor trace r_nc unit 45
+  rxncor define pn point select atom SYS 1 N1 end
+  rxncor define pc point select atom SYS 2 C1 end
+  rxncor define pcl point select atom SYS 2 CL1 end
+  rxncor define rcl distance pcl pc
+  rxncor define rcn distance pc pn
+  rxncor define rrat ratio rcl rcn
+  rxncor set nrxn 1 rrat
+  rxncor trace rrat unit 45
 
-  ! min 0: see adumb_nc_distance.yaml (UM1RXN upper-bound quirk when min>0)
-  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 8.0 name r_nc
+  ! Same window as vacuum 1D; min>0 needs UM1RXN patch (see adumb_nc_distance.yaml)
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat
   umbrella init nsim 10 update 100 equi 100 thresh 10 temp 300 wuni 44 ucun 50
