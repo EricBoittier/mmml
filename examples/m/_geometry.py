@@ -84,6 +84,32 @@ def find_frame_near_xi(
     return idx, float(xi[best]), float(r_clc[best]), float(r_cn[best])
 
 
+def find_frame_near_rc(
+    target_rcl: float,
+    target_rcn: float,
+    npz_path: Path | str | None = None,
+) -> tuple[int, float, float, float]:
+    """Absolute NPZ index of the N=9 frame nearest a 2D (r_ClC, r_CN) target (Å).
+
+    Returns ``(index, xi, r_ClC, r_CN)``. Seeds the 2D ADUMB (r_cl, r_cn) map at a
+    chosen point on the plane — e.g. the product basin (large r_ClC, small r_CN)
+    so a window samples the broken-C-Cl region without crossing the barrier.
+    """
+    path = Path(npz_path) if npz_path is not None else DEFAULT_NPZ
+    data = np.load(path, allow_pickle=True)
+    n = np.asarray(data["N"])
+    dimer_idx = np.flatnonzero(n == 9)
+    if dimer_idx.size == 0:
+        raise ValueError(f"No N=9 frames in {path}")
+    r_all = np.asarray(data["R"])[dimer_idx]
+    r_clc = np.linalg.norm(r_all[:, _NPZ_CL] - r_all[:, _NPZ_C], axis=1)
+    r_cn = np.linalg.norm(r_all[:, _NPZ_C] - r_all[:, _NPZ_N], axis=1)
+    d2 = (r_clc - float(target_rcl)) ** 2 + (r_cn - float(target_rcn)) ** 2
+    best = int(np.argmin(d2))
+    idx = int(dimer_idx[best])
+    return idx, float(r_clc[best] / r_cn[best]), float(r_clc[best]), float(r_cn[best])
+
+
 def write_evaluate_npz(
     out_path: Path | str,
     npz_path: Path | str | None = None,

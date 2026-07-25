@@ -7,7 +7,8 @@
 # ``umbrella init`` (CHARMM ADUMBRXNCOR multi-dimensional WHAM).
 #
 # Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
-# Prefer min 0.0 (UM1RXN quirk when min>0); wipe staged lingo after YAML edits.
+# Prefer min 0.0 (UM1RXN quirk when min>0); max ≳14 Å for vacuum dissociation.
+# Wipe staged lingo after YAML edits.
 #
 #   source examples/m/_env.sh
 #   USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
@@ -94,8 +95,10 @@ pycharmm_pre_dynamics_lingo: |
   ! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when
   ! min>0 (min 1 max 6 → abort once value > 5 Å). Patched eadumb.F90 uses
   ! [min, max]; min 0.0 works on both.
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 8.0 name rcl
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 8.0 name rcn
+  ! max must cover dissociated vacuum geometries: bundled NPZ dimers reach
+  ! r(Cl-C)≈13 Å and r(C-N)≈12 Å; max 8 aborts UM1RXN mid-heat (~156 ps).
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 14.0 name rcl
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 14.0 name rcn
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200_000 here): 400*500.
   ! equi 250 of update 500 discards 50% per window (absorbs the boundary redraw);

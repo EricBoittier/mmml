@@ -14,6 +14,7 @@ if str(EXAMPLE_DIR) not in sys.path:
 
 from _geometry import (  # noqa: E402
     DEFAULT_NPZ,
+    find_frame_near_rc,
     find_frame_near_xi,
     write_solute_pdb,
 )
@@ -31,6 +32,20 @@ def main() -> int:
         "closest to this value (e.g. --xi 1.0 for a transition-state-like start). "
         "Overrides --frame/--seed.",
     )
+    parser.add_argument(
+        "--rcl",
+        type=float,
+        default=None,
+        help="Seed near a 2D point on the (r_ClC, r_CN) plane: r(Cl-C) target in Å "
+        "(use with --rcn). Picks the nearest N=9 frame; e.g. --rcl 3.8 --rcn 1.57 "
+        "seeds the product basin (broken C-Cl). Overrides --xi/--frame/--seed.",
+    )
+    parser.add_argument(
+        "--rcn",
+        type=float,
+        default=None,
+        help="r(C-N) target in Å for 2D (r_ClC, r_CN) seeding (use with --rcl).",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--no-center",
@@ -47,7 +62,15 @@ def main() -> int:
     args = parser.parse_args()
 
     frame = args.frame
-    if args.xi is not None:
+    if (args.rcl is None) != (args.rcn is None):
+        parser.error("--rcl and --rcn must be given together (2D seeding)")
+    if args.rcl is not None:
+        frame, xi, r_clc, r_cn = find_frame_near_rc(args.rcl, args.rcn, args.data)
+        print(
+            f"(r_ClC, r_CN) target ({args.rcl:.2f}, {args.rcn:.2f}) -> frame {frame}: "
+            f"r(Cl-C)={r_clc:.2f} Å r(C-N)={r_cn:.2f} Å (xi={xi:.3f})"
+        )
+    elif args.xi is not None:
         frame, xi, r_clc, r_cn = find_frame_near_xi(args.xi, args.data)
         print(
             f"xi target {args.xi:.3f} -> frame {frame}: "
