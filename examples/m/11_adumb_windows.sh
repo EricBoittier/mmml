@@ -61,12 +61,18 @@ for xi in ${XIS}; do
   uv run python examples/m/07_export_solute_pdb.py --xi "${xi}" -o "${SOLUTE}"
 
   # Full-range ADUMB from that geometry; --no-packmol keeps the exact NPZ frame.
+  # Seed preservation (SEED_PRESERVE=1, default): skip the full-CGenFF MM pre-min
+  # and isolated-monomer PhysNet mini so a broken/dissociated seed is not relaxed
+  # back to the reactant geometry before dynamics (the hybrid ML BFGS is kept).
   CMD=(uv run mmml md-system
     --config "${CFG}"
     --output-dir "${OUT}"
     --composition "${SOLUTE}"
     --from-pdb "${SOLUTE}"
     --no-packmol)
+  if [[ "${SEED_PRESERVE:-1}" == "1" ]]; then
+    CMD+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
+  fi
 
   echo "--- window ${tag} -> ${OUT}"
   printf '    '; printf '%q ' "${CMD[@]}"; echo

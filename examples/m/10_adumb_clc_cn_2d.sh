@@ -7,14 +7,17 @@
 #                      a centered CGenFF AMM1+CH3CL PDB and md-system runs it via
 #                      --from-pdb --no-packmol (the NPZ has no residue/atom names, so
 #                      CHARMM cannot read it directly — the PDB carries them).
+#     RCL=<a> RCN=<b>    with USE_NPZ_PDB=1: pick the N=9 frame nearest a 2D
+#                        (r_ClC, r_CN) target Å — e.g. RCL=3.8 RCN=1.57 = product basin
 #     TS_XI=<x>          with USE_NPZ_PDB=1: pick the N=9 frame nearest ξ=r(Cl-C)/r(C-N)
-#                        (e.g. TS_XI=1.0 for a transition-state-like start)
 #     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
+#     SEED_PRESERVE=0    with USE_NPZ_PDB=1: restore the default pre-min (by default the
+#                        MM pre-min + monomer mini are skipped so a broken-C-Cl seed survives)
 #
 # Examples:
-#   bash examples/m/10_adumb_clc_cn_2d.sh                            # Packmol dimer
-#   TS_XI=1.0 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh    # seed near TS
-#   FRAME=4101 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh   # exact frame
+#   bash examples/m/10_adumb_clc_cn_2d.sh                                 # Packmol dimer
+#   RCL=3.8 RCN=1.57 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh  # seed product basin
+#   TS_XI=1.0 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh         # seed near TS
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -33,17 +36,35 @@ fi
 EXTRA=()
 if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   SOLUTE="${ARTIFACTS_DIR}/solute_amm1_ch3cl.pdb"
-  # Seed the starting geometry from an NPZ frame. TS_XI picks the frame nearest a
-  # target reaction coord xi=r(Cl-C)/r(C-N) (e.g. TS_XI=1.0 for a TS-like start);
-  # FRAME picks an absolute N=9 index. Default: seeded-random (--seed 0).
+  # Seed the starting geometry from an NPZ frame (highest priority first):
+  #   RCL + RCN  nearest frame to a 2D (r_ClC, r_CN) target — e.g. RCL=3.8 RCN=1.57
+  #              seeds the product basin (broken C-Cl) for the 2D map
+  #   TS_XI      nearest frame to a target ξ=r(Cl-C)/r(C-N) (e.g. TS_XI=1.0)
+  #   FRAME      absolute N=9 index
+  #   (none)     seeded-random frame (--seed 0)
   EXPORT_ARGS=()
-  if [[ -n "${TS_XI:-}" ]]; then
+  if [[ -n "${RCL:-}" && -n "${RCN:-}" ]]; then
+    EXPORT_ARGS+=(--rcl "${RCL}" --rcn "${RCN}")
+  elif [[ -n "${TS_XI:-}" ]]; then
     EXPORT_ARGS+=(--xi "${TS_XI}")
   elif [[ -n "${FRAME:-}" ]]; then
     EXPORT_ARGS+=(--frame "${FRAME}")
   fi
   uv run python examples/m/07_export_solute_pdb.py "${EXPORT_ARGS[@]}" -o "${SOLUTE}"
   EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}" --no-packmol)
+  # Preserve the seeded reaction coordinate (SEED_PRESERVE=1, default). The NPZ
+  # frame is already a physical geometry, so skip the two steps that would erase
+  # a broken/dissociated seed before dynamics:
+  #   --charmm-sd-steps 0 --charmm-abnr-steps 0  : the full-CGenFF MM pre-min
+  #        reforms the C-Cl harmonic bond (BONDs jumps then relaxes to ~1.78 Å);
+  #   --no-monomer-physnet-mini                  : isolated-monomer PhysNet mini
+  #        pulls CH3Cl back to its gas-phase equilibrium.
+  # The hybrid ML BFGS (--calculator-pre-minimize) is kept — it relaxes downhill
+  # within the seeded basin only (product stays product; it will not cross the
+  # barrier). Set SEED_PRESERVE=0 if a raw seed fails the pre-dynamics GRMS gate.
+  if [[ "${SEED_PRESERVE:-1}" == "1" ]]; then
+    EXTRA+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
+  fi
 fi
 
 mkdir -p "${OUT}"

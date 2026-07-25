@@ -7,9 +7,12 @@
 #                      a centered CGenFF AMM1+CH3CL PDB and md-system runs it via
 #                      --from-pdb --no-packmol (the NPZ has no residue/atom names, so
 #                      CHARMM cannot read it directly — the PDB carries them).
+#     RCL=<a> RCN=<b>    with USE_NPZ_PDB=1: pick the N=9 frame nearest a 2D
+#                        (r_ClC, r_CN) target Å — e.g. RCL=3.8 RCN=1.57 = product basin
 #     TS_XI=<x>          with USE_NPZ_PDB=1: pick the N=9 frame nearest ξ=r(Cl-C)/r(C-N)
-#                        (e.g. TS_XI=1.0 for a transition-state-like start)
 #     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
+#     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum): restore the default pre-min (by default
+#                        MM pre-min + monomer mini are skipped so a broken-C-Cl seed survives)
 #   SOLVATED=1         use the explicit-TIP3 (PBC) YAML instead of vacuum
 #
 # Examples:
@@ -45,21 +48,36 @@ fi
 EXTRA=()
 if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   SOLUTE="${ARTIFACTS_DIR}/solute_amm1_ch3cl.pdb"
-  # Seed the starting geometry from an NPZ frame. TS_XI picks the frame nearest a
-  # target reaction coord xi=r(Cl-C)/r(C-N) (e.g. TS_XI=1.0 for a TS-like start);
-  # FRAME picks an absolute N=9 index. Default: seeded-random (--seed 0).
+  # Seed the starting geometry from an NPZ frame (highest priority first):
+  #   RCL + RCN  nearest frame to a 2D (r_ClC, r_CN) target — e.g. RCL=3.8 RCN=1.57
+  #              seeds the product basin (broken C-Cl)
+  #   TS_XI      nearest frame to a target ξ=r(Cl-C)/r(C-N) (e.g. TS_XI=1.0)
+  #   FRAME      absolute N=9 index
+  #   (none)     seeded-random frame (--seed 0)
   EXPORT_ARGS=()
-  if [[ -n "${TS_XI:-}" ]]; then
+  if [[ -n "${RCL:-}" && -n "${RCN:-}" ]]; then
+    EXPORT_ARGS+=(--rcl "${RCL}" --rcn "${RCN}")
+  elif [[ -n "${TS_XI:-}" ]]; then
     EXPORT_ARGS+=(--xi "${TS_XI}")
   elif [[ -n "${FRAME:-}" ]]; then
     EXPORT_ARGS+=(--frame "${FRAME}")
   fi
   uv run python examples/m/07_export_solute_pdb.py "${EXPORT_ARGS[@]}" -o "${SOLUTE}"
   if [[ "${SOLVATED}" == "1" ]]; then
+    # Solvated: Packmol wraps TIP3 around the solute — keep the default pre-min.
     EXTRA+=(--composition "${SOLUTE}:1,TIP3:12")
   else
     # Lone full-system PDB; do not Packmol-rebuild over the NPZ geometry.
     EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}" --no-packmol)
+    # Preserve the seeded reaction coordinate (SEED_PRESERVE=1, default): skip the
+    # full-CGenFF MM pre-min (reforms the C-Cl harmonic bond) and the isolated-
+    # monomer PhysNet mini (pulls CH3Cl back to gas-phase equilibrium), both of
+    # which would erase a broken/dissociated seed. The hybrid ML BFGS
+    # (--calculator-pre-minimize) is kept: it only relaxes within the seeded basin.
+    # SEED_PRESERVE=0 restores the default pre-min if a raw seed fails the GRMS gate.
+    if [[ "${SEED_PRESERVE:-1}" == "1" ]]; then
+      EXTRA+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
+    fi
   fi
 fi
 
