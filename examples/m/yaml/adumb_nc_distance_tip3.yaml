@@ -33,6 +33,9 @@ output_dir: artifacts/nh3_ch3cl/adumb_nc_distance_tip3
 # Chunk size = overlap check interval; align to umbrella `update` (100) so each
 # MD block spans one ADUMB update cycle (200/100 heat, 1000/100 prod).
 dynamics_overlap_check_interval: 100
+# Velocity-reassignment micro-chunk cadence == update (100) so redraws land on
+# update boundaries and are absorbed by `equi`.
+dyn_freq_cadence: 100
 # Fly-off guard raised modestly (still < 20 Å box) for the dissociating fragment.
 dynamics_max_monomer_extent: 15.0
 # NOTE: close-contact / repair thresholds are deliberately left at solvent-safe
@@ -64,4 +67,6 @@ pycharmm_pre_dynamics_lingo: |
 
   ! Same window as vacuum 1D; min>0 needs UM1RXN patch (see adumb_nc_distance.yaml)
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat
-  umbrella init nsim 10 update 100 equi 100 thresh 10 temp 300 wuni 44 ucun 50
+  ! equi MUST be < update or MOD(ICUM,update) > equi is never true and ADUMB
+  ! records ZERO statistics. equi 20 of update 100 → 80% of each window sampled.
+  umbrella init nsim 10 update 100 equi 20 thresh 10 temp 300 wuni 44 ucun 50

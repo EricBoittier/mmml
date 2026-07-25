@@ -42,6 +42,10 @@ reuse_packmol_cache: false
 # Chunk size = overlap check interval; align to umbrella `update` (500) so each
 # MD block spans one ADUMB update cycle (was 200, misaligned).
 dynamics_overlap_check_interval: 500
+# Velocity-reassignment (IASVEL=1) micro-chunk cadence during the Bussi ramp;
+# MUST equal `update` (500) so thermal redraws land on update boundaries and are
+# absorbed by `equi`. See adumb_nc_distance.yaml for the full rationale.
+dyn_freq_cadence: 500
 # Repair without biasing the umbrella histogram: keep rescue but only on
 # catastrophic overlaps (0.2 Å); normal TS/bond contacts never trigger it.
 dynamics_overlap_action: rescue
@@ -89,8 +93,10 @@ pycharmm_pre_dynamics_lingo: |
   ! MUST use min 0.0 unless libcharmm has the mmml UM1RXN patch (eadumb.F90):
   ! unpatched code treats the upper edge as (max-min), so min 1 max 5 only
   ! allows [1, 4] Å and aborts with "reaction coordinate out of range".
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name rcl
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name rcn
+  umbrella rxncor nresol 20 trig 0 poly 4 min 1.0 max 6.0 name rcl
+  umbrella rxncor nresol 20 trig 0 poly 4 min 1.0 max 6.0 name rcn
 
-  ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200 here)
-  umbrella init nsim 40 update 500 equi 250 thresh 10 temp 300 wuni 44 ucun 50
+  ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200_000 here): 400*500.
+  ! equi 250 of update 500 discards 50% per window (absorbs the boundary redraw);
+  ! lower equi toward ~100 if you want more sampling per window.
+  umbrella init nsim 400 update 500 equi 250 thresh 10 temp 300 wuni 44 ucun 50
