@@ -58,9 +58,9 @@ pycharmm_pre_dynamics_lingo: |
 
   ! Points selected by atom NAME only (segid/resid-agnostic): works under both
   ! packmol (segid CLST) and --from-pdb / NPZ-frame seeding (segid SYS).
-  rxncor define pn point select type N1 end
-  rxncor define pc point select type C1 end
-  rxncor define pcl point select type CL1 end
+  rxncor define pn point select atom * * N1 end
+  rxncor define pc point select atom * * C1 end
+  rxncor define pcl point select atom * * CL1 end
   rxncor define rcl distance pcl pc
   rxncor define rcn distance pc pn
   rxncor define rrat ratio rcl rcn
