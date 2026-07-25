@@ -61,8 +61,8 @@ if ! grep -q "umbrella rxncor" "${LINGO}"; then
   echo "FAIL: ${LINGO} missing 'umbrella rxncor'"
   exit 1
 fi
-if ! grep -q "r_cl" "${LINGO}" || ! grep -q "r_cn" "${LINGO}"; then
-  echo "FAIL: ${LINGO} missing r_cl / r_cn reaction coordinates"
+if ! grep -q "name rcl" "${LINGO}" || ! grep -q "name rcn" "${LINGO}"; then
+  echo "FAIL: ${LINGO} missing rcl / rcn reaction coordinates"
   exit 1
 fi
 n_umb="$(grep -cE '^[[:space:]]*umbrella[[:space:]]+rxncor' "${LINGO}" || true)"
