@@ -38,7 +38,17 @@ ps_heat: 200.0
 packmol_placement: sphere
 packmol_radius: 6.0
 reuse_packmol_cache: false
-dynamics_overlap_check_interval: 200
+# --- Reactive-coordinate dynamics guards (bond breaking + forming) ---
+# Chunk size = overlap check interval; align to umbrella `update` (500) so each
+# MD block spans one ADUMB update cycle (was 200, misaligned).
+dynamics_overlap_check_interval: 500
+# Repair without biasing the umbrella histogram: keep rescue but only on
+# catastrophic overlaps (0.2 Å); normal TS/bond contacts never trigger it.
+dynamics_overlap_action: rescue
+dynamics_overlap_min_distance: 0.2
+dynamics_intra_min_distance: 0.2
+# Fly-off guard raised past the 12 Å default for the dissociating fragment.
+dynamics_max_monomer_extent: 25.0
 mini_nstep: 40
 skip_energy_show: true
 skip_jit_warmup: true
@@ -54,8 +64,9 @@ dcd_max_frames: 100
 # Packmol/composition: segid CLST, resid 1 = AMM1, resid 2 = CH3CL.
 # RXNCOR NAME tokens are ≤4 chars in ADUMB (param_store).
 pycharmm_pre_dynamics_lingo: |
-  ! Keep the complex near the origin during vacuum heat
-  cons hmcm force 15.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+  ! Weak COM tether: stops global drift in vacuum without confining the
+  ! reaction. Acts on the aggregate COM, so it does NOT bias the internal RCs.
+  cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
   open unit 44 write card name ADUMB-WUNI.DAT
   open unit 50 write card name UMBCOR

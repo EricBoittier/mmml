@@ -29,6 +29,16 @@ seed: 0
 mc_density_equalize: false
 output_dir: artifacts/nh3_ch3cl/adumb_nc_distance_tip3
 
+# --- Reactive-coordinate dynamics guards (PBC + explicit solvent) ---
+# Chunk size = overlap check interval; align to umbrella `update` (100) so each
+# MD block spans one ADUMB update cycle (200/100 heat, 1000/100 prod).
+dynamics_overlap_check_interval: 100
+# Fly-off guard raised modestly (still < 20 Å box) for the dissociating fragment.
+dynamics_max_monomer_extent: 15.0
+# NOTE: close-contact / repair thresholds are deliberately left at solvent-safe
+# defaults. Do NOT copy the vacuum files' dynamics_overlap_min_distance: 0.2 —
+# with explicit TIP3 that would let solvent–solvent overlaps go unrescued.
+
 dcd_nsavc: 20
 dcd_max_frames: 200
 
