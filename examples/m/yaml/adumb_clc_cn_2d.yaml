@@ -51,7 +51,7 @@ output_dir: artifacts/nh3_ch3cl/adumb_clc_cn_2d
 dcd_nsavc: 10
 dcd_max_frames: 100
 
-# Packmol/composition: SYS resid 1 = AMM1, resid 2 = CH3CL.
+# Packmol/composition: segid CLST, resid 1 = AMM1, resid 2 = CH3CL.
 # RXNCOR NAME tokens are ≤4 chars in ADUMB (param_store).
 pycharmm_pre_dynamics_lingo: |
   ! Keep the complex near the origin during vacuum heat
@@ -63,9 +63,9 @@ pycharmm_pre_dynamics_lingo: |
   open unit 46 write card name RXNCOR_RCN.DAT
 
   ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1
-  rxncor define pn point select atom SYS 1 N1 end
-  rxncor define pc point select atom SYS 2 C1 end
-  rxncor define pcl point select atom SYS 2 CL1 end
+  rxncor define pn point select atom CLST 1 N1 end
+  rxncor define pc point select atom CLST 2 C1 end
+  rxncor define pcl point select atom CLST 2 CL1 end
 
   ! Distances (Angstrom): Cl-C and C-N
   rxncor define rcl distance pcl pc
