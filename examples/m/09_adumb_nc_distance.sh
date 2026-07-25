@@ -28,7 +28,16 @@ fi
 EXTRA=()
 if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   SOLUTE="${ARTIFACTS_DIR}/solute_amm1_ch3cl.pdb"
-  uv run python examples/m/07_export_solute_pdb.py -o "${SOLUTE}"
+  # Seed the starting geometry from an NPZ frame. TS_XI picks the frame nearest a
+  # target reaction coord xi=r(Cl-C)/r(C-N) (e.g. TS_XI=1.0 for a TS-like start);
+  # FRAME picks an absolute N=9 index. Default: seeded-random (--seed 0).
+  EXPORT_ARGS=()
+  if [[ -n "${TS_XI:-}" ]]; then
+    EXPORT_ARGS+=(--xi "${TS_XI}")
+  elif [[ -n "${FRAME:-}" ]]; then
+    EXPORT_ARGS+=(--frame "${FRAME}")
+  fi
+  uv run python examples/m/07_export_solute_pdb.py "${EXPORT_ARGS[@]}" -o "${SOLUTE}"
   if [[ "${SOLVATED}" == "1" ]]; then
     EXTRA+=(--composition "${SOLUTE}:1,TIP3:12")
   else

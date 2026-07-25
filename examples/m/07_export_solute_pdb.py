@@ -12,13 +12,25 @@ REPO_ROOT = EXAMPLE_DIR.parent.parent
 if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
 
-from _geometry import DEFAULT_NPZ, write_solute_pdb  # noqa: E402
+from _geometry import (  # noqa: E402
+    DEFAULT_NPZ,
+    find_frame_near_xi,
+    write_solute_pdb,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DEFAULT_NPZ)
     parser.add_argument("--frame", type=int, default=None, help="Absolute NPZ index (N=9).")
+    parser.add_argument(
+        "--xi",
+        type=float,
+        default=None,
+        help="Seed near reaction coord xi=r(Cl-C)/r(C-N): pick the N=9 frame "
+        "closest to this value (e.g. --xi 1.0 for a transition-state-like start). "
+        "Overrides --frame/--seed.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "-o",
@@ -28,10 +40,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    frame = args.frame
+    if args.xi is not None:
+        frame, xi, r_clc, r_cn = find_frame_near_xi(args.xi, args.data)
+        print(
+            f"xi target {args.xi:.3f} -> frame {frame}: "
+            f"xi={xi:.3f} r(Cl-C)={r_clc:.2f} Å r(C-N)={r_cn:.2f} Å"
+        )
+
     out = write_solute_pdb(
         args.output,
         args.data,
-        index=args.frame,
+        index=frame,
         seed=int(args.seed),
     )
     atom_lines = [

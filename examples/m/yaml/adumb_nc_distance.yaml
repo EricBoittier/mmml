@@ -83,7 +83,8 @@ dcd_nsavc: 1000
 dcd_max_frames: 200
 
 # Do NOT put PSF/PBC/nbonds/SHAKE/DYNAmics here — md-system owns those.
-# Packmol/composition: SYS resid 1 = AMM1, resid 2 = CH3CL.
+# Builder segids differ (packmol=CLST, --from-pdb=SYS); rxncor selects by atom
+# name below so either path works. resid 1 = AMM1, resid 2 = CH3CL in both.
 # OPEN names are basenames: lingo runs with cwd=output_dir (mxcmsz-safe).
 # ADUMB NAME tokens are ≤4 chars (rrat).
 pycharmm_pre_dynamics_lingo: |
@@ -97,12 +98,13 @@ pycharmm_pre_dynamics_lingo: |
   open unit 50 write card name UMBCOR
   open unit 45 write card name RXNCOR_TRACE.DAT
 
-  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1
-  ! segid is CLST (single segment built by the packmol composition path);
-  ! resid 1 = AMM1 (NH3), resid 2 = CH3CL, in composition order.
-  rxncor define pn point select atom CLST 1 N1 end
-  rxncor define pc point select atom CLST 2 C1 end
-  rxncor define pcl point select atom CLST 2 CL1 end
+  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1.
+  ! Selected by atom NAME only (segid/resid-agnostic): N1/C1/CL1 are each unique
+  ! in this system, so the SAME lingo works whether the builder made segid CLST
+  ! (packmol composition) or SYS (--from-pdb / seeding from an NPZ frame).
+  rxncor define pn point select type N1 end
+  rxncor define pc point select type C1 end
+  rxncor define pcl point select type CL1 end
 
   ! Bond distances, then SN2-like ratio ξ = r(Cl-C) / r(C-N)
   rxncor define rcl distance pcl pc

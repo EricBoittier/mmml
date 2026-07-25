@@ -77,10 +77,11 @@ pycharmm_pre_dynamics_lingo: |
   open unit 45 write card name RXNCOR_RCL.DAT
   open unit 46 write card name RXNCOR_RCN.DAT
 
-  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1
-  rxncor define pn point select atom CLST 1 N1 end
-  rxncor define pc point select atom CLST 2 C1 end
-  rxncor define pcl point select atom CLST 2 CL1 end
+  ! Points selected by atom NAME only (segid/resid-agnostic): works under both
+  ! packmol (segid CLST) and --from-pdb / NPZ-frame seeding (segid SYS).
+  rxncor define pn point select type N1 end
+  rxncor define pc point select type C1 end
+  rxncor define pcl point select type CL1 end
 
   ! Distances (Angstrom): Cl-C and C-N
   rxncor define rcl distance pcl pc

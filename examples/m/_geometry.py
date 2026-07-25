@@ -48,6 +48,42 @@ def load_dimer_frame(
     return z[mask], r[mask]
 
 
+# NPZ atom order (see comment above): Cl=0, N=1, C=2.
+_NPZ_CL, _NPZ_N, _NPZ_C = 0, 1, 2
+
+
+def frame_reaction_coord(r: np.ndarray) -> tuple[float, float, float]:
+    """Return ``(xi, r_ClC, r_CN)`` for one N=9 frame; xi = r(Cl-C)/r(C-N)."""
+    r_clc = float(np.linalg.norm(r[_NPZ_CL] - r[_NPZ_C]))
+    r_cn = float(np.linalg.norm(r[_NPZ_C] - r[_NPZ_N]))
+    return r_clc / r_cn, r_clc, r_cn
+
+
+def find_frame_near_xi(
+    target_xi: float,
+    npz_path: Path | str | None = None,
+) -> tuple[int, float, float, float]:
+    """Absolute NPZ index of the N=9 frame whose xi is closest to ``target_xi``.
+
+    Returns ``(index, xi, r_ClC, r_CN)``. Seeds ADUMB near the transition state
+    (xi≈1); note the bundled dataset has *no* frames in xi∈[0.9,1.1], so the
+    nearest available geometry is returned.
+    """
+    path = Path(npz_path) if npz_path is not None else DEFAULT_NPZ
+    data = np.load(path, allow_pickle=True)
+    n = np.asarray(data["N"])
+    dimer_idx = np.flatnonzero(n == 9)
+    if dimer_idx.size == 0:
+        raise ValueError(f"No N=9 frames in {path}")
+    r_all = np.asarray(data["R"])[dimer_idx]
+    r_clc = np.linalg.norm(r_all[:, _NPZ_CL] - r_all[:, _NPZ_C], axis=1)
+    r_cn = np.linalg.norm(r_all[:, _NPZ_C] - r_all[:, _NPZ_N], axis=1)
+    xi = r_clc / r_cn
+    best = int(np.argmin(np.abs(xi - float(target_xi))))
+    idx = int(dimer_idx[best])
+    return idx, float(xi[best]), float(r_clc[best]), float(r_cn[best])
+
+
 def write_evaluate_npz(
     out_path: Path | str,
     npz_path: Path | str | None = None,
