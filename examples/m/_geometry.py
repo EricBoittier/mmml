@@ -133,12 +133,16 @@ def write_solute_pdb(
     *,
     index: int | None = None,
     seed: int = 0,
+    center: bool = True,
 ) -> Path:
     """Write a CGenFF-named AMM1+CH3CL PDB from one dimer frame (for ``make-box``).
 
     Residue order is AMM1 then CH3CL with standard CGenFF atom names so CHARMM
     ``READ SEQU PDB`` / Packmol solvation work. Requires
     ``MMML_CGENFF_EXTRA_RTF=examples/m/top_ch3cl.rtf`` for CH3CL.
+
+    ``center`` (default True) translates the mass-weighted COM to the origin so the
+    ``cons hmcm ... refx 0`` tether starts at ~0 energy (no t=0 yank).
     """
     z, r = load_dimer_frame(npz_path, index=index, seed=seed)
     if len(z) != 9:
@@ -149,6 +153,13 @@ def write_solute_pdb(
         raise ValueError(
             f"unexpected Z order for dimer frame: {z.tolist()} (want {expected.tolist()})"
         )
+
+    if center:
+        from ase.data import atomic_masses
+
+        masses = atomic_masses[z.astype(int)]
+        com = (masses[:, None] * r).sum(axis=0) / masses.sum()
+        r = r - com
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)

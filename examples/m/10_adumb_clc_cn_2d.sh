@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 # PyCHARMM 2D ADUMB on NH3–CH3Cl: Cl⋯C and C⋯N (RXNCOR).
+#
+# Starting geometry (env vars; choose one):
+#   default            build the dimer with Packmol (composition from the YAML)
+#   USE_NPZ_PDB=1      seed from an NPZ frame instead: 07_export_solute_pdb.py writes
+#                      a centered CGenFF AMM1+CH3CL PDB and md-system runs it via
+#                      --from-pdb --no-packmol (the NPZ has no residue/atom names, so
+#                      CHARMM cannot read it directly — the PDB carries them).
+#     TS_XI=<x>          with USE_NPZ_PDB=1: pick the N=9 frame nearest ξ=r(Cl-C)/r(C-N)
+#                        (e.g. TS_XI=1.0 for a transition-state-like start)
+#     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
+#
+# Examples:
+#   bash examples/m/10_adumb_clc_cn_2d.sh                            # Packmol dimer
+#   TS_XI=1.0 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh    # seed near TS
+#   FRAME=4101 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh   # exact frame
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -18,7 +33,16 @@ fi
 EXTRA=()
 if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   SOLUTE="${ARTIFACTS_DIR}/solute_amm1_ch3cl.pdb"
-  uv run python examples/m/07_export_solute_pdb.py -o "${SOLUTE}"
+  # Seed the starting geometry from an NPZ frame. TS_XI picks the frame nearest a
+  # target reaction coord xi=r(Cl-C)/r(C-N) (e.g. TS_XI=1.0 for a TS-like start);
+  # FRAME picks an absolute N=9 index. Default: seeded-random (--seed 0).
+  EXPORT_ARGS=()
+  if [[ -n "${TS_XI:-}" ]]; then
+    EXPORT_ARGS+=(--xi "${TS_XI}")
+  elif [[ -n "${FRAME:-}" ]]; then
+    EXPORT_ARGS+=(--frame "${FRAME}")
+  fi
+  uv run python examples/m/07_export_solute_pdb.py "${EXPORT_ARGS[@]}" -o "${SOLUTE}"
   EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}" --no-packmol)
 fi
 

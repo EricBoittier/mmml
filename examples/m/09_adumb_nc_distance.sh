@@ -1,5 +1,22 @@
 #!/usr/bin/env bash
-# PyCHARMM ADUMB on NH3–CH3Cl bond ratio ξ=r(Cl-C)/r(C-N) (NPZ / Packmol).
+# PyCHARMM ADUMB on NH3–CH3Cl bond ratio ξ=r(Cl-C)/r(C-N).
+#
+# Starting geometry (env vars; choose one):
+#   default            build the dimer with Packmol (composition from the YAML)
+#   USE_NPZ_PDB=1      seed from an NPZ frame instead: 07_export_solute_pdb.py writes
+#                      a centered CGenFF AMM1+CH3CL PDB and md-system runs it via
+#                      --from-pdb --no-packmol (the NPZ has no residue/atom names, so
+#                      CHARMM cannot read it directly — the PDB carries them).
+#     TS_XI=<x>          with USE_NPZ_PDB=1: pick the N=9 frame nearest ξ=r(Cl-C)/r(C-N)
+#                        (e.g. TS_XI=1.0 for a transition-state-like start)
+#     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
+#   SOLVATED=1         use the explicit-TIP3 (PBC) YAML instead of vacuum
+#
+# Examples:
+#   bash examples/m/09_adumb_nc_distance.sh                            # Packmol dimer
+#   TS_XI=1.0 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh    # seed near TS
+#   FRAME=4101 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh   # exact frame
+# Many seeds across ξ (independent full-range replicas): examples/m/11_adumb_windows.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null

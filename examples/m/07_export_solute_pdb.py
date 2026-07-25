@@ -33,6 +33,12 @@ def main() -> int:
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
+        "--no-center",
+        dest="center",
+        action="store_false",
+        help="Keep raw NPZ coords (default centers mass-weighted COM at origin).",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=Path,
@@ -53,6 +59,7 @@ def main() -> int:
         args.data,
         index=frame,
         seed=int(args.seed),
+        center=bool(args.center),
     )
     atom_lines = [
         ln for ln in out.read_text(encoding="utf-8").splitlines() if ln.startswith("ATOM")
