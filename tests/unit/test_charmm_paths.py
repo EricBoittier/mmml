@@ -207,6 +207,39 @@ def test_fortran_path_needs_alias_detects_uppercase():
     assert charmm_paths.fortran_path_needs_alias(lower, for_write=True)
 
 
+def test_charmm_io_staging_root_defaults_to_per_user_subdir(tmp_path, monkeypatch):
+    monkeypatch.delenv("MMML_CHARMM_IO_STAGING", raising=False)
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setenv("USER", "alice")
+
+    root = charmm_paths.charmm_io_staging_root()
+
+    assert root == tmp_path / "mmml-charmm-io-alice"
+
+
+def test_charmm_io_alias_uses_user_staging_when_legacy_root_not_writable(
+    tmp_path, monkeypatch
+):
+    shared = tmp_path / "tmp"
+    shared.mkdir()
+    legacy = shared / "mmml-charmm-io"
+    legacy.mkdir()
+    legacy.chmod(0o555)
+    monkeypatch.delenv("MMML_CHARMM_IO_STAGING", raising=False)
+    monkeypatch.setenv("TMPDIR", str(shared))
+    monkeypatch.setenv("USER", "boittier")
+
+    upper_dir = tmp_path / "boxes" / "dcm60_L32" / "pretreat"
+    upper_dir.mkdir(parents=True)
+    original = upper_dir / "mini_box_equil.res"
+    original.write_text("restart\n", encoding="ascii")
+
+    alias = charmm_paths.charmm_io_alias(original, for_write=False)
+    assert alias is not None
+    assert alias.alias.parent.parent == shared / "mmml-charmm-io-boittier"
+    assert alias.alias.is_symlink()
+
+
 def test_charmm_io_alias_read_symlink(tmp_path):
     upper_dir = tmp_path / "boxes" / "dcm60_L32" / "pretreat"
     upper_dir.mkdir(parents=True)

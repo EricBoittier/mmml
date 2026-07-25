@@ -199,7 +199,14 @@ def charmm_io_staging_root() -> Path:
     raw = (os.environ.get("MMML_CHARMM_IO_STAGING") or "").strip()
     if raw:
         return Path(os.path.expandvars(raw)).expanduser()
-    return Path(os.environ.get("TMPDIR", "/tmp")) / "mmml-charmm-io"
+    base = Path(os.environ.get("TMPDIR", "/tmp"))
+    # Per-user directory name: on shared compute nodes a legacy flat
+    # ``/tmp/mmml-charmm-io`` is often owned by another account (mode 755),
+    # which blocks mkdir for everyone else.
+    user = (os.environ.get("USER") or os.environ.get("LOGNAME") or "").strip()
+    if not user:
+        user = f"u{os.getuid()}"
+    return base / f"mmml-charmm-io-{user}"
 
 
 def _charmm_io_alias_scope() -> str:
