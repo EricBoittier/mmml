@@ -34,7 +34,7 @@ mm_pair_source: jax
 temperature: 300
 dt_fs: 1.0
 md_stages: "mini,heat"
-ps_heat: 0.2
+ps_heat: 200.0
 packmol_placement: sphere
 packmol_radius: 6.0
 reuse_packmol_cache: false
@@ -82,4 +82,4 @@ pycharmm_pre_dynamics_lingo: |
   umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 12.0 name rcn
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200 here)
-  umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
+  umbrella init nsim 40 update 500 equi 250 thresh 10 temp 300 wuni 44 ucun 50
