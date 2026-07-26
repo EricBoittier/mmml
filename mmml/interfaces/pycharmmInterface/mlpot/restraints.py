@@ -43,7 +43,7 @@ def _mmfp_rcm_distance_wall_card(
 ) -> str:
     """One-line MMFP card (must stay within library ``mxcmsz`` ≈ 80)."""
     card = (
-        f"MMFP GEO RCM DIST HARM OUTS FORC {float(force):g} "
+        f"MMFP GEO SPHE RCM DIST HARM FORC {float(force):g} "
         f"DROF {float(max_dist):g} SELE ATOM {int(atom_i)} END "
         f"SELE ATOM {int(atom_j)} END END"
     )
@@ -53,6 +53,8 @@ def _mmfp_rcm_distance_wall_card(
             f"{card[:60]}…"
         )
     return card
+
+
 _ENERGY_VERIFY_TOL_KCAL = 1.0e-4
 _DROFF_TUNE_MAX_ATTEMPTS = 8
 

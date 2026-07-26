@@ -1825,6 +1825,12 @@ def strip_mmfp_blocks_from_script(script: str) -> str:
     return "\n".join(kept).strip()
 
 
+def adumb_rc_mmfp_walls_enabled() -> bool:
+    """Whether to install Python MMFP walls before ``umbrella rxncor``."""
+    flag = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "1").strip().lower()
+    return flag not in ("0", "no", "false", "off")
+
+
 def split_charmm_lingo_commands(script: str) -> list[str]:
     """Split CHARMM lingo into executable command strings (join ``-`` continuations).
 
@@ -2005,6 +2011,7 @@ def run_charmm_lingo_script(
         for cmd in commands:
             if (
                 adumb_walls
+                and adumb_rc_mmfp_walls_enabled()
                 and not walls_installed
                 and re.match(r"(?i)^\s*umbrella\b", cmd)
             ):
@@ -2014,6 +2021,18 @@ def run_charmm_lingo_script(
 
                 rcmax, rcwall = adumb_walls
                 install_adumb_rxncor_distance_walls(rcmax=rcmax, rcwall=rcwall)
+                walls_installed = True
+            elif (
+                adumb_walls
+                and not adumb_rc_mmfp_walls_enabled()
+                and not walls_installed
+                and re.match(r"(?i)^\s*umbrella\b", cmd)
+            ):
+                print(
+                    "MMFP: skipping ADUMB RC distance walls "
+                    "(MMML_ADUMB_RC_MMFP_WALLS=0); umbrella max @adum_rcmax only",
+                    flush=True,
+                )
                 walls_installed = True
             for line in cmd.splitlines():
                 if len(line) > 78:

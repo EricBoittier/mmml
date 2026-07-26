@@ -79,7 +79,7 @@ def test_mmfp_rcm_distance_wall_card_fits_mxcmsz() -> None:
 
     card = _mmfp_rcm_distance_wall_card(8, 5, max_dist=8.0, force=500.0)
     assert len(card) <= 80
-    assert card.startswith("MMFP GEO RCM DIST HARM OUTS")
+    assert card.startswith("MMFP GEO SPHE RCM DIST HARM FORC")
     assert card.endswith("SELE ATOM 5 END END")
 
 
