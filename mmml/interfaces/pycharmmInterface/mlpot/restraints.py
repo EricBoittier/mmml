@@ -11,9 +11,48 @@ _DROFF_MARGIN_A = 1.0e-3
 
 # NH3–CH3Cl ADUMB examples: half-harmonic outer walls on traced bond distances.
 _ADUMB_RC_WALL_PAIRS: tuple[tuple[str, str], ...] = (
-    ("atom * * CL1", "atom * * C1"),
-    ("atom * * C1", "atom * * N1"),
+    ("CL1", "C1"),
+    ("C1", "N1"),
 )
+_MXCMSZ_SAFE = 80
+
+
+def _unique_atom_index_by_name(name: str) -> int:
+    """Return 1-based CHARMM atom index for a unique IUPAC ``atype`` label."""
+    from pycharmm import select_atoms as sel
+
+    target = str(name or "").strip()
+    if not target:
+        raise ValueError("atom name must be non-empty")
+    atoms = sel.SelectAtoms()
+    atoms.by_atom_type(target)
+    indexes = [int(i) for i in atoms.get_atom_indexes()]
+    if len(indexes) != 1:
+        raise ValueError(
+            f"expected exactly one atom named {target!r}, found {len(indexes)}"
+        )
+    return indexes[0]
+
+
+def _mmfp_rcm_distance_wall_card(
+    atom_i: int,
+    atom_j: int,
+    *,
+    max_dist: float,
+    force: float,
+) -> str:
+    """One-line MMFP card (must stay within library ``mxcmsz`` ≈ 80)."""
+    card = (
+        f"MMFP GEO RCM DIST HARM OUTS FORC {float(force):g} "
+        f"DROF {float(max_dist):g} SELE ATOM {int(atom_i)} END "
+        f"SELE ATOM {int(atom_j)} END END"
+    )
+    if len(card) > _MXCMSZ_SAFE:
+        raise ValueError(
+            f"MMFP distance-wall card length {len(card)} exceeds mxcmsz (~80): "
+            f"{card[:60]}…"
+        )
+    return card
 _ENERGY_VERIFY_TOL_KCAL = 1.0e-4
 _DROFF_TUNE_MAX_ATTEMPTS = 8
 
@@ -218,30 +257,31 @@ def setup_distance_wall_mmfp(
     *,
     max_dist: float,
     force: float,
+    atom_i: int | None = None,
+    atom_j: int | None = None,
 ) -> None:
-    """Half-harmonic MMFP wall when distance between two selections exceeds ``max_dist``.
+    """Half-harmonic MMFP wall when distance between two atoms exceeds ``max_dist``.
 
-    Must be **one** ``eval_charmm_script`` card: ``MMFP`` alone returns before ``GEO``
-    is read (``PPSTRM`` on EOF), which hangs or drops the wall.  See
-    ``setup/charmm/doc/mmfp.info`` example 6 (``GEO sphere RCM distance``).
+    Uses one ``eval_charmm_script`` card with numeric ``SELE ATOM <i>`` tokens so
+    the line stays within ``mxcmsz`` (~80).  Name-based ``select atom * * CL1 end``
+    cards exceed the limit and truncate (CHARMM extraneous-characters error).
     """
     if max_dist <= 0:
         raise ValueError(f"distance-wall droff must be > 0, got {max_dist}")
     if force <= 0:
         raise ValueError(f"distance-wall force must be > 0, got {force}")
-    s1 = (sel1 or "").strip()
-    s2 = (sel2 or "").strip()
-    if not s1 or not s2:
-        raise ValueError("distance-wall selections must be non-empty")
-    # Single-line card: MMFP + GEO + END in one library eval (no MMFP> prompt hang).
-    card = (
-        f"MMFP GEO sphere RCM distance harmonic outside "
-        f"force {float(force):g} droff {float(max_dist):g} "
-        f"select {s1} end select {s2} end END"
+    if atom_i is None or atom_j is None:
+        atom_i = _unique_atom_index_by_name(sel1)
+        atom_j = _unique_atom_index_by_name(sel2)
+    card = _mmfp_rcm_distance_wall_card(
+        atom_i,
+        atom_j,
+        max_dist=max_dist,
+        force=force,
     )
     print(
         f"MMFP: GEO sphere RCM distance wall droff={float(max_dist):g} Å "
-        f"({s1} ↔ {s2})…",
+        f"(atoms {int(atom_i)}–{int(atom_j)}; {sel1} ↔ {sel2})…",
         flush=True,
     )
     _run_mmfp_charmm_script(card)
@@ -263,8 +303,8 @@ def install_adumb_rxncor_distance_walls(
         f"(droff={float(rcmax):g} Å, force={float(rcwall):g})…",
         flush=True,
     )
-    for sel1, sel2 in wall_pairs:
-        setup_distance_wall_mmfp(sel1, sel2, max_dist=rcmax, force=rcwall)
+    for name1, name2 in wall_pairs:
+        setup_distance_wall_mmfp(name1, name2, max_dist=rcmax, force=rcwall)
     print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
 
 

@@ -72,6 +72,17 @@ def test_split_charmm_lingo_commands_joins_continuations() -> None:
     ]
 
 
+def test_mmfp_rcm_distance_wall_card_fits_mxcmsz() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        _mmfp_rcm_distance_wall_card,
+    )
+
+    card = _mmfp_rcm_distance_wall_card(8, 5, max_dist=8.0, force=500.0)
+    assert len(card) <= 80
+    assert card.startswith("MMFP GEO RCM DIST HARM OUTS")
+    assert card.endswith("SELE ATOM 5 END END")
+
+
 def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
     script = """
     set adum_rcmax = 8.0
