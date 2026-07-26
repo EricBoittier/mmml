@@ -21,6 +21,19 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 PathLike = str | Path
 
 
+def _reinstall_adumb_rxncor_walls_from_ctx(ctx: MlpotContext | None) -> None:
+    if ctx is None:
+        return
+    wf = getattr(ctx, "workflow_args", None)
+    if wf is None:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        reinstall_adumb_rxncor_walls_from_workflow_args,
+    )
+
+    reinstall_adumb_rxncor_walls_from_workflow_args(wf)
+
+
 def write_overlap_recovery_trace(
     ctx: MlpotContext,
     *,
@@ -555,6 +568,7 @@ def _run_mlpot_recovery_mini(
         print(f"{context}: MLpot SD mini ({steps} steps{abnr_txt})", flush=True)
     if clear_restraints:
         clear_adumb_rxncor_restraints()
+        _reinstall_adumb_rxncor_walls_from_ctx(ctx)
     minimize_with_mlpot(
         MinimizeWithMlpotConfig(
             nstep=steps,
@@ -678,6 +692,7 @@ def _run_all_ml_extent_recovery(
             flush=True,
         )
     clear_adumb_rxncor_restraints()
+    _reinstall_adumb_rxncor_walls_from_ctx(ctx)
     # Preflight runs once inside hybrid recovery (avoid duplicate 900-row dumps).
     _run_hybrid_bonded_mlpot_recovery(
         ctx,
@@ -1492,9 +1507,13 @@ def _run_heavy_bonded_recovery_check(
         )
     _reload_pre_mlpot_topology(ctx, topology_psf=path)
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_adumb_rxncor_restraints
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+            clear_adumb_rxncor_restraints,
+            reinstall_adumb_rxncor_walls_from_workflow_args,
+        )
 
         clear_adumb_rxncor_restraints()
+        reinstall_adumb_rxncor_walls_from_workflow_args(args)
         current = _measure_current_mm_strain()
         always = bonded_mm_mini_always(args)
         if always:
