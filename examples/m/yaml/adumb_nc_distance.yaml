@@ -95,8 +95,8 @@ pycharmm_pre_dynamics_lingo: |
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
   ! Traced distance upper bound (Å); MMFP walls match so UM1RXN cannot abort.
-  set adum_rcmax = 8.0
-  set adum_rcwall = 500.0
+  set adumrcmax = 8.0
+  set adumrcwall = 500.0
 
   ! Filenames uppercased: library eval_charmm_script uppercases the whole card.
   open unit 44 write card name ADUMB-WUNI.DAT
@@ -116,8 +116,7 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rrat
   rxncor trace rrat unit 45
 
-  ! Soft outer walls on Cl-C and C-N: installed from Python before umbrella
-  ! (see ``set adum_rcmax`` / ``set adum_rcwall`` above).
+  ! Optional MMFP walls via ``MMML_ADUMB_RC_MMFP_WALLS=1`` (see adumrcmax above).
 
   ! Adaptive umbrella on ξ ∈ [0.125, 5.0] (dimensionless).
   ! min>0 needs UM1RXN [min,max] patch for the exact upper edge (see header).

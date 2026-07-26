@@ -1787,25 +1787,60 @@ def resolve_pre_dynamics_lingo_script(args: argparse.Namespace) -> str:
     return inline or file_text
 
 
-_ADUM_RCMAX_RE = re.compile(r"(?im)^\s*set\s+adum_rcmax\s*=\s*([^\s!]+)")
-_ADUM_RCWALL_RE = re.compile(r"(?im)^\s*set\s+adum_rcwall\s*=\s*([^\s!]+)")
+_ADUM_RCMAX_SET_RE = re.compile(
+    r"(?im)^\s*set\s+(?:adumrcmax|adum_rcmax)\s*=\s*([^\s!]+)"
+)
+_ADUM_RCWALL_SET_RE = re.compile(
+    r"(?im)^\s*set\s+(?:adumrcwall|adum_rcwall)\s*=\s*([^\s!]+)"
+)
+_ADUM_RCMAX_TOKEN_RE = re.compile(r"@adum_?rc_?max\b", re.I)
+_ADUM_RCWALL_TOKEN_RE = re.compile(r"@adum_?rc_?wall\b", re.I)
+
+
+def parse_adumb_rc_params(script: str) -> tuple[float | None, float | None]:
+    """Return ``(rcmax, rcwall)`` from ``set adumrcmax`` / ``set adumrcwall`` lingo."""
+    text = str(script or "")
+    rcmax = rcwall = None
+    mmax = _ADUM_RCMAX_SET_RE.search(text)
+    mwall = _ADUM_RCWALL_SET_RE.search(text)
+    if mmax:
+        try:
+            rcmax = float(mmax.group(1))
+        except ValueError:
+            rcmax = None
+    if mwall:
+        try:
+            rcwall = float(mwall.group(1))
+        except ValueError:
+            rcwall = None
+    if rcmax is not None and rcmax <= 0:
+        rcmax = None
+    if rcwall is not None and rcwall <= 0:
+        rcwall = None
+    return rcmax, rcwall
 
 
 def parse_adumb_rc_wall_params(script: str) -> tuple[float, float] | None:
-    """Return ``(rcmax, rcwall)`` when lingo defines ADUMB RC MMFP wall parameters."""
-    text = str(script or "")
-    mmax = _ADUM_RCMAX_RE.search(text)
-    mwall = _ADUM_RCWALL_RE.search(text)
-    if not (mmax and mwall):
-        return None
-    try:
-        rcmax = float(mmax.group(1))
-        rcwall = float(mwall.group(1))
-    except ValueError:
-        return None
-    if rcmax <= 0 or rcwall <= 0:
+    """Return ``(rcmax, rcwall)`` when both ADUMB RC MMFP wall parameters are set."""
+    rcmax, rcwall = parse_adumb_rc_params(script)
+    if rcmax is None or rcwall is None:
         return None
     return rcmax, rcwall
+
+
+def substitute_adumb_rc_tokens(
+    command: str,
+    *,
+    rcmax: float | None,
+    rcwall: float | None,
+) -> str:
+    """Replace ``@adumrcmax`` tokens with numeric literals (CHARMM ``@`` names cannot contain ``_``)."""
+    cmd = str(command or "")
+    if rcmax is not None:
+        cmd = _ADUM_RCMAX_TOKEN_RE.sub(f"{float(rcmax):g}", cmd)
+    if rcwall is not None:
+        cmd = _ADUM_RCWALL_TOKEN_RE.sub(f"{float(rcwall):g}", cmd)
+    return cmd
 
 
 def strip_mmfp_blocks_from_script(script: str) -> str:
@@ -1826,9 +1861,9 @@ def strip_mmfp_blocks_from_script(script: str) -> str:
 
 
 def adumb_rc_mmfp_walls_enabled() -> bool:
-    """Whether to install Python MMFP walls before ``umbrella rxncor``."""
-    flag = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "1").strip().lower()
-    return flag not in ("0", "no", "false", "off")
+    """Whether to install Python MMFP walls before ``umbrella rxncor`` (opt-in only)."""
+    flag = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "0").strip().lower()
+    return flag in ("1", "yes", "true", "on")
 
 
 def split_charmm_lingo_commands(script: str) -> list[str]:
@@ -1982,6 +2017,7 @@ def run_charmm_lingo_script(
 
     require_adumbrxncor_for_umbrella_rxncor(text)
 
+    adumb_rcmax, adumb_rcwall = parse_adumb_rc_params(text)
     adumb_walls = parse_adumb_rc_wall_params(text)
     exec_text = strip_mmfp_blocks_from_script(text) if adumb_walls else text
 
@@ -2030,10 +2066,14 @@ def run_charmm_lingo_script(
             ):
                 print(
                     "MMFP: skipping ADUMB RC distance walls "
-                    "(MMML_ADUMB_RC_MMFP_WALLS=0); umbrella max @adum_rcmax only",
+                    "(MMML_ADUMB_RC_MMFP_WALLS not enabled; "
+                    "umbrella max uses numeric adumrcmax)",
                     flush=True,
                 )
                 walls_installed = True
+            cmd = substitute_adumb_rc_tokens(
+                cmd, rcmax=adumb_rcmax, rcwall=adumb_rcwall
+            )
             for line in cmd.splitlines():
                 if len(line) > 78:
                     print(

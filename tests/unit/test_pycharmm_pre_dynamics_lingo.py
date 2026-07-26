@@ -11,6 +11,7 @@ import pytest
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_pre_dynamics_lingo_from_args,
     normalize_pycharmm_pre_dynamics_lingo,
+    parse_adumb_rc_params,
     parse_adumb_rc_wall_params,
     require_adumbrxncor_for_umbrella_rxncor,
     resolve_pre_dynamics_lingo_script,
@@ -18,6 +19,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     script_uses_umbrella_rxncor,
     split_charmm_lingo_commands,
     strip_mmfp_blocks_from_script,
+    substitute_adumb_rc_tokens,
 )
 
 
@@ -85,17 +87,42 @@ def test_mmfp_rcm_distance_wall_card_fits_mxcmsz() -> None:
 
 def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
     script = """
-    set adum_rcmax = 8.0
-    set adum_rcwall = 500.0
+    set adumrcmax = 8.0
+    set adumrcwall = 500.0
     umbrella rxncor nresol 20 name rcl
     """
     assert parse_adumb_rc_wall_params(script) == (8.0, 500.0)
+    assert parse_adumb_rc_params(script) == (8.0, 500.0)
     assert parse_adumb_rc_wall_params("umbrella rxncor name rcl") is None
+
+
+def test_parse_adumb_rc_params_accepts_legacy_underscore_names() -> None:
+    script = """
+    set adum_rcmax = 8.0
+    set adum_rcwall = 500.0
+    """
+    assert parse_adumb_rc_params(script) == (8.0, 500.0)
+
+
+def test_substitute_adumb_rc_tokens_replaces_at_references() -> None:
+    cmd = "umbrella rxncor min 0.0 max @adum_rcmax name rcl"
+    assert (
+        substitute_adumb_rc_tokens(cmd, rcmax=8.0, rcwall=None)
+        == "umbrella rxncor min 0.0 max 8 name rcl"
+    )
+    assert (
+        substitute_adumb_rc_tokens(
+            "umbrella rxncor max @adumrcmax name rcn",
+            rcmax=8.0,
+            rcwall=None,
+        )
+        == "umbrella rxncor max 8 name rcn"
+    )
 
 
 def test_strip_mmfp_blocks_from_script() -> None:
     script = """
-    set adum_rcmax = 8.0
+    set adumrcmax = 8.0
     MMFP -
     GEO sphere distance harmonic outside force 500 droff 8 -
       select atom * * CL1 end -
@@ -106,21 +133,16 @@ def test_strip_mmfp_blocks_from_script() -> None:
     stripped = strip_mmfp_blocks_from_script(script)
     assert "MMFP" not in stripped
     assert "GEO sphere" not in stripped
-    assert "set adum_rcmax = 8.0" in stripped
+    assert "set adumrcmax = 8.0" in stripped
     assert stripped.strip().endswith("ucun 50")
 
 
-def test_run_charmm_lingo_installs_adumb_walls_before_umbrella(tmp_path: Path) -> None:
+def test_run_charmm_lingo_expands_adumb_tokens_before_umbrella(tmp_path: Path) -> None:
     script = """
-    set adum_rcmax = 8.0
-    set adum_rcwall = 500.0
+    set adumrcmax = 8.0
+    set adumrcwall = 500.0
     rxncor define rcl distance pcl pc
-    MMFP -
-    GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
-      select atom * * CL1 end -
-      select atom * * C1 end -
-    END
-    umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcl
+    umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adumrcmax name rcl
     umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
     """
     inp = tmp_path / "lingo.inp"
@@ -133,12 +155,14 @@ def test_run_charmm_lingo_installs_adumb_walls_before_umbrella(tmp_path: Path) -
         return_value=True,
     ) as script_fn:
         run_charmm_lingo_script(script, inp_path=inp, workdir=tmp_path)
-    install.assert_called_once_with(rcmax=8.0, rcwall=500.0)
+    install.assert_not_called()
     assert script_fn.call_count == 5
-    assert script_fn.call_args_list[0].args[0] == "set adum_rcmax = 8.0"
-    assert script_fn.call_args_list[1].args[0] == "set adum_rcwall = 500.0"
+    assert script_fn.call_args_list[0].args[0] == "set adumrcmax = 8.0"
+    assert script_fn.call_args_list[1].args[0] == "set adumrcwall = 500.0"
     assert script_fn.call_args_list[2].args[0] == "rxncor define rcl distance pcl pc"
-    assert script_fn.call_args_list[3].args[0].startswith("umbrella rxncor")
+    assert script_fn.call_args_list[3].args[0] == (
+        "umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 8 name rcl"
+    )
     assert script_fn.call_args_list[4].args[0].startswith("umbrella init")
 
 
