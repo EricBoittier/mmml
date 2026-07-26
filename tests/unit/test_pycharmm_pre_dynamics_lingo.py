@@ -11,11 +11,13 @@ import pytest
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_pre_dynamics_lingo_from_args,
     normalize_pycharmm_pre_dynamics_lingo,
+    parse_adumb_rc_wall_params,
     require_adumbrxncor_for_umbrella_rxncor,
     resolve_pre_dynamics_lingo_script,
     run_charmm_lingo_script,
     script_uses_umbrella_rxncor,
     split_charmm_lingo_commands,
+    strip_mmfp_blocks_from_script,
 )
 
 
@@ -70,30 +72,63 @@ def test_split_charmm_lingo_commands_joins_continuations() -> None:
     ]
 
 
-def test_split_charmm_lingo_commands_keeps_mmfp_block_as_one_command() -> None:
-    """MMFP blocks must stay multi-line (mxcmsz) and include GEO before END."""
+def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
     script = """
     set adum_rcmax = 8.0
     set adum_rcwall = 500.0
+    umbrella rxncor nresol 20 name rcl
+    """
+    assert parse_adumb_rc_wall_params(script) == (8.0, 500.0)
+    assert parse_adumb_rc_wall_params("umbrella rxncor name rcl") is None
+
+
+def test_strip_mmfp_blocks_from_script() -> None:
+    script = """
+    set adum_rcmax = 8.0
+    MMFP -
+    GEO sphere distance harmonic outside force 500 droff 8 -
+      select atom * * CL1 end -
+      select atom * * C1 end -
+    END
+    umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
+    """
+    stripped = strip_mmfp_blocks_from_script(script)
+    assert "MMFP" not in stripped
+    assert "GEO sphere" not in stripped
+    assert "set adum_rcmax = 8.0" in stripped
+    assert stripped.strip().endswith("ucun 50")
+
+
+def test_run_charmm_lingo_installs_adumb_walls_before_umbrella(tmp_path: Path) -> None:
+    script = """
+    set adum_rcmax = 8.0
+    set adum_rcwall = 500.0
+    rxncor define rcl distance pcl pc
     MMFP -
     GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
       select atom * * CL1 end -
       select atom * * C1 end -
-    GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
-      select atom * * C1 end -
-      select atom * * N1 end -
     END
+    umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcl
     umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
     """
-    cmds = split_charmm_lingo_commands(script)
-    assert cmds[0] == "set adum_rcmax = 8.0"
-    assert cmds[1] == "set adum_rcwall = 500.0"
-    mmfp = cmds[2]
-    assert mmfp.startswith("MMFP -\n")
-    assert mmfp.endswith("\nEND")
-    assert "GEO sphere distance harmonic outside" in mmfp
-    assert mmfp.count("\n") >= 5
-    assert cmds[3].startswith("umbrella init")
+    inp = tmp_path / "lingo.inp"
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+    ) as install, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        return_value=True,
+    ) as script_fn:
+        run_charmm_lingo_script(script, inp_path=inp, workdir=tmp_path)
+    install.assert_called_once_with(rcmax=8.0, rcwall=500.0)
+    assert script_fn.call_count == 5
+    assert script_fn.call_args_list[0].args[0] == "set adum_rcmax = 8.0"
+    assert script_fn.call_args_list[1].args[0] == "set adum_rcwall = 500.0"
+    assert script_fn.call_args_list[2].args[0] == "rxncor define rcl distance pcl pc"
+    assert script_fn.call_args_list[3].args[0].startswith("umbrella rxncor")
+    assert script_fn.call_args_list[4].args[0].startswith("umbrella init")
 
 
 def test_apply_pre_dynamics_lingo_no_op_when_empty() -> None:

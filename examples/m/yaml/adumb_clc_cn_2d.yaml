@@ -97,16 +97,9 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcl unit 45
   rxncor trace rcn unit 46
 
-  ! Soft outer walls (MMFP RESTR): must be ONE lingo command — every line below
-  ! ends with ``-`` until ``END`` so split_charmm_lingo does not send bare ``MMFP``.
-  MMFP -
-  GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
-    select atom * * CL1 end -
-    select atom * * C1 end -
-  GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
-    select atom * * C1 end -
-    select atom * * N1 end -
-  END
+  ! Soft outer walls on Cl-C and C-N (MMFP): installed from Python before
+  ! ``umbrella rxncor`` (PyCHARMM joins ``-`` continuations into one card).
+  ! Parameters: ``set adum_rcmax`` / ``set adum_rcwall`` above.
 
   ! Adaptive umbrella on Cl-C and C-N distances (Å).
   ! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when

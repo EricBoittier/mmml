@@ -71,14 +71,8 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rrat
   rxncor trace rrat unit 45
 
-  MMFP -
-  GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
-    select atom * * CL1 end -
-    select atom * * C1 end -
-  GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
-    select atom * * C1 end -
-    select atom * * N1 end -
-  END
+  ! Soft outer walls on Cl-C and C-N: installed from Python before umbrella
+  ! (see ``set adum_rcmax`` / ``set adum_rcwall`` above).
 
   ! Same window as vacuum 1D; min>0 needs UM1RXN patch (see adumb_nc_distance.yaml)
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat

@@ -8,6 +8,12 @@ import numpy as np
 
 _MMFP_GEO_ACTIVE = False
 _DROFF_MARGIN_A = 1.0e-3
+
+# NH3–CH3Cl ADUMB examples: half-harmonic outer walls on traced bond distances.
+_ADUMB_RC_WALL_PAIRS: tuple[tuple[str, str], ...] = (
+    ("atom * * CL1", "atom * * C1"),
+    ("atom * * C1", "atom * * N1"),
+)
 _ENERGY_VERIFY_TOL_KCAL = 1.0e-4
 _DROFF_TUNE_MAX_ATTEMPTS = 8
 
@@ -191,6 +197,59 @@ def _energy_delta_after_install(before: float | None) -> float | None:
 def _next_droff_increment(radius: float, attempt: int) -> float:
     base = max(0.05, 0.01 * float(radius))
     return base * (2 ** max(0, attempt - 1))
+
+
+def setup_distance_wall_mmfp(
+    sel1: str,
+    sel2: str,
+    *,
+    max_dist: float,
+    force: float,
+) -> None:
+    """Half-harmonic MMFP wall when distance between two selections exceeds ``max_dist``.
+
+    Uses the same ``MMFP`` / ``GEO`` / ``END`` line structure as
+    :func:`setup_flat_bottom_sphere_mmfp` so PyCHARMM ``_clean_charmm_script``
+    emits separate cards (bare ``MMFP`` alone would hang).
+    """
+    if max_dist <= 0:
+        raise ValueError(f"distance-wall droff must be > 0, got {max_dist}")
+    if force <= 0:
+        raise ValueError(f"distance-wall force must be > 0, got {force}")
+    s1 = (sel1 or "").strip()
+    s2 = (sel2 or "").strip()
+    if not s1 or not s2:
+        raise ValueError("distance-wall selections must be non-empty")
+    pycharmm = _import_pycharmm()
+    script = f"""
+MMFP
+GEO sphere distance harmonic outside -
+    force {float(force):g} droff {float(max_dist):g} -
+    select {s1} end -
+    select {s2} end
+END
+"""
+    pycharmm.lingo.charmm_script(script)
+    global _MMFP_GEO_ACTIVE
+    _MMFP_GEO_ACTIVE = True
+
+
+def install_adumb_rxncor_distance_walls(
+    *,
+    rcmax: float,
+    rcwall: float,
+    pairs: tuple[tuple[str, str], ...] | None = None,
+) -> None:
+    """Install soft outer walls on Cl–C and C–N before ADUMB ``umbrella rxncor``."""
+    wall_pairs = pairs if pairs is not None else _ADUMB_RC_WALL_PAIRS
+    print(
+        "MMFP: installing ADUMB RC distance walls "
+        f"(droff={float(rcmax):g} Å, force={float(rcwall):g})…",
+        flush=True,
+    )
+    for sel1, sel2 in wall_pairs:
+        setup_distance_wall_mmfp(sel1, sel2, max_dist=rcmax, force=rcwall)
+    print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
 
 
 def clear_mmfp_restraints() -> None:

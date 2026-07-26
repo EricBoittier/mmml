@@ -1787,6 +1787,44 @@ def resolve_pre_dynamics_lingo_script(args: argparse.Namespace) -> str:
     return inline or file_text
 
 
+_ADUM_RCMAX_RE = re.compile(r"(?im)^\s*set\s+adum_rcmax\s*=\s*([^\s!]+)")
+_ADUM_RCWALL_RE = re.compile(r"(?im)^\s*set\s+adum_rcwall\s*=\s*([^\s!]+)")
+
+
+def parse_adumb_rc_wall_params(script: str) -> tuple[float, float] | None:
+    """Return ``(rcmax, rcwall)`` when lingo defines ADUMB RC MMFP wall parameters."""
+    text = str(script or "")
+    mmax = _ADUM_RCMAX_RE.search(text)
+    mwall = _ADUM_RCWALL_RE.search(text)
+    if not (mmax and mwall):
+        return None
+    try:
+        rcmax = float(mmax.group(1))
+        rcwall = float(mwall.group(1))
+    except ValueError:
+        return None
+    if rcmax <= 0 or rcwall <= 0:
+        return None
+    return rcmax, rcwall
+
+
+def strip_mmfp_blocks_from_script(script: str) -> str:
+    """Drop ``MMFP`` … ``END`` blocks (installed from Python instead)."""
+    kept: list[str] = []
+    in_mmfp = False
+    for raw in str(script or "").splitlines():
+        line = raw.strip()
+        if not in_mmfp and line.upper().startswith("MMFP"):
+            in_mmfp = True
+            continue
+        if in_mmfp:
+            if line and line.upper().split()[0] == "END":
+                in_mmfp = False
+            continue
+        kept.append(raw)
+    return "\n".join(kept).strip()
+
+
 def split_charmm_lingo_commands(script: str) -> list[str]:
     """Split CHARMM lingo into executable command strings (join ``-`` continuations).
 
@@ -1938,6 +1976,9 @@ def run_charmm_lingo_script(
 
     require_adumbrxncor_for_umbrella_rxncor(text)
 
+    adumb_walls = parse_adumb_rc_wall_params(text)
+    exec_text = strip_mmfp_blocks_from_script(text) if adumb_walls else text
+
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         _bootstrap_workdir,
         mpi_charmm_script,
@@ -1954,12 +1995,26 @@ def run_charmm_lingo_script(
     cwd = Path(workdir) if workdir is not None else (
         path.parent if path is not None else Path.cwd()
     )
-    commands = split_charmm_lingo_commands(text)
+    commands = split_charmm_lingo_commands(exec_text)
     if not commands:
         return
 
+    walls_installed = False
+
     with _bootstrap_workdir(cwd):
         for cmd in commands:
+            if (
+                adumb_walls
+                and not walls_installed
+                and re.match(r"(?i)^\s*umbrella\b", cmd)
+            ):
+                from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                    install_adumb_rxncor_distance_walls,
+                )
+
+                rcmax, rcwall = adumb_walls
+                install_adumb_rxncor_distance_walls(rcmax=rcmax, rcwall=rcwall)
+                walls_installed = True
             for line in cmd.splitlines():
                 if len(line) > 78:
                     print(
