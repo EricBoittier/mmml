@@ -135,6 +135,14 @@ def test_charmm_output_indicates_failure_detects_resd_syntax() -> None:
     assert _resd_restraint_count_from_log(count_log) == 2
 
 
+def test_resd_restraint_count_skips_when_capture_empty() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        _resd_restraint_count_from_log,
+    )
+
+    assert _resd_restraint_count_from_log("") is None
+
+
 def test_split_charmm_lingo_keeps_noe_block_together() -> None:
     script = """
     noe
