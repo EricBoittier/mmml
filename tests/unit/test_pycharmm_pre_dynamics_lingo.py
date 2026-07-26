@@ -93,17 +93,46 @@ def test_noe_adumb_rc_distance_wall_script_upper_bound() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
         _noe_adumb_rc_distance_wall_assign,
         _noe_adumb_rc_distance_walls_script,
-        adumb_rc_walls_backend,
     )
 
     assign = _noe_adumb_rc_distance_wall_assign(5, 4, rmax=7.25, kmax=500.0)
     assert len(assign) <= 78
     assert "-" not in assign
     script = _noe_adumb_rc_distance_walls_script(((5, 4, 7.25, 500.0),))
-    assert adumb_rc_walls_backend() == "noe"
     assert script.startswith("noe\nreset\n")
     assert assign in script
     assert script.strip().endswith("end")
+
+
+def test_resd_adumb_rc_distance_wall_commands_positive_upper_bound() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        _resd_adumb_rc_distance_wall_commands,
+        adumb_rc_walls_backend,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints._resd_atom_token",
+        side_effect=lambda idx: f"RES {idx} A{idx}",
+    ):
+        cmds = _resd_adumb_rc_distance_wall_commands(((5, 4, 7.25, 500.0),))
+    assert cmds[0] == "RESDistance RESEt"
+    assert cmds[1].startswith("RESDistance KVAL 500 RVAL 7.25 POSITIVE")
+    assert "RES 5 A5 RES 4 A4" in cmds[1]
+    assert all(len(c) <= 78 for c in cmds)
+    assert adumb_rc_walls_backend() == "resd"
+
+
+def test_split_charmm_lingo_keeps_noe_block_together() -> None:
+    script = """
+    noe
+    reset
+    assi sele atom 5 end sele atom 4 end kmin 0 rmin 0 kmax 500 rmax 7.25
+    end
+    """
+    cmds = split_charmm_lingo_commands(script)
+    assert len(cmds) == 1
+    assert cmds[0].startswith("noe\nreset\n")
+    assert cmds[0].strip().endswith("end")
 
 
 def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:

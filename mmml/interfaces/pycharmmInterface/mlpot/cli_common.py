@@ -1904,6 +1904,19 @@ def split_charmm_lingo_commands(script: str) -> list[str]:
             commands.append("\n".join(block))
             continue
 
+        if line.upper().startswith("NOE"):
+            block = [line]
+            i += 1
+            while i < n:
+                block.append(stripped_lines[i])
+                head = stripped_lines[i].upper().split()[0]
+                if head == "END":
+                    i += 1
+                    break
+                i += 1
+            commands.append("\n".join(block))
+            continue
+
         pending: list[str] = [line]
         i += 1
         while pending[-1].endswith("-") and i < n:

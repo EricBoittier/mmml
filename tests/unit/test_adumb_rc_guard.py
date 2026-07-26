@@ -16,12 +16,12 @@ from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
 )
 
 
-def test_adumb_rc_walls_backend_defaults_to_noe(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_adumb_rc_walls_backend_defaults_to_resd(monkeypatch: pytest.MonkeyPatch) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import adumb_rc_walls_backend
 
     monkeypatch.delenv("MMML_ADUMB_RC_WALL_BACKEND", raising=False)
     monkeypatch.delenv("MMML_ADUMB_RC_MMFP_WALLS", raising=False)
-    assert adumb_rc_walls_backend() == "noe"
+    assert adumb_rc_walls_backend() == "resd"
 
 
 def test_adumb_rc_walls_backend_legacy_mmfp_env(monkeypatch: pytest.MonkeyPatch) -> None:

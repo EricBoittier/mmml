@@ -10,7 +10,15 @@ import numpy as np
 
 _MMFP_GEO_ACTIVE = False
 _NOE_RESTRAINTS_ACTIVE = False
+_RESD_RESTRAINTS_ACTIVE = False
 _DROFF_MARGIN_A = 1.0e-3
+_MXCMSZ = 78
+_CHARMM_FAILURE_MARKERS = (
+    "unrecognized command",
+    "not compiled",
+    "bomlev",
+    "terminating",
+)
 
 # NH3–CH3Cl ADUMB examples: half-harmonic outer walls on traced bond distances.
 _ADUMB_RC_WALL_PAIRS: tuple[tuple[str, str], ...] = (
@@ -77,7 +85,7 @@ def _mmfp_rcm_distance_wall_block(
 
 
 def adumb_rc_walls_backend() -> str:
-    """Return ``noe``, ``mmfp``, or ``off`` for traced-RC outer walls."""
+    """Return ``resd``, ``noe``, ``mmfp``, or ``off`` for traced-RC outer walls."""
     raw = (os.environ.get("MMML_ADUMB_RC_WALL_BACKEND") or "").strip().lower()
     if raw in ("0", "off", "none", "no"):
         return "off"
@@ -85,12 +93,14 @@ def adumb_rc_walls_backend() -> str:
         return "mmfp"
     if raw in ("noe",):
         return "noe"
+    if raw in ("resd", "resdistance"):
+        return "resd"
     legacy = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "").strip().lower()
     if legacy in ("1", "yes", "true", "on"):
         return "mmfp"
     if legacy in ("0", "no", "false", "off"):
         return "off"
-    return "noe"
+    return "resd"
 
 
 def adumb_rc_mmfp_walls_enabled() -> bool:
@@ -135,6 +145,50 @@ def _noe_adumb_rc_distance_walls_script(
         )
     lines.append("end")
     return "\n".join(lines) + "\n"
+
+
+def _resd_atom_token(atom_index: int) -> str:
+    """Return ``resname resid atomname`` for a 1-based PSF atom index."""
+    import pycharmm.psf as psf
+
+    i = int(atom_index) - 1
+    resname = str(psf.get_res()[i]).strip()
+    resid = str(psf.get_resid()[i]).strip()
+    atype = str(psf.get_atype()[i]).strip()
+    return f"{resname} {resid} {atype}"
+
+
+def _resd_adumb_rc_distance_wall_line(
+    atom_i: int,
+    atom_j: int,
+    *,
+    rmax: float,
+    kmax: float,
+) -> str:
+    """One-line ``RESDistance POSITIVE`` upper-bound wall (``mxcmsz`` safe)."""
+    card = (
+        f"RESDistance KVAL {float(kmax):g} RVAL {float(rmax):g} POSITIVE "
+        f"1.0 {_resd_atom_token(atom_i)} {_resd_atom_token(atom_j)}"
+    )
+    if len(card) > _MXCMSZ:
+        raise ValueError(
+            f"RESDistance card length {len(card)} exceeds mxcmsz (~80): {card[:60]}…"
+        )
+    return card
+
+
+def _resd_adumb_rc_distance_wall_commands(
+    walls: tuple[tuple[int, int, float, float], ...],
+) -> list[str]:
+    """Return single-line ``RESDistance`` commands for upper-bound walls."""
+    commands = ["RESDistance RESEt"]
+    for atom_i, atom_j, rmax, kmax in walls:
+        commands.append(
+            _resd_adumb_rc_distance_wall_line(
+                atom_i, atom_j, rmax=rmax, kmax=kmax
+            )
+        )
+    return commands
 
 
 @dataclass(frozen=True)
@@ -238,7 +292,7 @@ def prepare_adumb_rc_before_overlap_chunk(
         raise RuntimeError(
             f"{label}: ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
             f"is at or beyond umbrella max {rcmax:g} Å — UM1RXN would abort. "
-            "Increase adumrcmax or enable RC walls (default NOE)."
+            "Increase adumrcmax or enable RC walls (default RESD)."
         )
 
     from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
@@ -473,15 +527,71 @@ def _next_droff_increment(radius: float, attempt: int) -> float:
     return base * (2 ** max(0, attempt - 1))
 
 
-def _run_charmm_lingo_block(script: str) -> None:
+def _charmm_output_indicates_failure(log_text: str) -> str | None:
+    """Return a short reason when captured CHARMM output shows install failure."""
+    lower = str(log_text or "").lower()
+    if "unrecognized command" in lower:
+        return "CHARMM reported unrecognized command(s)"
+    if "not compiled" in lower:
+        return "required CHARMM module is not compiled"
+    if "bomlev" in lower and "terminat" in lower:
+        return "CHARMM aborted (BOMLEV)"
+    return None
+
+
+def _run_charmm_commands_verified(
+    commands: list[str],
+    *,
+    label: str,
+    verify: bool = True,
+) -> None:
+    """Run one CHARMM card per ``charmm_script`` call and fail on WRNLEV noise."""
+    from pathlib import Path
+
+    pycharmm = _import_pycharmm()
+    if not commands:
+        return
+    if verify:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import capture_fortran_stdio
+
+        with capture_fortran_stdio() as tmp_path:
+            for cmd in commands:
+                pycharmm.lingo.charmm_script(cmd)
+            log_text = Path(tmp_path).read_text(encoding="utf-8", errors="replace")
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+        reason = _charmm_output_indicates_failure(log_text)
+        if reason is not None:
+            snippet = next(
+                (
+                    line.strip()
+                    for line in log_text.splitlines()
+                    if any(m in line.lower() for m in _CHARMM_FAILURE_MARKERS)
+                ),
+                "",
+            )
+            detail = f" ({snippet})" if snippet else ""
+            raise RuntimeError(f"{label}: {reason}{detail}")
+        return
+    for cmd in commands:
+        pycharmm.lingo.charmm_script(cmd)
+
+
+def _run_charmm_lingo_block(script: str, *, label: str = "CHARMM") -> None:
     """Execute a multi-line CHARMM lingo block (NOE / MMFP).
 
     Uses ``pycharmm.lingo.charmm_script`` directly (same as flat-bottom MMFP).
     ``mpi_charmm_script`` uppercases the whole blob and can hang in ``NOESET`` /
     ``MMFP`` on MPI-linked builds when cards use ``-`` continuations.
     """
-    pycharmm = _import_pycharmm()
-    pycharmm.lingo.charmm_script(script)
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        split_charmm_lingo_commands,
+    )
+
+    commands = split_charmm_lingo_commands(script)
+    _run_charmm_commands_verified(commands, label=label)
 
 
 def _mmfp_adumb_rc_distance_walls_script(
@@ -558,10 +668,11 @@ def install_adumb_rxncor_distance_walls(
 ) -> None:
     """Install soft outer walls on traced RXNCOR distances before ``umbrella rxncor``.
 
-    Default backend is CHARMM **NOE** upper-bound restraints (``kmin 0 rmin 0
-    kmax … rmax …``).  MMFP ``GEO sphere RCM distance`` hangs on some MPI-linked
-    builds; opt in with ``MMML_ADUMB_RC_WALL_BACKEND=mmfp``.  ``rmax`` / ``droff``
-    is set below umbrella ``max`` so the wall activates before UM1RXN hard-aborts.
+    Default backend is CHARMM **RESDistance POSITIVE** half-harmonic walls (works
+    without the NOE module).  Legacy backends: ``noe`` (needs KEY_NOE), ``mmfp``
+    (``MMML_ADUMB_RC_WALL_BACKEND=mmfp``; can hang on MPI-linked builds).
+    ``rmax`` / ``droff`` is set below umbrella ``max`` so the wall activates
+    before UM1RXN hard-aborts.
     """
     wall_backend = (backend or adumb_rc_walls_backend()).strip().lower()
     if wall_backend == "off":
@@ -588,7 +699,8 @@ def install_adumb_rxncor_distance_walls(
                 flush=True,
             )
         _run_charmm_lingo_block(
-            _mmfp_adumb_rc_distance_walls_script(tuple(walls))
+            _mmfp_adumb_rc_distance_walls_script(tuple(walls)),
+            label="MMFP ADUMB RC walls",
         )
         if not quiet:
             print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
@@ -596,18 +708,39 @@ def install_adumb_rxncor_distance_walls(
         _MMFP_GEO_ACTIVE = True
         return
 
+    if wall_backend == "noe":
+        if not quiet:
+            print(
+                "NOE: installing ADUMB RC upper-bound walls "
+                f"(rmax={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
+                f"kmax={float(rcwall):g})…",
+                flush=True,
+            )
+        _run_charmm_lingo_block(
+            _noe_adumb_rc_distance_walls_script(tuple(walls)),
+            label="NOE ADUMB RC walls",
+        )
+        if not quiet:
+            print(f"NOE: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
+        global _NOE_RESTRAINTS_ACTIVE
+        _NOE_RESTRAINTS_ACTIVE = True
+        return
+
     if not quiet:
         print(
-            "NOE: installing ADUMB RC upper-bound walls "
+            "RESD: installing ADUMB RC upper-bound walls "
             f"(rmax={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
             f"kmax={float(rcwall):g})…",
             flush=True,
         )
-    _run_charmm_lingo_block(_noe_adumb_rc_distance_walls_script(tuple(walls)))
+    _run_charmm_commands_verified(
+        _resd_adumb_rc_distance_wall_commands(tuple(walls)),
+        label="RESD ADUMB RC walls",
+    )
     if not quiet:
-        print(f"NOE: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
-    global _NOE_RESTRAINTS_ACTIVE
-    _NOE_RESTRAINTS_ACTIVE = True
+        print(f"RESD: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
+    global _RESD_RESTRAINTS_ACTIVE
+    _RESD_RESTRAINTS_ACTIVE = True
 
 
 def clear_noe_restraints() -> None:
@@ -615,12 +748,26 @@ def clear_noe_restraints() -> None:
     global _NOE_RESTRAINTS_ACTIVE
     if not _NOE_RESTRAINTS_ACTIVE:
         return
-    _run_charmm_lingo_block("noe\nreset\nend\n")
+    _run_charmm_lingo_block("noe\nreset\nend\n", label="NOE clear")
     _NOE_RESTRAINTS_ACTIVE = False
 
 
+def clear_resd_restraints() -> None:
+    """Remove RESDistance restraints (safe to call if none were defined)."""
+    global _RESD_RESTRAINTS_ACTIVE
+    if not _RESD_RESTRAINTS_ACTIVE:
+        return
+    _run_charmm_commands_verified(
+        ["RESDistance RESEt"],
+        label="RESD clear",
+        verify=False,
+    )
+    _RESD_RESTRAINTS_ACTIVE = False
+
+
 def clear_adumb_rxncor_restraints() -> None:
-    """Remove ADUMB RC outer walls (NOE and/or MMFP)."""
+    """Remove ADUMB RC outer walls (RESD, NOE, and/or MMFP)."""
+    clear_resd_restraints()
     clear_noe_restraints()
     clear_mmfp_restraints()
 
