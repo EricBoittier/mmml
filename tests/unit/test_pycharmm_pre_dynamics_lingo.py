@@ -110,34 +110,12 @@ def test_resd_adumb_rc_distance_wall_commands_positive_upper_bound() -> None:
         _resd_adumb_rc_distance_wall_commands,
     )
 
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints._resd_atom_token",
-        side_effect=lambda idx: f"RES {idx} A{idx}",
-    ):
-        cmds = _resd_adumb_rc_distance_wall_commands(((5, 4, 7.25, 500.0),))
+    cmds = _resd_adumb_rc_distance_wall_commands(((5, 4, 7.25, 500.0),))
     assert cmds[0] == "RESDistance RESEt"
-    assert cmds[1].startswith("RESDistance KVAL 500 RVAL 7.25 POSITIVE")
-    assert "RES 5 A5 RES 4 A4" in cmds[1]
+    assert cmds[1] == (
+        "RESDistance KVAL 500 RVAL 7.25 POSITIVE 1.0 BYNU 6 5"
+    )
     assert all(len(c) <= 78 for c in cmds)
-
-
-def test_resd_atom_token_uses_per_atom_residue_fields() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import _resd_atom_token
-
-    with mock.patch(
-        "pycharmm.atom_info.get_seg_ids",
-        return_value=["M1"],
-    ), mock.patch(
-        "pycharmm.atom_info.get_res_ids",
-        return_value=["2"],
-    ), mock.patch(
-        "pycharmm.psf.get_atype",
-        return_value=["N1", "H11", "H12", "CL1"],
-    ), mock.patch(
-        "pycharmm.psf.get_natom",
-        return_value=4,
-    ):
-        assert _resd_atom_token(3) == "M1 2 CL1"
 
 
 def test_charmm_output_indicates_failure_detects_resd_syntax() -> None:

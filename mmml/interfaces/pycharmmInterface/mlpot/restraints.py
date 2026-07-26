@@ -153,21 +153,6 @@ def _noe_adumb_rc_distance_walls_script(
     return "\n".join(lines) + "\n"
 
 
-def _resd_atom_token(atom_index: int) -> str:
-    """Return ``segid resid atomname`` for a 0-based PSF atom index."""
-    import pycharmm.atom_info as atom_info
-    import pycharmm.psf as psf
-
-    i = int(atom_index)
-    natom = int(psf.get_natom())
-    if i < 0 or i >= natom:
-        raise ValueError(f"atom index {i} out of range for natom={natom}")
-    segid = atom_info.get_seg_ids([i])[0].strip()
-    resid = atom_info.get_res_ids([i])[0].strip()
-    atype = str(psf.get_atype()[i]).strip()
-    return f"{segid} {resid} {atype}"
-
-
 def _resd_adumb_rc_distance_wall_line(
     atom_i: int,
     atom_j: int,
@@ -175,10 +160,16 @@ def _resd_adumb_rc_distance_wall_line(
     rmax: float,
     kmax: float,
 ) -> str:
-    """One-line ``RESDistance POSITIVE`` upper-bound wall (``mxcmsz`` safe)."""
+    """One-line ``RESDistance POSITIVE`` upper-bound wall (``mxcmsz`` safe).
+
+    Uses ``BYNUMBER`` (``BYNu``) atom indices so tokens work regardless of segid
+    naming (Packmol ``CLST``, ``--from-pdb`` ``SYS``, or truncated RESN fields).
+    """
+    i_num = _charmm_lingo_atom_num(atom_i)
+    j_num = _charmm_lingo_atom_num(atom_j)
     card = (
         f"RESDistance KVAL {float(kmax):g} RVAL {float(rmax):g} POSITIVE "
-        f"1.0 {_resd_atom_token(atom_i)} {_resd_atom_token(atom_j)}"
+        f"1.0 BYNU {i_num} {j_num}"
     )
     if len(card) > _MXCMSZ:
         raise ValueError(
