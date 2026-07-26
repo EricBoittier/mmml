@@ -222,6 +222,7 @@ def test_run_charmm_lingo_installs_adumb_walls_when_enabled(tmp_path: Path) -> N
     set adumrcmax = 8.0
     set adumrcwall = 500.0
     umbrella rxncor nresol 20 min 0.0 max @adumrcmax name rcl
+    umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
     """
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
@@ -233,9 +234,11 @@ def test_run_charmm_lingo_installs_adumb_walls_when_enabled(tmp_path: Path) -> N
     ) as install, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         return_value=True,
-    ):
+    ) as script_fn:
         run_charmm_lingo_script(script, inp_path=tmp_path / "lingo.inp", workdir=tmp_path)
     install.assert_called_once_with(rcmax=8.0, rcwall=500.0)
+    assert script_fn.call_count == 4
+    assert script_fn.call_args_list[-1].args[0].startswith("umbrella init")
 
 
 def test_apply_pre_dynamics_lingo_sets_adumb_rc_guard(tmp_path: Path) -> None:

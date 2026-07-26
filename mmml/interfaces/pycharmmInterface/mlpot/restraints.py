@@ -539,11 +539,29 @@ def _charmm_output_indicates_failure(log_text: str) -> str | None:
     return None
 
 
+def _skip_adumb_rc_wall_verify() -> bool:
+    """Skip captured-output verify on MPI-linked CHARMM (RESD can trigger ENER)."""
+    flag = (os.environ.get("MMML_ADUMB_RC_WALL_VERIFY") or "").strip().lower()
+    if flag in ("0", "no", "false", "off"):
+        return True
+    if flag in ("1", "yes", "true", "on"):
+        return False
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            charmm_lib_links_mpi,
+        )
+
+        return bool(charmm_lib_links_mpi() and _under_mpirun())
+    except Exception:
+        return False
+
+
 def _run_charmm_commands_verified(
     commands: list[str],
     *,
     label: str,
-    verify: bool = True,
+    verify: bool | None = None,
 ) -> None:
     """Run one CHARMM card per ``charmm_script`` call and fail on WRNLEV noise."""
     from pathlib import Path
@@ -551,7 +569,8 @@ def _run_charmm_commands_verified(
     pycharmm = _import_pycharmm()
     if not commands:
         return
-    if verify:
+    do_verify = not _skip_adumb_rc_wall_verify() if verify is None else bool(verify)
+    if do_verify:
         from mmml.interfaces.pycharmmInterface.charmm_levels import capture_fortran_stdio
 
         with capture_fortran_stdio() as tmp_path:

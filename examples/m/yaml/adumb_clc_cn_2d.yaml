@@ -97,7 +97,7 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcn unit 46
 
   ! RC outer walls: Python installs RESDistance POSITIVE half-harmonic walls
-  ! by default (onset below ``adumrcmax`` via ``MMML_ADUMB_RC_WALL_MARGIN``).
+  ! after ``umbrella init`` (onset below ``adumrcmax`` via ``MMML_ADUMB_RC_WALL_MARGIN``).
   ! Legacy: ``MMML_ADUMB_RC_WALL_BACKEND=noe`` (needs KEY_NOE) or ``=mmfp``.
   ! Disable walls: ``MMML_ADUMB_RC_WALL_BACKEND=off``.
 

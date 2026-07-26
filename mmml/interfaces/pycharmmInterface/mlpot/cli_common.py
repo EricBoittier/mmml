@@ -2061,32 +2061,6 @@ def run_charmm_lingo_script(
 
     with _bootstrap_workdir(cwd):
         for cmd in commands:
-            if (
-                adumb_walls
-                and adumb_rc_walls_enabled()
-                and not walls_installed
-                and re.match(r"(?i)^\s*umbrella\b", cmd)
-            ):
-                from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
-                    install_adumb_rxncor_distance_walls,
-                )
-
-                rcmax, rcwall = adumb_walls
-                install_adumb_rxncor_distance_walls(rcmax=rcmax, rcwall=rcwall)
-                walls_installed = True
-            elif (
-                adumb_walls
-                and not adumb_rc_walls_enabled()
-                and not walls_installed
-                and re.match(r"(?i)^\s*umbrella\b", cmd)
-            ):
-                print(
-                    "ADUMB RC walls disabled "
-                    "(MMML_ADUMB_RC_WALL_BACKEND=off; umbrella max is the only "
-                    "hard limit — UM1RXN aborts if a traced RC exceeds it)",
-                    flush=True,
-                )
-                walls_installed = True
             cmd = substitute_adumb_rc_tokens(
                 cmd, rcmax=adumb_rcmax, rcwall=adumb_rcwall
             )
@@ -2104,6 +2078,26 @@ def run_charmm_lingo_script(
                     flush=True,
                 )
             mpi_charmm_script(cmd, barriers="none")
+            if (
+                adumb_walls
+                and not walls_installed
+                and re.match(r"(?i)^\s*umbrella\s+init\b", cmd)
+            ):
+                if adumb_rc_walls_enabled():
+                    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                        install_adumb_rxncor_distance_walls,
+                    )
+
+                    rcmax, rcwall = adumb_walls
+                    install_adumb_rxncor_distance_walls(rcmax=rcmax, rcwall=rcwall)
+                else:
+                    print(
+                        "ADUMB RC walls disabled "
+                        "(MMML_ADUMB_RC_WALL_BACKEND=off; umbrella max is the only "
+                        "hard limit — UM1RXN aborts if a traced RC exceeds it)",
+                        flush=True,
+                    )
+                walls_installed = True
 
 
 def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
