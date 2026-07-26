@@ -97,16 +97,15 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcl unit 45
   rxncor trace rcn unit 46
 
-  ! Soft outer walls on traced distances (MMFP RESTR): zero energy for r<=max,
-  ! half-harmonic repulsion outside (force @adum_rcwall). Keeps UM1RXN in range
-  ! without the hard abort when dynamics briefly overshoot the umbrella edge.
-  MMFP
-  GEO SPHE DIST HARM OUTS force @adum_rcwall droff @adum_rcmax -
+  ! Soft outer walls (MMFP RESTR): must be ONE lingo command — every line below
+  ! ends with ``-`` until ``END`` so split_charmm_lingo does not send bare ``MMFP``.
+  MMFP -
+  GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
     select atom * * CL1 end -
-    select atom * * C1 end
-  GEO SPHE DIST HARM OUTS force @adum_rcwall droff @adum_rcmax -
     select atom * * C1 end -
-    select atom * * N1 end
+  GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
+    select atom * * C1 end -
+    select atom * * N1 end -
   END
 
   ! Adaptive umbrella on Cl-C and C-N distances (Å).

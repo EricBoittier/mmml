@@ -70,6 +70,30 @@ def test_split_charmm_lingo_commands_joins_continuations() -> None:
     ]
 
 
+def test_split_charmm_lingo_commands_keeps_mmfp_block_as_one_command() -> None:
+    """Bare ``MMFP`` on its own line hangs CHARMM waiting for GEO (issue #ADUMB)."""
+    script = """
+    set adum_rcmax = 8.0
+    set adum_rcwall = 500.0
+    MMFP -
+    GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
+      select atom * * CL1 end -
+      select atom * * C1 end -
+    GEO sphere distance harmonic outside force @adum_rcwall droff @adum_rcmax -
+      select atom * * C1 end -
+      select atom * * N1 end -
+    END
+    umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
+    """
+    cmds = split_charmm_lingo_commands(script)
+    assert cmds[0] == "set adum_rcmax = 8.0"
+    assert cmds[1] == "set adum_rcwall = 500.0"
+    assert cmds[2].startswith("MMFP GEO sphere distance harmonic outside")
+    assert cmds[2].endswith("select atom * * N1 end END")
+    assert "MMFP" not in cmds[3]
+    assert cmds[3].startswith("umbrella init")
+
+
 def test_apply_pre_dynamics_lingo_no_op_when_empty() -> None:
     args = argparse.Namespace(
         pycharmm_pre_dynamics_lingo="",
