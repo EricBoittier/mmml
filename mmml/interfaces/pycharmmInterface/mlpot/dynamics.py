@@ -8263,9 +8263,8 @@ def run_dynamics_with_io(
                     chunk_kw["_numbered_restart_chunk_index"] = chunk_index
                     chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
                     chunk_kw["_numbered_restart_context"] = overlap_context
-                el                if (
-                    split_trajectory
-                    and final_restart is not None
+                elif (
+                    final_restart is not None
                     and mem_handoff
                     and _bussi_heat_ramp_active(chunk_kw)
                 ):
