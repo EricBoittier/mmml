@@ -6999,29 +6999,36 @@ def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | No
     return chunk
 
 
-def _maybe_check_adumb_rc_before_overlap_chunk(
+def _maybe_prepare_adumb_rc_before_overlap_chunk(
     *,
     mlpot_ctx: Any | None,
     overlap_context: str,
     chunk_index: int,
     n_chunks: int,
-) -> None:
-    """Pre-flight traced RXNCOR distances vs umbrella ``max`` (UM1RXN guard)."""
+    final_restart: Path | None,
+) -> bool:
+    """Reinstall RC walls and rewind if a traced RC exceeds umbrella ``max``.
+
+    Returns ``True`` when the overlap loop should retry the current chunk
+    from restored in-memory coordinates.
+    """
     if mlpot_ctx is None:
-        return
+        return False
     wf_args = getattr(mlpot_ctx, "workflow_args", None)
     guard = getattr(wf_args, "_adumb_rc_guard", None) if wf_args is not None else None
     if guard is None:
-        return
+        return False
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
-        check_adumb_rc_before_overlap_chunk,
+        prepare_adumb_rc_before_overlap_chunk,
     )
 
-    check_adumb_rc_before_overlap_chunk(
+    return prepare_adumb_rc_before_overlap_chunk(
         guard,
         overlap_context=overlap_context,
         chunk_index=chunk_index,
         n_chunks=n_chunks,
+        final_restart=final_restart,
+        quiet_walls=chunk_index > 0,
     )
 
 
@@ -8272,12 +8279,40 @@ def run_dynamics_with_io(
                     chunk_kw["_numbered_restart_chunk_index"] = chunk_index
                     chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
                     chunk_kw["_numbered_restart_context"] = overlap_context
-                _maybe_check_adumb_rc_before_overlap_chunk(
+                adumb_rc_retry = _maybe_prepare_adumb_rc_before_overlap_chunk(
                     mlpot_ctx=mlpot_ctx,
                     overlap_context=overlap_context,
                     chunk_index=chunk_index,
                     n_chunks=n_chunks,
+                    final_restart=final_restart,
                 )
+                if adumb_rc_retry:
+                    if chunk_retry_count >= _MAX_EARLY_ABORT_CHUNK_RETRIES:
+                        raise RuntimeError(
+                            f"overlap ({overlap_context}): ADUMB RC recovery "
+                            f"exhausted retries on chunk {chunk_index + 1}/{n_chunks}"
+                        )
+                    chunk_retry_count += 1
+                    early_abort_memory_handoff = True
+                    if mlpot_ctx is not None:
+                        _prepare_overlap_chunk_after_restart(
+                            mlpot_ctx, restart_read=None
+                        )
+                        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                            probe_and_light_resync_if_desync,
+                        )
+
+                        probe_and_light_resync_if_desync(
+                            mlpot_ctx,
+                            context=(
+                                f"{overlap_context} ADUMB RC recovery "
+                                f"chunk {chunk_index + 1}/{n_chunks}"
+                            ),
+                            silent_charmm=True,
+                            verbose=False,
+                        )
+                    rerun_chunk = True
+                    continue
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
                         mlpot_ctx,

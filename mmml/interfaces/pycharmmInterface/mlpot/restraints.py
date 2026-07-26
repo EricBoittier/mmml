@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -157,29 +158,117 @@ def check_adumb_rc_before_overlap_chunk(
     n_chunks: int,
     warn_fraction: float = 0.92,
 ) -> None:
-    """Fail fast when a traced RC is already at the umbrella hard limit."""
-    dists = measure_adumb_rc_distances(guard.pairs)
+    """Fail fast when a traced RC is already at the umbrella hard limit (no restart ladder)."""
+    if prepare_adumb_rc_before_overlap_chunk(
+        guard,
+        overlap_context=overlap_context,
+        chunk_index=chunk_index,
+        n_chunks=n_chunks,
+        final_restart=None,
+        warn_fraction=warn_fraction,
+    ):
+        raise RuntimeError("internal: prepare_adumb_rc returned retry without restart ladder")
+
+
+def prepare_adumb_rc_before_overlap_chunk(
+    guard: AdumbRcGuard,
+    *,
+    overlap_context: str,
+    chunk_index: int,
+    n_chunks: int,
+    final_restart: "Path | None",
+    warn_fraction: float = 0.92,
+    max_recovery_lookback: int = 5,
+    quiet_walls: bool = False,
+) -> bool:
+    """Reinstall RC walls, verify range, rewind from numbered restarts if needed.
+
+    Returns ``True`` when the caller should retry the current overlap chunk
+    (in-memory coords restored from an earlier ``heat.NNNN.res``).
+    """
+    from pathlib import Path
+
+    label = f"overlap ({overlap_context}) chunk {chunk_index + 1}/{n_chunks}"
     rcmax = float(guard.rcmax)
-    worst_name = max(dists, key=dists.get)
-    worst = float(dists[worst_name])
-    label = (
-        f"overlap ({overlap_context}) chunk {chunk_index + 1}/{n_chunks}"
-    )
-    if worst >= rcmax - 1.0e-4:
+
+    if adumb_rc_walls_enabled():
+        install_adumb_rxncor_distance_walls(
+            rcmax=guard.rcmax,
+            rcwall=guard.rcwall,
+            pairs=guard.pairs,
+            wall_margin=guard.wall_margin,
+            quiet=quiet_walls,
+        )
+
+    def _worst_distance() -> tuple[str, float]:
+        dists = measure_adumb_rc_distances(guard.pairs)
+        worst_name = max(dists, key=dists.get)
+        return worst_name, float(dists[worst_name])
+
+    worst_name, worst = _worst_distance()
+    if worst < rcmax - 1.0e-4:
+        warn_at = rcmax * float(warn_fraction)
+        if worst >= warn_at:
+            print(
+                f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å "
+                f"approaching umbrella max {rcmax:g} Å "
+                f"(wall rmax≈{guard.wall_droff():.2f} Å)",
+                flush=True,
+            )
+        return False
+
+    if final_restart is None:
         raise RuntimeError(
             f"{label}: ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
             f"is at or beyond umbrella max {rcmax:g} Å — UM1RXN would abort. "
-            "Enable RC walls (default NOE), increase adumrcmax, or restart from "
-            "an earlier checkpoint."
+            "Increase adumrcmax or enable RC walls (default NOE)."
         )
-    warn_at = rcmax * float(warn_fraction)
-    if worst >= warn_at:
+
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        overlap_chunk_restart_path,
+    )
+
+    stage_restart = Path(final_restart)
+    for back in range(1, max(1, int(max_recovery_lookback)) + 1):
+        idx = int(chunk_index) - back
+        if idx < 0:
+            break
+        candidate = overlap_chunk_restart_path(stage_restart, idx)
+        if not candidate.is_file():
+            continue
         print(
-            f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å "
-            f"approaching umbrella max {rcmax:g} Å "
-            f"(wall rmax≈{guard.wall_droff():.2f} Å)",
+            f"ADUMB RC recovery: {worst_name}={worst:.3f} Å ≥ {rcmax:g} Å; "
+            f"restoring {candidate.name} and retrying chunk…",
             flush=True,
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+            restore_charmm_state_from_restart,
+        )
+
+        restore_charmm_state_from_restart(candidate)
+        if adumb_rc_walls_enabled():
+            install_adumb_rxncor_distance_walls(
+                rcmax=guard.rcmax,
+                rcwall=guard.rcwall,
+                pairs=guard.pairs,
+                wall_margin=guard.wall_margin,
+                quiet=True,
+            )
+        worst_name, worst = _worst_distance()
+        if worst < rcmax - 1.0e-4:
+            print(
+                f"ADUMB RC recovery: restored {candidate.name}; "
+                f"{worst_name}={worst:.3f} Å (< {rcmax:g} Å)",
+                flush=True,
+            )
+            return True
+
+    raise RuntimeError(
+        f"{label}: ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
+        f"is at or beyond umbrella max {rcmax:g} Å after rewind "
+        f"(lookback={max_recovery_lookback} numbered restarts). "
+        "Increase adumrcmax / adumrcwall or restart from an earlier heat.NNNN.res."
+    )
 
 
 _ENERGY_VERIFY_TOL_KCAL = 1.0e-4
@@ -429,6 +518,20 @@ def setup_distance_wall_mmfp(
     _MMFP_GEO_ACTIVE = True
 
 
+def reinstall_adumb_rxncor_walls_from_workflow_args(args: Any) -> None:
+    """Reapply NOE/MMFP outer walls after overlap rescue cleared them."""
+    guard = getattr(args, "_adumb_rc_guard", None)
+    if guard is None or not adumb_rc_walls_enabled():
+        return
+    install_adumb_rxncor_distance_walls(
+        rcmax=guard.rcmax,
+        rcwall=guard.rcwall,
+        pairs=guard.pairs,
+        wall_margin=guard.wall_margin,
+        quiet=True,
+    )
+
+
 def install_adumb_rxncor_distance_walls(
     *,
     rcmax: float,
@@ -436,6 +539,7 @@ def install_adumb_rxncor_distance_walls(
     pairs: tuple[tuple[str, str], ...] | None = None,
     wall_margin: float | None = None,
     backend: str | None = None,
+    quiet: bool = False,
 ) -> None:
     """Install soft outer walls on traced RXNCOR distances before ``umbrella rxncor``.
 
@@ -461,28 +565,32 @@ def install_adumb_rxncor_distance_walls(
             )
         )
     if wall_backend == "mmfp":
-        print(
-            "MMFP: installing ADUMB RC distance walls "
-            f"(droff={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
-            f"force={float(rcwall):g})…",
-            flush=True,
-        )
+        if not quiet:
+            print(
+                "MMFP: installing ADUMB RC distance walls "
+                f"(droff={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
+                f"force={float(rcwall):g})…",
+                flush=True,
+            )
         _run_charmm_lingo_block(
             _mmfp_adumb_rc_distance_walls_script(tuple(walls))
         )
-        print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
+        if not quiet:
+            print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
         global _MMFP_GEO_ACTIVE
         _MMFP_GEO_ACTIVE = True
         return
 
-    print(
-        "NOE: installing ADUMB RC upper-bound walls "
-        f"(rmax={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
-        f"kmax={float(rcwall):g})…",
-        flush=True,
-    )
+    if not quiet:
+        print(
+            "NOE: installing ADUMB RC upper-bound walls "
+            f"(rmax={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
+            f"kmax={float(rcwall):g})…",
+            flush=True,
+        )
     _run_charmm_lingo_block(_noe_adumb_rc_distance_walls_script(tuple(walls)))
-    print(f"NOE: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
+    if not quiet:
+        print(f"NOE: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
     global _NOE_RESTRAINTS_ACTIVE
     _NOE_RESTRAINTS_ACTIVE = True
 
