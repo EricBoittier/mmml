@@ -33,7 +33,7 @@ mm_charge_mode: fixed
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
 temperature: 500
-dt_fs: 2.0
+dt_fs: 1.0
 md_stages: "mini,heat"
 ps_heat: 200.0
 packmol_placement: sphere
