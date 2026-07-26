@@ -221,9 +221,9 @@ def setup_distance_wall_mmfp(
 ) -> None:
     """Half-harmonic MMFP wall when distance between two selections exceeds ``max_dist``.
 
-    Uses ``GEO sphere RCM distance`` (see ``setup/charmm/doc/mmfp.info`` example 6)
-    with ``harmonic outside``.  PyCHARMM ``_clean_charmm_script`` must emit separate
-    ``MMFP`` / ``GEO`` / ``END`` cards.
+    Must be **one** ``eval_charmm_script`` card: ``MMFP`` alone returns before ``GEO``
+    is read (``PPSTRM`` on EOF), which hangs or drops the wall.  See
+    ``setup/charmm/doc/mmfp.info`` example 6 (``GEO sphere RCM distance``).
     """
     if max_dist <= 0:
         raise ValueError(f"distance-wall droff must be > 0, got {max_dist}")
@@ -233,20 +233,19 @@ def setup_distance_wall_mmfp(
     s2 = (sel2 or "").strip()
     if not s1 or not s2:
         raise ValueError("distance-wall selections must be non-empty")
-    script = f"""
-MMFP
-GEO sphere RCM distance -
-    harmonic outside force {float(force):g} droff {float(max_dist):g} -
-    select {s1} end -
-    select {s2} end
-END
-"""
+    # Single-line card: MMFP + GEO + END in one library eval (no MMFP> prompt hang).
+    card = (
+        f"MMFP GEO sphere RCM distance harmonic outside "
+        f"force {float(force):g} droff {float(max_dist):g} "
+        f"select {s1} end select {s2} end END"
+    )
     print(
         f"MMFP: GEO sphere RCM distance wall droff={float(max_dist):g} Å "
         f"({s1} ↔ {s2})…",
         flush=True,
     )
-    _run_mmfp_charmm_script(script)
+    _run_mmfp_charmm_script(card)
+    print("MMFP: distance wall install returned to Python", flush=True)
     global _MMFP_GEO_ACTIVE
     _MMFP_GEO_ACTIVE = True
 
