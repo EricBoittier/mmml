@@ -103,6 +103,25 @@ def adumb_rc_walls_enabled() -> bool:
     return adumb_rc_walls_backend() != "off"
 
 
+def _noe_adumb_rc_distance_wall_assign(
+    atom_i: int,
+    atom_j: int,
+    *,
+    rmax: float,
+    kmax: float,
+) -> str:
+    """One-line NOE ``assign`` (must fit ``mxcmsz``; no ``-`` continuations)."""
+    card = (
+        f"assi sele atom {int(atom_i)} end sele atom {int(atom_j)} end "
+        f"kmin 0 rmin 0 kmax {float(kmax):g} rmax {float(rmax):g}"
+    )
+    if len(card) > 78:
+        raise ValueError(
+            f"NOE assign card length {len(card)} exceeds mxcmsz (~80): {card[:60]}…"
+        )
+    return card
+
+
 def _noe_adumb_rc_distance_walls_script(
     walls: tuple[tuple[int, int, float, float], ...],
 ) -> str:
@@ -110,11 +129,9 @@ def _noe_adumb_rc_distance_walls_script(
     lines = ["noe", "reset"]
     for atom_i, atom_j, rmax, kmax in walls:
         lines.append(
-            f"assign sele atom {int(atom_i)} end sele atom {int(atom_j)} end -"
-        )
-        lines.append(
-            f"    kmin 0 rmin 0 kmax {float(kmax):g} rmax {float(rmax):g} "
-            f"fmax {float(kmax):g}"
+            _noe_adumb_rc_distance_wall_assign(
+                atom_i, atom_j, rmax=rmax, kmax=kmax
+            )
         )
     lines.append("end")
     return "\n".join(lines) + "\n"
@@ -457,14 +474,12 @@ def _next_droff_increment(radius: float, attempt: int) -> float:
 
 
 def _run_charmm_lingo_block(script: str) -> None:
-    """Execute a multi-line CHARMM lingo block (NOE / MMFP)."""
-    try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    """Execute a multi-line CHARMM lingo block (NOE / MMFP).
 
-        mpi_charmm_script(script, barriers="none")
-        return
-    except Exception:
-        pass
+    Uses ``pycharmm.lingo.charmm_script`` directly (same as flat-bottom MMFP).
+    ``mpi_charmm_script`` uppercases the whole blob and can hang in ``NOESET`` /
+    ``MMFP`` on MPI-linked builds when cards use ``-`` continuations.
+    """
     pycharmm = _import_pycharmm()
     pycharmm.lingo.charmm_script(script)
 
