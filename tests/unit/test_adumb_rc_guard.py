@@ -41,7 +41,7 @@ def test_measure_adumb_rc_distances_from_coords() -> None:
     z = np.zeros(3, dtype=np.float64)
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.restraints._unique_atom_index_by_name",
-        side_effect=[1, 2],
+        side_effect=[0, 1],
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.restraints._positions_xyz",
         return_value=(x, y, z),

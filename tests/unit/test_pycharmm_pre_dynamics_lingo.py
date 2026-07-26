@@ -84,8 +84,8 @@ def test_mmfp_rcm_distance_wall_script_uses_outside_harmonic() -> None:
     script = _mmfp_adumb_rc_distance_walls_script(((5, 4, droff, 500.0),))
     assert "GEO sphere RCM distance" in script
     assert "harmonic outside force 500 droff 7.25" in script
+    assert "sele atom 6 end" in script
     assert "sele atom 5 end" in script
-    assert "sele atom 4 end" in script
     assert script.strip().endswith("END")
 
 
@@ -98,6 +98,7 @@ def test_noe_adumb_rc_distance_wall_script_upper_bound() -> None:
     assign = _noe_adumb_rc_distance_wall_assign(5, 4, rmax=7.25, kmax=500.0)
     assert len(assign) <= 78
     assert "-" not in assign
+    assert "sele atom 6 end sele atom 5 end" in assign
     script = _noe_adumb_rc_distance_walls_script(((5, 4, 7.25, 500.0),))
     assert script.startswith("noe\nreset\n")
     assert assign in script
@@ -118,6 +119,25 @@ def test_resd_adumb_rc_distance_wall_commands_positive_upper_bound() -> None:
     assert cmds[1].startswith("RESDistance KVAL 500 RVAL 7.25 POSITIVE")
     assert "RES 5 A5 RES 4 A4" in cmds[1]
     assert all(len(c) <= 78 for c in cmds)
+
+
+def test_resd_atom_token_uses_per_atom_residue_fields() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import _resd_atom_token
+
+    with mock.patch(
+        "pycharmm.atom_info.get_res_names",
+        return_value=["MCL"],
+    ), mock.patch(
+        "pycharmm.atom_info.get_res_ids",
+        return_value=["2"],
+    ), mock.patch(
+        "pycharmm.psf.get_atype",
+        return_value=["N1", "H11", "H12", "CL1"],
+    ), mock.patch(
+        "pycharmm.psf.get_natom",
+        return_value=4,
+    ):
+        assert _resd_atom_token(3) == "MCL 2 CL1"
 
 
 def test_split_charmm_lingo_keeps_noe_block_together() -> None:

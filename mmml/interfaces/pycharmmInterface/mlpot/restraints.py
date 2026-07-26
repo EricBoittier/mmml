@@ -30,7 +30,7 @@ _DEFAULT_ADUMB_RC_WALL_MARGIN_A = 0.75
 
 
 def _unique_atom_index_by_name(name: str) -> int:
-    """Return 1-based CHARMM atom index for a unique IUPAC ``atype`` label."""
+    """Return 0-based PSF atom index for a unique IUPAC ``atype`` label."""
     from pycharmm import select_atoms as sel
 
     target = str(name or "").strip()
@@ -44,6 +44,11 @@ def _unique_atom_index_by_name(name: str) -> int:
             f"expected exactly one atom named {target!r}, found {len(indexes)}"
         )
     return indexes[0]
+
+
+def _charmm_lingo_atom_num(atom_index: int) -> int:
+    """Map 0-based PSF index to 1-based ``sele atom N end`` numbering."""
+    return int(atom_index) + 1
 
 
 def adumb_rc_wall_margin_A() -> float:
@@ -79,8 +84,8 @@ def _mmfp_rcm_distance_wall_block(
     return [
         "GEO sphere RCM distance -",
         f"    harmonic outside force {float(force):g} droff {float(droff):g} -",
-        f"    sele atom {int(atom_i)} end -",
-        f"    sele atom {int(atom_j)} end",
+        f"    sele atom {_charmm_lingo_atom_num(atom_i)} end -",
+        f"    sele atom {_charmm_lingo_atom_num(atom_j)} end",
     ]
 
 
@@ -122,7 +127,8 @@ def _noe_adumb_rc_distance_wall_assign(
 ) -> str:
     """One-line NOE ``assign`` (must fit ``mxcmsz``; no ``-`` continuations)."""
     card = (
-        f"assi sele atom {int(atom_i)} end sele atom {int(atom_j)} end "
+        f"assi sele atom {_charmm_lingo_atom_num(atom_i)} end "
+        f"sele atom {_charmm_lingo_atom_num(atom_j)} end "
         f"kmin 0 rmin 0 kmax {float(kmax):g} rmax {float(rmax):g}"
     )
     if len(card) > 78:
@@ -148,12 +154,16 @@ def _noe_adumb_rc_distance_walls_script(
 
 
 def _resd_atom_token(atom_index: int) -> str:
-    """Return ``resname resid atomname`` for a 1-based PSF atom index."""
+    """Return ``resname resid atomname`` for a 0-based PSF atom index."""
+    import pycharmm.atom_info as atom_info
     import pycharmm.psf as psf
 
-    i = int(atom_index) - 1
-    resname = str(psf.get_res()[i]).strip()
-    resid = str(psf.get_resid()[i]).strip()
+    i = int(atom_index)
+    natom = int(psf.get_natom())
+    if i < 0 or i >= natom:
+        raise ValueError(f"atom index {i} out of range for natom={natom}")
+    resname = atom_info.get_res_names([i])[0].strip()
+    resid = atom_info.get_res_ids([i])[0].strip()
     atype = str(psf.get_atype()[i]).strip()
     return f"{resname} {resid} {atype}"
 
@@ -213,9 +223,9 @@ def measure_adumb_rc_distances(
         i = _unique_atom_index_by_name(name1)
         j = _unique_atom_index_by_name(name2)
         x, y, z = _positions_xyz()
-        dx = float(x[i - 1] - x[j - 1])
-        dy = float(y[i - 1] - y[j - 1])
-        dz = float(z[i - 1] - z[j - 1])
+        dx = float(x[i] - x[j])
+        dy = float(y[i] - y[j])
+        dz = float(z[i] - z[j])
         key = f"{name1}-{name2}"
         out[key] = float(np.sqrt(dx * dx + dy * dy + dz * dz))
     return out
