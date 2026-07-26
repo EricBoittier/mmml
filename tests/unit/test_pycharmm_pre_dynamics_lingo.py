@@ -125,8 +125,8 @@ def test_resd_atom_token_uses_per_atom_residue_fields() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import _resd_atom_token
 
     with mock.patch(
-        "pycharmm.atom_info.get_res_names",
-        return_value=["MCL"],
+        "pycharmm.atom_info.get_seg_ids",
+        return_value=["M1"],
     ), mock.patch(
         "pycharmm.atom_info.get_res_ids",
         return_value=["2"],
@@ -137,7 +137,24 @@ def test_resd_atom_token_uses_per_atom_residue_fields() -> None:
         "pycharmm.psf.get_natom",
         return_value=4,
     ):
-        assert _resd_atom_token(3) == "MCL 2 CL1"
+        assert _resd_atom_token(3) == "M1 2 CL1"
+
+
+def test_charmm_output_indicates_failure_detects_resd_syntax() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        _charmm_output_indicates_failure,
+        _resd_restraint_count_from_log,
+    )
+
+    log = "ERROR IN NXTATM: Unrecognizable SEGID or residue number"
+    assert _charmm_output_indicates_failure(log) == (
+        "CHARMM could not parse restraint atom tokens"
+    )
+    count_log = """
+    RESDIST:  Current number of restraints=   0
+    RESDIST:  Current number of restraints=   2
+    """
+    assert _resd_restraint_count_from_log(count_log) == 2
 
 
 def test_split_charmm_lingo_keeps_noe_block_together() -> None:

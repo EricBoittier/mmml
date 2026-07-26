@@ -154,7 +154,7 @@ def _noe_adumb_rc_distance_walls_script(
 
 
 def _resd_atom_token(atom_index: int) -> str:
-    """Return ``resname resid atomname`` for a 0-based PSF atom index."""
+    """Return ``segid resid atomname`` for a 0-based PSF atom index."""
     import pycharmm.atom_info as atom_info
     import pycharmm.psf as psf
 
@@ -162,10 +162,10 @@ def _resd_atom_token(atom_index: int) -> str:
     natom = int(psf.get_natom())
     if i < 0 or i >= natom:
         raise ValueError(f"atom index {i} out of range for natom={natom}")
-    resname = atom_info.get_res_names([i])[0].strip()
+    segid = atom_info.get_seg_ids([i])[0].strip()
     resid = atom_info.get_res_ids([i])[0].strip()
     atype = str(psf.get_atype()[i]).strip()
-    return f"{resname} {resid} {atype}"
+    return f"{segid} {resid} {atype}"
 
 
 def _resd_adumb_rc_distance_wall_line(
@@ -544,9 +544,27 @@ def _charmm_output_indicates_failure(log_text: str) -> str | None:
         return "CHARMM reported unrecognized command(s)"
     if "not compiled" in lower:
         return "required CHARMM module is not compiled"
+    if "unrecognizable segid" in lower or "error in nxtatm" in lower:
+        return "CHARMM could not parse restraint atom tokens"
+    if "wrong number of atoms specified" in lower:
+        return "CHARMM RESDistance atom syntax rejected"
     if "bomlev" in lower and "terminat" in lower:
         return "CHARMM aborted (BOMLEV)"
     return None
+
+
+def _resd_restraint_count_from_log(log_text: str) -> int | None:
+    """Parse the last ``RESDIST: Current number of restraints=`` line."""
+    import re
+
+    matches = re.findall(
+        r"RESDIST:\s*Current number of restraints=\s*(\d+)",
+        str(log_text or ""),
+        flags=re.IGNORECASE,
+    )
+    if not matches:
+        return None
+    return int(matches[-1])
 
 
 def _skip_adumb_rc_wall_verify() -> bool:
@@ -572,6 +590,7 @@ def _run_charmm_commands_verified(
     *,
     label: str,
     verify: bool | None = None,
+    expect_resd_restraints: int | None = None,
 ) -> None:
     """Run one CHARMM card per ``charmm_script`` call and fail on WRNLEV noise."""
     from pathlib import Path
@@ -597,12 +616,23 @@ def _run_charmm_commands_verified(
                 (
                     line.strip()
                     for line in log_text.splitlines()
-                    if any(m in line.lower() for m in _CHARMM_FAILURE_MARKERS)
+                    if any(
+                        m in line.lower()
+                        for m in _CHARMM_FAILURE_MARKERS
+                        + ("nxtatm", "wrong number of atoms", "resdist")
+                    )
                 ),
                 "",
             )
             detail = f" ({snippet})" if snippet else ""
             raise RuntimeError(f"{label}: {reason}{detail}")
+        if expect_resd_restraints is not None:
+            count = _resd_restraint_count_from_log(log_text)
+            if count is None or count < int(expect_resd_restraints):
+                raise RuntimeError(
+                    f"{label}: expected {expect_resd_restraints} RESDistance restraint(s), "
+                    f"CHARMM reports {count if count is not None else 'unknown'}"
+                )
         return
     for cmd in commands:
         pycharmm.lingo.charmm_script(cmd)
@@ -765,6 +795,8 @@ def install_adumb_rxncor_distance_walls(
     _run_charmm_commands_verified(
         _resd_adumb_rc_distance_wall_commands(tuple(walls)),
         label="RESD ADUMB RC walls",
+        verify=True,
+        expect_resd_restraints=len(wall_pairs),
     )
     if not quiet:
         print(f"RESD: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
