@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import numpy as np
@@ -14,7 +15,8 @@ _ADUMB_RC_WALL_PAIRS: tuple[tuple[str, str], ...] = (
     ("CL1", "C1"),
     ("C1", "N1"),
 )
-_MXCMSZ_SAFE = 80
+# Activate MMFP walls below umbrella ``max`` so UM1RXN does not hard-abort first.
+_DEFAULT_ADUMB_RC_WALL_MARGIN_A = 0.75
 
 
 def _unique_atom_index_by_name(name: str) -> int:
@@ -34,25 +36,123 @@ def _unique_atom_index_by_name(name: str) -> int:
     return indexes[0]
 
 
-def _mmfp_rcm_distance_wall_card(
+def adumb_rc_wall_margin_A() -> float:
+    """Inside offset (Å) for MMFP ``droff`` below umbrella ``max``."""
+    raw = (os.environ.get("MMML_ADUMB_RC_WALL_MARGIN") or "").strip()
+    if raw:
+        try:
+            margin = float(raw)
+        except ValueError:
+            margin = _DEFAULT_ADUMB_RC_WALL_MARGIN_A
+    else:
+        margin = _DEFAULT_ADUMB_RC_WALL_MARGIN_A
+    return max(0.05, margin)
+
+
+def adumb_rc_wall_droff(rcmax: float, *, margin: float | None = None) -> float:
+    """MMFP outer-wall ``droff`` — strictly below UM1RXN ``umbmax``."""
+    m = adumb_rc_wall_margin_A() if margin is None else max(0.05, float(margin))
+    droff = float(rcmax) - m
+    if droff <= 0:
+        droff = 0.9 * float(rcmax)
+    return droff
+
+
+def _mmfp_rcm_distance_wall_block(
     atom_i: int,
     atom_j: int,
     *,
-    max_dist: float,
+    droff: float,
     force: float,
+) -> list[str]:
+    """Return MMFP ``GEO sphere RCM distance`` lines (CHARMM c47 syntax)."""
+    return [
+        "GEO sphere RCM distance -",
+        f"    harmonic outside force {float(force):g} droff {float(droff):g} -",
+        f"    sele atom {int(atom_i)} end -",
+        f"    sele atom {int(atom_j)} end",
+    ]
+
+
+def _mmfp_adumb_rc_distance_walls_script(
+    walls: tuple[tuple[int, int, float, float], ...],
 ) -> str:
-    """One-line MMFP card (must stay within library ``mxcmsz`` ≈ 80)."""
-    card = (
-        f"MMFP GEO SPHE RCM DIST HARM FORC {float(force):g} "
-        f"DROF {float(max_dist):g} SELE ATOM {int(atom_i)} END "
-        f"SELE ATOM {int(atom_j)} END END"
-    )
-    if len(card) > _MXCMSZ_SAFE:
-        raise ValueError(
-            f"MMFP distance-wall card length {len(card)} exceeds mxcmsz (~80): "
-            f"{card[:60]}…"
+    """Multi-line MMFP script installing all ADUMB RC outer walls."""
+    lines = ["MMFP"]
+    for atom_i, atom_j, droff, force in walls:
+        lines.extend(
+            _mmfp_rcm_distance_wall_block(
+                atom_i,
+                atom_j,
+                droff=droff,
+                force=force,
+            )
         )
-    return card
+    lines.append("END")
+    return "\n".join(lines) + "\n"
+
+
+@dataclass(frozen=True)
+class AdumbRcGuard:
+    """Track traced ADUMB distances vs umbrella ``max`` during overlap dynamics."""
+
+    rcmax: float
+    rcwall: float
+    pairs: tuple[tuple[str, str], ...] = _ADUMB_RC_WALL_PAIRS
+    wall_margin: float = _DEFAULT_ADUMB_RC_WALL_MARGIN_A
+
+    def wall_droff(self) -> float:
+        return adumb_rc_wall_droff(self.rcmax, margin=self.wall_margin)
+
+
+def measure_adumb_rc_distances(
+    pairs: tuple[tuple[str, str], ...] | None = None,
+) -> dict[str, float]:
+    """Return traced bond distances (Å) for ``(name1, name2)`` atom pairs."""
+    out: dict[str, float] = {}
+    for name1, name2 in pairs or _ADUMB_RC_WALL_PAIRS:
+        i = _unique_atom_index_by_name(name1)
+        j = _unique_atom_index_by_name(name2)
+        x, y, z = _positions_xyz()
+        dx = float(x[i - 1] - x[j - 1])
+        dy = float(y[i - 1] - y[j - 1])
+        dz = float(z[i - 1] - z[j - 1])
+        key = f"{name1}-{name2}"
+        out[key] = float(np.sqrt(dx * dx + dy * dy + dz * dz))
+    return out
+
+
+def check_adumb_rc_before_overlap_chunk(
+    guard: AdumbRcGuard,
+    *,
+    overlap_context: str,
+    chunk_index: int,
+    n_chunks: int,
+    warn_fraction: float = 0.92,
+) -> None:
+    """Fail fast when a traced RC is already at the umbrella hard limit."""
+    dists = measure_adumb_rc_distances(guard.pairs)
+    rcmax = float(guard.rcmax)
+    worst_name = max(dists, key=dists.get)
+    worst = float(dists[worst_name])
+    label = (
+        f"overlap ({overlap_context}) chunk {chunk_index + 1}/{n_chunks}"
+    )
+    if worst >= rcmax - 1.0e-4:
+        raise RuntimeError(
+            f"{label}: ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
+            f"is at or beyond umbrella max {rcmax:g} Å — UM1RXN would abort. "
+            "Enable MMFP walls (default), increase adumrcmax, or restart from "
+            "an earlier checkpoint."
+        )
+    warn_at = rcmax * float(warn_fraction)
+    if worst >= warn_at:
+        print(
+            f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å "
+            f"approaching umbrella max {rcmax:g} Å "
+            f"(MMFP wall droff≈{guard.wall_droff():.2f} Å)",
+            flush=True,
+        )
 
 
 _ENERGY_VERIFY_TOL_KCAL = 1.0e-4
@@ -262,12 +362,7 @@ def setup_distance_wall_mmfp(
     atom_i: int | None = None,
     atom_j: int | None = None,
 ) -> None:
-    """Half-harmonic MMFP wall when distance between two atoms exceeds ``max_dist``.
-
-    Uses one ``eval_charmm_script`` card with numeric ``SELE ATOM <i>`` tokens so
-    the line stays within ``mxcmsz`` (~80).  Name-based ``select atom * * CL1 end``
-    cards exceed the limit and truncate (CHARMM extraneous-characters error).
-    """
+    """Half-harmonic MMFP outer wall on an atom–atom distance (``droff`` = onset)."""
     if max_dist <= 0:
         raise ValueError(f"distance-wall droff must be > 0, got {max_dist}")
     if force <= 0:
@@ -275,18 +370,15 @@ def setup_distance_wall_mmfp(
     if atom_i is None or atom_j is None:
         atom_i = _unique_atom_index_by_name(sel1)
         atom_j = _unique_atom_index_by_name(sel2)
-    card = _mmfp_rcm_distance_wall_card(
-        atom_i,
-        atom_j,
-        max_dist=max_dist,
-        force=force,
+    script = _mmfp_adumb_rc_distance_walls_script(
+        ((int(atom_i), int(atom_j), float(max_dist), float(force)),),
     )
     print(
         f"MMFP: GEO sphere RCM distance wall droff={float(max_dist):g} Å "
         f"(atoms {int(atom_i)}–{int(atom_j)}; {sel1} ↔ {sel2})…",
         flush=True,
     )
-    _run_mmfp_charmm_script(card)
+    _run_mmfp_charmm_script(script)
     print("MMFP: distance wall install returned to Python", flush=True)
     global _MMFP_GEO_ACTIVE
     _MMFP_GEO_ACTIVE = True
@@ -297,17 +389,36 @@ def install_adumb_rxncor_distance_walls(
     rcmax: float,
     rcwall: float,
     pairs: tuple[tuple[str, str], ...] | None = None,
+    wall_margin: float | None = None,
 ) -> None:
-    """Install soft outer walls on Cl–C and C–N before ADUMB ``umbrella rxncor``."""
+    """Install soft outer walls on traced RXNCOR distances before ``umbrella rxncor``.
+
+    Uses multi-line ``MMFP GEO sphere RCM distance harmonic outside`` cards
+    (see ``setup/charmm/test/c47test/omm_mmfp_rcm_distance.inp``).  ``droff`` is
+    set below umbrella ``max`` so the wall activates before UM1RXN hard-aborts.
+    """
     wall_pairs = pairs if pairs is not None else _ADUMB_RC_WALL_PAIRS
+    droff = adumb_rc_wall_droff(rcmax, margin=wall_margin)
+    walls: list[tuple[int, int, float, float]] = []
+    for name1, name2 in wall_pairs:
+        walls.append(
+            (
+                _unique_atom_index_by_name(name1),
+                _unique_atom_index_by_name(name2),
+                droff,
+                float(rcwall),
+            )
+        )
     print(
         "MMFP: installing ADUMB RC distance walls "
-        f"(droff={float(rcmax):g} Å, force={float(rcwall):g})…",
+        f"(droff={droff:g} Å, umbrella max={float(rcmax):g} Å, "
+        f"force={float(rcwall):g})…",
         flush=True,
     )
-    for name1, name2 in wall_pairs:
-        setup_distance_wall_mmfp(name1, name2, max_dist=rcmax, force=rcwall)
+    _run_mmfp_charmm_script(_mmfp_adumb_rc_distance_walls_script(tuple(walls)))
     print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
+    global _MMFP_GEO_ACTIVE
+    _MMFP_GEO_ACTIVE = True
 
 
 def clear_mmfp_restraints() -> None:

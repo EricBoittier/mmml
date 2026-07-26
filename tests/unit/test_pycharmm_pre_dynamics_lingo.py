@@ -74,15 +74,19 @@ def test_split_charmm_lingo_commands_joins_continuations() -> None:
     ]
 
 
-def test_mmfp_rcm_distance_wall_card_fits_mxcmsz() -> None:
+def test_mmfp_rcm_distance_wall_script_uses_outside_harmonic() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
-        _mmfp_rcm_distance_wall_card,
+        _mmfp_adumb_rc_distance_walls_script,
+        adumb_rc_wall_droff,
     )
 
-    card = _mmfp_rcm_distance_wall_card(8, 5, max_dist=8.0, force=500.0)
-    assert len(card) <= 80
-    assert card.startswith("MMFP GEO SPHE RCM DIST HARM FORC")
-    assert card.endswith("SELE ATOM 5 END END")
+    droff = adumb_rc_wall_droff(8.0, margin=0.75)
+    script = _mmfp_adumb_rc_distance_walls_script(((5, 4, droff, 500.0),))
+    assert "GEO sphere RCM distance" in script
+    assert "harmonic outside force 500 droff 7.25" in script
+    assert "sele atom 5 end" in script
+    assert "sele atom 4 end" in script
+    assert script.strip().endswith("END")
 
 
 def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
@@ -149,6 +153,9 @@ def test_run_charmm_lingo_expands_adumb_tokens_before_umbrella(tmp_path: Path) -
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_mmfp_walls_enabled",
+        return_value=False,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ) as install, mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
@@ -164,6 +171,50 @@ def test_run_charmm_lingo_expands_adumb_tokens_before_umbrella(tmp_path: Path) -
         "umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 8 name rcl"
     )
     assert script_fn.call_args_list[4].args[0].startswith("umbrella init")
+
+
+def test_run_charmm_lingo_installs_adumb_walls_when_enabled(tmp_path: Path) -> None:
+    script = """
+    set adumrcmax = 8.0
+    set adumrcwall = 500.0
+    umbrella rxncor nresol 20 min 0.0 max @adumrcmax name rcl
+    """
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_mmfp_walls_enabled",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+    ) as install, mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        return_value=True,
+    ):
+        run_charmm_lingo_script(script, inp_path=tmp_path / "lingo.inp", workdir=tmp_path)
+    install.assert_called_once_with(rcmax=8.0, rcwall=500.0)
+
+
+def test_apply_pre_dynamics_lingo_sets_adumb_rc_guard(tmp_path: Path) -> None:
+    args = argparse.Namespace(
+        pycharmm_pre_dynamics_lingo="""
+        set adumrcmax = 8.0
+        set adumrcwall = 500.0
+        umbrella rxncor nresol 20 min 0.0 max @adumrcmax name rcl
+        umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
+        """,
+        pycharmm_pre_dynamics_lingo_file=None,
+        quiet=True,
+        output_dir=tmp_path,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script",
+    ):
+        apply_pre_dynamics_lingo_from_args(args)
+    guard = getattr(args, "_adumb_rc_guard", None)
+    assert guard is not None
+    assert guard.rcmax == 8.0
+    assert guard.rcwall == 500.0
+    assert guard.wall_droff() == pytest.approx(7.25)
 
 
 def test_apply_pre_dynamics_lingo_no_op_when_empty() -> None:

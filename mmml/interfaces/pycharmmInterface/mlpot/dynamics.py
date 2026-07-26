@@ -6999,6 +6999,32 @@ def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | No
     return chunk
 
 
+def _maybe_check_adumb_rc_before_overlap_chunk(
+    *,
+    mlpot_ctx: Any | None,
+    overlap_context: str,
+    chunk_index: int,
+    n_chunks: int,
+) -> None:
+    """Pre-flight traced RXNCOR distances vs umbrella ``max`` (UM1RXN guard)."""
+    if mlpot_ctx is None:
+        return
+    wf_args = getattr(mlpot_ctx, "workflow_args", None)
+    guard = getattr(wf_args, "_adumb_rc_guard", None) if wf_args is not None else None
+    if guard is None:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        check_adumb_rc_before_overlap_chunk,
+    )
+
+    check_adumb_rc_before_overlap_chunk(
+        guard,
+        overlap_context=overlap_context,
+        chunk_index=chunk_index,
+        n_chunks=n_chunks,
+    )
+
+
 def _dynamics_chunk_state_corrupt(
     *,
     overlap_context: str,
@@ -8237,8 +8263,9 @@ def run_dynamics_with_io(
                     chunk_kw["_numbered_restart_chunk_index"] = chunk_index
                     chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
                     chunk_kw["_numbered_restart_context"] = overlap_context
-                elif (
-                    final_restart is not None
+                el                if (
+                    split_trajectory
+                    and final_restart is not None
                     and mem_handoff
                     and _bussi_heat_ramp_active(chunk_kw)
                 ):
@@ -8246,6 +8273,12 @@ def run_dynamics_with_io(
                     chunk_kw["_numbered_restart_chunk_index"] = chunk_index
                     chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
                     chunk_kw["_numbered_restart_context"] = overlap_context
+                _maybe_check_adumb_rc_before_overlap_chunk(
+                    mlpot_ctx=mlpot_ctx,
+                    overlap_context=overlap_context,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                )
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
                         mlpot_ctx,

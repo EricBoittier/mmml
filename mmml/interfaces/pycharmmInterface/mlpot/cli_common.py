@@ -1861,8 +1861,8 @@ def strip_mmfp_blocks_from_script(script: str) -> str:
 
 
 def adumb_rc_mmfp_walls_enabled() -> bool:
-    """Whether to install Python MMFP walls before ``umbrella rxncor`` (opt-in only)."""
-    flag = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "0").strip().lower()
+    """Whether to install Python MMFP walls before ``umbrella rxncor``."""
+    flag = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "1").strip().lower()
     return flag in ("1", "yes", "true", "on")
 
 
@@ -2066,8 +2066,8 @@ def run_charmm_lingo_script(
             ):
                 print(
                     "MMFP: skipping ADUMB RC distance walls "
-                    "(MMML_ADUMB_RC_MMFP_WALLS not enabled; "
-                    "umbrella max uses numeric adumrcmax)",
+                    "(MMML_ADUMB_RC_MMFP_WALLS=0; umbrella max is the only "
+                    "hard limit — UM1RXN aborts if a traced RC exceeds it)",
                     flush=True,
                 )
                 walls_installed = True
@@ -2120,6 +2120,24 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
         workdir / "pycharmm_pre_dynamics_lingo.inp"
     )
     run_charmm_lingo_script(script, inp_path=inp_path, workdir=workdir)
+
+    if script_uses_umbrella_rxncor(script):
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+            AdumbRcGuard,
+            adumb_rc_wall_margin_A,
+        )
+
+        rcmax, rcwall = parse_adumb_rc_params(script)
+        if rcmax is not None:
+            setattr(
+                args,
+                "_adumb_rc_guard",
+                AdumbRcGuard(
+                    rcmax=float(rcmax),
+                    rcwall=float(rcwall if rcwall is not None else 500.0),
+                    wall_margin=adumb_rc_wall_margin_A(),
+                ),
+            )
 
 
 def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:
