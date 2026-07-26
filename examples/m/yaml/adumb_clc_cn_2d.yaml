@@ -74,6 +74,10 @@ pycharmm_pre_dynamics_lingo: |
   ! reaction. Acts on the aggregate COM, so it does NOT bias the internal RCs.
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
+  ! Umbrella grid edge (Å); MMFP walls below use the same upper bound so
+  ! dynamics cannot exceed UM1RXN [min,max] and abort mid-heat.
+  set adum_rcmax = 14.0
+
   open unit 44 write card name ADUMB-WUNI.DAT
   open unit 50 write card name UMBCOR
   open unit 45 write card name RXNCOR_RCL.DAT
@@ -92,14 +96,26 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcl unit 45
   rxncor trace rcn unit 46
 
+  ! Hard outer walls on traced distances (MMFP RESTR): zero energy for r<=max,
+  ! harmonic repulsion outside. Prevents UM1RXN "reaction coordinate out of range"
+  ! when rescue/repack or 500 K dynamics overshoot the umbrella grid edge.
+  MMFP
+  GEO SPHE DIST HARM OUTS force 2000.0 droff @adum_rcmax -
+    select atom * * CL1 end -
+    select atom * * C1 end
+  GEO SPHE DIST HARM OUTS force 2000.0 droff @adum_rcmax -
+    select atom * * C1 end -
+    select atom * * N1 end
+  END
+
   ! Adaptive umbrella on Cl-C and C-N distances (Å).
   ! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when
   ! min>0 (min 1 max 6 → abort once value > 5 Å). Patched eadumb.F90 uses
   ! [min, max]; min 0.0 works on both.
   ! max must cover dissociated vacuum geometries: bundled NPZ dimers reach
   ! r(Cl-C)≈13 Å and r(C-N)≈12 Å; max 8 aborts UM1RXN mid-heat (~156 ps).
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 14.0 name rcl
-  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 14.0 name rcn
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcl
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcn
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200_000 here): 400*500.
   ! equi 250 of update 500 discards 50% per window (absorbs the boundary redraw);

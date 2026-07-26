@@ -94,6 +94,9 @@ pycharmm_pre_dynamics_lingo: |
   ! internal RC ξ=r(Cl-C)/r(C-N) — that is translation-invariant.
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
+  ! Traced distance upper bound (Å); MMFP walls match so UM1RXN cannot abort.
+  set adum_rcmax = 14.0
+
   ! Filenames uppercased: library eval_charmm_script uppercases the whole card.
   open unit 44 write card name ADUMB-WUNI.DAT
   open unit 50 write card name UMBCOR
@@ -111,6 +114,15 @@ pycharmm_pre_dynamics_lingo: |
   rxncor define rrat ratio rcl rcn
   rxncor set nrxn 1 rrat
   rxncor trace rrat unit 45
+
+  MMFP
+  GEO SPHE DIST HARM OUTS force 2000.0 droff @adum_rcmax -
+    select atom * * CL1 end -
+    select atom * * C1 end
+  GEO SPHE DIST HARM OUTS force 2000.0 droff @adum_rcmax -
+    select atom * * C1 end -
+    select atom * * N1 end
+  END
 
   ! Adaptive umbrella on ξ ∈ [0.125, 5.0] (dimensionless).
   ! min>0 needs UM1RXN [min,max] patch for the exact upper edge (see header).
