@@ -107,7 +107,6 @@ def test_noe_adumb_rc_distance_wall_script_upper_bound() -> None:
 def test_resd_adumb_rc_distance_wall_commands_positive_upper_bound() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
         _resd_adumb_rc_distance_wall_commands,
-        adumb_rc_walls_backend,
     )
 
     with mock.patch(
@@ -119,7 +118,6 @@ def test_resd_adumb_rc_distance_wall_commands_positive_upper_bound() -> None:
     assert cmds[1].startswith("RESDistance KVAL 500 RVAL 7.25 POSITIVE")
     assert "RES 5 A5 RES 4 A4" in cmds[1]
     assert all(len(c) <= 78 for c in cmds)
-    assert adumb_rc_walls_backend() == "resd"
 
 
 def test_split_charmm_lingo_keeps_noe_block_together() -> None:

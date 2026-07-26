@@ -71,7 +71,7 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rrat
   rxncor trace rrat unit 45
 
-  ! RC outer walls: NOE upper-bound by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
+  ! RC outer walls: RESDistance POSITIVE by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
 
   ! Same window as vacuum 1D; min>0 needs UM1RXN patch (see adumb_nc_distance.yaml)
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat

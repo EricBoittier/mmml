@@ -89,3 +89,12 @@ def test_prepare_adumb_rc_rewinds_from_numbered_restart(tmp_path) -> None:
         )
     assert retry is True
     restore.assert_called_once_with(good)
+
+
+def test_charmm_output_indicates_failure_detects_unrecognized() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        _charmm_output_indicates_failure,
+    )
+
+    log = "***** Unrecognized command: noe *****"
+    assert _charmm_output_indicates_failure(log) == "CHARMM reported unrecognized command(s)"

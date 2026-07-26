@@ -96,11 +96,10 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcl unit 45
   rxncor trace rcn unit 46
 
-  ! RC outer walls: Python installs NOE upper-bound restraints by default
-  ! (``kmin 0 rmin 0 kmax @adumrcwall rmax`` below ``adumrcmax``). MMFP RCM
-  ! distance hangs on some MPI builds — use ``MMML_ADUMB_RC_WALL_BACKEND=mmfp``
-  ! only if yours supports it. Disable: ``MMML_ADUMB_RC_WALL_BACKEND=off``.
-  ! Wall onset = adumrcmax − 0.75 Å (``MMML_ADUMB_RC_WALL_MARGIN``).
+  ! RC outer walls: Python installs RESDistance POSITIVE half-harmonic walls
+  ! by default (onset below ``adumrcmax`` via ``MMML_ADUMB_RC_WALL_MARGIN``).
+  ! Legacy: ``MMML_ADUMB_RC_WALL_BACKEND=noe`` (needs KEY_NOE) or ``=mmfp``.
+  ! Disable walls: ``MMML_ADUMB_RC_WALL_BACKEND=off``.
 
   ! Adaptive umbrella on Cl-C and C-N distances (Å).
   ! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when

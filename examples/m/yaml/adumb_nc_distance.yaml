@@ -116,7 +116,7 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rrat
   rxncor trace rrat unit 45
 
-  ! RC outer walls: NOE upper-bound by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
+  ! RC outer walls: RESDistance POSITIVE by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
 
   ! Adaptive umbrella on ξ ∈ [0.125, 5.0] (dimensionless).
   ! min>0 needs UM1RXN [min,max] patch for the exact upper edge (see header).
