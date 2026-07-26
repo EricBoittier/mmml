@@ -199,6 +199,19 @@ def _next_droff_increment(radius: float, attempt: int) -> float:
     return base * (2 ** max(0, attempt - 1))
 
 
+def _run_mmfp_charmm_script(script: str) -> None:
+    """Execute MMFP lingo under MPI when md-system runs under mpirun."""
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+
+        mpi_charmm_script(script, barriers="none")
+        return
+    except Exception:
+        pass
+    pycharmm = _import_pycharmm()
+    pycharmm.lingo.charmm_script(script)
+
+
 def setup_distance_wall_mmfp(
     sel1: str,
     sel2: str,
@@ -208,9 +221,9 @@ def setup_distance_wall_mmfp(
 ) -> None:
     """Half-harmonic MMFP wall when distance between two selections exceeds ``max_dist``.
 
-    Uses the same ``MMFP`` / ``GEO`` / ``END`` line structure as
-    :func:`setup_flat_bottom_sphere_mmfp` so PyCHARMM ``_clean_charmm_script``
-    emits separate cards (bare ``MMFP`` alone would hang).
+    Uses ``GEO sphere RCM distance`` (see ``setup/charmm/doc/mmfp.info`` example 6)
+    with ``harmonic outside``.  PyCHARMM ``_clean_charmm_script`` must emit separate
+    ``MMFP`` / ``GEO`` / ``END`` cards.
     """
     if max_dist <= 0:
         raise ValueError(f"distance-wall droff must be > 0, got {max_dist}")
@@ -220,16 +233,20 @@ def setup_distance_wall_mmfp(
     s2 = (sel2 or "").strip()
     if not s1 or not s2:
         raise ValueError("distance-wall selections must be non-empty")
-    pycharmm = _import_pycharmm()
     script = f"""
 MMFP
-GEO sphere distance harmonic outside -
-    force {float(force):g} droff {float(max_dist):g} -
+GEO sphere RCM distance -
+    harmonic outside force {float(force):g} droff {float(max_dist):g} -
     select {s1} end -
     select {s2} end
 END
 """
-    pycharmm.lingo.charmm_script(script)
+    print(
+        f"MMFP: GEO sphere RCM distance wall droff={float(max_dist):g} Å "
+        f"({s1} ↔ {s2})…",
+        flush=True,
+    )
+    _run_mmfp_charmm_script(script)
     global _MMFP_GEO_ACTIVE
     _MMFP_GEO_ACTIVE = True
 
