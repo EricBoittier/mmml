@@ -533,7 +533,7 @@ def _run_mlpot_recovery_mini(
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_adumb_rxncor_restraints
     from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
 
     # All-ML PBC liquid: never MLpot SD polish after geometry rescue. Restored
@@ -554,7 +554,7 @@ def _run_mlpot_recovery_mini(
             abnr_txt = f", ABNR={int(nstep_abnr)}"
         print(f"{context}: MLpot SD mini ({steps} steps{abnr_txt})", flush=True)
     if clear_restraints:
-        clear_mmfp_restraints()
+        clear_adumb_rxncor_restraints()
     minimize_with_mlpot(
         MinimizeWithMlpotConfig(
             nstep=steps,
@@ -648,7 +648,7 @@ def _run_all_ml_extent_recovery(
     positions: np.ndarray,
 ) -> None:
     """Fly-off recovery: restore prior coords, then bonded recovery + MLpot polish."""
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_adumb_rxncor_restraints
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     topo = getattr(config, "topology_psf", None) or getattr(ctx, "topology_psf_path", None)
@@ -677,7 +677,7 @@ def _run_all_ml_extent_recovery(
             "(CRD/coords have no valid velocities; cold-start comes later)",
             flush=True,
         )
-    clear_mmfp_restraints()
+    clear_adumb_rxncor_restraints()
     # Preflight runs once inside hybrid recovery (avoid duplicate 900-row dumps).
     _run_hybrid_bonded_mlpot_recovery(
         ctx,
@@ -1492,9 +1492,9 @@ def _run_heavy_bonded_recovery_check(
         )
     _reload_pre_mlpot_topology(ctx, topology_psf=path)
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_adumb_rxncor_restraints
 
-        clear_mmfp_restraints()
+        clear_adumb_rxncor_restraints()
         current = _measure_current_mm_strain()
         always = bonded_mm_mini_always(args)
         if always:

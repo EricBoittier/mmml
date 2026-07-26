@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 _MMFP_GEO_ACTIVE = False
+_NOE_RESTRAINTS_ACTIVE = False
 _DROFF_MARGIN_A = 1.0e-3
 
 # NH3–CH3Cl ADUMB examples: half-harmonic outer walls on traced bond distances.
@@ -74,21 +75,47 @@ def _mmfp_rcm_distance_wall_block(
     ]
 
 
-def _mmfp_adumb_rc_distance_walls_script(
+def adumb_rc_walls_backend() -> str:
+    """Return ``noe``, ``mmfp``, or ``off`` for traced-RC outer walls."""
+    raw = (os.environ.get("MMML_ADUMB_RC_WALL_BACKEND") or "").strip().lower()
+    if raw in ("0", "off", "none", "no"):
+        return "off"
+    if raw in ("mmfp",):
+        return "mmfp"
+    if raw in ("noe",):
+        return "noe"
+    legacy = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "").strip().lower()
+    if legacy in ("1", "yes", "true", "on"):
+        return "mmfp"
+    if legacy in ("0", "no", "false", "off"):
+        return "off"
+    return "noe"
+
+
+def adumb_rc_mmfp_walls_enabled() -> bool:
+    """True when ADUMB RC walls use the MMFP backend (legacy env name)."""
+    return adumb_rc_walls_backend() == "mmfp"
+
+
+def adumb_rc_walls_enabled() -> bool:
+    """True when any ADUMB RC outer-wall backend is active."""
+    return adumb_rc_walls_backend() != "off"
+
+
+def _noe_adumb_rc_distance_walls_script(
     walls: tuple[tuple[int, int, float, float], ...],
 ) -> str:
-    """Multi-line MMFP script installing all ADUMB RC outer walls."""
-    lines = ["MMFP"]
-    for atom_i, atom_j, droff, force in walls:
-        lines.extend(
-            _mmfp_rcm_distance_wall_block(
-                atom_i,
-                atom_j,
-                droff=droff,
-                force=force,
-            )
+    """NOE upper-bound restraints: flat for ``r <= rmax``, harmonic above."""
+    lines = ["noe", "reset"]
+    for atom_i, atom_j, rmax, kmax in walls:
+        lines.append(
+            f"assign sele atom {int(atom_i)} end sele atom {int(atom_j)} end -"
         )
-    lines.append("END")
+        lines.append(
+            f"    kmin 0 rmin 0 kmax {float(kmax):g} rmax {float(rmax):g} "
+            f"fmax {float(kmax):g}"
+        )
+    lines.append("end")
     return "\n".join(lines) + "\n"
 
 
@@ -142,7 +169,7 @@ def check_adumb_rc_before_overlap_chunk(
         raise RuntimeError(
             f"{label}: ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
             f"is at or beyond umbrella max {rcmax:g} Å — UM1RXN would abort. "
-            "Enable MMFP walls (default), increase adumrcmax, or restart from "
+            "Enable RC walls (default NOE), increase adumrcmax, or restart from "
             "an earlier checkpoint."
         )
     warn_at = rcmax * float(warn_fraction)
@@ -150,7 +177,7 @@ def check_adumb_rc_before_overlap_chunk(
         print(
             f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å "
             f"approaching umbrella max {rcmax:g} Å "
-            f"(MMFP wall droff≈{guard.wall_droff():.2f} Å)",
+            f"(wall rmax≈{guard.wall_droff():.2f} Å)",
             flush=True,
         )
 
@@ -340,8 +367,8 @@ def _next_droff_increment(radius: float, attempt: int) -> float:
     return base * (2 ** max(0, attempt - 1))
 
 
-def _run_mmfp_charmm_script(script: str) -> None:
-    """Execute MMFP lingo under MPI when md-system runs under mpirun."""
+def _run_charmm_lingo_block(script: str) -> None:
+    """Execute a multi-line CHARMM lingo block (NOE / MMFP)."""
     try:
         from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
 
@@ -351,6 +378,24 @@ def _run_mmfp_charmm_script(script: str) -> None:
         pass
     pycharmm = _import_pycharmm()
     pycharmm.lingo.charmm_script(script)
+
+
+def _mmfp_adumb_rc_distance_walls_script(
+    walls: tuple[tuple[int, int, float, float], ...],
+) -> str:
+    """Multi-line MMFP script installing all ADUMB RC outer walls."""
+    lines = ["MMFP"]
+    for atom_i, atom_j, droff, force in walls:
+        lines.extend(
+            _mmfp_rcm_distance_wall_block(
+                atom_i,
+                atom_j,
+                droff=droff,
+                force=force,
+            )
+        )
+    lines.append("END")
+    return "\n".join(lines) + "\n"
 
 
 def setup_distance_wall_mmfp(
@@ -378,7 +423,7 @@ def setup_distance_wall_mmfp(
         f"(atoms {int(atom_i)}–{int(atom_j)}; {sel1} ↔ {sel2})…",
         flush=True,
     )
-    _run_mmfp_charmm_script(script)
+    _run_charmm_lingo_block(script)
     print("MMFP: distance wall install returned to Python", flush=True)
     global _MMFP_GEO_ACTIVE
     _MMFP_GEO_ACTIVE = True
@@ -390,35 +435,71 @@ def install_adumb_rxncor_distance_walls(
     rcwall: float,
     pairs: tuple[tuple[str, str], ...] | None = None,
     wall_margin: float | None = None,
+    backend: str | None = None,
 ) -> None:
     """Install soft outer walls on traced RXNCOR distances before ``umbrella rxncor``.
 
-    Uses multi-line ``MMFP GEO sphere RCM distance harmonic outside`` cards
-    (see ``setup/charmm/test/c47test/omm_mmfp_rcm_distance.inp``).  ``droff`` is
-    set below umbrella ``max`` so the wall activates before UM1RXN hard-aborts.
+    Default backend is CHARMM **NOE** upper-bound restraints (``kmin 0 rmin 0
+    kmax … rmax …``).  MMFP ``GEO sphere RCM distance`` hangs on some MPI-linked
+    builds; opt in with ``MMML_ADUMB_RC_WALL_BACKEND=mmfp``.  ``rmax`` / ``droff``
+    is set below umbrella ``max`` so the wall activates before UM1RXN hard-aborts.
     """
+    wall_backend = (backend or adumb_rc_walls_backend()).strip().lower()
+    if wall_backend == "off":
+        return
+
     wall_pairs = pairs if pairs is not None else _ADUMB_RC_WALL_PAIRS
-    droff = adumb_rc_wall_droff(rcmax, margin=wall_margin)
+    rmax_wall = adumb_rc_wall_droff(rcmax, margin=wall_margin)
     walls: list[tuple[int, int, float, float]] = []
     for name1, name2 in wall_pairs:
         walls.append(
             (
                 _unique_atom_index_by_name(name1),
                 _unique_atom_index_by_name(name2),
-                droff,
+                rmax_wall,
                 float(rcwall),
             )
         )
+    if wall_backend == "mmfp":
+        print(
+            "MMFP: installing ADUMB RC distance walls "
+            f"(droff={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
+            f"force={float(rcwall):g})…",
+            flush=True,
+        )
+        _run_charmm_lingo_block(
+            _mmfp_adumb_rc_distance_walls_script(tuple(walls))
+        )
+        print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
+        global _MMFP_GEO_ACTIVE
+        _MMFP_GEO_ACTIVE = True
+        return
+
     print(
-        "MMFP: installing ADUMB RC distance walls "
-        f"(droff={droff:g} Å, umbrella max={float(rcmax):g} Å, "
-        f"force={float(rcwall):g})…",
+        "NOE: installing ADUMB RC upper-bound walls "
+        f"(rmax={rmax_wall:g} Å, umbrella max={float(rcmax):g} Å, "
+        f"kmax={float(rcwall):g})…",
         flush=True,
     )
-    _run_mmfp_charmm_script(_mmfp_adumb_rc_distance_walls_script(tuple(walls)))
-    print(f"MMFP: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
-    global _MMFP_GEO_ACTIVE
-    _MMFP_GEO_ACTIVE = True
+    _run_charmm_lingo_block(_noe_adumb_rc_distance_walls_script(tuple(walls)))
+    print(f"NOE: {len(wall_pairs)} ADUMB distance wall(s) installed", flush=True)
+    global _NOE_RESTRAINTS_ACTIVE
+    _NOE_RESTRAINTS_ACTIVE = True
+
+
+def clear_noe_restraints() -> None:
+    """Remove NOE restraints (safe to call if none were defined)."""
+    global _NOE_RESTRAINTS_ACTIVE
+    if not _NOE_RESTRAINTS_ACTIVE:
+        return
+    _run_charmm_lingo_block("noe\nreset\nend\n")
+    _NOE_RESTRAINTS_ACTIVE = False
+
+
+def clear_adumb_rxncor_restraints() -> None:
+    """Remove ADUMB RC outer walls (NOE and/or MMFP)."""
+    clear_noe_restraints()
+    clear_mmfp_restraints()
 
 
 def clear_mmfp_restraints() -> None:

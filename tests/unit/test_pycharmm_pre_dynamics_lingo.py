@@ -89,6 +89,20 @@ def test_mmfp_rcm_distance_wall_script_uses_outside_harmonic() -> None:
     assert script.strip().endswith("END")
 
 
+def test_noe_adumb_rc_distance_wall_script_upper_bound() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        _noe_adumb_rc_distance_walls_script,
+        adumb_rc_walls_backend,
+    )
+
+    script = _noe_adumb_rc_distance_walls_script(((5, 4, 7.25, 500.0),))
+    assert adumb_rc_walls_backend() == "noe"
+    assert script.startswith("noe\nreset")
+    assert "kmin 0 rmin 0 kmax 500 rmax 7.25" in script
+    assert "sele atom 5 end sele atom 4 end" in script
+    assert script.strip().endswith("end")
+
+
 def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
     script = """
     set adumrcmax = 8.0
@@ -153,7 +167,7 @@ def test_run_charmm_lingo_expands_adumb_tokens_before_umbrella(tmp_path: Path) -
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_mmfp_walls_enabled",
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_walls_enabled",
         return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
@@ -182,7 +196,7 @@ def test_run_charmm_lingo_installs_adumb_walls_when_enabled(tmp_path: Path) -> N
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_mmfp_walls_enabled",
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_walls_enabled",
         return_value=True,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",

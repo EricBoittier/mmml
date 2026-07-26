@@ -1860,10 +1860,13 @@ def strip_mmfp_blocks_from_script(script: str) -> str:
     return "\n".join(kept).strip()
 
 
-def adumb_rc_mmfp_walls_enabled() -> bool:
-    """Whether to install Python MMFP walls before ``umbrella rxncor``."""
-    flag = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "1").strip().lower()
-    return flag in ("1", "yes", "true", "on")
+def adumb_rc_walls_enabled() -> bool:
+    """True when ADUMB RC outer walls are installed (NOE default, or MMFP)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        adumb_rc_walls_enabled as _enabled,
+    )
+
+    return _enabled()
 
 
 def split_charmm_lingo_commands(script: str) -> list[str]:
@@ -2047,7 +2050,7 @@ def run_charmm_lingo_script(
         for cmd in commands:
             if (
                 adumb_walls
-                and adumb_rc_mmfp_walls_enabled()
+                and adumb_rc_walls_enabled()
                 and not walls_installed
                 and re.match(r"(?i)^\s*umbrella\b", cmd)
             ):
@@ -2060,13 +2063,13 @@ def run_charmm_lingo_script(
                 walls_installed = True
             elif (
                 adumb_walls
-                and not adumb_rc_mmfp_walls_enabled()
+                and not adumb_rc_walls_enabled()
                 and not walls_installed
                 and re.match(r"(?i)^\s*umbrella\b", cmd)
             ):
                 print(
-                    "MMFP: skipping ADUMB RC distance walls "
-                    "(MMML_ADUMB_RC_MMFP_WALLS=0; umbrella max is the only "
+                    "ADUMB RC walls disabled "
+                    "(MMML_ADUMB_RC_WALL_BACKEND=off; umbrella max is the only "
                     "hard limit — UM1RXN aborts if a traced RC exceeds it)",
                     flush=True,
                 )

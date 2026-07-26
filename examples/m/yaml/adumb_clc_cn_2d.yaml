@@ -96,10 +96,11 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcl unit 45
   rxncor trace rcn unit 46
 
-  ! Optional MMFP outer walls: ``MMML_ADUMB_RC_MMFP_WALLS=0`` to disable.
-  ! Python installs ``GEO sphere RCM distance harmonic outside`` before umbrella;
-  ! wall droff = adumrcmax − 0.75 Å (``MMML_ADUMB_RC_WALL_MARGIN``) so UM1RXN
-  ! does not hard-abort before the soft wall engages.
+  ! RC outer walls: Python installs NOE upper-bound restraints by default
+  ! (``kmin 0 rmin 0 kmax @adumrcwall rmax`` below ``adumrcmax``). MMFP RCM
+  ! distance hangs on some MPI builds — use ``MMML_ADUMB_RC_WALL_BACKEND=mmfp``
+  ! only if yours supports it. Disable: ``MMML_ADUMB_RC_WALL_BACKEND=off``.
+  ! Wall onset = adumrcmax − 0.75 Å (``MMML_ADUMB_RC_WALL_MARGIN``).
 
   ! Adaptive umbrella on Cl-C and C-N distances (Å).
   ! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when
