@@ -1791,26 +1791,45 @@ def split_charmm_lingo_commands(script: str) -> list[str]:
     """Split CHARMM lingo into executable command strings (join ``-`` continuations).
 
     Blank lines and ``!`` / ``*`` comment lines are dropped. Each returned command
-    is suitable for a single ``eval_charmm_script`` call (library builds truncate
-    multi-line blobs to ``mxcmsz``).
+    is suitable for a single ``charmm_script`` call.  ``MMFP`` … ``END`` blocks are
+    kept as multi-line strings; flattening them into one card exceeds ``mxcmsz``
+    (~80) and CHARMM treats the tail as extraneous text.
     """
-    commands: list[str] = []
-    pending: list[str] = []
+    stripped_lines: list[str] = []
     for raw in script.splitlines():
         line = raw.strip()
         if not line:
             continue
         if line.startswith(("!", "*")):
             continue
-        pending.append(line)
-        if line.endswith("-"):
+        stripped_lines.append(line)
+
+    commands: list[str] = []
+    i = 0
+    n = len(stripped_lines)
+    while i < n:
+        line = stripped_lines[i]
+        if line.upper().startswith("MMFP"):
+            block: list[str] = [line]
+            i += 1
+            while i < n:
+                block.append(stripped_lines[i])
+                head = stripped_lines[i].upper().split()[0]
+                if head == "END":
+                    i += 1
+                    break
+                i += 1
+            commands.append("\n".join(block))
             continue
-        joined = " ".join(part.rstrip("- ").strip() for part in pending if part.rstrip("- ").strip())
-        pending = []
-        if joined:
-            commands.append(joined)
-    if pending:
-        joined = " ".join(part.rstrip("- ").strip() for part in pending if part.rstrip("- ").strip())
+
+        pending: list[str] = [line]
+        i += 1
+        while pending[-1].endswith("-") and i < n:
+            pending.append(stripped_lines[i])
+            i += 1
+        joined = " ".join(
+            part.rstrip("- ").strip() for part in pending if part.rstrip("- ").strip()
+        )
         if joined:
             commands.append(joined)
     return commands
@@ -1941,7 +1960,14 @@ def run_charmm_lingo_script(
 
     with _bootstrap_workdir(cwd):
         for cmd in commands:
-            if len(cmd) > 78:
+            for line in cmd.splitlines():
+                if len(line) > 78:
+                    print(
+                        f"WARN: CHARMM lingo line length {len(line)} may exceed "
+                        f"mxcmsz (~80); shorten paths/tokens: {line[:60]}…",
+                        flush=True,
+                    )
+            if "\n" not in cmd and len(cmd) > 78:
                 print(
                     f"WARN: CHARMM lingo command length {len(cmd)} may exceed "
                     f"mxcmsz (~80); shorten paths/tokens: {cmd[:60]}…",

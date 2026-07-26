@@ -71,7 +71,7 @@ def test_split_charmm_lingo_commands_joins_continuations() -> None:
 
 
 def test_split_charmm_lingo_commands_keeps_mmfp_block_as_one_command() -> None:
-    """Bare ``MMFP`` on its own line hangs CHARMM waiting for GEO (issue #ADUMB)."""
+    """MMFP blocks must stay multi-line (mxcmsz) and include GEO before END."""
     script = """
     set adum_rcmax = 8.0
     set adum_rcwall = 500.0
@@ -88,9 +88,11 @@ def test_split_charmm_lingo_commands_keeps_mmfp_block_as_one_command() -> None:
     cmds = split_charmm_lingo_commands(script)
     assert cmds[0] == "set adum_rcmax = 8.0"
     assert cmds[1] == "set adum_rcwall = 500.0"
-    assert cmds[2].startswith("MMFP GEO sphere distance harmonic outside")
-    assert cmds[2].endswith("select atom * * N1 end END")
-    assert "MMFP" not in cmds[3]
+    mmfp = cmds[2]
+    assert mmfp.startswith("MMFP -\n")
+    assert mmfp.endswith("\nEND")
+    assert "GEO sphere distance harmonic outside" in mmfp
+    assert mmfp.count("\n") >= 5
     assert cmds[3].startswith("umbrella init")
 
 
