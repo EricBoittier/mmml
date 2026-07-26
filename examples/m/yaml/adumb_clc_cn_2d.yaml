@@ -29,6 +29,7 @@ composition: "AMM1:1,CH3CL:1"
 spacing: 1.0
 checkpoint: examples/m/kl.json
 include_mm: true
+mm_switch_on: 8.0
 mm_charge_mode: fixed
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax

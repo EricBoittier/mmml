@@ -10,6 +10,7 @@ defaults:
   dt_fs: 0.5
   temperature: 300
   include_mm: true
+  mm_switch_on: 8.0
   mm_charge_mode: fixed
   mm_nonbond_mode: jax_mic
   skip_jit_warmup: true

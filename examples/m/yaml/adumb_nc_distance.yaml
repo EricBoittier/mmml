@@ -31,6 +31,7 @@ spacing: 4.0
 checkpoint: examples/m/kl.json
 # Mechanical embedding style for the dimer (ML + MM); use include_mm: false for ML-only.
 include_mm: true
+mm_switch_on: 8.0
 mm_charge_mode: fixed
 # jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
 mm_nonbond_mode: jax_mic
