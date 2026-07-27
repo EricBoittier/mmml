@@ -162,9 +162,28 @@ def test_parse_adumb_umbrella_bounds_negative_min() -> None:
     )
 
     script = """
+    rxncor define rdif combination rcl 1.0 rcn -1.0
     umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
     """
     assert parse_adumb_umbrella_bounds(script) == (-6.0, 6.0)
+
+
+def test_parse_adumb_umbrella_bounds_skips_distance_only_rcl() -> None:
+    """Distance umbrella on rcl must not arm the xi=r(ClC)-r(CN) soft window."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        adumb_umbrella_is_bond_difference,
+        parse_adumb_umbrella_bounds,
+    )
+
+    script = """
+    rxncor define rcl distance pcl pc
+    rxncor define rcn distance pc pn
+    rxncor define rdif combination rcl 1.0 rcn -1.0
+    rxncor set nrxn 1 rcl
+    umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
+    """
+    assert adumb_umbrella_is_bond_difference(script) is False
+    assert parse_adumb_umbrella_bounds(script) == (None, None)
 
 
 def test_charmm_output_indicates_failure_detects_unrecognized() -> None:

@@ -1801,6 +1801,12 @@ _UMB_RXNCOR_MIN_RE = re.compile(
 _UMB_RXNCOR_MAX_RE = re.compile(
     r"(?im)^\s*umbrella\s+rxncor\b.*?[\s-]max\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
 )
+_UMB_RXNCOR_NAME_RE = re.compile(
+    r"(?im)^\s*umbrella\s+rxncor\b.*?[\s-]name\s+(\S+)"
+)
+_RXNCOR_COMBINATION_DEF_RE = re.compile(
+    r"(?im)^\s*rxncor\s+define\s+(\S+)\s+combination\b"
+)
 
 
 def parse_adumb_rc_params(script: str) -> tuple[float | None, float | None]:
@@ -1829,10 +1835,13 @@ def parse_adumb_rc_params(script: str) -> tuple[float | None, float | None]:
 def parse_adumb_umbrella_bounds(script: str) -> tuple[float | None, float | None]:
     """Return (umb_min, umb_max) from the first umbrella rxncor min/max card.
 
-    Used to guard combination RCs (xi = r_ClC - r_CN) where component distance
-    walls alone do not enforce the ADUMB window.
+    Only returned when that umbrella samples a ``combination`` RC (e.g. bond
+    difference ``rdif``). Distance-only umbrellas (``name rcl``) must not enable
+    the xi = r(ClC)-r(CN) soft window — reactant geometries have xi < 0.
     """
     text = str(script or "")
+    if not adumb_umbrella_is_bond_difference(text):
+        return None, None
     umin = umax = None
     mmin = _UMB_RXNCOR_MIN_RE.search(text)
     mmax = _UMB_RXNCOR_MAX_RE.search(text)
@@ -1847,6 +1856,20 @@ def parse_adumb_umbrella_bounds(script: str) -> tuple[float | None, float | None
         except ValueError:
             umax = None
     return umin, umax
+
+
+def adumb_umbrella_is_bond_difference(script: str) -> bool:
+    """True when the first ``umbrella rxncor`` name is a ``combination`` RXNCOR."""
+    text = str(script or "")
+    mname = _UMB_RXNCOR_NAME_RE.search(text)
+    if not mname:
+        return False
+    umb_name = mname.group(1).strip().lower()
+    # CHARMM names are ≤4 chars; compare case-insensitively.
+    for mdef in _RXNCOR_COMBINATION_DEF_RE.finditer(text):
+        if mdef.group(1).strip().lower() == umb_name:
+            return True
+    return False
 
 
 def parse_adumb_rc_wall_params(script: str) -> tuple[float, float] | None:
