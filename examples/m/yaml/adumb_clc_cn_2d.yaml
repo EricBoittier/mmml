@@ -12,7 +12,7 @@
 #   left C–N free → UM1RXN "reaction coordinate out of range".
 #
 # Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
-# Prefer min 0.0 (UM1RXN quirk when min>0); max 10 Å + stiff RESD outer walls.
+# Prefer min 0.0 (UM1RXN quirk when min>0); max 12 Å + soft RESD walls (k=500).
 # Heat: Bussi + in-memory overlap handoff; iasvel=1 (never IASVEL0/COMP-as-vel).
 # Wipe staged lingo after YAML edits.
 #
@@ -88,9 +88,9 @@ dcd_max_frames: 200
 # Packmol/composition: segid CLST, resid 1 = AMM1, resid 2 = CH3CL.
 # RXNCOR NAME tokens are ≤4 chars in ADUMB (param_store).
 pycharmm_pre_dynamics_lingo: |
-  ! Weak COM tether — keep vacuum fragments from drifting to 100+ Å (product
-  ! seed with Cl free needs a bit more than the reactant-only force 2.0).
-  cons hmcm force 10.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+  ! Weak COM tether — keep vacuum fragments from drifting (product seed).
+  ! force 10 + hard RC walls fought each other (CDROplet ~190); keep moderate.
+  cons hmcm force 5.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
   ! Shake X–H: without this, Bussi iasvel=1 redraws fling AMM1 H to 100+ Å
   ! (extent fly-off) while Cl–C / C–N walls stay in-range.
@@ -103,11 +103,11 @@ pycharmm_pre_dynamics_lingo: |
   delete angle sele atom * * CL1 end sele atom * * C1 end
 
   ! Outer walls for both 2D RCs (Å). Python installs RESD on Cl–C *and* C–N
-  ! after umbrella init. Engage early (margin 1.5 → rmax≈8.5) with stiff k so
-  ! a velocity redraw cannot jump past umbrella max before the wall acts.
+  ! after umbrella init. k=10000 detonated Cl–C (RESDistance ~3000 kcal, NaN);
+  ! softer k + earlier onset steers without exploding ML forces.
   ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
-  set adumrcmax = 10.0
-  set adumrcwall = 10000.0
+  set adumrcmax = 12.0
+  set adumrcwall = 500.0
 
   open unit 44 write card name ADUMB-WUNI.DAT
   open unit 50 write card name UMBCOR
@@ -127,7 +127,7 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcn unit 46
 
   ! Adaptive umbrella on Cl-C and C-N. min 0.0 for unpatched UM1RXN safety.
-  ! max matches adumrcmax (10 Å) so RESD engages ~1.5 Å earlier.
+  ! max matches adumrcmax (12 Å); RESD engages ~2.5 Å earlier (margin env).
   umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adumrcmax name rcl
   umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adumrcmax name rcn
 

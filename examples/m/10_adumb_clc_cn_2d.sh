@@ -75,9 +75,9 @@ EXTRA+=(
   --dynamics-overlap-memory-handoff
   --dynamics-overlap-action warn
 )
-# Soft-wall onset: engage 1.5 Å below umbrella max (default 0.75 is too late for
-# product-seed / dissociating Cl at 500 K).
-export MMML_ADUMB_RC_WALL_MARGIN="${MMML_ADUMB_RC_WALL_MARGIN:-1.5}"
+# Soft-wall onset: engage 2.5 Å below umbrella max (softer k=500 in YAML needs
+# earlier steering; default 0.75 is far too late).
+export MMML_ADUMB_RC_WALL_MARGIN="${MMML_ADUMB_RC_WALL_MARGIN:-2.5}"
 # Do NOT set MMML_BUSSI_IASVEL0_CONTINUATION for ADUMB: iasvel=0 reads COMP
 # positions as velocities on this PyCHARMM build (T≃10¹³ K → UM1RXN).
 unset MMML_BUSSI_IASVEL0_CONTINUATION || true

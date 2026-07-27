@@ -1774,6 +1774,11 @@ def _maybe_abort_heat_on_grms_jump(
     args = getattr(mlpot_ctx, "workflow_args", None)
     if bool(getattr(args, "no_heat_grms_jump_abort", False)):
         return
+    # ADUMB RC sampling: RESD walls + umbrella routinely spike hybrid GRMS when
+    # an RC presses the outer wall. Hard-aborting mid-map loses hours of WHAM
+    # sampling; warn/rewind paths handle true blow-ups instead.
+    if args is not None and getattr(args, "_adumb_rc_guard", None) is not None:
+        return
 
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         refresh_mlpot_energy_and_grms,
