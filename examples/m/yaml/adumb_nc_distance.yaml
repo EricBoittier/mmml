@@ -30,13 +30,13 @@ composition: "AMM1:1,CH3CL:1"
 spacing: 4.0
 checkpoint: examples/m/kl.json
 # Mechanical embedding style for the dimer (ML + MM); use include_mm: false for ML-only.
-include_mm: true
+include_mm: false
 mm_switch_on: 8.0
 mm_charge_mode: fixed
 # jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
-temperature: 300
+temperature: 500
 dt_fs: 1.0
 md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
@@ -67,7 +67,7 @@ dynamics_intra_min_distance: 0.2
 # raise well past the 12 Å default so dissociation is not flagged (still catches
 # a true explosion beyond 25 Å).
 dynamics_max_monomer_extent: 25.0
-mini_nstep: 40
+mini_nstep: 0
 skip_energy_show: true
 skip_jit_warmup: true
 no_echeck_heat: true
@@ -92,7 +92,7 @@ pycharmm_pre_dynamics_lingo: |
   ! Weak COM tether: stops global drift/rotation in vacuum without confining the
   ! reaction. Acts on the aggregate COM (sele all), so it does NOT bias the
   ! internal RC ξ=r(Cl-C)/r(C-N) — that is translation-invariant.
-  cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+  ! cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
   ! Traced distance upper bound (Å); MMFP walls match so UM1RXN cannot abort.
   set adumrcmax = 8.0
@@ -123,4 +123,4 @@ pycharmm_pre_dynamics_lingo: |
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat
 
   ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
-  umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 300 wuni 44 ucun 50
+  umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 500 wuni 44 ucun 50
