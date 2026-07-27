@@ -35,9 +35,14 @@ an RXNCOR **`combination` of two distances** (CHARMM `COMBI_TYPE`):
   Unpatched `UM1RXN` treated the upper edge as `(max − min)` for any nonzero
   `min` (e.g. `min 2 max 6` → abort once value \(> 4\); `min -3 max 3` →
   upper check against 6 instead of 3). mmml patches that check to `[min, max]`.
-  The 1D difference example uses `min -3 max 3` and **requires** that patch
-  plus a rebuild that installs into the `CHARMM_LIB_DIR` PyCHARMM actually
-  loads (do not leave `CHARMM_LIB_DIR` on a stale PhysNet tree).
+  The 1D difference example uses `min -6 max 6` (matches component RESD walls;
+  SN2 band ~[-3, 3]).
+- **Reactivity:** RESD walls are soft outer caps (~7.25 Å) and do **not** forbid
+  SN2. The CGenFF `BOND C1–CL1` (`k≈220` in `par_ch3cl.prm`) does — CHARMM
+  bonded terms remain in `ENER INTERN` even with `include_mm: false`. The 1D
+  YAML `delete bond/angle` removes C–Cl before heat. Do not replace the system
+  with a product topology that has a hard C–N bond (same trap, other basin).
+  Optional: `MMML_ADUMB_RC_WALL_BACKEND=off` to A/B-test walls.
 
 ### Align `umbrella init` with heat length
 

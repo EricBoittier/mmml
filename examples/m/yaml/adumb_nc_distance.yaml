@@ -3,14 +3,21 @@
 # Menshutkin / SN2-like 1D coordinate: ξ = r(Cl⋯C) − r(C⋯N)
 # (CHARMM ``rxncor define … combination``; see rxnene.F90 COMBI_TYPE).
 # Window [-6, 6] Å matches component RESD walls (adumrcmax=8); chemically
-# interesting SN2 band is ~[-3, 3]. Tight [-3, 3] needs mmml UM1RXN patch and
-# still risks mid-chunk abort with a flat initial umbrella in vacuum.
+# interesting SN2 band is ~[-3, 3].
 #
-# Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``) **and** the
-# mmml UM1RXN patch in ``eadumb.F90`` for nonzero ``min`` (especially negative).
+# Reaction freedom (important):
+#   RESD walls (rmax≈7.25 Å) are soft *outer* caps — they do NOT block SN2.
+#   What *does* block bond breaking is the CGenFF ``BOND C1 CL1`` (k≈220) in
+#   ``par_ch3cl.prm``. With MLpot, CHARMM bonded terms stay on (see ENER INTERN);
+#   this YAML ``delete bond/angle`` removes C–Cl before heat so PhysNet owns the
+#   reactive degrees of freedom. Keep N–H / C–H bonds.
+#   Optional A/B: ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable distance walls.
+#   Single-residue topology is optional bookkeeping — not required for reactivity.
+#
+# Requires CHARMM with ADUMB + ADUMBRXNCOR + mmml UM1RXN patch (eadumb.F90).
 #
 #   bash scripts/rebuild_charmm_mlpot.sh --clean
-#   export CHARMM_LIB_DIR=$PWD/setup/charmm/lib   # NOT PhysNet_PyCHARMM/...
+#   export CHARMM_LIB_DIR=$PWD/setup/charmm/lib
 #   source examples/m/_env.sh
 #   USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 #
@@ -96,9 +103,16 @@ pycharmm_pre_dynamics_lingo: |
   ! internal RC ξ=r(Cl-C)−r(C-N) — that is translation-invariant.
   ! cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
-  ! Soft upper walls on the *component* distances (Å); keeps |ξ| from flying
-  ! outside the ADUMB window via one bond alone. MMFP/RESDIST injected by mmml
-  ! after umbrella init unless ``MMML_ADUMB_RC_WALL_BACKEND=off``.
+  ! --- Make SN2 possible under MLpot ---
+  ! CGenFF CH3CL has BOND C1–CL1 (k≈220 kcal/mol/Å²). That harmonic stays in
+  ! ENER INTERN even with include_mm: false and prevents Cl leaving. Remove the
+  ! reactive C–Cl bond + Cl–C–H angles; PhysNet owns those coordinates.
+  ! Do NOT delete N–H / C–H. Do NOT add a C–N bond (that would lock the product).
+  delete bond sele atom * * CL1 end sele atom * * C1 end
+  delete angle sele atom * * CL1 end sele atom * * C1 end
+
+  ! Soft upper walls on *component* distances (Å). Outer caps only (r ≳ 7.25);
+  ! they do not forbid the TS. Disable: MMML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 8.0
   set adumrcwall = 500.0
 
@@ -107,14 +121,12 @@ pycharmm_pre_dynamics_lingo: |
   open unit 50 write card name UMBCOR
   open unit 45 write card name RXNCOR_TRACE.DAT
 
-  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1.
-  ! Selected by IUPAC atom name (``select atom * * NAME``); segid/resid-agnostic.
+  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1 (IUPAC names; segid/resid-agnostic).
   rxncor define pn point select atom * * N1 end
   rxncor define pc point select atom * * C1 end
   rxncor define pcl point select atom * * CL1 end
 
   ! Bond distances, then SN2-like difference ξ = r(Cl-C) − r(C-N)
-  ! (CHARMM keyword is ``combination``, not ``scombination``).
   rxncor define rcl distance pcl pc
   rxncor define rcn distance pc pn
   rxncor define rdif combination rcl 1.0 rcn -1.0
@@ -122,17 +134,9 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rdif
   rxncor trace rdif unit 45
 
-  ! Adaptive umbrella on ξ = r(Cl-C)−r(C-N).
-  ! Component RESD walls (adumrcmax=8 → rmax≈7.25) do NOT keep |ξ|≤3; they only
-  ! cap each bond, so |ξ| can reach ~6 before walls engage and UM1RXN aborts on
-  ! a tight [-3,3] window (flat initial umbrella + vacuum heat). Use [-6,6] to
-  ! match the walls; chemically interesting band remains ~[-3,3]. For a hard
-  ! [-3,3] window you need the mmml UM1RXN patch AND expect mid-chunk aborts
-  ! unless soft ξ walls exist.
+  ! Adaptive umbrella on ξ. Window matches component walls; SN2 band ~[-3, 3].
   umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
 
-  ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
-  ! Keep under mxcmsz (~80 chars): drop thresh (default 10).
+  ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 100_000 here)
   umbrella init nsim 100 update 1000 equi 200 temp 1000 wuni 44 ucun 50
-  ! ``umbrella stoff`` freezes bias stats; ``umbrella ston`` = adaptive (default)
   umbrella ston
