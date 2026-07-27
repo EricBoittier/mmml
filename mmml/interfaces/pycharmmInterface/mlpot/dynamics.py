@@ -5230,13 +5230,17 @@ def _overlap_chunk_uses_memory_handoff(
     Bussi sub-chunks rely on.  Set ``MMML_BUSSI_READYN_OVERLAP=1`` to opt into
     legacy scratch ``READYN`` (debug only).
 
+    ADUMB RC-guarded runs also stay in RAM: between-chunk RESD wall reinstall +
+    umbrella state churn often leaves scratch ``.a/.b.res`` files that fail
+    ``READYN`` with dynio "Bad value during floating point read".
+
     Other non-CPT overlap uses alternating scratch ``READYN`` with patched
     ``JHSTRT``.  ``overlap.memory_handoff`` on the config affects chunk-0
     ``start``/READYN only, not between-chunk I/O for scale-heat / NVE.
     CPT stability *sub-chunks* within one overlap chunk also stay in-memory
     (``_run_cpt_stability_subchunked``) unless ``MMML_CPT_READYN_SUBCHUNK=1``.
     """
-    del chunk_index, mlpot_ctx, overlap
+    del chunk_index, overlap
     if n_chunks <= 1:
         return False
     if cpt:
@@ -5247,6 +5251,10 @@ def _overlap_chunk_uses_memory_handoff(
         if _truthy_env("MMML_BUSSI_READYN_OVERLAP"):
             return False
         return True
+    if mlpot_ctx is not None:
+        wf = getattr(mlpot_ctx, "workflow_args", None)
+        if getattr(wf, "_adumb_rc_guard", None) is not None:
+            return True
     return False
 
 
@@ -6618,6 +6626,11 @@ def _apply_overlap_chunk_dynamics_kw(
     preserve_handoff_velocities = bool(
         chunk_kw.pop("_preserve_handoff_velocities", False)
     )
+    # ADUMB: never Boltzmann-redraw between overlap chunks — soft RESD walls
+    # cannot hold a 500 K kick mid-dyna before UM1RXN aborts.
+    adumb_preserve_velocities = bool(
+        chunk_kw.pop("_adumb_preserve_velocities", False)
+    )
     if int(chunk_index) > 0:
         chunk_kw.pop("_required_handoff_velocity_restart", None)
     if preserve_handoff_velocities and int(chunk_index) == 0 and not has_restart_read:
@@ -6629,6 +6642,25 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw["iunrea"] = -1
         for key in ("firstt", "finalt", "tbath", "tstruct"):
             chunk_kw.pop(key, None)
+        return
+    if (
+        adumb_preserve_velocities
+        and int(chunk_index) > 0
+        and not bool(chunk_kw.get("cpt"))
+    ):
+        chunk_kw["new"] = False
+        chunk_kw["restart"] = bool(has_restart_read)
+        chunk_kw["start"] = False
+        chunk_kw["iasvel"] = 0
+        chunk_kw["iasors"] = 0
+        if has_restart_read:
+            chunk_kw.pop("iunrea", None)
+        else:
+            chunk_kw["iunrea"] = -1
+        chunk_kw.pop("firstt", None)
+        _strip_stale_heat_ramp_keywords(chunk_kw)
+        if _bussi_heat_ramp_active(chunk_kw):
+            _ensure_bussi_heat_continuation_iasvel(chunk_kw)
         return
     if has_restart_read:
         chunk_kw["new"] = False
@@ -8129,6 +8161,13 @@ def run_dynamics_with_io(
                         steps_done=steps_done,
                         ramp_spec=heat_ramp_spec,
                     )
+                if mlpot_ctx is not None:
+                    wf_args = getattr(mlpot_ctx, "workflow_args", None)
+                    if (
+                        wf_args is not None
+                        and getattr(wf_args, "_adumb_rc_guard", None) is not None
+                    ):
+                        chunk_kw["_adumb_preserve_velocities"] = True
                 _apply_overlap_chunk_dynamics_kw(
                     chunk_kw,
                     chunk_index=chunk_index,

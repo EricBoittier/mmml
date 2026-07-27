@@ -13,7 +13,8 @@
 #
 # Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
 # Prefer min 0.0 (UM1RXN quirk when min>0); max 10 Å + stiff RESD outer walls.
-# Heat uses scale (not Bussi): iasvel=1 redraws punch past soft walls → UM1RXN.
+# Heat: Bussi + in-memory overlap handoff + IASVEL0 (see 10_*.sh; no scratch
+# READYN — scale heat hit dynio float-read errors after RESD reinstall).
 # Wipe staged lingo after YAML edits.
 #
 #   source examples/m/_env.sh
@@ -23,11 +24,10 @@
 # Alignment (this file — 200 ps heat):
 #   dt_fs=1.0, ps_heat=200 → heat nstep = 200_000
 #   umbrella init: nsim=400 × update=500 = 200_000; equi=250
-#   heat_thermostat=scale, heat_ihtfrq=500 (== update) — avoid Bussi iasvel=1
 #
 # Pass checks: exit 0; lingo has both ``rcl`` and ``rcn`` umbrella cards;
 # ADUMB-WUNI.DAT under output_dir; RESD installs 2 walls (CL1-C1 and C1-N1).
-# Log should show scale heat (not "VELOCITIES ASSIGNED" every micro-chunk).
+# Log: "in-memory handoff between N chunks" (not scratch .overlap_a/.b.res).
 #
 # Docs: docs/examples/nh3-ch3cl-results.md (ADUMB 2D section).
 
@@ -46,11 +46,10 @@ temperature: 500
 dt_fs: 1.0
 md_stages: "mini,heat"
 ps_heat: 200.0
-# Bussi defaults to iasvel=1 Boltzmann every micro-chunk — that redraw punches
-# reactive RCs past soft walls → UM1RXN. Scale heat + ihtfrq==update keeps
-# velocities continuous; ADUMB equi absorbs the rare ihtfrq redraw.
-heat_thermostat: scale
-heat_ihtfrq: 500
+# Prefer Bussi (default): auto in-memory overlap handoff. Scale heat used scratch
+# READYN (.a/.b.res) and hit dynio "Bad value during floating point read" after
+# ADUMB/RESD wall reinstall. Continuity across chunks: IASVEL0 (see 10_*.sh).
+# Soft walls still require no mid-chunk Boltzmann redraw → MMML_BUSSI_IASVEL0_CONTINUATION.
 heat_firstt: 100.0
 packmol_placement: sphere
 packmol_radius: 6.0
@@ -61,6 +60,9 @@ dyn_freq_cadence: 500
 # warn: no SD rescue (keeps ADUMB unbiased). Mid-chunk abort still rewinds
 # numbered heat.NNNN.res when ADUMB RC guard is armed.
 dynamics_overlap_action: warn
+# Belt-and-suspenders: skip scratch READYN between chunks (also auto when
+# _adumb_rc_guard is armed).
+dynamics_overlap_memory_handoff: true
 dynamics_overlap_min_distance: 0.2
 dynamics_intra_min_distance: 0.2
 # Product / dissociated Cl makes CH3CL "monomer" large; keep explicit ceiling.
