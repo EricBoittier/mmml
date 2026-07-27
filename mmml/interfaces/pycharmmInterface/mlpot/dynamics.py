@@ -4323,6 +4323,11 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1``). ``MMML_BUSSI_IASVEL1_REDRAW=1``
     is accepted as an explicit alias of the default.
     """
+    if bool(kw.get("_adumb_forbid_iasvel0")) or bool(
+        kw.get("_adumb_preserve_velocities")
+    ):
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
     if bool(kw.pop("_bussi_force_iasvel_one", False)):
         # One-shot: only the first post-rescue dyna may force IASVEL=1.
         _apply_bussi_iasvel_one_at_ramp_target(kw)
