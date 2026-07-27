@@ -64,6 +64,7 @@ dynamics_overlap_memory_handoff: true
 dynamics_overlap_min_distance: 0.2
 dynamics_intra_min_distance: 0.2
 # Product / dissociated Cl makes CH3CL "monomer" large; keep explicit ceiling.
+# md-system must forward this to pycharmm (else auto bond limits ≈4–5 Å abort).
 dynamics_max_monomer_extent: 30.0
 # CRITICAL for ADUMB: never rigid-body template-restore monomers after fly-off.
 # That keeps inter-monomer COMs and leaves r(C–N) ≫ umbrella max → UM1RXN.

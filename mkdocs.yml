@@ -122,6 +122,8 @@ nav:
           - md-embedding: cli/commands/md-embedding.md
           - mpi-launch: cli/commands/mpi-launch.md
           - plot-restart-velocities: cli/commands/plot-restart-velocities.md
+          - umbrella-mbar: cli/commands/umbrella-mbar.md
+          - umbrella-sample: cli/commands/umbrella-sample.md
       # CLI_NAV_END
   - MD workflows:
       - md-system YAML configs: md-system-configs.md

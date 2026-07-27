@@ -3066,6 +3066,17 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-dynamics-overlap-separate")
     if getattr(args, "dynamics_overlap_memory_handoff", False):
         cmd.append("--dynamics-overlap-memory-handoff")
+    _append_optional(
+        cmd,
+        "--dynamics-max-monomer-extent",
+        getattr(args, "dynamics_max_monomer_extent", None),
+    )
+    if getattr(args, "no_dynamics_max_monomer_extent", False):
+        cmd.append("--no-dynamics-max-monomer-extent")
+    if getattr(args, "no_dynamics_geometry_limits_auto", False):
+        cmd.append("--no-dynamics-geometry-limits-auto")
+    if getattr(args, "no_dynamics_monomer_template_restore", False):
+        cmd.append("--no-dynamics-monomer-template-restore")
     cmd.extend(
         [
             "--dynamics-overlap-separate-margin",

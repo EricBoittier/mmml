@@ -469,6 +469,22 @@ def test_build_pycharmm_command_forwards_intra_monomer_guard():
     assert cmd[idx + 1] == "0.5"
 
 
+def test_build_pycharmm_command_forwards_max_monomer_extent_and_adumb_guards():
+    """YAML extent / ADUMB flags must reach pycharmm_mlpot (not only md-system)."""
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            dynamics_max_monomer_extent=30.0,
+            dynamics_overlap_memory_handoff=True,
+            no_dynamics_monomer_template_restore=True,
+            no_dynamics_geometry_limits_auto=True,
+        )
+    )
+    assert cmd[cmd.index("--dynamics-max-monomer-extent") + 1] == "30.0"
+    assert "--dynamics-overlap-memory-handoff" in cmd
+    assert "--no-dynamics-monomer-template-restore" in cmd
+    assert "--no-dynamics-geometry-limits-auto" in cmd
+
+
 def test_build_pycharmm_command_omits_intra_monomer_guard_when_none():
     cmd = build_pycharmm_command(_pycharmm_args(dynamics_intra_min_distance=None))
     assert "--dynamics-intra-min-distance" not in cmd
