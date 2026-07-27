@@ -46,7 +46,7 @@ mm_charge_mode: fixed
 # jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
-temperature: 500
+temperature: 1000
 dt_fs: 1.0
 md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
@@ -70,7 +70,7 @@ dyn_freq_cadence: 1000
 # only fire it on catastrophic overlaps (0.2 Å). Normal TS/bond contacts (>1 Å)
 # and the forming N–C bond never trigger it, so sampling is untouched. The NaN
 # gate still guards against Fortran segfaults on blow-up.
-dynamics_overlap_action: rescue
+dynamics_overlap_action: warn !rescue
 dynamics_overlap_min_distance: 0.2
 dynamics_intra_min_distance: 0.2
 # Fly-off guard: dissociating Cl fragment can grow the CH3Cl extent; raise past
@@ -117,7 +117,7 @@ pycharmm_pre_dynamics_lingo: |
   ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
  
   ! Preserve the existing topology-derived IC table if needed later.
-  !cons dihe bynu 1 5 6 5 200 0.0 
+  cons dihe bynu 1 5 6 5 200 0.0 
   
   ! Soft upper walls on *component* distances (Å). Outer caps only (r ≳ 7.25);
   ! they do not forbid the TS. Disable: MMML_ADUMB_RC_WALL_BACKEND=off
@@ -146,5 +146,5 @@ pycharmm_pre_dynamics_lingo: |
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 100_000 here)
-  umbrella init nsim 100 update 1000 equi 200 temp 500 wuni 44 ucun 50
+  umbrella init nsim 100 update 1000 equi 200 temp 1000 wuni 44 ucun 50
   umbrella ston
