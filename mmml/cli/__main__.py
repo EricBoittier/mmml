@@ -250,6 +250,10 @@ def main():
         from .misc import dimer_scan
         return dimer_scan.main(args.args)
 
+    elif command == "neb":
+        from .misc import neb
+        return neb.main(args.args)
+
     elif command == "dmc":
         from mmml.generate.dmc.dmc import main as dmc_main
         return dmc_main(args.args)

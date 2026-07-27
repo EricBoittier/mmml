@@ -179,6 +179,25 @@ uv run mmml md-system --config examples/m/yaml/ewald_all_tip3.yaml --job-id ewal
 Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
 `RUN_ACN=0 RUN_DMSO=0` to run only the TIP3 matrix.
 
+### NEB (ASE nudged elastic band)
+
+Vacuum SN2-like path for NH₃–CH₃Cl with `kl.json` (endpoints under `neb/`):
+
+```bash
+source examples/m/_env.sh
+# Smoke (11 images):
+bash examples/m/13_neb.sh
+# Or via YAML:
+uv run mmml neb --config examples/m/yaml/neb.yaml --overwrite
+# Dense band (~Asparagus 99-image setup):
+N_IMAGES=99 bash examples/m/13_neb.sh
+```
+
+Writes `artifacts/nh3_ch3cl/neb/{neb.traj,neb.xyz,neb_profile.dat,neb_plot.png,neb_summary.json}`.
+Profile columns: reaction coordinate (Å), ΔE (kcal/mol), N–C and Cl–C distances.
+
+Docs: [`docs/neb.md`](../../docs/neb.md).
+
 ### ADUMB (PyCHARMM adaptive umbrella)
 
 Yes — the NPZ can drive a PyCHARMM ADUMB job after you have a CGenFF system
@@ -238,4 +257,5 @@ If a prior cube Packmol run left monomers ~box-length apart, the script clears
 | Ewald LR | core `mic_*` / `ewald_*` jobs exit 0; optional libs may SKIP |
 | ADUMB 1D | exit 0; lingo has `umbrella rxncor` / `r_nc`; ADUMB files under `adumb_nc_distance/` |
 | ADUMB 2D | exit 0; lingo has `nrxn 2` + `r_cl`/`r_cn`; ADUMB files under `adumb_clc_cn_2d/` |
+| NEB | exit 0; finite `barrier_kcal_mol` in `artifacts/nh3_ch3cl/neb/neb_summary.json` |
 | Docs | `docs/examples/nh3-ch3cl-results.md` + PNGs under `docs/images/examples/nh3-ch3cl/` |

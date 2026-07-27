@@ -80,7 +80,7 @@ Highlights:
 **QM & data** — `pyscf-dft`, `pyscf-evaluate`, `fix-and-split`, `xml2npz`, `npz2traj`
 
 **ML training & sampling** — `physnet-train`, `physnet-evaluate`, `physnet-md`,
-`dmc`, `efield-train`
+`neb`, `dmc`, `efield-train`
 
 **Workflow helpers** — `configure`, `env`, `commands`, `examples`
 

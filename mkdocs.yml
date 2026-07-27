@@ -91,6 +91,7 @@ nav:
           - physnet-train: cli/commands/physnet-train.md
           - physnet-evaluate: cli/commands/physnet-evaluate.md
           - physnet-md: cli/commands/physnet-md.md
+          - neb: cli/commands/neb.md
           - dmc: cli/commands/dmc.md
           - efield-train: cli/commands/efield-train.md
           - efield-evaluate: cli/commands/efield-evaluate.md
@@ -125,6 +126,7 @@ nav:
   - MD workflows:
       - md-system YAML configs: md-system-configs.md
       - Diffusion Monte Carlo (DMC): dmc.md
+      - Nudged elastic band (NEB): neb.md
       - Packmol placement: packmol-placement.md
       - Protein force fields (CHARMM + jax-md): protein-force-fields.md
       - Tri-alanine water box: trialanine-water-box.md

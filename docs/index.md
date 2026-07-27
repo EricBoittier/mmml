@@ -20,6 +20,7 @@ Use this site for installation, the **CLI reference**, MD workflow guides, and d
 - [Package architecture](package-architecture.md) — module layout and import graph
 - [Scientific code policy](scientific-code.md) — reproducibility, provenance, failure integrity, and review checklist
 - [1D dimer scan design](dimer-scan-design.md) — canonical modular API and self-describing result bundle
+- [Nudged elastic band (NEB)](neb.md) — PhysNet MEP / barrier sampling (`mmml neb`)
 - [Dimer tool inventory](dimer-tool-inventory.md) — canonical, campaign, validation, exploratory, and deprecated paths
 - [MPNN tool inventory](mpnn-tool-inventory.md) — PhysNet / Spooky / DCM / EF ownership and shared kernels
 - [Calculator capability matrix](calculator-capabilities.md) — calculators, hybrid assembly, charge modes, MM modes, LR solvers, and drivers

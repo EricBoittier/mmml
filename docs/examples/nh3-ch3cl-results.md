@@ -11,6 +11,17 @@ See [`examples/m/README.md`](https://github.com/EricBoittier/mmml/blob/main/exam
 commit `30eb7a01f7fcf1d42a795f188526a80e547110fd` (`examples/m/kl.json`,
 `examples/m/nh3_ch3cl_filtered.npz`).
 
+## NEB (vacuum ML path)
+
+ASE nudged elastic band on `kl.json` between reactant / product XYZs under
+`examples/m/neb/`. Guide: [Nudged elastic band](../neb.md).
+
+```bash
+source examples/m/_env.sh
+bash examples/m/13_neb.sh
+# or: uv run mmml neb --config examples/m/yaml/neb.yaml --overwrite
+```
+
 ## ADUMB (PyCHARMM)
 
 | Example | RCs | Config | Script |

@@ -1,0 +1,24 @@
+# NH3–CH3Cl vacuum NEB with examples/m/kl.json
+#
+# Paths are resolved relative to this file. Smoke defaults keep the band
+# small; raise n_images toward ~99 for a dense band like the Asparagus script.
+
+checkpoint: ../kl.json
+initial: ../neb/reag_0_opt.xyz
+final: ../neb/prod_0_opt.xyz
+output_dir: ../../artifacts/nh3_ch3cl/neb
+
+n_images: 11
+fmax: 0.05
+climb: false
+interpolate: idpp
+optimizer: BFGS
+neb_method: improvedtangent
+spring_k: 0.1
+shared_calculator: true
+plot: true
+
+# Atom order in endpoint XYZs: Cl, N, C, H… → log N–C and Cl–C.
+pair_indices:
+  - [1, 2]
+  - [0, 2]

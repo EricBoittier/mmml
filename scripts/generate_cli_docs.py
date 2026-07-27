@@ -68,6 +68,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "physnet-train",
             "physnet-evaluate",
             "physnet-md",
+            "neb",
             "dmc",
             "efield-train",
             "efield-evaluate",
