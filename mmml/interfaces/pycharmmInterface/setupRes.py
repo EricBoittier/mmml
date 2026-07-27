@@ -124,14 +124,31 @@ def _show_energy(skip_energy_show: bool) -> None:
 
 
 def _has_resolved_geometry(atoms: Atoms, *, min_axis_span_A: float = 0.2) -> bool:
-    """True when coordinates span all three Cartesian axes (not a collapsed line/plane)."""
+    """True when coordinates are finite and span at least two dimensions.
+
+    Guards against failed IC builds that leave CHARMM's 9999 placeholder coords,
+    NaNs, or collapse the molecule onto a single point or line. Genuinely planar
+    molecules (e.g. a single water) are valid geometry, so the extent test is
+    orientation-independent: it measures spans along the *principal* axes and
+    only requires the second-largest to exceed ``min_axis_span_A``. A collapsed
+    point spans zero axes and a line spans one, so both are rejected, while any
+    real 2D/3D geometry passes regardless of how it happens to sit relative to
+    the Cartesian axes (the previous all-three-Cartesian-axes test spuriously
+    failed axis-aligned planar molecules).
+    """
     positions = np.asarray(atoms.get_positions(), dtype=float)
     if positions.size == 0 or not np.all(np.isfinite(positions)):
         return False
-    if len(positions) <= 1:
+    if len(positions) <= 2:
+        # Fewer than 3 atoms cannot define a 2D extent; a finite point/diatomic
+        # is the best geometry available, so accept it.
         return True
-    spans = np.ptp(positions, axis=0)
-    if not np.all(spans >= float(min_axis_span_A)):
+    centered = positions - positions.mean(axis=0)
+    # Project onto principal axes, then measure the Å-valued span along each so
+    # the threshold stays in the same units as before.
+    _, _, principal_axes = np.linalg.svd(centered, full_matrices=False)
+    principal_spans = np.sort(np.ptp(centered @ principal_axes.T, axis=0))[::-1]
+    if principal_spans[1] < float(min_axis_span_A):
         return False
     # Reject accidental y/z duplication (bad PDB parsing or coor mix-ups).
     if np.allclose(positions[:, 1], positions[:, 2], rtol=0.0, atol=1e-6):

@@ -101,5 +101,6 @@ than listing every prior commit.
   and CI-only (`tests/charmm_mpi/`) testing rather than by the default unit
   suite.
 
-[Unreleased]: https://github.com/EricBoittier/mmml/compare/v0.1.0a1...HEAD
+[Unreleased]: https://github.com/EricBoittier/mmml/compare/v0.1.0a2...HEAD
+[0.1.0a2]: https://github.com/EricBoittier/mmml/compare/v0.1.0a1...v0.1.0a2
 [0.1.0a1]: https://github.com/EricBoittier/mmml/releases/tag/v0.1.0a1
