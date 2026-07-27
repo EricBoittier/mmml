@@ -115,14 +115,13 @@ pycharmm_pre_dynamics_lingo: |
   ! Wall rcmax is auto-capped to umbrella max so RESD engages before UM1RXN
   ! (e.g. adumrcmax=8 with umbrella max 6 → walls at 5.25, not 7.25).
   ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
- 
-  ! Preserve the existing topology-derived IC table if needed later.
-  cons dihe bynu 1 5 6 5 200 0.0 
-  
-  ! Soft upper walls on *component* distances (Å). Outer caps only (r ≳ 7.25);
-  ! they do not forbid the TS. Disable: MMML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 8.0
   set adumrcwall = 500.0
+
+  ! Optional dihedral restraint (needs FORCE/MIN before BYNUM; four distinct atoms):
+  !   cons dihe force 200.0 min 0.0 bynu 1 5 6 7
+  ! Do not use ``cons dihe bynu … 200 0.0`` — CHARMM then warns "no force constant"
+  ! and drops the restraint (LEVEL 0 from CSTRAN).
 
   ! Filenames uppercased: library eval_charmm_script uppercases the whole card.
   open unit 44 write card name ADUMB-WUNI.DAT

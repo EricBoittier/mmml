@@ -157,7 +157,11 @@ def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
         mock_unpack.assert_not_called()
         model.get_pycharmm_calculator()
     mock_setup.assert_called_once()
-    assert mock_setup.call_args.kwargs["defer_xla_gpu_warmup"] is True
+    # Default (GPU) MLpot runs no longer defer XLA GPU warmup: setup_calculator
+    # is called with defer_xla_gpu_warmup=False and the warmup runs eagerly.
+    # Deferral is now gated on the CPU-load path (_cpu_load in
+    # build_decomposed_mlpot_model), which is not exercised here.
+    assert mock_setup.call_args.kwargs["defer_xla_gpu_warmup"] is False
     mock_xla_warm.assert_called_once()
     mock_unpack.assert_called_once()
     assert model._spherical_fn is not None

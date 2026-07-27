@@ -24,6 +24,20 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics_with_io
 
 
+def _overlap_mlpot_ctx():
+    """mlpot_ctx double whose ``workflow_args`` carries no ADUMB RC guard.
+
+    A bare ``mock.Mock()`` auto-vivifies ``workflow_args._adumb_rc_guard`` into a
+    truthy child Mock, which trips the ADUMB RC overlap-chunk preflight
+    (``prepare_adumb_rc_before_overlap_chunk`` floats ``guard.rcmax``). Production
+    only sets ``_adumb_rc_guard`` when umbrella RXNCOR is configured, so mirror the
+    non-umbrella default of ``None`` here.
+    """
+    ctx = mock.Mock()
+    ctx.workflow_args._adumb_rc_guard = None
+    return ctx
+
+
 @pytest.fixture(autouse=True)
 def _mock_bond_exclusion_pairs_unless_targeted(request):
     """Overlap intra checks must not import PyCHARMM in CI."""
