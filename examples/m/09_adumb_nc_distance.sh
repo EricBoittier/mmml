@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PyCHARMM ADUMB on NH3–CH3Cl bond ratio ξ=r(Cl-C)/r(C-N).
+# PyCHARMM ADUMB on NH3–CH3Cl bond difference ξ=r(Cl-C)−r(C-N) ∈ [-3, 3] Å.
 #
 # Starting geometry (env vars; choose one):
 #   default            build the dimer with Packmol (composition from the YAML)
@@ -9,16 +9,18 @@
 #                      CHARMM cannot read it directly — the PDB carries them).
 #     RCL=<a> RCN=<b>    with USE_NPZ_PDB=1: pick the N=9 frame nearest a 2D
 #                        (r_ClC, r_CN) target Å — e.g. RCL=3.8 RCN=1.57 = product basin
-#     TS_XI=<x>          with USE_NPZ_PDB=1: pick the N=9 frame nearest ξ=r(Cl-C)/r(C-N)
+#     TS_XI=<x>          with USE_NPZ_PDB=1: pick nearest frame to ratio ξ (export helper)
 #     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
 #     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum): restore the default pre-min (by default
 #                        MM pre-min + monomer mini are skipped so a broken-C-Cl seed survives)
 #   SOLVATED=1         use the explicit-TIP3 (PBC) YAML instead of vacuum
 #
+# Requires mmml-patched libcharmm (UM1RXN [min,max]). Do NOT leave CHARMM_LIB_DIR
+# pointing at a stale PhysNet_PyCHARMM tree without that patch.
+#
 # Examples:
 #   bash examples/m/09_adumb_nc_distance.sh                            # Packmol dimer
-#   TS_XI=1.0 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh    # seed near TS
-#   FRAME=4101 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh   # exact frame
+#   FRAME=1000 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh  # exact frame
 # Many seeds across ξ (independent full-range replicas): examples/m/11_adumb_windows.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -39,6 +41,14 @@ fi
 if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
   echo "SKIP: PyCHARMM not importable"
   exit 0
+fi
+
+# Warn if CHARMM_LIB_DIR looks like an old external PhysNet build (no UM1RXN patch).
+if [[ -n "${CHARMM_LIB_DIR:-}" && "${CHARMM_LIB_DIR}" == *"PhysNet_PyCHARMM"* ]]; then
+  echo "WARN: CHARMM_LIB_DIR=${CHARMM_LIB_DIR}"
+  echo "      That tree is typically unpatched (UM1RXN). For ξ∈[-3,3] rebuild mmml CHARMM:"
+  echo "        bash scripts/rebuild_charmm_mlpot.sh --clean"
+  echo "        export CHARMM_LIB_DIR=\${ROOT}/setup/charmm/lib"
 fi
 
 # Optional: feed coordinates from the NPZ-exported CGenFF PDB.
@@ -90,10 +100,11 @@ rm -f "${OUT}/stage_summary.json" \
   "${OUT}/next_run.yaml" "${OUT}/next_run.sh" "${OUT}/next_run.command" \
   "${OUT}/pycharmm_pre_dynamics_lingo.inp"
 
-echo "=== ADUMB Cl–C / C–N ratio: $(basename "${CFG}") ==="
-echo "     (needs CHARMM ADUMB + ADUMBRXNCOR / ?ADUMBRXN; RXNCOR ratio umbrella)"
+echo "=== ADUMB Cl–C − C–N difference: $(basename "${CFG}") ==="
+echo "     (needs CHARMM ADUMB + ADUMBRXNCOR + UM1RXN [min,max] patch)"
 echo "     If Unknown umbrella / SIGSEGV / 'out of range': rebuild_charmm_mlpot.sh"
-echo "     Default YAML: ps_heat=100, ξ in [0.125, 5.0] (needs UM1RXN patch for min>0)"
+echo "     Default YAML: ps_heat=100, ξ=r(ClC)−r(CN) ∈ [-3, 3] Å"
+echo "     CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-<unset>}"
 echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
 echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"
 
@@ -126,17 +137,17 @@ if ! grep -q "umbrella rxncor" "${LINGO}"; then
   echo "FAIL: ${LINGO} missing 'umbrella rxncor'"
   exit 1
 fi
-if ! grep -Eqi 'ratio[[:space:]]+rcl[[:space:]]+rcn|define[[:space:]]+rrat[[:space:]]+ratio' "${LINGO}"; then
-  echo "FAIL: ${LINGO} missing rrat = ratio rcl rcn"
+if ! grep -Eqi 'combination[[:space:]]+rcl|[[:space:]]+rdif[[:space:]]+combination' "${LINGO}"; then
+  echo "FAIL: ${LINGO} missing rdif = combination rcl … rcn …"
   exit 1
 fi
-if ! grep -q "rrat" "${LINGO}"; then
-  echo "FAIL: ${LINGO} missing rrat reaction coordinate"
+if ! grep -q "rdif" "${LINGO}"; then
+  echo "FAIL: ${LINGO} missing rdif reaction coordinate"
   exit 1
 fi
-# Stale distance-only lingo after switching to ratio.
-if grep -Eq 'name[[:space:]]+r_nc|define[[:space:]]+r_nc[[:space:]]+distance' "${LINGO}"; then
-  echo "FAIL: ${LINGO} still has old r_nc distance RC — wipe output_dir and re-run"
+# Stale ratio / distance-only lingo after switching to difference.
+if grep -Eq 'name[[:space:]]+r_nc|name[[:space:]]+rrat|define[[:space:]]+rrat[[:space:]]+ratio|scombination' "${LINGO}"; then
+  echo "FAIL: ${LINGO} still has old r_nc/rrat/scombination RC — wipe output_dir and re-run"
   exit 1
 fi
 # Lingo is staged before dynamics; require an ADUMB output so a soft-failed

@@ -15,15 +15,15 @@ commit `30eb7a01f7fcf1d42a795f188526a80e547110fd` (`examples/m/kl.json`,
 
 | Example | RCs | Config | Script |
 |---------|-----|--------|--------|
-| 1D bond ratio | `rrat` = \(r_{\mathrm{ClC}}/r_{\mathrm{CN}}\) ∈ [0.125, 5] | `examples/m/yaml/adumb_nc_distance.yaml` | `09_adumb_nc_distance.sh` |
+| 1D bond difference | `rdif` = \(r_{\mathrm{ClC}}-r_{\mathrm{CN}}\) ∈ [-3, 3] Å | `examples/m/yaml/adumb_nc_distance.yaml` | `09_adumb_nc_distance.sh` |
 | 2D Cl⋯C / C⋯N | `rcl`, `rcn` distances | `yaml/adumb_clc_cn_2d.yaml` | `10_adumb_clc_cn_2d.sh` |
-| 1D + TIP3 | same `rrat` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` | `SOLVATED=1` on `09_*.sh` |
+| 1D + TIP3 | same `rdif` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` | `SOLVATED=1` on `09_*.sh` |
 
 Optional `USE_NPZ_PDB=1` feeds `07_export_solute_pdb.py` geometry. The 1D RC is
-an RXNCOR **`ratio` of two distances** (CHARMM `RATIO_TYPE`), not a single
-bond length. For 2D, define two distances, `rxncor set nrxn 2 …`, two
-`umbrella rxncor … name …` cards, then one `umbrella init`. ADUMB **NAME**
-tokens are ≤4 characters (`rrat`, `rcl`, `rcn`).
+an RXNCOR **`combination` of two distances** (CHARMM `COMBI_TYPE`):
+\(\xi = r_{\mathrm{ClC}} - r_{\mathrm{CN}}\). For 2D, define two distances,
+`rxncor set nrxn 2 …`, two `umbrella rxncor … name …` cards, then one
+`umbrella init`. ADUMB **NAME** tokens are ≤4 characters (`rdif`, `rcl`, `rcn`).
 
 ### CHARMM build
 
@@ -32,10 +32,12 @@ tokens are ≤4 characters (`rrat`, `rcl`, `rcn`).
 - Without `ADUMBRXNCOR`, `umbrella rxncor` prints `Unknown umbrella specified`
   and heat often SIGSEGVs under MLpot/MPI.
 - Prefer `umbrella rxncor … min 0.0 max …` when libcharmm is unpatched.
-  Unpatched `UM1RXN` treated the upper edge as `(max − min)` when `min > 0`
-  (e.g. `min 2 max 6` → abort once value \(> 4\)). mmml patches that check to
-  `[min, max]`. The 1D ratio example uses `min 0.125 max 5.0` and therefore
-  needs that patch for the exact upper edge (unpatched ≈ `[0.125, 4.875]`).
+  Unpatched `UM1RXN` treated the upper edge as `(max − min)` for any nonzero
+  `min` (e.g. `min 2 max 6` → abort once value \(> 4\); `min -3 max 3` →
+  upper check against 6 instead of 3). mmml patches that check to `[min, max]`.
+  The 1D difference example uses `min -3 max 3` and **requires** that patch
+  plus a rebuild that installs into the `CHARMM_LIB_DIR` PyCHARMM actually
+  loads (do not leave `CHARMM_LIB_DIR` on a stale PhysNet tree).
 
 ### Align `umbrella init` with heat length
 
@@ -71,7 +73,7 @@ common cause of `UM1RXN` `reaction coordinate out of range` after editing
 
 **1D** — `artifacts/nh3_ch3cl/adumb_nc_distance/` (`ps_heat=100`):
 
-- `pycharmm_pre_dynamics_lingo.inp` with `ratio rcl rcn`, `umbrella … name rrat`
+- `pycharmm_pre_dynamics_lingo.inp` with `combination rcl 1.0 rcn -1.0`, `name rdif`
 - `ADUMB-WUNI.DAT`, `UMBCOR`, `RXNCOR_TRACE.DAT` (or lowercase)
 - heat restart / DCD
 

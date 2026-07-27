@@ -189,16 +189,17 @@ RXNCOR + `umbrella rxncor` (same ADUMB path as
 
 | Example | Coordinates | Config / script |
 |---------|-------------|-----------------|
-| 1D | ξ = \(r_{\mathrm{ClC}}/r_{\mathrm{CN}}\) (`rrat`), [0.125, 5], 100 ps | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
+| 1D | ξ = \(r_{\mathrm{ClC}}-r_{\mathrm{CN}}\) (`rdif`), [-3, 3] Å, 100 ps | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
 | 2D | Cl⋯C + C⋯N (`rcl`, `rcn`) | `yaml/adumb_clc_cn_2d.yaml`, `10_adumb_clc_cn_2d.sh` |
-| 1D + TIP3 | same `rrat` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
+| 1D + TIP3 | same `rdif` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
 
 Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 `scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
 `umbrella rxncor` prints `Unknown umbrella specified` and heat often SIGSEGVs.
-The 1D ratio window uses `min 0.125` — rebuild with the mmml `UM1RXN` patch
-in `eadumb.F90` so the upper edge is exactly 5.0 (unpatched ≈ 4.875). RXNCOR
-**NAME** tokens for ADUMB are at most **4 characters** (`rrat`, `rcl`, `rcn`).
+The 1D difference window uses `min -3 max 3` — rebuild with the mmml `UM1RXN`
+patch in `eadumb.F90` and point `CHARMM_LIB_DIR` at that install (not a stale
+PhysNet lib). RXNCOR **NAME** tokens for ADUMB are at most **4 characters**
+(`rdif`, `rcl`, `rcn`).
 
 **Production heat:** set `umbrella init` so `nsim * update == heat nstep`
 (`nstep ≈ ps_heat * 1000 / dt_fs`). Full notes + results table:
@@ -211,7 +212,7 @@ in `eadumb.F90` so the upper edge is exactly 5.0 (unpatched ≈ 4.875). RXNCOR
 source examples/m/_env.sh
 rm -rf artifacts/nh3_ch3cl/adumb_nc_distance   # avoid stale next_run / old r_nc lingo
 
-# 100 ps vacuum ADUMB on bond ratio (NPZ geometry preferred):
+# 100 ps vacuum ADUMB on bond difference ξ=r(ClC)−r(CN) ∈ [-3,3] (NPZ preferred):
 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 
 # 2D Cl⋯C + C⋯N adaptive umbrella (smoke ps_heat=0.2):

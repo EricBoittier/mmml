@@ -1,5 +1,5 @@
-# ADUMB Cl⋯C / C⋯N bond ratio in explicit TIP3 (PBC) — after vacuum smoke works.
-# Same ξ = r(Cl-C)/r(C-N) as adumb_nc_distance.yaml (smoke lengths here).
+# ADUMB Cl⋯C − C⋯N bond difference in explicit TIP3 (PBC) — after vacuum smoke.
+# Same ξ = r(Cl-C)−r(C-N) ∈ [-3, 3] as adumb_nc_distance.yaml (smoke lengths).
 #
 #   source examples/m/_env.sh
 #   SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
@@ -67,14 +67,15 @@ pycharmm_pre_dynamics_lingo: |
   rxncor define pcl point select atom * * CL1 end
   rxncor define rcl distance pcl pc
   rxncor define rcn distance pc pn
-  rxncor define rrat ratio rcl rcn
-  rxncor set nrxn 1 rrat
-  rxncor trace rrat unit 45
+  rxncor define rdif combination rcl 1.0 rcn -1.0
+  rxncor set nrxn 1 rdif
+  rxncor trace rdif unit 45
 
   ! RC outer walls: RESDistance POSITIVE by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
 
-  ! Same window as vacuum 1D; min>0 needs UM1RXN patch (see adumb_nc_distance.yaml)
-  umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat
+  ! Same window as vacuum 1D; REQUIRES mmml UM1RXN [min,max] patch (eadumb.F90)
+  umbrella rxncor nresol 40 trig 0 poly 6 min -3.0 max 3.0 name rdif
   ! equi MUST be < update or MOD(ICUM,update) > equi is never true and ADUMB
   ! records ZERO statistics. equi 20 of update 100 → 80% of each window sampled.
   umbrella init nsim 10 update 100 equi 20 thresh 10 temp 300 wuni 44 ucun 50
+  umbrella ston

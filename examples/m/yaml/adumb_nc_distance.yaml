@@ -1,13 +1,16 @@
-# ADUMB on NH3–CH3Cl bond ratio (RXNCOR) — PyCHARMM only.
+# ADUMB on NH3–CH3Cl bond difference (RXNCOR) — PyCHARMM only.
 #
-# Menshutkin / SN2-like 1D coordinate: ξ = r(Cl⋯C) / r(C⋯N)
-# (CHARMM ``rxncor define … ratio`` of two distances; see rxnene.F90 RATIO_TYPE).
-# Window 0.125–5.0 covers reactant-like (ξ small) through product-like (ξ large).
+# Menshutkin / SN2-like 1D coordinate: ξ = r(Cl⋯C) − r(C⋯N)
+# (CHARMM ``rxncor define … combination``; see rxnene.F90 COMBI_TYPE).
+# Window [-3, 3] Å covers reactant (ξ < 0) through product (ξ > 0).
 #
-# Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
-# For min>0, prefer the mmml UM1RXN patch in eadumb.F90 (exact [min,max]);
-# unpatched treats the upper edge as (max−min) → ~[0.125, 4.875] here.
+# Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``) **and** the
+# mmml UM1RXN patch in ``eadumb.F90`` so ``min/max`` are the physical window
+# (unpatched compares the upper edge to ``max−min``, which is wrong for any
+# nonzero ``min`` — especially negative mins like −3).
 #
+#   bash scripts/rebuild_charmm_mlpot.sh --clean
+#   export CHARMM_LIB_DIR=/path/to/setup/charmm/lib   # NOT a stale PhysNet lib
 #   source examples/m/_env.sh
 #   USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 #
@@ -18,7 +21,7 @@
 #
 # Pass checks:
 #   1. exit 0
-#   2. staged lingo has ``ratio`` + ``umbrella rxncor`` name rrat
+#   2. staged lingo has ``combination`` + ``umbrella rxncor`` name rdif
 #   3. ADUMB-WUNI.DAT / UMBCOR / RXNCOR_TRACE.DAT under output_dir
 #
 # Wipe output_dir/pycharmm_pre_dynamics_lingo.inp after YAML edits (09 script does).
@@ -63,9 +66,8 @@ dyn_freq_cadence: 1000
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 0.2
 dynamics_intra_min_distance: 0.2
-# Fly-off guard: at ξ→5, r(Cl–C)→~7.5 Å so the CH3Cl fragment extent grows;
-# raise well past the 12 Å default so dissociation is not flagged (still catches
-# a true explosion beyond 25 Å).
+# Fly-off guard: dissociating Cl fragment can grow the CH3Cl extent; raise past
+# the 12 Å default (still catches a true explosion beyond 25 Å).
 dynamics_max_monomer_extent: 25.0
 mini_nstep: 0
 skip_energy_show: true
@@ -87,14 +89,16 @@ dcd_max_frames: 200
 # Builder segids differ (packmol=CLST, --from-pdb=SYS); rxncor selects by atom
 # name below so either path works. resid 1 = AMM1, resid 2 = CH3CL in both.
 # OPEN names are basenames: lingo runs with cwd=output_dir (mxcmsz-safe).
-# ADUMB NAME tokens are ≤4 chars (rrat).
+# ADUMB NAME tokens are ≤4 chars (rdif).
 pycharmm_pre_dynamics_lingo: |
   ! Weak COM tether: stops global drift/rotation in vacuum without confining the
   ! reaction. Acts on the aggregate COM (sele all), so it does NOT bias the
-  ! internal RC ξ=r(Cl-C)/r(C-N) — that is translation-invariant.
+  ! internal RC ξ=r(Cl-C)−r(C-N) — that is translation-invariant.
   ! cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
-  ! Traced distance upper bound (Å); MMFP walls match so UM1RXN cannot abort.
+  ! Soft upper walls on the *component* distances (Å); keeps |ξ| from flying
+  ! outside the ADUMB window via one bond alone. MMFP/RESDIST injected by mmml
+  ! after umbrella init unless ``MMML_ADUMB_RC_WALL_BACKEND=off``.
   set adumrcmax = 8.0
   set adumrcwall = 500.0
 
@@ -109,19 +113,20 @@ pycharmm_pre_dynamics_lingo: |
   rxncor define pc point select atom * * C1 end
   rxncor define pcl point select atom * * CL1 end
 
-  ! Bond distances, 
+  ! Bond distances, then SN2-like difference ξ = r(Cl-C) − r(C-N)
+  ! (CHARMM keyword is ``combination``, not ``scombination``).
   rxncor define rcl distance pcl pc
   rxncor define rcn distance pc pn
-  rxncor define rdiff scombination rcl 1.0 rcn -1.0
+  rxncor define rdif combination rcl 1.0 rcn -1.0
 
-  rxncor set nrxn 1 rdiff
-  rxncor trace rdiff unit 45
+  rxncor set nrxn 1 rdif
+  rxncor trace rdif unit 45
 
-  ! RC outer walls: RESDistance POSITIVE by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
-
-  ! Adaptive umbrella on ξ ∈ [0.125, 5.0] (dimensionless).
-  ! min>0 needs UM1RXN [min,max] patch for the exact upper edge (see header).
-  umbrella rxncor nresol 40 trig 0 poly 6 min -3.0 max 3.0 name rdiff
+  ! Adaptive umbrella on ξ ∈ [-3, 3] Å. REQUIRES mmml UM1RXN patch (eadumb.F90):
+  ! unpatched upper-edge check uses (max−min)=6, so the physical max=3 is wrong.
+  umbrella rxncor nresol 40 trig 0 poly 6 min -3.0 max 3.0 name rdif
 
   ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
   umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 1000 wuni 44 ucun 50
+  ! ``umbrella stoff`` freezes bias stats; ``umbrella ston`` = adaptive (default)
+  umbrella ston
