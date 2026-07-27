@@ -92,6 +92,16 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Nudged elastic band (NEB) path sampling with PhysNet",
     ),
     CommandSpec(
+        "umbrella-sample",
+        "mmml.cli.misc.umbrella_sample",
+        "Batched distance umbrella NVT sampling (PhysNet/SpookyNet)",
+    ),
+    CommandSpec(
+        "umbrella-mbar",
+        "mmml.cli.misc.umbrella_mbar",
+        "MBAR post-processing for umbrella-sample runs",
+    ),
+    CommandSpec(
         "dmc",
         "mmml.generate.dmc.dmc",
         "Diffusion Monte Carlo with PhysNetJax (batched walkers)",

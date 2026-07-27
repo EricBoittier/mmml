@@ -10,6 +10,13 @@ and versioning process.
 
 ## [Unreleased]
 
+### Added
+
+- Batched pure-ML distance umbrella sampling (`mmml umbrella-sample`) and
+  CV MBAR post-processing (`mmml umbrella-mbar`): pack K restrained copies into
+  one PhysNet/SpookyNet batch, NVT Nose-Hoover via JAX-MD, then pymbar.
+  See `docs/umbrella.md`.
+
 ## [0.1.0a2] - 2026-07-27
 
 Second tagged alpha. Focuses on enhanced-sampling / reaction-coordinate

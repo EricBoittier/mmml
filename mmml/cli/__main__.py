@@ -254,6 +254,14 @@ def main():
         from .misc import neb
         return neb.main(args.args)
 
+    elif command == "umbrella-sample":
+        from .misc import umbrella_sample
+        return umbrella_sample.main(args.args)
+
+    elif command == "umbrella-mbar":
+        from .misc import umbrella_mbar
+        return umbrella_mbar.main(args.args)
+
     elif command == "dmc":
         from mmml.generate.dmc.dmc import main as dmc_main
         return dmc_main(args.args)

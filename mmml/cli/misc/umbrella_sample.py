@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+"""CLI for batched umbrella NVT sampling with PhysNet / SpookyNet.
+
+Usage:
+    mmml umbrella-sample \\
+      --checkpoint out/ckpts/model \\
+      --structure molecule.xyz \\
+      --atoms 0,1 \\
+      --xi-min 1.5 --xi-max 3.5 --n-windows 11 \\
+      --k 20 --temperature 300 --nsteps 5000 -o out/umbrella
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+from typing import Any
+
+from mmml.umbrella.config import UmbrellaConfig
+from mmml.umbrella.sample import run_umbrella_nvt
+
+
+def _parse_pair(value: str) -> tuple[int, int]:
+    try:
+        left, right = value.split(",")
+        return int(left), int(right)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected I,J atom indices (got {value!r})"
+        ) from exc
+
+
+def _parse_float_list(value: str) -> tuple[float, ...]:
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("expected comma-separated floats")
+    try:
+        return tuple(float(p) for p in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected comma-separated floats (got {value!r})"
+        ) from exc
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="mmml umbrella-sample",
+        description=(
+            "Batched distance umbrella sampling with a PhysNet / SpookyNet "
+            "checkpoint via JAX-MD NVT Nose-Hoover."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="YAML/JSON UmbrellaConfig; CLI flags override file values when set",
+    )
+    parser.add_argument("--checkpoint", type=Path, help="PhysNet / SpookyNet checkpoint")
+    parser.add_argument("--structure", type=Path, help="Input XYZ / structure file")
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=Path,
+        help="Directory for snapshots, trajectories, and summary",
+    )
+    parser.add_argument(
+        "--atoms",
+        type=_parse_pair,
+        help="0-based atom indices for the distance CV (I,J)",
+    )
+    parser.add_argument(
+        "--targets",
+        type=_parse_float_list,
+        help="Comma-separated umbrella centers ξ₀ (Å)",
+    )
+    parser.add_argument("--xi-min", type=float, help="Grid start (Å) if --targets omitted")
+    parser.add_argument("--xi-max", type=float, help="Grid end (Å) if --targets omitted")
+    parser.add_argument(
+        "--n-windows",
+        type=int,
+        help="Number of windows on [xi-min, xi-max]",
+    )
+    parser.add_argument(
+        "--k",
+        dest="k_ev_A2",
+        type=float,
+        default=None,
+        help="Harmonic force constant (eV/Å²); shared across windows (default: 10)",
+    )
+    parser.add_argument(
+        "--temperature",
+        dest="temperature_K",
+        type=float,
+        default=None,
+        help="NVT temperature in K (default: 300)",
+    )
+    parser.add_argument(
+        "--timestep",
+        dest="timestep_fs",
+        type=float,
+        default=None,
+        help="Timestep in fs (default: 0.5)",
+    )
+    parser.add_argument("--nsteps", type=int, default=None, help="NVT steps (default: 1000)")
+    parser.add_argument(
+        "--printfreq",
+        type=int,
+        default=None,
+        help="Print interval in steps (default: 100)",
+    )
+    parser.add_argument(
+        "--savefreq",
+        type=int,
+        default=None,
+        help="Snapshot save interval (default: same as printfreq)",
+    )
+    parser.add_argument("--seed", type=int, default=None, help="PRNG seed (default: 42)")
+    parser.add_argument(
+        "--no-ema",
+        action="store_true",
+        help="Prefer non-EMA checkpoint params",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow writing into a non-empty output directory",
+    )
+    return parser
+
+
+def _load_config_file(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() in {".yaml", ".yml"}:
+        import yaml
+
+        data = yaml.safe_load(text)
+    else:
+        import json
+
+        data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError(f"config root must be a mapping, got {type(data).__name__}")
+    path_keys = ("checkpoint", "structure", "output_dir")
+    for key in path_keys:
+        value = data.get(key)
+        if value is None:
+            continue
+        expanded = os.path.expandvars(str(value))
+        if "$" in expanded:
+            raise ValueError(f"unresolved environment variable in config field {key}")
+        candidate = Path(expanded).expanduser()
+        if not candidate.is_absolute():
+            candidate = path.parent / candidate
+        data[key] = str(candidate)
+    return data
+
+
+def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
+    data: dict[str, Any] = {}
+    if args.config is not None:
+        cfg_path = args.config.expanduser().resolve()
+        if not cfg_path.is_file():
+            raise FileNotFoundError(f"--config not found: {cfg_path}")
+        data.update(_load_config_file(cfg_path))
+
+    cli_map = {
+        "checkpoint": args.checkpoint,
+        "structure": args.structure,
+        "output_dir": args.output_dir,
+        "temperature_K": args.temperature_K,
+        "timestep_fs": args.timestep_fs,
+        "nsteps": args.nsteps,
+        "printfreq": args.printfreq,
+        "savefreq": args.savefreq,
+        "seed": args.seed,
+        "k_ev_A2": args.k_ev_A2,
+        "xi_min": args.xi_min,
+        "xi_max": args.xi_max,
+        "n_windows": args.n_windows,
+    }
+    for key, value in cli_map.items():
+        if value is not None:
+            data[key] = value
+    if args.atoms is not None:
+        data["atom_i"], data["atom_j"] = args.atoms
+    if args.targets is not None:
+        data["targets_A"] = args.targets
+    if args.no_ema:
+        data["use_ema"] = False
+    if args.overwrite:
+        data["overwrite"] = True
+
+    required = ("checkpoint", "structure", "output_dir")
+    missing = [name for name in required if not data.get(name)]
+    if data.get("atom_i") is None or data.get("atom_j") is None:
+        missing.append("atoms")
+    if missing:
+        raise SystemExit(
+            "missing required options: "
+            + ", ".join(f"--{name.replace('_', '-')}" for name in missing)
+            + " (or provide them in --config)"
+        )
+
+    data.setdefault("targets_A", ())
+    data.setdefault("k_ev_A2", 10.0)
+    data.setdefault("temperature_K", 300.0)
+    data.setdefault("timestep_fs", 0.5)
+    data.setdefault("nsteps", 1000)
+    data.setdefault("printfreq", 100)
+    data.setdefault("seed", 42)
+    data.setdefault("use_ema", True)
+    data.setdefault("overwrite", False)
+
+    return UmbrellaConfig.from_dict(data)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        config = _config_from_args(args)
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
+
+    result = run_umbrella_nvt(config)
+    print(
+        f"Umbrella sampling done: {result.n_windows} windows, "
+        f"{result.n_frames} frames → {result.summary_path}"
+    )
+    print(f"  snapshots: {result.snapshots_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

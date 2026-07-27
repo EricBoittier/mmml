@@ -18,6 +18,7 @@ NH₃–CH₃Cl example: `[examples/m](https://github.com/EricBoittier/mmml/blob
 | Classical MD on the same potential                             | `[mmml physnet-md](cli/commands/physnet-md.md)`        |
 | Rigid 1D interaction scan (no bond rearrangements)             | `[mmml dimer-scan](cli/commands/dimer-scan.md)`        |
 | Adaptive umbrella / free-energy along Cl⋯C / C⋯N (CHARMM)      | ADUMB in `[examples/m](examples/nh3-ch3cl-results.md)` |
+| Pure-ML distance umbrella PMF (NVT + MBAR)                     | `[mmml umbrella-sample](umbrella.md)`                  |
 
 
 NEB is a **local path** method: endpoints must already be local minima (or
