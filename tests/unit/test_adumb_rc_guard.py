@@ -91,6 +91,82 @@ def test_prepare_adumb_rc_rewinds_from_numbered_restart(tmp_path) -> None:
     restore.assert_called_once_with(good)
 
 
+def test_measure_adumb_bond_difference_xi() -> None:
+    x = np.array([0.0, 2.0, 5.0], dtype=np.float64)  # N1, C1, CL1 along x
+    y = np.zeros(3, dtype=np.float64)
+    z = np.zeros(3, dtype=np.float64)
+
+    def _idx(name: str) -> int:
+        return {"N1": 0, "C1": 1, "CL1": 2}[name]
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints._unique_atom_index_by_name",
+        side_effect=_idx,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints._positions_xyz",
+        return_value=(x, y, z),
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+            measure_adumb_bond_difference_xi,
+        )
+
+        # r(Cl-C)=3, r(C-N)=2 → ξ = 1
+        assert measure_adumb_bond_difference_xi() == pytest.approx(1.0)
+
+
+def test_prepare_adumb_rc_rewinds_when_xi_out_of_window(tmp_path) -> None:
+    guard = AdumbRcGuard(
+        rcmax=8.0,
+        rcwall=500.0,
+        pairs=(("CL1", "C1"), ("C1", "N1")),
+        umb_min=-3.0,
+        umb_max=3.0,
+    )
+    stage = tmp_path / "heat.res"
+    stage.touch()
+    good = tmp_path / "heat.0021.res"
+    good.write_text("!X\n", encoding="utf-8")
+    # First call: ξ out of window; after restore: ξ ok and distances ok.
+    xi_vals = iter([-3.5, -1.0])
+    dists = iter(
+        [
+            {"CL1-C1": 1.8, "C1-N1": 5.3},
+            {"CL1-C1": 1.8, "C1-N1": 2.8},
+        ]
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        side_effect=lambda *_a, **_k: next(xi_vals),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        side_effect=lambda *_a, **_k: next(dists),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+    ) as restore:
+        retry = prepare_adumb_rc_before_overlap_chunk(
+            guard,
+            overlap_context="HEAT",
+            chunk_index=22,
+            n_chunks=400,
+            final_restart=stage,
+        )
+    assert retry is True
+    restore.assert_called_once_with(good)
+
+
+def test_parse_adumb_umbrella_bounds_negative_min() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        parse_adumb_umbrella_bounds,
+    )
+
+    script = """
+    umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
+    """
+    assert parse_adumb_umbrella_bounds(script) == (-6.0, 6.0)
+
+
 def test_charmm_output_indicates_failure_detects_unrecognized() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
         _charmm_output_indicates_failure,

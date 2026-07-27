@@ -43,12 +43,13 @@ if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
   exit 0
 fi
 
-# Warn if CHARMM_LIB_DIR looks like an old external PhysNet build (no UM1RXN patch).
+# Warn/fail if CHARMM_LIB_DIR looks like an old external PhysNet build (no UM1RXN patch).
 if [[ -n "${CHARMM_LIB_DIR:-}" && "${CHARMM_LIB_DIR}" == *"PhysNet_PyCHARMM"* ]]; then
-  echo "WARN: CHARMM_LIB_DIR=${CHARMM_LIB_DIR}"
-  echo "      That tree is typically unpatched (UM1RXN). For ξ∈[-3,3] rebuild mmml CHARMM:"
+  echo "FAIL: CHARMM_LIB_DIR=${CHARMM_LIB_DIR}"
+  echo "      That tree is unpatched (UM1RXN). Rebuild mmml CHARMM and retarget:"
   echo "        bash scripts/rebuild_charmm_mlpot.sh --clean"
-  echo "        export CHARMM_LIB_DIR=\${ROOT}/setup/charmm/lib"
+  echo "        export CHARMM_LIB_DIR=${ROOT}/setup/charmm/lib"
+  exit 1
 fi
 
 # Optional: feed coordinates from the NPZ-exported CGenFF PDB.
@@ -103,7 +104,7 @@ rm -f "${OUT}/stage_summary.json" \
 echo "=== ADUMB Cl–C − C–N difference: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXNCOR + UM1RXN [min,max] patch)"
 echo "     If Unknown umbrella / SIGSEGV / 'out of range': rebuild_charmm_mlpot.sh"
-echo "     Default YAML: ps_heat=100, ξ=r(ClC)−r(CN) ∈ [-3, 3] Å"
+echo "     Default YAML: ps_heat=100, ξ=r(ClC)−r(CN) ∈ [-6, 6] Å (SN2 band ~[-3,3])"
 echo "     CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-<unset>}"
 echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
 echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"

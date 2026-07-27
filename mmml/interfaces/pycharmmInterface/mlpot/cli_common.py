@@ -1795,6 +1795,12 @@ _ADUM_RCWALL_SET_RE = re.compile(
 )
 _ADUM_RCMAX_TOKEN_RE = re.compile(r"@adum_?rc_?max\b", re.I)
 _ADUM_RCWALL_TOKEN_RE = re.compile(r"@adum_?rc_?wall\b", re.I)
+_UMB_RXNCOR_MIN_RE = re.compile(
+    r"(?im)^\s*umbrella\s+rxncor\b.*?[\s-]min\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+)
+_UMB_RXNCOR_MAX_RE = re.compile(
+    r"(?im)^\s*umbrella\s+rxncor\b.*?[\s-]max\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+)
 
 
 def parse_adumb_rc_params(script: str) -> tuple[float | None, float | None]:
@@ -1818,6 +1824,29 @@ def parse_adumb_rc_params(script: str) -> tuple[float | None, float | None]:
     if rcwall is not None and rcwall <= 0:
         rcwall = None
     return rcmax, rcwall
+
+
+def parse_adumb_umbrella_bounds(script: str) -> tuple[float | None, float | None]:
+    """Return (umb_min, umb_max) from the first umbrella rxncor min/max card.
+
+    Used to guard combination RCs (xi = r_ClC - r_CN) where component distance
+    walls alone do not enforce the ADUMB window.
+    """
+    text = str(script or "")
+    umin = umax = None
+    mmin = _UMB_RXNCOR_MIN_RE.search(text)
+    mmax = _UMB_RXNCOR_MAX_RE.search(text)
+    if mmin:
+        try:
+            umin = float(mmin.group(1))
+        except ValueError:
+            umin = None
+    if mmax:
+        try:
+            umax = float(mmax.group(1))
+        except ValueError:
+            umax = None
+    return umin, umax
 
 
 def parse_adumb_rc_wall_params(script: str) -> tuple[float, float] | None:
@@ -2138,6 +2167,7 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
         )
 
         rcmax, rcwall = parse_adumb_rc_params(script)
+        umb_min, umb_max = parse_adumb_umbrella_bounds(script)
         if rcmax is not None:
             setattr(
                 args,
@@ -2146,6 +2176,8 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
                     rcmax=float(rcmax),
                     rcwall=float(rcwall if rcwall is not None else 500.0),
                     wall_margin=adumb_rc_wall_margin_A(),
+                    umb_min=umb_min,
+                    umb_max=umb_max,
                 ),
             )
 

@@ -73,9 +73,9 @@ pycharmm_pre_dynamics_lingo: |
 
   ! RC outer walls: RESDistance POSITIVE by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
 
-  ! Same window as vacuum 1D; REQUIRES mmml UM1RXN [min,max] patch (eadumb.F90)
-  umbrella rxncor nresol 40 trig 0 poly 6 min -3.0 max 3.0 name rdif
+  ! Same window as vacuum 1D (matches component walls; see adumb_nc_distance.yaml)
+  umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
   ! equi MUST be < update or MOD(ICUM,update) > equi is never true and ADUMB
   ! records ZERO statistics. equi 20 of update 100 → 80% of each window sampled.
-  umbrella init nsim 10 update 100 equi 20 thresh 10 temp 300 wuni 44 ucun 50
+  umbrella init nsim 10 update 100 equi 20 temp 300 wuni 44 ucun 50
   umbrella ston

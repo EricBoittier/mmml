@@ -2,15 +2,15 @@
 #
 # Menshutkin / SN2-like 1D coordinate: ξ = r(Cl⋯C) − r(C⋯N)
 # (CHARMM ``rxncor define … combination``; see rxnene.F90 COMBI_TYPE).
-# Window [-3, 3] Å covers reactant (ξ < 0) through product (ξ > 0).
+# Window [-6, 6] Å matches component RESD walls (adumrcmax=8); chemically
+# interesting SN2 band is ~[-3, 3]. Tight [-3, 3] needs mmml UM1RXN patch and
+# still risks mid-chunk abort with a flat initial umbrella in vacuum.
 #
 # Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``) **and** the
-# mmml UM1RXN patch in ``eadumb.F90`` so ``min/max`` are the physical window
-# (unpatched compares the upper edge to ``max−min``, which is wrong for any
-# nonzero ``min`` — especially negative mins like −3).
+# mmml UM1RXN patch in ``eadumb.F90`` for nonzero ``min`` (especially negative).
 #
 #   bash scripts/rebuild_charmm_mlpot.sh --clean
-#   export CHARMM_LIB_DIR=/path/to/setup/charmm/lib   # NOT a stale PhysNet lib
+#   export CHARMM_LIB_DIR=$PWD/setup/charmm/lib   # NOT PhysNet_PyCHARMM/...
 #   source examples/m/_env.sh
 #   USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 #
@@ -122,11 +122,17 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rdif
   rxncor trace rdif unit 45
 
-  ! Adaptive umbrella on ξ ∈ [-3, 3] Å. REQUIRES mmml UM1RXN patch (eadumb.F90):
-  ! unpatched upper-edge check uses (max−min)=6, so the physical max=3 is wrong.
-  umbrella rxncor nresol 40 trig 0 poly 6 min -3.0 max 3.0 name rdif
+  ! Adaptive umbrella on ξ = r(Cl-C)−r(C-N).
+  ! Component RESD walls (adumrcmax=8 → rmax≈7.25) do NOT keep |ξ|≤3; they only
+  ! cap each bond, so |ξ| can reach ~6 before walls engage and UM1RXN aborts on
+  ! a tight [-3,3] window (flat initial umbrella + vacuum heat). Use [-6,6] to
+  ! match the walls; chemically interesting band remains ~[-3,3]. For a hard
+  ! [-3,3] window you need the mmml UM1RXN patch AND expect mid-chunk aborts
+  ! unless soft ξ walls exist.
+  umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
 
   ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
-  umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 1000 wuni 44 ucun 50
+  ! Keep under mxcmsz (~80 chars): drop thresh (default 10).
+  umbrella init nsim 100 update 1000 equi 200 temp 1000 wuni 44 ucun 50
   ! ``umbrella stoff`` freezes bias stats; ``umbrella ston`` = adaptive (default)
   umbrella ston

@@ -194,12 +194,22 @@ def _resd_adumb_rc_distance_wall_commands(
 
 @dataclass(frozen=True)
 class AdumbRcGuard:
-    """Track traced ADUMB distances vs umbrella ``max`` during overlap dynamics."""
+    """Track traced ADUMB distances vs umbrella max during overlap dynamics.
+
+    Optional ``umb_min`` / ``umb_max`` guard a combination RC
+    xi = r(CL1-C1) - r(C1-N1) (Menshutkin difference). Component RESD walls
+    alone do **not** keep xi inside a tight window like [-3, 3] when
+    ``adumrcmax`` is ~8 A.
+    """
 
     rcmax: float
     rcwall: float
     pairs: tuple[tuple[str, str], ...] = _ADUMB_RC_WALL_PAIRS
     wall_margin: float = _DEFAULT_ADUMB_RC_WALL_MARGIN_A
+    umb_min: float | None = None
+    umb_max: float | None = None
+    # Rewind before UM1RXN hard-abort when |xi| is this close to the edge.
+    xi_margin: float = 0.05
 
     def wall_droff(self) -> float:
         return adumb_rc_wall_droff(self.rcmax, margin=self.wall_margin)
@@ -220,6 +230,18 @@ def measure_adumb_rc_distances(
         key = f"{name1}-{name2}"
         out[key] = float(np.sqrt(dx * dx + dy * dy + dz * dz))
     return out
+
+
+def measure_adumb_bond_difference_xi(
+    pairs: tuple[tuple[str, str], ...] | None = None,
+) -> float | None:
+    """Return xi = r(CL1-C1) - r(C1-N1) if both distances exist."""
+    dists = measure_adumb_rc_distances(pairs)
+    d_cl = dists.get("CL1-C1")
+    d_cn = dists.get("C1-N1")
+    if d_cl is None or d_cn is None:
+        return None
+    return float(d_cl) - float(d_cn)
 
 
 def check_adumb_rc_before_overlap_chunk(
@@ -277,8 +299,27 @@ def prepare_adumb_rc_before_overlap_chunk(
         worst_name = max(dists, key=dists.get)
         return worst_name, float(dists[worst_name])
 
+    def _xi_out_of_window() -> tuple[float, float, float] | None:
+        """Return ``(xi, lo, hi)`` when ξ is outside the soft ADUMB window."""
+        if guard.umb_min is None or guard.umb_max is None:
+            return None
+        xi = measure_adumb_bond_difference_xi(guard.pairs)
+        if xi is None:
+            return None
+        margin = max(0.0, float(guard.xi_margin))
+        lo = float(guard.umb_min) + margin
+        hi = float(guard.umb_max) - margin
+        if lo >= hi:
+            lo = float(guard.umb_min)
+            hi = float(guard.umb_max)
+        if xi < lo or xi > hi:
+            return float(xi), lo, hi
+        return None
+
+    xi_hit = _xi_out_of_window()
     worst_name, worst = _worst_distance()
-    if worst < rcmax - 1.0e-4:
+    distance_ok = worst < rcmax - 1.0e-4
+    if xi_hit is None and distance_ok:
         warn_at = rcmax * float(warn_fraction)
         if worst >= warn_at:
             print(
@@ -289,11 +330,20 @@ def prepare_adumb_rc_before_overlap_chunk(
             )
         return False
 
+    reason = (
+        f"ξ=r(ClC)−r(CN)={xi_hit[0]:.3f} Å outside soft window "
+        f"[{xi_hit[1]:g}, {xi_hit[2]:g}] (umbrella [{guard.umb_min:g}, {guard.umb_max:g}])"
+        if xi_hit is not None
+        else (
+            f"ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
+            f"is at or beyond umbrella max {rcmax:g} Å"
+        )
+    )
+
     if final_restart is None:
         raise RuntimeError(
-            f"{label}: ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
-            f"is at or beyond umbrella max {rcmax:g} Å — UM1RXN would abort. "
-            "Increase adumrcmax or enable RC walls (default RESD)."
+            f"{label}: {reason} — UM1RXN would abort. "
+            "Widen umbrella min/max, tighten dynamics, or enable RC walls (default RESD)."
         )
 
     from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
@@ -309,7 +359,7 @@ def prepare_adumb_rc_before_overlap_chunk(
         if not candidate.is_file():
             continue
         print(
-            f"ADUMB RC recovery: {worst_name}={worst:.3f} Å ≥ {rcmax:g} Å; "
+            f"ADUMB RC recovery: {reason}; "
             f"restoring {candidate.name} and retrying chunk…",
             flush=True,
         )
@@ -326,20 +376,26 @@ def prepare_adumb_rc_before_overlap_chunk(
                 wall_margin=guard.wall_margin,
                 quiet=True,
             )
+        xi_hit = _xi_out_of_window()
         worst_name, worst = _worst_distance()
-        if worst < rcmax - 1.0e-4:
+        if xi_hit is None and worst < rcmax - 1.0e-4:
             print(
                 f"ADUMB RC recovery: restored {candidate.name}; "
                 f"{worst_name}={worst:.3f} Å (< {rcmax:g} Å)",
                 flush=True,
             )
             return True
+        reason = (
+            f"ξ=r(ClC)−r(CN)={xi_hit[0]:.3f} Å outside soft window "
+            f"[{xi_hit[1]:g}, {xi_hit[2]:g}]"
+            if xi_hit is not None
+            else f"{worst_name}={worst:.3f} Å ≥ {rcmax:g} Å"
+        )
 
     raise RuntimeError(
-        f"{label}: ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
-        f"is at or beyond umbrella max {rcmax:g} Å after rewind "
+        f"{label}: {reason} after rewind "
         f"(lookback={max_recovery_lookback} numbered restarts). "
-        "Increase adumrcmax / adumrcwall or restart from an earlier heat.NNNN.res."
+        "Widen umbrella min/max / adumrcmax or restart from an earlier heat.NNNN.res."
     )
 
 
