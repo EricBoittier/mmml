@@ -5016,23 +5016,26 @@ def test_overlap_chunk_uses_memory_handoff_for_adumb_rc_guard():
 def test_apply_overlap_chunk_adumb_preserves_velocities_no_iasvel_redraw():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
+        prepare_bussi_heat_dynamics_kw,
     )
 
     kw = {
         "start": False,
         "firstt": 100.0,
         "finalt": 500.0,
+        "timestep": 0.001,
+        "nstep": 500,
         "iasvel": 1,
         "iasors": 0,
-        "ihtfrq": 500,
-        "TEMINC": 1.0,
         "_adumb_preserve_velocities": True,
     }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=500, ihtfrq=500, timestep_ps=0.001)
     _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
     assert kw["iasvel"] == 0
     assert kw["start"] is False
     assert kw["restart"] is False
     assert kw["iunrea"] == -1
+    assert kw.get("_skip_ase_cold_velocity_assign") is True
     assert "_adumb_preserve_velocities" not in kw
 
 
