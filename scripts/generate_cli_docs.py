@@ -153,6 +153,12 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "dmc": [
         ("Diffusion Monte Carlo guide", "../../dmc.md"),
     ],
+    "umbrella-sample": [
+        ("Batched umbrella sampling", "../../umbrella.md"),
+    ],
+    "umbrella-mbar": [
+        ("Batched umbrella sampling", "../../umbrella.md"),
+    ],
 }
 
 # Static figures under docs/images/ (see scripts/generate_docs_figures.py).
