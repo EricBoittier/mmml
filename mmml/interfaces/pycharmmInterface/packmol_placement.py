@@ -330,21 +330,28 @@ def _packmol_log_suggests_cli_rejection(log_text: str, exit_code: int) -> bool:
 
 
 def _run_packmol_subprocess(packmol_bin: str, inp_path: Path) -> subprocess.CompletedProcess[str]:
-    """Invoke Packmol; fall back to stdin redirection for pre-CLI binaries."""
+    """Invoke Packmol via its documented stdin interface (``packmol < input.inp``).
+
+    Stock Packmol reads its directives from stdin; the ``-i <file>`` form is not
+    universally supported — most builds silently ignore the flag and read stdin
+    (which, if empty, fails with "Output file not (correctly?) specified"). Drive
+    stdin directly, and fall back to ``-i`` only if the stdin run reports a
+    CLI-level rejection, covering any build that genuinely requires the flag.
+    """
     common = {
         "capture_output": True,
         "text": True,
         "check": False,
         "cwd": str(inp_path.parent),
     }
-    proc = subprocess.run([packmol_bin, "-i", str(inp_path)], **common)
+    with inp_path.open(encoding="utf-8") as fh:
+        proc = subprocess.run([packmol_bin], stdin=fh, **common)
     log_text = (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
     if int(proc.returncode) == 0 or not _packmol_log_suggests_cli_rejection(
         log_text, int(proc.returncode)
     ):
         return proc
-    with inp_path.open(encoding="utf-8") as fh:
-        return subprocess.run([packmol_bin], stdin=fh, **common)
+    return subprocess.run([packmol_bin, "-i", str(inp_path)], **common)
 
 
 def resolve_packmol_use(

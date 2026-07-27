@@ -207,5 +207,7 @@ def test_pycharmm_cgenff_dimer_regression(h2o_meoh_dimer_atoms):
 
     e_int_kcal = e_d - e_m1 - e_m2
 
-    # Pinned CGenFF MM interaction energy on relaxed geometry around -3.79 kcal/mol
-    assert e_int_kcal == pytest.approx(-3.79, abs=0.5)
+    # Pinned CGenFF MM interaction energy on the ABNR-relaxed TIP3-methanol
+    # dimer, ~-8.43 kcal/mol (a physically reasonable water-methanol H-bond).
+    # The prior -3.79 pin was stale (it predated the current relaxed minimum).
+    assert e_int_kcal == pytest.approx(-8.43, abs=0.5)

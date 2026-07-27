@@ -22,23 +22,33 @@ MPI_NP="${MMML_MPI_NP:-1}"
 PYCHARMM_RES_SMOKE="$ROOT/tests/functionality/pycharmmETC/test_res.py"
 MPI_LIVE_ENERGY_SMOKE="$ROOT/tests/charmm_mpi/test_mpi_live_energy.py"
 COMP_VELOCITIES_SMOKE="$ROOT/tests/functionality/mlpot/test_comp_velocities_integration.py"
+CG_JAXMD_SMOKE="$ROOT/tests/unit/test_cg_jaxmd_unified.py"
+DIMER_MODELS_SMOKE="$ROOT/tests/unit/test_dimer_default_models_regression.py"
 
 # CHARMM owns process-global PSF/topology/parameter state.  Any smoke module that
 # initializes or rebuilds that state must run in a fresh interpreter: re-reading
-# CGenFF after the MPI live-energy fixture can segfault inside pycharmm.read.prm.
-# Keep each stateful module isolated, then run the non-stateful remainder.
-for smoke_path in \
-  "$PYCHARMM_RES_SMOKE" \
-  "$MPI_LIVE_ENERGY_SMOKE" \
+# CGenFF after a prior CHARMM build can segfault inside pycharmm.read.prm (the
+# cg-jaxmd box builds and the dimer regression each rebuild topology + re-read
+# CGenFF).  Keep each stateful module isolated, then run the non-stateful
+# remainder.
+STATEFUL_SMOKE_PATHS=(
+  "$PYCHARMM_RES_SMOKE"
+  "$MPI_LIVE_ENERGY_SMOKE"
   "$COMP_VELOCITIES_SMOKE"
-do
+  "$CG_JAXMD_SMOKE"
+  "$DIMER_MODELS_SMOKE"
+)
+for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
   mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
     -m "$MARK_EXPR" "$smoke_path" "$@"
 done
 
+ignore_args=()
+for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
+  ignore_args+=("--ignore=$smoke_path")
+done
+
 exec mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
   -m "$MARK_EXPR" \
-  --ignore="$PYCHARMM_RES_SMOKE" \
-  --ignore="$MPI_LIVE_ENERGY_SMOKE" \
-  --ignore="$COMP_VELOCITIES_SMOKE" \
+  "${ignore_args[@]}" \
   "$@"

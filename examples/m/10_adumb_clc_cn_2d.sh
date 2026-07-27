@@ -68,6 +68,9 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
 fi
 # ADUMB heat: disable ECHECK (Verlet still gates on MAX(ECHECK,0.1×KE) if echeck=-1).
 EXTRA+=(--no-echeck --no-echeck-heat)
+# Soft-wall onset: engage 1.5 Å below umbrella max (default 0.75 is too late for
+# product-seed / dissociating Cl at 500 K).
+export MMML_ADUMB_RC_WALL_MARGIN="${MMML_ADUMB_RC_WALL_MARGIN:-1.5}"
 
 mkdir -p "${OUT}"
 rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT}/cleanup"
