@@ -90,7 +90,11 @@ dcd_max_frames: 200
 pycharmm_pre_dynamics_lingo: |
   ! Weak COM tether — keep vacuum fragments from drifting to 100+ Å (product
   ! seed with Cl free needs a bit more than the reactant-only force 2.0).
-  cons hmcm force 5.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+  cons hmcm force 10.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+
+  ! Shake X–H: without this, Bussi iasvel=1 redraws fling AMM1 H to 100+ Å
+  ! (extent fly-off) while Cl–C / C–N walls stay in-range.
+  shake bonh param
 
   ! --- Make SN2 possible under MLpot ---
   ! CGenFF BOND C1–CL1 (k≈220) stays in ENER INTERN even with include_mm: false

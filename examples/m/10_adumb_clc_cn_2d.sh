@@ -68,6 +68,13 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
 fi
 # ADUMB heat: disable ECHECK (Verlet still gates on MAX(ECHECK,0.1×KE) if echeck=-1).
 EXTRA+=(--no-echeck --no-echeck-heat)
+# Force extent / ADUMB guards onto pycharmm_mlpot even if YAML→cmd forwarding lags.
+EXTRA+=(
+  --dynamics-max-monomer-extent 30
+  --no-dynamics-monomer-template-restore
+  --dynamics-overlap-memory-handoff
+  --dynamics-overlap-action warn
+)
 # Soft-wall onset: engage 1.5 Å below umbrella max (default 0.75 is too late for
 # product-seed / dissociating Cl at 500 K).
 export MMML_ADUMB_RC_WALL_MARGIN="${MMML_ADUMB_RC_WALL_MARGIN:-1.5}"

@@ -395,6 +395,13 @@ def prepare_adumb_rc_before_overlap_chunk(
     )
 
     if final_restart is None:
+        if force_rewind:
+            print(
+                f"WARN: {label}: {reason} — no stage restart for rewind; "
+                "caller must handle (warn mode) or abort.",
+                flush=True,
+            )
+            return False
         raise RuntimeError(
             f"{label}: {reason} — UM1RXN would abort. "
             "Widen umbrella min/max, tighten dynamics, or enable RC walls (default RESD)."
@@ -403,25 +410,42 @@ def prepare_adumb_rc_before_overlap_chunk(
     from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         overlap_chunk_restart_path,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        restore_charmm_state_from_restart,
+    )
 
     stage_restart = Path(final_restart)
+    candidates: list[Path] = []
     for back in range(1, max(1, int(max_recovery_lookback)) + 1):
         idx = int(chunk_index) - back
         if idx < 0:
             break
         candidate = overlap_chunk_restart_path(stage_restart, idx)
-        if not candidate.is_file():
-            continue
+        if candidate.is_file():
+            candidates.append(candidate)
+    # Memory-handoff ADUMB often lacks heat.NNNN.res — fall back to stage / baseline.
+    for name in (
+        stage_restart,
+        stage_restart.with_name("baseline.res"),
+        stage_restart.with_name("mini.res"),
+    ):
+        if name.is_file() and name not in candidates:
+            candidates.append(name)
+
+    for candidate in candidates:
         print(
             f"ADUMB RC recovery: {reason}; "
             f"restoring {candidate.name} and retrying chunk…",
             flush=True,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-            restore_charmm_state_from_restart,
-        )
-
-        restore_charmm_state_from_restart(candidate)
+        try:
+            restore_charmm_state_from_restart(candidate)
+        except Exception as exc:
+            print(
+                f"WARN: ADUMB RC recovery: failed to restore {candidate.name}: {exc}",
+                flush=True,
+            )
+            continue
         if adumb_rc_walls_enabled():
             install_adumb_rxncor_distance_walls(
                 rcmax=guard.rcmax,
@@ -446,6 +470,13 @@ def prepare_adumb_rc_before_overlap_chunk(
             else f"{worst_name}={worst:.3f} Å ≥ {rcmax:g} Å"
         )
 
+    if force_rewind:
+        print(
+            f"WARN: {label}: {reason} after rewind lookback "
+            f"(tried {len(candidates)} restart(s)); returning without raise.",
+            flush=True,
+        )
+        return False
     raise RuntimeError(
         f"{label}: {reason} after rewind "
         f"(lookback={max_recovery_lookback} numbered restarts). "
