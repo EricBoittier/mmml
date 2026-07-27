@@ -4676,12 +4676,19 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         "_required_handoff_velocity_restart", None
     )
     bussi_active = _bussi_heat_ramp_active(kw)
+    adumb_forbid_iasvel0 = bool(kw.pop("_adumb_forbid_iasvel0", False)) or bool(
+        kw.pop("_adumb_preserve_velocities", False)
+    )
     _ensure_bussi_heat_continuation_iasvel(kw)
     # Defense: outer-chunk / subchunk callers can leave iasvel=0; never enter the
     # COMP/C-API inject path for Bussi without explicit opt-in (deferred DCD).
+    # ADUMB always forbids iasvel=0 (COMP-as-positions → T≃10¹³ → UM1RXN).
     if (
         bussi_active
-        and not _bussi_allows_iasvel0_continuation()
+        and (
+            adumb_forbid_iasvel0
+            or not _bussi_allows_iasvel0_continuation()
+        )
         and not bool(kw.get("start"))
         and int(kw.get("iasvel", 0) or 0) == 0
     ):

@@ -5013,7 +5013,8 @@ def test_overlap_chunk_uses_memory_handoff_for_adumb_rc_guard():
     )
 
 
-def test_apply_overlap_chunk_adumb_preserves_velocities_no_iasvel_redraw():
+def test_apply_overlap_chunk_adumb_uses_safe_iasvel_one_not_comp():
+    """ADUMB must not take iasvel=0 (COMP-as-positions → T≃10¹³ K)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         prepare_bussi_heat_dynamics_kw,
@@ -5025,18 +5026,37 @@ def test_apply_overlap_chunk_adumb_preserves_velocities_no_iasvel_redraw():
         "finalt": 500.0,
         "timestep": 0.001,
         "nstep": 500,
-        "iasvel": 1,
+        "iasvel": 0,
         "iasors": 0,
         "_adumb_preserve_velocities": True,
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=500, ihtfrq=500, timestep_ps=0.001)
     _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
-    assert kw["iasvel"] == 0
+    assert kw["iasvel"] == 1
     assert kw["start"] is False
     assert kw["restart"] is False
     assert kw["iunrea"] == -1
-    assert kw.get("_skip_ase_cold_velocity_assign") is True
+    assert kw.get("_skip_ase_cold_velocity_assign") is not True
     assert "_adumb_preserve_velocities" not in kw
+
+
+def test_apply_bussi_iasvel_zero_blocked_for_adumb():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_bussi_iasvel_zero_continuation,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 50.0,
+        "finalt": 500.0,
+        "timestep": 0.001,
+        "nstep": 500,
+        "_adumb_forbid_iasvel0": True,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=500, ihtfrq=250, timestep_ps=0.001)
+    _apply_bussi_iasvel_zero_continuation(kw)
+    assert kw["iasvel"] == 1
+    assert kw.get("_skip_ase_cold_velocity_assign") is not True
 
 
 def test_overlap_chunk_zero_preserves_explicit_handoff_velocities():
