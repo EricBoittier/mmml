@@ -190,6 +190,14 @@ def test_parse_adumb_umbrella_bounds_skips_distance_only_rcl() -> None:
     assert adumb_rc_wall_pairs_for_name("rcl") == (("CL1", "C1"),)
     assert adumb_rc_wall_pairs_for_name("rcn") == (("C1", "N1"),)
     assert adumb_rc_wall_pairs_for_name("rdif") == (("CL1", "C1"), ("C1", "N1"))
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        adumb_rc_wall_pairs_for_names,
+    )
+
+    assert adumb_rc_wall_pairs_for_names(["rcl", "rcn"]) == (
+        ("CL1", "C1"),
+        ("C1", "N1"),
+    )
 
 
 def test_charmm_output_indicates_failure_detects_unrecognized() -> None:

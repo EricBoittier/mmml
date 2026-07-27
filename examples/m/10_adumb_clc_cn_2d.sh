@@ -128,6 +128,13 @@ if [[ ! -f "${OUT}/ADUMB-WUNI.DAT" && ! -f "${OUT}/adumb-wuni.dat" ]]; then
   echo "FAIL: missing ${OUT}/ADUMB-WUNI.DAT (ADUMB did not produce output)"
   exit 1
 fi
+# Soft walls must cover both 2D RCs (Cl–C and C–N); first-name-only left C–N
+# free and UM1RXN aborted with "reaction coordinate out of range".
+if ! grep -qiE 'delete[[:space:]]+bond' "${LINGO}"; then
+  echo "FAIL: ${LINGO} missing 'delete bond' (CGenFF C–Cl locks dissociation)"
+  exit 1
+fi
 
 echo "PASS: ADUMB 2D wiring -> ${OUT}"
 echo "      ADUMB-WUNI.DAT / UMBCOR / RXNCOR_RCL.DAT / RXNCOR_RCN.DAT under ${OUT}"
+echo "      Expect log: RESD: 2 ADUMB distance wall(s) installed"

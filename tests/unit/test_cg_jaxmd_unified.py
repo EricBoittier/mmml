@@ -236,8 +236,17 @@ def test_end_to_end_peptide_water_ml_no_double_counting(cg_unified):
     efn = hybrid.as_jax_energy_fn()
     e_correct = float(efn(R, **{k: jnp.asarray(v) for k, v in kw_correct.items()}))
     e_buggy = float(efn(R, **{k: jnp.asarray(v) for k, v in kw_buggy.items()}))
+    assert np.isfinite(e_buggy)
     assert np.isfinite(e_correct)
     # double-counting the core-solvent interaction (once via ml_pep_water's
     # dimer term, again via classical mm_nonbonded) must change the energy;
     # if it didn't, the exclusion wiring would be a no-op.
-    assert e_correct != pytest.approx(e_buggy, rel=1e-9)
+    #
+    # Compare with an ABSOLUTE floor, not a relative tolerance: the two totals
+    # differ only by the peptide-water pairs (every other term is computed
+    # identically and cancels), but this un-minimized packed box has a large
+    # total (~1e8 eV) dominated by intramolecular clashes. A relative tolerance
+    # scales to that total and would swamp the (physically real) double-counted
+    # contribution; 1e-4 eV sits far above float64 evaluation noise yet well
+    # below any genuine within-cutoff electrostatic interaction.
+    assert abs(e_correct - e_buggy) > 1e-4

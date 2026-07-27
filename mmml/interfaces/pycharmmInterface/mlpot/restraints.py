@@ -74,6 +74,29 @@ def adumb_rc_wall_pairs_for_name(umb_name: str | None) -> tuple[tuple[str, str],
     return _ADUMB_RC_WALL_PAIR_BY_NAME.get(key, _ADUMB_RC_WALL_PAIRS)
 
 
+def adumb_rc_wall_pairs_for_names(
+    umb_names: list[str] | tuple[str, ...] | None,
+) -> tuple[tuple[str, str], ...]:
+    """Union of wall pairs for every umbrella name (2D ADUMB: ``rcl`` + ``rcn``).
+
+    A single-name lookup kept only Cl–C walls for 2D scripts whose first card
+    is ``name rcl``, leaving C–N free to exceed ``max`` → UM1RXN abort.
+    """
+    names = [str(n).strip().lower() for n in (umb_names or ()) if str(n).strip()]
+    if not names:
+        return _ADUMB_RC_WALL_PAIRS
+    if len(names) == 1:
+        return adumb_rc_wall_pairs_for_name(names[0])
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for name in names:
+        for pair in adumb_rc_wall_pairs_for_name(name):
+            if pair not in seen:
+                seen.add(pair)
+                out.append(pair)
+    return tuple(out) if out else _ADUMB_RC_WALL_PAIRS
+
+
 def adumb_rc_wall_margin_A() -> float:
     """Inside offset (Å) for MMFP ``droff`` below umbrella ``max``."""
     raw = (os.environ.get("MMML_ADUMB_RC_WALL_MARGIN") or "").strip()

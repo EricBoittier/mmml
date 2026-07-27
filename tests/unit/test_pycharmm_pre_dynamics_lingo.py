@@ -209,6 +209,21 @@ def test_parse_adumb_rc_wall_params_rdif_keeps_both_pairs_uncapped() -> None:
     )
 
 
+def test_parse_adumb_rc_wall_params_2d_unions_rcl_and_rcn() -> None:
+    """2D ADUMB must wall both distances (first name alone left C–N free)."""
+    script = """
+    set adumrcmax = 8.0
+    set adumrcwall = 2000.0
+    umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 8.0 name rcl
+    umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max 8.0 name rcn
+    """
+    assert parse_adumb_rc_wall_params(script) == (
+        8.0,
+        2000.0,
+        (("CL1", "C1"), ("C1", "N1")),
+    )
+
+
 def test_parse_adumb_rc_params_accepts_legacy_underscore_names() -> None:
     script = """
     set adum_rcmax = 8.0

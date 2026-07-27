@@ -1883,10 +1883,17 @@ def resolve_adumb_wall_rcmax(adumrcmax: float | None, script: str) -> float | No
 
 def parse_adumb_umbrella_name(script: str) -> str | None:
     """Return the first ``umbrella rxncor … name`` token (lowercased), if any."""
-    mname = _UMB_RXNCOR_NAME_RE.search(str(script or ""))
-    if not mname:
-        return None
-    return mname.group(1).strip().lower() or None
+    names = parse_adumb_umbrella_names(script)
+    return names[0] if names else None
+
+
+def parse_adumb_umbrella_names(script: str) -> list[str]:
+    """Return all ``umbrella rxncor … name`` tokens (lowercased), in order."""
+    return [
+        m.group(1).strip().lower()
+        for m in _UMB_RXNCOR_NAME_RE.finditer(str(script or ""))
+        if m.group(1).strip()
+    ]
 
 
 def adumb_umbrella_is_bond_difference(script: str) -> bool:
@@ -1906,11 +1913,12 @@ def parse_adumb_rc_wall_params(
 ) -> tuple[float, float, tuple[tuple[str, str], ...]] | None:
     """Return ``(rcmax, rcwall, pairs)`` when ADUMB RC wall parameters are set.
 
-    ``rcmax`` is capped by umbrella ``max`` for distance RCs; ``pairs`` match the
-    umbrella name (``rcl`` → Cl–C only).
+    ``rcmax`` is capped by umbrella ``max`` for distance RCs. ``pairs`` cover
+    **every** ``umbrella rxncor`` distance name (2D: both Cl–C and C–N). Using
+    only the first name left C–N unwalled and UM1RXN aborted on ``rcn``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
-        adumb_rc_wall_pairs_for_name,
+        adumb_rc_wall_pairs_for_names,
     )
 
     rcmax, rcwall = parse_adumb_rc_params(script)
@@ -1919,7 +1927,7 @@ def parse_adumb_rc_wall_params(
     capped = resolve_adumb_wall_rcmax(rcmax, script)
     if capped is None:
         return None
-    pairs = adumb_rc_wall_pairs_for_name(parse_adumb_umbrella_name(script))
+    pairs = adumb_rc_wall_pairs_for_names(parse_adumb_umbrella_names(script))
     return capped, rcwall, pairs
 
 
@@ -2257,7 +2265,7 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
             wall_rcmax = resolve_adumb_wall_rcmax(rcmax, script)
             if wall_rcmax is not None:
                 from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
-                    adumb_rc_wall_pairs_for_name,
+                    adumb_rc_wall_pairs_for_names,
                 )
 
                 setattr(
@@ -2266,8 +2274,8 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
                     AdumbRcGuard(
                         rcmax=float(wall_rcmax),
                         rcwall=float(rcwall if rcwall is not None else 500.0),
-                        pairs=adumb_rc_wall_pairs_for_name(
-                            parse_adumb_umbrella_name(script)
+                        pairs=adumb_rc_wall_pairs_for_names(
+                            parse_adumb_umbrella_names(script)
                         ),
                         wall_margin=adumb_rc_wall_margin_A(),
                         umb_min=umb_min,

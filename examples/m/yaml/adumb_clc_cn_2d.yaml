@@ -1,34 +1,40 @@
 # ADUMB 2D on NH3–CH3Cl: Cl⋯C and C⋯N distances (RXNCOR) — PyCHARMM only.
 #
 # Menshutkin / SN2-like reaction coordinates on the vacuum dimer:
-#   r_cl = CH3CL CL1⋯C1
-#   r_cn = CH3CL C1⋯AMM1 N1
+#   rcl = CH3CL CL1⋯C1
+#   rcn = CH3CL C1⋯AMM1 N1
 # Same system as adumb_nc_distance.yaml; two ``umbrella rxncor`` cards then one
 # ``umbrella init`` (CHARMM ADUMBRXNCOR multi-dimensional WHAM).
 #
+# Reaction freedom:
+#   delete CGenFF C–Cl bond/angles before heat (PhysNet owns SN2 coords).
+#   RESD walls cover *both* umbrella RCs (rcl + rcn). First-name-only walls
+#   left C–N free → UM1RXN "reaction coordinate out of range".
+#
 # Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
-# Prefer min 0.0 (UM1RXN quirk when min>0); max 8.0 Å + MMFP outer walls (see lingo).
+# Prefer min 0.0 (UM1RXN quirk when min>0); max 8.0 Å + RESD outer walls.
 # Wipe staged lingo after YAML edits.
 #
 #   source examples/m/_env.sh
 #   USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
+#   RCL=3.8 RCN=1.57 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh  # product seed
 #
-# Alignment (smoke):
-#   dt_fs=1.0, ps_heat=0.2 → heat nstep ≈ 200
-#   umbrella init: nsim=4 × update=50 = 200; equi=25
-# Medium: ps_heat=100 → nstep=100_000; nsim=100 update=1000 equi=200
+# Alignment (this file — 200 ps heat):
+#   dt_fs=1.0, ps_heat=200 → heat nstep = 200_000
+#   umbrella init: nsim=400 × update=500 = 200_000; equi=250
 #
-# Pass checks: exit 0; lingo has both ``r_cl`` and ``r_cn`` umbrella cards;
-# ADUMB-WUNI.DAT under output_dir.
+# Pass checks: exit 0; lingo has both ``rcl`` and ``rcn`` umbrella cards;
+# ADUMB-WUNI.DAT under output_dir; RESD installs 2 walls (CL1-C1 and C1-N1).
 #
 # Docs: docs/examples/nh3-ch3cl-results.md (ADUMB 2D section).
 
 setup: free_nvt
 backend: pycharmm
 composition: "AMM1:1,CH3CL:1"
-spacing: 1.0
+spacing: 4.0
 checkpoint: examples/m/kl.json
-include_mm: true
+# ML-only hybrid: CHARMM bonded C–Cl must still be deleted (see lingo).
+include_mm: false
 mm_switch_on: 8.0
 mm_charge_mode: fixed
 mm_nonbond_mode: jax_mic
@@ -40,20 +46,14 @@ ps_heat: 200.0
 packmol_placement: sphere
 packmol_radius: 6.0
 reuse_packmol_cache: false
-# --- Reactive-coordinate dynamics guards (bond breaking + forming) ---
-# Chunk size = overlap check interval; align to umbrella `update` (500) so each
-# MD block spans one ADUMB update cycle (was 200, misaligned).
+# --- Reactive-coordinate dynamics guards ---
 dynamics_overlap_check_interval: 500
-# Velocity-reassignment (IASVEL=1) micro-chunk cadence during the Bussi ramp;
-# MUST equal `update` (500) so thermal redraws land on update boundaries and are
-# absorbed by `equi`. See adumb_nc_distance.yaml for the full rationale.
 dyn_freq_cadence: 500
-# Repair without biasing the umbrella histogram: keep rescue but only on
-# catastrophic overlaps (0.2 Å); normal TS/bond contacts never trigger it.
-dynamics_overlap_action: rescue
+# warn: no SD rescue (keeps ADUMB unbiased). Mid-chunk abort still rewinds
+# numbered heat.NNNN.res when ADUMB RC guard is armed.
+dynamics_overlap_action: warn
 dynamics_overlap_min_distance: 0.2
 dynamics_intra_min_distance: 0.2
-# Fly-off guard raised past the 12 Å default for the dissociating fragment.
 dynamics_max_monomer_extent: 25.0
 mini_nstep: 40
 skip_energy_show: true
@@ -64,8 +64,8 @@ seed: 0
 mc_density_equalize: false
 output_dir: artifacts/nh3_ch3cl/adumb_clc_cn_2d
 
-dcd_nsavc: 10
-dcd_max_frames: 100
+dcd_nsavc: 1000
+dcd_max_frames: 200
 
 # Packmol/composition: segid CLST, resid 1 = AMM1, resid 2 = CH3CL.
 # RXNCOR NAME tokens are ≤4 chars in ADUMB (param_store).
@@ -74,9 +74,16 @@ pycharmm_pre_dynamics_lingo: |
   ! reaction. Acts on the aggregate COM, so it does NOT bias the internal RCs.
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
-  ! Umbrella grid edge (Å). CHARMM ``set`` names must not contain underscores.
+  ! --- Make SN2 possible under MLpot ---
+  ! CGenFF BOND C1–CL1 (k≈220) stays in ENER INTERN even with include_mm: false
+  ! and prevents Cl leaving. Delete reactive C–Cl bond + Cl–C–H angles.
+  delete bond sele atom * * CL1 end sele atom * * C1 end
+  delete angle sele atom * * CL1 end sele atom * * C1 end
+
+  ! Outer walls for both 2D RCs (Å). Python installs RESD on Cl–C *and* C–N
+  ! after umbrella init (onset below max via MMML_ADUMB_RC_WALL_MARGIN).
   set adumrcmax = 8.0
-  set adumrcwall = 500.0
+  set adumrcwall = 2000.0
 
   open unit 44 write card name ADUMB-WUNI.DAT
   open unit 50 write card name UMBCOR
@@ -84,7 +91,6 @@ pycharmm_pre_dynamics_lingo: |
   open unit 46 write card name RXNCOR_RCN.DAT
 
   ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1 (IUPAC names via ATOM, not TYPE).
-  ! TYPE selects FF labels (NG331/CG331/CLGA1); ATOM * * NAME matches names.
   rxncor define pn point select atom * * N1 end
   rxncor define pc point select atom * * C1 end
   rxncor define pcl point select atom * * CL1 end
@@ -96,20 +102,10 @@ pycharmm_pre_dynamics_lingo: |
   rxncor trace rcl unit 45
   rxncor trace rcn unit 46
 
-  ! RC outer walls: Python installs RESDistance POSITIVE half-harmonic walls
-  ! after ``umbrella init`` (onset below ``adumrcmax`` via ``MMML_ADUMB_RC_WALL_MARGIN``).
-  ! Legacy: ``MMML_ADUMB_RC_WALL_BACKEND=noe`` (needs KEY_NOE) or ``=mmfp``.
-  ! Disable walls: ``MMML_ADUMB_RC_WALL_BACKEND=off``.
-
-  ! Adaptive umbrella on Cl-C and C-N distances (Å).
-  ! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when
-  ! min>0 (min 1 max 6 → abort once value > 5 Å). Patched eadumb.F90 uses
-  ! [min, max]; min 0.0 works on both.
-  ! max @adumrcmax spans reactant–TS–product basins (~6 Å).
+  ! Adaptive umbrella on Cl-C and C-N. min 0.0 for unpatched UM1RXN safety.
   umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adumrcmax name rcl
   umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adumrcmax name rcn
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200_000 here): 400*500.
-  ! equi 250 of update 500 discards 50% per window (absorbs the boundary redraw);
-  ! lower equi toward ~100 if you want more sampling per window.
   umbrella init nsim 400 update 500 equi 250 thresh 10 temp 500 wuni 44 ucun 50
+  umbrella ston
