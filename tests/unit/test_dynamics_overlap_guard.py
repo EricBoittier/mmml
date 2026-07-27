@@ -306,7 +306,7 @@ def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
             CharmmTrajectoryFiles(restart_write=tmp_path / "prod.res"),
             overlap=cfg,
             overlap_context="PROD",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert len(calls) == 2
@@ -381,7 +381,7 @@ def test_overlap_early_abort_multi_chunk_cpt_uses_in_memory_handoff(tmp_path, ca
             CharmmTrajectoryFiles(restart_write=final_res),
             overlap=cfg,
             overlap_context="PROD",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert len(calls) == 3
@@ -454,7 +454,7 @@ def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
             CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
             overlap=cfg,
             overlap_context="HEAT",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     finalize.assert_not_called()
@@ -540,7 +540,7 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_in_memory(tmp_path, capsy
             CharmmTrajectoryFiles(restart_write=final_res),
             overlap=cfg,
             overlap_context="HEAT",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert len(calls) == 3
@@ -613,7 +613,7 @@ def test_overlap_early_abort_disk_recovery_non_cpt_retries_in_memory(tmp_path):
             CharmmTrajectoryFiles(restart_write=final_res),
             overlap=cfg,
             overlap_context="HEAT",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert len(calls) == 3
@@ -2301,7 +2301,7 @@ def test_overlap_restart_header_misread_does_not_trigger_recovery(tmp_path, caps
             CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
             overlap=cfg,
             overlap_context="HEAT",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert len(calls) == 1
@@ -2375,7 +2375,7 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
         use_pbc=False,
     )
     calls: list[tuple[dict, object]] = []
-    mlpot_ctx = mock.Mock()
+    mlpot_ctx = _overlap_mlpot_ctx()
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append((dict(kw), _io))
@@ -2512,7 +2512,7 @@ def test_post_rescue_in_memory_handoff_limited_to_next_chunk(tmp_path, monkeypat
             CharmmTrajectoryFiles(restart_write=final_res),
             overlap=cfg,
             overlap_context="HEAT",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert len(restart_reads) == 3
@@ -2595,7 +2595,7 @@ def test_mlpot_overlap_memory_handoff_flag_does_not_skip_readyn_between_chunks(t
     res_path = tmp_path / "heat.res"
     io = CharmmTrajectoryFiles(restart_write=res_path)
     calls: list[dict] = []
-    mlpot_ctx = mock.Mock()
+    mlpot_ctx = _overlap_mlpot_ctx()
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         if _io is not None and getattr(_io, "restart_read", None) is not None:
@@ -2655,7 +2655,7 @@ def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch)
     res_path = tmp_path / "heat.res"
     io = CharmmTrajectoryFiles(restart_write=res_path)
     calls: list[dict] = []
-    mlpot_ctx = mock.Mock()
+    mlpot_ctx = _overlap_mlpot_ctx()
     base_kw = {"nstep": 6, "new": False, "start": False, "restart": False}
     prepare_bussi_heat_dynamics_kw(
         base_kw, nstep=6, ihtfrq=2, timestep_ps=0.0001
@@ -2733,7 +2733,7 @@ def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch)
     res_path = tmp_path / "heat.res"
     io = CharmmTrajectoryFiles(restart_write=res_path)
     calls: list[dict] = []
-    mlpot_ctx = mock.Mock()
+    mlpot_ctx = _overlap_mlpot_ctx()
     valid_restart = (
         "REST     1     500\n"
         " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
@@ -2820,7 +2820,7 @@ def test_completed_overlap_refresh_repatches_final_restart_step(tmp_path):
             CharmmTrajectoryFiles(restart_write=heat_res),
             overlap=cfg,
             overlap_context="HEAT",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert result.integrated_step == 400
@@ -2866,7 +2866,7 @@ def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
             CharmmTrajectoryFiles(restart_write=final_res),
             overlap=cfg,
             overlap_context="NVE",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     assert [c["nstep"] for c in calls] == [2, 2, 2]
@@ -3328,7 +3328,7 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
         dtype=float,
     )
     calls: list[dict] = []
-    mlpot_ctx = mock.Mock()
+    mlpot_ctx = _overlap_mlpot_ctx()
     valid_restart = (
         "REST     1     500\n"
         " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
@@ -3605,7 +3605,7 @@ def test_run_dynamics_with_io_mlpot_overlap_chunks_use_readyn_handoff(tmp_path):
     )
     io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res")
     calls: list[dict] = []
-    mlpot_ctx = mock.Mock()
+    mlpot_ctx = _overlap_mlpot_ctx()
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         if _io is not None and getattr(_io, "restart_read", None) is not None:
@@ -4885,7 +4885,7 @@ def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):
             CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
             overlap=cfg,
             overlap_context="HEAT",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250
@@ -4940,7 +4940,7 @@ def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
             CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
             overlap=cfg,
             overlap_context="EQUI",
-            mlpot_ctx=mock.Mock(),
+            mlpot_ctx=_overlap_mlpot_ctx(),
         )
 
     # 2 overlap chunks of 500, each split into 2 CPT sub-chunks of 250.

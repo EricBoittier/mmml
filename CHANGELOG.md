@@ -10,6 +10,45 @@ and versioning process.
 
 ## [Unreleased]
 
+## [0.1.0a2] - 2026-07-27
+
+Second tagged alpha. Focuses on enhanced-sampling / reaction-coordinate
+workflows, PyCHARMM-interface robustness, and CLI ergonomics on top of the
+`0.1.0a1` baseline.
+
+### Added
+
+- Nudged Elastic Band (NEB) support with accompanying documentation.
+- Diffusion Monte Carlo (DMC) CLI commands and documentation.
+- ADUMB / umbrella-sampling reaction-coordinate tooling: RC distance walls
+  with preflight checks and automatic reinstallation during overlap-chunk
+  recovery, `RESDistance` / single-line NOE distance walls, MMFP wall setup
+  under MPI, and bond-difference (ξ) reaction-coordinate handling.
+- New CLI commands and flags: `npz2traj` (convert NPZ datasets to ASE
+  trajectories), `--from-pdb` full-system cold start, `--mm-pair-source` for
+  selecting the MM pair provider on `jax_mic` hybrids, and `make-box` solvent
+  density handling.
+- PyCHARMM interface: pre-dynamics CHARMM lingo scripting, execution/splitting
+  of lingo scripts, extra RTF/PRM path support in CGenFF residue handling, and
+  PDB parsing helpers for residue handling.
+- Geometry / frame-selection helpers for reaction coordinates (selection by
+  `r_ClC` / `r_CN` / ξ, mass-weighted centering for PDB output).
+
+### Changed
+
+- JAX backend/device management in the PyCHARMM interface is more robust:
+  CPU/GPU backend availability is detected explicitly, and default GPU runs no
+  longer defer XLA GPU warmup (avoiding spurious "CPU backend is not
+  registered" warnings). Deferral is now gated on the CPU-load path.
+- `charmm_io_staging_root` now creates per-user subdirectories.
+- Documentation: Read the Docs / MkDocs configuration, NEB and DMC guides, and
+  refreshed ADUMB (NH3–CH3Cl) examples.
+
+### Fixed
+
+- Numerous PyCHARMM dynamics, restraint, and overlap-guard fixes; regenerated
+  CLI reference and package-architecture docs to match the current tree.
+
 ## [0.1.0a1] - 2026-07-22
 
 First tagged alpha. Pre-alpha development happened directly on `main` without
