@@ -492,6 +492,10 @@ def _build_stage_dynamics_kw(
             or getattr(args, "no_echeck", False)
             or getattr(args, "_auto_no_echeck_heat", False)
         ):
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                disabled_charmm_echeck_kcal,
+            )
+
             heat_echeck = disabled_charmm_echeck_kcal()
         else:
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (

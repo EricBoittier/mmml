@@ -473,7 +473,11 @@ def run_charmm_mm_pretreat_before_mlpot(
                         quarantine_restart_file(hr, reason="pretreat_heat_fresh")
             heat_echeck = echeck
             if getattr(args, "no_echeck", False) or getattr(args, "no_echeck_heat", False):
-                heat_echeck = -1.0
+                from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                    disabled_charmm_echeck_kcal,
+                )
+
+                heat_echeck = disabled_charmm_echeck_kcal()
             save_interval_ps = timestep_ps * max(
                 1,
                 resolve_dcd_nsavc(

@@ -66,6 +66,8 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
     EXTRA+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
   fi
 fi
+# ADUMB heat: disable ECHECK (Verlet still gates on MAX(ECHECK,0.1×KE) if echeck=-1).
+EXTRA+=(--no-echeck --no-echeck-heat)
 
 mkdir -p "${OUT}"
 rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT}/cleanup"

@@ -598,10 +598,15 @@ def test_build_stage_dynamics_kw_heat_auto_no_echeck_heat_disables_echeck():
         restart=False,
         use_pbc=True,
     )
-    assert kw["echeck"] == -1.0
+    assert kw["echeck"] == pytest.approx(1.0e30)
 
 
 def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
+    import pytest
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _build_stage_dynamics_kw,
+    )
+
     args = argparse.Namespace(heat_thermostat="scale", no_echeck_heat=True)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     kw = _build_stage_dynamics_kw(
@@ -616,7 +621,7 @@ def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
         restart=False,
         use_pbc=True,
     )
-    assert kw["echeck"] == -1.0
+    assert kw["echeck"] == pytest.approx(1.0e30)
     assert "cpt" not in kw
     assert kw["ihtfrq"] > 0
 

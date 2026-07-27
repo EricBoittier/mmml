@@ -320,11 +320,15 @@ def prepare_adumb_rc_before_overlap_chunk(
     warn_fraction: float = 0.92,
     max_recovery_lookback: int = 5,
     quiet_walls: bool = False,
+    force_rewind: bool = False,
 ) -> bool:
     """Reinstall RC walls, verify range, rewind from numbered restarts if needed.
 
     Returns ``True`` when the caller should retry the current overlap chunk
     (in-memory coords restored from an earlier ``heat.NNNN.res``).
+
+    ``force_rewind`` rewinds even when traced RCs are still inside the umbrella
+    (e.g. monomer extent explosion with Cl–C / C–N still in-window).
     """
     from pathlib import Path
 
@@ -365,7 +369,7 @@ def prepare_adumb_rc_before_overlap_chunk(
     xi_hit = _xi_out_of_window()
     worst_name, worst = _worst_distance()
     distance_ok = worst < rcmax - 1.0e-4
-    if xi_hit is None and distance_ok:
+    if xi_hit is None and distance_ok and not force_rewind:
         warn_at = rcmax * float(warn_fraction)
         if worst >= warn_at:
             print(
@@ -381,8 +385,12 @@ def prepare_adumb_rc_before_overlap_chunk(
         f"[{xi_hit[1]:g}, {xi_hit[2]:g}] (umbrella [{guard.umb_min:g}, {guard.umb_max:g}])"
         if xi_hit is not None
         else (
-            f"ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
-            f"is at or beyond umbrella max {rcmax:g} Å"
+            f"forced rewind (monomer fly-off; {worst_name}={worst:.3f} Å still < {rcmax:g} Å)"
+            if force_rewind and distance_ok
+            else (
+                f"ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
+                f"is at or beyond umbrella max {rcmax:g} Å"
+            )
         )
     )
 

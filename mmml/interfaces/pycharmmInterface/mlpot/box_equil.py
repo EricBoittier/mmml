@@ -212,7 +212,11 @@ def _run_mini_box_equil_heat_leg(
     nstep = max(1, int(round(float(duration_ps) / float(timestep_ps))))
     heat_echeck = echeck
     if getattr(args, "no_echeck", False) or getattr(args, "no_echeck_heat", False):
-        heat_echeck = -1.0
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            disabled_charmm_echeck_kcal,
+        )
+
+        heat_echeck = disabled_charmm_echeck_kcal()
     save = bool(getattr(args, "save", True))
     dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=getattr(args, "dcd_nsavc", None), nstep=nstep)
     save_interval_ps = timestep_ps * max(1, dcd_nsavc)

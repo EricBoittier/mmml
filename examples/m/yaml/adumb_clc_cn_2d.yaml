@@ -63,6 +63,9 @@ no_dynamics_monomer_template_restore: true
 mini_nstep: 40
 skip_energy_show: true
 skip_jit_warmup: true
+# Heat uses Verlet: echeck=-1 still leaves MAX(ECHECK,0.1×KE). no_echeck uses
+# a huge sentinel so ENERGY CHANGE TOLERANCE cannot abort ADUMB heat.
+no_echeck: true
 no_echeck_heat: true
 quiet: false
 seed: 0

@@ -3925,8 +3925,18 @@ def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
 
     Pretreat/minimize legs can leave a positive ECHECK in Fortran; dynamics must
     reset it explicitly or short NPT legs abort at iprfrq cadence (e.g. step 240).
+
+    Values ``<= 0`` (legacy ``-1``) are coerced to
+    :func:`~mmml.interfaces.pycharmmInterface.mlpot.cli_common.disabled_charmm_echeck_kcal`
+    so velocity-Verlet still disables the ``MAX(ECHECK, 0.1×KE)`` gate.
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        disabled_charmm_echeck_kcal,
+    )
+
     val = float(echeck)
+    if val <= 0.0:
+        val = disabled_charmm_echeck_kcal()
     kw["echeck"] = val
     kw["ichecw"] = 0
     try:
@@ -7006,11 +7016,15 @@ def _maybe_prepare_adumb_rc_before_overlap_chunk(
     chunk_index: int,
     n_chunks: int,
     final_restart: Path | None,
+    force_rewind: bool = False,
 ) -> bool:
     """Reinstall RC walls and rewind if a traced RC exceeds umbrella ``max``.
 
     Returns ``True`` when the overlap loop should retry the current chunk
     from restored in-memory coordinates.
+
+    ``force_rewind``: rewind from numbered restarts even when RC distances are
+    still inside the umbrella (monomer fly-off / extent explosion).
     """
     if mlpot_ctx is None:
         return False
@@ -7029,6 +7043,7 @@ def _maybe_prepare_adumb_rc_before_overlap_chunk(
         n_chunks=n_chunks,
         final_restart=final_restart,
         quiet_walls=chunk_index > 0,
+        force_rewind=force_rewind,
     )
 
 
@@ -8824,31 +8839,59 @@ def run_dynamics_with_io(
                         if chunk_retry_count >= _MAX_EARLY_ABORT_CHUNK_RETRIES:
                             raise RuntimeError(
                                 f"overlap ({overlap_context}): ADUMB fly-off at step "
-                                f"{steps_done} — template restore skipped and RC "
+                                f"{steps_done} — template restore skipped and restart "
                                 "rewind retries exhausted. Check RESD walls "
-                                "(expect RESDistance in ENER) / widen max / lower T."
+                                "(expect RESDistance in ENER) / lower T / seed."
                             )
-                        adumb_retry = _maybe_prepare_adumb_rc_before_overlap_chunk(
-                            mlpot_ctx=mlpot_ctx,
-                            overlap_context=overlap_context,
-                            chunk_index=chunk_index,
-                            n_chunks=n_chunks,
-                            final_restart=final_restart,
+                        # Monomers can explode (extent) while Cl–C / C–N stay inside
+                        # the umbrella window — still rewind numbered heat.NNNN.res.
+                        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                            attempt_overlap_early_abort_recovery,
                         )
-                        if not adumb_retry:
-                            raise RuntimeError(
-                                f"overlap ({overlap_context}): ADUMB fly-off at step "
-                                f"{steps_done} but RC still inside umbrella max — "
-                                "refusing to continue with exploded monomers. "
-                                "Confirm RESD: 2 walls installed and ENER shows "
-                                "RESDistance > 0 when an RC approaches max."
+                        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                            reinstall_adumb_rxncor_walls_from_workflow_args,
+                        )
+
+                        recovery = attempt_overlap_early_abort_recovery(
+                            overlap,
+                            chunk_nstep=chunk_nstep,
+                            steps_done=steps_done,
+                            steps_before_chunk=steps_before_chunk,
+                            overlap_context=overlap_context,
+                            overlap_run_state_dir=overlap_run_state_dir,
+                            overlap_restart_read=overlap_restart_read_for_chunk,
+                            segment_restart_read=segment_restart_read,
+                            stage_final_restart=final_restart,
+                            mlpot_ctx=mlpot_ctx,
+                            cpt=bool(chunk_kw.get("cpt")),
+                            chunk_index=chunk_index,
+                        )
+                        if not recovery.ok:
+                            # Force RC-guard lookback even when distances still in-window.
+                            adumb_retry = _maybe_prepare_adumb_rc_before_overlap_chunk(
+                                mlpot_ctx=mlpot_ctx,
+                                overlap_context=overlap_context,
+                                chunk_index=chunk_index,
+                                n_chunks=n_chunks,
+                                final_restart=final_restart,
+                                force_rewind=True,
                             )
+                            if not adumb_retry and not recovery.ok:
+                                raise RuntimeError(
+                                    f"overlap ({overlap_context}): ADUMB fly-off at step "
+                                    f"{steps_done} — no numbered restart to rewind. "
+                                    "Confirm RESD: 2 walls installed (ENER RESDistance) "
+                                    "and heat.NNNN.res checkpoints exist."
+                                )
+                        wf = getattr(mlpot_ctx, "workflow_args", None)
+                        if wf is not None:
+                            reinstall_adumb_rxncor_walls_from_workflow_args(wf)
                         chunk_retry_count += 1
                         steps_done = steps_before_chunk
                         early_abort_memory_handoff = True
                         print(
                             f"overlap ({overlap_context}): retrying chunk "
-                            f"{chunk_index + 1}/{n_chunks} after ADUMB RC rewind "
+                            f"{chunk_index + 1}/{n_chunks} after ADUMB fly-off rewind "
                             f"(monomer template restore skipped; "
                             f"attempt {chunk_retry_count}/{_MAX_EARLY_ABORT_CHUNK_RETRIES})",
                             flush=True,
