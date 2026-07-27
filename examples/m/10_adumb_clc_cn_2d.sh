@@ -71,9 +71,10 @@ EXTRA+=(--no-echeck --no-echeck-heat)
 # Soft-wall onset: engage 1.5 Å below umbrella max (default 0.75 is too late for
 # product-seed / dissociating Cl at 500 K).
 export MMML_ADUMB_RC_WALL_MARGIN="${MMML_ADUMB_RC_WALL_MARGIN:-1.5}"
-# Keep velocities across Bussi micro-chunks (default iasvel=1 redraw punches RCs
-# past soft walls → UM1RXN). Experimental; unset if T collapses to ~0 K.
-export MMML_BUSSI_IASVEL0_CONTINUATION="${MMML_BUSSI_IASVEL0_CONTINUATION:-1}"
+# Do NOT set MMML_BUSSI_IASVEL0_CONTINUATION for ADUMB: iasvel=0 reads COMP
+# positions as velocities on this PyCHARMM build (T≃10¹³ K → UM1RXN).
+unset MMML_BUSSI_IASVEL0_CONTINUATION || true
+unset MMML_BUSSI_INIT_VELOCITIES_HANDOFF || true
 
 mkdir -p "${OUT}"
 rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT}/cleanup"

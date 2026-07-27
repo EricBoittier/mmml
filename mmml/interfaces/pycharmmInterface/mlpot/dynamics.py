@@ -4293,10 +4293,17 @@ def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
 
     It is gated behind ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` because PyCHARMM
     cannot force the START flag off via API: if START lingers from chunk 0,
-    ``iasvel=0`` reads comparison COMP coordinates as velocities (T collapses to
-    ~0 K).  Needs on-node validation — watch for a sudden T≈0 K chunk (COMP
+    ``iasvel=0`` reads comparison COMP coordinates as velocities (T ≫ 10¹² K).
+    Needs on-node validation — watch for a sudden T≈0 K chunk (COMP
     misread) or a ``dynopt`` segfault, and unset the flag if either occurs.
+
+    ADUMB RC-guarded heat must never take this path (UM1RXN after T≃10¹³ K).
     """
+    if bool(kw.pop("_adumb_forbid_iasvel0", False)) or bool(
+        kw.get("_adumb_preserve_velocities")
+    ):
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
     kw["iasvel"] = 0
     kw["iasors"] = 0
     kw["start"] = False
@@ -6651,18 +6658,22 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw["new"] = False
         chunk_kw["restart"] = bool(has_restart_read)
         chunk_kw["start"] = False
-        chunk_kw["iasvel"] = 0
-        chunk_kw["iasors"] = 0
         if has_restart_read:
             chunk_kw.pop("iunrea", None)
         else:
             chunk_kw["iunrea"] = -1
         chunk_kw.pop("firstt", None)
         _strip_stale_heat_ramp_keywords(chunk_kw)
+        # Never iasvel=0 for ADUMB: PyCHARMM often leaves START set, so IASVEL=0
+        # reads COMP *positions* as AKMA velocities (T≃10¹³ K → UM1RXN). Same
+        # conclusion as CPT in-memory legs — use iasvel=1 at the ramp target;
+        # stiff RESD walls + memory handoff absorb the redraw.
         if _bussi_heat_ramp_active(chunk_kw):
-            # Force continuous velocities even when MMML_BUSSI_IASVEL0_CONTINUATION
-            # is unset — ADUMB soft walls cannot survive iasvel=1 redraws.
-            _apply_bussi_iasvel_zero_continuation(chunk_kw)
+            _apply_bussi_iasvel_one_at_ramp_target(chunk_kw)
+        else:
+            chunk_kw["iasvel"] = 1
+            chunk_kw["iasors"] = 0
+        chunk_kw.pop("_skip_ase_cold_velocity_assign", None)
         return
     if has_restart_read:
         chunk_kw["new"] = False
@@ -8169,7 +8180,10 @@ def run_dynamics_with_io(
                         wf_args is not None
                         and getattr(wf_args, "_adumb_rc_guard", None) is not None
                     ):
+                        # Mark ADUMB: memory handoff + forbid COMP-as-velocity
+                        # (iasvel=0). Soft walls stay; safe redraw is iasvel=1.
                         chunk_kw["_adumb_preserve_velocities"] = True
+                        chunk_kw["_adumb_forbid_iasvel0"] = True
                 _apply_overlap_chunk_dynamics_kw(
                     chunk_kw,
                     chunk_index=chunk_index,
