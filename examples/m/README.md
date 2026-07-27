@@ -208,22 +208,31 @@ RXNCOR + `umbrella rxncor` (same ADUMB path as
 
 | Example | Coordinates | Config / script |
 |---------|-------------|-----------------|
-| 1D | ξ = \(r_{\mathrm{ClC}}-r_{\mathrm{CN}}\) (`rdif`), [-3, 3] Å, 100 ps | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
-| 2D | Cl⋯C + C⋯N (`rcl`, `rcn`) | `yaml/adumb_clc_cn_2d.yaml`, `10_adumb_clc_cn_2d.sh` |
-| 1D + TIP3 | same `rdif` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
+| 1D vacuum | Cl⋯C distance (`rcl`), [0, 8] Å, 100 ps heat | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
+| 2D vacuum | Cl⋯C + C⋯N (`rcl`, `rcn`), [0, 8] Å each, 200 ps heat | `yaml/adumb_clc_cn_2d.yaml`, `10_adumb_clc_cn_2d.sh` |
+| 1D + TIP3 | bond difference \(r_{\mathrm{ClC}}-r_{\mathrm{CN}}\) (`rdif`), [-6, 6] Å, short PBC skeleton | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
 
 Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 `scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
 `umbrella rxncor` prints `Unknown umbrella specified` and heat often SIGSEGVs.
-The 1D difference window uses `min -3 max 3` — rebuild with the mmml `UM1RXN`
-patch in `eadumb.F90` and point `CHARMM_LIB_DIR` at that install (not a stale
-PhysNet lib). RXNCOR **NAME** tokens for ADUMB are at most **4 characters**
-(`rdif`, `rcl`, `rcn`).
+Difference-coordinate windows such as the TIP3 `rdif` skeleton use negative
+`min` values, so rebuild with the mmml `UM1RXN` patch in `eadumb.F90` and point
+`CHARMM_LIB_DIR` at that install (not a stale PhysNet lib). RXNCOR **NAME**
+tokens for ADUMB are at most **4 characters** (`rdif`, `rcl`, `rcn`).
 
 **Production heat:** set `umbrella init` so `nsim * update == heat nstep`
 (`nstep ≈ ps_heat * 1000 / dt_fs`). Full notes + results table:
 [`docs/examples/nh3-ch3cl-results.md`](../../docs/examples/nh3-ch3cl-results.md)
 (ADUMB section).
+
+**Runtime guards:** the vacuum ADUMB YAML files set `adumrcmax` and
+`adumrcwall` in `pycharmm_pre_dynamics_lingo`. `md-system` parses those cards,
+installs `RESDistance` outer walls for the active RXNCOR names, and rewinds from
+numbered `heat.NNNN.res` files when a traced coordinate approaches the UM1RXN
+hard limit. For reactive ADUMB, keep `dynamics_overlap_action: warn` so CHARMM
+SD rescue does not bias the histogram; the ADUMB guard still performs restart
+rewind on fly-off. See the
+[`md-system` ADUMB guard notes](../../docs/md-system-configs.md#adumb-rxncor-guards-and-recovery).
 
 ```bash
 # One-time if your libcharmm predates ADUMBRXNCOR / UM1RXN fix:
@@ -231,13 +240,13 @@ PhysNet lib). RXNCOR **NAME** tokens for ADUMB are at most **4 characters**
 source examples/m/_env.sh
 rm -rf artifacts/nh3_ch3cl/adumb_nc_distance   # avoid stale next_run / old r_nc lingo
 
-# 100 ps vacuum ADUMB on bond difference ξ=r(ClC)−r(CN) ∈ [-3,3] (NPZ preferred):
+# 100 ps vacuum ADUMB on Cl⋯C distance rcl ∈ [0,8] Å (NPZ preferred):
 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 
-# 2D Cl⋯C + C⋯N adaptive umbrella (smoke ps_heat=0.2):
+# 200 ps 2D Cl⋯C + C⋯N adaptive umbrella:
 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
 
-# Solvated TIP3 (PBC); combine with USE_NPZ_PDB=1 for NPZ solute + TIP3:
+# Solvated TIP3 bond-difference skeleton; USE_NPZ_PDB=1 adds NPZ solute + TIP3:
 SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
 ```
 If a prior cube Packmol run left monomers ~box-length apart, the script clears
@@ -255,7 +264,7 @@ If a prior cube Packmol run left monomers ~box-length apart, the script clears
 | Mech. embed | campaign exit 0 under `artifacts/nh3_ch3cl/mech_embed_*` |
 | ES embed | campaign exit 0 under `artifacts/nh3_ch3cl/es_embed_*` |
 | Ewald LR | core `mic_*` / `ewald_*` jobs exit 0; optional libs may SKIP |
-| ADUMB 1D | exit 0; lingo has `umbrella rxncor` / `r_nc`; ADUMB files under `adumb_nc_distance/` |
-| ADUMB 2D | exit 0; lingo has `nrxn 2` + `r_cl`/`r_cn`; ADUMB files under `adumb_clc_cn_2d/` |
+| ADUMB 1D | exit 0; lingo has `umbrella rxncor` / `name rcl`; ADUMB files under `adumb_nc_distance/` |
+| ADUMB 2D | exit 0; lingo has `nrxn 2` + `name rcl` / `name rcn`; `ENER` reports 2 `RESDistance` walls; ADUMB files under `adumb_clc_cn_2d/` |
 | NEB | exit 0; finite `barrier_kcal_mol` in `artifacts/nh3_ch3cl/neb/neb_summary.json` |
 | Docs | `docs/examples/nh3-ch3cl-results.md` + PNGs under `docs/images/examples/nh3-ch3cl/` |
