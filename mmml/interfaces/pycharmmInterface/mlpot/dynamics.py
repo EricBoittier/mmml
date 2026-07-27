@@ -6660,7 +6660,9 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw.pop("firstt", None)
         _strip_stale_heat_ramp_keywords(chunk_kw)
         if _bussi_heat_ramp_active(chunk_kw):
-            _ensure_bussi_heat_continuation_iasvel(chunk_kw)
+            # Force continuous velocities even when MMML_BUSSI_IASVEL0_CONTINUATION
+            # is unset — ADUMB soft walls cannot survive iasvel=1 redraws.
+            _apply_bussi_iasvel_zero_continuation(chunk_kw)
         return
     if has_restart_read:
         chunk_kw["new"] = False

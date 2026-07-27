@@ -4990,6 +4990,52 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed_by_default(
     assert not _overlap_chunk_uses_memory_handoff(
         object(), chunk_index=1, n_chunks=1, overlap=overlap, cpt=True
     )
+
+
+def test_overlap_chunk_uses_memory_handoff_for_adumb_rc_guard():
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _overlap_chunk_uses_memory_handoff,
+    )
+
+    ctx = SimpleNamespace(
+        workflow_args=SimpleNamespace(_adumb_rc_guard=object()),
+    )
+    assert _overlap_chunk_uses_memory_handoff(
+        ctx, chunk_index=1, n_chunks=4, bussi_heat=False
+    )
+    assert not _overlap_chunk_uses_memory_handoff(
+        SimpleNamespace(workflow_args=SimpleNamespace(_adumb_rc_guard=None)),
+        chunk_index=1,
+        n_chunks=4,
+        bussi_heat=False,
+    )
+
+
+def test_apply_overlap_chunk_adumb_preserves_velocities_no_iasvel_redraw():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_dynamics_kw,
+    )
+
+    kw = {
+        "start": False,
+        "firstt": 100.0,
+        "finalt": 500.0,
+        "iasvel": 1,
+        "iasors": 0,
+        "ihtfrq": 500,
+        "TEMINC": 1.0,
+        "_adumb_preserve_velocities": True,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
+    assert kw["iasvel"] == 0
+    assert kw["start"] is False
+    assert kw["restart"] is False
+    assert kw["iunrea"] == -1
+    assert "_adumb_preserve_velocities" not in kw
+
+
 def test_overlap_chunk_zero_preserves_explicit_handoff_velocities():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
