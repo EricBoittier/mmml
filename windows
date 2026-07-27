@@ -1,0 +1,1721 @@
+=== 2D ADUMB replicas seeded across (r_ClC, r_CN): 1.8,3.5 2.2,2.0 3.8,1.57 6.0,1.5 ===
+    config=/mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml
+    base output=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows  seed_preserve=1
+(r_ClC, r_CN) target (1.80, 3.50) -> frame 2275: r(Cl-C)=1.80 Å r(C-N)=3.50 Å (xi=0.514)
+Wrote /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb
+  AMM1 atom records: 4  CH3CL atom records: 5
+PASS: solute PDB for make-box
+--- point rcl1.8_rcn3.5 -> /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5
+    uv run mmml md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini 
+mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+mmml: MPI-linked CHARMM — re-launching under OpenMPI for md-system:
+  /opt/gcc-14.2.0/openmpi-5.0.5/build/bin/mpirun -np 1 --mca pmix ^ext3x --mca shmem mmap -x LD_LIBRARY_PATH -x CHARMM_LIB_DIR --mca orte_abort_print_stack 1 /mmhome/boittier/home/mmml/.venv/bin/python3 -m mmml.cli.__main__ md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini
+mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+ JAX CPU thread XLA_FLAGS already present; using existing flags: 
+--[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
+mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
+[1;36mPyCHARMM environment[0m
+[2;36mCGenFF[0m[2;36m [0m/mmhome/boittier/home/mmml/mmml/data/charmm  (top_all36_cgenff.rtf,      
+[2;36m       [0mpar_all36_cgenff.prm)                                                    
+[2;36mCHARMM[0m[2;36m [0m/mmhome/boittier/home/mmml/setup/charmm                                  
+Loading full-system PDB solute_rcl1.8_rcn3.5.pdb (sequence_string AMM1 CH3CL, 9 atoms)…
+Loading full-system PDB solute_rcl1.8_rcn3.5.pdb (2 residues, 9 atoms, vacuum (no box))
+Cluster monomer count: CLI n_monomers=2 -> PSF nres=2 (9 atoms, 4 atoms/monomer typical)
+Cluster geometry OK: 2 monomer(s), 9 atoms | spans (Å) x=2.78 y=4.53 z=3.56
+echeck loosened 100.0 -> 500 kcal/mol for 2 monomer(s) / 9 atoms (legacy heuristic floor 500; --no-scale-echeck to keep 100.0)
+Dynamics overlap guard: action=rescue, min_distance=0.20 Å, check every 500 steps, last-resort monomer repack on
+Dynamics intra-monomer guard: action=rescue, min_distance=0.20 Å, exclude_1_3=True, check every 500 steps
+ api_nbonds%nbonds_cutoffs_orderly> CUTNB,CTOFNB,CTONNB=      18.0      12.0      13.0
+
+      ***** LEVEL  1 WARNING FROM <api_nbonds%nbonds_cutoffs_orderly> *****
+      ***** CUTNB,CTOFNB,CTONNB are not in correct order.
+      ******************************************
+      BOMLEV ( -2) IS NOT REACHED. WRNLEV IS  5
+
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and        0 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ <MAKINB> with mode   5 found     16 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/ccc30eac54892005/model.psf::
+ VCLOSE: Closing unit   90 with status "KEEP"
+minimize snapshot [00] packmol: Packmol sphere placement (pre-minimize) → 00_pack
+
+CHARMM MM pre-minimize: SD=0 ABNR=0
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       20 atom  pairs and       16 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+Post MM pre-min GRMS: 0.0000 kcal/mol/Å
+minimize snapshot [01] MM: CHARMM CGENFF SD/ABNR before MLpot (MM only) → 01_mm
+
+=== Progress: vacuum MMFP flat-bottom (before MLpot registration) ===
+=== Progress: MMFP done; continuing toward MLpot registration ===
+
+=== Progress: registering MLpot (9 atoms, ckpt=/mmhome/boittier/home/mmml/examples/m/kl.json) ===
+    (first JAX compile / USER registration can take minutes; watch GPU with nvidia-smi)
+ JAX CPU thread XLA_FLAGS already present; using existing flags: 
+--[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
+mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
+MLpot device policy: MMML_MLPOT_DEVICE=gpu JAX_PLATFORMS=cuda,cpu
+Decomposed MLpot: 2 JAX GPUs visible but ml_gpu_count=1 (only GPU:0 runs PhysNet). Use --ml-gpu-count 2 and enough chunks (--ml-batch-size 128-256 for DCM:90).
+Decomposed MLpot: max_active_dimers=1 (free-space all-pairs safe; PhysNet batch ≤ 3 systems/step)
+Decomposed MLpot: lr_solver=mic, scafacos=yes, jax_pme=no, nvalchemiops_pme=no (jax-pme method=ewald, sr_cutoff=13.0 Å; r^-6 dispersion=env/default when lr_solver=jax_pme)
+Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are fully excluded)
+[1;32mOK     [0m  Loaded checkpoint  [35m/mmhome/boittier/home/mmml/examples/m/[0m[95mkl.json[0m
+[1;36mHybrid ML/MM setup[0m
+[1;2mSystem[0m
+[36mn_monomers       [0m[36m [0m2                                            
+[36matoms_per_monomer[0m[36m [0m[4, 5]                                       
+[36mtotal_atoms      [0m[36m [0m9                                            
+[36mmax_atoms        [0m[36m [0m9                                            
+[36mmm_charge_mode   [0m[36m [0mfixed                                        
+[36mml_compute_dtype [0m[36m [0m<class 'jax.numpy.float64'>                  
+[36mcheckpoint_dir   [0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[1;2mHandoff & cutoffs[0m
+[36mml_switch_width_Å[0m[36m [0m1.5000
+[36mmm_switch_on_Å   [0m[36m [0m8.0000
+[36mmm_switch_width_Å[0m[36m [0m5.0000
+[36mcomplementary    [0m[36m [0mTrue  
+[36mmm_r_min_Å       [0m[36m [0m5.8500
+[36mmodel_cutoff_Å   [0m[36m [0m8.0   
+[1;2mML energy terms[0m
+[36mneural ML           [0m[36m [0m✓ (PhysNet/Spooky atomic)  
+[36melectrostatics      [0m[36m [0m✓ predicted charges (σ=4 Å)
+[36mZBL repulsion       [0m[36m [0m✓                          
+[36mCGenFF LJ (training)[0m[36m [0m✓ recorded                 
+[36mMBD dispersion      [0m[36m [0m✗ not configured           
+[1;2mZBL repulsion[0m
+[36menabled  [0m[36m [0mTrue               
+[36mcuton_Å  [0m[36m [0m0.1000             
+[36mcutoff_Å [0m[36m [0m0.6000             
+[36mtrainable[0m[36m [0mFalse              
+[36mmode     [0m[36m [0mfixed universal    
+[36mdistance [0m[36m [0mpair r (Å), not COM
+[1;2mLong-range Coulomb[0m
+[36mmm_nonbond_mode     [0m[36m [0mjax_mic                              
+[36mlr_solver           [0m[36m [0mmic                                  
+[36mjax_pme_pkg         [0m[36m [0mno                                   
+[36mnvalchemiops_pme_pkg[0m[36m [0mno                                   
+[36mscafacos_lib        [0m[36m [0myes                                  
+[36mlr_solver_active    [0m[36m [0mmic                                  
+[36mcoulomb_mode        [0m[36m [0mtruncated MIC (switched MM pair loop)
+[1;2mNeighbor lists & ML batching[0m
+[36mml_sparse_dimers   [0m[36m [0mTrue 
+[36mdimers_total       [0m[36m [0m1    
+[36mmax_active_dimers  [0m[36m [0m1    
+[36mml_batch_size      [0m[36m [0mall  
+[36mml_gpu_count       [0m[36m [0m1    
+[36mjax_md_skin_Å      [0m[36m [0m0.25 
+[36mjax_md_update_every[0m[36m [0m1    
+[36mmax_pairs          [0m[36m [0mauto 
+[36mcell_list_safety   [0m[36m [0m3.0  
+[36mdensity_est        [0m[36m [0m0.03 
+[36mPBC                [0m[36m [0mFalse
+[1;2mModel[0m
+[36mclass                 [0m[36m [0mPhysNet
+[36mfeatures              [0m[36m [0m32     
+[36mmax_degree            [0m[36m [0m1      
+[36mmessage_passing_steps [0m[36m [0m3      
+[36mnum_basis_functions   [0m[36m [0m64     
+[36mcutoff                [0m[36m [0m8.0    
+[36mmax_atomic_number     [0m[36m [0m35     
+[36mcharges               [0m[36m [0mTrue   
+[36mmax_padded_atoms      [0m[36m [0m9      
+[36mtotal_charge          [0m[36m [0m0.0    
+[36mn_refinement_blocks   [0m[36m [0m2      
+[36mzbl                   [0m[36m [0mTrue   
+[36mzbl_cuton             [0m[36m [0m0.1    
+[36mzbl_cutoff            [0m[36m [0m0.6    
+[36mtrainable_zbl         [0m[36m [0mFalse  
+[36mdebug                 [0m[36m [0mFalse  
+[36mefa                   [0m[36m [0mFalse  
+[36muse_energy_bias       [0m[36m [0mTrue   
+[36muse_pbc               [0m[36m [0mFalse  
+[36minclude_electrostatics[0m[36m [0mTrue   
+[1;2mRuntime threads[0m
+[36mOMP_NUM_THREADS            [0m[36m [0m1                                                   
+[36mMMML_CHARMM_OMP_THREADS    [0m[36m [0munset                                               
+[36mMKL_NUM_THREADS            [0m[36m [0m1                                                   
+[36mOPENBLAS_NUM_THREADS       [0m[36m [0m1                                                   
+[36mNUMEXPR_NUM_THREADS        [0m[36m [0m1                                                   
+[36mMMML_JAX_COMPILE_THREADS   [0m[36m [0munset                                               
+[36mMMML_NO_JAX_COMPILE_THREADS[0m[36m [0munset                                               
+[36mXLA_FLAGS                  [0m[36m [0m--xla_cpu_multi_thread_eigen=true                   
+[36m                            [0mintra_op_parallelism_threads=16                     
+[36mJAX_PLATFORMS              [0m[36m [0mcuda,cpu                                            
+[36mMMML_MLPOT_DEVICE          [0m[36m [0mgpu                                                 
+[1;2mML/MM flags[0m
+[36mdoML            [0m[36m [0mTrue 
+[36mdoMM            [0m[36m [0mTrue 
+[36mdoML_dimer      [0m[36m [0mTrue 
+[36mdefer_xla_warmup[0m[36m [0mFalse
+[1;2mCheckpoint[0m
+[36mCheckpoint[0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[36mname      [0m[36m [0mkl.json                                      
+[36mepoch     [0m[36m [0m—                                            
+[36mbest_loss [0m[36m [0m—                                            
+[36mSave Time [0m[36m [0m—                                            
+[1;32mCalculator Summary[0m
+[1mParameter                 [0m[1m [0m[1mValue                                                [0m
+[96mModel type                [0m[96m [0m[37mHybrid ML/MM (PhysNet spherical cutoff)              [0m
+[96mCheckpoint                [0m[96m [0m[37m/mmhome/boittier/home/mmml/examples/m/kl.json        [0m
+[96mEnsemble                  [0m[96m [0m[37mNVE                                                  [0m
+[96mMonomers                  [0m[96m [0m[37m2                                                    [0m
+[96mAtoms                     [0m[96m [0m[37m9                                                    [0m
+[96mdoML                      [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mdoMM                      [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mdoML_dimer                [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mComplementary handoff     [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[1;96mML energy terms[0m[96m           [0m[96m [0m[37m                                                     [0m
+[96mneural ML                 [0m[96m [0m[37m✓ (PhysNet/Spooky atomic)                            [0m
+[96melectrostatics            [0m[96m [0m[37m✓ predicted charges (σ=4 Å)                          [0m
+[96mZBL repulsion             [0m[96m [0m[37m✓                                                    [0m
+[96mCGenFF LJ (training)      [0m[96m [0m[37m✓ recorded                                           [0m
+[96mMBD dispersion            [0m[96m [0m[37m✗ not configured                                     [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[96mml_switch_width (Å)       [0m[96m [0m[94m1.500[0m[37m                                                [0m
+[96mmm_switch_on (Å)          [0m[96m [0m[93m8.000[0m[37m                                                [0m
+[96mmm_switch_width (Å)       [0m[96m [0m[91m5.000[0m[37m                                                [0m
+[96mML fully-on range (Å)     [0m[96m [0m[37m0 → [0m[94m6.500[0m[37m                                            [0m
+[96mML/MM handoff range (Å)   [0m[96m [0m[94m6.500[0m[37m → [0m[93m8.000[0m[37m                                        [0m
+[96mMM tail range (Å)         [0m[96m [0m[93m8.000[0m[37m → [0m[91m13.000[0m[37m                                       [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[96mShort-range wall          [0m[96m [0m[32m✓[0m[37m MD safety net                                      [0m
+[96mwall onset r_on (pair Å)  [0m[96m [0m[35m1.000[0m[37m                                                [0m
+[96mwall stiffness k (eV·Å²)  [0m[96m [0m[35m80.000[0m[37m                                               [0m
+[96mwall active range (pair Å)[0m[96m [0m[37m0 → [0m[35m1.000[0m[37m (0 above; inter-monomer only)              [0m
+[96mwall vs dimer scan        [0m[96m [0m[2;37mpair Å prior; not on COM ruler / not a scanned [0m[37m      [0m
+[96m                           [0m[2;37mhandoff term[0m[37m                                         [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[96mZBL repulsion             [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mZBL cuton (pair Å)        [0m[96m [0m[35m0.1000[0m[37m                                               [0m
+[96mZBL cutoff (pair Å)       [0m[96m [0m[35m0.6000[0m[37m                                               [0m
+[96mZBL trainable             [0m[96m [0m[37mfixed                                                [0m
+[96mZBL mode                  [0m[96m [0m[37mfixed universal                                      [0m
+
+[1;37m  COM-distance ruler (Å):[0m
+  [1;94m█████████████████[0m[1;93m███[0m[1;91m█████████████[0m[2;37m-----[0m
+                   ↑  ↑            ↑
+                   6.58.0          13.0
+  [1;94m█[0m[37m ML=1  [0m[1;93m█[0m[37m handoff (ML↓,MM↑)  [0m[1;91m█[0m[37m MM tail↓  [0m[2;37m─[0m[2;37m inactive[0m
+
+[2;37m  ruler scale: 0 → 14.9 Å[0m
+[2;35m  Note: ZBL and the short-range wall are pair-Å MD priors (not COM handoff). The[0m
+[2;35m2D dimer scan validates COM switching; it does not place those terms on this [0m
+[2;35mruler.[0m
+[1;35mNeighbor Lists[0m
+[1mProperty               [0m[1m [0m[1mValue                 [0m
+[95mAtoms                  [0m[95m [0m[37m9                     [0m
+[95mMonomers               [0m[95m [0m[37m2                     [0m
+[95mMM outer cutoff (Å)    [0m[95m [0m[37m13.000                [0m
+[95mSkin distance (Å)      [0m[95m [0m[37m0.250                 [0m
+[95mUpdate interval (steps)[0m[95m [0m[37m1                     [0m
+[95mCapacity multiplier    [0m[95m [0m[37m1.75×                 [0m
+[95m────────────────────── [0m[95m [0m[37m──────────────────────[0m
+[95mSparse ML dimer cap    [0m[95m [0m[37m1                     [0m
+[95mMonomer dimer pairs    [0m[95m [0m[37m1                     [0m
+[95mSparse cap / all pairs [0m[95m [0m[37m100.0%                [0m
+[95m────────────────────── [0m[95m [0m[37m──────────────────────[0m
+[95mml_sparse_dimers       [0m[95m [0m[37mTrue                  [0m
+[95mml_batch_size          [0m[95m [0m[37mall                   [0m
+[95mml_gpu_count           [0m[95m [0m[37m1                     [0m
+[95mmax_pairs              [0m[95m [0m[37mauto                  [0m
+[95mPBC                    [0m[95m [0m[37mFalse                 [0m
+
+[1;37m  Capacity fill-fraction:[0m
+  Sparse ML dimers   [93m██████████████████████████████████████[0m[37m 100.0%[0m[2;37m  (1 / 1)[0m
+[1;36mCHARMM topology [0m[1;36m([0m[1;36mPSF[0m[1;36m)[0m
+[2;36mn_atoms        [0m[2;36m [0m9                                          
+[2;36mn_residues     [0m[2;36m [0m2                                          
+[2;36mtotal_charge   [0m[2;36m [0m0.0000 e                                   
+[2;36mmass_range_amu [0m[2;36m [0m1.008–35.453                               
+[2;36matom_names     [0m[2;36m [0mC1×1, CL1×1, H11×2, H12×2, H13×2, N1×1     
+[2;36miac_index_range[0m[2;36m [0m4–140                                      
+[2;36mresidues       [0m[2;36m [0mAMM1×1, CH3CL×1                            
+[2;36mcgenff_types   [0m[2;36m [0mCG331×1, CLGA1×1, HGA3×3, HGPAM3×3, NG331×1
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSHIft   VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 14.000 CTEXNB =999.000 CTONNB = 10.000 CTOFNB = 12.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       20 atom  pairs and       16 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      0.68729      0.00000      4.62619
+ENER INTERN>        0.03044      0.68309      0.00000      0.00000      0.00000
+ENER EXTERN>       -0.02624      0.00000      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+CHARMM energy policy vdw: non-zero before reload (VDW=-0.0262386)
+CHARMM energy policy: reloading overlay /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/charmm_energy_policy/zeroed_vdw.prm (bonded=False, nonbond=True, zero_charges=False)
+ api_nbonds%nbonds_cutoffs_orderly> CUTNB,CTOFNB,CTONNB=      18.0      12.0      13.0
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and        0 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ <MAKINB> with mode   5 found     16 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       20 atom  pairs and       16 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      0.71353     -0.02624      4.58234
+ENER INTERN>        0.03044      0.68309      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+CHARMM energy policy: reload OK (vdw)
+ <MAKINB> with mode   5 found     36 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+ <MAKINB> with mode   5 found     36 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+[1;36mINFO   [0m  JAX compile threads  [1;36m16[0m [1m([0mOMP [1;36m1[0m temporarily; restored afterward[1m)[0m
+Decomposed MLpot spherical_fn=functools.partial(<PjitFunction of <function setup_calculator.<locals>.spherical_cutoff_calculator at 0x1505e93a4cc0>>, doML=True, doMM=True, doML_dimer=True, debug=False) (GPU; JIT bind doML=True doMM=True doML_dimer=True)
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+Decomposed MLpot JAX warmup: 9 atoms, 2 monomers (ML+MM)
+Decomposed MLpot JAX warmup: mlpot_callback_forward (single jit)...
+[1;36mINFO   [0m  JAX compile threads  [1;36m16[0m [1m([0mOMP [1;36m1[0m temporarily; restored afterward[1m)[0m
+Decomposed MLpot JAX warmup complete
+MLpot: rebound CHARMM callback to current pyCModel calculator
+MLpot: rebound CHARMM callback to current pyCModel calculator
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -5.25441      5.96794     28.43226
+ENER INTERN>        0.03044      0.68309      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -5.96794
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before MLpot registration: [1;36m-5.9679[0m kcal/mol [1m([0m[1;36m-0.258794[0m eV[1m)[0m
+=== Progress: MLpot registration complete ===
+MLpot list sync before SD minimize: first hybrid ENER FORCE (JAX compile cache / auto warmup speeds this up)...
+[1;36mMLpot list sync before SD minimize[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m27.2996 kcal/mol/Å (1.1838 eV/Å)
+[36mCHARMM GRMS[0m[36m [0m28.4323 kcal/mol/Å (1.2329 eV/Å)
+[36mUSER energy[0m[36m [0m—                               
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent   
+Before MLpot SD minimize: initial hybrid GRMS 27.30 kcal/mol/Å (limit 500.0)
+
+MLpot SD minimize: 40 steps/pass, 9 atoms
+GRMS thresholds: intervention=90.9, max_before_dyn=227.3 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=36.37, charmm_max=38.61)
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/c4d2d2cde20c006a/02_mini.dcd::
+MLpot: rebound CHARMM callback to current pyCModel calculator
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -5.25441      5.96794     28.43226
+ENER INTERN>        0.03044      0.68309      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -5.96794
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before Pre-SD MLpot SD minimize: [1;36m-5.9679[0m kcal/mol [1m([0m[1;36m-0.258794[0m
+eV[1m)[0m
+[1;36mPre-SD hybrid GRMS check[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m27.2996 kcal/mol/Å (1.1838 eV/Å)
+[36mCHARMM GRMS[0m[36m [0m28.4323 kcal/mol/Å (1.2329 eV/Å)
+[36mUSER energy[0m[36m [0m—                               
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent   
+GRMS thresholds: intervention=109.1, max_before_dyn=272.8 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=36.37, charmm_max=38.61, hybrid_p90=35.97, hybrid_max=38.61)
+Pre-SD hybrid calculator minimize: promoted JAX factory to GPU
+Pre-SD (pre-recovery) hybrid calculator BFGSLineSearch: start GRMS=27.2996 kcal/mol/Å (max 50 steps, fmax=0.1 eV/Å)
+      Step     Time          Energy          fmax
+FIRE:    0 02:28:54       -0.258794        4.060932
+FIRE:    1 02:28:54       -0.429015        1.009013
+FIRE:    2 02:28:54       -0.440249        3.037340
+Pre-SD (pre-recovery) hybrid calculator BFGS: fmax guard triggered (2.6925 eV/Å); stopping
+Pre-SD (pre-recovery) hybrid calculator BFGS: restored best frame (step_1, fmax=0.956878 eV/Å, E=-0.429015 eV)
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+Pre-SD (pre-recovery): restoring session-best calculator mini (step_1, fmax=0.956878 eV/Å, E=-0.429015 eV, GRMS=10.2584 kcal/mol/Å)
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+Pre-SD (pre-recovery) hybrid calculator BFGSLineSearch done (spike abort): GRMS 27.2996 -> 10.2584 kcal/mol/Å, E=-0.429015 eV (-9.8933 kcal/mol), fmax=0.956878 eV/Å, steps=2
+[1;36mPre-SD post-calculator hybrid GRMS[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m10.2584 kcal/mol/Å (0.4448 eV/Å)
+[36mCHARMM GRMS[0m[36m [0m12.3365 kcal/mol/Å (0.5350 eV/Å)
+[36mUSER energy[0m[36m [0m—                               
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent   
+MLpot: rebound CHARMM callback to current pyCModel calculator
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -9.36615      4.11175     12.33646
+ENER INTERN>        0.02672      0.50045      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000     -9.89332
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before Pre-SD MLpot SD [1m([0mpost calculator mini[1m)[0m: [1;36m-9.8933[0m 
+kcal/mol [1m([0m[1;36m-0.429015[0m eV[1m)[0m
+[1;36mMLpot SD watchdog baseline[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m10.2584 kcal/mol/Å (0.4448 eV/Å)
+[36mUSER energy[0m[36m [0m—                               
+[36mNote       [0m[36m [0mpost calculator pre-minimize    
+[1;34mSD pass [0m[1;34m1[0m[1;34m [0m[1;34m([0m[1;34mfree, all atoms[0m[1;34m)[0m
+[1;2mSD pass[0m
+[36mHybrid GRMS[0m[36m [0m10.2584 kcal/mol/Å (0.4448 eV/Å)                                    
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mNote       [0m[36m [0m40 steps in up to 4 chunks (≤500/chunk, adaptive down to 10,        
+[36m            [0minbfrq=0 + UPDATE between chunks)                                   
+[1;34mABNR pass [0m[1;34m1[0m[1;34m [0m[1;34m([0m[1;34mfree, all atoms[0m[1;34m)[0m
+[1;2mSD pass[0m
+[36mHybrid GRMS[0m[36m [0m10.2584 kcal/mol/Å (0.4448 eV/Å)                                    
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mNote       [0m[36m [0m40 steps in up to 4 chunks (≤500/chunk, adaptive down to 10,        
+[36m            [0minbfrq=0 + UPDATE between chunks)                                   
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -18.18676      8.82061      1.10086
+ENER INTERN>        0.01991      0.03237      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -18.23904
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -18.18676      8.82061      1.10086
+ENER INTERN>        0.01991      0.03237      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -18.23904
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -18.18676      8.82061      1.10086
+ENER INTERN>        0.01991      0.03237      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -18.23904
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -18.18676      8.82061      1.10086
+ENER INTERN>        0.01991      0.03237      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -18.23904
+ ----------       ---------    ---------    ---------    ---------    ---------
+CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)
+[1;36mPost MLpot SD pass [0m[1;36m1[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m1.5830 kcal/mol/Å (0.0686 eV/Å)
+[36mCHARMM GRMS[0m[36m [0m1.1009 kcal/mol/Å (0.0477 eV/Å)
+[36mUSER energy[0m[36m [0m—                              
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent  
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/2b10c60dffe4f195/02_mini.pdb::
+ VCLOSE: Closing unit   90 with status "KEEP"
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/095ecd760884ef19/02_mini.psf::
+ VCLOSE: Closing unit   90 with status "KEEP"
+ VCLOSE: Closing unit   51 with status "KEEP"
+minimize snapshot [02] MMML: MLpot PhysNet steepest descent (USER / MMML) → 02_mini
+[1;36mPost MLpot mini[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m1.5830 kcal/mol/Å (0.0686 eV/Å)
+[36mCHARMM GRMS[0m[36m [0m1.1009 kcal/mol/Å (0.0477 eV/Å)
+[36mUSER energy[0m[36m [0m—                              
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent  
+Geometry baseline restart -> baseline.res
+MLpot: rebound CHARMM callback to current pyCModel calculator
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -18.18676      8.82061      1.10086
+ENER INTERN>        0.01991      0.03237      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -18.23904
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before staged dynamics: [1;36m-18.2390[0m kcal/mol [1m([0m[1;36m-0.790920[0m eV[1m)[0m
+GRMS thresholds: intervention=5.0, max_before_dyn=50.0 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=1.34, charmm_max=1.40, hybrid_p90=1.68, hybrid_max=1.71)
+GRMS thresholds: intervention=5.0, max_before_dyn=50.0 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=1.34, charmm_max=1.40, hybrid_p90=1.68, hybrid_max=1.71)
+[1;36mPre-dynamics gate[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m1.5830 kcal/mol/Å (0.0686 eV/Å)
+[36mCHARMM GRMS[0m[36m [0m1.1009 kcal/mol/Å (0.0477 eV/Å)
+[36mUSER energy[0m[36m [0m—                              
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent  
+GRMS thresholds: intervention=5.0, max_before_dyn=50.0 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=1.34, charmm_max=1.40, hybrid_p90=1.68, hybrid_max=1.71)
+[1;36mMLpot energy refresh[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m1.5830 kcal/mol/Å (0.0686 eV/Å)
+[36mCHARMM GRMS[0m[36m [0m1.1009 kcal/mol/Å (0.0477 eV/Å)
+[36mUSER energy[0m[36m [0m—                              
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent  
+Pre-dynamics GRMS OK: 1.5830 kcal/mol/Å (limit 50.0), USER=-18.2390 kcal/mol (-0.790920 eV)
+Atom consistency OK before staged dynamics: N=9 (PSF ↔ MLpot ↔ calculator Z and masses)
+  atom 0: type=N1 Z=7 mass=14.0070 amu
+  atom 1: type=H11 Z=1 mass=1.0080 amu
+  atom 2: type=H12 Z=1 mass=1.0080 amu
+Pre-dynamics CHARMM lingo (file, 51 line(s)):
+! Weak COM tether: stops global drift in vacuum without confining the
+! reaction. Acts on the aggregate COM, so it does NOT bias the internal RCs.
+cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+
+! Umbrella grid edge (Å); MMFP walls below use the same upper bound so
+! dynamics cannot exceed UM1RXN [min,max] and abort mid-heat.
+set adum_rcmax = 8.0
+set adum_rcwall = 500.0
+
+open unit 44 write card name ADUMB-WUNI.DAT
+open unit 50 write card name UMBCOR
+open unit 45 write card name RXNCOR_RCL.DAT
+open unit 46 write card name RXNCOR_RCN.DAT
+
+! Points: NH3 N1, CH3Cl C1, CH3Cl CL1 (IUPAC names via ATOM, not TYPE).
+! TYPE selects FF labels (NG331/CG331/CLGA1); ATOM * * NAME matches names.
+rxncor define pn point select atom * * N1 end
+rxncor define pc point select atom * * C1 end
+rxncor define pcl point select atom * * CL1 end
+
+! Distances (Angstrom): Cl-C and C-N
+rxncor define rcl distance pcl pc
+rxncor define rcn distance pc pn
+rxncor set nrxn 2 rcl rcn
+rxncor trace rcl unit 45
+rxncor trace rcn unit 46
+
+! Soft outer walls on traced distances (MMFP RESTR): zero energy for r<=max,
+! half-harmonic repulsion outside (force @adum_rcwall). Keeps UM1RXN in range
+! without the hard abort when dynamics briefly overshoot the umbrella edge.
+MMFP
+GEO SPHE DIST HARM OUTS force @adum_rcwall droff @adum_rcmax -
+  select atom * * CL1 end -
+  select atom * * C1 end
+GEO SPHE DIST HARM OUTS force @adum_rcwall droff @adum_rcmax -
+  select atom * * C1 end -
+  select atom * * N1 end
+END
+
+! Adaptive umbrella on Cl-C and C-N distances (Å).
+! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when
+! min>0 (min 1 max 6 → abort once value > 5 Å). Patched eadumb.F90 uses
+! [min, max]; min 0.0 works on both.
+! max @adum_rcmax matches MMFP walls; spans reactant–TS–product basins (~6 Å).
+umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcl
+umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcn
+
+! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200_000 here): 400*500.
+! equi 250 of update 500 discards 50% per window (absorbs the boundary redraw);
+! lower equi toward ~100 if you want more sampling per window.
+umbrella init nsim 400 update 500 equi 250 thresh 10 temp 500 wuni 44 ucun 50
+ SELRPN>      9 atoms have been selected out of      9
+ Center of Geometry Harmonic Constraint #  1
+ force constant     =     0.2000E+01
+ reference distance =     0.0000E+00
+ reference point: (        0.0000        0.0000        0.0000)
+ for    9 out of     9 total selected atoms.
+ Parameter: ADUM_RCMAX <- "8.0"
+ Parameter: ADUM_RCWALL <- "500.0"
+ VOPEN> Attempting to open::adumb-wuni.dat::
+ OPNLGU> Unit 44 opened for WRITE access to adumb-wuni.dat
+ VOPEN> Attempting to open::umbcor::
+ OPNLGU> Unit 50 opened for WRITE access to umbcor
+ VOPEN> Attempting to open::rxncor_rcl.dat::
+ OPNLGU> Unit 45 opened for WRITE access to rxncor_rcl.dat
+ VOPEN> Attempting to open::rxncor_rcn.dat::
+ OPNLGU> Unit 46 opened for WRITE access to rxncor_rcn.dat
+ SELRPN>      1 atoms have been selected out of      9
+ SELRPN>      1 atoms have been selected out of      9
+ SELRPN>      1 atoms have been selected out of      9
+
+      MISCELANEOUS MEAN FIELD POTENTIALS
+  
+FAIL: point rcl1.8_rcn3.5 exited 137
+(r_ClC, r_CN) target (2.20, 2.00) -> frame 14499: r(Cl-C)=2.43 Å r(C-N)=1.91 Å (xi=1.270)
+Wrote /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb
+  AMM1 atom records: 4  CH3CL atom records: 5
+PASS: solute PDB for make-box
+--- point rcl2.2_rcn2.0 -> /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0
+    uv run mmml md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini 
+mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+mmml: MPI-linked CHARMM — re-launching under OpenMPI for md-system:
+  /opt/gcc-14.2.0/openmpi-5.0.5/build/bin/mpirun -np 1 --mca pmix ^ext3x --mca shmem mmap -x LD_LIBRARY_PATH -x CHARMM_LIB_DIR --mca orte_abort_print_stack 1 /mmhome/boittier/home/mmml/.venv/bin/python3 -m mmml.cli.__main__ md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini
+mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+ JAX CPU thread XLA_FLAGS already present; using existing flags: 
+--[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
+mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
+[1;36mPyCHARMM environment[0m
+[2;36mCGenFF[0m[2;36m [0m/mmhome/boittier/home/mmml/mmml/data/charmm  (top_all36_cgenff.rtf,      
+[2;36m       [0mpar_all36_cgenff.prm)                                                    
+[2;36mCHARMM[0m[2;36m [0m/mmhome/boittier/home/mmml/setup/charmm                                  
+Loading full-system PDB solute_rcl2.2_rcn2.0.pdb (sequence_string AMM1 CH3CL, 9 atoms)…
+Loading full-system PDB solute_rcl2.2_rcn2.0.pdb (2 residues, 9 atoms, vacuum (no box))
+Cluster monomer count: CLI n_monomers=2 -> PSF nres=2 (9 atoms, 4 atoms/monomer typical)
+Cluster geometry OK: 2 monomer(s), 9 atoms | spans (Å) x=4.62 y=2.19 z=2.38
+echeck loosened 100.0 -> 500 kcal/mol for 2 monomer(s) / 9 atoms (legacy heuristic floor 500; --no-scale-echeck to keep 100.0)
+Dynamics overlap guard: action=rescue, min_distance=0.20 Å, check every 500 steps, last-resort monomer repack on
+Dynamics intra-monomer guard: action=rescue, min_distance=0.20 Å, exclude_1_3=True, check every 500 steps
+ api_nbonds%nbonds_cutoffs_orderly> CUTNB,CTOFNB,CTONNB=      18.0      12.0      13.0
+
+      ***** LEVEL  1 WARNING FROM <api_nbonds%nbonds_cutoffs_orderly> *****
+      ***** CUTNB,CTOFNB,CTONNB are not in correct order.
+      ******************************************
+      BOMLEV ( -2) IS NOT REACHED. WRNLEV IS  5
+
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and        0 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ <MAKINB> with mode   5 found     16 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/d0ab8a254e464166/model.psf::
+ VCLOSE: Closing unit   90 with status "KEEP"
+minimize snapshot [00] packmol: Packmol sphere placement (pre-minimize) → 00_pack
+
+CHARMM MM pre-minimize: SD=0 ABNR=0
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       20 atom  pairs and       16 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+Post MM pre-min GRMS: 0.0000 kcal/mol/Å
+minimize snapshot [01] MM: CHARMM CGENFF SD/ABNR before MLpot (MM only) → 01_mm
+
+=== Progress: vacuum MMFP flat-bottom (before MLpot registration) ===
+=== Progress: MMFP done; continuing toward MLpot registration ===
+
+=== Progress: registering MLpot (9 atoms, ckpt=/mmhome/boittier/home/mmml/examples/m/kl.json) ===
+    (first JAX compile / USER registration can take minutes; watch GPU with nvidia-smi)
+ JAX CPU thread XLA_FLAGS already present; using existing flags: 
+--[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
+mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
+MLpot device policy: MMML_MLPOT_DEVICE=gpu JAX_PLATFORMS=cuda,cpu
+Decomposed MLpot: 2 JAX GPUs visible but ml_gpu_count=1 (only GPU:0 runs PhysNet). Use --ml-gpu-count 2 and enough chunks (--ml-batch-size 128-256 for DCM:90).
+Decomposed MLpot: max_active_dimers=1 (free-space all-pairs safe; PhysNet batch ≤ 3 systems/step)
+Decomposed MLpot: lr_solver=mic, scafacos=yes, jax_pme=no, nvalchemiops_pme=no (jax-pme method=ewald, sr_cutoff=13.0 Å; r^-6 dispersion=env/default when lr_solver=jax_pme)
+Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are fully excluded)
+[1;32mOK     [0m  Loaded checkpoint  [35m/mmhome/boittier/home/mmml/examples/m/[0m[95mkl.json[0m
+[1;36mHybrid ML/MM setup[0m
+[1;2mSystem[0m
+[36mn_monomers       [0m[36m [0m2                                            
+[36matoms_per_monomer[0m[36m [0m[4, 5]                                       
+[36mtotal_atoms      [0m[36m [0m9                                            
+[36mmax_atoms        [0m[36m [0m9                                            
+[36mmm_charge_mode   [0m[36m [0mfixed                                        
+[36mml_compute_dtype [0m[36m [0m<class 'jax.numpy.float64'>                  
+[36mcheckpoint_dir   [0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[1;2mHandoff & cutoffs[0m
+[36mml_switch_width_Å[0m[36m [0m1.5000
+[36mmm_switch_on_Å   [0m[36m [0m8.0000
+[36mmm_switch_width_Å[0m[36m [0m5.0000
+[36mcomplementary    [0m[36m [0mTrue  
+[36mmm_r_min_Å       [0m[36m [0m5.8500
+[36mmodel_cutoff_Å   [0m[36m [0m8.0   
+[1;2mML energy terms[0m
+[36mneural ML           [0m[36m [0m✓ (PhysNet/Spooky atomic)  
+[36melectrostatics      [0m[36m [0m✓ predicted charges (σ=4 Å)
+[36mZBL repulsion       [0m[36m [0m✓                          
+[36mCGenFF LJ (training)[0m[36m [0m✓ recorded                 
+[36mMBD dispersion      [0m[36m [0m✗ not configured           
+[1;2mZBL repulsion[0m
+[36menabled  [0m[36m [0mTrue               
+[36mcuton_Å  [0m[36m [0m0.1000             
+[36mcutoff_Å [0m[36m [0m0.6000             
+[36mtrainable[0m[36m [0mFalse              
+[36mmode     [0m[36m [0mfixed universal    
+[36mdistance [0m[36m [0mpair r (Å), not COM
+[1;2mLong-range Coulomb[0m
+[36mmm_nonbond_mode     [0m[36m [0mjax_mic                              
+[36mlr_solver           [0m[36m [0mmic                                  
+[36mjax_pme_pkg         [0m[36m [0mno                                   
+[36mnvalchemiops_pme_pkg[0m[36m [0mno                                   
+[36mscafacos_lib        [0m[36m [0myes                                  
+[36mlr_solver_active    [0m[36m [0mmic                                  
+[36mcoulomb_mode        [0m[36m [0mtruncated MIC (switched MM pair loop)
+[1;2mNeighbor lists & ML batching[0m
+[36mml_sparse_dimers   [0m[36m [0mTrue 
+[36mdimers_total       [0m[36m [0m1    
+[36mmax_active_dimers  [0m[36m [0m1    
+[36mml_batch_size      [0m[36m [0mall  
+[36mml_gpu_count       [0m[36m [0m1    
+[36mjax_md_skin_Å      [0m[36m [0m0.25 
+[36mjax_md_update_every[0m[36m [0m1    
+[36mmax_pairs          [0m[36m [0mauto 
+[36mcell_list_safety   [0m[36m [0m3.0  
+[36mdensity_est        [0m[36m [0m0.03 
+[36mPBC                [0m[36m [0mFalse
+[1;2mModel[0m
+[36mclass                 [0m[36m [0mPhysNet
+[36mfeatures              [0m[36m [0m32     
+[36mmax_degree            [0m[36m [0m1      
+[36mmessage_passing_steps [0m[36m [0m3      
+[36mnum_basis_functions   [0m[36m [0m64     
+[36mcutoff                [0m[36m [0m8.0    
+[36mmax_atomic_number     [0m[36m [0m35     
+[36mcharges               [0m[36m [0mTrue   
+[36mmax_padded_atoms      [0m[36m [0m9      
+[36mtotal_charge          [0m[36m [0m0.0    
+[36mn_refinement_blocks   [0m[36m [0m2      
+[36mzbl                   [0m[36m [0mTrue   
+[36mzbl_cuton             [0m[36m [0m0.1    
+[36mzbl_cutoff            [0m[36m [0m0.6    
+[36mtrainable_zbl         [0m[36m [0mFalse  
+[36mdebug                 [0m[36m [0mFalse  
+[36mefa                   [0m[36m [0mFalse  
+[36muse_energy_bias       [0m[36m [0mTrue   
+[36muse_pbc               [0m[36m [0mFalse  
+[36minclude_electrostatics[0m[36m [0mTrue   
+[1;2mRuntime threads[0m
+[36mOMP_NUM_THREADS            [0m[36m [0m1                                                   
+[36mMMML_CHARMM_OMP_THREADS    [0m[36m [0munset                                               
+[36mMKL_NUM_THREADS            [0m[36m [0m1                                                   
+[36mOPENBLAS_NUM_THREADS       [0m[36m [0m1                                                   
+[36mNUMEXPR_NUM_THREADS        [0m[36m [0m1                                                   
+[36mMMML_JAX_COMPILE_THREADS   [0m[36m [0munset                                               
+[36mMMML_NO_JAX_COMPILE_THREADS[0m[36m [0munset                                               
+[36mXLA_FLAGS                  [0m[36m [0m--xla_cpu_multi_thread_eigen=true                   
+[36m                            [0mintra_op_parallelism_threads=16                     
+[36mJAX_PLATFORMS              [0m[36m [0mcuda,cpu                                            
+[36mMMML_MLPOT_DEVICE          [0m[36m [0mgpu                                                 
+[1;2mML/MM flags[0m
+[36mdoML            [0m[36m [0mTrue 
+[36mdoMM            [0m[36m [0mTrue 
+[36mdoML_dimer      [0m[36m [0mTrue 
+[36mdefer_xla_warmup[0m[36m [0mFalse
+[1;2mCheckpoint[0m
+[36mCheckpoint[0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[36mname      [0m[36m [0mkl.json                                      
+[36mepoch     [0m[36m [0m—                                            
+[36mbest_loss [0m[36m [0m—                                            
+[36mSave Time [0m[36m [0m—                                            
+[1;32mCalculator Summary[0m
+[1mParameter                 [0m[1m [0m[1mValue                                                [0m
+[96mModel type                [0m[96m [0m[37mHybrid ML/MM (PhysNet spherical cutoff)              [0m
+[96mCheckpoint                [0m[96m [0m[37m/mmhome/boittier/home/mmml/examples/m/kl.json        [0m
+[96mEnsemble                  [0m[96m [0m[37mNVE                                                  [0m
+[96mMonomers                  [0m[96m [0m[37m2                                                    [0m
+[96mAtoms                     [0m[96m [0m[37m9                                                    [0m
+[96mdoML                      [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mdoMM                      [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mdoML_dimer                [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mComplementary handoff     [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[1;96mML energy terms[0m[96m           [0m[96m [0m[37m                                                     [0m
+[96mneural ML                 [0m[96m [0m[37m✓ (PhysNet/Spooky atomic)                            [0m
+[96melectrostatics            [0m[96m [0m[37m✓ predicted charges (σ=4 Å)                          [0m
+[96mZBL repulsion             [0m[96m [0m[37m✓                                                    [0m
+[96mCGenFF LJ (training)      [0m[96m [0m[37m✓ recorded                                           [0m
+[96mMBD dispersion            [0m[96m [0m[37m✗ not configured                                     [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[96mml_switch_width (Å)       [0m[96m [0m[94m1.500[0m[37m                                                [0m
+[96mmm_switch_on (Å)          [0m[96m [0m[93m8.000[0m[37m                                                [0m
+[96mmm_switch_width (Å)       [0m[96m [0m[91m5.000[0m[37m                                                [0m
+[96mML fully-on range (Å)     [0m[96m [0m[37m0 → [0m[94m6.500[0m[37m                                            [0m
+[96mML/MM handoff range (Å)   [0m[96m [0m[94m6.500[0m[37m → [0m[93m8.000[0m[37m                                        [0m
+[96mMM tail range (Å)         [0m[96m [0m[93m8.000[0m[37m → [0m[91m13.000[0m[37m                                       [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[96mShort-range wall          [0m[96m [0m[32m✓[0m[37m MD safety net                                      [0m
+[96mwall onset r_on (pair Å)  [0m[96m [0m[35m1.000[0m[37m                                                [0m
+[96mwall stiffness k (eV·Å²)  [0m[96m [0m[35m80.000[0m[37m                                               [0m
+[96mwall active range (pair Å)[0m[96m [0m[37m0 → [0m[35m1.000[0m[37m (0 above; inter-monomer only)              [0m
+[96mwall vs dimer scan        [0m[96m [0m[2;37mpair Å prior; not on COM ruler / not a scanned [0m[37m      [0m
+[96m                           [0m[2;37mhandoff term[0m[37m                                         [0m
+[96m──────────────────────    [0m[96m [0m[37m──────────────────────                               [0m
+[96mZBL repulsion             [0m[96m [0m[32m✓[0m[37m                                                    [0m
+[96mZBL cuton (pair Å)        [0m[96m [0m[35m0.1000[0m[37m                                               [0m
+[96mZBL cutoff (pair Å)       [0m[96m [0m[35m0.6000[0m[37m                                               [0m
+[96mZBL trainable             [0m[96m [0m[37mfixed                                                [0m
+[96mZBL mode                  [0m[96m [0m[37mfixed universal                                      [0m
+
+[1;37m  COM-distance ruler (Å):[0m
+  [1;94m█████████████████[0m[1;93m███[0m[1;91m█████████████[0m[2;37m-----[0m
+                   ↑  ↑            ↑
+                   6.58.0          13.0
+  [1;94m█[0m[37m ML=1  [0m[1;93m█[0m[37m handoff (ML↓,MM↑)  [0m[1;91m█[0m[37m MM tail↓  [0m[2;37m─[0m[2;37m inactive[0m
+
+[2;37m  ruler scale: 0 → 14.9 Å[0m
+[2;35m  Note: ZBL and the short-range wall are pair-Å MD priors (not COM handoff). The[0m
+[2;35m2D dimer scan validates COM switching; it does not place those terms on this [0m
+[2;35mruler.[0m
+[1;35mNeighbor Lists[0m
+[1mProperty               [0m[1m [0m[1mValue                 [0m
+[95mAtoms                  [0m[95m [0m[37m9                     [0m
+[95mMonomers               [0m[95m [0m[37m2                     [0m
+[95mMM outer cutoff (Å)    [0m[95m [0m[37m13.000                [0m
+[95mSkin distance (Å)      [0m[95m [0m[37m0.250                 [0m
+[95mUpdate interval (steps)[0m[95m [0m[37m1                     [0m
+[95mCapacity multiplier    [0m[95m [0m[37m1.75×                 [0m
+[95m────────────────────── [0m[95m [0m[37m──────────────────────[0m
+[95mSparse ML dimer cap    [0m[95m [0m[37m1                     [0m
+[95mMonomer dimer pairs    [0m[95m [0m[37m1                     [0m
+[95mSparse cap / all pairs [0m[95m [0m[37m100.0%                [0m
+[95m────────────────────── [0m[95m [0m[37m──────────────────────[0m
+[95mml_sparse_dimers       [0m[95m [0m[37mTrue                  [0m
+[95mml_batch_size          [0m[95m [0m[37mall                   [0m
+[95mml_gpu_count           [0m[95m [0m[37m1                     [0m
+[95mmax_pairs              [0m[95m [0m[37mauto                  [0m
+[95mPBC                    [0m[95m [0m[37mFalse                 [0m
+
+[1;37m  Capacity fill-fraction:[0m
+  Sparse ML dimers   [93m██████████████████████████████████████[0m[37m 100.0%[0m[2;37m  (1 / 1)[0m
+[1;36mCHARMM topology [0m[1;36m([0m[1;36mPSF[0m[1;36m)[0m
+[2;36mn_atoms        [0m[2;36m [0m9                                          
+[2;36mn_residues     [0m[2;36m [0m2                                          
+[2;36mtotal_charge   [0m[2;36m [0m0.0000 e                                   
+[2;36mmass_range_amu [0m[2;36m [0m1.008–35.453                               
+[2;36matom_names     [0m[2;36m [0mC1×1, CL1×1, H11×2, H12×2, H13×2, N1×1     
+[2;36miac_index_range[0m[2;36m [0m4–140                                      
+[2;36mresidues       [0m[2;36m [0mAMM1×1, CH3CL×1                            
+[2;36mcgenff_types   [0m[2;36m [0mCG331×1, CLGA1×1, HGA3×3, HGPAM3×3, NG331×1
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSHIft   VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 14.000 CTEXNB =999.000 CTONNB = 10.000 CTOFNB = 12.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       20 atom  pairs and       16 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    677.66780      0.00000   1020.62791
+ENER INTERN>       89.55431     25.32418      0.00000      0.00000      0.00000
+ENER EXTERN>      562.78930      0.00000      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+CHARMM energy policy vdw: non-zero before reload (VDW=562.789)
+CHARMM energy policy: reloading overlay /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/charmm_energy_policy/zeroed_vdw.prm (bonded=False, nonbond=True, zero_charges=False)
+ api_nbonds%nbonds_cutoffs_orderly> CUTNB,CTOFNB,CTONNB=      18.0      12.0      13.0
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and        0 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ <MAKINB> with mode   5 found     16 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       20 atom  pairs and       16 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       20 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    114.87849    562.78930     91.64985
+ENER INTERN>       89.55431     25.32418      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+CHARMM energy policy: reload OK (vdw)
+ <MAKINB> with mode   5 found     36 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+ <MAKINB> with mode   5 found     36 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+[1;36mINFO   [0m  JAX compile threads  [1;36m16[0m [1m([0mOMP [1;36m1[0m temporarily; restored afterward[1m)[0m
+Decomposed MLpot spherical_fn=functools.partial(<PjitFunction of <function setup_calculator.<locals>.spherical_cutoff_calculator at 0x149f749b0cc0>>, doML=True, doMM=True, doML_dimer=True, debug=False) (GPU; JIT bind doML=True doMM=True doML_dimer=True)
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+Decomposed MLpot JAX warmup: 9 atoms, 2 monomers (ML+MM)
+Decomposed MLpot JAX warmup: mlpot_callback_forward (single jit)...
+[1;36mINFO   [0m  JAX compile threads  [1;36m16[0m [1m([0mOMP [1;36m1[0m temporarily; restored afterward[1m)[0m
+Decomposed MLpot JAX warmup complete
+MLpot: rebound CHARMM callback to current pyCModel calculator
+MLpot: rebound CHARMM callback to current pyCModel calculator
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    104.79658     10.08191    119.09358
+ENER INTERN>       89.55431     25.32418      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -10.08191
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before MLpot registration: [1;36m-10.0819[0m kcal/mol [1m([0m[1;36m-0.437193[0m eV[1m)[0m
+=== Progress: MLpot registration complete ===
+MLpot list sync before SD minimize: first hybrid ENER FORCE (JAX compile cache / auto warmup speeds this up)...
+[1;36mMLpot list sync before SD minimize[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m70.6656 kcal/mol/Å (3.0644 eV/Å) 
+[36mCHARMM GRMS[0m[36m [0m119.0936 kcal/mol/Å (5.1644 eV/Å)
+[36mUSER energy[0m[36m [0m—                                
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent    
+Before MLpot SD minimize: initial hybrid GRMS 70.67 kcal/mol/Å (limit 500.0)
+
+MLpot SD minimize: 40 steps/pass, 9 atoms
+GRMS thresholds: intervention=317.5, max_before_dyn=793.7 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=126.99, charmm_max=129.47)
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/85ddf7ad617f1207/02_mini.dcd::
+MLpot: rebound CHARMM callback to current pyCModel calculator
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    104.79658     10.08191    119.09358
+ENER INTERN>       89.55431     25.32418      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -10.08191
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before Pre-SD MLpot SD minimize: [1;36m-10.0819[0m kcal/mol 
+[1m([0m[1;36m-0.437193[0m eV[1m)[0m
+[1;36mPre-SD hybrid GRMS check[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m70.6656 kcal/mol/Å (3.0644 eV/Å) 
+[36mCHARMM GRMS[0m[36m [0m119.0936 kcal/mol/Å (5.1644 eV/Å)
+[36mUSER energy[0m[36m [0m—                                
+[36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent    
+GRMS thresholds: intervention=381.0, max_before_dyn=952.4 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=126.99, charmm_max=129.47, hybrid_p90=95.71, hybrid_max=104.69)
+Pre-SD hybrid calculator minimize: promoted JAX factory to GPU
+Pre-SD (pre-recovery) hybrid calculator BFGSLineSearch: start GRMS=70.6656 kcal/mol/Å (max 50 steps, fmax=0.1 eV/Å)
+      Step     Time          Energy          fmax
+FIRE:    0 02:30:24       -0.437193       12.350750
+FIRE:    1 02:30:24       -1.024238        6.269045
+FIRE:    2 02:30:24       -1.286983        2.408197
+FIRE:    3 02:30:24       -1.329340        1.922142
+FIRE:    4 02:30:24       -1.353063        1.644178
+FIRE:    5 02:30:24       -1.388128        1.094154
+FIRE:    6 02:30:24       -1.417433        0.760986
+Pre-SD (pre-recovery) hybrid calculator BFGS: safe GRMS reached (6.7216 <= 30.0000 kcal/mol/Å; atomic fmax=0.7610 <= 1.0000 eV/Å); stopping early
+Pre-SD (pre-recovery) hybrid calculator BFGS: keeping current frame (safe GRMS reached at step 6)
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+Pre-SD (pre-recovery): restoring session-best calculator mini (step_6, fmax=0.661222 eV/Å, E=-1.417433 eV, GRMS=6.7216 kcal/mol/Å)
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+Pre-SD (pre-recovery) hybrid calculator BFGSLineSearch done (safe GRMS): GRMS 70.6656 -> 6.7216 kcal/mol/Å, E=-1.417433 eV (-32.6868 kcal/mol), fmax=0.661222 eV/Å, steps=6
+[1;36mPre-SD post-calculator hybrid GRMS[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m6.7216 kcal/mol/Å (0.2915 eV/Å)                         
+[36mCHARMM GRMS[0m[36m [0m90.9289 kcal/mol/Å (3.9430 eV/Å)                        
+[36mUSER energy[0m[36m [0m—                                                       
+[36mDiag       [0m[36m [0mpossible hybrid/CHARMM desync — light resync recommended
+[36mNote       [0m[36m [0mhybrid/CHARMM GRMS ratio=13.5                           
+MLpot: rebound CHARMM callback to current pyCModel calculator
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       36 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       37 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     71.89611     32.90047     90.92885
+ENER INTERN>       82.43754     22.14536      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -32.68679
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before Pre-SD MLpot SD [1m([0mpost calculator mini[1m)[0m: [1;36m-32.6868[0m 
+kcal/mol [1m([0m[1;36m-1.417433[0m eV[1m)[0m
+[1;36mMLpot SD watchdog baseline[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m6.7216 kcal/mol/Å (0.2915 eV/Å)
+[36mUSER energy[0m[36m [0m—                              
+[36mNote       [0m[36m [0mpost calculator pre-minimize   
+[1;34mSD pass [0m[1;34m1[0m[1;34m [0m[1;34m([0m[1;34mfree, all atoms[0m[1;34m)[0m
+[1;2mSD pass[0m
+[36mHybrid GRMS[0m[36m [0m6.7216 kcal/mol/Å (0.2915 eV/Å)                                     
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mNote       [0m[36m [0m40 steps in up to 4 chunks (≤500/chunk, adaptive down to 10,        
+[36m            [0minbfrq=0 + UPDATE between chunks)                                   
+[1;34mABNR pass [0m[1;34m1[0m[1;34m [0m[1;34m([0m[1;34mfree, all atoms[0m[1;34m)[0m
+[1;2mSD pass[0m
+[36mHybrid GRMS[0m[36m [0m6.7216 kcal/mol/Å (0.2915 eV/Å)                                     
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mNote       [0m[36m [0m40 steps in up to 4 chunks (≤500/chunk, adaptive down to 10,        
+[36m            [0minbfrq=0 + UPDATE between chunks)                                   
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -15.46755     87.36366      0.16096
+ENER INTERN>        0.35398      0.11125      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -15.93278
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -15.46755     87.36366      0.16096
+ENER INTERN>        0.35398      0.11125      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -15.93278
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -15.46755     87.36366      0.16096
+ENER INTERN>        0.35398      0.11125      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -15.93278
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -15.46755     87.36366      0.16096
+ENER INTERN>        0.35398      0.11125      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -15.93278
+ ----------       ---------    ---------    ---------    ---------    ---------
+CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)
+[1;36mPost MLpot SD pass [0m[1;36m1[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m5.8099 kcal/mol/Å (0.2519 eV/Å)                                     
+[36mCHARMM GRMS[0m[36m [0m0.1610 kcal/mol/Å (0.0070 eV/Å)                                     
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mDiag       [0m[36m [0mML geometry stress (CHARMM bonded/MM GRMS low; ELEC/VDW blocked on  
+[36m            [0mML atoms)                                                           
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/948198e54ece48df/02_mini.pdb::
+ VCLOSE: Closing unit   90 with status "KEEP"
+ VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/f53a3aea6cc4b66a/02_mini.psf::
+ VCLOSE: Closing unit   90 with status "KEEP"
+ VCLOSE: Closing unit   51 with status "KEEP"
+minimize snapshot [02] MMML: MLpot PhysNet steepest descent (USER / MMML) → 02_mini
+[1;36mPost MLpot mini[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m5.8099 kcal/mol/Å (0.2519 eV/Å)                                     
+[36mCHARMM GRMS[0m[36m [0m0.1610 kcal/mol/Å (0.0070 eV/Å)                                     
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mDiag       [0m[36m [0mML geometry stress (CHARMM bonded/MM GRMS low; ELEC/VDW blocked on  
+[36m            [0mML atoms)                                                           
+Geometry baseline restart -> baseline.res
+MLpot: rebound CHARMM callback to current pyCModel calculator
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -15.46755     87.36366      0.16096
+ENER INTERN>        0.35398      0.11125      0.00000      0.00000      0.00000
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000    -15.93278
+ ----------       ---------    ---------    ---------    ---------    ---------
+[1;32m[[0m[1;32mMLpot[0m[1;32m][0m USER active before staged dynamics: [1;36m-15.9328[0m kcal/mol [1m([0m[1;36m-0.690911[0m eV[1m)[0m
+GRMS thresholds: intervention=25.0, max_before_dyn=62.5 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=0.17, charmm_max=0.17, hybrid_p90=7.03, hybrid_max=7.79)
+GRMS thresholds: intervention=25.0, max_before_dyn=62.5 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=0.17, charmm_max=0.17, hybrid_p90=7.03, hybrid_max=7.79)
+[1;36mPre-dynamics gate[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m5.8099 kcal/mol/Å (0.2519 eV/Å)                                     
+[36mCHARMM GRMS[0m[36m [0m0.1610 kcal/mol/Å (0.0070 eV/Å)                                     
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mDiag       [0m[36m [0mML geometry stress (CHARMM bonded/MM GRMS low; ELEC/VDW blocked on  
+[36m            [0mML atoms)                                                           
+GRMS thresholds: intervention=25.0, max_before_dyn=62.5 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=0.17, charmm_max=0.17, hybrid_p90=7.03, hybrid_max=7.79)
+[1;36mMLpot energy refresh[0m
+[1;2mState[0m
+[36mHybrid GRMS[0m[36m [0m5.8099 kcal/mol/Å (0.2519 eV/Å)                                     
+[36mCHARMM GRMS[0m[36m [0m0.1610 kcal/mol/Å (0.0070 eV/Å)                                     
+[36mUSER energy[0m[36m [0m—                                                                   
+[36mDiag       [0m[36m [0mML geometry stress (CHARMM bonded/MM GRMS low; ELEC/VDW blocked on  
+[36m            [0mML atoms)                                                           
+Pre-dynamics GRMS OK: 5.8099 kcal/mol/Å (limit 62.5), USER=-15.9328 kcal/mol (-0.690911 eV)
+Atom consistency OK before staged dynamics: N=9 (PSF ↔ MLpot ↔ calculator Z and masses)
+  atom 0: type=N1 Z=7 mass=14.0070 amu
+  atom 1: type=H11 Z=1 mass=1.0080 amu
+  atom 2: type=H12 Z=1 mass=1.0080 amu
+Pre-dynamics CHARMM lingo (file, 51 line(s)):
+! Weak COM tether: stops global drift in vacuum without confining the
+! reaction. Acts on the aggregate COM, so it does NOT bias the internal RCs.
+cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+
+! Umbrella grid edge (Å); MMFP walls below use the same upper bound so
+! dynamics cannot exceed UM1RXN [min,max] and abort mid-heat.
+set adum_rcmax = 8.0
+set adum_rcwall = 500.0
+
+open unit 44 write card name ADUMB-WUNI.DAT
+open unit 50 write card name UMBCOR
+open unit 45 write card name RXNCOR_RCL.DAT
+open unit 46 write card name RXNCOR_RCN.DAT
+
+! Points: NH3 N1, CH3Cl C1, CH3Cl CL1 (IUPAC names via ATOM, not TYPE).
+! TYPE selects FF labels (NG331/CG331/CLGA1); ATOM * * NAME matches names.
+rxncor define pn point select atom * * N1 end
+rxncor define pc point select atom * * C1 end
+rxncor define pcl point select atom * * CL1 end
+
+! Distances (Angstrom): Cl-C and C-N
+rxncor define rcl distance pcl pc
+rxncor define rcn distance pc pn
+rxncor set nrxn 2 rcl rcn
+rxncor trace rcl unit 45
+rxncor trace rcn unit 46
+
+! Soft outer walls on traced distances (MMFP RESTR): zero energy for r<=max,
+! half-harmonic repulsion outside (force @adum_rcwall). Keeps UM1RXN in range
+! without the hard abort when dynamics briefly overshoot the umbrella edge.
+MMFP
+GEO SPHE DIST HARM OUTS force @adum_rcwall droff @adum_rcmax -
+  select atom * * CL1 end -
+  select atom * * C1 end
+GEO SPHE DIST HARM OUTS force @adum_rcwall droff @adum_rcmax -
+  select atom * * C1 end -
+  select atom * * N1 end
+END
+
+! Adaptive umbrella on Cl-C and C-N distances (Å).
+! Use min 0.0: unpatched UM1RXN treats the upper edge as (max-min) when
+! min>0 (min 1 max 6 → abort once value > 5 Å). Patched eadumb.F90 uses
+! [min, max]; min 0.0 works on both.
+! max @adum_rcmax matches MMFP walls; spans reactant–TS–product basins (~6 Å).
+umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcl
+umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adum_rcmax name rcn
+
+! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200_000 here): 400*500.
+! equi 250 of update 500 discards 50% per window (absorbs the boundary redraw);
+! lower equi toward ~100 if you want more sampling per window.
+umbrella init nsim 400 update 500 equi 250 thresh 10 temp 500 wuni 44 ucun 50
+ SELRPN>      9 atoms have been selected out of      9
+ Center of Geometry Harmonic Constraint #  1
+ force constant     =     0.2000E+01
+ reference distance =     0.0000E+00
+ reference point: (        0.0000        0.0000        0.0000)
+ for    9 out of     9 total selected atoms.
+ Parameter: ADUM_RCMAX <- "8.0"
+ Parameter: ADUM_RCWALL <- "500.0"
+ VOPEN> Attempting to open::adumb-wuni.dat::
+ OPNLGU> Unit 44 opened for WRITE access to adumb-wuni.dat
+ VOPEN> Attempting to open::umbcor::
+ OPNLGU> Unit 50 opened for WRITE access to umbcor
+ VOPEN> Attempting to open::rxncor_rcl.dat::
+ OPNLGU> Unit 45 opened for WRITE access to rxncor_rcl.dat
+ VOPEN> Attempting to open::rxncor_rcn.dat::
+ OPNLGU> Unit 46 opened for WRITE access to rxncor_rcn.dat
+ SELRPN>      1 atoms have been selected out of      9
+ SELRPN>      1 atoms have been selected out of      9
+ SELRPN>      1 atoms have been selected out of      9
+
+      MISCELANEOUS MEAN FIELD POTENTIALS
+  

@@ -1,0 +1,12 @@
+REMARK  NH3-CH3Cl from examples/m NPZ (CGenFF AMM1 + CH3CL)
+ATOM      1 N1   AMM1     1      -2.566   1.091   1.157  1.00  0.00           N
+ATOM      2 H11  AMM1     1      -2.672   1.995   1.628  1.00  0.00           H
+ATOM      3 H12  AMM1     1      -3.164   0.414   1.640  1.00  0.00           H
+ATOM      4 H13  AMM1     1      -2.918   1.193   0.200  1.00  0.00           H
+TER
+ATOM      5 C1   CH3CL    2      -1.062   0.624   1.161  1.00  0.00           C
+ATOM      6 CL1  CH3CL    2       1.686  -0.790  -1.049  1.00  0.00          Cl
+ATOM      7 H11  CH3CL    2      -0.751   0.535   2.203  1.00  0.00           H
+ATOM      8 H12  CH3CL    2      -1.017  -0.337   0.648  1.00  0.00           H
+ATOM      9 H13  CH3CL    2      -0.483   1.385   0.636  1.00  0.00           H
+END

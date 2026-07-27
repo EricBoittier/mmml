@@ -46,7 +46,7 @@ mm_charge_mode: fixed
 # jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
-temperature: 1000
+temperature: 500
 dt_fs: 1.0
 md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
@@ -115,6 +115,12 @@ pycharmm_pre_dynamics_lingo: |
   ! Wall rcmax is auto-capped to umbrella max so RESD engages before UM1RXN
   ! (e.g. adumrcmax=8 with umbrella max 6 → walls at 5.25, not 7.25).
   ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
+ 
+  ! Preserve the existing topology-derived IC table if needed later.
+  !cons dihe bynu 1 5 6 5 200 0.0 
+  
+  ! Soft upper walls on *component* distances (Å). Outer caps only (r ≳ 7.25);
+  ! they do not forbid the TS. Disable: MMML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 8.0
   set adumrcwall = 500.0
 
@@ -133,12 +139,12 @@ pycharmm_pre_dynamics_lingo: |
   rxncor define rcn distance pc pn
   rxncor define rdif combination rcl 1.0 rcn -1.0
 
-  rxncor set nrxn 1 rdif
-  rxncor trace rdif unit 45
+  rxncor set nrxn 1 rcl
+  rxncor trace rcl unit 45
 
   ! Adaptive umbrella on ξ. Window matches component walls; SN2 band ~[-3, 3].
-  umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 100_000 here)
-  umbrella init nsim 100 update 1000 equi 200 temp 1000 wuni 44 ucun 50
+  umbrella init nsim 100 update 1000 equi 200 temp 500 wuni 44 ucun 50
   umbrella ston
