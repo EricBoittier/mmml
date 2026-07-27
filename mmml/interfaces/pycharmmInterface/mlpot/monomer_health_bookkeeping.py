@@ -141,10 +141,13 @@ class MonomerHealthIntervention:
     ``geometry_restored`` arms the full overlap rescue / READYN chain.
     ``velocities_redrawn`` only keeps Maxwell–Boltzmann velocities in RAM for
     the next overlap chunk (no MLpot SD, no truncated ``write restart``).
+    ``adumb_skip_template_restore`` means geometry was bad but ADUMB mode
+    refused template restore (caller should RC-rewind on the next chunk).
     """
 
     geometry_restored: bool = False
     velocities_redrawn: bool = False
+    adumb_skip_template_restore: bool = False
 
     @property
     def changed(self) -> bool:
@@ -1426,6 +1429,29 @@ def maybe_intervene_monomer_health(
     geometry_bad = tuple(
         int(e.index) for e in report.entries if e.geometry_level == LEVEL_BAD
     )
+    # ADUMB RC sampling: never rigid-body template-restore monomers. That keeps
+    # inter-monomer COMs (often already fly-off) and leaves r(C–N)/r(Cl–C) far
+    # outside the umbrella → immediate UM1RXN abort. Overlap/ADUMB rewind from
+    # numbered heat.NNNN.res instead.
+    wf_args = getattr(mlpot_ctx, "workflow_args", None)
+    adumb_guard = getattr(wf_args, "_adumb_rc_guard", None) if wf_args is not None else None
+    if geometry_bad and adumb_guard is not None and health_cfg.template_restore_on_bad:
+        print(
+            f"{context}: ADUMB RC guard active — skipping monomer template restore "
+            f"for {list(geometry_bad)} (would leave inter-monomer RCs out of range); "
+            "next overlap chunk will reinstall walls / rewind numbered restarts",
+            flush=True,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+            reinstall_adumb_rxncor_walls_from_workflow_args,
+        )
+
+        reinstall_adumb_rxncor_walls_from_workflow_args(wf_args)
+        return MonomerHealthIntervention(
+            geometry_restored=False,
+            velocities_redrawn=False,
+            adumb_skip_template_restore=True,
+        )
     if geometry_bad and health_cfg.template_restore_on_bad:
         if bool(health_cfg.template_restore_requires_geometry):
             to_restore = select_flagged_bad_by_highest_grms(

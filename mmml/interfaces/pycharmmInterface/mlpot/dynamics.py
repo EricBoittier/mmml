@@ -8817,6 +8817,44 @@ def run_dynamics_with_io(
                     velocity_health_redrawn = bool(
                         getattr(health_action, "velocities_redrawn", False)
                     )
+                    adumb_skipped_template = bool(
+                        getattr(health_action, "adumb_skip_template_restore", False)
+                    )
+                    if adumb_skipped_template and mlpot_ctx is not None:
+                        if chunk_retry_count >= _MAX_EARLY_ABORT_CHUNK_RETRIES:
+                            raise RuntimeError(
+                                f"overlap ({overlap_context}): ADUMB fly-off at step "
+                                f"{steps_done} — template restore skipped and RC "
+                                "rewind retries exhausted. Check RESD walls "
+                                "(expect RESDistance in ENER) / widen max / lower T."
+                            )
+                        adumb_retry = _maybe_prepare_adumb_rc_before_overlap_chunk(
+                            mlpot_ctx=mlpot_ctx,
+                            overlap_context=overlap_context,
+                            chunk_index=chunk_index,
+                            n_chunks=n_chunks,
+                            final_restart=final_restart,
+                        )
+                        if not adumb_retry:
+                            raise RuntimeError(
+                                f"overlap ({overlap_context}): ADUMB fly-off at step "
+                                f"{steps_done} but RC still inside umbrella max — "
+                                "refusing to continue with exploded monomers. "
+                                "Confirm RESD: 2 walls installed and ENER shows "
+                                "RESDistance > 0 when an RC approaches max."
+                            )
+                        chunk_retry_count += 1
+                        steps_done = steps_before_chunk
+                        early_abort_memory_handoff = True
+                        print(
+                            f"overlap ({overlap_context}): retrying chunk "
+                            f"{chunk_index + 1}/{n_chunks} after ADUMB RC rewind "
+                            f"(monomer template restore skipped; "
+                            f"attempt {chunk_retry_count}/{_MAX_EARLY_ABORT_CHUNK_RETRIES})",
+                            flush=True,
+                        )
+                        rerun_chunk = True
+                        continue
                     rescued = bool(rescued or geometry_health_rescued)
                     if (
                         velocity_health_redrawn
