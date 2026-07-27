@@ -36,7 +36,7 @@ mm_charge_mode: fixed
 # jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
-temperature: 500
+temperature: 1000
 dt_fs: 1.0
 md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
@@ -109,18 +109,19 @@ pycharmm_pre_dynamics_lingo: |
   rxncor define pc point select atom * * C1 end
   rxncor define pcl point select atom * * CL1 end
 
-  ! Bond distances, then SN2-like ratio ξ = r(Cl-C) / r(C-N)
+  ! Bond distances, 
   rxncor define rcl distance pcl pc
   rxncor define rcn distance pc pn
-  rxncor define rrat ratio rcl rcn
-  rxncor set nrxn 1 rrat
-  rxncor trace rrat unit 45
+  rxncor define rdiff scombination rcl 1.0 rcn -1.0
+
+  rxncor set nrxn 1 rdiff
+  rxncor trace rdiff unit 45
 
   ! RC outer walls: RESDistance POSITIVE by default; ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable.
 
   ! Adaptive umbrella on ξ ∈ [0.125, 5.0] (dimensionless).
   ! min>0 needs UM1RXN [min,max] patch for the exact upper edge (see header).
-  umbrella rxncor nresol 40 trig 0 poly 6 min 0.125 max 5.0 name rrat
+  umbrella rxncor nresol 40 trig 0 poly 6 min -3.0 max 3.0 name rdiff
 
   ! nsim * update must equal heat nstep (ps_heat*1000/dt_fs = 100_000 here)
-  umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 500 wuni 44 ucun 50
+  umbrella init nsim 100 update 1000 equi 200 thresh 10 temp 1000 wuni 44 ucun 50
