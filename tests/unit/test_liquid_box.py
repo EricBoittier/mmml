@@ -347,7 +347,7 @@ def test_liquid_box_pretreat_cpt_echeck_disabled_by_default():
     args = parser.parse_args(
         ["--composition", "DCM:103", "--output-dir", "/tmp/x", "--profile", "dense"]
     )
-    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == -1.0
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == pytest.approx(1.0e30)
 
 
 def test_liquid_box_pretreat_cpt_echeck_explicit_override():
@@ -421,9 +421,9 @@ def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
     monkeypatch.setitem(sys.modules, "pycharmm.dynamics", fake_dyn)
     kw: dict[str, float | int] = {"echeck": 500.0}
     apply_charmm_dynamics_echeck_kw(kw, -1.0)
-    assert kw["echeck"] == -1.0
+    assert kw["echeck"] == pytest.approx(1.0e30)
     assert kw["ichecw"] == 0
-    assert calls == [-1.0]
+    assert calls == [pytest.approx(1.0e30)]
 
 
 def test_apply_charmm_dynamics_timestep_kw_sets_global_state(monkeypatch):

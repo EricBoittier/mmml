@@ -156,7 +156,7 @@ def test_resolve_charmm_mm_pretreat_cpt_echeck_defaults_off():
     )
 
     args = argparse.Namespace(no_echeck=False, no_scale_echeck=False)
-    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == -1.0
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == pytest.approx(1.0e30)
 
 
 def test_resolve_charmm_mm_pretreat_cpt_echeck_no_scale_legacy():

@@ -8876,7 +8876,7 @@ def run_dynamics_with_io(
                                 final_restart=final_restart,
                                 force_rewind=True,
                             )
-                            if not adumb_retry and not recovery.ok:
+                            if not adumb_retry:
                                 raise RuntimeError(
                                     f"overlap ({overlap_context}): ADUMB fly-off at step "
                                     f"{steps_done} — no numbered restart to rewind. "

@@ -3980,14 +3980,14 @@ def resolve_charmm_mm_pretreat_cpt_echeck(
     or ``--no-scale-echeck --echeck`` to override.
     """
     if getattr(args, "no_echeck", False):
-        return -1.0
+        return disabled_charmm_echeck_kcal()
     explicit = getattr(args, "charmm_mm_pretreat_echeck", None)
     if explicit is not None:
         val = float(explicit)
-        return -1.0 if val <= 0 else max(val, 500.0)
+        return disabled_charmm_echeck_kcal() if val <= 0 else max(val, 500.0)
     if float(echeck) > 0 and getattr(args, "no_scale_echeck", False):
         return max(float(echeck), 500.0)
-    return -1.0
+    return disabled_charmm_echeck_kcal()
 
 
 def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:

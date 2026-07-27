@@ -602,11 +602,6 @@ def test_build_stage_dynamics_kw_heat_auto_no_echeck_heat_disables_echeck():
 
 
 def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
-    import pytest
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
-        _build_stage_dynamics_kw,
-    )
-
     args = argparse.Namespace(heat_thermostat="scale", no_echeck_heat=True)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     kw = _build_stage_dynamics_kw(
