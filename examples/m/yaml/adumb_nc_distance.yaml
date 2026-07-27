@@ -46,7 +46,7 @@ mm_charge_mode: fixed
 # jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
-temperature: 1000
+temperature: 500
 dt_fs: 1.0
 md_stages: "mini,heat"
 # free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
@@ -70,13 +70,13 @@ dyn_freq_cadence: 1000
 # only fire it on catastrophic overlaps (0.2 Å). Normal TS/bond contacts (>1 Å)
 # and the forming N–C bond never trigger it, so sampling is untouched. The NaN
 # gate still guards against Fortran segfaults on blow-up.
-dynamics_overlap_action: warn !rescue
+dynamics_overlap_action: warn 
 dynamics_overlap_min_distance: 0.2
 dynamics_intra_min_distance: 0.2
 # Fly-off guard: dissociating Cl fragment can grow the CH3Cl extent; raise past
 # the 12 Å default (still catches a true explosion beyond 25 Å).
 dynamics_max_monomer_extent: 25.0
-mini_nstep: 0
+mini_nstep: 10
 skip_energy_show: true
 skip_jit_warmup: true
 no_echeck_heat: true
@@ -101,7 +101,7 @@ pycharmm_pre_dynamics_lingo: |
   ! Weak COM tether: stops global drift/rotation in vacuum without confining the
   ! reaction. Acts on the aggregate COM (sele all), so it does NOT bias the
   ! internal RC ξ=r(Cl-C)−r(C-N) — that is translation-invariant.
-  ! cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+  cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
 
   ! --- Make SN2 possible under MLpot ---
   ! CGenFF CH3CL has BOND C1–CL1 (k≈220 kcal/mol/Å²). That harmonic stays in
@@ -146,5 +146,5 @@ pycharmm_pre_dynamics_lingo: |
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 100_000 here)
-  umbrella init nsim 100 update 1000 equi 200 temp 1000 wuni 44 ucun 50
+  umbrella init nsim 100 update 1000 equi 200 temp 500 wuni 44 ucun 50
   umbrella ston
