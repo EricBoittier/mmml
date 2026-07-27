@@ -8906,26 +8906,6 @@ def run_dynamics_with_io(
                         overlap_action = str(
                             getattr(overlap, "action", "rescue") or "rescue"
                         ).lower()
-                        if chunk_retry_count >= _MAX_EARLY_ABORT_CHUNK_RETRIES:
-                            if overlap_action == "warn":
-                                print(
-                                    f"WARN: overlap ({overlap_context}): ADUMB fly-off "
-                                    f"at step {steps_done} — rewind retries exhausted; "
-                                    "continuing (dynamics_overlap_action=warn). "
-                                    "Raise --dynamics-max-monomer-extent for reactive "
-                                    "product seeds (Cl dissociation grows CH3CL extent).",
-                                    flush=True,
-                                )
-                            else:
-                                raise RuntimeError(
-                                    f"overlap ({overlap_context}): ADUMB fly-off at step "
-                                    f"{steps_done} — template restore skipped and restart "
-                                    "rewind retries exhausted. Check RESD walls "
-                                    "(expect RESDistance in ENER) / lower T / seed / "
-                                    "raise --dynamics-max-monomer-extent."
-                                )
-                        # Monomers can explode (extent) while Cl–C / C–N stay inside
-                        # the umbrella window — still rewind numbered heat.NNNN.res.
                         from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
                             attempt_overlap_early_abort_recovery,
                         )
@@ -8933,7 +8913,48 @@ def run_dynamics_with_io(
                             reinstall_adumb_rxncor_walls_from_workflow_args,
                         )
 
-                        if chunk_retry_count < _MAX_EARLY_ABORT_CHUNK_RETRIES:
+                        def _adumb_force_rewind_or_false() -> bool:
+                            try:
+                                return bool(
+                                    _maybe_prepare_adumb_rc_before_overlap_chunk(
+                                        mlpot_ctx=mlpot_ctx,
+                                        overlap_context=overlap_context,
+                                        chunk_index=chunk_index,
+                                        n_chunks=n_chunks,
+                                        final_restart=final_restart,
+                                        force_rewind=True,
+                                    )
+                                )
+                            except RuntimeError as exc:
+                                print(
+                                    f"WARN: overlap ({overlap_context}): ADUMB rewind "
+                                    f"failed ({exc}); treating as no-restart.",
+                                    flush=True,
+                                )
+                                return False
+
+                        if chunk_retry_count >= _MAX_EARLY_ABORT_CHUNK_RETRIES:
+                            if overlap_action == "warn":
+                                print(
+                                    f"WARN: overlap ({overlap_context}): ADUMB fly-off "
+                                    f"at step {steps_done} — rewind retries exhausted; "
+                                    "restoring best available restart and continuing "
+                                    "(dynamics_overlap_action=warn).",
+                                    flush=True,
+                                )
+                                _adumb_force_rewind_or_false()
+                                wf = getattr(mlpot_ctx, "workflow_args", None)
+                                if wf is not None:
+                                    reinstall_adumb_rxncor_walls_from_workflow_args(wf)
+                            else:
+                                raise RuntimeError(
+                                    f"overlap ({overlap_context}): ADUMB fly-off at step "
+                                    f"{steps_done} — template restore skipped and restart "
+                                    "rewind retries exhausted. Check RESD walls "
+                                    "(expect RESDistance in ENER) / lower T / seed / "
+                                    "raise --dynamics-max-monomer-extent / enable SHAKE."
+                                )
+                        elif chunk_retry_count < _MAX_EARLY_ABORT_CHUNK_RETRIES:
                             recovery = attempt_overlap_early_abort_recovery(
                                 overlap,
                                 chunk_nstep=chunk_nstep,
@@ -8948,59 +8969,8 @@ def run_dynamics_with_io(
                                 cpt=bool(chunk_kw.get("cpt")),
                                 chunk_index=chunk_index,
                             )
-                            if not recovery.ok:
-                                # Force RC-guard lookback even when distances still in-window.
-                                adumb_retry = _maybe_prepare_adumb_rc_before_overlap_chunk(
-                                    mlpot_ctx=mlpot_ctx,
-                                    overlap_context=overlap_context,
-                                    chunk_index=chunk_index,
-                                    n_chunks=n_chunks,
-                                    final_restart=final_restart,
-                                    force_rewind=True,
-                                )
-                                if not adumb_retry:
-                                    if overlap_action == "warn":
-                                        print(
-                                            f"WARN: overlap ({overlap_context}): ADUMB "
-                                            f"fly-off at step {steps_done} — no numbered "
-                                            "restart to rewind (memory handoff); "
-                                            "reinstalling walls and continuing.",
-                                            flush=True,
-                                        )
-                                        wf = getattr(mlpot_ctx, "workflow_args", None)
-                                        if wf is not None:
-                                            reinstall_adumb_rxncor_walls_from_workflow_args(
-                                                wf
-                                            )
-                                    else:
-                                        raise RuntimeError(
-                                            f"overlap ({overlap_context}): ADUMB fly-off "
-                                            f"at step {steps_done} — no numbered restart "
-                                            "to rewind. Confirm RESD: 2 walls installed "
-                                            "(ENER RESDistance) and heat.NNNN.res "
-                                            "checkpoints exist, or raise "
-                                            "--dynamics-max-monomer-extent."
-                                        )
-                                else:
-                                    wf = getattr(mlpot_ctx, "workflow_args", None)
-                                    if wf is not None:
-                                        reinstall_adumb_rxncor_walls_from_workflow_args(
-                                            wf
-                                        )
-                                    chunk_retry_count += 1
-                                    steps_done = steps_before_chunk
-                                    early_abort_memory_handoff = True
-                                    print(
-                                        f"overlap ({overlap_context}): retrying chunk "
-                                        f"{chunk_index + 1}/{n_chunks} after ADUMB "
-                                        "fly-off rewind (monomer template restore "
-                                        f"skipped; attempt {chunk_retry_count}/"
-                                        f"{_MAX_EARLY_ABORT_CHUNK_RETRIES})",
-                                        flush=True,
-                                    )
-                                    rerun_chunk = True
-                                    continue
-                            else:
+                            adumb_retry = bool(recovery.ok) or _adumb_force_rewind_or_false()
+                            if adumb_retry:
                                 wf = getattr(mlpot_ctx, "workflow_args", None)
                                 if wf is not None:
                                     reinstall_adumb_rxncor_walls_from_workflow_args(wf)
@@ -9017,6 +8987,24 @@ def run_dynamics_with_io(
                                 )
                                 rerun_chunk = True
                                 continue
+                            if overlap_action == "warn":
+                                print(
+                                    f"WARN: overlap ({overlap_context}): ADUMB "
+                                    f"fly-off at step {steps_done} — no restart to "
+                                    "rewind; reinstalling walls and continuing.",
+                                    flush=True,
+                                )
+                                wf = getattr(mlpot_ctx, "workflow_args", None)
+                                if wf is not None:
+                                    reinstall_adumb_rxncor_walls_from_workflow_args(wf)
+                            else:
+                                raise RuntimeError(
+                                    f"overlap ({overlap_context}): ADUMB fly-off "
+                                    f"at step {steps_done} — no numbered restart "
+                                    "to rewind. Confirm RESD walls, heat.NNNN.res / "
+                                    "baseline.res, or raise "
+                                    "--dynamics-max-monomer-extent / enable SHAKE."
+                                )
                     rescued = bool(rescued or geometry_health_rescued)
                     if (
                         velocity_health_redrawn

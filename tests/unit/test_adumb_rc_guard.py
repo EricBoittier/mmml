@@ -156,6 +156,78 @@ def test_prepare_adumb_rc_rewinds_when_xi_out_of_window(tmp_path) -> None:
     restore.assert_called_once_with(good)
 
 
+def test_prepare_adumb_force_rewind_returns_false_without_raise(tmp_path) -> None:
+    """force_rewind must not raise when no usable restart exists (warn mode)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        AdumbRcGuard,
+        prepare_adumb_rc_before_overlap_chunk,
+    )
+
+    guard = AdumbRcGuard(
+        rcmax=8.0,
+        rcwall=500.0,
+        pairs=(("CL1", "C1"), ("C1", "N1")),
+    )
+    stage = tmp_path / "heat.res"
+    # No numbered / baseline files.
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        return_value={"CL1-C1": 3.0, "C1-N1": 3.0},
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+    ):
+        retry = prepare_adumb_rc_before_overlap_chunk(
+            guard,
+            overlap_context="HEAT",
+            chunk_index=3,
+            n_chunks=400,
+            final_restart=stage,
+            force_rewind=True,
+        )
+    assert retry is False
+
+
+def test_prepare_adumb_force_rewind_falls_back_to_baseline(tmp_path) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        AdumbRcGuard,
+        prepare_adumb_rc_before_overlap_chunk,
+    )
+
+    guard = AdumbRcGuard(
+        rcmax=8.0,
+        rcwall=500.0,
+        pairs=(("CL1", "C1"), ("C1", "N1")),
+    )
+    stage = tmp_path / "heat.res"
+    stage.write_text("heat\n", encoding="utf-8")
+    baseline = tmp_path / "baseline.res"
+    baseline.write_text("base\n", encoding="utf-8")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        return_value={"CL1-C1": 2.0, "C1-N1": 2.5},
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+    ) as restore:
+        retry = prepare_adumb_rc_before_overlap_chunk(
+            guard,
+            overlap_context="HEAT",
+            chunk_index=3,
+            n_chunks=400,
+            final_restart=stage,
+            force_rewind=True,
+        )
+    assert retry is True
+    assert restore.call_args_list[0].args[0] in (stage, baseline)
+
+
 def test_parse_adumb_umbrella_bounds_negative_min() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         parse_adumb_umbrella_bounds,
