@@ -1,12 +1,12 @@
-# ADUMB on NH3–CH3Cl bond difference (RXNCOR) — PyCHARMM only.
+# ADUMB on NH3–CH3Cl Cl–C distance (RXNCOR) — PyCHARMM only.
 #
-# Menshutkin / SN2-like 1D coordinate: ξ = r(Cl⋯C) − r(C⋯N)
-# (CHARMM ``rxncor define … combination``; see rxnene.F90 COMBI_TYPE).
-# Window [-6, 6] Å matches component RESD walls (adumrcmax=8); chemically
-# interesting SN2 band is ~[-3, 3].
+# 1D scan: umbrella on ``rcl`` = r(Cl⋯C) with window [0, 6] Å.
+# (Difference ξ = r(Cl⋯C)−r(C⋯N) is defined as ``rdif``; switch
+# ``rxncor set nrxn`` / ``umbrella … name`` to ``rdif`` for that coordinate.)
 #
 # Reaction freedom (important):
-#   RESD walls (rmax≈7.25 Å) are soft *outer* caps — they do NOT block SN2.
+#   RESD walls follow the *active* umbrella name: ``rcl`` → Cl–C only;
+#   ``rdif`` → both Cl–C and C–N (using adumrcmax, not the difference max).
 #   What *does* block bond breaking is the CGenFF ``BOND C1 CL1`` (k≈220) in
 #   ``par_ch3cl.prm``. With MLpot, CHARMM bonded terms stay on (see ENER INTERN);
 #   this YAML ``delete bond/angle`` removes C–Cl before heat so PhysNet owns the
@@ -28,7 +28,7 @@
 #
 # Pass checks:
 #   1. exit 0
-#   2. staged lingo has ``combination`` + ``umbrella rxncor`` name rdif
+#   2. staged lingo has ``umbrella rxncor`` name rcl (or rdif for ξ)
 #   3. ADUMB-WUNI.DAT / UMBCOR / RXNCOR_TRACE.DAT under output_dir
 #
 # Wipe output_dir/pycharmm_pre_dynamics_lingo.inp after YAML edits (09 script does).
@@ -111,9 +111,9 @@ pycharmm_pre_dynamics_lingo: |
   delete bond sele atom * * CL1 end sele atom * * C1 end
   delete angle sele atom * * CL1 end sele atom * * C1 end
 
-  ! Soft upper walls on *component* distances (Å). Outer caps only.
-  ! Wall rcmax is auto-capped to umbrella max so RESD engages before UM1RXN
-  ! (e.g. adumrcmax=8 with umbrella max 6 → walls at 5.25, not 7.25).
+  ! Soft upper walls on the *active* umbrella distance (Å). For ``name rcl``,
+  ! only Cl–C is walled (capped at umbrella max). For ``name rdif``, both
+  ! component bonds use adumrcmax (difference max is not a bond length).
   ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 8.0
   set adumrcwall = 500.0
@@ -133,7 +133,7 @@ pycharmm_pre_dynamics_lingo: |
   rxncor define pc point select atom * * C1 end
   rxncor define pcl point select atom * * CL1 end
 
-  ! Bond distances, then SN2-like difference ξ = r(Cl-C) − r(C-N)
+  ! Bond distances (+ optional SN2 difference ξ = r(Cl-C) − r(C-N))
   rxncor define rcl distance pcl pc
   rxncor define rcn distance pc pn
   rxncor define rdif combination rcl 1.0 rcn -1.0
@@ -141,7 +141,7 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rcl
   rxncor trace rcl unit 45
 
-  ! Adaptive umbrella on ξ. Window matches component walls; SN2 band ~[-3, 3].
+  ! Adaptive umbrella on Cl–C. Tight max (e.g. 4 Å) is OK — C–N is not walled.
   umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 100_000 here)

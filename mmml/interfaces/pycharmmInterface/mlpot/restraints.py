@@ -25,6 +25,16 @@ _ADUMB_RC_WALL_PAIRS: tuple[tuple[str, str], ...] = (
     ("CL1", "C1"),
     ("C1", "N1"),
 )
+_ADUMB_RC_WALL_PAIR_BY_NAME: dict[str, tuple[tuple[str, str], ...]] = {
+    "rcl": (("CL1", "C1"),),
+    "r_cl": (("CL1", "C1"),),
+    "rcn": (("C1", "N1"),),
+    "r_cn": (("C1", "N1"),),
+    "r_nc": (("C1", "N1"),),
+    # Combination / both-bond windows keep both component walls.
+    "rdif": _ADUMB_RC_WALL_PAIRS,
+    "rrat": _ADUMB_RC_WALL_PAIRS,
+}
 # Activate MMFP walls below umbrella ``max`` so UM1RXN does not hard-abort first.
 _DEFAULT_ADUMB_RC_WALL_MARGIN_A = 0.75
 
@@ -49,6 +59,19 @@ def _unique_atom_index_by_name(name: str) -> int:
 def _charmm_lingo_atom_num(atom_index: int) -> int:
     """Map 0-based PSF index to 1-based ``sele atom N end`` numbering."""
     return int(atom_index) + 1
+
+
+def adumb_rc_wall_pairs_for_name(umb_name: str | None) -> tuple[tuple[str, str], ...]:
+    """Return RESD wall atom pairs for an ADUMB RXNCOR ``name`` token.
+
+    Distance-only umbrellas (``rcl`` / ``rcn``) must wall **only** that bond.
+    Capping both Cl–C and C–N to a tight ``rcl`` max (e.g. 4 Å) puts a huge
+    RESDistance on a reactant C⋯N (~4 Å) and aborts before heat.
+    """
+    key = str(umb_name or "").strip().lower()
+    if not key:
+        return _ADUMB_RC_WALL_PAIRS
+    return _ADUMB_RC_WALL_PAIR_BY_NAME.get(key, _ADUMB_RC_WALL_PAIRS)
 
 
 def adumb_rc_wall_margin_A() -> float:

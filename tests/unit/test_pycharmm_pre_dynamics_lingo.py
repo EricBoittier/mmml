@@ -162,7 +162,11 @@ def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
     set adumrcwall = 500.0
     umbrella rxncor nresol 20 name rcl
     """
-    assert parse_adumb_rc_wall_params(script) == (8.0, 500.0)
+    assert parse_adumb_rc_wall_params(script) == (
+        8.0,
+        500.0,
+        (("CL1", "C1"),),
+    )
     assert parse_adumb_rc_params(script) == (8.0, 500.0)
     assert parse_adumb_rc_wall_params("umbrella rxncor name rcl") is None
 
@@ -178,7 +182,31 @@ def test_parse_adumb_rc_wall_params_caps_at_umbrella_max() -> None:
     umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
     """
     assert resolve_adumb_wall_rcmax(8.0, script) == 6.0
-    assert parse_adumb_rc_wall_params(script) == (6.0, 500.0)
+    assert parse_adumb_rc_wall_params(script) == (
+        6.0,
+        500.0,
+        (("CL1", "C1"),),
+    )
+
+
+def test_parse_adumb_rc_wall_params_rdif_keeps_both_pairs_uncapped() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_adumb_wall_rcmax,
+    )
+
+    script = """
+    rxncor define rdif combination rcl 1.0 rcn -1.0
+    set adumrcmax = 8.0
+    set adumrcwall = 500.0
+    umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
+    """
+    # Combination max is a difference, not a bond length — do not cap walls to 6.
+    assert resolve_adumb_wall_rcmax(8.0, script) == 8.0
+    assert parse_adumb_rc_wall_params(script) == (
+        8.0,
+        500.0,
+        (("CL1", "C1"), ("C1", "N1")),
+    )
 
 
 def test_parse_adumb_rc_params_accepts_legacy_underscore_names() -> None:
@@ -273,7 +301,9 @@ def test_run_charmm_lingo_installs_adumb_walls_when_enabled(tmp_path: Path) -> N
         return_value=True,
     ) as script_fn:
         run_charmm_lingo_script(script, inp_path=tmp_path / "lingo.inp", workdir=tmp_path)
-    install.assert_called_once_with(rcmax=8.0, rcwall=500.0)
+    install.assert_called_once_with(
+        rcmax=8.0, rcwall=500.0, pairs=(("CL1", "C1"),)
+    )
     assert script_fn.call_count == 4
     assert script_fn.call_args_list[-1].args[0].startswith("umbrella init")
 

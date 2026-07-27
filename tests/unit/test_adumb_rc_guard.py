@@ -174,6 +174,9 @@ def test_parse_adumb_umbrella_bounds_skips_distance_only_rcl() -> None:
         adumb_umbrella_is_bond_difference,
         parse_adumb_umbrella_bounds,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        adumb_rc_wall_pairs_for_name,
+    )
 
     script = """
     rxncor define rcl distance pcl pc
@@ -184,6 +187,9 @@ def test_parse_adumb_umbrella_bounds_skips_distance_only_rcl() -> None:
     """
     assert adumb_umbrella_is_bond_difference(script) is False
     assert parse_adumb_umbrella_bounds(script) == (None, None)
+    assert adumb_rc_wall_pairs_for_name("rcl") == (("CL1", "C1"),)
+    assert adumb_rc_wall_pairs_for_name("rcn") == (("C1", "N1"),)
+    assert adumb_rc_wall_pairs_for_name("rdif") == (("CL1", "C1"), ("C1", "N1"))
 
 
 def test_charmm_output_indicates_failure_detects_unrecognized() -> None:

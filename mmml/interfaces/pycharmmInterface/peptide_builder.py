@@ -593,7 +593,13 @@ structure {tip3_pdb_src.name}
 end structure
 """
             packmol_inp_path.write_text(packmol_input, encoding="utf-8")
-            subprocess.run([packmol_bin, "-i", packmol_inp_path.name], cwd=out_dir, check=True, capture_output=True)
+            # Packmol reads its input from stdin ("packmol < input.inp"); a
+            # "-i <file>" form is silently ignored by stock Packmol (exits 0 but
+            # writes no output).
+            with packmol_inp_path.open(encoding="utf-8") as packmol_stdin:
+                subprocess.run(
+                    [packmol_bin], stdin=packmol_stdin, cwd=out_dir, check=True, capture_output=True
+                )
 
             packed_atoms = ase_read(str(packmol_out_path))
             water_coords = packed_atoms.get_positions()[len(peptide_pos):]

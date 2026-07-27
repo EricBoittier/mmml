@@ -1865,46 +1865,62 @@ def parse_adumb_umbrella_minmax(script: str) -> tuple[float | None, float | None
 
 
 def resolve_adumb_wall_rcmax(adumrcmax: float | None, script: str) -> float | None:
-    """Wall ``rcmax`` = min(adumrcmax, umbrella max) so RESD engages before UM1RXN.
+    """Wall ``rcmax`` for the active umbrella distance RC.
 
-    If ``adumrcmax=8`` but ``umbrella … max 6``, sampling can reach 6.14 and abort
-    while walls still sit at 7.25. Cap walls at the ADUMB hard edge.
+    Cap at umbrella ``max`` only for **distance** umbrellas (``rcl`` / ``rcn``),
+    so RESD engages before UM1RXN. Combination RCs (``rdif``) keep ``adumrcmax``
+    for both component walls — the umbrella max is a difference, not a bond length.
     """
     if adumrcmax is None:
         return None
+    if adumb_umbrella_is_bond_difference(script):
+        return float(adumrcmax)
     _umin, umax = parse_adumb_umbrella_minmax(script)
     if umax is not None and umax > 0:
         return float(min(float(adumrcmax), float(umax)))
     return float(adumrcmax)
 
 
+def parse_adumb_umbrella_name(script: str) -> str | None:
+    """Return the first ``umbrella rxncor … name`` token (lowercased), if any."""
+    mname = _UMB_RXNCOR_NAME_RE.search(str(script or ""))
+    if not mname:
+        return None
+    return mname.group(1).strip().lower() or None
+
+
 def adumb_umbrella_is_bond_difference(script: str) -> bool:
     """True when the first ``umbrella rxncor`` name is a ``combination`` RXNCOR."""
     text = str(script or "")
-    mname = _UMB_RXNCOR_NAME_RE.search(text)
-    if not mname:
+    umb_name = parse_adumb_umbrella_name(text)
+    if not umb_name:
         return False
-    umb_name = mname.group(1).strip().lower()
-    # CHARMM names are ≤4 chars; compare case-insensitively.
     for mdef in _RXNCOR_COMBINATION_DEF_RE.finditer(text):
         if mdef.group(1).strip().lower() == umb_name:
             return True
     return False
 
 
-def parse_adumb_rc_wall_params(script: str) -> tuple[float, float] | None:
-    """Return ``(rcmax, rcwall)`` when both ADUMB RC wall parameters are set.
+def parse_adumb_rc_wall_params(
+    script: str,
+) -> tuple[float, float, tuple[tuple[str, str], ...]] | None:
+    """Return ``(rcmax, rcwall, pairs)`` when ADUMB RC wall parameters are set.
 
-    ``rcmax`` is capped by umbrella ``max`` when present (see
-    :func:`resolve_adumb_wall_rcmax`).
+    ``rcmax`` is capped by umbrella ``max`` for distance RCs; ``pairs`` match the
+    umbrella name (``rcl`` → Cl–C only).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        adumb_rc_wall_pairs_for_name,
+    )
+
     rcmax, rcwall = parse_adumb_rc_params(script)
     if rcmax is None or rcwall is None:
         return None
     capped = resolve_adumb_wall_rcmax(rcmax, script)
     if capped is None:
         return None
-    return capped, rcwall
+    pairs = adumb_rc_wall_pairs_for_name(parse_adumb_umbrella_name(script))
+    return capped, rcwall, pairs
 
 
 def substitute_adumb_rc_tokens(
@@ -2167,8 +2183,10 @@ def run_charmm_lingo_script(
                         install_adumb_rxncor_distance_walls,
                     )
 
-                    rcmax, rcwall = adumb_walls
-                    install_adumb_rxncor_distance_walls(rcmax=rcmax, rcwall=rcwall)
+                    rcmax, rcwall, wall_pairs = adumb_walls
+                    install_adumb_rxncor_distance_walls(
+                        rcmax=rcmax, rcwall=rcwall, pairs=wall_pairs
+                    )
                 else:
                     print(
                         "ADUMB RC walls disabled "
@@ -2216,21 +2234,46 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
             adumb_rc_wall_margin_A,
         )
 
-        rcmax, rcwall = parse_adumb_rc_params(script)
-        wall_rcmax = resolve_adumb_wall_rcmax(rcmax, script)
+        wall_params = parse_adumb_rc_wall_params(script)
         umb_min, umb_max = parse_adumb_umbrella_bounds(script)
-        if wall_rcmax is not None:
+        if wall_params is not None:
+            wall_rcmax, rcwall, wall_pairs = wall_params
             setattr(
                 args,
                 "_adumb_rc_guard",
                 AdumbRcGuard(
                     rcmax=float(wall_rcmax),
-                    rcwall=float(rcwall if rcwall is not None else 500.0),
+                    rcwall=float(rcwall),
+                    pairs=wall_pairs,
                     wall_margin=adumb_rc_wall_margin_A(),
                     umb_min=umb_min,
                     umb_max=umb_max,
                 ),
             )
+        else:
+            # Umbrella without set adumrcmax/adumrcwall: still arm distance guard
+            # when raw params exist (legacy) or skip soft walls.
+            rcmax, rcwall = parse_adumb_rc_params(script)
+            wall_rcmax = resolve_adumb_wall_rcmax(rcmax, script)
+            if wall_rcmax is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                    adumb_rc_wall_pairs_for_name,
+                )
+
+                setattr(
+                    args,
+                    "_adumb_rc_guard",
+                    AdumbRcGuard(
+                        rcmax=float(wall_rcmax),
+                        rcwall=float(rcwall if rcwall is not None else 500.0),
+                        pairs=adumb_rc_wall_pairs_for_name(
+                            parse_adumb_umbrella_name(script)
+                        ),
+                        wall_margin=adumb_rc_wall_margin_A(),
+                        umb_min=umb_min,
+                        umb_max=umb_max,
+                    ),
+                )
 
 
 def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:
