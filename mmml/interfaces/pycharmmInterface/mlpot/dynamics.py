@@ -8635,7 +8635,12 @@ def run_dynamics_with_io(
                                 ),
                                 step=steps_before_chunk,
                             )
-                        if geometry_violation and mlpot_ctx is not None and overlap is not None:
+                        if (
+                            geometry_violation
+                            and mlpot_ctx is not None
+                            and overlap is not None
+                            and getattr(overlap, "action", None) == "rescue"
+                        ):
                             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                                 finalize_overlap_rescue_for_dynamics,
                             )

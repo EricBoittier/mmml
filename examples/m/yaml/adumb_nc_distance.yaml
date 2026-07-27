@@ -1,6 +1,6 @@
 # ADUMB on NH3–CH3Cl Cl–C distance (RXNCOR) — PyCHARMM only.
 #
-# 1D scan: umbrella on ``rcl`` = r(Cl⋯C) with window [0, 6] Å.
+# 1D scan: umbrella on ``rcl`` = r(Cl⋯C) with window [0, 8] Å (matches adumrcmax).
 # (Difference ξ = r(Cl⋯C)−r(C⋯N) is defined as ``rdif``; switch
 # ``rxncor set nrxn`` / ``umbrella … name`` to ``rdif`` for that coordinate.)
 #
@@ -66,11 +66,10 @@ dynamics_overlap_check_interval: 1000
 # redraw hits the MIDDLE of every recorded window (MOD(ICUM,1000)=500 > equi 200)
 # and biases the umbrella statistics.
 dyn_freq_cadence: 1000
-# Repair without biasing the umbrella histogram: keep CHARMM SD/ABNR rescue but
-# only fire it on catastrophic overlaps (0.2 Å). Normal TS/bond contacts (>1 Å)
-# and the forming N–C bond never trigger it, so sampling is untouched. The NaN
-# gate still guards against Fortran segfaults on blow-up.
-dynamics_overlap_action: warn 
+# Repair without biasing the umbrella histogram: warn (not rescue) so CHARMM SD
+# never fires on TS/bond contacts. Mid-chunk CHARMM aborts still rewind from
+# numbered heat.NNNN.res when ADUMB RC guard is armed (see geometry_checkpoint).
+dynamics_overlap_action: warn
 dynamics_overlap_min_distance: 0.2
 dynamics_intra_min_distance: 0.2
 # Fly-off guard: dissociating Cl fragment can grow the CH3Cl extent; raise past
@@ -114,9 +113,11 @@ pycharmm_pre_dynamics_lingo: |
   ! Soft upper walls on the *active* umbrella distance (Å). For ``name rcl``,
   ! only Cl–C is walled (capped at umbrella max). For ``name rdif``, both
   ! component bonds use adumrcmax (difference max is not a bond length).
+  ! k=2000: soft wall must hold at 500 K with C–Cl deleted (ADUMB explores
+  ! dissociation); k=500 was overrun by ~86 ps → mid-chunk abort.
   ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 8.0
-  set adumrcwall = 500.0
+  set adumrcwall = 2000.0
 
   ! Optional dihedral restraint (needs FORCE/MIN before BYNUM; four distinct atoms):
   !   cons dihe force 200.0 min 0.0 bynu 1 5 6 7
@@ -141,8 +142,9 @@ pycharmm_pre_dynamics_lingo: |
   rxncor set nrxn 1 rcl
   rxncor trace rcl unit 45
 
-  ! Adaptive umbrella on Cl–C. Tight max (e.g. 4 Å) is OK — C–N is not walled.
-  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
+  ! Adaptive umbrella on Cl–C. Keep max == adumrcmax so RESD engages ~0.75 Å
+  ! before UM1RXN; a tight max (e.g. 4–6) with soft k is easy to punch through.
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 8.0 name rcl
 
   ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 100_000 here)
   umbrella init nsim 100 update 1000 equi 200 temp 500 wuni 44 ucun 50
