@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -71,6 +71,9 @@ help:
 	@echo "  make lfs-audit         - Save LFS file list (sorted by size) to lfs_audit.txt"
 	@echo "  make lfs-setup-symlinks - Replace duplicate grids_esp with symlinks to preclassified_data"
 	@echo "  make lfs-remove-hooks  - Remove LFS hooks (silence warning when git-lfs not installed)"
+	@echo ""
+	@echo "Git hooks:"
+	@echo "  make install-hooks     - Install pre-commit hook that auto-regenerates CI-checked docs"
 	@echo ""
 
 # ==============================================================================
@@ -342,6 +345,16 @@ lfs-remove-hooks:
 	  fi; \
 	done
 	@echo "LFS hooks removed. git pull/checkout will no longer warn about missing git-lfs."
+
+# Install the repo's git hooks (currently a pre-commit that auto-regenerates the
+# CI-checked generated docs so commits never carry stale copies).
+# Run: make install-hooks
+install-hooks:
+	@hooks_dir="$$(git rev-parse --git-path hooks)"; \
+	mkdir -p "$$hooks_dir"; \
+	ln -sf "$$(pwd)/scripts/git-hooks/pre-commit" "$$hooks_dir/pre-commit"; \
+	chmod +x scripts/git-hooks/pre-commit; \
+	echo "Installed pre-commit hook -> $$hooks_dir/pre-commit"
 
 # ==============================================================================
 # Data utilities
