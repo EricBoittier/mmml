@@ -320,7 +320,10 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--no-echeck",
         action="store_true",
-        help="Disable ECHECK (CHARMM -1 = no early stop)",
+        help=(
+            "Disable ECHECK. Uses a huge sentinel (not -1): velocity-Verlet "
+            "paths still apply MAX(ECHECK, 0.1×KE) when ECHECK≤0."
+        ),
     )
     group.add_argument(
         "--allow-incomplete-dynamics",
@@ -332,9 +335,19 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+# VV2 / dynamc4 use MAX(ECHECK, 0.1*KE) without testing echeck>0, so echeck=-1
+# still leaves a ~10%-of-KE gate. A huge positive sentinel disables all paths.
+_DISABLED_CHARMM_ECHECK_KCAL = 1.0e30
+
+
+def disabled_charmm_echeck_kcal() -> float:
+    """ECHECK value that disables energy-drift abort on leapfrog and VV."""
+    return float(_DISABLED_CHARMM_ECHECK_KCAL)
+
+
 def resolve_echeck_from_args(args: argparse.Namespace) -> float:
     if getattr(args, "no_echeck", False):
-        return -1.0
+        return disabled_charmm_echeck_kcal()
     return float(getattr(args, "echeck", 100.0))
 
 
