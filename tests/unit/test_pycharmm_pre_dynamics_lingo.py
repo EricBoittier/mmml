@@ -167,6 +167,20 @@ def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
     assert parse_adumb_rc_wall_params("umbrella rxncor name rcl") is None
 
 
+def test_parse_adumb_rc_wall_params_caps_at_umbrella_max() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_adumb_wall_rcmax,
+    )
+
+    script = """
+    set adumrcmax = 8.0
+    set adumrcwall = 500.0
+    umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 6.0 name rcl
+    """
+    assert resolve_adumb_wall_rcmax(8.0, script) == 6.0
+    assert parse_adumb_rc_wall_params(script) == (6.0, 500.0)
+
+
 def test_parse_adumb_rc_params_accepts_legacy_underscore_names() -> None:
     script = """
     set adum_rcmax = 8.0

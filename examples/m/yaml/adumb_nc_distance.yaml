@@ -111,8 +111,10 @@ pycharmm_pre_dynamics_lingo: |
   delete bond sele atom * * CL1 end sele atom * * C1 end
   delete angle sele atom * * CL1 end sele atom * * C1 end
 
-  ! Soft upper walls on *component* distances (Å). Outer caps only (r ≳ 7.25);
-  ! they do not forbid the TS. Disable: MMML_ADUMB_RC_WALL_BACKEND=off
+  ! Soft upper walls on *component* distances (Å). Outer caps only.
+  ! Wall rcmax is auto-capped to umbrella max so RESD engages before UM1RXN
+  ! (e.g. adumrcmax=8 with umbrella max 6 → walls at 5.25, not 7.25).
+  ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 8.0
   set adumrcwall = 500.0
 

@@ -1833,15 +1833,21 @@ def parse_adumb_rc_params(script: str) -> tuple[float | None, float | None]:
 
 
 def parse_adumb_umbrella_bounds(script: str) -> tuple[float | None, float | None]:
-    """Return (umb_min, umb_max) from the first umbrella rxncor min/max card.
+    """Return (umb_min, umb_max) for the xi soft-window when umbrella is a combination RC.
 
-    Only returned when that umbrella samples a ``combination`` RC (e.g. bond
-    difference ``rdif``). Distance-only umbrellas (``name rcl``) must not enable
-    the xi = r(ClC)-r(CN) soft window — reactant geometries have xi < 0.
+    Distance-only umbrellas (``name rcl``) return ``(None, None)`` so the xi =
+    r(ClC)-r(CN) guard stays off. Use :func:`parse_adumb_umbrella_minmax` for the
+    raw card bounds (wall alignment).
     """
     text = str(script or "")
     if not adumb_umbrella_is_bond_difference(text):
         return None, None
+    return parse_adumb_umbrella_minmax(text)
+
+
+def parse_adumb_umbrella_minmax(script: str) -> tuple[float | None, float | None]:
+    """Return raw ``(min, max)`` from the first ``umbrella rxncor`` card (any RC type)."""
+    text = str(script or "")
     umin = umax = None
     mmin = _UMB_RXNCOR_MIN_RE.search(text)
     mmax = _UMB_RXNCOR_MAX_RE.search(text)
@@ -1856,6 +1862,20 @@ def parse_adumb_umbrella_bounds(script: str) -> tuple[float | None, float | None
         except ValueError:
             umax = None
     return umin, umax
+
+
+def resolve_adumb_wall_rcmax(adumrcmax: float | None, script: str) -> float | None:
+    """Wall ``rcmax`` = min(adumrcmax, umbrella max) so RESD engages before UM1RXN.
+
+    If ``adumrcmax=8`` but ``umbrella … max 6``, sampling can reach 6.14 and abort
+    while walls still sit at 7.25. Cap walls at the ADUMB hard edge.
+    """
+    if adumrcmax is None:
+        return None
+    _umin, umax = parse_adumb_umbrella_minmax(script)
+    if umax is not None and umax > 0:
+        return float(min(float(adumrcmax), float(umax)))
+    return float(adumrcmax)
 
 
 def adumb_umbrella_is_bond_difference(script: str) -> bool:
@@ -1873,11 +1893,18 @@ def adumb_umbrella_is_bond_difference(script: str) -> bool:
 
 
 def parse_adumb_rc_wall_params(script: str) -> tuple[float, float] | None:
-    """Return ``(rcmax, rcwall)`` when both ADUMB RC MMFP wall parameters are set."""
+    """Return ``(rcmax, rcwall)`` when both ADUMB RC wall parameters are set.
+
+    ``rcmax`` is capped by umbrella ``max`` when present (see
+    :func:`resolve_adumb_wall_rcmax`).
+    """
     rcmax, rcwall = parse_adumb_rc_params(script)
     if rcmax is None or rcwall is None:
         return None
-    return rcmax, rcwall
+    capped = resolve_adumb_wall_rcmax(rcmax, script)
+    if capped is None:
+        return None
+    return capped, rcwall
 
 
 def substitute_adumb_rc_tokens(
@@ -2190,13 +2217,14 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
         )
 
         rcmax, rcwall = parse_adumb_rc_params(script)
+        wall_rcmax = resolve_adumb_wall_rcmax(rcmax, script)
         umb_min, umb_max = parse_adumb_umbrella_bounds(script)
-        if rcmax is not None:
+        if wall_rcmax is not None:
             setattr(
                 args,
                 "_adumb_rc_guard",
                 AdumbRcGuard(
-                    rcmax=float(rcmax),
+                    rcmax=float(wall_rcmax),
                     rcwall=float(rcwall if rcwall is not None else 500.0),
                     wall_margin=adumb_rc_wall_margin_A(),
                     umb_min=umb_min,
