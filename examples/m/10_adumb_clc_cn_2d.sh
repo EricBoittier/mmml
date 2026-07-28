@@ -75,9 +75,10 @@ EXTRA+=(
   --dynamics-overlap-memory-handoff
   --dynamics-overlap-action warn
 )
-# Soft-wall onset: engage 2.5 Å below umbrella max (softer k=500 in YAML needs
-# earlier steering; default 0.75 is far too late).
+# Soft-wall onset: engage 2.5 Å below umbrella max. Cap IASVEL=1 redraw T so a
+# wall-near Boltzmann kick cannot leap past umbmax mid-dyna.
 export MMML_ADUMB_RC_WALL_MARGIN="${MMML_ADUMB_RC_WALL_MARGIN:-2.5}"
+export MMML_ADUMB_IASVEL1_T_CAP="${MMML_ADUMB_IASVEL1_T_CAP:-250}"
 # Do NOT set MMML_BUSSI_IASVEL0_CONTINUATION for ADUMB: iasvel=0 reads COMP
 # positions as velocities on this PyCHARMM build (T≃10¹³ K → UM1RXN).
 unset MMML_BUSSI_IASVEL0_CONTINUATION || true

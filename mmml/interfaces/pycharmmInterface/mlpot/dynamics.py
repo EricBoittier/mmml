@@ -6690,6 +6690,16 @@ def _apply_overlap_chunk_dynamics_kw(
         else:
             chunk_kw["iasvel"] = 1
             chunk_kw["iasors"] = 0
+        # Cap Boltzmann redraw temperature: a full 500 K kick at wall-near RCs
+        # punches past soft RESD mid-dyna (UM1RXN) before the wall can act.
+        t_cap = float(os.environ.get("MMML_ADUMB_IASVEL1_T_CAP", "250") or 250.0)
+        if t_cap > 0.0:
+            for key in ("firstt", "tbath", "tstruct", "finalt"):
+                if key in chunk_kw and chunk_kw[key] is not None:
+                    try:
+                        chunk_kw[key] = min(float(chunk_kw[key]), t_cap)
+                    except (TypeError, ValueError):
+                        pass
         chunk_kw.pop("_skip_ase_cold_velocity_assign", None)
         return
     if has_restart_read:

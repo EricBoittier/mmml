@@ -5013,13 +5013,14 @@ def test_overlap_chunk_uses_memory_handoff_for_adumb_rc_guard():
     )
 
 
-def test_apply_overlap_chunk_adumb_uses_safe_iasvel_one_not_comp():
+def test_apply_overlap_chunk_adumb_uses_safe_iasvel_one_not_comp(monkeypatch):
     """ADUMB must not take iasvel=0 (COMP-as-positions → T≃10¹³ K)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         prepare_bussi_heat_dynamics_kw,
     )
 
+    monkeypatch.setenv("MMML_ADUMB_IASVEL1_T_CAP", "250")
     kw = {
         "start": False,
         "firstt": 100.0,
@@ -5036,6 +5037,7 @@ def test_apply_overlap_chunk_adumb_uses_safe_iasvel_one_not_comp():
     assert kw["start"] is False
     assert kw["restart"] is False
     assert kw["iunrea"] == -1
+    assert float(kw["firstt"]) <= 250.0
     assert kw.get("_skip_ase_cold_velocity_assign") is not True
     assert "_adumb_preserve_velocities" not in kw
 

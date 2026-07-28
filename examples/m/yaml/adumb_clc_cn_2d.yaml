@@ -102,12 +102,11 @@ pycharmm_pre_dynamics_lingo: |
   delete bond sele atom * * CL1 end sele atom * * C1 end
   delete angle sele atom * * CL1 end sele atom * * C1 end
 
-  ! Outer walls for both 2D RCs (Å). Python installs RESD on Cl–C *and* C–N
-  ! after umbrella init. k=10000 detonated Cl–C (RESDistance ~3000 kcal, NaN);
-  ! softer k + earlier onset steers without exploding ML forces.
+  ! Outer walls for both 2D RCs (Å). Python installs RESD on Cl–C *and* C–N.
+  ! k=10000 detonated (NaN); k=500 allowed IASVEL=1 punch → UM1RXN. Use 2000.
   ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 12.0
-  set adumrcwall = 500.0
+  set adumrcwall = 2000.0
 
   open unit 44 write card name ADUMB-WUNI.DAT
   open unit 50 write card name UMBCOR

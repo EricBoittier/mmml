@@ -156,6 +156,52 @@ def test_prepare_adumb_rc_rewinds_when_xi_out_of_window(tmp_path) -> None:
     restore.assert_called_once_with(good)
 
 
+def test_prepare_adumb_near_wall_triggers_force_rewind(tmp_path) -> None:
+    """RC at RESD onset must rewind before the next iasvel=1 chunk."""
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        AdumbRcGuard,
+        prepare_adumb_rc_before_overlap_chunk,
+    )
+
+    guard = AdumbRcGuard(
+        rcmax=12.0,
+        rcwall=2000.0,
+        pairs=(("CL1", "C1"), ("C1", "N1")),
+        wall_margin=2.5,  # onset at 9.5 Å
+    )
+    stage = tmp_path / "heat.res"
+    stage.write_text("heat\n", encoding="utf-8")
+    good = tmp_path / "heat.0020.res"
+    good.write_text("ok\n", encoding="utf-8")
+    # First measure: at wall; after restore: safe.
+    dists = iter(
+        [
+            {"CL1-C1": 9.6, "C1-N1": 3.0},
+            {"CL1-C1": 4.0, "C1-N1": 3.0},
+        ]
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        side_effect=lambda *_a, **_k: next(dists),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+    ) as restore:
+        retry = prepare_adumb_rc_before_overlap_chunk(
+            guard,
+            overlap_context="HEAT",
+            chunk_index=21,
+            n_chunks=400,
+            final_restart=stage,
+        )
+    assert retry is True
+    restore.assert_called()
+
+
 def test_prepare_adumb_force_rewind_returns_false_without_raise(tmp_path) -> None:
     """force_rewind must not raise when no usable restart exists (warn mode)."""
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (

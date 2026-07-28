@@ -369,13 +369,24 @@ def prepare_adumb_rc_before_overlap_chunk(
     xi_hit = _xi_out_of_window()
     worst_name, worst = _worst_distance()
     distance_ok = worst < rcmax - 1.0e-4
+    # Past RESD onset: next iasvel=1 redraw can leap past umbmax mid-dyna before
+    # soft walls act. Treat as force_rewind so we restore a safer numbered restart.
+    wall_onset = float(guard.wall_droff())
+    near_wall = distance_ok and worst >= wall_onset - 1.0e-4
+    if near_wall and not force_rewind:
+        force_rewind = True
+        print(
+            f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å at/above wall "
+            f"onset {wall_onset:.2f} Å — rewind before next iasvel=1 chunk",
+            flush=True,
+        )
     if xi_hit is None and distance_ok and not force_rewind:
         warn_at = rcmax * float(warn_fraction)
         if worst >= warn_at:
             print(
                 f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å "
                 f"approaching umbrella max {rcmax:g} Å "
-                f"(wall rmax≈{guard.wall_droff():.2f} Å)",
+                f"(wall rmax≈{wall_onset:.2f} Å)",
                 flush=True,
             )
         return False
@@ -385,7 +396,8 @@ def prepare_adumb_rc_before_overlap_chunk(
         f"[{xi_hit[1]:g}, {xi_hit[2]:g}] (umbrella [{guard.umb_min:g}, {guard.umb_max:g}])"
         if xi_hit is not None
         else (
-            f"forced rewind (monomer fly-off; {worst_name}={worst:.3f} Å still < {rcmax:g} Å)"
+            f"forced rewind (RC at wall / fly-off; {worst_name}={worst:.3f} Å, "
+            f"wall onset {wall_onset:.2f} Å, umbmax {rcmax:g} Å)"
             if force_rewind and distance_ok
             else (
                 f"ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
