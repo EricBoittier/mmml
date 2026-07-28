@@ -6,7 +6,7 @@ chemically distinct methyl rotors. This page ties the pieces together:
 | Stage | Tool |
 |-------|------|
 | Build residue | `mmml make-res --res NMA` |
-| Methyl rotation scan | `mmml ic-scan` |
+| Methyl / ω scan | `mmml ic-scan` |
 | QM labels | `pyscf-dft` / `pyscf-evaluate` / `xml2npz` |
 | Splits | `mmml fix-and-split` |
 | Train | `mmml physnet-train`, `mmml train-joint` (PhysNet + DCMNet) |
@@ -89,27 +89,47 @@ Bundled examples:
 - [`examples/ic_scan/nma_methyl.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/ic_scan/nma_methyl.yaml) — methyl 1D
 - [`examples/ic_scan/nma_omega_methyl_2d.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/ic_scan/nma_omega_methyl_2d.yaml) — ω + N-methyl 1D/2D
 
-### Prepare geometries only (for external QM)
+### Prepare geometries (worked example)
+
+From a directory where `mmml make-res --res NMA` has just written `xyz/nma.xyz`:
 
 ```bash
-mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
-  --prepare-only --output artifacts/nma_omega_2d --overwrite
+cp xyz/nma.xyz ~/mmml/examples/ic_scan/   # keep example structure in sync
+mmml ic-scan --config ~/mmml/examples/ic_scan/nma_omega_methyl_2d.yaml \
+  --prepare-only --output ic_scan/omega_methyl_2d --overwrite
+# → Wrote 195 scan points to …/ic_scan/omega_methyl_2d/manifest.json
 ```
 
-Writes `trajectory.extxyz` / `.traj`, `data.csv`, `manifest.json` with
-`status=prepared` (no energies).
+195 frames = ω 1D (13) + N-methyl 1D (13) + ω×N-methyl 2D (13×13).
+
+### Result bundle (`ic_scan/omega_methyl_2d/`)
+
+| Artifact | Typical size | Contents |
+|----------|-------------:|----------|
+| `manifest.json` | ~3 KB | Schema version, resolved config, scan job list, frame counts, SHA256 of outputs |
+| `resolved_config.json` | ~1 KB | Full `IcScanConfig` with absolute paths |
+| `data.csv` | ~35 KB | One row per point: `scan_name`, requested/actual coordinates (JSON), `status=prepared` |
+| `trajectory.extxyz` | ~180 KB | All frames + ASE `info` (`coord_*`, `actual_*`, `active_dofs`, …) |
+| `trajectory.traj` | ~150 KB | Same frames as ASE binary traj |
+
+Inspect:
+
+```bash
+ase gui ic_scan/omega_methyl_2d/trajectory.traj
+# or
+ase gui ic_scan/omega_methyl_2d/trajectory.extxyz
+```
+
+`data.csv` columns of interest: `scan_name` (`omega_1d` / `n_methyl_1d` /
+`omega_methyl_2d`), `coordinates_json`, `actual_coordinates_json`, `status`.
+With `--prepare-only`, energies are empty (`status=prepared`); drop
+`--prepare-only` (and keep `evaluate: energy` in the YAML) to fill
+`energy_ev` / `energy_kcal_mol` and optional 1D `energy_*.png` plots.
 
 ### Evaluate in-process (xTB smoke)
 
 ```bash
-mmml ic-scan --config examples/ic_scan/nma_methyl.yaml \
-  --output artifacts/nma_methyl_xtb --overwrite
-```
-
-From a local `~/test` tree after `make-res`:
-
-```bash
-mmml ic-scan --config ic_scan/nma_methyl.yaml \
+mmml ic-scan --config ~/mmml/examples/ic_scan/nma_methyl.yaml \
   --output ic_scan/methyl_xtb --overwrite
 ```
 
@@ -294,7 +314,7 @@ Long-range solvers: [long-range solver tutorial](../long-range-solver-tutorial.m
 ## 8. Checklist
 
 1. [ ] `mmml make-res --res NMA` → inspect `xyz/nma.xyz` in VMD  
-2. [ ] `mmml ic-scan` methyl 1D (prepare-only and/or xTB/ML)  
+2. [ ] `mmml ic-scan` ω + N-methyl (`nma_omega_methyl_2d.yaml`, prepare-only → `ase gui …/trajectory.traj`)  
 3. [ ] Sample + `pyscf-evaluate` / `xml2npz` → `evaluated.npz`  
 4. [ ] `mmml fix-and-split` → `splits/`  
 5. [ ] `mmml physnet-train` and/or `mmml train-joint`  

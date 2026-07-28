@@ -108,6 +108,29 @@ are applied in several passes until every active DoF matches. If two DoFs fight
 (impossible rigid combination), preparation fails with the residual errors
 listed — fix atom order / masks rather than trusting `actual_*` in the CSV.
 
+## Result bundle
+
+Every successful run writes an atomic directory (safe `--overwrite`):
+
+| File | Role |
+|------|------|
+| `manifest.json` | Schema, counts, resolved config snapshot, output checksums |
+| `resolved_config.json` | Full config with absolute paths |
+| `data.csv` | Tabular records (`scan_name`, coordinates, status, energies) |
+| `trajectory.extxyz` | Archival frames + per-frame `info` |
+| `trajectory.traj` | ASE traj for `ase gui trajectory.traj` |
+| `energy_<scan>.png` | 1D energy plots only when `evaluate: energy` succeeded |
+
+Prepare-only example (NMA ω + N-methyl, 195 points):
+
+```bash
+mmml make-res --res NMA
+cp xyz/nma.xyz ~/mmml/examples/ic_scan/
+mmml ic-scan --config ~/mmml/examples/ic_scan/nma_omega_methyl_2d.yaml \
+  --prepare-only --output ic_scan/omega_methyl_2d --overwrite
+ase gui ic_scan/omega_methyl_2d/trajectory.traj
+```
+
 ## Public API
 
 ```python
@@ -120,7 +143,8 @@ result.write("artifacts/ic_scan_out")
 
 ```bash
 mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
-  --prepare-only --output artifacts/nma_omega_2d
+  --prepare-only --output ic_scan/omega_methyl_2d --overwrite
+ase gui ic_scan/omega_methyl_2d/trajectory.traj
 ```
 
 ## Relation to other tools
