@@ -5058,6 +5058,7 @@ def test_apply_bussi_iasvel_zero_blocked_for_adumb():
     prepare_bussi_heat_dynamics_kw(kw, nstep=500, ihtfrq=250, timestep_ps=0.001)
     _apply_bussi_iasvel_zero_continuation(kw)
     assert kw["iasvel"] == 1
+    assert float(kw["firstt"]) <= 250.0
     assert kw.get("_skip_ase_cold_velocity_assign") is not True
 
 

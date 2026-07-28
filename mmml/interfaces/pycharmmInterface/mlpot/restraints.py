@@ -369,15 +369,20 @@ def prepare_adumb_rc_before_overlap_chunk(
     xi_hit = _xi_out_of_window()
     worst_name, worst = _worst_distance()
     distance_ok = worst < rcmax - 1.0e-4
-    # Past RESD onset: next iasvel=1 redraw can leap past umbmax mid-dyna before
-    # soft walls act. Treat as force_rewind so we restore a safer numbered restart.
+    # Safe to continue only when RC is *below* RESD onset — not merely < umbmax.
+    # Restoring heat.NNNN.res that still sits at 11 Å (umbmax=12, wall=9.5) then
+    # redrawing IASVEL=1 → UM1RXN on the next micro-chunk.
     wall_onset = float(guard.wall_droff())
-    near_wall = distance_ok and worst >= wall_onset - 1.0e-4
+    safe_rc = min(float(rcmax), wall_onset) - 0.25
+    if safe_rc < 1.0:
+        safe_rc = max(0.5, 0.5 * float(rcmax))
+    near_wall = worst >= safe_rc - 1.0e-4
     if near_wall and not force_rewind:
         force_rewind = True
         print(
-            f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å at/above wall "
-            f"onset {wall_onset:.2f} Å — rewind before next iasvel=1 chunk",
+            f"WARN: {label}: ADUMB RC {worst_name}={worst:.3f} Å at/above safe "
+            f"limit {safe_rc:.2f} Å (wall onset {wall_onset:.2f}, umbmax {rcmax:g}) "
+            "— rewind before next iasvel=1 chunk",
             flush=True,
         )
     if xi_hit is None and distance_ok and not force_rewind:
@@ -397,7 +402,7 @@ def prepare_adumb_rc_before_overlap_chunk(
         if xi_hit is not None
         else (
             f"forced rewind (RC at wall / fly-off; {worst_name}={worst:.3f} Å, "
-            f"wall onset {wall_onset:.2f} Å, umbmax {rcmax:g} Å)"
+            f"safe<{safe_rc:.2f} Å, wall onset {wall_onset:.2f} Å, umbmax {rcmax:g} Å)"
             if force_rewind and distance_ok
             else (
                 f"ADUMB reaction coordinate {worst_name}={worst:.3f} Å "
@@ -427,8 +432,13 @@ def prepare_adumb_rc_before_overlap_chunk(
     )
 
     stage_restart = Path(final_restart)
+    # Near-wall: look back farther — recent numbered restarts often already press
+    # the soft wall (same blow-up will recur on the next iasvel=1 redraw).
+    lookback = int(max_recovery_lookback)
+    if near_wall or force_rewind:
+        lookback = max(lookback, 25)
     candidates: list[Path] = []
-    for back in range(1, max(1, int(max_recovery_lookback)) + 1):
+    for back in range(1, max(1, lookback) + 1):
         idx = int(chunk_index) - back
         if idx < 0:
             break
@@ -468,10 +478,11 @@ def prepare_adumb_rc_before_overlap_chunk(
             )
         xi_hit = _xi_out_of_window()
         worst_name, worst = _worst_distance()
-        if xi_hit is None and worst < rcmax - 1.0e-4:
+        # Accept only RCs safely inside the wall — not merely below umbmax.
+        if xi_hit is None and worst < safe_rc - 1.0e-4:
             print(
                 f"ADUMB RC recovery: restored {candidate.name}; "
-                f"{worst_name}={worst:.3f} Å (< {rcmax:g} Å)",
+                f"{worst_name}={worst:.3f} Å (safe < {safe_rc:.2f} Å)",
                 flush=True,
             )
             return True
@@ -479,9 +490,19 @@ def prepare_adumb_rc_before_overlap_chunk(
             f"ξ=r(ClC)−r(CN)={xi_hit[0]:.3f} Å outside soft window "
             f"[{xi_hit[1]:g}, {xi_hit[2]:g}]"
             if xi_hit is not None
-            else f"{worst_name}={worst:.3f} Å ≥ {rcmax:g} Å"
+            else f"{worst_name}={worst:.3f} Å ≥ safe {safe_rc:.2f} Å"
         )
 
+    if near_wall or worst >= safe_rc - 1.0e-4:
+        # Soft "warn and continue" would start another iasvel=1 chunk and hit UM1RXN.
+        raise RuntimeError(
+            f"{label}: {reason} after rewind lookback "
+            f"(tried {len(candidates)} restart(s); lookback={lookback}). "
+            f"No restart has RC below safe limit {safe_rc:.2f} Å "
+            f"(RESD onset {wall_onset:.2f} Å, umbmax {rcmax:g} Å). "
+            "Resume from an earlier heat.NNNN.res, widen adumrcmax / umbrella max, "
+            "or lower MMML_ADUMB_IASVEL1_T_CAP / heat temperature."
+        )
     if force_rewind:
         print(
             f"WARN: {label}: {reason} after rewind lookback "
@@ -491,7 +512,7 @@ def prepare_adumb_rc_before_overlap_chunk(
         return False
     raise RuntimeError(
         f"{label}: {reason} after rewind "
-        f"(lookback={max_recovery_lookback} numbered restarts). "
+        f"(lookback={lookback} numbered restarts). "
         "Widen umbrella min/max / adumrcmax or restart from an earlier heat.NNNN.res."
     )
 

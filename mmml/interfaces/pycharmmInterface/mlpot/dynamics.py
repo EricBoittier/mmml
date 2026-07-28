@@ -4275,12 +4275,28 @@ def _apply_bussi_iasvel_one_at_ramp_target(kw: dict[str, Any]) -> None:
     Used for Bussi heat *and* CPT/DCD fallbacks that drop C-API inject. Without
     an explicit ``FIRSTT``, CHARMM assigns at 0 K (seen on CPT equi chunk
     continuations after ``no readable velocities``).
+
+    When ``MMML_ADUMB_IASVEL1_T_CAP`` is set (ADUMB examples), cap the assign
+    temperature so a wall-near redraw cannot leap past umbrella ``max`` mid-dyna.
     """
     target = _bussi_ramp_target_k_for_kw(kw)
     if target is None:
         target = _bath_temperature_k_from_dyn_kw(kw)
-    kw["firstt"] = float(target)
-    kw["tstruct"] = float(target)
+    t_assign = float(target)
+    raw_cap = os.environ.get("MMML_ADUMB_IASVEL1_T_CAP", "").strip()
+    if raw_cap:
+        try:
+            t_cap = float(raw_cap)
+        except ValueError:
+            t_cap = 0.0
+        if t_cap > 0.0:
+            t_assign = min(t_assign, t_cap)
+    elif bool(kw.get("_adumb_forbid_iasvel0")) or bool(
+        kw.get("_adumb_preserve_velocities")
+    ):
+        t_assign = min(t_assign, 250.0)
+    kw["firstt"] = t_assign
+    kw["tstruct"] = t_assign
     kw["iasvel"] = 1
     kw["iasors"] = 0
     kw["start"] = False
