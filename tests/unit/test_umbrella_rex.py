@@ -73,6 +73,30 @@ def test_attempt_exchanges_swaps_when_delta_zero():
     np.testing.assert_allclose(out[1, 1, 0], 1.0)
 
 
+def test_attempt_exchanges_writable_from_readonly_view():
+    pos = np.zeros((2, 2, 3))
+    pos[0, 1, 0] = 1.0
+    pos[1, 1, 0] = 2.0
+    packed = pos.reshape(4, 3)
+    packed.setflags(write=False)
+    cv = np.array([[2.0], [1.0]])
+    pos_out, _, _, att, acc = attempt_replica_exchanges(
+        positions_packed=packed,
+        momenta_packed=None,
+        forces_packed=None,
+        cv=cv,
+        targets_per_cv=[[1.0, 2.0]],
+        k_per_cv=[[5.0, 5.0]],
+        grid_shape=(2,),
+        phase=0,
+        beta=1.0,
+        rng=np.random.default_rng(0),
+        n_atoms=2,
+    )
+    assert att == 1 and acc == 1
+    assert pos_out.flags.writeable
+
+
 def test_cli_replica_exchange_flag():
     from mmml.cli.misc.umbrella_sample import _config_from_args, build_parser
 

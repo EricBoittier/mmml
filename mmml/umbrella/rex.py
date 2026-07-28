@@ -125,14 +125,18 @@ def attempt_replica_exchanges(
     """
     if beta <= 0:
         raise ValueError(f"beta must be > 0 (got {beta})")
-    pos = np.asarray(positions_packed, dtype=np.float64).reshape(-1, n_atoms, 3)
+    pos = np.array(positions_packed, dtype=np.float64, copy=True).reshape(-1, n_atoms, 3)
     k_windows = int(pos.shape[0])
     mom = None
     frc = None
     if momenta_packed is not None:
-        mom = np.asarray(momenta_packed, dtype=np.float64).reshape(k_windows, n_atoms, 3)
+        mom = np.array(momenta_packed, dtype=np.float64, copy=True).reshape(
+            k_windows, n_atoms, 3
+        )
     if forces_packed is not None:
-        frc = np.asarray(forces_packed, dtype=np.float64).reshape(k_windows, n_atoms, 3)
+        frc = np.array(forces_packed, dtype=np.float64, copy=True).reshape(
+            k_windows, n_atoms, 3
+        )
 
     w = bias_energy_matrix(cv, targets_per_cv, k_per_cv)
     pairs = neighbor_exchange_pairs(grid_shape, phase)
