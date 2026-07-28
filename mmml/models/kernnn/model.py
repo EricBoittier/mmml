@@ -163,6 +163,22 @@ def _distance_fn(scheme: str):
         ) from exc
 
 
+def _coerce_stats_arrays(stats: KerNNStats | Mapping[str, Any], dtype=jnp.float32) -> dict[str, jnp.ndarray]:
+    """Normalize KerNNStats or a mapping into JAX arrays (JIT-safe)."""
+    if isinstance(stats, KerNNStats):
+        return stats.as_arrays(dtype=dtype)
+    out = {
+        "mean_e": jnp.asarray(stats["mean_e"], dtype=dtype),
+        "std_e": jnp.asarray(stats["std_e"], dtype=dtype),
+        "min_r": jnp.asarray(stats["min_r"], dtype=dtype),
+        "mean_k": jnp.asarray(stats["mean_k"], dtype=dtype),
+        "std_k": jnp.asarray(stats["std_k"], dtype=dtype),
+        "mean_dihedral": jnp.asarray(stats.get("mean_dihedral", 0.0), dtype=dtype),
+        "std_dihedral": jnp.asarray(stats.get("std_dihedral", 1.0), dtype=dtype),
+    }
+    return out
+
+
 def descriptor_from_positions(
     positions,
     stats: KerNNStats | Mapping[str, Any],
@@ -171,11 +187,7 @@ def descriptor_from_positions(
 ):
     """Distances → standardized kernel features."""
     cfg = config or KerNNConfig()
-    st = (
-        stats.as_arrays()
-        if isinstance(stats, KerNNStats)
-        else KerNNStats.from_mapping(stats).as_arrays()
-    )
+    st = _coerce_stats_arrays(stats)
     # Raw pair count for ABCC helpers is always 6; feature length may be 7 for sym
     r = _distance_fn(cfg.distance_scheme)(positions, 6)
     k_fn = _kernel_fn(cfg.kernel)
@@ -188,11 +200,7 @@ def dihedral_feature_from_positions(
     stats: KerNNStats | Mapping[str, Any],
 ):
     """Standardized H–C–O–H dihedral feature with trailing dim ``(..., 1)``."""
-    st = (
-        stats.as_arrays()
-        if isinstance(stats, KerNNStats)
-        else KerNNStats.from_mapping(stats).as_arrays()
-    )
+    st = _coerce_stats_arrays(stats)
     phi = h2co_hcoh_dihedral(positions)
     feat = (phi - st["mean_dihedral"]) / st["std_dihedral"]
     return feat[..., None]
@@ -223,11 +231,7 @@ def energy_from_params(
 ):
     """Scalar or batched energy (eV) from Flax params and positions."""
     cfg = config or KerNNConfig()
-    st = (
-        stats.as_arrays()
-        if isinstance(stats, KerNNStats)
-        else KerNNStats.from_mapping(stats).as_arrays()
-    )
+    st = _coerce_stats_arrays(stats)
     model = _build_model(cfg)
     features = descriptor_from_positions(positions, st, config=cfg)
 
