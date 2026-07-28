@@ -26,6 +26,10 @@ def enabled(cfg: dict[str, Any], key: str) -> bool:
     return bool((cfg.get("enable") or {}).get(key, False))
 
 
+def checkpoint_path(cfg: dict[str, Any]) -> str:
+    return str(cfg.get("checkpoint", "examples/m/model_ext.json"))
+
+
 def umbrella_variants(cfg: dict[str, Any]) -> list[str]:
     umb = cfg.get("umbrella") or {}
     active = list(umb.get("active") or [])
@@ -44,8 +48,32 @@ def dmc_basins(cfg: dict[str, Any]) -> list[str]:
     return [str(b) for b in ((cfg.get("dmc") or {}).get("basins") or ["react", "product"])]
 
 
+def seeds(cfg: dict[str, Any]) -> list[int]:
+    raw = cfg.get("seeds")
+    if raw is None and "seed" in cfg:
+        return [int(cfg["seed"])]
+    return [int(s) for s in (raw or [0])]
+
+
+def temperatures(cfg: dict[str, Any]) -> list[int]:
+    return [int(t) for t in (cfg.get("temperatures") or [300])]
+
+
 def slurm_value(cfg: dict[str, Any], name: str, default: Any) -> Any:
     return (cfg.get("slurm") or {}).get(name, default)
+
+
+def slurm_max_concurrent(cfg: dict[str, Any]) -> int:
+    return int(slurm_value(cfg, "max_jobs", 8))
+
+
+def slurm_launch_jobs(cfg: dict[str, Any]) -> int:
+    return slurm_max_concurrent(cfg)
+
+
+def slurm_resources_cli(cfg: dict[str, Any]) -> str:
+    n = slurm_max_concurrent(cfg)
+    return f"gpu={n} charmm_slot={n}"
 
 
 def job_runtime_min(cfg: dict[str, Any], job: str, *, variant: str | None = None) -> int:
@@ -73,6 +101,8 @@ def expand_targets(cfg: dict[str, Any], output_root: str) -> list[str]:
     """Return status.json paths that rule ``all`` should wait on."""
     targets: list[str] = []
     root = output_root.rstrip("/")
+    temps = temperatures(cfg)
+    seed_list = seeds(cfg)
 
     if enabled(cfg, "endpoints"):
         targets.append(f"{root}/endpoints/status.json")
@@ -82,27 +112,48 @@ def expand_targets(cfg: dict[str, Any], output_root: str) -> list[str]:
         targets.append(f"{root}/neb/status.json")
     if enabled(cfg, "dmc"):
         for basin in dmc_basins(cfg):
-            targets.append(f"{root}/dmc/{basin}/status.json")
+            for seed in seed_list:
+                targets.append(f"{root}/dmc/{basin}/seed{seed}/status.json")
     if enabled(cfg, "umbrella_gas"):
         for variant in umbrella_variants(cfg):
-            targets.append(f"{root}/umbrella_gas/{variant}/status.json")
+            for temp in temps:
+                for seed in seed_list:
+                    targets.append(
+                        f"{root}/umbrella_gas/{variant}/T{temp}/seed{seed}/status.json"
+                    )
     if enabled(cfg, "umbrella_sol"):
         for solvent in solvents(cfg):
             for variant in umbrella_variants(cfg):
-                targets.append(f"{root}/umbrella_sol/{solvent}/{variant}/status.json")
+                for temp in temps:
+                    for seed in seed_list:
+                        targets.append(
+                            f"{root}/umbrella_sol/{solvent}/{variant}/T{temp}/seed{seed}/status.json"
+                        )
     if enabled(cfg, "adumb_gas"):
-        targets.append(f"{root}/adumb_gas/status.json")
+        for temp in temps:
+            for seed in seed_list:
+                targets.append(f"{root}/adumb_gas/T{temp}/seed{seed}/status.json")
     if enabled(cfg, "adumb_sol"):
         for solvent in solvents(cfg):
-            targets.append(f"{root}/adumb_sol/{solvent}/status.json")
+            for temp in temps:
+                for seed in seed_list:
+                    targets.append(
+                        f"{root}/adumb_sol/{solvent}/T{temp}/seed{seed}/status.json"
+                    )
     if enabled(cfg, "mbar"):
         if enabled(cfg, "umbrella_gas"):
             for variant in umbrella_variants(cfg):
-                targets.append(f"{root}/umbrella_gas/{variant}/mbar/status.json")
+                for temp in temps:
+                    for seed in seed_list:
+                        targets.append(
+                            f"{root}/umbrella_gas/{variant}/T{temp}/seed{seed}/mbar/status.json"
+                        )
         if enabled(cfg, "umbrella_sol"):
             for solvent in solvents(cfg):
                 for variant in umbrella_variants(cfg):
-                    targets.append(
-                        f"{root}/umbrella_sol/{solvent}/{variant}/mbar/status.json"
-                    )
+                    for temp in temps:
+                        for seed in seed_list:
+                            targets.append(
+                                f"{root}/umbrella_sol/{solvent}/{variant}/T{temp}/seed{seed}/mbar/status.json"
+                            )
     return targets

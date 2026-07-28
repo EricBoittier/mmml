@@ -13,9 +13,12 @@ FIELDS = [
     "path",
     "job",
     "completed",
+    "checkpoint",
     "solvent",
     "variant",
     "basin",
+    "temperature_K",
+    "seed",
     "elapsed_seconds",
     "barrier_kcal_mol",
     "delta_e_product_kcal_mol",
@@ -45,22 +48,32 @@ def _row(path: Path, root: Path) -> dict[str, object]:
             "path": str(path.relative_to(root)) if root in path.parents else str(path),
             "job": "",
             "completed": False,
+            "checkpoint": "",
             "solvent": "",
             "variant": "",
             "basin": "",
+            "temperature_K": "",
+            "seed": "",
             "elapsed_seconds": "",
             "barrier_kcal_mol": "",
             "delta_e_product_kcal_mol": "",
             "error": f"read_error: {exc}",
         }
-    rel = str(path.relative_to(root)) if root in path.parents or path.parent == root else str(path)
+    rel = (
+        str(path.relative_to(root))
+        if root in path.parents or path.parent == root
+        else str(path)
+    )
     return {
         "path": rel,
         "job": data.get("job", ""),
         "completed": bool(data.get("completed")),
+        "checkpoint": data.get("checkpoint") or "",
         "solvent": data.get("solvent") or "",
         "variant": data.get("variant") or "",
         "basin": data.get("basin") or "",
+        "temperature_K": data.get("temperature_K", ""),
+        "seed": data.get("seed", ""),
         "elapsed_seconds": data.get("elapsed_seconds", ""),
         "barrier_kcal_mol": data.get("barrier_kcal_mol", ""),
         "delta_e_product_kcal_mol": data.get("delta_e_product_kcal_mol", ""),
@@ -85,8 +98,8 @@ def main() -> int:
         "",
         f"Completed: **{done}/{len(rows)}** status files under `{root}`",
         "",
-        "| job | solvent | variant | basin | status | elapsed (s) | notes |",
-        "|---|---|---|---|:---:|---:|---|",
+        "| job | solvent | variant | basin | T (K) | seed | status | elapsed (s) | notes |",
+        "|---|---|---|---|---:|---:|:---:|---:|---|",
     ]
     for r in rows:
         icon = "✅" if r["completed"] else f"❌ {r['error']}"
@@ -95,7 +108,7 @@ def main() -> int:
             notes = f"barrier={r['barrier_kcal_mol']}"
         lines.append(
             f"| {r['job']} | {r['solvent']} | {r['variant']} | {r['basin']} | "
-            f"{icon} | {r['elapsed_seconds']} | {notes} |"
+            f"{r['temperature_K']} | {r['seed']} | {icon} | {r['elapsed_seconds']} | {notes} |"
         )
     args.markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Wrote {args.csv} and {args.markdown} ({done}/{len(rows)} ok)")

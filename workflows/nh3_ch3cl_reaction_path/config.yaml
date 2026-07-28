@@ -6,12 +6,17 @@
 #
 # Smoke matrix:
 #   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
+#
+# Place the checkpoint at examples/m/model_ext.json (or override `checkpoint:`).
 
-checkpoint: examples/m/kl.json
+checkpoint: examples/m/model_ext.json
 example_dir: examples/m
 output_root: artifacts/nh3_ch3cl_reaction_path
 box_size: 30.0
-seed: 0
+
+# Classical sampling matrix (umbrella + ADUMB). DMC expands seeds only; NEB once.
+seeds: [0, 1, 2]
+temperatures: [250, 300, 350]   # Kelvin
 
 # Which job classes to schedule (true/false).
 enable:
@@ -87,6 +92,7 @@ slurm:
   nodes: 1
   ntasks: 1
   gpu: 1
+  max_jobs: 8
   # Optional:
   # mail_user: you@example.com
   # nodelist: gpu08,gpu09

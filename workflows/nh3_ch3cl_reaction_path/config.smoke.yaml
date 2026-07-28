@@ -1,11 +1,13 @@
 # Fast smoke matrix for pipeline validation on studix GPU.
 #   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
 
-checkpoint: examples/m/kl.json
+checkpoint: examples/m/model_ext.json
 example_dir: examples/m
 output_root: artifacts/nh3_ch3cl_reaction_path_smoke
 box_size: 30.0
-seed: 0
+
+seeds: [0]
+temperatures: [300]
 
 enable:
   endpoints: true
@@ -67,3 +69,4 @@ slurm:
   nodes: 1
   ntasks: 1
   gpu: 1
+  max_jobs: 4

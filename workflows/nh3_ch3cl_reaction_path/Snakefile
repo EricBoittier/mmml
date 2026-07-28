@@ -14,8 +14,10 @@ from campaign_lib import (  # noqa: E402
     expand_targets,
     job_runtime_min,
     load_config,
+    seeds as cfg_seeds,
     solvents,
     slurm_value,
+    temperatures as cfg_temps,
     umbrella_variants,
 )
 
@@ -25,13 +27,17 @@ CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
 WORKFLOW_DIR = Path(workflow.basedir)
 REPO_ROOT = WORKFLOW_DIR.parents[1]
 OUTPUT_ROOT = str(CFG.get("output_root", "artifacts/nh3_ch3cl_reaction_path"))
-# Artifacts live at repo root (../../ from this workflow dir).
 ARTIFACT_ROOT = f"../../{OUTPUT_ROOT}"
 
 _need_umb = enabled(CFG, "umbrella_gas") or enabled(CFG, "umbrella_sol")
 VARIANTS = umbrella_variants(CFG) if _need_umb else ["smoke"]
 SOLVENTS = solvents(CFG)
 BASINS = dmc_basins(CFG)
+TEMPS = cfg_temps(CFG)
+SEEDS = cfg_seeds(CFG)
+
+_TEMP_WC = "|".join(str(t) for t in TEMPS) if TEMPS else "300"
+_SEED_WC = "|".join(str(s) for s in SEEDS) if SEEDS else "0"
 
 TARGETS = [
     f"{ARTIFACT_ROOT}/{Path(t).relative_to(OUTPUT_ROOT)}"
@@ -54,6 +60,22 @@ def _deps(*paths):
     return [p for p in paths if p]
 
 
+def _res(job: str, *, variant=None):
+    return dict(
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(
+            CFG, job, variant=getattr(wildcards, "variant", variant)
+        ),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    )
+
+
 rule all:
     input:
         TARGETS,
@@ -70,15 +92,7 @@ rule endpoints:
         repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/endpoints",
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "endpoints"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("endpoints"),
     shell:
         r"""
         set -euo pipefail
@@ -107,15 +121,7 @@ rule make_boxes:
         repo=str(REPO_ROOT),
         out=ARTIFACT_ROOT,
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "make_boxes"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("make_boxes"),
     shell:
         r"""
         set -euo pipefail
@@ -144,15 +150,7 @@ rule neb:
         repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/neb",
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "neb"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("neb"),
     shell:
         r"""
         set -euo pipefail
@@ -173,25 +171,18 @@ rule dmc:
             f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
         ),
     output:
-        status=f"{ARTIFACT_ROOT}/dmc/{{basin}}/status.json",
+        status=f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}/status.json",
     log:
-        f"{ARTIFACT_ROOT}/dmc/{{basin}}/stdout.log",
+        f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}/stdout.log",
     params:
         cfg=_CFG_PATH,
         repo=str(REPO_ROOT),
-        out=f"{ARTIFACT_ROOT}/dmc/{{basin}}",
+        out=f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}",
     wildcard_constraints:
         basin="|".join(BASINS) if BASINS else "react|product",
+        seed=_SEED_WC,
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "dmc"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("dmc"),
     shell:
         r"""
         set -euo pipefail
@@ -201,6 +192,7 @@ rule dmc:
           --repo-root {params.repo} \
           --job dmc \
           --basin {wildcards.basin} \
+          --seed {wildcards.seed} \
           --output-dir {params.out} \
           --status {output.status} \
           > {log} 2>&1
@@ -213,15 +205,17 @@ rule umbrella_gas:
             f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
         ),
     output:
-        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/status.json",
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
     log:
-        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/stdout.log",
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
         cfg=_CFG_PATH,
         repo=str(REPO_ROOT),
-        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}",
     wildcard_constraints:
         variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
     resources:
         gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
         charmm_slot=1,
@@ -241,6 +235,8 @@ rule umbrella_gas:
           --repo-root {params.repo} \
           --job umbrella_gas \
           --variant {wildcards.variant} \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
           --output-dir {params.out} \
           --status {output.status} \
           > {log} 2>&1
@@ -254,16 +250,18 @@ rule umbrella_sol:
             f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
         ),
     output:
-        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/status.json",
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
     log:
-        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/stdout.log",
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
         cfg=_CFG_PATH,
         repo=str(REPO_ROOT),
-        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}",
     wildcard_constraints:
         solvent="|".join(SOLVENTS),
         variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
     resources:
         gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
         charmm_slot=1,
@@ -284,6 +282,8 @@ rule umbrella_sol:
           --job umbrella_sol \
           --solvent {wildcards.solvent} \
           --variant {wildcards.variant} \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
           --output-dir {params.out} \
           --status {output.status} \
           > {log} 2>&1
@@ -296,23 +296,18 @@ rule adumb_gas:
             f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
         ),
     output:
-        status=f"{ARTIFACT_ROOT}/adumb_gas/status.json",
+        status=f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}/status.json",
     log:
-        f"{ARTIFACT_ROOT}/adumb_gas/stdout.log",
+        f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
         cfg=_CFG_PATH,
         repo=str(REPO_ROOT),
-        out=f"{ARTIFACT_ROOT}/adumb_gas",
+        out=f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}",
+    wildcard_constraints:
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "adumb_gas"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("adumb_gas"),
     shell:
         r"""
         set -euo pipefail
@@ -321,6 +316,8 @@ rule adumb_gas:
           --config {params.cfg} \
           --repo-root {params.repo} \
           --job adumb_gas \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
           --output-dir {params.out} \
           --status {output.status} \
           > {log} 2>&1
@@ -333,25 +330,19 @@ rule adumb_sol:
             f"{ARTIFACT_ROOT}/boxes/status.json" if enabled(CFG, "make_boxes") else None,
         ),
     output:
-        status=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/status.json",
+        status=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}/status.json",
     log:
-        f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/stdout.log",
+        f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
         cfg=_CFG_PATH,
         repo=str(REPO_ROOT),
-        out=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}",
+        out=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}",
     wildcard_constraints:
         solvent="|".join(SOLVENTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "adumb_sol"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("adumb_sol"),
     shell:
         r"""
         set -euo pipefail
@@ -361,6 +352,8 @@ rule adumb_sol:
           --repo-root {params.repo} \
           --job adumb_sol \
           --solvent {wildcards.solvent} \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
           --output-dir {params.out} \
           --status {output.status} \
           > {log} 2>&1
@@ -369,28 +362,22 @@ rule adumb_sol:
 
 rule mbar_gas:
     input:
-        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/status.json",
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
     output:
-        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/mbar/status.json",
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/status.json",
     log:
-        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/mbar/stdout.log",
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/stdout.log",
     params:
         cfg=_CFG_PATH,
         repo=str(REPO_ROOT),
-        run_dir=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}",
-        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/mbar",
+        run_dir=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar",
     wildcard_constraints:
         variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "mbar"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("mbar"),
     shell:
         r"""
         set -euo pipefail
@@ -408,29 +395,23 @@ rule mbar_gas:
 
 rule mbar_sol:
     input:
-        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/status.json",
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
     output:
-        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/mbar/status.json",
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/status.json",
     log:
-        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/mbar/stdout.log",
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/stdout.log",
     params:
         cfg=_CFG_PATH,
         repo=str(REPO_ROOT),
-        run_dir=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}",
-        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/mbar",
+        run_dir=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar",
     wildcard_constraints:
         solvent="|".join(SOLVENTS),
         variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
     resources:
-        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
-        charmm_slot=1,
-        runtime=lambda wildcards: job_runtime_min(CFG, "mbar"),
-        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
-        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
-        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
-        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
-        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        **_res("mbar"),
     shell:
         r"""
         set -euo pipefail

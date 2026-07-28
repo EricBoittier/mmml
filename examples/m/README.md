@@ -218,6 +218,9 @@ bash examples/m/run_reaction_path_smokes.sh
 # RUN_ADUMB=1 to include PyCHARMM ADUMB vacuum + TIP3 legs
 ```
 
+**Studix GPU campaign** (seeds × temperatures × solvents, checkpoint
+`model_ext.json`): [`workflows/nh3_ch3cl_reaction_path/`](../../workflows/nh3_ch3cl_reaction_path/).
+
 ### Fixed-bias umbrella (`mmml umbrella-sample`)
 
 **Gas (`engine: packed_ml`)** — batched distance umbrella with PhysNet + JAX-MD

@@ -20,7 +20,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from campaign_lib import load_config  # noqa: E402
+from campaign_lib import checkpoint_path, load_config  # noqa: E402
 
 _SOLVENT_RESI = {
     "tip3": "TIP3",
@@ -53,15 +53,24 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--basin", default=None)
     p.add_argument("--solvent", default=None)
     p.add_argument("--variant", default=None)
+    p.add_argument("--temperature", type=float, default=None, help="NVT temperature (K)")
+    p.add_argument("--seed", type=int, default=None)
     p.add_argument("--run-dir", type=Path, default=None, help="For mbar: umbrella run directory")
     return p.parse_args()
 
 
-def _setup_env(repo: Path, cfg: dict[str, Any]) -> None:
+def _ckpt(repo: Path, cfg: dict[str, Any]) -> Path:
+    return (repo / checkpoint_path(cfg)).resolve()
+
+
+def _setup_env(repo: Path, cfg: dict[str, Any]) -> Path:
     example = repo / str(cfg.get("example_dir", "examples/m"))
-    ckpt = repo / str(cfg.get("checkpoint", "examples/m/kl.json"))
+    ckpt = _ckpt(repo, cfg)
+    if not ckpt.is_file():
+        raise FileNotFoundError(
+            f"checkpoint not found: {ckpt} (set config.checkpoint or place model_ext.json)"
+        )
     os.environ.setdefault("JAX_ENABLE_X64", "1")
-    # Prefer GPU on Slurm GPU allocations; leave local/login defaults alone.
     if os.environ.get("SLURM_JOB_ID") and (
         os.environ.get("SLURM_JOB_GPUS")
         or os.environ.get("CUDA_VISIBLE_DEVICES")
@@ -73,12 +82,13 @@ def _setup_env(repo: Path, cfg: dict[str, Any]) -> None:
     else:
         os.environ.setdefault("JAX_PLATFORMS", os.environ.get("JAX_PLATFORMS", "cpu"))
         os.environ.setdefault("MMML_MLPOT_DEVICE", os.environ.get("MMML_MLPOT_DEVICE", "cpu"))
-    os.environ["MMML_CKPT"] = str(ckpt.resolve())
+    os.environ["MMML_CKPT"] = str(ckpt)
     os.environ.setdefault("MMML_DATA", str((example / "nh3_ch3cl_filtered.npz").resolve()))
     os.environ.setdefault("MMML_CGENFF_EXTRA_RTF", str((example / "top_ch3cl.rtf").resolve()))
     os.environ.setdefault("MMML_CGENFF_EXTRA_PRM", str((example / "par_ch3cl.prm").resolve()))
     os.environ.setdefault("MMML_MM_PAIR_SOURCE", "jax")
     os.environ.setdefault("MMML_COMPOSITION", "AMM1:1,CH3CL:1")
+    return ckpt
 
 
 def _uv_run(repo: Path, args: list[str], *, cwd: Path | None = None) -> None:
@@ -97,6 +107,24 @@ def _variant_cfg(cfg: dict[str, Any], name: str) -> dict[str, Any]:
     if name not in variants:
         raise KeyError(f"unknown umbrella variant {name!r}")
     return dict(variants[name])
+
+
+def _resolve_seed(cfg: dict[str, Any], seed: int | None) -> int:
+    if seed is not None:
+        return int(seed)
+    seeds = cfg.get("seeds")
+    if isinstance(seeds, list) and seeds:
+        return int(seeds[0])
+    return int(cfg.get("seed", 0))
+
+
+def _resolve_temperature(cfg: dict[str, Any], temperature: float | None) -> float:
+    if temperature is not None:
+        return float(temperature)
+    temps = cfg.get("temperatures")
+    if isinstance(temps, list) and temps:
+        return float(temps[0])
+    return 300.0
 
 
 def _ensure_endpoints(repo: Path, example: Path) -> None:
@@ -121,21 +149,26 @@ def _write_hybrid_yaml(
     *,
     template: Path,
     out_yaml: Path,
-    solvent: str,
+    checkpoint: Path,
     box_psf: Path,
     box_pdb: Path,
     output_dir: Path,
     box_size: float,
     variant: dict[str, Any],
+    temperature_K: float,
+    seed: int,
 ) -> Path:
     data = yaml.safe_load(template.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"bad umbrella template: {template}")
     data["engine"] = "hybrid_jaxmd"
+    data["checkpoint"] = str(checkpoint)
     data["from_psf"] = str(box_psf.resolve())
     data["from_pdb"] = str(box_pdb.resolve())
     data["box_size"] = float(box_size)
     data["output_dir"] = str(output_dir.resolve())
+    data["temperature_K"] = float(temperature_K)
+    data["seed"] = int(seed)
     data["overwrite"] = True
     for key in ("xi_min", "xi_max", "n_windows", "k_ev_A2", "nsteps", "printfreq", "savefreq"):
         if key in variant:
@@ -151,16 +184,7 @@ def job_endpoints(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
     neb_dir = out / "neb_xyz"
     neb_dir.mkdir(parents=True, exist_ok=True)
-    _uv_run(
-        repo,
-        [
-            "python",
-            "examples/m/07_export_neb_endpoints.py",
-            "-o",
-            str(neb_dir),
-        ],
-    )
-    # Also refresh the canonical examples/m/neb paths used by YAML defaults.
+    _uv_run(repo, ["python", "examples/m/07_export_neb_endpoints.py", "-o", str(neb_dir)])
     _uv_run(repo, ["python", "examples/m/07_export_neb_endpoints.py"])
     return {
         "reag": str(neb_dir / "reag_0_opt.xyz"),
@@ -178,7 +202,6 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
     env["BOX_SIZE"] = str(float(cfg.get("box_size", 30.0)))
     env["N_SOLVENT"] = str(int(mb.get("n_solvent", 12)))
     env["USE_DENSITY"] = "1" if mb.get("use_density") else "0"
-    # Restrict 08_make_boxes.sh to requested solvents by wrapping per solvent.
     written: list[str] = []
     solute = out / "solute_amm1_ch3cl.pdb"
     _uv_run(repo, ["python", "examples/m/07_export_solute_pdb.py", "-o", str(solute)])
@@ -233,7 +256,7 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
     return {"boxes": written, "solvents": solvents}
 
 
-def job_neb(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
+def job_neb(repo: Path, cfg: dict[str, Any], out: Path, ckpt: Path) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
     _ensure_endpoints(repo, example)
     neb = cfg.get("neb") or {}
@@ -244,6 +267,8 @@ def job_neb(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
             "neb",
             "--config",
             str(example / "yaml" / "neb.yaml"),
+            "--checkpoint",
+            str(ckpt),
             "--output-dir",
             str(out),
             "--n-images",
@@ -261,10 +286,13 @@ def job_neb(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
         "summary": str(summary),
         "barrier_kcal_mol": data.get("barrier_kcal_mol"),
         "delta_e_product_kcal_mol": data.get("delta_e_product_kcal_mol"),
+        "checkpoint": str(ckpt),
     }
 
 
-def job_dmc(repo: Path, cfg: dict[str, Any], out: Path, basin: str) -> dict[str, Any]:
+def job_dmc(
+    repo: Path, cfg: dict[str, Any], out: Path, basin: str, *, seed: int, ckpt: Path
+) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
     _ensure_endpoints(repo, example)
     xyz = {
@@ -294,9 +322,9 @@ def job_dmc(repo: Path, cfg: dict[str, Any], out: Path, basin: str) -> dict[str,
             "--max-batch",
             str(int(dmc.get("nwalker", 128))),
             "--seed",
-            str(int(cfg.get("seed", 0))),
+            str(int(seed)),
             "--checkpoint",
-            os.environ["MMML_CKPT"],
+            str(ckpt),
             "--input",
             str(xyz),
             "--output-dir",
@@ -304,11 +332,24 @@ def job_dmc(repo: Path, cfg: dict[str, Any], out: Path, basin: str) -> dict[str,
         ],
     )
     logs = sorted(out.glob("*.log"))
-    return {"basin": basin, "input": str(xyz), "log": str(logs[0]) if logs else ""}
+    return {
+        "basin": basin,
+        "seed": seed,
+        "input": str(xyz),
+        "log": str(logs[0]) if logs else "",
+        "checkpoint": str(ckpt),
+    }
 
 
 def job_umbrella_gas(
-    repo: Path, cfg: dict[str, Any], out: Path, variant: str
+    repo: Path,
+    cfg: dict[str, Any],
+    out: Path,
+    variant: str,
+    *,
+    temperature: float,
+    seed: int,
+    ckpt: Path,
 ) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
     _ensure_endpoints(repo, example)
@@ -318,6 +359,8 @@ def job_umbrella_gas(
         "umbrella-sample",
         "--config",
         str(example / "yaml" / "umbrella_nc_gas.yaml"),
+        "--checkpoint",
+        str(ckpt),
         "--output-dir",
         str(out),
         "--xi-min",
@@ -336,13 +379,18 @@ def job_umbrella_gas(
         str(int(v.get("printfreq", 50))),
         "--savefreq",
         str(int(v.get("savefreq", v.get("printfreq", 50)))),
+        "--temperature",
+        str(float(temperature)),
         "--seed",
-        str(int(cfg.get("seed", 0))),
+        str(int(seed)),
         "--overwrite",
     ]
     _uv_run(repo, cmd)
     return {
         "variant": variant,
+        "temperature_K": temperature,
+        "seed": seed,
+        "checkpoint": str(ckpt),
         "summary": str(out / "umbrella_summary.json"),
         "snapshots": str(out / "umbrella_snapshots.npz"),
     }
@@ -355,6 +403,9 @@ def job_umbrella_sol(
     *,
     solvent: str,
     variant: str,
+    temperature: float,
+    seed: int,
+    ckpt: Path,
     artifact_root: Path,
 ) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
@@ -369,12 +420,14 @@ def job_umbrella_sol(
     _write_hybrid_yaml(
         template=example / "yaml" / "umbrella_nc_tip3.yaml",
         out_yaml=yaml_path,
-        solvent=sol,
+        checkpoint=ckpt,
         box_psf=psf,
         box_pdb=pdb,
         output_dir=out,
         box_size=float(cfg.get("box_size", 30.0)),
         variant=v,
+        temperature_K=temperature,
+        seed=seed,
     )
     move_with = _amm1_move_with(psf)
     _uv_run(
@@ -384,27 +437,42 @@ def job_umbrella_sol(
             "umbrella-sample",
             "--config",
             str(yaml_path),
+            "--checkpoint",
+            str(ckpt),
             "--output-dir",
             str(out),
             "--move-with",
             move_with,
+            "--temperature",
+            str(float(temperature)),
+            "--seed",
+            str(int(seed)),
             "--overwrite",
         ],
     )
     return {
         "solvent": sol,
         "variant": variant,
+        "temperature_K": temperature,
+        "seed": seed,
+        "checkpoint": str(ckpt),
         "move_with": move_with,
         "summary": str(out / "umbrella_summary.json"),
         "snapshots": str(out / "umbrella_snapshots.npz"),
     }
 
 
-def job_adumb_gas(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
+def job_adumb_gas(
+    repo: Path,
+    cfg: dict[str, Any],
+    out: Path,
+    *,
+    temperature: float,
+    seed: int,
+    ckpt: Path,
+) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
     use_npz = bool((cfg.get("adumb") or {}).get("use_npz_pdb", True))
-    env = os.environ.copy()
-    env["ARTIFACTS_DIR"] = str(out.parent.resolve())  # unused; we pass --output-dir
     cmd = [
         "uv",
         "run",
@@ -412,8 +480,14 @@ def job_adumb_gas(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
         "md-system",
         "--config",
         str(example / "yaml" / "adumb_nc_distance.yaml"),
+        "--checkpoint",
+        str(ckpt),
         "--output-dir",
         str(out),
+        "--temperature",
+        str(float(temperature)),
+        "--seed",
+        str(int(seed)),
     ]
     if use_npz:
         solute = out / "solute_amm1_ch3cl.pdb"
@@ -431,15 +505,27 @@ def job_adumb_gas(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
             "--no-monomer-physnet-mini",
         ]
     print("+", " ".join(cmd), flush=True)
-    subprocess.run(cmd, cwd=str(repo), check=True, env=env)
+    subprocess.run(cmd, cwd=str(repo), check=True)
     adumb = out / "ADUMB-WUNI.DAT"
     if not adumb.is_file() and not (out / "adumb-wuni.dat").is_file():
         raise FileNotFoundError(f"missing ADUMB-WUNI.DAT under {out}")
-    return {"adumb_wuni": str(adumb if adumb.is_file() else out / "adumb-wuni.dat")}
+    return {
+        "temperature_K": temperature,
+        "seed": seed,
+        "checkpoint": str(ckpt),
+        "adumb_wuni": str(adumb if adumb.is_file() else out / "adumb-wuni.dat"),
+    }
 
 
 def job_adumb_sol(
-    repo: Path, cfg: dict[str, Any], out: Path, solvent: str
+    repo: Path,
+    cfg: dict[str, Any],
+    out: Path,
+    solvent: str,
+    *,
+    temperature: float,
+    seed: int,
+    ckpt: Path,
 ) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
     sol = solvent.lower()
@@ -454,8 +540,14 @@ def job_adumb_sol(
         "md-system",
         "--config",
         str(yaml_cfg),
+        "--checkpoint",
+        str(ckpt),
         "--output-dir",
         str(out),
+        "--temperature",
+        str(float(temperature)),
+        "--seed",
+        str(int(seed)),
     ]
     if use_npz:
         solute = out / "solute_amm1_ch3cl.pdb"
@@ -470,6 +562,9 @@ def job_adumb_sol(
         raise FileNotFoundError(f"missing ADUMB-WUNI.DAT under {out}")
     return {
         "solvent": sol,
+        "temperature_K": temperature,
+        "seed": seed,
+        "checkpoint": str(ckpt),
         "adumb_wuni": str(adumb if adumb.is_file() else out / "adumb-wuni.dat"),
     }
 
@@ -497,11 +592,12 @@ def main() -> int:
     repo = args.repo_root.resolve()
     out = args.output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    _setup_env(repo, cfg)
+    ckpt = _setup_env(repo, cfg)
 
-    # Campaign artifact root: parent of job-specific dirs for box lookup.
     output_root = str(cfg.get("output_root", "artifacts/nh3_ch3cl_reaction_path"))
     artifact_root = (repo / output_root).resolve()
+    seed = _resolve_seed(cfg, args.seed)
+    temperature = _resolve_temperature(cfg, args.temperature)
 
     t0 = time.time()
     payload: dict[str, Any] = {
@@ -510,9 +606,12 @@ def main() -> int:
         "error": "",
         "output_dir": str(out),
         "config": str(Path(args.config).resolve()),
+        "checkpoint": str(ckpt),
         "basin": args.basin,
         "solvent": args.solvent,
         "variant": args.variant,
+        "temperature_K": temperature if args.job not in ("endpoints", "make_boxes", "neb", "dmc", "mbar") else None,
+        "seed": seed if args.job not in ("endpoints", "make_boxes", "neb", "mbar") else None,
     }
     try:
         if args.job == "endpoints":
@@ -520,15 +619,20 @@ def main() -> int:
         elif args.job == "make_boxes":
             payload.update(job_make_boxes(repo, cfg, out))
         elif args.job == "neb":
-            payload.update(job_neb(repo, cfg, out))
+            payload.update(job_neb(repo, cfg, out, ckpt))
         elif args.job == "dmc":
             if not args.basin:
                 raise ValueError("--basin required for dmc")
-            payload.update(job_dmc(repo, cfg, out, args.basin))
+            payload["seed"] = seed
+            payload.update(job_dmc(repo, cfg, out, args.basin, seed=seed, ckpt=ckpt))
         elif args.job == "umbrella_gas":
             if not args.variant:
                 raise ValueError("--variant required for umbrella_gas")
-            payload.update(job_umbrella_gas(repo, cfg, out, args.variant))
+            payload.update(
+                job_umbrella_gas(
+                    repo, cfg, out, args.variant, temperature=temperature, seed=seed, ckpt=ckpt
+                )
+            )
         elif args.job == "umbrella_sol":
             if not args.solvent or not args.variant:
                 raise ValueError("--solvent and --variant required for umbrella_sol")
@@ -539,15 +643,30 @@ def main() -> int:
                     out,
                     solvent=args.solvent,
                     variant=args.variant,
+                    temperature=temperature,
+                    seed=seed,
+                    ckpt=ckpt,
                     artifact_root=artifact_root,
                 )
             )
         elif args.job == "adumb_gas":
-            payload.update(job_adumb_gas(repo, cfg, out))
+            payload.update(
+                job_adumb_gas(repo, cfg, out, temperature=temperature, seed=seed, ckpt=ckpt)
+            )
         elif args.job == "adumb_sol":
             if not args.solvent:
                 raise ValueError("--solvent required for adumb_sol")
-            payload.update(job_adumb_sol(repo, cfg, out, args.solvent))
+            payload.update(
+                job_adumb_sol(
+                    repo,
+                    cfg,
+                    out,
+                    args.solvent,
+                    temperature=temperature,
+                    seed=seed,
+                    ckpt=ckpt,
+                )
+            )
         elif args.job == "mbar":
             if args.run_dir is None:
                 raise ValueError("--run-dir required for mbar")
