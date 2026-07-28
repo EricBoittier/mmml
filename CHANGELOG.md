@@ -18,6 +18,12 @@ and versioning process.
   Seeding fixes `atom_i` and can rigidly translate `--move-with` groups
   (default `dt=0.1` fs). See `docs/umbrella.md`.
 
+### Fixed
+
+- Missing comma in `mmml/data/qcml/atomic_reference_energies.json` that broke
+  `json.load` (and any import of `mmml.data`) after the QCML reference table
+  update.
+
 ## [0.1.0a2] - 2026-07-27
 
 Second tagged alpha. Focuses on enhanced-sampling / reaction-coordinate

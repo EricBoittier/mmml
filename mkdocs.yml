@@ -154,6 +154,7 @@ nav:
       - Simulation robustness report: simulation-robustness-report.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
+      - Preparing hybrid ML/MM datasets (CGenFF assignment): hybrid-mm-dataset-preparation.md
       - Hybrid MM charges (fixed / latent / fixed+latent): hybrid-mm-charges.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
       - Interaction-prior constraints & trust map: interaction-prior-constraints.md
