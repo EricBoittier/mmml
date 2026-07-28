@@ -120,6 +120,8 @@ nav:
           - orca-external: cli/commands/orca-external.md
       - Other utilities:
           - doctor: cli/commands/doctor.md
+          - kernnn-evaluate: cli/commands/kernnn-evaluate.md
+          - kernnn-train: cli/commands/kernnn-train.md
           - md-embedding: cli/commands/md-embedding.md
           - mpi-launch: cli/commands/mpi-launch.md
           - plot-restart-velocities: cli/commands/plot-restart-velocities.md

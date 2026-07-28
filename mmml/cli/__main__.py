@@ -317,6 +317,16 @@ def main():
         sys.argv = ["mmml efield-md"] + args.args
         return efield_md.main()
 
+    elif command == "kernnn-train":
+        from .misc import kernnn_train
+        sys.argv = ["mmml kernnn-train"] + args.args
+        return kernnn_train.main()
+
+    elif command == "kernnn-evaluate":
+        from .misc import kernnn_evaluate
+        sys.argv = ["mmml kernnn-evaluate"] + args.args
+        return kernnn_evaluate.main()
+
     elif command == "active-learning":
         from .misc import active_learning
         sys.argv = ["mmml active-learning"] + args.args

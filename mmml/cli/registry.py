@@ -129,6 +129,18 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     CommandSpec("efield-train", "mmml.cli.misc.efield_train", "Train external electric-field PhysNet", parser_module="mmml.models.efield.training"),
     CommandSpec("efield-evaluate", "mmml.cli.misc.efield_evaluate", "Evaluate external electric-field PhysNet", parser_module="mmml.models.efield.evaluate"),
     CommandSpec("efield-md", "mmml.cli.misc.efield_md", "MD with external electric-field PhysNet"),
+    CommandSpec(
+        "kernnn-train",
+        "mmml.cli.misc.kernnn_train",
+        "Train KerNN kernel Softplus MLP (E/F)",
+        parser_module="mmml.models.kernnn.training",
+    ),
+    CommandSpec(
+        "kernnn-evaluate",
+        "mmml.cli.misc.kernnn_evaluate",
+        "Evaluate KerNN checkpoint",
+        parser_module="mmml.models.kernnn.evaluate",
+    ),
     CommandSpec("active-learning", "mmml.cli.misc.active_learning", "Sample structures for re-labeling"),
     CommandSpec("kernel-fit", "mmml.cli.misc.kernel_fit", "Kernel fitting utilities"),
     CommandSpec("interpolate-xyz", "mmml.cli.misc.interpolate_xyz", "Interpolate XYZ via Z-matrix → NPZ"),

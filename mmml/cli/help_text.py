@@ -65,6 +65,8 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("ef-train", "Train EF equivariant model"),
             CommandInfo("ef-evaluate", "Evaluate EF model"),
             CommandInfo("ef-md", "MD with trained EF model"),
+            CommandInfo("kernnn-train", "Train KerNN kernel Softplus MLP"),
+            CommandInfo("kernnn-evaluate", "Evaluate KerNN checkpoint"),
             CommandInfo("active-learning", "Sample structures for re-labeling"),
         ),
     ),

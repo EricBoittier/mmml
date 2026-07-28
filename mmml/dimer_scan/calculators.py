@@ -152,6 +152,16 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             )
 
         return create_efield
+    if config.calculator == "kernnn":
+        if config.checkpoint is None:
+            raise ValueError("the kernnn calculator requires --checkpoint")
+
+        def create_kernnn() -> Calculator:
+            from mmml.models.kernnn import KerNNCalculator
+
+            return KerNNCalculator(config.checkpoint)
+
+        return create_kernnn
     if config.calculator == "dftb3-d4":
         if config.slako_dir is None:
             raise ValueError("dftb3-d4 requires --slako-dir")

@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
             "mbd",
             "multipoles",
             "efield",
+            "kernnn",
             "xtb",
             "dftb3-d4",
             "pyscf",

@@ -13,7 +13,7 @@ mmml dimer-scan --help
 
 ```text
 usage: mmml dimer-scan [-h] [--config CONFIG]
-                       [--calculator {physnet,spookynet,mbd,multipoles,efield,xtb,dftb3-d4,pyscf}]
+                       [--calculator {physnet,spookynet,mbd,multipoles,efield,kernnn,xtb,dftb3-d4,pyscf}]
                        [--checkpoint CHECKPOINT]
                        [--calculator-config CALCULATOR_CONFIG] [--method METHOD]
                        [--basis BASIS] [--xc XC] [--electric-field EX EY EZ]
@@ -48,7 +48,7 @@ Input & configuration:
                         External calculator executable
 
 Scientific model:
-  --calculator {physnet,spookynet,mbd,multipoles,efield,xtb,dftb3-d4,pyscf}
+  --calculator {physnet,spookynet,mbd,multipoles,efield,kernnn,xtb,dftb3-d4,pyscf}
                         Explicit ASE calculator type
   --method METHOD       Calculator method (for example pyscf: dft or hf)
   --basis BASIS         PySCF basis (default: def2-svp)
