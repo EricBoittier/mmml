@@ -43,7 +43,7 @@ def test_write_solute_pdb_amm1_ch3cl(tmp_path: Path) -> None:
     )
 
     assert _residue_sequence_from_pdb(path) == ["AMM1", "CH3CL"]
-    # make-box uses ase.io.read on pdb/initial.pdb — coords must be columns 31–54
+    # make-box: ase.io.read needs coords in columns 31–54; Packmol needs resid in 23–26
     pytest.importorskip("ase")
     import ase.io
 
@@ -51,6 +51,12 @@ def test_write_solute_pdb_amm1_ch3cl(tmp_path: Path) -> None:
     assert len(mol) == 9
     assert set(mol.get_chemical_symbols()) == {"N", "H", "C", "Cl"}
     assert np.all(np.isfinite(mol.get_positions()))
+    for ln in atom_lines:
+        assert ln[22:26].strip().isdigit(), f"Packmol resid cols 23-26 bad: {ln!r}"
+        assert len(ln) >= 54
+        float(ln[30:38])
+        float(ln[38:46])
+        float(ln[46:54])
     z, r = geom.load_dimer_frame(NPZ, index=0)
     assert len(z) == 9
     assert r.shape == (9, 3)

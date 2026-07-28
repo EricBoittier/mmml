@@ -142,21 +142,33 @@ def _pdb_atom_line(
 ) -> str:
     """Format one PDB ATOM record for CGenFF names (ASE + Packmol + CHARMM).
 
-    Coordinates are forced into classic columns 31–54 so ``ase.io.read`` works
-    (needed by ``mmml make-box``). AMM1 (4) / CH3CL (5) residue names are kept
-    intact in the text for CHARMM ``READ SEQU PDB`` / Packmol; ASE may truncate
-    the residuename array to 4 chars, which is fine (it only needs symbols/xyz).
+    Packmol ≥21 requires residue numbers strictly in columns 23–26, and
+    ``make-box`` needs coordinates in columns 31–54 for ``ase.io.read``.
+
+    Layout (1-based columns):
+    - 13–16 atom name (leading space for ≤3-char names)
+    - 17 altLoc (blank)
+    - 18–21 4-char resname + blank chain, **or** 18–22 for 5-char (CH3CL)
+    - 23–26 residue number
+    - 31–54 x/y/z
     """
     x, y, z = (float(v) for v in xyz)
     aname = f" {name:<3s}" if len(name) <= 3 else f"{name:<4s}"
-    head = f"ATOM  {serial:5d} {aname} {resname} {resid:4d}"
-    if len(head) > 30:
-        head = f"ATOM  {serial:5d} {aname}{resname} {resid:4d}"
-    if len(head) > 30:
-        head = f"ATOM  {serial:5d} {aname}{resname}{resid:4d}"
-    head = f"{head:<30s}"[:30]
+    alt = " "
+    if len(resname) <= 3:
+        mid = f"{resname:<3s}  "  # res + blank + blank chain
+    elif len(resname) == 4:
+        mid = f"{resname:<4s} "  # res + blank chain
+    else:
+        mid = f"{resname:<5s}"  # 5-char occupies chain column (Packmol-ok)
+    prefix = f"ATOM  {serial:5d} {aname}{alt}{mid}{resid:4d}    "
+    if len(prefix) != 30 or prefix[22:26] != f"{resid:4d}":
+        raise ValueError(
+            f"PDB column layout broken for {resname!r}/{name!r}: "
+            f"len={len(prefix)} resid_field={prefix[22:26]!r}"
+        )
     return (
-        f"{head}{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2s}"
+        f"{prefix}{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2s}"
     )
 
 
