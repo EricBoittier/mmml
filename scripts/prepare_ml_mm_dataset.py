@@ -32,13 +32,59 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from mmml.data.cgenff_dataset import (  # noqa: E402
+    DEF_PRM_PATH,
+    DEF_RTF_PATH,
+    K_COULOMB_KCAL_ANG,
+    KCAL_TO_EV,
     assign_frame_cgenff,
-    format_composition,
+    compute_inter_monomer_mm,
+    find_covalent_components,
+    load_cgenff_nonbonded_table,
     load_reference,
+    match_cgenff_template,
 )
 
 # Loaded once per (main or spawn-worker) process via the cached loader.
 _REF = load_reference()
+
+# ── Backward-compatibility shims ───────────────────────────────────────────────
+# The core moved to mmml.data.cgenff_dataset; these names keep older imports
+# (tests, notebooks) working against this script's historical public surface.
+_NB_MAP = _REF.nb_map
+_CGENFF_SIGMAS = _REF.sigmas
+_CGENFF_EPSILONS = _REF.epsilons
+_CGENFF_RESIDUES = _REF.residues
+
+# re-exported for `from scripts.prepare_ml_mm_dataset import ...`:
+#   DEF_PRM_PATH, DEF_RTF_PATH, K_COULOMB_KCAL_ANG, KCAL_TO_EV,
+#   load_cgenff_nonbonded_table, find_covalent_components
+find_covalent_components_fast = find_covalent_components
+
+
+def match_cgenff_template_fast(z_sub, pos_sub=None, target_charge=0.0, canonical_smiles=None):
+    return match_cgenff_template(
+        _REF, z_sub, pos_sub, target_charge=target_charge, canonical_smiles=canonical_smiles
+    )
+
+
+def compute_inter_monomer_cgenff_mm_fast(pos, comp_a, t_a, q_a, comp_b, t_b, q_b):
+    return compute_inter_monomer_mm(_REF, pos, comp_a, t_a, q_a, comp_b, t_b, q_b)
+
+
+# Names re-exported for backward compatibility (see shims above).
+__all__ = [
+    "DEF_PRM_PATH",
+    "DEF_RTF_PATH",
+    "K_COULOMB_KCAL_ANG",
+    "KCAL_TO_EV",
+    "load_cgenff_nonbonded_table",
+    "find_covalent_components_fast",
+    "match_cgenff_template_fast",
+    "compute_inter_monomer_cgenff_mm_fast",
+    "process_single_frame",
+    "process_orbax_cache",
+    "main",
+]
 
 
 def process_single_frame(args_tuple):
