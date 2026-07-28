@@ -90,12 +90,16 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     r0_cvs = [
         float(np.linalg.norm(r0[j] - r0[i])) for i, j in sched.atom_pairs
     ]
+    move_groups: list[tuple[int, ...]] = [tuple(cfg.move_with)]
+    if sched.ndim == 2:
+        move_groups.append(tuple(cfg.move_with2))
     r_packed_np = pack_window_seeds(
         positions=r0,
         atom_pairs=sched.atom_pairs,
         targets_per_cv=targets_per_cv,
         seed_mode=seed_mode,
         frames=frames,
+        move_groups=move_groups,
     )
 
     params, model = load_params_and_model(

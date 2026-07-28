@@ -79,7 +79,7 @@ class UmbrellaConfig:
     k_ev_A2: float | tuple[float, ...] = 10.0
     k_y_ev_A2: float | tuple[float, ...] | None = None
     temperature_K: float = 300.0
-    timestep_fs: float = 0.5
+    timestep_fs: float = 0.1
     nsteps: int = 1000
     printfreq: int = 100
     savefreq: int | None = None
@@ -88,6 +88,8 @@ class UmbrellaConfig:
     overwrite: bool = False
     structure_index: int = 0
     seed_mode: SeedMode = "stretch"
+    move_with: tuple[int, ...] = ()
+    move_with2: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
@@ -209,9 +211,12 @@ class UmbrellaConfig:
         for key in ("checkpoint", "structure", "output_dir"):
             if key in raw and raw[key] is not None:
                 raw[key] = Path(raw[key])
-        for key in ("targets_A", "targets_y_A"):
+        for key in ("targets_A", "targets_y_A", "move_with", "move_with2"):
             if key in raw and raw[key] is not None:
-                raw[key] = tuple(float(x) for x in raw[key])
+                if key.startswith("move_"):
+                    raw[key] = tuple(int(x) for x in raw[key])
+                else:
+                    raw[key] = tuple(float(x) for x in raw[key])
         for key in ("k_ev_A2", "k_y_ev_A2"):
             if key in raw and raw[key] is not None:
                 k = raw[key]
@@ -227,6 +232,8 @@ class UmbrellaConfig:
             out[key] = str(out[key])
         out["targets_A"] = list(out["targets_A"])
         out["targets_y_A"] = list(out["targets_y_A"])
+        out["move_with"] = list(out["move_with"])
+        out["move_with2"] = list(out["move_with2"])
         if isinstance(self.k_ev_A2, tuple):
             out["k_ev_A2"] = list(self.k_ev_A2)
         if isinstance(self.k_y_ev_A2, tuple):

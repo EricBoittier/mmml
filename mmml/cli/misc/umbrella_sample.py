@@ -2,12 +2,14 @@
 """CLI for batched umbrella NVT sampling with PhysNet / SpookyNet.
 
 Usage:
+    # Fix C (2), move NH3 rigidly along N–C:
     mmml umbrella-sample \\
       --checkpoint examples/m/kl.json \\
       --structure examples/m/neb/reag_0_opt.xyz \\
-      --atoms 1,2 \\
+      --atoms 2,1 --move-with 1,3,4,5 \\
       --xi-min 1.5 --xi-max 3.5 --n-windows 11 \\
-      --k 20 --temperature 300 --nsteps 5000 -o out/umbrella
+      --k 20 --timestep 0.1 --temperature 300 --nsteps 5000 \\
+      -o out/umbrella --overwrite
 
     # 2D (Cl–C × N–C product grid)
     mmml umbrella-sample --checkpoint examples/m/kl.json \\
@@ -52,6 +54,18 @@ def _parse_float_list(value: str) -> tuple[float, ...]:
     except ValueError as exc:
         raise argparse.ArgumentTypeError(
             f"expected comma-separated floats (got {value!r})"
+        ) from exc
+
+
+def _parse_int_list(value: str) -> tuple[int, ...]:
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("expected comma-separated integers")
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected comma-separated integers (got {value!r})"
         ) from exc
 
 
@@ -148,6 +162,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="CV2 force constant (eV/Å²); default same as --k",
     )
     parser.add_argument(
+        "--move-with",
+        type=_parse_int_list,
+        default=None,
+        help=(
+            "Atoms translated rigidly with CV1 atom_j when seeding "
+            "(e.g. NH3: --atoms 2,1 --move-with 1,3,4,5 fixes C, moves N+H)"
+        ),
+    )
+    parser.add_argument(
+        "--move-with2",
+        type=_parse_int_list,
+        default=None,
+        help="Atoms translated rigidly with CV2 mobile end when seeding",
+    )
+    parser.add_argument(
         "--temperature",
         dest="temperature_K",
         type=float,
@@ -159,7 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="timestep_fs",
         type=float,
         default=None,
-        help="Timestep in fs (default: 0.5)",
+        help="Timestep in fs (default: 0.1)",
     )
     parser.add_argument("--nsteps", type=int, default=None, help="NVT steps (default: 1000)")
     parser.add_argument(
@@ -243,6 +272,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "n_windows_y": args.n_windows_y,
         "structure_index": args.structure_index,
         "seed_mode": args.seed_mode,
+        "move_with": args.move_with,
+        "move_with2": args.move_with2,
     }
     for key, value in cli_map.items():
         if value is not None:
@@ -275,7 +306,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("targets_y_A", ())
     data.setdefault("k_ev_A2", 10.0)
     data.setdefault("temperature_K", 300.0)
-    data.setdefault("timestep_fs", 0.5)
+    data.setdefault("timestep_fs", 0.1)
     data.setdefault("nsteps", 1000)
     data.setdefault("printfreq", 100)
     data.setdefault("seed", 42)
@@ -283,6 +314,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("overwrite", False)
     data.setdefault("structure_index", 0)
     data.setdefault("seed_mode", "stretch")
+    data.setdefault("move_with", ())
+    data.setdefault("move_with2", ())
 
     return UmbrellaConfig.from_dict(data)
 

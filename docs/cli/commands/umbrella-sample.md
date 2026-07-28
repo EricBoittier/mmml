@@ -22,7 +22,9 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--xi-max XI_MAX] [--n-windows N_WINDOWS]
                             [--yi-min YI_MIN] [--yi-max YI_MAX]
                             [--n-windows-y N_WINDOWS_Y] [--k K_EV_A2]
-                            [--ky K_Y_EV_A2] [--temperature TEMPERATURE_K]
+                            [--ky K_Y_EV_A2] [--move-with MOVE_WITH]
+                            [--move-with2 MOVE_WITH2]
+                            [--temperature TEMPERATURE_K]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
                             [--seed SEED] [--no-ema] [--overwrite]
@@ -79,23 +81,31 @@ Other options:
   --k K_EV_A2           CV1 harmonic force constant (eV/Å²); shared across
                         windows (default: 10)
   --ky K_Y_EV_A2        CV2 force constant (eV/Å²); default same as --k
+  --move-with MOVE_WITH
+                        Atoms translated rigidly with CV1 atom_j when seeding
+                        (e.g. NH3: --atoms 2,1 --move-with 1,3,4,5 fixes C,
+                        moves N+H)
+  --move-with2 MOVE_WITH2
+                        Atoms translated rigidly with CV2 mobile end when
+                        seeding
   --timestep TIMESTEP_FS
-                        Timestep in fs (default: 0.5)
+                        Timestep in fs (default: 0.1)
   --printfreq PRINTFREQ
                         Print interval in steps (default: 100)
   --no-ema              Prefer non-EMA checkpoint params
 
-CLI for batched umbrella NVT sampling with PhysNet / SpookyNet. Usage: mmml
-umbrella-sample \ --checkpoint examples/m/kl.json \ --structure
-examples/m/neb/reag_0_opt.xyz \ --atoms 1,2 \ --xi-min 1.5 --xi-max 3.5
---n-windows 11 \ --k 20 --temperature 300 --nsteps 5000 -o out/umbrella # 2D
-(Cl–C × N–C product grid) mmml umbrella-sample --checkpoint examples/m/kl.json \
---structure examples/m/neb/reag_0_opt.xyz \ --atoms 0,2 --atoms2 1,2 \ --xi-min
-1.5 --xi-max 3.0 --n-windows 4 \ --yi-min 1.5 --yi-max 3.0 --n-windows-y 4 \ --k
-20 --ky 20 -o out/umbrella2d --overwrite # NPZ (R, Z) or PDB also work; --seed-
-mode frames uses consecutive frames as windows mmml umbrella-sample --checkpoint
-ckpt.json --structure data.npz \ --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode
-frames -o out/umb
+CLI for batched umbrella NVT sampling with PhysNet / SpookyNet. Usage: # Fix C
+(2), move NH3 rigidly along N–C: mmml umbrella-sample \ --checkpoint
+examples/m/kl.json \ --structure examples/m/neb/reag_0_opt.xyz \ --atoms 2,1
+--move-with 1,3,4,5 \ --xi-min 1.5 --xi-max 3.5 --n-windows 11 \ --k 20
+--timestep 0.1 --temperature 300 --nsteps 5000 \ -o out/umbrella --overwrite #
+2D (Cl–C × N–C product grid) mmml umbrella-sample --checkpoint
+examples/m/kl.json \ --structure examples/m/neb/reag_0_opt.xyz \ --atoms 0,2
+--atoms2 1,2 \ --xi-min 1.5 --xi-max 3.0 --n-windows 4 \ --yi-min 1.5 --yi-max
+3.0 --n-windows-y 4 \ --k 20 --ky 20 -o out/umbrella2d --overwrite # NPZ (R, Z)
+or PDB also work; --seed-mode frames uses consecutive frames as windows mmml
+umbrella-sample --checkpoint ckpt.json --structure data.npz \ --atoms 0,1
+--targets 1.8,2.0,2.2 --seed-mode frames -o out/umb
 ```
 
 
