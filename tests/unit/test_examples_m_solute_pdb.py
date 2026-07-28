@@ -43,6 +43,14 @@ def test_write_solute_pdb_amm1_ch3cl(tmp_path: Path) -> None:
     )
 
     assert _residue_sequence_from_pdb(path) == ["AMM1", "CH3CL"]
+    # make-box uses ase.io.read on pdb/initial.pdb — coords must be columns 31–54
+    pytest.importorskip("ase")
+    import ase.io
+
+    mol = ase.io.read(path)
+    assert len(mol) == 9
+    assert set(mol.get_chemical_symbols()) == {"N", "H", "C", "Cl"}
+    assert np.all(np.isfinite(mol.get_positions()))
     z, r = geom.load_dimer_frame(NPZ, index=0)
     assert len(z) == 9
     assert r.shape == (9, 3)

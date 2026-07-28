@@ -140,16 +140,23 @@ def _pdb_atom_line(
     xyz: np.ndarray,
     element: str,
 ) -> str:
-    """Format one whitespace-stable PDB ATOM record for CGenFF names.
+    """Format one PDB ATOM record for CGenFF names (ASE + Packmol + CHARMM).
 
-    AMM1 (4) and CH3CL (5) do not fit classic PDB columns 17–20. Emit a
-    chain-less, space-delimited layout that ``load_cluster_from_pdb`` parses
-    with ``str.split`` (and that CHARMM ``read.pdb`` still accepts).
+    Coordinates are forced into classic columns 31–54 so ``ase.io.read`` works
+    (needed by ``mmml make-box``). AMM1 (4) / CH3CL (5) residue names are kept
+    intact in the text for CHARMM ``READ SEQU PDB`` / Packmol; ASE may truncate
+    the residuename array to 4 chars, which is fine (it only needs symbols/xyz).
     """
     x, y, z = (float(v) for v in xyz)
+    aname = f" {name:<3s}" if len(name) <= 3 else f"{name:<4s}"
+    head = f"ATOM  {serial:5d} {aname} {resname} {resid:4d}"
+    if len(head) > 30:
+        head = f"ATOM  {serial:5d} {aname}{resname} {resid:4d}"
+    if len(head) > 30:
+        head = f"ATOM  {serial:5d} {aname}{resname}{resid:4d}"
+    head = f"{head:<30s}"[:30]
     return (
-        f"ATOM  {serial:5d} {name:<4s} {resname:<5s} {resid:4d}    "
-        f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2}"
+        f"{head}{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2s}"
     )
 
 

@@ -235,13 +235,15 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
             cmd += ["--n", env["N_SOLVENT"]]
         print("+", " ".join(cmd), flush=True)
         print(f"CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')}", flush=True)
-        proc = subprocess.run(cmd, cwd=str(work), env=env, capture_output=False)
+        proc = subprocess.run(cmd, cwd=str(work), env=env)
         if proc.returncode != 0:
+            found = sorted(str(p.relative_to(work)) for p in work.rglob("*") if p.is_file())
             raise RuntimeError(
                 f"make-box failed for solvent={resi!r} (rc={proc.returncode}); "
-                f"work={work}; CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')!r}. "
-                "On studix: ensure Packmol + PyCHARMM and a patched CHARMM lib "
-                "(scripts/ensure_charmm_mlpot_limits.sh / rebuild_charmm_mlpot.sh)."
+                f"work={work}; CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')!r}; "
+                f"files={found[:40]}. "
+                "If ASE PDB parse failed, regenerate solute via examples/m/07_export_solute_pdb.py "
+                "(coords must be in PDB columns 31–54)."
             )
         pdb_src = work / f"pdb/init-nh3ch3cl_{tag}.pdb"
         psf_src = work / f"psf/system-nh3ch3cl_{tag}.psf"

@@ -125,8 +125,17 @@ def _resolve_solvent_density_kg_m3(solvent: str, density: float | None) -> float
     return resolve_solvent_density_kg_m3(name, None)
 
 def read_initial_pdb(cwd: Path) -> Atoms:
-    """Reads the initial PDB file and returns an ASE Atoms object"""
-    mol = ase.io.read(cwd / "pdb" / "initial.pdb")
+    """Reads the initial PDB file and returns an ASE Atoms object.
+
+    Falls back to a whitespace-tolerant ATOM parser when ASE's fixed-column
+    reader rejects CGenFF residue names (e.g. 5-character ``CH3CL``).
+    """
+    pdb_path = cwd / "pdb" / "initial.pdb"
+    try:
+        mol = ase.io.read(pdb_path)
+    except (ValueError, IndexError, StopIteration) as exc:
+        print(f"ase.io.read failed on {pdb_path} ({exc}); using split-based fallback")
+        mol = _read_pdb_atoms_split(pdb_path)
     e = mol.get_chemical_symbols()
     print(mol)
     print(e)
@@ -144,6 +153,57 @@ def read_initial_pdb(cwd: Path) -> Atoms:
         ]
     )
     return mol
+
+
+def _read_pdb_atoms_split(pdb_path: Path) -> Atoms:
+    """Minimal ATOM/HETATM reader: ``str.split`` fields (not fixed columns)."""
+    from ase import Atoms as _Atoms
+    from ase.data import atomic_numbers, chemical_symbols
+
+    syms: list[str] = []
+    pos: list[list[float]] = []
+    for line in Path(pdb_path).read_text(encoding="utf-8", errors="replace").splitlines():
+        if not (line.startswith("ATOM") or line.startswith("HETATM")):
+            continue
+        parts = line.split()
+        if len(parts) < 6:
+            continue
+        # Try trailing element column first, then atom-name heuristic.
+        elem = parts[-1]
+        if elem.upper() == "CL" or (len(elem) <= 2 and elem.isalpha()):
+            sym = elem.capitalize() if len(elem) <= 2 else elem[0].upper()
+            if elem.upper() == "CL":
+                sym = "Cl"
+        else:
+            name = parts[2]
+            sym = "Cl" if name.upper().startswith("CL") else name[0].upper()
+        # Coordinates: last three floats before occupancy/element tail.
+        floats: list[float] = []
+        for tok in parts:
+            try:
+                floats.append(float(tok))
+            except ValueError:
+                continue
+        if len(floats) < 3:
+            continue
+        # serial may parse as float; coords are the first triple after integers
+        # Prefer the triple immediately preceding two trailing 1.00/0.00-style fields.
+        if len(floats) >= 5:
+            xyz = floats[-5:-2]
+        else:
+            xyz = floats[:3]
+        if sym not in atomic_numbers and sym.upper() == "CL":
+            sym = "Cl"
+        if sym not in atomic_numbers:
+            # last resort: first letter
+            sym = sym[0].upper()
+            if sym not in atomic_numbers:
+                continue
+        syms.append(sym if sym in chemical_symbols else sym[0].upper())
+        pos.append([float(xyz[0]), float(xyz[1]), float(xyz[2])])
+    if not syms:
+        raise ValueError(f"No ATOM records parsed from {pdb_path}")
+    return _Atoms(symbols=syms, positions=np.asarray(pos, dtype=float))
 
 
 def determine_box_size_from_mol(mol: Atoms) -> float:
