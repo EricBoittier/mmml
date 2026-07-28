@@ -177,6 +177,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Atoms translated rigidly with CV2 mobile end when seeding",
     )
     parser.add_argument(
+        "--invert-with",
+        type=_parse_int_list,
+        default=None,
+        help=(
+            "Atoms Walden-blended when seeding a shared-hub 2D stretch "
+            "(e.g. CH3 hydrogens: --invert-with 6,7,8)"
+        ),
+    )
+    parser.add_argument(
+        "--max-seed-force",
+        type=float,
+        default=None,
+        help="Abort if any window seed max|F| exceeds this (eV/Å; default: 25)",
+    )
+    parser.add_argument(
         "--temperature",
         dest="temperature_K",
         type=float,
@@ -274,6 +289,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "seed_mode": args.seed_mode,
         "move_with": args.move_with,
         "move_with2": args.move_with2,
+        "invert_with": args.invert_with,
+        "max_seed_force": args.max_seed_force,
     }
     for key, value in cli_map.items():
         if value is not None:
@@ -316,6 +333,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("seed_mode", "stretch")
     data.setdefault("move_with", ())
     data.setdefault("move_with2", ())
+    data.setdefault("invert_with", ())
+    data.setdefault("max_seed_force", 25.0)
 
     return UmbrellaConfig.from_dict(data)
 

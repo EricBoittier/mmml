@@ -119,6 +119,42 @@ def stretch_distance_seed(
     return r
 
 
+def reflect_atoms_through_plane(
+    positions: np.ndarray,
+    hub: int,
+    normal: np.ndarray,
+    atom_indices: Sequence[int],
+) -> np.ndarray:
+    """Reflect ``atom_indices`` through the plane at ``hub`` with given normal."""
+    r = np.asarray(positions, dtype=np.float64).copy()
+    n = np.asarray(normal, dtype=np.float64)
+    n_norm = float(np.linalg.norm(n))
+    if n_norm < 1e-12:
+        return r
+    n = n / n_norm
+    origin = r[int(hub)]
+    for a in atom_indices:
+        v = r[int(a)] - origin
+        r[int(a)] = origin + v - 2.0 * float(np.dot(v, n)) * n
+    return r
+
+
+def sn2_progress_weight(
+    d_leaving: float,
+    d_nucleophile: float,
+    d_leaving_ref: float,
+    d_nucleophile_ref: float,
+    *,
+    span_A: float = 3.0,
+) -> float:
+    """Map SN2-like ξ = r_LG−r_Nu from the reference toward product into [0, 1]."""
+    xi = float(d_leaving) - float(d_nucleophile)
+    xi_ref = float(d_leaving_ref) - float(d_nucleophile_ref)
+    if span_A <= 0:
+        raise ValueError(f"span_A must be > 0 (got {span_A})")
+    return float(np.clip((xi - xi_ref) / float(span_A), 0.0, 1.0))
+
+
 def stretch_two_distances(
     positions: np.ndarray,
     pair_x: tuple[int, int],
@@ -127,8 +163,14 @@ def stretch_two_distances(
     target_y: float,
     move_with_x: Sequence[int] | None = None,
     move_with_y: Sequence[int] | None = None,
+    invert_with: Sequence[int] | None = None,
 ) -> np.ndarray:
-    """Stretch two distance CVs (shared hub fixes the common atom)."""
+    """Stretch two distance CVs (shared hub fixes the common atom).
+
+    Optional ``invert_with`` blends a Walden-like reflection of those atoms
+    through the hub plane normal to (nucleophile − leaving), weighted by SN2
+    progress. Use for CH₃ hydrogens on a shared-carbon 2D grid.
+    """
     a, b = int(pair_x[0]), int(pair_x[1])
     c, d = int(pair_y[0]), int(pair_y[1])
     shared = set(pair_x) & set(pair_y)
@@ -136,12 +178,36 @@ def stretch_two_distances(
         hub = int(next(iter(shared)))
         other_x = b if a == hub else a
         other_y = d if c == hub else c
-        r = np.asarray(positions, dtype=np.float64).copy()
+        r_ref = np.asarray(positions, dtype=np.float64)
+        d_x_ref = float(np.linalg.norm(r_ref[other_x] - r_ref[hub]))
+        d_y_ref = float(np.linalg.norm(r_ref[other_y] - r_ref[hub]))
+        r = r_ref.copy()
         r = stretch_distance_seed(r, hub, other_x, float(target_x), move_with=move_with_x)
         r = stretch_distance_seed(r, hub, other_y, float(target_y), move_with=move_with_y)
+        if invert_with:
+            # Closer reference contact = leaving group; farther = nucleophile
+            # (SN2 reactant: LG bonded, Nu approaching from the back side).
+            if d_x_ref <= d_y_ref:
+                leaving, nuc = other_x, other_y
+                d_lg, d_nu = float(target_x), float(target_y)
+                d_lg_ref, d_nu_ref = d_x_ref, d_y_ref
+            else:
+                leaving, nuc = other_y, other_x
+                d_lg, d_nu = float(target_y), float(target_x)
+                d_lg_ref, d_nu_ref = d_y_ref, d_x_ref
+            w = sn2_progress_weight(d_lg, d_nu, d_lg_ref, d_nu_ref)
+            if w > 0.0:
+                r_inv = reflect_atoms_through_plane(
+                    r, hub, r[nuc] - r[leaving], invert_with
+                )
+                for idx in invert_with:
+                    i = int(idx)
+                    r[i] = (1.0 - w) * r[i] + w * r_inv[i]
         return r
     r = stretch_distance_seed(positions, a, b, target_x, move_with=move_with_x)
-    return stretch_distance_seed(r, c, d, target_y, move_with=move_with_y)
+    r = stretch_distance_seed(r, c, d, target_y, move_with=move_with_y)
+    return r
+
 
 
 def pack_window_seeds(
@@ -152,12 +218,15 @@ def pack_window_seeds(
     seed_mode: SeedMode = "stretch",
     frames: np.ndarray | None = None,
     move_groups: Sequence[Sequence[int]] | None = None,
+    invert_with: Sequence[int] | None = None,
 ) -> np.ndarray:
     """Build packed ``(K*N, 3)`` initial coordinates for ``K`` umbrella windows.
 
     - ``stretch``: fix ``atom_i``, translate ``atom_j`` (+ ``move_groups``) to ξ₀
     - ``tile``: duplicate the reference geometry unchanged (legacy; can explode)
     - ``frames``: use ``frames`` shape ``(K, N, 3)`` as window seeds
+
+    ``invert_with`` (2D stretch only): blend Walden inversion of those atoms.
     """
     from mmml.umbrella.energy import pack_positions
 
@@ -176,6 +245,7 @@ def pack_window_seeds(
         if len(move_groups) != len(pairs):
             raise ValueError("move_groups length must match atom_pairs length")
         groups = [tuple(int(a) for a in g) for g in move_groups]
+    invert = tuple(int(a) for a in invert_with) if invert_with else ()
 
     if seed_mode == "tile":
         return pack_positions(positions, k)
@@ -212,10 +282,12 @@ def pack_window_seeds(
                 targets[1][wid],
                 move_with_x=groups[0],
                 move_with_y=groups[1],
+                invert_with=invert,
             )
     else:
         raise ValueError(f"only 1D/2D distance umbrellas supported (got {len(pairs)} CVs)")
     return out.reshape(k * n_atoms, 3)
+
 
 
 def _trim_z(z: np.ndarray) -> np.ndarray:

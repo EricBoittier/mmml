@@ -90,6 +90,8 @@ class UmbrellaConfig:
     seed_mode: SeedMode = "stretch"
     move_with: tuple[int, ...] = ()
     move_with2: tuple[int, ...] = ()
+    invert_with: tuple[int, ...] = ()
+    max_seed_force: float = 25.0
 
     def __post_init__(self) -> None:
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
@@ -118,6 +120,8 @@ class UmbrellaConfig:
             raise ValueError(
                 f"seed_mode must be stretch|tile|frames (got {self.seed_mode!r})"
             )
+        if self.max_seed_force <= 0:
+            raise ValueError(f"max_seed_force must be > 0 (got {self.max_seed_force})")
         # Force validation via schedule construction
         sched = self.resolve_schedule()
         if sched.n_windows < 1:
@@ -211,9 +215,9 @@ class UmbrellaConfig:
         for key in ("checkpoint", "structure", "output_dir"):
             if key in raw and raw[key] is not None:
                 raw[key] = Path(raw[key])
-        for key in ("targets_A", "targets_y_A", "move_with", "move_with2"):
+        for key in ("targets_A", "targets_y_A", "move_with", "move_with2", "invert_with"):
             if key in raw and raw[key] is not None:
-                if key.startswith("move_"):
+                if key.startswith("move_") or key == "invert_with":
                     raw[key] = tuple(int(x) for x in raw[key])
                 else:
                     raw[key] = tuple(float(x) for x in raw[key])
@@ -234,6 +238,7 @@ class UmbrellaConfig:
         out["targets_y_A"] = list(out["targets_y_A"])
         out["move_with"] = list(out["move_with"])
         out["move_with2"] = list(out["move_with2"])
+        out["invert_with"] = list(out["invert_with"])
         if isinstance(self.k_ev_A2, tuple):
             out["k_ev_A2"] = list(self.k_ev_A2)
         if isinstance(self.k_y_ev_A2, tuple):

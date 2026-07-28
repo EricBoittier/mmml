@@ -70,15 +70,18 @@ mmml umbrella-sample \
   --checkpoint examples/m/kl.json \
   --structure examples/m/neb/reag_0_opt.xyz \
   --atoms 0,2 --atoms2 1,2 \
-  --move-with2 1,3,4,5 \
+  --move-with2 1,3,4,5 --invert-with 6,7,8 \
   --xi-min 1.5 --xi-max 3.0 --n-windows 4 \
   --yi-min 1.5 --yi-max 3.0 --n-windows-y 4 \
-  --k 20 --ky 20 --timestep 0.1 --nsteps 5000 \
+  --k 10 --ky 10 --timestep 0.1 --nsteps 5000 \
   -o artifacts/umbrella2d --overwrite
 ```
 
 CV1 is Cl–C (atom 0 alone); CV2 is N–C with `--move-with2` translating NH₃ rigidly.
-Shared hub C (2) stays fixed when seeding both stretches.
+`--invert-with` Walden-blends the CH₃ hydrogens as the SN2 progress advances.
+Shared hub C (2) stays fixed when seeding both stretches. Full product grids can
+still hit harsh corners — soften `--k`, raise `--max-seed-force` only if you
+understand the risk, or seed from NEB frames instead.
 
 Artifacts in the run directory:
 

@@ -49,6 +49,24 @@ def test_stretch_two_distances_shared_hub():
     np.testing.assert_allclose(out[2], r[2])
 
 
+def test_stretch_two_distances_invert_with_methyl():
+    # hub=2 (C), Cl=0 close, N=1 far; methyl H at 3
+    r = np.zeros((4, 3))
+    r[0] = [-1.8, 0.0, 0.0]
+    r[1] = [3.2, 0.0, 0.0]
+    r[2] = [0.0, 0.0, 0.0]
+    r[3] = [0.2, 1.0, 0.0]
+    # Product-like: Cl far, N close → full inversion weight
+    out = stretch_two_distances(
+        r, (0, 2), 3.0, (1, 2), 1.5, invert_with=(3,)
+    )
+    assert float(np.linalg.norm(out[0] - out[2])) == pytest.approx(3.0)
+    assert float(np.linalg.norm(out[1] - out[2])) == pytest.approx(1.5)
+    # Reflection is through the plane ⊥ to Cl···N at C → H_x flips sign
+    assert out[3, 0] < 0.0
+    np.testing.assert_allclose(out[3, 1], 1.0)
+
+
 def test_pack_window_seeds_stretch():
     r = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
     packed = pack_window_seeds(

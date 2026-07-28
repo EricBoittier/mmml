@@ -24,6 +24,8 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--n-windows-y N_WINDOWS_Y] [--k K_EV_A2]
                             [--ky K_Y_EV_A2] [--move-with MOVE_WITH]
                             [--move-with2 MOVE_WITH2]
+                            [--invert-with INVERT_WITH]
+                            [--max-seed-force MAX_SEED_FORCE]
                             [--temperature TEMPERATURE_K]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
@@ -50,6 +52,9 @@ Execution:
   --seed-mode {stretch,tile,frames}
                         Window seeding: stretch CV to each ξ₀ (default), tile
                         reference, or use consecutive frames from --structure
+  --max-seed-force MAX_SEED_FORCE
+                        Abort if any window seed max|F| exceeds this (eV/Å;
+                        default: 25)
   --nsteps NSTEPS       NVT steps (default: 1000)
   --seed SEED           PRNG seed (default: 42)
 
@@ -88,6 +93,9 @@ Other options:
   --move-with2 MOVE_WITH2
                         Atoms translated rigidly with CV2 mobile end when
                         seeding
+  --invert-with INVERT_WITH
+                        Atoms Walden-blended when seeding a shared-hub 2D
+                        stretch (e.g. CH3 hydrogens: --invert-with 6,7,8)
   --timestep TIMESTEP_FS
                         Timestep in fs (default: 0.1)
   --printfreq PRINTFREQ

@@ -100,6 +100,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         seed_mode=seed_mode,
         frames=frames,
         move_groups=move_groups,
+        invert_with=cfg.invert_with,
     )
 
     params, model = load_params_and_model(
@@ -136,6 +137,25 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         raise RuntimeError(
             f"initial umbrella E/F non-finite (E={e0}, max|F|={f0_max}). "
             "Check checkpoint, geometry, and --atoms / --atoms2 CV indices."
+        )
+    f_win = np.asarray(f0).reshape(k_windows, n_atoms, 3)
+    fmax_k = np.max(np.abs(f_win), axis=(1, 2))
+    hot = [
+        (int(i), float(fmax_k[i]), float(targets_per_cv[0][i]))
+        for i in range(k_windows)
+        if float(fmax_k[i]) > float(cfg.max_seed_force)
+    ]
+    if hot:
+        detail = ", ".join(
+            f"k={i} max|F|={fm:.1f} ξ₀={xi:.3f}" for i, fm, xi in hot[:8]
+        )
+        more = f" (+{len(hot) - 8} more)" if len(hot) > 8 else ""
+        raise RuntimeError(
+            f"{len(hot)}/{k_windows} window seeds exceed --max-seed-force="
+            f"{cfg.max_seed_force} eV/Å ({detail}{more}). "
+            "For SN2-like 2D grids add --invert-with for CH3 H atoms "
+            "(e.g. 6,7,8), use --move-with2 for NH3, soften --k/--ky, "
+            "narrow the product grid, or --seed-mode frames from an NEB path."
         )
 
     k_b = 8.617333262145e-5  # eV/K
@@ -174,6 +194,13 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     )
     if any(move_groups):
         print(f"  move_groups={move_groups}")
+    if cfg.invert_with:
+        print(f"  invert_with={tuple(cfg.invert_with)}")
+    print(
+        f"  per-window max|F|:"
+        f" min={float(np.min(fmax_k)):.2f} median={float(np.median(fmax_k)):.2f}"
+        f" max={float(np.max(fmax_k)):.2f} eV/Å"
+    )
     print(f"  Initial E_total={e0:.4f} eV  max|F|={f0_max:.4f} eV/Å")
     for step in range(1, int(cfg.nsteps) + 1):
         state = apply_fn(state)
