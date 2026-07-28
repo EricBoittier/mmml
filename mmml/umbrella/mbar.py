@@ -1,14 +1,14 @@
-"""MBAR post-processing for distance umbrella windows."""
+"""MBAR post-processing for distance umbrella windows (1D or 2D)."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
 from mmml.umbrella.config import UmbrellaMbarConfig
-from mmml.umbrella.energy import make_single_ml_energy_fn, numpy_bias_matrix
+from mmml.umbrella.energy import make_single_ml_energy_fn, numpy_bias_matrix_nd
 from mmml.umbrella.io import (
     SNAPSHOTS_NPZ,
     SUMMARY_JSON,
@@ -24,10 +24,9 @@ _K_B_EV = 8.617333262145e-5  # eV/K
 def fill_u_kln(
     *,
     positions: np.ndarray,
-    atom_i: int,
-    atom_j: int,
-    xi0: np.ndarray,
-    k_ev_A2: np.ndarray,
+    atom_pairs: Sequence[tuple[int, int]],
+    targets_per_cv: Sequence[Sequence[float]],
+    k_per_cv: Sequence[Sequence[float]],
     temperature_K: float,
     ml_energy_fn: Callable[[np.ndarray], float],
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -40,10 +39,9 @@ def fill_u_kln(
     if pos.ndim != 4:
         raise ValueError(f"positions must be (K, N_frames, N, 3), got {pos.shape}")
     k_windows, n_frames, _, _ = pos.shape
-    xi0 = np.asarray(xi0, dtype=np.float64).reshape(-1)
-    k_arr = np.asarray(k_ev_A2, dtype=np.float64).reshape(-1)
-    if xi0.shape[0] != k_windows or k_arr.shape[0] != k_windows:
-        raise ValueError("xi0 / k_ev_A2 length must match K windows")
+    for row in list(targets_per_cv) + list(k_per_cv):
+        if len(row) != k_windows:
+            raise ValueError("targets / k rows must match K windows")
 
     beta = 1.0 / (_K_B_EV * float(temperature_K))
     n_k = np.full(k_windows, n_frames, dtype=np.int64)
@@ -53,7 +51,7 @@ def fill_u_kln(
         for n in range(n_frames):
             r = pos[k, n]
             u_ml = float(ml_energy_fn(r))
-            w_l = numpy_bias_matrix(r, atom_i, atom_j, xi0, k_arr)
+            w_l = numpy_bias_matrix_nd(r, atom_pairs, targets_per_cv, k_per_cv)
             u_kln[k, :, n] = beta * (u_ml + w_l)
     return u_kln, n_k
 
@@ -95,6 +93,18 @@ def subsample_u_kln(
         for j, n_old in enumerate(selected[k]):
             u_eff[k, :, j] = u_kln[k, :, int(n_old)]
     return u_eff, n_k_eff, g_k
+
+
+def _snap_atom_pairs(snap: dict[str, Any]) -> list[tuple[int, int]]:
+    pairs = [(int(snap["atom_i"]), int(snap["atom_j"]))]
+    if "atom_k" in snap and "atom_l" in snap:
+        pairs.append(
+            (
+                int(np.asarray(snap["atom_k"]).reshape(-1)[0]),
+                int(np.asarray(snap["atom_l"]).reshape(-1)[0]),
+            )
+        )
+    return pairs
 
 
 def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
@@ -147,10 +157,17 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     positions = np.asarray(snap["positions"], dtype=np.float64)
     z = np.asarray(snap["Z"], dtype=np.int32)
     n_atoms = int(z.shape[0])
-    atom_i = int(snap["atom_i"])
-    atom_j = int(snap["atom_j"])
+    atom_pairs = _snap_atom_pairs(snap)
     xi0 = np.asarray(snap["xi0"], dtype=np.float64)
-    k_arr = np.asarray(snap["k_ev_A2"], dtype=np.float64)
+    k_x = np.asarray(snap["k_ev_A2"], dtype=np.float64)
+    targets_per_cv: list[list[float]] = [xi0.tolist()]
+    k_per_cv: list[list[float]] = [k_x.tolist()]
+    yi0 = None
+    if "yi0" in snap:
+        yi0 = np.asarray(snap["yi0"], dtype=np.float64)
+        k_y = np.asarray(snap.get("k_y_ev_A2", k_x), dtype=np.float64)
+        targets_per_cv.append(yi0.tolist())
+        k_per_cv.append(k_y.tolist())
 
     params, model = load_params_and_model(checkpoint, natoms=n_atoms, prefer_ema=True)
     ml_fn = make_single_ml_energy_fn(
@@ -166,10 +183,9 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
 
     u_kln, n_k = fill_u_kln(
         positions=positions,
-        atom_i=atom_i,
-        atom_j=atom_j,
-        xi0=xi0,
-        k_ev_A2=k_arr,
+        atom_pairs=atom_pairs,
+        targets_per_cv=targets_per_cv,
+        k_per_cv=k_per_cv,
         temperature_K=float(temperature_K),
         ml_energy_fn=ml_energy_np,
     )
@@ -186,16 +202,23 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     delta_f = np.asarray(fe["Delta_f"], dtype=np.float64)
     d_delta_f = np.asarray(fe["dDelta_f"], dtype=np.float64)
     kbt = _K_B_EV * float(temperature_K)
-    # PMF relative to window 0 along ξ₀
     pmf_kt = delta_f[0, :].copy()
     pmf_kt -= pmf_kt.min()
     pmf_ev = pmf_kt * kbt
     d_pmf_ev = d_delta_f[0, :] * kbt
 
-    result = {
+    grid_shape = None
+    if "grid_shape" in snap:
+        grid_shape = [int(x) for x in np.asarray(snap["grid_shape"]).tolist()]
+
+    result: dict[str, Any] = {
         "temperature_K": float(temperature_K),
+        "ndim": len(atom_pairs),
+        "atom_pairs": [list(p) for p in atom_pairs],
         "xi0": xi0.tolist(),
-        "k_ev_A2": k_arr.tolist(),
+        "yi0": None if yi0 is None else yi0.tolist(),
+        "k_ev_A2": k_x.tolist(),
+        "grid_shape": grid_shape,
         "Delta_f_kT": delta_f.tolist(),
         "dDelta_f_kT": d_delta_f.tolist(),
         "pmf_rel_kT": pmf_kt.tolist(),
@@ -207,9 +230,16 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
         "N_k_effective": n_k_eff.tolist(),
         "g_k": g_k,
         "note": (
-            "PMF is F(ξ₀) − min_k F(ξ₀) from MBAR window free energies; "
-            "u_kln = β(U_ML + W_l)."
+            "PMF is F(window) − min F from MBAR; "
+            "u_kln = β(U_ML + Σ_d W_d,l). For 2D, reshape pmf_* with grid_shape."
         ),
     }
+    if grid_shape is not None and len(grid_shape) == 2:
+        nx, ny = grid_shape
+        if nx * ny == len(pmf_kt):
+            result["pmf_rel_kcal_mol_2d"] = (
+                (pmf_ev * _EV_TO_KCAL).reshape(nx, ny).tolist()
+            )
+            result["pmf_rel_eV_2d"] = pmf_ev.reshape(nx, ny).tolist()
     merge_mbar_into_summary(run_dir, result)
     return result

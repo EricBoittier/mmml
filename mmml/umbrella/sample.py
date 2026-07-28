@@ -33,6 +33,16 @@ class UmbrellaResult:
     paths: dict[str, Path]
 
 
+def _schedule_targets_ks(sched):
+    targets = [list(sched.xi0)]
+    ks = [list(sched.k_x)]
+    if sched.ndim == 2:
+        assert sched.yi0 is not None and sched.k_y is not None
+        targets.append(list(sched.yi0))
+        ks.append(list(sched.k_y))
+    return targets, ks
+
+
 def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     """Run packed-batch NVT umbrella sampling with a PhysNet/SpookyNet checkpoint."""
     import jax
@@ -53,9 +63,9 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     structure_path = Path(cfg.structure).expanduser().resolve()
-    targets = cfg.resolve_targets()
-    ks = cfg.resolve_force_constants()
-    k_windows = len(targets)
+    sched = cfg.resolve_schedule()
+    k_windows = sched.n_windows
+    targets_per_cv, k_per_cv = _schedule_targets_ks(sched)
 
     frames = None
     seed_mode = cfg.seed_mode
@@ -71,18 +81,19 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         r0, z = load_structure(structure_path, index=int(cfg.structure_index))
 
     n_atoms = int(len(z))
-    if max(cfg.atom_i, cfg.atom_j) >= n_atoms:
-        raise ValueError(
-            f"atom indices ({cfg.atom_i}, {cfg.atom_j}) out of range for "
-            f"{n_atoms} atoms"
-        )
+    for i, j in sched.atom_pairs:
+        if max(i, j) >= n_atoms:
+            raise ValueError(
+                f"atom indices ({i}, {j}) out of range for {n_atoms} atoms"
+            )
 
-    r0_cv = float(np.linalg.norm(r0[cfg.atom_j] - r0[cfg.atom_i]))
+    r0_cvs = [
+        float(np.linalg.norm(r0[j] - r0[i])) for i, j in sched.atom_pairs
+    ]
     r_packed_np = pack_window_seeds(
         positions=r0,
-        atom_i=cfg.atom_i,
-        atom_j=cfg.atom_j,
-        targets_A=targets,
+        atom_pairs=sched.atom_pairs,
+        targets_per_cv=targets_per_cv,
         seed_mode=seed_mode,
         frames=frames,
     )
@@ -99,10 +110,9 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         params=params,
         atomic_numbers=z,
         graph=graph,
-        atom_i=cfg.atom_i,
-        atom_j=cfg.atom_j,
-        targets_A=targets,
-        k_ev_A2=ks,
+        atom_pairs=sched.atom_pairs,
+        targets_per_cv=targets_per_cv,
+        k_per_cv=k_per_cv,
     )
     energy_sum_fn = jax.jit(energy_sum_fn)
 
@@ -114,7 +124,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     if not np.isfinite(e0):
         raise RuntimeError(
             f"initial umbrella energy is non-finite ({e0}). "
-            "Check checkpoint, geometry, and --atoms CV indices."
+            "Check checkpoint, geometry, and --atoms / --atoms2 CV indices."
         )
 
     k_b = 8.617333262145e-5  # eV/K
@@ -129,24 +139,27 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     key = jax.random.PRNGKey(int(cfg.seed))
     state = init_fn(key, r_packed, mass=masses_batched)
 
+    def _cv_frame(pos):
+        cols = [
+            np.asarray(
+                packed_cv_distances(pos, n_atoms, i, j, k_windows)
+            )
+            for i, j in sched.atom_pairs
+        ]
+        return np.stack(cols, axis=-1)  # (K, ndim)
+
     frames_traj: list[np.ndarray] = [
         np.asarray(state.position).reshape(k_windows, n_atoms, 3)
     ]
-    cv_frames: list[np.ndarray] = [
-        np.asarray(
-            packed_cv_distances(
-                state.position, n_atoms, cfg.atom_i, cfg.atom_j, k_windows
-            )
-        )
-    ]
+    cv_frames: list[np.ndarray] = [_cv_frame(state.position)]
 
     print(
-        f"=== Umbrella NVT ({k_windows} windows batched, "
+        f"=== Umbrella NVT ({k_windows} windows, {sched.ndim}D, "
         f"T={cfg.temperature_K} K, dt={dt} fs) ==="
     )
     print(
         f"  structure={structure_path.name}  seed_mode={seed_mode}  "
-        f"CV atoms=({cfg.atom_i},{cfg.atom_j})  r0={r0_cv:.4f} Å"
+        f"pairs={sched.atom_pairs}  r0={r0_cvs}  grid={sched.grid_shape}"
     )
     print(f"  Initial E_total={e0:.4f} eV")
     for step in range(1, int(cfg.nsteps) + 1):
@@ -154,13 +167,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         if step % savefreq == 0 or step == cfg.nsteps:
             pos_batch = np.asarray(state.position).reshape(k_windows, n_atoms, 3)
             frames_traj.append(pos_batch)
-            cv_frames.append(
-                np.asarray(
-                    packed_cv_distances(
-                        state.position, n_atoms, cfg.atom_i, cfg.atom_j, k_windows
-                    )
-                )
-            )
+            cv_frames.append(_cv_frame(state.position))
         if step % int(cfg.printfreq) == 0 or step == cfg.nsteps:
             e_tot = float(energy_sum_fn(state.position))
             t_curr = float(
@@ -174,24 +181,35 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                 )
             print(f"  step {step:6d}  E_total={e_tot:.4f} eV  T={t_curr:.1f} K")
 
-    # frames: list of (K, N, 3) → (K, N_frames, N, 3)
     positions = np.stack(frames_traj, axis=1)
-    cv_traj = np.stack(cv_frames, axis=1)
+    cv_traj = np.stack(cv_frames, axis=1)  # (K, N_frames, ndim)
     n_frames = int(positions.shape[1])
+
+    extra = {
+        "ndim": np.int32(sched.ndim),
+        "grid_shape": np.asarray(sched.grid_shape, dtype=np.int32),
+    }
+    if sched.ndim == 2:
+        assert sched.yi0 is not None and sched.k_y is not None
+        extra["yi0"] = np.asarray(sched.yi0, dtype=np.float64)
+        extra["k_y_ev_A2"] = np.asarray(sched.k_y, dtype=np.float64)
+        extra["atom_k"] = np.int32(sched.atom_pairs[1][0])
+        extra["atom_l"] = np.int32(sched.atom_pairs[1][1])
 
     snapshots_path = output_dir / SNAPSHOTS_NPZ
     save_snapshots(
         snapshots_path,
         positions=positions,
         Z=z,
-        atom_i=cfg.atom_i,
-        atom_j=cfg.atom_j,
-        xi0=np.asarray(targets, dtype=np.float64),
-        k_ev_A2=np.asarray(ks, dtype=np.float64),
+        atom_i=sched.atom_pairs[0][0],
+        atom_j=sched.atom_pairs[0][1],
+        xi0=np.asarray(sched.xi0, dtype=np.float64),
+        k_ev_A2=np.asarray(sched.k_x, dtype=np.float64),
         temperature_K=float(cfg.temperature_K),
         dt_fs=dt,
         cv_traj=cv_traj,
         checkpoint=str(Path(cfg.checkpoint).expanduser().resolve()),
+        extra=extra,
     )
 
     traj_paths: dict[str, Path] = {}
@@ -206,12 +224,17 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
 
     summary = {
         "args": cfg.to_dict(),
+        "ndim": sched.ndim,
         "n_windows": k_windows,
         "n_frames": n_frames,
         "n_atoms": n_atoms,
-        "xi0": list(targets),
-        "k_ev_A2": list(ks),
-        "r0_cv_A": r0_cv,
+        "atom_pairs": [list(p) for p in sched.atom_pairs],
+        "xi0": list(sched.xi0),
+        "yi0": list(sched.yi0) if sched.yi0 is not None else None,
+        "k_ev_A2": list(sched.k_x),
+        "k_y_ev_A2": list(sched.k_y) if sched.k_y is not None else None,
+        "grid_shape": list(sched.grid_shape),
+        "r0_cv_A": r0_cvs,
         "seed_mode": seed_mode,
         "cv_mean": cv_traj.mean(axis=1).tolist(),
         "cv_std": cv_traj.std(axis=1).tolist(),

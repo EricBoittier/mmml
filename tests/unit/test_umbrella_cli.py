@@ -93,6 +93,45 @@ def test_mbar_parser():
     assert args.mbar_verbose is True
 
 
+def test_sample_parser_2d():
+    parser = build_sample_parser()
+    args = parser.parse_args(
+        [
+            "--checkpoint",
+            "ckpt",
+            "--structure",
+            "mol.xyz",
+            "-o",
+            "out",
+            "--atoms",
+            "0,2",
+            "--atoms2",
+            "1,2",
+            "--xi-min",
+            "1.5",
+            "--xi-max",
+            "2.5",
+            "--n-windows",
+            "3",
+            "--yi-min",
+            "1.8",
+            "--yi-max",
+            "2.8",
+            "--n-windows-y",
+            "2",
+            "--ky",
+            "15",
+            "--overwrite",
+        ]
+    )
+    cfg = _config_from_args(args)
+    assert cfg.is_2d
+    sched = cfg.resolve_schedule()
+    assert sched.n_windows == 6
+    assert sched.grid_shape == (3, 2)
+    assert cfg.atom_k == 1 and cfg.atom_l == 2
+
+
 def test_registry_lists_umbrella_commands():
     from mmml.cli.registry import command_by_name
 
@@ -100,3 +139,4 @@ def test_registry_lists_umbrella_commands():
     assert command_by_name("umbrella-mbar") is not None
     assert command_by_name("umbrella-sample").module == "mmml.cli.misc.umbrella_sample"
     assert command_by_name("umbrella-mbar").module == "mmml.cli.misc.umbrella_mbar"
+

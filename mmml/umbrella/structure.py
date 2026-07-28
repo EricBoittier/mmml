@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 
@@ -115,25 +116,63 @@ def stretch_distance_seed(
     return r
 
 
+def stretch_two_distances(
+    positions: np.ndarray,
+    pair_x: tuple[int, int],
+    target_x: float,
+    pair_y: tuple[int, int],
+    target_y: float,
+) -> np.ndarray:
+    """Stretch two distance CVs. Shared-atom pairs fix the hub atom."""
+    a, b = int(pair_x[0]), int(pair_x[1])
+    c, d = int(pair_y[0]), int(pair_y[1])
+    shared = set(pair_x) & set(pair_y)
+    if len(shared) == 1:
+        hub = int(next(iter(shared)))
+        other_x = b if a == hub else a
+        other_y = d if c == hub else c
+        r = np.asarray(positions, dtype=np.float64).copy()
+        for other, target in ((other_x, target_x), (other_y, target_y)):
+            if float(target) <= 0:
+                raise ValueError(f"target must be > 0 (got {target})")
+            disp = r[other] - r[hub]
+            dist = float(np.linalg.norm(disp))
+            if dist < 1e-8:
+                raise ValueError(
+                    f"cannot stretch atoms ({hub}, {other}): current distance ~0"
+                )
+            r[other] = r[hub] + (float(target) / dist) * disp
+        return r
+    r = stretch_distance_seed(positions, a, b, target_x)
+    return stretch_distance_seed(r, c, d, target_y)
+
+
 def pack_window_seeds(
     *,
     positions: np.ndarray,
-    atom_i: int,
-    atom_j: int,
-    targets_A: tuple[float, ...] | list[float],
+    atom_pairs: Sequence[tuple[int, int]],
+    targets_per_cv: Sequence[Sequence[float]],
     seed_mode: SeedMode = "stretch",
     frames: np.ndarray | None = None,
 ) -> np.ndarray:
     """Build packed ``(K*N, 3)`` initial coordinates for ``K`` umbrella windows.
 
-    - ``stretch``: one reference geometry; stretch the CV pair to each ξ₀
+    - ``stretch``: one reference geometry; stretch CV pair(s) to each window target
     - ``tile``: duplicate the reference geometry unchanged (legacy; can explode)
     - ``frames``: use ``frames`` shape ``(K, N, 3)`` as window seeds
     """
     from mmml.umbrella.energy import pack_positions
 
-    targets = tuple(float(x) for x in targets_A)
-    k = len(targets)
+    pairs = tuple((int(i), int(j)) for i, j in atom_pairs)
+    targets = [tuple(float(x) for x in row) for row in targets_per_cv]
+    if not pairs or not targets:
+        raise ValueError("atom_pairs and targets_per_cv are required")
+    k = len(targets[0])
+    if any(len(row) != k for row in targets):
+        raise ValueError("all CV target rows must have the same length K")
+    if len(pairs) != len(targets):
+        raise ValueError("atom_pairs length must match targets_per_cv length")
+
     if seed_mode == "tile":
         return pack_positions(positions, k)
     if seed_mode == "frames":
@@ -153,8 +192,17 @@ def pack_window_seeds(
     r0 = np.asarray(positions, dtype=np.float64)
     n_atoms = int(r0.shape[0])
     out = np.zeros((k, n_atoms, 3), dtype=np.float64)
-    for wid, xi0 in enumerate(targets):
-        out[wid] = stretch_distance_seed(r0, atom_i, atom_j, xi0)
+    if len(pairs) == 1:
+        i, j = pairs[0]
+        for wid in range(k):
+            out[wid] = stretch_distance_seed(r0, i, j, targets[0][wid])
+    elif len(pairs) == 2:
+        for wid in range(k):
+            out[wid] = stretch_two_distances(
+                r0, pairs[0], targets[0][wid], pairs[1], targets[1][wid]
+            )
+    else:
+        raise ValueError(f"only 1D/2D distance umbrellas supported (got {len(pairs)} CVs)")
     return out.reshape(k * n_atoms, 3)
 
 

@@ -17,9 +17,12 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--structure-index STRUCTURE_INDEX]
                             [--seed-mode {stretch,tile,frames}]
                             [--output-dir OUTPUT_DIR] [--atoms ATOMS]
-                            [--targets TARGETS] [--xi-min XI_MIN]
+                            [--atoms2 ATOMS2] [--targets TARGETS]
+                            [--targets-y TARGETS_Y] [--xi-min XI_MIN]
                             [--xi-max XI_MAX] [--n-windows N_WINDOWS]
-                            [--k K_EV_A2] [--temperature TEMPERATURE_K]
+                            [--yi-min YI_MIN] [--yi-max YI_MAX]
+                            [--n-windows-y N_WINDOWS_Y] [--k K_EV_A2]
+                            [--ky K_Y_EV_A2] [--temperature TEMPERATURE_K]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
                             [--seed SEED] [--no-ema] [--overwrite]
@@ -58,14 +61,24 @@ Diagnostics & safety:
   -h, --help            show this help message and exit
 
 Other options:
-  --atoms ATOMS         0-based atom indices for the distance CV (I,J)
-  --targets TARGETS     Comma-separated umbrella centers ξ₀ (Å)
-  --xi-min XI_MIN       Grid start (Å) if --targets omitted
-  --xi-max XI_MAX       Grid end (Å) if --targets omitted
+  --atoms ATOMS         0-based atom indices for CV1 distance (I,J)
+  --atoms2 ATOMS2       0-based atom indices for CV2 distance (K,L); enables 2D
+                        umbrella
+  --targets TARGETS     Comma-separated CV1 centers ξ₀ (Å)
+  --targets-y TARGETS_Y
+                        Comma-separated CV2 centers η₀ (Å); product grid with
+                        --targets
+  --xi-min XI_MIN       CV1 grid start (Å) if --targets omitted
+  --xi-max XI_MAX       CV1 grid end (Å) if --targets omitted
   --n-windows N_WINDOWS
-                        Number of windows on [xi-min, xi-max]
-  --k K_EV_A2           Harmonic force constant (eV/Å²); shared across windows
-                        (default: 10)
+                        Number of CV1 windows on [xi-min, xi-max]
+  --yi-min YI_MIN       CV2 grid start (Å)
+  --yi-max YI_MAX       CV2 grid end (Å)
+  --n-windows-y N_WINDOWS_Y
+                        Number of CV2 windows on [yi-min, yi-max]
+  --k K_EV_A2           CV1 harmonic force constant (eV/Å²); shared across
+                        windows (default: 10)
+  --ky K_Y_EV_A2        CV2 force constant (eV/Å²); default same as --k
   --timestep TIMESTEP_FS
                         Timestep in fs (default: 0.5)
   --printfreq PRINTFREQ
@@ -75,10 +88,14 @@ Other options:
 CLI for batched umbrella NVT sampling with PhysNet / SpookyNet. Usage: mmml
 umbrella-sample \ --checkpoint examples/m/kl.json \ --structure
 examples/m/neb/reag_0_opt.xyz \ --atoms 1,2 \ --xi-min 1.5 --xi-max 3.5
---n-windows 11 \ --k 20 --temperature 300 --nsteps 5000 -o out/umbrella # NPZ
-(R, Z) or PDB also work; --seed-mode frames uses consecutive frames as windows
-mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \ --atoms 0,1
---targets 1.8,2.0,2.2 --seed-mode frames -o out/umb
+--n-windows 11 \ --k 20 --temperature 300 --nsteps 5000 -o out/umbrella # 2D
+(Cl–C × N–C product grid) mmml umbrella-sample --checkpoint examples/m/kl.json \
+--structure examples/m/neb/reag_0_opt.xyz \ --atoms 0,2 --atoms2 1,2 \ --xi-min
+1.5 --xi-max 3.0 --n-windows 4 \ --yi-min 1.5 --yi-max 3.0 --n-windows-y 4 \ --k
+20 --ky 20 -o out/umbrella2d --overwrite # NPZ (R, Z) or PDB also work; --seed-
+mode frames uses consecutive frames as windows mmml umbrella-sample --checkpoint
+ckpt.json --structure data.npz \ --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode
+frames -o out/umb
 ```
 
 

@@ -32,10 +32,9 @@ def test_fill_u_kln_self_term_and_shape():
 
     u_kln, n_k = fill_u_kln(
         positions=positions,
-        atom_i=0,
-        atom_j=1,
-        xi0=xi0,
-        k_ev_A2=k_arr,
+        atom_pairs=((0, 1),),
+        targets_per_cv=(xi0.tolist(),),
+        k_per_cv=(k_arr.tolist(),),
         temperature_K=temperature_K,
         ml_energy_fn=ml_energy,
     )

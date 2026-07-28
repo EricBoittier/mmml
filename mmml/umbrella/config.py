@@ -4,10 +4,57 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, Sequence
 
 
 SeedMode = Literal["stretch", "tile", "frames"]
+
+
+@dataclass(frozen=True)
+class WindowSchedule:
+    """Resolved umbrella windows (1D or 2D distance CVs)."""
+
+    ndim: int
+    atom_pairs: tuple[tuple[int, int], ...]
+    xi0: tuple[float, ...]
+    yi0: tuple[float, ...] | None
+    k_x: tuple[float, ...]
+    k_y: tuple[float, ...] | None
+    grid_shape: tuple[int, ...]
+
+    @property
+    def n_windows(self) -> int:
+        return len(self.xi0)
+
+
+def _linspace_or_list(
+    *,
+    explicit: tuple[float, ...],
+    lo: float | None,
+    hi: float | None,
+    n: int | None,
+    label: str,
+) -> tuple[float, ...]:
+    if explicit:
+        return tuple(float(x) for x in explicit)
+    if lo is None or hi is None or n is None:
+        return ()
+    if n < 1:
+        raise ValueError(f"{label} n_windows must be >= 1 (got {n})")
+    if n == 1:
+        return (float(lo),)
+    import numpy as np
+
+    return tuple(float(x) for x in np.linspace(float(lo), float(hi), int(n)))
+
+
+def _broadcast_k(k: float | Sequence[float], n: int) -> tuple[float, ...]:
+    if isinstance(k, (int, float)):
+        return tuple(float(k) for _ in range(n))
+    out = tuple(float(x) for x in k)
+    if len(out) != n:
+        raise ValueError(f"force-constant length {len(out)} must match n_windows={n}")
+    return out
 
 
 @dataclass(frozen=True)
@@ -19,11 +66,18 @@ class UmbrellaConfig:
     output_dir: Path
     atom_i: int
     atom_j: int
+    atom_k: int | None = None
+    atom_l: int | None = None
     targets_A: tuple[float, ...] = ()
+    targets_y_A: tuple[float, ...] = ()
     xi_min: float | None = None
     xi_max: float | None = None
     n_windows: int | None = None
+    yi_min: float | None = None
+    yi_max: float | None = None
+    n_windows_y: int | None = None
     k_ev_A2: float | tuple[float, ...] = 10.0
+    k_y_ev_A2: float | tuple[float, ...] | None = None
     temperature_K: float = 300.0
     timestep_fs: float = 0.5
     nsteps: int = 1000
@@ -38,6 +92,14 @@ class UmbrellaConfig:
     def __post_init__(self) -> None:
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
             raise ValueError("atom_i and atom_j must be distinct non-negative indices")
+        has_k = self.atom_k is not None
+        has_l = self.atom_l is not None
+        if has_k != has_l:
+            raise ValueError("atom_k and atom_l must both be set for 2D umbrella")
+        if has_k and has_l:
+            assert self.atom_k is not None and self.atom_l is not None
+            if self.atom_k == self.atom_l or min(self.atom_k, self.atom_l) < 0:
+                raise ValueError("atom_k and atom_l must be distinct non-negative indices")
         if self.temperature_K <= 0:
             raise ValueError(f"temperature_K must be > 0 (got {self.temperature_K})")
         if self.timestep_fs <= 0:
@@ -54,42 +116,89 @@ class UmbrellaConfig:
             raise ValueError(
                 f"seed_mode must be stretch|tile|frames (got {self.seed_mode!r})"
             )
-        targets = self.resolve_targets()
-        if len(targets) < 1:
+        # Force validation via schedule construction
+        sched = self.resolve_schedule()
+        if sched.n_windows < 1:
             raise ValueError("need at least one umbrella window target")
-        ks = self.resolve_force_constants()
-        if len(ks) != len(targets):
-            raise ValueError(
-                f"k_ev_A2 length {len(ks)} must match number of windows {len(targets)}"
-            )
-        if any(k < 0 for k in ks):
+        if any(k < 0 for k in sched.k_x):
+            raise ValueError("force constants must be non-negative")
+        if sched.k_y is not None and any(k < 0 for k in sched.k_y):
             raise ValueError("force constants must be non-negative")
 
-    def resolve_targets(self) -> tuple[float, ...]:
-        """Return window centers ξ₀ from ``targets_A`` or a linear grid."""
-        if self.targets_A:
-            return tuple(float(x) for x in self.targets_A)
-        if (
-            self.xi_min is None
-            or self.xi_max is None
-            or self.n_windows is None
-        ):
-            return ()
-        if self.n_windows < 1:
-            raise ValueError(f"n_windows must be >= 1 (got {self.n_windows})")
-        if self.n_windows == 1:
-            return (float(self.xi_min),)
-        import numpy as np
+    @property
+    def is_2d(self) -> bool:
+        return self.atom_k is not None and self.atom_l is not None
 
-        grid = np.linspace(float(self.xi_min), float(self.xi_max), int(self.n_windows))
-        return tuple(float(x) for x in grid)
+    def resolve_targets(self) -> tuple[float, ...]:
+        """CV1 window centers (length ``K`` after product expansion)."""
+        return self.resolve_schedule().xi0
 
     def resolve_force_constants(self) -> tuple[float, ...]:
-        """Per-window force constants matching :meth:`resolve_targets`."""
-        n = len(self.resolve_targets())
-        if isinstance(self.k_ev_A2, (int, float)):
-            return tuple(float(self.k_ev_A2) for _ in range(n))
-        return tuple(float(k) for k in self.k_ev_A2)
+        """CV1 force constants (length ``K``)."""
+        return self.resolve_schedule().k_x
+
+    def resolve_schedule(self) -> WindowSchedule:
+        """Resolve 1D or 2D window centers and force constants."""
+        x_centers = _linspace_or_list(
+            explicit=self.targets_A,
+            lo=self.xi_min,
+            hi=self.xi_max,
+            n=self.n_windows,
+            label="x",
+        )
+        if not self.is_2d:
+            if not x_centers:
+                return WindowSchedule(
+                    ndim=1,
+                    atom_pairs=((self.atom_i, self.atom_j),),
+                    xi0=(),
+                    yi0=None,
+                    k_x=(),
+                    k_y=None,
+                    grid_shape=(0,),
+                )
+            kx = _broadcast_k(self.k_ev_A2, len(x_centers))
+            return WindowSchedule(
+                ndim=1,
+                atom_pairs=((self.atom_i, self.atom_j),),
+                xi0=x_centers,
+                yi0=None,
+                k_x=kx,
+                k_y=None,
+                grid_shape=(len(x_centers),),
+            )
+
+        y_centers = _linspace_or_list(
+            explicit=self.targets_y_A,
+            lo=self.yi_min,
+            hi=self.yi_max,
+            n=self.n_windows_y,
+            label="y",
+        )
+        if not x_centers or not y_centers:
+            raise ValueError(
+                "2D umbrella requires CV1 centers (targets_A or xi-min/max/n-windows) "
+                "and CV2 centers (targets_y_A or yi-min/max/n-windows-y)"
+            )
+        import numpy as np
+
+        xx, yy = np.meshgrid(np.asarray(x_centers), np.asarray(y_centers), indexing="ij")
+        xi0 = tuple(float(x) for x in xx.ravel())
+        yi0 = tuple(float(y) for y in yy.ravel())
+        n = len(xi0)
+        kx = _broadcast_k(self.k_ev_A2, n)
+        ky_src = self.k_ev_A2 if self.k_y_ev_A2 is None else self.k_y_ev_A2
+        ky = _broadcast_k(ky_src, n)
+        assert self.atom_k is not None and self.atom_l is not None
+        return WindowSchedule(
+            ndim=2,
+            atom_pairs=((self.atom_i, self.atom_j), (self.atom_k, self.atom_l)),
+            xi0=xi0,
+            yi0=yi0,
+            k_x=kx,
+            k_y=ky,
+            grid_shape=(len(x_centers), len(y_centers)),
+        )
 
     def effective_savefreq(self) -> int:
         return int(self.savefreq if self.savefreq is not None else self.printfreq)
@@ -100,14 +209,16 @@ class UmbrellaConfig:
         for key in ("checkpoint", "structure", "output_dir"):
             if key in raw and raw[key] is not None:
                 raw[key] = Path(raw[key])
-        if "targets_A" in raw and raw["targets_A"] is not None:
-            raw["targets_A"] = tuple(float(x) for x in raw["targets_A"])
-        if "k_ev_A2" in raw and raw["k_ev_A2"] is not None:
-            k = raw["k_ev_A2"]
-            if isinstance(k, (list, tuple)):
-                raw["k_ev_A2"] = tuple(float(x) for x in k)
-            else:
-                raw["k_ev_A2"] = float(k)
+        for key in ("targets_A", "targets_y_A"):
+            if key in raw and raw[key] is not None:
+                raw[key] = tuple(float(x) for x in raw[key])
+        for key in ("k_ev_A2", "k_y_ev_A2"):
+            if key in raw and raw[key] is not None:
+                k = raw[key]
+                if isinstance(k, (list, tuple)):
+                    raw[key] = tuple(float(x) for x in k)
+                else:
+                    raw[key] = float(k)
         return cls(**raw)
 
     def to_dict(self) -> dict[str, Any]:
@@ -115,8 +226,11 @@ class UmbrellaConfig:
         for key in ("checkpoint", "structure", "output_dir"):
             out[key] = str(out[key])
         out["targets_A"] = list(out["targets_A"])
+        out["targets_y_A"] = list(out["targets_y_A"])
         if isinstance(self.k_ev_A2, tuple):
             out["k_ev_A2"] = list(self.k_ev_A2)
+        if isinstance(self.k_y_ev_A2, tuple):
+            out["k_y_ev_A2"] = list(self.k_y_ev_A2)
         return out
 
 

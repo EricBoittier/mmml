@@ -12,6 +12,7 @@ from mmml.umbrella.structure import (
     load_structure_frames,
     pack_window_seeds,
     stretch_distance_seed,
+    stretch_two_distances,
 )
 
 
@@ -19,25 +20,52 @@ def test_stretch_distance_seed_sets_target():
     r = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
     out = stretch_distance_seed(r, 0, 1, 3.0)
     assert float(np.linalg.norm(out[1] - out[0])) == pytest.approx(3.0)
-    # third atom unchanged
     np.testing.assert_allclose(out[2], r[2])
-    # pair COM preserved
     np.testing.assert_allclose(0.5 * (out[0] + out[1]), 0.5 * (r[0] + r[1]))
+
+
+def test_stretch_two_distances_shared_hub():
+    # hub=2 (C), Cl=0, N=1
+    r = np.zeros((3, 3))
+    r[0] = [-2.0, 0.0, 0.0]
+    r[1] = [2.0, 0.0, 0.0]
+    r[2] = [0.0, 0.0, 0.0]
+    out = stretch_two_distances(r, (0, 2), 1.5, (1, 2), 2.5)
+    assert float(np.linalg.norm(out[0] - out[2])) == pytest.approx(1.5)
+    assert float(np.linalg.norm(out[1] - out[2])) == pytest.approx(2.5)
+    np.testing.assert_allclose(out[2], r[2])
 
 
 def test_pack_window_seeds_stretch():
     r = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
     packed = pack_window_seeds(
         positions=r,
-        atom_i=0,
-        atom_j=1,
-        targets_A=(1.5, 2.5, 3.5),
+        atom_pairs=((0, 1),),
+        targets_per_cv=((1.5, 2.5, 3.5),),
         seed_mode="stretch",
     )
     assert packed.shape == (6, 3)
     for k, t in enumerate((1.5, 2.5, 3.5)):
         rk = packed.reshape(3, 2, 3)[k]
         assert float(np.linalg.norm(rk[1] - rk[0])) == pytest.approx(t)
+
+
+def test_pack_window_seeds_2d():
+    r = np.zeros((3, 3))
+    r[0, 0] = -2.0
+    r[1, 0] = 2.0
+    packed = pack_window_seeds(
+        positions=r,
+        atom_pairs=((0, 2), (1, 2)),
+        targets_per_cv=((1.5, 2.0), (2.5, 3.0)),
+        seed_mode="stretch",
+    )
+    assert packed.shape == (6, 3)
+    batch = packed.reshape(2, 3, 3)
+    assert float(np.linalg.norm(batch[0, 0] - batch[0, 2])) == pytest.approx(1.5)
+    assert float(np.linalg.norm(batch[0, 1] - batch[0, 2])) == pytest.approx(2.5)
+    assert float(np.linalg.norm(batch[1, 0] - batch[1, 2])) == pytest.approx(2.0)
+    assert float(np.linalg.norm(batch[1, 1] - batch[1, 2])) == pytest.approx(3.0)
 
 
 def test_load_structure_npz(tmp_path: Path):
@@ -62,9 +90,8 @@ def test_load_structure_npz(tmp_path: Path):
 
     packed = pack_window_seeds(
         positions=r_multi[0],
-        atom_i=0,
-        atom_j=1,
-        targets_A=(1.0, 1.5),
+        atom_pairs=((0, 1),),
+        targets_per_cv=((1.0, 1.5),),
         seed_mode="frames",
         frames=r_multi,
     )

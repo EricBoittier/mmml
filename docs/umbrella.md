@@ -52,9 +52,25 @@ mmml umbrella-mbar --run-dir artifacts/umbrella
 ```
 
 `--structure` accepts **XYZ, PDB, or NPZ** (`R`, `Z`). Default `--seed-mode stretch`
-moves the CV atom pair to each ξ₀ before MD (avoids huge bias forces from tiling
-one far-from-target geometry). Use `--seed-mode frames` when the NPZ/PDB already
-has one frame per window.
+moves the CV atom pair(s) to each window target before MD.
+
+### 2D umbrella
+
+Pass a second distance CV with `--atoms2 K,L` and a Y grid
+(`--yi-min/--yi-max/--n-windows-y` or `--targets-y`). Windows are the product
+grid (``nx × ny``), batched in one JAX-MD NVT. MBAR writes
+`pmf_rel_kcal_mol_2d` reshaped to `grid_shape`.
+
+```bash
+mmml umbrella-sample \
+  --checkpoint examples/m/kl.json \
+  --structure examples/m/neb/reag_0_opt.xyz \
+  --atoms 0,2 --atoms2 1,2 \
+  --xi-min 1.5 --xi-max 3.0 --n-windows 4 \
+  --yi-min 1.5 --yi-max 3.0 --n-windows-y 4 \
+  --k 20 --ky 20 --nsteps 5000 \
+  -o artifacts/umbrella2d --overwrite
+```
 
 Artifacts in the run directory:
 

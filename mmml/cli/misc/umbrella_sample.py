@@ -9,6 +9,14 @@ Usage:
       --xi-min 1.5 --xi-max 3.5 --n-windows 11 \\
       --k 20 --temperature 300 --nsteps 5000 -o out/umbrella
 
+    # 2D (Cl–C × N–C product grid)
+    mmml umbrella-sample --checkpoint examples/m/kl.json \\
+      --structure examples/m/neb/reag_0_opt.xyz \\
+      --atoms 0,2 --atoms2 1,2 \\
+      --xi-min 1.5 --xi-max 3.0 --n-windows 4 \\
+      --yi-min 1.5 --yi-max 3.0 --n-windows-y 4 \\
+      --k 20 --ky 20 -o out/umbrella2d --overwrite
+
     # NPZ (R, Z) or PDB also work; --seed-mode frames uses consecutive frames as windows
     mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \\
       --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode frames -o out/umb
@@ -92,26 +100,52 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--atoms",
         type=_parse_pair,
-        help="0-based atom indices for the distance CV (I,J)",
+        help="0-based atom indices for CV1 distance (I,J)",
+    )
+    parser.add_argument(
+        "--atoms2",
+        type=_parse_pair,
+        default=None,
+        help="0-based atom indices for CV2 distance (K,L); enables 2D umbrella",
     )
     parser.add_argument(
         "--targets",
         type=_parse_float_list,
-        help="Comma-separated umbrella centers ξ₀ (Å)",
+        help="Comma-separated CV1 centers ξ₀ (Å)",
     )
-    parser.add_argument("--xi-min", type=float, help="Grid start (Å) if --targets omitted")
-    parser.add_argument("--xi-max", type=float, help="Grid end (Å) if --targets omitted")
+    parser.add_argument(
+        "--targets-y",
+        type=_parse_float_list,
+        default=None,
+        help="Comma-separated CV2 centers η₀ (Å); product grid with --targets",
+    )
+    parser.add_argument("--xi-min", type=float, help="CV1 grid start (Å) if --targets omitted")
+    parser.add_argument("--xi-max", type=float, help="CV1 grid end (Å) if --targets omitted")
     parser.add_argument(
         "--n-windows",
         type=int,
-        help="Number of windows on [xi-min, xi-max]",
+        help="Number of CV1 windows on [xi-min, xi-max]",
+    )
+    parser.add_argument("--yi-min", type=float, help="CV2 grid start (Å)")
+    parser.add_argument("--yi-max", type=float, help="CV2 grid end (Å)")
+    parser.add_argument(
+        "--n-windows-y",
+        type=int,
+        help="Number of CV2 windows on [yi-min, yi-max]",
     )
     parser.add_argument(
         "--k",
         dest="k_ev_A2",
         type=float,
         default=None,
-        help="Harmonic force constant (eV/Å²); shared across windows (default: 10)",
+        help="CV1 harmonic force constant (eV/Å²); shared across windows (default: 10)",
+    )
+    parser.add_argument(
+        "--ky",
+        dest="k_y_ev_A2",
+        type=float,
+        default=None,
+        help="CV2 force constant (eV/Å²); default same as --k",
     )
     parser.add_argument(
         "--temperature",
@@ -200,9 +234,13 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "savefreq": args.savefreq,
         "seed": args.seed,
         "k_ev_A2": args.k_ev_A2,
+        "k_y_ev_A2": args.k_y_ev_A2,
         "xi_min": args.xi_min,
         "xi_max": args.xi_max,
         "n_windows": args.n_windows,
+        "yi_min": args.yi_min,
+        "yi_max": args.yi_max,
+        "n_windows_y": args.n_windows_y,
         "structure_index": args.structure_index,
         "seed_mode": args.seed_mode,
     }
@@ -211,8 +249,12 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
             data[key] = value
     if args.atoms is not None:
         data["atom_i"], data["atom_j"] = args.atoms
+    if args.atoms2 is not None:
+        data["atom_k"], data["atom_l"] = args.atoms2
     if args.targets is not None:
         data["targets_A"] = args.targets
+    if args.targets_y is not None:
+        data["targets_y_A"] = args.targets_y
     if args.no_ema:
         data["use_ema"] = False
     if args.overwrite:
@@ -230,6 +272,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         )
 
     data.setdefault("targets_A", ())
+    data.setdefault("targets_y_A", ())
     data.setdefault("k_ev_A2", 10.0)
     data.setdefault("temperature_K", 300.0)
     data.setdefault("timestep_fs", 0.5)

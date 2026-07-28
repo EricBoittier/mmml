@@ -45,7 +45,7 @@ def packed_bias_energies(
     targets_A: Sequence[float],
     k_ev_A2: Sequence[float],
 ) -> Any:
-    """Per-window bias energies. Shape ``(K,)``."""
+    """Per-window 1D bias energies. Shape ``(K,)``."""
     import jax.numpy as jnp
 
     k = len(targets_A)
@@ -53,6 +53,31 @@ def packed_bias_energies(
     targets = jnp.asarray(targets_A, dtype=dists.dtype)
     ks = jnp.asarray(k_ev_A2, dtype=dists.dtype)
     return 0.5 * ks * jnp.square(dists - targets)
+
+
+def packed_bias_energies_nd(
+    positions_packed: Any,
+    n_atoms: int,
+    atom_pairs: Sequence[tuple[int, int]],
+    targets: Sequence[Sequence[float]],
+    k_ev_A2: Sequence[Sequence[float]],
+) -> Any:
+    """Sum of harmonic biases over CVs. ``targets`` / ``k_ev_A2`` are ``(ndim, K)``-like."""
+    import jax.numpy as jnp
+
+    total = None
+    for dim, (i, j) in enumerate(atom_pairs):
+        term = packed_bias_energies(
+            positions_packed,
+            n_atoms,
+            int(i),
+            int(j),
+            targets[dim],
+            k_ev_A2[dim],
+        )
+        total = term if total is None else total + term
+    assert total is not None
+    return total
 
 
 def build_packed_graph(n_atoms: int, n_windows: int) -> dict[str, Any]:
@@ -101,15 +126,13 @@ def make_packed_energy_fn(
     params: Any,
     atomic_numbers: Any,
     graph: dict[str, Any],
-    atom_i: int,
-    atom_j: int,
-    targets_A: Sequence[float],
-    k_ev_A2: Sequence[float],
+    atom_pairs: Sequence[tuple[int, int]],
+    targets_per_cv: Sequence[Sequence[float]],
+    k_per_cv: Sequence[Sequence[float]],
 ) -> Callable[..., Any]:
-    """Return ``energy_sum_fn(R_packed) = sum(E_ML) + sum(W_k)`` for NVT.
+    """Return ``energy_sum_fn(R_packed) = sum(E_ML) + sum_k W_k`` for NVT.
 
-    ``model_apply`` should accept the same kwargs as PhysNet/SpookyNet
-    ``model.apply`` (positions, atomic_numbers, dst/src idx, batch_*, …).
+    ``targets_per_cv[d]`` and ``k_per_cv[d]`` are length-``K`` sequences for CV ``d``.
     """
     import jax.numpy as jnp
 
@@ -126,10 +149,14 @@ def make_packed_energy_fn(
             f"n_atoms={n_atoms}, n_windows={n_windows}"
         )
 
-    targets = tuple(float(x) for x in targets_A)
-    ks = tuple(float(x) for x in k_ev_A2)
-    if len(targets) != n_windows or len(ks) != n_windows:
-        raise ValueError("targets_A / k_ev_A2 must match graph n_windows")
+    pairs = tuple((int(i), int(j)) for i, j in atom_pairs)
+    targets = tuple(tuple(float(x) for x in row) for row in targets_per_cv)
+    ks = tuple(tuple(float(x) for x in row) for row in k_per_cv)
+    if len(pairs) != len(targets) or len(pairs) != len(ks):
+        raise ValueError("atom_pairs / targets_per_cv / k_per_cv length mismatch")
+    for row in targets + ks:
+        if len(row) != n_windows:
+            raise ValueError("each CV target/k row must match graph n_windows")
 
     dst_idx = graph["dst_idx"]
     src_idx = graph["src_idx"]
@@ -153,9 +180,7 @@ def make_packed_energy_fn(
         )
         e_ml = jnp.sum(jnp.asarray(out["energy"]).reshape(-1))
         e_bias = jnp.sum(
-            packed_bias_energies(
-                position, n_atoms, atom_i, atom_j, targets, ks
-            )
+            packed_bias_energies_nd(position, n_atoms, pairs, targets, ks)
         )
         return e_ml + e_bias
 
@@ -205,9 +230,26 @@ def numpy_bias_matrix(
     targets_A: Sequence[float],
     k_ev_A2: Sequence[float],
 ) -> np.ndarray:
-    """Analytic ``W_l(R)`` for one frame. Shape ``(K,)``."""
+    """Analytic 1D ``W_l(R)`` for one frame. Shape ``(K,)``."""
     r = np.asarray(positions, dtype=np.float64)
     dist = float(np.linalg.norm(r[atom_j] - r[atom_i]))
     targets = np.asarray(targets_A, dtype=np.float64)
     ks = np.asarray(k_ev_A2, dtype=np.float64)
     return 0.5 * ks * (dist - targets) ** 2
+
+
+def numpy_bias_matrix_nd(
+    positions: np.ndarray,
+    atom_pairs: Sequence[tuple[int, int]],
+    targets_per_cv: Sequence[Sequence[float]],
+    k_per_cv: Sequence[Sequence[float]],
+) -> np.ndarray:
+    """Analytic multi-CV ``W_l(R)`` for one frame. Shape ``(K,)``."""
+    total = None
+    for dim, (i, j) in enumerate(atom_pairs):
+        term = numpy_bias_matrix(
+            positions, int(i), int(j), targets_per_cv[dim], k_per_cv[dim]
+        )
+        total = term if total is None else total + term
+    assert total is not None
+    return total
