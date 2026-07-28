@@ -162,6 +162,11 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     kt = k_b * float(cfg.temperature_K)
     dt = float(cfg.timestep_fs)
     savefreq = cfg.effective_savefreq()
+    if dt > 0.25:
+        print(
+            f"WARNING: timestep {dt} fs is large for PhysNet umbrella NVT with H atoms; "
+            "prefer --timestep 0.1 (0.5 fs often NaNs by step ~100 even when seed forces look fine)."
+        )
 
     _, shift = space.free()
     init_fn, apply_fn = simulate.nvt_nose_hoover(force_fn, shift, dt, kt)
