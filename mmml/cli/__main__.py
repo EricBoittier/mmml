@@ -249,6 +249,9 @@ def main():
     elif command == "dimer-scan":
         from .misc import dimer_scan
         return dimer_scan.main(args.args)
+    elif command == "ic-scan":
+        from .misc import ic_scan
+        return ic_scan.main(args.args)
 
     elif command == "neb":
         from .misc import neb

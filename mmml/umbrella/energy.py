@@ -120,6 +120,56 @@ def pack_positions(positions: np.ndarray, n_windows: int) -> np.ndarray:
     return np.tile(r[None, :, :], (n_windows, 1, 1)).reshape(n_windows * r.shape[0], 3)
 
 
+def packed_bias_forces(
+    positions_packed: Any,
+    n_atoms: int,
+    atom_i: int,
+    atom_j: int,
+    targets_A: Sequence[float],
+    k_ev_A2: Sequence[float],
+) -> Any:
+    """ASE-style forces ``F = -∇W`` for 1D harmonic distance bias. Shape ``(K*N, 3)``."""
+    import jax.numpy as jnp
+
+    k = len(targets_A)
+    pos = positions_packed.reshape(k, n_atoms, 3)
+    disp = pos[:, atom_j, :] - pos[:, atom_i, :]
+    dist = jnp.sqrt(jnp.sum(disp * disp, axis=-1) + 1e-12)
+    u = disp / dist[:, None]
+    targets = jnp.asarray(targets_A, dtype=dist.dtype)
+    ks = jnp.asarray(k_ev_A2, dtype=dist.dtype)
+    # W = 0.5 k (r-r0)^2 → ∇_i W = -k(r-r0)u, ∇_j W = +k(r-r0)u
+    # F = -∇W → F_i = k(r-r0)u, F_j = -k(r-r0)u
+    scale = (ks * (dist - targets))[:, None]
+    forces = jnp.zeros_like(pos)
+    forces = forces.at[:, atom_i, :].add(scale * u)
+    forces = forces.at[:, atom_j, :].add(-scale * u)
+    return forces.reshape(k * n_atoms, 3)
+
+
+def packed_bias_forces_nd(
+    positions_packed: Any,
+    n_atoms: int,
+    atom_pairs: Sequence[tuple[int, int]],
+    targets: Sequence[Sequence[float]],
+    k_ev_A2: Sequence[Sequence[float]],
+) -> Any:
+    """Sum of ASE-style bias forces over CVs. Shape ``(K*N, 3)``."""
+    total = None
+    for dim, (i, j) in enumerate(atom_pairs):
+        term = packed_bias_forces(
+            positions_packed,
+            n_atoms,
+            int(i),
+            int(j),
+            targets[dim],
+            k_ev_A2[dim],
+        )
+        total = term if total is None else total + term
+    assert total is not None
+    return total
+
+
 def make_packed_energy_fn(
     *,
     model_apply: Callable[..., dict[str, Any]],
@@ -130,9 +180,10 @@ def make_packed_energy_fn(
     targets_per_cv: Sequence[Sequence[float]],
     k_per_cv: Sequence[Sequence[float]],
 ) -> Callable[..., Any]:
-    """Return ``energy_sum_fn(R_packed) = sum(E_ML) + sum_k W_k`` for NVT.
+    """Return ``energy_sum_fn(R_packed) = sum(E_ML) + sum_k W_k`` (forces off).
 
-    ``targets_per_cv[d]`` and ``k_per_cv[d]`` are length-``K`` sequences for CV ``d``.
+    Uses ``compute_forces=False`` so logging/MBAR-style energy evals do not nest
+    autodiff through PhysNet's internal ``value_and_grad``.
     """
     import jax.numpy as jnp
 
@@ -165,9 +216,8 @@ def make_packed_energy_fn(
     atom_mask = graph["atom_mask"]
     batch_size = graph["batch_size"]
 
-    def energy_sum_fn(position, **kwargs):
-        del kwargs
-        out = model_apply(
+    def _apply(position, *, compute_forces: bool):
+        return model_apply(
             params,
             atomic_numbers=z_batched,
             positions=position,
@@ -177,14 +227,51 @@ def make_packed_energy_fn(
             batch_size=batch_size,
             batch_mask=batch_mask,
             atom_mask=atom_mask,
+            compute_forces=compute_forces,
         )
+
+    def energy_sum_fn(position, **kwargs):
+        del kwargs
+        out = _apply(position, compute_forces=False)
         e_ml = jnp.sum(jnp.asarray(out["energy"]).reshape(-1))
         e_bias = jnp.sum(
             packed_bias_energies_nd(position, n_atoms, pairs, targets, ks)
         )
         return e_ml + e_bias
 
+    def force_fn(position, **kwargs):
+        """ASE/jax-md forces ``F = -∇E`` for ML + umbrella bias."""
+        del kwargs
+        out = _apply(position, compute_forces=True)
+        f_ml = jnp.asarray(out["forces"]).reshape(-1, 3)
+        f_bias = packed_bias_forces_nd(position, n_atoms, pairs, targets, ks)
+        return f_ml + f_bias
+
+    energy_sum_fn.force_fn = force_fn  # type: ignore[attr-defined]
     return energy_sum_fn
+
+
+def make_packed_force_fn(
+    *,
+    model_apply: Callable[..., dict[str, Any]],
+    params: Any,
+    atomic_numbers: Any,
+    graph: dict[str, Any],
+    atom_pairs: Sequence[tuple[int, int]],
+    targets_per_cv: Sequence[Sequence[float]],
+    k_per_cv: Sequence[Sequence[float]],
+) -> Callable[..., Any]:
+    """Return packed force_fn for jax-md (avoids nested AD through PhysNet)."""
+    energy_fn = make_packed_energy_fn(
+        model_apply=model_apply,
+        params=params,
+        atomic_numbers=atomic_numbers,
+        graph=graph,
+        atom_pairs=atom_pairs,
+        targets_per_cv=targets_per_cv,
+        k_per_cv=k_per_cv,
+    )
+    return energy_fn.force_fn  # type: ignore[attr-defined]
 
 
 def make_single_ml_energy_fn(

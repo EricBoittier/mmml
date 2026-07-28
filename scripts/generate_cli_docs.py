@@ -57,6 +57,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "verify-esp-alignment",
             "normal-mode-sample",
             "dimer-scan",
+            "ic-scan",
             "mode-check",
             "compare-npz",
             "cross-check",
@@ -148,6 +149,10 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "env": [("CLI overview", "../index.md")],
     "dimer-scan": [
         ("1D dimer scan design", "../../dimer-scan-design.md"),
+        ("Scientific code policy", "../../scientific-code.md"),
+    ],
+    "ic-scan": [
+        ("Internal-coordinate scan design", "../../ic-scan-design.md"),
         ("Scientific code policy", "../../scientific-code.md"),
     ],
     "dmc": [

@@ -114,16 +114,23 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         targets_per_cv=targets_per_cv,
         k_per_cv=k_per_cv,
     )
+    # Use explicit PhysNet forces + analytic bias forces. Autodiff of
+    # energy_sum_fn nests AD through PhysNet's internal value_and_grad and
+    # can yield NaN forces even when the energy is finite.
+    force_fn = energy_sum_fn.force_fn  # type: ignore[attr-defined]
     energy_sum_fn = jax.jit(energy_sum_fn)
+    force_fn = jax.jit(force_fn)
 
     masses = np.array([atomic_masses[int(zi)] for zi in z], dtype=np.float64)
     masses_batched = jnp.tile(jnp.asarray(masses), k_windows)
     r_packed = jnp.asarray(r_packed_np, dtype=jnp.float64)
 
     e0 = float(energy_sum_fn(r_packed))
-    if not np.isfinite(e0):
+    f0 = force_fn(r_packed)
+    f0_max = float(jnp.max(jnp.abs(f0)))
+    if not np.isfinite(e0) or not bool(jnp.all(jnp.isfinite(f0))):
         raise RuntimeError(
-            f"initial umbrella energy is non-finite ({e0}). "
+            f"initial umbrella E/F non-finite (E={e0}, max|F|={f0_max}). "
             "Check checkpoint, geometry, and --atoms / --atoms2 CV indices."
         )
 
@@ -133,7 +140,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     savefreq = cfg.effective_savefreq()
 
     _, shift = space.free()
-    init_fn, apply_fn = simulate.nvt_nose_hoover(energy_sum_fn, shift, dt, kt)
+    init_fn, apply_fn = simulate.nvt_nose_hoover(force_fn, shift, dt, kt)
     apply_fn = jax.jit(apply_fn)
 
     key = jax.random.PRNGKey(int(cfg.seed))
@@ -161,7 +168,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f"  structure={structure_path.name}  seed_mode={seed_mode}  "
         f"pairs={sched.atom_pairs}  r0={r0_cvs}  grid={sched.grid_shape}"
     )
-    print(f"  Initial E_total={e0:.4f} eV")
+    print(f"  Initial E_total={e0:.4f} eV  max|F|={f0_max:.4f} eV/Å")
     for step in range(1, int(cfg.nsteps) + 1):
         state = apply_fn(state)
         if step % savefreq == 0 or step == cfg.nsteps:

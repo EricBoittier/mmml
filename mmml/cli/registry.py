@@ -87,6 +87,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Reproducible rigid 1D dimer energy/force scan",
     ),
     CommandSpec(
+        "ic-scan",
+        "mmml.cli.misc.ic_scan",
+        "Bond/angle/dihedral scans (1D or N-D) for QM/ML",
+    ),
+    CommandSpec(
         "neb",
         "mmml.cli.misc.neb",
         "Nudged elastic band (NEB) path sampling with PhysNet",

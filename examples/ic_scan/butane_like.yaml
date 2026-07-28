@@ -1,0 +1,43 @@
+# Example: butane-like backbone dihedral + bond 1D and 2D scans
+#
+# Run prepare-only (geometries for external QM/ML):
+#   mmml ic-scan --config examples/ic_scan/butane_like.yaml --prepare-only --output artifacts/ic_butane_prep
+#
+# Or evaluate in-process with xTB:
+#   mmml ic-scan --config examples/ic_scan/butane_like.yaml --output artifacts/ic_butane_xtb --overwrite
+
+structure: butane_like.xyz
+calculator: xtb
+evaluate: energy
+scan_mode: product   # ignored when `scans` is present
+failure_policy: fail
+geometry_mode: rigid
+
+# Optional fixed values for inactive DoFs during individual / subset scans.
+# Defaults: measured from `structure` at load time.
+# reference:
+#   r12: 1.54
+#   phi: 180.0
+
+dofs:
+  - name: r12
+    kind: bond
+    atoms: [0, 1]
+    start: 1.40
+    stop: 1.70
+    n_points: 4
+  - name: phi
+    kind: dihedral
+    atoms: [0, 1, 2, 3]
+    start: -180
+    stop: 180
+    n_points: 6
+
+# Explicit scan jobs: 1D each + full 2D product.
+scans:
+  - name: bond_1d
+    dofs: [r12]
+  - name: dihedral_1d
+    dofs: [phi]
+  - name: bond_dihedral_2d
+    dofs: [r12, phi]

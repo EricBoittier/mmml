@@ -67,7 +67,6 @@ def load_structure_frames(
 
     from ase.io import read
 
-    # index=':' loads all; then slice
     atoms_list = read(str(path), index=":")
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
@@ -94,10 +93,12 @@ def stretch_distance_seed(
     atom_i: int,
     atom_j: int,
     target_A: float,
+    move_with: Sequence[int] | None = None,
 ) -> np.ndarray:
-    """Return a copy of ``positions`` with atoms ``i,j`` set to distance ``target_A``.
+    """Set distance ``i–j`` to ``target_A`` by translating ``j`` (and friends).
 
-    The pair COM is held fixed; other atoms are unchanged.
+    Atom ``i`` is held fixed. Atom ``j`` and every index in ``move_with`` are
+    shifted by the same vector so a monomer/group can move rigidly.
     """
     r = np.asarray(positions, dtype=np.float64).copy()
     if target_A <= 0:
@@ -109,10 +110,12 @@ def stretch_distance_seed(
             f"cannot stretch atoms ({atom_i}, {atom_j}): current distance ~0"
         )
     u = disp / dist
-    mid = 0.5 * (r[atom_i] + r[atom_j])
-    half = 0.5 * float(target_A)
-    r[atom_i] = mid - half * u
-    r[atom_j] = mid + half * u
+    shift = (float(target_A) - dist) * u
+    group = {int(atom_j)}
+    if move_with:
+        group.update(int(a) for a in move_with)
+    for a in sorted(group):
+        r[a] = r[a] + shift
     return r
 
 
@@ -122,8 +125,10 @@ def stretch_two_distances(
     target_x: float,
     pair_y: tuple[int, int],
     target_y: float,
+    move_with_x: Sequence[int] | None = None,
+    move_with_y: Sequence[int] | None = None,
 ) -> np.ndarray:
-    """Stretch two distance CVs. Shared-atom pairs fix the hub atom."""
+    """Stretch two distance CVs (shared hub fixes the common atom)."""
     a, b = int(pair_x[0]), int(pair_x[1])
     c, d = int(pair_y[0]), int(pair_y[1])
     shared = set(pair_x) & set(pair_y)
@@ -132,19 +137,11 @@ def stretch_two_distances(
         other_x = b if a == hub else a
         other_y = d if c == hub else c
         r = np.asarray(positions, dtype=np.float64).copy()
-        for other, target in ((other_x, target_x), (other_y, target_y)):
-            if float(target) <= 0:
-                raise ValueError(f"target must be > 0 (got {target})")
-            disp = r[other] - r[hub]
-            dist = float(np.linalg.norm(disp))
-            if dist < 1e-8:
-                raise ValueError(
-                    f"cannot stretch atoms ({hub}, {other}): current distance ~0"
-                )
-            r[other] = r[hub] + (float(target) / dist) * disp
+        r = stretch_distance_seed(r, hub, other_x, float(target_x), move_with=move_with_x)
+        r = stretch_distance_seed(r, hub, other_y, float(target_y), move_with=move_with_y)
         return r
-    r = stretch_distance_seed(positions, a, b, target_x)
-    return stretch_distance_seed(r, c, d, target_y)
+    r = stretch_distance_seed(positions, a, b, target_x, move_with=move_with_x)
+    return stretch_distance_seed(r, c, d, target_y, move_with=move_with_y)
 
 
 def pack_window_seeds(
@@ -154,10 +151,11 @@ def pack_window_seeds(
     targets_per_cv: Sequence[Sequence[float]],
     seed_mode: SeedMode = "stretch",
     frames: np.ndarray | None = None,
+    move_groups: Sequence[Sequence[int]] | None = None,
 ) -> np.ndarray:
     """Build packed ``(K*N, 3)`` initial coordinates for ``K`` umbrella windows.
 
-    - ``stretch``: one reference geometry; stretch CV pair(s) to each window target
+    - ``stretch``: fix ``atom_i``, translate ``atom_j`` (+ ``move_groups``) to ξ₀
     - ``tile``: duplicate the reference geometry unchanged (legacy; can explode)
     - ``frames``: use ``frames`` shape ``(K, N, 3)`` as window seeds
     """
@@ -172,6 +170,12 @@ def pack_window_seeds(
         raise ValueError("all CV target rows must have the same length K")
     if len(pairs) != len(targets):
         raise ValueError("atom_pairs length must match targets_per_cv length")
+    if move_groups is None:
+        groups: list[tuple[int, ...]] = [() for _ in pairs]
+    else:
+        if len(move_groups) != len(pairs):
+            raise ValueError("move_groups length must match atom_pairs length")
+        groups = [tuple(int(a) for a in g) for g in move_groups]
 
     if seed_mode == "tile":
         return pack_positions(positions, k)
@@ -195,11 +199,19 @@ def pack_window_seeds(
     if len(pairs) == 1:
         i, j = pairs[0]
         for wid in range(k):
-            out[wid] = stretch_distance_seed(r0, i, j, targets[0][wid])
+            out[wid] = stretch_distance_seed(
+                r0, i, j, targets[0][wid], move_with=groups[0]
+            )
     elif len(pairs) == 2:
         for wid in range(k):
             out[wid] = stretch_two_distances(
-                r0, pairs[0], targets[0][wid], pairs[1], targets[1][wid]
+                r0,
+                pairs[0],
+                targets[0][wid],
+                pairs[1],
+                targets[1][wid],
+                move_with_x=groups[0],
+                move_with_y=groups[1],
             )
     else:
         raise ValueError(f"only 1D/2D distance umbrellas supported (got {len(pairs)} CVs)")

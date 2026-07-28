@@ -46,6 +46,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("npz2traj", "NPZ → ASE trajectory (E/F/dipole/charges)"),
             CommandInfo("validate", "Validate NPZ against schema"),
             CommandInfo("dimer-scan", "Rigid 1D dimer energy/force scan"),
+            CommandInfo("ic-scan", "Bond/angle/dihedral scans (1D or N-D) for QM/ML"),
             CommandInfo(
                 "mode-check",
                 "Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD)",

@@ -95,6 +95,19 @@ def test_make_packed_energy_fn_bias_only_with_zero_ml():
     assert e1 == pytest.approx(1.0)  # 0.5*2*(1)^2
 
 
+def test_packed_bias_forces_oppose_stretch():
+    import jax.numpy as jnp
+
+    from mmml.umbrella.energy import packed_bias_forces
+
+    # r=2, target=1 → want to pull atoms together: F0 along +x, F1 along -x
+    pos = jnp.asarray([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
+    f = np.asarray(packed_bias_forces(pos, 2, 0, 1, (1.0,), (2.0,)))
+    # scale = k*(r-r0)=2*1=2; F_i = +2 * u, F_j = -2 * u with u=+x
+    np.testing.assert_allclose(f[0], [2.0, 0.0, 0.0])
+    np.testing.assert_allclose(f[1], [-2.0, 0.0, 0.0])
+
+
 def test_numpy_bias_matrix():
     r = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
     w = numpy_bias_matrix(r, 0, 1, targets_A=(1.0, 2.0, 3.0), k_ev_A2=(2.0, 2.0, 2.0))
