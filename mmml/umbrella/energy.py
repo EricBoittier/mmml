@@ -63,8 +63,6 @@ def packed_bias_energies_nd(
     k_ev_A2: Sequence[Sequence[float]],
 ) -> Any:
     """Sum of harmonic biases over CVs. ``targets`` / ``k_ev_A2`` are ``(ndim, K)``-like."""
-    import jax.numpy as jnp
-
     total = None
     for dim, (i, j) in enumerate(atom_pairs):
         term = packed_bias_energies(
