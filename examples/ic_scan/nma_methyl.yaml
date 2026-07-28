@@ -3,10 +3,8 @@
 # 0-based ASE indices (match PSF order):
 #   0 CL, 1-3 HL1-3, 4 C, 5 O, 6 N, 7 H, 8 CR, 9-11 HR1-3
 #
-# ASE set_dihedral rotates about a2–a3 with a4 (and mask) on the a3 side.
-# For a methyl, put the methyl carbon as a3 and one methyl H as a4:
-#   acetyl: N–C–CL–HL1
-#   N-methyl: C–N–CR–HR1
+# Omit mask → covalent-topology fragment on the a3 side of a2–a3.
+# See docs/ic-scan-design.md for mask rules (a4 must be included).
 #
 #   mmml ic-scan --config examples/ic_scan/nma_methyl.yaml \
 #     --output artifacts/nma_methyl_xtb --overwrite
@@ -21,14 +19,12 @@ dofs:
   - name: acetyl_methyl
     kind: dihedral
     atoms: [6, 4, 0, 1]      # N-C-CL-HL1
-    mask: [1, 2, 3]          # HL1 HL2 HL3
     start: -180
     stop: 180
     n_points: 37
   - name: n_methyl
     kind: dihedral
     atoms: [4, 6, 8, 9]      # C-N-CR-HR1
-    mask: [9, 10, 11]        # HR1 HR2 HR3
     start: -180
     stop: 180
     n_points: 37

@@ -1,0 +1,39 @@
+# NMA amide torsion (C–C–N–C = CL–C–N–CR) + N-methyl rotor — 1D and 2D.
+#
+# Atom order (0-based, make-res PSF):
+#   0 CL, 1-3 HL*, 4 C, 5 O, 6 N, 7 H, 8 CR, 9-11 HR*
+#
+# ASE set_dihedral(a1,a2,a3,a4) rotates about a2–a3; a4 must lie on the a3 side.
+# Omit `mask` to use the covalent-topology default (recommended).
+# If you set `mask`, it MUST include a4 (CR for omega). Masking only HR* fails.
+#
+#   mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
+#     --prepare-only --output artifacts/nma_omega_2d --overwrite
+
+structure: nma.xyz
+calculator: xtb
+evaluate: energy
+geometry_mode: rigid
+failure_policy: fail
+
+dofs:
+  - name: omega
+    kind: dihedral
+    atoms: [0, 4, 6, 8]      # CL-C-N-CR  (C–C–N–C)
+    start: -180
+    stop: 180
+    n_points: 13
+  - name: n_methyl
+    kind: dihedral
+    atoms: [4, 6, 8, 9]      # C-N-CR-HR1
+    start: -180
+    stop: 180
+    n_points: 13
+
+scans:
+  - name: omega_1d
+    dofs: [omega]
+  - name: n_methyl_1d
+    dofs: [n_methyl]
+  - name: omega_methyl_2d
+    dofs: [omega, n_methyl]

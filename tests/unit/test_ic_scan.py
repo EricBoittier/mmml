@@ -143,6 +143,81 @@ def test_prepare_geometries_sets_requested_dihedral(structure_xyz: Path):
         assert abs(delta) < 1.0
 
 
+def test_dihedral_mask_must_include_a4(structure_xyz: Path):
+    config = IcScanConfig(
+        structure=structure_xyz,
+        dofs=(
+            DegreeOfFreedom(
+                name="phi",
+                kind="dihedral",
+                atoms=(0, 1, 2, 3),
+                values=(0.0,),
+                mask=(0, 1, 2),  # missing a4=3
+            ),
+        ),
+        evaluate="none",
+    )
+    with pytest.raises(ValueError, match="must include a4"):
+        prepare_geometries(config)
+
+
+def test_nma_omega_and_2d_methyl_product():
+    from mmml.ic_scan.topology import angles_match
+
+    nma = Path(__file__).resolve().parents[1].parent / "examples" / "ic_scan" / "nma.xyz"
+    if not nma.is_file():
+        pytest.skip("examples/ic_scan/nma.xyz not present")
+    config = IcScanConfig(
+        structure=nma,
+        evaluate="none",
+        dofs=(
+            DegreeOfFreedom(
+                "omega",
+                "dihedral",
+                (0, 4, 6, 8),
+                values=(-90.0, 0.0, 90.0),
+            ),
+            DegreeOfFreedom(
+                "n_methyl",
+                "dihedral",
+                (4, 6, 8, 9),
+                values=(-180.0, 0.0, 90.0),
+            ),
+        ),
+        scans=(ScanSpec("omega_methyl_2d", ("omega", "n_methyl")),),
+    )
+    _, prepared = prepare_geometries(config)
+    assert len(prepared) == 9
+    for point, atoms in prepared:
+        for name, dof in config.dof_map().items():
+            assert angles_match(
+                float(atoms.get_dihedral(*dof.atoms)),
+                point.coordinates[name],
+                atol_deg=1.0,
+            )
+
+
+def test_nma_bad_omega_mask_hr_only_raises():
+    nma = Path(__file__).resolve().parents[1].parent / "examples" / "ic_scan" / "nma.xyz"
+    if not nma.is_file():
+        pytest.skip("examples/ic_scan/nma.xyz not present")
+    config = IcScanConfig(
+        structure=nma,
+        evaluate="none",
+        dofs=(
+            DegreeOfFreedom(
+                "omega",
+                "dihedral",
+                (0, 4, 6, 8),
+                values=(0.0, 90.0),
+                mask=(9, 10, 11),  # HR* only — excludes a4=CR
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="must include a4"):
+        prepare_geometries(config)
+
+
 def test_run_ic_scan_with_emt_and_roundtrip(structure_xyz: Path, tmp_path: Path):
     config = IcScanConfig(
         structure=structure_xyz,

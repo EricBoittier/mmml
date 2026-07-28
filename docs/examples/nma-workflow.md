@@ -68,24 +68,32 @@ vmd xyz/nma.xyz
 
 ---
 
-## 2. Methyl rotation scan (`ic-scan`)
+## 2. Internal-coordinate scans (`ic-scan`)
 
-NMA has two methyls. ASE `set_dihedral` rotates about **a2–a3** with **a4** (and
-`mask`) on the **a3** side — so the methyl carbon must be `a3` and one methyl H
-`a4`:
+Full mask / atom-order rules: [ic-scan design](../ic-scan-design.md).
 
-| Rotor | Dihedral (names) | Atoms (0-based) | Mask (methyl H) |
-|-------|------------------|-----------------|-----------------|
-| Acetyl | `N–C–CL–HL1` | `[6, 4, 0, 1]` | `[1, 2, 3]` |
-| N-methyl | `C–N–CR–HR1` | `[4, 6, 8, 9]` | `[9, 10, 11]` |
+ASE rotates about **a2–a3**; **a4 must be on the a3 side** and in `mask` (or
+omit `mask` for the covalent-topology default).
 
-Bundled example: [`examples/ic_scan/nma_methyl.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/ic_scan/nma_methyl.yaml).
+| Rotor | Dihedral | `atoms` (0-based) |
+|-------|----------|-------------------|
+| Amide C–C–N–C | `CL–C–N–CR` | `[0, 4, 6, 8]` |
+| Acetyl methyl | `N–C–CL–HL1` | `[6, 4, 0, 1]` |
+| N-methyl | `C–N–CR–HR1` | `[4, 6, 8, 9]` |
+
+**Broken pattern for ω:** `atoms: [0,4,6,8]` with `mask: [9,10,11]` (HR* only —
+a4=`CR` never moves). Omit `mask` or include CR (and the N-methyl fragment).
+
+Bundled examples:
+
+- [`examples/ic_scan/nma_methyl.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/ic_scan/nma_methyl.yaml) — methyl 1D
+- [`examples/ic_scan/nma_omega_methyl_2d.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/ic_scan/nma_omega_methyl_2d.yaml) — ω + N-methyl 1D/2D
 
 ### Prepare geometries only (for external QM)
 
 ```bash
-mmml ic-scan --config examples/ic_scan/nma_methyl.yaml \
-  --prepare-only --output artifacts/nma_methyl_geoms --overwrite
+mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
+  --prepare-only --output artifacts/nma_omega_2d --overwrite
 ```
 
 Writes `trajectory.extxyz` / `.traj`, `data.csv`, `manifest.json` with
@@ -101,27 +109,15 @@ mmml ic-scan --config examples/ic_scan/nma_methyl.yaml \
 From a local `~/test` tree after `make-res`:
 
 ```bash
-# config: ic_scan/nma_methyl.yaml with structure: ../xyz/nma.xyz
 mmml ic-scan --config ic_scan/nma_methyl.yaml \
   --output ic_scan/methyl_xtb --overwrite
 ```
 
-Expect ~37 points per methyl (74 total), 1D energy PNGs, and barriers on the
-order of ~0.5 kcal/mol (acetyl) and ~1 kcal/mol (N-methyl) at GFN2-xTB — a
-smoke check, not a production reference.
+Expect ~0.5 kcal/mol (acetyl) and ~1 kcal/mol (N-methyl) barriers at GFN2-xTB —
+a smoke check, not a production reference.
 
 Swap `calculator: physnet` + `checkpoint:` (or `pyscf`) for ML/QM single-points
 on the same rigid grid.
-
-**2D product** of both rotors: add a scan job
-
-```yaml
-scans:
-  - name: both_2d
-    dofs: [acetyl_methyl, n_methyl]
-```
-
-(use coarser `n_points` — product cost is \(N_1 \times N_2\)).
 
 ---
 
@@ -308,9 +304,10 @@ Long-range solvers: [long-range solver tutorial](../long-range-solver-tutorial.m
 
 ---
 
-## Atom-order pitfall
+## Atom-order / mask pitfalls
 
-Do **not** define a methyl DoF as `HL1–CL–C–N` with `mask=[HL*]`. ASE then
-treats the carbonyl side as `a3`/`a4` and the methyl hydrogens do not land on
-the requested angle. Always use **methyl carbon = a3**, **methyl H = a4**, and
-mask all three methyl hydrogens (as in the table above).
+- Amide **C–C–N–C** is `CL–C–N–CR = [0, 4, 6, 8]`. Omit `mask`, or include **CR
+  (a4)** in it. `mask: [9,10,11]` alone does **not** rotate ω.
+- Methyl rotors need methyl carbon as **a3** and a methyl H as **a4**
+  (`N–C–CL–HL1`, `C–N–CR–HR1`), not `HL–CL–C–N`.
+- Details and 2D notes: [ic-scan design](../ic-scan-design.md).

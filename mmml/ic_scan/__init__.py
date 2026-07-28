@@ -20,6 +20,7 @@ from .geometry import (
 )
 from .grid import ScanPoint, expand_scan_points
 from .result import Provenance, ScanRecord, ScanResult
+from .topology import angles_match, circular_delta_deg, covalent_bond_graph
 
 __all__ = [
     "CONFIG_SCHEMA_VERSION",
@@ -31,8 +32,11 @@ __all__ = [
     "ScanRecord",
     "ScanResult",
     "ScanSpec",
+    "angles_match",
     "apply_coordinates",
     "build_grid",
+    "circular_delta_deg",
+    "covalent_bond_graph",
     "expand_scan_points",
     "load_structure",
     "measure_all",
