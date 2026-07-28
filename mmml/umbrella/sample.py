@@ -33,6 +33,25 @@ class UmbrellaResult:
     paths: dict[str, Path]
 
 
+
+def _per_window_temperatures_K(
+    momenta,
+    masses,
+    *,
+    n_windows: int,
+    n_atoms: int,
+    k_b: float,
+) -> "np.ndarray":
+    """Kinetic temperature of each packed window (K)."""
+    import numpy as np
+
+    p = np.asarray(momenta, dtype=np.float64).reshape(n_windows, n_atoms, 3)
+    m = np.asarray(masses, dtype=np.float64).reshape(n_windows, n_atoms)
+    ke = 0.5 * np.sum((p * p) / m[..., None], axis=(1, 2))
+    dof = 3 * n_atoms
+    return (2.0 * ke) / (dof * k_b)
+
+
 def _schedule_targets_ks(sched):
     targets = [list(sched.xi0)]
     ks = [list(sched.k_x)]
@@ -169,11 +188,28 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         )
 
     _, shift = space.free()
-    init_fn, apply_fn = simulate.nvt_nose_hoover(force_fn, shift, dt, kt)
+    # Packed multi-window MD must not use a shared Nose-Hoover chain or global
+    # COM velocity removal: one hot replica then drags every other window.
+    if cfg.thermostat == "langevin":
+        init_fn, apply_fn = simulate.nvt_langevin(
+            force_fn,
+            shift,
+            dt,
+            kt,
+            gamma=float(cfg.langevin_gamma),
+            center_velocity=False,
+        )
+    else:
+        init_fn, apply_fn = simulate.nvt_nose_hoover(force_fn, shift, dt, kt)
     apply_fn = jax.jit(apply_fn)
 
     key = jax.random.PRNGKey(int(cfg.seed))
     state = init_fn(key, r_packed, mass=masses_batched)
+    t_abort = (
+        float(cfg.max_window_temp_K)
+        if cfg.max_window_temp_K is not None
+        else 5.0 * float(cfg.temperature_K)
+    )
 
     def _cv_frame(pos):
         cols = [
@@ -191,7 +227,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
 
     print(
         f"=== Umbrella NVT ({k_windows} windows, {sched.ndim}D, "
-        f"T={cfg.temperature_K} K, dt={dt} fs) ==="
+        f"T={cfg.temperature_K} K, dt={dt} fs, thermostat={cfg.thermostat}) ==="
     )
     print(
         f"  structure={structure_path.name}  seed_mode={seed_mode}  "
@@ -218,13 +254,56 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             t_curr = float(
                 quantity.temperature(momentum=state.momentum, mass=state.mass) / k_b
             )
-            if not np.isfinite(e_tot) or not np.isfinite(t_curr):
+            t_win = _per_window_temperatures_K(
+                state.momentum,
+                state.mass,
+                n_windows=k_windows,
+                n_atoms=n_atoms,
+                k_b=k_b,
+            )
+            f_now = np.asarray(force_fn(state.position)).reshape(k_windows, n_atoms, 3)
+            fmax_now = np.max(np.abs(f_now), axis=(1, 2))
+            if not np.isfinite(e_tot) or not np.isfinite(t_curr) or not np.all(
+                np.isfinite(t_win)
+            ):
+                hot_idx = int(np.nanargmax(t_win)) if np.any(np.isfinite(t_win)) else -1
                 raise RuntimeError(
                     f"non-finite thermodynamics at step {step}: "
-                    f"E={e_tot} T={t_curr}. Try smaller --timestep (default 0.1 fs), "
-                    "softer --k, --move-with for rigid groups, or --seed-mode frames."
+                    f"E={e_tot} T={t_curr} hottest_window={hot_idx}. "
+                    "Try --thermostat langevin (default), smaller --timestep, "
+                    "softer --k, or drop harsh 2D corners."
                 )
-            print(f"  step {step:6d}  E_total={e_tot:.4f} eV  T={t_curr:.1f} K")
+            hot_t = [
+                (int(i), float(t_win[i]), float(fmax_now[i]))
+                for i in range(k_windows)
+                if float(t_win[i]) > t_abort
+            ]
+            if hot_t:
+                hot_t.sort(key=lambda x: -x[1])
+                detail = ", ".join(
+                    f"k={i} T={t:.0f}K max|F|={fm:.1f}" for i, t, fm in hot_t[:6]
+                )
+                xi = float(targets_per_cv[0][hot_t[0][0]])
+                yi = (
+                    float(targets_per_cv[1][hot_t[0][0]])
+                    if len(targets_per_cv) > 1
+                    else None
+                )
+                cv = f"ξ₀={xi:.3f}" + (f" η₀={yi:.3f}" if yi is not None else "")
+                raise RuntimeError(
+                    f"window temperature spike at step {step}: {detail} "
+                    f"(limit {t_abort:.0f} K; hottest {cv}). "
+                    "Packed Nose-Hoover couples replicas — prefer Langevin; "
+                    "soften --k/--ky or remove that grid corner."
+                )
+            print(
+                f"  step {step:6d}  E_total={e_tot:.4f} eV  "
+                f"T={t_curr:.1f} K  "
+                f"T_win[min/med/max]="
+                f"{float(np.min(t_win)):.0f}/"
+                f"{float(np.median(t_win)):.0f}/"
+                f"{float(np.max(t_win)):.0f}"
+            )
 
     positions = np.stack(frames_traj, axis=1)
     cv_traj = np.stack(cv_frames, axis=1)  # (K, N_frames, ndim)

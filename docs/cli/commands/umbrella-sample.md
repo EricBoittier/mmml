@@ -26,6 +26,9 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--move-with2 MOVE_WITH2]
                             [--invert-with INVERT_WITH]
                             [--max-seed-force MAX_SEED_FORCE]
+                            [--thermostat {langevin,nose-hoover}]
+                            [--langevin-gamma LANGEVIN_GAMMA]
+                            [--max-window-temp MAX_WINDOW_TEMP_K]
                             [--temperature TEMPERATURE_K]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
@@ -45,6 +48,10 @@ Input & configuration:
                         Frame index for multi-frame XYZ/PDB/NPZ (default: 0)
 
 Scientific model:
+  --thermostat {langevin,nose-hoover}
+                        Packed-batch thermostat (default: langevin). Nose-Hoover
+                        shares one chain across windows and can cascade failures
+                        when one replica heats.
   --temperature TEMPERATURE_K
                         NVT temperature in K (default: 300)
 
@@ -96,6 +103,11 @@ Other options:
   --invert-with INVERT_WITH
                         Atoms Walden-blended when seeding a shared-hub 2D
                         stretch (e.g. CH3 hydrogens: --invert-with 6,7,8)
+  --langevin-gamma LANGEVIN_GAMMA
+                        Langevin friction γ (1/fs in jax-md units; default: 0.1)
+  --max-window-temp MAX_WINDOW_TEMP_K
+                        Abort if any window kinetic T exceeds this (K; default:
+                        5× --temperature)
   --timestep TIMESTEP_FS
                         Timestep in fs (default: 0.1)
   --printfreq PRINTFREQ

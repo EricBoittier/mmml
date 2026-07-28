@@ -92,6 +92,9 @@ class UmbrellaConfig:
     move_with2: tuple[int, ...] = ()
     invert_with: tuple[int, ...] = ()
     max_seed_force: float = 15.0
+    thermostat: Literal["langevin", "nose-hoover"] = "langevin"
+    langevin_gamma: float = 0.1
+    max_window_temp_K: float | None = None
 
     def __post_init__(self) -> None:
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
@@ -122,6 +125,16 @@ class UmbrellaConfig:
             )
         if self.max_seed_force <= 0:
             raise ValueError(f"max_seed_force must be > 0 (got {self.max_seed_force})")
+        if self.thermostat not in ("langevin", "nose-hoover"):
+            raise ValueError(
+                f"thermostat must be langevin|nose-hoover (got {self.thermostat!r})"
+            )
+        if self.langevin_gamma <= 0:
+            raise ValueError(f"langevin_gamma must be > 0 (got {self.langevin_gamma})")
+        if self.max_window_temp_K is not None and self.max_window_temp_K <= 0:
+            raise ValueError(
+                f"max_window_temp_K must be > 0 (got {self.max_window_temp_K})"
+            )
         # Force validation via schedule construction
         sched = self.resolve_schedule()
         if sched.n_windows < 1:

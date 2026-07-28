@@ -193,6 +193,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Abort if any window seed max|F| exceeds this (eV/Å; default: 15)",
     )
     parser.add_argument(
+        "--thermostat",
+        choices=("langevin", "nose-hoover"),
+        default=None,
+        help=(
+            "Packed-batch thermostat (default: langevin). Nose-Hoover shares one "
+            "chain across windows and can cascade failures when one replica heats."
+        ),
+    )
+    parser.add_argument(
+        "--langevin-gamma",
+        type=float,
+        default=None,
+        help="Langevin friction γ (1/fs in jax-md units; default: 0.1)",
+    )
+    parser.add_argument(
+        "--max-window-temp",
+        dest="max_window_temp_K",
+        type=float,
+        default=None,
+        help="Abort if any window kinetic T exceeds this (K; default: 5× --temperature)",
+    )
+    parser.add_argument(
         "--temperature",
         dest="temperature_K",
         type=float,
@@ -292,6 +314,9 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "move_with2": args.move_with2,
         "invert_with": args.invert_with,
         "max_seed_force": args.max_seed_force,
+        "thermostat": args.thermostat,
+        "langevin_gamma": args.langevin_gamma,
+        "max_window_temp_K": args.max_window_temp_K,
     }
     for key, value in cli_map.items():
         if value is not None:
@@ -336,6 +361,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("move_with2", ())
     data.setdefault("invert_with", ())
     data.setdefault("max_seed_force", 15.0)
+    data.setdefault("thermostat", "langevin")
+    data.setdefault("langevin_gamma", 0.1)
 
     return UmbrellaConfig.from_dict(data)
 

@@ -3,8 +3,8 @@
 Pure-ML **distance umbrella sampling** packs \(K\) copies of one molecule into a
 single PhysNet / SpookyNet batch, adds a different harmonic restraint
 \(W_k = \tfrac12 k_k(\xi-\xi_{0,k})^2\) on each copy, and integrates them together
-with **JAX-MD NVT Nose-Hoover**. Free-energy differences come from
-**pymbar MBAR** on the saved snapshots.
+with **JAX-MD NVT Langevin** (default; Nose-Hoover optional). Free-energy
+differences come from **pymbar MBAR** on the saved snapshots.
 
 This is **not** CHARMM ADUMB (adaptive umbrella / WHAM). For ADUMB on hybrid
 CHARMM+ML systems see [examples/m](examples/nh3-ch3cl-results.md). For MEP /
@@ -25,8 +25,13 @@ barrier paths see [NEB](neb.md).
 one XYZ  →  tile K copies  →  flat (K·N) atoms
            batch_segments + offset pair list
            E = Σ_k E_ML(R_k) + Σ_k ½ k_k (r_ij^(k) − ξ₀,k)²
-           jax_md.simulate.nvt_nose_hoover(energy_sum, …)
+           jax_md.simulate.nvt_langevin(…, center_velocity=False)
 ```
+
+Langevin is the default thermostat for packed multi-window runs: a shared
+Nose-Hoover chain couples replicas, so one hot window can spike the batch T and
+NaN everyone else. Per-window kinetic temperatures are printed each
+`--printfreq` and abort above `--max-window-temp` (default 5×T).
 
 The layout matches multi-replica [`mmml physnet-md`](cli/commands/physnet-md.md)
 batching. Vacuum / free space only (no PBC MIC restraints in v1).

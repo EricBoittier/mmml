@@ -14,9 +14,9 @@ and versioning process.
 
 - Batched pure-ML distance umbrella sampling (`mmml umbrella-sample`) and
   CV MBAR post-processing (`mmml umbrella-mbar`): pack K restrained copies into
-  one PhysNet/SpookyNet batch, NVT Nose-Hoover via JAX-MD, then pymbar.
-  Seeding fixes `atom_i` and can rigidly translate `--move-with` groups
-  (default `dt=0.1` fs). See `docs/umbrella.md`.
+  one PhysNet/SpookyNet batch, NVT via JAX-MD Langevin by default (Nose-Hoover
+  optional), then pymbar. Seeding fixes `atom_i` and can rigidly translate
+  `--move-with` groups (default `dt=0.1` fs). See `docs/umbrella.md`.
 
 ### Fixed
 

@@ -138,3 +138,21 @@ def test_load_structure_xyz(tmp_path: Path):
     r, z = load_structure(xyz)
     assert z.tolist() == [1, 1]
     assert r.shape == (2, 3)
+
+
+def test_per_window_temperatures_shape():
+    from mmml.umbrella.sample import _per_window_temperatures_K
+
+    k_b = 8.617333262145e-5
+    n_windows, n_atoms = 3, 2
+    masses = np.ones(n_windows * n_atoms)
+    # Give window 1 extra momentum
+    momenta = np.zeros((n_windows * n_atoms, 3))
+    momenta[2:4, 0] = 1.0
+    t = _per_window_temperatures_K(
+        momenta, masses, n_windows=n_windows, n_atoms=n_atoms, k_b=k_b
+    )
+    assert t.shape == (3,)
+    assert t[0] == pytest.approx(0.0)
+    assert t[1] > t[0]
+    assert t[2] == pytest.approx(0.0)
