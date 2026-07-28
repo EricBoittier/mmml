@@ -1,49 +1,45 @@
 #!/usr/bin/env bash
-# Vacuum NEB for NH₃–CH₃Cl with examples/m/kl.json (mmml neb).
-#
-# Smoke (default): 11 images, fmax=0.05
-# Dense band (Asparagus-style): N_IMAGES=99 bash examples/m/13_neb.sh
+# Vacuum NEB smoke for NH3–CH3Cl (ASE + PhysNet kl.json).
 set -euo pipefail
-
-EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
-source "${EXAMPLE_DIR}/_env.sh"
+source "${ROOT}/examples/m/_env.sh"
+cd "${ROOT}"
 
-OUT_DIR="${ARTIFACTS_DIR}/neb"
 N_IMAGES="${N_IMAGES:-11}"
+MAX_STEPS="${MAX_STEPS:-80}"
 FMAX="${FMAX:-0.05}"
-MAX_STEPS="${MAX_STEPS:-}"
-CLIMB="${CLIMB:-0}"
+OUT="${ARTIFACTS_DIR}/neb"
 
-mkdir -p "${OUT_DIR}"
+echo "=== export NEB endpoints (if missing) ==="
+if [[ ! -f examples/m/neb/reag_0_opt.xyz || ! -f examples/m/neb/prod_0_opt.xyz ]]; then
+  uv run python examples/m/07_export_neb_endpoints.py
+fi
 
-CMD=(
-  uv run mmml neb
-  --checkpoint "${MMML_CKPT}"
-  --initial "${EXAMPLE_DIR}/neb/reag_0_opt.xyz"
-  --final "${EXAMPLE_DIR}/neb/prod_0_opt.xyz"
-  --output-dir "${OUT_DIR}"
-  --n-images "${N_IMAGES}"
-  --fmax "${FMAX}"
-  --pair 1,2
-  --pair 0,2
+echo "=== NEB: ${N_IMAGES} images, max_steps=${MAX_STEPS} ==="
+uv run mmml neb \
+  --config "${ROOT}/examples/m/yaml/neb.yaml" \
+  --output-dir "${OUT}" \
+  --n-images "${N_IMAGES}" \
+  --max-steps "${MAX_STEPS}" \
+  --fmax "${FMAX}" \
   --overwrite
-)
 
-if [[ "${CLIMB}" == "1" || "${CLIMB}" == "true" ]]; then
-  CMD+=(--climb)
-fi
-if [[ -n "${MAX_STEPS}" ]]; then
-  CMD+=(--max-steps "${MAX_STEPS}")
+SUMMARY="${OUT}/neb_summary.json"
+if [[ ! -f "${SUMMARY}" ]]; then
+  echo "FAIL: missing ${SUMMARY}"
+  exit 1
 fi
 
-echo "=== mmml neb (kl.json × NH3–CH3Cl) → ${OUT_DIR} ==="
-echo "${CMD[*]}"
-"${CMD[@]}"
-
-echo
-echo "Artifacts:"
-ls -la "${OUT_DIR}"
-echo
-echo "Pass criteria: neb_summary.json has finite barrier_kcal_mol;"
-echo "  neb_profile.dat columns: RC, ΔE(kcal/mol), d_N-C, d_Cl-C."
+uv run python - <<PY
+import json
+from pathlib import Path
+data = json.loads(Path("${SUMMARY}").read_text())
+barrier = float(data.get("barrier_kcal_mol", float("nan")))
+delta = float(data.get("delta_e_product_kcal_mol", float("nan")))
+if barrier != barrier or delta != delta:
+    raise SystemExit(f"FAIL: non-finite barrier={barrier!r} delta_e_product={delta!r}")
+if abs(delta) < 1e-3:
+    raise SystemExit(f"FAIL: |delta_e_product| too small: {delta!r}")
+print(f"PASS: NEB barrier={barrier:.4f} kcal/mol, ΔE(prod)={delta:.2f} -> ${OUT}")
+PY

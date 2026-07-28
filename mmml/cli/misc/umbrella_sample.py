@@ -93,9 +93,72 @@ def build_parser() -> argparse.ArgumentParser:
         help="ML backend (default: auto-detect KerNN JSON)",
     )
     parser.add_argument(
+        "--engine",
+        choices=("packed_ml", "hybrid_jaxmd"),
+        default=None,
+        help=(
+            "packed_ml: vacuum batched all-ML (default). "
+            "hybrid_jaxmd: solvated mechanical embedding (ML solute + MM solvent)"
+        ),
+    )
+    parser.add_argument(
         "--structure",
         type=Path,
-        help="Starting geometry: XYZ, PDB, or NPZ with R/Z arrays",
+        help="Starting geometry: XYZ, PDB, or NPZ with R/Z arrays (packed_ml)",
+    )
+    parser.add_argument(
+        "--from-psf",
+        type=Path,
+        default=None,
+        help="CHARMM PSF for hybrid_jaxmd (make-box model.psf)",
+    )
+    parser.add_argument(
+        "--from-pdb",
+        type=Path,
+        default=None,
+        help="Coordinate PDB for hybrid_jaxmd (make-box model.pdb)",
+    )
+    parser.add_argument(
+        "--from-crd",
+        type=Path,
+        default=None,
+        help="Coordinate CRD for hybrid_jaxmd",
+    )
+    parser.add_argument(
+        "--composition",
+        type=str,
+        default=None,
+        help="Packmol composition for hybrid_jaxmd smoke (e.g. AMM1:1,CH3CL:1,TIP3:12)",
+    )
+    parser.add_argument(
+        "--box-size",
+        type=float,
+        default=None,
+        help="Cubic box edge (Å) for hybrid_jaxmd (or sibling box.json)",
+    )
+    parser.add_argument(
+        "--ml-resnames",
+        type=str,
+        default=None,
+        help="Comma-separated residue names forming the ML region (default: AMM1,CH3CL)",
+    )
+    parser.add_argument(
+        "--atom-name-i",
+        type=str,
+        default=None,
+        help="PSF atom name for CV atom i (hybrid; overrides --atoms first index)",
+    )
+    parser.add_argument(
+        "--atom-name-j",
+        type=str,
+        default=None,
+        help="PSF atom name for CV atom j (hybrid; overrides --atoms second index)",
+    )
+    parser.add_argument(
+        "--lr-solver",
+        type=str,
+        default=None,
+        help="MM long-range solver for hybrid_jaxmd (default: mic)",
     )
     parser.add_argument(
         "--structure-index",
@@ -297,7 +360,14 @@ def _load_config_file(path: Path) -> dict[str, Any]:
         data = json.loads(text)
     if not isinstance(data, dict):
         raise ValueError(f"config root must be a mapping, got {type(data).__name__}")
-    path_keys = ("checkpoint", "structure", "output_dir")
+    path_keys = (
+        "checkpoint",
+        "structure",
+        "output_dir",
+        "from_psf",
+        "from_pdb",
+        "from_crd",
+    )
     for key in path_keys:
         value = data.get(key)
         if value is None:
@@ -323,7 +393,16 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     cli_map = {
         "checkpoint": args.checkpoint,
         "model": args.model,
+        "engine": args.engine,
         "structure": args.structure,
+        "from_psf": args.from_psf,
+        "from_pdb": args.from_pdb,
+        "from_crd": args.from_crd,
+        "composition": args.composition,
+        "box_size": args.box_size,
+        "atom_name_i": args.atom_name_i,
+        "atom_name_j": args.atom_name_j,
+        "lr_solver": args.lr_solver,
         "output_dir": args.output_dir,
         "temperature_K": args.temperature_K,
         "timestep_fs": args.timestep_fs,
@@ -353,6 +432,10 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     for key, value in cli_map.items():
         if value is not None:
             data[key] = value
+    if args.ml_resnames is not None:
+        data["ml_resnames"] = tuple(
+            p.strip() for p in args.ml_resnames.split(",") if p.strip()
+        )
     if args.atoms is not None:
         data["atom_i"], data["atom_j"] = args.atoms
     if args.atoms2 is not None:
@@ -370,10 +453,18 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     if args.write_window_xyz:
         data["write_window_xyz"] = True
 
-    required = ("checkpoint", "structure", "output_dir")
+    engine = data.get("engine", "packed_ml")
+    required = ["checkpoint", "output_dir"]
+    if engine == "packed_ml":
+        required.append("structure")
     missing = [name for name in required if not data.get(name)]
     if data.get("atom_i") is None or data.get("atom_j") is None:
-        missing.append("atoms")
+        # Allow name-only hybrid configs that still need placeholder indices.
+        if not (data.get("atom_name_i") and data.get("atom_name_j")):
+            missing.append("atoms")
+        else:
+            data.setdefault("atom_i", 0)
+            data.setdefault("atom_j", 1)
     if missing:
         raise SystemExit(
             "missing required options: "
@@ -381,6 +472,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
             + " (or provide them in --config)"
         )
 
+    data.setdefault("engine", "packed_ml")
     data.setdefault("targets_A", ())
     data.setdefault("targets_y_A", ())
     data.setdefault("k_ev_A2", 10.0)
@@ -402,6 +494,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("langevin_gamma", 0.1)
     data.setdefault("replica_exchange", False)
     data.setdefault("rex_freq", 100)
+    data.setdefault("ml_resnames", ("AMM1", "CH3CL"))
+    data.setdefault("lr_solver", "mic")
 
     return UmbrellaConfig.from_dict(data)
 

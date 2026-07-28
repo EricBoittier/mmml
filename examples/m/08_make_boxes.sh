@@ -8,7 +8,7 @@ source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
 
 SOLUTE_PDB="${SOLUTE_PDB:-${ARTIFACTS_DIR}/solute_amm1_ch3cl.pdb}"
-BOX_SIZE="${BOX_SIZE:-20.0}"
+BOX_SIZE="${BOX_SIZE:-30.0}"
 N_SOLVENT="${N_SOLVENT:-12}"
 FRAME="${FRAME:-}"
 

@@ -1,0 +1,57 @@
+# ADUMB bond-difference ξ in explicit DMSO (PBC) — solvated counterpart to vacuum smoke.
+#
+#   SOLVATED=1 SOLVENT=dmso bash examples/m/09_adumb_nc_distance.sh
+
+setup: pbc_nvt
+backend: pycharmm
+composition: "AMM1:1,CH3CL:1,DMSO:12"
+box_size: 30.0
+checkpoint: examples/m/kl.json
+include_mm: true
+mm_switch_on: 8.0
+mm_charge_mode: fixed
+mm_nonbond_mode: jax_mic
+lr_solver: mic
+temperature: 300
+dt_fs: 1.0
+md_stages: "mini,heat,prod"
+ps_heat: 0.2
+ps_prod: 1.0
+mini_nstep: 40
+skip_energy_show: true
+skip_jit_warmup: true
+quiet: false
+seed: 0
+mc_density_equalize: false
+output_dir: artifacts/nh3_ch3cl/adumb_nc_distance_dmso
+
+dynamics_overlap_check_interval: 100
+dyn_freq_cadence: 100
+dynamics_max_monomer_extent: 20.0
+
+dcd_nsavc: 20
+dcd_max_frames: 200
+
+pycharmm_pre_dynamics_lingo: |
+  cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 -
+    sele (resid 1 .or. resid 2) end
+
+  set adumrcmax = 8.0
+  set adumrcwall = 500.0
+
+  open unit 44 write card name ADUMB-WUNI.DAT
+  open unit 50 write card name UMBCOR
+  open unit 45 write card name RXNCOR_TRACE.DAT
+
+  rxncor define pn point select atom * * N1 end
+  rxncor define pc point select atom * * C1 end
+  rxncor define pcl point select atom * * CL1 end
+  rxncor define rcl distance pcl pc
+  rxncor define rcn distance pc pn
+  rxncor define rdif combination rcl 1.0 rcn -1.0
+  rxncor set nrxn 1 rdif
+  rxncor trace rdif unit 45
+
+  umbrella rxncor nresol 40 trig 0 poly 6 min -6.0 max 6.0 name rdif
+  umbrella init nsim 10 update 100 equi 20 temp 300 wuni 44 ucun 50
+  umbrella ston

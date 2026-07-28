@@ -33,8 +33,14 @@ AUANG = 0.5291772083
 AUCM = 219474.6313710
 EV_TO_HARTREE = 0.0367493
 
-_ATOMIC_MASS: dict[str, float] = {"H": 1.008, "C": 12.011, "O": 15.999}
-_ATOMIC_Z: dict[str, int] = {"H": 1, "C": 6, "O": 8}
+_ATOMIC_MASS: dict[str, float] = {
+    "H": 1.008,
+    "C": 12.011,
+    "N": 14.007,
+    "O": 15.999,
+    "Cl": 35.45,
+}
+_ATOMIC_Z: dict[str, int] = {"H": 1, "C": 6, "N": 7, "O": 8, "Cl": 17}
 
 
 def build_parser() -> argparse.ArgumentParser:

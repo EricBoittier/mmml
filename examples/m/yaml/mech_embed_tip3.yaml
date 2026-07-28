@@ -7,8 +7,8 @@
 # ASE / PyCHARMM use the hybrid calculator with include_mm (MM LJ/Coulomb pairs).
 
 defaults:
-  composition: "AMM1:1,CH3CL:1,TIP3:12"
-  box_size: 20.0
+composition: "AMM1:1,CH3CL:1,TIP3:12"
+box_size: 30.0
   checkpoint: examples/m/kl.json
   setup: pbc_nve
   ps: 0.05

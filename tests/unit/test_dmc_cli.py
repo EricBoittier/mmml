@@ -28,6 +28,16 @@ def test_dmc_help_is_reachable(monkeypatch, capsys):
     assert "jax.vmap" in out
 
 
+def test_dmc_masses_support_nh3_ch3cl_elements():
+    from mmml.generate.dmc.dmc import _masses_and_charges
+    import numpy as np
+
+    symbols = np.array(["Cl", "N", "C", "H", "H", "H", "H", "H", "H"], dtype=str)
+    mass, z = _masses_and_charges(symbols)
+    assert mass.shape == (9,)
+    assert z.tolist() == [17, 7, 6, 1, 1, 1, 1, 1, 1]
+
+
 def test_dmc_parser_requires_core_flags():
     parser = build_parser()
     with pytest.raises(SystemExit):

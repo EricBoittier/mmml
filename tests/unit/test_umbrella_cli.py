@@ -182,3 +182,45 @@ def test_registry_lists_umbrella_commands():
     assert command_by_name("umbrella-sample").module == "mmml.cli.misc.umbrella_sample"
     assert command_by_name("umbrella-mbar").module == "mmml.cli.misc.umbrella_mbar"
 
+
+def test_sample_parser_hybrid_engine():
+    parser = build_sample_parser()
+    args = parser.parse_args(
+        [
+            "--engine",
+            "hybrid_jaxmd",
+            "--checkpoint",
+            "ckpt",
+            "--from-psf",
+            "box/model.psf",
+            "--from-pdb",
+            "box/model.pdb",
+            "--box-size",
+            "30",
+            "-o",
+            "out",
+            "--atom-name-i",
+            "C1",
+            "--atom-name-j",
+            "N1",
+            "--ml-resnames",
+            "AMM1,CH3CL",
+            "--xi-min",
+            "2.0",
+            "--xi-max",
+            "3.0",
+            "--n-windows",
+            "3",
+            "--overwrite",
+        ]
+    )
+    cfg = _config_from_args(args)
+    assert cfg.engine == "hybrid_jaxmd"
+    assert cfg.from_psf == Path("box/model.psf")
+    assert cfg.from_pdb == Path("box/model.pdb")
+    assert cfg.box_size == pytest.approx(30.0)
+    assert cfg.atom_name_i == "C1"
+    assert cfg.atom_name_j == "N1"
+    assert cfg.ml_resnames == ("AMM1", "CH3CL")
+    assert cfg.structure is None
+

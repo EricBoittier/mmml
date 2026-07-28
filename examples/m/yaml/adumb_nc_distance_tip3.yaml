@@ -10,7 +10,7 @@
 setup: pbc_nvt
 backend: pycharmm
 composition: "AMM1:1,CH3CL:1,TIP3:12"
-box_size: 20.0
+box_size: 30.0
 checkpoint: examples/m/kl.json
 include_mm: true
 mm_switch_on: 8.0
@@ -37,8 +37,8 @@ dynamics_overlap_check_interval: 100
 # Velocity-reassignment micro-chunk cadence == update (100) so redraws land on
 # update boundaries and are absorbed by `equi`.
 dyn_freq_cadence: 100
-# Fly-off guard raised modestly (still < 20 Å box) for the dissociating fragment.
-dynamics_max_monomer_extent: 15.0
+# Fly-off guard raised modestly (still < 30 Å box) for the dissociating fragment.
+dynamics_max_monomer_extent: 20.0
 # NOTE: close-contact / repair thresholds are deliberately left at solvent-safe
 # defaults. Do NOT copy the vacuum files' dynamics_overlap_min_distance: 0.2 —
 # with explicit TIP3 that would let solvent–solvent overlaps go unrescued.

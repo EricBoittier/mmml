@@ -8,6 +8,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 
 SeedMode = Literal["stretch", "tile", "frames"]
+UmbrellaEngine = Literal["packed_ml", "hybrid_jaxmd"]
 
 
 @dataclass(frozen=True)
@@ -62,10 +63,10 @@ class UmbrellaConfig:
     """Inputs for :func:`mmml.umbrella.sample.run_umbrella_nvt`."""
 
     checkpoint: Path
-    structure: Path
     output_dir: Path
     atom_i: int
     atom_j: int
+    structure: Path | None = None
     atom_k: int | None = None
     atom_l: int | None = None
     targets_A: tuple[float, ...] = ()
@@ -99,8 +100,22 @@ class UmbrellaConfig:
     max_window_temp_K: float | None = None
     replica_exchange: bool = False
     rex_freq: int = 100
+    engine: UmbrellaEngine = "packed_ml"
+    from_psf: Path | None = None
+    from_pdb: Path | None = None
+    from_crd: Path | None = None
+    composition: str | None = None
+    box_size: float | None = None
+    ml_resnames: tuple[str, ...] = ("AMM1", "CH3CL")
+    atom_name_i: str | None = None
+    atom_name_j: str | None = None
+    lr_solver: str = "mic"
 
     def __post_init__(self) -> None:
+        if self.engine not in ("packed_ml", "hybrid_jaxmd"):
+            raise ValueError(
+                f"engine must be packed_ml|hybrid_jaxmd (got {self.engine!r})"
+            )
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
             raise ValueError("atom_i and atom_j must be distinct non-negative indices")
         has_k = self.atom_k is not None
@@ -141,6 +156,40 @@ class UmbrellaConfig:
             )
         if self.rex_freq < 1:
             raise ValueError(f"rex_freq must be >= 1 (got {self.rex_freq})")
+        if self.box_size is not None and float(self.box_size) <= 0:
+            raise ValueError(f"box_size must be > 0 (got {self.box_size})")
+        if not self.ml_resnames:
+            raise ValueError("ml_resnames must be non-empty")
+        if self.engine == "packed_ml":
+            if self.structure is None:
+                raise ValueError("packed_ml engine requires structure")
+        else:
+            if self.is_2d:
+                raise ValueError(
+                    "hybrid_jaxmd engine supports 1D umbrellas only in v1 "
+                    "(omit --atoms2 / atom_k/atom_l)"
+                )
+            if self.replica_exchange:
+                raise ValueError(
+                    "hybrid_jaxmd engine does not support replica_exchange in v1"
+                )
+            has_psf = self.from_psf is not None
+            has_coords = (
+                self.from_pdb is not None
+                or self.from_crd is not None
+                or self.structure is not None
+            )
+            has_comp = self.composition is not None
+            if has_psf and not has_coords:
+                raise ValueError(
+                    "hybrid_jaxmd with from_psf also needs from_pdb, from_crd, or structure"
+                )
+            if not has_psf and not has_comp:
+                raise ValueError(
+                    "hybrid_jaxmd requires from_psf (+ coords) or composition (+ box_size)"
+                )
+            if has_comp and self.box_size is None and self.from_psf is None:
+                raise ValueError("hybrid_jaxmd composition path requires box_size")
         # Force validation via schedule construction
         sched = self.resolve_schedule()
         if sched.n_windows < 1:
@@ -231,7 +280,14 @@ class UmbrellaConfig:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> UmbrellaConfig:
         raw = dict(data)
-        for key in ("checkpoint", "structure", "output_dir"):
+        for key in (
+            "checkpoint",
+            "structure",
+            "output_dir",
+            "from_psf",
+            "from_pdb",
+            "from_crd",
+        ):
             if key in raw and raw[key] is not None:
                 raw[key] = Path(raw[key])
         for key in ("targets_A", "targets_y_A", "move_with", "move_with2", "invert_with"):
@@ -240,6 +296,8 @@ class UmbrellaConfig:
                     raw[key] = tuple(int(x) for x in raw[key])
                 else:
                     raw[key] = tuple(float(x) for x in raw[key])
+        if "ml_resnames" in raw and raw["ml_resnames"] is not None:
+            raw["ml_resnames"] = tuple(str(x) for x in raw["ml_resnames"])
         for key in ("k_ev_A2", "k_y_ev_A2"):
             if key in raw and raw[key] is not None:
                 k = raw[key]
@@ -251,13 +309,22 @@ class UmbrellaConfig:
 
     def to_dict(self) -> dict[str, Any]:
         out = asdict(self)
-        for key in ("checkpoint", "structure", "output_dir"):
-            out[key] = str(out[key])
+        for key in (
+            "checkpoint",
+            "structure",
+            "output_dir",
+            "from_psf",
+            "from_pdb",
+            "from_crd",
+        ):
+            if out[key] is not None:
+                out[key] = str(out[key])
         out["targets_A"] = list(out["targets_A"])
         out["targets_y_A"] = list(out["targets_y_A"])
         out["move_with"] = list(out["move_with"])
         out["move_with2"] = list(out["move_with2"])
         out["invert_with"] = list(out["invert_with"])
+        out["ml_resnames"] = list(out["ml_resnames"])
         if isinstance(self.k_ev_A2, tuple):
             out["k_ev_A2"] = list(self.k_ev_A2)
         if isinstance(self.k_y_ev_A2, tuple):

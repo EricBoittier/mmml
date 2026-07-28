@@ -28,12 +28,18 @@ def fill_u_kln(
     targets_per_cv: Sequence[Sequence[float]],
     k_per_cv: Sequence[Sequence[float]],
     temperature_K: float,
-    ml_energy_fn: Callable[[np.ndarray], float],
+    ml_energy_fn: Callable[[np.ndarray], float] | None = None,
+    unbiased_energies: np.ndarray | None = None,
+    box: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build reduced-potential tensor ``u_kln`` and sample counts ``N_k``.
 
     ``positions`` shape: ``(K, N_frames, N_atoms, 3)``.
-    ``u_kln[k, l, n] = β (U_ML(R_k^n) + W_l(R_k^n))``.
+    ``u_kln[k, l, n] = β (U_unbiased(R_k^n) + W_l(R_k^n))``.
+
+    Pass either ``ml_energy_fn`` (gas-phase recomputation) or precomputed
+    ``unbiased_energies`` with shape ``(K, N_frames)`` (hybrid mechanical
+    embedding). When ``box`` is set, bias distances use minimum-image.
     """
     pos = np.asarray(positions, dtype=np.float64)
     if pos.ndim != 4:
@@ -42,16 +48,46 @@ def fill_u_kln(
     for row in list(targets_per_cv) + list(k_per_cv):
         if len(row) != k_windows:
             raise ValueError("targets / k rows must match K windows")
+    if ml_energy_fn is None and unbiased_energies is None:
+        raise ValueError("need ml_energy_fn or unbiased_energies")
+    if unbiased_energies is not None:
+        u_store = np.asarray(unbiased_energies, dtype=np.float64)
+        if u_store.shape != (k_windows, n_frames):
+            raise ValueError(
+                f"unbiased_energies shape {u_store.shape} != {(k_windows, n_frames)}"
+            )
 
     beta = 1.0 / (_K_B_EV * float(temperature_K))
     n_k = np.full(k_windows, n_frames, dtype=np.int64)
     u_kln = np.zeros((k_windows, k_windows, n_frames), dtype=np.float64)
 
+    if box is not None:
+        from mmml.umbrella.hybrid import mic_distance
+
+        def _bias_row(r: np.ndarray) -> np.ndarray:
+            out = np.zeros(k_windows, dtype=np.float64)
+            for l in range(k_windows):
+                total = 0.0
+                for dim, (i, j) in enumerate(atom_pairs):
+                    d = mic_distance(r, int(i), int(j), box)
+                    total += 0.5 * float(k_per_cv[dim][l]) * (
+                        d - float(targets_per_cv[dim][l])
+                    ) ** 2
+                out[l] = total
+            return out
+    else:
+        def _bias_row(r: np.ndarray) -> np.ndarray:
+            return numpy_bias_matrix_nd(r, atom_pairs, targets_per_cv, k_per_cv)
+
     for k in range(k_windows):
         for n in range(n_frames):
             r = pos[k, n]
-            u_ml = float(ml_energy_fn(r))
-            w_l = numpy_bias_matrix_nd(r, atom_pairs, targets_per_cv, k_per_cv)
+            if unbiased_energies is not None:
+                u_ml = float(u_store[k, n])
+            else:
+                assert ml_energy_fn is not None
+                u_ml = float(ml_energy_fn(r))
+            w_l = _bias_row(r)
             u_kln[k, :, n] = beta * (u_ml + w_l)
     return u_kln, n_k
 
@@ -169,26 +205,53 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
         targets_per_cv.append(yi0.tolist())
         k_per_cv.append(k_y.tolist())
 
-    params, model = load_params_and_model(checkpoint, natoms=n_atoms, prefer_ema=True)
-    ml_fn = make_single_ml_energy_fn(
-        model_apply=model.apply,
-        params=params,
-        atomic_numbers=z,
-        n_atoms=n_atoms,
-    )
-    ml_fn_jit = jax.jit(ml_fn)
+    engine = "packed_ml"
+    if "engine" in snap:
+        eng = snap["engine"]
+        engine = str(eng.item() if getattr(eng, "ndim", 1) == 0 else eng)
+    summary_path = run_dir / SUMMARY_JSON
+    if summary_path.is_file():
+        engine = str(load_summary(summary_path).get("engine") or engine)
 
-    def ml_energy_np(r: np.ndarray) -> float:
-        return float(ml_fn_jit(jnp.asarray(r, dtype=jnp.float64)))
+    box = None
+    if "box" in snap:
+        box = np.asarray(snap["box"], dtype=np.float64)
 
-    u_kln, n_k = fill_u_kln(
-        positions=positions,
-        atom_pairs=atom_pairs,
-        targets_per_cv=targets_per_cv,
-        k_per_cv=k_per_cv,
-        temperature_K=float(temperature_K),
-        ml_energy_fn=ml_energy_np,
-    )
+    if engine == "hybrid_jaxmd" or "energies_unbiased_ev" in snap:
+        if "energies_unbiased_ev" not in snap:
+            raise ValueError(
+                "hybrid_jaxmd MBAR requires energies_unbiased_ev in umbrella_snapshots.npz"
+            )
+        u_kln, n_k = fill_u_kln(
+            positions=positions,
+            atom_pairs=atom_pairs,
+            targets_per_cv=targets_per_cv,
+            k_per_cv=k_per_cv,
+            temperature_K=float(temperature_K),
+            unbiased_energies=np.asarray(snap["energies_unbiased_ev"], dtype=np.float64),
+            box=box,
+        )
+    else:
+        params, model = load_params_and_model(checkpoint, natoms=n_atoms, prefer_ema=True)
+        ml_fn = make_single_ml_energy_fn(
+            model_apply=model.apply,
+            params=params,
+            atomic_numbers=z,
+            n_atoms=n_atoms,
+        )
+        ml_fn_jit = jax.jit(ml_fn)
+
+        def ml_energy_np(r: np.ndarray) -> float:
+            return float(ml_fn_jit(jnp.asarray(r, dtype=jnp.float64)))
+
+        u_kln, n_k = fill_u_kln(
+            positions=positions,
+            atom_pairs=atom_pairs,
+            targets_per_cv=targets_per_cv,
+            k_per_cv=k_per_cv,
+            temperature_K=float(temperature_K),
+            ml_energy_fn=ml_energy_np,
+        )
     if np.any(n_k == 0):
         return {
             "error": "MBAR skipped: at least one umbrella window has no snapshots.",
@@ -229,9 +292,10 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
         "N_k": n_k.tolist(),
         "N_k_effective": n_k_eff.tolist(),
         "g_k": g_k,
+        "engine": engine,
         "note": (
             "PMF is F(window) − min F from MBAR; "
-            "u_kln = β(U_ML + Σ_d W_d,l). For 2D, reshape pmf_* with grid_shape."
+            "u_kln = β(U_unbiased + Σ_d W_d,l). For 2D, reshape pmf_* with grid_shape."
         ),
     }
     if grid_shape is not None and len(grid_shape) == 2:

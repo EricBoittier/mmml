@@ -2,8 +2,8 @@
 #   uv run mmml md-system --config examples/m/yaml/mech_embed_acn.yaml --run-all
 
 defaults:
-  composition: "AMM1:1,CH3CL:1,ACN:12"
-  box_size: 20.0
+composition: "AMM1:1,CH3CL:1,ACN:12"
+box_size: 30.0
   checkpoint: examples/m/kl.json
   setup: pbc_nve
   ps: 0.05

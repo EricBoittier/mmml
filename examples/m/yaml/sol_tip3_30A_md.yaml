@@ -1,0 +1,28 @@
+# Load NH3–CH3Cl from a 30 Å TIP3 make-box PDB and run a short PBC NVE smoke.
+#
+# Prerequisite:
+#   source examples/m/_env.sh
+#   BOX_SIZE=30 uv run python examples/m/07_export_solute_pdb.py
+#   BOX_SIZE=30 USE_DENSITY=1 bash examples/m/08_make_boxes.sh
+#
+#   uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
+#   bash examples/m/run_sol_tip3_30A.sh
+
+from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb
+checkpoint: examples/m/kl.json
+setup: pbc_nve
+backend: jaxmd
+jaxmd_unified: true
+ps: 0.05
+dt_fs: 0.5
+temperature: 300
+include_mm: true
+mm_switch_on: 8.0
+skip_jit_warmup: true
+quiet: true
+seed: 0
+mc_density_equalize: false
+output_dir: artifacts/nh3_ch3cl/sol_tip3_30A/jaxmd
+
+dcd_nsavc: 1
+dcd_max_frames: 50

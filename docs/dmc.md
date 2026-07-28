@@ -77,7 +77,7 @@ stem (e.g. `acetone_dmc`):
 
 - Any ASE-readable geometry (`xyz`, `extxyz`, …).
 - `--natm` must match the atom count of the first frame.
-- Currently supported element types: **H, C, O**.
+- Currently supported element types: **H, C, N, O, Cl** (NH₃–CH₃Cl uses H, C, N, Cl).
 - `--fbohr 1` if coordinates are already in Bohr (default assumes Å).
 
 ## Tunables

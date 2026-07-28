@@ -91,15 +91,28 @@ or `RUN_PYCHARMM=0` to keep ASE/JAX-MD `md-system` only when PyCHARMM is present
 ### Solvated boxes (`make-box`) + mechanical embedding
 
 Export a CGenFF-named solute PDB from the NPZ, then solvate with
-`mmml make-box` in **ACN**, **TIP3**, and **DMSO**:
+`mmml make-box` in **ACN**, **TIP3**, and **DMSO** (default **30 Å** cube):
 
 ```bash
 source examples/m/_env.sh
 uv run python examples/m/07_export_solute_pdb.py
-bash examples/m/08_make_boxes.sh   # Packmol + PyCHARMM; smoke: 12 solvent, L=20 Å
+# Smoke: fixed --n (12 molecules). Production density: USE_DENSITY=1
+BOX_SIZE=30 bash examples/m/08_make_boxes.sh
+# or: BOX_SIZE=30 USE_DENSITY=1 bash examples/m/08_make_boxes.sh
 ```
 
 Outputs: `artifacts/nh3_ch3cl/boxes/{acn,tip3,dmso}/model.{pdb,psf}` + `box.json`.
+
+**Load into `md-system` (30 Å TIP3, JAX-MD unified mechanical embedding):**
+
+```bash
+# One-shot: export → make-box → short PBC NVE
+bash examples/m/run_sol_tip3_30A.sh
+
+# Or stepwise after 08_make_boxes.sh:
+uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
+uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
+```
 
 **Mechanical embedding** = former `cg_jax` mode: ML monomers (`ml_intra`) + MM
 intermolecular (`mm_nonbonded`), not ML–MM electrostatic embedding.
@@ -109,7 +122,9 @@ intermolecular (`mm_nonbonded`), not ML–MM electrostatic embedding.
 | `jaxmd` + `jaxmd_unified: true` | Shared `mmml.md` (`ml_intra` + `mm_nonbonded`) |
 | `ase` / `pycharmm` | Hybrid calculator with `include_mm: true` |
 
-Composition campaigns (Packmol inside `md-system`; no make-box required):
+Composition campaigns (Packmol inside `md-system`; no make-box required).
+Default **30 Å** PBC cube; solvent counts are smoke-sparse (`TIP3:12`, etc.) —
+use the make-box path with `USE_DENSITY=1` for production-like filling.
 
 ```bash
 uv run mmml md-system --config examples/m/yaml/mech_embed_tip3.yaml --run-all
@@ -179,6 +194,62 @@ uv run mmml md-system --config examples/m/yaml/ewald_all_tip3.yaml --job-id ewal
 Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
 `RUN_ACN=0 RUN_DMSO=0` to run only the TIP3 matrix.
 
+## Reaction-path toolkit (gas + solution)
+
+End-to-end SN₂-like workflows for NH₃–CH₃Cl. Regenerate gas-phase endpoints
+from the bundled NPZ:
+
+```bash
+uv run python examples/m/07_export_neb_endpoints.py
+# → examples/m/neb/reag_0_opt.xyz, prod_0_opt.xyz
+```
+
+| Method | Gas phase | Explicit solvent (TIP3 / ACN / DMSO) |
+|--------|-----------|----------------------------------------|
+| **`mmml umbrella-sample`** | `engine: packed_ml` — batched all-ML NVT | `engine: hybrid_jaxmd` — ML reactive complex + MM solvent ([`yaml/umbrella_nc_tip3.yaml`](yaml/umbrella_nc_tip3.yaml), `14_umbrella_sample_sol.sh`) |
+| **ADUMB** (PyCHARMM adaptive umbrella) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` | `yaml/adumb_nc_distance_{tip3,acn,dmso}.yaml`; `SOLVATED=1 SOLVENT=tip3 bash examples/m/09_adumb_nc_distance.sh` |
+| **NEB** (ASE nudged elastic band) | `yaml/neb.yaml`, `13_neb.sh` | Gas-phase path only (same endpoints) |
+| **DMC** (Diffusion Monte Carlo) | `15_dmc_basins.sh` on react/product XYZ | Gas-phase basins only (same endpoints) |
+
+One-shot ML smokes (no CHARMM):
+
+```bash
+bash examples/m/run_reaction_path_smokes.sh
+# RUN_ADUMB=1 to include PyCHARMM ADUMB vacuum + TIP3 legs
+```
+
+### Fixed-bias umbrella (`mmml umbrella-sample`)
+
+**Gas (`engine: packed_ml`)** — batched distance umbrella with PhysNet + JAX-MD
+Langevin NVT. Atom order: `Cl, N, C, H×3(N), H×3(C)` (same as NEB endpoints).
+
+```bash
+source examples/m/_env.sh
+bash examples/m/14_umbrella_sample_gas.sh
+# or:
+uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_gas.yaml --overwrite
+# 2D Cl–C × N–C grid:
+uv run mmml umbrella-sample --config examples/m/yaml/umbrella_clc_cn_2d_gas.yaml --overwrite
+# MBAR post-processing:
+uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
+```
+
+**Solution (`engine: hybrid_jaxmd`)** — mechanical embedding: ML on the reactive
+AMM1+CH3CL complex only; TIP3 (or other) solvent as MM. Per-window
+`JaxmdDriver` NVT (not packed). Needs a make-box PSF/PDB (30 Å TIP3 by default).
+
+```bash
+source examples/m/_env.sh
+bash examples/m/14_umbrella_sample_sol.sh
+# or after 08_make_boxes.sh:
+uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
+uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3
+```
+
+Writes `umbrella_snapshots.npz` (includes `energies_unbiased_ev` +
+`ml_atom_indices` for hybrid), `umbrella_summary.json`, and
+`umbrella_bin_minima.traj` under `artifacts/nh3_ch3cl/umbrella_*`.
+
 ### NEB (ASE nudged elastic band)
 
 Vacuum SN2-like path for NH₃–CH₃Cl with `kl.json` (endpoints under `neb/`):
@@ -198,6 +269,20 @@ Profile columns: reaction coordinate (Å), ΔE (kcal/mol), N–C and Cl–C dist
 
 Docs: [`docs/neb.md`](../../docs/neb.md).
 
+### DMC (reactant / product basins)
+
+Vibrational ground-state estimates at the exported basin geometries (gas phase,
+9 atoms). Requires N and Cl support in `mmml dmc` (included in this repo).
+
+```bash
+source examples/m/_env.sh
+bash examples/m/15_dmc_basins.sh
+# smoke knobs: NWALKER=32 NSTEP=100 EQSTEP=20
+```
+
+Outputs: `artifacts/nh3_ch3cl/dmc_{react,product}/*.pot`, `*.log`,
+`configs_*.traj`. Docs: [`docs/dmc.md`](../../docs/dmc.md).
+
 ### ADUMB (PyCHARMM adaptive umbrella)
 
 Yes — the NPZ can drive a PyCHARMM ADUMB job after you have a CGenFF system
@@ -210,7 +295,7 @@ RXNCOR + `umbrella rxncor` (same ADUMB path as
 |---------|-------------|-----------------|
 | 1D | ξ = \(r_{\mathrm{ClC}}-r_{\mathrm{CN}}\) (`rdif`), [-3, 3] Å, 100 ps | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` |
 | 2D | Cl⋯C + C⋯N (`rcl`, `rcn`) | `yaml/adumb_clc_cn_2d.yaml`, `10_adumb_clc_cn_2d.sh` |
-| 1D + TIP3 | same `rdif` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` (`SOLVATED=1` on `09_*.sh`) |
+| 1D + solvent | same `rdif` (PBC, 30 Å) | `yaml/adumb_nc_distance_{tip3,acn,dmso}.yaml` (`SOLVATED=1`, optional `SOLVENT=`) |
 
 Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 `scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
@@ -237,8 +322,10 @@ USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # 2D Cl⋯C + C⋯N adaptive umbrella (smoke ps_heat=0.2):
 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
 
-# Solvated TIP3 (PBC); combine with USE_NPZ_PDB=1 for NPZ solute + TIP3:
+# Solvated adaptive umbrella (30 Å PBC); combine with USE_NPZ_PDB=1:
 SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
+SOLVATED=1 SOLVENT=acn bash examples/m/09_adumb_nc_distance.sh
+SOLVATED=1 SOLVENT=dmso bash examples/m/09_adumb_nc_distance.sh
 ```
 If a prior cube Packmol run left monomers ~box-length apart, the script clears
 `{output_dir}/.packmol_cache` before launching.
@@ -251,11 +338,15 @@ If a prior cube Packmol run left monomers ~box-length apart, the script clears
 | ASE/JAX-MD smokes | `md_summary.json` with finite `E1`; `md.traj` + `md.xyz` present |
 | PyCHARMM `md-system` | DCD under the job `output_dir` (PSF from cluster build) |
 | Solute PDB | `solute_amm1_ch3cl.pdb` with 4×AMM1 + 5×CH3CL ATOM lines |
-| make-box | `boxes/{acn,tip3,dmso}/model.pdb` + `model.psf` + `box.json` |
+| make-box | `boxes/{acn,tip3,dmso}/model.pdb` + `model.psf` + `box.json` (30 Å default) |
 | Mech. embed | campaign exit 0 under `artifacts/nh3_ch3cl/mech_embed_*` |
 | ES embed | campaign exit 0 under `artifacts/nh3_ch3cl/es_embed_*` |
 | Ewald LR | core `mic_*` / `ewald_*` jobs exit 0; optional libs may SKIP |
-| ADUMB 1D | exit 0; lingo has `umbrella rxncor` / `r_nc`; ADUMB files under `adumb_nc_distance/` |
+| umbrella-sample (gas) | `umbrella_summary.json` + `umbrella_snapshots.npz` under `umbrella_nc_gas/` |
+| umbrella-sample (sol) | `engine=hybrid_jaxmd`; snapshots have `energies_unbiased_ev` + `ml_atom_indices` |
+| ADUMB 1D | exit 0; lingo has `umbrella rxncor`; ADUMB files under `adumb_nc_distance/` |
 | ADUMB 2D | exit 0; lingo has `nrxn 2` + `r_cl`/`r_cn`; ADUMB files under `adumb_clc_cn_2d/` |
-| NEB | exit 0; finite `barrier_kcal_mol` in `artifacts/nh3_ch3cl/neb/neb_summary.json` |
+| ADUMB solvated | exit 0; ADUMB files under `adumb_nc_distance_{tip3,acn,dmso}/` |
+| NEB | exit 0; finite `barrier_kcal_mol`, finite `delta_e_product_kcal_mol` in `neb_summary.json` |
+| DMC basins | exit 0; finite average energy in `dmc_{react,product}/*.log` |
 | Docs | `docs/examples/nh3-ch3cl-results.md` + PNGs under `docs/images/examples/nh3-ch3cl/` |

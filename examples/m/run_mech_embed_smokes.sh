@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mechanical-embedding smokes: Packmol composition (ACN/TIP3/DMSO) × ASE/JAX-MD/PyCHARMM.
-# Optionally build make-box artifacts and run from-pdb campaigns.
+# Default 30 Å PBC cube; optionally build make-box artifacts and run from-pdb campaigns.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null

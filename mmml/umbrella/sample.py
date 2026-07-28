@@ -114,7 +114,12 @@ def _schedule_targets_ks(sched):
 
 
 def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
-    """Run packed-batch NVT umbrella sampling with a PhysNet/SpookyNet checkpoint."""
+    """Run umbrella sampling (packed pure-ML or hybrid mechanical embedding)."""
+    if cfg.engine == "hybrid_jaxmd":
+        from mmml.umbrella.hybrid import run_umbrella_hybrid_nvt
+
+        return run_umbrella_hybrid_nvt(cfg)
+
     import jax
     import jax.numpy as jnp
     from ase.data import atomic_masses
@@ -132,6 +137,8 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         )
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if cfg.structure is None:
+        raise ValueError("packed_ml engine requires structure")
     structure_path = Path(cfg.structure).expanduser().resolve()
     sched = cfg.resolve_schedule()
     k_windows = sched.n_windows
@@ -511,6 +518,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
 
     summary = {
         "args": cfg.to_dict(),
+        "engine": "packed_ml",
         "ndim": sched.ndim,
         "n_windows": k_windows,
         "n_frames": n_frames,
@@ -534,6 +542,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "bin_minima": str(minima_path),
         "bin_minima_frame_idx": minima_idx.tolist(),
         "bin_minima_energy_ev": minima_e.tolist(),
+        "has_energies_unbiased_ev": False,
     }
     summary_path = write_summary(output_dir / SUMMARY_JSON, summary)
 

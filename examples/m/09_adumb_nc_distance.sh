@@ -13,7 +13,8 @@
 #     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
 #     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum): restore the default pre-min (by default
 #                        MM pre-min + monomer mini are skipped so a broken-C-Cl seed survives)
-#   SOLVATED=1         use the explicit-TIP3 (PBC) YAML instead of vacuum
+#   SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
+#   SOLVATED=1 SOLVENT=acn bash examples/m/09_adumb_nc_distance.sh
 #
 # Requires mmml-patched libcharmm (UM1RXN [min,max]). Do NOT leave CHARMM_LIB_DIR
 # pointing at a stale PhysNet_PyCHARMM tree without that patch.
@@ -32,10 +33,11 @@ CFG="${CFG:-${ROOT}/examples/m/yaml/adumb_nc_distance.yaml}"
 OUT="${ARTIFACTS_DIR}/adumb_nc_distance"
 USE_NPZ_PDB="${USE_NPZ_PDB:-0}"
 SOLVATED="${SOLVATED:-0}"
+SOLVENT="${SOLVENT:-tip3}"
 
 if [[ "${SOLVATED}" == "1" ]]; then
-  CFG="${ROOT}/examples/m/yaml/adumb_nc_distance_tip3.yaml"
-  OUT="${ARTIFACTS_DIR}/adumb_nc_distance_tip3"
+  CFG="${ROOT}/examples/m/yaml/adumb_nc_distance_${SOLVENT}.yaml"
+  OUT="${ARTIFACTS_DIR}/adumb_nc_distance_${SOLVENT}"
 fi
 
 if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
