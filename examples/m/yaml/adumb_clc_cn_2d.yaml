@@ -34,21 +34,21 @@ setup: free_nvt
 backend: pycharmm
 composition: "AMM1:1,CH3CL:1"
 spacing: 4.0
-checkpoint: examples/m/kl.json
+checkpoint: examples/m/model_ext.json
 # ML-only hybrid: CHARMM bonded C–Cl must still be deleted (see lingo).
 include_mm: false
 mm_switch_on: 8.0
 mm_charge_mode: fixed
 mm_nonbond_mode: jax_mic
 mm_pair_source: jax
-temperature: 500
+temperature: 1000
 dt_fs: 1.0
 md_stages: "mini,heat"
 ps_heat: 200.0
 # Prefer Bussi (default): auto in-memory overlap handoff. Never IASVEL0 for
 # ADUMB — COMP-as-velocity (T≃10¹³ K) → UM1RXN. Safe continuation is iasvel=1
 # at the ramp target; stiff RESD walls absorb redraws.
-heat_firstt: 50.0
+heat_firstt: 200.0
 packmol_placement: sphere
 packmol_radius: 6.0
 reuse_packmol_cache: false

@@ -26,7 +26,7 @@ cd "${ROOT}"
 
 CFG="${CFG:-${ROOT}/examples/m/yaml/adumb_clc_cn_2d.yaml}"
 OUT="${ARTIFACTS_DIR}/adumb_clc_cn_2d"
-USE_NPZ_PDB="${USE_NPZ_PDB:-0}"
+USE_NPZ_PDB="${USE_NPZ_PDB:-1}"
 
 if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
   echo "SKIP: PyCHARMM not importable"
