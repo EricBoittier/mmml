@@ -352,7 +352,9 @@ file = "mmml/_version.py"
 target-version = "py313"
 line-length = 119
 src = ["mmml", "tests", "scripts", "setup/charmm/tool/pycharmm"]
-extend-exclude = ["*.ipynb"]
+# scripts/kernn is vendored external KerNN (torch) model code, not part of the
+# mmml package and not maintained to this repo's lint rules; exclude from ruff.
+extend-exclude = ["*.ipynb", "scripts/kernn"]
 
 [tool.ruff.lint]
 select = [
