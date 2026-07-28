@@ -358,6 +358,10 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                 f"{float(np.max(t_win)):.0f}"
             )
 
+    print(
+        f"=== MD finished ({cfg.nsteps} steps); writing snapshots "
+        f"({k_windows} windows × {len(frames_traj)} frames) ==="
+    )
     positions = np.stack(frames_traj, axis=1)
     cv_traj = np.stack(cv_frames, axis=1)  # (K, N_frames, ndim)
     n_frames = int(positions.shape[1])
@@ -374,6 +378,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         extra["atom_l"] = np.int32(sched.atom_pairs[1][1])
 
     snapshots_path = output_dir / SNAPSHOTS_NPZ
+    print(f"  writing {snapshots_path.name} …")
     save_snapshots(
         snapshots_path,
         positions=positions,
@@ -388,16 +393,31 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         checkpoint=str(Path(cfg.checkpoint).expanduser().resolve()),
         extra=extra,
     )
+    print(f"  snapshots done → {snapshots_path}")
 
     traj_paths: dict[str, Path] = {}
-    for wid in range(k_windows):
-        traj_path = output_dir / f"umbrella_window{wid:03d}.xyz"
-        for frame_idx in range(n_frames):
-            from ase import Atoms
+    if cfg.write_window_xyz:
+        from ase import Atoms
 
-            at = Atoms(numbers=z, positions=positions[wid, frame_idx])
-            write(traj_path, at, append=(frame_idx > 0))
-        traj_paths[f"window_{wid:03d}"] = traj_path
+        print(
+            f"  writing {k_windows} window XYZ trajectories "
+            f"({n_frames} frames each) …"
+        )
+        for wid in range(k_windows):
+            traj_path = output_dir / f"umbrella_window{wid:03d}.xyz"
+            frames = [
+                Atoms(numbers=z, positions=positions[wid, frame_idx])
+                for frame_idx in range(n_frames)
+            ]
+            write(traj_path, frames)
+            traj_paths[f"window_{wid:03d}"] = traj_path
+            if (wid + 1) % max(1, k_windows // 8) == 0 or wid + 1 == k_windows:
+                print(f"    XYZ {wid + 1}/{k_windows}")
+    else:
+        print(
+            "  skipping per-window XYZ (MBAR uses NPZ only); "
+            "pass --write-window-xyz to export trajectories"
+        )
 
     summary = {
         "args": cfg.to_dict(),

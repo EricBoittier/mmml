@@ -86,6 +86,7 @@ class UmbrellaConfig:
     seed: int = 42
     use_ema: bool = True
     overwrite: bool = False
+    write_window_xyz: bool = False
     structure_index: int = 0
     seed_mode: SeedMode = "stretch"
     move_with: tuple[int, ...] = ()

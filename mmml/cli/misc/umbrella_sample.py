@@ -266,6 +266,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow writing into a non-empty output directory",
     )
+    parser.add_argument(
+        "--write-window-xyz",
+        action="store_true",
+        help=(
+            "Write per-window XYZ trajectories (slow for large K×N_frames); "
+            "default off — umbrella_snapshots.npz is enough for MBAR"
+        ),
+    )
     return parser
 
 
@@ -350,6 +358,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         data["overwrite"] = True
     if args.replica_exchange:
         data["replica_exchange"] = True
+    if args.write_window_xyz:
+        data["write_window_xyz"] = True
 
     required = ("checkpoint", "structure", "output_dir")
     missing = [name for name in required if not data.get(name)]
@@ -372,6 +382,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("seed", 42)
     data.setdefault("use_ema", True)
     data.setdefault("overwrite", False)
+    data.setdefault("write_window_xyz", False)
     data.setdefault("structure_index", 0)
     data.setdefault("seed_mode", "stretch")
     data.setdefault("move_with", ())

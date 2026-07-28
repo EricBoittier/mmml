@@ -99,7 +99,7 @@ geometry — both ligands bonded without a proper TS seed blows up forces
 Artifacts in the run directory:
 
 - `umbrella_snapshots.npz` — positions `(K, N_frames, N, 3)`, `xi0`, `k_ev_A2`, …
-- `umbrella_windowXXX.xyz` — per-window trajectory
+- `umbrella_windowXXX.xyz` — optional per-window trajectory (`--write-window-xyz`)
 - `umbrella_summary.json` — run args + MBAR block after step 2
 
 ## MBAR formula

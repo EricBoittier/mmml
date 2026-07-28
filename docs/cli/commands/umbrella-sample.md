@@ -34,6 +34,7 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
                             [--seed SEED] [--no-ema] [--overwrite]
+                            [--write-window-xyz]
 
 Batched distance umbrella sampling with a PhysNet / SpookyNet checkpoint via
 JAX-MD NVT Nose-Hoover.
@@ -74,6 +75,9 @@ Output & artifacts:
                         Directory for snapshots, trajectories, and summary
   --savefreq SAVEFREQ   Snapshot save interval (default: same as printfreq)
   --overwrite           Allow writing into a non-empty output directory
+  --write-window-xyz    Write per-window XYZ trajectories (slow for large
+                        K×N_frames); default off — umbrella_snapshots.npz is
+                        enough for MBAR
 
 Diagnostics & safety:
   -h, --help            show this help message and exit
