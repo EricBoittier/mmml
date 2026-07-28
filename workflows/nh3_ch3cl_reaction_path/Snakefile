@@ -1,0 +1,464 @@
+configfile: "config.yaml"
+
+import os
+import sys
+from pathlib import Path
+
+_SCRIPTS = Path(workflow.basedir) / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from campaign_lib import (  # noqa: E402
+    dmc_basins,
+    enabled,
+    expand_targets,
+    job_runtime_min,
+    load_config,
+    solvents,
+    slurm_value,
+    umbrella_variants,
+)
+
+_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
+
+WORKFLOW_DIR = Path(workflow.basedir)
+REPO_ROOT = WORKFLOW_DIR.parents[1]
+OUTPUT_ROOT = str(CFG.get("output_root", "artifacts/nh3_ch3cl_reaction_path"))
+# Artifacts live at repo root (../../ from this workflow dir).
+ARTIFACT_ROOT = f"../../{OUTPUT_ROOT}"
+
+_need_umb = enabled(CFG, "umbrella_gas") or enabled(CFG, "umbrella_sol")
+VARIANTS = umbrella_variants(CFG) if _need_umb else ["smoke"]
+SOLVENTS = solvents(CFG)
+BASINS = dmc_basins(CFG)
+
+TARGETS = [
+    f"{ARTIFACT_ROOT}/{Path(t).relative_to(OUTPUT_ROOT)}"
+    for t in expand_targets(CFG, OUTPUT_ROOT)
+]
+
+
+def _slurm_extra(wildcards) -> str:
+    mail = str(slurm_value(CFG, "mail_user", "") or "").strip()
+    nodelist = str(slurm_value(CFG, "nodelist", "") or "").strip()
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
+    if nodelist:
+        parts.append(f"--nodelist={nodelist}")
+    return " ".join(parts)
+
+
+def _deps(*paths):
+    return [p for p in paths if p]
+
+
+rule all:
+    input:
+        TARGETS,
+        "results/summary.md",
+
+
+rule endpoints:
+    output:
+        status=f"{ARTIFACT_ROOT}/endpoints/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/endpoints/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=f"{ARTIFACT_ROOT}/endpoints",
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "endpoints"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job endpoints \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule make_boxes:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/boxes/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/boxes/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=ARTIFACT_ROOT,
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "make_boxes"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}/boxes
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job make_boxes \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule neb:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/neb/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/neb/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=f"{ARTIFACT_ROOT}/neb",
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "neb"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job neb \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule dmc:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/dmc/{{basin}}/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/dmc/{{basin}}/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=f"{ARTIFACT_ROOT}/dmc/{{basin}}",
+    wildcard_constraints:
+        basin="|".join(BASINS) if BASINS else "react|product",
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "dmc"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job dmc \
+          --basin {wildcards.basin} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule umbrella_gas:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}",
+    wildcard_constraints:
+        variant="|".join(VARIANTS),
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "umbrella_gas", variant=wildcards.variant),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job umbrella_gas \
+          --variant {wildcards.variant} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule umbrella_sol:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/boxes/status.json" if enabled(CFG, "make_boxes") else None,
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}",
+    wildcard_constraints:
+        solvent="|".join(SOLVENTS),
+        variant="|".join(VARIANTS),
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "umbrella_sol", variant=wildcards.variant),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job umbrella_sol \
+          --solvent {wildcards.solvent} \
+          --variant {wildcards.variant} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule adumb_gas:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/adumb_gas/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/adumb_gas/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=f"{ARTIFACT_ROOT}/adumb_gas",
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "adumb_gas"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job adumb_gas \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule adumb_sol:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/boxes/status.json" if enabled(CFG, "make_boxes") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        out=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}",
+    wildcard_constraints:
+        solvent="|".join(SOLVENTS),
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "adumb_sol"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job adumb_sol \
+          --solvent {wildcards.solvent} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule mbar_gas:
+    input:
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/status.json",
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/mbar/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/mbar/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        run_dir=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/mbar",
+    wildcard_constraints:
+        variant="|".join(VARIANTS),
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "mbar"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job mbar \
+          --run-dir {params.run_dir} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule mbar_sol:
+    input:
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/status.json",
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/mbar/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/mbar/stdout.log",
+    params:
+        cfg=_CFG_PATH,
+        repo=str(REPO_ROOT),
+        run_dir=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/mbar",
+    wildcard_constraints:
+        solvent="|".join(SOLVENTS),
+        variant="|".join(VARIANTS),
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "mbar"),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        python {workflow.basedir}/scripts/run_job.py \
+          --config {params.cfg} \
+          --repo-root {params.repo} \
+          --job mbar \
+          --run-dir {params.run_dir} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule collect:
+    input:
+        TARGETS,
+    output:
+        csv="results/summary.csv",
+        md="results/summary.md",
+    params:
+        script=str(WORKFLOW_DIR / "scripts" / "collect_results.py"),
+        root=ARTIFACT_ROOT,
+    shell:
+        r"""
+        python {params.script} \
+          --artifact-root {params.root} \
+          --csv {output.csv} \
+          --markdown {output.md}
+        """

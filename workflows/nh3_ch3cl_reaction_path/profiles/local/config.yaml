@@ -1,0 +1,15 @@
+# Local / interactive GPU node (no Slurm).
+jobs: 2
+latency-wait: 5
+printshellcmds: true
+envvars:
+  - MMML_CKPT
+  - MMML_WORKFLOW_CONFIG
+  - MMML_CGENFF_EXTRA_RTF
+  - MMML_CGENFF_EXTRA_PRM
+  - CHARMM_LIB_DIR
+  - JAX_ENABLE_X64
+default-resources:
+  - gpu=1
+  - charmm_slot=1
+  - runtime=120

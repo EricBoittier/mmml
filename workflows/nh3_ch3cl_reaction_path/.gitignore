@@ -1,0 +1,4 @@
+.snakemake/
+results/
+*.log
+__pycache__/

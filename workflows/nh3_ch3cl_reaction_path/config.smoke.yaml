@@ -1,0 +1,69 @@
+# Fast smoke matrix for pipeline validation on studix GPU.
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
+
+checkpoint: examples/m/kl.json
+example_dir: examples/m
+output_root: artifacts/nh3_ch3cl_reaction_path_smoke
+box_size: 30.0
+seed: 0
+
+enable:
+  endpoints: true
+  make_boxes: true
+  neb: true
+  dmc: true
+  umbrella_gas: true
+  umbrella_sol: true
+  adumb_gas: false   # needs patched libcharmm ADUMBRXNCOR
+  adumb_sol: false
+  mbar: true
+
+solvents: [tip3]   # TIP3 only for smoke; add acn/dmso for full campaign
+
+umbrella:
+  active: [smoke]
+  variants:
+    smoke:
+      n_windows: 3
+      xi_min: 2.2
+      xi_max: 3.2
+      k_ev_A2: 5.0
+      nsteps: 40
+      timestep_fs_gas: 0.05
+      timestep_fs_sol: 0.5
+      printfreq: 20
+      savefreq: 20
+      runtime_min: 30
+
+neb:
+  n_images: 11
+  max_steps: 40
+  fmax: 0.1
+  runtime_min: 45
+
+dmc:
+  basins: [react, product]
+  nwalker: 16
+  nstep: 50
+  eqstep: 10
+  stepsize: 5.0e-4
+  alpha: 1200.0
+  runtime_min: 30
+
+adumb:
+  use_npz_pdb: true
+  runtime_min: 60
+
+make_boxes:
+  use_density: false
+  n_solvent: 12
+  runtime_min: 45
+
+slurm:
+  partition: gpu
+  runtime_min: 45
+  mem_mb_per_cpu: 4000
+  cpus_per_task: 4
+  nodes: 1
+  ntasks: 1
+  gpu: 1
