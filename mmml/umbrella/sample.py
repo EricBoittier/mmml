@@ -48,7 +48,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     from ase.io import write
     from jax_md import quantity, simulate, space
 
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+    from mmml.umbrella.checkpoint import load_params_and_model
 
     jax.config.update("jax_enable_x64", True)
 
@@ -71,9 +71,10 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     ks = cfg.resolve_force_constants()
     k_windows = len(targets)
 
-    restart = get_last(str(Path(cfg.checkpoint).expanduser().resolve()))
-    params, model = get_params_model(
-        str(restart), natoms=n_atoms, prefer_ema=cfg.use_ema
+    params, model = load_params_and_model(
+        Path(cfg.checkpoint).expanduser().resolve(),
+        natoms=n_atoms,
+        prefer_ema=cfg.use_ema,
     )
 
     graph = build_packed_graph(n_atoms, k_windows)

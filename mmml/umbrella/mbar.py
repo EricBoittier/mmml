@@ -110,7 +110,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     import jax
     import jax.numpy as jnp
 
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+    from mmml.umbrella.checkpoint import load_params_and_model
 
     jax.config.update("jax_enable_x64", True)
 
@@ -152,8 +152,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     xi0 = np.asarray(snap["xi0"], dtype=np.float64)
     k_arr = np.asarray(snap["k_ev_A2"], dtype=np.float64)
 
-    restart = get_last(str(checkpoint))
-    params, model = get_params_model(str(restart), natoms=n_atoms, prefer_ema=True)
+    params, model = load_params_and_model(checkpoint, natoms=n_atoms, prefer_ema=True)
     ml_fn = make_single_ml_energy_fn(
         model_apply=model.apply,
         params=params,

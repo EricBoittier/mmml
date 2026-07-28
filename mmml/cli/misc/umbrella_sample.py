@@ -3,8 +3,8 @@
 
 Usage:
     mmml umbrella-sample \\
-      --checkpoint out/ckpts/model \\
-      --structure molecule.xyz \\
+      --checkpoint examples/m/kl.json \\
+      --structure examples/m/neb/reag_0_opt.xyz \\
       --atoms 0,1 \\
       --xi-min 1.5 --xi-max 3.5 --n-windows 11 \\
       --k 20 --temperature 300 --nsteps 5000 -o out/umbrella
