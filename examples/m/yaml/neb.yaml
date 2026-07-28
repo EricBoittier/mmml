@@ -8,13 +8,13 @@ initial: ../neb/reag_0_opt.xyz
 final: ../neb/prod_0_opt.xyz
 output_dir: ../../artifacts/nh3_ch3cl/neb
 
-n_images: 100
-fmax: 0.0005
+n_images: 1000
+fmax: 0.2
 climb: False
 interpolate: idpp
 optimizer: BFGS
 neb_method: improvedtangent
-spring_k: 0.1
+spring_k: 0.5
 shared_calculator: true
 plot: true
 
