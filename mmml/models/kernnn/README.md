@@ -1,15 +1,9 @@
 # KerNN (JAX)
 
-Kernel-descriptor neural network: pairwise **ABCC** distances → 1D kernels
-(**k33**) → Softplus MLP → energy; forces via autodiff.
+Kernel-descriptor neural network: pairwise **ABCC** or **ABCC_sym** distances →
+1D kernels (**k33**) → Softplus MLP → energy; forces via autodiff.
 
-This package is the JAX/Flax port of the PyTorch prototype in
-[`scripts/kernn`](../../../scripts/kernn/). Prefer these APIs and CLIs for new
-work.
-
-## Molecule convention (H2CO / ABCC)
-
-Atom order: **C, O, H, H**. Six distances: C–O, C–H1, C–H2, O–H1, O–H2, H1–H2.
+Optional **DualFFNet** adds an H–C–O–H dihedral branch.
 
 ## Train / evaluate
 
@@ -19,6 +13,9 @@ mmml kernnn-train \
   --ntrain 3200 --seed 42 \
   --workdir artifacts/kernnn
 
+# Optional: permutationally symmetrized distances and/or dual architecture
+mmml kernnn-train --distance-scheme abcc_sym --architecture dual ...
+
 mmml kernnn-evaluate \
   --checkpoint artifacts/kernnn/best.json \
   --data datasets/h2co_ccsdt_avtz_4001.npz \
@@ -26,45 +23,32 @@ mmml kernnn-evaluate \
   --output-dir artifacts/kernnn/eval
 ```
 
-Checkpoints are portable JSON with `params`, `config`, and normalization
-`stats` (`mean_e`, `std_e`, `min_r`, `mean_k`, `std_k`).
-
-## ASE calculator
-
-```python
-from ase.io import read
-from mmml.models.kernnn import KerNNCalculator
-
-atoms = read("h2co.xyz")
-atoms.calc = KerNNCalculator("artifacts/kernnn/best.json")
-print(atoms.get_potential_energy(), atoms.get_forces())
-```
-
-## Dimer / IC scans
+## ASE / scans / NEB / umbrella / DMC
 
 ```bash
 mmml dimer-scan --calculator kernnn --checkpoint artifacts/kernnn/best.json ...
 mmml ic-scan --calculator kernnn --checkpoint artifacts/kernnn/best.json ...
+mmml neb --calculator kernnn --checkpoint artifacts/kernnn/best.json \
+  --initial h2co_a.xyz --final h2co_b.xyz --output-dir artifacts/neb
+mmml umbrella-sample --model kernnn --checkpoint artifacts/kernnn/best.json ...
+mmml dmc --model kernnn --natm 4 --nwalker 64 --stepsize 5e-4 \
+  --nstep 200 --eqstep 50 --alpha 1200.0 \
+  --checkpoint artifacts/kernnn/best.json --input h2co.extxyz
 ```
 
-## Importing a Torch state_dict
+## Hybrid MLpot / md-system
 
-```python
-from mmml.models.kernnn import import_torch_state_dict, H2CO_CALCULATOR_STATS
-
-params, config, stats = import_torch_state_dict(
-    "model_ema.pt",
-    stats=H2CO_CALCULATOR_STATS,
-    out_path="artifacts/kernnn/from_torch.json",
-)
-```
+Pass a KerNN JSON checkpoint to `setup_calculator` / `md-system`. Checkpoints with
+`config.model_type == "kernnn"` (and bundled `stats`) are auto-detected; monomers
+must be 4-atom ABCC (e.g. H₂CO liquid). Dimers are evaluated as the sum of two
+independent KerNN monomers.
 
 ## Python API
 
 ```python
 from mmml.models.kernnn import (
-    FFNet,
-    KerNNConfig,
+    KerNNCalculator,
+    DualFFNet,
     energy_and_forces,
     load_checkpoint,
 )

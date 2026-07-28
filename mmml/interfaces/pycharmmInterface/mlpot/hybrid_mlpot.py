@@ -1189,8 +1189,10 @@ def build_decomposed_mlpot_model(
     from mmml.models.kernnn import is_kernnn_checkpoint
 
     _spoof = jax_mm_spoof_enabled(args)
-    _ckpt = getattr(args, "model_restart_path", None) if args is not None else None
-    _kernnn = bool(_ckpt) and is_kernnn_checkpoint(_ckpt)
+    _ckpt_probe = Path(checkpoint).expanduser() if checkpoint is not None else None
+    if args is not None and getattr(args, "model_restart_path", None) is not None:
+        _ckpt_probe = Path(getattr(args, "model_restart_path")).expanduser()
+    _kernnn = bool(_ckpt_probe) and is_kernnn_checkpoint(_ckpt_probe)
     _ml_mode = "jax_mm_clone" if _spoof else ("kernnn" if _kernnn else "physnet")
     if _spoof:
         ckpt = Path("/dev/null")

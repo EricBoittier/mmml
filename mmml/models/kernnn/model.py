@@ -288,6 +288,7 @@ def energy_and_forces(
     raise ValueError(f"positions must be (N,3) or (B,N,3); got {positions.shape}")
 
 
+# Re-export commonly used symbol and helpers used by checkpoint I/O
 __all__ = [
     "DualFFNet",
     "FFNet",
@@ -299,3 +300,7 @@ __all__ = [
     "energy_from_params",
     "get_1d_kernels_k33",
 ]
+
+# Used by checkpoint.init_params / load_kernnn_model
+def build_model(cfg: KerNNConfig):
+    return _build_model(cfg)
