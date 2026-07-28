@@ -57,3 +57,13 @@ def test_full_config_expands_seed_temperature_solvent() -> None:
     dmc = [t for t in targets if "/dmc/" in t]
     assert len(dmc) == 2 * 3
     assert all("/T" not in t for t in dmc)
+
+
+def test_job_mbar_cli_has_no_output_dir_flag() -> None:
+    """Regression: umbrella-mbar rejects --output-dir (broke mbar_gas on studix)."""
+    import argparse
+    from mmml.cli.misc.umbrella_mbar import build_parser
+
+    parser = build_parser()
+    with __import__("pytest").raises(SystemExit):
+        parser.parse_args(["--run-dir", "/tmp", "--output-dir", "/tmp/mbar"])

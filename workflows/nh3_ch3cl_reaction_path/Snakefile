@@ -25,9 +25,11 @@ _CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir)
 CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
 
 WORKFLOW_DIR = Path(workflow.basedir)
-REPO_ROOT = WORKFLOW_DIR.parents[1]
+REPO_ROOT = WORKFLOW_DIR.parents[1].resolve()
 OUTPUT_ROOT = str(CFG.get("output_root", "artifacts/nh3_ch3cl_reaction_path"))
-ARTIFACT_ROOT = f"../../{OUTPUT_ROOT}"
+# Absolute artifact root so Slurm jobs do not depend on cwd.
+ARTIFACT_ROOT = str((REPO_ROOT / OUTPUT_ROOT).resolve())
+JOB_SHELL = str(WORKFLOW_DIR / "scripts" / "job_shell.sh")
 
 _need_umb = enabled(CFG, "umbrella_gas") or enabled(CFG, "umbrella_sol")
 VARIANTS = umbrella_variants(CFG) if _need_umb else ["smoke"]
@@ -39,10 +41,7 @@ SEEDS = cfg_seeds(CFG)
 _TEMP_WC = "|".join(str(t) for t in TEMPS) if TEMPS else "300"
 _SEED_WC = "|".join(str(s) for s in SEEDS) if SEEDS else "0"
 
-TARGETS = [
-    f"{ARTIFACT_ROOT}/{Path(t).relative_to(OUTPUT_ROOT)}"
-    for t in expand_targets(CFG, OUTPUT_ROOT)
-]
+TARGETS = expand_targets(CFG, ARTIFACT_ROOT)
 
 
 def _slurm_extra(wildcards) -> str:
@@ -88,18 +87,15 @@ rule endpoints:
     log:
         f"{ARTIFACT_ROOT}/endpoints/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/endpoints",
+        job_shell=JOB_SHELL,
     resources:
         **_res("endpoints"),
     shell:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job endpoints \
           --output-dir {params.out} \
           --status {output.status} \
@@ -117,18 +113,15 @@ rule make_boxes:
     log:
         f"{ARTIFACT_ROOT}/boxes/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=ARTIFACT_ROOT,
+        job_shell=JOB_SHELL,
     resources:
         **_res("make_boxes"),
     shell:
         r"""
         set -euo pipefail
         mkdir -p {params.out}/boxes
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job make_boxes \
           --output-dir {params.out} \
           --status {output.status} \
@@ -146,18 +139,15 @@ rule neb:
     log:
         f"{ARTIFACT_ROOT}/neb/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/neb",
+        job_shell=JOB_SHELL,
     resources:
         **_res("neb"),
     shell:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job neb \
           --output-dir {params.out} \
           --status {output.status} \
@@ -175,9 +165,8 @@ rule dmc:
     log:
         f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
     wildcard_constraints:
         basin="|".join(BASINS) if BASINS else "react|product",
         seed=_SEED_WC,
@@ -187,9 +176,7 @@ rule dmc:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job dmc \
           --basin {wildcards.basin} \
           --seed {wildcards.seed} \
@@ -209,9 +196,8 @@ rule umbrella_gas:
     log:
         f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
     wildcard_constraints:
         variant="|".join(VARIANTS),
         temperature=_TEMP_WC,
@@ -230,9 +216,7 @@ rule umbrella_gas:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job umbrella_gas \
           --variant {wildcards.variant} \
           --temperature {wildcards.temperature} \
@@ -254,9 +238,8 @@ rule umbrella_sol:
     log:
         f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
     wildcard_constraints:
         solvent="|".join(SOLVENTS),
         variant="|".join(VARIANTS),
@@ -276,9 +259,7 @@ rule umbrella_sol:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job umbrella_sol \
           --solvent {wildcards.solvent} \
           --variant {wildcards.variant} \
@@ -300,9 +281,8 @@ rule adumb_gas:
     log:
         f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
     wildcard_constraints:
         temperature=_TEMP_WC,
         seed=_SEED_WC,
@@ -312,9 +292,7 @@ rule adumb_gas:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job adumb_gas \
           --temperature {wildcards.temperature} \
           --seed {wildcards.seed} \
@@ -334,9 +312,8 @@ rule adumb_sol:
     log:
         f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         out=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
     wildcard_constraints:
         solvent="|".join(SOLVENTS),
         temperature=_TEMP_WC,
@@ -347,9 +324,7 @@ rule adumb_sol:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job adumb_sol \
           --solvent {wildcards.solvent} \
           --temperature {wildcards.temperature} \
@@ -368,10 +343,9 @@ rule mbar_gas:
     log:
         f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         run_dir=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}",
         out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar",
+        job_shell=JOB_SHELL,
     wildcard_constraints:
         variant="|".join(VARIANTS),
         temperature=_TEMP_WC,
@@ -382,9 +356,7 @@ rule mbar_gas:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job mbar \
           --run-dir {params.run_dir} \
           --output-dir {params.out} \
@@ -401,10 +373,9 @@ rule mbar_sol:
     log:
         f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/stdout.log",
     params:
-        cfg=_CFG_PATH,
-        repo=str(REPO_ROOT),
         run_dir=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}",
         out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar",
+        job_shell=JOB_SHELL,
     wildcard_constraints:
         solvent="|".join(SOLVENTS),
         variant="|".join(VARIANTS),
@@ -416,9 +387,7 @@ rule mbar_sol:
         r"""
         set -euo pipefail
         mkdir -p {params.out}
-        python {workflow.basedir}/scripts/run_job.py \
-          --config {params.cfg} \
-          --repo-root {params.repo} \
+        bash {params.job_shell} \
           --job mbar \
           --run-dir {params.run_dir} \
           --output-dir {params.out} \

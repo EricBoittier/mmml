@@ -234,9 +234,23 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
         else:
             cmd += ["--n", env["N_SOLVENT"]]
         print("+", " ".join(cmd), flush=True)
-        subprocess.run(cmd, cwd=str(work), check=True, env=env)
+        print(f"CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')}", flush=True)
+        proc = subprocess.run(cmd, cwd=str(work), env=env, capture_output=False)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"make-box failed for solvent={resi!r} (rc={proc.returncode}); "
+                f"work={work}; CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')!r}. "
+                "On studix: ensure Packmol + PyCHARMM and a patched CHARMM lib "
+                "(scripts/ensure_charmm_mlpot_limits.sh / rebuild_charmm_mlpot.sh)."
+            )
         pdb_src = work / f"pdb/init-nh3ch3cl_{tag}.pdb"
         psf_src = work / f"psf/system-nh3ch3cl_{tag}.psf"
+        if not pdb_src.is_file() or not psf_src.is_file():
+            found = sorted(str(p.relative_to(work)) for p in work.rglob("*") if p.is_file())
+            raise FileNotFoundError(
+                f"make-box finished but missing {pdb_src.name} / {psf_src.name} under {work}. "
+                f"files={found[:40]}"
+            )
         shutil.copy2(pdb_src, box_out / "model.pdb")
         shutil.copy2(psf_src, box_out / "model.psf")
         (box_out / "box.json").write_text(
@@ -570,8 +584,13 @@ def job_adumb_sol(
 
 
 def job_mbar(repo: Path, run_dir: Path, out: Path) -> dict[str, Any]:
+    """Run ``umbrella-mbar`` (writes into ``run_dir``) and mirror markers under ``out``."""
     if not run_dir.is_dir():
         raise FileNotFoundError(run_dir)
+    snap = run_dir / "umbrella_snapshots.npz"
+    if not snap.is_file():
+        raise FileNotFoundError(f"missing {snap}")
+    # CLI has no --output-dir; results land in run_dir (updates umbrella_summary.json).
     _uv_run(
         repo,
         [
@@ -579,11 +598,19 @@ def job_mbar(repo: Path, run_dir: Path, out: Path) -> dict[str, Any]:
             "umbrella-mbar",
             "--run-dir",
             str(run_dir),
-            "--output-dir",
-            str(out),
         ],
     )
-    return {"run_dir": str(run_dir), "mbar_dir": str(out)}
+    out.mkdir(parents=True, exist_ok=True)
+    summary = run_dir / "umbrella_summary.json"
+    mirrored = out / "umbrella_summary.json"
+    if summary.is_file():
+        shutil.copy2(summary, mirrored)
+    (out / "done.txt").write_text(f"mbar ok\nrun_dir={run_dir}\n", encoding="utf-8")
+    return {
+        "run_dir": str(run_dir),
+        "mbar_dir": str(out),
+        "summary": str(mirrored if mirrored.is_file() else summary),
+    }
 
 
 def main() -> int:

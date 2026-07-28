@@ -42,8 +42,15 @@ adumb_sol/{solvent}/T{T}/seed{S}/
 ls examples/m/model_ext.json
 
 cd ~/mmml
-uv sync --extra gpu   # PyCHARMM + CHARMM for make-box / ADUMB
+uv sync --extra gpu    # PyCHARMM + CHARMM for make-box / ADUMB
+uv sync --extra mbar   # pymbar for umbrella-mbar
+
+# CHARMM lib (GPU node). job_shell.sh also tries ensure_charmm_mlpot_limits.sh.
+export CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib}
 ```
+
+If `make_boxes` fails, check `artifacts/.../boxes/stdout.log` for Packmol / PyCHARMM /
+`CHARMM_LIB_DIR`. If `mbar_*` fails with `No module named pymbar`, run `uv sync --extra mbar`.
 
 ## Dry-run
 
