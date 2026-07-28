@@ -1475,7 +1475,21 @@ def build_decomposed_mlpot_model(
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True
         ),
-        ml_potential_mode="jax_mm_clone" if _spoof else "physnet",
+        ml_potential_mode=(
+            "jax_mm_clone"
+            if _spoof
+            else (
+                "kernnn"
+                if (
+                    args is not None
+                    and getattr(args, "model_restart_path", None) is not None
+                    and __import__(
+                        "mmml.models.kernnn", fromlist=["is_kernnn_checkpoint"]
+                    ).is_kernnn_checkpoint(getattr(args, "model_restart_path"))
+                )
+                else "physnet"
+            )
+        ),
         jax_mm_spoof_psf=(
             getattr(args, "jax_mm_spoof_psf", None) if args is not None else None
         ),

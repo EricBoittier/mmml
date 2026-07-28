@@ -18,11 +18,17 @@ usage: mmml kernnn-train [-h] [--data DATA] [--workdir WORKDIR]
                          [--learning-rate LEARNING_RATE] [--f-weight F_WEIGHT]
                          [--epochs EPOCHS] [--patience PATIENCE]
                          [--ema-decay EMA_DECAY] [--kernel KERNEL]
+                         [--distance-scheme {abcc,abcc_sym}]
+                         [--architecture {ffnet,dual}]
 
 Train KerNN (kernel Softplus MLP) on NPZ (R, E, F)
 
 Input & configuration:
   --data DATA           NPZ with R, E, F
+
+Scientific model:
+  --distance-scheme {abcc,abcc_sym}
+                        Distance descriptor (abcc or abcc_sym)
 
 Execution:
   --seed SEED           RNG seed for split/init
@@ -45,6 +51,8 @@ Other options:
                         epochs
   --ema-decay EMA_DECAY
   --kernel KERNEL       1D kernel name (default k33)
+  --architecture {ffnet,dual}
+                        ffnet (default) or dual (kernel + dihedral branch)
 ```
 
 

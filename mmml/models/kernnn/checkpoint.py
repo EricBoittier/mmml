@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.models.kernnn.model import FFNet, KerNNConfig, KerNNStats
+from mmml.models.kernnn.model import DualFFNet, FFNet, KerNNConfig, KerNNStats, _build_model
 from mmml.utils.model_checkpoint import to_jsonable
 
 # Hardcoded stats from scripts/kernn KerNNCalculator (H2CO train split).
@@ -69,6 +69,8 @@ def save_checkpoint(
             "min_r": _arrays_to_jsonable_leaves(st.min_r),
             "mean_k": _arrays_to_jsonable_leaves(st.mean_k),
             "std_k": _arrays_to_jsonable_leaves(st.std_k),
+            "mean_dihedral": float(st.mean_dihedral),
+            "std_dihedral": float(st.std_dihedral),
         },
     }
     if metadata:
@@ -103,14 +105,10 @@ def load_checkpoint(
 
 def load_kernnn_model(
     checkpoint: str | Path,
-) -> tuple[FFNet, dict[str, Any], KerNNConfig, KerNNStats]:
+) -> tuple[FFNet | DualFFNet, dict[str, Any], KerNNConfig, KerNNStats]:
     """Load Flax model + params + config + stats from a KerNN JSON checkpoint."""
     params, config, stats, _ = load_checkpoint(checkpoint)
-    model = FFNet(
-        n_input=config.n_input,
-        n_hidden=config.n_hidden,
-        n_out=config.n_out,
-    )
+    model = _build_model(config)
     return model, params, config, stats
 
 
@@ -212,8 +210,11 @@ def init_params(
     *,
     config: KerNNConfig | None = None,
 ) -> dict[str, Any]:
-    """Initialize Flax FFNet params with a dummy feature batch."""
+    """Initialize Flax model params with a dummy feature batch."""
     cfg = config or KerNNConfig()
-    model = FFNet(n_input=cfg.n_input, n_hidden=cfg.n_hidden, n_out=cfg.n_out)
-    dummy = jnp.zeros((1, cfg.n_input), dtype=jnp.float32)
-    return model.init(key, dummy)["params"]
+    model = _build_model(cfg)
+    dummy_k = jnp.zeros((1, cfg.n_input), dtype=jnp.float32)
+    if cfg.architecture == "dual":
+        dummy_d = jnp.zeros((1, 1), dtype=jnp.float32)
+        return model.init(key, dummy_k, dummy_d, deterministic=True)["params"]
+    return model.init(key, dummy_k)["params"]

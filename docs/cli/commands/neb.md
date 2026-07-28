@@ -13,8 +13,9 @@ mmml neb --help
 
 ```text
 usage: mmml neb [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
-                [--initial INITIAL] [--final FINAL] [--output-dir OUTPUT_DIR]
-                [--n-images N_IMAGES] [--fmax FMAX] [--climb | --no-climb]
+                [--calculator {physnet,kernnn}] [--initial INITIAL]
+                [--final FINAL] [--output-dir OUTPUT_DIR] [--n-images N_IMAGES]
+                [--fmax FMAX] [--climb | --no-climb]
                 [--interpolate {idpp,linear}] [--optimizer {BFGS,FIRE,MDMin}]
                 [--neb-method {improvedtangent,aseneb,eb,spline,string}]
                 [--spring-k SPRING_K]
@@ -29,9 +30,12 @@ Input & configuration:
   --config CONFIG       YAML/JSON NebConfig; CLI flags override file values when
                         set
   --checkpoint CHECKPOINT
-                        PhysNet / MMML checkpoint
+                        PhysNet / KerNN / MMML checkpoint
 
 Scientific model:
+  --calculator {physnet,kernnn}
+                        ASE calculator backend (default: auto-detect from
+                        checkpoint)
   --neb-method {improvedtangent,aseneb,eb,spline,string}
                         ASE NEB force method (default: improvedtangent)
   --shared-calculator, --no-shared-calculator

@@ -85,7 +85,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="YAML/JSON UmbrellaConfig; CLI flags override file values when set",
     )
-    parser.add_argument("--checkpoint", type=Path, help="PhysNet / SpookyNet checkpoint")
+    parser.add_argument("--checkpoint", type=Path, help="PhysNet / SpookyNet / KerNN checkpoint")
+    parser.add_argument(
+        "--model",
+        choices=("physnet", "kernnn"),
+        default=None,
+        help="ML backend (default: auto-detect KerNN JSON)",
+    )
     parser.add_argument(
         "--structure",
         type=Path,

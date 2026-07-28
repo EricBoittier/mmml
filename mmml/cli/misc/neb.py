@@ -44,7 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="YAML/JSON NebConfig; CLI flags override file values when set",
     )
-    parser.add_argument("--checkpoint", type=Path, help="PhysNet / MMML checkpoint")
+    parser.add_argument("--checkpoint", type=Path, help="PhysNet / KerNN / MMML checkpoint")
+    parser.add_argument(
+        "--calculator",
+        choices=("physnet", "kernnn"),
+        default=None,
+        help="ASE calculator backend (default: auto-detect from checkpoint)",
+    )
     parser.add_argument("--initial", type=Path, help="Reactant / initial XYZ")
     parser.add_argument("--final", type=Path, help="Product / final XYZ")
     parser.add_argument(
@@ -168,6 +174,7 @@ def _config_from_args(args: argparse.Namespace) -> NebConfig:
 
     cli_map = {
         "checkpoint": args.checkpoint,
+        "calculator": args.calculator,
         "initial": args.initial,
         "final": args.final,
         "output_dir": args.output_dir,

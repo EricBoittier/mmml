@@ -31,6 +31,8 @@ class NebConfig:
     max_steps: int | None = None
     plot: bool = True
     overwrite: bool = False
+    calculator: str | None = None
+    """Optional calculator backend (``physnet`` / ``kernnn``); auto-detect if unset."""
     pair_indices: tuple[tuple[int, int], ...] = field(
         default_factory=lambda: ((1, 2), (0, 2))
     )

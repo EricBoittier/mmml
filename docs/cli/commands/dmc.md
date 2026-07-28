@@ -67,8 +67,8 @@ mmml dmc --help
 ```text
 usage: mmml dmc [-h] --natm NATM --nwalker NWALKER --stepsize STEPSIZE
                 --nstep NSTEP --eqstep EQSTEP --alpha ALPHA [--fbohr {0,1}]
-                --checkpoint CHECKPOINT [--max-batch MAX_BATCH]
-                [--minimize-fmax MINIMIZE_FMAX]
+                --checkpoint CHECKPOINT [--model {physnet,kernnn}]
+                [--max-batch MAX_BATCH] [--minimize-fmax MINIMIZE_FMAX]
                 [--minimize-steps MINIMIZE_STEPS] [--random-sigma RANDOM_SIGMA]
                 [--seed SEED] -i INPUT [--output-dir OUTPUT_DIR]
 
@@ -77,9 +77,13 @@ jax.vmap).
 
 Input & configuration:
   --checkpoint CHECKPOINT
-                        PhysNetJax checkpoint directory (experiment or epoch
-                        path).
+                        PhysNetJax or KerNN checkpoint (JSON / Orbax).
   -i, --input INPUT     Geometry file (XYZ/EXTXYZ/anything ASE can read).
+
+Scientific model:
+  --model {physnet,kernnn}
+                        Energy backend (default: auto-detect KerNN JSON vs
+                        PhysNet).
 
 Execution:
   --stepsize STEPSIZE   Imaginary-time stepsize (atomic units).

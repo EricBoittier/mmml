@@ -82,7 +82,22 @@ def _attach_calculators(
         image.calc = make_calc()
 
 
-def _default_calculator_factory(checkpoint: Path) -> Callable[[], Any]:
+def _default_calculator_factory(
+    checkpoint: Path,
+    *,
+    calculator: str | None = None,
+) -> Callable[[], Any]:
+    from mmml.models.kernnn import KerNNCalculator, is_kernnn_checkpoint
+
+    calc_name = (calculator or "").strip().lower()
+    if calc_name == "kernnn" or (not calc_name and is_kernnn_checkpoint(checkpoint)):
+        path = Path(checkpoint)
+
+        def make_kernnn() -> Any:
+            return KerNNCalculator(path)
+
+        return make_kernnn
+
     from mmml.interfaces.calculators.checkpoint_loading import (
         create_calculator_from_checkpoint,
         load_checkpoint_bundle,
@@ -215,7 +230,9 @@ def run_neb(
     images.extend(initial.copy() for _ in range(config.n_images - 2))
     images.append(final.copy())
 
-    make_calc = calculator_factory or _default_calculator_factory(ckpt_path)
+    make_calc = calculator_factory or _default_calculator_factory(
+        ckpt_path, calculator=getattr(config, "calculator", None)
+    )
     _attach_calculators(images, make_calc, shared=config.shared_calculator)
 
     NEB = _import_neb()

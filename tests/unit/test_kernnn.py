@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import jax
 import jax.numpy as jnp
 import numpy as np

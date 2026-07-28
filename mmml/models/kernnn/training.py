@@ -15,8 +15,9 @@ import numpy as np
 import optax
 
 from mmml.models.kernnn.checkpoint import init_params, save_checkpoint
-from mmml.models.kernnn.distances import get_bond_length_abcc
-from mmml.models.kernnn.kernels import get_1d_kernels_k33
+from mmml.models.kernnn.dihedrals import h2co_hcoh_dihedral
+from mmml.models.kernnn.distances import DISTANCE_FNS, n_features_for_scheme
+from mmml.models.kernnn.kernels import KERNEL_FNS
 from mmml.models.kernnn.model import (
     KerNNConfig,
     KerNNStats,
@@ -40,6 +41,8 @@ _TRAIN_DEFAULTS = {
     "patience": 200,
     "ema_decay": 0.999,
     "kernel": "k33",
+    "distance_scheme": "abcc",
+    "architecture": "ffnet",
 }
 
 
@@ -66,6 +69,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--ema-decay", type=float, default=d["ema_decay"])
     p.add_argument("--kernel", type=str, default=d["kernel"], help="1D kernel name (default k33)")
+    p.add_argument(
+        "--distance-scheme",
+        type=str,
+        default=d["distance_scheme"],
+        choices=sorted(DISTANCE_FNS),
+        help="Distance descriptor (abcc or abcc_sym)",
+    )
+    p.add_argument(
+        "--architecture",
+        type=str,
+        default=d["architecture"],
+        choices=("ffnet", "dual"),
+        help="ffnet (default) or dual (kernel + dihedral branch)",
+    )
     return p
 
 
@@ -82,27 +99,37 @@ def _compute_stats(
     idx_train: np.ndarray,
     *,
     kernel: str = "k33",
+    distance_scheme: str = "abcc",
+    architecture: str = "ffnet",
 ) -> KerNNStats:
     """Match Torch script: min_r / k stats on full set; E stats on train only."""
-    from mmml.models.kernnn.kernels import KERNEL_FNS
-
     pos_j = jnp.asarray(positions, dtype=jnp.float32)
     e_j = jnp.asarray(energies, dtype=jnp.float32)
-    nintdist = 6
+    dist_fn = DISTANCE_FNS[distance_scheme]
     min_idx = int(jnp.argmin(e_j))
-    min_r = get_bond_length_abcc(pos_j[min_idx], nintdist)
-    r_all = get_bond_length_abcc(pos_j, nintdist)
+    min_r = dist_fn(pos_j[min_idx], 6)
+    r_all = dist_fn(pos_j, 6)
     k_fn = KERNEL_FNS[kernel]
     k_all = k_fn(r_all, min_r, 1.0)
     mean_k = jnp.mean(k_all, axis=0)
     std_k = jnp.std(k_all, axis=0)
     e_train = e_j[idx_train]
+    mean_dih = 0.0
+    std_dih = 1.0
+    if architecture == "dual":
+        phi = h2co_hcoh_dihedral(pos_j)
+        mean_dih = float(jnp.mean(phi))
+        std_dih = float(jnp.std(phi))
+        if std_dih < 1e-8:
+            std_dih = 1.0
     return KerNNStats(
         mean_e=float(jnp.mean(e_train)),
         std_e=float(jnp.std(e_train)),
         min_r=np.asarray(min_r),
         mean_k=np.asarray(mean_k),
         std_k=np.asarray(std_k),
+        mean_dihedral=mean_dih,
+        std_dihedral=std_dih,
     )
 
 
@@ -156,13 +183,21 @@ def train(args) -> Path:
     idx_test = idx[ntrain + nvalid :]
 
     config = KerNNConfig(
-        n_input=6,
+        n_input=n_features_for_scheme(str(args.distance_scheme)),
         n_hidden=int(args.n_hidden),
         n_out=1,
         kernel=str(args.kernel),
-        distance_scheme="abcc",
+        distance_scheme=str(args.distance_scheme),
+        architecture=str(args.architecture),
     )
-    stats = _compute_stats(positions, energies, idx_train, kernel=config.kernel)
+    stats = _compute_stats(
+        positions,
+        energies,
+        idx_train,
+        kernel=config.kernel,
+        distance_scheme=config.distance_scheme,
+        architecture=config.architecture,
+    )
 
     key = jax.random.key(int(args.seed))
     key, init_key = jax.random.split(key)

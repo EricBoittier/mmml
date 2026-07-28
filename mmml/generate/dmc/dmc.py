@@ -104,7 +104,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--checkpoint",
         type=Path,
         required=True,
-        help="PhysNetJax checkpoint directory (experiment or epoch path).",
+        help="PhysNetJax or KerNN checkpoint (JSON / Orbax).",
+    )
+    parser.add_argument(
+        "--model",
+        choices=("physnet", "kernnn"),
+        default=None,
+        help="Energy backend (default: auto-detect KerNN JSON vs PhysNet).",
     )
     parser.add_argument(
         "--max-batch",
@@ -171,12 +177,22 @@ def _minimise_structure_with_model(
     *,
     minimize_fmax: float,
     minimize_steps: int,
+    backend: str = "physnet",
+    kernnn_checkpoint: Path | None = None,
 ):
     from ase.optimize import BFGS
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
     atoms_min = atoms.copy()
-    calc = get_ase_calc(params, model, atoms_min)
+    if backend == "kernnn":
+        from mmml.models.kernnn import KerNNCalculator
+
+        if kernnn_checkpoint is None:
+            raise ValueError("KerNN minimize requires kernnn_checkpoint")
+        calc = KerNNCalculator(kernnn_checkpoint)
+    else:
+        from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+
+        calc = get_ase_calc(params, model, atoms_min)
     atoms_min.calc = calc
     dyn = BFGS(atoms_min, logfile=None)
     try:
@@ -306,8 +322,39 @@ def run_dmc(args: argparse.Namespace) -> int:
         pair_dst_jnp = jnp.asarray(pair_dst, dtype=jnp.int32)
         pair_src_jnp = jnp.asarray(pair_src, dtype=jnp.int32)
 
-        _base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
-        params, model = load_model_parameters(epoch_dir, natoms=natm)
+        from mmml.models.kernnn import (
+            KerNNApplyAdapter,
+            is_kernnn_checkpoint,
+            load_checkpoint,
+        )
+
+        model_name = getattr(args, "model", None)
+        use_kernnn = (
+            str(model_name or "").lower() == "kernnn"
+            or (not model_name and is_kernnn_checkpoint(args.checkpoint))
+        )
+
+        kernnn_ckpt_path = None
+        if use_kernnn:
+            kernnn_ckpt_path = Path(args.checkpoint).expanduser()
+            if kernnn_ckpt_path.is_dir():
+                for name in ("best.json", "params.json"):
+                    cand = kernnn_ckpt_path / name
+                    if cand.is_file():
+                        kernnn_ckpt_path = cand
+                        break
+            kn_params, kn_config, kn_stats, _ = load_checkpoint(kernnn_ckpt_path)
+            if natm != 4:
+                raise SystemExit(
+                    f"KerNN DMC currently supports 4-atom ABCC systems; got --natm {natm}"
+                )
+            params = kn_params
+            model = KerNNApplyAdapter(stats=kn_stats, config=kn_config, n_atoms=natm)
+            backend = "kernnn"
+        else:
+            _base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
+            params, model = load_model_parameters(epoch_dir, natoms=natm)
+            backend = "physnet"
 
         template_atoms = first_frame.copy()
         template_atoms.calc = None
@@ -319,6 +366,8 @@ def run_dmc(args: argparse.Namespace) -> int:
                 model,
                 minimize_fmax=args.minimize_fmax,
                 minimize_steps=args.minimize_steps,
+                backend=backend,
+                kernnn_checkpoint=kernnn_ckpt_path,
             )
             xmin = np.asarray(xmin_atoms.get_positions(), dtype=float)
         except Exception as exc:  # pragma: no cover - fallback if minimisation fails
@@ -334,16 +383,29 @@ def run_dmc(args: argparse.Namespace) -> int:
         def _reshape_to_angstrom(coords_flat: np.ndarray) -> jnp.ndarray:
             return jnp.asarray(coords_flat.reshape(natm, 3) * AUANG, dtype=jnp.float32)
 
-        @jax.jit
-        def single_energy_fn(positions_angstrom: jnp.ndarray) -> jnp.ndarray:
-            output = model.apply(
-                params,
-                atomic_numbers=atomic_numbers_jnp,
-                positions=positions_angstrom,
-                dst_idx=pair_dst_jnp,
-                src_idx=pair_src_jnp,
-            )
-            return output["energy"].squeeze()
+        if backend == "kernnn":
+
+            @jax.jit
+            def single_energy_fn(positions_angstrom: jnp.ndarray) -> jnp.ndarray:
+                output = model.apply(
+                    params,
+                    positions=positions_angstrom,
+                    compute_forces=False,
+                )
+                return jnp.asarray(output["energy"]).reshape(())
+
+        else:
+
+            @jax.jit
+            def single_energy_fn(positions_angstrom: jnp.ndarray) -> jnp.ndarray:
+                output = model.apply(
+                    params,
+                    atomic_numbers=atomic_numbers_jnp,
+                    positions=positions_angstrom,
+                    dst_idx=pair_dst_jnp,
+                    src_idx=pair_src_jnp,
+                )
+                return output["energy"].squeeze()
 
         # Parallelised walker energies: vmap over geometries, then JIT.
         batched_energy_fn: Callable = jax.jit(jax.vmap(single_energy_fn))

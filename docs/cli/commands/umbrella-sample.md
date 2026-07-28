@@ -13,7 +13,7 @@ mmml umbrella-sample --help
 
 ```text
 usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
-                            [--structure STRUCTURE]
+                            [--model {physnet,kernnn}] [--structure STRUCTURE]
                             [--structure-index STRUCTURE_INDEX]
                             [--seed-mode {stretch,tile,frames}]
                             [--output-dir OUTPUT_DIR] [--atoms ATOMS]
@@ -43,13 +43,15 @@ Input & configuration:
   --config CONFIG       YAML/JSON UmbrellaConfig; CLI flags override file values
                         when set
   --checkpoint CHECKPOINT
-                        PhysNet / SpookyNet checkpoint
+                        PhysNet / SpookyNet / KerNN checkpoint
   --structure STRUCTURE
                         Starting geometry: XYZ, PDB, or NPZ with R/Z arrays
   --structure-index STRUCTURE_INDEX
                         Frame index for multi-frame XYZ/PDB/NPZ (default: 0)
 
 Scientific model:
+  --model {physnet,kernnn}
+                        ML backend (default: auto-detect KerNN JSON)
   --thermostat {langevin,nose-hoover}
                         Packed-batch thermostat (default: langevin). Nose-Hoover
                         shares one chain across windows and can cascade failures

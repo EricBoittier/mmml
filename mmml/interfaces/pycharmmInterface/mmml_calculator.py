@@ -492,7 +492,12 @@ def setup_calculator(
     _ = MAX_ATOMS_PER_SYSTEM
     if model_restart_path is None:
         _ml_mode = str(ml_potential_mode or "physnet").strip().lower()
-        if _ml_mode not in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}:
+        if _ml_mode not in {
+            "jax_mm_clone",
+            "jax-mm-clone",
+            "jax_mm_spoof",
+            "kernnn",
+        }:
             raise ValueError("model_restart_path must be provided")
 
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
@@ -678,22 +683,39 @@ def setup_calculator(
     N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    _jax_mm_spoof_mode = str(ml_potential_mode or "physnet").strip().lower() in {
+    _ml_mode_norm = str(ml_potential_mode or "physnet").strip().lower()
+    # Auto-detect KerNN JSON checkpoints even when mode defaults to physnet.
+    if (
+        _ml_mode_norm == "physnet"
+        and restart_path is not None
+    ):
+        try:
+            from mmml.models.kernnn import is_kernnn_checkpoint
+
+            if is_kernnn_checkpoint(restart_path):
+                _ml_mode_norm = "kernnn"
+        except Exception:
+            pass
+    _jax_mm_spoof_mode = _ml_mode_norm in {
         "jax_mm_clone",
         "jax-mm-clone",
         "jax_mm_spoof",
     }
+    _kernnn_mode = _ml_mode_norm == "kernnn"
     if _jax_mm_spoof_mode:
         setup_rows.append(("ml_backend", "JAX CGenFF bonded clone (spoof PhysNet)"))
         if restart_path is not None:
             setup_rows.append(("model_restart_path", "(spoof; checkpoint unused)"))
+    elif _kernnn_mode:
+        setup_rows.append(("ml_backend", "KerNN (kernel Softplus MLP)"))
+        setup_rows.append(("model_restart_path", restart_path.resolve() if restart_path else "(missing)"))
     else:
         setup_rows.append(("model_restart_path", restart_path.resolve()))
 
     # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
     is_json_checkpoint = False
     is_joint_checkpoint = False
-    if not _jax_mm_spoof_mode and restart_path is not None:
+    if not _jax_mm_spoof_mode and not _kernnn_mode and restart_path is not None:
         is_json_checkpoint = (
             (restart_path.is_file() and restart_path.suffix == ".json")
             or ((restart_path / "params.json").exists())
@@ -717,6 +739,7 @@ def setup_calculator(
     _is_spooky_model = False
     _jax_mm_spoof_monomer_eval = None
     _jax_mm_spoof_batch_apply = None
+    _kernnn_batch_apply = None
     if _jax_mm_spoof_mode:
         from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
             build_jax_mm_spoof_batch_apply,
@@ -744,6 +767,38 @@ def setup_calculator(
         is_spooky_model = False
         is_json_checkpoint = False
         is_joint_checkpoint = False
+    elif _kernnn_mode:
+        from mmml.models.kernnn import build_kernnn_batch_apply, load_checkpoint
+
+        if restart_path is None:
+            raise ValueError("KerNN hybrid backend requires model_restart_path")
+        ckpt_file = restart_path
+        if ckpt_file.is_dir():
+            for name in ("best.json", "params.json"):
+                cand = ckpt_file / name
+                if cand.is_file():
+                    ckpt_file = cand
+                    break
+        _kn_params, _kn_config, _kn_stats, _ = load_checkpoint(ckpt_file)
+        _kernnn_batch_apply = build_kernnn_batch_apply(
+            params=_kn_params,
+            stats=_kn_stats,
+            config=_kn_config,
+            max_atoms=max_atoms,
+            atoms_per_monomer=atoms_per_monomer_list,
+        )
+        MODEL = None
+        params = _kn_params
+        is_spooky_model = False
+        is_json_checkpoint = False
+        is_joint_checkpoint = False
+        checkpoint_meta = {
+            "Checkpoint": str(ckpt_file.resolve()),
+            "name": ckpt_file.name,
+            "epoch": "—",
+            "best_loss": "—",
+            "Save Time": "—",
+        }
     elif is_joint_checkpoint:
         from mmml.interfaces.calculators.checkpoint_loading import load_physnet_for_hybrid_mlpot
 
@@ -906,7 +961,7 @@ def setup_calculator(
             restart, natoms=max_atoms, quiet=True, return_meta=True, prefer_ema=ml_use_ema
         )
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
-    if not _jax_mm_spoof_mode:
+    if not _jax_mm_spoof_mode and not _kernnn_mode:
         MODEL.max_padded_atoms = max_atoms
 
     from mmml.interfaces.pycharmmInterface.mm_charge_correction import (
@@ -930,7 +985,7 @@ def setup_calculator(
     )
     _model_has_charges = bool(
         getattr(MODEL, "charges", False)
-        if not _jax_mm_spoof_mode
+        if not _jax_mm_spoof_mode and not _kernnn_mode
         else False
     )
     assert_mm_charge_mode_dimer_supported(
@@ -1167,7 +1222,7 @@ def setup_calculator(
         # forces near ±L/2 and breaks minimization / NVE.
         use_smooth_mic = False
 
-    if cell and not _jax_mm_spoof_mode:
+    if cell and not _jax_mm_spoof_mode and not _kernnn_mode:
         MODEL.use_pbc = True
         cell_arr = jnp.asarray(cell)
         if cell_arr.ndim == 0:
@@ -1180,6 +1235,21 @@ def setup_calculator(
         else:
             raise ValueError(f"cell must be scalar, (3,), or (3,3); got {cell_arr.shape}")
         # MIC-only PBC: cell list uses wrap-by-molecule for binning (in cell_list.py).
+        pbc_cell = cell
+        do_pbc_map = False
+        pbc_map = None
+    elif cell and (_jax_mm_spoof_mode or _kernnn_mode):
+        # Alternate ML backends still need a numeric box for PBC neighbor lists.
+        cell_arr = jnp.asarray(cell)
+        if cell_arr.ndim == 0:
+            cell = jnp.asarray([[float(cell), 0, 0], [0, float(cell), 0], [0, 0, float(cell)]])
+        elif cell_arr.shape == (3,):
+            a, b, c = float(cell_arr[0]), float(cell_arr[1]), float(cell_arr[2])
+            cell = jnp.asarray([[a, 0, 0], [0, b, 0], [0, 0, c]])
+        elif cell_arr.shape == (3, 3):
+            cell = jnp.asarray(cell_arr, dtype=jnp.float64)
+        else:
+            raise ValueError(f"cell must be scalar, (3,), or (3,3); got {cell_arr.shape}")
         pbc_cell = cell
         do_pbc_map = False
         pbc_map = None
@@ -1217,7 +1287,9 @@ def setup_calculator(
     from mmml.interfaces.pycharmmInterface.long_range_backend import collect_lr_solver_mapping
 
     _checkpoint_dir = (
-        "(jax_mm_clone spoof)" if _jax_mm_spoof_mode else str(restart_path.resolve())
+        "(jax_mm_clone spoof)"
+        if _jax_mm_spoof_mode
+        else str(restart_path.resolve()) if restart_path is not None else "(none)"
     )
     _handoff = {
         "ml_switch_width_Å": f"{ml_switch_width:.4f}",
@@ -1246,11 +1318,15 @@ def setup_calculator(
             _cell_side = float(np.asarray(pbc_cell)[0, 0])
         except Exception:
             _cell_side = None
-    _zbl_map = collect_zbl_cutoff_mapping(MODEL)
-    if _jax_mm_spoof_mode and _zbl_map is None:
+    _zbl_map = collect_zbl_cutoff_mapping(MODEL) if MODEL is not None else None
+    if (_jax_mm_spoof_mode or _kernnn_mode) and _zbl_map is None:
         _zbl_map = {
             "enabled": False,
-            "note": "n/a (jax_mm_clone spoof; no PhysNet ZBL)",
+            "note": (
+                "n/a (KerNN; no PhysNet ZBL)"
+                if _kernnn_mode
+                else "n/a (jax_mm_clone spoof; no PhysNet ZBL)"
+            ),
         }
     _mm_charge_mode_dashboard = next(
         (label for key, label in setup_rows if key == "mm_charge_mode"),
@@ -1304,9 +1380,13 @@ def setup_calculator(
             "Hybrid ML/MM (jax_mm_clone spoof)"
             if _jax_mm_spoof_mode
             else (
-                "Hybrid ML/MM (SpookyPhysNet spherical cutoff)"
-                if _is_spooky_model
-                else "Hybrid ML/MM (PhysNet spherical cutoff)"
+                "Hybrid ML/MM (KerNN)"
+                if _kernnn_mode
+                else (
+                    "Hybrid ML/MM (SpookyPhysNet spherical cutoff)"
+                    if _is_spooky_model
+                    else "Hybrid ML/MM (PhysNet spherical cutoff)"
+                )
             )
         ),
         n_monomers=n_monomers,
@@ -2180,6 +2260,13 @@ def setup_calculator(
             """Applies the ML model to batched inputs (with optional chunking)."""
             if _jax_mm_spoof_mode:
                 return _jax_mm_spoof_batch_apply(
+                    atomic_numbers,
+                    positions,
+                    batches["N"],
+                    batches.get("N_a"),
+                )
+            if _kernnn_mode:
+                return _kernnn_batch_apply(
                     atomic_numbers,
                     positions,
                     batches["N"],
