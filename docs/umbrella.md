@@ -33,6 +33,13 @@ Nose-Hoover chain couples replicas, so one hot window can spike the batch T and
 NaN everyone else. Per-window kinetic temperatures are printed each
 `--printfreq` and abort above `--max-window-temp` (default 5×T).
 
+### Replica exchange
+
+`--replica-exchange` enables Hamiltonian RE between neighbor windows (bias-only
+Metropolis; ML energy cancels). Even/odd neighbor pairs on the 1D chain or 2D
+grid are proposed every `--rex-freq` steps (default 100). Cumulative acceptance
+is written to `umbrella_summary.json`.
+
 The layout matches multi-replica [`mmml physnet-md`](cli/commands/physnet-md.md)
 batching. Vacuum / free space only (no PBC MIC restraints in v1).
 
@@ -79,6 +86,7 @@ mmml umbrella-sample \
   --xi-min 1.8 --xi-max 3.0 --n-windows 4 \
   --yi-min 1.8 --yi-max 3.0 --n-windows-y 4 \
   --k 10 --ky 10 --timestep 0.1 --nsteps 5000 \
+  --replica-exchange --rex-freq 100 \
   -o artifacts/umbrella2d --overwrite
 ```
 

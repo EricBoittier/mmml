@@ -215,6 +215,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Abort if any window kinetic T exceeds this (K; default: 5× --temperature)",
     )
     parser.add_argument(
+        "--replica-exchange",
+        action="store_true",
+        help=(
+            "Enable Hamiltonian replica exchange between neighbor umbrella windows "
+            "(bias-only Metropolis; even/odd pairs on the 1D/2D grid)"
+        ),
+    )
+    parser.add_argument(
+        "--rex-freq",
+        type=int,
+        default=None,
+        help="Attempt RE swaps every this many steps (default: 100)",
+    )
+    parser.add_argument(
         "--temperature",
         dest="temperature_K",
         type=float,
@@ -317,6 +331,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "thermostat": args.thermostat,
         "langevin_gamma": args.langevin_gamma,
         "max_window_temp_K": args.max_window_temp_K,
+        "rex_freq": args.rex_freq,
     }
     for key, value in cli_map.items():
         if value is not None:
@@ -333,6 +348,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         data["use_ema"] = False
     if args.overwrite:
         data["overwrite"] = True
+    if args.replica_exchange:
+        data["replica_exchange"] = True
 
     required = ("checkpoint", "structure", "output_dir")
     missing = [name for name in required if not data.get(name)]
@@ -363,6 +380,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("max_seed_force", 15.0)
     data.setdefault("thermostat", "langevin")
     data.setdefault("langevin_gamma", 0.1)
+    data.setdefault("replica_exchange", False)
+    data.setdefault("rex_freq", 100)
 
     return UmbrellaConfig.from_dict(data)
 

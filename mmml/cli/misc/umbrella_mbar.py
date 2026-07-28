@@ -10,10 +10,46 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 from mmml.umbrella.config import UmbrellaMbarConfig
 from mmml.umbrella.io import SUMMARY_JSON
 from mmml.umbrella.mbar import run_umbrella_mbar
+
+
+def _format_pmf_report(result: dict[str, Any]) -> list[str]:
+    """Human-readable MBAR PMF lines (1D list and optional 2D matrix)."""
+    lines: list[str] = ["Umbrella MBAR done:"]
+    xi0 = list(result.get("xi0") or [])
+    yi0 = result.get("yi0")
+    pmf = list(result.get("pmf_rel_kcal_mol") or [])
+    d_pmf = list(result.get("d_pmf_rel_kcal_mol") or [])
+    ndim = int(result.get("ndim") or (2 if yi0 else 1))
+
+    if ndim >= 2 and yi0 is not None and len(yi0) == len(pmf):
+        for i, (x, y, f) in enumerate(zip(xi0, yi0, pmf)):
+            err = f"  ±{d_pmf[i]:.4f}" if i < len(d_pmf) else ""
+            lines.append(f"  ξ₀={x:.4f} Å  η₀={y:.4f} Å   PMF={f:.4f}{err} kcal/mol")
+        grid = result.get("pmf_rel_kcal_mol_2d")
+        shape = result.get("grid_shape")
+        if grid is not None and shape is not None and len(shape) == 2:
+            nx, ny = int(shape[0]), int(shape[1])
+            # Unique axis ticks in ravel order
+            xs = [xi0[i * ny] for i in range(nx)] if nx * ny == len(xi0) else []
+            ys = list(yi0[:ny]) if len(yi0) >= ny else []
+            lines.append(f"  PMF grid (kcal/mol) shape={nx}×{ny}  rows=ξ₀ cols=η₀:")
+            if ys:
+                hdr = "           " + " ".join(f"{y:8.3f}" for y in ys)
+                lines.append(hdr)
+            for ix, row in enumerate(grid):
+                label = f"{xs[ix]:8.3f}" if ix < len(xs) else f"{ix:8d}"
+                body = " ".join(f"{float(v):8.3f}" for v in row)
+                lines.append(f"  {label}  {body}")
+    else:
+        for i, (x, f) in enumerate(zip(xi0, pmf)):
+            err = f"  ±{d_pmf[i]:.4f}" if i < len(d_pmf) else ""
+            lines.append(f"  ξ₀={x:.4f} Å   PMF={f:.4f}{err} kcal/mol")
+    return lines
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -72,15 +108,17 @@ def main(argv: list[str] | None = None) -> int:
     if "error" in result:
         print(f"MBAR error: {result['error']}")
         return 1
-    print("Umbrella MBAR done:")
-    xi0 = result.get("xi0") or []
-    pmf = result.get("pmf_rel_kcal_mol") or []
-    for x, f in zip(xi0, pmf):
-        print(f"  ξ₀={x:.4f} Å   PMF={f:.4f} kcal/mol")
+    for line in _format_pmf_report(result):
+        print(line)
     summary_path = Path(args.run_dir).expanduser().resolve() / SUMMARY_JSON
     print(f"  summary: {summary_path}")
     # Ensure JSON-serializable echo for scripting
-    print(json.dumps({"N_k_effective": result.get("N_k_effective")}, indent=2))
+    n_eff = result.get("N_k_effective") or []
+    echo: dict[str, Any] = {"N_k_effective": n_eff}
+    if n_eff:
+        echo["N_k_effective_min"] = int(min(n_eff))
+        echo["N_k_effective_median"] = float(sorted(n_eff)[len(n_eff) // 2])
+    print(json.dumps(echo, indent=2))
     return 0
 
 

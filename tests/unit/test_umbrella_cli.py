@@ -118,6 +118,23 @@ def test_mbar_parser():
     assert args.mbar_verbose is True
 
 
+def test_format_pmf_report_2d():
+    from mmml.cli.misc.umbrella_mbar import _format_pmf_report
+
+    result = {
+        "ndim": 2,
+        "xi0": [1.8, 1.8, 2.0, 2.0],
+        "yi0": [1.8, 2.0, 1.8, 2.0],
+        "pmf_rel_kcal_mol": [1.0, 0.0, 2.0, 3.0],
+        "d_pmf_rel_kcal_mol": [0.1, 0.1, 0.1, 0.1],
+        "grid_shape": [2, 2],
+        "pmf_rel_kcal_mol_2d": [[1.0, 0.0], [2.0, 3.0]],
+    }
+    lines = _format_pmf_report(result)
+    assert any("η₀=" in line for line in lines)
+    assert any("PMF grid" in line for line in lines)
+
+
 def test_sample_parser_2d():
     parser = build_sample_parser()
     args = parser.parse_args(

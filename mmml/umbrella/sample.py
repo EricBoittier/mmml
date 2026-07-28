@@ -243,8 +243,61 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f" max={float(np.max(fmax_k)):.2f} eV/Å"
     )
     print(f"  Initial E_total={e0:.4f} eV  max|F|={f0_max:.4f} eV/Å")
+    rex_stats = None
+    rex_phase = 0
+    rex_rng = None
+    if cfg.replica_exchange:
+        from mmml.umbrella.rex import RexStats
+
+        if k_windows < 2:
+            raise ValueError("replica exchange requires at least 2 windows")
+        rex_stats = RexStats()
+        rex_rng = np.random.default_rng(int(cfg.seed) + 17)
+        print(
+            f"  replica_exchange=on  rex_freq={cfg.rex_freq}  "
+            f"neighbor even/odd on grid={sched.grid_shape}"
+        )
     for step in range(1, int(cfg.nsteps) + 1):
         state = apply_fn(state)
+        if (
+            cfg.replica_exchange
+            and rex_stats is not None
+            and rex_rng is not None
+            and step % int(cfg.rex_freq) == 0
+        ):
+            import dataclasses
+
+            from mmml.umbrella.rex import attempt_replica_exchanges
+
+            cv_now = _cv_frame(state.position)
+            force_arr = getattr(state, "force", None)
+            pos_new, mom_new, frc_new, n_att, n_acc = attempt_replica_exchanges(
+                positions_packed=np.asarray(state.position),
+                momenta_packed=np.asarray(state.momentum),
+                forces_packed=None if force_arr is None else np.asarray(force_arr),
+                cv=cv_now,
+                targets_per_cv=targets_per_cv,
+                k_per_cv=k_per_cv,
+                grid_shape=sched.grid_shape,
+                phase=rex_phase,
+                beta=1.0 / kt,
+                rng=rex_rng,
+                n_atoms=n_atoms,
+                stats=rex_stats,
+            )
+            rex_phase += 1
+            replace_kwargs = {
+                "position": jnp.asarray(pos_new, dtype=state.position.dtype),
+                "momentum": jnp.asarray(mom_new, dtype=state.momentum.dtype),
+            }
+            if frc_new is not None and force_arr is not None:
+                replace_kwargs["force"] = jnp.asarray(frc_new, dtype=force_arr.dtype)
+            state = dataclasses.replace(state, **replace_kwargs)
+            if step % int(cfg.printfreq) == 0 or step == cfg.nsteps:
+                print(
+                    f"  rex step {step:6d}  accepted {n_acc}/{n_att}  "
+                    f"cum_acc={rex_stats.acceptance:.3f}"
+                )
         if step % savefreq == 0 or step == cfg.nsteps:
             pos_batch = np.asarray(state.position).reshape(k_windows, n_atoms, 3)
             frames_traj.append(pos_batch)
@@ -360,6 +413,11 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "grid_shape": list(sched.grid_shape),
         "r0_cv_A": r0_cvs,
         "seed_mode": seed_mode,
+        "replica_exchange": bool(cfg.replica_exchange),
+        "rex_freq": int(cfg.rex_freq) if cfg.replica_exchange else None,
+        "rex_attempted": None if rex_stats is None else rex_stats.attempted,
+        "rex_accepted": None if rex_stats is None else rex_stats.accepted,
+        "rex_acceptance": None if rex_stats is None else rex_stats.acceptance,
         "cv_mean": cv_traj.mean(axis=1).tolist(),
         "cv_std": cv_traj.std(axis=1).tolist(),
         "snapshots": str(snapshots_path),

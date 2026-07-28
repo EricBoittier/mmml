@@ -95,6 +95,8 @@ class UmbrellaConfig:
     thermostat: Literal["langevin", "nose-hoover"] = "langevin"
     langevin_gamma: float = 0.1
     max_window_temp_K: float | None = None
+    replica_exchange: bool = False
+    rex_freq: int = 100
 
     def __post_init__(self) -> None:
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
@@ -135,6 +137,8 @@ class UmbrellaConfig:
             raise ValueError(
                 f"max_window_temp_K must be > 0 (got {self.max_window_temp_K})"
             )
+        if self.rex_freq < 1:
+            raise ValueError(f"rex_freq must be >= 1 (got {self.rex_freq})")
         # Force validation via schedule construction
         sched = self.resolve_schedule()
         if sched.n_windows < 1:

@@ -29,6 +29,7 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--thermostat {langevin,nose-hoover}]
                             [--langevin-gamma LANGEVIN_GAMMA]
                             [--max-window-temp MAX_WINDOW_TEMP_K]
+                            [--replica-exchange] [--rex-freq REX_FREQ]
                             [--temperature TEMPERATURE_K]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
@@ -52,6 +53,9 @@ Scientific model:
                         Packed-batch thermostat (default: langevin). Nose-Hoover
                         shares one chain across windows and can cascade failures
                         when one replica heats.
+  --replica-exchange    Enable Hamiltonian replica exchange between neighbor
+                        umbrella windows (bias-only Metropolis; even/odd pairs
+                        on the 1D/2D grid)
   --temperature TEMPERATURE_K
                         NVT temperature in K (default: 300)
 
@@ -108,6 +112,7 @@ Other options:
   --max-window-temp MAX_WINDOW_TEMP_K
                         Abort if any window kinetic T exceeds this (K; default:
                         5× --temperature)
+  --rex-freq REX_FREQ   Attempt RE swaps every this many steps (default: 100)
   --timestep TIMESTEP_FS
                         Timestep in fs (default: 0.1)
   --printfreq PRINTFREQ
