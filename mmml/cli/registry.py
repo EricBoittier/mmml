@@ -75,6 +75,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     CommandSpec("train-joint", "mmml.cli.misc.train_joint", "Joint PhysNet+DCMNet training"),
     CommandSpec("downstream", "mmml.cli.misc.downstream", "Downstream analysis utilities"),
     CommandSpec("fix-and-split", "mmml.cli.misc.fix_and_split", "Unit fixes + train/valid/test splits"),
+    CommandSpec(
+        "prepare-mm-dataset",
+        "mmml.cli.misc.prepare_mm_dataset",
+        "Assign CGenFF types/charges to a dimer NPZ (hybrid ML/MM)",
+    ),
     CommandSpec("pyscf-dft", "mmml.cli.misc.pyscf_dft", "GPU DFT (energy, gradient, hessian, …)", parser_module="mmml.interfaces.pyscf4gpuInterface.calcs"),
     CommandSpec("pyscf-mp2", "mmml.cli.misc.pyscf_mp2", "GPU MP2"),
     CommandSpec("pyscf-evaluate", "mmml.cli.misc.pyscf_evaluate", "Batch E/F/D/ESP evaluation"),

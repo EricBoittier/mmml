@@ -216,6 +216,10 @@ def main():
         sys.argv = ["mmml fix-and-split"] + args.args
         return fix_and_split.main()
 
+    elif command == "prepare-mm-dataset":
+        from .misc import prepare_mm_dataset
+        return prepare_mm_dataset.main(args.args)
+
     elif command == "pyscf-dft":
         from .misc import pyscf_dft
         sys.argv = ["mmml pyscf-dft"] + args.args

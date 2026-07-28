@@ -42,6 +42,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("pyscf-mp2", "GPU MP2"),
             CommandInfo("pyscf-evaluate", "Batch E/F/D/ESP evaluation"),
             CommandInfo("fix-and-split", "Unit fixes + train/valid/test splits"),
+            CommandInfo("prepare-mm-dataset", "Assign CGenFF types/charges to a dimer NPZ (hybrid ML/MM)"),
             CommandInfo("xml2npz", "Molpro XML → NPZ"),
             CommandInfo("npz2traj", "NPZ → ASE trajectory (E/F/dipole/charges)"),
             CommandInfo("validate", "Validate NPZ against schema"),
