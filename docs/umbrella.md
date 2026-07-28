@@ -35,12 +35,13 @@ batching. Vacuum / free space only (no PBC MIC restraints in v1).
 
 ```bash
 # 1) Sample (requires jax-md + a PhysNet/Spooky checkpoint)
+# Fix C (2), translate NH₃ (N+H) rigidly along N–C; default dt=0.1 fs
 mmml umbrella-sample \
   --checkpoint examples/m/kl.json \
   --structure examples/m/neb/reag_0_opt.xyz \
-  --atoms 1,2 \
+  --atoms 2,1 --move-with 1,3,4,5 \
   --xi-min 1.5 --xi-max 3.5 --n-windows 11 \
-  --k 20 --temperature 300 --nsteps 20000 --savefreq 100 \
+  --k 20 --timestep 0.1 --temperature 300 --nsteps 20000 --savefreq 100 \
   -o artifacts/umbrella --overwrite
 
 # NPZ with R/Z (optional --seed-mode frames for pre-generated window seeds):
@@ -52,7 +53,10 @@ mmml umbrella-mbar --run-dir artifacts/umbrella
 ```
 
 `--structure` accepts **XYZ, PDB, or NPZ** (`R`, `Z`). Default `--seed-mode stretch`
-moves the CV atom pair(s) to each window target before MD.
+fixes `atom_i` and translates `atom_j` (plus `--move-with` for a rigid group) to
+each window ξ₀. Without `--move-with`, dangling H atoms left behind after a
+large stretch can blow up forces — use the group for NH₃/CH₃ fragments, prefer
+`dt ≤ 0.1 fs` for H-containing systems, or seed from NEB frames.
 
 ### 2D umbrella
 

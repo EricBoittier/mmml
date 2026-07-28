@@ -1,0 +1,37 @@
+# N-methylacetamide (NMA) methyl rotations — CGenFF atom order from `mmml make-res --res NMA`
+#
+# 0-based ASE indices (match PSF order):
+#   0 CL, 1-3 HL1-3, 4 C, 5 O, 6 N, 7 H, 8 CR, 9-11 HR1-3
+#
+# Acetyl methyl about CL–C:  HL1–CL–C–N
+# N-methyl about CR–N:       HR1–CR–N–C
+# Explicit masks rotate only the three methyl hydrogens.
+
+structure: ../../../../test/xyz/nma.xyz
+calculator: xtb
+evaluate: energy
+geometry_mode: rigid
+failure_policy: fail
+
+dofs:
+  - name: acetyl_methyl
+    kind: dihedral
+    atoms: [1, 0, 4, 6]      # HL1-CL-C-N
+    mask: [1, 2, 3]          # HL1 HL2 HL3
+    start: -180
+    stop: 180
+    n_points: 37
+  - name: n_methyl
+    kind: dihedral
+    atoms: [9, 8, 6, 4]      # HR1-CR-N-C
+    mask: [9, 10, 11]        # HR1 HR2 HR3
+    start: -180
+    stop: 180
+    n_points: 37
+
+# Separate 1D scans + optional 2D product (coarser grid for the 2D job).
+scans:
+  - name: acetyl_1d
+    dofs: [acetyl_methyl]
+  - name: n_methyl_1d
+    dofs: [n_methyl]

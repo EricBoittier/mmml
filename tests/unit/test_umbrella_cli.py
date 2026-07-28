@@ -50,6 +50,31 @@ def test_sample_parser_targets():
     assert cfg.structure_index == 2
 
 
+def test_sample_parser_move_with_and_timestep_default():
+    parser = build_sample_parser()
+    args = parser.parse_args(
+        [
+            "--checkpoint",
+            "ckpt",
+            "--structure",
+            "mol.xyz",
+            "-o",
+            "out",
+            "--atoms",
+            "2,1",
+            "--move-with",
+            "1,3,4,5",
+            "--targets",
+            "2.0",
+            "--overwrite",
+        ]
+    )
+    cfg = _config_from_args(args)
+    assert cfg.atom_i == 2 and cfg.atom_j == 1
+    assert cfg.move_with == (1, 3, 4, 5)
+    assert cfg.timestep_fs == pytest.approx(0.1)
+
+
 def test_sample_parser_grid_from_config_file(tmp_path: Path):
     cfg_path = tmp_path / "umb.json"
     cfg_path.write_text(

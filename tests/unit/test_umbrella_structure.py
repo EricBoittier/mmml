@@ -20,8 +20,21 @@ def test_stretch_distance_seed_sets_target():
     r = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
     out = stretch_distance_seed(r, 0, 1, 3.0)
     assert float(np.linalg.norm(out[1] - out[0])) == pytest.approx(3.0)
+    np.testing.assert_allclose(out[0], r[0])  # atom_i fixed
+    np.testing.assert_allclose(out[2], r[2])  # untouched
+
+
+def test_stretch_distance_seed_move_with():
+    # Fix C=2, move N=1 and H=3 together along N–C
+    r = np.zeros((4, 3))
+    r[1] = [2.0, 0.0, 0.0]  # N
+    r[2] = [0.0, 0.0, 0.0]  # C
+    r[3] = [2.5, 0.5, 0.0]  # H bonded to N
+    out = stretch_distance_seed(r, 2, 1, 3.0, move_with=(1, 3))
+    assert float(np.linalg.norm(out[1] - out[2])) == pytest.approx(3.0)
     np.testing.assert_allclose(out[2], r[2])
-    np.testing.assert_allclose(0.5 * (out[0] + out[1]), 0.5 * (r[0] + r[1]))
+    # H shifts by the same vector as N
+    np.testing.assert_allclose(out[3] - r[3], out[1] - r[1])
 
 
 def test_stretch_two_distances_shared_hub():

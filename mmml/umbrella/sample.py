@@ -172,6 +172,8 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f"  structure={structure_path.name}  seed_mode={seed_mode}  "
         f"pairs={sched.atom_pairs}  r0={r0_cvs}  grid={sched.grid_shape}"
     )
+    if any(move_groups):
+        print(f"  move_groups={move_groups}")
     print(f"  Initial E_total={e0:.4f} eV  max|F|={f0_max:.4f} eV/Å")
     for step in range(1, int(cfg.nsteps) + 1):
         state = apply_fn(state)
@@ -187,8 +189,8 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             if not np.isfinite(e_tot) or not np.isfinite(t_curr):
                 raise RuntimeError(
                     f"non-finite thermodynamics at step {step}: "
-                    f"E={e_tot} T={t_curr}. Try smaller --timestep, "
-                    "softer --k, or --seed-mode stretch/frames near each ξ₀."
+                    f"E={e_tot} T={t_curr}. Try smaller --timestep (default 0.1 fs), "
+                    "softer --k, --move-with for rigid groups, or --seed-mode frames."
                 )
             print(f"  step {step:6d}  E_total={e_tot:.4f} eV  T={t_curr:.1f} K")
 
