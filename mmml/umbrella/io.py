@@ -10,6 +10,7 @@ import numpy as np
 
 SNAPSHOTS_NPZ = "umbrella_snapshots.npz"
 SUMMARY_JSON = "umbrella_summary.json"
+BIN_MINIMA_TRAJ = "umbrella_bin_minima.traj"
 
 
 def save_snapshots(

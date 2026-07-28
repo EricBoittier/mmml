@@ -88,11 +88,18 @@ def test_make_packed_energy_fn_bias_only_with_zero_ml():
     pos[1, 1, 0] = 2.0
     e0 = float(energy_fn(jnp.asarray(pos.reshape(-1, 3))))
     assert e0 == pytest.approx(0.0)
+    e_win0 = np.asarray(energy_fn.per_window_energy_fn(jnp.asarray(pos.reshape(-1, 3))))
+    assert e_win0.shape == (n_windows,)
+    assert e_win0[0] == pytest.approx(0.0)
+    assert e_win0[1] == pytest.approx(0.0)
 
     # Move window 0 away from its target
     pos[0, 1, 0] = 2.0
     e1 = float(energy_fn(jnp.asarray(pos.reshape(-1, 3))))
     assert e1 == pytest.approx(1.0)  # 0.5*2*(1)^2
+    e_win1 = np.asarray(energy_fn.per_window_energy_fn(jnp.asarray(pos.reshape(-1, 3))))
+    assert e_win1[0] == pytest.approx(1.0)
+    assert e_win1[1] == pytest.approx(0.0)
 
 
 def test_packed_bias_forces_oppose_stretch():

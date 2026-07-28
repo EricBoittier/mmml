@@ -228,14 +228,17 @@ def make_packed_energy_fn(
             compute_forces=compute_forces,
         )
 
-    def energy_sum_fn(position, **kwargs):
+    def per_window_energy_fn(position, **kwargs):
+        """Per-window ``E_ML + W`` (eV). Shape ``(K,)``."""
         del kwargs
         out = _apply(position, compute_forces=False)
-        e_ml = jnp.sum(jnp.asarray(out["energy"]).reshape(-1))
-        e_bias = jnp.sum(
-            packed_bias_energies_nd(position, n_atoms, pairs, targets, ks)
-        )
+        e_ml = jnp.asarray(out["energy"]).reshape(-1)
+        e_bias = packed_bias_energies_nd(position, n_atoms, pairs, targets, ks)
         return e_ml + e_bias
+
+    def energy_sum_fn(position, **kwargs):
+        del kwargs
+        return jnp.sum(per_window_energy_fn(position))
 
     def force_fn(position, **kwargs):
         """ASE/jax-md forces ``F = -∇E`` for ML + umbrella bias."""
@@ -246,6 +249,7 @@ def make_packed_energy_fn(
         return f_ml + f_bias
 
     energy_sum_fn.force_fn = force_fn  # type: ignore[attr-defined]
+    energy_sum_fn.per_window_energy_fn = per_window_energy_fn  # type: ignore[attr-defined]
     return energy_sum_fn
 
 

@@ -270,8 +270,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--write-window-xyz",
         action="store_true",
         help=(
-            "Write per-window XYZ trajectories (slow for large K×N_frames); "
-            "default off — umbrella_snapshots.npz is enough for MBAR"
+            "Write per-window XYZ trajectories with mass-weighted CoM at the "
+            "origin (slow for large K×N_frames); default off — "
+            "umbrella_snapshots.npz is enough for MBAR. "
+            "umbrella_bin_minima.traj (lowest E_ML+W per window) is always written"
         ),
     )
     return parser

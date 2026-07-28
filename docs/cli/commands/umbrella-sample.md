@@ -75,9 +75,11 @@ Output & artifacts:
                         Directory for snapshots, trajectories, and summary
   --savefreq SAVEFREQ   Snapshot save interval (default: same as printfreq)
   --overwrite           Allow writing into a non-empty output directory
-  --write-window-xyz    Write per-window XYZ trajectories (slow for large
-                        K×N_frames); default off — umbrella_snapshots.npz is
-                        enough for MBAR
+  --write-window-xyz    Write per-window XYZ trajectories with mass-weighted CoM
+                        at the origin (slow for large K×N_frames); default off —
+                        umbrella_snapshots.npz is enough for MBAR.
+                        umbrella_bin_minima.traj (lowest E_ML+W per window) is
+                        always written
 
 Diagnostics & safety:
   -h, --help            show this help message and exit

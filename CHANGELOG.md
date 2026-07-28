@@ -17,7 +17,9 @@ and versioning process.
   one PhysNet/SpookyNet batch, NVT via JAX-MD Langevin by default (Nose-Hoover
   optional), optional Hamiltonian replica exchange (`--replica-exchange`), then
   pymbar. Seeding fixes `atom_i` and can rigidly translate `--move-with` groups
-  (default `dt=0.1` fs). See `docs/umbrella.md`.
+  (default `dt=0.1` fs). Exports CoM-centered window XYZs (optional) and an ASE
+  `umbrella_bin_minima.traj` of the lowest `E_ML+W` frame per window. See
+  `docs/umbrella.md`.
 
 ### Fixed
 

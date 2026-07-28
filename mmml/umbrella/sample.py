@@ -13,7 +13,13 @@ from mmml.umbrella.energy import (
     make_packed_energy_fn,
     packed_cv_distances,
 )
-from mmml.umbrella.io import SNAPSHOTS_NPZ, SUMMARY_JSON, save_snapshots, write_summary
+from mmml.umbrella.io import (
+    BIN_MINIMA_TRAJ,
+    SNAPSHOTS_NPZ,
+    SUMMARY_JSON,
+    save_snapshots,
+    write_summary,
+)
 from mmml.umbrella.structure import (
     load_structure,
     load_structure_frames,
@@ -32,6 +38,51 @@ class UmbrellaResult:
     n_frames: int
     paths: dict[str, Path]
 
+
+def center_com_positions(
+    positions: np.ndarray,
+    masses: np.ndarray,
+) -> np.ndarray:
+    """Translate so the mass-weighted CoM is at the origin.
+
+    ``positions`` may be ``(N, 3)`` or ``(..., N, 3)``.
+    """
+    pos = np.asarray(positions, dtype=np.float64)
+    m = np.asarray(masses, dtype=np.float64).reshape(-1)
+    if pos.ndim < 2 or pos.shape[-1] != 3:
+        raise ValueError(f"positions must be (..., N, 3); got shape {pos.shape}")
+    if pos.shape[-2] != m.shape[0]:
+        raise ValueError(
+            f"masses length {m.shape[0]} != n_atoms {pos.shape[-2]}"
+        )
+    total_mass = float(np.sum(m))
+    if total_mass <= 0.0:
+        raise ValueError("sum of masses must be positive")
+    com = np.sum(pos * m.reshape((1,) * (pos.ndim - 2) + (-1, 1)), axis=-2) / total_mass
+    return pos - com[..., None, :]
+
+
+def select_lowest_energy_frames(
+    positions: np.ndarray,
+    energies: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pick the lowest-``E_ML+W`` frame in each window.
+
+    Returns ``(coords, frame_indices, energies)`` with shapes
+    ``(K, N, 3)``, ``(K,)``, ``(K,)``.
+    """
+    pos = np.asarray(positions, dtype=np.float64)
+    ene = np.asarray(energies, dtype=np.float64)
+    if pos.ndim != 4:
+        raise ValueError(f"positions must be (K, T, N, 3); got {pos.shape}")
+    if ene.shape != pos.shape[:2]:
+        raise ValueError(
+            f"energies shape {ene.shape} must match positions[:2] {pos.shape[:2]}"
+        )
+    idx = np.nanargmin(ene, axis=1).astype(np.int64)
+    k = pos.shape[0]
+    chosen = pos[np.arange(k), idx]
+    return chosen, idx, ene[np.arange(k), idx]
 
 
 def _per_window_temperatures_K(
@@ -142,8 +193,10 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     # energy_sum_fn nests AD through PhysNet's internal value_and_grad and
     # can yield NaN forces even when the energy is finite.
     force_fn = energy_sum_fn.force_fn  # type: ignore[attr-defined]
+    per_window_energy_fn = energy_sum_fn.per_window_energy_fn  # type: ignore[attr-defined]
     energy_sum_fn = jax.jit(energy_sum_fn)
     force_fn = jax.jit(force_fn)
+    per_window_energy_fn = jax.jit(per_window_energy_fn)
 
     masses = np.array([atomic_masses[int(zi)] for zi in z], dtype=np.float64)
     masses_batched = jnp.tile(jnp.asarray(masses), k_windows)
@@ -224,6 +277,9 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         np.asarray(state.position).reshape(k_windows, n_atoms, 3)
     ]
     cv_frames: list[np.ndarray] = [_cv_frame(state.position)]
+    energy_frames: list[np.ndarray] = [
+        np.asarray(per_window_energy_fn(state.position), dtype=np.float64)
+    ]
 
     print(
         f"=== Umbrella NVT ({k_windows} windows, {sched.ndim}D, "
@@ -302,6 +358,9 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             pos_batch = np.asarray(state.position).reshape(k_windows, n_atoms, 3)
             frames_traj.append(pos_batch)
             cv_frames.append(_cv_frame(state.position))
+            energy_frames.append(
+                np.asarray(per_window_energy_fn(state.position), dtype=np.float64)
+            )
         if step % int(cfg.printfreq) == 0 or step == cfg.nsteps:
             e_tot = float(energy_sum_fn(state.position))
             t_curr = float(
@@ -364,11 +423,18 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     )
     positions = np.stack(frames_traj, axis=1)
     cv_traj = np.stack(cv_frames, axis=1)  # (K, N_frames, ndim)
+    energies = np.stack(energy_frames, axis=1)  # (K, N_frames)
     n_frames = int(positions.shape[1])
+    minima_pos, minima_idx, minima_e = select_lowest_energy_frames(
+        positions, energies
+    )
 
     extra = {
         "ndim": np.int32(sched.ndim),
         "grid_shape": np.asarray(sched.grid_shape, dtype=np.int32),
+        "energies_ev": np.asarray(energies, dtype=np.float64),
+        "bin_minima_frame_idx": np.asarray(minima_idx, dtype=np.int64),
+        "bin_minima_energy_ev": np.asarray(minima_e, dtype=np.float64),
     }
     if sched.ndim == 2:
         assert sched.yi0 is not None and sched.k_y is not None
@@ -396,17 +462,40 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     print(f"  snapshots done → {snapshots_path}")
 
     traj_paths: dict[str, Path] = {}
-    if cfg.write_window_xyz:
-        from ase import Atoms
+    from ase import Atoms
 
+    minima_centered = center_com_positions(minima_pos, masses)
+    minima_path = output_dir / BIN_MINIMA_TRAJ
+    minima_frames = [
+        Atoms(
+            numbers=z,
+            positions=minima_centered[wid],
+            masses=masses,
+            info={
+                "window": wid,
+                "frame_idx": int(minima_idx[wid]),
+                "energy_ev": float(minima_e[wid]),
+            },
+        )
+        for wid in range(k_windows)
+    ]
+    write(minima_path, minima_frames)
+    traj_paths["bin_minima"] = minima_path
+    print(
+        f"  wrote {minima_path.name} "
+        f"({k_windows} CoM-centered lowest-E_ML+W frames)"
+    )
+
+    if cfg.write_window_xyz:
         print(
             f"  writing {k_windows} window XYZ trajectories "
-            f"({n_frames} frames each) …"
+            f"({n_frames} frames each, CoM→origin) …"
         )
         for wid in range(k_windows):
             traj_path = output_dir / f"umbrella_window{wid:03d}.xyz"
+            centered = center_com_positions(positions[wid], masses)
             frames = [
-                Atoms(numbers=z, positions=positions[wid, frame_idx])
+                Atoms(numbers=z, positions=centered[frame_idx], masses=masses)
                 for frame_idx in range(n_frames)
             ]
             write(traj_path, frames)
@@ -441,6 +530,9 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "cv_mean": cv_traj.mean(axis=1).tolist(),
         "cv_std": cv_traj.std(axis=1).tolist(),
         "snapshots": str(snapshots_path),
+        "bin_minima": str(minima_path),
+        "bin_minima_frame_idx": minima_idx.tolist(),
+        "bin_minima_energy_ev": minima_e.tolist(),
     }
     summary_path = write_summary(output_dir / SUMMARY_JSON, summary)
 
