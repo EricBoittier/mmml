@@ -69,3 +69,11 @@ mmml ic-scan --config examples/ic_scan/butane_like.yaml \
 | `scripts/scan_trialanine_phi_psi_pes.py` | Peptide-specific constrained φ/ψ PES |
 | `mmml mode-check` | Diagnostic X–H bond scans |
 | `mmml ic-scan` | General monomer IC grids for QM/ML |
+| [NMA end-to-end tutorial](examples/nma-workflow.md) | make-res → methyl `ic-scan` → train → dimer → MD |
+
+### Methyl rotations (ASE atom order)
+
+`Atoms.set_dihedral(a1, a2, a3, a4, …)` rotates about **a2–a3** with **a4** on
+the a3 side. For a methyl rotor, put the **methyl carbon as a3** and one methyl
+hydrogen as **a4**, and set `mask` to all three methyl hydrogens. Example for
+CGenFF NMA: acetyl `N–C–CL–HL1` → atoms `[6, 4, 0, 1]`, mask `[1, 2, 3]`.

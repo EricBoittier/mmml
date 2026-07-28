@@ -3,11 +3,15 @@
 # 0-based ASE indices (match PSF order):
 #   0 CL, 1-3 HL1-3, 4 C, 5 O, 6 N, 7 H, 8 CR, 9-11 HR1-3
 #
-# Acetyl methyl about CL–C:  HL1–CL–C–N
-# N-methyl about CR–N:       HR1–CR–N–C
-# Explicit masks rotate only the three methyl hydrogens.
+# ASE set_dihedral rotates about a2–a3 with a4 (and mask) on the a3 side.
+# For a methyl, put the methyl carbon as a3 and one methyl H as a4:
+#   acetyl: N–C–CL–HL1
+#   N-methyl: C–N–CR–HR1
+#
+#   mmml ic-scan --config examples/ic_scan/nma_methyl.yaml \
+#     --output artifacts/nma_methyl_xtb --overwrite
 
-structure: ../../../../test/xyz/nma.xyz
+structure: nma.xyz
 calculator: xtb
 evaluate: energy
 geometry_mode: rigid
@@ -16,20 +20,19 @@ failure_policy: fail
 dofs:
   - name: acetyl_methyl
     kind: dihedral
-    atoms: [1, 0, 4, 6]      # HL1-CL-C-N
+    atoms: [6, 4, 0, 1]      # N-C-CL-HL1
     mask: [1, 2, 3]          # HL1 HL2 HL3
     start: -180
     stop: 180
     n_points: 37
   - name: n_methyl
     kind: dihedral
-    atoms: [9, 8, 6, 4]      # HR1-CR-N-C
+    atoms: [4, 6, 8, 9]      # C-N-CR-HR1
     mask: [9, 10, 11]        # HR1 HR2 HR3
     start: -180
     stop: 180
     n_points: 37
 
-# Separate 1D scans + optional 2D product (coarser grid for the 2D job).
 scans:
   - name: acetyl_1d
     dofs: [acetyl_methyl]
