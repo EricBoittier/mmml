@@ -1,22 +1,90 @@
 #!/usr/bin/env python3
-"""Dispatch one reaction-path campaign job and write status.json."""
+"""Dispatch one NH₃–CH₃Cl reaction-path campaign job and write status.json."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from campaign_lib import load_config
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
-REPO_ROOT_DEFAULT = Path(__file__).resolve().parents[3]
+from campaign_lib import load_config  # noqa: E402
+
+_SOLVENT_RESI = {
+    "tip3": "TIP3",
+    "acn": "ACN",
+    "dmso": "DMSO",
+}
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--config", type=Path, required=True)
+    p.add_argument("--repo-root", type=Path, required=True)
+    p.add_argument(
+        "--job",
+        required=True,
+        choices=(
+            "endpoints",
+            "make_boxes",
+            "neb",
+            "dmc",
+            "umbrella_gas",
+            "umbrella_sol",
+            "adumb_gas",
+            "adumb_sol",
+            "mbar",
+        ),
+    )
+    p.add_argument("--output-dir", type=Path, required=True)
+    p.add_argument("--status", type=Path, required=True)
+    p.add_argument("--basin", default=None)
+    p.add_argument("--solvent", default=None)
+    p.add_argument("--variant", default=None)
+    p.add_argument("--run-dir", type=Path, default=None, help="For mbar: umbrella run directory")
+    return p.parse_args()
+
+
+def _setup_env(repo: Path, cfg: dict[str, Any]) -> None:
+    example = repo / str(cfg.get("example_dir", "examples/m"))
+    ckpt = repo / str(cfg.get("checkpoint", "examples/m/kl.json"))
+    os.environ.setdefault("JAX_ENABLE_X64", "1")
+    # Prefer GPU on Slurm GPU allocations; leave local/login defaults alone.
+    if os.environ.get("SLURM_JOB_ID") and (
+        os.environ.get("SLURM_JOB_GPUS")
+        or os.environ.get("CUDA_VISIBLE_DEVICES")
+        or str((cfg.get("slurm") or {}).get("partition", "")).lower() == "gpu"
+    ):
+        os.environ.setdefault("JAX_PLATFORMS", "cuda")
+        os.environ.setdefault("MMML_MLPOT_DEVICE", "gpu")
+        os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "gpu")
+    else:
+        os.environ.setdefault("JAX_PLATFORMS", os.environ.get("JAX_PLATFORMS", "cpu"))
+        os.environ.setdefault("MMML_MLPOT_DEVICE", os.environ.get("MMML_MLPOT_DEVICE", "cpu"))
+    os.environ["MMML_CKPT"] = str(ckpt.resolve())
+    os.environ.setdefault("MMML_DATA", str((example / "nh3_ch3cl_filtered.npz").resolve()))
+    os.environ.setdefault("MMML_CGENFF_EXTRA_RTF", str((example / "top_ch3cl.rtf").resolve()))
+    os.environ.setdefault("MMML_CGENFF_EXTRA_PRM", str((example / "par_ch3cl.prm").resolve()))
+    os.environ.setdefault("MMML_MM_PAIR_SOURCE", "jax")
+    os.environ.setdefault("MMML_COMPOSITION", "AMM1:1,CH3CL:1")
+
+
+def _uv_run(repo: Path, args: list[str], *, cwd: Path | None = None) -> None:
+    cmd = ["uv", "run", *args]
+    print("+", " ".join(cmd), flush=True)
+    subprocess.run(cmd, cwd=str(cwd or repo), check=True)
 
 
 def _write_status(path: Path, payload: dict[str, Any]) -> None:
@@ -24,217 +92,258 @@ def _write_status(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> None:
-    print("+", " ".join(cmd), flush=True)
-    subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
+def _variant_cfg(cfg: dict[str, Any], name: str) -> dict[str, Any]:
+    variants = (cfg.get("umbrella") or {}).get("variants") or {}
+    if name not in variants:
+        raise KeyError(f"unknown umbrella variant {name!r}")
+    return dict(variants[name])
 
 
-def _env(repo: Path, cfg: dict[str, Any]) -> dict[str, str]:
-    env = os.environ.copy()
+def _ensure_endpoints(repo: Path, example: Path) -> None:
+    reag = example / "neb" / "reag_0_opt.xyz"
+    prod = example / "neb" / "prod_0_opt.xyz"
+    if reag.is_file() and prod.is_file():
+        return
+    _uv_run(repo, ["python", "examples/m/07_export_neb_endpoints.py"])
+
+
+def _amm1_move_with(psf: Path) -> str:
+    from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
+
+    atoms, _ = read_psf_atoms_and_bonds(psf)
+    idxs = [str(a.index) for a in atoms if a.resname.upper() == "AMM1"]
+    if not idxs:
+        raise RuntimeError(f"no AMM1 atoms in {psf}")
+    return ",".join(idxs)
+
+
+def _write_hybrid_yaml(
+    *,
+    template: Path,
+    out_yaml: Path,
+    solvent: str,
+    box_psf: Path,
+    box_pdb: Path,
+    output_dir: Path,
+    box_size: float,
+    variant: dict[str, Any],
+) -> Path:
+    data = yaml.safe_load(template.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"bad umbrella template: {template}")
+    data["engine"] = "hybrid_jaxmd"
+    data["from_psf"] = str(box_psf.resolve())
+    data["from_pdb"] = str(box_pdb.resolve())
+    data["box_size"] = float(box_size)
+    data["output_dir"] = str(output_dir.resolve())
+    data["overwrite"] = True
+    for key in ("xi_min", "xi_max", "n_windows", "k_ev_A2", "nsteps", "printfreq", "savefreq"):
+        if key in variant:
+            data[key] = variant[key]
+    if "timestep_fs_sol" in variant:
+        data["timestep_fs"] = variant["timestep_fs_sol"]
+    out_yaml.parent.mkdir(parents=True, exist_ok=True)
+    out_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return out_yaml
+
+
+def job_endpoints(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
     example = repo / str(cfg.get("example_dir", "examples/m"))
-    env.setdefault("JAX_ENABLE_X64", "1")
-    env["MMML_CKPT"] = str(repo / cfg["checkpoint"])
-    env["MMML_CGENFF_EXTRA_RTF"] = str(example / "top_ch3cl.rtf")
-    env["MMML_CGENFF_EXTRA_PRM"] = str(example / "par_ch3cl.prm")
-    env["ARTIFACTS_DIR"] = str(repo / cfg.get("output_root", "artifacts/nh3_ch3cl_reaction_path"))
-    # Prefer CUDA on studix GPU nodes; fall back if unset by launcher.
-    if "JAX_PLATFORMS" not in env:
-        env["JAX_PLATFORMS"] = "cuda,cpu"
-    return env
-
-
-def _dump_yaml(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-
-
-def job_endpoints(repo: Path, cfg: dict[str, Any], out: Path, env: dict[str, str]) -> dict[str, Any]:
-    script = repo / "examples/m/07_export_neb_endpoints.py"
     neb_dir = out / "neb_xyz"
-    _run(
-        [sys.executable, str(script), "-o", str(neb_dir)],
-        cwd=repo,
-        env=env,
+    neb_dir.mkdir(parents=True, exist_ok=True)
+    _uv_run(
+        repo,
+        [
+            "python",
+            "examples/m/07_export_neb_endpoints.py",
+            "-o",
+            str(neb_dir),
+        ],
     )
+    # Also refresh the canonical examples/m/neb paths used by YAML defaults.
+    _uv_run(repo, ["python", "examples/m/07_export_neb_endpoints.py"])
     return {
-        "job": "endpoints",
-        "ok": True,
         "reag": str(neb_dir / "reag_0_opt.xyz"),
         "prod": str(neb_dir / "prod_0_opt.xyz"),
+        "example_neb": str(example / "neb"),
     }
 
 
-def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path, env: dict[str, str]) -> dict[str, Any]:
-    """Build solvated boxes under ``$ARTIFACTS_DIR/boxes/{solvent}/``.
-
-    ``out`` is the campaign root (same as ``ARTIFACTS_DIR``), not a nested
-    ``boxes/`` directory — ``08_make_boxes.sh`` already appends ``boxes/``.
-    """
+def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
+    """``out`` is the campaign artifact root; boxes land in ``out/boxes/{solvent}/``."""
     mb = cfg.get("make_boxes") or {}
-    env = dict(env)
-    env["BOX_SIZE"] = str(cfg.get("box_size", 30.0))
-    env["N_SOLVENT"] = str(mb.get("n_solvent", 12))
+    solvents = [str(s).lower() for s in (cfg.get("solvents") or ["tip3"])]
+    env = os.environ.copy()
+    env["ARTIFACTS_DIR"] = str(out.resolve())
+    env["BOX_SIZE"] = str(float(cfg.get("box_size", 30.0)))
+    env["N_SOLVENT"] = str(int(mb.get("n_solvent", 12)))
     env["USE_DENSITY"] = "1" if mb.get("use_density") else "0"
-    env["ARTIFACTS_DIR"] = str(out)
-    _run(["bash", str(repo / "examples/m/08_make_boxes.sh")], cwd=repo, env=env)
-    boxes = {}
-    for sol in (cfg.get("solvents") or ["tip3"]):
-        pdb = out / "boxes" / sol / "model.pdb"
-        psf = out / "boxes" / sol / "model.psf"
-        boxes[sol] = {"pdb": str(pdb), "psf": str(psf), "exists": pdb.is_file() and psf.is_file()}
-    if not all(v["exists"] for v in boxes.values()):
-        raise RuntimeError(f"make-box incomplete: {boxes}")
-    return {"job": "make_boxes", "ok": True, "boxes": boxes}
-
-
-def job_neb(repo: Path, cfg: dict[str, Any], out: Path, env: dict[str, str]) -> dict[str, Any]:
-    neb_cfg = cfg.get("neb") or {}
-    endpoints = Path(env["ARTIFACTS_DIR"]) / "endpoints" / "neb_xyz"
-    # Prefer campaign endpoints; fall back to examples/m/neb
-    reag = endpoints / "reag_0_opt.xyz"
-    prod = endpoints / "prod_0_opt.xyz"
-    if not reag.is_file():
-        reag = repo / "examples/m/neb/reag_0_opt.xyz"
-        prod = repo / "examples/m/neb/prod_0_opt.xyz"
-        if not reag.is_file():
-            _run(
-                [sys.executable, str(repo / "examples/m/07_export_neb_endpoints.py")],
-                cwd=repo,
-                env=env,
+    # Restrict 08_make_boxes.sh to requested solvents by wrapping per solvent.
+    written: list[str] = []
+    solute = out / "solute_amm1_ch3cl.pdb"
+    _uv_run(repo, ["python", "examples/m/07_export_solute_pdb.py", "-o", str(solute)])
+    for sol in solvents:
+        tag = sol.lower()
+        work = out / f"make_box_work_{tag}"
+        box_out = out / "boxes" / tag
+        if work.exists():
+            shutil.rmtree(work)
+        work.mkdir(parents=True, exist_ok=True)
+        box_out.mkdir(parents=True, exist_ok=True)
+        resi = _SOLVENT_RESI[tag]
+        cmd = [
+            "uv",
+            "run",
+            "mmml",
+            "make-box",
+            "--pdb",
+            str(solute),
+            "--res",
+            f"nh3ch3cl_{tag}",
+            "--box-size",
+            env["BOX_SIZE"],
+            "--solvent",
+            resi,
+        ]
+        if env["USE_DENSITY"] == "1":
+            density = {"ACN": "786", "TIP3": "1000", "DMSO": "1100"}[resi]
+            cmd += ["--density", density]
+        else:
+            cmd += ["--n", env["N_SOLVENT"]]
+        print("+", " ".join(cmd), flush=True)
+        subprocess.run(cmd, cwd=str(work), check=True, env=env)
+        pdb_src = work / f"pdb/init-nh3ch3cl_{tag}.pdb"
+        psf_src = work / f"psf/system-nh3ch3cl_{tag}.psf"
+        shutil.copy2(pdb_src, box_out / "model.pdb")
+        shutil.copy2(psf_src, box_out / "model.psf")
+        (box_out / "box.json").write_text(
+            json.dumps(
+                {
+                    "box_size": float(env["BOX_SIZE"]),
+                    "side_length_A": float(env["BOX_SIZE"]),
+                    "solvent": resi,
+                    "n_solvent": int(env["N_SOLVENT"]),
+                },
+                indent=2,
             )
-    cmd = [
-        "uv",
-        "run",
-        "mmml",
-        "neb",
-        "--checkpoint",
-        str(repo / cfg["checkpoint"]),
-        "--initial",
-        str(reag),
-        "--final",
-        str(prod),
-        "--output-dir",
-        str(out),
-        "--n-images",
-        str(int(neb_cfg.get("n_images", 11))),
-        "--max-steps",
-        str(int(neb_cfg.get("max_steps", 80))),
-        "--fmax",
-        str(float(neb_cfg.get("fmax", 0.05))),
-        "--overwrite",
-    ]
-    _run(cmd, cwd=repo, env=env)
+            + "\n",
+            encoding="utf-8",
+        )
+        written.append(str(box_out))
+    return {"boxes": written, "solvents": solvents}
+
+
+def job_neb(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
+    example = repo / str(cfg.get("example_dir", "examples/m"))
+    _ensure_endpoints(repo, example)
+    neb = cfg.get("neb") or {}
+    _uv_run(
+        repo,
+        [
+            "mmml",
+            "neb",
+            "--config",
+            str(example / "yaml" / "neb.yaml"),
+            "--output-dir",
+            str(out),
+            "--n-images",
+            str(int(neb.get("n_images", 11))),
+            "--max-steps",
+            str(int(neb.get("max_steps", 200))),
+            "--fmax",
+            str(float(neb.get("fmax", 0.05))),
+            "--overwrite",
+        ],
+    )
     summary = out / "neb_summary.json"
-    if not summary.is_file():
-        raise RuntimeError(f"missing {summary}")
-    return {"job": "neb", "ok": True, "summary": str(summary)}
+    data = json.loads(summary.read_text(encoding="utf-8")) if summary.is_file() else {}
+    return {
+        "summary": str(summary),
+        "barrier_kcal_mol": data.get("barrier_kcal_mol"),
+        "delta_e_product_kcal_mol": data.get("delta_e_product_kcal_mol"),
+    }
 
 
-def job_dmc(
-    repo: Path,
-    cfg: dict[str, Any],
-    out: Path,
-    env: dict[str, str],
-    *,
-    basin: str,
-) -> dict[str, Any]:
+def job_dmc(repo: Path, cfg: dict[str, Any], out: Path, basin: str) -> dict[str, Any]:
+    example = repo / str(cfg.get("example_dir", "examples/m"))
+    _ensure_endpoints(repo, example)
+    xyz = {
+        "react": example / "neb" / "reag_0_opt.xyz",
+        "product": example / "neb" / "prod_0_opt.xyz",
+    }.get(basin)
+    if xyz is None or not xyz.is_file():
+        raise FileNotFoundError(f"unknown or missing basin {basin!r}")
     dmc = cfg.get("dmc") or {}
-    endpoints = Path(env["ARTIFACTS_DIR"]) / "endpoints" / "neb_xyz"
-    mapping = {"react": "reag_0_opt.xyz", "product": "prod_0_opt.xyz"}
-    if basin not in mapping:
-        raise ValueError(f"unknown dmc basin {basin!r}")
-    xyz = endpoints / mapping[basin]
-    if not xyz.is_file():
-        xyz = repo / "examples/m/neb" / mapping[basin]
-    cmd = [
-        "uv",
-        "run",
-        "mmml",
-        "dmc",
-        "--natm",
-        "9",
-        "--nwalker",
-        str(int(dmc.get("nwalker", 64))),
-        "--stepsize",
-        str(float(dmc.get("stepsize", 5e-4))),
-        "--nstep",
-        str(int(dmc.get("nstep", 200))),
-        "--eqstep",
-        str(int(dmc.get("eqstep", 50))),
-        "--alpha",
-        str(float(dmc.get("alpha", 1200.0))),
-        "--max-batch",
-        str(int(dmc.get("nwalker", 64))),
-        "--seed",
-        str(int(cfg.get("seed", 0))),
-        "--checkpoint",
-        str(repo / cfg["checkpoint"]),
-        "--input",
-        str(xyz),
-        "--output-dir",
-        str(out),
-    ]
-    _run(cmd, cwd=repo, env=env)
-    logs = list(out.glob("*.log"))
-    if not logs:
-        raise RuntimeError(f"no DMC log under {out}")
-    return {"job": "dmc", "basin": basin, "ok": True, "log": str(logs[0])}
-
-
-def _umbrella_variant(cfg: dict[str, Any], variant: str) -> dict[str, Any]:
-    variants = ((cfg.get("umbrella") or {}).get("variants") or {})
-    if variant not in variants:
-        raise KeyError(f"unknown umbrella variant {variant!r}")
-    return dict(variants[variant])
+    _uv_run(
+        repo,
+        [
+            "mmml",
+            "dmc",
+            "--natm",
+            "9",
+            "--nwalker",
+            str(int(dmc.get("nwalker", 128))),
+            "--stepsize",
+            str(float(dmc.get("stepsize", 5.0e-4))),
+            "--nstep",
+            str(int(dmc.get("nstep", 1000))),
+            "--eqstep",
+            str(int(dmc.get("eqstep", 200))),
+            "--alpha",
+            str(float(dmc.get("alpha", 1200.0))),
+            "--max-batch",
+            str(int(dmc.get("nwalker", 128))),
+            "--seed",
+            str(int(cfg.get("seed", 0))),
+            "--checkpoint",
+            os.environ["MMML_CKPT"],
+            "--input",
+            str(xyz),
+            "--output-dir",
+            str(out),
+        ],
+    )
+    logs = sorted(out.glob("*.log"))
+    return {"basin": basin, "input": str(xyz), "log": str(logs[0]) if logs else ""}
 
 
 def job_umbrella_gas(
-    repo: Path,
-    cfg: dict[str, Any],
-    out: Path,
-    env: dict[str, str],
-    *,
-    variant: str,
+    repo: Path, cfg: dict[str, Any], out: Path, variant: str
 ) -> dict[str, Any]:
-    knobs = _umbrella_variant(cfg, variant)
-    endpoints = Path(env["ARTIFACTS_DIR"]) / "endpoints" / "neb_xyz"
-    structure = endpoints / "reag_0_opt.xyz"
-    if not structure.is_file():
-        structure = repo / "examples/m/neb/reag_0_opt.xyz"
-    umb_yaml = {
-        "engine": "packed_ml",
-        "checkpoint": str(repo / cfg["checkpoint"]),
-        "structure": str(structure),
-        "output_dir": str(out),
-        "atom_i": 2,
-        "atom_j": 1,
-        "move_with": [1, 3, 4, 5],
-        "xi_min": float(knobs["xi_min"]),
-        "xi_max": float(knobs["xi_max"]),
-        "n_windows": int(knobs["n_windows"]),
-        "k_ev_A2": float(knobs["k_ev_A2"]),
-        "temperature_K": 300.0,
-        "timestep_fs": float(knobs.get("timestep_fs_gas", 0.1)),
-        "nsteps": int(knobs["nsteps"]),
-        "printfreq": int(knobs.get("printfreq", 50)),
-        "savefreq": int(knobs.get("savefreq", 50)),
-        "seed": int(cfg.get("seed", 0)),
-        "seed_mode": "stretch",
-        "thermostat": "langevin",
-        "overwrite": True,
-    }
-    cfg_path = out / "umbrella_config.yaml"
-    _dump_yaml(cfg_path, umb_yaml)
-    _run(
-        ["uv", "run", "mmml", "umbrella-sample", "--config", str(cfg_path), "--overwrite"],
-        cwd=repo,
-        env=env,
-    )
+    example = repo / str(cfg.get("example_dir", "examples/m"))
+    _ensure_endpoints(repo, example)
+    v = _variant_cfg(cfg, variant)
+    cmd = [
+        "mmml",
+        "umbrella-sample",
+        "--config",
+        str(example / "yaml" / "umbrella_nc_gas.yaml"),
+        "--output-dir",
+        str(out),
+        "--xi-min",
+        str(float(v["xi_min"])),
+        "--xi-max",
+        str(float(v["xi_max"])),
+        "--n-windows",
+        str(int(v["n_windows"])),
+        "--k",
+        str(float(v["k_ev_A2"])),
+        "--nsteps",
+        str(int(v["nsteps"])),
+        "--timestep",
+        str(float(v.get("timestep_fs_gas", 0.1))),
+        "--printfreq",
+        str(int(v.get("printfreq", 50))),
+        "--savefreq",
+        str(int(v.get("savefreq", v.get("printfreq", 50)))),
+        "--seed",
+        str(int(cfg.get("seed", 0))),
+        "--overwrite",
+    ]
+    _uv_run(repo, cmd)
     return {
-        "job": "umbrella_gas",
         "variant": variant,
-        "ok": True,
-        "config": str(cfg_path),
+        "summary": str(out / "umbrella_summary.json"),
         "snapshots": str(out / "umbrella_snapshots.npz"),
     }
 
@@ -243,211 +352,222 @@ def job_umbrella_sol(
     repo: Path,
     cfg: dict[str, Any],
     out: Path,
-    env: dict[str, str],
     *,
     solvent: str,
     variant: str,
+    artifact_root: Path,
 ) -> dict[str, Any]:
-    knobs = _umbrella_variant(cfg, variant)
-    # make_boxes writes ARTIFACTS_DIR/boxes/{sol}/...
-    boxes = Path(env["ARTIFACTS_DIR"]) / "boxes" / solvent
-    psf = boxes / "model.psf"
-    pdb = boxes / "model.pdb"
+    example = repo / str(cfg.get("example_dir", "examples/m"))
+    sol = solvent.lower()
+    box = artifact_root / "boxes" / sol
+    psf = box / "model.psf"
+    pdb = box / "model.pdb"
     if not psf.is_file() or not pdb.is_file():
-        raise FileNotFoundError(
-            f"missing make-box artifacts for {solvent}: {psf} / {pdb} "
-            "(enable make_boxes and re-run)"
-        )
-
-    # Resolve AMM1 move-with from PSF
-    from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
-
-    atoms, _ = read_psf_atoms_and_bonds(psf)
-    move_with = [a.index for a in atoms if a.resname.upper() == "AMM1"]
-
-    umb_yaml = {
-        "engine": "hybrid_jaxmd",
-        "checkpoint": str(repo / cfg["checkpoint"]),
-        "from_psf": str(psf),
-        "from_pdb": str(pdb),
-        "box_size": float(cfg.get("box_size", 30.0)),
-        "output_dir": str(out),
-        "ml_resnames": ["AMM1", "CH3CL"],
-        "atom_name_i": "C1",
-        "atom_name_j": "N1",
-        "atom_i": 0,
-        "atom_j": 1,
-        "move_with": move_with,
-        "xi_min": float(knobs["xi_min"]),
-        "xi_max": float(knobs["xi_max"]),
-        "n_windows": int(knobs["n_windows"]),
-        "k_ev_A2": float(knobs["k_ev_A2"]),
-        "temperature_K": 300.0,
-        "timestep_fs": float(knobs.get("timestep_fs_sol", 0.5)),
-        "nsteps": int(knobs["nsteps"]),
-        "printfreq": int(knobs.get("printfreq", 50)),
-        "savefreq": int(knobs.get("savefreq", 50)),
-        "seed": int(cfg.get("seed", 0)),
-        "seed_mode": "stretch",
-        "overwrite": True,
-        "lr_solver": "mic",
-    }
-    cfg_path = out / "umbrella_config.yaml"
-    _dump_yaml(cfg_path, umb_yaml)
-    _run(
-        ["uv", "run", "mmml", "umbrella-sample", "--config", str(cfg_path), "--overwrite"],
-        cwd=repo,
-        env=env,
+        raise FileNotFoundError(f"missing make-box artifacts under {box}")
+    v = _variant_cfg(cfg, variant)
+    yaml_path = out / "umbrella_hybrid.yaml"
+    _write_hybrid_yaml(
+        template=example / "yaml" / "umbrella_nc_tip3.yaml",
+        out_yaml=yaml_path,
+        solvent=sol,
+        box_psf=psf,
+        box_pdb=pdb,
+        output_dir=out,
+        box_size=float(cfg.get("box_size", 30.0)),
+        variant=v,
+    )
+    move_with = _amm1_move_with(psf)
+    _uv_run(
+        repo,
+        [
+            "mmml",
+            "umbrella-sample",
+            "--config",
+            str(yaml_path),
+            "--output-dir",
+            str(out),
+            "--move-with",
+            move_with,
+            "--overwrite",
+        ],
     )
     return {
-        "job": "umbrella_sol",
-        "solvent": solvent,
+        "solvent": sol,
         "variant": variant,
-        "ok": True,
-        "config": str(cfg_path),
+        "move_with": move_with,
+        "summary": str(out / "umbrella_summary.json"),
         "snapshots": str(out / "umbrella_snapshots.npz"),
-        "ml_atoms": len(move_with) + sum(
-            1 for a in atoms if a.resname.upper() == "CH3CL"
-        ),
     }
 
 
-def job_adumb_gas(repo: Path, cfg: dict[str, Any], out: Path, env: dict[str, str]) -> dict[str, Any]:
-    adumb = cfg.get("adumb") or {}
-    env = dict(env)
-    env["ARTIFACTS_DIR"] = str(out.parent)  # script writes adumb_* under ARTIFACTS_DIR
-    env["OUT"] = str(out)
-    env["USE_NPZ_PDB"] = "1" if adumb.get("use_npz_pdb", True) else "0"
-    env["SOLVATED"] = "0"
-    # Point 09 script at a campaign-local copy of the vacuum YAML with redirected output.
-    src = repo / "examples/m/yaml/adumb_nc_distance.yaml"
-    data = yaml.safe_load(src.read_text(encoding="utf-8"))
-    data["output_dir"] = str(out)
-    cfg_path = out / "adumb_config.yaml"
-    _dump_yaml(cfg_path, data)
-    env["CFG"] = str(cfg_path)
-    # 09 script hardcodes OUT from solvated flag; override by setting CFG and patching via env
-    # Easiest: call md-system directly with the YAML.
-    _run(
-        ["uv", "run", "mmml", "md-system", "--config", str(cfg_path)],
-        cwd=repo,
-        env=env,
-    )
-    return {"job": "adumb_gas", "ok": True, "config": str(cfg_path)}
+def job_adumb_gas(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]:
+    example = repo / str(cfg.get("example_dir", "examples/m"))
+    use_npz = bool((cfg.get("adumb") or {}).get("use_npz_pdb", True))
+    env = os.environ.copy()
+    env["ARTIFACTS_DIR"] = str(out.parent.resolve())  # unused; we pass --output-dir
+    cmd = [
+        "uv",
+        "run",
+        "mmml",
+        "md-system",
+        "--config",
+        str(example / "yaml" / "adumb_nc_distance.yaml"),
+        "--output-dir",
+        str(out),
+    ]
+    if use_npz:
+        solute = out / "solute_amm1_ch3cl.pdb"
+        _uv_run(repo, ["python", "examples/m/07_export_solute_pdb.py", "-o", str(solute)])
+        cmd += [
+            "--composition",
+            str(solute),
+            "--from-pdb",
+            str(solute),
+            "--no-packmol",
+            "--charmm-sd-steps",
+            "0",
+            "--charmm-abnr-steps",
+            "0",
+            "--no-monomer-physnet-mini",
+        ]
+    print("+", " ".join(cmd), flush=True)
+    subprocess.run(cmd, cwd=str(repo), check=True, env=env)
+    adumb = out / "ADUMB-WUNI.DAT"
+    if not adumb.is_file() and not (out / "adumb-wuni.dat").is_file():
+        raise FileNotFoundError(f"missing ADUMB-WUNI.DAT under {out}")
+    return {"adumb_wuni": str(adumb if adumb.is_file() else out / "adumb-wuni.dat")}
 
 
 def job_adumb_sol(
-    repo: Path,
-    cfg: dict[str, Any],
-    out: Path,
-    env: dict[str, str],
-    *,
-    solvent: str,
+    repo: Path, cfg: dict[str, Any], out: Path, solvent: str
 ) -> dict[str, Any]:
-    adumb = cfg.get("adumb") or {}
-    src = repo / f"examples/m/yaml/adumb_nc_distance_{solvent}.yaml"
-    if not src.is_file():
-        raise FileNotFoundError(f"missing ADUMB YAML for solvent={solvent}: {src}")
-    data = yaml.safe_load(src.read_text(encoding="utf-8"))
-    data["output_dir"] = str(out)
-    data["box_size"] = float(cfg.get("box_size", data.get("box_size", 30.0)))
-    cfg_path = out / "adumb_config.yaml"
-    _dump_yaml(cfg_path, data)
-    env = dict(env)
-    if adumb.get("use_npz_pdb", True):
-        # Seed solute from NPZ PDB via md-system --from-pdb path is handled by 09 script;
-        # for campaign we use Packmol composition in the YAML as-is.
-        pass
-    _run(
-        ["uv", "run", "mmml", "md-system", "--config", str(cfg_path)],
-        cwd=repo,
-        env=env,
-    )
-    return {"job": "adumb_sol", "solvent": solvent, "ok": True, "config": str(cfg_path)}
+    example = repo / str(cfg.get("example_dir", "examples/m"))
+    sol = solvent.lower()
+    yaml_cfg = example / "yaml" / f"adumb_nc_distance_{sol}.yaml"
+    if not yaml_cfg.is_file():
+        raise FileNotFoundError(yaml_cfg)
+    use_npz = bool((cfg.get("adumb") or {}).get("use_npz_pdb", True))
+    cmd = [
+        "uv",
+        "run",
+        "mmml",
+        "md-system",
+        "--config",
+        str(yaml_cfg),
+        "--output-dir",
+        str(out),
+    ]
+    if use_npz:
+        solute = out / "solute_amm1_ch3cl.pdb"
+        _uv_run(repo, ["python", "examples/m/07_export_solute_pdb.py", "-o", str(solute)])
+        n = int((cfg.get("make_boxes") or {}).get("n_solvent", 12))
+        resi = _SOLVENT_RESI[sol]
+        cmd += ["--composition", f"{solute}:1,{resi}:{n}"]
+    print("+", " ".join(cmd), flush=True)
+    subprocess.run(cmd, cwd=str(repo), check=True)
+    adumb = out / "ADUMB-WUNI.DAT"
+    if not adumb.is_file() and not (out / "adumb-wuni.dat").is_file():
+        raise FileNotFoundError(f"missing ADUMB-WUNI.DAT under {out}")
+    return {
+        "solvent": sol,
+        "adumb_wuni": str(adumb if adumb.is_file() else out / "adumb-wuni.dat"),
+    }
 
 
-def job_mbar(repo: Path, cfg: dict[str, Any], out: Path, env: dict[str, str], *, run_dir: Path) -> dict[str, Any]:
-    _run(
+def job_mbar(repo: Path, run_dir: Path, out: Path) -> dict[str, Any]:
+    if not run_dir.is_dir():
+        raise FileNotFoundError(run_dir)
+    _uv_run(
+        repo,
         [
-            "uv",
-            "run",
             "mmml",
             "umbrella-mbar",
             "--run-dir",
             str(run_dir),
-            "--checkpoint",
-            str(repo / cfg["checkpoint"]),
+            "--output-dir",
+            str(out),
         ],
-        cwd=repo,
-        env=env,
     )
-    summary = run_dir / "umbrella_summary.json"
-    return {"job": "mbar", "ok": True, "run_dir": str(run_dir), "summary": str(summary)}
+    return {"run_dir": str(run_dir), "mbar_dir": str(out)}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--repo-root", type=Path, default=REPO_ROOT_DEFAULT)
-    parser.add_argument("--job", required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--status", type=Path, required=True)
-    parser.add_argument("--variant", default=None)
-    parser.add_argument("--solvent", default=None)
-    parser.add_argument("--basin", default=None)
-    parser.add_argument("--run-dir", type=Path, default=None, help="For mbar: umbrella run dir")
-    args = parser.parse_args()
-
+    args = _parse_args()
     cfg = load_config(args.config)
     repo = args.repo_root.resolve()
     out = args.output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    env = _env(repo, cfg)
-    # Campaign ARTIFACTS_DIR is the output_root (shared across jobs).
-    env["ARTIFACTS_DIR"] = str((repo / cfg.get("output_root", "artifacts/nh3_ch3cl_reaction_path")).resolve())
+    _setup_env(repo, cfg)
+
+    # Campaign artifact root: parent of job-specific dirs for box lookup.
+    output_root = str(cfg.get("output_root", "artifacts/nh3_ch3cl_reaction_path"))
+    artifact_root = (repo / output_root).resolve()
 
     t0 = time.time()
+    payload: dict[str, Any] = {
+        "job": args.job,
+        "completed": False,
+        "error": "",
+        "output_dir": str(out),
+        "config": str(Path(args.config).resolve()),
+        "basin": args.basin,
+        "solvent": args.solvent,
+        "variant": args.variant,
+    }
     try:
         if args.job == "endpoints":
-            result = job_endpoints(repo, cfg, out, env)
+            payload.update(job_endpoints(repo, cfg, out))
         elif args.job == "make_boxes":
-            result = job_make_boxes(repo, cfg, out, env)
+            payload.update(job_make_boxes(repo, cfg, out))
         elif args.job == "neb":
-            result = job_neb(repo, cfg, out, env)
+            payload.update(job_neb(repo, cfg, out))
         elif args.job == "dmc":
-            result = job_dmc(repo, cfg, out, env, basin=str(args.basin))
+            if not args.basin:
+                raise ValueError("--basin required for dmc")
+            payload.update(job_dmc(repo, cfg, out, args.basin))
         elif args.job == "umbrella_gas":
-            result = job_umbrella_gas(repo, cfg, out, env, variant=str(args.variant))
+            if not args.variant:
+                raise ValueError("--variant required for umbrella_gas")
+            payload.update(job_umbrella_gas(repo, cfg, out, args.variant))
         elif args.job == "umbrella_sol":
-            result = job_umbrella_sol(
-                repo, cfg, out, env, solvent=str(args.solvent), variant=str(args.variant)
+            if not args.solvent or not args.variant:
+                raise ValueError("--solvent and --variant required for umbrella_sol")
+            payload.update(
+                job_umbrella_sol(
+                    repo,
+                    cfg,
+                    out,
+                    solvent=args.solvent,
+                    variant=args.variant,
+                    artifact_root=artifact_root,
+                )
             )
         elif args.job == "adumb_gas":
-            result = job_adumb_gas(repo, cfg, out, env)
+            payload.update(job_adumb_gas(repo, cfg, out))
         elif args.job == "adumb_sol":
-            result = job_adumb_sol(repo, cfg, out, env, solvent=str(args.solvent))
+            if not args.solvent:
+                raise ValueError("--solvent required for adumb_sol")
+            payload.update(job_adumb_sol(repo, cfg, out, args.solvent))
         elif args.job == "mbar":
             if args.run_dir is None:
-                raise SystemExit("--run-dir required for mbar")
-            result = job_mbar(repo, cfg, out, env, run_dir=args.run_dir.resolve())
+                raise ValueError("--run-dir required for mbar")
+            payload.update(job_mbar(repo, args.run_dir.resolve(), out))
         else:
-            raise SystemExit(f"unknown job {args.job!r}")
-        result["elapsed_s"] = time.time() - t0
-        result["host"] = os.uname().nodename
-        _write_status(args.status, result)
-        print(json.dumps(result, indent=2), flush=True)
-        return 0
-    except Exception as exc:
-        payload = {
-            "job": args.job,
-            "ok": False,
-            "error": f"{type(exc).__name__}: {exc}",
-            "elapsed_s": time.time() - t0,
-            "host": os.uname().nodename,
-        }
+            raise ValueError(f"unknown job {args.job}")
+        payload["completed"] = True
+    except Exception as exc:  # noqa: BLE001 — status.json must capture failures
+        payload["completed"] = False
+        payload["error"] = f"{type(exc).__name__}: {exc}"
+        payload["traceback"] = traceback.format_exc()
+        print(payload["traceback"], file=sys.stderr, flush=True)
+        payload["elapsed_seconds"] = time.time() - t0
         _write_status(args.status, payload)
-        print(json.dumps(payload, indent=2), flush=True)
-        raise
+        return 1
+
+    payload["elapsed_seconds"] = time.time() - t0
+    _write_status(args.status, payload)
+    print(json.dumps(payload, indent=2), flush=True)
+    return 0
 
 
 if __name__ == "__main__":
