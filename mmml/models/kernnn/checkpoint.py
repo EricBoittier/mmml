@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from mmml.models.kernnn.model import DualFFNet, FFNet, KerNNConfig, KerNNStats, _build_model
+from mmml.utils.model_checkpoint import to_jsonable
 
 # Hardcoded stats from scripts/kernn KerNNCalculator (H2CO train split).
 H2CO_CALCULATOR_STATS = KerNNStats(
