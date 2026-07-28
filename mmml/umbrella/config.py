@@ -91,7 +91,7 @@ class UmbrellaConfig:
     move_with: tuple[int, ...] = ()
     move_with2: tuple[int, ...] = ()
     invert_with: tuple[int, ...] = ()
-    max_seed_force: float = 25.0
+    max_seed_force: float = 15.0
 
     def __post_init__(self) -> None:
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:

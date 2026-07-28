@@ -54,7 +54,7 @@ Execution:
                         reference, or use consecutive frames from --structure
   --max-seed-force MAX_SEED_FORCE
                         Abort if any window seed max|F| exceeds this (eV/Å;
-                        default: 25)
+                        default: 15)
   --nsteps NSTEPS       NVT steps (default: 1000)
   --seed SEED           PRNG seed (default: 42)
 
@@ -107,13 +107,14 @@ CLI for batched umbrella NVT sampling with PhysNet / SpookyNet. Usage: # Fix C
 examples/m/kl.json \ --structure examples/m/neb/reag_0_opt.xyz \ --atoms 2,1
 --move-with 1,3,4,5 \ --xi-min 1.5 --xi-max 3.5 --n-windows 11 \ --k 20
 --timestep 0.1 --temperature 300 --nsteps 5000 \ -o out/umbrella --overwrite #
-2D (Cl–C × N–C product grid) mmml umbrella-sample --checkpoint
-examples/m/kl.json \ --structure examples/m/neb/reag_0_opt.xyz \ --atoms 0,2
---atoms2 1,2 \ --xi-min 1.5 --xi-max 3.0 --n-windows 4 \ --yi-min 1.5 --yi-max
-3.0 --n-windows-y 4 \ --k 20 --ky 20 -o out/umbrella2d --overwrite # NPZ (R, Z)
-or PDB also work; --seed-mode frames uses consecutive frames as windows mmml
-umbrella-sample --checkpoint ckpt.json --structure data.npz \ --atoms 0,1
---targets 1.8,2.0,2.2 --seed-mode frames -o out/umb
+2D (Cl–C × N–C); invert CH3, avoid 1.5/1.5 corner mmml umbrella-sample
+--checkpoint examples/m/kl.json \ --structure examples/m/neb/reag_0_opt.xyz \
+--atoms 0,2 --atoms2 1,2 \ --move-with2 1,3,4,5 --invert-with 6,7,8 \ --xi-min
+1.8 --xi-max 3.0 --n-windows 4 \ --yi-min 1.8 --yi-max 3.0 --n-windows-y 4 \ --k
+10 --ky 10 -o out/umbrella2d --overwrite # NPZ (R, Z) or PDB also work; --seed-
+mode frames uses consecutive frames as windows mmml umbrella-sample --checkpoint
+ckpt.json --structure data.npz \ --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode
+frames -o out/umb
 ```
 
 

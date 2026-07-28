@@ -11,13 +11,14 @@ Usage:
       --k 20 --timestep 0.1 --temperature 300 --nsteps 5000 \\
       -o out/umbrella --overwrite
 
-    # 2D (Cl–C × N–C product grid)
+    # 2D (Cl–C × N–C); invert CH3, avoid 1.5/1.5 corner
     mmml umbrella-sample --checkpoint examples/m/kl.json \\
       --structure examples/m/neb/reag_0_opt.xyz \\
       --atoms 0,2 --atoms2 1,2 \\
-      --xi-min 1.5 --xi-max 3.0 --n-windows 4 \\
-      --yi-min 1.5 --yi-max 3.0 --n-windows-y 4 \\
-      --k 20 --ky 20 -o out/umbrella2d --overwrite
+      --move-with2 1,3,4,5 --invert-with 6,7,8 \\
+      --xi-min 1.8 --xi-max 3.0 --n-windows 4 \\
+      --yi-min 1.8 --yi-max 3.0 --n-windows-y 4 \\
+      --k 10 --ky 10 -o out/umbrella2d --overwrite
 
     # NPZ (R, Z) or PDB also work; --seed-mode frames uses consecutive frames as windows
     mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \\
@@ -189,7 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-seed-force",
         type=float,
         default=None,
-        help="Abort if any window seed max|F| exceeds this (eV/Å; default: 25)",
+        help="Abort if any window seed max|F| exceeds this (eV/Å; default: 15)",
     )
     parser.add_argument(
         "--temperature",
@@ -334,7 +335,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("move_with", ())
     data.setdefault("move_with2", ())
     data.setdefault("invert_with", ())
-    data.setdefault("max_seed_force", 25.0)
+    data.setdefault("max_seed_force", 15.0)
 
     return UmbrellaConfig.from_dict(data)
 
