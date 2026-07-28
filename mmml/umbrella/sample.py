@@ -177,6 +177,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         Path(cfg.checkpoint).expanduser().resolve(),
         natoms=n_atoms,
         prefer_ema=cfg.use_ema,
+        model=getattr(cfg, "model", None),
     )
 
     graph = build_packed_graph(n_atoms, k_windows)

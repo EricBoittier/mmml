@@ -322,6 +322,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
 
     cli_map = {
         "checkpoint": args.checkpoint,
+        "model": args.model,
         "structure": args.structure,
         "output_dir": args.output_dir,
         "temperature_K": args.temperature_K,

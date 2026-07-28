@@ -1186,15 +1186,20 @@ def build_decomposed_mlpot_model(
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel:
     from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import jax_mm_spoof_enabled
+    from mmml.models.kernnn import is_kernnn_checkpoint
 
     _spoof = jax_mm_spoof_enabled(args)
+    _ckpt = getattr(args, "model_restart_path", None) if args is not None else None
+    _kernnn = bool(_ckpt) and is_kernnn_checkpoint(_ckpt)
+    _ml_mode = "jax_mm_clone" if _spoof else ("kernnn" if _kernnn else "physnet")
     if _spoof:
         ckpt = Path("/dev/null")
     else:
         ckpt = Path(checkpoint).expanduser().resolve()
-        from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
+        if not _kernnn:
+            from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
 
-        assert_hybrid_ml_compatible(ckpt)
+            assert_hybrid_ml_compatible(ckpt)
     if args is not None and ml_compute_dtype is None:
         ml_compute_dtype = getattr(args, "ml_compute_dtype", None)
     cutoff_params = (
@@ -1475,21 +1480,7 @@ def build_decomposed_mlpot_model(
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True
         ),
-        ml_potential_mode=(
-            "jax_mm_clone"
-            if _spoof
-            else (
-                "kernnn"
-                if (
-                    args is not None
-                    and getattr(args, "model_restart_path", None) is not None
-                    and __import__(
-                        "mmml.models.kernnn", fromlist=["is_kernnn_checkpoint"]
-                    ).is_kernnn_checkpoint(getattr(args, "model_restart_path"))
-                )
-                else "physnet"
-            )
-        ),
+        ml_potential_mode=_ml_mode,
         jax_mm_spoof_psf=(
             getattr(args, "jax_mm_spoof_psf", None) if args is not None else None
         ),

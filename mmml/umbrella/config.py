@@ -85,6 +85,7 @@ class UmbrellaConfig:
     savefreq: int | None = None
     seed: int = 42
     use_ema: bool = True
+    model: str | None = None
     overwrite: bool = False
     write_window_xyz: bool = False
     structure_index: int = 0
