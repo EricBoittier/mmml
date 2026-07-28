@@ -5,9 +5,13 @@ Usage:
     mmml umbrella-sample \\
       --checkpoint examples/m/kl.json \\
       --structure examples/m/neb/reag_0_opt.xyz \\
-      --atoms 0,1 \\
+      --atoms 1,2 \\
       --xi-min 1.5 --xi-max 3.5 --n-windows 11 \\
       --k 20 --temperature 300 --nsteps 5000 -o out/umbrella
+
+    # NPZ (R, Z) or PDB also work; --seed-mode frames uses consecutive frames as windows
+    mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \\
+      --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode frames -o out/umb
 """
 
 from __future__ import annotations
@@ -59,7 +63,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="YAML/JSON UmbrellaConfig; CLI flags override file values when set",
     )
     parser.add_argument("--checkpoint", type=Path, help="PhysNet / SpookyNet checkpoint")
-    parser.add_argument("--structure", type=Path, help="Input XYZ / structure file")
+    parser.add_argument(
+        "--structure",
+        type=Path,
+        help="Starting geometry: XYZ, PDB, or NPZ with R/Z arrays",
+    )
+    parser.add_argument(
+        "--structure-index",
+        type=int,
+        default=None,
+        help="Frame index for multi-frame XYZ/PDB/NPZ (default: 0)",
+    )
+    parser.add_argument(
+        "--seed-mode",
+        choices=("stretch", "tile", "frames"),
+        default=None,
+        help=(
+            "Window seeding: stretch CV to each ξ₀ (default), tile reference, "
+            "or use consecutive frames from --structure"
+        ),
+    )
     parser.add_argument(
         "--output-dir",
         "-o",
@@ -180,6 +203,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "xi_min": args.xi_min,
         "xi_max": args.xi_max,
         "n_windows": args.n_windows,
+        "structure_index": args.structure_index,
+        "seed_mode": args.seed_mode,
     }
     for key, value in cli_map.items():
         if value is not None:
@@ -213,6 +238,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("seed", 42)
     data.setdefault("use_ema", True)
     data.setdefault("overwrite", False)
+    data.setdefault("structure_index", 0)
+    data.setdefault("seed_mode", "stretch")
 
     return UmbrellaConfig.from_dict(data)
 

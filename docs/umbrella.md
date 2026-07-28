@@ -38,14 +38,23 @@ batching. Vacuum / free space only (no PBC MIC restraints in v1).
 mmml umbrella-sample \
   --checkpoint examples/m/kl.json \
   --structure examples/m/neb/reag_0_opt.xyz \
-  --atoms 0,1 \
+  --atoms 1,2 \
   --xi-min 1.5 --xi-max 3.5 --n-windows 11 \
   --k 20 --temperature 300 --nsteps 20000 --savefreq 100 \
   -o artifacts/umbrella --overwrite
 
+# NPZ with R/Z (optional --seed-mode frames for pre-generated window seeds):
+# mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \
+#   --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode frames -o artifacts/umbrella
+
 # 2) MBAR (requires: uv sync --extra mbar)
 mmml umbrella-mbar --run-dir artifacts/umbrella
 ```
+
+`--structure` accepts **XYZ, PDB, or NPZ** (`R`, `Z`). Default `--seed-mode stretch`
+moves the CV atom pair to each ξ₀ before MD (avoids huge bias forces from tiling
+one far-from-target geometry). Use `--seed-mode frames` when the NPZ/PDB already
+has one frame per window.
 
 Artifacts in the run directory:
 

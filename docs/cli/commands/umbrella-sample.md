@@ -13,11 +13,13 @@ mmml umbrella-sample --help
 
 ```text
 usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
-                            [--structure STRUCTURE] [--output-dir OUTPUT_DIR]
-                            [--atoms ATOMS] [--targets TARGETS]
-                            [--xi-min XI_MIN] [--xi-max XI_MAX]
-                            [--n-windows N_WINDOWS] [--k K_EV_A2]
-                            [--temperature TEMPERATURE_K]
+                            [--structure STRUCTURE]
+                            [--structure-index STRUCTURE_INDEX]
+                            [--seed-mode {stretch,tile,frames}]
+                            [--output-dir OUTPUT_DIR] [--atoms ATOMS]
+                            [--targets TARGETS] [--xi-min XI_MIN]
+                            [--xi-max XI_MAX] [--n-windows N_WINDOWS]
+                            [--k K_EV_A2] [--temperature TEMPERATURE_K]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
                             [--seed SEED] [--no-ema] [--overwrite]
@@ -31,13 +33,18 @@ Input & configuration:
   --checkpoint CHECKPOINT
                         PhysNet / SpookyNet checkpoint
   --structure STRUCTURE
-                        Input XYZ / structure file
+                        Starting geometry: XYZ, PDB, or NPZ with R/Z arrays
+  --structure-index STRUCTURE_INDEX
+                        Frame index for multi-frame XYZ/PDB/NPZ (default: 0)
 
 Scientific model:
   --temperature TEMPERATURE_K
                         NVT temperature in K (default: 300)
 
 Execution:
+  --seed-mode {stretch,tile,frames}
+                        Window seeding: stretch CV to each ξ₀ (default), tile
+                        reference, or use consecutive frames from --structure
   --nsteps NSTEPS       NVT steps (default: 1000)
   --seed SEED           PRNG seed (default: 42)
 
@@ -67,8 +74,11 @@ Other options:
 
 CLI for batched umbrella NVT sampling with PhysNet / SpookyNet. Usage: mmml
 umbrella-sample \ --checkpoint examples/m/kl.json \ --structure
-examples/m/neb/reag_0_opt.xyz \ --atoms 0,1 \ --xi-min 1.5 --xi-max 3.5
---n-windows 11 \ --k 20 --temperature 300 --nsteps 5000 -o out/umbrella
+examples/m/neb/reag_0_opt.xyz \ --atoms 1,2 \ --xi-min 1.5 --xi-max 3.5
+--n-windows 11 \ --k 20 --temperature 300 --nsteps 5000 -o out/umbrella # NPZ
+(R, Z) or PDB also work; --seed-mode frames uses consecutive frames as windows
+mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \ --atoms 0,1
+--targets 1.8,2.0,2.2 --seed-mode frames -o out/umb
 ```
 
 

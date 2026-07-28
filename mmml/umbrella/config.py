@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
+
+
+SeedMode = Literal["stretch", "tile", "frames"]
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,8 @@ class UmbrellaConfig:
     seed: int = 42
     use_ema: bool = True
     overwrite: bool = False
+    structure_index: int = 0
+    seed_mode: SeedMode = "stretch"
 
     def __post_init__(self) -> None:
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
@@ -43,6 +48,12 @@ class UmbrellaConfig:
             raise ValueError(f"printfreq must be >= 1 (got {self.printfreq})")
         if self.savefreq is not None and self.savefreq < 1:
             raise ValueError(f"savefreq must be >= 1 (got {self.savefreq})")
+        if self.structure_index < 0:
+            raise ValueError(f"structure_index must be >= 0 (got {self.structure_index})")
+        if self.seed_mode not in ("stretch", "tile", "frames"):
+            raise ValueError(
+                f"seed_mode must be stretch|tile|frames (got {self.seed_mode!r})"
+            )
         targets = self.resolve_targets()
         if len(targets) < 1:
             raise ValueError("need at least one umbrella window target")

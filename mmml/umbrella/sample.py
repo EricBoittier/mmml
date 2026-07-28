@@ -11,10 +11,14 @@ from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.energy import (
     build_packed_graph,
     make_packed_energy_fn,
-    pack_positions,
     packed_cv_distances,
 )
 from mmml.umbrella.io import SNAPSHOTS_NPZ, SUMMARY_JSON, save_snapshots, write_summary
+from mmml.umbrella.structure import (
+    load_structure,
+    load_structure_frames,
+    pack_window_seeds,
+)
 
 
 @dataclass(frozen=True)
@@ -27,17 +31,6 @@ class UmbrellaResult:
     n_windows: int
     n_frames: int
     paths: dict[str, Path]
-
-
-def _load_structure(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    from ase.io import read
-
-    atoms = read(str(path))
-    if isinstance(atoms, list):
-        atoms = atoms[0]
-    z = np.asarray(atoms.get_atomic_numbers(), dtype=np.int32)
-    r = np.asarray(atoms.get_positions(), dtype=np.float64)
-    return r, z
 
 
 def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
@@ -59,7 +52,24 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    r0, z = _load_structure(Path(cfg.structure).expanduser().resolve())
+    structure_path = Path(cfg.structure).expanduser().resolve()
+    targets = cfg.resolve_targets()
+    ks = cfg.resolve_force_constants()
+    k_windows = len(targets)
+
+    frames = None
+    seed_mode = cfg.seed_mode
+    if seed_mode == "frames":
+        r_multi, z = load_structure_frames(
+            structure_path,
+            n_frames=k_windows,
+            start_index=int(cfg.structure_index),
+        )
+        r0 = r_multi[0]
+        frames = r_multi
+    else:
+        r0, z = load_structure(structure_path, index=int(cfg.structure_index))
+
     n_atoms = int(len(z))
     if max(cfg.atom_i, cfg.atom_j) >= n_atoms:
         raise ValueError(
@@ -67,9 +77,15 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             f"{n_atoms} atoms"
         )
 
-    targets = cfg.resolve_targets()
-    ks = cfg.resolve_force_constants()
-    k_windows = len(targets)
+    r0_cv = float(np.linalg.norm(r0[cfg.atom_j] - r0[cfg.atom_i]))
+    r_packed_np = pack_window_seeds(
+        positions=r0,
+        atom_i=cfg.atom_i,
+        atom_j=cfg.atom_j,
+        targets_A=targets,
+        seed_mode=seed_mode,
+        frames=frames,
+    )
 
     params, model = load_params_and_model(
         Path(cfg.checkpoint).expanduser().resolve(),
@@ -92,7 +108,14 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
 
     masses = np.array([atomic_masses[int(zi)] for zi in z], dtype=np.float64)
     masses_batched = jnp.tile(jnp.asarray(masses), k_windows)
-    r_packed = jnp.asarray(pack_positions(r0, k_windows), dtype=jnp.float64)
+    r_packed = jnp.asarray(r_packed_np, dtype=jnp.float64)
+
+    e0 = float(energy_sum_fn(r_packed))
+    if not np.isfinite(e0):
+        raise RuntimeError(
+            f"initial umbrella energy is non-finite ({e0}). "
+            "Check checkpoint, geometry, and --atoms CV indices."
+        )
 
     k_b = 8.617333262145e-5  # eV/K
     kt = k_b * float(cfg.temperature_K)
@@ -106,7 +129,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     key = jax.random.PRNGKey(int(cfg.seed))
     state = init_fn(key, r_packed, mass=masses_batched)
 
-    frames: list[np.ndarray] = [
+    frames_traj: list[np.ndarray] = [
         np.asarray(state.position).reshape(k_windows, n_atoms, 3)
     ]
     cv_frames: list[np.ndarray] = [
@@ -121,11 +144,16 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f"=== Umbrella NVT ({k_windows} windows batched, "
         f"T={cfg.temperature_K} K, dt={dt} fs) ==="
     )
+    print(
+        f"  structure={structure_path.name}  seed_mode={seed_mode}  "
+        f"CV atoms=({cfg.atom_i},{cfg.atom_j})  r0={r0_cv:.4f} Å"
+    )
+    print(f"  Initial E_total={e0:.4f} eV")
     for step in range(1, int(cfg.nsteps) + 1):
         state = apply_fn(state)
         if step % savefreq == 0 or step == cfg.nsteps:
             pos_batch = np.asarray(state.position).reshape(k_windows, n_atoms, 3)
-            frames.append(pos_batch)
+            frames_traj.append(pos_batch)
             cv_frames.append(
                 np.asarray(
                     packed_cv_distances(
@@ -138,10 +166,16 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             t_curr = float(
                 quantity.temperature(momentum=state.momentum, mass=state.mass) / k_b
             )
+            if not np.isfinite(e_tot) or not np.isfinite(t_curr):
+                raise RuntimeError(
+                    f"non-finite thermodynamics at step {step}: "
+                    f"E={e_tot} T={t_curr}. Try smaller --timestep, "
+                    "softer --k, or --seed-mode stretch/frames near each ξ₀."
+                )
             print(f"  step {step:6d}  E_total={e_tot:.4f} eV  T={t_curr:.1f} K")
 
     # frames: list of (K, N, 3) → (K, N_frames, N, 3)
-    positions = np.stack(frames, axis=1)
+    positions = np.stack(frames_traj, axis=1)
     cv_traj = np.stack(cv_frames, axis=1)
     n_frames = int(positions.shape[1])
 
@@ -177,6 +211,8 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "n_atoms": n_atoms,
         "xi0": list(targets),
         "k_ev_A2": list(ks),
+        "r0_cv_A": r0_cv,
+        "seed_mode": seed_mode,
         "cv_mean": cv_traj.mean(axis=1).tolist(),
         "cv_std": cv_traj.std(axis=1).tolist(),
         "snapshots": str(snapshots_path),

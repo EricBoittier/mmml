@@ -21,7 +21,7 @@ def test_sample_parser_targets():
             "--checkpoint",
             "ckpt",
             "--structure",
-            "mol.xyz",
+            "mol.npz",
             "-o",
             "out",
             "--atoms",
@@ -32,6 +32,10 @@ def test_sample_parser_targets():
             "12.5",
             "--nsteps",
             "50",
+            "--seed-mode",
+            "frames",
+            "--structure-index",
+            "2",
             "--overwrite",
         ]
     )
@@ -42,6 +46,8 @@ def test_sample_parser_targets():
     assert cfg.resolve_force_constants() == (12.5, 12.5, 12.5)
     assert cfg.nsteps == 50
     assert cfg.overwrite is True
+    assert cfg.seed_mode == "frames"
+    assert cfg.structure_index == 2
 
 
 def test_sample_parser_grid_from_config_file(tmp_path: Path):
