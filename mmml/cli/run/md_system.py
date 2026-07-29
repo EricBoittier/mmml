@@ -2393,6 +2393,12 @@ def _append_suite_mmml_handoff_args(
     _append_boolean_optional_flag(
         cmd, "--include-mm", bool(getattr(args, "include_mm", True))
     )
+    _append_boolean_optional_flag(cmd, "--do-ml", bool(getattr(args, "do_ml", True)))
+    _append_boolean_optional_flag(
+        cmd, "--do-ml-dimer", bool(getattr(args, "do_ml_dimer", True))
+    )
+    if bool(getattr(args, "skip_ml_dimers", False)):
+        cmd.append("--skip-ml-dimers")
     cmd.extend(["--pre-min-fmax", str(getattr(args, "pre_min_fmax", 0.1))])
     cmd.extend(["--pre-min-steps", str(getattr(args, "pre_min_steps", 50))])
     cmd.extend(["--fire-min-steps", str(getattr(args, "fire_min_steps", 200))])
@@ -3251,6 +3257,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     if not bool(getattr(args, "include_mm", True)):
         cmd.append("--no-include-mm")
+    if not bool(getattr(args, "do_ml", True)):
+        cmd.append("--no-do-ml")
+    if not bool(getattr(args, "do_ml_dimer", True)):
+        cmd.append("--no-do-ml-dimer")
+    if bool(getattr(args, "skip_ml_dimers", False)):
+        cmd.append("--skip-ml-dimers")
     if bool(getattr(args, "jax_mm_spoof", False)):
         cmd.append("--jax-mm-spoof")
     _append_optional(cmd, "--jax-mm-spoof-psf", getattr(args, "jax_mm_spoof_psf", None))

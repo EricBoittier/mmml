@@ -172,6 +172,8 @@ class DecomposedMlpotCalculator:
         get_update_fn: Any | None = None,
         ml_compute_dtype: str | None = None,
         *,
+        do_ml: bool = True,
+        do_ml_dimer: bool = True,
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
         periodic_mm_config: Any | None = None,
@@ -183,6 +185,8 @@ class DecomposedMlpotCalculator:
         self.cutoff_params = cutoff_params
         self.n_monomers = int(n_monomers)
         self.do_mm = bool(do_mm)
+        self.do_ml = bool(do_ml)
+        self.do_ml_dimer = bool(do_ml_dimer)
         self._periodic_mm_config = periodic_mm_config
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
@@ -304,6 +308,8 @@ class DecomposedMlpotCalculator:
             int(n_atoms),
             int(self.n_monomers),
             bool(self.do_mm),
+            bool(self.do_ml),
+            bool(self.do_ml_dimer),
             dtype,
             box_present,
             bool(self._spatial_mpi),
@@ -316,6 +322,8 @@ class DecomposedMlpotCalculator:
         cutoff_params = self.cutoff_params
         n_monomers = self.n_monomers
         do_mm = self.do_mm
+        do_ml = self.do_ml
+        do_ml_dimer = self.do_ml_dimer
 
         if box_present:
 
@@ -334,9 +342,9 @@ class DecomposedMlpotCalculator:
                     atomic_numbers=atomic_numbers_jax,
                     n_monomers=n_monomers,
                     cutoff_params=cutoff_params,
-                    doML=True,
+                    doML=do_ml,
                     doMM=do_mm,
-                    doML_dimer=True,
+                    doML_dimer=do_ml_dimer,
                     box=box,
                 )
                 if use_mm_pairs:
@@ -390,9 +398,9 @@ class DecomposedMlpotCalculator:
                     atomic_numbers=atomic_numbers_jax,
                     n_monomers=n_monomers,
                     cutoff_params=cutoff_params,
-                    doML=True,
+                    doML=do_ml,
                     doMM=do_mm,
-                    doML_dimer=True,
+                    doML_dimer=do_ml_dimer,
                 )
                 if use_mm_pairs:
                     kwargs["mm_pair_idx"] = mm_pair_idx
@@ -1131,6 +1139,8 @@ class DecomposedMlpotModel:
             z,
             cell=self._cell,
             do_mm=self._do_mm,
+            do_ml=self._pending_do_ml,
+            do_ml_dimer=self._pending_do_ml_dimer,
             get_update_fn=self._get_update_fn,
             ml_compute_dtype=self._ml_compute_dtype,
             spatial_mpi=self._spatial_mpi,
@@ -1312,10 +1322,12 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
             flush=True,
         )
-    do_ml = True
+    do_ml = True if args is None else bool(getattr(args, "do_ml", True))
     include_mm = True if args is None else bool(getattr(args, "include_mm", True))
     do_mm = include_mm and not periodic_mode
-    do_ml_dimer = True
+    do_ml_dimer = True if args is None else bool(getattr(args, "do_ml_dimer", True))
+    if args is not None and bool(getattr(args, "skip_ml_dimers", False)):
+        do_ml_dimer = False
     if verbose and periodic_mm_config is not None and cell:
         print(
             periodic_mm_status_line(periodic_mm_config, box_side_A=float(cell)),
@@ -1569,6 +1581,8 @@ def build_decomposed_mlpot_model(
         do_mm=do_mm,
         get_update_fn=get_update_fn if do_mm else None,
         ml_compute_dtype=ml_compute_dtype,
+        pending_do_ml=do_ml,
+        pending_do_ml_dimer=do_ml_dimer,
         spatial_mpi=spatial_mpi,
         atoms_per_monomer=per,
         periodic_mm_config=periodic_mm_config,
