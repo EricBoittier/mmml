@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from mmml.analysis.residue_geometry import (
+    ensure_residue_pdb,
     known_solvent_density_kg_m3,
     load_residue_monomer_atoms,
     resolve_solvent_density_kg_m3,
@@ -89,6 +90,43 @@ def test_load_bundled_and_campaign_monomers() -> None:
     # Campaign ACE geometry still loads
     ace = load_residue_monomer_atoms("ACE", generate=False)
     assert len(ace) == len(aco)
+
+
+def test_ensure_residue_pdb_writes_molecules_geometry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MOLECULES entries (e.g. ACE) have no bundled PDB; must still materialize out."""
+    monkeypatch.chdir(tmp_path)
+    path = ensure_residue_pdb("ACE", generate=False)
+    assert path.is_file()
+    assert path.name == "ace.pdb"
+    resnames = {
+        line.split()[3].upper()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith(("ATOM  ", "HETATM"))
+    }
+    assert resnames == {"ACE"}
+    assert "MOL" not in resnames
+    atoms = load_residue_monomer_atoms("ACE", generate=False)
+    assert len(atoms) == sum(
+        1
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith(("ATOM  ", "HETATM"))
+    )
+
+
+def test_ensure_residue_pdb_writes_campaign_alias_without_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ACO aliases to ACE in MOLECULES; without a bundle, still write aco.pdb."""
+    from mmml.analysis import residue_geometry as rg
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(rg, "bundled_monomer_pdb", lambda _name: None)
+    path = ensure_residue_pdb("ACO", generate=False)
+    assert path.is_file()
+    assert path.name == "aco.pdb"
+    assert rg._pdb_resnames(path) == {"ACO"}
 
 
 def test_load_from_cwd_pdb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

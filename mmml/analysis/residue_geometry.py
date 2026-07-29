@@ -165,6 +165,45 @@ def _pdb_resnames(path: Path) -> set[str]:
     return names
 
 
+def _atom_names_from_symbols(symbols: list[str]) -> list[str]:
+    """Build short PDB atom names from element symbols (C1, H2, CL1, …)."""
+    counts: dict[str, int] = {}
+    names: list[str] = []
+    for sym in symbols:
+        key = str(sym).strip().upper() or "X"
+        counts[key] = counts.get(key, 0) + 1
+        n = counts[key]
+        base = key[:2] if len(key) >= 2 else key
+        name = f"{base}{n}"
+        names.append(name[:4])
+    return names
+
+
+def _write_monomer_pdb(path: Path, atoms: Atoms, resname: str) -> None:
+    """Write *atoms* as a single-residue PDB with *resname* (never ASE ``MOL``)."""
+    # Lazy import: formatting helper lives next to Packmol writers.
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        format_cgenff_pdb_atom_line,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    resn = str(resname).strip().upper() or "UNK"
+    symbols = [str(s) for s in atoms.get_chemical_symbols()]
+    names = _atom_names_from_symbols(symbols)
+    lines = [
+        f"REMARK   mmml monomer for {resn} (campaign/template geometry)",
+    ]
+    for i, (aname, elem, xyz) in enumerate(
+        zip(names, symbols, atoms.get_positions(), strict=True),
+        start=1,
+    ):
+        lines.append(
+            format_cgenff_pdb_atom_line(i, aname, resn, 1, xyz, elem)
+        )
+    lines.append("END")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def ensure_residue_pdb(
     residue: str,
     *,
@@ -172,6 +211,11 @@ def ensure_residue_pdb(
     dest: Path | str | None = None,
 ) -> Path:
     """Ensure ``pdb/<resi>.pdb`` exists; return its path.
+
+    Sources (in order): existing ``out``, bundled template, then
+    :func:`load_residue_monomer_atoms` (MOLECULES / cwd / make-res). When load
+    returns atoms without writing a file (campaign geometries), write *out*
+    with :func:`_write_monomer_pdb` so the path always exists.
 
     Preserves an existing ``pdb/initial.pdb`` when generating via ``make-res``.
     Never overwrites a CHARMM/make-res PDB with ASE's default ``MOL`` resname.
@@ -187,22 +231,18 @@ def ensure_residue_pdb(
         out.write_bytes(bundled.read_bytes())
         return out.resolve()
 
-    # ``make-res`` (via load→generate) writes ``pdb/<resi>.pdb`` with CGenFF names.
-    load_residue_monomer_atoms(name, generate=generate)
-    if out.is_file():
-        resnames = _pdb_resnames(out)
-        if resnames and resnames != {"MOL"} and name in resnames:
-            return out.resolve()
-        if resnames == {"MOL"}:
-            raise RuntimeError(
-                f"{out} has ASE placeholder resname MOL after generating {name!r}. "
-                "CHARMM GENERATE will fail; fix the monomer writer to keep CGenFF names."
-            )
-        return out.resolve()
+    # make-res writes ``pdb/<resi>.pdb``; MOLECULES / aliases only return atoms.
+    atoms = load_residue_monomer_atoms(name, generate=generate)
+    if not out.is_file():
+        _write_monomer_pdb(out, atoms, name)
 
-    raise FileNotFoundError(
-        f"Expected {out} after loading residue {name!r}, but the file is missing."
-    )
+    resnames = _pdb_resnames(out)
+    if resnames == {"MOL"}:
+        raise RuntimeError(
+            f"{out} has ASE placeholder resname MOL after generating {name!r}. "
+            "CHARMM GENERATE will fail; fix the monomer writer to keep CGenFF names."
+        )
+    return out.resolve()
 
 
 def _generate_monomer_via_make_res(name: str) -> Atoms:
