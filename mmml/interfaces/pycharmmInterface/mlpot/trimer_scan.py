@@ -54,12 +54,23 @@ def place_trimer(
     d02: float,
     angle_02_rad: float,
 ) -> np.ndarray:
-    """Rigid-body move monomers 1 and, when present, 2 relative to monomer 0 COM."""
+    """Rigid-body move monomers 1 and, when present, 2 relative to monomer 0 COM.
+
+    * Dimer (2 monomers): ``d01`` is the COM separation along +x and ``d02`` is
+      a lateral +y offset (``angle_02_rad`` unused). This makes a true 2D grid
+      for pair scans; previously ``d02`` was ignored so every column duplicated.
+    * Trimer (3+ monomers): monomer 1 at ``(d01, 0, 0)``; monomer 2 at
+      ``d02 * (cos θ, sin θ, 0)`` with ``θ = angle_02_rad``.
+    """
     if len(atoms_per) < 2:
         raise ValueError(f"scan requires at least 2 monomers, got {len(atoms_per)}")
     pos = np.array(ref, dtype=np.float64, copy=True)
     off = monomer_offsets(atoms_per)
     com0 = monomer_com(ref, int(off[0]), int(atoms_per[0]))
+    if len(atoms_per) == 2:
+        target1 = com0 + np.array([d01, d02, 0.0], dtype=float)
+        rigid_shift_monomer(pos, ref, int(off[1]), int(atoms_per[1]), target1)
+        return pos
     target1 = com0 + np.array([d01, 0.0, 0.0], dtype=float)
     rigid_shift_monomer(pos, ref, int(off[1]), int(atoms_per[1]), target1)
     if len(atoms_per) >= 3:
