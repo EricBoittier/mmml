@@ -1431,12 +1431,14 @@ def _parse_pdb_atoms_whitespace(
     positions: list[list[float]] = []
     with path.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
-            if not line.startswith(("ATOM  ", "HETATM")):
-                continue
             parts = line.split()
+            if not parts or parts[0] not in ("ATOM", "HETATM"):
+                continue
             if len(parts) < 8:
                 raise RuntimeError(f"Truncated PDB ATOM record in {path}: {line!r}")
             # ATOM serial name resname [chain] resid x y z ...
+            # Never harvest "all floats" — serial/resid would be mistaken for x/y
+            # when occupancy/tempFactor are omitted (only 5 numeric tokens).
             try:
                 if len(parts[4]) == 1 and parts[4].isalpha() and not parts[4].isdigit():
                     name, resn, resid_s = parts[2], parts[3], parts[5]

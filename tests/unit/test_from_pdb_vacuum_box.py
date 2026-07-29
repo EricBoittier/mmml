@@ -68,3 +68,25 @@ def test_residue_sequence_from_pdb_preserves_resid_order(tmp_path):
     assert resn == ["AMM1", "AMM1", "CH3CL", "CH3CL"]
     assert resids == [1, 1, 2, 2]
     assert float(xyz[3, 0]) == pytest.approx(3.8)
+
+
+def test_parse_pdb_atoms_whitespace_minimal_no_occupancy(tmp_path):
+    """Serial/resid must not be taken as x/y when occ/tempFactor are omitted."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _parse_pdb_atoms_whitespace
+
+    pdb = tmp_path / "minimal.pdb"
+    # ATOM serial name resname resid x y z  (exactly 5 numeric tokens)
+    pdb.write_text(
+        "ATOM 1 N1 AMM1 1 -2.699 1.081 -0.327\n"
+        "ATOM 2 CL1 CH3CL 2 1.439 -0.600 0.174\n"
+        "END\n",
+        encoding="utf-8",
+    )
+    names, resn, resids, xyz = _parse_pdb_atoms_whitespace(pdb)
+    assert names == ["N1", "CL1"]
+    assert resn == ["AMM1", "CH3CL"]
+    assert resids == [1, 2]
+    assert xyz[0].tolist() == pytest.approx([-2.699, 1.081, -0.327])
+    assert xyz[1].tolist() == pytest.approx([1.439, -0.600, 0.174])
+    # Old float-harvest bug: floats[:3] or floats[-5:-2] → [1, 1, -2.699]
+    assert xyz[0, 0] != pytest.approx(1.0)

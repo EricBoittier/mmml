@@ -155,55 +155,52 @@ def read_initial_pdb(cwd: Path) -> Atoms:
     return mol
 
 
-def _read_pdb_atoms_split(pdb_path: Path) -> Atoms:
-    """Minimal ATOM/HETATM reader: ``str.split`` fields (not fixed columns)."""
-    from ase import Atoms as _Atoms
-    from ase.data import atomic_numbers, chemical_symbols
+def _element_from_pdb_atom_name(name: str, trailing: str | None = None) -> str:
+    """Map a PDB atom name / trailing element token to an ASE chemical symbol."""
+    if trailing:
+        t = trailing.strip()
+        if t.upper() == "CL":
+            return "Cl"
+        if len(t) <= 2 and t.isalpha():
+            return t[0].upper() + t[1:].lower()
+    n = (name or "").strip()
+    if n.upper().startswith("CL"):
+        return "Cl"
+    if not n:
+        return "X"
+    return n[0].upper()
 
-    syms: list[str] = []
-    pos: list[list[float]] = []
+
+def _read_pdb_atoms_split(pdb_path: Path) -> Atoms:
+    """Whitespace ATOM/HETATM reader for CGenFF names ASE rejects.
+
+    Uses ``_parse_pdb_atoms_whitespace`` field order
+    (``ATOM serial name resname [chain] resid x y z …``) so serial/resid are
+    never mistaken for coordinates when occupancy/tempFactor are omitted.
+    """
+    from ase import Atoms as _Atoms
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _parse_pdb_atoms_whitespace,
+    )
+
+    names, _resnames, _resids, positions = _parse_pdb_atoms_whitespace(pdb_path)
+    trailing_by_index: list[str | None] = [None] * len(names)
+    atom_i = 0
     for line in Path(pdb_path).read_text(encoding="utf-8", errors="replace").splitlines():
-        if not (line.startswith("ATOM") or line.startswith("HETATM")):
-            continue
         parts = line.split()
-        if len(parts) < 6:
+        if not parts or parts[0] not in ("ATOM", "HETATM"):
             continue
-        # Try trailing element column first, then atom-name heuristic.
-        elem = parts[-1]
-        if elem.upper() == "CL" or (len(elem) <= 2 and elem.isalpha()):
-            sym = elem.capitalize() if len(elem) <= 2 else elem[0].upper()
-            if elem.upper() == "CL":
-                sym = "Cl"
-        else:
-            name = parts[2]
-            sym = "Cl" if name.upper().startswith("CL") else name[0].upper()
-        # Coordinates: last three floats before occupancy/element tail.
-        floats: list[float] = []
-        for tok in parts:
-            try:
-                floats.append(float(tok))
-            except ValueError:
-                continue
-        if len(floats) < 3:
-            continue
-        # serial may parse as float; coords are the first triple after integers
-        # Prefer the triple immediately preceding two trailing 1.00/0.00-style fields.
-        if len(floats) >= 5:
-            xyz = floats[-5:-2]
-        else:
-            xyz = floats[:3]
-        if sym not in atomic_numbers and sym.upper() == "CL":
-            sym = "Cl"
-        if sym not in atomic_numbers:
-            # last resort: first letter
-            sym = sym[0].upper()
-            if sym not in atomic_numbers:
-                continue
-        syms.append(sym if sym in chemical_symbols else sym[0].upper())
-        pos.append([float(xyz[0]), float(xyz[1]), float(xyz[2])])
-    if not syms:
-        raise ValueError(f"No ATOM records parsed from {pdb_path}")
-    return _Atoms(symbols=syms, positions=np.asarray(pos, dtype=float))
+        if len(parts) >= 9 and parts[-1].isalpha() and len(parts[-1]) <= 2:
+            if atom_i < len(trailing_by_index):
+                trailing_by_index[atom_i] = parts[-1]
+        atom_i += 1
+    syms = [
+        _element_from_pdb_atom_name(
+            name, trailing_by_index[i] if i < len(trailing_by_index) else None
+        )
+        for i, name in enumerate(names)
+    ]
+    return _Atoms(symbols=syms, positions=np.asarray(positions, dtype=float))
 
 
 def determine_box_size_from_mol(mol: Atoms) -> float:
