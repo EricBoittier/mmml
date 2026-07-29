@@ -12,6 +12,7 @@ from mmml.cli.registry import command_by_name
 
 EXPECTED_CALCULATORS = {
     "physnet",
+    "kernnn",
     "spookynet",
     "mbd",
     "multipoles",
