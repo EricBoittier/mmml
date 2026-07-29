@@ -122,9 +122,11 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         '200->300:0.25,300:0.75'. Overrides the fixed thermostat
                         target.
   --interaction-policy INTERACTION_POLICY
-                        Versioned YAML/JSON species interaction policy. The
-                        unified runner validates complete, unambiguous monomer
-                        and molecular-pair ownership.
+                        Versioned YAML/JSON species interaction policy (separate
+                        file). Relative paths in --config YAML resolve against
+                        the config directory. md-system loads and validates
+                        ownership; multi-provider / near–far policies fail
+                        closed until generalized lowering exists.
   --nvt-integrator {auto,nhc,langevin}
                         Integrator for NVT in ASE route. auto=nhc for
                         homogeneous, langevin for mixed composition.

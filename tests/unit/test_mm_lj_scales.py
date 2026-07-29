@@ -93,29 +93,36 @@ def test_metadata_without_scales():
 
 
 def test_hybrid_forward_unit_scales_match_baseline():
+    from mmml.models.cgenff_mm import cgenff_mm_energy
     from mmml.models.hybrid_energy import hybrid_forward
+    from mmml.data.units import KCAL_MOL_TO_EV
 
-    # Reuse fixtures from test_hybrid_energy via a mid-range dimer with MM on.
     SIG = jnp.array([3.6527, 2.3876])
     EPS = jnp.array([0.0780, 0.0240])
-    KW = dict(mm_switch_on=8.0, mm_switch_width=5.0, ml_switch_width=1.5)
+    # Legacy handoff with a short MM onset so intermolecular LJ is active.
+    KW = dict(
+        mm_switch_on=3.0,
+        mm_switch_width=2.0,
+        ml_switch_width=1.0,
+        complementary_handoff=False,
+    )
 
     def fake_apply(params, *, atomic_numbers, positions, dst_idx, src_idx,
                    batch_segments, batch_size, batch_mask, atom_mask):
         e = jnp.sum(atom_mask) * jnp.asarray(-1.0)
-        f = jnp.zeros_like(positions)
         return {
             "energy": e.reshape(batch_size, 1),
-            "forces": f,
+            "forces": jnp.zeros_like(positions),
         }
 
     n = 4
+    # Closest inter-monomer distance ~3.5 A — nonzero LJ under the switch.
     pos = jnp.array(
-        [[0.0, 0, 0], [1.0, 0, 0], [6.5, 0, 0], [7.5, 0, 0]], dtype=jnp.float32
+        [[0.0, 0, 0], [1.0, 0, 0], [3.5, 0, 0], [4.5, 0, 0]], dtype=jnp.float32
     )
     mid = jnp.array([0, 0, 1, 1])
     tidx = jnp.array([0, 1, 0, 1])
-    chg = jnp.array([-0.3, 0.3, -0.3, 0.3])
+    chg = jnp.zeros(n)
     atom_mask = jnp.ones(n, dtype=jnp.float32)
     idx = jnp.arange(n)
     dst, src = jnp.meshgrid(idx, idx, indexing="ij")
@@ -133,6 +140,24 @@ def test_hybrid_forward_unit_scales_match_baseline():
         "src_idx": src,
         "batch_segments": jnp.zeros(n, dtype=jnp.int32),
     }
+
+    # Direct MM check first (charges zero → pure LJ).
+    e_mm_base = float(
+        KCAL_MOL_TO_EV
+        * cgenff_mm_energy(
+            pos,
+            tidx,
+            mid,
+            chg,
+            SIG,
+            EPS,
+            mm_switch_on=3.0,
+            mm_switch_width=2.0,
+            ml_switch_width=1.0,
+            complementary_handoff=False,
+        )
+    )
+    assert abs(e_mm_base) > 1e-6
 
     base = hybrid_forward(fake_apply, {}, batch, 1, SIG, EPS, **KW)
     ones = hybrid_forward(
@@ -170,7 +195,12 @@ def test_lj_scale_gradients_nonzero():
 
     SIG = jnp.array([3.6527, 2.3876])
     EPS = jnp.array([0.0780, 0.0240])
-    KW = dict(mm_switch_on=8.0, mm_switch_width=5.0, ml_switch_width=1.5)
+    KW = dict(
+        mm_switch_on=3.0,
+        mm_switch_width=2.0,
+        ml_switch_width=1.0,
+        complementary_handoff=False,
+    )
 
     def fake_apply(params, *, atomic_numbers, positions, dst_idx, src_idx,
                    batch_segments, batch_size, batch_mask, atom_mask):
@@ -182,11 +212,11 @@ def test_lj_scale_gradients_nonzero():
 
     n = 4
     pos = jnp.array(
-        [[0.0, 0, 0], [1.0, 0, 0], [6.5, 0, 0], [7.5, 0, 0]], dtype=jnp.float32
+        [[0.0, 0, 0], [1.0, 0, 0], [3.5, 0, 0], [4.5, 0, 0]], dtype=jnp.float32
     )
     mid = jnp.array([0, 0, 1, 1])
     tidx = jnp.array([0, 1, 0, 1])
-    chg = jnp.array([-0.3, 0.3, -0.3, 0.3])
+    chg = jnp.zeros(n)
     atom_mask = jnp.ones(n, dtype=jnp.float32)
     idx = jnp.arange(n)
     dst, src = jnp.meshgrid(idx, idx, indexing="ij")

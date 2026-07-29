@@ -214,8 +214,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "Versioned YAML/JSON species interaction policy. The unified runner "
-            "validates complete, unambiguous monomer and molecular-pair ownership."
+            "Versioned YAML/JSON species interaction policy (separate file). "
+            "Relative paths in --config YAML resolve against the config directory. "
+            "md-system loads and validates ownership; multi-provider / near–far "
+            "policies fail closed until generalized lowering exists."
         ),
     )
     parser.add_argument(
@@ -2060,6 +2062,16 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     args._cli_explicit = collect_explicit_cli_dests(remaining, parser)
     normalize_resume_flags(args)
+    # Resolve interaction_policy relative to the --config file (not CWD).
+    if getattr(args, "interaction_policy", None) is not None:
+        from mmml.cli.run.md_config import resolve_config_relative_path
+
+        resolved = resolve_config_relative_path(
+            getattr(args, "config", None),
+            args.interaction_policy,
+        )
+        if resolved is not None:
+            args.interaction_policy = resolved
     from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         sync_spatial_mpi_env_from_args,
     )
@@ -2110,6 +2122,48 @@ def _args_for_manifest(args: argparse.Namespace) -> dict[str, Any]:
     return out
 
 
+def _validate_and_record_interaction_policy(args: argparse.Namespace) -> None:
+    """Load/validate ``--interaction-policy`` and fail closed if not lowerable.
+
+    Single-provider policies (no near/far) are accepted on all runners; the
+    compiled ownership is recorded for the run manifest.  Multi-provider or
+    near/far policies raise ``NotImplementedError`` before MD starts.
+    """
+    policy_path = getattr(args, "interaction_policy", None)
+    if policy_path is None:
+        return
+    from mmml.md.interactions import (
+        interaction_policy_content_hash,
+        load_interaction_policy,
+        policy_is_lowerable,
+    )
+
+    path = Path(policy_path).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"interaction policy not found: {path}")
+    policy = load_interaction_policy(path)
+    digest = interaction_policy_content_hash(policy)
+    args._interaction_policy_hash = digest
+    args._interaction_policy_schema = int(policy.schema_version)
+    if not policy_is_lowerable(policy):
+        monomer_providers = sorted(set(policy.monomers.values()))
+        split = sum(1 for rule in policy.pairs if rule.near_provider is not None)
+        raise NotImplementedError(
+            f"interaction policy {path} is valid, but this provider decomposition "
+            f"is not yet lowerable (monomer providers={monomer_providers}, "
+            f"near/far rules={split}); refusing to silently ignore ownership. "
+            "Use a single-provider policy until multi-provider / near–far "
+            "lowering is implemented."
+        )
+    if not getattr(args, "quiet", False):
+        print(
+            f"mmml md-system: interaction_policy={path} "
+            f"schema={policy.schema_version} sha256={digest[:12]}… "
+            "(single-provider; ownership validated)",
+            flush=True,
+        )
+
+
 def build_run_manifest(
     args: argparse.Namespace,
     *,
@@ -2138,6 +2192,13 @@ def build_run_manifest(
     }
     if argv is not None:
         manifest["backend_argv"] = list(argv)
+    policy_path = getattr(args, "interaction_policy", None)
+    if policy_path is not None:
+        manifest["interaction_policy"] = {
+            "path": str(policy_path),
+            "schema_version": getattr(args, "_interaction_policy_schema", None),
+            "sha256": getattr(args, "_interaction_policy_hash", None),
+        }
     return manifest
 
 
@@ -3852,7 +3913,8 @@ def main() -> int:
                 _validate_box_sizing_args(args)
                 _validate_builder_args(args)
                 _validate_packmol_args(args)
-        except ValueError as exc:
+                _validate_and_record_interaction_policy(args)
+        except (ValueError, FileNotFoundError, NotImplementedError) as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             exit_code = 2
             return exit_code

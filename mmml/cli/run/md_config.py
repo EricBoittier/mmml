@@ -94,6 +94,25 @@ def _resolve_include_path(config_path: Path, include_ref: str) -> Path:
     return candidate
 
 
+def resolve_config_relative_path(
+    config_path: str | Path | None,
+    ref: str | Path | None,
+) -> Path | None:
+    """Resolve a path from a YAML config relative to the config file directory.
+
+    Absolute refs are returned unchanged.  When ``config_path`` is None, the
+    ref is expanded against the current working directory.
+    """
+    if ref is None or str(ref).strip() == "":
+        return None
+    raw = Path(os.path.expandvars(str(ref))).expanduser()
+    if raw.is_absolute():
+        return raw.resolve()
+    if config_path is None:
+        return raw.resolve()
+    return _resolve_include_path(Path(config_path), str(raw))
+
+
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
     config_path = Path(path)
     if not config_path.is_file():

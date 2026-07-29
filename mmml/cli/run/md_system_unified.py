@@ -211,19 +211,14 @@ def run_unified_jaxmd(args: Any) -> int:
     system = build_packmol_system_with_ffparams(run_config.system)
     policy_path = getattr(args, "interaction_policy", None)
     if policy_path is not None:
-        from mmml.md.interactions import compile_interaction_policy, load_interaction_policy
+        from mmml.md.interactions import (
+            assert_interaction_plan_lowerable,
+            compile_interaction_policy,
+            load_interaction_policy,
+        )
 
         plan = compile_interaction_policy(system, load_interaction_policy(policy_path))
-        # Ownership validation is useful immediately, but scoring a non-legacy
-        # plan requires provider-specific terms. Never pretend the old fixed
-        # ml_intra/mm_nonbonded decomposition implements an arbitrary policy.
-        legacy_providers = {assignment.provider for assignment in plan.monomers}
-        split_pairs = [pair for pair in plan.pairs if pair.near_provider is not None]
-        if len(legacy_providers) > 1 or split_pairs:
-            raise NotImplementedError(
-                "interaction policy is valid, but this provider decomposition is not yet "
-                "lowerable to the current JAX energy terms; refusing to silently double-count"
-            )
+        assert_interaction_plan_lowerable(plan, runner="jaxmd-unified")
     ctx = build_energy_context(args, system, run_config.terms)
 
     traj = assemble_and_run(run_config, system=system, ctx=ctx)

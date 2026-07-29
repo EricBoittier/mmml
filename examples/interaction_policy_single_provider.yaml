@@ -1,0 +1,17 @@
+schema_version: 1
+
+# Single-provider policy (legacy-lowerable). Multi-provider / near–far examples
+# are in examples/interaction_policy_peptide_water.yaml and currently fail closed.
+
+providers:
+  cgenff:
+    kind: mm
+    calculator: cgenff
+
+monomers:
+  DCM: cgenff
+  TIP3: cgenff
+
+pairs:
+  - species: ["*", "*"]
+    provider: cgenff

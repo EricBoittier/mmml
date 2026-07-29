@@ -24,8 +24,12 @@ __all__ = [
     "MonomerAssignment",
     "PairAssignment",
     "InteractionPlan",
+    "assert_interaction_plan_lowerable",
     "compile_interaction_policy",
+    "interaction_plan_is_lowerable",
+    "interaction_policy_content_hash",
     "load_interaction_policy",
+    "policy_is_lowerable",
 ]
 
 INTERACTION_POLICY_SCHEMA_VERSION = 1
@@ -252,3 +256,56 @@ def load_interaction_policy(path: str | Path) -> InteractionPolicy:
     if not isinstance(data, Mapping):
         raise ValueError("interaction policy document must contain a mapping")
     return InteractionPolicy.from_mapping(data)
+
+
+def policy_is_lowerable(policy: InteractionPolicy) -> bool:
+    """True when ownership can be represented by the current single-provider terms.
+
+    Multi-provider monomers or near/far pair switches need generalized lowering
+    that is not yet implemented; those policies must fail closed.
+    """
+    monomer_providers = {str(p) for p in policy.monomers.values()}
+    if len(monomer_providers) > 1:
+        return False
+    for rule in policy.pairs:
+        if rule.near_provider is not None or rule.far_provider is not None:
+            return False
+    return True
+
+
+def interaction_plan_is_lowerable(plan: InteractionPlan) -> bool:
+    """Same criterion as :func:`policy_is_lowerable`, on a compiled plan."""
+    monomer_providers = {assignment.provider for assignment in plan.monomers}
+    if len(monomer_providers) > 1:
+        return False
+    if any(pair.near_provider is not None for pair in plan.pairs):
+        return False
+    return True
+
+
+def assert_interaction_plan_lowerable(
+    plan: InteractionPlan,
+    *,
+    runner: str = "md-system",
+) -> None:
+    """Raise ``NotImplementedError`` when a plan cannot be lowered safely."""
+    if interaction_plan_is_lowerable(plan):
+        return
+    monomer_providers = sorted({assignment.provider for assignment in plan.monomers})
+    split_pairs = sum(1 for pair in plan.pairs if pair.near_provider is not None)
+    raise NotImplementedError(
+        f"interaction policy is valid, but this provider decomposition is not yet "
+        f"lowerable on {runner} (monomer providers={monomer_providers}, "
+        f"near/far pairs={split_pairs}); refusing to silently double-count or ignore "
+        f"ownership. Use a single-provider policy, or --jaxmd-unified once multi-provider "
+        f"lowering is implemented."
+    )
+
+
+def interaction_policy_content_hash(policy: InteractionPolicy) -> str:
+    """Stable SHA-256 of the canonical policy mapping (for manifests / logs)."""
+    import hashlib
+    import json
+
+    payload = json.dumps(policy.to_mapping(), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
