@@ -10,6 +10,7 @@ import pytest
 from mmml.cli.run.health_check import (
     check_checkpoint,
     check_core,
+    check_gpu_quantum,
     check_jax,
     render_health_report,
     run_health_check,
@@ -118,3 +119,74 @@ def test_main_reruns_under_mpirun(monkeypatch, tmp_path):
     assert code == 0
     cmd = mock_run.call_args.args[0]
     assert "health-check" in cmd
+
+
+def _fake_cupy(version: str):
+    import types
+
+    mod = types.ModuleType("cupy")
+    mod.__version__ = version
+    return mod
+
+
+def test_gpu_quantum_noop_without_cupy(monkeypatch):
+    import sys
+
+    monkeypatch.delitem(sys.modules, "cupy", raising=False)
+    monkeypatch.setattr(
+        "builtins.__import__",
+        _reject_import("cupy"),
+    )
+    check = check_gpu_quantum()
+    assert check.ok is True
+    assert check.warnings == []
+    assert check.details["cupy"] is None
+
+
+def _reject_import(blocked: str):
+    import builtins
+
+    real = builtins.__import__
+
+    def _imp(name, *args, **kwargs):
+        if name == blocked:
+            raise ImportError(f"No module named {name!r}")
+        return real(name, *args, **kwargs)
+
+    return _imp
+
+
+def test_gpu_quantum_warns_on_cupy14_with_gpu4pyscf(monkeypatch):
+    import importlib.util
+    import sys
+
+    monkeypatch.setitem(sys.modules, "cupy", _fake_cupy("14.1.1"))
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name: object() if name == "gpu4pyscf" else None,
+    )
+    check = check_gpu_quantum()
+    # a warning, not a hard failure (non-strict health-check stays ok)
+    assert check.ok is True
+    assert check.warnings, "expected a cupy>=14 + gpu4pyscf warning"
+    text = " ".join(check.warnings)
+    assert "cuTENSOR" in text and "836" in text
+    assert check.details["cupy"] == "14.1.1"
+    assert check.details["gpu4pyscf_installed"] is True
+
+
+def test_gpu_quantum_ok_on_cupy13(monkeypatch):
+    import importlib.util
+    import sys
+
+    monkeypatch.setitem(sys.modules, "cupy", _fake_cupy("13.6.0"))
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name: object() if name == "gpu4pyscf" else None,
+    )
+    check = check_gpu_quantum()
+    assert check.ok is True
+    assert check.warnings == []
+    assert check.details["cupy"] == "13.6.0"

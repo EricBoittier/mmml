@@ -13,6 +13,7 @@ from typing import Any, Sequence
 DEFAULT_CHECKS: tuple[str, ...] = (
     "core",
     "jax",
+    "gpu_quantum",
     "charmm",
     "mlpot",
     "packmol",
@@ -120,6 +121,47 @@ def check_jax(*, require_gpu: bool = False) -> InterfaceCheck:
         check.summary = f"JAX CUDA ({', '.join(check.details['devices'])})"
     elif check.ok:
         check.summary = f"JAX CPU ({', '.join(check.details.get('devices', []))})"
+    return check
+
+
+def check_gpu_quantum() -> InterfaceCheck:
+    """cupy / cuTENSOR compatibility for gpu4pyscf DFT Hessian.
+
+    cupy 14 dropped the bundled cuTENSOR, so gpu4pyscf's ``contract`` silently
+    falls back to ``cupy.einsum`` (non-C-contiguous output), which trips
+    ``assert a.flags.c_contiguous`` in ``transpose_sum`` during a DFT
+    Hessian/CPSCF solve. Warn when that exact combination is installed so the
+    footgun is caught before a long run aborts. See issue #135 and
+    gpu4pyscf#836. No-op when cupy is not installed (CPU-only environments).
+    """
+    import importlib.util
+
+    check = InterfaceCheck(name="gpu_quantum", ok=True, summary="GPU quantum (cupy not installed)")
+    try:
+        import cupy  # type: ignore
+    except Exception:
+        check.details["cupy"] = None
+        return check
+
+    ver = str(getattr(cupy, "__version__", "0"))
+    check.details["cupy"] = ver
+    try:
+        major = int(ver.split(".")[0])
+    except Exception:
+        major = 0
+    has_gpu4pyscf = importlib.util.find_spec("gpu4pyscf") is not None
+    check.details["gpu4pyscf_installed"] = has_gpu4pyscf
+
+    if major >= 14 and has_gpu4pyscf:
+        check.warnings.append(
+            f"cupy {ver} drops cuTENSOR, so gpu4pyscf falls back to a non-contiguous "
+            "einsum and DFT Hessian/CPSCF aborts with 'assert a.flags.c_contiguous'. "
+            "Pin cupy to the 13.x series: uv pip install 'cupy-cuda12x>=13,<14' "
+            "(or cupy-cuda13x). See issue #135 / gpu4pyscf#836."
+        )
+        check.summary = f"GPU quantum (cupy {ver} — cuTENSOR incompatible)"
+    else:
+        check.summary = f"GPU quantum (cupy {ver})"
     return check
 
 
@@ -354,6 +396,8 @@ def run_health_check(
             checks.append(check_core())
         elif name == "jax":
             checks.append(check_jax(require_gpu=require_gpu))
+        elif name == "gpu_quantum":
+            checks.append(check_gpu_quantum())
         elif name == "charmm":
             checks.append(check_charmm())
         elif name == "mlpot":

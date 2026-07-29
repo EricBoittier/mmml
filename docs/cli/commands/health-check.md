@@ -36,8 +36,8 @@ Diagnostics & safety:
 
 Other options:
   --only CHECK [CHECK ...]
-                        Run subset of: core, jax, charmm, mlpot, packmol,
-                        checkpoint, mpi, live
+                        Run subset of: core, jax, gpu_quantum, charmm, mlpot,
+                        packmol, checkpoint, mpi, live
   --skip CHECK [CHECK ...]
                         Skip checks from the default set.
   --live                Run live MLpot registration + CHARMM energy (implies
