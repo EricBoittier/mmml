@@ -656,6 +656,133 @@ def _parse_pdb_atom_records(
     return names, resids, np.asarray(positions, dtype=float)
 
 
+def _parse_pdb_template_atoms(
+    pdb_path: Path | str,
+) -> list[list[tuple[str, str, str]]]:
+    """Group template PDB atoms into residues: ``[(name, resname, element), ...]``.
+
+    Uses whitespace parsing so 4–5 character CGenFF names (e.g. ``CH3CL``) survive.
+    """
+    path = Path(pdb_path)
+    residues: list[list[tuple[str, str, str]]] = []
+    cur_resid: int | None = None
+    cur: list[tuple[str, str, str]] = []
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line.startswith(("ATOM  ", "HETATM")):
+                continue
+            parts = line.split()
+            if len(parts) < 8:
+                raise RuntimeError(f"Truncated PDB ATOM record in {path}: {line!r}")
+            try:
+                if len(parts[4]) == 1 and parts[4].isalpha() and not parts[4].isdigit():
+                    name, resn, resid_s = parts[2], parts[3], parts[5]
+                else:
+                    name, resn, resid_s = parts[2], parts[3], parts[4]
+                resid = int(resid_s)
+            except (ValueError, IndexError) as exc:
+                raise RuntimeError(
+                    f"Could not parse PDB ATOM record in {path}: {line!r}"
+                ) from exc
+            elem = parts[-1]
+            if not (elem.isalpha() and len(elem) <= 2):
+                elem = "Cl" if name.upper().startswith("CL") else name[0].upper()
+            if cur_resid is None or resid != cur_resid:
+                if cur:
+                    residues.append(cur)
+                cur = []
+                cur_resid = resid
+            cur.append((str(name), str(resn).strip().upper(), str(elem)))
+    if cur:
+        residues.append(cur)
+    if not residues:
+        raise RuntimeError(f"No ATOM/HETATM records found in {path}")
+    return residues
+
+
+def format_cgenff_pdb_atom_line(
+    serial: int,
+    name: str,
+    resname: str,
+    resid: int,
+    xyz: np.ndarray | tuple[float, float, float],
+    element: str,
+) -> str:
+    """Format one ATOM record safe for Packmol + CHARMM (cols 23–26 resid, 31–54 xyz)."""
+    x, y, z = (float(v) for v in xyz)
+    aname = f" {name:<3s}" if len(name) <= 3 else f"{name:<4s}"
+    alt = " "
+    if len(resname) <= 3:
+        mid = f"{resname:<3s}  "
+    elif len(resname) == 4:
+        mid = f"{resname:<4s} "
+    else:
+        mid = f"{resname:<5s}"
+    prefix = f"ATOM  {serial:5d} {aname}{alt}{mid}{resid:4d}    "
+    if len(prefix) != 30 or prefix[22:26] != f"{resid:4d}":
+        raise ValueError(
+            f"PDB column layout broken for {resname!r}/{name!r}: "
+            f"len={len(prefix)} resid_field={prefix[22:26]!r}"
+        )
+    return (
+        f"{prefix}{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2s}"
+    )
+
+
+def rewrite_packmol_pdb_resnames(
+    packed_pdb: Path | str,
+    templates: list[tuple[Path | str, int]],
+) -> Path:
+    """Restore CGenFF residue names after Packmol writes a PDB.
+
+    Packmol 20.x puts chain IDs in column 22 and truncates 5-character names
+    (``CH3CL`` → ``CH3C`` / ``CH3CA``). CHARMM ``GENERATE`` / ``READ SEQU PDB``
+    then fails. Coordinates and atom order from *packed_pdb* are kept; names
+    come from *templates* ``(monomer_pdb, count)`` in Packmol structure order.
+    """
+    path = Path(packed_pdb)
+    if not path.is_file():
+        raise FileNotFoundError(f"Packmol output PDB not found: {path}")
+    if not templates:
+        raise ValueError("rewrite_packmol_pdb_resnames requires at least one template")
+
+    expected: list[tuple[str, str, str]] = []
+    expected_resids: list[int] = []
+    next_resid = 1
+    for tmpl, count in templates:
+        residues = _parse_pdb_template_atoms(tmpl)
+        n = int(count)
+        if n <= 0:
+            continue
+        for _ in range(n):
+            for res_atoms in residues:
+                for name, resn, elem in res_atoms:
+                    expected.append((name, resn, elem))
+                    expected_resids.append(next_resid)
+                next_resid += 1
+
+    _names, _resids, positions = _parse_pdb_atom_records(path)
+    if int(positions.shape[0]) != len(expected):
+        raise RuntimeError(
+            f"Packmol PDB atom count ({positions.shape[0]}) != template expansion "
+            f"({len(expected)}) for {path}. Check Packmol structure blocks vs templates."
+        )
+
+    lines = [
+        "REMARK   mmml: Packmol coords with restored CGenFF residue names",
+        "REMARK   (Packmol truncates 5-char RESN / embeds chain in col 22)",
+    ]
+    for i, ((name, resn, elem), resid, xyz) in enumerate(
+        zip(expected, expected_resids, positions, strict=True), start=1
+    ):
+        lines.append(
+            format_cgenff_pdb_atom_line(i, name, resn, resid, xyz, elem)
+        )
+    lines.append("END")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
 def assign_packmol_pdb_to_psf_order(
     pdb_path: Path | str,
     psf_atom_names: list[str],

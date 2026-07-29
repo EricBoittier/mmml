@@ -13,6 +13,10 @@ def test_setup_box_generic_uses_prepare_charmm_pbc() -> None:
     assert "prepare_charmm_pbc" in body
     assert "charmm_script(pbcs)" not in body
     assert "nbonds atom cutnb" not in body
+    # 5-char CGenFF names (CH3CL): do not use lingo READ SEQU PDB UNIT.
+    assert "READ SEQU PDB UNIT" not in body
+    assert "sequence_string" in body
+    assert "sync_charmm_positions" in body
 
 
 def test_minimize_box_does_not_use_lingo_nbonds() -> None:
@@ -50,3 +54,12 @@ def test_setup_box_generic_uses_read_cgenff_toppar() -> None:
     body = src.split("def setup_box_generic")[1].split("\ndef ")[0]
     assert "read_cgenff_toppar" in body
     assert "read.rtf(rtf)" not in body
+
+
+def test_run_packmol_solvation_restores_resnames() -> None:
+    src = Path("mmml/interfaces/pycharmmInterface/setupBox.py").read_text(
+        encoding="utf-8"
+    )
+    body = src.split("def run_packmol_solvation")[1].split("\ndef ")[0]
+    assert "rewrite_packmol_pdb_resnames" in body
+    assert "chain A" not in body

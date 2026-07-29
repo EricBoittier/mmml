@@ -404,6 +404,8 @@ def run_packmol_solvation(
 
     print(f"Solvation radii: inner={inner_radius:.2f} Å, outer={outer_radius:.2f} Å")
 
+    # Do not set Packmol ``chain``: its PDB writer embeds the chain ID in column
+    # 22 and truncates 5-char CGenFF names (CH3CL → CH3CA). We restore names after.
     packmol_input = f"""
 
     output pdb/init-{solvent_tag}box.pdb
@@ -412,13 +414,11 @@ def run_packmol_solvation(
     structure pdb/initial.pdb 
     number 1
     resnumbers 2
-    chain A
     inside sphere {cx} {cy} {cz} {inner_radius}
     end structure
     structure pdb/{solvent_tag}.pdb 
     number {n_molecules}
     resnumbers 2
-    chain A
     outside sphere {cx} {cy} {cz} {inner_radius}
     inside sphere {cx} {cy} {cz} {outer_radius}
     end structure
@@ -434,8 +434,10 @@ def run_packmol_solvation(
     with open(f"packmol/packmol-{solvent_tag}.inp", "w") as f:
         f.writelines(packmol_script)
 
-    import os
-    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        packmol_executable,
+        rewrite_packmol_pdb_resnames,
+    )
 
     packmol_bin = packmol_executable()
     print(f"{packmol_bin} < packmol/packmol-{solvent_tag}.inp")
@@ -445,7 +447,20 @@ def run_packmol_solvation(
         )
     )
     print(output)
-    print(f"Generated init-{solvent_tag}box.pdb")
+    if output != 0:
+        raise RuntimeError(
+            f"packmol solvation failed with exit status {output} "
+            f"(see packmol/packmol-{solvent_tag}.inp)"
+        )
+    out_pdb = Path(f"pdb/init-{solvent_tag}box.pdb")
+    rewrite_packmol_pdb_resnames(
+        out_pdb,
+        [
+            (Path("pdb/initial.pdb"), 1),
+            (Path(f"pdb/{solvent_tag}.pdb"), int(n_molecules)),
+        ],
+    )
+    print(f"Generated {out_pdb} (CGenFF residue names restored)")
 
 
 def run_packmol(n_molecules: int, side_length: float) -> None:
@@ -455,8 +470,8 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     filetype pdb
     tolerance 2.0
     structure pdb/initial.pdb 
-    chain A
     number {n_molecules}
+    resnumbers 2
     inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
     end structure
     """
@@ -468,7 +483,10 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     with open("packmol/packmol.inp", "w") as f:
         f.writelines(packmol_script)
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        packmol_executable,
+        rewrite_packmol_pdb_resnames,
+    )
 
     packmol_bin = packmol_executable()
     print(f"{packmol_bin} < packmol/packmol.inp")
@@ -478,7 +496,13 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
         )
     )
     print(output)
-    print("Generated initial.pdb")
+    if output != 0:
+        raise RuntimeError(f"packmol failed with exit status {output}")
+    rewrite_packmol_pdb_resnames(
+        "pdb/init-packmol.pdb",
+        [(Path("pdb/initial.pdb"), int(n_molecules))],
+    )
+    print("Generated pdb/init-packmol.pdb (CGenFF residue names restored)")
 
 
 def _ensure_crystal_image_str() -> None:
@@ -509,28 +533,48 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
             ``read_cgenff_toppar()`` so ``MMML_CGENFF_EXTRA_RTF`` append residues
             (e.g. CH3CL) are available.
     """
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _parse_pdb_atoms_whitespace,
+        _residue_sequence_from_pdb,
+        sync_charmm_positions,
+    )
     from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    import pycharmm.generate as generate
+    import pycharmm.read as read
 
     _ = (rtf, prm)  # API compat; EXTRA_RTF comes from the env via read_cgenff_toppar
     _ensure_crystal_image_str()
     CLEAR_CHARMM()
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
+    # Prefer sequence_string + coord overlay over lingo READ SEQU PDB:
+    # fixed columns truncate 5-char CGenFF names (CH3CL) and some KEY_LIBRARY
+    # builds abort on sequence_pdb.
+    res_seq = _residue_sequence_from_pdb(pdb_path)
+    _names, _resnames, _resids, pdb_xyz = _parse_pdb_atoms_whitespace(pdb_path)
+    print(
+        f"setup_box_generic: sequence_string {' '.join(res_seq)} "
+        f"({len(pdb_xyz)} atoms) from {pdb_path}",
+        flush=True,
+    )
     read_cgenff_toppar()
-    header = f"""OPEN UNIT 1 READ FORM NAME {pdb_path}
-    READ SEQU PDB UNIT 1
-    CLOSE UNIT 1
-    GENERATE SYS FIRST NONE LAST NONE SETUP
-
-    OPEN UNIT 1 READ FORM NAME {pdb_path}
-    READ COOR PDB UNIT 1
-    CLOSE UNIT 1
-
-    """
-    with charmm_silent_command():
-        pycharmm.lingo.charmm_script(header)
+    with charmm_relaxed_bomlev():
+        read.sequence_string(" ".join(res_seq))
+        status = generate.new_segment(
+            seg_name="SYS",
+            first_patch="NONE",
+            last_patch="NONE",
+            setup_ic=True,
+        )
+        if status is not None and int(status) not in (0, 1):
+            raise RuntimeError(
+                f"GENERATE SYS failed for {pdb_path} (status={status}; "
+                f"sequence={res_seq}). Check CGenFF residue names and "
+                "MMML_CGENFF_EXTRA_RTF (e.g. CH3CL)."
+            )
+    sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
     # KEY_LIBRARY builds do not parse lingo ``nbonds`` / ``open`` / ``crystal``;
     # use the C API path (define_cubic + build + NonBondedScript).
     prepare_charmm_pbc(float(side_length))
@@ -539,7 +583,6 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     write.psf_card(f"psf/system-{tag}.psf")
     write.coor_pdb(f"pdb/init-{tag}.pdb")
     print(f"wrote pdb/init-{tag}.pdb")
-
 
     pycharmm_quiet()
     atoms = ase.io.read(f"pdb/init-{tag}.pdb")

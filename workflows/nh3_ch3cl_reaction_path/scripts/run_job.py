@@ -235,15 +235,44 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
             cmd += ["--n", env["N_SOLVENT"]]
         print("+", " ".join(cmd), flush=True)
         print(f"CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')}", flush=True)
-        proc = subprocess.run(cmd, cwd=str(work), env=env)
+        print(
+            f"MMML_CGENFF_EXTRA_RTF={env.get('MMML_CGENFF_EXTRA_RTF', '')}",
+            flush=True,
+        )
+        proc = subprocess.run(
+            cmd,
+            cwd=str(work),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if proc.stdout:
+            print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n", flush=True)
         if proc.returncode != 0:
+            if proc.stderr:
+                print(proc.stderr, end="" if proc.stderr.endswith("\n") else "\n", flush=True)
             found = sorted(str(p.relative_to(work)) for p in work.rglob("*") if p.is_file())
+            # Hint when Packmol truncated 5-char CH3CL (pre-fix symptom).
+            packed = work / f"pdb/init-{tag}box.pdb"
+            hint = (
+                "If ASE PDB parse failed, regenerate solute via examples/m/07_export_solute_pdb.py "
+                "(coords must be in PDB columns 31–54)."
+            )
+            if packed.is_file():
+                sample = packed.read_text(encoding="utf-8", errors="replace")
+                if "CH3CA" in sample or "AMM1A" in sample:
+                    hint = (
+                        "Packmol PDB still has mangled residue names (e.g. CH3CA/AMM1A); "
+                        "need rewrite_packmol_pdb_resnames after Packmol + MMML_CGENFF_EXTRA_RTF."
+                    )
+            tail = ""
+            err = (proc.stderr or "").strip()
+            if err:
+                tail = " stderr_tail=" + repr("\n".join(err.splitlines()[-30:]))
             raise RuntimeError(
                 f"make-box failed for solvent={resi!r} (rc={proc.returncode}); "
                 f"work={work}; CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')!r}; "
-                f"files={found[:40]}. "
-                "If ASE PDB parse failed, regenerate solute via examples/m/07_export_solute_pdb.py "
-                "(coords must be in PDB columns 31–54)."
+                f"files={found[:40]}. {hint}{tail}"
             )
         pdb_src = work / f"pdb/init-nh3ch3cl_{tag}.pdb"
         psf_src = work / f"psf/system-nh3ch3cl_{tag}.psf"
