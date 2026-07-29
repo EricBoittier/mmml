@@ -14,6 +14,10 @@ mmml make-box --help
 ```text
 usage: mmml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH]
                      [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
+                     [--packmol-region {box,sphere}]
+                     [--packmol-tolerance PACKMOL_TOLERANCE]
+                     [--packmol-nloop PACKMOL_NLOOP]
+                     [--fill-fraction FILL_FRACTION] [--no-packmol-pbc]
 
 Pack a solute into a periodic box (vacuum copies or explicit solvent). Stages
 --pdb to pdb/initial.pdb when given, then runs Packmol + CHARMM.
@@ -42,6 +46,25 @@ Other options:
   --solvent SOLVENT     CGenFF solvent residue name (any RESI in
                         top_all36_cgenff.rtf), e.g. TIP3, MEOH, ACO, OCOH, ACN,
                         DMSO. Aliases: water→TIP3, octanol→OCOH.
+  --packmol-region {box,sphere}
+                        Solvent placement region. 'box' (default) fills the
+                        cubic cell outside a solute exclusion sphere — this
+                        matches the L³ volume used to size N from --density.
+                        'sphere' packs a droplet shell instead, which holds only
+                        pi/6 (52%) of the cell.
+  --packmol-tolerance PACKMOL_TOLERANCE
+                        Packmol minimum interatomic distance in Å (default 2.0).
+                        Lower to relax packing.
+  --packmol-nloop PACKMOL_NLOOP
+                        Packmol GENCAN loops per molecule type (default 200;
+                        Packmol's own default is 50).
+  --fill-fraction FILL_FRACTION
+                        Fraction of ideal bulk-density occupancy to request
+                        (default 0.98). N is clamped to this; lower it if
+                        Packmol still fails to converge.
+  --no-packmol-pbc      Disable Packmol's 'pbc' keyword. By default the cell is
+                        packed periodically so bulk density has no clashes with
+                        periodic images.
 ```
 
 ## Example structures

@@ -40,12 +40,18 @@ def check_md_system_args_supported(args: Any) -> None:
     from mmml.md.lowering import terms_from_md_system_args
 
     builder = getattr(args, "builder", None)
-    if builder not in (None, "packmol"):
+    if builder not in (None, "packmol", "from_pdb"):
         raise NotImplementedError(
-            f"--jaxmd-unified only supports the packmol composition builder; got --builder {builder!r}"
+            f"--jaxmd-unified supports the packmol composition and from_pdb "
+            f"builders; got --builder {builder!r}"
         )
     if getattr(args, "template_pdb", None):
         raise NotImplementedError("--jaxmd-unified does not yet support --template-pdb")
+    if not getattr(args, "from_pdb", None) and not getattr(args, "composition", None):
+        raise ValueError(
+            "--jaxmd-unified needs either --from-pdb (a prebuilt full-system PDB) "
+            "or --composition (for the packmol builder)"
+        )
     if getattr(args, "continue_from", None):
         raise NotImplementedError("--jaxmd-unified does not yet support --continue-from (handoff)")
 
@@ -87,6 +93,52 @@ def build_packmol_system_with_ffparams(spec: Any):
         system = _placement_system(
             name="packmol", spec=spec, z=z, positions=positions,
             atoms_per_molecule=list(sizes), residue_names=list(residues), box=box,
+        )
+        system = _lower_optional_psf(system, psf_path=psf_path, prm_paths=())
+    return system
+
+
+def build_from_pdb_system_with_ffparams(args: Any, spec: Any):
+    """Cold-start from a prebuilt full-system PDB (``--from-pdb``).
+
+    ``load_cluster_from_pdb`` generates the PSF live in CHARMM from the PDB's
+    residue sequence and overlays its coordinates; like
+    ``build_packmol_composition_cluster`` it never persists a PSF, so write the
+    live one to scratch for ``FFParams`` resolution.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+    from mmml.md.builders.placement import _lower_optional_psf, _placement_system
+
+    pdb_path = spec.template_pdb or getattr(args, "from_pdb", None)
+    if pdb_path is None:
+        raise ValueError("from_pdb builder requires SystemSpec.template_pdb or --from-pdb")
+
+    z, positions, n_mol, _tag = load_cluster_from_pdb(args, pdb_path=pdb_path)
+
+    # load_cluster_from_pdb records the per-residue split it derived from the
+    # generated PSF; _placement_system needs exactly that to form monomer groups.
+    atoms_per_molecule = [int(x) for x in getattr(args, "_cluster_atoms_per_list", [])]
+    residue_names = [str(x) for x in getattr(args, "_cluster_residue_labels", [])]
+    if len(atoms_per_molecule) != n_mol or len(residue_names) != n_mol:
+        raise ValueError(
+            f"from_pdb load returned {n_mol} residues but "
+            f"{len(atoms_per_molecule)} sizes / {len(residue_names)} labels "
+            f"for {pdb_path}"
+        )
+
+    # The box is resolved during the load (CRYST1 -> sibling box.json ->
+    # --box-size), i.e. after the spec was lowered, so read it back off args.
+    side = getattr(args, "box_size", None) or spec.box_size
+    box = None if side is None else np.eye(3, dtype=np.float64) * float(side)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        import pycharmm.write as write
+
+        psf_path = Path(tmp) / "md_system_unified.psf"
+        write.psf_card(str(psf_path))
+        system = _placement_system(
+            name="from_pdb", spec=spec, z=z, positions=positions,
+            atoms_per_molecule=atoms_per_molecule, residue_names=residue_names, box=box,
         )
         system = _lower_optional_psf(system, psf_path=psf_path, prm_paths=())
     return system
@@ -208,7 +260,10 @@ def run_unified_jaxmd(args: Any) -> int:
         raise RuntimeError("PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so)")
 
     run_config = runconfig_from_md_system_args(args)
-    system = build_packmol_system_with_ffparams(run_config.system)
+    if (run_config.system.builder or "").lower() == "from_pdb":
+        system = build_from_pdb_system_with_ffparams(args, run_config.system)
+    else:
+        system = build_packmol_system_with_ffparams(run_config.system)
     policy_path = getattr(args, "interaction_policy", None)
     if policy_path is not None:
         from mmml.md.interactions import (
