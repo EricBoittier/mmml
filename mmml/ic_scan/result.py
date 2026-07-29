@@ -40,6 +40,7 @@ class ScanRecord:
     status: Literal["prepared", "success", "failed"]
     energy_ev: float | None = None
     energy_kcal_mol: float | None = None
+    max_force_ev_A: float | None = None
     error_type: str | None = None
     error_message: str | None = None
 
@@ -266,7 +267,10 @@ class ScanResult:
 
         root = Path(output_dir).expanduser().resolve()
         manifest = json.loads((root / "manifest.json").read_text())
-        if manifest.get("result_schema_version") != RESULT_SCHEMA_VERSION:
+        if manifest.get("result_schema_version") not in (
+            RESULT_SCHEMA_VERSION,
+            "1.0",
+        ):
             raise ValueError(
                 "unsupported ic-scan result schema: "
                 f"{manifest.get('result_schema_version')!r}"
@@ -278,6 +282,7 @@ class ScanResult:
         records: list[ScanRecord] = []
         with (root / "data.csv").open(newline="") as handle:
             for row in csv.DictReader(handle):
+                mf = row.get("max_force_ev_A") or ""
                 records.append(
                     ScanRecord(
                         point_id=row["point_id"],
@@ -294,6 +299,7 @@ class ScanResult:
                             if row["energy_kcal_mol"]
                             else None
                         ),
+                        max_force_ev_A=float(mf) if mf else None,
                         error_type=row["error_type"] or None,
                         error_message=row["error_message"] or None,
                     )

@@ -19,6 +19,7 @@ from .geometry import (
     prepare_geometries,
 )
 from .grid import ScanPoint, expand_scan_points
+from .plotting import plot_model_comparison
 from .result import Provenance, ScanRecord, ScanResult
 from .topology import angles_match, circular_delta_deg, covalent_bond_graph
 
@@ -41,6 +42,7 @@ __all__ = [
     "load_structure",
     "measure_all",
     "measure_dof",
+    "plot_model_comparison",
     "prepare_geometries",
     "run_ic_scan",
 ]

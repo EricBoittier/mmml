@@ -100,6 +100,8 @@ Bundled configs:
 
 - `examples/ic_scan/nma_methyl.yaml` — both methyl 1D scans
 - `examples/ic_scan/nma_omega_methyl_2d.yaml` — amide ω 1D + N-methyl 1D + 2D product
+- `examples/ic_scan/acem_dihedrals.yaml` — acetamide methyl + amide N–H 1D
+- `examples/kernnn/acem_dihedral_scan_compare.sh` — PhysNet vs KerNN overlay plots
 
 ### N-D / 2D scans
 

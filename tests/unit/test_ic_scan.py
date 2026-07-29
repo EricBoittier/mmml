@@ -236,11 +236,48 @@ def test_run_ic_scan_with_emt_and_roundtrip(structure_xyz: Path, tmp_path: Path)
     assert len(result.records) == 2
     assert all(record.status == "success" for record in result.records)
     assert all(record.energy_ev is not None for record in result.records)
+    assert all(record.max_force_ev_A is not None for record in result.records)
+    assert all(record.max_force_ev_A > 0 for record in result.records)
     out = tmp_path / "bundle"
     result.write(out)
     loaded = type(result).read(out)
     assert len(loaded.records) == 2
     assert loaded.records[0].energy_ev == pytest.approx(result.records[0].energy_ev)
+    assert loaded.records[0].max_force_ev_A == pytest.approx(
+        result.records[0].max_force_ev_A
+    )
+    assert (out / "energy_r.png").is_file() or any(
+        p.name.startswith("energy_") for p in out.glob("*.png")
+    )
+    assert any(p.name.startswith("maxforce_") for p in out.glob("*.png"))
+
+
+def test_plot_model_comparison(structure_xyz: Path, tmp_path: Path):
+    from mmml.ic_scan.plotting import plot_model_comparison
+
+    def _scan(tag: str):
+        config = IcScanConfig(
+            structure=structure_xyz,
+            dofs=(
+                DegreeOfFreedom(
+                    name="phi",
+                    kind="dihedral",
+                    atoms=(0, 1, 2, 3),
+                    values=(-60.0, 0.0, 60.0),
+                ),
+            ),
+            calculator="xtb",
+            evaluate="energy",
+        )
+        return run_ic_scan(config, calculator=lambda: EMT())
+
+    a = _scan("a")
+    b = _scan("b")
+    out = tmp_path / "compare"
+    paths = plot_model_comparison({"A": a, "B": b}, out)
+    assert paths
+    assert any("compare_energy" in p.name for p in paths)
+    assert any("compare_maxforce" in p.name for p in paths)
 
 
 def test_config_yaml_roundtrip(structure_xyz: Path, tmp_path: Path):

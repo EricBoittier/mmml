@@ -75,6 +75,10 @@ print **RMSE** in eV and eV/Å.
 ## ASE / scans / NEB / umbrella / DMC
 
 ```bash
+# ACEM dihedral compare: PhysNet vs KerNN GT vs KerNN distill
+bash examples/kernnn/acem_dihedral_scan_compare.sh
+# → ~/abirh/artifacts/ic_scan/acem_dihedrals/compare/compare_{energy,maxforce}_*.png
+
 mmml dimer-scan --calculator kernnn --checkpoint artifacts/kernnn/best.json ...
 mmml neb --calculator kernnn --checkpoint ... --initial a.xyz --final b.xyz ...
 mmml umbrella-sample --model kernnn --checkpoint ...

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 
-RESULT_SCHEMA_VERSION = "1.0"
+RESULT_SCHEMA_VERSION = "1.1"
 CONFIG_SCHEMA_VERSION = "1.0"
 
 DofKind = Literal["bond", "angle", "dihedral"]

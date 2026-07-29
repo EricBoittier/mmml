@@ -41,6 +41,7 @@ def _record_from_point(
     *,
     status: str,
     energy_ev: float | None = None,
+    max_force_ev_A: float | None = None,
     error: Exception | None = None,
 ) -> ScanRecord:
     return ScanRecord(
@@ -54,6 +55,7 @@ def _record_from_point(
         status=status,  # type: ignore[arg-type]
         energy_ev=energy_ev,
         energy_kcal_mol=None if energy_ev is None else energy_ev * EV_TO_KCAL_MOL,
+        max_force_ev_A=max_force_ev_A,
         error_type=None if error is None else type(error).__name__,
         error_message=None if error is None else str(error),
     )
@@ -88,15 +90,22 @@ def run_ic_scan(
         assert factory is not None
         try:
             energy, forces = _evaluate_atoms(frame, factory)
+            max_f = float(np.max(np.linalg.norm(forces, axis=1)))
             frame.info.update(
                 status="success",
                 energy_ev=energy,
                 energy_kcal_mol=energy * EV_TO_KCAL_MOL,
+                max_force_ev_A=max_f,
             )
             frame.calc = SinglePointCalculator(frame, energy=energy, forces=forces)
             records.append(
                 _record_from_point(
-                    point, frame, config, status="success", energy_ev=energy
+                    point,
+                    frame,
+                    config,
+                    status="success",
+                    energy_ev=energy,
+                    max_force_ev_A=max_f,
                 )
             )
         except Exception as exc:
