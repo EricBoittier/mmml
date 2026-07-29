@@ -983,11 +983,11 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         zero via PSF/.prm reload after MLpot registration: vdw,
                         elec, bonded, hbond. --no-periodic-charmm-vdw implies
                         vdw.
-  --include-mm, --no-include-mm
+  --include-mm, --no-include-mm, --do-mm, --no-do-mm
                         Include switched JAX MM pairs (LJ + MIC Coulomb) in the
-                        hybrid calculator. --no-include-mm evaluates PhysNet ML
-                        only (doMM=False); cutoff keys are ignored for MM pair
-                        lists.
+                        hybrid calculator (doMM). --no-include-mm / --no-do-mm
+                        evaluates PhysNet ML only; cutoff keys are ignored for
+                        MM pair lists. YAML aliases: doMM, do_mm.
   --mm-charge-mode, --mm_charge_mode {fixed,q0,latent,q1,fixed_plus_latent,latent_mean,latent_dynamic}
                         Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF,
                         default), q0 / Q⁰ (neutralize unperturbed monomer q_ML;
@@ -1218,6 +1218,12 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         callback idxu/idxv or JAX neighbor rebuild. All-ML
                         jax_mic hybrids (empty CHARMM lists) default to jax;
                         override with MMML_MM_PAIR_SOURCE.
+  --do-ml, --no-do-ml   Include ML monomer terms in the hybrid calculator
+                        (doML). YAML aliases: doML, do_ml. Default: on.
+  --do-ml-dimer, --no-do-ml-dimer
+                        Include switched ML dimer correction terms (doML_dimer).
+                        YAML aliases: doML_dimer, do_ml_dimer. Default: on.
+  --skip-ml-dimers      Disable ML dimer terms (sets do_ml_dimer=False).
   --mm-lj-scales-file, --mm_lj_scales_file MM_LJ_SCALES_FILE
                         Path to hybrid_mm.json with learnable per-type MM LJ σ/ε
                         scales. When omitted, MLpot looks next to --checkpoint

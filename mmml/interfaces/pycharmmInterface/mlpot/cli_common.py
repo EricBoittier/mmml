@@ -4630,12 +4630,34 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
     )
     group.add_argument(
         "--include-mm",
+        "--do-mm",
         action=argparse.BooleanOptionalAction,
         default=True,
+        dest="include_mm",
         help=(
             "Include JAX switched MM LJ+Coulomb pairs in the hybrid MLpot calculator "
-            "(default: on). Use --no-include-mm for ML-only (PhysNet terms only)."
+            "(doMM; default: on). Use --no-include-mm / --no-do-mm for ML-only."
         ),
+    )
+    group.add_argument(
+        "--do-ml",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml",
+        help="Include ML monomer terms (doML). Default: on.",
+    )
+    group.add_argument(
+        "--do-ml-dimer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml_dimer",
+        help="Include switched ML dimer correction (doML_dimer). Default: on.",
+    )
+    group.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        default=False,
+        help="Disable ML dimer terms (sets do_ml_dimer=False).",
     )
     group.add_argument(
         "--mm-charge-mode",

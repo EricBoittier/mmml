@@ -1559,13 +1559,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--include-mm",
+        "--do-mm",
         action=argparse.BooleanOptionalAction,
         default=True,
+        dest="include_mm",
         help=(
-            "Include switched JAX MM pairs (LJ + MIC Coulomb) in the hybrid calculator. "
-            "--no-include-mm evaluates PhysNet ML only (doMM=False); cutoff keys are "
-            "ignored for MM pair lists."
+            "Include switched JAX MM pairs (LJ + MIC Coulomb) in the hybrid calculator "
+            "(doMM). --no-include-mm / --no-do-mm evaluates PhysNet ML only; cutoff "
+            "keys are ignored for MM pair lists. YAML aliases: doMM, do_mm."
         ),
+    )
+    parser.add_argument(
+        "--do-ml",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml",
+        help=(
+            "Include ML monomer terms in the hybrid calculator (doML). "
+            "YAML aliases: doML, do_ml. Default: on."
+        ),
+    )
+    parser.add_argument(
+        "--do-ml-dimer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml_dimer",
+        help=(
+            "Include switched ML dimer correction terms (doML_dimer). "
+            "YAML aliases: doML_dimer, do_ml_dimer. Default: on."
+        ),
+    )
+    parser.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        default=False,
+        help="Disable ML dimer terms (sets do_ml_dimer=False).",
     )
     parser.add_argument(
         "--mm-charge-mode",
@@ -2058,10 +2086,15 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = build_parser()
     parser.set_defaults(**defaults)
     args = parser.parse_args(remaining)
-    from mmml.cli.run.md_config import collect_explicit_cli_dests, normalize_resume_flags
+    from mmml.cli.run.md_config import (
+        collect_explicit_cli_dests,
+        normalize_hybrid_assembly_flags,
+        normalize_resume_flags,
+    )
 
     args._cli_explicit = collect_explicit_cli_dests(remaining, parser)
     normalize_resume_flags(args)
+    normalize_hybrid_assembly_flags(args)
     # Resolve interaction_policy relative to the --config file (not CWD).
     if getattr(args, "interaction_policy", None) is not None:
         from mmml.cli.run.md_config import resolve_config_relative_path

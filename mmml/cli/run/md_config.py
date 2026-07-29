@@ -23,6 +23,15 @@ _CONFIG_ALIASES: dict[str, str] = {
     "no-stage-summary": "no_stage_summary",
     "campaign_output": "campaign_output_dir",
     "campaign-output": "campaign_output_dir",
+    # Hybrid energy assembly (calculator doML / doMM / doML_dimer)
+    "doMM": "include_mm",
+    "do_mm": "include_mm",
+    "do-mm": "include_mm",
+    "doML": "do_ml",
+    "do-ml": "do_ml",
+    "doML_dimer": "do_ml_dimer",
+    "do-ml-dimer": "do_ml_dimer",
+    "skip-ml-dimers": "skip_ml_dimers",
 }
 
 # Keys with these prefixes may be set on args without an argparse dest (density prep, etc.).
@@ -160,6 +169,32 @@ def normalize_resume_flags(args: argparse.Namespace) -> None:
         args.resume_campaign = True
 
 
+def _check_include_mm_alias_conflicts(mapping: Mapping[str, Any]) -> None:
+    """Raise if ``include_mm`` and ``doMM`` (aliases) disagree in one mapping."""
+    seen: list[tuple[str, bool]] = []
+    for raw_key, value in mapping.items():
+        if raw_key in {"defaults", "runs", "jobs"}:
+            continue
+        if _normalize_config_key(str(raw_key)) == "include_mm":
+            seen.append((str(raw_key), bool(value)))
+    if len({v for _, v in seen}) > 1:
+        detail = ", ".join(f"{k}={v}" for k, v in seen)
+        raise ValueError(
+            f"conflicting include_mm / doMM values in config ({detail}); "
+            "use one of include_mm, doMM, or do_mm"
+        )
+
+
+def normalize_hybrid_assembly_flags(args: argparse.Namespace) -> None:
+    """Sync ``skip_ml_dimers`` → ``do_ml_dimer`` after CLI/YAML parsing."""
+    if bool(getattr(args, "skip_ml_dimers", False)):
+        args.do_ml_dimer = False
+    if not hasattr(args, "do_ml"):
+        args.do_ml = True
+    if not hasattr(args, "do_ml_dimer"):
+        args.do_ml_dimer = True
+
+
 def campaign_resume_enabled(
     args: argparse.Namespace,
     campaign: Mapping[str, Any],
@@ -207,6 +242,7 @@ def apply_mapping_to_namespace(
     source: str,
     allowed_prefixes: tuple[str, ...] = (),
 ) -> None:
+    _check_include_mm_alias_conflicts(mapping)
     unknown: list[str] = []
     for raw_key, value in mapping.items():
         if raw_key in {"defaults", "runs", "jobs"}:
@@ -225,6 +261,7 @@ def apply_mapping_to_namespace(
             f"Unknown {source} key(s): {', '.join(sorted(unknown))}. "
             f"Valid keys include: {', '.join(valid[:40])}..."
         )
+    normalize_hybrid_assembly_flags(args)
 
 
 def namespace_from_yaml(path: str | Path, parse_args_fn) -> argparse.Namespace:
