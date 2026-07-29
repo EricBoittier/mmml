@@ -135,7 +135,12 @@ mbar = [
 gpu = [
     "jax[cuda13]",
     "nvidia-cudnn-cu13>=9.10.1",
-    "cupy-cuda13x>=13.0.0",
+    # Cap cupy at <14: cupy 14 fails to load cuTENSOR, so gpu4pyscf's `contract`
+    # silently falls back to cupy.einsum (non-C-contiguous output), which trips
+    # `assert a.flags.c_contiguous` in transpose_sum during DFT Hessian/CPSCF.
+    # See issue #135 and gpu4pyscf#836. Stay on the 13.x series where cuTENSOR
+    # loads and contractions return contiguous arrays.
+    "cupy-cuda13x>=13.0.0,<14",
     "cutensor-cu13>=2.0.0",
     "mpi4py",
 #    "cuequivariance-ops-jax-cu13",
@@ -145,7 +150,10 @@ gpu = [
 # jaxlib has no [cuda12] extra in JAX 0.9+; jax[cuda12] pulls jax-cuda12-plugin[with-cuda] + jaxlib from PyPI.
 gpu-cuda12 = [
     "jax[cuda12]>=0.9.0",
-    "cupy-cuda12x>=13.0.0",
+    # Cap cupy at <14 (see the cuda13 note above / issue #135, gpu4pyscf#836):
+    # cupy 14 drops cuTENSOR, forcing gpu4pyscf into a non-contiguous einsum
+    # fallback that breaks DFT Hessian with a c_contiguous assertion.
+    "cupy-cuda12x>=13.0.0,<14",
     "cutensor-cu12>=2.0.0",
     "mpi4py",
 #    "cuequivariance-ops-jax-cu12",
