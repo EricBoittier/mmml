@@ -397,6 +397,30 @@ def test_build_pycharmm_command_no_include_mm_parses_in_pycharmm_backend():
     assert parsed.include_mm is False
 
 
+def test_build_pycharmm_command_forwards_do_ml_flags():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(do_ml=False, do_ml_dimer=False, skip_ml_dimers=False)
+    )
+    assert "--no-do-ml" in cmd
+    assert "--no-do-ml-dimer" in cmd
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.do_ml is False
+    assert parsed.do_ml_dimer is False
+
+
+def test_build_pycharmm_command_skip_ml_dimers_parses():
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(_pycharmm_args(skip_ml_dimers=True, do_ml_dimer=True))
+    assert "--skip-ml-dimers" in cmd
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    normalize_hybrid_assembly_flags(parsed)
+    assert parsed.do_ml_dimer is False
+
+
 def test_build_pycharmm_command_fire_min_flags_parse_in_pycharmm_backend():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 

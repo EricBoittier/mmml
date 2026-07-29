@@ -177,6 +177,45 @@ def test_apply_mapping_hyphen_keys() -> None:
     assert args.handoff_write_res is False
 
 
+def test_apply_mapping_hybrid_assembly_camelcase_aliases() -> None:
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    apply_mapping_to_namespace(
+        args,
+        {"doML": False, "doMM": False, "doML_dimer": False},
+        source="test",
+    )
+    assert args.do_ml is False
+    assert args.include_mm is False
+    assert args.do_ml_dimer is False
+
+
+def test_apply_mapping_skip_ml_dimers_forces_do_ml_dimer_false() -> None:
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    apply_mapping_to_namespace(
+        args,
+        {"skip_ml_dimers": True},
+        source="test",
+    )
+    assert args.skip_ml_dimers is True
+    assert args.do_ml_dimer is False
+
+
+def test_apply_mapping_conflicting_include_mm_and_doMM_raises() -> None:
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    with pytest.raises(ValueError, match="conflicting include_mm / doMM"):
+        apply_mapping_to_namespace(
+            args,
+            {"include_mm": True, "doMM": False},
+            source="test",
+        )
+
+
 def test_apply_mapping_no_scale_max_grms() -> None:
     from mmml.cli.run.md_system import parse_args
 

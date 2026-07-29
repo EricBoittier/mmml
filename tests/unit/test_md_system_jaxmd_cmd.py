@@ -177,9 +177,25 @@ def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
 
     root = Path(__file__).resolve().parents[2]
     jaxmd_src = (root / "mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
-    warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:400]
+    warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:500]
     assert "doMM=include_mm" in warmup_block
     assert 'getattr(args, "include_mm", True)' in jaxmd_src
+    assert 'getattr(args, "do_ml", True)' in warmup_block
+    assert 'getattr(args, "do_ml_dimer", True)' in warmup_block
+    assert "doML=True" not in warmup_block
+    assert "doML_dimer=True" not in warmup_block
+
+
+def test_build_command_jaxmd_forwards_do_ml_flags() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(do_ml=False, do_ml_dimer=False, include_mm=True)
+    )
+    assert backend == "jaxmd"
+    assert "--no-do-ml" in argv
+    assert "--no-do-ml-dimer" in argv
+    assert "--include-mm" in argv
 
 
 def test_jaxmd_setup_calculator_forwards_ewald_include_self() -> None:

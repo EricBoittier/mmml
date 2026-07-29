@@ -480,9 +480,31 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
     p.add_argument(
         "--include-mm",
+        "--do-mm",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Include JAX MM LJ/Coulomb pairs; --no-include-mm = ML (PhysNet) only.",
+        dest="include_mm",
+        help="Include JAX MM LJ/Coulomb pairs (doMM); --no-include-mm = ML only.",
+    )
+    p.add_argument(
+        "--do-ml",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml",
+        help="Include ML monomer terms (doML). Default: on.",
+    )
+    p.add_argument(
+        "--do-ml-dimer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml_dimer",
+        help="Include ML dimer correction (doML_dimer). Default: on.",
+    )
+    p.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        default=False,
+        help="Disable ML dimer terms (sets do_ml_dimer=False).",
     )
     p.add_argument(
         "--mm-switch-width",
@@ -819,6 +841,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Reduce console output.",
     )
     args = p.parse_args(argv)
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+
+    normalize_hybrid_assembly_flags(args)
     if args.free_space and args.ensemble == "npt":
         raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
     if args.box_size is not None and args.box_size <= 0:
@@ -1070,9 +1095,12 @@ def main(argv: list[str] | None = None) -> int:
         ml_switch_width=ml_w,
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
-        doML=True,
+        doML=bool(getattr(args, "do_ml", True)),
         doMM=bool(getattr(args, "include_mm", True)),
-        doML_dimer=True,
+        doML_dimer=(
+            bool(getattr(args, "do_ml_dimer", True))
+            and not bool(getattr(args, "skip_ml_dimers", False))
+        ),
         debug=False,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
@@ -1111,9 +1139,9 @@ def main(argv: list[str] | None = None) -> int:
         atomic_positions=atoms.get_positions(),
         n_monomers=n_molecules,
         cutoff_params=cutoff,
-        doML=True,
+        doML=bool(getattr(args, "do_ml", True)),
         doMM=bool(getattr(args, "include_mm", True)),
-        doML_dimer=True,
+        doML_dimer=bool(getattr(args, "do_ml_dimer", True)),
         backprop=False,
         debug=False,
         energy_conversion_factor=1.0,
@@ -1154,9 +1182,9 @@ def main(argv: list[str] | None = None) -> int:
             positions=jnp.asarray(atoms.get_positions(), dtype=jnp.float32),
             n_monomers=n_molecules,
             cutoff_params=cutoff,
-            doML=True,
+            doML=bool(getattr(args, "do_ml", True)),
             doMM=include_mm,
-            doML_dimer=True,
+            doML_dimer=bool(getattr(args, "do_ml_dimer", True)),
             box=box_warm,
             mm_pair_idx=mm_pair_idx,
             mm_pair_mask=mm_pair_mask,
@@ -1782,7 +1810,7 @@ def main(argv: list[str] | None = None) -> int:
         ensemble=args.ensemble,
         cell=None if free_space else float(L),
         include_mm=bool(getattr(args, "include_mm", True)),
-        skip_ml_dimers=False,
+        skip_ml_dimers=not bool(getattr(args, "do_ml_dimer", True)),
         debug=False,
         steps_per_recording=max(1, args.steps_per_recording),
         jax_md_update_interval=effective_update_interval,
@@ -2131,9 +2159,9 @@ def main(argv: list[str] | None = None) -> int:
         model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
         n_monomers=n_molecules,
         n_atoms=len(atoms),
-        doML=True,
+        doML=bool(getattr(args, "do_ml", True)),
         doMM=bool(getattr(args, "include_mm", True)),
-        doML_dimer=True,
+        doML_dimer=bool(getattr(args, "do_ml_dimer", True)),
         ensemble=args.ensemble,
         checkpoint=str(base_ckpt_dir),
         nl_skin_distance_A=float(effective_skin),

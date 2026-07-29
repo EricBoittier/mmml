@@ -159,6 +159,9 @@ _CAMPAIGN_CLI_EXPLICIT_OVERRIDE_KEYS: tuple[str, ...] = (
     "mm_nonbond_mode",
     "periodic_charmm_vdw",
     "include_mm",
+    "do_ml",
+    "do_ml_dimer",
+    "skip_ml_dimers",
 )
 
 

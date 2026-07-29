@@ -1652,9 +1652,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
     parser.add_argument(
         "--include-mm",
+        "--do-mm",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Include JAX MM LJ/Coulomb pairs; --no-include-mm = ML (PhysNet) only.",
+        dest="include_mm",
+        help="Include JAX MM LJ/Coulomb pairs (doMM); --no-include-mm = ML only.",
+    )
+    parser.add_argument(
+        "--do-ml",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml",
+        help="Include ML monomer terms (doML). Default: on.",
+    )
+    parser.add_argument(
+        "--do-ml-dimer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml_dimer",
+        help="Include ML dimer correction (doML_dimer). Default: on.",
+    )
+    parser.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        default=False,
+        help="Disable ML dimer terms (sets do_ml_dimer=False).",
     )
     parser.add_argument("--mm-cutoff", type=float, default=DEFAULT_MM_SWITCH_WIDTH)
     parser.add_argument("--pre-min-fmax", type=float, default=0.1)
@@ -2065,6 +2087,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Reduce console output.",
     )
     args = parser.parse_args(argv)
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+
+    normalize_hybrid_assembly_flags(args)
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
 
@@ -2252,8 +2277,10 @@ def main(argv: list[str] | None = None) -> int:
             "runs": {},
         },
     }
-    use_ml_terms = True
-    use_ml_dimer_terms = True
+    use_ml_terms = bool(getattr(args, "do_ml", True))
+    use_ml_dimer_terms = bool(getattr(args, "do_ml_dimer", True))
+    if bool(getattr(args, "skip_ml_dimers", False)):
+        use_ml_dimer_terms = False
     if args.composition and args.mm_only_on_mixed:
         use_ml_terms = False
         use_ml_dimer_terms = False

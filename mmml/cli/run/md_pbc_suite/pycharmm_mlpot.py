@@ -296,6 +296,9 @@ def main(argv: list[str] | None = None) -> int:
     # After MPI/CHARMM prepends LD_LIBRARY_PATH, prefer pip cuDNN over module stacks.
     ensure_jax_cuda_toolchain()
     args = parse_args(argv)
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+
+    normalize_hybrid_assembly_flags(args)
     # Alias for run_workflow helpers that read ``temp``.
     args.temp = args.temperature
     try:
