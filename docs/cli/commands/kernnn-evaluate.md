@@ -22,7 +22,8 @@ Evaluate KerNN checkpoint (E/F metrics)
 
 Input & configuration:
   --checkpoint CHECKPOINT
-  --data DATA           NPZ with R, E, F
+  --data DATA           NPZ with R, E, F (use --split all for a dedicated test
+                        NPZ)
 
 Execution:
   --seed SEED
@@ -40,7 +41,7 @@ Diagnostics & safety:
 Other options:
   --split {train,valid,test,all}
                         Which split to evaluate (seed/ntrain/nvalid define the
-                        split)
+                        split; use 'all' for a dedicated test NPZ)
   --ntrain NTRAIN
   --nvalid NVALID
 ```

@@ -13,7 +13,14 @@ mmml umbrella-sample --help
 
 ```text
 usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
-                            [--model {physnet,kernnn}] [--structure STRUCTURE]
+                            [--model {physnet,kernnn}]
+                            [--engine {packed_ml,hybrid_jaxmd}]
+                            [--structure STRUCTURE] [--from-psf FROM_PSF]
+                            [--from-pdb FROM_PDB] [--from-crd FROM_CRD]
+                            [--composition COMPOSITION] [--box-size BOX_SIZE]
+                            [--ml-resnames ML_RESNAMES]
+                            [--atom-name-i ATOM_NAME_I]
+                            [--atom-name-j ATOM_NAME_J] [--lr-solver LR_SOLVER]
                             [--structure-index STRUCTURE_INDEX]
                             [--seed-mode {stretch,tile,frames}]
                             [--output-dir OUTPUT_DIR] [--atoms ATOMS]
@@ -46,6 +53,13 @@ Input & configuration:
                         PhysNet / SpookyNet / KerNN checkpoint
   --structure STRUCTURE
                         Starting geometry: XYZ, PDB, or NPZ with R/Z arrays
+                        (packed_ml)
+  --from-psf FROM_PSF   CHARMM PSF for hybrid_jaxmd (make-box model.psf)
+  --from-pdb FROM_PDB   Coordinate PDB for hybrid_jaxmd (make-box model.pdb)
+  --from-crd FROM_CRD   Coordinate CRD for hybrid_jaxmd
+  --composition COMPOSITION
+                        Packmol composition for hybrid_jaxmd smoke (e.g.
+                        AMM1:1,CH3CL:1,TIP3:12)
   --structure-index STRUCTURE_INDEX
                         Frame index for multi-frame XYZ/PDB/NPZ (default: 0)
 
@@ -87,6 +101,23 @@ Diagnostics & safety:
   -h, --help            show this help message and exit
 
 Other options:
+  --engine {packed_ml,hybrid_jaxmd}
+                        packed_ml: vacuum batched all-ML (default).
+                        hybrid_jaxmd: solvated mechanical embedding (ML solute +
+                        MM solvent)
+  --box-size BOX_SIZE   Cubic box edge (Å) for hybrid_jaxmd (or sibling
+                        box.json)
+  --ml-resnames ML_RESNAMES
+                        Comma-separated residue names forming the ML region
+                        (default: AMM1,CH3CL)
+  --atom-name-i ATOM_NAME_I
+                        PSF atom name for CV atom i (hybrid; overrides --atoms
+                        first index)
+  --atom-name-j ATOM_NAME_J
+                        PSF atom name for CV atom j (hybrid; overrides --atoms
+                        second index)
+  --lr-solver LR_SOLVER
+                        MM long-range solver for hybrid_jaxmd (default: mic)
   --atoms ATOMS         0-based atom indices for CV1 distance (I,J)
   --atoms2 ATOMS2       0-based atom indices for CV2 distance (K,L); enables 2D
                         umbrella

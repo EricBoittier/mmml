@@ -319,9 +319,9 @@ def train(args) -> Path:
         pos_train, e_train, f_train = _load_ef_npz(args.train_npz)
         pos_valid, e_valid, f_valid = _load_ef_npz(args.valid_npz)
         if args.test_npz:
-            pos_test, e_test, f_test = _load_ef_npz(args.test_npz)
+            pos_test, e_test, _ = _load_ef_npz(args.test_npz)
         else:
-            pos_test = e_test = f_test = None
+            pos_test = e_test = None
         # Stats over train only, but min_r/k over train+valid (+test) like legacy
         pos_all = np.concatenate(
             [pos_train, pos_valid]
@@ -364,7 +364,6 @@ def train(args) -> Path:
         f_valid = forces[idx_valid]
         pos_test = positions[idx_test] if len(idx_test) else None
         e_test = energies[idx_test] if len(idx_test) else None
-        f_test = forces[idx_test] if len(idx_test) else None
         pos_all, e_all = positions, energies
         idx_train_stats = idx_train
         data_desc = {"data": str(args.data)}
