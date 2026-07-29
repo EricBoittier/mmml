@@ -21,6 +21,8 @@ from mmml.models.kernnn import (
     get_1d_kernels_k33,
     get_bond_length_abcc,
     get_bond_length_abcc_sym,
+    get_bond_length_acem,
+    get_bond_length_form,
     init_params,
     is_kernnn_checkpoint,
     load_checkpoint,
@@ -250,16 +252,41 @@ def test_torch_state_dict_transpose():
     assert params["dense_3"]["kernel"].shape == (20, 1)
 
 
+def test_form_acem_feature_counts():
+    from mmml.models.kernnn.distances import n_features_for_scheme
+
+    form = jnp.zeros((6, 3), dtype=jnp.float32)
+    form = form.at[1, 0].set(1.0)
+    assert get_bond_length_form(form).shape == (15,)
+    assert n_features_for_scheme("form") == 15
+
+    acem = jnp.zeros((9, 3), dtype=jnp.float32)
+    acem = acem.at[1, 0].set(1.2)
+    assert get_bond_length_acem(acem).shape == (36,)
+    assert n_features_for_scheme("acem") == 36
+
+
 def test_cli_parsers():
     tp = build_train_parser()
     ep = build_eval_parser()
     targs = tp.parse_args(
-        ["--ntrain", "100", "--architecture", "dual", "--distance-scheme", "abcc_sym"]
+        [
+            "--ntrain",
+            "100",
+            "--architecture",
+            "ffnet",
+            "--distance-scheme",
+            "acem",
+            "--distill-alpha",
+            "0.5",
+            "--teacher-checkpoint",
+            "teacher.json",
+        ]
     )
-    assert targs.architecture == "dual"
-    assert targs.distance_scheme == "abcc_sym"
-    eargs = ep.parse_args(["--split", "valid"])
-    assert eargs.split == "valid"
+    assert targs.distance_scheme == "acem"
+    assert targs.distill_alpha == 0.5
+    eargs = ep.parse_args(["--split", "all"])
+    assert eargs.split == "all"
 
 
 def test_dimer_scan_factory_requires_checkpoint():

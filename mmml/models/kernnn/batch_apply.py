@@ -17,26 +17,29 @@ def build_kernnn_batch_apply(
     stats: KerNNStats | Mapping[str, Any],
     config: KerNNConfig | Mapping[str, Any] | None = None,
     max_atoms: int,
-    atoms_per_monomer: int | Sequence[int] = 4,
+    atoms_per_monomer: int | Sequence[int] | None = None,
 ) -> Callable[..., dict[str, Array]]:
     """Return ``apply_model(Z, R, N, N_a=None)`` for hybrid ``setup_calculator``.
 
-    Only supports monomer size 4 (H2CO / ABCC). Dimers are evaluated as the sum
-    of two independent KerNN monomers (no learned cross terms).
+    Supports monomer size ``config.n_atoms`` (ABCC=4, form=6, acem=9). Dimers are
+    the sum of two independent KerNN monomers (no learned cross terms).
     """
     cfg = config if isinstance(config, KerNNConfig) else KerNNConfig.from_mapping(config)
-    if isinstance(atoms_per_monomer, (list, tuple)):
+    mono_n = int(cfg.n_atoms)
+    if atoms_per_monomer is None:
+        per_list = [mono_n]
+    elif isinstance(atoms_per_monomer, (list, tuple)):
         per_list = [int(x) for x in atoms_per_monomer]
     else:
         per_list = [int(atoms_per_monomer)]
-    if any(n != 4 for n in per_list):
+    if any(n != mono_n for n in per_list):
         raise ValueError(
-            f"KerNN hybrid backend requires 4-atom monomers; got {per_list}"
+            f"KerNN hybrid backend requires {mono_n}-atom monomers "
+            f"(scheme={cfg.distance_scheme}); got {per_list}"
         )
-    if max_atoms < 4:
-        raise ValueError(f"max_atoms={max_atoms} too small for KerNN (need >= 4)")
+    if max_atoms < mono_n:
+        raise ValueError(f"max_atoms={max_atoms} too small for KerNN (need >= {mono_n})")
 
-    mono_n = 4
     slice_pad = max_atoms
 
     def _eval_mono(R: Array) -> tuple[Array, Array]:

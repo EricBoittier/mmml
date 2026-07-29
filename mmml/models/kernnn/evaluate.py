@@ -33,14 +33,20 @@ def build_parser() -> argparse.ArgumentParser:
     d = _EVAL_DEFAULTS
     p = argparse.ArgumentParser(description="Evaluate KerNN checkpoint (E/F metrics)")
     p.add_argument("--checkpoint", type=str, default=d["checkpoint"])
-    p.add_argument("--data", type=str, default=d["data"], help="NPZ with R, E, F")
+    p.add_argument(
+        "--data",
+        type=str,
+        default=d["data"],
+        help="NPZ with R, E, F (use --split all for a dedicated test NPZ)",
+    )
     p.add_argument("--output-dir", type=str, default=d["output_dir"])
     p.add_argument(
         "--split",
         type=str,
         default=d["split"],
         choices=("train", "valid", "test", "all"),
-        help="Which split to evaluate (seed/ntrain/nvalid define the split)",
+        help="Which split to evaluate (seed/ntrain/nvalid define the split; "
+        "use 'all' for a dedicated test NPZ)",
     )
     p.add_argument("--seed", type=int, default=d["seed"])
     p.add_argument("--ntrain", type=int, default=d["ntrain"])
@@ -108,6 +114,11 @@ def evaluate(args) -> dict:
     positions = np.asarray(data["R"], dtype=np.float32)
     energies = np.asarray(data["E"], dtype=np.float32).reshape(-1)
     forces = np.asarray(data["F"], dtype=np.float32)
+    if positions.shape[1] != int(config.n_atoms):
+        raise ValueError(
+            f"checkpoint expects {config.n_atoms} atoms "
+            f"(scheme={config.distance_scheme}); data has R shape {positions.shape}"
+        )
     ndata = positions.shape[0]
     indices = _resolve_indices(args, ndata)
 
