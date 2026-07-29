@@ -7,6 +7,19 @@ Provides a unified interface for all MMML command-line tools.
 
 import os
 import sys
+
+# Must run before any transitive ``import jax`` (umbrella → jax_md → jax).
+# Stale JAX_PLATFORMS=rocm on NVIDIA nodes aborts backend init.
+_plat = (os.environ.get("JAX_PLATFORMS") or "").strip()
+if _plat:
+    _parts = [p.strip() for p in _plat.split(",") if p.strip()]
+    _clean = [p for p in _parts if p.lower() != "rocm"]
+    if _clean != _parts:
+        if _clean:
+            os.environ["JAX_PLATFORMS"] = ",".join(_clean)
+        else:
+            os.environ.pop("JAX_PLATFORMS", None)
+
 import argparse
 
 from mmml.cli.completion import completion_main, try_autocomplete

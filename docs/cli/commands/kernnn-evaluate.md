@@ -17,6 +17,7 @@ usage: mmml kernnn-evaluate [-h] [--checkpoint CHECKPOINT] [--data DATA]
                             [--split {train,valid,test,all}] [--seed SEED]
                             [--ntrain NTRAIN] [--nvalid NVALID]
                             [--batch-size BATCH_SIZE] [--split-json SPLIT_JSON]
+                            [--list-kernels]
 
 Evaluate KerNN checkpoint (E/F metrics)
 
@@ -37,6 +38,8 @@ Output & artifacts:
 
 Diagnostics & safety:
   -h, --help            show this help message and exit
+  --list-kernels        Print the table of available 1D kernel functions and
+                        exit
 
 Other options:
   --split {train,valid,test,all}

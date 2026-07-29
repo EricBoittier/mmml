@@ -104,7 +104,24 @@ def _setup_env(repo: Path, cfg: dict[str, Any]) -> Path:
 def _uv_run(repo: Path, args: list[str], *, cwd: Path | None = None) -> None:
     cmd = ["uv", "run", *args]
     print("+", " ".join(cmd), flush=True)
-    subprocess.run(cmd, cwd=str(cwd or repo), check=True)
+    env = os.environ.copy()
+    # Child must not inherit stale JAX_PLATFORMS=rocm (NVIDIA studix GPUs).
+    plat = (env.get("JAX_PLATFORMS") or "").strip()
+    if plat:
+        parts = [p.strip() for p in plat.split(",") if p.strip()]
+        cleaned = [p for p in parts if p.lower() != "rocm"]
+        if not cleaned:
+            env.pop("JAX_PLATFORMS", None)
+            if env.get("SLURM_JOB_ID") and (
+                env.get("SLURM_JOB_GPUS")
+                or env.get("CUDA_VISIBLE_DEVICES")
+                or "gpu" in str(env.get("SLURM_JOB_PARTITION", "")).lower()
+            ):
+                env["JAX_PLATFORMS"] = "cuda"
+        elif cleaned != parts:
+            env["JAX_PLATFORMS"] = ",".join(cleaned)
+    print(f"JAX_PLATFORMS={env.get('JAX_PLATFORMS', '')!r}", flush=True)
+    subprocess.run(cmd, cwd=str(cwd or repo), env=env, check=True)
 
 
 def _write_status(path: Path, payload: dict[str, Any]) -> None:
