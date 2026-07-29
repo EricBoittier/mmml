@@ -12,6 +12,13 @@ and versioning process.
 
 ### Added
 
+- Hybrid MM: learnable per-CGenFF-type LJ σ and ε scales (`--learn-mm-lj-scales`)
+  for MIC hybrid training; scales persist in `hybrid_mm.json` and load into MD
+  `ep_scale` / `sig_scale` (`--mm-lj-scales-file` or auto next to checkpoint).
+  See `docs/hybrid-mm-charges.md` and `examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`.
+- `md-system` `interaction_policy: ./policy.yaml`: config-relative path
+  resolution, load/validate on all runners, fail-closed for multi-provider /
+  near–far policies, manifest provenance. See `docs/md-interaction-policies.md`.
 - Batched pure-ML distance umbrella sampling (`mmml umbrella-sample`) and
   CV MBAR post-processing (`mmml umbrella-mbar`): pack K restrained copies into
   one PhysNet/SpookyNet batch, NVT via JAX-MD Langevin by default (Nose-Hoover
