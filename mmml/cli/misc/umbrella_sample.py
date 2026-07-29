@@ -32,6 +32,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from mmml.md.restraints import FlatBottomWall, LinearDistanceCV
 from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.sample import run_umbrella_nvt
 
@@ -56,6 +57,21 @@ def _parse_float_list(value: str) -> tuple[float, ...]:
         raise argparse.ArgumentTypeError(
             f"expected comma-separated floats (got {value!r})"
         ) from exc
+
+
+def _parse_quad(value: str) -> tuple[int, int, int, int]:
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    if len(parts) != 4:
+        raise argparse.ArgumentTypeError(
+            f"expected A,B,C,D atom indices for xi = r(A,B) - r(C,D) (got {value!r})"
+        )
+    try:
+        a, b, c, d = (int(p) for p in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected four integers (got {value!r})"
+        ) from exc
+    return a, b, c, d
 
 
 def _parse_int_list(value: str) -> tuple[int, ...]:
@@ -193,6 +209,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="0-based atom indices for CV2 distance (K,L); enables 2D umbrella",
     )
     parser.add_argument(
+        "--cv-difference",
+        type=_parse_quad,
+        default=None,
+        help=(
+            "CV1 as an antisymmetric stretch xi = r(A,B) - r(C,D), given as "
+            "A,B,C,D. For the Menshutkin reaction with dataset order Cl,N,C use "
+            "--cv-difference 2,0,2,1 (xi = r(C-Cl) - r(C-N)), so reactants sit "
+            "at negative xi and products at positive xi. Overrides --atoms."
+        ),
+    )
+    parser.add_argument(
+        "--cv2-difference",
+        type=_parse_quad,
+        default=None,
+        help="CV2 as an antisymmetric stretch A,B,C,D; enables 2D umbrella",
+    )
+    parser.add_argument(
+        "--wall-sum",
+        type=str,
+        default=None,
+        action="append",
+        help=(
+            "Flat-bottom confinement wall on a sum of distances, as "
+            "A,B,C,D,UPPER[,K]: penalises r(A,B) + r(C,D) above UPPER (A) with "
+            "force constant K (eV/A^2, default 50). Required for difference-CV "
+            "umbrella runs on a fitted potential: xi = r(A,B) - r(C,D) is "
+            "satisfied just as well by a dissociated complex, and the fit is "
+            "unbounded below out there, so the trajectory escapes. Menshutkin: "
+            "--wall-sum 2,0,2,1,6.5 . Repeatable."
+        ),
+    )
+    parser.add_argument(
         "--targets",
         type=_parse_float_list,
         help="Comma-separated CV1 centers ξ₀ (Å)",
@@ -253,6 +301,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Atoms Walden-blended when seeding a shared-hub 2D stretch "
             "(e.g. CH3 hydrogens: --invert-with 6,7,8)"
+        ),
+    )
+    parser.add_argument(
+        "--equilibration-steps",
+        type=int,
+        default=None,
+        help=(
+            "Discard this many leading MD steps before recording frames "
+            "(default: 0). Window seeds are optimised geometries with no "
+            "kinetic energy, so the start of each run is a heating transient."
         ),
     )
     parser.add_argument(
@@ -423,6 +481,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "move_with": args.move_with,
         "move_with2": args.move_with2,
         "invert_with": args.invert_with,
+        "equilibration_steps": args.equilibration_steps,
         "max_seed_force": args.max_seed_force,
         "thermostat": args.thermostat,
         "langevin_gamma": args.langevin_gamma,
@@ -440,6 +499,33 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         data["atom_i"], data["atom_j"] = args.atoms
     if args.atoms2 is not None:
         data["atom_k"], data["atom_l"] = args.atoms2
+    if args.wall_sum:
+        walls = []
+        for spec in args.wall_sum:
+            parts = [p.strip() for p in spec.split(",") if p.strip()]
+            if len(parts) not in (5, 6):
+                raise SystemExit(
+                    f"--wall-sum expects A,B,C,D,UPPER[,K] (got {spec!r})"
+                )
+            a, b, c, d = (int(x) for x in parts[:4])
+            upper = float(parts[4])
+            k = float(parts[5]) if len(parts) == 6 else 50.0
+            walls.append(
+                FlatBottomWall(
+                    cv=LinearDistanceCV(
+                        pairs=((a, b), (c, d)), coefficients=(1.0, 1.0)
+                    ),
+                    upper=upper,
+                    k=k,
+                )
+            )
+        data["walls"] = tuple(walls)
+    if args.cv_difference is not None:
+        a, b, c, d = args.cv_difference
+        data["cv_x"] = LinearDistanceCV.difference((a, b), (c, d))
+    if args.cv2_difference is not None:
+        a, b, c, d = args.cv2_difference
+        data["cv_y"] = LinearDistanceCV.difference((a, b), (c, d))
     if args.targets is not None:
         data["targets_A"] = args.targets
     if args.targets_y is not None:
@@ -458,6 +544,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     if engine == "packed_ml":
         required.append("structure")
     missing = [name for name in required if not data.get(name)]
+<<<<<<< HEAD
     if data.get("atom_i") is None or data.get("atom_j") is None:
         # Allow name-only hybrid configs that still need placeholder indices.
         if not (data.get("atom_name_i") and data.get("atom_name_j")):
@@ -465,6 +552,12 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         else:
             data.setdefault("atom_i", 0)
             data.setdefault("atom_j", 1)
+=======
+    if data.get("cv_x") is None and (
+        data.get("atom_i") is None or data.get("atom_j") is None
+    ):
+        missing.append("atoms (or --cv-difference)")
+>>>>>>> 50152da7b (Update)
     if missing:
         raise SystemExit(
             "missing required options: "
@@ -489,6 +582,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("move_with", ())
     data.setdefault("move_with2", ())
     data.setdefault("invert_with", ())
+    data.setdefault("equilibration_steps", 0)
     data.setdefault("max_seed_force", 15.0)
     data.setdefault("thermostat", "langevin")
     data.setdefault("langevin_gamma", 0.1)

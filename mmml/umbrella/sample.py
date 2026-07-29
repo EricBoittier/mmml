@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +12,6 @@ from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.energy import (
     build_packed_graph,
     make_packed_energy_fn,
-    packed_cv_distances,
 )
 from mmml.umbrella.io import (
     BIN_MINIMA_TRAJ,
@@ -124,7 +124,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     import jax.numpy as jnp
     from ase.data import atomic_masses
     from ase.io import write
-    from jax_md import quantity, simulate, space
+    from jax_md import quantity, simulate, space, units
 
     from mmml.umbrella.checkpoint import load_params_and_model
 
@@ -158,15 +158,12 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         r0, z = load_structure(structure_path, index=int(cfg.structure_index))
 
     n_atoms = int(len(z))
-    for i, j in sched.atom_pairs:
-        if max(i, j) >= n_atoms:
-            raise ValueError(
-                f"atom indices ({i}, {j}) out of range for {n_atoms} atoms"
-            )
+    for cv in sched.cvs:
+        cv.validate_against(n_atoms)
+    for wall in sched.walls:
+        wall.cv.validate_against(n_atoms)
 
-    r0_cvs = [
-        float(np.linalg.norm(r0[j] - r0[i])) for i, j in sched.atom_pairs
-    ]
+    r0_cvs = [cv.value_numpy(r0) for cv in sched.cvs]
     move_groups: list[tuple[int, ...]] = [tuple(cfg.move_with)]
     if sched.ndim == 2:
         move_groups.append(tuple(cfg.move_with2))
@@ -178,6 +175,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         frames=frames,
         move_groups=move_groups,
         invert_with=cfg.invert_with,
+        cvs=sched.cvs,
     )
 
     params, model = load_params_and_model(
@@ -193,9 +191,10 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         params=params,
         atomic_numbers=z,
         graph=graph,
-        atom_pairs=sched.atom_pairs,
+        cvs=sched.cvs,
         targets_per_cv=targets_per_cv,
         k_per_cv=k_per_cv,
+        walls=sched.walls,
     )
     # Use explicit PhysNet forces + analytic bias forces. Autodiff of
     # energy_sum_fn nests AD through PhysNet's internal value_and_grad and
@@ -240,12 +239,17 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
 
     k_b = 8.617333262145e-5  # eV/K
     kt = k_b * float(cfg.temperature_K)
-    dt = float(cfg.timestep_fs)
+    # jax-md's metal unit system (Å, eV, amu) has an internal time unit of
+    # Å·sqrt(amu/eV) = 10.18 fs, NOT 1 fs and not 1 ps. Passing femtoseconds
+    # straight to the integrator runs a ~10x too large step, which is what the
+    # old "0.5 fs often NaNs by step ~100" behaviour actually was.
+    _time_unit = units.metal_unit_system()["time"]  # internal units per ps
+    dt = float(cfg.timestep_fs) * 1.0e-3 * _time_unit
     savefreq = cfg.effective_savefreq()
-    if dt > 0.25:
+    if float(cfg.timestep_fs) > 0.5:
         print(
-            f"WARNING: timestep {dt} fs is large for PhysNet umbrella NVT with H atoms; "
-            "prefer --timestep 0.1 (0.5 fs often NaNs by step ~100 even when seed forces look fine)."
+            f"WARNING: timestep {cfg.timestep_fs} fs is large for a reactive ML "
+            "potential with X-H stretches; 0.25-0.5 fs is the usual safe range."
         )
 
     _, shift = space.free()
@@ -274,28 +278,39 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
 
     def _cv_frame(pos):
         cols = [
-            np.asarray(
-                packed_cv_distances(pos, n_atoms, i, j, k_windows)
-            )
-            for i, j in sched.atom_pairs
+            np.asarray(cv.value_batched(pos, n_atoms, k_windows)) for cv in sched.cvs
         ]
         return np.stack(cols, axis=-1)  # (K, ndim)
 
-    frames_traj: list[np.ndarray] = [
-        np.asarray(state.position).reshape(k_windows, n_atoms, 3)
-    ]
-    cv_frames: list[np.ndarray] = [_cv_frame(state.position)]
-    energy_frames: list[np.ndarray] = [
-        np.asarray(per_window_energy_fn(state.position), dtype=np.float64)
-    ]
+    # Frames before ``equilibration_steps`` are thermal transient, not samples:
+    # window seeds come from optimised scan/NEB geometries with no kinetic
+    # energy, so including them biases MBAR toward the seed configuration.
+    equil_steps = int(cfg.equilibration_steps)
+    if equil_steps >= int(cfg.nsteps):
+        raise ValueError(
+            f"equilibration_steps={equil_steps} leaves no production frames "
+            f"(nsteps={cfg.nsteps})"
+        )
+    frames_traj: list[np.ndarray] = []
+    cv_frames: list[np.ndarray] = []
+    energy_frames: list[np.ndarray] = []
+    if equil_steps == 0:
+        frames_traj.append(np.asarray(state.position).reshape(k_windows, n_atoms, 3))
+        cv_frames.append(_cv_frame(state.position))
+        energy_frames.append(
+            np.asarray(per_window_energy_fn(state.position), dtype=np.float64)
+        )
 
     print(
         f"=== Umbrella NVT ({k_windows} windows, {sched.ndim}D, "
-        f"T={cfg.temperature_K} K, dt={dt} fs, thermostat={cfg.thermostat}) ==="
+        f"T={cfg.temperature_K} K, dt={cfg.timestep_fs} fs, thermostat={cfg.thermostat}) ==="
     )
     print(
         f"  structure={structure_path.name}  seed_mode={seed_mode}  "
-        f"pairs={sched.atom_pairs}  r0={r0_cvs}  grid={sched.grid_shape}"
+        f"cv={[cv.label() for cv in sched.cvs]}  r0={r0_cvs}  grid={sched.grid_shape}"
+    )
+    if sched.walls:
+        print(f"  walls={[w.label() for w in sched.walls]}"
     )
     if any(move_groups):
         print(f"  move_groups={move_groups}")
@@ -362,7 +377,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                     f"  rex step {step:6d}  accepted {n_acc}/{n_att}  "
                     f"cum_acc={rex_stats.acceptance:.3f}"
                 )
-        if step % savefreq == 0 or step == cfg.nsteps:
+        if step > equil_steps and (step % savefreq == 0 or step == cfg.nsteps):
             pos_batch = np.asarray(state.position).reshape(k_windows, n_atoms, 3)
             frames_traj.append(pos_batch)
             cv_frames.append(_cv_frame(state.position))
@@ -443,6 +458,10 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "energies_ev": np.asarray(energies, dtype=np.float64),
         "bin_minima_frame_idx": np.asarray(minima_idx, dtype=np.int64),
         "bin_minima_energy_ev": np.asarray(minima_e, dtype=np.float64),
+        # Authoritative CV definition. atom_i/atom_j below are the legacy view
+        # and describe only the first pair, so MBAR must prefer this.
+        "cv_spec": np.asarray(json.dumps(sched.cv_specs())),
+        "wall_spec": np.asarray(json.dumps(sched.wall_specs())),
     }
     if sched.ndim == 2:
         assert sched.yi0 is not None and sched.k_y is not None
@@ -462,7 +481,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         xi0=np.asarray(sched.xi0, dtype=np.float64),
         k_ev_A2=np.asarray(sched.k_x, dtype=np.float64),
         temperature_K=float(cfg.temperature_K),
-        dt_fs=dt,
+        dt_fs=float(cfg.timestep_fs),
         cv_traj=cv_traj,
         checkpoint=str(Path(cfg.checkpoint).expanduser().resolve()),
         extra=extra,
@@ -524,6 +543,10 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "n_frames": n_frames,
         "n_atoms": n_atoms,
         "atom_pairs": [list(p) for p in sched.atom_pairs],
+        "cv_spec": sched.cv_specs(),
+        "cv_label": [cv.label() for cv in sched.cvs],
+        "wall_spec": sched.wall_specs(),
+        "wall_label": [w.label() for w in sched.walls],
         "xi0": list(sched.xi0),
         "yi0": list(sched.yi0) if sched.yi0 is not None else None,
         "k_ev_A2": list(sched.k_x),

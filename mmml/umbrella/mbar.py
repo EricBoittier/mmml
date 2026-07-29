@@ -7,6 +7,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
+from mmml.md.restraints import LinearDistanceCV
 from mmml.umbrella.config import UmbrellaMbarConfig
 from mmml.umbrella.energy import make_single_ml_energy_fn, numpy_bias_matrix_nd
 from mmml.umbrella.io import (
@@ -24,7 +25,7 @@ _K_B_EV = 8.617333262145e-5  # eV/K
 def fill_u_kln(
     *,
     positions: np.ndarray,
-    atom_pairs: Sequence[tuple[int, int]],
+    atom_pairs: Sequence[Any],
     targets_per_cv: Sequence[Sequence[float]],
     k_per_cv: Sequence[Sequence[float]],
     temperature_K: float,
@@ -35,11 +36,18 @@ def fill_u_kln(
     """Build reduced-potential tensor ``u_kln`` and sample counts ``N_k``.
 
     ``positions`` shape: ``(K, N_frames, N_atoms, 3)``.
+<<<<<<< HEAD
     ``u_kln[k, l, n] = β (U_unbiased(R_k^n) + W_l(R_k^n))``.
 
     Pass either ``ml_energy_fn`` (gas-phase recomputation) or precomputed
     ``unbiased_energies`` with shape ``(K, N_frames)`` (hybrid mechanical
     embedding). When ``box`` is set, bias distances use minimum-image.
+=======
+    ``u_kln[k, l, n] = β (U_ML(R_k^n) + W_l(R_k^n))``.
+
+    ``atom_pairs`` entries may be ``(i, j)`` pairs or
+    :class:`~mmml.md.restraints.LinearDistanceCV` objects.
+>>>>>>> 50152da7b (Update)
     """
     pos = np.asarray(positions, dtype=np.float64)
     if pos.ndim != 4:
@@ -131,16 +139,26 @@ def subsample_u_kln(
     return u_eff, n_k_eff, g_k
 
 
-def _snap_atom_pairs(snap: dict[str, Any]) -> list[tuple[int, int]]:
-    pairs = [(int(snap["atom_i"]), int(snap["atom_j"]))]
+def _snap_cvs(snap: dict[str, Any]) -> list[LinearDistanceCV]:
+    """Recover the sampling CVs from a snapshot.
+
+    Prefers the stored ``cv_spec``: for a combination CV such as
+    ``xi = r(C-Cl) - r(C-N)`` the legacy ``atom_i``/``atom_j`` fields name only
+    the first distance, so rebuilding from them would re-weight MBAR with the
+    wrong bias and silently produce a wrong PMF.
+    """
+    spec = snap.get("cv_spec")
+    if spec:
+        return [LinearDistanceCV.from_spec(s) for s in spec]
+    cvs = [LinearDistanceCV.distance(int(snap["atom_i"]), int(snap["atom_j"]))]
     if "atom_k" in snap and "atom_l" in snap:
-        pairs.append(
-            (
+        cvs.append(
+            LinearDistanceCV.distance(
                 int(np.asarray(snap["atom_k"]).reshape(-1)[0]),
                 int(np.asarray(snap["atom_l"]).reshape(-1)[0]),
             )
         )
-    return pairs
+    return cvs
 
 
 def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
@@ -193,7 +211,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     positions = np.asarray(snap["positions"], dtype=np.float64)
     z = np.asarray(snap["Z"], dtype=np.int32)
     n_atoms = int(z.shape[0])
-    atom_pairs = _snap_atom_pairs(snap)
+    cvs = _snap_cvs(snap)
     xi0 = np.asarray(snap["xi0"], dtype=np.float64)
     k_x = np.asarray(snap["k_ev_A2"], dtype=np.float64)
     targets_per_cv: list[list[float]] = [xi0.tolist()]
@@ -217,6 +235,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     if "box" in snap:
         box = np.asarray(snap["box"], dtype=np.float64)
 
+<<<<<<< HEAD
     if engine == "hybrid_jaxmd" or "energies_unbiased_ev" in snap:
         if "energies_unbiased_ev" not in snap:
             raise ValueError(
@@ -252,6 +271,16 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
             temperature_K=float(temperature_K),
             ml_energy_fn=ml_energy_np,
         )
+=======
+    u_kln, n_k = fill_u_kln(
+        positions=positions,
+        atom_pairs=cvs,
+        targets_per_cv=targets_per_cv,
+        k_per_cv=k_per_cv,
+        temperature_K=float(temperature_K),
+        ml_energy_fn=ml_energy_np,
+    )
+>>>>>>> 50152da7b (Update)
     if np.any(n_k == 0):
         return {
             "error": "MBAR skipped: at least one umbrella window has no snapshots.",
@@ -276,8 +305,13 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
 
     result: dict[str, Any] = {
         "temperature_K": float(temperature_K),
-        "ndim": len(atom_pairs),
-        "atom_pairs": [list(p) for p in atom_pairs],
+        "ndim": len(cvs),
+        "atom_pairs": [list(cv.pairs[0]) for cv in cvs],
+        "cv_spec": [
+            {"pairs": [list(p) for p in cv.pairs], "coefficients": list(cv.coefficients)}
+            for cv in cvs
+        ],
+        "cv_label": [cv.label() for cv in cvs],
         "xi0": xi0.tolist(),
         "yi0": None if yi0 is None else yi0.tolist(),
         "k_ev_A2": k_x.tolist(),

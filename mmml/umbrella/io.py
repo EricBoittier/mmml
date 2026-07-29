@@ -66,6 +66,11 @@ def load_snapshots(path: Path) -> dict[str, Any]:
     if "checkpoint" in out:
         ck = out["checkpoint"]
         out["checkpoint"] = str(ck.item() if getattr(ck, "ndim", 0) == 0 else ck)
+    if "cv_spec" in out:
+        spec = out["cv_spec"]
+        out["cv_spec"] = json.loads(
+            str(spec.item() if getattr(spec, "ndim", 0) == 0 else spec)
+        )
     return out
 
 

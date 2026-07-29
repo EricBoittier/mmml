@@ -99,7 +99,10 @@ def main() -> int:
 
     unit = units.metal_unit_system()
     _displacement, shift = space.free()
-    dt = float(args.dt_fs) * 0.001  # fs → ps
+    # jax-md metal units measure time in Å·sqrt(amu/eV) = 10.18 fs;
+    # unit["time"] converts ps → those internal units. Passing bare ps
+    # integrates ~98x too finely (stable, but 1% of the nominal duration).
+    dt = float(args.dt_fs) * 0.001 * unit["time"]
     kT = float(args.temperature) * unit["temperature"]
     init_fn, apply_fn = simulate.nvt_nose_hoover(force_fn, shift, dt, kT)
     key = jax.random.PRNGKey(0)

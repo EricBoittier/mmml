@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence
+
+from mmml.md.restraints import FlatBottomWall, LinearDistanceCV
 
 
 SeedMode = Literal["stretch", "tile", "frames"]
@@ -13,7 +15,12 @@ UmbrellaEngine = Literal["packed_ml", "hybrid_jaxmd"]
 
 @dataclass(frozen=True)
 class WindowSchedule:
-    """Resolved umbrella windows (1D or 2D distance CVs)."""
+    """Resolved umbrella windows (1D or 2D CVs).
+
+    ``cvs`` holds the authoritative collective variables; ``atom_pairs`` is the
+    legacy view and only describes plain-distance CVs faithfully. Code that must
+    handle antisymmetric-stretch reaction coordinates reads ``cvs``.
+    """
 
     ndim: int
     atom_pairs: tuple[tuple[int, int], ...]
@@ -22,10 +29,50 @@ class WindowSchedule:
     k_x: tuple[float, ...]
     k_y: tuple[float, ...] | None
     grid_shape: tuple[int, ...]
+    cvs: tuple[LinearDistanceCV, ...] = ()
+    walls: tuple[FlatBottomWall, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.cvs:
+            # Legacy construction from atom pairs alone: every CV is a distance.
+            object.__setattr__(
+                self,
+                "cvs",
+                tuple(LinearDistanceCV.distance(i, j) for i, j in self.atom_pairs),
+            )
+        elif len(self.cvs) != self.ndim:
+            raise ValueError(
+                f"schedule has ndim={self.ndim} but {len(self.cvs)} CVs"
+            )
 
     @property
     def n_windows(self) -> int:
         return len(self.xi0)
+
+    @property
+    def targets_per_cv(self) -> tuple[tuple[float, ...], ...]:
+        """Window centers as ``(ndim, K)``."""
+        if self.ndim == 1 or self.yi0 is None:
+            return (self.xi0,)
+        return (self.xi0, self.yi0)
+
+    @property
+    def k_per_cv(self) -> tuple[tuple[float, ...], ...]:
+        """Force constants as ``(ndim, K)``."""
+        if self.ndim == 1 or self.k_y is None:
+            return (self.k_x,)
+        return (self.k_x, self.k_y)
+
+    def wall_specs(self) -> list[dict[str, Any]]:
+        """JSON-serialisable wall descriptions, for snapshots and summaries."""
+        return [w.to_spec() for w in self.walls]
+
+    def cv_specs(self) -> list[dict[str, Any]]:
+        """JSON-serialisable CV descriptions, for snapshots and summaries."""
+        return [
+            {"pairs": [list(p) for p in cv.pairs], "coefficients": list(cv.coefficients)}
+            for cv in self.cvs
+        ]
 
 
 def _linspace_or_list(
@@ -64,11 +111,31 @@ class UmbrellaConfig:
 
     checkpoint: Path
     output_dir: Path
+<<<<<<< HEAD
     atom_i: int
     atom_j: int
     structure: Path | None = None
+=======
+    atom_i: int | None = None
+    atom_j: int | None = None
+>>>>>>> 50152da7b (Update)
     atom_k: int | None = None
     atom_l: int | None = None
+    cv_x: Any = None
+    """CV1 override: a :class:`LinearDistanceCV`, a ``(i, j)`` pair, or a
+    ``{"pairs": ..., "coefficients": ...}`` mapping. Takes precedence over
+    ``atom_i``/``atom_j`` and is how antisymmetric-stretch reaction coordinates
+    such as ``xi = r(C-Cl) - r(C-N)`` are declared."""
+    cv_y: Any = None
+    """CV2 override; takes precedence over ``atom_k``/``atom_l``."""
+    walls: tuple[Any, ...] = ()
+    """Flat-bottom confinement restraints (see
+    :class:`~mmml.md.restraints.FlatBottomWall`). A reaction coordinate built as
+    a difference of distances does not bound the system -- a dissociated complex
+    can satisfy the same ``xi`` -- and a fitted potential is typically unbounded
+    below outside its training data, so the dissociated branch is downhill.
+    Walling the *sum* of the same two distances removes that escape route
+    without biasing the reaction path."""
     targets_A: tuple[float, ...] = ()
     targets_y_A: tuple[float, ...] = ()
     xi_min: float | None = None
@@ -82,6 +149,10 @@ class UmbrellaConfig:
     temperature_K: float = 300.0
     timestep_fs: float = 0.1
     nsteps: int = 1000
+    equilibration_steps: int = 0
+    """Leading steps discarded before any frame is recorded. Window seeds come
+    from optimised geometries with no kinetic energy, so the first part of each
+    trajectory is a heating transient rather than equilibrium sampling."""
     printfreq: int = 100
     savefreq: int | None = None
     seed: int = 42
@@ -112,26 +183,49 @@ class UmbrellaConfig:
     lr_solver: str = "mic"
 
     def __post_init__(self) -> None:
+<<<<<<< HEAD
         if self.engine not in ("packed_ml", "hybrid_jaxmd"):
             raise ValueError(
                 f"engine must be packed_ml|hybrid_jaxmd (got {self.engine!r})"
             )
         if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
             raise ValueError("atom_i and atom_j must be distinct non-negative indices")
+=======
+        if self.cv_x is None:
+            if self.atom_i is None or self.atom_j is None:
+                raise ValueError("provide either cv_x or both atom_i and atom_j")
+            if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
+                raise ValueError("atom_i and atom_j must be distinct non-negative indices")
+>>>>>>> 50152da7b (Update)
         has_k = self.atom_k is not None
         has_l = self.atom_l is not None
-        if has_k != has_l:
-            raise ValueError("atom_k and atom_l must both be set for 2D umbrella")
-        if has_k and has_l:
-            assert self.atom_k is not None and self.atom_l is not None
-            if self.atom_k == self.atom_l or min(self.atom_k, self.atom_l) < 0:
-                raise ValueError("atom_k and atom_l must be distinct non-negative indices")
+        if self.cv_y is None:
+            if has_k != has_l:
+                raise ValueError("atom_k and atom_l must both be set for 2D umbrella")
+            if has_k and has_l:
+                assert self.atom_k is not None and self.atom_l is not None
+                if self.atom_k == self.atom_l or min(self.atom_k, self.atom_l) < 0:
+                    raise ValueError(
+                        "atom_k and atom_l must be distinct non-negative indices"
+                    )
+        # Fail here rather than deep inside the sampler on a malformed spec.
+        self.resolve_cvs()
+        self.resolve_walls()
         if self.temperature_K <= 0:
             raise ValueError(f"temperature_K must be > 0 (got {self.temperature_K})")
         if self.timestep_fs <= 0:
             raise ValueError(f"timestep_fs must be > 0 (got {self.timestep_fs})")
         if self.nsteps < 1:
             raise ValueError(f"nsteps must be >= 1 (got {self.nsteps})")
+        if self.equilibration_steps < 0:
+            raise ValueError(
+                f"equilibration_steps must be >= 0 (got {self.equilibration_steps})"
+            )
+        if self.equilibration_steps >= self.nsteps:
+            raise ValueError(
+                f"equilibration_steps ({self.equilibration_steps}) must be less "
+                f"than nsteps ({self.nsteps}); no production frames would remain"
+            )
         if self.printfreq < 1:
             raise ValueError(f"printfreq must be >= 1 (got {self.printfreq})")
         if self.savefreq is not None and self.savefreq < 1:
@@ -201,7 +295,37 @@ class UmbrellaConfig:
 
     @property
     def is_2d(self) -> bool:
-        return self.atom_k is not None and self.atom_l is not None
+        return self.cv_y is not None or (
+            self.atom_k is not None and self.atom_l is not None
+        )
+
+    def resolve_cvs(self) -> tuple[LinearDistanceCV, ...]:
+        """Resolve CV1 (and CV2 when 2D) from ``cv_*`` or the atom-index fields."""
+        if self.cv_x is not None:
+            cv_x = LinearDistanceCV.from_spec(self.cv_x)
+        else:
+            cv_x = LinearDistanceCV.distance(int(self.atom_i), int(self.atom_j))
+        if not self.is_2d:
+            return (cv_x,)
+        if self.cv_y is not None:
+            cv_y = LinearDistanceCV.from_spec(self.cv_y)
+        else:
+            cv_y = LinearDistanceCV.distance(int(self.atom_k), int(self.atom_l))
+        return (cv_x, cv_y)
+
+    def resolve_walls(self) -> tuple[FlatBottomWall, ...]:
+        """Resolve the configured confinement walls."""
+        return tuple(FlatBottomWall.from_spec(w) for w in self.walls)
+
+    def _legacy_atom_pairs(
+        self, cvs: tuple[LinearDistanceCV, ...]
+    ) -> tuple[tuple[int, int], ...]:
+        """First pair of each CV -- the backward-compatible ``atom_pairs`` view.
+
+        Only faithful for plain-distance CVs; combination CVs carry their real
+        definition on ``WindowSchedule.cvs``.
+        """
+        return tuple(cv.pairs[0] for cv in cvs)
 
     def resolve_targets(self) -> tuple[float, ...]:
         """CV1 window centers (length ``K`` after product expansion)."""
@@ -213,6 +337,9 @@ class UmbrellaConfig:
 
     def resolve_schedule(self) -> WindowSchedule:
         """Resolve 1D or 2D window centers and force constants."""
+        cvs = self.resolve_cvs()
+        walls = self.resolve_walls()
+        atom_pairs = self._legacy_atom_pairs(cvs)
         x_centers = _linspace_or_list(
             explicit=self.targets_A,
             lo=self.xi_min,
@@ -224,22 +351,26 @@ class UmbrellaConfig:
             if not x_centers:
                 return WindowSchedule(
                     ndim=1,
-                    atom_pairs=((self.atom_i, self.atom_j),),
+                    atom_pairs=atom_pairs,
                     xi0=(),
                     yi0=None,
                     k_x=(),
                     k_y=None,
                     grid_shape=(0,),
+                    cvs=cvs,
+                    walls=walls,
                 )
             kx = _broadcast_k(self.k_ev_A2, len(x_centers))
             return WindowSchedule(
                 ndim=1,
-                atom_pairs=((self.atom_i, self.atom_j),),
+                atom_pairs=atom_pairs,
                 xi0=x_centers,
                 yi0=None,
                 k_x=kx,
                 k_y=None,
                 grid_shape=(len(x_centers),),
+                cvs=cvs,
+                walls=walls,
             )
 
         y_centers = _linspace_or_list(
@@ -263,15 +394,16 @@ class UmbrellaConfig:
         kx = _broadcast_k(self.k_ev_A2, n)
         ky_src = self.k_ev_A2 if self.k_y_ev_A2 is None else self.k_y_ev_A2
         ky = _broadcast_k(ky_src, n)
-        assert self.atom_k is not None and self.atom_l is not None
         return WindowSchedule(
             ndim=2,
-            atom_pairs=((self.atom_i, self.atom_j), (self.atom_k, self.atom_l)),
+            atom_pairs=atom_pairs,
             xi0=xi0,
             yi0=yi0,
             k_x=kx,
             k_y=ky,
             grid_shape=(len(x_centers), len(y_centers)),
+            cvs=cvs,
+            walls=walls,
         )
 
     def effective_savefreq(self) -> int:
@@ -305,10 +437,16 @@ class UmbrellaConfig:
                     raw[key] = tuple(float(x) for x in k)
                 else:
                     raw[key] = float(k)
+        for key in ("cv_x", "cv_y"):
+            if raw.get(key) is not None:
+                raw[key] = LinearDistanceCV.from_spec(raw[key])
+        if raw.get("walls"):
+            raw["walls"] = tuple(FlatBottomWall.from_spec(w) for w in raw["walls"])
         return cls(**raw)
 
     def to_dict(self) -> dict[str, Any]:
         out = asdict(self)
+<<<<<<< HEAD
         for key in (
             "checkpoint",
             "structure",
@@ -319,12 +457,30 @@ class UmbrellaConfig:
         ):
             if out[key] is not None:
                 out[key] = str(out[key])
+=======
+        for key in ("checkpoint", "structure", "output_dir"):
+            out[key] = str(out[key])
+        for key in ("cv_x", "cv_y"):
+            cv = getattr(self, key)
+            out[key] = (
+                None
+                if cv is None
+                else {
+                    "pairs": [list(p) for p in LinearDistanceCV.from_spec(cv).pairs],
+                    "coefficients": list(LinearDistanceCV.from_spec(cv).coefficients),
+                }
+            )
+>>>>>>> 50152da7b (Update)
         out["targets_A"] = list(out["targets_A"])
         out["targets_y_A"] = list(out["targets_y_A"])
         out["move_with"] = list(out["move_with"])
         out["move_with2"] = list(out["move_with2"])
         out["invert_with"] = list(out["invert_with"])
+<<<<<<< HEAD
         out["ml_resnames"] = list(out["ml_resnames"])
+=======
+        out["walls"] = [w.to_spec() for w in self.resolve_walls()]
+>>>>>>> 50152da7b (Update)
         if isinstance(self.k_ev_A2, tuple):
             out["k_ev_A2"] = list(self.k_ev_A2)
         if isinstance(self.k_y_ev_A2, tuple):

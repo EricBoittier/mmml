@@ -1,10 +1,25 @@
-"""Packed-batch ML + harmonic distance umbrella bias energies."""
+"""Packed-batch ML + harmonic umbrella bias energies.
+
+Each CV dimension is a :class:`~mmml.md.restraints.LinearDistanceCV`, i.e. a
+linear combination of interatomic distances. A bare ``(i, j)`` pair is accepted
+everywhere a CV is and promoted to the plain-distance special case, so existing
+distance-umbrella callers are unaffected; the general form is what makes an
+antisymmetric-stretch reaction coordinate such as ``xi = r(C-Cl) - r(C-N)``
+expressible.
+"""
 
 from __future__ import annotations
 
 from typing import Any, Callable, Sequence
 
 import numpy as np
+
+from mmml.md.restraints import FlatBottomWall, LinearDistanceCV
+
+
+def _as_cvs(specs: Sequence[Any]) -> tuple[LinearDistanceCV, ...]:
+    """Promote ``(i, j)`` pairs / mappings / CV instances to CVs."""
+    return tuple(LinearDistanceCV.from_spec(spec) for spec in specs)
 
 
 def cv_distance(positions: Any, atom_i: int, atom_j: int) -> Any:
@@ -55,21 +70,72 @@ def packed_bias_energies(
     return 0.5 * ks * jnp.square(dists - targets)
 
 
+def packed_cv_values(
+    positions_packed: Any,
+    n_atoms: int,
+    cv: Any,
+    n_windows: int,
+) -> Any:
+    """CV value for each packed window copy. Shape ``(K,)``.
+
+    Generalises :func:`packed_cv_distances` to any
+    :class:`~mmml.md.restraints.LinearDistanceCV` (or ``(i, j)`` pair).
+    """
+    return LinearDistanceCV.from_spec(cv).value_batched(
+        positions_packed, n_atoms, n_windows
+    )
+
+
+def packed_cv_values_nd(
+    positions_packed: Any,
+    n_atoms: int,
+    cvs: Sequence[Any],
+    n_windows: int,
+) -> Any:
+    """All CV values per window. Shape ``(K, ndim)``."""
+    import jax.numpy as jnp
+
+    cols = [
+        LinearDistanceCV.from_spec(cv).value_batched(positions_packed, n_atoms, n_windows)
+        for cv in cvs
+    ]
+    return jnp.stack(cols, axis=-1)
+
+
+def packed_bias_energies_cv(
+    positions_packed: Any,
+    n_atoms: int,
+    cv: Any,
+    targets_A: Sequence[float],
+    k_ev_A2: Sequence[float],
+) -> Any:
+    """Per-window harmonic bias on one general CV. Shape ``(K,)``."""
+    import jax.numpy as jnp
+
+    k = len(targets_A)
+    values = packed_cv_values(positions_packed, n_atoms, cv, k)
+    targets = jnp.asarray(targets_A, dtype=values.dtype)
+    ks = jnp.asarray(k_ev_A2, dtype=values.dtype)
+    return 0.5 * ks * jnp.square(values - targets)
+
+
 def packed_bias_energies_nd(
     positions_packed: Any,
     n_atoms: int,
-    atom_pairs: Sequence[tuple[int, int]],
+    cvs: Sequence[Any],
     targets: Sequence[Sequence[float]],
     k_ev_A2: Sequence[Sequence[float]],
 ) -> Any:
-    """Sum of harmonic biases over CVs. ``targets`` / ``k_ev_A2`` are ``(ndim, K)``-like."""
+    """Sum of harmonic biases over CVs. ``targets`` / ``k_ev_A2`` are ``(ndim, K)``-like.
+
+    ``cvs`` entries may be ``(i, j)`` pairs or :class:`LinearDistanceCV` objects.
+    """
     total = None
-    for dim, (i, j) in enumerate(atom_pairs):
-        term = packed_bias_energies(
+    for dim, cv in enumerate(_as_cvs(cvs)):
+        term = packed_bias_energies_cv(
             positions_packed,
             n_atoms,
-            int(i),
-            int(j),
+            cv,
             targets[dim],
             k_ev_A2[dim],
         )
@@ -145,21 +211,45 @@ def packed_bias_forces(
     return forces.reshape(k * n_atoms, 3)
 
 
+def packed_bias_forces_cv(
+    positions_packed: Any,
+    n_atoms: int,
+    cv: Any,
+    targets_A: Sequence[float],
+    k_ev_A2: Sequence[float],
+) -> Any:
+    """ASE-style bias forces ``F = -grad W`` for one general CV. Shape ``(K*N, 3)``.
+
+    Uses the CV's analytic gradient so bias forces never differentiate through
+    the ML model (nesting AD inside PhysNet's ``value_and_grad`` yields NaNs).
+    """
+    import jax.numpy as jnp
+
+    resolved = LinearDistanceCV.from_spec(cv)
+    k = len(targets_A)
+    values = resolved.value_batched(positions_packed, n_atoms, k)
+    grad = resolved.gradient_batched(positions_packed, n_atoms, k)  # (K, N, 3)
+    targets = jnp.asarray(targets_A, dtype=values.dtype)
+    ks = jnp.asarray(k_ev_A2, dtype=values.dtype)
+    # W = 0.5 k (xi - xi0)^2 -> grad W = k (xi - xi0) * grad xi ; F = -grad W
+    scale = (ks * (values - targets))[:, None, None]
+    return (-scale * grad).reshape(k * n_atoms, 3)
+
+
 def packed_bias_forces_nd(
     positions_packed: Any,
     n_atoms: int,
-    atom_pairs: Sequence[tuple[int, int]],
+    cvs: Sequence[Any],
     targets: Sequence[Sequence[float]],
     k_ev_A2: Sequence[Sequence[float]],
 ) -> Any:
     """Sum of ASE-style bias forces over CVs. Shape ``(K*N, 3)``."""
     total = None
-    for dim, (i, j) in enumerate(atom_pairs):
-        term = packed_bias_forces(
+    for dim, cv in enumerate(_as_cvs(cvs)):
+        term = packed_bias_forces_cv(
             positions_packed,
             n_atoms,
-            int(i),
-            int(j),
+            cv,
             targets[dim],
             k_ev_A2[dim],
         )
@@ -174,14 +264,19 @@ def make_packed_energy_fn(
     params: Any,
     atomic_numbers: Any,
     graph: dict[str, Any],
-    atom_pairs: Sequence[tuple[int, int]],
-    targets_per_cv: Sequence[Sequence[float]],
-    k_per_cv: Sequence[Sequence[float]],
+    atom_pairs: Sequence[Any] | None = None,
+    targets_per_cv: Sequence[Sequence[float]] = (),
+    k_per_cv: Sequence[Sequence[float]] = (),
+    cvs: Sequence[Any] | None = None,
+    walls: Sequence[Any] | None = None,
 ) -> Callable[..., Any]:
-    """Return ``energy_sum_fn(R_packed) = sum(E_ML) + sum_k W_k`` (forces off).
+    """Return ``energy_sum_fn(R_packed) = sum(E_ML) + sum_k W_k + walls`` (forces off).
 
     Uses ``compute_forces=False`` so logging/MBAR-style energy evals do not nest
     autodiff through PhysNet's internal ``value_and_grad``.
+
+    ``cvs`` (preferred) or ``atom_pairs`` selects the collective variables; both
+    accept ``(i, j)`` pairs and :class:`LinearDistanceCV` objects.
     """
     import jax.numpy as jnp
 
@@ -198,11 +293,19 @@ def make_packed_energy_fn(
             f"n_atoms={n_atoms}, n_windows={n_windows}"
         )
 
-    pairs = tuple((int(i), int(j)) for i, j in atom_pairs)
+    specs = cvs if cvs is not None else atom_pairs
+    if not specs:
+        raise ValueError("make_packed_energy_fn requires cvs (or atom_pairs)")
+    resolved_cvs = _as_cvs(specs)
+    resolved_walls = tuple(FlatBottomWall.from_spec(w) for w in (walls or ()))
+    for wall in resolved_walls:
+        wall.cv.validate_against(n_atoms)
+    for cv in resolved_cvs:
+        cv.validate_against(n_atoms)
     targets = tuple(tuple(float(x) for x in row) for row in targets_per_cv)
     ks = tuple(tuple(float(x) for x in row) for row in k_per_cv)
-    if len(pairs) != len(targets) or len(pairs) != len(ks):
-        raise ValueError("atom_pairs / targets_per_cv / k_per_cv length mismatch")
+    if len(resolved_cvs) != len(targets) or len(resolved_cvs) != len(ks):
+        raise ValueError("cvs / targets_per_cv / k_per_cv length mismatch")
     for row in targets + ks:
         if len(row) != n_windows:
             raise ValueError("each CV target/k row must match graph n_windows")
@@ -233,7 +336,9 @@ def make_packed_energy_fn(
         del kwargs
         out = _apply(position, compute_forces=False)
         e_ml = jnp.asarray(out["energy"]).reshape(-1)
-        e_bias = packed_bias_energies_nd(position, n_atoms, pairs, targets, ks)
+        e_bias = packed_bias_energies_nd(position, n_atoms, resolved_cvs, targets, ks)
+        for wall in resolved_walls:
+            e_bias = e_bias + wall.energy_batched(position, n_atoms, n_windows)
         return e_ml + e_bias
 
     def energy_sum_fn(position, **kwargs):
@@ -245,7 +350,9 @@ def make_packed_energy_fn(
         del kwargs
         out = _apply(position, compute_forces=True)
         f_ml = jnp.asarray(out["forces"]).reshape(-1, 3)
-        f_bias = packed_bias_forces_nd(position, n_atoms, pairs, targets, ks)
+        f_bias = packed_bias_forces_nd(position, n_atoms, resolved_cvs, targets, ks)
+        for wall in resolved_walls:
+            f_bias = f_bias + wall.forces_batched(position, n_atoms, n_windows)
         return f_ml + f_bias
 
     energy_sum_fn.force_fn = force_fn  # type: ignore[attr-defined]
@@ -259,9 +366,11 @@ def make_packed_force_fn(
     params: Any,
     atomic_numbers: Any,
     graph: dict[str, Any],
-    atom_pairs: Sequence[tuple[int, int]],
-    targets_per_cv: Sequence[Sequence[float]],
-    k_per_cv: Sequence[Sequence[float]],
+    atom_pairs: Sequence[Any] | None = None,
+    targets_per_cv: Sequence[Sequence[float]] = (),
+    k_per_cv: Sequence[Sequence[float]] = (),
+    cvs: Sequence[Any] | None = None,
+    walls: Sequence[Any] | None = None,
 ) -> Callable[..., Any]:
     """Return packed force_fn for jax-md (avoids nested AD through PhysNet)."""
     energy_fn = make_packed_energy_fn(
@@ -272,6 +381,8 @@ def make_packed_force_fn(
         atom_pairs=atom_pairs,
         targets_per_cv=targets_per_cv,
         k_per_cv=k_per_cv,
+        cvs=cvs,
+        walls=walls,
     )
     return energy_fn.force_fn  # type: ignore[attr-defined]
 
@@ -327,17 +438,34 @@ def numpy_bias_matrix(
     return 0.5 * ks * (dist - targets) ** 2
 
 
+def numpy_bias_matrix_cv(
+    positions: np.ndarray,
+    cv: Any,
+    targets_A: Sequence[float],
+    k_ev_A2: Sequence[float],
+    *,
+    cell: np.ndarray | None = None,
+) -> np.ndarray:
+    """Analytic ``W_l(R)`` for one frame and one general CV. Shape ``(K,)``."""
+    value = LinearDistanceCV.from_spec(cv).value_numpy(positions, cell=cell)
+    targets = np.asarray(targets_A, dtype=np.float64)
+    ks = np.asarray(k_ev_A2, dtype=np.float64)
+    return 0.5 * ks * (value - targets) ** 2
+
+
 def numpy_bias_matrix_nd(
     positions: np.ndarray,
-    atom_pairs: Sequence[tuple[int, int]],
+    cvs: Sequence[Any],
     targets_per_cv: Sequence[Sequence[float]],
     k_per_cv: Sequence[Sequence[float]],
+    *,
+    cell: np.ndarray | None = None,
 ) -> np.ndarray:
     """Analytic multi-CV ``W_l(R)`` for one frame. Shape ``(K,)``."""
     total = None
-    for dim, (i, j) in enumerate(atom_pairs):
-        term = numpy_bias_matrix(
-            positions, int(i), int(j), targets_per_cv[dim], k_per_cv[dim]
+    for dim, cv in enumerate(_as_cvs(cvs)):
+        term = numpy_bias_matrix_cv(
+            positions, cv, targets_per_cv[dim], k_per_cv[dim], cell=cell
         )
         total = term if total is None else total + term
     assert total is not None

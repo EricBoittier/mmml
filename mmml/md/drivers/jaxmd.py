@@ -141,9 +141,14 @@ class JaxmdDriver:
         def _record_energy(state, dyn):
             return float(jax.device_get(energy_fn(state.position, **dyn)))
 
-        dt_ps = float(ensemble.dt_fs) * 1.0e-3
         seed = int(options.get("seed", 0))
         unit_system = units.metal_unit_system()
+        # jax-md's metal system (Å, eV, amu) measures time in Å·sqrt(amu/eV) =
+        # 10.18 fs, and ``unit_system["time"]`` is how many of those make one
+        # picosecond. Handing the integrator a raw picosecond value silently
+        # integrates ~98x too finely, so every run covered ~1% of its nominal
+        # duration while looking perfectly well-behaved.
+        dt_ps = float(ensemble.dt_fs) * 1.0e-3 * unit_system["time"]
 
         def _init_state(pos, dyn, offset=0):
             if ensemble.ensemble == "min":
@@ -164,7 +169,19 @@ class JaxmdDriver:
 
         kT = None
         if ensemble.ensemble == "min":
-            init_fn, step_fn = minimize.fire_descent(energy_fn, shift_fn, dt_start=dt_ps)
+            # FIRE grows its step adaptively up to ``dt_max``, so starting from a
+            # freshly packed box (close contacts, |F| ~ 100 eV/A) it can take a
+            # step large enough to produce NaN before the geometry relaxes.
+            # Default to a conservative fraction of the dynamics step and let
+            # ``dt_max`` be capped explicitly; both are overridable.
+            fire_kwargs = {
+                "dt_start": 0.1 * dt_ps,
+                "dt_max": dt_ps,
+                **dict(options.get("fire_kwargs", {})),
+            }
+            init_fn, step_fn = minimize.fire_descent(
+                energy_fn, shift_fn, **fire_kwargs
+            )
         else:
             # Cast kT to the run dtype: under JAX_ENABLE_X64 a Python-float kT is
             # float64, which makes jax-md build the (NPT) barostat state in

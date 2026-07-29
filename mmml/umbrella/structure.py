@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -210,6 +210,46 @@ def stretch_two_distances(
 
 
 
+def stretch_antisymmetric_seed(
+    positions: np.ndarray,
+    pair_plus: tuple[int, int],
+    pair_minus: tuple[int, int],
+    target_xi: float,
+    *,
+    move_with_plus: Sequence[int] | None = None,
+    move_with_minus: Sequence[int] | None = None,
+    min_distance_A: float = 1.4,
+) -> np.ndarray:
+    """Seed a window of the antisymmetric-stretch CV ``xi = r_plus - r_minus``.
+
+    ``xi`` alone does not fix a geometry -- ``(r_plus, r_minus) = (2, 3)`` and
+    ``(5, 6)`` share ``xi = -1`` but the second is a dissociated pair. We
+    therefore hold the *sum* ``r_plus + r_minus`` at its reference value, which
+    keeps the seed on the compact SN2 path, and split it to give the requested
+    difference. Both distances are floored at ``min_distance_A`` so extreme
+    windows cannot seed atoms on top of each other.
+    """
+    r_ref = np.asarray(positions, dtype=np.float64)
+    d_plus = float(np.linalg.norm(r_ref[pair_plus[1]] - r_ref[pair_plus[0]]))
+    d_minus = float(np.linalg.norm(r_ref[pair_minus[1]] - r_ref[pair_minus[0]]))
+    total = d_plus + d_minus
+    xi = float(target_xi)
+    # r_plus - r_minus = xi and r_plus + r_minus = total
+    new_plus = 0.5 * (total + xi)
+    new_minus = 0.5 * (total - xi)
+    if new_plus < min_distance_A or new_minus < min_distance_A:
+        # xi is too extreme for this sum; grow the sum just enough to respect the floor.
+        needed = abs(xi) + 2.0 * min_distance_A
+        new_plus = 0.5 * (needed + xi)
+        new_minus = 0.5 * (needed - xi)
+    r = stretch_distance_seed(
+        r_ref, pair_plus[0], pair_plus[1], new_plus, move_with=move_with_plus
+    )
+    return stretch_distance_seed(
+        r, pair_minus[0], pair_minus[1], new_minus, move_with=move_with_minus
+    )
+
+
 def pack_window_seeds(
     *,
     positions: np.ndarray,
@@ -219,6 +259,7 @@ def pack_window_seeds(
     frames: np.ndarray | None = None,
     move_groups: Sequence[Sequence[int]] | None = None,
     invert_with: Sequence[int] | None = None,
+    cvs: Sequence[Any] | None = None,
 ) -> np.ndarray:
     """Build packed ``(K*N, 3)`` initial coordinates for ``K`` umbrella windows.
 
@@ -227,6 +268,11 @@ def pack_window_seeds(
     - ``frames``: use ``frames`` shape ``(K, N, 3)`` as window seeds
 
     ``invert_with`` (2D stretch only): blend Walden inversion of those atoms.
+
+    ``cvs`` carries the real CV definitions; a 1D two-term CV (an antisymmetric
+    stretch) is seeded by :func:`stretch_antisymmetric_seed`. ``atom_pairs`` is
+    only sufficient for plain-distance CVs. For reactive systems, prefer
+    ``seed_mode="frames"`` with geometries from a scan or NEB path.
     """
     from mmml.umbrella.energy import pack_positions
 
@@ -266,7 +312,44 @@ def pack_window_seeds(
     r0 = np.asarray(positions, dtype=np.float64)
     n_atoms = int(r0.shape[0])
     out = np.zeros((k, n_atoms, 3), dtype=np.float64)
-    if len(pairs) == 1:
+
+    resolved = None
+    if cvs is not None:
+        from mmml.md.restraints import LinearDistanceCV
+
+        resolved = [LinearDistanceCV.from_spec(cv) for cv in cvs]
+
+    if resolved is not None and len(resolved) == 1 and len(resolved[0].pairs) == 2:
+        cv = resolved[0]
+        (pair_a, pair_b), (coef_a, coef_b) = cv.pairs, cv.coefficients
+        if coef_a * coef_b >= 0:
+            raise ValueError(
+                "seed_mode='stretch' for a two-term CV expects opposite-sign "
+                f"coefficients (antisymmetric stretch); got {cv.label()}. "
+                "Use seed_mode='frames' instead."
+            )
+        if abs(coef_a) != 1.0 or abs(coef_b) != 1.0:
+            raise ValueError(
+                f"seed_mode='stretch' supports unit coefficients only; got {cv.label()}. "
+                "Use seed_mode='frames' instead."
+            )
+        plus, minus = (pair_a, pair_b) if coef_a > 0 else (pair_b, pair_a)
+        for wid in range(k):
+            out[wid] = stretch_antisymmetric_seed(
+                r0,
+                plus,
+                minus,
+                targets[0][wid],
+                move_with_plus=groups[0],
+                move_with_minus=groups[0],
+            )
+    elif resolved is not None and any(len(cv.pairs) > 1 for cv in resolved):
+        raise ValueError(
+            "seed_mode='stretch' handles 1D/2D distance CVs and one 1D "
+            "antisymmetric stretch; use seed_mode='frames' for "
+            f"{[cv.label() for cv in resolved]}"
+        )
+    elif len(pairs) == 1:
         i, j = pairs[0]
         for wid in range(k):
             out[wid] = stretch_distance_seed(
