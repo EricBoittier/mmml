@@ -80,7 +80,20 @@ def test_require_umbrella_products(tmp_path: Path) -> None:
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
-    spec.loader.exec_module(mod)
+    # run_job.py does ``from campaign_lib import ...`` after prepending its own
+    # scripts dir to sys.path. Both reaction-path workflows ship a
+    # ``campaign_lib.py``, and sys.modules is consulted before sys.path, so a
+    # sibling workflow's cached ``campaign_lib`` would win the slot (and lacks
+    # this workflow's ``checkpoint_path``). Evict it so the import resolves to
+    # *this* workflow's sibling, then restore the prior state afterward.
+    _saved_cl = sys.modules.pop("campaign_lib", None)
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        if _saved_cl is not None:
+            sys.modules["campaign_lib"] = _saved_cl
+        else:
+            sys.modules.pop("campaign_lib", None)
 
     out = tmp_path / "umb"
     out.mkdir()
