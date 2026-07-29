@@ -155,8 +155,14 @@ def _load_box_json(path: Path) -> float | None:
     if not path.is_file():
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("box_size", "side_length_A", "L"):
-        if key in data:
+    for key in (
+        "box_side_A",
+        "final_cubic_side_A",
+        "box_size",
+        "side_length_A",
+        "L",
+    ):
+        if key in data and data[key] is not None:
             return float(data[key])
     return None
 

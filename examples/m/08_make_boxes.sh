@@ -101,6 +101,9 @@ if packed.is_file():
 (out / "box.json").write_text(
     json.dumps(
         {
+            # Canonical key for md-system / liquid-box handoff.
+            "box_side_A": side,
+            # Aliases kept for hybrid umbrella + older readers.
             "box_size": side,
             "side_length_A": side,
             "solvent": solvent,
