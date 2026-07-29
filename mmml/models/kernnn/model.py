@@ -10,7 +10,11 @@ import jax
 import jax.numpy as jnp
 
 from mmml.models.kernnn.dihedrals import h2co_hcoh_dihedral
-from mmml.models.kernnn.distances import DISTANCE_FNS, n_features_for_scheme
+from mmml.models.kernnn.distances import (
+    DISTANCE_FNS,
+    n_atoms_for_scheme,
+    n_features_for_scheme,
+)
 from mmml.models.kernnn.kernels import KERNEL_FNS, get_1d_kernels_k33
 
 
@@ -55,10 +59,11 @@ class KerNNConfig:
     n_input: int = 6
     n_hidden: int = 20
     n_out: int = 1
+    n_atoms: int = 4
     kernel: str = "k33"
     distance_scheme: str = "abcc"
-    architecture: str = "ffnet"  # "ffnet" | "dual"
-    dual_dropout: float = 0.0  # match Torch Dual dropout only when > 0 (train)
+    architecture: str = "ffnet"  # "ffnet" | "dual" (dual is ABCC-only)
+    dual_dropout: float = 0.0
     model_type: str = "kernnn"
 
     def to_dict(self) -> dict[str, Any]:
@@ -66,6 +71,7 @@ class KerNNConfig:
             "n_input": int(self.n_input),
             "n_hidden": int(self.n_hidden),
             "n_out": int(self.n_out),
+            "n_atoms": int(self.n_atoms),
             "kernel": str(self.kernel),
             "distance_scheme": str(self.distance_scheme),
             "architecture": str(self.architecture),
@@ -78,10 +84,12 @@ class KerNNConfig:
         data = dict(data or {})
         scheme = str(data.get("distance_scheme", "abcc"))
         default_n = n_features_for_scheme(scheme) if scheme in DISTANCE_FNS else 6
+        default_atoms = n_atoms_for_scheme(scheme) if scheme in DISTANCE_FNS else 4
         return cls(
             n_input=int(data.get("n_input", default_n)),
             n_hidden=int(data.get("n_hidden", 20)),
             n_out=int(data.get("n_out", 1)),
+            n_atoms=int(data.get("n_atoms", default_atoms)),
             kernel=str(data.get("kernel", "k33")),
             distance_scheme=scheme,
             architecture=str(data.get("architecture", "ffnet")),
@@ -188,8 +196,7 @@ def descriptor_from_positions(
     """Distances → standardized kernel features."""
     cfg = config or KerNNConfig()
     st = _coerce_stats_arrays(stats)
-    # Raw pair count for ABCC helpers is always 6; feature length may be 7 for sym
-    r = _distance_fn(cfg.distance_scheme)(positions, 6)
+    r = _distance_fn(cfg.distance_scheme)(positions)
     k_fn = _kernel_fn(cfg.kernel)
     k = k_fn(r, st["min_r"], 1.0)
     return (k - st["mean_k"]) / st["std_k"]

@@ -1,38 +1,57 @@
 """JAX interatomic distance helpers for KerNN.
 
-Default trained path uses H2CO / ABCC (C, O, H, H) with six pairwise distances.
-``abcc_sym`` adds fundamental-invariant features for H↔H permutational symmetry.
+Schemes:
+  abcc / abcc_sym — H2CO (4 atoms)
+  form — formamide (6 atoms, all pairs)
+  acem — acetamide (9 atoms, all pairs)
 """
 
 from __future__ import annotations
 
 import jax.numpy as jnp
 
+SCHEME_N_ATOMS = {
+    "abcc": 4,
+    "abcc_sym": 4,
+    "form": 6,
+    "acem": 9,
+}
 
-def get_bond_length_abcc(pos, n_int_dist: int | None = None):
-    """Interatomic distances for H2CO-style ABCC geometries.
 
-    Atom order: C=0, O=1, H=2, H=3.
+def n_atoms_for_scheme(scheme: str) -> int:
+    try:
+        return SCHEME_N_ATOMS[scheme]
+    except KeyError as exc:
+        raise ValueError(
+            f"unknown distance_scheme {scheme!r}; choose one of {sorted(SCHEME_N_ATOMS)}"
+        ) from exc
 
-    Distance order:
-      0: C–O, 1: C–H1, 2: C–H2, 3: O–H1, 4: O–H2, 5: H1–H2
-    """
-    if n_int_dist is not None and int(n_int_dist) != 6:
-        raise ValueError(f"ABCC expects n_int_dist=6, got {n_int_dist}")
 
+def n_features_for_scheme(scheme: str) -> int:
+    if scheme == "abcc":
+        return 6
+    if scheme == "abcc_sym":
+        return 7
+    n = n_atoms_for_scheme(scheme)
+    return n * (n - 1) // 2
+
+
+def _pair_list(n_atoms: int) -> tuple[tuple[int, int], ...]:
+    return tuple((i, j) for i in range(n_atoms) for j in range(i + 1, n_atoms))
+
+
+def _pairwise(pos, n_atoms: int):
+    pairs = _pair_list(n_atoms)
     if pos.ndim == 2:
-        if pos.shape[0] != 4:
-            raise ValueError(f"ABCC expects 4 atoms, got shape {pos.shape}")
-        pairs = ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3))
+        if pos.shape[0] != n_atoms:
+            raise ValueError(f"expected {n_atoms} atoms, got shape {pos.shape}")
         return jnp.stack(
             [jnp.linalg.norm(pos[i] - pos[j]) for i, j in pairs],
             axis=0,
         )
-
     if pos.ndim == 3:
-        if pos.shape[1] != 4:
-            raise ValueError(f"ABCC expects 4 atoms, got shape {pos.shape}")
-        pairs = ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3))
+        if pos.shape[1] != n_atoms:
+            raise ValueError(f"expected {n_atoms} atoms, got shape {pos.shape}")
         return jnp.stack(
             [
                 jnp.linalg.norm(pos[:, i, :] - pos[:, j, :], axis=-1)
@@ -40,20 +59,20 @@ def get_bond_length_abcc(pos, n_int_dist: int | None = None):
             ],
             axis=-1,
         )
-
     raise ValueError(
         f"positions must be (N,3) or (B,N,3); got shape {getattr(pos, 'shape', None)}"
     )
 
 
+def get_bond_length_abcc(pos, n_int_dist: int | None = None):
+    """H2CO ABCC distances (C,O,H,H) — 6 pairs."""
+    del n_int_dist
+    return _pairwise(pos, 4)
+
+
 def get_bond_length_abcc_sym(pos, n_int_dist: int | None = None):
-    """ABCC distances with H↔H fundamental invariants (7 features).
-
-    Port of ``scripts/kernn/utils/distances.get_bond_length_ABCC_sym``.
-    """
-    if n_int_dist is not None and int(n_int_dist) != 6:
-        raise ValueError(f"ABCC_sym expects n_int_dist=6, got {n_int_dist}")
-
+    """ABCC with H↔H fundamental invariants (7 features)."""
+    del n_int_dist
     if pos.ndim == 2:
         if pos.shape[0] != 4:
             raise ValueError(f"ABCC_sym expects 4 atoms, got shape {pos.shape}")
@@ -103,15 +122,21 @@ def get_bond_length_abcc_sym(pos, n_int_dist: int | None = None):
     )
 
 
+def get_bond_length_form(pos, n_int_dist: int | None = None):
+    """Formamide all-pairs distances (H,C,N,H,H,O) — 15 features."""
+    del n_int_dist
+    return _pairwise(pos, 6)
+
+
+def get_bond_length_acem(pos, n_int_dist: int | None = None):
+    """Acetamide all-pairs distances (9 atoms) — 36 features."""
+    del n_int_dist
+    return _pairwise(pos, 9)
+
+
 DISTANCE_FNS = {
     "abcc": get_bond_length_abcc,
     "abcc_sym": get_bond_length_abcc_sym,
+    "form": get_bond_length_form,
+    "acem": get_bond_length_acem,
 }
-
-
-def n_features_for_scheme(scheme: str) -> int:
-    if scheme == "abcc":
-        return 6
-    if scheme == "abcc_sym":
-        return 7
-    raise ValueError(f"unknown distance_scheme {scheme!r}; choose abcc or abcc_sym")

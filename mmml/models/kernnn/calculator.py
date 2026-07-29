@@ -65,9 +65,11 @@ class KerNNCalculator(Calculator):
         properties = properties or ["energy", "forces"]
         Calculator.calculate(self, atoms, properties, system_changes)
         positions = jnp.asarray(self.atoms.get_positions(), dtype=jnp.float32)
-        if positions.shape[0] != 4:
+        n_atoms = int(self.config.n_atoms)
+        if positions.shape[0] != n_atoms:
             raise ValueError(
-                f"KerNN ABCC calculator expects 4 atoms (C,O,H,H); got {positions.shape[0]}"
+                f"KerNN calculator expects {n_atoms} atoms "
+                f"(scheme={self.config.distance_scheme}); got {positions.shape[0]}"
             )
         energy, forces = energy_and_forces(
             self.params,
