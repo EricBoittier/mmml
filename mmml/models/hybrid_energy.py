@@ -70,6 +70,7 @@ from mmml.models.mm_charge_mode import (
     require_charge_head_for_mode,
     resolve_hybrid_mm_charge_mode,
 )
+from mmml.models.mm_lj_scales import apply_mm_lj_scales, split_mm_lj_scale_params
 
 Array = jnp.ndarray
 
@@ -117,6 +118,7 @@ class HybridMMConfig:
     mm_charge_mode: str = "fixed"
     lr_solver: str = "mic"
     include_lj: bool = True
+    learn_mm_lj_scales: bool = False
     pme_box_length: float | None = None
     pme_accuracy: float = 1e-6
     pme_real_space_cutoff: float | None = None
@@ -167,6 +169,7 @@ class HybridMMConfig:
             d["pme_box_length"] = float(box)
         else:
             d["include_lj"] = bool(d.get("include_lj", True))
+        d["learn_mm_lj_scales"] = bool(d.get("learn_mm_lj_scales", False))
         if "pme_accuracy" in d and d["pme_accuracy"] is not None:
             d["pme_accuracy"] = float(d["pme_accuracy"])
         if d.get("pme_real_space_cutoff", None) is not None:
@@ -245,6 +248,9 @@ def hybrid_forward(
     wall_k: float = DEFAULT_WALL_K_EV_A2,
     lr_solver: str = "mic",
     include_lj: bool = True,
+    learn_mm_lj_scales: bool = False,
+    mm_lj_sigma_scale: Array | None = None,
+    mm_lj_epsilon_scale: Array | None = None,
     pme_box_length: float | None = None,
     pme_accuracy: float = 1e-6,
     pme_real_space_cutoff: float | None = None,
@@ -283,6 +289,17 @@ def hybrid_forward(
         charge_correction=charge_correction,
     )
 
+    model_params, scale_sig_from_params, scale_eps_from_params = split_mm_lj_scale_params(
+        params
+    )
+    sigma_scale = mm_lj_sigma_scale
+    epsilon_scale = mm_lj_epsilon_scale
+    if learn_mm_lj_scales:
+        if sigma_scale is None:
+            sigma_scale = scale_sig_from_params
+        if epsilon_scale is None:
+            epsilon_scale = scale_eps_from_params
+
     def _fwd(atom_mask, batch_mask):
         # NOTE: deliberately does NOT pass cgenff_type_idx / cgenff_master_*.
         # The Spooky model has its own in-model CGenFF VdW gated on exactly those
@@ -290,7 +307,7 @@ def hybrid_forward(
         # them would count MM twice.  Pinned by
         # tests/unit/test_hybrid_energy.py::test_hybrid_forward_never_passes_cgenff_to_the_model
         return model_apply(
-            params,
+            model_params,
             atomic_numbers=batch["Z"],
             positions=batch["R"],
             dst_idx=batch["dst_idx"],
@@ -387,14 +404,20 @@ def hybrid_forward(
                     include_self_energy=bool(ewald_include_self),
                 )
             else:
-                eps = master_epsilons if include_lj else jnp.zeros_like(master_epsilons)
+                sig_eff, eps_eff = apply_mm_lj_scales(
+                    master_sigmas,
+                    master_epsilons,
+                    sigma_scale,
+                    epsilon_scale,
+                    include_lj=include_lj,
+                )
                 e = KCAL_MOL_TO_EV * cgenff_mm_energy(
                     x,
                     t,
                     m,
                     q,
-                    master_sigmas,
-                    eps,
+                    sig_eff,
+                    eps_eff,
                     mm_switch_on=mm_switch_on,
                     mm_switch_width=mm_switch_width,
                     ml_switch_width=ml_switch_width,

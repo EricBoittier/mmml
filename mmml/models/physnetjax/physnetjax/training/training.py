@@ -406,11 +406,28 @@ def train_model(
         import json
 
         from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+        from mmml.models.mm_lj_scales import (
+            cgenff_type_names_from_prm,
+            mm_lj_scales_metadata,
+        )
 
         CKPT_DIR.mkdir(parents=True, exist_ok=True)
+        _meta = hybrid_mm_metadata_dict(hybrid_mm)
+        if bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+            try:
+                _names = cgenff_type_names_from_prm()
+                if len(_names) == len(hybrid_mm.master_sigmas):
+                    _meta.update(
+                        mm_lj_scales_metadata(
+                            learn_mm_lj_scales=True,
+                            type_names=_names,
+                        )
+                    )
+            except Exception as exc:  # pragma: no cover - PRM missing in some envs
+                print(f"WARNING: could not resolve CGenFF type names: {exc}", flush=True)
         _meta_path = CKPT_DIR / "hybrid_mm.json"
         with open(_meta_path, "w") as _mf:
-            json.dump(hybrid_mm_metadata_dict(hybrid_mm), _mf, indent=2)
+            json.dump(_meta, _mf, indent=2)
             _mf.write("\n")
         print(f"Wrote hybrid MM metadata to {_meta_path}", flush=True)
 
@@ -449,6 +466,10 @@ def train_model(
         dst_idx=dst_idx,
         src_idx=src_idx,
     )
+    if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+        fresh_params = attach_mm_lj_scales(fresh_params, len(hybrid_mm.master_sigmas))
     # Use caller-supplied params (e.g. transplanted from a previous stage)
     # when available, falling back to fresh random init.
     if init_params is not None and not restart:
@@ -477,6 +498,12 @@ def train_model(
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
+        if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+            from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+            fresh_restart_params = attach_mm_lj_scales(
+                fresh_restart_params, len(hybrid_mm.master_sigmas)
+            )
         params = _merge_params(fresh_restart_params, params)
         ema_params = _merge_params(fresh_restart_params, ema_params)
         do_charges = bool(getattr(model, "charges", False))
@@ -519,6 +546,7 @@ def train_model(
         state = train_state.TrainState.create(
             apply_fn=model.apply, params=params, tx=optimizer
         )
+
     if best_loss is None or restart:
         best_loss = float('inf')
 
@@ -777,6 +805,36 @@ def train_model(
 
     if profile_epoch_timing and console is not None and timing_summary.epochs > 0:
         console.print(timing_summary.format_means())
+
+    if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+        from mmml.models.mm_lj_scales import (
+            MM_LJ_EPSILON_SCALE_KEY,
+            MM_LJ_SIGMA_SCALE_KEY,
+            cgenff_type_names_from_prm,
+            write_mm_lj_scales_into_hybrid_mm_json,
+        )
+
+        if (
+            isinstance(ema_params, dict)
+            and MM_LJ_SIGMA_SCALE_KEY in ema_params
+            and MM_LJ_EPSILON_SCALE_KEY in ema_params
+        ):
+            try:
+                _names = cgenff_type_names_from_prm()
+            except Exception:
+                _names = [f"type_{i}" for i in range(len(hybrid_mm.master_sigmas))]
+            if len(_names) != len(hybrid_mm.master_sigmas):
+                _names = [f"type_{i}" for i in range(len(hybrid_mm.master_sigmas))]
+            write_mm_lj_scales_into_hybrid_mm_json(
+                CKPT_DIR / "hybrid_mm.json",
+                type_names=_names,
+                sigma_scale=ema_params[MM_LJ_SIGMA_SCALE_KEY],
+                epsilon_scale=ema_params[MM_LJ_EPSILON_SCALE_KEY],
+            )
+            print(
+                f"Wrote final MM LJ scales to {CKPT_DIR / 'hybrid_mm.json'}",
+                flush=True,
+            )
 
     # Return final model parameters, best objective value, and run checkpoint dir.
     return ema_params, best_loss, CKPT_DIR

@@ -301,6 +301,19 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         ),
     )
     parser.add_argument(
+        "--learn-mm-lj-scales",
+        "--learn_mm_lj_scales",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        dest="learn_mm_lj_scales",
+        help=(
+            "Learn per-CGenFF-type multiplicative scales on master σ and ε "
+            "(separate arrays, init 1.0). Only affects mic hybrid E_MM LJ; "
+            "ignored when LJ is forced off (ewald / nvalchemiops_pme). "
+            "Scales are saved in hybrid_mm.json for MD ep_scale/sig_scale."
+        ),
+    )
+    parser.add_argument(
         "--ema-decay",
         "--ema_decay",
         type=float,
@@ -892,6 +905,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     )
     lr_solver = str(getattr(args, "lr_solver", "mic") or "mic").strip().lower()
     include_lj = bool(getattr(args, "mm_include_lj", True))
+    learn_mm_lj_scales = bool(getattr(args, "learn_mm_lj_scales", False))
     pme_box_length = getattr(args, "pme_box_length", None)
     pme_accuracy = float(getattr(args, "pme_accuracy", 1e-6) or 1e-6)
     pme_real_space_cutoff = None
@@ -935,6 +949,10 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         # No external-package / cutoff-estimation step needed: ewald_hybrid_
         # coulomb.py defaults real_space_cutoff_A to box_length/2 internally
         # when left None, already validated at that setting.
+    if lr_solver in ("nvalchemiops_pme", "ewald"):
+        learn_mm_lj_scales = False
+    if learn_mm_lj_scales and not include_lj:
+        learn_mm_lj_scales = False
     cfg = {
         "master_sigmas": sigmas,
         "master_epsilons": epsilons,
@@ -945,6 +963,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "mm_charge_mode": mode.value,
         "lr_solver": lr_solver,
         "include_lj": include_lj,
+        "learn_mm_lj_scales": learn_mm_lj_scales,
         "pme_box_length": pme_box_length,
         "pme_accuracy": pme_accuracy,
         "pme_real_space_cutoff": pme_real_space_cutoff,
@@ -969,7 +988,8 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
             f"complementary_handoff={cfg['complementary_handoff']}, "
             f"mm_charge_mode={cfg['mm_charge_mode']}, "
-            f"lr_solver={lr_solver}, E_MM={lj_txt}{pme_txt})",
+            f"lr_solver={lr_solver}, E_MM={lj_txt}, "
+            f"learn_mm_lj_scales={learn_mm_lj_scales}{pme_txt})",
             flush=True,
         )
     return cfg

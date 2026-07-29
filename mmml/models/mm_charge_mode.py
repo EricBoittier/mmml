@@ -303,12 +303,13 @@ def hybrid_mm_metadata_dict(hybrid_mm: Any) -> dict[str, Any]:
             "hybrid_mm": False,
             "charge_correction": False,
             "mm_charge_mode": MMChargeMode.FIXED.value,
+            "learn_mm_lj_scales": False,
         }
     mode = resolve_hybrid_mm_charge_mode(
         mm_charge_mode=getattr(hybrid_mm, "mm_charge_mode", None),
         charge_correction=bool(getattr(hybrid_mm, "charge_correction", False)),
     )
-    return {
+    out = {
         "hybrid_mm": True,
         "charge_correction": mode is MMChargeMode.FIXED_PLUS_LATENT,
         "mm_charge_mode": mode.value,
@@ -318,4 +319,11 @@ def hybrid_mm_metadata_dict(hybrid_mm: Any) -> dict[str, Any]:
         "complementary_handoff": bool(
             getattr(hybrid_mm, "complementary_handoff", True)
         ),
+        "learn_mm_lj_scales": bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)),
+        "include_lj": bool(getattr(hybrid_mm, "include_lj", True)),
+        "lr_solver": str(getattr(hybrid_mm, "lr_solver", "mic")),
     }
+    type_names = getattr(hybrid_mm, "cgenff_type_names", None)
+    if type_names is not None:
+        out["cgenff_type_names"] = [str(n) for n in type_names]
+    return out

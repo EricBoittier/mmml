@@ -34,6 +34,7 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--pme-box-length PME_BOX_LENGTH]
                           [--pme-accuracy PME_ACCURACY]
                           [--mm-include-lj | --no-mm-include-lj | --mm_include_lj | --no-mm_include_lj]
+                          [--learn-mm-lj-scales | --no-learn-mm-lj-scales | --learn_mm_lj_scales | --no-learn_mm_lj_scales]
                           [--ema-decay EMA_DECAY] [--restart RESTART]
                           [--num-atoms NUM_ATOMS] [--features FEATURES]
                           [--max-degree MAX_DEGREE]
@@ -221,6 +222,12 @@ Other options:
   --mm-include-lj, --no-mm-include-lj, --mm_include_lj, --no-mm_include_lj
                         Include CGenFF LJ in hybrid E_MM (default: on for mic).
                         Forced off when --lr-solver nvalchemiops_pme or ewald.
+  --learn-mm-lj-scales, --no-learn-mm-lj-scales, --learn_mm_lj_scales, --no-learn_mm_lj_scales
+                        Learn per-CGenFF-type multiplicative scales on master σ
+                        and ε (separate arrays, init 1.0). Only affects mic
+                        hybrid E_MM LJ; ignored when LJ is forced off (ewald /
+                        nvalchemiops_pme). Scales are saved in hybrid_mm.json
+                        for MD ep_scale/sig_scale.
   --ema-decay, --ema_decay EMA_DECAY
                         Decay for the parameter EMA (default: 0.999).
                         Validation, checkpointing and restart all use the EMA
