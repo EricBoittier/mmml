@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from mmml.models.kernnn.checkpoint import load_checkpoint
+from mmml.models.kernnn.kernels import print_kernel_table
 from mmml.models.kernnn.model import energy_and_forces
 from mmml.utils.cli_args import exit_if_unknown_long_options
 
@@ -57,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="Optional data_split.json from training (overrides seed/ntrain/nvalid)",
+    )
+    p.add_argument(
+        "--list-kernels",
+        action="store_true",
+        help="Print the table of available 1D kernel functions and exit",
     )
     return p
 
@@ -218,6 +224,23 @@ def evaluate(args) -> dict:
 def main(args=None):
     if args is None:
         args = get_args()
+    if getattr(args, "list_kernels", False):
+        selected = None
+        try:
+            _, config, _, _ = load_checkpoint(args.checkpoint)
+            selected = config.kernel
+        except Exception:
+            pass
+        print_kernel_table(selected=selected)
+        return {"kernels": True}
+    # Show catalog + which kernel this checkpoint uses (when loadable)
+    selected = None
+    try:
+        _, config, _, _ = load_checkpoint(args.checkpoint)
+        selected = config.kernel
+    except Exception:
+        pass
+    print_kernel_table(selected=selected)
     return evaluate(args)
 
 

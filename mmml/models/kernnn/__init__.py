@@ -21,7 +21,7 @@ from mmml.models.kernnn.distances import (
     get_bond_length_acem,
     get_bond_length_form,
 )
-from mmml.models.kernnn.kernels import get_1d_kernels_k33
+from mmml.models.kernnn.kernels import get_1d_kernels_k33, print_kernel_table
 from mmml.models.kernnn.model import (
     DualFFNet,
     FFNet,
@@ -45,6 +45,7 @@ __all__ = [
     "energy_and_forces",
     "energy_from_params",
     "get_1d_kernels_k33",
+    "print_kernel_table",
     "get_bond_length_abcc",
     "get_bond_length_abcc_sym",
     "get_bond_length_acem",

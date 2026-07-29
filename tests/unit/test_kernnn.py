@@ -266,6 +266,18 @@ def test_form_acem_feature_counts():
     assert n_features_for_scheme("acem") == 36
 
 
+def test_print_kernel_table(capsys):
+    from mmml.models.kernnn.kernels import list_kernel_rows, print_kernel_table
+
+    rows = list_kernel_rows(selected="k33")
+    assert len(rows) == 14
+    assert any(r["name"] == "k33" and "selected" in r["note"] for r in rows)
+    print_kernel_table(selected="k33")
+    out = capsys.readouterr().out
+    assert "k33" in out
+    assert "k20" in out
+
+
 def test_cli_parsers():
     tp = build_train_parser()
     ep = build_eval_parser()
@@ -281,12 +293,15 @@ def test_cli_parsers():
             "0.5",
             "--teacher-checkpoint",
             "teacher.json",
+            "--list-kernels",
         ]
     )
     assert targs.distance_scheme == "acem"
     assert targs.distill_alpha == 0.5
-    eargs = ep.parse_args(["--split", "all"])
+    assert targs.list_kernels is True
+    eargs = ep.parse_args(["--split", "all", "--list-kernels"])
     assert eargs.split == "all"
+    assert eargs.list_kernels is True
 
 
 def test_dimer_scan_factory_requires_checkpoint():

@@ -25,7 +25,7 @@ from mmml.models.kernnn.distances import (
     n_atoms_for_scheme,
     n_features_for_scheme,
 )
-from mmml.models.kernnn.kernels import KERNEL_FNS
+from mmml.models.kernnn.kernels import KERNEL_FNS, print_kernel_table
 from mmml.models.kernnn.model import (
     KerNNConfig,
     KerNNStats,
@@ -90,7 +90,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Early-stop after this many non-improving validation epochs",
     )
     p.add_argument("--ema-decay", type=float, default=d["ema_decay"])
-    p.add_argument("--kernel", type=str, default=d["kernel"], help="1D kernel name (default k33)")
+    p.add_argument(
+        "--kernel",
+        type=str,
+        default=d["kernel"],
+        choices=sorted(KERNEL_FNS),
+        help="1D kernel name (default k33)",
+    )
+    p.add_argument(
+        "--list-kernels",
+        action="store_true",
+        help="Print the table of available 1D kernel functions and exit",
+    )
     p.add_argument(
         "--distance-scheme",
         type=str,
@@ -632,6 +643,10 @@ def train(args) -> Path:
 def main(args=None) -> Path | None:
     if args is None:
         args = get_args()
+    if getattr(args, "list_kernels", False):
+        print_kernel_table(selected=getattr(args, "kernel", None))
+        return Path(".")
+    print_kernel_table(selected=getattr(args, "kernel", None))
     return train(args)
 
 
