@@ -550,6 +550,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         # A CV difference (--cv-difference -> cv_x) removes the atom_i/atom_j
         # requirement. Otherwise allow name-only hybrid configs that still need
         # placeholder indices; failing that, the atoms are genuinely missing.
+        # Name-only hybrid configs still need placeholder indices.
         if not (data.get("atom_name_i") and data.get("atom_name_j")):
             missing.append("atoms (or --cv-difference)")
         else:

@@ -17,6 +17,7 @@ from __future__ import annotations
 from mmml.md.energy.terms.dihedral import DihedralRestraint, DihedralRestraintTerm
 from mmml.md.energy.terms.mbd import MBDDispersionTerm
 from mmml.md.energy.terms.ml_intra import MLIntramolecularTerm
+from mmml.md.energy.terms.ml_mm_elec import MLMMElectrostaticTerm
 from mmml.md.energy.terms.ml_pep_water import MLCoreGroupTerm
 from mmml.md.energy.terms.mm_bonded import MMBondedTerm
 from mmml.md.energy.terms.mm_nonbonded import MMNonbondedTerm
@@ -31,6 +32,7 @@ __all__ = [
     "DihedralRestraintTerm",
     "MBDDispersionTerm",
     "MLIntramolecularTerm",
+    "MLMMElectrostaticTerm",
     "MLCoreGroupTerm",
     "MMBondedTerm",
     "MMNonbondedTerm",
