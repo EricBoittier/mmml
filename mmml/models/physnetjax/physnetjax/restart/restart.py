@@ -373,11 +373,8 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
         step = 1
     best_loss = _safe_float(restored.get("best_loss"))
     print(f"Training resumed from step {step - 1}, best_loss {best_loss:.6f}")
-    if _is_params_json(Path(restart)):
-        # New Orbax epoch-* dirs go next to the JSON (same as training's ckpt_dir).
-        CKPT_DIR = Path(restart).parent.resolve()
-    else:
-        CKPT_DIR = Path(restart).parent.resolve()  # Orbax requires absolute paths
+    # New Orbax epoch-* dirs go next to the JSON / under the run root.
+    CKPT_DIR = Path(restart).parent.resolve()
     return (
         ema_params,
         model,

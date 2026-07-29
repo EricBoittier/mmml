@@ -51,6 +51,7 @@ def test_get_params_model_robustness(tmp_path: Path) -> None:
     }
     
     with patch("mmml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer") as mock_checkpointer:
+        mock_checkpointer.metadata.return_value = MagicMock(item_metadata=None)
         mock_checkpointer.restore.return_value = restored_mock
         
         # Test get_params_model
@@ -90,6 +91,7 @@ def test_get_params_model_prefers_ema_by_default(tmp_path: Path) -> None:
     with patch(
         "mmml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer"
     ) as mock_checkpointer:
+        mock_checkpointer.metadata.return_value = MagicMock(item_metadata=None)
         mock_checkpointer.restore.return_value = restored_mock
         params, _model = get_params_model(str(epoch_dir), natoms=20, quiet=True)
         assert params == {"weights": 9.0}
@@ -243,6 +245,7 @@ def test_restart_training_robustness(tmp_path: Path) -> None:
     mock_transform.init.return_value = "transform_state_dummy"
 
     with patch("mmml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer") as mock_checkpointer:
+        mock_checkpointer.metadata.return_value = MagicMock(item_metadata=None)
         mock_checkpointer.restore.return_value = restored_mock
         
         # Test restart_training (which searches the parent directory for epoch folders)
