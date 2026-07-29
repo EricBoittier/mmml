@@ -551,7 +551,11 @@ def run_packmol_solvation(
     inp = f"packmol/packmol-{solvent_tag}.inp"
     print(f"{packmol_bin} < {inp}")
     status = os.system(" ".join([packmol_bin, " < ", inp]))
-    exit_code = os.waitstatus_to_exitcode(status) if status else 0
+    # os.system returns an encoded wait status: 173 shows up as 44288 (173 << 8).
+    try:
+        exit_code = os.waitstatus_to_exitcode(status)
+    except ValueError:  # killed by a signal, or the shell could not exec
+        exit_code = status
     if exit_code != 0:
         from mmml.interfaces.pycharmmInterface.packmol_placement import (
             PACKMOL_EXIT_LABELS,
@@ -592,25 +596,42 @@ def run_packmol_solvation(
     return int(n_molecules)
 
 
-def run_packmol(n_molecules: int, side_length: float) -> None:
-    packmol_input = f"""
+def run_packmol(
+    n_molecules: int,
+    side_length: float,
+    tolerance: float = PACKMOL_TOLERANCE,
+    nloop: int = PACKMOL_NLOOP,
+    periodic: bool = True,
+) -> None:
+    """
+    Pack *n_molecules* copies of ``pdb/initial.pdb`` into a cubic cell.
 
+    ``periodic`` enables Packmol's ``pbc`` so the tolerance holds across the
+    cell faces: without it a box packed at bulk density is clash-free only
+    within the cell, and molecules straddling opposite faces land on top of
+    their own periodic images (contacts of ~0.2 Å, which blows up the CHARMM
+    energy at the first minimisation step).
+    """
+    pbc_line = (
+        f"pbc 0.0 0.0 0.0 {side_length} {side_length} {side_length}\n"
+        if periodic
+        else ""
+    )
+    randint = np.random.randint(1000000)
+    packmol_input = f"""seed {randint}
     output pdb/init-packmol.pdb
     filetype pdb
-    tolerance 2.0
-    structure pdb/initial.pdb 
+    tolerance {tolerance}
+    nloop {int(nloop)}
+    {pbc_line}structure pdb/initial.pdb
     number {n_molecules}
     resnumbers 2
     inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
     end structure
-    """
+"""
     os.makedirs("packmol", exist_ok=True)
-    randint = np.random.randint(1000000)
-    packmol_script = packmol_input.split("\n")
-    packmol_script[1] = f"seed {randint}"
-    packmol_script = "\n".join(packmol_script)
     with open("packmol/packmol.inp", "w") as f:
-        f.writelines(packmol_script)
+        f.write(packmol_input)
 
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
         packmol_executable,
@@ -619,14 +640,22 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
 
     packmol_bin = packmol_executable()
     print(f"{packmol_bin} < packmol/packmol.inp")
-    output = os.system(
-        " ".join(
-            [packmol_bin, " < ", "packmol/packmol.inp"]
+    status = os.system(" ".join([packmol_bin, " < ", "packmol/packmol.inp"]))
+    try:
+        exit_code = os.waitstatus_to_exitcode(status)
+    except ValueError:  # killed by a signal, or the shell could not exec
+        exit_code = status
+    if exit_code != 0:
+        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+            PACKMOL_EXIT_LABELS,
         )
-    )
-    print(output)
-    if output != 0:
-        raise RuntimeError(f"packmol failed with exit status {output}")
+
+        label = PACKMOL_EXIT_LABELS.get(exit_code, "unknown error")
+        raise RuntimeError(
+            f"packmol failed: exit {exit_code} ({label}); see packmol/packmol.inp. "
+            f"Packed {n_molecules} copies into a {side_length:.1f} Å cell at "
+            f"tolerance {tolerance} Å, nloop {int(nloop)}."
+        )
     rewrite_packmol_pdb_resnames(
         "pdb/init-packmol.pdb",
         [(Path("pdb/initial.pdb"), int(n_molecules))],
