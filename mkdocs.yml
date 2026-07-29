@@ -151,6 +151,7 @@ nav:
       - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
       - Trajectory free-energy surfaces: trajectory-free-energy-surfaces.md
+      - Batched umbrella sampling: umbrella.md
       - MD sweep plotting improvements: md-sweep-plotting-improvements.md
       - Plotting style guide: plotting-style-guide.md
       - Plot style gallery: plot-style-gallery.md
@@ -173,6 +174,7 @@ nav:
       - SciCORE cluster guide: scicore.md
       - Periodic boundaries (IMAGE super system): pbc-super-system.md
       - PyCHARMM C API (box and pressure): pycharmm-c-api-pbc-box-pressure.md
+      - CHARMM Fortran C API audit: charmm-fortran-api-audit.md
       - MPI operations: pycharmm-mpi.md
       - Threading & launchers: pycharmm-threading.md
       - FFTW for CHARMM: fftw-build.md
@@ -191,6 +193,7 @@ nav:
       - Contributor guide: development.md
       - Scientific code policy: scientific-code.md
       - 1D dimer scan design: dimer-scan-design.md
+      - Internal-coordinate scan design: ic-scan-design.md
       - Dimer tool inventory: dimer-tool-inventory.md
       - MPNN tool inventory: mpnn-tool-inventory.md
       - Releasing: releasing.md
