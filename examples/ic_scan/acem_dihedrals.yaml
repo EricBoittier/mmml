@@ -8,8 +8,10 @@
 #   python examples/ic_scan/structure_from_npz.py \
 #     --npz splits/acem/energies_forces_dipoles_train.npz \
 #     --out acem_from_npz.xyz
-# then point `structure:` at that file and keep the dihedral `atoms:` indices
-# consistent with that order (CGenFF order matches if Z = C,C,N,H,H,O,H,H,H).
+# NPZ ``Z`` is integer atomic numbers. CGenFF ACEM order is
+# ``[6, 6, 7, 1, 1, 8, 1, 1, 1]`` (CC,C,N,HC,HT,O,HC1,HC2,HC3). If your split
+# uses a different Z permutation, retarget ``structure:`` and the dihedral
+# ``atoms:`` indices below.
 #
 #   mmml ic-scan --config examples/ic_scan/acem_dihedrals.yaml \
 #     --output artifacts/ic_scan/acem_xtb --overwrite

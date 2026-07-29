@@ -43,10 +43,11 @@ def main(argv: list[str] | None = None) -> int:
     write(args.out, atoms)
     print(
         f"wrote {args.out}  frame={idx}  E={float(E[idx]):.6f}  "
-        f"Z={list(map(int, z0))}  symbols={symbols}"
+        f"Z={list(map(int, np.asarray(z0).reshape(-1)))}  symbols={symbols}"
     )
     print(
-        "If Z order is not CGenFF ACEM (C,C,N,H,H,O,H,H,H), update "
+        "CGenFF ACEM integer Z order is [6, 6, 7, 1, 1, 8, 1, 1, 1] "
+        "(CC,C,N,HC,HT,O,HC1,HC2,HC3). If your NPZ Z differs, update "
         "dihedral atom indices in the ic-scan YAML."
     )
     return 0
