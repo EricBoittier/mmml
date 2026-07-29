@@ -21,6 +21,16 @@ mmml build-crystal --literature benz --box-size 30 --write-charmm -o benz30.extx
 # also writes: benz30.pdb, benz30.psf, benz30.crd, benz30_box.json
 ```
 
+Then run PBC NVT (dense-liquid MC/prep is skipped when `*_box.json` has
+`source: build-crystal`):
+
+```bash
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --from-psf benz30.psf --from-crd benz30.crd --box-size 30 \
+  --temperature 300 --ps 0.1 --dt-fs 0.5 \
+  --output-dir artifacts/benz_nvt --skip-jit-warmup
+```
+
 `--box-size` tiles the supercell so each crystal edge ≥ L (Å) and sets the cubic
 CHARMM IMAGE side used by `prepare_charmm_pbc`. ASE/geometry keeps the true
 crystal cell (e.g. monoclinic benzene); only the CHARMM IMAGE is cubic.

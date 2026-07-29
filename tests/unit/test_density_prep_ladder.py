@@ -169,6 +169,43 @@ def test_condensed_phase_defaults_from_certified_box():
     assert int(args.pre_min_steps) >= 200
 
 
+def test_build_crystal_handoff_skips_liquid_prep_mc_density(
+    tmp_path: Path,
+) -> None:
+    """build-crystal PSF+box.json must not auto-enable liquid MC density equalize."""
+    import json
+
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_condensed_phase_md_defaults,
+        is_build_crystal_handoff,
+        liquid_prep_enabled,
+    )
+
+    psf = tmp_path / "benz30.psf"
+    psf.write_text("PSF\n", encoding="utf-8")
+    (tmp_path / "benz30_box.json").write_text(
+        json.dumps(
+            {
+                "source": "build-crystal",
+                "box_side_A": 49.0,
+                "final_cubic_side_A": 49.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = _args(
+        from_psf=str(psf),
+        from_crd=str(tmp_path / "benz30.crd"),
+        box_size=49.0,
+        liquid_prep=False,
+        mc_density_equalize=True,
+    )
+    assert is_build_crystal_handoff(args)
+    apply_condensed_phase_md_defaults(args)
+    assert liquid_prep_enabled(args) is False
+    assert args.mc_density_equalize is False
+
+
 def test_resolve_density_prep_lattice_steps_zero_stays_disabled():
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         resolve_density_prep_lattice_abnr_steps,
