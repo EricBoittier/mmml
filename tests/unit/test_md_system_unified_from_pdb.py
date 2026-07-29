@@ -114,6 +114,22 @@ def test_run_unified_jaxmd_routes_on_builder(monkeypatch) -> None:
         assert routed == [expected]
 
 
+def test_builder_stays_from_pdb_after_the_alias_sets_composition() -> None:
+    """``apply_from_pdb_alias`` sets composition=<pdb path>; that must not
+    re-route the run to the packmol composition builder."""
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        apply_from_pdb_alias,
+    )
+    from mmml.md.lowering import runconfig_from_md_system_args
+
+    args = _from_pdb_args()
+    args.from_psf = None
+    args.from_crd = None
+    apply_from_pdb_alias(args)
+    assert str(args.composition).endswith("model.pdb")
+    assert runconfig_from_md_system_args(args).system.builder == "from_pdb"
+
+
 def test_from_pdb_builder_reads_box_back_off_args() -> None:
     """The box is resolved during the load, so the pre-load spec cannot supply it."""
     import inspect

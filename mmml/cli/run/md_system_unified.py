@@ -260,6 +260,16 @@ def run_unified_jaxmd(args: Any) -> int:
     if not ensure_pycharmm_loaded():
         raise RuntimeError("PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so)")
 
+    if getattr(args, "from_pdb", None):
+        # Same normalisation the ase / staged cold-start paths apply: resolves the
+        # path and rejects --from-pdb mixed with --from-psf/--from-crd or with a
+        # Packmol composition. Must run before the spec is lowered.
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            apply_from_pdb_alias,
+        )
+
+        apply_from_pdb_alias(args)
+
     run_config = runconfig_from_md_system_args(args)
     if (run_config.system.builder or "").lower() == "from_pdb":
         system = build_from_pdb_system_with_ffparams(args, run_config.system)
