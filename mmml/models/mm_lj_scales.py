@@ -26,6 +26,7 @@ __all__ = [
     "cgenff_type_names_from_prm",
     "load_mm_lj_scales_sidecar",
     "mm_lj_scales_metadata",
+    "resolve_md_lj_scales",
     "scales_to_atc",
     "split_mm_lj_scale_params",
     "write_mm_lj_scales_into_hybrid_mm_json",
@@ -202,6 +203,73 @@ def load_mm_lj_scales_sidecar(path: str | Path) -> dict[str, Any] | None:
         "mm_lj_sigma_scale": np.asarray(sig, dtype=np.float64),
         "mm_lj_epsilon_scale": np.asarray(eps, dtype=np.float64),
     }
+
+
+def resolve_md_lj_scales(
+    *,
+    scales_file: str | Path | None = None,
+    checkpoint: str | Path | None = None,
+    atc_names: list[str] | tuple[str, ...] | None = None,
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """Resolve ``(ep_scale, sig_scale)`` for CHARMM ATC from a hybrid_mm sidecar.
+
+    Search order for the JSON:
+
+    1. Explicit ``scales_file``
+    2. ``<checkpoint>/hybrid_mm.json`` when ``checkpoint`` is a directory
+    3. ``<checkpoint.parent>/hybrid_mm.json`` when ``checkpoint`` is a file
+
+    Returns ``(None, None)`` when no learnable scales are present.
+    """
+    candidates: list[Path] = []
+    if scales_file is not None:
+        candidates.append(Path(scales_file).expanduser())
+    if checkpoint is not None:
+        ckpt = Path(checkpoint).expanduser()
+        if ckpt.is_dir():
+            candidates.append(ckpt / "hybrid_mm.json")
+        else:
+            candidates.append(ckpt.parent / "hybrid_mm.json")
+            # Orbax epoch dirs live under the run root that owns hybrid_mm.json.
+            if ckpt.parent.parent != ckpt.parent:
+                candidates.append(ckpt.parent.parent / "hybrid_mm.json")
+
+    payload = None
+    last_err: Exception | None = None
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            payload = load_mm_lj_scales_sidecar(path)
+        except Exception as exc:  # pragma: no cover - defensive
+            last_err = exc
+            continue
+        if payload is not None:
+            break
+    if payload is None:
+        if last_err is not None and scales_file is not None:
+            raise last_err
+        return None, None
+
+    names = list(atc_names) if atc_names is not None else None
+    if names is None:
+        try:
+            import pycharmm.param as param
+
+            names = [str(x) for x in param.get_atc()]
+        except Exception as exc:
+            raise RuntimeError(
+                "MM LJ scales require CHARMM ATC names (param.get_atc); "
+                "load CGenFF toppar before resolving scales"
+            ) from exc
+
+    ep_scale, sig_scale = scales_to_atc(
+        payload["cgenff_type_names"],
+        payload["mm_lj_sigma_scale"],
+        payload["mm_lj_epsilon_scale"],
+        names,
+    )
+    return ep_scale, sig_scale
 
 
 def write_mm_lj_scales_into_hybrid_mm_json(

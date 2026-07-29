@@ -547,6 +547,12 @@ def train_model(
             apply_fn=model.apply, params=params, tx=optimizer
         )
 
+    if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+        print(
+            f"Learnable MM LJ scales enabled ({len(hybrid_mm.master_sigmas)} CGenFF types)",
+            flush=True,
+        )
+
     if best_loss is None or restart:
         best_loss = float('inf')
 

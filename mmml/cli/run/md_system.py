@@ -1611,6 +1611,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--mm-lj-scales-file",
+        "--mm_lj_scales_file",
+        type=str,
+        default=None,
+        dest="mm_lj_scales_file",
+        help=(
+            "Path to hybrid_mm.json with learnable per-type MM LJ σ/ε scales. "
+            "When omitted, MLpot looks next to --checkpoint for hybrid_mm.json."
+        ),
+    )
+    parser.add_argument(
         "--jax-mm-spoof",
         action="store_true",
         help=(
@@ -3139,6 +3150,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         "--mm-latent-charge-template",
         getattr(args, "mm_latent_charge_template", None),
     )
+    _append_optional(
+        cmd,
+        "--mm-lj-scales-file",
+        getattr(args, "mm_lj_scales_file", None),
+    )
     if not bool(getattr(args, "include_mm", True)):
         cmd.append("--no-include-mm")
     if bool(getattr(args, "jax_mm_spoof", False)):
@@ -3587,6 +3603,9 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         cmd.append("--mm-charge-correction")
     _append_optional(
         cmd, "--mm-latent-charge-template", getattr(args, "mm_latent_charge_template", None)
+    )
+    _append_optional(
+        cmd, "--mm-lj-scales-file", getattr(args, "mm_lj_scales_file", None)
     )
 
     if args.composition:

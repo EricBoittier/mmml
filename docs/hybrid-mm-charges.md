@@ -42,8 +42,11 @@ switched dimer interaction ≈ E¹).  MM charges follow the same language:
 | PhysNet charge head → model Coulomb / dipoles | `--charges`, `include_electrostatics` | Inside **`E_ML`** (fragments A, B, AB) |
 | MM electrostatic charges | `mm_charge_mode` / `--mm-charge-correction` | Intermolecular **`E_MM`** Coulomb only |
 
-`--charges` alone does **not** put the head into `E_MM`.  LJ always uses
-fixed CGenFF ε / Rmin.
+|--charges` alone does **not** put the head into `E_MM`.  By default LJ uses
+fixed CGenFF ε / Rmin.  With ``--learn-mm-lj-scales`` (MIC only), hybrid
+training learns **per-type** multiplicative scales on master σ and ε; MD loads
+them from ``hybrid_mm.json`` (or ``--mm-lj-scales-file``) into
+``ep_scale`` / ``sig_scale``.
 
 If `include_electrostatics=True` (PhysNet default) **and** hybrid `E_MM` is
 on, short-range intermolecular electrostatics can appear in both `E_ML` and

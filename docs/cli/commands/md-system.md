@@ -1216,6 +1216,10 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         callback idxu/idxv or JAX neighbor rebuild. All-ML
                         jax_mic hybrids (empty CHARMM lists) default to jax;
                         override with MMML_MM_PAIR_SOURCE.
+  --mm-lj-scales-file, --mm_lj_scales_file MM_LJ_SCALES_FILE
+                        Path to hybrid_mm.json with learnable per-type MM LJ σ/ε
+                        scales. When omitted, MLpot looks next to --checkpoint
+                        for hybrid_mm.json.
 ```
 
 

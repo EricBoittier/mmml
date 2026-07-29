@@ -1421,6 +1421,28 @@ def build_decomposed_mlpot_model(
     # "CPU backend is not registered" whenever jax had already initialized
     # CUDA-only — while PhysNet still belonged on GPU.
     _cpu_load = defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
+    ep_scale = None
+    sig_scale = None
+    if args is not None and do_mm:
+        from mmml.models.mm_lj_scales import resolve_md_lj_scales
+
+        scales_file = getattr(args, "mm_lj_scales_file", None)
+        try:
+            ep_scale, sig_scale = resolve_md_lj_scales(
+                scales_file=scales_file,
+                checkpoint=None if _spoof else ckpt,
+            )
+        except Exception as exc:
+            if scales_file is not None:
+                raise
+            if verbose:
+                print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
+        if verbose and ep_scale is not None:
+            print(
+                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+                f"from hybrid_mm.json / --mm-lj-scales-file",
+                flush=True,
+            )
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -1429,6 +1451,8 @@ def build_decomposed_mlpot_model(
         doML=do_ml,
         doML_dimer=do_ml_dimer,
         verbose=verbose,
+        ep_scale=ep_scale,
+        sig_scale=sig_scale,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
         ml_gpu_count=gpu_count,

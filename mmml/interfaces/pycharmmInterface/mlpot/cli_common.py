@@ -4678,6 +4678,18 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--mm-lj-scales-file",
+        "--mm_lj_scales_file",
+        type=str,
+        default=None,
+        dest="mm_lj_scales_file",
+        help=(
+            "Path to hybrid_mm.json (or scales sidecar) with learn_mm_lj_scales "
+            "and per-type mm_lj_sigma_scale / mm_lj_epsilon_scale. When omitted, "
+            "MLpot looks for hybrid_mm.json next to --checkpoint."
+        ),
+    )
+    group.add_argument(
         "--jax-mm-spoof",
         action="store_true",
         help=(

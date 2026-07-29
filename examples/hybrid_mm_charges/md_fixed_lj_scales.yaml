@@ -1,0 +1,34 @@
+# Mode A MD with trained per-type LJ scales from hybrid_mm.json
+#
+#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml --run-all
+#
+# Point checkpoint at the Mode A + learn_mm_lj_scales train run. MLpot auto-loads
+# hybrid_mm.json next to the checkpoint; override with mm_lj_scales_file if needed.
+
+defaults:
+  composition: "DCM:2"
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/params.json
+  # mm_lj_scales_file: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/hybrid_mm.json
+  spacing: 5.0
+  packmol_radius: 6.9
+  packmol_tolerance: 2.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+
+  skip_jit_warmup: true
+  quiet: true
+
+campaign_output: results/hybrid_mm_fixed_lj_scales
+runs:
+  dimer_nve:
+    description: Vacuum NVE — Mode A + trained LJ scales
+    backend: pycharmm
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_mm_fixed_lj_scales/dimer_nve
