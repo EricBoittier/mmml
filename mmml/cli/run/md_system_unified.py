@@ -11,7 +11,7 @@ Deliberately NOT yet supported (raise clearly rather than silently diverge
 from the legacy backend):
 
 - ``--builder pyxtal`` / ``--template-pdb`` (only the packmol composition
-  builder is wired here).
+  builder and ``--from-pdb`` full-system loading are wired here).
 - Campaign/handoff continuation (``--continue-from``), lambda-TI.
 
 See ``docs/md-cg-unification-design.md`` (§0, §9, §11) and
@@ -30,6 +30,7 @@ import numpy as np
 __all__ = [
     "check_md_system_args_supported",
     "build_packmol_system_with_ffparams",
+    "build_from_pdb_system_with_ffparams",
     "build_energy_context",
     "run_unified_jaxmd",
 ]
