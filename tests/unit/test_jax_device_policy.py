@@ -211,3 +211,49 @@ def test_mlpot_jax_compilation_cache_respects_override(monkeypatch, tmp_path):
 
     cache = jax_device_policy.apply_mlpot_jax_compilation_cache_env(quiet=True)
     assert cache == override
+
+
+def test_apply_mlpot_drops_stale_rocm_platforms(monkeypatch):
+    """Studix GPU nodes inherit JAX_PLATFORMS=rocm; strip it before import jax."""
+    import sys
+
+    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.setenv("JAX_PLATFORMS", "rocm")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    saved = sys.modules.pop("jax", None)
+    try:
+        with mock.patch(
+            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            return_value=["jax-cuda12-plugin"],
+        ):
+            assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
+        # rocm removed → policy default gpu,cpu (via empty → wanted).
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "gpu,cpu"
+    finally:
+        os = __import__("os")
+        os.environ["JAX_PLATFORMS"] = "cpu"
+        if saved is not None:
+            sys.modules["jax"] = saved
+
+
+def test_apply_mlpot_strips_rocm_from_mixed_list(monkeypatch):
+    import sys
+
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("JAX_PLATFORMS", "cuda,rocm")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    saved = sys.modules.pop("jax", None)
+    try:
+        with mock.patch(
+            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            return_value=["jax-cuda12-plugin"],
+        ):
+            jax_device_policy.apply_mlpot_jax_platform_env(quiet=True)
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "cuda,cpu"
+    finally:
+        os = __import__("os")
+        os.environ["JAX_PLATFORMS"] = "cpu"
+        if saved is not None:
+            sys.modules["jax"] = saved

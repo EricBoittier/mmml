@@ -76,11 +76,21 @@ def _setup_env(repo: Path, cfg: dict[str, Any]) -> Path:
         or os.environ.get("CUDA_VISIBLE_DEVICES")
         or str((cfg.get("slurm") or {}).get("partition", "")).lower() == "gpu"
     ):
-        os.environ.setdefault("JAX_PLATFORMS", "cuda")
+        # Snakemake profile often exports JAX_PLATFORMS="" (empty but set);
+        # setdefault then never applies cuda. Stale rocm also breaks jax_md.
+        plat = (os.environ.get("JAX_PLATFORMS") or "").strip()
+        parts = [p.strip() for p in plat.split(",") if p.strip()]
+        cleaned = [p for p in parts if p.lower() != "rocm"]
+        if not cleaned:
+            os.environ["JAX_PLATFORMS"] = "cuda"
+        elif cleaned != parts:
+            os.environ["JAX_PLATFORMS"] = ",".join(cleaned)
         os.environ.setdefault("MMML_MLPOT_DEVICE", "gpu")
         os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "gpu")
     else:
-        os.environ.setdefault("JAX_PLATFORMS", os.environ.get("JAX_PLATFORMS", "cpu"))
+        plat = (os.environ.get("JAX_PLATFORMS") or "").strip()
+        if not plat:
+            os.environ["JAX_PLATFORMS"] = "cpu"
         os.environ.setdefault("MMML_MLPOT_DEVICE", os.environ.get("MMML_MLPOT_DEVICE", "cpu"))
     os.environ["MMML_CKPT"] = str(ckpt)
     os.environ.setdefault("MMML_DATA", str((example / "nh3_ch3cl_filtered.npz").resolve()))

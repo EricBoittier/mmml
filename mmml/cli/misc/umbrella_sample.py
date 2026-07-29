@@ -501,6 +501,16 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Before any transitive ``import jax`` / ``jax_md`` (hybrid path).
+    try:
+        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+            apply_mlpot_jax_platform_env,
+        )
+
+        apply_mlpot_jax_platform_env(quiet=True)
+    except Exception:
+        pass
+
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

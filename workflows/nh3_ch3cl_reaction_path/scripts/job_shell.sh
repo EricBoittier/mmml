@@ -15,6 +15,28 @@ PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
+# Studix GPU partition is NVIDIA. Empty JAX_PLATFORMS (snakemake envvars) or a
+# stale rocm value makes ``import jax_md`` fail before umbrella/hybrid can run.
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+  _part="${SLURM_JOB_PARTITION:-${SLURM_PARTITION:-}}"
+  if [[ -n "${SLURM_JOB_GPUS:-}${CUDA_VISIBLE_DEVICES:-}" || "${_part}" == *gpu* ]]; then
+    case "${JAX_PLATFORMS:-}" in
+      ""|rocm|ROCM) export JAX_PLATFORMS=cuda ;;
+      *)
+        if [[ "${JAX_PLATFORMS}" == *[Rr][Oo][Cc][Mm]* ]]; then
+          export JAX_PLATFORMS="$(
+            printf '%s' "${JAX_PLATFORMS}" \
+              | sed -E 's/(^|,)[Rr][Oo][Cc][Mm](,|$)/\1\2/g; s/,,/,/g; s/^,//; s/,$//'
+          )"
+          [[ -z "${JAX_PLATFORMS}" ]] && export JAX_PLATFORMS=cuda
+        fi
+        ;;
+    esac
+    export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-gpu}"
+    export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-gpu}"
+  fi
+fi
+
 _cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG="$_cfg_raw"
@@ -62,6 +84,7 @@ echo "REPO_ROOT=${REPO_ROOT}" >&2
 echo "PY=${PY}" >&2
 echo "MMML_CKPT=${MMML_CKPT:-<unset>}" >&2
 echo "CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-<unset>}" >&2
+echo "JAX_PLATFORMS=${JAX_PLATFORMS:-<unset>}" >&2
 echo "MMML_WORKFLOW_CONFIG=${MMML_WORKFLOW_CONFIG}" >&2
 echo "argv: $*" >&2
 

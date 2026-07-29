@@ -120,6 +120,24 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
     device = mlpot_jax_device_name()
     wanted = mlpot_jax_platforms_for_device(device)
     existing = (os.environ.get("JAX_PLATFORMS") or "").strip()
+    # Stale JAX_PLATFORMS=rocm (common on mixed AMD/NVIDIA clusters) makes
+    # ``import jax_md`` abort even when CUDA is available. Drop ROCm tokens.
+    if existing:
+        parts = [p.strip() for p in existing.split(",") if p.strip()]
+        cleaned = [p for p in parts if p.lower() != "rocm"]
+        if cleaned != parts:
+            if cleaned:
+                os.environ["JAX_PLATFORMS"] = ",".join(cleaned)
+                existing = os.environ["JAX_PLATFORMS"]
+            else:
+                os.environ.pop("JAX_PLATFORMS", None)
+                existing = ""
+            if not quiet and not _truthy("MMML_QUIET"):
+                print(
+                    "mmml: dropped unusable 'rocm' from JAX_PLATFORMS "
+                    f"(now {(existing or '(auto / policy default)')!r})",
+                    flush=True,
+                )
     if not existing:
         os.environ["JAX_PLATFORMS"] = wanted
     elif device == "gpu" and wanted != "cpu":
