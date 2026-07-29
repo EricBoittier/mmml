@@ -94,7 +94,8 @@ if packed.is_file():
     seen = set()
     for line in packed.read_text(encoding="utf-8", errors="replace").splitlines():
         if line.startswith(("ATOM", "HETATM")) and line[17:21].strip() == solvent:
-            seen.add(line[21:27])
+            # PDB cols 23-26 (0-index 22:26) = residue sequence number
+            seen.add(line[22:26])
     if seen:
         n_solvent = len(seen)
 (out / "box.json").write_text(

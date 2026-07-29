@@ -161,11 +161,21 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
     dt_fs = float(getattr(args, "dt_fs", 1.0))
     ps = float(getattr(args, "ps", 0.0))
 
+    # ``--from-pdb`` loads a prebuilt full-system PDB (e.g. a make-box solvated
+    # cell) and needs no composition; without this it fell through to the
+    # packmol composition builder and failed on the missing composition.
+    from_pdb = getattr(args, "from_pdb", None)
+    builder = getattr(args, "builder", None)
+    if not builder:
+        builder = "from_pdb" if from_pdb else "packmol"
     system = SystemSpec(
-        builder=getattr(args, "builder", None) or "packmol",
+        builder=builder,
         composition=getattr(args, "composition", None),
         n_molecules=getattr(args, "n_molecules", None),
         box_size=getattr(args, "box_size", None),
+        # Full-system PDB for the ``from_pdb`` builder. Distinct from the
+        # ``--template-pdb`` monomer-template flag, which this path rejects.
+        template_pdb=Path(from_pdb) if from_pdb else None,
         seed=int(getattr(args, "seed", 0)),
     )
     schedule_text = getattr(args, "temperature_schedule", None)
