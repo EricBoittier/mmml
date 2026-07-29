@@ -233,10 +233,11 @@ def is_build_crystal_handoff(args: argparse.Namespace) -> bool:
 
 def condensed_phase_md_prep_recommended(args: argparse.Namespace) -> bool:
     """True when md-system should use dense-liquid prep defaults without Packmol."""
-    if is_build_crystal_handoff(args):
-        return False
+    # Explicit --liquid-prep / resilient always wins, including build-crystal handoffs.
     if liquid_prep_enabled(args):
         return True
+    if is_build_crystal_handoff(args):
+        return False
     if getattr(args, "from_psf", None) or getattr(args, "skip_cluster_build", False):
         return True
     n_mol = _composition_monomer_count(args)
@@ -278,14 +279,13 @@ def resolve_density_prep_lattice_abnr_steps(args: argparse.Namespace) -> int:
 
 def apply_condensed_phase_md_defaults(args: argparse.Namespace) -> None:
     """Apply resilient liquid prep defaults for certified-box / large-cluster md-system runs."""
-    if is_build_crystal_handoff(args):
-        # Literature / PyXtal crystal exports: keep packing; disable liquid MC density
-        # unless the user explicitly requested --liquid-prep / resilient mode.
-        if not liquid_prep_enabled(args):
-            args.mc_density_equalize = False
-            if getattr(args, "density_prep_ladder", None) is None:
-                args.density_prep_ladder = False
-            return
+    if is_build_crystal_handoff(args) and not liquid_prep_enabled(args):
+        # Literature / PyXtal crystal exports: keep packing; disable liquid MC density.
+        # Explicit --liquid-prep / --density-prep-mode resilient falls through below.
+        args.mc_density_equalize = False
+        if getattr(args, "density_prep_ladder", None) is None:
+            args.density_prep_ladder = False
+        return
     if not condensed_phase_md_prep_recommended(args):
         return
     if not liquid_prep_enabled(args):

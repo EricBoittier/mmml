@@ -169,17 +169,8 @@ def test_condensed_phase_defaults_from_certified_box():
     assert int(args.pre_min_steps) >= 200
 
 
-def test_build_crystal_handoff_skips_liquid_prep_mc_density(
-    tmp_path: Path,
-) -> None:
-    """build-crystal PSF+box.json must not auto-enable liquid MC density equalize."""
+def _write_build_crystal_handoff(tmp_path: Path) -> Path:
     import json
-
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
-        apply_condensed_phase_md_defaults,
-        is_build_crystal_handoff,
-        liquid_prep_enabled,
-    )
 
     psf = tmp_path / "benz30.psf"
     psf.write_text("PSF\n", encoding="utf-8")
@@ -193,6 +184,20 @@ def test_build_crystal_handoff_skips_liquid_prep_mc_density(
         ),
         encoding="utf-8",
     )
+    return psf
+
+
+def test_build_crystal_handoff_skips_liquid_prep_mc_density(
+    tmp_path: Path,
+) -> None:
+    """build-crystal PSF+box.json must not auto-enable liquid MC density equalize."""
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_condensed_phase_md_defaults,
+        is_build_crystal_handoff,
+        liquid_prep_enabled,
+    )
+
+    psf = _write_build_crystal_handoff(tmp_path)
     args = _args(
         from_psf=str(psf),
         from_crd=str(tmp_path / "benz30.crd"),
@@ -204,6 +209,51 @@ def test_build_crystal_handoff_skips_liquid_prep_mc_density(
     apply_condensed_phase_md_defaults(args)
     assert liquid_prep_enabled(args) is False
     assert args.mc_density_equalize is False
+
+
+def test_build_crystal_handoff_honors_explicit_liquid_prep(
+    tmp_path: Path,
+) -> None:
+    """Explicit --liquid-prep on a crystal handoff must still apply resilient defaults."""
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_condensed_phase_md_defaults,
+        density_prep_ladder_enabled,
+        liquid_prep_enabled,
+    )
+
+    psf = _write_build_crystal_handoff(tmp_path)
+    args = _args(
+        from_psf=str(psf),
+        from_crd=str(tmp_path / "benz30.crd"),
+        box_size=49.0,
+        liquid_prep=True,
+        mc_density_equalize=False,
+        density_prep_ladder=None,
+    )
+    apply_condensed_phase_md_defaults(args)
+    assert liquid_prep_enabled(args) is True
+    assert density_prep_ladder_enabled(args) is True
+    assert args.mc_density_equalize is True
+    assert int(args.charmm_sd_steps) >= 1000
+
+
+def test_build_crystal_handoff_honors_resilient_density_prep_mode(
+    tmp_path: Path,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_condensed_phase_md_defaults,
+        liquid_prep_enabled,
+    )
+
+    psf = _write_build_crystal_handoff(tmp_path)
+    args = _args(
+        from_psf=str(psf),
+        density_prep_mode="resilient",
+        liquid_prep=False,
+    )
+    apply_condensed_phase_md_defaults(args)
+    assert liquid_prep_enabled(args) is True
+    assert args.mc_density_equalize is True
 
 
 def test_resolve_density_prep_lattice_steps_zero_stays_disabled():
