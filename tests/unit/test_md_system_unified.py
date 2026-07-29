@@ -51,7 +51,8 @@ def test_check_supported_accepts_default():
 
 
 def test_check_supported_rejects_pyxtal_builder():
-    with pytest.raises(NotImplementedError, match="packmol composition builder"):
+    # from_pdb joined packmol as a supported builder; pyxtal is still rejected.
+    with pytest.raises(NotImplementedError, match="pyxtal"):
         check_md_system_args_supported(_args(builder="pyxtal"))
 
 
