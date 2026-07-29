@@ -26,6 +26,9 @@ usage: mmml kernnn-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                          [--architecture {ffnet,dual}]
                          [--teacher-checkpoint TEACHER_CHECKPOINT]
                          [--distill-alpha DISTILL_ALPHA]
+                         [--teacher-energy-offset TEACHER_ENERGY_OFFSET]
+                         [--no-align-teacher-energy]
+                         [--teacher-align-n TEACHER_ALIGN_N]
 
 Train KerNN (kernel Softplus MLP) on NPZ (R, E, F)
 
@@ -39,6 +42,12 @@ Scientific model:
   --distance-scheme {abcc,abcc_sym,acem,form}
                         Distance descriptor: abcc, abcc_sym, form (6 atoms),
                         acem (9 atoms)
+  --teacher-energy-offset TEACHER_ENERGY_OFFSET
+                        Add this constant (eV) to teacher energies before
+                        distill loss (overrides auto-align). Use when PhysNet
+                        atom refs shift the zero.
+  --no-align-teacher-energy
+                        Do not auto-fit an additive teacher energy offset vs GT
 
 Execution:
   --seed SEED           RNG seed for split/init
@@ -74,6 +83,9 @@ Other options:
   --distill-alpha DISTILL_ALPHA
                         Blend GT vs teacher: loss = alpha*GT + (1-alpha)*teacher
                         (1=pure GT)
+  --teacher-align-n TEACHER_ALIGN_N
+                        Number of train structures used to estimate teacher
+                        energy offset
 ```
 
 

@@ -75,6 +75,56 @@ def apply_mlpot_jax_compilation_cache_env(*, quiet: bool = False) -> Path | None
     return cache_dir
 
 
+def sanitize_stale_jax_platforms_env(*, prefer_cuda: bool | None = None) -> str | None:
+    """Drop unusable ``rocm`` tokens from ``JAX_PLATFORMS`` (NVIDIA studix nodes).
+
+    Mixed AMD/NVIDIA clusters often export ``JAX_PLATFORMS=rocm`` into every
+    shell. JAX builds with only ``cuda`` then abort on the first ``import jax``
+    / ``jax_md`` with ``Backend 'rocm' is not in the list of known backends``.
+
+    Parameters
+    ----------
+    prefer_cuda
+        When True and stripping leaves the list empty, set ``cuda``.
+        When False, leave unset (JAX auto-selects). When None (default), set
+        ``cuda`` if a GPU allocation is visible (``CUDA_VISIBLE_DEVICES``,
+        ``SLURM_JOB_GPUS``, or a GPU Slurm partition), otherwise leave unset.
+
+    Returns
+    -------
+    The resulting ``JAX_PLATFORMS`` value, or ``None`` if unset.
+    """
+    # Deprecated alias still seen in old profiles.
+    legacy = (os.environ.get("JAX_PLATFORM_NAME") or "").strip().lower()
+    if legacy == "rocm":
+        os.environ.pop("JAX_PLATFORM_NAME", None)
+
+    existing = (os.environ.get("JAX_PLATFORMS") or "").strip()
+    if not existing:
+        return None
+
+    parts = [p.strip() for p in existing.split(",") if p.strip()]
+    cleaned = [p for p in parts if p.lower() != "rocm"]
+    if cleaned == parts:
+        return existing
+
+    if cleaned:
+        os.environ["JAX_PLATFORMS"] = ",".join(cleaned)
+        return os.environ["JAX_PLATFORMS"]
+
+    os.environ.pop("JAX_PLATFORMS", None)
+    if prefer_cuda is None:
+        prefer_cuda = bool(
+            (os.environ.get("CUDA_VISIBLE_DEVICES") or "").strip()
+            or (os.environ.get("SLURM_JOB_GPUS") or "").strip()
+            or "gpu" in str(os.environ.get("SLURM_JOB_PARTITION", "")).lower()
+        )
+    if prefer_cuda:
+        os.environ["JAX_PLATFORMS"] = "cuda"
+        return "cuda"
+    return None
+
+
 def mlpot_jax_platforms_for_device(device: str) -> str:
     """``JAX_PLATFORMS`` value for ``cpu`` / ``gpu`` MLpot device selection.
 
@@ -82,6 +132,9 @@ def mlpot_jax_platforms_for_device(device: str) -> str:
     jax-pme host paths, and GPU→CPU fallback all call ``jax.devices("cpu")``.
     With ``JAX_PLATFORMS=gpu`` alone, JAX reports only ``['cuda']`` and those
     calls raise ``Unknown backend cpu``.
+
+    Prefer the explicit ``cuda`` token over the alias ``gpu`` so a stale ROCm
+    install cannot be selected on NVIDIA nodes.
 
     When no ``jax-cuda*-plugin`` is installed, return ``cpu`` even if GPU was
     requested so CPU-only envs do not hard-fail on a missing CUDA backend.
@@ -96,8 +149,8 @@ def mlpot_jax_platforms_for_device(device: str) -> str:
             return "cpu"
     except Exception:
         return "cpu"
-    # GPU first so it remains the default device; CPU stays available.
-    return "gpu,cpu"
+    # CUDA first so it remains the default device; CPU stays available.
+    return "cuda,cpu"
 
 
 def _expand_gpu_platforms_to_include_cpu(existing: str) -> str | None:
@@ -119,25 +172,8 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
     apply_jax_compile_xla_flags(quiet=quiet)
     device = mlpot_jax_device_name()
     wanted = mlpot_jax_platforms_for_device(device)
+    sanitize_stale_jax_platforms_env(prefer_cuda=(device == "gpu" and wanted != "cpu"))
     existing = (os.environ.get("JAX_PLATFORMS") or "").strip()
-    # Stale JAX_PLATFORMS=rocm (common on mixed AMD/NVIDIA clusters) makes
-    # ``import jax_md`` abort even when CUDA is available. Drop ROCm tokens.
-    if existing:
-        parts = [p.strip() for p in existing.split(",") if p.strip()]
-        cleaned = [p for p in parts if p.lower() != "rocm"]
-        if cleaned != parts:
-            if cleaned:
-                os.environ["JAX_PLATFORMS"] = ",".join(cleaned)
-                existing = os.environ["JAX_PLATFORMS"]
-            else:
-                os.environ.pop("JAX_PLATFORMS", None)
-                existing = ""
-            if not quiet and not _truthy("MMML_QUIET"):
-                print(
-                    "mmml: dropped unusable 'rocm' from JAX_PLATFORMS "
-                    f"(now {(existing or '(auto / policy default)')!r})",
-                    flush=True,
-                )
     if not existing:
         os.environ["JAX_PLATFORMS"] = wanted
     elif device == "gpu" and wanted != "cpu":

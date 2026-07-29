@@ -22,7 +22,7 @@ def test_mlpot_defaults_to_gpu_for_mpi_charmm(monkeypatch):
         assert jax_device_policy.mlpot_jax_device_name() == "gpu"
         assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
         # GPU primary + CPU kept for defer/fallback (Unknown backend cpu).
-        assert __import__("os").environ.get("JAX_PLATFORMS") == "gpu,cpu"
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "cuda,cpu"
 
 
 def test_mlpot_cpu_override(monkeypatch):
@@ -43,7 +43,7 @@ def test_mlpot_jax_platforms_helpers():
         "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
         return_value=["jax-cuda12-plugin"],
     ):
-        assert jax_device_policy.mlpot_jax_platforms_for_device("gpu") == "gpu,cpu"
+        assert jax_device_policy.mlpot_jax_platforms_for_device("gpu") == "cuda,cpu"
     with mock.patch(
         "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
         return_value=[],
@@ -213,6 +213,23 @@ def test_mlpot_jax_compilation_cache_respects_override(monkeypatch, tmp_path):
     assert cache == override
 
 
+def test_sanitize_stale_jax_platforms_env(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    monkeypatch.setenv("JAX_PLATFORMS", "rocm")
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    monkeypatch.delenv("SLURM_JOB_GPUS", raising=False)
+    monkeypatch.delenv("SLURM_JOB_PARTITION", raising=False)
+    assert jax_device_policy.sanitize_stale_jax_platforms_env(prefer_cuda=False) is None
+    assert "JAX_PLATFORMS" not in __import__("os").environ
+
+    monkeypatch.setenv("JAX_PLATFORMS", "rocm")
+    assert jax_device_policy.sanitize_stale_jax_platforms_env(prefer_cuda=True) == "cuda"
+
+    monkeypatch.setenv("JAX_PLATFORMS", "cuda,rocm")
+    assert jax_device_policy.sanitize_stale_jax_platforms_env() == "cuda"
+
+
 def test_apply_mlpot_drops_stale_rocm_platforms(monkeypatch):
     """Studix GPU nodes inherit JAX_PLATFORMS=rocm; strip it before import jax."""
     import sys
@@ -228,8 +245,8 @@ def test_apply_mlpot_drops_stale_rocm_platforms(monkeypatch):
             return_value=["jax-cuda12-plugin"],
         ):
             assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
-        # rocm removed → policy default gpu,cpu (via empty → wanted).
-        assert __import__("os").environ.get("JAX_PLATFORMS") == "gpu,cpu"
+        # rocm removed → policy default cuda,cpu (via empty → wanted).
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "cuda,cpu"
     finally:
         os = __import__("os")
         os.environ["JAX_PLATFORMS"] = "cpu"

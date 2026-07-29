@@ -505,11 +505,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         from mmml.interfaces.pycharmmInterface.jax_device_policy import (
             apply_mlpot_jax_platform_env,
+            sanitize_stale_jax_platforms_env,
         )
 
+        sanitize_stale_jax_platforms_env()
         apply_mlpot_jax_platform_env(quiet=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        import sys
+
+        print(
+            f"mmml umbrella-sample: JAX platform setup warning: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
 
     parser = build_parser()
     args = parser.parse_args(argv)

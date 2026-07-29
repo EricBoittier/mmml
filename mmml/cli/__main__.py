@@ -8,7 +8,8 @@ Provides a unified interface for all MMML command-line tools.
 import os
 import sys
 
-# Must run before any transitive ``import jax`` (umbrella → jax_md → jax).
+# Must run before any ``import mmml.*`` / ``import jax`` (umbrella → jax_md).
+# Do not import mmml here: package init pulls PhysNet and can init JAX too early.
 # Stale JAX_PLATFORMS=rocm on NVIDIA nodes aborts backend init.
 _plat = (os.environ.get("JAX_PLATFORMS") or "").strip()
 if _plat:
@@ -18,7 +19,16 @@ if _plat:
         if _clean:
             os.environ["JAX_PLATFORMS"] = ",".join(_clean)
         else:
+            # Prefer CUDA when a GPU allocation is visible; else leave unset (auto).
             os.environ.pop("JAX_PLATFORMS", None)
+            if (
+                (os.environ.get("CUDA_VISIBLE_DEVICES") or "").strip()
+                or (os.environ.get("SLURM_JOB_GPUS") or "").strip()
+                or "gpu" in str(os.environ.get("SLURM_JOB_PARTITION", "")).lower()
+            ):
+                os.environ["JAX_PLATFORMS"] = "cuda"
+if (os.environ.get("JAX_PLATFORM_NAME") or "").strip().lower() == "rocm":
+    os.environ.pop("JAX_PLATFORM_NAME", None)
 
 import argparse
 
