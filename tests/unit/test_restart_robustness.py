@@ -100,6 +100,119 @@ def test_get_params_model_prefers_ema_by_default(tmp_path: Path) -> None:
         assert live == {"weights": 1.0}
 
 
+def test_get_last_accepts_params_json_file(tmp_path: Path) -> None:
+    json_path = tmp_path / "params_acem1_2026-07-29_04-54-20.json"
+    json_path.write_text('{"params": {}, "config": {"features": 32}}\n', encoding="utf-8")
+    assert get_last(str(json_path)) == json_path.resolve()
+
+
+def test_get_last_finds_params_json_in_directory(tmp_path: Path) -> None:
+    older = tmp_path / "params_run_2020-01-01_00-00-00.json"
+    newer = tmp_path / "params_run_2026-07-29_04-54-20.json"
+    older.write_text('{"params": {}}\n', encoding="utf-8")
+    newer.write_text('{"params": {}}\n', encoding="utf-8")
+    # Ensure mtime ordering even on coarse filesystems.
+    os.utime(older, (1_000_000_000, 1_000_000_000))
+    os.utime(newer, (1_800_000_000, 1_800_000_000))
+    assert get_last(str(tmp_path)) == newer.resolve()
+
+
+def test_get_params_model_loads_portable_json(tmp_path: Path) -> None:
+    json_path = tmp_path / "params_acem1_test.json"
+    payload = {
+        "params": {"Dense_0": {"kernel": [[1.0, 0.0], [0.0, 1.0]]}},
+        "config": {
+            "features": 32,
+            "max_degree": 0,
+            "num_iterations": 1,
+            "num_basis_functions": 8,
+            "cutoff": 5.0,
+            "max_atomic_number": 9,
+            "charges": False,
+            "natoms": 9,
+            "total_charge": 0.0,
+            "zbl": False,
+        },
+        "metadata": {"epoch": 12, "best_loss": 0.5},
+    }
+    import json as _json
+
+    json_path.write_text(_json.dumps(payload), encoding="utf-8")
+
+    fake_model = MagicMock()
+    fake_model.zbl = False
+    with patch(
+        "mmml.utils.model_checkpoint.build_physnet_from_config",
+        return_value=fake_model,
+    ):
+        params, model, restored = get_params_model(
+            str(json_path),
+            natoms=9,
+            return_everything=True,
+            quiet=True,
+        )
+    assert model is fake_model
+    assert isinstance(params, dict) and "params" in params
+    assert restored["_checkpoint_format"] == "json"
+    assert restored.get("epoch") == 12
+    assert float(restored.get("best_loss")) == 0.5
+
+
+def test_restart_training_from_json(tmp_path: Path) -> None:
+    json_path = tmp_path / "params_tag_2026-07-29_04-54-20.json"
+    import json as _json
+
+    json_path.write_text(
+        _json.dumps(
+            {
+                "params": {"w": [1.0]},
+                "config": {
+                    "features": 8,
+                    "max_degree": 0,
+                    "num_iterations": 1,
+                    "num_basis_functions": 4,
+                    "cutoff": 5.0,
+                    "max_atomic_number": 9,
+                    "charges": False,
+                    "natoms": 9,
+                    "total_charge": 0.0,
+                    "zbl": False,
+                },
+                "metadata": {"epoch": 3, "best_loss": 1.25},
+            }
+        ),
+        encoding="utf-8",
+    )
+    fake_model = MagicMock()
+    fake_model.zbl = False
+    mock_optimizer = MagicMock()
+    mock_optimizer.init.return_value = "opt"
+    mock_transform = MagicMock()
+    mock_transform.init.return_value = "tx"
+    with patch(
+        "mmml.utils.model_checkpoint.build_physnet_from_config",
+        return_value=fake_model,
+    ):
+        (
+            ema_params,
+            model,
+            opt_state,
+            params,
+            transform_state,
+            step,
+            best_loss,
+            CKPT_DIR,
+            state,
+        ) = restart_training(str(json_path), mock_transform, mock_optimizer, 9)
+    assert model is fake_model
+    assert step == 4
+    assert best_loss == 1.25
+    assert CKPT_DIR == tmp_path.resolve()
+    assert opt_state == "opt"
+    assert transform_state == "tx"
+    assert ema_params is not None and params is not None
+
+
 def test_restart_training_robustness(tmp_path: Path) -> None:
     # Set up a dummy folder for restart
     restart_dir = tmp_path / "run"

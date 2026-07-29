@@ -86,45 +86,107 @@ def _merge_params(init_params, loaded_params):
     return result
 
 
+def _is_params_json(path: Path) -> bool:
+    """True for a portable PhysNet params JSON file (``params.json`` / ``params_*.json``)."""
+    return path.is_file() and path.suffix == ".json"
+
+
+def _find_latest_params_json(directory: Path) -> Path | None:
+    """Pick newest ``params.json`` / ``params_*.json`` under *directory*."""
+    if not directory.is_dir():
+        return None
+    candidates = [
+        p
+        for p in directory.glob("params*.json")
+        if p.is_file() and (p.name == "params.json" or p.name.startswith("params_"))
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
 def get_last(path: str) -> Path:
     """
-    Get the last checkpoint directory.
+    Resolve a restart path to a concrete checkpoint.
 
-    ``path`` may either be an experiment root containing multiple
-    ``epoch-*/`` checkpoints (the traditional layout, latest picked by
-    name), or a single flat Orbax checkpoint directory (e.g. a
-    ``step-NNNNNNN/`` directory saved directly with no ``epoch-*/``
-    wrapper). The latter is returned as-is.
+    ``path`` may be:
+
+    * an experiment root with ``epoch-*/`` Orbax dirs (latest by name);
+    * a flat Orbax checkpoint directory (``manifest.ocdbt`` / metadata);
+    * a portable ``params.json`` / ``params_*.json`` file;
+    * a directory containing only such JSON files (newest by mtime).
 
     Parameters
     ----------
     path : str
-        Path to checkpoint directory
+        Path to checkpoint directory or portable JSON file
 
     Returns
     -------
     Path
-        Path to the most recent checkpoint directory
+        Path to the most recent checkpoint directory or JSON file
     """
-    p = Path(path)
+    p = Path(path).expanduser()
+    if _is_params_json(p):
+        return p.resolve()
+    if not p.exists():
+        raise FileNotFoundError(
+            f"Checkpoint path not found: '{path}'. "
+            "Pass an Orbax run dir (with epoch-*/), a flat Orbax checkpoint, "
+            "or a portable params_*.json file."
+        )
     if (p / "manifest.ocdbt").exists() or (p / "_CHECKPOINT_METADATA").exists():
         return p
-    dirs = get_files(path)
-    if not dirs:
-        raise FileNotFoundError(
-            f"No checkpoint directories (epoch-*/) found in '{path}'. "
-            "Cannot restart training without an existing checkpoint."
-        )
+    dirs = get_files(str(p))
     # get_files already drops names containing "tmp"; keep a name-only
     # guard here for callers that pass a pre-filtered list edge case.
     while dirs and "tmp" in dirs[-1].name:
         dirs.pop()
-    if not dirs:
-        raise FileNotFoundError(
-            f"Only temporary checkpoint directories found in '{path}'. "
-            "No valid checkpoint to restart from."
+    if dirs:
+        return dirs[-1]
+    json_ckpt = _find_latest_params_json(p)
+    if json_ckpt is not None:
+        return json_ckpt.resolve()
+    raise FileNotFoundError(
+        f"No checkpoint epochs (epoch-*/) or portable params*.json found in '{path}'. "
+        "Cannot restart training without an existing checkpoint. "
+        "Pass --restart path/to/params_TAG_TIMESTAMP.json to resume from a "
+        "portable JSON exported at the end of training."
+    )
+
+
+def _restore_json_checkpoint(restart: Path) -> dict:
+    """Load a portable ``params_*.json`` into an Orbax-like restored dict."""
+    from mmml.utils.model_checkpoint import (
+        json_to_params,
+        normalize_flax_params_for_apply,
+    )
+
+    loaded = json_to_params(restart, backend="jax")
+    raw_params = loaded.get("params")
+    if raw_params is None:
+        raise ValueError(f"JSON checkpoint missing 'params' key: {restart}")
+    params = normalize_flax_params_for_apply(raw_params, backend="jax")
+    config = loaded.get("config")
+    if not isinstance(config, dict):
+        config = loaded.get("model_attributes")
+    if not isinstance(config, dict) or not config:
+        raise ValueError(
+            f"JSON checkpoint {restart} has no 'config' / 'model_attributes'. "
+            "Portable exports from mmml make-training include config; "
+            "re-export with orbax_to_json(..., config=...) if needed."
         )
-    return dirs[-1]
+    meta = loaded.get("metadata") if isinstance(loaded.get("metadata"), dict) else {}
+    return {
+        "params": params,
+        "ema_params": params,
+        "model_attributes": dict(config),
+        "epoch": meta.get("epoch", 0),
+        "best_loss": meta.get("best_loss"),
+        "metadata": meta,
+        "_checkpoint_format": "json",
+        "_json_path": str(restart.resolve()),
+    }
 
 
 def get_params_model(
@@ -142,7 +204,7 @@ def get_params_model(
     Parameters
     ----------
     restart : str
-        Path to checkpoint directory
+        Path to Orbax checkpoint directory or portable ``params_*.json``
     natoms : int, optional
         Number of atoms to set in model, by default None
     return_everything : bool, optional
@@ -152,6 +214,7 @@ def get_params_model(
         by default True. Live params can swing several-fold between adjacent
         epochs in extrapolation regions the loss never visits; EMA smooths
         that out. Falls back to ``params`` when ``ema_params`` is absent.
+        Portable JSON exports already store EMA weights under ``params``.
 
     Returns
     -------
@@ -160,7 +223,11 @@ def get_params_model(
     """
     from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
 
-    restored = _restore_pytree_cpu_safe(orbax_checkpointer, str(restart))
+    restart_path = Path(restart)
+    if _is_params_json(restart_path):
+        restored = _restore_json_checkpoint(restart_path)
+    else:
+        restored = _restore_pytree_cpu_safe(orbax_checkpointer, str(restart))
     # print(f"Restoring from {restart}")
     modification_time = os.path.getmtime(restart)
     modification_date = datetime.fromtimestamp(modification_time)
@@ -213,6 +280,7 @@ def get_params_model(
         "epoch": _safe_int(restored.get("epoch")),
         "best_loss": _safe_float(restored.get("best_loss")),
         "Save Time": modification_date,
+        "format": restored.get("_checkpoint_format", "orbax"),
     }
     if not quiet:
         print_dict_as_table(kwargs, title="Model Attributes", plot=True)
@@ -251,12 +319,14 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
     Restart training from a previous checkpoint.
 
     Loads model parameters, optimizer state, and training configuration
-    from a checkpoint to resume training.
+    from a checkpoint to resume training. Accepts Orbax ``epoch-*/`` run
+    directories and portable ``params_*.json`` files (optimizer state is
+    re-initialized for JSON / when Orbax opt state is incompatible).
 
     Parameters
     ----------
     restart : str
-        Path to the checkpoint directory
+        Path to the checkpoint directory or portable JSON file
     transform : optax.GradientTransformation
         Transform for learning rate scaling
     optimizer : optax.GradientTransformation
@@ -279,38 +349,35 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
         - state: Training state
     """
     restart = get_last(restart)
-    _, _model = get_params_model(restart, num_atoms, quiet=True)
-    if _model is not None:
-        model = _model
+    params, model, restored = get_params_model(
+        restart, num_atoms, return_everything=True, quiet=True
+    )
+    if model is None:
+        raise ValueError(
+            f"Could not rebuild model from checkpoint {restart}. "
+            "Orbax checkpoints need model_attributes; JSON needs a 'config' key."
+        )
 
-    restored = orbax_checkpointer.restore(restart)
     print("Restoring from", restart)
-    print("Restored keys:", restored.keys())
+    print("Restored keys:", list(restored.keys()))
     state = restored.get("model")
-    # print(state)
-    params = _  # restored["params"]
     ema_params = restored.get("ema_params", params)
-    # opt_state = restored["opt_state"]
-    # print("Opt state", opt_state)
+    if ema_params is None:
+        ema_params = params
     transform_state = transform.init(params)
-    # transform_state = restored["transform_state"]
     # Validate and reinitialize states if necessary
     opt_state = optimizer.init(params)
-    # update mu
-    # o_a, o_b = opt_state
-    # from optax import ScaleByAmsgradState
-    # _ = ScaleByAmsgradState(
-    #     mu=opt_state[1][0]["mu"],
-    #     nu=opt_state[1][0]["nu"],
-    #     nu_max=opt_state[1][0]["nu_max"],
-    #     count=opt_state[1][0]["count"],
-    # )
-    # # opt_state = (o_a, (_, o_b[1]))
     # Set training variables
     step = _safe_int(restored.get("epoch")) + 1
+    if step < 1:
+        step = 1
     best_loss = _safe_float(restored.get("best_loss"))
     print(f"Training resumed from step {step - 1}, best_loss {best_loss:.6f}")
-    CKPT_DIR = Path(restart).parent.resolve()  # Orbax requires absolute paths
+    if _is_params_json(Path(restart)):
+        # New Orbax epoch-* dirs go next to the JSON (same as training's ckpt_dir).
+        CKPT_DIR = Path(restart).parent.resolve()
+    else:
+        CKPT_DIR = Path(restart).parent.resolve()  # Orbax requires absolute paths
     return (
         ema_params,
         model,
