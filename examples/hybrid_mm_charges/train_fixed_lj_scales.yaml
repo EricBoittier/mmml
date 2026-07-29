@@ -6,6 +6,10 @@
 #
 # MIC only (ewald / nvalchemiops_pme force LJ off). Scales land in
 # hybrid_mm.json next to the run for MD --mm-lj-scales-file / auto-load.
+#
+# Staged workflow (MIC LJ → optional Ewald TL of ML only):
+#   see docs/hybrid-mm-lj-scales.md § "Staged MIC LJ then Ewald transfer learning"
+#   Adjusted LJs are for jax_mic / include_mm MD — not periodic_external+Ewald.
 
 data: /path/to/out_combined_dedup/energies_forces_dipoles_train.npz
 valid_data: /path/to/out_combined_dedup/energies_forces_dipoles_valid.npz

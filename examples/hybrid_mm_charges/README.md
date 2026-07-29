@@ -8,15 +8,17 @@ liquid-compatible). See
 |------|---------|------------|---------|
 | A `fixed` | `q_MM = q_CGenFF` | [`train_fixed.yaml`](train_fixed.yaml) | [`md_fixed.yaml`](md_fixed.yaml) |
 | A + LJ scales | fixed charges + learnable per-type σ/ε | [`train_fixed_lj_scales.yaml`](train_fixed_lj_scales.yaml) | [`md_fixed_lj_scales.yaml`](md_fixed_lj_scales.yaml) |
-
-Student walkthrough (train → `hybrid_mm.json` → MD):
-[`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.md).
 | A + PME (nvalchemiops) | fixed + `nvalchemiops_pme` Coulomb (LJ off) | [`train_fixed_nvalchemiops_pme.yaml`](train_fixed_nvalchemiops_pme.yaml) | [`md_fixed_nvalchemiops_pme.yaml`](md_fixed_nvalchemiops_pme.yaml) |
 | A + PME (native ewald) | fixed + `ewald` Coulomb (LJ off, pure JAX, no CUDA) | [`train_fixed_ewald.yaml`](train_fixed_ewald.yaml) | [`md_fixed_ewald.yaml`](md_fixed_ewald.yaml) |
 | B `latent` | `q_MM = neutralize(q_ML)` | [`train_latent.yaml`](train_latent.yaml) | [`md_latent.yaml`](md_latent.yaml) |
 | C `fixed_plus_latent` | `q_CGenFF + neutralize(q_ML)` | [`train_fixed_plus_latent.yaml`](train_fixed_plus_latent.yaml) | [`md_fixed_plus_latent.yaml`](md_fixed_plus_latent.yaml) |
 | D `latent_mean` (liquid) | `q_MM = tile(mean(neutralize(q_ML)))` | same checkpoint as B | `--mm-charge-mode latent_mean --mm-latent-charge-template <path>` (see below) |
 | E `latent_dynamic` (liquid) | `q_MM = neutralize(weighted_mean_over_active_dimers(q_ML))` | same checkpoint as B | `--mm-charge-mode latent_dynamic` (no precompute) |
+
+Student walkthrough (train → `hybrid_mm.json` → MD):
+[`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.md).
+Staged MIC LJ then Ewald TL (ML-only under Ewald; adjusted LJ stays MIC/jax_mic):
+[§ Staged MIC LJ then Ewald transfer learning](../../docs/hybrid-mm-lj-scales.md#staged-mic-lj-then-ewald-transfer-learning).
 
 ## Minimal example: native Ewald, `fixed` vs `latent`, small system, no checkpoint
 

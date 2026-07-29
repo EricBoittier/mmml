@@ -83,6 +83,16 @@ def test_build_command_ase_uses_mm_cutoff_not_switch_width() -> None:
     assert "--nve-temp-K" in argv
 
 
+def test_build_command_ase_forwards_do_ml_flags() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(_ase_args(do_ml=False, do_ml_dimer=False, include_mm=False))
+    assert backend == "ase"
+    assert "--no-do-ml" in argv
+    assert "--no-do-ml-dimer" in argv
+    assert "--no-include-mm" in argv
+
+
 def test_build_command_forwards_electrostatics_damping_sigma() -> None:
     from mmml.cli.run.md_system import build_command
 

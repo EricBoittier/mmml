@@ -1012,11 +1012,23 @@ There are several “MM off” levels — pick the one that matches your goal:
 
 | Goal | Config approach |
 |------|-----------------|
-| **ML only — no MM LJ or Coulomb pairs** | `include_mm: false` — PhysNet monomer/dimer terms only (`doMM=False`); no JAX switched LJ, no MIC Coulomb, no MM pair list |
+| **ML only — no MM LJ or Coulomb pairs** | `include_mm: false` (alias `doMM: false`) — PhysNet monomer/dimer terms only (`doMM=False`); no JAX switched LJ, no MIC Coulomb, no MM pair list |
 | **No JAX real-space LJ/Coulomb, but add long-range Coulomb** | `mm_nonbond_mode: periodic_external` + `lr_solver: scafacos` or `nvalchemiops_pme` — replaces JAX MM with full-box Coulomb (+ optional CHARMM VDW) |
 | **ML + ScaFaCoS Coulomb only** (no LJ anywhere) | `periodic_external` + `periodic_charmm_vdw: false` |
 | **No scaled CGENFF internals on ML atoms** | `mlpot_mm_internal_scale: 0.0` (default) |
-| **Skip ML dimers, keep MM** | `extra_args: ["--skip-ml-dimers"]` |
+| **Skip ML dimers, keep MM** | `doML_dimer: false` or `do_ml_dimer: false` or `skip_ml_dimers: true` |
+| **Skip ML monomers** | `doML: false` / `do_ml: false` (rare; MM-only / diagnosis) |
+
+Hybrid assembly YAML keys map to calculator flags:
+
+| YAML | Calculator |
+|------|------------|
+| `doML` / `do_ml` / `--do-ml` | `doML` |
+| `include_mm` / `doMM` / `do_mm` / `--include-mm` / `--do-mm` | `doMM` |
+| `doML_dimer` / `do_ml_dimer` / `--do-ml-dimer` | `doML_dimer` |
+| `skip_ml_dimers: true` | forces `doML_dimer=False` |
+
+Do not set conflicting `include_mm` and `doMM` in the same mapping.
 
 **ML-only (`include_mm: false`)** is what you want when the hybrid potential should be **just the ML model** — no inter-monomer Lennard-Jones and no truncated electrostatics from the MM force field. Cutoff keys (`mm_switch_on`, etc.) still configure the ML handoff taper but do not build MM pair lists.
 

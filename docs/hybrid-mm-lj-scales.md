@@ -82,6 +82,77 @@ LJ scales, as long as `lr_solver: mic` and `mm_include_lj: true`. See
 
 ---
 
+## Staged MIC LJ then Ewald transfer learning
+
+People often want: train ML + learnable LJ on MIC first, then warm-start a final
+Ewald (Coulomb-only) TL step, then run production MD with Ewald **and** the
+adjusted LJs. Here is what is supported today.
+
+### What works
+
+**Stage 1 — MIC + LJ scales + ML** (required for learning \(s^\sigma, s^\varepsilon\)):
+
+```yaml
+# examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
+hybrid_mm: true
+lr_solver: mic
+mm_include_lj: true
+learn_mm_lj_scales: true
+mm_charge_mode: fixed
+```
+
+```bash
+mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
+```
+
+Keep the run’s `hybrid_mm.json` (scale vectors) next to the Orbax/JSON checkpoint.
+
+**Stage 2 — warm-start / TL of ML under Ewald (Coulomb-only):**
+
+```yaml
+# like train_fixed_ewald.yaml, plus restart from Stage 1
+hybrid_mm: true
+lr_solver: ewald
+pme_box_length: 30.0
+mm_include_lj: false          # forced off for ewald anyway
+learn_mm_lj_scales: false     # forced off; scales are not updated
+# restart: /path/to/stage1/orbax_or_params   # or --restart / transfer-learning flags
+```
+
+```bash
+mmml physnet-train --config path/to/train_ewald_tl.yaml \
+  --restart /path/to/stage1/checkpoint
+```
+
+During Stage 2, LJ is **inert** in the train loss (`include_lj=False`). The
+Stage-1 `hybrid_mm.json` is **not** rewritten with new scales — keep the Stage-1
+sidecar for later MIC MD.
+
+**Deploy MIC MD with adjusted LJs** (supported):
+
+```yaml
+# md_fixed_lj_scales.yaml
+include_mm: true              # doMM; jax_mic switched MM
+# mm_lj_scales_file: .../hybrid_mm.json   # optional if auto-found next to checkpoint
+```
+
+Scales load into `ep_scale` / `sig_scale` only when JAX `doMM` is on
+(`include_mm: true` and not `periodic_external`).
+
+### What is still unsupported
+
+| Goal | Status |
+|------|--------|
+| Learn / fine-tune LJ scales **under** `lr_solver: ewald` or `nvalchemiops_pme` | Impossible — LJ forced off |
+| Production **`periodic_external` + Ewald** MD that still applies `hybrid_mm.json` scales | Unsupported — JAX `doMM` is off in periodic mode, so scales are not applied; CHARMM IMAGE VDW does not consume the sidecar |
+| End-to-end “MIC LJ → Ewald TL → Ewald MD with adjusted LJs” | **Not** a supported path yet |
+
+So: Stage 1 + Stage 2 for **ML weights** under Ewald is fine; keep using **MIC /
+`jax_mic` MD** if you need the adjusted LJs. Mixing Ewald Coulomb with learned
+LJ scales in one production energy is future work.
+
+---
+
 ## Prerequisites
 
 1. **Environment** — working `mmml` install with JAX; for MD later, PyCHARMM as usual.
