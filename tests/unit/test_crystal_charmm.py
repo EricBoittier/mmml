@@ -111,6 +111,138 @@ def test_build_crystal_literature_cli_parser():
     assert args.molecule is None
 
 
+def test_build_crystal_box_size_and_write_charmm_parser():
+    from mmml.cli.misc.build_crystal import effective_min_box_side_a, parse_args
+
+    args = parse_args(
+        [
+            "--literature",
+            "benz",
+            "--box-size",
+            "30",
+            "--write-charmm",
+            "-o",
+            "/tmp/benz30.extxyz",
+        ]
+    )
+    assert args.box_size == pytest.approx(30.0)
+    assert args.write_charmm is True
+    assert effective_min_box_side_a(args) == pytest.approx(30.0)
+
+    args_alias = parse_args(
+        ["--literature", "benz", "--side-length", "32.5", "-o", "/tmp/b.pdb"]
+    )
+    assert args_alias.box_size == pytest.approx(32.5)
+    assert effective_min_box_side_a(args_alias) == pytest.approx(32.5)
+
+
+def test_effective_min_box_side_defaults_to_min_box_side():
+    from mmml.cli.misc.build_crystal import effective_min_box_side_a, parse_args
+
+    args = parse_args(["--literature", "dcm", "-o", "/tmp/dcm.pdb"])
+    assert args.box_size is None
+    assert effective_min_box_side_a(args) == pytest.approx(args.min_box_side)
+
+
+def test_build_crystal_literature_uses_box_size_for_auto_reps():
+    from mmml.cli.misc import build_crystal as bc
+    from mmml.interfaces.crystal_charmm import CharmmLiteratureCrystalResult
+
+    fake = CharmmLiteratureCrystalResult(
+        atoms=object(),
+        pdb_path=Path("/tmp/fake.pdb"),
+        residue="BENZ",
+        supercell_reps=(3, 3, 3),
+        n_molecules=54,
+        density_g_cm3=1.2,
+        cell_lengths_a=(30.0, 31.0, 32.0),
+        cell_angles_deg=(90.0, 90.0, 90.0),
+        monomer_pdb=Path("/tmp/benz.pdb"),
+    )
+    with mock.patch.object(
+        bc, "build_literature_charmm_supercell", return_value=fake
+    ) as build:
+        with mock.patch.object(bc, "write_ase_structure"):
+            with mock.patch.object(bc, "_maybe_write_charmm", return_value=0):
+                rc = bc.main(
+                    [
+                        "--literature",
+                        "benz",
+                        "--box-size",
+                        "30",
+                        "-o",
+                        "/tmp/benz30.extxyz",
+                    ]
+                )
+    assert rc == 0
+    assert build.call_args.kwargs["min_box_side_a"] == pytest.approx(30.0)
+    assert build.call_args.kwargs["supercell_reps"] is None
+
+
+def test_build_crystal_write_charmm_calls_helper(tmp_path):
+    from mmml.cli.misc import build_crystal as bc
+    from mmml.interfaces.crystal_charmm import (
+        CharmmLiteratureCrystalResult,
+        CrystalCharmmTopologyPaths,
+    )
+
+    pdb = tmp_path / "lit.pdb"
+    pdb.write_text("CRYST1\nEND\n", encoding="utf-8")
+    out = tmp_path / "benz30.extxyz"
+    fake = CharmmLiteratureCrystalResult(
+        atoms=mock.Mock(
+            cell=mock.Mock(cellpar=lambda: (30.0, 31.0, 32.0, 90.0, 90.0, 90.0))
+        ),
+        pdb_path=pdb,
+        residue="BENZ",
+        supercell_reps=(2, 2, 2),
+        n_molecules=16,
+        density_g_cm3=1.2,
+        cell_lengths_a=(30.0, 31.0, 32.0),
+        cell_angles_deg=(90.0, 90.0, 90.0),
+        monomer_pdb=tmp_path / "benz.pdb",
+    )
+    topo = CrystalCharmmTopologyPaths(
+        pdb=tmp_path / "benz30.pdb",
+        psf=tmp_path / "benz30.psf",
+        crd=tmp_path / "benz30.crd",
+        box_json=tmp_path / "benz30_box.json",
+    )
+    with mock.patch.object(bc, "build_literature_charmm_supercell", return_value=fake):
+        with mock.patch.object(bc, "write_ase_structure"):
+            with mock.patch.object(
+                bc, "write_crystal_charmm_topology", return_value=topo
+            ) as write_topo:
+                rc = bc.main(
+                    [
+                        "--literature",
+                        "benz",
+                        "--box-size",
+                        "35",
+                        "--write-charmm",
+                        "--supercell",
+                        "2,2,2",
+                        "-o",
+                        str(out),
+                    ]
+                )
+    assert rc == 0
+    assert write_topo.call_args.args[0] == pdb
+    assert write_topo.call_args.kwargs["side_length_A"] == pytest.approx(35.0)
+    assert write_topo.call_args.kwargs["residue"] == "BENZ"
+    assert write_topo.call_args.kwargs["n_molecules"] == 16
+
+
+def test_charmm_side_rejects_box_smaller_than_edges():
+    from mmml.cli.misc.build_crystal import _charmm_side_length_a, parse_args
+
+    args = parse_args(
+        ["--literature", "benz", "--box-size", "20", "-o", "/tmp/b.extxyz"]
+    )
+    with pytest.raises(ValueError, match="smaller than the largest supercell"):
+        _charmm_side_length_a(args, (25.0, 26.0, 27.0))
+
+
 def test_build_crystal_literature_main(tmp_path):
     from mmml.cli.misc.build_crystal import main
 

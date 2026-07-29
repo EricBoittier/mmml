@@ -13,6 +13,18 @@ mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal
 mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
 ```
 
+For MD-ready cubic CHARMM handoff, pass `--box-size` (alias `--side-length`) and
+`--write-charmm`. Prefer literature presets over raw PyXtal when you need PSF/CRD:
+
+```bash
+mmml build-crystal --literature benz --box-size 30 --write-charmm -o benz30.extxyz
+# also writes: benz30.pdb, benz30.psf, benz30.crd, benz30_box.json
+```
+
+`--box-size` tiles the supercell so each crystal edge ≥ L (Å) and sets the cubic
+CHARMM IMAGE side used by `prepare_charmm_pbc`. ASE/geometry keeps the true
+crystal cell (e.g. monoclinic benzene); only the CHARMM IMAGE is cubic.
+
 PyXtal (`uv sync --extra chem`) is optional for random placement in the same
 space group. DCM crystal: [COD 2100015](https://www.crystallography.net/2100015.html)
 (Pbcn, ρ≈1.97 g/cm³). Benzene: [COD 4501704](https://www.crystallography.net/cod/4501704.html)
@@ -23,6 +35,9 @@ mmml build-crystal \
   -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \
   --spg 60 --z 4 --target-density-g-cm3 1.972 -o dcm_pyxtal.extxyz
 mmml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o benzene.extxyz
+# PyXtal + CHARMM files (requires --residue):
+mmml build-crystal -m benzene --spg 14 --z 2 --box-size 30 \
+  --residue BENZ --write-charmm -o benzene_pyxtal.extxyz
 ```
 
 Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`).
@@ -41,8 +56,8 @@ mmml build-crystal --help
 ```text
 usage: mmml build-crystal [-h] [--literature PRESET] [--from-cif PATH]
                           [--residue NAME] [--monomer-pdb PATH]
-                          [--min-box-side ANG] [-m SPEC]
-                          [--stoichiometry Z [Z ...]]
+                          [--min-box-side ANG] [--box-size ANG] [--write-charmm]
+                          [-m SPEC] [--stoichiometry Z [Z ...]]
                           [--z Z_VALUES [Z_VALUES ...]] [--dim {0,1,2,3}]
                           [--spg SPACE_GROUP] [--factor FACTOR]
                           [--target-density-g-cm3 RHO] [--seed SEED]
@@ -61,7 +76,8 @@ options:
                         Scale cell to this mass density (g/cm³). Literature
                         presets use CIF ρ unless this is set. Liquid DCM ≈
                         1.326; crystal DCM ≈ 1.972
-  --supercell NX,NY,NZ  Supercell repeats (literature: auto from --min-box-side
+  --supercell NX,NY,NZ  Supercell repeats (literature: auto from --box-size /
+                        --min-box-side if omitted; PyXtal: auto from --box-size
                         if omitted)
   -o, --output OUTPUT   Output path (.pdb, .xyz, .extxyz, .cif, or .npz)
   --format OUT_FORMAT   ASE output format override (default: inferred from
@@ -72,12 +88,22 @@ Literature CIF + make-res (recommended for DCM / benzene):
                         (P2₁/c)
   --from-cif PATH       Override CIF path (requires --residue or --literature
                         for residue name)
-  --residue NAME        CHARMM residue (DCM, BENZ) when using --from-cif without
-                        --literature
+  --residue NAME        CHARMM residue (DCM, BENZ) for --from-cif /
+                        --write-charmm on PyXtal path
   --monomer-pdb PATH    make-res monomer PDB for atom-name mapping (default:
                         pdb/<res>.pdb or bundled)
   --min-box-side ANG    Minimum supercell edge length (Å); default ≈2× CHARMM
                         cutnb
+
+MD box sizing / CHARMM handoff:
+  --box-size ANG, --side-length ANG
+                        Cubic MD cell side length (Å). When --supercell is
+                        omitted, also drives auto tiling so each crystal edge ≥
+                        this value. Used as CHARMM IMAGE side with
+                        --write-charmm.
+  --write-charmm        Write {stem}.pdb/.psf/.crd and {stem}_box.json via
+                        PyCHARMM GENERATE (cubic IMAGE). Prefer --literature
+                        for DCM/benzene.
 
 PyXtal random placement:
   -m, --molecule SPEC   Molecule specification (repeat for multi-component

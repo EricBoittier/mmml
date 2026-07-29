@@ -21,7 +21,7 @@ uv run python scripts/generate_docs_figures.py
 | [`make-res`](commands/make-res.md) | CGENFF residue name | `pdb/`, `psf/`, `xyz/` | PyCHARMM |
 | [`liquid-box`](commands/liquid-box.md) | Composition + density target | Certified MM liquid box | Packmol + CHARMM |
 | [`md-embedding`](commands/md-embedding.md) | aaa.ama NPZ + checkpoint | Solvated peptide partial MLpot | TRIA box + PhysNet |
-| [`build-crystal`](commands/build-crystal.md) | Literature CIF + make-res or SMILES/XYZ | `.pdb`, `.xyz`, `.cif`, `.npz` | CIF mapper / PyXtal |
+| [`build-crystal`](commands/build-crystal.md) | Literature CIF + make-res or SMILES/XYZ | `.pdb`/`.xyz`/`.cif`/`.npz`; optional `.psf`/`.crd`/`_box.json` | CIF mapper / PyXtal (+ PyCHARMM) |
 | Protein MM (CHARMM + jax-md) | [protein-force-fields.md](../protein-force-fields.md) | ALAD PDB/PSF, JAX energies | PyCHARMM + jax-md |
 
 ---
@@ -219,7 +219,16 @@ MMML ships `default_benzene_crystal_cif()`.
 mmml make-res --res BENZ --skip-energy-show
 mmml build-crystal --literature benz --monomer-pdb pdb/benz.pdb \\
   -o pdb/benz_crystal.pdb
+
+# MD handoff: cubic CHARMM IMAGE + PSF/CRD (prefer literature over PyXtal)
+mmml build-crystal --literature benz --box-size 30 --write-charmm \\
+  -o benz30.extxyz
+# → benz30.extxyz, benz30.pdb, benz30.psf, benz30.crd, benz30_box.json
 ```
+
+`--box-size` / `--side-length` sets the cubic MD cell side (Å) and auto-tiles
+the supercell so each crystal edge ≥ that length. Geometry keeps the true
+crystal lattice; CHARMM IMAGE is cubic for `md-system --from-psf`.
 
 PyXtal accepts the molecule name **`benzene`** (not SMILES `c1ccccc1`) for
 random placement:
