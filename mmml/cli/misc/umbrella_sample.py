@@ -544,20 +544,17 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     if engine == "packed_ml":
         required.append("structure")
     missing = [name for name in required if not data.get(name)]
-<<<<<<< HEAD
-    if data.get("atom_i") is None or data.get("atom_j") is None:
-        # Allow name-only hybrid configs that still need placeholder indices.
-        if not (data.get("atom_name_i") and data.get("atom_name_j")):
-            missing.append("atoms")
-        else:
-            data.setdefault("atom_i", 0)
-            data.setdefault("atom_j", 1)
-=======
     if data.get("cv_x") is None and (
         data.get("atom_i") is None or data.get("atom_j") is None
     ):
-        missing.append("atoms (or --cv-difference)")
->>>>>>> 50152da7b (Update)
+        # A CV difference (--cv-difference -> cv_x) removes the atom_i/atom_j
+        # requirement. Otherwise allow name-only hybrid configs that still need
+        # placeholder indices; failing that, the atoms are genuinely missing.
+        if not (data.get("atom_name_i") and data.get("atom_name_j")):
+            missing.append("atoms (or --cv-difference)")
+        else:
+            data.setdefault("atom_i", 0)
+            data.setdefault("atom_j", 1)
     if missing:
         raise SystemExit(
             "missing required options: "
