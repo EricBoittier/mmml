@@ -27,6 +27,16 @@ declare -A DENSITY=(
 )
 USE_DENSITY="${USE_DENSITY:-0}"
 
+# Packmol packing knobs. N from --density is sized to the cubic cell volume L³,
+# so PACKMOL_REGION must be 'box' — packing the inscribed sphere instead only
+# offers pi/6 = 52% of that volume and Packmol exits 173 ("failed to converge").
+# FILL_FRACTION leaves headroom below ideal bulk density; lower it (or lower
+# PACKMOL_TOLERANCE) if a solvent still fails to converge.
+PACKMOL_REGION="${PACKMOL_REGION:-box}"
+PACKMOL_TOLERANCE="${PACKMOL_TOLERANCE:-2.0}"
+PACKMOL_NLOOP="${PACKMOL_NLOOP:-200}"
+FILL_FRACTION="${FILL_FRACTION:-0.98}"
+
 has_pycharmm=0
 if uv run python -c "import pycharmm" >/dev/null 2>&1; then
   has_pycharmm=1
@@ -54,6 +64,10 @@ make_one() {
       --res "nh3ch3cl_${tag}"
       --box-size "${BOX_SIZE}"
       --solvent "${solvent}"
+      --packmol-region "${PACKMOL_REGION}"
+      --packmol-tolerance "${PACKMOL_TOLERANCE}"
+      --packmol-nloop "${PACKMOL_NLOOP}"
+      --fill-fraction "${FILL_FRACTION}"
     )
     if [[ "${USE_DENSITY}" == "1" ]]; then
       cmd+=(--density "${DENSITY[${solvent}]}")
@@ -71,19 +85,31 @@ import json
 from pathlib import Path
 out = Path("${out}")
 side = float("${BOX_SIZE}")
+solvent = "${solvent}"
+# Count the solvent residues Packmol actually placed: with --density the count
+# is clamped to the cell capacity, so N_SOLVENT is not authoritative.
+n_solvent = int("${N_SOLVENT}")
+packed = out / "packmol_$(echo "${solvent}" | tr '[:upper:]' '[:lower:]')box.pdb"
+if packed.is_file():
+    seen = set()
+    for line in packed.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith(("ATOM", "HETATM")) and line[17:21].strip() == solvent:
+            seen.add(line[21:27])
+    if seen:
+        n_solvent = len(seen)
 (out / "box.json").write_text(
     json.dumps(
         {
             "box_size": side,
             "side_length_A": side,
-            "solvent": "${solvent}",
-            "n_solvent": int("${N_SOLVENT}"),
+            "solvent": solvent,
+            "n_solvent": n_solvent,
         },
         indent=2,
     ),
     encoding="utf-8",
 )
-print(f"Wrote {out / 'box.json'}")
+print(f"Wrote {out / 'box.json'} (n_solvent={n_solvent})")
 PY
   )
   echo "PASS: ${solvent} box -> ${out}"

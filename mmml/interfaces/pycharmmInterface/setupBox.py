@@ -267,6 +267,57 @@ def outer_radius_from_n_solvent(
     return outer_radius + buffer
 
 
+# --- Packmol solvation hyper-parameters -------------------------------------
+#
+# ``determine_n_molecules_from_density`` sizes N from the *cubic* cell volume
+# L³, so the solvent must be packed into that same cube.  Packing into the
+# inscribed sphere instead (the old default) only offers pi/6 = 52% of the
+# volume, i.e. every density-sized request was ~1.9x over capacity and Packmol
+# terminated with "ENDED WITHOUT PERFECT PACKING" (exit 173) regardless of
+# solvent.  Keep ``PACKMOL_REGION = "box"`` unless a genuine spherical droplet
+# is wanted.
+PACKMOL_REGION = "box"
+PACKMOL_TOLERANCE = 2.0
+PACKMOL_NLOOP = 200
+# Slack on the ideal (bulk-density) occupancy.  Packmol's hard-sphere tolerance
+# cannot reach 100% of the continuum density; ~2% headroom converges in seconds
+# and the deficit is absorbed by the CHARMM minimisation / NPT equilibration.
+PACKMOL_FILL_FRACTION = 0.98
+
+
+def solvent_capacity(
+    side_length: float,
+    inner_radius: float,
+    solvent: str,
+    region: str = PACKMOL_REGION,
+    outer_radius: float | None = None,
+    density_kg_m3: float | None = None,
+    atoms: Atoms | None = None,
+    fill_fraction: float = PACKMOL_FILL_FRACTION,
+) -> int:
+    """
+    Largest solvent count Packmol can place in the requested region.
+
+    ``region="box"`` is the cubic cell minus the solute exclusion sphere;
+    ``region="sphere"`` is the shell between *inner_radius* and *outer_radius*.
+    *fill_fraction* derates the ideal bulk-density occupancy so Packmol has
+    room to satisfy its tolerance.
+    """
+    vol_per_mol = volume_per_solvent_molecule_ang3(
+        solvent, density_kg_m3=density_kg_m3, atoms=atoms
+    )
+    solute_vol = (4.0 / 3.0) * np.pi * (float(inner_radius) ** 3)
+    if region == "box":
+        available = float(side_length) ** 3 - solute_vol
+    elif region == "sphere":
+        if outer_radius is None:
+            raise ValueError("region='sphere' requires outer_radius")
+        available = (4.0 / 3.0) * np.pi * (float(outer_radius) ** 3) - solute_vol
+    else:
+        raise ValueError(f"region must be 'box' or 'sphere', got {region!r}")
+    return max(0, int(available * float(fill_fraction) / vol_per_mol))
+
+
 def setup_box(mol: Atoms) -> None:
     """Sets up the box"""
     box_size = determine_box_size_from_mol(mol)
@@ -346,15 +397,27 @@ def run_packmol_solvation(
     solute_buffer: float = 1.0,
     solvent_buffer: float = 1.0,
     density_kg_m3: float | None = None,
-) -> None:
+    region: str = PACKMOL_REGION,
+    tolerance: float = PACKMOL_TOLERANCE,
+    nloop: int = PACKMOL_NLOOP,
+    fill_fraction: float = PACKMOL_FILL_FRACTION,
+    periodic: bool = True,
+) -> int:
     """
-    Pack 1 solute molecule surrounded by n_molecules of solvent in a spherical shell.
+    Pack 1 solute molecule surrounded by n_molecules of solvent, and return the
+    count actually placed (clamped to what the region can hold).
 
     *solvent* may be any CGenFF RESI name (plus aliases ``water``/``octanol``).
-    Radii are computed from solute geometry and solvent density unless overridden.
-    When density is unavailable, the shell extends to the box inscribed sphere.
+    With ``region="box"`` (default) the solvent fills the whole cubic cell
+    outside a solute exclusion sphere, matching the L³ volume that
+    ``determine_n_molecules_from_density`` uses to size N; ``periodic`` then
+    enables Packmol's ``pbc`` so tolerances hold across the cell faces.
+    ``region="sphere"`` restores the spherical-shell (droplet) placement.
     """
     from mmml.analysis.residue_geometry import ensure_residue_pdb
+
+    if region not in ("box", "sphere"):
+        raise ValueError(f"region must be 'box' or 'sphere', got {region!r}")
 
     name = _normalize_solvent_key(solvent)
     solvent_atoms = _resolve_solvent_atoms(name)
@@ -375,8 +438,9 @@ def run_packmol_solvation(
         if solute_mol is None:
             solute_mol = read_initial_pdb(Path.cwd())
         inner_radius = solute_radius_from_mol(solute_mol, buffer=solute_buffer)
-    if outer_radius is None:
-        max_radius = center - 0.5
+
+    max_radius = center - 0.5
+    if region == "sphere" and outer_radius is None:
         try:
             dens = _resolve_solvent_density_kg_m3(name, density_kg_m3)
             outer_radius = outer_radius_from_n_solvent(
@@ -393,46 +457,90 @@ def run_packmol_solvation(
                 f"{max_radius:.2f} Å. Pass --density (kg/m³) for a denser shell estimate."
             )
             outer_radius = max_radius
-
-    max_radius = center - 0.5
-    if outer_radius > max_radius:
+    if outer_radius is not None and outer_radius > max_radius:
         print(
-            f"Warning: outer_radius {outer_radius:.2f} Å exceeds box; capping to {max_radius:.2f} Å. "
-            "Consider increasing side_length or reducing n_molecules."
+            f"Warning: outer_radius {outer_radius:.2f} Å exceeds box; capping to "
+            f"{max_radius:.2f} Å. Consider increasing side_length."
         )
         outer_radius = max_radius
 
-    print(f"Solvation radii: inner={inner_radius:.2f} Å, outer={outer_radius:.2f} Å")
+    # Never hand Packmol more molecules than the region can hold: an impossible
+    # request burns the full nloop budget and then exits 173.
+    n_requested = int(n_molecules)
+    try:
+        capacity = solvent_capacity(
+            side_length,
+            inner_radius,
+            name,
+            region=region,
+            outer_radius=outer_radius,
+            density_kg_m3=density_kg_m3,
+            atoms=solvent_atoms,
+            fill_fraction=fill_fraction,
+        )
+    except ValueError:
+        capacity = None  # no density for this solvent; trust the caller's N
+    if capacity is not None and n_requested > capacity:
+        print(
+            f"Reducing solvent count {n_requested} -> {capacity}: the {region} region "
+            f"({side_length:.1f} Å cell, solute R={inner_radius:.2f} Å) holds at most "
+            f"{capacity} {name} at {fill_fraction:.0%} of bulk density. "
+            "Increase --box-size for more solvent."
+        )
+        n_molecules = capacity
+    else:
+        n_molecules = n_requested
 
+    if region == "box":
+        placement = (
+            f"inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}\n"
+            f"    outside sphere {cx} {cy} {cz} {inner_radius}"
+        )
+        print(
+            f"Solvation region: cubic cell {side_length:.2f} Å, solute exclusion "
+            f"R={inner_radius:.2f} Å, N={n_molecules} {name}"
+        )
+    else:
+        placement = (
+            f"outside sphere {cx} {cy} {cz} {inner_radius}\n"
+            f"    inside sphere {cx} {cy} {cz} {outer_radius}"
+        )
+        print(
+            f"Solvation radii: inner={inner_radius:.2f} Å, "
+            f"outer={outer_radius:.2f} Å, N={n_molecules} {name}"
+        )
+
+    # ``pbc`` makes Packmol enforce the tolerance across the cell faces, so a
+    # box packed at bulk density has no clashes with its own periodic images.
+    pbc_line = (
+        f"pbc 0.0 0.0 0.0 {side_length} {side_length} {side_length}\n"
+        if (periodic and region == "box")
+        else ""
+    )
     # Do not set Packmol ``chain``: its PDB writer embeds the chain ID in column
     # 22 and truncates 5-char CGenFF names (CH3CL → CH3CA). We restore names after.
-    packmol_input = f"""
-
+    randint = np.random.randint(1000000)
+    packmol_input = f"""seed {randint}
     output pdb/init-{solvent_tag}box.pdb
     filetype pdb
-    tolerance 2.0
-    structure pdb/initial.pdb 
+    tolerance {tolerance}
+    nloop {int(nloop)}
+    {pbc_line}structure pdb/initial.pdb
     number 1
     resnumbers 2
-    inside sphere {cx} {cy} {cz} {inner_radius}
+    center
+    fixed {cx} {cy} {cz} 0.0 0.0 0.0
     end structure
-    structure pdb/{solvent_tag}.pdb 
+    structure pdb/{solvent_tag}.pdb
     number {n_molecules}
     resnumbers 2
-    outside sphere {cx} {cy} {cz} {inner_radius}
-    inside sphere {cx} {cy} {cz} {outer_radius}
+    {placement}
     end structure
-
-
-    """
+"""
     import os
     os.makedirs("packmol", exist_ok=True)
-    randint = np.random.randint(1000000)
-    packmol_script = packmol_input.split("\n")
-    packmol_script[1] = f"seed {randint}"
-    packmol_script = "\n".join(packmol_script)
     with open(f"packmol/packmol-{solvent_tag}.inp", "w") as f:
-        f.writelines(packmol_script)
+        f.write(packmol_input)
 
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
         packmol_executable,
@@ -440,17 +548,26 @@ def run_packmol_solvation(
     )
 
     packmol_bin = packmol_executable()
-    print(f"{packmol_bin} < packmol/packmol-{solvent_tag}.inp")
-    output = os.system(
-        " ".join(
-            [packmol_bin, " < ", f"packmol/packmol-{solvent_tag}.inp"]
+    inp = f"packmol/packmol-{solvent_tag}.inp"
+    print(f"{packmol_bin} < {inp}")
+    status = os.system(" ".join([packmol_bin, " < ", inp]))
+    exit_code = os.waitstatus_to_exitcode(status) if status else 0
+    if exit_code != 0:
+        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+            PACKMOL_EXIT_LABELS,
         )
-    )
-    print(output)
-    if output != 0:
+
+        label = PACKMOL_EXIT_LABELS.get(exit_code, "unknown error")
+        hint = ""
+        if exit_code == 173:
+            hint = (
+                f"\nPacked {n_molecules} {name} into the {region} region "
+                f"(L={side_length:.1f} Å, tolerance {tolerance} Å, nloop {int(nloop)}). "
+                "Relax by lowering fill_fraction, lowering tolerance, raising nloop, "
+                "or increasing --box-size."
+            )
         raise RuntimeError(
-            f"packmol solvation failed with exit status {output} "
-            f"(see packmol/packmol-{solvent_tag}.inp)"
+            f"packmol solvation failed: exit {exit_code} ({label}); see {inp}{hint}"
         )
     out_pdb = Path(f"pdb/init-{solvent_tag}box.pdb")
     rewrite_packmol_pdb_resnames(
@@ -472,6 +589,7 @@ def run_packmol_solvation(
             "ensure_residue_pdb."
         )
     print(f"Generated {out_pdb} (CGenFF residue names restored)")
+    return int(n_molecules)
 
 
 def run_packmol(n_molecules: int, side_length: float) -> None:
@@ -680,7 +798,10 @@ def main(density: float, side_length: float, residue: str, solvent: str):
         run_packmol(n_molecules, side_length)
     else:
         n_molecules = determine_n_molecules_from_density(density, mol, side_length, solvent)
-        run_packmol_solvation(n_molecules, side_length, solvent, solute_mol=mol)
+        # Packmol may clamp N to the region capacity; the PSF must match.
+        n_molecules = run_packmol_solvation(
+            n_molecules, side_length, solvent, solute_mol=mol, density_kg_m3=density
+        )
     initialize_psf(residue, n_molecules, side_length, solvent)
     # minimize_box()
 

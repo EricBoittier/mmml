@@ -67,6 +67,52 @@ def build_parser() -> argparse.ArgumentParser:
             "sizing N from density."
         ),
     )
+    parser.add_argument(
+        "--packmol-region",
+        dest="packmol_region",
+        choices=("box", "sphere"),
+        default="box",
+        help=(
+            "Solvent placement region. 'box' (default) fills the cubic cell "
+            "outside a solute exclusion sphere — this matches the L³ volume "
+            "used to size N from --density. 'sphere' packs a droplet shell "
+            "instead, which holds only pi/6 (52%%) of the cell."
+        ),
+    )
+    parser.add_argument(
+        "--packmol-tolerance",
+        dest="packmol_tolerance",
+        type=float,
+        default=2.0,
+        help="Packmol minimum interatomic distance in Å (default 2.0). Lower to relax packing.",
+    )
+    parser.add_argument(
+        "--packmol-nloop",
+        dest="packmol_nloop",
+        type=int,
+        default=200,
+        help="Packmol GENCAN loops per molecule type (default 200; Packmol's own default is 50).",
+    )
+    parser.add_argument(
+        "--fill-fraction",
+        dest="fill_fraction",
+        type=float,
+        default=0.98,
+        help=(
+            "Fraction of ideal bulk-density occupancy to request (default 0.98). "
+            "N is clamped to this; lower it if Packmol still fails to converge."
+        ),
+    )
+    parser.add_argument(
+        "--no-packmol-pbc",
+        dest="packmol_pbc",
+        action="store_false",
+        default=True,
+        help=(
+            "Disable Packmol's 'pbc' keyword. By default the cell is packed "
+            "periodically so bulk density has no clashes with periodic images."
+        ),
+    )
     return parser
 
 
@@ -125,12 +171,18 @@ def main_loop(args):
             )
         else:
             n_molecules = args.n
-        setupBox.run_packmol_solvation(
+        # Returns the count actually placed (clamped to the region capacity).
+        n_molecules = setupBox.run_packmol_solvation(
             n_molecules,
             args.side_length,
             solvent,
             solute_mol=mol,
             density_kg_m3=args.density,
+            region=args.packmol_region,
+            tolerance=args.packmol_tolerance,
+            nloop=args.packmol_nloop,
+            fill_fraction=args.fill_fraction,
+            periodic=args.packmol_pbc,
         )
         pdb_path = f"pdb/init-{solvent.lower()}box.pdb"
 
