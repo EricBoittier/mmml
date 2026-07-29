@@ -139,7 +139,7 @@ code should use the canonical paths above.
 
 ```mermaid
 flowchart TB
-  MAIN["cli/__main__.py\n63 subcommands"]
+  MAIN["cli/__main__.py\n64 subcommands"]
 
   subgraph make["cli/make"]
     MKRES["make_res"]
