@@ -33,34 +33,35 @@ umbrella:
   #   umbrella_{gas,sol}/.../dt{1,05,025}/T{T}/seed{S}/
   active: [dt1, dt05, dt025]
   variants:
+    # Soften short-ξ corner (1.8 Å + k=10 blew vacuum windows at T≥300).
     dt1:
       n_windows: 11
-      xi_min: 1.8
+      xi_min: 2.0
       xi_max: 3.5
-      k_ev_A2: 10.0
+      k_ev_A2: 5.0
       nsteps: 10000
       # 1 fs is aggressive for vacuum ML; keep gas smaller than sol.
-      timestep_fs_gas: 0.25
+      timestep_fs_gas: 0.1
       timestep_fs_sol: 1.0
       printfreq: 200
       savefreq: 200
       runtime_min: 720
     dt05:
       n_windows: 11
-      xi_min: 1.8
+      xi_min: 2.0
       xi_max: 3.5
-      k_ev_A2: 10.0
+      k_ev_A2: 5.0
       nsteps: 10000
-      timestep_fs_gas: 0.1
+      timestep_fs_gas: 0.05
       timestep_fs_sol: 0.5
       printfreq: 200
       savefreq: 200
       runtime_min: 720
     dt025:
       n_windows: 11
-      xi_min: 1.8
+      xi_min: 2.0
       xi_max: 3.5
-      k_ev_A2: 10.0
+      k_ev_A2: 5.0
       nsteps: 10000
       timestep_fs_gas: 0.05
       timestep_fs_sol: 0.25

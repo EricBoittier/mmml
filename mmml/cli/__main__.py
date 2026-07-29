@@ -63,8 +63,21 @@ def cli() -> None:
 
     ``main`` keeps returning an ``int`` so it stays callable from tests; only
     this wrapper forces the process exit status.
+
+    Uncaught exceptions must also go through ``os._exit``: importing PyCHARMM
+    installs a Fortran atexit that otherwise resets the process status to 0,
+    which made failed ``umbrella-sample`` look successful to Snakemake.
     """
-    _hard_exit(main())
+    try:
+        code = main()
+    except SystemExit as exc:
+        code = exc.code
+    except BaseException:
+        import traceback
+
+        traceback.print_exc()
+        code = 1
+    _hard_exit(code)
 
 
 class _MMMLTopLevelParser(argparse.ArgumentParser):

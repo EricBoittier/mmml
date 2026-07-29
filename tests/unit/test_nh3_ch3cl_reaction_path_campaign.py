@@ -59,9 +59,42 @@ def test_full_config_expands_seed_temperature_solvent() -> None:
     assert all("/T" not in t for t in dmc)
 
 
+def test_prod_config_uses_model_ext() -> None:
+    cfg = cl.load_config(WORKFLOW / "config.prod.yaml")
+    assert cfg["checkpoint"] == "examples/m/model_ext.json"
+    assert cl.checkpoint_path(cfg) == "examples/m/model_ext.json"
+    assert set(cl.umbrella_variants(cfg)) == {"dt1", "dt05", "dt025"}
+    for name in cl.umbrella_variants(cfg):
+        v = cfg["umbrella"]["variants"][name]
+        assert float(v["xi_min"]) >= 2.0
+        assert float(v["k_ev_A2"]) <= 5.0
+
+
+def test_require_umbrella_products(tmp_path: Path) -> None:
+    import importlib.util
+
+    name = "nh3_run_job_require_products"
+    path = SCRIPTS / "run_job.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+
+    out = tmp_path / "umb"
+    out.mkdir()
+    try:
+        mod._require_umbrella_products(out)
+        raise AssertionError("expected FileNotFoundError")
+    except FileNotFoundError as exc:
+        assert "umbrella_snapshots.npz" in str(exc)
+    (out / "umbrella_snapshots.npz").write_bytes(b"x")
+    (out / "umbrella_summary.json").write_text("{}", encoding="utf-8")
+    mod._require_umbrella_products(out)
+
+
 def test_job_mbar_cli_has_no_output_dir_flag() -> None:
     """Regression: umbrella-mbar rejects --output-dir (broke mbar_gas on studix)."""
-    import argparse
     from mmml.cli.misc.umbrella_mbar import build_parser
 
     parser = build_parser()

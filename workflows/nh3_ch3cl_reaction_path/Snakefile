@@ -193,6 +193,7 @@ rule umbrella_gas:
         ),
     output:
         status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
     log:
         f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
@@ -235,6 +236,7 @@ rule umbrella_sol:
         ),
     output:
         status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
     log:
         f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
     params:
@@ -337,7 +339,8 @@ rule adumb_sol:
 
 rule mbar_gas:
     input:
-        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
     output:
         status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/status.json",
     log:
@@ -367,7 +370,8 @@ rule mbar_gas:
 
 rule mbar_sol:
     input:
-        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
     output:
         status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/status.json",
     log:

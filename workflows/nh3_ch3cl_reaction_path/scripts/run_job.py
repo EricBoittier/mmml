@@ -140,6 +140,19 @@ def _uv_run(repo: Path, args: list[str], *, cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=str(cwd or repo), env=env, check=True)
 
 
+def _require_umbrella_products(out: Path) -> None:
+    """Fail closed if umbrella claimed success but wrote no snapshots (CHARMM atexit)."""
+    snap = out / "umbrella_snapshots.npz"
+    summary = out / "umbrella_summary.json"
+    missing = [p.name for p in (snap, summary) if not p.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"umbrella finished without products under {out}: missing {missing}. "
+            "Often caused by an in-run abort whose process exit code was reset to 0 "
+            "by PyCHARMM atexit — check stdout.log for RuntimeError / T-spikes."
+        )
+
+
 def _write_status(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -471,9 +484,12 @@ def job_umbrella_gas(
         str(float(temperature)),
         "--seed",
         str(int(seed)),
+        "--thermostat",
+        "langevin",
         "--overwrite",
     ]
     _uv_run(repo, cmd)
+    _require_umbrella_products(out)
     return {
         "variant": variant,
         "temperature_K": temperature,
@@ -535,9 +551,12 @@ def job_umbrella_sol(
             str(float(temperature)),
             "--seed",
             str(int(seed)),
+            "--thermostat",
+            "langevin",
             "--overwrite",
         ],
     )
+    _require_umbrella_products(out)
     return {
         "solvent": sol,
         "variant": variant,
@@ -775,17 +794,26 @@ def main() -> int:
         else:
             raise ValueError(f"unknown job {args.job}")
         payload["completed"] = True
-    except Exception as exc:  # noqa: BLE001 — status.json must capture failures
+    except Exception as exc:  # noqa: BLE001 — capture failures without marking Snakemake done
         payload["completed"] = False
         payload["error"] = f"{type(exc).__name__}: {exc}"
         payload["traceback"] = traceback.format_exc()
         print(payload["traceback"], file=sys.stderr, flush=True)
         payload["elapsed_seconds"] = time.time() - t0
-        _write_status(args.status, payload)
+        # Write a failure sidecar, but remove status.json so Snakemake does not
+        # treat the rule as complete (incomplete outputs previously blocked re-runs
+        # and let MBAR start from empty umbrella dirs).
+        fail_path = args.status.with_name("status.failed.json")
+        _write_status(fail_path, payload)
+        if args.status.is_file():
+            args.status.unlink()
         return 1
 
     payload["elapsed_seconds"] = time.time() - t0
     _write_status(args.status, payload)
+    fail_path = args.status.with_name("status.failed.json")
+    if fail_path.is_file():
+        fail_path.unlink()
     print(json.dumps(payload, indent=2), flush=True)
     return 0
 

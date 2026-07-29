@@ -64,9 +64,9 @@ if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
   done
 fi
 
-# Checkpoint from workflow config when unset.
-if [[ -z "${MMML_CKPT:-}" || ! -e "${MMML_CKPT}" ]]; then
-  _ckpt="$("$PY" -c "
+# Always prefer workflow config checkpoint over a stale shell MMML_CKPT
+# (e.g. leftover examples/m/kl.json from an interactive session).
+_ckpt="$("$PY" -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
@@ -74,9 +74,10 @@ from campaign_lib import load_config, checkpoint_path
 cfg = load_config(Path('${CFG}'))
 print(Path('${REPO_ROOT}') / checkpoint_path(cfg))
 " 2>/dev/null || true)"
-  if [[ -n "${_ckpt}" ]]; then
-    export MMML_CKPT="$_ckpt"
-  fi
+if [[ -n "${_ckpt}" && -e "${_ckpt}" ]]; then
+  export MMML_CKPT="$_ckpt"
+elif [[ -z "${MMML_CKPT:-}" || ! -e "${MMML_CKPT}" ]]; then
+  echo "WARNING: workflow checkpoint unresolved; MMML_CKPT=${MMML_CKPT:-unset}" >&2
 fi
 
 echo "=== nh3_ch3cl_reaction_path job_shell ===" >&2
