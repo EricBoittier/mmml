@@ -146,11 +146,25 @@ def test_all_ensembles_run_and_stay_finite(synthetic_water_box, ensemble):
 @pytest.mark.parametrize("float64", [False, True])
 def test_npt_runs_in_both_dtypes(synthetic_water_box, float64):
     """Regression guard for the barostat dtype fix: the driver casts kT/pressure
-    to the run dtype, so NPT runs in float32 *and* float64 under JAX_ENABLE_X64
-    (previously float32 raised a mixed-carry TypeError in the barostat scan)."""
+    **and dt** to the run dtype, so NPT runs in float32 *and* float64 under
+    JAX_ENABLE_X64 (a Python-float dt promoted the Nose-Hoover chain carry and
+    float32 raised ``carry component cs[0] ... float32[] ... float64[]``)."""
     traj = _run(synthetic_water_box(seed=0), ensemble="npt", n_steps=10,
                 extra_params={"float64": float64})
     assert np.all(np.isfinite(np.asarray(traj.metadata["energies"])))
+
+
+@pytest.mark.parametrize("ensemble", ["min", "nve", "nvt", "npt"])
+def test_kinetic_and_total_energy_are_recorded(synthetic_water_box, ensemble):
+    """Every ensemble records KE, so total energy is available to diagnostics."""
+    traj = _run(synthetic_water_box(seed=0), ensemble=ensemble, n_steps=10)
+    potential = np.asarray(traj.metadata["energies"])
+    kinetic = np.asarray(traj.metadata["kinetic_energies"])
+    total = np.asarray(traj.metadata["total_energies"])
+    assert kinetic.shape == potential.shape == total.shape
+    assert np.all(np.isfinite(kinetic)), f"{ensemble} recorded non-finite KE"
+    assert np.allclose(total, potential + kinetic)
+    assert np.all(kinetic >= 0.0)
 
 
 # --- dtype handling ---------------------------------------------------------

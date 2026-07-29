@@ -142,12 +142,14 @@ class JaxmdDriver:
             return float(jax.device_get(energy_fn(state.position, **dyn)))
 
         def _record_kinetic(state):
-            """Kinetic energy (eV), or NaN for states that carry no momentum.
+            """Kinetic energy (eV) of the integrator state.
 
             ``energies`` alone is the *potential* surface, so it oscillates under
             NVE and cannot show whether the integrator conserves energy. Record
             KE too so ``potential + kinetic`` is available to drift diagnostics.
-            ``min`` (fire_descent) is not a conservative propagator, hence NaN.
+            All four ensembles carry ``momentum`` (fire_descent included, where it
+            starts at zero); the guard returns NaN only for a state that has none,
+            so ``total_energies`` degrades visibly rather than silently.
             """
             momentum = getattr(state, "momentum", None)
             if momentum is None:
