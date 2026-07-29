@@ -360,10 +360,13 @@ def run_packmol_solvation(
     solvent_atoms = _resolve_solvent_atoms(name)
     solvent_pdb_path = ensure_residue_pdb(name, generate=True)
     # Keep a stable path name for the packmol input (resi lower-case).
+    # Copy the CHARMM/make-res PDB — never ase.io.write (defaults resname to MOL).
     solvent_tag = name.lower()
-    if Path(solvent_pdb_path).resolve() != Path(f"pdb/{solvent_tag}.pdb").resolve():
+    staged = Path(f"pdb/{solvent_tag}.pdb")
+    src = Path(solvent_pdb_path).resolve()
+    if src != staged.resolve():
         Path("pdb").mkdir(exist_ok=True)
-        ase.io.write(f"pdb/{solvent_tag}.pdb", solvent_atoms)
+        shutil.copy2(src, staged)
 
     center = side_length / 2
     cx, cy, cz = center, center, center
@@ -457,6 +460,17 @@ def run_packmol_solvation(
             (Path(f"pdb/{solvent_tag}.pdb"), int(n_molecules)),
         ],
     )
+    # Fail fast if the solvent template was ASE ``MOL`` (CHARMM GENERATE aborts).
+    from mmml.analysis.residue_geometry import _pdb_resnames
+
+    restored = _pdb_resnames(out_pdb)
+    if name not in restored:
+        raise RuntimeError(
+            f"After Packmol rewrite, {out_pdb} is missing solvent residue {name!r} "
+            f"(found {sorted(restored)}). Solvent template pdb/{solvent_tag}.pdb "
+            "likely used ASE placeholder MOL — regenerate with make-res / "
+            "ensure_residue_pdb."
+        )
     print(f"Generated {out_pdb} (CGenFF residue names restored)")
 
 

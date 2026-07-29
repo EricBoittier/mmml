@@ -91,6 +91,26 @@ def test_build_literature_benzene_supercell_auto_reps():
     assert result.density_g_cm3 == pytest.approx(1.202, rel=1e-3)
 
 
+def test_literature_benzene_pdb_keeps_benz_not_ben():
+    """4-char CGenFF RESN must survive PDB export for CHARMM GENERATE."""
+    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _residue_sequence_from_pdb,
+    )
+
+    result = build_literature_charmm_supercell(
+        "benz",
+        supercell_reps=(1, 1, 1),
+        min_box_side_a=None,
+    )
+    text = result.pdb_path.read_text(encoding="utf-8")
+    assert "BENZ" in text
+    assert " BEN " not in text
+    seq = _residue_sequence_from_pdb(result.pdb_path)
+    assert seq
+    assert all(r == "BENZ" for r in seq)
+
+
 def test_charmm_crystal_metrics_from_preset():
     from mmml.interfaces.crystal_charmm import charmm_crystal_metrics_from_preset
     from mmml.interfaces.crystal_reference import metrics_from_cif

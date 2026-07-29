@@ -34,6 +34,9 @@ _CAMPAIGN_GEOMETRY_ALIASES: dict[str, str] = {
 KNOWN_SOLVENT_DENSITY_KG_M3: dict[str, float] = {
     "TIP3": 1000.0,
     "OCOH": 824.0,
+    "ACN": 786.0,
+    "DMSO": 1100.0,
+    "MEOH": 792.0,
 }
 
 
@@ -145,6 +148,23 @@ def load_residue_monomer_atoms(
     )
 
 
+def _pdb_resnames(path: Path) -> set[str]:
+    """Residue names from ATOM/HETATM records (whitespace-tolerant)."""
+    names: set[str] = set()
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.startswith(("ATOM  ", "HETATM")):
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        # Standard: ATOM serial name resn ...; with chain: name resn chain resid
+        if len(parts) >= 5 and len(parts[4]) == 1 and parts[4].isalpha():
+            names.add(parts[3].upper())
+        else:
+            names.add(parts[3].upper())
+    return names
+
+
 def ensure_residue_pdb(
     residue: str,
     *,
@@ -154,6 +174,7 @@ def ensure_residue_pdb(
     """Ensure ``pdb/<resi>.pdb`` exists; return its path.
 
     Preserves an existing ``pdb/initial.pdb`` when generating via ``make-res``.
+    Never overwrites a CHARMM/make-res PDB with ASE's default ``MOL`` resname.
     """
     name = normalize_cgenff_residue_name(residue)
     out = Path(dest) if dest is not None else Path("pdb") / f"{name.lower()}.pdb"
@@ -166,28 +187,45 @@ def ensure_residue_pdb(
         out.write_bytes(bundled.read_bytes())
         return out.resolve()
 
-    atoms = load_residue_monomer_atoms(name, generate=generate)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    ase.io.write(str(out), atoms)
-    return out.resolve()
+    # ``make-res`` (via load→generate) writes ``pdb/<resi>.pdb`` with CGenFF names.
+    load_residue_monomer_atoms(name, generate=generate)
+    if out.is_file():
+        resnames = _pdb_resnames(out)
+        if resnames and resnames != {"MOL"} and name in resnames:
+            return out.resolve()
+        if resnames == {"MOL"}:
+            raise RuntimeError(
+                f"{out} has ASE placeholder resname MOL after generating {name!r}. "
+                "CHARMM GENERATE will fail; fix the monomer writer to keep CGenFF names."
+            )
+        return out.resolve()
+
+    raise FileNotFoundError(
+        f"Expected {out} after loading residue {name!r}, but the file is missing."
+    )
 
 
 def _generate_monomer_via_make_res(name: str) -> Atoms:
-    """Generate a residue with ``make-res``, restoring ``pdb/initial.pdb`` afterward."""
+    """Generate a residue with ``make-res``, restoring ``pdb/initial.pdb`` afterward.
+
+    Relies on ``setupRes`` copying the CHARMM ``write.coor_pdb`` output to
+    ``pdb/<resi>.pdb``. Do **not** rewrite that file with ``ase.io.write`` —
+    ASE defaults the residue name to ``MOL``, which breaks Packmol→GENERATE.
+    """
     import argparse
 
     from mmml.cli.make import make_res
 
     initial = Path("pdb/initial.pdb")
     backup = initial.read_bytes() if initial.is_file() else None
+    out = Path("pdb") / f"{name.lower()}.pdb"
     try:
-        atoms = make_res.main_loop(
-            argparse.Namespace(res=name, skip_energy_show=True)
-        )
-        out = Path("pdb") / f"{name.lower()}.pdb"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        ase.io.write(str(out), atoms)
-        return atoms
+        make_res.main_loop(argparse.Namespace(res=name, skip_energy_show=True))
+        if not out.is_file():
+            raise FileNotFoundError(
+                f"make-res did not write {out} for residue {name!r}"
+            )
+        return _read_monomer_pdb(out)
     finally:
         if backup is not None:
             initial.parent.mkdir(parents=True, exist_ok=True)

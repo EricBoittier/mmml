@@ -586,7 +586,7 @@ def write_monomer_pdb_for_packmol(
         )
     coords_arr = coords_arr - coords_arr.mean(axis=0)
     pdb_path.parent.mkdir(parents=True, exist_ok=True)
-    resn = str(resname).upper()[:3] or "UNK"
+    resn = str(resname).strip().upper() or "UNK"
 
     if atom_names is not None:
         names = [str(n) for n in atom_names]
@@ -598,12 +598,10 @@ def write_monomer_pdb_for_packmol(
             "REMARK   mmml packmol monomer (CHARMM atom names for PSF reordering)",
             "CRYST1   200.000   200.000   200.000  90.00  90.00  90.00 P 1           1",
         ]
-        for i, (name, (x, y, z_coord)) in enumerate(zip(names, coords_arr), start=1):
+        for i, (name, xyz) in enumerate(zip(names, coords_arr), start=1):
             elem = _element_symbol(Z[i - 1])
             lines.append(
-                f"ATOM  {i:5d} {name[:4]:>4s} {resn:<3s} A   1    "
-                f"{float(x):8.3f}{float(y):8.3f}{float(z_coord):8.3f}  1.00  0.00          "
-                f"{elem:>2s}"
+                format_cgenff_pdb_atom_line(i, name, resn, 1, xyz, elem)
             )
         lines.append("END")
         pdb_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
