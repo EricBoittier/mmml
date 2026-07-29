@@ -1477,6 +1477,87 @@ def _residue_sequence_from_pdb(pdb_path: Path | str) -> list[str]:
     return seq
 
 
+# CHARMM command buffers are short; a solvated make-box sequence ("TIP3 " * N)
+# overflows and aborts with ABNORMAL TERMINATION / LEVEL 0 and no Python trace.
+_FROM_PDB_SEQUENCE_STRING_MAX_CHARS = 480
+_FROM_PDB_SEQUENCE_STRING_MAX_RESIDUES = 80
+
+
+def _sibling_psf_for_pdb(pdb_path: Path) -> Path | None:
+    """Return ``model.psf`` next to ``model.pdb`` when present (make-box layout)."""
+    sibling = pdb_path.with_suffix(".psf")
+    return sibling if sibling.is_file() else None
+
+
+def from_pdb_topology_strategy(
+    pdb_path: Path,
+    res_seq: Sequence[str],
+) -> str:
+    """How to build CHARMM topology for a full-system PDB.
+
+    Returns ``sibling_psf``, ``sequence_string``, or ``too_large``.
+    """
+    if _sibling_psf_for_pdb(pdb_path) is not None:
+        return "sibling_psf"
+    joined = " ".join(str(r) for r in res_seq)
+    if (
+        len(res_seq) > _FROM_PDB_SEQUENCE_STRING_MAX_RESIDUES
+        or len(joined) > _FROM_PDB_SEQUENCE_STRING_MAX_CHARS
+    ):
+        return "too_large"
+    return "sequence_string"
+
+
+def _record_from_pdb_cluster_metadata(
+    args: Any,
+    *,
+    path: Path,
+    side: float | None,
+    z: np.ndarray,
+) -> tuple[int, str]:
+    """Fill ``args._cluster_*`` from the live PSF; return ``(n_mol, tag)``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        atoms_per_monomer_from_psf,
+    )
+
+    atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
+    n_mol = int(len(atoms_per_list))
+    residue_labels: list[str] = []
+    try:
+        import pycharmm.psf as psf_mod
+
+        if hasattr(psf_mod, "get_res"):
+            res_all = [str(x).strip().upper() for x in psf_mod.get_res()]
+            offset = 0
+            for n in atoms_per_list:
+                residue_labels.append(
+                    res_all[offset] if 0 <= offset < len(res_all) else "UNK"
+                )
+                offset += int(n)
+    except Exception:
+        residue_labels = ["UNK"] * n_mol
+    if len(residue_labels) != n_mol:
+        residue_labels = ["UNK"] * n_mol
+
+    summary: dict[str, int] = {}
+    for lab in residue_labels:
+        summary[lab] = summary.get(lab, 0) + 1
+
+    tag = str(getattr(args, "tag", None) or path.stem or f"from_pdb_{n_mol}mer")
+    setattr(args, "_cluster_atoms_per_list", list(atoms_per_list))
+    setattr(args, "_cluster_residue_labels", list(residue_labels))
+    setattr(args, "_cluster_composition_summary", dict(summary))
+    setattr(args, "n_molecules", n_mol)
+    if not getattr(args, "quiet", False):
+        box_msg = f"box={side:.3f} Å" if side is not None else "vacuum (no box)"
+        print(
+            f"Loading full-system PDB {path.name} "
+            f"({n_mol} residues, {int(z.size)} atoms, {box_msg})",
+            flush=True,
+        )
+    return n_mol, tag
+
+
 def load_cluster_from_pdb(
     args: Any,
     *,
@@ -1484,9 +1565,10 @@ def load_cluster_from_pdb(
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
     """Cold-start from a full-system PDB (CGenFF names).
 
-    Builds the PSF with ``read.sequence_string`` + ``generate.new_segment``,
-    then overlays PDB coordinates via the coor API. Avoids ``sequence_pdb`` /
-    lingo ``READ SEQU PDB``, which abort some MPI-linked CHARMM builds.
+    Prefer a sibling ``.psf`` (make-box writes ``model.psf`` next to
+    ``model.pdb``): regenerating a solvated cell via ``sequence_string`` exceeds
+    CHARMM's command buffer and aborts with LEVEL 0. Small vacuum systems still
+    use ``sequence_string`` + ``generate.new_segment`` + coordinate overlay.
     For PBC setups, box side prefers CRYST1, then sibling ``box.json``, then
     ``--box-size``. Vacuum ``free_*`` / ``--free-space`` may omit the box.
     """
@@ -1495,9 +1577,6 @@ def load_cluster_from_pdb(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         read_pdb_cryst1_side_A,
-    )
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
-        atoms_per_monomer_from_psf,
     )
     from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
     from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
@@ -1551,47 +1630,81 @@ def load_cluster_from_pdb(
         setattr(args, "_cold_start_sim_cell_side_A", side)
         setattr(args, "_cold_start_box_sizing_source", "from_pdb")
 
-    # Use sequence_string + generate + Python coordinate overlay.
-    # ``read.sequence_pdb`` / lingo ``READ SEQU PDB`` abort this CHARMM build
-    # (ABNORMAL TERMINATION, level 0) under mpirun. Whitespace PDB parse keeps
-    # full CGenFF names (e.g. CH3CL) that fixed columns 17–20 would truncate.
     res_seq = _residue_sequence_from_pdb(path)
     _atom_names, _resnames, _resids, pdb_xyz = _parse_pdb_atoms_whitespace(path)
-    if not getattr(args, "quiet", False):
-        print(
-            f"Loading full-system PDB {path.name} "
-            f"(sequence_string {' '.join(res_seq)}, {len(pdb_xyz)} atoms)…",
-            flush=True,
-        )
-    read_cgenff_toppar()
-    import pycharmm.generate as generate
-    import pycharmm.read as read
+    strategy = from_pdb_topology_strategy(path, res_seq)
+    sibling_psf = _sibling_psf_for_pdb(path)
 
-    with charmm_relaxed_bomlev():
-        read.sequence_string(" ".join(res_seq))
-        status = generate.new_segment(
-            seg_name="SYS",
-            first_patch="NONE",
-            last_patch="NONE",
-            setup_ic=True,
-        )
-        if status is not None and int(status) not in (0, 1):
-            raise RuntimeError(
-                f"GENERATE SYS failed for full-system PDB {path.name} "
-                f"(status={status}; sequence={res_seq}). Check CGenFF residue "
-                "names and MMML_CGENFF_EXTRA_RTF for append topologies (e.g. CH3CL)."
-            )
-
-    z = np.asarray(get_Z_from_psf(), dtype=int)
-    if int(z.size) != int(pdb_xyz.shape[0]):
+    if strategy == "too_large":
         raise ValueError(
-            f"PSF atom count ({int(z.size)}) != PDB atom count "
-            f"({int(pdb_xyz.shape[0])}) for {path.name}. "
-            "Atom order must match CGenFF RTF residue order."
+            f"Full-system PDB {path.name} has {len(res_seq)} residues; regenerating "
+            "topology via CHARMM sequence_string exceeds the command buffer and "
+            "aborts with ABNORMAL TERMINATION (LEVEL 0). Place a sibling "
+            f"{path.with_suffix('.psf').name} next to the PDB (make-box writes "
+            "model.psf alongside model.pdb), or pass a smaller system."
         )
-    # PDB atom order is assumed to match GENERATE/RTF order (true for
-    # examples/m solute export and Packmol CHARMM-named monomers).
-    sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
+
+    read_cgenff_toppar()
+
+    if strategy == "sibling_psf":
+        assert sibling_psf is not None
+        from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+            read_psf_card_file,
+        )
+
+        if not getattr(args, "quiet", False):
+            print(
+                f"Loading full-system PDB {path.name} via sibling {sibling_psf.name} "
+                f"({len(res_seq)} residues, {len(pdb_xyz)} atoms)…",
+                flush=True,
+            )
+        with charmm_relaxed_bomlev():
+            # PSF EXT XPLOR (make-box model.psf) needs the Fortran C API reader.
+            read_psf_card_file(sibling_psf)
+        z = np.asarray(get_Z_from_psf(), dtype=int)
+        if int(z.size) != int(pdb_xyz.shape[0]):
+            raise ValueError(
+                f"Sibling PSF atom count ({int(z.size)}) != PDB atom count "
+                f"({int(pdb_xyz.shape[0])}) for {path.name} / {sibling_psf.name}. "
+                "Rebuild the box (make-box) so model.psf and model.pdb match."
+            )
+        sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
+    else:
+        # Small systems only: sequence_string + generate + coordinate overlay.
+        # Whitespace PDB parse keeps full CGenFF names (e.g. CH3CL).
+        import pycharmm.generate as generate
+        import pycharmm.read as read
+
+        if not getattr(args, "quiet", False):
+            print(
+                f"Loading full-system PDB {path.name} "
+                f"(sequence_string {' '.join(res_seq)}, {len(pdb_xyz)} atoms)…",
+                flush=True,
+            )
+        with charmm_relaxed_bomlev():
+            read.sequence_string(" ".join(res_seq))
+            status = generate.new_segment(
+                seg_name="SYS",
+                first_patch="NONE",
+                last_patch="NONE",
+                setup_ic=True,
+            )
+            if status is not None and int(status) not in (0, 1):
+                raise RuntimeError(
+                    f"GENERATE SYS failed for full-system PDB {path.name} "
+                    f"(status={status}; sequence={res_seq}). Check CGenFF residue "
+                    "names and MMML_CGENFF_EXTRA_RTF for append topologies (e.g. CH3CL)."
+                )
+
+        z = np.asarray(get_Z_from_psf(), dtype=int)
+        if int(z.size) != int(pdb_xyz.shape[0]):
+            raise ValueError(
+                f"PSF atom count ({int(z.size)}) != PDB atom count "
+                f"({int(pdb_xyz.shape[0])}) for {path.name}. "
+                "Atom order must match CGenFF RTF residue order."
+            )
+        sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
+
     r = get_charmm_positions_array()
     if int(r.shape[0]) == 0 or np.allclose(r, 0.0):
         raise ValueError(
@@ -1600,46 +1713,7 @@ def load_cluster_from_pdb(
             "and MMML_CGENFF_EXTRA_RTF is set for append residues (e.g. CH3CL)."
         )
 
-    atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
-    n_mol = int(len(atoms_per_list))
-    # Residue labels from PSF when available
-    residue_labels: list[str] = []
-    try:
-        import pycharmm.psf as psf_mod
-
-        if hasattr(psf_mod, "get_res"):
-            res_all = [str(x).strip().upper() for x in psf_mod.get_res()]
-            offset = 0
-            for n in atoms_per_list:
-                residue_labels.append(
-                    res_all[offset] if 0 <= offset < len(res_all) else "UNK"
-                )
-                offset += int(n)
-    except Exception:
-        residue_labels = ["UNK"] * n_mol
-    if len(residue_labels) != n_mol:
-        residue_labels = ["UNK"] * n_mol
-
-    summary: dict[str, int] = {}
-    for lab in residue_labels:
-        summary[lab] = summary.get(lab, 0) + 1
-
-    tag = str(
-        getattr(args, "tag", None)
-        or path.stem
-        or f"from_pdb_{n_mol}mer"
-    )
-    setattr(args, "_cluster_atoms_per_list", list(atoms_per_list))
-    setattr(args, "_cluster_residue_labels", list(residue_labels))
-    setattr(args, "_cluster_composition_summary", dict(summary))
-    setattr(args, "n_molecules", n_mol)
-    if not getattr(args, "quiet", False):
-        box_msg = f"box={side:.3f} Å" if side is not None else "vacuum (no box)"
-        print(
-            f"Loading full-system PDB {path.name} "
-            f"({n_mol} residues, {int(z.size)} atoms, {box_msg})",
-            flush=True,
-        )
+    n_mol, tag = _record_from_pdb_cluster_metadata(args, path=path, side=side, z=z)
     sync_charmm_positions(r)
     return z, np.asarray(r, dtype=float), n_mol, tag
 
