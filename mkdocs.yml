@@ -119,6 +119,7 @@ nav:
           - orca-client: cli/commands/orca-client.md
           - orca-external: cli/commands/orca-external.md
       - Other utilities:
+          - compare-charmm-ml: cli/commands/compare-charmm-ml.md
           - doctor: cli/commands/doctor.md
           - kernnn-evaluate: cli/commands/kernnn-evaluate.md
           - kernnn-train: cli/commands/kernnn-train.md

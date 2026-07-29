@@ -20,6 +20,8 @@ and versioning process.
   (default `dt=0.1` fs). Exports CoM-centered window XYZs (optional) and an ASE
   `umbrella_bin_minima.traj` of the lowest `E_ML+W` frame per window. See
   `docs/umbrella.md`.
+- First-class CLI: `mmml compare-charmm-ml` (CHARMM PSF charges vs joint
+  PhysNet/DCMNet dipoles and ESP on a validation split).
 
 ### Fixed
 

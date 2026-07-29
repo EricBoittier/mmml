@@ -125,6 +125,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     CommandSpec("physnet-md", "mmml.cli.misc.physnet_md", "PhysNet MD sampling"),
     CommandSpec("physnet-evaluate", "mmml.cli.misc.physnet_evaluate", "Evaluate PhysNet checkpoint"),
     CommandSpec("compare-npz", "mmml.cli.misc.compare_npz", "Reference vs model NPZ plots"),
+    CommandSpec(
+        "compare-charmm-ml",
+        "mmml.cli.misc.compare_charmm_ml",
+        "CHARMM PSF charges vs joint ML dipoles/ESP",
+    ),
     CommandSpec("cross-check", "mmml.cli.misc.cross_check", "Supplementary QC cross-check"),
     CommandSpec("efield-train", "mmml.cli.misc.efield_train", "Train external electric-field PhysNet", parser_module="mmml.models.efield.training"),
     CommandSpec("efield-evaluate", "mmml.cli.misc.efield_evaluate", "Evaluate external electric-field PhysNet", parser_module="mmml.models.efield.evaluate"),

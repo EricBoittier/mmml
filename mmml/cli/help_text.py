@@ -86,6 +86,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         (
             CommandInfo("cross-check", "Supplementary QC cross-check"),
             CommandInfo("compare-npz", "Reference vs model NPZ plots"),
+            CommandInfo("compare-charmm-ml", "CHARMM PSF charges vs joint ML dipoles/ESP"),
             CommandInfo("unwrap-traj", "Unwrap periodic trajectories"),
             CommandInfo("orca-server", "Persistent JAX server for ORCA"),
         ),
@@ -118,6 +119,10 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmml fix-and-split --efd data.npz --output-dir ./splits",
             "mmml npz2traj data.npz -o trajectory.traj",
             "mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp",
+            "mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint "
+            "--valid-efd splits/energies_forces_dipoles_test.npz "
+            "--valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb "
+            "--n-samples 50 --out-dir charmm_ml_comparison",
             "mmml physnet-train --config train.yaml",
             "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
             "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",

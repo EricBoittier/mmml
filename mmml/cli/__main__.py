@@ -333,6 +333,11 @@ def main():
         sys.argv = ["mmml compare-npz"] + args.args
         return compare_npz.main()
 
+    elif command == "compare-charmm-ml":
+        from .misc import compare_charmm_ml
+        sys.argv = ["mmml compare-charmm-ml"] + args.args
+        return compare_charmm_ml.main()
+
     elif command == "cross-check":
         from .misc import cross_check
         sys.argv = ["mmml cross-check"] + args.args
