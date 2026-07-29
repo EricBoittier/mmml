@@ -66,7 +66,7 @@ PSF + PDB + box → MolecularSystem
   so MBAR does not need to rebuild the hybrid Hamiltonian.
 - v1: 1D CV only; no replica exchange.
 
-Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](../examples/m/yaml/umbrella_nc_tip3.yaml).
+Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/m/yaml/umbrella_nc_tip3.yaml).
 
 ## Workflow
 
