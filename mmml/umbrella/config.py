@@ -111,14 +111,11 @@ class UmbrellaConfig:
 
     checkpoint: Path
     output_dir: Path
-<<<<<<< HEAD
-    atom_i: int
-    atom_j: int
-    structure: Path | None = None
-=======
+    # Optional: a combination CV (``cv_x``) can define the coordinate instead,
+    # and the hybrid engine can name atoms by ``atom_name_i``/``atom_name_j``.
     atom_i: int | None = None
     atom_j: int | None = None
->>>>>>> 50152da7b (Update)
+    structure: Path | None = None
     atom_k: int | None = None
     atom_l: int | None = None
     cv_x: Any = None
@@ -183,20 +180,15 @@ class UmbrellaConfig:
     lr_solver: str = "mic"
 
     def __post_init__(self) -> None:
-<<<<<<< HEAD
         if self.engine not in ("packed_ml", "hybrid_jaxmd"):
             raise ValueError(
                 f"engine must be packed_ml|hybrid_jaxmd (got {self.engine!r})"
             )
-        if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
-            raise ValueError("atom_i and atom_j must be distinct non-negative indices")
-=======
         if self.cv_x is None:
             if self.atom_i is None or self.atom_j is None:
                 raise ValueError("provide either cv_x or both atom_i and atom_j")
             if self.atom_i == self.atom_j or min(self.atom_i, self.atom_j) < 0:
                 raise ValueError("atom_i and atom_j must be distinct non-negative indices")
->>>>>>> 50152da7b (Update)
         has_k = self.atom_k is not None
         has_l = self.atom_l is not None
         if self.cv_y is None:
@@ -446,7 +438,6 @@ class UmbrellaConfig:
 
     def to_dict(self) -> dict[str, Any]:
         out = asdict(self)
-<<<<<<< HEAD
         for key in (
             "checkpoint",
             "structure",
@@ -457,9 +448,6 @@ class UmbrellaConfig:
         ):
             if out[key] is not None:
                 out[key] = str(out[key])
-=======
-        for key in ("checkpoint", "structure", "output_dir"):
-            out[key] = str(out[key])
         for key in ("cv_x", "cv_y"):
             cv = getattr(self, key)
             out[key] = (
@@ -470,17 +458,13 @@ class UmbrellaConfig:
                     "coefficients": list(LinearDistanceCV.from_spec(cv).coefficients),
                 }
             )
->>>>>>> 50152da7b (Update)
         out["targets_A"] = list(out["targets_A"])
         out["targets_y_A"] = list(out["targets_y_A"])
         out["move_with"] = list(out["move_with"])
         out["move_with2"] = list(out["move_with2"])
         out["invert_with"] = list(out["invert_with"])
-<<<<<<< HEAD
         out["ml_resnames"] = list(out["ml_resnames"])
-=======
         out["walls"] = [w.to_spec() for w in self.resolve_walls()]
->>>>>>> 50152da7b (Update)
         if isinstance(self.k_ev_A2, tuple):
             out["k_ev_A2"] = list(self.k_ev_A2)
         if isinstance(self.k_y_ev_A2, tuple):

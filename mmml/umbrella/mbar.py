@@ -36,18 +36,14 @@ def fill_u_kln(
     """Build reduced-potential tensor ``u_kln`` and sample counts ``N_k``.
 
     ``positions`` shape: ``(K, N_frames, N_atoms, 3)``.
-<<<<<<< HEAD
     ``u_kln[k, l, n] = β (U_unbiased(R_k^n) + W_l(R_k^n))``.
 
     Pass either ``ml_energy_fn`` (gas-phase recomputation) or precomputed
     ``unbiased_energies`` with shape ``(K, N_frames)`` (hybrid mechanical
     embedding). When ``box`` is set, bias distances use minimum-image.
-=======
-    ``u_kln[k, l, n] = β (U_ML(R_k^n) + W_l(R_k^n))``.
 
     ``atom_pairs`` entries may be ``(i, j)`` pairs or
     :class:`~mmml.md.restraints.LinearDistanceCV` objects.
->>>>>>> 50152da7b (Update)
     """
     pos = np.asarray(positions, dtype=np.float64)
     if pos.ndim != 4:
@@ -235,7 +231,6 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     if "box" in snap:
         box = np.asarray(snap["box"], dtype=np.float64)
 
-<<<<<<< HEAD
     if engine == "hybrid_jaxmd" or "energies_unbiased_ev" in snap:
         if "energies_unbiased_ev" not in snap:
             raise ValueError(
@@ -243,7 +238,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
             )
         u_kln, n_k = fill_u_kln(
             positions=positions,
-            atom_pairs=atom_pairs,
+            atom_pairs=cvs,
             targets_per_cv=targets_per_cv,
             k_per_cv=k_per_cv,
             temperature_K=float(temperature_K),
@@ -265,22 +260,12 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
 
         u_kln, n_k = fill_u_kln(
             positions=positions,
-            atom_pairs=atom_pairs,
+            atom_pairs=cvs,
             targets_per_cv=targets_per_cv,
             k_per_cv=k_per_cv,
             temperature_K=float(temperature_K),
             ml_energy_fn=ml_energy_np,
         )
-=======
-    u_kln, n_k = fill_u_kln(
-        positions=positions,
-        atom_pairs=cvs,
-        targets_per_cv=targets_per_cv,
-        k_per_cv=k_per_cv,
-        temperature_K=float(temperature_K),
-        ml_energy_fn=ml_energy_np,
-    )
->>>>>>> 50152da7b (Update)
     if np.any(n_k == 0):
         return {
             "error": "MBAR skipped: at least one umbrella window has no snapshots.",
