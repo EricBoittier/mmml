@@ -1,0 +1,7 @@
+REMARK   bundled make-res-style monomer for METH (CH4, tetrahedral r(CH)=1.111 Å)
+ATOM      1   C1 METH A   1       0.000   0.000   0.000  1.00  0.00           C
+ATOM      2  H11 METH A   1       0.641   0.641   0.641  1.00  0.00           H
+ATOM      3  H12 METH A   1       0.641  -0.641  -0.641  1.00  0.00           H
+ATOM      4  H13 METH A   1      -0.641   0.641  -0.641  1.00  0.00           H
+ATOM      5  H14 METH A   1      -0.641  -0.641   0.641  1.00  0.00           H
+END
