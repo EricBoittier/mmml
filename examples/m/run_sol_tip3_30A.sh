@@ -25,9 +25,19 @@ echo "=== make-box TIP3 (L=${BOX_SIZE} Å, USE_DENSITY=${USE_DENSITY}) ==="
 bash examples/m/08_make_boxes.sh
 
 pdb="${ARTIFACTS_DIR}/boxes/tip3/model.pdb"
+psf="${ARTIFACTS_DIR}/boxes/tip3/model.psf"
 if [[ ! -f "${pdb}" ]]; then
   echo "FAIL: missing ${pdb}"
   exit 1
+fi
+if [[ ! -f "${psf}" ]]; then
+  echo "FAIL: missing ${psf} (make-box must write model.psf; jaxmd-unified"
+  echo "      loads the sibling PSF — regenerating a TIP3 box via sequence_string"
+  echo "      overflows CHARMM and aborts with ABNORMAL TERMINATION LEVEL 0)"
+  exit 1
+fi
+if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
+  echo "WARN: MMML_CGENFF_EXTRA_RTF unset — source examples/m/_env.sh for CH3CL"
 fi
 
 echo "=== md-system sol_tip3_30A (jaxmd unified) ==="

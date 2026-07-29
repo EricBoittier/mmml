@@ -41,6 +41,25 @@ def test_resolve_charmm_use_pbc_stays_off_when_vacuum_from_pdb_omits_box():
     assert resolve_charmm_use_pbc(args) is False
 
 
+def test_from_pdb_topology_prefers_sibling_psf(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import from_pdb_topology_strategy
+
+    pdb = tmp_path / "model.pdb"
+    pdb.write_text("ATOM\n", encoding="utf-8")
+    assert from_pdb_topology_strategy(pdb, ["TIP3"] * 200) == "too_large"
+    (tmp_path / "model.psf").write_text("PSF\n", encoding="utf-8")
+    assert from_pdb_topology_strategy(pdb, ["TIP3"] * 200) == "sibling_psf"
+    assert from_pdb_topology_strategy(pdb, ["AMM1", "CH3CL"]) == "sibling_psf"
+
+
+def test_from_pdb_topology_allows_small_sequence_without_psf(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import from_pdb_topology_strategy
+
+    pdb = tmp_path / "dimer.pdb"
+    pdb.write_text("ATOM\n", encoding="utf-8")
+    assert from_pdb_topology_strategy(pdb, ["AMM1", "CH3CL"]) == "sequence_string"
+
+
 def test_residue_sequence_from_pdb_preserves_resid_order(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         _parse_pdb_atoms_whitespace,
