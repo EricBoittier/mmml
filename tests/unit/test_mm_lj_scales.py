@@ -254,3 +254,260 @@ def test_lj_scale_gradients_nonzero():
     g_sig, g_eps = jax.grad(loss)((jnp.ones(2), jnp.ones(2)))
     assert np.isfinite(g_sig).all() and np.isfinite(g_eps).all()
     assert float(jnp.sum(jnp.abs(g_sig)) + jnp.sum(jnp.abs(g_eps))) > 0.0
+
+
+def test_epsilon_only_scale_changes_energy_sigma_only_changes_shape():
+    """ε scale multiplies well depth; σ scale shifts the LJ length scale."""
+    from mmml.models.cgenff_mm import cgenff_mm_energy
+    from mmml.models.mm_lj_scales import apply_mm_lj_scales
+
+    SIG = jnp.array([3.6527, 2.3876])
+    EPS = jnp.array([0.0780, 0.0240])
+    pos = jnp.array(
+        [[0.0, 0, 0], [1.0, 0, 0], [3.5, 0, 0], [4.5, 0, 0]], dtype=jnp.float32
+    )
+    mid = jnp.array([0, 0, 1, 1])
+    tidx = jnp.array([0, 1, 0, 1])
+    chg = jnp.zeros(4)
+    kw = dict(
+        mm_switch_on=3.0,
+        mm_switch_width=2.0,
+        ml_switch_width=1.0,
+        complementary_handoff=False,
+    )
+
+    def e_mm(sig, eps):
+        return float(
+            cgenff_mm_energy(pos, tidx, mid, chg, sig, eps, **kw)
+        )
+
+    base = e_mm(SIG, EPS)
+    sig2, eps2 = apply_mm_lj_scales(SIG, EPS, jnp.ones(2), jnp.array([2.0, 2.0]))
+    doubled_eps = e_mm(sig2, eps2)
+    assert doubled_eps == pytest.approx(2.0 * base, rel=1e-5)
+
+    sig3, eps3 = apply_mm_lj_scales(SIG, EPS, jnp.array([1.3, 1.3]), jnp.ones(2))
+    shifted_sig = e_mm(sig3, eps3)
+    assert shifted_sig != pytest.approx(base, rel=1e-3)
+
+
+def test_params_leaf_path_through_hybrid_forward():
+    """Scales attached on the Optax pytree are picked up when learn flag is on."""
+    from mmml.models.hybrid_energy import hybrid_forward
+    from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+    SIG = jnp.array([3.6527, 2.3876])
+    EPS = jnp.array([0.0780, 0.0240])
+    KW = dict(
+        mm_switch_on=3.0,
+        mm_switch_width=2.0,
+        ml_switch_width=1.0,
+        complementary_handoff=False,
+        learn_mm_lj_scales=True,
+    )
+
+    def fake_apply(params, *, atomic_numbers, positions, dst_idx, src_idx,
+                   batch_segments, batch_size, batch_mask, atom_mask):
+        assert MM_LJ_SIGMA_SCALE_KEY not in params
+        e = jnp.sum(atom_mask) * jnp.asarray(-1.0)
+        return {"energy": e.reshape(batch_size, 1), "forces": jnp.zeros_like(positions)}
+
+    n = 4
+    pos = jnp.array(
+        [[0.0, 0, 0], [1.0, 0, 0], [3.5, 0, 0], [4.5, 0, 0]], dtype=jnp.float32
+    )
+    mid = jnp.array([0, 0, 1, 1])
+    tidx = jnp.array([0, 1, 0, 1])
+    atom_mask = jnp.ones(n, dtype=jnp.float32)
+    idx = jnp.arange(n)
+    dst, src = jnp.meshgrid(idx, idx, indexing="ij")
+    dst, src = dst.reshape(-1), src.reshape(-1)
+    batch = {
+        "R": pos,
+        "Z": jnp.array([6, 1, 6, 1]),
+        "mol_id": mid.reshape(1, n),
+        "cgenff_type_idx": tidx.reshape(1, n),
+        "cgenff_charge": jnp.zeros(n).reshape(1, n),
+        "atom_mask": atom_mask,
+        "batch_mask": (dst != src).astype(jnp.float32),
+        "dst_idx": dst,
+        "src_idx": src,
+        "batch_segments": jnp.zeros(n, dtype=jnp.int32),
+    }
+    params = attach_mm_lj_scales(
+        {"params": {}},
+        2,
+        sigma_scale=np.array([1.0, 1.0]),
+        epsilon_scale=np.array([1.5, 1.5]),
+    )
+    out = hybrid_forward(fake_apply, params, batch, 1, SIG, EPS, **KW)
+    base = hybrid_forward(
+        fake_apply,
+        {"params": {}},
+        batch,
+        1,
+        SIG,
+        EPS,
+        learn_mm_lj_scales=True,
+        mm_lj_sigma_scale=jnp.ones(2),
+        mm_lj_epsilon_scale=jnp.ones(2),
+        mm_switch_on=3.0,
+        mm_switch_width=2.0,
+        ml_switch_width=1.0,
+        complementary_handoff=False,
+    )
+    # 1.5× ε on both types → e_mm ≈ 1.5× (charges zero)
+    e_out = float(np.asarray(out["e_mm"]).reshape(-1)[0])
+    e_base = float(np.asarray(base["e_mm"]).reshape(-1)[0])
+    assert e_out == pytest.approx(1.5 * e_base, rel=1e-5)
+
+
+def test_resolve_md_lj_scales_from_checkpoint_parent(tmp_path: Path):
+    run = tmp_path / "run-abc"
+    run.mkdir()
+    write_mm_lj_scales_into_hybrid_mm_json(
+        run / "hybrid_mm.json",
+        type_names=["T0", "T1"],
+        sigma_scale=[1.1, 0.9],
+        epsilon_scale=[1.2, 0.8],
+    )
+    ckpt = run / "epoch-1" / "params.json"
+    ckpt.parent.mkdir()
+    ckpt.write_text("{}", encoding="utf-8")
+    ep, sig = resolve_md_lj_scales(checkpoint=ckpt, atc_names=["T1", "T0"])
+    assert ep is not None
+    np.testing.assert_allclose(sig, [0.9, 1.1])
+    np.testing.assert_allclose(ep, [0.8, 1.2])
+
+
+def test_resolve_md_lj_scales_missing_learn_flag_returns_none(tmp_path: Path):
+    path = tmp_path / "hybrid_mm.json"
+    path.write_text(
+        json.dumps({"hybrid_mm": True, "learn_mm_lj_scales": False}),
+        encoding="utf-8",
+    )
+    ep, sig = resolve_md_lj_scales(scales_file=path, atc_names=["A"])
+    assert ep is None and sig is None
+
+
+def test_load_sidecar_incomplete_raises(tmp_path: Path):
+    path = tmp_path / "hybrid_mm.json"
+    path.write_text(
+        json.dumps({"learn_mm_lj_scales": True, "cgenff_type_names": ["A"]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="missing"):
+        load_mm_lj_scales_sidecar(path)
+
+
+def test_scales_to_atc_length_mismatch():
+    with pytest.raises(ValueError, match="scale length"):
+        scales_to_atc(["A", "B"], [1.0], [1.0, 1.0], ["A"])
+
+
+def test_hybrid_mm_config_learn_flag_coerce():
+    from mmml.models.hybrid_energy import HybridMMConfig
+
+    cfg = HybridMMConfig.coerce(
+        {
+            "master_sigmas": [3.6, 2.4],
+            "master_epsilons": [0.08, 0.02],
+            "mm_switch_on": 8.0,
+            "mm_switch_width": 5.0,
+            "ml_switch_width": 1.5,
+            "learn_mm_lj_scales": True,
+        }
+    )
+    assert cfg.learn_mm_lj_scales is True
+    assert "learn_mm_lj_scales" in cfg.kwargs()
+
+
+def test_hybrid_mm_metadata_includes_lj_flag():
+    from mmml.models.hybrid_energy import HybridMMConfig
+    from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+
+    cfg = HybridMMConfig(
+        master_sigmas=(3.6, 2.4),
+        master_epsilons=(0.08, 0.02),
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+        ml_switch_width=1.5,
+        learn_mm_lj_scales=True,
+    )
+    meta = hybrid_mm_metadata_dict(cfg)
+    assert meta["learn_mm_lj_scales"] is True
+    assert meta["include_lj"] is True
+    assert meta["lr_solver"] == "mic"
+
+
+def test_cli_learn_mm_lj_scales_flag(tmp_path):
+    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+
+    payload = {
+        "R": np.zeros((2, 4, 3)),
+        "Z": np.ones((2, 4), dtype=int),
+        "F": np.zeros((2, 4, 3)),
+        "E": np.zeros(2),
+        "N": np.full(2, 4),
+        "cgenff_type_idx": np.zeros((2, 4), dtype=int),
+        "mol_id": np.tile([0, 0, 1, 1], (2, 1)),
+        "cgenff_charge": np.zeros((2, 4)),
+        "cgenff_master_sigmas": np.array([3.6, 2.4]),
+        "cgenff_master_epsilons": np.array([0.078, 0.024]),
+    }
+    p = tmp_path / "d.npz"
+    np.savez(p, **payload)
+
+    args = parse_args(
+        ["--data", str(p), "--hybrid-mm", "--learn-mm-lj-scales", "--quiet"]
+    )
+    assert args.learn_mm_lj_scales is True
+    cfg = _build_hybrid_mm_config(args, [str(p)])
+    assert cfg["learn_mm_lj_scales"] is True
+    assert cfg["include_lj"] is True
+
+    # Ewald forces LJ (and therefore learnable scales) off.
+    args_ew = parse_args(
+        [
+            "--data",
+            str(p),
+            "--hybrid-mm",
+            "--learn-mm-lj-scales",
+            "--lr-solver",
+            "ewald",
+            "--pme-box-length",
+            "20",
+            "--quiet",
+        ]
+    )
+    cfg_ew = _build_hybrid_mm_config(args_ew, [str(p)])
+    assert cfg_ew["include_lj"] is False
+    assert cfg_ew["learn_mm_lj_scales"] is False
+
+
+def test_example_yaml_keys_exist():
+    """Checked-in example YAMLs carry the student-facing knobs."""
+    import yaml
+
+    root = Path(__file__).resolve().parents[2]
+    train = yaml.safe_load(
+        (root / "examples/hybrid_mm_charges/train_fixed_lj_scales.yaml").read_text()
+    )
+    assert train["learn_mm_lj_scales"] is True
+    assert train["hybrid_mm"] is True
+    assert train.get("lr_solver", "mic") == "mic"
+    md = yaml.safe_load(
+        (root / "examples/hybrid_mm_charges/md_fixed_lj_scales.yaml").read_text()
+    )
+    assert "checkpoint" in md["defaults"]
+    assert md["defaults"]["include_mm"] is True
+
+
+def test_docs_page_exists_and_links_examples():
+    root = Path(__file__).resolve().parents[2]
+    page = (root / "docs/hybrid-mm-lj-scales.md").read_text(encoding="utf-8")
+    assert "learn_mm_lj_scales" in page
+    assert "train_fixed_lj_scales.yaml" in page
+    assert "hybrid-mm-charges.md" in page
+    assert "hybrid-mm-dataset-preparation.md" in page
+    assert "md-interaction-policies.md" in page

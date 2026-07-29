@@ -4,8 +4,9 @@ Hybrid ML/MM training ([`--hybrid-mm`](cli/commands/physnet-train.md)) evaluates
 
 $$E = (1-s)\,(E_A + E_B) + s\,E_{AB} + E_{MM}$$
 
-where the **`E_MM`** term is a fixed CGenFF Lennard-Jones + Coulomb baseline
-between the two monomers. To compute it, every atom in every training frame needs
+where the **`E_MM`** term is a CGenFF Lennard-Jones + Coulomb baseline
+between the two monomers (LJ σ/ε may later be scaled in training; see
+[trainable hybrid MM LJ scales](hybrid-mm-lj-scales.md)). To compute it, every atom in every training frame needs
 a **CGenFF atom type** (→ LJ σ/ε), a **CGenFF charge**, and a **monomer id**.
 
 Raw QM datasets (`R`, `Z`, `E`, `F`, `D`, …) carry none of this — a `.npz` from
@@ -19,6 +20,7 @@ on the tutorial's **acodcm** (acetone–dichloromethane) system.
 
 !!! note "Related"
     [Hybrid MM charges (fixed / q0 / q1)](hybrid-mm-charges.md) ·
+    [Trainable hybrid MM LJ scales](hybrid-mm-lj-scales.md) ·
     [Hybrid ML/MM decomposition](hybrid-mlmm-decomposition.md) ·
     [Hybrid potential regions & LR solvers](hybrid-potential-regions.md) ·
     [CHARMM CGenFF JAX clone](cgenff-jax-clone.md)

@@ -182,22 +182,57 @@ def test_md_system_parse_resolves_interaction_policy(tmp_path, monkeypatch):
     assert Path(args.interaction_policy).resolve() == policy.resolve()
 
 
-def test_validate_and_record_fail_closed_multi_provider(tmp_path):
+def test_validate_single_provider_records_hash(tmp_path):
     import argparse
 
     from mmml.cli.run.md_system import _validate_and_record_interaction_policy
 
-    policy = tmp_path / "multi.yaml"
+    policy = tmp_path / "single.yaml"
     policy.write_text(
         "schema_version: 1\n"
-        "providers:\n"
-        "  pep_ml: {kind: ml, checkpoint: pep.pkl}\n"
-        "  charmm: {kind: mm, calculator: cgenff}\n"
-        "monomers: {PEP: pep_ml, TIP3: charmm}\n"
-        "pairs:\n"
-        "  - {species: ['*', '*'], provider: charmm}\n",
+        "providers: {cgenff: {kind: mm, calculator: cgenff}}\n"
+        "monomers: {DCM: cgenff}\n"
+        "pairs: [{species: ['*', '*'], provider: cgenff}]\n",
         encoding="utf-8",
     )
     args = argparse.Namespace(interaction_policy=policy, quiet=True)
-    with pytest.raises(NotImplementedError, match="not yet lowerable"):
-        _validate_and_record_interaction_policy(args)
+    _validate_and_record_interaction_policy(args)
+    assert getattr(args, "_interaction_policy_schema") == 1
+    assert len(getattr(args, "_interaction_policy_hash")) == 64
+
+
+def test_manifest_includes_interaction_policy_block():
+    import argparse
+    from datetime import datetime, timezone
+
+    from mmml.cli.run.md_system import build_run_manifest
+
+    args = argparse.Namespace(
+        setup="free_nve",
+        output_dir="/tmp/out_job",
+        interaction_policy="/tmp/policy.yaml",
+        _interaction_policy_schema=1,
+        _interaction_policy_hash="abc123",
+        extra_args=None,
+        jobs_dir=None,
+    )
+    # resolve_job_name needs a non-default output stem
+    man = build_run_manifest(
+        args,
+        backend="pycharmm",
+        argv=None,
+        started_at=datetime.now(timezone.utc).isoformat(),
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        exit_code=0,
+    )
+    assert man["interaction_policy"]["path"] == "/tmp/policy.yaml"
+    assert man["interaction_policy"]["schema_version"] == 1
+    assert man["interaction_policy"]["sha256"] == "abc123"
+
+
+def test_example_single_provider_policy_file_loads():
+    root = Path(__file__).resolve().parents[2]
+    policy = load_interaction_policy(
+        root / "examples/interaction_policy_single_provider.yaml"
+    )
+    assert policy_is_lowerable(policy)

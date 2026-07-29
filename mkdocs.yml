@@ -159,6 +159,7 @@ nav:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Preparing hybrid ML/MM datasets (CGenFF assignment): hybrid-mm-dataset-preparation.md
       - Hybrid MM charges (fixed / latent / fixed+latent): hybrid-mm-charges.md
+      - Trainable hybrid MM LJ scales (per-type σ / ε): hybrid-mm-lj-scales.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
       - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md

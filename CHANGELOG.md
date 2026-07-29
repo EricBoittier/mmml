@@ -12,6 +12,8 @@ and versioning process.
 
 ### Added
 
+- Docs: student walkthrough for trainable hybrid MM LJ scales
+  ([`docs/hybrid-mm-lj-scales.md`](docs/hybrid-mm-lj-scales.md)).
 - Hybrid MM: learnable per-CGenFF-type LJ σ and ε scales (`--learn-mm-lj-scales`)
   for MIC hybrid training; scales persist in `hybrid_mm.json` and load into MD
   `ep_scale` / `sig_scale` (`--mm-lj-scales-file` or auto next to checkpoint).

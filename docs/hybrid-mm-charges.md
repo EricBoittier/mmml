@@ -5,7 +5,8 @@ training and deployment.  Implementation:
 [`mmml/models/mm_charge_mode.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/mm_charge_mode.py).
 
 Related: [Hybrid potential regions](hybrid-potential-regions.md),
-[hybrid energy assembly](https://github.com/EricBoittier/mmml/blob/main/mmml/models/hybrid_energy.py).
+[hybrid energy assembly](https://github.com/EricBoittier/mmml/blob/main/mmml/models/hybrid_energy.py),
+[**trainable LJ scales**](hybrid-mm-lj-scales.md).
 
 **Example YAMLs (train + MD for all three modes):**
 [`examples/hybrid_mm_charges/`](https://github.com/EricBoittier/mmml/tree/main/examples/hybrid_mm_charges)
@@ -46,7 +47,8 @@ switched dimer interaction ≈ E¹).  MM charges follow the same language:
 fixed CGenFF ε / Rmin.  With ``--learn-mm-lj-scales`` (MIC only), hybrid
 training learns **per-type** multiplicative scales on master σ and ε; MD loads
 them from ``hybrid_mm.json`` (or ``--mm-lj-scales-file``) into
-``ep_scale`` / ``sig_scale``.
+``ep_scale`` / ``sig_scale``.  Full student walkthrough:
+[trainable hybrid MM LJ scales](hybrid-mm-lj-scales.md).
 
 If `include_electrostatics=True` (PhysNet default) **and** hybrid `E_MM` is
 on, short-range intermolecular electrostatics can appear in both `E_ML` and
