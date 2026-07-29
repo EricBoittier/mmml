@@ -69,8 +69,8 @@ Loss is `α · MSE(GT) + (1−α) · MSE(teacher)` on energies and forces
 energies can sit near ~0 while the NPZ mean is ~10² eV. Training auto-fits an
 additive teacher energy offset (`mean(E_GT − E_teacher)`) unless you pass
 `--no-align-teacher-energy` or an explicit `--teacher-energy-offset` (eV).
-Forces are unchanged by that constant. Epoch logs report MSE in **eV²** /
-**(eV/Å)²**.
+Forces are unchanged by that constant. The optimizer minimizes MSE; epoch logs
+print **RMSE** in eV and eV/Å.
 
 ## ASE / scans / NEB / umbrella / DMC
 

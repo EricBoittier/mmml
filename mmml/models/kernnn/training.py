@@ -656,8 +656,8 @@ def train(args) -> Path:
     )
     print(f"  workdir={workdir}")
     print(
-        "  epoch log: loss = MSE(E)+f_weight*MSE(F); "
-        "E columns are MSE in eV², F columns MSE in (eV/Å)²"
+        "  epoch log: train/valid = total MSE loss (eV² scale); "
+        "E/F columns are RMSE = sqrt(MSE) in eV and eV/Å"
     )
 
     for epoch in range(int(args.epochs)):
@@ -716,11 +716,16 @@ def train(args) -> Path:
         avg_ve = np.mean([x[1] for x in v_losses])
         avg_tf = np.mean([x[2] for x in train_losses])
         avg_vf = np.mean([x[2] for x in v_losses])
+        # Optimizer minimizes MSE; print RMSE so units are eV / eV/Å.
+        rmse_te = float(np.sqrt(max(avg_te, 0.0)))
+        rmse_ve = float(np.sqrt(max(avg_ve, 0.0)))
+        rmse_tf = float(np.sqrt(max(avg_tf, 0.0)))
+        rmse_vf = float(np.sqrt(max(avg_vf, 0.0)))
         dt = time.time() - t0
         print(
             f"epoch {epoch + 1:4d}  train {avg_t:.6e}  valid {avg_v:.6e}  "
-            f"(E[eV²] {avg_te:.3e}/{avg_ve:.3e}  "
-            f"F[(eV/Å)²] {avg_tf:.3e}/{avg_vf:.3e})  {dt:.1f}s"
+            f"(E RMSE {rmse_te:.3e}/{rmse_ve:.3e} eV  "
+            f"F RMSE {rmse_tf:.3e}/{rmse_vf:.3e} eV/Å)  {dt:.1f}s"
         )
         history.append(
             {
@@ -731,6 +736,10 @@ def train(args) -> Path:
                 "eloss_valid": avg_ve,
                 "floss_train": avg_tf,
                 "floss_valid": avg_vf,
+                "e_rmse_train_eV": rmse_te,
+                "e_rmse_valid_eV": rmse_ve,
+                "f_rmse_train_eV_A": rmse_tf,
+                "f_rmse_valid_eV_A": rmse_vf,
             }
         )
 
