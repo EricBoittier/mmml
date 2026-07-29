@@ -173,10 +173,29 @@ class JaxmdDriver:
             # integrator state in one precision (NVE/NVT benefit too).
             kT = jnp.asarray(_target_temperature(0) * unit_system["temperature"], dtype=dtype)
             if ensemble.ensemble == "nvt":
-                init_fn, step_fn = simulate.nvt_nose_hoover(
-                    energy_fn, shift_fn, dt_ps, kT,
-                    thermostat_kwargs=options.get("thermostat_kwargs", {}),
-                )
+                thermo = str(ensemble.thermostat or "nhc").strip().lower()
+                if thermo in {"langevin", "lgv"}:
+                    # Prefer Langevin for packed / hybrid umbrellas: NHC couples
+                    # degrees of freedom and one hot window can runaway.
+                    gamma = float(
+                        options.get(
+                            "langevin_gamma",
+                            options.get("gamma", 0.1),
+                        )
+                    )
+                    init_fn, step_fn = simulate.nvt_langevin(
+                        energy_fn,
+                        shift_fn,
+                        dt_ps,
+                        kT,
+                        gamma=gamma,
+                        center_velocity=bool(options.get("center_velocity", False)),
+                    )
+                else:
+                    init_fn, step_fn = simulate.nvt_nose_hoover(
+                        energy_fn, shift_fn, dt_ps, kT,
+                        thermostat_kwargs=options.get("thermostat_kwargs", {}),
+                    )
             elif is_npt:
                 pressure = jnp.asarray(
                     float(ensemble.pressure_bar) * unit_system["pressure"], dtype=dtype
@@ -223,10 +242,27 @@ class JaxmdDriver:
                         thermostat_kwargs=options.get("thermostat_kwargs", {}),
                     )
                 else:
-                    _, step_fn = simulate.nvt_nose_hoover(
-                        energy_fn, shift_fn, dt_ps, block_kT,
-                        thermostat_kwargs=options.get("thermostat_kwargs", {}),
-                    )
+                    thermo = str(ensemble.thermostat or "nhc").strip().lower()
+                    if thermo in {"langevin", "lgv"}:
+                        gamma = float(
+                            options.get(
+                                "langevin_gamma",
+                                options.get("gamma", 0.1),
+                            )
+                        )
+                        _, step_fn = simulate.nvt_langevin(
+                            energy_fn,
+                            shift_fn,
+                            dt_ps,
+                            block_kT,
+                            gamma=gamma,
+                            center_velocity=bool(options.get("center_velocity", False)),
+                        )
+                    else:
+                        _, step_fn = simulate.nvt_nose_hoover(
+                            energy_fn, shift_fn, dt_ps, block_kT,
+                            thermostat_kwargs=options.get("thermostat_kwargs", {}),
+                        )
             for _ in range(count):
                 state = step_fn(state, **dynamic_kwargs)
             state.position.block_until_ready()

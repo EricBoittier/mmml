@@ -8,7 +8,7 @@
 #
 # MBAR: mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
 
-checkpoint: ../kl.json
+checkpoint: ../model_ext.json
 structure: ../neb/reag_0_opt.xyz
 output_dir: ../../artifacts/nh3_ch3cl/umbrella_nc_gas
 

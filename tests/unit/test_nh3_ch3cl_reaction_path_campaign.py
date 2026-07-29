@@ -66,8 +66,9 @@ def test_prod_config_uses_model_ext() -> None:
     assert set(cl.umbrella_variants(cfg)) == {"dt1", "dt05", "dt025"}
     for name in cl.umbrella_variants(cfg):
         v = cfg["umbrella"]["variants"][name]
-        assert float(v["xi_min"]) >= 2.0
-        assert float(v["k_ev_A2"]) <= 5.0
+        assert float(v["xi_min"]) >= 2.2
+        assert float(v["k_ev_A2"]) <= 2.5
+        assert float(v.get("timestep_fs_sol", 1.0)) <= 0.5
 
 
 def test_require_umbrella_products(tmp_path: Path) -> None:

@@ -153,6 +153,18 @@ def _require_umbrella_products(out: Path) -> None:
         )
 
 
+def _prepare_umbrella_outdir(out: Path) -> None:
+    """Drop stale status markers when re-running an incomplete umbrella cell."""
+    out.mkdir(parents=True, exist_ok=True)
+    snap = out / "umbrella_snapshots.npz"
+    if snap.is_file():
+        return
+    for name in ("status.json", "status.failed.json"):
+        p = out / name
+        if p.is_file():
+            p.unlink()
+
+
 def _write_status(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -455,6 +467,7 @@ def job_umbrella_gas(
     example = repo / str(cfg.get("example_dir", "examples/m"))
     _ensure_endpoints(repo, example)
     v = _variant_cfg(cfg, variant)
+    _prepare_umbrella_outdir(out)
     cmd = [
         "mmml",
         "umbrella-sample",
@@ -486,8 +499,12 @@ def job_umbrella_gas(
         str(int(seed)),
         "--thermostat",
         "langevin",
+        "--langevin-gamma",
+        str(float(v.get("langevin_gamma", 1.0))),
         "--overwrite",
     ]
+    if v.get("max_window_temp_K") is not None:
+        cmd.extend(["--max-window-temp-K", str(float(v["max_window_temp_K"]))])
     _uv_run(repo, cmd)
     _require_umbrella_products(out)
     return {
@@ -520,6 +537,7 @@ def job_umbrella_sol(
     if not psf.is_file() or not pdb.is_file():
         raise FileNotFoundError(f"missing make-box artifacts under {box}")
     v = _variant_cfg(cfg, variant)
+    _prepare_umbrella_outdir(out)
     yaml_path = out / "umbrella_hybrid.yaml"
     _write_hybrid_yaml(
         template=example / "yaml" / "umbrella_nc_tip3.yaml",
@@ -553,6 +571,8 @@ def job_umbrella_sol(
             str(int(seed)),
             "--thermostat",
             "langevin",
+            "--langevin-gamma",
+            str(float(v.get("langevin_gamma", 1.0))),
             "--overwrite",
         ],
     )
@@ -676,7 +696,7 @@ def job_adumb_sol(
     }
 
 
-def job_mbar(repo: Path, run_dir: Path, out: Path) -> dict[str, Any]:
+def job_mbar(repo: Path, run_dir: Path, out: Path, *, ckpt: Path | None = None) -> dict[str, Any]:
     """Run ``umbrella-mbar`` (writes into ``run_dir``) and mirror markers under ``out``."""
     if not run_dir.is_dir():
         raise FileNotFoundError(run_dir)
@@ -684,15 +704,15 @@ def job_mbar(repo: Path, run_dir: Path, out: Path) -> dict[str, Any]:
     if not snap.is_file():
         raise FileNotFoundError(f"missing {snap}")
     # CLI has no --output-dir; results land in run_dir (updates umbrella_summary.json).
-    _uv_run(
-        repo,
-        [
-            "mmml",
-            "umbrella-mbar",
-            "--run-dir",
-            str(run_dir),
-        ],
-    )
+    cmd = [
+        "mmml",
+        "umbrella-mbar",
+        "--run-dir",
+        str(run_dir),
+    ]
+    if ckpt is not None and ckpt.is_file():
+        cmd.extend(["--checkpoint", str(ckpt)])
+    _uv_run(repo, cmd)
     out.mkdir(parents=True, exist_ok=True)
     summary = run_dir / "umbrella_summary.json"
     mirrored = out / "umbrella_summary.json"
@@ -703,6 +723,7 @@ def job_mbar(repo: Path, run_dir: Path, out: Path) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "mbar_dir": str(out),
         "summary": str(mirrored if mirrored.is_file() else summary),
+        "checkpoint": str(ckpt) if ckpt is not None else None,
     }
 
 
@@ -790,7 +811,7 @@ def main() -> int:
         elif args.job == "mbar":
             if args.run_dir is None:
                 raise ValueError("--run-dir required for mbar")
-            payload.update(job_mbar(repo, args.run_dir.resolve(), out))
+            payload.update(job_mbar(repo, args.run_dir.resolve(), out, ckpt=ckpt))
         else:
             raise ValueError(f"unknown job {args.job}")
         payload["completed"] = True

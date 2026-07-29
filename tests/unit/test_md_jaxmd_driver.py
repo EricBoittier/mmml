@@ -114,6 +114,27 @@ def test_nvt_nhc_runs_and_is_reproducible():
     assert first.n_frames == 3
 
 
+def test_nvt_langevin_runs_and_is_reproducible():
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    ensemble = EnsembleSpec(
+        ensemble="nvt",
+        space="free",
+        temperature_K=150.0,
+        dt_fs=0.1,
+        n_steps=3,
+        thermostat="langevin",
+        params={"seed": 17, "langevin_gamma": 1.0, "masses": np.ones(2)},
+    )
+
+    first = JaxmdDriver(record_every=2).run(system, energy, ensemble)
+    second = JaxmdDriver(record_every=2).run(system, energy, ensemble)
+
+    np.testing.assert_allclose(first.metadata["positions"], second.metadata["positions"])
+    assert np.isfinite(first.metadata["energies"]).all()
+    assert first.n_frames == 3
+
+
 def test_fixed_box_pbc_and_neighbor_kwargs_are_routed():
     base = _system()
     system = MolecularSystem(

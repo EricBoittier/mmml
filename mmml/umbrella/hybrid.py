@@ -468,17 +468,26 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         except (ValueError, NotImplementedError):
             fmax = float("nan")
 
+        # Default Langevin: hybrid NHC was hard-coded and blew up solvent
+        # windows (high-T / stiff ξ), then Snakemake still scheduled MBAR.
+        thermo = str(getattr(cfg, "thermostat", None) or "langevin").strip().lower()
+        if thermo not in {"langevin", "lgv", "nhc", "nose_hoover", "nose-hoover"}:
+            thermo = "langevin"
+        if thermo in {"nose_hoover", "nose-hoover"}:
+            thermo = "nhc"
         ensemble = EnsembleSpec(
             ensemble="nvt",
             space="pbc" if box is not None else "free",
             temperature_K=float(cfg.temperature_K),
             dt_fs=dt,
             n_steps=int(cfg.nsteps),
-            thermostat="nhc",
+            thermostat=thermo,
             params={
                 "seed": int(cfg.seed) + wid,
                 "masses": masses,
                 "float64": True,
+                "langevin_gamma": float(getattr(cfg, "langevin_gamma", 0.1) or 0.1),
+                "center_velocity": False,
             },
         )
         driver = JaxmdDriver(

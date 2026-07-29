@@ -52,13 +52,24 @@ if [[ -z "${CHARMM_LIB_DIR:-}" || ! -d "${CHARMM_LIB_DIR:-}" ]]; then
       2>/dev/null | grep '^export CHARMM_LIB_DIR=' || true
   )" || true
 fi
+# Prefer .../lib when a parent directory was exported without libcharmm.so.
+if [[ -n "${CHARMM_LIB_DIR:-}" ]]; then
+  if [[ ! -e "${CHARMM_LIB_DIR}/libcharmm.so" && -e "${CHARMM_LIB_DIR}/lib/libcharmm.so" ]]; then
+    export CHARMM_LIB_DIR="${CHARMM_LIB_DIR}/lib"
+  fi
+fi
 if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
   for cand in \
     "$REPO_ROOT/setup/charmm/lib" \
+    "$REPO_ROOT/setup/charmm" \
     "$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib"
   do
-    if [[ -d "$cand" ]]; then
-      export CHARMM_LIB_DIR="$cand"
+    if [[ -d "$cand" ]] && { [[ -e "$cand/libcharmm.so" ]] || [[ -e "$cand/lib/libcharmm.so" ]]; }; then
+      if [[ -e "$cand/lib/libcharmm.so" && ! -e "$cand/libcharmm.so" ]]; then
+        export CHARMM_LIB_DIR="$cand/lib"
+      else
+        export CHARMM_LIB_DIR="$cand"
+      fi
       break
     fi
   done
