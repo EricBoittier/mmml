@@ -7,6 +7,7 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from ase import Atoms
 
 from mmml.models.kernnn import (
@@ -278,6 +279,17 @@ def test_print_kernel_table(capsys):
     assert "k20" in out
 
 
+def test_calibrate_teacher_energy_offset():
+    from mmml.models.kernnn.training import calibrate_teacher_energy_offset
+
+    e_gt = np.array([160.0, 162.0, 161.0], dtype=np.float64)
+    e_t = e_gt - 161.5  # atom-ref style zero near 0
+    info = calibrate_teacher_energy_offset(e_gt, e_t)
+    assert info["offset_eV"] == pytest.approx(161.5)
+    assert info["mae_aligned_eV"] == pytest.approx(0.0)
+    assert info["mae_raw_eV"] == pytest.approx(161.5)
+
+
 def test_cli_parsers():
     tp = build_train_parser()
     ep = build_eval_parser()
@@ -294,11 +306,14 @@ def test_cli_parsers():
             "--teacher-checkpoint",
             "teacher.json",
             "--list-kernels",
+            "--teacher-energy-offset",
+            "12.5",
         ]
     )
     assert targs.distance_scheme == "acem"
     assert targs.distill_alpha == 0.5
     assert targs.list_kernels is True
+    assert targs.teacher_energy_offset == 12.5
     eargs = ep.parse_args(["--split", "all", "--list-kernels"])
     assert eargs.split == "all"
     assert eargs.list_kernels is True

@@ -65,6 +65,13 @@ mmml kernnn-train \
 Loss is `α · MSE(GT) + (1−α) · MSE(teacher)` on energies and forces
 (`α=1` pure GT, `α=0` pure teacher). NPZs must include `Z` for the teacher.
 
+**Energy zero:** PhysNet teachers often use atomization references, so raw teacher
+energies can sit near ~0 while the NPZ mean is ~10² eV. Training auto-fits an
+additive teacher energy offset (`mean(E_GT − E_teacher)`) unless you pass
+`--no-align-teacher-energy` or an explicit `--teacher-energy-offset` (eV).
+Forces are unchanged by that constant. Epoch logs report MSE in **eV²** /
+**(eV/Å)²**.
+
 ## ASE / scans / NEB / umbrella / DMC
 
 ```bash

@@ -57,6 +57,9 @@ _TRAIN_DEFAULTS = {
     "architecture": "ffnet",
     "teacher_checkpoint": None,
     "distill_alpha": 1.0,
+    "teacher_energy_offset": None,
+    "no_align_teacher_energy": False,
+    "teacher_align_n": 256,
 }
 
 
@@ -128,7 +131,57 @@ def build_parser() -> argparse.ArgumentParser:
         default=d["distill_alpha"],
         help="Blend GT vs teacher: loss = alpha*GT + (1-alpha)*teacher (1=pure GT)",
     )
+    p.add_argument(
+        "--teacher-energy-offset",
+        type=float,
+        default=d["teacher_energy_offset"],
+        help="Add this constant (eV) to teacher energies before distill loss "
+        "(overrides auto-align). Use when PhysNet atom refs shift the zero.",
+    )
+    p.add_argument(
+        "--no-align-teacher-energy",
+        action="store_true",
+        default=d["no_align_teacher_energy"],
+        help="Do not auto-fit an additive teacher energy offset vs GT",
+    )
+    p.add_argument(
+        "--teacher-align-n",
+        type=int,
+        default=d["teacher_align_n"],
+        help="Number of train structures used to estimate teacher energy offset",
+    )
     return p
+
+
+def calibrate_teacher_energy_offset(
+    e_gt: np.ndarray,
+    e_teacher: np.ndarray,
+) -> dict[str, float]:
+    """Estimate additive shift so teacher energies match GT zero (atom-ref etc.).
+
+    Returns mean offset ``mean(E_gt - E_teacher)`` plus diagnostics. Forces are
+    unchanged by a constant energy shift, which is why F can learn while raw E
+    MSE stays huge (~(ΔE)²) without this alignment.
+    """
+    e_gt = np.asarray(e_gt, dtype=np.float64).reshape(-1)
+    e_teacher = np.asarray(e_teacher, dtype=np.float64).reshape(-1)
+    if e_gt.shape != e_teacher.shape:
+        raise ValueError(
+            f"GT/teacher energy shapes differ: {e_gt.shape} vs {e_teacher.shape}"
+        )
+    delta = e_gt - e_teacher
+    offset = float(np.mean(delta))
+    e_aligned = e_teacher + offset
+    return {
+        "offset_eV": offset,
+        "mean_e_gt_eV": float(np.mean(e_gt)),
+        "mean_e_teacher_eV": float(np.mean(e_teacher)),
+        "mean_e_teacher_aligned_eV": float(np.mean(e_aligned)),
+        "mae_raw_eV": float(np.mean(np.abs(delta))),
+        "mae_aligned_eV": float(np.mean(np.abs(e_gt - e_aligned))),
+        "rmse_raw_eV": float(np.sqrt(np.mean(delta**2))),
+        "rmse_aligned_eV": float(np.sqrt(np.mean((e_gt - e_aligned) ** 2))),
+    }
 
 
 def get_args(argv: list[str] | None = None):
@@ -422,6 +475,8 @@ def train(args) -> Path:
             break
 
     teacher_predict = None
+    teacher_e_offset = 0.0
+    teacher_align_info: dict[str, Any] | None = None
     if use_teacher:
         set_z, teacher_predict = _load_physnet_teacher_ef_fn(
             args.teacher_checkpoint, n_atoms
@@ -432,6 +487,37 @@ def train(args) -> Path:
                 "(or provide a split that contains Z)"
             )
         set_z(z_atoms[:n_atoms])
+
+        if args.teacher_energy_offset is not None:
+            teacher_e_offset = float(args.teacher_energy_offset)
+            teacher_align_info = {
+                "offset_eV": teacher_e_offset,
+                "source": "cli",
+            }
+        elif not bool(args.no_align_teacher_energy):
+            n_align = min(int(args.teacher_align_n), int(ntrain))
+            if n_align < 1:
+                raise ValueError("--teacher-align-n must be >= 1 when aligning")
+            pos_cal = jnp.asarray(pos_train[:n_align])
+            e_t_cal, f_t_cal = teacher_predict(pos_cal)
+            teacher_align_info = calibrate_teacher_energy_offset(
+                e_train[:n_align], np.asarray(e_t_cal)
+            )
+            teacher_align_info["n"] = float(n_align)
+            teacher_align_info["source"] = "auto"
+            # Force scale check (constant E shift does not change F)
+            f_mae = float(
+                np.mean(
+                    np.abs(
+                        np.asarray(f_train[:n_align], dtype=np.float64)
+                        - np.asarray(f_t_cal, dtype=np.float64)
+                    )
+                )
+            )
+            teacher_align_info["force_mae_eV_A"] = f_mae
+            teacher_e_offset = float(teacher_align_info["offset_eV"])
+        else:
+            teacher_align_info = {"offset_eV": 0.0, "source": "disabled"}
 
     key = jax.random.key(int(args.seed))
     key, init_key = jax.random.split(key)
@@ -489,7 +575,10 @@ def train(args) -> Path:
     def _teacher_batch(pos_b):
         if teacher_predict is None or distill_alpha >= 1.0:
             return None, None
-        return teacher_predict(pos_b)
+        e_t, f_t = teacher_predict(pos_b)
+        if teacher_e_offset != 0.0:
+            e_t = e_t + teacher_e_offset
+        return e_t, f_t
 
     best_vloss = float("inf")
     stopper = 0
@@ -508,6 +597,8 @@ def train(args) -> Path:
                 "n_atoms": n_atoms,
                 "teacher_checkpoint": args.teacher_checkpoint,
                 "distill_alpha": distill_alpha,
+                "teacher_energy_offset_eV": teacher_e_offset,
+                "teacher_align": teacher_align_info,
                 **data_desc,
                 "idx_train": np.asarray(idx_train).tolist(),
                 "idx_valid": np.asarray(idx_valid).tolist(),
@@ -522,12 +613,52 @@ def train(args) -> Path:
         f"KerNN train: scheme={scheme} n_atoms={n_atoms} "
         f"ntrain={ntrain} nvalid={nvalid} n_input={config.n_input}"
     )
+    print(
+        "  units: E,F from NPZ treated as eV and eV/Å "
+        f"(×{EV_TO_KCAL_MOL:.4f} → kcal/mol); loss is MSE"
+    )
     if use_teacher:
         print(
             f"  teacher={args.teacher_checkpoint}  distill_alpha={distill_alpha}"
         )
-    print(f"  mean_e={stats.mean_e:.8f} std_e={stats.std_e:.8f}")
+        if teacher_align_info is not None:
+            src = teacher_align_info.get("source", "?")
+            print(
+                f"  teacher energy align ({src}): "
+                f"offset={teacher_e_offset:+.6f} eV "
+                f"({teacher_e_offset * EV_TO_KCAL_MOL:+.3f} kcal/mol)"
+            )
+            if "mean_e_teacher_eV" in teacher_align_info:
+                print(
+                    "    mean E_gt={:.6f} eV  mean E_teacher={:.6f} eV  "
+                    "MAE raw/aligned={:.4f}/{:.4f} eV  "
+                    "F MAE={:.4f} eV/Å".format(
+                        teacher_align_info["mean_e_gt_eV"],
+                        teacher_align_info["mean_e_teacher_eV"],
+                        teacher_align_info["mae_raw_eV"],
+                        teacher_align_info["mae_aligned_eV"],
+                        teacher_align_info.get("force_mae_eV_A", float("nan")),
+                    )
+                )
+                if teacher_align_info["mae_raw_eV"] > 1.0 and abs(
+                    teacher_e_offset
+                ) > 1.0:
+                    print(
+                        "    note: large teacher/GT energy zero mismatch "
+                        "(typical when PhysNet used atom refs); "
+                        "offset is applied to teacher E only"
+                    )
+    print(
+        f"  mean_e={stats.mean_e:.8f} eV "
+        f"({stats.mean_e * EV_TO_KCAL_MOL:.4f} kcal/mol)  "
+        f"std_e={stats.std_e:.8f} eV "
+        f"({stats.std_e * EV_TO_KCAL_MOL:.4f} kcal/mol)"
+    )
     print(f"  workdir={workdir}")
+    print(
+        "  epoch log: loss = MSE(E)+f_weight*MSE(F); "
+        "E columns are MSE in eV², F columns MSE in (eV/Å)²"
+    )
 
     for epoch in range(int(args.epochs)):
         t0 = time.time()
@@ -588,7 +719,8 @@ def train(args) -> Path:
         dt = time.time() - t0
         print(
             f"epoch {epoch + 1:4d}  train {avg_t:.6e}  valid {avg_v:.6e}  "
-            f"(E {avg_te:.3e}/{avg_ve:.3e}  F {avg_tf:.3e}/{avg_vf:.3e})  {dt:.1f}s"
+            f"(E[eV²] {avg_te:.3e}/{avg_ve:.3e}  "
+            f"F[(eV/Å)²] {avg_tf:.3e}/{avg_vf:.3e})  {dt:.1f}s"
         )
         history.append(
             {
@@ -618,6 +750,8 @@ def train(args) -> Path:
                     "distance_scheme": scheme,
                     "teacher_checkpoint": args.teacher_checkpoint,
                     "distill_alpha": distill_alpha,
+                    "teacher_energy_offset_eV": teacher_e_offset,
+                    "teacher_align": teacher_align_info,
                     **data_desc,
                 },
             )

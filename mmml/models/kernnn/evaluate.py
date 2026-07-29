@@ -151,6 +151,11 @@ def evaluate(args) -> dict:
         "data": str(args.data),
         "split": args.split,
         "n": int(len(indices)),
+        "units": {
+            "npz_assumed": "eV and eV/Å (PhysNet convention)",
+            "energy_metrics": "eV and kcal/mol (converted ×23.0605)",
+            "force_metrics": "eV/Å and kcal/mol/Å",
+        },
         "energy_eV": e_m,
         "energy_kcal_mol": {
             k: (v * EV_TO_KCAL_MOL if k != "r2" else v) for k, v in e_m.items()
@@ -161,6 +166,12 @@ def evaluate(args) -> dict:
         },
         "metadata": metadata,
         "config": config.to_dict(),
+        "stats": {
+            "mean_e_eV": float(stats.mean_e),
+            "std_e_eV": float(stats.std_e),
+            "mean_e_kcal_mol": float(stats.mean_e) * EV_TO_KCAL_MOL,
+            "std_e_kcal_mol": float(stats.std_e) * EV_TO_KCAL_MOL,
+        },
     }
     (out / "metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 
@@ -215,7 +226,17 @@ def evaluate(args) -> dict:
         indices=indices,
     )
 
+    print(
+        f"KerNN evaluate: n={report['n']}  "
+        f"NPZ assumed eV / eV/Å  (checkpoint mean_e={stats.mean_e:.6f} eV)"
+    )
+    print("energy [eV]:")
+    print(json.dumps(report["energy_eV"], indent=2))
+    print("energy [kcal/mol]:")
     print(json.dumps(report["energy_kcal_mol"], indent=2))
+    print("forces [eV/Å]:")
+    print(json.dumps(report["forces_eV_A"], indent=2))
+    print("forces [kcal/mol/Å]:")
     print(json.dumps(report["forces_kcal_mol_A"], indent=2))
     print(f"wrote {out}")
     return report
