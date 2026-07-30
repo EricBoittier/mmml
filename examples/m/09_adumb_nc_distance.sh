@@ -13,8 +13,10 @@
 #     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
 #     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum): restore the default pre-min (by default
 #                        MM pre-min + monomer mini are skipped so a broken-C-Cl seed survives)
-#   SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
-#   SOLVATED=1 SOLVENT=acn bash examples/m/09_adumb_nc_distance.sh
+#   SOLVATED=1           Packmol from YAML (AMM1:1,CH3CL:1,SOLVENT:N)
+#   SOLVATED=1 USE_NPZ_PDB=1
+#                        export solute → rebuild make-box for SOLVENT → --from-pdb box
+#                        (cannot Packmol a multi-residue solute PDB as one monomer)
 #
 # Requires mmml-patched libcharmm (UM1RXN [min,max]). Do NOT leave CHARMM_LIB_DIR
 # pointing at a stale PhysNet_PyCHARMM tree without that patch.
@@ -22,6 +24,7 @@
 # Examples:
 #   bash examples/m/09_adumb_nc_distance.sh                            # Packmol dimer
 #   FRAME=1000 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh  # exact frame
+#   SOLVATED=1 SOLVENT=dmso USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # Many seeds across ξ (independent full-range replicas): examples/m/11_adumb_windows.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -85,6 +88,7 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
       BOX_SIZE="${BOX_SIZE:-30.0}" \
       N_SOLVENT="${N_SOLVENT:-12}" \
       SOLVENT_ONLY="${SOLVENT}" \
+      SKIP_SOLUTE_EXPORT=1 \
       bash examples/m/08_make_boxes.sh
     if [[ ! -f "${BOX_PDB}" ]]; then
       echo "FAIL: missing ${BOX_PDB} after make-box" >&2
