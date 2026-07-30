@@ -1,7 +1,8 @@
 # Liquid methane PBC MM/ML campaign: jaxmd + pycharmm × checkpoint JSONs × T,
 # with native Ewald long-range electrostatics.
 #
-# Matrix: temperatures × checkpoints × backends × box_sizes × density fractions
+# Matrix: temperatures × checkpoints × embeddings × backends × box_sizes × density
+# Embeddings: mechanical → mm_charge_mode=fixed; electrostatic → q0 (ML Q⁰).
 # Output: artifacts/pbc_methane_ewald/{tag}/
 #
 # Launch:
@@ -16,12 +17,14 @@ box_sizes: [20.0]
 bulk_density_fractions: [1.0]
 bulk_density_n_min: 8
 backends: [pycharmm, jaxmd]
+embeddings: [mechanical]
 
 # Named portable JSON checkpoints to sweep (slug → path relative to repo root).
 checkpoints:
   des: examples/ckpts_json/DESdimers_params.json
   spooky4: examples/ckpts_json/spooky_epoch-0004-chunk-000040-step-00584747.json
   sppoky10: examples/sppoky-epoch-0010_params.json
+  so3lr13: examples/spooky_so3lr_muon3_epoch0013.json
 
 output_root: artifacts/pbc_methane_ewald
 seed_base: 4242

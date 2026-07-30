@@ -45,6 +45,7 @@ composition_string = cl.composition_string
 iter_matrix_cells = cl.iter_matrix_cells
 load_config = cl.load_config
 matrix_backends = cl.matrix_backends
+matrix_embeddings = cl.matrix_embeddings
 matrix_job_count = cl.matrix_job_count
 matrix_temperatures = cl.matrix_temperatures
 campaign_job_order = cl.campaign_job_order
@@ -64,6 +65,7 @@ def cfg() -> dict:
         "box_sizes": [20.0],
         "bulk_density_fractions": [1.0],
         "backends": ["pycharmm", "jaxmd"],
+        "embeddings": ["mechanical"],
         "cluster_sizes": None,
     }
 
@@ -74,9 +76,9 @@ def test_temperatures_match_request(cfg: dict) -> None:
 
 def test_matrix_expands_t_ckpt_backend(cfg: dict) -> None:
     tags = {cell_run_tag(c, cfg) for c in iter_matrix_cells(cfg)}
-    assert any(t.endswith("_des_pycharmm") and "_t100_" in t for t in tags)
-    assert any(t.endswith("_sppoky10_jaxmd") and "_t300_" in t for t in tags)
-    # 1 solvent × 1 N × 3 T × 2 ckpt × 2 backend
+    assert any(t.endswith("_des_mech_pycharmm") and "_t100_" in t for t in tags)
+    assert any(t.endswith("_sppoky10_mech_jaxmd") and "_t300_" in t for t in tags)
+    # 1 solvent × 1 N × 3 T × 2 ckpt × 1 emb × 2 backend
     assert matrix_job_count(cfg) == 3 * 2 * 2
 
 
@@ -86,6 +88,7 @@ def test_campaign_defaults_use_ewald(cfg: dict) -> None:
     defaults = campaign["defaults"]
     assert defaults["lr_solver"] == "ewald"
     assert defaults["mm_nonbond_mode"] == "periodic_external"
+    assert defaults["mm_charge_mode"] == "fixed"
     assert defaults["composition"].startswith("METH:")
     assert Path(defaults["checkpoint"]).name.endswith(".json")
 
@@ -121,7 +124,49 @@ def test_smoke_config(cfg: dict) -> None:
     assert smoke["temperatures"] == [100.0, 200.0, 300.0]
     assert set(checkpoint_map(smoke)) == {"des", "sppoky10"}
     assert matrix_backends(smoke) == ["pycharmm", "jaxmd"]
+    # default embedding = mechanical only
+    assert matrix_embeddings(smoke) == [("mechanical", "fixed")]
     assert matrix_job_count(smoke) == 3 * 2 * 2
+
+
+def test_embeddings_matrix_skips_des_q0(cfg: dict) -> None:
+    cfg = {
+        **cfg,
+        "temperatures": [100.0],
+        "embeddings": ["mechanical", "electrostatic"],
+        "checkpoints": {
+            "des": "examples/ckpts_json/DESdimers_params.json",
+            "so3lr13": "examples/spooky_so3lr_muon3_epoch0013.json",
+        },
+        "backends": ["pycharmm"],
+    }
+    tags = {cell_run_tag(c, cfg) for c in iter_matrix_cells(cfg)}
+    assert "meth_127_t100_l20_des_mech_pycharmm" in tags or any(
+        t.startswith("meth_") and t.endswith("_des_mech_pycharmm") for t in tags
+    )
+    assert not any("_des_es_" in t for t in tags)
+    assert any("_so3lr13_es_pycharmm" in t for t in tags)
+    assert any("_so3lr13_mech_pycharmm" in t for t in tags)
+    cells = list(iter_matrix_cells(cfg))
+    es = next(c for c in cells if c.embedding == "electrostatic")
+    assert es.mm_charge_mode == "q0"
+    camp = build_campaign(cfg, es)
+    assert camp["defaults"]["mm_charge_mode"] == "q0"
+
+
+def test_embeddings_smoke_config() -> None:
+    smoke = load_config(WORKFLOW / "config.smoke.embeddings.tiny.yaml")
+    assert smoke["jax_mm_spoof"] is False
+    assert matrix_embeddings(smoke) == [
+        ("mechanical", "fixed"),
+        ("electrostatic", "q0"),
+    ]
+    # DES mech × 2 backends + So3LR mech/es × 2 backends = 2 + 4 = 6
+    assert matrix_job_count(smoke) == 6
+    tags = {cell_run_tag(c, smoke) for c in iter_matrix_cells(smoke)}
+    assert "meth_8_t100_l24_des_mech_pycharmm" in tags
+    assert "meth_8_t100_l24_so3lr13_es_jaxmd" in tags
+    assert not any("_des_es_" in t for t in tags)
 
 
 def test_methane_bulk_count_positive() -> None:

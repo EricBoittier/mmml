@@ -126,9 +126,26 @@ def ckpt_slug(name: str) -> str:
     return slug or "ckpt"
 
 
+# Mechanical ≈ fixed CGenFF q for E_MM Coulomb; electrostatic ≈ ML Q⁰ (q0).
+_EMBEDDING_ALIASES: dict[str, tuple[str, str]] = {
+    "mechanical": ("mechanical", "fixed"),
+    "mech": ("mechanical", "fixed"),
+    "fixed": ("mechanical", "fixed"),
+    "electrostatic": ("electrostatic", "q0"),
+    "es": ("electrostatic", "q0"),
+    "elec": ("electrostatic", "q0"),
+    "q0": ("electrostatic", "q0"),
+}
+
+_EMBEDDING_TAG: dict[str, str] = {
+    "mechanical": "mech",
+    "electrostatic": "es",
+}
+
+
 @dataclass(frozen=True)
 class RunCell:
-    """One matrix point: methane box × T × checkpoint JSON × backend."""
+    """One matrix point: methane box × T × checkpoint × embedding × backend."""
 
     solvent: str
     n_monomers: int
@@ -137,6 +154,8 @@ class RunCell:
     checkpoint_slug: str
     checkpoint: str
     backend: str
+    embedding: str = "mechanical"
+    mm_charge_mode: str = "fixed"
 
 
 def matrix_temperatures(cfg: dict[str, Any]) -> list[float]:
@@ -162,6 +181,63 @@ def matrix_backends(cfg: dict[str, Any]) -> list[str]:
     return out
 
 
+def resolve_embedding(raw: str) -> tuple[str, str]:
+    """Return ``(embedding_name, mm_charge_mode)`` for a config token."""
+    key = str(raw).strip().lower().replace("-", "_")
+    if key not in _EMBEDDING_ALIASES:
+        raise ValueError(
+            f"Unsupported embedding {raw!r}; use mechanical/electrostatic "
+            f"(or fixed/q0). Known: {sorted(_EMBEDDING_ALIASES)}"
+        )
+    return _EMBEDDING_ALIASES[key]
+
+
+def matrix_embeddings(cfg: dict[str, Any]) -> list[tuple[str, str]]:
+    """Embedding axis: mechanical (fixed) and/or electrostatic (q0)."""
+    raw = cfg.get("embeddings")
+    if raw is None:
+        raw = cfg.get("mm_charge_modes")
+    if raw is None:
+        single = cfg.get("mm_charge_mode") or cfg.get("embedding")
+        raw = [single] if single is not None else ["mechanical"]
+    if isinstance(raw, str):
+        raw = [raw]
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for item in raw:
+        emb, mode = resolve_embedding(str(item))
+        if emb in seen:
+            continue
+        seen.add(emb)
+        out.append((emb, mode))
+    if not out:
+        raise ValueError("Matrix requires at least one embedding / mm_charge_mode")
+    return out
+
+
+def checkpoint_predicts_charges(raw: str) -> bool:
+    """True when the portable JSON checkpoint enables an ML charge head."""
+    import json
+
+    path = resolve_checkpoint_path(raw)
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    cfg = data.get("config", data) if isinstance(data, dict) else {}
+    if not isinstance(cfg, dict):
+        return False
+    return bool(cfg.get("charges") or cfg.get("predict_charges"))
+
+
+def mm_charge_mode_needs_ml_charges(mode: str) -> bool:
+    return str(mode).strip().lower() in {
+        "q0",
+        "latent",
+        "q1",
+        "fixed_plus_latent",
+        "latent_dynamic",
+    }
+
+
 def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
     solvents = [str(s).strip().upper() for s in cfg.get("solvents", ["METH"])]
     if not solvents:
@@ -173,6 +249,10 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
         raise ValueError("Matrix requires cluster_sizes or bulk_density_fractions.")
 
     skip = {str(t).strip() for t in (cfg.get("exclude_run_tags") or [])}
+    skip_charge_mismatch = bool(cfg.get("skip_embedding_without_charges", True))
+    force_charge_mismatch = {
+        str(t).strip() for t in (cfg.get("force_embedding_without_charges") or [])
+    }
     seen: set[str] = set()
     for sol in solvents:
         for box in matrix_box_sizes(cfg):
@@ -180,31 +260,43 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
             for n in sizes:
                 for temp in matrix_temperatures(cfg):
                     for slug, ckpt in checkpoint_map(cfg).items():
-                        for backend in matrix_backends(cfg):
-                            cell = RunCell(
-                                solvent=sol,
-                                n_monomers=int(n),
-                                temperature=float(temp),
-                                box_size=float(box),
-                                checkpoint_slug=ckpt_slug(slug),
-                                checkpoint=str(ckpt),
-                                backend=backend,
-                            )
-                            tag = cell_run_tag(cell, cfg)
-                            if tag in skip or tag in seen:
-                                continue
-                            seen.add(tag)
-                            yield cell
+                        for embedding, mm_mode in matrix_embeddings(cfg):
+                            for backend in matrix_backends(cfg):
+                                cell = RunCell(
+                                    solvent=sol,
+                                    n_monomers=int(n),
+                                    temperature=float(temp),
+                                    box_size=float(box),
+                                    checkpoint_slug=ckpt_slug(slug),
+                                    checkpoint=str(ckpt),
+                                    backend=backend,
+                                    embedding=embedding,
+                                    mm_charge_mode=mm_mode,
+                                )
+                                tag = cell_run_tag(cell, cfg)
+                                if tag in skip or tag in seen:
+                                    continue
+                                if (
+                                    skip_charge_mismatch
+                                    and tag not in force_charge_mismatch
+                                    and mm_charge_mode_needs_ml_charges(mm_mode)
+                                    and not checkpoint_predicts_charges(ckpt)
+                                ):
+                                    # DES dimers (charges: False) cannot do q0/ES.
+                                    continue
+                                seen.add(tag)
+                                yield cell
 
 
 def cell_run_tag(cell: RunCell, cfg: dict[str, Any] | None = None) -> str:
-    del cfg  # tag always includes T/L/ckpt/backend for this workflow
+    del cfg  # tag always includes T/L/ckpt/embedding/backend for this workflow
     sol = solvent_slug(cell.solvent).lower()
     t = int(round(cell.temperature))
     box = int(round(cell.box_size))
+    emb = _EMBEDDING_TAG.get(cell.embedding, ckpt_slug(cell.embedding))
     return (
         f"{sol}_{int(cell.n_monomers)}_t{t}_l{box}"
-        f"_{cell.checkpoint_slug}_{cell.backend}"
+        f"_{cell.checkpoint_slug}_{emb}_{cell.backend}"
     )
 
 
@@ -252,6 +344,7 @@ def run_seed(cell: RunCell, *, seed_base: int = 4242) -> int:
     solvent_off = sum(ord(c) for c in solvent_slug(cell.solvent)) % 1000
     ckpt_off = sum(ord(c) for c in cell.checkpoint_slug) % 997
     backend_off = 17 if cell.backend == "jaxmd" else 0
+    embedding_off = 29 if cell.embedding == "electrostatic" else 0
     return (
         int(seed_base)
         + int(cell.n_monomers) * 10000
@@ -260,6 +353,7 @@ def run_seed(cell: RunCell, *, seed_base: int = 4242) -> int:
         + int(round(cell.box_size)) * 131
         + ckpt_off
         + backend_off
+        + embedding_off
     )
 
 
@@ -366,6 +460,8 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 "ml_batch_size", cfg.get("ml_batch_size", 512)
             )
         ),
+        # mechanical → fixed CGenFF q; electrostatic → ML Q⁰ for E_MM Coulomb
+        "mm_charge_mode": str(cell.mm_charge_mode),
         "handoff_write_res": True,
         "continue_velocities": True,
         "cleanup_strategy_name": strategy.name,
@@ -382,6 +478,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 "description": (
                     f"{comp} METH liquid T={cell.temperature:.0f}K "
                     f"L={cell.box_size:.0f}Å ckpt={cell.checkpoint_slug} "
+                    f"emb={cell.embedding}/{cell.mm_charge_mode} "
                     f"backend={cell.backend} ewald init"
                 ),
                 "backend": "pycharmm",
