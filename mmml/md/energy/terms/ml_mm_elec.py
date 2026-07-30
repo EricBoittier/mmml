@@ -65,6 +65,8 @@ class MLMMElectrostaticTerm:
         charge_mode: str = "q0",
         total_charge: float = 0.0,
         damping_sigma_A: float = 1.0,
+        charge_clip: float | None = 1.0,
+        charge_gradient: bool = True,
         capacity_hint: int | None = None,
     ):
         self.ml_atoms = None if ml_atoms is None else tuple(int(a) for a in ml_atoms)
@@ -96,6 +98,49 @@ class MLMMElectrostaticTerm:
             raise ValueError(f"charge_mode must be raw|q0 (got {charge_mode!r})")
         self.charge_mode = charge_mode
         self.total_charge = float(total_charge)
+        # Bound on |q| for the embedding charges.
+        #
+        # The solute-solvent coupling is a feedback loop: the solvent pulls the
+        # chloride out, the model responds with more charge transfer, the larger
+        # charge pulls the solvent in harder. Measured, its gain exceeds unity
+        # somewhere near 0.6 of full coupling -- ramping the coupling on in 5,
+        # 10 and 20 stages failed at 0.80, 0.70 and 0.60 respectively, i.e. the
+        # more time spent near the threshold the sooner it is found, which is a
+        # threshold rather than a rate. q(Cl) reached -1.035 just before the
+        # collapse.
+        #
+        # Clipping caps the gain exactly where the runaway passes through, and
+        # costs nothing in normal operation: a hard clip has unit gradient
+        # inside the bound, so charges in their physical range are untouched and
+        # dq/dR survives there. The reference dipoles never imply more than
+        # about 1 e of charge separation, so +-1 is the physical bound, not a
+        # tuning knob. Set None to disable.
+        self.charge_clip = None if charge_clip is None else float(charge_clip)
+        if self.charge_clip is not None and self.charge_clip <= 0:
+            raise ValueError(f"charge_clip must be positive (got {self.charge_clip})")
+        # Whether dq/dR contributes to the force.
+        #
+        # True is the physically complete form and the reason this term exists:
+        # the solvent feels the charges, and the charges' response to geometry
+        # feeds back into the forces.
+        #
+        # It is also the gain of a feedback loop -- solvent pulls the chloride
+        # out, model transfers more charge, larger charge pulls harder -- whose
+        # gain exceeds unity near 0.6 of full coupling. Ramping the coupling on
+        # in 5, 10 and 20 stages failed at 0.80, 0.70 and 0.60: the more time
+        # spent near the threshold, the sooner it is found, so it is a threshold
+        # and not a rate. Clipping |q| at 1 does not help, because q(Cl) only
+        # reached -1.035 before collapsing -- the runaway is already underway at
+        # |q| ~ 0.85, inside the physical range.
+        #
+        # Setting this False keeps the charges recomputed every step and still
+        # in the energy, but stops the gradient through them. NOTE this is an
+        # APPROXIMATION, unlike the stop_gradient on the MIC lattice shift
+        # documented in devtools/CLAUDE.md, which is exact: piecewise-constant
+        # shifts genuinely have zero derivative. Here a real term is being
+        # dropped, so the dynamics is no longer strictly variational and the
+        # forces are not the gradient of the energy being reported.
+        self.charge_gradient = bool(charge_gradient)
         self.capacity_hint = capacity_hint
 
     def neighbor_request(self, system: MolecularSystem) -> NeighborRequest:
@@ -155,6 +200,8 @@ class MLMMElectrostaticTerm:
         r_on, r_off = self.switch_on_A, self.cutoff_A
         sigma = self.damping_sigma_A
         mode, q_tot = self.charge_mode, self.total_charge
+        q_clip = self.charge_clip
+        use_charge_grad = self.charge_gradient
 
         def unfold(pos, cell_used):
             """Make the solute contiguous across the periodic boundary.
@@ -190,6 +237,12 @@ class MLMMElectrostaticTerm:
                 compute_forces=False,
             )
             q = jnp.reshape(jnp.asarray(out["charges"]), (n_ml,))
+            # Clip before the neutrality correction, so the solute still sums
+            # exactly to total_charge -- a net charge in a periodic box is a
+            # physical error that grows with system size, and it matters more
+            # than the last few thousandths on an individual atom.
+            if q_clip is not None:
+                q = jnp.clip(q, -q_clip, q_clip)
             if mode == "q0":
                 q = q - (jnp.sum(q) - q_tot) / n_ml
             return q
@@ -248,6 +301,8 @@ class MLMMElectrostaticTerm:
             r_safe = jnp.where(mask > 0, r, r_off)
 
             qa = q_ml[ml_slot_j[a]]
+            if not use_charge_grad:
+                qa = jax.lax.stop_gradient(qa)
             qb = mm_q_j[b]
             damping = (
                 1.0
