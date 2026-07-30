@@ -40,8 +40,10 @@ density_prep_ladder_max_rounds: 2
 mc_density_equalize: false
 min_intermonomer_atom_distance: 1.0
 max_grms_before_dyn: 100.0
-# Spoof+DES methane can leave |F|max ~10–20 eV/Å after mini; smoke-only ceiling.
-max_fmax_before_dyn_ev_A: 25.0
+# Do not raise max_fmax to paper over failed DES+methane mini: seed 89904
+# (pycharmm backend) stalled at fmax≈20.7 eV/Å / USER≈2826 kcal/mol, then
+# heat hit ENERGY CHANGE TOLERANCE by step ~85. Default ~2 eV/Å gate fails
+# that case cleanly; jaxmd seed 89921 still minimises to fmax≈1 eV/Å.
 
 cleanup_strategy:
   name: pbc_methane_ewald_smoke_tiny
