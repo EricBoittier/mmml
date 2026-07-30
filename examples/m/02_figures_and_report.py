@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -24,8 +25,19 @@ REPO = Path(__file__).resolve().parents[2]
 ART = REPO / "artifacts" / "nh3_ch3cl"
 IMG = REPO / "docs" / "images" / "examples" / "nh3-ch3cl"
 RESULTS_MD = REPO / "docs" / "examples" / "nh3-ch3cl-results.md"
-CKPT = REPO / "examples" / "m" / "kl.json"
-DATA = REPO / "examples" / "m" / "nh3_ch3cl_filtered.npz"
+# Mirror examples/m/_env.sh: a pre-set MMML_CKPT / MMML_DATA wins, otherwise the
+# example defaults apply. Hard-coding kl.json here made the report claim a
+# different model than 01_evaluate.sh actually evaluated.
+CKPT = Path(os.environ.get("MMML_CKPT") or REPO / "examples" / "m" / "model_ext.json")
+DATA = Path(os.environ.get("MMML_DATA") or REPO / "examples" / "m" / "nh3_ch3cl_filtered.npz")
+
+
+def _repo_rel(path: Path) -> str:
+    """Repo-relative path when inside the repo, else the absolute path."""
+    try:
+        return str(path.resolve().relative_to(REPO.resolve()))
+    except ValueError:
+        return str(path)
 COMMIT = "30eb7a01f7fcf1d42a795f188526a80e547110fd"
 
 
@@ -68,7 +80,7 @@ def _parity_plots(pred_npz: Path, out_png: Path) -> Path | None:
 
     _panel(axes[0], e_ref, e_pred, r"$E$ (kcal/mol)", colors[0])
     _panel(axes[1], f_ref, f_pred, r"$F$ (kcal/mol/Å)", colors[1])
-    fig.suptitle("NH₃–CH₃Cl PhysNet (kl.json)", y=1.02)
+    fig.suptitle(f"NH₃–CH₃Cl PhysNet ({CKPT.name})", y=1.02)
     fig.tight_layout()
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, bbox_inches="tight")
@@ -169,8 +181,8 @@ def _write_results_md(summary: dict) -> None:
         "",
         "| Quantity | Value |",
         "|----------|-------|",
-        row("Checkpoint", "`examples/m/kl.json`"),
-        row("Dataset", "`examples/m/nh3_ch3cl_filtered.npz`"),
+        row("Checkpoint", f"`{_repo_rel(CKPT)}`"),
+        row("Dataset", f"`{_repo_rel(DATA)}`"),
         row("Padded atoms", "9"),
         row("Frames (N=9 / N=4 / N=5)", "12000 / 2000 / 2000"),
         row("Eval samples", ev.get("n_eval", "—")),

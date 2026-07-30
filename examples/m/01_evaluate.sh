@@ -12,6 +12,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
 source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
+mmml_example_env_banner
 
 OUT="${ARTIFACTS_DIR}/evaluate"
 DIMER_NPZ="${ARTIFACTS_DIR}/dimer_only.npz"

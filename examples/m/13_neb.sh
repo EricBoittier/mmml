@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Vacuum NEB smoke for NH3–CH3Cl (ASE + PhysNet kl.json).
+# Vacuum NEB smoke for NH3–CH3Cl (ASE + the examples/m PhysNet ckpt, MMML_CKPT).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
