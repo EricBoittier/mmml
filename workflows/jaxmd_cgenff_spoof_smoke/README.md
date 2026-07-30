@@ -39,12 +39,13 @@ python workflows/jaxmd_cgenff_spoof_smoke/scripts/report.py
 ## Compare to native CHARMM
 
 Energy/force parity of the jax-mm-spoof CGenFF bonded clone vs PyCHARMM
-``ENER FORCE`` (GPU / OpenCL required):
+``ENER`` ETERMs is documented in
+[jax-mm-spoof vs native CHARMM](../../docs/jax-mm-spoof-charmm-parity.md).
 
 ```bash
 sbatch workflows/jaxmd_cgenff_spoof_smoke/scripts/submit_compare_slurm.sh compare
 # or interactively on a GPU node:
-python workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py
+python workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py --no-mm
 python workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py
 ```
 

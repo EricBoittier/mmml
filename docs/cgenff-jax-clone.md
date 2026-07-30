@@ -2,7 +2,7 @@
 
 Pure-JAX implementation of **CHARMM36 CGenFF** bonded and switched nonbonded terms for cross-checking PyCHARMM without MLpot. This stack is separate from the **monomer-decomposed hybrid** path in `mm_energy_forces.py` (COM switching + PhysNet).
 
-Related: [MLpot switching reference](mlpot-settings.md) (COM handoff), [Tri-alanine water box](trialanine-water-box.md) (live cross-check), [Hybrid potential regions](hybrid-potential-regions.md).
+Related: [MLpot switching reference](mlpot-settings.md) (COM handoff), [Tri-alanine water box](trialanine-water-box.md) (live cross-check), [Hybrid potential regions](hybrid-potential-regions.md), [jax-mm-spoof vs native CHARMM](jax-mm-spoof-charmm-parity.md) (DCM/ACO spoof bonded parity report).
 
 ---
 
@@ -155,6 +155,7 @@ Diagnostic:
 | Goal | Path |
 |------|------|
 | Validate CGenFF bonded parameters | `cgenff_bonded.py` + `test_cgenff_bonded_pycharmm.py` |
+| jax-mm-spoof bonded vs CHARMM (DCM/ACO) | [parity report](jax-mm-spoof-charmm-parity.md) + `workflows/jaxmd_cgenff_spoof_smoke/` |
 | Full-system CHARMM MM vs JAX | `mm_system_energy.py` + tri-alanine tests |
 | Production hybrid ML/MM MD | `mmml_calculator` / `mm_energy_forces.py` (COM switching) |
 | CHARMM IMAGE VDW + external LR | `mm_nonbond_mode=periodic_external` |
