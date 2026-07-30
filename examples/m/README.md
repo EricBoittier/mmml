@@ -276,6 +276,15 @@ uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --ove
 uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3
 ```
 
+**Production (dense TIP3, 30 windows × 20 ps):** after
+`USE_DENSITY=1 BOX_SIZE=30 bash examples/m/08_make_boxes.sh`:
+
+```bash
+bash examples/m/14_umbrella_sample_sol_prod.sh
+# optional: TIMESTEP_FS=0.25 NSTEPS=80000 bash examples/m/14_umbrella_sample_sol_prod.sh
+uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3_prod
+```
+
 Writes `umbrella_snapshots.npz` (includes `energies_unbiased_ev` +
 `ml_atom_indices` for hybrid), `umbrella_summary.json`, and
 `umbrella_bin_minima.traj` under `artifacts/nh3_ch3cl/umbrella_*`.
