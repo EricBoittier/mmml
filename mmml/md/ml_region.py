@@ -38,21 +38,56 @@ def parse_ml_resnames(raw: Any) -> tuple[str, ...] | None:
     return tuple(parts)
 
 
+# Packmol / CHARMM may truncate 5-char CGenFF residue names in PSF tables.
+_RESNAME_ALIASES: dict[str, frozenset[str]] = {
+    "CH3CL": frozenset({"CH3CL", "CH3C", "CH3CA"}),
+}
+
+
+def _expand_resname_match_set(names: Sequence[str]) -> set[str]:
+    want: set[str] = set()
+    for raw in names:
+        key = str(raw).strip().upper()
+        want |= set(_RESNAME_ALIASES.get(key, frozenset({key})))
+        want.add(key)
+    return want
+
+
 def resolve_ml_region_indices(
     resnames: Sequence[str],
     ml_resnames: Sequence[str],
 ) -> np.ndarray:
-    """Return atom indices whose residue name is in ``ml_resnames`` (case-insensitive)."""
-    want = {str(r).strip().upper() for r in ml_resnames}
+    """Return atom indices whose residue name is in ``ml_resnames`` (case-insensitive).
+
+    Every requested name must match at least one atom (aliases allowed for known
+    truncated CGenFF labels such as ``CH3CL`` → ``CH3C``). Partial matches that
+    silently drop a solute residue are rejected.
+    """
+    requested = [str(r).strip().upper() for r in ml_resnames if str(r).strip()]
+    if not requested:
+        raise ValueError("ml_resnames must be non-empty")
+    want = _expand_resname_match_set(requested)
     idx = [
         i
         for i, name in enumerate(resnames)
         if str(name).strip().upper() in want
     ]
+    available = sorted({str(r).strip().upper() for r in resnames})
     if not idx:
         raise ValueError(
-            f"no atoms match ml_resnames={sorted(want)}; "
-            f"available residues={sorted({str(r).strip().upper() for r in resnames})}"
+            f"no atoms match ml_resnames={sorted(set(requested))}; "
+            f"available residues={available}"
+        )
+    matched_labels = {str(resnames[i]).strip().upper() for i in idx}
+    missing: list[str] = []
+    for req in requested:
+        aliases = _RESNAME_ALIASES.get(req, frozenset({req})) | {req}
+        if matched_labels.isdisjoint(aliases):
+            missing.append(req)
+    if missing:
+        raise ValueError(
+            f"ml_resnames missing residues {missing} (matched only {sorted(matched_labels)}); "
+            f"available residues={available}"
         )
     return np.asarray(idx, dtype=np.int32)
 

@@ -67,8 +67,16 @@ def test_apply_ml_resnames_restricts_ml_and_merges_mol_id():
 
 
 def test_resolve_rejects_unknown_resname():
-    with pytest.raises(ValueError, match="no atoms match"):
+    with pytest.raises(ValueError, match="no atoms match|missing residues"):
         resolve_ml_region_indices(["TIP3", "TIP3", "TIP3"], ("AMM1",))
+
+
+def test_resolve_rejects_partial_solute_match():
+    with pytest.raises(ValueError, match="missing residues"):
+        resolve_ml_region_indices(
+            ["AMM1", "AMM1", "AMM1", "AMM1", "TIP3", "TIP3", "TIP3"],
+            ("AMM1", "CH3CL"),
+        )
 
 
 def test_sol_tip3_yaml_points_at_model_ext_and_ml_resnames():

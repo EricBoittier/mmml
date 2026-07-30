@@ -1514,8 +1514,14 @@ def _record_from_pdb_cluster_metadata(
     path: Path,
     side: float | None,
     z: np.ndarray,
+    pdb_res_seq: Sequence[str] | None = None,
 ) -> tuple[int, str]:
-    """Fill ``args._cluster_*`` from the live PSF; return ``(n_mol, tag)``."""
+    """Fill ``args._cluster_*`` from the live PSF; return ``(n_mol, tag)``.
+
+    Prefer ``pdb_res_seq`` (whitespace-parsed PDB residue names) when its length
+    matches the PSF monomer count — ``psf.get_res()`` often truncates 5-char
+    CGenFF names (``CH3CL`` → ``CH3C``), which breaks ``ml_resnames``.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         atoms_per_monomer_from_psf,
     )
@@ -1523,21 +1529,25 @@ def _record_from_pdb_cluster_metadata(
     atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
     n_mol = int(len(atoms_per_list))
     residue_labels: list[str] = []
-    try:
-        import pycharmm.psf as psf_mod
+    pdb_labels = [str(x).strip().upper() for x in (pdb_res_seq or [])]
+    if len(pdb_labels) == n_mol and all(pdb_labels):
+        residue_labels = list(pdb_labels)
+    else:
+        try:
+            import pycharmm.psf as psf_mod
 
-        if hasattr(psf_mod, "get_res"):
-            res_all = [str(x).strip().upper() for x in psf_mod.get_res()]
-            offset = 0
-            for n in atoms_per_list:
-                residue_labels.append(
-                    res_all[offset] if 0 <= offset < len(res_all) else "UNK"
-                )
-                offset += int(n)
-    except Exception:
-        residue_labels = ["UNK"] * n_mol
-    if len(residue_labels) != n_mol:
-        residue_labels = ["UNK"] * n_mol
+            if hasattr(psf_mod, "get_res"):
+                res_all = [str(x).strip().upper() for x in psf_mod.get_res()]
+                offset = 0
+                for n in atoms_per_list:
+                    residue_labels.append(
+                        res_all[offset] if 0 <= offset < len(res_all) else "UNK"
+                    )
+                    offset += int(n)
+        except Exception:
+            residue_labels = ["UNK"] * n_mol
+        if len(residue_labels) != n_mol:
+            residue_labels = ["UNK"] * n_mol
 
     summary: dict[str, int] = {}
     for lab in residue_labels:
@@ -1713,7 +1723,9 @@ def load_cluster_from_pdb(
             "and MMML_CGENFF_EXTRA_RTF is set for append residues (e.g. CH3CL)."
         )
 
-    n_mol, tag = _record_from_pdb_cluster_metadata(args, path=path, side=side, z=z)
+    n_mol, tag = _record_from_pdb_cluster_metadata(
+        args, path=path, side=side, z=z, pdb_res_seq=res_seq
+    )
     sync_charmm_positions(r)
     return z, np.asarray(r, dtype=float), n_mol, tag
 

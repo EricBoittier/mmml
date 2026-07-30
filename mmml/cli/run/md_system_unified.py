@@ -21,7 +21,6 @@ See ``docs/md-cg-unification-design.md`` (§0, §9, §11) and
 from __future__ import annotations
 
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -61,14 +60,34 @@ def check_md_system_args_supported(args: Any) -> None:
         raise ValueError("--jaxmd-unified with ml_intra requires --checkpoint")
 
 
-def build_packmol_system_with_ffparams(spec: Any):
+def _durable_psf_path(args: Any, *, stem: str = "md_system_unified") -> Path:
+    """Write-live-PSF destination that outlives TemporaryDirectory cleanup.
+
+    ``mm_bonded`` (and other late readers) need ``system.psf_path`` to still
+    exist after the builder returns. Prefer ``--output-dir``, else a process
+    temp file that is not auto-deleted with a TemporaryDirectory context.
+    """
+    import os
+    import tempfile
+
+    out = getattr(args, "output_dir", None)
+    if out is not None:
+        dest_dir = Path(out)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return dest_dir / f"{stem}.psf"
+    fd, name = tempfile.mkstemp(suffix=".psf", prefix=f"{stem}_")
+    os.close(fd)
+    return Path(name)
+
+
+def build_packmol_system_with_ffparams(spec: Any, args: Any = None):
     """Build a composition system via packmol and lower it to ``FFParams``.
 
     ``PackmolSystemBuilder`` (``mmml.md.builders.placement``) does not write a
     PSF file by default, since ``build_packmol_composition_cluster`` never
     persists one — it only leaves the built system live in CHARMM. Reuse the
-    same building blocks, then write the live PSF to a scratch file so
-    ``FFParams`` can be resolved from it (mirrors ``_lower_optional_psf``).
+    same building blocks, then write the live PSF to a durable path so
+    ``FFParams`` / ``mm_bonded`` can resolve it after the builder returns.
     """
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
     from mmml.md.builders.placement import _box, _composition, _lower_optional_psf, _placement_system
@@ -86,33 +105,34 @@ def build_packmol_system_with_ffparams(spec: Any):
         composition=composition, seed=spec.seed, **params
     )
 
-    with tempfile.TemporaryDirectory() as tmp:
-        import pycharmm.write as write
+    import pycharmm.write as write
 
-        psf_path = Path(tmp) / "md_system_unified.psf"
-        write.psf_card(str(psf_path))
-        system = _placement_system(
-            name="packmol", spec=spec, z=z, positions=positions,
-            atoms_per_molecule=list(sizes), residue_names=list(residues), box=box,
-        )
-        system = _lower_optional_psf(system, psf_path=psf_path, prm_paths=())
-    return system
+    psf_path = _durable_psf_path(args if args is not None else spec, stem="md_system_unified")
+    write.psf_card(str(psf_path))
+    system = _placement_system(
+        name="packmol", spec=spec, z=z, positions=positions,
+        atoms_per_molecule=list(sizes), residue_names=list(residues), box=box,
+    )
+    return _lower_optional_psf(system, psf_path=psf_path, prm_paths=())
 
 
 def build_from_pdb_system_with_ffparams(args: Any, spec: Any):
     """Cold-start from a prebuilt full-system PDB (``--from-pdb``).
 
-    ``load_cluster_from_pdb`` generates the PSF live in CHARMM from the PDB's
-    residue sequence and overlays its coordinates; like
-    ``build_packmol_composition_cluster`` it never persists a PSF, so write the
-    live one to scratch for ``FFParams`` resolution.
+    Prefer the sibling ``model.psf`` written by make-box when present. Otherwise
+    dump the live CHARMM PSF to a durable path (not a TemporaryDirectory that
+    is deleted before ``mm_bonded`` runs).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _sibling_psf_for_pdb,
+        load_cluster_from_pdb,
+    )
     from mmml.md.builders.placement import _lower_optional_psf, _placement_system
 
     pdb_path = spec.template_pdb or getattr(args, "from_pdb", None)
     if pdb_path is None:
         raise ValueError("from_pdb builder requires SystemSpec.template_pdb or --from-pdb")
+    pdb_path = Path(pdb_path)
 
     z, positions, n_mol, _tag = load_cluster_from_pdb(args, pdb_path=pdb_path)
 
@@ -132,17 +152,24 @@ def build_from_pdb_system_with_ffparams(args: Any, spec: Any):
     side = getattr(args, "box_size", None) or spec.box_size
     box = None if side is None else np.eye(3, dtype=np.float64) * float(side)
 
-    with tempfile.TemporaryDirectory() as tmp:
-        import pycharmm.write as write
+    sibling = _sibling_psf_for_pdb(pdb_path.resolve() if pdb_path.is_file() else pdb_path)
+    if sibling is None:
+        # Path may be relative; also try resolved from CWD.
+        sibling = _sibling_psf_for_pdb(Path(str(pdb_path)).expanduser().resolve())
 
-        psf_path = Path(tmp) / "md_system_unified.psf"
+    import pycharmm.write as write
+
+    if sibling is not None and sibling.is_file():
+        psf_path = sibling.resolve()
+    else:
+        psf_path = _durable_psf_path(args, stem="md_system_unified")
         write.psf_card(str(psf_path))
-        system = _placement_system(
-            name="from_pdb", spec=spec, z=z, positions=positions,
-            atoms_per_molecule=atoms_per_molecule, residue_names=residue_names, box=box,
-        )
-        system = _lower_optional_psf(system, psf_path=psf_path, prm_paths=())
-    return system
+
+    system = _placement_system(
+        name="from_pdb", spec=spec, z=z, positions=positions,
+        atoms_per_molecule=atoms_per_molecule, residue_names=residue_names, box=box,
+    )
+    return _lower_optional_psf(system, psf_path=psf_path, prm_paths=())
 
 
 def _load_model(checkpoint_path: Path) -> tuple[Any, Any]:
@@ -274,7 +301,7 @@ def run_unified_jaxmd(args: Any) -> int:
     if (run_config.system.builder or "").lower() == "from_pdb":
         system = build_from_pdb_system_with_ffparams(args, run_config.system)
     else:
-        system = build_packmol_system_with_ffparams(run_config.system)
+        system = build_packmol_system_with_ffparams(run_config.system, args)
     policy_path = getattr(args, "interaction_policy", None)
     if policy_path is not None:
         from mmml.md.interactions import (
