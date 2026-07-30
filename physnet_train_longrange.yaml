@@ -1,0 +1,63 @@
+# PhysNet retrain for the Menshutkin campaign, with a range that actually
+# covers the data.
+#
+# Why this differs from physnet_train_extended.yaml
+# -------------------------------------------------
+# That config trained at cutoff 8.0 with the electrostatics switching off over
+# 8-10 A. The dataset reaches r(C-Cl) = 13.08 A, and 12.0 % of training frames
+# (1386 of 11572) sit beyond 8 A. For every one of those the chloride is outside
+# the radial basis AND outside the Coulomb term, so the network has no channel
+# through which to represent the interaction at all -- those points were
+# unfittable, not merely hard.
+#
+# The symptoms in the resulting checkpoint (model_ext.json), all measured:
+#   * charge on the chloride sags from 0.91 e at 4 A to 0.79 e at 7.9 A, where
+#     the physical answer is 1.0 throughout (diag/tail_charge.py);
+#   * past 8 A the energy freezes at 0.1803 eV and stops responding to geometry
+#     entirely, while the charge sum jumps to +8.6 e (diag/dummy_pad.py);
+#   * in solvated MD the charge sum drifts monotonically to -0.96 over ~12 fs,
+#     dragging the forces up with it until the run diverges
+#     (diag/trace_blowup_window.py).
+#
+# The fix is range, not more data. Both distances are raised past the largest
+# separation present, and the electrostatics are given a longer reach than the
+# radial basis, which is the physically sensible ordering for a reaction that
+# separates charge. Because the ML region here is a 9-atom solute -- the solvent
+# is MM -- all 36 pairs are evaluated regardless, so a larger cutoff costs
+# nothing at inference and nothing in training.
+
+data: splits/extended_dataset/energies_forces_dipoles_train_fixed5892.npz
+valid_data: splits/extended_dataset/energies_forces_dipoles_valid.npz
+# Its own directory, kept clear of ./ckpts/run where the extended_fixed and test
+# runs live. Nothing here touches model_ext.json, which stays the working
+# checkpoint until this one is validated against it.
+ckpt_dir: ./ckpts/menshutkin_longrange
+tag: longrange
+seed: 42
+batch_size: 32
+num_epochs: 5000
+learning_rate: 0.0005
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+max_atomic_number: 35
+features: 128
+num_basis_functions: 64
+num_iterations: 3
+
+# 14.0 clears the 13.08 A maximum in the training set.
+cutoff: 14.0
+# Electrostatics reach beyond the radial basis, so the 1/r tail survives to the
+# edge of the data instead of dying where message passing does. Previously these
+# were never passed through from the config at all and silently took 8.0/10.0.
+switch_start: 1.0
+switch_end: 10.0
+electrostatics_off_start: 16.0
+electrostatics_off_end: 20.0
+
+charges: true
+include_electrostatics: true
+zbl: true
+max_degree: 1
+optimizer: adam
+best: true

@@ -1,0 +1,72 @@
+* Cyclohexane (CHEX) as a CGenFF append residue.
+* Stock CGenFF has no plain cyclohexane; the only one in the CHARMM tree is
+* RESI CHEX in top_all35_ethers.rtf, typed with the legacy ether types CC32A /
+* HCA2A. Mixing that file in would pull a second force field into the run, so
+* this re-types the same molecule with CGenFF CG321 (CH2) and HGA2 (H on CH2).
+* Both are fully parameterised in stock par_all36_cgenff.prm:
+*   BOND  CG321 CG321  222.50  1.5300      BOND  CG321 HGA2  309.00  1.1110
+*   ANGLE CG321 CG321 CG321  58.35 113.60  (Urey-Bradley 11.16 2.56100)
+*   ANGLE CG321 CG321 HGA2   26.50 110.10  (Urey-Bradley 22.53 2.17900)
+*   ANGLE HGA2  CG321 HGA2   35.50 109.00  (Urey-Bradley  5.40 1.80200)
+* so no extra parameter file is needed.
+* Charges are the standard CGenFF apolar-CH2 values (C -0.18, H +0.09), giving
+* the neutral, essentially non-polar apolar reference solvent of Turan et al.
+* NOTE: keep this title block free of interior lone-asterisk lines - CHARMM ends
+* the title at the first one and parses everything after it as RTF commands.
+*
+
+RESI CHEX          0.00 ! C6H12, cyclohexane (CGenFF types)
+GROUP
+ATOM C1   CG321    -0.18
+ATOM H11  HGA2      0.09
+ATOM H12  HGA2      0.09
+GROUP
+ATOM C2   CG321    -0.18
+ATOM H21  HGA2      0.09
+ATOM H22  HGA2      0.09
+GROUP
+ATOM C3   CG321    -0.18
+ATOM H31  HGA2      0.09
+ATOM H32  HGA2      0.09
+GROUP
+ATOM C4   CG321    -0.18
+ATOM H41  HGA2      0.09
+ATOM H42  HGA2      0.09
+GROUP
+ATOM C5   CG321    -0.18
+ATOM H51  HGA2      0.09
+ATOM H52  HGA2      0.09
+GROUP
+ATOM C6   CG321    -0.18
+ATOM H61  HGA2      0.09
+ATOM H62  HGA2      0.09
+
+BOND C1 C2   C2 C3   C3 C4   C4 C5   C5 C6   C6 C1
+BOND C1 H11  C1 H12
+BOND C2 H21  C2 H22
+BOND C3 H31  C3 H32
+BOND C4 H41  C4 H42
+BOND C5 H51  C5 H52
+BOND C6 H61  C6 H62
+
+! Chair conformer: ring torsion alternating +/-55.9 deg, C-C 1.530, C-C-C 111.5.
+IC C1   C2   C3   C4    1.5300  111.50   55.90  111.50   1.5300
+IC C2   C3   C4   C5    1.5300  111.50  -55.90  111.50   1.5300
+IC C3   C4   C5   C6    1.5300  111.50   55.90  111.50   1.5300
+IC C4   C5   C6   C1    1.5300  111.50  -55.90  111.50   1.5300
+IC C5   C6   C1   C2    1.5300  111.50   55.90  111.50   1.5300
+IC C6   C1   C2   C3    1.5300  111.50  -55.90  111.50   1.5300
+IC C2   C1   *C6  H61   1.5300  111.50  120.00  109.50   1.1110
+IC C2   C1   *C6  H62   1.5300  111.50 -120.00  109.50   1.1110
+IC C3   C2   *C1  H11   1.5300  111.50  120.00  109.50   1.1110
+IC C3   C2   *C1  H12   1.5300  111.50 -120.00  109.50   1.1110
+IC C4   C3   *C2  H21   1.5300  111.50  120.00  109.50   1.1110
+IC C4   C3   *C2  H22   1.5300  111.50 -120.00  109.50   1.1110
+IC C5   C4   *C3  H31   1.5300  111.50  120.00  109.50   1.1110
+IC C5   C4   *C3  H32   1.5300  111.50 -120.00  109.50   1.1110
+IC C6   C5   *C4  H41   1.5300  111.50  120.00  109.50   1.1110
+IC C6   C5   *C4  H42   1.5300  111.50 -120.00  109.50   1.1110
+IC C1   C6   *C5  H51   1.5300  111.50  120.00  109.50   1.1110
+IC C1   C6   *C5  H52   1.5300  111.50 -120.00  109.50   1.1110
+
+END
