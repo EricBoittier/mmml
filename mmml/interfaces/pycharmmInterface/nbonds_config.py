@@ -798,6 +798,41 @@ def trigger_nbonds_update_script() -> None:
     lingo.charmm_script("UPDATE")
 
 
+def _resolve_update_nonbonded_script():
+    """Return ``UpdateNonBondedScript`` when the installed pycharmm exposes it.
+
+    KEY_LIBRARY / some cluster builds ship ``pycharmm.nbonds`` without the
+    scripting helper ``pycharmm.UpdateNonBondedScript``. Callers must fall back
+    to ``nbonds.update_bnbnd()``.
+    """
+    import pycharmm
+
+    cls = getattr(pycharmm, "UpdateNonBondedScript", None)
+    if cls is not None:
+        return cls
+    try:
+        from pycharmm.scripts import UpdateNonBondedScript as cls
+    except ImportError:
+        return None
+    return cls
+
+
+def rebuild_nonbonded(*, nbxmod: int | None = None) -> None:
+    """Rebuild nonbond lists after cutoff / exclusion changes.
+
+    Prefers ``UpdateNonBondedScript(nbxmod=...)`` when available (can refresh
+    exclusion lists with an explicit ``nbxmod``). Otherwise uses the C API
+    ``nbonds.update_bnbnd()`` (``nbxmod`` then comes from the loaded PRM).
+    """
+    import pycharmm.nbonds as nbonds
+
+    update_cls = _resolve_update_nonbonded_script()
+    if update_cls is not None and nbxmod is not None:
+        update_cls(nbxmod=int(nbxmod)).run()
+        return
+    nbonds.update_bnbnd()
+
+
 def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     """Apply nonbond settings via the KEY_LIBRARY C API (no ``nbonds`` script).
 
@@ -838,12 +873,7 @@ def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     if imgfrq is not None:
         nbonds.set_imgfrq(int(imgfrq))
     if rebuild:
-        if nbxmod is not None:
-            import pycharmm
-
-            pycharmm.UpdateNonBondedScript(nbxmod=int(nbxmod)).run()
-        else:
-            nbonds.update_bnbnd()
+        rebuild_nonbonded(nbxmod=None if nbxmod is None else int(nbxmod))
 
 
 def apply_nbonds_script_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:

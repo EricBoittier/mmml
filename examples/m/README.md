@@ -22,7 +22,8 @@ source examples/m/_env.sh
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MMML_CKPT` | `examples/m/model_ext.json` | Checkpoint |
+| `MMML_CKPT` | `examples/m/model_ext.json` | Checkpoint for solvated / reaction-path MD |
+| `MMML_EVAL_CKPT` | `examples/m/kl.json` | Vacuum-dimer evaluate (`01_evaluate.sh`) |
 | `MMML_DATA` | `examples/m/nh3_ch3cl_filtered.npz` | Eval NPZ |
 | `MMML_CGENFF_EXTRA_RTF` | `examples/m/top_ch3cl.rtf` | Enables `CH3CL` in compositions |
 | `MMML_CGENFF_EXTRA_PRM` | `examples/m/par_ch3cl.prm` | Bonded params for append `CH3CL` |
