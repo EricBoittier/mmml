@@ -29,8 +29,22 @@ export EXAMPLE_DIR
 #
 #     MMML_EXAMPLE_DEVICE=gpu bash examples/m/run_all.sh
 #
-# An explicitly pre-set JAX_PLATFORMS / MMML_MLPOT_DEVICE still wins over
-# MMML_EXAMPLE_DEVICE, so per-variable overrides keep working.
+# Precedence: an *explicit* MMML_EXAMPLE_DEVICE wins over an inherited
+# JAX_PLATFORMS / MMML_MLPOT_DEVICE that implies a different device. A stale
+# `export JAX_PLATFORMS=cpu` in a login profile used to silently downgrade a run
+# that asked for the GPUs, which made MMML_EXAMPLE_DEVICE the one device knob
+# that could not change the device. Setting only JAX_PLATFORMS /
+# MMML_MLPOT_DEVICE still works as a per-variable override, and an inherited
+# value that *agrees* with the request is kept verbatim (so
+# `MMML_EXAMPLE_DEVICE=gpu JAX_PLATFORMS=cuda,cpu` keeps its cpu fallback).
+#
+# MMML_EXAMPLE_DEVICE_EXPLICIT is exported so nested `bash examples/m/0X_*.sh`
+# steps do not mistake our own exported MMML_EXAMPLE_DEVICE for a user override.
+if [[ -n "${MMML_EXAMPLE_DEVICE:-}" ]]; then
+  MMML_EXAMPLE_DEVICE_EXPLICIT=1
+fi
+MMML_EXAMPLE_DEVICE_EXPLICIT="${MMML_EXAMPLE_DEVICE_EXPLICIT:-0}"
+export MMML_EXAMPLE_DEVICE_EXPLICIT
 MMML_EXAMPLE_DEVICE="$(printf '%s' "${MMML_EXAMPLE_DEVICE:-cpu}" | tr '[:upper:]' '[:lower:]')"
 case "${MMML_EXAMPLE_DEVICE}" in
   cpu)
@@ -49,11 +63,39 @@ case "${MMML_EXAMPLE_DEVICE}" in
 esac
 export MMML_EXAMPLE_DEVICE
 
+# Records every inherited var we discarded, so the banner can name the polluted
+# environment instead of silently papering over it.
+MMML_EXAMPLE_DEVICE_FORCED=""
+
+# Clear an inherited value that contradicts an explicit MMML_EXAMPLE_DEVICE; the
+# `${VAR:-default}` expansions below then fill in the requested device.
+_mmml_drop_conflicting_device_var() {
+  # $1 = var name, $2 = device the inherited value implies ("" when unset)
+  [[ "${MMML_EXAMPLE_DEVICE_EXPLICIT}" == "1" ]] || return 0
+  [[ -n "${2}" && "${2}" != "${MMML_EXAMPLE_DEVICE}" ]] || return 0
+  MMML_EXAMPLE_DEVICE_FORCED="${MMML_EXAMPLE_DEVICE_FORCED:+${MMML_EXAMPLE_DEVICE_FORCED} }${1}=${!1}"
+  unset "${1}"
+}
+
+if [[ -n "${JAX_PLATFORMS:-}" ]]; then
+  case ":${JAX_PLATFORMS}:" in
+    *cuda*|*gpu*|*rocm*) _mmml_inherited_platforms_device="gpu" ;;
+    *) _mmml_inherited_platforms_device="cpu" ;;
+  esac
+else
+  _mmml_inherited_platforms_device=""
+fi
+_mmml_drop_conflicting_device_var JAX_PLATFORMS "${_mmml_inherited_platforms_device}"
+_mmml_drop_conflicting_device_var MMML_MLPOT_DEVICE "${MMML_MLPOT_DEVICE:-}"
+_mmml_drop_conflicting_device_var MMML_JAX_WARMUP_DEVICE "${MMML_JAX_WARMUP_DEVICE:-}"
+
 export JAX_PLATFORMS="${JAX_PLATFORMS:-${_mmml_example_jax_platforms}}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-${_mmml_example_mlpot_device}}"
 export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-${_mmml_example_mlpot_device}}"
+export MMML_EXAMPLE_DEVICE_FORCED
 unset _mmml_example_jax_platforms _mmml_example_mlpot_device
+unset _mmml_inherited_platforms_device
 
 # Checkpoint + dataset from commit 30eb7a01f7fcf1d42a795f188526a80e547110fd
 #
@@ -85,22 +127,38 @@ mmml_example_env_banner() {
   fi
   export MMML_EXAMPLE_ENV_BANNER_SHOWN=1
   printf 'examples/m inputs\n'
-  # Report the *effective* device: an explicit JAX_PLATFORMS / MMML_MLPOT_DEVICE
-  # outranks MMML_EXAMPLE_DEVICE, and printing the request instead of the result
-  # is exactly the kind of mismatch this banner is meant to expose.
+  # Report the *effective* device, never the request: a device request that did
+  # not take effect is exactly the mismatch this banner exists to expose.
   local _effective="cpu"
   case ":${JAX_PLATFORMS}:" in
     *cuda*|*gpu*|*rocm*) _effective="gpu" ;;
   esac
   printf '  device     : %s  (JAX_PLATFORMS=%s, MMML_MLPOT_DEVICE=%s)\n' \
     "${_effective}" "${JAX_PLATFORMS}" "${MMML_MLPOT_DEVICE}"
+  if [[ -n "${MMML_EXAMPLE_DEVICE_FORCED:-}" ]]; then
+    printf '               (MMML_EXAMPLE_DEVICE=%s overrode inherited %s —\n' \
+      "${MMML_EXAMPLE_DEVICE}" "${MMML_EXAMPLE_DEVICE_FORCED}"
+    printf '                probably a stale export in a login profile; unset it there)\n'
+  fi
   if [[ "${_effective}" != "${MMML_EXAMPLE_DEVICE}" ]]; then
-    printf '               (MMML_EXAMPLE_DEVICE=%s was overridden by an explicit\n' \
-      "${MMML_EXAMPLE_DEVICE}"
-    printf '                JAX_PLATFORMS / MMML_MLPOT_DEVICE in the environment)\n'
+    if [[ "${MMML_EXAMPLE_DEVICE_EXPLICIT:-0}" == "1" ]]; then
+      # An explicit device request that did not take effect wastes the whole
+      # run, so this is stderr and not a parenthetical.
+      printf '  WARNING: MMML_EXAMPLE_DEVICE=%s was requested but the effective device is %s\n' \
+        "${MMML_EXAMPLE_DEVICE}" "${_effective}" >&2
+      printf '           (JAX_PLATFORMS=%s, MMML_MLPOT_DEVICE=%s)\n' \
+        "${JAX_PLATFORMS}" "${MMML_MLPOT_DEVICE}" >&2
+    else
+      printf '               (MMML_EXAMPLE_DEVICE defaults to %s; an explicit\n' \
+        "${MMML_EXAMPLE_DEVICE}"
+      printf '                JAX_PLATFORMS / MMML_MLPOT_DEVICE selected %s instead)\n' \
+        "${_effective}"
+    fi
   fi
   if [[ "${_effective}" == "cpu" ]]; then
-    printf '               (CPU by default — rerun with MMML_EXAMPLE_DEVICE=gpu to use the GPUs)\n'
+    if [[ "${MMML_EXAMPLE_DEVICE_EXPLICIT:-0}" != "1" ]]; then
+      printf '               (CPU by default — rerun with MMML_EXAMPLE_DEVICE=gpu to use the GPUs)\n'
+    fi
   elif [[ "${MMML_EXAMPLE_SKIP_DEVICE_PROBE:-0}" != "1" ]]; then
     # Asking for the GPU and silently getting CPU (CPU-only jaxlib, or a
     # CUDA-12 build on an sm_120 card) is the failure this banner exists to
