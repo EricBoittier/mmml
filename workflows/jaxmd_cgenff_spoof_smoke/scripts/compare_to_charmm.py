@@ -158,28 +158,37 @@ def compare_bonded(
     jax_e = _to_float_dict(jax_comp)
     jax_f_np = np.asarray(jax_f, dtype=np.float64)
 
-    energy_keys = sorted(set(jax_e) | set(charmm_e))
-    energy_deltas = {
-        k: float(jax_e.get(k, 0.0) - charmm_e.get(k, 0.0)) for k in energy_keys
+    # Map JAX component names onto CHARMM ETERM keys.
+    jax_to_charmm = {
+        "bond": "bond",
+        "angle": "angl",
+        "angl": "angl",
+        "torsion": "dihe",
+        "dihe": "dihe",
+        "improper": "impr",
+        "impr": "impr",
+        "urey": "urey",
+        "ub": "urey",
+        "cmap": "cmap",
+        "total": "total",
     }
+    energy_deltas = {}
+    term_ok = True
+    for jax_key, charmm_key in jax_to_charmm.items():
+        if jax_key not in jax_e and charmm_key not in charmm_e:
+            continue
+        jv = float(jax_e.get(jax_key, 0.0))
+        cv = float(charmm_e.get(charmm_key, 0.0))
+        # Prefer canonical CHARMM key in the delta table.
+        energy_deltas[charmm_key] = jv - cv
+        if not _allclose(jv, cv, rtol=ENERGY_RTOL, atol=ENERGY_ATOL):
+            term_ok = False
     ok_e = _allclose(
         jax_e.get("total", 0.0),
         charmm_e.get("total", 0.0),
         rtol=ENERGY_RTOL,
         atol=ENERGY_ATOL,
     )
-    # Per-term checks (ignore urey/ub aliasing and cmap when inactive).
-    term_ok = True
-    for key in ("bond", "angl", "dihe", "impr"):
-        if key not in jax_e and key not in charmm_e:
-            continue
-        if not _allclose(
-            jax_e.get(key, 0.0),
-            charmm_e.get(key, 0.0),
-            rtol=ENERGY_RTOL,
-            atol=ENERGY_ATOL,
-        ):
-            term_ok = False
     return {
         "label": label,
         "kind": "bonded",
