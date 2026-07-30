@@ -537,6 +537,8 @@ def register_embedding_mlpot(
     ml_fq: bool = True,
     mlmm_ctonnb: float | None = None,
     mlmm_ctofnb: float | None = None,
+    use_pbc: bool = True,
+    cubic_box_side_A: float | None = None,
 ) -> Any:
     """Register partial MLpot on ``ml_seg_id`` using single-monomer PhysNet (``n_monomers=1``)."""
     from ase import Atoms
@@ -567,6 +569,18 @@ def register_embedding_mlpot(
     z = np.asarray(get_Z_from_psf(), dtype=int)[idx]
     r = positions[idx]
     atoms = Atoms(numbers=z, positions=r)
+    n_h = int(np.sum(z == 1))
+    n_c = int(np.sum(z == 6))
+    print(
+        f"ML Z (mass-mapped): n={len(z)} H={n_h} C={n_c} "
+        f"Z=[{','.join(str(int(x)) for x in z[:8])}{'…' if len(z) > 8 else ''}]",
+        flush=True,
+    )
+    if n_h < len(z) // 3:
+        print(
+            "WARN: unusually few hydrogens in ML Z — check PSF masses / get_Z_from_psf",
+            flush=True,
+        )
 
     _, _, pyCModel = load_physnet_mlpot_bundle(
         Path(checkpoint),
@@ -581,6 +595,10 @@ def register_embedding_mlpot(
         mlmm_ctonnb=mlmm_ctonnb,
         mlmm_ctofnb=mlmm_ctofnb,
         use_mlmm_pair_lists=False,
+        use_pbc=bool(use_pbc),
+        cubic_box_side_A=(
+            float(cubic_box_side_A) if cubic_box_side_A is not None else None
+        ),
     )
     return register_mlpot_partial_mm(pyCModel, z.tolist(), config)
 
@@ -635,12 +653,28 @@ def run_embedding_phase(
         ml_fq=ml_fq,
         mlmm_ctonnb=mlmm_cuton,
         mlmm_ctofnb=mlmm_cutoff,
+        use_pbc=True,
+        cubic_box_side_A=side,
     )
     minimized = False
     total: float | None = None
     try:
         energy.show()
         total = float(energy.get_total())
+        if not np.isfinite(total) or abs(total) > 1.0e6:
+            terms: dict[str, float] = {}
+            for name in ("USER", "VDW", "ELEC", "BOND", "ANGL", "DIHE", "IMNB", "IMEL"):
+                try:
+                    terms[name] = float(energy.get_term_by_name(name))
+                except Exception:
+                    pass
+            raise RuntimeError(
+                f"Pathological CHARMM energy after MLpot register: ENER={total}. "
+                f"Terms={terms}. Confirm this checkout has mass-based ML Z "
+                f"(git log -1 --oneline -- "
+                f"mmml/interfaces/pycharmmInterface/mlpot/embedding_workflow.py) "
+                f"and that PEPT hydrogens map to Z=1."
+            )
         if mini_nstep > 0:
             from mmml.interfaces.pycharmmInterface.mlpot import (
                 MinimizeWithMlpotConfig,

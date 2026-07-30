@@ -213,6 +213,8 @@ def prepare_trialanine_hybrid_session(
         ml_seg_id=ml_seg_id,
         ml_charge=ml_charge,
         ml_fq=ml_fq,
+        use_pbc=True,
+        cubic_box_side_A=side,
     )
     positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     atoms = atoms_from_psf_box(psf_path, positions, box_side_A=side, pbc=True)

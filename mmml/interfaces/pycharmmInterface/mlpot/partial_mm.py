@@ -25,6 +25,10 @@ class PartialMlMmConfig:
     mlmm_ctofnb: Optional[float] = None
     # When True, require ML–MM pair electrostatics in PyCharmm_Calculator (not implemented).
     use_mlmm_pair_lists: bool = False
+    # Solvated TRIA boxes are periodic; register with PBC so IMAGE/nb lists and
+    # ML–ML exclusions match ``run_embedding_phase`` (default False was vacuum).
+    use_pbc: bool = False
+    cubic_box_side_A: Optional[float] = None
 
 
 def register_mlpot_partial_mm(
@@ -72,6 +76,8 @@ def register_mlpot_partial_mm(
         ml_fq=config.ml_fq,
         mlmm_ctonnb=config.mlmm_ctonnb,
         mlmm_ctofnb=config.mlmm_ctofnb,
+        use_pbc=bool(config.use_pbc),
+        cubic_box_side_A=config.cubic_box_side_A,
     )
 
 

@@ -41,6 +41,32 @@ def test_tria_psf_atom_names_must_not_map_as_cgenff_types() -> None:
     assert z_from_mass == [6, 1, 1, 1]
 
 
+def test_partial_mlmm_config_forwards_pbc_to_register() -> None:
+    from unittest import mock
+
+    from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
+        PartialMlMmConfig,
+        register_mlpot_partial_mm,
+    )
+
+    cfg = PartialMlMmConfig(
+        ml_seg_id="PEPT",
+        use_pbc=True,
+        cubic_box_side_A=28.0,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.select_by_seg_id",
+        return_value=mock.Mock(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.partial_mm.register_mlpot",
+        return_value="ctx",
+    ) as reg:
+        out = register_mlpot_partial_mm(object(), [1, 6, 1], cfg)
+    assert out == "ctx"
+    assert reg.call_args.kwargs["use_pbc"] is True
+    assert reg.call_args.kwargs["cubic_box_side_A"] == 28.0
+
+
 def test_export_embedding_checkpoint_calls_orbax_to_json(tmp_path: Path) -> None:
     epoch = tmp_path / "epoch-49"
     epoch.mkdir()
