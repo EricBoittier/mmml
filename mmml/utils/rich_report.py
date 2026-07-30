@@ -824,6 +824,16 @@ def emit_md_system_calculator_report(
             wall=wall_map,
             energy_terms=energy_map,
             extra=dict(calculator_extra) if calculator_extra else None,
+            mm_nonbond_mode=(
+                None
+                if long_range is None
+                else long_range.get("mm_nonbond_mode")
+            ),
+            ml_resnames=(
+                None
+                if system is None
+                else system.get("ml_resnames")
+            ),
         )
 
     if include_neighbor_list_summary and n_atoms is not None:

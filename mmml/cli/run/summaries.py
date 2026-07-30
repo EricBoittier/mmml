@@ -299,6 +299,19 @@ def _scale_bar(fraction: float, width: int = _BAR_WIDTH, color: str = "cyan") ->
     return t
 
 
+def _format_do_mm_summary(do_mm: bool, *, mm_nonbond_mode: Optional[str] = None) -> str:
+    """Human-readable JAX doMM flag (periodic_external turns JAX MM off on purpose)."""
+    mode = str(mm_nonbond_mode or "").strip().lower()
+    if do_mm:
+        return "[green]✓[/green] JAX real-space LJ/Coulomb"
+    if mode == "periodic_external":
+        return (
+            "[yellow]✗[/yellow] JAX off by design — solvent–solute MM via "
+            "CHARMM IMAGE VDW + Ewald"
+        )
+    return "[red]✗[/red] no JAX MM pairs (ML-only)"
+
+
 def print_calculator_summary(
     cutoff_params: Any,
     *,
@@ -315,6 +328,8 @@ def print_calculator_summary(
     wall: Optional[dict] = None,
     energy_terms: Optional[dict] = None,
     extra: Optional[dict] = None,
+    mm_nonbond_mode: Optional[str] = None,
+    ml_resnames: Optional[Any] = None,
     console: Optional[Console] = None,
 ) -> None:
     """Print a rich, colored summary of the hybrid calculator configuration.
@@ -395,9 +410,21 @@ def print_calculator_summary(
         table.add_row("Atoms", str(n_atoms))
 
     table.add_row("doML", "[green]✓[/green]" if doML else "[red]✗[/red]")
-    table.add_row("doMM", "[green]✓[/green]" if doMM else "[red]✗[/red]")
+    table.add_row("doMM (JAX)", _format_do_mm_summary(doMM, mm_nonbond_mode=mm_nonbond_mode))
     table.add_row("doML_dimer", "[green]✓[/green]" if doML_dimer else "[red]✗[/red]")
     table.add_row("Complementary handoff", "[green]✓[/green]" if complementary_handoff else "[yellow]legacy[/yellow]")
+    if mm_nonbond_mode:
+        table.add_row("mm_nonbond_mode", str(mm_nonbond_mode))
+    if ml_resnames:
+        names = (
+            ", ".join(str(x) for x in ml_resnames)
+            if isinstance(ml_resnames, (list, tuple))
+            else str(ml_resnames)
+        )
+        table.add_row(
+            "ml_resnames (USER)",
+            f"[green]{names}[/green] — solvent stays CHARMM MM",
+        )
     if energy_terms:
         table.add_row("─" * 22, "─" * 22)
         table.add_row("[bold]ML energy terms[/bold]", "")
@@ -410,6 +437,11 @@ def print_calculator_summary(
     table.add_row("ML fully-on range (Å)", f"0 → [bright_blue]{ml_full_end:.3f}[/bright_blue]")
     table.add_row("ML/MM handoff range (Å)", f"[bright_blue]{ml_full_end:.3f}[/bright_blue] → [bright_yellow]{mm_on:.3f}[/bright_yellow]")
     table.add_row("MM tail range (Å)", f"[bright_yellow]{mm_on:.3f}[/bright_yellow] → [bright_red]{mm_outer_end:.3f}[/bright_red]")
+    if str(mm_nonbond_mode or "").strip().lower() == "periodic_external":
+        table.add_row(
+            "MM engine (solvent–solute)",
+            "[green]CHARMM[/green] IMAGE VDW + Ewald (JAX doMM off by design)",
+        )
     if wall is not None:
         table.add_row("─" * 22, "─" * 22)
         w_on = bool(wall.get("enabled", False))
