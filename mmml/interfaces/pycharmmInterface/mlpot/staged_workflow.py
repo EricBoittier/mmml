@@ -243,6 +243,7 @@ def _should_skip_pre_dyn_fmax_gate(
     seeded_from_dynamics_restart: bool,
     dyn_stages: list[str] | tuple[str, ...],
     restart_from: Path | str | None = None,
+    handoff_coords_in_memory: bool = False,
 ) -> bool:
     """True when equi/NVE/prod resumes a finished dynamics restart.
 
@@ -250,13 +251,13 @@ def _should_skip_pre_dyn_fmax_gate(
     still must not FIRE a post-heat liquid, and EQUI CPT start loads coords
     from the restart before ``dyna``.
 
-    Memory-handoff legs set ``restart_from`` to ``continue_seed.res`` (not a
-    READYN stage file). That seed still means prior dynamics already ran and
-    finite-T coordinates are in CHARMM — apply the same skip.
+    Memory-handoff legs already placed finite-T coordinates in CHARMM (often
+    with ``restart_from`` rewritten to ``continue_seed.res`` or a local
+    ``baseline.res`` after prep). Treat that the same as a dynamics resume.
     """
     if not dyn_stages or dyn_stages[0] not in _POST_DYNAMICS_RESUME_STAGES:
         return False
-    if seeded_from_dynamics_restart:
+    if seeded_from_dynamics_restart or handoff_coords_in_memory:
         return True
     if _is_dynamics_stage_restart_path(restart_from):
         return True
@@ -2452,6 +2453,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             seeded_from_dynamics_restart=seeded_from_dynamics_restart,
             dyn_stages=dyn_stages,
             restart_from=seed_restart,
+            handoff_coords_in_memory=bool(handoff_coords_in_memory),
         )
         max_grms = resolve_max_grms_before_dyn(
             args,

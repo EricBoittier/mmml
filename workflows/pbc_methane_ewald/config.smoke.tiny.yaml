@@ -45,6 +45,7 @@ cleanup_strategy:
   name: pbc_methane_ewald_smoke_tiny
   charmm_mm:
     pretreat_on_pycharmm: true
+    pretreat_with_liquid_prep: true
     ps_heat: 0.25
     ps_equi: 0.25
     ps_prod: 0.1
@@ -53,6 +54,10 @@ cleanup_strategy:
   mlpot:
     cleanup: true
     no_echeck_heat: true
+    # DES checkpoint is not methane; avoid PhysNet monomer reshape under spoof.
+    monomer_physnet_mini: false
+    # Tiny dilute boxes: extent rescue loops + echeck fight cold-start heat.
+    no_dynamics_max_monomer_extent: true
     dynamics_overlap_action: rescue
     dynamics_overlap_min_distance: 1.5
     dynamics_intra_min_distance: 0.5

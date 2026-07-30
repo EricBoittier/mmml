@@ -3415,6 +3415,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--max-pairs", str(args.max_pairs)])
     if args.no_echeck:
         cmd.append("--no-echeck")
+    if getattr(args, "no_echeck_heat", False):
+        cmd.append("--no-echeck-heat")
     if getattr(args, "allow_incomplete_dynamics", False):
         cmd.append("--allow-incomplete-dynamics")
     if getattr(args, "skip_energy_show", False):

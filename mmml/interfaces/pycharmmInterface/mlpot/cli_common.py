@@ -326,6 +326,15 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--no-echeck-heat",
+        action="store_true",
+        help=(
+            "Disable ECHECK during the heat stage only "
+            "(equi/prod still use --echeck). Needed for ML USER-only heat "
+            "before Hoover settles."
+        ),
+    )
+    group.add_argument(
         "--allow-incomplete-dynamics",
         action="store_true",
         help=(
