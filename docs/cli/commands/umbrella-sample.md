@@ -26,6 +26,8 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--output-dir OUTPUT_DIR] [--atoms ATOMS]
                             [--atoms2 ATOMS2] [--cv-difference CV_DIFFERENCE]
                             [--cv2-difference CV2_DIFFERENCE]
+                            [--wall-angle A,V,C,THETA_MIN[,K]]
+                            [--wall-min-bond A,B,C,D,R_MAX[,K]]
                             [--wall-sum WALL_SUM] [--targets TARGETS]
                             [--targets-y TARGETS_Y] [--xi-min XI_MIN]
                             [--xi-max XI_MAX] [--n-windows N_WINDOWS]
@@ -138,6 +140,27 @@ Other options:
   --atoms ATOMS         0-based atom indices for CV1 distance (I,J)
   --atoms2 ATOMS2       0-based atom indices for CV2 distance (K,L); enables 2D
                         umbrella
+  --wall-angle A,V,C,THETA_MIN[,K]
+                        Flat-bottom lower bound (degrees) on the A-V-C angle,
+                        keeping an SN2 attack in its backside channel. xi =
+                        r(C-X) - r(C-N) does not constrain the angle, so once
+                        the bond breaks the leaving group can swing round: gas-
+                        phase windows beyond xi = +1.3 sampled a mean N-C-Cl
+                        angle of 70 deg (chloride hydrogen-bonded to the
+                        ammonium) while reaction-region windows stayed at
+                        165-173 deg. Those windows did not crash, so without
+                        this the corruption is silent. Menshutkin: --wall-angle
+                        1,2,0,130,50 . Repeatable.
+  --wall-min-bond A,B,C,D,R_MAX[,K]
+                        Flat-bottom bound on min(r(A-B), r(C-D)): the
+                        transferring group must stay bonded to one partner or
+                        the other. Preferred over --wall-sum for a transfer
+                        coordinate, because the allowed sum depends on xi (large
+                        where one bond is long, small at the transition state)
+                        while the shortest bond does not. Measured for NH3 +
+                        CH3Cl: min(r(C-Cl), r(C-N)) has max 2.18 A across the
+                        whole training set, at every xi. Menshutkin: --wall-min-
+                        bond 2,0,2,1,2.25,100 . Repeatable.
   --wall-sum WALL_SUM   Flat-bottom confinement wall on a sum of distances, as
                         A,B,C,D,UPPER[,K]: penalises r(A,B) + r(C,D) above UPPER
                         (A) with force constant K (eV/A^2, default 50). Required

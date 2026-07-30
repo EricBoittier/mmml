@@ -40,7 +40,10 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--max-degree MAX_DEGREE]
                           [--num-basis-functions NUM_BASIS_FUNCTIONS]
                           [--num-iterations NUM_ITERATIONS] [--n-res N_RES]
-                          [--cutoff CUTOFF]
+                          [--cutoff CUTOFF] [--switch-start SWITCH_START]
+                          [--switch-end SWITCH_END]
+                          [--electrostatics-off-start ELECTROSTATICS_OFF_START]
+                          [--electrostatics-off-end ELECTROSTATICS_OFF_END]
                           [--max-atomic-number MAX_ATOMIC_NUMBER] [--zbl]
                           [--no-zbl] [--trainable-zbl] [--use-pbc] [--no-pbc]
                           [--no-energy-bias] [--optimizer OPTIMIZER]
@@ -133,6 +136,18 @@ Scientific model:
                         over, or it is silently truncated inside the handoff.
                         Baked into the checkpoint; MD reads it back
                         automatically.
+  --switch-start, --switch_start SWITCH_START
+                        Short-range Coulomb switch start (Angstrom)
+  --switch-end, --switch_end SWITCH_END
+                        Short-range Coulomb switch end (Angstrom)
+  --electrostatics-off-start, --electrostatics_off_start ELECTROSTATICS_OFF_START
+                        Distance at which the electrostatic term begins
+                        switching off (Angstrom). Set this beyond the largest
+                        separation the reaction reaches, or the Coulomb tail
+                        vanishes there.
+  --electrostatics-off-end, --electrostatics_off_end ELECTROSTATICS_OFF_END
+                        Distance at which the electrostatic term is fully off
+                        (Angstrom)
   --no-energy-bias      Disable per-element energy bias in the model
   --physnet-transfer-model, --physnet_transfer_model PHYSNET_TRANSFER_MODEL
                         Bundled PhysNet transfer model ID, file stem, or

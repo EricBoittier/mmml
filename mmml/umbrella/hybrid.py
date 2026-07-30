@@ -30,11 +30,13 @@ from mmml.umbrella.sample import (
 )
 
 __all__ = [
+    "bind_hybrid_atom_names",
     "find_atom_index_by_name",
     "merge_ml_region_mol_id",
     "mic_distance",
     "resolve_ml_region_indices",
     "run_umbrella_hybrid_nvt",
+    "stretch_antisymmetric_seed_mic",
     "stretch_distance_seed_mic",
 ]
 
@@ -162,29 +164,137 @@ def _load_coords(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return r, z
 
 
-def _resolve_cv_indices(
+def _resolve_atom_ref(
+    ref,
+    atom_names: Sequence[str],
+    resnames: Sequence[str],
+    *,
+    ml_resnames: Sequence[str] | None,
+) -> int:
+    """Map a YAML atom reference (index or name like ``C1``) to a 0-based index."""
+    if isinstance(ref, str):
+        s = ref.strip()
+        try:
+            return int(s)
+        except ValueError:
+            return find_atom_index_by_name(
+                atom_names,
+                resnames,
+                atom_name=s,
+                ml_resnames=ml_resnames,
+            )
+    return int(ref)
+
+
+def bind_hybrid_atom_names(
     cfg: UmbrellaConfig,
     atom_names: Sequence[str],
     resnames: Sequence[str],
-) -> tuple[int, int]:
-    atom_i, atom_j = int(cfg.atom_i), int(cfg.atom_j)
-    if cfg.atom_name_i is not None:
-        atom_i = find_atom_index_by_name(
-            atom_names,
-            resnames,
-            atom_name=cfg.atom_name_i,
-            ml_resnames=cfg.ml_resnames,
+) -> UmbrellaConfig:
+    """Resolve PSF atom *names* in ``cv_x`` / walls to integer indices.
+
+    Enables YAML such as::
+
+        cv_x:
+          pairs: [[C1, CL1], [C1, N1]]
+          coefficients: [1.0, -1.0]   # ξ = r(C–Cl) − r(C–N)
+    """
+    from mmml.md.restraints import LinearDistanceCV
+    from mmml.umbrella.config import _resolve_wall, _spec_needs_name_bind
+
+    ml = cfg.ml_resnames
+
+    def _bind_pair(pair):
+        return (
+            _resolve_atom_ref(pair[0], atom_names, resnames, ml_resnames=ml),
+            _resolve_atom_ref(pair[1], atom_names, resnames, ml_resnames=ml),
         )
-    if cfg.atom_name_j is not None:
-        atom_j = find_atom_index_by_name(
-            atom_names,
-            resnames,
-            atom_name=cfg.atom_name_j,
-            ml_resnames=cfg.ml_resnames,
-        )
-    if atom_i == atom_j:
-        raise ValueError(f"resolved CV atoms collide: {atom_i}")
-    return atom_i, atom_j
+
+    def _bind_cv(spec):
+        if spec is None:
+            return None
+        if isinstance(spec, LinearDistanceCV):
+            return spec
+        data = dict(spec)
+        data["pairs"] = [_bind_pair(p) for p in data["pairs"]]
+        return LinearDistanceCV.from_spec(data)
+
+    def _bind_wall(spec):
+        if not isinstance(spec, dict) or not _spec_needs_name_bind(spec):
+            return _resolve_wall(spec)
+        data = dict(spec)
+        if "pairs" in data:
+            data["pairs"] = [_bind_pair(p) for p in data["pairs"]]
+        if "atoms" in data:
+            data["atoms"] = [
+                _resolve_atom_ref(a, atom_names, resnames, ml_resnames=ml)
+                for a in data["atoms"]
+            ]
+        if "cv" in data:
+            data["cv"] = _bind_cv(data["cv"])
+        return _resolve_wall(data)
+
+    cv_x = _bind_cv(cfg.cv_x)
+    cv_y = _bind_cv(cfg.cv_y)
+    walls = tuple(_bind_wall(w) for w in cfg.walls)
+
+    atom_i, atom_j = cfg.atom_i, cfg.atom_j
+    if cv_x is None:
+        atom_i = int(cfg.atom_i)
+        atom_j = int(cfg.atom_j)
+        if cfg.atom_name_i is not None:
+            atom_i = find_atom_index_by_name(
+                atom_names, resnames, atom_name=cfg.atom_name_i, ml_resnames=ml
+            )
+        if cfg.atom_name_j is not None:
+            atom_j = find_atom_index_by_name(
+                atom_names, resnames, atom_name=cfg.atom_name_j, ml_resnames=ml
+            )
+        cv_x = LinearDistanceCV.distance(atom_i, atom_j)
+    else:
+        atom_i, atom_j = int(cv_x.pairs[0][0]), int(cv_x.pairs[0][1])
+
+    return replace(
+        cfg,
+        cv_x=cv_x,
+        cv_y=cv_y,
+        walls=walls,
+        atom_i=atom_i,
+        atom_j=atom_j,
+        atom_name_i=None,
+        atom_name_j=None,
+    )
+
+
+def stretch_antisymmetric_seed_mic(
+    positions: np.ndarray,
+    pair_plus: tuple[int, int],
+    pair_minus: tuple[int, int],
+    target_xi: float,
+    box: np.ndarray | None,
+    *,
+    move_with_plus: Sequence[int] | None = None,
+    move_with_minus: Sequence[int] | None = None,
+    min_distance_A: float = 1.4,
+) -> np.ndarray:
+    """MIC-aware seed for ``ξ = r_plus − r_minus`` (hold sum, split difference)."""
+    r_ref = np.asarray(positions, dtype=np.float64)
+    d_plus = mic_distance(r_ref, pair_plus[0], pair_plus[1], box)
+    d_minus = mic_distance(r_ref, pair_minus[0], pair_minus[1], box)
+    total = d_plus + d_minus
+    xi = float(target_xi)
+    new_plus = 0.5 * (total + xi)
+    new_minus = 0.5 * (total - xi)
+    if new_plus < min_distance_A or new_minus < min_distance_A:
+        needed = abs(xi) + 2.0 * min_distance_A
+        new_plus = 0.5 * (needed + xi)
+        new_minus = 0.5 * (needed - xi)
+    r = stretch_distance_seed_mic(
+        r_ref, pair_plus[0], pair_plus[1], new_plus, box, move_with=move_with_plus
+    )
+    return stretch_distance_seed_mic(
+        r, pair_minus[0], pair_minus[1], new_minus, box, move_with=move_with_minus
+    )
 
 
 def build_hybrid_umbrella_system(cfg: UmbrellaConfig) -> tuple[MolecularSystem, np.ndarray, list[str], list[str]]:
@@ -313,16 +423,47 @@ def build_hybrid_umbrella_system(cfg: UmbrellaConfig) -> tuple[MolecularSystem, 
     return system, ml_indices, atom_names, resnames
 
 
-def _numpy_bias_1d(
+def _numpy_bias_cv(
     positions: np.ndarray,
-    atom_i: int,
-    atom_j: int,
+    cv,
     target: float,
     k_ev_A2: float,
     box: np.ndarray | None,
 ) -> float:
-    d = mic_distance(positions, atom_i, atom_j, box)
-    return 0.5 * float(k_ev_A2) * (d - float(target)) ** 2
+    xi = float(cv.value_numpy(positions, cell=box))
+    return 0.5 * float(k_ev_A2) * (xi - float(target)) ** 2
+
+
+def _seed_window_geometry(
+    r0: np.ndarray,
+    cv,
+    xi0: float,
+    box: np.ndarray | None,
+    move_with: Sequence[int],
+) -> np.ndarray:
+    """Stretch plain distance or antisymmetric-difference CV to ``xi0``."""
+    if len(cv.pairs) == 1 and abs(float(cv.coefficients[0]) - 1.0) < 1e-12:
+        i, j = cv.pairs[0]
+        return stretch_distance_seed_mic(r0, i, j, xi0, box, move_with=move_with)
+    if len(cv.pairs) == 2:
+        (pair_a, pair_b), (coef_a, coef_b) = cv.pairs, cv.coefficients
+        if coef_a * coef_b >= 0:
+            raise ValueError(
+                f"hybrid stretch seed expects opposite-sign coefficients; got {cv.label()}"
+            )
+        plus, minus = (pair_a, pair_b) if coef_a > 0 else (pair_b, pair_a)
+        return stretch_antisymmetric_seed_mic(
+            r0,
+            plus,
+            minus,
+            xi0,
+            box,
+            move_with_plus=(),
+            move_with_minus=move_with,
+        )
+    raise ValueError(
+        f"hybrid stretch seed does not support CV {cv.label()}; use seed_mode=frames"
+    )
 
 
 def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
@@ -337,6 +478,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     from mmml.md.drivers import JaxmdDriver
     from mmml.md.energy.registry import EnergyContext
     from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from mmml.md.restraints import LinearDistanceCV
     from mmml.cli.run.md_system_unified import _load_model
 
     jax.config.update("jax_enable_x64", True)
@@ -352,13 +494,15 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     base_system, ml_indices, atom_names, resnames = build_hybrid_umbrella_system(cfg)
-    atom_i, atom_j = _resolve_cv_indices(cfg, atom_names, resnames)
-    cfg = replace(cfg, atom_i=atom_i, atom_j=atom_j)
+    cfg = bind_hybrid_atom_names(cfg, atom_names, resnames)
     sched = cfg.resolve_schedule()
     if sched.ndim != 1:
         raise ValueError("hybrid_jaxmd supports 1D only")
+    cv = LinearDistanceCV.from_spec(sched.cvs[0])
+    atom_i, atom_j = int(cv.pairs[0][0]), int(cv.pairs[0][1])
     k_windows = sched.n_windows
     box = None if base_system.box is None else np.asarray(base_system.box, dtype=np.float64)
+    wall_specs = [w.to_spec() for w in sched.walls]
 
     model, params = _load_model(Path(cfg.checkpoint).expanduser().resolve())
     ctx = EnergyContext(model=model, params=params, options={})
@@ -367,11 +511,17 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         [atomic_masses[int(zi)] for zi in base_system.Z], dtype=np.float64
     )
     r0 = np.asarray(base_system.R, dtype=np.float64)
-    r0_cv = mic_distance(r0, atom_i, atom_j, box)
+    r0_cv = float(cv.value_numpy(r0, cell=box))
 
     savefreq = cfg.effective_savefreq()
     dt = float(cfg.timestep_fs)
     n_atoms = base_system.n_atoms
+    nsteps = int(cfg.nsteps)
+    equil = int(cfg.equilibration_steps)
+    printfreq = int(cfg.printfreq) if int(cfg.printfreq) > 0 else savefreq
+    ps_per_window = nsteps * dt / 1000.0
+    # Driver records frame 0 plus every savefreq steps → ~nsteps/savefreq + 1.
+    n_frames_est = 1 + (nsteps // savefreq if savefreq > 0 else 0)
 
     print(
         f"=== Hybrid umbrella NVT ({k_windows} windows, 1D, "
@@ -379,9 +529,17 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     )
     print(
         f"  ML region: {len(ml_indices)} atoms resnames={list(cfg.ml_resnames)}  "
-        f"CV=({atom_i},{atom_j}) r0={r0_cv:.4f} Å"
+        f"CV={cv.label()}  r0={r0_cv:.4f} Å"
     )
     print(f"  n_atoms={n_atoms}  box_diag={None if box is None else np.diag(box).tolist()}")
+    print(
+        f"  nsteps={nsteps}  ({ps_per_window:g} ps/window)  "
+        f"equil={equil}  savefreq={savefreq}  printfreq={printfreq}  "
+        f"~{n_frames_est} frames/window"
+    )
+    print(f"  output_dir={output_dir}")
+    if wall_specs:
+        print(f"  walls={len(wall_specs)}  {[w.label() for w in sched.walls]}")
 
     all_pos: list[np.ndarray] = []
     all_cv: list[np.ndarray] = []
@@ -391,9 +549,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     for wid in range(k_windows):
         xi0 = float(sched.xi0[wid])
         k_w = float(sched.k_x[wid])
-        seeded = stretch_distance_seed_mic(
-            r0, atom_i, atom_j, xi0, box, move_with=cfg.move_with
-        )
+        seeded = _seed_window_geometry(r0, cv, xi0, box, cfg.move_with)
         win_system = MolecularSystem(
             R=seeded,
             Z=base_system.Z,
@@ -411,7 +567,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             extra_prm.append(ch3cl_prm)
         energy = build_hybrid_energy(
             win_system,
-            ("ml_intra", "mm_bonded", "mm_nonbonded", "smd"),
+            ("ml_intra", "mm_bonded", "mm_nonbonded", "rxncoor"),
             ctx,
             term_kwargs={
                 "ml_intra": {"monomer_indices": [ml_indices]},
@@ -420,11 +576,11 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                     "extra_prm_files": extra_prm,
                 },
                 "mm_nonbonded": {"lr_solver": str(cfg.lr_solver)},
-                "smd": {
-                    "atom_i": atom_i,
-                    "atom_j": atom_j,
+                "rxncoor": {
+                    "cv": cv,
                     "k_ev_per_A2": k_w,
                     "target": xi0,
+                    "walls": list(sched.walls),
                 },
             },
         )
@@ -480,10 +636,13 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             neighbor_fn=neighbor_fn,
             output_path=None,
             name=f"umbrella_hybrid_w{wid:03d}",
+            progress_every=int(printfreq),
         )
         print(
             f"  window {wid + 1}/{k_windows}  ξ₀={xi0:.3f}  k={k_w:.3f}  "
-            f"seed_max|F|={fmax if fmax == fmax else float('nan'):.2f}"
+            f"nsteps={nsteps}  "
+            f"seed_max|F|={fmax if fmax == fmax else float('nan'):.2f}",
+            flush=True,
         )
         traj = driver.run(win_system, energy, ensemble)
         frames = traj.metadata.get("positions")
@@ -500,12 +659,12 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         if e_tot.shape[0] != pos_w.shape[0]:
             e_tot = np.resize(e_tot, pos_w.shape[0])
         cv_w = np.array(
-            [mic_distance(pos_w[t], atom_i, atom_j, box) for t in range(pos_w.shape[0])],
+            [float(cv.value_numpy(pos_w[t], cell=box)) for t in range(pos_w.shape[0])],
             dtype=np.float64,
         )
         w_w = np.array(
             [
-                _numpy_bias_1d(pos_w[t], atom_i, atom_j, xi0, k_w, box)
+                _numpy_bias_cv(pos_w[t], cv, xi0, k_w, box)
                 for t in range(pos_w.shape[0])
             ],
             dtype=np.float64,
@@ -541,6 +700,9 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "bin_minima_energy_ev": np.asarray(minima_e, dtype=np.float64),
         "engine": np.asarray("hybrid_jaxmd"),
         "ml_atom_indices": np.asarray(ml_indices, dtype=np.int32),
+        # Authoritative CV (difference / combination); atom_i/j are legacy only.
+        "cv_spec": np.asarray(json.dumps(sched.cv_specs())),
+        "wall_spec": np.asarray(json.dumps(wall_specs)),
     }
     if box is not None:
         extra["box"] = np.asarray(box, dtype=np.float64)
@@ -586,7 +748,11 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "n_windows": k_windows,
         "n_frames": int(n_frames),
         "n_atoms": int(n_atoms),
-        "atom_pairs": [[atom_i, atom_j]],
+        "atom_pairs": [list(p) for p in cv.pairs],
+        "cv_spec": sched.cv_specs(),
+        "cv_label": [cv.label()],
+        "wall_spec": wall_specs,
+        "wall_label": [w.label() for w in sched.walls],
         "xi0": list(sched.xi0),
         "yi0": None,
         "k_ev_A2": list(sched.k_x),

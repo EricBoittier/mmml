@@ -37,6 +37,8 @@ class JaxmdDriver:
     neighbor_fn: Callable[[np.ndarray, np.ndarray | None], Mapping[str, Any]] | None = None
     output_path: Path | None = None
     name: str = "jaxmd"
+    # When set, print ``step i/N`` after blocks that cross this cadence (flush).
+    progress_every: int | None = None
 
     def run(
         self,
@@ -400,6 +402,16 @@ class JaxmdDriver:
                 state = step_fn(state, **dynamic_kwargs)
             state.position.block_until_ready()
             completed += count
+            prog = self.progress_every
+            if prog is not None and int(prog) > 0:
+                # Print when this block crossed a progress boundary (or finished).
+                prev = completed - count
+                crossed = (prev // int(prog)) < (completed // int(prog))
+                if crossed or completed >= ensemble.n_steps:
+                    print(
+                        f"    [{self.name}] step {completed}/{ensemble.n_steps}",
+                        flush=True,
+                    )
 
             if on_overlap is not None:
                 repaired = on_overlap(

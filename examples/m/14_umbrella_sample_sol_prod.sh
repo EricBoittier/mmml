@@ -63,6 +63,15 @@ fi
 echo "=== hybrid umbrella-sample PROD: $(basename "${CFG}") ==="
 echo "  out=${OUT}"
 echo "  move-with=${MOVE_WITH}"
+if [[ -n "${NSTEPS:-}" ]]; then
+  echo "  NSTEPS override=${NSTEPS}"
+fi
+if [[ -n "${N_WINDOWS:-}" ]]; then
+  echo "  N_WINDOWS override=${N_WINDOWS}"
+fi
+if [[ -n "${TIMESTEP_FS:-}" ]]; then
+  echo "  TIMESTEP_FS override=${TIMESTEP_FS}"
+fi
 uv run mmml umbrella-sample \
   --config "${CFG}" \
   --from-pdb "${PDB}" \

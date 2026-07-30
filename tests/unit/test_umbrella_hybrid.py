@@ -9,10 +9,12 @@ import pytest
 
 from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.hybrid import (
+    bind_hybrid_atom_names,
     find_atom_index_by_name,
     merge_ml_region_mol_id,
     mic_distance,
     resolve_ml_region_indices,
+    stretch_antisymmetric_seed_mic,
     stretch_distance_seed_mic,
 )
 from mmml.umbrella.io import load_snapshots, save_snapshots
@@ -56,6 +58,59 @@ def test_find_atom_index_by_name_scoped_to_ml_resnames():
     assert find_atom_index_by_name(names, res, atom_name="N1", ml_resnames=("AMM1",)) == 0
     with pytest.raises(ValueError, match="ambiguous"):
         find_atom_index_by_name(names, res, atom_name="N1", ml_resnames=None)
+
+
+def test_bind_hybrid_atom_names_builds_difference_cv():
+    """YAML ξ = r(C–Cl) − r(C–N) with atom names → integer LinearDistanceCV."""
+    names = ["N1", "H1", "C1", "CL1", "H2"]
+    res = ["AMM1", "AMM1", "CH3CL", "CH3CL", "CH3CL"]
+    cfg = UmbrellaConfig.from_dict(
+        {
+            "checkpoint": "ckpt.json",
+            "output_dir": "out",
+            "engine": "hybrid_jaxmd",
+            "from_psf": "x.psf",
+            "from_pdb": "x.pdb",
+            "box_size": 30.0,
+            "ml_resnames": ["AMM1", "CH3CL"],
+            "cv_x": {
+                "pairs": [["C1", "CL1"], ["C1", "N1"]],
+                "coefficients": [1.0, -1.0],
+            },
+            "walls": [
+                {"pairs": [["C1", "CL1"], ["C1", "N1"]], "r_max": 2.25, "k": 100.0},
+                {"atoms": ["N1", "C1", "CL1"], "theta_min_deg": 130.0, "k": 50.0},
+            ],
+            "xi_min": -1.3,
+            "xi_max": 1.6,
+            "n_windows": 3,
+            "k_ev_A2": 6.505,
+        }
+    )
+    bound = bind_hybrid_atom_names(cfg, names, res)
+    cv = bound.resolve_cvs()[0]
+    assert cv.pairs == ((2, 3), (2, 0))
+    assert cv.coefficients == (1.0, -1.0)
+    assert "r(2-3) - r(2-0)" == cv.label() or cv.label().startswith("r(2-3)")
+    walls = bound.resolve_walls()
+    assert len(walls) == 2
+    sched = bound.resolve_schedule()
+    assert sched.n_windows == 3
+
+
+def test_stretch_antisymmetric_seed_mic_targets_xi():
+    from mmml.md.restraints import LinearDistanceCV
+
+    # C=0, Cl=1, N=2 along x; ξ = r(CCl) - r(CN) = 1.8 - 2.8 = -1.0
+    r0 = np.zeros((3, 3), dtype=np.float64)
+    r0[1, 0] = 1.8
+    r0[2, 0] = 2.8
+    box = np.diag([20.0, 20.0, 20.0])
+    cv = LinearDistanceCV.difference((0, 1), (0, 2))
+    seeded = stretch_antisymmetric_seed_mic(
+        r0, (0, 1), (0, 2), target_xi=0.0, box=box, move_with_minus=(2,)
+    )
+    assert cv.value_numpy(seeded, cell=box) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_hybrid_config_requires_psf_or_composition():

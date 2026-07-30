@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -40,6 +40,9 @@ help:
 	@echo "  make test-all          - Run full pytest suite (needs mpirun for charmm_mpi live tests)"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
+	@echo "  make test-ci           - Local stand-in for CI's build job (hides libcharmm)"
+	@echo "  make lint-dupes        - Duplicate defs / conflict markers (bad-merge detector)"
+	@echo "  make merge-check       - Pre-merge gate: lint-dupes + lint + imports + docs"
 	@echo "  make deadcode          - Report dead/unused code (Ruff + Vulture)"
 	@echo "  make deadcode-fix      - Auto-fix safe unused-code issues with Ruff"
 	@echo ""
@@ -216,6 +219,45 @@ test-data:
 
 lint:
 	uv run ruff check mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+
+# Duplicated definitions / dead imports / syntax breakage, repo-wide.
+# A bad merge that concatenates two versions of a file shows up here as F811
+# "Redefinition of unused X" -- which is exactly how three duplicated blocks
+# (mm_bonded.py, linear_distance.py, umbrella/energy.py) reached main after the
+# PR #140 merge. Two of them were not cosmetic: a duplicate @register_term made
+# `import mmml.md.energy.terms` raise, and a duplicated block was the only home
+# of a helper that was still being called. Unlike `make lint` this also covers
+# shipped code (`make lint` covers the same dirs, so this is the same verdict)
+# and, advisory-only, the dirs lint never sees. tests/ examples/ workflows/ carry
+# pre-existing redefinitions, so they are reported but do not fail the gate --
+# a gate that is red on day one gets ignored. Conflict markers are always fatal.
+# Run: make lint-dupes
+lint-dupes:
+	@uv run ruff check --select F811 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	@if git grep -nE '^(<<<<<<< |>>>>>>> )' -- '*.py' '*.sh' '*.yaml' '*.yml' '*.toml' '*.md'; then \
+	  echo "lint-dupes: unresolved conflict markers above" >&2; exit 1; \
+	fi
+	@echo "--- advisory: redefinitions outside lint scope (not fatal) ---"
+	@uv run ruff check --select F811 --quiet tests/ examples/ workflows/ || true
+	@echo "lint-dupes: shipped code has no duplicate definitions; no conflict markers"
+
+# Local stand-in for the CI `build` job on a machine that HAS libcharmm.
+# CI installs no libcharmm, so every live-PyCHARMM test self-skips there. Locally
+# they run instead and abort the session inside test_charmm_mpi.py on a native
+# CHARMM exit, truncating the run long before the real failures. Hiding the
+# library reproduces CI's skip behaviour and gives an honest signal.
+# Run: make test-ci
+test-ci:
+	CHARMM_LIB_DIR=/nonexistent CHARMM_HOME=/nonexistent \
+	  uv run pytest tests/ -q -p no:cacheprovider
+
+# Pre-merge gate: everything CI checks first, in the order it fails.
+# Run: make merge-check
+merge-check: lint-dupes lint
+	uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
+	uv run python scripts/generate_cli_docs.py --check
+	uv run python scripts/generate_package_architecture.py --check
+	@echo "merge-check: OK -- now run 'make test-ci' for the full suite"
 
 format:
 	uv run ruff format mmml/ scripts/

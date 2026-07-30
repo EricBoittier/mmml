@@ -51,6 +51,35 @@ def test_fill_u_kln_self_term_and_shape():
     assert u_kln[1, 0, 0] == pytest.approx(beta * (0.25 + 1.0))
 
 
+def test_fill_u_kln_accepts_linear_distance_cv_with_box():
+    """Hybrid MBAR passes LinearDistanceCV + PBC box (regression for unpack bug)."""
+    from mmml.md.restraints import LinearDistanceCV
+
+    k, n_frames, n_atoms = 2, 2, 2
+    positions = np.zeros((k, n_frames, n_atoms, 3), dtype=np.float64)
+    positions[0, :, 1, 0] = 1.5
+    positions[1, :, 1, 0] = 2.5
+    box = np.diag([20.0, 20.0, 20.0])
+    u_unb = np.full((k, n_frames), 0.5, dtype=np.float64)
+    cv = LinearDistanceCV.distance(0, 1)
+    u_kln, n_k = fill_u_kln(
+        positions=positions,
+        atom_pairs=[cv],
+        targets_per_cv=[[1.5, 2.5]],
+        k_per_cv=[[4.0, 4.0]],
+        temperature_K=300.0,
+        unbiased_energies=u_unb,
+        box=box,
+    )
+    assert u_kln.shape == (2, 2, 2)
+    assert n_k.tolist() == [2, 2]
+    assert np.all(np.isfinite(u_kln))
+    # Self-bias vanishes at the window targets → u_kk = β U_unbiased
+    beta = 1.0 / (8.617333262145e-5 * 300.0)
+    assert u_kln[0, 0, 0] == pytest.approx(beta * 0.5)
+    assert u_kln[1, 1, 0] == pytest.approx(beta * 0.5)
+
+
 def test_subsample_u_kln_with_stub_timeseries():
     class _TS:
         @staticmethod

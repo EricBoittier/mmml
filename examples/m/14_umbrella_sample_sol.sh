@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 # Solvated hybrid umbrella-sample smoke (ML solute + MM TIP3 solvent).
+#
+# Default: 3 windows × 1 ps (2000 × 0.5 fs). Optional:
+#   NSTEPS=500 N_WINDOWS=1   # quicker compile timing probe
+#   USE_DENSITY=1            # rebuild dense tip3 box if missing
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
 source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
 
+export PYTHONUNBUFFERED=1
+
 CFG="${CFG:-${ROOT}/examples/m/yaml/umbrella_nc_tip3.yaml}"
-OUT="${ARTIFACTS_DIR}/umbrella_nc_tip3"
+OUT="${OUT:-${ARTIFACTS_DIR}/umbrella_nc_tip3}"
 PSF="${ARTIFACTS_DIR}/boxes/tip3/model.psf"
 PDB="${ARTIFACTS_DIR}/boxes/tip3/model.pdb"
 
 if [[ ! -f "${PSF}" || ! -f "${PDB}" ]]; then
   echo "=== missing TIP3 make-box artifacts; building (BOX_SIZE=30) ==="
   export BOX_SIZE="${BOX_SIZE:-30.0}"
+  export USE_DENSITY="${USE_DENSITY:-1}"
   bash examples/m/08_make_boxes.sh
 fi
 if [[ ! -f "${PSF}" || ! -f "${PDB}" ]]; then
@@ -40,6 +47,14 @@ print(",".join(idxs))
 PY
 )"
 
+EXTRA=()
+if [[ -n "${NSTEPS:-}" ]]; then
+  EXTRA+=(--nsteps "${NSTEPS}")
+fi
+if [[ -n "${N_WINDOWS:-}" ]]; then
+  EXTRA+=(--n-windows "${N_WINDOWS}")
+fi
+
 echo "=== hybrid umbrella-sample: $(basename "${CFG}") (move-with=${MOVE_WITH}) ==="
 # CLI path overrides beat YAML relatives (config-dir resolution is easy to mis-count).
 uv run mmml umbrella-sample \
@@ -49,7 +64,8 @@ uv run mmml umbrella-sample \
   --checkpoint "${MMML_CKPT}" \
   --output-dir "${OUT}" \
   --move-with "${MOVE_WITH}" \
-  --overwrite
+  --overwrite \
+  "${EXTRA[@]}"
 
 SUMMARY="${OUT}/umbrella_summary.json"
 SNAP="${OUT}/umbrella_snapshots.npz"
