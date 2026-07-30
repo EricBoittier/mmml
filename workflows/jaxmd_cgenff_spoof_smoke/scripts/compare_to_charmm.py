@@ -399,8 +399,6 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    os.environ.setdefault("JAX_ENABLE_X64", "1")
-    os.environ.setdefault("MMML_ALLOW_SELECTIVE_BONDED_BLOCK", "1")
     if str(_REPO) not in sys.path:
         sys.path.insert(0, str(_REPO))
 
