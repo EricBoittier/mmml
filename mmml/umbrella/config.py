@@ -18,6 +18,42 @@ SeedMode = Literal["stretch", "tile", "frames"]
 UmbrellaEngine = Literal["packed_ml", "hybrid_jaxmd"]
 
 
+def _atom_ref_is_name(ref: Any) -> bool:
+    """True when a CV/wall atom reference still needs PSF name → index binding."""
+    if isinstance(ref, str):
+        s = ref.strip()
+        if not s:
+            return False
+        try:
+            int(s)
+            return False
+        except ValueError:
+            return True
+    return False
+
+
+def _pairs_need_name_bind(pairs: Any) -> bool:
+    for pair in pairs or ():
+        if any(_atom_ref_is_name(x) for x in pair):
+            return True
+    return False
+
+
+def _spec_needs_name_bind(spec: Any) -> bool:
+    """True when ``cv_x`` / wall YAML still carries atom *names* (e.g. ``C1``)."""
+    if spec is None or isinstance(spec, (LinearDistanceCV, FlatBottomWall, BondRetentionWall, AngleWall)):
+        return False
+    if not isinstance(spec, dict):
+        return False
+    if "pairs" in spec and _pairs_need_name_bind(spec["pairs"]):
+        return True
+    if "atoms" in spec and any(_atom_ref_is_name(x) for x in spec["atoms"]):
+        return True
+    if "cv" in spec and _spec_needs_name_bind(spec["cv"]):
+        return True
+    return False
+
+
 def _resolve_wall(spec):
     """Build whichever wall kind the spec describes.
 
@@ -25,8 +61,12 @@ def _resolve_wall(spec):
     shortest of several competing distances); anything else is a
     :class:`FlatBottomWall` on a linear CV. Both expose ``energy_batched`` and
     ``forces_batched``, so the sampler does not care which it has.
+
+    Specs that still use atom *names* are left as dicts for hybrid name binding.
     """
     if isinstance(spec, (FlatBottomWall, BondRetentionWall, AngleWall)):
+        return spec
+    if isinstance(spec, dict) and _spec_needs_name_bind(spec):
         return spec
     if isinstance(spec, dict) and "atoms" in spec:
         return AngleWall.from_spec(spec)
@@ -222,9 +262,16 @@ class UmbrellaConfig:
                     raise ValueError(
                         "atom_k and atom_l must be distinct non-negative indices"
                     )
-        # Fail here rather than deep inside the sampler on a malformed spec.
-        self.resolve_cvs()
-        self.resolve_walls()
+        # Named-atom CVs (``C1``/``CL1``/…) are bound after the PSF is loaded.
+        needs_name_bind = (
+            _spec_needs_name_bind(self.cv_x)
+            or _spec_needs_name_bind(self.cv_y)
+            or any(_spec_needs_name_bind(w) for w in self.walls)
+        )
+        if not needs_name_bind:
+            # Fail here rather than deep inside the sampler on a malformed spec.
+            self.resolve_cvs()
+            self.resolve_walls()
         if self.temperature_K <= 0:
             raise ValueError(f"temperature_K must be > 0 (got {self.temperature_K})")
         if self.timestep_fs <= 0:
@@ -298,14 +345,19 @@ class UmbrellaConfig:
                 )
             if has_comp and self.box_size is None and self.from_psf is None:
                 raise ValueError("hybrid_jaxmd composition path requires box_size")
-        # Force validation via schedule construction
-        sched = self.resolve_schedule()
-        if sched.n_windows < 1:
-            raise ValueError("need at least one umbrella window target")
-        if any(k < 0 for k in sched.k_x):
-            raise ValueError("force constants must be non-negative")
-        if sched.k_y is not None and any(k < 0 for k in sched.k_y):
-            raise ValueError("force constants must be non-negative")
+        if needs_name_bind:
+            n_win = int(self.n_windows or len(self.targets_A) or 0)
+            if n_win < 1:
+                raise ValueError("need at least one umbrella window target")
+        else:
+            # Force validation via schedule construction
+            sched = self.resolve_schedule()
+            if sched.n_windows < 1:
+                raise ValueError("need at least one umbrella window target")
+            if any(k < 0 for k in sched.k_x):
+                raise ValueError("force constants must be non-negative")
+            if sched.k_y is not None and any(k < 0 for k in sched.k_y):
+                raise ValueError("force constants must be non-negative")
 
     @property
     def is_2d(self) -> bool:
@@ -453,7 +505,11 @@ class UmbrellaConfig:
                     raw[key] = float(k)
         for key in ("cv_x", "cv_y"):
             if raw.get(key) is not None:
-                raw[key] = LinearDistanceCV.from_spec(raw[key])
+                if _spec_needs_name_bind(raw[key]):
+                    # Keep YAML atom names; hybrid binds them to PSF indices.
+                    raw[key] = dict(raw[key])
+                else:
+                    raw[key] = LinearDistanceCV.from_spec(raw[key])
         if raw.get("walls"):
             raw["walls"] = tuple(_resolve_wall(w) for w in raw["walls"])
         return cls(**raw)
