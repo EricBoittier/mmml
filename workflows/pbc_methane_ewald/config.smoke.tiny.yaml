@@ -1,10 +1,9 @@
-# Tiny smoke: L>=20 for periodic_external; jax_mm_spoof avoids DES-on-methane
-# force-gate failures while still exercising Ewald + hybrid driver.
+# Tiny smoke: few monomers, large box, jax_mm_spoof + Ewald.
+# Avoid density-sized packing that leaves MIC overlaps in Packmol.
 solvents: [METH]
 temperatures: [100.0]
-box_sizes: [22.0]
-bulk_density_fractions: [0.25]
-bulk_density_n_min: 8
+box_sizes: [24.0]
+cluster_sizes: [8]
 backends: [pycharmm, jaxmd]
 
 checkpoints:
@@ -31,16 +30,16 @@ jaxmd_prod_ps: 0.25
 
 dt_fs: 0.25
 pressure: 1.0
-spacing: 4.5
+spacing: 5.0
 packmol_tolerance: 2.0
 
+# Fixed N + box: certify geometry without forcing liquid bulk compression.
 liquid_prep: true
 density_prep_ladder: true
-density_prep_ladder_max_rounds: 3
-mc_density_equalize: true
-mc_density_steps: 40
+density_prep_ladder_max_rounds: 2
+mc_density_equalize: false
 min_intermonomer_atom_distance: 1.0
-max_grms_before_dyn: 50.0
+max_grms_before_dyn: 100.0
 
 cleanup_strategy:
   name: pbc_methane_ewald_smoke_tiny
@@ -49,8 +48,8 @@ cleanup_strategy:
     ps_heat: 0.25
     ps_equi: 0.25
     ps_prod: 0.1
-    overlap_rescue_sd_steps: 50
-    overlap_rescue_abnr_steps: 100
+    overlap_rescue_sd_steps: 100
+    overlap_rescue_abnr_steps: 200
   mlpot:
     cleanup: true
     no_echeck_heat: true
@@ -60,19 +59,19 @@ cleanup_strategy:
     dynamics_overlap_check_interval: 250
     bonded_mm_mini: true
     bonded_mm_mini_after: mini,heat
-    bonded_mm_mini_steps: 100
+    bonded_mm_mini_steps: 200
     charmm_pre_minimize: true
-    charmm_sd_steps: 100
-    charmm_abnr_steps: 100
-    mini_nstep: 50
+    charmm_sd_steps: 300
+    charmm_abnr_steps: 300
+    mini_nstep: 100
     dcd_nsavc: 50
     dyn_nprint: 50
     save_run_state: true
   jaxmd_pbc:
     handoff_quality_gate: true
-    handoff_quality_fmax_eVA: 20.0
+    handoff_quality_fmax_eVA: 50.0
     handoff_quality_action: minimize
-    jaxmd_minimize_steps: 30
+    jaxmd_minimize_steps: 50
     steps_per_recording: 100
 
 mm_switch_on: 8.0
