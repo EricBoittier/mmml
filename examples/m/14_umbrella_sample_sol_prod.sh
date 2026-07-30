@@ -74,6 +74,9 @@ fi
 if [[ -n "${N_WINDOWS:-}" ]]; then
   EXTRA+=(--n-windows "${N_WINDOWS}")
 fi
+if [[ -n "${MAX_SEED_FORCE:-}" ]]; then
+  EXTRA+=(--max-seed-force "${MAX_SEED_FORCE}")
+fi
 if [[ "${OVERWRITE:-0}" == "1" ]]; then
   EXTRA+=(--overwrite)
 fi

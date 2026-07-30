@@ -74,6 +74,9 @@ fi
 if [[ -n "${N_WINDOWS:-}" ]]; then
   EXTRA+=(--n-windows "${N_WINDOWS}")
 fi
+if [[ -n "${MAX_SEED_FORCE:-}" ]]; then
+  EXTRA+=(--max-seed-force "${MAX_SEED_FORCE}")
+fi
 
 echo "=== hybrid umbrella-sample: $(basename "${CFG}") (solvent=${SOLVENT}, move-with=${MOVE_WITH}) ==="
 # CLI path overrides beat YAML relatives (config-dir resolution is easy to mis-count).

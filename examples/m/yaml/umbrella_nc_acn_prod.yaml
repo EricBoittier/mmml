@@ -52,4 +52,5 @@ seed: 0
 seed_mode: stretch
 overwrite: false
 lr_solver: mic
-max_seed_force: 30.0
+# Antisymmetric stretch seeds at ξ≈±1.3 can exceed ~35 eV/Å before MD relaxes.
+max_seed_force: 50.0
