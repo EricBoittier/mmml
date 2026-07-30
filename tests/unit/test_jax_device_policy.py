@@ -82,6 +82,88 @@ def test_mlpot_expands_gpu_only_jax_platforms_before_import(monkeypatch):
             sys.modules["jax"] = saved
 
 
+def test_mlpot_overrides_stale_cpu_jax_platforms_when_gpu_requested(monkeypatch):
+    """Login shells often export JAX_PLATFORMS=cpu; that must not pin GPU runs."""
+    import sys
+
+    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    saved = sys.modules.pop("jax", None)
+    try:
+        with mock.patch(
+            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            return_value=["jax-cuda12-plugin"],
+        ), mock.patch(
+            "mmml.utils.jax_gpu_warmup.ensure_jax_cuda_toolchain",
+            return_value=True,
+        ):
+            assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "cuda,cpu"
+    finally:
+        os = __import__("os")
+        os.environ["JAX_PLATFORMS"] = "cpu"
+        if saved is not None:
+            sys.modules["jax"] = saved
+
+
+def test_mlpot_overrides_cpu_first_defer_list_when_gpu_requested(monkeypatch):
+    """Leftover MPI-defer ``cpu,gpu`` would make JAX default to CPU — rewrite."""
+    import sys
+
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu,gpu")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    saved = sys.modules.pop("jax", None)
+    try:
+        with mock.patch(
+            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            return_value=["jax-cuda12-plugin"],
+        ), mock.patch(
+            "mmml.utils.jax_gpu_warmup.ensure_jax_cuda_toolchain",
+            return_value=True,
+        ):
+            assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "cuda,cpu"
+    finally:
+        os = __import__("os")
+        os.environ["JAX_PLATFORMS"] = "cpu"
+        if saved is not None:
+            sys.modules["jax"] = saved
+
+
+def test_mlpot_keeps_cpu_first_when_device_is_cpu(monkeypatch):
+    """MPI MLpot defer uses MMML_MLPOT_DEVICE=cpu + cpu,gpu — do not clobber."""
+    import sys
+
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu,gpu")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    saved = sys.modules.pop("jax", None)
+    try:
+        assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "cpu"
+        assert __import__("os").environ.get("JAX_PLATFORMS") == "cpu,gpu"
+    finally:
+        os = __import__("os")
+        os.environ["JAX_PLATFORMS"] = "cpu"
+        if saved is not None:
+            sys.modules["jax"] = saved
+
+
+def test_format_jax_device_banner_includes_platforms(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu")
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    line = jax_device_policy.format_jax_device_banner()
+    assert "requested=cpu" in line
+    assert "JAX_PLATFORMS=cpu" in line
+    assert "default_backend=" in line
+
+
 def test_mlpot_jax_device_context_falls_back_to_cpu_when_no_gpu(monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cpu")

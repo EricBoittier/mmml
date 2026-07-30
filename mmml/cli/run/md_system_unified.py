@@ -273,6 +273,18 @@ def run_unified_jaxmd(args: Any) -> int:
     """Run ``args`` through the unified ``mmml.md`` pipeline; return an exit code."""
     check_md_system_args_supported(args)
 
+    # Platforms + CUDA runtime libs before import jax. Campaign ``quiet: true``
+    # still gets the device banner below (honours MMML_QUIET only).
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        apply_mlpot_jax_platform_env,
+        mlpot_device_context_fell_back_to_cpu,
+        mlpot_jax_device_context,
+        print_jax_device_banner,
+        reset_mlpot_device_fallback_flag,
+    )
+
+    apply_mlpot_jax_platform_env(quiet=True)
+
     import jax
 
     jax.config.update("jax_enable_x64", True)
@@ -367,11 +379,23 @@ def run_unified_jaxmd(args: Any) -> int:
             flush=True,
         )
 
-    ctx = build_energy_context(args, system, run_config.terms)
+    # Pin ML + jax-md energy/MD to MMML_MLPOT_DEVICE (default gpu). Without this,
+    # a cpu-first JAX_PLATFORMS list (or silent CUDA plugin fallback) leaves
+    # Spooky/PhysNet on the host while nvidia-smi stays idle.
+    reset_mlpot_device_fallback_flag()
+    with mlpot_jax_device_context() as jax_device:
+        print_jax_device_banner(active_device=jax_device)
+        if mlpot_device_context_fell_back_to_cpu():
+            print(
+                "mmml md-system (jaxmd-unified): computing on CPU "
+                "(GPU requested but unavailable — see WARNING above)",
+                flush=True,
+            )
+        ctx = build_energy_context(args, system, run_config.terms)
 
-    traj = assemble_and_run(
-        run_config, system=system, ctx=ctx, term_kwargs=term_kwargs or None
-    )
+        traj = assemble_and_run(
+            run_config, system=system, ctx=ctx, term_kwargs=term_kwargs or None
+        )
 
     energies = traj.metadata.get("energies")
     if energies is not None and len(energies):

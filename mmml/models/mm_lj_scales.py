@@ -24,6 +24,8 @@ __all__ = [
     "apply_mm_lj_scales",
     "attach_mm_lj_scales",
     "cgenff_type_names_from_prm",
+    "find_learnable_lj_scales_sidecar",
+    "lj_scales_sidecar_candidates",
     "load_mm_lj_scales_sidecar",
     "mm_lj_scales_metadata",
     "resolve_md_lj_scales",
@@ -205,21 +207,16 @@ def load_mm_lj_scales_sidecar(path: str | Path) -> dict[str, Any] | None:
     }
 
 
-def resolve_md_lj_scales(
+def lj_scales_sidecar_candidates(
     *,
     scales_file: str | Path | None = None,
     checkpoint: str | Path | None = None,
-    atc_names: list[str] | tuple[str, ...] | None = None,
-) -> tuple[np.ndarray | None, np.ndarray | None]:
-    """Resolve ``(ep_scale, sig_scale)`` for CHARMM ATC from a hybrid_mm sidecar.
-
-    Search order for the JSON:
+) -> list[Path]:
+    """Sidecar JSON paths to try, in priority order.
 
     1. Explicit ``scales_file``
     2. ``<checkpoint>/hybrid_mm.json`` when ``checkpoint`` is a directory
     3. ``<checkpoint.parent>/hybrid_mm.json`` when ``checkpoint`` is a file
-
-    Returns ``(None, None)`` when no learnable scales are present.
     """
     candidates: list[Path] = []
     if scales_file is not None:
@@ -233,6 +230,49 @@ def resolve_md_lj_scales(
             # Orbax epoch dirs live under the run root that owns hybrid_mm.json.
             if ckpt.parent.parent != ckpt.parent:
                 candidates.append(ckpt.parent.parent / "hybrid_mm.json")
+    return candidates
+
+
+def find_learnable_lj_scales_sidecar(
+    *,
+    scales_file: str | Path | None = None,
+    checkpoint: str | Path | None = None,
+) -> Path | None:
+    """Path of the first sidecar carrying learnable scales, else ``None``.
+
+    Unlike :func:`resolve_md_lj_scales` this never needs CHARMM ATC names, so
+    callers can ask "are there trained LJ scales here?" before deciding whether
+    they are applicable — used to reject a request that would be silently
+    dropped (JAX ``doMM`` off).
+    """
+    for path in lj_scales_sidecar_candidates(
+        scales_file=scales_file, checkpoint=checkpoint
+    ):
+        if not path.is_file():
+            continue
+        try:
+            if load_mm_lj_scales_sidecar(path) is not None:
+                return path
+        except Exception:  # pragma: no cover - malformed sidecar
+            continue
+    return None
+
+
+def resolve_md_lj_scales(
+    *,
+    scales_file: str | Path | None = None,
+    checkpoint: str | Path | None = None,
+    atc_names: list[str] | tuple[str, ...] | None = None,
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """Resolve ``(ep_scale, sig_scale)`` for CHARMM ATC from a hybrid_mm sidecar.
+
+    Search order is :func:`lj_scales_sidecar_candidates`.
+
+    Returns ``(None, None)`` when no learnable scales are present.
+    """
+    candidates = lj_scales_sidecar_candidates(
+        scales_file=scales_file, checkpoint=checkpoint
+    )
 
     payload = None
     last_err: Exception | None = None

@@ -42,6 +42,13 @@ Pass criteria:
 
 ## Notes
 
+- **GPU**: jaxmd-unified pins Spooky/PhysNet + jax-md under
+  `MMML_MLPOT_DEVICE` (default `gpu`). Look for
+  `mmml: JAX requested=gpu ... default_backend=gpu` (or `cuda`). If you see
+  `computing on CPU` / `no GPU device`, fix the env before blaming MD:
+  `unset JAX_PLATFORMS MMML_MLPOT_DEVICE`, then `uv sync --extra gpu`, and
+  prefer `./scripts/mmml-charmm-mpirun.sh md-system ...` so bundled CUDA libs
+  are on `LD_LIBRARY_PATH`.
 - **jaxmd-unified** does not yet support `--continue-from`, so campaign legs
   cold-start independently (same geometry). Chained NVT→NPT→NVE handoff is a
   follow-up.
