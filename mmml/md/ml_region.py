@@ -136,5 +136,10 @@ def apply_ml_resnames_mechanical_embedding(
             "ml_resnames": [str(r) for r in ml_resnames],
         },
     )
-    term_kwargs = {"ml_intra": {"monomer_indices": [ml_indices]}}
+    term_kwargs = {
+        "ml_intra": {"monomer_indices": [ml_indices]},
+        # Solvent (and any non-ML) intramolecular CGenFF bonded — without this,
+        # TIP3 has no forces holding O–H together and NVE explodes immediately.
+        "mm_bonded": {"ml_atom_indices": ml_indices},
+    }
     return new_system, term_kwargs, ml_indices

@@ -58,7 +58,8 @@ def test_apply_ml_resnames_restricts_ml_and_merges_mol_id():
     assert new_system.mol_id[0] == new_system.mol_id[3]
     assert new_system.mol_id[0] != new_system.mol_id[4]
     assert len(new_system.monomer_indices) == 2  # merged solute + TIP3
-    assert term_kwargs == {"ml_intra": {"monomer_indices": [ml_idx]}}
+    assert term_kwargs["ml_intra"]["monomer_indices"][0].tolist() == [0, 1, 2, 3]
+    assert term_kwargs["mm_bonded"]["ml_atom_indices"].tolist() == [0, 1, 2, 3]
     # Solute–solute would share mol_id → intermolecular MM filter drops them
     assert merge_ml_region_mol_id(system.mol_id, ml_idx)[0] == merge_ml_region_mol_id(
         system.mol_id, ml_idx

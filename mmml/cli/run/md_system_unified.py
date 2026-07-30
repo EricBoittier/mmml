@@ -287,6 +287,8 @@ def run_unified_jaxmd(args: Any) -> int:
         assert_interaction_plan_lowerable(plan, runner="jaxmd-unified")
 
     term_kwargs: dict[str, dict] = {}
+    from dataclasses import replace
+
     from mmml.md.ml_region import (
         apply_ml_resnames_mechanical_embedding,
         parse_ml_resnames,
@@ -302,13 +304,24 @@ def run_unified_jaxmd(args: Any) -> int:
         system, term_kwargs, ml_indices = apply_ml_resnames_mechanical_embedding(
             system, ml_resnames
         )
-        if not getattr(args, "quiet", False):
-            print(
-                f"mmml md-system (jaxmd-unified): ML region "
-                f"{len(ml_indices)} atoms resnames={list(ml_resnames)} "
-                f"(MM for solute–solvent / solvent–solvent only)",
-                flush=True,
-            )
+        # Mechanical embedding: ML solute + MM bonded (solvent) + MM nonbonded.
+        terms = list(run_config.terms)
+        if "mm_bonded" not in terms:
+            if "ml_intra" in terms:
+                i = terms.index("ml_intra") + 1
+                terms.insert(i, "mm_bonded")
+            else:
+                terms.insert(0, "mm_bonded")
+        run_config = replace(run_config, terms=tuple(terms))
+        extra_prm = _resolve_extra_prm_files(args)
+        if extra_prm:
+            term_kwargs.setdefault("mm_bonded", {})["extra_prm_files"] = extra_prm
+        print(
+            f"mmml md-system (jaxmd-unified): ML region "
+            f"{len(ml_indices)} atoms resnames={list(ml_resnames)}; "
+            f"mm_bonded on MM atoms; MM nonbonded for solute–solvent / solvent–solvent",
+            flush=True,
+        )
 
     ctx = build_energy_context(args, system, run_config.terms)
 
@@ -326,4 +339,38 @@ def run_unified_jaxmd(args: Any) -> int:
     if energies is None or not np.all(np.isfinite(energies)):
         print("mmml md-system: jaxmd-unified produced non-finite energies", file=sys.stderr)
         return 1
+    # Huge-but-finite energies still mean the run exploded (e.g. missing solvent
+    # bonded terms). Fail closed so wrapper scripts do not print PASS.
+    abs_max = float(np.max(np.abs(np.asarray(energies, dtype=np.float64))))
+    if abs_max > 1.0e6:
+        print(
+            f"mmml md-system: jaxmd-unified energy blew up "
+            f"(|E|_max={abs_max:.4e} eV > 1e6)",
+            file=sys.stderr,
+        )
+        return 1
     return 0
+
+
+def _resolve_extra_prm_files(args: Any) -> list[Path]:
+    """Append RTF/PRM extras (e.g. CH3CL) for CGenFF bonded loading."""
+    import os
+
+    out: list[Path] = []
+    raw = getattr(args, "cgenff_extra_prm", None) or os.environ.get(
+        "MMML_CGENFF_EXTRA_PRM", ""
+    )
+    if raw:
+        p = Path(str(raw)).expanduser()
+        if p.is_file():
+            out.append(p)
+    # Convention used by examples/m when env is unset but the append file exists.
+    fallback = Path(__file__).resolve().parents[3] / "examples" / "m" / "par_ch3cl.prm"
+    if fallback.is_file() and fallback.resolve() not in {p.resolve() for p in out}:
+        # Only auto-include when the composition / PDB likely needs CH3CL.
+        labels = [str(x).upper() for x in (getattr(args, "_cluster_residue_labels", None) or [])]
+        if any(lab == "CH3CL" for lab in labels) or "CH3CL" in str(
+            getattr(args, "composition", "") or ""
+        ).upper():
+            out.append(fallback)
+    return out

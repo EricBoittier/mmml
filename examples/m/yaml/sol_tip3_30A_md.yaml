@@ -2,7 +2,8 @@
 #
 # Mechanical embedding (same ownership as umbrella hybrid_jaxmd):
 #   ML = AMM1+CH3CL complex once (model_ext.json)
-#   MM = solute–solvent + solvent–solvent only (solute–solute MM dropped)
+#   mm_bonded = CGenFF intramolecular on solvent (TIP3 O–H, etc.)
+#   MM nonbonded = solute–solvent + solvent–solvent only (solute–solute dropped)
 #
 # Prerequisite:
 #   source examples/m/_env.sh          # CH3CL append RTF/PRM

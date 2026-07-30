@@ -115,9 +115,10 @@ uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --r
 ```
 
 **Mechanical embedding** = ML on the AMM1+CH3CL complex once
-(`checkpoint: examples/m/model_ext.json`, `ml_resnames: [AMM1, CH3CL]`) + MM
-intermolecular for solute–solvent / solvent–solvent only (solute–solute MM
-pairs are dropped via shared `mol_id`). Not ML–MM electrostatic embedding.
+(`checkpoint: examples/m/model_ext.json`, `ml_resnames: [AMM1, CH3CL]`) +
+CGenFF **bonded** on solvent (`mm_bonded`) + MM intermolecular for
+solute–solvent / solvent–solvent only (solute–solute MM pairs are dropped via
+shared `mol_id`). Not ML–MM electrostatic embedding.
 
 | Backend | Config |
 |---------|--------|

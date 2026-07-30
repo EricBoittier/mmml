@@ -195,8 +195,11 @@ def test_run_unified_applies_ml_resnames(monkeypatch) -> None:
     args.ml_resnames = ["AMM1", "CH3CL"]
     args.quiet = True
     assert unified.run_unified_jaxmd(args) == 0
-    assert captured["terms"] == ("ml_intra", "mm_nonbonded")
+    assert "ml_intra" in captured["terms"]
+    assert "mm_bonded" in captured["terms"]
+    assert "mm_nonbonded" in captured["terms"]
     ml_idx = captured["term_kwargs"]["ml_intra"]["monomer_indices"][0]
     assert list(ml_idx) == [0, 1, 2, 3]
+    assert list(captured["term_kwargs"]["mm_bonded"]["ml_atom_indices"]) == [0, 1, 2, 3]
     assert int(captured["system"].mol_id[0]) == int(captured["system"].mol_id[3])
     assert int(captured["system"].mol_id[0]) != int(captured["system"].mol_id[4])

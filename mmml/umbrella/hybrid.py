@@ -405,12 +405,20 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             ff_params=base_system.ff_params,
             metadata=base_system.metadata,
         )
+        extra_prm: list = []
+        ch3cl_prm = Path(__file__).resolve().parents[2] / "examples" / "m" / "par_ch3cl.prm"
+        if ch3cl_prm.is_file():
+            extra_prm.append(ch3cl_prm)
         energy = build_hybrid_energy(
             win_system,
-            ("ml_intra", "mm_nonbonded", "smd"),
+            ("ml_intra", "mm_bonded", "mm_nonbonded", "smd"),
             ctx,
             term_kwargs={
                 "ml_intra": {"monomer_indices": [ml_indices]},
+                "mm_bonded": {
+                    "ml_atom_indices": ml_indices,
+                    "extra_prm_files": extra_prm,
+                },
                 "mm_nonbonded": {"lr_solver": str(cfg.lr_solver)},
                 "smd": {
                     "atom_i": atom_i,
