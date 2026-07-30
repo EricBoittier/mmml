@@ -138,6 +138,10 @@ class MMBondedTerm:
         *,
         ml_atom_indices: Sequence[int] | None = None,
         extra_prm_files: Sequence[str | Path] = (),
+        topology: Any = None,
+        bonded: Any = None,
+        urey_k: Any = None,
+        urey_r0: Any = None,
     ):
         # Callers (ml_region mechanical embedding, md-system unified) pass
         # ``ml_atom_indices`` / ``extra_prm_files``; keep ``ml_atoms`` /
@@ -146,6 +150,15 @@ class MMBondedTerm:
             ml_atoms = ml_atom_indices
         if not prm_paths and extra_prm_files:
             prm_paths = extra_prm_files
+        # Pre-built CGenFF topology/parameters (e.g. from
+        # ``load_cgenff_bonded_from_charmm_files``). When given, ``make`` skips
+        # the PSF round trip entirely and uses these objects as-is.
+        self.topology = topology
+        self.bonded = bonded
+        self.urey_k = urey_k
+        self.urey_r0 = urey_r0
+        if (topology is None) != (bonded is None):
+            raise ValueError("mm_bonded: pass topology and bonded together, or neither")
         self.psf_path = Path(psf_path) if psf_path is not None else None
         self.prm_paths = tuple(Path(p) for p in prm_paths)
         self.ml_atoms = None if ml_atoms is None else frozenset(int(a) for a in ml_atoms)
@@ -294,19 +307,26 @@ class MMBondedTerm:
             load_bonded_system_from_psf,
         )
 
-        psf_path = self._resolve_psf(system)
-        prm, extra_prm = self._resolve_prm(ctx)
-        bonded_system = load_bonded_system_from_psf(
-            psf_path,
-            np.asarray(system.R, dtype=np.float64),
-            prm_file=prm,
-            extra_prm_files=extra_prm,
-        )
+        psf_path: Path | None = None
+        if self.topology is not None:
+            topology = self.topology
+            bonded = self.bonded
+            urey_k = self.urey_k
+            urey_r0 = self.urey_r0
+        else:
+            psf_path = self._resolve_psf(system)
+            prm, extra_prm = self._resolve_prm(ctx)
+            bonded_system = load_bonded_system_from_psf(
+                psf_path,
+                np.asarray(system.R, dtype=np.float64),
+                prm_file=prm,
+                extra_prm_files=extra_prm,
+            )
 
-        topology = bonded_system.topology
-        bonded = bonded_system.bonded
-        urey_k = bonded_system.urey_k
-        urey_r0 = bonded_system.urey_r0
+            topology = bonded_system.topology
+            bonded = bonded_system.bonded
+            urey_k = bonded_system.urey_k
+            urey_r0 = bonded_system.urey_r0
 
         ml_atoms = self._resolve_ml_atoms(system, ctx)
         report: dict[str, Any] = {}
@@ -340,7 +360,7 @@ class MMBondedTerm:
             return components["total"] * KCAL_MOL_TO_EV
 
         energy_fn.bonded_report = {  # type: ignore[attr-defined]
-            "psf": str(psf_path),
+            "psf": str(psf_path) if psf_path is not None else "(caller-supplied topology)",
             "n_bonds": int(np.asarray(topology.bonds).shape[0]),
             "n_angles": int(np.asarray(topology.angles).shape[0]),
             "n_torsions": int(np.asarray(topology.torsions).shape[0]),
