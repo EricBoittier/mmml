@@ -11,8 +11,9 @@
 #                        (r_ClC, r_CN) target Å — e.g. RCL=3.8 RCN=1.57 = product basin
 #     TS_XI=<x>          with USE_NPZ_PDB=1: pick nearest frame to ratio ξ (export helper)
 #     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
-#     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum): restore the default pre-min (by default
-#                        MM pre-min + monomer mini are skipped so a broken-C-Cl seed survives)
+#     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum or solvated): restore the default
+#                        pre-min (by default MM pre-min + monomer mini are skipped so a
+#                        broken-C-Cl seed survives)
 #   SOLVATED=1           Packmol from YAML (AMM1:1,CH3CL:1,SOLVENT:N)
 #   SOLVATED=1 USE_NPZ_PDB=1
 #                        export solute → rebuild make-box for SOLVENT → --from-pdb box
@@ -98,15 +99,15 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   else
     # Lone full-system PDB; do not Packmol-rebuild over the NPZ geometry.
     EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}" --no-packmol)
-    # Preserve the seeded reaction coordinate (SEED_PRESERVE=1, default): skip the
-    # full-CGenFF MM pre-min (reforms the C-Cl harmonic bond) and the isolated-
-    # monomer PhysNet mini (pulls CH3Cl back to gas-phase equilibrium), both of
-    # which would erase a broken/dissociated seed. The hybrid ML BFGS
-    # (--calculator-pre-minimize) is kept: it only relaxes within the seeded basin.
-    # SEED_PRESERVE=0 restores the default pre-min if a raw seed fails the GRMS gate.
-    if [[ "${SEED_PRESERVE:-1}" == "1" ]]; then
-      EXTRA+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
-    fi
+  fi
+  # Preserve the seeded reaction coordinate (SEED_PRESERVE=1, default): skip the
+  # full-CGenFF MM pre-min (reforms the C-Cl harmonic bond) and the isolated-
+  # monomer PhysNet mini (pulls CH3Cl back to gas-phase equilibrium), both of
+  # which would erase a broken/dissociated seed. Applies to vacuum and solvated
+  # USE_NPZ_PDB paths. The hybrid ML BFGS (--calculator-pre-minimize) is kept.
+  # SEED_PRESERVE=0 restores the default pre-min if a raw seed fails the GRMS gate.
+  if [[ "${SEED_PRESERVE:-1}" == "1" ]]; then
+    EXTRA+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
   fi
 fi
 

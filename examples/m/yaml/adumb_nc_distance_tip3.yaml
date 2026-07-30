@@ -42,6 +42,9 @@ dynamics_max_monomer_extent: 20.0
 # NOTE: close-contact / repair thresholds are deliberately left at solvent-safe
 # defaults. Do NOT copy the vacuum files' dynamics_overlap_min_distance: 0.2 —
 # with explicit TIP3 that would let solvent–solvent overlaps go unrescued.
+# Reactive C–Cl contacts must not trigger CHARMM SD rescue mid-umbrella.
+dynamics_overlap_action: warn
+no_echeck_heat: true
 
 dcd_nsavc: 20
 dcd_max_frames: 200
@@ -51,6 +54,10 @@ pycharmm_pre_dynamics_lingo: |
   ! Soft COM restraint on the solute (resid 1-2); leave solvent free
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 -
     sele (resid 1 .or. resid 2) end
+
+  ! CGenFF BOND C1–CL1 stays in ENER INTERN and blocks SN2; PhysNet owns it.
+  delete bond sele atom * * CL1 end sele atom * * C1 end
+  delete angle sele atom * * CL1 end sele atom * * C1 end
 
   set adumrcmax = 8.0
   set adumrcwall = 500.0
