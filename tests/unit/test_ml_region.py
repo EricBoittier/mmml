@@ -109,5 +109,9 @@ def test_adumb_solvated_yaml_mechanical_embedding(name: str):
     raw = yaml.safe_load((root / "examples/m/yaml" / name).read_text())
     assert raw["ml_resnames"] == ["AMM1", "CH3CL"]
     assert raw["mm_nonbond_mode"] == "periodic_external"
-    assert str(raw["lr_solver"]).lower() == "ewald"
+    # The regression this guards is a *truncated* Coulomb solver in a solvated
+    # run; which periodic solver is used is a per-solvent tuning choice
+    # (tip3 uses scafacos, acn/dmso ewald, and scafacos falls back to ewald when
+    # SCAFACOS_LIB is unset). Pin the invariant, not the current pick.
+    assert str(raw["lr_solver"]).lower() in {"ewald", "scafacos", "nvalchemiops_pme"}
     assert raw.get("calculator_pre_minimize") is True
