@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Production solvated hybrid umbrella (ML solute + dense TIP3 MM solvent).
+# Production solvated hybrid umbrella (ML solute + dense MM solvent).
 #
 #   source examples/m/_env.sh
-#   bash examples/m/14_umbrella_sample_sol_prod.sh
+#   bash examples/m/14_umbrella_sample_sol_prod.sh              # TIP3
+#   SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh  # acetonitrile
+#   SOLVENT=dmso bash examples/m/14_umbrella_sample_sol_prod.sh
 #
 # Optional env:
-#   USE_DENSITY=1   rebuild make-box at liquid density if PSF missing (default on
-#                   when boxes/tip3 is absent)
+#   USE_DENSITY=1   rebuild make-box at liquid density if PSF missing
 #   TIMESTEP_FS=0.25 NSTEPS=80000   safer H timestep, same 20 ps / window
 #   SKIP_MBAR=1     skip umbrella-mbar after sampling
+#   OVERWRITE=1     overwrite existing output_dir
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -17,15 +19,31 @@ cd "${ROOT}"
 
 export PYTHONUNBUFFERED=1
 
-CFG="${CFG:-${ROOT}/examples/m/yaml/umbrella_nc_tip3_prod.yaml}"
-OUT="${OUT:-${ARTIFACTS_DIR}/umbrella_nc_tip3_prod}"
-PSF="${ARTIFACTS_DIR}/boxes/tip3/model.psf"
-PDB="${ARTIFACTS_DIR}/boxes/tip3/model.pdb"
+SOLVENT="$(echo "${SOLVENT:-tip3}" | tr '[:upper:]' '[:lower:]')"
+case "${SOLVENT}" in
+  tip3|acn|dmso) ;;
+  *)
+    echo "FAIL: SOLVENT=${SOLVENT} (expected tip3|acn|dmso)" >&2
+    exit 1
+    ;;
+esac
+
+CFG="${CFG:-${ROOT}/examples/m/yaml/umbrella_nc_${SOLVENT}_prod.yaml}"
+OUT="${OUT:-${ARTIFACTS_DIR}/umbrella_nc_${SOLVENT}_prod}"
+PSF="${ARTIFACTS_DIR}/boxes/${SOLVENT}/model.psf"
+PDB="${ARTIFACTS_DIR}/boxes/${SOLVENT}/model.pdb"
+
+if [[ ! -f "${CFG}" ]]; then
+  echo "FAIL: missing config ${CFG}" >&2
+  echo "      (DMSO prod YAML not added yet — use tip3/acn, or set CFG=…)" >&2
+  exit 1
+fi
 
 if [[ ! -f "${PSF}" || ! -f "${PDB}" ]]; then
-  echo "=== missing TIP3 make-box; building dense box (USE_DENSITY=1, BOX_SIZE=30) ==="
+  echo "=== missing ${SOLVENT} make-box; building dense box (USE_DENSITY=1, BOX_SIZE=30) ==="
   export BOX_SIZE="${BOX_SIZE:-30.0}"
   export USE_DENSITY="${USE_DENSITY:-1}"
+  export SOLVENT_ONLY="${SOLVENT}"
   bash examples/m/08_make_boxes.sh
 fi
 if [[ ! -f "${PSF}" || ! -f "${PDB}" ]]; then
@@ -61,6 +79,7 @@ if [[ "${OVERWRITE:-0}" == "1" ]]; then
 fi
 
 echo "=== hybrid umbrella-sample PROD: $(basename "${CFG}") ==="
+echo "  solvent=${SOLVENT}"
 echo "  out=${OUT}"
 echo "  move-with=${MOVE_WITH}"
 if [[ -n "${NSTEPS:-}" ]]; then
@@ -102,7 +121,9 @@ assert "ml_atom_indices" in snap.files, snap.files
 n_win = int(summary["n_windows"])
 n_fr = int(summary["n_frames"])
 print(f"PASS: hybrid umbrella PROD -> ${OUT}")
-print(f"  windows={n_win} frames/window={n_fr} ml_atoms={len(summary.get('ml_atom_indices', []))}")
+print(f"  solvent=${SOLVENT} windows={n_win} frames/window={n_fr} "
+      f"ml_atoms={len(summary.get('ml_atom_indices', []))}")
+print(f"  cv_label={summary.get('cv_label')}")
 PY
 
 if [[ "${SKIP_MBAR:-0}" != "1" ]]; then

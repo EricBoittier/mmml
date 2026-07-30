@@ -1,31 +1,28 @@
-# Solvated mechanical-embedding umbrella — production (dense TIP3 @ 30 Å).
+# Solvated mechanical-embedding umbrella — production (dense ACN @ 30 Å).
 #
 # Reaction coordinate (1D PMF):
 #   ξ = r(C–Cl) − r(C–N)     [= ADUMB ``rdif`` / Menshutkin convention]
 #   reactants: ξ < 0   |   products: ξ > 0
 #
-# Same CV / ML region / walls as umbrella_nc_tip3.yaml; longer sampling for MBAR.
+# Same CV / ML region / walls as umbrella_nc_acn.yaml; longer sampling for MBAR.
 # Prerequisite: dense make-box (USE_DENSITY=1):
-#   USE_DENSITY=1 BOX_SIZE=30 bash examples/m/08_make_boxes.sh
+#   USE_DENSITY=1 BOX_SIZE=30 SOLVENT_ONLY=acn bash examples/m/08_make_boxes.sh
 #
 #   source examples/m/_env.sh
-#   bash examples/m/14_umbrella_sample_sol_prod.sh              # or SOLVENT=tip3
 #   SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh
 #
 # Timing (defaults): 30 windows × 40000 steps × 0.5 fs = 20 ps / window;
 #   equilibration_steps 4000 → 2 ps discarded; ~401 saved frames / window.
-# If a window heats, set TIMESTEP_FS=0.25 (and double NSTEPS for same wall time).
 
 engine: hybrid_jaxmd
 checkpoint: ../../model_ext.json
-from_psf: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.psf
-from_pdb: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.pdb
+from_psf: ../../../artifacts/nh3_ch3cl/boxes/acn/model.psf
+from_pdb: ../../../artifacts/nh3_ch3cl/boxes/acn/model.pdb
 box_size: 30.0
-output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_tip3_prod
+output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_acn_prod
 
 ml_resnames: [AMM1, CH3CL]
 
-# ξ = r(C1–CL1) − r(C1–N1); names resolved against ml_resnames in the PSF.
 cv_x:
   pairs:
     - [C1, CL1]
@@ -40,7 +37,6 @@ walls:
     theta_min_deg: 130.0
     k: 50.0
 
-# Turan et al.: ξ ∈ [-1.3, 1.6], ~0.1 Å spacing → 30 windows.
 xi_min: -1.3
 xi_max: 1.6
 n_windows: 30
