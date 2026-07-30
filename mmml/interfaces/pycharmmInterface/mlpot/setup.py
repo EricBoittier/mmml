@@ -835,7 +835,10 @@ def verify_mlpot_charmm_atom_consistency(
         issues.append(f"context ml_Z length {z_ctx.shape[0]} != ml_Natoms {n_ml}")
     if z_mlpot.shape[0] != n_ml:
         issues.append(f"mlpot.ml_Z length {z_mlpot.shape[0]} != ml_Natoms {n_ml}")
-    if n_ml != n_psf:
+    partial_ml = n_ml < n_psf
+    if n_ml > n_psf:
+        issues.append(f"ml_Natoms {n_ml} > CHARMM natom {n_psf}")
+    if not partial_ml and n_ml != n_psf:
         issues.append(f"ml_Natoms {n_ml} != CHARMM natom {n_psf}")
 
     if expected_z is not None:
@@ -846,21 +849,29 @@ def verify_mlpot_charmm_atom_consistency(
                 f"(build {z_exp.tolist()[:8]}... vs ctx {z_ctx.tolist()[:8]}...)"
             )
 
-    if not np.array_equal(z_psf, z_ctx):
-        mismatch = np.where(z_psf != z_ctx)[0]
+    z_psf_ml = z_psf[ml_idx] if partial_ml else z_psf
+    if not np.array_equal(z_psf_ml, z_ctx):
+        mismatch = np.where(z_psf_ml != z_ctx)[0]
         issues.append(
-            "PSF mass-derived Z != MlpotContext.ml_Z at indices "
+            "PSF mass-derived Z != MlpotContext.ml_Z at ML indices "
             + ", ".join(str(int(i)) for i in mismatch[:12])
             + ("..." if mismatch.size > 12 else "")
         )
     if not np.array_equal(z_ctx, z_mlpot):
         issues.append("MlpotContext.ml_Z != mlpot.ml_Z (registration vs MLpot object)")
 
-    expected_idx = np.arange(n_ml, dtype=int)
-    if ml_idx.shape != expected_idx.shape or not np.array_equal(ml_idx, expected_idx):
-        issues.append(
-            f"mlpot.ml_indices not 0..{n_ml - 1} (got {ml_idx.tolist()[:16]}...)"
-        )
+    if partial_ml:
+        if ml_idx.size != n_ml or ml_idx.min() < 0 or ml_idx.max() >= n_psf:
+            issues.append(
+                f"mlpot.ml_indices out of range for partial ML "
+                f"(n_ml={n_ml}, natom={n_psf}, idx={ml_idx.tolist()[:16]}...)"
+            )
+    else:
+        expected_idx = np.arange(n_ml, dtype=int)
+        if ml_idx.shape != expected_idx.shape or not np.array_equal(ml_idx, expected_idx):
+            issues.append(
+                f"mlpot.ml_indices not 0..{n_ml - 1} (got {ml_idx.tolist()[:16]}...)"
+            )
 
     z_calc = _calculator_atomic_numbers(ctx)
     if z_calc is None:
@@ -882,15 +893,22 @@ def verify_mlpot_charmm_atom_consistency(
         )
 
     if not quiet:
-        sample = min(3, n_psf)
+        sample = min(3, n_psf if not partial_ml else n_ml)
+        region = (
+            f"partial ML n_ml={n_ml}/{n_psf}"
+            if partial_ml
+            else f"all-ML N={n_psf}"
+        )
         lines = [
-            f"Atom consistency OK before {context}: N={n_psf} "
+            f"Atom consistency OK before {context}: {region} "
             f"(PSF ↔ MLpot ↔ calculator Z and masses)"
         ]
-        for i in range(sample):
+        sample_idx = ml_idx[:sample] if partial_ml else range(sample)
+        for i in sample_idx:
+            ii = int(i)
             lines.append(
-                f"  atom {i}: type={atypes[i]} Z={int(z_psf[i])} "
-                f"mass={float(masses[i]):.4f} amu"
+                f"  atom {ii}: type={atypes[ii]} Z={int(z_psf[ii])} "
+                f"mass={float(masses[ii]):.4f} amu"
             )
         print("\n".join(lines), flush=True)
 
@@ -942,6 +960,45 @@ def select_by_resids(resids: Sequence[int | str]) -> Any:
     for rid in ids[1:]:
         sel = sel | select_by_resid(rid)
     return sel
+
+
+def select_by_resname(res_name: str) -> Any:
+    """CHARMM selection by residue name (e.g. ``'AMM1'``)."""
+    name = str(res_name).strip()
+    if not name:
+        raise ValueError("select_by_resname: empty residue name")
+    return _select_atoms_cls()(res_name=name)
+
+
+def select_by_resnames(res_names: Sequence[str]) -> Any:
+    """Union selection over multiple residue names (mechanical-embedding ML region)."""
+    names = [str(r).strip() for r in res_names if str(r).strip()]
+    if not names:
+        raise ValueError("select_by_resnames: empty residue-name list")
+    # Include known CGenFF truncations (CH3CL → CH3C) so PSF tables still match.
+    from mmml.md.ml_region import _expand_resname_match_set
+
+    expanded = sorted(_expand_resname_match_set(names))
+    sel = select_by_resname(expanded[0])
+    for name in expanded[1:]:
+        sel = sel | select_by_resname(name)
+    return sel
+
+
+def resolve_mlpot_selection_from_args(args: Any | None) -> Any:
+    """Return ML ``SelectAtoms``: ``ml_resnames`` subset, else all atoms.
+
+    Mechanical embedding on PyCHARMM: PhysNet/USER only on the listed residues;
+    solvent keeps CHARMM MM (requires BLOCK registration + non-``jax_mic`` VDW).
+    """
+    from mmml.md.ml_region import parse_ml_resnames
+
+    ml_resnames = parse_ml_resnames(
+        getattr(args, "ml_resnames", None) if args is not None else None
+    )
+    if ml_resnames is None:
+        return select_all_atoms()
+    return select_by_resnames(ml_resnames)
 
 
 def apply_charmm_verbosity(

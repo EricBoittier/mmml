@@ -40,10 +40,16 @@ export EXAMPLE_DIR
 #
 # MMML_EXAMPLE_DEVICE_EXPLICIT is exported so nested `bash examples/m/0X_*.sh`
 # steps do not mistake our own exported MMML_EXAMPLE_DEVICE for a user override.
-if [[ -n "${MMML_EXAMPLE_DEVICE:-}" ]]; then
-  MMML_EXAMPLE_DEVICE_EXPLICIT=1
+# An already-set marker always wins, including "0": we export MMML_EXAMPLE_DEVICE
+# unconditionally, so a nested step cannot tell a user request from our own
+# default by looking at MMML_EXAMPLE_DEVICE alone.
+if [[ -z "${MMML_EXAMPLE_DEVICE_EXPLICIT:-}" ]]; then
+  if [[ -n "${MMML_EXAMPLE_DEVICE:-}" ]]; then
+    MMML_EXAMPLE_DEVICE_EXPLICIT=1
+  else
+    MMML_EXAMPLE_DEVICE_EXPLICIT=0
+  fi
 fi
-MMML_EXAMPLE_DEVICE_EXPLICIT="${MMML_EXAMPLE_DEVICE_EXPLICIT:-0}"
 export MMML_EXAMPLE_DEVICE_EXPLICIT
 MMML_EXAMPLE_DEVICE="$(printf '%s' "${MMML_EXAMPLE_DEVICE:-cpu}" | tr '[:upper:]' '[:lower:]')"
 case "${MMML_EXAMPLE_DEVICE}" in
@@ -140,20 +146,16 @@ mmml_example_env_banner() {
       "${MMML_EXAMPLE_DEVICE}" "${MMML_EXAMPLE_DEVICE_FORCED}"
     printf '                probably a stale export in a login profile; unset it there)\n'
   fi
+  # Only reachable without an explicit MMML_EXAMPLE_DEVICE: when it is explicit
+  # the forcing above guarantees JAX_PLATFORMS agrees with it, so a surviving
+  # mismatch means only the per-variable knobs were set. Informational, not a
+  # warning — nothing was ignored. An explicit request that cannot be honoured
+  # is caught by the backend probe below instead.
   if [[ "${_effective}" != "${MMML_EXAMPLE_DEVICE}" ]]; then
-    if [[ "${MMML_EXAMPLE_DEVICE_EXPLICIT:-0}" == "1" ]]; then
-      # An explicit device request that did not take effect wastes the whole
-      # run, so this is stderr and not a parenthetical.
-      printf '  WARNING: MMML_EXAMPLE_DEVICE=%s was requested but the effective device is %s\n' \
-        "${MMML_EXAMPLE_DEVICE}" "${_effective}" >&2
-      printf '           (JAX_PLATFORMS=%s, MMML_MLPOT_DEVICE=%s)\n' \
-        "${JAX_PLATFORMS}" "${MMML_MLPOT_DEVICE}" >&2
-    else
-      printf '               (MMML_EXAMPLE_DEVICE defaults to %s; an explicit\n' \
-        "${MMML_EXAMPLE_DEVICE}"
-      printf '                JAX_PLATFORMS / MMML_MLPOT_DEVICE selected %s instead)\n' \
-        "${_effective}"
-    fi
+    printf '               (MMML_EXAMPLE_DEVICE defaults to %s; an explicit\n' \
+      "${MMML_EXAMPLE_DEVICE}"
+    printf '                JAX_PLATFORMS / MMML_MLPOT_DEVICE selected %s instead)\n' \
+      "${_effective}"
   fi
   if [[ "${_effective}" == "cpu" ]]; then
     if [[ "${MMML_EXAMPLE_DEVICE_EXPLICIT:-0}" != "1" ]]; then
@@ -168,10 +170,14 @@ mmml_example_env_banner() {
     if [[ "${_backend}" == "gpu" || "${_backend}" == "cuda" ]]; then
       printf '               (JAX backend: %s)\n' "${_backend}"
     else
-      printf '  WARNING: MMML_EXAMPLE_DEVICE=gpu but JAX reports backend=%s\n' \
+      # A GPU request that silently lands on CPU wastes the entire pipeline, so
+      # this goes to stderr and says so plainly rather than as a parenthetical.
+      printf '  WARNING: GPU was requested but JAX reports backend=%s — this run\n' \
         "${_backend:-unknown}" >&2
+      printf '           will execute on CPU (expect ~10-100x slower).\n' >&2
       printf '           Install the CUDA build:  uv sync --extra gpu\n' >&2
       printf '           (RTX 50xx / Blackwell needs the cuda13 build.)\n' >&2
+      printf '           Set MMML_EXAMPLE_DEVICE=cpu to accept CPU and silence this.\n' >&2
     fi
   fi
   printf '  checkpoint : %s\n' "${MMML_CKPT}"
