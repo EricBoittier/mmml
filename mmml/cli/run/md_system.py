@@ -2198,14 +2198,22 @@ def _validate_and_record_interaction_policy(args: argparse.Namespace) -> None:
             f"interaction policy {path} is valid, but this provider decomposition "
             f"is not yet lowerable (monomer providers={monomer_providers}, "
             f"near/far rules={split}); refusing to silently ignore ownership. "
-            "Use a single-provider policy until multi-provider / near–far "
-            "lowering is implemented."
+            "Use a single-provider policy or a mechanical-embedding policy "
+            "(ML solute monomers + MM intermolecular pairs; no near/far) until "
+            "generalized lowering is implemented."
         )
+    from mmml.md.interactions import policy_is_mechanical_embedding
+
+    kind = (
+        "mechanical-embedding"
+        if policy_is_mechanical_embedding(policy)
+        else "single-provider"
+    )
     if not getattr(args, "quiet", False):
         print(
             f"mmml md-system: interaction_policy={path} "
             f"schema={policy.schema_version} sha256={digest[:12]}… "
-            "(single-provider; ownership validated)",
+            f"({kind}; ownership validated)",
             flush=True,
         )
 

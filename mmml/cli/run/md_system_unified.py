@@ -302,25 +302,42 @@ def run_unified_jaxmd(args: Any) -> int:
         system = build_from_pdb_system_with_ffparams(args, run_config.system)
     else:
         system = build_packmol_system_with_ffparams(run_config.system, args)
-    policy_path = getattr(args, "interaction_policy", None)
-    if policy_path is not None:
-        from mmml.md.interactions import (
-            assert_interaction_plan_lowerable,
-            compile_interaction_policy,
-            load_interaction_policy,
-        )
 
-        plan = compile_interaction_policy(system, load_interaction_policy(policy_path))
-        assert_interaction_plan_lowerable(plan, runner="jaxmd-unified")
-
-    term_kwargs: dict[str, dict] = {}
     from dataclasses import replace
+    from pathlib import Path
 
     from mmml.md.ml_region import (
         apply_ml_resnames_mechanical_embedding,
         parse_ml_resnames,
     )
 
+    policy_path = getattr(args, "interaction_policy", None)
+    if policy_path is not None:
+        from mmml.md.interactions import (
+            assert_interaction_plan_lowerable,
+            compile_interaction_policy,
+            load_interaction_policy,
+            mechanical_embedding_ml_species,
+            policy_is_mechanical_embedding,
+        )
+
+        policy = load_interaction_policy(policy_path)
+        plan = compile_interaction_policy(system, policy)
+        assert_interaction_plan_lowerable(plan, runner="jaxmd-unified", policy=policy)
+        # Mechanical embedding ownership → ml_resnames (unless already set).
+        if (
+            policy_is_mechanical_embedding(policy)
+            and parse_ml_resnames(getattr(args, "ml_resnames", None)) is None
+        ):
+            args.ml_resnames = list(mechanical_embedding_ml_species(policy))
+            if not getattr(args, "checkpoint", None):
+                for pname in policy.monomers.values():
+                    spec = policy.providers.get(str(pname))
+                    if spec is not None and spec.kind == "ml" and spec.checkpoint:
+                        args.checkpoint = Path(spec.checkpoint)
+                        break
+
+    term_kwargs: dict[str, dict] = {}
     ml_resnames = parse_ml_resnames(getattr(args, "ml_resnames", None))
     if ml_resnames is not None:
         if "ml_intra" not in run_config.terms:

@@ -455,6 +455,7 @@ def build_embedding_box(
 
     psf_path = out / "model.psf"
     crd_path = out / "model.crd"
+    pdb_path = out / "model.pdb"
     prev = os.getcwd()
     try:
         os.chdir(out)
@@ -462,6 +463,22 @@ def build_embedding_box(
         write.coor_card(crd_path.name)
     finally:
         os.chdir(prev)
+
+    # Sibling PDB for ``md-system --from-pdb`` / jaxmd-unified mechanical embedding.
+    try:
+        from ase import Atoms
+        from ase.io import write as ase_write
+
+        from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+        z = np.asarray(get_Z_from_psf(), dtype=int)
+        pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+        atoms = Atoms(numbers=z, positions=pos, cell=np.eye(3) * float(box.box_side_A), pbc=True)
+        # Prefer CHARMM residue names on atoms when available for ml_resnames.
+        ase_write(str(pdb_path), atoms)
+    except Exception as exc:
+        print(f"WARN: could not write {pdb_path.name} for md-system from_pdb: {exc}", flush=True)
+        pdb_path = None
 
     bonded_report: dict[str, float] | None = None
     if write_bonded_report:
@@ -493,6 +510,7 @@ def build_embedding_box(
         ),
         "psf": str(psf_path.name),
         "crd": str(crd_path.name),
+        **({"pdb": str(pdb_path.name)} if pdb_path is not None else {}),
         "bonded_report": bonded_report,
     }
     box_json_path = out / "box.json"

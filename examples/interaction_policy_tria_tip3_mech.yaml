@@ -1,0 +1,30 @@
+# Mechanical embedding ownership for TRIA (peptide) + TIP3 water.
+#
+# ML owns TRIA intramolecular energy; CGenFF owns TIP3 monomers and *all*
+# intermolecular pairs (peptide–water and water–water). No near/far dimer ML.
+#
+# Lowered on ``md-system --jaxmd-unified`` to ``ml_resnames: [TRIA]``.
+# Near/far policies (see interaction_policy_peptide_water.yaml) still fail closed.
+#
+#   uv run mmml md-system \
+#     --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
+#     --run-all
+
+schema_version: 1
+
+providers:
+  peptide_ml:
+    kind: ml
+    # Override with --checkpoint / campaign checkpoint (Spooky or PhysNet JSON).
+    checkpoint: examples/spooky_so3lr_muon3_epoch0013.json
+  cgenff:
+    kind: mm
+    calculator: cgenff
+
+monomers:
+  TRIA: peptide_ml
+  TIP3: cgenff
+
+pairs:
+  - species: ["*", "*"]
+    provider: cgenff
