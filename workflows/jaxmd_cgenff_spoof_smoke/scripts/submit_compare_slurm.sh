@@ -15,7 +15,7 @@ mkdir -p artifacts/jaxmd_cgenff_spoof_smoke/charmm_compare
 export JAX_ENABLE_X64=1
 export MMML_PYTHON="${MMML_PYTHON:-/mmhome/boittier/home/mmml/.venv/bin/python}"
 export PYTHONPATH="/mmhome/boittier/home/mmml_cursor${PYTHONPATH:+:$PYTHONPATH}"
-export MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1
+export MMML_ALLOW_SELECTIVE_BONDED_BLOCK=0
 
 MODE="${1:-compare}"
 if [[ "$MODE" == "native" || "$MODE" == "all" ]]; then
