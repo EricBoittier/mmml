@@ -4,9 +4,11 @@
 #     bash scripts/snakemake_slurm.sh
 
 solvents: [DCM]
+# Clear keys inherited when Snakemake merges this file onto config.yaml.
+bulk_density_fractions: []
 cluster_sizes: [8]
 temperatures: [300.0]
-box_sizes: [18.0]
+box_sizes: [20.0]
 checkpoint: ${MMML_CKPT}
 output_root: artifacts/pbc_liquid_density_dyn_smoke_tiny
 seed_base: 4242

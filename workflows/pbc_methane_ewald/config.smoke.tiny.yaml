@@ -1,10 +1,8 @@
-# Tiny smoke: one T, one checkpoint, both backends (2 cells).
-# Fixes: METH in SOLVENT_BULK_PROPS + correct bulk_density_fraction wiring.
-
+# Tiny smoke: L>=20 required for periodic_external Ewald; keep N modest.
 solvents: [METH]
 temperatures: [100.0]
-box_sizes: [16.0]
-bulk_density_fractions: [0.5]
+box_sizes: [22.0]
+bulk_density_fractions: [0.25]
 bulk_density_n_min: 8
 backends: [pycharmm, jaxmd]
 
@@ -31,14 +29,14 @@ jaxmd_prod_ps: 0.25
 
 dt_fs: 0.25
 pressure: 1.0
-spacing: 4.0
-packmol_tolerance: 1.5
+spacing: 4.5
+packmol_tolerance: 2.0
 
 liquid_prep: true
 density_prep_ladder: true
-density_prep_ladder_max_rounds: 2
+density_prep_ladder_max_rounds: 3
 mc_density_equalize: true
-mc_density_steps: 20
+mc_density_steps: 40
 min_intermonomer_atom_distance: 1.0
 max_grms_before_dyn: 50.0
 
