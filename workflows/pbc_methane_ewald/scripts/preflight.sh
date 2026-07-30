@@ -77,8 +77,10 @@ for i, cell in enumerate(iter_matrix_cells(cfg)):
         print('  ...')
         break
     print(f'  {cell.solvent}:{cell.n_monomers} T={cell.temperature} '
-          f'ckpt={cell.checkpoint_slug} backend={cell.backend} '
+          f'ckpt={cell.checkpoint_slug} emb={cell.embedding}/{cell.mm_charge_mode} '
+          f'backend={cell.backend} '
           f'n_ml={cell_ml_atoms(cell)}')
+print('embeddings:', [f'{e}/{m}' for e, m in matrix_embeddings(cfg)])
 print('slurm -j:', slurm_launch_jobs(cfg))
 print('METH monomer pdb:', mono)
 "

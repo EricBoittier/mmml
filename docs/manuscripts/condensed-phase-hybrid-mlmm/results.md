@@ -149,12 +149,25 @@ Tiny GPU smokes used while wiring manuscript workflows (not paper numbers):
 | Workflow | Config / tags | Last result | Notes |
 |----------|---------------|-------------|-------|
 | `pbc_liquid_density_dyn` | `config.smoke.tiny.gpu.yaml` → `dcm_8` | **PASS** init+equi+prod (0.5 ps NPT); Slurm/launcher exit 0 | Handoff fmax-gate skip; density `run_job` uses direct Python + CLI mpirun re-exec; success path no longer `os._exit(0)` (lets MPI finalize so PRRTE returns 0) |
-| `pbc_methane_ewald` | `meth_8_t100_l24_des_jaxmd` | **PASS** init heat + jaxmd equi/prod (0.25 ps NVT, Ewald); launcher exit 0 | Seed 89921: mini → fmax≈0.96 eV/Å, USER≈−61 kcal/mol before heat |
-| `pbc_methane_ewald` | `meth_8_t100_l24_des_pycharmm` | **FAIL** pre-heat / HEAT | Root cause: DES≠methane; seed 89904 mini spike-aborts at fmax≈20.7 eV/Å, USER≈+2826; smoke had raised `max_fmax_before_dyn_ev_A=25` so heat started and CHARMM aborted (`ENERGY CHANGE TOLERANCE`, Inf-scale ΔE) by step ~85. Not an echeck wiring bug (`no_echeck_heat` / echeck=1e30 were on). Removed the 25 eV/Å ceiling so this fails at the pre-dyn gate instead. Prefer jaxmd for DES/spoof methane smoke. |
+| `pbc_methane_ewald` | `meth_8_t100_l24_des_jaxmd` (spoof tiny) | **PASS** init heat + jaxmd equi/prod (0.25 ps NVT, Ewald); launcher exit 0 | Seed 89921: mini → fmax≈0.96 eV/Å, USER≈−61 kcal/mol before heat |
+| `pbc_methane_ewald` | `meth_8_t100_l24_des_pycharmm` (spoof tiny) | **FAIL** pre-heat / HEAT | Root cause: DES≠methane under `jax_mm_spoof`; seed 89904 mini spike-aborts at fmax≈20.7 eV/Å, USER≈+2826; smoke had raised `max_fmax_before_dyn_ev_A=25` so heat started and CHARMM aborted (`ENERGY CHANGE TOLERANCE`) by step ~85. Removed the 25 eV/Å ceiling. |
+| `pbc_methane_ewald` | `config.smoke.embeddings.tiny.yaml` (real ML, no spoof) | **PASS** 6/6 cells; Slurm exit 0 | DES + So3LR13; mechanical (`mm_charge_mode=fixed`) + electrostatic (`q0`). DES+q0 skipped (no charge head). See table below. |
 | `dcm5_md_benchmark` | needs real DCM PhysNet `MMML_CKPT` | not smoked here | Only DES / spooky JSON in `examples/ckpts_json/` |
 
+Embedding smoke tags (`artifacts/pbc_methane_ewald_smoke_embeddings/`, jobs 205234–205240):
+
+| Tag | Checkpoint | Embedding | Backend | Result |
+|-----|------------|-----------|---------|--------|
+| `meth_8_t100_l24_des_mech_pycharmm` | DESdimers | mechanical / fixed | pycharmm | **PASS** (retry 205240 exit 0 after 205239 exit 1) |
+| `meth_8_t100_l24_des_mech_jaxmd` | DESdimers | mechanical / fixed | jaxmd | **PASS** |
+| `meth_8_t100_l24_so3lr13_mech_pycharmm` | So3LR epoch0013 | mechanical / fixed | pycharmm | **PASS** |
+| `meth_8_t100_l24_so3lr13_mech_jaxmd` | So3LR epoch0013 | mechanical / fixed | jaxmd | **PASS** |
+| `meth_8_t100_l24_so3lr13_es_pycharmm` | So3LR epoch0013 | electrostatic / q0 | pycharmm | **PASS** |
+| `meth_8_t100_l24_so3lr13_es_jaxmd` | So3LR epoch0013 | electrostatic / q0 | jaxmd | **PASS** |
+
 Artifact roots: `artifacts/pbc_liquid_density_dyn_smoke_tiny/`,
-`artifacts/pbc_methane_ewald_smoke_tiny/`.
+`artifacts/pbc_methane_ewald_smoke_tiny/`,
+`artifacts/pbc_methane_ewald_smoke_embeddings/`.
 
 ---
 
