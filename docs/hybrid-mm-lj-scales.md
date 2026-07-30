@@ -372,14 +372,27 @@ LJ scales still live on hybrid / md-system flags, not inside the policy file.
 | Unit scales ≡ baseline | With all `s=1`, hybrid energy matches fixed-LJ hybrid (unit tests) |
 | Non-unit scales move LJ | Changing `s^ε` or `s^σ` changes `e_mm` (unit tests) |
 | Gradients exist | ∂E/∂s^σ and ∂E/∂s^ε finite and nonzero on a close dimer |
+| Scales actually *converge* | Adam recovers a planted σ/ε scale to a few % |
+| Absent types untouched | A type not present in the data keeps `s = 1.0` exactly |
+| Train → MD continuity | Deployed `at_ep`/`at_rm` equal master × trained scale for the right ATC rows |
 | MD loads scales | Verbose MLpot line, or explicit `--mm-lj-scales-file` |
 | Ewald/PME | Do **not** expect LJ scales; LJ is forced off |
+| `periodic_external` + `--mm-lj-scales-file` | **Errors out** — it cannot apply them (see Troubleshooting) |
 
 Local unit tests (no CHARMM / no GPU required for these):
 
 ```bash
-uv run pytest tests/unit/test_mm_lj_scales.py tests/unit/test_hybrid_energy.py -q
+uv run pytest tests/unit/test_mm_lj_scales.py \
+              tests/unit/test_mm_lj_scales_learning.py \
+              tests/unit/test_hybrid_energy.py -q
 ```
+
+`test_mm_lj_scales.py` covers the mechanics (attach/split/apply, JSON I/O, ATC
+remap, nonzero gradients). `test_mm_lj_scales_learning.py` covers the two
+questions those cannot answer: whether an optimizer drives the scales to the
+right values, and whether the value that trained is the value MD deploys. It also
+pins the Ewald limitation, so if LJ-under-Ewald is ever implemented that test
+fails and forces this page to be updated with it.
 
 ---
 
@@ -389,6 +402,10 @@ uv run pytest tests/unit/test_mm_lj_scales.py tests/unit/test_hybrid_energy.py -
 |---------|----------------|
 | `learn_mm_lj_scales` silently false | `lr_solver` is ewald/PME, or `mm_include_lj: false` |
 | MD ignores scales | Missing `hybrid_mm.json`, wrong path, or `learn_mm_lj_scales: false` in sidecar |
+| `--mm-lj-scales-file … but JAX MM is off` error | You asked to deploy trained LJ under `periodic_external` or with `include_mm: false`, where nothing can consume it. Switch to `--mm-nonbond-mode jax_mic --include-mm`, or drop the flag to run stock CGenFF LJ on purpose |
+| `WARNING: … carries trained MM LJ scales but JAX MM is off` | A `hybrid_mm.json` was auto-discovered next to the checkpoint but the run cannot apply it — this run is using **stock** CGenFF LJ. Harmless if intended; otherwise switch to `jax_mic` |
+| Fit looks great, density/RDF is wrong under Ewald | Coulomb error absorbed into σ/ε during MIC fitting — see [Why you train LJ *without* Ewald](#why-you-train-lj-without-ewald-read-this-first) |
+| Cutoffs differ between train and MD | The σ/ε were fitted against a different operator; match `mm_switch_on` / `mm_switch_width` / `ml_switch_width` |
 | ATC length mismatch / wrong types | Sidecar type names don’t match CHARMM ATC; regenerate from the same CGenFF PRM |
 | Energies look like double LJ | Spooky in-model VdW + hybrid `E_MM` — hybrid must not pass CGenFF tables into the model (guarded in tests) |
 | Charge head errors | Mode B/C need `--charges`; Mode A does not need the head for `E_MM` |
