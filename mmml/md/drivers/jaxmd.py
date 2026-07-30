@@ -140,9 +140,23 @@ class JaxmdDriver:
 
         dynamic_kwargs: Mapping[str, Any] = {}
 
+        # A neighbor_fn may declare itself device-native, meaning it takes and
+        # returns device arrays. Then the per-block host round trip disappears:
+        # for a 1767-atom solvated system the numpy rebuild cost 4.07 s against
+        # 0.02 s of actual gradient evaluation, which is what pinned such runs
+        # at 100 % CPU and 0 % GPU.
+        device_native = bool(getattr(self.neighbor_fn, "device_native", False))
+
         def refresh_real(real_pos_jax, box_jax):
             if self.neighbor_fn is None:
                 return {}
+            if device_native:
+                result = self.neighbor_fn(real_pos_jax, box_jax)
+                if not isinstance(result, Mapping):
+                    raise TypeError(
+                        "neighbor_fn must return a mapping of energy keyword arrays"
+                    )
+                return dict(result)
             real_pos = np.asarray(jax.device_get(real_pos_jax))
             box_arr = None if box_jax is None else np.asarray(jax.device_get(box_jax))
             result = self.neighbor_fn(real_pos, box_arr)
@@ -152,6 +166,11 @@ class JaxmdDriver:
 
         def refresh(state):
             return refresh_real(_real_of(state), _box_of(state))
+
+        # Recording used the raw (un-jitted) energy function, which cost ~0.5 s
+        # per frame on a 1767-atom solvated system -- more than the dynamics
+        # between frames. Compile it once instead.
+        _energy_jit = jax.jit(energy_fn)
 
         def _record_energy(state, dyn):
             if is_npt:

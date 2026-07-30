@@ -32,7 +32,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from mmml.md.restraints import FlatBottomWall, LinearDistanceCV
+from mmml.md.restraints import (
+    AngleWall,
+    BondRetentionWall,
+    FlatBottomWall,
+    LinearDistanceCV,
+)
 from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.sample import run_umbrella_nvt
 
@@ -224,6 +229,36 @@ def build_parser() -> argparse.ArgumentParser:
         type=_parse_quad,
         default=None,
         help="CV2 as an antisymmetric stretch A,B,C,D; enables 2D umbrella",
+    )
+    parser.add_argument(
+        "--wall-angle",
+        action="append",
+        metavar="A,V,C,THETA_MIN[,K]",
+        help=(
+            "Flat-bottom lower bound (degrees) on the A-V-C angle, keeping an "
+            "SN2 attack in its backside channel. xi = r(C-X) - r(C-N) does not "
+            "constrain the angle, so once the bond breaks the leaving group can "
+            "swing round: gas-phase windows beyond xi = +1.3 sampled a mean "
+            "N-C-Cl angle of 70 deg (chloride hydrogen-bonded to the ammonium) "
+            "while reaction-region windows stayed at 165-173 deg. Those windows "
+            "did not crash, so without this the corruption is silent. "
+            "Menshutkin: --wall-angle 1,2,0,130,50 . Repeatable."
+        ),
+    )
+    parser.add_argument(
+        "--wall-min-bond",
+        action="append",
+        metavar="A,B,C,D,R_MAX[,K]",
+        help=(
+            "Flat-bottom bound on min(r(A-B), r(C-D)): the transferring group "
+            "must stay bonded to one partner or the other. Preferred over "
+            "--wall-sum for a transfer coordinate, because the allowed sum "
+            "depends on xi (large where one bond is long, small at the "
+            "transition state) while the shortest bond does not. Measured for "
+            "NH3 + CH3Cl: min(r(C-Cl), r(C-N)) has max 2.18 A across the whole "
+            "training set, at every xi. Menshutkin: "
+            "--wall-min-bond 2,0,2,1,2.25,100 . Repeatable."
+        ),
     )
     parser.add_argument(
         "--wall-sum",
@@ -517,6 +552,39 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
                     ),
                     upper=upper,
                     k=k,
+                )
+            )
+        data["walls"] = tuple(walls)
+    if args.wall_angle:
+        walls = list(data.get("walls", ()))
+        for spec in args.wall_angle:
+            parts = [p.strip() for p in spec.split(",") if p.strip()]
+            if len(parts) not in (4, 5):
+                raise SystemExit(
+                    f"--wall-angle expects A,V,C,THETA_MIN[,K] (got {spec!r})"
+                )
+            walls.append(
+                AngleWall(
+                    atoms=tuple(int(x) for x in parts[:3]),
+                    theta_min_deg=float(parts[3]),
+                    k=float(parts[4]) if len(parts) == 5 else 50.0,
+                )
+            )
+        data["walls"] = tuple(walls)
+    if args.wall_min_bond:
+        walls = list(data.get("walls", ()))
+        for spec in args.wall_min_bond:
+            parts = [p.strip() for p in spec.split(",") if p.strip()]
+            if len(parts) not in (5, 6):
+                raise SystemExit(
+                    f"--wall-min-bond expects A,B,C,D,R_MAX[,K] (got {spec!r})"
+                )
+            a, b, c, d = (int(x) for x in parts[:4])
+            walls.append(
+                BondRetentionWall(
+                    pairs=((a, b), (c, d)),
+                    r_max=float(parts[4]),
+                    k=float(parts[5]) if len(parts) == 6 else 50.0,
                 )
             )
         data["walls"] = tuple(walls)

@@ -14,7 +14,29 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from mmml.md.restraints import FlatBottomWall, LinearDistanceCV
+from mmml.md.restraints import (
+    AngleWall,
+    BondRetentionWall,
+    FlatBottomWall,
+    LinearDistanceCV,
+)
+
+
+def _resolve_wall(spec):
+    """Build whichever wall kind the spec describes.
+
+    A mapping carrying ``r_max`` is a :class:`BondRetentionWall` (bound on the
+    shortest of several competing distances); anything else is a
+    :class:`FlatBottomWall` on a linear CV. Both expose ``energy_batched`` and
+    ``forces_batched``, so the sampler does not care which it has.
+    """
+    if isinstance(spec, (FlatBottomWall, BondRetentionWall, AngleWall)):
+        return spec
+    if isinstance(spec, dict) and "atoms" in spec:
+        return AngleWall.from_spec(spec)
+    if isinstance(spec, dict) and "r_max" in spec:
+        return BondRetentionWall.from_spec(spec)
+    return FlatBottomWall.from_spec(spec)
 
 
 def _as_cvs(specs: Sequence[Any]) -> tuple[LinearDistanceCV, ...]:
@@ -25,6 +47,82 @@ def _as_cvs(specs: Sequence[Any]) -> tuple[LinearDistanceCV, ...]:
     reaction coordinate (xi = r(C-Cl) - r(C-N)) is expressible without forking
     the sampler.
     """
+    return tuple(LinearDistanceCV.from_spec(spec) for spec in specs)
+
+
+def packed_cv_values(positions_packed: Any, n_atoms: int, cv: Any, n_windows: int) -> Any:
+    """CV value for each packed window copy. Shape ``(K,)``."""
+    return LinearDistanceCV.from_spec(cv).value_batched(
+        positions_packed, n_atoms, n_windows
+    )
+
+
+def packed_cv_values_nd(
+    positions_packed: Any, n_atoms: int, cvs: Sequence[Any], n_windows: int
+) -> Any:
+    """All CV values per window. Shape ``(K, ndim)``."""
+    import jax.numpy as jnp
+
+    return jnp.stack(
+        [packed_cv_values(positions_packed, n_atoms, cv, n_windows) for cv in cvs],
+        axis=-1,
+    )
+
+
+def packed_bias_energies_cv(
+    positions_packed: Any, n_atoms: int, cv: Any,
+    targets_A: Sequence[float], k_ev_A2: Sequence[float],
+) -> Any:
+    """Per-window harmonic bias on one general CV. Shape ``(K,)``."""
+    import jax.numpy as jnp
+
+    k = len(targets_A)
+    values = packed_cv_values(positions_packed, n_atoms, cv, k)
+    targets = jnp.asarray(targets_A, dtype=values.dtype)
+    ks = jnp.asarray(k_ev_A2, dtype=values.dtype)
+    return 0.5 * ks * jnp.square(values - targets)
+
+
+def packed_bias_forces_cv(
+    positions_packed: Any, n_atoms: int, cv: Any,
+    targets_A: Sequence[float], k_ev_A2: Sequence[float],
+) -> Any:
+    """ASE-style bias forces ``F = -grad W`` for one general CV. ``(K*N, 3)``.
+
+    Uses the CV's analytic gradient so bias forces never differentiate through
+    the ML model (nesting AD inside PhysNet's ``value_and_grad`` yields NaNs).
+    """
+    import jax.numpy as jnp
+
+    resolved = LinearDistanceCV.from_spec(cv)
+    k = len(targets_A)
+    values = resolved.value_batched(positions_packed, n_atoms, k)
+    grad = resolved.gradient_batched(positions_packed, n_atoms, k)
+    targets = jnp.asarray(targets_A, dtype=values.dtype)
+    ks = jnp.asarray(k_ev_A2, dtype=values.dtype)
+    scale = (ks * (values - targets))[:, None, None]
+    return (-scale * grad).reshape(k * n_atoms, 3)
+
+
+def numpy_bias_matrix_cv(
+    positions: np.ndarray, cv: Any,
+    targets_A: Sequence[float], k_ev_A2: Sequence[float],
+    *, cell: np.ndarray | None = None,
+) -> np.ndarray:
+    """Analytic ``W_l(R)`` for one frame and one general CV. Shape ``(K,)``."""
+    value = LinearDistanceCV.from_spec(cv).value_numpy(positions, cell=cell)
+    return 0.5 * np.asarray(k_ev_A2, float) * (value - np.asarray(targets_A, float)) ** 2
+
+from mmml.md.restraints import (
+    AngleWall,
+    BondRetentionWall,
+    FlatBottomWall,
+    LinearDistanceCV,
+)
+
+
+def _as_cvs(specs: Sequence[Any]) -> tuple[LinearDistanceCV, ...]:
+    """Promote ``(i, j)`` pairs / mappings / CV instances to CVs."""
     return tuple(LinearDistanceCV.from_spec(spec) for spec in specs)
 
 
@@ -303,9 +401,9 @@ def make_packed_energy_fn(
     if not specs:
         raise ValueError("make_packed_energy_fn requires cvs (or atom_pairs)")
     resolved_cvs = _as_cvs(specs)
-    resolved_walls = tuple(FlatBottomWall.from_spec(w) for w in (walls or ()))
+    resolved_walls = tuple(_resolve_wall(w) for w in (walls or ()))
     for wall in resolved_walls:
-        wall.cv.validate_against(n_atoms)
+        wall.validate_against(n_atoms)
     for cv in resolved_cvs:
         cv.validate_against(n_atoms)
     targets = tuple(tuple(float(x) for x in row) for row in targets_per_cv)

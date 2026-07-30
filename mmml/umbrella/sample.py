@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -161,7 +163,8 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     for cv in sched.cvs:
         cv.validate_against(n_atoms)
     for wall in sched.walls:
-        wall.cv.validate_against(n_atoms)
+        # Both wall kinds expose validate_against; only FlatBottomWall has .cv.
+        wall.validate_against(n_atoms)
 
     r0_cvs = [cv.value_numpy(r0) for cv in sched.cvs]
     move_groups: list[tuple[int, ...]] = [tuple(cfg.move_with)]
@@ -246,6 +249,42 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     _time_unit = units.metal_unit_system()["time"]  # internal units per ps
     dt = float(cfg.timestep_fs) * 1.0e-3 * _time_unit
     savefreq = cfg.effective_savefreq()
+    # Periodic partial dump of the trajectory so progress is visible while the
+    # run is still going. Costs one compressed write per `live_every` saved
+    # frames; set MMML_UMBRELLA_LIVE_EVERY=0 to disable.
+    live_every = int(os.environ.get("MMML_UMBRELLA_LIVE_EVERY", "10"))
+    live_path = Path(cfg.output_dir) / "umbrella_live.npz"
+    # Recover from a single-window blow-up rather than losing the whole run.
+    recover_windows = os.environ.get("MMML_UMBRELLA_RECOVER", "1") not in ("0", "")
+    if recover_windows and bool(cfg.replica_exchange):
+        # Measured the hard way: with REX on, a reset window resumes near
+        # whatever region blew it up, replica exchange then swaps that
+        # configuration into its neighbours, and the corruption walks along the
+        # ladder. A 220 ps run left 24 of 30 windows with xi standard deviations
+        # of 5-620 A -- finite numbers, smooth-looking output, no crash, and
+        # completely unusable. Only the windows furthest from the exchange
+        # traffic stayed clean.
+        #
+        # Per-window recovery is only sound when the windows are actually
+        # independent, which is exactly what REX gives up.
+        raise ValueError(
+            "per-window recovery cannot be combined with replica exchange: a "
+            "reset window's configuration propagates to its neighbours and "
+            "corrupts the ladder silently. Either drop --replica-exchange "
+            "(windows are then independent and recovery is local and correct) "
+            "or set MMML_UMBRELLA_RECOVER=0 to abort on the first spike."
+        )
+    reset_counts = [0] * int(np.prod(sched.grid_shape))
+    # A window that has to be reset more than a handful of times is not
+    # recovering -- it sits beside a spurious well and falls back in within a
+    # couple of thousand steps. Observed: three windows resetting 106, 84 and 42
+    # times in one run while the other 27 sampled cleanly for 55 ps. Retrying
+    # such a window forever fills it with garbage; the honest outcome is to mark
+    # it failed so downstream analysis drops it.
+    max_resets = int(os.environ.get("MMML_UMBRELLA_MAX_RESETS", "5"))
+    failed_windows: set[int] = set()
+    last_good = None
+    recover_rng = np.random.default_rng(int(cfg.seed) + 991)
     if float(cfg.timestep_fs) > 0.5:
         print(
             f"WARNING: timestep {cfg.timestep_fs} fs is large for a reactive ML "
@@ -344,7 +383,6 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             and rex_rng is not None
             and step % int(cfg.rex_freq) == 0
         ):
-            import dataclasses
 
             from mmml.umbrella.rex import attempt_replica_exchanges
 
@@ -380,10 +418,33 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         if step > equil_steps and (step % savefreq == 0 or step == cfg.nsteps):
             pos_batch = np.asarray(state.position).reshape(k_windows, n_atoms, 3)
             frames_traj.append(pos_batch)
+            # Kept for the recovery path: the most recent frame that passed the
+            # temperature check, per window.
+            last_good = pos_batch.copy()
             cv_frames.append(_cv_frame(state.position))
             energy_frames.append(
                 np.asarray(per_window_energy_fn(state.position), dtype=np.float64)
             )
+            # Flush what we have so far, so a long run can be watched (and
+            # salvaged if it dies) instead of yielding nothing until the end.
+            # Written to a temporary file and renamed, so a reader never sees a
+            # half-written archive.
+            if live_every and len(frames_traj) % live_every == 0:
+                tmp = live_path.with_suffix(".tmp.npz")
+                np.savez_compressed(
+                    tmp,
+                    positions=np.asarray(frames_traj, dtype=np.float32).transpose(
+                        1, 0, 2, 3
+                    ),
+                    cv_traj=np.asarray(cv_frames, dtype=np.float32).transpose(1, 0, 2),
+                    energies_ev=np.asarray(
+                        energy_frames, dtype=np.float64
+                    ).transpose(1, 0),
+                    Z=np.asarray(z),
+                    xi0=np.asarray(sched.xi0, dtype=np.float64),
+                    step=np.asarray(step),
+                )
+                tmp.replace(live_path)
         if step % int(cfg.printfreq) == 0 or step == cfg.nsteps:
             e_tot = float(energy_sum_fn(state.position))
             t_curr = float(
@@ -425,12 +486,76 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                     else None
                 )
                 cv = f"ξ₀={xi:.3f}" + (f" η₀={yi:.3f}" if yi is not None else "")
-                raise RuntimeError(
-                    f"window temperature spike at step {step}: {detail} "
-                    f"(limit {t_abort:.0f} K; hottest {cv}). "
-                    "Packed Nose-Hoover couples replicas — prefer Langevin; "
-                    "soften --k/--ky or remove that grid corner."
-                )
+                if recover_windows and last_good is not None:
+                    # Reset just the offending windows to their last saved frame
+                    # with fresh velocities, instead of discarding the other 29.
+                    #
+                    # A fitted potential can carry narrow spurious wells that
+                    # thermal sampling finds occasionally: the geometry is
+                    # entirely normal one saved frame earlier (angle 175 deg,
+                    # bonds 1.9/2.5 A, E above the training floor) and destroyed
+                    # the next. Aborting the whole packed run for one such event
+                    # makes long runs impossible, so recover and count it.
+                    #
+                    # This is a modification of the sampled ensemble, not a fix:
+                    # affected windows are reported at the end and their
+                    # statistics should be treated with the reset count in mind.
+                    import jax.numpy as _jnp
+
+                    pos = np.asarray(state.position).reshape(
+                        k_windows, n_atoms, 3
+                    ).copy()
+                    mom = np.asarray(state.momentum).reshape(
+                        k_windows, n_atoms, 3
+                    ).copy()
+                    # NOT `masses`: that name holds the per-window masses the
+                    # bin-minima writer needs at the end of the run.
+                    packed_masses = np.asarray(state.mass).reshape(
+                        k_windows, n_atoms, 1
+                    )
+                    for i, t_hot, _fm in hot_t:
+                        pos[i] = last_good[i]
+                        sigma = np.sqrt(
+                            k_b * float(cfg.temperature_K) * packed_masses[i]
+                        )
+                        mom[i] = recover_rng.normal(size=(n_atoms, 3)) * sigma
+                        reset_counts[i] += 1
+                        if reset_counts[i] > max_resets:
+                            failed_windows.add(i)
+                    state = dataclasses.replace(
+                        state,
+                        position=_jnp.asarray(pos.reshape(-1, 3)),
+                        momentum=_jnp.asarray(mom.reshape(-1, 3)),
+                    )
+                    newly_failed = sorted(
+                        i for i, _, _ in hot_t
+                        if reset_counts[i] == max_resets + 1
+                    )
+                    if newly_failed:
+                        print(
+                            f"  step {step:6d}  window(s) {newly_failed} exceeded "
+                            f"{max_resets} resets -- marked FAILED, their samples "
+                            f"will be dropped"
+                        )
+                    print(
+                        f"  step {step:6d}  RESET window(s) "
+                        f"{[i for i, _, _ in hot_t]} after a temperature spike "
+                        f"({detail}); resets so far: "
+                        + ", ".join(
+                            f"w{k}={v}"
+                            for k, v in enumerate(reset_counts)
+                            if v
+                        )
+                    )
+                else:
+                    raise RuntimeError(
+                        f"window temperature spike at step {step}: {detail} "
+                        f"(limit {t_abort:.0f} K; hottest {cv}). "
+                        "Packed Nose-Hoover couples replicas — prefer Langevin; "
+                        "soften --k/--ky or remove that grid corner. "
+                        "Set MMML_UMBRELLA_RECOVER=1 to reset the offending "
+                        "window and continue instead of aborting."
+                    )
             print(
                 f"  step {step:6d}  E_total={e_tot:.4f} eV  "
                 f"T={t_curr:.1f} K  "
@@ -452,7 +577,12 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         positions, energies
     )
 
+    # Sampling quality, recorded alongside the data rather than only printed:
+    # a consumer that does not look at these will happily average windows that
+    # spent the run falling into a spurious well.
     extra = {
+        "reset_counts": np.asarray(reset_counts, dtype=np.int32),
+        "failed_windows": np.asarray(sorted(failed_windows), dtype=np.int32),
         "ndim": np.int32(sched.ndim),
         "grid_shape": np.asarray(sched.grid_shape, dtype=np.int32),
         "energies_ev": np.asarray(energies, dtype=np.float64),

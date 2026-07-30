@@ -153,6 +153,12 @@ def main() -> int:
     # reach about -270 eV and 8000 reach -376 eV, and the difference is not
     # cosmetic: with 300 the residual strain overwhelmed the umbrella restraint,
     # so the window centred at xi = 0.00 actually sampled <xi> = +0.94.
+    p.add_argument("--freeze-charge-forces", action="store_true",
+                   help="Drop dq/dR from the force. Charges are still "
+                        "recomputed every step and still enter the energy, "
+                        "but the feedback loop that destabilises full "
+                        "coupling is broken. An approximation: forces are "
+                        "then not the exact gradient of the energy.")
     p.add_argument("--ramp-stages", type=int, default=5,
                    help="Stages over which to switch the ML/MM "
                         "electrostatics on during equilibration; 0 disables")
@@ -316,7 +322,11 @@ def main() -> int:
                     "walls": walls},
     }
     if "ml_mm_elec" in terms:
-        term_kwargs_static["ml_mm_elec"] = {"ml_atoms": solute, "charge_mode": "q0"}
+        term_kwargs_static["ml_mm_elec"] = {
+            "ml_atoms": solute,
+            "charge_mode": "q0",
+            "charge_gradient": not args.freeze_charge_forces,
+        }
 
     from mmml.md.assemble import build_hybrid_energy
     from mmml.md.drivers import JaxmdDriver

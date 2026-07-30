@@ -370,6 +370,40 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "handoff. Baked into the checkpoint; MD reads it back automatically."
         ),
     )
+    # Electrostatics switching distances. These are model fields but were never
+    # passed through from the training config, so every run silently took the
+    # dataclass defaults regardless of --cutoff. That is how a model trained at
+    # cutoff 8.0 ended up switching its Coulomb tail off at 8.0 as well, leaving
+    # a dissociating ion pair with no long-range interaction at all -- and 12 %
+    # of the Menshutkin training set beyond that radius, structurally unfittable.
+    #
+    # They are deliberately NOT derived from --cutoff. The radial cutoff decides
+    # which atoms exchange features; the electrostatics range decides where the
+    # Coulomb tail is truncated, and for a reaction that separates charges the
+    # latter should extend well beyond the former. Defaults are unchanged, so
+    # existing configs reproduce their previous behaviour exactly.
+    parser.add_argument(
+        "--switch-start", "--switch_start", type=float, default=1.0,
+        help="Short-range Coulomb switch start (Angstrom)",
+    )
+    parser.add_argument(
+        "--switch-end", "--switch_end", type=float, default=10.0,
+        help="Short-range Coulomb switch end (Angstrom)",
+    )
+    parser.add_argument(
+        "--electrostatics-off-start", "--electrostatics_off_start",
+        type=float, default=8.0,
+        help=(
+            "Distance at which the electrostatic term begins switching off "
+            "(Angstrom). Set this beyond the largest separation the reaction "
+            "reaches, or the Coulomb tail vanishes there."
+        ),
+    )
+    parser.add_argument(
+        "--electrostatics-off-end", "--electrostatics_off_end",
+        type=float, default=10.0,
+        help="Distance at which the electrostatic term is fully off (Angstrom)",
+    )
     parser.add_argument(
         "--max-atomic-number",
         "--max_atomic_number",
@@ -803,10 +837,36 @@ def _validate_handoff_within_cutoff(args: argparse.Namespace) -> None:
         )
 
 
+def _warn_electrostatics_shorter_than_cutoff(args: argparse.Namespace) -> None:
+    """Electrostatics dying before the radial basis does is almost never wanted.
+
+    If the Coulomb term switches off at or inside ``--cutoff``, any pair beyond
+    that distance contributes nothing at all: no message passing and no
+    electrostatics. Training points out there are then unfittable, and the model
+    does not fail loudly -- it fits what it can and returns a frozen artefact
+    beyond. That is what happened to the Menshutkin checkpoint, where the ion
+    pair lost its 1/r tail at exactly the radius the graph disconnected.
+    """
+    if not getattr(args, "include_electrostatics", True):
+        return
+    cutoff = float(getattr(args, "cutoff", 0.0))
+    off_end = float(getattr(args, "electrostatics_off_end", 0.0))
+    if off_end <= cutoff:
+        print(
+            f"WARNING: --electrostatics-off-end ({off_end:g} A) is not beyond "
+            f"--cutoff ({cutoff:g} A), so pairs past {cutoff:g} A get neither "
+            f"message passing nor electrostatics. If your data contains "
+            f"separations beyond that, those points cannot be fitted. Raise "
+            f"--electrostatics-off-start/--electrostatics-off-end past the "
+            f"largest separation in the dataset."
+        )
+
+
 def validate_train_args(args: argparse.Namespace) -> None:
     if not args.data:
         raise ValueError("--data is required (or set 'data' / 'train' in --config)")
     _validate_handoff_within_cutoff(args)
+    _warn_electrostatics_shorter_than_cutoff(args)
     data_paths = normalize_data_paths(args.data)
     if not data_paths:
         raise ValueError("--data must contain at least one NPZ path")
@@ -1279,6 +1339,10 @@ def main_loop(args):
             num_iterations=args.num_iterations,
             n_refinement_blocks=args.n_res,
             cutoff=args.cutoff,
+            switch_start=args.switch_start,
+            switch_end=args.switch_end,
+            electrostatics_off_start=args.electrostatics_off_start,
+            electrostatics_off_end=args.electrostatics_off_end,
             max_atomic_number=args.max_atomic_number,
             zbl=args.zbl,
             trainable_zbl=args.trainable_zbl,

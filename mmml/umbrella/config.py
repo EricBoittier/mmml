@@ -6,11 +6,33 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence
 
-from mmml.md.restraints import FlatBottomWall, LinearDistanceCV
+from mmml.md.restraints import (
+    AngleWall,
+    BondRetentionWall,
+    FlatBottomWall,
+    LinearDistanceCV,
+)
 
 
 SeedMode = Literal["stretch", "tile", "frames"]
 UmbrellaEngine = Literal["packed_ml", "hybrid_jaxmd"]
+
+
+def _resolve_wall(spec):
+    """Build whichever wall kind the spec describes.
+
+    A mapping carrying ``r_max`` is a :class:`BondRetentionWall` (bound on the
+    shortest of several competing distances); anything else is a
+    :class:`FlatBottomWall` on a linear CV. Both expose ``energy_batched`` and
+    ``forces_batched``, so the sampler does not care which it has.
+    """
+    if isinstance(spec, (FlatBottomWall, BondRetentionWall, AngleWall)):
+        return spec
+    if isinstance(spec, dict) and "atoms" in spec:
+        return AngleWall.from_spec(spec)
+    if isinstance(spec, dict) and "r_max" in spec:
+        return BondRetentionWall.from_spec(spec)
+    return FlatBottomWall.from_spec(spec)
 
 
 @dataclass(frozen=True)
@@ -307,7 +329,7 @@ class UmbrellaConfig:
 
     def resolve_walls(self) -> tuple[FlatBottomWall, ...]:
         """Resolve the configured confinement walls."""
-        return tuple(FlatBottomWall.from_spec(w) for w in self.walls)
+        return tuple(_resolve_wall(w) for w in self.walls)
 
     def _legacy_atom_pairs(
         self, cvs: tuple[LinearDistanceCV, ...]
@@ -433,7 +455,7 @@ class UmbrellaConfig:
             if raw.get(key) is not None:
                 raw[key] = LinearDistanceCV.from_spec(raw[key])
         if raw.get("walls"):
-            raw["walls"] = tuple(FlatBottomWall.from_spec(w) for w in raw["walls"])
+            raw["walls"] = tuple(_resolve_wall(w) for w in raw["walls"])
         return cls(**raw)
 
     def to_dict(self) -> dict[str, Any]:

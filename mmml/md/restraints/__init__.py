@@ -16,6 +16,8 @@ __all__ = [
     "BondRetentionWall",
     "DistanceRestraint",
     "DihedralRestraint",
+    "AngleWall",
+    "BondRetentionWall",
     "FlatBottomWall",
     "LinearDistanceCV",
     "harmonic_bias_energy",
