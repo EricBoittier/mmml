@@ -334,10 +334,13 @@ USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # 2D Cl⋯C + C⋯N adaptive umbrella (smoke ps_heat=0.2):
 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
 
-# Solvated adaptive umbrella (30 Å PBC); combine with USE_NPZ_PDB=1:
+# Solvated adaptive umbrella (30 Å PBC). With USE_NPZ_PDB=1 the script exports
+# the solute, rebuilds make-box for SOLVENT, then cold-starts from that PDB
+# (Packmol cannot take the multi-residue AMM1+CH3CL PDB as one monomer):
 SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
+SOLVATED=1 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 SOLVATED=1 SOLVENT=acn bash examples/m/09_adumb_nc_distance.sh
-SOLVATED=1 SOLVENT=dmso bash examples/m/09_adumb_nc_distance.sh
+SOLVATED=1 SOLVENT=dmso USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 ```
 If a prior cube Packmol run left monomers ~box-length apart, the script clears
 `{output_dir}/.packmol_cache` before launching.

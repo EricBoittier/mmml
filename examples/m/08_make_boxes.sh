@@ -12,12 +12,20 @@ BOX_SIZE="${BOX_SIZE:-30.0}"
 N_SOLVENT="${N_SOLVENT:-12}"
 FRAME="${FRAME:-}"
 
-echo "=== 07 export solute PDB ==="
-EXPORT_ARGS=(uv run python examples/m/07_export_solute_pdb.py -o "${SOLUTE_PDB}")
-if [[ -n "${FRAME}" ]]; then
-  EXPORT_ARGS+=(--frame "${FRAME}")
+if [[ "${SKIP_SOLUTE_EXPORT:-0}" == "1" ]]; then
+  echo "=== reuse solute PDB ${SOLUTE_PDB} (SKIP_SOLUTE_EXPORT=1) ==="
+  if [[ ! -f "${SOLUTE_PDB}" ]]; then
+    echo "FAIL: missing ${SOLUTE_PDB}" >&2
+    exit 1
+  fi
+else
+  echo "=== 07 export solute PDB ==="
+  EXPORT_ARGS=(uv run python examples/m/07_export_solute_pdb.py -o "${SOLUTE_PDB}")
+  if [[ -n "${FRAME}" ]]; then
+    EXPORT_ARGS+=(--frame "${FRAME}")
+  fi
+  "${EXPORT_ARGS[@]}"
 fi
-"${EXPORT_ARGS[@]}"
 
 # Optional: USE_DENSITY=1 sizes N from bulk density (overrides --n). Smoke keeps --n.
 declare -A DENSITY=(
