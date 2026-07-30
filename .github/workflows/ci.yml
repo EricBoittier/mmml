@@ -23,17 +23,36 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
       - name: Install package and dependencies
         run: uv sync --extra dev --extra all-cpu
+      # Lint and the duplicate-definition scan record their result but do not
+      # abort the job: a lint failure used to stop the run before a single test
+      # executed, so a bad merge surfaced one problem per push instead of all of
+      # them at once. The "Lint gate" step below still fails the job.
       - name: Lint
-        run: |
-          make lint
+        id: lint
+        continue-on-error: true
+        run: make lint
+      - name: Duplicate definitions / conflict markers
+        id: dupes
+        continue-on-error: true
+        run: make lint-dupes
       - name: Package import sanity
+        if: always()
         run: |
           uv run python -V
           uv run python -c "import mmml; print('package imports ok')"
       - name: Run tests
+        if: always()
         run: uv run pytest -v --color=yes --cov=mmml --cov-report=xml tests/
       - name: Run CHARMM MPI unit suite
+        if: always()
         run: uv run pytest -v --color=yes tests/charmm_mpi/ -m "charmm_mpi and not pycharmm"
+      - name: Lint gate
+        if: always()
+        run: |
+          fail=0
+          [ "${{ steps.lint.outcome }}" = "failure" ] && { echo "::error::make lint failed"; fail=1; }
+          [ "${{ steps.dupes.outcome }}" = "failure" ] && { echo "::error::make lint-dupes failed (duplicate defs or conflict markers)"; fail=1; }
+          exit "$fail"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
