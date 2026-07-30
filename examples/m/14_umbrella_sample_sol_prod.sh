@@ -4,7 +4,12 @@
 #   source examples/m/_env.sh
 #   bash examples/m/14_umbrella_sample_sol_prod.sh              # TIP3
 #   SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh  # acetonitrile
-#   SOLVENT=dmso bash examples/m/14_umbrella_sample_sol_prod.sh
+#
+# Pick a free GPU (nvidia-smi lists 0, 1, …). examples/m defaults to CPU unless
+# you ask for GPU — do both in one line:
+#
+#   GPU=1 SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh
+#   # equivalent: MMML_EXAMPLE_DEVICE=gpu CUDA_VISIBLE_DEVICES=1 SOLVENT=acn …
 #
 # Optional env:
 #   USE_DENSITY=1   rebuild make-box at liquid density if PSF missing
@@ -13,11 +18,26 @@
 #   OVERWRITE=1     overwrite existing output_dir
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Resolve GPU *before* sourcing _env.sh / starting Python (JAX binds at import).
+if [[ -n "${GPU:-}" ]]; then
+  export CUDA_VISIBLE_DEVICES="${GPU}"
+fi
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${MMML_EXAMPLE_DEVICE:-}" == "gpu" || "${MMML_EXAMPLE_DEVICE:-}" == "cuda" ]]; then
+  export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
+fi
+
 # shellcheck source=/dev/null
 source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
 
 export PYTHONUNBUFFERED=1
+if declare -F mmml_example_env_banner >/dev/null 2>&1; then
+  mmml_example_env_banner
+fi
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+  echo "  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}  (physical GPU index → sole device cuda:0 for this job)"
+fi
 
 SOLVENT="$(echo "${SOLVENT:-tip3}" | tr '[:upper:]' '[:lower:]')"
 case "${SOLVENT}" in

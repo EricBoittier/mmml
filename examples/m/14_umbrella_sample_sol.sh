@@ -4,18 +4,34 @@
 #   source examples/m/_env.sh
 #   bash examples/m/14_umbrella_sample_sol.sh              # TIP3 (default)
 #   SOLVENT=acn bash examples/m/14_umbrella_sample_sol.sh  # acetonitrile
-#   SOLVENT=dmso bash examples/m/14_umbrella_sample_sol.sh
+#
+# Free GPU (second card is index 1):
+#   GPU=1 SOLVENT=acn bash examples/m/14_umbrella_sample_sol.sh
 #
 # Default: 3 windows × 1 ps (2000 × 0.5 fs). Optional:
 #   NSTEPS=500 N_WINDOWS=1   # quicker compile timing probe
 #   USE_DENSITY=1            # rebuild dense box if missing (default on)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+if [[ -n "${GPU:-}" ]]; then
+  export CUDA_VISIBLE_DEVICES="${GPU}"
+fi
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${MMML_EXAMPLE_DEVICE:-}" == "gpu" || "${MMML_EXAMPLE_DEVICE:-}" == "cuda" ]]; then
+  export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
+fi
+
 # shellcheck source=/dev/null
 source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
 
 export PYTHONUNBUFFERED=1
+if declare -F mmml_example_env_banner >/dev/null 2>&1; then
+  mmml_example_env_banner
+fi
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+  echo "  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}  (physical GPU index → sole device cuda:0 for this job)"
+fi
 
 SOLVENT="$(echo "${SOLVENT:-tip3}" | tr '[:upper:]' '[:lower:]')"
 case "${SOLVENT}" in
