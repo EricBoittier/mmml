@@ -47,10 +47,11 @@ Pass criteria:
 ## 3. Denser box (pressure sense-check)
 
 ```bash
+# 200 waters need ~L=30 Å (L=20 overpacks → E0 ~ 1e6 eV / NaN)
 uv run mmml md-embedding build \
   -o artifacts/md_embedding/aaa_dense \
   --n-waters 200 \
-  --box-side-A 20
+  --box-side-A 30
 
 uv run mmml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml \
@@ -58,6 +59,7 @@ uv run mmml md-system \
   --run-all
 ```
 
+Pass gate for NVT: `E0` should be O(10²–10³) eV in magnitude (negative/near), **not** `1e6`. If `E0` is huge, rebuild with a larger `--box-side-A`.
 ### Sense-checking pressures
 
 NPT logs now split the instantaneous pressure:

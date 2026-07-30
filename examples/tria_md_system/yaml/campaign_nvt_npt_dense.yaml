@@ -1,11 +1,14 @@
 # Denser TRIA + TIP3 mechanical embedding — meaningful NPT pressure smoke.
 #
-# Build first (liquid-ish packing; adjust if Packmol fails):
+# Build first (do NOT use 200 waters in 20 Å — Packmol overpacks → E0 ~ 1e6 eV):
 #   uv run mmml md-embedding build \
 #     -o artifacts/md_embedding/aaa_dense \
 #     --n-waters 200 \
-#     --box-side-A 20
+#     --box-side-A 30
 #   awk '/^ATOM/{print substr($0,18,4)}' artifacts/md_embedding/aaa_dense/model.pdb | sort -u
+#
+# Sanity: liquid water ~30 Å^3/molecule → 200 waters alone want L~18–20 Å;
+# peptide + Packmol padding needs ~28–32 Å. Use L=30 for 200 TIP3.
 #
 #   export MMML_CKPT=examples/spooky_so3lr_muon3_epoch0013.json
 #   uv run mmml md-system \
@@ -14,10 +17,8 @@
 #     --run-all
 #
 # Sense-check: NPT log prints P0, Pkin0, Pvir0. After NVT thermalization,
-# Pkin0 should be O(N kT / V) (~10^2–10^3 bar for this size); Pvir0 cancels
-# most of it toward P_target when density is reasonable. Instantaneous P
-# still fluctuates strongly on short runs — look at order of magnitude, not
-# equality to 1 bar.
+# Pkin0 should be O(N kT / V); |P0| should be far below dilute aaa ~10^3 bar
+# once packing is liquid-like. Instantaneous P still fluctuates on short runs.
 
 defaults:
   from_pdb: artifacts/md_embedding/aaa_dense/model.pdb
