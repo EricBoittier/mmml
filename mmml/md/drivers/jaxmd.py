@@ -67,7 +67,19 @@ class JaxmdDriver:
         options = dict(ensemble.params)
         dtype = jnp.float64 if bool(options.get("float64", False)) else jnp.float32
         position = jnp.asarray(system.R, dtype=dtype)
-        masses = jnp.asarray(options.get("masses", np.ones(system.n_atoms)), dtype=dtype)
+        if "masses" in options:
+            masses_np = np.asarray(options["masses"], dtype=float)
+        else:
+            try:
+                from ase.data import atomic_masses
+
+                masses_np = np.asarray(
+                    [float(atomic_masses[int(z)]) for z in np.asarray(system.Z)],
+                    dtype=float,
+                )
+            except Exception:
+                masses_np = np.ones(system.n_atoms, dtype=float)
+        masses = jnp.asarray(masses_np, dtype=dtype)
         if masses.shape != (system.n_atoms,):
             raise ValueError(f"masses must have shape ({system.n_atoms},), got {masses.shape}")
         if not bool(np.all(np.asarray(masses) > 0)):

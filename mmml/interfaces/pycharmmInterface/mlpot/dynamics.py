@@ -56,6 +56,32 @@ def _dynamics_io_fortran_path(
         return str(p.expanduser().resolve()), None
 
 
+def _resolve_charmm_file_cls(pycharmm: Any | None = None) -> Any:
+    """Return the ``CharmmFile`` class from a loaded ``pycharmm`` package.
+
+    Some installs expose only the ``charmm_file`` submodule (e.g. a PEP 420
+    namespace ``pycharmm/`` at the repo root shadowing CHARMM's package). Prefer
+    the top-level export, then fall back to ``pycharmm.charmm_file.CharmmFile``.
+    """
+    mod = pycharmm
+    if mod is None:
+        import pycharmm as _pycharmm  # noqa: PLC0415
+
+        mod = _pycharmm
+
+    cls = getattr(mod, "CharmmFile", None)
+    if cls is not None:
+        return cls
+    try:
+        from pycharmm.charmm_file import CharmmFile as _CharmmFile
+    except ImportError as exc:  # pragma: no cover - both missing is fatal
+        raise AttributeError(
+            "module 'pycharmm' has no attribute 'CharmmFile' "
+            "(and pycharmm.charmm_file.CharmmFile is unavailable)"
+        ) from exc
+    return _CharmmFile
+
+
 def _apply_dynamics_io_setters(
     kw: dict[str, Any], *, restart_read_unit: int = 3
 ) -> None:
@@ -143,7 +169,7 @@ class CharmmTrajectoryFiles:
             # cluster MPI build but DYNA RESTART subsequently sees an empty unit
             # and assigns zero-K velocities.  Open the formatted restart on the
             # conventional explicit unit instead and retain IUNREA in the script.
-            restart_file = pycharmm.CharmmFile(
+            restart_file = _resolve_charmm_file_cls(pycharmm)(
                 file_name=str(fortran_path),
                 file_unit=int(self.restart_read_unit),
                 formatted=True,
@@ -176,7 +202,7 @@ class CharmmTrajectoryFiles:
 
             p = Path(self.pressure_tensor_log)
             p.parent.mkdir(parents=True, exist_ok=True)
-            f = pycharmm.CharmmFile(
+            f = _resolve_charmm_file_cls(pycharmm)(
                 file_name=str(p),
                 file_unit=self.pressure_tensor_log_unit,
                 formatted=True,
@@ -203,7 +229,7 @@ class CharmmTrajectoryFiles:
             return [], {}
         p = Path(self.trajectory)
         p.parent.mkdir(parents=True, exist_ok=True)
-        f = pycharmm.CharmmFile(
+        f = _resolve_charmm_file_cls(pycharmm)(
             file_name=str(p),
             file_unit=self.trajectory_unit,
             formatted=False,
@@ -9286,7 +9312,7 @@ def open_minimize_dcd(path: PathLike, *, unit: int = 51) -> Any:
     pycharmm, *_ = _import_pycharmm_modules()
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    return pycharmm.CharmmFile(
+    return _resolve_charmm_file_cls(pycharmm)(
         file_name=str(p),
         file_unit=unit,
         formatted=False,

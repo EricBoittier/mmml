@@ -14,6 +14,31 @@ from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env,
 CHARMM_HOME, CHARMM_LIB_DIR = bootstrap_charmm_env(repo_root=_REPO_ROOT)
 
 
+def _vendored_pycharmm_sys_path_entries() -> list[str]:
+    """Return ``sys.path`` entries that expose mmml's patched ``pycharmm`` package.
+
+    Preference order:
+
+    1. ``<repo>/pycharmm/`` checkout (gitignored sibling; insert repo root)
+    2. ``setup/charmm/tool/pycharmm`` tree shipped in-repo
+
+    An empty or ``__init__``-less ``<repo>/pycharmm/`` directory becomes a PEP 420
+    namespace package and shadows CHARMM's real package: ``pycharmm.charmm_file``
+    may still resolve from ``$CHARMM_HOME``, but ``pycharmm.CharmmFile`` is missing.
+    Only treat the repo-root sibling as valid when it has a real ``__init__.py``.
+    """
+    entries: list[str] = []
+    repo_pkg = _REPO_ROOT / "pycharmm" / "__init__.py"
+    if repo_pkg.is_file():
+        entries.append(str(_REPO_ROOT))
+    tool_pkg = (
+        _REPO_ROOT / "setup" / "charmm" / "tool" / "pycharmm" / "pycharmm" / "__init__.py"
+    )
+    if tool_pkg.is_file():
+        entries.append(str(tool_pkg.parent.parent))
+    return entries
+
+
 def _ensure_vendored_pycharmm_on_path() -> None:
     """Prefer mmml's patched ``pycharmm`` over ``$CHARMM_HOME/tool/pycharmm``.
 
@@ -21,9 +46,13 @@ def _ensure_vendored_pycharmm_on_path() -> None:
     vendored package (missing ``MLpot.skip_iblo_inb_update`` for PBC registration).
     """
     root = str(_REPO_ROOT)
-    if root in sys.path:
+    # Drop stale repo-root inserts from prior imports; re-add only when valid.
+    while root in sys.path:
         sys.path.remove(root)
-    sys.path.insert(0, root)
+    for entry in reversed(_vendored_pycharmm_sys_path_entries()):
+        if entry in sys.path:
+            sys.path.remove(entry)
+        sys.path.insert(0, entry)
 
 
 _ensure_vendored_pycharmm_on_path()

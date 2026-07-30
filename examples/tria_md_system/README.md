@@ -57,6 +57,13 @@ Pass criteria:
   by jaxmd-unified (`EnsembleSpec.pressure_bar`); the argparse help text still
   says atm (~1% difference). Instantaneous `P_inst` is jax-md
   `quantity.pressure` (virial + kinetic), not CHARMM CPT.
+- **Dilute cold-start NPT**: the aaa smoke box (~28 Å, 10 waters) can report
+  `P0 ~ -10^3 bar`. With jax-md’s default barostat tau the piston compresses
+  into `Efinal=nan` / `Vfinal=nan`. The campaign sets `barostat_tau: 1.0e6`
+  (metal time) on the NPT leg so volume barely moves on 0.05 ps — smoke pass
+  only. For real density equilibration, rebuild denser
+  (`md-embedding build --n-waters …` with a tighter box) and use a longer run
+  with a smaller tau after NVT equilibration / handoff.
 - **jaxmd-unified** does not yet support `--continue-from`, so campaign legs
   cold-start independently (same geometry). Chained NVT→NPT→NVE handoff is a
   follow-up.

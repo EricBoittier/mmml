@@ -136,6 +136,22 @@ def test_runconfig_from_md_system_args():
     assert cfg.seed == 7
 
 
+def test_runconfig_npt_barostat_tau():
+    args = argparse.Namespace(
+        setup="pbc_npt",
+        dt_fs=0.5,
+        ps=0.05,
+        temperature=300.0,
+        pressure=1.0,
+        composition="TIP3:4",
+        seed=0,
+        barostat_tau=1.0e6,
+    )
+    cfg = runconfig_from_md_system_args(args)
+    assert cfg.ensemble.params["barostat_kwargs"]["tau"] == 1.0e6
+    assert cfg.ensemble.params.get("float64") is True
+
+
 def test_runconfig_from_md_system_args_default_builder_and_terms():
     args = argparse.Namespace(setup="free_nve", dt_fs=0.5, ps=1.0, seed=0)
     cfg = runconfig_from_md_system_args(args)

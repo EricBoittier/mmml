@@ -185,6 +185,15 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
     # NPT barostat + virial AD is sensitive to float32; prefer float64 for NPT.
     if ensemble_name == "npt":
         ens_params["float64"] = True
+        # Optional soft piston for dilute / cold-start smokes (jax-md metal time).
+        # Default jax-md tau is 1000*dt; a 28 Å box with ~10 waters can sit at
+        # P_inst ~ -10^3 bar and slam the cell unless tau is raised.
+        barostat_tau = getattr(args, "barostat_tau", None)
+        if barostat_tau is not None:
+            ens_params["barostat_kwargs"] = {"tau": float(barostat_tau)}
+        thermo_tau = getattr(args, "thermostat_tau", None)
+        if thermo_tau is not None:
+            ens_params["thermostat_kwargs"] = {"tau": float(thermo_tau)}
     ensemble = EnsembleSpec(
         ensemble=ensemble_name,
         space=space,

@@ -254,6 +254,30 @@ def test_neighbor_and_repair_contracts_are_validated():
         )
 
 
+def test_npt_soft_barostat_keeps_volume_finite():
+    """Heavy piston (large tau) must not NaN the box on a short run."""
+    system = _periodic_system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    ensemble = EnsembleSpec(
+        ensemble="npt",
+        dt_fs=0.5,
+        n_steps=40,
+        temperature_K=300.0,
+        pressure_bar=1.0,
+        params={
+            "float64": True,
+            "seed": 2,
+            "barostat_kwargs": {"tau": 1.0e6},
+        },
+    )
+    traj = JaxmdDriver(record_every=10).run(system, energy, ensemble)
+    volumes = traj.metadata["volumes_A3"]
+    assert np.all(np.isfinite(volumes))
+    assert np.all(np.isfinite(traj.metadata["energies"]))
+    ratio = float(volumes[-1]) / float(volumes[0])
+    assert 0.9 <= ratio <= 1.1
+
+
 def test_npt_requires_a_box():
     system = _system()  # free space (box=None)
     energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())

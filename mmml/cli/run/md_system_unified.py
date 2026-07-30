@@ -476,6 +476,17 @@ def run_unified_jaxmd(args: Any) -> int:
     )
     if npt_line is not None:
         print(npt_line, flush=True)
+        pressures = traj.metadata.get("pressures_bar")
+        if pressures is not None and len(pressures):
+            p0 = float(np.asarray(pressures, dtype=np.float64).reshape(-1)[0])
+            if np.isfinite(p0) and abs(p0) > 500.0:
+                print(
+                    f"mmml md-system (jaxmd-unified): WARNING NPT |P0|={abs(p0):.4g} bar "
+                    f">> P_target (dilute/cold-start box). Use a denser box or raise "
+                    f"barostat_tau (metal time) so the piston cannot slam the cell "
+                    f"on a short smoke.",
+                    flush=True,
+                )
     if energies is None or not np.all(np.isfinite(energies)):
         print("mmml md-system: jaxmd-unified produced non-finite energies", file=sys.stderr)
         return 1
