@@ -372,6 +372,12 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     savefreq = cfg.effective_savefreq()
     dt = float(cfg.timestep_fs)
     n_atoms = base_system.n_atoms
+    nsteps = int(cfg.nsteps)
+    equil = int(cfg.equilibration_steps)
+    printfreq = int(cfg.printfreq) if int(cfg.printfreq) > 0 else savefreq
+    ps_per_window = nsteps * dt / 1000.0
+    # Driver records frame 0 plus every savefreq steps → ~nsteps/savefreq + 1.
+    n_frames_est = 1 + (nsteps // savefreq if savefreq > 0 else 0)
 
     print(
         f"=== Hybrid umbrella NVT ({k_windows} windows, 1D, "
@@ -382,6 +388,12 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f"CV=({atom_i},{atom_j}) r0={r0_cv:.4f} Å"
     )
     print(f"  n_atoms={n_atoms}  box_diag={None if box is None else np.diag(box).tolist()}")
+    print(
+        f"  nsteps={nsteps}  ({ps_per_window:g} ps/window)  "
+        f"equil={equil}  savefreq={savefreq}  printfreq={printfreq}  "
+        f"~{n_frames_est} frames/window"
+    )
+    print(f"  output_dir={output_dir}")
 
     all_pos: list[np.ndarray] = []
     all_cv: list[np.ndarray] = []
@@ -480,10 +492,13 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             neighbor_fn=neighbor_fn,
             output_path=None,
             name=f"umbrella_hybrid_w{wid:03d}",
+            progress_every=int(printfreq),
         )
         print(
             f"  window {wid + 1}/{k_windows}  ξ₀={xi0:.3f}  k={k_w:.3f}  "
-            f"seed_max|F|={fmax if fmax == fmax else float('nan'):.2f}"
+            f"nsteps={nsteps}  "
+            f"seed_max|F|={fmax if fmax == fmax else float('nan'):.2f}",
+            flush=True,
         )
         traj = driver.run(win_system, energy, ensemble)
         frames = traj.metadata.get("positions")
