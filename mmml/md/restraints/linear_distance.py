@@ -30,6 +30,42 @@ __all__ = [
 ]
 
 _EPS = 1e-12
+from typing import Any, Mapping, Sequence
+
+
+def _as_pair(pair: Sequence[int]) -> tuple[int, int]:
+    if len(pair) != 2:
+        raise ValueError(f"atom pair must have length 2 (got {pair!r})")
+    i, j = int(pair[0]), int(pair[1])
+    if i == j or i < 0 or j < 0:
+        raise ValueError(f"atom pair requires two distinct non-negative indices (got {i}, {j})")
+    return (i, j)
+
+
+def _mic_disp_numpy(a: Any, b: Any, cell: Any | None) -> Any:
+    import numpy as np
+
+    d = np.asarray(b, dtype=np.float64) - np.asarray(a, dtype=np.float64)
+    if cell is None:
+        return d
+    cell_arr = np.asarray(cell, dtype=np.float64)
+    if cell_arr.shape == (3,):
+        # Orthorhombic lengths
+        box = cell_arr
+        return d - box * np.round(d / box)
+    if cell_arr.shape == (3, 3):
+        inv = np.linalg.inv(cell_arr.T)
+        frac = inv @ d
+        frac = frac - np.round(frac)
+        return cell_arr.T @ frac
+    raise ValueError(f"cell must be shape (3,) or (3, 3), got {cell_arr.shape}")
+
+
+def harmonic_bias_energy(value: Any, target: float, k_ev_A2: float) -> Any:
+    """Harmonic umbrella bias ``0.5 * k * (ξ - ξ₀)²`` (eV)."""
+    import jax.numpy as jnp
+
+    return 0.5 * float(k_ev_A2) * jnp.square(value - float(target))
 
 
 @dataclass(frozen=True)

@@ -41,8 +41,8 @@ mmml build-crystal --help
 ```text
 usage: mmml build-crystal [-h] [--literature PRESET] [--from-cif PATH]
                           [--residue NAME] [--monomer-pdb PATH]
-                          [--min-box-side ANG] [-m SPEC]
-                          [--stoichiometry Z [Z ...]]
+                          [--min-box-side ANG] [--box-size ANG] [--write-charmm]
+                          [-m SPEC] [--stoichiometry Z [Z ...]]
                           [--z Z_VALUES [Z_VALUES ...]] [--dim {0,1,2,3}]
                           [--spg SPACE_GROUP] [--factor FACTOR]
                           [--target-density-g-cm3 RHO] [--seed SEED]
@@ -61,7 +61,8 @@ options:
                         Scale cell to this mass density (g/cm³). Literature
                         presets use CIF ρ unless this is set. Liquid DCM ≈
                         1.326; crystal DCM ≈ 1.972
-  --supercell NX,NY,NZ  Supercell repeats (literature: auto from --min-box-side
+  --supercell NX,NY,NZ  Supercell repeats (literature: auto from --box-size /
+                        --min-box-side if omitted; PyXtal: auto from --box-size
                         if omitted)
   -o, --output OUTPUT   Output path (.pdb, .xyz, .extxyz, .cif, or .npz)
   --format OUT_FORMAT   ASE output format override (default: inferred from
@@ -72,12 +73,22 @@ Literature CIF + make-res (recommended for DCM / benzene):
                         (P2₁/c)
   --from-cif PATH       Override CIF path (requires --residue or --literature
                         for residue name)
-  --residue NAME        CHARMM residue (DCM, BENZ) when using --from-cif without
-                        --literature
+  --residue NAME        CHARMM residue (DCM, BENZ) for --from-cif / --write-
+                        charmm on PyXtal path
   --monomer-pdb PATH    make-res monomer PDB for atom-name mapping (default:
                         pdb/<res>.pdb or bundled)
   --min-box-side ANG    Minimum supercell edge length (Å); default ≈2× CHARMM
                         cutnb
+
+MD box sizing / CHARMM handoff:
+  --box-size, --side-length ANG
+                        Cubic MD cell side length (Å). When --supercell is
+                        omitted, also drives auto tiling so each crystal edge ≥
+                        this value. Used as CHARMM IMAGE side with --write-
+                        charmm.
+  --write-charmm        Write {stem}.pdb/.psf/.crd and {stem}_box.json via
+                        PyCHARMM GENERATE (cubic IMAGE). Prefer --literature for
+                        DCM/benzene.
 
 PyXtal random placement:
   -m, --molecule SPEC   Molecule specification (repeat for multi-component

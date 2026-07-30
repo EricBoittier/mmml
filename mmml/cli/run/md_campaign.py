@@ -185,6 +185,36 @@ def apply_campaign_cli_overrides(merged: dict[str, Any], parent: Namespace) -> N
         merged["ml_spatial_mpi"] = True
 
 
+_CAMPAIGN_CONFIG_RELATIVE_PATH_KEYS = (
+    "interaction_policy",
+    "from_pdb",
+    "from_psf",
+    "from_crd",
+    "checkpoint",
+)
+
+
+def resolve_campaign_namespace_paths(
+    ns: Namespace,
+    *,
+    config_path: str | Path | None,
+) -> None:
+    """Resolve path-like fields on a campaign job namespace vs the YAML config dir.
+
+    ``merge_campaign_job_config`` re-reads relative paths from YAML; without this,
+    an initial parse-time resolve on the parent args is overwritten.
+    """
+    from mmml.cli.run.md_config import resolve_config_relative_path
+
+    for key in _CAMPAIGN_CONFIG_RELATIVE_PATH_KEYS:
+        val = getattr(ns, key, None)
+        if val is None:
+            continue
+        resolved = resolve_config_relative_path(config_path, val)
+        if resolved is not None:
+            setattr(ns, key, resolved)
+
+
 def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
     from mmml.cli.run import md_system
 
@@ -263,10 +293,21 @@ def run_single_backend(
     clear_handoff_context()
     set_handoff_in(handoff_in)
     set_handoff_out(None)
+    if getattr(args, "jaxmd_unified", False):
+        from mmml.cli.run.md_system_unified import run_unified_jaxmd
+
+        try:
+            exit_code = int(run_unified_jaxmd(args))
+        except Exception as exc:
+            print(f"mmml md-system: jaxmd-unified failed: {exc}", flush=True)
+            exit_code = 1
+        handoff_out = get_handoff_out()
+        stages: list[MdStageSummary] = getattr(md_system, "_last_job_stages", []) or []
+        return exit_code, handoff_out, stages
     backend, argv = md_system.build_command(args)
     exit_code = md_system.run_backend(backend, argv, args)
     handoff_out = get_handoff_out()
-    stages: list[MdStageSummary] = getattr(md_system, "_last_job_stages", []) or []
+    stages = getattr(md_system, "_last_job_stages", []) or []
     return exit_code, handoff_out, stages
 
 
@@ -397,6 +438,7 @@ def run_campaign(args: Namespace) -> int:
 
         apply_campaign_cli_overrides(merged, args)
         ns = namespace_from_merged(merged)
+        resolve_campaign_namespace_paths(ns, config_path=getattr(args, "config", None))
         ns.output_dir = out_dir
         ns.job_name = run_id
         t0 = time.perf_counter()

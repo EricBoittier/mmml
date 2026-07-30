@@ -185,7 +185,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_build(args: argparse.Namespace) -> int:
+def _cmd_build(args: argparse.Namespace, argv: list[str]) -> int:
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         maybe_rerun_mmml_under_mpirun,
         prepare_serial_charmm_mpi_env,
@@ -195,10 +195,8 @@ def _cmd_build(args: argparse.Namespace) -> int:
     )
 
     prepare_serial_charmm_mpi_env()
-    rerun = maybe_rerun_mmml_under_mpirun(
-        ["build", "-o", str(args.output_dir)],
-        subcommand="md-embedding",
-    )
+    # Forward full argv so MPI re-launch keeps --n-waters / --charmm-sd-steps / …
+    rerun = maybe_rerun_mmml_under_mpirun(argv, subcommand="md-embedding")
     if rerun is not None:
         return int(rerun)
 
@@ -222,7 +220,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_run(args: argparse.Namespace) -> int:
+def _cmd_run(args: argparse.Namespace, argv: list[str]) -> int:
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         maybe_rerun_mmml_under_mpirun,
         prepare_serial_charmm_mpi_env,
@@ -232,10 +230,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     )
 
     prepare_serial_charmm_mpi_env()
-    rerun = maybe_rerun_mmml_under_mpirun(
-        ["run", "-o", str(args.output_dir), "--checkpoint", str(args.checkpoint)],
-        subcommand="md-embedding",
-    )
+    # Forward full argv so MPI re-launch keeps --mini-nstep / --ml-charge / …
+    rerun = maybe_rerun_mmml_under_mpirun(argv, subcommand="md-embedding")
     if rerun is not None:
         return int(rerun)
 
@@ -260,6 +256,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     print(
         f"ML segment {result.ml_seg_id}: {result.n_ml_atoms} ML atoms / "
         f"{result.n_total_atoms} total; ENER={result.charmm_total_energy_kcalmol}"
+        f"; mini_nstep={args.mini_nstep}; minimized={result.minimized}"
     )
     return 0
 
@@ -271,9 +268,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.phase == "train":
         return _cmd_train(args)
     if args.phase == "build":
-        return _cmd_build(args)
+        return _cmd_build(args, parsed_argv)
     if args.phase == "run":
-        return _cmd_run(args)
+        return _cmd_run(args, parsed_argv)
     parser.error(f"unknown phase: {args.phase}")
     return 1
 

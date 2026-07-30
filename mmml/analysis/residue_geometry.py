@@ -4,7 +4,7 @@ Lookup order
 ------------
 1. Campaign dimers in ``mmml.analysis.dimer_molecules.MOLECULES`` (plus ACE↔ACO).
 2. Working-directory ``pdb/<resi>.pdb`` (from a prior ``make-res``).
-3. Bundled package templates (TIP3, OCOH, ACO, MEOH, DCM, BENZ).
+3. Bundled package templates (TIP3, OCOH, ACO, MEOH, DCM, BENZ, METH).
 4. Optional ``make-res`` generation via PyCHARMM (when ``generate=True``).
 """
 
@@ -34,6 +34,11 @@ _CAMPAIGN_GEOMETRY_ALIASES: dict[str, str] = {
 KNOWN_SOLVENT_DENSITY_KG_M3: dict[str, float] = {
     "TIP3": 1000.0,
     "OCOH": 824.0,
+    "ACN": 786.0,
+    "DMSO": 1100.0,
+    "MEOH": 792.0,
+    # Liquid methane near the normal boiling point (~111.7 K).
+    "METH": 422.6,
 }
 
 
@@ -67,6 +72,7 @@ def bundled_monomer_pdb(residue: str) -> Path | None:
         "MEOH": default_meoh_template_pdb(),
         "DCM": bundled_file("data", "molecules", "dcm_monomer.pdb"),
         "BENZ": bundled_file("data", "molecules", "benz_monomer.pdb"),
+        "METH": bundled_file("data", "molecules", "meth_monomer.pdb"),
     }
     path = mapping.get(name)
     if path is not None and path.is_file():
@@ -145,6 +151,62 @@ def load_residue_monomer_atoms(
     )
 
 
+def _pdb_resnames(path: Path) -> set[str]:
+    """Residue names from ATOM/HETATM records (whitespace-tolerant)."""
+    names: set[str] = set()
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.startswith(("ATOM  ", "HETATM")):
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        # Standard: ATOM serial name resn ...; with chain: name resn chain resid
+        if len(parts) >= 5 and len(parts[4]) == 1 and parts[4].isalpha():
+            names.add(parts[3].upper())
+        else:
+            names.add(parts[3].upper())
+    return names
+
+
+def _atom_names_from_symbols(symbols: list[str]) -> list[str]:
+    """Build short PDB atom names from element symbols (C1, H2, CL1, …)."""
+    counts: dict[str, int] = {}
+    names: list[str] = []
+    for sym in symbols:
+        key = str(sym).strip().upper() or "X"
+        counts[key] = counts.get(key, 0) + 1
+        n = counts[key]
+        base = key[:2] if len(key) >= 2 else key
+        name = f"{base}{n}"
+        names.append(name[:4])
+    return names
+
+
+def _write_monomer_pdb(path: Path, atoms: Atoms, resname: str) -> None:
+    """Write *atoms* as a single-residue PDB with *resname* (never ASE ``MOL``)."""
+    # Lazy import: formatting helper lives next to Packmol writers.
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        format_cgenff_pdb_atom_line,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    resn = str(resname).strip().upper() or "UNK"
+    symbols = [str(s) for s in atoms.get_chemical_symbols()]
+    names = _atom_names_from_symbols(symbols)
+    lines = [
+        f"REMARK   mmml monomer for {resn} (campaign/template geometry)",
+    ]
+    for i, (aname, elem, xyz) in enumerate(
+        zip(names, symbols, atoms.get_positions(), strict=True),
+        start=1,
+    ):
+        lines.append(
+            format_cgenff_pdb_atom_line(i, aname, resn, 1, xyz, elem)
+        )
+    lines.append("END")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def ensure_residue_pdb(
     residue: str,
     *,
@@ -153,7 +215,13 @@ def ensure_residue_pdb(
 ) -> Path:
     """Ensure ``pdb/<resi>.pdb`` exists; return its path.
 
+    Sources (in order): existing ``out``, bundled template, then
+    :func:`load_residue_monomer_atoms` (MOLECULES / cwd / make-res). When load
+    returns atoms without writing a file (campaign geometries), write *out*
+    with :func:`_write_monomer_pdb` so the path always exists.
+
     Preserves an existing ``pdb/initial.pdb`` when generating via ``make-res``.
+    Never overwrites a CHARMM/make-res PDB with ASE's default ``MOL`` resname.
     """
     name = normalize_cgenff_residue_name(residue)
     out = Path(dest) if dest is not None else Path("pdb") / f"{name.lower()}.pdb"
@@ -166,28 +234,41 @@ def ensure_residue_pdb(
         out.write_bytes(bundled.read_bytes())
         return out.resolve()
 
+    # make-res writes ``pdb/<resi>.pdb``; MOLECULES / aliases only return atoms.
     atoms = load_residue_monomer_atoms(name, generate=generate)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    ase.io.write(str(out), atoms)
+    if not out.is_file():
+        _write_monomer_pdb(out, atoms, name)
+
+    resnames = _pdb_resnames(out)
+    if resnames == {"MOL"}:
+        raise RuntimeError(
+            f"{out} has ASE placeholder resname MOL after generating {name!r}. "
+            "CHARMM GENERATE will fail; fix the monomer writer to keep CGenFF names."
+        )
     return out.resolve()
 
 
 def _generate_monomer_via_make_res(name: str) -> Atoms:
-    """Generate a residue with ``make-res``, restoring ``pdb/initial.pdb`` afterward."""
+    """Generate a residue with ``make-res``, restoring ``pdb/initial.pdb`` afterward.
+
+    Relies on ``setupRes`` copying the CHARMM ``write.coor_pdb`` output to
+    ``pdb/<resi>.pdb``. Do **not** rewrite that file with ``ase.io.write`` —
+    ASE defaults the residue name to ``MOL``, which breaks Packmol→GENERATE.
+    """
     import argparse
 
     from mmml.cli.make import make_res
 
     initial = Path("pdb/initial.pdb")
     backup = initial.read_bytes() if initial.is_file() else None
+    out = Path("pdb") / f"{name.lower()}.pdb"
     try:
-        atoms = make_res.main_loop(
-            argparse.Namespace(res=name, skip_energy_show=True)
-        )
-        out = Path("pdb") / f"{name.lower()}.pdb"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        ase.io.write(str(out), atoms)
-        return atoms
+        make_res.main_loop(argparse.Namespace(res=name, skip_energy_show=True))
+        if not out.is_file():
+            raise FileNotFoundError(
+                f"make-res did not write {out} for residue {name!r}"
+            )
+        return _read_monomer_pdb(out)
     finally:
         if backup is not None:
             initial.parent.mkdir(parents=True, exist_ok=True)

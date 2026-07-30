@@ -130,7 +130,7 @@ uv run pytest tests/unit/test_hybrid_energy.py::test_ewald_monomer_ml_plus_mm_fi
 ```
 
 Charge-mode taxonomy and train/MD YAML pairs live in
-[Hybrid MM charges](hybrid-mm-charges.md#minimal-runnable-example--native-ewald-fixed-vs-latent-small-system).
+[Hybrid MM charges](hybrid-mm-charges.md#minimal-runnable-example-native-ewald-fixed-vs-latent-small-system).
 MM bonded terms are orthogonal: native Ewald owns intermolecular Coulomb in
 `E_MM`, while PyCHARMM may still evaluate BOND/ANGL/DIHE on the PSF. The
 `DCM:2` YAMLs keep that bonded contribution; the analytic example above is

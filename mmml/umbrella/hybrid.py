@@ -9,6 +9,11 @@ from typing import Sequence
 
 import numpy as np
 
+from mmml.md.ml_region import (
+    compact_mol_id,
+    merge_ml_region_mol_id,
+    resolve_ml_region_indices,
+)
 from mmml.md.system import MolecularSystem, SystemSpec
 from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.io import (
@@ -32,41 +37,6 @@ __all__ = [
     "run_umbrella_hybrid_nvt",
     "stretch_distance_seed_mic",
 ]
-
-
-def resolve_ml_region_indices(
-    resnames: Sequence[str],
-    ml_resnames: Sequence[str],
-) -> np.ndarray:
-    """Return atom indices whose residue name is in ``ml_resnames`` (case-insensitive)."""
-    want = {str(r).strip().upper() for r in ml_resnames}
-    idx = [
-        i
-        for i, name in enumerate(resnames)
-        if str(name).strip().upper() in want
-    ]
-    if not idx:
-        raise ValueError(
-            f"no atoms match ml_resnames={sorted(want)}; "
-            f"available residues={sorted({str(r).strip().upper() for r in resnames})}"
-        )
-    return np.asarray(idx, dtype=np.int32)
-
-
-def merge_ml_region_mol_id(
-    mol_id: np.ndarray,
-    ml_indices: Sequence[int],
-) -> np.ndarray:
-    """Assign one shared ``mol_id`` to all ML-region atoms (exclude solute–solute MM)."""
-    out = np.asarray(mol_id, dtype=np.int32).copy()
-    ml = np.asarray(list(ml_indices), dtype=np.int32)
-    if ml.size == 0:
-        raise ValueError("ml_indices must be non-empty")
-    if int(np.min(ml)) < 0 or int(np.max(ml)) >= out.shape[0]:
-        raise ValueError("ml_indices out of range for mol_id")
-    shared = int(np.min(out[ml]))
-    out[ml] = shared
-    return out
 
 
 def find_atom_index_by_name(
@@ -155,8 +125,14 @@ def _load_box_json(path: Path) -> float | None:
     if not path.is_file():
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("box_size", "side_length_A", "L"):
-        if key in data:
+    for key in (
+        "box_side_A",
+        "final_cubic_side_A",
+        "box_size",
+        "side_length_A",
+        "L",
+    ):
+        if key in data and data[key] is not None:
             return float(data[key])
     return None
 
@@ -253,7 +229,7 @@ def build_hybrid_umbrella_system(cfg: UmbrellaConfig) -> tuple[MolecularSystem, 
                 resnames[int(a)] = name
         atom_names = [f"X{i}" for i in range(system.n_atoms)]
         ml_indices = resolve_ml_region_indices(resnames, cfg.ml_resnames)
-        mol_id = merge_ml_region_mol_id(system.mol_id, ml_indices)
+        mol_id = compact_mol_id(merge_ml_region_mol_id(system.mol_id, ml_indices))
         monomers = monomer_indices_from_mol_id(mol_id)
         system = MolecularSystem(
             R=system.R,
@@ -315,7 +291,7 @@ def build_hybrid_umbrella_system(cfg: UmbrellaConfig) -> tuple[MolecularSystem, 
         )
     )
     ml_indices = resolve_ml_region_indices(resnames, cfg.ml_resnames)
-    mol_id = merge_ml_region_mol_id(system.mol_id, ml_indices)
+    mol_id = compact_mol_id(merge_ml_region_mol_id(system.mol_id, ml_indices))
     monomers = monomer_indices_from_mol_id(mol_id)
     system = MolecularSystem(
         R=system.R,
@@ -429,12 +405,20 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             ff_params=base_system.ff_params,
             metadata=base_system.metadata,
         )
+        extra_prm: list = []
+        ch3cl_prm = Path(__file__).resolve().parents[2] / "examples" / "m" / "par_ch3cl.prm"
+        if ch3cl_prm.is_file():
+            extra_prm.append(ch3cl_prm)
         energy = build_hybrid_energy(
             win_system,
-            ("ml_intra", "mm_nonbonded", "smd"),
+            ("ml_intra", "mm_bonded", "mm_nonbonded", "smd"),
             ctx,
             term_kwargs={
                 "ml_intra": {"monomer_indices": [ml_indices]},
+                "mm_bonded": {
+                    "ml_atom_indices": ml_indices,
+                    "extra_prm_files": extra_prm,
+                },
                 "mm_nonbonded": {"lr_solver": str(cfg.lr_solver)},
                 "smd": {
                     "atom_i": atom_i,

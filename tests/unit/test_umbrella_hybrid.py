@@ -25,6 +25,21 @@ def test_resolve_ml_region_indices():
     assert idx.tolist() == [0, 1, 2]
 
 
+def test_resolve_ml_region_accepts_truncated_ch3cl_alias():
+    from mmml.md.ml_region import resolve_ml_region_indices
+
+    resnames = ["AMM1", "AMM1", "CH3C", "CH3C", "TIP3"]
+    idx = resolve_ml_region_indices(resnames, ("AMM1", "CH3CL"))
+    assert idx.tolist() == [0, 1, 2, 3]
+
+
+def test_resolve_ml_region_rejects_partial_match():
+    from mmml.md.ml_region import resolve_ml_region_indices
+
+    with pytest.raises(ValueError, match="missing residues"):
+        resolve_ml_region_indices(["AMM1", "AMM1", "TIP3"], ("AMM1", "CH3CL"))
+
+
 def test_merge_ml_region_mol_id_excludes_solute_solute():
     mol_id = np.array([0, 0, 1, 1, 2, 2, 2], dtype=np.int32)
     ml = [0, 1, 2, 3]

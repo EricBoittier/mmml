@@ -382,3 +382,24 @@ def test_apply_certified_box_size_from_box_json(tmp_path) -> None:
     side = apply_certified_box_size_from_artifacts(args)
     assert side == pytest.approx(55.229)
     assert args.box_size == pytest.approx(55.229)
+
+
+def test_resolve_box_size_accepts_make_box_aliases(tmp_path) -> None:
+    """examples/m make-box wrote box_size/side_length_A before box_side_A."""
+    import json
+
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        resolve_box_size_from_certified_artifacts,
+    )
+
+    box_dir = tmp_path / "boxes" / "tip3"
+    box_dir.mkdir(parents=True)
+    (box_dir / "box.json").write_text(
+        json.dumps({"box_size": 30.0, "side_length_A": 30.0, "n_solvent": 100}),
+        encoding="utf-8",
+    )
+    pdb = box_dir / "model.pdb"
+    pdb.write_text("ATOM\n", encoding="utf-8")
+    # load_cluster_from_pdb temporarily sets from_crd to the PDB path.
+    args = argparse.Namespace(from_crd=str(pdb), from_psf=None, restart_from=None)
+    assert resolve_box_size_from_certified_artifacts(args) == pytest.approx(30.0)

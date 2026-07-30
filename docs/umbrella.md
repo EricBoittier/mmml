@@ -55,12 +55,14 @@ shared `smd` energy term).
 ```text
 PSF + PDB + box → MolecularSystem
   mol_id: ML-region atoms share one id  →  MM drops solute–solute pairs
-  E = E_ML(solute complex) + E_MM(pairs with solvent) + W(ξ)
+  E = E_ML(solute complex) + E_MM_bonded(solvent) + E_MM(pairs with solvent) + W(ξ)
   JaxmdDriver NVT per window (not packed)
 ```
 
 - ML region defaults to residue names `AMM1,CH3CL` (one PhysNet evaluation;
-  matches a 9-atom dimer checkpoint such as `examples/m/kl.json`).
+  matches a 9-atom dimer checkpoint such as `examples/m/model_ext.json`).
+- Solvent intramolecular CGenFF bonded is required (`mm_bonded`); without it,
+  TIP3 has no O–H restoring forces and NVE/NVT explodes.
 - Solute–solvent and solvent–solvent stay in `mm_nonbonded`.
 - Snapshots store `energies_unbiased_ev` (= \(E_{\mathrm{ML}}+E_{\mathrm{MM}}\))
   so MBAR does not need to rebuild the hybrid Hamiltonian.

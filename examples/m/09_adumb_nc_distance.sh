@@ -11,10 +11,13 @@
 #                        (r_ClC, r_CN) target Å — e.g. RCL=3.8 RCN=1.57 = product basin
 #     TS_XI=<x>          with USE_NPZ_PDB=1: pick nearest frame to ratio ξ (export helper)
 #     FRAME=<n>          with USE_NPZ_PDB=1: pick an absolute N=9 NPZ index
-#     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum): restore the default pre-min (by default
-#                        MM pre-min + monomer mini are skipped so a broken-C-Cl seed survives)
-#   SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
-#   SOLVATED=1 SOLVENT=acn bash examples/m/09_adumb_nc_distance.sh
+#     SEED_PRESERVE=0    with USE_NPZ_PDB=1 (vacuum or solvated): restore the default
+#                        pre-min (by default MM pre-min + monomer mini are skipped so a
+#                        broken-C-Cl seed survives)
+#   SOLVATED=1           Packmol from YAML (AMM1:1,CH3CL:1,SOLVENT:N)
+#   SOLVATED=1 USE_NPZ_PDB=1
+#                        export solute → rebuild make-box for SOLVENT → --from-pdb box
+#                        (cannot Packmol a multi-residue solute PDB as one monomer)
 #
 # Requires mmml-patched libcharmm (UM1RXN [min,max]). Do NOT leave CHARMM_LIB_DIR
 # pointing at a stale PhysNet_PyCHARMM tree without that patch.
@@ -22,6 +25,7 @@
 # Examples:
 #   bash examples/m/09_adumb_nc_distance.sh                            # Packmol dimer
 #   FRAME=1000 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh  # exact frame
+#   SOLVATED=1 SOLVENT=dmso USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # Many seeds across ξ (independent full-range replicas): examples/m/11_adumb_windows.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -55,9 +59,8 @@ if [[ -n "${CHARMM_LIB_DIR:-}" && "${CHARMM_LIB_DIR}" == *"PhysNet_PyCHARMM"* ]]
 fi
 
 # Optional: feed coordinates from the NPZ-exported CGenFF PDB.
-# YAML still has Packmol composition (AMM1:1,CH3CL:1[…]); --from-pdb alone
-# cannot mix with that — override --composition to a lone PDB (vacuum) or
-# solute.pdb:1,TIP3:N (solvated).
+# YAML still has Packmol composition (AMM1:1,CH3CL:1[…]); override it with a
+# lone full-system PDB (vacuum) or a make-box solvent PDB (solvated).
 EXTRA=()
 if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   SOLUTE="${ARTIFACTS_DIR}/solute_amm1_ch3cl.pdb"
@@ -77,20 +80,34 @@ if [[ "${USE_NPZ_PDB}" == "1" ]]; then
   fi
   uv run python examples/m/07_export_solute_pdb.py "${EXPORT_ARGS[@]}" -o "${SOLUTE}"
   if [[ "${SOLVATED}" == "1" ]]; then
-    # Solvated: Packmol wraps TIP3 around the solute — keep the default pre-min.
-    EXTRA+=(--composition "${SOLUTE}:1,TIP3:12")
+    # Solvated: rebuild make-box around the seeded solute, then cold-start from
+    # that full-system PDB. Packmol cannot take AMM1+CH3CL as one monomer
+    # (``solute.pdb:1,TIP3:N`` → "single residue name" error).
+    BOX_PDB="${ARTIFACTS_DIR}/boxes/${SOLVENT}/model.pdb"
+    echo "=== rebuild make-box ${SOLVENT} around NPZ solute ==="
+    SOLUTE_PDB="${SOLUTE}" \
+      BOX_SIZE="${BOX_SIZE:-30.0}" \
+      N_SOLVENT="${N_SOLVENT:-12}" \
+      SOLVENT_ONLY="${SOLVENT}" \
+      SKIP_SOLUTE_EXPORT=1 \
+      bash examples/m/08_make_boxes.sh
+    if [[ ! -f "${BOX_PDB}" ]]; then
+      echo "FAIL: missing ${BOX_PDB} after make-box" >&2
+      exit 1
+    fi
+    EXTRA+=(--composition "${BOX_PDB}" --from-pdb "${BOX_PDB}" --no-packmol)
   else
     # Lone full-system PDB; do not Packmol-rebuild over the NPZ geometry.
     EXTRA+=(--composition "${SOLUTE}" --from-pdb "${SOLUTE}" --no-packmol)
-    # Preserve the seeded reaction coordinate (SEED_PRESERVE=1, default): skip the
-    # full-CGenFF MM pre-min (reforms the C-Cl harmonic bond) and the isolated-
-    # monomer PhysNet mini (pulls CH3Cl back to gas-phase equilibrium), both of
-    # which would erase a broken/dissociated seed. The hybrid ML BFGS
-    # (--calculator-pre-minimize) is kept: it only relaxes within the seeded basin.
-    # SEED_PRESERVE=0 restores the default pre-min if a raw seed fails the GRMS gate.
-    if [[ "${SEED_PRESERVE:-1}" == "1" ]]; then
-      EXTRA+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
-    fi
+  fi
+  # Preserve the seeded reaction coordinate (SEED_PRESERVE=1, default): skip the
+  # full-CGenFF MM pre-min (reforms the C-Cl harmonic bond) and the isolated-
+  # monomer PhysNet mini (pulls CH3Cl back to gas-phase equilibrium), both of
+  # which would erase a broken/dissociated seed. Applies to vacuum and solvated
+  # USE_NPZ_PDB paths. The hybrid ML BFGS (--calculator-pre-minimize) is kept.
+  # SEED_PRESERVE=0 restores the default pre-min if a raw seed fails the GRMS gate.
+  if [[ "${SEED_PRESERVE:-1}" == "1" ]]; then
+    EXTRA+=(--charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini)
   fi
 fi
 

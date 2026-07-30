@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Vacuum NVT (ASE Langevin) for NH3–CH3Cl with the kl.json PhysNet ckpt."""
+"""Vacuum NVT (ASE Langevin) for NH3–CH3Cl with the examples/m PhysNet ckpt (MMML_CKPT)."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import os
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,12 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = EXAMPLE_DIR.parent.parent
+
+# Mirror examples/m/_env.sh so a pipeline run and a standalone run agree on
+# which checkpoint is used; a pre-set MMML_CKPT still wins.
+DEFAULT_CKPT = Path(
+    os.environ.get("MMML_CKPT") or REPO_ROOT / "examples" / "m" / "model_ext.json"
+)
 if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
 
@@ -24,7 +31,7 @@ from md_io import attach_ase_trajectory, write_final_geometry, write_xyz_frames 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", type=Path, default=REPO_ROOT / "examples/m/kl.json")
+    parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CKPT)
     parser.add_argument("--data", type=Path, default=DEFAULT_NPZ)
     parser.add_argument("--frame", type=int, default=None)
     parser.add_argument("--n-steps", type=int, default=100)

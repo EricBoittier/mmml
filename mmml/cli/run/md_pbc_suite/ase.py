@@ -1593,10 +1593,8 @@ def run_md(
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
-
-    apply_xla_cuda_timer_log_filter()
+def build_parser() -> argparse.ArgumentParser:
+    """CLI parser for the ASE md-system backend (also used by unit tests)."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--checkpoint",
@@ -1700,6 +1698,21 @@ def main(argv: list[str] | None = None) -> int:
         help="Abort before MD if post-minimization Fmax exceeds this threshold (eV/A).",
     )
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05, help="ASE BFGS maxstep (A)")
+    parser.add_argument(
+        "--fire-min-steps",
+        type=int,
+        default=200,
+        help=(
+            "ASE FIRE steps for calculator / rescue-style minimize (md-system argv "
+            "parity with jaxmd/pycharmm; default 200)."
+        ),
+    )
+    parser.add_argument(
+        "--fire-min-maxstep",
+        type=float,
+        default=0.2,
+        help="ASE FIRE max atomic displacement per step in Å (default 0.2).",
+    )
     parser.add_argument(
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
@@ -2086,7 +2099,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Reduce console output.",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+
+    apply_xla_cuda_timer_log_filter()
+    args = build_parser().parse_args(argv)
     from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
 
     normalize_hybrid_assembly_flags(args)

@@ -17,12 +17,18 @@ _RESI_LINE = re.compile(r"^RESI\s+(\S+)\s+(\S+)")
 CGENFF_RESIDUE_ALIASES: dict[str, str] = {
     "WATER": "TIP3",
     "OCTANOL": "OCOH",
+    "CH4": "METH",
+    "METHANE": "METH",
 }
 
 # Colon- or comma-separated append RTF paths (extra RESI records + CHARMM append).
 _EXTRA_RTF_ENV = "MMML_CGENFF_EXTRA_RTF"
 # Colon- or comma-separated append PRM paths (bonded params for append residues).
 _EXTRA_PRM_ENV = "MMML_CGENFF_EXTRA_PRM"
+
+# Repo-bundled append topology for chloromethane (not in stock CGenFF).
+_BUNDLED_CH3CL_RTF = "examples/m/top_ch3cl.rtf"
+_BUNDLED_CH3CL_PRM = "examples/m/par_ch3cl.prm"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +40,22 @@ class CgenffResidue:
 
 def default_cgenff_rtf_path() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "charmm" / "top_all36_cgenff.rtf"
+
+
+def _repo_root() -> Path:
+    # …/mmml/interfaces/pycharmmInterface/cgenff_residues.py → repo root
+    return Path(__file__).resolve().parents[3]
+
+
+def _bundled_example_extra_paths(*rel_parts: str) -> tuple[Path, ...]:
+    """Return existing repo-relative append files (e.g. examples/m CH3CL)."""
+    root = _repo_root()
+    out: list[Path] = []
+    for rel in rel_parts:
+        path = (root / rel).resolve()
+        if path.is_file():
+            out.append(path)
+    return tuple(out)
 
 
 def _extra_paths_from_env(env_key: str, *, env: os._Environ | None = None) -> tuple[Path, ...]:
@@ -52,14 +74,37 @@ def _extra_paths_from_env(env_key: str, *, env: os._Environ | None = None) -> tu
     return tuple(out)
 
 
+def _merge_unique_paths(*groups: tuple[Path, ...]) -> tuple[Path, ...]:
+    out: list[Path] = []
+    seen: set[Path] = set()
+    for group in groups:
+        for path in group:
+            key = path.resolve()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(key)
+    return tuple(out)
+
+
 def extra_cgenff_rtf_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
-    """Append-topology RTF paths from ``MMML_CGENFF_EXTRA_RTF`` (``:`` / ``,`` separated)."""
-    return _extra_paths_from_env(_EXTRA_RTF_ENV, env=env)
+    """Append-topology RTF paths from ``MMML_CGENFF_EXTRA_RTF`` plus bundled extras.
+
+    When ``examples/m/top_ch3cl.rtf`` is present in the checkout, it is included
+    automatically so ``CH3CL`` compositions work without sourcing ``_env.sh``.
+    """
+    return _merge_unique_paths(
+        _extra_paths_from_env(_EXTRA_RTF_ENV, env=env),
+        _bundled_example_extra_paths(_BUNDLED_CH3CL_RTF),
+    )
 
 
 def extra_cgenff_prm_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
-    """Append-parameter PRM paths from ``MMML_CGENFF_EXTRA_PRM`` (``:`` / ``,`` separated)."""
-    return _extra_paths_from_env(_EXTRA_PRM_ENV, env=env)
+    """Append-parameter PRM paths from ``MMML_CGENFF_EXTRA_PRM`` plus bundled extras."""
+    return _merge_unique_paths(
+        _extra_paths_from_env(_EXTRA_PRM_ENV, env=env),
+        _bundled_example_extra_paths(_BUNDLED_CH3CL_PRM),
+    )
 
 
 def normalize_cgenff_residue_name(name: str) -> str:
@@ -95,10 +140,16 @@ def require_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None
     """Normalize and validate a CGenFF residue name; raise ``ValueError`` if unknown."""
     key = normalize_cgenff_residue_name(name)
     if not is_cgenff_residue_name(key, rtf_path=rtf_path):
+        hint = f"(or append via {_EXTRA_RTF_ENV})"
+        if key == "CH3CL":
+            hint = (
+                f"(or append via {_EXTRA_RTF_ENV}="
+                f"{_BUNDLED_CH3CL_RTF}; typically: source examples/m/_env.sh)"
+            )
         raise ValueError(
             f"Unknown CGenFF residue {name!r} (normalized {key!r}). "
             "List valid names with: mmml make-res --list-residues "
-            f"(or append via {_EXTRA_RTF_ENV})"
+            f"{hint}"
         )
     return key
 

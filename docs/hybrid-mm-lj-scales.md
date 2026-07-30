@@ -82,6 +82,61 @@ LJ scales, as long as `lr_solver: mic` and `mm_include_lj: true`. See
 
 ---
 
+## Why you train LJ *without* Ewald (read this first)
+
+New users usually read "LJ is forced off under Ewald" as a missing feature to
+work around. It is not. Training LJ under truncated MIC and keeping Ewald for
+Coulomb is the **recommended** workflow, because the two terms genuinely do not
+need the same long-range treatment.
+
+| Term | Falls off as | Lattice sum | Consequence |
+|------|--------------|-------------|-------------|
+| LJ repulsion / dispersion | \(r^{-12}\), \(r^{-6}\) | Converges absolutely and fast | A switch at 8–13 Å is standard practice; the residual is a small, nearly uniform energy/pressure offset (what an analytic tail correction handles) |
+| Coulomb | \(r^{-1}\) | Only *conditionally* convergent | Truncation is qualitatively wrong — it distorts structure and dielectric response, so Ewald/PME is mandatory |
+
+So the split is principled: **σ/ε are short-ranged parameters, and you fit them
+with the same short-ranged switched operator you will deploy.** Nothing is lost
+by the MIC Coulomb during Stage 1 that Ewald would have told you about the LJ
+well depth or radius.
+
+### The catch a student must understand
+
+Because Stage 1 fits σ/ε while Coulomb is truncated, **any Coulomb error can be
+absorbed into the LJ parameters**. That is real parameter compensation, and it is
+the main way this workflow goes wrong: you get σ/ε that look great in the fit and
+then behave badly with Ewald, because part of what they learned was standing in
+for missing long-range electrostatics.
+
+Three things keep it bounded — do all three:
+
+1. **Use `mm_charge_mode: fixed`** for the LJ-fitting stage. Fixed CGenFF charges
+   have no freedom to co-adapt, so the compensation has one fewer place to hide.
+   (This is why `train_fixed_lj_scales.yaml` pins it, even though charge modes
+   are otherwise orthogonal.)
+2. **Keep the cutoffs identical between training and MD.** `mm_switch_on`,
+   `mm_switch_width` and `ml_switch_width` define the operator your σ/ε were
+   fitted against; changing them at MD time silently uses the parameters with a
+   different energy function. See [Handoff cutoffs](#handoff-cutoffs).
+3. **Validate on a property that was not in the loss** — density, or an
+   RDF first-peak position. A fit that only reports its own training loss has
+   not been validated.
+
+### Which solver for which job
+
+| You want to… | Use | Why |
+|---|---|---|
+| Learn σ/ε | `lr_solver: mic`, `mm_include_lj: true`, `learn_mm_lj_scales: true` | The only path where LJ is in the energy and differentiable |
+| Refine ML weights with correct electrostatics | `lr_solver: ewald` (LJ auto-off, scales frozen) | Stage 2 below; keeps the Stage-1 sidecar intact |
+| Deploy trained σ/ε in MD, including a condensed-phase box | `include_mm: true`, `mm_nonbond_mode: jax_mic` (the default) | The switched-MM pair loop is what reads `ep_scale`/`sig_scale` |
+| Full-box Ewald/PME production MD | `mm_nonbond_mode: periodic_external` | **Trained LJ scales do not apply here** — MLpot now refuses `--mm-lj-scales-file` in this mode rather than ignoring it |
+
+The last row is the honest limit: a condensed-phase run *with* trained LJ uses
+truncated-MIC electrostatics today. Combining learned LJ with full Ewald in one
+production energy is future work, tracked in
+[issue #133](https://github.com/EricBoittier/mmml/issues/133).
+
+---
+
 ## Staged MIC LJ then Ewald transfer learning
 
 People often want: train ML + learnable LJ on MIC first, then warm-start a final
@@ -317,14 +372,27 @@ LJ scales still live on hybrid / md-system flags, not inside the policy file.
 | Unit scales ≡ baseline | With all `s=1`, hybrid energy matches fixed-LJ hybrid (unit tests) |
 | Non-unit scales move LJ | Changing `s^ε` or `s^σ` changes `e_mm` (unit tests) |
 | Gradients exist | ∂E/∂s^σ and ∂E/∂s^ε finite and nonzero on a close dimer |
+| Scales actually *converge* | Adam recovers a planted σ/ε scale to a few % |
+| Absent types untouched | A type not present in the data keeps `s = 1.0` exactly |
+| Train → MD continuity | Deployed `at_ep`/`at_rm` equal master × trained scale for the right ATC rows |
 | MD loads scales | Verbose MLpot line, or explicit `--mm-lj-scales-file` |
 | Ewald/PME | Do **not** expect LJ scales; LJ is forced off |
+| `periodic_external` + `--mm-lj-scales-file` | **Errors out** — it cannot apply them (see Troubleshooting) |
 
 Local unit tests (no CHARMM / no GPU required for these):
 
 ```bash
-uv run pytest tests/unit/test_mm_lj_scales.py tests/unit/test_hybrid_energy.py -q
+uv run pytest tests/unit/test_mm_lj_scales.py \
+              tests/unit/test_mm_lj_scales_learning.py \
+              tests/unit/test_hybrid_energy.py -q
 ```
+
+`test_mm_lj_scales.py` covers the mechanics (attach/split/apply, JSON I/O, ATC
+remap, nonzero gradients). `test_mm_lj_scales_learning.py` covers the two
+questions those cannot answer: whether an optimizer drives the scales to the
+right values, and whether the value that trained is the value MD deploys. It also
+pins the Ewald limitation, so if LJ-under-Ewald is ever implemented that test
+fails and forces this page to be updated with it.
 
 ---
 
@@ -334,6 +402,10 @@ uv run pytest tests/unit/test_mm_lj_scales.py tests/unit/test_hybrid_energy.py -
 |---------|----------------|
 | `learn_mm_lj_scales` silently false | `lr_solver` is ewald/PME, or `mm_include_lj: false` |
 | MD ignores scales | Missing `hybrid_mm.json`, wrong path, or `learn_mm_lj_scales: false` in sidecar |
+| `--mm-lj-scales-file … but JAX MM is off` error | You asked to deploy trained LJ under `periodic_external` or with `include_mm: false`, where nothing can consume it. Switch to `--mm-nonbond-mode jax_mic --include-mm`, or drop the flag to run stock CGenFF LJ on purpose |
+| `WARNING: … carries trained MM LJ scales but JAX MM is off` | A `hybrid_mm.json` was auto-discovered next to the checkpoint but the run cannot apply it — this run is using **stock** CGenFF LJ. Harmless if intended; otherwise switch to `jax_mic` |
+| Fit looks great, density/RDF is wrong under Ewald | Coulomb error absorbed into σ/ε during MIC fitting — see [Why you train LJ *without* Ewald](#why-you-train-lj-without-ewald-read-this-first) |
+| Cutoffs differ between train and MD | The σ/ε were fitted against a different operator; match `mm_switch_on` / `mm_switch_width` / `ml_switch_width` |
 | ATC length mismatch / wrong types | Sidecar type names don’t match CHARMM ATC; regenerate from the same CGenFF PRM |
 | Energies look like double LJ | Spooky in-model VdW + hybrid `E_MM` — hybrid must not pass CGenFF tables into the model (guarded in tests) |
 | Charge head errors | Mode B/C need `--charges`; Mode A does not need the head for `E_MM` |
@@ -351,3 +423,5 @@ uv run pytest tests/unit/test_mm_lj_scales.py tests/unit/test_hybrid_energy.py -
 | MD load → calculator | `mmml/interfaces/pycharmmInterface/mlpot/hybrid_mlpot.py` |
 | MM multiply | `mmml/interfaces/pycharmmInterface/mm_energy_forces.py` (`ep_scale`, `sig_scale`) |
 | Example YAMLs | `examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`, `md_fixed_lj_scales.yaml` |
+| Mechanics tests | `tests/unit/test_mm_lj_scales.py` |
+| Convergence + deploy-continuity tests | `tests/unit/test_mm_lj_scales_learning.py` |

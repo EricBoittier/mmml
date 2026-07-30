@@ -163,14 +163,45 @@ def _expand_gpu_platforms_to_include_cpu(existing: str) -> str | None:
     return f"{existing},cpu"
 
 
+def _jax_platforms_parts(existing: str) -> list[str]:
+    return [p.strip().lower() for p in existing.split(",") if p.strip()]
+
+
+def _jax_platforms_are_cpu_only(existing: str) -> bool:
+    parts = _jax_platforms_parts(existing)
+    return bool(parts) and all(p == "cpu" for p in parts)
+
+
+def _jax_platforms_are_cpu_first(existing: str) -> bool:
+    """True when the first token is ``cpu`` (JAX default backend becomes CPU)."""
+    parts = _jax_platforms_parts(existing)
+    return bool(parts) and parts[0] == "cpu"
+
+
 def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
-    """Set ``JAX_PLATFORMS`` and compilation cache before the first ``import jax``."""
+    """Set ``JAX_PLATFORMS`` and compilation cache before the first ``import jax``.
+
+    When ``MMML_MLPOT_DEVICE=gpu``, a stale login export of ``JAX_PLATFORMS=cpu``
+    (or leftover MPI-defer ``cpu,gpu`` / ``cpu,cuda``) is rewritten to put CUDA
+    first. MPI MLpot defer keeps ``MMML_MLPOT_DEVICE=cpu`` during that window, so
+    it is not clobbered here.
+    """
+    import sys
+
     from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
         apply_jax_compile_xla_flags,
     )
 
     apply_jax_compile_xla_flags(quiet=quiet)
     device = mlpot_jax_device_name()
+    if device == "gpu":
+        # Bundled cuDNN/ptxas must precede import jax for the CUDA plugin to bind.
+        try:
+            from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
+
+            ensure_jax_cuda_toolchain(required=False)
+        except Exception:
+            pass
     wanted = mlpot_jax_platforms_for_device(device)
     sanitize_stale_jax_platforms_env(prefer_cuda=(device == "gpu" and wanted != "cpu"))
     existing = (os.environ.get("JAX_PLATFORMS") or "").strip()
@@ -179,8 +210,6 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
     elif device == "gpu" and wanted != "cpu":
         expanded = _expand_gpu_platforms_to_include_cpu(existing)
         if expanded is not None:
-            import sys
-
             if "jax" in sys.modules:
                 if not quiet and not _truthy("MMML_QUIET"):
                     print(
@@ -198,6 +227,27 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
                         "(CPU kept for MLpot defer/fallback)",
                         flush=True,
                     )
+        elif _jax_platforms_are_cpu_only(existing) or _jax_platforms_are_cpu_first(
+            existing
+        ):
+            if "jax" in sys.modules:
+                if not quiet and not _truthy("MMML_QUIET"):
+                    print(
+                        "mmml WARNING: MMML_MLPOT_DEVICE=gpu but JAX_PLATFORMS="
+                        f"{existing!r} and jax is already imported — default "
+                        "backend stays CPU. Restart with JAX_PLATFORMS unset "
+                        f"(or {wanted!r}); jaxmd-unified / MLpot still pin via "
+                        "mlpot_jax_device_context when possible.",
+                        flush=True,
+                    )
+            else:
+                os.environ["JAX_PLATFORMS"] = wanted
+                if not quiet and not _truthy("MMML_QUIET"):
+                    print(
+                        f"mmml: JAX_PLATFORMS overridden {existing!r} → {wanted!r} "
+                        "(MMML_MLPOT_DEVICE=gpu; CUDA first)",
+                        flush=True,
+                    )
     apply_mlpot_jax_compilation_cache_env(quiet=quiet)
     if not quiet and not _truthy("MMML_QUIET") and device == "cpu":
         print(
@@ -206,6 +256,39 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
             flush=True,
         )
     return device
+
+
+def format_jax_device_banner(*, active_device: Any | None = None) -> str:
+    """One-line status for CLI logs (always useful when diagnosing CPU-vs-GPU)."""
+    requested = mlpot_jax_device_name()
+    platforms = os.environ.get("JAX_PLATFORMS", "(unset)")
+    backend = "?"
+    devices_s = "?"
+    try:
+        import jax
+
+        try:
+            backend = str(jax.default_backend())
+        except Exception as exc:
+            backend = f"error:{exc}"
+        try:
+            devices_s = ", ".join(str(d) for d in jax.devices())
+        except Exception as exc:
+            devices_s = f"error:{exc}"
+    except Exception as exc:
+        backend = f"no-jax:{exc}"
+    active = "" if active_device is None else f" active={active_device}"
+    return (
+        f"mmml: JAX requested={requested} JAX_PLATFORMS={platforms} "
+        f"default_backend={backend} devices=[{devices_s}]{active}"
+    )
+
+
+def print_jax_device_banner(*, active_device: Any | None = None) -> None:
+    """Print :func:`format_jax_device_banner` (honours ``MMML_QUIET`` only)."""
+    if _truthy("MMML_QUIET"):
+        return
+    print(format_jax_device_banner(active_device=active_device), flush=True)
 
 
 def jax_warmup_device_name() -> str:

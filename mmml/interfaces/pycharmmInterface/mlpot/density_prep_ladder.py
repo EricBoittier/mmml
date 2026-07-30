@@ -9,6 +9,7 @@ CHARMM, ASE, and MLpot recovery steps until GRMS is low enough for dynamics.
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -185,10 +186,58 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     _bump_int_attr(args, "fire_min_steps", 200)
 
 
+def _handoff_path_candidates(args: argparse.Namespace) -> list[Path]:
+    paths: list[Path] = []
+    for key in ("from_psf", "from_crd", "from_pdb"):
+        raw = getattr(args, key, None)
+        if raw is None:
+            continue
+        paths.append(Path(str(raw)).expanduser())
+    return paths
+
+
+def _box_json_candidates_for_handoff(path: Path) -> list[Path]:
+    """Sibling metadata written by liquid-box / build-crystal next to PSF/CRD/PDB."""
+    stem = path.stem
+    parent = path.parent
+    return [
+        parent / f"{stem}_box.json",
+        parent / "box.json",
+        # build-crystal also accepts -o foo.extxyz → foo_box.json beside foo.psf
+        path.with_name(f"{stem}_box.json"),
+    ]
+
+
+def is_build_crystal_handoff(args: argparse.Namespace) -> bool:
+    """True when loading a ``build-crystal --write-charmm`` artifact.
+
+    Detected via sibling ``*_box.json`` / ``box.json`` with ``source: build-crystal``.
+    Those systems are already lattice-packed; the dense-liquid MC/prep ladder
+    must not run (it creates unphysical H–H clashes in the cubic IMAGE).
+    """
+    for path in _handoff_path_candidates(args):
+        for cand in _box_json_candidates_for_handoff(path):
+            if not cand.is_file():
+                continue
+            try:
+                data = json.loads(cand.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            source = str(data.get("source", "")).strip().lower().replace("_", "-")
+            if source == "build-crystal":
+                return True
+    return False
+
+
 def condensed_phase_md_prep_recommended(args: argparse.Namespace) -> bool:
     """True when md-system should use dense-liquid prep defaults without Packmol."""
+    # Explicit --liquid-prep / resilient always wins, including build-crystal handoffs.
     if liquid_prep_enabled(args):
         return True
+    if is_build_crystal_handoff(args):
+        return False
     if getattr(args, "from_psf", None) or getattr(args, "skip_cluster_build", False):
         return True
     n_mol = _composition_monomer_count(args)
@@ -230,6 +279,13 @@ def resolve_density_prep_lattice_abnr_steps(args: argparse.Namespace) -> int:
 
 def apply_condensed_phase_md_defaults(args: argparse.Namespace) -> None:
     """Apply resilient liquid prep defaults for certified-box / large-cluster md-system runs."""
+    if is_build_crystal_handoff(args) and not liquid_prep_enabled(args):
+        # Literature / PyXtal crystal exports: keep packing; disable liquid MC density.
+        # Explicit --liquid-prep / --density-prep-mode resilient falls through below.
+        args.mc_density_equalize = False
+        if getattr(args, "density_prep_ladder", None) is None:
+            args.density_prep_ladder = False
+        return
     if not condensed_phase_md_prep_recommended(args):
         return
     if not liquid_prep_enabled(args):

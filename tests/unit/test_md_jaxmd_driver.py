@@ -254,6 +254,30 @@ def test_neighbor_and_repair_contracts_are_validated():
         )
 
 
+def test_npt_soft_barostat_keeps_volume_finite():
+    """Heavy piston (large tau) must not NaN the box on a short run."""
+    system = _periodic_system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    ensemble = EnsembleSpec(
+        ensemble="npt",
+        dt_fs=0.5,
+        n_steps=40,
+        temperature_K=300.0,
+        pressure_bar=1.0,
+        params={
+            "float64": True,
+            "seed": 2,
+            "barostat_kwargs": {"tau": 1.0e6},
+        },
+    )
+    traj = JaxmdDriver(record_every=10).run(system, energy, ensemble)
+    volumes = traj.metadata["volumes_A3"]
+    assert np.all(np.isfinite(volumes))
+    assert np.all(np.isfinite(traj.metadata["energies"]))
+    ratio = float(volumes[-1]) / float(volumes[0])
+    assert 0.9 <= ratio <= 1.1
+
+
 def test_npt_requires_a_box():
     system = _system()  # free space (box=None)
     energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
@@ -292,3 +316,46 @@ def test_npt_evolves_the_box():
     assert np.all(np.isfinite(traj.metadata["positions"]))
     assert np.all(np.isfinite(traj.metadata["energies"]))
     assert traj.metadata["steps"] == 20
+    volumes = traj.metadata["volumes_A3"]
+    pressures = traj.metadata["pressures_bar"]
+    assert volumes.shape == (traj.n_frames,)
+    assert pressures.shape == (traj.n_frames,)
+    assert np.all(np.isfinite(volumes))
+    assert np.all(np.isfinite(pressures))
+    assert traj.metadata["target_pressure_bar"] == 1.0
+    ratio = float(volumes[-1]) / float(volumes[0])
+    assert 0.5 <= ratio <= 2.0
+
+
+def test_npt_energy_fn_responds_to_perturbation():
+    """Virial contract: isotropic ``perturbation`` must change U (dUdV ≠ 0)."""
+    import jax
+    import jax.numpy as jnp
+    from jax import grad
+
+    jax.config.update("jax_enable_x64", True)
+
+    system = _periodic_system(n_side=2, spacing=3.0)
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    hybrid_fn = energy.as_jax_energy_fn()
+    box0 = jnp.asarray(system.box, dtype=jnp.float64)
+    inv_box0 = jnp.linalg.inv(box0)
+    frac_R = jnp.asarray(system.R, dtype=jnp.float64) @ jnp.transpose(inv_box0)
+
+    def energy_fn(frac, box=box0, perturbation=1.0, **kw):
+        box_p = jnp.asarray(box) * perturbation
+        real = frac @ jnp.transpose(box_p)
+        return hybrid_fn(real, box=box_p, **kw)
+
+    e1 = float(energy_fn(frac_R, perturbation=1.0))
+    e2 = float(energy_fn(frac_R, perturbation=1.01))
+    assert e1 != e2
+
+    def U_eps(eps):
+        return energy_fn(frac_R, perturbation=(1.0 + eps))
+
+    dudv_ad = float(grad(U_eps)(0.0))
+    eps = 1.0e-5
+    dudv_fd = float((U_eps(eps) - U_eps(-eps)) / (2.0 * eps))
+    assert abs(dudv_ad - dudv_fd) / max(1.0, abs(dudv_fd)) < 1.0e-4
+    assert abs(dudv_ad) > 1.0e-8

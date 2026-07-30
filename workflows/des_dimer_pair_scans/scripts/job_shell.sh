@@ -9,6 +9,12 @@ PAIR_TAG="${1:?usage: job_shell.sh PAIR_TAG}"
 
 cd "$REPO_ROOT"
 
+# SciCORE toolchain for MPI-linked libcharmm (idempotent if already loaded).
+if [[ -f "$REPO_ROOT/scripts/scicore_env.sh" ]]; then
+  # shellcheck source=../../../scripts/scicore_env.sh
+  source "$REPO_ROOT/scripts/scicore_env.sh"
+fi
+
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
@@ -22,6 +28,13 @@ else
 fi
 export MMML_WORKFLOW_CONFIG="$CFG"
 
-exec "${MMML_PYTHON}" "$WORKFLOW_ROOT/scripts/run_pair_scan.py" \
-  --config "$CFG" \
-  --pair "$PAIR_TAG"
+SCAN_PY="$WORKFLOW_ROOT/scripts/run_pair_scan.py"
+WRAPPER="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+
+# Prefer the CHARMM MPI launcher (np=1). Fall back to bare python for serial
+# libcharmm builds (e.g. local macOS --no-mpi).
+if [[ "${MMML_DES_SCAN_NO_MPIRUN:-0}" != "1" && -x "$WRAPPER" ]]; then
+  exec "$WRAPPER" python "$SCAN_PY" --config "$CFG" --pair "$PAIR_TAG"
+fi
+
+exec "${MMML_PYTHON}" "$SCAN_PY" --config "$CFG" --pair "$PAIR_TAG"

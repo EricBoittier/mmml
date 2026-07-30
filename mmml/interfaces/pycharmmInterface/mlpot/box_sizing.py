@@ -86,7 +86,20 @@ def resolve_box_size_from_certified_artifacts(args: argparse.Namespace) -> float
                 payload = json.loads(box_json.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError, TypeError, ValueError):
                 continue
-            side_raw = payload.get("box_side_A", payload.get("box_side"))
+            # Canonical liquid-box key is box_side_A; make-box / hybrid also
+            # write box_size or side_length_A.
+            side_raw = None
+            for key in (
+                "box_side_A",
+                "final_cubic_side_A",
+                "box_side",
+                "box_size",
+                "side_length_A",
+                "L",
+            ):
+                if key in payload and payload[key] is not None:
+                    side_raw = payload[key]
+                    break
             if side_raw is None:
                 continue
             side = float(side_raw)

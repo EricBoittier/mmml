@@ -1206,6 +1206,16 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         --ps when tracing.
 
 9. Other options  (-hother):
+  --ml-resnames ML_RESNAMES
+                        Mechanical embedding: comma-separated residue names for
+                        the ML solute complex (e.g. AMM1,CH3CL). On --jaxmd-
+                        unified, PhysNet evaluates that complex once and MM
+                        covers solute–solvent / solvent–solvent (solute–solute
+                        MM pairs dropped via shared mol_id). On --backend
+                        pycharmm, USER/PhysNet registers only on those residues
+                        (solvent stays CHARMM MM); requires
+                        mm_nonbond_mode=periodic_external (not jax_mic). YAML:
+                        ml_resnames: [AMM1, CH3CL].
   --pycharmm-pre-dynamics-lingo PYCHARMM_PRE_DYNAMICS_LINGO
                         pycharmm: CHARMM lingo run once after setup/constraints
                         and before scheduled dynamics (YAML may use a multiline

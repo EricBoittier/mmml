@@ -126,12 +126,30 @@ def test_runconfig_from_md_system_args():
     assert cfg.ensemble.space == "pbc"
     assert cfg.ensemble.n_steps == 2000
     assert cfg.ensemble.pressure_bar == 1.0
+    assert cfg.ensemble.params.get("float64") is True
+    assert cfg.ensemble.params.get("seed") == 7
     assert cfg.system.builder == "packmol"
     assert cfg.system.composition == "DCM:10,TIP3:20"
     assert cfg.system.box_size == 25.0
     assert cfg.terms == ("ml_intra", "mm_nonbonded")
     assert cfg.checkpoint == Path("examples/ckpt.json")
     assert cfg.seed == 7
+
+
+def test_runconfig_npt_barostat_tau():
+    args = argparse.Namespace(
+        setup="pbc_npt",
+        dt_fs=0.5,
+        ps=0.05,
+        temperature=300.0,
+        pressure=1.0,
+        composition="TIP3:4",
+        seed=0,
+        barostat_tau=1.0e6,
+    )
+    cfg = runconfig_from_md_system_args(args)
+    assert cfg.ensemble.params["barostat_kwargs"]["tau"] == 1.0e6
+    assert cfg.ensemble.params.get("float64") is True
 
 
 def test_runconfig_from_md_system_args_default_builder_and_terms():

@@ -8,9 +8,13 @@ from pathlib import Path
 
 from mmml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
 from mmml.interfaces.crystal_charmm import (
+    DEFAULT_MIN_BOX_SIDE_A,
     LITERATURE_CRYSTAL_PRESETS,
     build_charmm_literature_supercell,
     build_literature_charmm_supercell,
+    map_ase_crystal_to_charmm_pdb,
+    suggest_supercell_reps,
+    write_crystal_charmm_topology,
 )
 from mmml.interfaces.pyxtal_placement import (
     MolecularCrystalBuildRequest,
@@ -55,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--residue",
         default=None,
         metavar="NAME",
-        help="CHARMM residue (DCM, BENZ) when using --from-cif without --literature",
+        help="CHARMM residue (DCM, BENZ) for --from-cif / --write-charmm on PyXtal path",
     )
     lit.add_argument(
         "--monomer-pdb",
@@ -67,9 +71,31 @@ def build_parser() -> argparse.ArgumentParser:
     lit.add_argument(
         "--min-box-side",
         type=float,
-        default=28.0,
+        default=DEFAULT_MIN_BOX_SIDE_A,
         metavar="ANG",
         help="Minimum supercell edge length (Å); default ≈2× CHARMM cutnb",
+    )
+    md = parser.add_argument_group("MD box sizing / CHARMM handoff")
+    md.add_argument(
+        "--box-size",
+        "--side-length",
+        dest="box_size",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help=(
+            "Cubic MD cell side length (Å). When --supercell is omitted, also drives "
+            "auto tiling so each crystal edge ≥ this value. Used as CHARMM IMAGE side "
+            "with --write-charmm."
+        ),
+    )
+    md.add_argument(
+        "--write-charmm",
+        action="store_true",
+        help=(
+            "Write {stem}.pdb/.psf/.crd and {stem}_box.json via PyCHARMM GENERATE "
+            "(cubic IMAGE). Prefer --literature for DCM/benzene."
+        ),
     )
     pyx = parser.add_argument_group("PyXtal random placement")
     pyx.add_argument(
@@ -152,7 +178,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         metavar="NX,NY,NZ",
-        help="Supercell repeats (literature: auto from --min-box-side if omitted)",
+        help=(
+            "Supercell repeats (literature: auto from --box-size / --min-box-side "
+            "if omitted; PyXtal: auto from --box-size if omitted)"
+        ),
     )
     parser.add_argument(
         "-o",
@@ -213,6 +242,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
 
 
+def effective_min_box_side_a(args: argparse.Namespace) -> float:
+    """Supercell edge target: ``--box-size`` overrides ``--min-box-side``."""
+    if args.box_size is not None:
+        side = float(args.box_size)
+        if side <= 0.0:
+            raise ValueError(f"--box-size must be positive, got {side}")
+        return side
+    side = float(args.min_box_side)
+    if side <= 0.0:
+        raise ValueError(f"--min-box-side must be positive, got {side}")
+    return side
+
+
 def _infer_format(path: Path, override: str | None) -> str | None:
     if override:
         return override
@@ -249,6 +291,60 @@ def _resolve_literature_args(args: argparse.Namespace) -> tuple[str, Path]:
     return residue, cif
 
 
+def _charmm_side_length_a(
+    args: argparse.Namespace,
+    cell_lengths_a: tuple[float, float, float],
+) -> float:
+    """Cubic CHARMM IMAGE side; ``--box-size`` or max crystal edge."""
+    max_edge = max(float(x) for x in cell_lengths_a)
+    if args.box_size is not None:
+        side = float(args.box_size)
+        if side + 1e-6 < max_edge:
+            raise ValueError(
+                f"--box-size {side:.3f} Å is smaller than the largest supercell "
+                f"edge ({max_edge:.3f} Å). Increase --box-size or reduce --supercell."
+            )
+        return side
+    return max_edge
+
+
+def _maybe_write_charmm(
+    args: argparse.Namespace,
+    *,
+    charmm_pdb: Path,
+    out_stem: Path,
+    cell_lengths_a: tuple[float, float, float],
+    n_molecules: int | None,
+    residue: str | None,
+) -> int:
+    if not args.write_charmm:
+        return 0
+    try:
+        side = _charmm_side_length_a(args, cell_lengths_a)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        paths = write_crystal_charmm_topology(
+            charmm_pdb,
+            out_stem,
+            side_length_A=side,
+            n_molecules=n_molecules,
+            residue=residue,
+        )
+    except ModuleNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:  # noqa: BLE001 — surface CHARMM failures cleanly
+        print(f"Error writing CHARMM topology: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"CHARMM handoff: psf={paths.psf} crd={paths.crd} box.json={paths.box_json}",
+        flush=True,
+    )
+    return 0
+
+
 def _run_literature_build(args: argparse.Namespace) -> int:
     residue, cif_path = _resolve_literature_args(args)
     reps = (
@@ -257,12 +353,13 @@ def _run_literature_build(args: argparse.Namespace) -> int:
         else None
     )
     out = Path(args.output).expanduser().resolve()
+    min_side = effective_min_box_side_a(args)
 
     if args.literature is not None and args.from_cif is None:
         result = build_literature_charmm_supercell(
             args.literature,
             supercell_reps=reps,
-            min_box_side_a=float(args.min_box_side) if reps is None else None,
+            min_box_side_a=min_side if reps is None else None,
             monomer_pdb=args.monomer_pdb,
             pdb_out=out if out.suffix.lower() == ".pdb" else None,
             target_density_g_cm3=args.target_density_g_cm3,
@@ -272,7 +369,7 @@ def _run_literature_build(args: argparse.Namespace) -> int:
             residue=residue,
             cif_path=cif_path,
             supercell_reps=reps,
-            min_box_side_a=float(args.min_box_side) if reps is None else None,
+            min_box_side_a=min_side if reps is None else None,
             monomer_pdb=args.monomer_pdb,
             pdb_out=out if out.suffix.lower() == ".pdb" else None,
             target_density_g_cm3=args.target_density_g_cm3,
@@ -308,11 +405,23 @@ def _run_literature_build(args: argparse.Namespace) -> int:
         print(f"Wrote {out}", flush=True)
         if out.suffix.lower() != ".pdb":
             print(f"CHARMM PDB: {result.pdb_path}", flush=True)
-    return 0
+
+    return _maybe_write_charmm(
+        args,
+        charmm_pdb=result.pdb_path,
+        out_stem=out,
+        cell_lengths_a=result.cell_lengths_a,
+        n_molecules=result.n_molecules,
+        residue=result.residue,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    if args.box_size is not None and float(args.box_size) <= 0.0:
+        print(f"Error: --box-size must be positive, got {args.box_size}", file=sys.stderr)
+        return 2
 
     if args.literature is not None or args.from_cif is not None:
         return _run_literature_build(args)
@@ -320,6 +429,14 @@ def main(argv: list[str] | None = None) -> int:
     if not args.molecule:
         print(
             "Error: provide --literature / --from-cif or at least one -m/--molecule.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.write_charmm and not args.residue:
+        print(
+            "Error: --write-charmm on the PyXtal path requires --residue "
+            "(e.g. BENZ). Prefer --literature benz for MD-ready CHARMM files.",
             file=sys.stderr,
         )
         return 2
@@ -359,6 +476,22 @@ def main(argv: list[str] | None = None) -> int:
         reps = parse_supercell_reps(args.supercell)
         atoms = ase_supercell(atoms, reps)
         print(f"Supercell {reps[0]}×{reps[1]}×{reps[2]} → natoms={len(atoms)}", flush=True)
+    elif args.box_size is not None:
+        lengths = tuple(float(x) for x in atoms.cell.cellpar()[:3])
+        reps = suggest_supercell_reps(lengths, min_box_side_a=float(args.box_size))
+        if reps != (1, 1, 1):
+            atoms = ase_supercell(atoms, reps)
+            print(
+                f"Supercell {reps[0]}×{reps[1]}×{reps[2]} "
+                f"(from --box-size {float(args.box_size):.3f} Å) → natoms={len(atoms)}",
+                flush=True,
+            )
+        else:
+            print(
+                f"Unit cell already ≥ --box-size {float(args.box_size):.3f} Å "
+                f"(edges {[round(x, 3) for x in lengths]})",
+                flush=True,
+            )
 
     if args.target_density_g_cm3 is not None:
         rho_before = crystal_mass_density_g_cm3(atoms)
@@ -405,7 +538,49 @@ def main(argv: list[str] | None = None) -> int:
     else:
         write_ase_structure(atoms, out, format=_infer_format(out, args.out_format))
     print(f"Wrote {out}", flush=True)
-    return 0
+
+    if not args.write_charmm:
+        return 0
+
+    residue = str(args.residue).strip().upper()
+    charmm_pdb = out.with_name(f"{out.stem}_charmm.pdb")
+    try:
+        map_ase_crystal_to_charmm_pdb(
+            atoms,
+            residue=residue,
+            monomer_pdb=args.monomer_pdb,
+            pdb_out=charmm_pdb,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"Error mapping PyXtal atoms to CHARMM PDB: {exc}", file=sys.stderr)
+        return 1
+    print(f"CHARMM PDB: {charmm_pdb}", flush=True)
+    par = tuple(float(x) for x in atoms.cell.cellpar())
+    cell_lengths = (par[0], par[1], par[2])
+    # Molecule count from residue template size when available.
+    n_mol = None
+    try:
+        from mmml.interfaces.crystal_charmm import (
+            load_monomer_template,
+            resolve_make_res_monomer_pdb,
+        )
+
+        tmpl = load_monomer_template(
+            resolve_make_res_monomer_pdb(residue, monomer_pdb=args.monomer_pdb)
+        )
+        n_per = int(tmpl[2].shape[0])
+        if n_per > 0 and len(atoms) % n_per == 0:
+            n_mol = len(atoms) // n_per
+    except Exception:  # noqa: BLE001
+        n_mol = None
+    return _maybe_write_charmm(
+        args,
+        charmm_pdb=charmm_pdb,
+        out_stem=out,
+        cell_lengths_a=cell_lengths,
+        n_molecules=n_mol,
+        residue=residue,
+    )
 
 
 if __name__ == "__main__":

@@ -12,12 +12,20 @@ BOX_SIZE="${BOX_SIZE:-30.0}"
 N_SOLVENT="${N_SOLVENT:-12}"
 FRAME="${FRAME:-}"
 
-echo "=== 07 export solute PDB ==="
-EXPORT_ARGS=(uv run python examples/m/07_export_solute_pdb.py -o "${SOLUTE_PDB}")
-if [[ -n "${FRAME}" ]]; then
-  EXPORT_ARGS+=(--frame "${FRAME}")
+if [[ "${SKIP_SOLUTE_EXPORT:-0}" == "1" ]]; then
+  echo "=== reuse solute PDB ${SOLUTE_PDB} (SKIP_SOLUTE_EXPORT=1) ==="
+  if [[ ! -f "${SOLUTE_PDB}" ]]; then
+    echo "FAIL: missing ${SOLUTE_PDB}" >&2
+    exit 1
+  fi
+else
+  echo "=== 07 export solute PDB ==="
+  EXPORT_ARGS=(uv run python examples/m/07_export_solute_pdb.py -o "${SOLUTE_PDB}")
+  if [[ -n "${FRAME}" ]]; then
+    EXPORT_ARGS+=(--frame "${FRAME}")
+  fi
+  "${EXPORT_ARGS[@]}"
 fi
-"${EXPORT_ARGS[@]}"
 
 # Optional: USE_DENSITY=1 sizes N from bulk density (overrides --n). Smoke keeps --n.
 declare -A DENSITY=(
@@ -26,6 +34,16 @@ declare -A DENSITY=(
   [DMSO]=1100
 )
 USE_DENSITY="${USE_DENSITY:-0}"
+
+# Packmol packing knobs. N from --density is sized to the cubic cell volume L³,
+# so PACKMOL_REGION must be 'box' — packing the inscribed sphere instead only
+# offers pi/6 = 52% of that volume and Packmol exits 173 ("failed to converge").
+# FILL_FRACTION leaves headroom below ideal bulk density; lower it (or lower
+# PACKMOL_TOLERANCE) if a solvent still fails to converge.
+PACKMOL_REGION="${PACKMOL_REGION:-box}"
+PACKMOL_TOLERANCE="${PACKMOL_TOLERANCE:-2.0}"
+PACKMOL_NLOOP="${PACKMOL_NLOOP:-200}"
+FILL_FRACTION="${FILL_FRACTION:-0.98}"
 
 has_pycharmm=0
 if uv run python -c "import pycharmm" >/dev/null 2>&1; then
@@ -54,6 +72,10 @@ make_one() {
       --res "nh3ch3cl_${tag}"
       --box-size "${BOX_SIZE}"
       --solvent "${solvent}"
+      --packmol-region "${PACKMOL_REGION}"
+      --packmol-tolerance "${PACKMOL_TOLERANCE}"
+      --packmol-nloop "${PACKMOL_NLOOP}"
+      --fill-fraction "${FILL_FRACTION}"
     )
     if [[ "${USE_DENSITY}" == "1" ]]; then
       cmd+=(--density "${DENSITY[${solvent}]}")
@@ -71,26 +93,55 @@ import json
 from pathlib import Path
 out = Path("${out}")
 side = float("${BOX_SIZE}")
+solvent = "${solvent}"
+# Count the solvent residues Packmol actually placed: with --density the count
+# is clamped to the cell capacity, so N_SOLVENT is not authoritative.
+n_solvent = int("${N_SOLVENT}")
+packed = out / "packmol_$(echo "${solvent}" | tr '[:upper:]' '[:lower:]')box.pdb"
+if packed.is_file():
+    seen = set()
+    for line in packed.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith(("ATOM", "HETATM")) and line[17:21].strip() == solvent:
+            # PDB cols 23-26 (0-index 22:26) = residue sequence number
+            seen.add(line[22:26])
+    if seen:
+        n_solvent = len(seen)
 (out / "box.json").write_text(
     json.dumps(
         {
+            # Canonical key for md-system / liquid-box handoff.
+            "box_side_A": side,
+            # Aliases kept for hybrid umbrella + older readers.
             "box_size": side,
             "side_length_A": side,
-            "solvent": "${solvent}",
-            "n_solvent": int("${N_SOLVENT}"),
+            "solvent": solvent,
+            "n_solvent": n_solvent,
         },
         indent=2,
     ),
     encoding="utf-8",
 )
-print(f"Wrote {out / 'box.json'}")
+print(f"Wrote {out / 'box.json'} (n_solvent={n_solvent})")
 PY
   )
   echo "PASS: ${solvent} box -> ${out}"
 }
 
-make_one ACN
-make_one TIP3
-make_one DMSO
+# SOLVENT_ONLY=tip3|acn|dmso (or TIP3|ACN|DMSO) builds a single solvent box.
+_solvents=(ACN TIP3 DMSO)
+if [[ -n "${SOLVENT_ONLY:-}" ]]; then
+  case "$(echo "${SOLVENT_ONLY}" | tr '[:upper:]' '[:lower:]')" in
+    acn) _solvents=(ACN) ;;
+    tip3) _solvents=(TIP3) ;;
+    dmso) _solvents=(DMSO) ;;
+    *)
+      echo "FAIL: SOLVENT_ONLY=${SOLVENT_ONLY} (expected tip3|acn|dmso)" >&2
+      exit 1
+      ;;
+  esac
+fi
+for _s in "${_solvents[@]}"; do
+  make_one "${_s}"
+done
 
-echo "PASS: make-box ACN/TIP3/DMSO under ${ARTIFACTS_DIR}/boxes/"
+echo "PASS: make-box ${_solvents[*]} under ${ARTIFACTS_DIR}/boxes/"

@@ -9,7 +9,7 @@
 
 initial: ../neb/reag_0_opt.xyz
 final: ../neb/prod_0_opt.xyz
-checkpoint: ../kl.json
+checkpoint: ../model_ext.json
 output_dir: ../../artifacts/nh3_ch3cl/neb
 
 n_images: 11

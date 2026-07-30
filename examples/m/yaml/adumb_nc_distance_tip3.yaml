@@ -1,6 +1,9 @@
 # ADUMB Cl⋯C − C⋯N bond difference in explicit TIP3 (PBC) — after vacuum smoke.
 # Same ξ = r(Cl-C)−r(C-N) ∈ [-3, 3] as adumb_nc_distance.yaml (smoke lengths).
 #
+# Mechanical embedding: PhysNet on AMM1+CH3CL only; TIP3 stays CHARMM MM.
+# (jax_mic all-ML would ML-evaluate water and explode hybrid GRMS.)
+#
 #   source examples/m/_env.sh
 #   SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
 #
@@ -11,18 +14,23 @@ setup: pbc_nvt
 backend: pycharmm
 composition: "AMM1:1,CH3CL:1,TIP3:12"
 box_size: 30.0
-checkpoint: examples/m/kl.json
+checkpoint: examples/m/model_ext.json
 include_mm: true
+# Restrict USER/PhysNet to the reactive complex (solvent = CHARMM MM).
+ml_resnames: [AMM1, CH3CL]
+# jax_mic zeros all CHARMM VDW (including solvent) — incompatible with ml_resnames.
+mm_nonbond_mode: periodic_external
+lr_solver: ewald
 mm_switch_on: 8.0
 mm_charge_mode: fixed
-mm_nonbond_mode: jax_mic
-lr_solver: mic
 temperature: 300
 dt_fs: 1.0
 md_stages: "mini,heat,prod"
 ps_heat: 0.2
 ps_prod: 1.0
 mini_nstep: 40
+# ASE FIRE→BFGS before MLpot SD (safer PBC handoff after Packmol).
+calculator_pre_minimize: true
 skip_energy_show: true
 skip_jit_warmup: true
 quiet: false
@@ -42,6 +50,9 @@ dynamics_max_monomer_extent: 20.0
 # NOTE: close-contact / repair thresholds are deliberately left at solvent-safe
 # defaults. Do NOT copy the vacuum files' dynamics_overlap_min_distance: 0.2 —
 # with explicit TIP3 that would let solvent–solvent overlaps go unrescued.
+# Reactive C–Cl contacts must not trigger CHARMM SD rescue mid-umbrella.
+dynamics_overlap_action: warn
+no_echeck_heat: true
 
 dcd_nsavc: 20
 dcd_max_frames: 200
@@ -51,6 +62,10 @@ pycharmm_pre_dynamics_lingo: |
   ! Soft COM restraint on the solute (resid 1-2); leave solvent free
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 -
     sele (resid 1 .or. resid 2) end
+
+  ! CGenFF BOND C1–CL1 stays in ENER INTERN and blocks SN2; PhysNet owns it.
+  delete bond sele atom * * CL1 end sele atom * * C1 end
+  delete angle sele atom * * CL1 end sele atom * * C1 end
 
   set adumrcmax = 8.0
   set adumrcwall = 500.0

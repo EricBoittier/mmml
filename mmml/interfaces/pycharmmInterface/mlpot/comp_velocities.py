@@ -358,6 +358,18 @@ def _selection_count(sel) -> int:
     return int(sum(sel.get_selection()))
 
 
+def _select_atoms_cls(pycharmm_mod=None):
+    """Resolve ``SelectAtoms`` across PyCHARMM layouts."""
+    if pycharmm_mod is None:
+        pycharmm_mod = _import_pycharmm()
+    cls = getattr(pycharmm_mod, "SelectAtoms", None)
+    if cls is not None:
+        return cls
+    from pycharmm.select_atoms import SelectAtoms
+
+    return SelectAtoms
+
+
 def build_high_force_selection(
     min_force_kcalmol_A: float,
     *,
@@ -373,6 +385,7 @@ def build_high_force_selection(
     if hydrogen_only and exclude_hydrogen:
         raise ValueError("hydrogen_only and exclude_hydrogen are mutually exclusive")
     pycharmm = _import_pycharmm()
+    SelectAtoms = _select_atoms_cls(pycharmm)
     select = pycharmm.select
 
     if select.find(store_name) > 0:
@@ -382,13 +395,13 @@ def build_high_force_selection(
     indices = np.flatnonzero(mags >= float(min_force_kcalmol_A)).tolist()
     n_atoms = pycharmm.psf.get_natom()
     if indices:
-        sel = pycharmm.SelectAtoms(atom_nums=indices, update=False)
+        sel = SelectAtoms(atom_nums=indices, update=False)
         if hydrogen_only:
-            sel = sel & pycharmm.SelectAtoms(hydrogens=True, update=False)
+            sel = sel & SelectAtoms(hydrogens=True, update=False)
         elif exclude_hydrogen:
-            sel = sel & ~pycharmm.SelectAtoms(hydrogens=True, update=False)
+            sel = sel & ~SelectAtoms(hydrogens=True, update=False)
     else:
-        sel = pycharmm.SelectAtoms(update=False)
+        sel = SelectAtoms(update=False)
         sel.set_selection(select.none_selection(n_atoms))
 
     stored = sel.store(name=store_name)

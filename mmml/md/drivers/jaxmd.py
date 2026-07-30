@@ -60,14 +60,26 @@ class JaxmdDriver:
         try:
             import jax
             import jax.numpy as jnp
-            from jax_md import minimize, simulate, space, units
+            from jax_md import minimize, quantity, simulate, space, units
         except ImportError as exc:  # pragma: no cover - environment dependent
             raise RuntimeError("JaxmdDriver requires the optional jax and jax-md packages") from exc
 
         options = dict(ensemble.params)
         dtype = jnp.float64 if bool(options.get("float64", False)) else jnp.float32
         position = jnp.asarray(system.R, dtype=dtype)
-        masses = jnp.asarray(options.get("masses", np.ones(system.n_atoms)), dtype=dtype)
+        if "masses" in options:
+            masses_np = np.asarray(options["masses"], dtype=float)
+        else:
+            try:
+                from ase.data import atomic_masses
+
+                masses_np = np.asarray(
+                    [float(atomic_masses[int(z)]) for z in np.asarray(system.Z)],
+                    dtype=float,
+                )
+            except Exception:
+                masses_np = np.ones(system.n_atoms, dtype=float)
+        masses = jnp.asarray(masses_np, dtype=dtype)
         if masses.shape != (system.n_atoms,):
             raise ValueError(f"masses must have shape ({system.n_atoms},), got {masses.shape}")
         if not bool(np.all(np.asarray(masses) > 0)):
@@ -103,10 +115,13 @@ class JaxmdDriver:
             def _to_real(frac_R, box_curr):
                 return frac_R @ jnp.transpose(box_curr)
 
-            def energy_fn(frac_R, box=box, **kw):
-                # jax-md passes the current box each step; convert to real space
-                # and thread the box into the (box-aware) terms.
-                return hybrid_fn(_to_real(frac_R, box), box=box, **kw)
+            def energy_fn(frac_R, box=box, perturbation=1.0, **kw):
+                # jax-md NPT force_stress_fn differentiates through
+                # ``perturbation=(1+eps)`` for the virial (dUdV). Ignoring it
+                # yields dUdV≈0 → kinetic-only pressure → violent expansion.
+                # Isotropic scale matches jax-md pair potentials / quantity.pressure.
+                box_p = jnp.asarray(box) * perturbation
+                return hybrid_fn(_to_real(frac_R, box_p), box=box_p, **kw)
 
             def _box_of(state):
                 return simulate.npt_box(state)
@@ -139,16 +154,65 @@ class JaxmdDriver:
             return refresh_real(_real_of(state), _box_of(state))
 
         def _record_energy(state, dyn):
+            if is_npt:
+                return float(
+                    jax.device_get(
+                        energy_fn(state.position, box=_box_of(state), **dyn)
+                    )
+                )
             return float(jax.device_get(energy_fn(state.position, **dyn)))
+
+        def _record_kinetic(state):
+            """Kinetic energy (eV) of the integrator state.
+
+            ``energies`` alone is the *potential* surface, so it oscillates under
+            NVE and cannot show whether the integrator conserves energy. Record
+            KE too so ``potential + kinetic`` is available to drift diagnostics.
+            All four ensembles carry ``momentum`` (fire_descent included, where it
+            starts at zero); the guard returns NaN only for a state that has none,
+            so ``total_energies`` degrades visibly rather than silently.
+            """
+            momentum = getattr(state, "momentum", None)
+            if momentum is None:
+                return float("nan")
+            return float(
+                jax.device_get(
+                    quantity.kinetic_energy(momentum=momentum, mass=state.mass)
+                )
+            )
 
         seed = int(options.get("seed", 0))
         unit_system = units.metal_unit_system()
+
+        def _volume_A3(box_arr) -> float:
+            return float(abs(np.linalg.det(np.asarray(box_arr, dtype=np.float64))))
+
+        def _record_pressure_bar(state, dyn, kinetic_eV: float) -> float:
+            """Instantaneous pressure (bar) via jax-md ``quantity.pressure``."""
+            box_now = _box_of(state)
+            ke = jnp.asarray(kinetic_eV, dtype=dtype)
+            p_metal = quantity.pressure(
+                energy_fn,
+                state.position,
+                box_now,
+                kinetic_energy=ke,
+                **dyn,
+            )
+            return float(jax.device_get(p_metal)) / float(unit_system["pressure"])
+
         # jax-md's metal system (Å, eV, amu) measures time in Å·sqrt(amu/eV) =
         # 10.18 fs, and ``unit_system["time"]`` is how many of those make one
         # picosecond. Handing the integrator a raw picosecond value silently
         # integrates ~98x too finely, so every run covered ~1% of its nominal
         # duration while looking perfectly well-behaved.
         dt_ps = float(ensemble.dt_fs) * 1.0e-3 * unit_system["time"]
+        # Cast dt to the run dtype for the same reason as kT/pressure below: a
+        # Python-float dt is float64 under JAX_ENABLE_X64, and jax-md threads it
+        # through the Nose-Hoover chain update, so a float32 chain state comes
+        # back float64 and the integrator scan rejects the mixed carry
+        # (``carry component cs[0] has type float32[] ... output ... float64[]``).
+        # ``minimize.fire_descent`` takes plain floats, so it keeps ``dt_ps``.
+        dt = jnp.asarray(dt_ps, dtype=dtype)
 
         def _init_state(pos, dyn, offset=0):
             if ensemble.ensemble == "min":
@@ -203,14 +267,14 @@ class JaxmdDriver:
                     init_fn, step_fn = simulate.nvt_langevin(
                         energy_fn,
                         shift_fn,
-                        dt_ps,
+                        dt,
                         kT,
                         gamma=gamma,
                         center_velocity=bool(options.get("center_velocity", False)),
                     )
                 else:
                     init_fn, step_fn = simulate.nvt_nose_hoover(
-                        energy_fn, shift_fn, dt_ps, kT,
+                        energy_fn, shift_fn, dt, kT,
                         thermostat_kwargs=options.get("thermostat_kwargs", {}),
                     )
             elif is_npt:
@@ -218,12 +282,12 @@ class JaxmdDriver:
                     float(ensemble.pressure_bar) * unit_system["pressure"], dtype=dtype
                 )
                 init_fn, step_fn = simulate.npt_nose_hoover(
-                    energy_fn, shift_fn, dt_ps, pressure, kT,
+                    energy_fn, shift_fn, dt, pressure, kT,
                     barostat_kwargs=options.get("barostat_kwargs", {}),
                     thermostat_kwargs=options.get("thermostat_kwargs", {}),
                 )
             else:
-                init_fn, step_fn = simulate.nve(energy_fn, shift_fn, dt_ps)
+                init_fn, step_fn = simulate.nve(energy_fn, shift_fn, dt)
 
         # bootstrap: build the first neighbor list from the initial real positions
         real_init = _to_real(init_position, box) if is_npt else init_position
@@ -233,6 +297,14 @@ class JaxmdDriver:
         frames = [np.asarray(jax.device_get(_real_of(state)))]
         boxes = [None if box is None else np.asarray(jax.device_get(_box_of(state)))]
         energies = [_record_energy(state, dynamic_kwargs)]
+        kinetic_energies = [_record_kinetic(state)]
+        volumes_A3: list[float] = []
+        pressures_bar: list[float] = []
+        if is_npt:
+            volumes_A3.append(_volume_A3(boxes[0]))
+            pressures_bar.append(
+                _record_pressure_bar(state, dynamic_kwargs, kinetic_energies[0])
+            )
         target_temperatures.append(_target_temperature(0))
         block_size = int(self.record_every if self.block_size is None else self.block_size)
 
@@ -254,7 +326,7 @@ class JaxmdDriver:
                 )
                 if is_npt:
                     _, step_fn = simulate.npt_nose_hoover(
-                        energy_fn, shift_fn, dt_ps, pressure, block_kT,
+                        energy_fn, shift_fn, dt, pressure, block_kT,
                         barostat_kwargs=options.get("barostat_kwargs", {}),
                         thermostat_kwargs=options.get("thermostat_kwargs", {}),
                     )
@@ -270,14 +342,14 @@ class JaxmdDriver:
                         _, step_fn = simulate.nvt_langevin(
                             energy_fn,
                             shift_fn,
-                            dt_ps,
+                            dt,
                             block_kT,
                             gamma=gamma,
                             center_velocity=bool(options.get("center_velocity", False)),
                         )
                     else:
                         _, step_fn = simulate.nvt_nose_hoover(
-                            energy_fn, shift_fn, dt_ps, block_kT,
+                            energy_fn, shift_fn, dt, block_kT,
                             thermostat_kwargs=options.get("thermostat_kwargs", {}),
                         )
             for _ in range(count):
@@ -313,6 +385,14 @@ class JaxmdDriver:
                 frames.append(np.asarray(jax.device_get(_real_of(state))))
                 boxes.append(None if box is None else np.asarray(jax.device_get(_box_of(state))))
                 energies.append(_record_energy(state, dynamic_kwargs))
+                kinetic_energies.append(_record_kinetic(state))
+                if is_npt:
+                    volumes_A3.append(_volume_A3(boxes[-1]))
+                    pressures_bar.append(
+                        _record_pressure_bar(
+                            state, dynamic_kwargs, kinetic_energies[-1]
+                        )
+                    )
                 target_temperatures.append(_target_temperature(completed))
                 next_record = min(completed + self.record_every, ensemble.n_steps)
 
@@ -328,6 +408,8 @@ class JaxmdDriver:
             npz_kwargs: dict[str, Any] = dict(
                 positions=np.asarray(frames),
                 energies=np.asarray(energies),
+                kinetic_energies=np.asarray(kinetic_energies),
+                total_energies=np.asarray(energies) + np.asarray(kinetic_energies),
                 target_temperatures_K=np.asarray(target_temperatures),
                 Z=np.asarray(system.Z),
             )
@@ -335,14 +417,22 @@ class JaxmdDriver:
                 npz_kwargs["box"] = np.asarray(box)
             if is_npt:
                 npz_kwargs["boxes"] = np.asarray(boxes)
+                npz_kwargs["volumes_A3"] = np.asarray(volumes_A3, dtype=np.float64)
+                npz_kwargs["pressures_bar"] = np.asarray(pressures_bar, dtype=np.float64)
+                npz_kwargs["target_pressure_bar"] = float(ensemble.pressure_bar)
             np.savez(path, **npz_kwargs)
 
         metadata: dict[str, Any] = {
             "steps": completed,
             "positions": np.asarray(frames),
             "energies": np.asarray(energies),
+            "kinetic_energies": np.asarray(kinetic_energies),
+            "total_energies": np.asarray(energies) + np.asarray(kinetic_energies),
             "target_temperatures_K": np.asarray(target_temperatures),
         }
         if is_npt:
             metadata["boxes"] = np.asarray(boxes)
+            metadata["volumes_A3"] = np.asarray(volumes_A3, dtype=np.float64)
+            metadata["pressures_bar"] = np.asarray(pressures_bar, dtype=np.float64)
+            metadata["target_pressure_bar"] = float(ensemble.pressure_bar)
         return Trajectory(path=path, n_frames=len(frames), metadata=metadata)

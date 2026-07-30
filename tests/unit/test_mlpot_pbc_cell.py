@@ -1728,12 +1728,29 @@ def test_apply_nbonds_kwargs_uses_update_script_for_nbxmod():
 
     with patch("pycharmm.nbonds.configure"), patch(
         "pycharmm.nbonds.update_bnbnd"
-    ) as rebuild, patch("pycharmm.UpdateNonBondedScript") as update_script:
-        update_script.return_value.run.return_value = None
+    ) as rebuild, patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script"
+    ) as resolve:
+        update_script = MagicMock()
+        resolve.return_value = update_script
         apply_nbonds_kwargs({"cutnb": 12.0, "nbxmod": 5})
     rebuild.assert_not_called()
     update_script.assert_called_once_with(nbxmod=5)
     update_script.return_value.run.assert_called_once()
+
+
+def test_apply_nbonds_kwargs_falls_back_without_update_script():
+    """Cluster KEY_LIBRARY builds may lack UpdateNonBondedScript."""
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
+
+    with patch("pycharmm.nbonds.configure"), patch(
+        "pycharmm.nbonds.update_bnbnd"
+    ) as rebuild, patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script",
+        return_value=None,
+    ):
+        apply_nbonds_kwargs({"cutnb": 12.0, "nbxmod": 5})
+    rebuild.assert_called_once()
 
 
 def test_calculator_dimer_wrap_detaches_lattice_shift():

@@ -1,0 +1,8 @@
+jobs: 1
+latency-wait: 60
+retries: 0
+envvars:
+  - MMML_CKPT
+  - MMML_WORKFLOW_CONFIG
+  - MMML_PYTHON
+  - JAX_ENABLE_X64

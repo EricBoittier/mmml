@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from argparse import Namespace
 
+import pytest
+
 from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
@@ -91,6 +93,25 @@ def test_build_command_ase_forwards_do_ml_flags() -> None:
     assert "--no-do-ml" in argv
     assert "--no-do-ml-dimer" in argv
     assert "--no-include-mm" in argv
+
+
+def test_build_command_ase_forwards_fire_min_flags_parse() -> None:
+    """md-system always forwards FIRE min flags; ASE backend must accept them."""
+    from mmml.cli.run.md_pbc_suite.ase import build_parser
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _ase_args(fire_min_steps=200, fire_min_maxstep=0.2)
+    )
+    assert backend == "ase"
+    assert "--fire-min-steps" in argv
+    assert argv[argv.index("--fire-min-steps") + 1] == "200"
+    assert "--fire-min-maxstep" in argv
+    assert argv[argv.index("--fire-min-maxstep") + 1] == "0.2"
+
+    parsed = build_parser().parse_args(argv)
+    assert parsed.fire_min_steps == 200
+    assert parsed.fire_min_maxstep == pytest.approx(0.2)
 
 
 def test_build_command_forwards_electrostatics_damping_sigma() -> None:

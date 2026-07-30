@@ -9,11 +9,12 @@
 #   uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
 
 engine: hybrid_jaxmd
-checkpoint: ../kl.json
-from_psf: ../../artifacts/nh3_ch3cl/boxes/tip3/model.psf
-from_pdb: ../../artifacts/nh3_ch3cl/boxes/tip3/model.pdb
+# Paths resolve relative to this file (examples/m/yaml/) → repo root is ../../..
+checkpoint: ../../model_ext.json
+from_psf: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.psf
+from_pdb: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.pdb
 box_size: 30.0
-output_dir: ../../artifacts/nh3_ch3cl/umbrella_nc_tip3
+output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_tip3
 
 ml_resnames: [AMM1, CH3CL]
 # CV: N–C distance (names resolved in the ML region / PSF)

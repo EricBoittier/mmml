@@ -22,11 +22,35 @@ source examples/m/_env.sh
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MMML_CKPT` | `examples/m/kl.json` | Checkpoint |
+| `MMML_EXAMPLE_DEVICE` | `cpu` | `cpu` or `gpu`; sets `JAX_PLATFORMS` + `MMML_MLPOT_DEVICE` |
+| `MMML_CKPT` | `examples/m/model_ext.json` | Checkpoint (evaluate + MD) |
 | `MMML_DATA` | `examples/m/nh3_ch3cl_filtered.npz` | Eval NPZ |
 | `MMML_CGENFF_EXTRA_RTF` | `examples/m/top_ch3cl.rtf` | Enables `CH3CL` in compositions |
 | `MMML_CGENFF_EXTRA_PRM` | `examples/m/par_ch3cl.prm` | Bonded params for append `CH3CL` |
 | `ARTIFACTS_DIR` | `artifacts/nh3_ch3cl` | Outputs |
+
+These examples run on **CPU by default** so results do not depend on which node
+they land on. To use the GPUs:
+
+```bash
+MMML_EXAMPLE_DEVICE=gpu bash examples/m/run_all.sh
+```
+
+Each script prints the resolved device, checkpoint and dataset once per run, so
+an `MMML_CKPT` left in a login profile — or a GPU request that silently fell
+back to CPU — is visible before any compute starts. A GPU request additionally
+probes `jax.default_backend()` and warns when no CUDA build is installed
+(`uv sync --extra gpu`; RTX 50xx / Blackwell needs the cuda13 build). Skip that
+probe with `MMML_EXAMPLE_SKIP_DEVICE_PROBE=1`.
+
+Device precedence: an explicitly set `MMML_EXAMPLE_DEVICE` wins over an inherited
+`JAX_PLATFORMS` / `MMML_MLPOT_DEVICE` that implies a *different* device, and the
+banner names what it overrode — a stale `export JAX_PLATFORMS=cpu` in a login
+profile must not silently downgrade a run that asked for the GPUs. Setting only
+`JAX_PLATFORMS` / `MMML_MLPOT_DEVICE` (without `MMML_EXAMPLE_DEVICE`) still works
+as a per-variable override, and an inherited value that *agrees* with the request
+is kept verbatim, so `MMML_EXAMPLE_DEVICE=gpu JAX_PLATFORMS=cuda,cpu` keeps its
+CPU fallback.
 
 ## Quick run (full report)
 
@@ -114,12 +138,15 @@ uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
 uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
 ```
 
-**Mechanical embedding** = former `cg_jax` mode: ML monomers (`ml_intra`) + MM
-intermolecular (`mm_nonbonded`), not ML–MM electrostatic embedding.
+**Mechanical embedding** = ML on the AMM1+CH3CL complex once
+(`checkpoint: examples/m/model_ext.json`, `ml_resnames: [AMM1, CH3CL]`) +
+CGenFF **bonded** on solvent (`mm_bonded`) + MM intermolecular for
+solute–solvent / solvent–solvent only (solute–solute MM pairs are dropped via
+shared `mol_id`). Not ML–MM electrostatic embedding.
 
 | Backend | Config |
 |---------|--------|
-| `jaxmd` + `jaxmd_unified: true` | Shared `mmml.md` (`ml_intra` + `mm_nonbonded`) |
+| `jaxmd` + `jaxmd_unified: true` + `ml_resnames` | Shared `mmml.md` (`ml_intra` on solute complex + `mm_nonbonded`) |
 | `ase` / `pycharmm` | Hybrid calculator with `include_mm: true` |
 
 Composition campaigns (Packmol inside `md-system`; no make-box required).
@@ -207,7 +234,7 @@ uv run python examples/m/07_export_neb_endpoints.py
 | Method | Gas phase | Explicit solvent (TIP3 / ACN / DMSO) |
 |--------|-----------|----------------------------------------|
 | **`mmml umbrella-sample`** | `engine: packed_ml` — batched all-ML NVT | `engine: hybrid_jaxmd` — ML reactive complex + MM solvent ([`yaml/umbrella_nc_tip3.yaml`](yaml/umbrella_nc_tip3.yaml), `14_umbrella_sample_sol.sh`) |
-| **ADUMB** (PyCHARMM adaptive umbrella) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` | `yaml/adumb_nc_distance_{tip3,acn,dmso}.yaml`; `SOLVATED=1 SOLVENT=tip3 bash examples/m/09_adumb_nc_distance.sh` |
+| **ADUMB** (PyCHARMM adaptive umbrella) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` | `yaml/adumb_nc_distance_{tip3,acn,dmso}.yaml` (`ml_resnames: [AMM1, CH3CL]`, `periodic_external` + `ewald`); `SOLVATED=1 SOLVENT=tip3 bash examples/m/09_adumb_nc_distance.sh` |
 | **NEB** (ASE nudged elastic band) | `yaml/neb.yaml`, `13_neb.sh` | Gas-phase path only (same endpoints) |
 | **DMC** (Diffusion Monte Carlo) | `15_dmc_basins.sh` on react/product XYZ | Gas-phase basins only (same endpoints) |
 
@@ -255,7 +282,7 @@ Writes `umbrella_snapshots.npz` (includes `energies_unbiased_ev` +
 
 ### NEB (ASE nudged elastic band)
 
-Vacuum SN2-like path for NH₃–CH₃Cl with `kl.json` (endpoints under `neb/`):
+Vacuum SN2-like path for NH₃–CH₃Cl with `model_ext.json` (endpoints under `neb/`):
 
 ```bash
 source examples/m/_env.sh
@@ -271,6 +298,12 @@ Writes `artifacts/nh3_ch3cl/neb/{neb.traj,neb.xyz,neb_profile.dat,neb_plot.png,n
 Profile columns: reaction coordinate (Å), ΔE (kcal/mol), N–C and Cl–C distances.
 
 Docs: [`docs/neb.md`](../../docs/neb.md).
+
+**Solvent NEB** is not wired yet (`mmml neb` is ASE + all-ML vacuum). For
+solution free-energy profiles use the hybrid umbrella / ADUMB paths above
+(mechanical embedding on the make-box cell). A solvated NEB would need a
+hybrid ASE calculator (ML solute + MM solvent) and a policy for solvent DOFs
+(frozen / rigid / fully flexible) — say if you want that next.
 
 ### DMC (reactant / product basins)
 
@@ -325,10 +358,13 @@ USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 # 2D Cl⋯C + C⋯N adaptive umbrella (smoke ps_heat=0.2):
 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
 
-# Solvated adaptive umbrella (30 Å PBC); combine with USE_NPZ_PDB=1:
+# Solvated adaptive umbrella (30 Å PBC). With USE_NPZ_PDB=1 the script exports
+# the solute, rebuilds make-box for SOLVENT, then cold-starts from that PDB
+# (Packmol cannot take the multi-residue AMM1+CH3CL PDB as one monomer):
 SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
+SOLVATED=1 USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 SOLVATED=1 SOLVENT=acn bash examples/m/09_adumb_nc_distance.sh
-SOLVATED=1 SOLVENT=dmso bash examples/m/09_adumb_nc_distance.sh
+SOLVATED=1 SOLVENT=dmso USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
 ```
 If a prior cube Packmol run left monomers ~box-length apart, the script clears
 `{output_dir}/.packmol_cache` before launching.

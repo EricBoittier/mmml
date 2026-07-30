@@ -29,7 +29,9 @@ __all__ = [
     "interaction_plan_is_lowerable",
     "interaction_policy_content_hash",
     "load_interaction_policy",
+    "mechanical_embedding_ml_species",
     "policy_is_lowerable",
+    "policy_is_mechanical_embedding",
 ]
 
 INTERACTION_POLICY_SCHEMA_VERSION = 1
@@ -258,37 +260,88 @@ def load_interaction_policy(path: str | Path) -> InteractionPolicy:
     return InteractionPolicy.from_mapping(data)
 
 
-def policy_is_lowerable(policy: InteractionPolicy) -> bool:
-    """True when ownership can be represented by the current single-provider terms.
+def policy_is_mechanical_embedding(policy: InteractionPolicy) -> bool:
+    """True for ML solute monomer(s) + MM solvent monomers + all-MM pairs.
 
-    Multi-provider monomers or near/far pair switches need generalized lowering
-    that is not yet implemented; those policies must fail closed.
+    This is the ``ml_resnames`` mechanical-embedding ownership pattern: PhysNet
+    owns intramolecular energy on named ML species; CGenFF owns solvent bonded
+    and all intermolecular pairs. Near/far dimer ML is not included.
     """
-    monomer_providers = {str(p) for p in policy.monomers.values()}
-    if len(monomer_providers) > 1:
+    if any(rule.near_provider is not None or rule.far_provider is not None for rule in policy.pairs):
         return False
-    for rule in policy.pairs:
-        if rule.near_provider is not None or rule.far_provider is not None:
+    if not policy.pairs:
+        return False
+    pair_providers = {str(rule.provider) for rule in policy.pairs if rule.provider is not None}
+    if len(pair_providers) != 1:
+        return False
+    pair_name = next(iter(pair_providers))
+    pair_spec = policy.providers.get(pair_name)
+    if pair_spec is None or pair_spec.kind != "mm":
+        return False
+    ml_species = mechanical_embedding_ml_species(policy)
+    if not ml_species:
+        return False
+    # Every non-ML monomer must use an MM provider.
+    for species, pname in policy.monomers.items():
+        if species in ml_species:
+            continue
+        spec = policy.providers.get(str(pname))
+        if spec is None or spec.kind != "mm":
             return False
     return True
 
 
-def interaction_plan_is_lowerable(plan: InteractionPlan) -> bool:
-    """Same criterion as :func:`policy_is_lowerable`, on a compiled plan."""
-    monomer_providers = {assignment.provider for assignment in plan.monomers}
-    if len(monomer_providers) > 1:
+def mechanical_embedding_ml_species(policy: InteractionPolicy) -> tuple[str, ...]:
+    """Residue/species names whose monomer provider is ML (mechanical embedding)."""
+    out: list[str] = []
+    for species, pname in sorted(policy.monomers.items()):
+        spec = policy.providers.get(str(pname))
+        if spec is not None and spec.kind == "ml":
+            out.append(str(species).strip().upper())
+    return tuple(out)
+
+
+def policy_is_lowerable(policy: InteractionPolicy) -> bool:
+    """True when ownership can be represented by the current energy terms.
+
+    Accepted today:
+
+    - Single-provider policies (homogeneous MM or ML).
+    - Mechanical embedding: ML monomer species + MM solvent monomers + all-MM
+      pairs (no near/far) — lowers to ``ml_resnames`` on jaxmd-unified.
+
+    Near/far multi-provider pair switches still fail closed.
+    """
+    if any(rule.near_provider is not None or rule.far_provider is not None for rule in policy.pairs):
         return False
+    monomer_providers = {str(p) for p in policy.monomers.values()}
+    if len(monomer_providers) <= 1:
+        return True
+    return policy_is_mechanical_embedding(policy)
+
+
+def interaction_plan_is_lowerable(plan: InteractionPlan) -> bool:
+    """Same criterion as :func:`policy_is_lowerable`, on a compiled plan.
+
+    Without provider *kinds*, multi-monomer-provider plans cannot be classified
+    as mechanical embedding here — pass ``policy=`` to
+    :func:`assert_interaction_plan_lowerable`.
+    """
     if any(pair.near_provider is not None for pair in plan.pairs):
         return False
-    return True
+    monomer_providers = {assignment.provider for assignment in plan.monomers}
+    return len(monomer_providers) <= 1
 
 
 def assert_interaction_plan_lowerable(
     plan: InteractionPlan,
     *,
     runner: str = "md-system",
+    policy: InteractionPolicy | None = None,
 ) -> None:
     """Raise ``NotImplementedError`` when a plan cannot be lowered safely."""
+    if policy is not None and policy_is_lowerable(policy):
+        return
     if interaction_plan_is_lowerable(plan):
         return
     monomer_providers = sorted({assignment.provider for assignment in plan.monomers})
@@ -297,8 +350,8 @@ def assert_interaction_plan_lowerable(
         f"interaction policy is valid, but this provider decomposition is not yet "
         f"lowerable on {runner} (monomer providers={monomer_providers}, "
         f"near/far pairs={split_pairs}); refusing to silently double-count or ignore "
-        f"ownership. Use a single-provider policy, or --jaxmd-unified once multi-provider "
-        f"lowering is implemented."
+        f"ownership. Use a single-provider policy, a mechanical-embedding policy "
+        f"(ML solute monomers + MM pairs), or wait for near/far lowering."
     )
 
 

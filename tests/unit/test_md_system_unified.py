@@ -10,6 +10,8 @@ import pytest
 
 from mmml.cli.run.md_system_unified import (
     check_md_system_args_supported,
+    format_npt_volume_pressure_line,
+    npt_volume_ratio_ok,
     run_unified_jaxmd,
 )
 
@@ -51,7 +53,8 @@ def test_check_supported_accepts_default():
 
 
 def test_check_supported_rejects_pyxtal_builder():
-    with pytest.raises(NotImplementedError, match="packmol composition builder"):
+    # from_pdb joined packmol as a supported builder; pyxtal is still rejected.
+    with pytest.raises(NotImplementedError, match="pyxtal"):
         check_md_system_args_supported(_args(builder="pyxtal"))
 
 
@@ -82,10 +85,120 @@ def test_check_supported_zbl_mbd_multipoles_without_spooky_checkpoint():
     )
 
 
+def test_npt_volume_ratio_ok_and_format_line():
+    ok, ratio = npt_volume_ratio_ok([1000.0, 1100.0])
+    assert ok and abs(ratio - 1.1) < 1e-12
+    ok, ratio = npt_volume_ratio_ok([1000.0, 3000.0])
+    assert not ok and abs(ratio - 3.0) < 1e-12
+    ok, ratio = npt_volume_ratio_ok([1000.0, float("nan")])
+    assert not ok
+
+    line = format_npt_volume_pressure_line(
+        {
+            "volumes_A3": np.array([8000.0, 8100.0]),
+            "pressures_bar": np.array([1.2, 0.9]),
+            "target_pressure_bar": 1.0,
+        }
+    )
+    assert line is not None
+    assert "V0=8000" in line
+    assert "Vfinal/V0=" in line
+    assert "P0=" in line
+    assert "P_target=1" in line
+
+
 def test_run_unified_jaxmd_fails_fast_on_unsupported():
     """The unsupported-combo check must run before any CHARMM build."""
     with pytest.raises(NotImplementedError, match="template-pdb"):
         run_unified_jaxmd(_args(template_pdb="foo.pdb"))
+
+
+def test_run_unified_pins_mlpot_device_context(monkeypatch):
+    """Energy/MD must run under mlpot_jax_device_context (GPU by default)."""
+    from contextlib import contextmanager
+    from unittest import mock
+
+    entered = {"n": 0}
+
+    @contextmanager
+    def _fake_ctx():
+        entered["n"] += 1
+        yield mock.Mock(platform="cpu", id=0)
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        _fake_ctx,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.apply_mlpot_jax_platform_env",
+        lambda quiet=True: "cpu",
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.print_jax_device_banner",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.reset_mlpot_device_fallback_flag",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_device_context_fell_back_to_cpu",
+        lambda: False,
+    )
+
+    with pytest.raises(NotImplementedError, match="template-pdb"):
+        # Fails before context — prove early validation still first.
+        run_unified_jaxmd(_args(template_pdb="foo.pdb"))
+    assert entered["n"] == 0
+
+    # Patch past validation + CHARMM into the energy path.
+    monkeypatch.setattr(
+        "mmml.cli.run.md_system_unified.check_md_system_args_supported",
+        lambda args: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.import_pycharmm.ensure_pycharmm_loaded",
+        lambda: True,
+    )
+
+    class _Sys:
+        n_atoms = 3
+        Z = np.array([8, 1, 1], dtype=np.int32)
+        R = np.zeros((3, 3), dtype=np.float64)
+        monomer_indices = [[0, 1, 2]]
+        mol_id = np.array([0, 0, 0], dtype=np.int32)
+        residue_names = ["TIP3"]
+        ff_params = None
+        box = None
+
+    monkeypatch.setattr(
+        "mmml.cli.run.md_system_unified.build_packmol_system_with_ffparams",
+        lambda *a, **k: _Sys(),
+    )
+    monkeypatch.setattr(
+        "mmml.md.lowering.runconfig_from_md_system_args",
+        lambda args: mock.Mock(
+            terms=("ml_intra", "mm_nonbonded"),
+            system=mock.Mock(builder="packmol"),
+        ),
+    )
+    monkeypatch.setattr(
+        "mmml.cli.run.md_system_unified.build_energy_context",
+        lambda *a, **k: mock.Mock(),
+    )
+
+    class _Traj:
+        n_frames = 2
+        metadata = {"energies": np.array([-1.0, -1.1])}
+
+    monkeypatch.setattr(
+        "mmml.md.assemble.assemble_and_run",
+        lambda *a, **k: _Traj(),
+    )
+
+    rc = run_unified_jaxmd(_args(composition="TIP3:1", checkpoint=str(CKPT)))
+    assert rc == 0
+    assert entered["n"] == 1
 
 
 # --- end-to-end integration (real CHARMM build + real checkpoint) ----------

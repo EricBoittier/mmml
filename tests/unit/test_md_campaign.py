@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from mmml.cli.run.md_config import (
@@ -31,6 +33,53 @@ def _sample_campaign() -> dict:
             },
         },
     }
+
+
+def test_resolve_campaign_namespace_paths_vs_config(tmp_path: Path) -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import resolve_campaign_namespace_paths
+
+    cfg_dir = tmp_path / "cfgs" / "yaml"
+    cfg_dir.mkdir(parents=True)
+    policy = tmp_path / "cfgs" / "policy.yaml"
+    policy.write_text("schema_version: 1\n", encoding="utf-8")
+    cfg = cfg_dir / "campaign.yaml"
+    cfg.write_text("runs: {}\n", encoding="utf-8")
+    # Relative to yaml/ → ../policy.yaml
+    ns = Namespace(interaction_policy="../policy.yaml", from_pdb=None, checkpoint=None)
+    resolve_campaign_namespace_paths(ns, config_path=cfg)
+    assert Path(ns.interaction_policy) == policy.resolve()
+
+
+def test_run_single_backend_honors_jaxmd_unified(monkeypatch):
+    """Campaign legs must call run_unified_jaxmd when jaxmd_unified is set."""
+    from argparse import Namespace
+    from unittest import mock
+
+    from mmml.cli.run import md_campaign
+
+    called: dict[str, object] = {}
+
+    def _fake_unified(args):
+        called["args"] = args
+        return 0
+
+    monkeypatch.setattr(
+        "mmml.cli.run.md_system_unified.run_unified_jaxmd",
+        _fake_unified,
+    )
+    monkeypatch.setattr(md_campaign, "clear_handoff_context", lambda: None)
+    monkeypatch.setattr(md_campaign, "set_handoff_in", lambda *_a, **_k: None)
+    monkeypatch.setattr(md_campaign, "set_handoff_out", lambda *_a, **_k: None)
+    monkeypatch.setattr(md_campaign, "get_handoff_out", lambda: None)
+
+    ns = Namespace(jaxmd_unified=True, output_dir="/tmp/x")
+    rc, handoff, stages = md_campaign.run_single_backend(ns)
+    assert rc == 0
+    assert called["args"] is ns
+    assert handoff is None
+    assert stages == []
 
 
 def test_topological_job_order() -> None:

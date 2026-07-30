@@ -1,23 +1,27 @@
 # ADUMB bond-difference ξ in explicit DMSO (PBC) — solvated counterpart to vacuum smoke.
 #
+# Mechanical embedding: PhysNet on AMM1+CH3CL only; DMSO stays CHARMM MM.
+#
 #   SOLVATED=1 SOLVENT=dmso bash examples/m/09_adumb_nc_distance.sh
 
 setup: pbc_nvt
 backend: pycharmm
 composition: "AMM1:1,CH3CL:1,DMSO:12"
 box_size: 30.0
-checkpoint: examples/m/kl.json
+checkpoint: examples/m/model_ext.json
 include_mm: true
+ml_resnames: [AMM1, CH3CL]
+mm_nonbond_mode: periodic_external
+lr_solver: ewald
 mm_switch_on: 8.0
 mm_charge_mode: fixed
-mm_nonbond_mode: jax_mic
-lr_solver: mic
 temperature: 300
 dt_fs: 1.0
 md_stages: "mini,heat,prod"
 ps_heat: 0.2
 ps_prod: 1.0
 mini_nstep: 40
+calculator_pre_minimize: true
 skip_energy_show: true
 skip_jit_warmup: true
 quiet: false
@@ -25,16 +29,26 @@ seed: 0
 mc_density_equalize: false
 output_dir: artifacts/nh3_ch3cl/adumb_nc_distance_dmso
 
+# Chunk size = umbrella update (100). Keep solvent-safe overlap thresholds
+# (do NOT copy vacuum dynamics_overlap_min_distance: 0.2).
 dynamics_overlap_check_interval: 100
 dyn_freq_cadence: 100
 dynamics_max_monomer_extent: 20.0
+# Reactive C–Cl contacts must not trigger CHARMM SD rescue mid-umbrella.
+dynamics_overlap_action: warn
+no_echeck_heat: true
 
 dcd_nsavc: 20
 dcd_max_frames: 200
 
 pycharmm_pre_dynamics_lingo: |
+  ! Soft COM restraint on the solute (resid 1-2); leave solvent free
   cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 -
     sele (resid 1 .or. resid 2) end
+
+  ! CGenFF BOND C1–CL1 stays in ENER INTERN and blocks SN2; PhysNet owns it.
+  delete bond sele atom * * CL1 end sele atom * * C1 end
+  delete angle sele atom * * CL1 end sele atom * * C1 end
 
   set adumrcmax = 8.0
   set adumrcwall = 500.0

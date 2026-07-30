@@ -126,6 +126,42 @@ def test_single_provider_is_lowerable_multi_is_not():
         assert_interaction_plan_lowerable(plan_bad)
 
 
+def test_mechanical_embedding_policy_is_lowerable():
+    from mmml.md.interactions import (
+        mechanical_embedding_ml_species,
+        policy_is_mechanical_embedding,
+    )
+
+    policy = InteractionPolicy.from_mapping(
+        {
+            "schema_version": 1,
+            "providers": {
+                "peptide_ml": {"kind": "ml", "checkpoint": "pep.json"},
+                "cgenff": {"kind": "mm", "calculator": "cgenff"},
+            },
+            "monomers": {"TRIA": "peptide_ml", "TIP3": "cgenff"},
+            "pairs": [{"species": ["*", "*"], "provider": "cgenff"}],
+        }
+    )
+    assert policy_is_mechanical_embedding(policy)
+    assert policy_is_lowerable(policy)
+    assert mechanical_embedding_ml_species(policy) == ("TRIA",)
+    system = _system(names=("TRIA", "TIP3", "TIP3"))
+    # SOD not in this system — rebuild
+    system = MolecularSystem(
+        R=np.zeros((8, 3)),
+        Z=np.array([6, 1, 8, 1, 1, 8, 1, 1]),
+        box=np.eye(3) * 28,
+        mol_id=np.array([0, 0, 1, 1, 1, 2, 2, 2]),
+        monomer_indices=[np.array([0, 1]), np.array([2, 3, 4]), np.array([5, 6, 7])],
+        metadata={"residue_names": ("TRIA", "TIP3", "TIP3")},
+    )
+    plan = compile_interaction_policy(system, policy)
+    assert_interaction_plan_lowerable(plan, policy=policy)
+    with pytest.raises(NotImplementedError):
+        assert_interaction_plan_lowerable(plan)  # no policy → cannot classify
+
+
 def test_policy_content_hash_stable():
     a = interaction_policy_content_hash(_single_provider_policy())
     b = interaction_policy_content_hash(_single_provider_policy())

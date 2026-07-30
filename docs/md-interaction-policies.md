@@ -38,6 +38,9 @@ Checked-in examples:
 
 - [`interaction_policy_single_provider.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/interaction_policy_single_provider.yaml)
   — single MM provider (accepted / lowerable today)
+- [`interaction_policy_tria_tip3_mech.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/interaction_policy_tria_tip3_mech.yaml)
+  — mechanical embedding: TRIA→ML, TIP3→MM, all pairs MM (lowered to
+  `ml_resnames` on `--jaxmd-unified`; see `examples/tria_md_system/`)
 - [`interaction_policy_peptide_water.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/interaction_policy_peptide_water.yaml)
   — multi-provider + near/far (valid schema; **fails closed** until generalized
   lowering lands)
