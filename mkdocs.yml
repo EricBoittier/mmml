@@ -141,6 +141,7 @@ nav:
       - MD embedding (solvated peptide): examples/md-embedding-design.md
       - md-embedding smoke results: examples/md-embedding-results.md
       - NH₃–CH₃Cl PhysNet results: examples/nh3-ch3cl-results.md
+      - Menshutkin reactive ML/MM free energies: examples/menshutkin.md
       - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
       - NMA end-to-end (residue → train → MD): examples/nma-workflow.md
       - Cross-backend handoff: handoff.md
