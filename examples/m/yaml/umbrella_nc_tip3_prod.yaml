@@ -1,0 +1,42 @@
+# Solvated mechanical-embedding umbrella — production (dense TIP3 @ 30 Å).
+#
+# Same CV / ML region as umbrella_nc_tip3.yaml smoke; longer sampling for MBAR.
+# Prerequisite: dense make-box (USE_DENSITY=1):
+#   USE_DENSITY=1 BOX_SIZE=30 bash examples/m/08_make_boxes.sh
+#
+#   source examples/m/_env.sh
+#   bash examples/m/14_umbrella_sample_sol_prod.sh
+#
+# Timing (defaults): 30 windows × 40000 steps × 0.5 fs = 20 ps / window;
+#   equilibration_steps 4000 → 2 ps discarded; ~360 saved frames / window.
+# If a window heats, set TIMESTEP_FS=0.25 (and double NSTEPS for same wall time).
+
+engine: hybrid_jaxmd
+checkpoint: ../../model_ext.json
+from_psf: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.psf
+from_pdb: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.pdb
+box_size: 30.0
+output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_tip3_prod
+
+ml_resnames: [AMM1, CH3CL]
+atom_name_i: C1
+atom_name_j: N1
+atom_i: 0
+atom_j: 1
+
+xi_min: 2.2
+xi_max: 3.2
+n_windows: 30
+k_ev_A2: 5.0
+
+temperature_K: 300.0
+timestep_fs: 0.5
+nsteps: 40000
+equilibration_steps: 4000
+printfreq: 500
+savefreq: 100
+seed: 0
+seed_mode: stretch
+overwrite: false
+lr_solver: mic
+max_seed_force: 30.0

@@ -3242,6 +3242,13 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(
         ["--mm-nonbond-mode", str(getattr(args, "mm_nonbond_mode", "jax_mic"))]
     )
+    raw_ml_resnames = getattr(args, "ml_resnames", None)
+    if raw_ml_resnames is not None:
+        from mmml.md.ml_region import parse_ml_resnames
+
+        parsed = parse_ml_resnames(raw_ml_resnames)
+        if parsed:
+            cmd.extend(["--ml-resnames", ",".join(parsed)])
     _append_optional(cmd, "--mm-pair-source", getattr(args, "mm_pair_source", None))
     _append_optional(cmd, "--lr-solver", getattr(args, "lr_solver", None))
     if bool(getattr(args, "ewald_omit_self", False)):

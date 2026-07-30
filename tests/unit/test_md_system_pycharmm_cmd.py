@@ -130,6 +130,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         bonded_recovery_backend="jax",
         bonded_mm_internal_margin=0.0,
         bonded_mm_mini_always=False,
+        ml_resnames=None,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -843,6 +844,22 @@ def test_build_pycharmm_command_forwards_periodic_mm_flags():
     assert cmd[cmd.index("--lr-solver") + 1] == "scafacos"
     assert "--scafacos-method" in cmd
     assert cmd[cmd.index("--scafacos-method") + 1] == "p3m"
+
+
+def test_build_pycharmm_command_forwards_ml_resnames_list():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            ml_resnames=["AMM1", "CH3CL"],
+            mm_nonbond_mode="periodic_external",
+        )
+    )
+    assert "--ml-resnames" in cmd
+    assert cmd[cmd.index("--ml-resnames") + 1] == "AMM1,CH3CL"
+
+
+def test_build_pycharmm_command_forwards_ml_resnames_string():
+    cmd = build_pycharmm_command(_pycharmm_args(ml_resnames="AMM1,CH3CL"))
+    assert cmd[cmd.index("--ml-resnames") + 1] == "AMM1,CH3CL"
 
 
 def test_build_pycharmm_command_forwards_jax_pme_flags():

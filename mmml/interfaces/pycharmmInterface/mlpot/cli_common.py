@@ -1000,6 +1000,18 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Checkpoint (.json or Orbax root). Default: MMML_CKPT or repo ckpts.",
     )
+    parser.add_argument(
+        "--ml-resnames",
+        type=str,
+        default=None,
+        dest="ml_resnames",
+        help=(
+            "Mechanical embedding: comma-separated residue names for USER/PhysNet "
+            "(e.g. AMM1,CH3CL). Solvent residues stay CHARMM MM. Requires "
+            "mm_nonbond_mode=periodic_external (not jax_mic). "
+            "YAML: ml_resnames: [AMM1, CH3CL]."
+        ),
+    )
 
 
 def add_packmol_cache_args(parser: argparse.ArgumentParser) -> None:

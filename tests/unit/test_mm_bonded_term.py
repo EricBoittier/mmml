@@ -46,3 +46,15 @@ def test_mm_bonded_registered():
     from mmml.md.energy.registry import get_term
 
     assert get_term("mm_bonded") is not None
+
+
+def test_mm_bonded_accepts_ml_atom_indices_alias():
+    from mmml.md.energy.terms.mm_bonded import MMBondedTerm
+
+    term = MMBondedTerm(ml_atom_indices=[0, 1, 2])
+    assert term.ml_atoms == frozenset({0, 1, 2})
+    term2 = MMBondedTerm(ml_atoms=[3], ml_atom_indices=[9, 9])
+    # Explicit ml_atoms wins over the alias.
+    assert term2.ml_atoms == frozenset({3})
+    term3 = MMBondedTerm(extra_prm_files=["/tmp/x.prm"])
+    assert term3.prm_paths == (Path("/tmp/x.prm"),)

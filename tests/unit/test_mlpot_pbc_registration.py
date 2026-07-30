@@ -491,7 +491,10 @@ def test_register_mlpot_context_skips_user_check_when_jax_deferred():
         "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.register_mlpot",
         return_value=MagicMock(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.select_all_atoms",
+        # run_workflow now resolves the ML region via
+        # resolve_mlpot_selection_from_args (imported inside the function),
+        # so patch it at the source module.
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.resolve_mlpot_selection_from_args",
         return_value=MagicMock(),
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",

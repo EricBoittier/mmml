@@ -181,6 +181,7 @@ class DecomposedMlpotCalculator:
         mm_pair_source: MmPairSource = _DEFAULT_MM_PAIR_SOURCE,
         mm_r_min: float | None = None,
         mm_pair_capacity_hint: int | None = None,
+        ml_atom_indices: Sequence[int] | np.ndarray | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
@@ -200,6 +201,10 @@ class DecomposedMlpotCalculator:
         self.atomic_numbers = np.asarray(
             physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
         )
+        if ml_atom_indices is None:
+            self._ml_atom_indices: np.ndarray | None = None
+        else:
+            self._ml_atom_indices = np.asarray(ml_atom_indices, dtype=int).reshape(-1)
         self.ev2kcal = float(ev2kcalmol)
         self._cell = float(cell) if cell else False
         self.last_ml_forces: np.ndarray | None = None
@@ -215,6 +220,41 @@ class DecomposedMlpotCalculator:
     def _mm_pair_pad_capacity(self) -> int:
         cap = getattr(self, "_mm_pair_capacity", None)
         return max(int(cap), 1) if cap is not None else 1
+
+    def _resolve_ml_callback_slice(self, n_charmm: int) -> np.ndarray:
+        """PSF indices of the ML region for this callback (all-ML → ``0..n-1``).
+
+        Mechanical embedding registers a model sized to the ML solute only while
+        CHARMM still passes full-system coordinates (``Natom``). Without this
+        slice, the hybrid forward is evaluated on solvent atoms with the wrong
+        ``atoms_per_monomer`` layout and USER/GRMS explode.
+        """
+        expected = int(self.atomic_numbers.shape[0])
+        stored = getattr(self, "_ml_atom_indices", None)
+        if stored is not None:
+            ml_idx = np.asarray(stored, dtype=int).reshape(-1)
+        elif int(n_charmm) == expected:
+            ml_idx = np.arange(expected, dtype=int)
+        else:
+            raise RuntimeError(
+                f"Decomposed MLpot: CHARMM Natom={int(n_charmm)} != model "
+                f"n_ml={expected} and ml_atom_indices was not set. Partial ML "
+                "(ml_resnames) requires get_pycharmm_calculator(ml_atom_indices=...)."
+            )
+        if ml_idx.size != expected:
+            raise RuntimeError(
+                f"Decomposed MLpot: ml_atom_indices length {ml_idx.size} != "
+                f"model n_ml={expected}"
+            )
+        if ml_idx.size == 0:
+            raise RuntimeError("Decomposed MLpot: empty ml_atom_indices")
+        if int(ml_idx.min()) < 0 or int(ml_idx.max()) >= int(n_charmm):
+            raise RuntimeError(
+                f"Decomposed MLpot: ml_atom_indices out of range for "
+                f"Natom={int(n_charmm)} (min={int(ml_idx.min())}, "
+                f"max={int(ml_idx.max())})"
+            )
+        return ml_idx
 
     def _invalidate_forward_jit_cache(self) -> None:
         owner = self._grad_cache_owner()
@@ -597,8 +637,11 @@ class DecomposedMlpotCalculator:
         idxvp,
     ) -> float:
         n = int(Natom)
-        pos = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
-        pos = self._maybe_rewrap_primary_cell_in_callback(pos, n, x, y, z)
+        pos_full = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
+        pos_full = self._maybe_rewrap_primary_cell_in_callback(pos_full, n, x, y, z)
+        ml_idx = self._resolve_ml_callback_slice(n)
+        n_ml = int(ml_idx.size)
+        pos = pos_full[ml_idx]
         box = None
         if self._cell or self._requires_callback_pbc_box():
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -633,7 +676,7 @@ class DecomposedMlpotCalculator:
 
         run_ml = mlpot_runs_on_this_rank()
         e_kcal = 0.0
-        forces = np.zeros((n, 3), dtype=np.float64)
+        forces_ml = np.zeros((n_ml, 3), dtype=np.float64)
         mm_pair_idx = None
         mm_pair_mask = None
         use_mm_pairs = False
@@ -653,7 +696,7 @@ class DecomposedMlpotCalculator:
                                 idxv,
                                 idxup,
                                 idxvp,
-                                natom=n,
+                                natom=n_ml,
                                 nmlmmp=int(Nmlmmp),
                                 pos=pos,
                                 box=box,
@@ -681,9 +724,9 @@ class DecomposedMlpotCalculator:
                     pos,
                     dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
                 )
-                atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
+                atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n_ml])
                 forward_fn = self._get_spherical_forward_fn(
-                    n_atoms=n,
+                    n_atoms=n_ml,
                     atomic_numbers_jax=atomic_numbers_jax,
                     box_jax=box,
                 )
@@ -722,7 +765,11 @@ class DecomposedMlpotCalculator:
                 e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
                 forces_ev = jnp.where(jnp.isfinite(forces_ev), forces_ev, 0.0)
                 e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
-                forces = np.asarray(jax.device_get(forces_ev), dtype=np.float64) * self.ev2kcal
+                forces_ml = (
+                    np.asarray(jax.device_get(forces_ev), dtype=np.float64) * self.ev2kcal
+                )
+                forces = np.zeros((n, 3), dtype=np.float64)
+                forces[ml_idx] = forces_ml
                 self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
                 parent = getattr(self, "_parent_model", None)
                 if parent is not None:
@@ -740,6 +787,8 @@ class DecomposedMlpotCalculator:
             parent = getattr(self, "_parent_model", None)
             if parent is not None:
                 parent._maybe_promote_deferred_jax_on_hybrid_eval(self)
+        else:
+            forces = np.zeros((n, 3), dtype=np.float64)
         forces, e_kcal = broadcast_mlpot_result(forces, e_kcal, n)
         self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
         parent = getattr(self, "_parent_model", None)
@@ -758,17 +807,20 @@ class DecomposedMlpotCalculator:
 
             side = float(self._cell)
             offsets = _monomer_offsets_from_atoms_per_monomer(self._atoms_per_monomer)
-            mid = monomer_id_from_offsets(offsets, int(n))
+            mid = monomer_id_from_offsets(offsets, int(n_ml))
             try:
-                e_kcal, forces = add_periodic_coulomb_to_callback(
+                e_ml, forces_ml_cb = add_periodic_coulomb_to_callback(
                     pos,
                     box_side_A=side,
                     cfg=periodic_cfg,
                     energy_kcal=float(e_kcal),
-                    forces_kcal=np.asarray(forces, dtype=np.float64),
+                    forces_kcal=np.asarray(forces[ml_idx], dtype=np.float64),
                     mol_id=mid,
                     n_monomers=int(self.n_monomers),
                 )
+                e_kcal = float(e_ml)
+                forces = np.asarray(forces, dtype=np.float64, copy=True)
+                forces[ml_idx] = np.asarray(forces_ml_cb, dtype=np.float64)
             except Exception as exc:
                 # ScaFaCoS/MPI failures inside the CHARMM callback must not zero the
                 # whole USER term (ML energy was already computed above).
@@ -814,10 +866,16 @@ class _DeferredDecomposedMlpotCalculator:
         model: "DecomposedMlpotModel",
         *,
         ml_atomic_numbers: np.ndarray | None = None,
+        ml_atom_indices: Sequence[int] | np.ndarray | None = None,
     ) -> None:
         self._model = model
         self._ml_atomic_numbers = (
             None if ml_atomic_numbers is None else np.asarray(ml_atomic_numbers, dtype=int)
+        )
+        self._ml_atom_indices = (
+            None
+            if ml_atom_indices is None
+            else np.asarray(ml_atom_indices, dtype=int).reshape(-1)
         )
         self._real: DecomposedMlpotCalculator | None = None
 
@@ -839,6 +897,7 @@ class _DeferredDecomposedMlpotCalculator:
             return self._real
         self._real = self._model._build_registered_calculator(
             ml_atomic_numbers=self._ml_atomic_numbers,
+            ml_atom_indices=self._ml_atom_indices,
         )
         return self._real
 
@@ -891,6 +950,7 @@ class DecomposedMlpotModel:
         self._charmm_mlpot_sd_active = 0
         self._jax_on_gpu = spherical_fn is not None
         self._registered_calculator: DecomposedMlpotCalculator | None = None
+        self._ml_atom_indices: np.ndarray | None = None
         if atoms_per_monomer is None:
             apm = max(1, len(self._atomic_numbers) // max(1, int(n_monomers)))
             self._atoms_per_monomer = [apm] * int(n_monomers)
@@ -1127,12 +1187,15 @@ class DecomposedMlpotModel:
         self,
         *,
         ml_atomic_numbers: np.ndarray | None = None,
+        ml_atom_indices: Sequence[int] | np.ndarray | None = None,
     ) -> DecomposedMlpotCalculator:
         self._finalize_jax_factory()
         if ml_atomic_numbers is not None:
             z = np.asarray(ml_atomic_numbers, dtype=int)
         else:
             z = self._atomic_numbers
+        if ml_atom_indices is None:
+            ml_atom_indices = getattr(self, "_ml_atom_indices", None)
         calc = DecomposedMlpotCalculator(
             self._spherical_fn,
             self._cutoff_params,
@@ -1150,12 +1213,15 @@ class DecomposedMlpotModel:
             mm_pair_source=self._mm_pair_source,
             mm_r_min=self._mm_r_min,
             mm_pair_capacity_hint=self._mm_pair_capacity_hint,
+            ml_atom_indices=ml_atom_indices,
         )
         calc._parent_model = self
         self._registered_calculator = calc
         return calc
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
+        if ml_atom_indices is not None:
+            self._ml_atom_indices = np.asarray(ml_atom_indices, dtype=int).reshape(-1)
         if self._spherical_fn is None and self._pending_factory is not None:
             if self._defer_jax_until_mlpot_registered:
                 if self._defer_jax_until_after_sd:
@@ -1164,19 +1230,25 @@ class DecomposedMlpotModel:
                     deferred = _DeferredDecomposedMlpotCalculator(
                         self,
                         ml_atomic_numbers=ml_atomic_numbers,
+                        ml_atom_indices=getattr(self, "_ml_atom_indices", None),
                     )
                     self._registered_calculator = deferred
                     return deferred
                 return self._build_registered_calculator(
-                    ml_atomic_numbers=ml_atomic_numbers
+                    ml_atomic_numbers=ml_atomic_numbers,
+                    ml_atom_indices=getattr(self, "_ml_atom_indices", None),
                 )
             deferred = _DeferredDecomposedMlpotCalculator(
                 self,
                 ml_atomic_numbers=ml_atomic_numbers,
+                ml_atom_indices=getattr(self, "_ml_atom_indices", None),
             )
             self._registered_calculator = deferred
             return deferred
-        return self._build_registered_calculator(ml_atomic_numbers=ml_atomic_numbers)
+        return self._build_registered_calculator(
+            ml_atomic_numbers=ml_atomic_numbers,
+            ml_atom_indices=getattr(self, "_ml_atom_indices", None),
+        )
 
 
 def build_decomposed_mlpot_model(

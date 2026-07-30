@@ -12,6 +12,8 @@ from mmml.md.restraints.linear_distance import (
 )
 
 __all__ = [
+    "AngleWall",
+    "BondRetentionWall",
     "DistanceRestraint",
     "DihedralRestraint",
     "AngleWall",

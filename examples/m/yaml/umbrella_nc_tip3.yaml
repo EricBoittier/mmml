@@ -1,15 +1,15 @@
-# Solvated mechanical-embedding umbrella (TIP3, 30 Å make-box).
+# Solvated mechanical-embedding umbrella — smoke (TIP3 make-box).
 #
-# ML region = AMM1+CH3CL as one complex; solvent = MM intermolecular.
-# Prerequisite: bash examples/m/08_make_boxes.sh  (or run_sol_tip3_30A.sh)
+# ML region = AMM1+CH3CL; solvent = MM intermolecular.
+# Prerequisite: bash examples/m/08_make_boxes.sh
 #
 #   source examples/m/_env.sh
 #   bash examples/m/14_umbrella_sample_sol.sh
-#   # or:
-#   uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
+#
+# Production (dense box, 20 ps/window): yaml/umbrella_nc_tip3_prod.yaml
+#   bash examples/m/14_umbrella_sample_sol_prod.sh
 
 engine: hybrid_jaxmd
-# Paths resolve relative to this file (examples/m/yaml/) → repo root is ../../..
 checkpoint: ../../model_ext.json
 from_psf: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.psf
 from_pdb: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.pdb
@@ -17,10 +17,8 @@ box_size: 30.0
 output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_tip3
 
 ml_resnames: [AMM1, CH3CL]
-# CV: N–C distance (names resolved in the ML region / PSF)
 atom_name_i: C1
 atom_name_j: N1
-# Placeholder indices (overridden by atom_name_* when PSF is present)
 atom_i: 0
 atom_j: 1
 
@@ -38,3 +36,4 @@ seed: 0
 seed_mode: stretch
 overwrite: false
 lr_solver: mic
+max_seed_force: 30.0

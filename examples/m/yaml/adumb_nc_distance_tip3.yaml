@@ -2,7 +2,7 @@
 # Same ξ = r(Cl-C)−r(C-N) ∈ [-3, 3] as adumb_nc_distance.yaml (smoke lengths).
 #
 # Mechanical embedding: PhysNet on AMM1+CH3CL only; TIP3 stays CHARMM MM.
-# (jax_mic all-ML would ML-evaluate water and explode hybrid GRMS.)
+# (jax_mic zeros CHARMM VDW for the whole PSF — solvent would have no LJ.)
 #
 #   source examples/m/_env.sh
 #   SOLVATED=1 bash examples/m/09_adumb_nc_distance.sh
@@ -18,9 +18,12 @@ checkpoint: examples/m/model_ext.json
 include_mm: true
 # Restrict USER/PhysNet to the reactive complex (solvent = CHARMM MM).
 ml_resnames: [AMM1, CH3CL]
-# jax_mic zeros all CHARMM VDW (including solvent) — incompatible with ml_resnames.
+# Solvent LJ must be CHARMM IMAGE under ml_resnames (no JAX doMM on TIP3).
+# Do not use --no-periodic-charmm-vdw here — TIP3 would lose all LJ.
 mm_nonbond_mode: periodic_external
-lr_solver: ewald
+# Skip hybrid_ewald for this smoke (train-matched full-box). ScaFaCoS covers
+# periodic Coulomb; falls back if SCAFACOS_LIB is unset (set lr_solver: ewald then).
+lr_solver: scafacos
 mm_switch_on: 8.0
 mm_charge_mode: fixed
 temperature: 300
