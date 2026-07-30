@@ -349,6 +349,7 @@ PBC_BURST_ML_ATOMS_PER_MONOMER: dict[str, int] = {
     "ACO": 10,
     "TIP3": 3,
     "MEOH": 6,
+    "METH": 5,
 }
 
 

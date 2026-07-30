@@ -17,6 +17,8 @@ _RESI_LINE = re.compile(r"^RESI\s+(\S+)\s+(\S+)")
 CGENFF_RESIDUE_ALIASES: dict[str, str] = {
     "WATER": "TIP3",
     "OCTANOL": "OCOH",
+    "CH4": "METH",
+    "METHANE": "METH",
 }
 
 # Colon- or comma-separated append RTF paths (extra RESI records + CHARMM append).

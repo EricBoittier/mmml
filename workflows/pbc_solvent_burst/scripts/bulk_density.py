@@ -10,6 +10,8 @@ BULK_SOLVENTS: dict[str, dict[str, float]] = {
     "ACO": {"rho_g_cm3": 0.784, "mw_g_mol": 58.08},
     "TIP3": {"rho_g_cm3": 0.9970, "mw_g_mol": 18.01528},
     "MEOH": {"rho_g_cm3": 0.7866, "mw_g_mol": 32.04186},
+    # Liquid CH4 near the NBP (~111.7 K); used for liquid-density matrix sizing.
+    "METH": {"rho_g_cm3": 0.4226, "mw_g_mol": 16.0425},
 }
 
 AVOGADRO = 6.02214076e23

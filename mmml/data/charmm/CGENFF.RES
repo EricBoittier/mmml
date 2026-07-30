@@ -37,6 +37,7 @@ RESI PHEO         -1.00 ! C6H5O, phenoxide, adm jr.
 RESI APNH          0.00 ! C7H12N2O2, acetyl-prolineamide (aka AP2, APAM), R. Dunbrack
 RESI PDIP          0.00 ! C8H14N2O2, proline dipeptide
 RESI PNH2          1.00 ! C5H11N2O, prolineamide (aka TP2, PAMD), R. Dunbrack
+RESI METH          0.00 ! CH4, methane (MMML; CG331/HGA3 alkane types)
 RESI ETHA          0.00 ! C2H6, ethane
 RESI PRPA          0.00 ! C3H8, propane, adm jr.
 RESI BUTA          0.00 ! C4H10, butane

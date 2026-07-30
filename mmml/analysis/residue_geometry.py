@@ -4,7 +4,7 @@ Lookup order
 ------------
 1. Campaign dimers in ``mmml.analysis.dimer_molecules.MOLECULES`` (plus ACE↔ACO).
 2. Working-directory ``pdb/<resi>.pdb`` (from a prior ``make-res``).
-3. Bundled package templates (TIP3, OCOH, ACO, MEOH, DCM, BENZ).
+3. Bundled package templates (TIP3, OCOH, ACO, MEOH, DCM, BENZ, METH).
 4. Optional ``make-res`` generation via PyCHARMM (when ``generate=True``).
 """
 
@@ -37,6 +37,8 @@ KNOWN_SOLVENT_DENSITY_KG_M3: dict[str, float] = {
     "ACN": 786.0,
     "DMSO": 1100.0,
     "MEOH": 792.0,
+    # Liquid methane near the normal boiling point (~111.7 K).
+    "METH": 422.6,
 }
 
 
@@ -70,6 +72,7 @@ def bundled_monomer_pdb(residue: str) -> Path | None:
         "MEOH": default_meoh_template_pdb(),
         "DCM": bundled_file("data", "molecules", "dcm_monomer.pdb"),
         "BENZ": bundled_file("data", "molecules", "benz_monomer.pdb"),
+        "METH": bundled_file("data", "molecules", "meth_monomer.pdb"),
     }
     path = mapping.get(name)
     if path is not None and path.is_file():
