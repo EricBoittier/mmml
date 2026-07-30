@@ -40,12 +40,15 @@ density_prep_ladder_max_rounds: 2
 mc_density_equalize: false
 min_intermonomer_atom_distance: 1.0
 max_grms_before_dyn: 100.0
+# Spoof+DES methane can leave |F|max ~10–20 eV/Å after mini; smoke-only ceiling.
+max_fmax_before_dyn_ev_A: 25.0
 
 cleanup_strategy:
   name: pbc_methane_ewald_smoke_tiny
   charmm_mm:
     pretreat_on_pycharmm: true
-    pretreat_with_liquid_prep: true
+    # Do not force pretreat under liquid-prep: MM pretreat+Ewald left
+    # high-energy frames that calculator mini could not recover.
     ps_heat: 0.25
     ps_equi: 0.25
     ps_prod: 0.1

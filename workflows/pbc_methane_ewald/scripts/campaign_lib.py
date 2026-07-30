@@ -283,6 +283,8 @@ def _liquid_prep_defaults(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         ),
         "max_grms_before_dyn": float(cfg.get("max_grms_before_dyn", 50.0)),
     }
+    if cfg.get("max_fmax_before_dyn_ev_A") is not None:
+        flags["max_fmax_before_dyn_ev_A"] = float(cfg["max_fmax_before_dyn_ev_A"])
     if matrix_uses_bulk_density(cfg):
         # Match the fraction used to size N for this cell (smoke may be < 1.0).
         min_n = int(cfg.get("bulk_density_n_min", 1))
