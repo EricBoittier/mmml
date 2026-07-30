@@ -135,7 +135,17 @@ class MMBondedTerm:
         angles: Any = None,
         angle_k: Any = None,
         angle_theta0: Any = None,
+        *,
+        ml_atom_indices: Sequence[int] | None = None,
+        extra_prm_files: Sequence[str | Path] = (),
     ):
+        # Callers (ml_region mechanical embedding, md-system unified) pass
+        # ``ml_atom_indices`` / ``extra_prm_files``; keep ``ml_atoms`` /
+        # ``prm_paths`` as the canonical names.
+        if ml_atoms is None and ml_atom_indices is not None:
+            ml_atoms = ml_atom_indices
+        if not prm_paths and extra_prm_files:
+            prm_paths = extra_prm_files
         self.psf_path = Path(psf_path) if psf_path is not None else None
         self.prm_paths = tuple(Path(p) for p in prm_paths)
         self.ml_atoms = None if ml_atoms is None else frozenset(int(a) for a in ml_atoms)
@@ -194,6 +204,8 @@ class MMBondedTerm:
             return self.ml_atoms
         options = dict(getattr(ctx, "options", {}) or {})
         from_ctx = options.get("ml_atoms")
+        if from_ctx is None:
+            from_ctx = options.get("ml_atom_indices")
         if from_ctx is not None:
             return frozenset(int(a) for a in from_ctx)
         return frozenset()
