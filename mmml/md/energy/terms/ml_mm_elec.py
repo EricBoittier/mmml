@@ -67,6 +67,9 @@ class MLMMElectrostaticTerm:
         damping_sigma_A: float = 1.0,
         charge_clip: float | None = 1.0,
         charge_gradient: bool = True,
+        lr_solver: str = "mic",
+        ewald_alpha: float | None = None,
+        ewald_accuracy_exponent: float = 3.5,
         capacity_hint: int | None = None,
     ):
         self.ml_atoms = None if ml_atoms is None else tuple(int(a) for a in ml_atoms)
@@ -141,6 +144,34 @@ class MLMMElectrostaticTerm:
         # dropped, so the dynamics is no longer strictly variational and the
         # forces are not the gradient of the energy being reported.
         self.charge_gradient = bool(charge_gradient)
+        # Long-range solute-solvent electrostatics.
+        #
+        # "mic" truncates at cutoff_A with a switch. For a solute that develops
+        # +-1 charges in a periodic box that is not a small approximation: the
+        # interaction beyond the cutoff is exactly the long-range solvation that
+        # stabilises the ion pair, and discarding it under-stabilises the
+        # product side -- which is where every solvated failure in this campaign
+        # occurred, and never on the neutral reactant side.
+        #
+        # "ewald" adds the reciprocal-space cross term. The reciprocal sum does
+        # not decompose into "solute-solvent" and "solvent-solvent" pieces
+        # naively, but the cross term does, exactly:
+        #
+        #     |S_ml + S_mm|^2 = |S_ml|^2 + |S_mm|^2 + 2 Re(S_ml* S_mm)
+        #
+        # mm_nonbonded already contributes |S_mm|^2 (the solute's MM charges are
+        # zeroed for this embedding) and the solute's own intramolecular
+        # electrostatics belong to ml_intra, so this term needs precisely the
+        # cross term -- which is obtained as
+        #     E(q_ml + q_mm) - E(q_ml) - E(q_mm)
+        # from the existing, tested reciprocal routine. It carries no self
+        # energy (that is per-atom, not a cross term) and needs no exclusion
+        # correction, because solute-solvent pairs are never bonded-excluded.
+        if lr_solver not in ("mic", "ewald"):
+            raise ValueError(f"lr_solver must be mic|ewald (got {lr_solver!r})")
+        self.lr_solver = lr_solver
+        self.ewald_alpha = ewald_alpha
+        self.ewald_accuracy_exponent = float(ewald_accuracy_exponent)
         self.capacity_hint = capacity_hint
 
     def neighbor_request(self, system: MolecularSystem) -> NeighborRequest:
@@ -202,6 +233,33 @@ class MLMMElectrostaticTerm:
         mode, q_tot = self.charge_mode, self.total_charge
         q_clip = self.charge_clip
         use_charge_grad = self.charge_gradient
+        use_ewald = self.lr_solver == "ewald"
+        if use_ewald:
+            if cell is None:
+                raise ValueError("lr_solver='ewald' needs a periodic box")
+            from mmml.interfaces.pycharmmInterface.ewald_native import (
+                build_kspace_integers,
+                default_ewald_alpha,
+                ewald_reciprocal_energy,
+            )
+
+            cell_np = np.asarray(system.box, dtype=np.float64)
+            alpha = float(
+                self.ewald_alpha
+                if self.ewald_alpha is not None
+                else default_ewald_alpha(
+                    self.cutoff_A, accuracy_exponent=self.ewald_accuracy_exponent
+                )
+            )
+            n_int = jnp.asarray(
+                build_kspace_integers(
+                    cell_np, alpha, accuracy_exponent=self.ewald_accuracy_exponent
+                )
+            )
+            # Solvent charges alone, with the solute's slots zeroed: the ML
+            # charges are scattered in per frame since they depend on geometry.
+            q_mm_only = jnp.asarray(mm_charges).at[ml_idx_j].set(0.0)
+            n_atoms_total = int(system.n_atoms)
 
         def unfold(pos, cell_used):
             """Make the solute contiguous across the periodic boundary.
@@ -309,9 +367,29 @@ class MLMMElectrostaticTerm:
                 if sigma <= 0.0
                 else jax.scipy.special.erf(r_safe / sigma)
             )
-            e_pair = COULOMB_KCAL * qa * qb * damping / r_safe * switch(r_safe)
+            if use_ewald:
+                # Real-space Ewald: erfc(alpha r)/r, complementary to the
+                # reciprocal sum below. The short-range erf damping is retained
+                # on top, because erfc(alpha r)/r is still singular as r -> 0
+                # and MM hydrogens have no core to prevent that approach.
+                radial = jax.scipy.special.erfc(alpha * r_safe) / r_safe
+            else:
+                radial = switch(r_safe) / r_safe
+            e_pair = COULOMB_KCAL * qa * qb * damping * radial
+            total = jnp.sum(e_pair * mask)
+            if use_ewald:
+                # Cross term only: E(q_ml + q_mm) - E(q_ml) - E(q_mm).
+                cell_e = cell if box is None else jnp.asarray(box)
+                q_full = jnp.zeros(n_atoms_total, dtype=R.dtype).at[ml_idx_j].set(q_ml)
+                both = q_full + q_mm_only
+
+                def recip(qv):
+                    return ewald_reciprocal_energy(R, qv, cell_e, n_int, alpha)
+
+                cross = recip(both) - recip(q_full) - recip(q_mm_only)
+                total = total + COULOMB_KCAL * cross
             scale = 1.0 if elec_scale is None else elec_scale
-            return scale * jnp.sum(e_pair * mask) * KCAL_MOL_TO_EV
+            return scale * total * KCAL_MOL_TO_EV
 
         energy_fn.ml_charges = ml_charges  # type: ignore[attr-defined]
         energy_fn.n_ml_atoms = n_ml  # type: ignore[attr-defined]
