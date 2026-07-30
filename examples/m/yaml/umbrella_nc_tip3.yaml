@@ -1,13 +1,13 @@
 # Solvated mechanical-embedding umbrella — smoke (TIP3 make-box).
 #
 # ML region = AMM1+CH3CL; solvent = MM intermolecular.
-# Prerequisite: bash examples/m/08_make_boxes.sh
+# Prerequisite dense box: USE_DENSITY=1 BOX_SIZE=30 bash examples/m/08_make_boxes.sh
 #
 #   source examples/m/_env.sh
 #   bash examples/m/14_umbrella_sample_sol.sh
 #
-# Production (dense box, 20 ps/window): yaml/umbrella_nc_tip3_prod.yaml
-#   bash examples/m/14_umbrella_sample_sol_prod.sh
+# Timing: 3 windows × 2000 steps × 0.5 fs = 1 ps / window (scale ×20 → prod).
+# Production (20 ps/window): yaml/umbrella_nc_tip3_prod.yaml
 
 engine: hybrid_jaxmd
 checkpoint: ../../model_ext.json
@@ -29,9 +29,10 @@ k_ev_A2: 5.0
 
 temperature_K: 300.0
 timestep_fs: 0.5
-nsteps: 40
-printfreq: 20
-savefreq: 20
+nsteps: 2000
+equilibration_steps: 200
+printfreq: 200
+savefreq: 100
 seed: 0
 seed_mode: stretch
 overwrite: false
