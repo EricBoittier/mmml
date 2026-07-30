@@ -67,6 +67,44 @@ def test_partial_mlmm_config_forwards_pbc_to_register() -> None:
     assert reg.call_args.kwargs["cubic_box_side_A"] == 28.0
 
 
+def test_read_crd_coordinates_parses_ext_card(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_crd_coordinates,
+    )
+
+    crd = tmp_path / "tiny.crd"
+    crd.write_text(
+        "* title\n"
+        "*\n"
+        "         2  EXT\n"
+        "         1         1  TIP3      OH         1.0000000000         2.0000000000         3.0000000000  SOLV      1       0.0000000000\n"
+        "         2         1  TIP3      H1         4.0000000000         5.0000000000         6.0000000000  SOLV      1       0.0000000000\n",
+        encoding="utf-8",
+    )
+    pos = read_crd_coordinates(crd)
+    assert pos is not None
+    assert pos.shape == (2, 3)
+    assert float(pos[0, 0]) == pytest.approx(1.0)
+    assert float(pos[1, 2]) == pytest.approx(6.0)
+
+
+def test_embedding_run_uses_apply_crd_not_coor_card() -> None:
+    """Regression: md-embedding run must not call pycharmm read.coor_card."""
+    import inspect
+
+    from mmml.interfaces.pycharmmInterface.mlpot import embedding_workflow
+
+    src = inspect.getsource(embedding_workflow.run_embedding_phase)
+    code_lines = [
+        line
+        for line in src.splitlines()
+        if line.lstrip() and not line.lstrip().startswith("#")
+    ]
+    code = "\n".join(code_lines)
+    assert "apply_crd_file_to_charmm" in code
+    assert "read.coor_card" not in code
+
+
 def test_export_embedding_checkpoint_calls_orbax_to_json(tmp_path: Path) -> None:
     epoch = tmp_path / "epoch-49"
     epoch.mkdir()

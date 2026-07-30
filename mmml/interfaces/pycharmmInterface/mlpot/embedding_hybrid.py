@@ -156,11 +156,13 @@ def prepare_trialanine_hybrid_session(
 
     ensure_pycharmm_loaded()
     import pycharmm.coor as coor
-    import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
     from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _hybrid_mlpot_ase_calculator_class,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        apply_crd_file_to_charmm,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
@@ -190,7 +192,13 @@ def prepare_trialanine_hybrid_session(
 
     prepare_charmm_for_trialanine_box_psf()
     read_psf_card_file(psf_path)
-    read.coor_card(str(crd_path))
+    apply_crd_file_to_charmm(crd_path)
+    positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    if positions.shape[0] == 0 or float(np.std(positions)) < 1e-6:
+        raise RuntimeError(
+            f"Coordinates not loaded into CHARMM from {crd_path} "
+            f"(natom={positions.shape[0]}, std={float(np.std(positions)):.3g})"
+        )
     prepare_charmm_pbc(side)
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
 

@@ -619,10 +619,13 @@ def run_embedding_phase(
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
+    import pycharmm.coor as coor
     import pycharmm.energy as energy
-    import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        apply_crd_file_to_charmm,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
@@ -642,7 +645,23 @@ def run_embedding_phase(
 
     prepare_charmm_for_trialanine_box_psf()
     read_psf_card_file(psf_path)
-    read.coor_card(str(crd_path))
+    # PyCHARMM ``read.coor_card`` is unreliable after PSF EXT (often leaves all
+    # coords at 0 → VDW ~1e68). Parse EXT CRD in Python and sync, same as
+    # ``load_minimized_coordinates`` / trialanine reload path.
+    apply_crd_file_to_charmm(crd_path)
+    positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    if positions.shape[0] == 0 or float(np.std(positions)) < 1e-6:
+        raise RuntimeError(
+            f"Coordinates not loaded into CHARMM from {crd_path} "
+            f"(natom={positions.shape[0]}, std={float(np.std(positions)):.3g}). "
+            "Rebuild with md-embedding build or check model.crd."
+        )
+    print(
+        f"Loaded CRD {crd_path.name}: natom={positions.shape[0]} "
+        f"std={float(np.std(positions)):.3f} Å "
+        f"extent={float(np.ptp(positions, axis=0).max()):.3f} Å",
+        flush=True,
+    )
     prepare_charmm_pbc(side)
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
 
@@ -670,10 +689,9 @@ def run_embedding_phase(
                     pass
             raise RuntimeError(
                 f"Pathological CHARMM energy after MLpot register: ENER={total}. "
-                f"Terms={terms}. Confirm this checkout has mass-based ML Z "
-                f"(git log -1 --oneline -- "
-                f"mmml/interfaces/pycharmmInterface/mlpot/embedding_workflow.py) "
-                f"and that PEPT hydrogens map to Z=1."
+                f"Terms={terms}. If VDW dominates and coords were all-zero, "
+                f"CRD failed to load (use apply_crd_file_to_charmm). "
+                f"If USER dominates with H≈0 in ML Z, mass-based Z is missing."
             )
         if mini_nstep > 0:
             from mmml.interfaces.pycharmmInterface.mlpot import (
