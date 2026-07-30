@@ -64,24 +64,7 @@ def fill_u_kln(
     beta = 1.0 / (_K_B_EV * float(temperature_K))
     n_k = np.full(k_windows, n_frames, dtype=np.int64)
     u_kln = np.zeros((k_windows, k_windows, n_frames), dtype=np.float64)
-
-    if box is not None:
-        from mmml.umbrella.hybrid import mic_distance
-
-        def _bias_row(r: np.ndarray) -> np.ndarray:
-            out = np.zeros(k_windows, dtype=np.float64)
-            for l in range(k_windows):
-                total = 0.0
-                for dim, (i, j) in enumerate(atom_pairs):
-                    d = mic_distance(r, int(i), int(j), box)
-                    total += 0.5 * float(k_per_cv[dim][l]) * (
-                        d - float(targets_per_cv[dim][l])
-                    ) ** 2
-                out[l] = total
-            return out
-    else:
-        def _bias_row(r: np.ndarray) -> np.ndarray:
-            return numpy_bias_matrix_nd(r, atom_pairs, targets_per_cv, k_per_cv)
+    cell = None if box is None else np.asarray(box, dtype=np.float64)
 
     for k in range(k_windows):
         for n in range(n_frames):
@@ -91,7 +74,10 @@ def fill_u_kln(
             else:
                 assert ml_energy_fn is not None
                 u_ml = float(ml_energy_fn(r))
-            w_l = _bias_row(r)
+            # Accepts (i, j) pairs or LinearDistanceCV; MIC when ``cell`` is set.
+            w_l = numpy_bias_matrix_nd(
+                r, atom_pairs, targets_per_cv, k_per_cv, cell=cell
+            )
             u_kln[k, :, n] = beta * (u_ml + w_l)
     return u_kln, n_k
 
