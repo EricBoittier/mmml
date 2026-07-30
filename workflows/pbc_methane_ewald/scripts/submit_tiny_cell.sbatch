@@ -13,6 +13,9 @@ cd /mmhome/boittier/home/mmml_cursor
 export MMML_PYTHON=/mmhome/boittier/home/mmml/.venv/bin/python
 export PYTHONPATH=/mmhome/boittier/home/mmml_cursor
 export JAX_ENABLE_X64=1
+# Direct Python launch relies on CLI auto-rerun under mpirun; do not inherit a
+# submitter shell that left MMML_NO_MPI_RERUN=1 from wrapper experiments.
+unset MMML_NO_MPI_RERUN || true
 export MMML_WORKFLOW_CONFIG=/mmhome/boittier/home/mmml_cursor/workflows/pbc_methane_ewald/config.smoke.tiny.yaml
 TAG="${1:?usage: sbatch submit_tiny_cell.sh TAG}"
 bash workflows/pbc_methane_ewald/scripts/job_shell.sh "$TAG"

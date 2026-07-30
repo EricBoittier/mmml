@@ -710,8 +710,17 @@ def mpi_diagnostic_env_defaults() -> None:
 
 
 def mpi_mpirun_extra_args() -> list[str]:
-    """Extra ``mpirun`` argv tokens for crash diagnostics."""
+    """Extra ``mpirun`` argv tokens for crash diagnostics and clean exit codes.
+
+    OpenMPI/PRRTE can return the exit status of a *secondary* (spawned) job even
+    when the primary mmml process exits 0 — often accompanied by empty
+    "PRRTE was built without Sphinx" help blocks. Default to reporting only the
+    primary job's status so successful CHARMM/jaxmd campaigns are not marked
+    failed by helper-process teardown.
+    """
     args: list[str] = []
+    if not _truthy("MMML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY"):
+        args.append("--report-child-jobs-separately")
     if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
         args.extend(["--mca", "pmix", "^ext3x"])
         mca_dir = openmpi_mca_component_dir()

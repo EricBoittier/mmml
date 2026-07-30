@@ -73,9 +73,11 @@ def main() -> int:
     print(f"Campaign jobs ({tag}): {campaign_job_order(cfg, cell)}", flush=True)
     print(f"Running: {' '.join(cmd)}", flush=True)
     rc = subprocess.call(cmd)
+    if rc != 0:
+        print(f"{tag} methane ewald campaign failed with exit code {rc}", file=sys.stderr)
+        return rc
 
     summary_path = paths["campaign_summary"]
-    summary_ok = False
     if summary_path.is_file():
         try:
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -84,26 +86,11 @@ def main() -> int:
             if failed:
                 print(f"Campaign summary reports failed legs: {failed}", file=sys.stderr)
                 return 1
-            summary_ok = bool(jobs)
         except (json.JSONDecodeError, TypeError) as exc:
             print(f"Could not parse {summary_path}: {exc}", file=sys.stderr)
-            if rc != 0:
-                print(f"{tag} methane ewald campaign failed with exit code {rc}", file=sys.stderr)
-                return rc
             return 1
-    elif rc == 0:
+    else:
         print(f"Warning: missing campaign summary {summary_path}", flush=True)
-
-    if rc != 0:
-        if summary_ok and paths["final_handoff"].is_file():
-            print(
-                f"WARN: launcher exit {rc} but campaign legs OK and handoff present; "
-                "treating as success",
-                flush=True,
-            )
-        else:
-            print(f"{tag} methane ewald campaign failed with exit code {rc}", file=sys.stderr)
-            return rc
 
     if not paths["final_handoff"].is_file():
         print(f"Expected final handoff missing: {paths['final_handoff']}", file=sys.stderr)

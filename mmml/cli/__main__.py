@@ -41,7 +41,7 @@ install_colored_argparse()
 
 
 def _hard_exit(code: int | None) -> None:
-    """Terminate with *code*, bypassing CHARMM's Fortran teardown.
+    """Terminate with *code*, preserving non-zero status past CHARMM teardown.
 
     Importing pycharmm installs a Fortran/MPI finalizer that runs during
     interpreter shutdown and **resets the process exit status to 0**. A command
@@ -49,13 +49,18 @@ def _hard_exit(code: int | None) -> None:
     that trusts exit codes -- Slurm, CI, Make, the validation campaign -- was
     blind to failures.
 
-    ``os._exit`` skips atexit handlers and interpreter shutdown entirely, so the
-    status chosen here is the status the caller actually observes. Streams are
-    flushed first because ``os._exit`` will not do it for us.
+    For **non-zero** codes we ``os._exit`` so atexit/Fortran shutdown cannot
+    mask the failure. For **zero** we take a normal ``SystemExit`` so OpenMPI
+    can finalize cleanly: ``os._exit(0)`` skips ``MPI_Finalize`` and PRRTE then
+    often returns exit 1 (with empty Sphinx help noise) even though the app
+    succeeded.
     """
+    code_i = int(code or 0)
     sys.stdout.flush()
     sys.stderr.flush()
-    os._exit(int(code or 0))
+    if code_i == 0:
+        raise SystemExit(0)
+    os._exit(code_i)
 
 
 def cli() -> None:

@@ -148,9 +148,9 @@ Tiny GPU smokes used while wiring manuscript workflows (not paper numbers):
 
 | Workflow | Config / tags | Last result | Notes |
 |----------|---------------|-------------|-------|
-| `pbc_liquid_density_dyn` | `config.smoke.tiny.gpu.yaml` → `dcm_8` | **PASS** init+equi+prod (0.5 ps NPT) | Handoff fmax-gate skip; mpirun exit-1 ignored when summary+handoff OK |
-| `pbc_methane_ewald` | `meth_8_t100_l24_des_jaxmd` | **PASS** init heat + jaxmd equi/prod (0.25 ps NVT, Ewald) | Å/ps→metal velocity conversion; spoof DES; no-echeck-heat |
-| `pbc_methane_ewald` | `meth_8_t100_l24_des_pycharmm` | HEAT extent fly-off | Spoof+DES methane still fragile on pycharmm heat; jaxmd path preferred for smoke |
+| `pbc_liquid_density_dyn` | `config.smoke.tiny.gpu.yaml` → `dcm_8` | **PASS** init+equi+prod (0.5 ps NPT); Slurm/launcher exit 0 | Handoff fmax-gate skip; density `run_job` uses direct Python + CLI mpirun re-exec; success path no longer `os._exit(0)` (lets MPI finalize so PRRTE returns 0) |
+| `pbc_methane_ewald` | `meth_8_t100_l24_des_jaxmd` | **PASS** init heat + jaxmd equi/prod (0.25 ps NVT, Ewald); launcher exit 0 | Å/ps→metal velocity conversion; spoof DES; no-echeck-heat |
+| `pbc_methane_ewald` | `meth_8_t100_l24_des_pycharmm` | HEAT ABNORMAL (energy-change tolerance) | Extent gate correctly disabled; DES+spoof methane heat still blows up under pycharmm; prefer jaxmd smoke |
 | `dcm5_md_benchmark` | needs real DCM PhysNet `MMML_CKPT` | not smoked here | Only DES / spooky JSON in `examples/ckpts_json/` |
 
 Artifact roots: `artifacts/pbc_liquid_density_dyn_smoke_tiny/`,
