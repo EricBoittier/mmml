@@ -215,11 +215,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="ml_resnames",
         help=(
-            "Mechanical embedding for --jaxmd-unified: comma-separated residue "
-            "names defining the ML solute complex (e.g. AMM1,CH3CL). PhysNet "
-            "evaluates that complex once; MM covers solute–solvent and "
-            "solvent–solvent (solute–solute MM pairs are dropped via shared "
-            "mol_id). YAML: ml_resnames: [AMM1, CH3CL]."
+            "Mechanical embedding: comma-separated residue names for the ML "
+            "solute complex (e.g. AMM1,CH3CL). On --jaxmd-unified, PhysNet "
+            "evaluates that complex once and MM covers solute–solvent / "
+            "solvent–solvent (solute–solute MM pairs dropped via shared mol_id). "
+            "On --backend pycharmm, USER/PhysNet registers only on those "
+            "residues (solvent stays CHARMM MM); requires "
+            "mm_nonbond_mode=periodic_external (not jax_mic). "
+            "YAML: ml_resnames: [AMM1, CH3CL]."
         ),
     )
     parser.add_argument(

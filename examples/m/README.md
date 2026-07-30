@@ -41,9 +41,16 @@ an `MMML_CKPT` left in a login profile — or a GPU request that silently fell
 back to CPU — is visible before any compute starts. A GPU request additionally
 probes `jax.default_backend()` and warns when no CUDA build is installed
 (`uv sync --extra gpu`; RTX 50xx / Blackwell needs the cuda13 build). Skip that
-probe with `MMML_EXAMPLE_SKIP_DEVICE_PROBE=1`. Explicit `JAX_PLATFORMS` /
-`MMML_MLPOT_DEVICE` still override `MMML_EXAMPLE_DEVICE`, and the banner says so
-when they do.
+probe with `MMML_EXAMPLE_SKIP_DEVICE_PROBE=1`.
+
+Device precedence: an explicitly set `MMML_EXAMPLE_DEVICE` wins over an inherited
+`JAX_PLATFORMS` / `MMML_MLPOT_DEVICE` that implies a *different* device, and the
+banner names what it overrode — a stale `export JAX_PLATFORMS=cpu` in a login
+profile must not silently downgrade a run that asked for the GPUs. Setting only
+`JAX_PLATFORMS` / `MMML_MLPOT_DEVICE` (without `MMML_EXAMPLE_DEVICE`) still works
+as a per-variable override, and an inherited value that *agrees* with the request
+is kept verbatim, so `MMML_EXAMPLE_DEVICE=gpu JAX_PLATFORMS=cuda,cpu` keeps its
+CPU fallback.
 
 ## Quick run (full report)
 
