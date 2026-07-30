@@ -119,8 +119,21 @@ PY
   echo "PASS: ${solvent} box -> ${out}"
 }
 
-make_one ACN
-make_one TIP3
-make_one DMSO
+# SOLVENT_ONLY=tip3|acn|dmso (or TIP3|ACN|DMSO) builds a single solvent box.
+_solvents=(ACN TIP3 DMSO)
+if [[ -n "${SOLVENT_ONLY:-}" ]]; then
+  case "$(echo "${SOLVENT_ONLY}" | tr '[:upper:]' '[:lower:]')" in
+    acn) _solvents=(ACN) ;;
+    tip3) _solvents=(TIP3) ;;
+    dmso) _solvents=(DMSO) ;;
+    *)
+      echo "FAIL: SOLVENT_ONLY=${SOLVENT_ONLY} (expected tip3|acn|dmso)" >&2
+      exit 1
+      ;;
+  esac
+fi
+for _s in "${_solvents[@]}"; do
+  make_one "${_s}"
+done
 
-echo "PASS: make-box ACN/TIP3/DMSO under ${ARTIFACTS_DIR}/boxes/"
+echo "PASS: make-box ${_solvents[*]} under ${ARTIFACTS_DIR}/boxes/"

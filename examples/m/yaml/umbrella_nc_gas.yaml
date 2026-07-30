@@ -8,9 +8,10 @@
 #
 # MBAR: mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
 
-checkpoint: ../model_ext.json
+# Paths resolve relative to this file (examples/m/yaml/) → repo root is ../../..
+checkpoint: ../../model_ext.json
 structure: ../neb/reag_0_opt.xyz
-output_dir: ../../artifacts/nh3_ch3cl/umbrella_nc_gas
+output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_gas
 
 # 0-based: C–N distance; move NH3 with N
 atom_i: 2

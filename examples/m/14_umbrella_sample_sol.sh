@@ -41,8 +41,12 @@ PY
 )"
 
 echo "=== hybrid umbrella-sample: $(basename "${CFG}") (move-with=${MOVE_WITH}) ==="
+# CLI path overrides beat YAML relatives (config-dir resolution is easy to mis-count).
 uv run mmml umbrella-sample \
   --config "${CFG}" \
+  --from-pdb "${PDB}" \
+  --from-psf "${PSF}" \
+  --checkpoint "${MMML_CKPT}" \
   --output-dir "${OUT}" \
   --move-with "${MOVE_WITH}" \
   --overwrite
