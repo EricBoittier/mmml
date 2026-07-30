@@ -148,8 +148,8 @@ Tiny GPU smokes used while wiring manuscript workflows (not paper numbers):
 
 | Workflow | Config / tags | Last result | Notes |
 |----------|---------------|-------------|-------|
-| `pbc_liquid_density_dyn` | `config.smoke.tiny.gpu.yaml` → `dcm_8` | init+equi OK; prod failed on cold |F|max gate | Fixed: skip pre-dyn fmax gate when `handoff_coords_in_memory` (continue_seed / baseline after equi) |
-| `pbc_methane_ewald` | `config.smoke.tiny.yaml` → `meth_8_t100_l24_des_{pycharmm,jaxmd}` | N=8 still force-gated / heat echeck | Forward `--no-echeck-heat`; MM pretreat+liquid-prep; disable DES PhysNet monomer mini + extent guard for tiny smoke |
+| `pbc_liquid_density_dyn` | `config.smoke.tiny.gpu.yaml` → `dcm_8` | **PASS** init+equi+prod (0.5 ps NPT) | Handoff fmax-gate skip; mpirun exit-1 ignored when summary+handoff OK |
+| `pbc_methane_ewald` | `config.smoke.tiny.yaml` → `meth_8_t100_l24_des_{pycharmm,jaxmd}` | CLI arg miss then retry | Added `--charmm-mm-pretreat-with-liquid-prep` to staged parser; no-echeck-heat forwarded |
 | `dcm5_md_benchmark` | needs real DCM PhysNet `MMML_CKPT` | not smoked here | Only DES / spooky JSON in `examples/ckpts_json/` |
 
 Artifact roots: `artifacts/pbc_liquid_density_dyn_smoke_tiny/`,

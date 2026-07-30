@@ -4399,6 +4399,14 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     pretreat.add_argument(
+        "--charmm-mm-pretreat-with-liquid-prep",
+        action="store_true",
+        help=(
+            "Run CHARMM MM pretreat even when --liquid-prep is set "
+            "(default skips pretreat because liquid-prep already relaxes the box)."
+        ),
+    )
+    pretreat.add_argument(
         "--charmm-mm-pretreat-ps-heat",
         type=float,
         default=None,
