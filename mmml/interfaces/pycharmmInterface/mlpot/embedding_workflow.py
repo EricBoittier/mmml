@@ -556,44 +556,16 @@ def register_embedding_mlpot(
         raise ValueError(f"ML segment {ml_seg_id!r} has no atoms")
 
     import pycharmm.coor as coor
-    import pycharmm.psf as psf
 
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    # ``psf.get_atype()`` is the atom *name* array (CAY, HY1, …), not CGenFF
+    # chemical types (CG331, HGA3). Map Z from PSF masses like the rest of MLpot;
+    # name→Z tables default unknown H names to carbon and blow Spooky/PhysNet to ~1e68.
     positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
-    atypes = psf.get_atype()
-    # Map CHARMM atom types to Z for ASE (fallback: C for unknown protein types)
-    _atype_z = {
-        "H": 1,
-        "HC": 1,
-        "HA": 1,
-        "HP": 1,
-        "HN": 1,
-        "CT": 6,
-        "CA": 6,
-        "C": 6,
-        "CB": 6,
-        "N": 7,
-        "NH1": 7,
-        "NH2": 7,
-        "NH3": 7,
-        "O": 8,
-        "OT": 8,
-        "OH1": 8,
-        "OG2D1": 8,
-        "NG2S1": 7,
-        "CG311": 6,
-        "CG2O1": 6,
-        "CG331": 6,
-        "HGA1": 1,
-        "HGA2": 1,
-        "HGA3": 1,
-        "HGP1": 1,
-        "OG2D1": 8,
-    }
-    z = np.array(
-        [_atype_z.get(str(atypes[i]).strip().upper(), 6) for i in ml_indices],
-        dtype=int,
-    )
-    r = positions[np.asarray(ml_indices, dtype=int)]
+    idx = np.asarray(ml_indices, dtype=int)
+    z = np.asarray(get_Z_from_psf(), dtype=int)[idx]
+    r = positions[idx]
     atoms = Atoms(numbers=z, positions=r)
 
     _, _, pyCModel = load_physnet_mlpot_bundle(

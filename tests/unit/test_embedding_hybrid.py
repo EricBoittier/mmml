@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
@@ -13,6 +14,31 @@ from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
     export_embedding_checkpoint,
     validate_embedding_monomer_potential,
 )
+
+
+def test_tria_psf_atom_names_must_not_map_as_cgenff_types() -> None:
+    """Regression: embedding used get_atype() names with a type→Z table.
+
+    TRIA atom names like HY1 / CAY are not CGenFF types (HGA3 / CG331). Looking
+    them up in a type table defaults to Z=6 and yields ~1e68 Spooky energies.
+    Mass-based Z (get_Z_from_psf) is required.
+    """
+    import ase.data
+
+    # ACE methyl: CAY (CG331) + HY1–3 (HGA3) — names as CHARMM stores them
+    names = ["CAY", "HY1", "HY2", "HY3"]
+    masses = np.array([12.011, 1.008, 1.008, 1.008], dtype=float)
+    type_table = {
+        "HGA3": 1,
+        "CG331": 6,
+        "H": 1,
+        "C": 6,
+    }
+    z_from_names = [type_table.get(n.upper(), 6) for n in names]
+    ase_m = ase.data.atomic_masses_common
+    z_from_mass = [int(np.argmin((ase_m - float(m)) ** 2)) for m in masses]
+    assert z_from_names == [6, 6, 6, 6]
+    assert z_from_mass == [6, 1, 1, 1]
 
 
 def test_export_embedding_checkpoint_calls_orbax_to_json(tmp_path: Path) -> None:
