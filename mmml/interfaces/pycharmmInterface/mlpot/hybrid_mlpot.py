@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -1467,8 +1468,8 @@ def build_decomposed_mlpot_model(
             found = None
         mode_note = (
             f"mm_nonbond_mode={mm_nonbond_mode!r}"
-            if mm_nonbond_mode is not None
-            else "include_mm=false"
+            if str(mm_nonbond_mode) == "periodic_external"
+            else f"include_mm=false, mm_nonbond_mode={mm_nonbond_mode!r}"
         )
         if scales_file is not None:
             raise ValueError(
