@@ -8,6 +8,7 @@
 |-----|------|
 | [outline.md](outline.md) | Recommended sections, maturity, next steps |
 | [methods.md](methods.md) | Methods draft (hybrid energy, PBC, solvers, protocols) |
+| [latex/](latex/) | **ACS/JCTC LaTeX** Methods (`achemso`) + TikZ figures; `make pdf` |
 | [results.md](results.md) | Results draft (placeholders → workflow outputs) |
 | [workflow-map.md](workflow-map.md) | Figure/table ↔ Snakemake workflow matrix |
 
