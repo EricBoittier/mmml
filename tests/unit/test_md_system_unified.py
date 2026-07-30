@@ -97,6 +97,8 @@ def test_npt_volume_ratio_ok_and_format_line():
         {
             "volumes_A3": np.array([8000.0, 8100.0]),
             "pressures_bar": np.array([1.2, 0.9]),
+            "pressures_kin_bar": np.array([100.0, 110.0]),
+            "pressures_vir_bar": np.array([-98.8, -109.1]),
             "target_pressure_bar": 1.0,
         }
     )
@@ -104,6 +106,8 @@ def test_npt_volume_ratio_ok_and_format_line():
     assert "V0=8000" in line
     assert "Vfinal/V0=" in line
     assert "P0=" in line
+    assert "Pkin0=" in line
+    assert "Pvir0=" in line
     assert "P_target=1" in line
 
 

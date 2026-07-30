@@ -92,6 +92,12 @@ def format_npt_volume_pressure_line(
         p_part = f" P0={p0:.4g} bar Pfinal={pf:.4g} bar"
     else:
         p_part = ""
+    p_kin = metadata.get("pressures_kin_bar")
+    p_vir = metadata.get("pressures_vir_bar")
+    if p_kin is not None and len(p_kin) and p_vir is not None and len(p_vir):
+        pk0 = float(np.asarray(p_kin, dtype=np.float64).reshape(-1)[0])
+        pv0 = float(np.asarray(p_vir, dtype=np.float64).reshape(-1)[0])
+        p_part += f" Pkin0={pk0:.4g} bar Pvir0={pv0:.4g} bar"
     t_part = f" P_target={float(p_target):.4g} bar" if p_target is not None else ""
     return (
         f"mmml md-system (jaxmd-unified): NPT "

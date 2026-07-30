@@ -187,8 +187,14 @@ class JaxmdDriver:
         def _volume_A3(box_arr) -> float:
             return float(abs(np.linalg.det(np.asarray(box_arr, dtype=np.float64))))
 
-        def _record_pressure_bar(state, dyn, kinetic_eV: float) -> float:
-            """Instantaneous pressure (bar) via jax-md ``quantity.pressure``."""
+        def _record_pressure_parts_bar(
+            state, dyn, kinetic_eV: float, volume_A3: float
+        ) -> tuple[float, float, float]:
+            """Return ``(P_total, P_kin, P_virial)`` in bar.
+
+            jax-md: ``P = (2 KE - dUdV) / (d V)``. Split so dilute-box
+            sense-checks can compare ``P_kin`` to ``N kT / V``.
+            """
             box_now = _box_of(state)
             ke = jnp.asarray(kinetic_eV, dtype=dtype)
             p_metal = quantity.pressure(
@@ -198,7 +204,21 @@ class JaxmdDriver:
                 kinetic_energy=ke,
                 **dyn,
             )
-            return float(jax.device_get(p_metal)) / float(unit_system["pressure"])
+            scale = float(unit_system["pressure"])
+            p_tot = float(jax.device_get(p_metal)) / scale
+            dim = 3.0
+            vol = max(float(volume_A3), 1.0e-30)
+            p_kin = (2.0 * float(kinetic_eV)) / (dim * vol) / scale
+            p_vir = p_tot - p_kin
+            return p_tot, p_kin, p_vir
+
+        def _record_pressure_bar(state, dyn, kinetic_eV: float) -> float:
+            """Instantaneous total pressure (bar) via jax-md ``quantity.pressure``."""
+            vol = _volume_A3(_box_of(state))
+            p_tot, _p_kin, _p_vir = _record_pressure_parts_bar(
+                state, dyn, kinetic_eV, vol
+            )
+            return p_tot
 
         # jax-md's metal system (Å, eV, amu) measures time in Å·sqrt(amu/eV) =
         # 10.18 fs, and ``unit_system["time"]`` is how many of those make one
@@ -300,11 +320,16 @@ class JaxmdDriver:
         kinetic_energies = [_record_kinetic(state)]
         volumes_A3: list[float] = []
         pressures_bar: list[float] = []
+        pressures_kin_bar: list[float] = []
+        pressures_vir_bar: list[float] = []
         if is_npt:
             volumes_A3.append(_volume_A3(boxes[0]))
-            pressures_bar.append(
-                _record_pressure_bar(state, dynamic_kwargs, kinetic_energies[0])
+            p_tot, p_kin, p_vir = _record_pressure_parts_bar(
+                state, dynamic_kwargs, kinetic_energies[0], volumes_A3[0]
             )
+            pressures_bar.append(p_tot)
+            pressures_kin_bar.append(p_kin)
+            pressures_vir_bar.append(p_vir)
         target_temperatures.append(_target_temperature(0))
         block_size = int(self.record_every if self.block_size is None else self.block_size)
 
@@ -388,11 +413,15 @@ class JaxmdDriver:
                 kinetic_energies.append(_record_kinetic(state))
                 if is_npt:
                     volumes_A3.append(_volume_A3(boxes[-1]))
-                    pressures_bar.append(
-                        _record_pressure_bar(
-                            state, dynamic_kwargs, kinetic_energies[-1]
-                        )
+                    p_tot, p_kin, p_vir = _record_pressure_parts_bar(
+                        state,
+                        dynamic_kwargs,
+                        kinetic_energies[-1],
+                        volumes_A3[-1],
                     )
+                    pressures_bar.append(p_tot)
+                    pressures_kin_bar.append(p_kin)
+                    pressures_vir_bar.append(p_vir)
                 target_temperatures.append(_target_temperature(completed))
                 next_record = min(completed + self.record_every, ensemble.n_steps)
 
@@ -419,6 +448,12 @@ class JaxmdDriver:
                 npz_kwargs["boxes"] = np.asarray(boxes)
                 npz_kwargs["volumes_A3"] = np.asarray(volumes_A3, dtype=np.float64)
                 npz_kwargs["pressures_bar"] = np.asarray(pressures_bar, dtype=np.float64)
+                npz_kwargs["pressures_kin_bar"] = np.asarray(
+                    pressures_kin_bar, dtype=np.float64
+                )
+                npz_kwargs["pressures_vir_bar"] = np.asarray(
+                    pressures_vir_bar, dtype=np.float64
+                )
                 npz_kwargs["target_pressure_bar"] = float(ensemble.pressure_bar)
             np.savez(path, **npz_kwargs)
 
@@ -434,5 +469,11 @@ class JaxmdDriver:
             metadata["boxes"] = np.asarray(boxes)
             metadata["volumes_A3"] = np.asarray(volumes_A3, dtype=np.float64)
             metadata["pressures_bar"] = np.asarray(pressures_bar, dtype=np.float64)
+            metadata["pressures_kin_bar"] = np.asarray(
+                pressures_kin_bar, dtype=np.float64
+            )
+            metadata["pressures_vir_bar"] = np.asarray(
+                pressures_vir_bar, dtype=np.float64
+            )
             metadata["target_pressure_bar"] = float(ensemble.pressure_bar)
         return Trajectory(path=path, n_frames=len(frames), metadata=metadata)

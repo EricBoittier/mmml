@@ -1,0 +1,60 @@
+# Denser TRIA + TIP3 mechanical embedding — meaningful NPT pressure smoke.
+#
+# Build first (liquid-ish packing; adjust if Packmol fails):
+#   uv run mmml md-embedding build \
+#     -o artifacts/md_embedding/aaa_dense \
+#     --n-waters 200 \
+#     --box-side-A 20
+#   awk '/^ATOM/{print substr($0,18,4)}' artifacts/md_embedding/aaa_dense/model.pdb | sort -u
+#
+#   export MMML_CKPT=examples/spooky_so3lr_muon3_epoch0013.json
+#   uv run mmml md-system \
+#     --config examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml \
+#     --checkpoint "$MMML_CKPT" \
+#     --run-all
+#
+# Sense-check: NPT log prints P0, Pkin0, Pvir0. After NVT thermalization,
+# Pkin0 should be O(N kT / V) (~10^2–10^3 bar for this size); Pvir0 cancels
+# most of it toward P_target when density is reasonable. Instantaneous P
+# still fluctuates strongly on short runs — look at order of magnitude, not
+# equality to 1 bar.
+
+defaults:
+  from_pdb: artifacts/md_embedding/aaa_dense/model.pdb
+  checkpoint: examples/spooky_so3lr_muon3_epoch0013.json
+  interaction_policy: examples/interaction_policy_tria_tip3_mech.yaml
+  backend: jaxmd
+  jaxmd_unified: true
+  include_mm: true
+  mm_switch_on: 8.0
+  temperature: 300
+  pressure: 1.0
+  dt_fs: 0.5
+  seed: 0
+  skip_jit_warmup: true
+  quiet: true
+  mc_density_equalize: false
+  ml_resnames: [TRIA]
+
+campaign_output: artifacts/tria_md_system/campaign_dense
+
+runs:
+  nvt:
+    description: "NVT thermalize denser box (cold start)"
+    setup: pbc_nvt
+    ps: 0.5
+    output_dir: artifacts/tria_md_system/campaign_dense/nvt
+
+  npt:
+    description: "NPT with moderate barostat tau (still short; not full equilibration)"
+    setup: pbc_npt
+    ps: 0.5
+    # Smaller than dilute-smoke 1e6, larger than jax-md default 1000*dt.
+    barostat_tau: 5.0e4
+    output_dir: artifacts/tria_md_system/campaign_dense/npt
+
+  nve:
+    description: "Short NVE after cold-start (no handoff yet)"
+    setup: pbc_nve
+    ps: 0.1
+    output_dir: artifacts/tria_md_system/campaign_dense/nve

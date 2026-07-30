@@ -23,7 +23,7 @@ uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box
 awk '/^ATOM/{print substr($0,18,4)}' artifacts/md_embedding/aaa/model.pdb | sort -u
 ```
 
-## 2. NVT / NPT / NVE smokes
+## 2. NVT / NPT / NVE smokes (dilute aaa — stability only)
 
 ```bash
 export MMML_CKPT="${MMML_CKPT:-examples/spooky_so3lr_muon3_epoch0013.json}"
@@ -44,6 +44,53 @@ Pass criteria:
   finite E + finite V + `Vfinal/V0` in `[0.5, 2.0]` on this short smoke — **not**
   equilibrated density.
 
+## 3. Denser box (pressure sense-check)
+
+```bash
+uv run mmml md-embedding build \
+  -o artifacts/md_embedding/aaa_dense \
+  --n-waters 200 \
+  --box-side-A 20
+
+uv run mmml md-system \
+  --config examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml \
+  --checkpoint "$MMML_CKPT" \
+  --run-all
+```
+
+### Sense-checking pressures
+
+NPT logs now split the instantaneous pressure:
+
+`P0 = Pkin0 + Pvir0` (bar), from jax-md `P = (2 KE − dU/dε) / (3 V)`.
+
+| Check | What “good” looks like |
+| --- | --- |
+| Units | `Pkin0` positive and O(`N kT / V`) after thermalization (~10²–10³ bar for these box sizes) |
+| Dilute aaa (10 waters / 28 Å) | `Pvir0` largely negative → `P0 ~ −10³ bar` (wants to shrink); soft `barostat_tau` keeps `V` fixed |
+| Denser box | `|P0|` much closer to `P_target` order after NVT; still noisy on 0.5 ps |
+| Red flag | `Pkin0 ≈ 0` while T is 300 K, or `|Pvir0|` absurd with no geometry change |
+
+Your recent dilute run (`P0≈−2600`, `V` fixed) matches the dilute-box row: virial dominates, soft piston OK.
+
+Quick offline check from a saved `trajectory.npz`:
+
+```bash
+uv run python - <<'PY'
+import numpy as np
+from jax_md import units
+z = np.load("artifacts/tria_md_system/campaign_dense/npt/trajectory.npz")
+V = z["volumes_A3"][0]
+N = z["Z"].shape[0]
+kT = 300.0 * float(units.metal_unit_system()["temperature"])
+# Ideal-gas kinetic pressure (3N dof): N kT / V  → bar
+p_ig = (N * kT / V) / float(units.metal_unit_system()["pressure"])
+print("V0", V, "N", N)
+print("ideal-gas Pkin ~", p_ig, "bar")
+print("logged Pkin0", z["pressures_kin_bar"][0], "Pvir0", z["pressures_vir_bar"][0], "P0", z["pressures_bar"][0])
+PY
+```
+
 ## Notes
 
 - **GPU**: jaxmd-unified pins Spooky/PhysNet + jax-md under
@@ -59,11 +106,10 @@ Pass criteria:
   `quantity.pressure` (virial + kinetic), not CHARMM CPT.
 - **Dilute cold-start NPT**: the aaa smoke box (~28 Å, 10 waters) can report
   `P0 ~ -10^3 bar`. With jax-md’s default barostat tau the piston compresses
-  into `Efinal=nan` / `Vfinal=nan`. The campaign sets `barostat_tau: 1.0e6`
+  into `Efinal=nan` / `Vfinal=nan`. The dilute campaign sets `barostat_tau: 1.0e6`
   (metal time) on the NPT leg so volume barely moves on 0.05 ps — smoke pass
-  only. For real density equilibration, rebuild denser
-  (`md-embedding build --n-waters …` with a tighter box) and use a longer run
-  with a smaller tau after NVT equilibration / handoff.
+  only. Use [`campaign_nvt_npt_dense.yaml`](yaml/campaign_nvt_npt_dense.yaml) for
+  a denser build and a more active piston.
 - **jaxmd-unified** does not yet support `--continue-from`, so campaign legs
   cold-start independently (same geometry). Chained NVT→NPT→NVE handoff is a
   follow-up.

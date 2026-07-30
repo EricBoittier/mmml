@@ -323,6 +323,14 @@ def test_npt_evolves_the_box():
     assert np.all(np.isfinite(volumes))
     assert np.all(np.isfinite(pressures))
     assert traj.metadata["target_pressure_bar"] == 1.0
+    assert "pressures_kin_bar" in traj.metadata
+    assert "pressures_vir_bar" in traj.metadata
+    np.testing.assert_allclose(
+        traj.metadata["pressures_bar"],
+        traj.metadata["pressures_kin_bar"] + traj.metadata["pressures_vir_bar"],
+        rtol=1e-5,
+        atol=1e-3,
+    )
     ratio = float(volumes[-1]) / float(volumes[0])
     assert 0.5 <= ratio <= 2.0
 
