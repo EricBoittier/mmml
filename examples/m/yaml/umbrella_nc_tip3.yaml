@@ -26,14 +26,14 @@ atom_j: 1
 
 xi_min: 2.2
 xi_max: 3.2
-n_windows: 3
+n_windows: 30
 k_ev_A2: 5.0
 
 temperature_K: 300.0
 timestep_fs: 0.5
-nsteps: 40
-printfreq: 20
-savefreq: 20
+nsteps: 40000
+printfreq: 2000
+savefreq: 2000
 seed: 0
 seed_mode: stretch
 overwrite: false
