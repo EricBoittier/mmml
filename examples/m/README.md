@@ -22,11 +22,28 @@ source examples/m/_env.sh
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `MMML_EXAMPLE_DEVICE` | `cpu` | `cpu` or `gpu`; sets `JAX_PLATFORMS` + `MMML_MLPOT_DEVICE` |
 | `MMML_CKPT` | `examples/m/model_ext.json` | Checkpoint (evaluate + MD) |
 | `MMML_DATA` | `examples/m/nh3_ch3cl_filtered.npz` | Eval NPZ |
 | `MMML_CGENFF_EXTRA_RTF` | `examples/m/top_ch3cl.rtf` | Enables `CH3CL` in compositions |
 | `MMML_CGENFF_EXTRA_PRM` | `examples/m/par_ch3cl.prm` | Bonded params for append `CH3CL` |
 | `ARTIFACTS_DIR` | `artifacts/nh3_ch3cl` | Outputs |
+
+These examples run on **CPU by default** so results do not depend on which node
+they land on. To use the GPUs:
+
+```bash
+MMML_EXAMPLE_DEVICE=gpu bash examples/m/run_all.sh
+```
+
+Each script prints the resolved device, checkpoint and dataset once per run, so
+an `MMML_CKPT` left in a login profile — or a GPU request that silently fell
+back to CPU — is visible before any compute starts. A GPU request additionally
+probes `jax.default_backend()` and warns when no CUDA build is installed
+(`uv sync --extra gpu`; RTX 50xx / Blackwell needs the cuda13 build). Skip that
+probe with `MMML_EXAMPLE_SKIP_DEVICE_PROBE=1`. Explicit `JAX_PLATFORMS` /
+`MMML_MLPOT_DEVICE` still override `MMML_EXAMPLE_DEVICE`, and the banner says so
+when they do.
 
 ## Quick run (full report)
 
