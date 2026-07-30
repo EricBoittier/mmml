@@ -126,6 +126,8 @@ def test_runconfig_from_md_system_args():
     assert cfg.ensemble.space == "pbc"
     assert cfg.ensemble.n_steps == 2000
     assert cfg.ensemble.pressure_bar == 1.0
+    assert cfg.ensemble.params.get("float64") is True
+    assert cfg.ensemble.params.get("seed") == 7
     assert cfg.system.builder == "packmol"
     assert cfg.system.composition == "DCM:10,TIP3:20"
     assert cfg.system.box_size == 25.0

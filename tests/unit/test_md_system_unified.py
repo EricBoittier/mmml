@@ -10,6 +10,8 @@ import pytest
 
 from mmml.cli.run.md_system_unified import (
     check_md_system_args_supported,
+    format_npt_volume_pressure_line,
+    npt_volume_ratio_ok,
     run_unified_jaxmd,
 )
 
@@ -81,6 +83,28 @@ def test_check_supported_zbl_mbd_multipoles_without_spooky_checkpoint():
     check_md_system_args_supported(
         _args(checkpoint=None, sampler="rigid", ff="zbl-mbd-multipoles")
     )
+
+
+def test_npt_volume_ratio_ok_and_format_line():
+    ok, ratio = npt_volume_ratio_ok([1000.0, 1100.0])
+    assert ok and abs(ratio - 1.1) < 1e-12
+    ok, ratio = npt_volume_ratio_ok([1000.0, 3000.0])
+    assert not ok and abs(ratio - 3.0) < 1e-12
+    ok, ratio = npt_volume_ratio_ok([1000.0, float("nan")])
+    assert not ok
+
+    line = format_npt_volume_pressure_line(
+        {
+            "volumes_A3": np.array([8000.0, 8100.0]),
+            "pressures_bar": np.array([1.2, 0.9]),
+            "target_pressure_bar": 1.0,
+        }
+    )
+    assert line is not None
+    assert "V0=8000" in line
+    assert "Vfinal/V0=" in line
+    assert "P0=" in line
+    assert "P_target=1" in line
 
 
 def test_run_unified_jaxmd_fails_fast_on_unsupported():

@@ -179,6 +179,12 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
         seed=int(getattr(args, "seed", 0)),
     )
     schedule_text = getattr(args, "temperature_schedule", None)
+    ens_params: dict[str, Any] = {
+        "seed": int(getattr(args, "seed", 0)),
+    }
+    # NPT barostat + virial AD is sensitive to float32; prefer float64 for NPT.
+    if ensemble_name == "npt":
+        ens_params["float64"] = True
     ensemble = EnsembleSpec(
         ensemble=ensemble_name,
         space=space,
@@ -187,6 +193,7 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
         pressure_bar=float(getattr(args, "pressure", 1.0)),
         dt_fs=dt_fs,
         n_steps=_nsteps_from_ps(ps, dt_fs),
+        params=ens_params,
     )
     terms = terms_from_md_system_args(args)
     checkpoint = getattr(args, "checkpoint", None)

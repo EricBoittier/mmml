@@ -32,7 +32,73 @@ __all__ = [
     "build_from_pdb_system_with_ffparams",
     "build_energy_context",
     "run_unified_jaxmd",
+    "npt_volume_ratio_ok",
+    "format_npt_volume_pressure_line",
 ]
+
+# Short-smoke gate: catch explode/collapse, not density equilibration.
+_NPT_VOLUME_RATIO_MIN = 0.5
+_NPT_VOLUME_RATIO_MAX = 2.0
+
+
+def npt_volume_ratio_ok(
+    volumes_A3: Any,
+    *,
+    ratio_min: float = _NPT_VOLUME_RATIO_MIN,
+    ratio_max: float = _NPT_VOLUME_RATIO_MAX,
+) -> tuple[bool, float | None]:
+    """Return ``(ok, Vfinal/V0)`` for NPT smoke gating."""
+    vols = np.asarray(volumes_A3, dtype=np.float64).reshape(-1)
+    if vols.size < 1 or not np.all(np.isfinite(vols)):
+        return False, None
+    v0 = float(vols[0])
+    if v0 <= 0.0:
+        return False, None
+    ratio = float(vols[-1]) / v0
+    if not np.isfinite(ratio):
+        return False, ratio
+    return ratio_min <= ratio <= ratio_max, ratio
+
+
+def format_npt_volume_pressure_line(
+    metadata: dict[str, Any],
+    *,
+    target_pressure_bar: float | None = None,
+) -> str | None:
+    """One-line NPT diagnostics, or ``None`` when volume metadata is absent."""
+    volumes = metadata.get("volumes_A3")
+    if volumes is None:
+        boxes = metadata.get("boxes")
+        if boxes is None:
+            return None
+        boxes_arr = np.asarray(boxes)
+        volumes = np.array(
+            [abs(float(np.linalg.det(np.asarray(b, dtype=np.float64)))) for b in boxes_arr],
+            dtype=np.float64,
+        )
+    vols = np.asarray(volumes, dtype=np.float64).reshape(-1)
+    if vols.size < 1:
+        return None
+    v0 = float(vols[0])
+    vf = float(vols[-1])
+    ratio = vf / v0 if v0 > 0 else float("nan")
+    L0 = v0 ** (1.0 / 3.0) if v0 > 0 else float("nan")
+    Lf = vf ** (1.0 / 3.0) if vf > 0 else float("nan")
+    pressures = metadata.get("pressures_bar")
+    p_target = metadata.get("target_pressure_bar", target_pressure_bar)
+    if pressures is not None and len(pressures):
+        p0 = float(np.asarray(pressures, dtype=np.float64).reshape(-1)[0])
+        pf = float(np.asarray(pressures, dtype=np.float64).reshape(-1)[-1])
+        p_part = f" P0={p0:.4g} bar Pfinal={pf:.4g} bar"
+    else:
+        p_part = ""
+    t_part = f" P_target={float(p_target):.4g} bar" if p_target is not None else ""
+    return (
+        f"mmml md-system (jaxmd-unified): NPT "
+        f"V0={v0:.4g} A3 (L~{L0:.4g} A) "
+        f"Vfinal={vf:.4g} A3 (L~{Lf:.4g} A) "
+        f"Vfinal/V0={ratio:.4g}{p_part}{t_part}"
+    )
 
 
 def check_md_system_args_supported(args: Any) -> None:
@@ -404,6 +470,12 @@ def run_unified_jaxmd(args: Any) -> int:
             f"E0={energies[0]:.4f} eV, Efinal={energies[-1]:.4f} eV",
             flush=True,
         )
+    npt_line = format_npt_volume_pressure_line(
+        traj.metadata,
+        target_pressure_bar=float(getattr(args, "pressure", 1.0)),
+    )
+    if npt_line is not None:
+        print(npt_line, flush=True)
     if energies is None or not np.all(np.isfinite(energies)):
         print("mmml md-system: jaxmd-unified produced non-finite energies", file=sys.stderr)
         return 1
@@ -417,6 +489,32 @@ def run_unified_jaxmd(args: Any) -> int:
             file=sys.stderr,
         )
         return 1
+    if "volumes_A3" in traj.metadata or "boxes" in traj.metadata:
+        volumes = traj.metadata.get("volumes_A3")
+        if volumes is None and traj.metadata.get("boxes") is not None:
+            volumes = [
+                abs(float(np.linalg.det(np.asarray(b, dtype=np.float64))))
+                for b in np.asarray(traj.metadata["boxes"])
+            ]
+        ok, ratio = npt_volume_ratio_ok(volumes)
+        if not ok:
+            ratio_s = "nan" if ratio is None else f"{ratio:.4g}"
+            print(
+                f"mmml md-system: jaxmd-unified NPT volume ratio out of range "
+                f"(Vfinal/V0={ratio_s}; allowed "
+                f"[{_NPT_VOLUME_RATIO_MIN}, {_NPT_VOLUME_RATIO_MAX}])",
+                file=sys.stderr,
+            )
+            return 1
+        pressures = traj.metadata.get("pressures_bar")
+        if pressures is not None and not np.all(
+            np.isfinite(np.asarray(pressures, dtype=np.float64))
+        ):
+            print(
+                "mmml md-system: jaxmd-unified produced non-finite NPT pressures",
+                file=sys.stderr,
+            )
+            return 1
     return 0
 
 

@@ -8,6 +8,10 @@
 # ``--continue-from`` / campaign handoff is not yet supported on jaxmd-unified,
 # so this is NVT / NPT / NVE *setups*, not a chained thermostat protocol.
 #
+# NPT pass on this short smoke: finite E + finite V + Vfinal/V0 in [0.5, 2]
+# (see driver volume gate). Not a density-equilibration criterion.
+# ``pressure`` is treated as bar by EnsembleSpec (CLI help still says atm).
+#
 #   export MMML_CKPT=examples/spooky_so3lr_muon3_epoch0013.json   # optional
 #   uv run mmml md-system \
 #     --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
@@ -26,6 +30,7 @@ defaults:
   include_mm: true
   mm_switch_on: 8.0
   temperature: 300
+  # Target pressure for jax-md NPT (bar; ~atm numerically).
   pressure: 1.0
   dt_fs: 0.5
   seed: 0
