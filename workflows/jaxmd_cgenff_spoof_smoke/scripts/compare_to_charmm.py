@@ -22,7 +22,7 @@ from typing import Any
 # jax / jax_md import so empty CUDA nodes do not abort import.
 os.environ.setdefault("JAX_ENABLE_X64", "1")
 os.environ["JAX_PLATFORMS"] = os.environ.get("JAX_PLATFORMS_COMPARE", "cpu")
-os.environ.setdefault("MMML_ALLOW_SELECTIVE_BONDED_BLOCK", "1")
+os.environ.setdefault("MMML_ALLOW_SELECTIVE_BONDED_BLOCK", "0")
 
 import jax.numpy as jnp
 import numpy as np
@@ -142,12 +142,16 @@ def compare_bonded(
     )
 
     n_atoms = int(positions.shape[0])
+    print(f"    bonded: set CHARMM coords (N={n_atoms})…", flush=True)
     set_charmm_positions(positions)
+    print("    bonded: setup bonded-only BLOCK…", flush=True)
     setup_bonded_only_charmm()
+    print("    bonded: ENER FORCE…", flush=True)
     run_charmm_bonded_ener_force(silent=True)
     charmm_e = charmm_bonded_energy_components_kcalmol()
     charmm_f = charmm_bonded_forces_kcalmol_A()
 
+    print("    bonded: JAX CGenFF spoof eval…", flush=True)
     jax_comp, jax_f = load_monomer_bonded_components_from_psf(
         psf,
         jnp.asarray(positions),
