@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# Evaluate kl.json on NH3–CH3Cl dimers (parity metrics + plots).
+# Evaluate the examples/m PhysNet checkpoint on NH3–CH3Cl dimers.
 #
 # Energies in the NPZ are absolute QM totals; the checkpoint predicts a
 # mean-centered / interaction-like scale. Default eval uses --subtract-mean
 # so energy MAE is comparable; forces/dipoles are absolute and usually the
 # better quality signal for this checkpoint.
 #
-# Always uses kl.json for this vacuum-dimer parity check (override with
-# MMML_EVAL_CKPT). MMML_CKPT may point at model_ext.json for solvated /
-# reaction-path MD — that checkpoint is not the vacuum-dimer eval target.
+# Checkpoint: MMML_CKPT (default examples/m/model_ext.json from _env.sh).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -19,14 +17,13 @@ OUT="${ARTIFACTS_DIR}/evaluate"
 DIMER_NPZ="${ARTIFACTS_DIR}/dimer_only.npz"
 NUM_SAMPLES="${NUM_SAMPLES:-512}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
-EVAL_CKPT="${MMML_EVAL_CKPT:-${EXAMPLE_DIR}/kl.json}"
 
 echo "=== Prepare dimer-only NPZ (N=9) ==="
 uv run python examples/m/00_prepare_eval_npz.py --data "${MMML_DATA}" -o "${DIMER_NPZ}"
 
-echo "=== physnet-evaluate (${EVAL_CKPT} × dimers, --subtract-mean) ==="
+echo "=== physnet-evaluate (${MMML_CKPT} × dimers, --subtract-mean) ==="
 uv run mmml physnet-evaluate \
-  --checkpoint "${EVAL_CKPT}" \
+  --checkpoint "${MMML_CKPT}" \
   --data "${DIMER_NPZ}" \
   --natoms 9 \
   --batch-size "${BATCH_SIZE}" \
@@ -45,7 +42,7 @@ m = json.loads(p.read_text())
 m["energy_reference"] = "subtract_mean"
 m["data_subset"] = "N=9 dimers"
 m["source_npz"] = "${MMML_DATA}"
-m["checkpoint"] = "${EVAL_CKPT}"
+m["checkpoint"] = "${MMML_CKPT}"
 p.write_text(json.dumps(m, indent=2))
 print("Updated", p)
 PY
