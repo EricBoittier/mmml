@@ -37,6 +37,7 @@ from campaign_lib import (
     load_config,
     matrix_backends,
     matrix_box_sizes,
+    matrix_embeddings,
     matrix_job_count,
     matrix_temperatures,
     resolve_checkpoint_path,
