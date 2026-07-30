@@ -159,6 +159,23 @@ def main() -> int:
                         "but the feedback loop that destabilises full "
                         "coupling is broken. An approximation: forces are "
                         "then not the exact gradient of the energy.")
+    p.add_argument("--lr-solver", choices=("mic", "ewald"), default="ewald",
+                   help="Long-range electrostatics for both the solvent and "
+                        "the solute-solvent terms. mic truncates at the "
+                        "cutoff and under-stabilises the ion pair; ewald "
+                        "adds the reciprocal-space contribution.")
+    p.add_argument("--equilibrate-box-ps", type=float, default=100.0,
+                   help="One-off solvent equilibration before any window, "
+                        "cached and reused. Turan et al. use 500 ps NpT + "
+                        "2 ns NVT; 0 disables (and reproduces the old, "
+                        "unequilibrated behaviour).")
+    p.add_argument("--heat-stages", type=int, default=5,
+                   help="Stages for heating from --heat-start-fraction of "
+                        "the target temperature up to it, before the "
+                        "coupling ramp; 0 disables")
+    p.add_argument("--heat-start-fraction", type=float, default=0.2,
+                   help="Heat stage starts here x --temperature "
+                        "(0.2 is the default used elsewhere in mmml)")
     p.add_argument("--ramp-stages", type=int, default=5,
                    help="Stages over which to switch the ML/MM "
                         "electrostatics on during equilibration; 0 disables")
@@ -237,6 +254,10 @@ def main() -> int:
         solute_charges="ml" if args.embedding == "electrostatic" else "cgenff",
     )
     solute = list(range(SOLUTE_N_ATOMS))
+    print(f"electrostatics {args.lr_solver}"
+          + ("  (reciprocal-space cross term included)"
+             if args.lr_solver == "ewald" else
+             "  (switched cutoff -- ion pair under-solvated)"))
     print(f"atoms        {system.n_atoms} total, {SOLUTE_N_ATOMS} ML solute, "
           f"{system.metadata['n_solvent']} {model_solv.residue}")
 
@@ -320,12 +341,20 @@ def main() -> int:
         "mm_bonded": {"ml_atoms": solute, **bonded},
         "rxncoor": {"cv": cv, "target": 0.0, "k_ev_per_A2": args.k_ev,
                     "walls": walls},
+        # Long-range electrostatics for the solvent-solvent term. A switched
+        # cutoff in a periodic box of polar solvent is an approximation this
+        # campaign cannot afford: the reaction creates a +-1 ion pair, and the
+        # interaction beyond the cutoff is what solvates it.
+        "mm_nonbonded": {"lr_solver": args.lr_solver},
     }
     if "ml_mm_elec" in terms:
         term_kwargs_static["ml_mm_elec"] = {
             "ml_atoms": solute,
             "charge_mode": "q0",
             "charge_gradient": not args.freeze_charge_forces,
+            # Same reasoning, and it matters more here: this is the
+            # solute-solvent term, i.e. the one that carries the catalysis.
+            "lr_solver": args.lr_solver,
         }
 
     from mmml.md.assemble import build_hybrid_energy
@@ -340,7 +369,7 @@ def main() -> int:
     energy = build_hybrid_energy(system, terms, ctx, term_kwargs_static)
 
     def run_leg(sys_in, xi0, ensemble, n_steps, record_every, tag, dt_fs=None,
-                elec_scale=1.0):
+                elec_scale=1.0, temperature_K=None):
         # `dt_fs` overrides the MD timestep for this leg. It exists for
         # minimisation: the driver hands FIRE dt_max = the MD timestep, which is
         # sized for dynamics on an equilibrated box, not for the first steps down
@@ -354,7 +383,9 @@ def main() -> int:
             terms=terms,
             ensemble=EnsembleSpec(
                 ensemble=ensemble, space="pbc",
-                temperature_K=args.temperature, dt_fs=dt_fs, n_steps=n_steps,
+                temperature_K=(args.temperature if temperature_K is None
+                               else float(temperature_K)),
+                dt_fs=dt_fs, n_steps=n_steps,
                 params={"masses": masses, "seed": args.seed, "float64": True},
             ),
             backend="jaxmd", output_dir=None, seed=args.seed,
@@ -500,7 +531,13 @@ def main() -> int:
     # Relax the packed box once, restrained at the window nearest xi = 0.
     start_idx = int(np.argmin(np.abs(centres)))
     print(f"\nrelaxing packed box at xi0 = {centres[start_idx]:+.2f}")
-    if args.minimize_steps > 0:
+    have_cache = args.equilibrate_box_ps > 0 and (
+        artifacts / "boxes"
+        / f"equilibrated_{args.solvent}_{box_size:.1f}A_seed{args.seed}.npz"
+    ).exists()
+    if have_cache:
+        print("  minimisation skipped: the cached box replaces it")
+    if args.minimize_steps > 0 and not have_cache:
         # Two passes. The lattice builder places molecules on a grid at the
         # target density, which is a sound starting density but leaves individual
         # contacts strained, and FIRE at the full MD step size can diverge on
@@ -527,6 +564,54 @@ def main() -> int:
               f"{run_leg.last_seconds:.1f}s (dt {args.minimize_dt_fs:g} fs, "
               f"includes XLA compile)")
     n_eq = int(round(args.equil_ps * 1000.0 / args.dt_fs))
+
+    # A pre-equilibrated box, cached and reused.
+    #
+    # Turan et al. equilibrate the solvated system with 500 ps of NpT followed
+    # by 2 ns of NVT before any umbrella window runs. This campaign had been
+    # giving it about 2 ps -- roughly a thousandth of that. A lattice-packed box
+    # is at the right *density* from the first step but its liquid *structure*
+    # is not relaxed at all, and the first solvation shell around a charged
+    # solute takes tens to hundreds of ps to form. Starting umbrella windows
+    # before that is what detonated every solvated run.
+    #
+    # The cost is paid once: the relaxed box is cached per (solvent, box size,
+    # seed) and reused for every window, every embedding and every replica.
+    box_cache = (artifacts / "boxes" /
+                 f"equilibrated_{args.solvent}_{box_size:.1f}A_seed{args.seed}.npz")
+    if args.equilibrate_box_ps > 0 and box_cache.exists():
+        cached = np.load(box_cache)
+        system = dataclasses.replace(system, R=np.asarray(cached["R"]))
+        print(f"\nusing cached equilibrated box {box_cache.name} "
+              f"({float(cached['ps']):.0f} ps)")
+        # Heating is NOT skipped. The cache stores positions only; velocities
+        # are not carried across, so the system restarts at 0 K however well
+        # equilibrated its structure is. Skipping the heat stage here put the
+        # run straight back into the thermal shock the stage exists to prevent
+        # -- it died 25 fs into equilibration.
+    elif args.equilibrate_box_ps > 0:
+        print(f"\nno cached box; equilibrating for {args.equilibrate_box_ps} ps "
+              f"(one-off, then cached to {box_cache.name})")
+
+    # Heat gradually before anything else. Minimisation ends at 0 K; starting
+    # 300 K dynamics from there is a thermal shock, and this codebase refuses to
+    # do it elsewhere -- mlpot/cli_common.py raises on a 0 K heat start unless
+    # --allow-zero-temperature-start is given, and defaults to firstt = 0.2 *
+    # finalt. The staged order used throughout mmml is mini -> heat -> nve ->
+    # equi -> prod (see cli/run/md_run_advice.py::_STAGE_ORDER); this run had
+    # been going mini -> equi, skipping the two stages that exist to catch
+    # exactly the failures seen here.
+    if args.heat_stages > 0:
+        n_heat = max(1, n_eq // args.heat_stages)
+        t_lo = args.temperature * args.heat_start_fraction
+        for stage in range(1, args.heat_stages + 1):
+            t_stage = t_lo + (args.temperature - t_lo) * stage / args.heat_stages
+            system, _, e = run_leg(system, centres[start_idx], "nvt", n_heat,
+                                   args.record_every, f"heat{stage}",
+                                   elec_scale=0.0, temperature_K=t_stage)
+            print(f"  heat {t_stage:5.0f} K  E {e[0]:12.3f} -> {e[-1]:12.3f} eV   "
+                  f"{run_leg.last_seconds:5.1f}s")
+
     # Ramp the solute-solvent electrostatics on in stages rather than switching
     # them on at full strength. The failure this avoids is a feedback loop, not
     # a singularity: the solvent pulls the chloride out, the model responds with
@@ -544,6 +629,27 @@ def main() -> int:
                                    elec_scale=scale)
             print(f"  ramp {scale:4.2f}     E {e[0]:12.3f} -> {e[-1]:12.3f} eV   "
                   f"{run_leg.last_seconds:5.1f}s")
+    # Long solvent equilibration, at FULL coupling and after heating.
+    #
+    # It has to come after the ramp: at elec_scale = 0 the solute carries no
+    # charge at all (its MM charges are zeroed for this embedding), so the shell
+    # that forms would be the one around a neutral solute -- the wrong structure,
+    # equilibrated at length.
+    if args.equilibrate_box_ps > 0 and not box_cache.exists():
+        n_box = int(round(args.equilibrate_box_ps * 1000.0 / args.dt_fs))
+        chunk = max(1, n_box // 10)
+        for i in range(10):
+            system, _, e = run_leg(system, centres[start_idx], "nvt", chunk,
+                                   chunk, f"boxeq{i}", elec_scale=1.0)
+            print(f"  box equil {(i + 1) * args.equilibrate_box_ps / 10:6.1f} ps  "
+                  f"E {e[0]:12.3f} -> {e[-1]:12.3f} eV   "
+                  f"{run_leg.last_seconds:5.1f}s")
+        box_cache.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(box_cache, R=np.asarray(system.R),
+                 ps=np.asarray(float(args.equilibrate_box_ps)))
+        print(f"  cached -> {box_cache}")
+
+
     # Recorded densely rather than endpoint-only: this leg is shared by every
     # window, so if it blows up the guard in run_leg should say when.
     system, _, e = run_leg(system, centres[start_idx], "nvt", n_eq,
