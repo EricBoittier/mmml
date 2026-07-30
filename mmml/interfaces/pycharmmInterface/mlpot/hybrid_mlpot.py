@@ -1435,10 +1435,10 @@ def build_decomposed_mlpot_model(
     _cpu_load = defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
     ep_scale = None
     sig_scale = None
+    scales_file = getattr(args, "mm_lj_scales_file", None) if args is not None else None
     if args is not None and do_mm:
         from mmml.models.mm_lj_scales import resolve_md_lj_scales
 
-        scales_file = getattr(args, "mm_lj_scales_file", None)
         try:
             ep_scale, sig_scale = resolve_md_lj_scales(
                 scales_file=scales_file,
@@ -1449,6 +1449,46 @@ def build_decomposed_mlpot_model(
                 raise
             if verbose:
                 print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
+    elif args is not None:
+        # doMM off (periodic_external, or include_mm false): ep_scale/sig_scale
+        # feed the JAX switched-MM pair loop only, and CHARMM IMAGE VDW does not
+        # read the sidecar. Applying nothing while the user believes trained LJ
+        # is active is a silent-wrong-results failure, so say so — loudly when
+        # the scales were requested explicitly, on stderr when auto-discovered.
+        from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
+
+        found = None
+        try:
+            found = find_learnable_lj_scales_sidecar(
+                scales_file=scales_file,
+                checkpoint=None if _spoof else ckpt,
+            )
+        except Exception:  # pragma: no cover - discovery must never break setup
+            found = None
+        mode_note = (
+            f"mm_nonbond_mode={mm_nonbond_mode!r}"
+            if mm_nonbond_mode is not None
+            else "include_mm=false"
+        )
+        if scales_file is not None:
+            raise ValueError(
+                f"--mm-lj-scales-file={scales_file} was given but JAX MM is off "
+                f"({mode_note}), so per-type LJ scales cannot be applied: the "
+                "switched-MM pair loop is what consumes ep_scale/sig_scale, and "
+                "CHARMM IMAGE VDW ignores hybrid_mm.json. Use "
+                "--include-mm with --mm-nonbond-mode jax_mic to deploy trained "
+                "LJ scales, or drop --mm-lj-scales-file to run stock CGenFF LJ. "
+                "See docs/hybrid-mm-lj-scales.md."
+            )
+        if found is not None:
+            print(
+                f"mmml WARNING: {found} carries trained MM LJ scales but JAX MM "
+                f"is off ({mode_note}) — they are NOT applied and this run uses "
+                "stock CGenFF LJ. Use --mm-nonbond-mode jax_mic with "
+                "--include-mm to deploy them. See docs/hybrid-mm-lj-scales.md.",
+                file=sys.stderr,
+                flush=True,
+            )
         if verbose and ep_scale is not None:
             print(
                 f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
