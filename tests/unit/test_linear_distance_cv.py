@@ -26,7 +26,10 @@ def test_distance_factory_and_value():
     assert cv.pairs == ((0, 1),)
     assert cv.coefficients == (1.0,)
     assert cv.value_numpy(_colinear_three()) == pytest.approx(2.0)
-    assert cv.label() == "r(0,1)"
+    # Labels are display/metadata only (printed, and stored as "cv_label" in
+    # run summaries); pairs render as r(i-j) so multi-term labels stay readable
+    # when joined into a list.
+    assert cv.label() == "r(0-1)"
 
 
 def test_difference_factory():
@@ -50,7 +53,7 @@ def test_from_spec_round_trips():
 def test_validate_against_rejects_oob():
     cv = LinearDistanceCV.distance(0, 2)
     cv.validate_against(3)
-    with pytest.raises(ValueError, match="out of range"):
+    with pytest.raises(ValueError, match="references atom index 2 but the system has 2"):
         cv.validate_against(2)
 
 
