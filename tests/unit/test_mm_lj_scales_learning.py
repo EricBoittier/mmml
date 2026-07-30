@@ -47,8 +47,15 @@ def _zero_ml_apply(params, *, atomic_numbers, positions, dst_idx, src_idx,
     return {"energy": e.reshape(batch_size, 1), "forces": jnp.zeros_like(positions)}
 
 
-def _dimer_batch(separation_A: float = 3.5) -> dict:
-    """Two 2-atom monomers along x, separated so intermolecular LJ is active."""
+def _dimer_batch(
+    separation_A: float = 3.5,
+    type_idx: tuple[int, int, int, int] = (0, 1, 0, 1),
+) -> dict:
+    """Two 2-atom monomers along x, separated so intermolecular LJ is active.
+
+    ``type_idx`` assigns each atom a master-table row.  Using a single type
+    throughout makes a scalar energy target identify that type's scale exactly.
+    """
     n = 4
     pos = jnp.array(
         [[0.0, 0, 0], [1.0, 0, 0], [separation_A, 0, 0], [separation_A + 1.0, 0, 0]],
@@ -61,7 +68,7 @@ def _dimer_batch(separation_A: float = 3.5) -> dict:
         "R": pos,
         "Z": jnp.array([6, 1, 6, 1]),
         "mol_id": jnp.array([0, 0, 1, 1]).reshape(1, n),
-        "cgenff_type_idx": jnp.array([0, 1, 0, 1]).reshape(1, n),
+        "cgenff_type_idx": jnp.array(type_idx).reshape(1, n),
         # Zero charges: E_MM is pure LJ, so the fit is unambiguous.
         "cgenff_charge": jnp.zeros(n).reshape(1, n),
         "atom_mask": jnp.ones(n, dtype=jnp.float32),
@@ -70,6 +77,35 @@ def _dimer_batch(separation_A: float = 3.5) -> dict:
         "src_idx": src,
         "batch_segments": jnp.zeros(n, dtype=jnp.int32),
     }
+
+
+def _scalar_target_loss(target, batch):
+    """Squared error of E_MM against one reference energy."""
+
+    def loss_fn(p):
+        _, sig, eps = split_mm_lj_scale_params(p)
+        return (_e_mm(sig, eps, batch) - target) ** 2
+
+    return loss_fn
+
+
+def _fit_scales(loss_fn, params, *, lr: float, steps: int):
+    """Adam loop over the LJ-scale leaves; returns (params, loss0, loss1)."""
+    import optax
+
+    opt = optax.adam(lr)
+    state = opt.init(params)
+    loss0 = float(loss_fn(params))
+
+    @jax.jit
+    def step(p, s):
+        loss, grads = jax.value_and_grad(loss_fn)(p)
+        updates, s = opt.update(grads, s, p)
+        return optax.apply_updates(p, updates), s, loss
+
+    for _ in range(steps):
+        params, state, _ = step(params, state)
+    return params, loss0, float(loss_fn(params))
 
 
 def _e_mm(sigma_scale, epsilon_scale, batch) -> jnp.ndarray:
@@ -93,75 +129,72 @@ def _e_mm(sigma_scale, epsilon_scale, batch) -> jnp.ndarray:
 def test_optimizer_recovers_planted_epsilon_scale():
     """Adam on the params-pytree leaves recovers a known ε scale.
 
-    The real question behind issue #133: not "is there a gradient" but "does
-    the optimizer move these leaves to the right place".  ε enters E_MM
-    linearly, so a single well-separated dimer identifies it.
+    The real question behind issue #133: not "is there a gradient" but "does the
+    optimizer move these leaves to the right place".  A single-type system makes
+    the scalar energy target identify ``s^ε[0]`` uniquely — with two types one
+    scalar target is underdetermined (ε₀ up and ε₁ down compensate exactly).
     """
-    import optax
+    batch = _dimer_batch(type_idx=(0, 0, 0, 0))
+    truth_eps = 1.6
+    target = _e_mm(jnp.ones(2), jnp.array([truth_eps, 1.0]), batch)
 
-    batch = _dimer_batch()
-    truth_eps = jnp.array([1.6, 0.6])
-    target = _e_mm(jnp.ones(2), truth_eps, batch)
-
-    params = attach_mm_lj_scales({"params": {}}, 2)
-
-    def loss_fn(p):
-        _, sig, eps = split_mm_lj_scale_params(p)
-        return (_e_mm(sig, eps, batch) - target) ** 2
-
-    opt = optax.adam(3e-2)
-    state = opt.init(params)
-    loss0 = float(loss_fn(params))
-
-    @jax.jit
-    def step(p, s):
-        loss, grads = jax.value_and_grad(loss_fn)(p)
-        updates, s = opt.update(grads, s, p)
-        return optax.apply_updates(p, updates), s, loss
-
-    for _ in range(600):
-        params, state, _ = step(params, state)
-
-    loss1 = float(loss_fn(params))
+    params, loss0, loss1 = _fit_scales(
+        _scalar_target_loss(target, batch), attach_mm_lj_scales({"params": {}}, 2),
+        lr=3e-2, steps=400,
+    )
     assert loss1 < loss0 * 1e-4, f"loss did not converge: {loss0:g} -> {loss1:g}"
 
-    _, sig_out, eps_out = split_mm_lj_scale_params(params)
-    # σ is unconstrained by a single ε-only target, so only ε is asserted.
-    np.testing.assert_allclose(np.asarray(eps_out), np.asarray(truth_eps), rtol=2e-2)
+    _, _, eps_out = split_mm_lj_scale_params(params)
+    assert float(np.asarray(eps_out)[0]) == pytest.approx(truth_eps, rel=2e-2)
+    # Type 1 is absent from the system, so it gets no gradient and must stay at
+    # its 1.0 init — the same property the ATC remap relies on for solvent types.
+    assert float(np.asarray(eps_out)[1]) == pytest.approx(1.0, abs=1e-6)
 
 
 def test_optimizer_recovers_planted_sigma_scale():
     """Same, for σ — which enters through r^-12/r^-6, not linearly."""
-    import optax
+    batch = _dimer_batch(type_idx=(0, 0, 0, 0))
+    truth_sig = 1.08
+    target = _e_mm(jnp.array([truth_sig, 1.0]), jnp.ones(2), batch)
 
-    batch = _dimer_batch()
-    truth_sig = jnp.array([1.08, 0.94])
-    target = _e_mm(truth_sig, jnp.ones(2), batch)
+    params, loss0, loss1 = _fit_scales(
+        _scalar_target_loss(target, batch), attach_mm_lj_scales({"params": {}}, 2),
+        lr=1e-2, steps=600,
+    )
+    assert loss1 < loss0 * 1e-4, f"loss did not converge: {loss0:g} -> {loss1:g}"
 
-    params = attach_mm_lj_scales({"params": {}}, 2)
+    _, sig_out, _ = split_mm_lj_scale_params(params)
+    assert float(np.asarray(sig_out)[0]) == pytest.approx(truth_sig, rel=2e-2)
+    assert float(np.asarray(sig_out)[1]) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_two_types_identified_from_multiple_geometries():
+    """Both per-type ε scales recover once the fit sees several separations.
+
+    This is the shape of a real training set: one geometry leaves the per-type
+    split degenerate, a distance scan does not, because each type pair carries a
+    different r-dependence.
+    """
+    separations = (3.2, 3.6, 4.1, 4.8, 5.6)
+    batches = [_dimer_batch(d) for d in separations]
+    truth_eps = jnp.array([1.5, 0.6])
+    targets = [_e_mm(jnp.ones(2), truth_eps, b) for b in batches]
 
     def loss_fn(p):
         _, sig, eps = split_mm_lj_scale_params(p)
-        return (_e_mm(sig, eps, batch) - target) ** 2
+        return sum(
+            (_e_mm(sig, eps, b) - t) ** 2 for b, t in zip(batches, targets)
+        ) / len(batches)
 
-    opt = optax.adam(1e-2)
-    state = opt.init(params)
-    loss0 = float(loss_fn(params))
+    params, loss0, loss1 = _fit_scales(
+        loss_fn, attach_mm_lj_scales({"params": {}}, 2), lr=2e-2, steps=1500
+    )
+    assert loss1 < loss0 * 1e-4, f"loss did not converge: {loss0:g} -> {loss1:g}"
 
-    @jax.jit
-    def step(p, s):
-        loss, grads = jax.value_and_grad(loss_fn)(p)
-        updates, s = opt.update(grads, s, p)
-        return optax.apply_updates(p, updates), s, loss
-
-    for _ in range(800):
-        params, state, _ = step(params, state)
-
-    assert float(loss_fn(params)) < loss0 * 1e-4
-    _, sig_out, _ = split_mm_lj_scale_params(params)
-    # One scalar target cannot separate two σ types; assert the energy matched
-    # and that σ actually moved off its 1.0 init.
-    assert not np.allclose(np.asarray(sig_out), np.ones(2), atol=1e-3)
+    _, _, eps_out = split_mm_lj_scale_params(params)
+    np.testing.assert_allclose(
+        np.asarray(eps_out), np.asarray(truth_eps), rtol=5e-2
+    )
 
 
 def test_scales_stay_finite_and_positive_under_training():

@@ -82,6 +82,61 @@ LJ scales, as long as `lr_solver: mic` and `mm_include_lj: true`. See
 
 ---
 
+## Why you train LJ *without* Ewald (read this first)
+
+New users usually read "LJ is forced off under Ewald" as a missing feature to
+work around. It is not. Training LJ under truncated MIC and keeping Ewald for
+Coulomb is the **recommended** workflow, because the two terms genuinely do not
+need the same long-range treatment.
+
+| Term | Falls off as | Lattice sum | Consequence |
+|------|--------------|-------------|-------------|
+| LJ repulsion / dispersion | \(r^{-12}\), \(r^{-6}\) | Converges absolutely and fast | A switch at 8–13 Å is standard practice; the residual is a small, nearly uniform energy/pressure offset (what an analytic tail correction handles) |
+| Coulomb | \(r^{-1}\) | Only *conditionally* convergent | Truncation is qualitatively wrong — it distorts structure and dielectric response, so Ewald/PME is mandatory |
+
+So the split is principled: **σ/ε are short-ranged parameters, and you fit them
+with the same short-ranged switched operator you will deploy.** Nothing is lost
+by the MIC Coulomb during Stage 1 that Ewald would have told you about the LJ
+well depth or radius.
+
+### The catch a student must understand
+
+Because Stage 1 fits σ/ε while Coulomb is truncated, **any Coulomb error can be
+absorbed into the LJ parameters**. That is real parameter compensation, and it is
+the main way this workflow goes wrong: you get σ/ε that look great in the fit and
+then behave badly with Ewald, because part of what they learned was standing in
+for missing long-range electrostatics.
+
+Three things keep it bounded — do all three:
+
+1. **Use `mm_charge_mode: fixed`** for the LJ-fitting stage. Fixed CGenFF charges
+   have no freedom to co-adapt, so the compensation has one fewer place to hide.
+   (This is why `train_fixed_lj_scales.yaml` pins it, even though charge modes
+   are otherwise orthogonal.)
+2. **Keep the cutoffs identical between training and MD.** `mm_switch_on`,
+   `mm_switch_width` and `ml_switch_width` define the operator your σ/ε were
+   fitted against; changing them at MD time silently uses the parameters with a
+   different energy function. See [Handoff cutoffs](#handoff-cutoffs).
+3. **Validate on a property that was not in the loss** — density, or an
+   RDF first-peak position. A fit that only reports its own training loss has
+   not been validated.
+
+### Which solver for which job
+
+| You want to… | Use | Why |
+|---|---|---|
+| Learn σ/ε | `lr_solver: mic`, `mm_include_lj: true`, `learn_mm_lj_scales: true` | The only path where LJ is in the energy and differentiable |
+| Refine ML weights with correct electrostatics | `lr_solver: ewald` (LJ auto-off, scales frozen) | Stage 2 below; keeps the Stage-1 sidecar intact |
+| Deploy trained σ/ε in MD, including a condensed-phase box | `include_mm: true`, `mm_nonbond_mode: jax_mic` (the default) | The switched-MM pair loop is what reads `ep_scale`/`sig_scale` |
+| Full-box Ewald/PME production MD | `mm_nonbond_mode: periodic_external` | **Trained LJ scales do not apply here** — MLpot now refuses `--mm-lj-scales-file` in this mode rather than ignoring it |
+
+The last row is the honest limit: a condensed-phase run *with* trained LJ uses
+truncated-MIC electrostatics today. Combining learned LJ with full Ewald in one
+production energy is future work, tracked in
+[issue #133](https://github.com/EricBoittier/mmml/issues/133).
+
+---
+
 ## Staged MIC LJ then Ewald transfer learning
 
 People often want: train ML + learnable LJ on MIC first, then warm-start a final
