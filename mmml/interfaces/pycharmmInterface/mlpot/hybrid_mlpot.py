@@ -1450,6 +1450,12 @@ def build_decomposed_mlpot_model(
                 raise
             if verbose:
                 print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
+        if verbose and ep_scale is not None:
+            print(
+                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+                f"from hybrid_mm.json / --mm-lj-scales-file",
+                flush=True,
+            )
     elif args is not None:
         # doMM off (periodic_external, or include_mm false): ep_scale/sig_scale
         # feed the JAX switched-MM pair loop only, and CHARMM IMAGE VDW does not
@@ -1488,12 +1494,6 @@ def build_decomposed_mlpot_model(
                 "stock CGenFF LJ. Use --mm-nonbond-mode jax_mic with "
                 "--include-mm to deploy them. See docs/hybrid-mm-lj-scales.md.",
                 file=sys.stderr,
-                flush=True,
-            )
-        if verbose and ep_scale is not None:
-            print(
-                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
-                f"from hybrid_mm.json / --mm-lj-scales-file",
                 flush=True,
             )
     factory = setup_calculator(
