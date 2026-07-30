@@ -272,7 +272,6 @@ def _attach_leg_output_dir(job: dict[str, Any], cell_root: Path, job_id: str) ->
 
 
 def _liquid_prep_defaults(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
-    del cell
     flags: dict[str, Any] = {
         "liquid_prep": bool(cfg.get("liquid_prep", True)),
         "density_prep_ladder": bool(cfg.get("density_prep_ladder", True)),
@@ -284,9 +283,29 @@ def _liquid_prep_defaults(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         ),
         "max_grms_before_dyn": float(cfg.get("max_grms_before_dyn", 50.0)),
     }
-    if cfg.get("bulk_density_fractions"):
-        # Target the liquid packing density used to size N.
-        flags["bulk_density_fraction"] = 1.0
+    if matrix_uses_bulk_density(cfg):
+        # Match the fraction used to size N for this cell (smoke may be < 1.0).
+        min_n = int(cfg.get("bulk_density_n_min", 1))
+        max_raw = cfg.get("bulk_density_n_max")
+        max_n = int(max_raw) if max_raw is not None else None
+        frac_match: float | None = None
+        for frac in (float(x) for x in (cfg.get("bulk_density_fractions") or [])):
+            n = n_monomers_at_bulk_density(
+                cell.solvent,
+                cell.box_size,
+                frac,
+                min_n=min_n,
+                max_n=max_n,
+            )
+            if n == int(cell.n_monomers):
+                frac_match = float(frac)
+                break
+        if frac_match is None:
+            bulk_n = n_monomers_at_bulk_density(
+                cell.solvent, cell.box_size, 1.0, min_n=1
+            )
+            frac_match = float(cell.n_monomers) / float(max(1, bulk_n))
+        flags["bulk_density_fraction"] = float(frac_match)
     return flags
 
 

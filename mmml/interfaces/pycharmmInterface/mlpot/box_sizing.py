@@ -25,6 +25,8 @@ MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A = 1.0
 MAX_PACKMOL_MARGIN_FRAC_PER_SIDE = 0.20
 
 # Experimental bulk liquid densities (~298 K) for auto-sizing.
+# METH: liquid CH4 near the normal boiling point (~111.7 K); used for
+# liquid-density matrix sizing (same value as workflows/.../bulk_density.py).
 SOLVENT_BULK_PROPS: dict[str, dict[str, float]] = {
     "BENZ": {"rho_g_cm3": 0.874, "mw_g_mol": 78.11},
     "DCM": {"rho_g_cm3": 1.326, "mw_g_mol": 84.93},
@@ -33,6 +35,8 @@ SOLVENT_BULK_PROPS: dict[str, dict[str, float]] = {
     "ETOH": {"rho_g_cm3": 0.789, "mw_g_mol": 46.07},
     "TIP3": {"rho_g_cm3": 1.000, "mw_g_mol": 18.015},
     "WAT": {"rho_g_cm3": 1.000, "mw_g_mol": 18.015},
+    "METH": {"rho_g_cm3": 0.4226, "mw_g_mol": 16.0425},
+    "CH4": {"rho_g_cm3": 0.4226, "mw_g_mol": 16.0425},
 }
 
 BoxAutoMode = Literal["geometry", "density", "count"]
