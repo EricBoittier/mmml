@@ -258,7 +258,7 @@ Writes `umbrella_snapshots.npz` (includes `energies_unbiased_ev` +
 
 ### NEB (ASE nudged elastic band)
 
-Vacuum SN2-like path for NH₃–CH₃Cl with `kl.json` (endpoints under `neb/`):
+Vacuum SN2-like path for NH₃–CH₃Cl with `model_ext.json` (endpoints under `neb/`):
 
 ```bash
 source examples/m/_env.sh
@@ -274,6 +274,12 @@ Writes `artifacts/nh3_ch3cl/neb/{neb.traj,neb.xyz,neb_profile.dat,neb_plot.png,n
 Profile columns: reaction coordinate (Å), ΔE (kcal/mol), N–C and Cl–C distances.
 
 Docs: [`docs/neb.md`](../../docs/neb.md).
+
+**Solvent NEB** is not wired yet (`mmml neb` is ASE + all-ML vacuum). For
+solution free-energy profiles use the hybrid umbrella / ADUMB paths above
+(mechanical embedding on the make-box cell). A solvated NEB would need a
+hybrid ASE calculator (ML solute + MM solvent) and a policy for solvent DOFs
+(frozen / rigid / fully flexible) — say if you want that next.
 
 ### DMC (reactant / product basins)
 

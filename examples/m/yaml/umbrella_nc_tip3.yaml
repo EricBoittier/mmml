@@ -9,7 +9,7 @@
 #   uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
 
 engine: hybrid_jaxmd
-checkpoint: ../kl.json
+checkpoint: ../model_ext.json
 from_psf: ../../artifacts/nh3_ch3cl/boxes/tip3/model.psf
 from_pdb: ../../artifacts/nh3_ch3cl/boxes/tip3/model.pdb
 box_size: 30.0
