@@ -86,7 +86,10 @@ def _libcharmm_candidates() -> list[Path]:
     Delegates to ``charmm_paths.find_charmm_lib_in_dir`` so the platform suffix
     (``.so`` on Linux, ``.dylib`` on macOS) is handled in exactly one place.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_paths import find_charmm_lib_in_dir
+    from mmml.interfaces.pycharmmInterface.charmm_paths import (
+        charmm_build_cache_dirs,
+        find_charmm_lib_in_dir,
+    )
 
     search_dirs: list[Path] = []
     lib_dir = _charmm_lib_dir()
@@ -96,6 +99,10 @@ def _libcharmm_candidates() -> list[Path]:
     if home is not None:
         search_dirs.append(home)
     search_dirs.append(_repo_root() / "setup" / "charmm")
+    # Out-of-tree builds (``$HOME/.cache/mmml-charmm-build/...``) are usually
+    # newer than the in-tree copy; without them the freshness check below sees
+    # only a stale setup/charmm library and falls back to conservative limits.
+    search_dirs.extend(charmm_build_cache_dirs())
 
     seen: set[Path] = set()
     out: list[Path] = []

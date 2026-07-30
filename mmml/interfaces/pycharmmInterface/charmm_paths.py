@@ -48,6 +48,65 @@ def default_repo_charmm_home(repo_root: Path | None = None) -> Path | None:
     return None
 
 
+def charmm_build_cache_dirs(env: "os._Environ | dict[str, str] | None" = None) -> list[Path]:
+    """Out-of-tree build directories that hold a ``libcharmm``.
+
+    ``scripts/rebuild_charmm_mlpot.sh`` builds into
+    ``$HOME/.cache/mmml-charmm-build/<platform-tag>`` (overridable with
+    ``CHARMM_BUILD_DIR``), and the per-tier helpers add
+    ``.../tier_<max_npr>_nodomdec/lib``. Those builds are frequently *newer*
+    than the copy under ``setup/charmm``, so they must be discoverable — a
+    stale in-tree library silently caps MLpot at the conservative
+    ``max_Nml``/``max_Npr`` fallback even when a fresh build exists.
+
+    Reads ``CHARMM_BUILD_DIR`` / ``HOME`` from *env* (default ``os.environ``);
+    passing an explicit mapping keeps discovery hermetic under test.
+    """
+    environ = env if env is not None else os.environ
+    roots: list[Path] = []
+    explicit = (environ.get("CHARMM_BUILD_DIR") or "").strip()
+    if explicit:
+        build_dir = Path(explicit).expanduser()
+        # CHARMM_BUILD_DIR names one build directory; its siblings are the
+        # other platform/tier builds from the same cache.
+        roots.extend([build_dir, build_dir.parent])
+    home_raw = (environ.get("HOME") or "").strip()
+    if home_raw:
+        roots.append(Path(home_raw) / ".cache" / "mmml-charmm-build")
+    elif env is None:
+        roots.append(Path("~/.cache/mmml-charmm-build").expanduser())
+
+    out: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        candidates = [root, *(c for c in sorted(root.iterdir()) if c.is_dir())]
+        for candidate in candidates:
+            if find_charmm_lib_in_dir(candidate) is None:
+                continue
+            resolved = candidate.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            out.append(candidate)
+    return out
+
+
+def newest_charmm_lib_dir(candidates: list[Path]) -> Path | None:
+    """The candidate whose ``libcharmm`` has the most recent mtime."""
+    best: Path | None = None
+    best_mtime: float | None = None
+    for directory in candidates:
+        lib = find_charmm_lib_in_dir(directory)
+        if lib is None:
+            continue
+        mtime = lib.stat().st_mtime
+        if best_mtime is None or mtime > best_mtime:
+            best, best_mtime = directory, mtime
+    return best
+
+
 def normalize_charmm_lib_dir(raw: str | None) -> str:
     """Return a directory path for ``CHARMM_LIB_DIR`` (not a ``.so`` file path)."""
     value = (raw or "").strip()
@@ -122,9 +181,23 @@ def resolve_charmm_paths(
     if home and not _valid_charmm_home(home) and default_home_s:
         home = default_home_s
 
-    lib = _resolve_lib_dir(env=environ, default=default_home_s)
-    if lib and not _valid_charmm_home(lib) and default_home_s:
-        lib = default_home_s
+    # CHARMM_HOME stays the *source* tree (it owns source/api/api_func.F90 and
+    # toppar); only the library directory follows the freshest build. Prefer an
+    # out-of-tree build-cache library over a stale setup/charmm copy, matching
+    # what the cluster workflow scripts set by hand.
+    default_lib_s = default_home_s
+    freshest = newest_charmm_lib_dir(
+        [
+            *([default_home] if default_home else []),
+            *charmm_build_cache_dirs(env=environ),
+        ]
+    )
+    if freshest is not None:
+        default_lib_s = str(freshest)
+
+    lib = _resolve_lib_dir(env=environ, default=default_lib_s)
+    if lib and not _valid_charmm_home(lib) and default_lib_s:
+        lib = default_lib_s
 
     return home, lib
 

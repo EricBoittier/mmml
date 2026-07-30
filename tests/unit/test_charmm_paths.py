@@ -437,3 +437,84 @@ def test_assert_cgenff_toppar_readable_rejects_truncated_prm(tmp_path):
         assert "read_param_file" in str(exc)
     else:
         raise AssertionError("expected FileNotFoundError for truncated PRM")
+
+
+def _write_lib(directory: Path, *, mtime: float, name: str = "libcharmm.so") -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    lib = directory / name
+    lib.write_bytes(b"stub")
+    os.utime(lib, (mtime, mtime))
+    return lib
+
+
+def test_newer_build_cache_lib_wins_over_stale_setup_tree(tmp_path):
+    """A fresh ~/.cache build must beat a stale setup/charmm copy.
+
+    Regression: rebuilds land in $HOME/.cache/mmml-charmm-build/<platform>, so a
+    stale in-tree libcharmm made mlpot_limits fall back to max_Nml=100 even
+    though a current build existed.
+    """
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    _write_lib(chm, mtime=1_000.0)
+
+    home = tmp_path / "home"
+    cache = home / ".cache" / "mmml-charmm-build" / "linux-x86_64"
+    _write_lib(cache, mtime=9_000.0)
+
+    charmm_home, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo, env={"HOME": str(home)}
+    )
+
+    # CHARMM_HOME stays the source tree (it owns api_func.F90 / toppar) ...
+    assert charmm_home == str(chm)
+    # ... while the library directory follows the freshest build.
+    assert lib == str(cache)
+
+
+def test_stale_build_cache_does_not_displace_fresh_setup_tree(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    _write_lib(chm, mtime=9_000.0)
+
+    home = tmp_path / "home"
+    _write_lib(home / ".cache" / "mmml-charmm-build" / "linux-x86_64", mtime=1_000.0)
+
+    _, lib = charmm_paths.resolve_charmm_paths(repo_root=repo, env={"HOME": str(home)})
+
+    assert lib == str(chm)
+
+
+def test_explicit_lib_dir_still_beats_build_cache(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    _write_lib(chm, mtime=1_000.0)
+
+    home = tmp_path / "home"
+    _write_lib(home / ".cache" / "mmml-charmm-build" / "linux-x86_64", mtime=9_000.0)
+
+    tier_lib = tmp_path / "tier" / "lib"
+    _write_lib(tier_lib, mtime=5_000.0)
+
+    _, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo,
+        env={"HOME": str(home), "CHARMM_LIB_DIR": str(tier_lib)},
+    )
+
+    assert lib == str(tier_lib)
+
+
+def test_tier_build_under_cache_is_discovered(tmp_path):
+    """Per-tier builds live in .../tier_<max_npr>_nodomdec/lib."""
+    home = tmp_path / "home"
+    tier = home / ".cache" / "mmml-charmm-build" / "tier_56000000_nodomdec"
+    _write_lib(tier / "lib", mtime=9_000.0)
+
+    found = charmm_paths.charmm_build_cache_dirs(env={"HOME": str(home)})
+
+    assert tier in found
+
+
+def test_build_cache_discovery_is_hermetic_without_home(tmp_path):
+    """An explicit env without HOME must not reach the real ~/.cache."""
+    assert charmm_paths.charmm_build_cache_dirs(env={}) == []
