@@ -1546,22 +1546,51 @@ def _record_from_pdb_cluster_metadata(
     n_mol = int(len(atoms_per_list))
     residue_labels: list[str] = []
     pdb_labels = [str(x).strip().upper() for x in (pdb_res_seq or [])]
-    if len(pdb_labels) == n_mol and all(pdb_labels):
+    _placeholder = frozenset({"", "UNK", "MOL", "UNL", "XXX"})
+
+    def _usable(labels: list[str]) -> bool:
+        return (
+            len(labels) == n_mol
+            and all(labels)
+            and not all(lab in _placeholder for lab in labels)
+        )
+
+    if _usable(pdb_labels):
         residue_labels = list(pdb_labels)
     else:
         try:
             import pycharmm.psf as psf_mod
 
+            # ``get_res()`` is one name per *residue* (nres), not per atom.
             if hasattr(psf_mod, "get_res"):
                 res_all = [str(x).strip().upper() for x in psf_mod.get_res()]
-                offset = 0
-                for n in atoms_per_list:
-                    residue_labels.append(
-                        res_all[offset] if 0 <= offset < len(res_all) else "UNK"
-                    )
-                    offset += int(n)
+                if len(res_all) == n_mol and _usable(res_all):
+                    residue_labels = list(res_all)
+                elif len(res_all) >= n_mol and any(
+                    r not in _placeholder for r in res_all[:n_mol]
+                ):
+                    residue_labels = list(res_all[:n_mol])
         except Exception:
-            residue_labels = ["UNK"] * n_mol
+            residue_labels = []
+        if not _usable(residue_labels):
+            # Last resort: first atom of each monomer from a flat per-atom view.
+            try:
+                import pycharmm.psf as psf_mod
+
+                if hasattr(psf_mod, "get_res"):
+                    res_flat = [str(x).strip().upper() for x in psf_mod.get_res()]
+                    if len(res_flat) == int(np.sum(atoms_per_list)):
+                        residue_labels = []
+                        offset = 0
+                        for n in atoms_per_list:
+                            residue_labels.append(
+                                res_flat[offset]
+                                if 0 <= offset < len(res_flat)
+                                else "UNK"
+                            )
+                            offset += int(n)
+            except Exception:
+                residue_labels = ["UNK"] * n_mol
         if len(residue_labels) != n_mol:
             residue_labels = ["UNK"] * n_mol
 
@@ -1578,7 +1607,8 @@ def _record_from_pdb_cluster_metadata(
         box_msg = f"box={side:.3f} Å" if side is not None else "vacuum (no box)"
         print(
             f"Loading full-system PDB {path.name} "
-            f"({n_mol} residues, {int(z.size)} atoms, {box_msg})",
+            f"({n_mol} residues, {int(z.size)} atoms, {box_msg}; "
+            f"species={dict(summary)})",
             flush=True,
         )
     return n_mol, tag

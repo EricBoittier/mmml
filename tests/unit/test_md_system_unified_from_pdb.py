@@ -43,6 +43,38 @@ def _composition_args() -> Namespace:
     return _args(from_pdb=None, composition="TIP3:100", builder=None, box_size=30.0)
 
 
+def test_from_pdb_cluster_metadata_uses_per_residue_psf_names(monkeypatch) -> None:
+    """``psf.get_res()`` is nres-long; indexing by atom offset produced all UNK."""
+    from argparse import Namespace
+    from pathlib import Path
+    from types import SimpleNamespace
+    from unittest import mock
+
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
+        lambda: [42, 3, 3],
+    )
+    fake_psf = SimpleNamespace(get_res=lambda: ["TRIA", "TIP3", "TIP3"])
+    args = Namespace(quiet=True, tag=None)
+    with mock.patch.dict(
+        "sys.modules",
+        {"pycharmm": SimpleNamespace(psf=fake_psf), "pycharmm.psf": fake_psf},
+    ):
+        n_mol, _tag = setup_mod._record_from_pdb_cluster_metadata(
+            args,
+            path=Path("model.pdb"),
+            side=28.0,
+            z=np.zeros(48, dtype=int),
+            pdb_res_seq=["MOL", "MOL", "MOL"],  # placeholders → fall back to PSF
+        )
+    assert n_mol == 3
+    assert args._cluster_residue_labels == ["TRIA", "TIP3", "TIP3"]
+
+
 def test_from_pdb_selects_the_from_pdb_builder() -> None:
     from mmml.md.lowering import runconfig_from_md_system_args
 
