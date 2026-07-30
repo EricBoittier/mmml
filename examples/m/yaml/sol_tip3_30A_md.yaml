@@ -1,5 +1,9 @@
 # Load NH3–CH3Cl from a 30 Å TIP3 make-box PDB and run a short PBC NVE smoke.
 #
+# Mechanical embedding (same ownership as umbrella hybrid_jaxmd):
+#   ML = AMM1+CH3CL complex once (model_ext.json)
+#   MM = solute–solvent + solvent–solvent only (solute–solute MM dropped)
+#
 # Prerequisite:
 #   source examples/m/_env.sh          # CH3CL append RTF/PRM
 #   BOX_SIZE=30 uv run python examples/m/07_export_solute_pdb.py
@@ -11,7 +15,7 @@
 #   uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
 
 from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb
-checkpoint: examples/m/kl.json
+checkpoint: examples/m/model_ext.json
 setup: pbc_nve
 backend: jaxmd
 jaxmd_unified: true
@@ -20,6 +24,8 @@ dt_fs: 0.5
 temperature: 300
 include_mm: true
 mm_switch_on: 8.0
+# Restrict PhysNet to the reactive complex; do not ML-evaluate TIP3.
+ml_resnames: [AMM1, CH3CL]
 skip_jit_warmup: true
 quiet: true
 seed: 0

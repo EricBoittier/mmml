@@ -26,6 +26,7 @@ BASE = dict(
     backend="jaxmd",
     jaxmd_unified=True,
     interaction_policy=None,
+    ml_resnames=None,
     n_molecules=None,
 )
 
@@ -141,3 +142,61 @@ def test_from_pdb_builder_reads_box_back_off_args() -> None:
     # Must consume the per-residue split the loader derived from the PSF.
     assert "_cluster_atoms_per_list" in src
     assert "_cluster_residue_labels" in src
+
+
+def test_run_unified_applies_ml_resnames(monkeypatch) -> None:
+    """ml_resnames must restrict ml_intra and merge solute mol_ids before assemble."""
+    import numpy as np
+
+    import mmml.cli.run.md_system_unified as unified
+    import mmml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
+    from mmml.md.system import MolecularSystem
+
+    monkeypatch.setattr(import_pycharmm, "ensure_pycharmm_loaded", lambda: True)
+
+    R = np.zeros((7, 3), dtype=np.float64)
+    Z = np.array([7, 1, 6, 17, 8, 1, 1], dtype=np.int32)
+    mol_id = np.array([0, 0, 1, 1, 2, 2, 2], dtype=np.int32)
+    monomers = [
+        np.array([0, 1], dtype=np.int32),
+        np.array([2, 3], dtype=np.int32),
+        np.array([4, 5, 6], dtype=np.int32),
+    ]
+    toy = MolecularSystem(
+        R=R,
+        Z=Z,
+        box=np.eye(3) * 20.0,
+        mol_id=mol_id,
+        monomer_indices=monomers,
+        water_indices=[monomers[2]],
+        metadata={"residue_names": ("AMM1", "CH3CL", "TIP3")},
+    )
+
+    monkeypatch.setattr(
+        unified, "build_from_pdb_system_with_ffparams", lambda *_a, **_k: toy
+    )
+    monkeypatch.setattr(unified, "build_energy_context", lambda *_a, **_k: object())
+
+    captured: dict = {}
+
+    class _Traj:
+        n_frames = 1
+        metadata = {"energies": np.array([1.0])}
+
+    def _assemble(run_config, *, system=None, ctx=None, term_kwargs=None, **_k):
+        captured["system"] = system
+        captured["term_kwargs"] = term_kwargs
+        captured["terms"] = run_config.terms
+        return _Traj()
+
+    monkeypatch.setattr("mmml.md.assemble.assemble_and_run", _assemble)
+
+    args = _from_pdb_args()
+    args.ml_resnames = ["AMM1", "CH3CL"]
+    args.quiet = True
+    assert unified.run_unified_jaxmd(args) == 0
+    assert captured["terms"] == ("ml_intra", "mm_nonbonded")
+    ml_idx = captured["term_kwargs"]["ml_intra"]["monomer_indices"][0]
+    assert list(ml_idx) == [0, 1, 2, 3]
+    assert int(captured["system"].mol_id[0]) == int(captured["system"].mol_id[3])
+    assert int(captured["system"].mol_id[0]) != int(captured["system"].mol_id[4])

@@ -4,10 +4,12 @@
 #
 # Sibling box.json next to model.pdb supplies the cell. ASE / legacy JAX-MD /
 # PyCHARMM only (``--jaxmd-unified`` is packmol-composition-only today).
+# For jaxmd-unified mechanical embedding from this PDB, use sol_tip3_30A_md.yaml
+# (model_ext.json + ml_resnames: [AMM1, CH3CL]).
 
 defaults:
   from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb
-  checkpoint: examples/m/kl.json
+  checkpoint: examples/m/model_ext.json
   setup: pbc_nve
   ps: 0.05
   dt_fs: 0.5

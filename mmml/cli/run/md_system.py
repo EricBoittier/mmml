@@ -210,6 +210,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--ml-resnames",
+        type=str,
+        default=None,
+        dest="ml_resnames",
+        help=(
+            "Mechanical embedding for --jaxmd-unified: comma-separated residue "
+            "names defining the ML solute complex (e.g. AMM1,CH3CL). PhysNet "
+            "evaluates that complex once; MM covers solute–solvent and "
+            "solvent–solvent (solute–solute MM pairs are dropped via shared "
+            "mol_id). YAML: ml_resnames: [AMM1, CH3CL]."
+        ),
+    )
+    parser.add_argument(
         "--interaction-policy",
         type=Path,
         default=None,

@@ -285,9 +285,36 @@ def run_unified_jaxmd(args: Any) -> int:
 
         plan = compile_interaction_policy(system, load_interaction_policy(policy_path))
         assert_interaction_plan_lowerable(plan, runner="jaxmd-unified")
+
+    term_kwargs: dict[str, dict] = {}
+    from mmml.md.ml_region import (
+        apply_ml_resnames_mechanical_embedding,
+        parse_ml_resnames,
+    )
+
+    ml_resnames = parse_ml_resnames(getattr(args, "ml_resnames", None))
+    if ml_resnames is not None:
+        if "ml_intra" not in run_config.terms:
+            raise ValueError(
+                "--ml-resnames / ml_resnames requires ml_intra "
+                "(omit --ff cgenff / provide a checkpoint)"
+            )
+        system, term_kwargs, ml_indices = apply_ml_resnames_mechanical_embedding(
+            system, ml_resnames
+        )
+        if not getattr(args, "quiet", False):
+            print(
+                f"mmml md-system (jaxmd-unified): ML region "
+                f"{len(ml_indices)} atoms resnames={list(ml_resnames)} "
+                f"(MM for solute–solvent / solvent–solvent only)",
+                flush=True,
+            )
+
     ctx = build_energy_context(args, system, run_config.terms)
 
-    traj = assemble_and_run(run_config, system=system, ctx=ctx)
+    traj = assemble_and_run(
+        run_config, system=system, ctx=ctx, term_kwargs=term_kwargs or None
+    )
 
     energies = traj.metadata.get("energies")
     if energies is not None and len(energies):

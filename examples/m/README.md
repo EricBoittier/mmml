@@ -114,12 +114,14 @@ uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
 uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
 ```
 
-**Mechanical embedding** = former `cg_jax` mode: ML monomers (`ml_intra`) + MM
-intermolecular (`mm_nonbonded`), not ML–MM electrostatic embedding.
+**Mechanical embedding** = ML on the AMM1+CH3CL complex once
+(`checkpoint: examples/m/model_ext.json`, `ml_resnames: [AMM1, CH3CL]`) + MM
+intermolecular for solute–solvent / solvent–solvent only (solute–solute MM
+pairs are dropped via shared `mol_id`). Not ML–MM electrostatic embedding.
 
 | Backend | Config |
 |---------|--------|
-| `jaxmd` + `jaxmd_unified: true` | Shared `mmml.md` (`ml_intra` + `mm_nonbonded`) |
+| `jaxmd` + `jaxmd_unified: true` + `ml_resnames` | Shared `mmml.md` (`ml_intra` on solute complex + `mm_nonbonded`) |
 | `ase` / `pycharmm` | Hybrid calculator with `include_mm: true` |
 
 Composition campaigns (Packmol inside `md-system`; no make-box required).

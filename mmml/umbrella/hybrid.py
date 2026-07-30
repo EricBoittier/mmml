@@ -9,6 +9,7 @@ from typing import Sequence
 
 import numpy as np
 
+from mmml.md.ml_region import merge_ml_region_mol_id, resolve_ml_region_indices
 from mmml.md.system import MolecularSystem, SystemSpec
 from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.io import (
@@ -32,41 +33,6 @@ __all__ = [
     "run_umbrella_hybrid_nvt",
     "stretch_distance_seed_mic",
 ]
-
-
-def resolve_ml_region_indices(
-    resnames: Sequence[str],
-    ml_resnames: Sequence[str],
-) -> np.ndarray:
-    """Return atom indices whose residue name is in ``ml_resnames`` (case-insensitive)."""
-    want = {str(r).strip().upper() for r in ml_resnames}
-    idx = [
-        i
-        for i, name in enumerate(resnames)
-        if str(name).strip().upper() in want
-    ]
-    if not idx:
-        raise ValueError(
-            f"no atoms match ml_resnames={sorted(want)}; "
-            f"available residues={sorted({str(r).strip().upper() for r in resnames})}"
-        )
-    return np.asarray(idx, dtype=np.int32)
-
-
-def merge_ml_region_mol_id(
-    mol_id: np.ndarray,
-    ml_indices: Sequence[int],
-) -> np.ndarray:
-    """Assign one shared ``mol_id`` to all ML-region atoms (exclude solute–solute MM)."""
-    out = np.asarray(mol_id, dtype=np.int32).copy()
-    ml = np.asarray(list(ml_indices), dtype=np.int32)
-    if ml.size == 0:
-        raise ValueError("ml_indices must be non-empty")
-    if int(np.min(ml)) < 0 or int(np.max(ml)) >= out.shape[0]:
-        raise ValueError("ml_indices out of range for mol_id")
-    shared = int(np.min(out[ml]))
-    out[ml] = shared
-    return out
 
 
 def find_atom_index_by_name(
