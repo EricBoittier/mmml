@@ -902,19 +902,35 @@ def _import_pycharmm():
     return pycharmm
 
 
+def _select_atoms_cls():
+    """Resolve ``SelectAtoms`` across PyCHARMM layouts.
+
+    Some builds expose ``pycharmm.SelectAtoms``; others only ship the
+    ``pycharmm.select_atoms`` submodule (``AttributeError: ... Did you mean:
+    'select_atoms'?``). Prefer the package attribute when present.
+    """
+    pycharmm = _import_pycharmm()
+    cls = getattr(pycharmm, "SelectAtoms", None)
+    if cls is not None:
+        return cls
+    from pycharmm.select_atoms import SelectAtoms
+
+    return SelectAtoms
+
+
 def select_all_atoms():
     """CHARMM selection of all atoms."""
-    return _import_pycharmm().SelectAtoms().all_atoms()
+    return _select_atoms_cls()().all_atoms()
 
 
 def select_by_seg_id(seg_id: str):
     """CHARMM selection by segment ID (e.g. ``'AMM1'`` for an ML region)."""
-    return _import_pycharmm().SelectAtoms(seg_id=seg_id)
+    return _select_atoms_cls()(seg_id=seg_id)
 
 
 def select_by_resid(resid: int | str):
     """CHARMM selection by residue ID (e.g. ``1`` for the first residue)."""
-    return _import_pycharmm().SelectAtoms(res_id=str(resid))
+    return _select_atoms_cls()(res_id=str(resid))
 
 
 def select_by_resids(resids: Sequence[int | str]) -> Any:

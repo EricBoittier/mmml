@@ -23,10 +23,37 @@ export REPO_ROOT
 EXAMPLE_DIR="${REPO_ROOT}/examples/m"
 export EXAMPLE_DIR
 
-export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
+# Device selection. These examples are smoke/reproducibility runs, so they
+# default to CPU — otherwise a stray JAX_PLATFORMS makes results depend on
+# whichever node they land on. Ask for the GPUs with:
+#
+#     MMML_EXAMPLE_DEVICE=gpu bash examples/m/run_all.sh
+#
+# An explicitly pre-set JAX_PLATFORMS / MMML_MLPOT_DEVICE still wins over
+# MMML_EXAMPLE_DEVICE, so per-variable overrides keep working.
+MMML_EXAMPLE_DEVICE="$(printf '%s' "${MMML_EXAMPLE_DEVICE:-cpu}" | tr '[:upper:]' '[:lower:]')"
+case "${MMML_EXAMPLE_DEVICE}" in
+  cpu)
+    _mmml_example_jax_platforms="cpu"
+    _mmml_example_mlpot_device="cpu"
+    ;;
+  gpu | cuda)
+    MMML_EXAMPLE_DEVICE="gpu"
+    _mmml_example_jax_platforms="cuda"
+    _mmml_example_mlpot_device="gpu"
+    ;;
+  *)
+    echo "examples/m: MMML_EXAMPLE_DEVICE must be 'cpu' or 'gpu' (got '${MMML_EXAMPLE_DEVICE}')" >&2
+    return 1 2>/dev/null || exit 1
+    ;;
+esac
+export MMML_EXAMPLE_DEVICE
+
+export JAX_PLATFORMS="${JAX_PLATFORMS:-${_mmml_example_jax_platforms}}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-cpu}"
-export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-cpu}"
+export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-${_mmml_example_mlpot_device}}"
+export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-${_mmml_example_mlpot_device}}"
+unset _mmml_example_jax_platforms _mmml_example_mlpot_device
 
 # Checkpoint + dataset from commit 30eb7a01f7fcf1d42a795f188526a80e547110fd
 #
@@ -58,6 +85,37 @@ mmml_example_env_banner() {
   fi
   export MMML_EXAMPLE_ENV_BANNER_SHOWN=1
   printf 'examples/m inputs\n'
+  # Report the *effective* device: an explicit JAX_PLATFORMS / MMML_MLPOT_DEVICE
+  # outranks MMML_EXAMPLE_DEVICE, and printing the request instead of the result
+  # is exactly the kind of mismatch this banner is meant to expose.
+  local _effective="cpu"
+  case ":${JAX_PLATFORMS}:" in
+    *cuda*|*gpu*|*rocm*) _effective="gpu" ;;
+  esac
+  printf '  device     : %s  (JAX_PLATFORMS=%s, MMML_MLPOT_DEVICE=%s)\n' \
+    "${_effective}" "${JAX_PLATFORMS}" "${MMML_MLPOT_DEVICE}"
+  if [[ "${_effective}" != "${MMML_EXAMPLE_DEVICE}" ]]; then
+    printf '               (MMML_EXAMPLE_DEVICE=%s was overridden by an explicit\n' \
+      "${MMML_EXAMPLE_DEVICE}"
+    printf '                JAX_PLATFORMS / MMML_MLPOT_DEVICE in the environment)\n'
+  fi
+  if [[ "${_effective}" == "cpu" ]]; then
+    printf '               (CPU by default — rerun with MMML_EXAMPLE_DEVICE=gpu to use the GPUs)\n'
+  elif [[ "${MMML_EXAMPLE_SKIP_DEVICE_PROBE:-0}" != "1" ]]; then
+    # Asking for the GPU and silently getting CPU (CPU-only jaxlib, or a
+    # CUDA-12 build on an sm_120 card) is the failure this banner exists to
+    # catch. One probe per pipeline; skip with MMML_EXAMPLE_SKIP_DEVICE_PROBE=1.
+    local _backend
+    _backend="$(cd "${REPO_ROOT}" && uv run python -c 'import jax; print(jax.default_backend())' 2>/dev/null | tail -n 1)"
+    if [[ "${_backend}" == "gpu" || "${_backend}" == "cuda" ]]; then
+      printf '               (JAX backend: %s)\n' "${_backend}"
+    else
+      printf '  WARNING: MMML_EXAMPLE_DEVICE=gpu but JAX reports backend=%s\n' \
+        "${_backend:-unknown}" >&2
+      printf '           Install the CUDA build:  uv sync --extra gpu\n' >&2
+      printf '           (RTX 50xx / Blackwell needs the cuda13 build.)\n' >&2
+    fi
+  fi
   printf '  checkpoint : %s\n' "${MMML_CKPT}"
   printf '               (%s)\n' "${MMML_CKPT_SOURCE}"
   printf '  dataset    : %s\n' "${MMML_DATA}"
