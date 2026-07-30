@@ -8,7 +8,7 @@ This module builds that callback for the intermolecular MM pair list that
 padded to a fixed capacity with an overflow guard.
 
 Host-side and numpy-only at call time (it runs between jitted blocks), so it may
-use the non-jittable ``_build_pair_indices`` path.
+use the non-jittable ``_build_pair_indices`` path (Vesin / vectorized NumPy).
 """
 
 from __future__ import annotations
