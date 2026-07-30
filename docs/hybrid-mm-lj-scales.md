@@ -423,3 +423,5 @@ fails and forces this page to be updated with it.
 | MD load → calculator | `mmml/interfaces/pycharmmInterface/mlpot/hybrid_mlpot.py` |
 | MM multiply | `mmml/interfaces/pycharmmInterface/mm_energy_forces.py` (`ep_scale`, `sig_scale`) |
 | Example YAMLs | `examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`, `md_fixed_lj_scales.yaml` |
+| Mechanics tests | `tests/unit/test_mm_lj_scales.py` |
+| Convergence + deploy-continuity tests | `tests/unit/test_mm_lj_scales_learning.py` |

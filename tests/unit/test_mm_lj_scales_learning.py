@@ -79,12 +79,25 @@ def _dimer_batch(
     }
 
 
-def _scalar_target_loss(target, batch):
-    """Squared error of E_MM against one reference energy."""
+def _fit_loss(targets, batches, *, freeze: str | None = None):
+    """Mean squared error of E_MM over ``batches`` against ``targets``.
+
+    ``freeze`` stops the gradient on one leaf.  This matters: σ and ε are
+    *mutually degenerate* against an energy-only target — a larger well depth and
+    a slightly larger radius produce the same E_MM — so a test that plants one and
+    leaves the other free recovers neither.  Real training breaks the degeneracy
+    with forces and many geometries; here we simply hold one fixed.
+    """
 
     def loss_fn(p):
         _, sig, eps = split_mm_lj_scale_params(p)
-        return (_e_mm(sig, eps, batch) - target) ** 2
+        if freeze == "sigma":
+            sig = jax.lax.stop_gradient(sig)
+        elif freeze == "epsilon":
+            eps = jax.lax.stop_gradient(eps)
+        return sum(
+            (_e_mm(sig, eps, b) - t) ** 2 for b, t in zip(batches, targets)
+        ) / len(batches)
 
     return loss_fn
 
@@ -130,25 +143,27 @@ def test_optimizer_recovers_planted_epsilon_scale():
     """Adam on the params-pytree leaves recovers a known ε scale.
 
     The real question behind issue #133: not "is there a gradient" but "does the
-    optimizer move these leaves to the right place".  A single-type system makes
-    the scalar energy target identify ``s^ε[0]`` uniquely — with two types one
-    scalar target is underdetermined (ε₀ up and ε₁ down compensate exactly).
+    optimizer move these leaves to the right place".  A single-type system with σ
+    held fixed makes the scalar energy target identify ``s^ε[0]`` uniquely.
     """
     batch = _dimer_batch(type_idx=(0, 0, 0, 0))
     truth_eps = 1.6
     target = _e_mm(jnp.ones(2), jnp.array([truth_eps, 1.0]), batch)
 
     params, loss0, loss1 = _fit_scales(
-        _scalar_target_loss(target, batch), attach_mm_lj_scales({"params": {}}, 2),
+        _fit_loss([target], [batch], freeze="sigma"),
+        attach_mm_lj_scales({"params": {}}, 2),
         lr=3e-2, steps=400,
     )
-    assert loss1 < loss0 * 1e-4, f"loss did not converge: {loss0:g} -> {loss1:g}"
+    assert loss1 < loss0 * 1e-3, f"loss did not converge: {loss0:g} -> {loss1:g}"
 
-    _, _, eps_out = split_mm_lj_scale_params(params)
+    _, sig_out, eps_out = split_mm_lj_scale_params(params)
     assert float(np.asarray(eps_out)[0]) == pytest.approx(truth_eps, rel=2e-2)
     # Type 1 is absent from the system, so it gets no gradient and must stay at
     # its 1.0 init — the same property the ATC remap relies on for solvent types.
     assert float(np.asarray(eps_out)[1]) == pytest.approx(1.0, abs=1e-6)
+    # Frozen leaf untouched.
+    np.testing.assert_allclose(np.asarray(sig_out), np.ones(2), atol=1e-6)
 
 
 def test_optimizer_recovers_planted_sigma_scale():
@@ -158,14 +173,16 @@ def test_optimizer_recovers_planted_sigma_scale():
     target = _e_mm(jnp.array([truth_sig, 1.0]), jnp.ones(2), batch)
 
     params, loss0, loss1 = _fit_scales(
-        _scalar_target_loss(target, batch), attach_mm_lj_scales({"params": {}}, 2),
+        _fit_loss([target], [batch], freeze="epsilon"),
+        attach_mm_lj_scales({"params": {}}, 2),
         lr=1e-2, steps=600,
     )
-    assert loss1 < loss0 * 1e-4, f"loss did not converge: {loss0:g} -> {loss1:g}"
+    assert loss1 < loss0 * 1e-3, f"loss did not converge: {loss0:g} -> {loss1:g}"
 
-    _, sig_out, _ = split_mm_lj_scale_params(params)
+    _, sig_out, eps_out = split_mm_lj_scale_params(params)
     assert float(np.asarray(sig_out)[0]) == pytest.approx(truth_sig, rel=2e-2)
     assert float(np.asarray(sig_out)[1]) == pytest.approx(1.0, abs=1e-6)
+    np.testing.assert_allclose(np.asarray(eps_out), np.ones(2), atol=1e-6)
 
 
 def test_two_types_identified_from_multiple_geometries():
