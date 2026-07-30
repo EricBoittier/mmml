@@ -119,10 +119,6 @@ def _drop_ml_rows(topology: Any, bonded: Any, ml_atoms: frozenset[int]) -> tuple
 
 @register_term("mm_bonded")
 class MMBondedTerm:
-    """CGenFF bonded energy for the MM (non-ML) part of the system."""
-
-@register_term("mm_bonded")
-class MMBondedTerm:
     """CGenFF bonded energy on MM atoms (ML-region bonded interactions dropped)."""
 
     name = "mm_bonded"

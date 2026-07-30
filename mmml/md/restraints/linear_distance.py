@@ -30,7 +30,6 @@ __all__ = [
 ]
 
 _EPS = 1e-12
-from typing import Any, Mapping, Sequence
 
 
 def _as_pair(pair: Sequence[int]) -> tuple[int, int]:
@@ -62,7 +61,11 @@ def _mic_disp_numpy(a: Any, b: Any, cell: Any | None) -> Any:
 
 
 def harmonic_bias_energy(value: Any, target: float, k_ev_A2: float) -> Any:
-    """Harmonic umbrella bias ``0.5 * k * (ξ - ξ₀)²`` (eV)."""
+    """Harmonic umbrella bias ``0.5 * k * (ξ - ξ₀)²``.
+
+    Units follow the caller: eV/Å² in the jax paths, kcal/mol/Å² in the
+    CHARMM-facing ones. Nothing here converts.
+    """
     import jax.numpy as jnp
 
     return 0.5 * float(k_ev_A2) * jnp.square(value - float(target))
@@ -369,17 +372,6 @@ class FlatBottomWall:
 
     def value_numpy(self, positions, *, cell=None) -> float:
         return self.cv.value_numpy(positions, cell=cell)
-
-
-def harmonic_bias_energy(cv_value: Any, target: float, k: float) -> Any:
-    """``0.5 * k * (xi - xi0)^2``.
-
-    Units follow the caller: eV/A^2 in the jax paths, kcal/mol/A^2 in the
-    CHARMM-facing ones. Nothing here converts.
-    """
-    import jax.numpy as jnp
-
-    return 0.5 * float(k) * jnp.square(cv_value - float(target))
 
 
 def linear_cvs_from_pairs(
