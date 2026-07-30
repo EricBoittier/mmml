@@ -35,3 +35,29 @@ Outputs land under `artifacts/jaxmd_cgenff_spoof_smoke/{job_id}/` with
 ```bash
 python workflows/jaxmd_cgenff_spoof_smoke/scripts/report.py
 ```
+
+## Compare to native CHARMM
+
+Energy/force parity of the jax-mm-spoof CGenFF bonded clone vs PyCHARMM
+``ENER FORCE`` (GPU / OpenCL required):
+
+```bash
+sbatch workflows/jaxmd_cgenff_spoof_smoke/scripts/submit_compare_slurm.sh compare
+# or interactively on a GPU node:
+python workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py
+python workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py
+```
+
+Native PyCHARMM MD counterparts (same DCM/ACO matrix, no spoof):
+
+```bash
+sbatch workflows/jaxmd_cgenff_spoof_smoke/scripts/submit_compare_slurm.sh native
+# or:
+bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all_native.sh
+```
+
+Both (native MD + E/F compare):
+
+```bash
+sbatch workflows/jaxmd_cgenff_spoof_smoke/scripts/submit_compare_slurm.sh all
+```

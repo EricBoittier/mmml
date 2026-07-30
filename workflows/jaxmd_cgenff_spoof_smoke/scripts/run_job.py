@@ -65,9 +65,14 @@ def write_job_config(cfg: dict[str, Any], job_id: str, out_dir: Path) -> Path:
     merged["checkpoint"] = str(resolve_checkpoint(cfg))
     merged["output_dir"] = str(out_dir)
     merged["packmol_cache_dir"] = str(out_dir / ".packmol_cache")
-    # Ensure spoof is on even if a job accidentally overrides.
-    merged["jax_mm_spoof"] = True
-    merged["backend"] = "jaxmd"
+    backend = str(merged.get("backend", "jaxmd")).strip().lower()
+    if backend in {"pycharmm", "charmm", "native"}:
+        merged["backend"] = "pycharmm"
+        merged["jax_mm_spoof"] = False
+    else:
+        # Default smoke path: jaxmd + CGenFF bonded spoof.
+        merged["backend"] = "jaxmd"
+        merged["jax_mm_spoof"] = bool(merged.get("jax_mm_spoof", True))
     # Drop workflow-only keys that md-system rejects.
     for drop in ("output_root", "description", "jobs", "defaults"):
         merged.pop(drop, None)
