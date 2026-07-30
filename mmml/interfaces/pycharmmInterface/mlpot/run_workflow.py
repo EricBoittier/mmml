@@ -70,7 +70,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     refresh_nbonds_after_mlpot_pbc,
     register_mlpot,
     save_cluster_topology_for_vmd,
-    select_all_atoms,
     select_by_resids,
     setup_default_nbonds,
     sync_charmm_positions,

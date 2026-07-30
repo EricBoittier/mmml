@@ -234,7 +234,7 @@ uv run python examples/m/07_export_neb_endpoints.py
 | Method | Gas phase | Explicit solvent (TIP3 / ACN / DMSO) |
 |--------|-----------|----------------------------------------|
 | **`mmml umbrella-sample`** | `engine: packed_ml` — batched all-ML NVT | `engine: hybrid_jaxmd` — ML reactive complex + MM solvent ([`yaml/umbrella_nc_tip3.yaml`](yaml/umbrella_nc_tip3.yaml), `14_umbrella_sample_sol.sh`) |
-| **ADUMB** (PyCHARMM adaptive umbrella) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` | `yaml/adumb_nc_distance_{tip3,acn,dmso}.yaml`; `SOLVATED=1 SOLVENT=tip3 bash examples/m/09_adumb_nc_distance.sh` |
+| **ADUMB** (PyCHARMM adaptive umbrella) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` | `yaml/adumb_nc_distance_{tip3,acn,dmso}.yaml` (`ml_resnames: [AMM1, CH3CL]`, `periodic_external` + `ewald`); `SOLVATED=1 SOLVENT=tip3 bash examples/m/09_adumb_nc_distance.sh` |
 | **NEB** (ASE nudged elastic band) | `yaml/neb.yaml`, `13_neb.sh` | Gas-phase path only (same endpoints) |
 | **DMC** (Diffusion Monte Carlo) | `15_dmc_basins.sh` on react/product XYZ | Gas-phase basins only (same endpoints) |
 

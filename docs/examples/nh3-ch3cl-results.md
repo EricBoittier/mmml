@@ -28,7 +28,7 @@ bash examples/m/13_neb.sh
 |---------|-----|--------|--------|
 | 1D bond difference | `rdif` = \(r_{\mathrm{ClC}}-r_{\mathrm{CN}}\) ∈ [-6, 6] Å (SN2 ~[-3, 3]) | `examples/m/yaml/adumb_nc_distance.yaml` | `09_adumb_nc_distance.sh` |
 | 2D Cl⋯C / C⋯N | `rcl`, `rcn` distances | `yaml/adumb_clc_cn_2d.yaml` | `10_adumb_clc_cn_2d.sh` |
-| 1D + TIP3 | same `rdif` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` | `SOLVATED=1` on `09_*.sh` |
+| 1D + TIP3 | same `rdif` (PBC skeleton) | `yaml/adumb_nc_distance_tip3.yaml` | `SOLVATED=1` on `09_*.sh`; ML on AMM1+CH3CL only (`ml_resnames`) |
 
 Optional `USE_NPZ_PDB=1` feeds `07_export_solute_pdb.py` geometry. The 1D RC is
 an RXNCOR **`combination` of two distances** (CHARMM `COMBI_TYPE`):

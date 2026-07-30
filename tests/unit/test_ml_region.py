@@ -89,3 +89,25 @@ def test_sol_tip3_yaml_points_at_model_ext_and_ml_resnames():
     assert raw["checkpoint"].endswith("model_ext.json")
     assert raw["ml_resnames"] == ["AMM1", "CH3CL"]
     assert raw.get("jaxmd_unified") is True
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "adumb_nc_distance_tip3.yaml",
+        "adumb_nc_distance_acn.yaml",
+        "adumb_nc_distance_dmso.yaml",
+    ],
+)
+def test_adumb_solvated_yaml_mechanical_embedding(name: str):
+    """Solvated ADUMB must not all-ML jax_mic solvent (hybrid GRMS explosion)."""
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).resolve().parents[2]
+    raw = yaml.safe_load((root / "examples/m/yaml" / name).read_text())
+    assert raw["ml_resnames"] == ["AMM1", "CH3CL"]
+    assert raw["mm_nonbond_mode"] == "periodic_external"
+    assert str(raw["lr_solver"]).lower() == "ewald"
+    assert raw.get("calculator_pre_minimize") is True
