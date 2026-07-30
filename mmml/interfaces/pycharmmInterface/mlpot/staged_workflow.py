@@ -1487,6 +1487,39 @@ def _publish_staged_handoff(
     )
 
 
+def should_auto_resume_failed_staged_run(
+    args: argparse.Namespace,
+    *,
+    out_dir: Path,
+) -> bool:
+    """Return True when a prior failed ``stage_summary.json`` should set ``restart_from``.
+
+    ``--rebuild-packmol`` must not inherit a stale ``baseline.res`` from a previous
+    failed attempt — that discards the freshly packed geometry and often flies off
+    in CHARMM MM pretreat heat.
+    """
+    if getattr(args, "restart_from", None):
+        return False
+    if bool(getattr(args, "rebuild_packmol", False)):
+        if not getattr(args, "quiet", False):
+            summary_path = Path(out_dir) / "stage_summary.json"
+            if summary_path.is_file():
+                print(
+                    "Skipping auto-resume: --rebuild-packmol requested "
+                    "(ignoring prior stage_summary / baseline.res)",
+                    flush=True,
+                )
+        return False
+    summary_path = Path(out_dir) / "stage_summary.json"
+    if not summary_path.is_file():
+        return False
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        return int(payload.get("exit_code", 0)) != 0
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return False
+
+
 def run_staged_workflow(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
@@ -1565,29 +1598,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     paths = _artifact_paths(out_dir, tag)
     save_artifacts = bool(getattr(args, "save", True))
     n_heat_segments_early = max(1, int(getattr(args, "n_heat_segments", 1)))
-    if not getattr(args, "restart_from", None):
-        summary_path = out_dir / "stage_summary.json"
-        should_resume = False
-        if summary_path.is_file():
-            try:
-                payload = json.loads(summary_path.read_text(encoding="utf-8"))
-                should_resume = int(payload.get("exit_code", 0)) != 0
-            except (json.JSONDecodeError, OSError, TypeError, ValueError):
-                should_resume = False
-        if should_resume:
-            resume_restart = discover_resume_restart(
-                out_dir,
-                tag,
-                paths=paths,
-                n_heat_segments=n_heat_segments_early,
-            )
-            if resume_restart is not None:
-                args.restart_from = str(resume_restart)
-                if not args.quiet:
-                    print(
-                        f"Resuming staged workflow from {resume_restart.name}",
-                        flush=True,
-                    )
+    if should_auto_resume_failed_staged_run(args, out_dir=out_dir):
+        resume_restart = discover_resume_restart(
+            out_dir,
+            tag,
+            paths=paths,
+            n_heat_segments=n_heat_segments_early,
+        )
+        if resume_restart is not None:
+            args.restart_from = str(resume_restart)
+            if not args.quiet:
+                print(
+                    f"Resuming staged workflow from {resume_restart.name}",
+                    flush=True,
+                )
     mini_registry: MinimizeArtifactRegistry | None = (
         MinimizeArtifactRegistry(out_dir, tag) if save_artifacts else None
     )

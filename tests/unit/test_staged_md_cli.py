@@ -34,8 +34,40 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _seed_charmm_coords_from_dynamics_restart,
     _should_seed_heat_prior_restart,
     _should_skip_pre_dyn_fmax_gate,
+    should_auto_resume_failed_staged_run,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+
+
+def test_should_auto_resume_failed_staged_run_from_stage_summary(tmp_path: Path):
+    (tmp_path / "stage_summary.json").write_text(
+        '{"exit_code": 2}',
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(restart_from=None, rebuild_packmol=False, quiet=True)
+    assert should_auto_resume_failed_staged_run(args, out_dir=tmp_path) is True
+
+
+def test_should_auto_resume_skips_when_rebuild_packmol(tmp_path: Path):
+    (tmp_path / "stage_summary.json").write_text(
+        '{"exit_code": 2}',
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(restart_from=None, rebuild_packmol=True, quiet=True)
+    assert should_auto_resume_failed_staged_run(args, out_dir=tmp_path) is False
+
+
+def test_should_auto_resume_skips_when_restart_from_set(tmp_path: Path):
+    (tmp_path / "stage_summary.json").write_text(
+        '{"exit_code": 2}',
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(
+        restart_from=str(tmp_path / "baseline.res"),
+        rebuild_packmol=False,
+        quiet=True,
+    )
+    assert should_auto_resume_failed_staged_run(args, out_dir=tmp_path) is False
 
 
 def test_resolve_md_stages_pycharmm_full():
