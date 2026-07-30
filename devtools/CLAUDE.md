@@ -6,6 +6,12 @@ If your change adds, removes, or renames CLI flags/commands (anything under
 `mmml/cli` or argparse setup used by the `mmml` entry point), regenerate the
 CLI reference docs and commit them with your change:
 
+Ensure that lint passes (e.g.. in CI: uv run ruff check mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+)
+
+
+
+
 ```bash
 uv run python scripts/generate_cli_docs.py
 git add docs/cli/commands
