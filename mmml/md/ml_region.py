@@ -15,6 +15,7 @@ from mmml.md.system import MolecularSystem
 
 __all__ = [
     "apply_ml_resnames_mechanical_embedding",
+    "compact_mol_id",
     "merge_ml_region_mol_id",
     "parse_ml_resnames",
     "per_atom_residue_names",
@@ -72,6 +73,12 @@ def merge_ml_region_mol_id(
     return out
 
 
+def compact_mol_id(mol_id: np.ndarray) -> np.ndarray:
+    """Renumber molecule ids to contiguous ``0..K-1`` (drop unused ids after merge)."""
+    _, compacted = np.unique(np.asarray(mol_id, dtype=np.int32), return_inverse=True)
+    return np.asarray(compacted, dtype=np.int32)
+
+
 def per_atom_residue_names(system: MolecularSystem) -> list[str]:
     """Expand per-molecule ``metadata['residue_names']`` to one label per atom."""
     per_mol = list(system.metadata.get("residue_names") or [])
@@ -110,6 +117,9 @@ def apply_ml_resnames_mechanical_embedding(
     resnames = per_atom_residue_names(system)
     ml_indices = resolve_ml_region_indices(resnames, ml_resnames)
     mol_id = merge_ml_region_mol_id(system.mol_id, ml_indices)
+    # Merge can leave unused molecule ids (e.g. former CH3CL id); compact so
+    # monomer_indices_from_mol_id does not emit empty groups.
+    mol_id = compact_mol_id(mol_id)
     monomers = monomer_indices_from_mol_id(mol_id)
     new_system = MolecularSystem(
         R=system.R,

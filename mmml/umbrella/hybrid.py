@@ -9,7 +9,11 @@ from typing import Sequence
 
 import numpy as np
 
-from mmml.md.ml_region import merge_ml_region_mol_id, resolve_ml_region_indices
+from mmml.md.ml_region import (
+    compact_mol_id,
+    merge_ml_region_mol_id,
+    resolve_ml_region_indices,
+)
 from mmml.md.system import MolecularSystem, SystemSpec
 from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.io import (
@@ -225,7 +229,7 @@ def build_hybrid_umbrella_system(cfg: UmbrellaConfig) -> tuple[MolecularSystem, 
                 resnames[int(a)] = name
         atom_names = [f"X{i}" for i in range(system.n_atoms)]
         ml_indices = resolve_ml_region_indices(resnames, cfg.ml_resnames)
-        mol_id = merge_ml_region_mol_id(system.mol_id, ml_indices)
+        mol_id = compact_mol_id(merge_ml_region_mol_id(system.mol_id, ml_indices))
         monomers = monomer_indices_from_mol_id(mol_id)
         system = MolecularSystem(
             R=system.R,
@@ -287,7 +291,7 @@ def build_hybrid_umbrella_system(cfg: UmbrellaConfig) -> tuple[MolecularSystem, 
         )
     )
     ml_indices = resolve_ml_region_indices(resnames, cfg.ml_resnames)
-    mol_id = merge_ml_region_mol_id(system.mol_id, ml_indices)
+    mol_id = compact_mol_id(merge_ml_region_mol_id(system.mol_id, ml_indices))
     monomers = monomer_indices_from_mol_id(mol_id)
     system = MolecularSystem(
         R=system.R,
