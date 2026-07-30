@@ -1,4 +1,5 @@
-# Tiny smoke: L>=20 required for periodic_external Ewald; keep N modest.
+# Tiny smoke: L>=20 for periodic_external; jax_mm_spoof avoids DES-on-methane
+# force-gate failures while still exercising Ewald + hybrid driver.
 solvents: [METH]
 temperatures: [100.0]
 box_sizes: [22.0]
@@ -12,6 +13,7 @@ checkpoints:
 output_root: artifacts/pbc_methane_ewald_smoke_tiny
 seed_base: 4242
 
+jax_mm_spoof: true
 mm_nonbond_mode: periodic_external
 lr_solver: ewald
 ensemble: pbc_nvt

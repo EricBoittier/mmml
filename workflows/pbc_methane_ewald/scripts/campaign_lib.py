@@ -371,6 +371,8 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         **ewald,
         **liquid,
     }
+    if bool(cfg.get("jax_mm_spoof", False)):
+        defaults["jax_mm_spoof"] = True
 
     runs: dict[str, Any] = {
         "pycharmm_init": _attach_leg_output_dir(
