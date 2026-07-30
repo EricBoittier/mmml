@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from mmml.cli.run.md_config import (
@@ -31,6 +33,23 @@ def _sample_campaign() -> dict:
             },
         },
     }
+
+
+def test_resolve_campaign_namespace_paths_vs_config(tmp_path: Path) -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import resolve_campaign_namespace_paths
+
+    cfg_dir = tmp_path / "cfgs" / "yaml"
+    cfg_dir.mkdir(parents=True)
+    policy = tmp_path / "cfgs" / "policy.yaml"
+    policy.write_text("schema_version: 1\n", encoding="utf-8")
+    cfg = cfg_dir / "campaign.yaml"
+    cfg.write_text("runs: {}\n", encoding="utf-8")
+    # Relative to yaml/ → ../policy.yaml
+    ns = Namespace(interaction_policy="../policy.yaml", from_pdb=None, checkpoint=None)
+    resolve_campaign_namespace_paths(ns, config_path=cfg)
+    assert Path(ns.interaction_policy) == policy.resolve()
 
 
 def test_run_single_backend_honors_jaxmd_unified(monkeypatch):

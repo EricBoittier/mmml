@@ -19,7 +19,8 @@
 defaults:
   from_pdb: artifacts/md_embedding/aaa/model.pdb
   checkpoint: examples/spooky_so3lr_muon3_epoch0013.json
-  interaction_policy: ../../interaction_policy_tria_tip3_mech.yaml
+  interaction_policy: examples/interaction_policy_tria_tip3_mech.yaml
+  # Also accepted: ../../interaction_policy_tria_tip3_mech.yaml (resolved vs this YAML).
   backend: jaxmd
   jaxmd_unified: true
   include_mm: true
