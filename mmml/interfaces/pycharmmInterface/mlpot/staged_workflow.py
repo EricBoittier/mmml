@@ -243,18 +243,32 @@ def _should_skip_pre_dyn_fmax_gate(
     seeded_from_dynamics_restart: bool,
     dyn_stages: list[str] | tuple[str, ...],
     restart_from: Path | str | None = None,
+    handoff_coords_in_memory: bool = False,
 ) -> bool:
     """True when equi/NVE/prod resumes a finished dynamics restart.
 
     Skip even when offline coord seeding fails: the cold-start 2 eV/Å ceiling
     still must not FIRE a post-heat liquid, and EQUI CPT start loads coords
     from the restart before ``dyna``.
+
+    Memory-handoff legs already placed finite-T coordinates in CHARMM (often
+    with ``restart_from`` rewritten to ``continue_seed.res`` or a local
+    ``baseline.res`` after prep). Treat that the same as a dynamics resume.
     """
     if not dyn_stages or dyn_stages[0] not in _POST_DYNAMICS_RESUME_STAGES:
         return False
-    if seeded_from_dynamics_restart:
+    if seeded_from_dynamics_restart or handoff_coords_in_memory:
         return True
-    return _is_dynamics_stage_restart_path(restart_from)
+    if _is_dynamics_stage_restart_path(restart_from):
+        return True
+    if restart_from is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+            is_handoff_seed_restart_path,
+        )
+
+        if is_handoff_seed_restart_path(restart_from):
+            return True
+    return False
 
 
 def _restart_coord_read_candidates(path: Path) -> list[Path]:
@@ -2463,6 +2477,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             seeded_from_dynamics_restart=seeded_from_dynamics_restart,
             dyn_stages=dyn_stages,
             restart_from=seed_restart,
+            handoff_coords_in_memory=bool(handoff_coords_in_memory),
         )
         max_grms = resolve_max_grms_before_dyn(
             args,

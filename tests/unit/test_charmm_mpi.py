@@ -699,7 +699,8 @@ def test_mpi_mpirun_extra_args_includes_detected_shmem(tmp_path, monkeypatch):
         return_value=tmp_path,
     ):
         args = charmm_mpi.mpi_mpirun_extra_args()
-    assert args[:3] == ["--mca", "pmix", "^ext3x"]
+    assert args[0] == "--report-child-jobs-separately"
+    assert args[1:4] == ["--mca", "pmix", "^ext3x"]
     assert ["--mca", "mca_base_component_path", str(mca)] in [
         args[i : i + 3] for i in range(len(args) - 2)
     ]
@@ -709,14 +710,37 @@ def test_mpi_mpirun_extra_args_includes_detected_shmem(tmp_path, monkeypatch):
 def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
     monkeypatch.delenv("MMML_MPI_VERBOSE", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY", raising=False)
     monkeypatch.setenv("MMML_NO_MPI_MCA_PREFIX", "1")
-    for var in ("LD_LIBRARY_PATH", "OPENMPI_ROOT", "EBROOTOPENMPI", "CHARMM_LIB_DIR"):
+    for var in (
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "OPENMPI_ROOT",
+        "EBROOTOPENMPI",
+        "CHARMM_LIB_DIR",
+    ):
         monkeypatch.delenv(var, raising=False)
     assert charmm_mpi.mpi_mpirun_extra_args() == [
+        "--report-child-jobs-separately",
         "--mca",
         "orte_abort_print_stack",
         "1",
     ]
+
+
+def test_mpi_mpirun_extra_args_can_disable_child_job_report(monkeypatch):
+    monkeypatch.setenv("MMML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY", "1")
+    monkeypatch.setenv("MMML_NO_MPI_MCA_PREFIX", "1")
+    monkeypatch.setenv("MMML_NO_MPI_ABORT_STACK", "1")
+    for var in (
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "OPENMPI_ROOT",
+        "EBROOTOPENMPI",
+        "CHARMM_LIB_DIR",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    assert charmm_mpi.mpi_mpirun_extra_args() == []
 
 
 def test_mpi_mpirun_extra_args_forwards_ld_library_path(monkeypatch):
@@ -789,7 +813,8 @@ def test_mpi_mpirun_extra_args_verbose(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     monkeypatch.setenv("MMML_MPI_VERBOSE", "1")
     args = charmm_mpi.mpi_mpirun_extra_args()
-    assert args[:3] == ["--mca", "pmix", "^ext3x"]
+    assert args[0] == "--report-child-jobs-separately"
+    assert args[1:4] == ["--mca", "pmix", "^ext3x"]
     assert "orte_abort_print_stack" in args
     assert "plm_base_verbose" in args
 

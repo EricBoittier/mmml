@@ -1,10 +1,11 @@
-# Smoke matrix: one small box, short MD, two JSONs × both backends × T ladder.
+# Smoke matrix: short MD, two JSONs × both backends × T ladder.
+# L>=20 Å required for periodic_external Ewald (CHARMM cutnb/image margin).
 # Standalone (no YAML include) so the checkpoint map fully replaces the default.
 
 solvents: [METH]
 temperatures: [100.0, 200.0, 300.0]
-box_sizes: [16.0]
-bulk_density_fractions: [0.5]
+box_sizes: [22.0]
+bulk_density_fractions: [0.25]
 bulk_density_n_min: 8
 backends: [pycharmm, jaxmd]
 

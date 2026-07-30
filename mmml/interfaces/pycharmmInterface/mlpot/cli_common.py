@@ -326,6 +326,15 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--no-echeck-heat",
+        action="store_true",
+        help=(
+            "Disable ECHECK during the heat stage only "
+            "(equi/prod still use --echeck). Needed for ML USER-only heat "
+            "before Hoover settles."
+        ),
+    )
+    group.add_argument(
         "--allow-incomplete-dynamics",
         action="store_true",
         help=(
@@ -4399,6 +4408,14 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Before MLpot: CGENFF SD/ABNR minimize + CHARMM heat/equi/prod (no USER/ML). "
             "Coordinates feed MLpot mini/heat/NVE."
+        ),
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat-with-liquid-prep",
+        action="store_true",
+        help=(
+            "Run CHARMM MM pretreat even when --liquid-prep is set "
+            "(default skips pretreat because liquid-prep already relaxes the box)."
         ),
     )
     pretreat.add_argument(

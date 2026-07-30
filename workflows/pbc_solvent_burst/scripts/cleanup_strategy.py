@@ -148,12 +148,15 @@ def pretreat_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
     mm = strategy.charmm_mm
     if not bool(mm.get("pretreat_on_pycharmm", False)):
         return {}
-    return {
+    flags: dict[str, Any] = {
         "charmm_mm_pretreat": True,
         "charmm_mm_pretreat_ps_heat": float(mm.get("ps_heat", 30.0)),
         "charmm_mm_pretreat_ps_equi": float(mm.get("ps_equi", 0.0)),
         "charmm_mm_pretreat_ps_prod": float(mm.get("ps_prod", 0.0)),
     }
+    if bool(mm.get("pretreat_with_liquid_prep", False)):
+        flags["charmm_mm_pretreat_with_liquid_prep"] = True
+    return flags
 
 
 def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
@@ -187,6 +190,10 @@ def pycharmm_job_flags(strategy: CleanupStrategy) -> dict[str, Any]:
         "save_run_state": bool(ml.get("save_run_state", False)),
         "overlap_run_state_every_chunks": int(ml.get("overlap_run_state_every_chunks", 0)),
     }
+    if "monomer_physnet_mini" in ml:
+        flags["monomer_physnet_mini"] = bool(ml["monomer_physnet_mini"])
+    if bool(ml.get("no_dynamics_max_monomer_extent", False)):
+        flags["no_dynamics_max_monomer_extent"] = True
     return flags
 
 

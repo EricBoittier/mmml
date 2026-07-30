@@ -281,6 +281,25 @@ def test_bulk_density_fraction_requires_single_species():
         )
 
 
+def test_meth_bulk_density_table_and_fraction():
+    """Liquid methane must be in SOLVENT_BULK_PROPS for pbc_methane_ewald."""
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        SOLVENT_BULK_PROPS,
+        resolve_target_density_g_cm3,
+    )
+
+    assert "METH" in SOLVENT_BULK_PROPS
+    assert SOLVENT_BULK_PROPS["METH"]["rho_g_cm3"] == pytest.approx(0.4226)
+    rho = resolve_target_density_g_cm3(
+        argparse.Namespace(
+            target_density_g_cm3=None,
+            bulk_density_fraction=0.5,
+        ),
+        {"METH": 32},
+    )
+    assert rho == pytest.approx(0.5 * 0.4226)
+
+
 def test_should_run_mini_box_equil_skips_when_pretreat_npt():
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         should_run_mini_box_equil,

@@ -764,6 +764,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: abort if post-min GRMS exceeds this (kcal/mol/Å)",
     )
     parser.add_argument(
+        "--max-fmax-before-dyn-ev-A",
+        type=float,
+        default=None,
+        metavar="EV_A",
+        dest="max_fmax_before_dyn_ev_A",
+        help=(
+            "pycharmm: abort if max atomic |F| exceeds this (eV/Å) before dynamics; "
+            "default 2.0. Raise only for controlled smokes."
+        ),
+    )
+    parser.add_argument(
         "--test-first",
         action="store_true",
         help="pycharmm: CHARMM TEST FIRSt after MLpot SD minimization",
@@ -3422,6 +3433,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--max-pairs", str(args.max_pairs)])
     if args.no_echeck:
         cmd.append("--no-echeck")
+    if getattr(args, "no_echeck_heat", False):
+        cmd.append("--no-echeck-heat")
     if getattr(args, "allow_incomplete_dynamics", False):
         cmd.append("--allow-incomplete-dynamics")
     if getattr(args, "skip_energy_show", False):
@@ -3448,6 +3461,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if getattr(args, "no_scale_max_grms", False):
         cmd.append("--no-scale-max-grms")
     cmd.extend(["--max-grms-before-dyn", str(args.max_grms_before_dyn)])
+    if getattr(args, "max_fmax_before_dyn_ev_A", None) is not None:
+        cmd.extend(
+            ["--max-fmax-before-dyn-ev-A", str(args.max_fmax_before_dyn_ev_A)]
+        )
     if getattr(args, "test_first", False):
         cmd.append("--test-first")
         cmd.extend(["--test-first-tol", str(args.test_first_tol)])

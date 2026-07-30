@@ -881,6 +881,8 @@ def main(argv: list[str] | None = None) -> int:
         get_handoff_in,
         handoff_from_atoms,
         handoff_velocities_as_ang_ps,
+        ang_ps_velocities_to_jaxmd_metal,
+        kinetic_temperature_k_from_ang_ps_velocities,
         kinetic_temperature_k_from_jaxmd_metal_velocities,
         remove_center_of_mass_velocity_ang_ps,
         handoff_skip_pre_min,
@@ -1655,21 +1657,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         if converted_velocities is None:
             raise RuntimeError("handoff velocity policy selected velocities, but none were converted")
-        initial_velocities = np.asarray(converted_velocities, dtype=float)
+        velocities_ang_ps = np.asarray(converted_velocities, dtype=float)
+        masses_amu = np.asarray(atoms.get_masses(), dtype=float)
         if getattr(args, "handoff_velocity_remove_drift", True):
-            masses_amu = np.asarray(atoms.get_masses(), dtype=float)
-            initial_velocities = remove_center_of_mass_velocity_ang_ps(
-                initial_velocities, masses_amu
+            velocities_ang_ps = remove_center_of_mass_velocity_ang_ps(
+                velocities_ang_ps, masses_amu
             )
-        else:
-            masses_amu = np.asarray(atoms.get_masses(), dtype=float)
-        # JAX-MD / ASE metal units (same as state.momentum/state.mass), not Å/ps.
-        handoff_temperature = kinetic_temperature_k_from_jaxmd_metal_velocities(
-            initial_velocities, masses_amu
+        physical_temperature = kinetic_temperature_k_from_ang_ps_velocities(
+            velocities_ang_ps, masses_amu
         )
         dt_ps = float(args.dt_fs) * 0.001
         max_step_displacement = float(
-            np.max(np.linalg.norm(initial_velocities, axis=1)) * dt_ps
+            np.max(np.linalg.norm(velocities_ang_ps, axis=1)) * dt_ps
         )
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             MIN_VELOCITY_ASSIGNMENT_TEMP_K,
@@ -1678,22 +1677,21 @@ def main(argv: list[str] | None = None) -> int:
         target_T = float(args.temperature)
         cold_floor = max(float(MIN_VELOCITY_ASSIGNMENT_TEMP_K), 0.1 * target_T)
         if (
-            not np.all(np.isfinite(initial_velocities))
-            or not np.isfinite(handoff_temperature)
-            or handoff_temperature <= 0.0
+            not np.all(np.isfinite(velocities_ang_ps))
+            or not np.isfinite(physical_temperature)
+            or physical_temperature <= 0.0
             or max_step_displacement > 0.25
         ):
             raise RuntimeError(
                 "implausible converted handoff velocities: "
-                f"T={handoff_temperature:.3f} K, "
+                f"T={physical_temperature:.3f} K, "
                 f"max one-step displacement={max_step_displacement:.6f} Å "
                 f"at dt={float(args.dt_fs):g} fs"
             )
-        if float(handoff_temperature) < cold_floor:
-            # Truly quenched momenta (metal-unit T ≪ target) — re-thermalize.
+        if float(physical_temperature) < cold_floor:
             if not getattr(args, "quiet", False):
                 print(
-                    f"WARN: handoff kinetic T={float(handoff_temperature):.3f} K "
+                    f"WARN: handoff kinetic T={float(physical_temperature):.3f} K "
                     f"< floor {cold_floor:.1f} K (target {target_T:.1f} K); "
                     "re-thermalizing Maxwell–Boltzmann (ignoring dead handoff velocities).",
                     flush=True,
@@ -1701,13 +1699,18 @@ def main(argv: list[str] | None = None) -> int:
             initial_velocities = None
             use_handoff_velocities = False
             velocity_policy = "rethermalize_cold_handoff"
-        elif not getattr(args, "quiet", False):
-            print(
-                f"Using converted handoff velocities ({len(initial_velocities)} atoms): "
-                f"T={handoff_temperature:.3f} K (JAX-MD metal), "
-                f"max dt*v={max_step_displacement:.6f} Å.",
-                flush=True,
+        else:
+            initial_velocities = ang_ps_velocities_to_jaxmd_metal(velocities_ang_ps)
+            handoff_temperature = kinetic_temperature_k_from_jaxmd_metal_velocities(
+                initial_velocities, masses_amu
             )
+            if not getattr(args, "quiet", False):
+                print(
+                    f"Using converted handoff velocities ({len(initial_velocities)} atoms): "
+                    f"T_phys={physical_temperature:.3f} K → T_metal={handoff_temperature:.3f} K, "
+                    f"max dt*v={max_step_displacement:.6f} Å.",
+                    flush=True,
+                )
     if initial_velocities is None:
         if not getattr(args, "quiet", False):
             if velocity_policy == "rethermalize_cold_handoff":

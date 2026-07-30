@@ -92,3 +92,44 @@ def test_compute_limits_two_monomers_use_worst_case() -> None:
     assert limits is not None
     assert limits.reference_max_extent_A == 2.5
     assert limits.max_monomer_extent_A < 8.0
+
+
+def test_apply_geometry_limits_respects_no_dynamics_max_monomer_extent() -> None:
+    from argparse import Namespace
+    from dataclasses import dataclass
+
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        apply_geometry_limits_to_overlap_config,
+    )
+
+    @dataclass
+    class _Overlap:
+        n_monomers: int = 1
+        max_monomer_extent_A: float = 12.0
+        intra_min_distance_A: float = 0.5
+        min_distance_A: float = 1.5
+
+    class _Ctx:
+        pass
+
+    overlap = _Overlap(max_monomer_extent_A=0.0)
+    args = Namespace(no_dynamics_max_monomer_extent=True, quiet=True)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
+            "compute_geometry_limits_from_mlpot_ctx",
+            lambda *a, **k: type(
+                "L",
+                (),
+                {
+                    "max_monomer_extent_A": 4.2,
+                    "intra_min_distance_A": 0.8,
+                    "inter_min_distance_A": 1.5,
+                    "notes": "mock",
+                },
+            )(),
+        )
+        updated = apply_geometry_limits_to_overlap_config(
+            overlap, _Ctx(), args, verbose=False
+        )
+    assert updated.max_monomer_extent_A == 0.0

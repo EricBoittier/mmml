@@ -33,11 +33,15 @@ liquid-density packing.
 | Box | 20 Å |
 | Density | 1.0 × bulk liquid (~0.423 g/cm³) |
 | Checkpoints | `des`, `spooky4`, `sppoky10` (see `checkpoints:`) |
+| Embeddings | `mechanical` (`mm_charge_mode=fixed`) by default; smoke can add `electrostatic` (`q0`) |
 | Backends | `pycharmm`, `jaxmd` |
 
-Run tag example: `meth_127_t100_l20_des_pycharmm`.
+Run tag example: `meth_127_t100_l20_des_mech_pycharmm`.
 
 Smoke matrix (`config.smoke.yaml`): L=16 Å at 0.5× bulk, two JSONs, 1 ps legs.
+
+Embedding smoke (`config.smoke.embeddings.tiny.yaml`): DES + So3LR13, mechanical +
+electrostatic (DES+q0 skipped — no charge head), real ML (`jax_mm_spoof: false`).
 
 ## Prerequisites
 

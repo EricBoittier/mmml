@@ -361,6 +361,11 @@ def apply_geometry_limits_to_overlap_config(
     explicit_extent = (
         getattr(args, "dynamics_max_monomer_extent", None) if args is not None else None
     )
+    # --no-dynamics-max-monomer-extent disables the gate (0.0); do not reinstate
+    # bond-derived auto extents on top of that opt-out.
+    disable_extent = bool(
+        args is not None and getattr(args, "no_dynamics_max_monomer_extent", False)
+    )
     explicit_intra = (
         getattr(args, "dynamics_intra_min_distance", None) if args is not None else None
     )
@@ -380,11 +385,12 @@ def apply_geometry_limits_to_overlap_config(
 
     setattr(mlpot_ctx, "_monomer_geometry_limits", limits)
 
-    max_extent = (
-        float(explicit_extent)
-        if explicit_extent is not None
-        else float(limits.max_monomer_extent_A)
-    )
+    if disable_extent:
+        max_extent = 0.0
+    elif explicit_extent is not None:
+        max_extent = float(explicit_extent)
+    else:
+        max_extent = float(limits.max_monomer_extent_A)
     intra_min = (
         float(explicit_intra)
         if explicit_intra is not None
@@ -403,10 +409,13 @@ def apply_geometry_limits_to_overlap_config(
         min_distance_A=inter_min,
     )
     if verbose or (args is not None and not getattr(args, "quiet", False)):
+        if disable_extent:
+            extent_note = "disabled (--no-dynamics-max-monomer-extent)"
+        else:
+            extent_note = f"max_extent={max_extent:.2f} Å (default was {DEFAULT_MAX_MONOMER_EXTENT_A:.1f})"
         print(
             "Monomer geometry limits (bond/reference auto): "
-            f"max_extent={max_extent:.2f} Å "
-            f"(default was {DEFAULT_MAX_MONOMER_EXTENT_A:.1f}), "
+            f"{extent_note}, "
             f"intra_min={intra_min:.2f} Å "
             f"(default was {DEFAULT_INTRA_MIN_DISTANCE_A:.1f}), "
             f"inter_min={inter_min:.2f} Å "
