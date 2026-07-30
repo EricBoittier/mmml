@@ -30,9 +30,9 @@ n_windows: 30
 k_ev_A2: 5.0
 
 temperature_K: 300.0
-timestep_fs: 0.5
-nsteps: 40000
-equilibration_steps: 4000
+timestep_fs: 1.0
+nsteps: 10000
+equilibration_steps: 1000
 printfreq: 500
 savefreq: 100
 seed: 0
