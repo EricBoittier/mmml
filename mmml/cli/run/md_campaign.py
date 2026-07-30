@@ -263,10 +263,21 @@ def run_single_backend(
     clear_handoff_context()
     set_handoff_in(handoff_in)
     set_handoff_out(None)
+    if getattr(args, "jaxmd_unified", False):
+        from mmml.cli.run.md_system_unified import run_unified_jaxmd
+
+        try:
+            exit_code = int(run_unified_jaxmd(args))
+        except Exception as exc:
+            print(f"mmml md-system: jaxmd-unified failed: {exc}", flush=True)
+            exit_code = 1
+        handoff_out = get_handoff_out()
+        stages: list[MdStageSummary] = getattr(md_system, "_last_job_stages", []) or []
+        return exit_code, handoff_out, stages
     backend, argv = md_system.build_command(args)
     exit_code = md_system.run_backend(backend, argv, args)
     handoff_out = get_handoff_out()
-    stages: list[MdStageSummary] = getattr(md_system, "_last_job_stages", []) or []
+    stages = getattr(md_system, "_last_job_stages", []) or []
     return exit_code, handoff_out, stages
 
 

@@ -465,17 +465,16 @@ def build_embedding_box(
         os.chdir(prev)
 
     # Sibling PDB for ``md-system --from-pdb`` / jaxmd-unified mechanical embedding.
+    # Use CHARMM ``coor_pdb`` so RESN is TRIA/TIP3 (ASE defaults everything to MOL).
     try:
-        from ase import Atoms
-        from ase.io import write as ase_write
-
-        from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
-
-        z = np.asarray(get_Z_from_psf(), dtype=int)
-        pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
-        atoms = Atoms(numbers=z, positions=pos, cell=np.eye(3) * float(box.box_side_A), pbc=True)
-        # Prefer CHARMM residue names on atoms when available for ml_resnames.
-        ase_write(str(pdb_path), atoms)
+        prev_pdb = os.getcwd()
+        try:
+            os.chdir(out)
+            write.coor_pdb(pdb_path.name)
+        finally:
+            os.chdir(prev_pdb)
+        if not pdb_path.is_file():
+            raise FileNotFoundError(pdb_path)
     except Exception as exc:
         print(f"WARN: could not write {pdb_path.name} for md-system from_pdb: {exc}", flush=True)
         pdb_path = None

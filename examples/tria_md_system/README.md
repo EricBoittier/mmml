@@ -13,7 +13,15 @@ still fails closed until generalized lowering lands.
 uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
 ```
 
-Needs sibling `model.pdb` (written by build), `model.psf`, `box.json`.
+Needs sibling `model.pdb` (CHARMM `coor_pdb` with TRIA/TIP3 RESN — **rebuild**
+if an older ASE `MOL` PDB is present), `model.psf`, `box.json`.
+
+```bash
+# Force a fresh PDB with correct residue names:
+uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
+# Confirm RESN (should list TRIA and TIP3, not MOL):
+awk '/^ATOM/{print substr($0,18,4)}' artifacts/md_embedding/aaa/model.pdb | sort -u
+```
 
 ## 2. NVT / NPT / NVE smokes
 

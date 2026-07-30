@@ -33,6 +33,36 @@ def _sample_campaign() -> dict:
     }
 
 
+def test_run_single_backend_honors_jaxmd_unified(monkeypatch):
+    """Campaign legs must call run_unified_jaxmd when jaxmd_unified is set."""
+    from argparse import Namespace
+    from unittest import mock
+
+    from mmml.cli.run import md_campaign
+
+    called: dict[str, object] = {}
+
+    def _fake_unified(args):
+        called["args"] = args
+        return 0
+
+    monkeypatch.setattr(
+        "mmml.cli.run.md_system_unified.run_unified_jaxmd",
+        _fake_unified,
+    )
+    monkeypatch.setattr(md_campaign, "clear_handoff_context", lambda: None)
+    monkeypatch.setattr(md_campaign, "set_handoff_in", lambda *_a, **_k: None)
+    monkeypatch.setattr(md_campaign, "set_handoff_out", lambda *_a, **_k: None)
+    monkeypatch.setattr(md_campaign, "get_handoff_out", lambda: None)
+
+    ns = Namespace(jaxmd_unified=True, output_dir="/tmp/x")
+    rc, handoff, stages = md_campaign.run_single_backend(ns)
+    assert rc == 0
+    assert called["args"] is ns
+    assert handoff is None
+    assert stages == []
+
+
 def test_topological_job_order() -> None:
     order = topological_job_order(_sample_campaign())
     assert order.index("equil") < order.index("prod")
