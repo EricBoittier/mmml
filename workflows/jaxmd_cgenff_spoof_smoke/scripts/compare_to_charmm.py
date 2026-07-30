@@ -18,6 +18,12 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+# CHARMM uses OpenCL; monomer JAX parity is fine on CPU. Force CPU before any
+# jax / jax_md import so empty CUDA nodes do not abort import.
+os.environ.setdefault("JAX_ENABLE_X64", "1")
+os.environ["JAX_PLATFORMS"] = os.environ.get("JAX_PLATFORMS_COMPARE", "cpu")
+os.environ.setdefault("MMML_ALLOW_SELECTIVE_BONDED_BLOCK", "1")
+
 import jax.numpy as jnp
 import numpy as np
 from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
@@ -338,6 +344,7 @@ def run_case(residue: str, workdir: Path, *, include_mm: bool) -> list[dict[str,
 
 def _run_one_residue(residue: str, *, include_mm: bool, partial_path: Path) -> int:
     """One CHARMM session per process (PSF cannot be cleanly swapped)."""
+    print(f"=== compare {residue} vs native CHARMM ===", flush=True)
     partial: dict[str, Any] = {
         "residue": residue,
         "comparisons": [],
@@ -345,6 +352,7 @@ def _run_one_residue(residue: str, *, include_mm: bool, partial_path: Path) -> i
         "traceback": None,
     }
     try:
+        print("  workdir setup…", flush=True)
         with tempfile.TemporaryDirectory(prefix=f"charmm_cmp_{residue}_") as tmp:
             results = run_case(residue, Path(tmp), include_mm=include_mm)
         partial["comparisons"] = results
@@ -364,8 +372,10 @@ def _run_one_residue(residue: str, *, include_mm: bool, partial_path: Path) -> i
         print(f"  ERROR {residue}: {exc}", flush=True)
         print(partial["traceback"], flush=True)
         partial_path.write_text(json.dumps(partial, indent=2) + "\n", encoding="utf-8")
+        print(f"  wrote {partial_path}", flush=True)
         return 1
     partial_path.write_text(json.dumps(partial, indent=2) + "\n", encoding="utf-8")
+    print(f"  wrote {partial_path}", flush=True)
     return 0 if all(c.get("pass") for c in partial["comparisons"]) else 1
 
 
@@ -408,7 +418,6 @@ def main() -> int:
     if args.residue:
         if args.partial_out is None:
             parser.error("--residue requires --partial-out")
-        print(f"=== compare {args.residue} vs native CHARMM ===", flush=True)
         return _run_one_residue(
             args.residue,
             include_mm=not args.no_mm,
@@ -431,11 +440,13 @@ def main() -> int:
     env["PYTHONPATH"] = str(_REPO) + (
         os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
     )
+    env["PYTHONUNBUFFERED"] = "1"
     fail = 0
     for residue in args.residues:
         partial_path = out_dir / f"partial_{residue.lower()}.json"
         cmd = [
             py,
+            "-u",
             str(Path(__file__).resolve()),
             "--residue",
             residue,

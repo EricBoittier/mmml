@@ -24,7 +24,13 @@ if [[ "$MODE" == "native" || "$MODE" == "all" ]]; then
 fi
 if [[ "$MODE" == "compare" || "$MODE" == "all" ]]; then
   # Monomer E/F parity: JAX on CPU, PyCHARMM OpenCL on the allocated GPU node.
+  # Bonded-only by default (matches jax_mm_spoof); set COMPARE_INCLUDE_MM=1 for full MM.
   export JAX_PLATFORMS=cpu
-  "$MMML_PYTHON" workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py
-  "$MMML_PYTHON" workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py || true
+  export PYTHONUNBUFFERED=1
+  COMPARE_ARGS=()
+  if [[ "${COMPARE_INCLUDE_MM:-0}" != "1" ]]; then
+    COMPARE_ARGS+=(--no-mm)
+  fi
+  "$MMML_PYTHON" -u workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py "${COMPARE_ARGS[@]}"
+  "$MMML_PYTHON" -u workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py || true
 fi
