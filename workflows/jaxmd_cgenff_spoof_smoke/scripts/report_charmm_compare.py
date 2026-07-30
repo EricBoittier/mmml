@@ -63,7 +63,7 @@ def main() -> int:
                 dF = (c.get("force_stats") or {}).get("max_abs_diff")
                 print(
                     f"  {status}  {label}: ΔE_total={dE:+.6e} kcal/mol  "
-                    f"max|ΔF|={dF:.6e} kcal/mol/Å"
+                    f"max|ΔF|={('n/a' if dF is None else f'{dF:.6e}')} kcal/mol/Å"
                 )
                 je = c.get("jax_kcalmol") or {}
                 ce = c.get("charmm_kcalmol") or {}

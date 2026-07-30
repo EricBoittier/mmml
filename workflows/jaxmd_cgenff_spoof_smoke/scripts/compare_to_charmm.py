@@ -158,34 +158,37 @@ def compare_bonded(
     jax_e = _to_float_dict(jax_comp)
     jax_f_np = np.asarray(jax_f, dtype=np.float64)
 
-    # Map JAX component names onto CHARMM ETERM keys.
-    jax_to_charmm = {
-        "bond": "bond",
-        "angle": "angl",
-        "angl": "angl",
-        "torsion": "dihe",
-        "dihe": "dihe",
-        "improper": "impr",
-        "impr": "impr",
-        "urey": "urey",
-        "ub": "urey",
-        "cmap": "cmap",
-        "total": "total",
+    # Map CHARMM ETERM keys onto possible JAX component names.
+    charmm_from_jax = {
+        "bond": ("bond",),
+        "angl": ("angle", "angl"),
+        "dihe": ("torsion", "dihe"),
+        "impr": ("improper", "impr"),
+        "urey": ("urey", "ub"),
+        "cmap": ("cmap",),
+        "total": ("total",),
     }
     energy_deltas = {}
     term_ok = True
-    for jax_key, charmm_key in jax_to_charmm.items():
-        if jax_key not in jax_e and charmm_key not in charmm_e:
+    for charmm_key, jax_keys in charmm_from_jax.items():
+        jv = None
+        for jk in jax_keys:
+            if jk in jax_e:
+                jv = float(jax_e[jk])
+                break
+        cv = float(charmm_e[charmm_key]) if charmm_key in charmm_e else None
+        if jv is None and cv is None:
             continue
-        jv = float(jax_e.get(jax_key, 0.0))
-        cv = float(charmm_e.get(charmm_key, 0.0))
-        # Prefer canonical CHARMM key in the delta table.
+        if jv is None:
+            jv = 0.0
+        if cv is None:
+            cv = 0.0
         energy_deltas[charmm_key] = jv - cv
         if not _allclose(jv, cv, rtol=ENERGY_RTOL, atol=ENERGY_ATOL):
             term_ok = False
     ok_e = _allclose(
-        jax_e.get("total", 0.0),
-        charmm_e.get("total", 0.0),
+        float(jax_e.get("total", 0.0)),
+        float(charmm_e.get("total", 0.0)),
         rtol=ENERGY_RTOL,
         atol=ENERGY_ATOL,
     )
