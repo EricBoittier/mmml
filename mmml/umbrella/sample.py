@@ -81,8 +81,14 @@ def select_lowest_energy_frames(
         raise ValueError(
             f"energies shape {ene.shape} must match positions[:2] {pos.shape[:2]}"
         )
-    idx = np.nanargmin(ene, axis=1).astype(np.int64)
     k = pos.shape[0]
+    idx = np.zeros(k, dtype=np.int64)
+    for i in range(k):
+        row = ene[i]
+        if np.all(~np.isfinite(row)):
+            idx[i] = 0
+        else:
+            idx[i] = int(np.nanargmin(row))
     chosen = pos[np.arange(k), idx]
     return chosen, idx, ene[np.arange(k), idx]
 

@@ -44,14 +44,14 @@ n_windows: 3
 k_ev_A2: 6.505
 
 temperature_K: 300.0
-timestep_fs: 0.5
-nsteps: 2000
-equilibration_steps: 200
-printfreq: 200
-savefreq: 100
+timestep_fs: 0.25
+nsteps: 4000
+equilibration_steps: 400
+printfreq: 400
+savefreq: 200
 seed: 0
 seed_mode: stretch
 overwrite: false
 lr_solver: mic
 # Antisymmetric stretch seeds at ξ≈±1.3 can exceed ~35 eV/Å before MD relaxes.
-max_seed_force: 50.0
+max_seed_force: 80.0

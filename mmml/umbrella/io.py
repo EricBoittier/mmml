@@ -71,6 +71,11 @@ def load_snapshots(path: Path) -> dict[str, Any]:
         out["cv_spec"] = json.loads(
             str(spec.item() if getattr(spec, "ndim", 0) == 0 else spec)
         )
+    if "fail_reasons" in out:
+        fr = out["fail_reasons"]
+        out["fail_reasons"] = json.loads(
+            str(fr.item() if getattr(fr, "ndim", 0) == 0 else fr)
+        )
     return out
 
 

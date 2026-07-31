@@ -12,9 +12,9 @@
 #   bash examples/m/14_umbrella_sample_sol_prod.sh              # or SOLVENT=tip3
 #   SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh
 #
-# Timing (defaults): 30 windows × 40000 steps × 0.5 fs = 20 ps / window;
-#   equilibration_steps 4000 → 2 ps discarded; ~401 saved frames / window.
-# If a window heats, set TIMESTEP_FS=0.25 (and double NSTEPS for same wall time).
+# Timing (defaults): 30 windows × 80000 steps × 0.25 fs = 20 ps / window;
+#   equilibration_steps 8000 → 2 ps discarded; ~401 saved frames / window.
+# 0.25 fs matches Menshutkin gas practice (PhysNet + H unstable at 0.5 fs near TS).
 
 engine: hybrid_jaxmd
 checkpoint: ../../model_ext.json
@@ -47,14 +47,14 @@ n_windows: 30
 k_ev_A2: 6.505
 
 temperature_K: 300.0
-timestep_fs: 0.5
-nsteps: 40000
-equilibration_steps: 4000
-printfreq: 500
-savefreq: 100
+timestep_fs: 0.25
+nsteps: 80000
+equilibration_steps: 8000
+printfreq: 1000
+savefreq: 200
 seed: 0
 seed_mode: stretch
 overwrite: false
 lr_solver: mic
 # Antisymmetric stretch seeds at ξ≈±1.3 can exceed ~35 eV/Å before MD relaxes.
-max_seed_force: 50.0
+max_seed_force: 80.0

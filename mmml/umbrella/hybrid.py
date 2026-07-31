@@ -537,6 +537,10 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f"equil={equil}  savefreq={savefreq}  printfreq={printfreq}  "
         f"~{n_frames_est} frames/window"
     )
+    print(
+        f"  max_seed_force={float(cfg.max_seed_force):g} eV/Å  "
+        f"(failed windows are skipped, not fatal)"
+    )
     print(f"  output_dir={output_dir}")
     if wall_specs:
         print(f"  walls={len(wall_specs)}  {[w.label() for w in sched.walls]}")
@@ -545,6 +549,14 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     all_cv: list[np.ndarray] = []
     all_e_tot: list[np.ndarray] = []
     all_e_unb: list[np.ndarray] = []
+    failed_windows: list[int] = []
+    fail_reasons: dict[int, str] = {}
+
+    def _nan_window() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        pos = np.full((n_frames_est, n_atoms, 3), np.nan, dtype=np.float64)
+        cv_nan = np.full(n_frames_est, np.nan, dtype=np.float64)
+        e_nan = np.full(n_frames_est, np.nan, dtype=np.float64)
+        return pos, cv_nan, e_nan, e_nan.copy()
 
     for wid in range(k_windows):
         xi0 = float(sched.xi0[wid])
@@ -589,6 +601,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             cutoff_A=12.0,
         )
         # Preflight seed force via ASE face when available; otherwise skip.
+        fmax = float("nan")
         try:
             calc = energy.as_ase_calculator()
             atoms = Atoms(
@@ -600,11 +613,6 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             atoms.calc = calc
             f0 = atoms.get_forces()
             fmax = float(np.max(np.abs(f0)))
-            if fmax > float(cfg.max_seed_force):
-                raise RuntimeError(
-                    f"window {wid} seed max|F|={fmax:.2f} eV/Å exceeds "
-                    f"--max-seed-force={cfg.max_seed_force} (ξ₀={xi0:.3f})"
-                )
         except (ValueError, NotImplementedError):
             fmax = float("nan")
 
@@ -637,6 +645,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             output_path=None,
             name=f"umbrella_hybrid_w{wid:03d}",
             progress_every=int(printfreq),
+            abort_nonfinite=True,
         )
         print(
             f"  window {wid + 1}/{k_windows}  ξ₀={xi0:.3f}  k={k_w:.3f}  "
@@ -644,40 +653,74 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             f"seed_max|F|={fmax if fmax == fmax else float('nan'):.2f}",
             flush=True,
         )
-        traj = driver.run(win_system, energy, ensemble)
-        frames = traj.metadata.get("positions")
-        energies = traj.metadata.get("energies")
-        if frames is None:
-            # Fallback: single final frame from path or empty
-            raise RuntimeError(
-                f"hybrid window {wid}: driver returned no positions in metadata"
+
+        fail_msg: str | None = None
+        if fmax == fmax and fmax > float(cfg.max_seed_force):
+            fail_msg = (
+                f"seed max|F|={fmax:.2f} eV/Å exceeds max_seed_force="
+                f"{cfg.max_seed_force:g} (ξ₀={xi0:.3f})"
             )
-        pos_w = np.asarray(frames, dtype=np.float64)
-        if pos_w.ndim == 2:
-            pos_w = pos_w[None, ...]
-        e_tot = np.asarray(energies, dtype=np.float64).reshape(-1)
-        if e_tot.shape[0] != pos_w.shape[0]:
-            e_tot = np.resize(e_tot, pos_w.shape[0])
-        cv_w = np.array(
-            [float(cv.value_numpy(pos_w[t], cell=box)) for t in range(pos_w.shape[0])],
-            dtype=np.float64,
-        )
-        w_w = np.array(
-            [
-                _numpy_bias_cv(pos_w[t], cv, xi0, k_w, box)
-                for t in range(pos_w.shape[0])
-            ],
-            dtype=np.float64,
-        )
-        e_unb = e_tot - w_w
-        all_pos.append(pos_w)
-        all_cv.append(cv_w)
-        all_e_tot.append(e_tot)
-        all_e_unb.append(e_unb)
-        print(
-            f"    done: {pos_w.shape[0]} frames  "
-            f"⟨ξ⟩={float(cv_w.mean()):.3f}  ⟨E_unb⟩={float(e_unb.mean()):.4f} eV"
-        )
+        else:
+            try:
+                traj = driver.run(win_system, energy, ensemble)
+            except RuntimeError as exc:
+                fail_msg = str(exc)
+                traj = None
+            if fail_msg is None:
+                frames = traj.metadata.get("positions") if traj is not None else None
+                energies = traj.metadata.get("energies") if traj is not None else None
+                if frames is None:
+                    fail_msg = "driver returned no positions in metadata"
+                else:
+                    pos_w = np.asarray(frames, dtype=np.float64)
+                    if pos_w.ndim == 2:
+                        pos_w = pos_w[None, ...]
+                    e_tot = np.asarray(energies, dtype=np.float64).reshape(-1)
+                    if e_tot.shape[0] != pos_w.shape[0]:
+                        e_tot = np.resize(e_tot, pos_w.shape[0])
+                    if not (
+                        np.all(np.isfinite(pos_w)) and np.all(np.isfinite(e_tot))
+                    ):
+                        fail_msg = "non-finite positions/energies in recorded frames"
+                    else:
+                        cv_w = np.array(
+                            [
+                                float(cv.value_numpy(pos_w[t], cell=box))
+                                for t in range(pos_w.shape[0])
+                            ],
+                            dtype=np.float64,
+                        )
+                        w_w = np.array(
+                            [
+                                _numpy_bias_cv(pos_w[t], cv, xi0, k_w, box)
+                                for t in range(pos_w.shape[0])
+                            ],
+                            dtype=np.float64,
+                        )
+                        e_unb = e_tot - w_w
+                        if not np.all(np.isfinite(cv_w)):
+                            fail_msg = "non-finite CV values in recorded frames"
+                        else:
+                            all_pos.append(pos_w)
+                            all_cv.append(cv_w)
+                            all_e_tot.append(e_tot)
+                            all_e_unb.append(e_unb)
+                            print(
+                                f"    done: {pos_w.shape[0]} frames  "
+                                f"⟨ξ⟩={float(cv_w.mean()):.3f}  "
+                                f"⟨E_unb⟩={float(e_unb.mean()):.4f} eV",
+                                flush=True,
+                            )
+
+        if fail_msg is not None:
+            failed_windows.append(wid)
+            fail_reasons[wid] = fail_msg
+            pos_w, cv_w, e_tot, e_unb = _nan_window()
+            all_pos.append(pos_w)
+            all_cv.append(cv_w)
+            all_e_tot.append(e_tot)
+            all_e_unb.append(e_unb)
+            print(f"    FAILED window {wid + 1}/{k_windows}: {fail_msg}", flush=True)
 
     # Pad windows to equal frame counts (driver may differ by 1 at boundaries).
     n_frames = min(p.shape[0] for p in all_pos)
@@ -703,6 +746,8 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         # Authoritative CV (difference / combination); atom_i/j are legacy only.
         "cv_spec": np.asarray(json.dumps(sched.cv_specs())),
         "wall_spec": np.asarray(json.dumps(wall_specs)),
+        "failed_windows": np.asarray(failed_windows, dtype=np.int32),
+        "fail_reasons": np.asarray(json.dumps({str(k): v for k, v in fail_reasons.items()})),
     }
     if box is not None:
         extra["box"] = np.asarray(box, dtype=np.float64)
@@ -763,14 +808,23 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         "ml_atom_indices": ml_indices.tolist(),
         "ml_resnames": list(cfg.ml_resnames),
         "replica_exchange": False,
-        "cv_mean": cv_traj.mean(axis=1).reshape(k_windows, -1).tolist(),
-        "cv_std": cv_traj.std(axis=1).reshape(k_windows, -1).tolist(),
+        "cv_mean": np.nanmean(cv_traj, axis=1).reshape(k_windows, -1).tolist(),
+        "cv_std": np.nanstd(cv_traj, axis=1).reshape(k_windows, -1).tolist(),
         "snapshots": str(snapshots_path),
         "bin_minima": str(minima_path),
         "bin_minima_frame_idx": minima_idx.tolist(),
         "bin_minima_energy_ev": minima_e.tolist(),
         "has_energies_unbiased_ev": True,
+        "failed_windows": failed_windows,
+        "fail_reasons": {str(k): v for k, v in fail_reasons.items()},
+        "n_failed_windows": len(failed_windows),
     }
+    if failed_windows:
+        print(
+            f"WARNING: {len(failed_windows)}/{k_windows} windows failed and will be "
+            f"dropped by MBAR: {failed_windows}",
+            flush=True,
+        )
     summary_path = write_summary(output_dir / SUMMARY_JSON, summary)
     return UmbrellaResult(
         output_dir=output_dir,
