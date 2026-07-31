@@ -1,13 +1,10 @@
-% ACS-style Methods draft: hybrid ML/MM training and MD (MMML).
-% Compile:  tectonic -X compile main.tex
-%           (or: make pdf)
-% Target journal class: JCTC via achemso. Requires TeX Live / tectonic network fetch.
-% Single-column review layout (ACS Paragon accepts author PDF); switch to
-% layout=twocolumn for a production-like proof if desired.
+% ACS-style draft: hybrid ML/MM for condensed-phase simulations (MMML).
+% Compile:  tectonic -X compile main.tex   (or: make pdf)
+% Supporting Information is appended in this file after the bibliography.
 \documentclass[journal=jctc,manuscript=article]{achemso}
 
 %%%%%%%%%%%%%%%%%%%%%%%%
-%%% Packages (minimal)
+%%% Packages
 %%%%%%%%%%%%%%%%%%%%%%%%
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
@@ -23,15 +20,33 @@
   decorations.pathreplacing
 }
 \usepackage{siunitx}
+\usepackage{placeins}
 \sisetup{per-mode=symbol}
 \definecolor{MmBand}{RGB}{210,235,230}
 \definecolor{MmLine}{RGB}{20,120,110}
+\definecolor{PlaceholderBg}{RGB}{248,248,246}
+\definecolor{PlaceholderFg}{RGB}{120,110,90}
+
+% Placeholder figure frame used until workflow PNGs are frozen.
+\newcommand{\placeholderfig}[2]{%
+  \begin{tikzpicture}
+    \draw[rounded corners=2pt, fill=PlaceholderBg, draw=PlaceholderFg!50]
+      (0,0) rectangle (12.2,5.2);
+    \draw[->, PlaceholderFg] (0.8,0.7) -- (11.4,0.7) node[right] {\scriptsize #1};
+    \draw[->, PlaceholderFg] (0.8,0.7) -- (0.8,4.6) node[above] {\scriptsize #2};
+    \draw[PlaceholderFg!40, densely dashed] (1.2,1.2) -- (3.5,3.8) -- (5.0,2.4)
+      -- (7.2,4.1) -- (9.0,2.9) -- (10.8,3.6);
+    \node[align=center, text=PlaceholderFg, font=\sffamily\small] at (6.1,2.6)
+      {\textbf{(PLACEHOLDER)}\\[2pt]
+       replace with workflow figure};
+  \end{tikzpicture}%
+}
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% Manuscript metadata
 %%%%%%%%%%%%%%%%%%%%%%%%
 \SectionNumbersOn
-\renewcommand*\rmdefault{ptm}% Times-like body (ACS-friendly)
+\renewcommand*\rmdefault{ptm}
 
 \author{Eric Boittier}
 \affiliation{Department of Chemistry, University of Basel, Klingelbergstrasse 80, CH-4056 Basel, Switzerland}
@@ -41,28 +56,28 @@
 
 \title{Hybrid Machine-Learning / Molecular-Mechanics Energy Functions for Condensed-Phase Simulations: Training and Molecular Dynamics}
 
-\abbreviations{MD,ML,MM,COM,PME}
-\keywords{machine learning, molecular mechanics, hybrid potentials, PhysNet, CHARMM, condensed phase}
+\abbreviations{MD,ML,MM,COM,PME,MBAR,WHAM,ADUMB}
+\keywords{machine learning, molecular mechanics, hybrid potentials, PhysNet, CHARMM, umbrella sampling, condensed phase}
 
 \begin{document}
 
 \begin{abstract}
-We describe the hybrid machine-learning / molecular-mechanics (ML/MM) energy
-function implemented in the MMML software stack and the associated training and
-molecular-dynamics (MD) workflows. Intramolecular and short-range
-intermolecular interactions are evaluated with a neural-network potential,
-while intermolecular Lennard-Jones and Coulomb interactions are supplied by a
-CHARMM/CGenFF-compatible classical term that is switched on as a function of
-monomer center-of-mass separation. The same hybrid total energy is assembled
-during supervised training (\texttt{physnet-train}) and during condensed-phase
-MD (\texttt{md-system}), so that the learned model is trained on the Hamiltonian
-later used for dynamics. Mechanical and electrostatic embeddings for the
-classical Coulomb term are controlled by a charge-mode switch
-(\texttt{fixed} versus \(\mathrm{Q}^{0}\)). Periodic long-range electrostatics
-are provided by optional Ewald / particle-mesh Ewald solvers. The Methods
-section below documents the energy decomposition, CLI entry points, default
-handoff cutoffs, and campaign pipelines used for liquid dichloromethane,
-acetone, and methane.
+We describe a hybrid machine-learning / molecular-mechanics (ML/MM) energy
+function for condensed-phase simulations in which intramolecular and
+short-range intermolecular interactions are evaluated with a neural-network
+potential, while intermolecular Lennard-Jones and Coulomb interactions are
+supplied by a CHARMM/CGenFF-compatible classical term that is switched on as a
+function of monomer center-of-mass separation. The same hybrid total energy is
+assembled during supervised training and during molecular dynamics (MD), so
+that the learned model is trained on the Hamiltonian later used for dynamics.
+Mechanical and electrostatic embeddings for the classical Coulomb term are
+controlled by a charge-mode switch. Periodic long-range electrostatics are
+provided by optional Ewald / particle-mesh Ewald solvers. We outline validation
+targets---bonded MM parity, NVE energy conservation, rigid dimer scans, liquid
+densities, and free-energy profiles from umbrella sampling and CHARMM adaptive
+umbrella dynamics (ADUMB)---and provide regenerable workflow hooks; numerical
+panels that are not yet frozen appear as explicit placeholders. Implementation
+details and CLI examples are collected in the Supporting Information.
 \end{abstract}
 
 \tableofcontents
@@ -72,23 +87,38 @@ acetone, and methane.
 \section{Introduction}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Machine-learned (ML) potentials offer near-quantum accuracy for local chemical
-environments, but long-range electrostatics and large condensed-phase systems
-remain expensive when treated entirely by neural networks. Classical molecular
-mechanics (MM) force fields such as CHARMM/CGenFF\cite{Vanommeslaeghe2010,Brooks2009CHARMM}
-remain efficient for intermolecular interactions at longer range. Hybrid ML/MM
-energy functions combine the two: ML for intramolecular and short-range
-many-body interactions, and MM for the intermolecular tail and optional
-long-range Coulomb solvers.\cite{Unke2019PhysNet,MMML2026}
+Machine-learned interatomic potentials have transformed the accuracy--cost
+trade-off for molecular simulation, from early high-dimensional neural network
+representations\cite{Behler2007,Behler2021} and Gaussian approximation
+potentials\cite{Bartok2010,Deringer2021} to message-passing architectures such
+as SchNet,\cite{Schutt2018} PhysNet,\cite{Unke2019PhysNet}
+SpookyNet,\cite{Unke2021SpookyNet} and related force fields trained to
+near-quantum fidelity.\cite{Chmiela2018,Unke2021ChemRev,Keith2021,Ko2021}
+Nonetheless, treating large condensed-phase systems entirely with neural
+networks remains expensive when long-range electrostatics and many solvent
+molecules must be retained.
+
+Classical molecular-mechanics (MM) force fields such as
+CHARMM/CGenFF\cite{Brooks2009CHARMM,Vanommeslaeghe2010,Mackerell2004} remain
+efficient for intermolecular interactions at longer range, and
+particle-mesh Ewald (PME) methods provide scalable periodic
+Coulomb sums.\cite{Ewald1921,Darden1993,Essmann1995} Hybrid schemes that
+combine a local high-accuracy model with an efficient environment have a long
+history in QM/MM chemistry\cite{Warshel1976,Senn2009,Lin2014} and motivate
+analogous ML/MM constructions: ML for intramolecular and short-range many-body
+interactions, MM for the intermolecular tail and optional long-range Coulomb
+solvers.\cite{Unke2019PhysNet,MMML2026}
 
 A practical hybrid scheme must expose a \emph{single} total energy both when
-fitting parameters and when integrating equations of motion. The MMML package
-implements that requirement through a shared hybrid forward pass used by the
-\texttt{physnet-train} and \texttt{md-system} commands. The remainder of this
-article details the hybrid energy (Section~\ref{sec:energy}), training
-(Section~\ref{sec:train}), MD campaigns (Section~\ref{sec:md}), charge
-embeddings (Section~\ref{sec:charges}), and software reproducibility
-(Section~\ref{sec:software}).
+fitting parameters and when integrating equations of motion. The MMML
+package\cite{MMML2026} implements that requirement through a shared hybrid
+forward pass used by training and MD entry points. The remainder of this
+article defines the hybrid energy (Section~\ref{sec:energy}), summarizes
+training and condensed-phase protocols (Sections~\ref{sec:train}--\ref{sec:md}),
+describes charge embeddings (Section~\ref{sec:charges}), and presents the
+validation and application targets that the accompanying Snakemake workflows
+are designed to regenerate (Section~\ref{sec:results}). Software command
+inventories and YAML templates are deferred to the Supporting Information.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Hybrid ML/MM Energy Function}
@@ -114,8 +144,10 @@ where \(E_I^{\mathrm{ML}}\) is the intramolecular ML energy of monomer \(I\),
 \(E_{IJ}^{\mathrm{MM}}\) collects switched intermolecular Lennard-Jones and
 Coulomb contributions evaluated with CGenFF-compatible parameters. Optional
 long-range Coulomb beyond the real-space switch enters as \(E^{\mathrm{LR}}\)
-(Ewald\cite{Ewald1921}, particle-mesh Ewald, or related solvers). A short-range
-steric wall and restraints may contribute \(E^{\mathrm{wall/restr}}\).
+(Ewald,\cite{Ewald1921} PME,\cite{Darden1993,Essmann1995} or related solvers).
+A short-range steric wall and restraints may contribute
+\(E^{\mathrm{wall/restr}}\) (including optional Ziegler--Biersack--Littmark
+nuclear repulsion inside the neural model\cite{Ziegler1985}).
 
 For an isolated dimer \(AB\), Equation~\ref{eq:hybrid-E} is equivalent to the
 training assembly
@@ -138,8 +170,7 @@ and MD YAML are listed in Table~\ref{tab:cutoffs} and illustrated in
 Figure~\ref{fig:handoff}.
 
 \begin{table}[h]
-\caption{Default COM handoff parameters shared by \texttt{physnet-train} and
-\texttt{md-system}.}
+\caption{Default COM handoff parameters shared by hybrid training and MD.}
 \label{tab:cutoffs}
 \begin{tabular}{llc}
 \toprule
@@ -161,11 +192,9 @@ Parameter & Symbol / role & Default \\
   box/.style={draw, rounded corners=1.5pt, align=center, inner sep=4pt},
   band/.style={draw, minimum height=1.05cm, minimum width=2.35cm, align=center},
 ]
-  % axis
   \draw[->, thick] (0,0) -- (14.2,0) node[below left] {$r_{\mathrm{COM}}$};
   \draw[->, thick] (0,0) -- (0,3.4) node[above left] {scale};
 
-  % region bands
   \fill[blue!12] (0.3,0.15) rectangle (5.5,2.85);
   \fill[orange!18] (5.5,0.15) rectangle (7.3,2.85);
   \fill[MmBand] (7.3,0.15) rectangle (11.8,2.85);
@@ -176,7 +205,6 @@ Parameter & Symbol / role & Default \\
   \node[band, fill=MmBand] at (9.55,2.25) {MM tail\\$s_{\mathrm{MM}}\to 0$};
   \node[band, fill=gray!12] at (12.7,2.25) {LR only\\$E^{\mathrm{LR}}$};
 
-  % switch curves (schematic)
   \draw[blue!70!black, very thick, domain=0.3:5.5, samples=40] plot (\x,{2.55});
   \draw[blue!70!black, very thick, domain=5.5:7.3, samples=50]
     plot (\x,{2.55*(7.3-\x)/(7.3-5.5)});
@@ -191,13 +219,11 @@ Parameter & Symbol / role & Default \\
   \draw[MmLine, very thick, domain=11.8:13.5, samples=20] plot (\x,{0.12});
   \node[MmLine] at (9.2,1.55) {$s_{\mathrm{MM}}$};
 
-  % ticks
   \foreach \x/\lab in {5.5/6.5, 7.3/8.0, 11.8/13} {
     \draw (\x,0.06) -- (\x,-0.06) node[below] {\lab\,\si{\angstrom}};
   }
   \node[below] at (0.3,-0.05) {0};
 
-  % ownership callouts
   \node[box, fill=white] at (2.9,0.75) {$E_I^{\mathrm{ML}}+E_{IJ}^{\mathrm{ML}}$};
   \node[box, fill=white] at (9.55,0.75) {$E_{IJ}^{\mathrm{MM}}$ (LJ + Coulomb)};
   \node[box, fill=white] at (12.7,0.75) {Ewald / PME};
@@ -214,22 +240,19 @@ the MM cutoff, only optional long-range Coulomb (\(E^{\mathrm{LR}}\)) remains.}
 \subsection{Ownership of Terms}
 
 Table~\ref{tab:ownership} summarizes which component owns each contribution.
-Nuclear repulsion inside the neural model (optional Ziegler--Biersack--Littmark,
-ZBL) is distinct from the classical short-range wall used as a safety term
-outside the training domain.
 
 \begin{table}[h]
 \caption{Term ownership in the hybrid Hamiltonian.}
 \label{tab:ownership}
-\begin{tabular}{llp{4.6cm}}
+\begin{tabular}{llp{4.8cm}}
 \toprule
 Term & Owner & Notes \\
 \midrule
-\(E_I^{\mathrm{ML}}\) & PhysNet / Spooky & Always on \\
-\(E_{IJ}^{\mathrm{ML}}\) & PhysNet / Spooky & COM-gated by \(s_{\mathrm{ML}}\) \\
+\(E_I^{\mathrm{ML}}\) & PhysNet / Spooky / SO3LR\cite{Unke2019PhysNet,Unke2021SpookyNet,Kabylda2025SO3LR} & Always on \\
+\(E_{IJ}^{\mathrm{ML}}\) & PhysNet / Spooky / SO3LR & COM-gated by \(s_{\mathrm{ML}}\) \\
 LJ + Coulomb pairs & CGenFF MM & Scaled by \(s_{\mathrm{MM}}\); \(q\) from charge mode \\
-Optional LJ scales & Trainable \(s^\sigma,s^\varepsilon\) & Sidecar \texttt{hybrid\_mm.json} \\
-\(E^{\mathrm{LR}}\) & Ewald / PME / \ldots & \texttt{lr\_solver} \\
+Optional LJ scales & Trainable \(s^\sigma,s^\varepsilon\) & Sidecar scales file \\
+\(E^{\mathrm{LR}}\) & Ewald / PME / \ldots & Long-range solver flag \\
 Bonded CHARMM & Topology (Mode~B) & Or jax-mm-spoof bonded clone \\
 \bottomrule
 \end{tabular}
@@ -240,29 +263,13 @@ Bonded CHARMM & Topology (Mode~B) & Or jax-mm-spoof bonded clone \\
 \label{sec:train}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{CLI Entry Point and Dataset}
-
-Hybrid models are trained with
-\begin{center}
-\texttt{mmml physnet-train --hybrid-mm [--config train.yaml]}
-\end{center}
-The CLI is implemented in \texttt{mmml/cli/make/make\_training.py}. Training
-targets the \emph{hybrid} total of Equation~\ref{eq:dimer-train}, not the bare
-neural energy, so that the checkpoint used later in MD matches the dynamics
-Hamiltonian.
-
-Datasets are covalent \emph{dimers}: each frame contains exactly two monomers.
-In addition to standard QM labels (\(R\), \(Z\), \(E\), \(\mathbf{F}\), optional
-dipole/charges), NPZ files must provide CGenFF fields
-(\texttt{cgenff\_type\_idx}, \texttt{mol\_id}, \texttt{cgenff\_charge},
-\texttt{cgenff\_master\_sigmas}/\texttt{epsilons}). These fields are prepared by
-\texttt{mmml prepare-mm-dataset} after electronic-structure evaluation of
-normal-mode samples.
-
-\subsection{Loss and Key Flags}
-
-The supervised objective is a weighted sum of squared residuals on hybrid
-energies and forces (and optional dipole / charge heads),
+Hybrid models are trained so that the supervised target is the \emph{hybrid}
+total of Equation~\ref{eq:dimer-train}, not the bare neural energy. Datasets
+are covalent dimers with QM labels
+(\(R\), \(Z\), \(E\), \(\mathbf{F}\), optional multipoles)\cite{Kohn1965,Sun2018PySCF,Moller1934,KohnShamDFTReview}
+augmented by CGenFF type indices and charges. The objective is a weighted sum
+of squared residuals on hybrid energies and forces (and optional dipole /
+charge heads),
 \begin{equation}
 \label{eq:loss}
 \mathcal{L}
@@ -271,23 +278,13 @@ energies and forces (and optional dipole / charge heads),
   + w_D\|\boldsymbol{\mu}-\boldsymbol{\mu}^{\mathrm{ref}}\|^2
   + w_q\|q-q^{\mathrm{ref}}\|^2.
 \end{equation}
-Representative weights used in the bundled fixed-charge template are
-\(w_E=1\), \(w_F=52.91\), \(w_D=27.21\), and \(w_q=14.39\). Validation scores
-the same hybrid total.
-
-Essential flags (YAML or CLI) are summarized below. The PhysNet radial cutoff
-must be at least \texttt{mm\_switch\_on}. Portable JSON checkpoints (and
-optional \texttt{hybrid\_mm.json} LJ-scale sidecars) are written for MD
-deployment. Figure~\ref{fig:train} summarizes the pipeline.
-\begin{itemize}
-\item \texttt{--hybrid-mm} --- enable hybrid total of Equation~\ref{eq:dimer-train}
-\item \texttt{--mm-charge-mode} \(\{\texttt{fixed},\texttt{q0},\texttt{latent},\ldots\}\)
-\item \texttt{--charges} / \texttt{--no-charges} --- neural charge head
-\item \texttt{--ml-switch-width}, \texttt{--mm-switch-on}, \texttt{--mm-switch-width}
-  (Table~\ref{tab:cutoffs})
-\item \texttt{--lr-solver} \(\{\texttt{mic},\texttt{ewald},\texttt{nvalchemiops\_pme}\}\)
-\item \texttt{--learn-mm-lj-scales} --- optional trainable LJ scales
-\end{itemize}
+Representative weights in the bundled fixed-charge template are
+\(w_E=1\), \(w_F=52.91\), \(w_D=27.21\), and \(w_q=14.39\). The PhysNet radial
+cutoff must be at least the MM handoff onset (Table~\ref{tab:cutoffs}).
+Portable JSON checkpoints (and optional LJ-scale sidecars) are written for MD
+deployment. The dataset \(\to\) fit \(\to\) MD pipeline is summarized in
+Figure~\ref{fig:train}; CLI flags and invocation examples are collected in
+Section~\ref{si:cli-train}.
 
 \begin{figure}[t]
 \centering
@@ -301,14 +298,14 @@ deployment. Figure~\ref{fig:train} summarizes the pipeline.
   step/.default=black!6,
   arr/.style={->, thick},
 ]
-  \node[step=blue!12] (res) {make-res\\monomers};
+  \node[step=blue!12] (res) {monomer\\prep};
   \node[step=blue!12, right=of res] (nms) {normal-mode\\sample};
-  \node[step=blue!12, right=of nms] (qm) {PySCF\\evaluate};
-  \node[step=blue!12, right=of qm] (split) {fix-and-split\\NPZ};
-  \node[step=orange!18, below=0.7cm of split] (prep) {prepare-mm-\\dataset};
-  \node[step=MmBand, left=of prep] (train) {physnet-train\\--hybrid-mm};
-  \node[step=gray!15, left=of train] (ckpt) {JSON ckpt\\(+ hybrid\_mm.json)};
-  \node[step=violet!12, left=of ckpt] (md) {md-system\\campaigns};
+  \node[step=blue!12, right=of nms] (qm) {QM\\evaluate};
+  \node[step=blue!12, right=of qm] (split) {train/val\\split};
+  \node[step=orange!18, below=0.7cm of split] (prep) {attach\\CGenFF};
+  \node[step=MmBand, left=of prep] (train) {hybrid\\train};
+  \node[step=gray!15, left=of train] (ckpt) {JSON\\checkpoint};
+  \node[step=violet!12, left=of ckpt] (md) {MD\\campaigns};
 
   \draw[arr] (res) -- (nms);
   \draw[arr] (nms) -- (qm);
@@ -325,9 +322,8 @@ deployment. Figure~\ref{fig:train} summarizes the pipeline.
 \end{tikzpicture}%
 }
 \caption{Hybrid training pipeline. Quantum labels on dimer geometries are
-augmented with CGenFF arrays, then \texttt{physnet-train --hybrid-mm} fits the
-hybrid total of Equation~\ref{eq:dimer-train}. The resulting portable JSON
-checkpoint is consumed unchanged by \texttt{md-system}.}
+augmented with CGenFF arrays; hybrid training fits Equation~\ref{eq:dimer-train}.
+The resulting portable JSON checkpoint is consumed unchanged by MD campaigns.}
 \label{fig:train}
 \end{figure}
 
@@ -336,25 +332,17 @@ checkpoint is consumed unchanged by \texttt{md-system}.}
 \label{sec:md}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{CLI Entry Point and Campaign YAML}
-
-Dynamics are launched with
-\begin{center}
-\texttt{mmml md-system --config campaign.yaml --run-all [--resume]}
-\end{center}
-(\texttt{mmml/cli/run/md\_system.py}). A campaign file supplies global
-\texttt{defaults} (composition, box, checkpoint, cutoffs, \texttt{lr\_solver},
-\texttt{mm\_charge\_mode}, backend options) and an ordered list of
-\texttt{runs}/\texttt{jobs}. Dependencies are resolved automatically; each leg
-writes a handoff state (\texttt{handoff/state.npz}) consumed by the next stage.
-
-Supported backends are \texttt{pycharmm} (CHARMM integrator with MLpot USER
-callback),\cite{Brooks2009CHARMM} \texttt{jaxmd} (pure-JAX evaluation with a
-jax-md integrator),\cite{Schoenholz2019JaxMD} and \texttt{ase} for reference
-smokes. Ensembles include \texttt{pbc\_nvt}, \texttt{pbc\_npt}, and
-\texttt{pbc\_nve}.
-
 \subsection{Two Drivers, One Hamiltonian}
+
+Dynamics are organized as campaign YAML files that chain box preparation,
+minimization, heating, equilibration, and production under a shared set of
+handoff and long-range defaults (Supporting Information,
+Section~\ref{si:cli-md}).\cite{FrenkelSmit2002,AllenTildesley2017}
+Supported backends are PyCHARMM (CHARMM integrator with an MLpot USER
+callback),\cite{Brooks2009CHARMM} jax-md (pure-JAX hybrid energy with a jax-md
+integrator),\cite{Schoenholz2019JaxMD} and ASE for reference smokes. Thermostats
+and barostats follow standard Nos\'{e}--Hoover / MTTK
+practice.\cite{Martyna1992,Martyna1994}
 
 \begin{itemize}
 \item \textbf{Mode A (jax-md).} CHARMM is used only to build the topology;
@@ -370,15 +358,13 @@ parameters and charge mode.
 
 Dense liquids follow a two-phase protocol (Figure~\ref{fig:md}):
 \begin{enumerate}
-\item \textbf{Phase A (MM certify).} Packmol placement, optional Monte Carlo
-  density moves, and classical minimization / short dynamics until
-  inter-monomer contact criteria pass.
+\item \textbf{Phase A (MM certify).} Packmol placement,\cite{Martinez2009}
+  optional Monte Carlo density moves, and classical minimization / short
+  dynamics until inter-monomer contact criteria pass.
 \item \textbf{Phase B (hybrid MD).} Register the ML potential (or a jax-mm-spoof
   bonded clone for infrastructure tests), minimize under the hybrid energy,
   then heat \(\to\) equilibrate \(\to\) produce.
 \end{enumerate}
-Optional CHARMM MM pretreat (\texttt{pretreat\_on\_pycharmm}) inserts short
-classical heat/equilibration before MLpot registration on dense boxes.
 
 \begin{figure}[t]
 \centering
@@ -392,8 +378,8 @@ classical heat/equilibration before MLpot registration on dense boxes.
   box/.default=black!6,
   arr/.style={->, thick},
 ]
-  \node[box=blue!12] (pack) {Packmol\\+ liquid\_prep};
-  \node[box=blue!12, right=of pack] (mm) {CHARMM MM\\certify / pretreat};
+  \node[box=blue!12] (pack) {Packmol\\+ liquid prep};
+  \node[box=blue!12, right=of pack] (mm) {CHARMM MM\\certify};
   \node[box=orange!18, right=of mm] (mini) {Hybrid mini\\(+ heat)};
   \node[box=MmBand, right=of mini] (equi) {Equilibration\\NVT / NPT};
   \node[box=violet!12, right=of equi] (prod) {Production\\(+ analysis)};
@@ -403,7 +389,6 @@ classical heat/equilibration before MLpot registration on dense boxes.
   \draw[arr] (mini) -- (equi);
   \draw[arr] (equi) -- (prod);
 
-  % fork backends
   \node[box=gray!12, below=1.1cm of equi] (py) {backend:\\pycharmm};
   \node[box=gray!12, below=1.1cm of prod] (jx) {backend:\\jaxmd};
   \draw[arr, densely dashed] (mini.south) |- (py.west);
@@ -413,32 +398,32 @@ classical heat/equilibration before MLpot registration on dense boxes.
         label=above:{\footnotesize Phase A --- MM certify}] {};
   \node[draw, densely dashed, fit=(mini)(equi)(prod), inner sep=5pt,
         label=above:{\footnotesize Phase B --- hybrid MD}] {};
-
-  \node[align=left, anchor=west] at ($(pack.west)+(0,-2.35)$) {
-    Handoffs: \texttt{state.npz} between legs\\
-    Knobs: \texttt{lr\_solver}, \texttt{mm\_nonbond\_mode}, \texttt{mm\_charge\_mode}
-  };
 \end{tikzpicture}%
 }
-\caption{Condensed-phase campaign pipeline driven by \texttt{md-system --run-all}.
-Phase~A builds and certifies a classical liquid box; Phase~B registers the hybrid
-potential and runs mini/heat/equilibration/production on either the PyCHARMM or
-jax-md backend. Long-range Coulomb and charge embedding are selected in campaign
-defaults and applied identically on both backends.}
+\caption{Condensed-phase campaign pipeline. Phase~A builds and certifies a
+classical liquid box; Phase~B registers the hybrid potential and runs
+mini/heat/equilibration/production on either the PyCHARMM or jax-md backend.}
 \label{fig:md}
 \end{figure}
 
-\subsection{Paper Workflows}
+\subsection{Free-Energy and Scanning Protocols}
 
-Two Snakemake workflows instantiate the campaign pattern for the manuscript:
+Beyond equilibrium liquid MD, the same hybrid energy supports:
 \begin{itemize}
-\item \texttt{workflows/pbc\_liquid\_density\_dyn/} --- dichloromethane and acetone
-  liquids under NPT/NVT with density acceptance metrics;
-\item \texttt{workflows/pbc\_methane\_ewald/} --- methane at fixed liquid density
-  with \texttt{lr\_solver: ewald} and \texttt{mm\_nonbond\_mode: periodic\_external},
-  sweeping temperature, checkpoint, backend, and embedding
-  (mechanical / electrostatic).
+\item \textbf{Rigid dimer / pair scans} along a COM or atom--atom distance to
+  validate the ML\(\leftrightarrow\)MM handoff against QM or DES reference
+  curves;
+\item \textbf{Umbrella sampling} with harmonic restraints
+  \(W_k=\tfrac12 k_k(\xi-\xi_{0,k})^2\) and MBAR analysis\cite{Torrie1977,Shirts2008}
+  (gas-phase packed ML windows or hybrid mechanical embedding in explicit
+  solvent);
+\item \textbf{CHARMM ADUMB} adaptive umbrella / WHAM paths\cite{Bartels1997,Kumar1992}
+  driven through PyCHARMM reaction-coordinate lingo for reactive complexes
+  (e.g.\ Menshutkin-type \(\mathrm{NH_3}+\mathrm{CH_3Cl}\)
+  studies\cite{Gao1996Menshutkin,Truong1997Menshutkin}).
 \end{itemize}
+CLI entry points and example YAML are given in Sections~\ref{si:cli-md} and
+\ref{si:free-energy}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Mechanical and Electrostatic Embeddings}
@@ -446,25 +431,23 @@ Two Snakemake workflows instantiate the campaign pattern for the manuscript:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 The classical Coulomb term inside \(E_{\mathrm{MM}}\) obtains its per-atom
-charges from \texttt{mm\_charge\_mode}. This choice is orthogonal to whether the
+charges from a charge-mode switch. This choice is orthogonal to whether the
 neural model predicts charges for use \emph{inside} \(E^{\mathrm{ML}}\).
 
 \begin{description}
 \item[Mechanical embedding (\texttt{fixed}).]
   \(q_{\mathrm{MM}}=q_{\mathrm{CGenFF}}\). Default for charge-less PhysNet
-  checkpoints (e.g., DES dimers) and for LJ-fitting stages.
+  checkpoints and for LJ-fitting stages.
 \item[Electrostatic embedding (\texttt{q0} / \(\mathrm{Q}^{0}\)).]
   \(q_{\mathrm{MM}}=\mathrm{neutralize}(Q^{0})\), where \(Q^{0}\) denotes
   unperturbed monomer charge-head evaluations. Requires a charge-capable
-  checkpoint (\texttt{charges: true}). Suitable for liquids.
-\item[Dimer-only modes (\texttt{latent}/\(\mathrm{Q}^{1}\), \texttt{fixed\_plus\_latent}).]
+  checkpoint.
+\item[Dimer-only modes (\texttt{latent}/\(\mathrm{Q}^{1}\)).]
   Partner-perturbed charges from the \(AB\) forward; undefined for \(N>2\)
   monomers and therefore not used in liquid production matrices.
 \end{description}
 
-Figure~\ref{fig:embed} contrasts the two liquid-capable embeddings used in the
-methane Ewald smoke matrix. Campaign tags encode the choice as \texttt{\_mech\_}
-or \texttt{\_es\_}.
+Figure~\ref{fig:embed} contrasts the two liquid-capable embeddings.
 
 \begin{figure}[t]
 \centering
@@ -476,7 +459,6 @@ or \texttt{\_es\_}.
   atom/.style={circle, draw, inner sep=0pt, minimum size=0.28cm},
   arr/.style={->, thick},
 ]
-  % Mechanical
   \node[pane=blue!8] (M) at (0,0) {};
   \node[above] at (M.north) {\textbf{Mechanical}};
   \node at ($(M.center)+(0,1.05)$) {\texttt{mm\_charge\_mode=fixed}};
@@ -487,7 +469,6 @@ or \texttt{\_es\_}.
     {$q_{\mathrm{MM}}=q_{\mathrm{CGenFF}}$\\[-1pt]
      ML charges unused in \(E_{\mathrm{MM}}\)};
 
-  % Electrostatic
   \node[pane=orange!10] (E) at (4.2,0) {};
   \node[above] at (E.north) {\textbf{Electrostatic}};
   \node at ($(E.center)+(0,1.05)$) {\texttt{mm\_charge\_mode=q0}};
@@ -504,37 +485,207 @@ or \texttt{\_es\_}.
 \end{tikzpicture}
 \caption{Liquid-capable embeddings for hybrid MM Coulomb. Mechanical embedding
 keeps fixed CGenFF charges in \(E_{\mathrm{MM}}\). Electrostatic embedding
-(\(\mathrm{Q}^{0}\)) rebuilds neutralized monomer ML charges each evaluation.
-Dimer-only \(\mathrm{Q}^{1}\) modes are omitted from condensed-phase matrices.}
+(\(\mathrm{Q}^{0}\)) rebuilds neutralized monomer ML charges each evaluation.}
 \label{fig:embed}
 \end{figure}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Software and Reproducibility}
-\label{sec:software}
+\section{Results and Illustrative Applications}
+\label{sec:results}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Table~\ref{tab:soft} lists the principal components. Manuscript figures and
-tables are regenerable from versioned Snakemake workflows under
-\texttt{workflows/}; each Results entry should cite the workflow directory,
-config file, artifact path, and git commit. Engineering smoke matrices
-(including DES / So3LR methane Ewald cells with mechanical and electrostatic
-embeddings) are recorded in the accompanying Results draft and are not
-themselves production property claims.
+Unless noted, panels marked \textbf{(PLACEHOLDER)} will be replaced by figures
+exported from versioned Snakemake workflows under \texttt{workflows/} (artifact
+paths and provenance checklist in Section~\ref{si:provenance}). Numbers already
+available in-repository are filled in; empty cells await frozen production runs.
+
+\subsection{Bonded MM Parity (jax-mm-spoof)}
+
+The hybrid jax-md path can replace the neural model by a JAX CGenFF bonded
+clone (\texttt{jax\_mm\_spoof}) so that drivers can be certified without a
+trained checkpoint. Bonded energy components for dichloromethane (DCM) and
+acetone (ACO) monomers match native PyCHARMM to machine precision
+(Table~\ref{tab:spoof}; workflow \texttt{jaxmd\_cgenff\_spoof\_smoke}).
 
 \begin{table}[h]
-\caption{Software stack for hybrid training and MD.}
-\label{tab:soft}
-\begin{tabular}{lp{5.2cm}}
+\caption{Bonded energy parity: jax-mm-spoof versus native CHARMM
+(\(\mathrm{kcal\,mol^{-1}}\)).}
+\label{tab:spoof}
+\begin{tabular}{lrrr}
 \toprule
-Component & Role \\
+Case & \(E_{\mathrm{jax}}\) & \(E_{\mathrm{CHARMM}}\) & \(\Delta E\) \\
 \midrule
-MMML (\texttt{mmml})\cite{MMML2026} & CLI, hybrid calculator, workflows \\
-\texttt{physnet-train} & Hybrid supervised training \\
-\texttt{md-system} & Campaign MD (ASE / jax-md / PyCHARMM) \\
-JAX / jax-md\cite{Schoenholz2019JaxMD} & Differentiable hybrid energy; jaxmd backend \\
-PyCHARMM / CHARMM\cite{Brooks2009CHARMM} & Topology, classical MM, pycharmm backend \\
-Snakemake (+ Slurm) & Parameter sweeps and cluster submission \\
+DCM fixture & 311.3070436736117 & 311.30704367361164 & \(+5.7\times10^{-14}\) \\
+DCM smoke-min & 1.6671786898619212 & 1.667178689861924 & \(-2.9\times10^{-15}\) \\
+ACO fixture & 7.779347176527917 & 7.779347176527915 & \(+1.8\times10^{-15}\) \\
+ACO smoke-min & 1.9927947535063575 & 1.9927947535063568 & \(+6.7\times10^{-16}\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Energy Conservation (NVE)}
+
+Integrator and handoff robustness are assessed in the microcanonical ensemble
+by monitoring total-energy drift and high-frequency noise as a function of COM
+cutoff preset and system size
+(\texttt{dcm3\_nve\_cutoff\_sweep}, \texttt{dcm\_nve\_scaling}).
+Figure~\ref{fig:nve} will show representative \(E(t)\) traces for hybrid DCM
+clusters / liquid boxes under jax-md and PyCHARMM.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\placeholderfig{$t$ / ps}{$E_{\mathrm{tot}}$ / eV}}
+\caption{\textbf{(PLACEHOLDER)} NVE total-energy traces for hybrid DCM under
+representative COM cutoff presets (workflow
+\texttt{dcm3\_nve\_cutoff\_sweep}). Report mean drift
+(\(\mathrm{eV\,ps^{-1}}\) or \(\mathrm{kcal\,mol^{-1}\,ps^{-1}}\)) and
+peak-to-peak noise in the accompanying metrics table.}
+\label{fig:nve}
+\end{figure}
+
+\begin{table}[h]
+\caption{\textbf{(PLACEHOLDER)} NVE conservation metrics for hybrid DCM
+(fill from sweep \texttt{metrics.json}).}
+\label{tab:nve}
+\begin{tabular}{llcccc}
+\toprule
+Preset & Backend & \(N_{\mathrm{mol}}\) & \(\langle\Delta E\rangle\) & RMS noise & Status \\
+\midrule
+paper-default & jaxmd & --- & --- & --- & pending \\
+paper-default & pycharmm & --- & --- & --- & pending \\
+tight / loose & jaxmd & --- & --- & --- & pending \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Rigid Dimer and Pair Scans}
+
+Rigid scans along intermolecular separation probe whether the hybrid handoff
+reproduces reference interaction curves outside the fitting set. Primary sources
+are DES-style dimer panels (\texttt{des\_dimer\_pair\_scans}) and solvent-specific
+COM scans. Figure~\ref{fig:scan} contrasts ML-only, MM-only, and hybrid
+\(E(r)\) against a QM / DES reference.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\placeholderfig{$r_{\mathrm{COM}}$ / \AA}{$\Delta E$ / kcal\,mol$^{-1}$}}
+\caption{\textbf{(PLACEHOLDER)} Rigid dimer interaction scan: reference versus
+ML, MM, and hybrid (Equation~\ref{eq:dimer-train}) along \(r_{\mathrm{COM}}\).
+Vertical guides mark the default handoff window of Table~\ref{tab:cutoffs}.}
+\label{fig:scan}
+\end{figure}
+
+\subsection{Liquid Densities}
+
+Dichloromethane and acetone liquids are targeted under NPT/NVT hybrid dynamics
+(\texttt{pbc\_liquid\_density\_dyn}); methane at fixed liquid-like density with
+\texttt{lr\_solver: ewald} is covered by \texttt{pbc\_methane\_ewald}.
+Table~\ref{tab:density} and Figure~\ref{fig:density} summarize the planned
+reporting matrix. Experimental liquid densities are listed as orientation only
+until production \(\langle\rho\rangle\) values are frozen.
+
+\begin{table}[h]
+\caption{\textbf{(PLACEHOLDER)} Liquid densities under hybrid MD
+(\(T=\SI{300}{\kelvin}\) unless noted).}
+\label{tab:density}
+\footnotesize
+\begin{tabular}{llccccc}
+\toprule
+Solvent & \(N\) & Ens. & Backend & Emb. & \(\langle\rho\rangle\) & Expt. \\
+ & & & & & (g\,cm$^{-3}$) & (g\,cm$^{-3}$) \\
+\midrule
+DCM & --- & NPT & jaxmd & mech. & --- & \(\sim\)1.33 \\
+DCM & --- & NPT & pycharmm & mech. & --- & \(\sim\)1.33 \\
+ACO & --- & NPT & jaxmd & m./es. & --- & \(\sim\)0.78 \\
+CH\(_4\) & --- & NVT & both & m./es. & (input) & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\placeholderfig{$t$ / ps}{$\rho$ / g\,cm$^{-3}$}}
+\caption{\textbf{(PLACEHOLDER)} Density time series \(\rho(t)\) for hybrid DCM
+and ACO production windows (\texttt{pbc\_liquid\_density\_dyn}). Horizontal
+lines: experimental liquid densities.}
+\label{fig:density}
+\end{figure}
+
+\subsection{Umbrella Sampling and MBAR Free Energies}
+
+Gas-phase and explicit-solvent free-energy profiles are obtained from
+windowed umbrella sampling\cite{Torrie1977} with MBAR
+reweighting\cite{Shirts2008,Chipot2007,Mobley2014}
+(\texttt{mmml umbrella-sample} / \texttt{umbrella-mbar}). The Menshutkin-type
+\(\mathrm{NH_3}+\mathrm{CH_3Cl}\) reaction coordinate
+\(\xi=r(\mathrm{C{-}Cl})-r(\mathrm{C{-}N})\) is the primary reactive
+example.\cite{Gao1996Menshutkin,Truong1997Menshutkin}
+Figure~\ref{fig:umbrella} will show window histograms and the MBAR PMF;
+Table~\ref{tab:umbrella} records window settings.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\placeholderfig{$\xi$ / \AA}{$W(\xi)$ / kcal\,mol$^{-1}$}}
+\caption{\textbf{(PLACEHOLDER)} Umbrella-sampling PMF along \(\xi\) for the
+Menshutkin-type complex (gas-phase packed ML and/or hybrid mechanical embedding
+in TIP3P water\cite{Jorgensen1983}). Inset (future): overlapping window
+histograms.}
+\label{fig:umbrella}
+\end{figure}
+
+\begin{table}[h]
+\caption{\textbf{(PLACEHOLDER)} Umbrella window summary for the reactive PMF.}
+\label{tab:umbrella}
+\begin{tabular}{cccccc}
+\toprule
+Engine & \(N_{\mathrm{win}}\) & \(k\) & \(\xi\) range & \(T\) / K & Status \\
+\midrule
+packed\_ml & --- & --- & --- & 300 & pending \\
+hybrid\_jaxmd & --- & --- & --- & 300 & pending \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{CHARMM ADUMB Paths}
+
+Adaptive umbrella sampling in CHARMM (ADUMB / reaction-coordinate
+WHAM)\cite{Bartels1997,Kumar1992,Brooks2009CHARMM} provides an independent
+free-energy route for hybrid PyCHARMM+MLpot systems. ADUMB is issued through
+pre-dynamics CHARMM lingo; outputs include bias histograms and WHAM profiles
+(\texttt{ADUMB-WUNI.DAT}, \texttt{UMBCOR}). Figure~\ref{fig:adumb} will compare
+ADUMB and MBAR PMFs on a shared CV where both protocols apply.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\placeholderfig{$\xi$ / \AA}{$A(\xi)$ / kcal\,mol$^{-1}$}}
+\caption{\textbf{(PLACEHOLDER)} CHARMM ADUMB free-energy profile for the
+hybrid reactive complex, optionally overlaid with the MBAR PMF of
+Figure~\ref{fig:umbrella}. Workflow / example tree:
+\texttt{examples/m/} and \texttt{workflows/nh3\_ch3cl\_reaction\_path/}.}
+\label{fig:adumb}
+\end{figure}
+
+\subsection{Simulation Matrix}
+
+Table~\ref{tab:matrix} lists the intended production cells for the first frozen
+manuscript bundle. Smoke-level engineering runs already exercise mechanical and
+electrostatic embeddings for methane/Ewald (DES and So3LR checkpoints) but are
+not promoted as property claims.
+
+\begin{table}[h]
+\caption{\textbf{(PLACEHOLDER)} Production simulation matrix for regenerable
+Results panels.}
+\label{tab:matrix}
+\begin{tabular}{lllll}
+\toprule
+System & Protocol & Backend & Embedding & Workflow \\
+\midrule
+DCM/ACO bonded & spoof parity & jaxmd & --- & \texttt{jaxmd\_cgenff\_spoof\_smoke} \\
+DCM cluster & NVE cutoffs & both & mech. & \texttt{dcm3\_nve\_cutoff\_sweep} \\
+DCM/ACO liquid & NPT density & both & mech./es. & \texttt{pbc\_liquid\_density\_dyn} \\
+CH\(_4\) liquid & NVT+Ewald & both & mech./es. & \texttt{pbc\_methane\_ewald} \\
+NH\(_3\)/CH\(_3\)Cl & umbrella+MBAR & jaxmd & mech. & umbrella examples \\
+NH\(_3\)/CH\(_3\)Cl & ADUMB & pycharmm & mech. & ADUMB examples \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -543,14 +694,16 @@ Snakemake (+ Slurm) & Parameter sweeps and cluster submission \\
 \section{Conclusions}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-The hybrid ML/MM formulation in Equation~\ref{eq:hybrid-E}, the training
-assembly in Equation~\ref{eq:dimer-train}, and the \texttt{md-system} campaign
-protocol provide a closed loop from dimer QM data to condensed-phase dynamics.
-Mechanical (\texttt{fixed}) and electrostatic (\(\mathrm{Q}^{0}\)) embeddings
-select how classical Coulomb charges are obtained without changing the ML/MM
-ownership of bonded and short-range many-body terms. Shared handoff defaults
-and portable JSON checkpoints keep training and MD numerically aligned across
-the jax-md and PyCHARMM drivers.
+The hybrid ML/MM formulation in Equation~\ref{eq:hybrid-E} and the training
+assembly in Equation~\ref{eq:dimer-train} provide a closed loop from dimer QM
+data to condensed-phase dynamics and free-energy protocols. Mechanical and
+electrostatic embeddings select how classical Coulomb charges are obtained
+without changing ML/MM ownership of bonded and short-range many-body terms.
+Shared handoff defaults and portable JSON checkpoints keep training and MD
+numerically aligned across the jax-md and PyCHARMM drivers. The Results panels
+above---energy conservation, rigid scans, liquid densities, umbrella/MBAR, and
+ADUMB---are structured so that each figure or table cites a regenerable
+workflow; placeholders will be replaced as production artifacts are frozen.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{acknowledgement}
@@ -560,12 +713,203 @@ Computational resources at the University of Basel are gratefully acknowledged.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{suppinfo}
-Extended CLI flag tables, YAML templates under
-\texttt{examples/hybrid\_mm\_charges/}, and workflow provenance maps are
-available in the MMML documentation tree
-\texttt{docs/manuscripts/condensed-phase-hybrid-mlmm/}.
+Supporting Information is appended at the end of this file (CLI inventories,
+YAML templates, free-energy command examples, and workflow provenance notes).
+Extended CLI documentation also lives in the MMML documentation tree.
 \end{suppinfo}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Supporting Information (in-file; journal may extract to a separate PDF)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\setcounter{section}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\setcounter{equation}{0}
+\renewcommand{\thesection}{S\arabic{section}}
+\renewcommand{\thesubsection}{S\arabic{section}.\arabic{subsection}}
+\renewcommand{\thefigure}{S\arabic{figure}}
+\renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\theequation}{S\arabic{equation}}
+
+\begin{center}
+{\LARGE\bfseries Supporting Information}\\[0.6em]
+{\large Hybrid Machine-Learning / Molecular-Mechanics Energy Functions\\
+for Condensed-Phase Simulations}\\[0.4em]
+{\normalsize Eric Boittier and Markus Meuwly}
+\end{center}
+\vspace{1em}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Training CLI and Flags}
+\label{si:cli-train}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Hybrid models are trained with
+\begin{verbatim}
+mmml physnet-train --hybrid-mm [--config train.yaml]
+\end{verbatim}
+Essential flags (YAML or CLI):
+\begin{itemize}
+\item \texttt{--hybrid-mm} --- enable hybrid total of Equation~\ref{eq:dimer-train}
+\item \texttt{--mm-charge-mode} \(\{\texttt{fixed},\texttt{q0},\texttt{latent},\ldots\}\)
+\item \texttt{--charges} / \texttt{--no-charges} --- neural charge head
+\item \texttt{--ml-switch-width}, \texttt{--mm-switch-on}, \texttt{--mm-switch-width}
+\item \texttt{--lr-solver} \(\{\texttt{mic},\texttt{ewald},\texttt{nvalchemiops\_pme},\ldots\}\)
+\item \texttt{--learn-mm-lj-scales} --- optional trainable LJ scales
+\end{itemize}
+CGenFF fields in the NPZ (\texttt{cgenff\_type\_idx}, \texttt{mol\_id},
+\texttt{cgenff\_charge}, master \(\sigma/\varepsilon\)) are prepared after
+electronic-structure evaluation of normal-mode samples, e.g.\
+\begin{verbatim}
+mmml prepare-mm-dataset ...
+mmml physnet-train --hybrid-mm --config train.yaml
+\end{verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{MD Campaign CLI and YAML}
+\label{si:cli-md}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Dynamics are launched with
+\begin{verbatim}
+mmml md-system --config campaign.yaml --run-all [--resume]
+\end{verbatim}
+A campaign file supplies global \texttt{defaults} (composition, box, checkpoint,
+cutoffs, \texttt{lr\_solver}, \texttt{mm\_charge\_mode}, backend options) and an
+ordered list of \texttt{runs}/\texttt{jobs}. Dependencies are resolved
+automatically; each leg writes a handoff state consumed by the next stage.
+
+\subsection{Minimal campaign sketch}
+
+\begin{verbatim}
+defaults:
+  composition: "DCM:64"
+  backend: jaxmd
+  setup: pbc_npt
+  checkpoint: path/to/hybrid.json
+  mm_switch_on: 8.0
+  ml_switch_width: 1.5
+  mm_switch_width: 5.0
+  lr_solver: ewald
+  mm_charge_mode: fixed
+runs:
+  - { id: mini, stage: minimize }
+  - { id: heat, stage: heat, depends: [mini] }
+  - { id: equi, stage: equilibrate, depends: [heat] }
+  - { id: prod, stage: produce, depends: [equi] }
+\end{verbatim}
+
+\subsection{Paper workflow entry points}
+
+\begin{itemize}
+\item \texttt{workflows/pbc\_liquid\_density\_dyn/} --- DCM and ACO liquids
+\item \texttt{workflows/pbc\_methane\_ewald/} --- methane + Ewald, embedding sweep
+\item \texttt{workflows/dcm3\_nve\_cutoff\_sweep/} --- NVE / cutoff ranking
+\item \texttt{workflows/jaxmd\_cgenff\_spoof\_smoke/} --- bonded parity
+\item \texttt{workflows/des\_dimer\_pair\_scans/} --- rigid DES panels
+\end{itemize}
+
+\begin{table}[h]
+\caption{Software stack for hybrid training and MD.}
+\label{tab:soft}
+\begin{tabular}{lp{6.2cm}}
+\toprule
+Component & Role \\
+\midrule
+MMML\cite{MMML2026} & CLI, hybrid calculator, workflows \\
+JAX / jax-md\cite{Schoenholz2019JaxMD} & Differentiable hybrid energy; jaxmd backend \\
+PyCHARMM / CHARMM\cite{Brooks2009CHARMM} & Topology, classical MM, pycharmm backend \\
+PhysNet / SpookyNet / SO3LR\cite{Unke2019PhysNet,Unke2021SpookyNet,Kabylda2025SO3LR}
+  & Neural short-range models \\
+Snakemake (+ Slurm) & Parameter sweeps and cluster submission \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Free-Energy Protocols (Umbrella and ADUMB)}
+\label{si:free-energy}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Batched / hybrid umbrella sampling}
+
+Gas-phase packed windows:
+\begin{verbatim}
+mmml umbrella-sample \
+  --checkpoint model.json \
+  --structure seed.xyz \
+  --config umbrella.yaml
+mmml umbrella-mbar --input umbrella_windows.json -o pmf/
+\end{verbatim}
+Explicit-solvent mechanical embedding uses \texttt{engine: hybrid\_jaxmd} with a
+PSF/PDB/box and an ML region (reactive complex) while solvent remains MM.
+Snapshots store unbiased hybrid energies so MBAR does not need to rebuild the
+Hamiltonian.
+
+\subsection{CHARMM ADUMB}
+
+ADUMB is enabled via PyCHARMM pre-dynamics lingo (reaction-coordinate umbrella
+with \texttt{ADUMBRXNCOR} in the CHARMM build). Typical artifacts:
+\texttt{ADUMB-WUNI.DAT}, \texttt{UMBCOR}, \texttt{RXNCOR\_TRACE.DAT}. NAME tokens
+are \(\le 4\) characters. Example trees live under \texttt{examples/m/} and the
+\texttt{nh3\_ch3cl} documentation.
+
+\begin{table}[h]
+\caption{\textbf{(PLACEHOLDER)} Extended free-energy provenance (SI).}
+\label{tab:si-fe}
+\begin{tabular}{llll}
+\toprule
+Protocol & CV & Artifact root & Git SHA \\
+\midrule
+umbrella+MBAR & \(\xi\) & \texttt{artifacts/.../pmf/} & --- \\
+ADUMB+WHAM & \(\xi\) / multi & \texttt{artifacts/.../adumb/} & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Workflow Provenance}
+\label{si:provenance}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Each directory that feeds a main-text figure or table should contain:
+\begin{enumerate}
+\item frozen inputs (\texttt{request.json} / job YAML);
+\item \texttt{metrics.json} (numbers that enter the paper);
+\item plot PNG/PDF;
+\item \texttt{provenance.json} --- git SHA, checkpoint hash, host/partition;
+\item optional \texttt{proof.json} when under validation-campaign gates.
+\end{enumerate}
+Recommended manuscript aggregator: \texttt{workflows/manuscript\_hybrid\_liquids/}
+writing \texttt{artifacts/manuscript\_hybrid\_liquids/<fig\_or\_table\_id>/}.
+
+\begin{table}[h]
+\caption{Figure / table \(\leftrightarrow\) workflow map (main text).}
+\label{tab:si-map}
+\begin{tabular}{lll}
+\toprule
+Panel & Content & Workflow \\
+\midrule
+Fig.~\ref{fig:nve} & NVE traces & \texttt{dcm3\_nve\_cutoff\_sweep} \\
+Fig.~\ref{fig:scan} & Rigid scans & \texttt{des\_dimer\_pair\_scans} \\
+Fig.~\ref{fig:density} & \(\rho(t)\) & \texttt{pbc\_liquid\_density\_dyn} \\
+Fig.~\ref{fig:umbrella} & Umbrella PMF & umbrella examples / Menshutkin \\
+Fig.~\ref{fig:adumb} & ADUMB profile & ADUMB examples / \texttt{nh3\_ch3cl} \\
+Table~\ref{tab:spoof} & Spoof parity & \texttt{jaxmd\_cgenff\_spoof\_smoke} \\
+Table~\ref{tab:density} & \(\langle\rho\rangle\) & density / methane workflows \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\FloatBarrier
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Bibliography after SI so in-file SI citations resolve.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
 \bibliography{refs}
 
 \end{document}
