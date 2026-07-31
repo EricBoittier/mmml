@@ -82,28 +82,27 @@ def normalize_hydrogen_positions(
     Molecules are unwrapped first, so a hydrogen whose carbon sits across a cell
     face is still moved along the real bond rather than across the cell.
     """
-    mol_id, positions, cell = molecular_frames(atoms)
+    mol_id, positions, _ = molecular_frames(atoms)
     z = np.asarray(atoms.get_atomic_numbers(), dtype=int)
     hydrogens = np.flatnonzero(z == 1)
     heavy = np.flatnonzero(z != 1)
     if not len(hydrogens) or not len(heavy):
         return atoms.copy()
 
-    moved = np.array(positions, dtype=np.float64, copy=True)
+    # Heavy atoms keep the coordinates they were handed, wrapping included; each
+    # hydrogen is re-placed relative to its own anchor.
+    moved = np.asarray(atoms.get_positions(), dtype=np.float64).copy()
     for h in hydrogens:
         same = heavy[mol_id[heavy] == mol_id[h]]
         candidates = same if len(same) else heavy
-        vectors = positions[candidates] - positions[h]
-        norms = np.linalg.norm(vectors, axis=1)
+        norms = np.linalg.norm(positions[candidates] - positions[h], axis=1)
         nearest = int(np.argmin(norms))
-        anchor = positions[candidates[nearest]]
-        direction = (positions[h] - anchor) / norms[nearest]
-        moved[h] = anchor + direction * float(target_A)
+        anchor = candidates[nearest]
+        direction = (positions[h] - positions[anchor]) / norms[nearest]
+        moved[h] = moved[anchor] + direction * float(target_A)
 
     out = atoms.copy()
     out.set_positions(moved)
-    out.set_cell(cell)
-    out.set_pbc(True)
     return out
 
 

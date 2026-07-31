@@ -247,9 +247,11 @@ def rebuild_methylene_hydrogens(
     0.2 kcal/mol and it decides the sign of the apparent change in the shortest
     H...Cl contact between the two pressure points.
     """
-    mol_id, positions, cell = molecular_frames(atoms)
+    mol_id, positions, _ = molecular_frames(atoms)
     z = np.asarray(atoms.get_atomic_numbers(), dtype=int)
-    moved = np.array(positions, dtype=np.float64, copy=True)
+    # Heavy atoms keep the coordinates they were handed, wrapping included; only
+    # the hydrogens move, placed relative to their own carbon.
+    moved = np.asarray(atoms.get_positions(), dtype=np.float64).copy()
     half_angle = np.radians(float(hch_deg)) / 2.0
 
     for m in range(int(mol_id.max()) + 1):
@@ -273,14 +275,13 @@ def rebuild_methylene_hydrogens(
         normal /= np.linalg.norm(normal)
         # Hydrogens open away from the chlorines, symmetric about the Cl-C-Cl
         # plane -- the C2v arrangement.
+        carbon_as_given = moved[carbons[0]]
         for h, sign in zip(hydrogens, (+1.0, -1.0)):
             direction = -bisector * np.cos(half_angle) + sign * normal * np.sin(half_angle)
-            moved[h] = c + float(ch_A) * direction
+            moved[h] = carbon_as_given + float(ch_A) * direction
 
     out = atoms.copy()
     out.set_positions(moved)
-    out.set_cell(cell)
-    out.set_pbc(True)
     return out
 
 
