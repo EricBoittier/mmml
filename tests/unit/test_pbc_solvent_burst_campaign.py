@@ -35,8 +35,19 @@ def _load_script_module(name: str, path: Path) -> ModuleType:
 
 
 cl = _load_script_module(_CAMPAIGN_MOD, SCRIPTS / "campaign_lib.py")
+
+# cleanup_strategy.py imports ``campaign_lib`` by bare name. Seven workflows
+# ship one, and sys.modules wins over sys.path, so the alias must not outlive
+# this load or it hijacks the name for every later test module.
+_saved_cl = sys.modules.get("campaign_lib")
 sys.modules["campaign_lib"] = cl
-cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
+try:
+    cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
+finally:
+    if _saved_cl is not None:
+        sys.modules["campaign_lib"] = _saved_cl
+    else:
+        sys.modules.pop("campaign_lib", None)
 
 RunCell = cl.RunCell
 build_campaign = cl.build_campaign

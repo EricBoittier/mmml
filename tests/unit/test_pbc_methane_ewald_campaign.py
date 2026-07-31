@@ -34,7 +34,10 @@ def _load_script_module(name: str, path: Path) -> ModuleType:
 
 
 cl = _load_script_module(_MOD, SCRIPTS / "campaign_lib.py")
-sys.modules["campaign_lib"] = cl
+
+# Nothing further is loaded here that needs the bare name, and seven workflows
+# ship a campaign_lib.py; publishing the alias globally only hijacks the name
+# for test modules imported later. Left un-aliased deliberately.
 
 RunCell = cl.RunCell
 build_campaign = cl.build_campaign
