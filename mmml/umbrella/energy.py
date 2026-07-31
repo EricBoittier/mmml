@@ -19,7 +19,6 @@ from mmml.md.restraints import (
     BondRetentionWall,
     DihedralCV,
     FlatBottomWall,
-    LinearDistanceCV,
     cv_from_spec,
     periodic_delta_deg,
 )

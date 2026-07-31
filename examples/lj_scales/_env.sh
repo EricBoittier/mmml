@@ -49,6 +49,22 @@ else
   export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
   export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-cpu}"
   export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-cpu}"
+  # Those three inherit independently, so they can end up disagreeing: sourcing
+  # examples/m/_env.sh earlier in the same shell leaves MMML_MLPOT_DEVICE=gpu
+  # behind while JAX_PLATFORMS falls back to cpu here. JAX_PLATFORMS is the hard
+  # gate — at cpu, JAX never enumerates the GPU — so the gpu half is a lie that
+  # still reads as a GPU run downstream. Make the pair agree, loudly.
+  case ":${JAX_PLATFORMS}:" in
+    *cuda*|*gpu*|*rocm*) _lj_eff="gpu" ;;
+    *) _lj_eff="cpu" ;;
+  esac
+  if [[ "${MMML_MLPOT_DEVICE}" != "${_lj_eff}" ]]; then
+    printf 'examples/lj_scales: inherited MMML_MLPOT_DEVICE=%s conflicts with JAX_PLATFORMS=%s; forcing %s (use LJ_DEVICE=gpu to run on the GPU)\n' \
+      "${MMML_MLPOT_DEVICE}" "${JAX_PLATFORMS}" "${_lj_eff}" >&2
+    export MMML_MLPOT_DEVICE="${_lj_eff}"
+    export MMML_JAX_WARMUP_DEVICE="${_lj_eff}"
+  fi
+  unset _lj_eff
 fi
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
@@ -96,7 +112,7 @@ lj_scales_banner() {
   printf '  device    : %s  (JAX_PLATFORMS=%s, MMML_MLPOT_DEVICE=%s)\n' \
     "${_eff}" "${JAX_PLATFORMS}" "${MMML_MLPOT_DEVICE}"
   [[ "${_eff}" == "cpu" ]] && \
-    printf '              (CPU by default — LJ_DEVICE=gpu for step 05)\n'
+    printf '              (CPU by default — LJ_DEVICE=gpu for steps 05 and 07)\n'
   printf '  dataset   : %s\n' "${LJ_DATASET}"
   [[ -f "${LJ_DATASET}" ]] || printf '              WARNING: does not exist\n'
   printf '  artifacts : %s\n' "${LJ_ARTIFACTS_DIR}"

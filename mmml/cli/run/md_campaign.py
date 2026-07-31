@@ -71,6 +71,32 @@ def _resolve_output_dir(merged: dict[str, Any], run_id: str, *, rep: int = 0) ->
     return (Path(str(root)) / run_id).resolve()
 
 
+def _explicit_cli_output_dir(
+    args: Namespace,
+    expanded: list[tuple[str, str, int]],
+) -> Path | None:
+    """``--output-dir`` given on the parent CLI, when it can name exactly one run.
+
+    Without this the flag is accepted and then dropped: :func:`_resolve_output_dir`
+    reads the per-job ``output_dir`` out of the YAML, so a caller who passes
+    ``--job-id X --output-dir DIR`` gets its results under the YAML's path instead
+    and nothing says so. One directory cannot serve several runs, so refuse rather
+    than pile them on top of each other.
+    """
+    explicit = getattr(args, "_cli_explicit", None) or set()
+    raw = getattr(args, "output_dir", None)
+    if "output_dir" not in explicit or not raw:
+        return None
+    if len(expanded) != 1:
+        run_ids = ", ".join(run_id for _, run_id, _ in expanded)
+        raise ValueError(
+            f"--output-dir names one directory but this campaign expands to "
+            f"{len(expanded)} runs ({run_ids}). Use --campaign-output-dir to move "
+            f"the whole campaign, or --job-id to select a single run."
+        )
+    return Path(str(raw)).expanduser().resolve()
+
+
 def _unique_output_dir_if_exists(path: Path, *, resume: bool) -> Path:
     """Return ``path`` when missing or resuming; else ``path_<uuid>`` if ``path`` exists."""
     resolved = path.expanduser().resolve()
@@ -369,6 +395,7 @@ def run_campaign(args: Namespace) -> int:
         print_campaign_plan(plan_rows)
 
     expanded = expand_repeated_jobs(campaign, order)
+    cli_output_dir = _explicit_cli_output_dir(args, expanded)
     handoff_by_run: dict[str, Any] = {}
     resolved_output_dirs: dict[str, Path] = {}
     job_summaries: list[MdJobSummary] = []
@@ -379,7 +406,7 @@ def run_campaign(args: Namespace) -> int:
         if rep:
             merged["seed"] = int(merged.get("seed", 123)) + rep
         merged["campaign_output_dir"] = str(campaign_root)
-        requested_out_dir = _resolve_output_dir(merged, run_id, rep=rep)
+        requested_out_dir = cli_output_dir or _resolve_output_dir(merged, run_id, rep=rep)
         out_dir = requested_out_dir
         if run_all and not resume:
             out_dir = _unique_output_dir_if_exists(out_dir, resume=False)
