@@ -32,11 +32,21 @@ MonomerTemplate = tuple[np.ndarray, list[str], np.ndarray]
 DEFAULT_MIN_BOX_SIDE_A = 28.0
 
 LITERATURE_CRYSTAL_PRESETS: dict[str, dict[str, Any]] = {
+    # Podsiadlo, Dziubek & Katrusiak, Acta Crystallogr. B 61, 595 (2005). Both
+    # entries are diamond-anvil-cell structures, so both are compressed well
+    # below the ambient-pressure cell -- fine as packing references, wrong as
+    # cohesive-energy references. See docs/dcm-crystal-cohesion.md.
     "dcm": {
         "residue": "DCM",
         "cif": default_dcm_crystal_cif,
         "space_group": 60,
         "reference_density_g_cm3": 1.972,
+    },
+    "dcm133": {
+        "residue": "DCM",
+        "cif": lambda: default_dcm_crystal_cif("pbcn_133gpa"),
+        "space_group": 60,
+        "reference_density_g_cm3": 1.920,
     },
     "benz": {
         "residue": "BENZ",

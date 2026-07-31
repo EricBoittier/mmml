@@ -47,7 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PRESET",
         help=(
-            "Bundled experimental CIF preset: dcm (Pbcn), benz (P2₁/c), "
+            "Bundled experimental CIF preset: dcm / dcm133 (DCM Pbcn at 1.63 "
+            "and 1.33 GPa), benz (P2₁/c), "
             "aco / aco5k / aco110k (acetone Pbca at 150, 5, 110 K), "
             "acocmcm (metastable acetone Cmcm)"
         ),
