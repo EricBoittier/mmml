@@ -203,9 +203,6 @@ nav:
       - Plotting style guide: plotting-style-guide.md
       - Plot style gallery: plot-style-gallery.md
       - API reference: api.md
-      - Deprecated & legacy commands:
-          # CLI_NAV_START: Deprecated & legacy
-          # CLI_NAV_END: Deprecated & legacy
   - Development:
       - Contributor guide: development.md
       - Scientific code policy: scientific-code.md
@@ -224,4 +221,9 @@ nav:
       - Simulation robustness report: simulation-robustness-report.md
       - MD sweep plotting improvements: md-sweep-plotting-improvements.md
       - md-embedding smoke results: examples/md-embedding-results.md
-      - "Manuscript: hybrid ML/MM condensed phase": manuscripts/condensed-phase-hybrid-mlmm/README.md
+      - "Manuscript: hybrid ML/MM condensed phase":
+          - Overview: manuscripts/condensed-phase-hybrid-mlmm/README.md
+          - Outline: manuscripts/condensed-phase-hybrid-mlmm/outline.md
+          - Methods: manuscripts/condensed-phase-hybrid-mlmm/methods.md
+          - Results: manuscripts/condensed-phase-hybrid-mlmm/results.md
+          - Snakemake workflow map: manuscripts/condensed-phase-hybrid-mlmm/workflow-map.md

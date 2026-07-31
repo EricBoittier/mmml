@@ -10,19 +10,19 @@
 # Sanity: liquid water ~30 Å^3/molecule → 200 waters alone want L~18–20 Å;
 # peptide + Packmol padding needs ~28–32 Å. Use L=30 for 200 TIP3.
 #
-#   export MMML_CKPT=examples/spooky_so3lr_muon3_epoch0013.json
+#   export MMML_CKPT=examples/sppoky-epoch-0010_params.json   # known-good for TRIA
 #   uv run mmml md-system \
 #     --config examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml \
 #     --checkpoint "$MMML_CKPT" \
 #     --run-all
 #
-# Sense-check: NPT log prints P0, Pkin0, Pvir0. After NVT thermalization,
+# Sense-check: NPT log prints P0, Pkin0, Pvir0. Cold-start (no handoff yet).
 # Pkin0 should be O(N kT / V); |P0| should be far below dilute aaa ~10^3 bar
 # once packing is liquid-like. Instantaneous P still fluctuates on short runs.
 
 defaults:
   from_pdb: artifacts/md_embedding/aaa_dense/model.pdb
-  checkpoint: examples/spooky_so3lr_muon3_epoch0013.json
+  checkpoint: examples/sppoky-epoch-0010_params.json
   interaction_policy: examples/interaction_policy_tria_tip3_mech.yaml
   backend: jaxmd
   jaxmd_unified: true

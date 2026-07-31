@@ -65,24 +65,21 @@ See [Tab completion](completion.md) for per-shell setup and fallbacks when
 
 ## Command index
 
-Browse the sidebar under **CLI** for a page per subcommand (options pulled from
-each command's `argparse` help). Structure builders (`make-res`, `make-box`,
-`build-crystal`) include ASE structure figures — see
-[Structure building](structure-building.md).
+These docs are organized the same way `mmml commands` is. Each task group is a
+section in the sidebar, holding its conceptual guides **and** a **Commands**
+subsection with one generated reference page per subcommand (options pulled from
+that command's `argparse` help).
 
-Highlights:
+| Group | Guides live here | Commands |
+|-------|------------------|----------|
+| **Structure & boxes** | [Structure building](structure-building.md), [Packmol placement](../packmol-placement.md), [Liquid box workflow](../liquid-box-workflow.md) | `make-res`, `make-box`, `build-crystal`, `liquid-box` |
+| **MD & campaigns** | [md-system YAML configs](../md-system-configs.md), [Cross-backend handoff](../handoff.md), [Umbrella sampling](../umbrella.md) | `md-system`, `md-embedding`, `umbrella-sample`, `warmup-mlpot-jax`, `health-check` |
+| **QM & data** | [QC cross-check](../qc-cross-check.md), [Dataset preparation](../hybrid-mm-dataset-preparation.md) | `pyscf-dft`, `pyscf-evaluate`, `dimer-scan`, `ic-scan`, `fix-and-split` |
+| **ML training & MD** | [Hybrid potential regions](../hybrid-potential-regions.md), [MLpot settings](../mlpot-settings.md), [NEB](../neb.md), [DMC](../dmc.md) | `physnet-train`, `physnet-evaluate`, `neb`, `dmc`, `efield-train`, `kernnn-train` |
+| **Environment & clusters** | [SciCORE guide](../scicore.md), [MPI operations](../pycharmm-mpi.md) | `configure`, `env`, `doctor`, `mpi-launch`, `completion` |
 
-**Structure & boxes** — `make-res`, `make-box`, `build-crystal`, `liquid-box`
-
-**MD & campaigns** — `md-system` (see also [md-system YAML configs](../md-system-configs.md)),
-`warmup-mlpot-jax`, `mpi-check`, `health-check`
-
-**QM & data** — `pyscf-dft`, `pyscf-evaluate`, `fix-and-split`, `xml2npz`, `npz2traj`
-
-**ML training & sampling** — `physnet-train`, `physnet-evaluate`, `physnet-md`,
-`neb`, `dmc`, `efield-train`
-
-**Workflow helpers** — `configure`, `env`, `commands`, `examples`
+Structure builders (`make-res`, `make-box`, `build-crystal`) include ASE
+structure figures — see [Structure building](structure-building.md).
 
 Run `mmml commands --audit` locally to see which commands are **deprecated** or
 **legacy** and what to use instead.

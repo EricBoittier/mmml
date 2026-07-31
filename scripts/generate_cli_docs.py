@@ -126,16 +126,6 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "downstream",
         ),
     ),
-    (
-        "Deprecated & legacy",
-        (
-            "train",
-            "evaluate",
-            "ef-train",
-            "ef-evaluate",
-            "ef-md",
-        ),
-    ),
 )
 
 RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
@@ -632,7 +622,11 @@ def _update_nav(text: str, registry_names: set[str]) -> str:
                 f"{MKDOCS} missing '{NAV_START}: {group}' / '{NAV_END}: {group}' markers"
             )
         if not present:
-            continue
+            # An empty block would leave a null-valued nav key and break the build.
+            raise SystemExit(
+                f"nav group {group!r} matches no registry command — drop it from "
+                "CLI_NAV_GROUPS and remove its section from mkdocs.yml"
+            )
         indent = match.group(1)
         text = pattern.sub(
             lambda _m, g=group, n=present, i=indent: _render_nav_block(g, n, i),
