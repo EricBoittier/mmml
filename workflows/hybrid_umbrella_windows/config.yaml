@@ -27,7 +27,7 @@ slurm:
   # Nodes to keep jobs off, e.g. "gpu11" for a wedged GPU that fails cuInit
   # with "Unable to determine the device handle". Snakemake only auto-excludes
   # on Slurm NODE_FAIL, so a broken GPU has to be blacklisted here by hand.
-  exclude_nodes: ""
+  exclude_nodes: "gpu11,gpu10"
   gpu: 1
   nodes: 1
   ntasks: 1

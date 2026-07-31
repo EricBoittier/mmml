@@ -1,0 +1,169 @@
+nohup: ignoring input
+Snakemake Slurm: profile=profiles/slurm config=/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/config.yaml -j8 --resources gpu=8 charmm_slot=8
+  checkpoint=examples/m/model_ext.json
+Using profile profiles/slurm for setting default command line arguments.
+Config file config.yaml is extended by additional config specified via the command line.
+
+SNAKEMAKE
+=========
+  Date: 2026-07-31 11:44:25
+  Workflow ID: 892260ca-9d43-4c1a-b3f3-c50593f0c97b
+  Platform: Linux-5.15.0-181-generic-x86_64-with-glibc2.35
+  Host: gpu08
+  User: boittier
+  Snakemake version: 9.24.0
+  Python version: 3.13.1 (main, Dec  6 2024, 18:40:43) [Clang 18.1.8 ]
+  Command: /mmhome/boittier/home/.cache/uv/builds-v0/.tmpoqRP7W/bin/snakemake --profile profiles/slurm --configfile /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/config.yaml -j8 --resources gpu=8 charmm_slot=8 --keep-going
+  Snakefile: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/Snakefile
+  Base directory: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows
+  Run directory: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows
+  Working directory: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows
+  Config file(s): [PosixPath('/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/config.yaml'), 'config.yaml']
+  Config MD5: 2ab2b363b7a68400c84941211cf4dea4
+
+Building DAG of jobs...
+SLURM run ID: 11a38a48-5883-476b-a9db-58ba0a9237d3
+MinJobAge 300s (>= 120s). 'squeue' should work reliably for status queries.
+Using shell: /usr/bin/bash
+Provided remote nodes: 8
+Provided resources: gpu=Resource("gpu", 8), charmm_slot=Resource("charmm_slot", 8)
+Job stats:
+job         count
+--------  -------
+window         30
+assemble        1
+mbar            1
+all             1
+total          33
+
+Select jobs to execute...
+Execute 8 jobs...
+No SLURM account given, trying to guess.
+No SLURM account given, trying to guess.
+No account was given, not able to get a SLURM account via sacct: sacct: invalid option -- '1'
+
+Unable to guess SLURM account. Trying to proceed without.
+No account was given, not able to get a SLURM account via sacct: sacct: invalid option -- '1'
+
+Unable to guess SLURM account. Trying to proceed without.
+Job 6 has been submitted with SLURM jobid 205310 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/003/205310.log).
+Job 14 has been submitted with SLURM jobid 205311 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/011/205311.log).
+Job 22 has been submitted with SLURM jobid 205312 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/019/205312.log).
+Job 29 has been submitted with SLURM jobid 205313 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/026/205313.log).
+Job 7 has been submitted with SLURM jobid 205314 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/004/205314.log).
+Job 15 has been submitted with SLURM jobid 205315 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/012/205315.log).
+Job 30 has been submitted with SLURM jobid 205316 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/027/205316.log).
+Job 26 has been submitted with SLURM jobid 205317 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/023/205317.log).
+Select jobs to execute...
+[Fri Jul 31 11:45:05 2026]
+Error in rule window:
+    message: SLURM-job '205312' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 22
+    input: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf, /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb, /mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml, /mmhome/boittier/home/mmml/examples/m/model_ext.json
+    output: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows/w019.npz
+    log: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w019.log, /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/019/205312.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p "$(dirname "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w019.log")" "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows"
+        bash "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/env_shell.sh" -- bash \
+          "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/run_one_window.sh" \
+            --yaml "/mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml" \
+            --psf "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf" \
+            --pdb "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb" \
+            --checkpoint "/mmhome/boittier/home/mmml/examples/m/model_ext.json" \
+            --output-dir "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod" \
+            --window "19" \
+             \
+          > "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w019.log" 2>&1
+        
+        (command exited with non-zero exit code)
+    external_jobid: 205312
+Trying to restart job 22.
+Execute 1 jobs...
+Job 28 has been submitted with SLURM jobid 205318 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/025/205318.log).
+[Fri Jul 31 11:45:05 2026]
+Error in rule window:
+    message: SLURM-job '205313' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 29
+    input: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf, /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb, /mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml, /mmhome/boittier/home/mmml/examples/m/model_ext.json
+    output: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows/w026.npz
+    log: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w026.log, /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/026/205313.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p "$(dirname "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w026.log")" "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows"
+        bash "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/env_shell.sh" -- bash \
+          "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/run_one_window.sh" \
+            --yaml "/mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml" \
+            --psf "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf" \
+            --pdb "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb" \
+            --checkpoint "/mmhome/boittier/home/mmml/examples/m/model_ext.json" \
+            --output-dir "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod" \
+            --window "26" \
+             \
+          > "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w026.log" 2>&1
+        
+        (command exited with non-zero exit code)
+    external_jobid: 205313
+Trying to restart job 29.
+Select jobs to execute...
+Execute 1 jobs...
+Job 21 has been submitted with SLURM jobid 205319 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/018/205319.log).
+[Fri Jul 31 11:45:05 2026]
+Error in rule window:
+    message: SLURM-job '205315' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 15
+    input: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf, /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb, /mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml, /mmhome/boittier/home/mmml/examples/m/model_ext.json
+    output: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows/w012.npz
+    log: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w012.log, /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/012/205315.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p "$(dirname "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w012.log")" "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows"
+        bash "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/env_shell.sh" -- bash \
+          "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/run_one_window.sh" \
+            --yaml "/mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml" \
+            --psf "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf" \
+            --pdb "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb" \
+            --checkpoint "/mmhome/boittier/home/mmml/examples/m/model_ext.json" \
+            --output-dir "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod" \
+            --window "12" \
+             \
+          > "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w012.log" 2>&1
+        
+        (command exited with non-zero exit code)
+    external_jobid: 205315
+Trying to restart job 15.
+Select jobs to execute...
+Execute 1 jobs...
+Job 29 has been submitted with SLURM jobid 205320 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/026/205320.log).
+[Fri Jul 31 11:45:05 2026]
+Error in rule window:
+    message: SLURM-job '205316' failed, SLURM status is: 'FAILED'. Reason: Unknown.For further error details see the cluster/cloud log and the log files of the involved rule(s).
+    jobid: 30
+    input: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf, /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb, /mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml, /mmhome/boittier/home/mmml/examples/m/model_ext.json
+    output: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows/w027.npz
+    log: /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w027.log, /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/027/205316.log (check log file(s) for error details)
+    shell:
+        
+        set -euo pipefail
+        mkdir -p "$(dirname "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w027.log")" "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows"
+        bash "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/env_shell.sh" -- bash \
+          "/mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/scripts/run_one_window.sh" \
+            --yaml "/mmhome/boittier/home/mmml/examples/m/yaml/umbrella_nc_acn_prod.yaml" \
+            --psf "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.psf" \
+            --pdb "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/boxes/acn/model.pdb" \
+            --checkpoint "/mmhome/boittier/home/mmml/examples/m/model_ext.json" \
+            --output-dir "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod" \
+            --window "27" \
+             \
+          > "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/umbrella_nc_acn_prod/logs/window_w027.log" 2>&1
+        
+        (command exited with non-zero exit code)
+    external_jobid: 205316
+Trying to restart job 30.
+Select jobs to execute...
+Execute 1 jobs...
+Select jobs to execute...
+Job 22 has been submitted with SLURM jobid 205321 (log: /mmhome/boittier/home/mmml/workflows/hybrid_umbrella_windows/.snakemake/slurm_logs/rule_window/019/205321.log).
