@@ -30,6 +30,7 @@ echo "  ckpt_dir=${LJ_CKPT_DIR} tag=${LJ_TAG}"
 uv run mmml physnet-train \
   --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml \
   --data "${LJ_ENRICHED}" \
+  --valid-data "" \
   --ckpt-dir "${LJ_CKPT_DIR}" \
   --tag "${LJ_TAG}" \
   --n-train "${LJ_NTRAIN}" \
