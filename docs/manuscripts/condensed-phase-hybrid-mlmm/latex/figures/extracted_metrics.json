@@ -58,5 +58,16 @@
   },
   "density": {
     "note": "no filled density_g_cm3 metrics in artifacts; smoke tiny has null means"
+  },
+  "hybrid_orient_scan": {
+    "source": "figures/hybrid_orient_scan_summary.json",
+    "n_rays": 48,
+    "n_r": 36,
+    "r_range_A": [2.8, 12.0],
+    "deepest_soft_kcal_mol": -6.691699128278761,
+    "mean_soft_well_kcal_mol": -1.5792705993050038,
+    "r_at_deepest_soft_A": 4.377142857142857,
+    "median_mean_abs_dF_at_handoff_kcal_mol_A": 2.580092665386129,
+    "checkpoint": "params_hybrid_mm_fixed_lj_scales_2026-07-31_13-39-37.json"
   }
 }

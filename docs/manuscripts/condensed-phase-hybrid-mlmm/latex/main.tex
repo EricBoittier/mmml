@@ -681,6 +681,80 @@ TIP3--TIP3 & 3.00 & 0.0 & $-3.00$ \\
 \end{tabular}
 \end{table}
 
+\subsection{Hybrid Orientation Scans with Energy Components}
+
+To probe orientation dependence under the trained hybrid + learnable-LJ
+checkpoint, we scan DCM-like dimers (\(Z=[6,17,17,1,1]\)) over a Fibonacci
+\(S^2\) direction set \(\times\) super-Fibonacci SO(3) orientations
+(\(6\times 8=48\) rays) with COM separations
+\(r\in[2.8,12]\,\si{\angstrom}\) (36 points). Energies and forces are evaluated
+with \texttt{hybrid\_forward} using the portable PhysNet JSON and
+\texttt{hybrid\_mm.json} LJ-scale sidecar from run
+\texttt{hybrid\_mm\_fixed\_lj\_scales-f7be8ce9-\ldots}. Interaction energies are
+reported relative to the large-\(r\) asymptote; the ML piece is
+\(E_{\mathrm{ML}}=E_{\mathrm{int}}-E_{\mathrm{MM}}\) with \(E_{\mathrm{MM}}\) the
+always-on CGenFF Coulomb/LJ (+wall) contribution from the hybrid assembly.
+
+Figure~\ref{fig:orient-eint} shows the orientation envelope: contact geometries
+are strongly repulsive and orientation-sensitive, while the soft region
+(\(r\gtrsim 3.5\,\si{\angstrom}\)) yields a mean well of
+\(\approx -1.58\,\mathrm{kcal\,mol^{-1}}\) and a deepest soft well of
+\(-6.69\,\mathrm{kcal\,mol^{-1}}\) at \(r=4.38\,\si{\angstrom}\).
+Figure~\ref{fig:orient-comp} decomposes total, ML, and MM interaction curves
+along representative rays (deep / median / shallow soft wells) together with the
+COM handoff \(s_{\mathrm{ML}}\) (dotted/dashed verticals at \(6.5\) /
+\(8.0\,\si{\angstrom}\)). Mean components over all rays
+(Figure~\ref{fig:orient-comp-mean}) confirm that short-range binding is carried
+by the ML term inside \(s_{\mathrm{ML}}=1\), with a smooth decay of
+\(\langle s_{\mathrm{ML}}\rangle\) through the handoff window. Because raw
+atomic \(|F|\) retains intramolecular residuals even at large \(r\), we report
+force changes relative to the separated asymptote,
+\(|F-F_\infty|\), and the net monomer COM interaction force
+(Figure~\ref{fig:orient-force}). Both metrics decay through the soft well and
+are already small entering the handoff window (median
+\(\langle|F-F_\infty|\rangle\approx 2.6\,\mathrm{kcal\,mol^{-1}}\,\si{\angstrom}^{-1}\)
+at \(r=6.5\,\si{\angstrom}\)).
+CSV tables are archived as \texttt{figures/hybrid\_orient\_components.csv}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{hybrid_orient_Eint_zoom.png}
+\caption{Hybrid DCM-like dimer interaction envelope over 48 relative
+orientations (median, mean, and 10--90\% band). Vertical dotted/dashed lines
+mark the ML\(\to\)MM handoff window (\(6.5\)--\(8.0\,\si{\angstrom}\)).}
+\label{fig:orient-eint}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\textwidth]{hybrid_orient_components.png}
+\caption{Hybrid energy components along three representative orientation rays
+(deepest, median, and shallowest soft-region wells). Solid curves:
+\(E_{\mathrm{int}}\), \(E_{\mathrm{ML}}\), and \(E_{\mathrm{MM}}\)
+(kcal\,mol$^{-1}$); dashed gold: \(s_{\mathrm{ML}}\).}
+\label{fig:orient-comp}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.88\textwidth]{hybrid_orient_components_mean.png}
+\caption{Mean hybrid components \(\langle E_{\mathrm{int}}\rangle\),
+\(\langle E_{\mathrm{ML}}\rangle\), \(\langle E_{\mathrm{MM}}\rangle\) and
+\(\langle s_{\mathrm{ML}}\rangle\) over the 48 orientation rays. Shaded band:
+\(\pm 1\sigma\) on \(\langle E_{\mathrm{int}}\rangle\).}
+\label{fig:orient-comp-mean}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\textwidth]{hybrid_orient_meanF_zoom.png}
+\caption{Force metrics across 48 orientations (kcal\,mol$^{-1}$\,\si{\angstrom}$^{-1}$).
+Left: atomwise \(|F-F_\infty|\) (median mean/max; 10--90\% band). Right: net
+monomer COM interaction force relative to the separated limit. Vertical
+dotted/dashed lines mark the ML\(\to\)MM handoff.}
+\label{fig:orient-force}
+\end{figure}
+
 \subsection{Liquid Densities and Methane/Ewald Smokes}
 
 Dichloromethane and acetone liquids are targeted under NPT/NVT hybrid dynamics
@@ -814,6 +888,7 @@ DCM/ACO bonded & spoof parity & \textbf{filled} & \texttt{jaxmd\_cgenff\_spoof\_
 NH\(_3\)/CH\(_3\)Cl hybrid train & LJ scales + loss curves & \textbf{filled} & \texttt{artifacts/nh3\_ch3cl/ckpts/} \\
 Ethanol / water NVE & conservation & \textbf{filled} & robustness + mixed\_calculator \\
 DCM/ACE/TIP3 pairs & rigid scans & \textbf{filled} & \texttt{dimer\_scan\_campaign} \\
+DCM-like hybrid & orient.\ scans + components & \textbf{filled} & \texttt{hybrid\_orient\_*} figures \\
 NH\(_3\)/CH\(_3\)Cl & umbrella+MBAR & \textbf{filled} (gas) & \texttt{artifacts/umbrella/} \\
 NH\(_3\)/CH\(_3\)Cl & ADUMB & status only & \texttt{adumb\_nc\_distance} \\
 CH\(_4\) Ewald & embedding smokes & PASS (eng.) & \texttt{pbc\_methane\_ewald\_smoke\_*} \\
@@ -833,7 +908,8 @@ electrostatic embeddings select how classical Coulomb charges are obtained
 without changing ML/MM ownership of bonded and short-range many-body terms.
 Shared handoff defaults and portable JSON checkpoints keep training and MD
 numerically aligned across the jax-md and PyCHARMM drivers. Filled Results panels already include bonded spoof parity, NVE conservation
-illustrations, rigid dimer scans, and a gas-phase umbrella/MBAR PMF; liquid
+illustrations, rigid dimer scans, hybrid multi-orientation component/
+force curves, and a gas-phase umbrella/MBAR PMF; liquid
 \(\langle\rho\rangle\) and a converged ADUMB WHAM profile remain the principal
 outstanding production exports.
 
