@@ -67,11 +67,12 @@ plugins:
 nav:
   - Home: index.md
   - Getting started:
-      - Install & first run: getting-started.md
+      - getting-started.md
       - How the CLI is organized: cli/index.md
       - Examples: examples.md
       - Tab completion: cli/completion.md
   - Structure & boxes:
+      - sections/structure-boxes.md
       - Structure building: cli/structure-building.md
       - Packmol placement: packmol-placement.md
       - Liquid box workflow: liquid-box-workflow.md
@@ -83,9 +84,10 @@ nav:
           - liquid-box: cli/commands/liquid-box.md
           # CLI_NAV_END: Structure & boxes
   - MD & campaigns:
+      - sections/md-campaigns.md
+      - Tri-alanine water box: trialanine-water-box.md
       - md-system YAML configs: md-system-configs.md
       - Protein force fields (CHARMM + jax-md): protein-force-fields.md
-      - Tri-alanine water box: trialanine-water-box.md
       - Species-aware ML/MM interaction policies: md-interaction-policies.md
       - Batched umbrella sampling: umbrella.md
       - Trajectory free-energy surfaces: trajectory-free-energy-surfaces.md
@@ -113,6 +115,7 @@ nav:
           - pycharmm-two-residue-sample: cli/commands/pycharmm-two-residue-sample.md
           # CLI_NAV_END: MD & campaigns
   - QM & data:
+      - sections/qm-data.md
       - QC cross-check: qc-cross-check.md
       - Preparing hybrid ML/MM datasets (CGenFF assignment): hybrid-mm-dataset-preparation.md
       - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md
@@ -143,19 +146,19 @@ nav:
           - orca-client: cli/commands/orca-client.md
           - orca-external: cli/commands/orca-external.md
           # CLI_NAV_END: ORCA external
-  - ML training & MD:
+  - Hybrid ML/MM potentials:
+      - sections/hybrid-potentials.md
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Hybrid MM charges (fixed / latent / fixed+latent): hybrid-mm-charges.md
       - Trainable hybrid MM LJ scales (per-type σ / ε): hybrid-mm-lj-scales.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
       - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - MLpot settings: mlpot-settings.md
-      - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
-      - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
-      - Long-range solver tutorial: long-range-solver-tutorial.md
-      - Spatial ML MPI: mlpot-spatial-mpi.md
-      - Calculator profiling: calculator-profiling.md
       - DCMNet calculators: dcmnet_calculators.md
+      - Long-range solver tutorial: long-range-solver-tutorial.md
+      - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
+  - Training & sampling:
+      - sections/training-sampling.md
       - Nudged elastic band (NEB): neb.md
       - Diffusion Monte Carlo (DMC): dmc.md
       - Commands:
@@ -180,12 +183,17 @@ nav:
           - orbax-to-json: cli/commands/orbax-to-json.md
           # CLI_NAV_END: ML training & MD
   - Environment & clusters:
+      - sections/environment-clusters.md
       - SciCORE cluster guide: scicore.md
       - MPI operations: pycharmm-mpi.md
       - Threading & launchers: pycharmm-threading.md
       - FFTW for CHARMM: fftw-build.md
       - Periodic boundaries (IMAGE super system): pbc-super-system.md
       - PyCHARMM C API (box and pressure): pycharmm-c-api-pbc-box-pressure.md
+      - Scale & performance:
+          - Calculator profiling: calculator-profiling.md
+          - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
+          - Spatial ML MPI: mlpot-spatial-mpi.md
       - Commands:
           # CLI_NAV_START: Workflow helpers
           - configure: cli/commands/configure.md
@@ -214,18 +222,23 @@ nav:
       - Scientific claim evidence policy: evidence-policy.md
       - Releasing: releasing.md
   - Internals & reports:
+      - sections/internals.md
       - md-system / cg_jaxmd capabilities checklist: md-cg-capabilities-checklist.md
-      - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
-      - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
-      - 1D dimer scan design: dimer-scan-design.md
-      - Internal-coordinate scan design: ic-scan-design.md
-      - Dimer tool inventory: dimer-tool-inventory.md
-      - MPNN tool inventory: mpnn-tool-inventory.md
-      - CHARMM Fortran C API audit: charmm-fortran-api-audit.md
-      - Hard-coded recommendation audit: hardcoded-recommendations-audit.md
-      - Simulation robustness report: simulation-robustness-report.md
-      - MD sweep plotting improvements: md-sweep-plotting-improvements.md
-      - md-embedding smoke results: examples/md-embedding-results.md
+      - Design & handoff:
+          - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
+          - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
+          - 1D dimer scan design: dimer-scan-design.md
+          - Internal-coordinate scan design: ic-scan-design.md
+      - Inventories:
+          - Dimer tool inventory: dimer-tool-inventory.md
+          - MPNN tool inventory: mpnn-tool-inventory.md
+      - Audits:
+          - CHARMM Fortran C API audit: charmm-fortran-api-audit.md
+          - Hard-coded recommendation audit: hardcoded-recommendations-audit.md
+      - Reports:
+          - Simulation robustness report: simulation-robustness-report.md
+          - MD sweep plotting improvements: md-sweep-plotting-improvements.md
+          - md-embedding smoke results: examples/md-embedding-results.md
       - "Manuscript: hybrid ML/MM condensed phase":
           - Overview: manuscripts/condensed-phase-hybrid-mlmm/README.md
           - Outline: manuscripts/condensed-phase-hybrid-mlmm/outline.md
