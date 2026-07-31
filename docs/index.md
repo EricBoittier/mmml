@@ -74,11 +74,15 @@ page for every command in that group.
 
 | Section | Covers | Commands |
 |---|---|---|
-| [Structure & boxes](packmol-placement.md) | residues, packing, crystals, liquid boxes | `make-res`, `make-box`, `build-crystal`, `liquid-box` |
-| [MD & campaigns](md-system-configs.md) | mixed MM/ML dynamics, umbrella sampling, cluster runs | `md-system`, `md-embedding`, `umbrella-sample`, `health-check` |
-| [QM & data](qc-cross-check.md) | reference calculations, scans, dataset prep | `pyscf-dft`, `dimer-scan`, `ic-scan`, `fix-and-split` |
-| [ML training & MD](hybrid-potential-regions.md) | PhysNet / EF / KerNN training, hybrid potentials, sampling | `physnet-train`, `neb`, `dmc`, `efield-train` |
-| [Environment & clusters](scicore.md) | checkpoints, MPI, threading, SciCORE | `env`, `configure`, `doctor`, `mpi-launch` |
+| [Structure & boxes](sections/structure-boxes.md) | residues, packing, crystals, liquid boxes | `make-res`, `make-box`, `build-crystal`, `liquid-box` |
+| [MD & campaigns](sections/md-campaigns.md) | mixed MM/ML dynamics, umbrella sampling, cluster runs | `md-system`, `md-embedding`, `umbrella-sample`, `health-check` |
+| [QM & data](sections/qm-data.md) | reference calculations, scans, dataset prep | `pyscf-dft`, `dimer-scan`, `ic-scan`, `fix-and-split` |
+| [Hybrid ML/MM potentials](sections/hybrid-potentials.md) | regions, charges, LJ scales, long-range solvers | — (assembly is configured, not commanded) |
+| [Training & sampling](sections/training-sampling.md) | PhysNet / EF / KerNN training, NEB, DMC | `physnet-train`, `neb`, `dmc`, `efield-train` |
+| [Environment & clusters](sections/environment-clusters.md) | checkpoints, MPI, threading, SciCORE, profiling | `env`, `configure`, `doctor`, `mpi-launch` |
+
+Each section opens with its own orientation page — what the area covers, the
+happy path, and where it leads next.
 
 ## Reference & policy
 
