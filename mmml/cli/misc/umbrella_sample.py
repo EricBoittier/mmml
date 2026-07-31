@@ -429,6 +429,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allow writing into a non-empty output directory",
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Hybrid: keep finished windows under output_dir/windows/ and only "
+            "run missing / failed ones (implies allowing a non-empty output_dir)"
+        ),
+    )
+    parser.add_argument(
+        "--no-resume-failed",
+        action="store_true",
+        help="With --resume, leave previously failed windows as failed (do not retry)",
+    )
+    parser.add_argument(
+        "--windows",
+        type=str,
+        default=None,
+        help=(
+            "Hybrid: comma-separated 0-based window indices to run "
+            "(e.g. 19,20,21). Combine with --resume to fill holes."
+        ),
+    )
+    parser.add_argument(
         "--write-window-xyz",
         action="store_true",
         help=(
@@ -602,6 +624,14 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         data["use_ema"] = False
     if args.overwrite:
         data["overwrite"] = True
+    if getattr(args, "resume", False):
+        data["resume"] = True
+    if getattr(args, "no_resume_failed", False):
+        data["resume_failed"] = False
+    if getattr(args, "windows", None) is not None:
+        data["only_windows"] = tuple(
+            int(x.strip()) for x in args.windows.split(",") if x.strip()
+        )
     if args.replica_exchange:
         data["replica_exchange"] = True
     if args.write_window_xyz:
@@ -642,6 +672,9 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("seed", 42)
     data.setdefault("use_ema", True)
     data.setdefault("overwrite", False)
+    data.setdefault("resume", False)
+    data.setdefault("resume_failed", True)
+    data.setdefault("only_windows", ())
     data.setdefault("write_window_xyz", False)
     data.setdefault("structure_index", 0)
     data.setdefault("seed_mode", "stretch")

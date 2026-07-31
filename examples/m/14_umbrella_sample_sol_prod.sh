@@ -15,7 +15,12 @@
 #   USE_DENSITY=1   rebuild make-box at liquid density if PSF missing
 #   TIMESTEP_FS=0.25 NSTEPS=80000   safer H timestep, same 20 ps / window
 #   SKIP_MBAR=1     skip umbrella-mbar after sampling
-#   OVERWRITE=1     overwrite existing output_dir
+#   OVERWRITE=1     wipe windows/ and start fresh (not for resume)
+#   RESUME=1        re-run only missing/failed windows under output_dir/windows/
+#   WINDOWS=19,20,21  optional 0-based subset (with or without RESUME)
+#
+# Resume example (after a crash / NaN windows):
+#   GPU=1 SOLVENT=acn RESUME=1 bash examples/m/14_umbrella_sample_sol_prod.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -96,6 +101,12 @@ if [[ -n "${N_WINDOWS:-}" ]]; then
 fi
 if [[ -n "${MAX_SEED_FORCE:-}" ]]; then
   EXTRA+=(--max-seed-force "${MAX_SEED_FORCE}")
+fi
+if [[ "${RESUME:-0}" == "1" ]]; then
+  EXTRA+=(--resume)
+fi
+if [[ -n "${WINDOWS:-}" ]]; then
+  EXTRA+=(--windows "${WINDOWS}")
 fi
 if [[ "${OVERWRITE:-0}" == "1" ]]; then
   EXTRA+=(--overwrite)

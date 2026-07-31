@@ -218,6 +218,12 @@ class UmbrellaConfig:
     use_ema: bool = True
     model: str | None = None
     overwrite: bool = False
+    resume: bool = False
+    """Hybrid only: keep existing ``windows/wXXX.npz`` and re-run missing/failed."""
+    resume_failed: bool = True
+    """When ``resume``, also re-run windows previously marked failed."""
+    only_windows: tuple[int, ...] = ()
+    """Optional hybrid subset (0-based). Empty means all windows (subject to resume)."""
     write_window_xyz: bool = False
     structure_index: int = 0
     seed_mode: SeedMode = "stretch"
@@ -488,9 +494,16 @@ class UmbrellaConfig:
         ):
             if key in raw and raw[key] is not None:
                 raw[key] = Path(raw[key])
-        for key in ("targets_A", "targets_y_A", "move_with", "move_with2", "invert_with"):
+        for key in (
+            "targets_A",
+            "targets_y_A",
+            "move_with",
+            "move_with2",
+            "invert_with",
+            "only_windows",
+        ):
             if key in raw and raw[key] is not None:
-                if key.startswith("move_") or key == "invert_with":
+                if key.startswith("move_") or key in {"invert_with", "only_windows"}:
                     raw[key] = tuple(int(x) for x in raw[key])
                 else:
                     raw[key] = tuple(float(x) for x in raw[key])

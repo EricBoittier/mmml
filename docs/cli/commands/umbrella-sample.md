@@ -45,7 +45,8 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--temperature TEMPERATURE_K]
                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
-                            [--seed SEED] [--no-ema] [--overwrite]
+                            [--seed SEED] [--no-ema] [--overwrite] [--resume]
+                            [--no-resume-failed] [--windows WINDOWS]
                             [--write-window-xyz]
 
 Batched distance umbrella sampling with a PhysNet / SpookyNet checkpoint via
@@ -104,6 +105,9 @@ Execution:
                         default: 15)
   --nsteps NSTEPS       NVT steps (default: 1000)
   --seed SEED           PRNG seed (default: 42)
+  --resume              Hybrid: keep finished windows under output_dir/windows/
+                        and only run missing / failed ones (implies allowing a
+                        non-empty output_dir)
 
 Output & artifacts:
   --output-dir, -o OUTPUT_DIR
@@ -118,6 +122,8 @@ Output & artifacts:
 
 Diagnostics & safety:
   -h, --help            show this help message and exit
+  --no-resume-failed    With --resume, leave previously failed windows as failed
+                        (do not retry)
 
 Other options:
   --engine {packed_ml,hybrid_jaxmd}
@@ -205,6 +211,8 @@ Other options:
   --printfreq PRINTFREQ
                         Print interval in steps (default: 100)
   --no-ema              Prefer non-EMA checkpoint params
+  --windows WINDOWS     Hybrid: comma-separated 0-based window indices to run
+                        (e.g. 19,20,21). Combine with --resume to fill holes.
 
 CLI for batched umbrella NVT sampling with PhysNet / SpookyNet. Usage: # Fix C
 (2), move NH3 rigidly along N–C: mmml umbrella-sample \ --checkpoint

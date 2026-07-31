@@ -486,11 +486,34 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     if cfg.engine != "hybrid_jaxmd":
         raise ValueError(f"run_umbrella_hybrid_nvt requires engine=hybrid_jaxmd (got {cfg.engine})")
 
+    from mmml.umbrella.hybrid_windows import (
+        bootstrap_windows_from_snapshots,
+        load_all_window_arrays,
+        save_window_checkpoint,
+        select_windows_to_run,
+        windows_dir,
+    )
+
     output_dir = Path(cfg.output_dir).expanduser().resolve()
-    if output_dir.exists() and any(output_dir.iterdir()) and not cfg.overwrite:
+    resume = bool(getattr(cfg, "resume", False))
+    if (
+        output_dir.exists()
+        and any(output_dir.iterdir())
+        and not cfg.overwrite
+        and not resume
+    ):
         raise FileExistsError(
-            f"output_dir is not empty: {output_dir} (pass overwrite=True to proceed)"
+            f"output_dir is not empty: {output_dir} "
+            "(pass --overwrite to wipe, or --resume to fill missing windows)"
         )
+    if cfg.overwrite and output_dir.exists() and not resume:
+        # Fresh campaign: drop per-window checkpoints so stale wXXX.npz cannot
+        # be mistaken for finished work.
+        import shutil
+
+        wdir = windows_dir(output_dir)
+        if wdir.is_dir():
+            shutil.rmtree(wdir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     base_system, ml_indices, atom_names, resnames = build_hybrid_umbrella_system(cfg)
@@ -545,12 +568,31 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     if wall_specs:
         print(f"  walls={len(wall_specs)}  {[w.label() for w in sched.walls]}")
 
-    all_pos: list[np.ndarray] = []
-    all_cv: list[np.ndarray] = []
-    all_e_tot: list[np.ndarray] = []
-    all_e_unb: list[np.ndarray] = []
-    failed_windows: list[int] = []
-    fail_reasons: dict[int, str] = {}
+    if resume:
+        boot = bootstrap_windows_from_snapshots(output_dir, n_windows=k_windows)
+        if boot:
+            print(
+                f"  resume: imported {len(boot)} window(s) from existing "
+                f"{SNAPSHOTS_NPZ} → {windows_dir(output_dir).name}/",
+                flush=True,
+            )
+
+    only = tuple(getattr(cfg, "only_windows", ()) or ())
+    to_run, already_ok = select_windows_to_run(
+        k_windows,
+        output_dir,
+        resume=resume,
+        resume_failed=bool(getattr(cfg, "resume_failed", True)),
+        only_windows=only if only else None,
+    )
+    if resume or only:
+        print(
+            f"  resume={resume}: run {len(to_run)} window(s) {to_run}; "
+            f"keep {len(already_ok)} finished",
+            flush=True,
+        )
+    if not to_run and resume:
+        print("  resume: nothing to run — reassembling snapshots from windows/", flush=True)
 
     def _nan_window() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         pos = np.full((n_frames_est, n_atoms, 3), np.nan, dtype=np.float64)
@@ -558,7 +600,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         e_nan = np.full(n_frames_est, np.nan, dtype=np.float64)
         return pos, cv_nan, e_nan, e_nan.copy()
 
-    for wid in range(k_windows):
+    for wid in to_run:
         xi0 = float(sched.xi0[wid])
         k_w = float(sched.k_x[wid])
         seeded = _seed_window_geometry(r0, cv, xi0, box, cfg.move_with)
@@ -701,33 +743,56 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                         if not np.all(np.isfinite(cv_w)):
                             fail_msg = "non-finite CV values in recorded frames"
                         else:
-                            all_pos.append(pos_w)
-                            all_cv.append(cv_w)
-                            all_e_tot.append(e_tot)
-                            all_e_unb.append(e_unb)
+                            save_window_checkpoint(
+                                output_dir,
+                                wid,
+                                status="ok",
+                                positions=pos_w,
+                                cv=cv_w,
+                                energies=e_tot,
+                                energies_unbiased=e_unb,
+                                xi0=xi0,
+                                k_ev_A2=k_w,
+                            )
                             print(
                                 f"    done: {pos_w.shape[0]} frames  "
                                 f"⟨ξ⟩={float(cv_w.mean()):.3f}  "
-                                f"⟨E_unb⟩={float(e_unb.mean()):.4f} eV",
+                                f"⟨E_unb⟩={float(e_unb.mean()):.4f} eV  "
+                                f"→ windows/w{wid:03d}.npz",
                                 flush=True,
                             )
 
         if fail_msg is not None:
-            failed_windows.append(wid)
-            fail_reasons[wid] = fail_msg
             pos_w, cv_w, e_tot, e_unb = _nan_window()
-            all_pos.append(pos_w)
-            all_cv.append(cv_w)
-            all_e_tot.append(e_tot)
-            all_e_unb.append(e_unb)
-            print(f"    FAILED window {wid + 1}/{k_windows}: {fail_msg}", flush=True)
+            save_window_checkpoint(
+                output_dir,
+                wid,
+                status="failed",
+                positions=pos_w,
+                cv=cv_w,
+                energies=e_tot,
+                energies_unbiased=e_unb,
+                xi0=xi0,
+                k_ev_A2=k_w,
+                fail_reason=fail_msg,
+            )
+            print(
+                f"    FAILED window {wid + 1}/{k_windows}: {fail_msg}  "
+                f"→ windows/w{wid:03d}.npz",
+                flush=True,
+            )
 
-    # Pad windows to equal frame counts (driver may differ by 1 at boundaries).
-    n_frames = min(p.shape[0] for p in all_pos)
-    positions = np.stack([p[:n_frames] for p in all_pos], axis=0)
-    cv_traj = np.stack([c[:n_frames] for c in all_cv], axis=0)[..., None]
-    energies = np.stack([e[:n_frames] for e in all_e_tot], axis=0)
-    energies_unbiased = np.stack([e[:n_frames] for e in all_e_unb], axis=0)
+    # Assemble from per-window checkpoints (resume-safe source of truth).
+    positions, cv_2d, energies, energies_unbiased, failed_windows, fail_reasons = (
+        load_all_window_arrays(
+            output_dir,
+            k_windows,
+            n_frames=n_frames_est,
+            n_atoms=n_atoms,
+        )
+    )
+    n_frames = int(positions.shape[1])
+    cv_traj = cv_2d[..., None]
 
     minima_pos, minima_idx, minima_e = select_lowest_energy_frames(
         positions, energies
