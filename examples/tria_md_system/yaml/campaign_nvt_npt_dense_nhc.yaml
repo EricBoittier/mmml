@@ -1,0 +1,56 @@
+# Same dense TRIA+TIP3 chain as campaign_nvt_npt_dense.yaml, but NVT uses
+# jax-md Nose–Hoover chain (``nvt_nose_hoover`` — velocity-Verlet style + NHC).
+# Langevin remains the default dense smoke; this is the NHC comparison.
+#
+# NPT is already ``npt_nose_hoover`` (NHC thermostat + barostat) in both YAMLs.
+#
+#   export MMML_CKPT=examples/sppoky-epoch-0010_params.json
+#   uv run mmml md-system \
+#     --config examples/tria_md_system/yaml/campaign_nvt_npt_dense_nhc.yaml \
+#     --checkpoint "$MMML_CKPT" \
+#     --run-all
+#
+# Pass: finite E each leg; NVT banner shows thermostat=nhc; NPT/NVE skip FIRE.
+
+defaults:
+  from_pdb: artifacts/md_embedding/aaa_dense/model.pdb
+  checkpoint: examples/sppoky-epoch-0010_params.json
+  interaction_policy: examples/interaction_policy_tria_tip3_mech.yaml
+  backend: jaxmd
+  jaxmd_unified: true
+  include_mm: true
+  mm_switch_on: 8.0
+  temperature: 300
+  pressure: 1.0
+  dt_fs: 0.25
+  nvt_integrator: nhc
+  jaxmd_minimize_steps: 250
+  seed: 0
+  skip_jit_warmup: true
+  quiet: true
+  mc_density_equalize: false
+  ml_resnames: [TRIA]
+
+campaign_output: artifacts/tria_md_system/campaign_dense_nhc
+
+runs:
+  nvt:
+    description: "NVT Nose–Hoover chain thermalize denser box (cold start + FIRE)"
+    setup: pbc_nvt
+    ps: 0.2
+    output_dir: artifacts/tria_md_system/campaign_dense_nhc/nvt
+
+  npt:
+    description: "NPT (already NHC) from NVT handoff"
+    setup: pbc_npt
+    depends_on: nvt
+    ps: 0.2
+    barostat_tau: 5.0e4
+    output_dir: artifacts/tria_md_system/campaign_dense_nhc/npt
+
+  nve:
+    description: "Short NVE from NPT handoff"
+    setup: pbc_nve
+    depends_on: npt
+    ps: 0.05
+    output_dir: artifacts/tria_md_system/campaign_dense_nhc/nve

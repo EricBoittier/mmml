@@ -57,6 +57,12 @@ uv run mmml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml \
   --checkpoint "$MMML_CKPT" \
   --run-all
+
+# Optional: NVT Nose–Hoover chain (jax-md nvt_nose_hoover) instead of Langevin
+uv run mmml md-system \
+  --config examples/tria_md_system/yaml/campaign_nvt_npt_dense_nhc.yaml \
+  --checkpoint "$MMML_CKPT" \
+  --run-all
 ```
 
 Pass gate for NVT: `E0` should be O(10²–10³) eV in magnitude (negative/near), **not** `1e6`. If `E0` is huge, rebuild with a larger `--box-side-A`.
