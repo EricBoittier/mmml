@@ -181,10 +181,10 @@ class JaxmdDriver:
             if is_npt:
                 return float(
                     jax.device_get(
-                        energy_fn(state.position, box=_box_of(state), **dyn)
+                        _energy_jit(state.position, box=_box_of(state), **dyn)
                     )
                 )
-            return float(jax.device_get(energy_fn(state.position, **dyn)))
+            return float(jax.device_get(_energy_jit(state.position, **dyn)))
 
         def _record_kinetic(state):
             """Kinetic energy (eV) of the integrator state.
@@ -221,8 +221,10 @@ class JaxmdDriver:
             """
             box_now = _box_of(state)
             ke = jnp.asarray(kinetic_eV, dtype=dtype)
+            # First call compiles AD through the hybrid energy (virial); can take
+            # minutes with GPU idle / host CPU busy — not "slow MD".
             p_metal = quantity.pressure(
-                energy_fn,
+                _energy_jit,
                 state.position,
                 box_now,
                 kinetic_energy=ke,
@@ -333,9 +335,15 @@ class JaxmdDriver:
             else:
                 init_fn, step_fn = simulate.nve(energy_fn, shift_fn, dt)
 
+        # Match legacy jaxmd_runner: without jit, NPT force+stress AD is traced
+        # every Python step (GPU util ~0, host CPU pegged for tens of minutes).
+        step_fn = jax.jit(step_fn)
+
         # bootstrap: build the first neighbor list from the initial real positions
         real_init = _to_real(init_position, box) if is_npt else init_position
         dynamic_kwargs = refresh_real(real_init, box)
+        if is_npt:
+            print(f"    [{self.name}] NPT: init state + E0/P0 (first compile)…", flush=True)
         state = _init_state(init_position, dynamic_kwargs)
 
         frames = [np.asarray(jax.device_get(_real_of(state)))]
@@ -348,17 +356,28 @@ class JaxmdDriver:
         pressures_vir_bar: list[float] = []
         if is_npt:
             volumes_A3.append(_volume_A3(boxes[0]))
+            print(f"    [{self.name}] NPT: compiling pressure/virial AD…", flush=True)
             p_tot, p_kin, p_vir = _record_pressure_parts_bar(
                 state, dynamic_kwargs, kinetic_energies[0], volumes_A3[0]
             )
             pressures_bar.append(p_tot)
             pressures_kin_bar.append(p_kin)
             pressures_vir_bar.append(p_vir)
+            print(
+                f"    [{self.name}] NPT: P0={p_tot:.4g} bar "
+                f"(Pkin={p_kin:.4g}, Pvir={p_vir:.4g}); starting dynamics…",
+                flush=True,
+            )
         target_temperatures.append(_target_temperature(0))
         block_size = int(self.record_every if self.block_size is None else self.block_size)
 
         completed = 0
         next_record = min(self.record_every, ensemble.n_steps)
+        # NPT smokes: surface progress even when progress_every is unset.
+        if is_npt and (self.progress_every is None or int(self.progress_every) <= 0):
+            self_progress_every = max(1, min(block_size, ensemble.n_steps // 4 or 1))
+        else:
+            self_progress_every = self.progress_every
         while completed < ensemble.n_steps:
             dynamic_kwargs = refresh(state)
             count = min(
@@ -401,11 +420,12 @@ class JaxmdDriver:
                             energy_fn, shift_fn, dt, block_kT,
                             thermostat_kwargs=options.get("thermostat_kwargs", {}),
                         )
+                step_fn = jax.jit(step_fn)
             for _ in range(count):
                 state = step_fn(state, **dynamic_kwargs)
             state.position.block_until_ready()
             completed += count
-            prog = self.progress_every
+            prog = self_progress_every
             if prog is not None and int(prog) > 0:
                 # Print when this block crossed a progress boundary (or finished).
                 prev = completed - count
