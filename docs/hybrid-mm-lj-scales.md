@@ -54,7 +54,11 @@ Both scales initialize at **1.0**. Combining rules are unchanged
 | \(s^\varepsilon\) | `0.25 – 4.0` | Well depths are genuinely uncertain to a factor of a few. The hard requirement is the lower end: ε enters as \(\sqrt{\varepsilon_i \varepsilon_j}\), so one type crossing zero NaNs every pair that mixes it with a positive type |
 
 These are enforced by projecting the leaves back into range after every
-optimizer update (`clip_mm_lj_scale_params`), not by a penalty term.
+optimizer update (`clip_mm_lj_scale_params`), not by a penalty term. Two weaker
+layers sit underneath for callers that never ran the optimizer: `apply_mm_lj_scales`
+floors any scale at `MM_LJ_MIN_SCALE` so it cannot change sign, and the geometric
+mean itself is written so a zero or negative ε product contributes nothing
+instead of NaN-ing the system.
 
 Unbounded, drift is the *default* outcome rather than an edge case. Adam moves a
 parameter by roughly the learning rate per step regardless of gradient

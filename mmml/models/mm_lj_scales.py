@@ -128,19 +128,18 @@ def attach_mm_lj_scales(
     return out
 
 
-# Smallest per-type scale allowed during training.
+# Last-resort sign invariant for callers that never went through training.
 #
 # The LJ combining rule is a *geometric* mean, ``eps_ij = sqrt(eps_i * eps_j)``
 # (cgenff_mm.cgenff_mm_energy). Its sign only cancels while every per-type
-# epsilon shares a sign. An unconstrained scale that crosses zero flips one
-# type's sign, so every mixed pair involving it evaluates ``sqrt(negative)`` ->
-# NaN, which propagates into all forces and the loss and never recovers.
+# epsilon shares a sign. A scale that crosses zero flips one type's sign, so
+# every mixed pair involving it evaluates ``sqrt(negative)``.
 #
-# Observed in practice: a DCM run went NaN at epoch ~89 (Adam, lr 1e-3, ~44k
-# steps -- ample room to drift a scale from 1.0 through 0). Flooring keeps the
-# sign invariant. A scale pinned at the floor has zero gradient and stays there,
-# which is a visible, inspectable outcome ("this type's LJ went to ~zero")
-# rather than a silent NaN cascade.
+# During training this floor never binds: :func:`clip_mm_lj_scale_params`
+# projects into the far tighter :data:`MM_LJ_SIGMA_SCALE_BOUNDS` /
+# :data:`MM_LJ_EPSILON_SCALE_BOUNDS` after every step. It covers the paths that
+# bypass the optimizer -- a hand-edited sidecar, or a direct call -- where
+# :func:`load_mm_lj_scales_sidecar` warns and this keeps the arithmetic sane.
 MM_LJ_MIN_SCALE = 1e-3
 
 

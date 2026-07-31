@@ -8,6 +8,9 @@ with a slightly larger radius produces the same energy as a shallower well with 
 smaller one. So you can drive the loss to zero and still recover *wrong
 parameters*. Part C below demonstrates exactly that failure.
 
+Part E shows the other way a long run goes wrong: with nothing holding them in
+range, the scales simply drift until the LJ term is unphysical or NaN.
+
 Self-contained — no dataset, no CHARMM, no GPU. Runs in a few seconds.
 """
 
@@ -24,7 +27,12 @@ import numpy as np
 
 from _toy import dimer, e_mm, fit
 
-from mmml.models.mm_lj_scales import attach_mm_lj_scales, split_mm_lj_scale_params
+from mmml.models.mm_lj_scales import (
+    MM_LJ_EPSILON_SCALE_BOUNDS as EPS_BOUNDS,
+    MM_LJ_SIGMA_SCALE_BOUNDS as SIG_BOUNDS,
+    attach_mm_lj_scales,
+    split_mm_lj_scale_params,
+)
 
 RTOL = 5e-2
 
@@ -67,7 +75,7 @@ if abs(got - truth) > RTOL * truth:
 
 # --- B. sigma, single type, epsilon frozen ---------------------------------
 print("\n-- B. recover a planted sigma (one type, epsilon frozen) --")
-truth_s = 1.08
+truth_s = 1.04
 target = e_mm(jnp.array([truth_s, 1.0]), jnp.ones(2), single)
 p, l0, l1 = fit(loss_against([target], [single], freeze="epsilon"),
                 attach_mm_lj_scales({"params": {}}, 2), lr=1e-2, steps=600)
@@ -108,6 +116,42 @@ print(f"  planted   {np.asarray(truth_v)}")
 print(f"  recovered {np.asarray(eps_v)}")
 if not np.allclose(np.asarray(eps_v), np.asarray(truth_v), rtol=RTOL):
     failures.append(f"D: {np.asarray(eps_v)} != {np.asarray(truth_v)}")
+
+# --- E. why real training projects the scales after every step -------------
+print("\n-- E. the bound that keeps a long run alive --")
+runaway = loss_against([20.0 * e_mm(jnp.ones(2), jnp.ones(2), single)],
+                       [single], freeze=None)
+free, _, _ = fit(runaway, attach_mm_lj_scales({"params": {}}, 2),
+                 lr=5e-2, steps=300, clip=False)
+held, _, _ = fit(runaway, attach_mm_lj_scales({"params": {}}, 2),
+                 lr=5e-2, steps=300, clip=True)
+
+print("  target: 20x the stock E_MM — unreachable inside the bounds")
+print(f"  {'':12s} {'s_sigma':>18s} {'s_epsilon':>18s}")
+for label, p in (("unbounded", free), ("projected", held)):
+    _, s, e = split_mm_lj_scale_params(p)
+    print(f"  {label:12s} {str(np.asarray(s)):>18s} {str(np.asarray(e)):>18s}")
+
+print(f"\n  bounds: sigma {SIG_BOUNDS}   epsilon {EPS_BOUNDS}")
+print("  The unbounded fit answers with a 25% change in Rmin, which no CGenFF")
+print("  radius tolerates — it is chasing an energy the LJ term cannot produce.")
+print("  The projected fit saturates instead, which is a legible symptom.")
+print("  Left alone the travel does not stop: Adam moves a parameter by about")
+print("  the learning rate per step however small the gradient is, and a real")
+print("  run takes 500 steps per epoch. An epsilon that reaches zero is fatal —")
+print("  the combining rule takes sqrt(eps_i * eps_j), so one type crossing zero")
+print("  NaNs every pair that mixes it with a positive type.")
+
+_, sig_free, eps_free = split_mm_lj_scale_params(free)
+_, sig_held, eps_held = split_mm_lj_scale_params(held)
+if not (np.any(np.asarray(eps_free) > EPS_BOUNDS[1])
+        or np.any(np.asarray(sig_free) > SIG_BOUNDS[1])):
+    failures.append("E: unbounded fit did not leave the physical range")
+if (np.any(np.asarray(sig_held) < SIG_BOUNDS[0] - 1e-6)
+        or np.any(np.asarray(sig_held) > SIG_BOUNDS[1] + 1e-6)
+        or np.any(np.asarray(eps_held) < EPS_BOUNDS[0] - 1e-6)
+        or np.any(np.asarray(eps_held) > EPS_BOUNDS[1] + 1e-6)):
+    failures.append("E: projected fit left the physical range")
 
 print()
 if failures:

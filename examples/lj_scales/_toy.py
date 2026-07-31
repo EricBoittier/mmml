@@ -71,9 +71,17 @@ def e_mm(sigma_scale, epsilon_scale, batch):
     return jnp.asarray(out["e_mm"]).reshape(())
 
 
-def fit(loss_fn, params, *, lr: float, steps: int):
-    """Adam over the LJ-scale leaves. Returns (params, loss_before, loss_after)."""
+def fit(loss_fn, params, *, lr: float, steps: int, clip: bool = False):
+    """Adam over the LJ-scale leaves. Returns (params, loss_before, loss_after).
+
+    ``clip`` mirrors what real training does after every update: project the
+    scales back into their physical bounds. Off by default here so steps A-D can
+    plant and recover an arbitrary scale; step E turns it on to show what it is
+    for.
+    """
     import optax
+
+    from mmml.models.mm_lj_scales import clip_mm_lj_scale_params
 
     opt = optax.adam(lr)
     state = opt.init(params)
@@ -83,7 +91,10 @@ def fit(loss_fn, params, *, lr: float, steps: int):
     def step(p, s):
         loss, grads = jax.value_and_grad(loss_fn)(p)
         updates, s = opt.update(grads, s, p)
-        return optax.apply_updates(p, updates), s, loss
+        p = optax.apply_updates(p, updates)
+        if clip:
+            p = clip_mm_lj_scale_params(p)
+        return p, s, loss
 
     for _ in range(steps):
         params, state, _ = step(params, state)
