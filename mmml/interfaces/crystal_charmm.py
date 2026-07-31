@@ -95,9 +95,13 @@ class CharmmLiteratureCrystalResult:
 
 def default_make_res_monomer_pdb(residue: str) -> Path:
     """Bundled CHARMM monomer PDB (``make-res``-style atom names)."""
-    from mmml.paths import bundled_file
+    from mmml.paths import bundled_file, default_aco_template_pdb
 
     key = residue.strip().upper()
+    if key == "ACO":
+        # Acetone's template already ships with the cluster builders rather than
+        # under data/molecules; reuse it instead of duplicating the geometry.
+        return default_aco_template_pdb()
     name = {"DCM": "dcm", "BENZ": "benz"}.get(key, key.lower())
     return bundled_file("data", "molecules", f"{name}_monomer.pdb")
 
