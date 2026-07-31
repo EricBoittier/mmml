@@ -117,85 +117,39 @@ fi
 echo "PyCHARMM import OK"
 
 # ---------------------------------------------------------------------------
-# Stage 1 — CGenFF assignment. Adds cgenff_type_idx / cgenff_charge / mol_id,
-# without which hybrid_mm training cannot run at all.
+# Stages. These delegate to the numbered ladder in examples/lj_scales/ rather
+# than re-implementing prep/train/MD here — one definition of each step, so a
+# fix in the ladder reaches the cluster job automatically.
+#
+#   01  prepare-mm-dataset + schema assertion
+#   02  PSF-ordering + type histogram
+#   05  physnet-train with learn_mm_lj_scales
+#   06  report which scales moved
+#   07  md-system liquid_nvt (jax_mic)
+#
+# The ladder's _env.sh reads the same variables exported above.
 # ---------------------------------------------------------------------------
-if [[ -f "$ENRICHED" ]]; then
-  echo "--- Stage 1: reusing existing $ENRICHED"
-else
-  echo "--- Stage 1: prepare-mm-dataset"
-  mmml prepare-mm-dataset \
-    --data "$DATASET" \
-    --output "$ENRICHED" \
-    --num-workers "${SLURM_CPUS_PER_TASK:-4}"
-fi
+export LJ_DATASET="$DATASET"
+export ARTIFACTS_DIR="$RUN_DIR"
+export LJ_ENRICHED="$ENRICHED"
+export LJ_CKPT_DIR="$CKPT_DIR"
+export LJ_TAG="$TAG"
+export LJ_EPOCHS="$EPOCHS"
+export LJ_NTRAIN="$NTRAIN"
+export LJ_NVALID="$NVALID"
+export LJ_DEVICE="${LJ_DEVICE:-gpu}"
+export LJ_WORKERS="${SLURM_CPUS_PER_TASK:-4}"
 
-python - "$ENRICHED" <<'PY'
-import sys, numpy as np
-d = np.load(sys.argv[1], allow_pickle=True)
-need = {"cgenff_type_idx", "cgenff_charge", "mol_id"}
-missing = need - set(d.files)
-if missing:
-    raise SystemExit(f"ERROR: enriched NPZ missing {sorted(missing)}")
-print(f"Stage 1 OK: {len(d['E'])} frames, keys={sorted(d.files)}")
-PY
-
-# ---------------------------------------------------------------------------
-# Stage 2 — train ML + learnable LJ scales under MIC.
-# lr_solver must stay 'mic': ewald / nvalchemiops_pme force LJ off, so there
-# would be no LJ term to differentiate. See docs/hybrid-mm-lj-scales.md
-# § "Why you train LJ without Ewald".
-# ---------------------------------------------------------------------------
-echo "--- Stage 2: physnet-train (learn_mm_lj_scales)"
-mmml physnet-train \
-  --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml \
-  --data "$ENRICHED" \
-  --ckpt-dir "$CKPT_DIR" \
-  --tag "$TAG" \
-  --n-train "$NTRAIN" \
-  --n-valid "$NVALID" \
-  --num-epochs "$EPOCHS"
-
-SIDECAR="$(find "$CKPT_DIR" -name hybrid_mm.json -newer "$ENRICHED" 2>/dev/null | head -1)"
-if [[ -z "$SIDECAR" ]]; then
-  echo "ERROR: training produced no hybrid_mm.json under $CKPT_DIR" >&2
-  echo "       learn_mm_lj_scales may have been forced off — check the log for" >&2
-  echo "       'Learnable MM LJ scales enabled' and confirm lr_solver=mic." >&2
-  exit 3
-fi
-echo "Stage 2 OK: $SIDECAR"
-python -c "
-import json,sys
-d=json.load(open('$SIDECAR'))
-s,e=d['mm_lj_sigma_scale'],d['mm_lj_epsilon_scale']
-print(f'  learned {len(s)} type scales')
-print(f'  sigma   min={min(s):.4f} max={max(s):.4f}')
-print(f'  epsilon min={min(e):.4f} max={max(e):.4f}')
-moved=sum(1 for x in s+e if abs(x-1.0)>1e-3)
-print(f'  {moved} of {len(s)+len(e)} scales moved off 1.0')
-"
+bash examples/lj_scales/01_prepare_dataset.sh
+uv run python examples/lj_scales/02_inspect_dataset.py
+bash examples/lj_scales/05_train.sh
+uv run python examples/lj_scales/06_inspect_scales.py
 
 if [[ "${MMML_LJ_SKIP_MD:-0}" == "1" ]]; then
   echo "MMML_LJ_SKIP_MD=1 — stopping after training."
   exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# Stage 3 — deploy in a condensed-phase run. jax_mic is mandatory here: the
-# switched-MM pair loop is what consumes ep_scale/sig_scale, and MLpot now
-# raises rather than silently ignoring the sidecar under periodic_external.
-# ---------------------------------------------------------------------------
-CKPT="$(find "$CKPT_DIR" -name "params.json" -newer "$ENRICHED" 2>/dev/null | head -1)"
-if [[ -z "$CKPT" ]]; then
-  echo "ERROR: no params.json under $CKPT_DIR" >&2
-  exit 4
-fi
-echo "--- Stage 3: md-system liquid_nvt (checkpoint=$CKPT)"
-mmml md-system \
-  --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
-  --only liquid_nvt \
-  --checkpoint "$CKPT" \
-  --mm-lj-scales-file "$SIDECAR" \
-  --output-dir "$RUN_DIR/liquid_nvt"
+bash examples/lj_scales/07_deploy_md.sh
 
 echo "=== done: $RUN_DIR ==="

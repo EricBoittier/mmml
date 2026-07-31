@@ -24,6 +24,7 @@ Staged MIC LJ then Ewald TL (ML-only under Ewald; adjusted LJ stays MIC/jax_mic)
 
 | Resource | What it is |
 |---|---|
+| [`../lj_scales/`](../lj_scales/) | **Numbered command-line ladder** (`00_check_env.py` → `07_deploy_md.sh`) with `_env.sh` and `run_all.sh`, same convention as `examples/m` and `examples/md_cpu`. Start here if you prefer a shell to a notebook. |
 | [`lj_scales_walkthrough.ipynb`](lj_scales_walkthrough.ipynb) | Annotated notebook: why LJ is fitted without Ewald, differentiating σ/ε by hand, a miniature fit that recovers a planted scale, then deployment. Cells run in seconds on a laptop CPU — no GPU, no CHARMM. |
 | [`submit_lj_scales_scicore.sbatch`](submit_lj_scales_scicore.sbatch) | SciCORE job running the real pipeline: `prepare-mm-dataset` → train → condensed-phase MD, with each stage gated on the previous. |
 | [`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.md) | Reference page, support matrix, troubleshooting. |
