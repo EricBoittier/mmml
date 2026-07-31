@@ -1,0 +1,24 @@
+# Short 3-window smoke (local or 1–2 GPU jobs).
+solvent: tip3
+umbrella_yaml: examples/m/yaml/umbrella_nc_tip3.yaml
+output_dir: artifacts/nh3_ch3cl/umbrella_nc_tip3_smoke_snakemake
+n_windows: 3
+box_size: 25.0
+use_density: true
+build_box_if_missing: true
+checkpoint: examples/m/model_ext.json
+run_mbar: true
+
+slurm:
+  partition: gpu
+  nodelist: ""
+  gpu: 1
+  nodes: 1
+  ntasks: 1
+  cpus_per_task: 4
+  mem_mb_per_cpu: 8000
+  jobs: 3
+  runtime_min_window: 240
+  runtime_min_box: 60
+  runtime_min_assemble: 60
+  mail_user: ""

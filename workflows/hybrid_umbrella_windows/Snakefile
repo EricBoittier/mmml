@@ -1,0 +1,233 @@
+# Parallel hybrid umbrella windows — one GPU Slurm job per window.
+#
+#   cd workflows/hybrid_umbrella_windows
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   MMML_WORKFLOW_CONFIG=config.yaml bash scripts/snakemake_slurm.sh 8
+
+import os
+import sys
+from pathlib import Path
+
+configfile: "config.yaml"
+
+_SCRIPTS = Path(workflow.basedir) / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from campaign_lib import (  # noqa: E402
+    load_config,
+    resolve_path,
+    slurm_value,
+    window_ids as cfg_window_ids,
+)
+
+_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(
+    Path(workflow.basedir) / "config.yaml"
+)
+CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
+
+WORKFLOW_DIR = Path(workflow.basedir)
+REPO = WORKFLOW_DIR.parents[1].resolve()
+SOLVENT = str(CFG.get("solvent", "acn")).lower()
+N_WINDOWS = int(CFG.get("n_windows", 30))
+WINDOW_IDS = cfg_window_ids(CFG)
+WID_PAD = [f"{w:03d}" for w in WINDOW_IDS]
+
+OUT = resolve_path(REPO, CFG.get("output_dir", "artifacts/nh3_ch3cl/umbrella_nc_acn_prod"))
+YAML = resolve_path(REPO, CFG.get("umbrella_yaml", "examples/m/yaml/umbrella_nc_acn_prod.yaml"))
+CKPT = resolve_path(REPO, CFG.get("checkpoint", "examples/m/model_ext.json"))
+BOX_DIR = REPO / "artifacts" / "nh3_ch3cl" / "boxes" / SOLVENT
+PSF = BOX_DIR / "model.psf"
+PDB = BOX_DIR / "model.pdb"
+CRD = BOX_DIR / "model.crd"
+CRD_ARG = f"--crd {CRD}" if CRD.is_file() else ""
+RUN_MBAR = bool(CFG.get("run_mbar", True))
+ENV_SHELL = str(WORKFLOW_DIR / "scripts" / "env_shell.sh")
+
+
+def _slurm_extra(wildcards) -> str:
+    parts = []
+    nodelist = str(slurm_value(CFG, "nodelist", "") or "").strip()
+    if nodelist:
+        parts.append(f"--nodelist={nodelist}")
+    mail = str(slurm_value(CFG, "mail_user", "") or "").strip()
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=FAIL")
+    return " ".join(parts)
+
+
+def _res(*, runtime_key: str, gpu: int = 1, charmm_slot: int = 1):
+    return dict(
+        gpu=gpu,
+        charmm_slot=charmm_slot,
+        runtime=lambda wildcards: int(slurm_value(CFG, runtime_key, 120)),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 8000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    )
+
+
+rule all:
+    input:
+        str(OUT / "umbrella_snapshots.npz"),
+        str(OUT / "umbrella_summary.json"),
+        *([str(OUT / "mbar" / "status.json")] if RUN_MBAR else []),
+
+
+rule make_box:
+    """Build dense solvent box if PSF/PDB are missing."""
+    output:
+        psf=str(PSF),
+        pdb=str(PDB),
+    log:
+        str(OUT / "logs" / "make_box.log"),
+    params:
+        repo=str(REPO),
+        solvent=SOLVENT,
+        box_size=float(CFG.get("box_size", 30.0)),
+        use_density=1 if bool(CFG.get("use_density", True)) else 0,
+        build=1 if bool(CFG.get("build_box_if_missing", True)) else 0,
+        env_shell=ENV_SHELL,
+    resources:
+        **_res(runtime_key="runtime_min_box", gpu=0, charmm_slot=1),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{log}")"
+        if [[ -f "{output.psf}" && -f "{output.pdb}" ]]; then
+          echo "[make_box] reuse {output.psf}" | tee "{log}"
+          exit 0
+        fi
+        if [[ "{params.build}" != "1" ]]; then
+          echo "[make_box] missing box and build_box_if_missing=false" | tee "{log}" >&2
+          exit 1
+        fi
+        bash "{params.env_shell}" --no-cuda -- bash -c '
+          set -euo pipefail
+          cd "'"{params.repo}"'"
+          source examples/m/_env.sh
+          export SOLVENT="'"{params.solvent}"'"
+          export SOLVENT_ONLY=1
+          export BOX_SIZE="'"{params.box_size}"'"
+          export USE_DENSITY="'"{params.use_density}"'"
+          bash examples/m/08_make_boxes.sh
+        ' > "{log}" 2>&1
+        test -f "{output.psf}" && test -f "{output.pdb}"
+        """
+
+
+rule window:
+    """One hybrid umbrella window on a GPU → windows/wXXX.npz."""
+    input:
+        psf=str(PSF),
+        pdb=str(PDB),
+        yaml=str(YAML),
+        ckpt=str(CKPT),
+    output:
+        npz=str(OUT / "windows" / "w{wid}.npz"),
+    log:
+        str(OUT / "logs" / "window_w{wid}.log"),
+    wildcard_constraints:
+        wid="|".join(WID_PAD) if WID_PAD else r"\d{3}",
+    params:
+        repo=str(REPO),
+        out=str(OUT),
+        wid_int=lambda wildcards: str(int(wildcards.wid)),
+        crd_arg=CRD_ARG,
+        env_shell=ENV_SHELL,
+    resources:
+        **_res(runtime_key="runtime_min_window", gpu=1, charmm_slot=1),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{log}")" "{params.out}/windows"
+        bash "{params.env_shell}" -- bash \
+          "{params.repo}/workflows/hybrid_umbrella_windows/scripts/run_one_window.sh" \
+            --yaml "{input.yaml}" \
+            --psf "{input.psf}" \
+            --pdb "{input.pdb}" \
+            --checkpoint "{input.ckpt}" \
+            --output-dir "{params.out}" \
+            --window "{params.wid_int}" \
+            {params.crd_arg} \
+          > "{log}" 2>&1
+        """
+
+
+rule assemble:
+    """Pack windows/wXXX.npz → umbrella_snapshots.npz + umbrella_summary.json."""
+    input:
+        windows=expand(str(OUT / "windows" / "w{wid}.npz"), wid=WID_PAD),
+        psf=str(PSF),
+        pdb=str(PDB),
+        yaml=str(YAML),
+        ckpt=str(CKPT),
+    output:
+        npz=str(OUT / "umbrella_snapshots.npz"),
+        summary=str(OUT / "umbrella_summary.json"),
+    log:
+        str(OUT / "logs" / "assemble.log"),
+    params:
+        repo=str(REPO),
+        out=str(OUT),
+        crd_arg=CRD_ARG,
+        env_shell=ENV_SHELL,
+    resources:
+        **_res(runtime_key="runtime_min_assemble", gpu=1, charmm_slot=1),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{log}")"
+        bash "{params.env_shell}" -- bash \
+          "{params.repo}/workflows/hybrid_umbrella_windows/scripts/run_assemble.sh" \
+            --yaml "{input.yaml}" \
+            --psf "{input.psf}" \
+            --pdb "{input.pdb}" \
+            --checkpoint "{input.ckpt}" \
+            --output-dir "{params.out}" \
+            {params.crd_arg} \
+          > "{log}" 2>&1
+        test -f "{output.npz}" && test -f "{output.summary}"
+        """
+
+
+rule mbar:
+    input:
+        npz=str(OUT / "umbrella_snapshots.npz"),
+        summary=str(OUT / "umbrella_summary.json"),
+    output:
+        status=str(OUT / "mbar" / "status.json"),
+    log:
+        str(OUT / "logs" / "mbar.log"),
+    params:
+        out=str(OUT),
+        env_shell=ENV_SHELL,
+    resources:
+        **_res(runtime_key="runtime_min_assemble", gpu=0, charmm_slot=0),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{log}")" "{params.out}/mbar"
+        bash "{params.env_shell}" --no-cuda -- bash -c '
+          set -euo pipefail
+          uv run mmml umbrella-mbar --run-dir "'"{params.out}"'"
+          python - <<PY
+import json
+from pathlib import Path
+out = Path("'"'{params.out}'"'")
+summary = json.loads((out / "umbrella_summary.json").read_text())
+mbar = summary.get("mbar") or {{}}
+if "error" in mbar:
+    raise SystemExit(f"MBAR failed: {{mbar[\"error\"]}}")
+if "pmf_rel_kcal_mol" not in mbar and "pmf_rel_eV" not in summary.get("mbar", {{}}):
+    # merge_mbar_into_summary stores under summary["mbar"]
+    pass
+status = {{"ok": True, "run_dir": str(out), "n_windows_used": mbar.get("n_windows_used")}}
+(out / "mbar" / "status.json").write_text(json.dumps(status, indent=2) + "\n")
+print("PASS: mbar ->", out / "mbar" / "status.json")
+PY
+        ' > "{log}" 2>&1
+        """
