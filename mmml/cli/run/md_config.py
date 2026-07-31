@@ -270,26 +270,6 @@ def namespace_from_yaml(path: str | Path, parse_args_fn) -> argparse.Namespace:
     return args
 
 
-def resolve_campaign_checkpoint_value(raw: Any, *, must_exist: bool = True) -> str:
-    """Expand ``${MMML_CKPT}`` and env vars for campaign YAML / job merge.
-
-    ``must_exist=False`` expands without checking the filesystem, for call sites
-    where a later ``--checkpoint`` on the parent CLI still gets to replace the
-    value. Validating there would reject a placeholder that never gets used.
-    """
-    text = str(raw).strip()
-    if text == "${MMML_CKPT}":
-        env = os.environ.get("MMML_CKPT", "").strip()
-        if not env:
-            raise RuntimeError("MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})")
-        path = Path(env).expanduser().resolve()
-    else:
-        path = Path(os.path.expandvars(text)).expanduser().resolve()
-    if must_exist:
-        validate_campaign_checkpoint(path)
-    return str(path)
-
-
 _CHECKPOINT_PLACEHOLDER_MARKERS = ("/path/to", "<run>", "REPLACE_ME", "your/checkpoint")
 
 
@@ -311,10 +291,30 @@ def validate_campaign_checkpoint(value: Any, *, job_id: str | None = None) -> No
     hint = ""
     if any(marker in text for marker in _CHECKPOINT_PLACEHOLDER_MARKERS):
         hint = (
-            "\nThis looks like the placeholder from the config's `defaults:` block. "
-            "Pass --checkpoint /path/to/params.json, or set checkpoint: in the YAML."
+            "\nThat is the placeholder from the config's `defaults:` block. Pass "
+            "--checkpoint <params.json>, or edit `checkpoint:` in the YAML."
         )
     raise FileNotFoundError(f"Checkpoint not found{where}: {path}{hint}")
+
+
+def resolve_campaign_checkpoint_value(raw: Any, *, must_exist: bool = True) -> str:
+    """Expand ``${MMML_CKPT}`` and env vars for campaign YAML / job merge.
+
+    ``must_exist=False`` expands without checking the filesystem, for call sites
+    where a later ``--checkpoint`` on the parent CLI still gets to replace the
+    value. Validating there would reject a placeholder that never gets used.
+    """
+    text = str(raw).strip()
+    if text == "${MMML_CKPT}":
+        env = os.environ.get("MMML_CKPT", "").strip()
+        if not env:
+            raise RuntimeError("MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})")
+        path = Path(env).expanduser().resolve()
+    else:
+        path = Path(os.path.expandvars(text)).expanduser().resolve()
+    if must_exist:
+        validate_campaign_checkpoint(path)
+    return str(path)
 
 
 def merge_campaign_job_config(

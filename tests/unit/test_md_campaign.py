@@ -264,6 +264,71 @@ def test_merge_campaign_job_config_defaults() -> None:
     assert merged["backend"] == "jaxmd"
 
 
+PLACEHOLDER_CKPT = "/path/to/ckpts/tag/<run>/params.json"
+
+
+def _campaign_yaml_with_placeholder_checkpoint(tmp_path: Path) -> Path:
+    cfg = tmp_path / "campaign.yaml"
+    cfg.write_text(
+        "defaults:\n"
+        f"  checkpoint: {PLACEHOLDER_CKPT}\n"
+        "  composition: DCM:2\n"
+        "runs:\n"
+        "  liquid_nvt:\n"
+        "    backend: pycharmm\n"
+        "    setup: pbc_nvt\n",
+        encoding="utf-8",
+    )
+    return cfg
+
+
+def test_cli_checkpoint_overrides_unresolvable_config_placeholder(tmp_path: Path) -> None:
+    """A CLI --checkpoint must win before the config value is checked for existence."""
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    cfg = _campaign_yaml_with_placeholder_checkpoint(tmp_path)
+    real = tmp_path / "params.json"
+    real.write_text("{}", encoding="utf-8")
+
+    args = parse_md_system_args(
+        ["--config", str(cfg), "--checkpoint", str(real), "--job-id", "liquid_nvt"]
+    )
+    assert Path(args.checkpoint) == real
+    assert "checkpoint" in args._cli_explicit
+
+
+def test_config_placeholder_checkpoint_still_rejected_without_cli(tmp_path: Path) -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    cfg = _campaign_yaml_with_placeholder_checkpoint(tmp_path)
+    with pytest.raises(FileNotFoundError, match="Checkpoint not found"):
+        parse_md_system_args(["--config", str(cfg), "--job-id", "liquid_nvt"])
+
+
+def test_merge_campaign_job_config_does_not_require_checkpoint(tmp_path: Path) -> None:
+    """Merge expands only; the CLI still gets to replace the value afterwards."""
+    campaign = {
+        "defaults": {"checkpoint": PLACEHOLDER_CKPT},
+        "runs": {"liquid_nvt": {"backend": "pycharmm"}},
+    }
+    merged = merge_campaign_job_config(campaign, "liquid_nvt")
+    assert merged["checkpoint"].endswith("params.json")
+
+
+def test_validate_campaign_checkpoint(tmp_path: Path) -> None:
+    from mmml.cli.run.md_config import validate_campaign_checkpoint
+
+    real = tmp_path / "params.json"
+    real.write_text("{}", encoding="utf-8")
+    validate_campaign_checkpoint(str(real), job_id="liquid_nvt")
+    validate_campaign_checkpoint(None)
+
+    with pytest.raises(FileNotFoundError, match="liquid_nvt"):
+        validate_campaign_checkpoint(str(tmp_path / "missing.json"), job_id="liquid_nvt")
+    with pytest.raises(FileNotFoundError, match="placeholder"):
+        validate_campaign_checkpoint(PLACEHOLDER_CKPT)
+
+
 def test_apply_campaign_cli_overrides_ml_flags() -> None:
     from argparse import Namespace
 
