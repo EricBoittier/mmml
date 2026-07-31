@@ -310,7 +310,7 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
         "",
         "Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`",
         "",
-        "#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/2100015.html)",
+        "#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/cod/2100015.html)",
         "",
         comparison_table_markdown(
             dcm_lit,

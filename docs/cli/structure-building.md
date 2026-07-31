@@ -151,7 +151,7 @@ names, simulation supercell) or PyXtal random placement with space-group symmetr
 The deposited structure at
 [CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)
 (Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595; COD
-[2100015](https://www.crystallography.net/2100015.html)) is orthorhombic **Pbcn**
+[2100015](https://www.crystallography.net/cod/2100015.html)) is orthorhombic **Pbcn**
 (SG 60), Z=4, measured at **1.63 GPa / 293 K**:
 
 | Quantity | Value |
@@ -259,7 +259,7 @@ Bundled experimental CIFs vs **make-res+CIF** (exact literature unit cell, CHARM
 
 Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`
 
-#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/2100015.html)
+#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/cod/2100015.html)
 
 Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595 ([CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)); Pbcn, Z=4, 1.63 GPa / 293 K.
 
