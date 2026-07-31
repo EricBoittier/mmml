@@ -39,6 +39,9 @@ class JaxmdDriver:
     name: str = "jaxmd"
     # When set, print ``step i/N`` after blocks that cross this cadence (flush).
     progress_every: int | None = None
+    # Abort as soon as a recorded frame has non-finite positions/energy (hybrid
+    # umbrella windows can otherwise burn hours after a silent blow-up).
+    abort_nonfinite: bool = False
 
     def run(
         self,
@@ -442,6 +445,19 @@ class JaxmdDriver:
                 boxes.append(None if box is None else np.asarray(jax.device_get(_box_of(state))))
                 energies.append(_record_energy(state, dynamic_kwargs))
                 kinetic_energies.append(_record_kinetic(state))
+                if self.abort_nonfinite:
+                    e_now = float(energies[-1])
+                    kin_now = float(kinetic_energies[-1])
+                    if (
+                        not np.isfinite(e_now)
+                        or not np.isfinite(kin_now)
+                        or not np.all(np.isfinite(frames[-1]))
+                    ):
+                        raise RuntimeError(
+                            f"{self.name}: non-finite state at step {completed}/"
+                            f"{ensemble.n_steps} (E={e_now}, K={kin_now}). "
+                            "Try a smaller timestep (e.g. 0.25 fs) or softer seeds."
+                        )
                 if is_npt:
                     volumes_A3.append(_volume_A3(boxes[-1]))
                     p_tot, p_kin, p_vir = _record_pressure_parts_bar(
