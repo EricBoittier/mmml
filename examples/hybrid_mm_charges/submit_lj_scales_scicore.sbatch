@@ -32,15 +32,35 @@ set -uo pipefail
 REPO="${MMML_REPO:-$HOME/mmml}"
 cd "$REPO" || { echo "ERROR: no repo at $REPO" >&2; exit 1; }
 
-# SciCORE prolog: initializes Lmod in a non-login shell and loads the matched
-# foss/2023b + OpenMPI 4.1.6 stack, plus the MMML_NO_MPI_* guards that keep the
-# generic launcher's fallbacks disabled (see docs/scicore.md).
+# ---------------------------------------------------------------------------
+# Module stack. This MUST match what the local PyCHARMM/libcharmm.so was built
+# against — a mismatched GCCcore gives an ABI/symbol failure on `import pycharmm`.
+#
+# scripts/scicore_env.sh still defaults to CMake/3.27.6-GCCcore-13.2.0 with
+# foss/2023b (GCC 13.2.0), which is NOT what the current SciCORE PyCHARMM was
+# compiled with. Override here rather than editing the shared prolog.
+#
+# NB: the prolog runs both `module load` calls with `|| true`, so a wrong or
+# missing module name is silent. The pycharmm assertion below is what actually
+# catches it.
+# ---------------------------------------------------------------------------
+export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+# Toolchain must be the GCC 14.3.0-consistent one; foss/2023b would drag in
+# GCC 13.2.0 and fight the CMake module above. Override if the name differs.
+export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+
+# SciCORE prolog: initializes Lmod in a non-login shell, loads the toolchain +
+# CMake selected above, and sets the MMML_NO_MPI_* guards that keep the generic
+# launcher's fallbacks disabled (see docs/scicore.md).
 #
 # Sourced *before* `set -e` on purpose: scripts/scicore_env.sh documents that it
 # contains tolerated non-zero commands and that caller errexit "would abort it on
 # the first" of them. It manages `set -u` itself (relax, then restore).
 source scripts/scicore_env.sh
 source .venv/bin/activate
+
+echo "--- module stack ---"
+module list 2>&1 | sed 's/^/  /' || true
 
 # Everything past the prolog is fail-fast.
 set -e
@@ -79,6 +99,22 @@ fi
 
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 python -c "import jax; print('JAX devices:', jax.devices())"
+
+# Fail here, not 3 hours in at Stage 3. The prolog's `module load ... || true`
+# means a wrong GCCcore is silent until libcharmm.so fails to dlopen, and the
+# MD leg is the last thing this job does — so import PyCHARMM up front.
+if ! python -c "import pycharmm" >/dev/null 2>&1; then
+  echo "ERROR: 'import pycharmm' failed — the loaded module stack does not match" >&2
+  echo "       the one libcharmm.so was built against." >&2
+  echo "       toolchain=$MMML_SCICORE_TOOLCHAIN cmake=$MMML_SCICORE_CMAKE" >&2
+  echo "       Fix by exporting the correct names before sbatch, e.g.:" >&2
+  echo "         export MMML_SCICORE_TOOLCHAIN=<foss/YYYYx>" >&2
+  echo "         export MMML_SCICORE_CMAKE=CMake/3.31.8-GCCcore-14.3.0" >&2
+  echo "       Diagnose with:  ldd \$(python -c 'import pycharmm,os;print(os.path.dirname(pycharmm.__file__))')/../*.so | grep 'not found'" >&2
+  echo "       (Set MMML_LJ_SKIP_MD=1 to run prep+train only, which needs no CHARMM.)" >&2
+  exit 5
+fi
+echo "PyCHARMM import OK"
 
 # ---------------------------------------------------------------------------
 # Stage 1 — CGenFF assignment. Adds cgenff_type_idx / cgenff_charge / mol_id,
