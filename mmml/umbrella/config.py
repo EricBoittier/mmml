@@ -377,16 +377,16 @@ class UmbrellaConfig:
             self.atom_k is not None and self.atom_l is not None
         )
 
-    def resolve_cvs(self) -> tuple[LinearDistanceCV, ...]:
+    def resolve_cvs(self) -> tuple[Any, ...]:
         """Resolve CV1 (and CV2 when 2D) from ``cv_*`` or the atom-index fields."""
         if self.cv_x is not None:
-            cv_x = LinearDistanceCV.from_spec(self.cv_x)
+            cv_x = cv_from_spec(self.cv_x)
         else:
             cv_x = LinearDistanceCV.distance(int(self.atom_i), int(self.atom_j))
         if not self.is_2d:
             return (cv_x,)
         if self.cv_y is not None:
-            cv_y = LinearDistanceCV.from_spec(self.cv_y)
+            cv_y = cv_from_spec(self.cv_y)
         else:
             cv_y = LinearDistanceCV.distance(int(self.atom_k), int(self.atom_l))
         return (cv_x, cv_y)
@@ -396,12 +396,12 @@ class UmbrellaConfig:
         return tuple(_resolve_wall(w) for w in self.walls)
 
     def _legacy_atom_pairs(
-        self, cvs: tuple[LinearDistanceCV, ...]
+        self, cvs: tuple[Any, ...]
     ) -> tuple[tuple[int, int], ...]:
         """First pair of each CV -- the backward-compatible ``atom_pairs`` view.
 
-        Only faithful for plain-distance CVs; combination CVs carry their real
-        definition on ``WindowSchedule.cvs``.
+        Only faithful for plain-distance CVs; combination / dihedral CVs carry
+        their real definition on ``WindowSchedule.cvs``.
         """
         return tuple(cv.pairs[0] for cv in cvs)
 
@@ -528,7 +528,7 @@ class UmbrellaConfig:
                     # Keep YAML atom names; hybrid binds them to PSF indices.
                     raw[key] = dict(raw[key])
                 else:
-                    raw[key] = LinearDistanceCV.from_spec(raw[key])
+                    raw[key] = cv_from_spec(raw[key])
         if raw.get("walls"):
             raw["walls"] = tuple(_resolve_wall(w) for w in raw["walls"])
         return cls(**raw)
@@ -547,14 +547,17 @@ class UmbrellaConfig:
                 out[key] = str(out[key])
         for key in ("cv_x", "cv_y"):
             cv = getattr(self, key)
-            out[key] = (
-                None
-                if cv is None
-                else {
-                    "pairs": [list(p) for p in LinearDistanceCV.from_spec(cv).pairs],
-                    "coefficients": list(LinearDistanceCV.from_spec(cv).coefficients),
-                }
-            )
+            if cv is None:
+                out[key] = None
+            else:
+                resolved = cv_from_spec(cv)
+                if isinstance(resolved, DihedralCV):
+                    out[key] = {"kind": "dihedral", "atoms": list(resolved.atoms)}
+                else:
+                    out[key] = {
+                        "pairs": [list(p) for p in resolved.pairs],
+                        "coefficients": list(resolved.coefficients),
+                    }
         out["targets_A"] = list(out["targets_A"])
         out["targets_y_A"] = list(out["targets_y_A"])
         out["move_with"] = list(out["move_with"])

@@ -52,8 +52,43 @@ uv run python scripts/plot_tria_phi_psi_gas_solvent.py --demo \
   -o artifacts/tria_phi_psi_scan/figures/gas_vs_solvent.DEMO.png
 ```
 
+## Umbrella sampling (gas φ, then ψ)
+
+After the gas scan NPZ exists, run a **periodic dihedral** umbrella with
+`mmml umbrella-sample` (`DihedralCV`, degrees / eV·deg⁻²):
+
+```bash
+# Export one seed frame per φ window (ψ held near -60°)
+uv run python scripts/export_tria_phi_umbrella_seeds.py \
+  --gas-npz "$OUT/gas/phi_psi_pes.npz" \
+  --cv phi --n-windows 13 \
+  -o "$OUT/gas/umbrella_phi_seeds.npz"
+
+# Need Z in the NPZ — copy from ASE traj or rebuild once:
+# (if seeds lack Z, point --structure at gas/phi_psi_pes.traj instead)
+
+uv run mmml umbrella-sample \
+  --config examples/tria_phi_psi_scan/yaml/umbrella_phi_gas.yaml
+
+uv run mmml umbrella-mbar --run-dir "$OUT/umbrella_phi_gas"
+```
+
+YAML CV block:
+
+```yaml
+cv_x:
+  kind: dihedral
+  atoms: [14, 16, 18, 24]   # φ; use [16, 18, 24, 26] for ψ
+seed_mode: frames           # required (stretch is distance-only)
+```
+
+**Solvent dihedral umbrella** (hybrid `hybrid_jaxmd`) is the next layer — same
+`DihedralCV` spec once hybrid name-binding accepts `atoms:` indices (gas
+`packed_ml` path is wired now). Until then, use the constrained solvent relax
+above for solvent landscapes.
+
 ## Notes
 
-- Solvent stage is **MM-constrained** (CHARMM); hybrid ML peptide + MM solvent can be layered later via `md-embedding` / mechanical policy.
+- Solvent *minimize* stage is **MM-constrained** (CHARMM); hybrid ML peptide + MM solvent can be layered later via `md-embedding` / mechanical policy.
 - Gas NPZ `positions_A[i,j]` must stay finite (clash rejects still keep MM-min frames).
-- Dihedral restraints use the same atom indices as the gas scan — do not reorder the PSF.
+- Dihedral restraints / umbrella CVs use the same atom indices as the gas scan — do not reorder the PSF.
