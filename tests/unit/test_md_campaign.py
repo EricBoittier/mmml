@@ -278,6 +278,10 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_spatial_mpi=False,
         skip_jit_warmup=True,
         handoff_pre_minimize=False,
+        dt_fs=0.25,
+        nvt_integrator="langevin",
+        checkpoint="/tmp/ck.json",
+        jaxmd_minimize_steps=250,
         _cli_explicit=set(),
     )
     apply_campaign_cli_overrides(merged, parent)
@@ -286,6 +290,10 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
     assert merged["charmm_omp_threads"] == 16
     assert merged["skip_jit_warmup"] is True
     assert merged["handoff_pre_minimize"] is False
+    assert merged["dt_fs"] == 0.25
+    assert merged["nvt_integrator"] == "langevin"
+    assert merged["checkpoint"] == "/tmp/ck.json"
+    assert merged["jaxmd_minimize_steps"] == 250
 
     merged2 = {"backend": "pycharmm"}
     parent2 = Namespace(
@@ -296,12 +304,17 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_spatial_mpi=True,
         skip_jit_warmup=False,
         handoff_pre_minimize=True,
+        dt_fs=None,
+        nvt_integrator=None,
+        checkpoint=None,
+        jaxmd_minimize_steps=None,
         _cli_explicit=set(),
     )
     apply_campaign_cli_overrides(merged2, parent2)
     assert merged2["ml_max_active_dimers"] == 900
     assert merged2["ml_spatial_mpi"] is True
     assert "ml_gpu_count" not in merged2
+    assert "dt_fs" not in merged2
 
 
 def test_apply_campaign_cli_overrides_lr_flags_when_explicit() -> None:

@@ -31,8 +31,10 @@ defaults:
   temperature: 300
   pressure: 1.0
   # Packed hybrid: 0.5 fs + NHC was NaNing after good E0; Langevin + 0.25 fs.
+  # FIRE before dynamics (jaxmd-unified) — Packmol cold starts need it.
   dt_fs: 0.25
   nvt_integrator: langevin
+  jaxmd_minimize_steps: 250
   seed: 0
   skip_jit_warmup: true
   quiet: true

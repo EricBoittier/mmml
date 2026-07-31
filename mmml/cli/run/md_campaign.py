@@ -147,6 +147,11 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "skip_jit_warmup",
     "auto_warmup_mlpot_jax",
     "handoff_pre_minimize",
+    # Dynamics / hybrid-stability knobs (parent CLI must reach campaign jobs).
+    "dt_fs",
+    "nvt_integrator",
+    "checkpoint",
+    "jaxmd_minimize_steps",
 )
 
 # Long-range / MM-stack flags: only override job YAML when present on the parent CLI.

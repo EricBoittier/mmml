@@ -24,6 +24,45 @@ mmml_resolve_env "$REPO_ROOT"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export PYTHONUNBUFFERED=1
+# Avoid grabbing the whole GPU up front when several JAX jobs share a node.
+export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
+
+_mmml_cuda_ready() {
+  # nvidia-smi must see at least one device in this job's view.
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! nvidia-smi -L >/dev/null 2>&1; then
+    return 1
+  fi
+  # Cheap cuInit via jax — matches the failure mode in window logs.
+  "$MMML_PYTHON" - <<'PY' >/dev/null 2>&1
+import os
+os.environ.setdefault("JAX_PLATFORMS", "cuda")
+import jax
+devs = jax.devices("cuda")
+assert devs, "no cuda devices"
+print(devs[0])
+PY
+}
+
+_mmml_wait_cuda() {
+  local tries="${MMML_CUDA_INIT_RETRIES:-12}"
+  local i=1
+  while (( i <= tries )); do
+    if _mmml_cuda_ready; then
+      echo "[env_shell] CUDA ready (try ${i}/${tries})  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}  SLURM_JOB_GPUS=${SLURM_JOB_GPUS:-}" >&2
+      return 0
+    fi
+    echo "[env_shell] CUDA not ready (try ${i}/${tries}); sleep ${i}s …  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}  SLURM_JOB_GPUS=${SLURM_JOB_GPUS:-}" >&2
+    sleep "$i"
+    i=$((i + 1))
+  done
+  echo "[env_shell] FAIL: CUDA init failed after ${tries} tries (cuInit / nvidia-smi)." >&2
+  echo "[env_shell]   host=$(hostname) job=${SLURM_JOB_ID:-local} gres=${SLURM_JOB_GPUS:-?} cvd=${CUDA_VISIBLE_DEVICES:-}" >&2
+  nvidia-smi -L >&2 || true
+  return 1
+}
 
 if [[ "$USE_CUDA" == "1" ]]; then
   if [[ -n "${SLURM_JOB_ID:-}" ]]; then
@@ -31,14 +70,25 @@ if [[ "$USE_CUDA" == "1" ]]; then
     if [[ -n "${SLURM_JOB_GPUS:-}${CUDA_VISIBLE_DEVICES:-}" || "${_part}" == *gpu* ]]; then
       case "${JAX_PLATFORMS:-}" in
         ""|rocm|ROCM) export JAX_PLATFORMS=cuda ;;
+        *)
+          if [[ "${JAX_PLATFORMS}" == *[Rr][Oo][Cc][Mm]* ]]; then
+            export JAX_PLATFORMS="$(
+              printf '%s' "${JAX_PLATFORMS}" \
+                | sed -E 's/(^|,)[Rr][Oo][Cc][Mm](,|$)/\1\2/g; s/,,/,/g; s/^,//; s/,$//'
+            )"
+            [[ -z "${JAX_PLATFORMS}" ]] && export JAX_PLATFORMS=cuda
+          fi
+          ;;
       esac
       export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
       export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-gpu}"
       export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-gpu}"
+      _mmml_wait_cuda
     fi
   elif [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${MMML_EXAMPLE_DEVICE:-}" == "gpu" ]]; then
     export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
     export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
+    _mmml_wait_cuda
   fi
 fi
 

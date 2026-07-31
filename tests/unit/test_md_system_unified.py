@@ -111,6 +111,58 @@ def test_npt_volume_ratio_ok_and_format_line():
     assert "P_target=1" in line
 
 
+def test_fire_minimize_picks_best_energy_frame(monkeypatch):
+    """Packmol cold-start premin must restore the lowest-energy FIRE frame."""
+    from mmml.cli.run.md_system_unified import _fire_minimize_system
+    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from mmml.md.system import MolecularSystem
+
+    system = MolecularSystem(
+        R=np.zeros((2, 3), dtype=np.float64),
+        Z=np.array([1, 1], dtype=np.int32),
+        box=np.eye(3) * 10.0,
+        mol_id=np.array([0, 0], dtype=np.int32),
+    )
+    positions = np.stack(
+        [
+            np.zeros((2, 3)),
+            np.ones((2, 3)),
+            2.0 * np.ones((2, 3)),
+        ],
+        axis=0,
+    )
+    energies = np.array([10.0, -5.0, 1.0])
+
+    class _Traj:
+        metadata = {"positions": positions, "energies": energies}
+
+    monkeypatch.setattr(
+        "mmml.md.assemble.assemble_and_run",
+        lambda *a, **k: _Traj(),
+    )
+    run_config = RunConfig(
+        system=SystemSpec(builder="packmol"),
+        terms=("ml_intra",),
+        ensemble=EnsembleSpec(
+            ensemble="nvt",
+            space="periodic",
+            temperature_K=300.0,
+            dt_fs=0.25,
+            n_steps=10,
+            thermostat="langevin",
+            params={"seed": 0, "float64": True},
+        ),
+    )
+    out = _fire_minimize_system(
+        argparse.Namespace(jaxmd_minimize_steps=50, seed=0),
+        run_config,
+        system,
+        ctx=object(),
+        term_kwargs=None,
+    )
+    assert np.allclose(out.R, positions[1])
+
+
 def test_run_unified_jaxmd_fails_fast_on_unsupported():
     """The unsupported-combo check must run before any CHARMM build."""
     with pytest.raises(NotImplementedError, match="template-pdb"):

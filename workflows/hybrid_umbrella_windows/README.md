@@ -43,7 +43,9 @@ MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
 
 ## Studix GPU queue
 
-Submit from the **login node** (do not run JAX on login):
+Submit the Snakemake **controller from the login node** (not an interactive
+`gpu0N` shell — that often leaves batch jobs with `CUDA_ERROR_UNKNOWN` /
+`cuInit` failures). Window jobs themselves run on the GPU partition via Slurm.
 
 ```bash
 cd workflows/hybrid_umbrella_windows

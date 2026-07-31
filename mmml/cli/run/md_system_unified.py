@@ -107,7 +107,94 @@ def format_npt_volume_pressure_line(
     )
 
 
-def check_md_system_args_supported(args: Any) -> None:
+def _system_with_positions(system, positions: np.ndarray):
+    """Return a copy of ``system`` with updated ``R`` (MolecularSystem is frozen)."""
+    from dataclasses import replace
+
+    return replace(system, R=np.asarray(positions, dtype=np.float64))
+
+
+def _fire_minimize_system(
+    args: Any,
+    run_config: Any,
+    system,
+    ctx: Any,
+    term_kwargs: dict[str, dict] | None,
+):
+    """Optional FIRE relax before NVT/NPT/NVE (Packmol cold starts)."""
+    from dataclasses import replace
+
+    from mmml.md.assemble import assemble_and_run
+
+    n_steps = int(getattr(args, "jaxmd_minimize_steps", 0) or 0)
+    if n_steps <= 0 or run_config.ensemble.ensemble == "min":
+        return system
+
+    min_params = dict(run_config.ensemble.params)
+    min_params["float64"] = True
+    min_params["seed"] = int(getattr(args, "seed", 0) or 0)
+    min_ens = replace(
+        run_config.ensemble,
+        ensemble="min",
+        n_steps=n_steps,
+        thermostat=None,
+        barostat=None,
+        params=min_params,
+    )
+    min_cfg = replace(run_config, ensemble=min_ens, output_dir=None)
+    print(
+        f"mmml md-system (jaxmd-unified): FIRE minimize {n_steps} steps before "
+        f"{run_config.ensemble.ensemble}",
+        flush=True,
+    )
+    traj = assemble_and_run(
+        min_cfg, system=system, ctx=ctx, term_kwargs=term_kwargs or None
+    )
+    positions = traj.metadata.get("positions")
+    energies = traj.metadata.get("energies")
+    if positions is None or len(positions) == 0:
+        print(
+            "mmml md-system (jaxmd-unified): WARNING FIRE produced no frames; "
+            "continuing with input coordinates",
+            flush=True,
+        )
+        return system
+    e = np.asarray(energies, dtype=np.float64) if energies is not None else None
+    if e is not None and np.any(np.isfinite(e)):
+        best = int(np.nanargmin(e))
+        print(
+            f"mmml md-system (jaxmd-unified): FIRE E0={e[0]:.4f} eV "
+            f"Ebest={e[best]:.4f} eV (frame {best})",
+            flush=True,
+        )
+        if not np.isfinite(e[best]) or float(e[best]) > 1.0e6:
+            print(
+                "mmml md-system (jaxmd-unified): WARNING FIRE best energy still "
+                f"pathological ({e[best]}); check packing / box size",
+                flush=True,
+            )
+    else:
+        best = len(positions) - 1
+        print(
+            "mmml md-system (jaxmd-unified): WARNING FIRE energies non-finite; "
+            "using last frame",
+            flush=True,
+        )
+    return _system_with_positions(system, positions[best])
+
+
+def _print_unified_ensemble_banner(args: Any, run_config: Any) -> None:
+    ens = run_config.ensemble
+    params = dict(ens.params or {})
+    print(
+        f"mmml md-system (jaxmd-unified): ensemble={ens.ensemble} "
+        f"thermostat={ens.thermostat or 'default'} "
+        f"dt_fs={ens.dt_fs} n_steps={ens.n_steps} "
+        f"float64={bool(params.get('float64', False))} "
+        f"T={ens.temperature_K} K P_target={ens.pressure_bar} bar "
+        f"barostat_tau={((params.get('barostat_kwargs') or {}).get('tau'))}",
+        flush=True,
+    )
     """Raise clearly (before any CHARMM build) for combinations not yet wired."""
     from mmml.md.lowering import terms_from_md_system_args
 
@@ -464,6 +551,10 @@ def run_unified_jaxmd(args: Any) -> int:
                 flush=True,
             )
         ctx = build_energy_context(args, system, run_config.terms)
+        _print_unified_ensemble_banner(args, run_config)
+        system = _fire_minimize_system(
+            args, run_config, system, ctx, term_kwargs
+        )
 
         traj = assemble_and_run(
             run_config, system=system, ctx=ctx, term_kwargs=term_kwargs or None

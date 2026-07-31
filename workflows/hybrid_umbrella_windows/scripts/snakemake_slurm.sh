@@ -14,6 +14,19 @@ source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
+# Controller should run on the login node. An interactive GPU shell often holds
+# the device and causes cuInit CUDA_ERROR_UNKNOWN in the batch window jobs.
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+  _part="${SLURM_JOB_PARTITION:-${SLURM_PARTITION:-}}"
+  if [[ "${_part}" == *gpu* || -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+    echo "WARNING: snakemake_slurm.sh is running inside a GPU Slurm allocation" >&2
+    echo "  (job=${SLURM_JOB_ID} partition=${_part} CVD=${CUDA_VISIBLE_DEVICES:-})." >&2
+    echo "  Prefer: ssh to the login node, then nohup bash scripts/snakemake_slurm.sh …" >&2
+  fi
+fi
+# Do not forward the submit host's GPU mask into batch jobs.
+unset CUDA_VISIBLE_DEVICES || true
+
 PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
 _cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
@@ -29,8 +42,8 @@ export MMML_CKPT="${MMML_CKPT:-}"
 export MMML_CGENFF_EXTRA_RTF="${MMML_CGENFF_EXTRA_RTF:-}"
 export MMML_CGENFF_EXTRA_PRM="${MMML_CGENFF_EXTRA_PRM:-}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+# Leave JAX_PLATFORMS empty on the controller; batch jobs set cuda in env_shell.
 export JAX_PLATFORMS="${JAX_PLATFORMS:-}"
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-}"
 export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-}"
 CONFIG_ARGS=(--configfile "$CFG_PATH")
 

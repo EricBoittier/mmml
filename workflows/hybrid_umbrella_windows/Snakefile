@@ -44,8 +44,11 @@ RUN_MBAR = bool(CFG.get("run_mbar", True))
 ENV_SHELL = str(WORKFLOW_DIR / "scripts" / "env_shell.sh")
 
 
-def _slurm_extra(wildcards) -> str:
+def _slurm_extra(wildcards, *, want_gpu: bool = False) -> str:
     parts = []
+    if want_gpu:
+        # Explicit GRES — plugin `gpu=` alone is not always enough on studix.
+        parts.append("--gres=gpu:1")
     nodelist = str(slurm_value(CFG, "nodelist", "") or "").strip()
     if nodelist:
         parts.append(f"--nodelist={nodelist}")
@@ -56,6 +59,7 @@ def _slurm_extra(wildcards) -> str:
 
 
 def _res(*, runtime_key: str, gpu: int = 1, charmm_slot: int = 1):
+    want_gpu = int(gpu) > 0
     return dict(
         gpu=gpu,
         charmm_slot=charmm_slot,
@@ -65,7 +69,7 @@ def _res(*, runtime_key: str, gpu: int = 1, charmm_slot: int = 1):
         cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
         mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 8000)),
         slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=_slurm_extra,
+        slurm_extra=lambda wildcards: _slurm_extra(wildcards, want_gpu=want_gpu),
     )
 
 
