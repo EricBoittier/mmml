@@ -27,6 +27,21 @@ Example entrypoint: `examples/m/15_umbrella_snakemake.sh`
 - Shell: `RESUME=1`, `WINDOWS=…` in `examples/m/14_umbrella_sample_sol_prod.sh`
 - Tests: `tests/unit/test_hybrid_windows_resume.py` (run: `uv run pytest tests/unit/test_hybrid_windows_resume.py -q`)
 
+### Assemble → MBAR (verified offline)
+
+`tests/unit/test_hybrid_windows_assemble_mbar.py` packs synthetic `windows/wXXX.npz`
+the same way `run_umbrella_hybrid_nvt` does, then runs `run_umbrella_mbar` on the
+result. It covers the parts of the workflow tail that need no GPU or CHARMM:
+
+- failed window → NaN row in the PMF, still counted in `failed_windows`, kept at
+  its original ξ₀ index (`n_windows_used = K - 1`)
+- antisymmetric `cv_spec` round-trip through the NPZ — with the legacy single-pair
+  CV instead, MBAR fails to converge outright
+- the `umbrella_summary.json` fields `scripts/run_mbar.sh` turns into `mbar/status.json`
+
+Still unverified on real data: the `assemble` rule itself (needs CHARMM + the model
+to rebuild the hybrid system before packing).
+
 ### Snakemake workflow
 
 ```text
@@ -66,8 +81,10 @@ Cluster path is often `/mmhome/boittier/home/mmml` (same tree as `~/mmml`).
 
 **Fix (in tree):**
 
-1. Skip bootstrap when `--windows` / `only_windows` is set (`hybrid.py`).
+1. Skip bootstrap when `--windows` / `only_windows` is set — `should_bootstrap_windows()` in `hybrid_windows.py`, called from `hybrid.py`.
 2. Unique temp names `wXXX.<pid>.<uuid>.tmp.npz` in `save_window_checkpoint`.
+
+Both halves are pinned by `tests/unit/test_hybrid_windows_resume.py`.
 
 ### CUDA flake mitigation (partial)
 
@@ -139,18 +156,30 @@ Finished `windows/wXXX.npz` are kept; only missing outputs re-run.
 
 ## Likely next tasks for the new agent
 
+Everything left needs the cluster. `pc-mm025` has no Slurm config (`squeue` fails
+with `_establish_config_source`), so run these from the studix login node.
+
 1. Confirm CUDA preflight + `--gres=gpu:1` actually stops `CUDA_ERROR_UNKNOWN` when controller is on **login**.
 2. If CUDA still flakes: inspect Slurm plugin GPU request vs studix (`scontrol show job <id>` for GRES), consider lowering `-j` / `max_jobs`, or exclusive node flags the site supports.
-3. Verify assemble/mbar after a full set of `wXXX.npz` exists.
+3. Run the real `assemble` rule once a full set of `wXXX.npz` exists (the pure
+   pack + MBAR half is already covered by unit tests — see above).
 4. Optionally: tip3 prod via `config.tip3.yaml`.
 5. Do **not** commit unless user asks.
+
+### Checked 2026-07-31 (offline, no cluster)
+
+- `uv run pytest tests/unit -k "umbrella or hybrid_windows" -q` → 77 passed
+- `MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n` →
+  DAG resolves to `make_box → window×3 → assemble → mbar`, GPU rules carry
+  `slurm_extra=--gres=gpu:1`, `mbar` correctly requests `gpu=0`
+- Working tree clean at `828e57422`; all workflow files tracked
 
 ---
 
 ## Quick test commands
 
 ```bash
-uv run pytest tests/unit/test_hybrid_windows_resume.py -q
+uv run pytest tests/unit -k "umbrella or hybrid_windows" -q
 cd workflows/hybrid_umbrella_windows
 MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
 ```
