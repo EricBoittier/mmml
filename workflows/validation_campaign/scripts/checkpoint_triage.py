@@ -162,44 +162,61 @@ def _flatten(node: Any) -> list[Any]:
 def tier_dataset(
     ckpt: Path, out: Path, *, test_extxyz: str | None, cache_dir: str | None, timeout_s: int
 ) -> dict[str, Any]:
+    """Evaluate against each named test set separately.
+
+    Deliberately one evaluator call per file rather than pointing ``--extxyz``
+    at the directory: the directory holds ten sets covering very different
+    chemistry, and we only want the ones asked for. Metrics are kept **per
+    dataset** and never averaged -- an energy MAE over small molecules and one
+    over torsion scans are not commensurable, so a mean of the two would be a
+    number with no meaning.
+    """
     if not test_extxyz:
         return _result("skipped", reason="--test-extxyz not given")
-    if not Path(test_extxyz).exists():
-        return _result("skipped", reason=f"test set not found: {test_extxyz}")
     if not cache_dir:
         return _result("skipped", reason="--cache-dir required by the evaluator")
 
-    summary = out / f"{ckpt.stem}.eval.json"
-    rc, why = _run(
-        [
-            sys.executable,
-            "scripts/evaluate_so3lr_spooky_extxyz.py",
-            "--checkpoint", str(ckpt),
-            "--extxyz", test_extxyz,
-            "--cache-dir", cache_dir,
-            "--output", str(summary),
-        ],
-        out / "logs" / f"{ckpt.stem}.dataset.log",
-        timeout_s,
-    )
-    if rc != 0:
-        return _result("fail", reason=f"evaluator exited {rc}: {why}")
-    if not summary.is_file():
-        return _result("fail", reason="evaluator wrote no summary JSON")
+    cache = Path(cache_dir).expanduser()
+    paths = [Path(p).expanduser() for p in test_extxyz.split(",") if p.strip()]
+    missing = [str(p) for p in paths if not p.exists()]
+    if missing:
+        return _result("skipped", reason=f"test set(s) not found: {', '.join(missing)}")
 
-    data = json.loads(summary.read_text())
-    # {dataset: {energy_mae, forces_mae, ...}} -- average across datasets.
-    e = [v.get("energy_mae") for v in data.values() if isinstance(v, dict)]
-    f = [v.get("forces_mae") for v in data.values() if isinstance(v, dict)]
-    e = [x for x in e if isinstance(x, (int, float))]
-    f = [x for x in f if isinstance(x, (int, float))]
-    return _result(
-        "pass",
-        energy_mae=round(sum(e) / len(e), 6) if e else None,
-        forces_mae=round(sum(f) / len(f), 6) if f else None,
-        n_datasets=len(data),
-        summary=str(summary.relative_to(out)) if summary.is_relative_to(out) else str(summary),
-    )
+    per_dataset: dict[str, Any] = {}
+    for path in paths:
+        summary = out / "eval" / f"{ckpt.stem}.{path.stem}.json"
+        summary.parent.mkdir(parents=True, exist_ok=True)
+        rc, why = _run(
+            [
+                sys.executable,
+                "scripts/evaluate_so3lr_spooky_extxyz.py",
+                "--checkpoint", str(ckpt),
+                "--extxyz", str(path),
+                "--cache-dir", str(cache),
+                "--output", str(summary),
+            ],
+            out / "logs" / f"{ckpt.stem}.{path.stem}.dataset.log",
+            timeout_s,
+        )
+        if rc != 0:
+            return _result("fail", reason=f"evaluator exited {rc} on {path.name}: {why}")
+        if not summary.is_file():
+            return _result("fail", reason=f"evaluator wrote no summary for {path.name}")
+
+        data = json.loads(summary.read_text())
+        # {dataset_name: {energy_mae, forces_mae, ...}} -- usually one entry here.
+        for dname, metrics in data.items():
+            if not isinstance(metrics, dict):
+                continue
+            per_dataset[dname] = {
+                k: metrics.get(k)
+                for k in ("energy_mae", "energy_rmse", "forces_mae", "forces_rmse")
+                if metrics.get(k) is not None
+            }
+
+    if not per_dataset:
+        return _result("fail", reason="evaluator produced no per-dataset metrics")
+    return _result("pass", datasets=per_dataset, n_datasets=len(per_dataset))
 
 
 # ---------------------------------------------------------------------------

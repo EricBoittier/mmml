@@ -52,7 +52,9 @@ __all__ = [
     "LatticeEnergyResult",
     "build_molecular_cell",
     "unwrap_molecules",
+    "molecular_reach_A",
     "lattice_shift_vectors",
+    "periodic_coulomb_energy",
     "crystal_lattice_energy",
     "sublimation_enthalpy_kcal_mol",
     "KCAL_MOL_TO_KJ_MOL",
@@ -244,6 +246,15 @@ def build_molecular_cell(
     return mcell, sigmas, epsilons
 
 
+def molecular_reach_A(positions: np.ndarray, mol_id: np.ndarray) -> float:
+    """Largest distance from any atom to its own molecule's centroid."""
+    reach = 0.0
+    for m in range(int(mol_id.max()) + 1):
+        block = np.asarray(positions)[mol_id == m]
+        reach = max(reach, float(np.linalg.norm(block - block.mean(axis=0), axis=1).max()))
+    return reach
+
+
 def lattice_shift_vectors(
     cell: np.ndarray,
     cutoff_A: float,
@@ -337,20 +348,30 @@ def _lj_tail_correction(
     return float(2.0 * np.pi / mcell.volume_A3 * np.sum(integral))
 
 
-def _coulomb_ewald(
-    mcell: MolecularCell,
-    shifts: np.ndarray,
-    cutoff_A: float,
+def periodic_coulomb_energy(
+    positions: np.ndarray,
+    charges: np.ndarray,
+    cell: np.ndarray,
     *,
+    cutoff_A: float = 12.0,
+    excluded_pairs: np.ndarray | None = None,
+    shifts: np.ndarray | None = None,
     accuracy_exponent: float = 3.5,
 ) -> tuple[float, float, int]:
-    """Intermolecular Coulomb by Ewald summation. Returns ``(E, alpha, n_k)``.
+    """Ewald Coulomb energy (kcal/mol) of one cell's contents. ``(E, alpha, n_k)``.
 
-    Uses tinfoil (conducting) boundary conditions, i.e. no surface dipole term.
-    That is the standard choice and is exact for a centrosymmetric cell, which
-    carries no net dipole anyway.
+    ``excluded_pairs`` is an ``(n, 2)`` index array of pairs that must not
+    interact at all -- here, atoms of the same molecule in the same image. They
+    are dropped from the real-space sum, and their implicit ``erf(alpha r)/r``
+    contribution to the reciprocal sum is subtracted, so their net contribution
+    is exactly zero rather than merely screened.
+
+    Tinfoil (conducting) boundary conditions: no surface dipole term. That is
+    the standard convention and costs nothing for a centrosymmetric cell, which
+    carries no net dipole in the first place.
     """
     import jax.numpy as jnp
+    from scipy.special import erfc
 
     from mmml.interfaces.pycharmmInterface.ewald_native import (
         build_kspace_integers,
@@ -359,43 +380,53 @@ def _coulomb_ewald(
         ewald_reciprocal_energy,
         ewald_self_energy,
     )
-    from scipy.special import erfc
 
-    q = mcell.charges
+    pos = np.asarray(positions, dtype=np.float64)
+    q = np.asarray(charges, dtype=np.float64)
+    cell = np.asarray(cell, dtype=np.float64).reshape(3, 3)
+
     net = float(np.sum(q))
     if abs(net) > 1e-6:
         raise ValueError(
-            f"Ewald requires a neutral cell; CGenFF charges sum to {net:+.3e} e"
+            f"Ewald without a neutralising background requires a neutral cell; "
+            f"charges sum to {net:+.3e} e"
         )
 
     alpha = default_ewald_alpha(cutoff_A, accuracy_exponent=accuracy_exponent)
-    n_int = build_kspace_integers(mcell.cell, alpha, accuracy_exponent=accuracy_exponent)
+    n_int = build_kspace_integers(cell, alpha, accuracy_exponent=accuracy_exponent)
+    if shifts is None:
+        shifts = lattice_shift_vectors(cell, cutoff_A, reach_A=0.0)
 
-    pos = mcell.positions
-    same_molecule = mcell.mol_id[:, None] == mcell.mol_id[None, :]
+    excluded = np.zeros((len(pos), len(pos)), dtype=bool)
+    if excluded_pairs is not None and len(excluded_pairs):
+        idx = np.asarray(excluded_pairs, dtype=int)
+        excluded[idx[:, 0], idx[:, 1]] = True
+        excluded[idx[:, 1], idx[:, 0]] = True
+    np.fill_diagonal(excluded, True)
+
     qq = q[:, None] * q[None, :]
-
     e_real = 0.0
     for shift in shifts:
         is_home = not np.any(shift)
         delta = (pos[None, :, :] + shift) - pos[:, None, :]
         r = np.linalg.norm(delta, axis=-1)
         keep = r < cutoff_A
-        keep &= ~same_molecule if is_home else r > 0.0
+        # Exclusions apply only in the home image: an atom does interact with
+        # its own periodic images, and so does the rest of its molecule.
+        keep &= ~excluded if is_home else r > 0.0
         if not np.any(keep):
             continue
         r_safe = np.where(keep, np.maximum(r, 1e-10), 1.0)
         e_real += 0.5 * float(np.sum(np.where(keep, qq * erfc(alpha * r_safe) / r_safe, 0.0)))
 
-    # The reciprocal sum has no notion of molecules, so it silently includes
-    # every intramolecular pair; erf/r for exactly those pairs comes back out.
     excl_i, excl_j = np.triu_indices(len(pos), k=1)
-    intra = same_molecule[excl_i, excl_j]
-    excl_i, excl_j = excl_i[intra].astype(np.int32), excl_j[intra].astype(np.int32)
+    keep_excl = excluded[excl_i, excl_j]
+    excl_i = excl_i[keep_excl].astype(np.int32)
+    excl_j = excl_j[keep_excl].astype(np.int32)
 
     r_jnp = jnp.asarray(pos)
     q_jnp = jnp.asarray(q)
-    cell_jnp = jnp.asarray(mcell.cell)
+    cell_jnp = jnp.asarray(cell)
     e_recip = float(ewald_reciprocal_energy(r_jnp, q_jnp, cell_jnp, n_int, alpha))
     e_self = float(ewald_self_energy(q_jnp, alpha))
     e_excl = float(
@@ -405,6 +436,13 @@ def _coulomb_ewald(
     )
     total = COULOMB_CONSTANT * (e_real + e_recip + e_self + e_excl)
     return total, float(alpha), int(n_int.shape[0])
+
+
+def _intramolecular_pairs(mol_id: np.ndarray) -> np.ndarray:
+    """All ``(i, j)`` index pairs sharing a molecule, as an ``(n, 2)`` array."""
+    iu, ju = np.triu_indices(len(mol_id), k=1)
+    same = mol_id[iu] == mol_id[ju]
+    return np.stack([iu[same], ju[same]], axis=1)
 
 
 def crystal_lattice_energy(
@@ -435,19 +473,20 @@ def crystal_lattice_energy(
         scaled = apply_mm_lj_scales(sigmas, epsilons, sigma_scale, epsilon_scale)
         sigmas, epsilons = np.asarray(scaled[0]), np.asarray(scaled[1])
 
-    centroid_reach = 0.0
-    for m in range(mcell.n_molecules):
-        sel = mcell.mol_id == m
-        block = mcell.positions[sel]
-        centroid_reach = max(
-            centroid_reach, float(np.linalg.norm(block - block.mean(axis=0), axis=1).max())
-        )
-    shifts = lattice_shift_vectors(mcell.cell, cutoff_A, reach_A=centroid_reach)
+    reach = molecular_reach_A(mcell.positions, mcell.mol_id)
+    shifts = lattice_shift_vectors(mcell.cell, cutoff_A, reach_A=reach)
 
     pair_rmin, pair_eps = _pair_tables(mcell, sigmas, epsilons)
     e_lj = _lj_real_space(mcell, pair_rmin, pair_eps, shifts, cutoff_A)
     e_tail = _lj_tail_correction(mcell, pair_rmin, pair_eps, cutoff_A)
-    e_coulomb, alpha, n_k = _coulomb_ewald(mcell, shifts, cutoff_A)
+    e_coulomb, alpha, n_k = periodic_coulomb_energy(
+        mcell.positions,
+        mcell.charges,
+        mcell.cell,
+        cutoff_A=cutoff_A,
+        excluded_pairs=_intramolecular_pairs(mcell.mol_id),
+        shifts=shifts,
+    )
 
     z = mcell.n_molecules
     lengths = np.linalg.norm(mcell.cell, axis=1)
