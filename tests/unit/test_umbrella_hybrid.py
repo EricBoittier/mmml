@@ -113,6 +113,18 @@ def test_stretch_antisymmetric_seed_mic_targets_xi():
     assert cv.value_numpy(seeded, cell=box) == pytest.approx(0.0, abs=1e-6)
 
 
+def test_select_lowest_energy_frames_tolerates_all_nan_window():
+    from mmml.umbrella.sample import select_lowest_energy_frames
+
+    pos = np.zeros((2, 3, 2, 3), dtype=np.float64)
+    ene = np.array([[1.0, 0.5, 2.0], [np.nan, np.nan, np.nan]], dtype=np.float64)
+    chosen, idx, e_sel = select_lowest_energy_frames(pos, ene)
+    assert idx[0] == 1
+    assert e_sel[0] == pytest.approx(0.5)
+    assert idx[1] == 0
+    assert np.isnan(e_sel[1])
+
+
 def test_hybrid_config_requires_psf_or_composition():
     with pytest.raises(ValueError, match="from_psf"):
         UmbrellaConfig(

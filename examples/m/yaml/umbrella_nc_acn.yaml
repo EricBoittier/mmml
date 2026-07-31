@@ -11,7 +11,7 @@
 #   source examples/m/_env.sh
 #   SOLVENT=acn bash examples/m/14_umbrella_sample_sol.sh
 #
-# Timing: 3 windows × 2000 steps × 0.5 fs = 1 ps / window.
+# Timing: 3 windows × 4000 steps × 0.25 fs = 1 ps / window.
 # Production: yaml/umbrella_nc_acn_prod.yaml
 
 engine: hybrid_jaxmd
