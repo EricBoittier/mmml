@@ -195,6 +195,9 @@ def _print_unified_ensemble_banner(args: Any, run_config: Any) -> None:
         f"barostat_tau={((params.get('barostat_kwargs') or {}).get('tau'))}",
         flush=True,
     )
+
+
+def check_md_system_args_supported(args: Any) -> None:
     """Raise clearly (before any CHARMM build) for combinations not yet wired."""
     from mmml.md.lowering import terms_from_md_system_args
 

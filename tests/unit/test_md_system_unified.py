@@ -114,8 +114,8 @@ def test_npt_volume_ratio_ok_and_format_line():
 def test_fire_minimize_picks_best_energy_frame(monkeypatch):
     """Packmol cold-start premin must restore the lowest-energy FIRE frame."""
     from mmml.cli.run.md_system_unified import _fire_minimize_system
-    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
-    from mmml.md.system import MolecularSystem
+    from mmml.md.config import EnsembleSpec, RunConfig
+    from mmml.md.system import MolecularSystem, SystemSpec
 
     system = MolecularSystem(
         R=np.zeros((2, 3), dtype=np.float64),
@@ -145,7 +145,7 @@ def test_fire_minimize_picks_best_energy_frame(monkeypatch):
         terms=("ml_intra",),
         ensemble=EnsembleSpec(
             ensemble="nvt",
-            space="periodic",
+            space="pbc",
             temperature_K=300.0,
             dt_fs=0.25,
             n_steps=10,
