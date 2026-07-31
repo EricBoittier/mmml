@@ -1,0 +1,32 @@
+{
+  "run": "artifacts/nh3_ch3cl/ckpts/hybrid_mm_fixed_lj_scales-f7be8ce9-6b0c-4eae-bcc1-c50def501d13",
+  "n_epochs": 500,
+  "best_valid_loss": 0.0052430407001272375,
+  "best_valid_epoch": 498,
+  "final_train_loss": 0.005568286992867878,
+  "final_valid_loss": 0.005254953819410835,
+  "final_valid_energy_mae_eV": 0.0030525260960804178,
+  "final_valid_forces_mae_eV_A": 0.00232930597620695,
+  "final_valid_dipole_mae": 0.00208189927375754,
+  "final_valid_energy_mae_kcal_mol": 0.07039277803866248,
+  "final_valid_forces_mae_kcal_mol_A": 0.05371496046432038,
+  "lj_scales_focus": {
+    "HGA2": {
+      "sigma": 1.9572269916534424,
+      "epsilon": -0.00908190943300724
+    },
+    "CG321": {
+      "sigma": 2.1836771965026855,
+      "epsilon": 0.5870304703712463
+    },
+    "CLGA1": {
+      "sigma": 0.5587341785430908,
+      "epsilon": 4.042435646057129
+    }
+  },
+  "n_types": 164,
+  "n_types_moved": 3,
+  "portable_ckpt": "artifacts/nh3_ch3cl/ckpts/params_hybrid_mm_fixed_lj_scales_2026-07-31_13-39-37.json",
+  "sidecar": "artifacts/nh3_ch3cl/ckpts/hybrid_mm_fixed_lj_scales-f7be8ce9-6b0c-4eae-bcc1-c50def501d13/hybrid_mm.json",
+  "note": "Scales for HGA2/CG321/CLGA1 are outside configured trainable bounds [0.95,1.05]/[0.25,4]; see RuntimeWarning from 06_inspect_scales."
+}

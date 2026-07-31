@@ -525,6 +525,63 @@ ACO smoke-min & 1.9927947535063575 & 1.9927947535063568 & \(+6.7\times10^{-16}\)
 \end{tabular}
 \end{table}
 
+\subsection{Hybrid Training with Learnable LJ Scales}
+
+A 500-epoch hybrid \texttt{physnet-train} run with
+\texttt{learn\_mm\_lj\_scales} on the Menshutkin (NH\(_3\)/CH\(_3\)Cl) enriched
+dataset (\texttt{examples/lj\_scales/}, Orbax run
+\texttt{hybrid\_mm\_fixed\_lj\_scales-f7be8ce9-\ldots}) yields the loss and MAE
+curves in Figure~\ref{fig:train-lj}. Best validation loss is
+\(5.243\times10^{-3}\) at epoch~498; final validation energy / force MAEs are
+\(3.05\times10^{-3}\,\mathrm{eV}\) (\(\approx 0.070\,\mathrm{kcal\,mol^{-1}}\))
+and \(2.33\times10^{-3}\,\mathrm{eV\,\AA^{-1}}\)
+(\(\approx 0.054\,\mathrm{kcal\,mol^{-1}\,\AA^{-1}}\)). Dipole MAEs converge
+near \(2.08\times10^{-3}\) (Supporting Information).
+
+Of 164 CGenFF types, three receive nonzero LJ-scale updates
+(Figure~\ref{fig:lj-scales}): HGA2, CG321, and CLGA1. The written sidecar
+places several of these scales outside the configured training bounds
+(\(s^\sigma\in[0.95,1.05]\), \(s^\varepsilon\in[0.25,4]\)), so deployment
+should treat the sidecar as diagnostic until bounds / parameterization are
+revisited. Portable JSON + \texttt{hybrid\_mm.json} live under
+\texttt{artifacts/nh3\_ch3cl/ckpts/}; per-epoch metrics are archived as
+\texttt{figures/hybrid\_mm\_lj\_metrics.csv}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\textwidth]{hybrid_mm_lj_training_curves.png}
+\caption{Hybrid MM training with learnable LJ scales (500 epochs; Menshutkin
+enriched NPZ). Left: train / valid / best-valid loss. Right: energy and force
+MAE. Metrics restored from Orbax epoch directories via OCDBT/zarr.}
+\label{fig:train-lj}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.72\textwidth]{hybrid_mm_lj_scales_focus.png}
+\caption{Learned MM LJ scale factors for the three CGenFF types that moved
+during training (HGA2, CG321, CLGA1). Dashed line: unscaled CGenFF
+(\(s=1\)). Shaded bands mark the intended \(\sigma\) and \(\varepsilon\)
+bounds; several final scales lie outside those windows.}
+\label{fig:lj-scales}
+\end{figure}
+
+\begin{table}[h]
+\caption{Final hybrid + LJ-scale training metrics (epoch 500 / best valid).}
+\label{tab:train-lj}
+\begin{tabular}{lcc}
+\toprule
+Quantity & Value & Notes \\
+\midrule
+Best valid loss & \(5.243\times10^{-3}\) & epoch 498 \\
+Final valid loss & \(5.255\times10^{-3}\) & epoch 500 \\
+Valid energy MAE & \(0.070\) kcal mol$^{-1}$ & \(3.05\times10^{-3}$ eV \\
+Valid force MAE & \(0.054\) kcal mol$^{-1}$ \AA$^{-1}$ & \(2.33\times10^{-3}$ eV \AA$^{-1}$ \\
+Types with \(\lvert s-1\rvert>10^{-3}\) & 3 / 164 & HGA2, CG321, CLGA1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Energy Conservation (NVE)}
 
 Integrator robustness is illustrated by controlled NVE tests
@@ -754,6 +811,7 @@ manuscript freeze.
 System & Protocol & Status & Primary source \\
 \midrule
 DCM/ACO bonded & spoof parity & \textbf{filled} & \texttt{jaxmd\_cgenff\_spoof\_smoke} \\
+NH\(_3\)/CH\(_3\)Cl hybrid train & LJ scales + loss curves & \textbf{filled} & \texttt{artifacts/nh3\_ch3cl/ckpts/} \\
 Ethanol / water NVE & conservation & \textbf{filled} & robustness + mixed\_calculator \\
 DCM/ACE/TIP3 pairs & rigid scans & \textbf{filled} & \texttt{dimer\_scan\_campaign} \\
 NH\(_3\)/CH\(_3\)Cl & umbrella+MBAR & \textbf{filled} (gas) & \texttt{artifacts/umbrella/} \\
@@ -820,6 +878,14 @@ for Condensed-Phase Simulations}\\[0.4em]
 \section{Training CLI and Flags}
 \label{si:cli-train}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.72\textwidth]{hybrid_mm_lj_dipole_mae.png}
+\caption{Dipole MAE versus epoch for the hybrid + LJ-scale Menshutkin run
+(companion to Figure~\ref{fig:train-lj}).}
+\label{fig:train-dipole}
+\end{figure}
 
 Hybrid models are trained with
 \begin{verbatim}
@@ -967,6 +1033,8 @@ writing \texttt{artifacts/manuscript\_hybrid\_liquids/<fig\_or\_table\_id>/}.
 \toprule
 Panel & Content & Source \\
 \midrule
+Fig.~\ref{fig:train-lj} & Hybrid train curves & \texttt{artifacts/nh3\_ch3cl/ckpts/…f7be8ce9…} \\
+Fig.~\ref{fig:lj-scales} & LJ scales & same run \texttt{hybrid\_mm.json} \\
 Fig.~\ref{fig:nve} & Ethanol NVE & \texttt{docs/robustness-report-assets/} \\
 Fig.~\ref{fig:nve-sweep} & Mixed NVE bars & \texttt{mixed\_calculator\_sweep/results/} \\
 Fig.~\ref{fig:scan} & DCM/ACE scans & \texttt{results/dimer\_scan\_campaign/} \\
