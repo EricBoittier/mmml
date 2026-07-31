@@ -231,11 +231,21 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
         "mmml.cli.run.md_system_unified.build_packmol_system_with_ffparams",
         lambda *a, **k: _Sys(),
     )
+    ens = mock.Mock(
+        ensemble="nve",
+        thermostat=None,
+        dt_fs=1.0,
+        n_steps=10,
+        temperature_K=300.0,
+        pressure_bar=1.0,
+        params={"float64": True},
+    )
     monkeypatch.setattr(
         "mmml.md.lowering.runconfig_from_md_system_args",
         lambda args: mock.Mock(
             terms=("ml_intra", "mm_nonbonded"),
             system=mock.Mock(builder="packmol"),
+            ensemble=ens,
         ),
     )
     monkeypatch.setattr(
