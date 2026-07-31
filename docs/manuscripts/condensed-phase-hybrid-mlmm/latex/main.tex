@@ -762,6 +762,36 @@ dotted/dashed lines mark the ML\(\to\)MM handoff.}
 \label{fig:orient-force}
 \end{figure}
 
+The same portable checkpoint (run
+\texttt{hybrid\_mm\_fixed\_lj\_scales-32a09175-\ldots}) applied to acetone
+dimers (\(Z=[6,6,6,8,1\times6]\), CGenFF-enriched from
+\texttt{fixed-acetone-only\_MP2}) is an out-of-distribution transfer test
+(Figure~\ref{fig:orient-ace}). Soft-region wells are shallow
+(mean \(\approx -0.17\,\mathrm{kcal\,mol^{-1}}\), deepest
+\(\approx -0.67\,\mathrm{kcal\,mol^{-1}}\) near the handoff), while
+\(r\sim 5\,\si{\angstrom}\) remains strongly repulsive across orientations.
+Force residuals relative to the separated asymptote stay large into the
+handoff window---consistent with a DCM-trained hybrid that has not seen ACE
+chemistry. ACE-specific hybrid training (or fine-tuning) is required before
+promoting acetone condensed-phase MD from this checkpoint.
+
+\begin{figure}[t]
+\centering
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{hybrid_orient_ACE_Eint_zoom.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{hybrid_orient_ACE_components_mean.png}
+\end{minipage}
+\caption{Acetone hybrid orientation scans with the DCM-trained LJ-scale
+checkpoint. Left: \(E_{\mathrm{int}}\) envelope. Right: mean ML/MM components
+and \(s_{\mathrm{ML}}\). Soft wells are shallow; mid-range repulsion and large
+force residuals mark OOD transfer.}
+\label{fig:orient-ace}
+\end{figure}
+
 \subsection{Liquid Densities and Methane/Ewald Smokes}
 
 Dichloromethane and acetone liquids are targeted under NPT/NVT hybrid dynamics

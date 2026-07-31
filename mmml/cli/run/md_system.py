@@ -2074,6 +2074,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI with optional ``--config`` YAML (CLI overrides file)."""
     from mmml.cli.run.md_config import (
         apply_mapping_to_namespace,
+        collect_explicit_cli_dests,
         config_is_campaign,
         CONFIG_PASSTHROUGH_PREFIXES,
         load_yaml_config,
@@ -2084,6 +2085,8 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--config", type=str, default=None)
     pre_args, remaining = pre.parse_known_args(argv)
+    parser = build_parser()
+    cli_explicit = collect_explicit_cli_dests(remaining, parser)
     defaults = vars(parse_args([]))
     if pre_args.config:
         cfg = load_yaml_config(pre_args.config)
@@ -2093,7 +2096,14 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
             from mmml.cli.run.md_campaign import strip_campaign_metadata_keys
 
             merged.update(strip_campaign_metadata_keys(defaults_block))
-        if config_is_campaign(cfg) and merged.get("checkpoint") is not None:
+        # A CLI --checkpoint replaces the config value below, so resolving the
+        # config one first would reject a shared campaign YAML whose placeholder
+        # checkpoint this invocation never uses.
+        if (
+            config_is_campaign(cfg)
+            and merged.get("checkpoint") is not None
+            and "checkpoint" not in cli_explicit
+        ):
             from mmml.cli.run.md_config import resolve_campaign_checkpoint_value
 
             merged["checkpoint"] = resolve_campaign_checkpoint_value(merged["checkpoint"])
@@ -2110,16 +2120,14 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
         defaults.update(vars(tmp))
         defaults["config"] = pre_args.config
-    parser = build_parser()
     parser.set_defaults(**defaults)
     args = parser.parse_args(remaining)
     from mmml.cli.run.md_config import (
-        collect_explicit_cli_dests,
         normalize_hybrid_assembly_flags,
         normalize_resume_flags,
     )
 
-    args._cli_explicit = collect_explicit_cli_dests(remaining, parser)
+    args._cli_explicit = cli_explicit
     normalize_resume_flags(args)
     normalize_hybrid_assembly_flags(args)
     # Resolve interaction_policy relative to the --config file (not CWD).

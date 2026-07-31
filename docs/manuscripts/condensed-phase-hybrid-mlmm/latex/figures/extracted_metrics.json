@@ -73,5 +73,17 @@
     "r_at_deepest_soft_A": 4.377142857142857,
     "median_mean_abs_dF_at_handoff_kcal_mol_A": 2.580092665386129,
     "checkpoint": "params_hybrid_mm_fixed_lj_scales_2026-07-31_13-39-37.json"
+  },
+  "hybrid_orient_ACE_transfer": {
+    "source": "figures/hybrid_orient_ACE_scan_summary.json",
+    "note": "DCM-trained hybrid applied to ACE dimers (OOD)",
+    "n_rays": 48,
+    "n_r": 32,
+    "r_range_A": [3.0, 12.0],
+    "deepest_soft_kcal_mol": -0.6735448894286342,
+    "mean_soft_well_kcal_mol": -0.1674847320093825,
+    "r_at_deepest_soft_A": 7.935483870967742,
+    "checkpoint": "params_hybrid_mm_fixed_lj_scales_2026-07-31_14-34-33.json",
+    "sidecar_run": "hybrid_mm_fixed_lj_scales-32a09175-7932-419d-8935-9832caf00c78"
   }
 }

@@ -65,12 +65,12 @@ def main() -> int:
     p.add_argument(
         "--checkpoint",
         default="/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/"
-        "params_hybrid_mm_fixed_lj_scales_2026-07-31_13-39-37.json",
+        "params_hybrid_mm_fixed_lj_scales_2026-07-31_14-34-33.json",
     )
     p.add_argument(
         "--sidecar",
         default="/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/"
-        "hybrid_mm_fixed_lj_scales-f7be8ce9-6b0c-4eae-bcc1-c50def501d13/hybrid_mm.json",
+        "hybrid_mm_fixed_lj_scales-32a09175-7932-419d-8935-9832caf00c78/hybrid_mm.json",
     )
     p.add_argument(
         "--data",
@@ -86,6 +86,16 @@ def main() -> int:
     p.add_argument("--mm-switch-on", type=float, default=8.0)
     p.add_argument("--ml-switch-width", type=float, default=1.5)
     p.add_argument("--mm-switch-width", type=float, default=5.0)
+    p.add_argument(
+        "--label",
+        default="",
+        help="Species label for titles (default: inferred from Z)",
+    )
+    p.add_argument(
+        "--file-prefix",
+        default="hybrid_orient",
+        help="Output basename prefix (e.g. hybrid_orient_ACE)",
+    )
     p.add_argument(
         "--out",
         type=Path,
@@ -114,6 +124,17 @@ def main() -> int:
     t1 = np.asarray(raw["cgenff_type_idx"][0])[:n_mono]
     q1 = np.asarray(raw["cgenff_charge"][0])[:n_mono]
 
+    zlist = Z1.tolist()
+    if args.label:
+        species = args.label
+    elif zlist == [6, 17, 17, 1, 1]:
+        species = "DCM"
+    elif sorted(zlist) == [1, 1, 1, 1, 1, 1, 6, 6, 6, 8]:
+        species = "ACE"
+    else:
+        species = f"Z={zlist}"
+    prefix = args.file_prefix
+
     side = json.loads(Path(args.sidecar).read_text())
     sig_scale = jnp.asarray(side["mm_lj_sigma_scale"], dtype=jnp.float32)
     eps_scale = jnp.asarray(side["mm_lj_epsilon_scale"], dtype=jnp.float32)
@@ -126,7 +147,7 @@ def main() -> int:
     n_rays = len(dirs) * len(quats)
     n_tot = n_rays * len(rs)
     print(
-        f"DCM-like monomer Z={Z1.tolist()}: {len(dirs)} dirs × {len(quats)} oris "
+        f"{species} monomer Z={zlist}: {len(dirs)} dirs × {len(quats)} oris "
         f"= {n_rays} rays × {len(rs)} r = {n_tot} evals"
     )
 
@@ -350,11 +371,11 @@ def main() -> int:
         "deepest_kcal": float(min(c["e_min_kcal"] for c in curves)),
         "mean_well_kcal": float(np.mean([c["e_min_kcal"] for c in curves])),
         "Z_monomer": Z1.tolist(),
+        "species": species,
+        "file_prefix": prefix,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    (fig_dir / "hybrid_orient_scan_summary.json").write_text(
-        json.dumps(summary, indent=2)
-    )
+    (fig_dir / f"{prefix}_scan_summary.json").write_text(json.dumps(summary, indent=2))
 
     # Stack for mean ± std
     Emat = np.stack([c["e_int_kcal"] for c in curves], axis=0)
@@ -370,9 +391,7 @@ def main() -> int:
         np.median(Fcommat[:, rs >= 3.5].max(axis=1))
     )
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    (fig_dir / "hybrid_orient_scan_summary.json").write_text(
-        json.dumps(summary, indent=2)
-    )
+    (fig_dir / f"{prefix}_scan_summary.json").write_text(json.dumps(summary, indent=2))
 
     # Soft-region wells (ignore contact spikes when ranking)
     soft_mask = rs >= 3.5
@@ -390,9 +409,7 @@ def main() -> int:
     )
     summary["r_at_deepest_soft"] = float(ranked[0]["r_at_min_soft"])
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    (fig_dir / "hybrid_orient_scan_summary.json").write_text(
-        json.dumps(summary, indent=2)
-    )
+    (fig_dir / f"{prefix}_scan_summary.json").write_text(json.dumps(summary, indent=2))
 
     def _save(fig, name: str) -> None:
         for dest in [out_dir / name, fig_dir / name]:
@@ -416,13 +433,13 @@ def main() -> int:
     ax.set_xlabel(r"$r_{\mathrm{COM}}$ / Å")
     ax.set_ylabel(r"$E_{\mathrm{int}}$ / kcal mol$^{-1}$")
     ax.set_title(
-        f"Hybrid dimer scans ({n_rays} orientations)\n"
-        f"DCM-like · learnable LJ scales"
+        f"Hybrid {species} dimer scans ({n_rays} orientations)\n"
+        f"learnable LJ scales"
     )
     ax.legend(frameon=False, fontsize=8)
     ax.set_xlim(args.r_min, args.r_max)
     ax.set_ylim(-12.0, 40.0)
-    _save(fig, "hybrid_orient_Eint.png")
+    _save(fig, f"{prefix}_Eint.png")
 
     # --- Fig 1b: percentile envelope (robust to contact outliers) ---
     fig, ax = plt.subplots(figsize=(5.6, 3.6), dpi=160)
@@ -435,11 +452,11 @@ def main() -> int:
     ax.axhline(0, color="k", lw=0.4, alpha=0.4)
     ax.set_xlabel(r"$r_{\mathrm{COM}}$ / Å")
     ax.set_ylabel(r"$E_{\mathrm{int}}$ / kcal mol$^{-1}$")
-    ax.set_title("Orientation envelope (median / mean)")
+    ax.set_title(f"{species} orientation envelope (median / mean)")
     ax.legend(frameon=False, fontsize=8)
     ax.set_xlim(3.2, args.r_max)
     ax.set_ylim(-10.0, 20.0)
-    _save(fig, "hybrid_orient_Eint_zoom.png")
+    _save(fig, f"{prefix}_Eint_zoom.png")
 
     # --- Fig 2: components for showcase rays ---
     fig, axes = plt.subplots(1, 3, figsize=(9.4, 3.3), dpi=160, sharey=False)
@@ -464,9 +481,9 @@ def main() -> int:
         )
     axes[0].set_ylabel(r"energy / kcal mol$^{-1}$")
     axes[0].legend(frameon=False, fontsize=7)
-    fig.suptitle("Hybrid energy components along selected orientations", fontsize=10)
+    fig.suptitle(f"Hybrid {species} energy components (selected orientations)", fontsize=10)
     fig.tight_layout()
-    _save(fig, "hybrid_orient_components.png")
+    _save(fig, f"{prefix}_components.png")
 
     # --- Fig 3: mean components across orientations ---
     fig, ax = plt.subplots(figsize=(5.6, 3.6), dpi=160)
@@ -491,14 +508,14 @@ def main() -> int:
     ax.axhline(0, color="k", lw=0.4, alpha=0.35)
     ax.set_xlabel(r"$r_{\mathrm{COM}}$ / Å")
     ax.set_ylabel(r"energy / kcal mol$^{-1}$")
-    ax.set_title("Mean hybrid components over orientations")
+    ax.set_title(f"Mean hybrid {species} components over orientations")
     ax.set_xlim(3.2, args.r_max)
     ax.set_ylim(-10.0, 25.0)
     h1, l1 = ax.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
     ax.legend(h1 + h2, l1 + l2, frameon=False, fontsize=8)
     fig.tight_layout()
-    _save(fig, "hybrid_orient_components_mean.png")
+    _save(fig, f"{prefix}_components_mean.png")
 
     # --- Fig 4: |F - F_infty| ---
     fig, ax = plt.subplots(figsize=(5.6, 3.6), dpi=160)
@@ -511,12 +528,12 @@ def main() -> int:
     ax.axvline(handoff_hi, color="k", ls="--", lw=0.8)
     ax.set_xlabel(r"$r_{\mathrm{COM}}$ / Å")
     ax.set_ylabel(r"mean $|F-F_\infty|$ / kcal mol$^{-1}$ Å$^{-1}$")
-    ax.set_title(r"Force magnitude relative to separated limit")
+    ax.set_title(rf"{species} force magnitude relative to separated limit")
     ax.legend(frameon=False, fontsize=8)
     ax.set_xlim(args.r_min, args.r_max)
     ax.set_ylim(0.0, 80.0)
     fig.tight_layout()
-    _save(fig, "hybrid_orient_meanF.png")
+    _save(fig, f"{prefix}_meanF.png")
 
     # --- Fig 4b: ΔF + COM interaction force ---
     fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.4), dpi=160)
@@ -554,14 +571,14 @@ def main() -> int:
     ax.set_ylabel(r"$|\Delta F_{\mathrm{COM}}|$ / kcal mol$^{-1}$ Å$^{-1}$")
     ax.set_title("Net monomer COM force (interaction)")
     ax.legend(frameon=False, fontsize=7)
-    fig.suptitle("Force metrics across orientations", fontsize=10)
+    fig.suptitle(f"{species} force metrics across orientations", fontsize=10)
     fig.tight_layout()
-    _save(fig, "hybrid_orient_meanF_zoom.png")
+    _save(fig, f"{prefix}_meanF_zoom.png")
 
     # copy CSV into figures/
     import shutil
 
-    shutil.copy2(out_dir / "orient_components.csv", fig_dir / "hybrid_orient_components.csv")
+    shutil.copy2(out_dir / "orient_components.csv", fig_dir / f"{prefix}_components.csv")
 
     print(json.dumps(summary, indent=2))
     print(f"wrote panels under {out_dir} and {fig_dir}")
