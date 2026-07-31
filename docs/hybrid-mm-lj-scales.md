@@ -436,6 +436,19 @@ a value assembled from calorimetry. Stock CGenFF overbinds by 13% at 150 K, so
 there is room for scales to help or hurt visibly. See
 [Solid acetone & sublimation enthalpy](acetone-crystal-sublimation.md).
 
+Dichloromethane gives a second, harder check, because it also tests the shape of
+the repulsive wall rather than only the depth of the well:
+
+```bash
+DCM_SCALES=path/to/hybrid_mm.json \
+  bash examples/dcm_crystal/run_all.sh
+```
+
+The DCM ladder relaxes the crystal under applied pressure, so scales that fix
+ΔH_sub by distorting σ will show up as a wrong cell volume at the two pressures
+where the volume was actually measured. See
+[Solid dichloromethane & halogen contacts](dcm-crystal-cohesion.md).
+
 ---
 
 ## Troubleshooting

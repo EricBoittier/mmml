@@ -160,7 +160,13 @@ The deposited structure at
 | ρ (experimental) | **1.972 g/cm³** |
 | Low-*T* phase (153 K, 0.1 MPa) | same SG; *a*≈4.25, *b*≈8.14, *c*≈9.49 Å ([Kawaguchi *et al.* 1973](https://doi.org/10.1246/bcsj.46.62)) |
 
-MMML ships the CIF as `default_dcm_crystal_cif()`. For MD, build a **simulation
+MMML ships the CIF as `default_dcm_crystal_cif()`, and the companion 1.33 GPa
+structure ([COD 2100014](https://www.crystallography.net/cod/2100014.html)) as
+`default_dcm_crystal_cif("pbcn_133gpa")`. Both are compressed — 13% and 11% below
+the ambient-pressure cell — which is fine for packing and density but not for a
+cohesive energy; see
+[Solid dichloromethane & halogen contacts](../dcm-crystal-cohesion.md) for
+relaxing to ambient pressure. For MD, build a **simulation
 supercell** with CHARMM atom names from `make-res` and literature geometry from
 the bundled CIF (no PyXtal required). Supercell repeats default to ≥28 Å per
 edge (≈2× CHARMM `cutnb`), preserving experimental density.

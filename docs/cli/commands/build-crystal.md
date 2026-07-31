@@ -21,7 +21,7 @@ space group.
 
 | Preset | Residue | Structure | Source |
 |---|---|---|---|
-| `dcm` | `DCM` | Pbcn, ρ≈1.97 g/cm³ | [COD 2100015](https://www.crystallography.net/2100015.html) |
+| `dcm` | `DCM` | Pbcn, 1.63 GPa, ρ≈1.97 g/cm³ | [COD 2100015](https://www.crystallography.net/cod/2100015.html) |
 | `benz` | `BENZ` | P2₁/c, ρ≈1.20 g/cm³ | [COD 4501704](https://www.crystallography.net/cod/4501704.html) |
 | `aco` | `ACO` | Acetone Pbca, 150 K, Z=16 | [COD 7110464](https://www.crystallography.net/cod/7110464.html) |
 | `aco110k` | `ACO` | Acetone Pbca, 110 K | [COD 7110466](https://www.crystallography.net/cod/7110466.html) |
@@ -36,6 +36,16 @@ onto CGenFF. See
 [Solid acetone & sublimation enthalpy](../../acetone-crystal-sublimation.md) for
 validating a built acetone cell against the published contacts and computing its
 sublimation enthalpy.
+
+The `dcm` preset is a **high-pressure** structure — one of the two points of
+Podsiadło et al., *Acta Crystallogr. B* 61, 595 (2005)
+([doi:10.1107/S0108768105017374](https://doi.org/10.1107/S0108768105017374)),
+which are the only pure CH₂Cl₂ entries in COD. It is fine as a packing reference
+and as a starting density, but it is compressed 13% below the ambient-pressure
+cell, so its static lattice energy is not a cohesive energy. The companion
+1.33 GPa structure ships as `default_dcm_crystal_cif("pbcn_133gpa")`. See
+[Solid dichloromethane & halogen contacts](../../dcm-crystal-cohesion.md) for
+relaxing to ambient pressure and for the H···Cl versus Cl···Cl decomposition.
 
 !!! warning "Non-cubic cells and `--write-charmm`"
 
@@ -159,6 +169,7 @@ More detail: [Structure building guide](../structure-building.md).
 
 - [Structure building guide](../structure-building.md)
 - [Solid acetone & sublimation enthalpy](../../acetone-crystal-sublimation.md)
+- [Solid dichloromethane & halogen contacts](../../dcm-crystal-cohesion.md)
 
 ---
 

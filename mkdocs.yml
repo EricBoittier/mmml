@@ -77,6 +77,7 @@ nav:
       - Packmol placement: packmol-placement.md
       - Liquid box workflow: liquid-box-workflow.md
       - Solid acetone & sublimation enthalpy: acetone-crystal-sublimation.md
+      - Solid dichloromethane & halogen contacts: dcm-crystal-cohesion.md
       - Commands:
           # CLI_NAV_START: Structure & boxes
           - make-res: cli/commands/make-res.md
