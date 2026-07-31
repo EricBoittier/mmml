@@ -48,6 +48,15 @@ An explicitly set `LJ_DEVICE` beats an inherited `JAX_PLATFORMS` / `MMML_MLPOT_D
 so a stale `export JAX_PLATFORMS=cpu` in a login profile cannot silently downgrade
 a GPU run.
 
+`bash 05_train.sh` runs in a subshell, so a `LJ_CKPT_DIR` / `ARTIFACTS_DIR` it
+derived is gone afterwards. Either `source examples/lj_scales/_env.sh` in the
+shell you run steps 06 and 07 from, or point step 06 at the run directly:
+
+```bash
+LJ_SIDECAR=/path/to/ckpts/<tag>-<uuid>/hybrid_mm.json \
+  uv run python examples/lj_scales/06_inspect_scales.py
+```
+
 ## Three things that will cost you a day
 
 **1. PSF ordering.** `dcm_mp2_psf_order.npz` is `C Cl Cl H H`; the otherwise

@@ -33,7 +33,25 @@ from mmml.models.mm_lj_scales import (
 
 print("=== 06: learned LJ scales ===")
 
-ckpt_dir = Path(os.environ.get("LJ_CKPT_DIR", ""))
+
+def resolve_ckpt_dir() -> Path:
+    """Mirror the ``LJ_CKPT_DIR`` default in ``_env.sh``.
+
+    ``05_train.sh`` runs in a subshell, so its exports are gone by the time this
+    step runs unless ``_env.sh`` was sourced into the interactive shell. Without
+    a fallback the empty string becomes ``Path('.')`` and this step quietly
+    searches the current directory — which finds nothing and blames training.
+    """
+    ckpt_dir = os.environ.get("LJ_CKPT_DIR", "").strip()
+    if ckpt_dir:
+        return Path(ckpt_dir)
+    artifacts = os.environ.get("ARTIFACTS_DIR", "").strip()
+    if artifacts:
+        return Path(artifacts) / "ckpts"
+    return Path(__file__).resolve().parents[2] / "artifacts" / "lj_scales" / "ckpts"
+
+
+ckpt_dir = resolve_ckpt_dir()
 explicit = os.environ.get("LJ_SIDECAR", "")
 
 sidecar = None
@@ -53,9 +71,13 @@ elif ckpt_dir.is_dir():
             break
 
 if sidecar is None:
+    where = explicit if explicit else f"{ckpt_dir}{'' if ckpt_dir.is_dir() else ' (does not exist)'}"
     print(
-        f"ERROR: no hybrid_mm.json with learnable scales under {ckpt_dir or '(unset)'}\n"
-        "       Run 05_train.sh first, or set LJ_SIDECAR to an explicit path.",
+        f"ERROR: no hybrid_mm.json with learnable scales under {where}\n"
+        "       Run 05_train.sh first, or point this step at the run you trained:\n"
+        "         source examples/lj_scales/_env.sh   # same shell as step 05\n"
+        "         LJ_CKPT_DIR=/path/to/ckpts uv run python examples/lj_scales/06_inspect_scales.py\n"
+        "         LJ_SIDECAR=/path/to/hybrid_mm.json uv run python examples/lj_scales/06_inspect_scales.py",
         file=sys.stderr,
     )
     sys.exit(2)
