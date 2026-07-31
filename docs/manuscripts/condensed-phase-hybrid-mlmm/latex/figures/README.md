@@ -4,7 +4,7 @@
 |------|--------|
 | `chart_energy_conservation_*.png` | `docs/robustness-report-assets/` |
 | `mixed_*.png` | `workflows/mixed_calculator_sweep/results/figures/` (sibling `mmml` tree) |
-| `DCM_DCM.png`, `ACE_ACE.png`, `DCM_TIP3.png` | `results/dimer_scan_campaign/mbd_checkpoint_comparison/` |
+| `DCM_DCM.png`, `ACE_ACE.png`, `DCM_TIP3.png`, `dimer_scan_DCM_ACE.png` | replot from `scan_results_clean.csv` via `replot_dimer_campaign_clean.py` |
 | `umbrella_pmf_mbar.{png,pdf}` | regenerated from `artifacts/umbrella/umbrella_summary.json` |
 | `adumb_nc_distance_status.{png,pdf}` | regenerated from `artifacts/nh3_ch3cl/adumb_nc_distance/` |
 | `extracted_metrics.json` | numeric summary for tables |

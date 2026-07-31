@@ -18,20 +18,24 @@
   },
   "dimer_scan_wells_kcal_mol": {
     "source": "../mmml/results/dimer_scan_campaign/mbd_checkpoint_comparison/scan_results_clean.csv",
+    "note": "QC/xTB cleaned interaction wells on highlighted offsets; SpookyNet campaign artifacts omitted from figures",
     "DCM_DCM": {
-      "Eint_min": -52.997,
-      "r_A": 2.75,
-      "offset_A": 2.0
-    },
-    "ACE_ACE": {
-      "Eint_min": -24.15,
-      "r_A": 5.3,
+      "method": "pbe0_def2svp_gpu4pyscf_d3bj_cp",
+      "Eint_min": -2.378,
+      "r_A": 4.5,
       "offset_A": 0.0
     },
     "DCM_TIP3": {
-      "Eint_min": -4.63,
-      "r_A": 2.75,
-      "offset_A": 2.0
+      "method": "pbe0_def2svp_gpu4pyscf_d3bj_cp",
+      "Eint_min": -2.310,
+      "r_A": 3.75,
+      "offset_A": 0.0
+    },
+    "ACE_ACE": {
+      "method": "xtb_gfn2",
+      "Eint_min": -3.251,
+      "r_A": 2.317,
+      "offset_A": 2.5
     }
   },
   "nve_water_baseline": {

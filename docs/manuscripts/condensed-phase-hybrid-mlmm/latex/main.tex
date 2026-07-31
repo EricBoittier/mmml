@@ -639,16 +639,20 @@ DCM liquid NVE (paper preset) & dcm3\_nve\_cutoff\_sweep & --- & --- & pending f
 
 Rigid intermolecular scans from the dimer-scan campaign
 (\texttt{results/dimer\_scan\_campaign/mbd\_checkpoint\_comparison/}) provide
-interaction curves for DCM, acetone (ACE), and water (TIP3) pairs
-(Figure~\ref{fig:scan}). Relative to the large-\(r\) asymptote, deepest wells on
-the cleaned interaction energy are
-\(\Delta E_{\mathrm{int}}\approx -53.0\,\mathrm{kcal\,mol^{-1}}\) (DCM--DCM at
-\(r=2.75\,\si{\angstrom}\), lateral offset \(2.0\,\si{\angstrom}\)),
-\(-24.1\,\mathrm{kcal\,mol^{-1}}\) (ACE--ACE at \(5.30\,\si{\angstrom}\)), and
-\(-4.63\,\mathrm{kcal\,mol^{-1}}\) (DCM--TIP3 at \(2.75\,\si{\angstrom}\)).
-These panels are electronic-structure reference scans used to design hybrid
-handoffs; hybrid ML/MM overlays from DES pair workflows will be added alongside
-as they are frozen.
+cleaned interaction curves for DCM, acetone (ACE), and water (TIP3) pairs
+(Figure~\ref{fig:scan}). Panels plot \(E_{\mathrm{int}}\) from
+\texttt{scan\_results\_clean.csv} with MP2 lateral-offset families and bold
+MP2 / PBE0-D3(BJ) (plus GFN2-xTB on DCM--TIP3). Deepest electronic-structure
+wells on the highlighted \(\Delta=0\) rays are
+\(\approx -2.38\,\mathrm{kcal\,mol^{-1}}\) (DCM--DCM, PBE0-D3(BJ) at
+\(r=4.50\,\si{\angstrom}\)) and
+\(-2.31\,\mathrm{kcal\,mol^{-1}}\) (DCM--TIP3, PBE0-D3(BJ) at
+\(r=3.75\,\si{\angstrom}\)); MP2 wells are
+\(-1.17\) and \(-1.69\,\mathrm{kcal\,mol^{-1}}\), respectively.
+Short-range ACE QC geometries were largely rejected by cleaning, so ACE is
+kept in the numeric table (GFN2-xTB \(\Delta=2.5\)) rather than the main
+figure. Oscillatory SpookyNet campaign overlays are omitted; hybrid ML/MM
+orientation scans are reported separately below.
 
 \begin{figure}[t]
 \centering
@@ -658,25 +662,28 @@ as they are frozen.
 \end{minipage}\hfill
 \begin{minipage}{0.48\textwidth}
 \centering
-\includegraphics[width=\linewidth]{ACE_ACE.png}
+\includegraphics[width=\linewidth]{DCM_TIP3.png}
 \end{minipage}
-\caption{Rigid dimer interaction scans for DCM--DCM (left) and ACE--ACE (right)
-from the dimer-scan campaign (\texttt{scan\_results\_clean.csv}). Energies are
-interaction values relative to separated monomers.}
+\caption{Rigid dimer interaction scans for DCM--DCM (left) and DCM--TIP3
+(right) from the dimer-scan campaign (\texttt{scan\_results\_clean.csv}).
+Faint curves: MP2 across lateral offsets. Bold: MP2 and PBE0-D3(BJ) at
+\(\Delta=0\) (DCM--TIP3 also shows GFN2-xTB). Energies are cleaned
+interaction values.}
 \label{fig:scan}
 \end{figure}
 
 \begin{table}[h]
-\caption{Deepest cleaned interaction wells from the dimer-scan campaign.}
+\caption{Deepest cleaned QC / xTB interaction wells on the highlighted offsets.}
 \label{tab:scan}
-\begin{tabular}{lccc}
+\begin{tabular}{llccc}
 \toprule
-Pair & \(r\) / \si{\angstrom} & Offset / \si{\angstrom} & \(\Delta E_{\mathrm{int}}\) / kcal mol$^{-1}$ \\
+Pair & Method & \(r\) / \si{\angstrom} & \(\Delta\) / \si{\angstrom} & \(E_{\mathrm{int}}\) / kcal mol$^{-1}$ \\
 \midrule
-DCM--DCM & 2.75 & 2.0 & $-53.0$ \\
-ACE--ACE & 5.30 & 0.0 & $-24.1$ \\
-DCM--TIP3 & 2.75 & 2.0 & $-4.63$ \\
-TIP3--TIP3 & 3.00 & 0.0 & $-3.00$ \\
+DCM--DCM & PBE0-D3(BJ) & 4.50 & 0.0 & $-2.38$ \\
+DCM--DCM & MP2 & 4.50 & 0.0 & $-1.17$ \\
+DCM--TIP3 & PBE0-D3(BJ) & 3.75 & 0.0 & $-2.31$ \\
+DCM--TIP3 & MP2 & 4.00 & 0.0 & $-1.69$ \\
+ACE--ACE & GFN2-xTB & 2.32 & 2.5 & $-3.25$ \\
 \bottomrule
 \end{tabular}
 \end{table}
