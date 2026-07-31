@@ -6,6 +6,8 @@ from pathlib import Path
 
 import importlib.util
 
+import pytest
+
 from mmml.paths import (
     _package_dir,
     bundled_file,
@@ -74,6 +76,23 @@ def test_default_dcm_crystal_cif_is_bundled() -> None:
     text = path.read_text(encoding="utf-8")
     assert "P b c n" in text or "Pbcn" in text
     assert "_cell_formula_units_Z" in text
+
+
+def test_both_dcm_pressure_points_are_bundled() -> None:
+    """The default must stay the 1.63 GPa entry: presets and doc tables use it."""
+    from mmml.paths import DCM_CRYSTAL_CIFS
+
+    assert set(DCM_CRYSTAL_CIFS) == {"pbcn_133gpa", "pbcn_163gpa"}
+    for phase in DCM_CRYSTAL_CIFS:
+        path = default_dcm_crystal_cif(phase)
+        assert path.is_file(), f"missing bundled DCM CIF for {phase}: {path}"
+        assert "_cell_measurement_pressure" in path.read_text(encoding="utf-8")
+    assert default_dcm_crystal_cif() == default_dcm_crystal_cif("pbcn_163gpa")
+
+
+def test_unknown_dcm_phase_names_the_alternatives() -> None:
+    with pytest.raises(KeyError, match="pbcn_133gpa"):
+        default_dcm_crystal_cif("ambient")
 
 
 def test_default_benzene_crystal_cif_is_bundled() -> None:
