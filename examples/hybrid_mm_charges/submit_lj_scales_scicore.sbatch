@@ -27,16 +27,23 @@
 #SBATCH --output=artifacts/lj_scales_dcm/slurm-%j.out
 #SBATCH --error=artifacts/lj_scales_dcm/slurm-%j.err
 
-set -euo pipefail
+set -uo pipefail
 
 REPO="${MMML_REPO:-$HOME/mmml}"
-cd "$REPO"
+cd "$REPO" || { echo "ERROR: no repo at $REPO" >&2; exit 1; }
 
 # SciCORE prolog: initializes Lmod in a non-login shell and loads the matched
 # foss/2023b + OpenMPI 4.1.6 stack, plus the MMML_NO_MPI_* guards that keep the
 # generic launcher's fallbacks disabled (see docs/scicore.md).
+#
+# Sourced *before* `set -e` on purpose: scripts/scicore_env.sh documents that it
+# contains tolerated non-zero commands and that caller errexit "would abort it on
+# the first" of them. It manages `set -u` itself (relax, then restore).
 source scripts/scicore_env.sh
 source .venv/bin/activate
+
+# Everything past the prolog is fail-fast.
+set -e
 
 RUN_DIR="$REPO/artifacts/lj_scales_dcm"
 ENRICHED="$RUN_DIR/dcm_mp2_cgenff.npz"

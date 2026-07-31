@@ -29,7 +29,6 @@ CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
 WORKFLOW_DIR = Path(workflow.basedir)
 REPO = WORKFLOW_DIR.parents[1].resolve()
 SOLVENT = str(CFG.get("solvent", "acn")).lower()
-N_WINDOWS = int(CFG.get("n_windows", 30))
 WINDOW_IDS = cfg_window_ids(CFG)
 WID_PAD = [f"{w:03d}" for w in WINDOW_IDS]
 
@@ -203,6 +202,7 @@ rule mbar:
     log:
         str(OUT / "logs" / "mbar.log"),
     params:
+        repo=str(REPO),
         out=str(OUT),
         env_shell=ENV_SHELL,
     resources:
@@ -211,23 +211,8 @@ rule mbar:
         r"""
         set -euo pipefail
         mkdir -p "$(dirname "{log}")" "{params.out}/mbar"
-        bash "{params.env_shell}" --no-cuda -- bash -c '
-          set -euo pipefail
-          uv run mmml umbrella-mbar --run-dir "'"{params.out}"'"
-          python - <<PY
-import json
-from pathlib import Path
-out = Path("'"'{params.out}'"'")
-summary = json.loads((out / "umbrella_summary.json").read_text())
-mbar = summary.get("mbar") or {{}}
-if "error" in mbar:
-    raise SystemExit(f"MBAR failed: {{mbar[\"error\"]}}")
-if "pmf_rel_kcal_mol" not in mbar and "pmf_rel_eV" not in summary.get("mbar", {{}}):
-    # merge_mbar_into_summary stores under summary["mbar"]
-    pass
-status = {{"ok": True, "run_dir": str(out), "n_windows_used": mbar.get("n_windows_used")}}
-(out / "mbar" / "status.json").write_text(json.dumps(status, indent=2) + "\n")
-print("PASS: mbar ->", out / "mbar" / "status.json")
-PY
-        ' > "{log}" 2>&1
+        bash "{params.env_shell}" --no-cuda -- bash \
+          "{params.repo}/workflows/hybrid_umbrella_windows/scripts/run_mbar.sh" \
+            --run-dir "{params.out}" \
+          > "{log}" 2>&1
         """

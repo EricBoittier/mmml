@@ -8,7 +8,6 @@
 # run once all windows exist (failed windows still produce a checkpoint).
 
 solvent: acn
-# Relative to repo root.
 umbrella_yaml: examples/m/yaml/umbrella_nc_acn_prod.yaml
 output_dir: artifacts/nh3_ch3cl/umbrella_nc_acn_prod
 n_windows: 30
@@ -30,9 +29,9 @@ slurm:
   ntasks: 1
   cpus_per_task: 4
   mem_mb_per_cpu: 8000
-  # Parallel Slurm jobs (also passed as snakemake -j)
-  jobs: 8
-  # Per-window wall time (minutes). 20 ps @ 0.25 fs ≈ hours; give headroom.
+  # Concurrent window jobs (also snakemake -j default)
+  max_jobs: 8
+  # Per-window wall time (minutes). 20 ps @ 0.25 fs needs headroom for compile.
   runtime_min_window: 720
   runtime_min_box: 120
   runtime_min_assemble: 180

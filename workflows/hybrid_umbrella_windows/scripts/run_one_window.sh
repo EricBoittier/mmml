@@ -25,10 +25,12 @@ done
 
 for req in YAML PSF PDB CKPT OUT WID; do
   if [[ -z "${!req}" ]]; then
-    echo "FAIL: --${req,,} required" >&2
+    echo "FAIL: missing required arg (${req})" >&2
     exit 2
   fi
 done
+# CRD reserved for future loaders; PSF+PDB are authoritative today.
+: "${CRD:=}"
 
 export PSF
 MOVE_WITH="$(
@@ -44,10 +46,6 @@ PY
 )"
 
 EXTRA=(--resume --windows "${WID}")
-if [[ -n "${CRD}" && -f "${CRD}" ]]; then
-  # umbrella-sample accepts PDB/PSF; CRD is optional if loader supports it later
-  :
-fi
 
 echo "=== hybrid window ${WID}: $(basename "${YAML}") → ${OUT}/windows/ ==="
 echo "  move-with=${MOVE_WITH}"

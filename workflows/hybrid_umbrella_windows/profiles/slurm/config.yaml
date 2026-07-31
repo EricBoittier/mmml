@@ -1,0 +1,24 @@
+# Snakemake >=8.6 + snakemake-executor-plugin-slurm (studix GPU).
+# Submit from the login node — do not run JAX/PyCHARMM jobs on the login node.
+executor: slurm
+jobs: 8
+latency-wait: 120
+retries: 1
+keep-going: true
+envvars:
+  - MMML_CKPT
+  - MMML_WORKFLOW_CONFIG
+  - MMML_CGENFF_EXTRA_RTF
+  - MMML_CGENFF_EXTRA_PRM
+  - CHARMM_LIB_DIR
+  - JAX_ENABLE_X64
+  - JAX_PLATFORMS
+default-resources:
+  - gpu=1
+  - charmm_slot=1
+  - runtime=720
+  - nodes=1
+  - tasks=1
+  - mem_mb_per_cpu=8000
+  - cpus_per_task=4
+  - slurm_partition=gpu

@@ -1,0 +1,24 @@
+# TIP3 production (parallel windows).
+solvent: tip3
+umbrella_yaml: examples/m/yaml/umbrella_nc_tip3_prod.yaml
+output_dir: artifacts/nh3_ch3cl/umbrella_nc_tip3_prod
+n_windows: 30
+box_size: 30.0
+use_density: true
+build_box_if_missing: true
+checkpoint: examples/m/model_ext.json
+run_mbar: true
+
+slurm:
+  partition: gpu
+  nodelist: ""
+  gpu: 1
+  nodes: 1
+  ntasks: 1
+  cpus_per_task: 4
+  mem_mb_per_cpu: 8000
+  max_jobs: 8
+  runtime_min_window: 720
+  runtime_min_box: 120
+  runtime_min_assemble: 180
+  mail_user: ""
