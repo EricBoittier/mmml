@@ -56,12 +56,19 @@ export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 # getting it wrong mis-assigns CGenFF types silently rather than crashing.
 export LJ_DATASET="${LJ_DATASET:-${REPO_ROOT}/examples/dcm_mp2_psf_order.npz}"
 
-ARTIFACTS_DIR="${ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales}"
-mkdir -p "${ARTIFACTS_DIR}"
-export ARTIFACTS_DIR
+# Outputs. Namespaced, and deliberately NOT inherited from a bare
+# ARTIFACTS_DIR: examples/m, examples/acetone_crystal and others export that
+# same generic name from their own _env.sh, so sourcing one of them earlier in
+# the shell used to redirect this ladder's dataset and checkpoints into that
+# study's folder without a word. This ladder does not export ARTIFACTS_DIR
+# either, so it cannot capture those examples in return.
+_LJ_INHERITED_ARTIFACTS_DIR="${ARTIFACTS_DIR:-}"
+LJ_ARTIFACTS_DIR="${LJ_ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales}"
+mkdir -p "${LJ_ARTIFACTS_DIR}"
+export LJ_ARTIFACTS_DIR
 
-export LJ_ENRICHED="${LJ_ENRICHED:-${ARTIFACTS_DIR}/dataset_cgenff.npz}"
-export LJ_CKPT_DIR="${LJ_CKPT_DIR:-${ARTIFACTS_DIR}/ckpts}"
+export LJ_ENRICHED="${LJ_ENRICHED:-${LJ_ARTIFACTS_DIR}/dataset_cgenff.npz}"
+export LJ_CKPT_DIR="${LJ_CKPT_DIR:-${LJ_ARTIFACTS_DIR}/ckpts}"
 export LJ_TAG="${LJ_TAG:-hybrid_mm_fixed_lj_scales}"
 export LJ_EPOCHS="${LJ_EPOCHS:-500}"
 export LJ_NTRAIN="${LJ_NTRAIN:-8000}"
@@ -92,6 +99,12 @@ lj_scales_banner() {
     printf '              (CPU by default — LJ_DEVICE=gpu for step 05)\n'
   printf '  dataset   : %s\n' "${LJ_DATASET}"
   [[ -f "${LJ_DATASET}" ]] || printf '              WARNING: does not exist\n'
-  printf '  artifacts : %s\n' "${ARTIFACTS_DIR}"
+  printf '  artifacts : %s\n' "${LJ_ARTIFACTS_DIR}"
+  if [[ -n "${_LJ_INHERITED_ARTIFACTS_DIR}" \
+        && "${_LJ_INHERITED_ARTIFACTS_DIR}" != "${LJ_ARTIFACTS_DIR}" ]]; then
+    printf '              (ignoring inherited ARTIFACTS_DIR=%s —\n' \
+      "${_LJ_INHERITED_ARTIFACTS_DIR}"
+    printf '               export LJ_ARTIFACTS_DIR to redirect this ladder)\n'
+  fi
   printf '\n'
 }

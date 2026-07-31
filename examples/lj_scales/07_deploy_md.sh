@@ -64,7 +64,7 @@ uv run mmml md-system \
   --job-id liquid_nvt \
   --checkpoint "${CKPT}" \
   --mm-lj-scales-file "${SIDECAR}" \
-  --output-dir "${ARTIFACTS_DIR}/liquid_nvt" \
+  --output-dir "${LJ_ARTIFACTS_DIR}/liquid_nvt" \
   ${GATE_ARGS[@]+"${GATE_ARGS[@]}"}
 
-echo "07: OK  ${ARTIFACTS_DIR}/liquid_nvt"
+echo "07: OK  ${LJ_ARTIFACTS_DIR}/liquid_nvt"
