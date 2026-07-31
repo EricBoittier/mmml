@@ -124,7 +124,9 @@ def plot_gas_solvent(
         raise FileNotFoundError("Need at least one of gas_csv / solvent_csv with data")
 
     n = len(panels)
-    fig, axes = plt.subplots(1, n, figsize=(4.6 * n, 4.4), squeeze=False)
+    fig, axes = plt.subplots(
+        1, n, figsize=(4.6 * n + 0.8, 4.4), squeeze=False, constrained_layout=True
+    )
     last_mappable = None
     for ax, (title, phi, psi, e) in zip(axes[0], panels):
         last_mappable = _contour_panel(
@@ -138,8 +140,7 @@ def plot_gas_solvent(
             shrink=0.85,
             label=r"$\Delta E$ (kcal/mol)",
         )
-    fig.suptitle(r"Trialanine central $\phi$/$\psi$: gas vs solvent-relaxed", y=1.02)
-    fig.tight_layout()
+    fig.suptitle(r"Trialanine central $\phi$/$\psi$: gas vs solvent-relaxed")
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220, bbox_inches="tight")
