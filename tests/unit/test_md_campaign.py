@@ -257,6 +257,36 @@ def test_resolve_output_dir_repeat_subdirs(tmp_path) -> None:
     ).resolve()
 
 
+def test_explicit_cli_output_dir_overrides_single_job(tmp_path) -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+
+    args = Namespace(output_dir=str(tmp_path / "elsewhere"), _cli_explicit={"output_dir"})
+    got = _explicit_cli_output_dir(args, [("prod", "prod", 0)])
+    assert got == (tmp_path / "elsewhere").resolve()
+
+
+def test_explicit_cli_output_dir_ignores_non_cli_value(tmp_path) -> None:
+    """A default or YAML-sourced output_dir must not displace the per-job path."""
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+
+    args = Namespace(output_dir=str(tmp_path / "default"), _cli_explicit=set())
+    assert _explicit_cli_output_dir(args, [("prod", "prod", 0)]) is None
+
+
+def test_explicit_cli_output_dir_rejects_multi_run_campaign(tmp_path) -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+
+    args = Namespace(output_dir=str(tmp_path / "one"), _cli_explicit={"output_dir"})
+    with pytest.raises(ValueError, match="--campaign-output-dir"):
+        _explicit_cli_output_dir(args, [("equil", "equil", 0), ("prod", "prod", 0)])
+
+
 def test_merge_campaign_job_config_defaults() -> None:
     merged = merge_campaign_job_config(_sample_campaign(), "prod")
     assert merged["composition"] == "DCM:5"

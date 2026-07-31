@@ -59,6 +59,8 @@ fi
 
 # --job-id, not --only: md-system has no --only flag (that one belongs to the
 # ase/jaxmd pbc suite it shells out to) and campaign dispatch keys off --job-id.
+# --output-dir overrides the job's YAML output_dir only because --job-id pins the
+# campaign to a single run; with --run-all the CLI rejects it as ambiguous.
 uv run mmml md-system \
   --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
   --job-id liquid_nvt \

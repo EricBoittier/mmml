@@ -8,8 +8,10 @@ missing window from ``umbrella_snapshots.npz`` as a failed placeholder.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import numpy as np
 import pytest
@@ -20,13 +22,50 @@ _SCRIPTS = (
     / "hybrid_umbrella_windows"
     / "scripts"
 )
-sys.path.insert(0, str(_SCRIPTS))
 
-from window_status import (  # noqa: E402
-    files_to_reset,
-    scan_windows,
-    window_log_relax_steps,
-)
+
+def _load_window_status() -> ModuleType:
+    """Load ``window_status`` under a unique name, bound to *this* workflow's library.
+
+    ``window_status.py`` does a bare ``from campaign_lib import ...`` after
+    prepending its own scripts dir to ``sys.path``. Seven workflows ship a
+    ``campaign_lib.py``, they do not share an API (``resolve_path`` is specific to
+    this one), and ``sys.modules`` is consulted before ``sys.path`` -- so whichever
+    sibling another test module happened to import first would win the slot and
+    break this import. Which is precisely what used to happen, and it varied with
+    collection order.
+
+    So: evict any cached ``campaign_lib`` for the duration of the load, and restore
+    it afterwards rather than leaving this workflow's copy behind for the next
+    module to trip over.
+    """
+    name = "hybrid_umbrella_windows_window_status"
+    cached = sys.modules.get(name)
+    if cached is not None:
+        return cached
+
+    spec = importlib.util.spec_from_file_location(name, _SCRIPTS / "window_status.py")
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+
+    saved_cl = sys.modules.pop("campaign_lib", None)
+    old_path = sys.path[:]
+    sys.path.insert(0, str(_SCRIPTS))
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        sys.path[:] = old_path
+        sys.modules.pop("campaign_lib", None)
+        if saved_cl is not None:
+            sys.modules["campaign_lib"] = saved_cl
+    return mod
+
+
+_ws = _load_window_status()
+files_to_reset = _ws.files_to_reset
+scan_windows = _ws.scan_windows
+window_log_relax_steps = _ws.window_log_relax_steps
 
 from mmml.umbrella.hybrid_windows import save_window_checkpoint  # noqa: E402
 

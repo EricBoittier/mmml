@@ -25,10 +25,11 @@ EXAMPLE_DIR="${REPO_ROOT}/examples/lj_scales"
 export EXAMPLE_DIR
 
 # Device. Steps 00-04 are tiny and run fine on CPU, so that is the default and
-# results do not depend on which node you land on. Step 05 (real training) wants
-# a GPU:
+# results do not depend on which node you land on. Step 05 (real training) and
+# step 07 (condensed-phase MD, thousands of hybrid force evaluations) want a GPU:
 #
 #     LJ_DEVICE=gpu bash examples/lj_scales/05_train.sh
+#     LJ_DEVICE=gpu bash examples/lj_scales/07_deploy_md.sh
 #
 # An explicitly pre-set JAX_PLATFORMS / MMML_MLPOT_DEVICE is honoured only when
 # LJ_DEVICE was NOT given: a stale `export JAX_PLATFORMS=cpu` in a login profile

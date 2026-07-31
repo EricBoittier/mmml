@@ -503,6 +503,40 @@ def test_example_yaml_keys_exist():
     assert md["defaults"]["include_mm"] is True
 
 
+def test_md_yaml_stage_times_are_not_silently_the_defaults():
+    """Every dynamics stage each run executes must get its length from the YAML.
+
+    ``resolve_stage_ps`` reads ``ps`` only for the prod and nve stages, so a
+    pbc_nvt run (mini,heat,equi) that sets ``ps`` alone quietly inherits the
+    10 ps / 50 ps stage defaults — 120k steps instead of the intended smoke test.
+    """
+    from argparse import Namespace
+
+    import yaml
+
+    from mmml.cli.run.md_config import merge_campaign_job_config
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_md_stages,
+        resolve_stage_ps,
+    )
+
+    root = Path(__file__).resolve().parents[2]
+    campaign = yaml.safe_load(
+        (root / "examples/hybrid_mm_charges/md_fixed_lj_scales.yaml").read_text()
+    )
+    for run_id in campaign["runs"]:
+        merged = merge_campaign_job_config(campaign, run_id)
+        ns = Namespace(**merged)
+        stages = [s for s in resolve_md_stages(ns) if s != "mini"]
+        assert stages, f"{run_id}: no dynamics stages"
+        for stage in stages:
+            ps = resolve_stage_ps(ns, stage)
+            assert ps <= 0.1, (
+                f"{run_id}: {stage} runs {ps} ps — set ps_{stage} in the YAML "
+                f"(a bare `ps` does not reach this stage)"
+            )
+
+
 def test_docs_page_exists_and_links_examples():
     root = Path(__file__).resolve().parents[2]
     page = (root / "docs/hybrid-mm-lj-scales.md").read_text(encoding="utf-8")
