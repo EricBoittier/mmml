@@ -50,5 +50,10 @@ runs:
     composition: "DCM:64"
     box_size: 25.0
     mm_nonbond_mode: jax_mic
-    ps: 0.05
+    # pbc_nvt runs mini,heat,equi, and resolve_stage_ps only reads `ps` for the
+    # prod and nve stages — so `ps` here would be inert and the run would silently
+    # take the 10 ps / 50 ps stage defaults. Set the two stages that actually run.
+    # 0.5 fs steps: 20 heat + 80 equi. Raise both for a production run.
+    ps_heat: 0.01
+    ps_equi: 0.04
     output_dir: results/hybrid_mm_fixed_lj_scales/liquid_nvt

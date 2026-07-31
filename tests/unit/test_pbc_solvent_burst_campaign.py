@@ -35,19 +35,32 @@ def _load_script_module(name: str, path: Path) -> ModuleType:
 
 
 cl = _load_script_module(_CAMPAIGN_MOD, SCRIPTS / "campaign_lib.py")
+cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
 
-# cleanup_strategy.py imports ``campaign_lib`` by bare name. Seven workflows
-# ship one, and sys.modules wins over sys.path, so the alias must not outlive
-# this load or it hijacks the name for every later test module.
-_saved_cl = sys.modules.get("campaign_lib")
-sys.modules["campaign_lib"] = cl
-try:
-    cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
-finally:
-    if _saved_cl is not None:
-        sys.modules["campaign_lib"] = _saved_cl
-    else:
-        sys.modules.pop("campaign_lib", None)
+
+@pytest.fixture(autouse=True, scope="module")
+def _campaign_lib_alias():
+    """Publish this workflow's ``campaign_lib`` under the bare name, then remove it.
+
+    ``cleanup_strategy.dense_cell_mlpot_overrides`` does a lazy
+    ``from campaign_lib import cell_bulk_total`` at call time, so the bare name
+    has to resolve while these tests run -- not merely while the module loads.
+
+    It must not outlive them, though: seven workflows ship a ``campaign_lib.py``
+    and ``sys.modules`` is consulted before ``sys.path``, so a lingering alias
+    hijacks the name for every test module imported later. That is exactly how
+    ``tests/unit/test_window_status.py`` began failing collection against this
+    workflow's library instead of its own.
+    """
+    saved = sys.modules.get("campaign_lib")
+    sys.modules["campaign_lib"] = cl
+    try:
+        yield
+    finally:
+        if saved is not None:
+            sys.modules["campaign_lib"] = saved
+        else:
+            sys.modules.pop("campaign_lib", None)
 
 RunCell = cl.RunCell
 build_campaign = cl.build_campaign

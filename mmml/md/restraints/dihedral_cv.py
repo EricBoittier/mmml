@@ -8,7 +8,7 @@ shortest arc ``atan2(sin Δ, cos Δ)`` so windows near ±180° wrap correctly.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 __all__ = ["DihedralCV", "periodic_delta_deg", "harmonic_bias_energy_periodic_deg"]
 
@@ -140,7 +140,6 @@ class DihedralCV:
         Uses reverse-mode AD on the scalar dihedral (cheap four-atom graph).
         """
         import jax
-        import jax.numpy as jnp
 
         pos = positions.reshape(n_windows, n_atoms, 3)
 
