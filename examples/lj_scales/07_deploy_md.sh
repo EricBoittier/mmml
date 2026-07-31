@@ -41,9 +41,11 @@ fi
 echo "  checkpoint : ${CKPT}"
 echo "  scales     : ${SIDECAR}"
 
+# --job-id, not --only: md-system has no --only flag (that one belongs to the
+# ase/jaxmd pbc suite it shells out to) and campaign dispatch keys off --job-id.
 uv run mmml md-system \
   --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
-  --only liquid_nvt \
+  --job-id liquid_nvt \
   --checkpoint "${CKPT}" \
   --mm-lj-scales-file "${SIDECAR}" \
   --output-dir "${ARTIFACTS_DIR}/liquid_nvt"

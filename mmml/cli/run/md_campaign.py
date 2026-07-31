@@ -14,6 +14,7 @@ from mmml.cli.run.md_config import (
     load_yaml_config,
     merge_campaign_job_config,
     topological_job_order,
+    validate_campaign_checkpoint,
 )
 from mmml.cli.run.md_handoff import (
     clear_handoff_context,
@@ -444,6 +445,7 @@ def run_campaign(args: Namespace) -> int:
         apply_campaign_cli_overrides(merged, args)
         ns = namespace_from_merged(merged)
         resolve_campaign_namespace_paths(ns, config_path=getattr(args, "config", None))
+        validate_campaign_checkpoint(getattr(ns, "checkpoint", None), job_id=run_id)
         ns.output_dir = out_dir
         ns.job_name = run_id
         t0 = time.perf_counter()
