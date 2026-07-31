@@ -40,7 +40,14 @@ sidecar = None
 if explicit:
     sidecar = find_learnable_lj_scales_sidecar(scales_file=explicit)
 elif ckpt_dir.is_dir():
-    for candidate in sorted(ckpt_dir.rglob("hybrid_mm.json")):
+    # Newest first: several runs share the checkpoint dir, and an older one is
+    # not what you just trained.
+    candidates = sorted(
+        ckpt_dir.rglob("hybrid_mm.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for candidate in candidates:
         sidecar = find_learnable_lj_scales_sidecar(scales_file=candidate)
         if sidecar is not None:
             break

@@ -467,6 +467,17 @@ def write_mm_lj_scales_into_hybrid_mm_json(
             epsilon_scale=epsilon_scale,
         )
     )
+    problems = out_of_bounds_mm_lj_scales(type_names, sigma_scale, epsilon_scale)
+    if problems:
+        # Training projects the scales every step, so this should be unreachable
+        # from a normal run. Reaching it means the sidecar is not deployable and
+        # the run needs to be understood before anyone uses it.
+        warnings.warn(
+            f"writing {len(problems)} LJ scale(s) outside the trainable bounds to "
+            f"{p} (e.g. {problems[0]}); this run's scales are not deployable",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)

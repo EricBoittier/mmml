@@ -67,6 +67,19 @@ export LJ_EPOCHS="${LJ_EPOCHS:-500}"
 export LJ_NTRAIN="${LJ_NTRAIN:-8000}"
 export LJ_NVALID="${LJ_NVALID:-1000}"
 
+# Newest file matching the given `find` expression under a directory, by mtime.
+# Empty (exit 0) when the directory or the match is missing.
+#
+# `find ... | head -1` is wrong here and bit us once: runs accumulate under
+# LJ_CKPT_DIR, traversal order is arbitrary, and a failed earlier run left a
+# hybrid_mm.json that step 07 then tried to deploy.
+lj_newest_file() {
+  local dir="${1}"
+  shift
+  [[ -d "${dir}" ]] || return 0
+  find "${dir}" "$@" -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -1 | cut -f2-
+}
+
 lj_scales_banner() {
   [[ "${LJ_BANNER_SHOWN:-0}" == "1" ]] && return 0
   export LJ_BANNER_SHOWN=1

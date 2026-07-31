@@ -22,10 +22,15 @@ if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
   exit 0
 fi
 
-# `|| true`: find exits non-zero when LJ_CKPT_DIR does not exist yet, and under
-# `set -e` that aborts the script before the explanatory error below can print.
-CKPT="${LJ_MD_CKPT:-$(find "${LJ_CKPT_DIR}" -name 'params.json' 2>/dev/null | head -1 || true)}"
-SIDECAR="${LJ_SIDECAR:-$(find "${LJ_CKPT_DIR}" -name hybrid_mm.json 2>/dev/null | head -1 || true)}"
+# Newest match, not first: several runs share LJ_CKPT_DIR and find's traversal
+# order is arbitrary. `|| true` because the dir may not exist yet, and under
+# `set -e` that would abort before the explanatory error below can print.
+#
+# Training writes the portable checkpoint as `params_<tag>_<timestamp>.json`
+# (make_training.py), so matching only `params.json` finds nothing.
+CKPT="${LJ_MD_CKPT:-$(lj_newest_file "${LJ_CKPT_DIR}" \
+  \( -name 'params_*.json' -o -name 'params.json' \) || true)}"
+SIDECAR="${LJ_SIDECAR:-$(lj_newest_file "${LJ_CKPT_DIR}" -name hybrid_mm.json || true)}"
 
 if [[ -z "${CKPT}" || -z "${SIDECAR}" ]]; then
   echo "ERROR: need both a checkpoint and hybrid_mm.json under ${LJ_CKPT_DIR}" >&2

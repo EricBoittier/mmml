@@ -37,8 +37,9 @@ uv run mmml physnet-train \
   --n-valid "${LJ_NVALID}" \
   --num-epochs "${LJ_EPOCHS}"
 
-# `|| true` so a missing dir does not abort under `set -e` before the message.
-SIDECAR="$(find "${LJ_CKPT_DIR}" -name hybrid_mm.json 2>/dev/null | head -1 || true)"
+# Newest, not first: earlier runs leave their own hybrid_mm.json behind, and
+# reporting one of those would claim success for a run that never finished.
+SIDECAR="$(lj_newest_file "${LJ_CKPT_DIR}" -name hybrid_mm.json || true)"
 if [[ -z "${SIDECAR}" ]]; then
   echo "ERROR: training wrote no hybrid_mm.json under ${LJ_CKPT_DIR}" >&2
   echo "       learn_mm_lj_scales was probably forced off. Check the log for" >&2
