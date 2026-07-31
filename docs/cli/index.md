@@ -83,7 +83,7 @@ same thing:
 | Section | Start here | Commands |
 |---------|------------|----------|
 | [Structure & boxes](../sections/structure-boxes.md) | [Structure building](structure-building.md) | `make-res`, `make-box`, `build-crystal`, `liquid-box` |
-| [MD & campaigns](../sections/md-campaigns.md) | [Tri-alanine water box](../trialanine-water-box.md) | `md-system`, `md-embedding`, `umbrella-sample`, `health-check` |
+| [MD & campaigns](../sections/md-campaigns.md) | [Tri-alanine water box](../trialanine-water-box.md); [φ/ψ → umbrella teaching](../examples/tria-phi-psi-scan.md) | `md-system`, `md-embedding`, `umbrella-sample`, `health-check` |
 | [QM & data](../sections/qm-data.md) | [QC cross-check](../qc-cross-check.md) | `pyscf-*`, `dimer-scan`, `ic-scan`, `fix-and-split` |
 | [Hybrid ML/MM potentials](../sections/hybrid-potentials.md) | [Cutoffs, regions & LR solvers](../hybrid-potential-regions.md) | — |
 | [Training & sampling](../sections/training-sampling.md) | [NEB](../neb.md), [DMC](../dmc.md) | `physnet-*`, `efield-*`, `kernnn-*`, `neb`, `dmc` |
