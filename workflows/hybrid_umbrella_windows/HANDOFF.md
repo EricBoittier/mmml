@@ -137,6 +137,43 @@ grep -h 'FAIL: CUDA init' -A1 artifacts/.../logs/window_w*.log \
   | grep -o 'host=[a-z0-9]*' | sort | uniq -c | sort -rn
 ```
 
+### Root cause: unrelaxed seeds, not a bad integrator (2026-07-31)
+
+With gpu11 aside, windows at ξ ≥ +0.7 aborted non-finite at step 1600–3400 of
+80000 while everything below survived. Diagnosis, in order:
+
+1. Every window seeds from the **same** box PDB (`r0` = −0.8566 Å along ξ) by
+   rigidly displacing the solute. Failure begins once that displacement passes
+   ≈1.5 Å (w016 needs 1.16 Å and lives; w020 needs 1.56 Å and dies; w029 would
+   need 2.46 Å). The solvent is packed for the reactant ξ and never moves aside.
+2. `seed_max|F|` read **37.10 eV/Å in every window**, to the hundredth. Term
+   decomposition put it on `mm_nonbonded`, on ACN — ten different molecules at
+   25–37 eV/Å, with `mm_bonded` at 0.18. That is a raw Packmol packing at the
+   default `--packmol-tolerance 2.0`, not a defect: contacts sit just above
+   2.0 Å, which is deep in the CGenFF repulsive wall. A contact search below
+   2.0 Å finds nothing, because Packmol guarantees that.
+3. So the whole-system max is a constant the seeding never touches, and
+   `max_seed_force` could never discriminate. Raising it 35 → 80 did not loosen
+   a check; it disabled the only tripwire, converting clean t=0 rejections into
+   NaNs at step 2000.
+
+**Fix in tree:** `relax_seed_steps` / `relax_seed_fmax` (`UmbrellaConfig`) run
+FIRE on the surroundings with the ML solute frozen, after seeding and before
+dynamics, so ξ is preserved while the solvent opens up. The preflight now gates
+on `max |F|` over the **ML region** and logs both numbers:
+
+```text
+window 21/30  ξ₀=0.700  k=6.505  nsteps=80000  relax_steps=…
+  seed_max|F|_ML=…  seed_max|F|_all=…
+```
+
+`relax_seed_steps: 300` is set in both prod YAMLs; default is 0 (off) elsewhere.
+`max_seed_force: 80` is left as-is and **still needs calibrating** from the new
+`seed_max|F|_ML` column — 80 was chosen against the old solvent-dominated
+number and is almost certainly far too loose for an ML-region gate.
+
+Tests: `tests/unit/test_umbrella_seed_relax.py`.
+
 ### How the GPU is requested (do not put it in `slurm_extra`)
 
 Current `snakemake-executor-plugin-slurm` **refuses to submit** any job whose
