@@ -19,9 +19,16 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import re
 import sys
 from pathlib import Path
+
+# Rendering a page imports the command module, which initializes JAX. On a busy
+# GPU that import raises, get_subcommand_parser() swallows the error, and the
+# page silently regenerates as a "help could not be loaded" stub — which the
+# pre-commit hook then stages over the real option dump. Docs need argparse only.
+os.environ["JAX_PLATFORMS"] = "cpu"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_CLI = REPO_ROOT / "docs" / "cli"
