@@ -41,6 +41,22 @@ fi
 echo "  checkpoint : ${CKPT}"
 echo "  scales     : ${SIDECAR}"
 
+# Pre-dynamics force gate overrides. The gate rejects a starting frame whose
+# worst single-atom force exceeds 2 eV/Å. Every molecule here is ML, so CHARMM
+# GRMS is 0 and CHARMM SD cannot help; only looser packing or a raised ceiling
+# gets past it. Tolerance is part of the packmol cache key, so changing it
+# rebuilds the box without --rebuild-packmol.
+#
+#   LJ_MD_PACKMOL_TOLERANCE=3.5   pack further apart (try this first)
+#   LJ_MD_MAX_FMAX_EV_A=3.0       raise the ceiling once you have inspected the frame
+GATE_ARGS=()
+if [[ -n "${LJ_MD_PACKMOL_TOLERANCE:-}" ]]; then
+  GATE_ARGS+=(--packmol-tolerance "${LJ_MD_PACKMOL_TOLERANCE}")
+fi
+if [[ -n "${LJ_MD_MAX_FMAX_EV_A:-}" ]]; then
+  GATE_ARGS+=(--max-fmax-before-dyn-ev-A "${LJ_MD_MAX_FMAX_EV_A}")
+fi
+
 # --job-id, not --only: md-system has no --only flag (that one belongs to the
 # ase/jaxmd pbc suite it shells out to) and campaign dispatch keys off --job-id.
 uv run mmml md-system \
@@ -48,6 +64,7 @@ uv run mmml md-system \
   --job-id liquid_nvt \
   --checkpoint "${CKPT}" \
   --mm-lj-scales-file "${SIDECAR}" \
-  --output-dir "${ARTIFACTS_DIR}/liquid_nvt"
+  --output-dir "${ARTIFACTS_DIR}/liquid_nvt" \
+  ${GATE_ARGS[@]+"${GATE_ARGS[@]}"}
 
 echo "07: OK  ${ARTIFACTS_DIR}/liquid_nvt"
