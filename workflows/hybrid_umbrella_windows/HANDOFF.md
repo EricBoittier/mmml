@@ -105,6 +105,38 @@ Mitigations added (not fully validated in prod yet):
 
 **Strong advice:** run the Snakemake **controller on the login node**, not an interactive `gpu0N` shell. User was on `gpu08` when many failures appeared.
 
+### Root cause: wedged GPUs on individual nodes (2026-07-31)
+
+With the controller on `pc-studix` and submission fixed, a window on `gpu11`
+still failed — and the preflight finally showed why:
+
+```text
+[env_shell] FAIL: CUDA init failed after 12 tries (cuInit / nvidia-smi).
+[env_shell]   host=gpu11 job=205337 gres=? cvd=0
+Unable to determine the device handle for gpu 0000:11:00.0: Unknown Error
+```
+
+Slurm allocated the GPU correctly (`CUDA_VISIBLE_DEVICES=0`); the device itself
+is wedged at driver level. That is a node fault needing `nvidia-smi -r` or a
+reboot by admins — **not** something the workflow can retry its way out of.
+
+The executor only auto-excludes a node on Slurm status `NODE_FAIL`. A wedged GPU
+makes jobs exit `FAILED`, so `retries: 3` cheerfully resends them to the same
+node. Blacklist bad nodes explicitly:
+
+```yaml
+slurm:
+  exclude_nodes: "gpu11"      # list or comma string
+```
+
+`scripts/snakemake_slurm.sh` turns that into `--slurm-exclude-failed-nodes`.
+Find the offenders across a campaign with:
+
+```bash
+grep -h 'FAIL: CUDA init' -A1 artifacts/.../logs/window_w*.log \
+  | grep -o 'host=[a-z0-9]*' | sort | uniq -c | sort -rn
+```
+
 ### How the GPU is requested (do not put it in `slurm_extra`)
 
 Current `snakemake-executor-plugin-slurm` **refuses to submit** any job whose
