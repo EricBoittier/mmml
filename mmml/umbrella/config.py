@@ -9,8 +9,10 @@ from typing import Any, Literal, Mapping, Sequence
 from mmml.md.restraints import (
     AngleWall,
     BondRetentionWall,
+    DihedralCV,
     FlatBottomWall,
     LinearDistanceCV,
+    cv_from_spec,
 )
 
 
@@ -41,13 +43,17 @@ def _pairs_need_name_bind(pairs: Any) -> bool:
 
 def _spec_needs_name_bind(spec: Any) -> bool:
     """True when ``cv_x`` / wall YAML still carries atom *names* (e.g. ``C1``)."""
-    if spec is None or isinstance(spec, (LinearDistanceCV, FlatBottomWall, BondRetentionWall, AngleWall)):
+    if spec is None or isinstance(
+        spec, (LinearDistanceCV, DihedralCV, FlatBottomWall, BondRetentionWall, AngleWall)
+    ):
         return False
     if not isinstance(spec, dict):
         return False
     if "pairs" in spec and _pairs_need_name_bind(spec["pairs"]):
         return True
     if "atoms" in spec and any(_atom_ref_is_name(x) for x in spec["atoms"]):
+        return True
+    if "dihedral" in spec and any(_atom_ref_is_name(x) for x in spec["dihedral"]):
         return True
     if "cv" in spec and _spec_needs_name_bind(spec["cv"]):
         return True
@@ -91,7 +97,7 @@ class WindowSchedule:
     k_x: tuple[float, ...]
     k_y: tuple[float, ...] | None
     grid_shape: tuple[int, ...]
-    cvs: tuple[LinearDistanceCV, ...] = ()
+    cvs: tuple[Any, ...] = ()
     walls: tuple[FlatBottomWall, ...] = ()
 
     def __post_init__(self) -> None:
