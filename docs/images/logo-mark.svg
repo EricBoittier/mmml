@@ -1,13 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="MMML">
   <title>MMML</title>
   <!--
-    Simplified mark derived from the interlocking rings at the centre of
-    docs/images/mmml.svg. Each ring is broken where the other passes in front,
-    so the weave survives as flat monochrome line art at header/favicon sizes.
-    White, for the Material header bar.
+    Simplified mark derived from the central motif of docs/images/mmml.svg:
+    a ring with a beam passing through it. White, for the Material header bar.
   -->
   <g fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round">
-    <path d="M 20.57 33.67 A 10 10 0 1 1 26.56 29.17"/>
-    <path d="M 27.43 14.33 A 10 10 0 1 1 21.44 18.83"/>
+    <path d="M 7 35 L 41 13"/>
+    <circle cx="24" cy="24" r="12.2"/>
   </g>
 </svg>

@@ -47,14 +47,19 @@ export JAX_PLATFORMS="${JAX_PLATFORMS:-}"
 export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-}"
 CONFIG_ARGS=(--configfile "$CFG_PATH")
 
-IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
+IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES EXCLUDE_NODES <<EOF
 $("$PY" -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
-from campaign_lib import load_config, slurm_launch_jobs, slurm_resources_cli
+from campaign_lib import (
+    load_config,
+    slurm_exclude_nodes,
+    slurm_launch_jobs,
+    slurm_resources_cli,
+)
 cfg = load_config(Path('${CFG_PATH}'))
-print(f\"{slurm_launch_jobs(cfg)}\t{slurm_resources_cli(cfg)}\")
+print(f\"{slurm_launch_jobs(cfg)}\t{slurm_resources_cli(cfg)}\t{slurm_exclude_nodes(cfg)}\")
 ")
 EOF
 
@@ -65,6 +70,12 @@ fi
 
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
+
+EXCLUDE_ARGS=()
+if [[ -n "${EXCLUDE_NODES// }" ]]; then
+  EXCLUDE_ARGS=(--slurm-exclude-failed-nodes "$EXCLUDE_NODES")
+  echo "Excluding nodes: ${EXCLUDE_NODES}" >&2
+fi
 
 UV="${MMML_UV:-uv}"
 echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} -j${JOBS} --resources ${DEFAULT_RES}" >&2
@@ -81,5 +92,6 @@ exec "$UV" run --with snakemake --with snakemake-executor-plugin-slurm snakemake
   "${CONFIG_ARGS[@]}" \
   -j"$JOBS" \
   --resources ${DEFAULT_RES} \
+  "${EXCLUDE_ARGS[@]}" \
   --keep-going \
   "$@"

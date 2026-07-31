@@ -74,6 +74,26 @@ def test_throttle_resource_is_not_named_gpu() -> None:
     assert " gpu=" not in f" {cli}"
 
 
+def test_exclude_nodes_accepts_a_list_or_a_comma_string() -> None:
+    assert cl.slurm_exclude_nodes({}) == ""
+    assert cl.slurm_exclude_nodes({"slurm": {"exclude_nodes": "gpu11"}}) == "gpu11"
+    assert (
+        cl.slurm_exclude_nodes({"slurm": {"exclude_nodes": ["gpu11", "gpu04"]}})
+        == "gpu11,gpu04"
+    )
+    # Stray whitespace and empty entries must not produce a bogus node name.
+    assert (
+        cl.slurm_exclude_nodes({"slurm": {"exclude_nodes": " gpu11 , ,gpu04,"}})
+        == "gpu11,gpu04"
+    )
+
+
+def test_launcher_forwards_the_exclude_list() -> None:
+    text = (WORKFLOW / "scripts" / "snakemake_slurm.sh").read_text()
+    assert "slurm_exclude_nodes" in text
+    assert "--slurm-exclude-failed-nodes" in text
+
+
 def test_shipped_configs_and_profiles_avoid_the_reserved_gpu_resource() -> None:
     for profile in ("slurm", "local"):
         text = (WORKFLOW / "profiles" / profile / "config.yaml").read_text()

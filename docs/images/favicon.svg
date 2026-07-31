@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="MMML">
   <title>MMML</title>
   <!--
-    Source for docs/images/favicon.png. Same interlocking-ring mark as
-    logo-mark.svg, on an indigo plate matching theme.palette.primary so the
-    icon stays visible on both light and dark browser tab bars.
+    Source for docs/images/favicon.png. Same mark as logo-mark.svg, on an
+    indigo plate matching theme.palette.primary so the icon stays visible on
+    both light and dark browser tab bars.
     Regenerate the PNG with:
       inkscape docs/images/favicon.svg -w 96 -o docs/images/favicon.png
   -->
   <rect width="48" height="48" rx="10" fill="#3f51b5"/>
   <g fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round">
-    <path d="M 20.57 33.67 A 10 10 0 1 1 26.56 29.17"/>
-    <path d="M 27.43 14.33 A 10 10 0 1 1 21.44 18.83"/>
+    <path d="M 9 33 L 39 15"/>
+    <circle cx="24" cy="24" r="11"/>
   </g>
 </svg>
