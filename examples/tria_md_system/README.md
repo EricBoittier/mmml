@@ -61,10 +61,11 @@ uv run mmml md-system \
 
 Pass gate for NVT: `E0` should be O(10²–10³) eV in magnitude (negative/near), **not** `1e6`. If `E0` is huge, rebuild with a larger `--box-side-A`.
 
-Expect log lines before dynamics:
+Expect log lines:
 
-- `ensemble=nvt thermostat=langevin dt_fs=0.25 ... float64=True`
-- `FIRE minimize …` then `FIRE E0=… Ebest=…` (geometry relax; skip with `--jaxmd-minimize-steps 0`)
+- NVT: `ensemble=nvt thermostat=langevin … float64=True`, then `FIRE minimize …`
+- NPT/NVE (`--run-all`): `continue-from geometry …` and `skipping FIRE` (campaign `depends_on`)
+- Geometry-only handoff (positions + box); velocities are rethermalized
 
 If NVT still blows after a good `E0` without those lines, the cluster tree is stale — sync `mmml/md/lowering.py` + `mmml/cli/run/md_system_unified.py` before retrying.
 
