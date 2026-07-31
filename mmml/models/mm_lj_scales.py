@@ -102,6 +102,22 @@ def attach_mm_lj_scales(
     return out
 
 
+# Smallest per-type scale allowed during training.
+#
+# The LJ combining rule is a *geometric* mean, ``eps_ij = sqrt(eps_i * eps_j)``
+# (cgenff_mm.cgenff_mm_energy). Its sign only cancels while every per-type
+# epsilon shares a sign. An unconstrained scale that crosses zero flips one
+# type's sign, so every mixed pair involving it evaluates ``sqrt(negative)`` ->
+# NaN, which propagates into all forces and the loss and never recovers.
+#
+# Observed in practice: a DCM run went NaN at epoch ~89 (Adam, lr 1e-3, ~44k
+# steps -- ample room to drift a scale from 1.0 through 0). Flooring keeps the
+# sign invariant. A scale pinned at the floor has zero gradient and stays there,
+# which is a visible, inspectable outcome ("this type's LJ went to ~zero")
+# rather than a silent NaN cascade.
+MM_LJ_MIN_SCALE = 1e-3
+
+
 def apply_mm_lj_scales(
     master_sigmas,
     master_epsilons,
@@ -109,8 +125,13 @@ def apply_mm_lj_scales(
     epsilon_scale=None,
     *,
     include_lj: bool = True,
+    min_scale: float = MM_LJ_MIN_SCALE,
 ):
-    """Return effective ``(sigmas, epsilons)`` after optional per-type scales."""
+    """Return effective ``(sigmas, epsilons)`` after optional per-type scales.
+
+    Scales are floored at ``min_scale`` so they cannot change sign; see
+    :data:`MM_LJ_MIN_SCALE`. Pass ``min_scale=0.0`` to disable (tests only).
+    """
     import jax.numpy as jnp
 
     sig = jnp.asarray(master_sigmas)
@@ -118,9 +139,11 @@ def apply_mm_lj_scales(
     if not include_lj:
         eps = jnp.zeros_like(eps)
     if sigma_scale is not None:
-        sig = sig * jnp.asarray(sigma_scale).reshape(-1)
+        s = jnp.asarray(sigma_scale).reshape(-1)
+        sig = sig * jnp.maximum(s, min_scale)
     if epsilon_scale is not None and include_lj:
-        eps = eps * jnp.asarray(epsilon_scale).reshape(-1)
+        e = jnp.asarray(epsilon_scale).reshape(-1)
+        eps = eps * jnp.maximum(e, min_scale)
     return sig, eps
 
 

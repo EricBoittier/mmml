@@ -367,3 +367,46 @@ def test_md_example_ships_a_condensed_phase_run():
         )
         assert run.get("box_size"), "pbc_* run needs a box_size"
     assert md["defaults"]["include_mm"] is True
+
+
+def test_negative_epsilon_scale_does_not_produce_nan():
+    """Regression: an unconstrained scale crossing zero used to NaN the loss.
+
+    ``eps_ij = sqrt(eps_i * eps_j)`` is a geometric mean, so its sign only
+    cancels while every per-type epsilon shares a sign. A scale that crossed zero
+    flipped one type's sign and every mixed pair became ``sqrt(negative)``. That
+    NaN reached the forces and the loss and never recovered — a real DCM training
+    run died this way at epoch ~89.
+
+    ``apply_mm_lj_scales`` now floors scales at ``MM_LJ_MIN_SCALE``.
+    """
+    batch = _dimer_batch()  # two types -> mixed pairs exist
+
+    baseline = float(_e_mm(jnp.ones(2), jnp.ones(2), batch))
+    assert np.isfinite(baseline) and abs(baseline) > 0
+
+    for bad in (-1e-3, -0.05, -0.5, -50.0):
+        got = float(_e_mm(jnp.ones(2), jnp.array([bad, 1.0]), batch))
+        assert np.isfinite(got), f"epsilon scale {bad} produced {got}"
+        got = float(_e_mm(jnp.array([bad, 1.0]), jnp.ones(2), batch))
+        assert np.isfinite(got), f"sigma scale {bad} produced {got}"
+
+
+def test_scale_floor_leaves_normal_values_untouched():
+    """The floor must not perturb any scale in a plausible range."""
+    from mmml.models.mm_lj_scales import MM_LJ_MIN_SCALE, apply_mm_lj_scales
+
+    assert MM_LJ_MIN_SCALE > 0
+    sig_in = jnp.array([0.5, 2.0])
+    eps_in = jnp.array([0.5, 2.0])
+    s, e = apply_mm_lj_scales(MASTER_SIGMAS, MASTER_EPSILONS, sig_in, eps_in)
+    np.testing.assert_allclose(np.asarray(s), np.asarray(MASTER_SIGMAS * sig_in))
+    np.testing.assert_allclose(np.asarray(e), np.asarray(MASTER_EPSILONS * eps_in))
+
+
+def test_gradient_survives_across_the_floor():
+    """Above the floor the gradient is unchanged; the floor only clamps below."""
+    batch = _dimer_batch()
+    g = jax.grad(lambda e: _e_mm(jnp.ones(2), e, batch))(jnp.array([0.5, 1.0]))
+    assert np.all(np.isfinite(np.asarray(g)))
+    assert np.any(np.abs(np.asarray(g)) > 0)
