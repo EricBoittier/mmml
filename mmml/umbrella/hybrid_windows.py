@@ -7,7 +7,8 @@ missing / failed ones, then reassembles ``umbrella_snapshots.npz``.
 
 from __future__ import annotations
 
-import json
+import os
+import uuid
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -39,12 +40,18 @@ def save_window_checkpoint(
     k_ev_A2: float,
     fail_reason: str | None = None,
 ) -> Path:
-    """Atomic-ish write of one window result (ok or failed)."""
+    """Atomic-ish write of one window result (ok or failed).
+
+    Uses a process-unique temp name so parallel Snakemake window jobs (or a
+    concurrent bootstrap from ``umbrella_snapshots.npz``) cannot race on a
+    shared ``wXXX.tmp.npz``.
+    """
     path = window_npz_path(output_dir, wid)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # NumPy appends ``.npz`` unless the path already ends with it — keep the
-    # temp name ``*.tmp.npz`` so replace() finds the file we wrote.
-    tmp = path.with_name(path.stem + ".tmp.npz")
+    # NumPy appends ``.npz`` unless the path already ends with it.
+    tmp = path.with_name(
+        f"{path.stem}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp.npz"
+    )
     payload: dict[str, Any] = {
         "status": np.asarray(status),
         "window": np.int32(wid),
@@ -58,7 +65,19 @@ def save_window_checkpoint(
     if fail_reason is not None:
         payload["fail_reason"] = np.asarray(fail_reason)
     np.savez_compressed(tmp, **payload)
-    tmp.replace(path)
+    try:
+        tmp.replace(path)
+    except FileNotFoundError:
+        # Another process already replaced the same destination after we wrote
+        # tmp, or the temp vanished; keep an existing checkpoint if present.
+        if not path.is_file():
+            raise
+    finally:
+        if tmp.is_file():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
     return path
 
 

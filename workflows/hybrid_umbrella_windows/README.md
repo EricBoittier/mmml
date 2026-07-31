@@ -75,6 +75,10 @@ Snakemake only re-runs missing `windows/wXXX.npz`. Failed MD still writes a
 checkpoint (`status=failed`), so that window is considered done; re-run a hole
 by deleting its NPZ:
 
+Per-window jobs use `--windows N --resume` and **do not** split a leftover
+`umbrella_snapshots.npz` into `windows/` (that raced across GPUs). Only the
+serial `assemble` step bootstraps from an aggregated NPZ if needed.
+
 ```bash
 rm artifacts/nh3_ch3cl/umbrella_nc_acn_prod/windows/w019.npz
 bash scripts/snakemake_slurm.sh 8

@@ -76,6 +76,30 @@ def test_select_only_windows(tmp_path):
     assert ok == []
 
 
+def test_save_window_checkpoint_unique_tmp(tmp_path, monkeypatch):
+    """Parallel writers must not share wXXX.tmp.npz (race → FileNotFoundError)."""
+    import mmml.umbrella.hybrid_windows as hw
+
+    names: list[str] = []
+    real_savez = hw.np.savez_compressed
+
+    def _spy(path, **payload):
+        names.append(str(path))
+        return real_savez(path, **payload)
+
+    monkeypatch.setattr(hw.np, "savez_compressed", _spy)
+    pos, cv, e, u = _ok_arrays()
+    for _ in range(2):
+        save_window_checkpoint(
+            tmp_path, 7, status="ok", positions=pos, cv=cv, energies=e,
+            energies_unbiased=u, xi0=0.1, k_ev_A2=6.5,
+        )
+    assert len(names) == 2
+    assert names[0] != names[1]
+    assert all(".tmp.npz" in n for n in names)
+    assert (tmp_path / "windows" / "w007.npz").is_file()
+
+
 def test_bootstrap_from_aggregated_snapshots(tmp_path):
     k, t, n = 3, 5, 2
     positions = np.zeros((k, t, n, 3))
