@@ -15,7 +15,9 @@ envvars:
   - JAX_ENABLE_X64
   - JAX_PLATFORMS
 default-resources:
-  - gpu=1
+  # Throttle only. A resource named `gpu` would be turned into --gpus=N by the
+  # executor plugin and clash with the per-rule `gres` request.
+  - gpu_slot=1
   - charmm_slot=1
   - runtime=720
   - nodes=1

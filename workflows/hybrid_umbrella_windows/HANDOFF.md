@@ -50,7 +50,7 @@ make_box → window[{000..N-1}] (parallel GPU) → assemble → mbar
 
 | File | Role |
 |------|------|
-| `Snakefile` | Rules; GPU jobs get `--gres=gpu:1` |
+| `Snakefile` | Rules; GPU jobs set the `gres` resource (→ `--gres=gpu:1`) |
 | `config.yaml` | ACN prod (default), 30 windows, `max_jobs: 8` |
 | `config.tip3.yaml` | TIP3 prod |
 | `config.smoke.yaml` | 3-window tip3 smoke |
@@ -99,11 +99,38 @@ Mitigations added (not fully validated in prod yet):
 
 - CUDA preflight + retries in `env_shell.sh` (`MMML_CUDA_INIT_RETRIES`, default 12)
 - `XLA_PYTHON_CLIENT_PREALLOCATE=false`
-- Explicit `--gres=gpu:1` on GPU rules
+- Explicit `--gres=gpu:1` on GPU rules (see GPU-request section below)
 - Profile `retries: 3`
 - Warning if `snakemake_slurm.sh` is launched from inside a GPU allocation
 
 **Strong advice:** run the Snakemake **controller on the login node**, not an interactive `gpu0N` shell. User was on `gpu08` when many failures appeared.
+
+### How the GPU is requested (do not put it in `slurm_extra`)
+
+Current `snakemake-executor-plugin-slurm` **refuses to submit** any job whose
+`slurm_extra` contains `--gres` or `--gpus`:
+
+```text
+The --generic-resources-(GRES) option is not allowed in the 'slurm_extra'
+parameter. The generic resources (GRES) is set by the snakemake executor plugin
+```
+
+It builds the flag itself from job resources (`utils.set_gres_string`):
+
+| Resource | sbatch flag |
+|----------|-------------|
+| `gres: "gpu:1"` | `--gres=gpu:1` |
+| `gpu: 1` | `--gpus=1` |
+
+Setting **both** emits both flags for one device, so the rules pick exactly one
+via `gpu_request_resources()` in `campaign_lib.py`. Default is `gres`; set
+`slurm.gres: ""` in the config to fall back to `--gpus=1` if a site prefers it.
+
+The concurrency throttle is `gpu_slot`, **not** `gpu` — a resource literally
+named `gpu` is consumed by the plugin and turned into `--gpus=N`. Same reason the
+profiles' `default-resources` use `gpu_slot=1`.
+
+Pinned by `tests/unit/test_hybrid_umbrella_windows_campaign.py`.
 
 ---
 
@@ -170,8 +197,8 @@ with `_establish_config_source`), so run these from the studix login node.
 
 - `uv run pytest tests/unit -k "umbrella or hybrid_windows" -q` → 77 passed
 - `MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n` →
-  DAG resolves to `make_box → window×3 → assemble → mbar`, GPU rules carry
-  `slurm_extra=--gres=gpu:1`, `mbar` correctly requests `gpu=0`
+  DAG resolves to `make_box → window×3 → assemble → mbar`; `window` / `assemble`
+  carry `gres=gpu:1` with empty `slurm_extra`, `make_box` / `mbar` carry neither
 - Working tree clean at `828e57422`; all workflow files tracked
 
 ---
