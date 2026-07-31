@@ -1,0 +1,22 @@
+/* Landing-page hero artwork.
+   The logo is line art over a soft white haze, so it needs a light plate to
+   read correctly — without one it turns into a milky box on the dark theme. */
+.mmml-hero {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 2rem;
+}
+
+.mmml-hero img {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  background: #fff;
+  border-radius: 0.6rem;
+  padding: 0.75rem;
+}
+
+[data-md-color-scheme="slate"] .mmml-hero img {
+  /* Soften the white plate so it does not glare against the dark page. */
+  background: #e8e8e4;
+}

@@ -1,3 +1,7 @@
+<div class="mmml-hero" markdown>
+![MMML](images/mmml.svg)
+</div>
+
 # MMML
 
 Molecular mechanics workflows and machine-learned force fields, on JAX.

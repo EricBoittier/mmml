@@ -1,4 +1,8 @@
-# mmml
+<p align="center">
+  <img src="https://raw.githubusercontent.com/EricBoittier/mmml/main/docs/images/mmml.svg" alt="MMML" width="380">
+</p>
+
+<h1 align="center">mmml</h1>
 
 [![CI](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/EricBoittier/mmml/branch/main/graph/badge.svg)](https://codecov.io/gh/EricBoittier/mmml/branch/main)
