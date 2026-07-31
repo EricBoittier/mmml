@@ -141,12 +141,17 @@ tasks:
       --output-dir {output_dir}
       --checkpoint-glob 'examples/sppoky-epoch-*_params.json'
       --tiers load,dataset,physics,smoothness
+      --test-extxyz '~/data/so3lr_test/qm7x_10k_testset.extxyz,~/data/so3lr_test/TorsionNet500.extxyz'
+      --cache-dir '~/data/so3lr_orbax_cache'
     acceptance: [all_checkpoints_load, dataset_error_ranked, fd_forces_pass, no_spurious_minima]
     note: >-
-      Tiers needing data absent from the repo (dataset needs --test-extxyz and
-      --cache-dir; smoothness needs --dimer-npz) report `skipped` and assert
-      nothing, so the task stays INCOMPLETE until they are supplied via
-      MMML_TEST_EXTXYZ / MMML_EVAL_CACHE_DIR / MMML_DIMER_NPZ.
+      Only qm7x_10k_testset and TorsionNet500 are evaluated; ~/data/so3lr_test
+      holds eight more sets that are deliberately skipped. Each is evaluated and
+      reported separately -- their errors are not on a common scale, so the
+      scoreboard ranks by mean rank across sets, never by mean MAE.
+      The smoothness tier still needs a CGenFF-typed dimer NPZ via --dimer-npz
+      (or MMML_DIMER_NPZ); until then it reports `skipped`, asserts nothing, and
+      the task stays INCOMPLETE rather than falsely passing.
 
   checkpoint.scoreboard:
     goal: checkpoint

@@ -331,7 +331,12 @@ def main() -> int:
         help="glob of candidate checkpoints, relative to the repo root",
     )
     p.add_argument("--tiers", default=",".join(TIERS), help=f"subset of {','.join(TIERS)}")
-    p.add_argument("--test-extxyz", default=os.environ.get("MMML_TEST_EXTXYZ"))
+    p.add_argument(
+        "--test-extxyz",
+        default=os.environ.get("MMML_TEST_EXTXYZ"),
+        help="comma-separated .extxyz test sets; each is evaluated separately "
+             "and reported separately (never averaged together)",
+    )
     p.add_argument("--cache-dir", default=os.environ.get("MMML_EVAL_CACHE_DIR"))
     p.add_argument("--dimer-npz", default=os.environ.get("MMML_DIMER_NPZ"))
     p.add_argument("--composition", default="TIP3:2", help="system for mode-check")

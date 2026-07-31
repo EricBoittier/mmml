@@ -18,6 +18,7 @@ from mmml.interfaces.pyxtal_placement import (
     write_psf_order_mapping_pdb,
 )
 from mmml.paths import (
+    default_acetone_crystal_cif,
     default_benzene_crystal_cif,
     default_dcm_crystal_cif,
 )
@@ -42,6 +43,37 @@ LITERATURE_CRYSTAL_PRESETS: dict[str, dict[str, Any]] = {
         "cif": default_benzene_crystal_cif,
         "space_group": 14,
         "reference_density_g_cm3": 1.202,
+    },
+    # Allan et al., Chem. Commun. 1999, 751. The stable low-temperature Pbca
+    # phase is the default acetone entry; ``aco5k``/``aco110k`` are the same
+    # phase at the other two temperatures the paper reports, which differ
+    # enough in cell shape (b contracts 6% from 150 K to 5 K while a expands)
+    # to be worth building separately. The 15 kbar Cmcm phase is deliberately
+    # absent: its methyls are rotationally disordered, so it has no single set
+    # of hydrogen positions to hand a force field.
+    "aco": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_150k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 0.987,
+    },
+    "aco5k": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_5k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 1.052,
+    },
+    "aco110k": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_110k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 1.001,
+    },
+    "acocmcm": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("cmcm_160k"),
+        "space_group": 63,
+        "reference_density_g_cm3": 1.017,
     },
 }
 

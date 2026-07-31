@@ -37,35 +37,67 @@ def _metric(row: dict[str, Any], tier: str, key: str) -> Any:
     return node.get(key) if isinstance(node, dict) else None
 
 
-def rank(results: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def dataset_names(results: dict[str, dict[str, Any]]) -> list[str]:
+    names: set[str] = set()
+    for row in results.values():
+        names.update(_metric(row, "dataset", "datasets") or {})
+    return sorted(names)
+
+
+def _dataset_metric(row: dict[str, Any], dataset: str, key: str) -> Any:
+    ds = _metric(row, "dataset", "datasets") or {}
+    entry = ds.get(dataset)
+    return entry.get(key) if isinstance(entry, dict) else None
+
+
+def rank(results: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Rank by gates first, then by mean rank across test sets.
+
+    Mean *rank* rather than mean MAE: the test sets cover different chemistry,
+    so their errors are not on a common scale and averaging them would invent a
+    quantity. Rank aggregation only assumes each set can order the checkpoints,
+    which is all we actually need.
+    """
+    datasets = dataset_names(results)
     rows = []
     for name, row in results.items():
         gates = {g: _status(row, g) for g in GATES}
-        n_failed = sum(1 for s in gates.values() if s == "fail")
-        e_mae = _metric(row, "dataset", "energy_mae")
-        f_mae = _metric(row, "dataset", "forces_mae")
-        rows.append(
-            {
-                "checkpoint": name,
-                "load": SYMBOL[gates["load"]],
-                "physics": SYMBOL[gates["physics"]],
-                "smoothness": SYMBOL[gates["smoothness"]],
-                "energy_mae": e_mae,
-                "forces_mae": f_mae,
-                "gates_failed": n_failed,
-                "wall_s": row.get("_wall_s"),
-            }
+        entry: dict[str, Any] = {
+            "checkpoint": name,
+            "load": SYMBOL[gates["load"]],
+            "physics": SYMBOL[gates["physics"]],
+            "smoothness": SYMBOL[gates["smoothness"]],
+            "gates_failed": sum(1 for s in gates.values() if s == "fail"),
+            "wall_s": row.get("_wall_s"),
+        }
+        for d in datasets:
+            entry[f"{d}:energy_mae"] = _dataset_metric(row, d, "energy_mae")
+            entry[f"{d}:forces_mae"] = _dataset_metric(row, d, "forces_mae")
+        rows.append(entry)
+
+    # Per-dataset ordering by energy MAE; checkpoints without a value sort last.
+    for d in datasets:
+        key = f"{d}:energy_mae"
+        ordered = sorted(
+            rows, key=lambda r, k=key: (r[k] is None, r[k] if r[k] is not None else 0.0)
         )
-    # Gates dominate; energy MAE breaks ties (None sorts last).
+        for i, r in enumerate(ordered, 1):
+            r[f"{d}:rank"] = i if r[key] is not None else None
+
+    for r in rows:
+        got = [r[f"{d}:rank"] for d in datasets if r.get(f"{d}:rank") is not None]
+        r["mean_rank"] = round(sum(got) / len(got), 2) if got else None
+
     rows.sort(key=lambda r: (r["gates_failed"],
-                             r["energy_mae"] if r["energy_mae"] is not None else float("inf"),
+                             r["mean_rank"] if r["mean_rank"] is not None else float("inf"),
                              r["checkpoint"]))
     for i, r in enumerate(rows, 1):
         r["rank"] = i
-    return rows
+    return rows, datasets
 
 
-def to_markdown(rows: list[dict[str, Any]], *, glob: str | None) -> str:
+def to_markdown(rows: list[dict[str, Any]], datasets: list[str], *, glob: str | None) -> str:
+    fmt = lambda v: "—" if v is None else f"{v:.4g}"  # noqa: E731
     out = [
         "# Checkpoint scoreboard",
         "",
@@ -78,29 +110,49 @@ def to_markdown(rows: list[dict[str, Any]], *, glob: str | None) -> str:
     ]
     if glob:
         out += [f"Candidates: `{glob}`", ""]
-    out += [
-        "| # | Checkpoint | load | physics | smoothness | energy MAE | forces MAE |",
-        "|---|------------|------|---------|------------|-----------:|-----------:|",
-    ]
-    fmt = lambda v: "—" if v is None else f"{v:.4g}"  # noqa: E731
+
+    header = "| # | Checkpoint | load | physics | smoothness |"
+    rule = "|---|------------|------|---------|------------|"
+    for d in datasets:
+        header += f" {d} energy MAE | {d} forces MAE |"
+        rule += "-----------:|-----------:|"
+    header += " mean rank |"
+    rule += "----------:|"
+    out += [header, rule]
+
     for r in rows:
-        out.append(
-            f"| {r['rank']} | `{r['checkpoint']}` | {r['load']} | {r['physics']} | "
-            f"{r['smoothness']} | {fmt(r['energy_mae'])} | {fmt(r['forces_mae'])} |"
-        )
+        line = (f"| {r['rank']} | `{r['checkpoint']}` | {r['load']} | {r['physics']} "
+                f"| {r['smoothness']} |")
+        for d in datasets:
+            line += f" {fmt(r.get(f'{d}:energy_mae'))} | {fmt(r.get(f'{d}:forces_mae'))} |"
+        line += f" {fmt(r.get('mean_rank'))} |"
+        out.append(line)
+
     out += ["", "## How to read this", ""]
-    if all(r["energy_mae"] is None for r in rows):
+    if not datasets:
         out.append(
             "No dataset tier ran, so **this table cannot tell you which checkpoint is "
             "most accurate** — only which ones are free of the pathologies the physics "
             "gates detect. Supply `--test-extxyz` and `--cache-dir` to rank on error."
         )
     else:
-        out.append(
-            "Ranking is by gates first, then energy MAE. Where the top two differ only "
-            "in MAE, prefer the earlier epoch: it has had less opportunity to overfit "
-            "into the sharp features that MD finds."
-        )
+        out += [
+            "Ranking is by gates first, then **mean rank across test sets** — not mean "
+            "MAE. The sets cover different chemistry, so their errors are not on a "
+            "common scale and averaging them would invent a quantity that means "
+            "nothing. Rank aggregation only assumes each set can order the "
+            "checkpoints.",
+            "",
+            "Where the top two differ only in error, prefer the earlier epoch: it has "
+            "had less opportunity to overfit into the sharp features that MD finds.",
+        ]
+        if len(datasets) > 1:
+            out += [
+                "",
+                "If the test sets disagree on the ordering, that disagreement is the "
+                "result — it means no single checkpoint dominates, and the choice "
+                "should follow whichever set resembles your production system.",
+            ]
     return "\n".join(out) + "\n"
 
 
@@ -118,19 +170,21 @@ def main() -> int:
     if not results:
         raise SystemExit(f"{args.metrics} is empty -- did the triage run?")
 
-    rows = rank(results)
+    rows, datasets = rank(results)
 
     if args.csv:
         args.csv.parent.mkdir(parents=True, exist_ok=True)
-        cols = ["rank", "checkpoint", "load", "physics", "smoothness",
-                "energy_mae", "forces_mae", "gates_failed", "wall_s"]
+        cols = ["rank", "checkpoint", "load", "physics", "smoothness"]
+        for d in datasets:
+            cols += [f"{d}:energy_mae", f"{d}:forces_mae", f"{d}:rank"]
+        cols += ["mean_rank", "gates_failed", "wall_s"]
         with args.csv.open("w", newline="", encoding="utf-8") as fh:
-            w = csv.DictWriter(fh, fieldnames=cols)
+            w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
             w.writeheader()
             w.writerows(rows)
         print(f"checkpoint_scoreboard: wrote {args.csv}")
 
-    md = to_markdown(rows, glob=args.glob)
+    md = to_markdown(rows, datasets, glob=args.glob)
     if args.markdown:
         args.markdown.parent.mkdir(parents=True, exist_ok=True)
         args.markdown.write_text(md, encoding="utf-8")
