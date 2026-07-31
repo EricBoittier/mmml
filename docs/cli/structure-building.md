@@ -292,6 +292,26 @@ Katrusiak *et al.*, *Cryst. Growth Des.* **2010**, 10, 3461 ([doi:10.1021/cg1002
 
 _make-res+CIF: `mmml build-crystal --literature benz` (unit cell)._
 _PyXtal: `-m benzene` (not `c1ccccc1`), `--spg 14 --z 2 --seed 7`, ρ scaled to literature._
+
+#### Acetone (C₃H₆O) — [COD 7110464](https://www.crystallography.net/cod/7110464.html)
+
+Allan *et al.*, *Chem. Commun.* **1999**, 751 ([doi:10.1039/a900558g](https://doi.org/10.1039/a900558g)); Pbca, Z=16, ambient pressure / 150 K. Three more phases ship as presets (`aco5k`, `aco110k`, `acocmcm`); all five published structures are checked against the paper by `examples/acetone_crystal/01_phases.py`.
+
+| Quantity | Literature | make-res+CIF | Δ (CIF−lit) | PyXtal build | Δ (PyXtal−lit) |
+|----------|------------|--------------|-------------|--------------|----------------|
+| Space group | 61 | 61 | — | — | — |
+| N atoms | 160 | 160 | +0.0% | — | — |
+| *a* (Å) | 8.873 | 8.873 | +0.0% | — | — |
+| *b* (Å) | 8.000 | 8.000 | +0.0% | — | — |
+| *c* (Å) | 22.027 | 22.027 | +0.0% | — | — |
+| α (°) | 90.0 | 90.0 | +0.0% | — | — |
+| β (°) | 90.0 | 90.0 | +0.0% | — | — |
+| γ (°) | 90.0 | 90.0 | +0.0% | — | — |
+| Volume (Å³) | 1563.6 | 1563.6 | +0.0% | — | — |
+| ρ (g/cm³) | 0.987 | 0.987 | -0.0% | — | — |
+
+_make-res+CIF: `mmml build-crystal --literature aco` (unit cell)._
+_No PyXtal column: acetone is used here as an experimental reference structure, not a packing target._
 <!-- CRYSTAL_LIT_COMPARE_END -->
 
 ### Other examples

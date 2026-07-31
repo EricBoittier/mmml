@@ -9,8 +9,10 @@ from typing import Any, Literal, Mapping, Sequence
 from mmml.md.restraints import (
     AngleWall,
     BondRetentionWall,
+    DihedralCV,
     FlatBottomWall,
     LinearDistanceCV,
+    cv_from_spec,
 )
 
 
@@ -41,13 +43,17 @@ def _pairs_need_name_bind(pairs: Any) -> bool:
 
 def _spec_needs_name_bind(spec: Any) -> bool:
     """True when ``cv_x`` / wall YAML still carries atom *names* (e.g. ``C1``)."""
-    if spec is None or isinstance(spec, (LinearDistanceCV, FlatBottomWall, BondRetentionWall, AngleWall)):
+    if spec is None or isinstance(
+        spec, (LinearDistanceCV, DihedralCV, FlatBottomWall, BondRetentionWall, AngleWall)
+    ):
         return False
     if not isinstance(spec, dict):
         return False
     if "pairs" in spec and _pairs_need_name_bind(spec["pairs"]):
         return True
     if "atoms" in spec and any(_atom_ref_is_name(x) for x in spec["atoms"]):
+        return True
+    if "dihedral" in spec and any(_atom_ref_is_name(x) for x in spec["dihedral"]):
         return True
     if "cv" in spec and _spec_needs_name_bind(spec["cv"]):
         return True
@@ -91,7 +97,7 @@ class WindowSchedule:
     k_x: tuple[float, ...]
     k_y: tuple[float, ...] | None
     grid_shape: tuple[int, ...]
-    cvs: tuple[LinearDistanceCV, ...] = ()
+    cvs: tuple[Any, ...] = ()
     walls: tuple[FlatBottomWall, ...] = ()
 
     def __post_init__(self) -> None:
@@ -131,10 +137,20 @@ class WindowSchedule:
 
     def cv_specs(self) -> list[dict[str, Any]]:
         """JSON-serialisable CV descriptions, for snapshots and summaries."""
-        return [
-            {"pairs": [list(p) for p in cv.pairs], "coefficients": list(cv.coefficients)}
-            for cv in self.cvs
-        ]
+        out: list[dict[str, Any]] = []
+        for cv in self.cvs:
+            if isinstance(cv, DihedralCV):
+                out.append(cv.to_spec())
+            elif hasattr(cv, "to_spec"):
+                out.append(cv.to_spec())
+            else:
+                out.append(
+                    {
+                        "pairs": [list(p) for p in cv.pairs],
+                        "coefficients": list(cv.coefficients),
+                    }
+                )
+        return out
 
 
 def _linspace_or_list(
@@ -231,6 +247,22 @@ class UmbrellaConfig:
     move_with2: tuple[int, ...] = ()
     invert_with: tuple[int, ...] = ()
     max_seed_force: float = 15.0
+    """Reject a seed whose **ML-region** max |F| exceeds this (eV/Å).
+
+    Gating on the whole-system maximum is meaningless in explicit solvent: a raw
+    Packmol box pins it at a window-independent value (~37 eV/Å for dense ACN at
+    the default 2.0 Å packing tolerance) coming from solvent contacts the seeding
+    never touches, so every window reports the same number and no strained seed
+    is ever caught."""
+    relax_seed_steps: int = 0
+    """FIRE steps relaxing the surroundings around a frozen seeded solute (0 = off).
+
+    Windows are seeded by rigidly displacing the solute inside a box packed for a
+    different ξ, so the solvent has to accommodate before dynamics can start.
+    Without it the far windows integrate straight into an overlap and abort
+    non-finite within ~1 ps."""
+    relax_seed_fmax: float = 1.0
+    """Convergence target (eV/Å) on the mobile atoms of that relaxation."""
     thermostat: Literal["langevin", "nose-hoover"] = "langevin"
     langevin_gamma: float = 0.1
     max_window_temp_K: float | None = None
@@ -305,6 +337,14 @@ class UmbrellaConfig:
             )
         if self.max_seed_force <= 0:
             raise ValueError(f"max_seed_force must be > 0 (got {self.max_seed_force})")
+        if self.relax_seed_steps < 0:
+            raise ValueError(
+                f"relax_seed_steps must be >= 0 (got {self.relax_seed_steps})"
+            )
+        if self.relax_seed_fmax <= 0:
+            raise ValueError(
+                f"relax_seed_fmax must be > 0 (got {self.relax_seed_fmax})"
+            )
         if self.thermostat not in ("langevin", "nose-hoover"):
             raise ValueError(
                 f"thermostat must be langevin|nose-hoover (got {self.thermostat!r})"
@@ -371,16 +411,16 @@ class UmbrellaConfig:
             self.atom_k is not None and self.atom_l is not None
         )
 
-    def resolve_cvs(self) -> tuple[LinearDistanceCV, ...]:
+    def resolve_cvs(self) -> tuple[Any, ...]:
         """Resolve CV1 (and CV2 when 2D) from ``cv_*`` or the atom-index fields."""
         if self.cv_x is not None:
-            cv_x = LinearDistanceCV.from_spec(self.cv_x)
+            cv_x = cv_from_spec(self.cv_x)
         else:
             cv_x = LinearDistanceCV.distance(int(self.atom_i), int(self.atom_j))
         if not self.is_2d:
             return (cv_x,)
         if self.cv_y is not None:
-            cv_y = LinearDistanceCV.from_spec(self.cv_y)
+            cv_y = cv_from_spec(self.cv_y)
         else:
             cv_y = LinearDistanceCV.distance(int(self.atom_k), int(self.atom_l))
         return (cv_x, cv_y)
@@ -390,12 +430,12 @@ class UmbrellaConfig:
         return tuple(_resolve_wall(w) for w in self.walls)
 
     def _legacy_atom_pairs(
-        self, cvs: tuple[LinearDistanceCV, ...]
+        self, cvs: tuple[Any, ...]
     ) -> tuple[tuple[int, int], ...]:
         """First pair of each CV -- the backward-compatible ``atom_pairs`` view.
 
-        Only faithful for plain-distance CVs; combination CVs carry their real
-        definition on ``WindowSchedule.cvs``.
+        Only faithful for plain-distance CVs; combination / dihedral CVs carry
+        their real definition on ``WindowSchedule.cvs``.
         """
         return tuple(cv.pairs[0] for cv in cvs)
 
@@ -522,7 +562,7 @@ class UmbrellaConfig:
                     # Keep YAML atom names; hybrid binds them to PSF indices.
                     raw[key] = dict(raw[key])
                 else:
-                    raw[key] = LinearDistanceCV.from_spec(raw[key])
+                    raw[key] = cv_from_spec(raw[key])
         if raw.get("walls"):
             raw["walls"] = tuple(_resolve_wall(w) for w in raw["walls"])
         return cls(**raw)
@@ -541,14 +581,17 @@ class UmbrellaConfig:
                 out[key] = str(out[key])
         for key in ("cv_x", "cv_y"):
             cv = getattr(self, key)
-            out[key] = (
-                None
-                if cv is None
-                else {
-                    "pairs": [list(p) for p in LinearDistanceCV.from_spec(cv).pairs],
-                    "coefficients": list(LinearDistanceCV.from_spec(cv).coefficients),
-                }
-            )
+            if cv is None:
+                out[key] = None
+            else:
+                resolved = cv_from_spec(cv)
+                if isinstance(resolved, DihedralCV):
+                    out[key] = {"kind": "dihedral", "atoms": list(resolved.atoms)}
+                else:
+                    out[key] = {
+                        "pairs": [list(p) for p in resolved.pairs],
+                        "coefficients": list(resolved.coefficients),
+                    }
         out["targets_A"] = list(out["targets_A"])
         out["targets_y_A"] = list(out["targets_y_A"])
         out["move_with"] = list(out["move_with"])

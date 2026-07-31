@@ -57,14 +57,21 @@ uv run mmml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml \
   --checkpoint "$MMML_CKPT" \
   --run-all
+
+# Optional: NVT Nose–Hoover chain (jax-md nvt_nose_hoover) instead of Langevin
+uv run mmml md-system \
+  --config examples/tria_md_system/yaml/campaign_nvt_npt_dense_nhc.yaml \
+  --checkpoint "$MMML_CKPT" \
+  --run-all
 ```
 
 Pass gate for NVT: `E0` should be O(10²–10³) eV in magnitude (negative/near), **not** `1e6`. If `E0` is huge, rebuild with a larger `--box-side-A`.
 
-Expect log lines before dynamics:
+Expect log lines:
 
-- `ensemble=nvt thermostat=langevin dt_fs=0.25 ... float64=True`
-- `FIRE minimize …` then `FIRE E0=… Ebest=…` (geometry relax; skip with `--jaxmd-minimize-steps 0`)
+- NVT: `ensemble=nvt thermostat=langevin … float64=True`, then `FIRE minimize …`
+- NPT/NVE (`--run-all`): `continue-from geometry …` and `skipping FIRE` (campaign `depends_on`)
+- Geometry-only handoff (positions + box); velocities are rethermalized
 
 If NVT still blows after a good `E0` without those lines, the cluster tree is stale — sync `mmml/md/lowering.py` + `mmml/cli/run/md_system_unified.py` before retrying.
 
@@ -82,6 +89,33 @@ NPT logs now split the instantaneous pressure:
 | Red flag | `Pkin0 ≈ 0` while T is 300 K, or `|Pvir0|` absurd with no geometry change |
 
 Your recent dilute run (`P0≈−2600`, `V` fixed) matches the dilute-box row: virial dominates, soft piston OK.
+
+### Export trajectories (ASE / CHARMM PSF+DCD)
+
+`trajectory.npz` from jaxmd-unified can be converted with `mmml npz2traj`.
+Use the box PSF from the build (`artifacts/md_embedding/aaa_dense/model.psf`).
+
+```bash
+PSF=artifacts/md_embedding/aaa_dense/model.psf
+LEG=artifacts/tria_md_system/campaign_dense/nvt_1057729e   # or nvt/
+
+# Full system → ASE
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.traj"
+
+# Full system → CHARMM PSF+DCD (PSF copied next to the DCD)
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF"
+
+# Also write protein-only and water-only copies
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF" \
+  --split-resnames TRIA,TIP3
+# → all.dcd / all.psf, all.TRIA.dcd / all.TRIA.psf, all.TIP3.dcd / all.TIP3.psf
+
+# Primary output = selection only
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/tria.dcd" --psf "$PSF" \
+  --resnames TRIA
+```
+
+VMD: `vmd all.psf all.dcd` (or the `.TRIA` / `.TIP3` pair).
 
 Quick offline check from a saved `trajectory.npz`:
 

@@ -41,6 +41,6 @@ exec uv run --with snakemake snakemake \
   --profile "$PROFILE" \
   "${CONFIG_ARGS[@]}" \
   -j"$JOBS" \
-  --resources gpu="${JOBS}" charmm_slot="${JOBS}" \
+  --resources gpu_slot="${JOBS}" charmm_slot="${JOBS}" \
   --keep-going \
   "$@"

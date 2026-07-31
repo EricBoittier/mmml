@@ -111,6 +111,80 @@ def test_literature_benzene_pdb_keeps_benz_not_ben():
     assert all(r == "BENZ" for r in seq)
 
 
+def test_acetone_presets_cover_the_ordered_phases():
+    """Allan et al.'s Pbca phases, plus the metastable Cmcm one.
+
+    The 15 kbar phase is deliberately absent: its methyls are rotationally
+    disordered, so there is no single set of hydrogen positions to map onto
+    CGenFF ACO.
+    """
+    from mmml.interfaces.crystal_charmm import LITERATURE_CRYSTAL_PRESETS
+
+    acetone = {k: v for k, v in LITERATURE_CRYSTAL_PRESETS.items() if k.startswith("aco")}
+    assert set(acetone) == {"aco", "aco5k", "aco110k", "acocmcm"}
+    for spec in acetone.values():
+        assert spec["residue"] == "ACO"
+        assert Path(spec["cif"]()).is_file()
+    assert LITERATURE_CRYSTAL_PRESETS["aco"]["space_group"] == 61
+    assert LITERATURE_CRYSTAL_PRESETS["acocmcm"]["space_group"] == 63
+
+
+def test_build_literature_acetone_unit_cell_matches_cif():
+    """Mapping 16 molecules onto CHARMM atom names must not move any atom."""
+    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from mmml.interfaces.crystal_reference import metrics_from_cif
+    from mmml.paths import default_acetone_crystal_cif
+
+    lit = metrics_from_cif(default_acetone_crystal_cif("pbca_150k"), space_group=61)
+    result = build_literature_charmm_supercell(
+        "aco",
+        supercell_reps=(1, 1, 1),
+        min_box_side_a=None,
+    )
+    assert result.n_molecules == 16
+    assert result.residue == "ACO"
+    assert result.density_g_cm3 == pytest.approx(lit.density_g_cm3, rel=1e-4)
+    for axis in range(3):
+        assert result.cell_lengths_a[axis] == pytest.approx(lit.lengths_a[axis], rel=1e-3)
+
+    text = result.pdb_path.read_text(encoding="utf-8")
+    assert "CRYST1" in text
+    assert " ACO " in text
+
+
+def test_acetone_lattice_energy_survives_the_charmm_name_mapping():
+    """A geometry-preserving rename must leave the lattice energy untouched.
+
+    Atom names are assigned by Hungarian matching against the make-res template,
+    which is exactly the kind of step that can permute atoms between molecules
+    without anything looking wrong.
+    """
+    from ase.io import read
+
+    from mmml.analysis.acetone_crystal import read_acetone_phase
+    from mmml.analysis.lattice_energy import crystal_lattice_energy
+    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
+
+    direct = read_acetone_phase("pbca_150k")
+    mapped = read(
+        str(
+            build_literature_charmm_supercell(
+                "aco", supercell_reps=(1, 1, 1), min_box_side_a=None
+            ).pdb_path
+        )
+    )
+
+    energies = [
+        crystal_lattice_energy(
+            atoms.get_positions(), atoms.get_atomic_numbers(), atoms.cell.array, cutoff_A=10.0
+        ).e_lattice
+        for atoms in (direct, mapped)
+    ]
+    # Not exact: a PDB stores coordinates to 0.001 A, which is worth about a
+    # thousandth of a kcal/mol here. A permutation error would cost far more.
+    assert energies[1] == pytest.approx(energies[0], abs=5e-3)
+
+
 def test_charmm_crystal_metrics_from_preset():
     from mmml.interfaces.crystal_charmm import charmm_crystal_metrics_from_preset
     from mmml.interfaces.crystal_reference import metrics_from_cif

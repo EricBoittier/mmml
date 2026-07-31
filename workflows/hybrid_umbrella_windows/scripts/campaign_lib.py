@@ -31,6 +31,52 @@ def slurm_value(cfg: dict[str, Any], name: str, default: Any) -> Any:
     return (cfg.get("slurm") or {}).get(name, default)
 
 
+def slurm_extra_string(cfg: dict[str, Any]) -> str:
+    """Extra ``sbatch`` flags for every rule.
+
+    GRES is deliberately absent. snakemake-executor-plugin-slurm builds
+    ``--gres`` / ``--gpus`` itself from the job resources and raises
+    ``The --generic-resources-(GRES) option is not allowed in the 'slurm_extra'
+    parameter`` if it finds either one here.
+    """
+    parts: list[str] = []
+    nodelist = str(slurm_value(cfg, "nodelist", "") or "").strip()
+    if nodelist:
+        parts.append(f"--nodelist={nodelist}")
+    mail = str(slurm_value(cfg, "mail_user", "") or "").strip()
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=FAIL")
+    return " ".join(parts)
+
+
+def slurm_exclude_nodes(cfg: dict[str, Any]) -> str:
+    """Nodes to keep jobs off, as ``--slurm-exclude-failed-nodes`` wants them.
+
+    Accepts a list or a comma string. The executor only auto-excludes nodes on
+    Slurm status ``NODE_FAIL``; a node whose GPU is wedged fails jobs with plain
+    ``FAILED``, so retries land right back on it unless it is listed here.
+    """
+    value = slurm_value(cfg, "exclude_nodes", "")
+    if isinstance(value, (list, tuple)):
+        parts = [str(v) for v in value]
+    else:
+        parts = str(value or "").split(",")
+    return ",".join(p.strip() for p in parts if p and p.strip())
+
+
+def gpu_request_resources(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Resources that make the executor ask Slurm for a GPU.
+
+    ``slurm.gres`` (default ``gpu:1``) becomes ``--gres=gpu:1``. Setting it
+    empty switches to the plugin's ``gpu`` resource, i.e. ``--gpus=1`` — the two
+    forms are not interchangeable on every site, so this stays configurable.
+    """
+    gres = str(slurm_value(cfg, "gres", "gpu:1") or "").strip()
+    if gres:
+        return {"gres": gres}
+    return {"gpu": int(slurm_value(cfg, "gpu", 1))}
+
+
 def slurm_max_concurrent(cfg: dict[str, Any]) -> int:
     slurm = cfg.get("slurm") or {}
     if "max_jobs" in slurm:
@@ -43,8 +89,14 @@ def slurm_launch_jobs(cfg: dict[str, Any]) -> int:
 
 
 def slurm_resources_cli(cfg: dict[str, Any]) -> str:
+    """``--resources`` throttles.
+
+    ``gpu_slot`` rather than ``gpu``: any resource literally named ``gpu`` is
+    consumed by the Slurm plugin and turned into ``--gpus=N``, which would
+    duplicate the ``gres`` request.
+    """
     n = slurm_max_concurrent(cfg)
-    return f"gpu={n} charmm_slot={n}"
+    return f"gpu_slot={n} charmm_slot={n}"
 
 
 def checkpoint_path(cfg: dict[str, Any]) -> str:

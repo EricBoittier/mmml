@@ -11,7 +11,12 @@ defaults:
   # mm_lj_scales_file: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/hybrid_mm.json
   spacing: 5.0
   packmol_radius: 6.9
-  packmol_tolerance: 2.0
+  # Packmol's tolerance is the minimum distance between atoms of different
+  # molecules, so 2.0 hands the hybrid PES Cl···H contacts near 2.07 Å — about
+  # 0.9 Å inside the vdW contact distance. Every molecule here is ML, so CHARMM
+  # GRMS is 0 and only the calculator can relax that; it plateaus above the
+  # 2 eV/Å pre-dynamics force gate. 3.0 packs comfortably at this density.
+  packmol_tolerance: 3.0
   dt_fs: 0.5
   temperature: 300.0
   seed: 42

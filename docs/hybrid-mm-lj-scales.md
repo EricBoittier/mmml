@@ -46,6 +46,31 @@ With `--learn-mm-lj-scales` / `learn_mm_lj_scales: true`, those tables stay the
 Both scales initialize at **1.0**. Combining rules are unchanged
 (arithmetic Rmin/2, geometric ε) — only the per-type inputs are scaled.
 
+### Bounds (why the scales are projected after every step)
+
+| Scale | Bounds | Why |
+|-------|--------|-----|
+| \(s^\sigma\) | `0.95 – 1.05` | Rmin is pinned tightly by packing and the repulsive wall. A correction beyond a few percent is compensation for something else, and a scale drifting up drags \(r^{-12}\) into separations the data samples |
+| \(s^\varepsilon\) | `0.25 – 4.0` | Well depths are genuinely uncertain to a factor of a few. The hard requirement is the lower end: ε enters as \(\sqrt{\varepsilon_i \varepsilon_j}\), so one type crossing zero NaNs every pair that mixes it with a positive type |
+
+These are enforced by projecting the leaves back into range after every
+optimizer update (`clip_mm_lj_scale_params`), not by a penalty term. Two weaker
+layers sit underneath for callers that never ran the optimizer: `apply_mm_lj_scales`
+floors any scale at `MM_LJ_MIN_SCALE` so it cannot change sign, and the geometric
+mean itself is written so a zero or negative ε product contributes nothing
+instead of NaN-ing the system.
+
+Unbounded, drift is the *default* outcome rather than an edge case. Adam moves a
+parameter by roughly the learning rate per step regardless of gradient
+magnitude, so at `lr=1e-3` with `n_train=8000` and `batch_size=16` (500 steps per
+epoch) a scale accumulates tens of units of possible travel over a few hundred
+epochs — against a distance of 1.0 from the init to the singularity. The
+observed failure was a run that trained cleanly for 88 epochs and then went NaN.
+
+A scale that ends *sitting on* a bound is a diagnostic, not a result: the fit
+wanted LJ the bounds do not allow, which usually means the LJ is standing in for
+missing long-range electrostatics or an unconverged ML term. Step 06 flags them.
+
 ```mermaid
 flowchart TD
   masters["CGenFF master σ/ε<br/>(fixed NPZ tables)"] --> scale["× s_σ[t], × s_ε[t]<br/>(learnable)"]
@@ -373,6 +398,7 @@ LJ scales still live on hybrid / md-system flags, not inside the policy file.
 | Non-unit scales move LJ | Changing `s^ε` or `s^σ` changes `e_mm` (unit tests) |
 | Gradients exist | ∂E/∂s^σ and ∂E/∂s^ε finite and nonzero on a close dimer |
 | Scales actually *converge* | Adam recovers a planted σ/ε scale to a few % |
+| Scales stay physical | Every trained scale inside `0.95–1.05` (σ) and `0.25–4.0` (ε); none pinned at a bound |
 | Absent types untouched | A type not present in the data keeps `s = 1.0` exactly |
 | Train → MD continuity | Deployed `at_ep`/`at_rm` equal master × trained scale for the right ATC rows |
 | MD loads scales | Verbose MLpot line, or explicit `--mm-lj-scales-file` |
@@ -394,6 +420,22 @@ right values, and whether the value that trained is the value MD deploys. It als
 pins the Ewald limitation, so if LJ-under-Ewald is ever implemented that test
 fails and forces this page to be updated with it.
 
+### An out-of-sample check: crystal sublimation enthalpy
+
+Every check above is internal — it asks whether the scales trained and deployed
+correctly, not whether they improved the physics. For an observable that training
+never sees, point the learned sidecar at a crystal:
+
+```bash
+ACO_SCALES=path/to/hybrid_mm.json \
+  uv run python examples/acetone_crystal/05_sublimation.py
+```
+
+That evaluates ΔH_sub for solid acetone at three experimental geometries against
+a value assembled from calorimetry. Stock CGenFF overbinds by 13% at 150 K, so
+there is room for scales to help or hurt visibly. See
+[Solid acetone & sublimation enthalpy](acetone-crystal-sublimation.md).
+
 ---
 
 ## Troubleshooting
@@ -404,6 +446,9 @@ fails and forces this page to be updated with it.
 | MD ignores scales | Missing `hybrid_mm.json`, wrong path, or `learn_mm_lj_scales: false` in sidecar |
 | `--mm-lj-scales-file … but JAX MM is off` error | You asked to deploy trained LJ under `periodic_external` or with `include_mm: false`, where nothing can consume it. Switch to `--mm-nonbond-mode jax_mic --include-mm`, or drop the flag to run stock CGenFF LJ on purpose |
 | `WARNING: … carries trained MM LJ scales but JAX MM is off` | A `hybrid_mm.json` was auto-discovered next to the checkpoint but the run cannot apply it — this run is using **stock** CGenFF LJ. Harmless if intended; otherwise switch to `jax_mic` |
+| Loss goes `nan` mid-run after training cleanly for many epochs | An LJ scale drifted out of physical range — ε crossing zero NaNs `sqrt(eps_i eps_j)`, σ drifting up drags the \(r^{-12}\) wall into sampled separations. Fixed by the projection above; if you see it again, the scales are saturating and the LJ is compensating for something else |
+| Several types pinned exactly at a bound | The fit wants LJ the bounds forbid. Check the handoff cutoffs and whether `--electrostatics-off-end` is beyond `--cutoff` before widening anything |
+| `carries LJ scales outside the trainable bounds` warning on load | Sidecar from a run predating the bounds (or hand-edited). It still deploys, but the LJ it applies is not something training could produce today |
 | Fit looks great, density/RDF is wrong under Ewald | Coulomb error absorbed into σ/ε during MIC fitting — see [Why you train LJ *without* Ewald](#why-you-train-lj-without-ewald-read-this-first) |
 | Cutoffs differ between train and MD | The σ/ε were fitted against a different operator; match `mm_switch_on` / `mm_switch_width` / `ml_switch_width` |
 | ATC length mismatch / wrong types | Sidecar type names don’t match CHARMM ATC; regenerate from the same CGenFF PRM |

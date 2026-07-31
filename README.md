@@ -1,4 +1,8 @@
-# mmml
+<p align="center">
+  <img src="https://raw.githubusercontent.com/EricBoittier/mmml/main/docs/images/mmml.svg" alt="MMML" width="380">
+</p>
+
+<h1 align="center">mmml</h1>
 
 [![CI](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/EricBoittier/mmml/branch/main/graph/badge.svg)](https://codecov.io/gh/EricBoittier/mmml/branch/main)
@@ -42,6 +46,29 @@ make doctor           # mmml doctor — env / CHARMM readiness
 ```
 
 Or from a fresh clone: `make install-full` (`uv sync` + native build).
+
+### Jupyter kernel (required for the example notebooks)
+
+Register the project venv as its own kernel **once**, and select it in the
+notebook (`Kernel → Change Kernel → mmml-venv`):
+
+```bash
+.venv/bin/python -m ipykernel install --user --name mmml-venv --display-name "mmml venv"
+```
+
+Without this, Jupyter's default `python3` kernel may start a different
+interpreter: the kernelspec `uv` installs uses a bare `"python"` in its `argv`,
+so it resolves against `PATH` and picks up an active conda environment instead of
+`.venv`. The symptom is an immediate
+
+```
+TypeError: 'type' object is not subscriptable
+```
+
+on the first `import mmml...`, because that interpreter is too old to parse
+`tuple[float, ...]` annotations. It looks like broken code but is purely kernel
+selection. Check with `import sys; print(sys.executable)` — it must point inside
+`.venv`.
 
 ### Using Conda / micromamba
 

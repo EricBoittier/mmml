@@ -38,6 +38,8 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--invert-with INVERT_WITH]
                             [--equilibration-steps EQUILIBRATION_STEPS]
                             [--max-seed-force MAX_SEED_FORCE]
+                            [--relax-seed-steps RELAX_SEED_STEPS]
+                            [--relax-seed-fmax RELAX_SEED_FMAX]
                             [--thermostat {langevin,nose-hoover}]
                             [--langevin-gamma LANGEVIN_GAMMA]
                             [--max-window-temp MAX_WINDOW_TEMP_K]
@@ -101,8 +103,16 @@ Execution:
                         geometries with no kinetic energy, so the start of each
                         run is a heating transient.
   --max-seed-force MAX_SEED_FORCE
-                        Abort if any window seed max|F| exceeds this (eV/Å;
-                        default: 15)
+                        Fail a window whose seed max|F| over the ML region
+                        exceeds this (eV/Å; default: 15). The whole-system max
+                        is not used: solvent contacts pin it at the same value
+                        in every window.
+  --relax-seed-steps RELAX_SEED_STEPS
+                        FIRE steps relaxing the surroundings around the frozen
+                        seeded solute before dynamics (default: 0 = off)
+  --relax-seed-fmax RELAX_SEED_FMAX
+                        Convergence target for --relax-seed-steps (eV/Å;
+                        default: 1.0)
   --nsteps NSTEPS       NVT steps (default: 1000)
   --seed SEED           PRNG seed (default: 42)
   --resume              Hybrid: keep finished windows under output_dir/windows/

@@ -7,7 +7,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from mmml.md.restraints import LinearDistanceCV
+from mmml.md.restraints import DihedralCV, LinearDistanceCV, cv_from_spec
 from mmml.umbrella.config import UmbrellaMbarConfig
 from mmml.umbrella.energy import make_single_ml_energy_fn, numpy_bias_matrix_nd
 from mmml.umbrella.io import (
@@ -121,18 +121,32 @@ def subsample_u_kln(
     return u_eff, n_k_eff, g_k
 
 
-def _snap_cvs(snap: dict[str, Any]) -> list[LinearDistanceCV]:
+def _cv_to_spec(cv: Any) -> dict[str, Any]:
+    if isinstance(cv, DihedralCV):
+        return cv.to_spec()
+    if hasattr(cv, "to_spec"):
+        return cv.to_spec()
+    return {
+        "pairs": [list(p) for p in cv.pairs],
+        "coefficients": list(cv.coefficients),
+    }
+
+
+def _snap_cvs(snap: dict[str, Any]) -> list[Any]:
     """Recover the sampling CVs from a snapshot.
 
     Prefers the stored ``cv_spec``: for a combination CV such as
     ``xi = r(C-Cl) - r(C-N)`` the legacy ``atom_i``/``atom_j`` fields name only
     the first distance, so rebuilding from them would re-weight MBAR with the
-    wrong bias and silently produce a wrong PMF.
+    wrong bias and silently produce a wrong PMF. Dihedral CVs are restored via
+    ``cv_from_spec`` (periodic degrees / eV·deg⁻²).
     """
     spec = snap.get("cv_spec")
     if spec:
-        return [LinearDistanceCV.from_spec(s) for s in spec]
-    cvs = [LinearDistanceCV.distance(int(snap["atom_i"]), int(snap["atom_j"]))]
+        return [cv_from_spec(s) for s in spec]
+    cvs: list[Any] = [
+        LinearDistanceCV.distance(int(snap["atom_i"]), int(snap["atom_j"]))
+    ]
     if "atom_k" in snap and "atom_l" in snap:
         cvs.append(
             LinearDistanceCV.distance(
@@ -321,10 +335,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
         "temperature_K": float(temperature_K),
         "ndim": len(cvs),
         "atom_pairs": [list(cv.pairs[0]) for cv in cvs],
-        "cv_spec": [
-            {"pairs": [list(p) for p in cv.pairs], "coefficients": list(cv.coefficients)}
-            for cv in cvs
-        ],
+        "cv_spec": [_cv_to_spec(cv) for cv in cvs],
         "cv_label": [cv.label() for cv in cvs],
         "xi0": xi0.tolist(),
         "yi0": yi0_out,

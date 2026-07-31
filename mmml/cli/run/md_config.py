@@ -340,7 +340,9 @@ def merge_campaign_job_config(
     elif "output_dir" not in merged and "output_root" in campaign:
         merged["output_dir"] = str(Path(str(campaign["output_root"])) / job_id)
     if merged.get("checkpoint") is not None:
-        # Expand only. Parent CLI ``--checkpoint`` may still replace this.
+        # Expand only. ``apply_campaign_cli_overrides`` runs after this and lets a
+        # parent ``--checkpoint`` win, so the YAML value here may never be used;
+        # the effective one is validated by ``validate_campaign_checkpoint``.
         merged["checkpoint"] = resolve_campaign_checkpoint_value(
             merged["checkpoint"], must_exist=False
         )

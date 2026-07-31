@@ -34,8 +34,10 @@ __all__ = [
     "find_atom_index_by_name",
     "merge_ml_region_mol_id",
     "mic_distance",
+    "relax_around_frozen_seed",
     "resolve_ml_region_indices",
     "run_umbrella_hybrid_nvt",
+    "seed_force_maxima",
     "stretch_antisymmetric_seed_mic",
     "stretch_distance_seed_mic",
 ]
@@ -434,6 +436,54 @@ def _numpy_bias_cv(
     return 0.5 * float(k_ev_A2) * (xi - float(target)) ** 2
 
 
+def seed_force_maxima(
+    forces: np.ndarray,
+    ml_indices: Sequence[int],
+) -> tuple[float, float]:
+    """``(max |F| over the ML region, max |F| over every atom)`` in eV/Å.
+
+    The two differ by orders of importance. Only the first responds to the seed:
+    solvent coordinates are shared by every window, so the whole-system maximum
+    is a constant offset set by the packing, not by how far this window had to
+    displace the solute.
+    """
+    f = np.abs(np.asarray(forces, dtype=np.float64))
+    if f.size == 0:
+        return float("nan"), float("nan")
+    idx = np.asarray(list(ml_indices), dtype=np.int64).reshape(-1)
+    fmax_all = float(f.max())
+    fmax_ml = float(f[idx].max()) if idx.size else float("nan")
+    return fmax_ml, fmax_all
+
+
+def relax_around_frozen_seed(
+    atoms,
+    *,
+    frozen_indices: Sequence[int],
+    fmax: float,
+    steps: int,
+) -> tuple[np.ndarray, int]:
+    """FIRE-relax everything except ``frozen_indices``; returns ``(R, n_steps)``.
+
+    Holding the solute keeps the window at exactly the ξ it was seeded at while
+    the surroundings open up around it. Constraints are cleared before returning
+    so a subsequent ``get_forces()`` reports true forces on the frozen atoms
+    rather than the zeros a constrained call would give.
+    """
+    from ase.constraints import FixAtoms
+    from ase.optimize import FIRE
+
+    idx = [int(i) for i in np.asarray(list(frozen_indices), dtype=np.int64).reshape(-1)]
+    atoms.set_constraint(FixAtoms(indices=idx))
+    try:
+        opt = FIRE(atoms, logfile=None)
+        opt.run(fmax=float(fmax), steps=int(steps))
+        n_steps = int(opt.get_number_of_steps())
+    finally:
+        atoms.set_constraint()
+    return np.asarray(atoms.get_positions(), dtype=np.float64), n_steps
+
+
 def _seed_window_geometry(
     r0: np.ndarray,
     cv,
@@ -562,8 +612,17 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f"~{n_frames_est} frames/window"
     )
     print(
-        f"  max_seed_force={float(cfg.max_seed_force):g} eV/Å  "
+        f"  max_seed_force={float(cfg.max_seed_force):g} eV/Å over the ML region  "
         f"(failed windows are skipped, not fatal)"
+    )
+    relax_steps = int(getattr(cfg, "relax_seed_steps", 0))
+    print(
+        f"  seed relaxation: {relax_steps} FIRE steps around the frozen solute"
+        + (
+            f" to fmax={float(getattr(cfg, 'relax_seed_fmax', 1.0)):g} eV/Å"
+            if relax_steps > 0
+            else " (disabled)"
+        )
     )
     print(f"  output_dir={output_dir}")
     if wall_specs:
@@ -643,21 +702,38 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             win_system,
             cutoff_A=12.0,
         )
-        # Preflight seed force via ASE face when available; otherwise skip.
+        # Relax the surroundings around the frozen seed, then preflight, both via
+        # the ASE face when available; otherwise skip.
         fmax = float("nan")
+        fmax_all = float("nan")
+        n_relax = 0
+        seed_error: str | None = None
         try:
-            calc = energy.as_ase_calculator()
             atoms = Atoms(
                 numbers=win_system.Z,
                 positions=seeded,
                 cell=box,
                 pbc=box is not None,
             )
-            atoms.calc = calc
-            f0 = atoms.get_forces()
-            fmax = float(np.max(np.abs(f0)))
+            atoms.calc = energy.as_ase_calculator()
+            if int(getattr(cfg, "relax_seed_steps", 0)) > 0:
+                seeded, n_relax = relax_around_frozen_seed(
+                    atoms,
+                    frozen_indices=ml_indices,
+                    fmax=float(getattr(cfg, "relax_seed_fmax", 1.0)),
+                    steps=int(cfg.relax_seed_steps),
+                )
+                win_system = replace(win_system, R=seeded)
+            fmax, fmax_all = seed_force_maxima(atoms.get_forces(), ml_indices)
         except (ValueError, NotImplementedError):
+            # No usable ASE face here (some lr_solver choices have none): the
+            # relaxation and the gate are both skipped, as before.
             fmax = float("nan")
+            fmax_all = float("nan")
+        except Exception as exc:  # noqa: BLE001
+            # A blown-up minimisation must cost one window, not the campaign:
+            # the serial path runs all 30 in a single process.
+            seed_error = f"seed relaxation failed: {type(exc).__name__}: {exc}"
 
         # Default Langevin: hybrid NHC was hard-coded and blew up solvent
         # windows (high-T / stiff ξ), then Snakemake still scheduled MBAR.
@@ -692,18 +768,19 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         )
         print(
             f"  window {wid + 1}/{k_windows}  ξ₀={xi0:.3f}  k={k_w:.3f}  "
-            f"nsteps={nsteps}  "
-            f"seed_max|F|={fmax if fmax == fmax else float('nan'):.2f}",
+            f"nsteps={nsteps}  relax_steps={n_relax}  "
+            f"seed_max|F|_ML={fmax:.2f}  seed_max|F|_all={fmax_all:.2f}",
             flush=True,
         )
 
-        fail_msg: str | None = None
-        if fmax == fmax and fmax > float(cfg.max_seed_force):
+        fail_msg: str | None = seed_error
+        if fail_msg is None and fmax == fmax and fmax > float(cfg.max_seed_force):
             fail_msg = (
-                f"seed max|F|={fmax:.2f} eV/Å exceeds max_seed_force="
-                f"{cfg.max_seed_force:g} (ξ₀={xi0:.3f})"
+                f"seed max|F| over the ML region={fmax:.2f} eV/Å exceeds "
+                f"max_seed_force={cfg.max_seed_force:g} (ξ₀={xi0:.3f}; "
+                f"whole-system max {fmax_all:.2f})"
             )
-        else:
+        if fail_msg is None:
             try:
                 traj = driver.run(win_system, energy, ensemble)
             except RuntimeError as exc:

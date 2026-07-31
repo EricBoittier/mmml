@@ -22,7 +22,7 @@ flowchart TB
     CLI["cli\n122 modules"]
     IFACE["interfaces\n230 modules"]
     MODELS["models\n142 modules"]
-    UTILS["utils\n48 modules"]
+    UTILS["utils\n49 modules"]
     DATA["data\n16 modules"]
     GEN["generate\n15 modules"]
     GUI["gui\n14 modules"]

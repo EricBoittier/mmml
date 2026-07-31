@@ -27,6 +27,21 @@ Example entrypoint: `examples/m/15_umbrella_snakemake.sh`
 - Shell: `RESUME=1`, `WINDOWS=…` in `examples/m/14_umbrella_sample_sol_prod.sh`
 - Tests: `tests/unit/test_hybrid_windows_resume.py` (run: `uv run pytest tests/unit/test_hybrid_windows_resume.py -q`)
 
+### Assemble → MBAR (verified offline)
+
+`tests/unit/test_hybrid_windows_assemble_mbar.py` packs synthetic `windows/wXXX.npz`
+the same way `run_umbrella_hybrid_nvt` does, then runs `run_umbrella_mbar` on the
+result. It covers the parts of the workflow tail that need no GPU or CHARMM:
+
+- failed window → NaN row in the PMF, still counted in `failed_windows`, kept at
+  its original ξ₀ index (`n_windows_used = K - 1`)
+- antisymmetric `cv_spec` round-trip through the NPZ — with the legacy single-pair
+  CV instead, MBAR fails to converge outright
+- the `umbrella_summary.json` fields `scripts/run_mbar.sh` turns into `mbar/status.json`
+
+Still unverified on real data: the `assemble` rule itself (needs CHARMM + the model
+to rebuild the hybrid system before packing).
+
 ### Snakemake workflow
 
 ```text
@@ -35,7 +50,7 @@ make_box → window[{000..N-1}] (parallel GPU) → assemble → mbar
 
 | File | Role |
 |------|------|
-| `Snakefile` | Rules; GPU jobs get `--gres=gpu:1` |
+| `Snakefile` | Rules; GPU jobs set the `gres` resource (→ `--gres=gpu:1`) |
 | `config.yaml` | ACN prod (default), 30 windows, `max_jobs: 8` |
 | `config.tip3.yaml` | TIP3 prod |
 | `config.smoke.yaml` | 3-window tip3 smoke |
@@ -66,8 +81,10 @@ Cluster path is often `/mmhome/boittier/home/mmml` (same tree as `~/mmml`).
 
 **Fix (in tree):**
 
-1. Skip bootstrap when `--windows` / `only_windows` is set (`hybrid.py`).
+1. Skip bootstrap when `--windows` / `only_windows` is set — `should_bootstrap_windows()` in `hybrid_windows.py`, called from `hybrid.py`.
 2. Unique temp names `wXXX.<pid>.<uuid>.tmp.npz` in `save_window_checkpoint`.
+
+Both halves are pinned by `tests/unit/test_hybrid_windows_resume.py`.
 
 ### CUDA flake mitigation (partial)
 
@@ -82,11 +99,107 @@ Mitigations added (not fully validated in prod yet):
 
 - CUDA preflight + retries in `env_shell.sh` (`MMML_CUDA_INIT_RETRIES`, default 12)
 - `XLA_PYTHON_CLIENT_PREALLOCATE=false`
-- Explicit `--gres=gpu:1` on GPU rules
+- Explicit `--gres=gpu:1` on GPU rules (see GPU-request section below)
 - Profile `retries: 3`
 - Warning if `snakemake_slurm.sh` is launched from inside a GPU allocation
 
 **Strong advice:** run the Snakemake **controller on the login node**, not an interactive `gpu0N` shell. User was on `gpu08` when many failures appeared.
+
+### Root cause: wedged GPUs on individual nodes (2026-07-31)
+
+With the controller on `pc-studix` and submission fixed, a window on `gpu11`
+still failed — and the preflight finally showed why:
+
+```text
+[env_shell] FAIL: CUDA init failed after 12 tries (cuInit / nvidia-smi).
+[env_shell]   host=gpu11 job=205337 gres=? cvd=0
+Unable to determine the device handle for gpu 0000:11:00.0: Unknown Error
+```
+
+Slurm allocated the GPU correctly (`CUDA_VISIBLE_DEVICES=0`); the device itself
+is wedged at driver level. That is a node fault needing `nvidia-smi -r` or a
+reboot by admins — **not** something the workflow can retry its way out of.
+
+The executor only auto-excludes a node on Slurm status `NODE_FAIL`. A wedged GPU
+makes jobs exit `FAILED`, so `retries: 3` cheerfully resends them to the same
+node. Blacklist bad nodes explicitly:
+
+```yaml
+slurm:
+  exclude_nodes: "gpu11"      # list or comma string
+```
+
+`scripts/snakemake_slurm.sh` turns that into `--slurm-exclude-failed-nodes`.
+Find the offenders across a campaign with:
+
+```bash
+grep -h 'FAIL: CUDA init' -A1 artifacts/.../logs/window_w*.log \
+  | grep -o 'host=[a-z0-9]*' | sort | uniq -c | sort -rn
+```
+
+### Root cause: unrelaxed seeds, not a bad integrator (2026-07-31)
+
+With gpu11 aside, windows at ξ ≥ +0.7 aborted non-finite at step 1600–3400 of
+80000 while everything below survived. Diagnosis, in order:
+
+1. Every window seeds from the **same** box PDB (`r0` = −0.8566 Å along ξ) by
+   rigidly displacing the solute. Failure begins once that displacement passes
+   ≈1.5 Å (w016 needs 1.16 Å and lives; w020 needs 1.56 Å and dies; w029 would
+   need 2.46 Å). The solvent is packed for the reactant ξ and never moves aside.
+2. `seed_max|F|` read **37.10 eV/Å in every window**, to the hundredth. Term
+   decomposition put it on `mm_nonbonded`, on ACN — ten different molecules at
+   25–37 eV/Å, with `mm_bonded` at 0.18. That is a raw Packmol packing at the
+   default `--packmol-tolerance 2.0`, not a defect: contacts sit just above
+   2.0 Å, which is deep in the CGenFF repulsive wall. A contact search below
+   2.0 Å finds nothing, because Packmol guarantees that.
+3. So the whole-system max is a constant the seeding never touches, and
+   `max_seed_force` could never discriminate. Raising it 35 → 80 did not loosen
+   a check; it disabled the only tripwire, converting clean t=0 rejections into
+   NaNs at step 2000.
+
+**Fix in tree:** `relax_seed_steps` / `relax_seed_fmax` (`UmbrellaConfig`) run
+FIRE on the surroundings with the ML solute frozen, after seeding and before
+dynamics, so ξ is preserved while the solvent opens up. The preflight now gates
+on `max |F|` over the **ML region** and logs both numbers:
+
+```text
+window 21/30  ξ₀=0.700  k=6.505  nsteps=80000  relax_steps=…
+  seed_max|F|_ML=…  seed_max|F|_all=…
+```
+
+`relax_seed_steps: 300` is set in both prod YAMLs; default is 0 (off) elsewhere.
+`max_seed_force: 80` is left as-is and **still needs calibrating** from the new
+`seed_max|F|_ML` column — 80 was chosen against the old solvent-dominated
+number and is almost certainly far too loose for an ML-region gate.
+
+Tests: `tests/unit/test_umbrella_seed_relax.py`.
+
+### How the GPU is requested (do not put it in `slurm_extra`)
+
+Current `snakemake-executor-plugin-slurm` **refuses to submit** any job whose
+`slurm_extra` contains `--gres` or `--gpus`:
+
+```text
+The --generic-resources-(GRES) option is not allowed in the 'slurm_extra'
+parameter. The generic resources (GRES) is set by the snakemake executor plugin
+```
+
+It builds the flag itself from job resources (`utils.set_gres_string`):
+
+| Resource | sbatch flag |
+|----------|-------------|
+| `gres: "gpu:1"` | `--gres=gpu:1` |
+| `gpu: 1` | `--gpus=1` |
+
+Setting **both** emits both flags for one device, so the rules pick exactly one
+via `gpu_request_resources()` in `campaign_lib.py`. Default is `gres`; set
+`slurm.gres: ""` in the config to fall back to `--gpus=1` if a site prefers it.
+
+The concurrency throttle is `gpu_slot`, **not** `gpu` — a resource literally
+named `gpu` is consumed by the plugin and turned into `--gpus=N`. Same reason the
+profiles' `default-resources` use `gpu_slot=1`.
+
+Pinned by `tests/unit/test_hybrid_umbrella_windows_campaign.py`.
 
 ---
 
@@ -139,18 +252,30 @@ Finished `windows/wXXX.npz` are kept; only missing outputs re-run.
 
 ## Likely next tasks for the new agent
 
+Everything left needs the cluster. `pc-mm025` has no Slurm config (`squeue` fails
+with `_establish_config_source`), so run these from the studix login node.
+
 1. Confirm CUDA preflight + `--gres=gpu:1` actually stops `CUDA_ERROR_UNKNOWN` when controller is on **login**.
 2. If CUDA still flakes: inspect Slurm plugin GPU request vs studix (`scontrol show job <id>` for GRES), consider lowering `-j` / `max_jobs`, or exclusive node flags the site supports.
-3. Verify assemble/mbar after a full set of `wXXX.npz` exists.
+3. Run the real `assemble` rule once a full set of `wXXX.npz` exists (the pure
+   pack + MBAR half is already covered by unit tests — see above).
 4. Optionally: tip3 prod via `config.tip3.yaml`.
 5. Do **not** commit unless user asks.
+
+### Checked 2026-07-31 (offline, no cluster)
+
+- `uv run pytest tests/unit -k "umbrella or hybrid_windows" -q` → 77 passed
+- `MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n` →
+  DAG resolves to `make_box → window×3 → assemble → mbar`; `window` / `assemble`
+  carry `gres=gpu:1` with empty `slurm_extra`, `make_box` / `mbar` carry neither
+- Working tree clean at `828e57422`; all workflow files tracked
 
 ---
 
 ## Quick test commands
 
 ```bash
-uv run pytest tests/unit/test_hybrid_windows_resume.py -q
+uv run pytest tests/unit -k "umbrella or hybrid_windows" -q
 cd workflows/hybrid_umbrella_windows
 MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
 ```

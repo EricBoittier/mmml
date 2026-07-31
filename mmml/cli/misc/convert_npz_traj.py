@@ -10,6 +10,12 @@ CLI::
     mmml npz2traj data.npz -o trajectory.traj
     mmml npz2traj data.npz -o subset.traj --max-structures 100 --stride 10
     mmml npz2traj data.npz -o frames.extxyz
+
+    # jaxmd-unified trajectory.npz → CHARMM PSF+DCD (full / selections)
+    mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf
+    mmml npz2traj nvt/trajectory.npz -o nvt/tria.dcd --psf model.psf --resnames TRIA
+    mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf \\
+        --split-resnames TRIA,TIP3
 """
 
 from __future__ import annotations
@@ -83,11 +89,14 @@ def build_parser() -> argparse.ArgumentParser:
             "  mmml npz2traj data.npz -o subset.traj --max-structures 100 --stride 10\n"
             "  mmml npz2traj data.npz -o frames.extxyz\n"
             "  mmml npz2traj data.npz -o ase.traj --ase-units\n"
+            "  mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf\n"
+            "  mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf "
+            "--split-resnames TRIA,TIP3\n"
             "\n"
-            "Schema keys: R/Z required; E, F, D/Dxyz, N, mono, cell optional.\n"
-            "Default units follow NPZ schema (E Hartree, F Hartree/Bohr, D Debye).\n"
-            "Use --ase-units to convert calculator + info energy/forces/dipole to\n"
-            "ASE conventions (eV, eV/Å, e·Å)."
+            "Schema keys: R/Z or positions/Z required; E, F, D, cell/boxes optional.\n"
+            "Training NPZs: default E Hartree / F Hartree/Bohr / D Debye "
+            "(--ase-units → eV).\n"
+            "jaxmd-unified trajectory.npz: energies are eV; use --psf for .dcd."
         ),
     )
     parser.add_argument("input", type=Path, help="Input NPZ file")
@@ -96,7 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         required=True,
-        help="Output trajectory (.traj, .extxyz, .xyz, …)",
+        help="Output trajectory (.traj, .extxyz, .xyz, .dcd, …)",
     )
     parser.add_argument(
         "--max-structures",
@@ -124,6 +133,46 @@ def build_parser() -> argparse.ArgumentParser:
             "(eV, eV/Å, e·Å). Without this flag, values stay in NPZ units "
             "and unit labels are stored in atoms.info."
         ),
+    )
+    parser.add_argument(
+        "--psf",
+        type=Path,
+        default=None,
+        help=(
+            "CHARMM PSF matching NPZ atom order (required for .dcd and for "
+            "--resnames / --split-resnames). Copied or subset-written next to "
+            "each DCD."
+        ),
+    )
+    parser.add_argument(
+        "--resnames",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated residue names kept in the primary output "
+            "(e.g. TRIA or TIP3). Requires --psf."
+        ),
+    )
+    parser.add_argument(
+        "--split-resnames",
+        type=str,
+        default=None,
+        help=(
+            "Also write one trajectory (+PSF for .dcd) per residue name, as "
+            "{stem}.{RESNAME}{suffix}. Requires --psf."
+        ),
+    )
+    parser.add_argument(
+        "--dt-ps",
+        type=float,
+        default=None,
+        help="DCD header timestep in ps (default: 1.0 if unset)",
+    )
+    parser.add_argument(
+        "--steps-per-frame",
+        type=int,
+        default=1,
+        help="DCD NSAVC / steps between saved frames (default: 1)",
     )
     parser.add_argument(
         "--quiet",
@@ -287,7 +336,8 @@ def npz_to_atoms_list(
         t = str(text).strip().lower().replace("å", "a").replace("angstrom", "a")
         return t in {"ev/a", "ev_a", "ev/ang", "ev_angstrom", "ev/angstrom"}
 
-    if e_key == "E_eV":
+    if e_key in ("E_eV", "energies", "energy"):
+        # jaxmd-unified trajectory.npz stores potential energy in eV.
         energy_is_ev = True
     elif "E" in units_meta or "energy" in units_meta:
         energy_is_ev = _unit_is_ev(units_meta.get("E", units_meta.get("energy")))
@@ -523,6 +573,7 @@ def npz_to_trajectory(
     start: int = 0,
     ase_units: bool = False,
     verbose: bool = True,
+    atom_indices: np.ndarray | None = None,
 ) -> int:
     """Convert NPZ → ASE trajectory file. Returns number of frames written."""
     output_file = Path(output_file)
@@ -539,12 +590,220 @@ def npz_to_trajectory(
     if not atoms_list:
         raise ValueError("No structures selected (check --start / --stride / --max-structures)")
 
+    if atom_indices is not None:
+        idx = [int(i) for i in np.asarray(atom_indices, dtype=np.int32).reshape(-1)]
+        atoms_list = [atoms[idx] for atoms in atoms_list]
+
     _write_atoms_list(output_file, atoms_list)
 
     if verbose:
         size_mb = output_file.stat().st_size / (1024 * 1024)
         print(f"Wrote {len(atoms_list)} frame(s) → {output_file} ({size_mb:.2f} MB)")
     return len(atoms_list)
+
+
+def load_md_npz_frames(
+    npz_file: Path | str,
+    *,
+    stride: int = 1,
+    start: int = 0,
+    max_structures: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Load jaxmd-unified / MD ``trajectory.npz`` arrays.
+
+    Returns ``(positions, Z, boxes_or_None)`` after frame slicing.
+    """
+    npz_file = Path(npz_file)
+    data = np.load(npz_file, allow_pickle=True)
+    try:
+        r_key = _first_key(data, _R_ALIASES)
+        z_key = _first_key(data, _Z_ALIASES)
+        if r_key is None or z_key is None:
+            raise ValueError(
+                "NPZ must contain positions and atomic numbers "
+                "(positions/R and Z)"
+            )
+        R = np.asarray(data[r_key], dtype=np.float64)
+        Z = np.asarray(data[z_key])
+        if R.ndim == 2:
+            R = R[None, ...]
+        if Z.ndim == 1:
+            Z = np.asarray(Z, dtype=np.int32)
+        else:
+            Z = np.asarray(Z[0], dtype=np.int32)
+        cell_key = _first_key(data, _CELL_ALIASES)
+        boxes = None
+        if cell_key is not None:
+            cell = np.asarray(data[cell_key], dtype=np.float64)
+            if cell.ndim == 2 and cell.shape == (3, 3):
+                boxes = np.broadcast_to(cell[None, ...], (R.shape[0], 3, 3)).copy()
+            elif cell.ndim == 3 and cell.shape[-2:] == (3, 3):
+                boxes = cell
+            elif cell.ndim == 2 and cell.shape[1] == 3:
+                boxes = np.array([np.diag(c) for c in cell], dtype=np.float64)
+    finally:
+        data.close()
+
+    n_structures = int(R.shape[0])
+    indices = list(range(max(0, start), n_structures, max(1, stride)))
+    if max_structures is not None:
+        indices = indices[: max(0, int(max_structures))]
+    if not indices:
+        raise ValueError("No frames selected (check --start / --stride / --max-structures)")
+    idx = np.asarray(indices, dtype=np.int32)
+    R_out = R[idx]
+    boxes_out = None if boxes is None else boxes[idx]
+    return R_out, Z, boxes_out
+
+
+def _write_dcd_bundle(
+    *,
+    positions: np.ndarray,
+    boxes: np.ndarray | None,
+    output_dcd: Path,
+    psf_in: Path | None,
+    atom_indices: np.ndarray | None,
+    dt_ps: float | None,
+    steps_per_frame: int,
+    verbose: bool,
+) -> int:
+    from ase import Atoms
+
+    from mmml.utils.dcd_writer import save_trajectory_dcd
+    from mmml.utils.psf_subset import copy_or_link_psf, write_subset_psf
+
+    pos = np.asarray(positions, dtype=np.float64)
+    box_list = None
+    if boxes is not None:
+        box_list = [np.asarray(b, dtype=np.float64) for b in boxes]
+
+    if atom_indices is not None:
+        sel = np.asarray(atom_indices, dtype=np.int32).reshape(-1)
+        pos = pos[:, sel, :]
+        if psf_in is None:
+            raise ValueError("PSF is required when writing a selected DCD")
+        psf_out = output_dcd.with_suffix(".psf")
+        write_subset_psf(psf_in, psf_out, sel)
+    elif psf_in is not None:
+        copy_or_link_psf(psf_in, output_dcd.with_suffix(".psf"))
+
+    n_atoms = int(pos.shape[1])
+    dummy = Atoms(numbers=np.ones(n_atoms, dtype=int))
+    output_dcd.parent.mkdir(parents=True, exist_ok=True)
+    save_trajectory_dcd(
+        output_dcd,
+        pos,
+        dummy,
+        boxes=box_list,
+        dt_ps=dt_ps,
+        steps_per_frame=int(steps_per_frame),
+    )
+    if verbose:
+        size_mb = output_dcd.stat().st_size / (1024 * 1024)
+        print(
+            f"Wrote {pos.shape[0]} frame(s), {n_atoms} atoms → {output_dcd} "
+            f"({size_mb:.2f} MB)"
+        )
+        psf_side = output_dcd.with_suffix(".psf")
+        if psf_side.is_file():
+            print(f"  PSF → {psf_side}")
+    return int(pos.shape[0])
+
+
+def export_md_npz(
+    npz_file: Path | str,
+    output_file: Path | str,
+    *,
+    psf: Path | str | None = None,
+    resnames: str | None = None,
+    split_resnames: str | None = None,
+    max_structures: int | None = None,
+    stride: int = 1,
+    start: int = 0,
+    ase_units: bool = False,
+    dt_ps: float | None = None,
+    steps_per_frame: int = 1,
+    verbose: bool = True,
+) -> int:
+    """Export MD ``trajectory.npz`` to ASE ``.traj`` / ``.dcd`` (+ optional splits)."""
+    from mmml.utils.psf_subset import indices_for_resnames, parse_resname_list
+
+    output_file = Path(output_file)
+    psf_path = Path(psf) if psf is not None else None
+    primary_res = parse_resname_list(resnames)
+    split_res = parse_resname_list(split_resnames)
+    want_dcd = output_file.suffix.lower() == ".dcd"
+
+    if (primary_res or split_res) and psf_path is None:
+        raise ValueError("--psf is required with --resnames / --split-resnames")
+    if want_dcd and psf_path is None:
+        raise ValueError("--psf is required when writing .dcd (VMD needs a matching PSF)")
+    if psf_path is not None and not psf_path.is_file():
+        raise FileNotFoundError(f"PSF not found: {psf_path}")
+
+    primary_idx: np.ndarray | None = None
+    if primary_res:
+        assert psf_path is not None
+        primary_idx, _ = indices_for_resnames(psf_path, primary_res)
+
+    if want_dcd:
+        positions, _z, boxes = load_md_npz_frames(
+            npz_file,
+            stride=stride,
+            start=start,
+            max_structures=max_structures,
+        )
+        n = _write_dcd_bundle(
+            positions=positions,
+            boxes=boxes,
+            output_dcd=output_file,
+            psf_in=psf_path,
+            atom_indices=primary_idx,
+            dt_ps=dt_ps,
+            steps_per_frame=steps_per_frame,
+            verbose=verbose,
+        )
+        for rname in split_res:
+            assert psf_path is not None
+            sel, _ = indices_for_resnames(psf_path, [rname])
+            split_path = output_file.with_name(f"{output_file.stem}.{rname}{output_file.suffix}")
+            _write_dcd_bundle(
+                positions=positions,
+                boxes=boxes,
+                output_dcd=split_path,
+                psf_in=psf_path,
+                atom_indices=sel,
+                dt_ps=dt_ps,
+                steps_per_frame=steps_per_frame,
+                verbose=verbose,
+            )
+        return n
+
+    n = npz_to_trajectory(
+        npz_file,
+        output_file,
+        max_structures=max_structures,
+        stride=stride,
+        start=start,
+        ase_units=ase_units,
+        verbose=verbose,
+        atom_indices=primary_idx,
+    )
+    for rname in split_res:
+        assert psf_path is not None
+        sel, _ = indices_for_resnames(psf_path, [rname])
+        split_path = output_file.with_name(f"{output_file.stem}.{rname}{output_file.suffix}")
+        npz_to_trajectory(
+            npz_file,
+            split_path,
+            max_structures=max_structures,
+            stride=stride,
+            start=start,
+            ase_units=ase_units,
+            verbose=verbose,
+            atom_indices=sel,
+        )
+    return n
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -556,13 +815,18 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: --stride must be >= 1", file=sys.stderr)
         return 1
     try:
-        npz_to_trajectory(
+        export_md_npz(
             args.input,
             args.output,
+            psf=args.psf,
+            resnames=args.resnames,
+            split_resnames=args.split_resnames,
             max_structures=args.max_structures,
             stride=args.stride,
             start=args.start,
             ase_units=args.ase_units,
+            dt_ps=args.dt_ps,
+            steps_per_frame=args.steps_per_frame,
             verbose=not args.quiet,
         )
     except Exception as exc:

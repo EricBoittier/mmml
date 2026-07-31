@@ -6,25 +6,47 @@ Run from repo root::
     uv run python scripts/generate_cli_docs.py
 
 Writes ``docs/cli/commands/<name>.md`` for every entry in ``COMMAND_REGISTRY`` and
-updates the ``# CLI_NAV_START`` … ``# CLI_NAV_END`` block in ``mkdocs.yml``.
+updates the ``# CLI_NAV_START: <group>`` … ``# CLI_NAV_END: <group>`` blocks in
+``mkdocs.yml``.
+
+One marker block per group, so hand-written guides can sit next to the generated
+command pages inside the same nav section without being clobbered. Group names
+track ``mmml.cli.help_text.COMMAND_GROUPS`` so the sidebar reads like
+``mmml commands``.
 """
 
 from __future__ import annotations
 
 import argparse
 import io
+import os
 import re
 import sys
 from pathlib import Path
+
+# Rendering a page imports the command module, which initializes JAX. On a busy
+# GPU that import raises, get_subcommand_parser() swallows the error, and the
+# page silently regenerates as a "help could not be loaded" stub — which the
+# pre-commit hook then stages over the real option dump. Docs need argparse only.
+os.environ["JAX_PLATFORMS"] = "cpu"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_CLI = REPO_ROOT / "docs" / "cli"
 COMMANDS_DIR = DOCS_CLI / "commands"
 MKDOCS = REPO_ROOT / "mkdocs.yml"
+INDEX_MD = REPO_ROOT / "docs" / "index.md"
+EXAMPLES_MD = REPO_ROOT / "docs" / "examples.md"
 NAV_START = "# CLI_NAV_START"
 NAV_END = "# CLI_NAV_END"
+HELP_START = "MMML_TOP_HELP_START"
+HELP_END = "MMML_TOP_HELP_END"
 
-# Sidebar groups (order matters). Commands not listed fall into "Other utilities".
+# Sidebar groups (order matters). Every registry command must land in exactly one
+# group; unassigned commands are reported as an error rather than silently pooled,
+# so a new subcommand cannot quietly disappear into an "Other" bucket.
+#
+# The first five names mirror ``mmml.cli.help_text.COMMAND_GROUPS`` — see
+# ``tests/unit/test_generate_cli_docs.py`` for the drift guard.
 CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "Structure & boxes",
@@ -36,10 +58,14 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "md-system",
             "run",
             "run-pycharmm",
+            "md-embedding",
             "warmup-mlpot-jax",
             "mpi-check",
+            "mpi-launch",
             "health-check",
             "lambda-mbar",
+            "umbrella-sample",
+            "umbrella-mbar",
             "pycharmm-two-residue-sample",
         ),
     ),
@@ -51,6 +77,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "pyscf-evaluate",
             "pyscf-evaluate-mp2",
             "fix-and-split",
+            "prepare-mm-dataset",
             "xml2npz",
             "npz2traj",
             "validate",
@@ -60,11 +87,16 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "ic-scan",
             "mode-check",
             "compare-npz",
+            "compare-charmm-ml",
             "cross-check",
         ),
     ),
     (
-        "ML training & sampling",
+        "ORCA external",
+        ("orca-server", "orca-client", "orca-external"),
+    ),
+    (
+        "ML training & MD",
         (
             "physnet-train",
             "physnet-evaluate",
@@ -74,6 +106,8 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "efield-train",
             "efield-evaluate",
             "efield-md",
+            "kernnn-train",
+            "kernnn-evaluate",
             "active-learning",
             "kernel-fit",
             "sample-diverse-xyz",
@@ -89,26 +123,14 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "configure",
             "env",
+            "doctor",
             "commands",
             "examples",
             "completion",
             "gui",
             "unwrap-traj",
+            "plot-restart-velocities",
             "downstream",
-        ),
-    ),
-    (
-        "ORCA external",
-        ("orca-server", "orca-client", "orca-external"),
-    ),
-    (
-        "Deprecated & legacy",
-        (
-            "train",
-            "evaluate",
-            "ef-train",
-            "ef-evaluate",
-            "ef-md",
         ),
     ),
 )
@@ -123,6 +145,10 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     ],
     "build-crystal": [
         ("Structure building guide", "../structure-building.md"),
+        (
+            "Solid acetone & sublimation enthalpy",
+            "../../acetone-crystal-sublimation.md",
+        ),
     ],
     "md-system": [
         ("md-system YAML configs", "../../md-system-configs.md"),
@@ -234,20 +260,46 @@ mmml env --json
 ```
 """,
     "build-crystal": """
-Build molecular crystals for MD. **Recommended for DCM and benzene:** literature
-CIF + `make-res` atom names (`--literature dcm|benz`) — exact experimental unit
+Build molecular crystals for MD. **Recommended for DCM, benzene and acetone:**
+literature CIF + `make-res` atom names (`--literature`) — exact experimental unit
 cell, tiled to a simulation supercell (≥28 Å edges by default) at literature ρ.
 
 ```bash
 mmml make-res --res DCM --skip-energy-show
 mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
 mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
+mmml build-crystal --literature aco -o acetone_pbca_150k.pdb
 ```
 
 PyXtal (`uv sync --extra chem`) is optional for random placement in the same
-space group. DCM crystal: [COD 2100015](https://www.crystallography.net/2100015.html)
-(Pbcn, ρ≈1.97 g/cm³). Benzene: [COD 4501704](https://www.crystallography.net/cod/4501704.html)
-(P2₁/c, ρ≈1.20 g/cm³).
+space group.
+
+## Bundled presets
+
+| Preset | Residue | Structure | Source |
+|---|---|---|---|
+| `dcm` | `DCM` | Pbcn, ρ≈1.97 g/cm³ | [COD 2100015](https://www.crystallography.net/2100015.html) |
+| `benz` | `BENZ` | P2₁/c, ρ≈1.20 g/cm³ | [COD 4501704](https://www.crystallography.net/cod/4501704.html) |
+| `aco` | `ACO` | Acetone Pbca, 150 K, Z=16 | [COD 7110464](https://www.crystallography.net/cod/7110464.html) |
+| `aco110k` | `ACO` | Acetone Pbca, 110 K | [COD 7110466](https://www.crystallography.net/cod/7110466.html) |
+| `aco5k` | `ACO` | Acetone Pbca, 5 K (neutron, d6) | [COD 7110465](https://www.crystallography.net/cod/7110465.html) |
+| `acocmcm` | `ACO` | Acetone Cmcm, 160 K (metastable) | [COD 7110463](https://www.crystallography.net/cod/7110463.html) |
+
+The acetone structures come from Allan et al., *Chem. Commun.* 1999, 751
+([doi:10.1039/a900558g](https://doi.org/10.1039/a900558g)). The paper's fifth
+structure — the 15 kbar Cmcm phase — is bundled but has no preset: its methyls
+are rotationally disordered, so it has no single set of hydrogen positions to map
+onto CGenFF. See
+[Solid acetone & sublimation enthalpy](../../acetone-crystal-sublimation.md) for
+validating a built acetone cell against the published contacts and computing its
+sublimation enthalpy.
+
+!!! warning "Non-cubic cells and `--write-charmm`"
+
+    `--write-charmm` installs a **cubic** CHARMM IMAGE. The acetone Pbca cell is
+    9.17 × 7.53 × 21.25 Å, which no cubic box represents, so MD started that way
+    would run a differently shaped cell than the one you built. For a static
+    periodic energy on the true cell use `mmml.analysis.lattice_energy` instead.
 
 ```bash
 mmml build-crystal \\
@@ -504,24 +556,121 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _nav_yaml_lines(registry_names: set[str]) -> list[str]:
-    grouped: set[str] = set()
-    lines = [f"      {NAV_START}"]
+def _render_examples_page() -> str:
+    """``docs/examples.md`` — the ``mmml examples`` output, verbatim."""
+    from mmml.cli.help_text import EXAMPLE_BLOCKS
+
+    lines = [
+        "# Examples",
+        "",
+        "Copy-paste invocations, grouped the same way as `mmml examples`.",
+        "Run `mmml <command> --help` for the full flag list of any of these.",
+        "",
+        "!!! note",
+        "    This page is generated from `mmml.cli.help_text.EXAMPLE_BLOCKS`,",
+        "    so it always matches what `mmml examples` prints.",
+        "",
+    ]
+    for title, examples in EXAMPLE_BLOCKS:
+        lines.append(f"## {title}")
+        lines.append("")
+        lines.append("```bash")
+        lines.extend(examples)
+        lines.append("```")
+        lines.append("")
+    lines.append("Interactive setup for YAML and Snakemake scaffolds: `mmml configure`.")
+    lines.append("")
+    lines.append("See also: [How the CLI is organized](cli/index.md).")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _update_top_level_help(text: str) -> str:
+    """Refresh the ``mmml -h`` transcript embedded in ``docs/index.md``."""
+    from mmml.cli.help_text import format_top_level_help
+
+    pattern = re.compile(
+        rf"^([ \t]*)<!-- {HELP_START} -->$.*?^[ \t]*<!-- {HELP_END} -->$\n",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if match is None:
+        raise SystemExit(
+            f"{INDEX_MD} missing <!-- {HELP_START} --> / <!-- {HELP_END} --> markers"
+        )
+    indent = match.group(1)
+    body = "\n".join(
+        [
+            f"{indent}<!-- {HELP_START} -->",
+            f"{indent}```console",
+            f"{indent}$ mmml -h",
+            *(f"{indent}{line}".rstrip() for line in format_top_level_help().splitlines()),
+            f"{indent}```",
+            f"{indent}<!-- {HELP_END} -->",
+        ]
+    )
+    return pattern.sub(lambda _m: body + "\n", text, count=1)
+
+
+def _check_group_coverage(registry_names: set[str]) -> None:
+    """Fail loudly when a registry command has no nav group, or is in two."""
+    seen: dict[str, str] = {}
+    for group, names in CLI_NAV_GROUPS:
+        for name in names:
+            if name in seen:
+                raise SystemExit(
+                    f"command {name!r} listed in both {seen[name]!r} and {group!r} "
+                    "in CLI_NAV_GROUPS"
+                )
+            seen[name] = group
+    missing = sorted(registry_names - set(seen))
+    if missing:
+        raise SystemExit(
+            "commands missing from CLI_NAV_GROUPS in scripts/generate_cli_docs.py: "
+            + ", ".join(missing)
+        )
+
+
+def _nav_block_pattern(group: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"^([ \t]*){re.escape(NAV_START)}: {re.escape(group)}[ \t]*$"
+        rf".*?"
+        rf"^[ \t]*{re.escape(NAV_END)}: {re.escape(group)}[ \t]*$\n",
+        re.MULTILINE | re.DOTALL,
+    )
+
+
+def _render_nav_block(group: str, names: list[str], indent: str) -> str:
+    lines = [f"{indent}{NAV_START}: {group}"]
+    for name in names:
+        lines.append(f"{indent}- {name}: cli/commands/{name}.md")
+    lines.append(f"{indent}{NAV_END}: {group}")
+    return "\n".join(lines) + "\n"
+
+
+def _update_nav(text: str, registry_names: set[str]) -> str:
+    """Rewrite each per-group marker block in ``mkdocs.yml`` in place."""
+    _check_group_coverage(registry_names)
     for group, names in CLI_NAV_GROUPS:
         present = [n for n in names if n in registry_names]
+        pattern = _nav_block_pattern(group)
+        match = pattern.search(text)
+        if match is None:
+            raise SystemExit(
+                f"{MKDOCS} missing '{NAV_START}: {group}' / '{NAV_END}: {group}' markers"
+            )
         if not present:
-            continue
-        grouped.update(present)
-        lines.append(f"      - {group}:")
-        for name in present:
-            lines.append(f"          - {name}: cli/commands/{name}.md")
-    other = sorted(registry_names - grouped - {"completion"})
-    if other:
-        lines.append("      - Other utilities:")
-        for name in other:
-            lines.append(f"          - {name}: cli/commands/{name}.md")
-    lines.append(f"      {NAV_END}")
-    return lines
+            # An empty block would leave a null-valued nav key and break the build.
+            raise SystemExit(
+                f"nav group {group!r} matches no registry command — drop it from "
+                "CLI_NAV_GROUPS and remove its section from mkdocs.yml"
+            )
+        indent = match.group(1)
+        text = pattern.sub(
+            lambda _m, g=group, n=present, i=indent: _render_nav_block(g, n, i),
+            text,
+            count=1,
+        )
+    return text
 
 
 def generate(*, check: bool = False) -> int:
@@ -545,25 +694,18 @@ def generate(*, check: bool = False) -> int:
                 path.write_text(body, encoding="utf-8")
                 changed += 1
 
-    nav_lines = _nav_yaml_lines(registry_names)
-    old_mkdocs = MKDOCS.read_text(encoding="utf-8")
-    nav_replacement = "\n".join(nav_lines) + "\n"
-    nav_pattern = re.compile(
-        rf"^      {re.escape(NAV_START)}.*?^      {re.escape(NAV_END)}\n",
-        re.MULTILINE | re.DOTALL,
-    )
-    if not nav_pattern.search(old_mkdocs):
-        raise SystemExit(
-            f"{MKDOCS} missing {NAV_START} / {NAV_END} markers — add them under the CLI nav section."
-        )
-    new_mkdocs = nav_pattern.sub(nav_replacement, old_mkdocs)
-    if new_mkdocs != old_mkdocs:
-        if check:
-            print("stale: mkdocs.yml (CLI nav block)", file=sys.stderr)
-            changed += 1
-        else:
-            MKDOCS.write_text(new_mkdocs, encoding="utf-8")
-            changed += 1
+    for path, body in (
+        (MKDOCS, _update_nav(MKDOCS.read_text(encoding="utf-8"), registry_names)),
+        (INDEX_MD, _update_top_level_help(INDEX_MD.read_text(encoding="utf-8"))),
+        (EXAMPLES_MD, _render_examples_page()),
+    ):
+        if not path.exists() or path.read_text(encoding="utf-8") != body:
+            if check:
+                print(f"stale: {path.relative_to(REPO_ROOT)}", file=sys.stderr)
+                changed += 1
+            else:
+                path.write_text(body, encoding="utf-8")
+                changed += 1
 
     # remove orphan command pages
     for path in COMMANDS_DIR.glob("*.md"):

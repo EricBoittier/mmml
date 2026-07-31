@@ -15,8 +15,10 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from campaign_lib import (  # noqa: E402
+    gpu_request_resources,
     load_config,
     resolve_path,
+    slurm_extra_string,
     slurm_value,
     window_ids as cfg_window_ids,
 )
@@ -44,24 +46,10 @@ RUN_MBAR = bool(CFG.get("run_mbar", True))
 ENV_SHELL = str(WORKFLOW_DIR / "scripts" / "env_shell.sh")
 
 
-def _slurm_extra(wildcards, *, want_gpu: bool = False) -> str:
-    parts = []
-    if want_gpu:
-        # Explicit GRES — plugin `gpu=` alone is not always enough on studix.
-        parts.append("--gres=gpu:1")
-    nodelist = str(slurm_value(CFG, "nodelist", "") or "").strip()
-    if nodelist:
-        parts.append(f"--nodelist={nodelist}")
-    mail = str(slurm_value(CFG, "mail_user", "") or "").strip()
-    if mail:
-        parts.append(f"--mail-user={mail} --mail-type=FAIL")
-    return " ".join(parts)
-
-
 def _res(*, runtime_key: str, gpu: int = 1, charmm_slot: int = 1):
     want_gpu = int(gpu) > 0
-    return dict(
-        gpu=gpu,
+    res = dict(
+        gpu_slot=1 if want_gpu else 0,
         charmm_slot=charmm_slot,
         runtime=lambda wildcards: int(slurm_value(CFG, runtime_key, 120)),
         nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
@@ -69,8 +57,11 @@ def _res(*, runtime_key: str, gpu: int = 1, charmm_slot: int = 1):
         cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
         mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 8000)),
         slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
-        slurm_extra=lambda wildcards: _slurm_extra(wildcards, want_gpu=want_gpu),
+        slurm_extra=lambda wildcards: slurm_extra_string(CFG),
     )
+    if want_gpu:
+        res.update(gpu_request_resources(CFG))
+    return res
 
 
 rule all:

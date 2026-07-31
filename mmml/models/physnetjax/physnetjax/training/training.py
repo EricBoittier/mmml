@@ -548,8 +548,15 @@ def train_model(
         )
 
     if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+        from mmml.models.mm_lj_scales import (
+            MM_LJ_EPSILON_SCALE_BOUNDS,
+            MM_LJ_SIGMA_SCALE_BOUNDS,
+        )
+
         print(
-            f"Learnable MM LJ scales enabled ({len(hybrid_mm.master_sigmas)} CGenFF types)",
+            f"Learnable MM LJ scales enabled ({len(hybrid_mm.master_sigmas)} CGenFF types; "
+            f"projected each step to sigma {MM_LJ_SIGMA_SCALE_BOUNDS}, "
+            f"epsilon {MM_LJ_EPSILON_SCALE_BOUNDS})",
             flush=True,
         )
 

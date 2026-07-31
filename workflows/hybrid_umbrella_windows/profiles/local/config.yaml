@@ -12,7 +12,7 @@ envvars:
   - CUDA_VISIBLE_DEVICES
   - MMML_EXAMPLE_DEVICE
 default-resources:
-  - gpu=1
+  - gpu_slot=1
   - charmm_slot=1
   - mem_mb=16000
   - cpus_per_task=4
