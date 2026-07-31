@@ -100,6 +100,9 @@ class DihedralCV:
         a, b, c, d = self.atoms
         return f"φ({a}-{b}-{c}-{d})"
 
+    def to_spec(self) -> dict[str, Any]:
+        return {"kind": "dihedral", "atoms": list(self.atoms)}
+
     def value(self, positions: Any, *, cell: Any = None) -> Any:
         """Dihedral in degrees for one ``(N, 3)`` frame."""
         import jax.numpy as jnp

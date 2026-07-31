@@ -137,10 +137,20 @@ class WindowSchedule:
 
     def cv_specs(self) -> list[dict[str, Any]]:
         """JSON-serialisable CV descriptions, for snapshots and summaries."""
-        return [
-            {"pairs": [list(p) for p in cv.pairs], "coefficients": list(cv.coefficients)}
-            for cv in self.cvs
-        ]
+        out: list[dict[str, Any]] = []
+        for cv in self.cvs:
+            if isinstance(cv, DihedralCV):
+                out.append(cv.to_spec())
+            elif hasattr(cv, "to_spec"):
+                out.append(cv.to_spec())
+            else:
+                out.append(
+                    {
+                        "pairs": [list(p) for p in cv.pairs],
+                        "coefficients": list(cv.coefficients),
+                    }
+                )
+        return out
 
 
 def _linspace_or_list(

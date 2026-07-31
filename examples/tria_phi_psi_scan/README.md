@@ -52,26 +52,32 @@ uv run python scripts/plot_tria_phi_psi_gas_solvent.py --demo \
   -o artifacts/tria_phi_psi_scan/figures/gas_vs_solvent.DEMO.png
 ```
 
-## Umbrella sampling (gas φ, then ψ)
+## Umbrella sampling (gas φ / ψ)
 
-After the gas scan NPZ exists, run a **periodic dihedral** umbrella with
-`mmml umbrella-sample` (`DihedralCV`, degrees / eV·deg⁻²):
+After the gas scan NPZ + traj exist, run a **periodic dihedral** umbrella with
+`mmml umbrella-sample` (`DihedralCV`, degrees / eV·deg⁻²). Seeds come from the
+scan (`seed_mode: frames`); stretch seeding is distance-only.
 
 ```bash
-# Export one seed frame per φ window (ψ held near -60°)
+# Export one seed frame per φ window (ψ held near -60°); Z from sibling .traj
 uv run python scripts/export_tria_phi_umbrella_seeds.py \
   --gas-npz "$OUT/gas/phi_psi_pes.npz" \
-  --cv phi --n-windows 13 \
+  --cv phi --n-windows 7 \
   -o "$OUT/gas/umbrella_phi_seeds.npz"
 
-# Need Z in the NPZ — copy from ASE traj or rebuild once:
-# (if seeds lack Z, point --structure at gas/phi_psi_pes.traj instead)
-
+# Smoke (~7 windows); swap yaml for production 13-window / longer nsteps
 uv run mmml umbrella-sample \
-  --config examples/tria_phi_psi_scan/yaml/umbrella_phi_gas.yaml
+  --config examples/tria_phi_psi_scan/yaml/umbrella_phi_gas_smoke.yaml
 
-uv run mmml umbrella-mbar --run-dir "$OUT/umbrella_phi_gas"
+uv run mmml umbrella-mbar --run-dir "$OUT/umbrella_phi_gas_smoke"
+
+uv run python scripts/plot_tria_dihedral_umbrella_pmf.py \
+  --run-dir "$OUT/umbrella_phi_gas_smoke" \
+  --xlabel 'φ (deg)' \
+  -o "$OUT/figures/umbrella_phi_pmf.png"
 ```
+
+ψ: `--cv psi` → `umbrella_psi_seeds.npz` + `yaml/umbrella_psi_gas.yaml`.
 
 YAML CV block:
 
@@ -80,12 +86,12 @@ cv_x:
   kind: dihedral
   atoms: [14, 16, 18, 24]   # φ; use [16, 18, 24, 26] for ψ
 seed_mode: frames           # required (stretch is distance-only)
+k_ev_A2: 0.05               # eV/deg² (raise if histograms drift)
 ```
 
-**Solvent dihedral umbrella** (hybrid `hybrid_jaxmd`) is the next layer — same
-`DihedralCV` spec once hybrid name-binding accepts `atoms:` indices (gas
-`packed_ml` path is wired now). Until then, use the constrained solvent relax
-above for solvent landscapes.
+**Solvent dihedral umbrella** (`hybrid_jaxmd`) is not wired yet — use the
+constrained solvent relax above for solvent landscapes; gas `packed_ml` path
+is ready.
 
 ## Notes
 
