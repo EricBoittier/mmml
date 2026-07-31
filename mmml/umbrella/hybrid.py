@@ -612,8 +612,17 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         f"~{n_frames_est} frames/window"
     )
     print(
-        f"  max_seed_force={float(cfg.max_seed_force):g} eV/Å  "
+        f"  max_seed_force={float(cfg.max_seed_force):g} eV/Å over the ML region  "
         f"(failed windows are skipped, not fatal)"
+    )
+    relax_steps = int(getattr(cfg, "relax_seed_steps", 0))
+    print(
+        f"  seed relaxation: {relax_steps} FIRE steps around the frozen solute"
+        + (
+            f" to fmax={float(getattr(cfg, 'relax_seed_fmax', 1.0)):g} eV/Å"
+            if relax_steps > 0
+            else " (disabled)"
+        )
     )
     print(f"  output_dir={output_dir}")
     if wall_specs:
