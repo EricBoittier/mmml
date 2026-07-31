@@ -42,7 +42,9 @@ def save_window_checkpoint(
     """Atomic-ish write of one window result (ok or failed)."""
     path = window_npz_path(output_dir, wid)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".npz.tmp")
+    # NumPy appends ``.npz`` unless the path already ends with it — keep the
+    # temp name ``*.tmp.npz`` so replace() finds the file we wrote.
+    tmp = path.with_name(path.stem + ".tmp.npz")
     payload: dict[str, Any] = {
         "status": np.asarray(status),
         "window": np.int32(wid),

@@ -8,9 +8,13 @@
 # Free GPU (second card is index 1):
 #   GPU=1 SOLVENT=acn bash examples/m/14_umbrella_sample_sol.sh
 #
-# Default: 3 windows × 1 ps (2000 × 0.5 fs). Optional:
+# Resume missing/failed windows:
+#   RESUME=1 SOLVENT=acn bash examples/m/14_umbrella_sample_sol.sh
+#
+# Default: 3 windows × 1 ps. Optional:
 #   NSTEPS=500 N_WINDOWS=1   # quicker compile timing probe
 #   USE_DENSITY=1            # rebuild dense box if missing (default on)
+#   WINDOWS=0,2              # only these 0-based windows
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -93,6 +97,16 @@ fi
 if [[ -n "${MAX_SEED_FORCE:-}" ]]; then
   EXTRA+=(--max-seed-force "${MAX_SEED_FORCE}")
 fi
+if [[ "${RESUME:-0}" == "1" ]]; then
+  EXTRA+=(--resume)
+fi
+if [[ -n "${WINDOWS:-}" ]]; then
+  EXTRA+=(--windows "${WINDOWS}")
+fi
+
+if [[ "${RESUME:-0}" != "1" ]]; then
+  EXTRA+=(--overwrite)
+fi
 
 echo "=== hybrid umbrella-sample: $(basename "${CFG}") (solvent=${SOLVENT}, move-with=${MOVE_WITH}) ==="
 # CLI path overrides beat YAML relatives (config-dir resolution is easy to mis-count).
@@ -103,7 +117,6 @@ uv run mmml umbrella-sample \
   --checkpoint "${MMML_CKPT}" \
   --output-dir "${OUT}" \
   --move-with "${MOVE_WITH}" \
-  --overwrite \
   "${EXTRA[@]}"
 
 SUMMARY="${OUT}/umbrella_summary.json"
