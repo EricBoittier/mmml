@@ -25,6 +25,14 @@ from typing import Any
 
 import numpy as np
 
+from mmml.analysis.crystal_contacts import (
+    Contact,
+    collapse_equivalent,
+    element_pair_contacts,
+    molecular_frames,
+)
+from mmml.analysis.lattice_energy import SublimationReference
+
 __all__ = [
     "AcetonePhase",
     "ACETONE_CRYSTAL_PHASES",
@@ -39,41 +47,18 @@ __all__ = [
 ]
 
 
-@dataclass(frozen=True)
-class SublimationReference:
-    """Experimental sublimation enthalpy assembled from a thermodynamic cycle.
-
-    The NIST WebBook lists no direct sublimation measurement for acetone, so
-    ``dH_sub(T_fus) = dH_vap(T_fus) + dH_fus(T_fus)`` is the available route.
-    Both legs are quoted near the melting point rather than at 298 K, because a
-    room-temperature ``dH_vap`` would be compared against a crystal that does
-    not exist at that temperature.
-
-    Treat the result as an estimate good to a kJ/mol or so, not a measurement.
-    The two legs come from different sources at slightly different temperatures,
-    and the heat capacity difference between phases means the number still drifts
-    with temperature -- which is the whole subject of the Allan et al. paper.
-    """
-
-    dvap_h_kj_mol: float = 32.9
-    dvap_h_temperature_K: float = 228.0
-    dvap_h_source: str = "Stephenson & Malanowski 1987 (data 178-243 K), via NIST WebBook"
-    dfus_h_kj_mol: float = 5.72
-    dfus_h_temperature_K: float = 176.6
-    dfus_h_source: str = "Kelley 1929 / Domalski & Hearing 1996, via NIST WebBook"
-
-    @property
-    def dsub_h_kj_mol(self) -> float:
-        return self.dvap_h_kj_mol + self.dfus_h_kj_mol
-
-    @property
-    def dsub_h_kcal_mol(self) -> float:
-        return self.dsub_h_kj_mol / 4.184
-
-
-# Kelley's 1929 calorimetry is the same study that first saw the heat-capacity
-# anomaly near 127 K which the Allan et al. paper set out to explain.
-ACETONE_SUBLIMATION_REFERENCE = SublimationReference()
+# The NIST WebBook lists no direct sublimation measurement for acetone, so the
+# reference comes from a thermodynamic cycle. Kelley's 1929 calorimetry is the
+# same study that first saw the heat-capacity anomaly near 127 K which the Allan
+# et al. paper set out to explain.
+ACETONE_SUBLIMATION_REFERENCE = SublimationReference(
+    dvap_h_kj_mol=32.9,
+    dvap_h_temperature_K=228.0,
+    dvap_h_source="Stephenson & Malanowski 1987 (data 178-243 K), via NIST WebBook",
+    dfus_h_kj_mol=5.72,
+    dfus_h_temperature_K=176.6,
+    dfus_h_source="Kelley 1929 / Domalski & Hearing 1996, via NIST WebBook",
+)
 
 
 @dataclass(frozen=True)
@@ -258,32 +243,6 @@ def read_acetone_phase(key: str, *, protiate: bool = True) -> Any:
     return atoms
 
 
-@dataclass(frozen=True)
-class Contact:
-    """One intermolecular contact between molecules ``i`` and ``j``."""
-
-    distance_A: float
-    mol_i: int
-    mol_j: int
-    atom_i: int
-    atom_j: int
-    angle_deg: float | None = None
-    motif: str | None = None
-
-
-def _molecular_frames(atoms: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Unwrap into molecules; return ``(mol_id, positions, cell)``."""
-    from mmml.analysis.lattice_energy import unwrap_molecules
-
-    cell = np.asarray(atoms.cell.array, dtype=np.float64)
-    mol_id, positions = unwrap_molecules(
-        np.asarray(atoms.get_positions(), dtype=np.float64),
-        np.asarray(atoms.get_atomic_numbers(), dtype=int),
-        cell,
-    )
-    return mol_id, positions, cell
-
-
 def _carbonyl_indices(
     positions: np.ndarray, z: np.ndarray, mol_id: np.ndarray
 ) -> list[tuple[int, int]]:
@@ -333,7 +292,7 @@ def carbonyl_contacts(
     """
     from mmml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
 
-    mol_id, positions, cell = _molecular_frames(atoms)
+    mol_id, positions, cell = molecular_frames(atoms)
     z = np.asarray(atoms.get_atomic_numbers(), dtype=int)
     pairs = _carbonyl_indices(positions, z, mol_id)
 
@@ -367,7 +326,7 @@ def carbonyl_contacts(
                     motif=classify_carbonyl_motif(angle),
                 )
             )
-    return _collapse_equivalent(found, tolerance_A)
+    return collapse_equivalent(found, tolerance_A)
 
 
 def ch_o_contacts(
@@ -384,41 +343,6 @@ def ch_o_contacts(
     contacts are quoted after normalising C-H to 1.08 A. No such normalisation
     is applied here; compare X-ray phases with X-ray phases.
     """
-    from mmml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
-
-    mol_id, positions, cell = _molecular_frames(atoms)
-    z = np.asarray(atoms.get_atomic_numbers(), dtype=int)
-    h_idx = np.flatnonzero(z == 1)
-    o_idx = np.flatnonzero(z == 8)
-
-    reach = molecular_reach_A(positions, mol_id)
-    shifts = lattice_shift_vectors(cell, max_distance_A, reach_A=reach)
-
-    found: list[Contact] = []
-    for shift in shifts:
-        delta = (positions[o_idx][None, :, :] + shift) - positions[h_idx][:, None, :]
-        dist = np.linalg.norm(delta, axis=-1)
-        keep = dist < max_distance_A
-        different = mol_id[h_idx][:, None] != mol_id[o_idx][None, :]
-        keep &= different if not np.any(shift) else np.ones_like(keep)
-        for i, j in zip(*np.nonzero(keep)):
-            found.append(
-                Contact(
-                    distance_A=float(dist[i, j]),
-                    mol_i=int(mol_id[h_idx[i]]),
-                    mol_j=int(mol_id[o_idx[j]]),
-                    atom_i=int(h_idx[i]),
-                    atom_j=int(o_idx[j]),
-                )
-            )
-    return _collapse_equivalent(found, tolerance_A)
-
-
-def _collapse_equivalent(contacts: list[Contact], tolerance_A: float) -> list[Contact]:
-    """Keep one representative per symmetry-equivalent distance, shortest first."""
-    out: list[Contact] = []
-    for contact in sorted(contacts, key=lambda c: c.distance_A):
-        if any(abs(contact.distance_A - kept.distance_A) < tolerance_A for kept in out):
-            continue
-        out.append(contact)
-    return out
+    return element_pair_contacts(
+        atoms, "H", "O", max_distance_A=max_distance_A, tolerance_A=tolerance_A
+    )

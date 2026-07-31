@@ -28,7 +28,7 @@ uv run python scripts/scan_trialanine_phi_psi_pes.py \
   --mm-sd-steps 50 --mm-abnr-steps 50 \
   --relax-steps 100
 
-# 2) Solvent relax from gas NPZ (fewer waters for smoke)
+# 2) Solvent relax from gas NPZ (one shared box; peptide swap per point)
 uv run python scripts/scan_trialanine_phi_psi_solvent.py \
   --gas-npz "$OUT/gas/phi_psi_pes.npz" \
   --out "$OUT/solvent" \

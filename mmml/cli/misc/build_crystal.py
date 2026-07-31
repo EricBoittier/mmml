@@ -39,14 +39,18 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     lit = parser.add_argument_group(
-        "Literature CIF + make-res (recommended for DCM / benzene)"
+        "Literature CIF + make-res (recommended for DCM / benzene / acetone)"
     )
     lit.add_argument(
         "--literature",
         choices=sorted(LITERATURE_CRYSTAL_PRESETS),
         default=None,
         metavar="PRESET",
-        help="Bundled experimental CIF preset: dcm (Pbcn) or benz (P2₁/c)",
+        help=(
+            "Bundled experimental CIF preset: dcm (Pbcn), benz (P2₁/c), "
+            "aco / aco5k / aco110k (acetone Pbca at 150, 5, 110 K), "
+            "acocmcm (metastable acetone Cmcm)"
+        ),
     )
     lit.add_argument(
         "--from-cif",

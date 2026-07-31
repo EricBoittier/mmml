@@ -327,7 +327,7 @@ mmml = [
     "data/molecules/dcm.xyz",
     "data/molecules/dcm_monomer.pdb",
     "data/molecules/benz_monomer.pdb",
-    "data/structures/dcm_pbcn_cod2100015.cif",
+    "data/structures/dcm_*.cif",
     "data/structures/benzene_p21c_cod4501704.cif",
     "data/structures/acetone_*.cif",
     "generate/sample/pdb/*.pdb",

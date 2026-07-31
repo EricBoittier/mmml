@@ -145,6 +145,10 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     ],
     "build-crystal": [
         ("Structure building guide", "../structure-building.md"),
+        (
+            "Solid acetone & sublimation enthalpy",
+            "../../acetone-crystal-sublimation.md",
+        ),
     ],
     "md-system": [
         ("md-system YAML configs", "../../md-system-configs.md"),
@@ -256,20 +260,46 @@ mmml env --json
 ```
 """,
     "build-crystal": """
-Build molecular crystals for MD. **Recommended for DCM and benzene:** literature
-CIF + `make-res` atom names (`--literature dcm|benz`) — exact experimental unit
+Build molecular crystals for MD. **Recommended for DCM, benzene and acetone:**
+literature CIF + `make-res` atom names (`--literature`) — exact experimental unit
 cell, tiled to a simulation supercell (≥28 Å edges by default) at literature ρ.
 
 ```bash
 mmml make-res --res DCM --skip-energy-show
 mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
 mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
+mmml build-crystal --literature aco -o acetone_pbca_150k.pdb
 ```
 
 PyXtal (`uv sync --extra chem`) is optional for random placement in the same
-space group. DCM crystal: [COD 2100015](https://www.crystallography.net/2100015.html)
-(Pbcn, ρ≈1.97 g/cm³). Benzene: [COD 4501704](https://www.crystallography.net/cod/4501704.html)
-(P2₁/c, ρ≈1.20 g/cm³).
+space group.
+
+## Bundled presets
+
+| Preset | Residue | Structure | Source |
+|---|---|---|---|
+| `dcm` | `DCM` | Pbcn, ρ≈1.97 g/cm³ | [COD 2100015](https://www.crystallography.net/2100015.html) |
+| `benz` | `BENZ` | P2₁/c, ρ≈1.20 g/cm³ | [COD 4501704](https://www.crystallography.net/cod/4501704.html) |
+| `aco` | `ACO` | Acetone Pbca, 150 K, Z=16 | [COD 7110464](https://www.crystallography.net/cod/7110464.html) |
+| `aco110k` | `ACO` | Acetone Pbca, 110 K | [COD 7110466](https://www.crystallography.net/cod/7110466.html) |
+| `aco5k` | `ACO` | Acetone Pbca, 5 K (neutron, d6) | [COD 7110465](https://www.crystallography.net/cod/7110465.html) |
+| `acocmcm` | `ACO` | Acetone Cmcm, 160 K (metastable) | [COD 7110463](https://www.crystallography.net/cod/7110463.html) |
+
+The acetone structures come from Allan et al., *Chem. Commun.* 1999, 751
+([doi:10.1039/a900558g](https://doi.org/10.1039/a900558g)). The paper's fifth
+structure — the 15 kbar Cmcm phase — is bundled but has no preset: its methyls
+are rotationally disordered, so it has no single set of hydrogen positions to map
+onto CGenFF. See
+[Solid acetone & sublimation enthalpy](../../acetone-crystal-sublimation.md) for
+validating a built acetone cell against the published contacts and computing its
+sublimation enthalpy.
+
+!!! warning "Non-cubic cells and `--write-charmm`"
+
+    `--write-charmm` installs a **cubic** CHARMM IMAGE. The acetone Pbca cell is
+    9.17 × 7.53 × 21.25 Å, which no cubic box represents, so MD started that way
+    would run a differently shaped cell than the one you built. For a static
+    periodic energy on the true cell use `mmml.analysis.lattice_energy` instead.
 
 ```bash
 mmml build-crystal \\

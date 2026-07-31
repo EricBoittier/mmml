@@ -76,6 +76,7 @@ nav:
       - Structure building: cli/structure-building.md
       - Packmol placement: packmol-placement.md
       - Liquid box workflow: liquid-box-workflow.md
+      - Solid acetone & sublimation enthalpy: acetone-crystal-sublimation.md
       - Commands:
           # CLI_NAV_START: Structure & boxes
           - make-res: cli/commands/make-res.md

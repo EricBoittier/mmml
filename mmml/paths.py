@@ -39,9 +39,30 @@ def default_dcm_molecule_xyz() -> Path:
     return bundled_file("data", "molecules", "dcm.xyz")
 
 
-def default_dcm_crystal_cif() -> Path:
-    """Experimental DCM crystal (Pbcn, COD 2100015 / CCDC doi:10.5517/cc9lyjb)."""
-    return bundled_file("data", "structures", "dcm_pbcn_cod2100015.cif")
+# The two pressure points of Podsiadło, Dziubek & Katrusiak, Acta Crystallogr. B
+# 61, 595 (2005) (doi:10.1107/S0108768105017374), redistributed by the
+# Crystallography Open Database.  These are the only pure CH2Cl2 structures in
+# COD; the ambient-pressure phase (Kawaguchi et al. 1973) has no open CIF.
+DCM_CRYSTAL_CIFS: dict[str, str] = {
+    "pbcn_133gpa": "dcm_pbcn_133gpa_cod2100014.cif",
+    "pbcn_163gpa": "dcm_pbcn_cod2100015.cif",
+}
+
+
+def default_dcm_crystal_cif(phase: str = "pbcn_163gpa") -> Path:
+    """Experimental DCM crystal for one pressure point of Podsiadło et al. (2005).
+
+    Defaults to the 1.63 GPa structure (COD 2100015 / CCDC doi:10.5517/cc9lyjb)
+    because that is what the ``dcm`` ``build-crystal`` preset and the literature
+    cross-check table have always used.
+    """
+    key = phase.strip().lower()
+    try:
+        filename = DCM_CRYSTAL_CIFS[key]
+    except KeyError:
+        known = ", ".join(sorted(DCM_CRYSTAL_CIFS))
+        raise KeyError(f"Unknown DCM phase {phase!r}; known phases: {known}") from None
+    return bundled_file("data", "structures", filename)
 
 
 def default_benzene_crystal_cif() -> Path:

@@ -50,19 +50,27 @@ __all__ = [
     "GAS_CONSTANT_KCAL_MOL_K",
     "MolecularCell",
     "LatticeEnergyResult",
+    "PairEnergyDecomposition",
     "build_molecular_cell",
     "unwrap_molecules",
     "molecular_reach_A",
     "lattice_shift_vectors",
     "periodic_coulomb_energy",
     "crystal_lattice_energy",
+    "decompose_lattice_energy_by_element_pair",
+    "CellRelaxationResult",
+    "relax_cell_lengths",
+    "SublimationReference",
     "sublimation_enthalpy_kcal_mol",
     "KCAL_MOL_TO_KJ_MOL",
+    "GPA_A3_TO_KCAL_MOL",
 ]
 
 # CODATA 2018 gas constant expressed in the CHARMM energy unit.
 GAS_CONSTANT_KCAL_MOL_K: float = 1.987204259e-3
 KCAL_MOL_TO_KJ_MOL: float = 4.184
+# 1 GPa acting through 1 A^3, per mole: 1e9 Pa * 1e-30 m^3 * N_A / 4184 J/kcal.
+GPA_A3_TO_KCAL_MOL: float = 0.14393262
 
 
 @dataclass(frozen=True)
@@ -506,6 +514,375 @@ def crystal_lattice_energy(
     )
 
 
+@dataclass(frozen=True)
+class MoleculePairInteraction:
+    """The full interaction energy of one molecule with one periodic image of another.
+
+    Energies are for the dimer as a whole, in kcal/mol.
+    """
+
+    mol_i: int
+    mol_j: int
+    shift: tuple[float, float, float]
+    centroid_distance_A: float
+    e_lj: float
+    e_coulomb: float
+    closest_contact_A: float
+    closest_contact: tuple[str, str]
+
+    @property
+    def e_total(self) -> float:
+        return self.e_lj + self.e_coulomb
+
+
+@dataclass(frozen=True)
+class PairEnergyDecomposition:
+    """Lattice energy split over molecule pairs and labelled by closest contact.
+
+    Answers "which contacts hold this crystal together" -- the question that
+    papers on halogen versus hydrogen bonding argue about. The decomposition is
+    over *molecule* pairs rather than atom pairs on purpose: each molecule here
+    is neutral, so a molecule-pair energy is a well-defined interaction energy,
+    while an atom-pair split of a dipolar lattice is dominated by cancelling
+    monopole terms of order 100 kcal/mol that mean nothing individually.
+
+    Each dimer is then attributed to the element pair of its *shortest*
+    intermolecular contact, which is how a crystallographic paper labels the
+    interaction holding two molecules together. Values are kcal/mol per
+    molecule, so the buckets sum to :attr:`e_total`.
+
+    ``e_coulomb_ewald`` carries the converged periodic value for comparison:
+    the per-dimer Coulomb sum is a direct one, and while each dimer is neutral
+    (so the sum converges as dipole-dipole rather than monopole-monopole) it is
+    still truncated at ``cutoff_A``. See :attr:`coulomb_truncation_error`.
+    """
+
+    by_contact: dict[tuple[str, str], tuple[float, float, int]]
+    dimers: tuple[MoleculePairInteraction, ...]
+    e_lj: float
+    e_coulomb_direct: float
+    e_coulomb_ewald: float
+    cutoff_A: float
+    n_molecules: int
+
+    @property
+    def e_total(self) -> float:
+        return self.e_lj + self.e_coulomb_direct
+
+    @property
+    def coulomb_truncation_error(self) -> float:
+        """How much the direct dimer Coulomb sum misses relative to Ewald."""
+        return self.e_coulomb_direct - self.e_coulomb_ewald
+
+    def ranked(self) -> list[tuple[tuple[str, str], float, float, float, int]]:
+        """``(contact, lj, coulomb, total, n_dimers)``, most attractive first."""
+        rows = [
+            (contact, lj, coul, lj + coul, count)
+            for contact, (lj, coul, count) in self.by_contact.items()
+        ]
+        return sorted(rows, key=lambda row: row[3])
+
+    def dominant_contact(self) -> tuple[str, str]:
+        """The element pair carrying the most binding energy."""
+        return self.ranked()[0][0]
+
+    def unique_dimers(
+        self, *, tolerance_kcal_mol: float = 1e-6
+    ) -> list[MoleculePairInteraction]:
+        """One representative per symmetry-equivalent dimer, most bound first."""
+        out: list[MoleculePairInteraction] = []
+        for dimer in sorted(self.dimers, key=lambda d: d.e_total):
+            if any(
+                abs(dimer.e_total - kept.e_total) < tolerance_kcal_mol
+                and abs(dimer.centroid_distance_A - kept.centroid_distance_A) < 1e-4
+                for kept in out
+            ):
+                continue
+            out.append(dimer)
+        return out
+
+
+def decompose_lattice_energy_by_element_pair(
+    positions: np.ndarray,
+    atomic_numbers: np.ndarray,
+    cell: np.ndarray,
+    *,
+    cutoff_A: float = 12.0,
+    report_dimers_within_A: float = 8.0,
+    sigma_scale: Sequence[float] | np.ndarray | None = None,
+    epsilon_scale: Sequence[float] | np.ndarray | None = None,
+    prm_path: Path | str | None = None,
+    rtf_path: Path | str | None = None,
+) -> PairEnergyDecomposition:
+    """Split the intermolecular energy over molecule pairs, labelled by contact.
+
+    The LJ buckets add up to the ``e_lj`` of :func:`crystal_lattice_energy`
+    exactly; the tail correction is excluded because it is isotropic and belongs
+    to no particular contact. ``report_dimers_within_A`` bounds the centroid
+    separation of dimers kept in :attr:`PairEnergyDecomposition.dimers` -- the
+    energy sums always run to the full ``cutoff_A``.
+    """
+    from ase.data import chemical_symbols
+
+    mcell, sigmas, epsilons = build_molecular_cell(
+        positions, atomic_numbers, cell, prm_path=prm_path, rtf_path=rtf_path
+    )
+    if sigma_scale is not None or epsilon_scale is not None:
+        from mmml.models.mm_lj_scales import apply_mm_lj_scales
+
+        scaled = apply_mm_lj_scales(sigmas, epsilons, sigma_scale, epsilon_scale)
+        sigmas, epsilons = np.asarray(scaled[0]), np.asarray(scaled[1])
+
+    reach = molecular_reach_A(mcell.positions, mcell.mol_id)
+    shifts = lattice_shift_vectors(mcell.cell, cutoff_A, reach_A=reach)
+    pair_rmin, pair_eps = _pair_tables(mcell, sigmas, epsilons)
+
+    pos = mcell.positions
+    z = mcell.atomic_numbers
+    qq = mcell.charges[:, None] * mcell.charges[None, :]
+    n_mol = mcell.n_molecules
+    members = [np.flatnonzero(mcell.mol_id == m) for m in range(n_mol)]
+    centroids = np.stack([pos[sel].mean(axis=0) for sel in members])
+
+    lj_acc: dict[tuple[str, str], float] = {}
+    coul_acc: dict[tuple[str, str], float] = {}
+    counts: dict[tuple[str, str], int] = {}
+    dimers: list[MoleculePairInteraction] = []
+
+    for shift in shifts:
+        is_home = not np.any(shift)
+        for i in range(n_mol):
+            for j in range(n_mol):
+                if is_home and i == j:
+                    continue
+                # Group-based cutoff: a dimer is either in or out as a whole.
+                # Truncating atom pairs within a dimer would split a neutral
+                # molecule into charged fragments and wreck the Coulomb sum.
+                if np.linalg.norm(centroids[j] + shift - centroids[i]) >= cutoff_A:
+                    continue
+                sel_i, sel_j = members[i], members[j]
+                delta = (pos[sel_j] + shift)[None, :, :] - pos[sel_i][:, None, :]
+                r = np.maximum(np.linalg.norm(delta, axis=-1), 1e-10)
+                r6 = (pair_rmin[np.ix_(sel_i, sel_j)] / r) ** 6
+                e_lj = float(np.sum(pair_eps[np.ix_(sel_i, sel_j)] * (r6 * r6 - 2.0 * r6)))
+                e_coul = float(np.sum(COULOMB_CONSTANT * qq[np.ix_(sel_i, sel_j)] / r))
+                flat = int(np.argmin(r))
+                ai, aj = np.unravel_index(flat, r.shape)
+                contact = tuple(
+                    sorted(
+                        (chemical_symbols[z[sel_i[ai]]], chemical_symbols[z[sel_j[aj]]])
+                    )
+                )
+                # Each physical dimer is visited twice, as (i, j, s) and
+                # (j, i, -s), so every accumulated energy carries a factor 1/2.
+                lj_acc[contact] = lj_acc.get(contact, 0.0) + 0.5 * e_lj
+                coul_acc[contact] = coul_acc.get(contact, 0.0) + 0.5 * e_coul
+                counts[contact] = counts.get(contact, 0) + 1
+                d_centroid = float(np.linalg.norm(centroids[j] + shift - centroids[i]))
+                if d_centroid <= report_dimers_within_A:
+                    dimers.append(
+                        MoleculePairInteraction(
+                            mol_i=i,
+                            mol_j=j,
+                            shift=(float(shift[0]), float(shift[1]), float(shift[2])),
+                            centroid_distance_A=d_centroid,
+                            e_lj=e_lj,
+                            e_coulomb=e_coul,
+                            closest_contact_A=float(r.min()),
+                            closest_contact=contact,  # type: ignore[arg-type]
+                        )
+                    )
+
+    by_contact = {
+        contact: (lj_acc[contact] / n_mol, coul_acc[contact] / n_mol, counts[contact])
+        for contact in lj_acc
+    }
+    e_coulomb_ewald, _, _ = periodic_coulomb_energy(
+        mcell.positions,
+        mcell.charges,
+        mcell.cell,
+        cutoff_A=cutoff_A,
+        excluded_pairs=_intramolecular_pairs(mcell.mol_id),
+        shifts=shifts,
+    )
+    return PairEnergyDecomposition(
+        by_contact=by_contact,
+        dimers=tuple(dimers),
+        e_lj=sum(lj for lj, _, _ in by_contact.values()),
+        e_coulomb_direct=sum(coul for _, coul, _ in by_contact.values()),
+        e_coulomb_ewald=e_coulomb_ewald / n_mol,
+        cutoff_A=float(cutoff_A),
+        n_molecules=n_mol,
+    )
+
+
+@dataclass(frozen=True)
+class CellRelaxationResult:
+    """Outcome of relaxing the cell axes of a rigid-molecule crystal."""
+
+    cell: np.ndarray
+    cell_lengths_A: tuple[float, float, float]
+    volume_A3: float
+    pressure_GPa: float
+    e_lattice: float  # kcal/mol per molecule at the relaxed cell
+    e_lattice_initial: float
+    enthalpy_kcal_mol: float  # (E + pV) per molecule
+    axis_strain: tuple[float, float, float]  # relaxed / initial, per axis
+    volume_strain: float
+    n_energy_evaluations: int
+    converged: bool
+
+    def sublimation_enthalpy(self, temperature_K: float) -> float:
+        return sublimation_enthalpy_kcal_mol(self.e_lattice, temperature_K)
+
+
+def _rigid_scaled_positions(
+    positions: np.ndarray,
+    mol_id: np.ndarray,
+    cell: np.ndarray,
+    new_cell: np.ndarray,
+) -> np.ndarray:
+    """Re-place rigid molecules when the cell changes shape.
+
+    Each molecular centroid keeps its fractional coordinate and every molecule
+    is carried along as a rigid body, so internal geometry is untouched. Scaling
+    the atomic coordinates directly would stretch the C-Cl bonds along with the
+    lattice, which is both wrong and would make the LJ repulsion nonsense.
+    """
+    inv = np.linalg.inv(cell)
+    out = np.array(positions, dtype=np.float64, copy=True)
+    for m in range(int(mol_id.max()) + 1):
+        sel = mol_id == m
+        centroid = positions[sel].mean(axis=0)
+        new_centroid = (centroid @ inv) @ new_cell
+        out[sel] += new_centroid - centroid
+    return out
+
+
+def _cell_energy(
+    mcell: MolecularCell,
+    pair_rmin: np.ndarray,
+    pair_eps: np.ndarray,
+    cutoff_A: float,
+) -> float:
+    """Total intermolecular energy of one cell (kcal/mol, not per molecule)."""
+    reach = molecular_reach_A(mcell.positions, mcell.mol_id)
+    shifts = lattice_shift_vectors(mcell.cell, cutoff_A, reach_A=reach)
+    e_lj = _lj_real_space(mcell, pair_rmin, pair_eps, shifts, cutoff_A)
+    e_tail = _lj_tail_correction(mcell, pair_rmin, pair_eps, cutoff_A)
+    e_coulomb, _, _ = periodic_coulomb_energy(
+        mcell.positions,
+        mcell.charges,
+        mcell.cell,
+        cutoff_A=cutoff_A,
+        excluded_pairs=_intramolecular_pairs(mcell.mol_id),
+        shifts=shifts,
+    )
+    return e_lj + e_tail + e_coulomb
+
+
+def relax_cell_lengths(
+    positions: np.ndarray,
+    atomic_numbers: np.ndarray,
+    cell: np.ndarray,
+    *,
+    pressure_GPa: float = 0.0,
+    cutoff_A: float = 12.0,
+    sigma_scale: Sequence[float] | np.ndarray | None = None,
+    epsilon_scale: Sequence[float] | np.ndarray | None = None,
+    prm_path: Path | str | None = None,
+    rtf_path: Path | str | None = None,
+    max_strain: float = 0.5,
+    tol: float = 1e-6,
+) -> CellRelaxationResult:
+    """Minimise ``E_latt + pV`` over the three cell axis lengths.
+
+    Molecules are held rigid at fixed fractional centroids and fixed
+    orientation, so the only degrees of freedom are the axis lengths: a pure
+    orthorhombic strain. That is enough to answer "what cell would this force
+    field choose at this pressure", which is what makes a lattice energy
+    comparable to an experimental sublimation enthalpy -- a structure measured
+    at 1.6 GPa is compressed well up its repulsive wall and its static energy is
+    not a cohesive energy.
+
+    What it is not: a full lattice relaxation. Molecular reorientation, internal
+    relaxation and cell angles are all frozen, so the returned energy is an
+    upper bound on the true force-field minimum, and the axis lengths are only
+    as good as the assumption that the molecules do not want to rotate. Both are
+    reasonable starting from an experimental structure whose molecules sit on
+    crystallographic symmetry elements; neither is exact.
+
+    Cell angles are preserved, so an orthorhombic cell stays orthorhombic.
+    """
+    from scipy.optimize import minimize
+
+    mcell, sigmas, epsilons = build_molecular_cell(
+        positions, atomic_numbers, cell, prm_path=prm_path, rtf_path=rtf_path
+    )
+    if sigma_scale is not None or epsilon_scale is not None:
+        from mmml.models.mm_lj_scales import apply_mm_lj_scales
+
+        scaled = apply_mm_lj_scales(sigmas, epsilons, sigma_scale, epsilon_scale)
+        sigmas, epsilons = np.asarray(scaled[0]), np.asarray(scaled[1])
+    pair_rmin, pair_eps = _pair_tables(mcell, sigmas, epsilons)
+
+    cell0 = np.asarray(mcell.cell, dtype=np.float64).reshape(3, 3)
+    pos0 = mcell.positions
+    n_mol = mcell.n_molecules
+    pv_factor = float(pressure_GPa) * GPA_A3_TO_KCAL_MOL
+    calls = 0
+
+    def trial_cell(log_scale: np.ndarray) -> np.ndarray:
+        # Scaling each lattice *vector* keeps the cell angles fixed, so an
+        # orthorhombic cell cannot drift into a triclinic one.
+        return cell0 * np.exp(np.asarray(log_scale, dtype=np.float64))[:, None]
+
+    def enthalpy(log_scale: np.ndarray) -> float:
+        nonlocal calls
+        calls += 1
+        new_cell = trial_cell(log_scale)
+        trial = MolecularCell(
+            positions=_rigid_scaled_positions(pos0, mcell.mol_id, cell0, new_cell),
+            atomic_numbers=mcell.atomic_numbers,
+            cell=new_cell,
+            mol_id=mcell.mol_id,
+            type_idx=mcell.type_idx,
+            charges=mcell.charges,
+            residues=mcell.residues,
+        )
+        volume = float(abs(np.linalg.det(new_cell)))
+        return _cell_energy(trial, pair_rmin, pair_eps, cutoff_A) + pv_factor * volume
+
+    e_initial = enthalpy(np.zeros(3)) - pv_factor * float(abs(np.linalg.det(cell0)))
+    bound = float(np.log1p(max_strain))
+    result = minimize(
+        enthalpy,
+        np.zeros(3),
+        method="Nelder-Mead",
+        options={"xatol": tol, "fatol": tol * 10.0, "maxiter": 2000},
+    )
+    log_scale = np.clip(np.asarray(result.x, dtype=np.float64), -bound, bound)
+
+    final_cell = trial_cell(log_scale)
+    final_volume = float(abs(np.linalg.det(final_cell)))
+    e_final = enthalpy(log_scale) - pv_factor * final_volume
+    lengths = np.linalg.norm(final_cell, axis=1)
+    lengths0 = np.linalg.norm(cell0, axis=1)
+    return CellRelaxationResult(
+        cell=final_cell,
+        cell_lengths_A=(float(lengths[0]), float(lengths[1]), float(lengths[2])),
+        volume_A3=final_volume,
+        pressure_GPa=float(pressure_GPa),
+        e_lattice=e_final / n_mol,
+        e_lattice_initial=e_initial / n_mol,
+        enthalpy_kcal_mol=(e_final + pv_factor * final_volume) / n_mol,
+        axis_strain=tuple(float(v) for v in (lengths / lengths0)),  # type: ignore[arg-type]
+        volume_strain=final_volume / float(abs(np.linalg.det(cell0))),
+        n_energy_evaluations=calls,
+        converged=bool(result.success),
+    )
+
+
 def sublimation_enthalpy_kcal_mol(
     lattice_energy_kcal_mol: float,
     temperature_K: float,
@@ -514,3 +891,35 @@ def sublimation_enthalpy_kcal_mol(
     return -float(lattice_energy_kcal_mol) - 2.0 * GAS_CONSTANT_KCAL_MOL_K * float(
         temperature_K
     )
+
+
+@dataclass(frozen=True)
+class SublimationReference:
+    """Experimental sublimation enthalpy assembled from a thermodynamic cycle.
+
+    Direct sublimation calorimetry is rare for volatile molecular solids, so
+    ``dH_sub(T_fus) = dH_vap(T_fus) + dH_fus(T_fus)`` is usually the only route
+    to a reference value. Both legs are quoted near the melting point rather
+    than at 298 K, because a room-temperature ``dH_vap`` would be compared
+    against a crystal that does not exist at that temperature.
+
+    Treat the result as an estimate good to a kJ/mol or so, not a measurement:
+    the legs typically come from different sources at slightly different
+    temperatures, and the heat-capacity difference between phases means the
+    number still drifts with temperature.
+    """
+
+    dvap_h_kj_mol: float
+    dvap_h_temperature_K: float
+    dvap_h_source: str
+    dfus_h_kj_mol: float
+    dfus_h_temperature_K: float
+    dfus_h_source: str
+
+    @property
+    def dsub_h_kj_mol(self) -> float:
+        return self.dvap_h_kj_mol + self.dfus_h_kj_mol
+
+    @property
+    def dsub_h_kcal_mol(self) -> float:
+        return self.dsub_h_kj_mol / KCAL_MOL_TO_KJ_MOL

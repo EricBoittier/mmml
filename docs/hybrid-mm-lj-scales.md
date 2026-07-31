@@ -420,6 +420,22 @@ right values, and whether the value that trained is the value MD deploys. It als
 pins the Ewald limitation, so if LJ-under-Ewald is ever implemented that test
 fails and forces this page to be updated with it.
 
+### An out-of-sample check: crystal sublimation enthalpy
+
+Every check above is internal — it asks whether the scales trained and deployed
+correctly, not whether they improved the physics. For an observable that training
+never sees, point the learned sidecar at a crystal:
+
+```bash
+ACO_SCALES=path/to/hybrid_mm.json \
+  uv run python examples/acetone_crystal/05_sublimation.py
+```
+
+That evaluates ΔH_sub for solid acetone at three experimental geometries against
+a value assembled from calorimetry. Stock CGenFF overbinds by 13% at 150 K, so
+there is room for scales to help or hurt visibly. See
+[Solid acetone & sublimation enthalpy](acetone-crystal-sublimation.md).
+
 ---
 
 ## Troubleshooting
