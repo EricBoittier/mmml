@@ -247,6 +247,22 @@ class UmbrellaConfig:
     move_with2: tuple[int, ...] = ()
     invert_with: tuple[int, ...] = ()
     max_seed_force: float = 15.0
+    """Reject a seed whose **ML-region** max |F| exceeds this (eV/Å).
+
+    Gating on the whole-system maximum is meaningless in explicit solvent: a raw
+    Packmol box pins it at a window-independent value (~37 eV/Å for dense ACN at
+    the default 2.0 Å packing tolerance) coming from solvent contacts the seeding
+    never touches, so every window reports the same number and no strained seed
+    is ever caught."""
+    relax_seed_steps: int = 0
+    """FIRE steps relaxing the surroundings around a frozen seeded solute (0 = off).
+
+    Windows are seeded by rigidly displacing the solute inside a box packed for a
+    different ξ, so the solvent has to accommodate before dynamics can start.
+    Without it the far windows integrate straight into an overlap and abort
+    non-finite within ~1 ps."""
+    relax_seed_fmax: float = 1.0
+    """Convergence target (eV/Å) on the mobile atoms of that relaxation."""
     thermostat: Literal["langevin", "nose-hoover"] = "langevin"
     langevin_gamma: float = 0.1
     max_window_temp_K: float | None = None
@@ -321,6 +337,14 @@ class UmbrellaConfig:
             )
         if self.max_seed_force <= 0:
             raise ValueError(f"max_seed_force must be > 0 (got {self.max_seed_force})")
+        if self.relax_seed_steps < 0:
+            raise ValueError(
+                f"relax_seed_steps must be >= 0 (got {self.relax_seed_steps})"
+            )
+        if self.relax_seed_fmax <= 0:
+            raise ValueError(
+                f"relax_seed_fmax must be > 0 (got {self.relax_seed_fmax})"
+            )
         if self.thermostat not in ("langevin", "nose-hoover"):
             raise ValueError(
                 f"thermostat must be langevin|nose-hoover (got {self.thermostat!r})"

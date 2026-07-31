@@ -34,8 +34,10 @@ __all__ = [
     "find_atom_index_by_name",
     "merge_ml_region_mol_id",
     "mic_distance",
+    "relax_around_frozen_seed",
     "resolve_ml_region_indices",
     "run_umbrella_hybrid_nvt",
+    "seed_force_maxima",
     "stretch_antisymmetric_seed_mic",
     "stretch_distance_seed_mic",
 ]

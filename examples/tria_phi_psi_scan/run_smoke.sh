@@ -7,9 +7,10 @@ cd "$ROOT"
 export MMML_CKPT="${MMML_CKPT:-examples/sppoky-epoch-0010_params.json}"
 OUT="${OUT:-artifacts/tria_phi_psi_scan}"
 
+# Use --phi=... (equals form): a bare '-180:...' is parsed as a flag by argparse.
 uv run python scripts/scan_trialanine_phi_psi_pes.py \
   --checkpoint "$MMML_CKPT" \
-  --phi '-180:180:60' --psi '-180:180:60' \
+  --phi=-180:180:60 --psi=-180:180:60 \
   --out "$OUT/gas" \
   --mm-sd-steps 50 --mm-abnr-steps 50 \
   --relax-steps 80

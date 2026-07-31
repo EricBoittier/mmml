@@ -288,8 +288,16 @@ def parse_grid(values: str, count: int | None = None) -> np.ndarray:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", default=PEPTIDE_CKPT_PATH)
-    parser.add_argument("--phi", default="-180:180:30", help="PHI grid as start:stop:step degrees")
-    parser.add_argument("--psi", default="-180:180:30", help="PSI grid as start:stop:step degrees")
+    parser.add_argument(
+        "--phi",
+        default="-180:180:30",
+        help="PHI grid as start:stop:step degrees (pass as --phi=-180:180:30; a bare leading '-' is a flag)",
+    )
+    parser.add_argument(
+        "--psi",
+        default="-180:180:30",
+        help="PSI grid as start:stop:step degrees (pass as --psi=-180:180:30)",
+    )
     parser.add_argument("--phi-count", type=int, default=None, help="Use exactly this many evenly spaced PHI grid points")
     parser.add_argument("--psi-count", type=int, default=None, help="Use exactly this many evenly spaced PSI grid points")
     parser.add_argument("--out", default="artifacts/trialanine_phi_psi_pes")

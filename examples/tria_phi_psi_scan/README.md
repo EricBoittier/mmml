@@ -23,7 +23,7 @@ OUT=artifacts/tria_phi_psi_scan
 # 1) Coarse gas grid (30° → 13×13; use 60° for a quicker smoke)
 uv run python scripts/scan_trialanine_phi_psi_pes.py \
   --checkpoint "$MMML_CKPT" \
-  --phi '-180:180:60' --psi '-180:180:60' \
+  --phi=-180:180:60 --psi=-180:180:60 \
   --out "$OUT/gas" \
   --mm-sd-steps 50 --mm-abnr-steps 50 \
   --relax-steps 100
@@ -43,7 +43,8 @@ uv run python scripts/plot_tria_phi_psi_gas_solvent.py \
   -o "$OUT/figures/gas_vs_solvent.png"
 ```
 
-Production-ish: `--phi '-180:180:30' --psi '-180:180:30'`, `--n-waters 200 --box-side-A 30`.
+Production-ish: `--phi=-180:180:30 --psi=-180:180:30`, `--n-waters 200 --box-side-A 30`.
+(Use the `=` form for negative ranges — otherwise argparse treats `-180:…` as a flag.)
 
 ## Figure without a scan
 
