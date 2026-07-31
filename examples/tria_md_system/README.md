@@ -90,6 +90,33 @@ NPT logs now split the instantaneous pressure:
 
 Your recent dilute run (`P0≈−2600`, `V` fixed) matches the dilute-box row: virial dominates, soft piston OK.
 
+### Export trajectories (ASE / CHARMM PSF+DCD)
+
+`trajectory.npz` from jaxmd-unified can be converted with `mmml npz2traj`.
+Use the box PSF from the build (`artifacts/md_embedding/aaa_dense/model.psf`).
+
+```bash
+PSF=artifacts/md_embedding/aaa_dense/model.psf
+LEG=artifacts/tria_md_system/campaign_dense/nvt_1057729e   # or nvt/
+
+# Full system → ASE
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.traj"
+
+# Full system → CHARMM PSF+DCD (PSF copied next to the DCD)
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF"
+
+# Also write protein-only and water-only copies
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF" \
+  --split-resnames TRIA,TIP3
+# → all.dcd / all.psf, all.TRIA.dcd / all.TRIA.psf, all.TIP3.dcd / all.TIP3.psf
+
+# Primary output = selection only
+uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/tria.dcd" --psf "$PSF" \
+  --resnames TRIA
+```
+
+VMD: `vmd all.psf all.dcd` (or the `.TRIA` / `.TIP3` pair).
+
 Quick offline check from a saved `trajectory.npz`:
 
 ```bash
