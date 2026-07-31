@@ -8,8 +8,14 @@
 |-----|------|
 | [outline.md](outline.md) | Recommended sections, maturity, next steps |
 | [methods.md](methods.md) | Methods draft (hybrid energy, PBC, solvers, protocols) |
-| [latex/](latex/) | **ACS/JCTC LaTeX** Methods (`achemso`) + TikZ figures; `make pdf` |
+| `latex/` (in repo) | **ACS/JCTC LaTeX** Methods (`achemso`) + TikZ figures; run `make pdf` there |
 | [results.md](results.md) | Results draft (placeholders → workflow outputs) |
 | [workflow-map.md](workflow-map.md) | Figure/table ↔ Snakemake workflow matrix |
 
-Related engineering docs (do not duplicate here): [hybrid potential regions](../hybrid-potential-regions.md), [liquid box workflow](../liquid-box-workflow.md), [long-range solvers](../long-range-solver-tutorial.md), [jax-mm-spoof CHARMM parity](../jax-mm-spoof-charmm-parity.md), [validation campaign](../../workflows/validation_campaign/README.md).
+Related engineering docs (do not duplicate here):
+[hybrid potential regions](../../hybrid-potential-regions.md),
+[liquid box workflow](../../liquid-box-workflow.md),
+[long-range solvers](../../long-range-solver-tutorial.md),
+[jax-mm-spoof CHARMM parity](../../jax-mm-spoof-charmm-parity.md).
+Validation campaign notes live under `workflows/validation_campaign/` in the
+repository (outside the MkDocs tree).

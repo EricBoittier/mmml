@@ -4,6 +4,10 @@ site_url: https://mmml.readthedocs.io/
 repo_url: https://github.com/EricBoittier/mmml
 repo_name: EricBoittier/mmml
 
+# Keep manuscript LaTeX sources in-tree but out of the HTML docs build.
+exclude_docs: |
+  manuscripts/**/latex/**
+
 theme:
   name: material
   palette:

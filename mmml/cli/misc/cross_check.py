@@ -21,15 +21,19 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-
-from mmml.interfaces.qc_backends.factory import backend_from_dict
-from mmml.interfaces.qc_backends.protocol import BackendSpec
-from mmml.interfaces.qc_backends.runner import CrossCheckConfig, CrossCheckRunner
+if TYPE_CHECKING:
+    from mmml.interfaces.qc_backends.protocol import BackendSpec
+    from mmml.interfaces.qc_backends.runner import CrossCheckConfig
 
 
 def _parse_backend_flags(argv: list[str]) -> tuple[list[BackendSpec], argparse.Namespace, list[str]]:
     """Parse repeated --backend/--checkpoint style flags before main argparse."""
+    # Lazy: importing qc_backends pulls energy_forces → calculators → PyCHARMM.
+    # Keep build_parser() import-light so docs/CI can dump --help without libcharmm.
+    from mmml.interfaces.qc_backends.factory import backend_from_dict
+
     backends: list[BackendSpec] = []
     remaining: list[str] = []
     i = 0
@@ -166,6 +170,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _config_from_args(args: argparse.Namespace, cli_backends: list[BackendSpec]) -> CrossCheckConfig:
+    from mmml.interfaces.qc_backends.factory import backend_from_dict
+    from mmml.interfaces.qc_backends.protocol import BackendSpec
+    from mmml.interfaces.qc_backends.runner import CrossCheckConfig
+
     if args.config is not None:
         return CrossCheckConfig.from_yaml(args.config)
 
@@ -213,6 +221,8 @@ def _config_from_args(args: argparse.Namespace, cli_backends: list[BackendSpec])
 
 
 def main() -> int:
+    from mmml.interfaces.qc_backends.runner import CrossCheckRunner
+
     cli_backends, _, remaining = _parse_backend_flags(sys.argv[1:])
     parser = build_parser()
     args = parser.parse_args(remaining)
