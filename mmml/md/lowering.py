@@ -182,9 +182,31 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
     ens_params: dict[str, Any] = {
         "seed": int(getattr(args, "seed", 0)),
     }
-    # NPT barostat + virial AD is sensitive to float32; prefer float64 for NPT.
-    if ensemble_name == "npt":
+    # Hybrid ML/MM PBC dynamics: prefer float64 (float32 NVT can NaN on packed boxes).
+    if ensemble_name in ("nvt", "npt", "nve"):
         ens_params["float64"] = True
+    thermostat: str | None = None
+    if ensemble_name == "nvt":
+        # md-system --nvt-integrator; "auto" → langevin for packed hybrid solvated boxes.
+        raw_thermo = getattr(args, "nvt_integrator", None) or getattr(
+            args, "thermostat", None
+        )
+        mode = str(raw_thermo or "auto").strip().lower()
+        if mode in ("langevin", "lgv"):
+            thermostat = "langevin"
+        elif mode == "nhc":
+            thermostat = "nhc"
+        else:
+            thermostat = "langevin"
+        gamma = getattr(args, "langevin_friction", None)
+        if gamma is None:
+            gamma = getattr(args, "langevin_gamma", None)
+        if gamma is not None:
+            ens_params["langevin_gamma"] = float(gamma)
+        thermo_tau = getattr(args, "thermostat_tau", None)
+        if thermo_tau is not None:
+            ens_params["thermostat_kwargs"] = {"tau": float(thermo_tau)}
+    if ensemble_name == "npt":
         # Optional soft piston for dilute / cold-start smokes (jax-md metal time).
         # Default jax-md tau is 1000*dt; a 28 Å box with ~10 waters can sit at
         # P_inst ~ -10^3 bar and slam the cell unless tau is raised.
@@ -194,6 +216,13 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
         thermo_tau = getattr(args, "thermostat_tau", None)
         if thermo_tau is not None:
             ens_params["thermostat_kwargs"] = {"tau": float(thermo_tau)}
+        raw_thermo = getattr(args, "nvt_integrator", None) or getattr(
+            args, "thermostat", None
+        )
+        mode = str(raw_thermo or "nhc").strip().lower()
+        if mode in ("langevin", "lgv", "nhc"):
+            # NPT driver currently uses Nose–Hoover only; keep nhc unless extended.
+            thermostat = "nhc"
     ensemble = EnsembleSpec(
         ensemble=ensemble_name,
         space=space,
@@ -202,6 +231,7 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
         pressure_bar=float(getattr(args, "pressure", 1.0)),
         dt_fs=dt_fs,
         n_steps=_nsteps_from_ps(ps, dt_fs),
+        thermostat=thermostat,
         params=ens_params,
     )
     terms = terms_from_md_system_args(args)

@@ -30,7 +30,9 @@ defaults:
   mm_switch_on: 8.0
   temperature: 300
   pressure: 1.0
-  dt_fs: 0.5
+  # Packed hybrid: 0.5 fs + NHC was NaNing after good E0; Langevin + 0.25 fs.
+  dt_fs: 0.25
+  nvt_integrator: langevin
   seed: 0
   skip_jit_warmup: true
   quiet: true
@@ -41,15 +43,15 @@ campaign_output: artifacts/tria_md_system/campaign_dense
 
 runs:
   nvt:
-    description: "NVT thermalize denser box (cold start)"
+    description: "NVT Langevin thermalize denser box (cold start)"
     setup: pbc_nvt
-    ps: 0.5
+    ps: 0.2
     output_dir: artifacts/tria_md_system/campaign_dense/nvt
 
   npt:
     description: "NPT with moderate barostat tau (still short; not full equilibration)"
     setup: pbc_npt
-    ps: 0.5
+    ps: 0.2
     # Smaller than dilute-smoke 1e6, larger than jax-md default 1000*dt.
     barostat_tau: 5.0e4
     output_dir: artifacts/tria_md_system/campaign_dense/npt
@@ -57,5 +59,5 @@ runs:
   nve:
     description: "Short NVE after cold-start (no handoff yet)"
     setup: pbc_nve
-    ps: 0.1
+    ps: 0.05
     output_dir: artifacts/tria_md_system/campaign_dense/nve
