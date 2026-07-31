@@ -106,6 +106,20 @@ def window_is_ok(chk: dict[str, Any] | None) -> bool:
     return bool(np.all(np.isfinite(pos)) and np.all(np.isfinite(ene)))
 
 
+def should_bootstrap_windows(
+    *,
+    resume: bool,
+    only_windows: Sequence[int] | None,
+) -> bool:
+    """Whether a run may split ``umbrella_snapshots.npz`` into ``windows/``.
+
+    Only whole-campaign resumes qualify. Parallel per-window jobs pass
+    ``--windows N``; if each of them bootstrapped, they would all write the same
+    ``wXXX.npz`` destinations concurrently and race on ``os.replace``.
+    """
+    return bool(resume) and not (only_windows or ())
+
+
 def bootstrap_windows_from_snapshots(
     output_dir: Path,
     *,

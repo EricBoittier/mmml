@@ -10,6 +10,7 @@ from mmml.umbrella.hybrid_windows import (
     load_window_checkpoint,
     save_window_checkpoint,
     select_windows_to_run,
+    should_bootstrap_windows,
     window_is_ok,
 )
 from mmml.umbrella.io import save_snapshots
@@ -98,6 +99,14 @@ def test_save_window_checkpoint_unique_tmp(tmp_path, monkeypatch):
     assert names[0] != names[1]
     assert all(".tmp.npz" in n for n in names)
     assert (tmp_path / "windows" / "w007.npz").is_file()
+
+
+def test_only_windows_never_bootstraps():
+    """Parallel Slurm jobs pass --windows N; bootstrapping there races windows/."""
+    assert should_bootstrap_windows(resume=True, only_windows=None)
+    assert should_bootstrap_windows(resume=True, only_windows=())
+    assert not should_bootstrap_windows(resume=True, only_windows=(3,))
+    assert not should_bootstrap_windows(resume=False, only_windows=None)
 
 
 def test_bootstrap_from_aggregated_snapshots(tmp_path):

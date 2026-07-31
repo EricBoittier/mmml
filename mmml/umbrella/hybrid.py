@@ -491,6 +491,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         load_all_window_arrays,
         save_window_checkpoint,
         select_windows_to_run,
+        should_bootstrap_windows,
         windows_dir,
     )
 
@@ -569,10 +570,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         print(f"  walls={len(wall_specs)}  {[w.label() for w in sched.walls]}")
 
     only = tuple(getattr(cfg, "only_windows", ()) or ())
-    # Parallel per-window jobs pass --windows N; do not bootstrap the full
-    # aggregated NPZ into windows/ (that races across Slurm jobs). Assemble /
-    # full --resume (no --windows) still splits snapshots when needed.
-    if resume and not only:
+    if should_bootstrap_windows(resume=resume, only_windows=only):
         boot = bootstrap_windows_from_snapshots(output_dir, n_windows=k_windows)
         if boot:
             print(
