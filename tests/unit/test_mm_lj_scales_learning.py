@@ -12,6 +12,7 @@ See ``docs/hybrid-mm-lj-scales.md``.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -19,8 +20,14 @@ import numpy as np
 import pytest
 
 from mmml.models.mm_lj_scales import (
+    MM_LJ_EPSILON_SCALE_BOUNDS,
+    MM_LJ_EPSILON_SCALE_KEY,
+    MM_LJ_SIGMA_SCALE_BOUNDS,
+    MM_LJ_SIGMA_SCALE_KEY,
     attach_mm_lj_scales,
+    clip_mm_lj_scale_params,
     find_learnable_lj_scales_sidecar,
+    out_of_bounds_mm_lj_scales,
     resolve_md_lj_scales,
     scales_to_atc,
     split_mm_lj_scale_params,
@@ -121,7 +128,9 @@ def _fit_scales(loss_fn, params, *, lr: float, steps: int):
     return params, loss0, float(loss_fn(params))
 
 
-def _e_mm(sigma_scale, epsilon_scale, batch) -> jnp.ndarray:
+def _e_mm(
+    sigma_scale, epsilon_scale, batch, *, master_epsilons=MASTER_EPSILONS
+) -> jnp.ndarray:
     from mmml.models.hybrid_energy import hybrid_forward
 
     out = hybrid_forward(
@@ -130,7 +139,7 @@ def _e_mm(sigma_scale, epsilon_scale, batch) -> jnp.ndarray:
         batch,
         1,
         MASTER_SIGMAS,
-        MASTER_EPSILONS,
+        master_epsilons,
         learn_mm_lj_scales=True,
         mm_lj_sigma_scale=sigma_scale,
         mm_lj_epsilon_scale=epsilon_scale,
@@ -232,6 +241,203 @@ def test_scales_stay_finite_and_positive_under_training():
         updates, state = opt.update(grads, state, params)
         params = optax.apply_updates(params, updates)
         assert np.all(np.asarray(params["mm_lj_sigma_scale"]) > 0.0)
+
+
+def test_scale_bounds_are_the_documented_physical_ranges():
+    """σ is pinned to ±5%; ε may move by a factor of four either way."""
+    assert MM_LJ_SIGMA_SCALE_BOUNDS == (0.95, 1.05)
+    assert MM_LJ_EPSILON_SCALE_BOUNDS == (0.25, 4.0)
+
+
+def test_clip_projects_scales_and_leaves_the_model_weights_alone():
+    params = {
+        "params": {"w": jnp.array([3.0, -7.0])},
+        MM_LJ_SIGMA_SCALE_KEY: jnp.array([0.5, 1.0, 2.0]),
+        MM_LJ_EPSILON_SCALE_KEY: jnp.array([-3.0, 1.0, 12.0]),
+    }
+    out = clip_mm_lj_scale_params(params)
+
+    np.testing.assert_allclose(np.asarray(out[MM_LJ_SIGMA_SCALE_KEY]), [0.95, 1.0, 1.05])
+    np.testing.assert_allclose(np.asarray(out[MM_LJ_EPSILON_SCALE_KEY]), [0.25, 1.0, 4.0])
+    # Network weights are free parameters and must pass through untouched.
+    np.testing.assert_allclose(np.asarray(out["params"]["w"]), [3.0, -7.0])
+
+
+def test_clip_is_traceable_and_a_noop_without_scale_leaves():
+    """It is called unconditionally inside the jitted step."""
+    plain = {"params": {"w": jnp.ones(2)}}
+    assert clip_mm_lj_scale_params(plain) is plain
+
+    out = jax.jit(clip_mm_lj_scale_params)(attach_mm_lj_scales({"params": {}}, 2))
+    np.testing.assert_allclose(np.asarray(out[MM_LJ_SIGMA_SCALE_KEY]), np.ones(2))
+
+
+def _drift_loop(*, clip: bool, steps: int = 300, lr: float = 5e-2):
+    """Adam chasing an E_MM the bounds cannot deliver.
+
+    This is the long-run failure mode in miniature. ``E_MM`` is linear in the
+    geometric-mean ε, so a target far outside reach gives a gradient that keeps
+    pointing the same way for the whole run and the scales simply travel. Adam
+    makes that travel roughly ``lr`` per step no matter how small the gradient
+    gets, which is why a real fit crosses into unphysical σ/ε after enough
+    epochs rather than settling.
+    """
+    import optax
+
+    batch = _dimer_batch()
+    target = 20.0 * _e_mm(jnp.ones(2), jnp.ones(2), batch)
+
+    def loss_fn(p):
+        _, sig, eps = split_mm_lj_scale_params(p)
+        return (_e_mm(sig, eps, batch) - target) ** 2
+
+    params = attach_mm_lj_scales({"params": {}}, 2)
+    opt = optax.adam(lr)
+    state = opt.init(params)
+    losses = []
+    for _ in range(steps):
+        loss, grads = jax.value_and_grad(loss_fn)(params)
+        losses.append(float(loss))
+        updates, state = opt.update(grads, state, params)
+        params = optax.apply_updates(params, updates)
+        if clip:
+            params = clip_mm_lj_scale_params(params)
+    return params, losses
+
+
+def test_unclipped_scales_leave_the_physical_range():
+    """The regression this guards: without projection the scales run away.
+
+    ε reaching zero is the fatal one -- the CHARMM combining rule takes
+    ``sqrt(eps_i * eps_j)``, so one type crossing zero NaNs every pair that mixes
+    it with a positive type.
+    """
+    params, _ = _drift_loop(clip=False)
+    sig = np.asarray(params[MM_LJ_SIGMA_SCALE_KEY])
+    eps = np.asarray(params[MM_LJ_EPSILON_SCALE_KEY])
+
+    escaped = (
+        np.any(sig < MM_LJ_SIGMA_SCALE_BOUNDS[0])
+        or np.any(sig > MM_LJ_SIGMA_SCALE_BOUNDS[1])
+        or np.any(eps < MM_LJ_EPSILON_SCALE_BOUNDS[0])
+        or np.any(eps > MM_LJ_EPSILON_SCALE_BOUNDS[1])
+    )
+    assert escaped, f"expected runaway scales, got sigma={sig}, epsilon={eps}"
+
+
+def test_clipped_training_stays_bounded_and_finite():
+    """Same optimizer, same unreachable target, with the projection in place."""
+    params, losses = _drift_loop(clip=True)
+    sig = np.asarray(params[MM_LJ_SIGMA_SCALE_KEY])
+    eps = np.asarray(params[MM_LJ_EPSILON_SCALE_KEY])
+
+    assert np.all(np.isfinite(losses)), "loss went non-finite under bounded scales"
+    assert np.all(sig >= MM_LJ_SIGMA_SCALE_BOUNDS[0])
+    assert np.all(sig <= MM_LJ_SIGMA_SCALE_BOUNDS[1])
+    assert np.all(eps >= MM_LJ_EPSILON_SCALE_BOUNDS[0])
+    assert np.all(eps <= MM_LJ_EPSILON_SCALE_BOUNDS[1])
+    # The bound is doing work, not merely agreeing with where the fit stopped.
+    assert np.any(np.isclose(eps, MM_LJ_EPSILON_SCALE_BOUNDS[1]))
+
+
+def test_zero_epsilon_type_keeps_energy_and_gradients_finite():
+    """CGenFF lone pairs carry ε = 0 by design; padding borrows master row 0.
+
+    ``d sqrt(x)/dx`` is infinite at the origin, so the geometric mean needs the
+    same masked-gradient treatment as the pair distance or a single zero-ε type
+    turns every force into NaN.
+    """
+    tables = jnp.array([MASTER_EPSILONS[0], 0.0])
+    batch = _dimer_batch(type_idx=(0, 1, 0, 1))
+
+    def e(scales):
+        return _e_mm(scales[0], scales[1], batch, master_epsilons=tables)
+
+    scales = (jnp.ones(2), jnp.ones(2))
+    assert np.isfinite(float(e(scales)))
+    grads = jax.grad(e)(scales)
+    for g in grads:
+        assert np.all(np.isfinite(np.asarray(g))), f"non-finite scale gradient: {g}"
+
+
+def test_negative_epsilon_scale_does_not_nan_the_system():
+    """Defence in depth for a hand-edited sidecar the bounds never saw."""
+    batch = _dimer_batch(type_idx=(0, 1, 0, 1))
+    e = _e_mm(jnp.ones(2), jnp.array([-0.5, 1.0]), batch)
+    assert np.isfinite(float(e))
+
+
+def test_out_of_bounds_report_names_the_offending_type():
+    problems = out_of_bounds_mm_lj_scales(
+        ["CG331", "HGA3"], [1.0, 1.4], [2.0, 0.01]
+    )
+    assert any("HGA3" in p and "sigma" in p for p in problems)
+    assert any("HGA3" in p and "epsilon" in p for p in problems)
+    assert not out_of_bounds_mm_lj_scales(["CG331"], [1.02], [3.0])
+
+
+def test_train_step_projects_lj_scales_into_bounds():
+    """The projection has to live in the real update path, not just a test loop."""
+    import optax
+
+    from mmml.models.hybrid_energy import HybridMMConfig
+    from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+
+    class _Transform(NamedTuple):
+        scale: jnp.ndarray
+
+    batch = dict(_dimer_batch())
+    # E_ML is a constant -4 eV here, so this asks E_MM for +1 eV -- orders of
+    # magnitude past what bounded LJ can produce, pinning the scales at a bound.
+    batch["E"] = jnp.array([[-3.0]])
+    batch["F"] = jnp.zeros((4, 3))
+
+    cfg = HybridMMConfig.coerce(
+        dict(
+            SWITCH_KW,
+            master_sigmas=tuple(float(x) for x in MASTER_SIGMAS),
+            master_epsilons=tuple(float(x) for x in MASTER_EPSILONS),
+            learn_mm_lj_scales=True,
+        )
+    )
+
+    params = attach_mm_lj_scales({"params": {}}, 2)
+    ema_params = params
+    opt = optax.adam(0.5)
+    opt_state = opt.init(params)
+    transform_state = _Transform(scale=jnp.asarray(1.0))
+
+    for _ in range(20):
+        params, ema_params, opt_state, transform_state, loss, *_ = train_step(
+            model_apply=_zero_ml_apply,
+            optimizer_update=opt.update,
+            transform_state=transform_state,
+            batch=batch,
+            batch_size=1,
+            doCharges=False,
+            energy_weight=1.0,
+            forces_weight=1.0,
+            dipole_weight=0.0,
+            charges_weight=0.0,
+            opt_state=opt_state,
+            params=params,
+            ema_params=ema_params,
+            hybrid_mm=cfg,
+        )
+        assert np.isfinite(float(loss))
+
+    sig = np.asarray(params[MM_LJ_SIGMA_SCALE_KEY])
+    eps = np.asarray(params[MM_LJ_EPSILON_SCALE_KEY])
+    assert np.all(sig >= MM_LJ_SIGMA_SCALE_BOUNDS[0] - 1e-6)
+    assert np.all(sig <= MM_LJ_SIGMA_SCALE_BOUNDS[1] + 1e-6)
+    assert np.all(eps >= MM_LJ_EPSILON_SCALE_BOUNDS[0] - 1e-6)
+    assert np.all(eps <= MM_LJ_EPSILON_SCALE_BOUNDS[1] + 1e-6)
+    assert np.any(np.isclose(eps, MM_LJ_EPSILON_SCALE_BOUNDS[1], atol=1e-6)), (
+        "learning rate was too small to prove the projection engaged"
+    )
+    # The EMA is what gets written to hybrid_mm.json, so it must be bounded too.
+    ema_eps = np.asarray(ema_params[MM_LJ_EPSILON_SCALE_KEY])
+    assert np.all(ema_eps <= MM_LJ_EPSILON_SCALE_BOUNDS[1] + 1e-6)
 
 
 def test_trained_scales_survive_round_trip_to_md_atc(tmp_path: Path):

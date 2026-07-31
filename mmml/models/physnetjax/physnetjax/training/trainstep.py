@@ -16,6 +16,7 @@ except ModuleNotFoundError:  # pragma: no cover
     optax = None  # type: ignore[assignment]
     otu = None  # type: ignore[assignment]
 
+from mmml.models.mm_lj_scales import clip_mm_lj_scale_params
 from mmml.models.physnetjax.physnetjax.training.loss import (
     mean_absolute_error,
     mean_squared_loss,
@@ -234,6 +235,10 @@ else:
 
         updates = otu.tree_scalar_mul(transform_state.scale, updates)
         params = optax.apply_updates(params, updates)
+        # Learnable LJ scales are physical multipliers, not free weights: left
+        # unbounded they drift until sqrt(eps_i * eps_j) sees a negative product
+        # and the run NaNs. No-op when the leaves are absent.
+        params = clip_mm_lj_scale_params(params)
 
         energy_mae = mean_absolute_error(
             energy,

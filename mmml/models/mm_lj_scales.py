@@ -13,21 +13,26 @@ order for :func:`mm_energy_forces.build_mm_energy_forces_fn` ``ep_scale`` /
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
 
 __all__ = [
+    "MM_LJ_EPSILON_SCALE_BOUNDS",
     "MM_LJ_EPSILON_SCALE_KEY",
+    "MM_LJ_SIGMA_SCALE_BOUNDS",
     "MM_LJ_SIGMA_SCALE_KEY",
     "apply_mm_lj_scales",
     "attach_mm_lj_scales",
     "cgenff_type_names_from_prm",
+    "clip_mm_lj_scale_params",
     "find_learnable_lj_scales_sidecar",
     "lj_scales_sidecar_candidates",
     "load_mm_lj_scales_sidecar",
     "mm_lj_scales_metadata",
+    "out_of_bounds_mm_lj_scales",
     "resolve_md_lj_scales",
     "scales_to_atc",
     "split_mm_lj_scale_params",
@@ -36,6 +41,27 @@ __all__ = [
 
 MM_LJ_SIGMA_SCALE_KEY = "mm_lj_sigma_scale"
 MM_LJ_EPSILON_SCALE_KEY = "mm_lj_epsilon_scale"
+
+# Bounds the scales are projected into after every optimizer step.
+#
+# These are not cosmetic. ε enters the CHARMM combining rule as
+# ``sqrt(eps_i * eps_j)``, so the instant one type's scale crosses zero every
+# pair mixing it with a positive type evaluates ``sqrt`` of a negative number
+# and the whole loss goes NaN. σ is worse behaved still: it multiplies Rmin
+# inside r^-12, so a scale that drifts up drags the repulsive wall into
+# separations the data actually samples.
+#
+# Unconstrained, drift is the default outcome rather than an edge case. Adam's
+# step size is bounded near the learning rate regardless of gradient magnitude,
+# so a scale accumulates roughly ``lr`` of travel per step -- tens of units over
+# a realistic run, against a distance of 1.0 from the init to the singularity.
+#
+# The widths reflect how well each parameter is determined: Rmin is pinned
+# tightly by packing and the repulsive wall (a correction beyond a few percent
+# is compensation for something else), while well depths are genuinely uncertain
+# to a factor of a few.
+MM_LJ_SIGMA_SCALE_BOUNDS = (0.95, 1.05)
+MM_LJ_EPSILON_SCALE_BOUNDS = (0.25, 4.0)
 
 
 def cgenff_type_names_from_prm(prm_path: str | Path | None = None) -> list[str]:
@@ -116,6 +142,73 @@ def attach_mm_lj_scales(
 # which is a visible, inspectable outcome ("this type's LJ went to ~zero")
 # rather than a silent NaN cascade.
 MM_LJ_MIN_SCALE = 1e-3
+
+
+def clip_mm_lj_scale_params(
+    params: Any,
+    *,
+    sigma_bounds: tuple[float, float] = MM_LJ_SIGMA_SCALE_BOUNDS,
+    epsilon_bounds: tuple[float, float] = MM_LJ_EPSILON_SCALE_BOUNDS,
+) -> Any:
+    """Project the LJ-scale leaves of ``params`` back into their bounds.
+
+    Applied after every optimizer step (see
+    :func:`mmml.models.physnetjax.physnetjax.training.trainstep.train_step`), so
+    the scales cannot wander to the values that make ``E_MM`` diverge or NaN --
+    see :data:`MM_LJ_SIGMA_SCALE_BOUNDS`.
+
+    Traceable: takes and returns JAX arrays, and is a no-op on pytrees without
+    the scale leaves, so it is safe to call unconditionally inside ``jit``.
+    """
+    if not isinstance(params, dict):
+        return params
+    if (
+        MM_LJ_SIGMA_SCALE_KEY not in params
+        and MM_LJ_EPSILON_SCALE_KEY not in params
+    ):
+        return params
+
+    import jax.numpy as jnp
+
+    out = dict(params)
+    for key, (lo, hi) in (
+        (MM_LJ_SIGMA_SCALE_KEY, sigma_bounds),
+        (MM_LJ_EPSILON_SCALE_KEY, epsilon_bounds),
+    ):
+        if key in out and out[key] is not None:
+            out[key] = jnp.clip(out[key], float(lo), float(hi))
+    return out
+
+
+def out_of_bounds_mm_lj_scales(
+    type_names,
+    sigma_scale,
+    epsilon_scale,
+    *,
+    sigma_bounds: tuple[float, float] = MM_LJ_SIGMA_SCALE_BOUNDS,
+    epsilon_bounds: tuple[float, float] = MM_LJ_EPSILON_SCALE_BOUNDS,
+) -> list[str]:
+    """Human-readable descriptions of scales outside the physical bounds.
+
+    Empty for a sidecar written by a bounded training run. Non-empty means the
+    file was hand-edited or produced before the bounds existed, in which case the
+    LJ it deploys may not be the LJ that was fitted.
+    """
+    sig = np.asarray(sigma_scale, dtype=np.float64).reshape(-1)
+    eps = np.asarray(epsilon_scale, dtype=np.float64).reshape(-1)
+    names = [str(n) for n in type_names]
+    problems: list[str] = []
+    for label, values, (lo, hi) in (
+        ("sigma", sig, sigma_bounds),
+        ("epsilon", eps, epsilon_bounds),
+    ):
+        for i, value in enumerate(values):
+            if not (lo <= float(value) <= hi):
+                name = names[i] if i < len(names) else f"type_{i}"
+                problems.append(
+                    f"{label} scale {value:.4f} for {name} outside [{lo:g}, {hi:g}]"
+                )
+    return problems
 
 
 def apply_mm_lj_scales(
@@ -223,11 +316,26 @@ def load_mm_lj_scales_sidecar(path: str | Path) -> dict[str, Any] | None:
             f"{p} has learn_mm_lj_scales=true but is missing "
             "cgenff_type_names / mm_lj_sigma_scale / mm_lj_epsilon_scale"
         )
-    return {
+    payload = {
         "cgenff_type_names": [str(n) for n in names],
         "mm_lj_sigma_scale": np.asarray(sig, dtype=np.float64),
         "mm_lj_epsilon_scale": np.asarray(eps, dtype=np.float64),
     }
+    problems = out_of_bounds_mm_lj_scales(
+        payload["cgenff_type_names"],
+        payload["mm_lj_sigma_scale"],
+        payload["mm_lj_epsilon_scale"],
+    )
+    if problems:
+        # Warn rather than raise: sidecars predating the bounds still load, and
+        # refusing them would strand existing runs.
+        warnings.warn(
+            f"{p} carries LJ scales outside the trainable bounds "
+            f"({len(problems)} entries, e.g. {problems[0]})",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return payload
 
 
 def lj_scales_sidecar_candidates(
