@@ -1,0 +1,230 @@
+#------------------------------------------------------------------------------
+#$Date: 2018-10-05 15:19:55 +0300 (Fri, 05 Oct 2018) $
+#$Revision: 211332 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/7/11/04/7110462.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/. The original data for this entry
+# were provided the Crystal Eye server at
+# http://wwmm.ch.cam.ac.uk/crystaleye/, created by Nick Day at the
+# Peter Murray-Rust laboratory.
+#
+# The file may be used within the scientific community so long as
+# proper attribution is given to the journal article from which the
+# data were obtained.
+#
+data_7110462
+loop_
+_publ_author_name
+'Allan, David R.'
+'Clark, Stewart J.'
+'Ibberson, Richard M.'
+'Parsons, Simon'
+'Pulham, Colin R.'
+'Sawyer, Lindsay'
+_publ_section_title
+;
+ The influence of pressure and temperature on the crystal structure of
+ acetone
+;
+_journal_issue                   8
+_journal_name_full               'Chemical Communications'
+_journal_page_first              751
+_journal_paper_doi               10.1039/a900558g
+_journal_year                    1999
+_chemical_formula_moiety         Me2CO
+_chemical_formula_sum            'C3 H6 O'
+_chemical_formula_weight         58.08
+_chemical_name_systematic
+; 
+ ? 
+;
+_space_group_IT_number           63
+_symmetry_cell_setting           orthorhombic
+_symmetry_space_group_name_Hall  '-C 2c 2'
+_symmetry_space_group_name_H-M   'C m c m'
+_atom_sites_solution_hydrogens   difmap
+_atom_sites_solution_primary     direct
+_audit_creation_method           SHELXL-97
+_cell_angle_alpha                90.00
+_cell_angle_beta                 90.00
+_cell_angle_gamma                90.00
+_cell_formula_units_Z            4
+_cell_length_a                   6.1219(11)
+_cell_length_b                   5.2029(10)
+_cell_length_c                   10.244(3)
+_cell_measurement_reflns_used    25
+_cell_measurement_temperature    293(2)
+_cell_measurement_theta_max      16.35
+_cell_measurement_theta_min      5.12
+_cell_volume                     326.29(13)
+_computing_structure_refinement  'SHELXL-97 (Sheldrick, 1997)'
+_computing_structure_solution    SIR92
+_diffrn_ambient_temperature      293(2)
+_diffrn_measured_fraction_theta_full 0.296
+_diffrn_measured_fraction_theta_max 0.296
+_diffrn_measurement_device_type  CAD-4
+_diffrn_measurement_method       Omega
+_diffrn_radiation_monochromator  graphite
+_diffrn_radiation_source         'fine-focus sealed tube'
+_diffrn_radiation_type           MoK\a
+_diffrn_radiation_wavelength     0.71073
+_diffrn_reflns_av_R_equivalents  0.0000
+_diffrn_reflns_av_sigmaI/netI    0.1067
+_diffrn_reflns_limit_h_max       10
+_diffrn_reflns_limit_h_min       0
+_diffrn_reflns_limit_k_max       9
+_diffrn_reflns_limit_k_min       0
+_diffrn_reflns_limit_l_max       4
+_diffrn_reflns_limit_l_min       0
+_diffrn_reflns_number            158
+_diffrn_reflns_theta_full        39.14
+_diffrn_reflns_theta_max         39.14
+_diffrn_reflns_theta_min         5.14
+_exptl_absorpt_coefficient_mu    0.087
+_exptl_absorpt_correction_type
+;
+Analytical correction for the sample, gasket occlusion and cell.
+;
+_exptl_crystal_colour            Colourless
+_exptl_crystal_density_diffrn    1.182
+_exptl_crystal_density_method    'not measured'
+_exptl_crystal_description       sphere
+_exptl_crystal_F_000             128
+_exptl_crystal_size_max          0.2
+_exptl_crystal_size_mid          0.2
+_exptl_crystal_size_min          0.2
+_refine_diff_density_max         0.137
+_refine_diff_density_min         -0.137
+_refine_diff_density_rms         0.039
+_refine_ls_extinction_coef       0.008(9)
+_refine_ls_extinction_expression Fc^*^=kFc[1+0.001xFc^2^\l^3^/sin(2\q)]^-1/4^
+_refine_ls_extinction_method     SHELXL
+_refine_ls_goodness_of_fit_ref   0.907
+_refine_ls_hydrogen_treatment    'Rotating rigid group'
+_refine_ls_matrix_type           full
+_refine_ls_number_parameters     17
+_refine_ls_number_reflns         158
+_refine_ls_number_restraints     0
+_refine_ls_restrained_S_all      0.907
+_refine_ls_R_factor_all          0.1670
+_refine_ls_R_factor_gt           0.0560
+_refine_ls_shift/su_max          0.001
+_refine_ls_shift/su_mean         0.000
+_refine_ls_structure_factor_coef Fsqd
+_refine_ls_weighting_details
+'calc w=1/[\s^2^(Fo^2^)+(0.0255P)^2^+0.0000P] where P=(Fo^2^+2Fc^2^)/3'
+_refine_ls_weighting_scheme      calc
+_refine_ls_wR_factor_gt          0.0805
+_refine_ls_wR_factor_ref         0.0982
+_reflns_number_gt                63
+_reflns_number_total             158
+_reflns_threshold_expression     >2sigma(I)
+_cod_data_source_file            900558gsup1.cif
+_cod_data_source_block           HPCMCM
+_cod_depositor_comments
+;
+The following automatic conversions were performed:
+'_atom_site_symetry_multiplicity' tag replaced with
+'_atom_site_symmetry_multiplicity'.
+
+Automatic conversion script
+Id: cif_correct_tags 1440 2010-10-19 06:21:57Z saulius 
+
+The following automatic conversions were performed:
+
+'_symmetry_cell_setting' value 'Orthorhombic' changed to
+'orthorhombic' according to
+/home/saulius/struct/CIF-dictionaries/cif_core.dic dictionary named
+'cif_core.dic' version 2.4.2 from 2011-04-26.
+
+Automatic conversion script
+Id: cif_fix_values 1891 2012-01-12 08:04:46Z andrius 
+
+The following automatic conversions were performed:
+
+'_atom_sites_solution_hydrogens' value 'difference map' was changed
+to 'difmap'.
+
+Automatic conversion script
+Id: cif_fix_values 6452 2018-10-05 10:23:21Z andrius 
+;
+_cod_original_sg_symbol_H-M      Cmcm
+_cod_database_code               7110462
+loop_
+_symmetry_equiv_pos_as_xyz
+'x, y, z'
+'-x, -y, z+1/2'
+'-x, y, -z+1/2'
+'x, -y, -z'
+'x+1/2, y+1/2, z'
+'-x+1/2, -y+1/2, z+1/2'
+'-x+1/2, y+1/2, -z+1/2'
+'x+1/2, -y+1/2, -z'
+'-x, -y, -z'
+'x, y, -z-1/2'
+'x, -y, z-1/2'
+'-x, y, z'
+'-x+1/2, -y+1/2, -z'
+'x+1/2, y+1/2, -z-1/2'
+'x+1/2, -y+1/2, z-1/2'
+'-x+1/2, y+1/2, z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_U_iso_or_equiv
+_atom_site_adp_type
+_atom_site_occupancy
+_atom_site_symmetry_multiplicity
+_atom_site_calc_flag
+_atom_site_refinement_flags
+_atom_site_disorder_assembly
+_atom_site_disorder_group
+C1 C 1.0000 0.3546(7) 0.2500 0.054(4) Uani 1 4 d S . .
+O1 O 1.0000 0.5861(5) 0.2500 0.061(5) Uani 1 4 d S . .
+C2 C 1.0000 0.2091(6) 0.1279(7) 0.055(3) Uani 1 2 d S . .
+H2A H 0.9146 0.2988 0.0638 0.083 Uiso 0.50 1 calc PR A -1
+H2B H 0.9381 0.0421 0.1427 0.083 Uiso 0.50 1 calc PR A -1
+H2C H 1.1472 0.1909 0.0970 0.083 Uiso 0.50 1 calc PR A -1
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_23
+_atom_site_aniso_U_13
+_atom_site_aniso_U_12
+C1 0.033(3) 0.039(2) 0.091(14) 0.000 0.000 0.000
+O1 0.091(3) 0.0513(18) 0.042(15) 0.000 0.000 0.000
+C2 0.062(2) 0.0588(16) 0.044(11) 0.003(3) 0.000 0.000
+loop_
+_atom_type_symbol
+_atom_type_description
+_atom_type_scat_dispersion_real
+_atom_type_scat_dispersion_imag
+_atom_type_scat_source
+C C 0.0033 0.0016 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+H H 0.0000 0.0000 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+O O 0.0106 0.0060 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+loop_
+_geom_angle_atom_site_label_1
+_geom_angle_atom_site_label_2
+_geom_angle_atom_site_label_3
+_geom_angle
+_geom_angle_site_symmetry_1
+_geom_angle_site_symmetry_3
+O1 C1 C2 121.2(2) . 10_556
+O1 C1 C2 121.2(2) . .
+C2 C1 C2 117.6(4) 10_556 .
+loop_
+_geom_bond_atom_site_label_1
+_geom_bond_atom_site_label_2
+_geom_bond_distance
+_geom_bond_site_symmetry_2
+C1 O1 1.205(5) .
+C1 C2 1.462(6) 10_556
+C1 C2 1.462(6) .

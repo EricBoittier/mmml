@@ -329,6 +329,7 @@ mmml = [
     "data/molecules/benz_monomer.pdb",
     "data/structures/dcm_pbcn_cod2100015.cif",
     "data/structures/benzene_p21c_cod4501704.cif",
+    "data/structures/acetone_*.cif",
     "generate/sample/pdb/*.pdb",
     "generate/sample/psf/*.psf",
     "models/physnetjax/defaults/*.json",
