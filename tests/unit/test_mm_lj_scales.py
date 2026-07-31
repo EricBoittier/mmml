@@ -70,20 +70,20 @@ def test_hybrid_mm_json_round_trip(tmp_path: Path):
     write_mm_lj_scales_into_hybrid_mm_json(
         path,
         type_names=["A", "B"],
-        sigma_scale=[1.2, 0.8],
+        sigma_scale=[1.04, 0.96],
         epsilon_scale=[1.5, 0.5],
     )
     raw = json.loads(path.read_text())
     assert raw["learn_mm_lj_scales"] is True
     loaded = load_mm_lj_scales_sidecar(path)
     assert loaded is not None
-    np.testing.assert_allclose(loaded["mm_lj_sigma_scale"], [1.2, 0.8])
+    np.testing.assert_allclose(loaded["mm_lj_sigma_scale"], [1.04, 0.96])
     ep, sig = resolve_md_lj_scales(
         scales_file=path,
         atc_names=["B", "A"],
     )
     assert ep is not None and sig is not None
-    np.testing.assert_allclose(sig, [0.8, 1.2])
+    np.testing.assert_allclose(sig, [0.96, 1.04])
     np.testing.assert_allclose(ep, [0.5, 1.5])
 
 
@@ -368,7 +368,7 @@ def test_resolve_md_lj_scales_from_checkpoint_parent(tmp_path: Path):
     write_mm_lj_scales_into_hybrid_mm_json(
         run / "hybrid_mm.json",
         type_names=["T0", "T1"],
-        sigma_scale=[1.1, 0.9],
+        sigma_scale=[1.03, 0.97],
         epsilon_scale=[1.2, 0.8],
     )
     ckpt = run / "epoch-1" / "params.json"
@@ -376,7 +376,7 @@ def test_resolve_md_lj_scales_from_checkpoint_parent(tmp_path: Path):
     ckpt.write_text("{}", encoding="utf-8")
     ep, sig = resolve_md_lj_scales(checkpoint=ckpt, atc_names=["T1", "T0"])
     assert ep is not None
-    np.testing.assert_allclose(sig, [0.9, 1.1])
+    np.testing.assert_allclose(sig, [0.97, 1.03])
     np.testing.assert_allclose(ep, [0.8, 1.2])
 
 

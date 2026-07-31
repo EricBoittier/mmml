@@ -9,9 +9,10 @@ Sanity guidance:
 
 * A scale still at exactly 1.0 means that type got no gradient — it was absent
   from the training data. Expected for solvent types; not a bug.
-* Scales far from 1.0 (outside roughly 0.5-2.0) deserve suspicion. That is
-  usually compensation for something else being wrong rather than a genuine
-  parameter correction.
+* A scale sitting exactly on a bound means the fit wanted to go further and was
+  stopped. Read that as a warning, not a result: the LJ is standing in for
+  something else (missing long-range electrostatics, a bad handoff cutoff, or an
+  ML term that has not converged).
 """
 
 from __future__ import annotations
@@ -23,7 +24,12 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar, scales_to_atc
+from mmml.models.mm_lj_scales import (
+    MM_LJ_EPSILON_SCALE_BOUNDS,
+    MM_LJ_SIGMA_SCALE_BOUNDS,
+    find_learnable_lj_scales_sidecar,
+    scales_to_atc,
+)
 
 print("=== 06: learned LJ scales ===")
 
@@ -59,14 +65,31 @@ moved = [i for i in range(len(names))
          if abs(sig[i] - 1.0) > 1e-3 or abs(eps[i] - 1.0) > 1e-3]
 print(f"moved  : {len(moved)} of {len(names)} types received a gradient\n")
 
+sig_lo, sig_hi = MM_LJ_SIGMA_SCALE_BOUNDS
+eps_lo, eps_hi = MM_LJ_EPSILON_SCALE_BOUNDS
+print(f"  bounds : sigma [{sig_lo:g}, {sig_hi:g}]   epsilon [{eps_lo:g}, {eps_hi:g}]\n")
+
 print(f"  {'type':10s} {'s_sigma':>9s} {'s_epsilon':>10s}")
+saturated = 0
 for i in moved:
-    flag = ""
-    if not (0.5 <= sig[i] <= 2.0) or not (0.5 <= eps[i] <= 2.0):
-        flag = "   <- outside 0.5-2.0, check for compensation"
+    at_bound = [
+        label
+        for label, value, lo, hi in (
+            ("sigma", sig[i], sig_lo, sig_hi),
+            ("epsilon", eps[i], eps_lo, eps_hi),
+        )
+        if abs(value - lo) < 1e-6 or abs(value - hi) < 1e-6
+    ]
+    flag = f"   <- {'/'.join(at_bound)} pinned at bound" if at_bound else ""
+    saturated += bool(at_bound)
     print(f"  {names[i]:10s} {sig[i]:9.4f} {eps[i]:10.4f}{flag}")
 if not moved:
     print("  (none — every scale is still 1.0, i.e. stock CGenFF)")
+if saturated:
+    print(
+        f"\n  {saturated} type(s) hit a bound. The fit wanted LJ the bounds do not\n"
+        "  allow — treat those numbers as a symptom, not a parameter."
+    )
 
 # --- how MD will see them ---------------------------------------------------
 # MD does not use master-table ordering; it remaps onto param.get_atc(). Types

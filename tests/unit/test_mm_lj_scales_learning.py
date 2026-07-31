@@ -294,14 +294,20 @@ def _drift_loop(*, clip: bool, steps: int = 300, lr: float = 5e-2):
     params = attach_mm_lj_scales({"params": {}}, 2)
     opt = optax.adam(lr)
     state = opt.init(params)
+
+    @jax.jit
+    def step(p, s):
+        loss, grads = jax.value_and_grad(loss_fn)(p)
+        updates, s = opt.update(grads, s, p)
+        p = optax.apply_updates(p, updates)
+        if clip:
+            p = clip_mm_lj_scale_params(p)
+        return p, s, loss
+
     losses = []
     for _ in range(steps):
-        loss, grads = jax.value_and_grad(loss_fn)(params)
+        params, state, loss = step(params, state)
         losses.append(float(loss))
-        updates, state = opt.update(grads, state, params)
-        params = optax.apply_updates(params, updates)
-        if clip:
-            params = clip_mm_lj_scale_params(params)
     return params, losses
 
 
@@ -376,6 +382,19 @@ def test_out_of_bounds_report_names_the_offending_type():
     assert not out_of_bounds_mm_lj_scales(["CG331"], [1.02], [3.0])
 
 
+def test_sidecar_outside_bounds_still_loads_but_warns(tmp_path: Path):
+    """Runs predating the bounds must not be stranded, only flagged."""
+    from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+
+    path = tmp_path / "hybrid_mm.json"
+    write_mm_lj_scales_into_hybrid_mm_json(
+        path, type_names=["CG331"], sigma_scale=[1.4], epsilon_scale=[12.0]
+    )
+    with pytest.warns(RuntimeWarning, match="outside the trainable bounds"):
+        payload = load_mm_lj_scales_sidecar(path)
+    np.testing.assert_allclose(payload["mm_lj_sigma_scale"], [1.4])
+
+
 def test_train_step_projects_lj_scales_into_bounds():
     """The projection has to live in the real update path, not just a test loop."""
     import optax
@@ -448,7 +467,7 @@ def test_trained_scales_survive_round_trip_to_md_atc(tmp_path: Path):
     ``mm_energy_forces.build_mm_energy_forces_fn``.
     """
     type_names = ["CG331", "HGA3"]
-    trained_sig = np.array([1.0731, 0.9422])
+    trained_sig = np.array([1.0312, 0.9622])
     trained_eps = np.array([1.6044, 0.5981])
 
     run = tmp_path / "run-xyz"
@@ -534,7 +553,7 @@ def test_find_learnable_sidecar_discovery(tmp_path: Path):
 
     path = run / "hybrid_mm.json"
     write_mm_lj_scales_into_hybrid_mm_json(
-        path, type_names=["CG331"], sigma_scale=[1.1], epsilon_scale=[1.2]
+        path, type_names=["CG331"], sigma_scale=[1.03], epsilon_scale=[1.2]
     )
     assert find_learnable_lj_scales_sidecar(checkpoint=run / "params.json") == path
     assert find_learnable_lj_scales_sidecar(scales_file=path) == path
