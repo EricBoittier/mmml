@@ -4,52 +4,31 @@ Molecular mechanics workflows and machine-learned force fields, on JAX.
 Everything runs through one command: `mmml`.
 
 <!-- MMML_TOP_HELP_START -->
-
 ```console
-
 $ mmml -h
-
 usage: mmml [-h] <command> ...
-
 
 MMML: Machine Learning for Molecular Modeling
 
-
 Subcommands (63 total). Common:
-
   md-system      mixed-composition MD (YAML + campaigns)
-
   physnet-train  train PhysNetJAX from NPZ
-
   configure      interactive config / Snakemake wizard
-
   env            find resolved/bundled checkpoints and CHARMM paths
-
   liquid-box     build periodic liquid boxes
 
-
 Browse:   mmml commands
-
 Setup:    mmml configure
-
 Examples: mmml examples
-
 Flags:    mmml <command> --help
 
-
 Tab completion (bash/zsh/fish):
-
   pip install 'mmml[cli]'
-
   eval "$(register-python-argcomplete mmml)"
 
-
 options:
-
   -h, --help  show this help message and exit
-
 ```
-
 <!-- MMML_TOP_HELP_END -->
 
 These docs are laid out the same way. The sections along the top are the task

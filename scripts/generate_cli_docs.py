@@ -562,7 +562,7 @@ def _update_top_level_help(text: str) -> str:
     from mmml.cli.help_text import format_top_level_help
 
     pattern = re.compile(
-        rf"^(\s*)<!-- {HELP_START} -->\n.*?^\s*<!-- {HELP_END} -->\n",
+        rf"^([ \t]*)<!-- {HELP_START} -->$.*?^[ \t]*<!-- {HELP_END} -->$\n",
         re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(text)

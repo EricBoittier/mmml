@@ -20,6 +20,44 @@ Student walkthrough (train → `hybrid_mm.json` → MD):
 Staged MIC LJ then Ewald TL (ML-only under Ewald; adjusted LJ stays MIC/jax_mic):
 [§ Staged MIC LJ then Ewald transfer learning](../../docs/hybrid-mm-lj-scales.md#staged-mic-lj-then-ewald-transfer-learning).
 
+## Trainable LJ scales — start here
+
+| Resource | What it is |
+|---|---|
+| [`lj_scales_walkthrough.ipynb`](lj_scales_walkthrough.ipynb) | Annotated notebook: why LJ is fitted without Ewald, differentiating σ/ε by hand, a miniature fit that recovers a planted scale, then deployment. Cells run in seconds on a laptop CPU — no GPU, no CHARMM. |
+| [`submit_lj_scales_scicore.sbatch`](submit_lj_scales_scicore.sbatch) | SciCORE job running the real pipeline: `prepare-mm-dataset` → train → condensed-phase MD, with each stage gated on the previous. |
+| [`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.md) | Reference page, support matrix, troubleshooting. |
+
+### Jupyter kernel — do this first
+
+```bash
+# once, from the repo root
+.venv/bin/python -m ipykernel install --user --name mmml-venv --display-name "mmml venv"
+```
+
+Then pick `mmml venv` via **Kernel → Change Kernel**. The kernelspec `uv` installs
+is named `python3` but has a bare `"python"` in its `argv`, so it resolves against
+`PATH` and will happily start an active conda interpreter instead of `.venv`. That
+fails on the first `import mmml...` with
+
+```
+TypeError: 'type' object is not subscriptable
+```
+
+which is a *kernel* problem, not a code problem. The notebook's first cell checks
+this and aborts with the fix, so you cannot get far down the wrong path.
+
+### Two things the notebook will save you from
+
+- **PSF ordering.** `dcm_mp2_psf_order.npz` is `C Cl Cl H H`; the otherwise
+  identical `new-dcm-round-2-only_MP2_41950.npz` is `C H H Cl Cl`. Only the first
+  can be typed by `prepare-mm-dataset`. The wrong one does not crash — it silently
+  mis-assigns CGenFF types.
+- **σ/ε degeneracy.** Against an energy-only target, a deeper well with a larger
+  radius is indistinguishable from a shallower one with a smaller radius. You can
+  drive the loss to zero and still recover the wrong parameters. Forces and a
+  range of separations are what break the tie.
+
 ## Minimal example: native Ewald, `fixed` vs `latent`, small system, no checkpoint
 
 [`monomer_ml_mm_ewald_example.py`](monomer_ml_mm_ewald_example.py) runs the
