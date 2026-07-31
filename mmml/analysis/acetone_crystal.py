@@ -28,13 +28,52 @@ import numpy as np
 __all__ = [
     "AcetonePhase",
     "ACETONE_CRYSTAL_PHASES",
+    "ACETONE_SUBLIMATION_REFERENCE",
     "Contact",
+    "SublimationReference",
     "acetone_phase",
     "read_acetone_phase",
     "carbonyl_contacts",
     "ch_o_contacts",
     "classify_carbonyl_motif",
 ]
+
+
+@dataclass(frozen=True)
+class SublimationReference:
+    """Experimental sublimation enthalpy assembled from a thermodynamic cycle.
+
+    The NIST WebBook lists no direct sublimation measurement for acetone, so
+    ``dH_sub(T_fus) = dH_vap(T_fus) + dH_fus(T_fus)`` is the available route.
+    Both legs are quoted near the melting point rather than at 298 K, because a
+    room-temperature ``dH_vap`` would be compared against a crystal that does
+    not exist at that temperature.
+
+    Treat the result as an estimate good to a kJ/mol or so, not a measurement.
+    The two legs come from different sources at slightly different temperatures,
+    and the heat capacity difference between phases means the number still drifts
+    with temperature -- which is the whole subject of the Allan et al. paper.
+    """
+
+    dvap_h_kj_mol: float = 32.9
+    dvap_h_temperature_K: float = 228.0
+    dvap_h_source: str = "Stephenson & Malanowski 1987 (data 178-243 K), via NIST WebBook"
+    dfus_h_kj_mol: float = 5.72
+    dfus_h_temperature_K: float = 176.6
+    dfus_h_source: str = "Kelley 1929 / Domalski & Hearing 1996, via NIST WebBook"
+
+    @property
+    def dsub_h_kj_mol(self) -> float:
+        return self.dvap_h_kj_mol + self.dfus_h_kj_mol
+
+    @property
+    def dsub_h_kcal_mol(self) -> float:
+        return self.dsub_h_kj_mol / 4.184
+
+
+# Kelley's 1929 calorimetry is the same study that first saw the heat-capacity
+# anomaly near 127 K which the Allan et al. paper set out to explain.
+ACETONE_SUBLIMATION_REFERENCE = SublimationReference()
 
 
 @dataclass(frozen=True)

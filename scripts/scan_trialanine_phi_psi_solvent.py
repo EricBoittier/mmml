@@ -92,9 +92,10 @@ def minimize_solvated_with_phi_psi(
 def _dihedral_deg(positions: np.ndarray, idx: tuple[int, int, int, int]) -> float:
     from ase import Atoms
 
-    # Z unused; ASE only needs 4 atoms for get_dihedral via full Atoms.
+    # ASE returns [0, 360); wrap to (−180, 180] for Ramachandran / CONS DIHE.
     atoms = Atoms(numbers=np.ones(len(positions), dtype=int), positions=positions)
-    return float(atoms.get_dihedral(*idx))
+    ang = float(atoms.get_dihedral(*idx))
+    return ((ang + 180.0) % 360.0) - 180.0
 
 
 def main() -> None:
