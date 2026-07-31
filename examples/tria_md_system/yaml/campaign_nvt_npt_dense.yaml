@@ -16,9 +16,9 @@
 #     --checkpoint "$MMML_CKPT" \
 #     --run-all
 #
-# Sense-check: NPT log prints P0, Pkin0, Pvir0. Cold-start (no handoff yet).
-# Pkin0 should be O(N kT / V); |P0| should be far below dilute aaa ~10^3 bar
-# once packing is liquid-like. Instantaneous P still fluctuates on short runs.
+# Sense-check: NPT log prints P0, Pkin0, Pvir0. Campaign chains via depends_on
+# (geometry handoff; velocities rethermalized). Pkin0 should be O(N kT / V);
+# Instantaneous P still fluctuates on short runs.
 
 defaults:
   from_pdb: artifacts/md_embedding/aaa_dense/model.pdb
@@ -45,21 +45,23 @@ campaign_output: artifacts/tria_md_system/campaign_dense
 
 runs:
   nvt:
-    description: "NVT Langevin thermalize denser box (cold start)"
+    description: "NVT Langevin thermalize denser box (cold start + FIRE)"
     setup: pbc_nvt
     ps: 0.2
     output_dir: artifacts/tria_md_system/campaign_dense/nvt
 
   npt:
-    description: "NPT with moderate barostat tau (still short; not full equilibration)"
+    description: "NPT from NVT handoff (geometry; skip FIRE)"
     setup: pbc_npt
+    depends_on: nvt
     ps: 0.2
     # Smaller than dilute-smoke 1e6, larger than jax-md default 1000*dt.
     barostat_tau: 5.0e4
     output_dir: artifacts/tria_md_system/campaign_dense/npt
 
   nve:
-    description: "Short NVE after cold-start (no handoff yet)"
+    description: "Short NVE from NPT handoff (geometry; skip FIRE)"
     setup: pbc_nve
+    depends_on: npt
     ps: 0.05
     output_dir: artifacts/tria_md_system/campaign_dense/nve

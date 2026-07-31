@@ -63,9 +63,64 @@ def test_check_supported_rejects_template_pdb():
         check_md_system_args_supported(_args(template_pdb="foo.pdb"))
 
 
-def test_check_supported_rejects_continue_from():
-    with pytest.raises(NotImplementedError, match="continue-from"):
-        check_md_system_args_supported(_args(continue_from="run1"))
+def test_check_supported_allows_continue_from():
+    check_md_system_args_supported(_args(continue_from="artifacts/nvt/handoff/state.npz"))
+
+
+def test_apply_incoming_handoff_overlays_geometry(monkeypatch):
+    from mmml.cli.run.md_handoff import MdHandoffState
+    from mmml.cli.run.md_system_unified import _apply_incoming_handoff
+    from mmml.md.system import MolecularSystem
+
+    system = MolecularSystem(
+        R=np.zeros((3, 3), dtype=np.float64),
+        Z=np.array([8, 1, 1], dtype=np.int32),
+        box=np.eye(3) * 10.0,
+        mol_id=np.array([0, 0, 0], dtype=np.int32),
+    )
+    handoff = MdHandoffState(
+        positions=np.ones((3, 3), dtype=np.float64),
+        atomic_numbers=np.array([8, 1, 1], dtype=np.int32),
+        cell=np.eye(3) * 12.0,
+        pbc=True,
+        metadata={"source": "unit-test"},
+    )
+    monkeypatch.setattr(
+        "mmml.cli.run.md_system_unified._resolve_handoff_in",
+        lambda args: handoff,
+    )
+    out, from_h = _apply_incoming_handoff(argparse.Namespace(continue_from=None), system)
+    assert from_h is True
+    assert np.allclose(out.R, 1.0)
+    assert np.allclose(out.box, np.eye(3) * 12.0)
+
+
+def test_publish_unified_handoff_sets_context():
+    from mmml.cli.run.md_handoff import clear_handoff_context, get_handoff_out
+    from mmml.cli.run.md_system_unified import _publish_unified_handoff
+    from mmml.md.system import MolecularSystem
+
+    clear_handoff_context()
+    system = MolecularSystem(
+        R=np.zeros((2, 3), dtype=np.float64),
+        Z=np.array([1, 1], dtype=np.int32),
+        box=np.eye(3) * 8.0,
+        mol_id=np.array([0, 0], dtype=np.int32),
+    )
+
+    class _Traj:
+        metadata = {
+            "positions": np.stack([np.zeros((2, 3)), np.ones((2, 3))], axis=0),
+            "boxes": np.stack([np.eye(3) * 8.0, np.eye(3) * 9.0], axis=0),
+        }
+
+    _publish_unified_handoff(argparse.Namespace(temperature=310.0), system, _Traj())
+    out = get_handoff_out()
+    assert out is not None
+    assert np.allclose(out.positions, 1.0)
+    assert np.allclose(out.cell, np.eye(3) * 9.0)
+    assert out.velocities is None
+    clear_handoff_context()
 
 
 def test_check_supported_requires_checkpoint_for_ml_intra():

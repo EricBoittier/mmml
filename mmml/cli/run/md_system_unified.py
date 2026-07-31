@@ -12,7 +12,12 @@ from the legacy backend):
 
 - ``--builder pyxtal`` / ``--template-pdb`` (only the packmol composition
   builder and ``--from-pdb`` full-system loading are wired here).
-- Campaign/handoff continuation (``--continue-from``), lambda-TI.
+- lambda-TI.
+
+Geometry handoff (``--continue-from`` / campaign ``depends_on``) is supported:
+positions + box are applied; velocities / thermostat / barostat state are not
+(rethermalize downstream). FIRE is skipped after handoff unless
+``--handoff-pre-minimize``.
 
 See ``docs/md-cg-unification-design.md`` (§0, §9, §11) and
 ``docs/md-cg-unification-handoff.md`` for the surrounding architecture.
@@ -112,6 +117,111 @@ def _system_with_positions(system, positions: np.ndarray):
     from dataclasses import replace
 
     return replace(system, R=np.asarray(positions, dtype=np.float64))
+
+
+def _system_with_positions_and_box(system, positions: np.ndarray, box: np.ndarray | None):
+    """Return a copy of ``system`` with updated ``R`` and optional ``box``."""
+    from dataclasses import replace
+
+    kwargs: dict[str, Any] = {"R": np.asarray(positions, dtype=np.float64)}
+    if box is not None:
+        kwargs["box"] = np.asarray(box, dtype=np.float64)
+    return replace(system, **kwargs)
+
+
+def _resolve_handoff_in(args: Any):
+    """Return campaign/context handoff or load ``--continue-from`` if set."""
+    from mmml.cli.run.md_handoff import get_handoff_in, load_handoff
+
+    handoff = get_handoff_in()
+    if handoff is not None:
+        return handoff
+    path = getattr(args, "continue_from", None)
+    if not path:
+        return None
+    frame = int(getattr(args, "continue_from_frame", -1) or -1)
+    return load_handoff(Path(str(path)), frame=frame)
+
+
+def _apply_incoming_handoff(args: Any, system):
+    """Overlay handoff positions (+ cell) onto the built topology system.
+
+    Returns ``(system, from_handoff)``. Geometry-only: velocities are ignored
+    (driver rethermalizes). Raises on atom-count / Z mismatches.
+    """
+    handoff = _resolve_handoff_in(args)
+    if handoff is None:
+        return system, False
+
+    pos = np.asarray(handoff.positions, dtype=np.float64)
+    if pos.shape != tuple(system.R.shape):
+        raise ValueError(
+            "jaxmd-unified handoff positions shape "
+            f"{pos.shape} != system.R shape {tuple(system.R.shape)}"
+        )
+    z_h = np.asarray(handoff.atomic_numbers, dtype=np.int32).reshape(-1)
+    z_s = np.asarray(system.Z, dtype=np.int32).reshape(-1)
+    if z_h.size == z_s.size and np.any(z_h != 0) and not np.array_equal(z_h, z_s):
+        raise ValueError(
+            "jaxmd-unified handoff atomic_numbers do not match the built system"
+        )
+    box = None
+    if handoff.cell is not None:
+        box = np.asarray(handoff.cell, dtype=np.float64)
+        if box.shape != (3, 3):
+            raise ValueError(
+                f"jaxmd-unified handoff cell must be (3, 3); got {box.shape}"
+            )
+    elif system.box is not None and bool(getattr(handoff, "pbc", False)):
+        print(
+            "mmml md-system (jaxmd-unified): WARNING handoff has pbc but no cell; "
+            "keeping built-system box",
+            flush=True,
+        )
+    system = _system_with_positions_and_box(system, pos, box)
+    src = (handoff.metadata or {}).get("source") or getattr(args, "continue_from", None) or "context"
+    print(
+        f"mmml md-system (jaxmd-unified): continue-from geometry "
+        f"N={system.n_atoms} box={'yes' if system.box is not None else 'no'} "
+        f"({src})",
+        flush=True,
+    )
+    return system, True
+
+
+def _publish_unified_handoff(args: Any, system, traj) -> None:
+    """Publish final geometry for campaign ``depends_on`` / ``save_handoff``."""
+    from mmml.cli.run.md_handoff import MdHandoffState, set_handoff_out
+
+    positions = traj.metadata.get("positions")
+    if positions is None or len(positions) == 0:
+        return
+    R = np.asarray(positions[-1], dtype=np.float64)
+    boxes = traj.metadata.get("boxes")
+    if boxes is not None and len(boxes):
+        cell = np.asarray(boxes[-1], dtype=np.float64)
+        pbc = True
+    elif system.box is not None:
+        cell = np.asarray(system.box, dtype=np.float64)
+        pbc = True
+    else:
+        cell = None
+        pbc = False
+    set_handoff_out(
+        MdHandoffState(
+            positions=R,
+            atomic_numbers=np.asarray(system.Z, dtype=np.int32),
+            velocities=None,
+            cell=cell,
+            pbc=pbc,
+            temperature_K=float(getattr(args, "temperature", 300.0)),
+            metadata={
+                "backend": "jaxmd-unified",
+                "source": "run_unified_jaxmd",
+                "note": "geometry-only; velocities not preserved",
+            },
+        )
+    )
 
 
 def _fire_minimize_system(
@@ -214,9 +324,6 @@ def check_md_system_args_supported(args: Any) -> None:
             "--jaxmd-unified needs either --from-pdb (a prebuilt full-system PDB) "
             "or --composition (for the packmol builder)"
         )
-    if getattr(args, "continue_from", None):
-        raise NotImplementedError("--jaxmd-unified does not yet support --continue-from (handoff)")
-
     terms = terms_from_md_system_args(args)
     if "ml_intra" in terms and not getattr(args, "checkpoint", None):
         raise ValueError("--jaxmd-unified with ml_intra requires --checkpoint")
@@ -541,6 +648,9 @@ def run_unified_jaxmd(args: Any) -> int:
             flush=True,
         )
 
+    # Overlay campaign / --continue-from geometry after topology + ML-region remap.
+    system, from_handoff = _apply_incoming_handoff(args, system)
+
     # Pin ML + jax-md energy/MD to MMML_MLPOT_DEVICE (default gpu). Without this,
     # a cpu-first JAX_PLATFORMS list (or silent CUDA plugin fallback) leaves
     # Spooky/PhysNet on the host while nvidia-smi stays idle.
@@ -555,13 +665,24 @@ def run_unified_jaxmd(args: Any) -> int:
             )
         ctx = build_energy_context(args, system, run_config.terms)
         _print_unified_ensemble_banner(args, run_config)
-        system = _fire_minimize_system(
-            args, run_config, system, ctx, term_kwargs
-        )
+        # Handoff geometry is already dynamics-ready; skip cold-start FIRE unless
+        # the user explicitly asked for --handoff-pre-minimize.
+        if from_handoff and not bool(getattr(args, "handoff_pre_minimize", False)):
+            print(
+                "mmml md-system (jaxmd-unified): skipping FIRE "
+                "(continue-from / campaign handoff)",
+                flush=True,
+            )
+        else:
+            system = _fire_minimize_system(
+                args, run_config, system, ctx, term_kwargs
+            )
 
         traj = assemble_and_run(
             run_config, system=system, ctx=ctx, term_kwargs=term_kwargs or None
         )
+
+    _publish_unified_handoff(args, system, traj)
 
     energies = traj.metadata.get("energies")
     if energies is not None and len(energies):
