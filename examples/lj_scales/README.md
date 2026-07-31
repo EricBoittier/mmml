@@ -38,9 +38,9 @@ first; they are where the concepts live.
 |---|---|---|
 | `LJ_DATASET` | `examples/dcm_mp2_psf_order.npz` | Input QM NPZ — **must be PSF-ordered** |
 | `LJ_DEVICE` | `cpu` | `cpu` or `gpu`; sets `JAX_PLATFORMS` + `MMML_MLPOT_DEVICE` |
-| `ARTIFACTS_DIR` | `artifacts/lj_scales` | Outputs |
-| `LJ_ENRICHED` | `$ARTIFACTS_DIR/dataset_cgenff.npz` | Step 01 output |
-| `LJ_CKPT_DIR` / `LJ_TAG` | `$ARTIFACTS_DIR/ckpts` / `hybrid_mm_fixed_lj_scales` | Training output |
+| `LJ_ARTIFACTS_DIR` | `artifacts/lj_scales` | Outputs |
+| `LJ_ENRICHED` | `$LJ_ARTIFACTS_DIR/dataset_cgenff.npz` | Step 01 output |
+| `LJ_CKPT_DIR` / `LJ_TAG` | `$LJ_ARTIFACTS_DIR/ckpts` / `hybrid_mm_fixed_lj_scales` | Training output |
 | `LJ_EPOCHS` / `LJ_NTRAIN` / `LJ_NVALID` | 500 / 8000 / 1000 | Training size |
 | `LJ_FULL` | `0` | `1` runs the expensive steps in `run_all.sh` |
 
@@ -48,7 +48,13 @@ An explicitly set `LJ_DEVICE` beats an inherited `JAX_PLATFORMS` / `MMML_MLPOT_D
 so a stale `export JAX_PLATFORMS=cpu` in a login profile cannot silently downgrade
 a GPU run.
 
-`bash 05_train.sh` runs in a subshell, so a `LJ_CKPT_DIR` / `ARTIFACTS_DIR` it
+Outputs use `LJ_ARTIFACTS_DIR`, not the generic `ARTIFACTS_DIR` that
+`examples/m`, `examples/acetone_crystal` and others export from their own
+`_env.sh`. Sourcing one of those earlier in the same shell would otherwise send
+this ladder's dataset and checkpoints into that study's folder; the banner says
+so when it ignores an inherited `ARTIFACTS_DIR`.
+
+`bash 05_train.sh` runs in a subshell, so a `LJ_CKPT_DIR` / `LJ_ARTIFACTS_DIR` it
 derived is gone afterwards. Either `source examples/lj_scales/_env.sh` in the
 shell you run steps 06 and 07 from, or point step 06 at the run directly:
 

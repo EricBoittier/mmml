@@ -130,7 +130,7 @@ echo "PyCHARMM import OK"
 # The ladder's _env.sh reads the same variables exported above.
 # ---------------------------------------------------------------------------
 export LJ_DATASET="$DATASET"
-export ARTIFACTS_DIR="$RUN_DIR"
+export LJ_ARTIFACTS_DIR="$RUN_DIR"
 export LJ_ENRICHED="$ENRICHED"
 export LJ_CKPT_DIR="$CKPT_DIR"
 export LJ_TAG="$TAG"

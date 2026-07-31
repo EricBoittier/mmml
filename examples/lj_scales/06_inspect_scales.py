@@ -41,11 +41,15 @@ def resolve_ckpt_dir() -> Path:
     step runs unless ``_env.sh`` was sourced into the interactive shell. Without
     a fallback the empty string becomes ``Path('.')`` and this step quietly
     searches the current directory — which finds nothing and blames training.
+
+    A bare ``ARTIFACTS_DIR`` is deliberately not consulted: other examples export
+    it for their own studies, and following it here would look for this ladder's
+    checkpoints in theirs.
     """
     ckpt_dir = os.environ.get("LJ_CKPT_DIR", "").strip()
     if ckpt_dir:
         return Path(ckpt_dir)
-    artifacts = os.environ.get("ARTIFACTS_DIR", "").strip()
+    artifacts = os.environ.get("LJ_ARTIFACTS_DIR", "").strip()
     if artifacts:
         return Path(artifacts) / "ckpts"
     return Path(__file__).resolve().parents[2] / "artifacts" / "lj_scales" / "ckpts"
