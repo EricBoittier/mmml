@@ -19,7 +19,37 @@ from mmml.md.energy.registry import HybridEnergy
 from mmml.md.results import Trajectory
 from mmml.md.system import MolecularSystem
 
-__all__ = ["JaxmdDriver"]
+__all__ = ["JaxmdDriver", "NonFiniteStateError"]
+
+
+class NonFiniteStateError(RuntimeError):
+    """A run aborted on a non-finite frame, carrying what it had recorded.
+
+    The frames leading up to a blow-up are the only evidence of *why* it blew
+    up, and discarding them is what makes these failures so hard to diagnose:
+    the driver's progress line prints step counts only, so a window that dies at
+    step 600 otherwise leaves nothing behind but the step number.
+
+    Subclasses ``RuntimeError`` so existing ``except RuntimeError`` handlers
+    keep working unchanged.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        step: int,
+        n_steps: int,
+        positions: list[np.ndarray] | None = None,
+        energies: list[float] | None = None,
+        kinetic_energies: list[float] | None = None,
+    ):
+        super().__init__(message)
+        self.step = int(step)
+        self.n_steps = int(n_steps)
+        self.positions = list(positions or [])
+        self.energies = list(energies or [])
+        self.kinetic_energies = list(kinetic_energies or [])
 
 
 @dataclass(frozen=True)
@@ -473,10 +503,15 @@ class JaxmdDriver:
                         or not np.isfinite(kin_now)
                         or not np.all(np.isfinite(frames[-1]))
                     ):
-                        raise RuntimeError(
+                        raise NonFiniteStateError(
                             f"{self.name}: non-finite state at step {completed}/"
                             f"{ensemble.n_steps} (E={e_now}, K={kin_now}). "
-                            "Try a smaller timestep (e.g. 0.25 fs) or softer seeds."
+                            "Try a smaller timestep (e.g. 0.25 fs) or softer seeds.",
+                            step=int(completed),
+                            n_steps=int(ensemble.n_steps),
+                            positions=[np.asarray(f) for f in frames],
+                            energies=[float(x) for x in energies],
+                            kinetic_energies=[float(x) for x in kinetic_energies],
                         )
                 if is_npt:
                     volumes_A3.append(_volume_A3(boxes[-1]))

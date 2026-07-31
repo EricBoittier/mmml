@@ -37,6 +37,7 @@ __all__ = [
     "relax_around_frozen_seed",
     "resolve_ml_region_indices",
     "run_umbrella_hybrid_nvt",
+    "save_failure_trace",
     "seed_force_maxima",
     "stretch_antisymmetric_seed_mic",
     "stretch_distance_seed_mic",
@@ -436,6 +437,47 @@ def _numpy_bias_cv(
     return 0.5 * float(k_ev_A2) * (xi - float(target)) ** 2
 
 
+def save_failure_trace(
+    output_dir: Path,
+    wid: int,
+    exc,
+    *,
+    keep_frames: int = 10,
+) -> Path | None:
+    """Dump the frames preceding a non-finite abort to ``windows/wXXX.trace.npz``.
+
+    Without this a blown-up window leaves only the step number: the driver logs
+    ``step N/80000`` and the checkpoint it writes is all NaN. The energy and
+    kinetic series say whether the run was heating steadily or snapped in one
+    frame, and the last geometries say which atoms were involved.
+
+    Only the tail of the trajectory is kept, so a window that dies at 52000
+    steps does not write hundreds of megabytes.
+    """
+    from mmml.umbrella.hybrid_windows import windows_dir
+
+    positions = list(getattr(exc, "positions", []) or [])
+    energies = list(getattr(exc, "energies", []) or [])
+    kinetic = list(getattr(exc, "kinetic_energies", []) or [])
+    if not positions and not energies:
+        return None
+    tail = positions[-int(keep_frames) :] if keep_frames > 0 else []
+    path = windows_dir(output_dir) / f"w{int(wid):03d}.trace.npz"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        path,
+        # Full series: cheap, and the shape of the run-up is the whole point.
+        energies=np.asarray(energies, dtype=np.float64),
+        kinetic_energies=np.asarray(kinetic, dtype=np.float64),
+        positions_tail=np.asarray(tail, dtype=np.float64),
+        n_frames_recorded=np.int64(len(positions)),
+        step=np.int64(getattr(exc, "step", -1)),
+        n_steps=np.int64(getattr(exc, "n_steps", -1)),
+        message=np.asarray(str(exc)),
+    )
+    return path
+
+
 def seed_force_maxima(
     forces: np.ndarray,
     ml_indices: Sequence[int],
@@ -786,6 +828,9 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             except RuntimeError as exc:
                 fail_msg = str(exc)
                 traj = None
+                trace_path = save_failure_trace(output_dir, wid, exc)
+                if trace_path is not None:
+                    print(f"    trace → {trace_path.name}", flush=True)
             if fail_msg is None:
                 frames = traj.metadata.get("positions") if traj is not None else None
                 energies = traj.metadata.get("energies") if traj is not None else None
@@ -859,6 +904,26 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                 f"→ windows/w{wid:03d}.npz",
                 flush=True,
             )
+
+    if only:
+        # A per-window Slurm job must not touch the shared aggregate. Eight run
+        # concurrently, each would assemble whatever happened to be on disk at
+        # the time and write that partial view to the same two paths, and the
+        # last writer would win. The assemble step rebuilds both once every
+        # window exists.
+        print(
+            f"  --windows set: wrote windows/ only; {SNAPSHOTS_NPZ} and "
+            f"{SUMMARY_JSON} are left to the assemble step",
+            flush=True,
+        )
+        return UmbrellaResult(
+            output_dir=output_dir,
+            snapshots_path=output_dir / SNAPSHOTS_NPZ,
+            summary_path=output_dir / SUMMARY_JSON,
+            n_windows=k_windows,
+            n_frames=int(n_frames_est),
+            paths={"windows": windows_dir(output_dir)},
+        )
 
     # Assemble from per-window checkpoints (resume-safe source of truth).
     positions, cv_2d, energies, energies_unbiased, failed_windows, fail_reasons = (

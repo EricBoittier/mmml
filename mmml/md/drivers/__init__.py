@@ -19,7 +19,7 @@ from mmml.md.energy.registry import HybridEnergy
 from mmml.md.results import Trajectory
 from mmml.md.system import MolecularSystem
 
-__all__ = ["Driver", "JaxmdDriver"]
+__all__ = ["Driver", "JaxmdDriver", "NonFiniteStateError"]
 
 
 @runtime_checkable
@@ -40,4 +40,4 @@ class Driver(Protocol):
 
 
 # Safe eager export: the implementation itself keeps jax/jax-md imports lazy.
-from mmml.md.drivers.jaxmd import JaxmdDriver  # noqa: E402
+from mmml.md.drivers.jaxmd import JaxmdDriver, NonFiniteStateError  # noqa: E402
