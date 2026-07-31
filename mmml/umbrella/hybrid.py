@@ -707,6 +707,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         fmax = float("nan")
         fmax_all = float("nan")
         n_relax = 0
+        seed_error: str | None = None
         try:
             atoms = Atoms(
                 numbers=win_system.Z,
@@ -725,8 +726,14 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                 win_system = replace(win_system, R=seeded)
             fmax, fmax_all = seed_force_maxima(atoms.get_forces(), ml_indices)
         except (ValueError, NotImplementedError):
+            # No usable ASE face here (some lr_solver choices have none): the
+            # relaxation and the gate are both skipped, as before.
             fmax = float("nan")
             fmax_all = float("nan")
+        except Exception as exc:  # noqa: BLE001
+            # A blown-up minimisation must cost one window, not the campaign:
+            # the serial path runs all 30 in a single process.
+            seed_error = f"seed relaxation failed: {type(exc).__name__}: {exc}"
 
         # Default Langevin: hybrid NHC was hard-coded and blew up solvent
         # windows (high-T / stiff ξ), then Snakemake still scheduled MBAR.
@@ -766,14 +773,14 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             flush=True,
         )
 
-        fail_msg: str | None = None
-        if fmax == fmax and fmax > float(cfg.max_seed_force):
+        fail_msg: str | None = seed_error
+        if fail_msg is None and fmax == fmax and fmax > float(cfg.max_seed_force):
             fail_msg = (
                 f"seed max|F| over the ML region={fmax:.2f} eV/Å exceeds "
                 f"max_seed_force={cfg.max_seed_force:g} (ξ₀={xi0:.3f}; "
                 f"whole-system max {fmax_all:.2f})"
             )
-        else:
+        if fail_msg is None:
             try:
                 traj = driver.run(win_system, energy, ensemble)
             except RuntimeError as exc:
