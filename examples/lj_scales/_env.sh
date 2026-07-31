@@ -52,6 +52,31 @@ else
 fi
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
+# PyCHARMM's libcharmm.so links OpenCL. The uv venv often lacks libOpenCL.so.1
+# even when a conda env on the same machine has it — prepend the first hit.
+_lj_prepend_opencl_lib() {
+  local cand
+  for cand in \
+    "${CONDA_PREFIX:-}/lib" \
+    "${CONDA_PREFIX:-}/targets/x86_64-linux/lib" \
+    "${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}/envs/mmml-full/targets/x86_64-linux/lib" \
+    "${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}/envs/mmml-full/lib" \
+    "/mmhome/boittier/home/micromamba/envs/mmml-full/targets/x86_64-linux/lib" \
+    "/mmhome/boittier/home/micromamba/envs/mmml-full/lib"
+  do
+    if [[ -n "${cand}" && -e "${cand}/libOpenCL.so.1" ]]; then
+      case ":${LD_LIBRARY_PATH:-}:" in
+        *":${cand}:"*) ;;
+        *) export LD_LIBRARY_PATH="${cand}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" ;;
+      esac
+      return 0
+    fi
+  done
+  return 0
+}
+_lj_prepend_opencl_lib
+unset -f _lj_prepend_opencl_lib
+
 # Input QM data. MUST be PSF-ordered — 02_inspect_dataset.py checks this, and
 # getting it wrong mis-assigns CGenFF types silently rather than crashing.
 export LJ_DATASET="${LJ_DATASET:-${REPO_ROOT}/examples/dcm_mp2_psf_order.npz}"
