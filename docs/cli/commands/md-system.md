@@ -1223,6 +1223,10 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --pycharmm-pre-dynamics-lingo-file PYCHARMM_PRE_DYNAMICS_LINGO_FILE
                         pycharmm: path to a CHARMM script file run once before
                         dynamics
+  --max-fmax-before-dyn-ev-A EV_A
+                        pycharmm: abort if max atomic |F| exceeds this (eV/Å)
+                        before dynamics; default 2.0. Raise only for controlled
+                        smokes.
   --mm-pair-source {jax,charmm_callback}
                         pycharmm decomposed MLpot MM pair provider: Fortran
                         callback idxu/idxv or JAX neighbor rebuild. All-ML

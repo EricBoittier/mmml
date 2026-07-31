@@ -39,6 +39,20 @@ def _truthy(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
 
 
+def _tempdir() -> Path:
+    """Return the process temp directory, honoring ``TMPDIR``/``TMP``/``TEMP``.
+
+    ``tempfile.gettempdir()`` caches its first resolution for the process, so
+    tests (and wrappers) that set ``TMPDIR`` after import would otherwise still
+    stage under ``/tmp``. Read the env vars on each call instead.
+    """
+    for key in ("TMPDIR", "TMP", "TEMP"):
+        raw = (os.environ.get(key) or "").strip()
+        if raw:
+            return Path(raw)
+    return Path(tempfile.gettempdir())
+
+
 def _under_mpirun() -> bool:
     return any(
         os.environ.get(k) is not None
@@ -1364,7 +1378,7 @@ def stage_topology_files_for_rank(
 ) -> dict[str, Path]:
     """Copy topology artifacts to ``$TMPDIR/mmml_mpi_bootstrap/rank<R>_<uuid>/``."""
     run_id = uuid.uuid4().hex
-    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base = _tempdir() / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
     base.mkdir(parents=True, exist_ok=True)
     staged: dict[str, Path] = {"staging_dir": base.resolve()}
     for key, src in paths.items():
@@ -1393,7 +1407,7 @@ def prepare_rank_local_bootstrap_paths(
 ) -> dict[str, Path]:
     """Stage PSF/CRD/PRM (and optional RTF/res) under a per-rank UUID directory."""
     run_id = uuid.uuid4().hex
-    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base = _tempdir() / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
     base.mkdir(parents=True, exist_ok=True)
 
     if rtf_path is not None and Path(rtf_path).is_file():

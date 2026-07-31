@@ -524,20 +524,6 @@ def _nav_yaml_lines(registry_names: set[str]) -> list[str]:
     return lines
 
 
-def _patch_mkdocs(nav_block_lines: list[str]) -> None:
-    text = MKDOCS.read_text(encoding="utf-8")
-    pattern = re.compile(
-        rf"^      {re.escape(NAV_START)}.*?^      {re.escape(NAV_END)}\n",
-        re.MULTILINE | re.DOTALL,
-    )
-    replacement = "\n".join(nav_block_lines) + "\n"
-    if not pattern.search(text):
-        raise SystemExit(
-            f"{MKDOCS} missing {NAV_START} / {NAV_END} markers — add them under the CLI nav section."
-        )
-    MKDOCS.write_text(pattern.sub(replacement, text), encoding="utf-8")
-
-
 def generate(*, check: bool = False) -> int:
     COMMAND_REGISTRY, _, get_subcommand_parser, parser_available = _import_registry()
     COMMANDS_DIR.mkdir(parents=True, exist_ok=True)
@@ -561,12 +547,22 @@ def generate(*, check: bool = False) -> int:
 
     nav_lines = _nav_yaml_lines(registry_names)
     old_mkdocs = MKDOCS.read_text(encoding="utf-8")
-    _patch_mkdocs(nav_lines)
-    if MKDOCS.read_text(encoding="utf-8") != old_mkdocs:
+    nav_replacement = "\n".join(nav_lines) + "\n"
+    nav_pattern = re.compile(
+        rf"^      {re.escape(NAV_START)}.*?^      {re.escape(NAV_END)}\n",
+        re.MULTILINE | re.DOTALL,
+    )
+    if not nav_pattern.search(old_mkdocs):
+        raise SystemExit(
+            f"{MKDOCS} missing {NAV_START} / {NAV_END} markers — add them under the CLI nav section."
+        )
+    new_mkdocs = nav_pattern.sub(nav_replacement, old_mkdocs)
+    if new_mkdocs != old_mkdocs:
         if check:
             print("stale: mkdocs.yml (CLI nav block)", file=sys.stderr)
             changed += 1
         else:
+            MKDOCS.write_text(new_mkdocs, encoding="utf-8")
             changed += 1
 
     # remove orphan command pages
