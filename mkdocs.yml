@@ -95,6 +95,7 @@ nav:
       - Cross-backend handoff: handoff.md
       - Remote MD runs + live streaming: remote-md-streaming.md
       - Worked examples:
+          - Peptide φ/ψ scan → umbrella PMF (teaching): examples/tria-phi-psi-scan.md
           - MD embedding (solvated peptide): examples/md-embedding-design.md
           - NMA end-to-end (residue → train → MD): examples/nma-workflow.md
           - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md

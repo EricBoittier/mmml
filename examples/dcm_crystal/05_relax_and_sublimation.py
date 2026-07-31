@@ -25,7 +25,6 @@ import os
 import sys
 import warnings
 
-import numpy as np
 
 warnings.filterwarnings("ignore", message=".*crystal system.*")
 
@@ -134,6 +133,19 @@ print("  measured cell should be the larger of the two by roughly the thermal")
 print("  expansion between 0 and 153 K, and it is.")
 print()
 
+# The relaxed ambient structure is the one thing in this ladder that is not
+# simply a reading of deposited data, so it is worth keeping.
+artifacts = os.environ.get("ARTIFACTS_DIR", "").strip()
+if artifacts:
+    relaxed_atoms = atoms.copy()
+    relaxed_atoms.set_cell(ambient.cell)
+    relaxed_atoms.set_positions(ambient.positions)
+    relaxed_atoms.set_pbc(True)
+    out_path = os.path.join(artifacts, "dcm_relaxed_ambient.extxyz")
+    relaxed_atoms.write(out_path)
+    print(f"  relaxed ambient-pressure structure written to {out_path}")
+    print()
+
 volume_error = (ambient.volume_A3 - ref.cell_volume_A3) / ref.cell_volume_A3
 if abs(volume_error) > VOLUME_TOLERANCE_FRAC:
     FAIL.append(
@@ -197,8 +209,8 @@ deposited_err = abs(
 print("-- reading the numbers --")
 print("  The relaxation is what makes this comparison legitimate, and it moves")
 print(
-    f"  the answer from {100.0 * deposited_err:.0f}% off to "
-    f"{100.0 * relaxed_err:.0f}% off. The deposited structure underbinds not"
+    f"  the answer from {100.0 * deposited_err:.1f}% off to "
+    f"{100.0 * relaxed_err:.1f}% off. The deposited structure underbinds not"
 )
 print("  because CGenFF is wrong about cohesion but because the crystal it was")
 print("  handed is squeezed onto its repulsive wall.")

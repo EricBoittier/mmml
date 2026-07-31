@@ -2,7 +2,9 @@
 
 Build small peptides with **CHARMM36 all-atom protein** parameters (PyCHARMM) and evaluate **JAX** bonded or full MM energies with **jax-md** or MMML loaders.
 
-Related: [Tri-alanine water box](trialanine-water-box.md) (bundled CGENFF peptide), [CHARMM CGenFF JAX clone](cgenff-jax-clone.md), [Structure building](cli/structure-building.md).
+Related: [Tri-alanine water box](trialanine-water-box.md) (bundled CGENFF peptide),
+[Peptide φ/ψ teaching exercise](examples/tria-phi-psi-scan.md) (maps, umbrella, other sequences),
+[CHARMM CGenFF JAX clone](cgenff-jax-clone.md), [Structure building](cli/structure-building.md).
 
 ---
 

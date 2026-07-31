@@ -28,7 +28,9 @@ mmml health-check --require-gpu --live
 ## What's here
 
 **Tutorial** — [Tri-alanine water box](../trialanine-water-box.md) is the
-fullest worked path: build, solvate, equilibrate, run.
+fullest worked path: build, solvate, equilibrate, run. For a classroom
+φ/ψ → umbrella sequence (and how to swap peptides), see
+[Peptide φ/ψ scan → umbrella PMF](../examples/tria-phi-psi-scan.md).
 
 **How-to**
 
@@ -45,8 +47,8 @@ fullest worked path: build, solvate, equilibrate, run.
 - [Remote MD runs + live streaming](../remote-md-streaming.md) — watching a
   cluster run from your laptop.
 
-**Worked examples** — five complete studies, from a solvated peptide to a
-reactive Menshutkin free-energy surface.
+**Worked examples** — teaching φ/ψ + umbrella, solvated embedding, NMA/aaa.ama
+training, and reactive Menshutkin free energies.
 
 **Commands** — `md-system`, `md-embedding`, `umbrella-sample`, `health-check`,
 and the MPI helpers.

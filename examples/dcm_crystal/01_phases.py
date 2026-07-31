@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 import warnings
 
-import numpy as np
+
 
 warnings.filterwarnings("ignore", message=".*crystal system.*")
 

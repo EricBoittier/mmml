@@ -1,5 +1,8 @@
 # Trialanine φ/ψ scan — gas then solvent-relaxed
 
+**Docs (full teaching page, other peptides):**
+[Peptide φ/ψ scan → umbrella PMF](../../docs/examples/tria-phi-psi-scan.md)
+
 Central ALA of CGenFF `TRIA` (ACE–ALA₃–CT3):
 
 | Angle | Atoms (0-based) | Definition |

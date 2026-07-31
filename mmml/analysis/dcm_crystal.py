@@ -43,7 +43,6 @@ from mmml.analysis.crystal_contacts import (
     collapse_equivalent,
     element_pair_contacts,
     molecular_frames,
-    normalize_hydrogen_positions,
 )
 from mmml.analysis.lattice_energy import SublimationReference
 

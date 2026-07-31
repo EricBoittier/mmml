@@ -40,7 +40,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
 import numpy as np
 
@@ -721,6 +721,7 @@ class CellRelaxationResult:
     """Outcome of relaxing the cell axes of a rigid-molecule crystal."""
 
     cell: np.ndarray
+    positions: np.ndarray  # (n_atoms, 3), molecules rigidly re-placed in the new cell
     cell_lengths_A: tuple[float, float, float]
     volume_A3: float
     pressure_GPa: float
@@ -870,6 +871,7 @@ def relax_cell_lengths(
     lengths0 = np.linalg.norm(cell0, axis=1)
     return CellRelaxationResult(
         cell=final_cell,
+        positions=_rigid_scaled_positions(pos0, mcell.mol_id, cell0, final_cell),
         cell_lengths_A=(float(lengths[0]), float(lengths[1]), float(lengths[2])),
         volume_A3=final_volume,
         pressure_GPa=float(pressure_GPa),
