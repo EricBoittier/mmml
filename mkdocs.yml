@@ -10,6 +10,8 @@ exclude_docs: |
 
 theme:
   name: material
+  logo: images/logo-mark.svg
+  favicon: images/favicon.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

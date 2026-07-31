@@ -49,6 +49,21 @@ def slurm_extra_string(cfg: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def slurm_exclude_nodes(cfg: dict[str, Any]) -> str:
+    """Nodes to keep jobs off, as ``--slurm-exclude-failed-nodes`` wants them.
+
+    Accepts a list or a comma string. The executor only auto-excludes nodes on
+    Slurm status ``NODE_FAIL``; a node whose GPU is wedged fails jobs with plain
+    ``FAILED``, so retries land right back on it unless it is listed here.
+    """
+    value = slurm_value(cfg, "exclude_nodes", "")
+    if isinstance(value, (list, tuple)):
+        parts = [str(v) for v in value]
+    else:
+        parts = str(value or "").split(",")
+    return ",".join(p.strip() for p in parts if p and p.strip())
+
+
 def gpu_request_resources(cfg: dict[str, Any]) -> dict[str, Any]:
     """Resources that make the executor ask Slurm for a GPU.
 
