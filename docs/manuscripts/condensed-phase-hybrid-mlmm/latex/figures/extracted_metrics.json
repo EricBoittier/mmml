@@ -1,0 +1,62 @@
+{
+  "umbrella_mbar": {
+    "source": "../mmml/artifacts/umbrella/umbrella_summary.json",
+    "n_windows": 20,
+    "n_frames_per_window": 2001,
+    "temperature_K": 300.0,
+    "xi_range_A": [
+      1.3,
+      3.5
+    ],
+    "barrier_kcal_mol": 12.991799869024817,
+    "barrier_dG_kcal_mol": 1.155554545840808,
+    "barrier_xi_A": 2.3421052631578947,
+    "pmf_endpoint_kcal_mol": [
+      0.0,
+      6.720875661860537
+    ]
+  },
+  "dimer_scan_wells_kcal_mol": {
+    "source": "../mmml/results/dimer_scan_campaign/mbd_checkpoint_comparison/scan_results_clean.csv",
+    "DCM_DCM": {
+      "Eint_min": -52.997,
+      "r_A": 2.75,
+      "offset_A": 2.0
+    },
+    "ACE_ACE": {
+      "Eint_min": -24.15,
+      "r_A": 5.3,
+      "offset_A": 0.0
+    },
+    "DCM_TIP3": {
+      "Eint_min": -4.63,
+      "r_A": 2.75,
+      "offset_A": 2.0
+    }
+  },
+  "nve_water_baseline": {
+    "source": "../mmml/workflows/mixed_calculator_sweep/results/summary.csv",
+    "drift_ev": [
+      0.29,
+      -0.143
+    ],
+    "std_ev": [
+      0.095,
+      0.112
+    ],
+    "n_steps": 10000
+  },
+  "adumb_nc_distance": {
+    "source": "../mmml/artifacts/nh3_ch3cl/adumb_nc_distance/",
+    "exit_code": 2,
+    "note": "incomplete WHAM; figure shows UMBCOR histogram + WUNI coverage",
+    "umbcor_n": 122,
+    "umbcor_xi_mean_A": 0.226298057948044,
+    "umbcor_xi_std_A": 0.003860465065580729,
+    "wuni_n_updates": 61,
+    "wuni_max_populated_bins": 2
+  },
+  "density": {
+    "note": "no filled density_g_cm3 metrics in artifacts; smoke tiny has null means"
+  }
+}

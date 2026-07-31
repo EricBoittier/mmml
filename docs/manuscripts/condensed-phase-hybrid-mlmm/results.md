@@ -175,12 +175,16 @@ Artifact roots: `artifacts/pbc_liquid_density_dyn_smoke_tiny/`,
 
 | Block | Ready for PDF? |
 |-------|----------------|
-| Spoof ↔ CHARMM bonded | Yes |
+| Spoof ↔ CHARMM bonded | **Yes** (in LaTeX Table) |
 | Hybrid method description | Yes (Methods) |
-| NVE / cutoff engineering | Nearly (pick one frozen figure) |
-| Liquid ρ vs experiment | Not until **[RUN]** + review |
-| Methane Ewald matrix | Not until **[RUN]** |
+| NVE illustrations | **Yes** (ethanol + mixed_calculator figures in `latex/figures/`) |
+| Rigid dimer scans | **Yes** (DCM/ACE/TIP3 wells + PNGs from `dimer_scan_campaign`) |
+| Gas-phase umbrella/MBAR | **Yes** (barrier \(12.99\pm1.16\) kcal/mol @ ξ≈2.34 Å) |
+| ADUMB WHAM PMF | Status only (exit 2; coverage figure) |
+| Liquid ρ vs experiment | Not until **[RUN]** metrics (`density_g_cm3_*=null`) |
+| Methane Ewald embeddings | Smoke **PASS** matrix in LaTeX (not property claims) |
 | RDF / diffusion | Not until analysis hooks |
 | Timings | Not until benchmark export |
 
-Regenerate and insert numbers via the mapping in [workflow-map.md](workflow-map.md).
+Numeric extract: [latex/figures/extracted_metrics.json](latex/figures/extracted_metrics.json).  
+Regenerate mapping: [workflow-map.md](workflow-map.md).

@@ -21,6 +21,7 @@
 }
 \usepackage{siunitx}
 \usepackage{placeins}
+\graphicspath{{figures/}}
 \sisetup{per-mode=symbol}
 \definecolor{MmBand}{RGB}{210,235,230}
 \definecolor{MmLine}{RGB}{20,120,110}
@@ -494,10 +495,11 @@ keeps fixed CGenFF charges in \(E_{\mathrm{MM}}\). Electrostatic embedding
 \label{sec:results}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Unless noted, panels marked \textbf{(PLACEHOLDER)} will be replaced by figures
-exported from versioned Snakemake workflows under \texttt{workflows/} (artifact
-paths and provenance checklist in Section~\ref{si:provenance}). Numbers already
-available in-repository are filled in; empty cells await frozen production runs.
+Figures and tables below are drawn from regenerable artifacts under
+\texttt{artifacts/}, \texttt{results/}, and the simulation-robustness report
+assets (paths in Section~\ref{si:provenance} and
+\texttt{figures/extracted\_metrics.json}). Panels still awaiting production
+\(\langle\rho\rangle\) export remain marked \textbf{(PLACEHOLDER)}.
 
 \subsection{Bonded MM Parity (jax-mm-spoof)}
 
@@ -505,7 +507,7 @@ The hybrid jax-md path can replace the neural model by a JAX CGenFF bonded
 clone (\texttt{jax\_mm\_spoof}) so that drivers can be certified without a
 trained checkpoint. Bonded energy components for dichloromethane (DCM) and
 acetone (ACO) monomers match native PyCHARMM to machine precision
-(Table~\ref{tab:spoof}; workflow \texttt{jaxmd\_cgenff\_spoof\_smoke}).
+(Table~\ref{tab:spoof}; \texttt{artifacts/jaxmd\_cgenff\_spoof\_smoke/charmm\_compare/}).
 
 \begin{table}[h]
 \caption{Bonded energy parity: jax-mm-spoof versus native CHARMM
@@ -525,68 +527,118 @@ ACO smoke-min & 1.9927947535063575 & 1.9927947535063568 & \(+6.7\times10^{-16}\)
 
 \subsection{Energy Conservation (NVE)}
 
-Integrator and handoff robustness are assessed in the microcanonical ensemble
-by monitoring total-energy drift and high-frequency noise as a function of COM
-cutoff preset and system size
-(\texttt{dcm3\_nve\_cutoff\_sweep}, \texttt{dcm\_nve\_scaling}).
-Figure~\ref{fig:nve} will show representative \(E(t)\) traces for hybrid DCM
-clusters / liquid boxes under jax-md and PyCHARMM.
+Integrator robustness is illustrated by controlled NVE tests
+(Figure~\ref{fig:nve}). For a small ethanol ASE NVE benchmark from the
+simulation-robustness report, total-energy fluctuations drop from
+\(\mathrm{std}(E)=0.0052\,\mathrm{kcal\,mol^{-1}}\) at \(\Delta t=0.5\,\mathrm{fs}\)
+to \(0.0002\,\mathrm{kcal\,mol^{-1}}\) at \(\Delta t=0.1\,\mathrm{fs}\)
+(\(\sim 23\times\)). Mixed water / peptide--water NVE sweeps
+(\texttt{mixed\_calculator\_sweep}) give water-baseline drifts of
+\(+0.29\) and \(-0.14\,\mathrm{eV}\) over \(10^{4}\) steps (std \(\approx 0.10\,\mathrm{eV}\));
+a mis-specified \texttt{mixed\_core\_vdw} setting is catastrophically unstable and
+is retained only as a negative control (Figure~\ref{fig:nve-sweep}).
+
+Hybrid DCM COM-cutoff ranking (\texttt{dcm3\_nve\_cutoff\_sweep}) has completed
+engineering CSV summaries but currently shows unphysically high
+\(\langle T\rangle\) on several presets; those rows are \emph{not} promoted as
+paper conservation metrics until re-frozen.
 
 \begin{figure}[t]
 \centering
-\resizebox{\textwidth}{!}{\placeholderfig{$t$ / ps}{$E_{\mathrm{tot}}$ / eV}}
-\caption{\textbf{(PLACEHOLDER)} NVE total-energy traces for hybrid DCM under
-representative COM cutoff presets (workflow
-\texttt{dcm3\_nve\_cutoff\_sweep}). Report mean drift
-(\(\mathrm{eV\,ps^{-1}}\) or \(\mathrm{kcal\,mol^{-1}\,ps^{-1}}\)) and
-peak-to-peak noise in the accompanying metrics table.}
+\includegraphics[width=0.92\textwidth]{chart_energy_conservation_small.png}
+\caption{NVE total-energy conservation for a small ethanol system at two
+timesteps (simulation-robustness report). Tighter \(\Delta t\) suppresses
+high-frequency \(E_{\mathrm{tot}}\) noise by more than an order of magnitude.}
 \label{fig:nve}
 \end{figure}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{mixed_summary_bars.png}
+\caption{Mixed-calculator NVE sweep summary bars (water and peptide--water
+settings). Stable water baselines contrast with the exploding
+\texttt{mixed\_core\_vdw} control
+(\texttt{workflows/mixed\_calculator\_sweep/}).}
+\label{fig:nve-sweep}
+\end{figure}
+
 \begin{table}[h]
-\caption{\textbf{(PLACEHOLDER)} NVE conservation metrics for hybrid DCM
-(fill from sweep \texttt{metrics.json}).}
+\caption{Selected NVE conservation metrics from available artifacts.}
 \label{tab:nve}
-\begin{tabular}{llcccc}
+\begin{tabular}{llccc}
 \toprule
-Preset & Backend & \(N_{\mathrm{mol}}\) & \(\langle\Delta E\rangle\) & RMS noise & Status \\
+System / setting & Source & Drift & Noise (std) & \(N_{\mathrm{steps}}\) \\
 \midrule
-paper-default & jaxmd & --- & --- & --- & pending \\
-paper-default & pycharmm & --- & --- & --- & pending \\
-tight / loose & jaxmd & --- & --- & --- & pending \\
+Ethanol ASE, \(0.1\,\mathrm{fs}\) & robustness report & --- & \(0.0002\) kcal mol$^{-1}$ & short \\
+Ethanol ASE, \(0.5\,\mathrm{fs}\) & robustness report & --- & \(0.0052\) kcal mol$^{-1}$ & short \\
+Water baseline (seed 1) & mixed\_calculator\_sweep & \(+0.29\) eV & \(0.095\) eV & \(10^{4}\) \\
+Water baseline (seed 2) & mixed\_calculator\_sweep & \(-0.14\) eV & \(0.112\) eV & \(10^{4}\) \\
+DCM liquid NVE (paper preset) & dcm3\_nve\_cutoff\_sweep & --- & --- & pending freeze \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Rigid Dimer and Pair Scans}
 
-Rigid scans along intermolecular separation probe whether the hybrid handoff
-reproduces reference interaction curves outside the fitting set. Primary sources
-are DES-style dimer panels (\texttt{des\_dimer\_pair\_scans}) and solvent-specific
-COM scans. Figure~\ref{fig:scan} contrasts ML-only, MM-only, and hybrid
-\(E(r)\) against a QM / DES reference.
+Rigid intermolecular scans from the dimer-scan campaign
+(\texttt{results/dimer\_scan\_campaign/mbd\_checkpoint\_comparison/}) provide
+interaction curves for DCM, acetone (ACE), and water (TIP3) pairs
+(Figure~\ref{fig:scan}). Relative to the large-\(r\) asymptote, deepest wells on
+the cleaned interaction energy are
+\(\Delta E_{\mathrm{int}}\approx -53.0\,\mathrm{kcal\,mol^{-1}}\) (DCM--DCM at
+\(r=2.75\,\si{\angstrom}\), lateral offset \(2.0\,\si{\angstrom}\)),
+\(-24.1\,\mathrm{kcal\,mol^{-1}}\) (ACE--ACE at \(5.30\,\si{\angstrom}\)), and
+\(-4.63\,\mathrm{kcal\,mol^{-1}}\) (DCM--TIP3 at \(2.75\,\si{\angstrom}\)).
+These panels are electronic-structure reference scans used to design hybrid
+handoffs; hybrid ML/MM overlays from DES pair workflows will be added alongside
+as they are frozen.
 
 \begin{figure}[t]
 \centering
-\resizebox{\textwidth}{!}{\placeholderfig{$r_{\mathrm{COM}}$ / \AA}{$\Delta E$ / kcal\,mol$^{-1}$}}
-\caption{\textbf{(PLACEHOLDER)} Rigid dimer interaction scan: reference versus
-ML, MM, and hybrid (Equation~\ref{eq:dimer-train}) along \(r_{\mathrm{COM}}\).
-Vertical guides mark the default handoff window of Table~\ref{tab:cutoffs}.}
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{DCM_DCM.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{ACE_ACE.png}
+\end{minipage}
+\caption{Rigid dimer interaction scans for DCM--DCM (left) and ACE--ACE (right)
+from the dimer-scan campaign (\texttt{scan\_results\_clean.csv}). Energies are
+interaction values relative to separated monomers.}
 \label{fig:scan}
 \end{figure}
 
-\subsection{Liquid Densities}
+\begin{table}[h]
+\caption{Deepest cleaned interaction wells from the dimer-scan campaign.}
+\label{tab:scan}
+\begin{tabular}{lccc}
+\toprule
+Pair & \(r\) / \si{\angstrom} & Offset / \si{\angstrom} & \(\Delta E_{\mathrm{int}}\) / kcal mol$^{-1}$ \\
+\midrule
+DCM--DCM & 2.75 & 2.0 & $-53.0$ \\
+ACE--ACE & 5.30 & 0.0 & $-24.1$ \\
+DCM--TIP3 & 2.75 & 2.0 & $-4.63$ \\
+TIP3--TIP3 & 3.00 & 0.0 & $-3.00$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Liquid Densities and Methane/Ewald Smokes}
 
 Dichloromethane and acetone liquids are targeted under NPT/NVT hybrid dynamics
-(\texttt{pbc\_liquid\_density\_dyn}); methane at fixed liquid-like density with
-\texttt{lr\_solver: ewald} is covered by \texttt{pbc\_methane\_ewald}.
-Table~\ref{tab:density} and Figure~\ref{fig:density} summarize the planned
-reporting matrix. Experimental liquid densities are listed as orientation only
-until production \(\langle\rho\rangle\) values are frozen.
+(\texttt{pbc\_liquid\_density\_dyn}). Production artifact trees exist, but
+\texttt{density\_g\_cm3\_mean} fields are still \texttt{null} in the available
+receipts, so Table~\ref{tab:density} remains a reporting template.
+Engineering smokes for liquid methane with \texttt{lr\_solver: ewald} and
+mechanical / electrostatic embeddings (DES and So3LR checkpoints) completed
+successfully (Table~\ref{tab:methane-smoke}); density is an NVT input there, not
+an NPT observable.
 
 \begin{table}[h]
 \caption{\textbf{(PLACEHOLDER)} Liquid densities under hybrid MD
-(\(T=\SI{300}{\kelvin}\) unless noted).}
+(\(T=\SI{300}{\kelvin}\) unless noted). \(\langle\rho\rangle\) awaiting
+production metrics export.}
 \label{tab:density}
 \footnotesize
 \begin{tabular}{llccccc}
@@ -597,7 +649,28 @@ Solvent & \(N\) & Ens. & Backend & Emb. & \(\langle\rho\rangle\) & Expt. \\
 DCM & --- & NPT & jaxmd & mech. & --- & \(\sim\)1.33 \\
 DCM & --- & NPT & pycharmm & mech. & --- & \(\sim\)1.33 \\
 ACO & --- & NPT & jaxmd & m./es. & --- & \(\sim\)0.78 \\
-CH\(_4\) & --- & NVT & both & m./es. & (input) & --- \\
+CH\(_4\) & 8 & NVT & both & m./es. & (imposed) & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\caption{Methane/Ewald embedding smoke matrix
+(\texttt{artifacts/pbc\_methane\_ewald\_smoke\_embeddings/}, \(T=100\,\mathrm{K}\),
+\(L=24\,\si{\angstrom}\), 8 methanes). Engineering PASS only---not liquid-property
+claims.}
+\label{tab:methane-smoke}
+\footnotesize
+\begin{tabular}{lllc}
+\toprule
+Checkpoint & Embedding & Backend & Result \\
+\midrule
+DESdimers & mechanical (\texttt{fixed}) & pycharmm & PASS \\
+DESdimers & mechanical & jaxmd & PASS \\
+So3LR epoch0013 & mechanical & pycharmm & PASS \\
+So3LR epoch0013 & mechanical & jaxmd & PASS \\
+So3LR epoch0013 & electrostatic (\texttt{q0}) & pycharmm & PASS \\
+So3LR epoch0013 & electrostatic & jaxmd & PASS \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -606,86 +679,87 @@ CH\(_4\) & --- & NVT & both & m./es. & (input) & --- \\
 \centering
 \resizebox{\textwidth}{!}{\placeholderfig{$t$ / ps}{$\rho$ / g\,cm$^{-3}$}}
 \caption{\textbf{(PLACEHOLDER)} Density time series \(\rho(t)\) for hybrid DCM
-and ACO production windows (\texttt{pbc\_liquid\_density\_dyn}). Horizontal
-lines: experimental liquid densities.}
+and ACO production windows once \texttt{metrics.json} density fields are
+populated by \texttt{pbc\_liquid\_density\_dyn}.}
 \label{fig:density}
 \end{figure}
 
 \subsection{Umbrella Sampling and MBAR Free Energies}
 
-Gas-phase and explicit-solvent free-energy profiles are obtained from
-windowed umbrella sampling\cite{Torrie1977} with MBAR
-reweighting\cite{Shirts2008,Chipot2007,Mobley2014}
-(\texttt{mmml umbrella-sample} / \texttt{umbrella-mbar}). The Menshutkin-type
-\(\mathrm{NH_3}+\mathrm{CH_3Cl}\) reaction coordinate
-\(\xi=r(\mathrm{C{-}Cl})-r(\mathrm{C{-}N})\) is the primary reactive
-example.\cite{Gao1996Menshutkin,Truong1997Menshutkin}
-Figure~\ref{fig:umbrella} will show window histograms and the MBAR PMF;
-Table~\ref{tab:umbrella} records window settings.
+Gas-phase Menshutkin-type umbrella sampling with MBAR
+reweighting\cite{Torrie1977,Shirts2008,Chipot2007,Mobley2014,Gao1996Menshutkin,Truong1997Menshutkin}
+is available from \texttt{artifacts/umbrella/umbrella\_summary.json}
+(Figure~\ref{fig:umbrella}). Twenty windows span
+\(\xi=r(\mathrm{C{-}Cl})-r(\mathrm{C{-}N})\in[1.3,3.5]\,\si{\angstrom}\) at
+\(300\,\mathrm{K}\) with \(2001\) frames per window. The MBAR PMF barrier is
+\(12.99\pm 1.16\,\mathrm{kcal\,mol^{-1}}\) at \(\xi\approx 2.34\,\si{\angstrom}\)
+(relative to the \(\xi=1.3\,\si{\angstrom}\) minimum). Explicit-solvent
+\texttt{hybrid\_jaxmd} TIP3P windows\cite{Jorgensen1983} are present as
+partial runs without a finished MBAR block and are left for a later freeze.
 
 \begin{figure}[t]
 \centering
-\resizebox{\textwidth}{!}{\placeholderfig{$\xi$ / \AA}{$W(\xi)$ / kcal\,mol$^{-1}$}}
-\caption{\textbf{(PLACEHOLDER)} Umbrella-sampling PMF along \(\xi\) for the
-Menshutkin-type complex (gas-phase packed ML and/or hybrid mechanical embedding
-in TIP3P water\cite{Jorgensen1983}). Inset (future): overlapping window
-histograms.}
+\includegraphics[width=0.88\textwidth]{umbrella_pmf_mbar.png}
+\caption{Gas-phase umbrella + MBAR PMF for \(\mathrm{NH_3}+\mathrm{CH_3Cl}\)
+along \(\xi=r(\mathrm{C{-}Cl})-r(\mathrm{C{-}N})\) at \(300\,\mathrm{K}\)
+(20 windows; source \texttt{artifacts/umbrella/}).}
 \label{fig:umbrella}
 \end{figure}
 
 \begin{table}[h]
-\caption{\textbf{(PLACEHOLDER)} Umbrella window summary for the reactive PMF.}
+\caption{Umbrella / MBAR summary for the gas-phase reactive PMF.}
 \label{tab:umbrella}
-\begin{tabular}{cccccc}
+\begin{tabular}{lccccc}
 \toprule
-Engine & \(N_{\mathrm{win}}\) & \(k\) & \(\xi\) range & \(T\) / K & Status \\
+Engine & \(N_{\mathrm{win}}\) & Frames/win & \(\xi\) / \si{\angstrom} & \(T\) / K & Barrier / kcal mol$^{-1}$ \\
 \midrule
-packed\_ml & --- & --- & --- & 300 & pending \\
-hybrid\_jaxmd & --- & --- & --- & 300 & pending \\
+packed\_ml + MBAR & 20 & 2001 & 1.3--3.5 & 300 & \(12.99\pm 1.16\) \\
+hybrid\_jaxmd (TIP3) & --- & --- & --- & 300 & pending MBAR \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{CHARMM ADUMB Paths}
 
-Adaptive umbrella sampling in CHARMM (ADUMB / reaction-coordinate
-WHAM)\cite{Bartels1997,Kumar1992,Brooks2009CHARMM} provides an independent
-free-energy route for hybrid PyCHARMM+MLpot systems. ADUMB is issued through
-pre-dynamics CHARMM lingo; outputs include bias histograms and WHAM profiles
-(\texttt{ADUMB-WUNI.DAT}, \texttt{UMBCOR}). Figure~\ref{fig:adumb} will compare
-ADUMB and MBAR PMFs on a shared CV where both protocols apply.
+Adaptive umbrella sampling in CHARMM (ADUMB)\cite{Bartels1997,Kumar1992,Brooks2009CHARMM}
+is wired for hybrid PyCHARMM+MLpot Menshutkin setups
+(\texttt{examples/m/yaml/adumb\_nc\_distance.yaml}). The archived
+\texttt{adumb\_nc\_distance} job wrote \texttt{ADUMB-WUNI.DAT} and
+\texttt{UMBCOR} but exited with code~2 before a converged WHAM profile; coverage
+stays on only a few of the 40 bins (Figure~\ref{fig:adumb}). We therefore report
+the sampling-status figure rather than a barrier height. A completed ADUMB PMF
+suitable for overlay with Figure~\ref{fig:umbrella} remains a production target.
 
 \begin{figure}[t]
 \centering
-\resizebox{\textwidth}{!}{\placeholderfig{$\xi$ / \AA}{$A(\xi)$ / kcal\,mol$^{-1}$}}
-\caption{\textbf{(PLACEHOLDER)} CHARMM ADUMB free-energy profile for the
-hybrid reactive complex, optionally overlaid with the MBAR PMF of
-Figure~\ref{fig:umbrella}. Workflow / example tree:
-\texttt{examples/m/} and \texttt{workflows/nh3\_ch3cl\_reaction\_path/}.}
+\includegraphics[width=0.95\textwidth]{adumb_nc_distance_status.png}
+\caption{CHARMM ADUMB status for the NC-distance Menshutkin setup
+(\texttt{artifacts/nh3\_ch3cl/adumb\_nc\_distance/}): UMBCOR \(\xi\) histogram
+during heat (left) and ADUMB-WUNI bin coverage versus update index (right).
+The run did not finish cleanly (\texttt{exit\_code=2}); no WHAM barrier is
+claimed.}
 \label{fig:adumb}
 \end{figure}
 
 \subsection{Simulation Matrix}
 
-Table~\ref{tab:matrix} lists the intended production cells for the first frozen
-manuscript bundle. Smoke-level engineering runs already exercise mechanical and
-electrostatic embeddings for methane/Ewald (DES and So3LR checkpoints) but are
-not promoted as property claims.
+Table~\ref{tab:matrix} summarizes what is filled versus pending for the first
+manuscript freeze.
 
 \begin{table}[h]
-\caption{\textbf{(PLACEHOLDER)} Production simulation matrix for regenerable
-Results panels.}
+\caption{Status of regenerable Results panels.}
 \label{tab:matrix}
-\begin{tabular}{lllll}
+\begin{tabular}{llll}
 \toprule
-System & Protocol & Backend & Embedding & Workflow \\
+System & Protocol & Status & Primary source \\
 \midrule
-DCM/ACO bonded & spoof parity & jaxmd & --- & \texttt{jaxmd\_cgenff\_spoof\_smoke} \\
-DCM cluster & NVE cutoffs & both & mech. & \texttt{dcm3\_nve\_cutoff\_sweep} \\
-DCM/ACO liquid & NPT density & both & mech./es. & \texttt{pbc\_liquid\_density\_dyn} \\
-CH\(_4\) liquid & NVT+Ewald & both & mech./es. & \texttt{pbc\_methane\_ewald} \\
-NH\(_3\)/CH\(_3\)Cl & umbrella+MBAR & jaxmd & mech. & umbrella examples \\
-NH\(_3\)/CH\(_3\)Cl & ADUMB & pycharmm & mech. & ADUMB examples \\
+DCM/ACO bonded & spoof parity & \textbf{filled} & \texttt{jaxmd\_cgenff\_spoof\_smoke} \\
+Ethanol / water NVE & conservation & \textbf{filled} & robustness + mixed\_calculator \\
+DCM/ACE/TIP3 pairs & rigid scans & \textbf{filled} & \texttt{dimer\_scan\_campaign} \\
+NH\(_3\)/CH\(_3\)Cl & umbrella+MBAR & \textbf{filled} (gas) & \texttt{artifacts/umbrella/} \\
+NH\(_3\)/CH\(_3\)Cl & ADUMB & status only & \texttt{adumb\_nc\_distance} \\
+CH\(_4\) Ewald & embedding smokes & PASS (eng.) & \texttt{pbc\_methane\_ewald\_smoke\_*} \\
+DCM/ACO liquid & NPT \(\langle\rho\rangle\) & pending metrics & \texttt{pbc\_liquid\_density\_dyn} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -700,10 +774,10 @@ data to condensed-phase dynamics and free-energy protocols. Mechanical and
 electrostatic embeddings select how classical Coulomb charges are obtained
 without changing ML/MM ownership of bonded and short-range many-body terms.
 Shared handoff defaults and portable JSON checkpoints keep training and MD
-numerically aligned across the jax-md and PyCHARMM drivers. The Results panels
-above---energy conservation, rigid scans, liquid densities, umbrella/MBAR, and
-ADUMB---are structured so that each figure or table cites a regenerable
-workflow; placeholders will be replaced as production artifacts are frozen.
+numerically aligned across the jax-md and PyCHARMM drivers. Filled Results panels already include bonded spoof parity, NVE conservation
+illustrations, rigid dimer scans, and a gas-phase umbrella/MBAR PMF; liquid
+\(\langle\rho\rangle\) and a converged ADUMB WHAM profile remain the principal
+outstanding production exports.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{acknowledgement}
@@ -887,22 +961,26 @@ Recommended manuscript aggregator: \texttt{workflows/manuscript\_hybrid\_liquids
 writing \texttt{artifacts/manuscript\_hybrid\_liquids/<fig\_or\_table\_id>/}.
 
 \begin{table}[h]
-\caption{Figure / table \(\leftrightarrow\) workflow map (main text).}
+\caption{Figure / table \(\leftrightarrow\) artifact map (main text).}
 \label{tab:si-map}
-\begin{tabular}{lll}
+\begin{tabular}{llp{5.2cm}}
 \toprule
-Panel & Content & Workflow \\
+Panel & Content & Source \\
 \midrule
-Fig.~\ref{fig:nve} & NVE traces & \texttt{dcm3\_nve\_cutoff\_sweep} \\
-Fig.~\ref{fig:scan} & Rigid scans & \texttt{des\_dimer\_pair\_scans} \\
-Fig.~\ref{fig:density} & \(\rho(t)\) & \texttt{pbc\_liquid\_density\_dyn} \\
-Fig.~\ref{fig:umbrella} & Umbrella PMF & umbrella examples / Menshutkin \\
-Fig.~\ref{fig:adumb} & ADUMB profile & ADUMB examples / \texttt{nh3\_ch3cl} \\
+Fig.~\ref{fig:nve} & Ethanol NVE & \texttt{docs/robustness-report-assets/} \\
+Fig.~\ref{fig:nve-sweep} & Mixed NVE bars & \texttt{mixed\_calculator\_sweep/results/} \\
+Fig.~\ref{fig:scan} & DCM/ACE scans & \texttt{results/dimer\_scan\_campaign/} \\
+Fig.~\ref{fig:umbrella} & MBAR PMF & \texttt{artifacts/umbrella/} \\
+Fig.~\ref{fig:adumb} & ADUMB status & \texttt{artifacts/nh3\_ch3cl/adumb\_nc\_distance/} \\
+Fig.~\ref{fig:density} & \(\rho(t)\) & pending \texttt{pbc\_liquid\_density\_dyn} \\
 Table~\ref{tab:spoof} & Spoof parity & \texttt{jaxmd\_cgenff\_spoof\_smoke} \\
-Table~\ref{tab:density} & \(\langle\rho\rangle\) & density / methane workflows \\
+Table~\ref{tab:methane-smoke} & CH\(_4\) embeddings & \texttt{pbc\_methane\_ewald\_smoke\_embeddings} \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+Copied PNG/PDF panels and a machine-readable summary live under
+\texttt{latex/figures/} (\texttt{extracted\_metrics.json}).
 
 \FloatBarrier
 
