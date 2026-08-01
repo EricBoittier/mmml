@@ -62,11 +62,24 @@ KCAL_TO_EV = ase.units.kcal / ase.units.mol
 _DATA_DIR = Path(__file__).resolve().parent / "charmm"
 DEF_PRM_PATH = _DATA_DIR / "par_all36_cgenff.prm"
 DEF_RTF_PATH = _DATA_DIR / "top_all36_cgenff.rtf"
-# CHARMM stream files merged on top of CGenFF. toppar_water_ions.str carries the
-# monatomic ion residues (CLA/SOD/POT/LIT/CAL/MG/...) that CGenFF has no
-# template for -- ~2% of DES dimer monomer slots. The merge is additive, so
-# nothing CGenFF already typed changes. See docs/des-so3lr-dimers.md.
-DEF_EXTRA_TOPPAR: tuple[Path, ...] = (_DATA_DIR / "toppar_water_ions.str",)
+# CHARMM stream files merged on top of CGenFF, for chemistry CGenFF has no
+# template for. The merge is additive, so nothing CGenFF already typed changes.
+# See docs/des-so3lr-dimers.md.
+#   toppar_water_ions.str            -- monatomic ions (CLA/SOD/POT/LIT/CAL/MG/...)
+#   toppar_dum_noble_gases.str       -- HE1/NE1 (and a DUM pseudo-atom, ignored)
+#   toppar_noble_gases_literature.str -- AR1/KR1/XE1, **not a CHARMM file**
+#
+# CHARMM ships no Ar/Kr/Xe residue anywhere, so that last file carries standard
+# literature 12-6 parameters instead. They were not fitted alongside CGenFF and
+# their cross terms are unvalidated -- noble-gas results are provisional. The
+# file's own header records the source values and the conversion. Pass
+# extra_toppar=() for the bare CGenFF reference, or drop that one entry to keep
+# the CHARMM-only set.
+DEF_EXTRA_TOPPAR: tuple[Path, ...] = (
+    _DATA_DIR / "toppar_water_ions.str",
+    _DATA_DIR / "toppar_dum_noble_gases.str",
+    _DATA_DIR / "toppar_noble_gases_literature.str",
+)
 
 # Warnings only print once from the main process, not from every spawn worker.
 _IS_WORKER = mp.current_process().name != "MainProcess"
@@ -140,7 +153,9 @@ def load_cgenff_nonbonded_table(
             f"[cgenff] {len(bad_types)} atom types parsed with zero sigma or epsilon: "
             f"{bad_types[:10]}"
         )
-        print("  (LPH is a lone-pair pseudo-atom with zero LJ by design -- expected)")
+        print(
+            "  (LPH lone pairs and DUM dummy sites have zero LJ by design -- expected)"
+        )
 
     return nb_map, sig_arr, eps_arr
 
@@ -174,6 +189,12 @@ def parse_mass_element_map(rtf_path: Path) -> dict[str, int]:
             try:
                 mass = float(parts[3])
             except ValueError:
+                continue
+            # Massless pseudo-atoms (DUM in toppar_dum_noble_gases.str, and
+            # similar dummy sites elsewhere) are not elements. Without this they
+            # fall through the nearest-mass fallback below and land on carbon,
+            # which would register a bogus single-carbon composition.
+            if mass < 0.5:
                 continue
             explicit = len(parts) >= 5 and parts[4].isalpha() and len(parts[4]) <= 2
             if explicit:
@@ -378,19 +399,35 @@ def load_reference(
     )
     for extra in extra_paths:
         e_res, e_comp, _ = load_cgenff_rtf_residues(extra, nb_map, type_to_z)
+        idx_to_type = {v: k for k, v in nb_map.items()}
         installed = set()
         for name, tmpl in e_res.items():
             if name in residues:
                 continue  # CGenFF wins; TIP3 is defined in both
+            # Skip templates built on pseudo-atoms with no element (DUM in
+            # toppar_dum_noble_gases.str). load_cgenff_rtf_residues falls back
+            # to carbon for an unmapped atom type, which would register RESI DUM
+            # as a lone carbon and let it match real single-carbon fragments.
+            if any(idx_to_type.get(int(i)) not in type_to_z
+                   for i in tmpl["type_indices"]):
+                continue
             residues[name] = tmpl
             installed.add(name)
         # Only register compositions for templates we actually installed --
         # otherwise a name CGenFF already owns could be reachable under the
         # stream file's composition while resolving to CGenFF's geometry.
         for comp_key, names in e_comp.items():
+            keep = [n for n in names if n in installed]
+            if not keep:
+                # Do not create the key at all. An empty candidate list makes
+                # match_cgenff_template's composition_map[key][0] raise
+                # IndexError, which assign_frame_cgenff does not catch -- it
+                # only handles KeyError/ValueError -- so a skipped template
+                # would crash the run instead of reporting "unmapped".
+                continue
             existing = composition_map.setdefault(comp_key, [])
-            for name in names:
-                if name in installed and name not in existing:
+            for name in keep:
+                if name not in existing:
                     existing.append(name)
     collision_map = {k: v for k, v in composition_map.items() if len(v) > 1}
 

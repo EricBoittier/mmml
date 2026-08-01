@@ -196,6 +196,53 @@ def _filter_pairs_by_com_min_jax(
     return mask & (r >= mm_r_min)
 
 
+@partial(jax.jit, static_argnames=("neighbor_fn", "filter_fn", "fractional_coordinates", "mm_r_min_val", "n_monomers"))
+def _optimized_jax_md_update_gpu(
+    positions,
+    nbrs,
+    neighbor_fn,
+    filter_fn,
+    monomer_id_jnp,
+    box,
+    pbc_cell_val,
+    mm_r_min_val,
+    n_monomers,
+    fractional_coordinates,
+):
+    kwargs = {} if (box is None or not fractional_coordinates) else {"box": box}
+    nbrs = neighbor_fn.update(positions, **kwargs)
+    pair_i, pair_j, mask = filter_fn(nbrs.idx)
+    
+    if mm_r_min_val is not None:
+        R_for_filter = positions
+        pbc_for_filter = None
+        cell_src = box if box is not None else pbc_cell_val
+        if cell_src is not None:
+            if cell_src.ndim == 0:
+                cell_3x3 = jnp.diag(jnp.full((3,), cell_src))
+            elif cell_src.ndim == 1:
+                cell_3x3 = jnp.diag(cell_src)
+            else:
+                cell_3x3 = cell_src
+            if fractional_coordinates:
+                R_for_filter = positions @ cell_3x3
+            pbc_for_filter = cell_3x3
+            
+        mask = _filter_pairs_by_com_min_jax(
+            R_for_filter,
+            pair_i,
+            pair_j,
+            mask,
+            monomer_id_jnp,
+            mm_r_min_val,
+            n_monomers,
+            pbc_cell=pbc_for_filter,
+        )
+        
+    pair_idx = jnp.stack([pair_i, pair_j], axis=1)
+    return nbrs, pair_idx, mask
+
+
 def format_mm_pair_update_stats_summary(stats: dict) -> str:
     """One-line neighbor-list cache summary for jaxmd suite logs."""
     calls = int(stats.get("calls", 0))
@@ -1853,17 +1900,29 @@ def build_mm_energy_forces_fn(
             NVE force–energy preflight rescue).
             """
             positions_jax = positions if hasattr(positions, "__dlpack_device__") else None
-            _nbr_debug = debug
             _pair_stats["calls"] += 1
 
             if _use_jax_md_nbrs:
                 # Optimized GPU JAX-MD path to avoid host synchronization of coordinates
                 R = positions
                 nbrs = _nbrs[0]
-                kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
+                box_jnp = jnp.asarray(box) if box is not None else None
+                pbc_cell_jnp = jnp.asarray(pbc_cell) if pbc_cell is not None else None
+                mm_r_min_val = float(mm_r_min) if mm_r_min is not None else None
                 
                 try:
-                    nbrs = nbrs.update(R, **kwargs)
+                    nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
+                        R,
+                        nbrs,
+                        _neighbor_fn_cell[0],
+                        _filter_fn_cell[0],
+                        _monomer_id_jnp,
+                        box_jnp,
+                        pbc_cell_jnp,
+                        mm_r_min_val,
+                        int(n_monomers),
+                        bool(fractional_coordinates),
+                    )
                 except Exception as e:
                     if _nbr_debug:
                         print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
@@ -1904,8 +1963,19 @@ def build_mm_energy_forces_fn(
                         _pair_stats["capacity_multiplier"] = float(next_multiplier)
                         
                     try:
-                        nbrs = _neighbor_fn_cell[0].allocate(R, **kwargs)
-                        nbrs = nbrs.update(R, **kwargs)
+                        nbrs_alloc = _neighbor_fn_cell[0].allocate(R, box=box_jnp) if (box_jnp is not None and fractional_coordinates) else _neighbor_fn_cell[0].allocate(R)
+                        nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
+                            R,
+                            nbrs_alloc,
+                            _neighbor_fn_cell[0],
+                            _filter_fn_cell[0],
+                            _monomer_id_jnp,
+                            box_jnp,
+                            pbc_cell_jnp,
+                            mm_r_min_val,
+                            int(n_monomers),
+                            bool(fractional_coordinates),
+                        )
                     except Exception as e:
                         if _nbr_debug:
                             print(
@@ -1928,39 +1998,10 @@ def build_mm_energy_forces_fn(
                 
                 _nbrs[0] = nbrs
                 
-                pair_i, pair_j, mask = _filter_fn_cell[0](nbrs.idx)
-                
                 if mm_r_min is not None:
                     _pair_stats["com_filter_calls"] += 1
-                    # Match the host path: COM filter always sees Cartesian R.
-                    R_for_filter = R
-                    pbc_for_filter = None
-                    cell_src = box if box is not None else pbc_cell
-                    if cell_src is not None:
-                        cell = jnp.asarray(cell_src)
-                        if cell.ndim == 0:
-                            cell_3x3 = jnp.diag(jnp.full((3,), cell))
-                        elif cell.ndim == 1:
-                            cell_3x3 = jnp.diag(cell)
-                        else:
-                            cell_3x3 = cell
-                        if fractional_coordinates:
-                            R_for_filter = R @ cell_3x3
-                        pbc_for_filter = cell_3x3
-
-                    mask = _filter_pairs_by_com_min_jax(
-                        R_for_filter,
-                        pair_i,
-                        pair_j,
-                        mask,
-                        _monomer_id_jnp,
-                        float(mm_r_min),
-                        int(n_monomers),
-                        pbc_cell=pbc_for_filter,
-                    )
                 
-                pair_idx = jnp.stack([pair_i, pair_j], axis=1)
-                pair_mask = jnp.asarray(mask, dtype=ml_jnp_dtype)
+                pair_mask = jnp.asarray(pair_mask, dtype=ml_jnp_dtype)
                 
                 _pair_idx_cell[0] = pair_idx
                 _pair_mask_cell[0] = pair_mask
