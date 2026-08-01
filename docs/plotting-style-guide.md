@@ -355,6 +355,62 @@ and the rendered example in
 [`docs/plot-style-gallery.md`](plot-style-gallery.md) "ASE Atoms as an
 overlay on a data plot".
 
+## POV-Ray liquid snapshots (PSF bonds)
+
+For **periodic liquid / crystal boxes** where covalent-radius bond inference
+will invent intermolecular sticks (or miss CHARMM topology), render with
+**ASE → POV-Ray** and pass **PSF `!NBOND` pairs only** as `bondatoms`. Do not
+infer bonds from distances for these figures.
+
+Reference pipeline:
+[`scripts/plot_liquid_structure_validation.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/plot_liquid_structure_validation.py)
+(analysis + ICML summary figure) and the campaign renderer under
+`artifacts/lj_scales/structure_analysis/make_structure_plots.py` (POV-Ray
+call). Example assets live in
+[`docs/images/structures/`](images/structures/) (`dcm120_*_psf_bonds*.png`,
+`validation_summary.png`).
+
+Hard rules for liquid POV-Ray panels:
+
+- **Bonds = topology.** Read pairs from the PSF (`read_psf_atoms_and_bonds` /
+  `!NBOND`). Pass them to ASE as
+  `povray_settings={"bondatoms": [(i, j, (0, 0, 0)), ...]}`. Never use
+  distance-based `infer_bonds` for the render.
+- **Molecular MIC wrap before render.** Atom-wrap alone can split a molecule
+  across a face so a topological bond looks broken. Rebuild each residue so
+  intramolecular bonds are contiguous (MIC relative to a seed atom / COM),
+  then translate the molecule's centroid back into the cell. The same idea
+  as `unwrap_molecules` in `mmml.analysis.lattice_energy`, but prefer the
+  PSF residue graph when you have one.
+- **jmol colors + scaled covalent radii** for atom spheres
+  (`ase.data.colors.jmol_colors`, `radii_scale * covalent_radii`) — same
+  semantic element coloring as `plot_rdfs`.
+- **Orthographic camera**, modest `canvas_width` (≈1200–1400 for a box;
+  smaller for a monomer inset). Show the unit cell (`show_unit_cell=1`) on
+  the liquid panel; omit it on a monomer close-up.
+- **conda `povray` include path.** The jaxphyscharmm build often fails to
+  find `colors.inc` unless you pass `+L$CONDA_PREFIX/share/povray-3.7/include`.
+  Wrap the binary (see `artifacts/lj_scales/structure_analysis/povray_wrap.sh`)
+  and point ASE at that wrapper via `pov.render(povray_executable=...)`.
+
+When validating an MD approach, **don't leave the POV-Ray stills as orphan
+PNGs** — combine them with the quantities that actually validate the run
+(thermo time series + marginals, PSF bond-health over time, RDFs, bond/angle
+distributions) into one summary figure. Prefer
+`apply_plot_style("icml")`, `timeseries_with_distribution` for each thermo
+trace, `legend_outside(...)` (never `loc="best"`), shared axis labels on
+RDF grids, and `assert_no_text_overlap(fig)` before `savefig`. The house
+example is [`docs/images/structures/validation_summary.png`](images/structures/validation_summary.png)
+from `scripts/plot_liquid_structure_validation.py`:
+
+![DCM:120 liquid NVT validation summary — POV-Ray snapshots, thermo time series with marginals, PSF bond health, RDFs, and angle distributions](images/structures/validation_summary.png)
+
+Standalone POV panels (PSF bonds only; molecular MIC wrap):
+
+| Liquid (t≈2 ps) | Top view | Monomer |
+| --- | --- | --- |
+| ![liquid](images/structures/dcm120_liquid_psf_bonds.png) | ![top](images/structures/dcm120_liquid_psf_bonds_top.png) | ![monomer](images/structures/dcm_monomer_psf_bonds.png) |
+
 ## Colormaps
 
 Prefer the [`cmap`](https://cmap-docs.readthedocs.io) library (`uv add
