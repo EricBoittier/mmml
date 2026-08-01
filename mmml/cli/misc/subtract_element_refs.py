@@ -58,10 +58,38 @@ def fit_element_refs(E, Z):
     return zs, coef, counts
 
 
+def fit_species_refs(E, res_name):
+    """Per-dimer-species mean energy. Returns (labels, residual).
+
+    Element counts cannot separate isomers, and on the DES set the per-species
+    constants hold **85.6%** of the variance that survives element-ref
+    subtraction (std 12.82 -> 4.87 kcal/mol over 570 species pairs). Those
+    constants are invisible to the force loss -- forces are dE/dR, so a
+    per-species offset has zero gradient -- which is why a force-dominated fit
+    leaves them unlearned and lands at roughly a constant predictor.
+    """
+    E = np.asarray(E, dtype=np.float64).ravel()
+    labels = np.array(["+".join(sorted(map(str, r))) for r in np.asarray(res_name)])
+    out = E.copy()
+    means = {}
+    for lab in np.unique(labels):
+        m = labels == lab
+        means[lab] = float(E[m].mean())
+        out[m] = E[m] - means[lab]
+    return labels, out, means
+
+
 def _parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--in", dest="inp", required=True, type=Path)
     p.add_argument("--out", dest="out", required=True, type=Path)
+    p.add_argument("--per-species", action="store_true",
+                   help="ALSO remove a per-dimer-species mean after the "
+                        "per-element refs. Leaves only the geometry-dependent "
+                        "signal, which is what forces constrain and what a "
+                        "force field is actually for. NOTE this changes what "
+                        "the energy metric means: the model no longer predicts "
+                        "absolute energies across species, only within one.")
     p.add_argument("--min-variance-explained", type=float, default=0.99,
                    help="abort if the per-element fit explains less than this "
                         "fraction of the energy variance (default 0.99); below "
@@ -107,6 +135,21 @@ def main(argv=None) -> int:
     if args.dry_run:
         print("\n(dry run: nothing written)")
         return 0
+
+    if args.per_species:
+        if "cgenff_res_name" not in data:
+            raise SystemExit("--per-species needs cgenff_res_name in the npz")
+        labels, residual2, means = fit_species_refs(residual, data["cgenff_res_name"])
+        print(f"\nper-species refs over {len(means)} dimer species:")
+        print(f"  before : std={residual.std()*EV_TO_KCAL_MOL:8.3f} kcal/mol")
+        print(f"  after  : std={residual2.std()*EV_TO_KCAL_MOL:8.3f} kcal/mol")
+        print(f"  -> species constants held "
+              f"{100*(1-residual2.var()/residual.var()):.2f}% of the remainder")
+        residual = residual2
+        data["species_ref_label"] = np.array(sorted(means), dtype=object)
+        data["species_ref_E_eV"] = np.array(
+            [means[k] for k in sorted(means)], dtype=np.float64
+        )
 
     data["E"] = residual.reshape(-1, 1)
     # Keep the fit so the absolute scale is always recoverable.
