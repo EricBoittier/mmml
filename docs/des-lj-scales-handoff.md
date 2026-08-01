@@ -593,6 +593,77 @@ gas at 298 K, so a 298 K "liquid" ammonia box would be meaningless.
 It has not been run: only the TIP3 box exists so far, and no MD has been driven
 with the trained scales.
 
+> The three ΔH_vap targets above (water 10.51, methanol 8.95, ammonia 5.58
+> kcal/mol) are **recalled, not verified against a cited source**. Treat them as
+> placeholders until checked — see §5.6, which is deliberate about this.
+
+### 5.6 Which species can actually be validated, and where
+
+![Reference availability and accessible density](images/des-so3lr-dimers/reference_state_points.png)
+
+"Run every species and compare the density" is not a plan: of the 94 CGenFF
+residues in the DES set, most have no usable liquid-phase reference at 298 K /
+1 atm. `mmml/data/reference_state_points.py` classifies 55 of them (the other 39
+carry <60 frames each):
+
+| Class | Species | Frames | What it means |
+|---|---:|---:|---|
+| **NIST reference EOS** | 15 | 8,304 | density at **any** (T, P) to reference accuracy |
+| Liquid at 298 K | 23 | 3,029 | one tabulated density; needs a per-species lookup |
+| Gas at 298 K | 4 | 628 | must run below the NBP, or at elevated pressure |
+| Solid at 298 K | 3 | 585 | must run above the melting point |
+| **Bare ion** | 10 | 1,279 | **no pure-liquid reference exists, even in principle** |
+
+The ion row is the important one: a box of chloride ions is not a physical
+system, so ~1,300 frames of the training set back species that can only ever be
+validated in solution (hydration free energy, or a salt solution at known
+molality) — a different and far more expensive experiment. `AMM1` generalises to
+a rule: a "liquid box" at a temperature above the species' boiling point is a
+*gas* box, and its density means nothing.
+
+**No density in this table is populated from memory.** `StatePoint` raises if a
+density is recorded without `verified=True`, so the module refuses to carry a
+plausible-looking recalled number — the failure mode from
+[[unit-constant-bugs-in-mmml]], where a self-consistent wrong constant survives
+indefinitely. The 11 values currently present were fetched from the NIST
+Chemistry WebBook this session.
+
+#### The cheapest strong test is argon, not water
+
+Argon and krypton are **pure Lennard-Jones** — one site, no charges, no
+intramolecular terms. If a trained σ/ε scale for the `AR` type is wrong, argon's
+density is wrong and there is nothing else to blame; water's density confounds
+LJ with electrostatics, geometry and the ML term. Our noble-gas parameters are
+also the *literature* values added in §3, not CGenFF, so this tests them
+directly.
+
+They also answer the "somewhere less dense" question. Along the saturation curve
+argon runs **0.0208 → 0.0103 atoms/Å³** (90 → 150 K, T_c = 150.86 K) and krypton
+**0.0174 → 0.0116** (120 → 195 K) — near T_c, argon is **10× sparser than
+water** (0.100 atoms/Å³), with a reference EOS at every point. That is a density
+*sweep* against reference data rather than a single number, in the regime where
+the LJ tail dominates and MIC truncation error is smallest — which matters given
+that `lr_solver: mic` is mandatory for trained LJ (§3).
+
+Number density, not mass density, is the right axis: krypton at 120 K is
+2.41 g/cm³ — *denser than water by mass* — while being 6× sparser in atoms/Å³.
+Comparing g/cm³ across species with different molar masses mostly compares molar
+masses.
+
+Suggested first runs, cheapest first:
+
+1. **AR1** at 90 / 120 / 140 / 150 K on the saturation curve — single-site, small
+   boxes, reference EOS, isolates the LJ term completely.
+2. **KR1**, **XE1** — same, and they check whether the σ/ε scales transfer
+   across the noble-gas series.
+3. **TIP3** at 298 K / 1 atm — the headline number, but the most confounded.
+4. **MEOH**, **BENZ** — NIST EOS, and they bring real chemistry back in.
+
+`runnable_at(T, P)` returns `(confirmed, unknown)` rather than one list: most
+rows carry no melting point, so below ambient the module cannot tell a liquid
+from a frozen solid and says so instead of guessing. An earlier version silently
+reported water and benzene as runnable at 90 K.
+
 ---
 
 ## 6. Suggested order
