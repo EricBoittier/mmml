@@ -279,9 +279,9 @@ des_dimers_raw.npz
    │  mmml prepare-mm-dataset                  (12b)  types, charges, res_name
    ▼
 des_dimers_cgenff_all.npz
-   │  scripts/filter_mm_dataset_by_residue.py  (12c)  --top 40
+   │  scripts/filter_mm_dataset_by_residue.py  (12c)  --top 50
    ▼
-des_dimers_cgenff_top40.npz  ──▶  05_train.sh  learn_mm_lj_scales
+des_dimers_cgenff_top50.npz  ──▶  05_train.sh  learn_mm_lj_scales
 ```
 
 ```bash
@@ -294,7 +294,7 @@ LJ_DES=1 LJ_DEVICE=gpu bash examples/lj_scales/05_train.sh
 |---|---|---|
 | `LJ_DES_H5` | `~/qcell/qcell_dimers.h5` | source HDF5 |
 | `LJ_DES_PAD` | `34` | the measured DES maximum, **not** the ladder's usual 20 |
-| `LJ_DES_TOP_RESIDUES` | `40` | residue cut (below) |
+| `LJ_DES_TOP_RESIDUES` | `50` | residue cut (below) |
 | `LJ_DES_ALL_CHARGES` | `0` | `1` admits net-charged (ion) dimers |
 
 **Units need no conversion.** FHI-aims writes eV and eV/Å, which is what the
@@ -309,34 +309,41 @@ Yield against the cut, from the scan (sampled frames ×20 ≈ full):
 
 | top-N residues | frames | ≈ full | % of typeable | LJ types | thinnest type |
 |---:|---:|---:|---:|---:|---:|
-| 20 | 3,049 | 61,000 | 46.0% | 32 | 2,600 |
-| 25 | 3,616 | 72,300 | 54.5% | 41 | 2,240 |
-| 30 | 4,009 | 80,200 | 60.4% | 47 | 2,120 |
-| **40** | **4,750** | **95,000** | **71.6%** | **58** | **1,440** |
-| 50 | 5,384 | 107,700 | 81.1% | 65 | 1,160 |
-| 60 | 5,894 | 117,900 | 88.8% | 74 | 920 |
-| 89 (all) | 6,635 | 132,700 | 100% | 96 | **140** |
+| 30 | 4,485 | 89,700 | 59.1% | 46 | 2,400 |
+| 40 | 5,269 | 105,400 | 69.4% | 57 | 1,460 |
+| **50** | **6,017** | **120,300** | **79.2%** | **69** | **1,420** |
+| 60 | 6,601 | 132,000 | 86.9% | 71 | 1,100 |
+| 94 (all) | 7,595 | 151,900 | 100% | 101 | **140** |
 
-**40 is the recommended default.** It keeps 72% of the usable frames and 58 LJ
-types while holding every one of them above ~1,400 frames. Taking all 89
-residues buys 38 more types but drops the sampling floor by an order of
-magnitude — those types are exactly the ones that will drift.
+**50 is the recommended default.** It keeps 79% of the usable frames and 69 LJ
+types while holding every one of them above ~1,400 frames — the *same* floor a
+40-residue cut gives, for 10 points more data and 12 more types, so 40 is simply
+dominated. At 60 the floor starts eroding; taking all 94 buys 32 more types but
+drops the floor by an order of magnitude, and those are exactly the types that
+will drift.
 
 A frame is kept only if **both** monomers are in the allowlist, which is why the
 frame yield falls faster than the residue count.
 
 ### What to watch
 
-1. **Water dominance.** `TIP3` is in 57% of typeable frames — more than five
+1. **Water dominance.** `TIP3` is in 59% of typeable frames — nearly seven
    times the next residue. Every aggregate error metric on this set is
    substantially a water metric. Step 12 prints the TIP3 share so it cannot
    surprise you at eval time; consider subsampling or a per-pair breakdown.
-2. **Ion frames are off by default.** The merged ion residues only occur in
-   net-charged dimers, and step 12a filters to neutral (matching
-   `~/trainDES/train.py`). `LJ_DES_ALL_CHARGES=1` admits them — a separate
+2. **Noble gases are in by default; ions are not.** Noble-gas dimers are
+   neutral, so they flow straight into training — which is why merging them
+   moved coverage 5 points where the ions moved it 3. The merged *ion* residues
+   only occur in net-charged dimers, and step 12a filters to neutral (matching
+   `~/trainDES/train.py`); `LJ_DES_ALL_CHARGES=1` admits them, a separate
    decision from having the templates, and one that changes what the Coulomb
    baseline has to represent.
-3. **`lr_solver: mic`.** Training LJ requires it; under `ewald` the LJ term is
+3. **Noble-gas LJ is literature, not CGenFF.** `AR`/`KR`/`XE` σ and ε were
+   never fitted with CGenFF and their cross terms are unvalidated. They are
+   well-sampled enough to move under training — `AR1` is the 7th-ranked residue
+   — so they *will* absorb error. Treat a fitted noble-gas scale as a
+   diagnostic, not a result.
+4. **`lr_solver: mic`.** Training LJ requires it; under `ewald` the LJ term is
    removed from the hybrid energy and there is nothing to differentiate.
 
 !!! warning "Dormant landmine in the SMILES fallback"
@@ -344,8 +351,8 @@ frame yield falls faster than the residue count.
     `[Kr]`, `[Xe]`, `[Ca+2]`, `[Li+]` and `[F-]` onto **`TIP3`**, and `C#N` onto
     `DMAM`. Those are placeholders, not chemistry. They are currently **inert** —
     `assign_frame_cgenff` calls `match_cgenff_template` without
-    `canonical_smiles`, so only the composition path runs, and noble gases and
-    ions correctly fail as "no template". Anything that starts passing SMILES
+    `canonical_smiles`, so only the composition path runs and the merged
+    residues above are what actually match. Anything that starts passing SMILES
     would silently give argon water's σ/ε. Fix the map before enabling that
     path on this dataset, where noble gases and bare ions are ~5% of frames.
 

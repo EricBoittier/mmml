@@ -23,7 +23,7 @@ Background: [SO3LR / DES dimers — chemical space & LJ coverage](des-so3lr-dime
 | CGenFF assignment | `mmml prepare-mm-dataset` | run on that slice; now also emits `cgenff_res_name` |
 | Residue-priority cut | [`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/filter_mm_dataset_by_residue.py) | run on that slice |
 | Ladder wiring | `LJ_DES=1`, [`examples/lj_scales/12_des_dataset.sh`](https://github.com/EricBoittier/mmml/blob/main/examples/lj_scales/12_des_dataset.sh) | env resolves; full step not run |
-| Ion residues | `DEF_EXTRA_TOPPAR` → `toppar_water_ions.str` | merged, regression-checked |
+| Extra residues (ions + noble gases) | `DEF_EXTRA_TOPPAR` → 3 stream files | merged, regression-checked; 32.9% → **40.9%** coverage |
 
 ```bash
 export LJ_DES=1
@@ -159,11 +159,11 @@ not evidence about σ/ε. Do not read the scales before the loss has plateaued.
 
 ### The training set is not "the DES dimers"
 
-Only **35.8%** of frames survive CGenFF assignment, and the survivors are not a
-random sample. What is systematically absent:
+Only **40.9%** of frames survive assignment, and the survivors are not a random
+sample. What is systematically absent:
 
-- **Noble gases** (He, Ne, Ar, Kr, Xe — 22,131 monomer occurrences) and the
-  **halides F⁻, Br⁻, I⁻** (10,219). No CHARMM residue exists for any of them.
+- **The halides F⁻, Br⁻, I⁻** (10,219 monomer occurrences). `toppar_water_ions.str`
+  carries chloride only, and no CHARMM residue exists for the other three.
 - **H₂S, H₂S₂, CH₂O** and other small molecules CGenFF does not cover.
 - **One isomer per colliding composition.** The template lookup is
   composition-keyed and takes `composition_map[key][0]`. Where two residues
@@ -176,9 +176,35 @@ random sample. What is systematically absent:
 Any statement of the form "the model is accurate on DES chemistry" is really a
 statement about this filtered subset.
 
+### The noble-gas parameters are not CGenFF, and they are well sampled
+
+Reaching 40.9% required merging three stream files on top of CGenFF. Two are
+CHARMM's own (`toppar_water_ions.str`, `toppar_dum_noble_gases.str`). The third,
+`toppar_noble_gases_literature.str`, is **mine** — CHARMM ships no Ar/Kr/Xe
+residue anywhere, so it carries standard literature 12-6 values (Ar σ 3.405 Å /
+ε 0.238 kcal/mol; Kr 3.600 / 0.340; Xe 4.100 / 0.439) converted to CHARMM's
+convention.
+
+Why this matters more than a footnote: these residues are **not rare**. `AR1`
+ranks 7th of 94 by frame count, `HE1` 15th, `NE1` 20th, `KR1` 25th, `XE1` 26th
+— all inside the default top-50 cut, and noble-gas dimers are neutral so they
+enter training by default (unlike the ions). So five well-sampled residues in
+the fit carry σ/ε that were never fitted alongside CGenFF and whose cross terms
+with CGenFF types have never been validated. Under a trainable-scale fit they
+will happily absorb error from elsewhere.
+
+The one check available is internal consistency: σ and ε both rise
+monotonically across the combined He→Xe series despite spanning two sources.
+The alternative in-tree values (BMS, `toppar/non_charmm/par_bms_dec03.inp`)
+fail it outright — argon ε smaller than neon ε, helium ε off by 51× from
+CHARMM's — which is why they were not used. Passing a consistency check is not
+the same as being right. **Treat a fitted noble-gas scale as a diagnostic, not
+a result**, and if noble gases are not scientifically interesting to you, drop
+that one file from `DEF_EXTRA_TOPPAR` and take 37.8% instead.
+
 ### Water dominates
 
-`TIP3` appears in **57%** of typeable frames — more than five times the next
+`TIP3` appears in **59%** of typeable frames — nearly seven times the next
 residue. Aggregate energy/force MAEs on this set are substantially water
 metrics. Report per-pair or per-residue breakdowns, not a single number.
 
@@ -296,7 +322,7 @@ The σ/ε identifiability gate has been checked and **passes**, so the run is
 worth doing. Order:
 
 1. Run the full `12_des_dataset.sh`; confirm frame count lands near the
-   predicted ~95,000 at `--top 40` and check the printed TIP3 share.
+   predicted ~120,000 at `--top 50` and check the printed TIP3 share.
 2. **Decide the cutoff question before training, not after.** Either warm-start
    and lower `mm_switch_on` to match the adopted 6 Å model cutoff, or keep the
    YAML's 10 Å and train from scratch. Do not run the default combination —
