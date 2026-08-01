@@ -644,7 +644,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.75)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
-    p.add_argument("--jax-md-update-interval", type=int, default=1)
+    p.add_argument(
+        "--jax-md-update-interval",
+        type=int,
+        default=0,
+        help=(
+            "MM neighbor-list refresh interval in MD steps. "
+            "0 = ensemble auto (NVT=10, NpT=5, NVE=5); 1 = rebuild every step "
+            "(slowest / safest)."
+        ),
+    )
     p.add_argument(
         "--jax-md-skin-distance",
         type=float,
@@ -1081,15 +1090,15 @@ def main(argv: list[str] | None = None) -> int:
             f"({minimization_summary.get('charmm_min_wall_s', 0.0):.3f} s)"
         )
 
-    if args.ensemble == "npt":
-        effective_update_interval = int(max(1, args.jax_md_update_interval))
-        effective_skin = float(max(0.0, args.jax_md_skin_distance))
-    elif args.ensemble == "nvt":
-        effective_update_interval = int(max(1, args.jax_md_update_interval))
-        effective_skin = float(max(0.0, args.jax_md_skin_distance))
-    else:
-        effective_update_interval = int(max(1, args.jax_md_update_interval))
-        effective_skin = float(max(0.0, args.jax_md_skin_distance))
+    from mmml.cli.run.jaxmd_runner import resolve_ensemble_jaxmd_update_interval
+
+    # 0 / unset → ensemble auto (NVT batches more; NpT/NVE stay tighter).
+    effective_update_interval = resolve_ensemble_jaxmd_update_interval(
+        args.ensemble,
+        getattr(args, "jax_md_update_interval", None),
+        use_pbc=not free_space,
+    )
+    effective_skin = float(max(0.0, args.jax_md_skin_distance))
 
     factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per_list,

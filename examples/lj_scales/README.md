@@ -94,11 +94,10 @@ Liquid campaign order (per solvent):
 4. **12_analyze_liquid** — RDF first peak + packing/NpT density vs bulk  
 
 Default DCM deploy is **jaxmd-only**: settle → 10 ps NVT → 2 ps NpT → short NVE
-(`dt_fs: 0.25`). PyCHARMM heat is skipped here (ASE Bussi @ 0.5 fs previously
-blew a DCM monomer; all-ML PBC cannot Packmol-repack). The 2 ps NpT leg is a
-density-response probe on the under-dense 120@30 Å box — not full ⟨ρ⟩
-equilibration. `LJ_MD_PROD=1` extends NVT to 20 ps; joint `LJ_JOINT=1` still
-uses PyCHARMM CPT for longer density work.
+(`dt_fs: 0.5`). NL/save cadence is ensemble-aware (NVT interval 20 / 0.25 ps
+frames; NpT/NVE interval 5). PyCHARMM heat is skipped here (ASE Bussi fly-off).
+The 2 ps NpT leg is a density-response probe on the under-dense 120@30 Å box.
+`LJ_MD_PROD=1` extends NVT to 20 ps; joint `LJ_JOINT=1` still uses PyCHARMM CPT.
 
 ## Configuration
 

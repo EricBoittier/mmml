@@ -699,12 +699,45 @@ def resolve_pre_md_fire_start_positions(
     return jnp.asarray(R - com, dtype=jnp.float32)
 
 
+# Ensemble-aware PBC MM neighbor refresh when ``--jax-md-update-interval`` is
+# omitted / 0. Explicit positive values always win.
+#
+# NVT can batch more aggressively (thermostat absorbs force noise). NpT needs
+# fresher pairs because the cell moves every step. NVE is in between: stale
+# pairs show up as E_tot drift, so stay tighter than NVT but not interval=1.
+ENSEMBLE_JAXMD_UPDATE_INTERVAL: dict[str, int] = {
+    "nvt": 10,
+    "npt": 5,
+    "nve": 5,
+}
+
+
+def resolve_ensemble_jaxmd_update_interval(
+    ensemble: str | None,
+    requested: int | None,
+    *,
+    use_pbc: bool = True,
+) -> int:
+    """Resolve MM neighbor refresh cadence (MD steps) for a JAX-MD ensemble.
+
+    ``requested <= 0`` or ``None`` selects the ensemble default when ``use_pbc``;
+    free-space falls back to a large batch interval (no dynamic MM pairs).
+    """
+    if requested is not None and int(requested) > 0:
+        return int(requested)
+    if not use_pbc:
+        return 100
+    key = str(ensemble or "nve").strip().lower()
+    return int(ENSEMBLE_JAXMD_UPDATE_INTERVAL.get(key, 1))
+
+
 def resolve_jaxmd_steps_per_loop_call(
     *,
     steps_per_recording: int,
     use_pbc: bool,
     has_update_fn: bool,
     jax_md_update_interval: int | None,
+    ensemble: str | None = None,
 ) -> int:
     """Return the JAX-MD block size that also controls MM pair refresh cadence.
 
@@ -715,20 +748,23 @@ def resolve_jaxmd_steps_per_loop_call(
     - how often Python rebuilds the neighbor list;
     - how many MD steps a single compiled JAX block advances before returning.
 
-    The default is intentionally conservative for PBC (`1` step), because stale
-    MM pairs can produce wrong forces. Explicit larger intervals are allowed for
-    stable NVT/NVE runs where avoiding per-step host synchronization matters.
-    The final value always divides ``steps_per_recording`` so each recording
-    block ends exactly on a neighbor-list refresh boundary.
+    When ``jax_md_update_interval`` is ``None``/``0``, the ensemble default from
+    :func:`resolve_ensemble_jaxmd_update_interval` is used (NVT batches more than
+    NpT/NVE). Explicit positive intervals always win. The final value always
+    divides ``steps_per_recording`` so each recording block ends exactly on a
+    neighbor-list refresh boundary.
     """
     has_dynamic_pbc_pairs = use_pbc and has_update_fn
-    conservative_pbc_interval = 1
-    non_pbc_batch_interval = 100
-    default_interval = conservative_pbc_interval if has_dynamic_pbc_pairs else non_pbc_batch_interval
-
-    requested_interval = int(jax_md_update_interval or default_interval)
-    if requested_interval <= 0:
-        requested_interval = default_interval
+    if has_dynamic_pbc_pairs:
+        requested_interval = resolve_ensemble_jaxmd_update_interval(
+            ensemble, jax_md_update_interval, use_pbc=True
+        )
+    else:
+        requested_interval = (
+            int(jax_md_update_interval)
+            if jax_md_update_interval is not None and int(jax_md_update_interval) > 0
+            else 100
+        )
 
     max_block_steps = min(requested_interval, int(steps_per_recording))
     for candidate_block_steps in range(max_block_steps, 0, -1):
@@ -1317,6 +1353,7 @@ def set_up_nhc_sim_routine(
         use_pbc=bool(use_pbc),
         has_update_fn=get_update_fn is not None,
         jax_md_update_interval=getattr(args, "jax_md_update_interval", None),
+        ensemble=getattr(args, "ensemble", None),
     )
 
     kT = as_jaxmd_dtype(T * unit['temperature'])

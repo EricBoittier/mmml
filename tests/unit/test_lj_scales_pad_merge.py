@@ -272,12 +272,20 @@ def test_lj_scales_packmol_liquid_campaign_yaml_parses() -> None:
     assert raw["runs"]["jaxmd_nve"]["depends_on"] == "jaxmd_npt"
     assert raw["defaults"]["mm_nonbond_mode"] == "jax_mic"
     assert float(raw["defaults"].get("max_fmax_before_dyn_ev_A", 0)) >= 3.5
-    assert float(raw["defaults"]["dt_fs"]) <= 0.25
+    assert float(raw["defaults"]["dt_fs"]) == pytest.approx(0.5)
     assert float(raw["runs"]["jaxmd_settle"]["ps"]) >= 1.0
     assert int(raw["runs"]["jaxmd_settle"]["jaxmd_minimize_steps"]) >= 1000
     assert float(raw["runs"]["jaxmd_nvt"]["ps"]) >= 10.0
+    assert int(raw["runs"]["jaxmd_nvt"]["jax_md_update_interval"]) >= 20
+    assert int(raw["runs"]["jaxmd_nvt"]["steps_per_recording"]) >= 500
     assert float(raw["runs"]["jaxmd_npt"]["ps"]) >= 2.0
+    assert int(raw["runs"]["jaxmd_npt"]["jax_md_update_interval"]) <= int(
+        raw["runs"]["jaxmd_nvt"]["jax_md_update_interval"]
+    )
     assert float(raw["runs"]["jaxmd_npt"]["nhc_barostat_tau"]) >= 20000.0
+    assert int(raw["runs"]["jaxmd_nve"]["jax_md_update_interval"]) <= int(
+        raw["runs"]["jaxmd_nvt"]["jax_md_update_interval"]
+    )
     # Packmol path — no certified-box defaults.
     assert "from_psf" not in raw["defaults"]
     assert "from_crd" not in raw["defaults"]
@@ -316,7 +324,8 @@ def test_lj_scales_liquid_prod_campaign_yaml_longer_than_smoke() -> None:
     assert float(prod["runs"]["jaxmd_nvt"]["ps"]) > float(smoke["runs"]["jaxmd_nvt"]["ps"])
     assert prod["runs"]["jaxmd_npt"]["setup"] == "pbc_npt"
     assert float(prod["runs"]["jaxmd_npt"]["ps"]) >= 2.0
-    assert float(prod["defaults"]["dt_fs"]) <= 0.25
+    assert float(prod["defaults"]["dt_fs"]) == pytest.approx(0.5)
+    assert int(prod["runs"]["jaxmd_nvt"]["jax_md_update_interval"]) >= 20
     joint_prod = yaml.safe_load(
         (_REPO / "examples/hybrid_mm_charges/md_lj_scales_liquid_campaign.prod.yaml").read_text()
     )

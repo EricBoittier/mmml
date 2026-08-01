@@ -5,8 +5,10 @@
 # monomer after settle (extent guard); all-ML PBC cannot Packmol-repack.
 # Learned LJ requires jax_mic (truncated MIC), not Ewald — issue #139.
 #
-# The seeded 120@30 Å box is under-dense vs bulk (~0.63 vs 1.326 g/cm³); the
-# 2 ps NpT leg is a first density-response probe, not full equilibration.
+# Throughput knobs (ensemble-aware):
+#   dt_fs=0.5 is stable on jaxmd for this system (CHARMM heat was the fly-off).
+#   NVT batches NL updates (20); NpT/NVE stay tighter (5). Recording is sparse
+#   enough for RDF/ρ (0.1–0.25 ps/frame) without drowning I/O.
 #
 #   uv run mmml md-system \
 #     --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
@@ -27,8 +29,8 @@ defaults:
   # mm_lj_scales_file: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/hybrid_mm.json
   temperature: 300.0
   pressure: 1.0
-  # Match liquid docs; 0.5 fs was implicated in CHARMM heat fly-off.
-  dt_fs: 0.25
+  # jaxmd settle already ran stably at 0.5 fs; CHARMM heat fly-off was separate.
+  dt_fs: 0.5
   seed: 42
   include_mm: true
   mm_charge_mode: fixed
@@ -44,8 +46,9 @@ defaults:
   handoff_quality_gate: true
   handoff_quality_fmax_eVA: 3.0
   max_fmax_before_dyn_ev_A: 3.5
-  # ~0.05 ps / frame at dt=0.25 fs.
-  steps_per_recording: 200
+  jax_md_skin_distance: 0.25
+  # Ensemble auto is NVT=10 / NpT=5 / NVE=5; jobs below override for liquid MD.
+  jax_md_update_interval: 0
 
 campaign_output: results/hybrid_mm_fixed_lj_scales_liquid
 
@@ -58,16 +61,23 @@ runs:
     jaxmd_minimize_steps: 1000
     fire_min_steps: 400
     continue_velocities: false
+    # Mildly batched NL during settle (still NVT-safe).
+    jax_md_update_interval: 10
+    steps_per_recording: 200
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_settle
 
   jaxmd_nvt:
-    description: jaxmd NVT production (10 ps)
+    description: jaxmd NVT production (10 ps) — fastest ensemble knobs
     backend: jaxmd
     setup: pbc_nvt
     depends_on: jaxmd_settle
     ps: 10.0
     handoff_quality_gate: true
     handoff_quality_fmax_eVA: 1.0
+    # At 0.5 fs, 20 steps ≈ 10 fs; liquid atoms move ≪ 0.25 Å skin.
+    jax_md_update_interval: 20
+    # 500 × 0.5 fs = 0.25 ps / frame (plenty for RDF / T series).
+    steps_per_recording: 500
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_nvt
 
   jaxmd_npt:
@@ -77,11 +87,14 @@ runs:
     depends_on: jaxmd_nvt
     ps: 2.0
     pressure: 1.0
-    # Soften piston vs default 10000*dt (~2.5 ps): under-dense 120@30 Å box
-    # wants to shrink toward bulk; avoid slamming the cell on a 2 ps leg.
+    # Soften piston vs default 10000*dt (~5 ps at 0.5 fs): under-dense 120@30 Å
+    # box wants to shrink toward bulk; avoid slamming the cell on a 2 ps leg.
     nhc_barostat_tau: 20000.0
     handoff_quality_gate: true
     handoff_quality_fmax_eVA: 1.0
+    # Tighter NL than NVT — cell moves every step.
+    jax_md_update_interval: 5
+    steps_per_recording: 200
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_npt
 
   jaxmd_nve:
@@ -90,4 +103,7 @@ runs:
     setup: pbc_nve
     depends_on: jaxmd_npt
     ps: 0.5
+    # Keep NL fresher for E_tot; denser recording for drift diagnosis.
+    jax_md_update_interval: 5
+    steps_per_recording: 100
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_nve
