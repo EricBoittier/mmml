@@ -27,8 +27,8 @@ mm_switch_on: 8.0
 mm_switch_width: 5.0
 
 charges: true
-batch_size: 16
-num_epochs: 500
+batch_size: 32
+num_epochs: 200
 learning_rate: 0.001
 seed: 42
 
@@ -40,6 +40,6 @@ objective: valid_loss
 best: true
 features: 64
 max_degree: 0
-num_iterations: 3
-num_basis_functions: 32
+num_iterations: 5
+num_basis_functions: 64
 cutoff: 10.0
