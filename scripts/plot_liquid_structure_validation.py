@@ -392,11 +392,14 @@ def plot_validation_summary(
     for key, label, color, ls in series_specs:
         if key in bond_ts:
             ax_bh.plot(t, bond_ts[key], color=color, linestyle=ls, linewidth=1.7, label=label)
+    from matplotlib.ticker import MaxNLocator
+
     ax_bh.set_xlabel(r"$t$ (ps)")
     ax_bh.set_ylabel(r"Bond length (Å)")
     ax_bh.set_title("PSF bond lengths over time", fontsize=11, pad=10)
     ax_bh.grid(alpha=0.18)
-    ax_bh.locator_params(axis="y", nbins=4)
+    ax_bh.yaxis.set_major_locator(MaxNLocator(nbins=4, prune="both"))
+    ax_bh.xaxis.set_major_locator(MaxNLocator(nbins=4, prune="both"))
     legend_outside(ax_bh, side="right", fontsize=8)
 
     ax_bhist = fig.add_subplot(bond_gs[0, 1])
@@ -417,8 +420,9 @@ def plot_validation_summary(
     ax_bhist.set_title("Bond-length distributions", fontsize=11, pad=10)
     ax_bhist.set_ylim(bottom=0.0)
     y0, y1 = ax_bhist.get_ylim()
-    ax_bhist.set_ylim(0.0, y1 * 1.15)
-    ax_bhist.locator_params(axis="y", nbins=3)
+    ax_bhist.set_ylim(0.0, y1 * 1.18)
+    ax_bhist.yaxis.set_major_locator(MaxNLocator(nbins=3, prune="both"))
+    ax_bhist.xaxis.set_major_locator(MaxNLocator(nbins=4, prune="both"))
     ax_bhist.grid(alpha=0.18)
     legend_outside(ax_bhist, side="right", fontsize=8)
 
@@ -439,6 +443,10 @@ def plot_validation_summary(
     ax_bad.set_title("PSF bond soft-cutoff outliers (C–H>1.40 Å, C–Cl>2.15 Å)", fontsize=11, pad=10)
     ax_bad.grid(alpha=0.18)
     ax_bad.set_ylim(bottom=0.0)
+    y0, y1 = ax_bad.get_ylim()
+    ax_bad.set_ylim(0.0, max(y1 * 1.15, 1.0))
+    ax_bad.yaxis.set_major_locator(MaxNLocator(nbins=4, prune="both", integer=True))
+    ax_bad.xaxis.set_major_locator(MaxNLocator(nbins=5, prune="both"))
     legend_outside(ax_bad, side="right", fontsize=8)
 
     # --- Row 4: key RDFs + angles ------------------------------------------------
@@ -465,6 +473,8 @@ def plot_validation_summary(
     ax_rdf.set_xlim(0.0, min(12.0, float(radii.max())))
     ax_rdf.set_ylim(bottom=0.0)
     ax_rdf.set_title("Element-pair RDFs", fontsize=11, pad=10)
+    ax_rdf.yaxis.set_major_locator(MaxNLocator(nbins=4, prune="both"))
+    ax_rdf.xaxis.set_major_locator(MaxNLocator(nbins=5, prune="both"))
     ax_rdf.grid(alpha=0.18)
     legend_outside(ax_rdf, side="right", fontsize=8)
 
@@ -488,8 +498,9 @@ def plot_validation_summary(
     ax_ang.set_title("Angle distributions (PSF)", fontsize=11, pad=10)
     ax_ang.set_ylim(bottom=0.0)
     y0, y1 = ax_ang.get_ylim()
-    ax_ang.set_ylim(0.0, y1 * 1.15)
-    ax_ang.locator_params(axis="y", nbins=3)
+    ax_ang.set_ylim(0.0, y1 * 1.18)
+    ax_ang.yaxis.set_major_locator(MaxNLocator(nbins=3, prune="both"))
+    ax_ang.xaxis.set_major_locator(MaxNLocator(nbins=5, prune="both"))
     ax_ang.grid(alpha=0.18)
     proxy = Line2D(
         [0], [0], color=status_color("neutral"), linestyle=":", linewidth=0.9, label=r"109.5°"
@@ -502,8 +513,8 @@ def plot_validation_summary(
     fig.suptitle(title, fontsize=12, y=0.978)
 
     fig.canvas.draw()
-    # 1 px pad: axis-aligned tick bboxes often touch without a visual collision.
-    assert_no_text_overlap(fig, padding_px=1.0)
+    # Small pad: axis-aligned tick bboxes often touch without a visual collision.
+    assert_no_text_overlap(fig, padding_px=2.0)
     fig.savefig(output, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -553,6 +564,10 @@ def write_summary_txt(
         "- conda povray needs +L to share/povray-3.7/include (see povray_wrap.sh)",
         "- Camera: ASE orthographic; jmol textures + covalent_radii * scale",
         "",
+        "Run notes",
+        f"- source H5: {h5}",
+        "- Prefer --psf-angle-restraints on jaxmd liquid NVT to keep DCM tetrahedral",
+        "",
         "Outputs",
     ]
     lines.extend(f"- {name}" for name in outputs)
@@ -587,6 +602,12 @@ def main() -> None:
         type=float,
         default=2.0,
         help="Preferred snapshot time (ps) for POV captions; images are reused if present.",
+    )
+    parser.add_argument(
+        "--title",
+        type=str,
+        default=None,
+        help="Override figure suptitle (default encodes box / frame count).",
     )
     args = parser.parse_args()
 
@@ -672,7 +693,13 @@ def main() -> None:
         bond_ts=bond_ts,
         pov_images=pov_images,
         output=summary_png,
-        title=f"DCM:120 liquid NVT validation  ·  PSF topology  ·  box={args.box:g} Å  ·  {len(frames)} frames",
+        title=(
+            args.title
+            or (
+                f"DCM:120 liquid NVT validation  ·  PSF topology  ·  "
+                f"box={args.box:g} Å  ·  {len(frames)} frames"
+            )
+        ),
     )
     print("wrote", summary_png)
 
