@@ -1,0 +1,26 @@
+# Fit all typeable neutral DES frames and evaluate on that same full set.
+# There is deliberately no held-out split: downstream thermodynamic properties
+# are the out-of-loss validation target for this run.
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: true
+mm_include_lj: true
+lr_solver: mic
+
+ml_switch_width: 1.5
+mm_switch_on: 6.0
+mm_switch_width: 5.0
+
+charges: false
+batch_size: 32
+num_epochs: 25
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 0.0
+charges_weight: 0.0
+objective: valid_loss
+best: true
+

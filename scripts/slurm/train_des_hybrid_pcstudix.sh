@@ -23,7 +23,7 @@ export LJ_WORKERS="${SLURM_CPUS_PER_TASK:-8}"
 export LJ_DES_TOP_RESIDUES="${LJ_DES_TOP_RESIDUES:-50}"
 export LJ_EPOCHS="${LJ_EPOCHS:-25}"
 export LJ_NTRAIN="${LJ_NTRAIN:-100000}"
-export LJ_NVALID="${LJ_NVALID:-10000}"
+export LJ_NVALID="${LJ_NVALID:-8500}"
 
 source examples/lj_scales/_env.sh
 mkdir -p "$LJ_ARTIFACTS_DIR" "$LJ_CKPT_DIR"
