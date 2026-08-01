@@ -102,6 +102,16 @@ unset -f _lj_prepend_opencl_lib
 # that flag is set, so existing DCM runs are undisturbed.
 export LJ_JOINT="${LJ_JOINT:-0}"
 
+# LJ_DES=1 switches onto the SO3LR/DES dimer set (step 12). Much broader
+# chemistry than the ACO/DCM paths -- 83 CGenFF residues and 90 LJ types are
+# reachable -- but the tail is thin, so the ladder trains on the best-sampled
+# LJ_DES_TOP_RESIDUES of them by default. See docs/des-so3lr-dimers.md.
+export LJ_DES="${LJ_DES:-0}"
+if [[ "${LJ_DES}" == "1" && "${LJ_JOINT}" == "1" ]]; then
+  echo "examples/lj_scales: LJ_DES=1 and LJ_JOINT=1 are mutually exclusive" >&2
+  return 1 2>/dev/null || exit 1
+fi
+
 # Outputs. Namespaced, and deliberately NOT inherited from a bare
 # ARTIFACTS_DIR: examples/m, examples/acetone_crystal and others export that
 # same generic name from their own _env.sh, so sourcing one of them earlier in
@@ -111,13 +121,28 @@ export LJ_JOINT="${LJ_JOINT:-0}"
 _LJ_INHERITED_ARTIFACTS_DIR="${ARTIFACTS_DIR:-}"
 if [[ "${LJ_JOINT}" == "1" ]]; then
   LJ_ARTIFACTS_DIR="${LJ_ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales_joint}"
+elif [[ "${LJ_DES}" == "1" ]]; then
+  LJ_ARTIFACTS_DIR="${LJ_ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales_des}"
 else
   LJ_ARTIFACTS_DIR="${LJ_ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales}"
 fi
 mkdir -p "${LJ_ARTIFACTS_DIR}"
 export LJ_ARTIFACTS_DIR
 
-if [[ "${LJ_JOINT}" == "1" ]]; then
+if [[ "${LJ_DES}" == "1" ]]; then
+  # Source HDF5 lives on scicore; override LJ_DES_H5 elsewhere.
+  export LJ_DES_H5="${LJ_DES_H5:-${HOME}/qcell/qcell_dimers.h5}"
+  # 34 is the measured DES dimer maximum -- not the ladder's usual 20.
+  export LJ_DES_PAD="${LJ_DES_PAD:-34}"
+  # Residue cut. 40 keeps 75% of typeable frames while holding every reachable
+  # LJ type above ~1,300 frames; past that the sampling floor collapses.
+  export LJ_DES_TOP_RESIDUES="${LJ_DES_TOP_RESIDUES:-40}"
+  export LJ_DES_RAW="${LJ_DES_RAW:-${LJ_ARTIFACTS_DIR}/des_dimers_raw.npz}"
+  export LJ_DES_ALL="${LJ_DES_ALL:-${LJ_ARTIFACTS_DIR}/des_dimers_cgenff_all.npz}"
+  export LJ_DATASET="${LJ_DATASET:-${LJ_DES_RAW}}"
+  export LJ_ENRICHED="${LJ_ENRICHED:-${LJ_ARTIFACTS_DIR}/des_dimers_cgenff_top${LJ_DES_TOP_RESIDUES}.npz}"
+  export LJ_TAG="${LJ_TAG:-hybrid_mm_fixed_lj_scales_des}"
+elif [[ "${LJ_JOINT}" == "1" ]]; then
   export LJ_DATASET="${LJ_DATASET:-${LJ_ARTIFACTS_DIR}/joint_rimp2_merged.npz}"
   export LJ_ENRICHED="${LJ_ENRICHED:-${LJ_ARTIFACTS_DIR}/joint_rimp2_cgenff.npz}"
   export LJ_TAG="${LJ_TAG:-hybrid_mm_fixed_lj_scales_aco_dcm}"
@@ -198,6 +223,12 @@ lj_scales_banner() {
   [[ "${_eff}" == "cpu" ]] && \
     printf '              (CPU by default — LJ_DEVICE=gpu for steps 05 and 07)\n'
   printf '  joint     : %s\n' "${LJ_JOINT}"
+  if [[ "${LJ_DES}" == "1" ]]; then
+    printf '  des       : 1  (h5 %s)\n' "${LJ_DES_H5}"
+    [[ -f "${LJ_DES_H5}" ]] || printf '              WARNING: h5 does not exist\n'
+    printf '              pad %s, top %s residues\n' \
+      "${LJ_DES_PAD}" "${LJ_DES_TOP_RESIDUES}"
+  fi
   printf '  dataset   : %s\n' "${LJ_DATASET}"
   [[ -f "${LJ_DATASET}" ]] || printf '              WARNING: does not exist\n'
   printf '  artifacts : %s\n' "${LJ_ARTIFACTS_DIR}"
