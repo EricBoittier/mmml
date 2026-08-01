@@ -211,7 +211,8 @@ viz = [
 
 # Molecular dynamics and analysis
 md = [
-    "vesin>=0.5.0",
+    # 0.6.1+ required for Blackwell (sm_120) GPU NeighborList NVRTC builds.
+    "vesin>=0.6.1",
     "mdanalysis",
     "mda-xdrlib",
     "mmtf-python",

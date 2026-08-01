@@ -69,6 +69,28 @@ else
 fi
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
+# CuPy NVRTC: many clusters symlink /usr/local/cuda → CUDA 9.x, whose
+# cuda_fp16.hpp pulls host <utility> and breaks GPU Vesin. Prefer pip
+# nvidia-cuda-runtime headers when present (nl_gpu.ensure_cupy_cuda_path
+# also repairs this at runtime).
+if [[ "${MMML_MM_NL_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "gpu" ]]; then
+  _lj_wheel_rt=""
+  for _lj_cand in \
+    "${REPO_ROOT}/.venv/lib/python"*/site-packages/nvidia/cuda_runtime \
+    "${VIRTUAL_ENV:-}/lib/python"*/site-packages/nvidia/cuda_runtime
+  do
+    if [[ -f "${_lj_cand}/include/cuda_fp16.hpp" ]]; then
+      _lj_wheel_rt="${_lj_cand}"
+      break
+    fi
+  done
+  if [[ -n "${_lj_wheel_rt}" ]]; then
+    export CUDA_PATH="${_lj_wheel_rt}"
+    export CUDA_HOME="${_lj_wheel_rt}"
+  fi
+  unset _lj_wheel_rt _lj_cand
+fi
+
 # PyCHARMM's libcharmm.so links OpenCL. The uv venv often lacks libOpenCL.so.1
 # even when a conda env on the same machine has it — prepend the first hit.
 _lj_prepend_opencl_lib() {
