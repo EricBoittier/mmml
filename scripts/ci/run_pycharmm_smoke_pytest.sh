@@ -28,6 +28,10 @@ MD_SYSTEM_SMOKE="$ROOT/tests/unit/test_md_system_unified.py"
 # Separate from MD_SYSTEM_SMOKE: builds_ffparams re-reads CGenFF after the
 # pbc_nve/nvt cases in that module and segfaults in pycharmm.read.prm.
 MD_SYSTEM_FFPARAMS_SMOKE="$ROOT/tests/unit/test_md_system_unified_ffparams.py"
+# This test intentionally launches a nested pytest process after loading
+# libcharmm. Running that child beneath mpirun can deadlock in MPI finalization,
+# so exercise it once in a genuinely serial parent process.
+PYTEST_EXIT_STATUS_SMOKE="$ROOT/tests/unit/test_pytest_exit_status_preserved.py"
 
 # CHARMM owns process-global PSF/topology/parameter state.  Any smoke module that
 # initializes or rebuilds that state must run in a fresh interpreter: re-reading
@@ -44,6 +48,7 @@ STATEFUL_SMOKE_PATHS=(
   "$DIMER_MODELS_SMOKE"
   "$MD_SYSTEM_SMOKE"
   "$MD_SYSTEM_FFPARAMS_SMOKE"
+  "$PYTEST_EXIT_STATUS_SMOKE"
 )
 
 # JUnit reports per invocation. pytest exits 0 when every selected test skips,
@@ -80,11 +85,28 @@ run_smoke() {  # run_smoke <report-name> <pytest args...>
   fi
 }
 
+run_serial_smoke() {  # run_serial_smoke <report-name> <pytest args...>
+  local report_name="$1"; shift
+  local report="$REPORT_DIR/$report_name.xml"
+  "$MMML_PYTHON" -m pytest --color=yes --junitxml="$report" "$@" || status=1
+  if [[ ! -s "$report" ]]; then
+    echo "::error::run_pycharmm_smoke_pytest: no JUnit report from $report_name;" \
+         "the serial run died before pytest could write one" >&2
+    status=1
+  fi
+}
+
 # Run every module (do not fail-fast) so CI reports the full set of failures
 # rather than only the first.
 for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
+  if [[ "$smoke_path" == "$PYTEST_EXIT_STATUS_SMOKE" ]]; then
+    continue
+  fi
   run_smoke "$(basename "$smoke_path" .py)" -m "$MARK_EXPR" "$smoke_path" "$@"
 done
+
+run_serial_smoke "$(basename "$PYTEST_EXIT_STATUS_SMOKE" .py)" \
+  -m "$MARK_EXPR" "$PYTEST_EXIT_STATUS_SMOKE" "$@"
 
 ignore_args=()
 for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do

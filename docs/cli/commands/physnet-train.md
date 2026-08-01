@@ -18,6 +18,7 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--n-valid N_VALID] [--seed SEED]
                           [--batch-size BATCH_SIZE] [--num-epochs NUM_EPOCHS]
                           [--learning-rate LEARNING_RATE]
+                          [--subtract-atom-energies] [--subtract-mean]
                           [--clip-global CLIP_GLOBAL]
                           [--energy-weight ENERGY_WEIGHT]
                           [--forces-weight FORCES_WEIGHT]
@@ -220,6 +221,17 @@ Other options:
                         Validation samples to split from --data (default: 100).
                         Omit when --valid-data is set: the full files are used.
   --learning-rate, --learning_rate LEARNING_RATE
+  --subtract-atom-energies, --subtract_atom_energies
+                        Subtract per-element atomic reference energies from E
+                        before training. Essential when training from scratch on
+                        absolute energies: without it the network must learn the
+                        whole ~1300 kcal/mol offset itself, and in practice it
+                        does not (energy MAE sat at ~1200 kcal/mol for 6 epochs
+                        while forces converged fine). A warm start hides this by
+                        carrying the scale in its weights.
+  --subtract-mean, --subtract_mean
+                        Subtract the dataset mean energy (applied after atom
+                        refs).
   --clip-global, --clip_global CLIP_GLOBAL
                         Global-norm gradient clip (default 10.0). Lower it
                         (~1.0) when the raw parameters oscillate rather than

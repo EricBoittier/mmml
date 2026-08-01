@@ -388,20 +388,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="With --psf-angle-restraints: omit Urey–Bradley 1–3 terms.",
     )
-    # Accepted because md-system always forwards these (calculator may use them);
-    # jax-md liquid path currently keeps the historical COM handoff defaults.
-    p.add_argument(
-        "--hybrid-hamiltonian",
-        choices=("handoff", "additive"),
-        default="handoff",
-        help="Hybrid Hamiltonian mode forwarded from md-system (default: handoff).",
-    )
-    p.add_argument(
-        "--shared-cutoff",
-        type=float,
-        default=None,
-        help="Optional shared ML/MM cutoff (Å) forwarded from md-system.",
-    )
     p.add_argument(
         "--from-crd",
         type=Path,
