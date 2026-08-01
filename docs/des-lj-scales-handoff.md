@@ -364,7 +364,148 @@ dependent, not caused by any of this work.
 
 ---
 
-## 5. Suggested order
+## 5. Validation results
+
+Everything here is measured. Where a number is an upper or lower bound rather
+than the quantity itself, it says so.
+
+### 5.1 Trained LJ scales — five completed fits
+
+Scales that reach their configured bounds are **not** treated as a failure: the
+bounds are a Bayesian prior on a component of the energy and force that may
+generalise at long range, so sitting on the prior boundary is the prior doing
+its job.
+
+| Run | σ mean | σ at bound | ε mean | ε at bound |
+|---|---:|---:|---:|---:|
+| des (top-50) | 0.9817 | 14/58 (24%) | 0.8480 | 11 (19%) |
+| des_full seed 42 | 0.9921 | 27/94 (29%) | 1.0489 | 15 (16%) |
+| des_full seed 7 | 0.9925 | 27 (29%) | 1.0314 | 15 (16%) |
+| des_full seed 2026 | 0.9926 | 29 (31%) | 1.0330 | 14 (15%) |
+| des_full **no ZBL** | 0.9921 | 27 (29%) | 1.0631 | 13 (14%) |
+| des_full **from scratch** | 1.0432 | 15/81 (19%) | **2.0289** | 3 (4%) |
+
+**Seed-reproducible.** Three seeds give σ means of 0.9921 / 0.9925 / 0.9926 —
+agreement to 0.05%. The fitted scales are a property of the data and the prior,
+not of one optimiser trajectory.
+
+**ZBL is not a confounder.** Disabling ZBL leaves σ mean unchanged to four
+decimals (0.9921 vs 0.9921) and the at-bound count identical (27 vs 27). An
+earlier hypothesis that ZBL and the CGenFF repulsive wall were double-counting
+into σ is refuted.
+
+**The warm start dominates.** Training from scratch lands at ε mean 2.03 —
+double the warm-started runs — and reaches 81 types instead of 94.
+
+### 5.2 Checkpoint comparison — same hold-out, three models
+
+8,500 frames, verified 0-overlap with the training split of `des-hybrid-ws`.
+
+| Checkpoint | Forces MAE (kcal/mol/Å) | Hold-out validity |
+|---|---:|---|
+| `DESdimers_params.json` | 0.3686 | partly seen (trained on 270k of the same HDF5) |
+| **`des-hybrid-ws` epoch-25** | **0.3320** | **clean — never saw these frames** |
+| `des_full_insample` epoch-25 | 0.3375 | contaminated — trained on all 121k |
+
+`des-hybrid-ws` epoch-25 is the best available warm start: 10% better forces
+than `DESdimers`, and the only one of the three with an uncontaminated number.
+Its caveat is coverage — it was trained on the top-50 cut (58 LJ types), so
+warm-starting a 94-type run from it leaves 36 types starting blind.
+
+Energy MAE is **not** reported: every checkpoint shows a near-constant ~1300
+kcal/mol offset (MAE ≈ RMSE), an atomic-reference mismatch against DES
+`formation_energy` rather than model error. Forces are reference-free.
+
+### 5.3 Liquid-box construction — TIP3
+
+<figure markdown>
+![TIP3 box, Packmol stage](images/des-so3lr-dimers/box_tip3_1_packmol.png)
+<figcaption>732 TIP3 molecules after Packmol placement. Rendered with
+<code>scripts/render_liquid_box_povray.py</code>.</figcaption>
+</figure>
+
+Stage-to-stage RMSD over all 2,196 atoms:
+
+| Stage | RMSD vs previous | Atom-extent (Å) |
+|---|---:|---|
+| 1 Packmol placement | — | 26.09 × 26.05 × 26.12 |
+| 2 CHARMM MM pretreat | 0.3661 | 26.23 × 26.53 × 26.37 |
+| 3 prep ladder | **0.0000** | 26.23 × 26.53 × 26.37 |
+| 4 final `model.pdb` | 0.0220 | 26.23 × 26.53 × 26.37 |
+
+**Density is correct by construction:** 732 waters in the requested 28.0 Å cube
+is 0.9975 g/cm³ against a 0.9970 target — 0.05%. The atom extent (~26.3 Å) is
+*smaller* than the cell because molecules do not touch the walls, so extent-based
+density is an upper bound, not the density.
+
+Two things the pictures and the RMSDs show that `box.json` does not:
+
+- **The prep ladder is a no-op here.** `001_initial.pdb` and `latest.pdb` are
+  byte-identical (same MD5), RMSD exactly 0.0000. Whatever it is meant to do, it
+  did nothing for this box.
+- **`box.json` is empty** — no `status`, `n_molecules`, `box_side_A` or
+  `density_g_cm3` was written, so the density above had to be reconstructed from
+  the requested side and molecule count rather than read back from the artefact.
+
+### 5.4 PBC test suite
+
+| | Before | After |
+|---|---:|---:|
+| Passed | 473 | **476** |
+| Failed | 3 | **1** |
+
+Two of the three failures were a **latent production bug**, not test flakiness:
+
+```
+import_pycharmm.py:97   coor: Any = None      # populated later, at init
+cluster.py:12           from ... import coor  # binds at IMPORT time
+```
+
+`from X import coor` captures the value at import, so any import order that
+reaches `cluster.py` before CHARMM init permanently binds `None`, and every
+later call dies with `AttributeError: 'NoneType' object has no attribute
+'set_positions'`. Importing an unrelated module that pulls in `lambda_dynamics`
+was enough to trigger it — in a real run as much as in a test. Fixed with a
+late-bound `_coor()` accessor across all 8 call sites, which also raises a
+diagnostic error instead of an `AttributeError` on `None`.
+
+The remaining failure
+(`test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short`)
+passes standalone and fails only after `test_mlpot_limits.py`. It is test
+isolation, not PBC physics, and is not yet root-caused.
+
+!!! warning "A green suite is not a validated PBC implementation"
+    These 476 tests show the periodic machinery is self-consistent — MIC/Ewald
+    parity helpers, cell handling, PME plumbing. They do **not** show that the
+    periodic energetics reproduce reference thermodynamics. The evidence
+    registry still carries
+    `solvent_burst_default_matrix: status: unverified, evidence: []`. Closing
+    that needs the ΔH_vap and density work below, not more unit tests.
+
+### 5.5 ΔH_vap — tooling ready, not yet run
+
+[`scripts/analyze_enthalpy_vaporization.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/analyze_enthalpy_vaporization.py)
+implements
+
+```
+dH_vap = <U>_gas - <U>_liquid / N + RT
+```
+
+with block-averaged error bars (the naive SEM understates correlated MD energies
+by roughly sqrt(2 tau / dt)) and guards that fail loudly on a non-divisible atom
+count, non-finite energies, or too few frames after the equilibration discard.
+Seven unit tests pin the arithmetic against synthetic trajectories.
+
+Reference targets: water **10.51**, methanol **8.95**, ammonia **5.58**
+kcal/mol. Ammonia is quoted at 239.8 K and its box is built at 240 K — it is a
+gas at 298 K, so a 298 K "liquid" ammonia box would be meaningless.
+
+It has not been run: only the TIP3 box exists so far, and no MD has been driven
+with the trained scales.
+
+---
+
+## 6. Suggested order
 
 The σ/ε identifiability gate has been checked and **passes**, so the run is
 worth doing. Order:

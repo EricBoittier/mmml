@@ -246,6 +246,9 @@ Other options:
                         slow single-threaded CHARMM phase.
 ```
 
+## Visual examples
+
+![Energy trace with force-annotated trajectory snapshots](../../images/povray-overlays/water_nve_with_povray.png)
 
 
 ---

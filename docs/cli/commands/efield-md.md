@@ -36,6 +36,9 @@ ramp on one axis --log-interval 100 --traj-interval 1 JAX-only examples: --save-
 interval 10 --print-interval 5 --field-scale 0.001 --dipole-field-coupling
 ```
 
+## Visual examples
+
+![Distributed electrostatics and equivalent moments](../../images/povray-overlays/distributed_charge_model.png)
 
 
 ---

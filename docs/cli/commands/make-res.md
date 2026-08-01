@@ -38,7 +38,7 @@ Examples: mmml make-res --list-residues mmml make-res --list-residues --no-pager
 | grep -i acetone mmml make-res --res ACO
 ```
 
-## Example structures
+## Visual examples
 
 ![Acetone monomer (ACO)](../../images/structures/make-res-aco.png)
 

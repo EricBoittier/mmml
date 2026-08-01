@@ -46,6 +46,9 @@ Other options:
                         Subtract reference atomic energies (match training)
 ```
 
+## Visual examples
+
+![MM/ML force validation](../../images/prepare-mm-dataset/force_validation.png)
 
 
 ---

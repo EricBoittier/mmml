@@ -59,7 +59,17 @@ Other options:
   --uncertainty-power UNCERTAINTY_POWER
 ```
 
+## Visual examples
 
+![Descriptor-space coverage](../../images/pes-design/descriptor_coverage.png)
+
+![Coverage CDF against random selection](../../images/pes-design/coverage_cdf.png)
+
+![Pair-distance spectrum reproduction](../../images/pes-design/rdf_spectrum.png)
+
+## Related docs
+
+- [Bayesian PES design](../../bayesian-pes-design.md)
 
 ---
 

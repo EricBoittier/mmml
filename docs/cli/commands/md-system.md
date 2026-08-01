@@ -1216,6 +1216,15 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         (solvent stays CHARMM MM); requires
                         mm_nonbond_mode=periodic_external (not jax_mic). YAML:
                         ml_resnames: [AMM1, CH3CL].
+  --psf-angle-restraints
+                        jaxmd: add scaled CGenFF harmonic angle (+ Urey–Bradley)
+                        forces from --from-psf so ML monomers stay tetrahedral
+                        (no classical SHAKE on this path).
+  --psf-angle-restraint-scale W
+                        Scale for --psf-angle-restraints (default: 1.0).
+  --psf-angle-restraints-no-urey
+                        With --psf-angle-restraints: omit Urey–Bradley 1–3 terms
+                        (angles only).
   --pycharmm-pre-dynamics-lingo PYCHARMM_PRE_DYNAMICS_LINGO
                         pycharmm: CHARMM lingo run once after setup/constraints
                         and before scheduled dynamics (YAML may use a multiline
@@ -1264,6 +1273,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         liquid boxes).
 ```
 
+## Visual examples
+
+![Structure, thermodynamics, RDF, and geometry validation](../../images/structures/validation_summary.png)
 
 ## Related docs
 

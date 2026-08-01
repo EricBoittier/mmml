@@ -46,6 +46,9 @@ Other options:
   --sigma SIGMA
 ```
 
+## Visual examples
+
+![Descriptor-space coverage of a diverse subset](../../images/pes-design/descriptor_coverage.png)
 
 
 ---

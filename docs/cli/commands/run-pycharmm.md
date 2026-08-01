@@ -76,6 +76,9 @@ mmml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40 mmml run-
 pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
 ```
 
+## Visual examples
+
+![Liquid structure and thermodynamic validation](../../images/structures/validation_summary.png)
 
 
 ---

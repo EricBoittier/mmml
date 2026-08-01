@@ -35,6 +35,9 @@ Other options:
                    evaluate)
 ```
 
+## Visual examples
+
+![Trialanine PES with force-annotated conformers](../../images/povray-overlays/trialanine_pes_with_povray.png)
 
 ## Related docs
 
