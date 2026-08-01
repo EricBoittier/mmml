@@ -144,18 +144,33 @@ def main(argv=None) -> int:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5), sharex=True)
+    from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+    style = apply_plot_style("icml")
+    designs = {
+        "bayes_dopt": ("Bayes/D-opt", style.colors["train"], "o", "-"),
+        "random": ("Random", style.colors["valid"], "s", "--"),
+    }
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5), sharex=True,
+                             constrained_layout=True)
     for ax, model in zip(axes, ("linear", "quadratic")):
-        for design in ("bayes_dopt", "random"):
+        for design, (label, color, marker, linestyle) in designs.items():
             means, stds = [], []
             for size in sizes:
                 vals = [r["mae"] for r in rows if r["n_train"] == size and r["design"] == design and r["model"] == model]
                 means.append(np.mean(vals)); stds.append(np.std(vals, ddof=1))
-            ax.errorbar(sizes, means, yerr=stds, marker="o", capsize=3, label=design)
+            means = np.asarray(means)
+            stds = np.asarray(stds)
+            ax.fill_between(sizes, np.maximum(means - stds, np.finfo(float).tiny),
+                            means + stds, color=color, alpha=.16, linewidth=0)
+            ax.plot(sizes, means, color=color, marker=marker,
+                    linestyle=linestyle, label=label)
         ax.set_xscale("log"); ax.set_yscale("log"); ax.set_title(model); ax.set_xlabel("RI-MP2 labels")
-        ax.set_ylabel("held-out energy MAE (eV)"); ax.legend()
+        ax.set_ylabel("held-out energy MAE (eV)")
+    legend_outside(axes[0], side="left")
+    legend_outside(axes[1], side="right")
     fig.suptitle("Does descriptor design improve simple-model learnability?")
-    fig.tight_layout(); fig.savefig(a.out_dir / "learning_curves.png", dpi=180); plt.close(fig)
+    fig.savefig(a.out_dir / "learning_curves.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
     print(json.dumps(summary, indent=2))
     return 0
 

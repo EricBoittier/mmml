@@ -250,31 +250,54 @@ def _plots(report_dir: Path, Z: np.ndarray, Xrdf: np.ndarray, selected: np.ndarr
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+
+    style = apply_plot_style("icml")
+    bayes_color = style.colors["train"]
+    random_color = style.colors["valid"]
+    candidate_color = style.colors["muted"]
 
     report_dir.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(7, 6))
-    ax.scatter(Z[:, 0], Z[:, 1], s=5, c="0.8", label="physical candidates")
-    ax.scatter(Z[random, 0], Z[random, 1], s=10, alpha=.55, label="random")
-    ax.scatter(Z[selected, 0], Z[selected, 1], s=12, alpha=.8, label="Bayes/D-opt")
+    fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
+    ax.scatter(Z[:, 0], Z[:, 1], s=5, color=candidate_color, alpha=.22,
+               marker=".", label="Physical candidates")
+    ax.scatter(Z[random, 0], Z[random, 1], s=14, color=random_color,
+               alpha=.65, marker="s", label="Random")
+    ax.scatter(Z[selected, 0], Z[selected, 1], s=16, color=bayes_color,
+               alpha=.85, marker="o", label="Bayes/D-opt")
     ax.set(xlabel="descriptor PC1", ylabel="descriptor PC2", title="Selected PES coverage")
-    ax.legend(); fig.tight_layout(); fig.savefig(report_dir / "descriptor_coverage.png", dpi=180); plt.close(fig)
+    legend_outside(ax, side="right")
+    fig.savefig(report_dir / "descriptor_coverage.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=(7, 5))
-    for d, label in ((d_sel, "Bayes/D-opt"), (d_random, "random")):
+    fig, ax = plt.subplots(figsize=(7, 5), constrained_layout=True)
+    for d, label, color, marker, linestyle in (
+        (d_sel, "Bayes/D-opt", bayes_color, "o", "-"),
+        (d_random, "Random", random_color, "s", "--"),
+    ):
         x = np.sort(d); y = np.linspace(0, 1, len(x), endpoint=True)
-        ax.plot(x, y, label=label)
+        markevery = max(1, len(x) // 12)
+        ax.plot(x, y, label=label, color=color, marker=marker,
+                linestyle=linestyle, markevery=markevery)
     ax.set(xlabel="nearest selected-point distance (PCA space)", ylabel="candidate CDF",
            title="Feature-space coverage (left is better)")
-    ax.legend(); fig.tight_layout(); fig.savefig(report_dir / "coverage_cdf.png", dpi=180); plt.close(fig)
+    legend_outside(ax, side="right")
+    fig.savefig(report_dir / "coverage_cdf.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
     if Xrdf.shape[1]:
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(Xrdf.mean(0), color="black", lw=1.5, label="candidate mean")
-        ax.plot(Xrdf[selected].mean(0), label="Bayes/D-opt mean")
-        ax.plot(Xrdf[random].mean(0), label="random mean", alpha=.8)
+        fig, ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
+        ax.plot(Xrdf.mean(0), color=candidate_color, lw=1.5,
+                linestyle=":", label="Candidate mean")
+        ax.plot(Xrdf[selected].mean(0), color=bayes_color,
+                linestyle="-", label="Bayes/D-opt mean")
+        ax.plot(Xrdf[random].mean(0), color=random_color,
+                linestyle="--", label="Random mean")
         ax.set(xlabel="pair-spectrum feature", ylabel="mean normalized intensity",
                title="Pair-distance/RDF spectrum reproduction")
-        ax.legend(); fig.tight_layout(); fig.savefig(report_dir / "rdf_spectrum.png", dpi=180); plt.close(fig)
+        legend_outside(ax, side="right")
+        fig.savefig(report_dir / "rdf_spectrum.png", dpi=300, bbox_inches="tight")
+        plt.close(fig)
 
 
 def run(args: argparse.Namespace) -> dict:

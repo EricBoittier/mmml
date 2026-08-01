@@ -122,19 +122,35 @@ def main(argv=None) -> int:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
+    from mmml.utils.plotting.styles import apply_plot_style
+    style = apply_plot_style("icml")
+    bayes_color = style.colors["train"]
+    random_color = style.colors["valid"]
+    connector_color = style.colors["muted"]
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5), constrained_layout=True)
     for repeat in range(a.repeats):
         pair = {r["method"]: r for r in rows if r["repeat"] == repeat}
         axes[0].plot([0, 1], [pair["random"]["gzip_npz_bytes"] / 1024,
-                             pair["bayes_dopt"]["gzip_npz_bytes"] / 1024], "o-", alpha=.65)
+                             pair["bayes_dopt"]["gzip_npz_bytes"] / 1024],
+                     color=connector_color, alpha=.45, marker=None)
         axes[1].plot([0, 1], [pair["random"]["coverage_mean"],
-                             pair["bayes_dopt"]["coverage_mean"]], "o-", alpha=.65)
+                             pair["bayes_dopt"]["coverage_mean"]],
+                     color=connector_color, alpha=.45, marker=None)
+        axes[0].scatter(0, pair["random"]["gzip_npz_bytes"] / 1024,
+                        color=random_color, marker="s")
+        axes[0].scatter(1, pair["bayes_dopt"]["gzip_npz_bytes"] / 1024,
+                        color=bayes_color, marker="o")
+        axes[1].scatter(0, pair["random"]["coverage_mean"],
+                        color=random_color, marker="s")
+        axes[1].scatter(1, pair["bayes_dopt"]["coverage_mean"],
+                        color=bayes_color, marker="o")
     for ax, ylabel, title in (
         (axes[0], "gzip size (KiB)", "Literal byte compressibility"),
         (axes[1], "mean coverage distance", "Descriptor coverage (lower is better)"),
     ):
-        ax.set_xticks([0, 1], ["random", "Bayes/D-opt"]); ax.set_ylabel(ylabel); ax.set_title(title)
-    fig.tight_layout(); fig.savefig(a.out_dir / "paired_compression_coverage.png", dpi=180); plt.close(fig)
+        ax.set_xticks([0, 1], ["Random", "Bayes/D-opt"]); ax.set_ylabel(ylabel); ax.set_title(title)
+    fig.savefig(a.out_dir / "paired_compression_coverage.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
     print(json.dumps(summary, indent=2))
     return 0
 
