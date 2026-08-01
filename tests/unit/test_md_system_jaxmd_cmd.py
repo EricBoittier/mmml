@@ -105,6 +105,20 @@ def test_build_command_jaxmd_forwards_default_cutoffs_from_namespace() -> None:
     assert "--handoff-pre-minimize" not in argv
 
 
+def test_build_command_jaxmd_forwards_nhc_barostat_tau() -> None:
+    """Campaign YAML nhc_barostat_tau must reach jaxmd NpT (soft piston)."""
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(setup="pbc_npt", nhc_barostat_tau=20000.0, nhc_tau=150.0)
+    )
+    assert backend == "jaxmd"
+    assert "--nhc-barostat-tau" in argv
+    assert argv[argv.index("--nhc-barostat-tau") + 1] == "20000.0"
+    assert "--nhc-tau" in argv
+    assert argv[argv.index("--nhc-tau") + 1] == "150.0"
+
+
 def test_build_command_jaxmd_forwards_mm_lj_scales_file() -> None:
     from mmml.cli.run.md_system import build_command
 

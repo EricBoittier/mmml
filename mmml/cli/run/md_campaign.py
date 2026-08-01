@@ -180,6 +180,8 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "checkpoint",
     "mm_lj_scales_file",
     "jaxmd_minimize_steps",
+    "nhc_tau",
+    "nhc_barostat_tau",
 )
 
 # Long-range / MM-stack flags: only override job YAML when present on the parent CLI.

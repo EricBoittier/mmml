@@ -1881,6 +1881,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="JAX-MD/ASE PBC MM neighbor-list skin distance in Å (default: 0.25).",
     )
     parser.add_argument(
+        "--nhc-tau",
+        type=float,
+        default=None,
+        metavar="MULT",
+        help=(
+            "jaxmd: Nose–Hoover thermostat coupling multiplier "
+            "(tau = nhc_tau * dt; default 100 in the jaxmd suite)."
+        ),
+    )
+    parser.add_argument(
+        "--nhc-barostat-tau",
+        type=float,
+        default=None,
+        metavar="MULT",
+        help=(
+            "jaxmd NpT: Nose–Hoover barostat coupling multiplier "
+            "(tau = nhc_barostat_tau * dt; default 10000 in the jaxmd suite). "
+            "Larger = softer piston (useful for under-dense liquid boxes)."
+        ),
+    )
+    parser.add_argument(
         "--steps-per-recording",
         type=int,
         default=100,
@@ -2409,6 +2430,10 @@ def _append_suite_mmml_handoff_args(
                 "--jaxmd-fire-skip-max-f-eVA",
                 str(getattr(args, "jaxmd_fire_skip_max_f_eVA", 0.10)),
             ]
+        )
+        _append_optional(cmd, "--nhc-tau", getattr(args, "nhc_tau", None))
+        _append_optional(
+            cmd, "--nhc-barostat-tau", getattr(args, "nhc_barostat_tau", None)
         )
         _append_boolean_optional_flag(
             cmd,
