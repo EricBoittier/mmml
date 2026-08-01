@@ -397,6 +397,65 @@ into σ is refuted.
 **The warm start dominates.** Training from scratch lands at ε mean 2.03 —
 double the warm-started runs — and reaches 81 types instead of 94.
 
+> **The "at bound" counts in the table above are tolerance-dependent and should
+> not be quoted on their own.** No fitted scale is ever *exactly* at a bound —
+> the projection leaves them ~2×10⁻⁵ inside — so any count depends on the
+> tolerance chosen, and an *absolute* tolerance is not comparable across priors
+> of different width (1×10⁻⁴ is 0.1% of the ±5% prior but 0.01% of the ±40% one).
+> §5.1.1 restates this with a width-relative measure and the full curve.
+
+### 5.1.1 How the fit responds to the prior — a bounds-width sweep
+
+![LJ scale response to the prior width](images/des-so3lr-dimers/lj_scale_prior_sweep.png)
+
+Three fits differing only in the prior on the scales. The question the sweep
+answers is not "did anything hit a bound" but **"does the likelihood ever take
+over from the prior"**.
+
+| Prior on σ | within 1% of the prior width of a bound | within 5% |
+|---|---:|---:|
+| ±5% (94 types) | 60% | 81% |
+| ±20% (88 types) | 41% | 49% |
+| **±40% (94 types)** | **10%** | **12%** |
+
+**σ: the likelihood takes over.** Widening the prior from ±5% to ±40% drops the
+pinned fraction from 60% to 10%, and the ±40% curve is *flat* from 0.06% to 2%
+of the prior width — its remaining ~9 types are hard against the bound while
+every other type is far from it, so the count does not depend on where the cut
+falls. At ±5% the prior is doing most of the work; at ±40% it is not.
+
+**ε: the ceiling was genuinely clipping.** Under the old ε ≤ 4.0 ceiling two
+types sat at 3.9999. Lifting it to 20 lets ε settle at **5.527** — well short of
+the new ceiling, so 4.0 was cutting off a real optimum and 20 is loose enough.
+
+**ε: the floor is not a prior artefact, and widening will not fix it.** Five
+types sit exactly on the ε floor, and dropping it from 0.25 to 0.05 did **not**
+release them — the same five simply followed it down. The fit wants to switch the
+MM dispersion off entirely for those types, presumably because the ML term
+already covers that interaction. A wider prior cannot resolve this; it is a
+statement about the model decomposition and should be treated as an open
+question, not a tuning parameter.
+
+Caveat: the ±20% run trained 88 types against 94 for the other two (the trainable
+masks differ), so this is a distributional comparison, not a matched per-type one.
+
+### 5.1.2 Seed reproducibility — the per-type pattern is signal
+
+![Seed reproducibility of the LJ scales](images/des-so3lr-dimers/lj_scale_seed_spread.png)
+
+The three σ ±20% seeds agree on the *mean* to 0.05%, but a mean can agree while
+the per-type assignment is noise. Measured per type instead:
+
+- **median seed-to-seed σ spread 0.0147**, against a between-type spread
+  (population sd) of **0.157** — optimiser noise is ~9% of the signal;
+- median ε spread 6% of the mean.
+
+The stored scale vectors carry no type names, so this rests on the three runs
+indexing the LJ table identically. That is checked rather than assumed: under an
+index-scramble null the median per-type spread would be **0.285**, ~20× larger
+and far outside the observed value's range. The alignment is established, and the
+fitted per-type pattern is reproducible across seeds.
+
 ### 5.2 Checkpoint comparison — same hold-out, three models
 
 8,500 frames, verified 0-overlap with the training split of `des-hybrid-ws`.
@@ -426,28 +485,57 @@ together precisely because they are indistinguishable — that is the
 result.</figcaption>
 </figure>
 
-Stage-to-stage RMSD over all 2,196 atoms:
+Stage-to-stage **minimum-image** RMSD over all 2,196 atoms:
 
-| Stage | RMSD vs previous | Atom-extent (Å) |
-|---|---:|---|
-| 1 Packmol placement | — | 26.09 × 26.05 × 26.12 |
-| 2 CHARMM MM pretreat | 0.3661 | 26.23 × 26.53 × 26.37 |
-| 3 prep ladder | **0.0000** | 26.23 × 26.53 × 26.37 |
-| 4 final `model.pdb` | 0.0220 | 26.23 × 26.53 × 26.37 |
+| Stage | RMSD vs previous (Å) | atoms wrapped |
+|---|---:|---:|
+| 1 Packmol placement | — | — |
+| 2 CHARMM MM pretreat | 1.3855 | 24 |
+| 3 prep ladder | **0.0000** | 0 |
+| 4 final `model.pdb` | 0.0734 | 6 |
 
-**Density is correct by construction:** 732 waters in the requested 28.0 Å cube
-is 0.9975 g/cm³ against a 0.9970 target — 0.05%. The atom extent (~26.3 Å) is
-*smaller* than the cell because molecules do not touch the walls, so extent-based
-density is an upper bound, not the density.
+> **These numbers supersede an earlier version of this table** (0.3661 / 0.0000 /
+> 0.0220), which was wrong. The stage PDBs carry no `CRYST1` record, so a plain
+> index-wise difference counts a molecule that crossed a periodic face as having
+> moved a full box length: 24 atoms of 2,196 do exactly that, inflating the
+> pretreat RMSD to 3.09 Å and the final-step RMSD from 0.07 Å to 1.43 Å. The
+> RMSDs are now computed under the minimum image convention, in
+> `scripts/compose_box_stage_figure.py`, from the same PDBs that were rendered.
 
-Two things the pictures and the RMSDs show that `box.json` does not:
+The corrected numbers change the reading: **the CHARMM MM pretreat does real
+work** (1.39 Å RMSD), it is not the near-no-op the old table implied. What is a
+genuine no-op is the prep ladder — `001_initial.pdb` and `latest.pdb` are
+byte-identical (same MD5), RMSD exactly 0.0000. The final write moves atoms by
+0.07 Å.
 
-- **The prep ladder is a no-op here.** `001_initial.pdb` and `latest.pdb` are
-  byte-identical (same MD5), RMSD exactly 0.0000. Whatever it is meant to do, it
-  did nothing for this box.
-- **`box.json` is empty** — no `status`, `n_molecules`, `box_side_A` or
-  `density_g_cm3` was written, so the density above had to be reconstructed from
-  the requested side and molecule count rather than read back from the artefact.
+**Density is correct by construction:** `box.json` reports `status: pass`,
+732 molecules, 28.0 Å, **0.9975 g/cm³** against a 0.9970 target — 0.05%. This is
+*not* a validation of the potential: Packmol was *asked* for that density, so it
+is an input. Only the NpT runs of `docs/npt-density-dh-dg.md` can turn it into a
+measurement.
+
+What the pictures add over `box.json` is the absence of packing faults — voids,
+interpenetrating pairs, molecules outside the cell — none of which move a density
+that was specified rather than measured.
+
+### 5.3.1 A second species — MEOH
+
+![MEOH box through preparation](images/des-so3lr-dimers/box_meoh_stages.png)
+
+327 methanol molecules, same 28.0 Å cube. The pattern reproduces: MM pretreat
+0.5631 Å, prep ladder exactly 0.0000, final write 0.0098 Å, no molecule crossing
+a face. **This box is not yet certified** — the build is still running and has
+written no `box.json`, so it must not be used for production MD yet. AMM1 has not
+started.
+
+> **A rendering trap worth knowing.** CHARMM writes PDBs with the element column
+> (77–78) blank — the trailing field is the segid. ASE then falls back to parsing
+> the atom *name*, so CHARMM's `OG` hydroxyl oxygen is read as **Og (oganesson)**
+> and `HG1` as **Hg (mercury)**. Geometry is unaffected, but every
+> element-derived property is wrong and it fails *silently* — the render simply
+> came out grey. `render_liquid_box_povray.py` now takes elements from a file
+> that has the column (`--elements-from model.pdb`, matched by atom order) and
+> hard-errors on implausible elements rather than rendering them.
 
 ### 5.4 PBC test suite
 

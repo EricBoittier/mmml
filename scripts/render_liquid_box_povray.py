@@ -55,12 +55,39 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rotation", default="-70x, 10y, 0z",
                     help="ASE rotation string for the camera")
     ap.add_argument("--label", default=None, help="unused by POV-Ray; kept for provenance")
+    ap.add_argument("--elements-from", type=Path, default=None,
+                    help="PDB with a real element column to take symbols from, "
+                         "matched by atom order (for CHARMM PDBs, which omit it)")
     ap.add_argument("--keep-pov", action="store_true", help="do not delete the .pov/.ini")
     a = ap.parse_args(argv)
 
     atoms = read(a.structure)
     n = len(atoms)
     syms = atoms.get_chemical_symbols()
+
+    # CHARMM writes PDBs with the element column (77-78) blank -- the trailing
+    # field is the segid. ASE then falls back to the atom NAME, so CHARMM's `OG`
+    # hydroxyl oxygen is read as Og (oganesson) and `HG1` as Hg (mercury). The
+    # geometry is unaffected but every element-derived property is wrong, and it
+    # fails silently: the render just comes out grey. Elements are therefore
+    # taken from a file that does carry the column, matched by atom order.
+    if a.elements_from is not None:
+        ref = read(a.elements_from)
+        if len(ref) != n:
+            print(f"  ERROR: --elements-from has {len(ref)} atoms, structure has {n}")
+            return 1
+        syms = ref.get_chemical_symbols()
+        atoms.set_chemical_symbols(syms)
+        print(f"  elements taken from {a.elements_from.name}")
+
+    IMPLAUSIBLE = {"Og", "Hg", "Cn", "Ts", "Nh", "Mc", "Lv", "Fl"}
+    bad = IMPLAUSIBLE & set(syms)
+    if bad:
+        print(f"  ERROR: implausible elements {sorted(bad)} -- the element column is "
+              f"probably blank and the atom names were parsed instead.\n"
+              f"         Pass --elements-from <a PDB with an element column>.")
+        return 1
+
     uniq = sorted(set(syms))
     print(f"{a.structure.name}: {n} atoms, elements {uniq}")
     if atoms.cell is not None and atoms.cell.rank == 3:

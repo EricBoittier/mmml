@@ -115,7 +115,7 @@ def main() -> int:
             prev = cur
 
     apply_plot_style("icml")
-    fig, axes = plt.subplots(1, 4, figsize=(16.5, 4.8))
+    fig, axes = plt.subplots(1, 4, figsize=(16.5, 5.5))
     for ax, (suffix, title, _), sub in zip(axes, STAGES, subs):
         p = a.render_dir / f"box_{a.species}_{suffix}.png"
         if not p.exists():
@@ -138,11 +138,15 @@ def main() -> int:
         f"Minimum-image RMSD over all {n_atoms:,} atoms against the previous stage"
         + (f" (box {box:g} Å; {total_wrapped} atoms cross a periodic face and would "
            "otherwise register as moving a full box length)" if box else "")
-        + ". The panels are visually identical because preparation moves the atoms "
-        "very little."
+        + ". The MM pretreat does real work; the prep ladder moves nothing. The "
+        "panels look alike because the relaxation is local — what they show is the "
+        "absence of packing faults, which a density number cannot."
     )
-    fig.text(0.5, 0.012, note, ha="center", fontsize=9.5, color="0.30")
-    fig.tight_layout(rect=(0, 0.085, 1, 0.94))
+    import textwrap
+
+    fig.text(0.5, 0.012, "\n".join(textwrap.wrap(note, 150)),
+             ha="center", va="bottom", fontsize=9.5, color="0.30")
+    fig.tight_layout(rect=(0, 0.17, 1, 0.94))
     a.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(a.output, dpi=150)
     print(f"wrote {a.output}")
