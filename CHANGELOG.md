@@ -32,8 +32,56 @@ and versioning process.
 - First-class CLI: `mmml compare-charmm-ml` (CHARMM PSF charges vs joint
   PhysNet/DCMNet dipoles and ESP on a validation split).
 
+- CI test-shape gates: `scripts/ci/check_test_report.py` reads the JUnit XML each
+  pytest step now emits and fails when too few tests passed, too many skipped, a
+  failure was recorded, or the report is missing entirely. `pytest`'s exit code
+  alone could not distinguish a passing suite from one that never ran. Also
+  `scripts/ci/assert_pycharmm_live.py` (hard PyCHARMM import before the live
+  job), `make test-shape`, and a 60-minute timeout on the `build` job.
+- `MMML_DISABLE_CHARMM=1` makes CHARMM discovery report nothing and blocks
+  `import pycharmm` outright, so `make test-ci` genuinely reproduces the
+  libcharmm-free CI environment. Setting `CHARMM_LIB_DIR` to a nonexistent path
+  does not work: a lib-less explicit override is treated as stale and replaced
+  by the discovered `setup/charmm` tree.
+
 ### Fixed
 
+- **DCMNet dipole units.** `dcmnet/loss.py:pred_dipole` multiplied by `1.88873`
+  and documented its result as Debye. The value is a transposed-digit typo for
+  the Angstrom -> bohr factor `1.8897261` (5.3e-4 relative), and the unit was
+  never Debye — both callers in `dcmnet/analysis.py` convert the residual with
+  `au_to_debye` afterwards. The docstring now states atomic units (e*bohr) and
+  the factor comes from `mmml.data.units.ANGSTROM_TO_BOHR`.
+
+  `dcmnet_ase.DCMNetCalculator._compute_molecular_dipole` carried the same
+  literal under an "atomic units to Debye" comment while its input was
+  e*Angstrom, so **every dipole that calculator reported was ~2.54x too small**
+  despite being labelled Debye in the method docstring, in `get_dcm_data`, and
+  in the example script's printout. It now applies `EANGSTROM_TO_DEBYE`.
+
+  `dcmnet/analysis.py` held a third independent literal for e*bohr -> Debye;
+  it now uses the shared `EBOHR_TO_DEBYE`, which `mmml.data.units` derives from
+  the other two so the chain cannot drift apart again. `au_to_kcal` likewise
+  moved to `HARTREE_TO_KCAL_MOL` (`627.509` -> `627.509474`).
+
+  Impact: recorded DCMNet dipole MAEs shift by 5.3e-4 relative; checkpoints are
+  unaffected (the change is to a reported/loss scale, not to parameters). ASE
+  calculator dipoles change by a factor of 2.5417. Covered by
+  `tests/unit/test_dcmnet_dipole_units.py`, which anchors on CODATA values
+  computed in the test and on the identity
+  `EANGSTROM_TO_DEBYE == ANGSTROM_TO_BOHR * EBOHR_TO_DEBYE`.
+- Test isolation: `test_mpi_openmpi_static_shmem_fallback` leaked
+  `LD_PRELOAD` / `DYLD_INSERT_LIBRARIES` into the real environment, pointing at a
+  library under a `tmp_path` pytest later deleted. Every subsequent test that
+  spawned a subprocess then died in the dynamic loader (exit -6) with a message
+  naming neither the cause nor the culprit; six unrelated tests failed that way
+  in a full-suite run while passing in isolation.
+- `python -m mmml.data.npz_schema` raised `NameError` instead of printing usage:
+  `sys` was imported inside `main()` only, but the module-level guard calls
+  `sys.exit(main())`.
+- Codecov could not report a regression: `patch: false` waived coverage on new
+  code entirely and a 50-percentage-point project threshold let total coverage
+  halve while the status stayed green.
 - Missing comma in `mmml/data/qcml/atomic_reference_energies.json` that broke
   `json.load` (and any import of `mmml.data`) after the QCML reference table
   update.
