@@ -376,6 +376,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         dt_fs=0.25,
         nvt_integrator="langevin",
         checkpoint="/tmp/ck.json",
+        mm_lj_scales_file="/tmp/hybrid_mm.json",
         jaxmd_minimize_steps=250,
         _cli_explicit=set(),
     )
@@ -388,6 +389,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
     assert merged["dt_fs"] == 0.25
     assert merged["nvt_integrator"] == "langevin"
     assert merged["checkpoint"] == "/tmp/ck.json"
+    assert merged["mm_lj_scales_file"] == "/tmp/hybrid_mm.json"
     assert merged["jaxmd_minimize_steps"] == 250
 
     merged2 = {"backend": "pycharmm"}
@@ -402,6 +404,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         dt_fs=None,
         nvt_integrator=None,
         checkpoint=None,
+        mm_lj_scales_file=None,
         jaxmd_minimize_steps=None,
         _cli_explicit=set(),
     )

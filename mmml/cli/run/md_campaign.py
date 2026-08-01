@@ -178,6 +178,7 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "dt_fs",
     "nvt_integrator",
     "checkpoint",
+    "mm_lj_scales_file",
     "jaxmd_minimize_steps",
 )
 
