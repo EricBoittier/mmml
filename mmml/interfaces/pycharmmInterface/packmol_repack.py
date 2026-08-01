@@ -32,18 +32,40 @@ def _cell_box_side(cell: Any | None) -> float | None:
     return None
 
 
+#: Packmol's own default tolerance (Å), also used by the initial cluster pack.
+PACKMOL_DEFAULT_TOLERANCE_A = 2.0
+
+#: Max deviation (Å) between two monomers' internal distances for them to count
+#: as the same rigid geometry and share one Packmol ``structure`` block.
+TEMPLATE_MATCH_TOL_A = 5e-3
+
+
 def _resolve_packmol_tolerance(
     *,
     min_distance: float,
-    spacing: float | None,
+    spacing: float | None = None,
     packmol_tolerance: float | None = None,
 ) -> float:
-    candidates = [2.0, float(min_distance)]
-    if spacing is not None and float(spacing) > 0.0:
-        candidates.append(float(spacing))
+    """Packmol ``tolerance`` (Å) for a repack.
+
+    Packmol's ``tolerance`` is the *minimum allowed distance between atoms of
+    different structures* — a contact floor, not a packing pitch. ``spacing`` is
+    a centre-to-centre COM separation (``--spacing``, default 5 Å); feeding it in
+    here asks Packmol to keep every atom pair further apart than the mean
+    molecular separation, which is unsatisfiable at liquid density (methanol at
+    0.79 g/cm³ has ~4.1 Å between COMs and 2.8 Å O···O hydrogen bonds). It is
+    accepted for call-site compatibility and deliberately ignored.
+    """
+    del spacing  # never a contact distance; see docstring
     if packmol_tolerance is not None and float(packmol_tolerance) > 0.0:
-        candidates.append(float(packmol_tolerance))
-    return float(max(candidates))
+        tol = float(packmol_tolerance)
+    else:
+        tol = PACKMOL_DEFAULT_TOLERANCE_A
+    # The caller's overlap floor is a genuine contact distance, so it may raise
+    # the tolerance (it is ~0.45 Å in the prep ladder, i.e. normally inert).
+    if np.isfinite(min_distance) and float(min_distance) > tol:
+        tol = float(min_distance)
+    return float(tol)
 
 
 def _charmm_atom_metadata(n_atoms: int) -> tuple[list[str], np.ndarray] | None:
@@ -61,9 +83,98 @@ def _charmm_atom_metadata(n_atoms: int) -> tuple[list[str], np.ndarray] | None:
         return None
 
 
-def _template_key(template: np.ndarray) -> tuple[float, ...]:
-    arr = np.asarray(template, dtype=float).reshape(-1)
-    return tuple(round(float(x), 4) for x in arr[: min(12, arr.size)])
+def _template_handedness(template: np.ndarray) -> np.ndarray:
+    """Reflection-odd terms (Å³): signed volumes of consecutive atom triples.
+
+    Distances alone are blind to reflection, so enantiomers share a distance
+    fingerprint and would be collapsed into one block — silently flipping a
+    molecule's hand. Each volume is invariant under proper rotation and changes
+    sign under reflection, and they are kept as a vector rather than summed
+    because opposite-signed terms cancel in a sum (an sp3 centre very nearly
+    does). Consecutive triples in PSF order, rather than e.g. the most non-planar
+    quadruple, keep this free of ``argmax`` ties — symmetric monomers such as
+    methanol hit those constantly, and a tie would turn the sign into float noise
+    and stop identical copies from merging at all.
+    """
+    arr = np.asarray(template, dtype=float).reshape(-1, 3)
+    if int(arr.shape[0]) < 3:
+        return np.zeros((0,), dtype=float)
+    a, b, c = arr[:-2], arr[1:-1], arr[2:]
+    return np.asarray(np.sum(np.cross(a, b) * c, axis=1) / 6.0, dtype=float)
+
+
+def _template_key(template: np.ndarray) -> np.ndarray:
+    """Rotation/translation-invariant fingerprint of a monomer's internal geometry.
+
+    The upper triangle of the internal distance matrix in atom order, plus a
+    handedness term. Raw coordinates cannot be compared directly: Packmol gives
+    every copy a random orientation, so two molecules with identical rigid
+    geometry have completely different coordinate arrays. Distances are invariant
+    under exactly the rotation + translation Packmol applies, so they identify the
+    copies that can share one ``structure ... number N`` block.
+    """
+    arr = np.asarray(template, dtype=float).reshape(-1, 3)
+    n = int(arr.shape[0])
+    if n < 2:
+        return np.zeros((1,), dtype=float)
+    d = np.linalg.norm(arr[:, None, :] - arr[None, :, :], axis=-1)
+    iu = np.triu_indices(n, k=1)
+    return np.concatenate(
+        [np.asarray(d[iu], dtype=float), _template_handedness(arr)]
+    )
+
+
+def _monomer_species_key(
+    atom_count: int,
+    names: list[str] | None,
+    z: np.ndarray | None,
+) -> tuple:
+    """Chemical identity of a monomer: atom count, atom names, atomic numbers."""
+    return (
+        int(atom_count),
+        tuple(str(x) for x in names) if names is not None else None,
+        tuple(int(x) for x in np.asarray(z).reshape(-1)) if z is not None else None,
+    )
+
+
+def _group_identical_templates(
+    indices: list[int],
+    templates: list[np.ndarray],
+    offsets: np.ndarray,
+    *,
+    atom_names: list[str] | None,
+    atomic_numbers: np.ndarray | None,
+    tol: float = TEMPLATE_MATCH_TOL_A,
+) -> list[list[int]]:
+    """Group monomers that are the same species *and* the same rigid geometry.
+
+    One Packmol ``structure`` block per molecule is quadratically expensive at
+    liquid density (Packmol treats every block as its own molecule type), so
+    interchangeable copies are collapsed into a single ``number N`` block. Only
+    monomers matching to within ``tol`` are merged, because the whole group is
+    packed from the representative's geometry — a conformationally diverse or
+    mixed-species set keeps its per-molecule blocks and its per-molecule shape.
+    """
+    groups: list[list[int]] = []
+    reps: list[tuple[tuple, np.ndarray]] = []
+    for mi in indices:
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        species = _monomer_species_key(
+            e - s,
+            atom_names[s:e] if atom_names is not None else None,
+            atomic_numbers[s:e] if atomic_numbers is not None else None,
+        )
+        fingerprint = _template_key(templates[mi])
+        for gi, (rep_species, rep_fingerprint) in enumerate(reps):
+            if rep_species != species or rep_fingerprint.shape != fingerprint.shape:
+                continue
+            if float(np.max(np.abs(rep_fingerprint - fingerprint), initial=0.0)) <= tol:
+                groups[gi].append(int(mi))
+                break
+        else:
+            groups.append([int(mi)])
+            reps.append((species, fingerprint))
+    return groups
 
 
 def _read_packmol_monomer_coords(
@@ -232,12 +343,15 @@ def _run_packmol_repack(
         )
         output_order.append(mi)
 
-    grouped: dict[tuple[float, ...], list[int]] = {}
-    for mi in movable:
-        key = _template_key(templates[mi])
-        grouped.setdefault(key, []).append(mi)
+    grouped = _group_identical_templates(
+        movable,
+        templates,
+        offsets,
+        atom_names=atom_names,
+        atomic_numbers=atomic_numbers,
+    )
 
-    for mi_list in grouped.values():
+    for mi_list in grouped:
         mi0 = int(mi_list[0])
         pdb_path = scratch_dir / f"movable_{mi0:04d}.pdb"
         s0, e0 = int(offsets[mi0]), int(offsets[mi0 + 1])
@@ -298,7 +412,8 @@ def _run_packmol_repack(
     print(
         f"Packmol repack ({placement_label}): patched monomers "
         f"{sorted(i + 1 for i in movable)} "
-        f"(1-based; fixed {len(fixed)}, tolerance {float(tolerance):.2f} Å)",
+        f"(1-based; fixed {len(fixed)}, tolerance {float(tolerance):.2f} Å, "
+        f"{len(grouped)} movable structure block(s))",
         flush=True,
     )
     return new_pos
@@ -331,9 +446,10 @@ def repack_monomers_clear_overlap(
         if scratch_dir is not None
         else Path("packmol_repack")
     )
+    # `spacing` is a COM pitch, not a contact distance: it belongs to the grid
+    # fallback below, never to the Packmol tolerance.
     tolerance = _resolve_packmol_tolerance(
         min_distance=min_distance,
-        spacing=spacing,
         packmol_tolerance=packmol_tolerance,
     )
     try:
@@ -398,9 +514,10 @@ def repack_selected_monomers_clear_overlap(
         if scratch_dir is not None
         else Path("packmol_repack")
     )
+    # `spacing` is a COM pitch, not a contact distance: it belongs to the grid
+    # fallback below, never to the Packmol tolerance.
     tolerance = _resolve_packmol_tolerance(
         min_distance=min_distance,
-        spacing=spacing,
         packmol_tolerance=packmol_tolerance,
     )
     try:
