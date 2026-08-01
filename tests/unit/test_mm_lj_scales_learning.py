@@ -507,35 +507,118 @@ def test_atc_types_missing_from_training_are_left_at_unit_scale():
     np.testing.assert_allclose(ep, [2.0, 1.0, 1.0])
 
 
-def test_lj_scales_are_inert_under_ewald_solver():
-    """Pins the documented limitation: ewald forces LJ off, so scales do nothing.
+def test_lj_scales_move_emm_under_ewald_when_include_lj():
+    """#139 Phase 1: fixed scales affect Ewald E_MM only when include_lj=True."""
+    from mmml.data.units import KCAL_MOL_TO_EV
+    from mmml.models.cgenff_mm import cgenff_lj_energy, monomer_centroids
+    from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+    from mmml.models.hybrid_energy import hybrid_forward
+    from mmml.models.mm_lj_scales import apply_mm_lj_scales
 
-    If someone implements LJ under Ewald, this test fails on purpose — update
-    ``docs/hybrid-mm-lj-scales.md`` § "What is still unsupported" at the same time.
-    """
+    batch = _dimer_batch(separation_A=3.5)
+    base_kw = dict(
+        SWITCH_KW,
+        lr_solver="ewald",
+        pme_box_length=25.0,
+        short_range_wall=False,
+        learn_mm_lj_scales=False,
+    )
+    sig_s = jnp.array([1.4, 0.7])
+    eps_s = jnp.array([3.0, 0.2])
+
+    # Coulomb-only: scales must remain inert.
+    base_off = hybrid_forward(
+        _zero_ml_apply, {"params": {}}, batch, 1, MASTER_SIGMAS, MASTER_EPSILONS,
+        include_lj=False,
+        mm_lj_sigma_scale=jnp.ones(2), mm_lj_epsilon_scale=jnp.ones(2), **base_kw
+    )
+    scaled_off = hybrid_forward(
+        _zero_ml_apply, {"params": {}}, batch, 1, MASTER_SIGMAS, MASTER_EPSILONS,
+        include_lj=False,
+        mm_lj_sigma_scale=sig_s, mm_lj_epsilon_scale=eps_s, **base_kw
+    )
+    np.testing.assert_allclose(
+        np.asarray(base_off["e_mm"]), np.asarray(scaled_off["e_mm"]), rtol=1e-6
+    )
+
+    # LJ on: scales must move e_mm.
+    base_on = hybrid_forward(
+        _zero_ml_apply, {"params": {}}, batch, 1, MASTER_SIGMAS, MASTER_EPSILONS,
+        include_lj=True,
+        mm_lj_sigma_scale=jnp.ones(2), mm_lj_epsilon_scale=jnp.ones(2), **base_kw
+    )
+    scaled_on = hybrid_forward(
+        _zero_ml_apply, {"params": {}}, batch, 1, MASTER_SIGMAS, MASTER_EPSILONS,
+        include_lj=True,
+        mm_lj_sigma_scale=sig_s, mm_lj_epsilon_scale=eps_s, **base_kw
+    )
+    assert not np.allclose(
+        np.asarray(base_on["e_mm"]), np.asarray(scaled_on["e_mm"]), rtol=1e-5
+    )
+
+    # LJ-on − LJ-off == KCAL_MOL_TO_EV * λ_MM * E_LJ (unit scales).
+    pos = batch["R"]
+    mid = batch["mol_id"].reshape(-1)
+    tidx = batch["cgenff_type_idx"].reshape(-1)
+    sig_eff, eps_eff = apply_mm_lj_scales(
+        MASTER_SIGMAS, MASTER_EPSILONS, jnp.ones(2), jnp.ones(2), include_lj=True
+    )
+    e_lj = float(cgenff_lj_energy(pos, tidx, mid, sig_eff, eps_eff))
+    coms = monomer_centroids(pos, mid, n_monomers=2)
+    r_com = float(np.linalg.norm(np.asarray(coms[1] - coms[0])))
+    lam = float(
+        mm_switch_scale(
+            jnp.asarray(r_com),
+            mm_switch_on=SWITCH_KW["mm_switch_on"],
+            mm_switch_width=SWITCH_KW["mm_switch_width"],
+            ml_switch_width=SWITCH_KW["ml_switch_width"],
+            complementary_handoff=SWITCH_KW["complementary_handoff"],
+        )
+    )
+    expected_delta = KCAL_MOL_TO_EV * lam * e_lj
+    delta = float(np.asarray(base_on["e_mm"]) - np.asarray(base_off["e_mm"]))
+    np.testing.assert_allclose(delta, expected_delta, rtol=1e-5, atol=1e-8)
+
+
+def test_ewald_plus_lj_force_energy_fd_smoke():
+    """Finite-difference check for Ewald Coulomb + switched LJ forces."""
     from mmml.models.hybrid_energy import hybrid_forward
 
-    batch = _dimer_batch()
+    batch = _dimer_batch(separation_A=3.5)
     kw = dict(
         SWITCH_KW,
         lr_solver="ewald",
         pme_box_length=25.0,
-        learn_mm_lj_scales=True,
+        short_range_wall=False,
+        include_lj=True,
+        complementary_handoff=SWITCH_KW["complementary_handoff"],
     )
 
-    base = hybrid_forward(
-        _zero_ml_apply, {"params": {}}, batch, 1, MASTER_SIGMAS, MASTER_EPSILONS,
-        mm_lj_sigma_scale=jnp.ones(2), mm_lj_epsilon_scale=jnp.ones(2), **kw
-    )
-    scaled = hybrid_forward(
-        _zero_ml_apply, {"params": {}}, batch, 1, MASTER_SIGMAS, MASTER_EPSILONS,
-        mm_lj_sigma_scale=jnp.array([1.4, 0.7]),
-        mm_lj_epsilon_scale=jnp.array([3.0, 0.2]),
-        **kw
-    )
-    np.testing.assert_allclose(
-        np.asarray(base["e_mm"]), np.asarray(scaled["e_mm"]), rtol=1e-6
-    )
+    def _fwd(b):
+        return hybrid_forward(
+            _zero_ml_apply, {"params": {}}, b, 1, MASTER_SIGMAS, MASTER_EPSILONS, **kw
+        )
+
+    out = _fwd(batch)
+    f0 = np.asarray(out["forces"]).reshape(-1, 3)
+    assert np.all(np.isfinite(f0))
+
+    d = np.zeros_like(f0)
+    d[0, 0] = 1.0
+    d[2, 0] = -1.0
+    d = d / np.linalg.norm(d)
+    eps = 1e-4
+    pos = np.asarray(batch["R"], dtype=np.float64)
+
+    def energy_at(p):
+        b = dict(batch)
+        b["R"] = jnp.asarray(p, dtype=batch["R"].dtype)
+        return float(np.asarray(_fwd(b)["energy"]).reshape(-1)[0])
+
+    fd = (energy_at(pos + eps * d) - energy_at(pos - eps * d)) / (2.0 * eps)
+    analytic = float(-np.sum(f0 * d))
+    rel = abs(fd - analytic) / max(abs(analytic), 1e-8)
+    assert rel < 5e-3, f"fd={fd}, -F.d={analytic}, rel={rel}"
 
 
 def test_find_learnable_sidecar_discovery(tmp_path: Path):

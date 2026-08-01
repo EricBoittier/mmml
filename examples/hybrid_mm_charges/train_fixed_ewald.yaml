@@ -1,11 +1,13 @@
-# Mode A + jit-native Ewald Coulomb (LJ off) for hybrid training
+# Mode A + jit-native Ewald Coulomb for hybrid training (Coulomb-only default)
 #   E_MM = E_ewald(all atoms, q_CGenFF)   # full-box many-to-many; no exclusions
+# Optional: mm_include_lj: true adds COM-switched LJ beside untapered Ewald
+# (learn_mm_lj_scales stays off under ewald — freeze Stage-1 hybrid_mm.json).
 #
 # Pure JAX (mmml.interfaces.pycharmmInterface.ewald_native) -- no external PME
-# library, no CUDA requirement. Same operator as fast MD periodic_external
-# --lr-solver ewald, and the same contract as train_fixed_nvalchemiops_pme.yaml
-# (drop-in alternative wherever nvalchemiops isn't installed, e.g. CPU-only
-# clusters).
+# library, no CUDA requirement. Same Coulomb operator as fast MD
+# periodic_external --lr-solver ewald, and the same contract as
+# train_fixed_nvalchemiops_pme.yaml (drop-in alternative wherever nvalchemiops
+# isn't installed, e.g. CPU-only clusters).
 #
 #   mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_ewald.yaml
 #
@@ -24,7 +26,7 @@ mm_charge_mode: fixed
 lr_solver: ewald
 pme_box_length: 30.0          # Å, cubic; required for ewald
 pme_accuracy: 1.0e-6          # optional
-mm_include_lj: false          # forced off for ewald anyway
+mm_include_lj: false          # set true for Ewald + switched LJ (scales frozen)
 
 # Handoff (same defaults as MD)
 ml_switch_width: 1.5

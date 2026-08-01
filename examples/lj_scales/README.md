@@ -167,15 +167,15 @@ That is kernel selection, not broken code.
 
 ## Honest limitations
 
-- Training LJ requires `lr_solver: mic`. Under `ewald` / `nvalchemiops_pme` the LJ
-  term is removed from the hybrid energy, so there is nothing to differentiate.
-  This is principled — LJ is short-ranged — but it means the fit sees truncated
-  Coulomb, and **Coulomb error can be absorbed into σ/ε**. Mitigate with
-  `mm_charge_mode: fixed`, identical cutoffs at train and MD time, and validation
-  on a property outside the loss (density, RDF first peak).
-- A condensed-phase run with trained LJ therefore uses truncated-MIC
-  electrostatics, not Ewald. Combining the two is
-  [issue #139](https://github.com/EricBoittier/mmml/issues/139).
+- Learning σ/ε still requires `lr_solver: mic` (`learn_mm_lj_scales` is forced
+  off under `ewald` / `nvalchemiops_pme`). The Stage-1 fit therefore sees
+  truncated Coulomb, and **Coulomb error can be absorbed into σ/ε**. Mitigate
+  with `mm_charge_mode: fixed`, identical cutoffs at train and MD time, and
+  validation on a property outside the loss (density, RDF first peak).
+- Fixed LJ beside Ewald Coulomb is available in train
+  (`mm_include_lj: true` + `lr_solver: ewald`). Deploy with scales via
+  `jax_mic` (optionally `jax_pme` for LR Coulomb). Full learn-under-Ewald /
+  parity work is [issue #139](https://github.com/EricBoittier/mmml/issues/139).
 - Exhaustive geometry + RI-MP2 is **cluster work**; steps 08–09 prepare/submit/collect
   only. Rigid grids without NMS undertrain intramolecular degrees of freedom.
 - Pure-liquid MD does not need TIP3; hetero **ACO–DCM** frames are still required

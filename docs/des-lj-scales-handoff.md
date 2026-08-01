@@ -292,12 +292,14 @@ Coulomb, and thin atom types remain. The machine-readable result is
 
 ### Truncated electrostatics contaminate the fit
 
-Training LJ requires `lr_solver: mic`. Under `ewald` the LJ term is removed from
-the hybrid energy entirely and `learn_mm_lj_scales` is silently ineffective. MIC
-means the fit sees **truncated Coulomb**, and Coulomb error can be absorbed into
-σ/ε. Mitigations: `mm_charge_mode: fixed`, identical cutoffs at train and MD
-time, and validation on a property outside the loss (density, RDF first peak).
-Combining trained LJ with Ewald is [issue #139](https://github.com/EricBoittier/mmml/issues/139).
+Learning σ/ε still requires `lr_solver: mic` (`learn_mm_lj_scales` is forced
+off under `ewald` / `nvalchemiops_pme`). MIC means the fit sees **truncated
+Coulomb**, and Coulomb error can be absorbed into σ/ε. Mitigations:
+`mm_charge_mode: fixed`, identical cutoffs at train and MD time, and validation
+on a property outside the loss (density, RDF first peak). Training may now
+evaluate fixed scales beside untapered Ewald Coulomb (`mm_include_lj: true`);
+learning under Ewald and full deploy parity remain
+[issue #139](https://github.com/EricBoittier/mmml/issues/139).
 
 Consequence: the resulting scales are for `jax_mic` / `include_mm` MD. They are
 **not** valid for `periodic_external` + Ewald — MLpot raises rather than

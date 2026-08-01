@@ -73,7 +73,7 @@ def _dimer_batch(sep: float = 6.0):
     }
 
 
-def test_hybrid_mm_config_nvalchemiops_forces_lj_off_and_requires_box():
+def test_hybrid_mm_config_nvalchemiops_honors_include_lj_and_requires_box():
     with pytest.raises(ValueError, match="pme_box_length"):
         HybridMMConfig.coerce(
             {
@@ -90,11 +90,13 @@ def test_hybrid_mm_config_nvalchemiops_forces_lj_off_and_requires_box():
             **KW,
             "lr_solver": "nvalchemiops_pme",
             "pme_box_length": 30.0,
-            "include_lj": True,  # forced off
+            "include_lj": True,
+            "learn_mm_lj_scales": True,  # still forced off under PME
         }
     )
     assert cfg.lr_solver == "nvalchemiops_pme"
-    assert cfg.include_lj is False
+    assert cfg.include_lj is True
+    assert cfg.learn_mm_lj_scales is False
     assert cfg.pme_box_length == pytest.approx(30.0)
 
 
@@ -125,6 +127,15 @@ def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
         pme_box_length=None,
         pme_accuracy=1e-4,
         mm_include_lj=True,
+        learn_mm_lj_scales=True,
+        mm_lj_sigma_scale_min=0.95,
+        mm_lj_sigma_scale_max=1.05,
+        mm_lj_epsilon_scale_min=0.25,
+        mm_lj_epsilon_scale_max=4.0,
+        mm_lj_min_type_frames=0,
+        hybrid_hamiltonian="handoff",
+        shared_cutoff=None,
+        cutoff=6.0,
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
@@ -145,7 +156,8 @@ def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
     ):
         cfg = _build_hybrid_mm_config(args, [str(path)])
     assert cfg["lr_solver"] == "nvalchemiops_pme"
-    assert cfg["include_lj"] is False
+    assert cfg["include_lj"] is True
+    assert cfg["learn_mm_lj_scales"] is False
     assert cfg["pme_box_length"] == pytest.approx(28.0)
     assert cfg["pme_real_space_cutoff"] == pytest.approx(9.0)
 

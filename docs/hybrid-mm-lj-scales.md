@@ -150,14 +150,16 @@ Three things keep it bounded — do all three:
 
 | You want to… | Use | Why |
 |---|---|---|
-| Learn σ/ε | `lr_solver: mic`, `mm_include_lj: true`, `learn_mm_lj_scales: true` | The only path where LJ is in the energy and differentiable |
-| Refine ML weights with correct electrostatics | `lr_solver: ewald` (LJ auto-off, scales frozen) | Stage 2 below; keeps the Stage-1 sidecar intact |
-| Deploy trained σ/ε in MD, including a condensed-phase box | `include_mm: true`, `mm_nonbond_mode: jax_mic` (the default) | The switched-MM pair loop is what reads `ep_scale`/`sig_scale` |
-| Full-box Ewald/PME production MD | `mm_nonbond_mode: periodic_external` | **Trained LJ scales do not apply here** — MLpot now refuses `--mm-lj-scales-file` in this mode rather than ignoring it |
+| Learn σ/ε | `lr_solver: mic`, `mm_include_lj: true`, `learn_mm_lj_scales: true` | Differentiable LJ under MIC (recommended Stage 1) |
+| Train / TL with Ewald Coulomb **and** fixed LJ scales | `lr_solver: ewald`, `mm_include_lj: true`, `learn_mm_lj_scales: false` | Split operator: untapered full-box Coulomb + COM-switched LJ ([#139](https://github.com/EricBoittier/mmml/issues/139) Phase 1) |
+| Refine ML weights with Coulomb-only Ewald | `lr_solver: ewald`, `mm_include_lj: false` | Stage 2 Coulomb-only TL; keeps the Stage-1 sidecar intact |
+| Deploy trained σ/ε in MD, including a condensed-phase box | `include_mm: true`, `mm_nonbond_mode: jax_mic` (the default); optionally `lr_solver: jax_pme` | Switched-MM pair LJ reads `ep_scale`/`sig_scale`; jax-pme adds k-space Coulomb |
+| Full-box Ewald via `periodic_external` | `mm_nonbond_mode: periodic_external` | **Trained LJ scales do not apply here** — MLpot refuses `--mm-lj-scales-file` |
 
-The last row is the honest limit: a condensed-phase run *with* trained LJ uses
-truncated-MIC electrostatics today. Combining learned LJ with full Ewald in one
-production energy is future work, tracked in
+Prefer `jax_mic` + `jax_pme` over `periodic_external` when you need scales with
+long-range Coulomb. Learning σ/ε **under** Ewald and full train↔MD Ewald+LJ
+parity are still tracked in
+[issue #139](https://github.com/EricBoittier/mmml/issues/139) /
 [issue #133](https://github.com/EricBoittier/mmml/issues/133).
 
 ---
@@ -187,15 +189,15 @@ mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_lj_scales.yam
 
 Keep the run’s `hybrid_mm.json` (scale vectors) next to the Orbax/JSON checkpoint.
 
-**Stage 2 — warm-start / TL of ML under Ewald (Coulomb-only):**
+**Stage 2 — warm-start / TL of ML under Ewald:**
 
 ```yaml
 # like train_fixed_ewald.yaml, plus restart from Stage 1
 hybrid_mm: true
 lr_solver: ewald
 pme_box_length: 30.0
-mm_include_lj: false          # forced off for ewald anyway
-learn_mm_lj_scales: false     # forced off; scales are not updated
+mm_include_lj: false          # Coulomb-only TL (set true for Ewald + switched LJ)
+learn_mm_lj_scales: false     # still forced off under ewald; scales are not updated
 # restart: /path/to/stage1/orbax_or_params   # or --restart / transfer-learning flags
 ```
 
@@ -204,9 +206,18 @@ mmml physnet-train --config path/to/train_ewald_tl.yaml \
   --restart /path/to/stage1/checkpoint
 ```
 
-During Stage 2, LJ is **inert** in the train loss (`include_lj=False`). The
-Stage-1 `hybrid_mm.json` is **not** rewritten with new scales — keep the Stage-1
-sidecar for later MIC MD.
+With `mm_include_lj: false`, LJ is inert in the train loss (classic Coulomb-only
+Stage 2). With `mm_include_lj: true`, training uses
+
+```text
+E_MM = E_Coulomb_LR (untapered Ewald/PME) + λ_MM(R) * E_LJ(σ_eff, ε_eff)
+```
+
+Coulomb stays untapered (same contract as Coulomb-only ewald parity);
+LJ uses the COM handoff taper. MD `jax_mic` + `jax_pme` COM-scales the LR
+Coulomb term as well — that taper asymmetry is deferred to Phase 3 parity work.
+`learn_mm_lj_scales` remains forced off under ewald/nval; keep the Stage-1
+`hybrid_mm.json` sidecar for deploy.
 
 **Deploy MIC MD with adjusted LJs** (supported):
 
@@ -223,13 +234,13 @@ Scales load into `ep_scale` / `sig_scale` only when JAX `doMM` is on
 
 | Goal | Status |
 |------|--------|
-| Learn / fine-tune LJ scales **under** `lr_solver: ewald` or `nvalchemiops_pme` | Impossible — LJ forced off |
-| Production **`periodic_external` + Ewald** MD that still applies `hybrid_mm.json` scales | Unsupported — JAX `doMM` is off in periodic mode, so scales are not applied; CHARMM IMAGE VDW does not consume the sidecar |
-| End-to-end “MIC LJ → Ewald TL → Ewald MD with adjusted LJs” | **Not** a supported path yet |
+| Learn / fine-tune LJ scales **under** `lr_solver: ewald` or `nvalchemiops_pme` | Unsupported — `learn_mm_lj_scales` forced false (fixed scales + `mm_include_lj: true` is supported) |
+| Production **`periodic_external` + Ewald** MD that still applies `hybrid_mm.json` scales | Unsupported — JAX `doMM` is off in periodic mode; CHARMM IMAGE VDW does not consume the sidecar |
+| Train↔MD Ewald+LJ operator parity (incl. Coulomb COM taper) | Deferred — prefer deploy on `jax_mic` + `jax_pme` with scales; full parity is [#139](https://github.com/EricBoittier/mmml/issues/139) Phase 3 |
 
-So: Stage 1 + Stage 2 for **ML weights** under Ewald is fine; keep using **MIC /
-`jax_mic` MD** if you need the adjusted LJs. Mixing Ewald Coulomb with learned
-LJ scales in one production energy is future work.
+So: Stage 1 (MIC + learn scales) + Stage 2 (Ewald TL, optionally with frozen
+switched LJ) works for training. Deploy adjusted LJs with `jax_mic` (and
+`jax_pme` for LR Coulomb). Avoid `periodic_external` when you need the sidecar.
 
 ---
 
@@ -412,7 +423,7 @@ LJ scales still live on hybrid / md-system flags, not inside the policy file.
 | Absent types untouched | A type not present in the data keeps `s = 1.0` exactly |
 | Train → MD continuity | Deployed `at_ep`/`at_rm` equal master × trained scale for the right ATC rows |
 | MD loads scales | Verbose MLpot line, or explicit `--mm-lj-scales-file` |
-| Ewald/PME | Do **not** expect LJ scales; LJ is forced off |
+| Ewald/PME + `mm_include_lj: true` | Fixed scales move switched LJ; `learn_mm_lj_scales` stays off |
 | `periodic_external` + `--mm-lj-scales-file` | **Errors out** — it cannot apply them (see Troubleshooting) |
 
 Local unit tests (no CHARMM / no GPU required for these):
@@ -424,11 +435,9 @@ uv run pytest tests/unit/test_mm_lj_scales.py \
 ```
 
 `test_mm_lj_scales.py` covers the mechanics (attach/split/apply, JSON I/O, ATC
-remap, nonzero gradients). `test_mm_lj_scales_learning.py` covers the two
-questions those cannot answer: whether an optimizer drives the scales to the
-right values, and whether the value that trained is the value MD deploys. It also
-pins the Ewald limitation, so if LJ-under-Ewald is ever implemented that test
-fails and forces this page to be updated with it.
+remap, nonzero gradients). `test_mm_lj_scales_learning.py` covers planted-scale
+recovery, train→MD continuity, and Ewald+LJ isolation (scales move LJ when
+`include_lj=True`; inert when `False`).
 
 ### An out-of-sample check: crystal sublimation enthalpy
 
