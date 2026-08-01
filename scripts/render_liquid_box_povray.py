@@ -104,8 +104,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     ini = stem.with_suffix(".ini")
+    # POV-Ray runs with cwd set to the .ini's directory (it resolves the .pov it
+    # references relatively), so it must be handed the bare filename. Passing the
+    # path as given fails from that cwd, and POV-Ray reports it as
+    # "Failed to parse command-line option" rather than as a missing file.
     proc = subprocess.run(
-        [exe, str(ini)], capture_output=True, text=True, cwd=str(stem.parent)
+        [exe, ini.name], capture_output=True, text=True, cwd=str(stem.parent)
     )
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-6:]

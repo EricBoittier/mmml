@@ -201,21 +201,36 @@ def main() -> int:
                 fontsize=9, color=C_DEP)
 
     ax = axes[2]
-    order = np.argsort(seps)
-    ax.plot(np.array(seps)[order], e_base[order], lw=2.0, color=C_BASE,
-            alpha=0.9, zorder=2)
-    ax.plot(np.array(seps)[order], e_ref[order], lw=2.0, color=C_REF,
-            alpha=0.9, zorder=3)
+    # A pair potential, not a scatter of random compositions: panel 3 has to be
+    # readable, and E-vs-separation over random type draws is just noise.
+    # Pick the two live types whose epsilon scale moved most.
+    moved = sorted(live, key=lambda i: -abs(eps_scale[i] - 1.0))[:2]
+    r = np.linspace(2.6, 8.0, 400)
+    styles = [("-", C_REF), ("-", C_DEP)]
+    for k, t in enumerate(moved):
+        s_b, e_b = ref.sigmas[t], ref.epsilons[t]
+        s_a, e_a = sigA[t], epsA[t]
+        base = 4 * e_b * ((s_b / r) ** 12 - (s_b / r) ** 6)
+        trained = 4 * e_a * ((s_a / r) ** 12 - (s_a / r) ** 6)
+        ls, col = styles[k]
+        ax.plot(r, base, lw=1.6, color=col, ls="--", alpha=0.55, zorder=2)
+        ax.plot(r, trained, lw=2.0, color=col, ls=ls, zorder=3)
+        j = int(np.argmin(trained))
+        ax.annotate(f"{names[t]}  (x{eps_scale[t]:.2f} eps)",
+                    xy=(r[j], trained[j]), xytext=(6, -4 + 12 * k),
+                    textcoords="offset points", fontsize=9, color=col,
+                    weight="bold")
     ax.axhline(0, color=GRID, lw=1.0, zorder=1)
-    ax.set_xlabel("monomer separation (Å)", fontsize=9, color=INK2)
-    ax.set_ylabel("LJ energy (kcal/mol)", fontsize=9, color=INK2)
-    ax.set_title(f"…and it is not a no-op — max Δ {effect:.2f} kcal/mol",
+    ax.set_ylim(min(-1.2, 1.3 * min(
+        float((4 * epsA[t] * ((sigA[t] / r) ** 12 - (sigA[t] / r) ** 6)).min())
+        for t in moved)), 1.0)
+    ax.set_xlabel("pair separation (Å)", fontsize=9, color=INK2)
+    ax.set_ylabel("LJ pair energy (kcal/mol)", fontsize=9, color=INK2)
+    ax.set_title(f"…and it is not a no-op — max Δ {effect:.1f} kcal/mol",
                  fontsize=11, color=INK, loc="left")
-    # Direct labels (contrast relief for the aqua slot).
-    ax.annotate("unscaled CGenFF", xy=(0.55, 0.16), xycoords="axes fraction",
-                fontsize=9, color=C_BASE, weight="bold")
-    ax.annotate("trained scales", xy=(0.55, 0.06), xycoords="axes fraction",
-                fontsize=9, color=C_REF, weight="bold")
+    ax.plot([], [], ls="--", color=INK2, lw=1.6, alpha=0.6, label="unscaled CGenFF")
+    ax.plot([], [], ls="-", color=INK2, lw=2.0, label="trained scales")
+    ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="lower right")
 
     fig.suptitle(
         f"periodic_external can now consume trained LJ scales  —  {label}  "
