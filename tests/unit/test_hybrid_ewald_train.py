@@ -86,13 +86,22 @@ def test_hybrid_mm_config_ewald_honors_include_lj_and_requires_box():
         {
             "master_sigmas": SIG, "master_epsilons": EPS, **KW,
             "lr_solver": "ewald", "pme_box_length": 30.0, "include_lj": True,
-            "learn_mm_lj_scales": True,  # still forced off under ewald
+            "learn_mm_lj_scales": True,
         }
     )
     assert cfg.lr_solver == "ewald"
     assert cfg.include_lj is True
-    assert cfg.learn_mm_lj_scales is False
+    assert cfg.learn_mm_lj_scales is True
     assert cfg.pme_box_length == pytest.approx(30.0)
+
+    cfg_learn_off = HybridMMConfig.coerce(
+        {
+            "master_sigmas": SIG, "master_epsilons": EPS, **KW,
+            "lr_solver": "ewald", "pme_box_length": 30.0,
+            "include_lj": False, "learn_mm_lj_scales": True,
+        }
+    )
+    assert cfg_learn_off.learn_mm_lj_scales is False
 
     cfg_off = HybridMMConfig.coerce(
         {
@@ -134,7 +143,7 @@ def test_build_hybrid_mm_config_cli_ewald(tmp_path):
     cfg = _build_hybrid_mm_config(args, [str(path)])
     assert cfg["lr_solver"] == "ewald"
     assert cfg["include_lj"] is True
-    assert cfg["learn_mm_lj_scales"] is False
+    assert cfg["learn_mm_lj_scales"] is True
     assert cfg["pme_box_length"] == pytest.approx(28.0)
     assert cfg["pme_real_space_cutoff"] is None  # no estimation step for ewald
 

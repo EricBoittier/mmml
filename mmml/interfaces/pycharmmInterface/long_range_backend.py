@@ -1500,6 +1500,7 @@ def collect_lr_solver_mapping(
     periodic_charmm_vdw: bool = True,
     ewald_include_self: bool = True,
     ewald_include_intra: bool = True,
+    include_lj: bool = False,
 ) -> dict[str, str]:
     """Key/value rows for the Hybrid ML/MM setup long-range Coulomb section."""
     requested = resolve_lr_solver(lr_solver)
@@ -1520,9 +1521,14 @@ def collect_lr_solver_mapping(
         mapping["lr_solver_requested"] = requested
 
     def _ewald_coulomb_mode() -> str:
+        lj_txt = (
+            " + COM-switched LJ"
+            if bool(include_lj)
+            else " / no LJ"
+        )
         if bool(ewald_include_intra) and bool(ewald_include_self):
             return (
-                "full-box Ewald Coulomb (hybrid_ewald; no switch / no LJ; "
+                f"full-box Ewald Coulomb (hybrid_ewald; no switch{lj_txt}; "
                 "train-matched)"
             )
         return (

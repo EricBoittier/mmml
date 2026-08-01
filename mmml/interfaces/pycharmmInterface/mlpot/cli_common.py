@@ -4619,6 +4619,19 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--mm-include-lj",
+        "--mm_include_lj",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="mm_include_lj",
+        help=(
+            "With --lr-solver ewald and jax_mic doMM: add COM-switched "
+            "intermolecular LJ beside untapered Ewald Coulomb (reads "
+            "--mm-lj-scales-file / hybrid_mm.json). Default: on when LJ scales "
+            "are loaded, otherwise off. Prefer jax_mic+jax_pme for large boxes."
+        ),
+    )
+    group.add_argument(
         "--jax-pme-method",
         type=str,
         choices=("ewald", "pme", "p3m"),

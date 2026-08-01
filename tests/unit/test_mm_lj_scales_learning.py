@@ -130,10 +130,25 @@ def _fit_scales(loss_fn, params, *, lr: float, steps: int):
 
 
 def _e_mm(
-    sigma_scale, epsilon_scale, batch, *, master_epsilons=MASTER_EPSILONS
+    sigma_scale,
+    epsilon_scale,
+    batch,
+    *,
+    master_epsilons=MASTER_EPSILONS,
+    lr_solver: str = "mic",
+    pme_box_length: float | None = None,
+    include_lj: bool = True,
 ) -> jnp.ndarray:
     from mmml.models.hybrid_energy import hybrid_forward
 
+    kw = dict(SWITCH_KW)
+    if lr_solver != "mic":
+        kw.update(
+            lr_solver=lr_solver,
+            pme_box_length=float(pme_box_length if pme_box_length is not None else 25.0),
+            include_lj=include_lj,
+            short_range_wall=False,
+        )
     out = hybrid_forward(
         _zero_ml_apply,
         {"params": {}},
@@ -144,7 +159,7 @@ def _e_mm(
         learn_mm_lj_scales=True,
         mm_lj_sigma_scale=sigma_scale,
         mm_lj_epsilon_scale=epsilon_scale,
-        **SWITCH_KW,
+        **kw,
     )
     return jnp.asarray(out["e_mm"]).reshape(())
 
@@ -173,6 +188,30 @@ def test_optimizer_recovers_planted_epsilon_scale():
     # its 1.0 init — the same property the ATC remap relies on for solvent types.
     assert float(np.asarray(eps_out)[1]) == pytest.approx(1.0, abs=1e-6)
     # Frozen leaf untouched.
+    np.testing.assert_allclose(np.asarray(sig_out), np.ones(2), atol=1e-6)
+
+
+def test_optimizer_recovers_planted_epsilon_scale_under_ewald():
+    """#139: learn_mm_lj_scales under lr_solver=ewald (q=0 → pure switched LJ)."""
+    batch = _dimer_batch(type_idx=(0, 0, 0, 0))
+    truth_eps = 1.6
+    ewald_kw = dict(lr_solver="ewald", pme_box_length=25.0, include_lj=True)
+    target = _e_mm(
+        jnp.ones(2), jnp.array([truth_eps, 1.0]), batch, **ewald_kw
+    )
+
+    def loss_fn(p):
+        _, sig, eps = split_mm_lj_scale_params(p)
+        sig = jax.lax.stop_gradient(sig)
+        return (_e_mm(sig, eps, batch, **ewald_kw) - target) ** 2
+
+    params, loss0, loss1 = _fit_scales(
+        loss_fn, attach_mm_lj_scales({"params": {}}, 2), lr=3e-2, steps=400
+    )
+    assert loss1 < loss0 * 1e-3, f"loss did not converge: {loss0:g} -> {loss1:g}"
+    _, sig_out, eps_out = split_mm_lj_scale_params(params)
+    assert float(np.asarray(eps_out)[0]) == pytest.approx(truth_eps, rel=2e-2)
+    assert float(np.asarray(eps_out)[1]) == pytest.approx(1.0, abs=1e-6)
     np.testing.assert_allclose(np.asarray(sig_out), np.ones(2), atol=1e-6)
 
 

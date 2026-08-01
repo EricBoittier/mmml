@@ -164,6 +164,7 @@ nav:
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
   - Training & sampling:
       - sections/training-sampling.md
+      - Bayesian design of compact PES datasets: bayesian-pes-design.md
       - Nudged elastic band (NEB): neb.md
       - Diffusion Monte Carlo (DMC): dmc.md
       - Commands:
@@ -179,6 +180,7 @@ nav:
           - kernnn-train: cli/commands/kernnn-train.md
           - kernnn-evaluate: cli/commands/kernnn-evaluate.md
           - active-learning: cli/commands/active-learning.md
+          - pes-design: cli/commands/pes-design.md
           - kernel-fit: cli/commands/kernel-fit.md
           - sample-diverse-xyz: cli/commands/sample-diverse-xyz.md
           - interpolate-xyz: cli/commands/interpolate-xyz.md

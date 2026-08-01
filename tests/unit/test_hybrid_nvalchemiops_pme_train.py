@@ -91,12 +91,12 @@ def test_hybrid_mm_config_nvalchemiops_honors_include_lj_and_requires_box():
             "lr_solver": "nvalchemiops_pme",
             "pme_box_length": 30.0,
             "include_lj": True,
-            "learn_mm_lj_scales": True,  # still forced off under PME
+            "learn_mm_lj_scales": True,
         }
     )
     assert cfg.lr_solver == "nvalchemiops_pme"
     assert cfg.include_lj is True
-    assert cfg.learn_mm_lj_scales is False
+    assert cfg.learn_mm_lj_scales is True
     assert cfg.pme_box_length == pytest.approx(30.0)
 
 
@@ -157,7 +157,7 @@ def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
         cfg = _build_hybrid_mm_config(args, [str(path)])
     assert cfg["lr_solver"] == "nvalchemiops_pme"
     assert cfg["include_lj"] is True
-    assert cfg["learn_mm_lj_scales"] is False
+    assert cfg["learn_mm_lj_scales"] is True
     assert cfg["pme_box_length"] == pytest.approx(28.0)
     assert cfg["pme_real_space_cutoff"] == pytest.approx(9.0)
 

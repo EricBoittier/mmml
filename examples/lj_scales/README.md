@@ -13,6 +13,7 @@ LJ_FULL=1 LJ_DEVICE=gpu bash examples/lj_scales/run_all.sh   # everything
 Reference page: [`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.md).
 Annotated notebook version: [`../hybrid_mm_charges/lj_scales_walkthrough.ipynb`](../hybrid_mm_charges/lj_scales_walkthrough.ipynb).
 Cluster job: [`../hybrid_mm_charges/submit_lj_scales_scicore.sbatch`](../hybrid_mm_charges/submit_lj_scales_scicore.sbatch).
+PES selection rationale and CLI: [`docs/bayesian-pes-design.md`](../../docs/bayesian-pes-design.md).
 
 ## Steps (DCM-only ladder)
 
@@ -85,6 +86,44 @@ for joint training — LoT / atom order may differ, and there are no ACO–DCM h
 
 NMS knobs: `LJ_NMS_CONFORMERS` (≥2), `LJ_NMS_TEMPERATURE`, `LJ_NMS_FREQ_MIN`
 (default 200 cm⁻¹ drops acetone methyl torsion). Step 08 fails if conformers &lt; 2.
+
+## Beyond an exhaustive grid: design the environments PhysNet sees
+
+The regular direction × orientation × distance grid is a useful smoke test and
+reference layer, but geometry count is not the objective. A production set
+should cover type-resolved pair distances, RDFs, and angular/many-body SOAP
+environments while remaining physical and non-redundant.
+
+Treat each important intermolecular type pair as four regions:
+
+| Region | Primary purpose | Relative density |
+|---|---|---|
+| Repulsive wall | excluded volume and stable emergency forces | sparse, controlled |
+| Well and curvature | structure, density, RDF peak, thermodynamics | densest |
+| Shoulder / transition | association and rearrangement | moderate |
+| Long-range / cutoff | asymptote and cutoff smoothness | sparse, explicit |
+
+Use nearest atom-pair distances—not only COM separation—and combine thermal
+monomers, biased pair windows, dimers, clusters, and condensed-phase snapshots.
+Screen a large candidate pool with MM/GFN2/existing ML, then compress it with:
+
+```bash
+mmml pes-design \
+  --input candidate_pool.npz \
+  --output selected_for_qm.npz \
+  --n-select 20000 \
+  --descriptor combined \
+  --cutoff 6 \
+  --temperatures 300,600,1200 \
+  --min-distance 0.75 \
+  --seed 42
+```
+
+The selector combines physical weighting, Bayesian leverage, and approximate
+D-optimal clustering. It writes coverage/RDF plots and compares against random
+sampling. Follow it with an ensemble loop driven by energy **and force**
+disagreement. Full rationale, equations, stopping criteria, and limitations are
+in [Bayesian design of compact PES datasets](../../docs/bayesian-pes-design.md).
 
 Liquid campaign order (per solvent):
 
@@ -167,15 +206,14 @@ That is kernel selection, not broken code.
 
 ## Honest limitations
 
-- Learning σ/ε still requires `lr_solver: mic` (`learn_mm_lj_scales` is forced
-  off under `ewald` / `nvalchemiops_pme`). The Stage-1 fit therefore sees
-  truncated Coulomb, and **Coulomb error can be absorbed into σ/ε**. Mitigate
-  with `mm_charge_mode: fixed`, identical cutoffs at train and MD time, and
-  validation on a property outside the loss (density, RDF first peak).
-- Fixed LJ beside Ewald Coulomb is available in train
-  (`mm_include_lj: true` + `lr_solver: ewald`). Deploy with scales via
-  `jax_mic` (optionally `jax_pme` for LR Coulomb). Full learn-under-Ewald /
-  parity work is [issue #139](https://github.com/EricBoittier/mmml/issues/139).
+- Stage-1 MIC learning sees truncated Coulomb — **Coulomb error can be absorbed
+  into σ/ε**. Mitigate with `mm_charge_mode: fixed`, matching cutoffs, and
+  density/RDF checks. Learning under Ewald is supported
+  (`lr_solver: ewald` + `mm_include_lj` + `learn_mm_lj_scales`).
+- Deploy: `jax_mic` (+ optional `jax_pme`), or train-matched
+  `lr_solver=ewald --mm-include-lj`. Parity:
+  `scripts/check_ewald_train_md_pme_parity.py --include-lj`
+  ([#139](https://github.com/EricBoittier/mmml/issues/139)).
 - Exhaustive geometry + RI-MP2 is **cluster work**; steps 08–09 prepare/submit/collect
   only. Rigid grids without NMS undertrain intramolecular degrees of freedom.
 - Pure-liquid MD does not need TIP3; hetero **ACO–DCM** frames are still required

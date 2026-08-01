@@ -21,6 +21,8 @@ usage: mmml run [-h] --pdbfile PDBFILE --checkpoint CHECKPOINT [--validate]
                 [--flat-bottom-mode {system,monomer}]
                 [--min-com-restraint-distance Å] [--min-com-restraint-k eV/Å²]
                 --n-monomers N_MONOMERS --n-atoms-monomer N_ATOMS_MONOMER
+                [--hybrid-hamiltonian {handoff,shared_cutoff}]
+                [--shared-cutoff SHARED_CUTOFF]
                 [--ml-switch-width ML_SWITCH_WIDTH]
                 [--mm-switch-on MM_SWITCH_ON]
                 [--mm-switch-width MM_SWITCH_WIDTH] [--no-complementary-handoff]
@@ -89,6 +91,9 @@ Scientific model:
   --min-com-restraint-k eV/Å²
                         Force constant for --min-com-restraint-distance
                         (default: 1.0).
+  --shared-cutoff SHARED_CUTOFF
+                        Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults
+                        to model cutoff.
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where ML→0 and MM→1 in complementary
                         handoff (default: 6).
@@ -189,6 +194,9 @@ Other options:
   --n-atoms-monomer N_ATOMS_MONOMER
                         Number of atoms per monomer. Defaults to
                         total_atoms/n_monomers derived from the dataset.
+  --hybrid-hamiltonian {handoff,shared_cutoff}
+                        Hybrid Hamiltonian: existing COM handoff or additive
+                        force-shifted shared cutoff.
   --include-mm          Keep MM contributions enabled when evaluating the hybrid
                         calculator.
   --skip-ml-dimers      If set, skip the ML dimer correction in the hybrid

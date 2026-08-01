@@ -25,6 +25,8 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--objective OBJECTIVE]
                           [--mm-charge-mode {fixed,q0,latent,q1,fixed_plus_latent}]
                           [--mm-charge-correction] [--hybrid-mm]
+                          [--hybrid-hamiltonian {handoff,shared_cutoff}]
+                          [--shared-cutoff SHARED_CUTOFF]
                           [--ml-switch-width ML_SWITCH_WIDTH]
                           [--mm-switch-on MM_SWITCH_ON]
                           [--mm-switch-width MM_SWITCH_WIDTH]
@@ -35,6 +37,11 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--pme-accuracy PME_ACCURACY]
                           [--mm-include-lj | --no-mm-include-lj | --mm_include_lj | --no-mm_include_lj]
                           [--learn-mm-lj-scales | --no-learn-mm-lj-scales | --learn_mm_lj_scales | --no-learn_mm_lj_scales]
+                          [--mm-lj-sigma-scale-min MM_LJ_SIGMA_SCALE_MIN]
+                          [--mm-lj-sigma-scale-max MM_LJ_SIGMA_SCALE_MAX]
+                          [--mm-lj-epsilon-scale-min MM_LJ_EPSILON_SCALE_MIN]
+                          [--mm-lj-epsilon-scale-max MM_LJ_EPSILON_SCALE_MAX]
+                          [--mm-lj-min-type-frames MM_LJ_MIN_TYPE_FRAMES]
                           [--ema-decay EMA_DECAY] [--restart RESTART]
                           [--num-atoms NUM_ATOMS] [--features FEATURES]
                           [--max-degree MAX_DEGREE]
@@ -117,6 +124,9 @@ Scientific model:
                         CGenFF charges in MM electrostatics (q_eff = q_cgenff +
                         dq_ML, projected net-zero per monomer). Requires
                         --charges.
+  --shared-cutoff SHARED_CUTOFF
+                        Atomic ML/MM cutoff (Å) for --hybrid-hamiltonian
+                        shared_cutoff; defaults to the model cutoff.
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where the complementary handoff ends:
                         ML scale reaches 0 and MM scale reaches 1 (default: 6).
@@ -171,6 +181,8 @@ Execution:
                         COM-distance width (Å) of the MM outer tail after
                         mm_switch_on. Switched MM reaches zero at mm_switch_on +
                         width (default: 5).
+  --mm-lj-epsilon-scale-min MM_LJ_EPSILON_SCALE_MIN
+  --mm-lj-epsilon-scale-max MM_LJ_EPSILON_SCALE_MAX
   --batch-method, --batch_method BATCH_METHOD
                         Batching method ('default' or 'advanced')
   --batch-args-dict, --batch_args_dict BATCH_ARGS_DICT
@@ -218,6 +230,11 @@ Other options:
                         and the cgenff_master_* LJ tables. The handoff is
                         controlled by --ml-switch-width/--mm-switch-on/--mm-
                         switch-width (same flags and defaults as the MD side).
+  --hybrid-hamiltonian {handoff,shared_cutoff}
+                        Hybrid assembly: handoff preserves the existing COM-
+                        switched Hamiltonian; shared_cutoff uses additive ML+MM
+                        with no handoff and force-shifts MM pairs at --shared-
+                        cutoff.
   --mm-pair-source {jax,charmm_callback}
                         Decomposed MLpot MM pair provider: Fortran callback
                         idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
@@ -228,21 +245,29 @@ Other options:
                         Hybrid-MM long-range Coulomb for training (default:
                         mic). mic: switched CGenFF LJ+Coulomb pairs.
                         nvalchemiops_pme: full-box many-to-many PME on fixed
-                        CGenFF charges (no exclusions / no intra subtract; LJ
-                        omitted; requires --pme-box-length and
-                        mmml[nvalchemiops-pme]). ewald: same full-box/no-
-                        exclusion contract as nvalchemiops_pme, pure JAX (no
-                        external PME library, no CUDA requirement); requires
-                        --pme-box-length. Matches fast MD periodic_external.
+                        CGenFF charges (no exclusions / no intra subtract;
+                        requires --pme-box-length and mmml[nvalchemiops-pme]).
+                        ewald: same full-box/no-exclusion Coulomb as
+                        nvalchemiops_pme, pure JAX (no external PME library, no
+                        CUDA requirement); requires --pme-box-length. With --mm-
+                        include-lj, COM-switched LJ is added beside the lattice
+                        Coulomb (Coulomb itself stays untapered).
   --mm-include-lj, --no-mm-include-lj, --mm_include_lj, --no-mm_include_lj
-                        Include CGenFF LJ in hybrid E_MM (default: on for mic).
-                        Forced off when --lr-solver nvalchemiops_pme or ewald.
+                        Include CGenFF LJ in hybrid E_MM (default: on). Under
+                        --lr-solver ewald|nvalchemiops_pme this is COM-switched
+                        intermolecular LJ beside untapered full-box Coulomb;
+                        under mic it is the usual switched LJ+Coulomb pair term.
   --learn-mm-lj-scales, --no-learn-mm-lj-scales, --learn_mm_lj_scales, --no-learn_mm_lj_scales
                         Learn per-CGenFF-type multiplicative scales on master σ
-                        and ε (separate arrays, init 1.0). Only affects mic
-                        hybrid E_MM LJ; ignored when LJ is forced off (ewald /
-                        nvalchemiops_pme). Scales are saved in hybrid_mm.json
-                        for MD ep_scale/sig_scale.
+                        and ε (separate arrays, init 1.0). Works under --lr-
+                        solver mic and under ewald|nvalchemiops_pme when --mm-
+                        include-lj is on. Scales are saved in hybrid_mm.json for
+                        MD ep_scale/sig_scale.
+  --mm-lj-sigma-scale-min MM_LJ_SIGMA_SCALE_MIN
+  --mm-lj-sigma-scale-max MM_LJ_SIGMA_SCALE_MAX
+  --mm-lj-min-type-frames MM_LJ_MIN_TYPE_FRAMES
+                        Freeze LJ scales at 1.0 for CGenFF types seen in fewer
+                        training frames.
   --ema-decay, --ema_decay EMA_DECAY
                         Decay for the parameter EMA (default: 0.999).
                         Validation, checkpointing and restart all use the EMA

@@ -1,7 +1,7 @@
 # Mode A + jit-native Ewald Coulomb for hybrid training (Coulomb-only default)
 #   E_MM = E_ewald(all atoms, q_CGenFF)   # full-box many-to-many; no exclusions
-# Optional: mm_include_lj: true adds COM-switched LJ beside untapered Ewald
-# (learn_mm_lj_scales stays off under ewald — freeze Stage-1 hybrid_mm.json).
+# Optional: mm_include_lj: true adds COM-switched LJ beside untapered Ewald;
+# learn_mm_lj_scales: true is allowed under ewald when LJ is on (#139).
 #
 # Pure JAX (mmml.interfaces.pycharmmInterface.ewald_native) -- no external PME
 # library, no CUDA requirement. Same Coulomb operator as fast MD

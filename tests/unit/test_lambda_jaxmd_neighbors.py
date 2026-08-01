@@ -16,6 +16,17 @@ import numpy as np
 import pytest
 
 pytest.importorskip("jax")
+# `lambda_jaxmd` imports `lambda_dynamics`, which does a module-level
+# `import pycharmm.param` (lambda_dynamics.py:33). CI installs no libcharmm, so
+# without this guard the import raises during *collection* -- pytest then
+# reports "Interrupted: 1 error during collection" and runs zero tests, which
+# fails the whole build rather than skipping one file. Nothing below actually
+# needs CHARMM; deferring that import in `lambda_dynamics` would let these run
+# in CI.
+from tests.conftest import can_import_pycharmm
+
+if not can_import_pycharmm():
+    pytest.skip("PyCHARMM is not available", allow_module_level=True)
 
 import jax
 import jax.numpy as jnp

@@ -394,6 +394,7 @@ def setup_calculator(
     jax_pme_dispersion: bool | None = None,
     ewald_include_self: bool = True,
     ewald_include_intra: bool = True,
+    include_lj: bool = False,
     mm_nonbond_mode: str = "jax_mic",
     periodic_charmm_vdw: bool = True,
     ml_potential_mode: str = "physnet",
@@ -1380,6 +1381,7 @@ def setup_calculator(
             periodic_charmm_vdw=periodic_charmm_vdw,
             ewald_include_self=ewald_include_self,
             ewald_include_intra=ewald_include_intra,
+            include_lj=include_lj,
         ),
         cutoff_params=cutoff_params,
         model_type=(
@@ -1520,6 +1522,7 @@ def setup_calculator(
             jax_pme_dispersion=jax_pme_dispersion,
             ewald_include_self=ewald_include_self,
             ewald_include_intra=ewald_include_intra,
+            include_lj=include_lj,
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd

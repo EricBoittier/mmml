@@ -311,8 +311,8 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         dest="learn_mm_lj_scales",
         help=(
             "Learn per-CGenFF-type multiplicative scales on master σ and ε "
-            "(separate arrays, init 1.0). Supported under --lr-solver mic; "
-            "forced off for ewald / nvalchemiops_pme (freeze Stage-1 scales). "
+            "(separate arrays, init 1.0). Works under --lr-solver mic and "
+            "under ewald|nvalchemiops_pme when --mm-include-lj is on. "
             "Scales are saved in hybrid_mm.json for MD ep_scale/sig_scale."
         ),
     )
@@ -1041,8 +1041,6 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         # No external-package / cutoff-estimation step needed: ewald_hybrid_
         # coulomb.py defaults real_space_cutoff_A to box_length/2 internally
         # when left None, already validated at that setting.
-    if lr_solver in ("nvalchemiops_pme", "ewald"):
-        learn_mm_lj_scales = False
     if learn_mm_lj_scales and not include_lj:
         learn_mm_lj_scales = False
     cfg = {

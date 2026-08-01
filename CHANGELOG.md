@@ -71,6 +71,26 @@ and versioning process.
 
 ### Fixed
 
+- **`md-system` died in the child process on both PBC backends.** `run_sim`
+  grew `--hybrid-hamiltonian` / `--shared-cutoff` and `md_system.build_command`
+  forwards them to every backend unconditionally, but neither
+  `md_pbc_suite.ase` nor `md_pbc_suite.jaxmd` declared them — so the forwarded
+  argv hit argparse exit 2 *inside the subprocess*, after the run had started.
+  Both parsers now accept them and thread them into `setup_calculator` and
+  `CutoffParameters`, matching `run_sim`. `md_pbc_suite/jaxmd.py::main` grew a
+  `build_parser` (its 743-line argparse block, extracted) so the argv a backend
+  receives can be parsed in a test rather than only in a live run;
+  `tests/unit/test_md_system_ase_cmd.py` now parses the *whole* forwarded argv
+  against both backends instead of one flag at a time.
+- `tests/unit/test_lambda_jaxmd_neighbors.py` aborted collection wherever
+  libcharmm is absent — `lambda_jaxmd` imports `lambda_dynamics`, which does a
+  module-level `import pycharmm.param`. pytest reports that as "Interrupted: 1
+  error during collection" and runs **zero** tests, so it failed the whole
+  build rather than skipping one file. Guarded with a module-level skip;
+  deferring that import in `lambda_dynamics` would let the tests run in CI.
+- `mmml pes-design` was registered without a `CLI_NAV_GROUPS` entry, which made
+  `scripts/generate_cli_docs.py` refuse to run at all and left the generated
+  CLI reference and package-architecture docs stale in CI.
 - **DCMNet dipole units.** `dcmnet/loss.py:pred_dipole` multiplied by `1.88873`
   and documented its result as Debye. The value is a transposed-digit typo for
   the Angstrom -> bohr factor `1.8897261` (5.3e-4 relative), and the unit was

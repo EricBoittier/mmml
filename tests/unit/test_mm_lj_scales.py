@@ -511,7 +511,7 @@ def test_cli_learn_mm_lj_scales_flag(tmp_path):
     assert cfg["learn_mm_lj_scales"] is True
     assert cfg["include_lj"] is True
 
-    # Ewald allows LJ but still freezes learnable scales (Phase 1 / #139).
+    # Ewald + LJ: learnable scales are allowed when --mm-include-lj is on (#139).
     args_ew = parse_args(
         [
             "--data",
@@ -527,7 +527,25 @@ def test_cli_learn_mm_lj_scales_flag(tmp_path):
     )
     cfg_ew = _build_hybrid_mm_config(args_ew, [str(p)])
     assert cfg_ew["include_lj"] is True
-    assert cfg_ew["learn_mm_lj_scales"] is False
+    assert cfg_ew["learn_mm_lj_scales"] is True
+
+    args_ew_coul = parse_args(
+        [
+            "--data",
+            str(p),
+            "--hybrid-mm",
+            "--learn-mm-lj-scales",
+            "--no-mm-include-lj",
+            "--lr-solver",
+            "ewald",
+            "--pme-box-length",
+            "20",
+            "--quiet",
+        ]
+    )
+    cfg_ew_coul = _build_hybrid_mm_config(args_ew_coul, [str(p)])
+    assert cfg_ew_coul["include_lj"] is False
+    assert cfg_ew_coul["learn_mm_lj_scales"] is False
 
 
 def test_example_yaml_keys_exist():
