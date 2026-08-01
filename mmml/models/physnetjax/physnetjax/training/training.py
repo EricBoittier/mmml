@@ -619,6 +619,12 @@ def train_model(
             epoch_timing.batch_prep_s = time.perf_counter() - batch_t0
 
             train_t0 = time.perf_counter()
+            # NOTE: train_loss below is measured on the raw `params`, while
+            # valid_loss is measured on `ema_params` (see the eval loop). The
+            # two are therefore NOT comparable, and a large train/valid ratio
+            # means the raw weights are oscillating, not that the model is
+            # overfitting. On the DES warm start (job 19360535) this read as a
+            # 128x "generalization gap" that was purely params-vs-EMA.
             train_loss = 0.0
             train_energy_mae = 0.0
             train_forces_mae = 0.0

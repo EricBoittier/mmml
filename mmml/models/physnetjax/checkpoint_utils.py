@@ -97,8 +97,41 @@ CHECKPOINT_ARCH_KEYS = (
 )
 
 
-def apply_checkpoint_architecture(args, config: dict[str, Any]) -> None:
-    """Override argparse Namespace model hyperparams from checkpoint config."""
+def apply_checkpoint_architecture(
+    args, config: dict[str, Any], *, verbose: bool = True
+) -> dict[str, tuple[Any, Any]]:
+    """Override argparse Namespace model hyperparams from checkpoint config.
+
+    Every key here changes the parameter tree, so a warm start *must* adopt the
+    checkpoint's values or the restored params will not fit the model. That
+    makes the override correct but easy to miss: a run can ask for
+    ``--use-energy-bias`` (or ``features=64``) on the command line and silently
+    train something else entirely, with nothing in the log connecting the two.
+
+    Returns ``{key: (requested, applied)}`` for the keys that actually changed,
+    and prints them when ``verbose``, so the run log records what the warm start
+    overrode.
+    """
+    changed: dict[str, tuple[Any, Any]] = {}
     for key in CHECKPOINT_ARCH_KEYS:
         if key in config and hasattr(args, key):
-            setattr(args, key, config[key])
+            requested = getattr(args, key)
+            applied = config[key]
+            if requested != applied:
+                changed[key] = (requested, applied)
+            setattr(args, key, applied)
+
+    if changed and verbose:
+        print(
+            f"[warm-start] checkpoint architecture overrode {len(changed)} "
+            f"requested setting(s); the command-line values below were NOT used:"
+        )
+        for key, (requested, applied) in sorted(changed.items()):
+            print(f"[warm-start]   {key}: requested={requested!r} -> applied={applied!r}")
+        print(
+            "[warm-start] these keys define the parameter tree, so they must match "
+            "the checkpoint; drop --match-checkpoint-architecture (and the warm "
+            "start) to train the requested architecture from scratch."
+        )
+
+    return changed
