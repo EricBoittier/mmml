@@ -83,8 +83,10 @@ def main(argv: list[str] | None = None) -> int:
         colors=colors,
         rotation=a.rotation,
         povray_settings=dict(
+            # ASE raises "Can't set *both* width and height!" -- it derives the
+            # aspect ratio from the projected geometry and refuses to be
+            # over-constrained, so only the width is passed.
             canvas_width=a.width,
-            canvas_height=a.height,
             background="White",
             transparent=False,
             display=False,
