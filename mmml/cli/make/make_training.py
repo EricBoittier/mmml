@@ -313,6 +313,14 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "Scales are saved in hybrid_mm.json for MD ep_scale/sig_scale."
         ),
     )
+    parser.add_argument("--mm-lj-sigma-scale-min", type=float, default=0.95)
+    parser.add_argument("--mm-lj-sigma-scale-max", type=float, default=1.05)
+    parser.add_argument("--mm-lj-epsilon-scale-min", type=float, default=0.25)
+    parser.add_argument("--mm-lj-epsilon-scale-max", type=float, default=4.0)
+    parser.add_argument(
+        "--mm-lj-min-type-frames", type=int, default=0,
+        help="Freeze LJ scales at 1.0 for CGenFF types seen in fewer training frames.",
+    )
     parser.add_argument(
         "--ema-decay",
         "--ema_decay",
@@ -964,6 +972,19 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         else:
             n_atoms_est = 32
 
+    min_type_frames = int(getattr(args, "mm_lj_min_type_frames", 0))
+    if min_type_frames < 0:
+        raise ValueError("--mm-lj-min-type-frames must be >= 0")
+    type_frame_counts = _np.zeros(len(sigmas), dtype=_np.int64)
+    for data_path in data_paths:
+        with _np.load(data_path, allow_pickle=True) as d:
+            idx = _np.asarray(d["cgenff_type_idx"], dtype=_np.int64)
+        if idx.ndim == 1:
+            idx = idx[None, :]
+        for type_idx in range(len(sigmas)):
+            type_frame_counts[type_idx] += _np.any(idx == type_idx, axis=1).sum()
+    trainable_mask = type_frame_counts >= max(1, min_type_frames)
+
     from mmml.models.mm_charge_mode import (
         mm_charge_mode_needs_q_ml,
         resolve_hybrid_mm_charge_mode,
@@ -1040,6 +1061,14 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "lr_solver": lr_solver,
         "include_lj": include_lj,
         "learn_mm_lj_scales": learn_mm_lj_scales,
+        "mm_lj_sigma_scale_bounds": (
+            float(args.mm_lj_sigma_scale_min), float(args.mm_lj_sigma_scale_max)
+        ),
+        "mm_lj_epsilon_scale_bounds": (
+            float(args.mm_lj_epsilon_scale_min), float(args.mm_lj_epsilon_scale_max)
+        ),
+        "mm_lj_trainable_mask": tuple(bool(x) for x in trainable_mask),
+        "mm_lj_type_frame_counts": tuple(int(x) for x in type_frame_counts),
         "pme_box_length": pme_box_length,
         "pme_accuracy": pme_accuracy,
         "pme_real_space_cutoff": pme_real_space_cutoff,
@@ -1065,7 +1094,9 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             f"complementary_handoff={cfg['complementary_handoff']}, "
             f"mm_charge_mode={cfg['mm_charge_mode']}, "
             f"lr_solver={lr_solver}, E_MM={lj_txt}, "
-            f"learn_mm_lj_scales={learn_mm_lj_scales}{pme_txt})",
+            f"learn_mm_lj_scales={learn_mm_lj_scales}, "
+            f"trainable_lj_types={int(trainable_mask.sum())}/{len(trainable_mask)}, "
+            f"min_type_frames={min_type_frames}{pme_txt})",
             flush=True,
         )
     return cfg

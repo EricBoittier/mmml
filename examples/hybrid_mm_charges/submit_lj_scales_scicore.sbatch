@@ -32,6 +32,14 @@ set -uo pipefail
 REPO="${MMML_REPO:-$HOME/mmml}"
 cd "$REPO" || { echo "ERROR: no repo at $REPO" >&2; exit 1; }
 
+# SciCORE compute nodes have no outbound network. Without these, every `uv run`
+# below re-resolves the editable install's build-system.requires against
+# pypi.org, hangs ~2 min on retries and then kills the job with
+#   error: Failed to fetch `https://pypi.org/simple/wheel/` ... operation timed out
+# The venv is already built and activated, so no sync is needed at run time.
+export UV_NO_SYNC=1
+export UV_OFFLINE=1
+
 # ---------------------------------------------------------------------------
 # Module stack. This MUST match what the local PyCHARMM/libcharmm.so was built
 # against — a mismatched GCCcore gives an ABI/symbol failure on `import pycharmm`.

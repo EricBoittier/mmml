@@ -119,6 +119,10 @@ class HybridMMConfig:
     lr_solver: str = "mic"
     include_lj: bool = True
     learn_mm_lj_scales: bool = False
+    mm_lj_sigma_scale_bounds: tuple[float, float] = (0.95, 1.05)
+    mm_lj_epsilon_scale_bounds: tuple[float, float] = (0.25, 4.0)
+    mm_lj_trainable_mask: tuple[bool, ...] | None = None
+    mm_lj_type_frame_counts: tuple[int, ...] | None = None
     pme_box_length: float | None = None
     pme_accuracy: float = 1e-6
     pme_real_space_cutoff: float | None = None
@@ -172,6 +176,18 @@ class HybridMMConfig:
         else:
             d["include_lj"] = bool(d.get("include_lj", True))
         d["learn_mm_lj_scales"] = bool(d.get("learn_mm_lj_scales", False))
+        for key, default in (
+            ("mm_lj_sigma_scale_bounds", (0.95, 1.05)),
+            ("mm_lj_epsilon_scale_bounds", (0.25, 4.0)),
+        ):
+            bounds = tuple(float(x) for x in d.get(key, default))
+            if len(bounds) != 2 or not (0.0 < bounds[0] <= 1.0 <= bounds[1]):
+                raise ValueError(f"{key} must be positive (min, max) containing 1.0")
+            d[key] = bounds
+        if d.get("mm_lj_trainable_mask") is not None:
+            d["mm_lj_trainable_mask"] = tuple(bool(x) for x in d["mm_lj_trainable_mask"])
+        if d.get("mm_lj_type_frame_counts") is not None:
+            d["mm_lj_type_frame_counts"] = tuple(int(x) for x in d["mm_lj_type_frame_counts"])
         hamiltonian = str(d.get("hybrid_hamiltonian", "handoff")).strip().lower()
         if hamiltonian not in ("handoff", "shared_cutoff"):
             raise ValueError("hybrid_hamiltonian must be handoff|shared_cutoff")

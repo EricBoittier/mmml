@@ -421,6 +421,10 @@ def train_model(
                         mm_lj_scales_metadata(
                             learn_mm_lj_scales=True,
                             type_names=_names,
+                            sigma_bounds=hybrid_mm.mm_lj_sigma_scale_bounds,
+                            epsilon_bounds=hybrid_mm.mm_lj_epsilon_scale_bounds,
+                            trainable_mask=hybrid_mm.mm_lj_trainable_mask,
+                            type_frame_counts=hybrid_mm.mm_lj_type_frame_counts,
                         )
                     )
             except Exception as exc:  # pragma: no cover - PRM missing in some envs
@@ -548,15 +552,11 @@ def train_model(
         )
 
     if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
-        from mmml.models.mm_lj_scales import (
-            MM_LJ_EPSILON_SCALE_BOUNDS,
-            MM_LJ_SIGMA_SCALE_BOUNDS,
-        )
-
         print(
             f"Learnable MM LJ scales enabled ({len(hybrid_mm.master_sigmas)} CGenFF types; "
-            f"projected each step to sigma {MM_LJ_SIGMA_SCALE_BOUNDS}, "
-            f"epsilon {MM_LJ_EPSILON_SCALE_BOUNDS})",
+            f"projected each step to sigma {hybrid_mm.mm_lj_sigma_scale_bounds}, "
+            f"epsilon {hybrid_mm.mm_lj_epsilon_scale_bounds}; "
+            f"{sum(hybrid_mm.mm_lj_trainable_mask or ())} trainable)",
             flush=True,
         )
 
@@ -843,6 +843,10 @@ def train_model(
                 type_names=_names,
                 sigma_scale=ema_params[MM_LJ_SIGMA_SCALE_KEY],
                 epsilon_scale=ema_params[MM_LJ_EPSILON_SCALE_KEY],
+                sigma_bounds=hybrid_mm.mm_lj_sigma_scale_bounds,
+                epsilon_bounds=hybrid_mm.mm_lj_epsilon_scale_bounds,
+                trainable_mask=hybrid_mm.mm_lj_trainable_mask,
+                type_frame_counts=hybrid_mm.mm_lj_type_frame_counts,
             )
             print(
                 f"Wrote final MM LJ scales to {CKPT_DIR / 'hybrid_mm.json'}",

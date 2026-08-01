@@ -153,6 +153,7 @@ def clip_mm_lj_scale_params(
     *,
     sigma_bounds: tuple[float, float] = MM_LJ_SIGMA_SCALE_BOUNDS,
     epsilon_bounds: tuple[float, float] = MM_LJ_EPSILON_SCALE_BOUNDS,
+    trainable_mask=None,
 ) -> Any:
     """Project the LJ-scale leaves of ``params`` back into their bounds.
 
@@ -180,7 +181,11 @@ def clip_mm_lj_scale_params(
         (MM_LJ_EPSILON_SCALE_KEY, epsilon_bounds),
     ):
         if key in out and out[key] is not None:
-            out[key] = jnp.clip(out[key], float(lo), float(hi))
+            value = jnp.clip(out[key], float(lo), float(hi))
+            if trainable_mask is not None:
+                mask = jnp.asarray(trainable_mask, dtype=bool).reshape(value.shape)
+                value = jnp.where(mask, value, jnp.ones_like(value))
+            out[key] = value
     return out
 
 
@@ -280,6 +285,10 @@ def mm_lj_scales_metadata(
     type_names: list[str] | None = None,
     sigma_scale=None,
     epsilon_scale=None,
+    sigma_bounds: tuple[float, float] = MM_LJ_SIGMA_SCALE_BOUNDS,
+    epsilon_bounds: tuple[float, float] = MM_LJ_EPSILON_SCALE_BOUNDS,
+    trainable_mask=None,
+    type_frame_counts=None,
 ) -> dict[str, Any]:
     """Serializable LJ-scale block for ``hybrid_mm.json``."""
     out: dict[str, Any] = {"learn_mm_lj_scales": bool(learn_mm_lj_scales)}
@@ -287,6 +296,12 @@ def mm_lj_scales_metadata(
         return out
     if type_names is not None:
         out["cgenff_type_names"] = [str(n) for n in type_names]
+    out["mm_lj_sigma_scale_bounds"] = [float(x) for x in sigma_bounds]
+    out["mm_lj_epsilon_scale_bounds"] = [float(x) for x in epsilon_bounds]
+    if trainable_mask is not None:
+        out["mm_lj_trainable_mask"] = [bool(x) for x in trainable_mask]
+    if type_frame_counts is not None:
+        out["mm_lj_type_frame_counts"] = [int(x) for x in type_frame_counts]
     if sigma_scale is not None:
         out["mm_lj_sigma_scale"] = [float(x) for x in np.asarray(sigma_scale).reshape(-1)]
     if epsilon_scale is not None:
@@ -325,10 +340,14 @@ def load_mm_lj_scales_sidecar(path: str | Path) -> dict[str, Any] | None:
         "mm_lj_sigma_scale": np.asarray(sig, dtype=np.float64),
         "mm_lj_epsilon_scale": np.asarray(eps, dtype=np.float64),
     }
+    sigma_bounds = tuple(data.get("mm_lj_sigma_scale_bounds", MM_LJ_SIGMA_SCALE_BOUNDS))
+    epsilon_bounds = tuple(data.get("mm_lj_epsilon_scale_bounds", MM_LJ_EPSILON_SCALE_BOUNDS))
     problems = out_of_bounds_mm_lj_scales(
         payload["cgenff_type_names"],
         payload["mm_lj_sigma_scale"],
         payload["mm_lj_epsilon_scale"],
+        sigma_bounds=sigma_bounds,
+        epsilon_bounds=epsilon_bounds,
     )
     if problems:
         # Warn rather than raise: sidecars predating the bounds still load, and
@@ -453,6 +472,10 @@ def write_mm_lj_scales_into_hybrid_mm_json(
     type_names: list[str],
     sigma_scale,
     epsilon_scale,
+    sigma_bounds: tuple[float, float] = MM_LJ_SIGMA_SCALE_BOUNDS,
+    epsilon_bounds: tuple[float, float] = MM_LJ_EPSILON_SCALE_BOUNDS,
+    trainable_mask=None,
+    type_frame_counts=None,
 ) -> None:
     """Merge final scale vectors into an existing ``hybrid_mm.json``."""
     import json
@@ -470,9 +493,16 @@ def write_mm_lj_scales_into_hybrid_mm_json(
             type_names=type_names,
             sigma_scale=sigma_scale,
             epsilon_scale=epsilon_scale,
+            sigma_bounds=sigma_bounds,
+            epsilon_bounds=epsilon_bounds,
+            trainable_mask=trainable_mask,
+            type_frame_counts=type_frame_counts,
         )
     )
-    problems = out_of_bounds_mm_lj_scales(type_names, sigma_scale, epsilon_scale)
+    problems = out_of_bounds_mm_lj_scales(
+        type_names, sigma_scale, epsilon_scale,
+        sigma_bounds=sigma_bounds, epsilon_bounds=epsilon_bounds,
+    )
     if problems:
         # Training projects the scales every step, so this should be unreachable
         # from a normal run. Reaching it means the sidecar is not deployable and

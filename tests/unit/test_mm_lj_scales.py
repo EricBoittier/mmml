@@ -16,6 +16,7 @@ from mmml.models.mm_lj_scales import (
     apply_mm_lj_scales,
     attach_mm_lj_scales,
     cgenff_type_names_from_prm,
+    clip_mm_lj_scale_params,
     load_mm_lj_scales_sidecar,
     mm_lj_scales_metadata,
     resolve_md_lj_scales,
@@ -63,6 +64,22 @@ def test_attach_and_split_params():
     assert "params" in model
     np.testing.assert_allclose(sig, jnp.ones(3))
     np.testing.assert_allclose(eps, jnp.ones(3))
+
+
+def test_custom_bounds_and_support_mask_are_projected():
+    params = attach_mm_lj_scales(
+        {"params": {}}, 3,
+        sigma_scale=np.array([0.5, 1.3, 1.1]),
+        epsilon_scale=np.array([0.1, 5.0, 2.0]),
+    )
+    projected = clip_mm_lj_scale_params(
+        params,
+        sigma_bounds=(0.8, 1.2),
+        epsilon_bounds=(0.25, 4.0),
+        trainable_mask=(True, False, True),
+    )
+    np.testing.assert_allclose(projected[MM_LJ_SIGMA_SCALE_KEY], [0.8, 1.0, 1.1])
+    np.testing.assert_allclose(projected[MM_LJ_EPSILON_SCALE_KEY], [0.25, 1.0, 2.0])
 
 
 def test_scales_to_atc_by_name():

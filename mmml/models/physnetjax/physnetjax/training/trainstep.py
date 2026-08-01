@@ -238,7 +238,12 @@ else:
         # Learnable LJ scales are physical multipliers, not free weights: left
         # unbounded they drift until sqrt(eps_i * eps_j) sees a negative product
         # and the run NaNs. No-op when the leaves are absent.
-        params = clip_mm_lj_scale_params(params)
+        params = clip_mm_lj_scale_params(
+            params,
+            sigma_bounds=getattr(hybrid_mm, "mm_lj_sigma_scale_bounds", (0.95, 1.05)),
+            epsilon_bounds=getattr(hybrid_mm, "mm_lj_epsilon_scale_bounds", (0.25, 4.0)),
+            trainable_mask=getattr(hybrid_mm, "mm_lj_trainable_mask", None),
+        )
 
         energy_mae = mean_absolute_error(
             energy,

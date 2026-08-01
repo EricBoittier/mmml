@@ -16,6 +16,14 @@ set -uo pipefail
 REPO="${MMML_REPO:-$HOME/mmml}"
 cd "$REPO"
 
+# SciCORE compute nodes have no outbound network. Without these, every `uv run`
+# below re-resolves the editable install's build-system.requires against
+# pypi.org, hangs ~2 min on retries and then kills the job with
+#   error: Failed to fetch `https://pypi.org/simple/wheel/` ... operation timed out
+# The venv is already built and activated, so no sync is needed at run time.
+export UV_NO_SYNC=1
+export UV_OFFLINE=1
+
 export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
 export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
 source scripts/scicore_env.sh
