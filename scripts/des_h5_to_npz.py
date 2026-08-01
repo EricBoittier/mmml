@@ -38,6 +38,7 @@ def convert(
     max_structures: int | None,
     energy_key: str,
     force_key: str,
+    stride: int = 1,
 ) -> dict:
     import h5py
 
@@ -48,6 +49,10 @@ def convert(
     with h5py.File(h5_path, "r") as fh:
         groups = [k for k in fh.keys() if k != "metadata"]
         groups.sort()
+        # Groups are chemically clustered, so a leading slice is NOT a sample of
+        # the set -- the first few thousand are dominated by a handful of
+        # species. Stride when you want something representative.
+        groups = groups[::stride]
         for gi, name in enumerate(groups):
             if max_structures and len(R_l) >= max_structures:
                 break
@@ -135,6 +140,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--all-charges", action="store_true",
                     help="disable the charge filter")
     ap.add_argument("--max-structures", type=int, default=None)
+    ap.add_argument("--stride", type=int, default=1,
+                    help="keep every Nth structure; use this rather than "
+                         "--max-structures for a representative subset")
     ap.add_argument("--energy-key", default="formation_energy",
                     help="free-atom-referenced energy (eV)")
     ap.add_argument("--force-key", default="total_forces", help="forces (eV/Ang)")
@@ -146,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         charge_filter=None if a.all_charges else a.charge,
         max_structures=a.max_structures,
         energy_key=a.energy_key, force_key=a.force_key,
+        stride=a.stride,
     )
     print(f"{info['n_kept']:,} / {info['n_groups']:,} structures kept "
           f"(pad {info['pad']}); dropped {info['n_skipped_charge']:,} on charge, "

@@ -219,7 +219,7 @@ def _optimized_jax_md_update_gpu(
     fractional_coordinates,
 ):
     kwargs = {} if (box is None or not fractional_coordinates) else {"box": box}
-    nbrs = neighbor_fn.update(positions, **kwargs)
+    nbrs = neighbor_fn.update(positions, nbrs, **kwargs)
     pair_i, pair_j, mask = filter_fn(nbrs.idx)
     
     if mm_r_min_val is not None:
@@ -2040,8 +2040,8 @@ def build_mm_energy_forces_fn(
                 _pair_stats["updates"] += 1
                 
                 if _nbr_debug:
-                    n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
-                    capacity = pair_idx.shape[0] if hasattr(pair_idx, "shape") else len(pair_i)
+                    n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
+                    capacity = pair_idx.shape[0]
                     print(
                         f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
                         f"frac_coords={fractional_coordinates}"

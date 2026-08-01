@@ -48,6 +48,7 @@ def _build_update_fn(skip_charmm: bool, mm_nl_backend: str = "auto"):
         jax_md_update_interval=3,
         defer_xla_gpu_warmup=True,
         mm_nl_backend=mm_nl_backend,
+        debug=True,
     )
     if not isinstance(result, tuple) or len(result) != 2:
         raise RuntimeError(f"expected (mm_fn, update_mm_pairs) from dynamic NL path ({mm_nl_backend})")
