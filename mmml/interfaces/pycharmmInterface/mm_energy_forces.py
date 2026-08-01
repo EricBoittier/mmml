@@ -1804,38 +1804,56 @@ def build_mm_energy_forces_fn(
             ):
                 pbc_for_build = _pbc_cell_for_nl_build(box_in)
                 pos_for_gpu = _jax_cartesian_for_nl_build(positions_jax, box_in)
-                while True:
-                    try:
-                        pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
-                            pos_for_gpu,
-                            pbc_for_build,
-                            cutoff=_mm_list_cutoff,
-                            monomer_offsets=_offsets_np,
-                            mm_r_min=mm_r_min,
-                            max_pairs=_fallback_max_pairs_cell[0],
-                            cell_list_safety_factor=cell_list_safety_factor,
-                            cell_list_density_estimate=cell_list_density_estimate,
+                try:
+                    while True:
+                        try:
+                            pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
+                                pos_for_gpu,
+                                pbc_for_build,
+                                cutoff=_mm_list_cutoff,
+                                monomer_offsets=_offsets_np,
+                                mm_r_min=mm_r_min,
+                                max_pairs=_fallback_max_pairs_cell[0],
+                                cell_list_safety_factor=cell_list_safety_factor,
+                                cell_list_density_estimate=cell_list_density_estimate,
+                                total_atoms=total_atoms,
+                                debug=_nbr_debug,
+                            )
+                            break
+                        except PairListTruncationError as exc:
+                            _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
+                            _pair_stats["capacity_grows"] += 1
+                            _record_pair_capacity(
+                                int(_fallback_max_pairs_cell[0]),
+                                "gpu_pair_truncation_growth",
+                            )
+                    if _nbr_debug:
+                        print(f"[nbr] rebuild via {used}")
+                        _validate_dynamic_pair_contract(
+                            pair_idx,
+                            pair_mask,
                             total_atoms=total_atoms,
-                            debug=_nbr_debug,
+                            label=used,
                         )
-                        break
-                    except PairListTruncationError as exc:
-                        _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
-                        _pair_stats["capacity_grows"] += 1
-                        _record_pair_capacity(
-                            int(_fallback_max_pairs_cell[0]),
-                            "gpu_pair_truncation_growth",
-                        )
-                if _nbr_debug:
-                    print(f"[nbr] rebuild via {used}")
-                    _validate_dynamic_pair_contract(
-                        pair_idx,
-                        pair_mask,
-                        total_atoms=total_atoms,
-                        label=used,
+                    _pair_stats["gpu_rebuilds"] += 1
+                    return pair_idx, pair_mask
+                except PairListTruncationError:
+                    raise
+                except Exception as exc:
+                    # CuPy/NVRTC or Vesin-GPU failures: fall back to CPU Vesin.
+                    _pair_stats["fallbacks"] += 1
+                    print(
+                        f"[nbr] GPU Vesin rebuild failed "
+                        f"({type(exc).__name__}: {exc}); falling back to CPU",
+                        flush=True,
                     )
-                _pair_stats["gpu_rebuilds"] += 1
-                return pair_idx, pair_mask
+                    try:
+                        import mmml.interfaces.pycharmmInterface.nl_gpu as _nl_gpu
+
+                        # Skip GPU on later rebuilds this process.
+                        _nl_gpu._CUPY_RUNTIME_OK = False
+                    except Exception:
+                        pass
 
             R_build = _cartesian_for_nl_build(positions_in, box_in)
             pbc_for_build = _pbc_cell_for_nl_build(box_in)
