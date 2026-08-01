@@ -91,7 +91,8 @@ flowchart TD
 | `--charges` / `include_electrostatics` | Charge head **inside** `E_ML` (not `E_MM`) |
 
 You can combine Mode A (`fixed` charges) with LJ scales, or Mode B/C charges with
-LJ scales, as long as `lr_solver: mic` and `mm_include_lj: true`. See
+LJ scales, as long as `mm_include_lj: true` (any of `mic`, `ewald`,
+`nvalchemiops_pme`). See
 [hybrid-mm-charges.md](hybrid-mm-charges.md).
 
 ### What this is *not*
