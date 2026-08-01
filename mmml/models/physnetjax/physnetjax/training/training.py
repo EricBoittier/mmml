@@ -832,13 +832,17 @@ def train_model(
             # Live still renders once.) Units are spelled out because the table's
             # MAE columns are eV, which has been misread as kcal/mol.
             if epoch % print_freq == 0:
+                # float() on every value: these are JAX scalars whose __format__
+                # is overridden (they render as "Array f64 gpu:0 5.6e+05"), which
+                # makes the line unparseable and unreadable.
                 print(
                     f"[epoch {epoch}/{num_epochs}] "
-                    f"train_loss={train_loss:.6g} valid_loss={valid_loss:.6g} "
-                    f"best={best_loss:.6g} "
-                    f"valid_E_MAE={_raw_valid_e_mae * _EV_TO_KCAL_MOL:.4f}kcal/mol "
-                    f"valid_F_MAE={_raw_valid_f_mae * _EV_TO_KCAL_MOL:.4f}kcal/mol/A "
-                    f"lr={lr_eff:.3g} t={epoch_length}",
+                    f"train_loss={float(train_loss):.6g} "
+                    f"valid_loss={float(valid_loss):.6g} "
+                    f"best={float(best_loss):.6g} "
+                    f"valid_E_MAE={float(_raw_valid_e_mae) * _EV_TO_KCAL_MOL:.4f} kcal/mol "
+                    f"valid_F_MAE={float(_raw_valid_f_mae) * _EV_TO_KCAL_MOL:.4f} kcal/mol/A "
+                    f"lr={float(lr_eff):.3g} t={epoch_length}",
                     flush=True,
                 )
                 sys.stderr.flush()  # Flush errors too
