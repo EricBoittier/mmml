@@ -50,8 +50,9 @@ def _resolve_packmol_tolerance(
 
     Packmol's ``tolerance`` is the *minimum allowed distance between atoms of
     different structures* — a contact floor, not a packing pitch. ``spacing`` is
-    a centre-to-centre COM separation (``--spacing``, default 5 Å); feeding it in
-    here asks Packmol to keep every atom pair further apart than the mean
+    a centre-to-centre COM separation (``--spacing``, 4 Å for ``liquid-box`` and
+    5 Å elsewhere); feeding it in here asks Packmol to keep every atom pair
+    further apart than the mean
     molecular separation, which is unsatisfiable at liquid density (methanol at
     0.79 g/cm³ has ~4.1 Å between COMs and 2.8 Å O···O hydrogen bonds). It is
     accepted for call-site compatibility and deliberately ignored.
