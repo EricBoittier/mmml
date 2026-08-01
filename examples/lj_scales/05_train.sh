@@ -20,10 +20,15 @@ lj_scales_banner
 echo "=== 05: physnet-train (learn_mm_lj_scales) ==="
 
 if [[ ! -f "${LJ_ENRICHED}" ]]; then
-  echo "ERROR: ${LJ_ENRICHED} not found — run 01_prepare_dataset.sh first." >&2
+  if [[ "${LJ_JOINT}" == "1" ]]; then
+    echo "ERROR: ${LJ_ENRICHED} not found — run 10_merge_prepare_joint.sh first." >&2
+  else
+    echo "ERROR: ${LJ_ENRICHED} not found — run 01_prepare_dataset.sh first." >&2
+  fi
   exit 2
 fi
 
+echo "  joint=${LJ_JOINT} tag=${LJ_TAG}"
 echo "  epochs=${LJ_EPOCHS} n_train=${LJ_NTRAIN} n_valid=${LJ_NVALID}"
 echo "  ckpt_dir=${LJ_CKPT_DIR} tag=${LJ_TAG}"
 

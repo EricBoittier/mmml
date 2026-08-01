@@ -11,6 +11,8 @@
 #   LJ_DEVICE=gpu            use the GPU (recommended for 05)
 #   LJ_EPOCHS=50             cheap first training pass
 #   LJ_DATASET=/path.npz     input QM data (PSF-ordered)
+#   LJ_JOINT=1               ACO+DCM joint path (steps 08–11; cluster ORCA) —
+#                            not driven by this script; see README
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -20,6 +22,17 @@ DIR="examples/lj_scales"
 lj_scales_banner
 
 echo "=== trainable LJ scales ladder ==="
+if [[ "${LJ_JOINT}" == "1" ]]; then
+  cat <<EOF
+LJ_JOINT=1: run the joint path manually (ORCA is cluster-side):
+  bash ${DIR}/08_build_joint_geoms.sh
+  bash ${DIR}/09_submit_orca_rimp2.sh && LJ_ORCA_MODE=collect bash ${DIR}/09_submit_orca_rimp2.sh
+  bash ${DIR}/10_merge_prepare_joint.sh
+  bash ${DIR}/05_train.sh && uv run python ${DIR}/06_inspect_scales.py
+  bash ${DIR}/11_liquid_boxes.sh
+  bash ${DIR}/07_deploy_md.sh
+EOF
+fi
 
 uv run python "${DIR}/00_check_env.py"
 

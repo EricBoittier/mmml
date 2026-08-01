@@ -71,7 +71,11 @@ export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
 # Input QM data. MUST be PSF-ordered — 02_inspect_dataset.py checks this, and
 # getting it wrong mis-assigns CGenFF types silently rather than crashing.
-export LJ_DATASET="${LJ_DATASET:-${REPO_ROOT}/examples/dcm_mp2_psf_order.npz}"
+#
+# LJ_JOINT=1 switches the ladder onto the ACO+DCM RI-MP2 joint path (steps
+# 08–11 + multi-backend liquid campaign). Defaults below stay DCM-only unless
+# that flag is set, so existing DCM runs are undisturbed.
+export LJ_JOINT="${LJ_JOINT:-0}"
 
 # Outputs. Namespaced, and deliberately NOT inherited from a bare
 # ARTIFACTS_DIR: examples/m, examples/acetone_crystal and others export that
@@ -80,16 +84,70 @@ export LJ_DATASET="${LJ_DATASET:-${REPO_ROOT}/examples/dcm_mp2_psf_order.npz}"
 # study's folder without a word. This ladder does not export ARTIFACTS_DIR
 # either, so it cannot capture those examples in return.
 _LJ_INHERITED_ARTIFACTS_DIR="${ARTIFACTS_DIR:-}"
-LJ_ARTIFACTS_DIR="${LJ_ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales}"
+if [[ "${LJ_JOINT}" == "1" ]]; then
+  LJ_ARTIFACTS_DIR="${LJ_ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales_joint}"
+else
+  LJ_ARTIFACTS_DIR="${LJ_ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/lj_scales}"
+fi
 mkdir -p "${LJ_ARTIFACTS_DIR}"
 export LJ_ARTIFACTS_DIR
 
-export LJ_ENRICHED="${LJ_ENRICHED:-${LJ_ARTIFACTS_DIR}/dataset_cgenff.npz}"
+if [[ "${LJ_JOINT}" == "1" ]]; then
+  export LJ_DATASET="${LJ_DATASET:-${LJ_ARTIFACTS_DIR}/joint_rimp2_merged.npz}"
+  export LJ_ENRICHED="${LJ_ENRICHED:-${LJ_ARTIFACTS_DIR}/joint_rimp2_cgenff.npz}"
+  export LJ_TAG="${LJ_TAG:-hybrid_mm_fixed_lj_scales_aco_dcm}"
+else
+  export LJ_DATASET="${LJ_DATASET:-${REPO_ROOT}/examples/dcm_mp2_psf_order.npz}"
+  export LJ_ENRICHED="${LJ_ENRICHED:-${LJ_ARTIFACTS_DIR}/dataset_cgenff.npz}"
+  export LJ_TAG="${LJ_TAG:-hybrid_mm_fixed_lj_scales}"
+fi
 export LJ_CKPT_DIR="${LJ_CKPT_DIR:-${LJ_ARTIFACTS_DIR}/ckpts}"
-export LJ_TAG="${LJ_TAG:-hybrid_mm_fixed_lj_scales}"
 export LJ_EPOCHS="${LJ_EPOCHS:-500}"
 export LJ_NTRAIN="${LJ_NTRAIN:-8000}"
 export LJ_NVALID="${LJ_NVALID:-1000}"
+
+# --- Joint geometry / ORCA / liquid-box (LJ_JOINT=1) ------------------------
+# Source monomers with res_name + CGenFF (not the DCM-only PSF NPZ).
+export LJ_GEOM_SOURCE="${LJ_GEOM_SOURCE:-${REPO_ROOT}/examples/mp2_nms15_train.npz}"
+export LJ_JOINT_GEOMS="${LJ_JOINT_GEOMS:-${LJ_ARTIFACTS_DIR}/joint_geoms.npz}"
+export LJ_ORCA_RUN_DIR="${LJ_ORCA_RUN_DIR:-${LJ_ARTIFACTS_DIR}/orca_rimp2}"
+# collect_orca_array writes ${base}_{train,valid,test}.npz; base is this path
+# without .npz (we pass --out with .npz and use the train split / merge).
+export LJ_JOINT_LABELED_BASE="${LJ_JOINT_LABELED_BASE:-${LJ_ARTIFACTS_DIR}/joint_rimp2}"
+export LJ_JOINT_LABELED="${LJ_JOINT_LABELED:-${LJ_JOINT_LABELED_BASE}_train.npz}"
+export LJ_JOINT_MERGED="${LJ_JOINT_MERGED:-${LJ_ARTIFACTS_DIR}/joint_rimp2_merged.npz}"
+export LJ_PAD_TO="${LJ_PAD_TO:-20}"
+
+# Thermal NMS (required >= 2). Not isotropic noise.
+export LJ_NMS_CONFORMERS="${LJ_NMS_CONFORMERS:-64}"
+export LJ_NMS_TEMPERATURE="${LJ_NMS_TEMPERATURE:-300}"
+export LJ_NMS_FREQ_MIN="${LJ_NMS_FREQ_MIN:-200}"
+export LJ_N_DIRECTIONS="${LJ_N_DIRECTIONS:-6}"
+export LJ_N_ORIENTATIONS="${LJ_N_ORIENTATIONS:-12}"
+export LJ_N_R="${LJ_N_R:-20}"
+export LJ_R_MIN="${LJ_R_MIN:-2.8}"
+export LJ_R_MAX="${LJ_R_MAX:-10.0}"
+export LJ_R_DENSE_TO="${LJ_R_DENSE_TO:-6.0}"
+export LJ_GEOM_SEED="${LJ_GEOM_SEED:-0}"
+
+export LJ_ORCA_MODE="${LJ_ORCA_MODE:-submit}"
+export LJ_ORCA_KEYWORDS="${LJ_ORCA_KEYWORDS:-RI-MP2 def2-TZVP def2-TZVP/C def2/J RIJCOSX TightSCF EnGrad}"
+export LJ_ORCA_NPROCS="${LJ_ORCA_NPROCS:-16}"
+export LJ_ORCA_MAXCORE="${LJ_ORCA_MAXCORE:-3000}"
+export LJ_ORCA_CHUNK="${LJ_ORCA_CHUNK:-40}"
+export LJ_ORCA_THROTTLE="${LJ_ORCA_THROTTLE:-128}"
+export LJ_ORCA_WALLTIME="${LJ_ORCA_WALLTIME:-24:00:00}"
+export LJ_ORCA_PARTITION="${LJ_ORCA_PARTITION:-long}"
+export LJ_ORCA_MODULE="${LJ_ORCA_MODULE:-orca/orca-openmpi-6.1.0}"
+
+# Liquid boxes (pure ACO + pure DCM). Smoke sizes by default; raise N / fraction
+# for production.
+export LJ_BOX_SIZE="${LJ_BOX_SIZE:-28}"
+export LJ_BULK_DENSITY_FRACTION="${LJ_BULK_DENSITY_FRACTION:-0.5}"
+export LJ_DCM_DENSITY="${LJ_DCM_DENSITY:-1.326}"
+export LJ_ACO_DENSITY="${LJ_ACO_DENSITY:-0.784}"
+export LJ_BOX_DCM_DIR="${LJ_BOX_DCM_DIR:-${LJ_ARTIFACTS_DIR}/boxes/dcm}"
+export LJ_BOX_ACO_DIR="${LJ_BOX_ACO_DIR:-${LJ_ARTIFACTS_DIR}/boxes/aco}"
 
 # Newest file matching the given `find` expression under a directory, by mtime.
 # Empty (exit 0) when the directory or the match is missing.
@@ -114,6 +172,7 @@ lj_scales_banner() {
     "${_eff}" "${JAX_PLATFORMS}" "${MMML_MLPOT_DEVICE}"
   [[ "${_eff}" == "cpu" ]] && \
     printf '              (CPU by default — LJ_DEVICE=gpu for steps 05 and 07)\n'
+  printf '  joint     : %s\n' "${LJ_JOINT}"
   printf '  dataset   : %s\n' "${LJ_DATASET}"
   [[ -f "${LJ_DATASET}" ]] || printf '              WARNING: does not exist\n'
   printf '  artifacts : %s\n' "${LJ_ARTIFACTS_DIR}"
@@ -122,6 +181,11 @@ lj_scales_banner() {
     printf '              (ignoring inherited ARTIFACTS_DIR=%s —\n' \
       "${_LJ_INHERITED_ARTIFACTS_DIR}"
     printf '               export LJ_ARTIFACTS_DIR to redirect this ladder)\n'
+  fi
+  if [[ "${LJ_JOINT}" == "1" ]]; then
+    printf '  geom src  : %s\n' "${LJ_GEOM_SOURCE}"
+    printf '  nms       : %s conf @ %s K (freq_min %s cm^-1)\n' \
+      "${LJ_NMS_CONFORMERS}" "${LJ_NMS_TEMPERATURE}" "${LJ_NMS_FREQ_MIN}"
   fi
   printf '\n'
 }

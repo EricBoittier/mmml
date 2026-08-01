@@ -228,11 +228,18 @@ def main() -> int:
                    ))
     p.add_argument("--include-monomers", action="store_true", default=True,
                    help="monomers carry the intramolecular energy the model must learn")
+    p.add_argument("--no-include-monomers", action="store_false", dest="include_monomers",
+                   help="omit monomer NMS frames from the geometry bank")
+    p.add_argument("--include-hetero", action="store_true", default=True,
+                   help="emit A,B heterodimers for every unordered pair of --resids "
+                        "(independent NMS draws per monomer, same grid as homodimers)")
+    p.add_argument("--no-include-hetero", action="store_false", dest="include_hetero",
+                   help="homodimers + monomers only")
     p.add_argument("--monomer-conformers", type=int, default=64,
                    help=(
-                       "Thermal normal-mode conformers per species. Rigid monomers "
-                       "(=1) leave the intramolecular ML term untrained: it sees one "
-                       "geometry and learns a constant. Each dimer draws two "
+                       "Thermal normal-mode conformers per species. Must be >= 2: "
+                       "rigid monomers (=1) leave the intramolecular ML term untrained "
+                       "and bias every dimer to one frozen pose. Each dimer draws two "
                        "conformers independently, and the conformers also enter the "
                        "set as monomer structures."
                    ))
@@ -245,6 +252,11 @@ def main() -> int:
                        "the harmonic amplitude diverges as omega->0 and breaks the "
                        "molecule (SCF stops converging)."
                    ))
+    p.add_argument("--geometry-only", action="store_true",
+                   help=(
+                       "Write the geometry bank (R/Z/N + CGenFF fields) and stop — no "
+                       "GFN2/HF labels. Use when ORCA (or another LoT) will relabel."
+                   ))
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="dimer_scan_hf.npz")
     p.add_argument("--checkpoint-every", type=int, default=200,
@@ -252,6 +264,15 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true",
                    help="count geometries and time a real sample, then stop")
     args = p.parse_args()
+
+    if args.monomer_conformers < 2:
+        print(
+            f"ERROR: --monomer-conformers must be >= 2 (got {args.monomer_conformers}). "
+            "Thermal NMS is required to reduce intramolecular bias; isotropic noise "
+            "is not a substitute.",
+            file=sys.stderr,
+        )
+        return 2
 
     # Must precede the tblite import: OpenMP reads it at load time.
     os.environ.setdefault("OMP_NUM_THREADS", str(args.omp_threads))
@@ -265,6 +286,9 @@ def main() -> int:
     raw = dict(np.load(args.data, allow_pickle=True))
     res = np.array([str(x) for x in raw["res_name"]])
     resids = [r.strip() for r in args.resids.split(",") if r.strip()]
+    if not resids:
+        print("ERROR: --resids is empty", file=sys.stderr)
+        return 2
 
     rng = np.random.default_rng(args.seed)
     dirs = fibonacci_sphere(args.n_directions)
@@ -272,9 +296,15 @@ def main() -> int:
     rs = r_grid(args.r_min, args.r_max, args.n_r, args.r_dense_to)
 
     # --- build every geometry (cheap; the QM is the cost) -------------------
+    # bank[resid] = dict(Z, confs, t, q)
+    bank: dict[str, dict] = {}
     geoms = []  # (res_name, Z, R, mol_id, cgenff_type_idx, cgenff_charge)
     for resid in resids:
-        k = int(np.where(res == resid)[0][0])
+        hits = np.where(res == resid)[0]
+        if hits.size == 0:
+            print(f"ERROR: resid {resid!r} not found in {args.data}", file=sys.stderr)
+            return 2
+        k = int(hits[0])
         n = int(raw["N"][k])
         Z1 = np.asarray(raw["Z"][k])[:n]
         R1 = np.asarray(raw["R"][k])[:n]
@@ -302,6 +332,7 @@ def main() -> int:
         confs = confs - confs.mean(axis=1, keepdims=True)
         print(f"{resid}: relaxed, {len(freqs)} modes {freqs.min():.0f}-{freqs.max():.0f} cm^-1, "
               f"{len(confs)} conformers @ {args.nms_temperature:g} K (rmsd {rmsd:.3f} A)")
+        bank[resid] = {"Z": Z1, "confs": confs, "t": t1, "q": q1}
         if args.include_monomers:
             for c in confs:
                 geoms.append((resid, Z1, c.copy(), np.zeros(n, np.int32), t1, q1))
@@ -322,13 +353,87 @@ def main() -> int:
                                   np.concatenate([np.zeros(n, np.int32), np.ones(n, np.int32)]),
                                   np.concatenate([t1, t1]),
                                   np.concatenate([q1, q1])))
-        print(f"{resid}: {len(dirs)}x{len(quats)}x{len(rs)} = "
+        print(f"{resid},{resid}: {len(dirs)}x{len(quats)}x{len(rs)} = "
               f"{len(dirs) * len(quats) * len(rs)} dimers, {skipped} skipped "
               f"(contact < {args.min_contact} A)")
+
+    if args.include_hetero and len(resids) >= 2:
+        for i, ra in enumerate(resids):
+            for rb in resids[i + 1:]:
+                Za, confa, ta, qa = (
+                    bank[ra]["Z"], bank[ra]["confs"], bank[ra]["t"], bank[ra]["q"])
+                Zb, confb, tb, qb = (
+                    bank[rb]["Z"], bank[rb]["confs"], bank[rb]["t"], bank[rb]["q"])
+                na, nb = len(Za), len(Zb)
+                skipped = 0
+                for d in dirs:
+                    for q in quats:
+                        for r in rs:
+                            a = confa[rng.integers(len(confa))] - 0.5 * r * d
+                            b = (confb[rng.integers(len(confb))] @ quat_to_matrix(q).T
+                                 + 0.5 * r * d)
+                            if (np.linalg.norm(a[:, None] - b[None, :], axis=-1).min()
+                                    < args.min_contact):
+                                skipped += 1
+                                continue
+                            geoms.append((
+                                f"{ra},{rb}",
+                                np.concatenate([Za, Zb]),
+                                np.concatenate([a, b]),
+                                np.concatenate([
+                                    np.zeros(na, np.int32),
+                                    np.ones(nb, np.int32),
+                                ]),
+                                np.concatenate([ta, tb]),
+                                np.concatenate([qa, qb]),
+                            ))
+                print(f"{ra},{rb}: {len(dirs)}x{len(quats)}x{len(rs)} heterodimers, "
+                      f"{skipped} skipped (contact < {args.min_contact} A)")
 
     n_tot = len(geoms)
     print(f"\n{n_tot} geometries total; r grid {rs.min():.2f}-{rs.max():.2f} A, "
           f"{(rs < args.r_dense_to).sum()}/{len(rs)} below {args.r_dense_to:g}")
+
+    if args.geometry_only:
+        out = Path(args.out)
+        n_at = max(len(g[1]) for g in geoms)
+        R_out = np.zeros((n_tot, n_at, 3))
+        Z_out = np.zeros((n_tot, n_at), np.int32)
+        M_out = np.full((n_tot, n_at), -1, np.int32)
+        T_out = np.full((n_tot, n_at), -1, np.int32)
+        Q_out = np.zeros((n_tot, n_at))
+        N_out = np.zeros(n_tot, np.int32)
+        names = []
+        for j, (rn, Z, R, m, t, q) in enumerate(geoms):
+            R_out[j, :len(Z)] = R
+            Z_out[j, :len(Z)] = Z
+            M_out[j, :len(Z)] = m
+            T_out[j, :len(Z)] = t
+            Q_out[j, :len(Z)] = q
+            N_out[j] = len(Z)
+            names.append(rn)
+        common = {}
+        if "cgenff_master_sigmas" in raw:
+            common["cgenff_master_sigmas"] = np.asarray(raw["cgenff_master_sigmas"])
+            common["cgenff_master_epsilons"] = np.asarray(raw["cgenff_master_epsilons"])
+        np.savez(
+            out,
+            R=R_out, Z=Z_out, N=N_out,
+            # Placeholders so collectors / prep see a complete schema; ORCA overwrites.
+            E=np.full((n_tot, 1), np.nan),
+            F=np.zeros((n_tot, n_at, 3)),
+            D=np.zeros((n_tot, 3)),
+            mol_id=M_out, cgenff_type_idx=T_out, cgenff_charge=Q_out,
+            res_name=np.array(names),
+            _mmml_units=np.array([
+                "coords=Angstrom", "geometry_only=true",
+                "labels=pending (ORCA / other LoT)",
+            ]),
+            **common,
+        )
+        print(f"\n--geometry-only: wrote {n_tot} frames -> {out}")
+        print("Next: scripts/make_orca_array.py --data", out, "--out orca_run ...")
+        return 0
 
     # --- time a real sample rather than guessing ---------------------------
     if args.method == "hf":

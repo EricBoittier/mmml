@@ -14,7 +14,7 @@ Reference page: [`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.m
 Annotated notebook version: [`../hybrid_mm_charges/lj_scales_walkthrough.ipynb`](../hybrid_mm_charges/lj_scales_walkthrough.ipynb).
 Cluster job: [`../hybrid_mm_charges/submit_lj_scales_scicore.sbatch`](../hybrid_mm_charges/submit_lj_scales_scicore.sbatch).
 
-## Steps
+## Steps (DCM-only ladder)
 
 | Step | Needs | Time | What it does |
 |------|-------|------|--------------|
@@ -25,10 +25,67 @@ Cluster job: [`../hybrid_mm_charges/submit_lj_scales_scicore.sbatch`](../hybrid_
 | [`04_miniature_fit.py`](04_miniature_fit.py) | — | 90 s | Recovers planted scales — **and demonstrates the σ/ε degeneracy** |
 | [`05_train.sh`](05_train.sh) | enriched NPZ, GPU | hours | `physnet-train` with `learn_mm_lj_scales` → writes `hybrid_mm.json` |
 | [`06_inspect_scales.py`](06_inspect_scales.py) | trained run | 5 s | Reports which types moved, flags implausible values, shows the ATC remap |
-| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run, PyCHARMM | minutes | `md-system --only liquid_nvt` with `jax_mic` |
+| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run, PyCHARMM | minutes | DCM: PyCHARMM `liquid_nvt` with `jax_mic` |
 
 Steps **00, 03, 04 are self-contained** — no dataset, no CHARMM, no GPU. Run them
 first; they are where the concepts live.
+
+## Joint ACO + DCM path (`LJ_JOINT=1`)
+
+Matched **RI-MP2 / def2-TZVP** labels on an exhaustive dimer grid with **thermal
+normal-mode sampling** (not isotropic noise), then pure-ACO and pure-DCM liquid
+campaigns:
+
+```mermaid
+flowchart TD
+  nms[GFN2 relax + thermal NMS] --> geom[Dimer grid + heteros]
+  geom --> orca[ORCA RI-MP2 EnGrad]
+  orca --> prep[pad-20 + prepare-mm-dataset]
+  prep --> train[physnet-train learn_mm_lj_scales]
+  train --> boxes[liquid-box DCM + ACO]
+  boxes --> md[jaxmd settle → PyCHARMM NpT → jaxmd NVT/NVE]
+```
+
+| Step | Needs | What it does |
+|------|-------|--------------|
+| [`08_build_joint_geoms.sh`](08_build_joint_geoms.sh) | `LJ_GEOM_SOURCE` (default `examples/mp2_nms15_train.npz`) | NMS conformers × directions × orientations × r; DCM–DCM, ACO–ACO, DCM–ACO; `--geometry-only` |
+| [`09_submit_orca_rimp2.sh`](09_submit_orca_rimp2.sh) | cluster ORCA | `LJ_ORCA_MODE=submit` then `collect`; keywords `RI-MP2 def2-TZVP def2-TZVP/C def2/J RIJCOSX TightSCF EnGrad` |
+| [`10_merge_prepare_joint.sh`](10_merge_prepare_joint.sh) | labeled splits | pad-merge to 20 atoms + `prepare-mm-dataset` |
+| [`05_train.sh`](05_train.sh) | joint enriched NPZ | same trainer; tag `hybrid_mm_fixed_lj_scales_aco_dcm` |
+| [`11_liquid_boxes.sh`](11_liquid_boxes.sh) | PyCHARMM | `mmml liquid-box` pure DCM + pure ACO |
+| [`07_deploy_md.sh`](07_deploy_md.sh) | ckpt + boxes | campaign [`md_lj_scales_liquid_campaign.yaml`](../hybrid_mm_charges/md_lj_scales_liquid_campaign.yaml) |
+
+```bash
+export LJ_JOINT=1
+export LJ_DEVICE=gpu
+source examples/lj_scales/_env.sh
+
+# Smoke geometry grid (still requires NMS >= 2):
+LJ_NMS_CONFORMERS=8 LJ_N_DIRECTIONS=2 LJ_N_ORIENTATIONS=2 LJ_N_R=4 \
+  bash examples/lj_scales/08_build_joint_geoms.sh
+
+bash examples/lj_scales/09_submit_orca_rimp2.sh          # print sbatch line
+# ... wait for array ...
+LJ_ORCA_MODE=collect bash examples/lj_scales/09_submit_orca_rimp2.sh
+
+bash examples/lj_scales/10_merge_prepare_joint.sh
+bash examples/lj_scales/05_train.sh
+uv run python examples/lj_scales/06_inspect_scales.py
+bash examples/lj_scales/11_liquid_boxes.sh
+bash examples/lj_scales/07_deploy_md.sh
+```
+
+**Do not** concatenate `dcm_mp2_psf_order.npz` with `fixed-acetone-only_MP2_21000.npz`
+for joint training — LoT / atom order may differ, and there are no ACO–DCM heteros.
+
+NMS knobs: `LJ_NMS_CONFORMERS` (≥2), `LJ_NMS_TEMPERATURE`, `LJ_NMS_FREQ_MIN`
+(default 200 cm⁻¹ drops acetone methyl torsion). Step 08 fails if conformers &lt; 2.
+
+Liquid campaign order (per solvent):
+
+1. **jaxmd_settle** — FIRE + short NVT from certified PSF/CRD  
+2. **pycharmm_npt** — CPT heat + equilibration (`jax_mic` + scales)  
+3. **jaxmd_nvt** / **jaxmd_nve** — production  
 
 ## Configuration
 
@@ -36,13 +93,16 @@ first; they are where the concepts live.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `LJ_DATASET` | `examples/dcm_mp2_psf_order.npz` | Input QM NPZ — **must be PSF-ordered** |
-| `LJ_DEVICE` | `cpu` | `cpu` or `gpu`; sets `JAX_PLATFORMS` + `MMML_MLPOT_DEVICE` |
-| `LJ_ARTIFACTS_DIR` | `artifacts/lj_scales` | Outputs |
-| `LJ_ENRICHED` | `$LJ_ARTIFACTS_DIR/dataset_cgenff.npz` | Step 01 output |
-| `LJ_CKPT_DIR` / `LJ_TAG` | `$LJ_ARTIFACTS_DIR/ckpts` / `hybrid_mm_fixed_lj_scales` | Training output |
+| `LJ_JOINT` | `0` | `1` → ACO+DCM joint artifacts / steps 08–11 |
+| `LJ_DATASET` | DCM NPZ or joint merged | Input QM NPZ |
+| `LJ_DEVICE` | `cpu` | `cpu` or `gpu` |
+| `LJ_ARTIFACTS_DIR` | `artifacts/lj_scales` or `..._joint` | Outputs |
+| `LJ_ENRICHED` | under artifacts | Enriched training NPZ |
+| `LJ_CKPT_DIR` / `LJ_TAG` | under artifacts | Training output |
 | `LJ_EPOCHS` / `LJ_NTRAIN` / `LJ_NVALID` | 500 / 8000 / 1000 | Training size |
-| `LJ_FULL` | `0` | `1` runs the expensive steps in `run_all.sh` |
+| `LJ_FULL` | `0` | `1` runs expensive steps in `run_all.sh` |
+| `LJ_GEOM_SOURCE` | `examples/mp2_nms15_train.npz` | Monomer bank with `res_name` + CGenFF |
+| `LJ_BOX_SIZE` / `LJ_BULK_DENSITY_FRACTION` | `28` / `0.5` | Liquid-box smoke sizing |
 
 An explicitly set `LJ_DEVICE` beats an inherited `JAX_PLATFORMS` / `MMML_MLPOT_DEVICE`,
 so a stale `export JAX_PLATFORMS=cpu` in a login profile cannot silently downgrade
@@ -104,3 +164,7 @@ That is kernel selection, not broken code.
 - A condensed-phase run with trained LJ therefore uses truncated-MIC
   electrostatics, not Ewald. Combining the two is
   [issue #139](https://github.com/EricBoittier/mmml/issues/139).
+- Exhaustive geometry + RI-MP2 is **cluster work**; steps 08–09 prepare/submit/collect
+  only. Rigid grids without NMS undertrain intramolecular degrees of freedom.
+- Pure-liquid MD does not need TIP3; hetero **ACO–DCM** frames are still required
+  in the **training** set so shared CGenFF types see cross contacts.
