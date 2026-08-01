@@ -338,6 +338,12 @@ def main():
         sys.argv = ["mmml compare-npz"] + args.args
         return compare_npz.main()
 
+    elif command == "diagnose-lc-outliers":
+        from .misc.diagnose_learning_curve_outliers import (
+            main as diagnose_lc_outliers_main,
+        )
+        return diagnose_lc_outliers_main(args.args)
+
     elif command == "compare-charmm-ml":
         from .misc import compare_charmm_ml
         sys.argv = ["mmml compare-charmm-ml"] + args.args
