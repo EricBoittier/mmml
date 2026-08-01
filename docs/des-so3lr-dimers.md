@@ -69,13 +69,15 @@ Reading the panels:
 
 - **(a)** Water is the hub: it is 27% of all monomer occurrences and outruns the
   next most common monomer (CH₄) roughly 15-fold. Colour marks whether the
-  hybrid ML/MM path can type the monomer — several very common ones (H₂S, CH₂O,
-  Ar) cannot.
+  hybrid ML/MM path can type the monomer — the biggest gaps left are H₂S and
+  CH₂O.
 - **(b)** The sampling is deliberately water-centred plus a homodimer diagonal;
   grey cells are pairs that were never generated. This is DES370K-style
   coverage, not a dense all-pairs grid.
 - **(c)** 20 elements, including noble gases (He, Ne, Ar, Kr, Xe) and bare ions
-  (Na, K, Li, Ca, Mg, F, Cl, Br, I) — chemistry that has no CGenFF residue.
+  (Na, K, Li, Ca, Mg, F, Cl, Br, I) — none of which CGenFF alone can type. All
+  five noble gases and six of the ions are covered by the merged stream files
+  below; F⁻, Br⁻ and I⁻ remain uncovered.
 - **(d)** **34 atoms is the hard maximum**, which is where `natoms=34` in
   `~/trainDES/train.py` comes from. The spike at 4 atoms is the
   noble-gas/diatomic and small-ion population.
@@ -150,24 +152,23 @@ The two large failure modes are different problems:
   mistyped. This is the failure mode working correctly, but it means the
   composition-first lookup is leaving usable frames on the table.
 
-Largest untypeable monomers by occurrence (Cl⁻ has moved off this list — it is
-now `CLA`):
+Largest untypeable monomers by occurrence. Cl⁻ and all five noble gases have
+moved off this list:
 
 | Monomer | occurrences | Monomer | occurrences |
 |---|---:|---|---:|
-| H₂S | 13,256 | Ne | 3,793 |
-| CH₂O | 13,040 | C₂H₄O | 3,682 |
-| Ar | 7,154 | Kr | 3,533 |
-| H₂S₂ | 7,147 | F⁻ | 3,533 |
-| C₆H₁₂ | 6,971 | Xe | 3,452 |
+| H₂S | 13,256 | C₃H₆S₂ | 4,613 |
+| CH₂O | 13,040 | C₃H₈O₂ | 4,571 |
+| H₂S₂ | 7,147 | C₂H₄O | 3,682 |
+| C₆H₁₂ | 6,971 | F⁻ | 3,533 |
 | C₃H₈S₂ | 6,135 | Br⁻ | 3,353 |
 | C₄H₄N₂ | 4,868 | I⁻ | 3,333 |
-| He | 4,199 | C₃H₆S₂ | 4,613 |
 
-The remaining ions are a bounded, tractable gap: F⁻, Br⁻ and I⁻ (10,219
-occurrences between them) have no residue in `toppar_water_ions.str` either, and
-the five noble gases (22,131) have none anywhere in CHARMM. Both would need
-hand-written residues rather than another stream file.
+What is left is now mostly **molecular**, not atomic: sulfur species (H₂S, H₂S₂,
+the C₃ dithiols), formaldehyde, and cyclohexane. The only remaining atomic gap
+is F⁻/Br⁻/I⁻ (10,219 occurrences), which `toppar_water_ions.str` does not carry
+— chloride is its only halide. Those three would need hand-written residues on
+the same footing as the literature noble gases.
 
 ---
 
@@ -175,25 +176,28 @@ hand-written residues rather than another stream file.
 
 <figure markdown>
 ![CGenFF LJ coverage](images/des-so3lr-dimers/lj_coverage.png)
-<figcaption>96 of 179 nonbonded types are reachable from the DES dimer set, via 89 residues.</figcaption>
+<figcaption>101 of 185 nonbonded types are reachable from the DES dimer set, via 94 residues.</figcaption>
 </figure>
 
 This is the figure that matters for [trainable LJ
 scales](hybrid-mm-lj-scales.md): a per-type σ/ε scale only receives a gradient
-if some training frame contains an atom of that type. **96 of 179** types
-qualify; the other 83 are inert no matter how long you train.
+if some training frame contains an atom of that type. **101 of 185** types
+qualify; the other 84 are inert no matter how long you train.
 
-The distribution is steep. `HGA3` (aliphatic H) appears in 76% of typeable
-frames and `CG331` (methyl C) in 72%, while 25 of the 96 types appear in fewer
+The distribution is steep. `HGA3` (aliphatic H) appears in 68% of typeable
+frames and `CG331` (methyl C) in 64%, while 20 of the 101 types appear in fewer
 than 50 sampled frames — **`NG2S1` appears in 7**, all from a single residue.
 Those thin types will move under gradient descent without being meaningfully
 constrained by data, which is exactly the regime where the
 [σ/ε degeneracy](hybrid-mm-lj-scales.md) bites. Freeze them, exclude them, or
 cut the residue list (below) rather than trusting a fitted value.
 
-The six ion types are the newest and among the thinnest: `CLA` 231 sampled
-frames, `POT` 103, `SOD` 93, `LIT` 83, `MG` 13, **`CAL` 9**. Treat `CAL` and
-`MG` as unfittable at this sample size.
+The eleven merged monatomic types split sharply. The noble gases and chloride
+are **well sampled** — `AR` 252, `CLA` 231, `HE` 199, `NE` 181, `KR` 171,
+`XE` 165 — and their residues rank 7th, 8th, 15th, 20th, 25th and 26th of 94,
+so they comfortably survive the default cut. The metal cations do not: `POT`
+103, `SOD` 93, `LIT` 83, `MG` 13, **`CAL` 9**. Treat `CAL` and `MG` as
+unfittable at this sample size.
 
 ### Most-exercised types
 
@@ -214,7 +218,7 @@ Note that `HT` and `HGP1` share σ = 0.4000 / ε = 0.04600 exactly — distinct
 types, one point in the LJ plane. Scaling them independently is only
 identifiable because they sit on different molecules.
 
-**Full tables** (generated, 96 types and 89 residues):
+**Full tables** (generated, 101 types and 94 residues):
 
 - [`docs/images/des-so3lr-dimers/lj_types.md`](images/des-so3lr-dimers/lj_types.md)
   — every reachable type with σ, ε, frame count, and the residues that use it
@@ -223,33 +227,36 @@ identifiable because they sit on different molecules.
 
 ### Residues covered, by sample count
 
-All 89, ranked. Sampled frames are 1-in-20; multiply by 20 for the full set.
-The **top 40** (above the rule) is the default training cut — see below.
+All 94, ranked. Sampled frames are 1-in-20; multiply by 20 for the full set.
+The **top 50** (above the rule) is the default training cut — see below.
+**Bold** entries are residues merged from the extra stream files.
 
-| # | RESI | smp | # | RESI | smp | # | RESI | smp | # | RESI | smp |
-|---:|---|---:|---:|---|---:|---:|---|---:|---:|---|---:|
-| 1 | `TIP3` | 3,776 | 11 | `ACO` | 197 | 21 | `DMDS` | 166 | 31 | `TMAM` | 111 |
-| 2 | `METH` | 661 | 12 | `ACEM` | 196 | 22 | `NH4` | 160 | 32 | `DETE` | 108 |
-| 3 | `AMM1` | 643 | 13 | `MAM1` | 190 | 23 | `FORA` | 157 | 33 | `MIMI` | 107 |
-| 4 | `ETHE` | 428 | 14 | `FORM` | 188 | 24 | `PRPA` | 132 | 34 | `CPEN` | 105 |
-| 5 | `FORH` | 338 | 15 | `MESH` | 188 | 25 | `DMAM` | 128 | 35 | `ACET` | 105 |
-| 6 | `MEOH` | 336 | 16 | `BENZ` | 181 | 26 | `PYRL` | 121 | 36 | **`POT`** | 103 |
-| 7 | **`CLA`** | 231 | 17 | `ETHA` | 177 | 27 | `PYR1` | 115 | 37 | `PRLD` | 103 |
-| 8 | `ETOH` | 202 | 18 | `BUTA` | 170 | 28 | `PRO2` | 115 | 38 | `THF` | 102 |
-| 9 | `ETSH` | 198 | 19 | `PHEN` | 169 | 29 | `MAS` | 114 | 39 | `MGUA` | 100 |
-| 10 | `ACEH` | 197 | 20 | `IMIA` | 197 | 30 | `EMS` | 114 | 40 | `MAMM` | 99 |
+| # | RESI | smp | # | RESI | smp | # | RESI | smp | # | RESI | smp | # | RESI | smp |
+|---:|---|---:|---:|---|---:|---:|---|---:|---:|---|---:|---:|---|---:|
+| 1 | `TIP3` | 4,518 | 11 | `ACEM` | 205 | 21 | `ETHA` | 180 | 31 | `PYRL` | 123 | 41 | **`POT`** | 107 |
+| 2 | `METH` | 662 | 12 | `IMIA` | 204 | 22 | `BUTA` | 177 | 32 | `PYR1` | 117 | 42 | `MGUA` | 106 |
+| 3 | `AMM1` | 644 | 13 | `ACO` | 204 | 23 | `PHEN` | 176 | 33 | `PRO2` | 117 | 43 | `CPEN` | 106 |
+| 4 | `ETHE` | 435 | 14 | `ETSH` | 204 | 24 | `DMDS` | 174 | 34 | `MAS` | 115 | 44 | `PRLD` | 104 |
+| 5 | `FORH` | 344 | 15 | **`HE1`** | 200 | 25 | **`KR1`** | 171 | 35 | `EMS` | 115 | 45 | `THF` | 103 |
+| 6 | `MEOH` | 340 | 16 | `MAM1` | 194 | 26 | **`XE1`** | 165 | 36 | `ACET` | 115 | 46 | `IMIM` | 103 |
+| 7 | **`AR1`** | 252 | 17 | `MESH` | 192 | 27 | `NH4` | 162 | 37 | `TMAM` | 113 | 47 | **`SOD`** | 95 |
+| 8 | **`CLA`** | 241 | 18 | `FORM` | 190 | 28 | `FORA` | 158 | 38 | `DETE` | 110 | 48 | `BTE1` | 87 |
+| 9 | `ETOH` | 207 | 19 | `BENZ` | 187 | 29 | `PRPA` | 133 | 39 | `MIMI` | 109 | 49 | **`LIT`** | 83 |
+| 10 | `ACEH` | 205 | 20 | **`NE1`** | 182 | 30 | `DMAM` | 129 | 40 | `MAMM` | 109 | 50 | `PRAM` | 81 |
 
-*— top-40 cut —*
+*— top-50 cut —*
 
 ```
-IMIM BTE1 SOD  PRAM LIT  ETAC PENT SM073 DMA  HEXA THPS DITH DEDS INDO
-TOLU NC4  TRIT EAMM GUAN FETH FLUB NC3  ACN  CLET DCM  PRPY DCLE DFET
-BRET DBRE EIMI MIND EBEN EIND PROA EIMM EPHE DMEP TFET SM158 MP_0 GLYN
-SM129 TCLE MG   AANM DME  CAL  DFB
+ETAC PENT HEXA SM073 DMA  THPS DITH DEDS TOLU INDO TRIT NC4  EAMM FETH
+FLUB GUAN ACN  NC3  CLET DCM  PRPY DCLE DFET BRET DBRE EIMI MIND EBEN
+EIND PROA EIMM EPHE SM158 MP_0 DMEP TFET GLYN MG   SM129 CAL  TCLE AANM
+DME  DFB
 ```
 
-Bold entries are the merged ion residues. `SOD` (93) and `LIT` (83) sit just
-below the cut; `MG` (13) and `CAL` (9) are deep in the tail.
+All five noble gases and chloride land in the top 26 — they are ordinary,
+well-sampled residues here, not tail entries. The metal cations are weaker:
+`POT` (107), `SOD` (95) and `LIT` (83) scrape in, while `MG` (13) and `CAL` (9)
+sit deep in the tail and are unfittable.
 
 The 12-species panel in
 [`workflows/des_dimer_pair_scans/config.yaml`](https://github.com/EricBoittier/mmml/blob/main/workflows/des_dimer_pair_scans/config.yaml)

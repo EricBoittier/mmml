@@ -112,8 +112,10 @@ def _mm_components(ref, r, a, ta, qa, b, tb, qb):
     coul = np.sum(332.06371 * qa[:, None] * qb[None, :] / np.maximum(distances, 1e-6))
     r_vdw = np.maximum(distances, 0.8 * sigma)
     sr6 = (sigma / r_vdw) ** 6
-    lj = np.sum(4 * epsilon * (sr6**2 - sr6))
-    return float(coul), float(lj)
+    lj_soft = np.sum(4 * epsilon * (sr6**2 - sr6))
+    sr6_exact = (sigma / distances) ** 6
+    lj_exact = np.sum(4 * epsilon * (sr6_exact**2 - sr6_exact))
+    return float(coul), float(lj_soft), float(lj_exact)
 
 
 def _select_frames(path: Path, wanted: set[tuple[str, str]], ref, group_names=()):
@@ -176,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         if spooky is not None:
             spooky_a = spooky(z[a], r0[a], assignment.cgenff_type_idx[a], np.zeros(len(a), dtype=np.int32))
             spooky_b = spooky(z[b], r0[b], assignment.cgenff_type_idx[b], np.zeros(len(b), dtype=np.int32))
-        ml, mm, spooky_values, contacts = [], [], [], []
+        ml, mm, mm_exact, spooky_values, contacts = [], [], [], [], []
         for separation in rs:
             r = translated_geometry(z, r0, assignment.mol_id, separation)
             contact = float(np.min(np.linalg.norm(r[a, None, :] - r[None, b, :], axis=-1)))
@@ -197,10 +199,11 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 spooky_values.append(np.nan)
             contacts.append(contact)
-            e_coul, e_lj = _mm_components(
+            e_coul, e_lj_soft, e_lj_exact = _mm_components(
                 ref, r, a, assignment.cgenff_type_idx[a], assignment.cgenff_charge[a],
                 b, assignment.cgenff_type_idx[b], assignment.cgenff_charge[b],
             )
+            mm_exact.append(e_coul + e_lj_exact)
             if spooky is None:
                 spooky_interactions = {key: np.nan for key in (
                     "energy", "neural_energy", "electrostatics_energy",
@@ -209,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
             rows.append(("+".join(pair), name, original_r, separation, contact,
                          float(np.sum(assignment.cgenff_charge[a])),
                          float(np.sum(assignment.cgenff_charge[b])),
-                         ml[-1], mm[-1], e_coul, e_lj,
+                         ml[-1], mm[-1], mm_exact[-1], e_coul, e_lj_soft, e_lj_exact,
                          spooky_interactions["energy"],
                          spooky_interactions["neural_energy"],
                          spooky_interactions["electrostatics_energy"],
@@ -217,18 +220,18 @@ def main(argv: list[str] | None = None) -> int:
                          spooky_interactions["zbl_repulsion_energy"]))
         physical = np.asarray(contacts) >= 1.2
         ml_plot = np.where(physical, ml, np.nan)
-        mm_plot = np.where(physical, mm, np.nan)
+        mm_plot = np.where(physical, mm_exact, np.nan)
         ax.axhline(0, color="0.75", lw=0.8)
         ax.axvline(original_r, color="0.45", lw=0.8, ls=":", label="dataset frame")
         ax.plot(rs, ml_plot, lw=2, label="original DES PhysNet")
-        ax.plot(rs, mm_plot, lw=1.5, ls="--", label="stock CGenFF")
+        ax.plot(rs, mm_plot, lw=1.5, ls="--", label="stock CGenFF (unclamped)")
         if spooky is not None:
             ax.plot(rs, np.where(physical, spooky_values, np.nan), lw=1.7,
                     ls="-.", label="SO3LR Spooky epoch 10")
         ax.set_title(" + ".join(pair))
         ax.set_xlabel("COM separation (Å)")
         ax.set_ylabel("interaction energy (kcal/mol)")
-        visible = np.concatenate([np.asarray(ml)[physical], np.asarray(mm)[physical]])
+        visible = np.concatenate([np.asarray(ml)[physical], np.asarray(mm_exact)[physical]])
         ax.set_ylim(max(-20, np.min(visible) * 1.2), min(50, max(10, np.percentile(visible, 90))))
     axes[0, 0].legend(frameon=False, fontsize=8)
     fig.savefig(args.output_dir / "dataset_dimer_scans.png", dpi=220, bbox_inches="tight")
@@ -238,8 +241,9 @@ def main(argv: list[str] | None = None) -> int:
         writer = csv.writer(fh)
         writer.writerow(("residue_pair", "h5_group", "original_com_A", "scan_com_A", "min_contact_A",
                          "monomer_a_charge", "monomer_b_charge",
-                         "physnet_interaction_kcal", "cgenff_interaction_kcal",
-                         "cgenff_coulomb_kcal", "cgenff_lj_kcal", "spooky_interaction_kcal",
+                         "physnet_interaction_kcal", "cgenff_softcore_interaction_kcal",
+                         "cgenff_exact_interaction_kcal", "cgenff_coulomb_kcal",
+                         "cgenff_softcore_lj_kcal", "cgenff_exact_lj_kcal", "spooky_interaction_kcal",
                          "spooky_neural_kcal", "spooky_electrostatics_kcal",
                          "spooky_cgenff_vdw_kcal", "spooky_zbl_kcal"))
         writer.writerows(rows)
