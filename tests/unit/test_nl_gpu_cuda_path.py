@@ -64,6 +64,16 @@ def test_ensure_cupy_cuda_path_overrides_broken_system_path(tmp_path: Path, monk
     assert not cuda_path_looks_broken(out)
 
 
+def test_vesin_gpu_version_gate(monkeypatch):
+    import mmml.interfaces.pycharmmInterface.nl_gpu as nl_gpu
+
+    monkeypatch.setattr(nl_gpu, "have_vesin", lambda: True)
+    monkeypatch.setattr(nl_gpu, "_vesin_version_tuple", lambda: (0, 5, 8))
+    assert not nl_gpu._vesin_gpu_version_ok()
+    monkeypatch.setattr(nl_gpu, "_vesin_version_tuple", lambda: (0, 6, 1))
+    assert nl_gpu._vesin_gpu_version_ok()
+
+
 def test_cupy_runtime_ok_after_ensure_when_gpu_present():
     """Integration: with pip CUDA wheels, probe should pass on a CUDA node."""
     import os

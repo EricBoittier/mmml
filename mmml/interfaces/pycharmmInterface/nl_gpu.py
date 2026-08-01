@@ -1,6 +1,6 @@
 """GPU neighbor-list path: Vesin + CuPy + DLPack interchange with JAX.
 
-Enabled when ``MMML_MM_NL_DEVICE=gpu``, CuPy and ``vesin>=0.5`` are available,
+Enabled when ``MMML_MM_NL_DEVICE=gpu``, CuPy and ``vesin>=0.6.1`` are available,
 and positions already reside on the JAX GPU (e.g. ``jaxmd_runner`` block boundary).
 
 Contract: callers pass Cartesian Å positions on device and a scalar, ``(3,)``,
@@ -260,11 +260,39 @@ def resolve_mm_nl_device(name: str | None = None) -> MmNlDeviceName:
     return "cpu"
 
 
+def _vesin_version_tuple() -> tuple[int, ...]:
+    try:
+        import importlib.metadata
+
+        raw = importlib.metadata.version("vesin")
+    except Exception:
+        return ()
+    parts: list[int] = []
+    for tok in raw.split("."):
+        digits = "".join(ch for ch in tok if ch.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts)
+
+
+def _vesin_gpu_version_ok() -> bool:
+    """Blackwell (sm_120) needs vesin>=0.6.1; older wheels reject the arch."""
+    if not have_vesin():
+        return False
+    ver = _vesin_version_tuple()
+    if not ver:
+        # Metadata unavailable: let vesin fail at compute time.
+        return True
+    return ver >= (0, 6, 1)
+
+
 def gpu_nl_path_available() -> bool:
     return (
         resolve_mm_nl_device() == "gpu"
         and have_cupy()
         and have_vesin()
+        and _vesin_gpu_version_ok()
         and cupy_runtime_ok()
     )
 
@@ -311,7 +339,8 @@ def rebuild_vesin_pairs_gpu(
     """Build padded MM pairs on GPU from Cartesian Å coordinates."""
     if not gpu_nl_path_available():
         raise RuntimeError(
-            "GPU NL path requires MMML_MM_NL_DEVICE=gpu, working CuPy JIT, and vesin>=0.5"
+            "GPU NL path requires MMML_MM_NL_DEVICE=gpu, working CuPy JIT, "
+            "and vesin>=0.6.1 (Blackwell/sm_120)"
         )
 
     pos_cp = positions_to_cupy(positions)
