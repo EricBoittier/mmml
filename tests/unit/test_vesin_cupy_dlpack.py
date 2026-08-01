@@ -94,8 +94,7 @@ def test_gpu_rebuild_parity_when_available():
         monomer_offsets=offsets,
         total_atoms=n,
     )
-    gpu_set = extract_valid_pairs(
-        np.asarray(jax.device_get(pair_idx)),
-        np.asarray(jax.device_get(pair_mask), dtype=bool),
-    )
+    idx = np.asarray(jax.device_get(pair_idx))
+    mask = np.asarray(jax.device_get(pair_mask), dtype=bool)
+    gpu_set = extract_valid_pairs(idx[:, 0], idx[:, 1], mask)
     assert gpu_set == ref
