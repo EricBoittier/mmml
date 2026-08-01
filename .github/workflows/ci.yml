@@ -73,8 +73,10 @@ jobs:
       # importing, a fixture tree that disappears, a large untested subsystem
       # landing at once. The Codecov status does the same job on PRs, but it is
       # advisory (`fail_ci_if_error: false`) and needs a token, so it does not
-      # run on forks. Both floors sit below the measured run with room for
-      # jitter; raise them as coverage rises, never lower them to go green.
+      # run on forks. Measured 2026-08-01 on a full MMML_DISABLE_CHARMM=1 run:
+      # 45.81%, 55706 of 121608 lines. The floors sit ~3.8pp and ~6.6% below
+      # that, which absorbs CI-vs-local jitter without waving through a
+      # collapse. Raise them as coverage rises, never lower them to go green.
       - name: Coverage floor
         if: always()
         run: |

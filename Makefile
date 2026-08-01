@@ -210,7 +210,8 @@ test-coverage:
 # The same coverage floor CI enforces, runnable before you push. It is a floor,
 # not a target: ~35k of the uncovered statements need live CHARMM, plotting, or
 # PySCF/torch/GPU, so the CI-reachable ceiling is around 70%. This only catches
-# the number sliding backwards. Run: make coverage-gate
+# the number sliding backwards. Measured 2026-08-01: 45.81%, 55706/121608
+# lines. Run: make coverage-gate
 coverage-gate:
 	uv run pytest tests/ -q -p no:cacheprovider --cov=mmml --cov-report=xml || true
 	uv run python scripts/ci/check_coverage_floor.py coverage.xml \
