@@ -52,6 +52,7 @@ __all__ = [
     "match_cgenff_template",
     "assign_frame_cgenff",
     "format_composition",
+    "reorder_to_cgenff_template",
 ]
 
 K_COULOMB_KCAL_ANG = 332.06371  # e^2 / Angstrom -> kcal/mol
