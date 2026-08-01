@@ -99,6 +99,16 @@ _ARGON_SAT = (
     StatePoint(150.0, 47.346, 0.68043, source="NIST WebBook SatP C7440371", verified=True),
 )
 
+# NIST WebBook SatP C7439909. Tc = 209.48 K, Pc = 55.250 bar (stated on the page).
+_KRYPTON_SAT = (
+    StatePoint(120.0, 1.0344, 2.4146, source="NIST WebBook SatP C7439909", verified=True),
+    StatePoint(135.0, 2.8957, 2.2957, source="NIST WebBook SatP C7439909", verified=True),
+    StatePoint(150.0, 6.5513, 2.1659, source="NIST WebBook SatP C7439909", verified=True),
+    StatePoint(165.0, 12.774, 2.0195, source="NIST WebBook SatP C7439909", verified=True),
+    StatePoint(180.0, 22.390, 1.8456, source="NIST WebBook SatP C7439909", verified=True),
+    StatePoint(195.0, 36.339, 1.6145, source="NIST WebBook SatP C7439909", verified=True),
+)
+
 SPECIES: tuple[Species, ...] = (
     # ---- NIST reference EOS: density at any (T, P) -------------------------
     Species("TIP3", "water", Phase.NIST_EOS, 4518, nist_id="C7732185"),
@@ -108,9 +118,10 @@ SPECIES: tuple[Species, ...] = (
             note="gas at 298 K -- a 298 K 'liquid ammonia' box is a gas"),
     Species("ETHE", "ethene", Phase.NIST_EOS, 435, nbp_K=169.4, nist_id="C74851"),
     Species("MEOH", "methanol", Phase.NIST_EOS, 340, nist_id="C67561"),
-    Species("AR1", "argon", Phase.NIST_EOS, 252, nbp_K=87.28, nist_id="C7440371",
-            states=_ARGON_SAT,
-            note="Tc 150.86 K; saturated liquid spans 1.379 -> 0.680 g/cm3"),
+    Species("AR1", "argon", Phase.NIST_EOS, 252, nbp_K=87.28, mp_K=83.78,
+            nist_id="C7440371", states=_ARGON_SAT,
+            note="PURE LJ, no charges. Tc 150.86 K, triple point 83.78 K (NIST). "
+                 "Saturated liquid spans 1.379 -> 0.680 g/cm3 over 90-150 K."),
     Species("HE1", "helium", Phase.NIST_EOS, 200, nbp_K=4.22, nist_id="C7440597",
             note="quantum fluid -- classical MD is not meaningful here"),
     Species("BENZ", "benzene", Phase.NIST_EOS, 187, nist_id="C71432"),
@@ -119,7 +130,10 @@ SPECIES: tuple[Species, ...] = (
     Species("ETHA", "ethane", Phase.NIST_EOS, 180, nbp_K=184.6, nist_id="C74840"),
     Species("BUTA", "butane", Phase.NIST_EOS, 177, nbp_K=272.7, nist_id="C106978",
             note="marginal: NBP is 272.7 K, so 298 K / 1 atm is a gas"),
-    Species("KR1", "krypton", Phase.NIST_EOS, 171, nbp_K=119.74, nist_id="C7439909"),
+    Species("KR1", "krypton", Phase.NIST_EOS, 171, nbp_K=119.74, nist_id="C7439909",
+            states=_KRYPTON_SAT,
+            note="PURE LJ, no charges. Tc 209.48 K (NIST). Saturated liquid "
+                 "spans 2.415 -> 1.615 g/cm3 over 120-195 K."),
     Species("XE1", "xenon", Phase.NIST_EOS, 165, nbp_K=165.05, nist_id="C7440633"),
     Species("PRPA", "propane", Phase.NIST_EOS, 133, nbp_K=231.0, nist_id="C74986"),
     Species("TOLU", "toluene", Phase.NIST_EOS, 58, nist_id="C108883"),
