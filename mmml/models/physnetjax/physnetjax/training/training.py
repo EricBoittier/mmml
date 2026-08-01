@@ -125,6 +125,10 @@ def train_model(
     optimizer=None,
     transform=None,
     schedule_fn=None,
+    # Global-norm gradient clip. None keeps get_optimizer's default (10.0),
+    # which is loose enough that most steps pass through unclipped; lower it
+    # (~1.0) when the raw params oscillate instead of converging.
+    clip_global=None,
     objective="valid_forces_mae",
     ckpt_dir=BASE_CKPT_DIR,
     log_tb=False,
@@ -362,6 +366,7 @@ def train_model(
         schedule_fn=schedule_fn,
         optimizer=optimizer,
         transform=transform,
+        **({} if clip_global is None else {"clip_global": float(clip_global)}),
     )
 
     train_params_dict = {

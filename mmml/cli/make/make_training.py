@@ -191,6 +191,17 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--learning-rate", "--learning_rate", type=float, default=0.001, dest="learning_rate"
     )
     parser.add_argument(
+        "--clip-global",
+        "--clip_global",
+        type=float,
+        default=None,
+        dest="clip_global",
+        help=(
+            "Global-norm gradient clip (default 10.0). Lower it (~1.0) when the "
+            "raw parameters oscillate rather than converge."
+        ),
+    )
+    parser.add_argument(
         "--energy-weight", "--energy_weight", type=float, default=1.0, dest="energy_weight"
     )
     parser.add_argument(
@@ -1468,6 +1479,7 @@ def main_loop(args):
             train_data,
             valid_data,
             learning_rate=args.learning_rate,
+            clip_global=args.clip_global,
             batch_size=args.batch_size,
             num_atoms=natoms,
             energy_weight=args.energy_weight,
