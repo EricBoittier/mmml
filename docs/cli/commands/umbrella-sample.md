@@ -243,6 +243,9 @@ frames -o out/umb
 
 ![Trialanine conformers anchored to collective-variable coordinates](../../images/povray-overlays/trialanine_pes_with_povray.png)
 
+## Related docs
+
+- [Batched umbrella sampling](../../umbrella.md)
 
 ---
 

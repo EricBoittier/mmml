@@ -211,6 +211,12 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
         ("Liquid box workflow", "../../liquid-box-workflow.md"),
         ("Plotting style guide", "../../plotting-style-guide.md"),
     ],
+    "umbrella-sample": [
+        ("Batched umbrella sampling", "../../umbrella.md"),
+    ],
+    "umbrella-mbar": [
+        ("Batched umbrella sampling", "../../umbrella.md"),
+    ],
 }
 
 # Static figures under docs/images/ (see scripts/generate_docs_figures.py).

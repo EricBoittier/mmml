@@ -50,6 +50,9 @@ mbar --run-dir out/umbrella [--checkpoint PATH] [--temperature-K 300]
 
 ![Two-dimensional free-energy surface](../../images/plots/test4_phi_psi_fes.png)
 
+## Related docs
+
+- [Batched umbrella sampling](../../umbrella.md)
 
 ---
 

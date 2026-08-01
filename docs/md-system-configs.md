@@ -1465,6 +1465,64 @@ Commented full-job skeleton (peptide PSF paths left for you to fill in):
 ADUMB bookkeeping (`nsim` / `update` / `equi`) will not line up with the
 trajectory CHARMM actually runs.
 
+#### ADUMB RXNCOR guards and recovery
+
+For NH3-CH3Cl RXNCOR umbrellas, `md-system` recognizes a small guard contract in
+the pre-dynamics lingo:
+
+```charmm
+set adumrcmax = 8.0
+set adumrcwall = 2000.0
+umbrella rxncor ... min 0.0 max @adumrcmax name rcl
+umbrella rxncor ... min 0.0 max @adumrcmax name rcn
+```
+
+When both `set` commands and at least one `umbrella rxncor ... name ...` card are
+present, the PyCHARMM backend parses the umbrella bounds before running
+dynamics. The current guard is tailored to the NH3-CH3Cl examples and expects
+unique atom names `CL1`, `C1`, and `N1`:
+
+| RXNCOR name | Guarded distance walls |
+|-------------|------------------------|
+| `rcl` / `r_cl` | Cl1-C1 only |
+| `rcn` / `r_cn` / `r_nc` | C1-N1 only |
+| `rdif` / `rrat` | Cl1-C1 and C1-N1 |
+| multiple `umbrella rxncor` cards | union of all named distances |
+
+The default wall backend is CHARMM `RESDistance POSITIVE`, which does not require
+the NOE module. Set `MMML_ADUMB_RC_WALL_BACKEND=noe`, `mmfp`, or `off` only for
+site-specific debugging. Walls are installed below the umbrella hard maximum
+(`adumrcmax - 0.75 Å` by default; override with `MMML_ADUMB_RC_WALL_MARGIN`) so
+the restraint can act before UM1RXN aborts.
+
+Operational constraints:
+
+- Keep `dynamics_overlap_check_interval` aligned with the ADUMB `update` value
+  when you use staged heat. The numbered `heat.NNNN.res` files are the restart
+  ladder used for recovery.
+- `dynamics_overlap_action: warn` is appropriate for reactive ADUMB runs when
+  steepest-descent rescue would bias the histogram. With an ADUMB guard active,
+  mid-chunk fly-offs can still rewind to an earlier numbered restart and retry.
+- If monomer health detects geometry fly-off while the ADUMB guard is armed,
+  `md-system` skips monomer template restore. Restoring one monomer from a
+  template preserves bad inter-monomer COM separation and usually leaves the
+  RXNCOR outside the umbrella window; restart-ladder rewind is safer.
+- For bond-difference umbrellas such as `rdif = r(Cl-C) - r(C-N)`, the guard
+  also checks the soft `min`/`max` window for the difference coordinate. Component
+  distance walls still use `adumrcmax`, because the difference maximum is not a
+  physical bond length.
+- `no_echeck` / `no_echeck_heat` now disable CHARMM ECHECK with a huge sentinel
+  rather than `-1`; velocity-Verlet paths still apply `MAX(ECHECK, 0.1*KE)` for
+  nonpositive ECHECK values.
+
+Troubleshooting checks:
+
+| Symptom | Check |
+|---------|-------|
+| `Unknown umbrella specified` near `umbrella rxncor` | Rebuild CHARMM with ADUMB and ADUMBRXNCOR (`?ADUMBRXN == 1`). |
+| `UM1RXN` reaction coordinate out of range | Confirm the staged lingo contains all active `name` cards (`rcl` + `rcn` for 2D), `ENER` reports `RESDistance`, and numbered `heat.NNNN.res` files exist. Widen `max` / `adumrcmax` or lower the heat temperature if recovery exhausts the restart ladder. |
+| Old `r_nc`, `rrat`, or stale `min`/`max` appears after YAML edits | Remove `{output_dir}/pycharmm_pre_dynamics_lingo.inp` and `next_run.*`, or use the example scripts which clear these files before launching. |
+
 ## Template improvements
 
 Use this structure when turning ad hoc configs into reusable campaign templates:
