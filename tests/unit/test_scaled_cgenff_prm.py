@@ -164,8 +164,10 @@ def test_roundtrip_through_production_parser_matches_master_times_scale(tmp_path
         s, e = sig_scale[i], eps_scale[i]
         if ref.sigmas[i] == 0.0 and ref.epsilons[i] == 0.0:
             continue  # LPH / DUM: zero LJ by design
-        assert ref2.sigmas[j] == pytest.approx(ref.sigmas[i] * s, rel=1e-4), name
-        assert ref2.epsilons[j] == pytest.approx(ref.epsilons[i] * e, rel=1e-4), name
+        # Tight on purpose: at rel=1e-4 a 6-decimal prm write passed while
+        # actually perturbing the LJ by ~6e-5 relative. Exact means exact.
+        assert ref2.sigmas[j] == pytest.approx(ref.sigmas[i] * s, rel=1e-10), name
+        assert ref2.epsilons[j] == pytest.approx(ref.epsilons[i] * e, rel=1e-10), name
         checked += 1
     assert checked > 100, f"only {checked} types actually verified"
 

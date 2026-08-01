@@ -138,11 +138,16 @@ def scale_nonbonded_block(
 
         new_nums = list(nums)
         # Column 1 is epsilon (negative by CHARMM convention); 2 is Rmin/2.
-        new_nums[1] = f"{float(nums[1]) * e:.6f}"
-        new_nums[2] = f"{float(nums[2]) * s:.6f}"
+        # 12 decimals, not 6: at 6 the rounding alone put a ~6e-5 relative error
+        # into the deployed LJ, which is a real (if small) physics change and
+        # defeats the whole point of an *exact* rewrite. Fixed-point rather than
+        # %g so no value can come out in scientific notation, which CHARMM's
+        # parameter reader is not guaranteed to accept.
+        new_nums[1] = f"{float(nums[1]) * e:.12f}"
+        new_nums[2] = f"{float(nums[2]) * s:.12f}"
         if scale_14 and len(nums) == 6:
-            new_nums[4] = f"{float(nums[4]) * e:.6f}"
-            new_nums[5] = f"{float(nums[5]) * s:.6f}"
+            new_nums[4] = f"{float(nums[4]) * e:.12f}"
+            new_nums[5] = f"{float(nums[5]) * s:.12f}"
 
         newline = "\n" if raw.endswith("\n") else ""
         rebuilt = (

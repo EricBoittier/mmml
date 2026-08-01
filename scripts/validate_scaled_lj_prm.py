@@ -58,6 +58,13 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
+    # apply_mm_lj_scales goes through jnp, which is float32 by default. Left
+    # at float32 the two routes disagree by ~4e-4 relative purely from the
+    # multiply, and r^-12 amplifies it further -- that is the harness losing
+    # precision, not the prm rewrite being inexact.
+    import jax
+    jax.config.update("jax_enable_x64", True)
+
     from mmml.data.cgenff_dataset import (
         DEF_EXTRA_TOPPAR, DEF_PRM_PATH, DEF_RTF_PATH, load_reference,
     )
@@ -128,9 +135,15 @@ def main() -> int:
         na, nb = rng.integers(2, 7), rng.integers(2, 7)
         ta = rng.choice(live, size=na)
         tb = rng.choice(live, size=nb)
-        sep = rng.uniform(2.6, 9.0)
-        pa = rng.normal(0, 1.2, size=(na, 3))
-        pb = rng.normal(0, 1.2, size=(nb, 3)) + np.array([sep, 0, 0])
+        sep = rng.uniform(3.0, 9.0)
+        # Compact monomers plus a real separation: without a floor on the
+        # closest contact, r^-12 produces ~1e15 kcal/mol and the absolute
+        # residual stops meaning anything.
+        pa = rng.normal(0, 0.7, size=(na, 3))
+        pb = rng.normal(0, 0.7, size=(nb, 3)) + np.array([sep, 0, 0])
+        dmin = np.linalg.norm(pa[:, None, :] - pb[None, :, :], axis=-1).min()
+        if dmin < 2.5:
+            pb = pb + np.array([2.5 - dmin, 0.0, 0.0])
         e_ref.append(lj_energy(pa, pb, sigA[ta], sigA[tb], epsA[ta], epsA[tb]))
         e_dep.append(lj_energy(pa, pb, sigB[ta], sigB[tb], epsB[ta], epsB[tb]))
         e_base.append(lj_energy(pa, pb, ref.sigmas[ta], ref.sigmas[tb],
@@ -214,7 +227,11 @@ def main() -> int:
     fig.savefig(args.out, dpi=150, facecolor=fig.get_facecolor())
     print(f"wrote {args.out}")
 
-    ok = max_abs < 1e-8 and effect > 1e-6
+    # 1e-7 relative: comfortably below anything physically meaningful, and
+    # ~600x tighter than the 6e-5 that the original 6-decimal prm write
+    # introduced. Not tighter, because summing r^-12 terms in float64 leaves
+    # ~1e-9 relative round-off that no amount of care in the writer removes.
+    ok = max_rel < 1e-7 and effect > 1e-6
     print("PASS" if ok else "FAIL")
     return 0 if ok else 1
 
