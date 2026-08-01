@@ -47,6 +47,13 @@ EV_ANGSTROM_TO_HARTREE_BOHR = BOHR_TO_ANGSTROM / HARTREE_TO_EV
 DEBYE_TO_EANGSTROM = 0.208194
 EANGSTROM_TO_DEBYE = 1.0 / DEBYE_TO_EANGSTROM
 
+# Dipole in atomic units (e*bohr). DCMNet builds molecular dipoles from
+# Angstrom coordinates, so the e*Angstrom -> e*bohr step is just the length
+# conversion; deriving the Debye factor from the two above keeps all three
+# mutually consistent instead of carrying a third independent literal.
+EBOHR_TO_DEBYE = EANGSTROM_TO_DEBYE / ANGSTROM_TO_BOHR
+DEBYE_TO_EBOHR = 1.0 / EBOHR_TO_DEBYE
+
 # Aliases used in some CLI code paths
 HARTREE_BOHR_TO_EV_ANG = HARTREE_BOHR_TO_EV_ANGSTROM
 EV_ANG_TO_HARTREE_BOHR = EV_ANGSTROM_TO_HARTREE_BOHR

@@ -8,14 +8,19 @@ import pandas as pd
 from jax import vmap
 from tqdm import tqdm
 
+from mmml.data.units import EBOHR_TO_DEBYE, HARTREE_TO_KCAL_MOL
+
 from .data import cut_vdw, prepare_batches
 from .loss import esp_mono_loss_pots, pred_dipole
 from .modules import MessagePassingModel, MessagePassingModelDEBUG
 from .multipoles import calc_esp_from_multipoles
 from .utils import apply_model
 
-au_to_debye = 2.5417464519
-au_to_kcal = 627.509
+# pred_dipole returns e*bohr; these convert its residuals for reporting.
+# Sourced from mmml.data.units so the dipole chain (Angstrom -> bohr -> Debye)
+# stays consistent with the factor pred_dipole itself applies.
+au_to_debye = EBOHR_TO_DEBYE
+au_to_kcal = HARTREE_TO_KCAL_MOL
 
 
 # Model hyperparameters.
