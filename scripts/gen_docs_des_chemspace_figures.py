@@ -49,7 +49,6 @@ def _fmt(formula: str) -> str:
 
 def figure_chemical_space(scan: dict, out: Path) -> None:
     cg = scan["cgenff"]
-    monomers = dict(scan["monomers"])
     mono_ok = dict(cg["monomer_ok"])
 
     fig, axes = plt.subplots(2, 2, figsize=(13.5, 10.5))

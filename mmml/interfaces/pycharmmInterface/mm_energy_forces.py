@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 import os
@@ -11,7 +12,11 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep, safe_norm
+from mmml.interfaces.pycharmmInterface.calculator_utils import (
+    _sharpstep,
+    monomer_coms_segment,
+    safe_norm,
+)
 from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
@@ -123,10 +128,14 @@ def _filter_pairs_by_com_min(
     """Exclude pairs where dimer COM distance < mm_r_min. Returns updated mask."""
     R = np.asarray(positions, dtype=np.float64)
     n_monomers = len(monomer_offsets) - 1
+    
+    # Vectorized COM calculation
+    monomer_ids = monomer_id.astype(np.int64)
+    counts = np.bincount(monomer_ids, minlength=n_monomers)
+    counts = np.where(counts > 0, counts, 1.0)
     coms = np.zeros((n_monomers, 3), dtype=np.float64)
-    for k in range(n_monomers):
-        start, end = int(monomer_offsets[k]), int(monomer_offsets[k + 1])
-        coms[k] = R[start:end].mean(axis=0)
+    for d in range(3):
+        coms[:, d] = np.bincount(monomer_ids, weights=R[:, d], minlength=n_monomers) / counts
 
     if pbc_cell is not None:
         cell = np.asarray(pbc_cell, dtype=np.float64)
@@ -138,25 +147,53 @@ def _filter_pairs_by_com_min(
     else:
         cell = inv_cell = None
 
-    out_mask = mask.copy()
-    n_pairs = mask.shape[0]
-    for k in range(n_pairs):
-        if not mask[k]:
-            continue
-        ai, aj = int(pair_i[k]), int(pair_j[k])
-        mi = int(monomer_id[ai])
-        mj = int(monomer_id[aj])
-        com_i = coms[mi]
-        com_j = coms[mj]
-        dr = com_j - com_i
-        if inv_cell is not None:
-            frac_dr = dr @ inv_cell.T
-            frac_dr = frac_dr - np.round(frac_dr)
-            dr = frac_dr @ cell
-        r = float(np.linalg.norm(dr))
-        if r < mm_r_min:
-            out_mask[k] = False
-    return out_mask
+    dr = coms[pair_j] - coms[pair_i]
+
+    if inv_cell is not None:
+        frac_dr = dr @ inv_cell.T
+        frac_dr = frac_dr - np.round(frac_dr)
+        dr = frac_dr @ cell
+
+    r = np.linalg.norm(dr, axis=1)
+    return mask & (r >= mm_r_min)
+
+
+@jax.jit
+def _filter_pairs_by_com_min_jax(
+    positions: Array,
+    pair_i: Array,
+    pair_j: Array,
+    mask: Array,
+    monomer_id_jnp: Array,
+    mm_r_min: float,
+    n_monomers: int,
+    pbc_cell: Optional[Array] = None,
+) -> Array:
+    """Exclude pairs where dimer COM distance < ``mm_r_min`` (GPU).
+
+    ``positions`` must be **Cartesian**. Callers that keep fractional
+    coordinates (``fractional_coordinates=True``) must convert with
+    ``R @ cell`` before calling — the same contract as
+    :func:`_filter_pairs_by_com_min`. Applying the Cartesian MIC
+    (``dr @ inv(cell)``) to fractional displacements yields garbage distances.
+    """
+    coms = monomer_coms_segment(positions, monomer_id_jnp, n_monomers)
+    mi = monomer_id_jnp[pair_i]
+    mj = monomer_id_jnp[pair_j]
+    dr = coms[mj] - coms[mi]
+
+    if pbc_cell is not None:
+        if pbc_cell.ndim == 1:
+            cell_3x3 = jnp.diag(pbc_cell)
+        else:
+            cell_3x3 = pbc_cell
+        inv_cell = jnp.linalg.inv(cell_3x3)
+        frac_dr = dr @ inv_cell.T
+        frac_dr = frac_dr - jnp.round(frac_dr)
+        dr = frac_dr @ cell_3x3
+
+    r = jnp.linalg.norm(dr, axis=1)
+    return mask & (r >= mm_r_min)
 
 
 def format_mm_pair_update_stats_summary(stats: dict) -> str:
@@ -1818,6 +1855,130 @@ def build_mm_energy_forces_fn(
             positions_jax = positions if hasattr(positions, "__dlpack_device__") else None
             _nbr_debug = debug
             _pair_stats["calls"] += 1
+
+            if _use_jax_md_nbrs:
+                # Optimized GPU JAX-MD path to avoid host synchronization of coordinates
+                R = positions
+                nbrs = _nbrs[0]
+                kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
+                
+                try:
+                    nbrs = nbrs.update(R, **kwargs)
+                except Exception as e:
+                    if _nbr_debug:
+                        print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
+                    return _cell_list_fallback_pairs(
+                        np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
+                        _nbr_debug,
+                        box_in=box,
+                    )
+                
+                realloc_count = 0
+                for _ in range(int(jax_md_max_overflow_retries)):
+                    overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
+                    did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
+                    
+                    if _nbr_debug:
+                        print(
+                            f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
+                            f"box={'None' if box is None else np.asarray(box).tolist()}"
+                        )
+                    
+                    if not did_overflow:
+                        break
+                    
+                    realloc_count += 1
+                    _pair_stats["reallocs"] += 1
+                    
+                    next_multiplier = (
+                        _current_capacity_multiplier[0]
+                        * float(jax_md_capacity_growth_factor)
+                    )
+                    
+                    rebuilt = _create_jax_md_bundle(next_multiplier)
+                    if rebuilt is not None:
+                        _neighbor_fn_new, _filter_fn_new, _ = rebuilt
+                        _neighbor_fn_cell[0] = _neighbor_fn_new
+                        _filter_fn_cell[0] = _filter_fn_new
+                        _current_capacity_multiplier[0] = next_multiplier
+                        _pair_stats["capacity_multiplier"] = float(next_multiplier)
+                        
+                    try:
+                        nbrs = _neighbor_fn_cell[0].allocate(R, **kwargs)
+                        nbrs = nbrs.update(R, **kwargs)
+                    except Exception as e:
+                        if _nbr_debug:
+                            print(
+                                f"[nbr] allocate/update failed during retry {realloc_count} "
+                                f"({type(e).__name__}): {e}"
+                            )
+                        return _cell_list_fallback_pairs(
+                            np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
+                            _nbr_debug,
+                            box_in=box,
+                        )
+                else:
+                    if _nbr_debug:
+                        print("[nbr] persistent overflow after retries; attempting cell-list fallback")
+                    return _cell_list_fallback_pairs(
+                        np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
+                        _nbr_debug,
+                        box_in=box,
+                    )
+                
+                _nbrs[0] = nbrs
+                
+                pair_i, pair_j, mask = _filter_fn_cell[0](nbrs.idx)
+                
+                if mm_r_min is not None:
+                    _pair_stats["com_filter_calls"] += 1
+                    # Match the host path: COM filter always sees Cartesian R.
+                    R_for_filter = R
+                    pbc_for_filter = None
+                    cell_src = box if box is not None else pbc_cell
+                    if cell_src is not None:
+                        cell = jnp.asarray(cell_src)
+                        if cell.ndim == 0:
+                            cell_3x3 = jnp.diag(jnp.full((3,), cell))
+                        elif cell.ndim == 1:
+                            cell_3x3 = jnp.diag(cell)
+                        else:
+                            cell_3x3 = cell
+                        if fractional_coordinates:
+                            R_for_filter = R @ cell_3x3
+                        pbc_for_filter = cell_3x3
+
+                    mask = _filter_pairs_by_com_min_jax(
+                        R_for_filter,
+                        pair_i,
+                        pair_j,
+                        mask,
+                        _monomer_id_jnp,
+                        float(mm_r_min),
+                        int(n_monomers),
+                        pbc_cell=pbc_for_filter,
+                    )
+                
+                pair_idx = jnp.stack([pair_i, pair_j], axis=1)
+                pair_mask = jnp.asarray(mask, dtype=ml_jnp_dtype)
+                
+                _pair_idx_cell[0] = pair_idx
+                _pair_mask_cell[0] = pair_mask
+                
+                _last_positions[0] = None
+                _last_cartesian_positions[0] = None
+                _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
+                _pair_stats["updates"] += 1
+                
+                if _nbr_debug:
+                    n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
+                    capacity = pair_idx.shape[0] if hasattr(pair_idx, "shape") else len(pair_i)
+                    print(
+                        f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
+                        f"frac_coords={fractional_coordinates}"
+                    )
+                
+                return pair_idx, pair_mask
 
             interval = int(max(1, jax_md_update_interval))
             skin = float(max(0.0, jax_md_skin_distance))

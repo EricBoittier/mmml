@@ -135,6 +135,11 @@ jobs:
           } > CHARMMSETUP
       - name: Install package and dependencies
         run: uv sync --extra dev --extra all-cpu --extra charmm-interface
+      # Packmol is gitignored and not part of the libcharmm cache, so a cache hit
+      # used to skip rebuild_charmm_mlpot.sh and leave the binary missing. Smoke
+      # tests that cold-start boxes then fail with FileNotFoundError.
+      - name: Build Packmol
+        run: bash scripts/rebuild_packmol.sh
       # Every live-CHARMM test is guarded by `skipif(not can_import_pycharmm())`,
       # and that guard only checks that the .so *file* exists. A library that is
       # present but cannot be dlopen'ed therefore turns this whole 45-minute job
