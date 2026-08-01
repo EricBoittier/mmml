@@ -3,8 +3,9 @@
 ``test_mm_lj_scales.py`` covers the mechanics (attach/split/apply, JSON I/O, ATC
 remap, nonzero gradients).  What it does not answer is whether the scales
 *converge* under a real optimizer and whether the number that trained is the
-number MD deploys.  These tests close that gap, and pin the documented
-Ewald limitation so it cannot go stale silently.
+number MD deploys.  These tests close that gap, and cover Ewald + switched LJ
+(#139 Phase 1): scales move ``e_mm`` when ``include_lj=True``, stay inert when
+``False``.
 
 See ``docs/hybrid-mm-lj-scales.md``.
 """
@@ -576,7 +577,10 @@ def test_lj_scales_move_emm_under_ewald_when_include_lj():
         )
     )
     expected_delta = KCAL_MOL_TO_EV * lam * e_lj
-    delta = float(np.asarray(base_on["e_mm"]) - np.asarray(base_off["e_mm"]))
+    delta = float(
+        np.asarray(base_on["e_mm"]).reshape(-1)[0]
+        - np.asarray(base_off["e_mm"]).reshape(-1)[0]
+    )
     np.testing.assert_allclose(delta, expected_delta, rtol=1e-5, atol=1e-8)
 
 
@@ -584,19 +588,27 @@ def test_ewald_plus_lj_force_energy_fd_smoke():
     """Finite-difference check for Ewald Coulomb + switched LJ forces."""
     from mmml.models.hybrid_energy import hybrid_forward
 
+    jax.config.update("jax_enable_x64", True)
+    # float64 for a stable central-difference check (training path is float32).
     batch = _dimer_batch(separation_A=3.5)
+    batch = {
+        k: (jnp.asarray(v, dtype=jnp.float64) if hasattr(v, "dtype") and
+            jnp.issubdtype(v.dtype, jnp.floating) else v)
+        for k, v in batch.items()
+    }
     kw = dict(
         SWITCH_KW,
         lr_solver="ewald",
         pme_box_length=25.0,
         short_range_wall=False,
         include_lj=True,
-        complementary_handoff=SWITCH_KW["complementary_handoff"],
     )
+    master_sig = jnp.asarray(MASTER_SIGMAS, dtype=jnp.float64)
+    master_eps = jnp.asarray(MASTER_EPSILONS, dtype=jnp.float64)
 
     def _fwd(b):
         return hybrid_forward(
-            _zero_ml_apply, {"params": {}}, b, 1, MASTER_SIGMAS, MASTER_EPSILONS, **kw
+            _zero_ml_apply, {"params": {}}, b, 1, master_sig, master_eps, **kw
         )
 
     out = _fwd(batch)
@@ -612,7 +624,7 @@ def test_ewald_plus_lj_force_energy_fd_smoke():
 
     def energy_at(p):
         b = dict(batch)
-        b["R"] = jnp.asarray(p, dtype=batch["R"].dtype)
+        b["R"] = jnp.asarray(p, dtype=jnp.float64)
         return float(np.asarray(_fwd(b)["energy"]).reshape(-1)[0])
 
     fd = (energy_at(pos + eps * d) - energy_at(pos - eps * d)) / (2.0 * eps)

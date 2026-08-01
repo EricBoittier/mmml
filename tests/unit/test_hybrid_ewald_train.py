@@ -1,4 +1,4 @@
-"""Hybrid train: lr_solver="ewald" Coulomb (LJ off) + force-energy consistency.
+"""Hybrid train: lr_solver="ewald" Coulomb (+ optional switched LJ) + FD checks.
 
 Mirrors test_hybrid_nvalchemiops_pme_train.py's coverage, but the ewald path
 needs no mocking -- it's pure JAX (no external library, no CUDA), so these
