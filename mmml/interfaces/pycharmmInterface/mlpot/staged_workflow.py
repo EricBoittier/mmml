@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from pathlib import Path
 from typing import Any, Literal
@@ -128,7 +127,7 @@ MdStage = Literal["mini", "heat", "nve", "equi", "prod"]
 # Restart / resume policy now lives in staged_restart_policy so it can be tested
 # without CHARMM (see that module's docstring). Re-exported here because callers
 # and tests import these names from staged_workflow.
-from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (  # noqa: E402
+from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (  # noqa: E402,F401
     _POST_DYNAMICS_RESUME_STAGES,
     _can_seed_stage_from_memory,
     _equi_in_place_restart,
