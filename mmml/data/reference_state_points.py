@@ -172,23 +172,38 @@ SPECIES: tuple[Species, ...] = (
 BY_RESNAME = {s.resname: s for s in SPECIES}
 
 
-def runnable_at(T_K: float, P_atm: float = 1.0) -> list[Species]:
-    """Species whose condensed phase is physical at this state point.
+def runnable_at(T_K: float, P_atm: float = 1.0) -> tuple[list[Species], list[Species]]:
+    """Species confirmed liquid at this state point, and those we cannot confirm.
 
-    Deliberately conservative: a species is excluded when it is a gas at the
-    requested temperature and the pressure is ambient, because that is the
-    failure this table exists to prevent.
+    Returns ``(confirmed, unknown)``. The split exists because most rows carry no
+    melting point: only the species that are *solid* at 298 K needed one for the
+    298 K classification. Without ``mp_K`` there is no way to tell a liquid from
+    a frozen solid below ambient, and an earlier version of this function
+    silently reported water and benzene as runnable at 90 K. A species is
+    therefore only *confirmed* when the state point can actually be checked
+    against known transitions -- everything else is returned as ``unknown`` for
+    the caller to look up, never quietly included.
     """
-    out = []
+    confirmed: list[Species] = []
+    unknown: list[Species] = []
     for s in SPECIES:
         if s.phase_298 is Phase.ION:
             continue
-        if s.nbp_K is not None and T_K > s.nbp_K and P_atm <= 1.5:
+        ambient = P_atm <= 1.5
+        # At 298 K / 1 atm the phase_298 classification is itself the answer.
+        if abs(T_K - 298.15) < 5.0 and ambient:
+            if s.phase_298 in (Phase.LIQUID, Phase.NIST_EOS):
+                (confirmed if s.nbp_K is None or s.nbp_K > T_K else unknown).append(s)
             continue
+        if s.nbp_K is not None and T_K > s.nbp_K and ambient:
+            continue  # a gas here: excluded outright, not "unknown"
         if s.mp_K is not None and T_K < s.mp_K:
+            continue  # a solid here
+        if s.mp_K is None and T_K < 298.15:
+            unknown.append(s)  # cannot rule out that it has frozen
             continue
-        out.append(s)
-    return out
+        confirmed.append(s)
+    return confirmed, unknown
 
 
 def summary() -> str:
