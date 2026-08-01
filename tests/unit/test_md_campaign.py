@@ -377,6 +377,13 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         nvt_integrator="langevin",
         checkpoint="/tmp/ck.json",
         jaxmd_minimize_steps=250,
+        from_psf="/tmp/mini.psf",
+        from_crd="/tmp/mini.crd",
+        from_pdb=None,
+        mm_lj_scales_file="/tmp/hybrid_mm.json",
+        composition="DCM:120",
+        box_size=30.0,
+        packmol_tolerance=3.5,
         _cli_explicit=set(),
     )
     apply_campaign_cli_overrides(merged, parent)
@@ -389,6 +396,12 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
     assert merged["nvt_integrator"] == "langevin"
     assert merged["checkpoint"] == "/tmp/ck.json"
     assert merged["jaxmd_minimize_steps"] == 250
+    assert merged["from_psf"] == "/tmp/mini.psf"
+    assert merged["from_crd"] == "/tmp/mini.crd"
+    assert merged["mm_lj_scales_file"] == "/tmp/hybrid_mm.json"
+    assert merged["composition"] == "DCM:120"
+    assert merged["box_size"] == 30.0
+    assert merged["packmol_tolerance"] == 3.5
 
     merged2 = {"backend": "pycharmm"}
     parent2 = Namespace(

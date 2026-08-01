@@ -79,10 +79,24 @@ def test_maybe_apply_certified_box_json_falls_back_to_box_size(tmp_path: Path):
 
     crd = tmp_path / "model.crd"
     crd.write_text("dummy\n", encoding="utf-8")
+<<<<<<< HEAD
     args = argparse.Namespace(box_size=28.0, quiet=True)
     side = _maybe_apply_certified_box_json(args, crd)
     assert side == pytest.approx(28.0)
     assert args.box_size == pytest.approx(28.0)
+=======
+    args = argparse.Namespace(
+        box_size=30.0,
+        box_auto="density",
+        target_density_g_cm3=1.3,
+        bulk_density_fraction=0.5,
+        quiet=True,
+    )
+    side = _maybe_apply_certified_box_json(args, crd)
+    assert side == pytest.approx(30.0)
+    assert args.box_size == pytest.approx(30.0)
+    assert args.box_auto is None
+>>>>>>> 3dc82b323 (feat(md_campaign): add new CLI override keys for certified box deployment)
 
 
 def test_maybe_apply_certified_box_json_requires_box_json_without_box_size(

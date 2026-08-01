@@ -282,6 +282,9 @@ def test_limits_status_reads_tier_api_func(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CHARMM_LIB_DIR", str(lib_dir))
     monkeypatch.setenv("CHARMM_HOME", str(charmm_home))
+    # This asserts which api_func.F90 discovery picks, not whether a build
+    # exists, so it must not inherit `make test-ci`'s MMML_DISABLE_CHARMM=1.
+    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)
     _clear_limits_cache()
 
     status = mlpot_limits.mlpot_limits_status()

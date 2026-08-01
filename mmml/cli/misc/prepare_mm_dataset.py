@@ -126,6 +126,13 @@ def enrich_npz(
     out_charge = np.zeros((limit, n_atoms), dtype=np.float64)
     out_e_mm = np.zeros((limit, 1), dtype=np.float64)
     out_f_mm = np.zeros((limit, n_atoms, 3), dtype=np.float64)
+    # Matched RESI names, mol_id order (0, 1). The assignment already knows
+    # these; recording them is what lets a downstream step select frames by
+    # residue -- e.g. training only on the best-sampled part of a broad set.
+    # Named cgenff_res_name, not res_name: some upstream geometry banks already
+    # carry a per-frame (n,) `res_name`, and this (n,2) array is a different
+    # thing. Fixed-width unicode so the NPZ stays pickle-free.
+    out_resname = np.full((limit, 2), "", dtype="<U8")
 
     drop_reasons: dict[str, int] = {}
     t0 = time.time()
@@ -136,6 +143,7 @@ def enrich_npz(
         out_type[idx, valid] = assignment.cgenff_type_idx
         out_molid[idx, valid] = assignment.mol_id
         out_charge[idx, valid] = assignment.cgenff_charge
+        out_resname[idx] = assignment.res_names
         if compute_mm:
             out_e_mm[idx, 0] = assignment.e_cgenff_mm
             out_f_mm[idx, valid] = assignment.f_cgenff_mm
@@ -195,6 +203,7 @@ def enrich_npz(
     out["cgenff_type_idx"] = out_type[keep]
     out["mol_id"] = out_molid[keep]
     out["cgenff_charge"] = out_charge[keep]
+    out["cgenff_res_name"] = out_resname[keep]
     out["cgenff_master_sigmas"] = ref.sigmas
     out["cgenff_master_epsilons"] = ref.epsilons
     if compute_mm:

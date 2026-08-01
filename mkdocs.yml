@@ -121,6 +121,7 @@ nav:
       - sections/qm-data.md
       - QC cross-check: qc-cross-check.md
       - Preparing hybrid ML/MM datasets (CGenFF assignment): hybrid-mm-dataset-preparation.md
+      - SO3LR / DES dimers — chemical space & LJ coverage: des-so3lr-dimers.md
       - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md
       - Orientation scan plots (path atlas): functionality/orient_scan_plots.md
       - Commands:

@@ -42,6 +42,19 @@ def _restore_dynamic_loader_env():
             os.environ[name] = value
 
 
+@pytest.fixture(autouse=True)
+def _ignore_charmm_disable_flag(monkeypatch):
+    """These tests exercise CHARMM/OpenMPI *discovery* against stub trees.
+
+    ``make test-ci`` runs the suite with ``MMML_DISABLE_CHARMM=1`` so that live
+    CHARMM tests skip. Discovery would then correctly find nothing, and the
+    assertions here -- which are about the search order, not about whether a
+    build exists -- would fail for a reason that has nothing to do with the code
+    under test.
+    """
+    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)
+
+
 def test_charmm_lib_links_mpi_detects_ldd(monkeypatch, tmp_path):
     lib = tmp_path / "libcharmm.so"
     lib.write_bytes(b"stub")

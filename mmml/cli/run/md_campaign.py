@@ -179,6 +179,16 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "nvt_integrator",
     "checkpoint",
     "jaxmd_minimize_steps",
+    # Certified-box / LJ-scales deploy: parent ``--from-psf`` etc. must reach
+    # jaxmd_settle (otherwise the job silently Packmol-rebuilds and can hit
+    # exact inter-monomer overlaps at liquid density).
+    "from_psf",
+    "from_crd",
+    "from_pdb",
+    "mm_lj_scales_file",
+    "composition",
+    "box_size",
+    "packmol_tolerance",
 )
 
 # Long-range / MM-stack flags: only override job YAML when present on the parent CLI.
