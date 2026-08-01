@@ -628,12 +628,7 @@ def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) ->
 
     box_json = Path(crd_path).expanduser().resolve().parent / "box.json"
     if not box_json.is_file():
-<<<<<<< HEAD
         # Allow an explicit CLI/YAML --box-size when mini/handoff CRDs lack box.json.
-=======
-        # mini.psf/crd from older Packmol legs often lack box.json; honor an
-        # explicit --box-size instead of forcing a Packmol rebuild.
->>>>>>> 3dc82b323 (feat(md_campaign): add new CLI override keys for certified box deployment)
         prev = getattr(args, "box_size", None)
         if prev is not None and float(prev) > 0.0:
             side_f = float(prev)
@@ -642,13 +637,8 @@ def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) ->
             args.bulk_density_fraction = None
             if not getattr(args, "quiet", False):
                 print(
-<<<<<<< HEAD
                     f"Certified box: L={side_f:.3f} Å from --box-size "
                     f"(no sibling box.json at {box_json})",
-=======
-                    f"Certified box: no {box_json.name}; using --box-size "
-                    f"{side_f:.3f} Å for {Path(crd_path).name}",
->>>>>>> 3dc82b323 (feat(md_campaign): add new CLI override keys for certified box deployment)
                     flush=True,
                 )
             return side_f
