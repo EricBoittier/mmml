@@ -214,6 +214,15 @@ class HybridMMConfig:
     def kwargs(self) -> dict:
         """Keyword arguments for :func:`hybrid_forward`."""
         d = dataclasses.asdict(self)
+        # Optimizer projection/support metadata belongs to the training step,
+        # not the physical forward Hamiltonian.
+        for key in (
+            "mm_lj_sigma_scale_bounds",
+            "mm_lj_epsilon_scale_bounds",
+            "mm_lj_trainable_mask",
+            "mm_lj_type_frame_counts",
+        ):
+            d.pop(key, None)
         d["master_sigmas"] = jnp.asarray(self.master_sigmas)
         d["master_epsilons"] = jnp.asarray(self.master_epsilons)
         return d

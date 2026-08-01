@@ -82,6 +82,23 @@ def test_custom_bounds_and_support_mask_are_projected():
     np.testing.assert_allclose(projected[MM_LJ_EPSILON_SCALE_KEY], [0.25, 1.0, 2.0])
 
 
+def test_optimizer_only_lj_config_is_not_forwarded_to_hamiltonian():
+    from mmml.models.hybrid_energy import HybridMMConfig
+
+    cfg = HybridMMConfig(
+        master_sigmas=(1.0, 2.0), master_epsilons=(0.1, 0.2),
+        mm_switch_on=6.0, mm_switch_width=5.0, ml_switch_width=1.5,
+        mm_lj_sigma_scale_bounds=(0.8, 1.2),
+        mm_lj_trainable_mask=(True, False),
+        mm_lj_type_frame_counts=(100, 0),
+    )
+    forwarded = cfg.kwargs()
+    assert "mm_lj_sigma_scale_bounds" not in forwarded
+    assert "mm_lj_epsilon_scale_bounds" not in forwarded
+    assert "mm_lj_trainable_mask" not in forwarded
+    assert "mm_lj_type_frame_counts" not in forwarded
+
+
 def test_scales_to_atc_by_name():
     ep, sig = scales_to_atc(
         ["CG2O1", "HGR52", "DEFAULT"],
