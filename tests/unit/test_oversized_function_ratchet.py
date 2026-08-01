@@ -15,10 +15,14 @@ CHARMM, which CI does not have. Extracting it safely needs the golden-record
 loop, not a unit test.
 
 What a test *can* do is keep the problem from getting worse. This file is a
-ratchet over every function above ``_MAX_LINES``:
+two-tier ratchet:
 
-* nothing in the baseline may grow;
-* nothing new may join it.
+* **Over 1,000 lines** (11 functions): none may grow, and none may be added.
+  At this size a function is only ever callable whole, so no test reaches
+  inside it -- which is how 699 statements end up uncoverable at once.
+* **Over 500 lines** (26 functions): capped by *count*, not by length. A
+  20-line edit to an already-large function is normal work and should not turn
+  the suite red; a 27th module adopting the pattern is the regression.
 
 When this fails you have two honest options: split the function, or raise its
 recorded number and say why in the commit. Lower the numbers as decomposition
@@ -37,9 +41,19 @@ import mmml
 
 MMML_ROOT = Path(mmml.__file__).resolve().parent
 
-# Above this, a function is effectively untestable in units: you can only call
-# it whole, with whatever environment it needs.
-_MAX_LINES = 500
+# Two tiers, because one threshold cannot do both jobs.
+#
+# ``_MAX_LINES`` is the hard line: a four-figure function can only ever be
+# called whole, with whatever environment it needs, so no test reaches inside
+# it. Eleven functions are already there; they may not grow and nothing new may
+# join them.
+#
+# ``_CROWDED_LINES`` is the soft line. Pinning the exact length of all 26
+# functions over 500 lines would fire on ordinary work -- a 20-line edit to an
+# already-large function is not the regression this file is about -- so that
+# tier is capped by *population* instead: the club may not gain members.
+_MAX_LINES = 1000
+_CROWDED_LINES = 500
 
 
 class Function(NamedTuple):
@@ -74,8 +88,11 @@ def _all_functions() -> dict[str, int]:
 
 _FUNCTIONS = _all_functions()
 _OVERSIZED = {k: v for k, v in _FUNCTIONS.items() if v > _MAX_LINES}
+_CROWDED = {k: v for k, v in _FUNCTIONS.items() if v > _CROWDED_LINES}
 
-# Measured 2026-08-01. Every entry is technical debt; none may grow.
+# Measured at e8191c8c1 (2026-08-01). Every entry is technical debt; none may
+# grow. Raising a number is allowed when the growth is genuinely unavoidable --
+# say why in the commit, so the register keeps meaning something.
 _BASELINE: dict[str, int] = {
     "mmml/interfaces/pycharmmInterface/mmml_calculator.py::setup_calculator": 3363,
     "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine": 2522,
@@ -87,23 +104,11 @@ _BASELINE: dict[str, int] = {
     "mmml/interfaces/pycharmmInterface/mm_energy_forces.py::build_mm_energy_forces_fn": 1543,
     "mmml/cli/misc/train_joint.py::plot_validation_results": 1255,
     "mmml/cli/misc/fix_and_split.py::fix_and_split_data": 1032,
-    "mmml/utils/hybrid_optimization.py::fit_hybrid_potential_to_training_data_jax": 902,
-    "mmml/models/physnetjax/physnetjax/training/training.py::train_model": 751,
-    "mmml/models/dcmnet/dcmnet/training.py::train_model": 699,
-    "mmml/interfaces/pycharmmInterface/mlpot/cli_common.py::prepare_mlpot_hybrid_state_for_sd": 673,
-    "mmml/cli/make/make_training.py::build_parser": 649,
-    "mmml/umbrella/sample.py::run_umbrella_nvt": 597,
-    "mmml/cli/run/md_pbc_suite/ase.py::main": 592,
-    "mmml/models/efield/evaluate.py::main": 582,
-    "mmml/cli/run/md_system.py::build_pycharmm_command": 571,
-    "mmml/cli/misc/train_joint.py::train_model": 566,
-    "mmml/utils/hybrid_optimization.py::create_hybrid_fitting_factory": 514,
-    "mmml/models/dcmnet/dcmnet_mcts.py::optimize_dcmnet_combination": 508,
-    "mmml/models/efield/ase_md.py::main_batched": 508,
-    "mmml/cli/run/md_pbc_suite/ase.py::build_parser": 507,
-    "mmml/models/dcmnet/dcmnet/loss.py::esp_mono_loss": 507,
-    "mmml/md/drivers/jaxmd.py::JaxmdDriver.run": 506,
 }
+
+# The 500+ tier, capped by population rather than per-function length. 26 at
+# e8191c8c1. Lower it when a function drops out; only raise it with a reason.
+_MAX_CROWDED = 26
 
 
 def test_the_scanner_actually_walks_the_package():
@@ -116,8 +121,9 @@ def test_the_scanner_actually_walks_the_package():
 
 
 def test_the_scanner_sees_nested_and_method_definitions():
-    """``run_sim`` is nested inside ``set_up_nhc_sim_routine``; ``JaxmdDriver.run``
-    is a method. Both are in the baseline, so both must be reachable."""
+    """``run_sim`` is nested inside ``set_up_nhc_sim_routine`` and
+    ``JaxmdDriver.run`` is a method; a walker that only looked at module-level
+    ``def``s would miss both, and one of them is 1,986 lines."""
     assert "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine.run_sim" in _FUNCTIONS
     assert "mmml/md/drivers/jaxmd.py::JaxmdDriver.run" in _FUNCTIONS
 
@@ -142,6 +148,20 @@ def test_no_new_function_joins_the_oversized_set():
         + ", ".join(f"{k} ({v})" for k, v in sorted(newcomers.items()))
         + ". Functions this size cannot be unit tested -- they can only be run "
         "whole, against whatever environment they need. Split before merging."
+    )
+
+
+def test_the_500_line_club_does_not_gain_members():
+    """The soft tier. Growing an already-large function by 20 lines is not what
+    this file is about; *another* module adopting the pattern is."""
+    assert len(_CROWDED) <= _MAX_CROWDED, (
+        f"{len(_CROWDED)} functions are now over {_CROWDED_LINES} lines, up "
+        f"from {_MAX_CROWDED}. The largest are: "
+        + ", ".join(
+            f"{k} ({v})"
+            for k, v in sorted(_CROWDED.items(), key=lambda kv: -kv[1])[:5]
+        )
+        + ". Split one before adding another."
     )
 
 

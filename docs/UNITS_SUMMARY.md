@@ -224,9 +224,35 @@ If your splits were built with `--preserve-units` (Hartree/Ha/Bohr in `E`/`F`):
 3. **Legacy checkpoints:** If `training_units.energy` is Hartree (or missing for pre-harmonization runs), the hybrid calculator applies `HARTREE_TO_EV` once at the ML boundary with a warning.
 4. **Evaluate artifacts:** Use reference NPZ with manifest or `_mmml_units`; compare scripts auto-detect units when `--reference-energy-unit` is omitted.
 
+## Guarding against constant drift
+
+Every unit bug found in the 2026-08-01 audit had the same shape: a conversion
+factor written as a **module-local literal**, used on both the write and the
+read side, so it round-tripped perfectly and disagreed only with physics.
+`mmml/data/units.py` was correct throughout — the bugs were in the ~50 modules
+that keep their own copy.
+
+Three checks now cover that class:
+
+| Check | Where | What it asserts |
+|---|---|---|
+| Canonical constants vs CODATA | `tests/unit/test_units_conversions.py` | `mmml.data.units` matches values spelled out in the test |
+| Duplicated constants vs canonical | `tests/unit/test_conversion_constant_drift.py` | any module-level constant reusing a canonical name agrees to 1e-4 |
+| Standalone conversions vs SI | `tests/unit/test_conversion_constant_drift.py` | ~25 factors with no canonical twin, each derived from SI/CODATA in the test |
+
+The 1e-4 tolerance is chosen so that rounded literals pass (the worst in the
+tree is 1.5e-5) while the historical `1.88873`-for-`1.8897261` transposition
+(5.3e-4) fails. **When adding a conversion, import it from `mmml.data.units`
+if it exists there; if it does not, add an anchor entry for it.**
+
 ## Potential Sign/Unit Issues to Check
 
-1. **E-field PhysNet Coulomb**: The factor 7.1998... in `energy = energy + coulomb_energy * 7.199822675975274` — verify r_ij units and whether this factor is correct.
+1. ~~**E-field PhysNet Coulomb**: the factor 7.1998...~~ **Resolved.** It is
+   `(e²/4πε₀)/2 = 7.19982...` eV·Å — the Coulomb constant halved because the
+   pair sum runs over *ordered* pairs and counts each pair twice. It is now
+   named `COULOMB_PAIR_FACTOR_EV_A` in `physnetjax/models/mpnn_kernels.py` and
+   anchored against 1/(4πε₀) in `test_conversion_constant_drift.py`, alongside
+   the un-halved `COULOMB_EV_ANGSTROM = 14.3996...` used by the ZBL terms.
 
 2. **Bohr→Angstrom for grid**: If grid comes from PySCF (Bohr), fix_and_split must convert before saving. The train_joint loads vdw_surface and assumes Angstrom.
 

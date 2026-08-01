@@ -52,6 +52,9 @@ def make_intermolecular_neighbor_fn(
     if system.ff_params is not None:
         excluded = frozenset(map(tuple, system.ff_params.exclusions.tolist()))
 
+    skin = max(0.0, float(skin_A))
+    build_cutoff_A = float(cutoff_A) + skin
+
     if capacity is None:
         n = system.n_atoms
         if system.box is not None:
@@ -59,8 +62,9 @@ def make_intermolecular_neighbor_fn(
             density = n / volume if volume > 0 else 0.0
         else:
             density = 0.0
-        # per-atom shell × atoms, generous headroom for a dense pair list
-        per_atom = shell_capacity(cutoff_A, max(density, 1e-6), headroom=2.0, minimum=8)
+        # per-atom shell × atoms, generous headroom for a dense pair list.
+        # Size the shell at the *build* cutoff so the skin pairs fit too.
+        per_atom = shell_capacity(build_cutoff_A, max(density, 1e-6), headroom=2.0, minimum=8)
         capacity = int(max(n * per_atom, 16))
 
     cap = int(capacity)
@@ -68,7 +72,7 @@ def make_intermolecular_neighbor_fn(
     def neighbor_fn(real_pos: np.ndarray, box: np.ndarray | None) -> Mapping[str, Any]:
         cell = np.asarray(system.box if box is None else box, dtype=np.float64)
         pi, pj = get_intermolecular_pairs(
-            np.asarray(real_pos, dtype=np.float64), cell, excluded, cutoff_A, mol_id,
+            np.asarray(real_pos, dtype=np.float64), cell, excluded, build_cutoff_A, mol_id,
             peptide_water_ml=peptide_water_ml,
         )
         n_pairs = int(len(pi))
@@ -81,5 +85,10 @@ def make_intermolecular_neighbor_fn(
         pair_j[:n_pairs] = np.asarray(pj[:n_pairs], dtype=np.int32)
         pair_mask[:n_pairs] = 1
         return {"pair_i": pair_i, "pair_j": pair_j, "pair_mask": pair_mask}
+
+    if skin > 0.0:
+        from mmml.md.neighbor_cache import with_verlet_skin
+
+        return with_verlet_skin(neighbor_fn, skin_A=skin)
 
     return neighbor_fn

@@ -38,6 +38,31 @@ and versioning process.
   alone could not distinguish a passing suite from one that never ran. Also
   `scripts/ci/assert_pycharmm_live.py` (hard PyCHARMM import before the live
   job), `make test-shape`, and a 60-minute timeout on the `build` job.
+- Repo-wide guard against the unit-constant bug class
+  (`tests/unit/test_conversion_constant_drift.py`). Every bug in the units audit
+  was a module-local literal used on both the write and the read side, so it
+  round-tripped perfectly and disagreed only with physics — invisible to any
+  test of the module holding it. The guard parses the package with `ast` (no
+  imports, so it also covers modules needing JAX/PySCF/CHARMM) and asserts that
+  every module-level constant reusing a `mmml.data.units` name agrees with the
+  canonical value, and that ~25 conversions with no canonical twin match an
+  SI/CODATA derivation spelled out in the test. Tolerance 1e-4: rounded literals
+  in the tree deviate by at most 1.5e-5, the historical `1.88873` transposition
+  by 5.3e-4.
+- CI coverage floor: `scripts/ci/check_coverage_floor.py` plus a `Coverage
+  floor` step and `make coverage-gate`. A floor, not a target — ~18.7k
+  statements need live CHARMM, ~10.9k are plotting and ~5.3k need
+  PySCF/torch/GPU, so the CI-reachable ceiling is near 70%. It also pins the
+  absolute covered-line count, since deleting untested code raises the
+  percentage. Complements the Codecov status, which is advisory and needs a
+  token.
+- Oversized-function ratchet (`tests/unit/test_oversized_function_ratchet.py`),
+  two tiers: the 11 functions over 1,000 lines may not grow and none may be
+  added; the 26 over 500 lines are capped by count, so ordinary edits to an
+  already-large function do not turn the suite red but a 27th does.
+  `run_staged_workflow` alone holds 699 of the 902 uncovered statements in its
+  module and caps that file near 35% coverage; the ratchet keeps the pattern
+  from spreading while decomposition waits on the golden-record harness.
 - `MMML_DISABLE_CHARMM=1` makes CHARMM discovery report nothing and blocks
   `import pycharmm` outright, so `make test-ci` genuinely reproduces the
   libcharmm-free CI environment. Setting `CHARMM_LIB_DIR` to a nonexistent path
@@ -70,6 +95,19 @@ and versioning process.
   `tests/unit/test_dcmnet_dipole_units.py`, which anchors on CODATA values
   computed in the test and on the identity
   `EANGSTROM_TO_DEBYE == ANGSTROM_TO_BOHR * EBOHR_TO_DEBYE`.
+- **PhysNetJAX `cut_vdw`.** The DCMNet copy of `cut_vdw` was fixed during the
+  units audit; the PhysNetJAX copy in `physnetjax/data/cut_grid.py` kept the
+  same defect — `elements` stayed a plain list on the element-symbol path, so
+  `elements[closest_atom]` raised "only integer scalar arrays can be converted
+  to a scalar index" for exactly the input the docstring advertises.
+  `physnetjax/data/data.py` also called `cut_vdw` without importing it, so
+  `prepare_multiple_datasets(..., esp_mask=True)` raised `NameError` for every
+  caller. Both fixed; `tests/unit/test_physnetjax_cut_grid.py` pins the two
+  implementations to identical output so a fix to one cannot skip the other.
+- Docs: `docs/UNITS_SUMMARY.md` listed the E-field PhysNet Coulomb prefactor
+  `7.199822675975274` as an unresolved question. It is `(e²/4πε₀)/2` — halved
+  because the pair sum runs over ordered pairs — now named
+  `COULOMB_PAIR_FACTOR_EV_A` and anchored against `1/(4πε₀)` in the drift test.
 - Test isolation: `test_mpi_openmpi_static_shmem_fallback` leaked
   `LD_PRELOAD` / `DYLD_INSERT_LIBRARIES` into the real environment, pointing at a
   library under a `tmp_path` pytest later deleted. Every subsequent test that

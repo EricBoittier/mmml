@@ -83,7 +83,13 @@ def build_hybrid_energy(
     return HybridEnergy(terms, system, ctx)
 
 
-def _auto_neighbor_fn(system: MolecularSystem, energy: Any, config: RunConfig):
+def _auto_neighbor_fn(
+    system: MolecularSystem,
+    energy: Any,
+    config: RunConfig,
+    *,
+    skin_A: float = 0.0,
+):
     """Build the intermolecular neighbor_fn a term's ``NeighborRequest`` implies.
 
     Shared by both the MD driver and the rigid sampler: any term declaring an
@@ -103,7 +109,9 @@ def _auto_neighbor_fn(system: MolecularSystem, energy: Any, config: RunConfig):
     # from the classical MM list too, or mm_nonbonded double-counts the same
     # interaction the ML dimer term already scores (doc §4/§8).
     peptide_water_ml = "ml_pep_water" in config.terms
-    return make_intermolecular_neighbor_fn(system, cutoff, cap, peptide_water_ml=peptide_water_ml)
+    return make_intermolecular_neighbor_fn(
+        system, cutoff, cap, peptide_water_ml=peptide_water_ml, skin_A=skin_A
+    )
 
 
 def assemble_and_run(
