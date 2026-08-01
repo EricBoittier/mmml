@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Without this the job inherits the 360-minute default, so one hung test
+    # burns six hours of runner time before anyone sees a red mark.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -40,12 +43,40 @@ jobs:
         run: |
           uv run python -V
           uv run python -c "import mmml; print('package imports ok')"
+          uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
+      # Part of `make merge-check` but previously absent from CI, so generated
+      # CLI docs / architecture pages could drift on main unnoticed.
+      - name: Generated docs are up to date
+        if: always()
+        run: |
+          uv run python scripts/generate_cli_docs.py --check
+          uv run python scripts/generate_package_architecture.py --check
       - name: Run tests
         if: always()
-        run: uv run pytest -v --color=yes --cov=mmml --cov-report=xml tests/
+        run: |
+          mkdir -p reports
+          uv run pytest -v --color=yes --cov=mmml --cov-report=xml \
+            --junitxml=reports/junit-unit.xml tests/
+      # pytest exits 0 when every selected test skips, so the step above can be
+      # green having validated nothing (a bad install, a missing fixture tree, a
+      # guard that starts returning False for everyone). Assert the run's shape,
+      # not just its exit code.
+      - name: Unit suite ran for real
+        if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py reports/junit-unit.xml \
+            --label "unit suite" --min-passed 3000 --max-skipped-frac 0.25
       - name: Run CHARMM MPI unit suite
         if: always()
-        run: uv run pytest -v --color=yes tests/charmm_mpi/ -m "charmm_mpi and not pycharmm"
+        run: |
+          mkdir -p reports
+          uv run pytest -v --color=yes tests/charmm_mpi/ \
+            -m "charmm_mpi and not pycharmm" --junitxml=reports/junit-charmm-mpi.xml
+      - name: CHARMM MPI suite ran for real
+        if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py reports/junit-charmm-mpi.xml \
+            --label "charmm_mpi suite" --min-passed 15 --max-skipped 5
       - name: Lint gate
         if: always()
         run: |
@@ -104,5 +135,16 @@ jobs:
           } > CHARMMSETUP
       - name: Install package and dependencies
         run: uv sync --extra dev --extra all-cpu --extra charmm-interface
+      # Every live-CHARMM test is guarded by `skipif(not can_import_pycharmm())`,
+      # and that guard only checks that the .so *file* exists. A library that is
+      # present but cannot be dlopen'ed therefore turns this whole 45-minute job
+      # into skips that exit 0. Fail here instead, where the cause is obvious.
+      - name: PyCHARMM loads
+        run: uv run python scripts/ci/assert_pycharmm_live.py
       - name: Run PyCHARMM smoke tests
         run: uv run bash scripts/ci/run_pycharmm_smoke_pytest.sh -q
+      - name: PyCHARMM smoke suite ran for real
+        if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py reports/junit-pycharmm \
+            --label "pycharmm smoke" --min-passed 10

@@ -42,11 +42,21 @@ STATEFUL_SMOKE_PATHS=(
   "$MD_SYSTEM_SMOKE"
 )
 
+# JUnit reports per invocation. pytest exits 0 when every selected test skips,
+# so the exit status below cannot distinguish "the live suite passed" from "the
+# live suite never ran". scripts/ci/check_test_report.py reads these and fails
+# when nothing actually passed.
+REPORT_DIR="${MMML_PYTEST_REPORT_DIR:-$ROOT/reports/junit-pycharmm}"
+rm -rf "$REPORT_DIR"
+mkdir -p "$REPORT_DIR"
+
 # Run every module (do not fail-fast) and remember whether any run failed, so
 # CI reports the full set of failures and never green-lights a masked one.
 status=0
 for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
+  report_name="$(basename "$smoke_path" .py)"
   mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
+    --junitxml="$REPORT_DIR/$report_name.xml" \
     -m "$MARK_EXPR" "$smoke_path" "$@" || status=1
 done
 
@@ -56,6 +66,7 @@ for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
 done
 
 mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
+  --junitxml="$REPORT_DIR/remainder.xml" \
   -m "$MARK_EXPR" \
   "${ignore_args[@]}" \
   "$@" || status=1
