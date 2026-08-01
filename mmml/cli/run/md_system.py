@@ -389,6 +389,26 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--psf-angle-restraints",
+        action="store_true",
+        help=(
+            "jaxmd: add scaled CGenFF harmonic angle (+ Urey–Bradley) forces from "
+            "--from-psf so ML monomers stay tetrahedral (no classical SHAKE on this path)."
+        ),
+    )
+    parser.add_argument(
+        "--psf-angle-restraint-scale",
+        type=float,
+        default=1.0,
+        metavar="W",
+        help="Scale for --psf-angle-restraints (default: 1.0).",
+    )
+    parser.add_argument(
+        "--psf-angle-restraints-no-urey",
+        action="store_true",
+        help="With --psf-angle-restraints: omit Urey–Bradley 1–3 terms (angles only).",
+    )
+    parser.add_argument(
         "--min-com-restraint-distance",
         type=float,
         default=None,
@@ -3864,6 +3884,16 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     if args.flat_bottom_radius is not None:
         cmd.extend(["--flat-bottom-k", str(args.flat_bottom_k)])
         cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
+    if getattr(args, "psf_angle_restraints", False):
+        cmd.append("--psf-angle-restraints")
+        cmd.extend(
+            [
+                "--psf-angle-restraint-scale",
+                str(getattr(args, "psf_angle_restraint_scale", 1.0)),
+            ]
+        )
+        if getattr(args, "psf_angle_restraints_no_urey", False):
+            cmd.append("--psf-angle-restraints-no-urey")
     _append_optional(
         cmd,
         "--min-com-restraint-distance",

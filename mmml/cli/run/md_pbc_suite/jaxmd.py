@@ -366,6 +366,25 @@ def main(argv: list[str] | None = None) -> int:
         help="Load certified/liquid-box PSF with --from-crd (skips Packmol rebuild).",
     )
     p.add_argument(
+        "--psf-angle-restraints",
+        action="store_true",
+        help=(
+            "Add scaled CGenFF harmonic angle (+ Urey–Bradley) forces from --from-psf "
+            "so ML monomers stay tetrahedral."
+        ),
+    )
+    p.add_argument(
+        "--psf-angle-restraint-scale",
+        type=float,
+        default=1.0,
+        help="Scale for --psf-angle-restraints (default: 1.0).",
+    )
+    p.add_argument(
+        "--psf-angle-restraints-no-urey",
+        action="store_true",
+        help="With --psf-angle-restraints: omit Urey–Bradley 1–3 terms.",
+    )
+    p.add_argument(
         "--from-crd",
         type=Path,
         default=None,
