@@ -1448,6 +1448,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--ml-cutoff", type=float, default=1.0, help="lambda_ti: ML cutoff (Å).")
     parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to checkpoint model cutoff.",
+    )
+    parser.add_argument(
         "--ml-switch-width",
         "--ml-cutoff-distance",
         dest="ml_switch_width",
@@ -2397,6 +2409,10 @@ def _append_suite_mmml_handoff_args(
         )
     )
     ml_width = str(getattr(args, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH))
+    cmd.extend(
+        ["--hybrid-hamiltonian", str(getattr(args, "hybrid_hamiltonian", "handoff"))]
+    )
+    _append_optional(cmd, "--shared-cutoff", getattr(args, "shared_cutoff", None))
     cmd.extend(
         ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
     )

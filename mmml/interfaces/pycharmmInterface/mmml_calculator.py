@@ -346,6 +346,8 @@ def setup_calculator(
     ml_cutoff_distance: float | None = None,
     mm_cutoff: float | None = None,
     complementary_handoff: bool = True,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
     doML: bool = True,
     doMM: bool = True,
     doML_dimer: bool = True,
@@ -591,9 +593,13 @@ def setup_calculator(
         mm_switch_on,
         mm_switch_width,
         complementary_handoff=complementary_handoff,
+        hybrid_hamiltonian=hybrid_hamiltonian,
+        shared_cutoff=shared_cutoff,
     )
     # Default mm_r_min: exclude pairs in pure ML region (MM contributes 0 there)
-    if mm_r_min is None and not complementary_handoff:
+    if hybrid_hamiltonian == "shared_cutoff":
+        mm_r_min = None
+    elif mm_r_min is None and not complementary_handoff:
         mm_r_min = mm_switch_on * 0.9  # 10% buffer below mm_switch_on for numerical safety
     elif mm_r_min is None and complementary_handoff:
         # Exclude r < handoff_start (pure ML); keep handoff [mm_switch_on - ml_switch_width, mm_switch_on]
@@ -1485,6 +1491,8 @@ def setup_calculator(
             mm_switch_on=mm_switch_on,
             mm_switch_width=mm_switch_width,
             complementary_handoff=complementary_handoff,
+            hybrid_hamiltonian=hybrid_hamiltonian,
+            shared_cutoff=shared_cutoff,
             ep_scale=ep_scale,
             sig_scale=sig_scale,
             at_codes_override=at_codes_override,

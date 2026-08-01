@@ -171,6 +171,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to model cutoff.",
+    )
+    parser.add_argument(
         "--ml-switch-width",
         "--ml-cutoff",
         dest="ml_switch_width",
@@ -584,6 +596,8 @@ def run(args: argparse.Namespace) -> int:
         mm_switch_on=args.mm_switch_on,
         mm_switch_width=args.mm_switch_width,
         complementary_handoff=not getattr(args, "no_complementary_handoff", False),
+        hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+        shared_cutoff=getattr(args, "shared_cutoff", None),
         doML=True,
         doMM=args.include_mm,
         doML_dimer=not args.skip_ml_dimers,
@@ -612,6 +626,8 @@ def run(args: argparse.Namespace) -> int:
             mm_switch_on=args.mm_switch_on,
             mm_switch_width=args.mm_switch_width,
             complementary_handoff=not getattr(args, "no_complementary_handoff", False),
+            hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+            shared_cutoff=getattr(args, "shared_cutoff", None),
         )
 
     # Print charges from PSF if available
