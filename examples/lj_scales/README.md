@@ -25,7 +25,8 @@ Cluster job: [`../hybrid_mm_charges/submit_lj_scales_scicore.sbatch`](../hybrid_
 | [`04_miniature_fit.py`](04_miniature_fit.py) | — | 90 s | Recovers planted scales — **and demonstrates the σ/ε degeneracy** |
 | [`05_train.sh`](05_train.sh) | enriched NPZ, GPU | hours | `physnet-train` with `learn_mm_lj_scales` → writes `hybrid_mm.json` |
 | [`06_inspect_scales.py`](06_inspect_scales.py) | trained run | 5 s | Reports which types moved, flags implausible values, shows the ATC remap |
-| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run, PyCHARMM | minutes | DCM Packmol campaign: jaxmd settle → PyCHARMM NVT → jaxmd NVT/NVE (`jax_mic`) |
+| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run, PyCHARMM | minutes–hours | DCM campaign: jaxmd settle → PyCHARMM NVT → jaxmd NVT/NVE (`jax_mic`); `LJ_MD_PROD=1` for 20 ps NVT |
+| [`12_analyze_liquid.sh`](12_analyze_liquid.sh) | campaign HDF5 | seconds | density / RDF / MSD / T·E plots via `mmml analyze-liquid` |
 
 Steps **00, 03, 04 are self-contained** — no dataset, no CHARMM, no GPU. Run them
 first; they are where the concepts live.
@@ -53,7 +54,8 @@ flowchart TD
 | [`10_merge_prepare_joint.sh`](10_merge_prepare_joint.sh) | labeled splits | pad-merge to 20 atoms + `prepare-mm-dataset` |
 | [`05_train.sh`](05_train.sh) | joint enriched NPZ | same trainer; tag `hybrid_mm_fixed_lj_scales_aco_dcm` |
 | [`11_liquid_boxes.sh`](11_liquid_boxes.sh) | PyCHARMM | `mmml liquid-box` pure DCM + pure ACO |
-| [`07_deploy_md.sh`](07_deploy_md.sh) | ckpt + boxes | campaign [`md_lj_scales_liquid_campaign.yaml`](../hybrid_mm_charges/md_lj_scales_liquid_campaign.yaml) |
+| [`07_deploy_md.sh`](07_deploy_md.sh) | ckpt + boxes | campaign [`md_lj_scales_liquid_campaign.yaml`](../hybrid_mm_charges/md_lj_scales_liquid_campaign.yaml) (`LJ_MD_PROD=1` → `.prod.yaml`) |
+| [`12_analyze_liquid.sh`](12_analyze_liquid.sh) | campaign HDF5 | `mmml analyze-liquid` → `*/analysis/{metrics.json,rdf.png,…}` |
 
 ```bash
 export LJ_JOINT=1
@@ -73,6 +75,9 @@ bash examples/lj_scales/05_train.sh
 uv run python examples/lj_scales/06_inspect_scales.py
 bash examples/lj_scales/11_liquid_boxes.sh
 bash examples/lj_scales/07_deploy_md.sh
+# Longer ⟨ρ⟩ / RDF sampling (hours on GPU):
+# LJ_MD_PROD=1 bash examples/lj_scales/07_deploy_md.sh
+bash examples/lj_scales/12_analyze_liquid.sh
 ```
 
 **Do not** concatenate `dcm_mp2_psf_order.npz` with `fixed-acetone-only_MP2_21000.npz`
@@ -86,6 +91,11 @@ Liquid campaign order (per solvent):
 1. **jaxmd_settle** — FIRE + short NVT from certified PSF/CRD  
 2. **pycharmm_npt** — CPT heat + equilibration (`jax_mic` + scales)  
 3. **jaxmd_nvt** / **jaxmd_nve** — production  
+4. **12_analyze_liquid** — RDF first peak + packing/NpT density vs bulk  
+
+Smoke lengths stay sub-ps. For validation set `LJ_MD_PROD=1` (settle 1 ps,
+CHARMM heat/equi 2/20 ps NpT, jaxmd NVT 20 ps). Fixed-box NVT packing density
+is not a force-field check — use the joint NpT prod campaign for ⟨ρ⟩.
 
 ## Configuration
 

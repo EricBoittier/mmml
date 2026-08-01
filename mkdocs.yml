@@ -207,6 +207,7 @@ nav:
           - completion: cli/commands/completion.md
           - gui: cli/commands/gui.md
           - unwrap-traj: cli/commands/unwrap-traj.md
+          - analyze-liquid: cli/commands/analyze-liquid.md
           - plot-restart-velocities: cli/commands/plot-restart-velocities.md
           - downstream: cli/commands/downstream.md
           # CLI_NAV_END: Workflow helpers

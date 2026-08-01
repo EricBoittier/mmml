@@ -393,6 +393,10 @@ def main():
         sys.argv = ["mmml unwrap-traj"] + args.args
         return unwrap_traj.main()
 
+    elif command == "analyze-liquid":
+        from .misc import analyze_liquid
+        return analyze_liquid.main(args.args)
+
     elif command == "sample-diverse-xyz":
         from mmml.generate.sample import sample_diverse_xyz
         sys.argv = ["mmml sample-diverse-xyz"] + args.args

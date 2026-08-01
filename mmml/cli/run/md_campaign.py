@@ -204,7 +204,10 @@ _CAMPAIGN_CLI_EXPLICIT_OVERRIDE_KEYS: tuple[str, ...] = (
     "composition",
     "box_size",
     "no_echeck",
+    "no_echeck_heat",
     "skip_cluster_build",
+    "max_fmax_before_dyn_ev_A",
+    "allow_high_grms",
 )
 
 

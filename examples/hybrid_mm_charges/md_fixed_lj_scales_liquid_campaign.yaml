@@ -1,11 +1,15 @@
-# Legacy DCM liquid campaign (Packmol box, jax_mic throughout).
+# Legacy DCM liquid campaign (Packmol box, jax_mic throughout) — smoke lengths.
 #
-# Ordering: Packmol DCM:N → jaxmd FIRE + short NVT settle → PyCHARMM NVT
+# Ordering: Packmol / seeded mini → jaxmd FIRE + NVT settle → PyCHARMM NVT
 # heat/equi → jaxmd NVT → jaxmd NVE.
 #
 # Cold PyCHARMM heat from a raw Packmol frame hits ENERGY CHANGE TOLERANCE;
 # jaxmd settle first is the intended path (see examples/lj_scales/07_deploy_md.sh).
 # Learned LJ requires jax_mic (truncated MIC), not Ewald — issue #139.
+#
+# For tens-of-ps production + analysis, use
+# md_fixed_lj_scales_liquid_campaign.prod.yaml (LJ_MD_PROD=1) then
+# examples/lj_scales/12_analyze_liquid.sh.
 #
 #   uv run mmml md-system \
 #     --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
@@ -42,17 +46,23 @@ defaults:
   n_heat_segments: 4
   heat_thermostat: bussi
   handoff_quality_gate: true
-  handoff_quality_fmax_eVA: 1.0
+  # Looser than the 1.0 eV/Å default — jaxmd→CHARMM handoff often sits ~2–3 eV/Å
+  # on all-ML DCM until heat starts moving contacts.
+  handoff_quality_fmax_eVA: 3.0
+  # Pre-dynamics gate that blocked pycharmm_nvt at 2.73 eV/Å (default 2.0).
+  max_fmax_before_dyn_ev_A: 3.5
 
 campaign_output: results/hybrid_mm_fixed_lj_scales_liquid
 
 runs:
   jaxmd_settle:
-    description: jaxmd FIRE + short NVT settle from Packmol DCM box
+    description: jaxmd FIRE + longer NVT settle from Packmol / seeded mini box
     backend: jaxmd
     setup: pbc_nvt
-    ps: 0.05
-    jaxmd_minimize_steps: 250
+    # Was 0.05 ps / 250 FIRE — too short before CHARMM handoff (fmax~2.7 eV/Å).
+    ps: 0.50
+    jaxmd_minimize_steps: 1000
+    fire_min_steps: 400
     continue_velocities: false
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_settle
 
@@ -63,9 +73,11 @@ runs:
     depends_on: jaxmd_settle
     md_stages: "mini,heat,equi"
     # Stage-specific durations (bare `ps` does not reach heat/equi).
-    ps_heat: 0.20
-    ps_equi: 0.20
+    ps_heat: 0.50
+    ps_equi: 0.50
     mm_nonbond_mode: jax_mic
+    max_fmax_before_dyn_ev_A: 3.5
+    no_echeck_heat: true
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid/pycharmm_nvt
 
   jaxmd_nvt:

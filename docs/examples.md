@@ -24,6 +24,7 @@ mmml configure
 mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300
 mmml md-system --config campaign.yaml --run-all
 mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 20
+mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/
 ```
 
 ## QM pipeline

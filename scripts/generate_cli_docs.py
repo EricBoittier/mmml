@@ -129,6 +129,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "completion",
             "gui",
             "unwrap-traj",
+            "analyze-liquid",
             "plot-restart-velocities",
             "downstream",
         ),

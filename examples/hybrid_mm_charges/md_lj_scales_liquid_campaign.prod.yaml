@@ -1,0 +1,86 @@
+# Production-length joint LJ-scales liquid campaign (jax_mic throughout).
+#
+# Same ladder as md_lj_scales_liquid_campaign.yaml with longer settle / CPT
+# equilibration and tens-of-ps jaxmd NVT production. Prefer this when validating
+# ⟨ρ⟩ (NpT equilibration) and RDF first peaks after training.
+#
+#   LJ_JOINT=1 LJ_MD_PROD=1 bash examples/lj_scales/07_deploy_md.sh
+#
+#   uv run mmml md-system \
+#     --config examples/hybrid_mm_charges/md_lj_scales_liquid_campaign.prod.yaml \
+#     --run-all \
+#     --checkpoint CKPT --mm-lj-scales-file SIDECAR \
+#     --from-psf BOX/model.psf --from-crd BOX/model.crd \
+#     --composition DCM:N --campaign-output-dir OUT
+
+defaults:
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales_aco_dcm/<run>/params.json
+  from_psf: /path/to/boxes/dcm/model.psf
+  from_crd: /path/to/boxes/dcm/model.crd
+  composition: "DCM:1"
+  temperature: 300.0
+  pressure: 1.0
+  dt_fs: 0.5
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+  skip_jit_warmup: true
+  quiet: true
+  continue_velocities: true
+  handoff_write_res: true
+  mc_density_equalize: false
+  no_echeck_heat: true
+  n_heat_segments: 4
+  heat_thermostat: bussi
+  handoff_quality_gate: true
+  handoff_quality_fmax_eVA: 3.0
+  max_fmax_before_dyn_ev_A: 3.5
+  steps_per_recording: 100
+
+campaign_output: results/lj_scales_liquid_campaign_prod
+
+runs:
+  jaxmd_settle:
+    description: jaxmd FIRE + NVT settle from certified liquid box
+    backend: jaxmd
+    setup: pbc_nvt
+    ps: 1.0
+    jaxmd_minimize_steps: 1000
+    fire_min_steps: 400
+    continue_velocities: false
+    output_dir: results/lj_scales_liquid_campaign_prod/jaxmd_settle
+
+  pycharmm_npt:
+    description: PyCHARMM NpT heat + equilibration (CPT) for density
+    backend: pycharmm
+    setup: pbc_npt
+    depends_on: jaxmd_settle
+    md_stages: "mini,heat,equi"
+    ps_heat: 2.0
+    ps_equi: 20.0
+    mm_nonbond_mode: jax_mic
+    max_fmax_before_dyn_ev_A: 3.5
+    no_echeck_heat: true
+    output_dir: results/lj_scales_liquid_campaign_prod/pycharmm_npt
+
+  jaxmd_nvt:
+    description: jaxmd NVT production from NpT handoff
+    backend: jaxmd
+    setup: pbc_nvt
+    depends_on: pycharmm_npt
+    ps: 20.0
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    output_dir: results/lj_scales_liquid_campaign_prod/jaxmd_nvt
+
+  jaxmd_nve:
+    description: short jaxmd NVE conservation check
+    backend: jaxmd
+    setup: pbc_nve
+    depends_on: jaxmd_nvt
+    ps: 2.0
+    output_dir: results/lj_scales_liquid_campaign_prod/jaxmd_nve

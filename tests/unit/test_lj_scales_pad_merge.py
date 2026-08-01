@@ -266,9 +266,32 @@ def test_lj_scales_packmol_liquid_campaign_yaml_parses() -> None:
     assert raw["runs"]["jaxmd_nve"]["depends_on"] == "jaxmd_nvt"
     assert raw["defaults"]["mm_nonbond_mode"] == "jax_mic"
     assert raw["defaults"].get("no_echeck_heat") is True
+    assert float(raw["defaults"].get("max_fmax_before_dyn_ev_A", 0)) >= 3.5
+    assert float(raw["runs"]["jaxmd_settle"]["ps"]) >= 0.5
+    assert int(raw["runs"]["jaxmd_settle"]["jaxmd_minimize_steps"]) >= 1000
     # Packmol path — no certified-box defaults.
     assert "from_psf" not in raw["defaults"]
     assert "from_crd" not in raw["defaults"]
+
+
+def test_lj_scales_liquid_prod_campaign_yaml_longer_than_smoke() -> None:
+    smoke = yaml.safe_load(
+        (_REPO / "examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml").read_text()
+    )
+    prod = yaml.safe_load(
+        (
+            _REPO / "examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.prod.yaml"
+        ).read_text()
+    )
+    assert float(prod["runs"]["jaxmd_nvt"]["ps"]) > float(smoke["runs"]["jaxmd_nvt"]["ps"])
+    assert float(prod["runs"]["pycharmm_nvt"]["ps_equi"]) > float(
+        smoke["runs"]["pycharmm_nvt"]["ps_equi"]
+    )
+    joint_prod = yaml.safe_load(
+        (_REPO / "examples/hybrid_mm_charges/md_lj_scales_liquid_campaign.prod.yaml").read_text()
+    )
+    assert joint_prod["runs"]["pycharmm_npt"]["setup"] == "pbc_npt"
+    assert float(joint_prod["runs"]["jaxmd_nvt"]["ps"]) >= 20.0
 
     args = parse_md_system_args(
         [
