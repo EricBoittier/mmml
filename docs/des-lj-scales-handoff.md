@@ -335,7 +335,7 @@ the exact tail order matters.
 
 ---
 
-## 4. Bug fixed on the way, and one still open
+## 4. Bug fixed on the way, and test status
 
 **Fixed.** `_maybe_unpad_dataset` in `mmml/cli/make/make_training.py` trimmed
 only `R`/`Z`/`F` when auto-removing padding, leaving `cgenff_type_idx`,
@@ -354,9 +354,9 @@ whose axis 1 is the atom axis; regression test in
 The existing DCM/ACO paths never hit this because their NPZs are already tight.
 Workaround if you meet it elsewhere: pin `--num-atoms`.
 
-**Open.** `tests/unit/test_certified_box_jaxmd_load.py` has unresolved merge
-conflict markers, so `pytest tests/unit` aborts during collection. Use
-`--ignore` on that file until it is resolved.
+**Resolved.** An earlier checkout had unresolved merge-conflict markers in
+`tests/unit/test_certified_box_jaxmd_load.py`. The current file is clean and
+its 10 tests pass, so `pytest tests/unit` no longer needs an `--ignore` for it.
 
 Also note `test_pycharmm_cgenff_dimer_regression` fails locally (−3.79 vs
 −8.43 kcal/mol). It is pure PyCHARMM, never imports `cgenff_dataset`, and −3.79
