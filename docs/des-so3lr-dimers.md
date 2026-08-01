@@ -92,33 +92,58 @@ Running the real assignment on a 1-in-20 sample (18,548 frames):
 
 | | frames | share |
 |---|---:|---:|
-| **Typeable — usable for hybrid ML/MM** | **6,635** | **35.8%** |
-| Dropped: composition matched, topology did not | 5,204 | 28.1% |
-| Dropped: no CGenFF template for the composition | 5,180 | 27.9% |
+| **Typeable — usable for hybrid ML/MM** | **7,595** | **40.9%** |
+| Dropped: composition matched, topology did not | 5,206 | 28.1% |
+| Dropped: no template for the composition | 4,218 | 22.7% |
 | Dropped: not two covalent components | 946 | 5.1% |
 | Dropped: not graph-isomorphic to the chosen template | 583 | 3.1% |
 
-**89 of 1,333 monomer species** are typeable, and they form **1,038 distinct
-CGenFF `RESI` pairs**. Because the lookup is composition-keyed, each typeable
-formula resolves to exactly one residue.
+**94 of 1,333 monomer species** are typeable, and they form **1,188 distinct
+`RESI` pairs**. Because the lookup is composition-keyed, each typeable formula
+resolves to exactly one residue.
 
-!!! note "CGenFF alone gets 32.9%; the ion residues take it to 35.8%"
-    CGenFF has no template for a bare ion, so every ion–water dimer used to
-    drop. `load_reference` now merges
-    [`toppar_water_ions.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_water_ions.str)
-    on top of CGenFF (`DEF_EXTRA_TOPPAR`), adding **`CLA`, `SOD`, `POT`,
-    `LIT`, `CAL`, `MG`** — +6 residues, +6 LJ types, +119 RESI pairs,
-    32.9% → 35.8% on the identical frame set. The merge is strictly additive:
-    an atom type or `RESI` CGenFF already defines is left alone and new
-    compositions are appended behind the existing candidates, so assignments
-    that already worked are byte-identical (verified over 3,000 DCM frames).
+### Extending the reference beyond CGenFF
+
+Bare CGenFF types only 32.9% of frames — it has no template for a monatomic ion
+or a noble gas, so every ion–water and noble-gas dimer dropped. `load_reference`
+merges additional CHARMM stream files listed in `DEF_EXTRA_TOPPAR`:
+
+| Added | Residues | Coverage | New LJ types |
+|---|---|---:|---:|
+| *(CGenFF alone)* | — | 32.9% | 90 |
+| [`toppar_water_ions.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_water_ions.str) | `CLA` `SOD` `POT` `LIT` `CAL` `MG` | 35.8% | 96 |
+| [`toppar_dum_noble_gases.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_dum_noble_gases.str) | `HE1` `NE1` | 37.8% | 98 |
+| [`toppar_noble_gases_literature.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_noble_gases_literature.str) | `AR1` `KR1` `XE1` | **40.9%** | **101** |
+
+All measured on the identical 18,548-frame sample — a 24% relative increase in
+usable data. The merge is strictly additive: an atom type or `RESI` CGenFF
+already defines is left alone and new compositions are appended behind the
+existing candidates, so assignments that already worked are byte-identical
+(verified over 3,000 DCM frames).
+
+!!! warning "Ar, Kr and Xe are not CHARMM parameters"
+    CHARMM ships no residue for them anywhere —
+    `toppar_dum_noble_gases.str` covers only He and Ne. The third file carries
+    **standard literature 12-6 parameters** (Ar σ 3.405 Å / ε 0.238 kcal/mol;
+    Kr 3.600 / 0.340; Xe 4.100 / 0.439), converted to CHARMM's
+    (ε, R<sub>min</sub>/2) convention and labelled as non-CHARMM in the file
+    header. They were **not fitted alongside CGenFF** and their cross terms are
+    unvalidated, so noble-gas results are provisional.
+
+    The one consistency check available: σ and ε both rise monotonically across
+    the combined series (He 2.637/0.021 < Ne 2.726/0.085 < Ar 3.405/0.238 <
+    Kr 3.600/0.340 < Xe 4.100/0.439) despite spanning two sources. The
+    alternative in-tree values, from BMS
+    (`toppar/non_charmm/par_bms_dec03.inp`), fail that check — their argon ε is
+    *smaller* than their neon ε, and their helium ε differs from CHARMM's by
+    51× — which is why they are not used.
 
 The two large failure modes are different problems:
 
-- **No template (27.9%)** — the composition has no `RESI` at all. After the ion
-  merge this is the noble gases (He, Ne, Ar, Kr, Xe), the halides CHARMM has no
-  ion residue for (F⁻, Br⁻, I⁻), and small molecules CGenFF does not cover
-  (H₂S, CH₂O, H₂S₂ are the three biggest single contributors).
+- **No template (22.7%)** — the composition has no `RESI` at all. With the ions
+  and all five noble gases merged, what remains is small molecules CGenFF does
+  not cover (H₂S, CH₂O and H₂S₂ are the three biggest single contributors) plus
+  the halides CHARMM has no ion residue for (F⁻, Br⁻, I⁻).
 - **Topology mismatch (28.1%)** — a residue with the *same formula* exists, but
   the frame is a different isomer. `_template_to_geometry_permutation` catches
   this by graph isomorphism and the frame is dropped rather than silently
