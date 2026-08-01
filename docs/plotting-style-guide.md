@@ -447,15 +447,15 @@ Reference implementation:
 
 ![Water-cluster energy trace with force snapshots](images/povray-overlays/water_nve_with_povray.png)
 
-For electrostatic diagrams, keep the hierarchy explicit: atoms and bonds define
-the molecule; translucent signed-charge shells are secondary; the dipole is the
-dominant vector; higher multipoles use thinner, shorter glyphs. State the source
-of every moment. In the DCM example below, the gold dipole is the stored quantum
-label, while the quadrupole axes are only a traceless tensor derived from the
-displayed CGenFF point charges—not an ab-initio quadrupole prediction. Use the
-conventional red-negative/blue-positive shell mapping redundantly with a legend.
+For distributed-charge-model (DCM) diagrams, keep the hierarchy explicit:
+atoms and bonds define the parent molecule; small signed off-atom sites and
+thin site-to-parent guides show the explicit DCM representation; the equivalent
+molecular dipole is the dominant vector; equivalent quadrupole axes use thinner,
+shorter glyphs. State whether values are predictions or schematic. Use the
+conventional red-negative/blue-positive mapping redundantly with a legend, and
+show the explicit-site and equivalent-moment views at the same molecular scale.
 
-![DCM charge, dipole, and point-charge quadrupole style](images/povray-overlays/dcm_multipoles.png)
+![Distributed charge sites and equivalent multipoles](images/povray-overlays/distributed_charge_model.png)
 
 ## Colormaps
 

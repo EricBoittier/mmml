@@ -10,11 +10,34 @@ import pandas as pd
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-    coor,
     pycharmm,
     reset_block,
 )
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+
+def _coor():
+    """Late-bound ``pycharmm.coor``.
+
+    ``import_pycharmm`` declares ``coor: Any = None`` at module scope and only
+    assigns the real module once CHARMM has been initialised. A module-level
+    ``from ... import coor`` therefore captures ``None`` whenever this module is
+    imported before that init runs, and every later call dies with
+
+        AttributeError: 'NoneType' object has no attribute 'set_positions'
+
+    Import order alone decides it, which is why importing an unrelated module
+    that pulls in ``lambda_dynamics`` was enough to break the PBC end-to-end
+    tests. Resolving the attribute per call keeps the binding honest.
+    """
+    if pyci.coor is None:
+        raise RuntimeError(
+            "pycharmm.coor is not initialised - import_pycharmm has not run its "
+            "CHARMM setup yet. Ensure CHARMM is initialised before building a "
+            "packmol cluster."
+        )
+    return pyci.coor
+
 
 if pyci.PYCHARMM_AVAILABLE:
     import pycharmm.generate as gen
@@ -85,7 +108,7 @@ def _build_psf_ordered_cluster(
     ic_prm_fill(replace_all=True)
     ic.build()
 
-    pos_df = coor.get_positions()
+    pos_df = _coor().get_positions()
     positions = pos_df[["x", "y", "z"]].to_numpy(dtype=float)
     n_atoms = positions.shape[0]
     if n_atoms % n_molecules != 0:
@@ -134,7 +157,7 @@ def _build_psf_ordered_cluster(
         shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
         shifted[start:end] = shifted[start:end] - com + shift
 
-    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    _coor().set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
@@ -237,7 +260,7 @@ def build_cluster_from_reference_npz(
             f"Reference atomic numbers {ref_z.tolist()} != PSF order {z.tolist()}. "
             "Use a PSF-order reference NPZ (e.g. *_psf_order.npz) matching the composition."
         )
-    coor.set_positions(pd.DataFrame(ref_r, columns=["x", "y", "z"]))
+    _coor().set_positions(pd.DataFrame(ref_r, columns=["x", "y", "z"]))
     sync_charmm_positions(ref_r)
     return z, ref_r
 
@@ -466,7 +489,7 @@ def build_packmol_composition_cluster(
                     "Packmol cache Z does not match rebuilt PSF; "
                     "use --rebuild-packmol or delete the cache entry"
                 )
-            coor.set_positions(
+            _coor().set_positions(
                 pd.DataFrame(shifted, columns=["x", "y", "z"])
             )
             span = np.ptp(shifted, axis=0)
@@ -589,7 +612,7 @@ def build_packmol_composition_cluster(
     shifted = _load_packmol_sphere_positions(
         output_pdb, atoms_per_list, psf_atom_names=atom_names
     )
-    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    _coor().set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
 
     if int(charmm_sd_steps) > 0 or int(charmm_abnr_steps) > 0:
         if verbose:
@@ -608,7 +631,7 @@ def build_packmol_composition_cluster(
                 skip_cgenff_restore=True,
             )
         )
-        shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+        shifted = _coor().get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
         if verbose:
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
@@ -870,7 +893,7 @@ def build_pyxtal_composition_cluster(
         pdb_path=mapping_pdb,
         trim_to_composition=bool(trim_to_composition),
     )
-    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    _coor().set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
 
     if int(charmm_sd_steps) > 0 or int(charmm_abnr_steps) > 0:
         if verbose:
@@ -889,7 +912,7 @@ def build_pyxtal_composition_cluster(
                 skip_cgenff_restore=True,
             )
         )
-        shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+        shifted = _coor().get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
         if verbose:
             from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 

@@ -19,8 +19,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --array=0-2
-#SBATCH --output=artifacts/lj_scales_des_bigmodel/logs/slurm-%A_%a.out
-#SBATCH --error=artifacts/lj_scales_des_bigmodel/logs/slurm-%A_%a.err
+#SBATCH --output=artifacts/lj_scales_des_bigmodel_f/logs/slurm-%A_%a.out
+#SBATCH --error=artifacts/lj_scales_des_bigmodel_f/logs/slurm-%A_%a.err
 
 set -uo pipefail
 
@@ -31,12 +31,16 @@ EW_LIST=(10 30 100)
 EW="${EW_LIST[${SLURM_ARRAY_TASK_ID:-0}]}"
 
 EPOCHS="${LJ_EPOCHS:-40}"
-NTRAIN="${LJ_NTRAIN:-100000}"
-NVALID="${LJ_NVALID:-8500}"
+# Filtered set has 102,994 frames (108,500 - 5,506 close contacts), so the
+# original 100000/8500 split no longer fits.
+NTRAIN="${LJ_NTRAIN:-95000}"
+NVALID="${LJ_NVALID:-7900}"
 
-RUN_ROOT="$REPO/artifacts/lj_scales_des_bigmodel/ew_${EW}"
+RUN_ROOT="$REPO/artifacts/lj_scales_des_bigmodel_f/ew_${EW}"
 CKPT_DIR="$RUN_ROOT/ckpts"
-DATA="$REPO/artifacts/lj_scales_des/des_dimers_cgenff_top50.npz"
+# Close-contact-filtered set: frames with any intermolecular contact below
+# 1.5 A are removed. Those 5% of frames carried 95% of the force MSE.
+DATA="${LJ_DATA:-$REPO/artifacts/lj_scales_des/des_dimers_cgenff_top50_min15.npz}"
 
 if [[ -e "$CKPT_DIR" ]]; then
   echo "REFUSING to run: $CKPT_DIR exists (would mix runs). Move it first." >&2
@@ -58,6 +62,7 @@ set -e
 echo "=== DES hybrid, high capacity ==="
 echo "host=$(hostname) job=${SLURM_JOB_ID:-none} task=${SLURM_ARRAY_TASK_ID:-none}"
 echo "energy_weight=$EW  epochs=$EPOCHS  n_train=$NTRAIN  n_valid=$NVALID"
+echo "data=$DATA"
 echo "ckpt_dir=$CKPT_DIR"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 
