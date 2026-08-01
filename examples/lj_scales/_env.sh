@@ -73,7 +73,12 @@ export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 # cuda_fp16.hpp pulls host <utility> and breaks GPU Vesin. Prefer pip
 # nvidia-cuda-runtime headers when present (nl_gpu.ensure_cupy_cuda_path
 # also repairs this at runtime).
-if [[ "${MMML_MM_NL_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "gpu" ]]; then
+# Prefer GPU Vesin NL rebuilds on GPU nodes (safe CPU fallback if CuPy JIT fails).
+if [[ "${LJ_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "cuda" ]]; then
+  export MMML_MM_NL_DEVICE="${MMML_MM_NL_DEVICE:-gpu}"
+fi
+
+if [[ "${MMML_MM_NL_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "cuda" ]]; then
   _lj_wheel_rt=""
   for _lj_cand in \
     "${REPO_ROOT}/.venv/lib/python"*/site-packages/nvidia/cuda_runtime \

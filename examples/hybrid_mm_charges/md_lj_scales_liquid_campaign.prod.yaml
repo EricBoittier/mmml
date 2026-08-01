@@ -42,7 +42,11 @@ defaults:
   handoff_quality_gate: true
   handoff_quality_fmax_eVA: 3.0
   max_fmax_before_dyn_ev_A: 3.5
-  steps_per_recording: 200
+  ml_compute_dtype: float32
+  mm_nl_device: gpu
+  jax_md_skin_distance: 0.5
+  jax_md_update_interval: 40
+  steps_per_recording: 1000
 
 campaign_output: results/lj_scales_liquid_campaign_prod
 
@@ -55,6 +59,8 @@ runs:
     jaxmd_minimize_steps: 1000
     fire_min_steps: 400
     continue_velocities: false
+    jax_md_update_interval: 20
+    steps_per_recording: 200
     output_dir: results/lj_scales_liquid_campaign_prod/jaxmd_settle
 
   pycharmm_npt:
@@ -78,6 +84,8 @@ runs:
     ps: 20.0
     handoff_quality_gate: true
     handoff_quality_fmax_eVA: 1.0
+    jax_md_update_interval: 40
+    steps_per_recording: 1000
     output_dir: results/lj_scales_liquid_campaign_prod/jaxmd_nvt
 
   jaxmd_nve:
@@ -86,4 +94,6 @@ runs:
     setup: pbc_nve
     depends_on: jaxmd_nvt
     ps: 2.0
+    jax_md_update_interval: 10
+    steps_per_recording: 100
     output_dir: results/lj_scales_liquid_campaign_prod/jaxmd_nve

@@ -3444,11 +3444,48 @@ def set_up_nhc_sim_routine(
                         pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
                 elif use_pbc and traj_export_molecular_wrap:
                     pos_for_h5 = _wrap_monomers(state.position, _cell_jax)
+                # True extended-system invariant for NHC (not bare E_tot).
+                # jax_md's nvt/npt_nose_hoover_invariant includes thermostat
+                # (and barostat) degrees of freedom; bare E_tot is not conserved
+                # in NVT/NpT and was previously written here by mistake.
+                e_invariant = e_tot
+                try:
+                    if is_npt:
+                        box_for_inv = simulate.npt_box(state)
+                        e_invariant = float(
+                            simulate.npt_nose_hoover_invariant(
+                                npt_energy_fn,
+                                state,
+                                pressure,
+                                kT,
+                                neighbor=(npt_pair_idx, npt_pair_mask),
+                                box=box_for_inv,
+                            )
+                        )
+                    elif args.ensemble == "nvt":
+                        e_invariant = float(
+                            simulate.nvt_nose_hoover_invariant(
+                                wrapped_energy_fn,
+                                state,
+                                kT,
+                                neighbor=current_neighbors,
+                            )
+                        )
+                except Exception as _inv_exc:
+                    if not getattr(run_sim, "_invariant_warn_once", False):
+                        print(
+                            f"[jaxmd] NHC invariant fallback to E_tot "
+                            f"({type(_inv_exc).__name__}: {_inv_exc})",
+                            flush=True,
+                        )
+                        run_sim._invariant_warn_once = True
+                    e_invariant = e_tot
+
                 report_kw = dict(
                     potential_energy=e_pot,
                     kinetic_energy=e_kin,
                     temperature=temp,
-                    invariant=e_tot,
+                    invariant=e_invariant,
                     total_energy=e_tot,
                     time_ps=time_ps,
                     positions=pos_for_h5,
