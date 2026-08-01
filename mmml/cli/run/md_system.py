@@ -3308,6 +3308,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
     )
     cmd.extend(
+        ["--hybrid-hamiltonian", str(getattr(args, "hybrid_hamiltonian", "handoff"))]
+    )
+    _append_optional(cmd, "--shared-cutoff", getattr(args, "shared_cutoff", None))
+    cmd.extend(
         [
             "--mm-switch-width",
             str(
