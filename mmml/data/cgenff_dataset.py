@@ -62,6 +62,11 @@ KCAL_TO_EV = ase.units.kcal / ase.units.mol
 _DATA_DIR = Path(__file__).resolve().parent / "charmm"
 DEF_PRM_PATH = _DATA_DIR / "par_all36_cgenff.prm"
 DEF_RTF_PATH = _DATA_DIR / "top_all36_cgenff.rtf"
+# CHARMM stream files merged on top of CGenFF. toppar_water_ions.str carries the
+# monatomic ion residues (CLA/SOD/POT/LIT/CAL/MG/...) that CGenFF has no
+# template for -- ~2% of DES dimer monomer slots. The merge is additive, so
+# nothing CGenFF already typed changes. See docs/des-so3lr-dimers.md.
+DEF_EXTRA_TOPPAR: tuple[Path, ...] = (_DATA_DIR / "toppar_water_ions.str",)
 
 # Warnings only print once from the main process, not from every spawn worker.
 _IS_WORKER = mp.current_process().name != "MainProcess"
@@ -149,10 +154,12 @@ def parse_mass_element_map(rtf_path: Path) -> dict[str, int]:
     _MASS_BY_APPROX = {
         1.008: 1, 4.003: 2, 6.941: 3, 9.012: 4, 10.811: 5, 12.011: 6,
         14.007: 7, 15.999: 8, 18.998: 9, 20.180: 10, 22.990: 11, 24.305: 12,
-        26.982: 13, 28.086: 14, 30.974: 15, 32.065: 16, 35.453: 17, 39.948: 18,
-        79.904: 35, 126.904: 53,
+        26.982: 13, 28.086: 14, 30.974: 15, 32.065: 16, 35.450: 17, 39.948: 18,
+        39.098: 19, 40.080: 20, 65.370: 30, 79.904: 35, 85.468: 37,
+        112.411: 48, 126.904: 53, 132.905: 55, 137.327: 56,
     }
     type_to_z: dict[str, int] = {}
+    from_element: set[str] = set()
     if not rtf_path.exists():
         return type_to_z
     with rtf_path.open("r", encoding="utf-8", errors="replace") as fh:
@@ -168,13 +175,23 @@ def parse_mass_element_map(rtf_path: Path) -> dict[str, int]:
                 mass = float(parts[3])
             except ValueError:
                 continue
-            if len(parts) >= 5 and parts[4].isalpha() and len(parts[4]) <= 2:
+            explicit = len(parts) >= 5 and parts[4].isalpha() and len(parts[4]) <= 2
+            if explicit:
                 z = atomic_numbers.get(parts[4].capitalize(), 0)
             else:
+                # Nearest-mass inference is a fallback, and a lossy one: K
+                # (39.098) and Ca (40.08) both sit within 1 amu of argon. A
+                # stream file repeats its MASS records without the element
+                # column in the parameter section, so never let a guess
+                # overwrite a value the topology section stated outright.
+                if atom_type in from_element:
+                    continue
                 closest = min(_MASS_BY_APPROX.keys(), key=lambda m: abs(m - mass))
                 z = _MASS_BY_APPROX[closest] if abs(closest - mass) < 1.0 else 6
             if z > 0:
                 type_to_z[atom_type] = z
+                if explicit:
+                    from_element.add(atom_type)
     return type_to_z
 
 
@@ -322,15 +339,61 @@ class CgenffReference:
 def load_reference(
     prm_path: str | Path = DEF_PRM_PATH,
     rtf_path: str | Path = DEF_RTF_PATH,
+    extra_toppar: tuple[str | Path, ...] = DEF_EXTRA_TOPPAR,
 ) -> CgenffReference:
-    """Load and cache the CGenFF reference from the given PRM/RTF paths."""
+    """Load and cache the CGenFF reference from the given PRM/RTF paths.
+
+    ``extra_toppar`` are CHARMM stream files (``.str``) carrying both topology
+    and parameter sections, merged on top of the CGenFF base. The default adds
+    ``toppar_water_ions.str``, which is what supplies the monatomic ion
+    residues (``CLA``, ``SOD``, ``POT``, ``LIT``, ``CAL``, ``MG``, …) that
+    CGenFF alone has no template for.
+
+    The merge is strictly **additive**: an atom type or ``RESI`` already
+    defined by CGenFF is left alone, and new compositions are appended to the
+    candidate list rather than inserted ahead of it. Assignments that already
+    worked therefore cannot change.
+    """
     prm = Path(prm_path)
     rtf = Path(rtf_path)
     nb_map, sigmas, epsilons = load_cgenff_nonbonded_table(prm)
     type_to_z = parse_mass_element_map(rtf)
+
+    extra_paths = [Path(p) for p in extra_toppar]
+    for extra in extra_paths:
+        if not extra.exists():
+            raise FileNotFoundError(f"extra toppar not found: {extra}")
+        e_nb, e_sig, e_eps = load_cgenff_nonbonded_table(extra)
+        for name, idx in e_nb.items():
+            if name == "DEFAULT" or name in nb_map:
+                continue
+            nb_map[name] = len(sigmas)
+            sigmas = np.append(sigmas, e_sig[idx])
+            epsilons = np.append(epsilons, e_eps[idx])
+        for t, z in parse_mass_element_map(extra).items():
+            type_to_z.setdefault(t, z)
+
     residues, composition_map, collision_map = load_cgenff_rtf_residues(
         rtf, nb_map, type_to_z
     )
+    for extra in extra_paths:
+        e_res, e_comp, _ = load_cgenff_rtf_residues(extra, nb_map, type_to_z)
+        installed = set()
+        for name, tmpl in e_res.items():
+            if name in residues:
+                continue  # CGenFF wins; TIP3 is defined in both
+            residues[name] = tmpl
+            installed.add(name)
+        # Only register compositions for templates we actually installed --
+        # otherwise a name CGenFF already owns could be reachable under the
+        # stream file's composition while resolving to CGenFF's geometry.
+        for comp_key, names in e_comp.items():
+            existing = composition_map.setdefault(comp_key, [])
+            for name in names:
+                if name in installed and name not in existing:
+                    existing.append(name)
+    collision_map = {k: v for k, v in composition_map.items() if len(v) > 1}
+
     return CgenffReference(
         nb_map=nb_map,
         sigmas=sigmas,
@@ -388,13 +451,19 @@ def match_cgenff_template(
     ref: CgenffReference,
     z_sub: np.ndarray,
     pos_sub: np.ndarray | None = None,
-    target_charge: float = 0.0,
+    target_charge: float | None = None,
     canonical_smiles: str | None = None,
 ) -> tuple[str, np.ndarray, np.ndarray]:
     """Match one monomer against a CGenFF ``RESI`` template.
 
     Returns ``(resi_name, type_indices, charges)`` in the observed atom order.
     Priority: canonical SMILES -> composition fast-path -> composition index.
+
+    ``target_charge=None`` (the default) conserves the **template's own** net
+    charge. For the neutral CGenFF residues this is 0 and behaves exactly as
+    the old hard-coded default did; for the ion residues from
+    ``toppar_water_ions.str`` it is what stops a chloride being rescaled to
+    neutral. Pass a float to force a specific monomer charge.
     """
     if canonical_smiles and canonical_smiles in DES_SMILES_TO_RESI:
         res_name = DES_SMILES_TO_RESI[canonical_smiles]
@@ -425,6 +494,9 @@ def match_cgenff_template(
 
     n_atoms = len(charges)
     if n_atoms > 0:
+        if target_charge is None:
+            # The RESI's declared net charge, recovered from its own atoms.
+            target_charge = float(np.round(np.sum(charges)))
         charge_diff = target_charge - float(np.sum(charges))
         if abs(charge_diff) > 1e-12:
             charges = charges + (charge_diff / n_atoms)
@@ -575,7 +647,7 @@ def assign_frame_cgenff(
     ref: CgenffReference,
     *,
     compute_mm: bool = True,
-    monomer_charges: tuple[float, float] = (0.0, 0.0),
+    monomer_charges: tuple[float | None, float | None] = (None, None),
 ) -> tuple[FrameAssignment | None, str | None]:
     """Assign CGenFF types/charges to one unpadded dimer frame.
 
