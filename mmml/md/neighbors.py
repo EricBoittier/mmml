@@ -30,12 +30,20 @@ def make_intermolecular_neighbor_fn(
     *,
     peptide_water_ml: bool = False,
     on_overflow: str = "raise",
+    skin_A: float = 0.0,
 ) -> Callable[[np.ndarray, np.ndarray | None], Mapping[str, Any]]:
     """Build a ``neighbor_fn`` yielding padded ``pair_i`` / ``pair_j`` / ``pair_mask``.
 
     ``capacity`` is the padded pair-slot count; when ``None`` it is estimated from
     the cutoff shell and atom density with headroom. Intramolecular pairs are
     filtered by ``system.mol_id``; exclusions come from ``FFParams``.
+
+    ``skin_A > 0`` builds the list at ``cutoff_A + skin_A`` and wraps the result
+    in :func:`mmml.md.neighbor_cache.with_verlet_skin`, so blocks that move every
+    atom less than ``skin_A / 2`` reuse the list instead of paying a host
+    rebuild. The extra pairs inside the skin are inert: ``mm_nonbonded`` zeroes
+    every pair beyond ``ctofnb``. Default ``0.0`` keeps the previous
+    rebuild-every-call behavior.
     """
     from mmml.interfaces.jaxmdInterface.hybrid_energy import get_intermolecular_pairs
 

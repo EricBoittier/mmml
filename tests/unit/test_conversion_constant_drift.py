@@ -61,8 +61,11 @@ _N_A = 6.02214076e23  # Avogadro, 1/mol (exact)
 _AMU_KG = 1.66053906660e-27
 _CAL_J = 4.184  # thermochemical calorie (exact)
 _C_CM_S = 29979245800.0  # speed of light, cm/s (exact)
+_EPS0 = 8.8541878128e-12  # vacuum permittivity, F/m
 
 _EV_KCAL = _HARTREE_KCAL / _HARTREE_EV
+# e^2 / (4 pi eps0) at 1 Angstrom, in eV.
+_COULOMB_EV_A = _E_C / (4.0 * 3.141592653589793 * _EPS0 * 1e-10)
 
 
 class Definition(NamedTuple):
@@ -257,6 +260,18 @@ _ANCHORED: dict[tuple[str, str], float] = {
     # sigma = 2 * Rmin/2 / 2^(1/6).
     ("models/cgenff_mm.py", "RMIN_HALF_TO_SIGMA"): 2.0 / 2.0 ** (1.0 / 6.0),
     ("mode_check/kick.py", "_FS_INV_TO_CM_INV"): 1e15 / _C_CM_S,
+    # Coulomb prefactor. The PhysNet one is halved because the pair sum runs
+    # over ordered pairs; docs/UNITS_SUMMARY.md used to list that factor of two
+    # as an unresolved question.
+    (
+        "models/physnetjax/physnetjax/models/mpnn_kernels.py",
+        "COULOMB_PAIR_FACTOR_EV_A",
+    ): _COULOMB_EV_A / 2.0,
+    (
+        "models/physnetjax/physnetjax/models/zbl.py",
+        "COULOMB_EV_ANGSTROM",
+    ): _COULOMB_EV_A,
+    ("md/energy/terms/zbl.py", "_COULOMB_EV_ANGSTROM"): _COULOMB_EV_A,
     ("spectra/spectra_md.py", "FS_INV_TO_CM_INV"): 1e15 / _C_CM_S,
     ("mode_check/forces.py", "_EV_TO_J"): _E_C,
     ("mode_check/forces.py", "_A_TO_M"): 1e-10,
