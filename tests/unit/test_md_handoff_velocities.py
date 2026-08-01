@@ -40,22 +40,15 @@ def _thermal_speed_ang_ps(t_k: float, mass_amu: float) -> float:
 # --- kinetic temperature from Å/ps ------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "_AMU_ANG_PS2_TO_KCALMOL = 1.036427e-3 in charmm_ase_velocities is wrong. "
-        "Its comment says 'amu * (Angstrom/psec)^2 -> kcal/mol', for which the "
-        "exact AKMA value is 1/418.4 = 2.390057e-3. The literal carries the "
-        "mantissa of the *eV* conversion (1 amu(A/ps)^2 = 1.036427e-4 eV) with "
-        "the wrong exponent, so every kinetic temperature on this path is a "
-        "factor 2.306 out. Verified end to end: velocities generated for '300 K' "
-        "measure 690.6 K against CODATA + the AKMA definition. Self-consistent "
-        "within the module (assign and read-back use the same constant), which "
-        "is why it survived. Delete this marker once the constant is corrected."
-    ),
-)
 def test_temperature_matches_equipartition_for_a_known_speed():
-    """One atom at exactly (3/2)kT must report T back."""
+    """One atom at exactly (3/2)kT must report T back.
+
+    This is the anchor for ``_AMU_ANG_PS2_TO_KCALMOL``. It was ``1.036427e-3``
+    -- the mantissa of the *eV* conversion with the wrong exponent -- making
+    every kinetic temperature on this path a factor 2.306 out, and velocities
+    drawn for "300 K" actually 690.6 K. The constant is now the exact AKMA
+    value ``1/418.4``; this test fails if it drifts again.
+    """
     t_target, mass = 300.0, 18.0
     speed = _thermal_speed_ang_ps(t_target, mass)
     v = np.array([[speed / np.sqrt(3.0)] * 3])
