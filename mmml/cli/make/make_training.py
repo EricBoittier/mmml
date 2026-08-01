@@ -191,6 +191,27 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--learning-rate", "--learning_rate", type=float, default=0.001, dest="learning_rate"
     )
     parser.add_argument(
+        "--subtract-atom-energies",
+        "--subtract_atom_energies",
+        action="store_true",
+        dest="subtract_atom_energies",
+        help=(
+            "Subtract per-element atomic reference energies from E before "
+            "training. Essential when training from scratch on absolute "
+            "energies: without it the network must learn the whole ~1300 "
+            "kcal/mol offset itself, and in practice it does not (energy MAE "
+            "sat at ~1200 kcal/mol for 6 epochs while forces converged fine). "
+            "A warm start hides this by carrying the scale in its weights."
+        ),
+    )
+    parser.add_argument(
+        "--subtract-mean",
+        "--subtract_mean",
+        action="store_true",
+        dest="subtract_mean",
+        help="Subtract the dataset mean energy (applied after atom refs).",
+    )
+    parser.add_argument(
         "--clip-global",
         "--clip_global",
         type=float,
@@ -1392,7 +1413,9 @@ def main_loop(args):
         valid_data = _load_physnet_npz_dict(args.valid_data, natoms)
     else:
         train_data, valid_data = prepare_datasets(
-            data_key, args.n_train, args.n_valid, data_paths, natoms=natoms
+            data_key, args.n_train, args.n_valid, data_paths, natoms=natoms,
+            subtract_atom_energies=bool(getattr(args, "subtract_atom_energies", False)),
+            subtract_mean=bool(getattr(args, "subtract_mean", False)),
         )
     
     if args.model is not None:
