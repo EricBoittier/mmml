@@ -23,7 +23,8 @@ defaults:
   packmol_tolerance: 3.0
   checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/params.json
   temperature: 300.0
-  dt_fs: 0.5
+  # 0.5 fs blew intramolecular extent on all-ML DCM heat after jaxmd settle.
+  dt_fs: 0.25
   seed: 42
   include_mm: true
   mm_charge_mode: fixed
@@ -37,13 +38,16 @@ defaults:
   handoff_write_res: true
   mc_density_equalize: false
   no_echeck_heat: true
-  n_heat_segments: 4
-  heat_thermostat: bussi
+  n_heat_segments: 8
+  heat_thermostat: hoover
+  # quiet:true would otherwise set ihtfrq=nstep (one rescale / segment).
+  heat_ihtfrq: 50
+  dynamics_overlap_check_interval: 100
   handoff_quality_gate: true
   handoff_quality_fmax_eVA: 3.0
   max_fmax_before_dyn_ev_A: 3.5
-  # Keep trajectory cadence readable for analysis (~0.05 ps / frame at 0.5 fs).
-  steps_per_recording: 100
+  # ~0.05 ps / frame at dt=0.25 fs.
+  steps_per_recording: 200
 
 campaign_output: results/hybrid_mm_fixed_lj_scales_liquid_prod
 

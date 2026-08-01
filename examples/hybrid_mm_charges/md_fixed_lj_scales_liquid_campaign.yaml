@@ -7,6 +7,10 @@
 # jaxmd settle first is the intended path (see examples/lj_scales/07_deploy_md.sh).
 # Learned LJ requires jax_mic (truncated MIC), not Ewald — issue #139.
 #
+# Heat note (2026-08): ASE Bussi @ dt=0.5 fs with 0.5 ps / 4 segments blew a
+# DCM monomer (extent 13.8 Å > 5.6 Å) at heat step 250; all-ML PBC cannot
+# Packmol-repack. Prefer dt=0.25 fs, Hoover, denser ihtfrq, longer settle/heat.
+#
 # For tens-of-ps production + analysis, use
 # md_fixed_lj_scales_liquid_campaign.prod.yaml (LJ_MD_PROD=1) then
 # examples/lj_scales/12_analyze_liquid.sh.
@@ -28,7 +32,8 @@ defaults:
   checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/params.json
   # mm_lj_scales_file: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/hybrid_mm.json
   temperature: 300.0
-  dt_fs: 0.5
+  # 0.5 fs blew intramolecular extent on all-ML DCM heat; docs use 0.25 for liquids.
+  dt_fs: 0.25
   seed: 42
   include_mm: true
   mm_charge_mode: fixed
@@ -43,8 +48,13 @@ defaults:
   mc_density_equalize: false
   # Soften CHARMM heat after jaxmd settle (legacy single-job heat was too abrupt).
   no_echeck_heat: true
-  n_heat_segments: 4
-  heat_thermostat: bussi
+  n_heat_segments: 8
+  # Hoover is the resilient DCM liquid path in docs/md-system-configs.md;
+  # Bussi @ 0.5 fs flew a monomer after jaxmd settle (extent guard trip).
+  heat_thermostat: hoover
+  # quiet:true would otherwise set ihtfrq=nstep (one rescale / segment).
+  heat_ihtfrq: 50
+  dynamics_overlap_check_interval: 100
   handoff_quality_gate: true
   # Looser than the 1.0 eV/Å default — jaxmd→CHARMM handoff often sits ~2–3 eV/Å
   # on all-ML DCM until heat starts moving contacts.
@@ -56,11 +66,11 @@ campaign_output: results/hybrid_mm_fixed_lj_scales_liquid
 
 runs:
   jaxmd_settle:
-    description: jaxmd FIRE + longer NVT settle from Packmol / seeded mini box
+    description: jaxmd FIRE + NVT settle from Packmol / seeded mini box
     backend: jaxmd
     setup: pbc_nvt
-    # Was 0.05 ps / 250 FIRE — too short before CHARMM handoff (fmax~2.7 eV/Å).
-    ps: 0.50
+    # Was 0.05→0.50 ps; 1.0 ps gives a calmer CHARMM handoff before heat.
+    ps: 1.0
     jaxmd_minimize_steps: 1000
     fire_min_steps: 400
     continue_velocities: false
@@ -73,8 +83,9 @@ runs:
     depends_on: jaxmd_settle
     md_stages: "mini,heat,equi"
     # Stage-specific durations (bare `ps` does not reach heat/equi).
-    ps_heat: 0.50
-    ps_equi: 0.50
+    # Was 0.50 / 4 segments @ 0.5 fs → monomer fly-off at heat step 250.
+    ps_heat: 2.0
+    ps_equi: 1.0
     mm_nonbond_mode: jax_mic
     max_fmax_before_dyn_ev_A: 3.5
     no_echeck_heat: true

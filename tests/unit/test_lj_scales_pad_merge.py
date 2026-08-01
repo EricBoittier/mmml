@@ -220,6 +220,10 @@ def test_lj_scales_liquid_campaign_yaml_parses() -> None:
     assert raw["runs"]["jaxmd_nvt"]["depends_on"] == "pycharmm_npt"
     assert raw["runs"]["jaxmd_nve"]["depends_on"] == "jaxmd_nvt"
     assert raw["defaults"]["mm_nonbond_mode"] == "jax_mic"
+    assert float(raw["defaults"]["dt_fs"]) <= 0.25
+    assert raw["defaults"]["heat_thermostat"] == "hoover"
+    assert int(raw["defaults"]["heat_ihtfrq"]) > 0
+    assert float(raw["runs"]["pycharmm_npt"]["ps_heat"]) >= 2.0
 
     # parse_md_system_args applies campaign ``defaults``; per-job backend/setup
     # merge happens later in run_campaign.
@@ -267,8 +271,14 @@ def test_lj_scales_packmol_liquid_campaign_yaml_parses() -> None:
     assert raw["defaults"]["mm_nonbond_mode"] == "jax_mic"
     assert raw["defaults"].get("no_echeck_heat") is True
     assert float(raw["defaults"].get("max_fmax_before_dyn_ev_A", 0)) >= 3.5
-    assert float(raw["runs"]["jaxmd_settle"]["ps"]) >= 0.5
+    # All-ML DCM heat blew a monomer at dt=0.5 fs / Bussi / quiet ihtfrq.
+    assert float(raw["defaults"]["dt_fs"]) <= 0.25
+    assert int(raw["defaults"]["n_heat_segments"]) >= 8
+    assert raw["defaults"]["heat_thermostat"] == "hoover"
+    assert int(raw["defaults"]["heat_ihtfrq"]) > 0
+    assert float(raw["runs"]["jaxmd_settle"]["ps"]) >= 1.0
     assert int(raw["runs"]["jaxmd_settle"]["jaxmd_minimize_steps"]) >= 1000
+    assert float(raw["runs"]["pycharmm_nvt"]["ps_heat"]) >= 2.0
     # Packmol path — no certified-box defaults.
     assert "from_psf" not in raw["defaults"]
     assert "from_crd" not in raw["defaults"]
@@ -308,8 +318,12 @@ def test_lj_scales_liquid_prod_campaign_yaml_longer_than_smoke() -> None:
     assert float(prod["runs"]["pycharmm_nvt"]["ps_equi"]) > float(
         smoke["runs"]["pycharmm_nvt"]["ps_equi"]
     )
+    assert float(prod["defaults"]["dt_fs"]) <= 0.25
+    assert prod["defaults"]["heat_thermostat"] == "hoover"
     joint_prod = yaml.safe_load(
         (_REPO / "examples/hybrid_mm_charges/md_lj_scales_liquid_campaign.prod.yaml").read_text()
     )
     assert joint_prod["runs"]["pycharmm_npt"]["setup"] == "pbc_npt"
     assert float(joint_prod["runs"]["jaxmd_nvt"]["ps"]) >= 20.0
+    assert float(joint_prod["defaults"]["dt_fs"]) <= 0.25
+    assert int(joint_prod["defaults"]["heat_ihtfrq"]) > 0

@@ -58,6 +58,8 @@ if [[ "${LJ_JOINT}" != "1" ]]; then
   # Optional seed (skips Packmol rebuild when mini.crd already exists):
   #   LJ_MD_FROM_PSF / LJ_MD_FROM_CRD, or default liquid_nvt/mini.{psf,crd}
   # Fresh campaign dir each run unless you pass --resume (via LJ_MD_RESUME=1).
+  # After a heat fly-off, wipe the failed campaign dir (or omit LJ_MD_RESUME)
+  # and re-run — do not resume from a blown heat.0.res.
   SEED_PSF="${LJ_MD_FROM_PSF:-${LJ_ARTIFACTS_DIR}/liquid_nvt/mini.psf}"
   SEED_CRD="${LJ_MD_FROM_CRD:-${LJ_ARTIFACTS_DIR}/liquid_nvt/mini.crd}"
   SEED_ARGS=()

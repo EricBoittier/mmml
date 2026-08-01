@@ -20,7 +20,8 @@ defaults:
   composition: "DCM:1"
   temperature: 300.0
   pressure: 1.0
-  dt_fs: 0.5
+  # Match fixed DCM liquid: 0.5 fs + quiet ihtfrq blew a monomer in heat.
+  dt_fs: 0.25
   seed: 42
   include_mm: true
   mm_charge_mode: fixed
@@ -34,12 +35,14 @@ defaults:
   handoff_write_res: true
   mc_density_equalize: false
   no_echeck_heat: true
-  n_heat_segments: 4
-  heat_thermostat: bussi
+  n_heat_segments: 8
+  heat_thermostat: hoover
+  heat_ihtfrq: 50
+  dynamics_overlap_check_interval: 100
   handoff_quality_gate: true
   handoff_quality_fmax_eVA: 3.0
   max_fmax_before_dyn_ev_A: 3.5
-  steps_per_recording: 100
+  steps_per_recording: 200
 
 campaign_output: results/lj_scales_liquid_campaign_prod
 

@@ -93,9 +93,11 @@ Liquid campaign order (per solvent):
 3. **jaxmd_nvt** / **jaxmd_nve** — production  
 4. **12_analyze_liquid** — RDF first peak + packing/NpT density vs bulk  
 
-Smoke lengths stay sub-ps. For validation set `LJ_MD_PROD=1` (settle 1 ps,
-CHARMM heat/equi 2/20 ps NpT, jaxmd NVT 20 ps). Fixed-box NVT packing density
-is not a force-field check — use the joint NpT prod campaign for ⟨ρ⟩.
+Smoke heat uses `dt_fs: 0.25`, Hoover, `heat_ihtfrq: 50`, and ≥2 ps heat
+(ASE Bussi @ 0.5 fs previously blew a DCM monomer; all-ML PBC cannot
+Packmol-repack). For validation set `LJ_MD_PROD=1` (longer NpT equi + 20 ps
+jaxmd NVT). Fixed-box NVT packing density is not a force-field check — use the
+joint NpT prod campaign for ⟨ρ⟩.
 
 ## Configuration
 
