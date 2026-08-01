@@ -147,7 +147,12 @@ def _filter_pairs_by_com_min(
     else:
         cell = inv_cell = None
 
-    dr = coms[pair_j] - coms[pair_i]
+    # pair_i/pair_j are atom indices (NL contract); index COMs by monomer id.
+    ai = np.asarray(pair_i, dtype=np.int64)
+    aj = np.asarray(pair_j, dtype=np.int64)
+    mi = monomer_ids[ai]
+    mj = monomer_ids[aj]
+    dr = coms[mj] - coms[mi]
 
     if inv_cell is not None:
         frac_dr = dr @ inv_cell.T
@@ -158,7 +163,7 @@ def _filter_pairs_by_com_min(
     return mask & (r >= mm_r_min)
 
 
-@jax.jit
+@partial(jax.jit, static_argnums=(6,))
 def _filter_pairs_by_com_min_jax(
     positions: Array,
     pair_i: Array,
@@ -176,6 +181,10 @@ def _filter_pairs_by_com_min_jax(
     ``R @ cell`` before calling — the same contract as
     :func:`_filter_pairs_by_com_min`. Applying the Cartesian MIC
     (``dr @ inv(cell)``) to fractional displacements yields garbage distances.
+
+    ``pair_i`` / ``pair_j`` are **atom** indices (same as the host filter).
+    ``n_monomers`` is a static JIT arg (``monomer_coms_segment`` needs a
+    concrete ``num_segments``).
     """
     coms = monomer_coms_segment(positions, monomer_id_jnp, n_monomers)
     mi = monomer_id_jnp[pair_i]
