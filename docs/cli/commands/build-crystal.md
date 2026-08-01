@@ -161,7 +161,7 @@ ASE optimization (optional, PyXtal path):
   --quiet-opt           Suppress ASE optimizer log output
 ```
 
-## Example structures
+## Visual examples
 
 ![DCM crystal / periodic cell (experimental Pbcn)](../../images/structures/build-crystal.png)
 

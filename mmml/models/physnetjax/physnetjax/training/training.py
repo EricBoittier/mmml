@@ -64,6 +64,10 @@ CONVERSION = {
     "forces": 1 / (ase.units.kcal / ase.units.mol),
 }
 
+# Explicit eV -> kcal/mol for the streaming per-epoch line, which must state a
+# unit that does not depend on whatever `conversion` the caller passed.
+_EV_TO_KCAL_MOL = 1 / (ase.units.kcal / ase.units.mol)
+
 def is_valid_advanced_batch_config(batch_args_dict):
     """
     Check if batch arguments dictionary has valid advanced batching configuration.
@@ -708,7 +712,14 @@ def train_model(
                 updates=params, state=transform_state, value=valid_loss
             )
 
+            # Raw (pre-conversion) values, kept so the streaming line below can
+            # state kcal/mol unambiguously whatever `conversion` happens to be.
+            _raw_valid_e_mae = valid_energy_mae
+            _raw_valid_f_mae = valid_forces_mae
+
             # convert statistics to kcal/mol for printing
+            # NB: the CLI passes conversion={'energy':1,'forces':1}, so in practice
+            # this is a no-op and the table's MAE columns are eV, not kcal/mol.
             valid_energy_mae *= conversion["energy"]
             valid_forces_mae *= conversion["forces"]
             train_energy_mae *= conversion["energy"]
@@ -813,6 +824,23 @@ def train_model(
                 live.update(combined, refresh=True)
                 import sys
                 sys.stdout.flush()  # Force output to SLURM log file
+
+            # Plain one-line-per-epoch record. The rich Live table above is a
+            # *live* display: it overwrites in place, so a redirected log keeps
+            # only the final render and a multi-hour run shows no progress at all
+            # until it exits. (TERM=dumb removes the control codes but not this;
+            # Live still renders once.) Units are spelled out because the table's
+            # MAE columns are eV, which has been misread as kcal/mol.
+            if epoch % print_freq == 0:
+                print(
+                    f"[epoch {epoch}/{num_epochs}] "
+                    f"train_loss={train_loss:.6g} valid_loss={valid_loss:.6g} "
+                    f"best={best_loss:.6g} "
+                    f"valid_E_MAE={_raw_valid_e_mae * _EV_TO_KCAL_MOL:.4f}kcal/mol "
+                    f"valid_F_MAE={_raw_valid_f_mae * _EV_TO_KCAL_MOL:.4f}kcal/mol/A "
+                    f"lr={lr_eff:.3g} t={epoch_length}",
+                    flush=True,
+                )
                 sys.stderr.flush()  # Flush errors too
                 gc.collect()  # Force garbage collection to prevent memory buildup during long training runs
                 if PROFILE:

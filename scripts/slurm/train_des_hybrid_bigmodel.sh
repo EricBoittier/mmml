@@ -48,6 +48,12 @@ if [[ -e "$CKPT_DIR" ]]; then
 fi
 mkdir -p "$CKPT_DIR"
 
+# rich builds its Console with force_terminal=True, so without this the log
+# fills with ANSI colour/cursor codes. TERM=dumb keeps the tables readable in
+# a redirected file. (It does NOT make the Live table stream per-epoch --
+# the plain "[epoch N/M]" line in training.py does that.)
+export TERM=dumb
+
 # Compute nodes have no outbound network; without these `uv run` re-resolves
 # against pypi.org and the job dies on timeouts.
 export UV_NO_SYNC=1

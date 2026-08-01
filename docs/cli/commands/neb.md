@@ -77,7 +77,14 @@ neb \ --checkpoint examples/m/kl.json \ --initial examples/m/neb/reag_0_opt.xyz
 --n-images 11 --fmax 0.05
 ```
 
+## Visual examples
 
+![NEB profile with ordered force-annotated geometries](../../images/povray-overlays/neb_profile_with_povray.png)
+
+## Related docs
+
+- [NEB guide](../../neb.md)
+- [Menshutkin example](../../examples/menshutkin.md)
 
 ---
 

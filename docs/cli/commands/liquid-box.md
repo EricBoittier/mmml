@@ -291,7 +291,7 @@ Geometry cleanup (one-shot recovery):
                         remain overridable.
 ```
 
-## Example structures
+## Visual examples
 
 ![Density prep ladder (schematic)](../../images/plots/liquid-box-density-ladder.png)
 

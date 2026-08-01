@@ -48,7 +48,16 @@ Other options:
   --r-max R_MAX         RDF cutoff (Å)
 ```
 
+## Visual examples
 
+![Liquid structure and thermodynamic validation summary](../../images/structures/validation_summary.png)
+
+![Element-pair radial distribution functions](../../images/structures/element_pair_rdfs.png)
+
+## Related docs
+
+- [Liquid box workflow](../../liquid-box-workflow.md)
+- [Plotting style guide](../../plotting-style-guide.md)
 
 ---
 

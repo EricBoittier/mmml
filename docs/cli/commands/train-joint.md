@@ -237,6 +237,9 @@ Other options:
 ```
 
 
+## Related docs
+
+- [DCMNet calculators and ESP](../../dcmnet_calculators.md)
 
 ---
 

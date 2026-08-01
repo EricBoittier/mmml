@@ -18,6 +18,7 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--n-valid N_VALID] [--seed SEED]
                           [--batch-size BATCH_SIZE] [--num-epochs NUM_EPOCHS]
                           [--learning-rate LEARNING_RATE]
+                          [--clip-global CLIP_GLOBAL]
                           [--energy-weight ENERGY_WEIGHT]
                           [--forces-weight FORCES_WEIGHT]
                           [--dipole-weight DIPOLE_WEIGHT]
@@ -219,6 +220,10 @@ Other options:
                         Validation samples to split from --data (default: 100).
                         Omit when --valid-data is set: the full files are used.
   --learning-rate, --learning_rate LEARNING_RATE
+  --clip-global, --clip_global CLIP_GLOBAL
+                        Global-norm gradient clip (default 10.0). Lower it
+                        (~1.0) when the raw parameters oscillate rather than
+                        converge.
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --objective OBJECTIVE
   --hybrid-mm, --hybrid_mm

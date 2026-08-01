@@ -50,6 +50,9 @@ normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
 --include-equilibrium
 ```
 
+## Visual examples
+
+![Harmonic and trajectory-derived vibrational spectra](../../images/mcp/smoke001_ir_comparison.png)
 
 
 ---

@@ -67,7 +67,7 @@ Other options:
                         periodic images.
 ```
 
-## Example structures
+## Visual examples
 
 ![Packed acetone box (Packmol)](../../images/structures/make-box-acetone.png)
 

@@ -190,6 +190,27 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "dmc": [
         ("Diffusion Monte Carlo guide", "../../dmc.md"),
     ],
+    "verify-esp-alignment": [
+        ("DCMNet calculators and ESP", "../../dcmnet_calculators.md"),
+    ],
+    "efield-evaluate": [
+        ("DCMNet calculators and ESP", "../../dcmnet_calculators.md"),
+        ("Multipole visualization gallery", "../../plot-style-gallery.md#fields-as-parametric-surfaces"),
+    ],
+    "train-joint": [
+        ("DCMNet calculators and ESP", "../../dcmnet_calculators.md"),
+    ],
+    "pes-design": [
+        ("Bayesian PES design", "../../bayesian-pes-design.md"),
+    ],
+    "neb": [
+        ("NEB guide", "../../neb.md"),
+        ("Menshutkin example", "../../examples/menshutkin.md"),
+    ],
+    "analyze-liquid": [
+        ("Liquid box workflow", "../../liquid-box-workflow.md"),
+        ("Plotting style guide", "../../plotting-style-guide.md"),
+    ],
 }
 
 # Static figures under docs/images/ (see scripts/generate_docs_figures.py).
@@ -205,6 +226,48 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
     ],
     "liquid-box": [
         ("Density prep ladder (schematic)", "../../images/plots/liquid-box-density-ladder.png"),
+    ],
+    "prepare-mm-dataset": [
+        ("MM baseline decomposition", "../../images/prepare-mm-dataset/mm_baseline_decomposition.png"),
+        ("Force-field assignment", "../../images/prepare-mm-dataset/acodcm_assignment.png"),
+        ("Force validation", "../../images/prepare-mm-dataset/force_validation.png"),
+    ],
+    "dimer-scan": [
+        ("Dimer force profiles across cutoff policies", "../../images/mlpot-settings/dcm_dimer_forces_cutoffs.png"),
+    ],
+    "ic-scan": [
+        ("Trialanine PES with force-annotated conformers", "../../images/povray-overlays/trialanine_pes_with_povray.png"),
+    ],
+    "normal-mode-sample": [
+        ("Harmonic and trajectory-derived vibrational spectra", "../../images/mcp/smoke001_ir_comparison.png"),
+    ],
+    "neb": [
+        ("NEB profile with ordered force-annotated geometries", "../../images/povray-overlays/neb_profile_with_povray.png"),
+    ],
+    "physnet-md": [
+        ("Energy conservation with force snapshots", "../../images/povray-overlays/water_nve_with_povray.png"),
+    ],
+    "active-learning": [
+        ("Descriptor-space coverage of a selected PES batch", "../../images/pes-design/descriptor_coverage.png"),
+    ],
+    "pes-design": [
+        ("Descriptor-space coverage", "../../images/pes-design/descriptor_coverage.png"),
+        ("Coverage CDF against random selection", "../../images/pes-design/coverage_cdf.png"),
+        ("Pair-distance spectrum reproduction", "../../images/pes-design/rdf_spectrum.png"),
+    ],
+    "sample-diverse-xyz": [
+        ("Descriptor-space coverage of a diverse subset", "../../images/pes-design/descriptor_coverage.png"),
+    ],
+    "verify-esp-alignment": [
+        ("ESP from explicit distributed charge sites", "../../images/povray-overlays/distributed_charge_esp.png"),
+        ("Distributed sites and equivalent multipoles", "../../images/povray-overlays/distributed_charge_model.png"),
+    ],
+    "efield-evaluate": [
+        ("Learned electrostatic-potential field", "../../plot-style-gallery-assets/chart_multipole_field_learned.png"),
+    ],
+    "analyze-liquid": [
+        ("Liquid structure and thermodynamic validation summary", "../../images/structures/validation_summary.png"),
+        ("Element-pair radial distribution functions", "../../images/structures/element_pair_rdfs.png"),
     ],
 }
 
@@ -483,12 +546,13 @@ def _figures_section(name: str) -> str:
     figs = COMMAND_FIGURES.get(name)
     if not figs:
         return ""
-    lines = ["## Example structures", ""]
+    lines = ["## Visual examples", ""]
     for caption, href in figs:
         lines.append(f"![{caption}]({href})")
         lines.append("")
-    lines.append("More detail: [Structure building guide](../structure-building.md).")
-    lines.append("")
+    if name in {"make-res", "make-box", "build-crystal", "liquid-box"}:
+        lines.append("More detail: [Structure building guide](../structure-building.md).")
+        lines.append("")
     return "\n".join(lines)
 
 

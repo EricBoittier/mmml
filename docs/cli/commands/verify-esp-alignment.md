@@ -41,7 +41,15 @@ alignment -i 07_evaluated.npz mmml verify-esp-alignment -i 07_evaluated.npz
 --sample 0 --n-points 200
 ```
 
+## Visual examples
 
+![ESP from explicit distributed charge sites](../../images/povray-overlays/distributed_charge_esp.png)
+
+![Distributed sites and equivalent multipoles](../../images/povray-overlays/distributed_charge_model.png)
+
+## Related docs
+
+- [DCMNet calculators and ESP](../../dcmnet_calculators.md)
 
 ---
 
