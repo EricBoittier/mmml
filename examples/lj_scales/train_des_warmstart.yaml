@@ -1,0 +1,28 @@
+# DES hybrid-MM warm start from examples/ckpts_json/DESdimers_params.json.
+#
+# The checkpoint architecture matcher adopts the checkpoint's 6 A cutoff.
+# Keep the end of the ML switching window at the same distance; the generic
+# LJ-scales config uses 8 A and is inconsistent with this warm start.
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: true
+mm_include_lj: true
+lr_solver: mic
+
+ml_switch_width: 1.5
+mm_switch_on: 6.0
+mm_switch_width: 5.0
+
+charges: false
+batch_size: 32
+num_epochs: 25
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 0.0
+charges_weight: 0.0
+objective: valid_loss
+best: true
+

@@ -17,6 +17,10 @@ When ``cleanup_strategy`` is absent, legacy flat keys in ``config.yaml`` are use
 
 from __future__ import annotations
 
+# Workflow-qualified so it can never collide with another workflow's
+# campaign_lib in sys.modules. See _own_campaign_lib below.
+_OWN_CAMPAIGN_LIB_MODULE = "mmml_pbc_solvent_burst_campaign_lib"
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -98,9 +102,65 @@ def _from_legacy_flat_keys(cfg: dict[str, Any]) -> CleanupStrategy:
     return CleanupStrategy(name="legacy_flat", charmm_mm=charmm_mm, mlpot=mlpot, jaxmd_pbc=jaxmd_pbc)
 
 
+def _own_campaign_lib() -> Any:
+    """This workflow's ``campaign_lib``, resolved by path rather than sys.path.
+
+    A bare ``from campaign_lib import ...`` is ambiguous here. Three workflows
+    ship a ``campaign_lib.py`` and each defines its own ``cell_bulk_total``, so
+    the bare form binds whichever one is on ``sys.path`` -- or raises
+    ``ModuleNotFoundError`` when none is.
+
+    The latter is what the ``dcm_density_setup_compare`` tests hit: that
+    workflow's ``campaign_lib`` prepends this directory to ``sys.path`` at
+    module scope and expects the insert to persist, but the test loader restores
+    ``sys.path`` after ``exec_module``, so by the time this function runs the
+    directory is gone again. Resolving by path removes the dependency on ambient
+    state and guarantees we get *our* sibling, not another workflow's.
+    """
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parent
+    target = here / "campaign_lib.py"
+
+    # Normal script execution imports campaign_lib first, which imports this
+    # module -- so the sibling is already in sys.modules (possibly still
+    # initializing, which is fine: cell_bulk_total is defined by the time any
+    # caller reaches this function).
+    for name in ("campaign_lib", _OWN_CAMPAIGN_LIB_MODULE):
+        cached = sys.modules.get(name)
+        if cached is not None and getattr(cached, "__file__", None):
+            if Path(cached.__file__).resolve() == target:
+                return cached
+
+    spec = importlib.util.spec_from_file_location(_OWN_CAMPAIGN_LIB_MODULE, target)
+    if spec is None or spec.loader is None:  # pragma: no cover - defensive
+        raise ImportError(f"cannot load campaign_lib from {target}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[_OWN_CAMPAIGN_LIB_MODULE] = module
+    # campaign_lib itself uses bare sibling imports (bulk_density, this
+    # module), so its own directory has to be importable while it executes.
+    restore = str(here) not in sys.path
+    if restore:
+        sys.path.insert(0, str(here))
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(_OWN_CAMPAIGN_LIB_MODULE, None)
+        raise
+    finally:
+        if restore:
+            try:
+                sys.path.remove(str(here))
+            except ValueError:  # pragma: no cover - someone else removed it
+                pass
+    return module
+
+
 def dense_cell_mlpot_overrides(cell: Any, cfg: dict[str, Any]) -> dict[str, Any]:
     """Size/density-aware MLpot flags for large or tight PBC burst cells."""
-    from campaign_lib import cell_bulk_total
+    cell_bulk_total = _own_campaign_lib().cell_bulk_total
 
     n = int(cell.n_monomers)
     overrides: dict[str, Any] = {}
