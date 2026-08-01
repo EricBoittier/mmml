@@ -246,9 +246,15 @@ lint-dupes:
 # they run instead and abort the session inside test_charmm_mpi.py on a native
 # CHARMM exit, truncating the run long before the real failures. Hiding the
 # library reproduces CI's skip behaviour and gives an honest signal.
+#
+# MMML_DISABLE_CHARMM is the *only* reliable way to do that: pointing
+# CHARMM_LIB_DIR at /nonexistent used to leave `resolve_charmm_paths()` still
+# returning the real setup/charmm tree (a lib-less explicit override is treated
+# as stale and discarded), so this target only half-hid the build and did not
+# reproduce CI. See charmm_paths.charmm_disabled.
 # Run: make test-ci
 test-ci:
-	CHARMM_LIB_DIR=/nonexistent CHARMM_HOME=/nonexistent \
+	MMML_DISABLE_CHARMM=1 \
 	  uv run pytest tests/ -q -p no:cacheprovider
 
 # Pre-merge gate: everything CI checks first, in the order it fails.

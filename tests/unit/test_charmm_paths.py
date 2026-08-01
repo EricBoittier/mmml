@@ -518,3 +518,80 @@ def test_tier_build_under_cache_is_discovered(tmp_path):
 def test_build_cache_discovery_is_hermetic_without_home(tmp_path):
     """An explicit env without HOME must not reach the real ~/.cache."""
     assert charmm_paths.charmm_build_cache_dirs(env={}) == []
+
+
+# --- MMML_DISABLE_CHARMM ----------------------------------------------------
+# `make test-ci` needs to reproduce CI's "no libcharmm" environment on a machine
+# that has one. Pointing CHARMM_LIB_DIR at a nonexistent directory does not do
+# that (see test_stale_explicit_lib_dir_falls_back_to_repo_default: a lib-less
+# explicit value is treated as stale and discarded), which left the target
+# half-hiding the build and reporting a signal CI would never produce.
+
+
+def test_charmm_disabled_reads_the_env_flag():
+    assert charmm_paths.charmm_disabled(env={"MMML_DISABLE_CHARMM": "1"})
+    assert charmm_paths.charmm_disabled(env={"MMML_DISABLE_CHARMM": "TRUE"})
+    assert charmm_paths.charmm_disabled(env={"MMML_DISABLE_CHARMM": "yes"})
+    assert not charmm_paths.charmm_disabled(env={"MMML_DISABLE_CHARMM": "0"})
+    assert not charmm_paths.charmm_disabled(env={"MMML_DISABLE_CHARMM": ""})
+    assert not charmm_paths.charmm_disabled(env={})
+
+
+def test_disable_flag_hides_a_real_build(tmp_path):
+    """The flag must win over a discoverable in-tree library."""
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.so").write_bytes(b"stub")
+
+    assert charmm_paths.resolve_charmm_paths(repo_root=repo, env={}) == (
+        str(chm),
+        str(chm),
+    )
+    assert charmm_paths.resolve_charmm_paths(
+        repo_root=repo, env={"MMML_DISABLE_CHARMM": "1"}
+    ) == ("", "")
+
+
+def test_disable_flag_wins_over_explicit_env_paths(tmp_path):
+    """An inherited CHARMM_HOME/CHARMM_LIB_DIR must not resurrect discovery."""
+    tier_lib = tmp_path / "tier" / "lib"
+    tier_lib.mkdir(parents=True)
+    (tier_lib / "libcharmm.so").write_bytes(b"tier")
+
+    assert charmm_paths.resolve_charmm_paths(
+        repo_root=tmp_path / "repo",
+        env={
+            "MMML_DISABLE_CHARMM": "1",
+            "CHARMM_HOME": str(tier_lib.parent),
+            "CHARMM_LIB_DIR": str(tier_lib),
+        },
+    ) == ("", "")
+
+
+def test_bootstrap_sets_nothing_when_disabled(tmp_path):
+    repo = tmp_path / "repo"
+    chm = repo / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.so").write_bytes(b"stub")
+
+    env: dict[str, str] = {"MMML_DISABLE_CHARMM": "1"}
+    charmm_paths.bootstrap_charmm_env(repo_root=repo, env=env)
+
+    assert "CHARMM_HOME" not in env
+    assert "CHARMM_LIB_DIR" not in env
+
+
+def test_charmm_lib_available_is_false_when_disabled(tmp_path, monkeypatch):
+    """The skip guards every live test hangs off must agree with the flag."""
+    from mmml.interfaces.pycharmmInterface import charmm_mpi
+
+    chm = tmp_path / "setup" / "charmm"
+    chm.mkdir(parents=True)
+    (chm / "libcharmm.so").write_bytes(b"stub")
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(chm))
+    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)
+    assert charmm_mpi.charmm_lib_available()
+
+    monkeypatch.setenv("MMML_DISABLE_CHARMM", "1")
+    assert not charmm_mpi.charmm_lib_available()

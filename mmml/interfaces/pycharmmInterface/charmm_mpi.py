@@ -81,8 +81,13 @@ def _openmpi_env_without_launch() -> bool:
 
 
 def _charmm_lib_path() -> Path | None:
-    from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
+    from mmml.interfaces.pycharmmInterface.charmm_paths import (
+        bootstrap_charmm_env,
+        charmm_disabled,
+    )
 
+    if charmm_disabled():
+        return None
     bootstrap_charmm_env()
     lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
     if not lib_dir:

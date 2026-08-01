@@ -17,6 +17,24 @@ _MIN_CGENFF_PRM_BYTES = 500_000
 _CHARMM_LIB_NAMES = ("libcharmm.so", "libcharmm.dylib", "charmm.so", "charmm.dylib")
 
 
+_DISABLE_ENV_VAR = "MMML_DISABLE_CHARMM"
+_TRUTHY = ("1", "true", "yes", "on")
+
+
+def charmm_disabled(env: "os._Environ | dict[str, str] | None" = None) -> bool:
+    """True when ``MMML_DISABLE_CHARMM`` asks discovery to pretend CHARMM is absent.
+
+    Pointing ``CHARMM_LIB_DIR`` at a nonexistent directory does *not* hide a
+    build: :func:`_resolve_lib_dir` treats a lib-less explicit value as stale
+    and falls back to the discovered ``setup/charmm``.  That is right for a
+    developer with an out-of-date override and wrong for ``make test-ci``,
+    which needs to reproduce CI's no-libcharmm environment honestly.  This flag
+    is the supported way to do that.
+    """
+    environ = env if env is not None else os.environ
+    return (environ.get(_DISABLE_ENV_VAR) or "").strip().lower() in _TRUTHY
+
+
 def mmml_repo_root(start: Path | None = None) -> Path:
     here = (start or Path(__file__)).resolve()
     for parent in here.parents:
@@ -172,6 +190,8 @@ def resolve_charmm_paths(
     (for example the per-tier libs built by ``ensure_charmm_mlpot_limits.sh``).
     """
     environ = env if env is not None else os.environ
+    if charmm_disabled(environ):
+        return "", ""
     root = repo_root or mmml_repo_root()
 
     default_home = default_repo_charmm_home(root)
