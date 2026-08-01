@@ -1,0 +1,24 @@
+# Simulation partner for train_shared_cutoff.yaml. The keyword and cutoff must
+# match the checkpoint metadata: additive ML + force-shifted MM, no COM handoff.
+defaults:
+  composition: "DCM:2"
+  checkpoint: /path/to/ckpts/hybrid_mm_shared_cutoff/<run>/epoch-N
+  include_mm: true
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  hybrid_hamiltonian: shared_cutoff
+  shared_cutoff: 6.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+  skip_jit_warmup: true
+  quiet: true
+
+campaign_output: results/hybrid_mm_shared_cutoff
+runs:
+  dimer_nve:
+    description: Shared-cutoff additive Hamiltonian vacuum NVE demo
+    backend: pycharmm
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_mm_shared_cutoff/dimer_nve

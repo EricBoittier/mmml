@@ -421,3 +421,106 @@ def test_a_summary_without_an_exit_code_does_not_resume(tmp_path):
 def test_a_non_numeric_exit_code_does_not_resume(tmp_path):
     _touch(tmp_path / "stage_summary.json", json.dumps({"exit_code": "boom"}))
     assert not should_auto_resume_failed_staged_run(_args(), out_dir=tmp_path)
+
+
+# --- remaining branches in staged_restart_policy ----------------------------
+# Extracting the module made these reachable; they are the fall-through paths
+# that decide "no usable restart" and the handoff-seed special cases.
+
+
+def test_a_handoff_seed_restart_is_not_a_dynamics_restart(tmp_path):
+    """Handoff seeds carry finite-T coords but are not a finished stage, so the
+    stage-restart classifier must reject them."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_handoff_seed_restart_path,
+    )
+
+    seed = tmp_path / "continue_seed.res"
+    if not is_handoff_seed_restart_path(seed):
+        pytest.skip("continue_seed.res is not the handoff-seed naming convention")
+    assert not _is_dynamics_stage_restart_path(seed)
+
+
+def test_a_handoff_seed_still_skips_the_cold_start_gate(tmp_path):
+    """It is not a stage restart, but it *does* hold equilibrated coordinates."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_handoff_seed_restart_path,
+    )
+
+    seed = tmp_path / "continue_seed.res"
+    if not is_handoff_seed_restart_path(seed):
+        pytest.skip("continue_seed.res is not the handoff-seed naming convention")
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False, dyn_stages=["equi"], restart_from=seed
+    )
+
+
+def test_heat_ignores_a_pretreat_restart(tmp_path):
+    """A CHARMM-MM pretreat seed must not be resumed as if it were heat."""
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        is_pretreat_mm_restart_path,
+    )
+
+    pre = tmp_path / "pretreat_mm.res"
+    if not is_pretreat_mm_restart_path(pre):
+        pytest.skip("pretreat_mm.res is not the pretreat naming convention")
+    assert _prior_restart_for_stage("heat", _paths(tmp_path), restart_from=pre) is None
+
+
+def test_nve_has_no_prior_restart_when_heat_never_wrote_one(tmp_path):
+    assert _prior_restart_for_stage("nve", _paths(tmp_path), restart_from=None) is None
+
+
+def test_equi_has_no_prior_restart_when_nothing_ran(tmp_path):
+    assert _prior_restart_for_stage("equi", _paths(tmp_path), restart_from=None) is None
+
+
+def test_an_unknown_stage_has_no_prior_restart(tmp_path):
+    paths = _paths(tmp_path)
+    _touch(paths["equi_res"])
+    assert _prior_restart_for_stage("mini", paths, restart_from=None) is None
+
+
+def test_segmented_heat_falls_back_when_the_segment_file_is_absent(tmp_path):
+    """Only heat.res exists though the run was configured with segments."""
+    paths = _paths(tmp_path)
+    _touch(paths["heat_res"])
+    got = _prior_restart_for_stage(
+        "nve", paths, restart_from=None, tag="t", n_heat_segments=3
+    )
+    assert got == paths["heat_res"]
+
+
+def test_overlap_chunk_dcds_are_reported_alongside_the_stage_dcd(tmp_path):
+    """Overlap recovery writes extra chunk DCDs; a stage that produced only
+    chunks still produced output."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        overlap_chunk_dcd_paths,
+    )
+
+    stage = tmp_path / "heat.dcd"
+    stage.write_bytes(b"CORD" + b"\x00" * 32)
+    chunks = list(overlap_chunk_dcd_paths(stage))
+    if not chunks:
+        pytest.skip("no overlap chunk naming convention to exercise")
+    chunks[0].write_bytes(b"CORD" + b"\x00" * 32)
+
+    outputs = _trajectory_outputs(stage)
+
+    assert stage in outputs
+    assert chunks[0] in outputs
+
+
+def test_rebuild_packmol_explains_itself_when_not_quiet(tmp_path, capsys):
+    """The skip is deliberate and surprising, so it must not be silent."""
+    _summary(tmp_path, 1)
+    should_auto_resume_failed_staged_run(
+        _args(rebuild_packmol=True, quiet=False), out_dir=tmp_path
+    )
+    assert "Skipping auto-resume" in capsys.readouterr().out
+
+
+def test_restart_read_candidates_tolerate_an_unresolvable_path():
+    """A path that cannot be resolved must still be offered, not dropped."""
+    got = _restart_coord_read_candidates(Path("relative/does/not/exist.res"))
+    assert any("exist.res" in str(c) for c in got)
