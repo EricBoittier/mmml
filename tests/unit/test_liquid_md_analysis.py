@@ -57,6 +57,41 @@ def test_element_pair_rdfs_ideal_gas_like():
         assert np.isfinite(rec["peak_g"])
 
 
+def test_element_pair_rdfs_excludes_intramolecular_bonds():
+    # Two DCM-like monomers with a short intramolecular C–H and a longer
+    # intermolecular C–Cl contact; intermolecular mode should not peak at ~1 Å.
+    pos0 = np.array(
+        [
+            [0.0, 0.0, 0.0],  # C
+            [1.09, 0.0, 0.0],  # H
+            [-0.5, 0.9, 0.0],  # H
+            [0.0, 0.0, 1.77],  # Cl
+            [0.0, 0.0, -1.77],  # Cl
+            [5.0, 0.0, 0.0],  # C'
+            [6.09, 0.0, 0.0],
+            [4.5, 0.9, 0.0],
+            [5.0, 0.0, 1.77],
+            [5.0, 0.0, -1.77],
+        ],
+        dtype=np.float64,
+    )
+    positions = np.stack([pos0, pos0 + 0.01], axis=0)
+    z = np.array([6, 1, 1, 17, 17, 6, 1, 1, 17, 17], dtype=int)
+    rdf = element_pair_rdfs_from_arrays(
+        positions,
+        z,
+        box_side_A=20.0,
+        r_max=10.0,
+        n_bins=50,
+        atoms_per_monomer=5,
+        exclude_intramolecular=True,
+    )
+    assert rdf["exclude_intramolecular"] is True
+    ch = rdf["pairs"]["C-H"]
+    assert ch["peak_r_A"] is not None
+    assert ch["peak_r_A"] > 2.0
+
+
 def test_monomer_com_msd_grows_with_diffusion():
     rng = np.random.default_rng(1)
     n_frames, n_mol, apm, box = 40, 12, 5, 25.0

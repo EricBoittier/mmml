@@ -119,8 +119,15 @@ def element_pair_rdfs_from_arrays(
     box_side_A: float | np.ndarray,
     r_max: float = 12.0,
     n_bins: int = 120,
+    atoms_per_monomer: int | None = None,
+    exclude_intramolecular: bool = True,
 ) -> dict[str, Any]:
-    """Partial g(r) for element pairs from (n_frames, n_atoms, 3) positions."""
+    """Partial g(r) for element pairs from (n_frames, n_atoms, 3) positions.
+
+    When ``atoms_per_monomer`` is set (and ``exclude_intramolecular``), pairs
+    that share a contiguous monomer block are dropped so bonded C–H etc. do not
+    dominate the first peak used for liquid validation.
+    """
     pos_all = np.asarray(positions, dtype=np.float64)
     z = np.asarray(atomic_numbers, dtype=int)
     if pos_all.ndim != 3 or pos_all.shape[0] == 0:
@@ -145,6 +152,16 @@ def element_pair_rdfs_from_arrays(
     shell_vol = (4.0 / 3.0) * np.pi * (edges[1:] ** 3 - edges[:-1] ** 3)
     volume = float(np.prod(box_vec))
     n_frames = int(pos_all.shape[0])
+    n_atoms = int(pos_all.shape[1])
+
+    mol_id: np.ndarray | None = None
+    if (
+        exclude_intramolecular
+        and atoms_per_monomer is not None
+        and atoms_per_monomer > 0
+        and n_atoms % int(atoms_per_monomer) == 0
+    ):
+        mol_id = np.arange(n_atoms, dtype=int) // int(atoms_per_monomer)
 
     pairs_out: dict[str, Any] = {}
     for i, ea in enumerate(elements):
@@ -161,14 +178,22 @@ def element_pair_rdfs_from_arrays(
                 if same:
                     if len(idx_a) < 2:
                         continue
-                    d = pos[idx_a][:, None, :] - pos[idx_a][None, :, :]
+                    d = pa[:, None, :] - pa[None, :, :]
                     d -= box_vec.reshape(1, 1, 3) * np.round(d / box_vec.reshape(1, 1, 3))
                     iu = np.triu_indices(len(idx_a), k=1)
                     dists = np.linalg.norm(d[iu], axis=-1)
+                    if mol_id is not None:
+                        keep = mol_id[idx_a][iu[0]] != mol_id[idx_a][iu[1]]
+                        dists = dists[keep]
                 else:
                     d = pa[:, None, :] - pb[None, :, :]
                     d -= box_vec.reshape(1, 1, 3) * np.round(d / box_vec.reshape(1, 1, 3))
-                    dists = np.linalg.norm(d, axis=-1).ravel()
+                    dists = np.linalg.norm(d, axis=-1)
+                    if mol_id is not None:
+                        keep = mol_id[idx_a][:, None] != mol_id[idx_b][None, :]
+                        dists = dists[keep]
+                    else:
+                        dists = dists.ravel()
                 n_pair_samples += int(dists.size)
                 if dists.size:
                     hist += np.histogram(dists, bins=edges)[0]
@@ -176,8 +201,20 @@ def element_pair_rdfs_from_arrays(
                 continue
             if same:
                 n_ideal = len(idx_a) * (len(idx_a) - 1) / 2.0
+                if mol_id is not None:
+                    # Drop same-monomer pairs from the ideal-gas count too.
+                    n_mol = n_atoms // int(atoms_per_monomer)
+                    n_per = int(np.sum(symbols[: int(atoms_per_monomer)] == ea))
+                    n_ideal -= n_mol * n_per * (n_per - 1) / 2.0
             else:
                 n_ideal = float(len(idx_a) * len(idx_b))
+                if mol_id is not None:
+                    n_mol = n_atoms // int(atoms_per_monomer)
+                    n_a = int(np.sum(symbols[: int(atoms_per_monomer)] == ea))
+                    n_b = int(np.sum(symbols[: int(atoms_per_monomer)] == eb))
+                    n_ideal -= n_mol * n_a * n_b
+            if n_ideal <= 0:
+                continue
             # Ideal-gas shell expectation for this pair class.
             norm = n_frames * n_ideal * shell_vol / volume
             g_r = np.divide(hist, norm, out=np.zeros_like(hist), where=norm > 0)
@@ -191,16 +228,19 @@ def element_pair_rdfs_from_arrays(
                 "g_r": g_r.tolist(),
                 "peak_r_A": float(centers[peak_i]) if g_r.size else None,
                 "peak_g": float(g_r[peak_i]) if g_r.size else None,
+                "exclude_intramolecular": bool(mol_id is not None),
             }
 
     return {
         "n_frames": n_frames,
-        "n_atoms": int(pos_all.shape[1]),
+        "n_atoms": n_atoms,
         "elements": elements,
         "pairs": pairs_out,
         "r_max_A": float(r_max),
         "bins_A": centers.tolist(),
         "box_side_A": box_vec.tolist(),
+        "exclude_intramolecular": bool(mol_id is not None),
+        "atoms_per_monomer": int(atoms_per_monomer) if atoms_per_monomer else None,
     }
 
 
@@ -444,6 +484,8 @@ def analyze_h5(
         box_side_A=float(box),
         r_max=r_max,
         n_bins=n_bins,
+        atoms_per_monomer=apm,
+        exclude_intramolecular=True,
     )
     peaks = [
         RdfPeak(pair=label, peak_r_A=float(rec["peak_r_A"]), peak_g=float(rec["peak_g"]))
