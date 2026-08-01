@@ -84,13 +84,24 @@ def _spooky_energy_fn(checkpoint: Path, ref):
     from mmml.models.spookynet_calc import SpookyNetCalculator
 
     calc = SpookyNetCalculator(checkpoint=checkpoint, mbd_checkpoint=False)
+    # Older Spooky checkpoints predate the optional CGenFF-vdW training path.
+    # Supplying metadata to those models would add a term that was not present
+    # during training. Newer configs record these flags explicitly.
+    has_cgenff_training_config = any(
+        key in calc.raw_config
+        for key in ("no_cgenff_vdw", "fixed_cgenff_vdw", "predict_atomic_vdw_scale")
+    )
+    supply_cgenff = has_cgenff_training_config and not bool(
+        calc.raw_config.get("no_cgenff_vdw", False)
+    )
 
     def wrapped(z, r, type_idx, mol_id):
         atoms = Atoms(numbers=z, positions=r)
-        atoms.arrays["cgenff_type_idx"] = np.asarray(type_idx, dtype=np.int32)
-        atoms.arrays["mol_id"] = np.asarray(mol_id, dtype=np.int32)
-        atoms.info["cgenff_master_sigmas"] = np.asarray(ref.sigmas)
-        atoms.info["cgenff_master_epsilons"] = np.asarray(ref.epsilons)
+        if supply_cgenff:
+            atoms.arrays["cgenff_type_idx"] = np.asarray(type_idx, dtype=np.int32)
+            atoms.arrays["mol_id"] = np.asarray(mol_id, dtype=np.int32)
+            atoms.info["cgenff_master_sigmas"] = np.asarray(ref.sigmas)
+            atoms.info["cgenff_master_epsilons"] = np.asarray(ref.epsilons)
         atoms.calc = calc
         atoms.get_potential_energy()
         return {

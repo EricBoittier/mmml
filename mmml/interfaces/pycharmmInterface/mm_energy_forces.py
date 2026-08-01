@@ -1900,6 +1900,7 @@ def build_mm_energy_forces_fn(
             NVE force–energy preflight rescue).
             """
             positions_jax = positions if hasattr(positions, "__dlpack_device__") else None
+            _nbr_debug = debug
             _pair_stats["calls"] += 1
 
             if _use_jax_md_nbrs:
