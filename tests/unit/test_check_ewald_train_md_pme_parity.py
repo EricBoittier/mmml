@@ -115,5 +115,6 @@ def test_compare_hybrid_emm_ewald_plus_lj_real_agreement():
 
 def test_cli_help_mentions_lj_layer():
     mod = _load_script_module()
-    assert "include-lj" in mod.__doc__.lower() or "switched LJ" in mod.__doc__
-    assert "kernel" in mod.__doc__.lower()
+    doc = (mod.__doc__ or "").lower()
+    assert "switched lj" in doc or "include-lj" in doc
+    assert "ewald" in doc

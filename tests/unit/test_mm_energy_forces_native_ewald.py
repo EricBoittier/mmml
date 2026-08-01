@@ -104,12 +104,31 @@ def test_ewald_branch_include_lj_adds_nonzero_vdw():
     box = np.diag([L, L, L])
     fake_psf = MagicMock()
     fake_psf.get_charges.return_value = charges
-    fake_psf.get_iac.return_value = np.ones(4, dtype=np.int32)
+    # ATC index 0 → planted non-zero LJ via patched param.get_atc + PRM dict path.
+    fake_psf.get_iac.return_value = np.zeros(4, dtype=np.int32)
+    fake_param = MagicMock()
+    fake_param.get_atc.return_value = ["XTEST", "YTEST"]
+
+    import builtins
+    from io import StringIO
+
+    real_open = builtins.open
+
+    def _fake_open(path, *args, **kwargs):
+        path_s = str(path).lower()
+        if path_s.endswith(".prm"):
+            # Parser requires >4 tokens; CHARMM NONBONDED: type 0.0 eps rmin/2 …
+            return StringIO("XTEST 0.0 -0.1 2.0 0.0\nYTEST 0.0 -0.05 1.5 0.0\n")
+        if path_s.endswith(".rtf"):
+            return StringIO("ATOM X XTEST 0.0\nATOM Y YTEST 0.0\n")
+        return real_open(path, *args, **kwargs)
 
     with patch("pycharmm.psf", fake_psf), patch(
+        "pycharmm.param", fake_param
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
         return_value=charges,
-    ):
+    ), patch("builtins.open", _fake_open):
         mm_fn = build_mm_energy_forces_fn(
             R,
             total_atoms=4,
