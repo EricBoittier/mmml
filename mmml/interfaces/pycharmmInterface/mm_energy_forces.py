@@ -2011,10 +2011,14 @@ def build_mm_energy_forces_fn(
             ):
                 _pair_stats["cache_checks"] += 1
                 _pair_stats["device_skin_checks"] += 1
+                # Max displacement on device; sync only a scalar (not full R).
                 R_cart_jax = _jax_cartesian_for_nl_build(positions_jax, box)
-                c = np.asarray(jax.device_get(R_cart_jax), dtype=np.float64)
-                p = np.asarray(jax.device_get(_last_cartesian_positions_jax[0]), dtype=np.float64)
-                max_disp = float(np.max(np.linalg.norm(c - p, axis=1)))
+                last_R = _last_cartesian_positions_jax[0]
+                max_disp = float(
+                    jax.device_get(
+                        jnp.max(jnp.linalg.norm(R_cart_jax - last_R, axis=1))
+                    )
+                )
                 if max_disp <= verlet_reuse_displacement_limit_A(skin):
                     _pair_stats["reused"] += 1
                     _pair_stats["cache_reuse_reason"] = "device_skin"
