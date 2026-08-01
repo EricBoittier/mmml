@@ -83,7 +83,8 @@ def test_compare_hybrid_emm_coulomb_only_with_stub_model():
             forces_kcalmol_A=np.zeros((n, 3)),
         ),
     ), mock.patch(
-        "mmml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy",
+        # hybrid_forward binds the symbol at import time
+        "mmml.models.hybrid_energy.hybrid_ewald_coulomb_energy",
         return_value=e_kcal,
     ):
         out = mod.compare_hybrid_emm_eV(
