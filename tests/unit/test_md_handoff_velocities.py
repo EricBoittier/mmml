@@ -170,16 +170,6 @@ def test_ang_ps_to_metal_matches_the_ase_definition():
     assert got == pytest.approx(v / (1000.0 * float(units.fs)), rel=1e-12)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Same root cause as test_temperature_matches_equipartition_for_a_known_speed: "
-        "the Angstrom/ps path is a factor 2.306 out because of "
-        "_AMU_ANG_PS2_TO_KCALMOL, while the metal-unit path uses k_B directly and "
-        "is correct. The two therefore disagree by exactly that factor. This test "
-        "is the cross-check that pins them together once the constant is fixed."
-    ),
-)
 def test_round_tripping_velocities_preserves_the_temperature():
     """Converting Å/ps to metal units and reading T with the metal formula must
     agree with reading T from the original with the Å/ps formula.
