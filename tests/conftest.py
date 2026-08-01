@@ -424,3 +424,68 @@ def build_synthetic_water_box(n_waters: int = 8, box_len: float = 18.0, seed: in
 def synthetic_water_box():
     """Factory fixture: ``synthetic_water_box(n_waters=, box_len=, seed=)``."""
     return build_synthetic_water_box
+
+
+# ---------------------------------------------------------------------------
+# Preserve a failing exit status past CHARMM's Fortran shutdown.
+#
+# Importing pycharmm installs a Fortran/MPI finalizer that runs during
+# interpreter shutdown and resets the process exit status to 0. A pytest session
+# with failing tests therefore reports success to the shell:
+#
+#     pytest <a test that loads pycharmm and then fails>; echo $?   ->  0
+#
+# That is why scripts/ci/check_test_report.py judges live-CHARMM runs from the
+# JUnit XML rather than the exit code. This hook closes the hole at the source so
+# `make test-all`, developer runs and any wrapper script get an honest status too.
+#
+# Only fires when BOTH conditions hold, so it is inert everywhere else:
+#   * the session actually failed (exitstatus != 0), and
+#   * pycharmm was really imported (the finalizer that does the masking exists).
+#
+# ``os._exit`` is deliberately confined to the failure path: for a clean run we
+# let normal shutdown proceed so OpenMPI can finalize (``os._exit(0)`` skips
+# MPI_Finalize, after which PRRTE often returns 1 for a successful job). This is
+# the same trade-off ``mmml.cli.__main__._hard_exit`` makes.
+#
+# It runs in ``pytest_unconfigure`` rather than ``pytest_sessionfinish`` so that
+# the JUnit writer and pytest-cov have already emitted their reports -- killing
+# the process earlier would destroy the very evidence the CI gate reads.
+_FORCED_EXIT_STATUS: dict[str, int] = {}
+
+
+def _pycharmm_was_loaded() -> bool:
+    """True when libcharmm was actually dlopen'ed during this session."""
+    import sys
+
+    return any(
+        name == "pycharmm" or name.startswith("pycharmm.") for name in sys.modules
+    )
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001
+    try:
+        code = int(exitstatus)
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        code = 1
+    if code != 0:
+        _FORCED_EXIT_STATUS["code"] = code
+
+
+def pytest_unconfigure(config) -> None:  # noqa: ARG001
+    code = _FORCED_EXIT_STATUS.get("code")
+    if not code:
+        return
+    if not _pycharmm_was_loaded():
+        return  # no Fortran finalizer to outrun; let pytest exit normally
+    if (os.environ.get("MMML_NO_FORCE_PYTEST_EXIT") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    import sys
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)

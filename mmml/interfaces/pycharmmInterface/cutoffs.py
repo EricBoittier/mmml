@@ -81,6 +81,8 @@ def cutoff_parameters_from_args(args) -> "CutoffParameters":
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
         complementary_handoff=complementary,
+        hybrid_hamiltonian=str(getattr(args, "hybrid_hamiltonian", "handoff")),
+        shared_cutoff=getattr(args, "shared_cutoff", None),
     )
 
 
@@ -252,7 +254,9 @@ class CutoffParameters:
             f"CutoffParameters(ml_switch_width={self.ml_switch_width}, "
             f"mm_switch_on={self.mm_switch_on}, "
             f"mm_switch_width={self.mm_switch_width}, "
-            f"complementary_handoff={self.complementary_handoff})"
+            f"complementary_handoff={self.complementary_handoff}, "
+            f"hybrid_hamiltonian={self.hybrid_hamiltonian!r}, "
+            f"shared_cutoff={self.shared_cutoff})"
         )
 
     def __repr__(self):
@@ -273,6 +277,10 @@ class CutoffParameters:
             and mm_w_self == mm_w_other
             and getattr(self, "complementary_handoff", True)
             == getattr(other, "complementary_handoff", True)
+            and getattr(self, "hybrid_hamiltonian", "handoff")
+            == getattr(other, "hybrid_hamiltonian", "handoff")
+            and getattr(self, "shared_cutoff", None)
+            == getattr(other, "shared_cutoff", None)
         )
 
     def __ne__(self, other):
@@ -286,6 +294,8 @@ class CutoffParameters:
                 float(self.mm_switch_on),
                 float(self.mm_switch_width),
                 comp,
+                self.hybrid_hamiltonian,
+                self.shared_cutoff,
             )
         )
 
@@ -359,6 +369,8 @@ class CutoffParameters:
             "mm_switch_on": self.mm_switch_on,
             "mm_switch_width": self.mm_switch_width,
             "complementary_handoff": getattr(self, "complementary_handoff", True),
+            "hybrid_hamiltonian": getattr(self, "hybrid_hamiltonian", "handoff"),
+            "shared_cutoff": getattr(self, "shared_cutoff", None),
             # Legacy keys for saved configs
             "ml_cutoff": self.ml_switch_width,
             "mm_cutoff": self.mm_switch_width,
@@ -375,6 +387,8 @@ class CutoffParameters:
                 "mm_switch_width", d.get("mm_cutoff", DEFAULT_MM_SWITCH_WIDTH)
             ),
             complementary_handoff=d.get("complementary_handoff", True),
+            hybrid_hamiltonian=d.get("hybrid_hamiltonian", "handoff"),
+            shared_cutoff=d.get("shared_cutoff", None),
         )
 
     def plot_cutoff_parameters(self, save_dir: Path | None = None):

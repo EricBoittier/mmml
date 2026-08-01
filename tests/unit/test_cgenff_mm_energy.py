@@ -132,6 +132,33 @@ def test_lj_energy_is_vmappable_and_differentiable():
     assert jax.vmap(f)(batch).shape == (2,)
 
 
+def test_shared_cutoff_force_shift_has_zero_energy_and_force_at_cutoff():
+    """The opt-in Hamiltonian is C1 at rc; the existing handoff is untouched."""
+    import jax
+    import jax.numpy as jnp
+    from mmml.models.cgenff_mm import cgenff_mm_energy
+
+    sig = jnp.array([3.4])
+    eps = jnp.array([0.12])
+    tidx = jnp.array([0, 0])
+    mid = jnp.array([0, 1])
+    q = jnp.array([0.3, -0.3])
+    rc = 6.0
+
+    def energy_at(r):
+        pos = jnp.array([[0.0, 0.0, 0.0], [r, 0.0, 0.0]])
+        return cgenff_mm_energy(
+            pos, tidx, mid, q, sig, eps,
+            mm_switch_on=6.0, mm_switch_width=5.0, ml_switch_width=1.5,
+            hybrid_hamiltonian="shared_cutoff", shared_cutoff=rc,
+        )
+
+    assert float(energy_at(rc)) == pytest.approx(0.0, abs=1e-12)
+    assert float(jax.grad(energy_at)(rc)) == pytest.approx(0.0, abs=2e-6)
+    assert float(energy_at(rc + 0.01)) == pytest.approx(0.0, abs=1e-12)
+    assert abs(float(energy_at(rc - 0.5))) > 0.0
+
+
 # --------------------------------------------------------------------------
 # TOTAL-energy gate: switched LJ + switched electrostatics vs the MD math.
 # --------------------------------------------------------------------------

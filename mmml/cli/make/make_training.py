@@ -925,6 +925,16 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     if not getattr(args, "hybrid_mm", False):
         return None
 
+    if str(getattr(args, "hybrid_hamiltonian", "handoff")) == "shared_cutoff":
+        shared = getattr(args, "shared_cutoff", None)
+        shared = float(args.cutoff if shared is None else shared)
+        model_cutoff = float(args.cutoff)
+        if abs(shared - model_cutoff) > 1e-9:
+            raise ValueError(
+                "hybrid_hamiltonian=shared_cutoff requires shared_cutoff to equal "
+                f"the ML model cutoff (got {shared:g} vs {model_cutoff:g} Å)"
+            )
+
     import numpy as _np
 
     from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
