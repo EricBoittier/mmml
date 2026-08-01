@@ -165,6 +165,9 @@ def test_bootstrap_charmm_env_sets_os_environ(tmp_path, monkeypatch):
     (chm / "libcharmm.so").write_bytes(b"stub")
     monkeypatch.delenv("CHARMM_HOME", raising=False)
     monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
+    # This test asserts *discovery*, so it must not inherit `make test-ci`'s
+    # MMML_DISABLE_CHARMM=1 (which correctly makes discovery find nothing).
+    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)
 
     home, lib = charmm_paths.bootstrap_charmm_env(repo_root=repo)
 
@@ -187,6 +190,7 @@ def test_charmm_lib_available_without_explicit_env(tmp_path, monkeypatch):
     (chm / "libcharmm.so").write_bytes(b"stub")
     monkeypatch.delenv("CHARMM_HOME", raising=False)
     monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
+    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)  # see test above
     monkeypatch.setattr(charmm_paths, "mmml_repo_root", lambda start=None: repo)
 
     assert charmm_mpi.charmm_lib_available() is True
