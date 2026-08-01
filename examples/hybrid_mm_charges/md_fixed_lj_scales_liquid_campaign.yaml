@@ -7,6 +7,12 @@
 # jaxmd settle first is the intended path (see examples/lj_scales/07_deploy_md.sh).
 # Learned LJ requires jax_mic (truncated MIC), not Ewald — issue #139.
 #
+# Throughput knobs:
+#   --ml-compute-dtype float32 (~2× vs f64 on DCM:120).
+#   --jax-md-skin-distance 0.5 --jax-md-update-interval 40 (fewer NL barriers).
+#   --mm-nl-device gpu for GPU Vesin rebuilds (auto-fixes CUDA_PATH away from
+#   stale /usr/local/cuda→cuda-9.0; falls back to CPU if CuPy JIT still fails).
+#
 #   uv run mmml md-system \
 #     --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
 #     --run-all \

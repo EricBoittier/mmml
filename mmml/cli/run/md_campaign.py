@@ -179,6 +179,11 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "nvt_integrator",
     "checkpoint",
     "jaxmd_minimize_steps",
+    "nhc_tau",
+    "nhc_barostat_tau",
+    "mm_nl_backend",
+    "mm_nl_device",
+    "ml_compute_dtype",
     # Certified-box / LJ-scales deploy: parent ``--from-psf`` etc. must reach
     # jaxmd_settle (otherwise the job silently Packmol-rebuilds and can hit
     # exact inter-monomer overlaps at liquid density).

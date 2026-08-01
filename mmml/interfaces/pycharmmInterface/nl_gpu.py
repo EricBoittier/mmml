@@ -44,6 +44,33 @@ def have_cupy() -> bool:
     return _HAVE_CUPY
 
 
+_CUPY_RUNTIME_OK: bool | None = None
+
+
+def cupy_runtime_ok(*, force: bool = False) -> bool:
+    """Return True if CuPy can JIT a trivial kernel on this host.
+
+    Some CUDA/NVRTC + host-libstdc++ setups import CuPy but fail on the first
+    kernel compile (``#include <utility>``). Probe once and cache so
+    ``MMML_MM_NL_DEVICE=gpu`` can fall back cleanly instead of crashing MD.
+    """
+    global _CUPY_RUNTIME_OK
+    if not force and _CUPY_RUNTIME_OK is not None:
+        return _CUPY_RUNTIME_OK
+    if not have_cupy():
+        _CUPY_RUNTIME_OK = False
+        return False
+    try:
+        x = cp.arange(4, dtype=cp.float32)
+        y = x + cp.asarray(1, dtype=cp.float32)
+        cp.cuda.Stream.null.synchronize()
+        float(y.sum())
+        _CUPY_RUNTIME_OK = True
+    except Exception:
+        _CUPY_RUNTIME_OK = False
+    return _CUPY_RUNTIME_OK
+
+
 def resolve_mm_nl_device(name: str | None = None) -> MmNlDeviceName:
     """Resolve NL device from argument or ``MMML_MM_NL_DEVICE`` env (default ``cpu``)."""
     raw = (name or os.environ.get("MMML_MM_NL_DEVICE", "cpu")).strip().lower()
@@ -55,7 +82,12 @@ def resolve_mm_nl_device(name: str | None = None) -> MmNlDeviceName:
 
 
 def gpu_nl_path_available() -> bool:
-    return resolve_mm_nl_device() == "gpu" and have_cupy() and have_vesin()
+    return (
+        resolve_mm_nl_device() == "gpu"
+        and have_cupy()
+        and have_vesin()
+        and cupy_runtime_ok()
+    )
 
 
 def _jax_array_module():

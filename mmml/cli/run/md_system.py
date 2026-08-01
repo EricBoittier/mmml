@@ -1881,6 +1881,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="JAX-MD/ASE PBC MM neighbor-list skin distance in Å (default: 0.25).",
     )
     parser.add_argument(
+        "--mm-nl-backend",
+        choices=["auto", "vesin", "cell_list", "jax_md"],
+        default=None,
+        help=(
+            "MM neighbor-list builder for jaxmd "
+            "(default: MMML_MM_NL_BACKEND or auto→vesin)."
+        ),
+    )
+    parser.add_argument(
+        "--mm-nl-device",
+        choices=["cpu", "gpu"],
+        default=None,
+        help=(
+            "MM Vesin rebuild device for jaxmd "
+            "(default: MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy failure)."
+        ),
+    )
+    parser.add_argument(
+        "--nhc-tau",
+        type=float,
+        default=None,
+        metavar="MULT",
+        help=(
+            "jaxmd: Nose–Hoover thermostat coupling multiplier "
+            "(tau = nhc_tau * dt; default 100 in the jaxmd suite)."
+        ),
+    )
+    parser.add_argument(
+        "--nhc-barostat-tau",
+        type=float,
+        default=None,
+        metavar="MULT",
+        help=(
+            "jaxmd NpT: Nose–Hoover barostat coupling multiplier "
+            "(tau = nhc_barostat_tau * dt; default 10000 in the jaxmd suite). "
+            "Larger = softer piston (useful for under-dense liquid boxes)."
+        ),
+    )
+    parser.add_argument(
         "--steps-per-recording",
         type=int,
         default=100,
@@ -2421,6 +2460,10 @@ def _append_suite_mmml_handoff_args(
     cmd.extend(
         ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
     )
+    if getattr(args, "mm_nl_backend", None) is not None:
+        cmd.extend(["--mm-nl-backend", str(args.mm_nl_backend)])
+    if getattr(args, "mm_nl_device", None) is not None:
+        cmd.extend(["--mm-nl-device", str(args.mm_nl_device)])
     if backend == "jaxmd":
         cmd.extend(
             [
