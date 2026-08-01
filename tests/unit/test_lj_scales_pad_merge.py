@@ -272,12 +272,15 @@ def test_lj_scales_packmol_liquid_campaign_yaml_parses() -> None:
     assert raw["runs"]["jaxmd_nve"]["depends_on"] == "jaxmd_npt"
     assert raw["defaults"]["mm_nonbond_mode"] == "jax_mic"
     assert float(raw["defaults"].get("max_fmax_before_dyn_ev_A", 0)) >= 3.5
-    assert float(raw["defaults"]["dt_fs"]) == pytest.approx(0.5)
+    assert float(raw["defaults"]["dt_fs"]) == pytest.approx(1.0)
     assert float(raw["runs"]["jaxmd_settle"]["ps"]) >= 1.0
     assert int(raw["runs"]["jaxmd_settle"]["jaxmd_minimize_steps"]) >= 1000
     assert float(raw["runs"]["jaxmd_nvt"]["ps"]) >= 10.0
-    assert int(raw["runs"]["jaxmd_nvt"]["jax_md_update_interval"]) >= 20
-    assert int(raw["runs"]["jaxmd_nvt"]["steps_per_recording"]) >= 500
+    assert int(raw["runs"]["jaxmd_nvt"]["jax_md_update_interval"]) >= 40
+    assert int(raw["runs"]["jaxmd_nvt"]["steps_per_recording"]) >= 1000
+    assert float(raw["defaults"].get("jax_md_skin_distance", 0)) >= 0.5
+    assert str(raw["defaults"].get("ml_compute_dtype", "")).lower() == "float32"
+    assert str(raw["defaults"].get("mm_nl_device", "")).lower() == "gpu"
     assert float(raw["runs"]["jaxmd_npt"]["ps"]) >= 2.0
     assert int(raw["runs"]["jaxmd_npt"]["jax_md_update_interval"]) <= int(
         raw["runs"]["jaxmd_nvt"]["jax_md_update_interval"]
@@ -324,8 +327,11 @@ def test_lj_scales_liquid_prod_campaign_yaml_longer_than_smoke() -> None:
     assert float(prod["runs"]["jaxmd_nvt"]["ps"]) > float(smoke["runs"]["jaxmd_nvt"]["ps"])
     assert prod["runs"]["jaxmd_npt"]["setup"] == "pbc_npt"
     assert float(prod["runs"]["jaxmd_npt"]["ps"]) >= 2.0
-    assert float(prod["defaults"]["dt_fs"]) == pytest.approx(0.5)
-    assert int(prod["runs"]["jaxmd_nvt"]["jax_md_update_interval"]) >= 20
+    assert float(prod["defaults"]["dt_fs"]) == pytest.approx(1.0)
+    assert int(prod["runs"]["jaxmd_nvt"]["jax_md_update_interval"]) >= 40
+    assert float(prod["defaults"].get("jax_md_skin_distance", 0)) >= 0.5
+    assert str(prod["defaults"].get("ml_compute_dtype", "")).lower() == "float32"
+    assert str(prod["defaults"].get("mm_nl_device", "")).lower() == "gpu"
     joint_prod = yaml.safe_load(
         (_REPO / "examples/hybrid_mm_charges/md_lj_scales_liquid_campaign.prod.yaml").read_text()
     )
@@ -333,3 +339,5 @@ def test_lj_scales_liquid_prod_campaign_yaml_longer_than_smoke() -> None:
     assert float(joint_prod["runs"]["jaxmd_nvt"]["ps"]) >= 20.0
     assert float(joint_prod["defaults"]["dt_fs"]) <= 0.25
     assert int(joint_prod["defaults"]["heat_ihtfrq"]) > 0
+    assert str(joint_prod["defaults"].get("mm_nl_device", "")).lower() == "gpu"
+    assert int(joint_prod["runs"]["jaxmd_nvt"]["jax_md_update_interval"]) >= 40
