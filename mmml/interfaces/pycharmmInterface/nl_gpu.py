@@ -7,11 +7,21 @@ Contract: callers pass Cartesian Å positions on device and a scalar, ``(3,)``,
 or ``(3, 3)`` Å cell. The returned JAX arrays are padded ``pair_idx`` with shape
 ``(capacity, 2)`` and boolean ``pair_mask`` with shape ``(capacity,)``. Only
 ``mask == True`` entries are valid; pair order is not stable API.
+
+CUDA toolkit note
+-----------------
+CuPy NVRTC adds ``-I$CUDA_PATH/include``. On some HPC images
+``/usr/local/cuda`` is a symlink to an ancient toolkit (e.g. CUDA 9.0) whose
+``cuda_fp16.hpp`` does ``#include <utility>`` under NVRTC and fails with
+``cannot open source file "utility"``. Pip ``nvidia-cuda-runtime-cu12`` wheels
+ship modern headers that work with NVRTC; :func:`ensure_cupy_cuda_path`
+points ``CUDA_PATH`` at those wheels when the system toolkit looks unusable.
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Literal, Tuple
 
 import numpy as np
@@ -39,19 +49,177 @@ try:
 except ImportError:
     cp = None  # type: ignore[assignment]
 
+_CUPY_RUNTIME_OK: bool | None = None
+_CUDA_PATH_ENSURED = False
+
 
 def have_cupy() -> bool:
     return _HAVE_CUPY
 
 
-_CUPY_RUNTIME_OK: bool | None = None
+def _nvidia_wheel_cuda_runtime_root() -> str | None:
+    """Return ``.../nvidia/cuda_runtime`` (or cu13 layout) that has ``include/cuda_fp16.hpp``."""
+    import importlib.metadata
+
+    candidates = (
+        ("nvidia-cuda-runtime-cu12", "cuda_runtime"),
+        ("nvidia-cuda-runtime-cu13", "cuda_runtime"),
+        ("nvidia-cuda-runtime", "cu13"),
+        ("nvidia-cuda-runtime", "cu12"),
+    )
+    for pkg_name, dir_name in candidates:
+        try:
+            dist = importlib.metadata.distribution(pkg_name)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+        root = Path(dist.locate_file(f"nvidia/{dir_name}"))
+        if (root / "include" / "cuda_fp16.hpp").is_file():
+            return str(root.resolve())
+    # Fallback: walk site-packages next to cupy.
+    if _HAVE_CUPY and cp is not None:
+        site = Path(cp.__file__).resolve().parents[1]
+        for dir_name in ("cuda_runtime", "cu13", "cu12"):
+            root = site / "nvidia" / dir_name
+            if (root / "include" / "cuda_fp16.hpp").is_file():
+                return str(root)
+    return None
+
+
+def _fp16_header_path(cuda_root: str) -> Path | None:
+    root = Path(cuda_root)
+    for candidate in (
+        root / "include" / "cuda_fp16.hpp",
+        root / "targets" / "x86_64-linux" / "include" / "cuda_fp16.hpp",
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def cuda_path_looks_broken(cuda_path: str | None) -> bool:
+    """True when CuPy NVRTC would likely fail with this ``CUDA_PATH``."""
+    if not cuda_path:
+        return True
+    root = Path(cuda_path)
+    if not root.exists():
+        return True
+    real = str(root.resolve()).lower()
+    if any(tag in real for tag in ("cuda-8", "cuda-9", "cuda-10.0", "cuda-10.1")):
+        return True
+    fp16 = _fp16_header_path(str(root))
+    if fp16 is None:
+        return True
+    try:
+        head = fp16.read_text(encoding="utf-8", errors="ignore")[:8000]
+    except OSError:
+        return True
+    # CUDA ≤9 style: top-level ``#include <utility>`` without NVRTC exclusion.
+    # Modern wheel headers do not pull host ``<utility>`` for NVRTC.
+    util = head.find("#include <utility>")
+    if util < 0:
+        return False
+    before = head[:util]
+    # If an NVRTC-only / host-skip guard wraps the include, accept it.
+    window = before[-400:]
+    if "CUDACC_RTC" in window and ("ifndef" in window or "if !" in window):
+        return False
+    return True
+
+
+def ensure_cupy_cuda_path(*, force: bool = False, quiet: bool = False) -> str | None:
+    """Ensure ``CUDA_PATH`` points at NVRTC-usable CUDA headers.
+
+    Returns the effective CUDA root (wheel or existing), or ``None``.
+    """
+    global _CUDA_PATH_ENSURED
+    if _CUDA_PATH_ENSURED and not force:
+        return os.environ.get("CUDA_PATH") or None
+
+    current = (os.environ.get("CUDA_PATH") or os.environ.get("CUDA_HOME") or "").strip()
+    if not current:
+        # Mirror CuPy's discovery so we can decide whether to override.
+        try:
+            import cupy._environment as cupy_env
+
+            current = cupy_env.get_cuda_path() or ""
+        except Exception:
+            if Path("/usr/local/cuda").exists():
+                current = "/usr/local/cuda"
+
+    wheel_root = _nvidia_wheel_cuda_runtime_root()
+    if wheel_root and (force or cuda_path_looks_broken(current or None)):
+        os.environ["CUDA_PATH"] = wheel_root
+        os.environ["CUDA_HOME"] = wheel_root
+        # Prefer wheel NVRTC libs when present.
+        nvrtc_lib = Path(wheel_root).parent / "cuda_nvrtc" / "lib"
+        if nvrtc_lib.is_dir():
+            prev = os.environ.get("LD_LIBRARY_PATH", "")
+            prefix = str(nvrtc_lib)
+            if prefix not in prev.split(":"):
+                os.environ["LD_LIBRARY_PATH"] = (
+                    f"{prefix}:{prev}" if prev else prefix
+                )
+        try:
+            import cupy._environment as cupy_env
+
+            cupy_env._cuda_path = wheel_root
+        except Exception:
+            pass
+        _patch_cupy_wheel_includes(str(Path(wheel_root) / "include"))
+        if not quiet:
+            old = current or "(unset)"
+            print(
+                f"[nl_gpu] CUDA_PATH {old} → {wheel_root} "
+                f"(pip nvidia-cuda-runtime headers for CuPy NVRTC)",
+                flush=True,
+            )
+        _CUDA_PATH_ENSURED = True
+        return wheel_root
+
+    if current:
+        try:
+            import cupy._environment as cupy_env
+
+            cupy_env._cuda_path = current
+        except Exception:
+            pass
+    _CUDA_PATH_ENSURED = True
+    return current or None
+
+
+def _patch_cupy_wheel_includes(wheel_include: str) -> None:
+    """Prepend pip runtime ``-I`` so NVRTC never picks stale toolkit headers first."""
+    if not _HAVE_CUPY or not wheel_include or not Path(wheel_include).is_dir():
+        return
+    try:
+        from cupy.cuda import compiler
+    except Exception:
+        return
+    flag = f"-I{wheel_include}"
+    existing = getattr(compiler, "_get_extra_include_dir_opts", None)
+    if existing is None or getattr(existing, "_mmml_wheel_include", None) == flag:
+        return
+
+    def _wrapped():
+        opts = tuple(existing())
+        if flag not in opts:
+            opts = (flag,) + opts
+        return opts
+
+    _wrapped._mmml_wheel_include = flag  # type: ignore[attr-defined]
+    # Clear memoized empty include-dir results from before the patch.
+    cache = getattr(existing, "_cache", None)
+    if isinstance(cache, dict):
+        cache.clear()
+    compiler._get_extra_include_dir_opts = _wrapped  # type: ignore[assignment]
 
 
 def cupy_runtime_ok(*, force: bool = False) -> bool:
     """Return True if CuPy can JIT a trivial kernel on this host.
 
-    Some CUDA/NVRTC + host-libstdc++ setups import CuPy but fail on the first
-    kernel compile (``#include <utility>``). Probe once and cache so
+    Runs :func:`ensure_cupy_cuda_path` first. Some CUDA/NVRTC + stale
+    ``/usr/local/cuda`` setups import CuPy but fail on the first kernel
+    compile (``#include <utility>``). Probe once and cache so
     ``MMML_MM_NL_DEVICE=gpu`` can fall back cleanly instead of crashing MD.
     """
     global _CUPY_RUNTIME_OK
@@ -60,15 +228,26 @@ def cupy_runtime_ok(*, force: bool = False) -> bool:
     if not have_cupy():
         _CUPY_RUNTIME_OK = False
         return False
-    try:
+
+    ensure_cupy_cuda_path(force=force)
+
+    def _probe() -> bool:
         x = cp.arange(4, dtype=cp.float32)
         y = x + cp.asarray(1, dtype=cp.float32)
         cp.cuda.Stream.null.synchronize()
         float(y.sum())
-        _CUPY_RUNTIME_OK = True
+        return True
+
+    try:
+        _CUPY_RUNTIME_OK = _probe()
     except Exception:
-        _CUPY_RUNTIME_OK = False
-    return _CUPY_RUNTIME_OK
+        # One retry after a forced path repair (covers import-order races).
+        try:
+            ensure_cupy_cuda_path(force=True)
+            _CUPY_RUNTIME_OK = _probe()
+        except Exception:
+            _CUPY_RUNTIME_OK = False
+    return bool(_CUPY_RUNTIME_OK)
 
 
 def resolve_mm_nl_device(name: str | None = None) -> MmNlDeviceName:
@@ -100,6 +279,7 @@ def positions_to_cupy(positions) -> "cp.ndarray":
     """Export positions to CuPy without host round-trip when already on GPU."""
     if not have_cupy():
         raise RuntimeError("CuPy is not installed")
+    ensure_cupy_cuda_path()
     if isinstance(positions, cp.ndarray):
         return positions
     if hasattr(positions, "__dlpack_device__"):
@@ -130,7 +310,9 @@ def rebuild_vesin_pairs_gpu(
 ) -> Tuple[object, object, str]:
     """Build padded MM pairs on GPU from Cartesian Å coordinates."""
     if not gpu_nl_path_available():
-        raise RuntimeError("GPU NL path requires MMML_MM_NL_DEVICE=gpu, cupy, and vesin>=0.5")
+        raise RuntimeError(
+            "GPU NL path requires MMML_MM_NL_DEVICE=gpu, working CuPy JIT, and vesin>=0.5"
+        )
 
     pos_cp = positions_to_cupy(positions)
     n_atoms = int(total_atoms if total_atoms is not None else pos_cp.shape[0])

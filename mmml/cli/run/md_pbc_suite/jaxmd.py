@@ -872,6 +872,14 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["MMML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
     if getattr(args, "mm_nl_device", None):
         os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
+    if (os.environ.get("MMML_MM_NL_DEVICE") or "").strip().lower() == "gpu":
+        # Repair stale /usr/local/cuda→cuda-9.0 before the first CuPy JIT.
+        try:
+            from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
+
+            ensure_cupy_cuda_path()
+        except Exception as exc:
+            print(f"[jaxmd] CUDA_PATH repair skipped ({type(exc).__name__}: {exc})", flush=True)
 
     if getattr(args, "mlpot_profile", False):
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
