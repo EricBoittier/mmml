@@ -2,7 +2,7 @@
 # Full-data demo of the opt-in additive shared-cutoff Hamiltonian.
 # Existing handoff jobs are untouched; fixed LJ keeps this first demo
 # identifiable before any later stage releases per-type LJ scales.
-#SBATCH --job-name=des-shared-rc6
+#SBATCH --job-name=des-shared
 #SBATCH --partition=gpu
 #SBATCH --time=7-00:00:00
 #SBATCH --gres=gpu:1
@@ -14,7 +14,9 @@
 set -euo pipefail
 REPO="${MMML_REPO:-$HOME/mmml}"
 DATASET="$REPO/artifacts/lj_scales_des/des_dimers_cgenff_all.npz"
-RUN_DIR="$REPO/artifacts/lj_scales_des_shared_cutoff"
+RC="${SHARED_CUTOFF:-6}"
+RC_TAG="${RC//./p}"
+RUN_DIR="$REPO/artifacts/lj_scales_des_shared_cutoff/rc${RC_TAG}"
 CKPT_DIR="$RUN_DIR/ckpts"
 cd "$REPO"
 source .venv/bin/activate
@@ -25,18 +27,21 @@ mkdir -p "$RUN_DIR/logs" "$CKPT_DIR"
 test -s "$DATASET"
 
 echo "Hamiltonian: shared_cutoff (additive ML + force-shifted MM)"
-echo "Shared atomic cutoff: 6.0 A"
+echo "Shared atomic cutoff: $RC A (not COM distance)"
 echo "Dataset: $DATASET (full train + in-sample evaluation)"
 echo "LJ scales: fixed"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
 uv run mmml physnet-train \
-  --config examples/hybrid_mm_charges/train_shared_cutoff.yaml \
+  --config examples/hybrid_mm_charges/train_shared_cutoff_des_transfer.yaml \
   --data "$DATASET" \
   --valid-data "$DATASET" \
   --ckpt-dir "$CKPT_DIR" \
-  --tag des_shared_cutoff_rc6_fixed_lj \
+  --tag "des_shared_cutoff_rc${RC_TAG}_fixed_lj" \
   --num-epochs 25 \
-  --physnet-checkpoint examples/ckpts_json/DESdimers_params.json
+  --cutoff "$RC" \
+  --shared-cutoff "$RC" \
+  --physnet-checkpoint examples/ckpts_json/DESdimers_params.json \
+  --no-match-checkpoint-architecture
 
 echo "=== shared-cutoff demo training complete ==="
