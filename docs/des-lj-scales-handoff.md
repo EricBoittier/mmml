@@ -419,9 +419,11 @@ kcal/mol offset (MAE ≈ RMSE), an atomic-reference mismatch against DES
 ### 5.3 Liquid-box construction — TIP3
 
 <figure markdown>
-![TIP3 box, Packmol stage](images/des-so3lr-dimers/box_tip3_1_packmol.png)
-<figcaption>732 TIP3 molecules after Packmol placement. Rendered with
-<code>scripts/render_liquid_box_povray.py</code>.</figcaption>
+![TIP3 box through preparation](images/des-so3lr-dimers/box_tip3_stages.png)
+<figcaption>732 TIP3 molecules at each preparation stage, POV-Ray via
+<code>scripts/render_liquid_box_povray.py</code>. The four panels are shown
+together precisely because they are indistinguishable — that is the
+result.</figcaption>
 </figure>
 
 Stage-to-stage RMSD over all 2,196 atoms:

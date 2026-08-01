@@ -91,7 +91,8 @@ flowchart TD
 | `--charges` / `include_electrostatics` | Charge head **inside** `E_ML` (not `E_MM`) |
 
 You can combine Mode A (`fixed` charges) with LJ scales, or Mode B/C charges with
-LJ scales, as long as `lr_solver: mic` and `mm_include_lj: true`. See
+LJ scales, as long as `mm_include_lj: true` (any of `mic`, `ewald`,
+`nvalchemiops_pme`). See
 [hybrid-mm-charges.md](hybrid-mm-charges.md).
 
 ### What this is *not*
@@ -101,18 +102,20 @@ LJ scales, as long as `lr_solver: mic` and `mm_include_lj: true`. See
   double-counted.
 - Not a free σ/ε head that invents types. Types still come from CGenFF assignment
   ([prepare-mm-dataset](hybrid-mm-dataset-preparation.md)).
-- Not available under `lr_solver: ewald` or `nvalchemiops_pme` — those paths force
-  LJ off (Coulomb-only LR). Scales only affect **MIC** hybrid `E_MM` and MD
-  `jax_mic` / switched MM.
+- Not applied by CHARMM IMAGE VDW. Under `mm_nonbond_mode: periodic_external` the
+  JAX MM term is off, so nothing consumes `hybrid_mm.json` ([#139](https://github.com/EricBoittier/mmml/issues/139)
+  step 2). Scales affect hybrid `E_MM` under `mic`, `ewald` and
+  `nvalchemiops_pme` (with `mm_include_lj: true`), and MD `jax_mic` /
+  native-`ewald` switched MM.
 
 ---
 
-## Why you train LJ *without* Ewald (read this first)
+## Why you can train LJ *without* Ewald (read this first)
 
-New users usually read "LJ is forced off under Ewald" as a missing feature to
-work around. It is not. Training LJ under truncated MIC and keeping Ewald for
-Coulomb is the **recommended** workflow, because the two terms genuinely do not
-need the same long-range treatment.
+Learning σ/ε under `lr_solver: ewald` is supported. It is still usually not what
+you want first: training LJ under truncated MIC and keeping Ewald for Coulomb is
+the **recommended** workflow, because the two terms genuinely do not need the
+same long-range treatment.
 
 | Term | Falls off as | Lattice sum | Consequence |
 |------|--------------|-------------|-------------|
@@ -420,7 +423,7 @@ LJ scales still live on hybrid / md-system flags, not inside the policy file.
 | Absent types untouched | A type not present in the data keeps `s = 1.0` exactly |
 | Train → MD continuity | Deployed `at_ep`/`at_rm` equal master × trained scale for the right ATC rows |
 | MD loads scales | Verbose MLpot line, or explicit `--mm-lj-scales-file` |
-| Ewald/PME + `mm_include_lj: true` | Fixed scales move switched LJ; `learn_mm_lj_scales` stays off |
+| Ewald/PME + `mm_include_lj: true` | Fixed scales move switched LJ; `learn_mm_lj_scales` is honored and recovers a planted ε |
 | `periodic_external` + `--mm-lj-scales-file` | **Errors out** — it cannot apply them (see Troubleshooting) |
 
 Local unit tests (no CHARMM / no GPU required for these):
@@ -471,14 +474,14 @@ where the volume was actually measured. See
 
 | Symptom | Likely cause |
 |---------|----------------|
-| `learn_mm_lj_scales` silently false | `lr_solver` is ewald/PME, or `mm_include_lj: false` |
+| `learn_mm_lj_scales` silently false | `mm_include_lj: false` — there is no LJ term to differentiate, under any solver |
 | MD ignores scales | Missing `hybrid_mm.json`, wrong path, or `learn_mm_lj_scales: false` in sidecar |
 | `--mm-lj-scales-file … but JAX MM is off` error | You asked to deploy trained LJ under `periodic_external` or with `include_mm: false`, where nothing can consume it. Switch to `--mm-nonbond-mode jax_mic --include-mm`, or drop the flag to run stock CGenFF LJ on purpose |
 | `WARNING: … carries trained MM LJ scales but JAX MM is off` | A `hybrid_mm.json` was auto-discovered next to the checkpoint but the run cannot apply it — this run is using **stock** CGenFF LJ. Harmless if intended; otherwise switch to `jax_mic` |
 | Loss goes `nan` mid-run after training cleanly for many epochs | An LJ scale drifted out of physical range — ε crossing zero NaNs `sqrt(eps_i eps_j)`, σ drifting up drags the \(r^{-12}\) wall into sampled separations. Fixed by the projection above; if you see it again, the scales are saturating and the LJ is compensating for something else |
 | Several types pinned exactly at a bound | The fit wants LJ the bounds forbid. Check the handoff cutoffs and whether `--electrostatics-off-end` is beyond `--cutoff` before widening anything |
 | `carries LJ scales outside the trainable bounds` warning on load | Sidecar from a run predating the bounds (or hand-edited). It still deploys, but the LJ it applies is not something training could produce today |
-| Fit looks great, density/RDF is wrong under Ewald | Coulomb error absorbed into σ/ε during MIC fitting — see [Why you train LJ *without* Ewald](#why-you-train-lj-without-ewald-read-this-first) |
+| Fit looks great, density/RDF is wrong under Ewald | Coulomb error absorbed into σ/ε during MIC fitting — see [Why you can train LJ *without* Ewald](#why-you-can-train-lj-without-ewald-read-this-first) |
 | Cutoffs differ between train and MD | The σ/ε were fitted against a different operator; match `mm_switch_on` / `mm_switch_width` / `ml_switch_width` |
 | ATC length mismatch / wrong types | Sidecar type names don’t match CHARMM ATC; regenerate from the same CGenFF PRM |
 | Energies look like double LJ | Spooky in-model VdW + hybrid `E_MM` — hybrid must not pass CGenFF tables into the model (guarded in tests) |
