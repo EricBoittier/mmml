@@ -2022,6 +2022,15 @@ def main(argv: list[str] | None = None) -> int:
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.5)),
         # Required for NVE Hellmann–Feynman preflight (freeze q_MM for q0/latent*).
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        # PSF/CGenFF angle (+ Urey) restraints for tetrahedral ML monomers.
+        from_psf=getattr(args, "from_psf", None),
+        psf_angle_restraints=bool(getattr(args, "psf_angle_restraints", False)),
+        psf_angle_restraint_scale=float(
+            getattr(args, "psf_angle_restraint_scale", 1.0) or 1.0
+        ),
+        psf_angle_restraints_no_urey=bool(
+            getattr(args, "psf_angle_restraints_no_urey", False)
+        ),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
