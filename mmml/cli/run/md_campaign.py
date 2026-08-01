@@ -194,6 +194,17 @@ _CAMPAIGN_CLI_EXPLICIT_OVERRIDE_KEYS: tuple[str, ...] = (
     "do_ml",
     "do_ml_dimer",
     "skip_ml_dimers",
+    # Seed geometry / packmol: parent --from-psf/--from-crd/--no-packmol must
+    # reach jaxmd_settle (otherwise the job re-Packmols and can self-overlap).
+    "from_psf",
+    "from_crd",
+    "from_pdb",
+    "packmol",
+    "packmol_tolerance",
+    "composition",
+    "box_size",
+    "no_echeck",
+    "skip_cluster_build",
 )
 
 
@@ -269,6 +280,8 @@ def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
                 argv.append(flag)
             elif key == "bonded_mm_mini":
                 argv.append("--no-bonded-mm-mini")
+            elif key == "packmol":
+                argv.append("--no-packmol")
             elif key.startswith("no_") or key in {
                 "handoff_write_res",
                 "continue_velocities",

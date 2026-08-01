@@ -74,12 +74,25 @@ def test_maybe_apply_certified_box_json_overrides_box_size(tmp_path: Path):
     assert args.target_density_g_cm3 is None
 
 
-def test_maybe_apply_certified_box_json_requires_box_json(tmp_path: Path):
+def test_maybe_apply_certified_box_json_falls_back_to_box_size(tmp_path: Path):
     from mmml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
 
     crd = tmp_path / "model.crd"
     crd.write_text("dummy\n", encoding="utf-8")
     args = argparse.Namespace(box_size=28.0, quiet=True)
+    side = _maybe_apply_certified_box_json(args, crd)
+    assert side == pytest.approx(28.0)
+    assert args.box_size == pytest.approx(28.0)
+
+
+def test_maybe_apply_certified_box_json_requires_box_json_without_box_size(
+    tmp_path: Path,
+):
+    from mmml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
+
+    crd = tmp_path / "model.crd"
+    crd.write_text("dummy\n", encoding="utf-8")
+    args = argparse.Namespace(box_size=None, quiet=True)
     with pytest.raises(FileNotFoundError, match="box.json"):
         _maybe_apply_certified_box_json(args, crd)
 

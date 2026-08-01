@@ -628,6 +628,20 @@ def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) ->
 
     box_json = Path(crd_path).expanduser().resolve().parent / "box.json"
     if not box_json.is_file():
+        # Allow an explicit CLI/YAML --box-size when mini/handoff CRDs lack box.json.
+        prev = getattr(args, "box_size", None)
+        if prev is not None and float(prev) > 0.0:
+            side_f = float(prev)
+            args.box_auto = None
+            args.target_density_g_cm3 = None
+            args.bulk_density_fraction = None
+            if not getattr(args, "quiet", False):
+                print(
+                    f"Certified box: L={side_f:.3f} Å from --box-size "
+                    f"(no sibling box.json at {box_json})",
+                    flush=True,
+                )
+            return side_f
         raise FileNotFoundError(
             f"Certified --from-crd requires sibling box.json next to {crd_path} "
             f"(expected {box_json}). Pass an explicit --box-size matching the "

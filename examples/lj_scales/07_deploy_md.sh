@@ -46,6 +46,15 @@ if [[ "${LJ_JOINT}" != "1" ]]; then
   #   LJ_MD_PACKMOL_TOLERANCE=3.5   pack further apart (try this first)
   #   LJ_MD_MAX_FMAX_EV_A=3.0       raise the ceiling after inspecting the frame
   # Tolerance is part of the packmol cache key; changing it rebuilds the box.
+  # Optional seed (skips Packmol rebuild — required if mini.crd already exists):
+  #   LJ_MD_FROM_PSF / LJ_MD_FROM_CRD, or default liquid_nvt/mini.{psf,crd}
+  SEED_PSF="${LJ_MD_FROM_PSF:-${LJ_ARTIFACTS_DIR}/liquid_nvt/mini.psf}"
+  SEED_CRD="${LJ_MD_FROM_CRD:-${LJ_ARTIFACTS_DIR}/liquid_nvt/mini.crd}"
+  SEED_ARGS=()
+  if [[ -f "${SEED_PSF}" && -f "${SEED_CRD}" ]]; then
+    echo "  seed box  : ${SEED_PSF} + ${SEED_CRD}"
+    SEED_ARGS+=(--from-psf "${SEED_PSF}" --from-crd "${SEED_CRD}" --no-packmol --box-size 30.0)
+  fi
   uv run mmml md-system \
     --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
     --run-all \
@@ -53,6 +62,7 @@ if [[ "${LJ_JOINT}" != "1" ]]; then
     --mm-lj-scales-file "${SIDECAR}" \
     --campaign-output-dir "${LJ_ARTIFACTS_DIR}/liquid_dcm" \
     --mm-nonbond-mode jax_mic \
+    ${SEED_ARGS[@]+"${SEED_ARGS[@]}"} \
     ${GATE_ARGS[@]+"${GATE_ARGS[@]}"}
   echo "07: OK  ${LJ_ARTIFACTS_DIR}/liquid_dcm"
   exit 0
