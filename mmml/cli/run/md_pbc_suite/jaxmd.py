@@ -667,6 +667,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--jax-md-disable-fallback", action="store_true")
     p.add_argument(
+        "--mm-nl-backend",
+        choices=["auto", "vesin", "cell_list", "jax_md"],
+        default=None,
+        help=(
+            "MM neighbor-list builder (default: MMML_MM_NL_BACKEND or auto→vesin). "
+            "jax_md uses device-side incremental lists when available."
+        ),
+    )
+    p.add_argument(
+        "--mm-nl-device",
+        choices=["cpu", "gpu"],
+        default=None,
+        help=(
+            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or cpu). "
+            "gpu needs working CuPy JIT + vesin; falls back to cpu on failure."
+        ),
+    )
+    p.add_argument(
         "--charmm-pre-minimize",
         dest="charmm_pre_minimize",
         action="store_true",
@@ -810,6 +828,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--mm-lj-scales-file",
+        "--mm_lj_scales_file",
+        dest="mm_lj_scales_file",
+        type=str,
+        default=None,
+        help=(
+            "Path to hybrid_mm.json with learnable per-type MM LJ σ/ε scales. "
+            "When omitted, looks next to --checkpoint for hybrid_mm.json."
+        ),
+    )
+    p.add_argument(
         "--lr-solver",
         "--lr_solver",
         dest="lr_solver",
@@ -848,6 +877,20 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
+
+    # NL backend/device are resolved via env inside mm_energy_forces / nl_gpu.
+    if getattr(args, "mm_nl_backend", None):
+        os.environ["MMML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
+    if getattr(args, "mm_nl_device", None):
+        os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
+    if (os.environ.get("MMML_MM_NL_DEVICE") or "").strip().lower() == "gpu":
+        # Repair stale /usr/local/cuda→cuda-9.0 before the first CuPy JIT.
+        try:
+            from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
+
+            ensure_cupy_cuda_path()
+        except Exception as exc:
+            print(f"[jaxmd] CUDA_PATH repair skipped ({type(exc).__name__}: {exc})", flush=True)
 
     if getattr(args, "mlpot_profile", False):
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
@@ -1091,6 +1134,35 @@ def main(argv: list[str] | None = None) -> int:
         effective_update_interval = int(max(1, args.jax_md_update_interval))
         effective_skin = float(max(0.0, args.jax_md_skin_distance))
 
+    do_mm = bool(getattr(args, "include_mm", True))
+    ep_scale = None
+    sig_scale = None
+    if do_mm:
+        from mmml.models.mm_lj_scales import resolve_md_lj_scales
+
+        scales_file = getattr(args, "mm_lj_scales_file", None)
+        try:
+            ep_scale, sig_scale = resolve_md_lj_scales(
+                scales_file=scales_file,
+                checkpoint=getattr(args, "checkpoint", None),
+            )
+        except Exception:
+            if scales_file is not None:
+                raise
+        if ep_scale is not None and not args.quiet:
+            print(
+                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+                f"from hybrid_mm.json / --mm-lj-scales-file",
+                flush=True,
+            )
+    elif getattr(args, "mm_lj_scales_file", None) is not None:
+        raise ValueError(
+            f"--mm-lj-scales-file={args.mm_lj_scales_file} was given but "
+            "--no-include-mm disables the JAX MM pair loop that applies "
+            "per-type LJ scales. Use --include-mm (default) or drop "
+            "--mm-lj-scales-file."
+        )
+
     factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per_list,
         N_MONOMERS=n_molecules,
@@ -1098,12 +1170,14 @@ def main(argv: list[str] | None = None) -> int:
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
         doML=bool(getattr(args, "do_ml", True)),
-        doMM=bool(getattr(args, "include_mm", True)),
+        doMM=do_mm,
         doML_dimer=(
             bool(getattr(args, "do_ml_dimer", True))
             and not bool(getattr(args, "skip_ml_dimers", False))
         ),
         debug=False,
+        ep_scale=ep_scale,
+        sig_scale=sig_scale,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=False if free_space else float(L),

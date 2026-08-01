@@ -147,7 +147,12 @@ def _filter_pairs_by_com_min(
     else:
         cell = inv_cell = None
 
-    dr = coms[pair_j] - coms[pair_i]
+    # pair_i/pair_j are atom indices (NL contract); index COMs by monomer id.
+    ai = np.asarray(pair_i, dtype=np.int64)
+    aj = np.asarray(pair_j, dtype=np.int64)
+    mi = monomer_ids[ai]
+    mj = monomer_ids[aj]
+    dr = coms[mj] - coms[mi]
 
     if inv_cell is not None:
         frac_dr = dr @ inv_cell.T
@@ -158,7 +163,7 @@ def _filter_pairs_by_com_min(
     return mask & (r >= mm_r_min)
 
 
-@jax.jit
+@partial(jax.jit, static_argnums=(6,))
 def _filter_pairs_by_com_min_jax(
     positions: Array,
     pair_i: Array,
@@ -176,6 +181,10 @@ def _filter_pairs_by_com_min_jax(
     ``R @ cell`` before calling — the same contract as
     :func:`_filter_pairs_by_com_min`. Applying the Cartesian MIC
     (``dr @ inv(cell)``) to fractional displacements yields garbage distances.
+
+    ``pair_i`` / ``pair_j`` are **atom** indices (same as the host filter).
+    ``n_monomers`` is a static JIT arg (``monomer_coms_segment`` needs a
+    concrete ``num_segments``).
     """
     coms = monomer_coms_segment(positions, monomer_id_jnp, n_monomers)
     mi = monomer_id_jnp[pair_i]
@@ -1795,38 +1804,56 @@ def build_mm_energy_forces_fn(
             ):
                 pbc_for_build = _pbc_cell_for_nl_build(box_in)
                 pos_for_gpu = _jax_cartesian_for_nl_build(positions_jax, box_in)
-                while True:
-                    try:
-                        pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
-                            pos_for_gpu,
-                            pbc_for_build,
-                            cutoff=_mm_list_cutoff,
-                            monomer_offsets=_offsets_np,
-                            mm_r_min=mm_r_min,
-                            max_pairs=_fallback_max_pairs_cell[0],
-                            cell_list_safety_factor=cell_list_safety_factor,
-                            cell_list_density_estimate=cell_list_density_estimate,
+                try:
+                    while True:
+                        try:
+                            pair_idx, pair_mask, used = rebuild_vesin_pairs_gpu(
+                                pos_for_gpu,
+                                pbc_for_build,
+                                cutoff=_mm_list_cutoff,
+                                monomer_offsets=_offsets_np,
+                                mm_r_min=mm_r_min,
+                                max_pairs=_fallback_max_pairs_cell[0],
+                                cell_list_safety_factor=cell_list_safety_factor,
+                                cell_list_density_estimate=cell_list_density_estimate,
+                                total_atoms=total_atoms,
+                                debug=_nbr_debug,
+                            )
+                            break
+                        except PairListTruncationError as exc:
+                            _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
+                            _pair_stats["capacity_grows"] += 1
+                            _record_pair_capacity(
+                                int(_fallback_max_pairs_cell[0]),
+                                "gpu_pair_truncation_growth",
+                            )
+                    if _nbr_debug:
+                        print(f"[nbr] rebuild via {used}")
+                        _validate_dynamic_pair_contract(
+                            pair_idx,
+                            pair_mask,
                             total_atoms=total_atoms,
-                            debug=_nbr_debug,
+                            label=used,
                         )
-                        break
-                    except PairListTruncationError as exc:
-                        _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
-                        _pair_stats["capacity_grows"] += 1
-                        _record_pair_capacity(
-                            int(_fallback_max_pairs_cell[0]),
-                            "gpu_pair_truncation_growth",
-                        )
-                if _nbr_debug:
-                    print(f"[nbr] rebuild via {used}")
-                    _validate_dynamic_pair_contract(
-                        pair_idx,
-                        pair_mask,
-                        total_atoms=total_atoms,
-                        label=used,
+                    _pair_stats["gpu_rebuilds"] += 1
+                    return pair_idx, pair_mask
+                except PairListTruncationError:
+                    raise
+                except Exception as exc:
+                    # CuPy/NVRTC or Vesin-GPU failures: fall back to CPU Vesin.
+                    _pair_stats["fallbacks"] += 1
+                    print(
+                        f"[nbr] GPU Vesin rebuild failed "
+                        f"({type(exc).__name__}: {exc}); falling back to CPU",
+                        flush=True,
                     )
-                _pair_stats["gpu_rebuilds"] += 1
-                return pair_idx, pair_mask
+                    try:
+                        import mmml.interfaces.pycharmmInterface.nl_gpu as _nl_gpu
+
+                        # Skip GPU on later rebuilds this process.
+                        _nl_gpu._CUPY_RUNTIME_OK = False
+                    except Exception:
+                        pass
 
             R_build = _cartesian_for_nl_build(positions_in, box_in)
             pbc_for_build = _pbc_cell_for_nl_build(box_in)
@@ -2044,10 +2071,14 @@ def build_mm_energy_forces_fn(
             ):
                 _pair_stats["cache_checks"] += 1
                 _pair_stats["device_skin_checks"] += 1
+                # Max displacement on device; sync only a scalar (not full R).
                 R_cart_jax = _jax_cartesian_for_nl_build(positions_jax, box)
-                c = np.asarray(jax.device_get(R_cart_jax), dtype=np.float64)
-                p = np.asarray(jax.device_get(_last_cartesian_positions_jax[0]), dtype=np.float64)
-                max_disp = float(np.max(np.linalg.norm(c - p, axis=1)))
+                last_R = _last_cartesian_positions_jax[0]
+                max_disp = float(
+                    jax.device_get(
+                        jnp.max(jnp.linalg.norm(R_cart_jax - last_R, axis=1))
+                    )
+                )
                 if max_disp <= verlet_reuse_displacement_limit_A(skin):
                     _pair_stats["reused"] += 1
                     _pair_stats["cache_reuse_reason"] = "device_skin"

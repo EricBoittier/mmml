@@ -474,10 +474,17 @@ def filter_vesin_half_list_vectorized(
         R = xp.asarray(positions, dtype=xp.float64)
         offsets = np.asarray(monomer_offsets, dtype=np.int32)
         n_monomers = len(offsets) - 1
-        coms = xp.zeros((n_monomers, 3), dtype=xp.float64)
-        for k in range(n_monomers):
-            start, end = int(offsets[k]), int(offsets[k + 1])
-            coms[k] = R[start:end].mean(axis=0)
+        sizes = offsets[1:] - offsets[:-1]
+        # Uniform monomers (e.g. solvent boxes): one reshape+mean instead of
+        # N tiny device kernels from a Python loop.
+        if n_monomers > 0 and int(sizes.min()) == int(sizes.max()):
+            apm = int(sizes[0])
+            coms = R.reshape(n_monomers, apm, 3).mean(axis=1)
+        else:
+            coms = xp.zeros((n_monomers, 3), dtype=xp.float64)
+            for k in range(n_monomers):
+                start, end = int(offsets[k]), int(offsets[k + 1])
+                coms[k] = R[start:end].mean(axis=0)
         cell_mat = cell_matrix_3x3(cell) if cell is not None else None
         inv_cell = None
         if cell_mat is not None:

@@ -82,7 +82,7 @@ plotting = [
 
 # Neighbor-list validation (Vesin reference oracle; not required at runtime)
 nl-validation = [
-    "vesin",
+    "vesin>=0.6.1",
 ]
 
 # Shell tab completion for ``mmml`` (bash/zsh/fish)
@@ -116,7 +116,7 @@ jax-pme-solver = [
 # CPU MD smoke testing: neighbor-list parity (Vesin), trajectory I/O, no CUDA.
 # Uses bundled examples/ckpts_json/DESdimers_params.json (ACO dimer, natoms=20).
 md-cpu = [
-    "vesin",
+    "vesin>=0.6.1",
     "mdanalysis",
     "mda-xdrlib",
 ]
@@ -211,7 +211,8 @@ viz = [
 
 # Molecular dynamics and analysis
 md = [
-    "vesin>=0.5.0",
+    # 0.6.1+ required for Blackwell (sm_120) GPU NeighborList NVRTC builds.
+    "vesin>=0.6.1",
     "mdanalysis",
     "mda-xdrlib",
     "mmtf-python",
