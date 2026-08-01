@@ -2470,6 +2470,8 @@ def _append_suite_mmml_handoff_args(
         cmd.extend(["--mm-nl-backend", str(args.mm_nl_backend)])
     if getattr(args, "mm_nl_device", None) is not None:
         cmd.extend(["--mm-nl-device", str(args.mm_nl_device)])
+    # nhc-tau / nhc-barostat-tau already forwarded above for backend==jaxmd
+    # via _append_optional (do not duplicate here).
     if backend == "jaxmd":
         cmd.extend(
             [

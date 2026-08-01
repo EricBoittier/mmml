@@ -11,8 +11,9 @@
 #   enough for RDF/ρ (0.1–0.25 ps/frame) without drowning I/O.
 #   Bigger wins measured on DCM:120: --ml-compute-dtype float32 (~2× vs f64),
 #   and --jax-md-skin-distance 0.5 --jax-md-update-interval 40 (fewer Python
-#   NL barriers). GPU Vesin rebuilds: --mm-nl-device gpu (needs working CuPy
-#   JIT; falls back to CPU on this host if NVRTC is broken).
+#   NL barriers). GPU Vesin: --mm-nl-device gpu (auto-fixes CUDA_PATH away from
+#   stale /usr/local/cuda→cuda-9.0; falls back to CPU if CuPy JIT still fails).
+
 #
 #   uv run mmml md-system \
 #     --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \

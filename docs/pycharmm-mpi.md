@@ -443,7 +443,9 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 
 | Path | DLPack? | Benefit |
 |------|---------|---------|
-| `jaxmd_runner` PBC + `MMML_MM_NL_DEVICE=gpu` | Yes — positions stay on JAX GPU → CuPy Vesin → JAX `pair_idx` | Avoids D2H/H2D for NL rebuild each block |
+| `jaxmd_runner` PBC + `MMML_MM_NL_DEVICE=gpu` / `--mm-nl-device gpu` | Yes — positions stay on JAX GPU → CuPy Vesin → JAX `pair_idx` | Avoids D2H/H2D for NL rebuild each block |
+
+**Cluster CUDA note (gpu08-class hosts):** if `/usr/local/cuda` points at an ancient toolkit (e.g. CUDA 9.0), CuPy NVRTC fails compiling `cuda_fp16.hpp` (`cannot open source file "utility"`). `ensure_cupy_cuda_path()` in `nl_gpu.py` redirects `CUDA_PATH` to the pip `nvidia-cuda-runtime` headers before the first JIT. Blackwell GPUs also need `vesin>=0.6.1` (sm_120).
 | PyCHARMM MLpot callback (`hybrid_mlpot.py`) | **No** — coords arrive on **host** from Fortran | Must copy H2D for JAX forward; DLPack cannot skip this |
 | Spatial MPI force merge (`force_exchange.py`) | **No** — numpy host arrays + MPI allreduce | Correctness path; not a GPU tensor pipeline |
 | `mm_energy_forces.py` when positions already device-resident | Yes (same as NL GPU path) | Faster MM energy when simulation state lives on GPU |
