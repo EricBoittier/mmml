@@ -239,6 +239,9 @@ ckpt.json --structure data.npz \ --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode
 frames -o out/umb
 ```
 
+## Visual examples
+
+![Trialanine conformers anchored to collective-variable coordinates](../../images/povray-overlays/trialanine_pes_with_povray.png)
 
 
 ---

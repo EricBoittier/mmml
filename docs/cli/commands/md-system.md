@@ -1273,6 +1273,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         liquid boxes).
 ```
 
+## Visual examples
+
+![Structure, thermodynamics, RDF, and geometry validation](../../images/structures/validation_summary.png)
 
 ## Related docs
 
