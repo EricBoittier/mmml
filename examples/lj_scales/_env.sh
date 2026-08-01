@@ -137,6 +137,12 @@ if [[ "${LJ_DES}" == "1" ]]; then
   # Residue cut. 40 keeps 75% of typeable frames while holding every reachable
   # LJ type above ~1,300 frames; past that the sampling floor collapses.
   export LJ_DES_TOP_RESIDUES="${LJ_DES_TOP_RESIDUES:-40}"
+  # Net charge filter for the h5 -> NPZ step. Neutral-only by default, matching
+  # ~/trainDES/train.py. The ion residues merged from toppar_water_ions.str
+  # (CLA/SOD/POT/LIT/CAL/MG) only ever appear in net-charged dimers, so
+  # LJ_DES_ALL_CHARGES=1 is what actually admits them -- a separate decision
+  # from having the templates available.
+  export LJ_DES_ALL_CHARGES="${LJ_DES_ALL_CHARGES:-0}"
   export LJ_DES_RAW="${LJ_DES_RAW:-${LJ_ARTIFACTS_DIR}/des_dimers_raw.npz}"
   export LJ_DES_ALL="${LJ_DES_ALL:-${LJ_ARTIFACTS_DIR}/des_dimers_cgenff_all.npz}"
   export LJ_DATASET="${LJ_DATASET:-${LJ_DES_RAW}}"

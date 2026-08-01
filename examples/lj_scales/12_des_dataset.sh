@@ -31,10 +31,16 @@ fi
 if [[ -f "${LJ_DES_RAW}" && "${LJ_FORCE_PREP:-0}" != "1" ]]; then
   echo "12a: reusing ${LJ_DES_RAW}  (LJ_FORCE_PREP=1 to redo)"
 else
+  _charge_flag=""
+  [[ "${LJ_DES_ALL_CHARGES}" == "1" ]] && _charge_flag="--all-charges"
   uv run python scripts/des_h5_to_npz.py "${LJ_DES_H5}" \
     -o "${LJ_DES_RAW}" \
     --pad "${LJ_DES_PAD}" \
+    ${_charge_flag} \
     ${LJ_DES_MAX_STRUCTURES:+--max-structures "${LJ_DES_MAX_STRUCTURES}"}
+fi
+if [[ "${LJ_DES_ALL_CHARGES}" != "1" ]]; then
+  echo "12: neutral-only (LJ_DES_ALL_CHARGES=1 to admit ion dimers: CLA/SOD/POT/LIT/CAL/MG)"
 fi
 
 # --- 12b: CGenFF assignment -------------------------------------------------
