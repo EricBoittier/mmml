@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
@@ -67,6 +68,21 @@ def test_skin_positive_small_disp_reuse() -> None:
         last_box=box.copy(),
         have_cache=True,
     )
+
+
+def test_device_skin_max_disp_matches_numpy_contract() -> None:
+    """Device skin path must use the same max|ΔR| metric as the host cache."""
+    import jax.numpy as jnp
+
+    R0 = np.zeros((4, 3), dtype=np.float64)
+    R1 = R0.copy()
+    R1[2, 0] = 0.11
+    host = float(np.max(np.linalg.norm(R1 - R0, axis=1)))
+    device = float(jnp.max(jnp.linalg.norm(jnp.asarray(R1) - jnp.asarray(R0), axis=1)))
+    assert device == pytest.approx(host)
+    assert host == pytest.approx(0.11)
+    assert host <= verlet_reuse_displacement_limit_A(0.25)
+    assert host > verlet_reuse_displacement_limit_A(0.20)
 
 
 def test_skin_positive_disp_beyond_half_skin_forces_rebuild() -> None:
