@@ -542,6 +542,37 @@ def match_cgenff_template(
     return res_name, type_indices, charges
 
 
+def reorder_to_cgenff_template(
+    ref: CgenffReference,
+    z: np.ndarray,
+    pos: np.ndarray,
+    res_name: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Reorder one monomer's ``(z, pos)`` into its CGenFF ``RESI`` atom order.
+
+    PyCHARMM's ``coor.set_positions`` fills the PSF **positionally**, so feeding
+    it a geometry in some other order silently bonds the wrong atoms rather than
+    failing. Methanol is the classic case: ASE's ``CH3OH`` puts the hydroxyl H
+    fourth, CGenFF's ``MEOH`` expects it third (``HG1``), and the mismatch
+    stretches an O-H bond to ~2 A -- worth ~5x10^5 kcal/mol.
+
+    Matching is by covalent-graph isomorphism, so it is composition- and
+    order-agnostic. Raises ``ValueError`` if the geometry is not isomorphic to
+    the template.
+    """
+    z = np.asarray(z).reshape(-1)
+    pos = np.asarray(pos, dtype=np.float64).reshape(-1, 3)
+    if res_name not in ref.residues:
+        raise KeyError(f"RESI '{res_name}' not found in parsed RTF residues.")
+    # obs_to_tmpl[i] is the template slot that observed atom i belongs in.
+    obs_to_tmpl = _template_to_geometry_permutation(ref.residues[res_name], z, pos)
+    z_out = np.empty_like(z)
+    pos_out = np.empty_like(pos)
+    z_out[obs_to_tmpl] = z
+    pos_out[obs_to_tmpl] = pos
+    return z_out, pos_out
+
+
 def _template_to_geometry_permutation(
     tmpl: dict, z_observed: np.ndarray, positions: np.ndarray
 ) -> np.ndarray:

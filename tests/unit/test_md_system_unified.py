@@ -485,16 +485,5 @@ def test_end_to_end_pbc_nvt(capsys):
     assert "jaxmd-unified" in out
 
 
-@pytest.mark.pycharmm
-def test_end_to_end_builds_ffparams():
-    """The packmol+PSF helper must produce FFParams, or mm_nonbonded can't run."""
-    _pycharmm_or_skip()
-    from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
-    from mmml.md.lowering import runconfig_from_md_system_args
-
-    run_config = runconfig_from_md_system_args(_args(setup="pbc_nve", seed=23))
-    system = build_packmol_system_with_ffparams(run_config.system)
-    assert system.ff_params is not None
-    assert system.n_atoms == 12  # 4 TIP3 waters
-    # TIP3 charges: O=-0.834, H=+0.417
-    assert np.allclose(sorted(system.ff_params.charges), sorted([-0.834, 0.417, 0.417] * 4))
+# test_end_to_end_builds_ffparams lives in test_md_system_unified_ffparams.py
+# so CI can run it in a fresh interpreter (CGenFF re-read segfaults otherwise).

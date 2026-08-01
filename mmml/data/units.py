@@ -102,18 +102,26 @@ _ENERGY_ALIASES = {
     "kcal_mol": "kcal_mol",
 }
 
+# normalize_force_unit() replaces "/" with "_" before looking a key up here, so
+# a key containing "/" is only reachable when its underscore form is also
+# present. "ev/a", "ha/bohr" and "kcal/mol/ang" were listed but unreachable --
+# passing them raised "Unsupported force unit" despite looking supported. Both
+# spellings are kept so the table reads as documentation of what is accepted.
 _FORCE_ALIASES = {
     "ev_angstrom": "ev_angstrom",
     "ev/angstrom": "ev_angstrom",
     "ev/ang": "ev_angstrom",
     "ev/a": "ev_angstrom",
+    "ev_a": "ev_angstrom",
     "ev_ang": "ev_angstrom",
     "hartree_bohr": "hartree_bohr",
     "hartree/bohr": "hartree_bohr",
     "ha/bohr": "hartree_bohr",
+    "ha_bohr": "hartree_bohr",
     "kcal_mol_angstrom": "kcal_mol_angstrom",
     "kcal/mol/angstrom": "kcal_mol_angstrom",
     "kcal/mol/ang": "kcal_mol_angstrom",
+    "kcal_mol_ang": "kcal_mol_angstrom",
 }
 
 _LENGTH_ALIASES = {
@@ -555,7 +563,12 @@ def _units_from_npz_metadata_json(raw: Any) -> tuple[str | None, str | None]:
     if isinstance(raw, np.ndarray) and raw.dtype == object and raw.shape == ():
         raw = raw.item()
     if isinstance(raw, (bytes, bytearray)):
-        raw = raw.decode("utf-8")
+        try:
+            raw = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            # Non-UTF-8 bytes in a metadata field are junk, not a crash: this
+            # helper's contract is "return (None, None) when it cannot tell".
+            return None, None
     if isinstance(raw, str):
         try:
             payload = json.loads(raw)

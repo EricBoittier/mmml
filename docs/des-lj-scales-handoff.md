@@ -18,7 +18,8 @@ Background: [SO3LR / DES dimers — chemical space & LJ coverage](des-so3lr-dime
 | Chemical-space + coverage scan | [`scripts/scan_des_chemical_space.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/scan_des_chemical_space.py) | run on all 370,956 frames |
 | Figures / tables | [`scripts/gen_docs_des_chemspace_figures.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/gen_docs_des_chemspace_figures.py) | generated |
 | Separation coverage (σ/ε gate) | [`scripts/analyze_des_geometry_coverage.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/analyze_des_geometry_coverage.py) | run on all 370,956 frames — **passes** |
-| Warm start from a checkpoint | `physnet-train --physnet-checkpoint` | 1-epoch runs from both `DESdimers` and an SO3LR checkpoint |
+| Warm start from a checkpoint | `physnet-train --physnet-checkpoint` | 1-epoch runs verified |
+| Checkpoint comparison | `mmml physnet-evaluate` | 7 candidates ranked on identical DES frames — `DESdimers` wins |
 | HDF5 → padded NPZ | [`scripts/des_h5_to_npz.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/des_h5_to_npz.py) | **only run on 4,000 of 371k structures** |
 | CGenFF assignment | `mmml prepare-mm-dataset` | run on that slice; now also emits `cgenff_res_name` |
 | Residue-priority cut | [`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/filter_mm_dataset_by_residue.py) | run on that slice |
@@ -85,6 +86,53 @@ can answer from the repo — `scripts/run_step_b_eval.sh` uses
 convention rather than measurement. If which one matters, evaluate them first
 (`scripts/evaluate_so3lr_spooky_extxyz.py` against `~/data/so3lr_test/` on
 pcstudix); do not inherit my guess.
+
+### Is there a better checkpoint? Measured: no
+
+The repo also bundles six PhysNet checkpoints
+(`mmml/models/physnetjax/defaults/hf_json/`, `--physnet-transfer-model`), all
+with `natoms=34` — the DES dimer shape. Their manifest carries validation
+metrics, but from **different runs on different data**, so they are not
+comparable to each other and say nothing about DES. I evaluated all seven
+candidates on the *same* 400 DES frames, strided across the whole HDF5:
+
+```bash
+mmml physnet-evaluate --checkpoint <ckpt.json> --data des_eval.npz \
+  --natoms 34 --batch-size 8 --num-samples 400 --subtract-mean
+```
+
+| Checkpoint | **force MAE on DES** | *reported on its own valid set* |
+|---|---:|---:|
+| **`DESdimers_params.json`** | **0.562** | — (none stored) |
+| `neutral_best_forces` | 0.585 | 0.974 |
+| `neutral_large_degree2` | 1.801 | 3.419 |
+| `charged_degree0_high_features` | 2.978 | 2.708 |
+| `charged_electrostatic_basis64` | 3.413 | 1.571 |
+| `charged_light_degree1` | 3.550 | 3.516 |
+| `charged_electrostatic_best_forces` | 4.670 | 1.530 |
+
+kcal/mol/Å. **`DESdimers_params.json` wins** — which was previously an
+assumption on this page and is now a measurement.
+
+Two things worth carrying forward:
+
+- **The reported ranking does not survive contact with DES.**
+  `charged_electrostatic_best_forces` is the manifest's
+  `default_joint_training_model` and 2nd-best on paper; it is the **worst**
+  here, 8× off. Do not inherit that default for this dataset.
+- **`neutral_best_forces` is a live alternative** at 0.585 — within 4% — and is
+  a much larger model (features 128 vs 32, 3 iterations vs 2, `max_atomic_number`
+  55, which still covers Xe at Z=54). `DESdimers` has a 32-feature backbone; if
+  the hybrid fit turns out capacity-limited, that is the one to try next.
+
+Only **forces** are comparable. Every checkpoint shows a ~1,612 kcal/mol
+near-constant energy offset that `--subtract-mean` does not remove — the same
+magnitude across different models, so it is an atomic-reference mismatch, not a
+quality signal. And this ranks *pure-ML* force accuracy as a proxy for warm-start
+quality; it is not a measure of hybrid-decomposition quality. The `spooky_so3lr_*`
+checkpoints are deliberately absent from the table: warm-starting from them
+silently drops three parameter groups (below), so benchmarking them would rank
+something you cannot actually deploy.
 
 ### The warm start silently discards weights
 
@@ -281,8 +329,9 @@ the exact tail order matters.
 - Any validation against an independent reference.
 - `--no-match-checkpoint-architecture` combined with a warm start (§2 item 1).
 - Whether ZBL and the CGenFF LJ repulsive wall double-count.
-- Any evaluation of the SO3LR checkpoints against each other, so "best" is
-  unestablished.
+- Any evaluation of the `spooky_so3lr_*` checkpoints against each other, so
+  "best" is unestablished for those (the PhysNet-compatible ones *are* ranked
+  above).
 
 ---
 
@@ -327,9 +376,10 @@ worth doing. Order:
    and lower `mm_switch_on` to match the adopted 6 Å model cutoff, or keep the
    YAML's 10 Å and train from scratch. Do not run the default combination —
    it puts the ML taper outside the model's own horizon.
-3. Short warm-started run (50 epochs) from `DESdimers_params.json`. Confirm the
-   scales move at all before spending GPU hours, and **diff the parameter-group
-   names in against out** (§2) so you know what was actually loaded.
+3. Short warm-started run (50 epochs) from `DESdimers_params.json` — measured
+   best of seven candidates (§2). Confirm the scales move at all before spending
+   GPU hours, and **diff the parameter-group names in against out** (§2) so you
+   know what was actually loaded.
 4. Inspect with `06_inspect_scales.py`; treat any type under ~1,000 frames as
    noise regardless of what it reports. Compare recovered σ against CGenFF's
    own value — a large excursion is more likely absorbed Coulomb or ZBL error

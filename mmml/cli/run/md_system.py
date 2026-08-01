@@ -1867,11 +1867,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--jax-md-update-interval",
         type=int,
-        default=1,
+        default=0,
         help=(
-            "JAX-MD/ASE PBC MM neighbor-list refresh interval in MD steps or calculator "
-            "calls (default: 1, conservative). Larger values reduce host/device sync "
-            "when pair-list stability has been validated."
+            "JAX-MD/ASE PBC MM neighbor-list refresh interval in MD steps "
+            "(0 = ensemble auto: NVT=10, NpT=5, NVE=5; 1 = every step / safest). "
+            "Larger values reduce host/device sync on stable runs."
         ),
     )
     parser.add_argument(
@@ -2449,14 +2449,20 @@ def _append_suite_mmml_handoff_args(
                 str(getattr(args, "jaxmd_fire_skip_max_f_eVA", 0.10)),
             ]
         )
+        _append_optional(cmd, "--nhc-tau", getattr(args, "nhc_tau", None))
+        _append_optional(
+            cmd, "--nhc-barostat-tau", getattr(args, "nhc_barostat_tau", None)
+        )
         _append_boolean_optional_flag(
             cmd,
             "--calculator-pre-minimize",
             bool(getattr(args, "calculator_pre_minimize", True)),
         )
-    cmd.extend(
-        ["--jax-md-update-interval", str(getattr(args, "jax_md_update_interval", 1))]
-    )
+    _nl_interval = int(getattr(args, "jax_md_update_interval", 0) or 0)
+    if backend != "jaxmd" and _nl_interval <= 0:
+        # ASE path has no ensemble-auto yet; keep the conservative every-step default.
+        _nl_interval = 1
+    cmd.extend(["--jax-md-update-interval", str(_nl_interval)])
     cmd.extend(
         ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
     )
@@ -2464,10 +2470,8 @@ def _append_suite_mmml_handoff_args(
         cmd.extend(["--mm-nl-backend", str(args.mm_nl_backend)])
     if getattr(args, "mm_nl_device", None) is not None:
         cmd.extend(["--mm-nl-device", str(args.mm_nl_device)])
-    if getattr(args, "nhc_tau", None) is not None:
-        cmd.extend(["--nhc-tau", str(args.nhc_tau)])
-    if getattr(args, "nhc_barostat_tau", None) is not None:
-        cmd.extend(["--nhc-barostat-tau", str(args.nhc_barostat_tau)])
+    # nhc-tau / nhc-barostat-tau already forwarded above for backend==jaxmd
+    # via _append_optional (do not duplicate here).
     if backend == "jaxmd":
         cmd.extend(
             [

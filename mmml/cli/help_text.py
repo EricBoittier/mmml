@@ -88,6 +88,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("compare-npz", "Reference vs model NPZ plots"),
             CommandInfo("compare-charmm-ml", "CHARMM PSF charges vs joint ML dipoles/ESP"),
             CommandInfo("unwrap-traj", "Unwrap periodic trajectories"),
+            CommandInfo("analyze-liquid", "Neat-liquid MD analysis (density, RDF, MSD)"),
             CommandInfo("orca-server", "Persistent JAX server for ORCA"),
         ),
     ),
@@ -111,6 +112,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300",
             "mmml md-system --config campaign.yaml --run-all",
             "mmml warmup-mlpot-jax --checkpoint \"$MMML_CKPT\" --n-monomers 20",
+            "mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/",
         ),
     ),
     (

@@ -151,6 +151,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     CommandSpec("interpolate-xyz", "mmml.cli.misc.interpolate_xyz", "Interpolate XYZ via Z-matrix → NPZ"),
     CommandSpec("unwrap-traj", "mmml.cli.misc.unwrap_traj", "Unwrap periodic trajectories"),
     CommandSpec(
+        "analyze-liquid",
+        "mmml.cli.misc.analyze_liquid",
+        "Neat-liquid MD analysis (density, RDF, MSD, plots)",
+    ),
+    CommandSpec(
         "sample-diverse-xyz",
         "mmml.generate.sample",
         "Pick diverse structures (SOAP) → NPZ",
