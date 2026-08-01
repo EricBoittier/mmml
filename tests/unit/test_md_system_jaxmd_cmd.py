@@ -105,6 +105,42 @@ def test_build_command_jaxmd_forwards_default_cutoffs_from_namespace() -> None:
     assert "--handoff-pre-minimize" not in argv
 
 
+def test_build_command_jaxmd_forwards_mm_lj_scales_file() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(mm_lj_scales_file="/tmp/hybrid_mm.json")
+    )
+    assert backend == "jaxmd"
+    assert "--mm-lj-scales-file" in argv
+    assert argv[argv.index("--mm-lj-scales-file") + 1] == "/tmp/hybrid_mm.json"
+
+
+def test_jaxmd_suite_accepts_mm_lj_scales_file_flag() -> None:
+    """md-system forwards --mm-lj-scales-file into jaxmd in-process argv; the
+    suite parser must accept it (otherwise GPU1 direct md-system benches die
+    with 'unrecognized arguments' before any MD)."""
+    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+
+    argv = [
+        "--ensemble",
+        "nvt",
+        "--composition",
+        "ACO:2",
+        "--checkpoint",
+        "/tmp/definitely-not-a-real-checkpoint",
+        "--mm-lj-scales-file",
+        "/tmp/hybrid_mm.json",
+        "--output-dir",
+        "/tmp/out",
+    ]
+    with pytest.raises(SystemExit) as exc:
+        jaxmd_suite.main(argv)
+    msg = str(exc.value)
+    assert "unrecognized arguments" not in msg
+    assert "not found" in msg or "Checkpoint" in msg
+
+
 def test_build_command_jaxmd_forwards_lr_solver_and_mm_charge_mode() -> None:
     """Regression: these were silently dropped for jaxmd/ase (only pycharmm
     got --lr-solver; --mm-charge-mode was forwarded nowhere at all), so a
