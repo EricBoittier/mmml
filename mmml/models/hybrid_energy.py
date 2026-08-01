@@ -124,6 +124,8 @@ class HybridMMConfig:
     pme_real_space_cutoff: float | None = None
     # Ewald Gaussian self term (−α/√π Σ q²). Default on (train-matched).
     ewald_include_self: bool = True
+    hybrid_hamiltonian: str = "handoff"
+    shared_cutoff: float | None = None
 
     @property
     def charge_correction(self) -> bool:
@@ -170,6 +172,17 @@ class HybridMMConfig:
         else:
             d["include_lj"] = bool(d.get("include_lj", True))
         d["learn_mm_lj_scales"] = bool(d.get("learn_mm_lj_scales", False))
+        hamiltonian = str(d.get("hybrid_hamiltonian", "handoff")).strip().lower()
+        if hamiltonian not in ("handoff", "shared_cutoff"):
+            raise ValueError("hybrid_hamiltonian must be handoff|shared_cutoff")
+        d["hybrid_hamiltonian"] = hamiltonian
+        if hamiltonian == "shared_cutoff":
+            cutoff = d.get("shared_cutoff", None)
+            if cutoff is None:
+                cutoff = d.get("mm_switch_on", None)
+            if cutoff is None or float(cutoff) <= 0.0:
+                raise ValueError("shared_cutoff Hamiltonian requires shared_cutoff > 0")
+            d["shared_cutoff"] = float(cutoff)
         if "pme_accuracy" in d and d["pme_accuracy"] is not None:
             d["pme_accuracy"] = float(d["pme_accuracy"])
         if d.get("pme_real_space_cutoff", None) is not None:
@@ -255,6 +268,8 @@ def hybrid_forward(
     pme_accuracy: float = 1e-6,
     pme_real_space_cutoff: float | None = None,
     ewald_include_self: bool = True,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
 ) -> dict:
     """Model forward assembled into the hybrid ML/MM total the calculator uses.
 
@@ -422,6 +437,8 @@ def hybrid_forward(
                     mm_switch_width=mm_switch_width,
                     ml_switch_width=ml_switch_width,
                     complementary_handoff=complementary_handoff,
+                    hybrid_hamiltonian=hybrid_hamiltonian,
+                    shared_cutoff=shared_cutoff,
                 )
             if short_range_wall:
                 # Already eV. NOT scaled by the MM taper: the taper is exactly
@@ -431,17 +448,25 @@ def hybrid_forward(
                 e = e + inter_monomer_wall_energy(x, m, r_on=wall_r_on, k=wall_k)
             return e
 
-        s, ds_dR = jax.value_and_grad(_scale)(p)
+        if hybrid_hamiltonian == "shared_cutoff":
+            s = jnp.asarray(1.0, dtype=p.dtype)
+            ds_dR = jnp.zeros_like(p)
+        else:
+            s, ds_dR = jax.value_and_grad(_scale)(p)
         e_mm, demm_dR = jax.value_and_grad(_emm)(p)
 
         e_mono = ea + eb
-        energy = (1.0 - s) * e_mono + s * eab + e_mm
-        forces = (
-            (1.0 - s) * (fa + fb)
-            + s * fab
-            + (e_mono - eab) * ds_dR
-            - demm_dR
-        )
+        if hybrid_hamiltonian == "shared_cutoff":
+            energy = eab + e_mm
+            forces = fab - demm_dR
+        else:
+            energy = (1.0 - s) * e_mono + s * eab + e_mm
+            forces = (
+                (1.0 - s) * (fa + fb)
+                + s * fab
+                + (e_mono - eab) * ds_dR
+                - demm_dR
+            )
         forces = jnp.where((m >= 0)[:, None], forces, 0.0)
         return energy, forces, s, e_mm
 

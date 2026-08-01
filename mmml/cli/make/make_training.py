@@ -1020,6 +1020,12 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "mm_switch_width": float(args.mm_switch_width),
         "ml_switch_width": float(args.ml_switch_width),
         "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
+        "hybrid_hamiltonian": str(getattr(args, "hybrid_hamiltonian", "handoff")),
+        "shared_cutoff": (
+            getattr(args, "shared_cutoff", None)
+            if getattr(args, "shared_cutoff", None) is not None
+            else float(getattr(args, "cutoff", 6.0))
+        ),
         "mm_charge_mode": mode.value,
         "lr_solver": lr_solver,
         "include_lj": include_lj,

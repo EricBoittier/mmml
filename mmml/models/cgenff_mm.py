@@ -213,6 +213,8 @@ def cgenff_mm_energy(
     mm_switch_width: float,
     ml_switch_width: float,
     complementary_handoff: bool = True,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
 ) -> Array:
     """Switched CGenFF MM energy (LJ + electrostatics) for one padded dimer.
 
@@ -247,6 +249,20 @@ def cgenff_mm_energy(
 
     r = _masked_pair_distance(positions, iu, ju, inter)
     pair_e = cgenff_pair_lj(r, pair_rmin, pair_eps) + cgenff_pair_coulomb(r, pair_qq)
+    if hybrid_hamiltonian == "shared_cutoff":
+        rc = float(shared_cutoff if shared_cutoff is not None else mm_switch_on)
+        if rc <= 0.0:
+            raise ValueError("shared_cutoff must be > 0")
+        # Force-shift V_FS(r)=V(r)-V(rc)-(r-rc)V'(rc).  This makes both
+        # energy and radial force continuous at the common ML/MM cutoff.
+        rc_a = jnp.asarray(rc, dtype=r.dtype)
+        lj_rc = cgenff_pair_lj(rc_a, pair_rmin, pair_eps)
+        x6 = (pair_rmin / rc_a) ** 6
+        dlj_rc = 12.0 * pair_eps * (x6 - x6**2) / rc_a
+        coul_rc = cgenff_pair_coulomb(rc_a, pair_qq)
+        dcoul_rc = -COULOMB_CONSTANT * pair_qq / (rc_a**2)
+        shifted = pair_e - (lj_rc + coul_rc) - (r - rc_a) * (dlj_rc + dcoul_rc)
+        return jnp.sum(jnp.where(inter & (r < rc_a), shifted, 0.0))
     e_raw = jnp.sum(jnp.where(inter, pair_e, 0.0))
 
     coms = monomer_centroids(positions, mol_id, n_monomers=2)

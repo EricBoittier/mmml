@@ -57,6 +57,7 @@ GAMMA_OFF: float = 3.0
 DEFAULT_MM_SWITCH_ON: float = 6.0
 DEFAULT_MM_SWITCH_WIDTH: float = 5.0
 DEFAULT_ML_SWITCH_WIDTH: float = 1.5
+HYBRID_HAMILTONIANS = ("handoff", "shared_cutoff")
 
 
 def handoff_widths_from_args(args) -> tuple[float, float, float]:
@@ -85,6 +86,22 @@ def cutoff_parameters_from_args(args) -> "CutoffParameters":
 
 def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
     """ML/MM handoff widths (shared by md-system and PyCHARMM MLpot CLIs)."""
+    parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=HYBRID_HAMILTONIANS,
+        default="handoff",
+        help=(
+            "Hybrid assembly: handoff preserves the existing COM-switched "
+            "Hamiltonian; shared_cutoff uses additive ML+MM with no handoff "
+            "and force-shifts MM pairs at --shared-cutoff."
+        ),
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for --hybrid-hamiltonian shared_cutoff; defaults to the model cutoff.",
+    )
     parser.add_argument(
         "--ml-switch-width",
         "--ml-cutoff",

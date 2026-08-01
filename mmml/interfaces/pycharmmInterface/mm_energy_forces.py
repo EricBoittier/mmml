@@ -841,6 +841,8 @@ def build_mm_energy_forces_fn(
     ml_cutoff_distance: float | None = None,
     mm_cutoff: float | None = None,
     complementary_handoff: bool = True,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
     ep_scale: Optional[np.ndarray] = None,
     sig_scale: Optional[np.ndarray] = None,
     at_codes_override: Optional[np.ndarray] = None,
@@ -907,7 +909,16 @@ def build_mm_energy_forces_fn(
         warmup_jax_pme_hybrid_host,
     )
 
+    hybrid_hamiltonian = str(hybrid_hamiltonian).strip().lower()
+    if hybrid_hamiltonian not in ("handoff", "shared_cutoff"):
+        raise ValueError("hybrid_hamiltonian must be handoff|shared_cutoff")
+    if hybrid_hamiltonian == "shared_cutoff":
+        shared_cutoff = float(shared_cutoff if shared_cutoff is not None else mm_switch_on)
+        if shared_cutoff <= 0.0:
+            raise ValueError("shared_cutoff must be > 0")
     _use_jax_pme_coulomb = pick_lr_solver(lr_solver) == "jax_pme"
+    if hybrid_hamiltonian == "shared_cutoff" and _use_jax_pme_coulomb:
+        raise ValueError("shared_cutoff currently supports the jax_mic MM backend, not jax_pme")
     _jax_pme_include_dispersion = resolve_jax_pme_dispersion(jax_pme_dispersion)
     _use_jax_pme_dispersion = (
         _use_jax_pme_coulomb and pbc_cell is not None and _jax_pme_include_dispersion
@@ -1014,8 +1025,10 @@ def build_mm_energy_forces_fn(
     def _create_jax_md_bundle(capacity_multiplier: float):
         return create_jax_md_neighbor_list(
             np.asarray(pbc_cell),
-            r_cutoff=resolve_mm_pair_list_cutoff_A(
-                mm_switch_on, mm_switch_width, jax_md_skin_distance
+            r_cutoff=(
+                float(shared_cutoff) + float(jax_md_skin_distance)
+                if hybrid_hamiltonian == "shared_cutoff"
+                else resolve_mm_pair_list_cutoff_A(mm_switch_on, mm_switch_width, jax_md_skin_distance)
             ),
             monomer_offsets=np.asarray(monomer_offsets),
             dr_threshold=0.5,
@@ -1039,8 +1052,10 @@ def build_mm_energy_forces_fn(
             )
             _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
 
-    _mm_list_cutoff = resolve_mm_pair_list_cutoff_A(
-        mm_switch_on, mm_switch_width, jax_md_skin_distance
+    _mm_list_cutoff = (
+        float(shared_cutoff) + float(jax_md_skin_distance)
+        if hybrid_hamiltonian == "shared_cutoff"
+        else resolve_mm_pair_list_cutoff_A(mm_switch_on, mm_switch_width, jax_md_skin_distance)
     )
 
     if _use_rebuild_nbrs:
@@ -1398,6 +1413,8 @@ def build_mm_energy_forces_fn(
             pair_dimer_idx_arg: Optional[Array] = None,
             box_override: Optional[Array] = None,
         ) -> Array:
+            if hybrid_hamiltonian == "shared_cutoff":
+                return jnp.sum(pair_energies)
             from mmml.interfaces.pycharmmInterface.calculator_utils import monomer_coms_segment
 
             coms = monomer_coms_segment(positions, _monomer_id_jnp, n_monomers)
@@ -1488,6 +1505,24 @@ def build_mm_energy_forces_fn(
         q_use = q_per_system if charges is None else charges
         qq = _pair_qq_from_charges(q_use)
         electrostatic_energies = coulomb(distances, qq) * pair_mask
+        if hybrid_hamiltonian == "shared_cutoff":
+            rc = jnp.asarray(float(shared_cutoff), dtype=distances.dtype)
+            inside = pair_mask & (distances < rc)
+            x6 = (pair_rm / rc) ** 6
+            lj_rc = pair_ep * (x6**2 - 2.0 * x6)
+            dlj_rc = 12.0 * pair_ep * (x6 - x6**2) / rc
+            vdw_energies = jnp.where(
+                inside,
+                vdw_energies - lj_rc - (distances - rc) * dlj_rc,
+                0.0,
+            )
+            coul_rc = coulombs_constant * qq / rc
+            dcoul_rc = -coulombs_constant * qq / (rc**2)
+            electrostatic_energies = jnp.where(
+                inside,
+                electrostatic_energies - coul_rc - (distances - rc) * dcoul_rc,
+                0.0,
+            )
         return vdw_energies, electrostatic_energies, vdw_energies + electrostatic_energies, distances
 
     def switched_mm_energy(positions: Array, charges: Optional[Array] = None) -> Array:
