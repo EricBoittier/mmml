@@ -36,11 +36,15 @@ eV / eV·Å, already free-atom referenced. No unit conversion needed.
 
 ## 2. Warm start — what is actually possible today
 
-**Yes, and it is verified.** `mmml physnet-train --physnet-checkpoint <path>`
-accepts a JSON or Orbax checkpoint and warm-starts from it. I ran a 1-epoch
-hybrid-MM training on real DES frames from
+**Mechanically yes — but with a real caveat you must read.**
+`mmml physnet-train --physnet-checkpoint <path>` accepts a JSON or Orbax
+checkpoint and warm-starts from it. I ran 1-epoch hybrid-MM training on real
+DES frames from
 [`examples/ckpts_json/DESdimers_params.json`](https://github.com/EricBoittier/mmml/blob/main/examples/ckpts_json/DESdimers_params.json):
 it trained, the LJ scales were learnable, and it wrote `hybrid_mm.json`.
+
+What "it ran" does **not** tell you is whether all the pretrained weights were
+actually used. They were not — see below. That check is not optional.
 
 ```bash
 LJ_DES=1 LJ_DEVICE=gpu bash examples/lj_scales/05_train.sh \
@@ -52,11 +56,13 @@ LJ_DES=1 LJ_DEVICE=gpu bash examples/lj_scales/05_train.sh \
 `DESdimers_params.json` was trained by `~/trainDES/train.py` on **this exact
 HDF5** with the PhysNet `EF` architecture. It is the right warm start.
 
-The `spooky_so3lr_*` checkpoints are a **different model**. They share the
-e3x-style backbone naming (`Dense_*`, `Embed_0`, `MessagePass_*`) but add
-`charge_bias`, `charge_feature_projection`, `spin_feature_projection` and
-`repulsion` parameter groups that PhysNet `EF` does not have, and are far
-larger:
+An SO3LR checkpoint **also runs** — I tested `spooky_so3lr_muon3_epoch0013`
+and it trained to completion and wrote its scales. Do not take that as
+approval: see "the warm start silently discards weights" below. It shares the
+e3x-style backbone naming (`Dense_*`, `Embed_0`, `MessagePass_*`) with `EF`
+but carries `charge_feature_projection` and `spin_feature_projection` groups
+that live in `spooky_model.py` and have no counterpart in the `EF` model
+`physnet-train` builds. It is also much larger:
 
 | | `DESdimers` | `spooky_so3lr_muon3_epoch0013` | lj_scales YAML |
 |---|---:|---:|---:|
@@ -74,9 +80,41 @@ architecture; they differ only in optimiser/LR/epoch. **I found no stored eval
 metrics for any of them**, so "the best SO3LR one we have" is not something I
 can answer from the repo — `scripts/run_step_b_eval.sh` uses
 `muon3_epoch0013`, which is the only evidence of a preferred one, and that is
-convention rather than measurement.
+convention rather than measurement. If which one matters, evaluate them first
+(`scripts/evaluate_so3lr_spooky_extxyz.py` against `~/data/so3lr_test/` on
+pcstudix); do not inherit my guess.
 
-### Three things the warm start silently changes
+### The warm start silently discards weights
+
+**Verified by diffing the input checkpoint against the checkpoint the run
+wrote.** Nothing is logged — I grepped the run for `drop|ignor|unused|missing|
+mismatch` and got zero hits. Parameter groups the `EF` model does not declare
+are dropped on the floor:
+
+| Warm start | groups in | groups out | silently dropped |
+|---|---:|---:|---|
+| `DESdimers_params.json` | 14 | 13 | `repulsion` |
+| `spooky_so3lr_muon3_epoch0013` | 21 | 18 | `repulsion`, `charge_feature_projection`, `spin_feature_projection` |
+
+- **`repulsion` (both cases).** `EF.trainable_zbl` defaults to `False` and is
+  *not* in `CHECKPOINT_ARCH_KEYS`, so `ZBLRepulsion` registers no parameters
+  and the checkpoint's **fitted** ZBL parameters are replaced by the universal
+  ZBL constants. Not catastrophic — the functional form survives — but the
+  short-range repulsion you train against is not the one the checkpoint
+  learned, and it is exactly the region σ is fitted in.
+- **The two projections (SO3LR only).** These are load-bearing learned
+  transforms in the spooky model. The `Dense_*` / `MessagePass_*` weights that
+  *are* loaded were trained with those projections in the loop; dropping them
+  leaves the rest of the network operating on inputs it never saw. **This makes
+  the SO3LR warm start substantially unsound**, and it fails silently rather
+  than loudly. Treat "it ran" as meaningless here.
+
+This is the [untrustworthy-diagnostics
+pattern](hybrid-mm-lj-scales.md) in its purest form: the run completes, the
+loss decreases, and a third of the pretrained information is gone. If you warm
+start from anything, diff the parameter-group names before and after.
+
+### Three more things the warm start silently changes
 
 `--match-checkpoint-architecture` is **on by default** and overwrites
 `features`, `max_degree`, `num_basis_functions`, `num_iterations`, `n_res`,
@@ -96,9 +134,11 @@ from `DESdimers` therefore silently:
    YAML's `dipole_weight: 27.21` and `charges_weight: 14.39` inert. For
    `mm_charge_mode: fixed` the MM charges come from CGenFF anyway, so this may
    be harmless — but it is not what the config file says is happening.
-3. **Turns `zbl` on.** ZBL short-range repulsion and the CGenFF LJ repulsive
-   wall now both act at short range. Whether that double-counts has **not been
-   checked**, and it directly affects the σ the fit converges to.
+3. **Turns `zbl` on** (with universal, not fitted, constants — see above). A
+   ZBL repulsive wall and the CGenFF LJ repulsive wall then both act at short
+   range. Whether that double-counts has **not been checked**, and it acts
+   precisely where σ is determined. This is the most likely way to get a
+   confidently wrong σ out of this pipeline.
 
 ### The warm start is a pure-ML prior fitted to the *whole* interaction
 
