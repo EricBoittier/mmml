@@ -1881,6 +1881,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="JAX-MD/ASE PBC MM neighbor-list skin distance in Å (default: 0.25).",
     )
     parser.add_argument(
+        "--mm-nl-backend",
+        choices=["auto", "vesin", "cell_list", "jax_md"],
+        default=None,
+        help=(
+            "MM neighbor-list builder for jaxmd "
+            "(default: MMML_MM_NL_BACKEND or auto→vesin)."
+        ),
+    )
+    parser.add_argument(
+        "--mm-nl-device",
+        choices=["cpu", "gpu"],
+        default=None,
+        help=(
+            "MM Vesin rebuild device for jaxmd "
+            "(default: MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy failure)."
+        ),
+    )
+    parser.add_argument(
         "--nhc-tau",
         type=float,
         default=None,
@@ -2448,6 +2466,10 @@ def _append_suite_mmml_handoff_args(
     cmd.extend(
         ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
     )
+    if getattr(args, "mm_nl_backend", None) is not None:
+        cmd.extend(["--mm-nl-backend", str(args.mm_nl_backend)])
+    if getattr(args, "mm_nl_device", None) is not None:
+        cmd.extend(["--mm-nl-device", str(args.mm_nl_device)])
     if backend == "jaxmd":
         cmd.extend(
             [

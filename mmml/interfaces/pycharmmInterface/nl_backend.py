@@ -47,8 +47,15 @@ except Exception:
 
 
 def resolve_mm_nl_backend(name: str | None = None) -> MmNlBackendName:
-    """Resolve backend name from argument, ``MMML_MM_NL_BACKEND`` env, or ``auto``."""
-    raw = (name or os.environ.get("MMML_MM_NL_BACKEND", "auto")).strip().lower()
+    """Resolve backend: explicit non-auto arg > ``MMML_MM_NL_BACKEND`` > ``auto``.
+
+    Passing ``\"auto\"`` (the common call-site default) must still honor the
+    env override; previously ``name or env`` short-circuited and ignored it.
+    """
+    raw = (name or "").strip().lower()
+    if not raw or raw == "auto":
+        env_raw = (os.environ.get("MMML_MM_NL_BACKEND") or "").strip().lower()
+        raw = env_raw if env_raw else "auto"
     if raw in ("auto", "vesin", "cell_list", "jax_md"):
         return raw  # type: ignore[return-value]
     raise ValueError(

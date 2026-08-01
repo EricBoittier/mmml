@@ -676,6 +676,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--jax-md-disable-fallback", action="store_true")
     p.add_argument(
+        "--mm-nl-backend",
+        choices=["auto", "vesin", "cell_list", "jax_md"],
+        default=None,
+        help=(
+            "MM neighbor-list builder (default: MMML_MM_NL_BACKEND or auto→vesin). "
+            "jax_md uses device-side incremental lists when available."
+        ),
+    )
+    p.add_argument(
+        "--mm-nl-device",
+        choices=["cpu", "gpu"],
+        default=None,
+        help=(
+            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or cpu). "
+            "gpu needs working CuPy JIT + vesin; falls back to cpu on failure."
+        ),
+    )
+    p.add_argument(
         "--charmm-pre-minimize",
         dest="charmm_pre_minimize",
         action="store_true",
@@ -868,6 +886,12 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
+
+    # NL backend/device are resolved via env inside mm_energy_forces / nl_gpu.
+    if getattr(args, "mm_nl_backend", None):
+        os.environ["MMML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
+    if getattr(args, "mm_nl_device", None):
+        os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
 
     if getattr(args, "mlpot_profile", False):
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
