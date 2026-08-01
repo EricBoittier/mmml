@@ -1,0 +1,87 @@
+# Legacy DCM liquid campaign (Packmol box, jax_mic throughout).
+#
+# Ordering: Packmol DCM:N → jaxmd FIRE + short NVT settle → PyCHARMM NVT
+# heat/equi → jaxmd NVT → jaxmd NVE.
+#
+# Cold PyCHARMM heat from a raw Packmol frame hits ENERGY CHANGE TOLERANCE;
+# jaxmd settle first is the intended path (see examples/lj_scales/07_deploy_md.sh).
+# Learned LJ requires jax_mic (truncated MIC), not Ewald — issue #139.
+#
+#   uv run mmml md-system \
+#     --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
+#     --run-all \
+#     --checkpoint CKPT --mm-lj-scales-file SIDECAR \
+#     --campaign-output-dir OUT
+
+defaults:
+  composition: "DCM:120"
+  box_size: 30.0
+  packmol_radius: 6.9
+  # Packmol tolerance is the min distance between atoms of different molecules.
+  # 2.0 packs Cl···H inside vdW; 3.0 is comfortable at this density. Every
+  # molecule is ML, so CHARMM GRMS stays 0 — only the calculator can relax contacts.
+  packmol_tolerance: 3.0
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/params.json
+  # mm_lj_scales_file: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/hybrid_mm.json
+  temperature: 300.0
+  dt_fs: 0.5
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+  skip_jit_warmup: true
+  quiet: true
+  continue_velocities: true
+  handoff_write_res: true
+  mc_density_equalize: false
+  # Soften CHARMM heat after jaxmd settle (legacy single-job heat was too abrupt).
+  no_echeck_heat: true
+  n_heat_segments: 4
+  heat_thermostat: bussi
+  handoff_quality_gate: true
+  handoff_quality_fmax_eVA: 1.0
+
+campaign_output: results/hybrid_mm_fixed_lj_scales_liquid
+
+runs:
+  jaxmd_settle:
+    description: jaxmd FIRE + short NVT settle from Packmol DCM box
+    backend: jaxmd
+    setup: pbc_nvt
+    ps: 0.05
+    jaxmd_minimize_steps: 250
+    continue_velocities: false
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_settle
+
+  pycharmm_nvt:
+    description: PyCHARMM NVT heat + equilibration after jaxmd settle
+    backend: pycharmm
+    setup: pbc_nvt
+    depends_on: jaxmd_settle
+    md_stages: "mini,heat,equi"
+    # Stage-specific durations (bare `ps` does not reach heat/equi).
+    ps_heat: 0.20
+    ps_equi: 0.20
+    mm_nonbond_mode: jax_mic
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid/pycharmm_nvt
+
+  jaxmd_nvt:
+    description: jaxmd NVT production from PyCHARMM handoff
+    backend: jaxmd
+    setup: pbc_nvt
+    depends_on: pycharmm_nvt
+    ps: 0.50
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_nvt
+
+  jaxmd_nve:
+    description: jaxmd NVE production from NVT handoff
+    backend: jaxmd
+    setup: pbc_nve
+    depends_on: jaxmd_nvt
+    ps: 0.25
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid/jaxmd_nve

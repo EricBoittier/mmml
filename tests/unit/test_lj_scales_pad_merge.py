@@ -246,3 +246,47 @@ def test_lj_scales_liquid_campaign_yaml_parses() -> None:
     assert str(args.mm_lj_scales_file).endswith("hybrid_mm.json")
     assert str(args.from_psf).endswith("model.psf")
     assert args.job_id == "jaxmd_settle"
+
+
+def test_lj_scales_packmol_liquid_campaign_yaml_parses() -> None:
+    """Legacy DCM deploy: Packmol box, jaxmd settle before PyCHARMM heat."""
+    cfg = _REPO / "examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml"
+    assert cfg.is_file()
+    raw = yaml.safe_load(cfg.read_text())
+    assert set(raw["runs"]) >= {
+        "jaxmd_settle",
+        "pycharmm_nvt",
+        "jaxmd_nvt",
+        "jaxmd_nve",
+    }
+    assert raw["runs"]["jaxmd_settle"]["backend"] == "jaxmd"
+    assert raw["runs"]["jaxmd_settle"]["continue_velocities"] is False
+    assert raw["runs"]["pycharmm_nvt"]["depends_on"] == "jaxmd_settle"
+    assert raw["runs"]["jaxmd_nvt"]["depends_on"] == "pycharmm_nvt"
+    assert raw["runs"]["jaxmd_nve"]["depends_on"] == "jaxmd_nvt"
+    assert raw["defaults"]["mm_nonbond_mode"] == "jax_mic"
+    assert raw["defaults"].get("no_echeck_heat") is True
+    # Packmol path — no certified-box defaults.
+    assert "from_psf" not in raw["defaults"]
+    assert "from_crd" not in raw["defaults"]
+
+    args = parse_md_system_args(
+        [
+            "--config",
+            str(cfg),
+            "--job-id",
+            "jaxmd_settle",
+            "--checkpoint",
+            "/tmp/ckpt.json",
+            "--composition",
+            "DCM:64",
+            "--box-size",
+            "25.0",
+            "--mm-lj-scales-file",
+            "/tmp/hybrid_mm.json",
+        ]
+    )
+    assert args.mm_nonbond_mode == "jax_mic"
+    assert args.composition == "DCM:64"
+    assert args.job_id == "jaxmd_settle"
+    assert getattr(args, "from_psf", None) in (None, "")

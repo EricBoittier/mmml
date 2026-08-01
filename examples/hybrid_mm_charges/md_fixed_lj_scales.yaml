@@ -38,22 +38,19 @@ runs:
     ps: 0.05
     output_dir: results/hybrid_mm_fixed_lj_scales/dimer_nve
 
-  # Condensed phase. jax_mic (the default mm_nonbond_mode) is the only MD path
-  # that consumes ep_scale/sig_scale — periodic_external hands VDW to CHARMM
-  # IMAGE, which does not read hybrid_mm.json, and MLpot now errors out rather
-  # than ignoring the sidecar there. Electrostatics are therefore truncated MIC,
-  # not Ewald; see docs/hybrid-mm-lj-scales.md § "Why you train LJ without Ewald".
+  # Condensed phase single-job fallback (smoke). Prefer the Packmol campaign
+  # md_fixed_lj_scales_liquid_campaign.yaml (jaxmd settle → PyCHARMM → jaxmd)
+  # via examples/lj_scales/07_deploy_md.sh — cold PyCHARMM heat from Packmol
+  # hits ENERGY CHANGE TOLERANCE. jax_mic is required for trained LJ (#139).
   liquid_nvt:
-    description: PBC liquid NVT — Mode A + trained LJ scales (jax_mic MM)
+    description: PBC liquid NVT smoke — Mode A + trained LJ scales (jax_mic MM)
     backend: pycharmm
     setup: pbc_nvt
     composition: "DCM:120"
     box_size: 30.0
     mm_nonbond_mode: jax_mic
-    # pbc_nvt runs mini,heat,equi, and resolve_stage_ps only reads `ps` for the
-    # prod and nve stages — so `ps` here would be inert and the run would silently
-    # take the 10 ps / 50 ps stage defaults. Set the two stages that actually run.
-    # 0.5 fs steps: 20 heat + 80 equi. Raise both for a production run.
-    ps_heat: 2.0
-    ps_equi: 2.0
+    # pbc_nvt runs mini,heat,equi; resolve_stage_ps only reads `ps` for prod/nve.
+    # Keep these smoke-short (≤0.1 ps); use the liquid campaign for real deploys.
+    ps_heat: 0.05
+    ps_equi: 0.05
     output_dir: results/hybrid_mm_fixed_lj_scales/liquid_nvt

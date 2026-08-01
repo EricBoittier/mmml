@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Step 07 — deploy trained LJ scales in condensed-phase MD.
 #
-# Default (LJ_JOINT!=1): legacy single-job PyCHARMM liquid_nvt (DCM, jax_mic).
+# Default (LJ_JOINT!=1): Packmol DCM campaign
+#   jaxmd settle → PyCHARMM NVT heat/eq → jaxmd NVT → jaxmd NVE
 #
 # Joint path (LJ_JOINT=1): certified boxes from step 11 → campaign
 #   jaxmd settle → PyCHARMM NpT heat/eq → jaxmd NVT → jaxmd NVE
@@ -31,23 +32,29 @@ fi
 echo "  checkpoint : ${CKPT}"
 echo "  scales     : ${SIDECAR}"
 
+GATE_ARGS=()
+if [[ -n "${LJ_MD_PACKMOL_TOLERANCE:-}" ]]; then
+  GATE_ARGS+=(--packmol-tolerance "${LJ_MD_PACKMOL_TOLERANCE}")
+fi
+if [[ -n "${LJ_MD_MAX_FMAX_EV_A:-}" ]]; then
+  GATE_ARGS+=(--max-fmax-before-dyn-ev-A "${LJ_MD_MAX_FMAX_EV_A}")
+fi
+
 if [[ "${LJ_JOINT}" != "1" ]]; then
-  echo "=== 07: md-system liquid_nvt (jax_mic, DCM legacy) ==="
-  GATE_ARGS=()
-  if [[ -n "${LJ_MD_PACKMOL_TOLERANCE:-}" ]]; then
-    GATE_ARGS+=(--packmol-tolerance "${LJ_MD_PACKMOL_TOLERANCE}")
-  fi
-  if [[ -n "${LJ_MD_MAX_FMAX_EV_A:-}" ]]; then
-    GATE_ARGS+=(--max-fmax-before-dyn-ev-A "${LJ_MD_MAX_FMAX_EV_A}")
-  fi
+  echo "=== 07: DCM liquid campaign (jaxmd settle → PyCHARMM NVT → jaxmd) ==="
+  # Pre-dynamics force gate knobs (Packmol path only):
+  #   LJ_MD_PACKMOL_TOLERANCE=3.5   pack further apart (try this first)
+  #   LJ_MD_MAX_FMAX_EV_A=3.0       raise the ceiling after inspecting the frame
+  # Tolerance is part of the packmol cache key; changing it rebuilds the box.
   uv run mmml md-system \
-    --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
-    --job-id liquid_nvt \
+    --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
+    --run-all \
     --checkpoint "${CKPT}" \
     --mm-lj-scales-file "${SIDECAR}" \
-    --output-dir "${LJ_ARTIFACTS_DIR}/liquid_nvt" \
+    --campaign-output-dir "${LJ_ARTIFACTS_DIR}/liquid_dcm" \
+    --mm-nonbond-mode jax_mic \
     ${GATE_ARGS[@]+"${GATE_ARGS[@]}"}
-  echo "07: OK  ${LJ_ARTIFACTS_DIR}/liquid_nvt"
+  echo "07: OK  ${LJ_ARTIFACTS_DIR}/liquid_dcm"
   exit 0
 fi
 
@@ -97,7 +104,8 @@ PY
     --from-crd "${crd}" \
     --composition "${comp}" \
     --campaign-output-dir "${out_root}" \
-    --mm-nonbond-mode jax_mic
+    --mm-nonbond-mode jax_mic \
+    ${GATE_ARGS[@]+"${GATE_ARGS[@]}"}
 }
 
 _run_solvent DCM "${LJ_BOX_DCM_DIR}" "${LJ_ARTIFACTS_DIR}/liquid_dcm"

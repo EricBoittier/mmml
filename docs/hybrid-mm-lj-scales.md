@@ -344,7 +344,17 @@ mm_charge_mode: fixed
 ```
 
 ```bash
-mmml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml --run-all
+# Prefer the Packmol liquid campaign (jaxmd settle before PyCHARMM heat):
+mmml md-system \
+  --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
+  --run-all --checkpoint CKPT --mm-lj-scales-file SIDECAR
+
+# Or the numbered ladder:
+#   LJ_DEVICE=gpu bash examples/lj_scales/07_deploy_md.sh
+#
+# Vacuum dimer smoke only:
+#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
+#     --job-id dimer_nve --checkpoint CKPT
 ```
 
 Resolution order for scales:
@@ -480,6 +490,6 @@ where the volume was actually measured. See
 | Train loop attach / write sidecar | `mmml/models/physnetjax/.../training/training.py` |
 | MD load → calculator | `mmml/interfaces/pycharmmInterface/mlpot/hybrid_mlpot.py` |
 | MM multiply | `mmml/interfaces/pycharmmInterface/mm_energy_forces.py` (`ep_scale`, `sig_scale`) |
-| Example YAMLs | `examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`, `md_fixed_lj_scales.yaml` |
+| Example YAMLs | `examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`, `md_fixed_lj_scales.yaml`, `md_fixed_lj_scales_liquid_campaign.yaml` |
 | Mechanics tests | `tests/unit/test_mm_lj_scales.py` |
 | Convergence + deploy-continuity tests | `tests/unit/test_mm_lj_scales_learning.py` |

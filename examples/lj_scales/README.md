@@ -25,7 +25,7 @@ Cluster job: [`../hybrid_mm_charges/submit_lj_scales_scicore.sbatch`](../hybrid_
 | [`04_miniature_fit.py`](04_miniature_fit.py) | — | 90 s | Recovers planted scales — **and demonstrates the σ/ε degeneracy** |
 | [`05_train.sh`](05_train.sh) | enriched NPZ, GPU | hours | `physnet-train` with `learn_mm_lj_scales` → writes `hybrid_mm.json` |
 | [`06_inspect_scales.py`](06_inspect_scales.py) | trained run | 5 s | Reports which types moved, flags implausible values, shows the ATC remap |
-| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run, PyCHARMM | minutes | DCM: PyCHARMM `liquid_nvt` with `jax_mic` |
+| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run, PyCHARMM | minutes | DCM Packmol campaign: jaxmd settle → PyCHARMM NVT → jaxmd NVT/NVE (`jax_mic`) |
 
 Steps **00, 03, 04 are self-contained** — no dataset, no CHARMM, no GPU. Run them
 first; they are where the concepts live.
