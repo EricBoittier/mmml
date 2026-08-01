@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 import yaml
 
 from mmml.cli.run.md_system import parse_md_system_args
@@ -93,10 +96,82 @@ def test_pad_merge_cli(tmp_path: Path) -> None:
     assert d["R"].shape == (2, 20, 3)
 
 
-def test_make_dimer_scan_rejects_single_conformer(tmp_path: Path) -> None:
-    import subprocess
-    import sys
+def test_merge_npz_paths_requires_n(tmp_path: Path) -> None:
+    mod = _load_pad_merge()
+    a = tmp_path / "no_n.npz"
+    np.savez(
+        a,
+        R=np.zeros((1, 5, 3)),
+        Z=np.zeros((1, 5), dtype=np.int32),
+    )
+    with pytest.raises(ValueError, match="missing required key"):
+        mod.merge_npz_paths([a])
 
+
+def test_pad_merge_cli_missing_n_exits(tmp_path: Path) -> None:
+    mod = _load_pad_merge()
+    a = tmp_path / "no_n.npz"
+    out = tmp_path / "out.npz"
+    np.savez(
+        a,
+        R=np.zeros((1, 5, 3)),
+        Z=np.zeros((1, 5), dtype=np.int32),
+    )
+    with pytest.raises(SystemExit, match="missing required key"):
+        mod.main([str(a), "-o", str(out)])
+
+
+def test_make_dimer_scan_empty_geoms_exits_cleanly(tmp_path: Path) -> None:
+    """All dimer frames skipped + no monomers -> clear exit, not max() crash."""
+    src = tmp_path / "src.npz"
+    # Two DCM frames so NMS can sample monomer_conformers>=2.
+    Z = np.array([[6, 17, 17, 1, 1], [6, 17, 17, 1, 1]], dtype=np.int32)
+    R = np.zeros((2, 5, 3))
+    R[0] = [[0, 0, 0], [1.7, 0, 0], [-0.6, 1.5, 0], [0.4, -0.9, 0.8], [0.4, -0.9, -0.8]]
+    R[1] = R[0] + 0.01
+    np.savez(
+        src,
+        R=R,
+        Z=Z,
+        N=np.array([5, 5], dtype=np.int32),
+        res_name=np.array(["DCM", "DCM"]),
+        cgenff_type_idx=np.zeros((2, 5), dtype=np.int32),
+        cgenff_charge=np.zeros((2, 5)),
+    )
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "scripts/make_dimer_scan_dataset.py",
+            "--data",
+            str(src),
+            "--resids",
+            "DCM",
+            "--monomer-conformers",
+            "2",
+            "--no-include-monomers",
+            "--min-contact",
+            "100.0",
+            "--n-directions",
+            "2",
+            "--n-orientations",
+            "2",
+            "--n-r",
+            "2",
+            "--geometry-only",
+            "--out",
+            str(tmp_path / "geoms.npz"),
+        ],
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 2
+    combined = proc.stderr + proc.stdout
+    assert "no geometries kept" in combined
+    assert "max() arg is an empty sequence" not in combined
+
+
+def test_make_dimer_scan_rejects_single_conformer(tmp_path: Path) -> None:
     src = tmp_path / "src.npz"
     # Minimal stub — argparse should fail before needing real chemistry.
     np.savez(

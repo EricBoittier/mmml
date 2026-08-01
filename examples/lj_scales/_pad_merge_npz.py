@@ -60,6 +60,9 @@ def pad_frames_to(
     return out
 
 
+_REQUIRED_KEYS = ("R", "Z", "N")
+
+
 def merge_npz_paths(
     paths: list[Path],
     pad_to: int | None = None,
@@ -68,12 +71,18 @@ def merge_npz_paths(
     loaded = [dict(np.load(p, allow_pickle=True)) for p in paths]
     if not loaded:
         raise ValueError("no NPZ paths given")
+    for path, data in zip(paths, loaded):
+        missing = [k for k in _REQUIRED_KEYS if k not in data]
+        if missing:
+            raise ValueError(
+                f"{path}: missing required key(s) {missing} (need R/Z/N)"
+            )
     widths = [int(np.asarray(d["R"]).shape[1]) for d in loaded]
     target = int(pad_to) if pad_to is not None else max(widths)
     padded = [pad_frames_to(d, target) for d in loaded]
 
     merged: dict[str, np.ndarray] = {}
-    # Prefer keys present in the first file; require R/Z/N.
+    # Prefer keys present in the first file; R/Z/N already validated above.
     keys = list(padded[0].keys())
     for key in keys:
         chunks = [d[key] for d in padded if key in d]
@@ -107,7 +116,12 @@ def main(argv: list[str] | None = None) -> int:
     for path in args.inputs:
         if not path.is_file():
             raise SystemExit(f"ERROR: missing input {path}")
-    merged = merge_npz_paths(args.inputs, pad_to=args.pad_to)
+    try:
+        merged = merge_npz_paths(args.inputs, pad_to=args.pad_to)
+    except ValueError as exc:
+        raise SystemExit(f"ERROR: {exc}") from exc
+    if "N" not in merged or "R" not in merged:
+        raise SystemExit("ERROR: merged NPZ missing required key(s) R and/or N")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     np.savez(args.output, **merged)
     n = len(merged["N"])

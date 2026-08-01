@@ -393,6 +393,13 @@ def main() -> int:
     n_tot = len(geoms)
     print(f"\n{n_tot} geometries total; r grid {rs.min():.2f}-{rs.max():.2f} A, "
           f"{(rs < args.r_dense_to).sum()}/{len(rs)} below {args.r_dense_to:g}")
+    if n_tot == 0:
+        print(
+            "ERROR: no geometries kept. Lower --min-contact, enable "
+            "--include-monomers, or widen the r / orientation grid.",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.geometry_only:
         out = Path(args.out)
