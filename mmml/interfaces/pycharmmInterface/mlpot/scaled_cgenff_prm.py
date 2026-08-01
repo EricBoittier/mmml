@@ -41,10 +41,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
+# (fingerprint, sidecar path, stats) for the one deploy this session allows.
+_DEPLOYED: tuple[str, str, dict] | None = None
+
 __all__ = [
     "ScaledPrmStats",
     "default_parameter_files",
     "deploy_scaled_lj_into_charmm",
+    "reset_deployed_lj_scales",
     "scale_nonbonded_block",
     "write_scaled_cgenff_prm",
 ]
@@ -263,13 +267,45 @@ def deploy_scaled_lj_into_charmm(
     is off (``do_mm = include_mm and not periodic_mode``), so per-type scales
     can only reach the energy through the parameter file itself.
 
-    Writes scaled copies of every CGenFF parameter file and reads them back with
-    ``append=True`` so the NONBONDED entries override the ones already loaded.
-    Returns the per-file stats.
+    Writes scaled copies of every CGenFF parameter file and reads them into the
+    live session. Returns the per-file stats.
+
+    **Callable once per CHARMM session.** A *second* non-append parameter read
+    into a live session silently zeroes the VDW energy (measured: base 1.11008
+    -> 2.22016 after the first deploy -> 0.00000 after the second). There is no
+    way to re-read parameters safely afterwards, so:
+
+    * re-deploying the same sidecar is a no-op and returns the cached stats;
+    * deploying a *different* sidecar raises -- restart CHARMM instead.
+
+    Both branches exist so a caller can invoke this defensively without having
+    to reason about whether some other code path already did.
     """
+    import hashlib
     import tempfile
 
     from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+
+    fingerprint = hashlib.sha256(
+        Path(sidecar).read_bytes() + f"|scale_14={bool(scale_14)}".encode()
+    ).hexdigest()
+    previous = globals().get("_DEPLOYED")
+    if previous is not None:
+        prev_fp, prev_sidecar, prev_results = previous
+        if prev_fp == fingerprint:
+            if verbose:
+                print(
+                    f"[lj-scales] already deployed from {Path(prev_sidecar).name}; "
+                    "skipping re-read (a second parameter read would zero the VDW)",
+                    flush=True,
+                )
+            return prev_results
+        raise RuntimeError(
+            "LJ scales were already deployed into this CHARMM session from "
+            f"{prev_sidecar}; deploying a different sidecar ({sidecar}) would "
+            "require a second non-append parameter read, which silently zeroes "
+            "the VDW energy. Restart CHARMM to change sidecars."
+        )
 
     if out_dir is None:
         out_dir = Path(tempfile.mkdtemp(prefix="mmml-scaled-lj-"))
@@ -293,6 +329,8 @@ def deploy_scaled_lj_into_charmm(
     for i, path in enumerate(ordered):
         read_cgenff_prm(path, append=(i > 0))
 
+    globals()["_DEPLOYED"] = (fingerprint, str(sidecar), results)
+
     if verbose:
         total = sum(len(s.scaled) for s in results.values())
         print(
@@ -302,3 +340,12 @@ def deploy_scaled_lj_into_charmm(
             flush=True,
         )
     return results
+
+
+def reset_deployed_lj_scales() -> None:
+    """Clear the once-per-session guard. Tests only.
+
+    Does NOT undo the parameter read -- nothing can, short of restarting
+    CHARMM. Calling this and deploying again will zero the VDW energy.
+    """
+    globals()["_DEPLOYED"] = None

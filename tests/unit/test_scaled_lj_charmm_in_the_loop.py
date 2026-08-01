@@ -1,20 +1,28 @@
 """CHARMM-in-the-loop: deployed LJ scales must reach CHARMM's own VDW energy.
 
 `test_scaled_cgenff_prm.py` proves the rewritten prm carries the right numbers.
-This proves CHARMM *reads* them, and — more importantly — that deploying twice
-does not apply the scales twice. Silent double-application is the failure this
-whole mechanism exists to avoid: it produces a plausible-looking energy from a
-force field nobody fitted.
+This proves CHARMM *reads* them, and pins the session contract that makes the
+wiring safe.
 
-The assertions are exact rather than approximate. Pair epsilons combine as
+Everything lives in one test because of a hard CHARMM constraint: a **second**
+non-append parameter read into a live session silently zeroes the VDW energy.
+Measured on this fixture:
+
+    base 1.11008  ->  2.22016 after the first deploy  ->  0.00000 after a
+    second unguarded one
+
+So `deploy_scaled_lj_into_charmm` allows one real deploy per process, and this
+test spends that one deploy exercising every assertion that genuinely needs
+CHARMM. Split into separate test functions these pass individually and fail as
+a file, which is worse than useless in CI.
+
+The epsilon assertion is exact, not approximate. Pair epsilons combine as
 ``eps_ij = sqrt(eps_i * eps_j)``, so scaling *every* type's epsilon by ``f``
-scales every pair epsilon by exactly ``f``; LJ energy is linear in eps_ij, and
-CHARMM's switching function depends only on r. Therefore::
-
-    E_vdw(all eps x f)  ==  f * E_vdw(base)
-
-to float precision, through CHARMM's full nonbond machinery. Sigma has no such
-identity (it sits inside r^-12/r^-6), so it is checked for *effect* instead.
+scales every pair epsilon by exactly ``f``; LJ energy is linear in eps_ij and
+CHARMM's switching function depends only on r. Hence
+``E_vdw(all eps x f) == f * E_vdw(base)`` through the full nonbond machinery.
+Sigma has no such identity (it sits inside r^-12/r^-6), so sigma behaviour is
+covered by the pure-Python table tests instead.
 """
 
 from __future__ import annotations
@@ -31,24 +39,31 @@ if not can_import_pycharmm():
 
 pytestmark = pytest.mark.pycharmm
 
+EPS_FACTOR = 2.0
 
-def _sidecar(tmp_path, names, *, eps_factor=1.0, sig_factor=1.0, name="hybrid_mm.json"):
+
+def _sidecar(tmp_path, names, *, eps_factor=1.0, name="hybrid_mm.json"):
     p = tmp_path / name
     p.write_text(json.dumps({
         "learn_mm_lj_scales": True,
         "cgenff_type_names": list(names),
-        "mm_lj_sigma_scale": [sig_factor] * len(names),
+        "mm_lj_sigma_scale": [1.0] * len(names),
         "mm_lj_epsilon_scale": [eps_factor] * len(names),
-        # Widen bounds: this is a deliberate probe, not a trained sidecar.
+        # Widened: this is a deliberate probe, not a trained sidecar.
         "mm_lj_sigma_scale_bounds": [0.5, 2.0],
         "mm_lj_epsilon_scale_bounds": [0.1, 10.0],
     }))
     return p
 
 
-@pytest.fixture
-def charmm_dimer(pycharmm_workdir):
-    """Fresh TIP3+MEOH system; returns a callable giving CHARMM's VDW energy."""
+def _live_types():
+    from mmml.models.mm_lj_scales import cgenff_type_names_from_prm
+
+    return [n for n in cgenff_type_names_from_prm() if n != "DEFAULT"]
+
+
+def _build_vdw_probe():
+    """Return a callable giving CHARMM's VDW energy for a fresh TIP3+MEOH PSF."""
     import pandas as pd
     import pycharmm
     import pycharmm.coor as coor
@@ -58,11 +73,11 @@ def charmm_dimer(pycharmm_workdir):
     import pycharmm.read as read
     import pycharmm.settings as settings
 
+    from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
     from mmml.data.cgenff_dataset import load_reference, reorder_to_cgenff_template
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         CGENFF_PRM, CGENFF_RTF, pycharmm_quiet, reset_block,
     )
-    from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
 
     pycharmm_quiet()
     reset_block()
@@ -90,111 +105,52 @@ def charmm_dimer(pycharmm_workdir):
     return vdw_energy
 
 
-def _live_types():
-    """CGenFF type names present in the parameter files."""
-    from mmml.models.mm_lj_scales import cgenff_type_names_from_prm
-
-    return [n for n in cgenff_type_names_from_prm() if n != "DEFAULT"]
-
-
-def test_charmm_vdw_picks_up_the_deployed_epsilon_scale(tmp_path, charmm_dimer):
-    """The headline: CHARMM's own VDW must change by exactly the scale factor."""
+def test_scaled_lj_reaches_charmm_and_the_session_contract_holds(
+    tmp_path, pycharmm_workdir
+):
+    from mmml.interfaces.pycharmmInterface.mlpot import scaled_cgenff_prm
     from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
         deploy_scaled_lj_into_charmm,
     )
 
-    base = charmm_dimer()
-    assert abs(base) > 1e-6, "degenerate fixture: base VDW is ~0, nothing to scale"
+    scaled_cgenff_prm.reset_deployed_lj_scales()
+    vdw = _build_vdw_probe()
+    types = _live_types()
 
-    deploy_scaled_lj_into_charmm(
-        _sidecar(tmp_path, _live_types(), eps_factor=2.0),
-        out_dir=tmp_path / "scaled",
-        verbose=False,
-    )
-    scaled = charmm_dimer()
+    base = vdw()
+    assert abs(base) > 1e-6, "degenerate fixture: base VDW ~0, nothing to scale"
 
-    assert scaled == pytest.approx(2.0 * base, rel=1e-6), (
-        f"CHARMM VDW {scaled} is not 2x the base {base}; the deployed prm "
-        "either did not reach CHARMM or did not carry the scale"
-    )
-
-
-def test_deploying_twice_does_not_double_apply(tmp_path, charmm_dimer):
-    """The bug this mechanism exists to prevent.
-
-    Re-deploying must re-derive from the pristine parameter files, not scale the
-    already-scaled ones. If it compounded, the second call would give 4x.
-    """
-    from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
-        deploy_scaled_lj_into_charmm,
-    )
-
-    base = charmm_dimer()
-    sidecar = _sidecar(tmp_path, _live_types(), eps_factor=2.0)
-
+    sidecar = _sidecar(tmp_path, types, eps_factor=EPS_FACTOR)
     deploy_scaled_lj_into_charmm(sidecar, out_dir=tmp_path / "s1", verbose=False)
-    once = charmm_dimer()
+    once = vdw()
+
+    # 1. CHARMM's own VDW picked up the deployed scale, exactly.
+    assert once == pytest.approx(EPS_FACTOR * base, rel=1e-6), (
+        f"CHARMM VDW {once} is not {EPS_FACTOR}x the base {base}; the deployed "
+        "prm either did not reach CHARMM or did not carry the scale. "
+        "(A ratio of exactly 1.0 means the parameter read was append-only, "
+        "which does not override existing NONBONDED entries.)"
+    )
+
+    # 2. Parameters survive a PSF rebuild.
+    assert vdw() == pytest.approx(once, rel=1e-9), "deploy did not survive PSF rebuild"
+
+    # 3. Re-deploying the same sidecar is a guarded no-op, not a second read.
     deploy_scaled_lj_into_charmm(sidecar, out_dir=tmp_path / "s2", verbose=False)
-    twice = charmm_dimer()
-
-    assert once == pytest.approx(2.0 * base, rel=1e-6)
+    twice = vdw()
     assert twice == pytest.approx(once, rel=1e-9), (
-        f"double application: {twice} vs {once} (would be "
-        f"{4.0 * base} if scales compounded)"
+        f"repeat deploy changed the energy: {twice} vs {once}. 0.0 means the "
+        f"second parameter read wiped the VDW; {EPS_FACTOR**2 * base} would "
+        "mean the scales compounded."
     )
+    assert abs(twice) > 1e-9, "second read zeroed the VDW"
 
+    # 4. A *different* sidecar must refuse rather than silently zero the VDW.
+    other = _sidecar(tmp_path, types, eps_factor=3.0, name="other.json")
+    with pytest.raises(RuntimeError, match="already deployed"):
+        deploy_scaled_lj_into_charmm(other, out_dir=tmp_path / "s3", verbose=False)
 
-def test_deploy_order_relative_to_psf_build_does_not_matter(tmp_path, charmm_dimer):
-    """Parameters are read into CHARMM globally; the PSF is rebuilt per call.
+    # ...and the refusal left the session intact.
+    assert vdw() == pytest.approx(once, rel=1e-9)
 
-    Deploying before or after a PSF build must give the same energy, or the
-    wiring becomes order-sensitive in a way callers cannot reason about.
-    """
-    from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
-        deploy_scaled_lj_into_charmm,
-    )
-
-    sidecar = _sidecar(tmp_path, _live_types(), eps_factor=1.5)
-
-    # Deploy first, then build+evaluate.
-    deploy_scaled_lj_into_charmm(sidecar, out_dir=tmp_path / "a", verbose=False)
-    before = charmm_dimer()
-
-    # Build+evaluate once more (PSF rebuilt), then re-deploy and evaluate.
-    _ = charmm_dimer()
-    deploy_scaled_lj_into_charmm(sidecar, out_dir=tmp_path / "b", verbose=False)
-    after = charmm_dimer()
-
-    assert before == pytest.approx(after, rel=1e-9)
-
-
-def test_sigma_scale_changes_the_energy(tmp_path, charmm_dimer):
-    """Sigma has no linear identity, so assert effect rather than a factor."""
-    from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
-        deploy_scaled_lj_into_charmm,
-    )
-
-    base = charmm_dimer()
-    deploy_scaled_lj_into_charmm(
-        _sidecar(tmp_path, _live_types(), sig_factor=1.1),
-        out_dir=tmp_path / "scaled",
-        verbose=False,
-    )
-    scaled = charmm_dimer()
-
-    assert scaled != pytest.approx(base, rel=1e-6), "sigma scale had no effect"
-
-
-def test_unit_scales_leave_charmm_vdw_untouched(tmp_path, charmm_dimer):
-    """A sidecar of all-1.0 must be a genuine no-op end to end."""
-    from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
-        deploy_scaled_lj_into_charmm,
-    )
-
-    base = charmm_dimer()
-    deploy_scaled_lj_into_charmm(
-        _sidecar(tmp_path, _live_types()),
-        out_dir=tmp_path / "scaled",
-        verbose=False,
-    )
-    assert charmm_dimer() == pytest.approx(base, rel=1e-9)
+    scaled_cgenff_prm.reset_deployed_lj_scales()

@@ -66,6 +66,8 @@ def test_attach_cell_from_box_json(tmp_path: Path):
     assert attached
     assert atoms.cell.rank == 3
     np.testing.assert_allclose(atoms.cell.lengths(), [28.0, 28.0, 28.0])
+    # Centroid lands at the cube centre so the wireframe encloses the liquid.
+    np.testing.assert_allclose(atoms.get_positions().mean(axis=0), [14.0, 14.0, 14.0], atol=1e-9)
 
 
 def test_box_side_cli_overrides_json(tmp_path: Path):

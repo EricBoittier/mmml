@@ -86,10 +86,19 @@ def resolve_box_side_A(
 
 
 def attach_cell_if_needed(atoms, side_A: float | None):
-    """Set a cubic cell when atoms lack one and ``side_A`` is known."""
+    """Set a cubic cell when atoms lack one and ``side_A`` is known.
+
+    Packmol / CHARMM stage PDBs are usually centered near the origin with no
+    ``CRYST1``. ASE draws the unit cell from the coordinate origin along the
+    cell vectors, so attaching ``[L,L,L]`` without shifting leaves the wireframe
+    sitting in the positive octant while the liquid sits around zero. Shift the
+    atom centroid to ``L/2`` so the cube encloses the liquid.
+    """
     if _atoms_have_cell(atoms) or side_A is None:
         return atoms, False
     atoms = atoms.copy()
+    pos = np.asarray(atoms.get_positions(), dtype=np.float64)
+    atoms.set_positions(pos - pos.mean(axis=0) + 0.5 * float(side_A))
     atoms.set_cell([side_A, side_A, side_A])
     atoms.set_pbc(True)
     return atoms, True
