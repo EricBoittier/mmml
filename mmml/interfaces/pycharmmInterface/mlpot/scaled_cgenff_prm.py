@@ -277,11 +277,21 @@ def deploy_scaled_lj_into_charmm(
         sidecar, out_dir, scale_14=scale_14, overwrite=True
     )
 
-    # Base file first, then streams, matching the original load order so later
-    # files still override earlier ones exactly as they do without scaling.
+    # The base file MUST be read non-append. CHARMM's `READ PARAM APPEND` only
+    # *adds* types it does not already have -- it silently leaves existing
+    # NONBONDED entries alone. Deploying entirely with append=True therefore
+    # reports success, writes correct files, and changes no energy whatsoever
+    # (verified: CHARMM VDW ratio came back exactly 1.000 instead of 2.000).
+    #
+    # A non-append read of the scaled base replaces the whole parameter set,
+    # which also drops the stream types; appending the scaled streams then
+    # re-adds them, and because they are now absent, append genuinely inserts
+    # the scaled values. Bonded sections are byte-identical to the originals,
+    # so replacing wholesale loses nothing.
     order = {p.name: i for i, p in enumerate(default_parameter_files())}
-    for path in sorted(results, key=lambda p: order.get(p.name, 999)):
-        read_cgenff_prm(path, append=True)
+    ordered = sorted(results, key=lambda p: order.get(p.name, 999))
+    for i, path in enumerate(ordered):
+        read_cgenff_prm(path, append=(i > 0))
 
     if verbose:
         total = sum(len(s.scaled) for s in results.values())
