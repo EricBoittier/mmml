@@ -10,8 +10,12 @@ Reads the scale vectors collected from the completed fits
 The bounds are a Bayesian prior on a component of the energy and force that may
 generalise at long range, so a scale sitting near its bound is the prior doing
 its job, not a failure. What the sweep tests is whether the likelihood ever
-takes over: it does, and epsilon converges at 5.53 once the ceiling is lifted
-above 4.0.
+takes over. It does for sigma and for the epsilon ceiling -- widening sigma to
++/-40% drops the fraction sitting within 1% of the prior width of a bound from
+60% to 10%, and epsilon settles at 5.53 once the ceiling moves off 4.0 -- but
+*not* for the epsilon floor: dropping it from
+0.25 to 0.05 leaves the same five types pinned, now at 0.05. Those types want
+their MM dispersion switched off, and a wider prior will not resolve them.
 """
 
 from __future__ import annotations
@@ -43,16 +47,26 @@ PRIORS = [
     ("prod", "σ ±20%", 1),
     ("wide", "σ ±40%", 2),
 ]
-NEAR_TOL = 1e-4
+# "Near a bound" has to be measured as a fraction of the prior width, not as an
+# absolute distance. An absolute 1e-4 is 0.1% of the +/-5% prior but only 0.01%
+# of the +/-40% one, so it is strictest exactly where a lenient test would be
+# least flattering -- it manufactures the conclusion it is used to support.
+NEAR_FRAC = 0.01
 
 
-def _near_bound(x: np.ndarray, lo: float, hi: float, tol: float = NEAR_TOL) -> np.ndarray:
-    return (np.abs(x - lo) <= tol) | (np.abs(x - hi) <= tol)
+def _rel_dist(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    """Distance to the nearest bound, as a fraction of the prior width."""
+    return np.minimum(x - lo, hi - x) / (hi - lo)
+
+
+def _near_bound(x: np.ndarray, lo: float, hi: float, frac: float = NEAR_FRAC) -> np.ndarray:
+    return _rel_dist(x, lo, hi) < frac
 
 
 def prior_sweep(d: dict, out: Path) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(15.0, 5.0))
+    fig, axes = plt.subplots(1, 3, figsize=(16.2, 5.2))
     ax_s, ax_e, ax_f = axes
+    fig.subplots_adjust(wspace=0.34)
 
     rng = np.random.default_rng(0)
 
@@ -80,8 +94,6 @@ def prior_sweep(d: dict, out: Path) -> None:
     ax_s.set_ylim(-0.55, 2.6)
     ax_s.grid(axis="x", alpha=0.25)
     ax_s.set_axisbelow(True)
-    ax_s.annotate("open marker = within 1e-4 of a bound;\ngrey bars = the prior",
-                  (0.02, 0.03), xycoords="axes fraction", fontsize=8.5, color="0.35")
 
     # (b) epsilon scales, log axis: the fitted values span two decades.
     for key, label, ci in PRIORS:
@@ -89,7 +101,10 @@ def prior_sweep(d: dict, out: Path) -> None:
         e = np.asarray(v["eps"])
         elo, ehi = v["bounds"][2], v["bounds"][3]
         y = ci + rng.uniform(-0.16, 0.16, e.size)
-        near = _near_bound(e, elo, ehi)
+        # eps is plotted on a log axis and its prior spans 1-3 decades, so the
+        # width is measured in logs too -- a linear fraction of [0.05, 20] would
+        # call eps=1 "10% from the floor", which is nonsense on a log scale.
+        near = _near_bound(np.log(e), np.log(elo), np.log(ehi))
         ax_e.scatter(e[~near], y[~near], s=22, color=C[ci], alpha=0.75,
                      edgecolors="white", linewidths=0.4, zorder=3)
         ax_e.scatter(e[near], y[near], s=48, facecolors="none",
@@ -100,44 +115,66 @@ def prior_sweep(d: dict, out: Path) -> None:
     ax_e.set_xscale("log")
     ax_e.set_yticks(range(3), ["ε [0.25, 4]", "ε [0.25, 4]", "ε [0.05, 20]"], fontsize=10)
     ax_e.set_xlabel("fitted ε scale (log)")
-    ax_e.set_title("(b) ε scales — the ceiling was binding", loc="left", fontweight="bold")
-    ax_e.set_ylim(-0.55, 2.6)
+    ax_e.set_title("(b) ε — ceiling releases, floor does not", loc="left",
+                   fontweight="bold")
+    ax_e.set_ylim(-0.55, 2.9)
     ax_e.grid(axis="x", alpha=0.25)
     ax_e.set_axisbelow(True)
     e_wide = np.asarray(d["wide"]["eps"])
-    ax_e.annotate(f"lifting the ceiling to 20\nlets ε settle at {e_wide.max():.2f}",
-                  (e_wide.max(), 2.0), textcoords="offset points", xytext=(-6, 26),
-                  ha="right", fontsize=9, color="0.20",
+    # Two findings, and they point opposite ways. Reporting only the first would
+    # be the flattering half of the result.
+    ax_e.annotate(f"ceiling 4 to 20:\nε settles at {e_wide.max():.2f}, not 20",
+                  (e_wide.max(), 2.15), textcoords="offset points", xytext=(4, 30),
+                  ha="left", fontsize=8.5, color="0.20",
+                  arrowprops=dict(arrowstyle="->", color="0.35", lw=1.2))
+    n_floor = int((np.abs(e_wide - 0.05) <= 1e-4).sum())
+    ax_e.annotate(f"floor 0.25 to 0.05:\n{n_floor} types just follow it down",
+                  (0.05, 2.15), textcoords="offset points", xytext=(6, 30),
+                  ha="left", fontsize=8.5, color="0.20",
                   arrowprops=dict(arrowstyle="->", color="0.35", lw=1.2))
 
-    # (c) the headline: widening the prior releases the scales.
-    widths, counts, labels = [], [], []
+    # (c) The headline, stated without a magic tolerance: the full curve of
+    # "how many types are within t of a bound" against t. A single cut would be
+    # a choice; the curve is the data. The +/-40% trace is flat, which is the
+    # real result -- its pinned types are hard against the bound and everything
+    # else is far from it, so the count does not depend on where the cut falls.
+    thresh = np.logspace(-3.2, -0.7, 120)  # 0.06% .. 20% of the prior width
     for key, label, ci in PRIORS:
         v = d[key]
         s = np.asarray(v["sigma"])
-        lo, hi = v["bounds"][0], v["bounds"][1]
-        widths.append(hi - lo)
-        counts.append(100.0 * _near_bound(s, lo, hi).mean())
-        labels.append(label)
-    ax_f.plot(widths, counts, "-o", color=C[0], lw=2.0, ms=9,
-              markeredgecolor="white", markeredgewidth=1.2)
-    for w, c, lab in zip(widths, counts, labels):
-        ax_f.annotate(f"{lab}\n{c:.0f}%", (w, c), textcoords="offset points",
-                      xytext=(8, 8), fontsize=9, color="0.25")
-    ax_f.set_xlabel("prior width on σ (max − min)")
-    ax_f.set_ylabel("σ scales within 1e-4 of a bound (%)")
-    ax_f.set_title("(c) A wider prior releases the fit", loc="left", fontweight="bold")
-    ax_f.set_xlim(0.0, 1.15)
-    ax_f.set_ylim(0, max(counts) * 1.35)
+        rel = _rel_dist(s, v["bounds"][0], v["bounds"][1])
+        frac = [100.0 * (rel < t).mean() for t in thresh]
+        ax_f.plot(100 * thresh, frac, lw=2.2, color=C[ci], label=label)
+        ax_f.annotate(f"{100 * (rel < NEAR_FRAC).mean():.0f}%",
+                      (100 * NEAR_FRAC, 100 * (rel < NEAR_FRAC).mean()),
+                      textcoords="offset points", xytext=(7, 5),
+                      fontsize=9, color=C[ci], fontweight="bold")
+    ax_f.axvline(100 * NEAR_FRAC, color="0.75", lw=1.0, ls=(0, (4, 3)), zorder=1)
+    ax_f.set_xscale("log")
+    ax_f.set_xlabel("distance to a bound (% of prior width)")
+    ax_f.set_ylabel("σ scales within that distance (%)")
+    ax_f.set_title("(c) A wider σ prior releases the fit", loc="left", fontweight="bold")
+    ax_f.legend(loc="upper left", fontsize=9, framealpha=0.95)
+    ax_f.set_ylim(0, 100)
     ax_f.grid(alpha=0.25)
     ax_f.set_axisbelow(True)
 
     fig.suptitle(
-        "DES LJ scales — response to the prior  "
-        "(94 reachable CGenFF types, warm-started, 25 epochs)",
+        "DES LJ scales — response to the prior  (warm-started PhysNet EF, 25 epochs)",
         fontsize=13, fontweight="bold",
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    # The ±20% run trained 88 types against 94 for the other two, so the three
+    # priors do not share a type set. The comparison below is distributional,
+    # not matched per type -- stated here rather than left for a reader to hit.
+    fig.text(
+        0.5, 0.006,
+        "(a, b) grey bars mark the prior; open markers sit within 1% of its width "
+        "of a bound (in logs for ε). "
+        "±5% and ±40% fit 94 types, ±20% fits 88 — the trainable masks differ, "
+        "so this is a distributional comparison, not a matched per-type one.",
+        ha="center", fontsize=8.5, color="0.40",
+    )
+    fig.tight_layout(rect=(0, 0.04, 1, 0.93), w_pad=3.0)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=160)
     plt.close(fig)
@@ -154,6 +191,18 @@ def seed_spread(d: dict, out: Path) -> None:
     S = np.array([d[k]["sigma"] for k in keys])
     E = np.array([d[k]["eps"] for k in keys])
 
+    # The stored vectors carry no type names, so a per-type comparison rests on
+    # the three runs indexing the LJ table identically. That is testable rather
+    # than assumable: if the order were scrambled, the per-type spread would
+    # look like three random draws from the population. It does not -- see the
+    # scramble null in panel (b) -- so the alignment is established, not assumed.
+    per_type = S.max(0) - S.min(0)
+    rng = np.random.default_rng(0)
+    null = np.array([
+        np.median(np.ptp(np.array([rng.permutation(s) for s in S]), axis=0))
+        for _ in range(2000)
+    ])
+
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12.6, 5.0))
 
     order = np.argsort(S[0])
@@ -168,22 +217,27 @@ def seed_spread(d: dict, out: Path) -> None:
     ax1.grid(alpha=0.25)
     ax1.set_axisbelow(True)
 
-    # Spread per type: max - min across seeds. This is the honest measure of
-    # how much of a fitted scale is optimiser noise rather than signal.
-    spread_s = S.max(0) - S.min(0)
-    spread_e = np.abs(E.max(0) - E.min(0)) / np.maximum(E.mean(0), 1e-12)
-    ax2.hist(spread_s, bins=24, color=C[0], alpha=0.85, label="σ  (absolute)")
-    ax2.set_xlabel("seed-to-seed spread in σ (max − min)")
+    # Panel (b): is the fitted per-type pattern signal or optimiser noise?
+    # Measured against the scramble null, which is what "noise" would look like.
+    ax2.hist(per_type, bins=24, color=C[0], alpha=0.85,
+             label="observed, per type")
+    ax2.axvline(np.median(per_type), color=C[0], lw=2.0,
+                label=f"observed median {np.median(per_type):.3f}")
+    ax2.axvline(null.mean(), color=C[1], lw=2.0, ls=(0, (5, 3)),
+                label=f"index-scramble null {null.mean():.3f}")
+    ax2.set_xlabel("seed-to-seed spread in σ  (max − min)")
     ax2.set_ylabel("CGenFF types")
-    ax2.set_title("(b) How much is optimiser noise", loc="left", fontweight="bold")
+    ax2.set_title("(b) Signal, not optimiser noise", loc="left", fontweight="bold")
+    ax2.legend(loc="upper right", fontsize=8.5, framealpha=0.95)
     ax2.grid(axis="y", alpha=0.25)
     ax2.set_axisbelow(True)
+    spread_e = np.abs(E.max(0) - E.min(0)) / np.maximum(E.mean(0), 1e-12)
     ax2.annotate(
-        f"median σ spread {np.median(spread_s):.4f}\n"
-        f"median ε spread {100 * np.median(spread_e):.1f}% of mean\n"
-        f"σ means: " + ", ".join(f"{s.mean():.4f}" for s in S),
-        (0.97, 0.95), xycoords="axes fraction", ha="right", va="top",
-        fontsize=9, color="0.25",
+        f"seed noise is {100 * np.median(per_type) / S.std(1).mean():.0f}% of the\n"
+        f"between-type spread (sd {S.std(1).mean():.3f})\n"
+        f"median ε spread {100 * np.median(spread_e):.0f}% of mean",
+        (0.97, 0.60), xycoords="axes fraction", ha="right", va="top",
+        fontsize=8.5, color="0.25",
         bbox=dict(boxstyle="round", facecolor="white", edgecolor="0.85"),
     )
 
