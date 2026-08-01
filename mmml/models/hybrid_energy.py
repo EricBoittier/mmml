@@ -225,9 +225,9 @@ class HybridMMConfig:
         #   TypeError: hybrid_forward() got an unexpected keyword argument
         #              'mm_lj_sigma_scale_bounds'
         # because dataclasses.asdict() sweeps the bounds in alongside the
-        # physical terms. pop() is keyed defensively so fields that only exist
-        # on newer configs (trainable mask, per-type frame counts) are handled
-        # too rather than reintroducing the same crash later.
+        # physical terms. Keyed defensively so fields that only exist on newer
+        # configs (trainable mask, per-type frame counts) cannot reintroduce
+        # the same crash later.
         for key in (
             "mm_lj_sigma_scale_bounds",
             "mm_lj_epsilon_scale_bounds",

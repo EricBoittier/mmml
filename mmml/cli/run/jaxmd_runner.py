@@ -1065,6 +1065,65 @@ def set_up_nhc_sim_routine(
         )
         return as_jaxmd_dtype(result.forces)
 
+    # Optional PSF/CGenFF angle (+ Urey) restraints — keep ML monomers tetrahedral
+    # when hybrid ml_intra has no classical bonded MM / SHAKE.
+    _psf_angle_on = bool(getattr(args, "psf_angle_restraints", False))
+    _psf_angle_energy_fn = None
+    _psf_angle_force_fn = None
+    if _psf_angle_on:
+        from mmml.md.restraints.psf_angles import build_psf_angle_restraint_fns
+
+        _psf_path = getattr(args, "from_psf", None)
+        if _psf_path is None:
+            raise ValueError("--psf-angle-restraints requires --from-psf")
+        _box_A = float(args.cell) if getattr(args, "cell", None) else None
+        _psf_angle_energy_fn, _psf_angle_force_fn, _psf_angle_info = (
+            build_psf_angle_restraint_fns(
+                _psf_path,
+                R,
+                box_A=_box_A,
+                scale=float(getattr(args, "psf_angle_restraint_scale", 1.0) or 1.0),
+                include_urey=not bool(
+                    getattr(args, "psf_angle_restraints_no_urey", False)
+                ),
+            )
+        )
+        _base_energy_fn = jax_md_energy_fn
+        _base_force_fn = jax_md_force_fn
+
+        @jit
+        def jax_md_energy_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
+            e0 = _base_energy_fn(
+                position,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
+                box=box,
+                **kwargs,
+            )
+            return e0 + _psf_angle_energy_fn(as_jaxmd_dtype(position))
+
+        @jit
+        def jax_md_force_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
+            f0 = _base_force_fn(
+                position,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
+                box=box,
+                **kwargs,
+            )
+            return f0 + as_jaxmd_dtype(_psf_angle_force_fn(as_jaxmd_dtype(position)))
+
+        c0 = Console()
+        c0.print(
+            Panel(
+                f"PSF={_psf_angle_info.psf_path}\n"
+                f"angles={_psf_angle_info.n_angles}  urey={_psf_angle_info.n_urey}  "
+                f"scale={_psf_angle_info.scale:g}  box={_psf_angle_info.box_A}",
+                title="[bold]PSF angle restraints (tetrahedral)[/bold]",
+                border_style="magenta",
+            )
+        )
+
     # evaluate_energies_and_forces (initial call - get update_fn if available)
     use_pbc = args.cell is not None
     is_npt = args.ensemble == "npt" and use_pbc
@@ -3011,6 +3070,13 @@ def set_up_nhc_sim_routine(
                         pair_mask=pair_mask,
                     )
                 e_pot = float(out_dyn.energy)
+                # Hybrid calculator output omits optional PSF angle restraints;
+                # add them so E_pot / E_tot match the forces the integrator sees.
+                if _psf_angle_energy_fn is not None:
+                    _pos_rep = state.position
+                    if is_npt:
+                        _pos_rep = space.transform(simulate.npt_box(state), state.position)
+                    e_pot += float(_psf_angle_energy_fn(as_jaxmd_dtype(_pos_rep)))
                 e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
                 if use_flat_bottom:
                     com_dist_report = float(out_dyn.com_dist)
