@@ -294,6 +294,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             pass
 
 
+# Raised by the ``MMML_DISABLE_CHARMM`` meta-path blocker installed above.
+_BLOCKED_IMPORT_SIGNATURE = "blocked by MMML_DISABLE_CHARMM"
+
 # Substrings that identify a failure caused purely by ``libcharmm`` being
 # absent (unbuilt), rather than a genuine defect in the code under test.
 _CHARMM_UNAVAILABLE_SIGNATURES = (
@@ -301,6 +304,11 @@ _CHARMM_UNAVAILABLE_SIGNATURES = (
     "libcharmm.dylib",
     "No module named 'pycharmm.",
     "'pycharmm' is not a package",
+    # The MMML_DISABLE_CHARMM blocker above. Without this the flag turns the
+    # ~50 tests that reach production code importing pycharmm into failures
+    # instead of the skips CI produces, which is the opposite of what a
+    # CI-reproduction switch is for.
+    _BLOCKED_IMPORT_SIGNATURE,
 )
 
 
@@ -321,9 +329,13 @@ def pytest_runtest_call(item: pytest.Item):
     exc = excinfo[1]
     if not isinstance(exc, (OSError, ImportError)):
         return
-    if charmm_env_configured():
-        return  # CHARMM available: a failure here is a real bug, keep it.
     message = str(exc)
+    # The MMML_DISABLE_CHARMM blocker is a deliberate harness decision, so it
+    # always yields a skip -- unlike the signatures below it does not describe
+    # the machine's real CHARMM state, and a test that clears the flag for its
+    # own discovery assertions must not turn the blocker into a failure.
+    if _BLOCKED_IMPORT_SIGNATURE not in message and charmm_env_configured():
+        return  # CHARMM available: a failure here is a real bug, keep it.
     if any(sig in message for sig in _CHARMM_UNAVAILABLE_SIGNATURES):
         outcome.force_exception(
             pytest.skip.Exception(
