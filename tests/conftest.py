@@ -81,9 +81,6 @@ def _block_pycharmm_imports_when_disabled() -> None:
     class _PycharmmBlocker:
         """A ``sys.meta_path`` finder that refuses the ``pycharmm`` package."""
 
-        def find_module(self, fullname, path=None):  # pragma: no cover - legacy API
-            return None
-
         def find_spec(self, fullname, path=None, target=None):
             if fullname == "pycharmm" or fullname.startswith("pycharmm."):
                 raise ImportError(
