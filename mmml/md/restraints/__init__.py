@@ -16,6 +16,10 @@ from mmml.md.restraints.linear_distance import (
     harmonic_bias_energy,
     linear_cvs_from_pairs,
 )
+from mmml.md.restraints.psf_angles import (
+    PsfAngleRestraintInfo,
+    build_psf_angle_restraint_fns,
+)
 
 __all__ = [
     "AngleWall",
@@ -25,6 +29,8 @@ __all__ = [
     "DihedralRestraint",
     "FlatBottomWall",
     "LinearDistanceCV",
+    "PsfAngleRestraintInfo",
+    "build_psf_angle_restraint_fns",
     "cv_from_spec",
     "harmonic_bias_energy",
     "harmonic_bias_energy_periodic_deg",

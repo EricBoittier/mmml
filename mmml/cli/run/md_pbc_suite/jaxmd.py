@@ -366,6 +366,39 @@ def main(argv: list[str] | None = None) -> int:
         help="Load certified/liquid-box PSF with --from-crd (skips Packmol rebuild).",
     )
     p.add_argument(
+        "--psf-angle-restraints",
+        action="store_true",
+        help=(
+            "Add scaled CGenFF harmonic angle (+ Urey–Bradley) forces from --from-psf "
+            "so ML monomers stay tetrahedral."
+        ),
+    )
+    p.add_argument(
+        "--psf-angle-restraint-scale",
+        type=float,
+        default=1.0,
+        help="Scale for --psf-angle-restraints (default: 1.0).",
+    )
+    p.add_argument(
+        "--psf-angle-restraints-no-urey",
+        action="store_true",
+        help="With --psf-angle-restraints: omit Urey–Bradley 1–3 terms.",
+    )
+    # Accepted because md-system always forwards these (calculator may use them);
+    # jax-md liquid path currently keeps the historical COM handoff defaults.
+    p.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "additive"),
+        default="handoff",
+        help="Hybrid Hamiltonian mode forwarded from md-system (default: handoff).",
+    )
+    p.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Optional shared ML/MM cutoff (Å) forwarded from md-system.",
+    )
+    p.add_argument(
         "--from-crd",
         type=Path,
         default=None,
@@ -1989,6 +2022,15 @@ def main(argv: list[str] | None = None) -> int:
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.5)),
         # Required for NVE Hellmann–Feynman preflight (freeze q_MM for q0/latent*).
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        # PSF/CGenFF angle (+ Urey) restraints for tetrahedral ML monomers.
+        from_psf=getattr(args, "from_psf", None),
+        psf_angle_restraints=bool(getattr(args, "psf_angle_restraints", False)),
+        psf_angle_restraint_scale=float(
+            getattr(args, "psf_angle_restraint_scale", 1.0) or 1.0
+        ),
+        psf_angle_restraints_no_urey=bool(
+            getattr(args, "psf_angle_restraints_no_urey", False)
+        ),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
