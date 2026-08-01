@@ -401,9 +401,17 @@ distributions) into one summary figure. Prefer
 trace, `legend_outside(...)` (never `loc="best"`), shared axis labels on
 RDF grids, and `assert_no_text_overlap(fig)` before `savefig`. The house
 example is [`docs/images/structures/validation_summary.png`](images/structures/validation_summary.png)
-from `scripts/plot_liquid_structure_validation.py`:
+from `scripts/plot_liquid_structure_validation.py` (DCM:120 liquid NVT with
+`--psf-angle-restraints` to keep monomers tetrahedral):
 
-![DCM:120 liquid NVT validation summary — POV-Ray snapshots, thermo time series with marginals, PSF bond health, RDFs, and angle distributions](images/structures/validation_summary.png)
+![DCM:120 liquid NVT + PSF angle restraints — POV-Ray snapshots, thermo time series with marginals, PSF bond health, RDFs, and angle distributions](images/structures/validation_summary.png)
+
+![Unconstrained vs PSF angle restraints](images/structures/unconstrained_vs_angle_restraints.png)
+
+**Figure.** Same 20 ps NVT protocol with and without CGenFF angle + Urey
+restraints from the PSF. Angle restraints keep tetrahedral geometry and
+sharply cut late-run bond outliers; residual max-bond growth after ~12 ps
+still points to missing hard bond constraints / underdense packing.
 
 Standalone POV panels (PSF bonds only; molecular MIC wrap):
 
