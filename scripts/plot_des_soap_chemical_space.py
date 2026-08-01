@@ -39,6 +39,16 @@ def _pair_label(z: np.ndarray, r: np.ndarray) -> str:
     return " + ".join(sorted(format_composition(z[c]) for c in comps))
 
 
+def _status_bucket(assignment, reason: str) -> str:
+    if assignment is not None:
+        return "typeable"
+    if reason.startswith("non-dimer"):
+        return "non-dimer"
+    if reason.startswith("unmapped"):
+        return "no CGenFF template"
+    return "topology mismatch"
+
+
 def _sample(path: Path, n_samples: int, seed: int):
     rng = np.random.default_rng(seed)
     with h5py.File(path, "r") as fh:
@@ -95,11 +105,15 @@ def main(argv: list[str] | None = None) -> int:
     status = []
     for (name, z, r), (x, y) in zip(frames, embedding, strict=True):
         assignment, reason = assign_frame_cgenff(z, r, ref, compute_mm=False)
-        label = "typeable" if assignment is not None else reason.split("(")[0].strip()
+        label = _status_bucket(assignment, reason)
         status.append(label)
         records.append((name, _pair_label(z, r), label, float(x), float(y)))
 
-    order = ["typeable"] + sorted(set(status) - {"typeable"})
+    order = [
+        label for label in
+        ("typeable", "topology mismatch", "no CGenFF template", "non-dimer")
+        if label in status
+    ]
     palette = ["#2878b5", "#d94841", "#e69f00", "#7b6fd0", "#888888"]
     fig, axes = plt.subplots(1, 2, figsize=(13.2, 6.1), constrained_layout=True)
     for ax, title in zip(axes, ("SOAP / UMAP", "SOAP neighbour tree"), strict=True):

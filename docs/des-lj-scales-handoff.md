@@ -17,6 +17,8 @@ Background: [SO3LR / DES dimers — chemical space & LJ coverage](des-so3lr-dime
 |---|---|---|
 | Chemical-space + coverage scan | [`scripts/scan_des_chemical_space.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/scan_des_chemical_space.py) | run on all 370,956 frames |
 | Figures / tables | [`scripts/gen_docs_des_chemspace_figures.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/gen_docs_des_chemspace_figures.py) | generated |
+| Separation coverage (σ/ε gate) | [`scripts/analyze_des_geometry_coverage.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/analyze_des_geometry_coverage.py) | run on all 370,956 frames — **passes** |
+| Warm start from a checkpoint | `physnet-train --physnet-checkpoint` | 1-epoch runs from both `DESdimers` and an SO3LR checkpoint |
 | HDF5 → padded NPZ | [`scripts/des_h5_to_npz.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/des_h5_to_npz.py) | **only run on 4,000 of 371k structures** |
 | CGenFF assignment | `mmml prepare-mm-dataset` | run on that slice; now also emits `cgenff_res_name` |
 | Residue-priority cut | [`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/filter_mm_dataset_by_residue.py) | run on that slice |
@@ -180,19 +182,39 @@ statement about this filtered subset.
 residue. Aggregate energy/force MAEs on this set are substantially water
 metrics. Report per-pair or per-residue breakdowns, not a single number.
 
-### σ/ε are degenerate, and I have not checked the geometry coverage
+### σ/ε are degenerate, but the DES separation coverage is broad
 
 A deeper well at larger radius is indistinguishable from a shallower one at
 smaller radius **from energies alone**. Forces and a range of separations break
 the tie — which is why `examples/lj_scales/04_miniature_fit.py` exists and
 recovers the wrong parameters on purpose.
 
-**I measured composition only.** I did not measure the radial or angular
-distribution of the DES dimer geometries. Whether this set spans enough
-separation to identify σ and ε separately is **unverified and is the single
-most important open question** before trusting a fitted scale. DES370K-style
-sets do vary separation, but I have not confirmed it for this file. Check it
-before running.
+The full 370,956-frame HDF5 has now been checked with
+`scripts/analyze_des_geometry_coverage.py`. The covalent-component criterion
+recognises 351,784 dimers and rejects 19,172 (5.17%) merged/contact structures.
+Across recognised dimers, COM distance runs from 2.884 to 8.404 Å over the
+5th–95th percentiles (median 4.816 Å); closest intermolecular contact runs from
+1.516 to 6.150 Å (median 2.908 Å). Among all 315 pairs with at least 100
+frames, the median per-pair COM 5th–95th span is 4.20 Å and **none** has a span
+below 1 Å. Relaxing the threshold to 50 frames gives 897 pairs, median span
+4.13 Å, **minimum 1.70 Å** — so this is not a "most pairs are fine" result,
+it holds for every reasonably-sampled pair. The common pairs are therefore not
+near-equilibrium-only samples; the radial coverage is broad enough to make a
+joint σ/ε fit plausible.
+
+Two caveats on that conclusion. The contacts reach ~1.3 Å at the 5th
+percentile, which is deep inside the repulsive wall — good for pinning σ, but
+also where ZBL and LJ repulsion overlap (above), so the two are fitted against
+each other exactly where the data is densest. And coverage being *broad* is
+necessary, not sufficient: identifiability also needs the fit to weight forces,
+which `forces_weight: 52.91` does. Neither point is a reason not to run; both
+are reasons to check the recovered σ against CGenFF's own value rather than
+accepting whatever the optimiser returns.
+
+That removes the largest geometry-level objection, but does not prove parameter
+identifiability: angular imbalance, correlated ML/MM compensation, truncated
+Coulomb, and thin atom types remain. The machine-readable result is
+`artifacts/des_chemspace/geometry_coverage.json`.
 
 ### Truncated electrostatics contaminate the fit
 
@@ -231,6 +253,10 @@ the exact tail order matters.
   unrepresentative. Nothing here says anything about convergence or accuracy.
 - Condensed-phase deployment (`07_deploy_md.sh`) with DES-trained scales.
 - Any validation against an independent reference.
+- `--no-match-checkpoint-architecture` combined with a warm start (§2 item 1).
+- Whether ZBL and the CGenFF LJ repulsive wall double-count.
+- Any evaluation of the SO3LR checkpoints against each other, so "best" is
+  unestablished.
 
 ---
 
@@ -266,19 +292,25 @@ dependent, not caused by any of this work.
 
 ## 5. Suggested order
 
-1. **Check the geometry coverage** of `qcell_dimers.h5` — COM separation and
-   closest-contact distributions per pair. The streaming analyzer is ready:
-   `uv run python scripts/analyze_des_geometry_coverage.py
-   ~/qcell/qcell_dimers.h5 -o artifacts/des_chemspace/geometry_coverage.json`.
-   It has not been run because the HDF5 is only on scicore. If the common pairs
-   are near-equilibrium only, stop: σ/ε will not be identifiable and nothing
-   downstream is worth running.
-2. Run the full `12_des_dataset.sh`; confirm frame count lands near the
+The σ/ε identifiability gate has been checked and **passes**, so the run is
+worth doing. Order:
+
+1. Run the full `12_des_dataset.sh`; confirm frame count lands near the
    predicted ~95,000 at `--top 40` and check the printed TIP3 share.
-3. Short warm-started run (50 epochs) from `DESdimers_params.json` with
-   `mm_switch_on` reconciled against the adopted 6 Å cutoff. Confirm the scales
-   move at all before spending GPU hours.
+2. **Decide the cutoff question before training, not after.** Either warm-start
+   and lower `mm_switch_on` to match the adopted 6 Å model cutoff, or keep the
+   YAML's 10 Å and train from scratch. Do not run the default combination —
+   it puts the ML taper outside the model's own horizon.
+3. Short warm-started run (50 epochs) from `DESdimers_params.json`. Confirm the
+   scales move at all before spending GPU hours, and **diff the parameter-group
+   names in against out** (§2) so you know what was actually loaded.
 4. Inspect with `06_inspect_scales.py`; treat any type under ~1,000 frames as
-   noise regardless of what it reports.
+   noise regardless of what it reports. Compare recovered σ against CGenFF's
+   own value — a large excursion is more likely absorbed Coulomb or ZBL error
+   than a real correction.
 5. Validate on something outside the loss — liquid density or an RDF first
    peak — before believing the scales.
+
+If you want the SO3LR warm start to be legitimate rather than lossy, the work
+is to give `EF` the two projection modules (or to train through
+`spooky_model.py` instead). That is a real piece of work, not a flag.

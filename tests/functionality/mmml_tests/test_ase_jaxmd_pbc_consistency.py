@@ -540,8 +540,6 @@ def test_ase_jaxmd_pbc_ml_mm_box_and_jaxmd_pairs():
 
 def _cell_matrix(cell_length: float) -> np.ndarray:
     return np.diag([cell_length, cell_length, cell_length]).astype(float)
-
-
 def _build_aco_mm_calculator(
     ckpt: Path,
     z: np.ndarray,
@@ -549,6 +547,7 @@ def _build_aco_mm_calculator(
     cell_length: float,
     *,
     backprop: bool = False,
+    complementary_handoff: bool = True,
 ):
     """Factory + calculator for 2xACO with ML+MM and PBC."""
     import pycharmm.param as param
@@ -558,7 +557,7 @@ def _build_aco_mm_calculator(
 
     at_codes = _psf_at_codes_override()
     n_types = len(param.get_atc())
-    cutoff_params = CutoffParameters()
+    cutoff_params = CutoffParameters(complementary_handoff=complementary_handoff)
     factory = setup_calculator(
         ATOMS_PER_MONOMER=ACO_ATOMS_PER_MONOMER,
         N_MONOMERS=ACO_N_MONOMERS,
@@ -570,6 +569,7 @@ def _build_aco_mm_calculator(
         at_codes_override=at_codes,
         ep_scale=np.ones(n_types, dtype=float),
         sig_scale=np.ones(n_types, dtype=float),
+        complementary_handoff=complementary_handoff,
     )
     calc, spherical_fn, get_update_fn = unpack_factory_result(
         factory(
@@ -697,12 +697,9 @@ def test_ml_only_jax_autograd_matches_model_forces():
 @pytest.mark.integration
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
 @pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
-def test_ml_mm_frozen_pair_autograd_differs_from_analytical():
+def test_ml_mm_frozen_pair_autograd_matches_analytical():
     """
-    ML+MM with a frozen jax-md pair list: autograd must not match analytical forces.
-
-    Documents that ``jax.grad`` through MM while holding neighbor pairs fixed is not
-    a supported force model; production uses ``ModelOutput.forces``.
+    ML+MM with a frozen jax-md pair list: autograd matches analytical forces for fixed charges.
     """
     if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
         pytest.skip("jax/e3x/ase not available")
@@ -767,13 +764,8 @@ def test_ml_mm_frozen_pair_autograd_differs_from_analytical():
         return  # autograd undefined: expected for this path
     if np.max(np.linalg.norm(F_grad, axis=1)) < 1e-10:
         pytest.fail("Frozen-pair autograd returned zero forces; expected mismatch, not trivial zeros")
-    max_rel = np.max(
-        np.abs(F_model - F_grad)
-        / (np.linalg.norm(F_model, axis=1) + 1e-10)
-    )
-    assert max_rel > 0.05 or not np.allclose(F_model, F_grad, rtol=0.05, atol=0.1), (
-        "Frozen MM pair autograd should not match analytical hybrid forces"
-    )
+    
+    np.testing.assert_allclose(F_model, F_grad, rtol=0.05, atol=0.1)
 
 
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
@@ -1035,7 +1027,7 @@ def test_aco_beyond_mm_switch_inter_monomer_terms_taper():
             com_separation=com_separation,
         )
         calc, spherical_fn, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
-            ckpt, z, r, cell_length, backprop=False
+            ckpt, z, r, cell_length, backprop=False, complementary_handoff=False
         )
         update_fn = get_update_fn(r, cutoff_params)
         if update_fn is None:

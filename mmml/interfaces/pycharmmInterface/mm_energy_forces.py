@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 import os
@@ -11,7 +12,11 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep, safe_norm
+from mmml.interfaces.pycharmmInterface.calculator_utils import (
+    _sharpstep,
+    monomer_coms_segment,
+    safe_norm,
+)
 from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
@@ -123,10 +128,14 @@ def _filter_pairs_by_com_min(
     """Exclude pairs where dimer COM distance < mm_r_min. Returns updated mask."""
     R = np.asarray(positions, dtype=np.float64)
     n_monomers = len(monomer_offsets) - 1
+    
+    # Vectorized COM calculation
+    monomer_ids = monomer_id.astype(np.int64)
+    counts = np.bincount(monomer_ids, minlength=n_monomers)
+    counts = np.where(counts > 0, counts, 1.0)
     coms = np.zeros((n_monomers, 3), dtype=np.float64)
-    for k in range(n_monomers):
-        start, end = int(monomer_offsets[k]), int(monomer_offsets[k + 1])
-        coms[k] = R[start:end].mean(axis=0)
+    for d in range(3):
+        coms[:, d] = np.bincount(monomer_ids, weights=R[:, d], minlength=n_monomers) / counts
 
     if pbc_cell is not None:
         cell = np.asarray(pbc_cell, dtype=np.float64)
@@ -138,13 +147,7 @@ def _filter_pairs_by_com_min(
     else:
         cell = inv_cell = None
 
-    ai = pair_i.astype(np.int32)
-    aj = pair_j.astype(np.int32)
-    mi = monomer_id[ai]
-    mj = monomer_id[aj]
-    com_i = coms[mi]
-    com_j = coms[mj]
-    dr = com_j - com_i
+    dr = coms[pair_j] - coms[pair_i]
 
     if inv_cell is not None:
         frac_dr = dr @ inv_cell.T
@@ -152,8 +155,7 @@ def _filter_pairs_by_com_min(
         dr = frac_dr @ cell
 
     r = np.linalg.norm(dr, axis=1)
-    out_mask = mask & (r >= mm_r_min)
-    return out_mask
+    return mask & (r >= mm_r_min)
 
 
 @jax.jit
@@ -164,17 +166,21 @@ def _filter_pairs_by_com_min_jax(
     mask: Array,
     monomer_id_jnp: Array,
     mm_r_min: float,
+    n_monomers: int,
     pbc_cell: Optional[Array] = None,
 ) -> Array:
-    """Exclude pairs where dimer COM distance < mm_r_min on GPU (JAX-native)."""
-    atom_ones = jnp.ones((positions.shape[0], 1), dtype=positions.dtype)
-    monomer_weights = jax.ops.segment_sum(atom_ones, monomer_id_jnp)
-    monomer_weights = jnp.where(monomer_weights > 0, monomer_weights, 1.0)
-    coms = jax.ops.segment_sum(positions, monomer_id_jnp) / monomer_weights
+    """Exclude pairs where dimer COM distance < ``mm_r_min`` (GPU).
 
-    com_i = coms[pair_i]
-    com_j = coms[pair_j]
-    dr = com_j - com_i
+    ``positions`` must be **Cartesian**. Callers that keep fractional
+    coordinates (``fractional_coordinates=True``) must convert with
+    ``R @ cell`` before calling — the same contract as
+    :func:`_filter_pairs_by_com_min`. Applying the Cartesian MIC
+    (``dr @ inv(cell)``) to fractional displacements yields garbage distances.
+    """
+    coms = monomer_coms_segment(positions, monomer_id_jnp, n_monomers)
+    mi = monomer_id_jnp[pair_i]
+    mj = monomer_id_jnp[pair_j]
+    dr = coms[mj] - coms[mi]
 
     if pbc_cell is not None:
         if pbc_cell.ndim == 1:
@@ -187,8 +193,7 @@ def _filter_pairs_by_com_min_jax(
         dr = frac_dr @ cell_3x3
 
     r = jnp.linalg.norm(dr, axis=1)
-    out_mask = mask & (r >= mm_r_min)
-    return out_mask
+    return mask & (r >= mm_r_min)
 
 
 def format_mm_pair_update_stats_summary(stats: dict) -> str:
@@ -1927,19 +1932,30 @@ def build_mm_energy_forces_fn(
                 
                 if mm_r_min is not None:
                     _pair_stats["com_filter_calls"] += 1
+                    # Match the host path: COM filter always sees Cartesian R.
+                    R_for_filter = R
                     pbc_for_filter = None
-                    if box is not None:
-                        pbc_for_filter = jnp.asarray(box)
-                    elif pbc_cell is not None:
-                        pbc_for_filter = jnp.asarray(pbc_cell)
-                    
+                    cell_src = box if box is not None else pbc_cell
+                    if cell_src is not None:
+                        cell = jnp.asarray(cell_src)
+                        if cell.ndim == 0:
+                            cell_3x3 = jnp.diag(jnp.full((3,), cell))
+                        elif cell.ndim == 1:
+                            cell_3x3 = jnp.diag(cell)
+                        else:
+                            cell_3x3 = cell
+                        if fractional_coordinates:
+                            R_for_filter = R @ cell_3x3
+                        pbc_for_filter = cell_3x3
+
                     mask = _filter_pairs_by_com_min_jax(
-                        R,
+                        R_for_filter,
                         pair_i,
                         pair_j,
                         mask,
                         _monomer_id_jnp,
-                        mm_r_min,
+                        float(mm_r_min),
+                        int(n_monomers),
                         pbc_cell=pbc_for_filter,
                     )
                 
