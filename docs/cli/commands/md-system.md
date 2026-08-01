@@ -1023,9 +1023,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         0.10). Set 0 to always run FIRE backoff stages.
   --jax-md-update-interval JAX_MD_UPDATE_INTERVAL
                         JAX-MD/ASE PBC MM neighbor-list refresh interval in MD
-                        steps or calculator calls (default: 1, conservative).
-                        Larger values reduce host/device sync when pair-list
-                        stability has been validated.
+                        steps (0 = ensemble auto: NVT=10, NpT=5, NVE=5; 1 =
+                        every step / safest). Larger values reduce host/device
+                        sync on stable runs.
   --jax-md-skin-distance JAX_MD_SKIN_DISTANCE
                         JAX-MD/ASE PBC MM neighbor-list skin distance in Å
                         (default: 0.25).
@@ -1242,6 +1242,20 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         Path to hybrid_mm.json with learnable per-type MM LJ σ/ε
                         scales. When omitted, MLpot looks next to --checkpoint
                         for hybrid_mm.json.
+  --mm-nl-backend {auto,vesin,cell_list,jax_md}
+                        MM neighbor-list builder for jaxmd (default:
+                        MMML_MM_NL_BACKEND or auto→vesin).
+  --mm-nl-device {cpu,gpu}
+                        MM Vesin rebuild device for jaxmd (default:
+                        MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy
+                        failure).
+  --nhc-tau MULT        jaxmd: Nose–Hoover thermostat coupling multiplier (tau =
+                        nhc_tau * dt; default 100 in the jaxmd suite).
+  --nhc-barostat-tau MULT
+                        jaxmd NpT: Nose–Hoover barostat coupling multiplier (tau
+                        = nhc_barostat_tau * dt; default 10000 in the jaxmd
+                        suite). Larger = softer piston (useful for under-dense
+                        liquid boxes).
 ```
 
 
