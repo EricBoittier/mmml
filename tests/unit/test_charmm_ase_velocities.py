@@ -226,9 +226,9 @@ def test_run_dynamics_preserves_explicit_bussi_iasvel_one(monkeypatch):
         "vz": np.array([0.0]),
     }
     fake_pycharmm = MagicMock()
-    # Patch the submodule too: run_dynamics ends with
-    # sync_comparison_velocities_from_main(), which reaches `import pycharmm.lib`.
-    # With only the parent stubbed that raises "'pycharmm' is not a package".
+    # Stub the submodule as well as the parent: run_dynamics finishes with
+    # sync_comparison_velocities_from_main(), which does `import pycharmm.lib`.
+    # With only the parent mocked that raises "'pycharmm' is not a package".
     with patch.dict(
         sys.modules,
         {"pycharmm": fake_pycharmm, "pycharmm.lib": fake_pycharmm.lib},
