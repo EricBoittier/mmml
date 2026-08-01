@@ -28,10 +28,16 @@ mkdir -p "$RUN_DIR/logs" "$CKPT_DIR" "$REPO/artifacts/lj_scales_des_production/l
 echo "Production scaled-LJ fit: seed=$SEED sigma=[0.8,1.2] min_type_frames=25"
 python -c "import jax; print('JAX devices:', jax.devices())"
 
+# Disjoint hold-out: --valid-data  made validation in-sample, and
+# with objective=valid_loss + best=true the saved epoch was then selected on
+# data the model had already trained on. Empty --valid-data makes
+# physnet-train split --data itself (0-overlap verified on des-hybrid-ws).
 uv run mmml physnet-train \
   --config examples/lj_scales/train_des_full_production_scaled.yaml \
   --data "$DATASET" \
-  --valid-data "$DATASET" \
+  --valid-data "" \
+  --n-train 108000 \
+  --n-valid 12000 \
   --ckpt-dir "$CKPT_DIR" \
   --tag "hybrid_mm_scaled_lj_des_full_seed${SEED}" \
   --seed "$SEED" \

@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""Render a certified liquid box with POV-Ray.
+
+Used to eyeball the boxes that back the dH_vap validation
+(``scripts/build_des_validation_boxes.sh``) before committing GPU hours to MD on
+them. A box that packed badly -- a void, an interpenetrating pair, a molecule
+outside the cell -- is obvious in a picture and nearly invisible in a density
+number, because Packmol reports the density it was *asked* for.
+
+POV-Ray must be on PATH (``brew install povray`` / ``apt install povray``).
+Without it this still writes the ``.pov``/``.ini`` pair, which renders anywhere.
+
+Example::
+
+    python scripts/render_liquid_box_povray.py boxes/tip3/model.pdb \\
+        -o docs/images/des-so3lr-dimers/box_tip3.png --label "TIP3  298 K"
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+from pathlib import Path
+
+import numpy as np
+from ase.io import read, write
+
+# Element colours tuned for a light background; ASE's jmol defaults render
+# hydrogen pure white, which disappears entirely.
+COLORS = {
+    "H": (0.85, 0.85, 0.88),
+    "C": (0.35, 0.35, 0.38),
+    "N": (0.20, 0.35, 0.85),
+    "O": (0.85, 0.20, 0.18),
+    "S": (0.90, 0.78, 0.20),
+    "Cl": (0.30, 0.75, 0.30),
+    "Ar": (0.45, 0.75, 0.80),
+    "He": (0.70, 0.85, 0.90),
+    "Ne": (0.55, 0.80, 0.85),
+    "Kr": (0.40, 0.70, 0.78),
+    "Xe": (0.35, 0.60, 0.72),
+}
+RADII = {"H": 0.30, "C": 0.60, "N": 0.58, "O": 0.55, "S": 0.85, "Cl": 0.85}
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("structure", type=Path, help="PDB/CRD/XYZ of the box")
+    ap.add_argument("-o", "--output", type=Path, required=True, help="PNG to write")
+    ap.add_argument("--width", type=int, default=1200)
+    ap.add_argument("--height", type=int, default=1200)
+    ap.add_argument("--rotation", default="-70x, 10y, 0z",
+                    help="ASE rotation string for the camera")
+    ap.add_argument("--label", default=None, help="unused by POV-Ray; kept for provenance")
+    ap.add_argument("--keep-pov", action="store_true", help="do not delete the .pov/.ini")
+    a = ap.parse_args(argv)
+
+    atoms = read(a.structure)
+    n = len(atoms)
+    syms = atoms.get_chemical_symbols()
+    uniq = sorted(set(syms))
+    print(f"{a.structure.name}: {n} atoms, elements {uniq}")
+    if atoms.cell is not None and atoms.cell.rank == 3:
+        L = atoms.cell.lengths()
+        print(f"  cell: {L[0]:.2f} x {L[1]:.2f} x {L[2]:.2f} A")
+
+    colors = np.array([COLORS.get(s, (0.6, 0.6, 0.6)) for s in syms])
+    radii = np.array([RADII.get(s, 0.6) for s in syms])
+
+    a.output.parent.mkdir(parents=True, exist_ok=True)
+    stem = a.output.with_suffix("")
+    pov_path = stem.with_suffix(".pov")
+
+    # `write` emits <stem>.pov and <stem>.ini; the renderer consumes the .ini.
+    write(
+        str(pov_path),
+        atoms,
+        format="pov",
+        radii=radii,
+        colors=colors,
+        rotation=a.rotation,
+        povray_settings=dict(
+            canvas_width=a.width,
+            canvas_height=a.height,
+            background="White",
+            transparent=False,
+            display=False,
+            camera_type="perspective",
+            # Cell edges make packing faults and stray molecules obvious.
+            celllinewidth=0.05,
+            bondlinewidth=0.0,
+        ),
+    )
+    print(f"  wrote {pov_path.name} + {stem.with_suffix('.ini').name}")
+
+    exe = shutil.which("povray")
+    if exe is None:
+        print("  POV-Ray not on PATH -- .pov/.ini written; render them elsewhere")
+        return 0
+
+    ini = stem.with_suffix(".ini")
+    proc = subprocess.run(
+        [exe, str(ini)], capture_output=True, text=True, cwd=str(stem.parent)
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-6:]
+        print(f"  POV-Ray failed (rc={proc.returncode}):")
+        for line in tail:
+            print(f"    {line}")
+        return 1
+
+    if not a.output.exists():
+        print(f"  POV-Ray reported success but {a.output} is missing")
+        return 1
+    print(f"  rendered {a.output} ({a.output.stat().st_size // 1024} KB)")
+
+    if not a.keep_pov:
+        for p in (pov_path, ini):
+            p.unlink(missing_ok=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

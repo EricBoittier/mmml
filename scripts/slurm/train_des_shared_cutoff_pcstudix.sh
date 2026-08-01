@@ -32,10 +32,16 @@ echo "Dataset: $DATASET (full train + in-sample evaluation)"
 echo "LJ scales: fixed"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
+# Disjoint hold-out: --valid-data  made validation in-sample, and
+# with objective=valid_loss + best=true the saved epoch was then selected on
+# data the model had already trained on. Empty --valid-data makes
+# physnet-train split --data itself (0-overlap verified on des-hybrid-ws).
 uv run mmml physnet-train \
   --config examples/hybrid_mm_charges/train_shared_cutoff_des_transfer.yaml \
   --data "$DATASET" \
-  --valid-data "$DATASET" \
+  --valid-data "" \
+  --n-train 108000 \
+  --n-valid 12000 \
   --ckpt-dir "$CKPT_DIR" \
   --tag "des_shared_cutoff_rc${RC_TAG}_fixed_lj" \
   --num-epochs 25 \
