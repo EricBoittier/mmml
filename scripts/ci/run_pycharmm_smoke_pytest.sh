@@ -25,6 +25,9 @@ COMP_VELOCITIES_SMOKE="$ROOT/tests/functionality/mlpot/test_comp_velocities_inte
 CG_JAXMD_SMOKE="$ROOT/tests/unit/test_cg_jaxmd_unified.py"
 DIMER_MODELS_SMOKE="$ROOT/tests/unit/test_dimer_default_models_regression.py"
 MD_SYSTEM_SMOKE="$ROOT/tests/unit/test_md_system_unified.py"
+# Separate from MD_SYSTEM_SMOKE: builds_ffparams re-reads CGenFF after the
+# pbc_nve/nvt cases in that module and segfaults in pycharmm.read.prm.
+MD_SYSTEM_FFPARAMS_SMOKE="$ROOT/tests/unit/test_md_system_unified_ffparams.py"
 
 # CHARMM owns process-global PSF/topology/parameter state.  Any smoke module that
 # initializes or rebuilds that state must run in a fresh interpreter: re-reading
@@ -40,6 +43,7 @@ STATEFUL_SMOKE_PATHS=(
   "$CG_JAXMD_SMOKE"
   "$DIMER_MODELS_SMOKE"
   "$MD_SYSTEM_SMOKE"
+  "$MD_SYSTEM_FFPARAMS_SMOKE"
 )
 
 # JUnit reports per invocation. pytest exits 0 when every selected test skips,
