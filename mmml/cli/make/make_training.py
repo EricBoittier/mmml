@@ -1251,15 +1251,24 @@ def _maybe_unpad_dataset(data_path: str, natoms: Optional[int]) -> tuple[str, in
             if padded_atoms > max_n:
                 print(f"  ⚠️  Data is PADDED: {padded_atoms} atoms in array (padding: {padded_atoms - max_n})")
                 print("  🔧 Auto-removing padding to train efficiently...")
+                n_samples = int(np.asarray(data["R"]).shape[0])
                 data_unpadded = {}
                 for key, value in data.items():
                     arr = np.asarray(value)
-                    if key == "R" and arr.ndim == 3:
-                        data_unpadded[key] = arr[:, :max_n, :]
-                    elif key == "Z" and arr.ndim == 2:
-                        data_unpadded[key] = arr[:, :max_n]
-                    elif key == "F" and arr.ndim == 3:
-                        data_unpadded[key] = arr[:, :max_n, :]
+                    # Trim every per-sample array whose axis 1 is the padded
+                    # atom axis -- not just R/Z/F. The hybrid ML/MM fields
+                    # (cgenff_type_idx, mol_id, cgenff_charge, F_cgenff_mm) are
+                    # also (n, atoms[, 3]); leaving them at the old width makes
+                    # hybrid_forward fail with a broadcasting error between
+                    # atom_mask (n*max_n) and the mol_id-derived keep mask
+                    # (n*padded_atoms). Shape-driven so new per-atom fields are
+                    # handled without another edit here.
+                    if (
+                        arr.ndim >= 2
+                        and arr.shape[0] == n_samples
+                        and arr.shape[1] == padded_atoms
+                    ):
+                        data_unpadded[key] = arr[:, :max_n, ...]
                     else:
                         data_unpadded[key] = value
                 unpadded_path = Path(data_path).parent / f"{Path(data_path).stem}_unpadded.npz"

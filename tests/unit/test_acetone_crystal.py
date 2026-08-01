@@ -263,10 +263,10 @@ def test_learned_lj_scales_change_the_lattice_energy():
     """
     from mmml.analysis.acetone_crystal import read_acetone_phase
     from mmml.analysis.lattice_energy import crystal_lattice_energy
-    from mmml.models.mm_lj_scales import cgenff_type_names_from_prm
+    from mmml.data.cgenff_dataset import load_reference
 
     atoms = read_acetone_phase("cmcm_160k")
-    n_types = len(cgenff_type_names_from_prm())
+    n_types = len(load_reference().sigmas)
     args = (atoms.get_positions(), atoms.get_atomic_numbers(), atoms.cell.array)
 
     stock = crystal_lattice_energy(*args, cutoff_A=10.0)

@@ -15,6 +15,7 @@ from mmml.models.mm_lj_scales import (
     MM_LJ_SIGMA_SCALE_KEY,
     apply_mm_lj_scales,
     attach_mm_lj_scales,
+    cgenff_type_names_from_prm,
     load_mm_lj_scales_sidecar,
     mm_lj_scales_metadata,
     resolve_md_lj_scales,
@@ -22,6 +23,16 @@ from mmml.models.mm_lj_scales import (
     split_mm_lj_scale_params,
     write_mm_lj_scales_into_hybrid_mm_json,
 )
+
+
+def test_cgenff_type_names_match_load_reference_master_tables():
+    """Scale vectors must line up with lattice/MD master LJ tables (incl. ions)."""
+    from mmml.data.cgenff_dataset import load_reference
+
+    ref = load_reference()
+    names = cgenff_type_names_from_prm()
+    assert len(names) == len(ref.sigmas) == len(ref.epsilons)
+    assert names == [n for n, _ in sorted(ref.nb_map.items(), key=lambda kv: kv[1])]
 
 
 def test_apply_unit_scales_identity():

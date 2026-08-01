@@ -65,16 +65,21 @@ MM_LJ_EPSILON_SCALE_BOUNDS = (0.25, 4.0)
 
 
 def cgenff_type_names_from_prm(prm_path: str | Path | None = None) -> list[str]:
-    """Type names in the same order as ``cgenff_master_sigmas`` / epsilons."""
-    from mmml.data.cgenff_dataset import DEF_PRM_PATH, load_cgenff_nonbonded_table
+    """Type names in the same order as ``cgenff_master_sigmas`` / epsilons.
 
-    path = Path(prm_path) if prm_path is not None else DEF_PRM_PATH
-    type_map, _, _ = load_cgenff_nonbonded_table(path)
-    names = [""] * len(type_map)
-    for name, idx in type_map.items():
+    Uses :func:`mmml.data.cgenff_dataset.load_reference` so the list includes
+    additive stream types (e.g. ``toppar_water_ions.str``) that extend the
+    master LJ tables beyond the bare CGenFF ``.prm``.
+    """
+    from mmml.data.cgenff_dataset import DEF_PRM_PATH, DEF_RTF_PATH, load_reference
+
+    prm = str(prm_path) if prm_path is not None else str(DEF_PRM_PATH)
+    ref = load_reference(prm, str(DEF_RTF_PATH))
+    names = [""] * len(ref.nb_map)
+    for name, idx in ref.nb_map.items():
         names[int(idx)] = str(name)
     if any(not n for n in names):
-        raise RuntimeError(f"incomplete CGenFF type map from {path}")
+        raise RuntimeError(f"incomplete CGenFF type map from {prm}")
     return names
 
 
