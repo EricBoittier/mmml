@@ -409,9 +409,15 @@ def _run_packmol_repack(
             was_charmm_centered=was_charmm_centered,
         )
 
+    patched = sorted(i + 1 for i in movable)
+    # A full-box repack would otherwise print several hundred indices.
+    patched_txt = (
+        str(patched)
+        if len(patched) <= 12
+        else f"{patched[:10]}… (+{len(patched) - 10} more)"
+    )
     print(
-        f"Packmol repack ({placement_label}): patched monomers "
-        f"{sorted(i + 1 for i in movable)} "
+        f"Packmol repack ({placement_label}): patched monomers {patched_txt} "
         f"(1-based; fixed {len(fixed)}, tolerance {float(tolerance):.2f} Å, "
         f"{len(grouped)} movable structure block(s))",
         flush=True,
