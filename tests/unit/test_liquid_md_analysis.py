@@ -155,15 +155,18 @@ def test_analyze_h5_and_write_outputs(tmp_path: Path):
     assert "rdf_full" in artifacts
 
 
-def test_analyze_campaign_dir_prefers_jaxmd_nvt(tmp_path: Path):
+def test_analyze_campaign_dir_prefers_jaxmd_npt(tmp_path: Path):
     campaign = tmp_path / "liquid_dcm"
     settle = campaign / "jaxmd_settle"
-    prod = campaign / "jaxmd_nvt"
+    nvt = campaign / "jaxmd_nvt"
+    npt = campaign / "jaxmd_npt"
     settle.mkdir(parents=True)
-    prod.mkdir(parents=True)
+    nvt.mkdir(parents=True)
+    npt.mkdir(parents=True)
     _write_synthetic_h5(settle / "pbc_nvt_jaxmd_nvt.h5")
-    _write_synthetic_h5(prod / "pbc_nvt_jaxmd_nvt.h5")
-    (prod / "suite_summary_jaxmd.json").write_text(
+    _write_synthetic_h5(nvt / "pbc_nvt_jaxmd_nvt.h5")
+    _write_synthetic_h5(npt / "pbc_npt_jaxmd_npt.h5")
+    (npt / "suite_summary_jaxmd.json").write_text(
         json.dumps({"box_A": 20.0}), encoding="utf-8"
     )
     (campaign / "campaign_plan.json").write_text(
@@ -172,4 +175,4 @@ def test_analyze_campaign_dir_prefers_jaxmd_nvt(tmp_path: Path):
     )
     report = analyze_campaign_dir(campaign, solvent="DCM", max_frames=10)
     assert "error" not in report
-    assert "jaxmd_nvt" in report["h5"]
+    assert "jaxmd_npt" in report["h5"]

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Step 07 — deploy trained LJ scales in condensed-phase MD.
 #
-# Default (LJ_JOINT!=1): Packmol DCM campaign
-#   jaxmd settle → PyCHARMM NVT heat/eq → jaxmd NVT → jaxmd NVE
+# Default (LJ_JOINT!=1): Packmol / seeded DCM campaign (jaxmd-only ladder)
+#   jaxmd settle → jaxmd NVT (10 ps) → jaxmd NpT (2 ps) → jaxmd NVE
 #
 # Joint path (LJ_JOINT=1): certified boxes from step 11 → campaign
 #   jaxmd settle → PyCHARMM NpT heat/eq → jaxmd NVT → jaxmd NVE
@@ -50,16 +50,16 @@ else
 fi
 
 if [[ "${LJ_JOINT}" != "1" ]]; then
-  echo "=== 07: DCM liquid campaign (jaxmd settle → PyCHARMM NVT → jaxmd) ==="
+  echo "=== 07: DCM liquid campaign (jaxmd settle → NVT 10 ps → NpT 2 ps) ==="
   # Knobs:
-  #   LJ_MD_PROD=1                  longer settle/heat/equi + 20 ps jaxmd NVT
+  #   LJ_MD_PROD=1                  20 ps NVT (+ same 2 ps NpT probe)
   #   LJ_MD_PACKMOL_TOLERANCE=3.5   pack further apart (Packmol path only)
   #   LJ_MD_MAX_FMAX_EV_A=3.5       pre-dynamics force gate (eV/Å)
   # Optional seed (skips Packmol rebuild when mini.crd already exists):
   #   LJ_MD_FROM_PSF / LJ_MD_FROM_CRD, or default liquid_nvt/mini.{psf,crd}
   # Fresh campaign dir each run unless you pass --resume (via LJ_MD_RESUME=1).
-  # After a heat fly-off, wipe the failed campaign dir (or omit LJ_MD_RESUME)
-  # and re-run — do not resume from a blown heat.0.res.
+  # After a failed CHARMM heat from an older campaign, wipe liquid_dcm and
+  # re-run — do not resume from a blown heat.0.res.
   SEED_PSF="${LJ_MD_FROM_PSF:-${LJ_ARTIFACTS_DIR}/liquid_nvt/mini.psf}"
   SEED_CRD="${LJ_MD_FROM_CRD:-${LJ_ARTIFACTS_DIR}/liquid_nvt/mini.crd}"
   SEED_ARGS=()

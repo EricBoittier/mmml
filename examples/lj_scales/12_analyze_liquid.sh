@@ -25,7 +25,7 @@ _analyze_one() {
   uv run mmml analyze-liquid \
     --campaign-dir "${campaign_dir}" \
     --solvent "${solvent}" \
-    --prefer-run "${LJ_ANALYZE_PREFER_RUN:-jaxmd_nvt}" \
+    --prefer-run "${LJ_ANALYZE_PREFER_RUN:-jaxmd_npt}" \
     --max-frames "${LJ_ANALYZE_MAX_FRAMES:-400}" \
     -o "${out}"
 }

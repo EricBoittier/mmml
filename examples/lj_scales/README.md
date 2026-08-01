@@ -25,7 +25,7 @@ Cluster job: [`../hybrid_mm_charges/submit_lj_scales_scicore.sbatch`](../hybrid_
 | [`04_miniature_fit.py`](04_miniature_fit.py) | — | 90 s | Recovers planted scales — **and demonstrates the σ/ε degeneracy** |
 | [`05_train.sh`](05_train.sh) | enriched NPZ, GPU | hours | `physnet-train` with `learn_mm_lj_scales` → writes `hybrid_mm.json` |
 | [`06_inspect_scales.py`](06_inspect_scales.py) | trained run | 5 s | Reports which types moved, flags implausible values, shows the ATC remap |
-| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run, PyCHARMM | minutes–hours | DCM campaign: jaxmd settle → PyCHARMM NVT → jaxmd NVT/NVE (`jax_mic`); `LJ_MD_PROD=1` for 20 ps NVT |
+| [`07_deploy_md.sh`](07_deploy_md.sh) | trained run | ~1–2 h GPU | DCM jaxmd ladder: settle → NVT 10 ps → NpT 2 ps → NVE (`jax_mic`); `LJ_MD_PROD=1` → 20 ps NVT |
 | [`12_analyze_liquid.sh`](12_analyze_liquid.sh) | campaign HDF5 | seconds | density / RDF / MSD / T·E plots via `mmml analyze-liquid` |
 
 Steps **00, 03, 04 are self-contained** — no dataset, no CHARMM, no GPU. Run them
@@ -93,11 +93,12 @@ Liquid campaign order (per solvent):
 3. **jaxmd_nvt** / **jaxmd_nve** — production  
 4. **12_analyze_liquid** — RDF first peak + packing/NpT density vs bulk  
 
-Smoke heat uses `dt_fs: 0.25`, Hoover, `heat_ihtfrq: 50`, and ≥2 ps heat
-(ASE Bussi @ 0.5 fs previously blew a DCM monomer; all-ML PBC cannot
-Packmol-repack). For validation set `LJ_MD_PROD=1` (longer NpT equi + 20 ps
-jaxmd NVT). Fixed-box NVT packing density is not a force-field check — use the
-joint NpT prod campaign for ⟨ρ⟩.
+Default DCM deploy is **jaxmd-only**: settle → 10 ps NVT → 2 ps NpT → short NVE
+(`dt_fs: 0.25`). PyCHARMM heat is skipped here (ASE Bussi @ 0.5 fs previously
+blew a DCM monomer; all-ML PBC cannot Packmol-repack). The 2 ps NpT leg is a
+density-response probe on the under-dense 120@30 Å box — not full ⟨ρ⟩
+equilibration. `LJ_MD_PROD=1` extends NVT to 20 ps; joint `LJ_JOINT=1` still
+uses PyCHARMM CPT for longer density work.
 
 ## Configuration
 

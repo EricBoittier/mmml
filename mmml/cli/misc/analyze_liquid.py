@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--prefer-run",
         type=str,
-        default="jaxmd_nvt",
+        default="jaxmd_npt",
         help="Campaign run id substring preferred when choosing an HDF5",
     )
     parser.add_argument("--stride", type=int, default=1, help="Frame stride")

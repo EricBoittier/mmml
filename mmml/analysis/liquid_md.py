@@ -550,7 +550,7 @@ def analyze_campaign_dir(
     *,
     box_side_A: float | None = None,
     solvent: str | None = None,
-    prefer_run: str = "jaxmd_nvt",
+    prefer_run: str = "jaxmd_npt",
     stride: int = 1,
     max_frames: int | None = 400,
     r_max: float = 12.0,

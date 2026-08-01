@@ -1,12 +1,8 @@
-# Production-length DCM liquid campaign (jax_mic + learned LJ scales).
+# Production-length DCM liquid campaign (jax_mic + learned LJ scales) — jaxmd.
 #
-# Same ladder as md_fixed_lj_scales_liquid_campaign.yaml, with longer settle /
-# CHARMM heat-equi and a tens-of-ps jaxmd NVT production leg for RDF / T / E
-# sampling. Fixed-box NVT packing density is not a force-field validation —
-# use the joint NpT campaign (md_lj_scales_liquid_campaign.prod.yaml) for ⟨ρ⟩.
-#
-# At ~0.25–0.3 ns/day on a single GPU (DCM:120 @ 30 Å hybrid), 20 ps NVT is
-# roughly a few hours. Override durations on the CLI if needed.
+# Same ladder as md_fixed_lj_scales_liquid_campaign.yaml with a longer NVT
+# production leg. NpT remains a short density probe (2 ps); full ⟨ρ⟩
+# equilibration still wants the joint NpT/CHARMM path or a longer jaxmd NpT.
 #
 #   LJ_MD_PROD=1 bash examples/lj_scales/07_deploy_md.sh
 #
@@ -23,7 +19,7 @@ defaults:
   packmol_tolerance: 3.0
   checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/params.json
   temperature: 300.0
-  # 0.5 fs blew intramolecular extent on all-ML DCM heat after jaxmd settle.
+  pressure: 1.0
   dt_fs: 0.25
   seed: 42
   include_mm: true
@@ -37,23 +33,16 @@ defaults:
   continue_velocities: true
   handoff_write_res: true
   mc_density_equalize: false
-  no_echeck_heat: true
-  n_heat_segments: 8
-  heat_thermostat: hoover
-  # quiet:true would otherwise set ihtfrq=nstep (one rescale / segment).
-  heat_ihtfrq: 50
-  dynamics_overlap_check_interval: 100
   handoff_quality_gate: true
   handoff_quality_fmax_eVA: 3.0
   max_fmax_before_dyn_ev_A: 3.5
-  # ~0.05 ps / frame at dt=0.25 fs.
   steps_per_recording: 200
 
 campaign_output: results/hybrid_mm_fixed_lj_scales_liquid_prod
 
 runs:
   jaxmd_settle:
-    description: jaxmd FIRE + NVT settle before CHARMM handoff
+    description: jaxmd FIRE + NVT settle before production
     backend: jaxmd
     setup: pbc_nvt
     ps: 1.0
@@ -62,33 +51,32 @@ runs:
     continue_velocities: false
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_settle
 
-  pycharmm_nvt:
-    description: PyCHARMM NVT heat + equilibration after jaxmd settle
-    backend: pycharmm
-    setup: pbc_nvt
-    depends_on: jaxmd_settle
-    md_stages: "mini,heat,equi"
-    ps_heat: 2.0
-    ps_equi: 5.0
-    mm_nonbond_mode: jax_mic
-    max_fmax_before_dyn_ev_A: 3.5
-    no_echeck_heat: true
-    output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/pycharmm_nvt
-
   jaxmd_nvt:
-    description: jaxmd NVT production (RDF / timeseries sampling)
+    description: jaxmd NVT production (20 ps)
     backend: jaxmd
     setup: pbc_nvt
-    depends_on: pycharmm_nvt
+    depends_on: jaxmd_settle
     ps: 20.0
     handoff_quality_gate: true
     handoff_quality_fmax_eVA: 1.0
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_nvt
 
+  jaxmd_npt:
+    description: jaxmd NpT density probe (2 ps) from NVT handoff
+    backend: jaxmd
+    setup: pbc_npt
+    depends_on: jaxmd_nvt
+    ps: 2.0
+    pressure: 1.0
+    nhc_barostat_tau: 20000.0
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_npt
+
   jaxmd_nve:
     description: short jaxmd NVE conservation check
     backend: jaxmd
     setup: pbc_nve
-    depends_on: jaxmd_nvt
+    depends_on: jaxmd_npt
     ps: 2.0
     output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_nve
