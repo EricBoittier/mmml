@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import bz2
 import gzip
 import io
 import json
+import lzma
 from pathlib import Path
 
 import numpy as np
@@ -21,8 +23,8 @@ from mmml.cli.misc.pes_design import (
 )
 
 
-def _serialized_sizes(data: dict, indices: np.ndarray) -> tuple[int, int, int]:
-    """Return uncompressed-NPZ, gzip(NPZ), and compressed-NPZ sizes.
+def _serialized_sizes(data: dict, indices: np.ndarray) -> dict[str, int]:
+    """Return byte sizes for the same NPZ payload under several codecs.
 
     Sorting removes ordering as a confound. Both arms contain exactly the same
     fields and number of structures; selector-only metadata is excluded.
@@ -39,7 +41,13 @@ def _serialized_sizes(data: dict, indices: np.ndarray) -> tuple[int, int, int]:
     raw_bytes = raw.getvalue()
     zipped = io.BytesIO()
     np.savez_compressed(zipped, **subset)
-    return len(raw_bytes), len(gzip.compress(raw_bytes, compresslevel=9)), len(zipped.getvalue())
+    return {
+        "raw_npz_bytes": len(raw_bytes),
+        "gzip_npz_bytes": len(gzip.compress(raw_bytes, compresslevel=9)),
+        "bz2_npz_bytes": len(bz2.compress(raw_bytes, compresslevel=9)),
+        "xz_npz_bytes": len(lzma.compress(raw_bytes, preset=9)),
+        "compressed_npz_bytes": len(zipped.getvalue()),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -84,13 +92,12 @@ def main(argv=None) -> int:
         random = np.concatenate(random_parts)
         for method, local in (("bayes_dopt", selected), ("random", random)):
             source = candidates[local]
-            raw_n, gzip_n, npzc_n = _serialized_sizes(data, source)
+            sizes_by_codec = _serialized_sizes(data, source)
             mean, p95, _ = _coverage(Z, local)
             rows.append({
                 "repeat": repeat, "seed": seed, "method": method,
-                "raw_npz_bytes": raw_n, "gzip_npz_bytes": gzip_n,
-                "compressed_npz_bytes": npzc_n,
-                "gzip_ratio": raw_n / gzip_n,
+                **sizes_by_codec,
+                "gzip_ratio": sizes_by_codec["raw_npz_bytes"] / sizes_by_codec["gzip_npz_bytes"],
                 "coverage_mean": mean, "coverage_p95": p95,
             })
     a.out_dir.mkdir(parents=True, exist_ok=True)
@@ -107,13 +114,18 @@ def main(argv=None) -> int:
     }
     for method in ("bayes_dopt", "random"):
         rr = [r for r in rows if r["method"] == method]
-        for metric in ("gzip_npz_bytes", "compressed_npz_bytes", "coverage_mean", "coverage_p95"):
+        for metric in ("gzip_npz_bytes", "bz2_npz_bytes", "xz_npz_bytes",
+                       "compressed_npz_bytes", "coverage_mean", "coverage_p95"):
             values = np.array([r[metric] for r in rr], float)
             summary[f"{method}_{metric}_mean"] = float(values.mean())
             summary[f"{method}_{metric}_std"] = float(values.std(ddof=1)) if len(values) > 1 else 0.0
     bg = summary["bayes_dopt_gzip_npz_bytes_mean"]
     rg = summary["random_gzip_npz_bytes_mean"]
     summary["bayes_gzip_size_change_vs_random_percent"] = 100 * (bg - rg) / rg
+    for codec in ("bz2", "xz", "compressed"):
+        bv = summary[f"bayes_dopt_{codec}_npz_bytes_mean"]
+        rv = summary[f"random_{codec}_npz_bytes_mean"]
+        summary[f"bayes_{codec}_size_change_vs_random_percent"] = 100 * (bv - rv) / rv
     bc = summary["bayes_dopt_coverage_mean_mean"]
     rc = summary["random_coverage_mean_mean"]
     summary["bayes_coverage_improvement_percent"] = 100 * (rc - bc) / rc

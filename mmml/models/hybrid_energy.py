@@ -44,8 +44,12 @@ import jax
 import jax.numpy as jnp
 
 from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
+from mmml.interfaces.pycharmmInterface.calculator_utils import (
+    ml_switch_scale,
+    mm_switch_scale,
+)
 from mmml.models.cgenff_mm import (
+    cgenff_lj_energy,
     cgenff_mm_energy,
     monomer_centroids,
 )
@@ -79,6 +83,7 @@ __all__ = [
     "HybridMMConfig",
     "hybrid_forward",
     "ml_scale_from_positions",
+    "switched_lj_kcal",
 ]
 
 #: Per-atom dataset fields the hybrid mode needs in each training batch.
@@ -165,17 +170,17 @@ class HybridMMConfig:
                 f"hybrid lr_solver must be mic|nvalchemiops_pme|ewald; got {lr!r}"
             )
         d["lr_solver"] = lr
+        d["include_lj"] = bool(d.get("include_lj", True))
         if lr in ("nvalchemiops_pme", "ewald"):
-            d["include_lj"] = False
             box = d.get("pme_box_length", None)
             if box is None or float(box) <= 0.0:
                 raise ValueError(
                     f"lr_solver={lr!r} requires pme_box_length > 0"
                 )
             d["pme_box_length"] = float(box)
-        else:
-            d["include_lj"] = bool(d.get("include_lj", True))
         d["learn_mm_lj_scales"] = bool(d.get("learn_mm_lj_scales", False))
+        if d["learn_mm_lj_scales"] and not d["include_lj"]:
+            d["learn_mm_lj_scales"] = False
         for key, default in (
             ("mm_lj_sigma_scale_bounds", (0.95, 1.05)),
             ("mm_lj_epsilon_scale_bounds", (0.25, 4.0)),
@@ -233,6 +238,48 @@ class HybridMMConfig:
         d["master_sigmas"] = jnp.asarray(self.master_sigmas)
         d["master_epsilons"] = jnp.asarray(self.master_epsilons)
         return d
+
+
+def switched_lj_kcal(
+    positions: Array,
+    type_idx: Array,
+    mol_id: Array,
+    master_sigmas: Array,
+    master_epsilons: Array,
+    *,
+    sigma_scale: Array | None,
+    epsilon_scale: Array | None,
+    include_lj: bool,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    ml_switch_width: float,
+    complementary_handoff: bool,
+) -> Array:
+    """COM-switched intermolecular LJ (kcal/mol); zero when ``include_lj`` is off.
+
+    Used beside untapered Ewald/PME Coulomb so the lattice sum is not
+    double-counted with MIC pair Coulomb from :func:`cgenff_mm_energy`.
+    """
+    sig_eff, eps_eff = apply_mm_lj_scales(
+        master_sigmas,
+        master_epsilons,
+        sigma_scale,
+        epsilon_scale,
+        include_lj=include_lj,
+    )
+    e_lj = cgenff_lj_energy(positions, type_idx, mol_id, sig_eff, eps_eff)
+    coms = monomer_centroids(positions, mol_id, n_monomers=2)
+    d_com = coms[1] - coms[0]
+    r_com = jnp.sqrt(jnp.maximum(jnp.sum(d_com * d_com), 1e-20))
+    scale = mm_switch_scale(
+        r_com,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        ml_switch_width=ml_switch_width,
+        complementary_handoff=complementary_handoff,
+    )
+    is_dimer = jnp.any(mol_id == 1)
+    return jnp.where(is_dimer, scale * e_lj, 0.0)
 
 
 def ml_scale_from_positions(
@@ -416,11 +463,12 @@ def hybrid_forward(
             # UNITS: MM helpers return kcal/mol; training targets are eV. Convert
             # at this boundary (same as mmml_calculator). Pinned by
             # tests/unit/test_hybrid_mm_units.py.
+            #
+            # Ewald / nvalchemiops_pme (#139):
+            #   E_MM = E_Coulomb_LR (untapered full-box) + λ_MM * E_LJ
+            # Do not call cgenff_mm_energy here — that would add MIC Coulomb.
             if lr_solver == "nvalchemiops_pme":
-                # Full-box many-to-many PME (no exclusions / no intra subtract):
-                # same operator as fast MD periodic_external nvalchemiops.
-                # Fixed CGenFF charges; LJ omitted for now.
-                e = KCAL_MOL_TO_EV * hybrid_nvalchemiops_pme_coulomb_energy(
+                e_coul = hybrid_nvalchemiops_pme_coulomb_energy(
                     x,
                     m,
                     q,
@@ -432,12 +480,23 @@ def hybrid_forward(
                     ml_switch_width=ml_switch_width,
                     complementary_handoff=complementary_handoff,
                 )
+                e_lj = switched_lj_kcal(
+                    x,
+                    t,
+                    m,
+                    master_sigmas,
+                    master_epsilons,
+                    sigma_scale=sigma_scale,
+                    epsilon_scale=epsilon_scale,
+                    include_lj=include_lj,
+                    mm_switch_on=mm_switch_on,
+                    mm_switch_width=mm_switch_width,
+                    ml_switch_width=ml_switch_width,
+                    complementary_handoff=complementary_handoff,
+                )
+                e = KCAL_MOL_TO_EV * (e_coul + e_lj)
             elif lr_solver == "ewald":
-                # Same full-box, no-exclusion contract as nvalchemiops_pme, but
-                # pure JAX (jit-native Ewald, ewald_native.py) -- no external
-                # PME library / no CUDA requirement. Useful wherever
-                # nvalchemiops isn't installed (e.g. CPU-only clusters).
-                e = KCAL_MOL_TO_EV * hybrid_ewald_coulomb_energy(
+                e_coul = hybrid_ewald_coulomb_energy(
                     x,
                     m,
                     q,
@@ -450,6 +509,21 @@ def hybrid_forward(
                     complementary_handoff=complementary_handoff,
                     include_self_energy=bool(ewald_include_self),
                 )
+                e_lj = switched_lj_kcal(
+                    x,
+                    t,
+                    m,
+                    master_sigmas,
+                    master_epsilons,
+                    sigma_scale=sigma_scale,
+                    epsilon_scale=epsilon_scale,
+                    include_lj=include_lj,
+                    mm_switch_on=mm_switch_on,
+                    mm_switch_width=mm_switch_width,
+                    ml_switch_width=ml_switch_width,
+                    complementary_handoff=complementary_handoff,
+                )
+                e = KCAL_MOL_TO_EV * (e_coul + e_lj)
             else:
                 sig_eff, eps_eff = apply_mm_lj_scales(
                     master_sigmas,
