@@ -278,6 +278,14 @@ class UmbrellaConfig:
     atom_name_i: str | None = None
     atom_name_j: str | None = None
     lr_solver: str = "mic"
+    # Verlet skin (Å) for the intermolecular MM pair list. > 0 builds the list
+    # at cutoff + skin and reuses it while every atom has moved < skin/2, which
+    # turns the per-block host rebuild into a scalar check. Pairs inside the
+    # skin are inert: mm_nonbonded zeroes everything beyond ctofnb.
+    nl_skin_A: float = 0.0
+    # MD steps per compiled block / MM pair refresh. None uses savefreq (the
+    # previous behavior, one refresh per recorded frame).
+    nl_update_interval: int | None = None
 
     def __post_init__(self) -> None:
         if self.engine not in ("packed_ml", "hybrid_jaxmd"):

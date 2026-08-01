@@ -191,6 +191,17 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--learning-rate", "--learning_rate", type=float, default=0.001, dest="learning_rate"
     )
     parser.add_argument(
+        "--clip-global",
+        "--clip_global",
+        type=float,
+        default=None,
+        dest="clip_global",
+        help=(
+            "Global-norm gradient clip (default 10.0). Lower it (~1.0) when the "
+            "raw parameters oscillate rather than converge."
+        ),
+    )
+    parser.add_argument(
         "--energy-weight", "--energy_weight", type=float, default=1.0, dest="energy_weight"
     )
     parser.add_argument(
@@ -263,11 +274,12 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "Hybrid-MM long-range Coulomb for training (default: mic). "
             "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: full-box "
             "many-to-many PME on fixed CGenFF charges (no exclusions / no "
-            "intra subtract; LJ omitted; requires --pme-box-length and "
+            "intra subtract; requires --pme-box-length and "
             "mmml[nvalchemiops-pme]). ewald: same full-box/no-exclusion "
-            "contract as nvalchemiops_pme, pure JAX (no external PME library, "
-            "no CUDA requirement); requires --pme-box-length. Matches fast MD "
-            "periodic_external."
+            "Coulomb as nvalchemiops_pme, pure JAX (no external PME library, "
+            "no CUDA requirement); requires --pme-box-length. With "
+            "--mm-include-lj, COM-switched LJ is added beside the lattice "
+            "Coulomb (Coulomb itself stays untapered)."
         ),
     )
     parser.add_argument(
@@ -296,8 +308,10 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         default=True,
         dest="mm_include_lj",
         help=(
-            "Include CGenFF LJ in hybrid E_MM (default: on for mic). "
-            "Forced off when --lr-solver nvalchemiops_pme or ewald."
+            "Include CGenFF LJ in hybrid E_MM (default: on). Under "
+            "--lr-solver ewald|nvalchemiops_pme this is COM-switched "
+            "intermolecular LJ beside untapered full-box Coulomb; under mic "
+            "it is the usual switched LJ+Coulomb pair term."
         ),
     )
     parser.add_argument(
@@ -308,8 +322,8 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         dest="learn_mm_lj_scales",
         help=(
             "Learn per-CGenFF-type multiplicative scales on master σ and ε "
-            "(separate arrays, init 1.0). Only affects mic hybrid E_MM LJ; "
-            "ignored when LJ is forced off (ewald / nvalchemiops_pme). "
+            "(separate arrays, init 1.0). Works under --lr-solver mic and "
+            "under ewald|nvalchemiops_pme when --mm-include-lj is on. "
             "Scales are saved in hybrid_mm.json for MD ep_scale/sig_scale."
         ),
     )
@@ -1016,7 +1030,6 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             raise ValueError(
                 "--lr-solver nvalchemiops_pme requires --pme-box-length > 0"
             )
-        include_lj = False
         pme_box_length = float(pme_box_length)
         # Static cutoff for jitted train steps (PME params fixed for the run).
         pme_real_space_cutoff = estimate_nvalchemiops_pme_real_space_cutoff(
@@ -1035,13 +1048,10 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     elif lr_solver == "ewald":
         if pme_box_length is None or float(pme_box_length) <= 0.0:
             raise ValueError("--lr-solver ewald requires --pme-box-length > 0")
-        include_lj = False
         pme_box_length = float(pme_box_length)
         # No external-package / cutoff-estimation step needed: ewald_hybrid_
         # coulomb.py defaults real_space_cutoff_A to box_length/2 internally
         # when left None, already validated at that setting.
-    if lr_solver in ("nvalchemiops_pme", "ewald"):
-        learn_mm_lj_scales = False
     if learn_mm_lj_scales and not include_lj:
         learn_mm_lj_scales = False
     cfg = {
@@ -1469,6 +1479,7 @@ def main_loop(args):
             train_data,
             valid_data,
             learning_rate=args.learning_rate,
+            clip_global=args.clip_global,
             batch_size=args.batch_size,
             num_atoms=natoms,
             energy_weight=args.energy_weight,

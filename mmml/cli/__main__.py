@@ -384,6 +384,10 @@ def main():
         sys.argv = ["mmml active-learning"] + args.args
         return active_learning.main()
 
+    elif command == "pes-design":
+        from .misc import pes_design
+        return pes_design.main(args.args)
+
     elif command == "kernel-fit":
         from .misc import kernel_fit
         sys.argv = ["mmml kernel-fit"] + args.args

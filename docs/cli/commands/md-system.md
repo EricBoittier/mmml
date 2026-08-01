@@ -1227,6 +1227,12 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         pycharmm: abort if max atomic |F| exceeds this (eV/Å)
                         before dynamics; default 2.0. Raise only for controlled
                         smokes.
+  --hybrid-hamiltonian {handoff,shared_cutoff}
+                        Hybrid Hamiltonian: existing COM handoff or additive
+                        force-shifted shared cutoff.
+  --shared-cutoff SHARED_CUTOFF
+                        Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults
+                        to checkpoint model cutoff.
   --mm-pair-source {jax,charmm_callback}
                         pycharmm decomposed MLpot MM pair provider: Fortran
                         callback idxu/idxv or JAX neighbor rebuild. All-ML

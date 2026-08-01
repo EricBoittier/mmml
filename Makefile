@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci coverage-gate
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -40,6 +40,7 @@ help:
 	@echo "  make test-all          - Run full pytest suite (needs mpirun for charmm_mpi live tests)"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
+	@echo "  make coverage-gate     - Run tests and enforce CI's coverage floor"
 	@echo "  make test-ci           - Local stand-in for CI's build job (hides libcharmm)"
 	@echo "  make lint-dupes        - Duplicate defs / conflict markers (bad-merge detector)"
 	@echo "  make merge-check       - Pre-merge gate: lint-dupes + lint + imports + docs"
@@ -205,6 +206,16 @@ test-quick:
 
 test-coverage:
 	uv run pytest --cov=mmml --cov-report=html --cov-report=term tests/
+
+# The same coverage floor CI enforces, runnable before you push. It is a floor,
+# not a target: ~35k of the uncovered statements need live CHARMM, plotting, or
+# PySCF/torch/GPU, so the CI-reachable ceiling is around 70%. This only catches
+# the number sliding backwards. Measured 2026-08-01: 45.81%, 55706/121608
+# lines. Run: make coverage-gate
+coverage-gate:
+	uv run pytest tests/ -q -p no:cacheprovider --cov=mmml --cov-report=xml || true
+	uv run python scripts/ci/check_coverage_floor.py coverage.xml \
+	  --label "local coverage" --min-percent 42 --min-covered-lines 52000
 
 # The honest local verdict on a test run. pytest's exit code cannot be trusted
 # here for two reasons: it is 0 when every selected test skips, and it is 0 once

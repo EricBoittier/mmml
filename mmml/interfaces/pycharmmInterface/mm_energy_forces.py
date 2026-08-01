@@ -872,11 +872,17 @@ def build_mm_energy_forces_fn(
     jax_pme_dispersion: bool | None = None,
     ewald_include_self: bool = True,
     ewald_include_intra: bool = True,
+    include_lj: bool = False,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
     Supports heterogeneous monomer sizes via monomer_offsets and atoms_per_monomer_list.
     Uses cell list for PBC when pbc_cell is provided, otherwise all-pairs.
+
+    ``include_lj`` applies to ``lr_solver=ewald``: when True, COM-switched
+    intermolecular LJ (reading ``ep_scale``/``sig_scale``) is added beside
+    untapered full-box Ewald Coulomb, matching train ``hybrid_forward`` with
+    ``mm_include_lj: true``. Default False preserves Coulomb-only ewald MD.
 
     Args:
         mm_r_min: Optional inner cutoff (Å). Pairs with dimer COM distance < mm_r_min
@@ -1187,12 +1193,10 @@ def build_mm_energy_forces_fn(
         at_codes = at_codes_override_arr
 
     if pick_lr_solver(lr_solver) == "ewald":
-        # Full-box, no-exclusion, no-switch Ewald -- the SAME operator training
-        # used (mmml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy,
-        # lr_solver="ewald" in hybrid_forward). Bypasses the switched-pair /
-        # LJ / cell-list machinery entirely (this checkpoint's E_MM has no LJ
-        # term at all -- mm_include_lj is forced off for this lr_solver at
-        # training time too).
+        # Full-box, no-exclusion, untapered Ewald Coulomb — same Coulomb operator
+        # as train hybrid_ewald_coulomb_energy. Optional COM-switched LJ
+        # (``include_lj=True``) matches train ``mm_include_lj`` under ewald and
+        # reads ``ep_scale``/``sig_scale`` via at_flat_ep/rm.
         #
         # NpT: host ``alpha`` / ``n_int`` are frozen for the MM factory lifetime;
         # the live cubic cell comes from ``box_override`` each call (MIC +
@@ -1202,6 +1206,7 @@ def build_mm_energy_forces_fn(
             raise ValueError(
                 "lr_solver=ewald requires a PBC cell when building MM forces."
             )
+        from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
         from mmml.models.ewald_hybrid_coulomb import (
             ewald_static_params_from_box_length,
             hybrid_ewald_coulomb_energy_with_cell,
@@ -1220,8 +1225,74 @@ def build_mm_energy_forces_fn(
         _ewald_include_self = bool(ewald_include_self)
         _ewald_include_intra = bool(ewald_include_intra)
         _ewald_n_monomers = int(n_monomers)
+        _ewald_include_lj = bool(include_lj)
+        _ewald_rm = jnp.asarray(at_flat_rm, dtype=ml_jnp_dtype)[
+            jnp.asarray(at_codes, dtype=jnp.int32)
+        ]
+        _ewald_ep = jnp.asarray(at_flat_ep, dtype=ml_jnp_dtype)[
+            jnp.asarray(at_codes, dtype=jnp.int32)
+        ]
+        _ewald_mm_switch_on = float(mm_switch_on)
+        _ewald_mm_switch_width = float(mm_switch_width)
+        _ewald_ml_switch_width = float(ml_switch_width)
+        _ewald_complementary = bool(complementary_handoff)
+
+        def _ewald_switched_lj(positions: Array) -> Array:
+            """Intermolecular LJ with COM handoff; open-boundary r (train-matched)."""
+            n = positions.shape[0]
+            iu, ju = jnp.triu_indices(n, k=1)
+            mid = _ewald_mol_id
+            inter = (mid[iu] != mid[ju]) & (mid[iu] >= 0) & (mid[ju] >= 0)
+            d = positions[iu] - positions[ju]
+            r = jnp.sqrt(jnp.maximum(jnp.sum(d * d, axis=-1), 1e-20))
+            pair_rm = _ewald_rm[iu] + _ewald_rm[ju]
+            # at_ep is signed negative; geometric mean → positive well depth.
+            pair_ep = (_ewald_ep[iu] * _ewald_ep[ju]) ** 0.5
+            r_safe = jnp.maximum(r, 1e-10)
+            r6 = (pair_rm / r_safe) ** 6
+            e_pair = pair_ep * (r6**2 - 2.0 * r6)
+            e_raw = jnp.sum(jnp.where(inter, e_pair, 0.0))
+            # Unweighted monomer centroids (same as train cgenff_mm).
+            coms = []
+            for m in range(_ewald_n_monomers):
+                sel = mid == m
+                w = sel.astype(positions.dtype)
+                coms.append(
+                    jnp.sum(positions * w[:, None], axis=0)
+                    / jnp.maximum(jnp.sum(w), 1.0)
+                )
+            coms_a = jnp.stack(coms, axis=0)
+            d_com = coms_a[1] - coms_a[0] if _ewald_n_monomers > 1 else coms_a[0]
+            r_com = jnp.sqrt(jnp.maximum(jnp.sum(d_com * d_com), 1e-20))
+            scale = mm_switch_scale(
+                r_com,
+                mm_switch_on=_ewald_mm_switch_on,
+                mm_switch_width=_ewald_mm_switch_width,
+                ml_switch_width=_ewald_ml_switch_width,
+                complementary_handoff=_ewald_complementary,
+            )
+            has_inter = jnp.any(inter)
+            return jnp.where(has_inter, scale * e_raw, 0.0)
 
         def _ewald_energy(
+            positions: Array, charges_arg: Array, cell: Array
+        ) -> Array:
+            e_c = hybrid_ewald_coulomb_energy_with_cell(
+                positions,
+                _ewald_mol_id,
+                charges_arg,
+                cell,
+                alpha=_ewald_alpha,
+                n_int=_ewald_n_int,
+                include_self_energy=_ewald_include_self,
+                include_intramolecular=_ewald_include_intra,
+                n_monomers=_ewald_n_monomers,
+            )
+            if _ewald_include_lj:
+                return e_c + _ewald_switched_lj(positions)
+            return e_c
+
+        def _ewald_coulomb_only(
             positions: Array, charges_arg: Array, cell: Array
         ) -> Array:
             return hybrid_ewald_coulomb_energy_with_cell(
@@ -1239,6 +1310,8 @@ def build_mm_energy_forces_fn(
         _ewald_value_and_grad = jax.jit(
             jax.value_and_grad(_ewald_energy, argnums=0),
         )
+        _ewald_coulomb_value = jax.jit(_ewald_coulomb_only)
+        _ewald_lj_value = jax.jit(_ewald_switched_lj)
 
         @jax.jit
         def calculate_mm_energy_and_forces_ewald(
@@ -1261,6 +1334,10 @@ def build_mm_energy_forces_fn(
             )
             e, grad = _ewald_value_and_grad(positions, q, cell)
             forces = -grad
+            if _ewald_include_lj:
+                e_lj = _ewald_lj_value(positions)
+                e_c = _ewald_coulomb_value(positions, q, cell)
+                return e, forces, e_lj, e_c
             zero = jnp.array(0.0, dtype=ml_jnp_dtype)
             return e, forces, zero, e
 

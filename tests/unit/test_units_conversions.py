@@ -145,6 +145,41 @@ def test_dipole_aliases(raw, expected):
     assert normalize_dipole_unit(raw) == expected
 
 
+def _alias_cases():
+    """Every alias in every table, paired with its normalizer."""
+    from mmml.data import units as units_module
+
+    tables = (
+        ("energy", units_module._ENERGY_ALIASES, normalize_energy_unit),
+        ("force", units_module._FORCE_ALIASES, normalize_force_unit),
+        ("length", units_module._LENGTH_ALIASES, normalize_length_unit),
+        ("dipole", units_module._DIPOLE_ALIASES, normalize_dipole_unit),
+    )
+    return [
+        pytest.param(fn, raw, expected, id=f"{kind}:{raw}")
+        for kind, table, fn in tables
+        for raw, expected in table.items()
+    ]
+
+
+@pytest.mark.parametrize(("fn", "raw", "expected"), _alias_cases())
+def test_every_listed_alias_is_actually_reachable(fn, raw, expected):
+    """An alias the normalizer can never match is dead config that reads as support.
+
+    ``_FORCE_ALIASES`` listed ``ev/a``, ``ha/bohr`` and ``kcal/mol/ang`` while
+    ``normalize_force_unit`` replaces ``/`` with ``_`` *before* the lookup, so
+    none of the three could ever be hit -- the table advertised units the
+    parser rejected. Spot-checking a handful of aliases (above) cannot catch
+    that; only walking the tables can.
+    """
+    assert fn(raw) == expected
+
+
+@pytest.mark.parametrize(("fn", "raw", "expected"), _alias_cases())
+def test_alias_lookup_survives_case_and_padding(fn, raw, expected):
+    assert fn(f"  {raw.upper()} ") == expected
+
+
 @pytest.mark.parametrize(
     ("fn", "bad"),
     [

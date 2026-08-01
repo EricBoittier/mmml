@@ -111,33 +111,52 @@ def test_esp_loss_eval_scales_linearly_with_the_residual():
 # --- the zeroed loss terms --------------------------------------------------
 
 
-def test_dipole_loss_is_the_only_live_term_in_dipo_esp_mono_loss():
-    """PINNED BEHAVIOUR, NOT AN ENDORSEMENT.
+def _final_return_of(fn) -> str:
+    import inspect
 
-    ``dipo_esp_mono_loss`` ends with::
+    src = inspect.getsource(fn)
+    final = [ln for ln in src.splitlines() if ln.strip().startswith("return")][-1]
+    return "".join(final.split())
+
+
+def test_no_loss_term_is_multiplied_out_of_existence():
+    """Regression: ``dipo_esp_mono_loss`` used to end with::
 
         return esp_loss_corrected * esp_w * 0.0, mono_loss_corrected * 0.0, dipo_loss * chg_w
 
-    and ``training.py`` sums the three into ``loss = esp_l + mono_l + dipo_l``.
-    The ESP and monopole terms are therefore multiplied out of existence: the
-    objective is dipole-only, and the ``esp_w`` weight threaded through every
-    call site has no effect. Both zeroed terms are still *returned*, so training
-    logs show them as a tidy 0.0 rather than as missing.
+    while ``training.py`` sums the three into ``loss = esp_l + mono_l + dipo_l``.
+    The ESP and monopole terms were therefore annihilated -- the objective was
+    dipole-only and ``esp_w`` had no effect anywhere -- yet both terms were still
+    returned, so the logs showed 0.0 and read as converged rather than disabled.
 
-    That reads as a debugging edit that was never reverted, but flipping it
-    changes what every DCMNet checkpoint is trained to fit, so this test records
-    the current behaviour instead of asserting the intended one. Delete it when
-    the objective is deliberately restored.
+    A zeroed term is invisible in every other check, so assert on the source.
     """
-    import inspect
-
     from mmml.models.dcmnet.dcmnet import loss as loss_mod
 
-    src = inspect.getsource(loss_mod.dipo_esp_mono_loss)
-    final = [ln for ln in src.splitlines() if ln.strip().startswith("return")][-1]
+    compact = _final_return_of(loss_mod.dipo_esp_mono_loss)
 
-    compact = "".join(final.split())
-    assert "esp_w*0.0" in compact and "mono_loss_corrected*0.0" in compact, (
-        "the zeroed ESP/monopole terms in dipo_esp_mono_loss have changed; if "
-        "that was deliberate, delete this test and cover the restored objective"
+    assert "*0.0" not in compact, (
+        "a loss term is multiplied by zero: the objective silently ignores it "
+        f"while still reporting it. Final return: {compact}"
     )
+
+
+def test_every_loss_term_is_returned_and_weighted():
+    """ESP carries ``esp_w``, the dipole carries ``chg_w``, monopole is unweighted
+    -- matching the debug print the function was written against."""
+    from mmml.models.dcmnet.dcmnet import loss as loss_mod
+
+    compact = _final_return_of(loss_mod.dipo_esp_mono_loss)
+
+    assert "esp_loss_corrected*esp_w" in compact
+    assert "mono_loss_corrected" in compact
+    assert "dipo_loss*chg_w" in compact
+
+
+def test_the_three_returned_terms_are_distinct():
+    """Three separate scalars, so training can report each independently."""
+    from mmml.models.dcmnet.dcmnet import loss as loss_mod
+
+    compact = _final_return_of(loss_mod.dipo_esp_mono_loss)
+    assert compact.startswith("return")
+    assert len(compact[len("return"):].split(",")) == 3

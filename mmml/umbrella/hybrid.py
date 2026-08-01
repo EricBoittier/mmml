@@ -570,6 +570,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     from mmml.md.drivers import JaxmdDriver
     from mmml.md.energy.registry import EnergyContext
     from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from mmml.md.nl_cadence import resolve_block_steps
     from mmml.md.restraints import LinearDistanceCV
     from mmml.cli.run.md_system_unified import _load_model
 
@@ -743,6 +744,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         neighbor_fn = make_intermolecular_neighbor_fn(
             win_system,
             cutoff_A=12.0,
+            skin_A=float(getattr(cfg, "nl_skin_A", 0.0) or 0.0),
         )
         # Relax the surroundings around the frozen seed, then preflight, both via
         # the ASE face when available; otherwise skip.
@@ -801,7 +803,16 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         )
         driver = JaxmdDriver(
             record_every=int(savefreq),
-            block_size=int(savefreq),
+            # Block size is the MM pair refresh cadence, not a recording
+            # concern; resolve_block_steps keeps it a divisor of savefreq so a
+            # frame still lands on a refresh boundary.
+            block_size=resolve_block_steps(
+                steps_per_recording=int(savefreq),
+                use_pbc=box is not None,
+                has_update_fn=True,
+                update_interval=getattr(cfg, "nl_update_interval", None) or int(savefreq),
+                ensemble="nvt",
+            ),
             neighbor_fn=neighbor_fn,
             output_path=None,
             name=f"umbrella_hybrid_w{wid:03d}",

@@ -146,10 +146,14 @@ class _BestMinimizationFrame:
         return summary
 
 
-def main(argv: list[str] | None = None) -> int:
-    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+def build_parser() -> argparse.ArgumentParser:
+    """The JAX-MD backend CLI.
 
-    apply_xla_cuda_timer_log_filter()
+    Split out of ``main`` so the argv ``md_system`` forwards to this
+    backend can be parsed in a test. While the parser lived inside
+    ``main``, the only way to discover that a forwarded flag was unknown
+    was to start a run and watch the subprocess exit 2.
+    """
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", type=Path, default=None)
     p.add_argument(
@@ -511,6 +515,21 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_ML_SWITCH_WIDTH,
     )
     p.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    # md_system forwards both of these to every backend unconditionally, so a
+    # parser that does not know them turns `mmml md-system` into argparse
+    # exit 2 in the subprocess. Kept name-for-name with `run_sim`.
+    p.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    p.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to model cutoff.",
+    )
     p.add_argument(
         "--include-mm",
         "--do-mm",
@@ -911,6 +930,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Reduce console output.",
     )
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+
+    apply_xla_cuda_timer_log_filter()
+    p = build_parser()
     args = p.parse_args(argv)
     from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
 
@@ -1279,8 +1306,16 @@ def main(argv: list[str] | None = None) -> int:
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
         mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
         mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
+        hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+        shared_cutoff=getattr(args, "shared_cutoff", None),
     )
-    cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
+    cutoff = CutoffParameters(
+        ml_switch_width=ml_w,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
+        hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+        shared_cutoff=getattr(args, "shared_cutoff", None),
+    )
     calc_result = factory(
         atomic_numbers=z,
         atomic_positions=atoms.get_positions(),

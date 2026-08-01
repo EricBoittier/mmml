@@ -25,13 +25,16 @@ mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \
 
 **How-to**
 
+- [Bayesian design of compact PES datasets](../bayesian-pes-design.md) — the
+  four intermolecular regions, physical candidate generation, RDF/SOAP
+  compression, D-optimal acquisition, and `mmml pes-design` validation.
 - [Nudged elastic band (NEB)](../neb.md) — PhysNet minimum-energy paths and
   barrier sampling.
 - [Diffusion Monte Carlo (DMC)](../dmc.md) — batched PhysNetJax walkers, with a
   longer production example and the output file layout.
 
 **Commands** — `physnet-train` / `-evaluate` / `-md`, the `efield-*` and
-`kernnn-*` families, `neb`, `dmc`, `active-learning`, `kernel-fit`,
+`kernnn-*` families, `neb`, `dmc`, `active-learning`, `pes-design`, `kernel-fit`,
 `train-joint`, and the checkpoint utilities (`orbax-to-json`,
 `extract-checkpoint-metrics`, `diagnose-lc-outliers`).
 

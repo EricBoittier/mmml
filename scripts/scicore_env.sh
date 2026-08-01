@@ -55,7 +55,22 @@ fi
 
 if command -v module >/dev/null 2>&1; then
   module load "$MMML_SCICORE_TOOLCHAIN" || true
+  # SciCORE disables Lmod's automatic same-name swapping.  foss/2025a may
+  # leave GCCcore/14.2.0 loaded while the requested CMake module was built
+  # against 14.3.0, so make the required swap explicit.
+  if [[ "$MMML_SCICORE_CMAKE" == *"GCCcore-14.3.0"* ]] && \
+     module is-loaded GCCcore/14.2.0 >/dev/null 2>&1; then
+    module swap GCCcore/14.2.0 GCCcore/14.3.0 || true
+  fi
+  _mmml_saved_autoswap="${LMOD_DISABLE_SAME_NAME_AUTOSWAP-}"
+  export LMOD_DISABLE_SAME_NAME_AUTOSWAP=no
   module load "$MMML_SCICORE_CMAKE" || true
+  if [[ -n "$_mmml_saved_autoswap" ]]; then
+    export LMOD_DISABLE_SAME_NAME_AUTOSWAP="$_mmml_saved_autoswap"
+  else
+    unset LMOD_DISABLE_SAME_NAME_AUTOSWAP
+  fi
+  unset _mmml_saved_autoswap
 else
   echo "scicore_env: lmod not found; libcharmm will fail to dlopen" >&2
 fi

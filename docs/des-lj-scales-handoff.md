@@ -292,12 +292,11 @@ Coulomb, and thin atom types remain. The machine-readable result is
 
 ### Truncated electrostatics contaminate the fit
 
-Training LJ requires `lr_solver: mic`. Under `ewald` the LJ term is removed from
-the hybrid energy entirely and `learn_mm_lj_scales` is silently ineffective. MIC
-means the fit sees **truncated Coulomb**, and Coulomb error can be absorbed into
-σ/ε. Mitigations: `mm_charge_mode: fixed`, identical cutoffs at train and MD
-time, and validation on a property outside the loss (density, RDF first peak).
-Combining trained LJ with Ewald is [issue #139](https://github.com/EricBoittier/mmml/issues/139).
+Stage-1 learning under `lr_solver: mic` still sees **truncated Coulomb**, so
+Coulomb error can be absorbed into σ/ε. Mitigations: `mm_charge_mode: fixed`,
+identical cutoffs at train and MD, and validation on density/RDF. Learning
+under Ewald is supported (`lr_solver: ewald`, `mm_include_lj: true`,
+`learn_mm_lj_scales: true`) — see [issue #139](https://github.com/EricBoittier/mmml/issues/139).
 
 Consequence: the resulting scales are for `jax_mic` / `include_mm` MD. They are
 **not** valid for `periodic_external` + Ewald — MLpot raises rather than
@@ -335,7 +334,7 @@ the exact tail order matters.
 
 ---
 
-## 4. Bug fixed on the way, and one still open
+## 4. Bug fixed on the way, and test status
 
 **Fixed.** `_maybe_unpad_dataset` in `mmml/cli/make/make_training.py` trimmed
 only `R`/`Z`/`F` when auto-removing padding, leaving `cgenff_type_idx`,
@@ -354,9 +353,9 @@ whose axis 1 is the atom axis; regression test in
 The existing DCM/ACO paths never hit this because their NPZs are already tight.
 Workaround if you meet it elsewhere: pin `--num-atoms`.
 
-**Open.** `tests/unit/test_certified_box_jaxmd_load.py` has unresolved merge
-conflict markers, so `pytest tests/unit` aborts during collection. Use
-`--ignore` on that file until it is resolved.
+**Resolved.** An earlier checkout had unresolved merge-conflict markers in
+`tests/unit/test_certified_box_jaxmd_load.py`. The current file is clean and
+its 10 tests pass, so `pytest tests/unit` no longer needs an `--ignore` for it.
 
 Also note `test_pycharmm_cgenff_dimer_regression` fails locally (−3.79 vs
 −8.43 kcal/mol). It is pure PyCHARMM, never imports `cgenff_dataset`, and −3.79

@@ -679,8 +679,13 @@ def dipo_esp_mono_loss(
     # remove dummy grid points
     valid_grids = jnp.where(espMask[0], l2_loss, 0)
     esp_loss_corrected = valid_grids.sum() / espMask[0].sum()
-    # jax.debug.print("{x} {y} {z}", x=esp_loss_corrected * esp_w, y=mono_loss_corrected, z=dipo_loss * 10)
-    return esp_loss_corrected * esp_w * 0.0 , mono_loss_corrected*0.0 , dipo_loss * chg_w
+    # The ESP and monopole terms were multiplied by 0.0 here until the units
+    # audit, so `loss = esp_l + mono_l + dipo_l` in training.py was a
+    # dipole-only objective and `esp_w` had no effect at all. Both dead terms
+    # were still *returned*, so training logs showed them as a tidy 0.0 -- which
+    # reads as converged rather than disabled. The weighting restored below is
+    # the one the debug print above was written against.
+    return esp_loss_corrected * esp_w, mono_loss_corrected, dipo_loss * chg_w
 
 
 def esp_mono_loss_pots(

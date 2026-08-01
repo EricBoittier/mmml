@@ -66,6 +66,22 @@ jobs:
         run: |
           uv run python scripts/ci/check_test_report.py .ci-reports/junit-unit.xml \
             --label "unit suite" --min-passed 3000 --max-skipped-frac 0.25
+      # Coverage floor, not a coverage target. Roughly 18.7k statements need
+      # live CHARMM, 10.9k are plotting and 5.3k need PySCF/torch/GPU, so the
+      # CI-reachable ceiling is near 70% and chasing a percentage here is
+      # pointless. What this catches is a *slide*: a module that stops
+      # importing, a fixture tree that disappears, a large untested subsystem
+      # landing at once. The Codecov status does the same job on PRs, but it is
+      # advisory (`fail_ci_if_error: false`) and needs a token, so it does not
+      # run on forks. Measured 2026-08-01 on a full MMML_DISABLE_CHARMM=1 run:
+      # 45.81%, 55706 of 121608 lines. The floors sit ~3.8pp and ~6.6% below
+      # that, which absorbs CI-vs-local jitter without waving through a
+      # collapse. Raise them as coverage rises, never lower them to go green.
+      - name: Coverage floor
+        if: always()
+        run: |
+          uv run python scripts/ci/check_coverage_floor.py coverage.xml \
+            --label "unit coverage" --min-percent 42 --min-covered-lines 52000
       - name: Run CHARMM MPI unit suite
         if: always()
         run: |

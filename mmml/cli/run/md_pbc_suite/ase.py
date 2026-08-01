@@ -1074,6 +1074,8 @@ def _factory_mmml(
     mm_charge_correction: bool = False,
     mm_latent_charge_template: str | Path | None = None,
     backprop: bool = False,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1130,12 +1132,16 @@ def _factory_mmml(
         mm_charge_mode=mm_charge_mode,
         mm_charge_correction=mm_charge_correction,
         mm_latent_charge_template=mm_latent_charge_template,
+        hybrid_hamiltonian=hybrid_hamiltonian,
+        shared_cutoff=shared_cutoff,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(
         ml_switch_width=ml_cut,
         mm_switch_on=mm_sw,
         mm_switch_width=mm_cut,
+        hybrid_hamiltonian=hybrid_hamiltonian,
+        shared_cutoff=shared_cutoff,
     )
     calc_result = factory(
         atomic_numbers=z,
@@ -1662,6 +1668,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    # md_system forwards both of these to every backend unconditionally, so a
+    # parser that does not know them turns `mmml md-system` into argparse
+    # exit 2 in the subprocess. Kept name-for-name with `run_sim`.
+    parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to model cutoff.",
+    )
     parser.add_argument(
         "--include-mm",
         "--do-mm",
@@ -2428,6 +2449,8 @@ def main(argv: list[str] | None = None) -> int:
             mm_charge_mode=getattr(args, "mm_charge_mode", None),
             mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
             mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
+            hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+            shared_cutoff=getattr(args, "shared_cutoff", None),
         )
         atoms.calc = calc
         _save_cutoff_plot(

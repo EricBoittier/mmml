@@ -1568,6 +1568,22 @@ def build_decomposed_mlpot_model(
                 file=sys.stderr,
                 flush=True,
             )
+    # Native ewald doMM: optional switched LJ beside untapered Coulomb (#139).
+    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+
+    _ewald_include_lj = False
+    if do_mm and pick_lr_solver(lr_solver) == "ewald":
+        _flag = getattr(args, "mm_include_lj", None) if args is not None else None
+        if _flag is None:
+            _ewald_include_lj = ep_scale is not None
+        else:
+            _ewald_include_lj = bool(_flag)
+        if verbose:
+            print(
+                f"Decomposed MLpot: lr_solver=ewald include_lj={_ewald_include_lj} "
+                f"(COM-switched LJ beside untapered full-box Coulomb)",
+                flush=True,
+            )
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -1627,6 +1643,7 @@ def build_decomposed_mlpot_model(
             if args is not None
             else True
         ),
+        include_lj=_ewald_include_lj,
         mm_nonbond_mode=mm_nonbond_mode,
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True

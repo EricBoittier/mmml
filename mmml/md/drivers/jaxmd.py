@@ -96,6 +96,8 @@ class JaxmdDriver:
             import jax
             import jax.numpy as jnp
             from jax_md import minimize, quantity, simulate, space, units
+
+            from mmml.md.step_batching import make_block_stepper
         except ImportError as exc:  # pragma: no cover - environment dependent
             raise RuntimeError("JaxmdDriver requires the optional jax and jax-md packages") from exc
 
@@ -369,6 +371,21 @@ class JaxmdDriver:
         # every Python step (GPU util ~0, host CPU pegged for tens of minutes).
         step_fn = jax.jit(step_fn)
 
+        # ...and batch whole blocks into one dispatch, as jaxmd_runner's
+        # `_bind_sim` does. A Python loop over single jitted steps pays a
+        # dispatch per step; `fori_loop` pays one per block. The pair arrays
+        # ride along as block-constant arguments, which is exactly the
+        # neighbor-list cadence the block size already encodes.
+        _block_cache: dict[tuple[int, int], Any] = {}
+
+        def _block_stepper(fn, n_steps: int):
+            key = (id(fn), int(n_steps))
+            cached = _block_cache.get(key)
+            if cached is None:
+                cached = make_block_stepper(fn, int(n_steps))
+                _block_cache[key] = cached
+            return cached
+
         # bootstrap: build the first neighbor list from the initial real positions
         real_init = _to_real(init_position, box) if is_npt else init_position
         dynamic_kwargs = refresh_real(real_init, box)
@@ -451,8 +468,14 @@ class JaxmdDriver:
                             thermostat_kwargs=options.get("thermostat_kwargs", {}),
                         )
                 step_fn = jax.jit(step_fn)
-            for _ in range(count):
-                state = step_fn(state, **dynamic_kwargs)
+            # One dispatch for the whole block. The ragged tail (a final block
+            # shorter than block_size) would compile a second variant, so step
+            # it the old way rather than paying a compile for one short block.
+            if count == block_size:
+                state = _block_stepper(step_fn, count)(state, **dynamic_kwargs)
+            else:
+                for _ in range(count):
+                    state = step_fn(state, **dynamic_kwargs)
             state.position.block_until_ready()
             completed += count
             prog = self_progress_every

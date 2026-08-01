@@ -125,6 +125,10 @@ def train_model(
     optimizer=None,
     transform=None,
     schedule_fn=None,
+    # Global-norm gradient clip. None keeps get_optimizer's default (10.0),
+    # which is loose enough that most steps pass through unclipped; lower it
+    # (~1.0) when the raw params oscillate instead of converging.
+    clip_global=None,
     objective="valid_forces_mae",
     ckpt_dir=BASE_CKPT_DIR,
     log_tb=False,
@@ -362,6 +366,7 @@ def train_model(
         schedule_fn=schedule_fn,
         optimizer=optimizer,
         transform=transform,
+        **({} if clip_global is None else {"clip_global": float(clip_global)}),
     )
 
     train_params_dict = {
@@ -619,6 +624,12 @@ def train_model(
             epoch_timing.batch_prep_s = time.perf_counter() - batch_t0
 
             train_t0 = time.perf_counter()
+            # NOTE: train_loss below is measured on the raw `params`, while
+            # valid_loss is measured on `ema_params` (see the eval loop). The
+            # two are therefore NOT comparable, and a large train/valid ratio
+            # means the raw weights are oscillating, not that the model is
+            # overfitting. On the DES warm start (job 19360535) this read as a
+            # 128x "generalization gap" that was purely params-vs-EMA.
             train_loss = 0.0
             train_energy_mae = 0.0
             train_forces_mae = 0.0
