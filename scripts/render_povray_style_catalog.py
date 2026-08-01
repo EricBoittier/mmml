@@ -35,18 +35,20 @@ def vec(v) -> str:
 
 
 def scene(atoms, style: str, title: str, *, vectors: bool, geometry: bool,
-          font: str, width: int, height: int) -> str:
+          font: str, width: int, height: int, frame_scale: float = 1.72) -> str:
     xyz = atoms.positions - atoms.positions.mean(0)
     span = max(float(np.ptp(xyz, axis=0).max()), 3.0)
     camera = np.array([span * 1.15, span * .80, -span * 2.7])
     finish = STYLES[style]
     lines = [
         '#version 3.7;', 'global_settings { assumed_gamma 1.0 }',
-        'background { color rgb <0.975,0.978,0.985> }',
-        f'camera {{ orthographic location {vec(camera)} look_at <0,0,0> right x*{1.35*span} up y*{1.35*span*height/width} }}',
+        'background { color rgbt <1,1,1,1> }',
+        f'camera {{ orthographic location {vec(camera)} look_at <0,0,0> right x*{frame_scale*span} up y*{frame_scale*span*height/width} }}',
         f'light_source {{ {vec((-span, span*2, -span*2))} color rgb <1,1,1> area_light <2,0,0>,<0,2,0>,5,5 adaptive 1 jitter }}',
         f'light_source {{ {vec((span*2, -span, -span))} color rgb <0.35,0.40,0.52> }}',
-        'plane { y, -2.15 pigment { color rgb <0.91,0.92,0.94> } finish { diffuse 0.75 } }',
+        # Mostly transparent shadow catcher: reusable alpha, but the soft
+        # contact shadows still ground the molecule on a page or slide.
+        'plane { y, -2.15 pigment { color rgbt <0.91,0.92,0.94,0.82> } finish { diffuse 0.75 } }',
     ]
     for i, j in bonds(atoms):
         a, b = xyz[i], xyz[j]
@@ -109,14 +111,20 @@ def main(argv=None) -> int:
             stem.with_suffix(".pov").write_text(scene(frames[frame_idx], material, label,
                 vectors=vectors, geometry=geometry, font=a.font, width=a.width, height=a.height))
             stem.with_suffix(".ini").write_text(
-                f'Input_File_Name="{stem.name}.pov"\nOutput_File_Name="{stem.name}.png"\nWidth={a.width}\nHeight={a.height}\nAntialias=On\nAntialias_Threshold=0.15\nDisplay=Off\n')
+                f'Input_File_Name="{stem.name}.pov"\nOutput_File_Name="{stem.name}.png"\nWidth={a.width}\nHeight={a.height}\nAntialias=On\nAntialias_Threshold=0.15\nOutput_Alpha=On\nDisplay=Off\n')
             if povray:
                 subprocess.run([povray, stem.with_suffix(".ini").name], cwd=a.out_dir,
                                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
                 # Labels belong to the image plane, not molecular world space:
                 # this keeps them fixed and unclipped for every camera framing.
                 from PIL import Image, ImageDraw, ImageFont
-                image = Image.open(stem.with_suffix(".png")).convert("RGB")
+                image = Image.open(stem.with_suffix(".png")).convert("RGBA")
+                alpha = image.getchannel("A")
+                baseline = alpha.getextrema()[0]
+                if 0 < baseline < 255:
+                    alpha = alpha.point(lambda value: max(
+                        0, round((value - baseline) * 255 / (255 - baseline))))
+                    image.putalpha(alpha)
                 draw = ImageDraw.Draw(image, "RGBA")
                 label_font = ImageFont.truetype(a.font, max(18, a.width // 34))
                 box = draw.textbbox((0, 0), label, font=label_font)

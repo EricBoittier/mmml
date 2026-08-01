@@ -1,0 +1,64 @@
+# DES hybrid-MM, higher capacity + rebalanced energy weight.
+#
+# Target: MAE and RMSE < 1.0 kcal/mol (energy) and kcal/mol/A (forces).
+# Baseline (job 19360535, warm start, features=32/iterations=2):
+#   energy  MAE 3.754  RMSE 9.245
+#   forces  MAE 0.937  RMSE 6.348
+#
+# Two changes from train_des_warmstart.yaml:
+#
+# 1. NO WARM START. `match_checkpoint_architecture` adopts the checkpoint's
+#    architecture wholesale, so DESdimers_params.json pins features=32,
+#    num_iterations=2, n_res=3 -- you cannot warm start *and* raise capacity.
+#    Training from scratch is what buys the bigger model, and it is why this
+#    config needs far more epochs than the 25 the warm start needed.
+#
+# 2. energy_weight >> 1. The baseline ran energy_weight=1 against
+#    forces_weight=52.91, i.e. a loss that was ~98% forces -- and it delivered
+#    exactly that: forces at target, energy 3.8x over. The sweep script varies
+#    this; the value here is the default for a single run.
+#
+# use_energy_bias is back on (the warm start had silently forced it off). With
+# E spanning -166..+1.9 eV, per-element reference energies remove a large
+# systematic offset the network would otherwise have to fit -- directly
+# relevant to the energy target.
+
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: true
+mm_include_lj: true
+lr_solver: mic
+
+# Keep the ML/MM handoff identical to the baseline so the capacity and weight
+# changes are the only variables.
+ml_switch_width: 1.5
+mm_switch_on: 6.0
+mm_switch_width: 5.0
+cutoff: 6.0
+
+# --- capacity (baseline in brackets) ---
+features: 64             # [32]
+num_iterations: 4        # [2]
+n_res: 4                 # [3]  (alias of n_refinement_blocks)
+num_basis_functions: 32  # [16]
+max_degree: 1            # [1]  raising this is the expensive axis; left alone
+use_energy_bias: true    # [false, forced off by the warm start]
+zbl: true
+# MUST be set explicitly without a warm start. The CLI default is 28, but this
+# dataset contains Xe (Z=54) -- the DESdimers checkpoint was quietly supplying
+# 118, so dropping the warm start exposes the too-small default and training
+# aborts with "Dataset atomic numbers exceed model.max_atomic_number".
+max_atomic_number: 118
+
+charges: false
+batch_size: 32
+num_epochs: 40
+learning_rate: 0.001     # best of {1e-3, 3e-4, 1e-4} in the job 19361103 sweep
+seed: 42
+
+energy_weight: 30.0      # [1.0]
+forces_weight: 52.91
+dipole_weight: 0.0
+charges_weight: 0.0
+objective: valid_loss
+best: true

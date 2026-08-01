@@ -654,6 +654,20 @@ that would only hit a handful of atoms:
 
 ![per-atom max discrepancy](plot-style-gallery-assets/chart_fd_mlpot_per_atom.png)
 
+## Transparent molecular overlays
+
+The same glossy transparent POV-Ray treatment can link molecular structure to
+three different quantitative layouts: ordered reaction progress, coordinates
+on a 2D PES, and physical time. Force arrows are attached to the rendered
+frame, while thin neutral connectors preserve the exact data association.
+
+| Reaction path | Two-dimensional PES | Dynamics |
+| --- | --- | --- |
+| ![NEB overlay](images/povray-overlays/neb_profile_with_povray.png) | ![trialanine overlay](images/povray-overlays/trialanine_pes_with_povray.png) | ![water dynamics overlay](images/povray-overlays/water_nve_with_povray.png) |
+
+The compositing rules and caveats are documented in
+[POV-Ray structures on quantitative plots](plotting-style-guide.md#transparent-pov-ray-structures-on-quantitative-plots).
+
 ## How to pick
 
 ```python

@@ -411,6 +411,52 @@ Standalone POV panels (PSF bonds only; molecular MIC wrap):
 | --- | --- | --- |
 | ![liquid](images/structures/dcm120_liquid_psf_bonds.png) | ![top](images/structures/dcm120_liquid_psf_bonds_top.png) | ![monomer](images/structures/dcm_monomer_psf_bonds.png) |
 
+### Transparent POV-Ray structures on quantitative plots
+
+For a scan, trajectory, or reaction path, prefer placing a small number of
+transparent structure renders **on the quantitative axes** over presenting an
+unlinked strip of molecular pictures. The plot remains the evidence; the
+structures explain which geometry produced selected marks.
+
+- Render glossy RGBA atoms on a transparent background, retaining a soft
+  partially transparent contact shadow. A uniform translucent background is
+  not transparency: normalize the shadow-catcher's baseline alpha to zero.
+- Use force arrows only when forces belong to the exact plotted frame. Keep a
+  fixed arrow normalization within a panel and state when arrows are rescaled.
+- A sequence's geometry should reinforce its axis. Place NEB/scan snapshots in
+  increasing path order at their actual x coordinates and connect each one to
+  the corresponding curve point. A single directional annotation may clarify
+  progress; do not add a second decorative timeline. Label an NEB coordinate
+  as path/reaction progress, not physical time: image order is time-like, but
+  NEB images do not carry dynamical timestamps.
+- On a 2D PES, anchor each conformer to its actual coordinates. Offset inward
+  with a thin connector when an overlay would collide with a title, axis label,
+  or colorbar. Never obscure the minimum or a scientifically important saddle.
+- Use three to five snapshots. More turns a plot into a molecular filmstrip and
+  hides the data. Transparent pixels still occupy annotation bounds, so inspect
+  the final export rather than trusting layout calculations alone.
+- Apply the normal plot preset before creating the figure and export the final
+  composite at 300 dpi with `bbox_inches="tight"` and `transparent=True`.
+
+Reference implementation:
+[`scripts/render_povray_data_overlays.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/render_povray_data_overlays.py).
+
+![NEB energy profile with ordered POV-Ray geometries](images/povray-overlays/neb_profile_with_povray.png)
+
+![Trialanine PES with force-annotated conformers](images/povray-overlays/trialanine_pes_with_povray.png)
+
+![Water-cluster energy trace with force snapshots](images/povray-overlays/water_nve_with_povray.png)
+
+For electrostatic diagrams, keep the hierarchy explicit: atoms and bonds define
+the molecule; translucent signed-charge shells are secondary; the dipole is the
+dominant vector; higher multipoles use thinner, shorter glyphs. State the source
+of every moment. In the DCM example below, the gold dipole is the stored quantum
+label, while the quadrupole axes are only a traceless tensor derived from the
+displayed CGenFF point charges—not an ab-initio quadrupole prediction. Use the
+conventional red-negative/blue-positive shell mapping redundantly with a legend.
+
+![DCM charge, dipole, and point-charge quadrupole style](images/povray-overlays/dcm_multipoles.png)
+
 ## Colormaps
 
 Prefer the [`cmap`](https://cmap-docs.readthedocs.io) library (`uv add

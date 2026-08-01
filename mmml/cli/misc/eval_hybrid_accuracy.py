@@ -62,15 +62,33 @@ def _parse_args(argv=None):
 
 
 def _find_sidecar(params_path: Path, explicit: Path | None) -> Path | None:
-    """Locate hybrid_mm.json: explicit, beside the params, or in a run subdir."""
+    """Locate hybrid_mm.json: explicit, or unambiguously beside the params.
+
+    Deliberately refuses to guess between several run directories. A ckpt dir
+    accumulates one per run, and silently picking the wrong run's LJ scales
+    would report accuracy for a parameter set that never existed -- the exact
+    error this script is meant to rule out. Newest-wins and alphabetical are
+    both wrong: the newest may be a *different* run still training.
+    """
     if explicit is not None:
-        return explicit if Path(explicit).is_file() else None
+        if not Path(explicit).is_file():
+            raise SystemExit(f"--hybrid-mm-json not found: {explicit}")
+        return Path(explicit)
+
     root = Path(params_path).parent
     direct = root / "hybrid_mm.json"
     if direct.is_file():
         return direct
+
     hits = sorted(root.glob("*/hybrid_mm.json"))
-    return hits[-1] if hits else None
+    if len(hits) > 1:
+        listed = "\n  ".join(str(h) for h in hits)
+        raise SystemExit(
+            f"{len(hits)} candidate hybrid_mm.json files under {root}; refusing "
+            f"to guess which run produced {params_path.name}.\n"
+            f"Pass --hybrid-mm-json explicitly:\n  {listed}"
+        )
+    return hits[0] if hits else None
 
 
 def _summarize(err, n_label):
@@ -174,14 +192,49 @@ def main(argv=None) -> int:
         pair_cache=_pair_indices(natoms, args.batch_size),
     )
 
+    # Uncompiled, the hybrid forward retraces per batch and 8.5k frames take
+    # >10 min; one compile covers all batches (they share shapes).
+    _fwd = jax.jit(
+        lambda p, b: _eval_forward(model.apply, p, b, args.batch_size, hybrid_mm)
+    )
+
     e_err, f_err = [], []
+    per_frame = []  # (|dE| kcal/mol, max|dF| kcal/mol/A, min inter-contact A)
+    frame_de, frame_df, frame_dmin = [], [], []  # for threshold sweep
     for batch in batches:
-        out = _eval_forward(model.apply, params, batch, args.batch_size, hybrid_mm)
-        e_err.append(np.asarray(out["energy"]).ravel() - np.asarray(batch["E"]).ravel())
+        out = _fwd(params, batch)
+        de = np.asarray(out["energy"]).ravel() - np.asarray(batch["E"]).ravel()
+        e_err.append(de)
         mask = np.asarray(batch["atom_mask"]).astype(bool)
         fp = np.asarray(out["forces"])[mask]
         ft = np.asarray(batch["F"])[mask]
         f_err.append((fp - ft).ravel())
+
+        # Per-frame worst-atom force error, to locate the RMSE tail.
+        fp_b = np.asarray(out["forces"]).reshape(args.batch_size, -1, 3)
+        ft_b = np.asarray(batch["F"]).reshape(args.batch_size, -1, 3)
+        m_b = np.asarray(batch["atom_mask"]).reshape(args.batch_size, -1).astype(bool)
+        r_b = np.asarray(batch["R"]).reshape(args.batch_size, -1, 3)
+        mol_b = (np.asarray(batch["mol_id"]).reshape(args.batch_size, -1)
+                 if "mol_id" in batch else None)
+        for k in range(args.batch_size):
+            m = m_b[k]
+            if not m.any():
+                continue
+            dfk = np.linalg.norm((fp_b[k] - ft_b[k])[m], axis=1).max() * EV_TO_KCAL_MOL
+            dmin = np.inf
+            if mol_b is not None:
+                r, mi = r_b[k][m], mol_b[k][m]
+                a, b = np.where(mi == 0)[0], np.where(mi == 1)[0]
+                if len(a) and len(b):
+                    dmin = float(np.linalg.norm(
+                        r[a][:, None, :] - r[b][None, :, :], axis=-1).min())
+            per_frame.append((abs(de[k]) * EV_TO_KCAL_MOL, dfk, dmin))
+            frame_de.append(de[k] * EV_TO_KCAL_MOL)
+            frame_df.append(
+                np.linalg.norm((fp_b[k] - ft_b[k])[m], axis=1) * EV_TO_KCAL_MOL
+            )
+            frame_dmin.append(dmin)
 
     energy = _summarize(np.concatenate(e_err) * EV_TO_KCAL_MOL, "kcal/mol")
     forces = _summarize(np.concatenate(f_err) * EV_TO_KCAL_MOL, "kcal/mol/A")
@@ -202,6 +255,43 @@ def main(argv=None) -> int:
                   f"{'PASS' if ok else 'FAIL'} (target < {target:g})")
             if not ok:
                 failures.append(f"{name}.{stat}={s[stat]:.3f}")
+
+    # Where does the RMSE tail live? If the worst frames are close contacts,
+    # the fix is the short-range handoff, not more training.
+    if per_frame:
+        pf = np.array(per_frame, dtype=np.float64)
+        order = np.argsort(pf[:, 1])[::-1]
+        print("\nworst 10 frames by max force error:")
+        print(f"  {'|dE| kcal/mol':>14}{'max|dF| kcal/mol/A':>21}{'min contact A':>15}")
+        for i in order[:10]:
+            print(f"  {pf[i,0]:>14.3f}{pf[i,1]:>21.3f}{pf[i,2]:>15.3f}")
+
+        tail = pf[order[: max(1, len(pf) // 100)]]
+        rest = pf[order[max(1, len(pf) // 100):]]
+        print(f"\n  worst 1% of frames: mean min-contact = {np.nanmean(tail[:,2]):.3f} A")
+        print(f"  other 99%         : mean min-contact = {np.nanmean(rest[:,2]):.3f} A")
+        f_sq = np.concatenate(f_err) ** 2
+        share = np.sort(f_sq)[::-1][: max(1, f_sq.size // 1000)].sum() / f_sq.sum()
+        print(f"  top 0.1% of force components own {100*share:.1f}% of the force MSE")
+
+    # If close contacts own the tail, how much does excluding them buy? These
+    # are *validation* metrics on a filtered subset -- an estimate of the
+    # achievable target, not a result you can claim without retraining.
+    if frame_dmin:
+        dmin_a = np.asarray(frame_dmin)
+        de_a = np.asarray(frame_de)
+        print(f"\n{'min-contact cut':>16}{'frames kept':>13}{'E MAE':>9}"
+              f"{'E RMSE':>9}{'F MAE':>9}{'F RMSE':>9}")
+        for cut in (0.0, 1.0, 1.5, 2.0, 2.5):
+            keep = dmin_a >= cut
+            if keep.sum() < 10:
+                continue
+            de_k = de_a[keep]
+            df_k = np.concatenate([frame_df[i] for i in np.where(keep)[0]])
+            print(f"{cut:>16.1f}{keep.sum():>13d}"
+                  f"{np.abs(de_k).mean():>9.3f}{np.sqrt((de_k**2).mean()):>9.3f}"
+                  f"{np.abs(df_k).mean():>9.3f}{np.sqrt((df_k**2).mean()):>9.3f}")
+        print(f"  ({len(dmin_a)} frames total; cut=0.0 is the unfiltered row)")
 
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
