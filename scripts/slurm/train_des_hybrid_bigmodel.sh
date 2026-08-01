@@ -19,8 +19,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --array=0-2
-#SBATCH --output=artifacts/lj_scales_des_bigmodel_f/logs/slurm-%A_%a.out
-#SBATCH --error=artifacts/lj_scales_des_bigmodel_f/logs/slurm-%A_%a.err
+#SBATCH --output=artifacts/lj_scales_des_bigmodel_e/logs/slurm-%A_%a.out
+#SBATCH --error=artifacts/lj_scales_des_bigmodel_e/logs/slurm-%A_%a.err
 
 set -uo pipefail
 
@@ -36,11 +36,15 @@ EPOCHS="${LJ_EPOCHS:-40}"
 NTRAIN="${LJ_NTRAIN:-95000}"
 NVALID="${LJ_NVALID:-7900}"
 
-RUN_ROOT="$REPO/artifacts/lj_scales_des_bigmodel_f/ew_${EW}"
+RUN_ROOT="$REPO/artifacts/lj_scales_des_bigmodel_e/ew_${EW}"
 CKPT_DIR="$RUN_ROOT/ckpts"
-# Close-contact-filtered set: frames with any intermolecular contact below
-# 1.5 A are removed. Those 5% of frames carried 95% of the force MSE.
-DATA="${LJ_DATA:-$REPO/artifacts/lj_scales_des/des_dimers_cgenff_top50_min15.npz}"
+# Close-contact filtered (<1.5 A removed: 5% of frames carrying 95% of the
+# force MSE) AND per-element reference energies subtracted. The latter is
+# essential without a warm start: composition explains 99.97% of raw E, so
+# from scratch the model spent every epoch failing to rediscover ~800
+# kcal/mol of offset (energy MAE flat at ~1200 for 6 epochs) while forces
+# converged normally. Residual std is 12.8 kcal/mol.
+DATA="${LJ_DATA:-$REPO/artifacts/lj_scales_des/des_dimers_cgenff_top50_min15_eref.npz}"
 
 if [[ -e "$CKPT_DIR" ]]; then
   echo "REFUSING to run: $CKPT_DIR exists (would mix runs). Move it first." >&2
