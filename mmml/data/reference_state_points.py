@@ -95,7 +95,11 @@ _ARGON_SAT = (
     StatePoint(90.0, 1.3351, 1.3786, source="NIST WebBook SatP C7440371", verified=True),
     StatePoint(100.0, 3.2377, 1.3137, source="NIST WebBook SatP C7440371", verified=True),
     StatePoint(120.0, 12.130, 1.1628, source="NIST WebBook SatP C7440371", verified=True),
+    StatePoint(130.0, 20.255, 1.0681, source="NIST WebBook SatP C7440371", verified=True),
     StatePoint(140.0, 31.682, 0.94371, source="NIST WebBook SatP C7440371", verified=True),
+    # Tr = 0.994. Kept for reference but NOT a usable MD state point: the
+    # compressibility diverges, the correlation length outgrows any affordable
+    # box, and equilibration times blow up. See run_npt_argon_water_campaign.sh.
     StatePoint(150.0, 47.346, 0.68043, source="NIST WebBook SatP C7440371", verified=True),
 )
 
