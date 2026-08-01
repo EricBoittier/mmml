@@ -69,13 +69,15 @@ Reading the panels:
 
 - **(a)** Water is the hub: it is 27% of all monomer occurrences and outruns the
   next most common monomer (CH₄) roughly 15-fold. Colour marks whether the
-  hybrid ML/MM path can type the monomer — several very common ones (H₂S, CH₂O,
-  Ar) cannot.
+  hybrid ML/MM path can type the monomer — the biggest gaps left are H₂S and
+  CH₂O.
 - **(b)** The sampling is deliberately water-centred plus a homodimer diagonal;
   grey cells are pairs that were never generated. This is DES370K-style
   coverage, not a dense all-pairs grid.
 - **(c)** 20 elements, including noble gases (He, Ne, Ar, Kr, Xe) and bare ions
-  (Na, K, Li, Ca, Mg, F, Cl, Br, I) — chemistry that has no CGenFF residue.
+  (Na, K, Li, Ca, Mg, F, Cl, Br, I) — none of which CGenFF alone can type. All
+  five noble gases and six of the ions are covered by the merged stream files
+  below; F⁻, Br⁻ and I⁻ remain uncovered.
 - **(d)** **34 atoms is the hard maximum**, which is where `natoms=34` in
   `~/trainDES/train.py` comes from. The spike at 4 atoms is the
   noble-gas/diatomic and small-ion population.
@@ -92,57 +94,81 @@ Running the real assignment on a 1-in-20 sample (18,548 frames):
 
 | | frames | share |
 |---|---:|---:|
-| **Typeable — usable for hybrid ML/MM** | **6,635** | **35.8%** |
-| Dropped: composition matched, topology did not | 5,204 | 28.1% |
-| Dropped: no CGenFF template for the composition | 5,180 | 27.9% |
+| **Typeable — usable for hybrid ML/MM** | **7,595** | **40.9%** |
+| Dropped: composition matched, topology did not | 5,206 | 28.1% |
+| Dropped: no template for the composition | 4,218 | 22.7% |
 | Dropped: not two covalent components | 946 | 5.1% |
 | Dropped: not graph-isomorphic to the chosen template | 583 | 3.1% |
 
-**89 of 1,333 monomer species** are typeable, and they form **1,038 distinct
-CGenFF `RESI` pairs**. Because the lookup is composition-keyed, each typeable
-formula resolves to exactly one residue.
+**94 of 1,333 monomer species** are typeable, and they form **1,188 distinct
+`RESI` pairs**. Because the lookup is composition-keyed, each typeable formula
+resolves to exactly one residue.
 
-!!! note "CGenFF alone gets 32.9%; the ion residues take it to 35.8%"
-    CGenFF has no template for a bare ion, so every ion–water dimer used to
-    drop. `load_reference` now merges
-    [`toppar_water_ions.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_water_ions.str)
-    on top of CGenFF (`DEF_EXTRA_TOPPAR`), adding **`CLA`, `SOD`, `POT`,
-    `LIT`, `CAL`, `MG`** — +6 residues, +6 LJ types, +119 RESI pairs,
-    32.9% → 35.8% on the identical frame set. The merge is strictly additive:
-    an atom type or `RESI` CGenFF already defines is left alone and new
-    compositions are appended behind the existing candidates, so assignments
-    that already worked are byte-identical (verified over 3,000 DCM frames).
+### Extending the reference beyond CGenFF
+
+Bare CGenFF types only 32.9% of frames — it has no template for a monatomic ion
+or a noble gas, so every ion–water and noble-gas dimer dropped. `load_reference`
+merges additional CHARMM stream files listed in `DEF_EXTRA_TOPPAR`:
+
+| Added | Residues | Coverage | New LJ types |
+|---|---|---:|---:|
+| *(CGenFF alone)* | — | 32.9% | 90 |
+| [`toppar_water_ions.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_water_ions.str) | `CLA` `SOD` `POT` `LIT` `CAL` `MG` | 35.8% | 96 |
+| [`toppar_dum_noble_gases.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_dum_noble_gases.str) | `HE1` `NE1` | 37.8% | 98 |
+| [`toppar_noble_gases_literature.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_noble_gases_literature.str) | `AR1` `KR1` `XE1` | **40.9%** | **101** |
+
+All measured on the identical 18,548-frame sample — a 24% relative increase in
+usable data. The merge is strictly additive: an atom type or `RESI` CGenFF
+already defines is left alone and new compositions are appended behind the
+existing candidates, so assignments that already worked are byte-identical
+(verified over 3,000 DCM frames).
+
+!!! warning "Ar, Kr and Xe are not CHARMM parameters"
+    CHARMM ships no residue for them anywhere —
+    `toppar_dum_noble_gases.str` covers only He and Ne. The third file carries
+    **standard literature 12-6 parameters** (Ar σ 3.405 Å / ε 0.238 kcal/mol;
+    Kr 3.600 / 0.340; Xe 4.100 / 0.439), converted to CHARMM's
+    (ε, R<sub>min</sub>/2) convention and labelled as non-CHARMM in the file
+    header. They were **not fitted alongside CGenFF** and their cross terms are
+    unvalidated, so noble-gas results are provisional.
+
+    The one consistency check available: σ and ε both rise monotonically across
+    the combined series (He 2.637/0.021 < Ne 2.726/0.085 < Ar 3.405/0.238 <
+    Kr 3.600/0.340 < Xe 4.100/0.439) despite spanning two sources. The
+    alternative in-tree values, from BMS
+    (`toppar/non_charmm/par_bms_dec03.inp`), fail that check — their argon ε is
+    *smaller* than their neon ε, and their helium ε differs from CHARMM's by
+    51× — which is why they are not used.
 
 The two large failure modes are different problems:
 
-- **No template (27.9%)** — the composition has no `RESI` at all. After the ion
-  merge this is the noble gases (He, Ne, Ar, Kr, Xe), the halides CHARMM has no
-  ion residue for (F⁻, Br⁻, I⁻), and small molecules CGenFF does not cover
-  (H₂S, CH₂O, H₂S₂ are the three biggest single contributors).
+- **No template (22.7%)** — the composition has no `RESI` at all. With the ions
+  and all five noble gases merged, what remains is small molecules CGenFF does
+  not cover (H₂S, CH₂O and H₂S₂ are the three biggest single contributors) plus
+  the halides CHARMM has no ion residue for (F⁻, Br⁻, I⁻).
 - **Topology mismatch (28.1%)** — a residue with the *same formula* exists, but
   the frame is a different isomer. `_template_to_geometry_permutation` catches
   this by graph isomorphism and the frame is dropped rather than silently
   mistyped. This is the failure mode working correctly, but it means the
   composition-first lookup is leaving usable frames on the table.
 
-Largest untypeable monomers by occurrence (Cl⁻ has moved off this list — it is
-now `CLA`):
+Largest untypeable monomers by occurrence. Cl⁻ and all five noble gases have
+moved off this list:
 
 | Monomer | occurrences | Monomer | occurrences |
 |---|---:|---|---:|
-| H₂S | 13,256 | Ne | 3,793 |
-| CH₂O | 13,040 | C₂H₄O | 3,682 |
-| Ar | 7,154 | Kr | 3,533 |
-| H₂S₂ | 7,147 | F⁻ | 3,533 |
-| C₆H₁₂ | 6,971 | Xe | 3,452 |
+| H₂S | 13,256 | C₃H₆S₂ | 4,613 |
+| CH₂O | 13,040 | C₃H₈O₂ | 4,571 |
+| H₂S₂ | 7,147 | C₂H₄O | 3,682 |
+| C₆H₁₂ | 6,971 | F⁻ | 3,533 |
 | C₃H₈S₂ | 6,135 | Br⁻ | 3,353 |
 | C₄H₄N₂ | 4,868 | I⁻ | 3,333 |
-| He | 4,199 | C₃H₆S₂ | 4,613 |
 
-The remaining ions are a bounded, tractable gap: F⁻, Br⁻ and I⁻ (10,219
-occurrences between them) have no residue in `toppar_water_ions.str` either, and
-the five noble gases (22,131) have none anywhere in CHARMM. Both would need
-hand-written residues rather than another stream file.
+What is left is now mostly **molecular**, not atomic: sulfur species (H₂S, H₂S₂,
+the C₃ dithiols), formaldehyde, and cyclohexane. The only remaining atomic gap
+is F⁻/Br⁻/I⁻ (10,219 occurrences), which `toppar_water_ions.str` does not carry
+— chloride is its only halide. Those three would need hand-written residues on
+the same footing as the literature noble gases.
 
 ---
 
@@ -150,25 +176,28 @@ hand-written residues rather than another stream file.
 
 <figure markdown>
 ![CGenFF LJ coverage](images/des-so3lr-dimers/lj_coverage.png)
-<figcaption>96 of 179 nonbonded types are reachable from the DES dimer set, via 89 residues.</figcaption>
+<figcaption>101 of 185 nonbonded types are reachable from the DES dimer set, via 94 residues.</figcaption>
 </figure>
 
 This is the figure that matters for [trainable LJ
 scales](hybrid-mm-lj-scales.md): a per-type σ/ε scale only receives a gradient
-if some training frame contains an atom of that type. **96 of 179** types
-qualify; the other 83 are inert no matter how long you train.
+if some training frame contains an atom of that type. **101 of 185** types
+qualify; the other 84 are inert no matter how long you train.
 
-The distribution is steep. `HGA3` (aliphatic H) appears in 76% of typeable
-frames and `CG331` (methyl C) in 72%, while 25 of the 96 types appear in fewer
+The distribution is steep. `HGA3` (aliphatic H) appears in 68% of typeable
+frames and `CG331` (methyl C) in 64%, while 20 of the 101 types appear in fewer
 than 50 sampled frames — **`NG2S1` appears in 7**, all from a single residue.
 Those thin types will move under gradient descent without being meaningfully
 constrained by data, which is exactly the regime where the
 [σ/ε degeneracy](hybrid-mm-lj-scales.md) bites. Freeze them, exclude them, or
 cut the residue list (below) rather than trusting a fitted value.
 
-The six ion types are the newest and among the thinnest: `CLA` 231 sampled
-frames, `POT` 103, `SOD` 93, `LIT` 83, `MG` 13, **`CAL` 9**. Treat `CAL` and
-`MG` as unfittable at this sample size.
+The eleven merged monatomic types split sharply. The noble gases and chloride
+are **well sampled** — `AR` 252, `CLA` 231, `HE` 199, `NE` 181, `KR` 171,
+`XE` 165 — and their residues rank 7th, 8th, 15th, 20th, 25th and 26th of 94,
+so they comfortably survive the default cut. The metal cations do not: `POT`
+103, `SOD` 93, `LIT` 83, `MG` 13, **`CAL` 9**. Treat `CAL` and `MG` as
+unfittable at this sample size.
 
 ### Most-exercised types
 
@@ -189,7 +218,7 @@ Note that `HT` and `HGP1` share σ = 0.4000 / ε = 0.04600 exactly — distinct
 types, one point in the LJ plane. Scaling them independently is only
 identifiable because they sit on different molecules.
 
-**Full tables** (generated, 96 types and 89 residues):
+**Full tables** (generated, 101 types and 94 residues):
 
 - [`docs/images/des-so3lr-dimers/lj_types.md`](images/des-so3lr-dimers/lj_types.md)
   — every reachable type with σ, ε, frame count, and the residues that use it
@@ -198,33 +227,36 @@ identifiable because they sit on different molecules.
 
 ### Residues covered, by sample count
 
-All 89, ranked. Sampled frames are 1-in-20; multiply by 20 for the full set.
-The **top 40** (above the rule) is the default training cut — see below.
+All 94, ranked. Sampled frames are 1-in-20; multiply by 20 for the full set.
+The **top 50** (above the rule) is the default training cut — see below.
+**Bold** entries are residues merged from the extra stream files.
 
-| # | RESI | smp | # | RESI | smp | # | RESI | smp | # | RESI | smp |
-|---:|---|---:|---:|---|---:|---:|---|---:|---:|---|---:|
-| 1 | `TIP3` | 3,776 | 11 | `ACO` | 197 | 21 | `DMDS` | 166 | 31 | `TMAM` | 111 |
-| 2 | `METH` | 661 | 12 | `ACEM` | 196 | 22 | `NH4` | 160 | 32 | `DETE` | 108 |
-| 3 | `AMM1` | 643 | 13 | `MAM1` | 190 | 23 | `FORA` | 157 | 33 | `MIMI` | 107 |
-| 4 | `ETHE` | 428 | 14 | `FORM` | 188 | 24 | `PRPA` | 132 | 34 | `CPEN` | 105 |
-| 5 | `FORH` | 338 | 15 | `MESH` | 188 | 25 | `DMAM` | 128 | 35 | `ACET` | 105 |
-| 6 | `MEOH` | 336 | 16 | `BENZ` | 181 | 26 | `PYRL` | 121 | 36 | **`POT`** | 103 |
-| 7 | **`CLA`** | 231 | 17 | `ETHA` | 177 | 27 | `PYR1` | 115 | 37 | `PRLD` | 103 |
-| 8 | `ETOH` | 202 | 18 | `BUTA` | 170 | 28 | `PRO2` | 115 | 38 | `THF` | 102 |
-| 9 | `ETSH` | 198 | 19 | `PHEN` | 169 | 29 | `MAS` | 114 | 39 | `MGUA` | 100 |
-| 10 | `ACEH` | 197 | 20 | `IMIA` | 197 | 30 | `EMS` | 114 | 40 | `MAMM` | 99 |
+| # | RESI | smp | # | RESI | smp | # | RESI | smp | # | RESI | smp | # | RESI | smp |
+|---:|---|---:|---:|---|---:|---:|---|---:|---:|---|---:|---:|---|---:|
+| 1 | `TIP3` | 4,518 | 11 | `ACEM` | 205 | 21 | `ETHA` | 180 | 31 | `PYRL` | 123 | 41 | **`POT`** | 107 |
+| 2 | `METH` | 662 | 12 | `IMIA` | 204 | 22 | `BUTA` | 177 | 32 | `PYR1` | 117 | 42 | `MGUA` | 106 |
+| 3 | `AMM1` | 644 | 13 | `ACO` | 204 | 23 | `PHEN` | 176 | 33 | `PRO2` | 117 | 43 | `CPEN` | 106 |
+| 4 | `ETHE` | 435 | 14 | `ETSH` | 204 | 24 | `DMDS` | 174 | 34 | `MAS` | 115 | 44 | `PRLD` | 104 |
+| 5 | `FORH` | 344 | 15 | **`HE1`** | 200 | 25 | **`KR1`** | 171 | 35 | `EMS` | 115 | 45 | `THF` | 103 |
+| 6 | `MEOH` | 340 | 16 | `MAM1` | 194 | 26 | **`XE1`** | 165 | 36 | `ACET` | 115 | 46 | `IMIM` | 103 |
+| 7 | **`AR1`** | 252 | 17 | `MESH` | 192 | 27 | `NH4` | 162 | 37 | `TMAM` | 113 | 47 | **`SOD`** | 95 |
+| 8 | **`CLA`** | 241 | 18 | `FORM` | 190 | 28 | `FORA` | 158 | 38 | `DETE` | 110 | 48 | `BTE1` | 87 |
+| 9 | `ETOH` | 207 | 19 | `BENZ` | 187 | 29 | `PRPA` | 133 | 39 | `MIMI` | 109 | 49 | **`LIT`** | 83 |
+| 10 | `ACEH` | 205 | 20 | **`NE1`** | 182 | 30 | `DMAM` | 129 | 40 | `MAMM` | 109 | 50 | `PRAM` | 81 |
 
-*— top-40 cut —*
+*— top-50 cut —*
 
 ```
-IMIM BTE1 SOD  PRAM LIT  ETAC PENT SM073 DMA  HEXA THPS DITH DEDS INDO
-TOLU NC4  TRIT EAMM GUAN FETH FLUB NC3  ACN  CLET DCM  PRPY DCLE DFET
-BRET DBRE EIMI MIND EBEN EIND PROA EIMM EPHE DMEP TFET SM158 MP_0 GLYN
-SM129 TCLE MG   AANM DME  CAL  DFB
+ETAC PENT HEXA SM073 DMA  THPS DITH DEDS TOLU INDO TRIT NC4  EAMM FETH
+FLUB GUAN ACN  NC3  CLET DCM  PRPY DCLE DFET BRET DBRE EIMI MIND EBEN
+EIND PROA EIMM EPHE SM158 MP_0 DMEP TFET GLYN MG   SM129 CAL  TCLE AANM
+DME  DFB
 ```
 
-Bold entries are the merged ion residues. `SOD` (93) and `LIT` (83) sit just
-below the cut; `MG` (13) and `CAL` (9) are deep in the tail.
+All five noble gases and chloride land in the top 26 — they are ordinary,
+well-sampled residues here, not tail entries. The metal cations are weaker:
+`POT` (107), `SOD` (95) and `LIT` (83) scrape in, while `MG` (13) and `CAL` (9)
+sit deep in the tail and are unfittable.
 
 The 12-species panel in
 [`workflows/des_dimer_pair_scans/config.yaml`](https://github.com/EricBoittier/mmml/blob/main/workflows/des_dimer_pair_scans/config.yaml)
@@ -247,9 +279,9 @@ des_dimers_raw.npz
    │  mmml prepare-mm-dataset                  (12b)  types, charges, res_name
    ▼
 des_dimers_cgenff_all.npz
-   │  scripts/filter_mm_dataset_by_residue.py  (12c)  --top 40
+   │  scripts/filter_mm_dataset_by_residue.py  (12c)  --top 50
    ▼
-des_dimers_cgenff_top40.npz  ──▶  05_train.sh  learn_mm_lj_scales
+des_dimers_cgenff_top50.npz  ──▶  05_train.sh  learn_mm_lj_scales
 ```
 
 ```bash
@@ -262,7 +294,7 @@ LJ_DES=1 LJ_DEVICE=gpu bash examples/lj_scales/05_train.sh
 |---|---|---|
 | `LJ_DES_H5` | `~/qcell/qcell_dimers.h5` | source HDF5 |
 | `LJ_DES_PAD` | `34` | the measured DES maximum, **not** the ladder's usual 20 |
-| `LJ_DES_TOP_RESIDUES` | `40` | residue cut (below) |
+| `LJ_DES_TOP_RESIDUES` | `50` | residue cut (below) |
 | `LJ_DES_ALL_CHARGES` | `0` | `1` admits net-charged (ion) dimers |
 
 **Units need no conversion.** FHI-aims writes eV and eV/Å, which is what the
@@ -277,34 +309,41 @@ Yield against the cut, from the scan (sampled frames ×20 ≈ full):
 
 | top-N residues | frames | ≈ full | % of typeable | LJ types | thinnest type |
 |---:|---:|---:|---:|---:|---:|
-| 20 | 3,049 | 61,000 | 46.0% | 32 | 2,600 |
-| 25 | 3,616 | 72,300 | 54.5% | 41 | 2,240 |
-| 30 | 4,009 | 80,200 | 60.4% | 47 | 2,120 |
-| **40** | **4,750** | **95,000** | **71.6%** | **58** | **1,440** |
-| 50 | 5,384 | 107,700 | 81.1% | 65 | 1,160 |
-| 60 | 5,894 | 117,900 | 88.8% | 74 | 920 |
-| 89 (all) | 6,635 | 132,700 | 100% | 96 | **140** |
+| 30 | 4,485 | 89,700 | 59.1% | 46 | 2,400 |
+| 40 | 5,269 | 105,400 | 69.4% | 57 | 1,460 |
+| **50** | **6,017** | **120,300** | **79.2%** | **69** | **1,420** |
+| 60 | 6,601 | 132,000 | 86.9% | 71 | 1,100 |
+| 94 (all) | 7,595 | 151,900 | 100% | 101 | **140** |
 
-**40 is the recommended default.** It keeps 72% of the usable frames and 58 LJ
-types while holding every one of them above ~1,400 frames. Taking all 89
-residues buys 38 more types but drops the sampling floor by an order of
-magnitude — those types are exactly the ones that will drift.
+**50 is the recommended default.** It keeps 79% of the usable frames and 69 LJ
+types while holding every one of them above ~1,400 frames — the *same* floor a
+40-residue cut gives, for 10 points more data and 12 more types, so 40 is simply
+dominated. At 60 the floor starts eroding; taking all 94 buys 32 more types but
+drops the floor by an order of magnitude, and those are exactly the types that
+will drift.
 
 A frame is kept only if **both** monomers are in the allowlist, which is why the
 frame yield falls faster than the residue count.
 
 ### What to watch
 
-1. **Water dominance.** `TIP3` is in 57% of typeable frames — more than five
+1. **Water dominance.** `TIP3` is in 59% of typeable frames — nearly seven
    times the next residue. Every aggregate error metric on this set is
    substantially a water metric. Step 12 prints the TIP3 share so it cannot
    surprise you at eval time; consider subsampling or a per-pair breakdown.
-2. **Ion frames are off by default.** The merged ion residues only occur in
-   net-charged dimers, and step 12a filters to neutral (matching
-   `~/trainDES/train.py`). `LJ_DES_ALL_CHARGES=1` admits them — a separate
+2. **Noble gases are in by default; ions are not.** Noble-gas dimers are
+   neutral, so they flow straight into training — which is why merging them
+   moved coverage 5 points where the ions moved it 3. The merged *ion* residues
+   only occur in net-charged dimers, and step 12a filters to neutral (matching
+   `~/trainDES/train.py`); `LJ_DES_ALL_CHARGES=1` admits them, a separate
    decision from having the templates, and one that changes what the Coulomb
    baseline has to represent.
-3. **`lr_solver: mic`.** Training LJ requires it; under `ewald` the LJ term is
+3. **Noble-gas LJ is literature, not CGenFF.** `AR`/`KR`/`XE` σ and ε were
+   never fitted with CGenFF and their cross terms are unvalidated. They are
+   well-sampled enough to move under training — `AR1` is the 7th-ranked residue
+   — so they *will* absorb error. Treat a fitted noble-gas scale as a
+   diagnostic, not a result.
+4. **`lr_solver: mic`.** Training LJ requires it; under `ewald` the LJ term is
    removed from the hybrid energy and there is nothing to differentiate.
 
 !!! warning "Dormant landmine in the SMILES fallback"
@@ -312,8 +351,8 @@ frame yield falls faster than the residue count.
     `[Kr]`, `[Xe]`, `[Ca+2]`, `[Li+]` and `[F-]` onto **`TIP3`**, and `C#N` onto
     `DMAM`. Those are placeholders, not chemistry. They are currently **inert** —
     `assign_frame_cgenff` calls `match_cgenff_template` without
-    `canonical_smiles`, so only the composition path runs, and noble gases and
-    ions correctly fail as "no template". Anything that starts passing SMILES
+    `canonical_smiles`, so only the composition path runs and the merged
+    residues above are what actually match. Anything that starts passing SMILES
     would silently give argon water's σ/ε. Fix the map before enabling that
     path on this dataset, where noble gases and bare ions are ~5% of frames.
 

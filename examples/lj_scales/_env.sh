@@ -134,9 +134,11 @@ if [[ "${LJ_DES}" == "1" ]]; then
   export LJ_DES_H5="${LJ_DES_H5:-${HOME}/qcell/qcell_dimers.h5}"
   # 34 is the measured DES dimer maximum -- not the ladder's usual 20.
   export LJ_DES_PAD="${LJ_DES_PAD:-34}"
-  # Residue cut. 40 keeps 75% of typeable frames while holding every reachable
-  # LJ type above ~1,300 frames; past that the sampling floor collapses.
-  export LJ_DES_TOP_RESIDUES="${LJ_DES_TOP_RESIDUES:-40}"
+  # Residue cut. 50 keeps 79% of typeable frames and 69 LJ types while holding
+  # every one of them above ~1,400 frames -- the same floor as a 40-residue cut,
+  # for 10 points more data and 12 more types. At 60 the floor drops to ~1,100
+  # and by 94 (everything) to 140, which is where thin types start drifting.
+  export LJ_DES_TOP_RESIDUES="${LJ_DES_TOP_RESIDUES:-50}"
   # Net charge filter for the h5 -> NPZ step. Neutral-only by default, matching
   # ~/trainDES/train.py. The ion residues merged from toppar_water_ions.str
   # (CLA/SOD/POT/LIT/CAL/MG) only ever appear in net-charged dimers, so
