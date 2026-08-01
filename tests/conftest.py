@@ -53,6 +53,52 @@ def _sanitize_jax_platforms_env() -> None:
 
 _sanitize_jax_platforms_env()
 
+
+def _block_pycharmm_imports_when_disabled() -> None:
+    """Make ``import pycharmm`` fail outright under ``MMML_DISABLE_CHARMM=1``.
+
+    ``make test-ci`` exists to reproduce the CI ``build`` job -- which has no
+    libcharmm -- on a machine that does have one. Hiding the library from
+    ``charmm_paths`` is not enough: several tests guard themselves with a bare
+    ``__import__("pycharmm")``, and the ``pycharmm`` package finds and dlopens
+    the library through its own search path. Those tests then run for real, and
+    a native CHARMM ``STOP`` at interpreter teardown ends the session early
+    *with exit status 0* -- the local run stops at 2% and still looks green.
+
+    Installing a meta-path blocker makes the guard checks answer "no", so the
+    same tests skip locally that skip in CI.
+    """
+    import sys
+
+    if (os.environ.get("MMML_DISABLE_CHARMM") or "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        return
+
+    class _PycharmmBlocker:
+        """A ``sys.meta_path`` finder that refuses the ``pycharmm`` package."""
+
+        def find_module(self, fullname, path=None):  # pragma: no cover - legacy API
+            return None
+
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == "pycharmm" or fullname.startswith("pycharmm."):
+                raise ImportError(
+                    f"{fullname} is blocked by MMML_DISABLE_CHARMM=1 "
+                    "(see tests/conftest.py)"
+                )
+            return None
+
+    sys.meta_path.insert(0, _PycharmmBlocker())
+    for name in [n for n in sys.modules if n == "pycharmm" or n.startswith("pycharmm.")]:
+        del sys.modules[name]
+
+
+_block_pycharmm_imports_when_disabled()
+
 import shutil
 from pathlib import Path
 

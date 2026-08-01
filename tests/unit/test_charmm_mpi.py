@@ -11,6 +11,36 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface import charmm_mpi
 
+# Bootstrap helpers such as ``mpi_openmpi_install_env_defaults`` write the
+# dynamic loader's preload variable into the real ``os.environ``. In these unit
+# tests the value they write points into ``tmp_path``, which pytest deletes a few
+# tests later -- after which *every* subsequent test that spawns a subprocess
+# dies in the loader ("could not be loaded: ... libopen-pal.so", exit -6) with a
+# message that names neither the leaking test nor the real cause. Six unrelated
+# tests failed that way in a full-suite run while passing in isolation.
+#
+# ``monkeypatch`` cannot undo what it never set, so snapshot and restore these
+# explicitly. See ``test_loader_env_does_not_leak_between_tests`` below.
+_LOADER_ENV_VARS = (
+    "LD_PRELOAD",
+    "DYLD_INSERT_LIBRARIES",
+    "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
+    "OPAL_PREFIX",
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_dynamic_loader_env():
+    """Undo any loader-environment mutation this module's tests perform."""
+    saved = {name: os.environ.get(name) for name in _LOADER_ENV_VARS}
+    yield
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
 
 def test_charmm_lib_links_mpi_detects_ldd(monkeypatch, tmp_path):
     lib = tmp_path / "libcharmm.so"
@@ -1548,3 +1578,42 @@ def test_stage_topology_files_for_rank_copies_to_uuid_dir(tmp_path, monkeypatch)
     assert staged["psf"].parent == staged["crd"].parent == staged["rtf"].parent
     assert staged["staging_dir"].name.startswith("rank2_")
     assert staged["rtf"].read_text(encoding="utf-8").startswith("* MMML MPI bootstrap")
+
+
+def test_loader_env_does_not_leak_between_tests(monkeypatch, tmp_path):
+    """``mpi_openmpi_install_env_defaults`` must not outlive the test that ran it.
+
+    It writes the platform preload variable into the real process environment,
+    pointing at a library under ``tmp_path``. Once pytest removes that directory
+    the value is a dangling path, and every later subprocess aborts inside the
+    dynamic loader before running a line of Python -- a failure that surfaces in
+    whichever unrelated test happens to shell out next. The autouse fixture at
+    the top of this module restores it; this test is what notices if that
+    fixture is removed or stops covering a newly-set variable.
+    """
+    preload_var = "DYLD_INSERT_LIBRARIES" if charmm_mpi._IS_DARWIN else "LD_PRELOAD"
+    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
+    monkeypatch.delenv("OMPI_MCA_shmem", raising=False)
+    monkeypatch.delenv(preload_var, raising=False)
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "libopen-pal.so").write_bytes(b"")
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_install_prefix",
+        return_value=tmp_path,
+    ):
+        charmm_mpi.mpi_openmpi_install_env_defaults()
+
+    # The helper really does set it -- otherwise this test would pass vacuously
+    # and stop protecting anything.
+    assert str(tmp_path) in os.environ.get(preload_var, ""), (
+        "helper no longer sets the loader preload variable; either the leak is "
+        "gone for good (drop this test) or the variable name changed"
+    )
+    assert every_loader_var_is_covered(preload_var)
+
+
+def every_loader_var_is_covered(name: str) -> bool:
+    """The autouse fixture must know about the variable that gets written."""
+    return name in _LOADER_ENV_VARS

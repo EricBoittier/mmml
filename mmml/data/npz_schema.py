@@ -12,9 +12,11 @@ Units Convention:
     - ESP: Hartree/e
 """
 
-import numpy as np
+import sys
 from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
+
+import numpy as np
 
 
 # Required keys that must be present in every NPZ file
@@ -307,8 +309,6 @@ def create_empty_npz(
 
 def main():
     """CLI entry point for validation."""
-    import sys
-    
     if len(sys.argv) > 1:
         file_path = sys.argv[1]
         is_valid, info = validate_npz(file_path, verbose=True)

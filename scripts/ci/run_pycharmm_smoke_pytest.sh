@@ -46,18 +46,40 @@ STATEFUL_SMOKE_PATHS=(
 # so the exit status below cannot distinguish "the live suite passed" from "the
 # live suite never ran". scripts/ci/check_test_report.py reads these and fails
 # when nothing actually passed.
-REPORT_DIR="${MMML_PYTEST_REPORT_DIR:-$ROOT/reports/junit-pycharmm}"
+REPORT_DIR="${MMML_PYTEST_REPORT_DIR:-$ROOT/.ci-reports/junit-pycharmm}"
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
 
-# Run every module (do not fail-fast) and remember whether any run failed, so
-# CI reports the full set of failures and never green-lights a masked one.
+# The exit status below is NOT trustworthy on its own. Once libcharmm is loaded
+# into the interpreter, CHARMM's Fortran STOP runs at teardown and replaces
+# Python's exit status with 0 -- a session with failing tests still exits 0, so
+# `|| status=1` never fires. Reproduce with:
+#
+#   pytest -q <a test that imports pycharmm and then fails>; echo $?   # -> 0
+#
+# Every invocation therefore also has to leave a JUnit report behind, and
+# scripts/ci/check_test_report.py is what actually decides pass/fail.
 status=0
-for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
-  report_name="$(basename "$smoke_path" .py)"
+
+run_smoke() {  # run_smoke <report-name> <pytest args...>
+  local report_name="$1"; shift
+  local report="$REPORT_DIR/$report_name.xml"
   mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
-    --junitxml="$REPORT_DIR/$report_name.xml" \
-    -m "$MARK_EXPR" "$smoke_path" "$@" || status=1
+    --junitxml="$report" "$@" || status=1
+  if [[ ! -s "$report" ]]; then
+    # A process killed before pytest could write its report leaves no evidence
+    # at all, and an absent file would otherwise just shrink the aggregate the
+    # gate inspects instead of failing it.
+    echo "::error::run_pycharmm_smoke_pytest: no JUnit report from $report_name;" \
+         "the run died before pytest could write one" >&2
+    status=1
+  fi
+}
+
+# Run every module (do not fail-fast) so CI reports the full set of failures
+# rather than only the first.
+for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
+  run_smoke "$(basename "$smoke_path" .py)" -m "$MARK_EXPR" "$smoke_path" "$@"
 done
 
 ignore_args=()
@@ -65,10 +87,6 @@ for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
   ignore_args+=("--ignore=$smoke_path")
 done
 
-mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
-  --junitxml="$REPORT_DIR/remainder.xml" \
-  -m "$MARK_EXPR" \
-  "${ignore_args[@]}" \
-  "$@" || status=1
+run_smoke remainder -m "$MARK_EXPR" "${ignore_args[@]}" "$@"
 
 exit "$status"

@@ -332,3 +332,6 @@ tests/packmol_repack/fixed_0001.pdb
 tests/packmol_repack/movable_0000.pdb
 tests/packmol_repack/movable_0001.pdb
 tests/packmol_repack/repack.inp
+
+# CI test-shape reports (scripts/ci/check_test_report.py)
+.ci-reports/

@@ -206,6 +206,19 @@ test-quick:
 test-coverage:
 	uv run pytest --cov=mmml --cov-report=html --cov-report=term tests/
 
+# The honest local verdict on a test run. pytest's exit code cannot be trusted
+# here for two reasons: it is 0 when every selected test skips, and it is 0 once
+# libcharmm has been loaded (CHARMM's Fortran STOP replaces the exit status at
+# teardown, and can kill the session mid-run). The JUnit report is the only
+# record that survives both, so `|| true` below is deliberate -- the gate that
+# follows is what decides pass/fail.
+# Run: make test-shape
+test-shape:
+	mkdir -p .ci-reports
+	uv run pytest tests/ -q -p no:cacheprovider --junitxml=.ci-reports/junit-local.xml || true
+	uv run python scripts/ci/check_test_report.py .ci-reports/junit-local.xml \
+	  --label "local suite" --min-passed 3000 --max-skipped-frac 0.25
+
 test-data:
 	@if [ -z "$(MMML_DATA)" ] || [ -z "$(MMML_CKPT)" ]; then \
 		echo "Error: MMML_DATA and MMML_CKPT must be set"; \
