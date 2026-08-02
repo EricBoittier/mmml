@@ -64,7 +64,7 @@ CASES=(
 )
 IDX="${SLURM_ARRAY_TASK_ID:-0}"
 read -r ens prep <<<"${CASES[$IDX]}"
-tag="bisect_${ens}_${prep}"
+tag="bisect_${ens}_${prep}${TAGSUFFIX:-}"
 out="$BISECT/$tag"
 rm -rf "$out"; mkdir -p "$out"
 
@@ -90,12 +90,12 @@ common=(
   --composition "TIP3:${nmol}"
   --from-psf "$BOX/model.psf" --from-crd "$BOX/model.crd"
   --skip-cluster-build --box-size "$side"
-  --checkpoint "$CKPT/epoch-25"
-  --mm-lj-scales-file "$sidecar"
+  --checkpoint "${CKPT_PATH:-$CKPT/epoch-25}"
   --temperature 298.15 --pressure 1.0
   --ps "$PS" --dt-fs 0.25
   --output-dir "$out"
   --include-mm --do-ml --do-ml-dimer
+  --ml-batch-size "${ML_BATCH:-1024}"
   --seed 123
 )
 
@@ -104,10 +104,10 @@ if [[ "$prep" == "campaign" ]]; then
   prep_flags=(
     --no-calculator-pre-minimize --no-charmm-pre-minimize
     --fire-min-steps 0
-    --jaxmd-minimize-steps 50 --jaxmd-pbc-minimize-steps 50
+    --jaxmd-minimize-steps "${MINSTEPS:-50}" --jaxmd-pbc-minimize-steps "${MINSTEPS:-50}"
     --no-handoff-quality-gate
     --mm-charge-mode fixed
-    --jax-md-skin-distance 0.5 --jax-md-update-interval 40
+    --jax-md-skin-distance "${SKIN:-0.5}" --jax-md-update-interval "${NLINT:-40}"
     --steps-per-recording "${REC:-100}"
   )
 else
@@ -117,15 +117,20 @@ else
     --fire-min-steps 200 --pre-min-steps 50 --pre-min-fmax 0.1
     --jaxmd-minimize-steps 1000 --jaxmd-pbc-minimize-steps 1000
     --no-handoff-quality-gate
-    --jax-md-skin-distance 0.25 --jax-md-update-interval 0
+    --jax-md-skin-distance "${SKIN:-0.25}" --jax-md-update-interval "${NLINT:-0}"
     --steps-per-recording "${REC:-100}"
   )
+fi
+
+scale_flags=()
+if [[ "${USE_SCALES:-1}" == "1" ]]; then
+  scale_flags=(--mm-lj-scales-file "$sidecar")
 fi
 
 echo "=== [$IDX] $tag : ensemble=$ens prep=$prep  ${nmol} TIP3, ${side} A, ${PS} ps"
 nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1
 
-uv run mmml md-system "${common[@]}" "${prep_flags[@]}" > "$out/md.log" 2>&1
+uv run mmml md-system "${common[@]}" "${scale_flags[@]}" "${prep_flags[@]}" > "$out/md.log" 2>&1
 rc=$?
 
 echo "--- exit $rc"
