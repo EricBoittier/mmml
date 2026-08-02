@@ -2,7 +2,7 @@
 
 Packmol is the **default** initial-geometry builder when `mmml md-system`, `mmml liquid-box`, or backend routes receive `--composition`. It packs minimized monomer templates into a cube or sphere, then CHARMM MM refinement removes bad contacts before MLpot or ASE/JAX-MD dynamics.
 
-Related: [Structure building](cli/structure-building.md), [Liquid box workflow](liquid-box-workflow.md), [md-system YAML configs](md-system-configs.md#builders-for-condensed-phase).
+Related: [Structure building](cli/structure-building.md), [Liquid box workflow](liquid-box-workflow.md), [md-system YAML configs](md-system-configs.md#builders-for-condensed-phase), [Packmol cluster geometry gate](packmol-monomer-geometry-gate.md) (what validates the minimized cluster before it is cached).
 
 ---
 
@@ -182,6 +182,8 @@ Artifacts in a cache hit:
 - `init-packmol-sphere.pdb` or cube equivalent
 - `packmol_cluster/monomers/*.pdb`
 - `manifest.json`
+
+Both the cache write and the cache hit are gated on monomer geometry: coordinates whose covalent skeleton no longer matches the placed template are never written, and an existing entry that holds distorted monomers fails loudly rather than feeding the box. See [Packmol cluster geometry gate](packmol-monomer-geometry-gate.md).
 
 ---
 

@@ -41,7 +41,7 @@ runs:
   # Condensed phase single-job fallback (smoke). Prefer the Packmol campaign
   # md_fixed_lj_scales_liquid_campaign.yaml (jaxmd settle → PyCHARMM → jaxmd)
   # via examples/lj_scales/07_deploy_md.sh — cold PyCHARMM heat from Packmol
-  # hits ENERGY CHANGE TOLERANCE. jax_mic is required for trained LJ (#139).
+  # hits ENERGY CHANGE TOLERANCE.
   liquid_nvt:
     description: PBC liquid NVT smoke — Mode A + trained LJ scales (jax_mic MM)
     backend: pycharmm
@@ -54,3 +54,17 @@ runs:
     ps_heat: 0.05
     ps_equi: 0.05
     output_dir: results/hybrid_mm_fixed_lj_scales/liquid_nvt
+
+  liquid_nvt_full_box_ewald:
+    description: PBC liquid NVT demo — full-box Ewald + scaled CHARMM IMAGE LJ
+    backend: pycharmm
+    setup: pbc_nvt
+    composition: "DCM:120"
+    box_size: 30.0
+    mm_nonbond_mode: periodic_external
+    lr_solver: ewald
+    # hybrid_mm.json is auto-discovered beside checkpoint. Setting the explicit
+    # path above is recommended for an auditable production invocation.
+    ps_heat: 0.05
+    ps_equi: 0.05
+    output_dir: results/hybrid_mm_fixed_lj_scales/liquid_nvt_full_box_ewald

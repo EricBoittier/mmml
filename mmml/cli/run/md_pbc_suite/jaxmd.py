@@ -388,17 +388,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="With --psf-angle-restraints: omit Urey–Bradley 1–3 terms.",
     )
-    # NOTE: --hybrid-hamiltonian and --shared-cutoff used to be registered here
-    # as well as further down in this same function, which made build_parser()
-    # raise before it could return:
-    #   argparse.ArgumentError: argument --hybrid-hamiltonian: conflicting
-    #   option string: --hybrid-hamiltonian
-    # That made `mmml md-system --backend jaxmd` impossible to run at all. This
-    # copy was also the stale one -- it offered choices ("handoff", "additive"),
-    # while md_system.py and md_pbc_suite/ase.py both use
-    # ("handoff", "shared_cutoff"), so md-system could forward a value this
-    # parser would have rejected. The surviving registration is the matching one
-    # below; do not re-add it here.
     p.add_argument(
         "--from-crd",
         type=Path,

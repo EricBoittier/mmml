@@ -90,7 +90,8 @@ def _load_cgenff_with_trialanine() -> None:
         read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
         read_cgenff_prm(bomlev=False)
         for cmap_prm in trialanine_cmap_extra_prm_files():
-            read.prm(str(cmap_prm), append=True)
+            # FLEX explicitly; see protein_charmm_build for why.
+            read.prm(str(cmap_prm), append=True, flex=True)
         read.rtf(str(trialanine_cgenff_rtf_path()), append=True)
 
 

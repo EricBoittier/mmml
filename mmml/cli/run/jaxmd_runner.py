@@ -980,6 +980,61 @@ def _run_npt_diagnostics(
     c.print(Panel("NPT diagnostic complete", title="[bold]NPT Diagnostics (--npt-diagnose)[/bold]", border_style="green"))
 
 
+def _add_psf_angle_restraints(args, positions, energy_fn, force_fn):
+    """Wrap JAX-MD energy/force callables with optional PSF angle terms."""
+    if not bool(getattr(args, "psf_angle_restraints", False)):
+        return energy_fn, force_fn, None
+
+    from mmml.md.restraints.psf_angles import build_psf_angle_restraint_fns
+
+    psf_path = getattr(args, "from_psf", None)
+    if psf_path is None:
+        raise ValueError("--psf-angle-restraints requires --from-psf")
+    box_A = float(args.cell) if getattr(args, "cell", None) else None
+    restraint_energy_fn, restraint_force_fn, info = build_psf_angle_restraint_fns(
+        psf_path,
+        positions,
+        box_A=box_A,
+        scale=float(getattr(args, "psf_angle_restraint_scale", 1.0) or 1.0),
+        include_urey=not bool(getattr(args, "psf_angle_restraints_no_urey", False)),
+    )
+
+    @jit
+    def energy_with_restraints(
+        position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs
+    ):
+        return energy_fn(
+            position,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
+            **kwargs,
+        ) + restraint_energy_fn(as_jaxmd_dtype(position))
+
+    @jit
+    def force_with_restraints(
+        position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs
+    ):
+        return force_fn(
+            position,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
+            **kwargs,
+        ) + as_jaxmd_dtype(restraint_force_fn(as_jaxmd_dtype(position)))
+
+    Console().print(
+        Panel(
+            f"PSF={info.psf_path}\n"
+            f"angles={info.n_angles}  urey={info.n_urey}  "
+            f"scale={info.scale:g}  box={info.box_A}",
+            title="[bold]PSF angle restraints (tetrahedral)[/bold]",
+            border_style="magenta",
+        )
+    )
+    return energy_with_restraints, force_with_restraints, restraint_energy_fn
+
+
 def set_up_nhc_sim_routine(
     atoms,
     args,
@@ -1065,64 +1120,11 @@ def set_up_nhc_sim_routine(
         )
         return as_jaxmd_dtype(result.forces)
 
-    # Optional PSF/CGenFF angle (+ Urey) restraints — keep ML monomers tetrahedral
+    # Optional PSF/CGenFF angle (+ Urey) restraints keep ML monomers tetrahedral
     # when hybrid ml_intra has no classical bonded MM / SHAKE.
-    _psf_angle_on = bool(getattr(args, "psf_angle_restraints", False))
-    _psf_angle_energy_fn = None
-    _psf_angle_force_fn = None
-    if _psf_angle_on:
-        from mmml.md.restraints.psf_angles import build_psf_angle_restraint_fns
-
-        _psf_path = getattr(args, "from_psf", None)
-        if _psf_path is None:
-            raise ValueError("--psf-angle-restraints requires --from-psf")
-        _box_A = float(args.cell) if getattr(args, "cell", None) else None
-        _psf_angle_energy_fn, _psf_angle_force_fn, _psf_angle_info = (
-            build_psf_angle_restraint_fns(
-                _psf_path,
-                R,
-                box_A=_box_A,
-                scale=float(getattr(args, "psf_angle_restraint_scale", 1.0) or 1.0),
-                include_urey=not bool(
-                    getattr(args, "psf_angle_restraints_no_urey", False)
-                ),
-            )
-        )
-        _base_energy_fn = jax_md_energy_fn
-        _base_force_fn = jax_md_force_fn
-
-        @jit
-        def jax_md_energy_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
-            e0 = _base_energy_fn(
-                position,
-                mm_pair_idx=mm_pair_idx,
-                mm_pair_mask=mm_pair_mask,
-                box=box,
-                **kwargs,
-            )
-            return e0 + _psf_angle_energy_fn(as_jaxmd_dtype(position))
-
-        @jit
-        def jax_md_force_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
-            f0 = _base_force_fn(
-                position,
-                mm_pair_idx=mm_pair_idx,
-                mm_pair_mask=mm_pair_mask,
-                box=box,
-                **kwargs,
-            )
-            return f0 + as_jaxmd_dtype(_psf_angle_force_fn(as_jaxmd_dtype(position)))
-
-        c0 = Console()
-        c0.print(
-            Panel(
-                f"PSF={_psf_angle_info.psf_path}\n"
-                f"angles={_psf_angle_info.n_angles}  urey={_psf_angle_info.n_urey}  "
-                f"scale={_psf_angle_info.scale:g}  box={_psf_angle_info.box_A}",
-                title="[bold]PSF angle restraints (tetrahedral)[/bold]",
-                border_style="magenta",
-            )
-        )
+    jax_md_energy_fn, jax_md_force_fn, _psf_angle_energy_fn = (
+        _add_psf_angle_restraints(args, R, jax_md_energy_fn, jax_md_force_fn)
+    )
 
     # evaluate_energies_and_forces (initial call - get update_fn if available)
     use_pbc = args.cell is not None
@@ -3613,7 +3615,8 @@ def set_up_nhc_sim_routine(
                 e_invariant = e_tot
                 try:
                     if is_npt:
-                        box_for_inv = simulate.npt_box(state)
+                        # jax_md already passes box=box_fn(volume) into energy_fn;
+                        # do not also forward box= here (TypeError: multiple values).
                         e_invariant = float(
                             simulate.npt_nose_hoover_invariant(
                                 npt_energy_fn,
@@ -3621,7 +3624,6 @@ def set_up_nhc_sim_routine(
                                 pressure,
                                 kT,
                                 neighbor=(npt_pair_idx, npt_pair_mask),
-                                box=box_for_inv,
                             )
                         )
                     elif args.ensemble == "nvt":

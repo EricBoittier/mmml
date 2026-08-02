@@ -75,6 +75,7 @@ nav:
       - sections/structure-boxes.md
       - Structure building: cli/structure-building.md
       - Packmol placement: packmol-placement.md
+      - Packmol cluster geometry gate: packmol-monomer-geometry-gate.md
       - Liquid box workflow: liquid-box-workflow.md
       - Solid acetone & sublimation enthalpy: acetone-crystal-sublimation.md
       - Solid dichloromethane & halogen contacts: dcm-crystal-cohesion.md

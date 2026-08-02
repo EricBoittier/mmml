@@ -1,0 +1,149 @@
+{
+  "baseline_csv": "artifacts/lj_scales/dense_dt_campaign/dimer_scans/orient_components.csv",
+  "literature_dcm_dimer_kcal": [
+    -5.0,
+    -3.0
+  ],
+  "runs": [
+    {
+      "tag": "es_off_on8",
+      "es_off": true,
+      "mm_switch_on": 8.0,
+      "ml_switch_width": 1.5,
+      "mm_switch_width": 5.0,
+      "n_rays": 64,
+      "n_r": 36,
+      "csv": "artifacts/lj_scales/dense_dt_campaign/overbind_ablation/es_off_on8_components.csv",
+      "mean_of_ray_minima_kcal": -30.134908245043103,
+      "mean_soft_well_kcal": -8.388364640921532,
+      "deepest_soft_kcal": -22.37501956855134,
+      "mean_curve_min_kcal": -5.114189200092805,
+      "r_at_mean_curve_min_A": 3.5857142857142854,
+      "ml_full_below_A": 6.5
+    },
+    {
+      "tag": "handoff_on6_w1p5",
+      "es_off": false,
+      "mm_switch_on": 6.0,
+      "ml_switch_width": 1.5,
+      "mm_switch_width": 5.0,
+      "n_rays": 64,
+      "n_r": 36,
+      "csv": "artifacts/lj_scales/dense_dt_campaign/overbind_ablation/handoff_on6_w1p5_components.csv",
+      "mean_of_ray_minima_kcal": -30.098750611365105,
+      "mean_soft_well_kcal": -8.371236068802414,
+      "deepest_soft_kcal": -22.37323975162636,
+      "mean_curve_min_kcal": -5.089437360862388,
+      "r_at_mean_curve_min_A": 3.5857142857142854,
+      "ml_full_below_A": 4.5
+    },
+    {
+      "tag": "handoff_on5_w1p5",
+      "es_off": false,
+      "mm_switch_on": 5.0,
+      "ml_switch_width": 1.5,
+      "mm_switch_width": 5.0,
+      "n_rays": 64,
+      "n_r": 36,
+      "csv": "artifacts/lj_scales/dense_dt_campaign/overbind_ablation/handoff_on5_w1p5_components.csv",
+      "mean_of_ray_minima_kcal": -29.439002881358018,
+      "mean_soft_well_kcal": -5.424440232821437,
+      "deepest_soft_kcal": -17.494334430519533,
+      "mean_curve_min_kcal": -3.071403587436749,
+      "r_at_mean_curve_min_A": 3.314285714285714,
+      "ml_full_below_A": 3.5
+    },
+    {
+      "tag": "handoff_on4p5_w1",
+      "es_off": false,
+      "mm_switch_on": 4.5,
+      "ml_switch_width": 1.0,
+      "mm_switch_width": 5.0,
+      "n_rays": 64,
+      "n_r": 36,
+      "csv": "artifacts/lj_scales/dense_dt_campaign/overbind_ablation/handoff_on4p5_w1_components.csv",
+      "mean_of_ray_minima_kcal": -29.4389925224475,
+      "mean_soft_well_kcal": -4.549112567187592,
+      "deepest_soft_kcal": -13.589437579147134,
+      "mean_curve_min_kcal": -3.071403587436749,
+      "r_at_mean_curve_min_A": 3.314285714285714,
+      "ml_full_below_A": 3.5
+    },
+    {
+      "tag": "es_off_handoff_on5",
+      "es_off": true,
+      "mm_switch_on": 5.0,
+      "ml_switch_width": 1.5,
+      "mm_switch_width": 5.0,
+      "n_rays": 64,
+      "n_r": 36,
+      "csv": "artifacts/lj_scales/dense_dt_campaign/overbind_ablation/es_off_handoff_on5_components.csv",
+      "mean_of_ray_minima_kcal": -29.476999427294757,
+      "mean_soft_well_kcal": -5.443530230647052,
+      "deepest_soft_kcal": -17.49245012066102,
+      "mean_curve_min_kcal": -3.104180121131313,
+      "r_at_mean_curve_min_A": 3.314285714285714,
+      "ml_full_below_A": 3.5
+    },
+    {
+      "tag": "ft_early_handoff_on5",
+      "es_off": false,
+      "mm_switch_on": 5.0,
+      "ml_switch_width": 1.5,
+      "mm_switch_width": 5.0,
+      "n_rays": 64,
+      "n_r": 36,
+      "csv": "artifacts/lj_scales/dense_dt_campaign/overbind_ablation/ft_early_handoff_on5_components.csv",
+      "mean_of_ray_minima_kcal": -0.9759255106162876,
+      "mean_soft_well_kcal": -0.9319795756498689,
+      "deepest_soft_kcal": -1.5282854335786291,
+      "mean_curve_min_kcal": -0.32523675539486885,
+      "r_at_mean_curve_min_A": 6.3,
+      "ml_full_below_A": 3.5
+    },
+    {
+      "tag": "ft_early_handoff_eval_on8",
+      "es_off": false,
+      "mm_switch_on": 8.0,
+      "ml_switch_width": 1.5,
+      "mm_switch_width": 5.0,
+      "n_rays": 64,
+      "n_r": 36,
+      "csv": "artifacts/lj_scales/dense_dt_campaign/overbind_ablation/ft_early_handoff_eval_on8_components.csv",
+      "mean_of_ray_minima_kcal": -0.543506093384707,
+      "mean_soft_well_kcal": -0.31977766992259715,
+      "deepest_soft_kcal": -1.0336596412535226,
+      "mean_curve_min_kcal": -0.08728767159135248,
+      "r_at_mean_curve_min_A": 7.928571428571428,
+      "ml_full_below_A": 6.5
+    }
+  ],
+  "verdict": {
+    "lever1_es_off": "If es_off soft well \u2248 baseline, PhysNet Coulomb is not the driver; overbinding is neural local ML energy \u2014 needs retrain/constraint, not charge off.",
+    "lever2_early_handoff": "If earlier mm_switch_on shallows the soft well toward \u22123\u2026\u22125, contact pairs must leave pure-ML sooner (deploy-time lever; retrain with matching switches)."
+  },
+  "fine_tune": {
+    "checkpoint": "artifacts/lj_scales/ckpts/params_hybrid_mm_early_handoff_ft_2026-08-02_16-37-54.json",
+    "sidecar": "artifacts/lj_scales/ckpts/hybrid_mm_early_handoff_ft-e33056f8-99a5-4109-b533-9308da7eb823/hybrid_mm.json",
+    "epochs": 5,
+    "n_train": 1500,
+    "mm_switch_on": 5.0,
+    "note": "CPU smoke fine-tune; GPUs were busy. Energy MAE during train looked unhealthy (~43 kcal) \u2014 treat FT scan as provisional."
+  },
+  "headline": {
+    "lever1_es_off": "no effect on wells (neural local ML drives overbinding)",
+    "lever2_early_handoff": "soft-well median \u22128.9 \u2192 \u22124.4 (on=5) / \u22123.0 (on=4.5); contact minima still \u221230",
+    "fine_tune_smoke": "5-epoch CPU warm-start collapsed wells to ~\u22121 kcal; not a usable fix",
+    "next": "GPU retrain with mm_switch_on\u22485 and dimer soft-well regularizer; keep contact wall"
+  },
+  "campaign": {
+    "default_DDC_HANDOFF": "soft",
+    "mm_switch_on": 5.0,
+    "ml_switch_width": 1.5,
+    "contact_mode": {
+      "DDC_HANDOFF": "contact",
+      "mm_switch_on": 3.5
+    },
+    "contact_ray_fix": "retrain at mm_switch_on=5 (deploy-only contact mode underbinds soft well)"
+  }
+}

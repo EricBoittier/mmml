@@ -82,6 +82,13 @@ def main() -> int:
     p.add_argument("--r-min", type=float, default=2.8)
     p.add_argument("--r-max", type=float, default=12.0)
     p.add_argument("--n-r", type=int, default=40)
+    p.add_argument(
+        "--min-contact",
+        type=float,
+        default=2.0,
+        help="Exclude r-points with intermolecular atom–atom dmin below this (Å) "
+        "from well metrics and mean curves. COM–COM r alone is not steric for DCM.",
+    )
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--mm-switch-on", type=float, default=8.0)
     p.add_argument("--ml-switch-width", type=float, default=1.5)
@@ -110,11 +117,13 @@ def main() -> int:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    from mmml.analysis.dimer_scans import intermolecular_min_distance
     from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
     from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
     from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
     from mmml.models.short_range_wall import inter_monomer_wall_energy
 
+    min_contact = float(args.min_contact)
     raw = dict(np.load(args.data, allow_pickle=True))
     n_mono = int(args.n_mono)
     pad = 2 * n_mono
@@ -150,6 +159,7 @@ def main() -> int:
         f"{species} monomer Z={zlist}: {len(dirs)} dirs × {len(quats)} oris "
         f"= {n_rays} rays × {len(rs)} r = {n_tot} evals"
     )
+    print(f"min intermolecular contact for metrics: {min_contact:g} Å")
 
     R_all = np.zeros((n_tot, pad, 3), dtype=np.float64)
     Z_all = np.zeros((n_tot, pad), dtype=np.int32)
@@ -158,14 +168,17 @@ def main() -> int:
     M_all = np.full((n_tot, pad), -1, dtype=np.int32)
     ray_of = np.zeros(n_tot, dtype=np.int32)
     ir_of = np.zeros(n_tot, dtype=np.int32)
+    dmin_of = np.zeros(n_tot, dtype=np.float64)
 
     n = 0
     for di, dvec in enumerate(dirs):
         for qi, q in enumerate(quats):
             Rb0 = R1 @ quat_to_matrix(q).T
             for ri, r in enumerate(rs):
-                R_all[n, :n_mono] = R1 - 0.5 * r * dvec
-                R_all[n, n_mono:pad] = Rb0 + 0.5 * r * dvec
+                Ra = R1 - 0.5 * r * dvec
+                Rb = Rb0 + 0.5 * r * dvec
+                R_all[n, :n_mono] = Ra
+                R_all[n, n_mono:pad] = Rb
                 Z_all[n, :n_mono] = Z1
                 Z_all[n, n_mono:pad] = Z1
                 T_all[n, :n_mono] = t1
@@ -176,6 +189,7 @@ def main() -> int:
                 M_all[n, n_mono:pad] = 1
                 ray_of[n] = di * len(quats) + qi
                 ir_of[n] = ri
+                dmin_of[n] = intermolecular_min_distance(Ra, Rb)
                 n += 1
 
     n_pad = -(-n_tot // args.batch_size) * args.batch_size
@@ -281,6 +295,7 @@ def main() -> int:
         s = S[sel]
         w = W[sel]
         F = F_all[sel]
+        dmin = dmin_of[sel]
         if np.isnan(e).any() or np.isnan(F).any():
             continue
         e_int = e - e[-1]
@@ -306,23 +321,44 @@ def main() -> int:
         fmax_raw = fnorm.max(axis=1)
         di = int(ray // len(quats))
         qi = int(ray % len(quats))
-        imin = int(np.argmin(e_int))
+        contact_ok = dmin >= min_contact
+        e_int_kcal = e_int * EV_TO_KCAL
+        if contact_ok.any():
+            imin = int(np.flatnonzero(contact_ok)[np.argmin(e_int_kcal[contact_ok])])
+            e_min_kcal = float(e_int_kcal[imin])
+            r_at_min = float(rs[imin])
+            dmin_at_min = float(dmin[imin])
+        else:
+            imin = -1
+            e_min_kcal = float("nan")
+            r_at_min = float("nan")
+            dmin_at_min = float("nan")
+        # NaN-mask clash points so mean/percentile stacks ignore steric overlaps.
+        e_plot = np.where(contact_ok, e_int_kcal, np.nan)
+        emm_plot = np.where(contact_ok, emm_int * EV_TO_KCAL, np.nan)
+        eml_plot = np.where(contact_ok, eml_int * EV_TO_KCAL, np.nan)
+        fmean_plot = np.where(contact_ok, fmean_d, np.nan)
+        fmax_plot = np.where(contact_ok, fmax_d, np.nan)
+        fcom_plot = np.where(contact_ok, fcom_d, np.nan)
         curves.append(
             dict(
                 ray=ray,
                 direction=di,
                 orientation=qi,
                 r=rs.copy(),
-                e_int_kcal=e_int * EV_TO_KCAL,
-                e_mm_kcal=emm_int * EV_TO_KCAL,
-                e_ml_kcal=eml_int * EV_TO_KCAL,
+                e_int_kcal=e_plot,
+                e_mm_kcal=emm_plot,
+                e_ml_kcal=eml_plot,
                 ml_scale=s.copy(),
                 wall_eV=w.copy(),
-                fmean_d=fmean_d.copy(),
-                fmax_d=fmax_d.copy(),
-                fcom_d=fcom_d.copy(),
-                e_min_kcal=float(e_int[imin] * EV_TO_KCAL),
-                r_at_min=float(rs[imin]),
+                dmin_A=dmin.copy(),
+                contact_ok=contact_ok.copy(),
+                fmean_d=fmean_plot,
+                fmax_d=fmax_plot,
+                fcom_d=fcom_plot,
+                e_min_kcal=e_min_kcal,
+                r_at_min=r_at_min,
+                dmin_at_min=dmin_at_min,
             )
         )
         for ri, r in enumerate(rs):
@@ -332,11 +368,13 @@ def main() -> int:
                     "direction": di,
                     "orientation": qi,
                     "r_A": float(r),
-                    "E_int_kcal": float(e_int[ri] * EV_TO_KCAL),
+                    "E_int_kcal": float(e_int_kcal[ri]),
                     "E_MM_kcal": float(emm_int[ri] * EV_TO_KCAL),
                     "E_ML_kcal": float(eml_int[ri] * EV_TO_KCAL),
                     "ml_scale": float(s[ri]),
                     "wall_eV": float(w[ri]),
+                    "dmin_A": float(dmin[ri]),
+                    "contact_ok": bool(contact_ok[ri]),
                     "mean_abs_F_eV_A": float(fmean_raw[ri]),
                     "max_abs_F_eV_A": float(fmax_raw[ri]),
                     "mean_abs_dF_kcal_A": float(fmean_d[ri]),
@@ -357,6 +395,7 @@ def main() -> int:
         wcsv.writeheader()
         wcsv.writerows(rows)
 
+    well_vals = [c["e_min_kcal"] for c in curves if np.isfinite(c["e_min_kcal"])]
     summary = {
         "checkpoint": str(args.checkpoint),
         "sidecar": str(args.sidecar),
@@ -365,11 +404,13 @@ def main() -> int:
         "n_r": len(rs),
         "r_min": args.r_min,
         "r_max": args.r_max,
+        "min_contact_A": min_contact,
         "mm_switch_on": args.mm_switch_on,
         "ml_switch_width": args.ml_switch_width,
         "mm_switch_width": args.mm_switch_width,
-        "deepest_kcal": float(min(c["e_min_kcal"] for c in curves)),
-        "mean_well_kcal": float(np.mean([c["e_min_kcal"] for c in curves])),
+        "deepest_kcal": float(min(well_vals)) if well_vals else None,
+        "mean_well_kcal": float(np.mean(well_vals)) if well_vals else None,
+        "n_rays_with_contact_ok_well": len(well_vals),
         "Z_monomer": Z1.tolist(),
         "species": species,
         "file_prefix": prefix,
@@ -377,7 +418,7 @@ def main() -> int:
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     (fig_dir / f"{prefix}_scan_summary.json").write_text(json.dumps(summary, indent=2))
 
-    # Stack for mean ± std
+    # Stack for mean ± std (NaN clash points → nanmean / nanpercentile)
     Emat = np.stack([c["e_int_kcal"] for c in curves], axis=0)
     EMMmat = np.stack([c["e_mm_kcal"] for c in curves], axis=0)
     EMLmat = np.stack([c["e_ml_kcal"] for c in curves], axis=0)
@@ -386,28 +427,47 @@ def main() -> int:
     Fcommat = np.stack([c["fcom_d"] for c in curves], axis=0)
     Smat = np.stack([c["ml_scale"] for c in curves], axis=0)
     soft_idx = int(np.argmin(np.abs(rs - (args.mm_switch_on - args.ml_switch_width))))
-    summary["median_mean_abs_dF_at_handoff"] = float(np.median(Fdmat[:, soft_idx]))
-    summary["median_peak_dFcom_soft_kcal_A"] = float(
-        np.median(Fcommat[:, rs >= 3.5].max(axis=1))
+    summary["median_mean_abs_dF_at_handoff"] = float(
+        np.nanmedian(Fdmat[:, soft_idx])
     )
+    soft_peak = np.nanmax(Fcommat[:, rs >= 3.5], axis=1)
+    summary["median_peak_dFcom_soft_kcal_A"] = float(np.nanmedian(soft_peak))
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     (fig_dir / f"{prefix}_scan_summary.json").write_text(json.dumps(summary, indent=2))
 
-    # Soft-region wells (ignore contact spikes when ranking)
+    # Soft-region wells among contact-ok points only
     soft_mask = rs >= 3.5
     for c in curves:
-        e_soft = c["e_int_kcal"][soft_mask]
-        r_soft = c["r"][soft_mask]
+        ok = soft_mask & c["contact_ok"]
+        if not ok.any():
+            c["e_min_soft_kcal"] = float("nan")
+            c["r_at_min_soft"] = float("nan")
+            continue
+        e_soft = c["e_int_kcal"][ok]
+        r_soft = c["r"][ok]
         i = int(np.argmin(e_soft))
         c["e_min_soft_kcal"] = float(e_soft[i])
         c["r_at_min_soft"] = float(r_soft[i])
-    ranked = sorted(curves, key=lambda c: c["e_min_soft_kcal"])
-    showcase = [ranked[0], ranked[len(ranked) // 2], ranked[-1]]
-    summary["deepest_soft_kcal"] = float(ranked[0]["e_min_soft_kcal"])
-    summary["mean_soft_well_kcal"] = float(
-        np.mean([c["e_min_soft_kcal"] for c in curves])
+    ranked = sorted(
+        [c for c in curves if np.isfinite(c["e_min_soft_kcal"])],
+        key=lambda c: c["e_min_soft_kcal"],
     )
-    summary["r_at_deepest_soft"] = float(ranked[0]["r_at_min_soft"])
+    showcase = (
+        [ranked[0], ranked[len(ranked) // 2], ranked[-1]] if ranked else []
+    )
+    summary["deepest_soft_kcal"] = (
+        float(ranked[0]["e_min_soft_kcal"]) if ranked else None
+    )
+    summary["mean_soft_well_kcal"] = (
+        float(np.mean([c["e_min_soft_kcal"] for c in ranked])) if ranked else None
+    )
+    summary["median_soft_well_kcal"] = (
+        float(np.median([c["e_min_soft_kcal"] for c in ranked])) if ranked else None
+    )
+    summary["r_at_deepest_soft"] = (
+        float(ranked[0]["r_at_min_soft"]) if ranked else None
+    )
+    summary["n_soft_wells_contact_ok"] = len(ranked)
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     (fig_dir / f"{prefix}_scan_summary.json").write_text(json.dumps(summary, indent=2))
 
@@ -424,7 +484,7 @@ def main() -> int:
     fig, ax = plt.subplots(figsize=(5.6, 3.6), dpi=160)
     for c in curves:
         ax.plot(c["r"], c["e_int_kcal"], color="#1f4e5f", alpha=0.18, lw=0.8)
-    mu, sd = Emat.mean(0), Emat.std(0)
+    mu, sd = np.nanmean(Emat, axis=0), np.nanstd(Emat, axis=0)
     ax.plot(rs, mu, color="#b85c38", lw=2.0, label="mean over orientations")
     ax.fill_between(rs, mu - sd, mu + sd, color="#b85c38", alpha=0.2, label="±1σ")
     ax.axvline(handoff_lo, color="k", ls=":", lw=0.8)
@@ -443,7 +503,7 @@ def main() -> int:
 
     # --- Fig 1b: percentile envelope (robust to contact outliers) ---
     fig, ax = plt.subplots(figsize=(5.6, 3.6), dpi=160)
-    p10, p50, p90 = np.percentile(Emat, [10, 50, 90], axis=0)
+    p10, p50, p90 = np.nanpercentile(Emat, [10, 50, 90], axis=0)
     ax.fill_between(rs, p10, p90, color="#1f4e5f", alpha=0.18, label="10–90%")
     ax.plot(rs, p50, color="#1f4e5f", lw=2.0, label="median")
     ax.plot(rs, mu, color="#b85c38", lw=1.6, label="mean")
@@ -487,13 +547,13 @@ def main() -> int:
 
     # --- Fig 3: mean components across orientations ---
     fig, ax = plt.subplots(figsize=(5.6, 3.6), dpi=160)
-    ax.plot(rs, Emat.mean(0), color="#1f4e5f", lw=2.0, label=r"$\langle E_{\mathrm{int}}\rangle$")
+    ax.plot(rs, np.nanmean(Emat, axis=0), color="#1f4e5f", lw=2.0, label=r"$\langle E_{\mathrm{int}}\rangle$")
     ax.plot(rs, EMLmat.mean(0), color="#2a9d8f", lw=1.6, label=r"$\langle E_{\mathrm{ML}}\rangle$")
     ax.plot(rs, EMMmat.mean(0), color="#b85c38", lw=1.6, label=r"$\langle E_{\mathrm{MM}}\rangle$")
     ax.fill_between(
         rs,
-        Emat.mean(0) - Emat.std(0),
-        Emat.mean(0) + Emat.std(0),
+        np.nanmean(Emat, axis=0) - np.nanstd(Emat, axis=0),
+        np.nanmean(Emat, axis=0) + np.nanstd(Emat, axis=0),
         color="#1f4e5f",
         alpha=0.15,
     )
@@ -521,7 +581,7 @@ def main() -> int:
     fig, ax = plt.subplots(figsize=(5.6, 3.6), dpi=160)
     for c in curves:
         ax.plot(c["r"], c["fmean_d"], color="#1f4e5f", alpha=0.15, lw=0.7)
-    mu, sd = Fdmat.mean(0), Fdmat.std(0)
+    mu, sd = np.nanmean(Fdmat, axis=0), np.nanstd(Fdmat, axis=0)
     ax.plot(rs, mu, color="#b85c38", lw=2.0, label=r"mean $\langle|F-F_\infty|\rangle$")
     ax.fill_between(rs, mu - sd, mu + sd, color="#b85c38", alpha=0.2)
     ax.axvline(handoff_lo, color="k", ls=":", lw=0.8)
@@ -538,7 +598,7 @@ def main() -> int:
     # --- Fig 4b: ΔF + COM interaction force ---
     fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.4), dpi=160)
     ax = axes[0]
-    p10, p50, p90 = np.percentile(Fdmat, [10, 50, 90], axis=0)
+    p10, p50, p90 = np.nanpercentile(Fdmat, [10, 50, 90], axis=0)
     ax.fill_between(rs, p10, p90, color="#1f4e5f", alpha=0.2, label="10–90%")
     ax.plot(rs, p50, color="#1f4e5f", lw=2.0, label=r"median mean $|F-F_\infty|$")
     ax.plot(
@@ -558,7 +618,7 @@ def main() -> int:
     ax.legend(frameon=False, fontsize=7)
 
     ax = axes[1]
-    p10, p50, p90 = np.percentile(Fcommat, [10, 50, 90], axis=0)
+    p10, p50, p90 = np.nanpercentile(Fcommat, [10, 50, 90], axis=0)
     for c in curves:
         ax.plot(c["r"], c["fcom_d"], color="#1f4e5f", alpha=0.12, lw=0.6)
     ax.fill_between(rs, p10, p90, color="#1f4e5f", alpha=0.2, label="10–90%")

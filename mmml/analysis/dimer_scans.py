@@ -255,6 +255,20 @@ def distance_scan_geometries_2d(
             )
 
 
+# Default atom–atom floor for orientation COM scans (DCM Cl…Cl / H…Cl).
+# COM–COM r alone is not a steric coordinate: at r=3.5 Å many DCM–DCM rays
+# still have dmin < 1 Å. Wells / mean curves that ignore this look spuriously
+# deep (−30…−55 kcal/mol). See docs/dimer-scan-design.md contact policy.
+DEFAULT_ORIENT_MIN_CONTACT_A = 2.0
+
+
+def intermolecular_min_distance(pos_a: np.ndarray, pos_b: np.ndarray) -> float:
+    """Closest atom–atom distance between two coordinate blocks (Å)."""
+    a = np.asarray(pos_a, dtype=np.float64).reshape(-1, 3)
+    b = np.asarray(pos_b, dtype=np.float64).reshape(-1, 3)
+    return float(np.linalg.norm(a[:, None, :] - b[None, :, :], axis=-1).min())
+
+
 def min_fragment_contact_distance(
     atoms: Atoms, fragments: tuple[np.ndarray, np.ndarray]
 ) -> float:
@@ -269,8 +283,7 @@ def min_fragment_contact_distance(
     """
     pos = atoms.get_positions()
     idx_a, idx_b = fragments
-    dmat = np.linalg.norm(pos[idx_a][:, None, :] - pos[idx_b][None, :, :], axis=-1)
-    return float(dmat.min())
+    return intermolecular_min_distance(pos[idx_a], pos[idx_b])
 
 
 def find_safe_min_distance(

@@ -107,7 +107,6 @@ def main(argv=None) -> int:
     args = _parse_args(argv)
 
     import jax
-    import jax.numpy as jnp
 
     from mmml.models.physnetjax.checkpoint_utils import load_physnet_checkpoint
     from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets

@@ -35,6 +35,23 @@ def test_detect_handoff_format_res(nve_stub: Path) -> None:
     assert detect_handoff_format(nve_stub) == "res"
 
 
+def test_load_handoff_from_h5_allows_missing_box(tmp_path: Path) -> None:
+    """NVT jaxmd H5s often omit ``box``; continue-from must still load R/V."""
+    h5py = pytest.importorskip("h5py")
+    path = tmp_path / "nvt_nobox.h5"
+    pos = np.zeros((3, 4, 3), dtype=np.float64)
+    vel = np.ones((3, 4, 3), dtype=np.float64)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("positions", data=pos)
+        f.create_dataset("velocities", data=vel)
+        f.create_dataset("total_energy", data=np.zeros(3))
+    state = load_handoff(path, frame=1)
+    assert state.positions.shape == (4, 3)
+    assert state.velocities is not None
+    assert state.cell is None
+    assert state.metadata.get("frame") == 1
+
+
 def test_cluster_geometry_from_handoff_skips_packmol_layout() -> None:
     from mmml.cli.run.md_handoff import MdHandoffState, cluster_geometry_from_handoff
 
