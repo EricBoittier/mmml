@@ -1,0 +1,36 @@
+* Lennard-Jones parameters for argon, krypton and xenon.
+*
+* NOT A CHARMM FILE. Split out of toppar_noble_gases_literature.str for
+* `read_cgenff_prm(path, append=True)` via MMML_CGENFF_EXTRA_PRM; pairs with
+* top_noble_gases_literature.rtf.
+*
+* Values are the classical 12-6 noble-gas parameters from the standard
+* gas-transport / second-virial literature, converted to CHARMM's
+* (epsilon, Rmin/2) convention with k_B = 0.0019872041 kcal/(mol K):
+*
+*     Ar   sigma 3.405 A   eps/k_B 119.8 K  ->  eps 0.23807 kcal/mol  Rmin/2 1.91099 A
+*     Kr   sigma 3.600 A   eps/k_B 171.0 K  ->  eps 0.33981 kcal/mol  Rmin/2 2.02043 A
+*     Xe   sigma 4.100 A   eps/k_B 221.0 K  ->  eps 0.43917 kcal/mol  Rmin/2 2.30105 A
+*
+* These are isolated-atom pair parameters. They were NOT fitted alongside CGenFF
+* and are combined with it under Lorentz-Berthelot with no cross-term
+* validation, so any noble-gas result in a MIXTURE is provisional. A PURE
+* noble-gas box is the exception: every pair is like-like, so no cross term is
+* involved and the numbers stand on their own.
+*
+* Full provenance and the comparison against the CHARMM He/Ne file and BMS:
+* see toppar_noble_gases_literature.str.
+
+ATOMS
+MASS  -1  AR        39.94800 ! argon
+MASS  -1  KR        83.79800 ! krypton
+MASS  -1  XE       131.29300 ! xenon
+
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+AR     0.000000  -0.238070     1.910990
+KR     0.000000  -0.339810     2.020430
+XE     0.000000  -0.439170     2.301050
+
+END

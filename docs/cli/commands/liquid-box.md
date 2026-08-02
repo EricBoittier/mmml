@@ -77,7 +77,10 @@ options:
                         standard: MC + CHARMM pre-minimize only; dense: liquid-
                         prep preventive stack; conservative: dense with looser
                         initial density.
-  --spacing SPACING     Monomer template spacing for cluster build (Å).
+  --spacing SPACING     Monomer COM pitch for grid / template placement (Å). 4 Å
+                        is too coarse for dense liquids (MeOH COM ~4.1 Å); 2.5 Å
+                        leaves headroom for water-like and denser packs. Packmol
+                        atom-atom contact uses --packmol-tolerance, not this.
   --seed SEED           Random seed for Packmol / MC placement.
   --temperature TEMPERATURE
                         Temperature for mini box equilibration (K).

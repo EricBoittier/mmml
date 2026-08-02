@@ -28,6 +28,9 @@ MD_SYSTEM_SMOKE="$ROOT/tests/unit/test_md_system_unified.py"
 # Separate from MD_SYSTEM_SMOKE: builds_ffparams re-reads CGenFF after the
 # pbc_nve/nvt cases in that module and segfaults in pycharmm.read.prm.
 MD_SYSTEM_FFPARAMS_SMOKE="$ROOT/tests/unit/test_md_system_unified_ffparams.py"
+# Deploying scaled LJ parameters rewrites CHARMM's process-global parameter
+# state, so it cannot safely share the aggregate remainder process.
+SCALED_LJ_CHARMM_SMOKE="$ROOT/tests/unit/test_scaled_lj_charmm_in_the_loop.py"
 # This test intentionally launches a nested pytest process after loading
 # libcharmm. Running that child beneath mpirun can deadlock in MPI finalization,
 # so exercise it once in a genuinely serial parent process.
@@ -48,6 +51,7 @@ STATEFUL_SMOKE_PATHS=(
   "$DIMER_MODELS_SMOKE"
   "$MD_SYSTEM_SMOKE"
   "$MD_SYSTEM_FFPARAMS_SMOKE"
+  "$SCALED_LJ_CHARMM_SMOKE"
   "$PYTEST_EXIT_STATUS_SMOKE"
 )
 

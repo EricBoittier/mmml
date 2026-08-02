@@ -125,3 +125,45 @@ def test_dry_run_writes_nothing(tmp_path):
     out = tmp_path / "out.npz"
     assert main(["--in", str(inp), "--out", str(out), "--dry-run"]) == 0
     assert not out.exists()
+
+
+# --- per-species refs --------------------------------------------------------
+
+def test_species_pairing_is_order_independent():
+    """A+B and B+A are the same dimer species; treating them separately would
+    split every pair's statistics in half."""
+    from mmml.cli.misc.subtract_element_refs import fit_species_refs
+
+    res = np.array([["A", "B"], ["B", "A"]], dtype=object)
+    labels, _, means = fit_species_refs(np.array([10.0, 12.0]), res)
+    assert labels[0] == labels[1]
+    assert len(means) == 1
+
+
+def test_species_refs_centre_each_species():
+    from mmml.cli.misc.subtract_element_refs import fit_species_refs
+
+    res = np.array([["A", "A"], ["A", "A"], ["B", "B"]], dtype=object)
+    E = np.array([10.0, 20.0, 7.0])
+    _, out, _ = fit_species_refs(E, res)
+    np.testing.assert_allclose(out, [-5.0, 5.0, 0.0])
+
+
+def test_species_refs_remove_offsets_forces_cannot_see():
+    """The motivating case: a per-species constant is invisible to a force loss
+    (forces are dE/dR), so it must be removed from the target instead."""
+    from mmml.cli.misc.subtract_element_refs import fit_species_refs
+
+    rng = np.random.default_rng(3)
+    n = 600
+    species = rng.choice(["X+X", "X+Y", "Y+Y"], size=n)
+    offsets = {"X+X": 40.0, "X+Y": -25.0, "Y+Y": 11.0}
+    geom = rng.normal(0, 1.0, size=n)          # the learnable part
+    E = np.array([offsets[s] for s in species]) + geom
+    res = np.array([s.split("+") for s in species], dtype=object)
+
+    _, out, means = fit_species_refs(E, res)
+    assert out.std() == pytest.approx(geom.std(), rel=0.02)
+    assert out.std() < 0.1 * E.std(), "species offsets still dominate"
+    for k, v in offsets.items():
+        assert means[k] == pytest.approx(v, abs=0.15)

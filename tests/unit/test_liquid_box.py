@@ -42,6 +42,16 @@ def _args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+def test_liquid_box_spacing_default_allows_dense_liquids():
+    """4 Å COM pitch sits at MeOH liquid mean (~4.1 Å) and blocks density."""
+    from mmml.cli.run.liquid_box import build_parser
+
+    args = build_parser().parse_args(
+        ["--composition", "MEOH:8", "--output-dir", "/tmp/lb"]
+    )
+    assert args.spacing == pytest.approx(2.5)
+
+
 def test_apply_liquid_box_profile_dense_enables_liquid_prep():
     args = _args(profile="dense")
     name = apply_liquid_box_profile(args)

@@ -1,0 +1,18 @@
+{
+  "tag": "L24_nvt_dt1_f32_50ps",
+  "box_A": 24,
+  "n_frames": 50,
+  "dE_tot": -2778.949956893921,
+  "dH_NHC": 8.810546875,
+  "max_bond_end_A": 2.590496747808858,
+  "outputs": [
+    "bond_health.png",
+    "box_t001.0ps.png",
+    "box_t026.0ps.png",
+    "box_t050.0ps.png",
+    "element_pair_rdfs.npz",
+    "element_pair_rdfs.png",
+    "summary_panel.png",
+    "thermo.png"
+  ]
+}
