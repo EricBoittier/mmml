@@ -540,7 +540,14 @@ def job_umbrella_sol(
     _prepare_umbrella_outdir(out)
     yaml_path = out / "umbrella_hybrid.yaml"
     _write_hybrid_yaml(
-        template=example / "yaml" / "umbrella_nc_tip3.yaml",
+        # Which hybrid YAML to template from. The default is the smoke
+        # config (3 windows, 40 steps); the Menshutkin campaign wants
+        # umbrella_nc_tip3_prod.yaml, which carries Turan's 30 windows over
+        # xi in [-1.3, 1.6], k = 6.505 eV/A^2, 20 ps/window, and the bond
+        # and attack-angle walls.
+        template=example / "yaml" / str(
+            cfg.get("umbrella_template", "umbrella_nc_tip3.yaml")
+        ),
         out_yaml=yaml_path,
         checkpoint=ckpt,
         box_psf=psf,

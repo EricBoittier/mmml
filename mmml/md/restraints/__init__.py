@@ -3,6 +3,7 @@
 from mmml.md.restraints.distance import DistanceRestraint
 from mmml.md.restraints.dihedral import DihedralRestraint
 from mmml.md.restraints.linear_distance import (
+    ReactionChannelRestraint,
     AngleWall,
     BondRetentionWall,
     FlatBottomWall,
@@ -20,6 +21,7 @@ __all__ = [
     "BondRetentionWall",
     "FlatBottomWall",
     "LinearDistanceCV",
+    "ReactionChannelRestraint",
     "harmonic_bias_energy",
     "linear_cvs_from_pairs",
 ]

@@ -24,6 +24,7 @@ from mmml.md.energy.registry import EnergyContext, TermFns, register_term
 from mmml.md.energy.terms._common import ase_contribution_from_jax
 from mmml.md.restraints import (
     AngleWall,
+    ReactionChannelRestraint,
     BondRetentionWall,
     FlatBottomWall,
     LinearDistanceCV,
@@ -81,19 +82,25 @@ class ReactionCoordinateBiasTerm:
         # part of defining the restrained ensemble: they are zero inside the
         # allowed region, so they do not bias the sampling that MBAR unbiases,
         # but without them the sampled ensemble is not the intended one.
-        # A wall is either a flat-bottom band on a linear CV or a
-        # bond-retention bound on the shortest of several distances; both
-        # expose .energy(R, cell=) and .validate_against(n).
+        # A wall is a flat-bottom band on a linear CV, a bond-retention bound
+        # on the shortest of several distances, an angle bound, or a
+        # reaction-channel restraint that follows the reference path as a
+        # function of the CV itself. All expose .energy(R, cell=) and
+        # .validate_against(n), which is the only contract this term needs.
         self.walls = tuple(
             w
-            if isinstance(w, (FlatBottomWall, BondRetentionWall, AngleWall))
+            if isinstance(w, (FlatBottomWall, BondRetentionWall, AngleWall,
+                              ReactionChannelRestraint))
             else (
+                ReactionChannelRestraint.from_spec(w)
+                if isinstance(w, dict) and "xi_grid" in w
+                else (
                 AngleWall.from_spec(w)
                 if isinstance(w, dict) and "atoms" in w
                 else BondRetentionWall.from_spec(w)
                 if isinstance(w, dict) and "r_max" in w
                 else FlatBottomWall.from_spec(w)
-            )
+            ))
             for w in (walls or ())
         )
 

@@ -26,6 +26,10 @@ export MMML_CGENFF_EXTRA_RTF="${MMML_CGENFF_EXTRA_RTF:-}"
 export MMML_CGENFF_EXTRA_PRM="${MMML_CGENFF_EXTRA_PRM:-}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-}"
+# examples/m/_env.sh defaults to CPU and deliberately overrides an
+# inherited JAX_PLATFORMS, so on a GPU node the device must be asked for
+# by name. Without this a local run is silently ~9x slower.
+export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
 CONFIG_ARGS=()
 if [[ "$CFG_PATH" != "$WORKFLOW_ROOT/config.yaml" ]]; then
   CONFIG_ARGS=(--configfile "$CFG_PATH")

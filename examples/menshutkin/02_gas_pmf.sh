@@ -25,7 +25,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/examples/menshutkin/_env.sh"
 cd "${ROOT}"
 
-OUT="${MENSH_ARTIFACTS}/gas"
+# MENSH_GAS_OUT lets a new run land somewhere else instead of overwriting the
+# previous one. Every stage below passes --overwrite, so pointing this at a live
+# directory DESTROYS it: on 2026-08-02 a 600-step smoke test run with the
+# production paths wiped umbrella_rep1 and the 5-replica MBAR solve behind the
+# published 34.56 kcal/mol barrier, which was not recoverable from disk (see
+# artifacts/menshutkin/_archive/gas_smoke_20260802/README). Give a fresh run a
+# fresh directory; merge or compare afterwards.
+OUT="${MENSH_GAS_OUT:-${MENSH_ARTIFACTS}/gas}"
 SEEDS="${OUT}/window_seeds.npz"
 
 # PhysNet with hydrogens is unstable above ~0.25 fs in this sampler, so we buy
@@ -48,6 +55,18 @@ MENSH_WALL_MIN_BOND="${MENSH_WALL_MIN_BOND:-2,0,2,1,2.25,100}"
 # Healthy reaction-region windows stay at 165-173 deg (min observed 134.6), so
 # 130 deg admits all legitimate sampling and excludes the reoriented basin.
 MENSH_WALL_ANGLE="${MENSH_WALL_ANGLE:-1,2,0,130,50}"
+# The channel restraint, matching the solvated runs. Without it the gas run
+# leaves the reaction path exactly at the transition state: measured on the
+# 2026-08-01 profile, the sum r(C-Cl)+r(C-N) sat 0.55-0.92 A off the reference
+# over xi = +0.4..+1.0, with 63-89 % of frames beyond the 0.60 A tolerance the
+# solvated runs enforce. That displaced the apparent TS from the model's own
+# PES saddle at xi = +0.67 out to +1.10 and made the gas profile
+# non-comparable with the solvated ones (different Hamiltonian).
+# A constant --wall-sum does NOT substitute: it is a box, and the path is a
+# line inside it.
+MENSH_CHANNEL_JSON="${MENSH_CHANNEL_JSON:-${MENSH_ARTIFACTS}/reaction_channel.json}"
+MENSH_WALL_CHANNEL="${MENSH_WALL_CHANNEL:-2,0,2,1,${MENSH_CHANNEL_JSON},sum_grid,0.60,50}"
+MENSH_WALL_CHANNEL_CN="${MENSH_WALL_CHANNEL_CN:-2,0,2,1,${MENSH_CHANNEL_JSON},cn_grid,0.80,50}"
 # Several short independent replicas rather than one long run. This checkpoint
 # sustains about 8 ps per window before some window finds a spurious well in the
 # fitted surface: 0.5 ps and 8 ps runs were clean, while a 55 ps run left three
@@ -102,6 +121,8 @@ for rep in $(seq 1 "${N_REPLICAS}"); do
     --thermostat langevin \
     --wall-min-bond "${MENSH_WALL_MIN_BOND}" \
     --wall-angle "${MENSH_WALL_ANGLE}" \
+    --wall-channel "${MENSH_WALL_CHANNEL}" \
+    --wall-channel "${MENSH_WALL_CHANNEL_CN}" \
     --write-window-xyz \
     --seed "${rep}" \
     --output-dir "${REP_DIR}" \

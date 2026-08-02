@@ -12,6 +12,7 @@ from mmml.md.restraints import (
     FlatBottomWall,
     LinearDistanceCV,
 )
+from mmml.md.restraints.linear_distance import ReactionChannelRestraint
 
 
 SeedMode = Literal["stretch", "tile", "frames"]
@@ -58,13 +59,16 @@ def _resolve_wall(spec):
     """Build whichever wall kind the spec describes.
 
     A mapping carrying ``r_max`` is a :class:`BondRetentionWall` (bound on the
-    shortest of several competing distances); anything else is a
+    shortest of several competing distances); one carrying ``xi_grid`` is a
+    :class:`ReactionChannelRestraint` (a flat bottom that FOLLOWS a reference
+    path rather than sitting at a fixed value); anything else is a
     :class:`FlatBottomWall` on a linear CV. Both expose ``energy_batched`` and
     ``forces_batched``, so the sampler does not care which it has.
 
     Specs that still use atom *names* are left as dicts for hybrid name binding.
     """
-    if isinstance(spec, (FlatBottomWall, BondRetentionWall, AngleWall)):
+    if isinstance(spec, (FlatBottomWall, BondRetentionWall, AngleWall,
+                         ReactionChannelRestraint)):
         return spec
     if isinstance(spec, dict) and _spec_needs_name_bind(spec):
         return spec
@@ -72,6 +76,8 @@ def _resolve_wall(spec):
         return AngleWall.from_spec(spec)
     if isinstance(spec, dict) and "r_max" in spec:
         return BondRetentionWall.from_spec(spec)
+    if isinstance(spec, dict) and "xi_grid" in spec:
+        return ReactionChannelRestraint.from_spec(spec)
     return FlatBottomWall.from_spec(spec)
 
 
@@ -197,6 +203,27 @@ class UmbrellaConfig:
     without biasing the reaction path."""
     targets_A: tuple[float, ...] = ()
     targets_y_A: tuple[float, ...] = ()
+    #: Explicit ``((x0, y0), (x1, y1), ...)`` window centres for a 2D umbrella,
+    #: instead of the full ``targets_A x targets_y_A`` grid.
+    #:
+    #: A reaction is a one-dimensional path through a two-dimensional space, so
+    #: the grid is almost entirely wasted: for a methyl transfer, windows with
+    #: both r(C-Cl) and r(C-N) large are a dissociated methyl, and windows with
+    #: both small are a five-coordinate carbon. Neither is on the path, neither
+    #: is in the training data, and sampling them is not just wasted time -- it
+    #: puts the model far outside the region it was fitted on.
+    #:
+    #: Why 2D at all: biasing xi = r(C-Cl) - r(C-N) alone fixes the DIFFERENCE
+    #: and leaves the SUM free, and on this surface the dissociated branch is
+    #: downhill. A 1D run measured r(C-Cl) 3.2-5.3 A and r(C-N) 3.1-3.7 A
+    #: simultaneously -- a perfect reaction coordinate with no bond ever formed.
+    #: Restraining both distances removes that degeneracy by construction rather
+    #: than patching it with walls afterwards.
+    #:
+    #: The natural source of centres is the reaction path the model was trained
+    #: on. The free energy is then reconstructed on the sampled band and
+    #: projected onto whatever coordinate is wanted for plotting.
+    targets_xy: tuple[tuple[float, float], ...] = ()
     xi_min: float | None = None
     xi_max: float | None = None
     n_windows: int | None = None
@@ -237,11 +264,68 @@ class UmbrellaConfig:
     composition: str | None = None
     box_size: float | None = None
     ml_resnames: tuple[str, ...] = ("AMM1", "CH3CL")
+    #: Use a complete static on-device pair list instead of rebuilding a padded
+    #: neighbour list on the host each block. Correct because the switched
+    #: force field makes distant pairs contribute exactly zero; roughly 3x
+    #: faster for a solute in a few thousand solvent atoms, and the win grows
+    #: with how often the driver would otherwise rebuild. Turn off above ~10k
+    #: atoms, where the O(N^2) energy costs more than the host rebuild saves.
+    static_pairs: bool = True
     atom_name_i: str | None = None
     atom_name_j: str | None = None
     lr_solver: str = "mic"
 
+    #: Picoseconds of NVT run on the packed box *before* any window starts, at
+    #: the schedule point nearest the base geometry, to relax the liquid.
+    #:
+    #: A Packmol box is at the right density from the first step but its liquid
+    #: structure is not relaxed at all, and the first solvation shell around a
+    #: charged solute takes tens to hundreds of picoseconds to form. Turan et
+    #: al. use 500 ps NpT + 2 ns NVT before sampling; this pipeline was using
+    #: none, because ``equilibration_steps`` only discards frames from a window
+    #: that has already started. Sampling a solvated barrier from an unrelaxed
+    #: box under-solvates the ion pair and biases the barrier high.
+    #:
+    #: The relaxed structure is cached under ``output_dir/../equilibrated_*.npz``
+    #: keyed by system size and seed, so the cost is paid once per box.
+    pre_equilibrate_ps: float = 0.0
+    #: Seed each window from the previous window's final frame instead of
+    #: re-stretching the solute from the one base structure every time.
+    #:
+    #: With ``seed_mode="stretch"`` alone every window starts from the same
+    #: solvent configuration, so no window ever inherits its neighbour's
+    #: relaxed solvation shell and each must re-form it from scratch inside its
+    #: own short trajectory. Turan et al. restart each window from the previous
+    #: window's structure for exactly this reason; consecutive centres differ
+    #: by ~0.1 A, so the carried-over shell is nearly correct already. The
+    #: solute is still stretched to the new centre -- only the solvent is
+    #: inherited.
+    #:
+    #: Tell-tale that this is off: an identical ``seed_max|F|`` on every window.
+    seed_from_previous_window: bool = False
+    #: Stages over which to raise the temperature from ``heat_start_fraction *
+    #: temperature_K`` to the target during pre-equilibration. Minimised or
+    #: freshly packed boxes have no kinetic energy, and assigning full-target
+    #: velocities in one step is a thermal shock; 0 disables staging.
+    heat_stages: int = 0
+    heat_start_fraction: float = 0.2
+
     def __post_init__(self) -> None:
+        if self.pre_equilibrate_ps < 0:
+            raise ValueError(
+                f"pre_equilibrate_ps must be >= 0 (got {self.pre_equilibrate_ps})"
+            )
+        if self.heat_stages < 0:
+            raise ValueError(f"heat_stages must be >= 0 (got {self.heat_stages})")
+        if not 0.0 < self.heat_start_fraction <= 1.0:
+            raise ValueError(
+                "heat_start_fraction must be in (0, 1] (got "
+                f"{self.heat_start_fraction}) -- a 0 K start is the thermal "
+                "shock the staging exists to prevent"
+            )
+        self._post_init_rest()
+
+    def _post_init_rest(self) -> None:
         if self.engine not in ("packed_ml", "hybrid_jaxmd"):
             raise ValueError(
                 f"engine must be packed_ml|hybrid_jaxmd (got {self.engine!r})"
@@ -365,6 +449,10 @@ class UmbrellaConfig:
             self.atom_k is not None and self.atom_l is not None
         )
 
+    @property
+    def uses_paired_windows(self) -> bool:
+        return bool(self.targets_xy)
+
     def resolve_cvs(self) -> tuple[LinearDistanceCV, ...]:
         """Resolve CV1 (and CV2 when 2D) from ``cv_*`` or the atom-index fields."""
         if self.cv_x is not None:
@@ -406,6 +494,40 @@ class UmbrellaConfig:
         cvs = self.resolve_cvs()
         walls = self.resolve_walls()
         atom_pairs = self._legacy_atom_pairs(cvs)
+
+        # Explicit paired centres: a band of windows following the reaction
+        # path, not the full outer product of the two axes.
+        if self.targets_xy:
+            if len(cvs) != 2:
+                raise ValueError(
+                    "targets_xy needs two CVs; give cv_y (or atom_k/atom_l) "
+                    "as well as cv_x"
+                )
+            import numpy as np
+
+            pairs = [tuple(float(v) for v in p) for p in self.targets_xy]
+            bad = [p for p in pairs if len(p) != 2]
+            if bad:
+                raise ValueError(
+                    f"targets_xy entries must be (x, y) pairs; got {bad[0]!r}"
+                )
+            xi0 = tuple(p[0] for p in pairs)
+            yi0 = tuple(p[1] for p in pairs)
+            n = len(xi0)
+            ky_src = self.k_ev_A2 if self.k_y_ev_A2 is None else self.k_y_ev_A2
+            return WindowSchedule(
+                ndim=2,
+                atom_pairs=atom_pairs,
+                xi0=xi0,
+                yi0=yi0,
+                k_x=_broadcast_k(self.k_ev_A2, n),
+                k_y=_broadcast_k(ky_src, n),
+                # A path, not a lattice: one window per centre.
+                grid_shape=(n,),
+                cvs=cvs,
+                walls=walls,
+            )
+
         x_centers = _linspace_or_list(
             explicit=self.targets_A,
             lo=self.xi_min,

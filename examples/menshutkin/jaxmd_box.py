@@ -123,8 +123,10 @@ def build_jaxmd_solvated_system(
     solute_gap: float = 2.6,
     solvent_gap: float = 1.95,
     solute_charges: str = "ml",
+    ml_frozen_charges=None,
     nonbonded_cutoff_A: float = 12.0,
     inflate: float = 1.15,
+    min_contact_A: float = 1.5,
     seed: int = 0,
     verbose: bool = True,
 ):
@@ -171,28 +173,62 @@ def build_jaxmd_solvated_system(
     existing = geom.copy()
     n_tries_per_site = 40
 
-    for site in sites:
-        if len(placed_coords) == target:
+    # Sites inside the solute cavity are dropped once and for all; every other
+    # site stays available to the later, more permissive passes below.
+    free_sites = [
+        s for s in sites
+        if np.linalg.norm(
+            (s - geom) - L * np.round((s - geom) / L), axis=-1).min() >= solute_gap
+    ]
+
+    # Progressive relaxation of the acceptance gap.
+    #
+    # A single fixed gap cannot reach liquid density for a large rigid molecule.
+    # Sequential random insertion saturates near the random-close-packing limit,
+    # and cyclohexane at 774 kg/m3 needs a packing fraction around 0.6: measured,
+    # the old single-pass placed 116 of 150 molecules and the box came out at
+    # 600 kg/m3 -- 22 % under-dense. A wrong density changes the solvation free
+    # energy far more than a strained contact does, and the strained contact is
+    # temporary: the two-pass minimisation in 07_solvated_pmf.py exists
+    # precisely to clear it ("the lattice builder places molecules on a grid at
+    # the target density ... but leaves individual contacts strained. The gentle
+    # pass exists only to clear them").
+    #
+    # So: demand the full gap first, and retry only the sites that could not be
+    # filled at a reduced one. Water, methanol and acetonitrile finish in pass 1
+    # and never see a relaxed gap, so their packing is unchanged.
+    gap_used = build_gap
+    for relax in (1.0, 0.9, 0.8, 0.7, 0.6, 0.5):
+        if len(placed_coords) >= target:
             break
-        d = site - geom
-        d -= L * np.round(d / L)
-        if np.linalg.norm(d, axis=-1).min() < solute_gap:
-            continue  # inside the solute cavity
-        for attempt in range(n_tries_per_site):
-            # Retry with a fresh orientation and a small positional nudge.
-            nudge = 0.0 if attempt == 0 else rng.uniform(-0.2, 0.2, 3) * spacing
-            trial = site + nudge + mol_geom @ _random_rotation(rng).T
-            dd = trial[:, None, :] - existing[None, :, :]
-            dd -= L * np.round(dd / L)
-            if np.linalg.norm(dd, axis=-1).min() >= build_gap:
-                placed_coords.append(trial)
-                existing = np.concatenate([existing, trial], axis=0)
-                break
+        gap_used = build_gap * relax
+        remaining: list[np.ndarray] = []
+        for site in free_sites:
+            if len(placed_coords) >= target:
+                remaining.append(site)
+                continue
+            for attempt in range(n_tries_per_site):
+                # Retry with a fresh orientation and a small positional nudge.
+                nudge = 0.0 if attempt == 0 else rng.uniform(-0.2, 0.2, 3) * spacing
+                trial = site + nudge + mol_geom @ _random_rotation(rng).T
+                dd = trial[:, None, :] - existing[None, :, :]
+                dd -= L * np.round(dd / L)
+                if np.linalg.norm(dd, axis=-1).min() >= gap_used:
+                    placed_coords.append(trial)
+                    existing = np.concatenate([existing, trial], axis=0)
+                    break
+            else:
+                remaining.append(site)
+        free_sites = remaining
 
     n_placed = len(placed_coords)
+    if verbose and gap_used < build_gap:
+        print(f"  note: {solvent_model.residue} needed the acceptance gap "
+              f"relaxed {build_gap:.2f} -> {gap_used:.2f} A to reach "
+              f"{n_placed}/{target} molecules (minimisation clears the strain)")
     if n_placed < target and verbose:
         print(f"  note: placed {n_placed} of {target} requested "
-              f"{solvent_model.residue} (cavity + {build_gap:.2f} A acceptance)")
+              f"{solvent_model.residue} (cavity + {gap_used:.2f} A acceptance)")
 
     # Compress from the inflated build box back to the requested cell. Only the
     # molecular *centres* move; internal geometry is rigid, which is what a
@@ -245,9 +281,37 @@ def build_jaxmd_solvated_system(
         # also appear in mm_nonbonded. Zeroing them removes exactly the Coulomb
         # part and leaves the solute's Lennard-Jones untouched.
         q_s = np.zeros_like(q_s)
+    elif solute_charges == "ml_frozen":
+        # Mechanical embedding done as a CONTROLLED comparison.
+        #
+        # The point of the mechanical/electrostatic A/B is to isolate the effect
+        # of solute charges RESPONDING to the reaction. Using CGenFF charges for
+        # the frozen side does not isolate it: CGenFF and PhysNet disagree by
+        # 0.44 e on nitrogen and 0.34 e on carbon at the *same* reactant
+        # geometry, so the measured gap mixes "charges responded" with "we
+        # swapped the charge model". Every kcal/mol of that mixture was being
+        # reported as charge response.
+        #
+        # Freezing the model's own charges at the reactant geometry removes the
+        # confound: both sides then use PhysNet electrostatics and differ only
+        # in whether the charges follow the reaction coordinate.
+        if ml_frozen_charges is None:
+            raise ValueError(
+                "solute_charges='ml_frozen' needs ml_frozen_charges=(n_solute,)"
+            )
+        q_s = np.asarray(ml_frozen_charges, dtype=float).reshape(-1)
+        if q_s.shape[0] != n_solute:
+            raise ValueError(
+                f"ml_frozen_charges has {q_s.shape[0]} entries for "
+                f"{n_solute} solute atoms"
+            )
+        # A net charge in a periodic box is a physical error that grows with
+        # system size; the reactants are neutral, so enforce it.
+        q_s = q_s - q_s.mean()
     elif solute_charges != "cgenff":
         raise ValueError(
-            f"solute_charges must be 'ml' or 'cgenff' (got {solute_charges!r})"
+            "solute_charges must be 'ml' | 'ml_frozen' | 'cgenff' "
+            f"(got {solute_charges!r})"
         )
     charges = np.concatenate([q_s, np.tile(solvent_model.charges, n_placed)])
     epsilon = np.concatenate([eps_s, np.tile(solvent_model.epsilon, n_placed)])
@@ -321,7 +385,8 @@ def build_jaxmd_solvated_system(
               f"{_density(solvent_model, n_placed, box_side):.0f} kg/m3")
         print(f"  closest solute-solvent  {report['solute_solvent']:.3f} A")
         print(f"  closest solvent-solvent {report['solvent_solvent']:.3f} A")
-    if report["solvent_solvent"] < 1.5 or report["solute_solvent"] < 1.5:
+    if (report["solvent_solvent"] < min_contact_A
+            or report["solute_solvent"] < min_contact_A):
         raise SystemExit(
             f"built box has a {min(report.values()):.3f} A intermolecular contact; "
             "refusing to hand it to the integrator"

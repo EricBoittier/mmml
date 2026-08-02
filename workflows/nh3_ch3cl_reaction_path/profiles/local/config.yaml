@@ -3,6 +3,10 @@ jobs: 2
 latency-wait: 5
 printshellcmds: true
 envvars:
+  # examples/m/_env.sh defaults to CPU and overrides an inherited
+  # JAX_PLATFORMS by design, so the GPU must be requested by name.
+  # Without it a run silently executes at 8 steps/s instead of 75.
+  - MMML_EXAMPLE_DEVICE
   - MMML_CKPT
   - MMML_WORKFLOW_CONFIG
   - MMML_CGENFF_EXTRA_RTF
