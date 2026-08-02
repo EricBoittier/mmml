@@ -49,6 +49,15 @@ from flax.training import orbax_utils, train_state
 
 from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 from mmml.models.physnetjax.physnetjax.restart.restart import save_training_checkpoint
+from mmml.models.physnetjax.physnetjax.training.spooky_distill import (
+    EnergyAlignment,
+    blend_component_loss,
+    checkpoint_fingerprint,
+    element_counts_from_atomic_numbers,
+    fit_energy_alignment,
+    parse_spooky_distill_targets,
+    teacher_architecture_from_checkpoint,
+)
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
@@ -952,6 +961,11 @@ def make_steps(
     mbd_params: Any | None = None,
     multipole_model: Any | None = None,
     multipole_params: Any | None = None,
+    teacher_model: Any | None = None,
+    teacher_params: Any | None = None,
+    teacher_alignment: EnergyAlignment | None = None,
+    teacher_no_cgenff_vdw: bool = False,
+    return_loss_fn: bool = False,
 ):
     per_device_batch_size = args.batch_size_per_device
     energy_weight = args.energy_weight
@@ -969,6 +983,31 @@ def make_steps(
         # These parameters are fixed external physics.  Positions deliberately
         # remain differentiable so the residual learns against MBD forces.
         mbd_params = jax.tree.map(jax.lax.stop_gradient, mbd_params)
+    if (teacher_model is None) != (teacher_params is None):
+        raise ValueError("teacher_model and teacher_params must be provided together")
+    distill_energy = False
+    distill_forces = False
+    distill_alpha = 1.0
+    teacher_scalar_offset = 0.0
+    teacher_element_offsets = None
+    if teacher_model is not None:
+        distill_energy, distill_forces = parse_spooky_distill_targets(args.distill_targets)
+        distill_alpha = float(args.distill_alpha)
+        if not 0.0 <= distill_alpha <= 1.0:
+            raise ValueError(
+                f"--distill-alpha must be in [0, 1] (1 = pure ground truth), got {distill_alpha}"
+            )
+        # The teacher is fixed reference physics, exactly like the MBD and
+        # multipole models above: its parameters never receive gradients, and
+        # its outputs enter the loss only through stop_gradient, so the student
+        # is pulled toward the teacher without the teacher ever moving.
+        teacher_params = jax.tree.map(jax.lax.stop_gradient, teacher_params)
+        if teacher_alignment is None:
+            raise ValueError("teacher_alignment is required when a teacher is supplied")
+        teacher_scalar_offset = float(teacher_alignment.scalar_offset)
+        teacher_element_offsets = jnp.asarray(
+            teacher_alignment.element_offsets, dtype=jnp.float32
+        )
     if (multipole_model is None) != (multipole_params is None):
         raise ValueError("multipole_model and multipole_params must be provided together")
     if multipole_params is not None:
@@ -1030,13 +1069,80 @@ def make_steps(
         forces_ref = batch["F"]
         force_mask = batch["atom_mask"][:, None]
 
+        def _masked_force_mean(values):
+            return jnp.sum(values * force_mask) / (jnp.sum(force_mask) * 3.0 + 1e-8)
+
         energy_mse = jnp.mean((energy_pred - energy_ref) ** 2)
-        force_mse = jnp.sum(((forces_pred - forces_ref) ** 2) * force_mask)
-        force_mse /= jnp.sum(force_mask) * 3.0 + 1e-8
+        force_mse = _masked_force_mean((forces_pred - forces_ref) ** 2)
         energy_mae = jnp.mean(jnp.abs(energy_pred - energy_ref))
-        force_mae = jnp.sum(jnp.abs(forces_pred - forces_ref) * force_mask)
-        force_mae /= jnp.sum(force_mask) * 3.0 + 1e-8
-        loss = energy_weight * energy_mse + forces_weight * force_mse
+        force_mae = _masked_force_mean(jnp.abs(forces_pred - forces_ref))
+
+        # Teacher distillation. The ground-truth terms above stay the primary
+        # objective; the teacher only regularizes them, blended by
+        # --distill-alpha (1.0 = ground truth only, 0.0 = teacher only).
+        distill_energy_mse = jnp.asarray(0.0)
+        distill_forces_mse = jnp.asarray(0.0)
+        distill_energy_mae = jnp.asarray(0.0)
+        distill_forces_mae = jnp.asarray(0.0)
+        energy_term = energy_mse
+        forces_term = force_mse
+        if teacher_model is not None:
+            teacher_out = teacher_model.apply(
+                teacher_params,
+                atomic_numbers=batch["Z"],
+                charges=batch["Q_atoms"],
+                spins=batch["S_atoms"],
+                positions=batch["R"],
+                dst_idx=batch["dst_idx"],
+                src_idx=batch["src_idx"],
+                batch_segments=batch["batch_segments"],
+                batch_size=per_device_batch_size,
+                batch_mask=batch["batch_mask"],
+                atom_mask=batch["atom_mask"],
+                mol_id=batch.get("mol_id"),
+                cgenff_type_idx=None if teacher_no_cgenff_vdw else batch.get("cgenff_type_idx"),
+                cgenff_master_sigmas=(
+                    None if teacher_no_cgenff_vdw else batch.get("cgenff_master_sigmas")
+                ),
+                cgenff_master_epsilons=(
+                    None if teacher_no_cgenff_vdw else batch.get("cgenff_master_epsilons")
+                ),
+                compute_forces=distill_forces,
+            )
+            if distill_energy:
+                # Teacher and student generally have different energy zeros
+                # (different caches, different use_energy_bias), so the teacher
+                # is mapped onto the reference scale by the offsets fitted and
+                # recorded before training started. Forces need no such
+                # correction -- a constant plus per-element shift differentiates
+                # to zero -- which is why only this branch applies it.
+                per_atom_shift = teacher_element_offsets[batch["Z"]] * batch["atom_mask"]
+                structure_shift = jax.ops.segment_sum(
+                    per_atom_shift,
+                    batch["batch_segments"],
+                    num_segments=per_device_batch_size,
+                ).reshape(-1, 1)
+                teacher_energy = jax.lax.stop_gradient(
+                    teacher_out["energy"].reshape(-1, 1)
+                    + teacher_scalar_offset
+                    + structure_shift
+                )
+                distill_energy_mse = jnp.mean((energy_pred - teacher_energy) ** 2)
+                distill_energy_mae = jnp.mean(jnp.abs(energy_pred - teacher_energy))
+            if distill_forces:
+                teacher_forces = jax.lax.stop_gradient(
+                    teacher_out["forces"].reshape(batch["F"].shape)
+                )
+                distill_forces_mse = _masked_force_mean((forces_pred - teacher_forces) ** 2)
+                distill_forces_mae = _masked_force_mean(jnp.abs(forces_pred - teacher_forces))
+            energy_term = blend_component_loss(
+                energy_mse, distill_energy_mse, distill_alpha, distill=distill_energy
+            )
+            forces_term = blend_component_loss(
+                force_mse, distill_forces_mse, distill_alpha, distill=distill_forces
+            )
+
+        loss = energy_weight * energy_term + forces_weight * forces_term
         dipole_mae = jnp.asarray(0.0)
         charge_mae = jnp.asarray(0.0)
         dipole_mse = jnp.asarray(0.0)
@@ -1184,6 +1290,14 @@ def make_steps(
             "forces_mse": force_mse,
             "neural_int_mse": neural_int_mse,
             "neural_int_rms": jnp.sqrt(neural_int_mse + 1e-12),
+            # Student-vs-teacher agreement. Reported alongside (never instead
+            # of) the ground-truth MAEs so a run that drifts toward the teacher
+            # and away from the reference data is visible in the logs.
+            "distill_energy_mae": distill_energy_mae,
+            "distill_forces_mae": distill_forces_mae,
+            "distill_energy_mse": distill_energy_mse,
+            "distill_forces_mse": distill_forces_mse,
+            "distill_alpha": jnp.asarray(distill_alpha),
             "dipole_mae": dipole_mae,
             "charge_mae": charge_mae,
             "dipole_mse": dipole_mse,
@@ -1231,6 +1345,15 @@ def make_steps(
         _, metrics = loss_fn(state.params, batch, mbd_scale)
         return jax.lax.pmean(metrics, axis_name="device")
 
+    if return_loss_fn:
+        # Exposed so tests can differentiate the un-pmapped loss directly --
+        # in particular w.r.t. the teacher parameters, which is the only way to
+        # prove the teacher branch is gradient-blocked rather than assume it.
+        return (
+            jax.pmap(train_step, axis_name="device", devices=devices),
+            jax.pmap(eval_step, axis_name="device", devices=devices),
+            loss_fn,
+        )
     return (
         jax.pmap(train_step, axis_name="device", devices=devices),
         jax.pmap(eval_step, axis_name="device", devices=devices),
@@ -1245,12 +1368,12 @@ def mean_metrics(metrics: list[dict[str, Any]]) -> dict[str, float]:
     return finalize_metrics(total, len(metrics))
 
 
-def init_state(
-    model: SpookyPhysNet,
+def build_init_batch(
     data: dict[str, np.ndarray],
     train_buckets: dict[int, np.ndarray],
     args: argparse.Namespace,
-) -> train_state.TrainState:
+) -> dict[str, Any]:
+    """One single-device batch, used to initialize the student and the teacher."""
     rng = np.random.default_rng(args.seed)
     init_indices = None
     init_pad = None
@@ -1274,6 +1397,16 @@ def init_state(
     ):
         batch["cgenff_master_sigmas"] = jnp.asarray(data["cgenff_master_sigmas"], dtype=jnp.float32)
         batch["cgenff_master_epsilons"] = jnp.asarray(data["cgenff_master_epsilons"], dtype=jnp.float32)
+    return batch
+
+
+def init_state(
+    model: SpookyPhysNet,
+    data: dict[str, np.ndarray],
+    train_buckets: dict[int, np.ndarray],
+    args: argparse.Namespace,
+) -> train_state.TrainState:
+    batch = build_init_batch(data, train_buckets, args)
     variables = model.init(
         jax.random.PRNGKey(args.seed),
         atomic_numbers=batch["Z"],
@@ -1570,15 +1703,8 @@ def _initialize_from_checkpoint(
     checkpoint_path: Path,
     state: train_state.TrainState,
 ) -> train_state.TrainState:
-    if checkpoint_path.is_file() and checkpoint_path.suffix == ".json":
-        restored = json_to_params(checkpoint_path)
-    else:
-        restored = ocp.PyTreeCheckpointer().restore(checkpoint_path)
-    loaded_params = restored.get("params")
-    if loaded_params is None and isinstance(restored.get("model"), Mapping):
-        loaded_params = restored["model"].get("params")
-    if loaded_params is None:
-        raise ValueError(f"Checkpoint {checkpoint_path} has no parameters")
+    restored = _restore_checkpoint_any(checkpoint_path)
+    loaded_params = _checkpoint_params(restored, checkpoint_path)
 
     # Some checkpoints (e.g. orbax_to_json exports) store the flax "params"
     # collection unwrapped, i.e. {"Dense_0": ..., ...} rather than the
@@ -1603,6 +1729,227 @@ def _initialize_from_checkpoint(
     return state.replace(params=params)
 
 
+def _restore_checkpoint_any(checkpoint_path: Path) -> Mapping[str, Any]:
+    """Restore either a portable params JSON or an Orbax checkpoint directory."""
+    if checkpoint_path.is_file() and checkpoint_path.suffix == ".json":
+        return json_to_params(checkpoint_path)
+    return ocp.PyTreeCheckpointer().restore(checkpoint_path)
+
+
+def _checkpoint_params(restored: Mapping[str, Any], checkpoint_path: Path) -> Any:
+    loaded_params = restored.get("params")
+    if loaded_params is None and isinstance(restored.get("model"), Mapping):
+        loaded_params = restored["model"].get("params")
+    if loaded_params is None:
+        raise ValueError(f"Checkpoint {checkpoint_path} has no parameters")
+    return loaded_params
+
+
+def _param_paths(tree: Any) -> set[str]:
+    return {
+        "/".join(str(getattr(k, "key", k)) for k in path)
+        for path, _ in jax.tree_util.tree_flatten_with_path(tree)[0]
+    }
+
+
+def load_distillation_teacher(
+    checkpoint_path: Path,
+    *,
+    max_padded_atoms: int,
+    sample_batch: dict[str, Any],
+    args: argparse.Namespace,
+) -> tuple[SpookyPhysNet, Any, bool, dict[str, Any]]:
+    """Rebuild a frozen teacher from its own checkpoint.
+
+    The teacher's architecture comes exclusively from the teacher checkpoint, so
+    running with a teacher can never change the student's model.  The loaded
+    parameter tree must match the rebuilt module *exactly* -- any missing,
+    extra, or differently-shaped leaf means the architecture was not recovered
+    faithfully, and a silently half-loaded teacher would emit plausible-looking
+    but meaningless targets, so it is a hard error rather than a warning.
+    """
+    restored = _restore_checkpoint_any(checkpoint_path)
+    architecture = teacher_architecture_from_checkpoint(
+        restored, max_padded_atoms=max_padded_atoms
+    )
+    teacher = SpookyPhysNet(**architecture.kwargs)
+
+    loaded_params = _checkpoint_params(restored, checkpoint_path)
+    if isinstance(loaded_params, Mapping) and "params" not in loaded_params:
+        loaded_params = {"params": loaded_params}
+
+    config = restored.get("config")
+    prefer_cgenff = True
+    if isinstance(config, Mapping) and "no_cgenff_vdw" in config:
+        prefer_cgenff = not bool(config["no_cgenff_vdw"])
+
+    # Whether the teacher was trained with the CGenFF LJ term changes which
+    # parameters exist (the learned vdW scales live inside that branch), and
+    # older checkpoints do not record the flag at all. Try the recorded/likely
+    # setting first and fall back to the other, accepting only an exact tree
+    # match so the choice is verified rather than assumed.
+    attempts: list[tuple[bool, set[str]]] = []
+    for use_cgenff in (prefer_cgenff, not prefer_cgenff):
+        variables = teacher.init(
+            jax.random.PRNGKey(0),
+            atomic_numbers=sample_batch["Z"],
+            charges=sample_batch["Q_atoms"],
+            spins=sample_batch["S_atoms"],
+            positions=sample_batch["R"],
+            dst_idx=sample_batch["dst_idx"],
+            src_idx=sample_batch["src_idx"],
+            batch_segments=sample_batch["batch_segments"],
+            batch_size=args.batch_size_per_device,
+            batch_mask=sample_batch["batch_mask"],
+            atom_mask=sample_batch["atom_mask"],
+            compute_forces=False,
+            mol_id=sample_batch.get("mol_id"),
+            cgenff_type_idx=sample_batch.get("cgenff_type_idx") if use_cgenff else None,
+            cgenff_master_sigmas=sample_batch.get("cgenff_master_sigmas") if use_cgenff else None,
+            cgenff_master_epsilons=(
+                sample_batch.get("cgenff_master_epsilons") if use_cgenff else None
+            ),
+        )
+        params, n_loaded, n_fresh, n_skipped = _merge_compatible_params(
+            variables, loaded_params
+        )
+        init_paths = _param_paths(variables)
+        extra = _param_paths(loaded_params) - init_paths
+        attempts.append((use_cgenff, extra))
+        if n_fresh == 0 and n_skipped == 0 and not extra:
+            fingerprint = checkpoint_fingerprint(checkpoint_path)
+            provenance = {
+                **fingerprint,
+                "architecture_source": architecture.source,
+                "architecture": {
+                    k: v for k, v in architecture.kwargs.items() if k != "max_padded_atoms"
+                },
+                "architecture_defaults_used": list(architecture.missing_fields),
+                "uses_cgenff_vdw": bool(use_cgenff),
+                "n_param_leaves": int(n_loaded),
+                "teacher_train_cache": (
+                    str(config.get("cache_path")) if isinstance(config, Mapping) else None
+                ),
+                "teacher_global_step": _scalar_or_none(restored.get("global_step")),
+                "teacher_epoch": _scalar_or_none(restored.get("epoch")),
+            }
+            return teacher, params, (not use_cgenff), provenance
+
+    detail = "; ".join(
+        f"cgenff={use_cgenff}: {len(extra)} unmatched checkpoint leaves"
+        for use_cgenff, extra in attempts
+    )
+    raise ValueError(
+        f"Teacher checkpoint {checkpoint_path} does not match the architecture "
+        f"rebuilt from its own {architecture.source} "
+        f"({architecture.kwargs}). Tried both CGenFF settings -- {detail}. "
+        "Refusing to distil from a partially-loaded teacher."
+    )
+
+
+def _scalar_or_none(value: Any) -> Any:
+    if value is None:
+        return None
+    try:
+        return np.asarray(value).reshape(-1)[0].item()
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def calibrate_teacher_energy_zero(
+    teacher: SpookyPhysNet,
+    teacher_params: Any,
+    *,
+    data: dict[str, np.ndarray],
+    train_buckets: dict[int, np.ndarray],
+    args: argparse.Namespace,
+    teacher_no_cgenff_vdw: bool,
+) -> EnergyAlignment:
+    """Fit the teacher→reference energy-zero correction before training starts.
+
+    Sampled across atom-count buckets so the fit is not dominated by whichever
+    bucket happens to be largest.
+    """
+    n_z = int(args.max_atomic_number) + 1
+    mode = args.distill_energy_align
+    if mode == "none":
+        return fit_energy_alignment(
+            np.zeros(0), np.zeros(0), np.zeros((0, n_z)), mode="none"
+        )
+
+    rng = np.random.default_rng(args.seed)
+    bucket_keys = sorted(train_buckets)
+    target_batches = max(1, int(args.distill_align_batches))
+    per_bucket = max(1, math.ceil(target_batches / max(1, len(bucket_keys))))
+
+    teacher_energies: list[np.ndarray] = []
+    reference_energies: list[np.ndarray] = []
+    counts: list[np.ndarray] = []
+    batches_done = 0
+    for pad_atoms in bucket_keys:
+        indices = train_buckets[pad_atoms]
+        if len(indices) < args.batch_size_per_device:
+            continue
+        for _ in range(per_bucket):
+            if batches_done >= target_batches:
+                break
+            picked = rng.choice(indices, size=args.batch_size_per_device, replace=False)
+            batch = build_spooky_batch_from_flat_data(data, picked, pad_atoms=pad_atoms)
+            if (
+                not teacher_no_cgenff_vdw
+                and "cgenff_master_sigmas" in data
+                and "cgenff_master_epsilons" in data
+            ):
+                batch["cgenff_master_sigmas"] = jnp.asarray(
+                    data["cgenff_master_sigmas"], dtype=jnp.float32
+                )
+                batch["cgenff_master_epsilons"] = jnp.asarray(
+                    data["cgenff_master_epsilons"], dtype=jnp.float32
+                )
+            out = teacher.apply(
+                teacher_params,
+                atomic_numbers=batch["Z"],
+                charges=batch["Q_atoms"],
+                spins=batch["S_atoms"],
+                positions=batch["R"],
+                dst_idx=batch["dst_idx"],
+                src_idx=batch["src_idx"],
+                batch_segments=batch["batch_segments"],
+                batch_size=args.batch_size_per_device,
+                batch_mask=batch["batch_mask"],
+                atom_mask=batch["atom_mask"],
+                compute_forces=False,
+                mol_id=batch.get("mol_id"),
+                cgenff_type_idx=None if teacher_no_cgenff_vdw else batch.get("cgenff_type_idx"),
+                cgenff_master_sigmas=(
+                    None if teacher_no_cgenff_vdw else batch.get("cgenff_master_sigmas")
+                ),
+                cgenff_master_epsilons=(
+                    None if teacher_no_cgenff_vdw else batch.get("cgenff_master_epsilons")
+                ),
+            )
+            teacher_energies.append(np.asarray(out["energy"], dtype=np.float64).reshape(-1))
+            reference_energies.append(np.asarray(data["E"][picked], dtype=np.float64).reshape(-1))
+            z_2d = np.asarray(batch["Z"]).reshape(args.batch_size_per_device, -1)
+            mask_2d = np.asarray(batch["atom_mask"]).reshape(args.batch_size_per_device, -1)
+            counts.append(element_counts_from_atomic_numbers(z_2d, mask_2d, n_z))
+            batches_done += 1
+        if batches_done >= target_batches:
+            break
+
+    if not teacher_energies:
+        raise ValueError(
+            "Could not assemble any calibration batch for teacher energy alignment; "
+            "lower --batch-size-per-device or pass --distill-energy-align none"
+        )
+    return fit_energy_alignment(
+        np.concatenate(teacher_energies),
+        np.concatenate(reference_energies),
+        np.concatenate(counts, axis=0),
+        mode=mode,
+    )
+
+
 def _restored_best_valid_loss(metrics: Any) -> float | None:
     if not isinstance(metrics, dict):
         return None
@@ -1624,6 +1971,7 @@ def save_epoch_checkpoint(
     model: SpookyPhysNet,
     args: argparse.Namespace,
     metrics: dict[str, float],
+    distill_meta: dict[str, Any] | None = None,
 ) -> None:
     ckpt = {
         "model": state,
@@ -1636,6 +1984,8 @@ def save_epoch_checkpoint(
         "epoch": epoch,
         "metrics": metrics,
     }
+    if distill_meta is not None:
+        ckpt["distillation"] = distill_meta
     save_training_checkpoint(workdir / f"epoch-{epoch:04d}", ckpt)
 
 
@@ -1647,6 +1997,7 @@ def save_step_checkpoint(
     model: SpookyPhysNet,
     args: argparse.Namespace,
     metrics: dict[str, float],
+    distill_meta: dict[str, Any] | None = None,
 ) -> None:
     ckpt = {
         "model": state,
@@ -1660,6 +2011,8 @@ def save_step_checkpoint(
         "global_step": global_step,
         "metrics": metrics,
     }
+    if distill_meta is not None:
+        ckpt["distillation"] = distill_meta
     save_training_checkpoint(workdir / f"step-{global_step:08d}", ckpt)
 
 
@@ -1921,11 +2274,97 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"the DFT-reference dipole loss on the network's own learned-charge dipole",
             flush=True,
         )
+    teacher_model = None
+    teacher_params = None
+    teacher_no_cgenff_vdw = False
+    teacher_alignment = None
+    distill_meta = None
+    if args.teacher_checkpoint is not None:
+        teacher_path = Path(args.teacher_checkpoint).expanduser().resolve()
+        distill_energy, distill_forces = parse_spooky_distill_targets(args.distill_targets)
+        if not (distill_energy or distill_forces):
+            raise ValueError("--teacher-checkpoint was given but no distillation target is active")
+        teacher_model, teacher_params, teacher_no_cgenff_vdw, teacher_provenance = (
+            load_distillation_teacher(
+                teacher_path,
+                max_padded_atoms=max_pad_atoms,
+                sample_batch=build_init_batch(data, train_buckets, args),
+                args=args,
+            )
+        )
+        student_kwargs = {
+            k: v for k, v in model.return_attributes().items() if k != "model_type"
+        }
+        differing = {
+            key: (teacher_value, student_kwargs[key])
+            for key, teacher_value in teacher_provenance["architecture"].items()
+            if key in student_kwargs and student_kwargs[key] != teacher_value
+        }
+        teacher_alignment = calibrate_teacher_energy_zero(
+            teacher_model,
+            teacher_params,
+            data=data,
+            train_buckets=train_buckets,
+            args=args,
+            teacher_no_cgenff_vdw=teacher_no_cgenff_vdw,
+        )
+        distill_meta = {
+            "teacher": teacher_provenance,
+            "alpha_ground_truth": float(args.distill_alpha),
+            "targets": {"energy": bool(distill_energy), "forces": bool(distill_forces)},
+            "charges_distilled": False,
+            "dipoles_distilled": False,
+            "energy_alignment": teacher_alignment.to_metadata(),
+            "loss_weights": {
+                "energy": float(args.energy_weight),
+                "forces": float(args.forces_weight),
+                "dipole": float(args.dipole_weight),
+                "charges": float(args.charges_weight),
+            },
+            "student_teacher_architecture_diff": {
+                key: {"teacher": t, "student": s} for key, (t, s) in differing.items()
+            },
+        }
+        print(
+            f"Distilling from teacher {teacher_path} "
+            f"(architecture from {teacher_provenance['architecture_source']}, "
+            f"sha256 {teacher_provenance['sha256'][:12]}, "
+            f"{teacher_provenance['n_param_leaves']} parameter leaves, "
+            f"cgenff_vdw={teacher_provenance['uses_cgenff_vdw']}): "
+            f"alpha_ground_truth={args.distill_alpha:g}, "
+            f"energy={distill_energy}, forces={distill_forces}. "
+            "Charges and dipoles stay supervised by reference data only.",
+            flush=True,
+        )
+        if differing:
+            print(
+                "  teacher/student architecture differences (teacher -> student): "
+                + ", ".join(f"{k}: {t!r} -> {s!r}" for k, (t, s) in sorted(differing.items())),
+                flush=True,
+            )
+        print(
+            f"  teacher energy-zero alignment: mode={teacher_alignment.mode} "
+            f"(requested {teacher_alignment.requested_mode}), "
+            f"n={teacher_alignment.n_samples}, "
+            f"residual RMS {teacher_alignment.rms_before_eV:.6g} -> "
+            f"{teacher_alignment.rms_after_eV:.6g} eV, "
+            f"mean |shift| {teacher_alignment.mean_abs_shift_eV:.6g} eV"
+            + (
+                f" [fallback: {teacher_alignment.fallback_reason}]"
+                if teacher_alignment.fallback_reason
+                else ""
+            ),
+            flush=True,
+        )
+
     state = init_state(model, data, train_buckets, args)
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
     with (workdir / "run_config.json").open("w") as fh:
         json.dump({**vars(args), "cache_path": str(cache_path)}, fh, indent=2, sort_keys=True)
+    if distill_meta is not None:
+        with (workdir / "distillation.json").open("w") as fh:
+            json.dump(distill_meta, fh, indent=2, sort_keys=True)
 
     print(f"JAX devices: {devices}")
     print(f"Train structures: {len(train_idx):,}; valid structures: {len(valid_idx):,}")
@@ -1995,6 +2434,10 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 mbd_params=mbd_params,
                 multipole_model=multipole_model,
                 multipole_params=multipole_params,
+                teacher_model=teacher_model,
+                teacher_params=teacher_params,
+                teacher_alignment=teacher_alignment,
+                teacher_no_cgenff_vdw=teacher_no_cgenff_vdw,
             )
         return probe_step_functions[batch_size]
 
@@ -2139,6 +2582,10 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 mbd_params=mbd_params,
                 multipole_model=multipole_model,
                 multipole_params=multipole_params,
+                teacher_model=teacher_model,
+                teacher_params=teacher_params,
+                teacher_alignment=teacher_alignment,
+                teacher_no_cgenff_vdw=teacher_no_cgenff_vdw,
             )
         return step_functions[batch_size]
 
@@ -2208,6 +2655,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     model,
                     args,
                     {"train": finalize_metrics(log_total, log_count)},
+                    distill_meta=distill_meta,
                 )
                 print(f"Saved mid-epoch checkpoint at global step {global_step}", flush=True)
             if step % args.log_every_steps == 0:
@@ -2227,6 +2675,12 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     line += f" MBD_λ={m['mbd_scale']:.3f}"
                 if multipole_model is not None:
                     line += f" MultipoleD_MAE={m['multipole_dipole_mae']:.6g}"
+                if teacher_model is not None:
+                    line += (
+                        f" distill(a={args.distill_alpha:g})"
+                        f" TE_MAE={m['distill_energy_mae']:.6g}"
+                        f" TF_MAE={m['distill_forces_mae']:.6g}"
+                    )
                 if args.far_field_augment_fraction > 0.0:
                     line += f" FarFieldQ_RMS={m['far_field_charge_rms']:.6g}"
                 print(line)
@@ -2295,6 +2749,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 model,
                 args,
                 {"train": train_mean, "valid": valid_mean, "best_valid_loss": best_valid},
+                distill_meta=distill_meta,
             )
 
 
@@ -2679,6 +3134,66 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Linearly introduce the frozen MBD correction over this many optimizer "
             "steps (default: 10000; 0 enables it immediately)."
+        ),
+    )
+    parser.add_argument(
+        "--teacher-checkpoint",
+        type=str,
+        default=None,
+        help=(
+            "Frozen Spooky teacher checkpoint (Orbax dir or portable params JSON) "
+            "to distil from. The teacher's architecture is rebuilt from its OWN "
+            "checkpoint and never from the student's flags, so student and teacher "
+            "may differ in features/max_degree/efa/etc. Ground-truth energy and "
+            "force labels remain the primary objective; the teacher only "
+            "regularizes them via --distill-alpha."
+        ),
+    )
+    parser.add_argument(
+        "--distill-alpha",
+        type=float,
+        default=0.75,
+        help=(
+            "Weight on the GROUND-TRUTH term when blending with the teacher: "
+            "loss = alpha * gt + (1 - alpha) * teacher, applied per distilled "
+            "component. 1.0 reproduces undistilled training exactly; 0.0 trains "
+            "against the teacher alone. Only used with --teacher-checkpoint."
+        ),
+    )
+    parser.add_argument(
+        "--distill-targets",
+        nargs="+",
+        default=("energy", "forces"),
+        help=(
+            "Which teacher outputs to distil: 'energy', 'forces', or both. "
+            "Charges and dipoles are rejected rather than ignored -- the "
+            "student's charge head stays supervised by reference data only."
+        ),
+    )
+    parser.add_argument(
+        "--distill-energy-align",
+        choices=("atomic", "scalar", "none"),
+        default="atomic",
+        help=(
+            "How to map the teacher's energy zero onto the reference scale "
+            "before distilling energies. Teacher and student are generally "
+            "trained on different caches with different --use-energy-bias "
+            "settings, so their absolute energies differ by a constant plus a "
+            "per-element atomic reference. 'atomic' least-squares fits "
+            "per-element offsets (falling back to 'scalar' with the reason "
+            "recorded if the sample cannot support it), 'scalar' fits one "
+            "constant shift, 'none' assumes the zeros already agree. Forces are "
+            "unaffected by any of these. The fitted offsets and their residuals "
+            "are written into the checkpoint's distillation metadata."
+        ),
+    )
+    parser.add_argument(
+        "--distill-align-batches",
+        type=int,
+        default=16,
+        help=(
+            "How many per-device batches to sample (spread across atom-count "
+            "buckets) when fitting the teacher energy-zero alignment."
         ),
     )
     parser.add_argument(
