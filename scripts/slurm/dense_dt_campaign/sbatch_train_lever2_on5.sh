@@ -5,13 +5,13 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=2-00:00:00
-#SBATCH --exclusive
 #SBATCH --exclude=gpu08,gpu09,gpu10
 #SBATCH --output=artifacts/lj_scales/dense_dt_campaign/logs/ddc-train-on5-%j.out
 #SBATCH --error=artifacts/lj_scales/dense_dt_campaign/logs/ddc-train-on5-%j.err
 #
 # GPU fine-tune at mm_switch_on=5 (soft lever-2 / DDC_HANDOFF=soft).
-# --exclusive: avoid sharing the node with other GPU jobs (CPU fallback risk + contention).
+# Hard-fails unless JAX sees CudaDevice (see train_lever2_on5.sh).
+# Optional: DDC_ON5_EXCLUSIVE=1 for --exclusive when the partition has free nodes.
 #
 # From repo root:
 #   bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5.sh

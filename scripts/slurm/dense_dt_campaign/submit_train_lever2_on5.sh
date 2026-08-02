@@ -19,7 +19,7 @@ for f in "$CONFIG" "$DATA" "$CKPT"; do
   [[ -f "$f" ]] || { echo "ERROR: missing $f" >&2; exit 2; }
 done
 
-echo "Submitting lever-2 on=5 FT (clean GPU env, exclusive node)"
+echo "Submitting lever-2 on=5 FT (clean GPU env)"
 echo "  config=$CONFIG"
 echo "  data=$DATA"
 echo "  warmstart=$CKPT"
@@ -35,7 +35,13 @@ EXPORT_LIST+=",DDC_ON5_SEED=${DDC_ON5_SEED:-42},DDC_ON5_BATCH=${DDC_ON5_BATCH:-6
 EXPORT_LIST+=",DDC_ON5_CKPT_DIR=${DDC_ON5_CKPT_DIR:-artifacts/lj_scales/ckpts}"
 EXPORT_LIST+=",UV_NO_SYNC=1,PYTHONUNBUFFERED=1,PATH=${PATH},HOME=${HOME},USER=${USER:-$LOGNAME}"
 
-JOB_LINE="$(sbatch --export="${EXPORT_LIST}" scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh)"
+SBATCH_EXTRA=()
+if [[ "${DDC_ON5_EXCLUSIVE:-0}" == "1" ]]; then
+  SBATCH_EXTRA+=(--exclusive)
+  echo "  exclusive=1"
+fi
+
+JOB_LINE="$(sbatch --export="${EXPORT_LIST}" "${SBATCH_EXTRA[@]}" scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh)"
 echo "$JOB_LINE"
 JOB_ID="$(awk '{print $4}' <<<"$JOB_LINE")"
 echo "$JOB_ID" | tee -a "$ROOT/artifacts/lj_scales/dense_dt_campaign/job_ids.txt"

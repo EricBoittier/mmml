@@ -60,9 +60,10 @@ bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5.sh
 # or: sbatch scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh
 ```
 
-Defaults: 50 epochs, batch 64, `n_train=32000` / `n_valid=5950`, exclusive GPU
-node, hard-fail unless JAX sees `CudaDevice` (avoids silent CPU training).
-Overrides: `DDC_ON5_EPOCHS`, `DDC_ON5_BATCH`, `DDC_ON5_TAG`, `DDC_ON5_CKPT`,
+Defaults: 50 epochs, batch 64, `n_train=32000` / `n_valid=5950`, hard-fail
+unless JAX sees `CudaDevice` (avoids silent CPU training from a stale
+`JAX_PLATFORMS=cpu`). Optional `DDC_ON5_EXCLUSIVE=1`. Overrides:
+`DDC_ON5_EPOCHS`, `DDC_ON5_BATCH`, `DDC_ON5_TAG`, `DDC_ON5_CKPT`,
 `DDC_ON5_DATA`. After train, re-run contact-ok dimer scans /
 `ablate_overbind.py` on the new best ckpt + sidecar before swapping campaign
 `CKPT`/`SIDECAR` in `run_one.sh`.
