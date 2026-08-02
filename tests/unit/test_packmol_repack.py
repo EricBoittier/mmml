@@ -194,6 +194,18 @@ def test_resolve_packmol_tolerance_honors_large_config_value():
     assert tol == pytest.approx(5.0)
 
 
+def test_resolve_packmol_tolerance_explicit_beats_vacuum_spacing():
+    """Dense liquid prep must not inherit vacuum-cluster spacing as Packmol tol."""
+    from mmml.interfaces.pycharmmInterface.packmol_repack import _resolve_packmol_tolerance
+
+    tol = _resolve_packmol_tolerance(
+        min_distance=2.3,
+        spacing=5.0,
+        packmol_tolerance=1.5,
+    )
+    assert tol == pytest.approx(1.5)
+
+
 def test_overlap_guard_repack_fn_uses_packmol_module():
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         _repack_monomers_clear_overlap_fn,

@@ -38,11 +38,14 @@ def _resolve_packmol_tolerance(
     spacing: float | None,
     packmol_tolerance: float | None = None,
 ) -> float:
+    # Explicit CLI/config tolerance wins. Vacuum-cluster ``spacing`` (often ~5 Å)
+    # must not inflate Packmol's minimum-separation for dense liquid packs —
+    # that made DCM:120 @ L=24 impossible (tol=4–5 Å near packing fraction 1).
+    if packmol_tolerance is not None and float(packmol_tolerance) > 0.0:
+        return float(packmol_tolerance)
     candidates = [2.0, float(min_distance)]
     if spacing is not None and float(spacing) > 0.0:
         candidates.append(float(spacing))
-    if packmol_tolerance is not None and float(packmol_tolerance) > 0.0:
-        candidates.append(float(packmol_tolerance))
     return float(max(candidates))
 
 

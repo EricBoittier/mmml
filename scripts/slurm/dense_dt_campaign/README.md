@@ -55,3 +55,19 @@ rg -n 'RESULT|H_NHC|nsteps_completed|ERROR' artifacts/lj_scales/dense_dt_campaig
 - `scripts/slurm/dense_dt_campaign/submit_all.sh`
 - `scripts/slurm/dense_dt_campaign/run_one.sh`
 - `scripts/slurm/dense_dt_campaign/sbatch_one.sh`
+- `scripts/slurm/dense_dt_campaign/monitor_and_progress.sh` — status + `--react` remediation
+- `scripts/slurm/dense_dt_campaign/install_monitor_cron.sh` — every **15 min** cron
+
+```bash
+bash scripts/slurm/dense_dt_campaign/install_monitor_cron.sh
+bash scripts/slurm/dense_dt_campaign/monitor_and_progress.sh --react
+```
+
+Live status: `artifacts/lj_scales/dense_dt_campaign/STATUS.md`
+
+## Manuscript link
+
+Supports draft Results §§7–8 (conservation + DCM liquid density) in
+`docs/manuscripts/condensed-phase-hybrid-mlmm/`. Dense NPT/NVT at L=24/26 is the
+bridge from the sparse L=30 (~0.63 g/cm³) cliff toward bulk ρ≈1.33 before bond
+SHAKE / full `pbc_liquid_density_dyn` production tables.
