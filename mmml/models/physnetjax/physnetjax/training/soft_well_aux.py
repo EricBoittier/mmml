@@ -50,6 +50,7 @@ def soft_well_e_int_loss(
     deep_weight: float = 2.0,
     hard_weight: float = 4.0,
     per_sample_cap: float = 64.0,
+    focus_max_kcal: float = 5.0,
 ):
     """Window + floor loss on hybrid ``E_int`` (eV in, scalar loss out).
 
@@ -58,9 +59,9 @@ def soft_well_e_int_loss(
     * ``e < deep_floor`` / ``hard_floor``: stronger penalties (deploy gates).
     * Mild centre pull toward ``target_mid`` so soft median lands near −4.
 
-    Per-sample contributions are capped so a few clash/outlier geometries
-    cannot explode the global-norm clip and erase the underbind gradient
-    (job 206092: loss~2e3 with median stuck at −0.75 kcal/mol).
+    Samples with ``E_int > focus_max_kcal`` (far-repulsive pathologies; diag
+    saw +137 kcal) are masked out of the mean so they cannot steal the
+    underbind gradient.  Per-sample terms use a tanh soft-cap.
     """
     import jax.numpy as jnp
 
@@ -84,7 +85,10 @@ def soft_well_e_int_loss(
     if per_sample_cap is not None and float(per_sample_cap) > 0.0:
         c = float(per_sample_cap)
         per = c * jnp.tanh(per / c)
-    return jnp.mean(per)
+    # Mask far-repulsive pathologies out of the batch mean.
+    w = (e_kcal <= float(focus_max_kcal)).astype(per.dtype)
+    denom = jnp.maximum(jnp.sum(w), 1.0)
+    return jnp.sum(per * w) / denom
 
 
 def fibonacci_sphere(n: int) -> np.ndarray:
@@ -174,8 +178,10 @@ class SoftWellConfig:
     deep_floor_kcal: float = DEFAULT_DEEP_FLOOR_KCAL
     hard_floor_kcal: float = DEFAULT_HARD_FLOOR_KCAL
     center_weight: float = 0.25
-    loss_scale: float = 1.0
+    loss_scale: float = 50.0
     seed: int = 0
+    # Drop pool members whose frozen-teacher E_int is above this (kcal/mol).
+    pool_max_e_int_kcal: float = 5.0
 
     @classmethod
     def coerce(cls, cfg) -> "SoftWellConfig | None":
@@ -255,6 +261,76 @@ class SoftWellGeometryPool:
         self._rng = np.random.default_rng(int(cfg.seed))
         self._batch_cache: list[dict] | None = None
         self._batch_i = 0
+
+    def filter_by_teacher_e_int(
+        self,
+        model_apply,
+        params,
+        hybrid_mm,
+        *,
+        batch_size: int = 64,
+        max_e_int_kcal: float | None = None,
+    ) -> int:
+        """Drop pool members with teacher ``E_int`` above ``max_e_int_kcal``.
+
+        Far-repulsive orientations (+100 kcal) steal underbind gradients; keep
+        only geometries the frozen teacher already treats as soft-ish.
+        Returns the number of geometries retained.
+        """
+        import jax
+        import jax.numpy as jnp
+        from mmml.data.units import EV_TO_KCAL_MOL as _EV2K
+        from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+        from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+        from mmml.models.physnetjax.physnetjax.training.trainstep import _forward
+
+        max_e = float(
+            self.cfg.pool_max_e_int_kcal if max_e_int_kcal is None else max_e_int_kcal
+        )
+        bs = int(min(batch_size, max(self.n, 1)))
+        n_pad = int(np.ceil(self.n / bs) * bs)
+        idx = np.arange(n_pad) % self.n
+        data = self._data_dict(idx)
+        keys = [
+            "R",
+            "Z",
+            "F",
+            "E",
+            "N",
+            "D",
+            "dst_idx",
+            "src_idx",
+            "batch_segments",
+            "id",
+        ] + list(HYBRID_MM_BATCH_KEYS)
+        batches = prepare_batches_jit(
+            jax.random.PRNGKey(0),
+            data,
+            bs,
+            num_atoms=self.pad,
+            data_keys=keys,
+            include_id=True,
+        )
+        e_all = np.full(n_pad, np.nan, dtype=np.float64)
+        for b in batches:
+            out = _forward(model_apply, params, b, bs, hybrid_mm=hybrid_mm)
+            e = np.asarray(out.get("e_int", out["energy"])).reshape(-1) * float(_EV2K)
+            ids = np.asarray(b["id"]).reshape(-1)
+            e_all[ids] = e
+        keep = np.where(e_all[: self.n] <= max_e)[0]
+        if keep.size < max(8, bs // 2):
+            # Fall back to the most-bound half of the pool rather than failing.
+            order = np.argsort(e_all[: self.n])
+            keep = order[: max(bs, self.n // 2)]
+        self.R = self.R[keep]
+        self.Z = self.Z[keep]
+        self.T = self.T[keep]
+        self.Q = self.Q[keep]
+        self.M = self.M[keep]
+        self.n = int(self.R.shape[0])
+        self._batch_cache = None
+        self._batch_i = 0
+        return self.n
 
     def _data_dict(self, idx: np.ndarray) -> dict:
         n = int(idx.shape[0])

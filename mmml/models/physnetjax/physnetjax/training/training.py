@@ -645,6 +645,22 @@ def train_model(
             flush=True,
         )
 
+    if soft_well_pool is not None and soft_well_cfg is not None and hybrid_mm is not None:
+        n_before = soft_well_pool.n
+        n_keep = soft_well_pool.filter_by_teacher_e_int(
+            model.apply,
+            params,
+            hybrid_mm,
+            batch_size=int(soft_well_cfg.batch_size),
+            max_e_int_kcal=float(soft_well_cfg.pool_max_e_int_kcal),
+        )
+        print(
+            f"Soft-well pool filtered by teacher E_int≤"
+            f"{soft_well_cfg.pool_max_e_int_kcal:g} kcal/mol: "
+            f"{n_before} → {n_keep}",
+            flush=True,
+        )
+
     if best_loss is None or restart:
         best_loss = float('inf')
 

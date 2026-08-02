@@ -23,7 +23,7 @@ soft_well_aux: true
 soft_well_steps_per_epoch: 48
 soft_well_every_n_train_batches: 25
 soft_well_batch_size: 32
-soft_well_loss_scale: 10.0
+soft_well_loss_scale: 50.0
 soft_well_target_lo: -5.0
 soft_well_target_hi: -3.0
 
