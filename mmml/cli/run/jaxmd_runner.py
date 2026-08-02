@@ -2217,7 +2217,37 @@ def set_up_nhc_sim_routine(
                     _rel_frac = abs(_an_frac - _fd_frac) / _dn
                     _ratio = _fd_frac / _an_frac if abs(_an_frac) > 1e-12 else float("nan")
 
+                    # Absolute energies. The NpT path evaluates through
+                    # npt_energy_fn (fractional coords + box); the real-space
+                    # calculator is the reference. A large CONSTANT gap between
+                    # them means the NpT energy is mis-evaluated rather than the
+                    # dynamics being unstable -- which is what a "blow-up" that
+                    # sits at 8.02e7 eV for 100 steps while T and rho stay put
+                    # actually is.
+                    _e_npt = float(
+                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0, kT, Si_mass)
+                    )
+                    try:
+                        _e_real = float(
+                            jnp.reshape(
+                                evaluate_energies_and_forces(
+                                    atomic_numbers=atomic_numbers,
+                                    positions=jnp.asarray(md_pos_wrapped),
+                                    mm_pair_idx=npt_pair_idx,
+                                    mm_pair_mask=npt_pair_mask,
+                                    box=jnp.asarray(_cell_jax),
+                                ).energy,
+                                (-1,),
+                            )[0]
+                        )
+                    except Exception:
+                        _e_real = float("nan")
+
                     c.print(Panel(
+                        f"E via npt_energy_fn (fractional) {_e_npt:.6e} eV\n"
+                        f"E via real-space calculator      {_e_real:.6e} eV\n"
+                        f"difference                       {_e_npt - _e_real:.6e} eV\n"
+                        f"---- derivatives ----\n"
                         f"dE/dp analytic {_analytic:.6e} eV\n"
                         f"dE/dp central-difference (h={_h}) {_fd:.6e} eV\n"
                         f"relative difference {_rel:.3%}\n"

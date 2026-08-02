@@ -60,6 +60,7 @@ CASES=(
   "npt campaign"
   "nvt mine"
   "npt mine"
+  "nve campaign"
 )
 IDX="${SLURM_ARRAY_TASK_ID:-0}"
 read -r ens prep <<<"${CASES[$IDX]}"
@@ -70,6 +71,10 @@ rm -rf "$out"; mkdir -p "$out"
 case "$ens" in
   nvt) setup=pbc_nvt ;;
   npt) setup=pbc_npt ;;
+  # NVE is the sharpest test of force/energy consistency: with no thermostat or
+  # barostat, E_tot must be conserved. Drift means the forces are not the
+  # gradient of the energy, which no ensemble choice can hide.
+  nve) setup=pbc_nve ;;
 esac
 
 # The control arm's scales: this is a stability question, not a scales question.
