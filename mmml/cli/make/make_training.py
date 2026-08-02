@@ -729,7 +729,7 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--soft-well-loss-scale",
         "--soft_well_loss_scale",
         type=float,
-        default=10.0,
+        default=50.0,
         dest="soft_well_loss_scale",
         help="Multiplier on soft-well window loss",
     )
