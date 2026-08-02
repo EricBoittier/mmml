@@ -372,6 +372,45 @@ def build_bonded_intra_evaluator(
     )
 
 
+def bonded_intra_damping(
+    e_bonded_ev: Array,
+    onset_kcal: float,
+    cutoff_kcal: float,
+) -> Tuple[Array, Array]:
+    """Per-monomer damping ``s`` for the ML interaction, and ``ds/dE_bonded``.
+
+    The ML interaction term is a difference of two large model totals and is
+    extrapolation noise once a monomer leaves the geometry it was trained on --
+    swinging +14, -7, +11, -73 kcal/mol over 0.02 A steps, peak gradient 3817
+    kcal/mol/A (docs/hybrid-bonded-intra.md). This damps it away there.
+
+    The bonded energy is the off-manifold coordinate: ~0 at equilibrium, +15.3
+    kcal/mol where the noise well sits, ~0.3 for ordinary thermal distortion. It
+    is already computed, smooth, and its gradient is the bonded force, so no
+    separate reference geometry or PSF bond list is needed.
+
+    Uses the same smoothstep as the ML/MM handoff (``calculator_utils``), so the
+    damping has the same continuity properties as every other switch here.
+    Returns the derivative too because forces in this calculator are assembled by
+    hand: dropping ``E_int * ds/dR`` would make them non-conservative.
+    """
+    from mmml.interfaces.pycharmmInterface.calculator_utils import _smoothstep01
+
+    ev_per_kcal = 1.0 / 23.060548
+    onset = float(onset_kcal) * ev_per_kcal
+    cutoff = float(cutoff_kcal) * ev_per_kcal
+    span = max(cutoff - onset, 1e-12)
+
+    t_raw = (e_bonded_ev - onset) / span
+    t = jnp.clip(t_raw, 0.0, 1.0)
+    s = 1.0 - _smoothstep01(t)
+    # d/dt smoothstep01 = 30 t^2 (t-1)^2; zero outside the taper, so the clip's
+    # kink does not propagate.
+    dsdt = -30.0 * t**2 * (t - 1.0) ** 2
+    in_taper = (t_raw > 0.0) & (t_raw < 1.0)
+    return s, jnp.where(in_taper, dsdt / span, 0.0)
+
+
 def bonded_intra_contribution(
     eval_fn: Callable[[Array], Tuple[Array, Array]],
     positions: Array,
