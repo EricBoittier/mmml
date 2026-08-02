@@ -351,7 +351,7 @@ def main() -> int:
     ]
     # Fake pred dict shape for box helper
     box_half = compute_shared_box_half(
-        [dict(atoms=a, r=r, dmin=d) for a, (r, _, d) in zip(atoms_list, picks)],
+        frames,
         pred,
         n_mono,
         force_scale=force_scale,

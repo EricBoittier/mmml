@@ -577,7 +577,6 @@ class HybridFrameEval:
     def _ensure_fwd(self, batch_size: int):
         if self._fwd is not None:
             return
-        jnp = self.jnp
         jax = self.jax
         hybrid_forward = self._hybrid_forward
         model = self.model
