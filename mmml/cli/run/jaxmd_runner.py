@@ -1528,7 +1528,32 @@ def set_up_nhc_sim_routine(
             )
             # grad(E) = -F; quantity.force = -grad, so we supply -F as grad
             grad_frac = as_jaxmd_dtype(-F * g)
-            return (grad_frac, None, None, None, None, None)
+
+            # dE/d(perturbation) is the VIRIAL, and returning None for it makes
+            # the barostat blind to the potential.
+            #
+            # jax-md gets the internal pressure by differentiating this energy
+            # with respect to `perturbation` at eps=0 (quantity.pressure builds
+            # U(eps) = energy_fn(..., perturbation=1+eps) and takes grad(U)(0.)).
+            # With a None cotangent that derivative is identically zero, so
+            #     P_int = 2*KE/(3V) + 0
+            # i.e. the ideal-gas term alone. That was measured, not inferred: a
+            # 732-TIP3 box at 297.87 K in 21955.3 A^3 reported P_meas = 4059.58
+            # atm against a 1 atm target, and the kinetic-only value is 4059.63
+            # atm -- agreement to 0.001%. The barostat then drove the cell on a
+            # 4000x pressure error, which is what produced the 8e7 eV blow-up.
+            #
+            # For isotropic scaling r = p^(1/3) r0:
+            #     dE/dp = sum_i (dE/dr_i) . (r_i / 3p) = -(1/3p) sum_i F_i . r_i
+            # Both F and real_pos are already in hand above, so this costs
+            # nothing extra.
+            if perturbation is None:
+                grad_pert = None
+            else:
+                p_val = jnp.asarray(perturbation, dtype=jnp.float32)
+                virial = jnp.sum(F * real_pos)
+                grad_pert = as_jaxmd_dtype(-virial / (3.0 * p_val) * g)
+            return (grad_frac, None, None, grad_pert, None, None)
 
         npt_energy_fn.defvjp(npt_energy_fn_fwd, npt_energy_fn_bwd)
         npt_energy_fn = jit(npt_energy_fn)
