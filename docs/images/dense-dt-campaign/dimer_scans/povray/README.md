@@ -2,16 +2,20 @@
 
 House glossy POV style (`docs/plotting-style-guide.md`):
 
+- **shared bounding box** — one cube (±half Å about COM) and one
+  orthographic camera for every frame, so atoms / bonds / force
+  arrows / dipoles are never cropped and spacing stays consistent.
 - **forces** — red arrows from the hybrid model on the exact frame;
-  fixed panel normalization (see `manifest.json`).
+  fixed soft-well panel normalization (see `manifest.json`).
 - **dipoles** — gold per-monomer μ from PhysNet `q_ML` (e·Å).
-- **by charge** — atom spheres + soft halos, blue = +, red = −.
+- **by charge** — continuous `crameri:vik` (red = +q,
+  blue = −q) with a colorbar in e.
 
 | Asset | Content |
 |---|---|
-| `*_forces_dipoles.png` | Glossy atoms + red F + gold μ |
-| `*_by_charge.png` | Charge-colored atoms + gold μ |
-| `ori_*/approach_*/…png` | Element-colored overview stills |
+| `*_forces_dipoles.png` | Glossy atoms + red F + gold μ + box |
+| `*_by_charge.png` | vik charge colors + colorbar + gold μ + box |
+| `ori_*/approach_*/…png` | Element-colored overview stills + box |
 | `dimer_scan_povray_sheet_forces_dipoles.png` | F+μ contact sheet |
 | `dimer_scan_povray_sheet_by_charge.png` | Charge contact sheet |
 | `dimer_scan_povray_sheet.png` | Element-color contact sheet |

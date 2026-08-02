@@ -9,9 +9,9 @@ Rigid COM–COM scans with the dense_dt_campaign hybrid checkpoint
 | `dcm_dimer_Eint_zoom.png` | Well-region zoom |
 | `dcm_dimer_components_mean.png` | Mean ML / MM / total decomposition |
 | `hybrid_orient_DCM_epoch222_*.png` | Full multi-ray panels from the scan script |
-| `povray/dimer_scan_povray_sheet_forces_dipoles.png` | Glossy stills + red hybrid forces + gold monomer dipoles |
-| `povray/dimer_scan_povray_sheet_by_charge.png` | Atoms colored by PhysNet charge (blue+/red−) + gold μ |
-| `povray/dimer_scan_povray_sheet.png` | Element-color overview contact sheet |
+| `povray/dimer_scan_povray_sheet_forces_dipoles.png` | Shared-box stills + red F + gold μ |
+| `povray/dimer_scan_povray_sheet_by_charge.png` | `crameri:vik` charge colors + colorbar (e) + gold μ |
+| `povray/dimer_scan_povray_sheet.png` | Element-color overview (same shared box) |
 | `povray/*_forces_dipoles.png` / `*_by_charge.png` | Per-frame annotated stills |
 
 - Mean well (learned): **-8.7 kcal/mol** at r ≈ 3.51 Å

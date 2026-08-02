@@ -2,9 +2,10 @@
 """POV-Ray stills for DCM–DCM hybrid dimer scan geometries.
 
 House glossy style (``docs/plotting-style-guide.md``):
+- shared world bounding box → consistent framing, no cropped arrows/atoms
 - red force arrows from the hybrid model on the exact frame
 - gold per-monomer dipoles from PhysNet ``q_ML``
-- separate charge-colored stills (blue +, red −)
+- charge stills colored with ``crameri:vik`` (actual q values + colorbar)
 
 Example::
 
@@ -29,15 +30,22 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from scripts.render_povray_multipoles import _arrow  # noqa: E402
-from scripts.render_povray_style_catalog import scene, vec  # noqa: E402
+from scripts.render_povray_style_catalog import STYLES, bonds, vec  # noqa: E402
 
 Z_TO_SYM = {1: "H", 6: "C", 17: "Cl"}
-EV_TO_KCAL = 23.0605
+ELEMENT_COLORS = {
+    "H": (0.86, 0.87, 0.90),
+    "C": (0.22, 0.24, 0.28),
+    "Cl": (0.20, 0.72, 0.28),
+}
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 FORCE_COLOR = (0.78, 0.04, 0.12)
 DIPOLE_COLOR = (0.95, 0.62, 0.06)
-Q_POS = (0.16, 0.38, 0.92)
-Q_NEG = (0.88, 0.12, 0.20)
+BOX_EDGE = (0.52, 0.55, 0.60)
+CHARGE_CMAP_NAME = "crameri:vik"  # house red/blue for signed charge (style guide)
+DIPOLE_ARROW_LEN = 2.0
+BOX_PAD_A = 0.55  # padding beyond atoms/arrow tips
+CAMERA_MARGIN = 1.08  # orthographic margin around the cube
 
 
 def fibonacci_sphere(n: int) -> np.ndarray:
@@ -110,12 +118,194 @@ def _molecular_dipole(pos: np.ndarray, q: np.ndarray) -> np.ndarray:
     return np.sum(q[:, None] * (pos - com), axis=0)
 
 
-def _charge_rgb(q: float, q_ref: float) -> tuple[float, float, float]:
-    """Signed charge → blue(+)/red(−), desaturated near zero."""
-    t = float(np.clip(abs(q) / max(q_ref, 1e-8), 0.0, 1.0))
-    base = Q_POS if q >= 0 else Q_NEG
-    gray = (0.55, 0.56, 0.58)
-    return tuple((1.0 - t) * g + t * c for g, c in zip(gray, base))
+def _centered_xyz(atoms) -> np.ndarray:
+    return atoms.positions - atoms.positions.mean(0)
+
+
+def _force_tip_points(
+    xyz: np.ndarray, forces: np.ndarray, scale: float, max_len: float
+) -> np.ndarray:
+    tips = []
+    for p, force in zip(xyz, forces):
+        d = force * scale
+        n = float(np.linalg.norm(d))
+        if n < 0.04:
+            continue
+        if n > max_len:
+            d = d * (max_len / n)
+            n = max_len
+        u = d / n
+        tips.append(p + 0.42 * u + d)
+    return np.asarray(tips).reshape(-1, 3)
+
+
+def _dipole_tip_points(
+    xyz: np.ndarray, charges: np.ndarray, n_mono: int, arrow_scale: float
+) -> np.ndarray:
+    tips = []
+    for mol in (0, 1):
+        sl = slice(mol * n_mono, (mol + 1) * n_mono)
+        pos = xyz[sl]
+        mu = _molecular_dipole(pos, charges[sl])
+        n = float(np.linalg.norm(mu))
+        if n < 1e-8:
+            continue
+        com = pos.mean(axis=0)
+        tips.append(com + (mu / n) * arrow_scale)
+    return np.asarray(tips).reshape(-1, 3)
+
+
+def _frame_extent_points(
+    xyz: np.ndarray,
+    forces: np.ndarray,
+    charges: np.ndarray,
+    n_mono: int,
+    *,
+    force_scale: float,
+    force_cap: float,
+    dipole_len: float,
+) -> np.ndarray:
+    chunks = [xyz]
+    ft = _force_tip_points(xyz, forces, force_scale, force_cap)
+    if len(ft):
+        chunks.append(ft)
+    dt = _dipole_tip_points(xyz, charges, n_mono, dipole_len)
+    if len(dt):
+        chunks.append(dt)
+    return np.vstack(chunks)
+
+
+def compute_shared_box_half(
+    frames: list[dict],
+    pred: dict[str, np.ndarray],
+    n_mono: int,
+    *,
+    force_scale: float,
+    force_cap: float,
+    dipole_len: float = DIPOLE_ARROW_LEN,
+    pad: float = BOX_PAD_A,
+) -> float:
+    """Half-edge of the axis-aligned cube that contains every frame's glyphs."""
+    lo = np.full(3, np.inf)
+    hi = np.full(3, -np.inf)
+    for i, fr in enumerate(frames):
+        xyz = _centered_xyz(fr["atoms"])
+        pts = _frame_extent_points(
+            xyz,
+            pred["forces"][i],
+            pred["charges"][i],
+            n_mono,
+            force_scale=force_scale,
+            force_cap=force_cap,
+            dipole_len=dipole_len,
+        )
+        lo = np.minimum(lo, pts.min(axis=0))
+        hi = np.maximum(hi, pts.max(axis=0))
+    half = float(np.max(np.abs(np.vstack([lo, hi])))) + pad
+    # Keep a minimum so tiny monomers don't fill the frame.
+    return max(half, 4.0)
+
+
+def _wire_box(half: float, *, radius: float = 0.028) -> list[str]:
+    """Thin cube edges at ±half — shared crop/framing guide."""
+    h = float(half)
+    # 12 edges of the cube [-h,h]^3.
+    edge_defs = [
+        # bottom face (y=-h)
+        ((-1, -1, -1), (1, -1, -1)),
+        ((1, -1, -1), (1, -1, 1)),
+        ((1, -1, 1), (-1, -1, 1)),
+        ((-1, -1, 1), (-1, -1, -1)),
+        # top face (y=+h)
+        ((-1, 1, -1), (1, 1, -1)),
+        ((1, 1, -1), (1, 1, 1)),
+        ((1, 1, 1), (-1, 1, 1)),
+        ((-1, 1, 1), (-1, 1, -1)),
+        # verticals
+        ((-1, -1, -1), (-1, 1, -1)),
+        ((1, -1, -1), (1, 1, -1)),
+        ((1, -1, 1), (1, 1, 1)),
+        ((-1, -1, 1), (-1, 1, 1)),
+    ]
+    pigment = (
+        f"pigment {{ color rgbt <{BOX_EDGE[0]},{BOX_EDGE[1]},{BOX_EDGE[2]},0.35> }} "
+        f"finish {{ emission 0.08 }}"
+    )
+    lines = []
+    for a_s, b_s in edge_defs:
+        a = np.array(a_s, dtype=float) * h
+        b = np.array(b_s, dtype=float) * h
+        lines.append(
+            f"cylinder {{ {vec(a)}, {vec(b)}, {radius} {pigment} no_shadow }}"
+        )
+    return lines
+
+
+def _camera_lights(half: float, width: int, height: int) -> list[str]:
+    span = 2.0 * half * CAMERA_MARGIN
+    camera = np.array([half * 1.35, half * 0.95, -half * 3.1])
+    shadow_y = -half - 0.05
+    return [
+        "#version 3.7;",
+        "global_settings { assumed_gamma 1.0 }",
+        "background { color rgbt <1,1,1,1> }",
+        (
+            f"camera {{ orthographic location {vec(camera)} look_at <0,0,0> "
+            f"right x*{span:.6f} up y*{span * height / width:.6f} }}"
+        ),
+        (
+            f"light_source {{ {vec((-half, half * 2.2, -half * 2))} color rgb <1,1,1> "
+            f"area_light <2,0,0>,<0,2,0>,5,5 adaptive 1 jitter }}"
+        ),
+        f"light_source {{ {vec((half * 2, -half, -half))} color rgb <0.35,0.40,0.52> }}",
+        (
+            f"plane {{ y, {shadow_y:.4f} pigment {{ color rgbt <0.91,0.92,0.94,0.82> }} "
+            f"finish {{ diffuse 0.75 }} }}"
+        ),
+    ]
+
+
+def _atom_bond_lines(atoms, xyz: np.ndarray, colors: list[tuple[float, float, float]]) -> list[str]:
+    from ase.data import covalent_radii
+
+    finish = STYLES["glossy"]
+    lines: list[str] = []
+    for i, j in bonds(atoms):
+        a, b = xyz[i], xyz[j]
+        lines.append(
+            f"cylinder {{ {vec(a)}, {vec(b)}, 0.105 "
+            f"pigment {{ color rgb <0.55,0.57,0.61> }} "
+            f"finish {{ diffuse 0.7 phong 0.25 }} }}"
+        )
+    for p, z, color in zip(xyz, atoms.numbers, colors):
+        radius = max(0.24, covalent_radii[z] * 0.52)
+        lines.append(
+            f"sphere {{ {vec(p)}, {radius:.4f} texture {{ "
+            f"pigment {{ color rgb {vec(color)} }} {finish} }} }}"
+        )
+    return lines
+
+
+def glossy_scene(
+    atoms,
+    *,
+    half: float,
+    width: int,
+    height: int,
+    atom_colors: list[tuple[float, float, float]] | None = None,
+    draw_box: bool = True,
+) -> str:
+    """Glossy molecule in a fixed world box (same camera for every frame)."""
+    xyz = _centered_xyz(atoms)
+    if atom_colors is None:
+        atom_colors = [
+            ELEMENT_COLORS.get(s, (0.55, 0.55, 0.58)) for s in atoms.get_chemical_symbols()
+        ]
+    lines = _camera_lights(half, width, height)
+    if draw_box:
+        lines += _wire_box(half)
+    lines += _atom_bond_lines(atoms, xyz, atom_colors)
+    return "\n".join(lines) + "\n"
 
 
 def _force_overlay(
@@ -125,7 +315,6 @@ def _force_overlay(
     *,
     max_len: float = 2.5,
 ) -> list[str]:
-    """Red force glyphs. ``scale`` is Å per (eV/Å); lengths capped at ``max_len``."""
     lines: list[str] = []
     for p, force in zip(xyz, forces):
         d = force * scale
@@ -150,7 +339,11 @@ def _force_overlay(
 
 
 def _dipole_overlay(
-    xyz: np.ndarray, charges: np.ndarray, n_mono: int, *, arrow_scale: float = 2.0
+    xyz: np.ndarray,
+    charges: np.ndarray,
+    n_mono: int,
+    *,
+    arrow_scale: float = DIPOLE_ARROW_LEN,
 ) -> tuple[list[str], list[float]]:
     lines: list[str] = []
     norms: list[float] = []
@@ -168,65 +361,29 @@ def _dipole_overlay(
     return lines, norms
 
 
-def _charge_atom_scene(
-    atoms,
-    charges: np.ndarray,
-    *,
-    width: int,
-    height: int,
-    q_ref: float,
-) -> str:
-    """Glossy scene with atom spheres recolored by signed charge."""
-    from ase.data import covalent_radii
+def _load_charge_cmap():
+    from cmap import Colormap
 
-    xyz = atoms.positions - atoms.positions.mean(0)
-    span = max(float(np.ptp(xyz, axis=0).max()), 3.0)
-    camera = np.array([span * 1.15, span * 0.80, -span * 2.7])
-    finish = 'finish { phong 0.85 phong_size 90 reflection 0.06 }'
-    frame_scale = 1.72
-    lines = [
-        "#version 3.7;",
-        "global_settings { assumed_gamma 1.0 }",
-        "background { color rgbt <1,1,1,1> }",
-        (
-            f"camera {{ orthographic location {vec(camera)} look_at <0,0,0> "
-            f"right x*{frame_scale*span} up y*{frame_scale*span*height/width} }}"
-        ),
-        (
-            f"light_source {{ {vec((-span, span*2, -span*2))} color rgb <1,1,1> "
-            f"area_light <2,0,0>,<0,2,0>,5,5 adaptive 1 jitter }}"
-        ),
-        f"light_source {{ {vec((span*2, -span, -span))} color rgb <0.35,0.40,0.52> }}",
-        (
-            "plane { y, -2.15 pigment { color rgbt <0.91,0.92,0.94,0.82> } "
-            "finish { diffuse 0.75 } }"
-        ),
-    ]
-    from scripts.render_povray_style_catalog import bonds
+    return Colormap(CHARGE_CMAP_NAME)
 
-    for i, j in bonds(atoms):
-        a, b = xyz[i], xyz[j]
-        lines.append(
-            f"cylinder {{ {vec(a)}, {vec(b)}, 0.105 "
-            f"pigment {{ color rgb <0.55,0.57,0.61> }} "
-            f"finish {{ diffuse 0.7 phong 0.25 }} }}"
-        )
-    for p, z, q in zip(xyz, atoms.numbers, charges):
-        color = _charge_rgb(float(q), q_ref)
-        radius = max(0.24, covalent_radii[z] * 0.52)
-        lines.append(
-            f"sphere {{ {vec(p)}, {radius:.4f} texture {{ "
-            f"pigment {{ color rgb {vec(color)} }} {finish} }} }}"
-        )
-        # Soft signed halo (style-guide multipole convention).
-        halo = radius + 0.07 + 0.40 * abs(float(q)) / max(q_ref, 1e-8)
-        hc = Q_POS if q >= 0 else Q_NEG
-        lines.append(
-            f"sphere {{ {vec(p)}, {halo:.4f} pigment {{ "
-            f"color rgbt <{hc[0]},{hc[1]},{hc[2]},0.82> }} "
-            f"finish {{ emission 0.04 phong 0.3 }} no_shadow }}"
-        )
-    return "\n".join(lines) + "\n"
+
+def _charge_rgb(q: float, q_lim: float, cmap) -> tuple[float, float, float]:
+    """Map signed charge onto house diverging scale (vik: blue− / red+)."""
+    t = 0.5 * (float(np.clip(q / max(q_lim, 1e-12), -1.0, 1.0)) + 1.0)
+    rgba = cmap(t)
+    return float(rgba[0]), float(rgba[1]), float(rgba[2])
+
+
+def _nice_q_lim(q_abs_max: float) -> float:
+    """Round charge limit up to a readable tick (e)."""
+    if q_abs_max <= 0:
+        return 0.1
+    exp = np.floor(np.log10(q_abs_max))
+    base = 10.0**exp
+    for m in (1.0, 1.5, 2.0, 2.5, 5.0, 10.0):
+        if m * base >= q_abs_max:
+            return float(m * base)
+    return float(10.0 * base)
 
 
 def _normalize_alpha(image):
@@ -241,12 +398,47 @@ def _normalize_alpha(image):
     return image
 
 
-def _label_image(
+def _draw_charge_colorbar(
+    draw,
+    *,
+    image_size: tuple[int, int],
+    q_lim: float,
+    cmap,
+    font,
+) -> None:
+    """Vertical colorbar with actual charge ticks (e)."""
+    w, h = image_size
+    bar_w = max(14, w // 48)
+    bar_h = int(h * 0.42)
+    x0 = w - bar_w - 56
+    y0 = (h - bar_h) // 2
+    n = 128
+    for i in range(n):
+        # top = +q_lim (red in vik), bottom = −q_lim (blue)
+        t = 1.0 - i / (n - 1)
+        rgba = cmap(t)
+        color = tuple(int(255 * c) for c in rgba[:3]) + (235,)
+        y = y0 + int(i * bar_h / n)
+        y2 = y0 + int((i + 1) * bar_h / n)
+        draw.rectangle((x0, y, x0 + bar_w, y2), fill=color)
+    draw.rectangle((x0 - 1, y0 - 1, x0 + bar_w + 1, y0 + bar_h + 1), outline=(40, 44, 52, 220))
+    ticks = [q_lim, 0.0, -q_lim]
+    for q in ticks:
+        t = 0.5 * (1.0 - q / q_lim)  # 0 at top (+), 1 at bottom (−)
+        y = y0 + int(t * bar_h)
+        label = f"{q:+.3f}" if q != 0 else "0"
+        draw.line((x0 + bar_w + 2, y, x0 + bar_w + 8, y), fill=(30, 34, 42, 255), width=2)
+        draw.text((x0 + bar_w + 10, y - 8), f"{label} e", font=font, fill=(18, 22, 30, 255))
+    draw.text((x0 - 4, y0 - 22), "q_ML", font=font, fill=(18, 22, 30, 255))
+
+
+def _annotate_image(
     png: Path,
     *,
     title: str,
     lines: list[str],
     width: int,
+    colorbar: dict | None = None,
 ) -> None:
     from PIL import Image, ImageDraw, ImageFont
 
@@ -256,13 +448,17 @@ def _label_image(
     try:
         title_font = ImageFont.truetype(FONT, max(18, width // 28))
         body_font = ImageFont.truetype(FONT, max(14, width // 40))
+        tick_font = ImageFont.truetype(FONT, max(12, width // 48))
     except OSError:
         title_font = ImageFont.load_default()
         body_font = title_font
+        tick_font = title_font
     pad = 14
     text_block = [title, *lines]
-    boxes = [draw.textbbox((0, 0), t, font=(title_font if i == 0 else body_font))
-             for i, t in enumerate(text_block)]
+    boxes = [
+        draw.textbbox((0, 0), t, font=(title_font if i == 0 else body_font))
+        for i, t in enumerate(text_block)
+    ]
     tw = max(b[2] - b[0] for b in boxes) + 2 * pad + 16
     th = sum(b[3] - b[1] + 6 for b in boxes) + 2 * pad
     draw.rounded_rectangle((16, 14, 16 + tw, 14 + th), radius=12, fill=(250, 250, 252, 225))
@@ -271,6 +467,14 @@ def _label_image(
         font = title_font if i == 0 else body_font
         draw.text((16 + pad, y), t, font=font, fill=(18, 22, 30, 255))
         y += (boxes[i][3] - boxes[i][1]) + 6
+    if colorbar is not None:
+        _draw_charge_colorbar(
+            draw,
+            image_size=image.size,
+            q_lim=float(colorbar["q_lim"]),
+            cmap=colorbar["cmap"],
+            font=tick_font,
+        )
     image.save(png)
 
 
@@ -461,6 +665,7 @@ class HybridFrameEval:
         forces = np.zeros((n, pad, 3), dtype=np.float64)
         charges = np.zeros((n, pad), dtype=np.float64)
         energy = np.zeros(n, dtype=np.float64)
+        charge_source = "cgenff_charge"
         for b in batches:
             out = self._fwd(b)
             ids = np.asarray(b["id"])
@@ -471,10 +676,16 @@ class HybridFrameEval:
                 q = np.asarray(b["cgenff_charge"]).reshape(batch_size, pad)
             else:
                 q = np.asarray(q).reshape(batch_size, pad)
+                charge_source = "PhysNet q_ML"
             forces[ids] = f
             charges[ids] = q
             energy[ids] = e
-        return {"forces": forces, "charges": charges, "energy": energy}
+        return {
+            "forces": forces,
+            "charges": charges,
+            "energy": energy,
+            "charge_source": charge_source,
+        }
 
 
 def make_contact_sheet(
@@ -594,7 +805,6 @@ def main() -> int:
     else:
         print(f"POV include: {include_dirs[0]}")
 
-    # Collect frames to evaluate / render.
     frames: list[dict] = []
 
     r_grid = 3.5
@@ -685,10 +895,8 @@ def main() -> int:
 
     print(f"Evaluating hybrid on {len(frames)} frames…", flush=True)
     pred = ev.evaluate([f["atoms"].positions.copy() for f in frames])
+    charge_source = str(pred.get("charge_source", "PhysNet q_ML"))
     fmax_panel = float(np.linalg.norm(pred["forces"], axis=-1).max())
-    # Soft-well reference for fixed panel scale (style guide). Exclude
-    # contact/clash frames (short COM or short atom–atom contacts) so a single
-    # Cl–Cl clash does not shrink every soft-well arrow.
     soft_fmax = [
         float(np.linalg.norm(pred["forces"][i], axis=-1).max())
         for i, fr in enumerate(frames)
@@ -697,12 +905,29 @@ def main() -> int:
     f_ref = float(np.percentile(soft_fmax, 90)) if soft_fmax else fmax_panel
     force_scale = 1.35 / max(f_ref, 1e-12)
     force_arrow_cap_A = 2.5
-    q_abs = np.abs(pred["charges"])
-    q_ref = float(np.percentile(q_abs[q_abs > 0], 90)) if np.any(q_abs > 0) else 0.1
+
+    q_all = pred["charges"]
+    q_abs_max = float(np.max(np.abs(q_all))) if q_all.size else 0.1
+    q_lim = _nice_q_lim(q_abs_max)
+    charge_cmap = _load_charge_cmap()
+
+    box_half = compute_shared_box_half(
+        frames,
+        pred,
+        n_mono,
+        force_scale=force_scale,
+        force_cap=force_arrow_cap_A,
+        dipole_len=DIPOLE_ARROW_LEN,
+        pad=BOX_PAD_A,
+    )
     print(
         f"  |F|_max={fmax_panel:.4f} eV/Å  soft |F|_ref={f_ref:.4f} eV/Å  "
-        f"force_scale={force_scale:.4f} Å/(eV/Å)  cap={force_arrow_cap_A} Å  "
-        f"q_ref={q_ref:.4f} e",
+        f"force_scale={force_scale:.4f} Å/(eV/Å)  cap={force_arrow_cap_A} Å",
+        flush=True,
+    )
+    print(
+        f"  shared box ±{box_half:.3f} Å  |  {charge_source}  "
+        f"|q|_max={q_abs_max:.4f} e  colorbar ±{q_lim:.3f} e ({CHARGE_CMAP_NAME})",
         flush=True,
     )
 
@@ -716,22 +941,12 @@ def main() -> int:
         atoms = fr["atoms"]
         forces = pred["forces"][i]
         charges = pred["charges"][i]
-        xyz = atoms.positions - atoms.positions.mean(0)
-        # Center forces/charges with the same COM shift used in the POV scene.
-        # Forces are translationally invariant; positions for arrows use centered xyz.
+        xyz = _centered_xyz(atoms)
 
         # --- forces + dipoles ---
-        base = scene(
-            atoms,
-            "glossy",
-            "",
-            vectors=False,
-            geometry=False,
-            font="",
-            width=args.width,
-            height=args.height,
+        base = glossy_scene(
+            atoms, half=box_half, width=args.width, height=args.height, draw_box=True
         )
-        # scene() recenters; rebuild overlays in the same frame.
         overlay = _force_overlay(
             xyz, forces, force_scale, max_len=force_arrow_cap_A
         )
@@ -753,11 +968,11 @@ def main() -> int:
                 f"soft-ref scale {force_scale:.3f} Å per eV/Å"
                 + (f"; arrows capped at {force_arrow_cap_A:g} Å" if capped else "")
             )
-            _label_image(
+            _annotate_image(
                 png_fd,
                 title=f"{fr['stem']}  |  forces + dipoles",
                 lines=[
-                    f"r={fr['r']:.2f} Å   dmin={fr['dmin']:.2f} Å",
+                    f"r={fr['r']:.2f} Å   dmin={fr['dmin']:.2f} Å   box ±{box_half:.2f} Å",
                     f"red F  |F|_max={fmax:.3f} eV/Å  ({scale_note})",
                     f"gold μ  |μ|_A={mu_norms[0]:.3f}  |μ|_B={mu_norms[1]:.3f} e·Å",
                     f"hybrid on={args.mm_switch_on:g} / "
@@ -771,9 +986,15 @@ def main() -> int:
         else:
             print(f"  {png_fd.name} FAIL")
 
-        # --- charge-colored ---
-        q_scene = _charge_atom_scene(
-            atoms, charges, width=args.width, height=args.height, q_ref=q_ref
+        # --- charge-colored (continuous house scale) ---
+        q_colors = [_charge_rgb(float(q), q_lim, charge_cmap) for q in charges]
+        q_scene = glossy_scene(
+            atoms,
+            half=box_half,
+            width=args.width,
+            height=args.height,
+            atom_colors=q_colors,
+            draw_box=True,
         )
         q_overlay, mu_norms_q = _dipole_overlay(xyz, charges, n_mono)
         png_q = args.out / f"{fr['stem']}_by_charge.png"
@@ -786,16 +1007,20 @@ def main() -> int:
             include_dirs=include_dirs,
         )
         if ok_q:
-            _label_image(
+            qmin = float(charges.min())
+            qmax = float(charges.max())
+            _annotate_image(
                 png_q,
                 title=f"{fr['stem']}  |  atoms by charge",
                 lines=[
-                    f"r={fr['r']:.2f} Å   dmin={fr['dmin']:.2f} Å",
-                    "blue +q / red −q  (PhysNet q_ML; halo ∝ |q|)",
+                    f"r={fr['r']:.2f} Å   dmin={fr['dmin']:.2f} Å   box ±{box_half:.2f} Å",
+                    f"{CHARGE_CMAP_NAME}  red=+q  blue=−q  "
+                    f"(scale ±{q_lim:.3f} e)",
                     f"gold μ  |μ|_A={mu_norms_q[0]:.3f}  |μ|_B={mu_norms_q[1]:.3f} e·Å",
-                    f"Σq={float(charges.sum()):.4f} e   q_ref={q_ref:.3f} e",
+                    f"{charge_source}  q∈[{qmin:+.4f},{qmax:+.4f}]  Σq={float(charges.sum()):+.4f} e",
                 ],
                 width=args.width,
+                colorbar={"q_lim": q_lim, "cmap": charge_cmap},
             )
             sheet_q.append(png_q)
             sheet_q_labels.append(fr["label"] + "\nq")
@@ -803,18 +1028,11 @@ def main() -> int:
         else:
             print(f"  {png_q.name} FAIL")
 
-        # Keep plain element-colored still (no vectors) for quick overview.
+        # Element-colored overview (same box).
         png_plain = args.out / f"{fr['stem']}.png"
         ok_p = render_pov(
-            scene(
-                atoms,
-                "glossy",
-                "",
-                vectors=False,
-                geometry=False,
-                font="",
-                width=args.width,
-                height=args.height,
+            glossy_scene(
+                atoms, half=box_half, width=args.width, height=args.height, draw_box=True
             ),
             png_plain,
             povray=povray,
@@ -823,11 +1041,11 @@ def main() -> int:
             include_dirs=include_dirs,
         )
         if ok_p:
-            _label_image(
+            _annotate_image(
                 png_plain,
                 title=fr["stem"],
                 lines=[
-                    f"r={fr['r']:.2f} Å   dmin={fr['dmin']:.2f} Å",
+                    f"r={fr['r']:.2f} Å   dmin={fr['dmin']:.2f} Å   box ±{box_half:.2f} Å",
                     "element colors (Cl green / C dark / H light)",
                 ],
                 width=args.width,
@@ -848,6 +1066,8 @@ def main() -> int:
                 mu_A_eA=mu_norms[0] if ok else None,
                 mu_B_eA=mu_norms[1] if ok else None,
                 q_sum_e=float(charges.sum()),
+                q_min_e=float(charges.min()),
+                q_max_e=float(charges.max()),
             )
         )
 
@@ -866,12 +1086,16 @@ def main() -> int:
             sheet_q_labels,
             args.out / "dimer_scan_povray_sheet_by_charge.png",
             cols=4,
-            title="DCM–DCM dimer scan — atoms colored by PhysNet charge (blue+/red−)",
+            title=(
+                f"DCM–DCM dimer scan — {CHARGE_CMAP_NAME} charge coloring "
+                f"(±{q_lim:.3f} e)"
+            ),
         )
         print(f"wrote {args.out / 'dimer_scan_povray_sheet_by_charge.png'}")
-    # Overview sheet of plain element-colored stills.
-    plain = [args.out / (m["file"]) for m in manifest if (args.out / m["file"]).is_file()]
-    plain_labels = [f"{m['kind']}\nr={m['r_A']:g}" for m in manifest if (args.out / m["file"]).is_file()]
+    plain = [args.out / m["file"] for m in manifest if (args.out / m["file"]).is_file()]
+    plain_labels = [
+        f"{m['kind']}\nr={m['r_A']:g}" for m in manifest if (args.out / m["file"]).is_file()
+    ]
     if plain:
         make_contact_sheet(
             plain,
@@ -893,10 +1117,17 @@ def main() -> int:
         "force_ref_eV_A": f_ref,
         "force_arrow_cap_A": force_arrow_cap_A,
         "fmax_panel_eV_A": fmax_panel,
-        "q_ref_e": q_ref,
-        "charge_source": "PhysNet q_ML (model charges head)",
-        "dipole_units": "e*Angstrom from q_ML*(R-COM) per monomer",
-        "style": "docs/plotting-style-guide.md glossy + force/dipole/charge conventions",
+        "shared_box_half_A": box_half,
+        "shared_box_note": (
+            "Axis-aligned cube ±half about dimer COM; camera fixed across all "
+            "frames. Box encloses atoms + force tips + dipole tips + pad."
+        ),
+        "charge_source": charge_source,
+        "charge_cmap": CHARGE_CMAP_NAME,
+        "charge_colorbar_lim_e": q_lim,
+        "charge_abs_max_e": q_abs_max,
+        "dipole_units": "e*Angstrom from q*(R-COM) per monomer",
+        "style": "docs/plotting-style-guide.md glossy + shared box + crameri:vik charges",
         "frames": manifest,
     }
     (args.out / "manifest.json").write_text(json.dumps(meta, indent=2) + "\n")
@@ -907,16 +1138,20 @@ def main() -> int:
                 "",
                 "House glossy POV style (`docs/plotting-style-guide.md`):",
                 "",
+                "- **shared bounding box** — one cube (±half Å about COM) and one",
+                "  orthographic camera for every frame, so atoms / bonds / force",
+                "  arrows / dipoles are never cropped and spacing stays consistent.",
                 "- **forces** — red arrows from the hybrid model on the exact frame;",
-                "  fixed panel normalization (see `manifest.json`).",
+                "  fixed soft-well panel normalization (see `manifest.json`).",
                 "- **dipoles** — gold per-monomer μ from PhysNet `q_ML` (e·Å).",
-                "- **by charge** — atom spheres + soft halos, blue = +, red = −.",
+                f"- **by charge** — continuous `{CHARGE_CMAP_NAME}` (red = +q,",
+                "  blue = −q) with a colorbar in e.",
                 "",
                 "| Asset | Content |",
                 "|---|---|",
-                "| `*_forces_dipoles.png` | Glossy atoms + red F + gold μ |",
-                "| `*_by_charge.png` | Charge-colored atoms + gold μ |",
-                "| `ori_*/approach_*/…png` | Element-colored overview stills |",
+                "| `*_forces_dipoles.png` | Glossy atoms + red F + gold μ + box |",
+                "| `*_by_charge.png` | vik charge colors + colorbar + gold μ + box |",
+                "| `ori_*/approach_*/…png` | Element-colored overview stills + box |",
                 "| `dimer_scan_povray_sheet_forces_dipoles.png` | F+μ contact sheet |",
                 "| `dimer_scan_povray_sheet_by_charge.png` | Charge contact sheet |",
                 "| `dimer_scan_povray_sheet.png` | Element-color contact sheet |",
