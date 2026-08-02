@@ -20,3 +20,8 @@ uv run python scripts/slurm/dense_dt_campaign/plot_passed_runs.py
 rsync -a --exclude='*.npz' --exclude='plot.log' \
   artifacts/lj_scales/dense_dt_campaign/plots/ docs/images/dense-dt-campaign/
 ```
+
+## Dimer 1D interaction profiles
+
+See [`dimer_scans/`](dimer_scans/) for DCM–DCM hybrid COM–COM scans
+(`dcm_dimer_Eint_profile.png`, component decomposition, multi-orientation rays).
