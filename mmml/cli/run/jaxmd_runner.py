@@ -22,6 +22,7 @@ from mmml.cli.run.summaries import (
     save_calculator_summary_json,
 )
 from mmml.utils.rich_report import emit_md_system_calculator_report
+from mmml.md.constraints import maybe_wrap_rigid_water
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
     wrap_groups_by_id_with_weight_sum,
@@ -1632,6 +1633,8 @@ def set_up_nhc_sim_routine(
         ))
     else:  # nve
         init_fn, apply_fn = simulate.nve(wrapped_force_fn, shift, dt)
+    # No-op unless --rigid-water; see mmml.md.constraints.
+    apply_fn = maybe_wrap_rigid_water(apply_fn, args, n_monomers, monomer_offsets, console=c)
     apply_fn = jit(apply_fn)
     sim = _bind_sim(apply_fn)
 

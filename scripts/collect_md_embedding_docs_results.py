@@ -31,7 +31,7 @@ ARTIFACTS = REPO / "artifacts" / "md_embedding" / "aaa_docs"
 IMG = REPO / "docs" / "images" / "examples" / "md-embedding"
 SUMMARY_JSON = REPO / "mmml" / "data" / "external" / "md_embedding_docs_summary.json"
 RESULTS_MD = REPO / "docs" / "examples" / "md-embedding-results.md"
-SHORT_CONFIG = REPO / "mmml" / "cli" / "run" / "md_embedding_aaa_train_short.yaml"
+SHORT_CONFIG = REPO / "mmml" / "cli" / "run" / "md_embedding_aaa_train_short.example.yaml"
 
 
 def _run(cmd: list[str], *, cwd: Path | None = None, charmm_mpi: bool = False) -> None:

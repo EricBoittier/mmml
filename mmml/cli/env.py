@@ -11,7 +11,7 @@ from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PRESETS_DIR = _REPO_ROOT / "mmml" / "cli" / "run" / "presets"
-_DCM_RESILIENT = _REPO_ROOT / "mmml" / "cli" / "run" / "dcm_liquid_workflow.resilient.yaml"
+_DCM_RESILIENT = _REPO_ROOT / "mmml" / "cli" / "run" / "dcm_liquid_workflow.resilient.example.yaml"
 
 
 def _repo_root() -> Path:

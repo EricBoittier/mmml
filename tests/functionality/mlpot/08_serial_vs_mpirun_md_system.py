@@ -78,7 +78,7 @@ def _repo_root() -> Path:
 
 
 def _default_config() -> Path:
-    return _repo_root() / "mmml/cli/run/md_system.serial_mpi_probe.yaml"
+    return _repo_root() / "mmml/cli/run/md_system.serial_mpi_probe.example.yaml"
 
 
 @dataclass
@@ -104,7 +104,7 @@ def _parse_args() -> argparse.Namespace:
         "--config",
         type=Path,
         default=_default_config(),
-        help="Probe YAML (default: md_system.serial_mpi_probe.yaml)",
+        help="Probe YAML (default: md_system.serial_mpi_probe.example.yaml)",
     )
     parser.add_argument("--checkpoint", default=None, help="Override checkpoint (or MMML_CKPT)")
     parser.add_argument("--output-dir", default=None, help="Override output_dir in YAML")
