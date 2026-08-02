@@ -881,7 +881,24 @@ def main() -> int:
         )
 
         df = pd.read_csv(args.components_csv)
-        # Campaign is 8 dirs × 12 oris (not the POV 4×4 subsample).
+        # Ablate CSVs pack ray = di * n_orient + qi; older dumps omit those cols.
+        if "direction" not in df.columns or "orientation" not in df.columns:
+            if "ray" not in df.columns:
+                raise KeyError(
+                    f"{args.components_csv} needs direction/orientation or ray"
+                )
+            n_ray = int(df["ray"].max()) + 1
+            # Prefer square 8×8 (ablate_overbind defaults); else factor n_ray.
+            if n_ray == 64:
+                n_ori_infer = 8
+            else:
+                n_ori_infer = int(round(n_ray**0.5))
+                if n_ori_infer * n_ori_infer != n_ray:
+                    n_ori_infer = 8 if n_ray % 8 == 0 else max(1, n_ray)
+            df = df.copy()
+            df["direction"] = (df["ray"] // n_ori_infer).astype(int)
+            df["orientation"] = (df["ray"] % n_ori_infer).astype(int)
+        # Campaign is typically 8 dirs × 8 oris (not the POV 4×4 subsample).
         n_dir_csv = int(df["direction"].max()) + 1
         n_ori_csv = int(df["orientation"].max()) + 1
         dirs_c = fibonacci_sphere(n_dir_csv)
