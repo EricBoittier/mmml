@@ -378,7 +378,7 @@ seed: 123
 dt_fs: 0.25
 temperature: 300.0
 pressure: 1.0
-spacing: 4.0
+spacing: 2.5
 packmol_tolerance: 1.5
 
 # Box build + target density
@@ -768,7 +768,7 @@ box_size: 32.0
 target_density_g_cm3: 1.326
 density_prep_mode: resilient
 density_prep_ladder_max_rounds: 5
-spacing: 4.0
+spacing: 2.5
 packmol_tolerance: 1.0
 charmm_sd_steps: 1000
 charmm_abnr_steps: 1000
