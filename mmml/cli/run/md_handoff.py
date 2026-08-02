@@ -1685,9 +1685,18 @@ def load_handoff_from_npz(path: Path, *, frame: int = 0) -> MdHandoffState:
 
 
 def load_handoff_from_h5(path: Path, *, frame: int = -1) -> MdHandoffState:
+  import h5py
+
   from mmml.utils.hdf5_reporter import load_hdf5_trajectory
 
-  data = load_hdf5_trajectory(path, datasets=["positions", "velocities", "box"])
+  # NVT reporters often omit ``box`` (constant cell). Require positions only;
+  # velocities/box are optional — caller supplies ``--box-size`` / PSF+CRD cell.
+  with h5py.File(str(path), "r") as f:
+    datasets = ["positions"]
+    for name in ("velocities", "box"):
+      if name in f:
+        datasets.append(name)
+  data = load_hdf5_trajectory(path, datasets=datasets)
   pos = np.asarray(data["positions"][frame], dtype=np.float64)
   vel = None
   if "velocities" in data:
@@ -1696,7 +1705,6 @@ def load_handoff_from_h5(path: Path, *, frame: int = -1) -> MdHandoffState:
   if "box" in data:
     cell = np.asarray(data["box"][frame], dtype=np.float64)
   attrs: dict[str, Any] = {}
-  import h5py
 
   with h5py.File(str(path), "r") as f:
     for key in ("atomic_numbers", "temperature_target", "ensemble"):

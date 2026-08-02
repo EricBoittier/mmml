@@ -170,6 +170,13 @@ fi
 actions=()
 
 if [[ "$REACT" -eq 1 ]]; then
+  if [[ -f "$OUT_ROOT/PAUSE_RESUBMIT" ]]; then
+    actions+=("PAUSE_RESUBMIT set — skipping box rebuild and job resubmits")
+    REACT=0
+  fi
+fi
+
+if [[ "$REACT" -eq 1 ]]; then
   if [[ "$packmol_stuck" -eq 1 ]]; then
     actions+=("kill stuck packmol (>45min) and restart dense box build v3")
     pkill -f 'build_dense_boxes_v[23]\.sh' 2>/dev/null || true

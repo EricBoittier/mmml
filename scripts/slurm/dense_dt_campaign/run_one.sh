@@ -64,19 +64,61 @@ PY
 
 export LJ_DEVICE=gpu JAX_PLATFORMS=cuda MMML_MLPOT_DEVICE=gpu MMML_MM_NL_DEVICE=gpu PYTHONUNBUFFERED=1
 
-# NPT/NVE need a harder handoff on dense L=24 (prior fails: E blow-up / max|F| gate).
+# NPT/NVE from packmol+mini alone blow up on dense L24/L26 (max|F|~140–180 eV/Å,
+# E_pot explosion by step 1000). Prefer continue-from a finished NVT H5.
 MINI_STEPS=50
 PBC_MINI_STEPS=50
 EXTRA_ARGS=()
+CONTINUE_FROM=""
+pick_nvt_h5() {
+  local cand h5
+  for cand in "$@"; do
+    if [[ -f "${OUT_ROOT}/${cand}/SUCCESS.flag" ]]; then
+      h5="$(find "${OUT_ROOT}/${cand}" -maxdepth 1 -name '*.h5' 2>/dev/null | head -1 || true)"
+      if [[ -n "${h5:-}" && -f "$h5" ]]; then
+        echo "$h5"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+case "$TAG" in
+  L24_npt_*|L24_nve_*)
+    CONTINUE_FROM="$(pick_nvt_h5 L24_nvt_dt05_x64_50ps L24_nvt_dt1_f32_50ps || true)"
+    ;;
+  L26_npt_*|L26_nve_*)
+    CONTINUE_FROM="$(pick_nvt_h5 L26_nvt_dt1_f32_50ps || true)"
+    ;;
+esac
+
 case "$ENSEMBLE" in
   npt|nve)
-    MINI_STEPS=400
-    PBC_MINI_STEPS=400
+    if [[ -z "${CONTINUE_FROM}" ]]; then
+      # Cold start: longer mini only; still often insufficient on L24.
+      MINI_STEPS=400
+      PBC_MINI_STEPS=400
+    else
+      MINI_STEPS=100
+      PBC_MINI_STEPS=100
+      # Dense NVT H5s collapse within ~1 ps (ΔE_tot ≲ −50 eV by frame 1). Seed
+      # from frame 0 (post-mini / first recorded), not the destroyed last frame.
+      CONT_FRAME=0
+      EXTRA_ARGS+=(--continue-from "${CONTINUE_FROM}" --continue-from-frame "${CONT_FRAME}")
+      echo "continue_from=${CONTINUE_FROM} frame=${CONT_FRAME}" | tee -a "$OUT/run_meta.txt"
+      if [[ "$ENSEMBLE" == npt ]]; then
+        # Barostat + dense hybrid: give FIRE a real shot before the piston.
+        EXTRA_ARGS+=(--fire-min-steps 200)
+        MINI_STEPS=300
+        PBC_MINI_STEPS=300
+      fi
+    fi
     ;;
 esac
 if [[ "$ENSEMBLE" == nve ]]; then
-  # Dense L24 post-FIRE forces were ~180 eV/Å with 50-step mini; size-scaled gate ~3.7.
-  EXTRA_ARGS+=(--nve-max-f-start-eVA 250)
+  # Dense L24 post-FIRE max|F|~180 eV/Å; effective gate is hard-capped at 15 eV/Å
+  # (base×sqrt(N/N_ref)), so raising the base cannot pass — disable for this arm.
+  EXTRA_ARGS+=(--nve-max-f-start-eVA 0)
 fi
 
 set +e
