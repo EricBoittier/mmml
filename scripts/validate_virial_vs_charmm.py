@@ -83,7 +83,6 @@ def main(argv: list[str] | None = None) -> int:
     from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
 
-    import pycharmm
     import pycharmm.coor as coor
     import pycharmm.energy as energy
     import pycharmm.read as read
