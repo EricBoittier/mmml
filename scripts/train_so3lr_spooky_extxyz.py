@@ -1702,8 +1702,12 @@ def _merge_compatible_params(
 def _initialize_from_checkpoint(
     checkpoint_path: Path,
     state: train_state.TrainState,
+    *,
+    restored: Mapping[str, Any] | None = None,
+    allow_partial: bool = False,
 ) -> train_state.TrainState:
-    restored = _restore_checkpoint_any(checkpoint_path)
+    if restored is None:
+        restored = _restore_checkpoint_any(checkpoint_path)
     loaded_params = _checkpoint_params(restored, checkpoint_path)
 
     # Some checkpoints (e.g. orbax_to_json exports) store the flax "params"
@@ -1722,10 +1726,41 @@ def _initialize_from_checkpoint(
     params, loaded, initialized, skipped = _merge_compatible_params(
         state.params, loaded_params
     )
+    dropped = sorted(_param_paths(loaded_params) - _param_paths(state.params))
+    fresh = sorted(_param_paths(state.params) - _param_paths(loaded_params))
     print(
         f"Warm-started from {checkpoint_path}: loaded {loaded} parameter leaves, "
         f"initialized {initialized} new leaves, skipped {skipped} incompatible leaves"
     )
+    if (initialized or skipped or dropped) and not allow_partial:
+        # A partial warm-start is almost never what the caller meant: the model
+        # silently keeps random weights wherever the checkpoint had none to give.
+        # The Q0 campaign trained three experiments this way -- an entire
+        # message-passing block randomly initialized -- because this only printed
+        # counts. Adding a head on purpose is legitimate, hence the opt-in flag.
+        detail = []
+        if fresh:
+            detail.append(
+                f"{len(fresh)} parameter(s) the checkpoint does not have, kept "
+                f"randomly initialized: {', '.join(fresh[:8])}"
+                + (" ..." if len(fresh) > 8 else "")
+            )
+        if dropped:
+            detail.append(
+                f"{len(dropped)} checkpoint parameter(s) this model has no slot "
+                f"for, discarded: {', '.join(dropped[:8])}"
+                + (" ..." if len(dropped) > 8 else "")
+            )
+        if skipped:
+            detail.append(f"{skipped} parameter(s) present in both but shape-mismatched")
+        raise ValueError(
+            f"--init-checkpoint {checkpoint_path} does not match the model this run "
+            f"builds:\n  - " + "\n  - ".join(detail) + "\n"
+            "The checkpoint's own architecture is applied automatically, so this "
+            "usually means an architecture flag was passed explicitly on the CLI "
+            "that contradicts it. Fix the flags, or pass --init-allow-partial if "
+            "the difference is intentional (e.g. adding a head to fine-tune)."
+        )
     return state.replace(params=params)
 
 
@@ -1857,6 +1892,54 @@ def load_distillation_teacher(
         f"({architecture.kwargs}). Tried both CGenFF settings -- {detail}. "
         "Refusing to distil from a partially-loaded teacher."
     )
+
+
+# SpookyPhysNet constructor kwarg -> the CLI flag that controls it. ``invert``
+# covers flags stored as the negation of the model field (--no-zbl vs zbl).
+_ARCH_KWARG_TO_ARG: dict[str, tuple[str, bool]] = {
+    "features": ("features", False),
+    "max_degree": ("max_degree", False),
+    "num_iterations": ("num_iterations", False),
+    "num_basis_functions": ("num_basis_functions", False),
+    "cutoff": ("cutoff", False),
+    "max_atomic_number": ("max_atomic_number", False),
+    "charges": ("predict_charges", False),
+    "n_refinement_blocks": ("n_res", False),
+    "zbl": ("no_zbl", True),
+    "trainable_zbl": ("trainable_zbl", False),
+    "zbl_cuton": ("zbl_cuton", False),
+    "zbl_cutoff": ("zbl_cutoff", False),
+    "efa": ("efa", False),
+    "use_energy_bias": ("use_energy_bias", False),
+    "electrostatics_damping_sigma": ("electrostatics_damping_sigma", False),
+}
+
+
+def checkpoint_architecture_overrides(
+    checkpoint_path: Path,
+    restored: Mapping[str, Any],
+) -> tuple[dict[str, Any], str]:
+    """Architecture flag values implied by a checkpoint's own recorded architecture.
+
+    Returns ``({arg_name: value}, source_label)``.
+
+    A checkpoint's ``model_attributes`` is serialized from the model object that
+    produced the weights, so it is the only description guaranteed to match them.
+    The sibling ``run_config.json`` is *workdir*-level: every run into that
+    workdir rewrites it, so for any checkpoint but the most recent it can
+    describe a different architecture entirely -- which is exactly how the Q0
+    campaign came to warm-start a 3-iteration model from 2-iteration weights.
+    """
+    architecture = teacher_architecture_from_checkpoint(restored, max_padded_atoms=1)
+    overrides: dict[str, Any] = {}
+    for kwarg, (arg_name, invert) in _ARCH_KWARG_TO_ARG.items():
+        if kwarg in architecture.missing_fields:
+            # Not recorded by this checkpoint; leave the CLI/default value alone
+            # rather than asserting a value the checkpoint never claimed.
+            continue
+        value = architecture.kwargs[kwarg]
+        overrides[arg_name] = (not value) if invert else value
+    return overrides, architecture.source
 
 
 def _scalar_or_none(value: Any) -> Any:
@@ -2131,12 +2214,48 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     source_checkpoint = restart_path
     if source_checkpoint is None and args.init_checkpoint is not None:
         source_checkpoint = Path(args.init_checkpoint).expanduser().resolve()
+    # The checkpoint's own recorded architecture wins over the sibling
+    # run_config.json, which is workdir-level and rewritten by every run into
+    # that workdir. Restored once here and reused for the warm-start itself.
+    source_restored: Mapping[str, Any] | None = None
+    if source_checkpoint is not None:
+        parser = build_parser()
+        try:
+            source_restored = _restore_checkpoint_any(source_checkpoint)
+            overrides, arch_source = checkpoint_architecture_overrides(
+                source_checkpoint, source_restored
+            )
+        except Exception as exc:  # noqa: BLE001 - fall back to the sibling config
+            overrides, arch_source = {}, ""
+            print(
+                f"Could not read the architecture recorded in {source_checkpoint} "
+                f"({type(exc).__name__}: {exc}); falling back to run_config.json"
+            )
+        if overrides:
+            print(f"Applying architecture recorded in {source_checkpoint} ({arch_source})")
+            for param, saved_val in sorted(overrides.items()):
+                current_val = getattr(args, param)
+                if current_val != parser.get_default(param):
+                    # An explicit non-default CLI flag is an intentional override
+                    # (e.g. --predict-charges to add a head); it still wins.
+                    if current_val != saved_val:
+                        print(
+                            f"  Keeping explicit --{param.replace('_', '-')}="
+                            f"{current_val} over the checkpoint's {saved_val}"
+                        )
+                    continue
+                if current_val != saved_val:
+                    print(f"  Overriding {param}: {current_val} -> {saved_val} (from {arch_source})")
+                    setattr(args, param, saved_val)
+
     if source_checkpoint is not None:
         config_path = source_checkpoint.parent / "run_config.json"
         if config_path.exists():
             print(f"Loading model configuration from {config_path}")
             with config_path.open("r") as fh:
                 saved_config = json.load(fh)
+            # Anything the checkpoint itself recorded has already been applied
+            # above and must not be second-guessed by the workdir-level file.
             arch_params = [
                 "features",
                 "max_degree",
@@ -2154,9 +2273,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "use_energy_bias",
                 "electrostatics_damping_sigma",
             ]
-            parser = build_parser()
             for param in arch_params:
-                if param not in saved_config:
+                if param not in saved_config or param in overrides:
                     continue
                 current_val = getattr(args, param)
                 if current_val != parser.get_default(param):
@@ -2170,6 +2288,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     setattr(args, param, saved_val)
             if (
                 "trainable_zbl" not in saved_config
+                and "trainable_zbl" not in overrides
                 and not args.no_zbl
                 and not args.force_fixed_zbl
             ):
@@ -2394,7 +2513,10 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "--init-checkpoint cannot be combined with --restart or --auto-resume"
             )
         state = _initialize_from_checkpoint(
-            Path(args.init_checkpoint).expanduser().resolve(), state
+            Path(args.init_checkpoint).expanduser().resolve(),
+            state,
+            restored=source_restored,
+            allow_partial=args.init_allow_partial,
         )
     if restart_path is not None:
         state, restored_epoch, restored_metrics = _restore_state_from_checkpoint(
@@ -2909,7 +3031,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Warm-start compatible parameters from a checkpoint while initializing "
-            "new heads and optimizer state from scratch"
+            "new heads and optimizer state from scratch. The checkpoint's OWN "
+            "recorded architecture (model_attributes) is applied first, so the "
+            "model built here matches the weights; explicit non-default "
+            "architecture flags still override it. A parameter tree that does not "
+            "line up is an error unless --init-allow-partial is given."
+        ),
+    )
+    parser.add_argument(
+        "--init-allow-partial",
+        action="store_true",
+        help=(
+            "Permit --init-checkpoint to leave parameters randomly initialized, or "
+            "to discard checkpoint parameters, when the trees do not line up. Off "
+            "by default: a silent partial warm-start looks exactly like a real one "
+            "in the logs but trains a partly-random model. Turn it on only when the "
+            "difference is intended, e.g. adding a head to fine-tune."
         ),
     )
     parser.add_argument(

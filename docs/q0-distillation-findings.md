@@ -103,19 +103,46 @@ Distillation is exonerated independently: `TE_MAE=150155` vs `E_MAE=150150`, i.e
 the aligned teacher target and the reference agree to 0.003%; the student is
 equally far from both.
 
-### Fix
+### Fix (implemented)
 
-1. Set `--num-iterations 2 --n-res 3` in the Q⁰ scripts, **or**
-2. better, make `--init-checkpoint` read the checkpoint's own `model_attributes`
-   (all three charge checkpoints record it) instead of the sibling
-   `run_config.json`, and error on leaf mismatch rather than merging leniently —
-   the discipline `teacher_architecture_from_checkpoint` already applies, which
-   is why the teacher path caught its mismatch and the warm-start path did not.
+`--init-checkpoint` now applies the checkpoint's **own** `model_attributes`
+before building the model, and refuses a parameter tree that does not line up
+unless `--init-allow-partial` is passed. Explicit non-default architecture flags
+still win, so deliberately adding a head to fine-tune still works — but it can no
+longer happen silently.
+
+Fixing the Q⁰ sbatch flags by hand would *not* have been sufficient. `--n-res 2`
+and `--num-iterations 3` both equal their parser defaults, and the override logic
+treats "equals the default" as "inherit" — so the values were already eligible to
+be inherited; the problem was that the source being inherited from was the wrong
+file. Only the checkpoint's own record carries the right answer.
+
+Verified against the real checkpoint (job 206099):
+
+```
+Applying architecture recorded in …/spooky_so3lr_charges/epoch-0002 (model_attributes)
+  Overriding cutoff: 6.0 -> 4.0 (from model_attributes)
+  Overriding efa: False -> True (from model_attributes)
+  Overriding n_res: 2 -> 3 (from model_attributes)
+  Overriding num_iterations: 3 -> 2 (from model_attributes)
+  Overriding use_energy_bias: False -> True (from model_attributes)
+```
+
+### A fourth discrepancy the leaf check could never catch
+
+`cutoff: 6.0 -> 4.0`. **Epoch-2 was trained with a 4 Å cutoff**; every Q⁰ script
+passes 6.0, and the sibling `run_config.json` also says 6.0.
+
+Cutoff does not change any parameter *shape*, so all 41 leaves would have loaded
+cleanly and the strict leaf check would have reported nothing — the model would
+simply have computed different physics from the one whose weights it holds. This
+is the argument for preferring `model_attributes` over merely validating shapes:
+shape agreement is necessary, not sufficient.
 
 Any epoch-2 quantity measured through the *retraining* scripts should be
-re-derived after this fix. Numbers from the evaluator may be unaffected if it
-builds the architecture from `model_attributes`; that is worth checking before
-concluding anything about epoch-2 itself.
+re-derived. Numbers from the evaluator may be unaffected if it builds the
+architecture from `model_attributes`; that is worth checking before concluding
+anything about epoch-2 itself — including its 9.16 eV/Å static max force.
 
 ## Job outcomes
 

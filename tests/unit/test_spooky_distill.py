@@ -631,6 +631,121 @@ def test_make_steps_requires_teacher_model_and_params_together(distill_fixture):
         )
 
 
+# ---------------------------------------------------------------------------
+# --init-checkpoint architecture recovery
+# ---------------------------------------------------------------------------
+
+
+def test_checkpoint_architecture_overrides_map_to_cli_flag_names():
+    """model_attributes are model fields; the run applies them as argparse flags."""
+    trainer = _load_trainer()
+    overrides, source = trainer.checkpoint_architecture_overrides(
+        Path("/nonexistent"),
+        {
+            "model_attributes": {
+                "features": 16,
+                "num_iterations": 2,
+                "n_refinement_blocks": 3,
+                "charges": True,
+                "zbl": True,
+                "efa": True,
+                "use_energy_bias": True,
+            }
+        },
+    )
+    assert source == "model_attributes"
+    assert overrides["features"] == 16
+    assert overrides["num_iterations"] == 2
+    assert overrides["n_res"] == 3
+    assert overrides["predict_charges"] is True
+    assert overrides["efa"] is True
+    # --no-zbl is stored as the negation of the model's `zbl` field.
+    assert overrides["no_zbl"] is False
+
+
+def test_checkpoint_architecture_overrides_recover_the_real_epoch2_shape():
+    """The exact case that silently mis-initialized three q0 experiments.
+
+    spooky_so3lr_charges/epoch-0002 is num_iterations=2, n_res=3, while the q0
+    scripts passed 3 and 2. Because 3 is also the parser default for
+    --num-iterations, the 'explicit flag wins' check could not tell it from
+    unset, so only the checkpoint's own record can correct it.
+    """
+    trainer = _load_trainer()
+    overrides, _ = trainer.checkpoint_architecture_overrides(
+        Path("/nonexistent"),
+        {"model_attributes": {"num_iterations": 2, "n_refinement_blocks": 3}},
+    )
+    assert overrides["num_iterations"] == 2
+    assert overrides["n_res"] == 3
+
+
+def test_checkpoint_architecture_overrides_omit_unrecorded_fields():
+    """Fields a checkpoint never recorded must not be asserted as overrides."""
+    trainer = _load_trainer()
+    overrides, _ = trainer.checkpoint_architecture_overrides(
+        Path("/nonexistent"), {"model_attributes": {"features": 16}}
+    )
+    assert overrides["features"] == 16
+    assert "efa" not in overrides
+    assert "cutoff" not in overrides
+
+
+def _tiny_state(params):
+    class _State:
+        def __init__(self, params):
+            self.params = params
+
+        def replace(self, params):
+            return _State(params)
+
+    return _State(params)
+
+
+def test_init_from_checkpoint_refuses_a_partial_warm_start():
+    """A checkpoint missing an entire block must stop the run, not print a count."""
+    trainer = _load_trainer()
+    state = _tiny_state(
+        {"params": {"MessagePass_0": {"k": np.zeros(2)}, "MessagePass_1": {"k": np.zeros(2)}}}
+    )
+    restored = {"params": {"params": {"MessagePass_0": {"k": np.ones(2)}}}}
+    with pytest.raises(ValueError, match="randomly initialized"):
+        trainer._initialize_from_checkpoint(Path("/ckpt"), state, restored=restored)
+
+
+def test_init_from_checkpoint_refuses_to_silently_discard_checkpoint_weights():
+    trainer = _load_trainer()
+    state = _tiny_state({"params": {"MessagePass_0": {"k": np.zeros(2)}}})
+    restored = {
+        "params": {
+            "params": {"MessagePass_0": {"k": np.ones(2)}, "MessagePass_1": {"k": np.ones(2)}}
+        }
+    }
+    with pytest.raises(ValueError, match="discarded"):
+        trainer._initialize_from_checkpoint(Path("/ckpt"), state, restored=restored)
+
+
+def test_init_allow_partial_is_the_documented_escape_hatch():
+    trainer = _load_trainer()
+    state = _tiny_state(
+        {"params": {"MessagePass_0": {"k": np.zeros(2)}, "new_head": {"k": np.zeros(2)}}}
+    )
+    restored = {"params": {"params": {"MessagePass_0": {"k": np.ones(2)}}}}
+    out = trainer._initialize_from_checkpoint(
+        Path("/ckpt"), state, restored=restored, allow_partial=True
+    )
+    np.testing.assert_array_equal(out.params["params"]["MessagePass_0"]["k"], np.ones(2))
+    np.testing.assert_array_equal(out.params["params"]["new_head"]["k"], np.zeros(2))
+
+
+def test_init_from_checkpoint_accepts_an_exact_match():
+    trainer = _load_trainer()
+    state = _tiny_state({"params": {"MessagePass_0": {"k": np.zeros(2)}}})
+    restored = {"params": {"params": {"MessagePass_0": {"k": np.ones(2)}}}}
+    out = trainer._initialize_from_checkpoint(Path("/ckpt"), state, restored=restored)
+    np.testing.assert_array_equal(out.params["params"]["MessagePass_0"]["k"], np.ones(2))
+
+
 def test_make_steps_requires_an_alignment_when_a_teacher_is_given(distill_fixture):
     trainer = distill_fixture["trainer"]
     with pytest.raises(ValueError, match="teacher_alignment is required"):
