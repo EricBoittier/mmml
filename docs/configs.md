@@ -38,7 +38,8 @@ checkpoint and the resilient workflow config — run it first when a path is in
 doubt.
 
 Field-by-field reference for these: [md-system-configs.md](md-system-configs.md).
-Preset composition rules: [`mmml/cli/run/presets/README.md`](../mmml/cli/run/presets/README.md).
+Preset composition rules:
+[`mmml/cli/run/presets/README.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/presets/README.md).
 
 ## The `.example.yaml` suffix is load-bearing
 
