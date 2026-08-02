@@ -619,9 +619,11 @@ def _build_window_leg(
     if getattr(cfg, "static_pairs", True):
         # Complete intermolecular list, uploaded once. The switching functions
         # cull by distance on the GPU, so no host rebuild is needed and none of
-        # the per-block transfer cost is paid. Measured 8.3 -> 24 steps/s on
-        # this 2625-atom box. O(N^2), so nl_skin_A and the block cadence in the
-        # caller are the path that scales past ~10k atoms.
+        # the per-block transfer cost is paid. Measured 2.7x faster on this
+        # 2625-atom box (A100, 20-step block), and 5.9x at 300 atoms.
+        # O(N^2), so nl_skin_A and the block cadence in the caller are the path
+        # that scales: they win past ~7000 atoms on GPU, ~2600 on CPU. Energies
+        # are identical either way -- see scripts/bench_static_vs_neighbor_pairs.py.
         leg_nbr = make_static_pair_fn(leg_system, verbose=verbose_pairs)
     else:
         leg_nbr = make_intermolecular_neighbor_fn(
