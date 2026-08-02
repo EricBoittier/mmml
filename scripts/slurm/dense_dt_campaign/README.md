@@ -49,6 +49,23 @@ soft well. The real fix is a GPU retrain at `mm_switch_on=5` (matching deploy)
 so the ML local interaction unlearns contact overbinding under the new taper.
 See `docs/images/dense-dt-campaign/overbind_ablation/`.
 
+### Retrain at `on=5` (warm-start epoch222)
+
+Config: `examples/hybrid_mm_charges/train_fixed_lj_scales_on5.yaml`  
+Tag: `hybrid_mm_lever2_on5_ft` → `artifacts/lj_scales/ckpts/`
+
+```bash
+mkdir -p artifacts/lj_scales/dense_dt_campaign/logs
+bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5.sh
+# or: sbatch scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh
+```
+
+Defaults: 50 epochs, `n_train=32000` / `n_valid=5950`, CUDA GPU, match
+architecture from epoch222. Overrides: `DDC_ON5_EPOCHS`, `DDC_ON5_TAG`,
+`DDC_ON5_CKPT`, `DDC_ON5_DATA`. After train, re-run contact-ok dimer scans /
+`ablate_overbind.py` on the new best ckpt + sidecar before swapping campaign
+`CKPT`/`SIDECAR` in `run_one.sh`.
+
 ## Where to look
 
 ```bash

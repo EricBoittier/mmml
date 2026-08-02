@@ -1,0 +1,42 @@
+# Lever-2 FT: same Mode A + learnable LJ scales as train_fixed_lj_scales.yaml,
+# but mm_switch_on=5.0 to match dense_dt_campaign soft deploy (DDC_HANDOFF=soft).
+#
+# Warm-start from epoch222 (trained at on=8), then continue on the DCM CGenFF set
+# so local ML can unlearn contact overbinding under the earlier handoff.
+#
+#   bash scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh
+#   # or interactively:
+#   bash scripts/slurm/dense_dt_campaign/train_lever2_on5.sh
+
+data: artifacts/lj_scales/dataset_cgenff.npz
+valid_data: ""
+ckpt_dir: artifacts/lj_scales/ckpts
+tag: hybrid_mm_lever2_on5_ft
+
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: true
+mm_include_lj: true
+lr_solver: mic
+
+ml_switch_width: 1.5
+mm_switch_on: 5.0
+mm_switch_width: 5.0
+
+charges: true
+batch_size: 32
+num_epochs: 50
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+best: true
+features: 64
+max_degree: 0
+num_iterations: 5
+num_basis_functions: 64
+cutoff: 10.0

@@ -65,13 +65,21 @@ Contact minima sit where `ml_scale=1` even under soft lever-2 (ML full below 3.5
 | **Retrain at on=5** with dimer soft targets | keep ~−4 | should unlearn | **recommended** |
 
 ```bash
+# Preferred: GPU sbatch (records job id)
+mkdir -p artifacts/lj_scales/dense_dt_campaign/logs
+bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5.sh
+
+# Equivalent one-shot (same defaults as train_fixed_lj_scales_on5.yaml)
 uv run mmml physnet-train \
-  --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml \
+  --config examples/hybrid_mm_charges/train_fixed_lj_scales_on5.yaml \
   --data artifacts/lj_scales/dataset_cgenff.npz \
+  --valid-data "" \
   --physnet-checkpoint artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json \
+  --match-checkpoint-architecture \
   --hybrid-mm --learn-mm-lj-scales --lr-solver mic \
   --mm-switch-on 5.0 --ml-switch-width 1.5 --mm-switch-width 5.0 \
-  --tag hybrid_mm_lever2_on5_ft --num-epochs 50
+  --tag hybrid_mm_lever2_on5_ft --num-epochs 50 \
+  --n-train 32000 --n-valid 5950
 ```
 
 ## Assets
