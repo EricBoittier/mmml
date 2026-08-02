@@ -74,6 +74,85 @@ PSF + PDB + box → MolecularSystem
 
 Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/m/yaml/umbrella_nc_tip3.yaml).
 
+#### Pair lists: static or rebuilt
+
+`hybrid_jaxmd` has two ways to feed MM pairs to the device, chosen by
+`static_pairs` (default **on**):
+
+| `static_pairs` | What happens | Use when |
+|---|---|---|
+| `true` (default) | The complete intermolecular list is built once and uploaded once. The switching functions cull by distance on the GPU, so no host rebuild happens and none of the per-block transfer cost is paid. Measured 8.3 → 24 steps/s on a 2625-atom box. | Solute in a few thousand solvent atoms |
+| `false` | `make_intermolecular_neighbor_fn` rebuilds a padded list on the host, with `nl_skin_A` of Verlet skin and a block size from `mmml.md.nl_cadence`. | Above ~10k atoms, where the O(N²) energy costs more than the rebuild saves |
+
+Correctness is the same either way: the switched force field makes distant pairs
+contribute exactly zero, so a complete list and a cutoff list give the same
+energy. Only the cost differs.
+
+#### Pre-equilibration and window chaining
+
+A Packmol box has the right density from the first step but no liquid structure,
+and the first solvation shell around a charged solute takes tens to hundreds of
+picoseconds to form. Windows started from it sample a solvent that is still
+relaxing, which under-solvates the solute and biases the barrier high.
+
+| Field | Default | What it does |
+|---|---|---|
+| `pre_equilibrate_ps` | `0.0` | Picoseconds of NVT on the packed box *before any window runs*, restrained at the schedule point nearest the base geometry. Cached to `<output_dir>/../equilibrated_<n>atoms_seed<s>_<ps>ps.npz`, so the cost is paid once per box and survives `--resume`. |
+| `heat_stages` | `0` | Stages over which pre-equilibration raises T from `heat_start_fraction · temperature_K` to the target. A packed box carries no kinetic energy, so assigning full-target velocities in one step is a thermal shock. |
+| `heat_start_fraction` | `0.2` | Where that ramp starts. Must be in (0, 1] — a 0 K start is the shock the staging exists to prevent. |
+| `seed_from_previous_window` | `false` | Seed each window from the previous window's final frame instead of re-stretching from the one base structure, so a relaxed solvation shell travels along the ladder. The solute is still stretched to the new centre; only the solvent is inherited. |
+
+Chaining is applied **only when the full ladder runs in order**. Under
+`--resume` or `--windows` the set of windows that happen to be missing would
+decide what "previous" means, so a chained window would sample a different
+ensemble on a resumed run than on a fresh one; the sampler disables chaining in
+that case and says so. A tell-tale that chaining is off is an identical
+`seed_max|F|` on every window.
+
+#### Reaction-channel restraints
+
+A bias on `ξ = r(A,B) − r(C,D)` fixes the *difference* of two distances and
+leaves their *sum* free. `FlatBottomWall` on the sum and `BondRetentionWall` on
+`min(r)` each bound that direction, but with a **constant** bound — and a
+constant bound is a box, while the reaction path is a line inside it.
+
+`ReactionChannelRestraint` bounds the deviation from the reference path
+*evaluated at the configuration's own ξ*:
+
+\[
+W = \tfrac12 k \max\bigl(|s(R) - s_\mathrm{ref}(\xi(R))| - \mathrm{tol},\ 0\bigr)^2
+\]
+
+with `s_ref` a linear interpolation through `(xi_grid, sum_grid)` — normally the
+median sum per ξ bin of the training set.
+
+Two properties matter for the analysis. It is flat-bottomed within `tol`, so it
+costs nothing on the path itself; and because `s_ref` is evaluated at the
+configuration's own ξ rather than at a window's target, it is one fixed function
+of the coordinates, identical in every window, and **cancels in the MBAR
+reduced-potential differences** exactly as the other walls do. A restraint aimed
+at each window's ξ₀ would not cancel and would force a two-dimensional MBAR.
+
+From the CLI, `--wall-channel A,B,C,D,JSON,GRIDKEY,TOL[,K]` (repeatable). The
+JSON supplies `xi_grid` plus the grid named by `GRIDKEY`: `sum_grid` restrains
+`r(A,B) + r(C,D)`, `cn_grid` restrains `r(C,D)` alone. In YAML, any `walls`
+mapping carrying an `xi_grid` key resolves to this restraint. Atom references
+must be integer indices — unlike the other wall kinds, channel specs are not
+run through hybrid atom-name binding.
+
+#### Paired 2D window centres
+
+`targets_xy` takes explicit `((x0, y0), (x1, y1), …)` centres for a 2D umbrella
+instead of the full `targets_A × targets_y_A` grid, giving one window per pair
+rather than a lattice (`uses_paired_windows` reports which mode is active).
+
+A reaction is a one-dimensional path through a two-dimensional space, so the
+grid is mostly wasted: for a methyl transfer, windows with both r(C–Cl) and
+r(C–N) large are a dissociated methyl and windows with both small are a
+five-coordinate carbon. Neither is on the path, neither is in the training data,
+and sampling them puts the model far outside the region it was fitted on. The
+natural source of centres is the reaction path the model was trained on.
+
 ## Workflow
 
 ```bash
