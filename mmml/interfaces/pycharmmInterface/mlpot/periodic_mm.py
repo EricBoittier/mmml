@@ -12,6 +12,7 @@ ScaFaCoS does not implement LJ; CHARMM is the supported periodic VDW backend.
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -55,6 +56,25 @@ class PeriodicMmConfig:
         return self.lr_solver == "ewald"
 
 
+#: ``periodic_external`` is deprecated. ``jax_mic`` is the supported periodic
+#: MM path: it applies trained per-type LJ scales directly in the JAX pair loop,
+#: whereas ``periodic_external`` takes its VDW from CHARMM IMAGE and can only
+#: receive scales by rewriting the parameter files -- exact, but limited to one
+#: deployment per CHARMM process (a second non-append parameter read silently
+#: zeroes the VDW energy). Keep it only for full-box PME on boxes too large for
+#: MIC; expect it to be removed.
+PERIODIC_EXTERNAL_DEPRECATED = True
+
+_PERIODIC_EXTERNAL_DEPRECATION = (
+    "mm_nonbond_mode=periodic_external is deprecated and will be removed. "
+    "Prefer jax_mic, which applies trained LJ scales in the JAX pair loop with "
+    "no parameter-file rewrite and no once-per-session restriction. "
+    "periodic_external remains only for full-box PME on boxes too large for "
+    "MIC; there, trained scales are deployed into CHARMM's parameters and may "
+    "be deployed only once per process."
+)
+
+
 def resolve_mm_nonbond_mode(args: Any | None) -> MmNonbondMode:
     raw = "jax_mic"
     if args is not None:
@@ -62,6 +82,7 @@ def resolve_mm_nonbond_mode(args: Any | None) -> MmNonbondMode:
     if raw in ("jax_mic", "mic", "jax"):
         return "jax_mic"
     if raw in ("periodic_external", "periodic", "scafacos"):
+        warnings.warn(_PERIODIC_EXTERNAL_DEPRECATION, DeprecationWarning, stacklevel=2)
         return "periodic_external"
     raise ValueError(
         f"mm_nonbond_mode must be jax_mic or periodic_external; got {raw!r}"
