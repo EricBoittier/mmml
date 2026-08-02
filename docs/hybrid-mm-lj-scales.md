@@ -159,7 +159,7 @@ Three things keep it bounded — do all three:
 | Refine ML with Coulomb-only Ewald | `lr_solver: ewald`, `mm_include_lj: false` | Classic Stage 2 TL |
 | Deploy scales + LR Coulomb (large box) | `include_mm: true`, `jax_mic` + `lr_solver: jax_pme` | Pair LJ reads scales; jax-pme k-space Coulomb |
 | Deploy train-matched Ewald+LJ (small/medium) | `include_mm: true`, `lr_solver: ewald`, `--mm-include-lj` (auto-on if scales loaded) | Untapered Ewald + COM-switched LJ |
-| Full-box Ewald via `periodic_external` | `mm_nonbond_mode: periodic_external` | **Scales do not apply** — MLpot refuses `--mm-lj-scales-file` |
+| Full-box Ewald via `periodic_external` | `include_mm: true`, `mm_nonbond_mode: periodic_external`, `lr_solver: ewald`, sidecar explicit or next to checkpoint | CHARMM IMAGE VDW reads scaled parameter copies; full-box Coulomb remains on the selected LR solver |
 
 Parity check (no CHARMM)::
 
@@ -167,6 +167,19 @@ Parity check (no CHARMM)::
 python scripts/check_ewald_train_md_pme_parity.py \
   --data path/to.npz --pme-box-length 30 --include-lj
 ```
+
+Runnable full-box deployment demo:
+
+```bash
+mmml md-system \
+  --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
+  --job-id liquid_nvt_full_box_ewald
+```
+
+Set the checkpoint (and preferably `mm_lj_scales_file`) in the YAML first. The
+demo uses a 30 Å DCM box, native full-box Ewald Coulomb, and CHARMM IMAGE VDW
+loaded from scaled parameter copies. Its short heat/equilibration stages are a
+deployment smoke, not a thermodynamic production trajectory.
 
 ---
 
@@ -228,19 +241,22 @@ include_mm: true              # doMM; jax_mic switched MM
 # mm_lj_scales_file: .../hybrid_mm.json   # optional if auto-found next to checkpoint
 ```
 
-Scales load into `ep_scale` / `sig_scale` only when JAX `doMM` is on
-(`include_mm: true` and not `periodic_external`).
+With `jax_mic`, scales load into the JAX `ep_scale` / `sig_scale` tables. With
+`periodic_external`, `include_mm: true` deploys the same per-type scales into
+temporary CGenFF parameter copies before CHARMM IMAGE VDW is evaluated. The
+sidecar is discovered explicitly or beside the checkpoint in both modes.
 
 ### What is still unsupported
 
 | Goal | Status |
 |------|--------|
-| Production **`periodic_external` + Ewald** MD that still applies `hybrid_mm.json` scales | Unsupported — JAX `doMM` is off; CHARMM IMAGE VDW ignores the sidecar |
+| Production **`periodic_external` + Ewald** MD that applies `hybrid_mm.json` scales | Supported through a once-per-process CHARMM parameter deployment; restart the process to change sidecars |
 | Train ewald+LJ ↔ MD `jax_pme` Coulomb COM-taper identity | Different operators — use native `lr_solver=ewald --mm-include-lj` for train-matched MD, or accept jax_pme taper |
 
-Prefer `jax_mic` (+ optional `jax_pme`) for large liquids; use native ewald+LJ
-for train-matched dimer/small-box checks. Avoid `periodic_external` when you
-need the sidecar.
+Prefer `jax_mic` (+ optional `jax_pme`) for repeated or changing deployments;
+use native ewald+LJ for train-matched dimer/small-box checks. The deprecated
+`periodic_external` path remains available for full-box Coulomb plus CHARMM
+IMAGE VDW, but a CHARMM process may deploy only one distinct sidecar.
 
 ---
 
@@ -424,7 +440,7 @@ LJ scales still live on hybrid / md-system flags, not inside the policy file.
 | Train → MD continuity | Deployed `at_ep`/`at_rm` equal master × trained scale for the right ATC rows |
 | MD loads scales | Verbose MLpot line, or explicit `--mm-lj-scales-file` |
 | Ewald/PME + `mm_include_lj: true` | Fixed scales move switched LJ; `learn_mm_lj_scales` is honored and recovers a planted ε |
-| `periodic_external` + `--mm-lj-scales-file` | **Errors out** — it cannot apply them (see Troubleshooting) |
+| `periodic_external` + `--mm-lj-scales-file` | Live CHARMM IMAGE VDW changes by the planted scale; repeat deployment is a guarded no-op |
 
 Local unit tests (no CHARMM / no GPU required for these):
 
@@ -433,6 +449,12 @@ uv run pytest tests/unit/test_mm_lj_scales.py \
               tests/unit/test_mm_lj_scales_learning.py \
               tests/unit/test_hybrid_energy.py -q
 ```
+
+The hosted PyCHARMM smoke additionally runs
+`test_scaled_lj_charmm_in_the_loop.py` in its own process. That test constructs
+a real cubic IMAGE cell, verifies that a planted epsilon scale changes CHARMM's
+live VDW energy by the exact factor, rebuilds the PSF/IMAGE state, and confirms
+that repeated or conflicting deployments cannot silently corrupt the energy.
 
 `test_mm_lj_scales.py` covers the mechanics (attach/split/apply, JSON I/O, ATC
 remap, nonzero gradients). `test_mm_lj_scales_learning.py` covers planted-scale
@@ -476,8 +498,8 @@ where the volume was actually measured. See
 |---------|----------------|
 | `learn_mm_lj_scales` silently false | `mm_include_lj: false` — there is no LJ term to differentiate, under any solver |
 | MD ignores scales | Missing `hybrid_mm.json`, wrong path, or `learn_mm_lj_scales: false` in sidecar |
-| `--mm-lj-scales-file … but JAX MM is off` error | You asked to deploy trained LJ under `periodic_external` or with `include_mm: false`, where nothing can consume it. Switch to `--mm-nonbond-mode jax_mic --include-mm`, or drop the flag to run stock CGenFF LJ on purpose |
-| `WARNING: … carries trained MM LJ scales but JAX MM is off` | A `hybrid_mm.json` was auto-discovered next to the checkpoint but the run cannot apply it — this run is using **stock** CGenFF LJ. Harmless if intended; otherwise switch to `jax_mic` |
+| `--mm-lj-scales-file … but no LJ backend can consume it` | `include_mm: false` disables both JAX LJ and CHARMM parameter deployment. Enable MM or drop the sidecar intentionally |
+| `LJ scales were already deployed … restart CHARMM` | A second distinct sidecar was requested in one process. This is refused because a second non-append parameter read can zero CHARMM VDW; start a fresh process |
 | Loss goes `nan` mid-run after training cleanly for many epochs | An LJ scale drifted out of physical range — ε crossing zero NaNs `sqrt(eps_i eps_j)`, σ drifting up drags the \(r^{-12}\) wall into sampled separations. Fixed by the projection above; if you see it again, the scales are saturating and the LJ is compensating for something else |
 | Several types pinned exactly at a bound | The fit wants LJ the bounds forbid. Check the handoff cutoffs and whether `--electrostatics-off-end` is beyond `--cutoff` before widening anything |
 | `carries LJ scales outside the trainable bounds` warning on load | Sidecar from a run predating the bounds (or hand-edited). It still deploys, but the LJ it applies is not something training could produce today |
