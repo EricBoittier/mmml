@@ -1203,6 +1203,13 @@ def load_transfer_init_params(
             teacher_params, teacher_config = load_physnet_checkpoint(teacher_path)
         print(f"Loaded teacher checkpoint: {teacher_path}")
 
+    # Portable JSON often stores a bare module tree (Embed_0, …). Student training
+    # merges into model.init() so it still works; teacher apply does not — wrap.
+    if init_params is not None:
+        init_params = normalize_flax_params_for_apply(init_params, backend="numpy")
+    if teacher_params is not None:
+        teacher_params = normalize_flax_params_for_apply(teacher_params, backend="numpy")
+
     arch_config = warm_config or teacher_config
     if args.match_checkpoint_architecture and arch_config is not None:
         apply_checkpoint_architecture(args, arch_config)
