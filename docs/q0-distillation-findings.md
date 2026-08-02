@@ -128,6 +128,25 @@ Applying architecture recorded in …/spooky_so3lr_charges/epoch-0002 (model_att
   Overriding use_energy_bias: False -> True (from model_attributes)
 ```
 
+The warm-start then loads cleanly, and the distilled smoke completes (job
+206104). Same script, same teacher, same 40 steps — only the init differs:
+
+| | before fix (206089) | after fix (206104) |
+|---|---:|---:|
+| warm-start | 36 loaded / 10 random / 2 dropped | **41 / 0 / 0** |
+| `E_MAE` (eV) | 150150 | 339 |
+| `F_MAE` (eV/Å) | 2438 | 0.765 |
+| `Q_MAE` (e) | 4.46 × 10⁶ | 1.48 |
+| `valid_F_MAE` (eV/Å) | 1560 | 0.485 |
+
+Forces land in a physically plausible range for the first time. The teacher also
+behaves as a regularizer rather than a competing objective: student-vs-teacher
+`TF_MAE` 0.829 against student-vs-reference `F_MAE` 0.765, and `TE_MAE` 343.7
+against `E_MAE` 339.5.
+
+These are 40 steps on the largest atom-count bucket and should not be read as
+converged quality — but the change is unambiguous.
+
 ### A fourth discrepancy the leaf check could never catch
 
 `cutoff: 6.0 -> 4.0`. **Epoch-2 was trained with a 4 Å cutoff**; every Q⁰ script
