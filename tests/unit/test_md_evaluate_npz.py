@@ -117,6 +117,55 @@ def test_attach_ase_mmml_forwards_ml_charge_configuration(monkeypatch) -> None:
     assert captured["mm_latent_charge_template"] is None
 
 
+@pytest.mark.parametrize("multi", [False, True])
+def test_evaluate_npz_declares_the_unit_it_actually_stores(tmp_path: Path, multi: bool) -> None:
+    """The declared unit for E must match the number stored in E.
+
+    ``E`` is written as eV * EV_TO_HARTREE but was declared "ev", so
+    ``units_from_npz`` reported a label 27.211x off. Asserted against CODATA
+    rather than against EV_TO_HARTREE, so a wrong internal constant cannot make
+    this pass by being consistently wrong with the writer.
+    """
+    from mmml.data.units import units_from_npz
+
+    hartree_to_ev = 27.211386245988  # CODATA 2018
+    energy_ev = -19.9964262266207
+    z = np.array([8, 1, 1, 8, 1, 1], dtype=np.int32)
+    r = np.zeros((6, 3), dtype=np.float64)
+    path = tmp_path / "evaluate.npz"
+
+    if multi:
+        save_evaluate_trajectory_npz_multi(
+            path,
+            atomic_numbers=z,
+            positions=r.reshape(1, 6, 3),
+            energies_eV=np.array([energy_ev]),
+            forces_eV_A=None,
+        )
+    else:
+        save_evaluate_trajectory_npz(
+            path,
+            atomic_numbers=z,
+            positions=r,
+            energy_eV=energy_ev,
+            forces_eV_A=None,
+        )
+
+    with np.load(path, allow_pickle=True) as data:
+        stored_e = float(np.asarray(data["E"]).reshape(-1)[0])
+        stored_e_ev = float(np.asarray(data["E_eV"]).reshape(-1)[0])
+        declared = json.loads(str(np.asarray(data["_mmml_units"]).item()))
+
+    assert stored_e_ev == pytest.approx(energy_ev, rel=1e-12)
+    assert stored_e * hartree_to_ev == pytest.approx(energy_ev, rel=1e-6)
+    assert declared["E"] == "hartree"
+    assert declared["E_eV"] == "ev"
+
+    manifest = units_from_npz(path)
+    assert manifest is not None
+    assert manifest.arrays["E"] == "hartree"
+
+
 def test_save_evaluate_trajectory_npz_roundtrip(tmp_path: Path) -> None:
     z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
     r = np.random.default_rng(0).random((5, 3))

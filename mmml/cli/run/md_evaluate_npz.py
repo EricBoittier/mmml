@@ -1015,6 +1015,26 @@ def _energy_ev_from_metrics(metrics: dict[str, Any]) -> float | None:
     return None
 
 
+def _evaluate_npz_units_json() -> str:
+    """Units declared inside the evaluate NPZs.
+
+    ``E`` holds the eV energy multiplied by ``EV_TO_HARTREE``, so it is hartree —
+    it was previously declared "ev", which made ``units_from_npz`` hand every
+    downstream consumer a label 27.211 times off the stored value. Note that this
+    is a model energy carrying an arbitrary zero, not a QM total energy; only its
+    variation across frames is meaningful.
+    """
+    return json.dumps(
+        {
+            "E": "hartree",
+            "E_eV": "ev",
+            "F": "ev_angstrom",
+            "F_hartree_bohr": "hartree_bohr",
+            "R": "angstrom",
+        }
+    )
+
+
 def save_evaluate_trajectory_npz(
     path: Path,
     *,
@@ -1034,9 +1054,7 @@ def save_evaluate_trajectory_npz(
         "R": r.reshape(1, n_atoms, 3),
         "E": np.array([float(energy_eV) * EV_TO_HARTREE], dtype=np.float64),
         "E_eV": np.array([float(energy_eV)], dtype=np.float64),
-        "_mmml_units": np.array(
-            json.dumps({"E": "ev", "F": "ev_angstrom", "R": "angstrom", "E_eV": "ev"})
-        ),
+        "_mmml_units": np.array(_evaluate_npz_units_json()),
     }
     if forces_eV_A is not None:
         f_ev = np.asarray(forces_eV_A, dtype=np.float64).reshape(n_atoms, 3)
@@ -1102,9 +1120,7 @@ def save_evaluate_trajectory_npz_multi(
         "R": r,
         "E": e_ev * EV_TO_HARTREE,
         "E_eV": e_ev,
-        "_mmml_units": np.array(
-            json.dumps({"E": "ev", "F": "ev_angstrom", "R": "angstrom", "E_eV": "ev"})
-        ),
+        "_mmml_units": np.array(_evaluate_npz_units_json()),
     }
     if frame_indices is not None:
         payload["source_indices"] = np.asarray(frame_indices, dtype=np.int32).reshape(-1)
