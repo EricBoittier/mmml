@@ -2125,6 +2125,47 @@ def set_up_nhc_sim_routine(
             npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
             current_neighbors = (npt_pair_idx, npt_pair_mask)
             npt_pressure = pressure  # Use same pressure as NPT block (handles --pressure 0)
+
+            # MMML_NPT_VIRIAL_SELFCHECK=1: verify the barostat actually sees the
+            # potential. The custom VJP supplies dE/d(perturbation) analytically
+            # (the virial); if that cotangent is wrong or dropped, jax-md's
+            # pressure silently degrades to the kinetic term alone and the
+            # barostat drives the cell on a huge phantom pressure error. That is
+            # exactly the failure this check exists to catch, so compare the
+            # analytic derivative against a central difference of the SAME
+            # energy function -- no reference implementation required.
+            import os as _os
+
+            if _os.environ.get("MMML_NPT_VIRIAL_SELFCHECK") == "1":
+                try:
+                    _nb = (npt_pair_idx, npt_pair_mask)
+                    _h = 1.0e-3
+                    _e_plus = float(
+                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0 + _h, kT, Si_mass)
+                    )
+                    _e_minus = float(
+                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0 - _h, kT, Si_mass)
+                    )
+                    _fd = (_e_plus - _e_minus) / (2.0 * _h)
+                    _analytic = float(
+                        jax.grad(
+                            lambda _p: npt_energy_fn(
+                                md_pos_frac, box_curr, _nb, _p, kT, Si_mass
+                            )
+                        )(1.0)
+                    )
+                    _denom = max(abs(_fd), 1.0e-12)
+                    _rel = abs(_analytic - _fd) / _denom
+                    c.print(Panel(
+                        f"dE/dp analytic {_analytic:.6e} eV\n"
+                        f"dE/dp central-difference (h={_h}) {_fd:.6e} eV\n"
+                        f"relative difference {_rel:.3%}\n"
+                        f"{'OK' if _rel < 0.05 else 'MISMATCH - barostat pressure will be wrong'}",
+                        title="[bold]NPT virial self-check[/bold]",
+                        border_style="green" if _rel < 0.05 else "red",
+                    ))
+                except Exception as _exc:  # diagnostic only; never abort the run
+                    c.print(f"[yellow]NPT virial self-check unavailable: {_exc}[/yellow]")
         elif args.ensemble == "nvt":
             state = init_fn(key, as_jaxmd_dtype(md_pos), mass=Si_mass)
             npt_pair_idx, npt_pair_mask = None, None
