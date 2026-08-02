@@ -61,10 +61,23 @@ def _cell_matrix(cell: Any | None) -> np.ndarray | None:
     return None
 
 
-def _mic(displacements: np.ndarray, cell: np.ndarray | None) -> np.ndarray:
+def _mic(
+    displacements: np.ndarray,
+    cell: np.ndarray | None,
+    inv_cell: np.ndarray | None = None,
+) -> np.ndarray:
+    """Minimum-image displacements.
+
+    ``inv_cell`` may be supplied by callers that apply the MIC repeatedly against
+    a fixed cell. Recomputing ``np.linalg.inv`` per call is pure waste when the
+    cell is constant, and it was measurable: a profile of the ASE
+    pre-minimisation showed 8,293,954 calls to ``numpy.linalg.inv`` costing 141 s
+    of a 1,054 s job, all inverting the same 3x3 box.
+    """
     if cell is None:
         return displacements
-    inv_cell = np.linalg.inv(cell)
+    if inv_cell is None:
+        inv_cell = np.linalg.inv(cell)
     frac = displacements @ inv_cell.T
     frac = frac - np.round(frac)
     return frac @ cell
@@ -164,30 +177,59 @@ def find_worst_intermonomer_overlap(
         return float("inf"), None
 
     cell_mat = _cell_matrix(cell)
-    best_dist = float("inf")
-    best: IntermonomerOverlap | None = None
+    inv_cell = np.linalg.inv(cell_mat) if cell_mat is not None else None
 
-    for mi in range(n_monomers):
-        si, ei = int(offsets[mi]), int(offsets[mi + 1])
-        ri = pos[si:ei]
-        for mj in range(mi + 1, n_monomers):
-            sj, ej = int(offsets[mj]), int(offsets[mj + 1])
-            rj = pos[sj:ej]
-            disp = _mic(ri[:, None, :] - rj[None, :, :], cell_mat)
-            d2 = np.sum(disp * disp, axis=-1)
-            flat_idx = int(np.argmin(d2))
-            local_i, local_j = np.unravel_index(flat_idx, d2.shape)
-            dist = float(np.sqrt(d2[local_i, local_j]))
-            if dist < best_dist:
-                best_dist = dist
-                best = IntermonomerOverlap(
-                    monomer_i=mi,
-                    monomer_j=mj,
-                    atom_i=si + int(local_i),
-                    atom_j=sj + int(local_j),
-                    distance_A=dist,
-                )
-    return best_dist, best
+    # Vectorised over atoms rather than looping over monomer PAIRS. The pair loop
+    # was O(n_monomers^2) in Python -- 732 waters is 267,546 iterations, each
+    # doing its own 3x3 matrix inverse -- and a profile of the ASE
+    # pre-minimisation attributed 444 s of a 1,054 s job (42%) to this function,
+    # via 8,293,926 _mic calls. Here the whole distance matrix is built in numpy
+    # and intra-monomer pairs are masked out, so cost is one pass over n_atoms^2.
+    #
+    # Chunked over rows to bound peak memory: the full displacement tensor is
+    # n_atoms^2 x 3 floats, which for a 2,196-atom box is ~116 MB per temporary
+    # and several are live at once inside the MIC transform.
+    n_atoms = int(pos.shape[0])
+    atom_monomer = np.repeat(np.arange(n_monomers, dtype=np.int64), np.diff(offsets))
+
+    best_d2 = float("inf")
+    best_i = best_j = -1
+    rows_per_chunk = max(1, int(2_000_000 // max(1, n_atoms)))
+
+    for start in range(0, n_atoms, rows_per_chunk):
+        stop = min(start + rows_per_chunk, n_atoms)
+        disp = pos[start:stop, None, :] - pos[None, :, :]
+        if cell_mat is not None:
+            disp = _mic(disp, cell_mat, inv_cell)
+        d2 = np.einsum("ijk,ijk->ij", disp, disp)
+        # Only inter-monomer pairs count; self and intra-monomer are excluded.
+        same = atom_monomer[start:stop, None] == atom_monomer[None, :]
+        d2[same] = np.inf
+        flat = int(np.argmin(d2))
+        li, lj = np.unravel_index(flat, d2.shape)
+        cand = float(d2[li, lj])
+        if cand < best_d2:
+            best_d2 = cand
+            best_i, best_j = start + int(li), int(lj)
+
+    if best_i < 0 or not np.isfinite(best_d2):
+        return float("inf"), None
+
+    # The distance matrix is symmetric, so the argmin may land on either
+    # ordering. Normalise to monomer_i < monomer_j as the pair loop produced.
+    mi, mj = int(atom_monomer[best_i]), int(atom_monomer[best_j])
+    if mi > mj:
+        best_i, best_j = best_j, best_i
+        mi, mj = mj, mi
+
+    best_dist = float(np.sqrt(best_d2))
+    return best_dist, IntermonomerOverlap(
+        monomer_i=mi,
+        monomer_j=mj,
+        atom_i=best_i,
+        atom_j=best_j,
+        distance_A=best_dist,
+    )
 
 
 def push_apart_overlapped_monomers(

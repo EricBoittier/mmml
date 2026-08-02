@@ -178,6 +178,25 @@ a non-git copy of the tree that simply lacks `examples/m/par_ch3cl.prm`, so the
 append never fired and the latch never armed. Hiding those two files on the darwin
 build reproduced the healthy result exactly.
 
+![Two waters of a TIP3:60 box with the nonbonded table live and wiped](images/packmol-monomer-geometry-gate/collapsed_pair.png)
+
+What that does to a structure: the two panels are the *same two waters* of the
+same `TIP3:60` box, from the same viewpoint, after the same SD 50 / ABNR 100. The
+only difference anywhere is `api_read.F90`. On the right the hydrogen has ended
+up on the neighbouring oxygen at **0.000 Å** — bit-identical coordinates, which is
+why only five spheres are visible — while its own O–H is stretched from 0.977 Å
+to 1.274 Å.
+
+That 0.000 Å contact is the same signature as the corrupted `MEOH:327` cache this
+gate was built for, where one monomer's `OG` was bit-identical to another's
+`HG1`. Same failure, now explained: with no van der Waals wall, nothing stops
+opposite charges from meeting.
+
+A whole-box render is not shown, deliberately — at 60 molecules the healthy and
+collapsed boxes look alike, because the damage is a handful of local contacts
+rather than a visibly scrambled cell. That is exactly why the gate measures 1-2
+and 1-3 distances instead of relying on inspection.
+
 Confirmed directly on pc-studix — one compute node, one `libcharmm.so`, one
 checkout, `MEOH:4` L = 15 Å seed 23, the *only* difference being whether the
 bundled append files are reachable (`MMML_CGENFF_EXTRA_RTF` / `_PRM`):

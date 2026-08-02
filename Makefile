@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci coverage-gate
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci coverage-gate check-prs-landed
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -421,6 +421,15 @@ lfs-remove-hooks:
 # Install the repo's git hooks (currently a pre-commit that auto-regenerates the
 # CI-checked generated docs so commits never carry stale copies).
 # Run: make install-hooks
+# Find merged PRs whose content never reached main. GitHub marks a stacked PR
+# "MERGED" when it merges into its own base, which is not the same as landing on
+# main -- #167 merged into a branch that had itself merged 16 seconds earlier, so
+# its files never arrived while the PR looked done.
+# Run: make check-prs-landed
+check-prs-landed:
+	git fetch origin --quiet
+	uv run python scripts/ci/check_merged_prs_landed.py --limit 100
+
 install-hooks:
 	@hooks_dir="$$(git rev-parse --git-path hooks)"; \
 	mkdir -p "$$hooks_dir"; \

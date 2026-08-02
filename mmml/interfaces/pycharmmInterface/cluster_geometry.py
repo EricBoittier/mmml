@@ -50,6 +50,18 @@ def prepare_charmm_notebook(**kwargs: Any) -> None:
 
 
 def _monomer_geometry_is_3d(coords: np.ndarray, *, min_axis_span: float = 0.3) -> bool:
+    """Whether a monomer's IC build produced a genuinely 3D geometry.
+
+    A monoatomic residue has zero span on every axis, which is correct rather
+    than degenerate: there is no internal geometry to build. Without the n < 2
+    short-circuit every single-atom residue is unbuildable -- AR1/KR1/XE1 and
+    the monoatomic ions CLA/POT/SOD/LIT all died with
+    "Monomer AR1 not 3D after minimization (spans Å x=0.00 y=0.00 z=0.00)".
+    ``ensure_monomer_3d_coords`` below already returns early for n < 2; this
+    function disagreeing with it was the inconsistency.
+    """
+    if np.asarray(coords).shape[0] < 2:
+        return True
     span = np.max(coords, axis=0) - np.min(coords, axis=0)
     return float(span[1]) >= min_axis_span and float(span[2]) >= min_axis_span
 
