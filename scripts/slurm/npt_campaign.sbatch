@@ -1,10 +1,14 @@
 #!/bin/bash
 #SBATCH --job-name=npt-lj
 #SBATCH --partition=a100
+#SBATCH --qos=a100-1day
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=12:00:00
+# The QOS is required, not cosmetic: without it the submission falls back to a
+# short default and is rejected with QOSMaxWallDurationPerJobLimit. a100-1day
+# allows up to 24 h (the concurrent des-big jobs run under it at 20 h).
 #SBATCH --output=artifacts/npt_argon_water/logs/%x-%A_%a.out
 #SBATCH --error=artifacts/npt_argon_water/logs/%x-%A_%a.err
 #
@@ -26,7 +30,33 @@ set -uo pipefail
 
 REPO="${MMML_REPO:-$HOME/mmml}"
 cd "$REPO" || exit 1
-source .venv/bin/activate 2>/dev/null
+
+# scicore compute nodes ship an older userland than libcharmm.so was built
+# against, so without the toolchain every run dies at `import pycharmm` with
+#   OSError: ... libstdc++.so.6: version `GLIBCXX_3.4.32' not found
+# Do NOT hand-roll this. scripts/scicore_env.sh is the repo's own prolog and it
+# handles what a hand-rolled `module load` gets wrong: a Slurm shell is not a
+# login shell, so neither `module` nor MODULEPATH exists, and with `module`
+# defined but MODULEPATH empty `module load` finds nothing and fails SILENTLY.
+# It also relaxes `set -u` around the system profile scripts, which otherwise
+# abort the job with no output at all.
+export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+# shellcheck disable=SC1091
+source scripts/scicore_env.sh
+
+# libcharmm.so is a build artifact, so a fresh clone of the repo does not carry
+# one. When running from a side checkout, fall back to the main tree's build.
+if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/mmml/setup/charmm/libcharmm.so" ]]; then
+  export CHARMM_LIB_DIR="$HOME/mmml/setup/charmm"
+  export CHARMM_HOME="$HOME/mmml/setup/charmm"
+  echo "=== CHARMM_LIB_DIR -> $CHARMM_LIB_DIR (this checkout has no built lib)"
+fi
+
+source .venv/bin/activate
+# The shared venv carries an editable install pointing at the MAIN tree, so
+# without this a side checkout silently runs the main tree's code.
+export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" 2>/dev/null
 # Compute nodes have no outbound network; uv would otherwise try pypi and hang.
 export UV_NO_SYNC=1 UV_OFFLINE=1
 
@@ -86,12 +116,29 @@ fi
 
 out="$OUT_ROOT/runs/${tag}_${mode}"
 mkdir -p "$out"
+
+# The certified box must be LOADED, not rebuilt. Without --from-psf/--from-crd
+# and --skip-cluster-build, md-system re-runs Packmol from --composition, and
+# `RESI:1` is an absolute count -- so the run silently becomes a ONE MOLECULE
+# system ("residues TIP3x1") whose density means nothing. The molecule count and
+# cell are read from the box's own box.json so they cannot drift from the file
+# actually being simulated.
+read -r nmol side < <(uv run python -c "
+import json,sys
+b=json.load(open(sys.argv[1]))
+print(int(b['n_molecules']), float(b['box_side_A']))" "$box/box.json") || exit 5
+
 echo "=== [$IDX] $tag / $mode : T=$temp K, P=$press atm, $((EQ_PS+PROD_PS)) ps"
+echo "    box: $nmol x $resid in a $side A cell (loaded, not rebuilt)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1
 
 uv run mmml md-system \
   --setup pbc_npt --backend jaxmd \
-  --composition "${resid}:1" \
+  --composition "${resid}:${nmol}" \
+  --from-psf "$box/model.psf" \
+  --from-crd "$box/model.crd" \
+  --skip-cluster-build \
+  --box-size "$side" \
   --checkpoint "$CKPT/epoch-$EPOCH" \
   --mm-lj-scales-file "$sidecar" \
   --temperature "$temp" --pressure "$press" \

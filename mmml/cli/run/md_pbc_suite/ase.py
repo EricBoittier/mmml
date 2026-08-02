@@ -112,9 +112,19 @@ reset_block_no_internal()
 
 
 def _has_resolved_geometry(coords: np.ndarray, min_span: float = 1.0e-4) -> bool:
-    """Return True if a residue has more than origin/identical coordinates."""
+    """Return True if a residue has more than origin/identical coordinates.
+
+    The span test catches an unresolved IC table, which collapses every atom of
+    a polyatomic residue onto the same point. A **monoatomic** residue has zero
+    span by definition -- there is no internal geometry to resolve -- so the
+    same test would reject a perfectly good single point and make every
+    single-atom residue unbuildable (AR1/KR1/XE1, and the monoatomic ions
+    CLA/POT/SOD/LIT). For one atom, finiteness is the whole check.
+    """
     if coords.size == 0 or not np.all(np.isfinite(coords)):
         return False
+    if coords.shape[0] == 1:
+        return True
     return bool(np.max(np.ptp(coords, axis=0)) > min_span)
 
 

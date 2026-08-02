@@ -1,18 +1,20 @@
 * Topology for argon, krypton and xenon.
-*
-* NOT A CHARMM FILE. Split out of toppar_noble_gases_literature.str so it can be
-* consumed by `read.rtf(path, append=True)` via MMML_CGENFF_EXTRA_RTF. The .str
-* is a *stream* file -- it carries its own `read rtf card append` /
-* `read para card flex append` directives -- which a direct RTF read cannot
-* parse. The .str remains the file to `stream`; this one is the file to read.
-*
+* NOT A CHARMM FILE. Split out of toppar_noble_gases_literature.str so it can
+* be consumed by read.rtf(path, append=True) via MMML_CGENFF_EXTRA_RTF. The
+* .str is a *stream* file -- it carries its own "read rtf card append" and
+* "read para card flex append" directives -- which a direct RTF read cannot
+* parse. The .str remains the file to stream; this one is the file to read.
 * Provenance, parameters and caveats: see toppar_noble_gases_literature.str.
 * The paired parameters are par_noble_gases_literature.prm.
-*
-* No version record here on purpose: a second version line under `append` is a
+* No version record here on purpose: a second version line under append is a
 * CHARMM level-1 abort (see _rtf_path_for_append in nbonds_config.py, which
 * strips one if present).
-
+* NOTE ON THIS TITLE BLOCK: every line above starts with "*" and carries text.
+* CHARMM ends the title at the FIRST line containing only "*", and parses
+* everything after it as data -- so a bare "*" in the middle of the comment
+* makes CHARMM read prose as topology and abort. The single bare "*" below is
+* the terminator and must be the only one in the file.
+*
 MASS  -1  AR        39.94800 AR ! argon
 MASS  -1  KR        83.79800 KR ! krypton
 MASS  -1  XE       131.29300 XE ! xenon
