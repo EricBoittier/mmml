@@ -89,7 +89,7 @@ def draw(ax, surf, r, th, *, vmax, title, mask=None, cbar_label):
     ax.set_xlabel("θ  (deg)")
     ax.set_ylabel("R  (Å)")
     ax.set_title(title, loc="left", fontweight="bold", fontsize=11)
-    cb = ax.figure.colorbar(im, ax=ax, pad=0.02, fraction=0.046)
+    cb = ax.figure.colorbar(im, ax=ax, pad=0.04, fraction=0.046)
     cb.set_label(cbar_label, fontsize=9)
     cb.ax.tick_params(labelsize=8)
     return im
@@ -113,7 +113,23 @@ def main() -> int:
         raise SystemExit("missing artifacts/dimer_2d/full/evaluate.npz")
     dimer_term = full - no_dimer if no_dimer is not None else None
 
-    fig, axes = plt.subplots(1, 4, figsize=(19.0, 4.9))
+    # Four verification frames: the reference minimum, the hybrid minimum, the
+    # most repulsive reference cell, and a separated pair. POV-Ray renders of
+    # these exact frames sit in the bottom row so the geometry behind any claim
+    # can be checked rather than taken on trust.
+    picks = []
+    i, j = np.unravel_index(np.argmin(ref), ref.shape)
+    picks.append(("reference minimum", i, j))
+    i, j = np.unravel_index(np.argmin(full), full.shape)
+    picks.append(("hybrid minimum", i, j))
+    i, j = np.unravel_index(np.argmax(ref), ref.shape)
+    picks.append(("most repulsive (ref)", i, j))
+    picks.append(("separated", nr - 1, 0))
+
+    fig = plt.figure(figsize=(19.0, 10.2))
+    gs = fig.add_gridspec(2, 4, height_ratios=[1.15, 1.0], hspace=0.55, wspace=0.42)
+    axes = [fig.add_subplot(gs[0, k]) for k in range(4)]
+    rax = [fig.add_subplot(gs[1, k]) for k in range(4)]
     shared = float(np.percentile(np.abs(ref), 99))
 
     draw(axes[0], ref, r, th, vmax=shared,
@@ -134,6 +150,44 @@ def main() -> int:
     else:
         axes[3].set_axis_off()
 
+    # Mark the verification frames on every surface, same symbols throughout.
+    marks = ["o", "s", "^", "D"]
+    glyphs = ["circle", "square", "triangle", "diamond"]
+    for ax in axes:
+        for (lab, i, j), mk in zip(picks, marks):
+            ax.plot(th[j], r[i], mk, ms=8, mfc="none", mec="0.10", mew=1.8, zorder=6)
+
+    # Bottom row: the rendered frames, labelled with values measured from the
+    # coordinates themselves, not copied from the grid metadata.
+    import matplotlib.image as mpimg
+    import sys as _sys
+    if str(Path(__file__).parent) not in _sys.path:
+        _sys.path.insert(0, str(Path(__file__).parent))
+    from render_dimer_2d_frames import frame_metrics
+
+    frames_xyz = np.asarray(g["R"], dtype=np.float64)
+    zz = np.asarray(g["Z"])
+    for ax, (lab, i, j), mk, gl in zip(rax, picks, marks, glyphs):
+        idx = i * nt + j
+        png = ARMS / "renders" / f"frame_{idx:04d}.png"
+        if png.is_file():
+            img = mpimg.imread(png)
+            h, w = img.shape[:2]
+            ax.imshow(img[int(0.04 * h):int(0.96 * h), int(0.04 * w):int(0.96 * w)])
+        else:
+            ax.text(0.5, 0.5, f"missing\n{png.name}", ha="center", va="center",
+                    transform=ax.transAxes, fontsize=9, color="0.4")
+        m = frame_metrics(frames_xyz[idx], zz[idx])
+        ax.set_title(f"[{gl}]  {lab}   frame {idx}", loc="left",
+                     fontweight="bold", fontsize=10)
+        ax.set_xlabel(
+            f"R={m['R_A']:.2f} Å   θ={th[j]:.0f}°   closest contact={m['min_contact_A']:.2f} Å\n"
+            f"E_ref={ref[i, j]:+.2f}   E_hybrid={full[i, j]:+.3f} kcal/mol",
+            fontsize=8.6, color="0.25")
+        ax.set_xticks([]); ax.set_yticks([])
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+
     axes[0].annotate(f"min {ref.min():.2f}\nspan {np.ptp(ref):.2f}",
                      (0.03, 0.94), xycoords="axes fraction", va="top",
                      fontsize=8.5, color="0.15", family="monospace",
@@ -147,12 +201,12 @@ def main() -> int:
         "Water-dimer 2D surfaces — 25 R × 24 θ, rigid TIP3 monomers, "
         "interaction referenced to the largest separation",
         fontsize=13, fontweight="bold")
-    fig.text(0.5, 0.015,
+    fig.text(0.5, 0.008,
              "Hatched: frames with a closest intermolecular contact < 1.4 Å, compressed past physical reach. "
              "(a) is computed independently from CHARMM TIP3 charges and LJ on the identical frames. "
              "MM contributes ~0 below 6 Å by design (--mm-switch-on 6.0), so the hybrid surface here is the ML dimer term.",
              ha="center", fontsize=8.5, color="0.40")
-    fig.tight_layout(rect=(0, 0.055, 1, 0.92), w_pad=2.2)
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=160)
     print(f"wrote {OUT}")
