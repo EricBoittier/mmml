@@ -104,7 +104,14 @@ _CROWDED = {k: v for k, v in _FUNCTIONS.items() if v > _CROWDED_LINES}
 # grow. Raising a number is allowed when the growth is genuinely unavoidable --
 # say why in the commit, so the register keeps meaning something.
 _BASELINE: dict[str, int] = {
-    "mmml/interfaces/pycharmmInterface/mmml_calculator.py::setup_calculator": 3363,
+    # 3363 -> 3445. Two separate movements, recorded together because the entry
+    # had drifted: other work in flight had already taken it to 3413, which fit
+    # inside the grace and so never had to be written down. The remaining +32 is
+    # the bonded-intra damping wiring, and it is call sites only -- the logic
+    # went to module level as `apply_bonded_intra_damping`, `bonded_intra_bundle`
+    # and `resolve_bonded_intra_damping`, which is why they are unit tested and
+    # the enclosing function still is not.
+    "mmml/interfaces/pycharmmInterface/mmml_calculator.py::setup_calculator": 3445,
     "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine": 2522,
     "mmml/interfaces/pycharmmInterface/mlpot/staged_workflow.py::run_staged_workflow": 2469,
     # 2186 -> 1467: its 743-line argparse block became `build_parser`, so the

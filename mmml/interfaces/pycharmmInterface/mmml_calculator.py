@@ -411,6 +411,23 @@ def bonded_intra_damping(
     return s, jnp.where(in_taper, dsdt / span, 0.0)
 
 
+def bonded_intra_per_monomer(
+    eval_fn: Callable[[Array], Tuple[Array, Array]],
+    positions: Array,
+    monomer_idx: Array,
+    atoms_per_monomer: int,
+) -> Tuple[Array, Array]:
+    """Per-monomer CGenFF bonded energy ``(n_mono,)`` and force ``(n_mono, apm, 3)``.
+
+    Forces stay in the monomer's own atom layout rather than being scattered, so
+    the caller can both scatter them for the total and feed them to the damping
+    product rule, which needs them per monomer. Indices are sliced to the real
+    atoms per monomer, so batch padding never reaches the bonded terms.
+    """
+    mono_idx = monomer_idx[:, :atoms_per_monomer]
+    return jax.vmap(eval_fn)(positions[mono_idx])
+
+
 def bonded_intra_contribution(
     eval_fn: Callable[[Array], Tuple[Array, Array]],
     positions: Array,
@@ -420,17 +437,141 @@ def bonded_intra_contribution(
 ) -> Tuple[Array, Array]:
     """Total CGenFF bonded energy and its forces scattered to global atoms.
 
-    Indices are sliced to the real atoms per monomer, so batch padding never
-    reaches the bonded terms. The caller keeps the ML monomer energies and forces
-    for the dimer term: ``E_AB - (E_A + E_B)`` only cancels when both sides come
-    from the same model, so only the contribution to the TOTAL is replaced.
+    The caller keeps the ML monomer energies and forces for the dimer term:
+    ``E_AB - (E_A + E_B)`` only cancels when both sides come from the same model,
+    so only the contribution to the TOTAL is replaced.
     """
     mono_idx = monomer_idx[:, :atoms_per_monomer]
-    e_bonded, f_bonded = jax.vmap(eval_fn)(positions[mono_idx])
+    e_bonded, f_bonded = bonded_intra_per_monomer(
+        eval_fn, positions, monomer_idx, atoms_per_monomer
+    )
     forces = jax.ops.segment_sum(
         f_bonded.reshape(-1, 3), mono_idx.reshape(-1), num_segments=total_atoms
     )
     return jnp.sum(e_bonded), forces
+
+
+def apply_bonded_intra_damping(
+    dimer_int_energies: Array,
+    dimer_int_forces_2d: Array,
+    dimer_pairs: Array,
+    s_monomer: Array,
+    dsde_monomer: Array,
+    f_bonded_monomer: Array,
+    dimer_atom_mask: Array,
+) -> Tuple[Array, Array]:
+    """Damp each dimer's ML interaction by ``s_A * s_B`` of its two monomers.
+
+    Both monomers gate the pair: a dimer's interaction energy is trustworthy only
+    if neither monomer has left the geometry the model was trained on. See
+    ``bonded_intra_damping`` for why the bonded energy is the off-manifold
+    coordinate.
+
+    Forces here are assembled by hand, so the product rule is explicit::
+
+        F = s_A s_B F_int + E_int (s_B dS_A/dR + s_A dS_B/dR)
+
+    and since ``dS/dR = (ds/dE) dE_bonded/dR = -(ds/dE) F_bonded``::
+
+        F = s_A s_B F_int
+            + E_int (ds/dE)_A s_B F_bonded_A
+            + E_int (ds/dE)_B s_A F_bonded_B
+
+    Dropping the last two terms would leave every energy unchanged and silently
+    make the forces non-conservative, which is the exact failure the damping
+    exists to prevent.
+
+    ``dimer_int_forces_2d`` is ``(n_dimers, max_atoms, 3)`` in the dimer's local
+    layout: monomer A's atoms first, then monomer B's (``indices_of_pairs``).
+    ``f_bonded_monomer`` is ``(n_mono, apm, 3)``; this requires the homogeneous
+    monomers that ``build_bonded_intra_evaluator`` already enforces.
+    """
+    apm = f_bonded_monomer.shape[1]
+    max_atoms = dimer_int_forces_2d.shape[1]
+    if 2 * apm > max_atoms:
+        raise ValueError(
+            f"bonded-intra damping needs room for both monomers in the dimer "
+            f"layout: 2*{apm} atoms > max_atoms={max_atoms}"
+        )
+
+    idx_a = dimer_pairs[:, 0]
+    idx_b = dimer_pairs[:, 1]
+    s_a = s_monomer[idx_a]
+    s_b = s_monomer[idx_b]
+
+    coeff_a = dimer_int_energies * s_b * dsde_monomer[idx_a]
+    coeff_b = dimer_int_energies * s_a * dsde_monomer[idx_b]
+
+    ds_term = jnp.zeros_like(dimer_int_forces_2d)
+    ds_term = ds_term.at[:, :apm, :].set(coeff_a[:, None, None] * f_bonded_monomer[idx_a])
+    ds_term = ds_term.at[:, apm : 2 * apm, :].set(
+        coeff_b[:, None, None] * f_bonded_monomer[idx_b]
+    )
+
+    scale = s_a * s_b
+    damped_forces = (
+        dimer_int_forces_2d * scale[:, None, None]
+        + ds_term * dimer_atom_mask[:, :, None]
+    )
+    return dimer_int_energies * scale, damped_forces
+
+
+def resolve_bonded_intra_damping(
+    onset_kcal: float | None,
+    cutoff_kcal: float,
+) -> Tuple[Optional[float], float, str]:
+    """Validate the damping window. Returns ``(onset, cutoff, setup-table label)``.
+
+    ``onset_kcal=None`` is the default and leaves the ML interaction undamped:
+    switching the taper on changes the interaction term of every existing
+    bonded_intra run, so it has to be asked for explicitly rather than inherited.
+    """
+    cutoff = float(cutoff_kcal)
+    if onset_kcal is None:
+        return None, cutoff, "off (ML interaction undamped)"
+    onset = float(onset_kcal)
+    if cutoff <= onset:
+        raise ValueError(
+            "bonded_intra_damp_cutoff_kcal must exceed bonded_intra_damp_onset_kcal; "
+            f"got cutoff={cutoff} <= onset={onset}"
+        )
+    label = (
+        f"ML interaction tapered over E_bonded "
+        f"{onset:g}->{cutoff:g} kcal/mol per monomer"
+    )
+    return onset, cutoff, label
+
+
+def bonded_intra_bundle(
+    eval_fn: Callable[[Array], Tuple[Array, Array]],
+    positions: Array,
+    monomer_idx: Array,
+    atoms_per_monomer: int,
+    total_atoms: int,
+    damp_onset_kcal: Optional[float] = None,
+    damp_cutoff_kcal: float = 15.0,
+) -> Tuple[Array, Array, Optional[Tuple[Array, Array, Array]]]:
+    """Everything the calculator needs from the CGenFF bonded terms in one pass.
+
+    Returns the total bonded energy, its forces scattered to global atoms, and --
+    when damping is enabled -- the ``(s, ds/dE, F_bonded)`` triple that
+    ``apply_bonded_intra_damping`` consumes. The bonded evaluation is shared
+    between the two so the monomers are not walked twice.
+    """
+    mono_idx = monomer_idx[:, :atoms_per_monomer]
+    e_bonded, f_bonded = bonded_intra_per_monomer(
+        eval_fn, positions, monomer_idx, atoms_per_monomer
+    )
+    forces = jax.ops.segment_sum(
+        f_bonded.reshape(-1, 3), mono_idx.reshape(-1), num_segments=total_atoms
+    )
+    damping = None
+    if damp_onset_kcal is not None:
+        s, dsde = bonded_intra_damping(
+            e_bonded, onset_kcal=damp_onset_kcal, cutoff_kcal=damp_cutoff_kcal
+        )
+        damping = (s, dsde, f_bonded)
+    return jnp.sum(e_bonded), forces, damping
 
 
 def setup_calculator(
@@ -495,6 +636,8 @@ def setup_calculator(
     periodic_charmm_vdw: bool = True,
     ml_potential_mode: str = "physnet",
     jax_mm_spoof_psf: Path | str | None = None,
+    bonded_intra_damp_onset_kcal: float | None = None,
+    bonded_intra_damp_cutoff_kcal: float = 15.0,
     electrostatics_damping_sigma: float | None = None,
     mbd_checkpoint: str | Path | bool | None = None,
     mbd_weight: float | None = None,
@@ -828,12 +971,18 @@ def setup_calculator(
         setup_rows.append(("model_restart_path", restart_path.resolve()))
 
     _bonded_intra_eval = None
+    _bonded_damp_onset = None
+    _bonded_damp_cutoff = float(bonded_intra_damp_cutoff_kcal)
     if _bonded_intra_mode:
         _bonded_intra_eval = build_bonded_intra_evaluator(
             atoms_per_monomer_list=atoms_per_monomer_list,
             monomer_psf=jax_mm_spoof_psf,
         )
         setup_rows.append(("bonded_intra_psf", str(jax_mm_spoof_psf)))
+        _bonded_damp_onset, _bonded_damp_cutoff, _damp_label = resolve_bonded_intra_damping(
+            bonded_intra_damp_onset_kcal, bonded_intra_damp_cutoff_kcal
+        )
+        setup_rows.append(("bonded_intra_damping", _damp_label))
 
     # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
     is_json_checkpoint = False
@@ -2707,13 +2856,16 @@ def setup_calculator(
 
         _bonded_E_total = None
         _bonded_F_global = None
+        _dimer_damping = None
         if _bonded_intra_eval is not None:
-            _bonded_E_total, _bonded_F_global = bonded_intra_contribution(
+            _bonded_E_total, _bonded_F_global, _dimer_damping = bonded_intra_bundle(
                 _bonded_intra_eval,
                 positions,
                 monomer_idx_arr_jnp,
                 int(atoms_per_monomer_list[0]),
                 total_atoms,
+                damp_onset_kcal=_bonded_damp_onset,
+                damp_cutoff_kcal=_bonded_damp_cutoff,
             )
 
 
@@ -2743,6 +2895,7 @@ def setup_calculator(
             debug,
             mic_pbc_cell=mic_pbc_cell,
             active_dimer_indices=sparse_active,
+            damping=_dimer_damping,
         )
 
         debug_print(debug, f"DEBUG dimer_contribs: {dimer_contribs}")
@@ -3579,8 +3732,13 @@ def setup_calculator(
         debug: bool = False,
         mic_pbc_cell: Optional[Array] = None,
         active_dimer_indices: Optional[Array] = None,
+        damping: Optional[Tuple[Array, Array, Array]] = None,
     ) -> Dict[str, Array]:
-        """Calculate energy and force contributions from dimers (heterogeneous-safe)."""
+        """Calculate energy and force contributions from dimers (heterogeneous-safe).
+
+        ``damping`` is the optional bonded-intra guard, ``(s, ds/dE, F_bonded)``
+        per monomer; see ``apply_bonded_intra_damping``.
+        """
         # Get dimer energies and forces
         ml_dimer_energy = jnp.array(e[n_monomers:]).flatten()
         monomer_batch_atoms = n_monomers * max_atoms
@@ -3610,6 +3768,21 @@ def setup_calculator(
             * dimer_lambda[:, None, None]
             * dimer_atom_mask_jnp[:, :, None]
         )
+        # Damp before the distance switching, so apply_dimer_switching's own
+        # product rule closes over the already-damped E and F -- that composes
+        # into the correct derivative of the triple product S(r) * s_A * s_B * E_int.
+        # Also before the active mask, so inactive dimers still end up at zero.
+        if damping is not None:
+            _s_mono, _dsde_mono, _f_bonded_mono = damping
+            dimer_int_energies, dimer_interaction_forces_2d = apply_bonded_intra_damping(
+                dimer_int_energies,
+                dimer_interaction_forces_2d,
+                dimer_pair_arr_jnp,
+                _s_mono,
+                _dsde_mono,
+                _f_bonded_mono,
+                dimer_atom_mask_jnp,
+            )
         if active_dimer_indices is not None:
             idx = jnp.asarray(active_dimer_indices, dtype=jnp.int32)
             active_mask = jnp.zeros(n_dimers, dtype=jnp.bool_).at[idx].set(True)
