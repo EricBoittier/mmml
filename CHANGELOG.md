@@ -71,6 +71,25 @@ and versioning process.
 
 ### Fixed
 
+- **libcharmm did not link on arm64 (macOS), at any MLpot tier.** `api_func.F90`
+  held twelve `max_Npr` integer arrays in static storage — 6.1 GB at
+  `max_Npr = 128000000` — which overruns arm64's ±4 GB ADRP reach
+  (`ld: fixup error (kind=arm64_was_adrp_ldr_got_elide_got) ... ADRP out of
+  range`) and only linked on x86_64 because the build passes `-mcmodel=medium`.
+  They are now allocated on the heap on first MLpot use, so the linker sees
+  twelve descriptors: `__common` drops from 207 MB at the 4 M tier to 15 MB at
+  the 128 M tier, and `scripts/rebuild_charmm_mlpot.sh` completes on darwin-arm64
+  at the full tier. Capacity, the `max_Npr` bounds checks and the `tier_*` build
+  layout are unchanged; a failed allocation now reports the requested size
+  instead of crashing.
+- **Every MLpot neighbour-list update walked all `max_Npr` entries.** The
+  Fortran-to-Python index shift at the end of `mlpot_update` was written as
+  whole-array `idxp = idxp - 1` over eight arrays, so it touched
+  8 × `max_Npr` elements per update regardless of system size — over a billion
+  integer updates at the 128 M tier — and first-touched every page, forcing the
+  whole tier resident. Now bounded to the populated prefix (`natom`/`natim`,
+  `Nmlp`, `Nmlmmp`), which is exactly what `mlpot_call` and `mlpot_export_*`
+  read.
 - **The Packmol cluster cache stored CHARMM-minimized coordinates without
   validating them.** A broken CHARMM/pycharmm build returned scrambled
   coordinates (a `MEOH:327` / L=28 build: all 327 monomers distorted, worst 1-2/1-3
