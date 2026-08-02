@@ -103,7 +103,7 @@ if [[ "$prep" == "campaign" ]]; then
     --no-handoff-quality-gate
     --mm-charge-mode fixed
     --jax-md-skin-distance 0.5 --jax-md-update-interval 40
-    --steps-per-recording 100
+    --steps-per-recording "${REC:-100}"
   )
 else
   # What the failing campaign used.
@@ -113,7 +113,7 @@ else
     --jaxmd-minimize-steps 1000 --jaxmd-pbc-minimize-steps 1000
     --no-handoff-quality-gate
     --jax-md-skin-distance 0.25 --jax-md-update-interval 0
-    --steps-per-recording 100
+    --steps-per-recording "${REC:-100}"
   )
 fi
 

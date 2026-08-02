@@ -1526,8 +1526,20 @@ def set_up_nhc_sim_routine(
                 mm_pair_mask=pair_mask,
                 box=box_eff,
             )
-            # grad(E) = -F; quantity.force = -grad, so we supply -F as grad
-            grad_frac = as_jaxmd_dtype(-F * g)
+            # grad(E) = -F in REAL space. The primal argument is FRACTIONAL, and
+            # real = box . frac, so the cotangent needs the chain-rule factor:
+            #     dE/dfrac = box^T . dE/dreal   ->   (-F) @ box_eff
+            # Returning -F alone under-scales the position gradient by the box
+            # length, which for a 28.0 A cell is 28x. Measured by the in-situ
+            # self-check (MMML_NPT_VIRIAL_SELFCHECK=1) on the certified TIP3 box:
+            #     dE/dfrac analytic            -4.196231e-01 eV
+            #     dE/dfrac central difference  -1.178808e+01 eV
+            #     ratio fd/analytic             28.0921      (box side 28.0 A)
+            # A mis-scaled position gradient corrupts the first integration step,
+            # which is what "E_pot = 8e7 eV at step 1, immediately after a
+            # minimisation that ended at -8751 eV, with T and the cell both
+            # healthy" looks like.
+            grad_frac = as_jaxmd_dtype((-F @ box_eff) * g)
 
             # dE/d(perturbation) is the VIRIAL, and returning None for it makes
             # the barostat blind to the potential.
@@ -1550,9 +1562,33 @@ def set_up_nhc_sim_routine(
             if perturbation is None:
                 grad_pert = None
             else:
+                # NOTE: -(1/3p) * sum_i F_i . r_i is WRONG here, and was tried.
+                # That is the *atomic* virial, valid only without minimum-image
+                # wrapping. Under PBC the energy depends on `perturbation`
+                # through two channels -- the positions scale AND the box scales,
+                # which rescales the MIC displacements -- and the correct object
+                # is the *pair* virial sum_ij f_ij . d_ij, which this backward
+                # pass cannot see (it has forces, not pair displacements). The
+                # in-situ self-check (MMML_NPT_VIRIAL_SELFCHECK=1) reported the
+                # atomic form as +3.971e2 eV against a central difference of
+                # -3.319e1 eV: wrong sign, 1296% off.
+                #
+                # Differentiate the real energy instead. Two extra evaluations
+                # per backward pass, but it captures both channels by
+                # construction and needs no assumption about the MIC.
                 p_val = jnp.asarray(perturbation, dtype=jnp.float32)
-                virial = jnp.sum(F * real_pos)
-                grad_pert = as_jaxmd_dtype(-virial / (3.0 * p_val) * g)
+                _h = jnp.asarray(1.0e-3, dtype=jnp.float32)
+                _e_plus = _npt_energy_fn_raw(
+                    frac_pos, box=box, neighbor=neighbor,
+                    perturbation=p_val * (1.0 + _h),
+                )
+                _e_minus = _npt_energy_fn_raw(
+                    frac_pos, box=box, neighbor=neighbor,
+                    perturbation=p_val * (1.0 - _h),
+                )
+                grad_pert = as_jaxmd_dtype(
+                    (_e_plus - _e_minus) / (2.0 * _h * p_val) * g
+                )
             return (grad_frac, None, None, grad_pert, None, None)
 
         npt_energy_fn.defvjp(npt_energy_fn_fwd, npt_energy_fn_bwd)
@@ -2156,13 +2192,43 @@ def set_up_nhc_sim_routine(
                     )
                     _denom = max(abs(_fd), 1.0e-12)
                     _rel = abs(_analytic - _fd) / _denom
+                    # Also check the POSITION cotangent. The bwd returns -F, the
+                    # real-space force, as dE/d(frac). But E depends on frac via
+                    # real = box . frac, so dE/dfrac = box^T . dE/dreal -- a
+                    # factor of the box (28x for this cell) that is missing. A
+                    # mis-scaled position gradient corrupts the very first
+                    # integration step, which is what "E_pot = 8e7 eV at step 1
+                    # after a minimisation that ended at -8751 eV" looks like.
+                    _i0 = 0
+                    _d = 1.0e-4
+                    _fp = md_pos_frac
+                    _pert1 = 1.0
+
+                    def _e_at(fp):
+                        return float(npt_energy_fn(fp, box_curr, _nb, _pert1, kT, Si_mass))
+
+                    _fp_p = _fp.at[_i0, 0].add(_d)
+                    _fp_m = _fp.at[_i0, 0].add(-_d)
+                    _fd_frac = (_e_at(_fp_p) - _e_at(_fp_m)) / (2.0 * _d)
+                    _an_frac = float(
+                        jax.grad(lambda fp: npt_energy_fn(fp, box_curr, _nb, _pert1, kT, Si_mass))(_fp)[_i0, 0]
+                    )
+                    _dn = max(abs(_fd_frac), 1.0e-12)
+                    _rel_frac = abs(_an_frac - _fd_frac) / _dn
+                    _ratio = _fd_frac / _an_frac if abs(_an_frac) > 1e-12 else float("nan")
+
                     c.print(Panel(
                         f"dE/dp analytic {_analytic:.6e} eV\n"
                         f"dE/dp central-difference (h={_h}) {_fd:.6e} eV\n"
                         f"relative difference {_rel:.3%}\n"
-                        f"{'OK' if _rel < 0.05 else 'MISMATCH - barostat pressure will be wrong'}",
-                        title="[bold]NPT virial self-check[/bold]",
-                        border_style="green" if _rel < 0.05 else "red",
+                        f"{'OK' if _rel < 0.05 else 'MISMATCH - barostat pressure will be wrong'}\n"
+                        f"---- position cotangent (atom 0, x) ----\n"
+                        f"dE/dfrac analytic {_an_frac:.6e} eV\n"
+                        f"dE/dfrac central-difference {_fd_frac:.6e} eV\n"
+                        f"relative difference {_rel_frac:.3%}   fd/analytic = {_ratio:.4f}\n"
+                        f"{'OK' if _rel_frac < 0.05 else 'MISMATCH - integration will be wrong'}",
+                        title="[bold]NPT VJP self-check[/bold]",
+                        border_style="green" if (_rel < 0.05 and _rel_frac < 0.05) else "red",
                     ))
                 except Exception as _exc:  # diagnostic only; never abort the run
                     c.print(f"[yellow]NPT virial self-check unavailable: {_exc}[/yellow]")
