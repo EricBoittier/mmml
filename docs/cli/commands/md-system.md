@@ -1266,6 +1266,19 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         on rigid monomers and carries no restoring force for
                         intramolecular coordinates. See docs/hybrid-bonded-
                         intra.md.
+  --bonded-intra-damp-onset BONDED_INTRA_DAMP_ONSET
+                        Enable the bonded_intra damping guard: taper the ML
+                        dimer interaction to zero as either monomer's CGenFF
+                        bonded energy rises from this value (kcal/mol) to
+                        --bonded-intra-damp-cutoff. The interaction term is a
+                        difference of two model totals and is extrapolation
+                        noise off-manifold. Off unless set; 5.0 is the measured
+                        onset above ordinary thermal distortion.
+  --bonded-intra-damp-cutoff BONDED_INTRA_DAMP_CUTOFF
+                        Bonded energy (kcal/mol) at which the ML dimer
+                        interaction is fully damped. Ignored unless --bonded-
+                        intra-damp-onset is set. Default 15.0 is where the
+                        measured noise well sits (O-H = 0.771 A).
   --mm-nl-backend {auto,vesin,cell_list,jax_md}
                         MM neighbor-list builder for jaxmd (default:
                         MMML_MM_NL_BACKEND or auto→vesin).
