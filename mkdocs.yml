@@ -103,6 +103,7 @@ nav:
           - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
           - NH₃–CH₃Cl PhysNet results: examples/nh3-ch3cl-results.md
           - Menshutkin reactive ML/MM free energies: examples/menshutkin.md
+          - Menshutkin campaign record + general recipe: examples/menshutkin-campaign-record.md
       - Commands:
           # CLI_NAV_START: MD & campaigns
           - md-system: cli/commands/md-system.md
@@ -234,6 +235,7 @@ nav:
       - sections/internals.md
       - md-system / cg_jaxmd capabilities checklist: md-cg-capabilities-checklist.md
       - Design & handoff:
+          - "Merge record: PR #185 electrical embedding": pr-185-merge-record.md
           - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
           - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
           - 1D dimer scan design: dimer-scan-design.md
