@@ -1788,7 +1788,7 @@ def load_distillation_teacher(
     # older checkpoints do not record the flag at all. Try the recorded/likely
     # setting first and fall back to the other, accepting only an exact tree
     # match so the choice is verified rather than assumed.
-    attempts: list[tuple[bool, set[str]]] = []
+    attempts: list[tuple[bool, str]] = []
     for use_cgenff in (prefer_cgenff, not prefer_cgenff):
         variables = teacher.init(
             jax.random.PRNGKey(0),
@@ -1813,9 +1813,15 @@ def load_distillation_teacher(
         params, n_loaded, n_fresh, n_skipped = _merge_compatible_params(
             variables, loaded_params
         )
-        init_paths = _param_paths(variables)
-        extra = _param_paths(loaded_params) - init_paths
-        attempts.append((use_cgenff, extra))
+        extra = _param_paths(loaded_params) - _param_paths(variables)
+        attempts.append(
+            (
+                use_cgenff,
+                f"{n_skipped} shape-mismatched, {n_fresh} missing from the "
+                f"checkpoint, {len(extra)} present only in the checkpoint"
+                + (f" ({', '.join(sorted(extra)[:5])})" if extra else ""),
+            )
+        )
         if n_fresh == 0 and n_skipped == 0 and not extra:
             fingerprint = checkpoint_fingerprint(checkpoint_path)
             provenance = {
@@ -1825,7 +1831,14 @@ def load_distillation_teacher(
                     k: v for k, v in architecture.kwargs.items() if k != "max_padded_atoms"
                 },
                 "architecture_defaults_used": list(architecture.missing_fields),
-                "uses_cgenff_vdw": bool(use_cgenff),
+                # Whether the CGenFF LJ term was actually active, not merely
+                # requested: with no CGenFF tables in the cache both attempts
+                # are identical, and reporting "True" there would overstate
+                # what the teacher was evaluated with.
+                "uses_cgenff_vdw": bool(
+                    use_cgenff and sample_batch.get("cgenff_type_idx") is not None
+                ),
+                "cgenff_requested": bool(use_cgenff),
                 "n_param_leaves": int(n_loaded),
                 "teacher_train_cache": (
                     str(config.get("cache_path")) if isinstance(config, Mapping) else None
@@ -1836,8 +1849,7 @@ def load_distillation_teacher(
             return teacher, params, (not use_cgenff), provenance
 
     detail = "; ".join(
-        f"cgenff={use_cgenff}: {len(extra)} unmatched checkpoint leaves"
-        for use_cgenff, extra in attempts
+        f"cgenff={use_cgenff}: {summary}" for use_cgenff, summary in attempts
     )
     raise ValueError(
         f"Teacher checkpoint {checkpoint_path} does not match the architecture "

@@ -189,6 +189,14 @@ def teacher_architecture_from_checkpoint(
         kwargs[field_name] = default
         missing.append(field_name)
 
+    if "trainable_zbl" in missing and kwargs["zbl"]:
+        # Every checkpoint produced before trainable_zbl was recorded used
+        # trainable ZBL parameters, so the field's *current* default (False) is
+        # the wrong reconstruction for a legacy teacher: the module would build
+        # no repulsion parameters and the checkpoint's four would be dropped.
+        # This mirrors the same legacy inference the warm-start path applies.
+        kwargs["trainable_zbl"] = True
+
     kwargs["max_padded_atoms"] = int(max_padded_atoms)
     return TeacherArchitecture(
         kwargs=kwargs, source=source, missing_fields=tuple(sorted(missing))
