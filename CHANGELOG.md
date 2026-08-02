@@ -90,6 +90,29 @@ and versioning process.
   whole tier resident. Now bounded to the populated prefix (`natom`/`natim`,
   `Nmlp`, `Nmlmmp`), which is exactly what `mlpot_call` and `mlpot_export_*`
   read.
+- **One `READ PARAM APPEND` disabled van der Waals for the rest of the CHARMM
+  process.** `setup/charmm/source/api/api_read.F90` declared `qappend` (and
+  `qflex`) with an initializer, which implicitly `SAVE`s a Fortran local, and only
+  ever set it — never cleared it. The first `read.prm(..., append=True)` latched
+  append mode permanently, so every later full parameter read ran as
+  `READ PARAM APPEND` and wiped the live NONBONDED table. Because
+  `read_cgenff_toppar()` appends the bundled `examples/m/par_ch3cl.prm` and the
+  Packmol builder calls it twice, the cluster relax ran with `VDWaals` identically
+  zero: ABNR then converged to a pure-electrostatic collapse (`ELEC` −4.4 × 10⁶
+  kcal/mol) that stretched TIP3 O–H from 0.953 Å to 1.257 Å. Both flags are now
+  assigned per call. In a controlled A/B on the darwin build (same source tree,
+  tier and build directory, only `api_read.F90` differing) the worst monomer
+  deviation drops from 0.304 Å to 0.031 Å (`TIP3:4`), 0.423 Å to 0.021 Å
+  (`MEOH:4`) and 0.451 Å to 0.037 Å (`TIP3:60`). No CHARMM build was ever exempt:
+  on one pc-studix compute node, one `libcharmm.so` and one checkout, `MEOH:4`
+  goes from 0.014 Å to 0.424 Å purely by making the bundled append files
+  reachable, so the environment that looked healthy was only missing an optional
+  data file. The CI libcharmm cache key and
+  `scripts/ci/setup_charmm_lib.sh`'s build stamp now hash every
+  `setup/charmm/source/api/*.F90` — `api_read.F90` was not in the previous
+  hand-picked list, so the fix would have been served a stale library — and
+  `tests/unit/test_md_system_unified_ffparams.py` runs with the monomer geometry
+  gate armed again. See `docs/packmol-monomer-geometry-gate.md`.
 - **The Packmol cluster cache stored CHARMM-minimized coordinates without
   validating them.** A broken CHARMM/pycharmm build returned scrambled
   coordinates (a `MEOH:327` / L=28 build: all 327 monomers distorted, worst 1-2/1-3

@@ -54,18 +54,13 @@ def _pycharmm_or_skip():
 
 
 @pytest.mark.pycharmm
-def test_end_to_end_builds_ffparams(monkeypatch):
+def test_end_to_end_builds_ffparams():
     """The packmol+PSF helper must produce FFParams, or mm_nonbonded can't run."""
     _pycharmm_or_skip()
-    # Measure the post-minimize monomer geometry without gating on it: this CHARMM
-    # build distorts monomers during ABNR, which the gate rightly rejects. On CI a
-    # TIP3 O-H placed at 0.953 A comes back at 1.345 A (0.393 A over template); a
-    # local darwin build gives 0.30 A for TIP3:4 and 0.97 A for MEOH:4. The same
-    # builds on pc-studix stay at 0.04 A, so the gate keeps its default threshold
-    # everywhere else — see docs/packmol-monomer-geometry-gate.md. This test asserts
-    # FFParams lowering, not geometry quality; the gate still prints its measurement.
-    monkeypatch.setenv("MMML_MAX_MONOMER_INTERNAL_DEVIATION_A", "0")
-
+    # The monomer geometry gate runs armed here. It used to be disabled because
+    # every build except pc-studix distorted monomers during the cluster ABNR;
+    # that was the sticky READ PARAM APPEND in api_read.F90 zeroing the VDW
+    # table, fixed at the source. See docs/packmol-monomer-geometry-gate.md.
     from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
     from mmml.md.lowering import runconfig_from_md_system_args
 

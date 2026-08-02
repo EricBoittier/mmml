@@ -1,1 +1,0 @@
-mmml md-system --output-dir scratch/tip3_physnet_ewald_ir/tip3_90_smoke --backend pycharmm --restart-from scratch/tip3_physnet_ewald_ir/tip3_90_smoke/baseline.res --md-stages mini,heat,nve --no-echeck-heat

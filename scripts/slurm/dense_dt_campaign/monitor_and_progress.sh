@@ -80,13 +80,20 @@ for tag in "${!LATEST_JID[@]}"; do
   state=$(sacct -j "$jid" -n -X -o State 2>/dev/null | head -1 | tr -d ' ' || true)
   if [[ "$state" == COMPLETED ]]; then
     mkdir -p "$OUT_ROOT/${tag}"
-    # Only SUCCESS when the arm's RESULT is rc=0 and the log is not a blow-up.
+    # Only SUCCESS when the arm's RESULT is rc=0, the per-tag log exists, and
+    # it is not a science blow-up (Slurm COMPLETED alone is not enough).
+    arm_log="$OUT_ROOT/${tag}/bench.log"
     res_line=""
     [[ -f "$OUT_ROOT/bench.log" ]] && res_line="$(_match "^RESULT ${tag} " "$OUT_ROOT/bench.log" 2>/dev/null | tail -1 || true)"
-    [[ -z "$res_line" && -f "$OUT_ROOT/${tag}/bench.log" ]] \
-      && res_line="$(_match "^RESULT " "$OUT_ROOT/${tag}/bench.log" 2>/dev/null | tail -1 || true)"
+    [[ -z "$res_line" && -f "$arm_log" ]] \
+      && res_line="$(_match "^RESULT " "$arm_log" 2>/dev/null | tail -1 || true)"
     blew=0
-    _match "energy blow-up|Partial output saved after error" "$OUT_ROOT/${tag}/bench.log" >/dev/null 2>&1 && blew=1
+    if [[ ! -s "$arm_log" ]]; then
+      # Missing/empty arm log: cannot verify; never auto-SUCCESS from rc alone.
+      blew=1
+    else
+      _match "energy blow-up|Partial output saved after error" "$arm_log" >/dev/null 2>&1 && blew=1
+    fi
     if [[ "$res_line" == *" rc=0 "* && "$blew" -eq 0 ]]; then
       touch "$OUT_ROOT/${tag}/SUCCESS.flag" 2>/dev/null || true
     else
@@ -103,18 +110,26 @@ for tag in "${!LATEST_JID[@]}"; do
 done
 
 # --- Box build process ---
+# Only count packmol / box-build that belong to this campaign. A long-running
+# packmol under lj_scales_des_validation/.../meoh must not trigger dense rebuilds
+# or get killed by --react.
 box_build_alive=0
 pgrep -f 'build_dense_boxes_v[23]\.sh|liquid-box .*liquid_dense_L' >/dev/null 2>&1 && box_build_alive=1
 packmol_alive=0
-pgrep -x packmol >/dev/null 2>&1 && packmol_alive=1
-
 packmol_stuck=0
-if [[ "$packmol_alive" -eq 1 ]] && ! box_ready "$BOX24"; then
-  etime=$(ps -C packmol -o etimes= 2>/dev/null | awk 'NR==1{print $1+0}')
-  if [[ -n "${etime:-}" && "$etime" -gt 2700 ]]; then
-    packmol_stuck=1
-  fi
-fi
+while IFS= read -r _pk; do
+  [[ -z "${_pk:-}" ]] && continue
+  _cwd="$(readlink -f "/proc/${_pk}/cwd" 2>/dev/null || true)"
+  case "${_cwd}" in
+    *liquid_dense_L24*|*liquid_dense_L26*|*dense_dt_campaign*)
+      packmol_alive=1
+      _etime=$(ps -p "${_pk}" -o etimes= 2>/dev/null | awk '{print $1+0}')
+      if [[ -n "${_etime:-}" && "${_etime}" -gt 2700 ]] && ! box_ready "$BOX24"; then
+        packmol_stuck=1
+      fi
+      ;;
+  esac
+done < <(pgrep -x packmol 2>/dev/null || true)
 
 {
   echo "# dense_dt_campaign STATUS"
@@ -189,9 +204,18 @@ fi
 
 if [[ "$REACT" -eq 1 ]]; then
   if [[ "$packmol_stuck" -eq 1 ]]; then
-    actions+=("kill stuck packmol (>45min) and restart dense box build v3")
+    actions+=("kill stuck dense-campaign packmol (>45min) and restart dense box build v3")
     pkill -f 'build_dense_boxes_v[23]\.sh' 2>/dev/null || true
-    pkill -x packmol 2>/dev/null || true
+    # Never pkill -x packmol globally — other campaigns (e.g. MeOH DES) may be packing.
+    while IFS= read -r _pk; do
+      [[ -z "${_pk:-}" ]] && continue
+      _cwd="$(readlink -f "/proc/${_pk}/cwd" 2>/dev/null || true)"
+      case "${_cwd}" in
+        *liquid_dense_L24*|*liquid_dense_L26*|*dense_dt_campaign*)
+          kill "${_pk}" 2>/dev/null || true
+          ;;
+      esac
+    done < <(pgrep -x packmol 2>/dev/null || true)
     sleep 2
     box_build_alive=0
   fi
@@ -282,11 +306,29 @@ fi
 
 {
   echo
+  echo "## Science compares (do not drop)"
+  echo
+  if [[ -f "$OUT_ROOT/NVE_COMPARE.md" ]]; then
+    echo "### NVE (§7) — see also \`NVE_COMPARE.md\` / \`AGENT_STATUS.md\`"
+    echo
+    # table + takeaway bullets (avoid printing Takeaway header twice)
+    awk '/^\| tag /{p=1} p; /^## Takeaway$/{getline; while(NF){print; if(!getline) exit} exit}' \
+      "$OUT_ROOT/NVE_COMPARE.md" | head -40
+    echo
+  fi
+  if [[ -f "$OUT_ROOT/NVT_COMPARE.md" ]]; then
+    echo "### NVT (§8 proxy) — see \`NVT_COMPARE.md\`"
+    echo
+    awk '/^\| tag /{p=1} p; /^## Takeaway$/{getline; while(NF){print; if(!getline) exit} exit}' \
+      "$OUT_ROOT/NVT_COMPARE.md" | head -40
+    echo
+  fi
   echo "## Agent TODO (when you wake)"
   echo
-  echo "1. Read \`$STATUS\` and \`$MONITOR_LOG\` tail"
+  echo "1. Read \`$STATUS\`, \`AGENT_STATUS.md\`, and \`$MONITOR_LOG\` tail"
   echo "2. Plots for passed NVT: \`$OUT_ROOT/plots/\`"
-  echo "3. When H5s land: compare E_tot / H_NHC / bond health vs sparse L30"
+  echo "3. NVE H5 compares written: \`NVE_COMPARE.md\` (dense melt vs L30 conserve)"
+  echo "4. NPT still blocked by ~1 ps blow-up — keep \`PAUSE_RESUBMIT\` until SHAKE/softer barostat"
   echo
 } >> "$STATUS"
 

@@ -322,3 +322,51 @@ def assert_monomer_internal_geometry(
         f"(scripts/rebuild_charmm_mlpot.sh). Set {MONOMER_INTERNAL_DEVIATION_ENV} "
         "to override the threshold."
     )
+
+
+# A relaxed cluster sits at O(1-100) kcal/mol of electrostatics per atom. Even a
+# bad steric clash stays orders of magnitude below this. Exceeding it means atoms
+# have been pulled onto each other, which only happens when the repulsive wall is
+# missing.
+COLLAPSED_ELEC_PER_ATOM_KCAL = 1.0e4
+
+
+def charmm_collapsed_nonbonded_hint(n_atoms: int) -> str:
+    """Extra diagnosis for a failed geometry gate: did the nonbonded table die?
+
+    Keyed on the electrostatic energy, not VDW. A wiped NONBONDED table does not
+    necessarily zero *every* VDW pair -- the parameters carried by the last
+    appended file survive, so e.g. MEOH (CG331/HGA3, present in the bundled
+    ``par_ch3cl.prm``) still reports a plausible-looking VDW while TIP3 (OT/HT)
+    reports zero. Measured on a MEOH:4 cluster: VDW 0.171 with the table wiped
+    versus -1.638 healthy, which no threshold can separate. The collapse shows up
+    unambiguously in ELEC instead: -9.1e6 kcal/mol against 43.1 healthy.
+
+    Lives here rather than next to its caller so that importing it does not pull
+    in ``import_pycharmm``, which binds ``pycharmm`` at import time and captures
+    ``None`` while the session is cold -- poisoning any live-CHARMM test
+    collected afterwards. ``pycharmm.energy`` is imported per call instead.
+
+    Returns "" when nothing looks wrong, or when CHARMM cannot be read. Never
+    raises: this only decorates an error that is already being raised.
+    """
+    n_atoms = int(n_atoms)
+    if n_atoms < 2:
+        return ""
+    try:
+        import pycharmm.energy as energy
+
+        elec = float(energy.get_elec())
+    except Exception:  # noqa: BLE001 - diagnosis must not mask the real error
+        return ""
+    if abs(elec) < COLLAPSED_ELEC_PER_ATOM_KCAL * n_atoms:
+        return ""
+    return (
+        f"CHARMM also reports ELEC={elec:.4g} kcal/mol for {n_atoms} atoms "
+        f"({elec / n_atoms:.4g} per atom), which is not a physical relaxed "
+        "structure -- the minimization ran without a full van der Waals wall, so "
+        "electrostatics pulled atoms onto each other. The usual cause is CHARMM's "
+        "NONBONDED table being wiped by a repeated CGenFF parameter read; see "
+        "tests/functionality/charmm/test_charmm_param_read_contract.py and the "
+        "saved READ PARAM APPEND flag in setup/charmm/source/api/api_read.F90."
+    )
