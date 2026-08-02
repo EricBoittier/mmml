@@ -28,6 +28,27 @@ Next levers (without bond SHAKE yet):
 Common: DCM:120, hybrid ML/MM epoch222 + LJ scales, PSF angle restraints,
 T=300 K, P=1 atm (NPT), record every 1 ps, GPU jaxmd.
 
+### Lever-2 handoff (overbinding)
+
+Epoch222 was trained at `mm_switch_on=8`. Deploy now defaults to **soft** lever-2:
+
+| `DDC_HANDOFF` | `mm_switch_on` | soft-well median | contact ray-min | Use |
+|---|---:|---:|---:|---|
+| `soft` (default) | 5.0 | ≈ −4.4 kcal | still ≈ −30 | liquid / droplet mitigation |
+| `contact` | 3.5 | ≈ −1.1 (underbinds) | ≈ −1.1 | diagnostic only |
+
+```bash
+# default soft lever-2
+bash scripts/slurm/dense_dt_campaign/submit_all.sh
+# contact-ray diagnostic (not for production density)
+DDC_HANDOFF=contact bash scripts/slurm/dense_dt_campaign/sbatch_one.sh ...
+```
+
+**Contact rays:** deploy-only `on=3.5` kills the −30 kcal wells but flattens the
+soft well. The real fix is a GPU retrain at `mm_switch_on=5` (matching deploy)
+so the ML local interaction unlearns contact overbinding under the new taper.
+See `docs/images/dense-dt-campaign/overbind_ablation/`.
+
 ## Where to look
 
 ```bash
@@ -78,4 +99,6 @@ Supports draft Results §§7–8 (conservation + DCM liquid density) in
 bridge from the sparse L=30 (~0.63 g/cm³) cliff toward bulk ρ≈1.33 before bond
 SHAKE / full `pbc_liquid_density_dyn` production tables.
 
-- `scripts/slurm/dense_dt_campaign/plot_dimer_profiles.py` — DCM–DCM 1D interaction profiles
+- `scripts/slurm/dense_dt_campaign/plot_dimer_profiles.py` — DCM–DCM 1D profiles (contact-ok: `dmin ≥ 2 Å`)
+- `scripts/slurm/dense_dt_campaign/dimer_scan_contacts.py` — annotate `dmin_A` / clash-filtered summary
+- `scripts/slurm/dense_dt_campaign/render_dimer_scan_povray.py` — POV stills (skips clashes)

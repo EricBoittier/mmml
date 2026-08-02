@@ -1,5 +1,5 @@
 {
-  "learned": {
+  "learned_raw": {
     "checkpoint": "artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json",
     "sidecar": "artifacts/lj_scales/ckpts/hybrid_mm_fixed_lj_scales-4d68132d-c686-4ded-9887-efc16d5b2638/hybrid_mm.json",
     "data": "artifacts/lj_scales/dataset_cgenff.npz",
@@ -27,7 +27,7 @@
     "mean_soft_well_kcal": -10.172028997266857,
     "r_at_deepest_soft": 3.5106382978723403
   },
-  "unit": {
+  "unit_raw": {
     "checkpoint": "artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json",
     "sidecar": "artifacts/lj_scales/dense_dt_campaign/dimer_scans/hybrid_mm_unit_scales.json",
     "data": "artifacts/lj_scales/dataset_cgenff.npz",
@@ -55,7 +55,43 @@
     "mean_soft_well_kcal": -10.172476715056495,
     "r_at_deepest_soft": 3.5106382978723403
   },
-  "mean_well_kcal_learned": -8.697393019592285,
-  "r_at_mean_well_A": 3.5106382978723403,
-  "note": "DCM\u2013DCM hybrid wells are far deeper than literature (~\u22123 to \u22125 kcal/mol). Learned vs unit LJ scales are nearly identical here \u2014 the overbinding is dominated by the ML/electrostatic handoff, which rationalizes the dense NVT droplet collapse."
+  "contact_filter": {
+    "min_contact_A": 2.0,
+    "n_points_total": 4608,
+    "n_points_contact_ok": 3942,
+    "frac_points_contact_ok": 0.85546875,
+    "n_rays_with_contact_ok": 96,
+    "mean_curve_min_kcal": -6.831904699430468,
+    "r_at_mean_curve_min_A": 3.3085106382978724,
+    "n_rays_at_mean_curve_min": 16,
+    "min_rays_for_mean": 10,
+    "mean_of_ray_minima_kcal": -5.051319814803643,
+    "median_of_ray_minima_kcal": -4.203088304945149,
+    "deepest_ray_min_kcal": -17.19675245522394,
+    "mean_soft_well_kcal": -4.132341399780512,
+    "median_soft_well_kcal": -3.712295043933473,
+    "deepest_soft_kcal": -12.98575157647016,
+    "r_at_deepest_soft": 3.914893617021277,
+    "deepest_soft_ray": {
+      "ray": 95,
+      "r_A": 3.914893617021277,
+      "E_int_kcal": -12.98575157647016,
+      "dmin_A": 2.022796867027041,
+      "direction": 7,
+      "orientation": 11
+    },
+    "deepest_soft": {
+      "ray": 95,
+      "r_A": 3.914893617021277,
+      "E_int_kcal": -12.98575157647016,
+      "dmin_A": 2.022796867027041,
+      "direction": 7,
+      "orientation": 11
+    }
+  },
+  "mean_well_kcal_learned": -6.831904699430468,
+  "r_at_mean_well_A": 3.3085106382978724,
+  "median_soft_well_kcal": -3.712295043933473,
+  "deepest_soft_kcal": -12.98575157647016,
+  "note": "Metrics exclude intermolecular clashes (dmin < 2 \u00c5). Unfiltered COM scans mix steric overlaps into the well statistics (raw deepest \u2248 \u221255 kcal/mol). Contact-ok soft wells sit near the literature DCM dimer band (~\u22123 to \u22125 kcal/mol)."
 }
