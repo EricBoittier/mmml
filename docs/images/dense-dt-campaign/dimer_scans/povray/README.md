@@ -5,6 +5,8 @@ House glossy POV style (`docs/plotting-style-guide.md`):
 - **shared bounding box** — one cube (±half Å about COM) and one
   orthographic camera for every frame, so atoms / bonds / force
   arrows / dipoles are never cropped and spacing stays consistent.
+- **contact filter** — frames with intermolecular $d_\mathrm{min} < 2$ Å are skipped (COM–COM $r$ alone is not
+  steric for DCM; clash geometries invent huge forces / deep wells).
 - **forces** — red arrows from the hybrid model on the exact frame;
   fixed soft-well panel normalization (see `manifest.json`).
 - **dipoles** — gold per-monomer μ from PhysNet `q_ML` (e·Å).

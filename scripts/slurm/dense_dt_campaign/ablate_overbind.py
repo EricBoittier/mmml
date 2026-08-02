@@ -230,6 +230,12 @@ def run_scan(
         if bi % 20 == 0:
             print(f"  [{tag}] batch {bi}/{len(batches)}", flush=True)
 
+    from mmml.analysis.dimer_scans import (
+        DEFAULT_ORIENT_MIN_CONTACT_A,
+        intermolecular_min_distance,
+    )
+
+    min_contact = DEFAULT_ORIENT_MIN_CONTACT_A
     rows = []
     well_e = []
     soft_e = []
@@ -245,11 +251,24 @@ def run_scan(
         e_int = (e - e[-1]) * EV_TO_KCAL
         emm_int = (emm - emm[-1]) * EV_TO_KCAL
         eml_int = e_int - emm_int
-        imin = int(np.argmin(e_int))
-        well_e.append(float(e_int[imin]))
-        soft = e_int[rs >= 3.4]
-        if soft.size:
-            soft_e.append(float(soft.min()))
+        di = int(ray // len(quats))
+        qi = int(ray % len(quats))
+        dvec = dirs[di]
+        quat = quats[qi]
+        Rb0 = R1 @ quat_to_matrix(quat).T
+        dmins = []
+        for r in rs:
+            Ra = R1 - 0.5 * r * dvec
+            Rb = Rb0 + 0.5 * r * dvec
+            dmins.append(intermolecular_min_distance(Ra, Rb))
+        dmins = np.asarray(dmins)
+        contact_ok = dmins >= min_contact
+        if contact_ok.any():
+            imin = int(np.flatnonzero(contact_ok)[np.argmin(e_int[contact_ok])])
+            well_e.append(float(e_int[imin]))
+            soft_ok = contact_ok & (rs >= 3.4)
+            if soft_ok.any():
+                soft_e.append(float(e_int[soft_ok].min()))
         for ri, r in enumerate(rs):
             rows.append(
                 dict(
@@ -260,6 +279,8 @@ def run_scan(
                     E_MM_kcal=float(emm_int[ri]),
                     E_ML_kcal=float(eml_int[ri]),
                     ml_scale=float(s[ri]),
+                    dmin_A=float(dmins[ri]),
+                    contact_ok=bool(contact_ok[ri]),
                 )
             )
 
@@ -269,24 +290,28 @@ def run_scan(
     csv_path = out_dir / f"{tag}_components.csv"
     df.to_csv(csv_path, index=False)
 
-    g = df.groupby("r_A")[["E_int_kcal", "E_MM_kcal", "E_ML_kcal", "ml_scale"]].mean()
-    r_mean_well = float(g["E_int_kcal"].idxmin())
-    mean_well = float(g["E_int_kcal"].min())
+    ok = df[df["contact_ok"]]
+    g = ok.groupby("r_A")[["E_int_kcal", "E_MM_kcal", "E_ML_kcal", "ml_scale"]].mean()
+    r_mean_well = float(g["E_int_kcal"].idxmin()) if len(g) else float("nan")
+    mean_well = float(g["E_int_kcal"].min()) if len(g) else float("nan")
     summary = {
         "tag": tag,
         "es_off": es_off,
         "mm_switch_on": mm_switch_on,
         "ml_switch_width": ml_switch_width,
         "mm_switch_width": mm_switch_width,
+        "min_contact_A": min_contact,
         "n_rays": n_rays,
         "n_r": int(n_r),
         "csv": str(csv_path),
         "mean_of_ray_minima_kcal": float(np.mean(well_e)) if well_e else None,
         "mean_soft_well_kcal": float(np.mean(soft_e)) if soft_e else None,
+        "median_soft_well_kcal": float(np.median(soft_e)) if soft_e else None,
         "deepest_soft_kcal": float(np.min(soft_e)) if soft_e else None,
         "mean_curve_min_kcal": mean_well,
         "r_at_mean_curve_min_A": r_mean_well,
         "ml_full_below_A": mm_switch_on - ml_switch_width,
+        "frac_points_contact_ok": float(df["contact_ok"].mean()) if len(df) else 0.0,
     }
     (out_dir / f"{tag}_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(f"[{tag}] mean_curve_min={mean_well:.2f} @ {r_mean_well:.2f} Å; "
@@ -306,18 +331,26 @@ def plot_compare(summaries: list[dict], out_dir: Path, baseline_csv: Path | None
 
     # Left: E_int mean curves
     ax = axes[0]
+    def _mean_curve(path: Path) -> pd.Series:
+        d = pd.read_csv(path)
+        if "contact_ok" in d.columns:
+            d = d[d["contact_ok"]]
+        elif "dmin_A" in d.columns:
+            from mmml.analysis.dimer_scans import DEFAULT_ORIENT_MIN_CONTACT_A
+
+            d = d[d["dmin_A"] >= DEFAULT_ORIENT_MIN_CONTACT_A]
+        return d.groupby("r_A")["E_int_kcal"].mean()
+
     if baseline_csv and baseline_csv.is_file():
-        bdf = pd.read_csv(baseline_csv)
-        bg = bdf.groupby("r_A")["E_int_kcal"].mean()
+        bg = _mean_curve(baseline_csv)
         ax.plot(bg.index, bg.values, "k-", lw=2.0, label="baseline (ES on, on=8)")
     for s in summaries:
-        df = pd.read_csv(s["csv"])
-        g = df.groupby("r_A")["E_int_kcal"].mean()
+        g = _mean_curve(Path(s["csv"]))
         ax.plot(g.index, g.values, lw=1.6, label=s["tag"])
     ax.axhline(0, color="0.5", lw=0.6)
     ax.axhspan(-5, -3, color="0.85", alpha=0.5, label="lit. DCM dimer ~−3…−5")
     ax.set_xlim(2.5, 10)
-    ax.set_ylim(-40, 15)
+    ax.set_ylim(-20, 15)
     ax.set_xlabel("COM–COM r (Å)")
     ax.set_ylabel(r"$E_\mathrm{int}$ (kcal/mol)")
     ax.set_title("Mean interaction profile")

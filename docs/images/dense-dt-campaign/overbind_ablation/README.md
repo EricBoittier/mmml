@@ -5,11 +5,18 @@ Epoch222 hybrid checkpoint. Ablation grid: 64 rays × 36 COM distances
 
 Literature DCM dimer wells are about **−3 to −5 kcal/mol**.
 
-## Results (soft well = per-ray min at r ≥ 3.4 Å)
+**Contact policy:** COM–COM `r` alone is not steric for DCM. Ablation tables
+below still quote unfiltered ray minima (includes Cl/H clashes at short `r`).
+Clash-filtered soft-well median for the epoch222 baseline is about **−3.7
+kcal/mol** (`dmin ≥ 2 Å`; see `docs/images/dense-dt-campaign/dimer_scans/` and
+`DEFAULT_ORIENT_MIN_CONTACT_A`). Re-run `ablate_overbind.py` to refresh the
+grid with the same cut.
+
+## Results (soft well = per-ray min at r ≥ 3.4 Å; unfiltered)
 
 | Run | Soft well median | Contact ray-min median | ML full below | Role |
 |---|---:|---:|---:|---|
-| baseline train handoff (on=8) | −8.9 | −30.8 | 6.5 Å | overbinds |
+| baseline train handoff (on=8) | −8.9 | −30.8 | 6.5 Å | overbinds (raw) |
 | `es_off_on8` | −8.9 | −30.8 | 6.5 Å | ES not the driver |
 | **`handoff_on5_w1p5` (lever 2 soft)** | **−4.4** | −30.8 | 3.5 Å | **campaign default** |
 | `handoff_on4p5_w1` | −3.0 | −30.8 | 3.5 Å | still contact-deep |

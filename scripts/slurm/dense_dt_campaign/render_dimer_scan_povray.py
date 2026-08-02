@@ -29,6 +29,10 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
+from mmml.analysis.dimer_scans import (  # noqa: E402
+    DEFAULT_ORIENT_MIN_CONTACT_A,
+    intermolecular_min_distance,
+)
 from scripts.render_povray_multipoles import _arrow  # noqa: E402
 from scripts.render_povray_style_catalog import STYLES, bonds, vec  # noqa: E402
 
@@ -752,9 +756,21 @@ def main() -> int:
     p.add_argument("--n-directions", type=int, default=4)
     p.add_argument("--n-orientations", type=int, default=4)
     p.add_argument(
+        "--r-grid",
+        type=float,
+        default=4.5,
+        help="COM distance (Å) for the orientation grid (must clear min-contact)",
+    )
+    p.add_argument(
         "--r-values",
-        default="2.8,3.5,5.0,8.0",
-        help="COM distances (Å) for the approach series",
+        default="4.0,4.5,5.5,8.0",
+        help="COM distances (Å) for the approach series (clash-free by default)",
+    )
+    p.add_argument(
+        "--min-contact",
+        type=float,
+        default=DEFAULT_ORIENT_MIN_CONTACT_A,
+        help="Skip frames with intermolecular atom–atom dmin below this (Å)",
     )
     p.add_argument("--width", type=int, default=720)
     p.add_argument("--height", type=int, default=540)
@@ -806,57 +822,81 @@ def main() -> int:
         print(f"POV include: {include_dirs[0]}")
 
     frames: list[dict] = []
+    min_contact = float(args.min_contact)
+    skipped_clash = 0
 
-    r_grid = 3.5
-    print(f"Orientation grid at r={r_grid} Å ({len(dirs)}×{len(quats)})")
-    for di, dvec in enumerate(dirs):
-        for qi, q in enumerate(quats):
-            atoms = build_dimer(R1, Z1, dvec, q, r_grid)
-            pa, pb = atoms.positions[:n_mono], atoms.positions[n_mono:]
-            dmin = float(np.linalg.norm(pa[:, None, :] - pb[None, :, :], axis=-1).min())
-            stem = f"ori_d{di:02d}_q{qi:02d}_r{_r_tag(r_grid)}"
-            frames.append(
-                dict(
-                    stem=stem,
-                    kind="orientation_grid",
-                    atoms=atoms,
-                    dmin=dmin,
-                    r=r_grid,
-                    direction=di,
-                    orientation=qi,
-                    label=f"d{di} q{qi}\nr={r_grid:g} dmin={dmin:.2f}",
-                )
-            )
+    def _dmin(atoms) -> float:
+        return intermolecular_min_distance(
+            atoms.positions[:n_mono], atoms.positions[n_mono:]
+        )
 
-    print("Approach series d0 q0")
-    for r in rs:
-        atoms = build_dimer(R1, Z1, dirs[0], quats[0], r)
-        pa, pb = atoms.positions[:n_mono], atoms.positions[n_mono:]
-        dmin = float(np.linalg.norm(pa[:, None, :] - pb[None, :, :], axis=-1).min())
-        stem = f"approach_d00_q00_r{_r_tag(r)}"
+    def _add(atoms, *, stem, kind, r, direction, orientation, label, ray=None):
+        nonlocal skipped_clash
+        dmin = _dmin(atoms)
+        if dmin < min_contact:
+            skipped_clash += 1
+            print(f"  skip clash {stem}: dmin={dmin:.2f} Å < {min_contact:g}")
+            return
         frames.append(
             dict(
                 stem=stem,
-                kind="approach",
+                kind=kind,
                 atoms=atoms,
                 dmin=dmin,
-                r=r,
-                direction=0,
-                orientation=0,
-                label=f"approach\nr={r:g} dmin={dmin:.2f}",
+                r=float(r),
+                direction=direction,
+                orientation=orientation,
+                ray=ray,
+                label=label + f"\ndmin={dmin:.2f}",
             )
         )
 
+    r_grid = float(args.r_grid)
+    print(
+        f"Orientation grid at r={r_grid} Å ({len(dirs)}×{len(quats)}), "
+        f"min_contact={min_contact:g} Å"
+    )
+    for di, dvec in enumerate(dirs):
+        for qi, q in enumerate(quats):
+            atoms = build_dimer(R1, Z1, dvec, q, r_grid)
+            _add(
+                atoms,
+                stem=f"ori_d{di:02d}_q{qi:02d}_r{_r_tag(r_grid)}",
+                kind="orientation_grid",
+                r=r_grid,
+                direction=di,
+                orientation=qi,
+                label=f"d{di} q{qi}\nr={r_grid:g}",
+            )
+
+    # Prefer a campaign ray that is contact-ok along the approach series.
+    approach_di, approach_qi = 0, 0
+    approach_dvec, approach_quat = dirs[0], quats[0]
     if args.components_csv.is_file():
         import pandas as pd
 
+        from scripts.slurm.dense_dt_campaign.dimer_scan_contacts import (
+            annotate_dmin,
+            contact_filtered_metrics,
+        )
+
         df = pd.read_csv(args.components_csv)
-        n_ori_csv = 8
-        n_rays = int(df.ray.max()) + 1
-        n_dir_csv = max(1, n_rays // n_ori_csv)
+        # Campaign is 8 dirs × 12 oris (not the POV 4×4 subsample).
+        n_dir_csv = int(df["direction"].max()) + 1
+        n_ori_csv = int(df["orientation"].max()) + 1
         dirs_c = fibonacci_sphere(n_dir_csv)
         quats_c = super_fibonacci(n_ori_csv)
-        print(f"CSV extremes assuming {n_dir_csv}×{n_ori_csv} rays")
+        if "dmin_A" not in df.columns:
+            df = annotate_dmin(df, R1=R1, n_directions=n_dir_csv, n_orientations=n_ori_csv)
+            df.to_csv(args.components_csv, index=False)
+        metrics = contact_filtered_metrics(df, min_contact=min_contact)
+        soft_wells = sorted(
+            metrics.get("soft_wells") or [], key=lambda x: x["E_int_kcal"]
+        )
+        print(
+            f"CSV contact-ok soft wells: {len(soft_wells)} "
+            f"(median {metrics.get('median_soft_well_kcal')})"
+        )
 
         def pick(ray: int, r: float, tag: str):
             di = int(ray // n_ori_csv)
@@ -864,43 +904,58 @@ def main() -> int:
             if di >= len(dirs_c) or qi >= len(quats_c):
                 return
             atoms = build_dimer(R1, Z1, dirs_c[di], quats_c[qi], float(r))
-            pa, pb = atoms.positions[:n_mono], atoms.positions[n_mono:]
-            dmin = float(np.linalg.norm(pa[:, None, :] - pb[None, :, :], axis=-1).min())
-            stem = f"{tag}_ray{ray:03d}_r{_r_tag(float(r))}"
-            frames.append(
-                dict(
-                    stem=stem,
-                    kind=tag,
-                    atoms=atoms,
-                    dmin=dmin,
-                    r=float(r),
-                    direction=di,
-                    orientation=qi,
-                    ray=int(ray),
-                    label=f"{tag}\nray {ray} r={float(r):.2f}\ndmin={dmin:.2f}",
-                )
+            _add(
+                atoms,
+                stem=f"{tag}_ray{ray:03d}_r{_r_tag(float(r))}",
+                kind=tag,
+                r=float(r),
+                direction=di,
+                orientation=qi,
+                ray=int(ray),
+                label=f"{tag}\nray {ray} r={float(r):.2f}",
             )
 
-        idx = df.groupby("ray")["E_int_kcal"].idxmin()
-        wells = df.loc[idx].sort_values("E_int_kcal")
-        deep = wells.iloc[0]
-        pick(int(deep.ray), float(deep.r_A), "deepest_well")
-        soft = df[df.r_A >= 3.4]
-        idx_s = soft.groupby("ray")["E_int_kcal"].idxmin()
-        soft_wells = soft.loc[idx_s].sort_values("E_int_kcal")
-        softest = soft_wells.iloc[0]
-        pick(int(softest.ray), float(softest.r_A), "softest_well")
-        shallow = soft_wells.iloc[-1]
-        pick(int(shallow.ray), float(shallow.r_A), "shallow_soft")
+        if soft_wells:
+            softest = soft_wells[0]
+            shallow = soft_wells[-1]
+            mid = soft_wells[len(soft_wells) // 2]
+            pick(int(softest["ray"]), float(softest["r_A"]), "softest_well")
+            pick(int(mid["ray"]), float(mid["r_A"]), "median_soft")
+            pick(int(shallow["ray"]), float(shallow["r_A"]), "shallow_soft")
+            # Approach series along the median soft-well orientation.
+            approach_di = int(mid["direction"])
+            approach_qi = int(mid["orientation"])
+            approach_dvec = dirs_c[approach_di]
+            approach_quat = quats_c[approach_qi]
 
-    print(f"Evaluating hybrid on {len(frames)} frames…", flush=True)
+    print(f"Approach series d{approach_di} q{approach_qi}")
+    for r in rs:
+        atoms = build_dimer(R1, Z1, approach_dvec, approach_quat, r)
+        _add(
+            atoms,
+            stem=f"approach_d{approach_di:02d}_q{approach_qi:02d}_r{_r_tag(r)}",
+            kind="approach",
+            r=r,
+            direction=approach_di,
+            orientation=approach_qi,
+            label=f"approach\nr={r:g}",
+        )
+
+    if not frames:
+        print("ERROR: no contact-ok frames to render; relax --min-contact or raise --r-grid")
+        return 2
+    print(
+        f"Evaluating hybrid on {len(frames)} contact-ok frames "
+        f"({skipped_clash} clash frames skipped)…",
+        flush=True,
+    )
     pred = ev.evaluate([f["atoms"].positions.copy() for f in frames])
     charge_source = str(pred.get("charge_source", "PhysNet q_ML"))
     fmax_panel = float(np.linalg.norm(pred["forces"], axis=-1).max())
     soft_fmax = [
         float(np.linalg.norm(pred["forces"][i], axis=-1).max())
         for i, fr in enumerate(frames)
-        if fr["r"] >= 3.2 and fr["dmin"] >= 1.6
+        if fr["dmin"] >= min_contact
     ]
     f_ref = float(np.percentile(soft_fmax, 90)) if soft_fmax else fmax_panel
     force_scale = 1.35 / max(f_ref, 1e-12)
@@ -1113,7 +1168,9 @@ def main() -> int:
         "ml_switch_width": args.ml_switch_width,
         "mm_switch_width": args.mm_switch_width,
         "force_scale_A_per_eV_A": force_scale,
-        "force_scale_ref": "90th percentile |F|_max among frames with r>=3.2 Å and dmin>=1.6 Å",
+        "force_scale_ref": f"90th percentile |F|_max among contact-ok frames (dmin>={min_contact:g} Å)",
+        "min_contact_A": min_contact,
+        "n_frames_skipped_clash": skipped_clash,
         "force_ref_eV_A": f_ref,
         "force_arrow_cap_A": force_arrow_cap_A,
         "fmax_panel_eV_A": fmax_panel,
@@ -1141,6 +1198,9 @@ def main() -> int:
                 "- **shared bounding box** — one cube (±half Å about COM) and one",
                 "  orthographic camera for every frame, so atoms / bonds / force",
                 "  arrows / dipoles are never cropped and spacing stays consistent.",
+                f"- **contact filter** — frames with intermolecular $d_\\mathrm{{min}}"
+                f" < {args.min_contact:g}$ Å are skipped (COM–COM $r$ alone is not",
+                "  steric for DCM; clash geometries invent huge forces / deep wells).",
                 "- **forces** — red arrows from the hybrid model on the exact frame;",
                 "  fixed soft-well panel normalization (see `manifest.json`).",
                 "- **dipoles** — gold per-monomer μ from PhysNet `q_ML` (e·Å).",

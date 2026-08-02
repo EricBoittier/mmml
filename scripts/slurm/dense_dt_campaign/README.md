@@ -99,4 +99,6 @@ Supports draft Results §§7–8 (conservation + DCM liquid density) in
 bridge from the sparse L=30 (~0.63 g/cm³) cliff toward bulk ρ≈1.33 before bond
 SHAKE / full `pbc_liquid_density_dyn` production tables.
 
-- `scripts/slurm/dense_dt_campaign/plot_dimer_profiles.py` — DCM–DCM 1D interaction profiles
+- `scripts/slurm/dense_dt_campaign/plot_dimer_profiles.py` — DCM–DCM 1D profiles (contact-ok: `dmin ≥ 2 Å`)
+- `scripts/slurm/dense_dt_campaign/dimer_scan_contacts.py` — annotate `dmin_A` / clash-filtered summary
+- `scripts/slurm/dense_dt_campaign/render_dimer_scan_povray.py` — POV stills (skips clashes)
