@@ -289,11 +289,27 @@ fi
 
 {
   echo
+  echo "## Science compares (do not drop)"
+  echo
+  if [[ -f "$OUT_ROOT/NVE_COMPARE.md" ]]; then
+    echo "### NVE (§7) — see also \`NVE_COMPARE.md\` / \`AGENT_STATUS.md\`"
+    echo
+    # table + takeaway only (skip title)
+    sed -n '/^| tag /,/^## Takeaway/p;/^## Takeaway$/,/^$/p' "$OUT_ROOT/NVE_COMPARE.md" | head -40
+    echo
+  fi
+  if [[ -f "$OUT_ROOT/NVT_COMPARE.md" ]]; then
+    echo "### NVT (§8 proxy) — see \`NVT_COMPARE.md\`"
+    echo
+    sed -n '/^| tag /,/^## Takeaway/p;/^## Takeaway$/,/^$/p' "$OUT_ROOT/NVT_COMPARE.md" | head -40
+    echo
+  fi
   echo "## Agent TODO (when you wake)"
   echo
-  echo "1. Read \`$STATUS\` and \`$MONITOR_LOG\` tail"
+  echo "1. Read \`$STATUS\`, \`AGENT_STATUS.md\`, and \`$MONITOR_LOG\` tail"
   echo "2. Plots for passed NVT: \`$OUT_ROOT/plots/\`"
-  echo "3. When H5s land: compare E_tot / H_NHC / bond health vs sparse L30"
+  echo "3. NVE H5 compares written: \`NVE_COMPARE.md\` (dense melt vs L30 conserve)"
+  echo "4. NPT still blocked by ~1 ps blow-up — keep \`PAUSE_RESUBMIT\` until SHAKE/softer barostat"
   echo
 } >> "$STATUS"
 
