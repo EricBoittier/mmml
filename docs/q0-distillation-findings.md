@@ -180,6 +180,36 @@ wrong-architecture init and should be discarded.
 cache; under `--mode train --cache-path` it silently does nothing, so the "smoke"
 became a full ~924k-step epoch. Bound smokes with `--steps-per-epoch`.
 
+## Job state is not evidence
+
+Both directions were observed in one afternoon:
+
+- **206089 reported `COMPLETED`** while training a partly-random model whose
+  forces were off by three orders of magnitude.
+- **206099 reported `TIMEOUT`** *after* the warm-start fix it existed to verify
+  had already succeeded — it then spent its remaining budget on auto-batch
+  probing.
+
+Reading either state would have given the wrong answer. Runs now state their own
+verdict against explicit postconditions:
+
+```bash
+python scripts/check_training_run.py --workdir "$OUT" \
+    --require-steps 40 --require-distillation --max-force-mae 50.0
+```
+
+It checks that the warm-start loaded completely, that training actually reached
+the required step, that a checkpoint exists, that final metrics are finite and
+within bound, and that distillation provenance was recorded. It writes
+`<workdir>/run_verdict.json` and exits non-zero on FAIL. Both smoke and full-run
+sbatch scripts invoke it from an `EXIT`/`TERM` trap, with
+`#SBATCH --signal=B:TERM@90`, so a job killed by the wall clock still records
+whether it had already done what it was asked to.
+
+`--require-steps 0` waives the training requirement, for verdicts scoped to
+something that happens before training — which is exactly how 206099 should have
+been judged.
+
 ## Reproducing the diagnosis
 
 Run against `pc-studix`; see the side-checkout pattern in
