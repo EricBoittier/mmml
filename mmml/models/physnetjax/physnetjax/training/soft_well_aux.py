@@ -47,15 +47,20 @@ def soft_well_e_int_loss(
     deep_floor_kcal: float = DEFAULT_DEEP_FLOOR_KCAL,
     hard_floor_kcal: float = DEFAULT_HARD_FLOOR_KCAL,
     center_weight: float = 0.25,
-    deep_weight: float = 4.0,
-    hard_weight: float = 16.0,
+    deep_weight: float = 2.0,
+    hard_weight: float = 4.0,
+    per_sample_cap: float = 64.0,
 ):
     """Window + floor loss on hybrid ``E_int`` (eV in, scalar loss out).
 
     * ``e > target_hi`` (underbind / too shallow): quadratic pull down.
     * ``e < target_lo`` (overbind vs lit window): quadratic push up.
-    * ``e < deep_floor`` / ``hard_floor``: strong penalties (deploy gates).
+    * ``e < deep_floor`` / ``hard_floor``: stronger penalties (deploy gates).
     * Mild centre pull toward ``target_mid`` so soft median lands near −4.
+
+    Per-sample contributions are capped so a few clash/outlier geometries
+    cannot explode the global-norm clip and erase the underbind gradient
+    (job 206092: loss~2e3 with median stuck at −0.75 kcal/mol).
     """
     import jax.numpy as jnp
 
@@ -72,6 +77,8 @@ def soft_well_e_int_loss(
         + float(hard_weight) * hard * hard
         + float(center_weight) * center * center
     )
+    if per_sample_cap is not None and float(per_sample_cap) > 0.0:
+        per = jnp.minimum(per, float(per_sample_cap))
     return jnp.mean(per)
 
 
@@ -147,7 +154,8 @@ class SoftWellConfig:
     """Host-side soft-well aux settings (not a jit static pytree)."""
 
     enabled: bool = False
-    steps_per_epoch: int = 16
+    steps_per_epoch: int = 48
+    every_n_train_batches: int = 25
     batch_size: int = 32
     n_directions: int = 16
     n_orientations: int = 12

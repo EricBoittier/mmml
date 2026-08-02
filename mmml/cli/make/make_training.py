@@ -705,9 +705,17 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--soft-well-steps-per-epoch",
         "--soft_well_steps_per_epoch",
         type=int,
-        default=16,
+        default=48,
         dest="soft_well_steps_per_epoch",
         help="Soft-well aux optimizer steps after each ASE epoch",
+    )
+    parser.add_argument(
+        "--soft-well-every-n-train-batches",
+        "--soft_well_every_n_train_batches",
+        type=int,
+        default=25,
+        dest="soft_well_every_n_train_batches",
+        help="Interleave one soft-well step every N ASE train batches (0=off)",
     )
     parser.add_argument(
         "--soft-well-batch-size",
@@ -721,7 +729,7 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--soft-well-loss-scale",
         "--soft_well_loss_scale",
         type=float,
-        default=1.0,
+        default=10.0,
         dest="soft_well_loss_scale",
         help="Multiplier on soft-well window loss",
     )
@@ -1641,6 +1649,7 @@ def main_loop(args):
                 {
                     "enabled": True,
                     "steps_per_epoch": int(args.soft_well_steps_per_epoch),
+                    "every_n_train_batches": int(args.soft_well_every_n_train_batches),
                     "batch_size": int(args.soft_well_batch_size),
                     "loss_scale": float(args.soft_well_loss_scale),
                     "target_lo_kcal": float(args.soft_well_target_lo),

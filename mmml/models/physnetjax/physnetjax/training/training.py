@@ -292,8 +292,9 @@ def train_model(
             f"Soft-well E_int aux ON: {soft_well_pool.n} contact-ok geoms "
             f"(dmin≥{soft_well_cfg.min_contact:g} Å, "
             f"r∈[{soft_well_cfg.r_min:g},{soft_well_cfg.r_max:g}] Å); "
-            f"{soft_well_cfg.steps_per_epoch} steps/epoch × "
-            f"batch {soft_well_cfg.batch_size}; "
+            f"{soft_well_cfg.steps_per_epoch} end-steps/epoch + every "
+            f"{soft_well_cfg.every_n_train_batches} ASE batches; "
+            f"batch {soft_well_cfg.batch_size}; loss_scale={soft_well_cfg.loss_scale:g}; "
             f"target [{soft_well_cfg.target_lo_kcal:g},"
             f"{soft_well_cfg.target_hi_kcal:g}] kcal/mol",
             flush=True,
@@ -713,6 +714,45 @@ def train_model(
             train_energy_mae = 0.0
             train_forces_mae = 0.0
             train_dipoles_mae = 0.0
+            soft_well_loss = 0.0
+            soft_well_e_med = 0.0
+            soft_well_n = 0
+
+            def _run_soft_well_step():
+                nonlocal params, ema_params, opt_state
+                nonlocal soft_well_loss, soft_well_e_med, soft_well_n
+                sw_batch = soft_well_pool.next_batch(soft_well_cfg.batch_size)
+                (
+                    params,
+                    ema_params,
+                    opt_state,
+                    sw_loss,
+                    sw_emed,
+                ) = soft_well_train_step(
+                    model_apply=model.apply,
+                    optimizer_update=optimizer.update,
+                    transform_state=transform_state,
+                    batch=sw_batch,
+                    batch_size=int(soft_well_cfg.batch_size),
+                    opt_state=opt_state,
+                    params=params,
+                    ema_params=ema_params,
+                    hybrid_mm=hybrid_mm,
+                    target_lo_kcal=float(soft_well_cfg.target_lo_kcal),
+                    target_hi_kcal=float(soft_well_cfg.target_hi_kcal),
+                    target_mid_kcal=float(soft_well_cfg.target_mid_kcal),
+                    deep_floor_kcal=float(soft_well_cfg.deep_floor_kcal),
+                    hard_floor_kcal=float(soft_well_cfg.hard_floor_kcal),
+                    center_weight=float(soft_well_cfg.center_weight),
+                    loss_scale=float(soft_well_cfg.loss_scale),
+                    ema_decay=ema_decay,
+                    frozen_sigma_scale=frozen_mm_lj_sigma_scale,
+                    frozen_epsilon_scale=frozen_mm_lj_epsilon_scale,
+                )
+                soft_well_n += 1
+                soft_well_loss += (float(sw_loss) - soft_well_loss) / soft_well_n
+                soft_well_e_med += (float(sw_emed) - soft_well_e_med) / soft_well_n
+
             for i, batch in enumerate(train_batches):
                 (
                     params,
@@ -761,6 +801,14 @@ def train_model(
                         frozen_mm_lj_sigma_scale,
                         frozen_mm_lj_epsilon_scale,
                     )
+                # Interleave soft-well so ASE batches cannot erase the lever.
+                if (
+                    soft_well_pool is not None
+                    and soft_well_cfg is not None
+                    and int(soft_well_cfg.every_n_train_batches) > 0
+                    and (i + 1) % int(soft_well_cfg.every_n_train_batches) == 0
+                ):
+                    _run_soft_well_step()
                 # Block until JAX operations complete to avoid async context issues
                 # This prevents RuntimeError: cannot enter context in IPython/Jupyter
                 train_loss += (loss - train_loss) / (i + 1)
@@ -768,44 +816,13 @@ def train_model(
                 train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
                 train_dipoles_mae += (dipole_mae - train_dipoles_mae) / (i + 1)
 
-            # Soft-well E_int aux: shape contact-ok soft wells toward lit DCM.
-            soft_well_loss = 0.0
-            soft_well_e_med = 0.0
+            # End-of-epoch soft-well block (primary shaping pressure).
             if soft_well_pool is not None and soft_well_cfg is not None:
-                for j in range(int(soft_well_cfg.steps_per_epoch)):
-                    sw_batch = soft_well_pool.next_batch(soft_well_cfg.batch_size)
-                    (
-                        params,
-                        ema_params,
-                        opt_state,
-                        sw_loss,
-                        sw_emed,
-                    ) = soft_well_train_step(
-                        model_apply=model.apply,
-                        optimizer_update=optimizer.update,
-                        transform_state=transform_state,
-                        batch=sw_batch,
-                        batch_size=int(soft_well_cfg.batch_size),
-                        opt_state=opt_state,
-                        params=params,
-                        ema_params=ema_params,
-                        hybrid_mm=hybrid_mm,
-                        target_lo_kcal=float(soft_well_cfg.target_lo_kcal),
-                        target_hi_kcal=float(soft_well_cfg.target_hi_kcal),
-                        target_mid_kcal=float(soft_well_cfg.target_mid_kcal),
-                        deep_floor_kcal=float(soft_well_cfg.deep_floor_kcal),
-                        hard_floor_kcal=float(soft_well_cfg.hard_floor_kcal),
-                        center_weight=float(soft_well_cfg.center_weight),
-                        loss_scale=float(soft_well_cfg.loss_scale),
-                        ema_decay=ema_decay,
-                        frozen_sigma_scale=frozen_mm_lj_sigma_scale,
-                        frozen_epsilon_scale=frozen_mm_lj_epsilon_scale,
-                    )
-                    soft_well_loss += (float(sw_loss) - soft_well_loss) / (j + 1)
-                    soft_well_e_med += (float(sw_emed) - soft_well_e_med) / (j + 1)
+                for _ in range(int(soft_well_cfg.steps_per_epoch)):
+                    _run_soft_well_step()
                 if epoch % print_freq == 0:
                     print(
-                        f"  soft-well aux: loss={soft_well_loss:.4f} "
+                        f"  soft-well aux: n={soft_well_n} loss={soft_well_loss:.4f} "
                         f"batch_E_int_median={soft_well_e_med:.2f} kcal/mol",
                         flush=True,
                     )

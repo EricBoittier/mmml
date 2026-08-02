@@ -25,9 +25,10 @@ N_VALID="${DDC_ON5SW_N_VALID:-5950}"
 SEED="${DDC_ON5SW_SEED:-42}"
 BATCH="${DDC_ON5SW_BATCH:-64}"
 LR="${DDC_ON5SW_LR:-0.0001}"
-SW_STEPS="${DDC_ON5SW_STEPS:-16}"
+SW_STEPS="${DDC_ON5SW_STEPS:-48}"
+SW_EVERY="${DDC_ON5SW_EVERY:-25}"
 SW_BATCH="${DDC_ON5SW_SW_BATCH:-32}"
-SW_SCALE="${DDC_ON5SW_LOSS_SCALE:-1.0}"
+SW_SCALE="${DDC_ON5SW_LOSS_SCALE:-10.0}"
 
 source .venv/bin/activate
 export PATH="${HOME}/.local/bin:${PATH}"
@@ -72,7 +73,7 @@ echo "  config   : $CONFIG"
 echo "  warm     : $CKPT"
 echo "  scales   : $SCALE_SIDECAR (frozen into forward + sidecar)"
 echo "  tag      : $TAG"
-echo "  epochs=$EPOCHS lr=$LR batch=$BATCH soft_well_steps=$SW_STEPS sw_batch=$SW_BATCH"
+echo "  epochs=$EPOCHS lr=$LR batch=$BATCH soft_well_steps=$SW_STEPS every=$SW_EVERY sw_batch=$SW_BATCH scale=$SW_SCALE"
 echo "  handoff  : mm_switch_on=5.0 (LJ scales FROZEN from sidecar)"
 date -Is
 nvidia-smi --query-gpu=index,name,memory.free --format=csv || true
@@ -109,6 +110,7 @@ uv run mmml physnet-train \
   --physnet-checkpoint "$CKPT" \
   --soft-well-aux \
   --soft-well-steps-per-epoch "$SW_STEPS" \
+  --soft-well-every-n-train-batches "$SW_EVERY" \
   --soft-well-batch-size "$SW_BATCH" \
   --soft-well-loss-scale "$SW_SCALE" \
   --soft-well-target-lo -5.0 \
