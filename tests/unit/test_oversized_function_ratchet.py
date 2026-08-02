@@ -112,7 +112,11 @@ _BASELINE: dict[str, int] = {
     # and `resolve_bonded_intra_damping`, which is why they are unit tested and
     # the enclosing function still is not.
     "mmml/interfaces/pycharmmInterface/mmml_calculator.py::setup_calculator": 3445,
-    "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine": 2522,
+    # 2522 -> 2734 (+212). NpT virial VJP + in-situ self-check + absolute-energy
+    # NVE arm landed as nested helpers (`npt_energy_fn_bwd`, FD checks) inside the
+    # existing closure rather than a module-level extract. Raising the register
+    # so the next append is noticed; the debt is still one uncoverable blob.
+    "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine": 2734,
     "mmml/interfaces/pycharmmInterface/mlpot/staged_workflow.py::run_staged_workflow": 2469,
     # 2186 -> 1467: its 743-line argparse block became `build_parser`, so the
     # backend's CLI surface can be parsed in a test instead of only in a
@@ -124,7 +128,10 @@ _BASELINE: dict[str, int] = {
     # single flag -- this function *is* the extraction that split
     # md_pbc_suite/jaxmd.py::main, and its whole body is add_argument calls.
     "mmml/cli/run/md_system.py::build_parser": 2153,
-    "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine.run_sim": 1986,
+    # 1986 -> 2131 (+145). Same NpT / diagnostic append as the parent
+    # set_up_nhc_sim_routine entry above; run_sim is where the FD checks and
+    # rescue path growth actually live.
+    "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine.run_sim": 2131,
     "mmml/interfaces/pycharmmInterface/mlpot/dynamics.py::run_dynamics_with_io": 1587,
     # 1543 -> 1620 (+77, past the grace). Raised to record uncommitted work in
     # flight, not because the growth was reviewed here. This is the tier where
