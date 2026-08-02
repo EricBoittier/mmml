@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # Preflight + sbatch for lever-2 on=5 retrain; appends job id to job_ids.txt.
+#
+# Uses a *clean* Slurm export list — never --export=ALL — so a login-shell
+# JAX_PLATFORMS=cpu / MMML_JAX_WARMUP_DEVICE=cpu cannot silently CPU-train.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -16,13 +19,22 @@ for f in "$CONFIG" "$DATA" "$CKPT"; do
   [[ -f "$f" ]] || { echo "ERROR: missing $f" >&2; exit 2; }
 done
 
-echo "Submitting lever-2 on=5 FT"
+echo "Submitting lever-2 on=5 FT (clean GPU env, exclusive node)"
 echo "  config=$CONFIG"
 echo "  data=$DATA"
 echo "  warmstart=$CKPT"
-echo "  epochs=${DDC_ON5_EPOCHS:-50} tag=${DDC_ON5_TAG:-hybrid_mm_lever2_on5_ft}"
+echo "  epochs=${DDC_ON5_EPOCHS:-50} batch=${DDC_ON5_BATCH:-64} tag=${DDC_ON5_TAG:-hybrid_mm_lever2_on5_ft}"
 
-JOB_LINE="$(sbatch --export=ALL scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh)"
+# Pass only the knobs we care about; force GPU device vars inside the job script.
+EXPORT_LIST="ALL,LJ_DEVICE=gpu,JAX_PLATFORMS=cuda,MMML_MLPOT_DEVICE=gpu,MMML_JAX_WARMUP_DEVICE=gpu,MMML_MM_NL_DEVICE=gpu"
+EXPORT_LIST+=",DDC_ON5_CONFIG=${CONFIG},DDC_ON5_DATA=${DATA},DDC_ON5_CKPT=${CKPT}"
+EXPORT_LIST+=",DDC_ON5_EPOCHS=${DDC_ON5_EPOCHS:-50},DDC_ON5_TAG=${DDC_ON5_TAG:-hybrid_mm_lever2_on5_ft}"
+EXPORT_LIST+=",DDC_ON5_N_TRAIN=${DDC_ON5_N_TRAIN:-32000},DDC_ON5_N_VALID=${DDC_ON5_N_VALID:-5950}"
+EXPORT_LIST+=",DDC_ON5_SEED=${DDC_ON5_SEED:-42},DDC_ON5_BATCH=${DDC_ON5_BATCH:-64}"
+EXPORT_LIST+=",DDC_ON5_CKPT_DIR=${DDC_ON5_CKPT_DIR:-artifacts/lj_scales/ckpts}"
+EXPORT_LIST+=",UV_NO_SYNC=1,PYTHONUNBUFFERED=1"
+
+JOB_LINE="$(sbatch --export="${EXPORT_LIST}" scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh)"
 echo "$JOB_LINE"
 JOB_ID="$(awk '{print $4}' <<<"$JOB_LINE")"
 echo "$JOB_ID" | tee -a "$ROOT/artifacts/lj_scales/dense_dt_campaign/job_ids.txt"
