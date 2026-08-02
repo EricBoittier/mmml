@@ -4774,7 +4774,22 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "Optional cluster PSF for --jax-mm-spoof bonded parameters "
-            "(first monomer slice). Default: minimal harmonic chain."
+            "(first monomer slice). Also supplies the CGenFF bonded terms for "
+            "--ml-potential-mode bonded_intra, where it is REQUIRED. "
+            "Default: minimal harmonic chain."
+        ),
+    )
+    group.add_argument(
+        "--ml-potential-mode",
+        type=str,
+        default=None,
+        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra"),
+        help=(
+            "Which potential supplies the ML terms. 'bonded_intra' keeps PhysNet "
+            "for the dimer interaction but hands the internal monomer energy to "
+            "CGenFF bonded, which requires --jax-mm-spoof-psf. Use it when the ML "
+            "model was trained on rigid monomers and so carries no restoring force "
+            "for intramolecular coordinates. See docs/hybrid-bonded-intra.md."
         ),
     )
 

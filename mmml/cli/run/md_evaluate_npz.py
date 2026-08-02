@@ -1423,6 +1423,8 @@ def _attach_ase_mmml_calculator(
         mm_charge_mode=getattr(args, "mm_charge_mode", None),
         mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
         mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
+        ml_potential_mode=getattr(args, "ml_potential_mode", None),
+        jax_mm_spoof_psf=getattr(args, "jax_mm_spoof_psf", None),
     )
     atoms.calc = calc
     return calc

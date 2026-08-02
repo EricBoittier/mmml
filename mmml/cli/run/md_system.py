@@ -1722,7 +1722,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--jax-mm-spoof-psf",
         type=Path,
         default=None,
-        help="Optional cluster PSF for --jax-mm-spoof bonded parameters.",
+        help=(
+            "Optional cluster PSF for --jax-mm-spoof bonded parameters. Also "
+            "supplies the CGenFF bonded terms for --ml-potential-mode "
+            "bonded_intra, where it is REQUIRED."
+        ),
+    )
+    parser.add_argument(
+        "--ml-potential-mode",
+        type=str,
+        default=None,
+        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra"),
+        help=(
+            "Which potential supplies the ML terms. 'bonded_intra' keeps PhysNet "
+            "for the dimer interaction but hands the internal monomer energy to "
+            "CGenFF bonded (requires --jax-mm-spoof-psf). Use it when the model "
+            "was trained on rigid monomers and carries no restoring force for "
+            "intramolecular coordinates. See docs/hybrid-bonded-intra.md."
+        ),
     )
     parser.add_argument(
         "--residue",

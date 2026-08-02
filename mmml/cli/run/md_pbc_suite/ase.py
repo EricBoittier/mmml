@@ -1086,6 +1086,8 @@ def _factory_mmml(
     backprop: bool = False,
     hybrid_hamiltonian: str = "handoff",
     shared_cutoff: float | None = None,
+    ml_potential_mode: str | None = None,
+    jax_mm_spoof_psf: str | Path | None = None,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1142,6 +1144,8 @@ def _factory_mmml(
         mm_charge_mode=mm_charge_mode,
         mm_charge_correction=mm_charge_correction,
         mm_latent_charge_template=mm_latent_charge_template,
+        ml_potential_mode=ml_potential_mode,
+        jax_mm_spoof_psf=jax_mm_spoof_psf,
         hybrid_hamiltonian=hybrid_hamiltonian,
         shared_cutoff=shared_cutoff,
     )

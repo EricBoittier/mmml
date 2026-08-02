@@ -337,6 +337,63 @@ Eref[17] = -459.549260062932
 
 
 
+def build_bonded_intra_evaluator(
+    *,
+    atoms_per_monomer_list: Sequence[int],
+    monomer_psf: Path | str | None,
+) -> Any:
+    """CGenFF bonded evaluator for ``ml_potential_mode=bonded_intra``.
+
+    See ``docs/hybrid-bonded-intra.md``. Raises rather than degrading, because
+    both degraded paths are silent and wrong.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+        resolve_monomer_bonded_evaluator,
+    )
+
+    if len(set(atoms_per_monomer_list)) != 1:
+        raise NotImplementedError(
+            "ml_potential_mode=bonded_intra requires homogeneous monomers; got "
+            f"{sorted(set(atoms_per_monomer_list))} atoms per monomer. The bonded "
+            "evaluator is resolved per monomer size and the batched path assumes "
+            "one static slice width."
+        )
+    if monomer_psf is None:
+        raise ValueError(
+            "ml_potential_mode=bonded_intra needs a PSF for the CGenFF bonded "
+            "terms; pass jax_mm_spoof_psf. Without one the bonded evaluator falls "
+            "back to a minimal chain, which is not a water potential."
+        )
+    return resolve_monomer_bonded_evaluator(
+        atoms_per_monomer=int(atoms_per_monomer_list[0]),
+        monomer_psf=monomer_psf,
+        atom_offset=0,
+        energy_unit="eV",
+    )
+
+
+def bonded_intra_contribution(
+    eval_fn: Callable[[Array], Tuple[Array, Array]],
+    positions: Array,
+    monomer_idx: Array,
+    atoms_per_monomer: int,
+    total_atoms: int,
+) -> Tuple[Array, Array]:
+    """Total CGenFF bonded energy and its forces scattered to global atoms.
+
+    Indices are sliced to the real atoms per monomer, so batch padding never
+    reaches the bonded terms. The caller keeps the ML monomer energies and forces
+    for the dimer term: ``E_AB - (E_A + E_B)`` only cancels when both sides come
+    from the same model, so only the contribution to the TOTAL is replaced.
+    """
+    mono_idx = monomer_idx[:, :atoms_per_monomer]
+    e_bonded, f_bonded = jax.vmap(eval_fn)(positions[mono_idx])
+    forces = jax.ops.segment_sum(
+        f_bonded.reshape(-1, 3), mono_idx.reshape(-1), num_segments=total_atoms
+    )
+    return jnp.sum(e_bonded), forces
+
+
 def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
@@ -710,18 +767,8 @@ def setup_calculator(
     }
     # Bonded-intra: CGenFF bonded owns the internal monomer energy, the ML model
     # owns only the dimer interaction. Unlike the spoof modes above this KEEPS the
-    # ML model -- it replaces what the monomer term contributes to the total, not
-    # the model itself.
-    #
-    # Motivated by an O-H scan of the DES-trained hybrid: the ML monomer term
-    # plateaus at ~+19 kcal/mol beyond 1.35 A where a real O-H bond costs +342, so
-    # nothing holds the molecules together and bulk water runs away without bound.
-    # The CGenFF bonded term has its minimum at 0.950 A (physical 0.958), rises
-    # monotonically below it, and gives +342 at 1.83 A.
-    #
-    # This does NOT repair the interaction term, which is extrapolation noise
-    # below ~0.85 A (values swinging +14, -7, +11, -73 kcal/mol over 0.02 A steps,
-    # peak gradient 3817 kcal/mol/A). See docs/hybrid-bonded-intra.md.
+    # ML model. It does NOT repair the interaction term, which is extrapolation
+    # noise below ~0.85 A. See docs/hybrid-bonded-intra.md.
     _bonded_intra_mode = _ml_mode_norm in {
         "bonded_intra",
         "bonded-intra",
@@ -743,28 +790,9 @@ def setup_calculator(
 
     _bonded_intra_eval = None
     if _bonded_intra_mode:
-        from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
-            resolve_monomer_bonded_evaluator,
-        )
-
-        if len(set(atoms_per_monomer_list)) != 1:
-            raise NotImplementedError(
-                "ml_potential_mode=bonded_intra requires homogeneous monomers; got "
-                f"{sorted(set(atoms_per_monomer_list))} atoms per monomer. The bonded "
-                "evaluator is resolved per monomer size and the batch path below "
-                "assumes one static slice width."
-            )
-        if jax_mm_spoof_psf is None:
-            raise ValueError(
-                "ml_potential_mode=bonded_intra needs a PSF for the CGenFF bonded "
-                "terms; pass jax_mm_spoof_psf. Without one the bonded evaluator "
-                "falls back to a minimal chain, which is not a water potential."
-            )
-        _bonded_intra_eval = resolve_monomer_bonded_evaluator(
-            atoms_per_monomer=int(atoms_per_monomer_list[0]),
+        _bonded_intra_eval = build_bonded_intra_evaluator(
+            atoms_per_monomer_list=atoms_per_monomer_list,
             monomer_psf=jax_mm_spoof_psf,
-            atom_offset=0,
-            energy_unit="eV",
         )
         setup_rows.append(("bonded_intra_psf", str(jax_mm_spoof_psf)))
 
@@ -2638,22 +2666,15 @@ def setup_calculator(
             debug,
         )
 
-        # Bonded-intra: CGenFF bonded owns the internal monomer energy. The ML
-        # monomer energies and forces still flow into the dimer term unchanged --
-        # E_int = E_AB - (E_A + E_B) only cancels if both sides come from the same
-        # model, so only the contribution to the TOTAL is replaced, below.
-        # Sliced to the real atoms per monomer, so batch padding never enters.
         _bonded_E_total = None
         _bonded_F_global = None
         if _bonded_intra_eval is not None:
-            _n_per = int(atoms_per_monomer_list[0])
-            _mono_idx = monomer_idx_arr_jnp[:, :_n_per]
-            _b_e, _b_f = jax.vmap(_bonded_intra_eval)(positions[_mono_idx])
-            _bonded_E_total = jnp.sum(_b_e)
-            _bonded_F_global = jax.ops.segment_sum(
-                _b_f.reshape(-1, 3),
-                _mono_idx.reshape(-1),
-                num_segments=total_atoms,
+            _bonded_E_total, _bonded_F_global = bonded_intra_contribution(
+                _bonded_intra_eval,
+                positions,
+                monomer_idx_arr_jnp,
+                int(atoms_per_monomer_list[0]),
+                total_atoms,
             )
 
 
@@ -2666,11 +2687,10 @@ def setup_calculator(
                 "ml_2b_F": jnp.zeros((total_atoms, 3)),
             }
             if _bonded_E_total is not None:
-                out["out_E"] = _bonded_E_total
-                out["out_F"] = _bonded_F_global
-                out["internal_E"] = _bonded_E_total
-                out["internal_F"] = _bonded_F_global
-                out["ml_internal_E"] = monomer_contribs["internal_E"]
+                out.update(
+                    out_E=_bonded_E_total, out_F=_bonded_F_global,
+                    internal_E=_bonded_E_total, internal_F=_bonded_F_global,
+                    ml_internal_E=monomer_contribs["internal_E"])
             if q_ml_global is not None:
                 out["q_ml_global"] = q_ml_global
             return out
@@ -2705,18 +2725,14 @@ def setup_calculator(
             else:
                 dimer_forces_safe = arr
         
-        # Bonded-intra substitutes the internal monomer term in the TOTAL only.
-        # dimer_contribs was already built from the ML monomer energies/forces
-        # above, so the E_AB - (E_A + E_B) cancellation is untouched.
-        if _bonded_E_total is not None:
-            monomer_E_for_total = _bonded_E_total
-            monomer_F_for_total = _bonded_F_global
-            internal_E_out, internal_F_out = _bonded_E_total, _bonded_F_global
-        else:
-            monomer_E_for_total = monomer_contribs["out_E"]
-            monomer_F_for_total = monomer_forces_safe
-            internal_E_out = monomer_contribs["internal_E"]
-            internal_F_out = monomer_contribs["internal_F"]
+        # Bonded-intra substitutes the internal monomer term in the TOTAL only;
+        # dimer_contribs was already built from the ML monomer energies/forces, so
+        # the E_AB - (E_A + E_B) cancellation is untouched.
+        _bi = _bonded_E_total is not None
+        monomer_E_for_total = _bonded_E_total if _bi else monomer_contribs["out_E"]
+        monomer_F_for_total = _bonded_F_global if _bi else monomer_forces_safe
+        internal_E_out = _bonded_E_total if _bi else monomer_contribs["internal_E"]
+        internal_F_out = _bonded_F_global if _bi else monomer_contribs["internal_F"]
 
         combined_forces = monomer_F_for_total + dimer_forces_safe
         combined_forces = jnp.where(jnp.isfinite(combined_forces), combined_forces, 0.0)
