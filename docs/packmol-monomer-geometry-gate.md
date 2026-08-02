@@ -125,6 +125,35 @@ Run these on a cluster node — they execute CHARMM.
 
 ---
 
+## Environments that currently fail the gate
+
+The gate is not hypothetical: two of the three CHARMM builds available to this
+project distort monomers during the cluster relax. Identical builds
+(`--seed 23`, SD 50 / ABNR 100), worst monomer:
+
+| Build | pc-studix | local darwin | GitHub CI `charmm` job |
+|-------|-----------|--------------|------------------------|
+| `TIP3:4`, L = 15 Å | 0.040 Å | 0.304 Å | 0.393 Å |
+| `MEOH:4`, L = 15 Å | 0.014 Å | 0.966 Å | — |
+| `TIP3:60`, L = 15 Å | 0.048 Å | 0.451 Å | — |
+
+On the local build the distortion enters during **ABNR**, and it is a converged
+state, not a transient: SD alone (2000 steps) leaves the skeleton at 0.018 Å,
+ABNR alone (2000 steps) reaches 0.514 Å, and SD 500 + ABNR 2000 lands on the same
+0.304 Å as SD 50 + ABNR 100. A TIP3 O–H placed at 0.953 Å ends at 1.257 Å there
+(1.345 Å on CI) — a 30–40 % bond stretch that no force field supports.
+
+Because pc-studix reproduces none of it, this is an environment/build problem
+rather than something inherent to small or dilute systems, and the threshold does
+not need to accommodate it. `tests/unit/test_md_system_unified_ffparams.py`
+therefore sets `MMML_MAX_MONOMER_INTERNAL_DEVIATION_A=0` (measure, don't gate) so
+that CHARMM smoke test can keep asserting what it is about — FFParams lowering —
+while the gate stays armed for real builds. Fixing those CHARMM builds is
+separate work; until then, boxes built on them carry distorted monomers, which is
+exactly what this gate now makes visible.
+
+---
+
 ## Why GRMS = 0.0000 is only a warning
 
 The failing run logged `CHARMM MM minimize start: GRMS=0.0000` *and*
