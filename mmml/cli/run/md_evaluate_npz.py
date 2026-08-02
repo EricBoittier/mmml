@@ -45,6 +45,28 @@ load_evaluate_npz = load_geometry_npz
 EVALUATE_ARTIFACT_UNITS = dict(CALCULATOR_UNITS)
 
 
+def evaluate_term_flags(args: Any) -> tuple[bool, bool, bool]:
+    """Resolve ``(doML, doMM, doML_dimer)`` for a single-point evaluation.
+
+    These were hardcoded to ``True`` at every call site in this module, so
+    ``--evaluate-npz`` silently ignored ``--no-do-ml``, ``--no-include-mm``,
+    ``--do-ml-dimer/--no-do-ml-dimer`` and ``--skip-ml-dimers``. Evaluating one
+    grid four ways -- full, no dimer term, no MM, MM only -- returned
+    bit-identical energies (max |dE| = 0.000e+00 eV), which makes any per-term
+    decomposition impossible and quietly misreports what was computed.
+
+    Kept as one helper because the three call sites must agree; the same
+    resolution is used by the jax-md runner, including ``--skip-ml-dimers`` as
+    an override on top of ``--do-ml-dimer``.
+    """
+    do_ml = bool(getattr(args, "do_ml", True))
+    do_mm = bool(getattr(args, "include_mm", True))
+    do_ml_dimer = bool(getattr(args, "do_ml_dimer", True)) and not bool(
+        getattr(args, "skip_ml_dimers", False)
+    )
+    return do_ml, do_mm, do_ml_dimer
+
+
 def _evaluate_int_arg(args: Any, name: str, default: int) -> int:
     value = getattr(args, name, default)
     if value is None:
@@ -1428,6 +1450,14 @@ def _evaluate_jaxmd_mmml(
     import pycharmm.psf as psf
 
     ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
+    # Resolved once and used at all three construction/evaluation sites below,
+    # which previously hardcoded True and so ignored the term flags entirely.
+    _do_ml, _do_mm, _do_ml_dimer = evaluate_term_flags(args)
+    if not getattr(args, "quiet", False):
+        print(
+            f"mmml evaluate: doML={_do_ml} doMM={_do_mm} doML_dimer={_do_ml_dimer}",
+            flush=True,
+        )
     if at_codes_override is not None:
         at_codes = np.asarray(at_codes_override, dtype=int)
     else:
@@ -1438,9 +1468,9 @@ def _evaluate_jaxmd_mmml(
         ml_switch_width=ml_w,
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
+        doML=_do_ml,
+        doMM=_do_mm,
+        doML_dimer=_do_ml_dimer,
         debug=False,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
@@ -1474,9 +1504,9 @@ def _evaluate_jaxmd_mmml(
         atomic_positions=atoms.get_positions(),
         n_monomers=n_monomers,
         cutoff_params=cutoff,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
+        doML=_do_ml,
+        doMM=_do_mm,
+        doML_dimer=_do_ml_dimer,
         backprop=False,
         energy_conversion_factor=1.0,
         force_conversion_factor=1.0,
@@ -1525,9 +1555,9 @@ def _evaluate_jaxmd_mmml(
         positions=pos,
         n_monomers=n_monomers,
         cutoff_params=cutoff,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
+        doML=_do_ml,
+        doMM=_do_mm,
+        doML_dimer=_do_ml_dimer,
         mm_pair_idx=mm_pair_idx,
         mm_pair_mask=mm_pair_mask,
         box=box_j,

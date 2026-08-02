@@ -27,6 +27,11 @@
 #   full - no_dimer  = the ML dimer term
 #   full - no_mm     = the MM term
 #
+# A box is REQUIRED even though the dimer is isolated: the MM pair list is built
+# from a cell, and without one no MM pairs are found and the MM term collapses to
+# ~0.06 kcal/mol across the grid against a true 28.81. 30 A is far larger than
+# the 7 A maximum separation, so minimum-image never wraps a real pair.
+#
 # Single-point only (--evaluate-npz), no dynamics, so this is minutes not hours.
 set -uo pipefail
 
@@ -82,6 +87,7 @@ fi
 uv run mmml md-system \
   --backend jaxmd --setup pbc_nve \
   --composition "TIP3:2" \
+  --box-size "${BOX:-30.0}" \
   --checkpoint "$CKPT/epoch-25" \
   "${scale_flags[@]}" "${terms[@]}" \
   --evaluate-npz "$GRID" \
