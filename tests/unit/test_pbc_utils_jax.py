@@ -12,6 +12,8 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     cart_coords,
     frac_coords,
     group_ids_from_groups,
+    mic_displacement,
+    pairwise_mic,
     vjp_wrap_dimer_monomer_b_forces,
     wrap_dimer_monomer_b,
     wrap_groups,
@@ -230,3 +232,53 @@ def test_wrap_dimer_monomer_b_smooth_vjp_matches_energy_gradient() -> None:
     np.testing.assert_allclose(
         np.asarray(f_vjp), np.asarray(f_autograd), rtol=1e-6, atol=1e-6
     )
+
+
+@pytest.mark.unit
+def test_pairwise_mic_runs_and_matches_mic_displacement() -> None:
+    cell = jnp.diag(jnp.array([10.0, 12.0, 14.0], dtype=jnp.float64))
+    R = jnp.array(
+        [
+            [9.5, 1.0, 1.0],
+            [1.0, 11.5, 2.0],
+            [5.0, 6.0, 7.0],
+            [0.2, 0.2, 0.2],
+        ],
+        dtype=jnp.float64,
+    )
+
+    dR_mic, dij = pairwise_mic(R, cell)
+
+    assert dR_mic.shape == (4, 4, 3)
+    assert dij.shape == (4, 4)
+
+    for i in range(R.shape[0]):
+        for j in range(R.shape[0]):
+            expected = mic_displacement(R[i], R[j], cell)
+            np.testing.assert_allclose(np.asarray(dR_mic[i, j]), np.asarray(expected), atol=1e-10)
+            np.testing.assert_allclose(
+                float(dij[i, j]), float(jnp.linalg.norm(expected)), atol=1e-10
+            )
+
+    np.testing.assert_allclose(np.asarray(jnp.diagonal(dij)), 0.0, atol=1e-12)
+
+
+@pytest.mark.unit
+def test_pairwise_mic_grad_no_nan_at_coincident_points() -> None:
+    """Coincident points (e.g. padding atoms) must not poison gradients with NaN."""
+    cell = jnp.diag(jnp.array([10.0, 10.0, 10.0], dtype=jnp.float64))
+    R = jnp.array(
+        [
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [5.0, 5.0, 5.0],
+        ],
+        dtype=jnp.float64,
+    )
+
+    def loss(pos):
+        _, dij = pairwise_mic(pos, cell)
+        return jnp.sum(dij)
+
+    g = jax.grad(loss)(R)
+    assert bool(jnp.all(jnp.isfinite(g)))
