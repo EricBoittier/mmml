@@ -866,5 +866,28 @@ def main() -> int:
     return generate(check=args.check)
 
 
+def _hard_exit(code: int) -> None:
+    """Exit with *code*, preserving a non-zero status past CHARMM teardown.
+
+    Rendering a page imports command modules, which pull in PyCHARMM; that
+    installs a Fortran/MPI finalizer which runs at interpreter shutdown and
+    **resets the process exit status to 0**. So ``--check`` printed
+    ``stale: ...`` and still exited 0: the pre-push hook and the Docs
+    workflow both trusted that status, and stale pages sailed through both
+    gates (``physnet-train.md`` had been missing two real flags since
+    63b549073).
+
+    Mirrors ``mmml.cli.__main__._hard_exit``: ``os._exit`` only on the
+    failure path, so a clean run still shuts down normally and lets OpenMPI
+    finalize -- ``os._exit(0)`` skips ``MPI_Finalize`` and PRRTE then often
+    returns 1 for a run that actually succeeded.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if code == 0:
+        raise SystemExit(0)
+    os._exit(code)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    _hard_exit(main())
