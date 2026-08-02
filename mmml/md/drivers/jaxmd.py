@@ -237,6 +237,23 @@ class JaxmdDriver:
                 )
             )
 
+        def _record_momentum(state):
+            """Per-atom momentum, so a recorded frame can be *restarted from*.
+
+            Positions alone do not determine the next step, so a trajectory
+            dumped on failure can be described but not replayed -- which is
+            exactly where diagnosing the solvated electrostatic NaN stopped:
+            every energy and every per-term force was finite on every dumped
+            frame, so the cause lay in the steps after the last record, and
+            there was no way to re-enter that trajectory and step into it.
+            Returns None for states that carry no momentum, so callers can tell
+            "not available" from "zero".
+            """
+            momentum = getattr(state, "momentum", None)
+            if momentum is None:
+                return None
+            return np.asarray(jax.device_get(momentum))
+
         seed = int(options.get("seed", 0))
         unit_system = units.metal_unit_system()
 
@@ -397,6 +414,7 @@ class JaxmdDriver:
         boxes = [None if box is None else np.asarray(jax.device_get(_box_of(state)))]
         energies = [_record_energy(state, dynamic_kwargs)]
         kinetic_energies = [_record_kinetic(state)]
+        momenta = [_record_momentum(state)]
         volumes_A3: list[float] = []
         pressures_bar: list[float] = []
         pressures_kin_bar: list[float] = []
@@ -590,6 +608,11 @@ class JaxmdDriver:
             "total_energies": np.asarray(energies) + np.asarray(kinetic_energies),
             "target_temperatures_K": np.asarray(target_temperatures),
         }
+        # Only when every recorded state carried one -- a partially populated
+        # array would silently pair the wrong momentum with a frame.
+        if momenta and all(m is not None for m in momenta):
+            metadata["momenta"] = np.asarray(momenta)
+            metadata["masses"] = np.asarray(jax.device_get(state.mass))
         if is_npt:
             metadata["boxes"] = np.asarray(boxes)
             metadata["volumes_A3"] = np.asarray(volumes_A3, dtype=np.float64)

@@ -38,6 +38,7 @@ from mmml.md.restraints import (
     FlatBottomWall,
     LinearDistanceCV,
 )
+from mmml.md.restraints.linear_distance import ReactionChannelRestraint
 from mmml.umbrella.config import UmbrellaConfig
 from mmml.umbrella.sample import run_umbrella_nvt
 
@@ -273,6 +274,31 @@ def build_parser() -> argparse.ArgumentParser:
             "satisfied just as well by a dissociated complex, and the fit is "
             "unbounded below out there, so the trajectory escapes. Menshutkin: "
             "--wall-sum 2,0,2,1,6.5 . Repeatable."
+        ),
+    )
+    parser.add_argument(
+        "--wall-channel",
+        type=str,
+        default=None,
+        action="append",
+        help=(
+            "Flat-bottom channel that FOLLOWS a reference path, as "
+            "A,B,C,D,JSON,GRIDKEY,TOL[,K]. Penalises the restrained CV when it "
+            "departs by more than TOL (A) from the reference value interpolated "
+            "at the configuration's OWN xi = r(A,B) - r(C,D). JSON supplies "
+            "'xi_grid' and GRIDKEY ('sum_grid' -> restrain r(A,B) + r(C,D); "
+            "'cn_grid' -> restrain r(C,D)). "
+            "Use this rather than --wall-sum for a transfer reaction: a "
+            "constant sum bound is a BOX, and the reaction path is a line "
+            "inside it, so the trajectory can sit legally inside the box while "
+            "being far off the path. Because the reference is evaluated at the "
+            "configuration's own xi it is one fixed function of the "
+            "coordinates, identical in every window, and cancels in the MBAR "
+            "reduced-potential differences exactly as the other walls do -- "
+            "aimed at each window's target instead it would not cancel and "
+            "would force a 2D analysis. Menshutkin: --wall-channel "
+            "2,0,2,1,artifacts/menshutkin/reaction_channel.json,sum_grid,0.60,50 "
+            ". Repeatable."
         ),
     )
     parser.add_argument(
@@ -595,6 +621,49 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
                     ),
                     upper=upper,
                     k=k,
+                )
+            )
+        data["walls"] = tuple(walls)
+    if args.wall_channel:
+        import json as _json
+
+        walls = list(data.get("walls", ()))
+        for spec in args.wall_channel:
+            parts = [p.strip() for p in spec.split(",") if p.strip()]
+            if len(parts) not in (7, 8):
+                raise SystemExit(
+                    "--wall-channel expects A,B,C,D,JSON,GRIDKEY,TOL[,K] "
+                    f"(got {spec!r})"
+                )
+            a, b, c, d = (int(x) for x in parts[:4])
+            path, gridkey = parts[4], parts[5]
+            tol = float(parts[6])
+            k = float(parts[7]) if len(parts) == 8 else 50.0
+            with open(path) as fh:
+                ch = _json.load(fh)
+            if "xi_grid" not in ch or gridkey not in ch:
+                raise SystemExit(
+                    f"{path} must contain 'xi_grid' and {gridkey!r}; "
+                    f"has {sorted(ch)}"
+                )
+            cv_xi = LinearDistanceCV(
+                pairs=((a, b), (c, d)), coefficients=(1.0, -1.0)
+            )
+            if gridkey == "cn_grid":
+                # Restrain the forming bond itself, not the sum.
+                cv_r = LinearDistanceCV(pairs=((c, d),), coefficients=(1.0,))
+            else:
+                cv_r = LinearDistanceCV(
+                    pairs=((a, b), (c, d)), coefficients=(1.0, 1.0)
+                )
+            walls.append(
+                ReactionChannelRestraint(
+                    cv_xi=cv_xi,
+                    cv_sum=cv_r,
+                    xi_grid=tuple(float(v) for v in ch["xi_grid"]),
+                    sum_grid=tuple(float(v) for v in ch[gridkey]),
+                    k=k,
+                    tol=tol,
                 )
             )
         data["walls"] = tuple(walls)

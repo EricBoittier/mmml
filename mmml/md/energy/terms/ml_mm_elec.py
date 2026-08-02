@@ -67,6 +67,7 @@ class MLMMElectrostaticTerm:
         damping_sigma_A: float = 1.0,
         charge_clip: float | None = 1.0,
         charge_gradient: bool = True,
+        charge_gradient_scale: float | None = None,
         lr_solver: str = "mic",
         ewald_alpha: float | None = None,
         ewald_accuracy_exponent: float = 3.5,
@@ -144,6 +145,33 @@ class MLMMElectrostaticTerm:
         # dropped, so the dynamics is no longer strictly variational and the
         # forces are not the gradient of the energy being reported.
         self.charge_gradient = bool(charge_gradient)
+        # Fractional charge-response force, lambda in [0, 1].
+        #
+        # None -> fall back to the boolean (0 or 1). Otherwise the gradient of
+        # the ML charges is scaled by lambda while their VALUE is untouched, via
+        #     q_eff = lam * q + (1 - lam) * stop_gradient(q)
+        # which sums to q exactly and differentiates to lam * dq/dR.
+        #
+        # This exists because lambda = 1 is unstable and lambda = 0 is wrong.
+        # MEASURED on an acetonitrile box at xi = +0.50: with the full response
+        # the charge oscillation on the chloride grows from +-0.03 e to +-0.15 e
+        # with a ~55 fs period (near the C-Cl stretch) and goes non-finite
+        # within 1 ps. Halving or quartering the timestep does NOT help -- 1.0,
+        # 0.5 and 0.25 fs all die after the same 1 ps of physical time -- so it
+        # is a dynamical instability (the term does net positive work on that
+        # mode), not integration error. Deleting the term entirely instead makes
+        # the forces non-conservative: dropping it changes the force by 101 %.
+        # Damping is the controlled middle ground, and lambda must be reported.
+        self.charge_gradient_scale = (
+            None if charge_gradient_scale is None else float(charge_gradient_scale)
+        )
+        if self.charge_gradient_scale is not None and not (
+            0.0 <= self.charge_gradient_scale <= 1.0
+        ):
+            raise ValueError(
+                "charge_gradient_scale must be in [0, 1] (got "
+                f"{self.charge_gradient_scale})"
+            )
         # Long-range solute-solvent electrostatics.
         #
         # "mic" truncates at cutoff_A with a switch. For a solute that develops
@@ -216,6 +244,7 @@ class MLMMElectrostaticTerm:
         is_ml = np.zeros(system.n_atoms, dtype=bool)
         is_ml[ml_idx] = True
         is_ml_j = jnp.asarray(is_ml)
+
         ml_idx_j = jnp.asarray(ml_idx, dtype=jnp.int32)
         # Position of each atom within the ML block, for gathering its charge.
         ml_slot = np.full(system.n_atoms, -1, dtype=np.int64)
@@ -233,6 +262,9 @@ class MLMMElectrostaticTerm:
         mode, q_tot = self.charge_mode, self.total_charge
         q_clip = self.charge_clip
         use_charge_grad = self.charge_gradient
+        lam_q = self.charge_gradient_scale
+        if lam_q is None:
+            lam_q = 1.0 if use_charge_grad else 0.0
         use_ewald = self.lr_solver == "ewald"
         if use_ewald:
             if cell is None:
@@ -341,6 +373,12 @@ class MLMMElectrostaticTerm:
             )
             # Keep pairs with exactly one ML atom: ML-ML is the model's own
             # business and MM-MM belongs to mm_nonbonded.
+            #
+            # NOTE this scans the full O(N^2) list and discards ~99 % of it. An
+            # attempt to enumerate only the n_ml * n_mm cross pairs measured
+            # 1.0x -- the pair loop is not the bottleneck. The cost is the EWALD
+            # RECIPROCAL sum, which runs over all atoms and all k-vectors no
+            # matter how the real-space pairs are organised. Optimise that.
             cross = jnp.logical_xor(is_ml_j[i], is_ml_j[j])
             mask = mask * cross.astype(R.dtype)
 
@@ -359,8 +397,10 @@ class MLMMElectrostaticTerm:
             r_safe = jnp.where(mask > 0, r, r_off)
 
             qa = q_ml[ml_slot_j[a]]
-            if not use_charge_grad:
+            if lam_q <= 0.0:
                 qa = jax.lax.stop_gradient(qa)
+            elif lam_q < 1.0:
+                qa = lam_q * qa + (1.0 - lam_q) * jax.lax.stop_gradient(qa)
             qb = mm_q_j[b]
             damping = (
                 1.0

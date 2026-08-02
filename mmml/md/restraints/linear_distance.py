@@ -639,3 +639,124 @@ class AngleWall:
         import numpy as _np
 
         return float(_np.degrees(self._theta(_np.asarray(positions), _np, cell)))
+
+
+@dataclass(frozen=True)
+class ReactionChannelRestraint:
+    """Hold a transfer reaction in the tube its potential was fitted on.
+
+    A one-dimensional bias on ``xi = r(C-X) - r(C-N)`` fixes the difference of
+    the two distances and leaves their sum free. :class:`FlatBottomWall` on the
+    sum and :class:`BondRetentionWall` on ``min(r)`` each bound that direction,
+    but with a *constant* bound -- and a constant bound is a box, while the
+    reaction path is a line inside it. Measured consequence: with
+    ``min(r) <= 2.25 A`` enforced, a water run at xi = +0.70 still sampled
+    r(C-N) = 2.24 A where its training path sits at 1.76 A, drifted 0.9 A off
+    in the sum, left the fitted manifold and produced non-finite forces.
+
+    This restrains the sum toward the value the reference path has **at the
+    current xi**, so the allowed region follows the reaction instead of
+    bracketing all of it:
+
+        W = 0.5 k * max(|sum(R) - s(xi(R))| - tol, 0)^2
+
+    ``s`` is linear interpolation through ``(xi_grid, sum_grid)``, normally the
+    median sum per xi bin of the training set.
+
+    Two properties matter for the analysis. It is **flat-bottomed** within
+    ``tol``, so it costs nothing on the path itself; and it is a single fixed
+    function of the coordinates -- ``s`` is evaluated at the configuration's own
+    xi, never at a window's target -- so it is identical in every window and
+    cancels in the MBAR reduced-potential differences, exactly as the walls do.
+    A restraint aimed at each window's xi0 would *not* cancel and would force a
+    two-dimensional MBAR.
+    """
+
+    cv_xi: "LinearDistanceCV"
+    cv_sum: "LinearDistanceCV"
+    xi_grid: tuple[float, ...]
+    sum_grid: tuple[float, ...]
+    k: float = 50.0
+    tol: float = 0.3
+
+    def __post_init__(self) -> None:
+        if len(self.xi_grid) != len(self.sum_grid):
+            raise ValueError(
+                f"xi_grid ({len(self.xi_grid)}) and sum_grid "
+                f"({len(self.sum_grid)}) must be the same length"
+            )
+        if len(self.xi_grid) < 2:
+            raise ValueError("need at least two points to define the channel")
+        if list(self.xi_grid) != sorted(self.xi_grid):
+            raise ValueError("xi_grid must be increasing (interpolation assumes it)")
+        if self.k < 0 or self.tol < 0:
+            raise ValueError("k and tol must be non-negative")
+
+    def _penalty(self, xi, total, xp):
+        target = xp.interp(xi, xp.asarray(self.xi_grid), xp.asarray(self.sum_grid))
+        excess = xp.maximum(xp.abs(total - target) - self.tol, 0.0)
+        return 0.5 * self.k * excess * excess
+
+    def label(self) -> str:
+        return (f"{self.cv_sum.label()} within {self.tol:g} A of the reference "
+                f"path over xi {self.xi_grid[0]:+g}..{self.xi_grid[-1]:+g} "
+                f"(k={self.k:g})")
+
+    def validate_against(self, n_atoms: int) -> None:
+        self.cv_xi.validate_against(n_atoms)
+        self.cv_sum.validate_against(n_atoms)
+
+    def to_spec(self) -> dict[str, Any]:
+        return {
+            "cv_xi": {"pairs": [list(p) for p in self.cv_xi.pairs],
+                      "coefficients": list(self.cv_xi.coefficients)},
+            "cv_sum": {"pairs": [list(p) for p in self.cv_sum.pairs],
+                       "coefficients": list(self.cv_sum.coefficients)},
+            "xi_grid": list(self.xi_grid),
+            "sum_grid": list(self.sum_grid),
+            "k": self.k,
+            "tol": self.tol,
+        }
+
+    @classmethod
+    def from_spec(cls, spec: Any) -> "ReactionChannelRestraint":
+        if isinstance(spec, ReactionChannelRestraint):
+            return spec
+        d = dict(spec)
+        return cls(
+            cv_xi=LinearDistanceCV.from_spec(d["cv_xi"]),
+            cv_sum=LinearDistanceCV.from_spec(d["cv_sum"]),
+            xi_grid=tuple(float(v) for v in d["xi_grid"]),
+            sum_grid=tuple(float(v) for v in d["sum_grid"]),
+            k=float(d.get("k", 50.0)),
+            tol=float(d.get("tol", 0.3)),
+        )
+
+    def energy(self, positions: Any, *, cell: Any = None) -> Any:
+        import jax.numpy as jnp
+
+        return self._penalty(self.cv_xi.value(positions, cell=cell),
+                             self.cv_sum.value(positions, cell=cell), jnp)
+
+    def energy_batched(self, positions: Any, n_atoms: int, n_windows: int) -> Any:
+        import jax.numpy as jnp
+
+        return self._penalty(
+            self.cv_xi.value_batched(positions, n_atoms, n_windows),
+            self.cv_sum.value_batched(positions, n_atoms, n_windows), jnp)
+
+    def forces_batched(self, positions: Any, n_atoms: int, n_windows: int) -> Any:
+        import jax
+
+        def total(flat):
+            return self.energy_batched(flat, n_atoms, n_windows).sum()
+
+        return -jax.grad(total)(positions).reshape(n_windows * n_atoms, 3)
+
+    def value_numpy(self, positions, *, cell=None) -> float:
+        """Signed deviation from the channel centre, for diagnostics."""
+        import numpy as np
+
+        xi = self.cv_xi.value_numpy(positions, cell=cell)
+        total = self.cv_sum.value_numpy(positions, cell=cell)
+        return float(total - np.interp(xi, self.xi_grid, self.sum_grid))

@@ -16,8 +16,8 @@ DT_FS="${6:?dt_fs}"
 X64="${7:?0|1}"
 SEED="${8:?seed}"
 
-CKPT=artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json
-SIDECAR=artifacts/lj_scales/ckpts/hybrid_mm_fixed_lj_scales-4d68132d-c686-4ded-9887-efc16d5b2638/hybrid_mm.json
+CKPT="${DDC_CKPT:-artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json}"
+SIDECAR="${DDC_SIDECAR:-artifacts/lj_scales/ckpts/hybrid_mm_fixed_lj_scales-4d68132d-c686-4ded-9887-efc16d5b2638/hybrid_mm.json}"
 OUT_ROOT=artifacts/lj_scales/dense_dt_campaign
 OUT="${OUT_ROOT}/${TAG}"
 PSF="${BOX_DIR}/model.psf"
@@ -74,6 +74,8 @@ fi
   echo "host=$(hostname) job=${SLURM_JOB_ID:-local} $(date -Is)"
   echo "box_dir=$BOX_DIR box_A=$BOX_A ensemble=$ENSEMBLE ps=$PS dt_fs=$DT_FS x64=$X64 seed=$SEED"
   echo "psf=$PSF crd=$CRD"
+  echo "ckpt=$CKPT"
+  echo "sidecar=$SIDECAR"
   echo "handoff=${DDC_HANDOFF} mm_switch_on=${MM_SWITCH_ON} ml_switch_width=${ML_SWITCH_WIDTH} mm_switch_width=${MM_SWITCH_WIDTH}"
   echo "note=deploy handoff differs from epoch222 train (8/1.5/5); calculator will warn — intentional lever-2 probe"
   python3 - <<PY

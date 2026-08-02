@@ -28,13 +28,13 @@ usage: mmml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                             [--cv2-difference CV2_DIFFERENCE]
                             [--wall-angle A,V,C,THETA_MIN[,K]]
                             [--wall-min-bond A,B,C,D,R_MAX[,K]]
-                            [--wall-sum WALL_SUM] [--targets TARGETS]
-                            [--targets-y TARGETS_Y] [--xi-min XI_MIN]
-                            [--xi-max XI_MAX] [--n-windows N_WINDOWS]
-                            [--yi-min YI_MIN] [--yi-max YI_MAX]
-                            [--n-windows-y N_WINDOWS_Y] [--k K_EV_A2]
-                            [--ky K_Y_EV_A2] [--move-with MOVE_WITH]
-                            [--move-with2 MOVE_WITH2]
+                            [--wall-sum WALL_SUM] [--wall-channel WALL_CHANNEL]
+                            [--targets TARGETS] [--targets-y TARGETS_Y]
+                            [--xi-min XI_MIN] [--xi-max XI_MAX]
+                            [--n-windows N_WINDOWS] [--yi-min YI_MIN]
+                            [--yi-max YI_MAX] [--n-windows-y N_WINDOWS_Y]
+                            [--k K_EV_A2] [--ky K_Y_EV_A2]
+                            [--move-with MOVE_WITH] [--move-with2 MOVE_WITH2]
                             [--invert-with INVERT_WITH]
                             [--equilibration-steps EQUILIBRATION_STEPS]
                             [--max-seed-force MAX_SEED_FORCE]
@@ -185,6 +185,26 @@ Other options:
                         dissociated complex, and the fit is unbounded below out
                         there, so the trajectory escapes. Menshutkin: --wall-sum
                         2,0,2,1,6.5 . Repeatable.
+  --wall-channel WALL_CHANNEL
+                        Flat-bottom channel that FOLLOWS a reference path, as
+                        A,B,C,D,JSON,GRIDKEY,TOL[,K]. Penalises the restrained
+                        CV when it departs by more than TOL (A) from the
+                        reference value interpolated at the configuration's OWN
+                        xi = r(A,B) - r(C,D). JSON supplies 'xi_grid' and
+                        GRIDKEY ('sum_grid' -> restrain r(A,B) + r(C,D);
+                        'cn_grid' -> restrain r(C,D)). Use this rather than
+                        --wall-sum for a transfer reaction: a constant sum bound
+                        is a BOX, and the reaction path is a line inside it, so
+                        the trajectory can sit legally inside the box while
+                        being far off the path. Because the reference is
+                        evaluated at the configuration's own xi it is one fixed
+                        function of the coordinates, identical in every window,
+                        and cancels in the MBAR reduced-potential differences
+                        exactly as the other walls do -- aimed at each window's
+                        target instead it would not cancel and would force a 2D
+                        analysis. Menshutkin: --wall-channel 2,0,2,1,artifacts/m
+                        enshutkin/reaction_channel.json,sum_grid,0.60,50 .
+                        Repeatable.
   --targets TARGETS     Comma-separated CV1 centers ξ₀ (Å)
   --targets-y TARGETS_Y
                         Comma-separated CV2 centers η₀ (Å); product grid with

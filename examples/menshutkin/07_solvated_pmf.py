@@ -49,7 +49,7 @@ REPO_ROOT = EXAMPLE_DIR.parent.parent
 if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
 
-from gpu_pairs import make_static_pair_fn  # noqa: E402
+from cutoff_pairs import make_cutoff_pair_fn  # noqa: E402
 from jaxmd_box import build_jaxmd_solvated_system  # noqa: E402
 from solute import (  # noqa: E402
     IDX_C,
@@ -112,6 +112,23 @@ def main() -> int:
     p.add_argument("--box-size", type=float, default=None)
     p.add_argument("--n-solvent", type=int, default=None,
                    help="Override the density-derived solvent count")
+    p.add_argument("--polarisation", action="store_true",
+                   help="Add ml_mm_pol: induced polarisation of the solute by "
+                        "the MM field, E = -1/2 sum_i alpha_i |E_i|^2. Without "
+                        "it the solute's charges respond to its own geometry "
+                        "but never to the solvent, which is mechanical rather "
+                        "than electrostatic embedding. Measured cost of the "
+                        "omission: the water/acetonitrile barrier gap was 0.07 "
+                        "kcal/mol against Turan's 2.6, and the total solvent "
+                        "effect about half of both Turan and AM1 QM/MM.")
+    p.add_argument("--min-contact", type=float, default=1.5,
+                   help="Refuse the built box below this closest contact (A). "
+                        "The packer reaches the target DENSITY first and hands "
+                        "residual strain to the two-pass minimiser, so large "
+                        "rigid solvents legitimately start tighter than water: "
+                        "cyclohexane packs to 0.86 A at 150/150 molecules, "
+                        "where demanding 1.5 gave only 116 and a 22%% "
+                        "under-dense box. Lower it for those, not for water.")
     p.add_argument("--xi-min", type=float, default=-1.3)
     p.add_argument("--xi-max", type=float, default=XI_MAX_SAFE)
     p.add_argument("--fine-to", type=float, default=2.0,
@@ -123,6 +140,98 @@ def main() -> int:
     # see. Defaults bracket the training envelope over xi in [-1.3, +2.5]
     # (p1 3.98, p99 5.52, max 5.65 A) with a small margin.
     p.add_argument("--sum-min", type=float, default=3.8)
+    # UPPER bound on r(C-Cl) + r(C-N), and the one constraint that actually
+    # encodes "one bond breaks as the other forms".
+    #
+    # xi = r(C-Cl) - r(C-N) fixes only the DIFFERENCE. The sum is free, and on
+    # this surface the dissociated branch is downhill, so the methyl walks away
+    # from both partners while reporting a perfect reaction coordinate. A run
+    # with this wall off did exactly that: from xi = +0.1 onward it sampled
+    # r(C-Cl) 3.2-5.3 A AND r(C-N) 3.1-3.7 A simultaneously -- sum 6.4-9.1 A,
+    # the C-N bond never formed, and the reported "barrier" was the cost of
+    # tearing the methyl off rather than of transferring it.
+    #
+    # The training scan pins the sum at 4.19-4.86 A across the whole path
+    # (max 5.11, p99 4.91 over xi in [-1.3, +1.6]) while r(C-Cl) goes 1.80 ->
+    # 3.28 and r(C-N) goes 3.06 -> 1.52. That near-constant sum IS the
+    # concerted mechanism, so bounding it above at 5.5 A brackets the data with
+    # margin and costs nothing on the real path.
+    p.add_argument("--channel-k", type=float, default=50.0,
+                   help="Force constant for the reaction-channel restraint, "
+                        "which holds r(C-Cl)+r(C-N) near the reference path at "
+                        "the current xi. 0 disables (and the sampling is then "
+                        "only bounded by the constant walls, which was not "
+                        "enough: see --sum-max).")
+    p.add_argument("--channel-cn-k", type=float, default=50.0,
+                   help="Force constant for the r(C-N) channel restraint. With "
+                        "the xi bias this pins both distances -- a 2D umbrella "
+                        "that still analyses in 1D. 0 disables.")
+    p.add_argument("--channel-cn-tol", type=float, default=0.80,
+                   help="Flat-bottom half-width on r(C-N), in A.")
+    # 0.80, not the 0.30 this had, and the reason is literature rather than our
+    # own statistics.
+    #
+    # Solvent does not merely jitter this bond, it MOVES the transition state:
+    # in water the C-N bond at the TS is 0.42 A LONGER than in the gas phase
+    # (and C-Cl 0.30 A shorter) -- the Menshutkin reaction is a charge-
+    # separation process and aqueous solvent advances it. A 0.30 A flat bottom
+    # sits inside that shift and would suppress the largest solvent effect on
+    # the geometry, which is precisely what this campaign exists to measure.
+    #
+    # Our own earlier estimate of the shift (+0.106 A) cannot be used to set
+    # this: it was measured in runs where the restraint was already clamping at
+    # 0.10 A, so it is the suppressed value, not the free one. Sizing the
+    # restraint from it was circular.
+    #
+    # 0.80 leaves room for the full 0.42 A shift plus thermal spread while still
+    # rejecting a broken C-N bond (2.13 A against a 1.55 A path = 0.58 A... note
+    # that is INSIDE 0.80, so the bond-integrity job now rests on the bond wall
+    # and the sum restraint, not on this one).
+    #
+    # The SUM restraint is unaffected: +0.42 and -0.30 nearly cancel, so the
+    # solvated sum moves only ~0.12 A and 0.60 A of tolerance is ample.
+    p.add_argument("--channel-tol", type=float, default=0.60,
+                   help="Flat-bottom half-width around the reference path, in A.")
+    # THE TOLERANCES MUST LEAVE ROOM FOR THE SOLVENT.
+    #
+    # The reference path comes from the GAS-PHASE training scan, so a tight
+    # tolerance tells the solvated reaction to keep the gas-phase geometry --
+    # and suppresses precisely the effect being measured. Solvent stabilises the
+    # charge-separated transition state, so it should be looser there.
+    #
+    # Measured, from solvated trajectories against the gas-phase path:
+    #
+    #   quantity   shift at the TS   at tol 0.20/0.10   dissociated branch
+    #   sum        +0.195 A          98 % of tolerance  +1.5 to +4.3 A
+    #   r(C-N)     +0.106 A          106 %              (bond broken)
+    #
+    # Both were pressed against the wall exactly where the barrier is measured,
+    # i.e. the restraint was biasing the one number the campaign exists to
+    # produce. But the physics and the pathology are an order of magnitude
+    # apart: a real solvent shift is ~0.1-0.2 A, dissociation is 1.5-4 A. So the
+    # tolerances are set to ~3x the observed shift -- generous enough that the
+    # solvated geometry can go where it wants, tight enough that the
+    # dissociated branch remains far outside.
+    #
+    # Earlier note, kept because it explains the lower bound: the MEASURED
+    # spread of
+    # r(C-Cl)+r(C-N) at fixed xi in the training set is 0.09-0.14 A, so 0.35 was
+    # nearly 4x the physical width and the restraint permitted a systematic
+    # drift rather than just thermal motion.
+    #
+    # That drift is not cosmetic. xi fixes only the DIFFERENCE of the two
+    # distances, so an error in one migrates into the other: with r(C-N)
+    # settling at 3.20 A instead of its reference 3.10, the umbrella forces
+    # r(C-Cl) to 1.90 A to keep xi = -1.30 -- against a training value of
+    # 1.804 +- 0.022 A and a gas-phase experimental CH3Cl bond of 1.785 A. The
+    # C-Cl bond came out 4-7 sigma too long at the reactant end for no reason
+    # other than a loose tolerance.
+    #
+    # 0.20 A is about 1.5 sigma of the tightest bins, so thermal motion still
+    # costs nothing while systematic drift is opposed.
+    p.add_argument("--sum-max", type=float, default=5.5,
+                   help="Upper bound on r(C-Cl)+r(C-N); training max is 5.11 A. "
+                        "0 disables (and lets the methyl dissociate)")
     # Just above the training maximum of 2.18 A. A first attempt at 2.35 A
     # with k = 10 eV/A^2 was violated rather than respected: the trajectory
     # sat at min(r) = 2.45-2.51 A, because the penalty there is only
@@ -139,12 +248,46 @@ def main() -> int:
                         "oscillation period is ~22 fs, still ~90 steps at "
                         "dt = 0.25 fs, so it does not strain the integrator.")
     p.add_argument(
-        "--embedding", choices=("electrostatic", "mechanical"), default="electrostatic",
-        help="electrostatic: solute-solvent Coulomb uses the ML model's "
-             "fluctuating charges q_i(R), which is what lets the solvent respond "
-             "to the ion pair forming. mechanical: fixed CGenFF charges on the "
-             "solute (the A/B comparison; expect much less catalysis).",
+        "--embedding",
+        choices=("electrostatic", "mechanical", "mechanical-fluct"),
+        default="mechanical-fluct",
+        help="How the solute talks to the solvent electrostatically.\n"
+             "  mechanical-fluct (default): the model's charges q_i(R) are "
+             "recomputed every step, so they follow the reaction and the "
+             "solvent feels the ion pair forming -- but they enter as "
+             "PARAMETERS, with no dq/dR term in the forces. This is mechanical "
+             "embedding with fluctuating charges: stable, and the forces are "
+             "the exact gradient of a well-defined energy.\n"
+             "  electrostatic: the same charges WITH dq/dR in the forces, i.e. "
+             "fully self-consistent. Physically the right thing and what we "
+             "want eventually, but the charge-response feedback ran away "
+             "(q(Cl) -0.80 -> -1.03 in 50 fs with nothing opposing it).\n"
+             "  mechanical: charges frozen, not following the reaction at all. "
+             "The control that isolates how much the response is worth.",
     )
+    p.add_argument("--mechanical-charges", choices=("ml-frozen", "cgenff"),
+                   default="ml-frozen",
+                   help="Fixed solute charges for mechanical embedding. "
+                        "ml-frozen: the model's own charges evaluated once at "
+                        "--frozen-charge-xi, which makes the mechanical/"
+                        "electrostatic comparison a CONTROLLED one -- both "
+                        "sides then use PhysNet electrostatics and differ only "
+                        "in whether the charges follow the reaction. cgenff: "
+                        "the force-field values, which differ from PhysNet by "
+                        "0.44 e on N and 0.34 e on C at the same geometry, so "
+                        "the measured gap mixes charge response with a change "
+                        "of charge model.")
+    p.add_argument("--frozen-charge-xi", type=float, default=-1.3,
+                   help="Geometry at which the frozen charges are evaluated. "
+                        "The reactant end, i.e. what a fixed-charge model "
+                        "parameterised on the reactants would carry.")
+    p.add_argument("--hmr-factor", type=float, default=1.0,
+                   help="Hydrogen mass repartitioning factor. 3.0 is standard "
+                        "and allows dt = 0.8 fs instead of 0.5 (3.2x). Exact "
+                        "for a PMF -- masses do not appear in the "
+                        "configurational Boltzmann factor -- but it changes "
+                        "the dynamics, so quote no rates or diffusion "
+                        "constants from a repartitioned run.")
     p.add_argument("--dt-fs", type=float, default=0.25)
     p.add_argument("--temperature", type=float, default=300.0)
     p.add_argument("--equil-ps", type=float, default=1.0, help="Per window, discarded")
@@ -187,6 +330,30 @@ def main() -> int:
     # settings were fine at 26 A. The first eighth runs at a fifth of this.
     p.add_argument("--minimize-dt-fs", type=float, default=0.05,
                    help="FIRE step size for minimisation, independent of --dt-fs")
+    # The next two exist to reproduce, and then explain, the deep minimum a
+    # minimiser found in a solvated box with the long-cutoff checkpoint
+    # (-1171 eV, against -526 for the production model). That measurement was
+    # taken with the coupling on, before this file switched minimisation to
+    # elec_scale = 0 -- so it is not yet known whether the hole belongs to the
+    # model or to the old setup. Diagnostic only; production leaves both alone.
+    p.add_argument("--minimize-elec-scale", type=float, default=0.0,
+                   help="ML/MM electrostatic coupling during minimisation. "
+                        "Production uses 0; set 1 to reproduce the pre-fix "
+                        "setup that drove xi to +0.94 against the restraint")
+    p.add_argument("--stop-after-minimize", action="store_true",
+                   help="Exit after minimisation, dumping the final geometry "
+                        "and its energy decomposition")
+    p.add_argument("--sweep-order", choices=("left-to-right", "outward"),
+                   default="left-to-right",
+                   help="left-to-right: one monotonic reactants -> products "
+                        "sweep, preceded by an unrecorded descent to the left "
+                        "edge (the box is equilibrated around xi ~ 0, so the "
+                        "sweep cannot simply start at xi_min). outward: walk "
+                        "both ways from xi ~ 0 -- cheaper, since nothing is "
+                        "run twice, but windows land in a confusing order.")
+    p.add_argument("--pair-cutoff", type=float, default=12.0,
+                   help="Intermolecular cutoff. 12 A is exact here (3e-6 eV); "
+                        "10 A is NOT (+0.13 eV), so do not shorten it for speed.")
     p.add_argument("--record-every", type=int, default=10)
     # Trajectories are not needed by MBAR -- it reconstructs the profile from
     # xi(t) alone -- but they are the only way to see what a window is actually
@@ -199,6 +366,15 @@ def main() -> int:
                    help="Stride over recorded frames for --save-traj full")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--output-dir", type=Path, default=None)
+    p.add_argument("--overwrite", action="store_true",
+                   help="Permit writing into an output directory that already "
+                        "holds window data. WITHOUT this the run refuses to "
+                        "start, because there is no resume: every window is "
+                        "recomputed and its trajectory rewritten, so pointing a "
+                        "new run at a finished one destroys it. A 600-step smoke "
+                        "test did exactly that to the gas campaign on 2026-08-02 "
+                        "and took the published barrier with it (see "
+                        "artifacts/menshutkin/_archive/gas_smoke_20260802).")
     args = p.parse_args()
 
     # The cap belongs to the checkpoint, not to this file. Past the model's
@@ -224,6 +400,25 @@ def main() -> int:
     box_size = args.box_size if args.box_size is not None else default_side
     artifacts = Path(os.environ.get("MENSH_ARTIFACTS", REPO_ROOT / "artifacts/menshutkin"))
     out = args.output_dir or artifacts / "pmf" / args.solvent
+
+    # Refuse to write into a directory that already holds results.
+    #
+    # This driver has no resume: it recomputes every window from the ladder and
+    # rewrites each trajectory, so aiming a second run at a finished one
+    # replaces good data with partial data and there is no way back. The failure
+    # is silent while it happens -- the run looks healthy, because it IS healthy;
+    # it is simply overwriting something. Cost of not having this guard, once:
+    # the whole 5-replica gas campaign and the barrier it produced.
+    prior = sorted(out.glob("traj/*.xyz")) if out.is_dir() else []
+    if (prior or (out / "pmf_solvated.json").exists()) and not args.overwrite:
+        raise SystemExit(
+            f"\n{out} already contains results "
+            f"({len(prior)} window trajector{'y' if len(prior) == 1 else 'ies'}"
+            f"{', plus pmf_solvated.json' if (out / 'pmf_solvated.json').exists() else ''}).\n"
+            f"There is no resume -- this run would recompute and overwrite them.\n\n"
+            f"  * new run       : pass a different --output-dir\n"
+            f"  * really replace: pass --overwrite\n"
+            f"  * keep the old  : mv {out} {out}_$(date +%Y%m%d) first\n")
     out.mkdir(parents=True, exist_ok=True)
 
     centres = window_ladder(args.xi_min, args.xi_max, args.fine_to,
@@ -245,13 +440,38 @@ def main() -> int:
     # written out explicitly in solvent_models.py.
     xi_seed = float(centres[int(np.argmin(np.abs(centres)))])
     model_solv = get_solvent_model(args.solvent)
+    # Loaded here rather than after the box build: the frozen-charge mode
+    # below needs the model to evaluate the solute's charges, and those charges
+    # have to be in hand before the system is constructed.
+    model, params = load_model()
+
+    # Frozen solute charges for mechanical embedding, taken from the MODEL at
+    # the reactant geometry rather than from CGenFF. See --mechanical-charges.
+    q_frozen = None
+    if args.embedding == "mechanical" and args.mechanical_charges == "ml-frozen":  # noqa: E501
+        import e3x as _e3x
+        _d, _s = _e3x.ops.sparse_pairwise_indices(SOLUTE_N_ATOMS)
+        _R = jnp.asarray(solute_geometry_at_xi(args.frozen_charge_xi, verbose=False))
+        _Z = jnp.asarray([7, 1, 1, 1, 6, 17, 1, 1, 1], jnp.int32)
+        _o = model.apply(params, atomic_numbers=_Z, positions=_R,
+                         dst_idx=jnp.asarray(_d, jnp.int32),
+                         src_idx=jnp.asarray(_s, jnp.int32), compute_forces=False)
+        q_frozen = np.asarray(_o["charges"]).reshape(-1)
+        print(f"frozen charges  from the model at xi = {args.frozen_charge_xi:+.2f}: "
+              f"q(N)={q_frozen[IDX_N]:+.3f} q(C)={q_frozen[IDX_C]:+.3f} "
+              f"q(Cl)={q_frozen[IDX_CL]:+.3f}")
+
     system, bonded, contacts = build_jaxmd_solvated_system(
         model_solv,
         solute_geometry_at_xi(xi_seed),
         box_size,
         n_solvent=args.n_solvent,
         seed=args.seed,
-        solute_charges="ml" if args.embedding == "electrostatic" else "cgenff",
+        solute_charges=("ml" if args.embedding in ("electrostatic",
+                                                   "mechanical-fluct")
+                        else "ml_frozen" if q_frozen is not None else "cgenff"),
+        ml_frozen_charges=q_frozen,
+        min_contact_A=args.min_contact,
     )
     solute = list(range(SOLUTE_N_ATOMS))
     print(f"electrostatics {args.lr_solver}"
@@ -265,12 +485,12 @@ def main() -> int:
     from mmml.md.energy.registry import EnergyContext
     from mmml.md.restraints import (
         AngleWall,
+        ReactionChannelRestraint,
         BondRetentionWall,
         FlatBottomWall,
         LinearDistanceCV,
     )
 
-    model, params = load_model()
     cv = LinearDistanceCV.difference(minuend=(IDX_C, IDX_CL), subtrahend=(IDX_C, IDX_N))
     # The bias fixes xi = r(C-Cl) - r(C-N) and nothing else. The orthogonal
     # direction, the sum r(C-Cl) + r(C-N), feels no force from it at all, and a
@@ -308,27 +528,145 @@ def main() -> int:
     # hydrogen-bond with the ammonium and sampled a mean angle of 70 deg instead
     # of the 165-173 deg of the reaction channel -- without crashing, so the
     # corruption would have reached the PMF silently.
-    angle_wall = AngleWall(atoms=(IDX_N, IDX_C, IDX_CL),
-                           theta_min_deg=args.angle_min_deg, k=args.wall_k_ev)
-    walls = [bond_wall, angle_wall,
-             FlatBottomWall(cv=sum_cv, lower=args.sum_min, k=args.wall_k_ev)]
+    # The angle and sum walls are RANGE-SPECIFIC and must be switchable off,
+    # because past the contact ion pair the training data itself violates them:
+    #
+    #   quantity   xi in [-1.3,+1.6]   xi > 1.6
+    #   min(r)     max 2.18 A          max 1.57 A     bounded everywhere
+    #   sum        max 5.11 A          up to 14.65 A  must grow as Cl leaves
+    #   angle      mean 169 deg        mean 85-88 deg must fall
+    #
+    # Leaving them on for a CIP -> SSIP run would forbid the separation being
+    # measured. min(r) is the one bound that holds across the whole path, and
+    # it is the one that stops the methyl leaving both partners, so it stays.
+    # Pass 0 to disable either of the other two.
+    walls = [bond_wall]
+    # The reaction-channel restraint, and the reason it exists.
+    #
+    # A constant bound on min(r) or on the sum is a *box*; the reaction path is
+    # a line inside it. With min(r) <= 2.25 A enforced, a water run at
+    # xi = +0.70 still sampled r(C-N) = 2.24 A where the training path is at
+    # 1.76 A -- 0.9 A off in the sum -- left the fitted manifold and produced
+    # non-finite forces at the next window. The box was doing its job and the
+    # trajectory was still nowhere near the reaction.
+    #
+    # This restrains the sum toward the reference path evaluated at the
+    # configuration's OWN xi, so the allowed region follows the reaction. It is
+    # flat-bottomed within --channel-tol, so it costs nothing on the path, and
+    # because the target depends on xi(R) rather than on a window's xi0 it is
+    # the same function in every window and cancels in the MBAR differences --
+    # the analysis stays one-dimensional.
+    if args.channel_k > 0:
+        chan = json.loads((artifacts / "reaction_channel.json").read_text())
+        walls.append(ReactionChannelRestraint(
+            cv_xi=cv, cv_sum=sum_cv,
+            xi_grid=tuple(chan["xi_grid"]), sum_grid=tuple(chan["sum_grid"]),
+            k=args.channel_k, tol=args.channel_tol,
+        ))
+        # Second channel restraint, on r(C-N) itself.
+        #
+        # Bounding the SUM is not sufficient, and w25 showed why: the C-N bond
+        # stretched 1.54 -> 2.13 A in ~100 fs while r(C-Cl) shrank 2.99 -> 2.71,
+        # so the sum stayed near its allowed band while the newly formed bond
+        # came apart. The sum cannot distinguish "both bonds correct" from "one
+        # too long and the other too short".
+        #
+        # Restraining r(C-N) as well pins BOTH distances, because xi fixes their
+        # difference: this is a full two-dimensional umbrella expressed in
+        # (xi, r(C-N)) rather than (r(C-Cl), r(C-N)). The target is still
+        # evaluated at the configuration's own xi, so it is one fixed function
+        # of the coordinates, identical in every window, and cancels in the MBAR
+        # differences -- the analysis stays 1D.
+        #
+        # Along the reference path r(C-N) runs 3.18 A at the reactants to 1.51 A
+        # in the product and then stays flat while the chloride walks out, which
+        # is exactly the behaviour the product region needs.
+        if args.channel_cn_k > 0 and "cn_grid" in chan:
+            walls.append(ReactionChannelRestraint(
+                cv_xi=cv,
+                cv_sum=LinearDistanceCV.distance(IDX_C, IDX_N),
+                xi_grid=tuple(chan["xi_grid"]), sum_grid=tuple(chan["cn_grid"]),
+                k=args.channel_cn_k, tol=args.channel_cn_tol,
+            ))
+    if args.angle_min_deg > 0:
+        walls.append(AngleWall(atoms=(IDX_N, IDX_C, IDX_CL),
+                               theta_min_deg=args.angle_min_deg,
+                               k=args.wall_k_ev))
+    if args.sum_min > 0 or args.sum_max > 0:
+        walls.append(FlatBottomWall(cv=sum_cv, lower=(args.sum_min or None),
+                                    upper=(args.sum_max or None),
+                                    k=args.wall_k_ev))
     print(f"wall         min(r(C-Cl), r(C-N)) <= {args.bond_r_max:.2f} A "
           f"(k = {args.wall_k_ev} eV/A^2); training set max is 2.18 A")
-    print(f"             plus angle(N-C-Cl) >= {args.angle_min_deg:.0f} deg"
-          f" and r(C-Cl)+r(C-N) >= {args.sum_min:.2f} A")
+    print(f"             angle(N-C-Cl) >= "
+          f"{f'{args.angle_min_deg:.0f} deg' if args.angle_min_deg > 0 else 'off'}"
+          f"; r(C-Cl)+r(C-N) in ["
+          f"{args.sum_min if args.sum_min > 0 else 0:.2f}, "
+          f"{args.sum_max if args.sum_max > 0 else float('inf'):.2f}] A")
     ctx = EnergyContext(model=model, params=params, options={"ml_atoms": solute})
     terms = ["ml_intra", "mm_bonded", "mm_nonbonded"]
-    if args.embedding == "electrostatic":
+    if args.embedding in ("electrostatic", "mechanical-fluct"):
+        # Both route the solute-solvent Coulomb through ml_mm_elec, which is
+        # what supplies q_i(R). They differ only in charge_gradient below.
         terms.append("ml_mm_elec")
+    if args.polarisation:
+        terms.append("ml_mm_pol")
     terms.append("rxncoor")
     terms = tuple(terms)
     print(f"embedding    {args.embedding}  ({' + '.join(terms)})")
     masses = np.asarray([atomic_mass(z) for z in np.asarray(system.Z)], dtype=float)
 
+    # Hydrogen mass repartitioning.
+    #
+    # The timestep here is set by the O-H stretch: k = 450 kcal/mol/A^2 gives a
+    # 9.97 fs period (the real 3700 cm-1 stretch is 9.0 fs, so that checks out),
+    # and 20 steps/period caps dt at 0.50 fs. Water in this setup is FLEXIBLE --
+    # there is no SHAKE/RATTLE/SETTLE in mmml and jax_md.simulate has no
+    # constraint support at all -- so the usual fix is unavailable.
+    #
+    # Moving mass from O onto its hydrogens slows that vibration without
+    # touching the potential. At the standard factor 3 the period goes to
+    # 15.9 fs and dt to 0.80 fs, a 3.2x speedup. Total mass is conserved, so
+    # density and pressure are unchanged.
+    #
+    # THIS DOES NOT CHANGE THE ANSWER. The classical partition function
+    # factorises into momentum and configuration, and a PMF is a configurational
+    # average -- exp(-beta U(r)) contains no masses. Repartitioning alters the
+    # dynamics and therefore any kinetic observable, but the free energy along a
+    # geometric coordinate is exactly invariant. (Quote no diffusion constants
+    # or rate constants from a repartitioned run.)
+    if args.hmr_factor > 1.0:
+        Z = np.asarray(system.Z)
+        h = np.flatnonzero(Z == 1)
+        # Each H takes its extra mass from the heavy atom it is bonded to, so
+        # bookkeeping is per molecule rather than global.
+        mol = np.asarray(system.mol_id)
+        added = 0.0
+        for i in h:
+            extra = masses[i] * (args.hmr_factor - 1.0)
+            same = np.flatnonzero((mol == mol[i]) & (Z > 1))
+            if same.size == 0:
+                continue
+            host = same[np.argmax(masses[same])]
+            masses[i] += extra
+            masses[host] -= extra
+            added += extra
+        if (masses <= 0).any():
+            raise SystemExit(
+                f"--hmr-factor {args.hmr_factor} left a non-positive mass; "
+                "the heavy atom cannot donate that much")
+        print(f"HMR          factor {args.hmr_factor:g}: m(H) = "
+              f"{masses[h[0]]:.3f}, moved {added:.1f} amu; total mass "
+              f"conserved to {abs(masses.sum() - sum(atomic_mass(z) for z in Z)):.2e} amu")
+
     # Static on-device pair list: the switched force field makes distant pairs
     # contribute exactly zero, so no neighbour list is needed and nothing is
     # rebuilt on the host. This is the difference between 2.5 and 28 steps/s.
-    pair_fn = make_static_pair_fn(system, with_lambda=True)
+    # Cutoff list rather than the complete O(N^2) one: measured 4.0x
+    # faster on this box at dE = 3e-6 eV. See cutoff_pairs.py for why the
+    # static list was slower and why the Ewald alpha must not be retuned.
+    pair_fn = make_cutoff_pair_fn(system, cutoff_A=args.pair_cutoff,
+                                  with_lambda=True)
 
     import dataclasses
 
@@ -351,11 +689,16 @@ def main() -> int:
         term_kwargs_static["ml_mm_elec"] = {
             "ml_atoms": solute,
             "charge_mode": "q0",
-            "charge_gradient": not args.freeze_charge_forces,
+            # mechanical-fluct is DEFINED by having no dq/dR force term; for
+            # electrostatic it is the --freeze-charge-forces approximation.
+            "charge_gradient": (args.embedding == "electrostatic"
+                                and not args.freeze_charge_forces),
             # Same reasoning, and it matters more here: this is the
             # solute-solvent term, i.e. the one that carries the catalysis.
             "lr_solver": args.lr_solver,
         }
+    if "ml_mm_pol" in terms:
+        term_kwargs_static["ml_mm_pol"] = {"ml_atoms": solute}
 
     from mmml.md.assemble import build_hybrid_energy
     from mmml.md.drivers import JaxmdDriver
@@ -369,7 +712,7 @@ def main() -> int:
     energy = build_hybrid_energy(system, terms, ctx, term_kwargs_static)
 
     def run_leg(sys_in, xi0, ensemble, n_steps, record_every, tag, dt_fs=None,
-                elec_scale=1.0, temperature_K=None):
+                elec_scale=1.0, temperature_K=None, fatal=True):
         # `dt_fs` overrides the MD timestep for this leg. It exists for
         # minimisation: the driver hands FIRE dt_max = the MD timestep, which is
         # sized for dynamics on an equilibrated box, not for the first steps down
@@ -392,6 +735,27 @@ def main() -> int:
         )
         driver = JaxmdDriver(
             record_every=record_every,
+            # The driver refreshes the neighbour list once per BLOCK, and
+            # block_size defaults to record_every. That silently ties how often
+            # the pair list is rebuilt to how often frames are saved, which is
+            # fine for production (record_every = 20) and catastrophic for the
+            # box-equilibration legs, which pass record_every = chunk = 10000
+            # steps to avoid storing 100 ps of frames -- and thereby ran 10 ps
+            # of dynamics on a single stale list.
+            #
+            # The list is built at 12 A while the switching function reaches
+            # zero near 10 A, so there is only ~2 A of skin. Water diffuses
+            # ~3.7 A RMS in 10 ps. Pairs therefore entered the cutoff unseen,
+            # forces lost real interactions, and the energy jumped at the next
+            # rebuild before diverging: acetonitrile printed a 6 eV
+            # discontinuity between boxeq chunks and went non-finite in the
+            # third. Both fresh-box failures in this campaign (water seed1,
+            # acetonitrile) were this, and neither had anything to do with the
+            # packing or the timestep.
+            #
+            # Capping the block at the production cadence decouples the two.
+            # Legs that already record every 20 steps are unchanged.
+            block_size=min(int(record_every), int(args.record_every)),
             neighbor_fn=pair_fn,
             output_path=None,
         )
@@ -420,12 +784,40 @@ def main() -> int:
                 # taken after the divergence has begun shows its consequences,
                 # not its cause. The run-up is what identifies the culprit.
                 lo = max(0, i - 20)
+                extra = {}
+                # Velocities, when the driver exposes them. Without them the
+                # dump cannot be replayed: positions alone do not determine the
+                # next step, so the failure can be described but not
+                # reproduced. This was the blocker on diagnosing the window-14
+                # NaN -- every term was finite on every dumped frame, so the
+                # cause lived in the ~20 steps after the last record, and there
+                # was no way to re-enter that trajectory.
+                mom = traj.metadata.get("momenta")
+                if mom is not None:
+                    m = np.asarray(mom)
+                    if m.ndim == 3 and m.shape[0] == pos.shape[0]:
+                        extra["P"] = m[lo:i]
+                        extra["masses"] = np.asarray(traj.metadata["masses"])
                 np.savez(dump, R=pos[lo:i], energies=energies[lo:i],
                          first_bad=i - lo, step0=lo * record_every,
                          record_every=record_every, dt_fs=dt_fs,
                          Z=np.asarray(system.Z),
-                         box=np.asarray(system.box), n_solute=len(solute))
-                print(f"  last {i - lo} finite frames written to {dump}")
+                         box=np.asarray(system.box), n_solute=len(solute),
+                         **extra)
+                print(f"  last {i - lo} finite frames written to {dump}"
+                      + ("" if "P" in extra else
+                         "  (no velocities: replay not possible)"))
+            if not fatal:
+                # A single window is not the campaign. Setup legs (minimise,
+                # heat, ramp, equilibrate) still abort, because a failure
+                # there means the system is wrong; a production window that
+                # diverges is one missing point in a profile that MBAR can
+                # reconstruct without it, and losing the other 45 windows to
+                # it -- as happened at w25 after four hours -- is pure waste.
+                print(f"  leg '{tag}' went non-finite at frame {i}/"
+                      f"{len(energies)}; skipping this window and reseeding "
+                      f"from the last good geometry", flush=True)
+                return None
             raise SystemExit(
                 f"\nleg '{tag}' (xi0 = {float(xi0):+.2f}) went non-finite at "
                 f"recorded frame {i}/{len(energies)} "
@@ -440,11 +832,19 @@ def main() -> int:
                     f"first steps. Lower --minimize-dt-fs."
                     if ensemble == "min"
                     else
-                    f"Most likely --dt-fs {dt_fs} is too large: electrostatic "
-                    f"embedding propagates dq/dR forces that respond to fast "
-                    f"solvent motion. Check inspect_blowup.py on the dump above "
-                    f"first -- if one pair sits far inside its contact distance "
-                    f"this is a missing repulsion, not an integration problem."
+                    f"Diagnose in this order, because the obvious answers have "
+                    f"already been ruled out once:\n"
+                    f"  1. inspect_blowup.py on the dump -- a pair far inside "
+                    f"its contact distance means a missing repulsion. When this "
+                    f"failed at window 14 it showed the opposite: every contact "
+                    f"was normal and the energy was flat to the last frame.\n"
+                    f"  2. trace_nan_forces.py -- differentiates each term "
+                    f"separately. A term with finite energy but NaN forces is a "
+                    f"gradient bug, which an energy check cannot see.\n"
+                    f"  3. probe_elec_gradient.py -- walks a solvent molecule "
+                    f"into the solute. ml_mm_elec was cleared this way: its "
+                    f"force stays under 5 eV/A even at 0.3 A.\n"
+                    f"  4. only then suspect --dt-fs {dt_fs}."
                 )
             )
         return dataclasses.replace(sys_in, R=pos[-1]), pos, energies
@@ -499,19 +899,45 @@ def main() -> int:
 
         The solute is written unfolded, so the molecule is contiguous rather
         than split across a periodic face -- otherwise a viewer draws bonds
-        across the box. Solvent keeps its wrapped coordinates, which is what a
-        viewer expects for a periodic box.
+        across the box.
+
+        It is then RECENTRED in the cell, with the solvent wrapped around it.
+        Without this the solute sits wherever the box equilibration left it --
+        measured at 7.9 A off centre, with atoms at negative x while the water
+        occupies 0..30 -- so an unwrapped file looks like the molecule is
+        floating outside its own solvent. The physics is unaffected (energies
+        are translation-invariant to machine precision, and the solute is fully
+        hydrated: closest water 2.0 A, 46 waters within 5 A of the chloride),
+        but a trajectory nobody can open is a trajectory nobody checks, and
+        every geometry problem in this campaign was found by eye.
         """
         from ase import Atoms
         from ase.io import write as ase_write
 
         z_all = np.asarray(system.Z)
+        traj_shift = [None]          # fixed per window; see the loop below
         keep = slice(None) if args.save_traj == "full" else slice(0, SOLUTE_N_ATOMS)
         stride = args.traj_stride if args.save_traj == "full" else 1
         frames = []
         for k in range(0, len(pos), max(1, stride)):
             r = np.asarray(pos[k]).copy()
             r[:SOLUTE_N_ATOMS] = np.asarray(_unfold(jnp.asarray(r)))
+            # Recentre ONCE per window, on the first frame, then apply that
+            # same shift to every later frame.
+            #
+            # Recentring per frame pins the solute at the box centre and makes
+            # the SOLVENT appear to jump around it -- measured: the carbon sat
+            # at exactly 15.00 for every frame while the solvent centre of mass
+            # moved up to 0.275 A per frame. That reads as the box teleporting
+            # and hides the molecule's real diffusion. A single fixed shift puts
+            # the solute near the centre at the start and lets it move
+            # naturally from there.
+            L = np.diag(np.asarray(system.box))
+            if traj_shift[0] is None:
+                traj_shift[0] = 0.5 * L - r[IDX_C]
+            shift = traj_shift[0]
+            r[:SOLUTE_N_ATOMS] += shift
+            r[SOLUTE_N_ATOMS:] = (r[SOLUTE_N_ATOMS:] + shift) % L
             at = Atoms(numbers=z_all[keep], positions=r[keep],
                        cell=np.asarray(system.box), pbc=True)
             at.info["xi"] = float(xi[k])
@@ -551,18 +977,48 @@ def main() -> int:
         # started, and the run then diverged within 90 fs. With them off, the
         # minimiser does what it is for -- removing packing strain.
         n_soft = max(1, args.minimize_steps // 8)
+        mscale = float(args.minimize_elec_scale)
+        if mscale != 0.0:
+            print(f"  ** diagnostic: minimising at elec_scale = {mscale:g}, "
+                  f"not the production 0 **")
         system, _, e = run_leg(system, centres[start_idx], "min", n_soft, n_soft,
                                "min_soft", dt_fs=args.minimize_dt_fs / 5.0,
-                               elec_scale=0.0)
+                               elec_scale=mscale)
         print(f"  minimise/soft E {e[0]:12.3f} -> {e[-1]:12.3f} eV   "
               f"{run_leg.last_seconds:.1f}s "
               f"(dt {args.minimize_dt_fs / 5.0:g} fs, includes XLA compile)")
         system, _, e = run_leg(system, centres[start_idx], "min",
                                args.minimize_steps, args.minimize_steps, "min",
-                               dt_fs=args.minimize_dt_fs, elec_scale=0.0)
+                               dt_fs=args.minimize_dt_fs, elec_scale=mscale)
         print(f"  minimise     E {e[0]:12.3f} -> {e[-1]:12.3f} eV   "
               f"{run_leg.last_seconds:.1f}s (dt {args.minimize_dt_fs:g} fs, "
               f"includes XLA compile)")
+        if args.stop_after_minimize:
+            # Everything needed to tell a collapse from a low-but-sane
+            # structure: the solute's own ML energy against the training floor,
+            # the closest solute-solvent contact, where xi ended up, and the
+            # geometry itself for term_breakdown.py.
+            pos = np.asarray(system.R)
+            xi_end = float(xi_of(pos[None])[0])
+            L = np.diag(np.asarray(system.box))
+            d = pos[:SOLUTE_N_ATOMS][:, None, :] - pos[SOLUTE_N_ATOMS:][None, :, :]
+            d -= L * np.round(d / L)
+            closest = float(np.linalg.norm(d, axis=-1).min())
+            e_ml = float(_ml_energy(jnp.asarray(pos)))
+            tag = f"{args.solvent}_elec{mscale:g}_seed{args.seed}"
+            out = artifacts / "minima" / f"min_{tag}.npz"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(out, R=pos, Z=np.asarray(system.Z), box=np.asarray(system.box),
+                     E_total=float(e[-1]), E_ml=e_ml, xi=xi_end, closest=closest)
+            print(f"\n  E_total  {e[-1]:12.3f} eV")
+            print(f"  E_ML     {e_ml:12.3f} eV   "
+                  f"({'BELOW' if e_ml < TRAIN_MIN_EV else 'above'} the "
+                  f"{TRAIN_MIN_EV} eV training floor)")
+            print(f"  xi       {xi_end:+12.3f} A   "
+                  f"(restrained at {centres[start_idx]:+.2f})")
+            print(f"  closest solute-solvent contact  {closest:.3f} A")
+            print(f"  wrote {out}")
+            return 0
     n_eq = int(round(args.equil_ps * 1000.0 / args.dt_fs))
 
     # A pre-equilibrated box, cached and reused.
@@ -620,7 +1076,8 @@ def main() -> int:
     # the first solvation shell form while the coupling is still weak.
     #
     # elec_scale is a traced scalar, so the stages cost no extra compilation.
-    if args.embedding == "electrostatic" and args.ramp_stages > 0:
+    if args.embedding in ("electrostatic", "mechanical-fluct") \
+            and args.ramp_stages > 0:
         n_ramp = max(1, n_eq // args.ramp_stages)
         for stage in range(1, args.ramp_stages + 1):
             scale = stage / args.ramp_stages
@@ -661,7 +1118,12 @@ def main() -> int:
     n_prod = int(round(args.prod_ps * 1000.0 / args.dt_fs))
     results: dict[int, dict] = {}
 
-    def walk(order, seed_system):
+    # Windows that diverged. Kept rather than fatal: MBAR reconstructs a
+    # profile from the windows it has, and losing a whole campaign to one
+    # bad window is waste. Reported at the end and recorded in the metadata.
+    failed: list[int] = []
+
+    def walk(order, seed_system, record=True):
         """Run windows in sequence, each seeded from the previous one's end.
 
         One continuous leg per window; the leading ``n_eq`` steps' worth of
@@ -673,9 +1135,29 @@ def main() -> int:
         n_discard = max(1, n_eq // args.record_every)
         for w in order:
             xi0 = float(centres[w])
-            sys_cur, pos_all, e_all = run_leg(
-                sys_cur, xi0, "nvt", n_eq + n_prod, args.record_every, f"w{w}"
+            # Spin-up legs carry the geometry and let the solvation shell
+            # follow; they are never analysed, so they run at equilibration
+            # length only. The full n_eq + n_prod is for recorded windows.
+            n_leg = (n_eq + n_prod) if record else n_eq
+            out = run_leg(
+                sys_cur, xi0, "nvt", n_leg, args.record_every, f"w{w}",
+                fatal=False,
             )
+            if out is None and not record:
+                # A spin-up window diverging is not recoverable by skipping:
+                # the whole point is to carry the geometry to the far edge, and
+                # there is no later window to reseed from.
+                raise SystemExit(
+                    f"\nspin-up leg w{w} (xi0 = {xi0:+.2f}) diverged. The sweep "
+                    f"cannot reach its starting edge; run with "
+                    f"--sweep-order outward instead.")
+            if out is None:
+                # Keep sys_cur at the last good geometry: reseeding the next
+                # window from a diverged one would propagate the failure along
+                # the ladder, which is the reason this used to abort.
+                failed.append(w)
+                continue
+            sys_cur, pos_all, e_all = out
             pos, energies = pos_all[n_discard:], e_all[n_discard:]
             if pos.shape[0] == 0:
                 pos, energies = pos_all[-1:], e_all[-1:]
@@ -684,36 +1166,92 @@ def main() -> int:
             # it has to be compared against the solute's own ML energy -- not
             # against `energies`, which is the whole box and is several hundred
             # eV lower simply because 586 waters are in it.
-            below = int((ml_energy_of(pos) < TRAIN_MIN_EV).sum())
-            # How hard is the wall working? A window that spends most of its
-            # time pressed against the bound is not sampling the physical
-            # ensemble -- it is sampling whatever the wall permits, and its
-            # contribution to the PMF is a property of the restraint rather
-            # than of the system. Reported per window so this is visible in the
-            # profile rather than discovered afterwards.
-            mb = min_bond_of(pos)
-            wall_frac = float((mb > args.bond_r_max - 0.05).mean())
-            flag = ""
-            if below:
-                flag = f"  !! {below}/{len(unbiased)} frames below the training floor"
-            print(f"  w{w:03d} xi0={xi0:+5.2f}  <xi>={xi.mean():+6.3f} "
-                  f"sd={xi.std():.3f}  E={energies.mean():10.2f} eV  "
-                  f"{run_leg.last_seconds:5.1f}s "
-                  f"({run_leg.last_rate:5.1f} steps/s)"
-                  f"  minr={mb.mean():.2f}"
-                  + (f" WALL {100 * wall_frac:.0f}%" if wall_frac > 0.05 else "")
-                  + flag)
+            if not record:
+                # Spin-up: the leg is equilibration-length, so after discarding
+                # there is at most one frame left and <xi>/sd would be noise
+                # printed to three decimals. Report only what is meaningful.
+                print(f"  spin-up w{w:03d} xi0={xi0:+5.2f}  "
+                      f"{run_leg.last_seconds:5.1f}s", flush=True)
+                continue
+
+            # The whole per-window report is guarded. A diagnostic exists to
+            # describe the run; it must never be able to end it. This block
+            # once killed a healthy 16-window electrostatic run with a
+            # NameError in an f-string that only evaluates when a window dips
+            # below the training floor -- four hours of good sampling lost to a
+            # typo in a warning message.
+            try:
+                below = int((ml_energy_of(pos) < TRAIN_MIN_EV).sum())
+                mb = min_bond_of(pos)
+                # How hard is the wall working? A window that spends most of
+                # its time pressed against the bound is not sampling the
+                # physical ensemble -- it samples whatever the wall permits,
+                # and its contribution to the PMF is a property of the
+                # restraint rather than of the system.
+                wall_frac = float((mb > args.bond_r_max - 0.05).mean())
+                # How often is the CHANNEL restraint actually doing work?
+                #
+                # This decides whether the profile is trustworthy. The restraint
+                # is flat-bottomed, so inside the tube it adds exactly zero and
+                # the free energy is the true one restricted to the reactive
+                # channel -- a well-defined quantity, and the right one for a
+                # reaction barrier. But every frame that sits OUTSIDE the
+                # bottom carries a penalty, and those frames' Boltzmann weights
+                # are modified. A window with a few percent contact is fine; one
+                # spending most of its time against the restraint is reporting a
+                # property of the restraint, not of the system.
+                # The solute must be UNFOLDED first. The integrator wraps
+                # coordinates into the primary cell, so a solute sitting across
+                # a box face comes back with its atoms on opposite sides, and
+                # raw r(C-Cl) is then a cross-box distance of tens of Angstroms.
+                # Fed to value_numpy that reads as an enormous channel
+                # deviation, and the window is reported as restraint-dominated
+                # when it is nothing of the kind.
+                #
+                # This produced CHAN 25-36 % on water windows whose true
+                # violation rate, measured from the trajectories, was 0.0 % with
+                # a maximum deviation of 0.27 A against a 0.60 A tolerance. It
+                # also read 79-81 % on a short test run, on the strength of
+                # which that run was killed. min_bond_of and xi_of already
+                # unfold; this block did not.
+                chan_frac = float("nan")
+                pos_unfolded = np.asarray(jax.vmap(_unfold)(jnp.asarray(pos)))
+                for _w in walls:
+                    if type(_w).__name__ == "ReactionChannelRestraint":
+                        dev = np.array([abs(_w.value_numpy(pp))
+                                        for pp in pos_unfolded])
+                        chan_frac = float((dev > _w.tol).mean())
+                        break
+                flag = f"  !! {below}/{len(pos)} frames below the training floor" if below else ""
+                print(f"  w{w:03d} xi0={xi0:+5.2f}  <xi>={xi.mean():+6.3f} "
+                      f"sd={xi.std():.3f}  E={energies.mean():10.2f} eV  "
+                      f"{run_leg.last_seconds:5.1f}s "
+                      f"({run_leg.last_rate:5.1f} steps/s)"
+                      f"  minr={mb.mean():.2f}"
+                      + (f" WALL {100 * wall_frac:.0f}%" if wall_frac > 0.05 else "")
+                      + (f" CHAN {100 * chan_frac:.0f}%"
+                         if chan_frac == chan_frac and chan_frac > 0.05 else "")
+                      + flag, flush=True)
+            except Exception as exc:                       # noqa: BLE001
+                mb = np.full(len(pos), np.nan)
+                print(f"  w{w:03d} xi0={xi0:+5.2f}  (diagnostics failed: "
+                      f"{type(exc).__name__}: {exc}) -- window kept", flush=True)
+
+            if not record:
+                continue
             if args.save_traj != "none":
                 write_traj(w, xi0, pos, xi, mb)
             results[w] = {
                 "xi0": xi0,
                 "min_bond_A": mb.tolist(),
                 "wall_contact_fraction": wall_frac,
+                "channel_contact_fraction": chan_frac,
                 "xi": xi.tolist(),
                 "energy_eV": energies.tolist(),
                 "below_training_floor": below,
             }
             _write_results(results, partial=True)
+        return sys_cur
 
     def _write_results(res, partial: bool):
         payload = {
@@ -731,15 +1269,81 @@ def main() -> int:
             "embedding": args.embedding,
             "terms": list(terms),
             "xi0": centres.tolist(),
+            # Everything else needed to write a methods table or reproduce the
+            # run, recorded here rather than reconstructed from a launcher
+            # script that may have changed since. Two of these -- the walls and
+            # lr_solver -- decide whether a profile is meaningful at all, so a
+            # figure caption that cannot state them is not publishable.
+            "parameters": {
+                "checkpoint": str(os.environ.get("MENSH_CKPT",
+                                                 REPO_ROOT / "model_ext.json")),
+                "model_cutoff_A": float(_cutoff),
+                "lr_solver": args.lr_solver,
+                "freeze_charge_forces": bool(args.freeze_charge_forces),
+                "walls": [w.label() for w in walls],
+                "bond_r_max_A": args.bond_r_max,
+                "sum_min_A": args.sum_min,
+                "sum_max_A": args.sum_max,
+                "angle_min_deg": args.angle_min_deg,
+                "wall_k_ev_A2": args.wall_k_ev,
+                "equilibrate_box_ps": args.equilibrate_box_ps,
+                "heat_stages": args.heat_stages,
+                "heat_start_fraction": args.heat_start_fraction,
+                "ramp_stages": args.ramp_stages,
+                "minimize_steps": args.minimize_steps,
+                "seed": args.seed,
+                "xi_min": float(centres.min()),
+                "xi_max": float(centres.max()),
+                "n_windows": int(len(centres)),
+                "record_every": args.record_every,
+            },
             "complete": not partial,
             "n_windows_done": len(res),
+            "failed_windows": sorted(failed),
             "windows": {str(k): v for k, v in sorted(res.items())},
         }
         (out / "umbrella_windows.json").write_text(json.dumps(payload, indent=2) + "\n")
 
     print("\nwalking windows outward from xi = 0")
-    walk(range(start_idx, len(centres)), system)
-    walk(range(start_idx - 1, -1, -1), system)
+
+    if args.sweep_order == "outward":
+        # Historical default: from the equilibrated xi ~ 0 box, walk out in both
+        # directions. Cheapest, because every window is one small step from an
+        # already-relaxed neighbour and nothing is run twice.
+        walk(range(start_idx, len(centres)), system)
+        walk(range(start_idx - 1, -1, -1), system)
+    else:
+        # One monotonic sweep, reactants -> products, which is what a reaction
+        # path should look like when read in file order.
+        #
+        # It cannot simply start at xi_min, and the reason is the SOLVATION
+        # SHELL, not the solute. xi is a solute-only coordinate, so jumping
+        # from xi = 0 to xi = -1.3 moves Cl in by ~0.3 A and N out by ~1.0 A --
+        # displacements minimisation clears without trouble. What does not
+        # clear is the shell: it is equilibrated around a transition-state
+        # solute, it is wrong for neutral reactants, and a first shell
+        # reorganises on ~10 ps. A single window would give it 1 ps to fix a
+        # large change.
+        #
+        # Descending in steps of 0.1 A instead gives ~10-40 ps of cumulative
+        # relaxation with every step small enough that the shell follows
+        # continuously -- the same argument that justifies sequential seeding
+        # at all. The legs are equilibration-length and unrecorded, so the cost
+        # is start_idx short windows rather than full ones.
+        print(f"  spin-up: descending to xi = {centres[0]:+.2f} "
+              f"({start_idx} windows, not recorded)")
+        sys_left = walk(range(start_idx - 1, -1, -1), system, record=False)
+        print(f"  sweeping {centres[0]:+.2f} -> {centres[-1]:+.2f}")
+        walk(range(0, len(centres)), sys_left)
+
+    if failed:
+        gaps = ", ".join(f"w{w:03d} (xi0={centres[w]:+.2f})" for w in sorted(failed))
+        print(f"\n{len(failed)}/{len(centres)} window(s) diverged and were skipped: {gaps}")
+        print("  MBAR can still build a profile, but check the overlap between the")
+        print("  windows either side of each gap -- a gap wider than ~2 sigma breaks")
+        print("  the chain and the free energies on the two sides are not comparable.")
+    else:
+        print(f"\nall {len(centres)} windows completed")
 
     _write_results(results, partial=False)
     path = out / "umbrella_windows.json"
@@ -749,4 +1353,25 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # sys.exit() does NOT work here, and the failure is silent.
+    #
+    # Importing pycharmm installs a Fortran/MPI finalizer that runs during
+    # interpreter shutdown and resets the process exit status to 0. Every
+    # failure path in this file -- the overwrite guard, the model-cutoff check,
+    # a bad solvent name -- therefore reported SUCCESS to the shell. Anything
+    # chaining steps with `&&`, or a submission script checking $?, would run
+    # the next stage on data the previous stage refused to produce.
+    #
+    # os._exit skips atexit and interpreter shutdown, so the status chosen here
+    # is the one the caller observes. Streams must be flushed first because
+    # os._exit will not do it. Same idiom as mmml.cli.__main__._hard_exit.
+    try:
+        _rc = main()
+    except SystemExit as _exc:          # argparse errors and our own guards
+        _rc = _exc.code
+        if isinstance(_rc, str):        # SystemExit("message") -> print, fail
+            print(_rc, file=sys.stderr)
+            _rc = 1
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(int(_rc or 0))
