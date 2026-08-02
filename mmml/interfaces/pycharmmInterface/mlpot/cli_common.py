@@ -1313,11 +1313,18 @@ def validate_cluster_geometry(
         com_dists: list[float] = []
         for i in range(n_molecules):
             chunk = r[i * n_per : (i + 1) * n_per]
-            extent = float(np.linalg.norm(chunk.max(axis=0) - chunk.min(axis=0)))
-            if extent < min_monomer_extent:
-                raise ValueError(
-                    f"Monomer {i + 1} extent {extent:.3f} Å < {min_monomer_extent} Å"
-                )
+            # A monoatomic monomer (AR1/KR1/XE1, or the ions CLA/POT/SOD/LIT)
+            # has zero extent by definition, so the collapsed-monomer test does
+            # not apply to it -- applying it anyway makes every single-atom
+            # species unbuildable. Monomers still contribute their COM to the
+            # separation checks below, which is what actually detects a bad pack
+            # for a monoatomic species.
+            if n_per > 1:
+                extent = float(np.linalg.norm(chunk.max(axis=0) - chunk.min(axis=0)))
+                if extent < min_monomer_extent:
+                    raise ValueError(
+                        f"Monomer {i + 1} extent {extent:.3f} Å < {min_monomer_extent} Å"
+                    )
             coms.append(chunk.mean(axis=0))
         if len(coms) > 1:
             for i in range(len(coms)):

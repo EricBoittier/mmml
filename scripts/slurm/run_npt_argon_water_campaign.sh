@@ -103,23 +103,34 @@ build_box() {
   [[ -f "$out/box.json" ]] && { echo "  box $tag already certified"; return 0; }
   # Cubic side that puts n atoms at the reference density, so the barostat
   # starts near the answer and only has to relax, not to find the phase.
-  local L
-  L=$(uv run python -c "
+  #
+  # NOTE: `--box-auto count --target-density-g-cm3` is deliberately NOT used.
+  # It sizes the box via SOLVENT_BULK_PROPS (box_sizing.py), a hardcoded table
+  # of nine solvents, so an argon box dies with
+  #   ValueError: Cannot size box from density: unknown residue(s) ['AR1']
+  # Adding the noble gases to that table would be wrong rather than merely
+  # missing: it stores ONE ambient bulk density per solvent, and argon has no
+  # ambient liquid density -- it is a gas at 298 K, which is the whole reason we
+  # run it along the saturation curve. The molecule count and box side are
+  # computed here instead and passed explicitly, which is exact and needs no
+  # table lookup.
+  local L nmol
+  read -r L nmol < <(uv run python -c "
 import sys
 rho,n=float(sys.argv[1]),int(sys.argv[2])
 M={'AR1':39.948,'TIP3':18.015}[sys.argv[3]]
 nat={'AR1':1,'TIP3':3}[sys.argv[3]]
-nmol=n/nat
+nmol=n//nat
 V=nmol*M/(rho*6.02214076e23)*1e24
-print(f'{V**(1/3):.3f}')" "$rho" "$n" "$resid")
-  echo "  building $tag: $n atoms, L=$L A, rho_target=$rho"
+print(f'{V**(1/3):.3f} {nmol}')" "$rho" "$n" "$resid")
+  echo "  building $tag: $nmol molecules ($n atoms), L=$L A, rho_target=$rho"
   mkdir -p "$out"
   # Box building is Packmol + CHARMM only -- no ML model is evaluated -- so it
   # is forced onto CPU. Left to autodetect, JAX grabs (or fails to grab) a GPU
   # and the CUDA init error is pure noise in the build log.
   JAX_PLATFORMS=cpu uv run mmml liquid-box \
-    --composition "${resid}:1" --box-auto count --box-size "$L" \
-    --target-density-g-cm3 "$rho" --temperature "$temp" \
+    --composition "${resid}:${nmol}" --box-size "$L" \
+    --temperature "$temp" \
     --output-dir "$out" || { echo "  FAILED box: $tag" >&2; return 1; }
 }
 
@@ -139,9 +150,18 @@ run_npt() {
   [[ -f "$box/box.json" ]] || { echo "  SKIP $tag/$mode: box not certified" >&2; return 1; }
   mkdir -p "$out"
   echo "  NpT $tag/$mode: T=$temp K P=$press atm, $((EQ_PS+PROD_PS)) ps"
+  local nmol side
+  read -r nmol side < <(uv run python -c "
+import json,sys
+b=json.load(open(sys.argv[1]))
+print(int(b['n_molecules']), float(b['box_side_A']))" "$box/box.json")
+  # Load the certified box; do NOT let Packmol rebuild from --composition,
+  # where RESI:1 would silently mean a one-molecule system.
   uv run mmml md-system \
     --setup pbc_npt --backend jaxmd \
-    --composition "${resid}:1" \
+    --composition "${resid}:${nmol}" \
+    --from-psf "$box/model.psf" --from-crd "$box/model.crd" \
+    --skip-cluster-build --box-size "$side" \
     --checkpoint "$CKPT/epoch-$EPOCH" \
     --mm-lj-scales-file "$SCALES/scales_$mode.json" \
     --temperature "$temp" --pressure "$press" \
