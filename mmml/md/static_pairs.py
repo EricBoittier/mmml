@@ -1,31 +1,32 @@
-"""Static on-device pair list, so no neighbour list is ever built on the host.
+"""Static on-device intermolecular pair list.
 
-Profiling a 1767-atom solvated step showed where the time went:
+Complements :func:`make_intermolecular_neighbor_fn`, which rebuilds a padded
+pair list on the host at every block boundary. For a solute in a solvent box of
+a few thousand atoms that host work dominates: profiling a 1767-atom step gave
 
     neighbour build (numpy, host)   4.07 s
     energy   (cached, GPU)          0.50 s
     grad     (cached, GPU)          0.02 s
 
-The GPU does 20 ms of work per step and then waits four seconds for the host to
-rebuild a pair list -- which is why the run sat at 107 % CPU and 0 % GPU. The
-list was also padded to 2,572,752 slots for 636,813 live pairs, so every block
-shipped three multi-megabyte arrays across the bus.
+-- 20 ms of GPU work per step behind four seconds of host work, at 107 % CPU and
+0 % GPU, with megabytes shipped across the bus each block.
 
-The fix exploits something the switched force field already guarantees: **pairs
-beyond the cutoff contribute exactly zero**, because both ``mm_nonbonded`` and
-``ml_mm_elec`` multiply by a switching function that reaches zero at
-``ctofnb``. So there is no need to know which pairs are within the cutoff at
-all. Enumerate every intermolecular pair once, upload it once, and let the
-switch do the culling on the GPU.
+This exploits what the switched force field already guarantees: pairs beyond the
+cutoff contribute **exactly** zero, because ``mm_nonbonded`` and ``ml_mm_elec``
+both multiply by a switching function that reaches zero at the cutoff. So the
+list need not know which pairs are within range. Enumerate every intermolecular
+pair once, upload once, and let the switch cull on the GPU.
 
-For a few thousand atoms this is strictly better than a neighbour list: no host
-work, no transfers, no rebuild cadence to tune, and no capacity to overflow. It
-is O(N^2) in the energy, so for tens of thousands of atoms a real cell list
-(``jax_md.partition.neighbor_list``) becomes worthwhile -- but that is a
-different regime from a solute in a solvent box.
+Measured on this campaign: 8.3 -> 24 steps/s on a 2625-atom water box, with
+energies agreeing to 0.000000 eV.
+
+It is O(N^2) in the energy, so beyond roughly ten thousand atoms a real cell
+list (``jax_md.partition.neighbor_list``) wins again -- a different regime from
+a solute in a solvent box.
 """
 
 from __future__ import annotations
+
 
 import numpy as np
 

@@ -121,17 +121,46 @@ def solute_geometry_at_xi(xi_target: float, scan: Path | str | None = None,
 
 
 def load_model(checkpoint: Path | str | None = None):
-    """Return ``(model, params)`` for the PhysNet checkpoint."""
-    from mmml.interfaces.calculators.simple_inference import (
-        create_calculator_from_checkpoint,
-    )
+    """Return ``(model, params)`` for the PhysNet checkpoint.
 
+    The calculator path is preferred, but it cannot restore an Orbax checkpoint
+    on a machine without the GPU it was written on: the stored arrays carry
+    their device sharding, and deserialisation dies with
+
+        ERROR:root:Device cuda:0 was not found in jax.local_devices()
+        ValueError: sharding passed to deserialization should be specified,
+                    concrete and an instance of `jax.sharding.Sharding`. Got None
+
+    That makes every CPU-side diagnostic unusable against the production
+    checkpoint, which is exactly when you most want one -- both GPUs are
+    typically busy with the runs you are trying to diagnose. ``physnet_evaluate``
+    already loads the same checkpoints on CPU through PhysNet's own restart
+    helper, so fall back to it rather than duplicating the workaround in each
+    diagnostic script (``diag/model_bias.py`` carried its own copy).
+    """
     checkpoint = Path(checkpoint or os.environ.get(
         "MENSH_CKPT", REPO_ROOT / "model_ext.json"))
-    calc = create_calculator_from_checkpoint(str(checkpoint))
-    model = getattr(calc, "model", None) or calc._mmml_physnet_model
-    params = getattr(calc, "params", None) or calc._mmml_physnet_params
-    return model, params
+
+    try:
+        from mmml.interfaces.calculators.simple_inference import (
+            create_calculator_from_checkpoint,
+        )
+
+        calc = create_calculator_from_checkpoint(str(checkpoint))
+        model = getattr(calc, "model", None) or calc._mmml_physnet_model
+        params = getattr(calc, "params", None) or calc._mmml_physnet_params
+        return model, params
+    except ValueError as exc:
+        if "sharding" not in str(exc):
+            raise
+        from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+
+        _path, params, model = _load_physnet_checkpoint(
+            checkpoint, SOLUTE_N_ATOMS)
+        print(f"  note: restored {checkpoint.name} through the CPU-safe "
+              f"loader (the checkpoint's stored device sharding is "
+              f"unavailable here)")
+        return model, params
 
 
 def atomic_mass(z: int) -> float:

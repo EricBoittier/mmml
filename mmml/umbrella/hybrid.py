@@ -558,6 +558,122 @@ def _seed_window_geometry(
     )
 
 
+def _pre_equilibrate(
+    *, cfg, r0, cv, sched, box, masses, dt, build_leg, output_dir, n_atoms
+):
+    """Relax the packed liquid once, before any window runs.
+
+    A Packmol box has the right density from the first step but no liquid
+    structure at all, and the first solvation shell around a charged solute
+    takes tens to hundreds of picoseconds to form. Windows started from it
+    spend their whole trajectory in a solvent that is still relaxing, which
+    under-solvates the ion pair and biases the barrier high. Turan et al. run
+    500 ps NpT + 2 ns NVT first; this is the same idea at a cost we can pay.
+
+    Heating is staged from ``heat_start_fraction * T`` because the packed box
+    carries no kinetic energy and assigning full-target velocities in one step
+    is a thermal shock.
+
+    Returns the relaxed coordinates, cached per (n_atoms, seed, ps) so the cost
+    is paid once per box rather than once per campaign.
+    """
+    import time
+
+    from mmml.md.config import EnsembleSpec
+    from mmml.md.drivers import JaxmdDriver
+
+    ps = float(getattr(cfg, "pre_equilibrate_ps", 0.0) or 0.0)
+    if ps <= 0.0:
+        return r0
+
+    cache = (
+        output_dir.parent
+        / f"equilibrated_{n_atoms}atoms_seed{int(cfg.seed)}_{ps:g}ps.npz"
+    )
+    if cache.is_file():
+        cached = np.load(cache)
+        print(f"  using cached equilibrated box {cache.name} ({ps:g} ps)")
+        return np.asarray(cached["R"], dtype=np.float64)
+
+    # Restrain at the schedule point nearest the base geometry so relaxing the
+    # solvent does not drag the solute off the coordinate.
+    r0_cv = float(cv.value_numpy(r0, cell=box))
+    start = int(np.argmin(np.abs(np.asarray(sched.xi0) - r0_cv)))
+    xi0, k_w = float(sched.xi0[start]), float(sched.k_x[start])
+    T = float(cfg.temperature_K)
+    stages = int(getattr(cfg, "heat_stages", 0) or 0)
+    frac = float(getattr(cfg, "heat_start_fraction", 0.2) or 0.2)
+
+    print(
+        f"\n  pre-equilibrating the packed box for {ps:g} ps at ξ₀={xi0:.3f} "
+        f"({stages} heat stages)  → {cache.name}"
+    )
+    pos = np.asarray(r0, dtype=np.float64)
+    temps = (
+        [T] if stages <= 0
+        else list(np.linspace(frac * T, T, stages, dtype=float))
+    )
+    # Heating shares the budget; the remainder runs at the target temperature.
+    n_total = int(round(ps * 1000.0 / dt))
+    n_heat = int(n_total * 0.3) // max(1, len(temps)) if stages > 0 else 0
+    n_hold = max(1, n_total - n_heat * len(temps))
+
+    for i, (T_i, n_i) in enumerate(
+        [*[(t, n_heat) for t in temps], (T, n_hold)]
+    ):
+        if n_i <= 0:
+            continue
+        leg_system, leg_energy, leg_nbr = build_leg(pos, xi0, k_w)
+        driver = JaxmdDriver(
+            record_every=n_i,
+            block_size=min(n_i, 500),
+            neighbor_fn=leg_nbr,
+            output_path=None,
+            name=f"preequil_{i}",
+            progress_every=0,
+        )
+        t0 = time.time()
+        traj = driver.run(
+            leg_system,
+            leg_energy,
+            EnsembleSpec(
+                ensemble="nvt",
+                space="pbc" if box is not None else "free",
+                temperature_K=float(T_i),
+                dt_fs=dt,
+                n_steps=int(n_i),
+                thermostat="langevin",
+                params={
+                    "seed": int(cfg.seed),
+                    "masses": masses,
+                    "float64": True,
+                    "langevin_gamma": float(getattr(cfg, "langevin_gamma", 0.1) or 0.1),
+                    "center_velocity": False,
+                },
+            ),
+        )
+        frames = np.asarray(traj.metadata["positions"], dtype=np.float64)
+        e = np.asarray(traj.metadata["energies"], dtype=np.float64).reshape(-1)
+        if not np.all(np.isfinite(frames[-1])):
+            raise RuntimeError(
+                f"pre-equilibration went non-finite at {T_i:.0f} K. The packed "
+                f"box is too strained to heat directly; lower "
+                f"--timestep-fs or raise heat_stages."
+            )
+        pos = frames[-1]
+        label = "hold" if i == len(temps) else f"heat {T_i:6.0f} K"
+        print(
+            f"    {label}  E {e[0]:12.3f} -> {e[-1]:12.3f} eV   "
+            f"{time.time() - t0:.1f}s",
+            flush=True,
+        )
+
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(cache, R=pos, ps=ps)
+    print(f"  cached → {cache}")
+    return pos
+
+
 def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     """Per-window hybrid (ML solute + MM solvent) NVT umbrella sampling."""
     import jax
@@ -570,6 +686,7 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     from mmml.md.drivers import JaxmdDriver
     from mmml.md.energy.registry import EnergyContext
     from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from mmml.md.static_pairs import make_static_pair_fn
     from mmml.md.nl_cadence import resolve_block_steps
     from mmml.md.restraints import LinearDistanceCV
     from mmml.cli.run.md_system_unified import _load_model
@@ -703,6 +820,21 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         e_nan = np.full(n_frames_est, np.nan, dtype=np.float64)
         return pos, cv_nan, e_nan, e_nan.copy()
 
+    # Structure each window is stretched from. With chaining this advances to
+    # the previous window's final frame, so the relaxed solvation shell is
+    # carried along the ladder instead of every window re-forming it from the
+    # same packed configuration.
+    seed_source = r0
+    chain = bool(getattr(cfg, "seed_from_previous_window", False))
+
+    def _build_leg(positions, xi0, k_w, verbose_pairs=False):
+        """System + biased energy + pair list for one leg at centre ``xi0``.
+
+        Shared by the pre-equilibration leg and every window so the two cannot
+        drift apart in force field, solver or pair-list treatment.
+        """
+        leg_system = MolecularSystem(
+            R=positions,
     for wid in to_run:
         xi0 = float(sched.xi0[wid])
         k_w = float(sched.k_x[wid])
@@ -722,8 +854,8 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
         ch3cl_prm = Path(__file__).resolve().parents[2] / "examples" / "m" / "par_ch3cl.prm"
         if ch3cl_prm.is_file():
             extra_prm.append(ch3cl_prm)
-        energy = build_hybrid_energy(
-            win_system,
+        leg_energy = build_hybrid_energy(
+            leg_system,
             ("ml_intra", "mm_bonded", "mm_nonbonded", "rxncoor"),
             ctx,
             term_kwargs={
@@ -741,6 +873,35 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                 },
             },
         )
+        if cfg.static_pairs:
+            # Complete intermolecular list, uploaded once. The switching
+            # functions cull by distance on the GPU, so no host rebuild is
+            # needed and none of the per-block transfer cost is paid. Measured
+            # 8.3 -> 24 steps/s on this 2625-atom box.
+            leg_nbr = make_static_pair_fn(leg_system, verbose=verbose_pairs)
+        else:
+            leg_nbr = make_intermolecular_neighbor_fn(leg_system, cutoff_A=12.0)
+        return leg_system, leg_energy, leg_nbr
+
+    seed_source = _pre_equilibrate(
+        cfg=cfg,
+        r0=r0,
+        cv=cv,
+        sched=sched,
+        box=box,
+        masses=masses,
+        dt=dt,
+        build_leg=_build_leg,
+        output_dir=output_dir,
+        n_atoms=n_atoms,
+    )
+
+    for wid in range(k_windows):
+        xi0 = float(sched.xi0[wid])
+        k_w = float(sched.k_x[wid])
+        seeded = _seed_window_geometry(seed_source, cv, xi0, box, cfg.move_with)
+        win_system, energy, neighbor_fn = _build_leg(
+            seeded, xi0, k_w, verbose_pairs=(wid == 0)
         neighbor_fn = make_intermolecular_neighbor_fn(
             win_system,
             cutoff_A=12.0,
@@ -935,6 +1096,18 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             n_frames=int(n_frames_est),
             paths={"windows": windows_dir(output_dir)},
         )
+        if chain:
+            # Hand the relaxed solvent to the next window. Refuse to propagate
+            # a diverged frame: a single NaN would otherwise seed every
+            # remaining window and the run would report finite-looking garbage.
+            last = pos_w[-1]
+            if np.all(np.isfinite(last)):
+                seed_source = np.asarray(last, dtype=np.float64)
+            else:
+                print(
+                    f"    window {wid} final frame is non-finite; keeping the "
+                    f"previous seed rather than propagating it"
+                )
 
     # Assemble from per-window checkpoints (resume-safe source of truth).
     positions, cv_2d, energies, energies_unbiased, failed_windows, fail_reasons = (
