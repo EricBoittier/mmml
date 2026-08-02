@@ -80,13 +80,20 @@ for tag in "${!LATEST_JID[@]}"; do
   state=$(sacct -j "$jid" -n -X -o State 2>/dev/null | head -1 | tr -d ' ' || true)
   if [[ "$state" == COMPLETED ]]; then
     mkdir -p "$OUT_ROOT/${tag}"
-    # Only SUCCESS when the arm's RESULT is rc=0 and the log is not a blow-up.
+    # Only SUCCESS when the arm's RESULT is rc=0, the per-tag log exists, and
+    # it is not a science blow-up (Slurm COMPLETED alone is not enough).
+    arm_log="$OUT_ROOT/${tag}/bench.log"
     res_line=""
     [[ -f "$OUT_ROOT/bench.log" ]] && res_line="$(_match "^RESULT ${tag} " "$OUT_ROOT/bench.log" 2>/dev/null | tail -1 || true)"
-    [[ -z "$res_line" && -f "$OUT_ROOT/${tag}/bench.log" ]] \
-      && res_line="$(_match "^RESULT " "$OUT_ROOT/${tag}/bench.log" 2>/dev/null | tail -1 || true)"
+    [[ -z "$res_line" && -f "$arm_log" ]] \
+      && res_line="$(_match "^RESULT " "$arm_log" 2>/dev/null | tail -1 || true)"
     blew=0
-    _match "energy blow-up|Partial output saved after error" "$OUT_ROOT/${tag}/bench.log" >/dev/null 2>&1 && blew=1
+    if [[ ! -s "$arm_log" ]]; then
+      # Missing/empty arm log: cannot verify; never auto-SUCCESS from rc alone.
+      blew=1
+    else
+      _match "energy blow-up|Partial output saved after error" "$arm_log" >/dev/null 2>&1 && blew=1
+    fi
     if [[ "$res_line" == *" rc=0 "* && "$blew" -eq 0 ]]; then
       touch "$OUT_ROOT/${tag}/SUCCESS.flag" 2>/dev/null || true
     else
