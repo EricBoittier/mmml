@@ -102,12 +102,22 @@ Implementation notes:
 
 ### What it fixes, and what it does not
 
-Simulated from the measured arms, relative to 0.9840 Å:
+**Measured** through the real code path (`scripts/slurm/bonded_intra_scan.sbatch`,
+job 19372884), relative to 0.9840 Å:
 
 | | current | with bonded intra |
 |---|---|---|
 | restoring force at 1.831 Å | +23.9 | **+347.2** |
 | deepest well below equilibrium | −18.8 at 0.790 Å | **−58.2 at 0.770 Å** |
+
+Two independent checks on the wiring:
+
+- The `bonded_only` arm (bonded intra, ML dimer off) reproduces the standalone
+  CGenFF curve from `scripts/bonded_vs_ml_intramolecular.py` to
+  **max|diff| = 0.0000 kcal/mol over all 71 points**, minimum at 0.950 Å,
+  monotone below it.
+- The `bonded_full` arm matches the value predicted from the separately-measured
+  arms to **max|diff| = 0.00 kcal/mol**.
 
 It fixes the stretching failure completely. It makes the compression region
 *worse*, because the ML monomer's +104 kcal/mol at 0.771 Å was partly masking the
@@ -116,9 +126,9 @@ a reason to withhold the mode — the runaway is driven by stretching, and the
 compression region is far harder to reach once a real bond potential is present
 (+15 kcal/mol ≈ 25 kT at 298 K).
 
-**This mode alone is therefore not sufficient.** It must be measured on the
-71-point scan through the real code path before it is trusted; the table above is
-arithmetic on separately-measured arms, not a measurement of the mode itself.
+**This mode alone is therefore not sufficient.** The compression well is real,
+measured, and deeper than before; the damping guard below is required before this
+is used for production dynamics.
 
 ## Next: damping the interaction off-manifold
 

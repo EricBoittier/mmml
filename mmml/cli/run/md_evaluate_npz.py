@@ -1524,6 +1524,12 @@ def _evaluate_jaxmd_mmml(
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=False if not use_pbc else float(L),
         at_codes_override=at_codes,
+        # --backend jaxmd builds its calculator here, not through _factory_mmml,
+        # so the mode has to be forwarded on this path too. Omitting it made
+        # bonded_intra silently no-op: the arms came back bit-identical to plain
+        # PhysNet (spans 193.88 / 293.79 kcal/mol) with no error anywhere.
+        ml_potential_mode=getattr(args, "ml_potential_mode", None),
+        jax_mm_spoof_psf=getattr(args, "jax_mm_spoof_psf", None),
         max_pairs=_evaluate_int_arg(args, "max_pairs", 20_000),
         jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.75)),
         jax_md_capacity_growth_factor=float(
