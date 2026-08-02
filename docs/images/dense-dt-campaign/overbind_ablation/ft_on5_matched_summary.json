@@ -1,0 +1,19 @@
+{
+  "tag": "ft_on5_matched",
+  "es_off": false,
+  "mm_switch_on": 5.0,
+  "ml_switch_width": 1.5,
+  "mm_switch_width": 5.0,
+  "min_contact_A": 2.0,
+  "n_rays": 64,
+  "n_r": 36,
+  "csv": "/mmhome/boittier/home/mmml/artifacts/lj_scales/dense_dt_campaign/overbind_ablation/lever2_on5_ft/ft_on5_matched_components.csv",
+  "mean_of_ray_minima_kcal": -8.10513426578045,
+  "mean_soft_well_kcal": -5.871097196400166,
+  "median_soft_well_kcal": -2.2775568971633913,
+  "deepest_soft_kcal": -20.79152006340027,
+  "mean_curve_min_kcal": -35.43328609530131,
+  "r_at_mean_curve_min_A": 3.0428571428571427,
+  "ml_full_below_A": 3.5,
+  "frac_points_contact_ok": 0.8532986111111112
+}

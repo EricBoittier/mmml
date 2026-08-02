@@ -38,12 +38,26 @@ REF_BASE = ROOT / (
 )
 
 
-def _soft_stats(csv: Path, *, min_contact: float = 2.0) -> dict:
+def _soft_stats(
+    csv: Path,
+    *,
+    min_contact: float = 2.0,
+    dmin_lookup: pd.DataFrame | None = None,
+) -> dict:
     df = pd.read_csv(csv)
     if "contact_ok" not in df.columns:
-        if "dmin_A" not in df.columns:
-            raise SystemExit(f"missing dmin_A/contact_ok in {csv}")
         df = df.copy()
+        if "dmin_A" not in df.columns:
+            if dmin_lookup is None:
+                raise SystemExit(f"missing dmin_A/contact_ok in {csv}")
+            # Geometry is model-independent: reuse dmin from a scan with same rays/r.
+            key = dmin_lookup.set_index(["ray", "r_A"])["dmin_A"]
+            df["dmin_A"] = [
+                float(key.loc[(int(r.ray), float(r.r_A))])
+                if (int(r.ray), float(r.r_A)) in key.index
+                else float("nan")
+                for r in df.itertuples()
+            ]
         df["contact_ok"] = df["dmin_A"] >= min_contact
     ok = df[df["contact_ok"]]
     soft = []
@@ -101,15 +115,17 @@ def main() -> int:
     )
     ft_csv = out / "ft_on5_matched_components.csv"
     ft_stats = _soft_stats(ft_csv)
+    ft_df = pd.read_csv(ft_csv)
 
     compare = {
         "ft_on5_matched": ft_stats,
         "run_scan_summary": {
             k: summary.get(k)
             for k in (
-                "soft_well_median_kcal",
-                "soft_well_mean_kcal",
-                "contact_ray_min_median_kcal",
+                "median_soft_well_kcal",
+                "mean_soft_well_kcal",
+                "deepest_soft_kcal",
+                "mean_curve_min_kcal",
                 "frac_points_contact_ok",
                 "mm_switch_on",
             )
@@ -117,9 +133,8 @@ def main() -> int:
         },
     }
     if REF_ON5.is_file():
-        compare["deploy_only_on5_epoch222"] = _soft_stats(REF_ON5)
+        compare["deploy_only_on5_epoch222"] = _soft_stats(REF_ON5, dmin_lookup=ft_df)
     if REF_BASE.is_file():
-        # baseline may use 8x12; stats still valid if dmin annotated
         try:
             compare["baseline_on8_epoch222"] = _soft_stats(REF_BASE)
         except SystemExit as e:
@@ -127,12 +142,20 @@ def main() -> int:
 
     lit = [-5.0, -3.0]
     med = ft_stats["soft_median"]
+    deep = ft_stats["soft_deepest"]
+    mean_c = ft_stats["mean_curve_min"]
     compare["verdict"] = {
         "literature_kcal": lit,
         "soft_median_in_lit_window": bool(lit[0] <= med <= lit[1]) if med == med else False,
+        "deploy_ready": bool(
+            med == med
+            and lit[0] - 1.0 <= med <= lit[1] + 0.5
+            and deep > -15.0
+            and mean_c > -8.0
+        ),
         "note": (
             "FT matched train/deploy on=5. Target soft-well median ≈ −3…−5 kcal; "
-            "mean-curve should not sit near 0 (underbind) or ≲ −7 (still overbind)."
+            "reject if soft deepest ≲ −15 or mean-curve ≲ −8 (overbind tail)."
         ),
     }
     (out / "contact_ok_ft_compare.json").write_text(json.dumps(compare, indent=2) + "\n")
