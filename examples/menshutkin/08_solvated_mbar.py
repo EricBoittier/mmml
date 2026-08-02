@@ -69,8 +69,14 @@ def main() -> int:
     keys = sorted(windows, key=lambda k: int(k))
     xi0 = np.array([windows[k]["xi0"] for k in keys])
     traces = [np.asarray(windows[k]["xi"]) for k in keys]
+    # The total potential energy, used only to measure the decorrelation time.
+    # See the subsampling block below for why xi alone is not enough.
+    e_traces = [np.asarray(windows[k].get("energy_eV", []), dtype=float)
+                for k in keys]
     if args.discard_frac > 0:
-        traces = [t[int(len(t) * args.discard_frac):] for t in traces]
+        cut = args.discard_frac
+        traces = [t[int(len(t) * cut):] for t in traces]
+        e_traces = [t[int(len(t) * cut):] for t in e_traces]
     k_ev = float(data["k_ev_A2"])
     T = float(data["temperature_K"])
     beta = 1.0 / (K_B_EV * T)
@@ -86,17 +92,51 @@ def main() -> int:
         raise SystemExit("pymbar required: uv sync --extra mbar")
 
     # Subsample each window to uncorrelated frames.
+    #
+    # The statistical inefficiency must NOT be measured on xi alone. xi sits in
+    # a 150 kcal/mol/A^2 restraint, so it is a stiff coordinate that decorrelates
+    # in tens of femtoseconds: measured on this campaign's runs it returned
+    # g ~ 1.0 for every window, i.e. N_eff equal to the full frame count (501 of
+    # 501 at 10 ps, 2501 of 2501 at 50 ps). Every frame declared independent.
+    #
+    # But the free energy depends on the SOLVENT as much as on xi, and solvent
+    # reorganisation decorrelates on picoseconds. Treating 20 fs frames as
+    # independent therefore understates the uncertainty by roughly sqrt(g_true),
+    # and the split-half test says g_true is not 1: 97 % of windows drift the
+    # same direction with rms 0.52 kcal/mol, which is a slow mode by definition.
+    #
+    # The total potential energy is the cheapest available probe of that slow
+    # mode, so take the more conservative of the two. Windows whose energy trace
+    # is missing (older runs) fall back to xi and are flagged in the output.
     sub = []
     g_k = []
-    for t in traces:
+    g_src = []
+    for t, e in zip(traces, e_traces):
         if t.size < 4:
             sub.append(t)
             g_k.append(1.0)
+            g_src.append("xi")
             continue
-        g = max(1.0, float(timeseries.statistical_inefficiency(t)))
+        g_xi = max(1.0, float(timeseries.statistical_inefficiency(t)))
+        g_e = 0.0
+        if e.size == t.size and e.size >= 4 and np.ptp(e) > 0:
+            try:
+                g_e = max(1.0, float(timeseries.statistical_inefficiency(e)))
+            except Exception:                                  # noqa: BLE001
+                g_e = 0.0
+        g = max(g_xi, g_e)
+        g_src.append("E" if g_e > g_xi else "xi")
         idx = np.asarray(timeseries.subsample_correlated_data(t, g=g), dtype=int)
         sub.append(t[idx] if idx.size else t[-1:])
         g_k.append(g)
+
+    if all(s == "xi" for s in g_src) and any(e.size for e in e_traces):
+        print("note: xi decorrelates faster than the potential energy in every "
+              "window; error bars follow xi\n")
+    elif any(s == "E" for s in g_src):
+        n_e = sum(1 for s in g_src if s == "E")
+        print(f"note: {n_e}/{len(g_src)} windows are limited by the potential-"
+              f"energy decorrelation, not xi (median g = {np.median(g_k):.1f})\n")
 
     K = len(sub)
     N_k = np.array([s.size for s in sub], dtype=np.int64)

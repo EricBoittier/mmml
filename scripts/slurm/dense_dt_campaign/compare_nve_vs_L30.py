@@ -16,7 +16,9 @@ OUT = ROOT / "artifacts/lj_scales/dense_dt_campaign"
 # PSF order: C, H1, H2, CL1, CL2
 _TAGS = (
     ("L24_nve_dt025_x64_5ps", 24, 1.224),
+    ("L24_nve_dt025_x64_5ps_softwell", 24, 1.224),
     ("L26_nve_dt025_x64_5ps", 26, 0.963),
+    ("L26_nve_dt025_x64_5ps_softwell", 26, 0.963),
     ("L30_nve_dt05_x64_5ps", 30, 0.627),
 )
 

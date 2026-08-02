@@ -9,6 +9,7 @@ from mmml.md.restraints.dihedral_cv import (
     periodic_delta_deg,
 )
 from mmml.md.restraints.linear_distance import (
+    ReactionChannelRestraint,
     AngleWall,
     BondRetentionWall,
     FlatBottomWall,
@@ -29,6 +30,7 @@ __all__ = [
     "DihedralRestraint",
     "FlatBottomWall",
     "LinearDistanceCV",
+    "ReactionChannelRestraint",
     "PsfAngleRestraintInfo",
     "build_psf_angle_restraint_fns",
     "cv_from_spec",

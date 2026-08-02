@@ -22,22 +22,32 @@ from mmml.md.restraints import (
     cv_from_spec,
     periodic_delta_deg,
 )
+from mmml.md.restraints.linear_distance import ReactionChannelRestraint
 
 
 def _resolve_wall(spec):
     """Build whichever wall kind the spec describes.
 
     A mapping carrying ``r_max`` is a :class:`BondRetentionWall` (bound on the
-    shortest of several competing distances); anything else is a
-    :class:`FlatBottomWall` on a linear CV. Both expose ``energy_batched`` and
+    shortest of several competing distances); one carrying ``xi_grid`` is a
+    :class:`ReactionChannelRestraint` (a flat bottom that FOLLOWS a reference
+    path rather than sitting at a fixed value); anything else is a
+    :class:`FlatBottomWall` on a linear CV. All expose ``energy_batched`` and
     ``forces_batched``, so the sampler does not care which it has.
+
+    NOTE this duplicates ``mmml.umbrella.config._resolve_wall``. Both must know
+    every wall kind: adding one to only the config copy gets past argument
+    parsing and then fails inside ``make_packed_energy_fn``.
     """
-    if isinstance(spec, (FlatBottomWall, BondRetentionWall, AngleWall)):
+    if isinstance(spec, (FlatBottomWall, BondRetentionWall, AngleWall,
+                         ReactionChannelRestraint)):
         return spec
     if isinstance(spec, dict) and "atoms" in spec:
         return AngleWall.from_spec(spec)
     if isinstance(spec, dict) and "r_max" in spec:
         return BondRetentionWall.from_spec(spec)
+    if isinstance(spec, dict) and "xi_grid" in spec:
+        return ReactionChannelRestraint.from_spec(spec)
     return FlatBottomWall.from_spec(spec)
 
 
