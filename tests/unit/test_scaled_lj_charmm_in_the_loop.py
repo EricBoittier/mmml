@@ -40,6 +40,7 @@ if not can_import_pycharmm():
 pytestmark = pytest.mark.pycharmm
 
 EPS_FACTOR = 2.0
+PBC_BOX_SIDE_A = 30.0
 
 
 def _sidecar(tmp_path, names, *, eps_factor=1.0, name="hybrid_mm.json"):
@@ -63,10 +64,11 @@ def _live_types():
 
 
 def _build_vdw_probe():
-    """Return a callable giving CHARMM's VDW energy for a fresh TIP3+MEOH PSF."""
+    """Return CHARMM IMAGE VDW for a fresh periodic TIP3+MEOH PSF."""
     import pandas as pd
     import pycharmm
     import pycharmm.coor as coor
+    import pycharmm.crystal as crystal
     import pycharmm.energy as energy
     import pycharmm.generate as gen
     import pycharmm.psf as psf
@@ -77,6 +79,9 @@ def _build_vdw_probe():
     from mmml.data.cgenff_dataset import load_reference, reorder_to_cgenff_template
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         CGENFF_PRM, CGENFF_RTF, pycharmm_quiet, reset_block,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        prepare_charmm_pbc,
     )
 
     pycharmm_quiet()
@@ -99,6 +104,9 @@ def _build_vdw_probe():
             read.sequence_string(resi)
             gen.new_segment(seg)
         coor.set_positions(pd.DataFrame(coords, columns=["x", "y", "z"]))
+        if crystal.crystal_free_available():
+            crystal.free_crystal()
+        prepare_charmm_pbc(PBC_BOX_SIDE_A)
         pycharmm.lingo.charmm_script("ENER")
         return float(energy.get_vdw())
 
@@ -124,7 +132,8 @@ def test_scaled_lj_reaches_charmm_and_the_session_contract_holds(
     deploy_scaled_lj_into_charmm(sidecar, out_dir=tmp_path / "s1", verbose=False)
     once = vdw()
 
-    # 1. CHARMM's own VDW picked up the deployed scale, exactly.
+    # 1. CHARMM IMAGE VDW in a real cubic PBC cell picked up the deployed
+    # scale exactly. This is the LJ half of periodic_external + Ewald/PME.
     assert once == pytest.approx(EPS_FACTOR * base, rel=1e-6), (
         f"CHARMM VDW {once} is not {EPS_FACTOR}x the base {base}; the deployed "
         "prm either did not reach CHARMM or did not carry the scale. "
