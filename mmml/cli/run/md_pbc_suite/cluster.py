@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
+    from mmml.utils.monomer_internal_geometry import MonomerInternalGeometryReport
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
@@ -389,6 +393,85 @@ def _residue_geometry_for_packmol(
     )
 
 
+def assert_packmol_cluster_minimize_sane(
+    positions: np.ndarray,
+    *,
+    atoms_per_list: list[int],
+    residue_names: list[str],
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]],
+    minimize_report: CharmmMmMinimizeReport | None = None,
+    max_deviation_A: float | None = None,
+    verbose: bool = True,
+) -> MonomerInternalGeometryReport:
+    """Reject a CHARMM MM cluster minimization that returned unusable coordinates.
+
+    Packmol places rigid copies of each monomer template, so after the cluster
+    relax every monomer must still have the template's covalent skeleton. Raises
+    ``RuntimeError`` when it does not. Callers must run this *before* writing the
+    Packmol cache — the whole point is to keep bad coordinates off disk.
+
+    A pre-minimize GRMS of exactly 0.0 only warns: healthy KEY_LIBRARY CHARMM
+    builds report it too (see :class:`CharmmMmMinimizeReport`).
+    """
+    from mmml.utils.monomer_internal_geometry import (
+        MONOMER_INTERNAL_DEVIATION_ENV,
+        assert_monomer_internal_geometry,
+        resolve_max_monomer_internal_deviation_A,
+    )
+
+    if minimize_report is not None and getattr(
+        minimize_report, "start_grms_is_exactly_zero", False
+    ):
+        # Informational only. A packed cluster always has finite gradients, so an
+        # exact 0.0 means CHARMM reported no gradient — which happens both on a
+        # broken build and on healthy KEY_LIBRARY builds whose ``get_grms()`` is
+        # never populated (measured on pc-studix: GRMS reads 0.0 before and after
+        # a minimization that demonstrably moved atoms). It cannot gate the build;
+        # the geometry check below does that.
+        print(
+            "WARNING: CHARMM MM minimize reported GRMS=0.0000 kcal/mol/Å before "
+            f"minimizing {int(getattr(minimize_report, 'n_atoms', 0))} atoms. Either this "
+            "CHARMM build does not populate GRMS, or it is not evaluating the energy "
+            "at all. Treat any minimize-related result from this run with suspicion.",
+            flush=True,
+        )
+
+    limit = resolve_max_monomer_internal_deviation_A(max_deviation_A)
+    report = assert_monomer_internal_geometry(
+        positions,
+        atoms_per_list,
+        residue_names=residue_names,
+        templates=residue_geometries,
+        max_deviation_A=limit,
+        context="Packmol cluster post-MM geometry",
+    )
+    if report.n_monomers_checked == 0 and report.n_monomers_skipped > 0:
+        # Silent vacuity is the failure mode this gate exists to prevent.
+        print(
+            f"WARNING: monomer geometry check covered 0 of {report.n_monomers_skipped} "
+            "monomer(s) — no residue template matched (unknown residue name or atom "
+            "count mismatch). The cached coordinates are unverified.",
+            flush=True,
+        )
+    if verbose:
+        if limit <= 0.0:
+            state = f"check disabled via {MONOMER_INTERNAL_DEVIATION_ENV}"
+        else:
+            state = f"max {report.max_deviation_A:.3f} Å (limit {limit:.3f} Å)"
+        print(
+            "Packmol cluster monomer internal geometry: "
+            f"{state} over {report.n_pairs_checked} 1-2/1-3 distances in "
+            f"{report.n_monomers_checked} monomer(s)"
+            + (
+                f", {report.n_monomers_skipped} unchecked"
+                if report.n_monomers_skipped
+                else ""
+            ),
+            flush=True,
+        )
+    return report
+
+
 def build_packmol_composition_cluster(
     *,
     composition: list[tuple[str, int]],
@@ -489,6 +572,22 @@ def build_packmol_composition_cluster(
                     "Packmol cache Z does not match rebuilt PSF; "
                     "use --rebuild-packmol or delete the cache entry"
                 )
+            # Entries written before this check existed (or by a broken CHARMM
+            # build) can hold distorted monomers; do not hand them downstream.
+            try:
+                assert_packmol_cluster_minimize_sane(
+                    shifted,
+                    atoms_per_list=atoms_per_list,
+                    residue_names=ordered_residue_names,
+                    residue_geometries=residue_geometries,
+                    verbose=False,
+                )
+            except RuntimeError as exc:
+                entry_dir = cache_root / str(cached["manifest"].get("cache_key", ""))
+                raise RuntimeError(
+                    f"Packmol cache entry {entry_dir} holds distorted monomers: {exc} "
+                    "Delete the entry or rebuild with --rebuild-packmol."
+                ) from exc
             _coor().set_positions(
                 pd.DataFrame(shifted, columns=["x", "y", "z"])
             )
@@ -614,6 +713,7 @@ def build_packmol_composition_cluster(
     )
     _coor().set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
 
+    minimize_report: CharmmMmMinimizeReport | None = None
     if int(charmm_sd_steps) > 0 or int(charmm_abnr_steps) > 0:
         if verbose:
             print(
@@ -621,7 +721,7 @@ def build_packmol_composition_cluster(
                 f"SD={charmm_sd_steps} ABNR={charmm_abnr_steps}",
                 flush=True,
             )
-        minimize_charmm_mm_only(
+        minimize_report = minimize_charmm_mm_only(
             CharmmMmMinimizeConfig(
                 nstep_sd=int(charmm_sd_steps),
                 nstep_abnr=int(charmm_abnr_steps),
@@ -640,6 +740,17 @@ def build_packmol_composition_cluster(
                 f"Packmol cluster post-MM GRMS: {charmm_grms():.4f} kcal/mol/Å",
                 flush=True,
             )
+    # These coordinates are about to be cached and reused. Verify them before that
+    # happens: a broken CHARMM build hands back scrambled coordinates without
+    # raising, and the cache turns one bad run into a persistently bad build.
+    assert_packmol_cluster_minimize_sane(
+        shifted,
+        atoms_per_list=atoms_per_list,
+        residue_names=ordered_residue_names,
+        residue_geometries=residue_geometries,
+        minimize_report=minimize_report,
+        verbose=verbose,
+    )
 
     span = np.ptp(shifted, axis=0)
     packmol_placement.emit_packmol_build_summary(

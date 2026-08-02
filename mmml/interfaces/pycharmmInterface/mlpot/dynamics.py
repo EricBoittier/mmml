@@ -280,7 +280,44 @@ class CharmmMmMinimizeConfig:
     """
 
 
-def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
+def _charmm_grms_or_none() -> float | None:
+    """Current GRMS, or None when this CHARMM build does not expose one.
+
+    Read for reporting only, so a missing accessor must not break a minimization
+    that would otherwise succeed.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+    try:
+        return float(charmm_grms())
+    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
+        return None
+
+
+@dataclass(frozen=True)
+class CharmmMmMinimizeReport:
+    """GRMS around a :func:`minimize_charmm_mm_only` call (kcal/mol/Å)."""
+
+    n_atoms: int
+    ran: bool
+    start_grms_kcalmol_A: float | None = None
+    end_grms_kcalmol_A: float | None = None
+
+    @property
+    def start_grms_is_exactly_zero(self) -> bool:
+        """True when the pre-minimize GRMS is a bit-exact 0.0 on a real system.
+
+        A packed multi-atom configuration always has finite gradients, so an exact
+        0.0 means CHARMM reported no gradient at all. Suspicious, but not
+        conclusive: healthy KEY_LIBRARY builds (measured on pc-studix) leave
+        ``energy.get_grms()`` unpopulated and read 0.0 straight through a
+        minimization that demonstrably moves atoms. Warn on this; do not fail.
+        """
+        start = self.start_grms_kcalmol_A
+        return int(self.n_atoms) > 1 and start is not None and float(start) == 0.0
+
+
+def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> CharmmMmMinimizeReport:
     """Run CHARMM SD (and optional ABNR) on the current PSF using MM terms only.
 
     Call **before** :func:`register_mlpot` so the PSF still has bonds and no ML model is loaded.
@@ -327,18 +364,20 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     elif not bool(config.use_pbc):
         setup_default_nbonds()
     if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
-        return
+        return CharmmMmMinimizeReport(
+            n_atoms=int(get_charmm_positions_array().shape[0]),
+            ran=False,
+        )
 
     n_atoms = int(get_charmm_positions_array().shape[0])
     if n_atoms == 0:
         raise RuntimeError("CHARMM MM minimize: no atoms in PSF (coordinates not loaded?)")
 
     pycharmm.lingo.charmm_script("ENER")
-    if config.verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
+    start_grms = _charmm_grms_or_none()
+    if config.verbose and start_grms is not None:
         print(
-            f"CHARMM MM minimize start: {n_atoms} atoms, GRMS={charmm_grms():.4f} kcal/mol/Å",
+            f"CHARMM MM minimize start: {n_atoms} atoms, GRMS={start_grms:.4f} kcal/mol/Å",
             flush=True,
         )
 
@@ -400,11 +439,10 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
                     **dcd_kw,
                 )
         pycharmm.lingo.charmm_script("ENER")
-        if config.verbose:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
+        end_grms = _charmm_grms_or_none()
+        if config.verbose and end_grms is not None:
             print(
-                f"CHARMM MM minimize end: GRMS={charmm_grms():.4f} kcal/mol/Å",
+                f"CHARMM MM minimize end: GRMS={end_grms:.4f} kcal/mol/Å",
                 flush=True,
             )
         if config.verbose and config.show_energy:
@@ -430,6 +468,13 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         if dcd_file is not None:
             dcd_file.close()
         cons_fix.turn_off()
+
+    return CharmmMmMinimizeReport(
+        n_atoms=n_atoms,
+        ran=True,
+        start_grms_kcalmol_A=None if start_grms is None else float(start_grms),
+        end_grms_kcalmol_A=None if end_grms is None else float(end_grms),
+    )
 
 
 _BONDED_INTERNAL_TERM_KEYS = ("BOND", "ANGL", "ANGLE", "UREY", "UB", "DIHE", "IMPR", "CMAP")

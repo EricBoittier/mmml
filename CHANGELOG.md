@@ -71,6 +71,24 @@ and versioning process.
 
 ### Fixed
 
+- **The Packmol cluster cache stored CHARMM-minimized coordinates without
+  validating them.** A broken CHARMM/pycharmm build returned scrambled
+  coordinates (a `MEOH:327` / L=28 build: all 327 monomers distorted, worst 1-2/1-3
+  distance change 2.006 Å, one monomer's `OG` bit-identical to another monomer's
+  `HG1`), and nothing noticed — the garbage was cached to
+  `.packmol_cache/<key>/cluster.npz`, triggered the expensive Packmol repack in
+  the pre-MLpot geometry gate, and would have been used for the box.
+  `build_packmol_composition_cluster` now compares every monomer's covalent
+  skeleton against the template Packmol placed, both before writing the cache and
+  on cache hit, and raises instead of caching
+  (`mmml/utils/monomer_internal_geometry.py`, threshold 0.35 Å, override
+  `MMML_MAX_MONOMER_INTERNAL_DEVIATION_A`). Threshold calibrated on real
+  pc-studix builds — worst healthy monomer across MEOH/TIP3, two densities and a
+  20× range of minimization length was 0.073 Å
+  (`scripts/validate_packmol_monomer_geometry.py`). `minimize_charmm_mm_only`
+  now returns a `CharmmMmMinimizeReport`; a GRMS of exactly 0.0 only warns,
+  because healthy KEY_LIBRARY CHARMM builds report it too. See
+  [`docs/packmol-monomer-geometry-gate.md`](docs/packmol-monomer-geometry-gate.md).
 - **`md-system` died in the child process on both PBC backends.** `run_sim`
   grew `--hybrid-hamiltonian` / `--shared-cutoff` and `md_system.build_command`
   forwards them to every backend unconditionally, but neither

@@ -14,6 +14,7 @@ from typing import Any
 
 __all__ = [
     "CharmmMmMinimizeConfig",
+    "CharmmMmMinimizeReport",
     "CharmmTrajectoryFiles",
     "FlatBottomSphereConfig",
     "MinimizeWithMlpotConfig",
@@ -69,6 +70,7 @@ __all__ = [
 
 _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "CharmmMmMinimizeConfig": (".dynamics", "CharmmMmMinimizeConfig"),
+    "CharmmMmMinimizeReport": (".dynamics", "CharmmMmMinimizeReport"),
     "CharmmTrajectoryFiles": (".dynamics", "CharmmTrajectoryFiles"),
     "MinimizeWithMlpotConfig": (".dynamics", "MinimizeWithMlpotConfig"),
     "minimize_charmm_mm_only": (".dynamics", "minimize_charmm_mm_only"),
