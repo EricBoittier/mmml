@@ -34,8 +34,11 @@ DEFAULT_TARGET_MID_KCAL = -4.0
 # Start penalising before the deploy deepest floor (−15).
 DEFAULT_DEEP_FLOOR_KCAL = -12.0
 DEFAULT_HARD_FLOOR_KCAL = -15.0
+# Soft metric is min E_int at r≥3.4, but at mm_switch_on=5 ML is already off
+# for r≳5 (ml_s→0). Aux must act where ML still controls E_int (s≳0.5),
+# i.e. r ≲ on − 0.75·width ≈ 4.25 Å — otherwise the lever is frozen MM.
 DEFAULT_SOFT_R_MIN_A = 3.4
-DEFAULT_SOFT_R_MAX_A = 6.0
+DEFAULT_SOFT_R_MAX_A = 4.25
 
 
 def soft_well_e_int_loss(
@@ -163,12 +166,12 @@ class SoftWellConfig:
     """Host-side soft-well aux settings (not a jit static pytree)."""
 
     enabled: bool = False
-    steps_per_epoch: int = 48
-    every_n_train_batches: int = 25
+    steps_per_epoch: int = 64
+    every_n_train_batches: int = 20
     batch_size: int = 32
-    n_directions: int = 16
-    n_orientations: int = 12
-    n_r: int = 8
+    n_directions: int = 20
+    n_orientations: int = 16
+    n_r: int = 10
     r_min: float = DEFAULT_SOFT_R_MIN_A
     r_max: float = DEFAULT_SOFT_R_MAX_A
     min_contact: float = DEFAULT_ORIENT_MIN_CONTACT_A
