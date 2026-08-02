@@ -22,7 +22,10 @@ REPO_ROOT = _package_dir().parent
 
 DEFAULT_RESIDUE = "ACO"
 DEFAULT_N_MOLECULES = 2
-DEFAULT_SPACING = 4.0
+# COM pitch for grid / multi-residue placement. Dense liquids (water O···O
+# ~2.8 Å, MeOH COM ~4.1 Å) need well below the old 4 Å default; Packmol's
+# atom-atom floor is ``--packmol-tolerance`` (default 2 Å), not this.
+DEFAULT_SPACING = 2.5
 ACO_ATOMS_PER_MONOMER = 10
 NVE_TIMESTEP_PS = 0.00025
 
@@ -1001,7 +1004,11 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         "--spacing",
         type=float,
         default=DEFAULT_SPACING,
-        help="Spacing (Å) when placing multiple residues",
+        help=(
+            "COM pitch (Å) when placing multiple residues on a grid. "
+            "Default 2.5 Å suits dense liquids; raise for sparse / gas packs. "
+            "Not Packmol's atom-atom tolerance (--packmol-tolerance)."
+        ),
     )
     parser.add_argument(
         "--checkpoint",

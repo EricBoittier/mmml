@@ -9,6 +9,7 @@ from pathlib import Path
 import ase.units
 import e3x
 import jax
+import numpy as np
 from flax.training import train_state
 
 # Try to enable lovely_jax for better array printing (optional; may fail with lovely-numpy>=0.2.19)
@@ -150,6 +151,9 @@ def train_model(
     distill_targets=None,
     ema_decay: float = 0.999,
     hybrid_mm=None,
+    soft_well_aux=None,
+    frozen_mm_lj_sigma_scale=None,
+    frozen_mm_lj_epsilon_scale=None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -234,6 +238,12 @@ def train_model(
         ``mmml.models.hybrid_energy.HybridMMConfig`` (master LJ tables +
         switching widths); a plain dict is coerced to one.  Requires the CGenFF
         per-atom fields in the batch (see ``HYBRID_MM_BATCH_KEYS``).
+    soft_well_aux : SoftWellConfig | dict | None, optional
+        When enabled, run contact-ok soft-well ``E_int`` aux steps after each
+        epoch's ASE train loop (lit DCM window −5…−3 kcal/mol).
+    frozen_mm_lj_sigma_scale, frozen_mm_lj_epsilon_scale : array | None
+        If set, hard-restore these LJ scale leaves after every optimizer step
+        so train/deploy share the sidecar scales while the neural net moves.
     ema_decay : float, optional
         Decay for the exponential moving average of parameters, by default
         0.999.  Validation, checkpointing and restart all use the EMA weights,
@@ -263,6 +273,32 @@ def train_model(
     from mmml.models.hybrid_energy import HybridMMConfig
 
     hybrid_mm = HybridMMConfig.coerce(hybrid_mm)
+    from mmml.models.physnetjax.physnetjax.training.soft_well_aux import (
+        SoftWellConfig,
+        SoftWellGeometryPool,
+        extract_monomer_from_hybrid_frame,
+        restore_mm_lj_scales,
+        soft_well_train_step,
+    )
+
+    soft_well_cfg = SoftWellConfig.coerce(soft_well_aux)
+    soft_well_pool = None
+    if soft_well_cfg is not None and soft_well_cfg.enabled:
+        if hybrid_mm is None:
+            raise ValueError("soft_well_aux requires hybrid_mm")
+        mono = extract_monomer_from_hybrid_frame(train_data, frame=0)
+        soft_well_pool = SoftWellGeometryPool(mono, soft_well_cfg)
+        print(
+            f"Soft-well E_int aux ON: {soft_well_pool.n} contact-ok geoms "
+            f"(dmin≥{soft_well_cfg.min_contact:g} Å, "
+            f"r∈[{soft_well_cfg.r_min:g},{soft_well_cfg.r_max:g}] Å); "
+            f"{soft_well_cfg.steps_per_epoch} end-steps/epoch + every "
+            f"{soft_well_cfg.every_n_train_batches} ASE batches; "
+            f"batch {soft_well_cfg.batch_size}; loss_scale={soft_well_cfg.loss_scale:g}; "
+            f"target [{soft_well_cfg.target_lo_kcal:g},"
+            f"{soft_well_cfg.target_hi_kcal:g}] kcal/mol",
+            flush=True,
+        )
     if profile_epoch_timing is None:
         import os
 
@@ -490,6 +526,20 @@ def train_model(
     else:
         params = fresh_params
 
+    if (
+        frozen_mm_lj_sigma_scale is not None
+        and frozen_mm_lj_epsilon_scale is not None
+        and not restart
+    ):
+        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+        params = attach_mm_lj_scales(
+            params,
+            len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1)),
+            sigma_scale=np.asarray(frozen_mm_lj_sigma_scale, dtype=np.float32),
+            epsilon_scale=np.asarray(frozen_mm_lj_epsilon_scale, dtype=np.float32),
+        )
+
     # load from restart
     if restart:
         (
@@ -569,6 +619,48 @@ def train_model(
             flush=True,
         )
 
+    if (
+        frozen_mm_lj_sigma_scale is not None
+        and frozen_mm_lj_epsilon_scale is not None
+    ):
+        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+        # Restart path: scales may be missing from the orbax tree.
+        params = attach_mm_lj_scales(
+            params,
+            len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1)),
+            sigma_scale=np.asarray(frozen_mm_lj_sigma_scale, dtype=np.float32),
+            epsilon_scale=np.asarray(frozen_mm_lj_epsilon_scale, dtype=np.float32),
+        )
+        ema_params = attach_mm_lj_scales(
+            ema_params,
+            len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1)),
+            sigma_scale=np.asarray(frozen_mm_lj_sigma_scale, dtype=np.float32),
+            epsilon_scale=np.asarray(frozen_mm_lj_epsilon_scale, dtype=np.float32),
+        )
+        print(
+            f"Frozen MM LJ scales from sidecar "
+            f"({len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1))} types; "
+            "hard-restored after every step)",
+            flush=True,
+        )
+
+    if soft_well_pool is not None and soft_well_cfg is not None and hybrid_mm is not None:
+        n_before = soft_well_pool.n
+        n_keep = soft_well_pool.filter_by_teacher_e_int(
+            model.apply,
+            params,
+            hybrid_mm,
+            batch_size=int(soft_well_cfg.batch_size),
+            max_e_int_kcal=float(soft_well_cfg.pool_max_e_int_kcal),
+        )
+        print(
+            f"Soft-well pool filtered by teacher E_int≤"
+            f"{soft_well_cfg.pool_max_e_int_kcal:g} kcal/mol: "
+            f"{n_before} → {n_keep}",
+            flush=True,
+        )
+
     if best_loss is None or restart:
         best_loss = float('inf')
 
@@ -638,6 +730,45 @@ def train_model(
             train_energy_mae = 0.0
             train_forces_mae = 0.0
             train_dipoles_mae = 0.0
+            soft_well_loss = 0.0
+            soft_well_e_med = 0.0
+            soft_well_n = 0
+
+            def _run_soft_well_step():
+                nonlocal params, ema_params, opt_state
+                nonlocal soft_well_loss, soft_well_e_med, soft_well_n
+                sw_batch = soft_well_pool.next_batch(soft_well_cfg.batch_size)
+                (
+                    params,
+                    ema_params,
+                    opt_state,
+                    sw_loss,
+                    sw_emed,
+                ) = soft_well_train_step(
+                    model_apply=model.apply,
+                    optimizer_update=optimizer.update,
+                    batch=sw_batch,
+                    batch_size=int(soft_well_cfg.batch_size),
+                    opt_state=opt_state,
+                    params=params,
+                    ema_params=ema_params,
+                    hybrid_mm=hybrid_mm,
+                    target_lo_kcal=float(soft_well_cfg.target_lo_kcal),
+                    target_hi_kcal=float(soft_well_cfg.target_hi_kcal),
+                    target_mid_kcal=float(soft_well_cfg.target_mid_kcal),
+                    deep_floor_kcal=float(soft_well_cfg.deep_floor_kcal),
+                    hard_floor_kcal=float(soft_well_cfg.hard_floor_kcal),
+                    center_weight=float(soft_well_cfg.center_weight),
+                    loss_scale=float(soft_well_cfg.loss_scale),
+                    update_scale=float(getattr(transform_state, "scale", 1.0)),
+                    ema_decay=ema_decay,
+                    frozen_sigma_scale=frozen_mm_lj_sigma_scale,
+                    frozen_epsilon_scale=frozen_mm_lj_epsilon_scale,
+                )
+                soft_well_n += 1
+                soft_well_loss += (float(sw_loss) - soft_well_loss) / soft_well_n
+                soft_well_e_med += (float(sw_emed) - soft_well_e_med) / soft_well_n
+
             for i, batch in enumerate(train_batches):
                 (
                     params,
@@ -672,12 +803,46 @@ def train_model(
                     distill_dipole=distill_dipole,
                     debug=True,
                 )
+                if (
+                    frozen_mm_lj_sigma_scale is not None
+                    and frozen_mm_lj_epsilon_scale is not None
+                ):
+                    params = restore_mm_lj_scales(
+                        params,
+                        frozen_mm_lj_sigma_scale,
+                        frozen_mm_lj_epsilon_scale,
+                    )
+                    ema_params = restore_mm_lj_scales(
+                        ema_params,
+                        frozen_mm_lj_sigma_scale,
+                        frozen_mm_lj_epsilon_scale,
+                    )
+                # Interleave soft-well so ASE batches cannot erase the lever.
+                if (
+                    soft_well_pool is not None
+                    and soft_well_cfg is not None
+                    and int(soft_well_cfg.every_n_train_batches) > 0
+                    and (i + 1) % int(soft_well_cfg.every_n_train_batches) == 0
+                ):
+                    _run_soft_well_step()
                 # Block until JAX operations complete to avoid async context issues
                 # This prevents RuntimeError: cannot enter context in IPython/Jupyter
                 train_loss += (loss - train_loss) / (i + 1)
                 train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
                 train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
                 train_dipoles_mae += (dipole_mae - train_dipoles_mae) / (i + 1)
+
+            # End-of-epoch soft-well block (primary shaping pressure).
+            if soft_well_pool is not None and soft_well_cfg is not None:
+                for _ in range(int(soft_well_cfg.steps_per_epoch)):
+                    _run_soft_well_step()
+                if epoch % print_freq == 0:
+                    print(
+                        f"  soft-well aux: n={soft_well_n} loss={soft_well_loss:.4f} "
+                        f"batch_E_int_median={soft_well_e_med:.2f} kcal/mol",
+                        flush=True,
+                    )
+
             jax.block_until_ready(loss)
             jax.block_until_ready(params)
             epoch_timing.train_s = time.perf_counter() - train_t0

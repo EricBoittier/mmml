@@ -73,6 +73,14 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--distill-alpha DISTILL_ALPHA]
                           [--distill-targets DISTILL_TARGETS [DISTILL_TARGETS ...]]
                           [--teacher-checkpoint TEACHER_CHECKPOINT]
+                          [--soft-well-aux]
+                          [--soft-well-steps-per-epoch SOFT_WELL_STEPS_PER_EPOCH]
+                          [--soft-well-every-n-train-batches SOFT_WELL_EVERY_N_TRAIN_BATCHES]
+                          [--soft-well-batch-size SOFT_WELL_BATCH_SIZE]
+                          [--soft-well-loss-scale SOFT_WELL_LOSS_SCALE]
+                          [--soft-well-target-lo SOFT_WELL_TARGET_LO]
+                          [--soft-well-target-hi SOFT_WELL_TARGET_HI]
+                          [--frozen-mm-lj-scales-sidecar FROZEN_MM_LJ_SCALES_SIDECAR]
                           [--metrics-plot METRICS_PLOT] [--log-loss]
                           [--rot-augment] [--rot-perturbation ROT_PERTURBATION]
                           [--charges] [--no-charges]
@@ -189,6 +197,13 @@ Execution:
                         Batching method ('default' or 'advanced')
   --batch-args-dict, --batch_args_dict BATCH_ARGS_DICT
                         JSON string or file path for advanced batch arguments
+  --soft-well-steps-per-epoch, --soft_well_steps_per_epoch SOFT_WELL_STEPS_PER_EPOCH
+                        Soft-well aux optimizer steps after each ASE epoch
+  --soft-well-every-n-train-batches, --soft_well_every_n_train_batches SOFT_WELL_EVERY_N_TRAIN_BATCHES
+                        Interleave one soft-well step every N ASE train batches
+                        (0=off)
+  --soft-well-batch-size, --soft_well_batch_size SOFT_WELL_BATCH_SIZE
+                        Batch size for soft-well aux steps
 
 Output & artifacts:
   --no-save-every-epoch
@@ -341,6 +356,18 @@ Other options:
   --distill-targets, --distill_targets DISTILL_TARGETS [DISTILL_TARGETS ...]
                         Distillation targets: energy forces dipole (default: all
                         three)
+  --soft-well-aux, --soft_well_aux
+                        Enable contact-ok soft-well E_int aux loss (lit DCM
+                        window −5…−3 kcal/mol)
+  --soft-well-loss-scale, --soft_well_loss_scale SOFT_WELL_LOSS_SCALE
+                        Multiplier on soft-well window loss
+  --soft-well-target-lo SOFT_WELL_TARGET_LO
+                        Soft-well E_int lower window edge (kcal/mol)
+  --soft-well-target-hi SOFT_WELL_TARGET_HI
+                        Soft-well E_int upper window edge (kcal/mol)
+  --frozen-mm-lj-scales-sidecar, --frozen_mm_lj_scales_sidecar FROZEN_MM_LJ_SCALES_SIDECAR
+                        hybrid_mm.json with mm_lj_*_scale; attach and hard-
+                        freeze so train/deploy share the same MM LJ
   --rot-augment, --rot_augment
                         Apply random rotation augmentation to inputs
   --rot-perturbation, --rot_perturbation ROT_PERTURBATION

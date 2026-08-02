@@ -103,6 +103,14 @@ def main() -> int:
     p.add_argument("--r-min", type=float, default=3.0)
     p.add_argument("--r-max", type=float, default=10.0)
     p.add_argument("--n-r", type=int, default=36)
+    p.add_argument(
+        "--min-contact",
+        type=float,
+        default=None,
+        help="Skip r-points with intermolecular atom–atom dmin below this (Å). "
+        "Default: mmml.analysis.dimer_scans.DEFAULT_ORIENT_MIN_CONTACT_A (2.0). "
+        "COM–COM r alone is not steric for DCM — clash points invent deep wells.",
+    )
     # Default = kT at 150 K. A sub-thermal threshold counts ripple your dynamics
     # cannot resolve and inverts the verdict: at 0.023 kcal/mol the 8.0 model
     # looks WORSE than the 6.0 (71% vs 62% of rays); at kT it is 34.6% vs 14.6%.
@@ -125,10 +133,18 @@ def main() -> int:
     import jax
     import jax.numpy as jnp
 
+    from mmml.analysis.dimer_scans import (
+        DEFAULT_ORIENT_MIN_CONTACT_A,
+        intermolecular_min_distance,
+    )
     from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
     from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
     from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
     from mmml.models.short_range_wall import inter_monomer_wall_energy
+
+    min_contact = (
+        DEFAULT_ORIENT_MIN_CONTACT_A if args.min_contact is None else float(args.min_contact)
+    )
 
     raw = dict(np.load(args.data, allow_pickle=True))
     res = np.array([str(x) for x in raw["res_name"]])
@@ -163,6 +179,7 @@ def main() -> int:
     print(f"handoff: ML on 0-{args.mm_switch_on - args.ml_switch_width:g}, "
           f"blend to {args.mm_switch_on:g}, MM tail to "
           f"{args.mm_switch_on + args.mm_switch_width:g} A")
+    print(f"min intermolecular contact for well metrics: {min_contact:g} Å")
 
     # --- assemble every geometry up front ---------------------------------
     R_all = np.zeros((n_tot, pad, 3), dtype=np.float64)
@@ -172,14 +189,17 @@ def main() -> int:
     M_all = np.full((n_tot, pad), -1, dtype=np.int32)
     ray_of = np.zeros(n_tot, dtype=np.int32)
     ir_of = np.zeros(n_tot, dtype=np.int32)
+    dmin_of = np.zeros(n_tot, dtype=np.float64)
 
     n = 0
     for di, d in enumerate(dirs):
         for qi, q in enumerate(quats):
             Rb0 = R1 @ quat_to_matrix(q).T
             for ri, r in enumerate(rs):
-                R_all[n, :n_mono] = R1 - 0.5 * r * d
-                R_all[n, n_mono:n_at] = Rb0 + 0.5 * r * d
+                Ra = R1 - 0.5 * r * d
+                Rb = Rb0 + 0.5 * r * d
+                R_all[n, :n_mono] = Ra
+                R_all[n, n_mono:n_at] = Rb
                 Z_all[n, :n_mono] = Z1
                 Z_all[n, n_mono:n_at] = Z1
                 T_all[n, :n_mono] = t1
@@ -190,6 +210,7 @@ def main() -> int:
                 M_all[n, n_mono:n_at] = 1
                 ray_of[n] = di * len(quats) + qi
                 ir_of[n] = ri
+                dmin_of[n] = intermolecular_min_distance(Ra, Rb)
                 n += 1
 
     # prepare_batches_jit shuffles and DROPS the remainder, which would delete
@@ -255,20 +276,41 @@ def main() -> int:
         sel = sel[order]
         e = E[sel]
         w = W[sel]
+        dmin = dmin_of[sel]
         if np.isnan(e).any():
             n_skip += 1
             continue
         e = e - e[-1]
-        mins = find_minima(e, args.prominence)
+        # Clash points (atom overlap) invent deep wells — exclude from minima.
+        # Find minima on the contact-ok subsequence so neighbors of a clash
+        # do not become artificial turning points.
+        contact_ok = dmin >= min_contact
+        idx_ok = np.flatnonzero(contact_ok)
+        if idx_ok.size >= 3:
+            mins = [int(idx_ok[i]) for i in find_minima(e[idx_ok], args.prominence)]
+        else:
+            mins = []
         # A minimum where the wall is live is geometry, not a model defect:
         # report it separately or the count is dominated by close contacts.
         wall_live = [i for i in mins if w[i] > 1e-3]
         clean = [i for i in mins if w[i] <= 1e-3]
+        if mins:
+            i_deep = int(mins[int(np.argmin(e[mins]))])
+            e_min_kcal = float(e[i_deep] * EV_TO_KCAL)
+            r_at_min = float(rs[i_deep])
+            dmin_at_min = float(dmin[i_deep])
+        else:
+            e_min_kcal = 0.0
+            r_at_min = float("nan")
+            dmin_at_min = float("nan")
         rows.append({
             "ray": ray, "direction": int(ray // len(quats)), "orientation": int(ray % len(quats)),
             "n_min": len(mins), "n_min_ml": len(clean), "n_min_wall": len(wall_live),
-            "e_min_kcal": float(e[mins[int(np.argmin(e[mins]))]] * EV_TO_KCAL) if mins else 0.0,
-            "r_at_min": float(rs[mins[int(np.argmin(e[mins]))]]) if mins else float("nan"),
+            "e_min_kcal": e_min_kcal,
+            "r_at_min": r_at_min,
+            "dmin_at_min": dmin_at_min,
+            "n_contact_ok": int(contact_ok.sum()),
+            "r_safe_min": float(rs[contact_ok][0]) if contact_ok.any() else float("nan"),
         })
         if len(clean) > 1:
             n_bad += 1
@@ -284,13 +326,16 @@ def main() -> int:
             fh.write(",".join(str(r_[k]) for k in keys) + "\n")
 
     frac = n_bad / max(n_ok + n_bad, 1)
+    contact_rows = [r_ for r_ in rows if np.isfinite(r_["r_at_min"])]
     summary = {
         "resid": args.resid, "checkpoint": args.checkpoint, "use_ema": args.use_ema,
         "mm_switch_on": args.mm_switch_on, "ml_switch_width": args.ml_switch_width,
+        "min_contact_A": min_contact,
         "n_rays": n_rays, "n_evaluated": n_ok + n_bad, "n_dropped": n_skip,
         "n_rays_spurious": n_bad, "frac_rays_spurious": frac,
-        "mean_min_kcal": float(np.mean([r_["e_min_kcal"] for r_ in rows])),
-        "deepest_kcal": float(np.min([r_["e_min_kcal"] for r_ in rows])),
+        "n_rays_with_contact_ok_min": len(contact_rows),
+        "mean_min_kcal": float(np.mean([r_["e_min_kcal"] for r_ in contact_rows])) if contact_rows else None,
+        "deepest_kcal": float(np.min([r_["e_min_kcal"] for r_ in contact_rows])) if contact_rows else None,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
 

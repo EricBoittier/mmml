@@ -1,0 +1,23 @@
+{
+  "note": "Deploy-time lever-2 soft handoff for dense_dt_campaign. Epoch222 was trained at mm_switch_on=8; this file documents the intentional mismatch used by run_one.sh (DDC_HANDOFF=soft). LJ scales still load from the epoch222 sidecar.",
+  "hybrid_mm": true,
+  "mm_charge_mode": "fixed",
+  "mm_switch_on": 5.0,
+  "mm_switch_width": 5.0,
+  "ml_switch_width": 1.5,
+  "complementary_handoff": true,
+  "learn_mm_lj_scales": true,
+  "include_lj": true,
+  "lr_solver": "mic",
+  "trained_checkpoint_handoff": {
+    "mm_switch_on": 8.0,
+    "ml_switch_width": 1.5,
+    "mm_switch_width": 5.0
+  },
+  "contact_ray_fix": {
+    "DDC_HANDOFF": "contact",
+    "mm_switch_on": 3.5,
+    "ml_switch_width": 1.5,
+    "tradeoff": "kills -30 kcal contact wells but soft-well median underbinds to ~-1 kcal; prefer retrain at on=5"
+  }
+}

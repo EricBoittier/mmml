@@ -57,6 +57,10 @@ def _pycharmm_or_skip():
 def test_end_to_end_builds_ffparams():
     """The packmol+PSF helper must produce FFParams, or mm_nonbonded can't run."""
     _pycharmm_or_skip()
+    # The monomer geometry gate runs armed here. It used to be disabled because
+    # every build except pc-studix distorted monomers during the cluster ABNR;
+    # that was the sticky READ PARAM APPEND in api_read.F90 zeroing the VDW
+    # table, fixed at the source. See docs/packmol-monomer-geometry-gate.md.
     from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
     from mmml.md.lowering import runconfig_from_md_system_args
 

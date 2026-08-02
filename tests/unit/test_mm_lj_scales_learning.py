@@ -695,12 +695,7 @@ def test_find_learnable_sidecar_ignores_non_learnable(tmp_path: Path):
 
 
 def test_md_example_ships_a_condensed_phase_run():
-    """The deployable path needs a liquid example, not only a vacuum dimer.
-
-    ``periodic_external`` cannot consume the scales, so a condensed-phase example
-    must pin ``jax_mic`` explicitly — otherwise the only shipped demonstration of
-    trained LJ is a two-molecule vacuum NVE.
-    """
+    """Ship both scalable JAX and full-box CHARMM deployment demonstrations."""
     import yaml
 
     root = Path(__file__).resolve().parents[2]
@@ -712,12 +707,14 @@ def test_md_example_ships_a_condensed_phase_run():
         r for r in runs.values() if str(r.get("setup", "")).startswith("pbc_")
     ]
     assert liquid, "no condensed-phase (pbc_*) run in md_fixed_lj_scales.yaml"
+    modes = {run.get("mm_nonbond_mode") for run in liquid}
+    assert "jax_mic" in modes, "missing scalable JAX LJ deployment demo"
+    assert "periodic_external" in modes, "missing full-box CHARMM LJ deployment demo"
     for run in liquid:
-        assert run.get("mm_nonbond_mode") == "jax_mic", (
-            "a condensed-phase run demonstrating trained LJ must pin jax_mic; "
-            "periodic_external cannot apply ep_scale/sig_scale"
-        )
         assert run.get("box_size"), "pbc_* run needs a box_size"
+        if run.get("mm_nonbond_mode") == "periodic_external":
+            assert run.get("backend") == "pycharmm"
+            assert run.get("lr_solver") in {"ewald", "jax_pme", "nvalchemiops_pme"}
     assert md["defaults"]["include_mm"] is True
 
 

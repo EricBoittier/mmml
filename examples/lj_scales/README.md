@@ -187,10 +187,11 @@ drive the loss to `1e-15` and still recover the wrong parameters — step 04 par
 does exactly that on purpose. Forces and a range of separations break the tie,
 which is why a distance scan beats a pile of equilibrium structures.
 
-**3. `periodic_external` cannot apply trained LJ.** The scales feed the JAX
-switched-MM pair loop, which is off in periodic mode; CHARMM IMAGE VDW never reads
-`hybrid_mm.json`. Use `jax_mic` (the default). MLpot now raises on
-`--mm-lj-scales-file` in that mode rather than ignoring it.
+**3. `periodic_external` deploys once per CHARMM process.** The JAX switched-MM
+pair loop is off in this mode, so MMML writes scaled CGenFF parameter copies and
+loads them into CHARMM IMAGE VDW. Reusing the same sidecar is a guarded no-op;
+changing sidecars requires a fresh process because a second non-append parameter
+read can zero CHARMM VDW. Prefer `jax_mic` for iterative work.
 
 ## Jupyter kernel
 
@@ -210,8 +211,9 @@ That is kernel selection, not broken code.
   into σ/ε**. Mitigate with `mm_charge_mode: fixed`, matching cutoffs, and
   density/RDF checks. Learning under Ewald is supported
   (`lr_solver: ewald` + `mm_include_lj` + `learn_mm_lj_scales`).
-- Deploy: `jax_mic` (+ optional `jax_pme`), or train-matched
-  `lr_solver=ewald --mm-include-lj`. Parity:
+- Deploy: `jax_mic` (+ optional `jax_pme`), train-matched
+  `lr_solver=ewald --mm-include-lj`, or the deprecated full-box
+  `periodic_external` path with one scaled CHARMM deployment per process. Parity:
   `scripts/check_ewald_train_md_pme_parity.py --include-lj`
   ([#139](https://github.com/EricBoittier/mmml/issues/139)).
 - Exhaustive geometry + RI-MP2 is **cluster work**; steps 08–09 prepare/submit/collect

@@ -589,9 +589,17 @@ def hybrid_forward(
         f_b,
     )
 
+    # Interaction energy relative to separated monomers:
+    #   E_int = E_total - E_A - E_B = s*(E_AB - E_A - E_B) + E_MM
+    # (handoff). Soft-well aux loss targets this, not the absolute total.
+    e_int = energy - e_a - e_b
+
     out = dict(out_ab)
     out["energy"] = energy.reshape(out_ab["energy"].shape)
     out["forces"] = forces.reshape(out_ab["forces"].shape)
     out["ml_scale"] = scale
     out["e_mm"] = e_mm
+    out["e_int"] = e_int.reshape(out_ab["energy"].shape)
+    out["e_a"] = e_a.reshape(out_ab["energy"].shape)
+    out["e_b"] = e_b.reshape(out_ab["energy"].shape)
     return out

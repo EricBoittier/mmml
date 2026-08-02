@@ -20,6 +20,8 @@ def test_stateful_charmm_smokes_run_separately_from_aggregate_selection() -> Non
         "CG_JAXMD_SMOKE",
         "DIMER_MODELS_SMOKE",
         "MD_SYSTEM_SMOKE",
+        "MD_SYSTEM_FFPARAMS_SMOKE",
+        "SCALED_LJ_CHARMM_SMOKE",
     )
 
     # The isolation set is declared as a STATEFUL_SMOKE_PATHS=( ... ) array.

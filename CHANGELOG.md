@@ -71,6 +71,66 @@ and versioning process.
 
 ### Fixed
 
+- **libcharmm did not link on arm64 (macOS), at any MLpot tier.** `api_func.F90`
+  held twelve `max_Npr` integer arrays in static storage — 6.1 GB at
+  `max_Npr = 128000000` — which overruns arm64's ±4 GB ADRP reach
+  (`ld: fixup error (kind=arm64_was_adrp_ldr_got_elide_got) ... ADRP out of
+  range`) and only linked on x86_64 because the build passes `-mcmodel=medium`.
+  They are now allocated on the heap on first MLpot use, so the linker sees
+  twelve descriptors: `__common` drops from 207 MB at the 4 M tier to 15 MB at
+  the 128 M tier, and `scripts/rebuild_charmm_mlpot.sh` completes on darwin-arm64
+  at the full tier. Capacity, the `max_Npr` bounds checks and the `tier_*` build
+  layout are unchanged; a failed allocation now reports the requested size
+  instead of crashing.
+- **Every MLpot neighbour-list update walked all `max_Npr` entries.** The
+  Fortran-to-Python index shift at the end of `mlpot_update` was written as
+  whole-array `idxp = idxp - 1` over eight arrays, so it touched
+  8 × `max_Npr` elements per update regardless of system size — over a billion
+  integer updates at the 128 M tier — and first-touched every page, forcing the
+  whole tier resident. Now bounded to the populated prefix (`natom`/`natim`,
+  `Nmlp`, `Nmlmmp`), which is exactly what `mlpot_call` and `mlpot_export_*`
+  read.
+- **One `READ PARAM APPEND` disabled van der Waals for the rest of the CHARMM
+  process.** `setup/charmm/source/api/api_read.F90` declared `qappend` (and
+  `qflex`) with an initializer, which implicitly `SAVE`s a Fortran local, and only
+  ever set it — never cleared it. The first `read.prm(..., append=True)` latched
+  append mode permanently, so every later full parameter read ran as
+  `READ PARAM APPEND` and wiped the live NONBONDED table. Because
+  `read_cgenff_toppar()` appends the bundled `examples/m/par_ch3cl.prm` and the
+  Packmol builder calls it twice, the cluster relax ran with `VDWaals` identically
+  zero: ABNR then converged to a pure-electrostatic collapse (`ELEC` −4.4 × 10⁶
+  kcal/mol) that stretched TIP3 O–H from 0.953 Å to 1.257 Å. Both flags are now
+  assigned per call. In a controlled A/B on the darwin build (same source tree,
+  tier and build directory, only `api_read.F90` differing) the worst monomer
+  deviation drops from 0.304 Å to 0.031 Å (`TIP3:4`), 0.423 Å to 0.021 Å
+  (`MEOH:4`) and 0.451 Å to 0.037 Å (`TIP3:60`). No CHARMM build was ever exempt:
+  on one pc-studix compute node, one `libcharmm.so` and one checkout, `MEOH:4`
+  goes from 0.014 Å to 0.424 Å purely by making the bundled append files
+  reachable, so the environment that looked healthy was only missing an optional
+  data file. The CI libcharmm cache key and
+  `scripts/ci/setup_charmm_lib.sh`'s build stamp now hash every
+  `setup/charmm/source/api/*.F90` — `api_read.F90` was not in the previous
+  hand-picked list, so the fix would have been served a stale library — and
+  `tests/unit/test_md_system_unified_ffparams.py` runs with the monomer geometry
+  gate armed again. See `docs/packmol-monomer-geometry-gate.md`.
+- **The Packmol cluster cache stored CHARMM-minimized coordinates without
+  validating them.** A broken CHARMM/pycharmm build returned scrambled
+  coordinates (a `MEOH:327` / L=28 build: all 327 monomers distorted, worst 1-2/1-3
+  distance change 2.006 Å, one monomer's `OG` bit-identical to another monomer's
+  `HG1`), and nothing noticed — the garbage was cached to
+  `.packmol_cache/<key>/cluster.npz`, triggered the expensive Packmol repack in
+  the pre-MLpot geometry gate, and would have been used for the box.
+  `build_packmol_composition_cluster` now compares every monomer's covalent
+  skeleton against the template Packmol placed, both before writing the cache and
+  on cache hit, and raises instead of caching
+  (`mmml/utils/monomer_internal_geometry.py`, threshold 0.35 Å, override
+  `MMML_MAX_MONOMER_INTERNAL_DEVIATION_A`). Threshold calibrated on real
+  pc-studix builds — worst healthy monomer across MEOH/TIP3, two densities and a
+  20× range of minimization length was 0.073 Å
+  (`scripts/validate_packmol_monomer_geometry.py`). `minimize_charmm_mm_only`
+  now returns a `CharmmMmMinimizeReport`; a GRMS of exactly 0.0 only warns,
+  because healthy KEY_LIBRARY CHARMM builds report it too. See
+  [`docs/packmol-monomer-geometry-gate.md`](docs/packmol-monomer-geometry-gate.md).
 - **`md-system` died in the child process on both PBC backends.** `run_sim`
   grew `--hybrid-hamiltonian` / `--shared-cutoff` and `md_system.build_command`
   forwards them to every backend unconditionally, but neither

@@ -258,12 +258,20 @@ def mic_displacements_batched_smooth(
 
 
 def pairwise_mic(R: Array, cell: Array):
-    """All-pairs MIC displacement and distance. Returns (dR_ij, d_ij)."""
-    dR = R[None, :, :] - R[:, None, :]
-    dS = frac_coords(dR, cell)
-    dS_mic = dS - jnp.round(dS)
-    dR_mic = cart_coords(dS_mic, cell)
-    dij = jnp.linalg.norm(dR_mic + 1e-18, axis=-1)  # tiny eps avoids NaNs at i=j
+    """All-pairs MIC displacement and distance. Returns (dR_ij, d_ij) where
+    dR_ij[i, j] = mic_displacement(R[i], R[j], cell) (i.e. r_j - r_i, minimum image)."""
+    dR_mic = jax.vmap(
+        jax.vmap(lambda a, b: mic_displacement(a, b, cell), in_axes=(None, 0)),
+        in_axes=(0, None),
+    )(R, R)
+    dR_sq = jnp.sum(dR_mic * dR_mic, axis=-1)
+    # Clamp the SQUARED distance before sqrt, not after: jnp.linalg.norm's
+    # gradient is 0/0 (NaN) exactly at dR_mic=0 (the diagonal, i=j). Clamping
+    # the pre-sqrt value keeps the gradient finite there.
+    coincident = dR_sq < 1e-18
+    safe_sq = jnp.where(coincident, 1.0, dR_sq)
+    dij = jnp.sqrt(safe_sq)
+    dij = jnp.where(coincident, 0.0, dij)
     return dR_mic, dij
 
 
