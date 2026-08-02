@@ -64,6 +64,21 @@ PY
 
 export LJ_DEVICE=gpu JAX_PLATFORMS=cuda MMML_MLPOT_DEVICE=gpu MMML_MM_NL_DEVICE=gpu PYTHONUNBUFFERED=1
 
+# NPT/NVE need a harder handoff on dense L=24 (prior fails: E blow-up / max|F| gate).
+MINI_STEPS=50
+PBC_MINI_STEPS=50
+EXTRA_ARGS=()
+case "$ENSEMBLE" in
+  npt|nve)
+    MINI_STEPS=400
+    PBC_MINI_STEPS=400
+    ;;
+esac
+if [[ "$ENSEMBLE" == nve ]]; then
+  # Dense L24 post-FIRE forces were ~180 eV/Å with 50-step mini; size-scaled gate ~3.7.
+  EXTRA_ARGS+=(--nve-max-f-start-eVA 250)
+fi
+
 set +e
 /usr/bin/time -f 'elapsed_s %e' -o "$OUT/wall.time" \
   uv run mmml md-system \
@@ -76,7 +91,7 @@ set +e
     --ps "$PS" --dt-fs "$DT_FS" \
     --quiet \
     --no-calculator-pre-minimize \
-    --jaxmd-minimize-steps 50 --jaxmd-pbc-minimize-steps 50 \
+    --jaxmd-minimize-steps "$MINI_STEPS" --jaxmd-pbc-minimize-steps "$PBC_MINI_STEPS" \
     --fire-min-steps 0 --no-charmm-pre-minimize \
     --no-handoff-quality-gate \
     --include-mm --do-ml --do-ml-dimer \
@@ -84,6 +99,7 @@ set +e
     --jax-md-skin-distance 0.5 --jax-md-update-interval 40 \
     --steps-per-recording 1000 \
     --psf-angle-restraints --psf-angle-restraint-scale 1.0 \
+    "${EXTRA_ARGS[@]}" \
     >"$OUT/bench.log" 2>&1
 rc=$?
 set -e

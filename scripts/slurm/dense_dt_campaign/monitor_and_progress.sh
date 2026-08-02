@@ -4,6 +4,12 @@
 #   bash scripts/slurm/dense_dt_campaign/monitor_and_progress.sh           # report
 #   bash scripts/slurm/dense_dt_campaign/monitor_and_progress.sh --react   # report + remediate
 set -euo pipefail
+
+# Cron often has a minimal env — force identity + a usable PATH.
+export USER="${USER:-$(id -un 2>/dev/null || echo boittier)}"
+export HOME="${HOME:-/mmhome/boittier/home}"
+export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:/usr/bin:/bin:${PATH:-/usr/bin:/bin}"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 OUT_ROOT=artifacts/lj_scales/dense_dt_campaign
@@ -14,13 +20,22 @@ MARKER_BOX_BUILD=/tmp/build_dense_boxes_v3.sh
 REACT=0
 [[ "${1:-}" == "--react" ]] && REACT=1
 
+# Prefer ripgrep when present; fall back to grep -E (cron PATH may lack rg).
+if command -v rg >/dev/null 2>&1; then
+  _match() { rg -N "$@"; }
+  _count_result() { rg -c '^RESULT ' "$@" 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'; }
+else
+  _match() { grep -E "$@"; }
+  _count_result() { grep -ch '^RESULT ' "$@" 2>/dev/null | awk '{s+=$1} END{print s+0}'; }
+fi
+
 mkdir -p "$OUT_ROOT" "$LOG_DIR"
 ts="$(date -Is)"
 host="$(hostname)"
 sha="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 {
-  echo "## dense_dt_campaign monitor $ts host=$host sha=$sha react=$REACT"
+  echo "## dense_dt_campaign monitor $ts host=$host sha=$sha react=$REACT user=$USER"
   echo
 } | tee -a "$MONITOR_LOG"
 
@@ -45,28 +60,36 @@ for line in "${DDC_LINES[@]}"; do
   [[ "$st" == PENDING ]] && n_pend=$((n_pend+1))
 done
 
-# Completed / failed from job_ids + sacct
-declare -a NEED_RESUBMIT=()
+# Latest job id per tag from job_ids.txt (avoid resubmitting from stale CANCELLED rows).
+declare -A LATEST_JID=()
+declare -A LATEST_META=()
 if [[ -f "$OUT_ROOT/job_ids.txt" ]]; then
-  while read -r _line; do
-    # SUBMITTED <tag> -> job <jid> ...
+  while read -r _line || [[ -n "${_line:-}" ]]; do
+    [[ "$_line" == SUBMITTED* || "$_line" == RESUBMITTED* ]] || continue
     tag=$(awk '{print $2}' <<<"$_line")
     jid=$(awk '{for(i=1;i<=NF;i++) if($i=="job"){print $(i+1); exit}}' <<<"$_line")
-    [[ -z "${tag:-}" || -z "${jid:-}" || ! "$jid" =~ ^[0-9]+$ ]] && continue
-    state=$(sacct -j "$jid" -n -X -o State 2>/dev/null | head -1 | tr -d ' ' || true)
-    if [[ "$state" == FAILED || "$state" == TIMEOUT || "$state" == NODE_FAIL || "$state" == CANCELLED ]]; then
-      if [[ ! -f "$OUT_ROOT/${tag}/SUCCESS.flag" ]] && ! squeue -j "$jid" -h >/dev/null 2>&1; then
-        # still in queue? skip
-        if ! squeue -u "$USER" -h -o '%j' 2>/dev/null | grep -qx "ddc-${tag}"; then
-          NEED_RESUBMIT+=("$tag")
-        fi
-      fi
-    fi
-    if [[ "$state" == COMPLETED ]]; then
-      touch "$OUT_ROOT/${tag}/SUCCESS.flag" 2>/dev/null || true
-    fi
+    [[ -n "${tag:-}" && "$jid" =~ ^[0-9]+$ ]] || continue
+    LATEST_JID["$tag"]="$jid"
+    LATEST_META["$tag"]="$_line"
   done < "$OUT_ROOT/job_ids.txt"
 fi
+
+declare -a NEED_RESUBMIT=()
+for tag in "${!LATEST_JID[@]}"; do
+  jid="${LATEST_JID[$tag]}"
+  state=$(sacct -j "$jid" -n -X -o State 2>/dev/null | head -1 | tr -d ' ' || true)
+  if [[ "$state" == COMPLETED ]]; then
+    mkdir -p "$OUT_ROOT/${tag}"
+    touch "$OUT_ROOT/${tag}/SUCCESS.flag" 2>/dev/null || true
+    continue
+  fi
+  if [[ "$state" == FAILED || "$state" == TIMEOUT || "$state" == NODE_FAIL ]]; then
+    if [[ ! -f "$OUT_ROOT/${tag}/SUCCESS.flag" ]] \
+      && ! squeue -u "$USER" -h -o '%j' 2>/dev/null | grep -qx "ddc-${tag}"; then
+      NEED_RESUBMIT+=("$tag")
+    fi
+  fi
+done
 
 # --- Box build process ---
 box_build_alive=0
@@ -74,7 +97,6 @@ pgrep -f 'build_dense_boxes_v[23]\.sh|liquid-box .*liquid_dense_L' >/dev/null 2>
 packmol_alive=0
 pgrep -x packmol >/dev/null 2>&1 && packmol_alive=1
 
-# Packmol stuck: >45 min with no model.crd
 packmol_stuck=0
 if [[ "$packmol_alive" -eq 1 ]] && ! box_ready "$BOX24"; then
   etime=$(ps -C packmol -o etimes= 2>/dev/null | awk 'NR==1{print $1+0}')
@@ -83,7 +105,6 @@ if [[ "$packmol_alive" -eq 1 ]] && ! box_ready "$BOX24"; then
   fi
 fi
 
-# --- Status body ---
 {
   echo "# dense_dt_campaign STATUS"
   echo
@@ -127,11 +148,12 @@ fi
   for dir in "$OUT_ROOT"/*/; do
     [[ -d "$dir" ]] || continue
     tag=$(basename "$dir")
-    [[ "$tag" == logs ]] && continue
-    res=$(rg -N '^RESULT ' "$dir/bench.log" 2>/dev/null | tail -1 || true)
+    [[ "$tag" == logs || "$tag" == plots ]] && continue
+    res=$(_match '^RESULT ' "$dir/bench.log" 2>/dev/null | tail -1 || true)
     nh5=$(find "$dir" -maxdepth 1 -name '*.h5' 2>/dev/null | wc -l | tr -d ' ')
     fail=""
     [[ -f "$dir/FAIL.txt" ]] && fail="FAIL.txt"
+    [[ -f "$dir/SUCCESS.flag" ]] && fail="${fail:+$fail }SUCCESS"
     echo "| $tag | ${res:-—} | $nh5 | $fail |"
   done
   if ((${#NEED_RESUBMIT[@]} > 0)); then
@@ -148,13 +170,11 @@ fi
 actions=()
 
 if [[ "$REACT" -eq 1 ]]; then
-  # Restart stuck packmol / dead box build
   if [[ "$packmol_stuck" -eq 1 ]]; then
     actions+=("kill stuck packmol (>45min) and restart dense box build v3")
     pkill -f 'build_dense_boxes_v[23]\.sh' 2>/dev/null || true
     pkill -x packmol 2>/dev/null || true
     sleep 2
-    # fall through to ensure_build
     box_build_alive=0
   fi
 
@@ -175,7 +195,6 @@ build() {
     echo "SKIP $OUT already certified $(date -Is)" | tee -a "$LOG"
     return 0
   fi
-  # Wipe incomplete packmol scratch so tolerance fix takes effect
   rm -rf "$OUT/packmol_repack" "$OUT/.packmol_cache"
   echo "=== L=$L rho_target=$RHO tol=1.5 -> $OUT $(date -Is) ===" | tee -a "$LOG" | tee "$OUT/build.log"
   uv run mmml liquid-box \
@@ -191,10 +210,8 @@ build() {
     >>"$OUT/build.log" 2>&1
   local rc=$?
   echo "rc=$rc $(date -Is)" | tee -a "$LOG" | tee -a "$OUT/build.log"
-  [[ -f "$OUT/box.json" ]] && python3 -c "import json; print(json.dumps(json.load(open('$OUT/box.json')), indent=2)[:800])" | tee -a "$LOG"
   return $rc
 }
-# L=24: slightly below absolute fill (1.224) so Packmol can finish
 build 24 1.15 artifacts/lj_scales/liquid_dense_L24
 build 26 0.96 artifacts/lj_scales/liquid_dense_L26
 echo "ALL BOXES DONE $(date -Is)" | tee -a "$LOG"
@@ -205,13 +222,10 @@ EOS
     tmux -f /exec-daemon/tmux.portal.conf new-session -d -s "$SESSION" -c "$ROOT" -- bash "$MARKER_BOX_BUILD"
   fi
 
-  # Resubmit failed arms if boxes ready
   if ((${#NEED_RESUBMIT[@]} > 0)); then
     for tag in "${NEED_RESUBMIT[@]}"; do
-      # parse original submit line
-      line=$(rg -N "SUBMITTED ${tag} " "$OUT_ROOT/job_ids.txt" | tail -1 || true)
+      line="${LATEST_META[$tag]:-}"
       [[ -z "$line" ]] && continue
-      # SUBMITTED TAG -> job JID  ens=E box=B dt=D x64=X ps=P
       ens=$(sed -n 's/.*ens=\([^ ]*\).*/\1/p' <<<"$line")
       box=$(sed -n 's/.*box=\([^ ]*\).*/\1/p' <<<"$line")
       dt=$(sed -n 's/.*dt=\([^ ]*\).*/\1/p' <<<"$line")
@@ -224,6 +238,11 @@ EOS
         *) continue ;;
       esac
       box_ready "$bdir" || continue
+      # Archive prior failed outputs so the new run starts clean.
+      if [[ -d "$OUT_ROOT/${tag}" && ! -f "$OUT_ROOT/${tag}/SUCCESS.flag" ]]; then
+        stamp=$(date +%Y%m%dT%H%M%S)
+        mv "$OUT_ROOT/${tag}" "$OUT_ROOT/${tag}.fail_${stamp}" 2>/dev/null || true
+      fi
       seed=$((100 + RANDOM % 800))
       actions+=("resubmit $tag ens=$ens box=$box dt=$dt x64=$x64 ps=$ps")
       jid=$(sbatch --parsable \
@@ -235,15 +254,6 @@ EOS
       echo "RESUBMITTED $tag -> job $jid  ens=$ens box=${box} dt=${dt} x64=${x64} ps=${ps}" | tee -a "$OUT_ROOT/bench.log" "$OUT_ROOT/job_ids.txt" "$MONITOR_LOG"
     done
   fi
-
-  # If no ddc jobs at all and boxes ready, re-submit full matrix
-  if [[ "$n_run" -eq 0 && "$n_pend" -eq 0 ]]; then
-    done_n=$(rg -c '^RESULT ' "$OUT_ROOT"/*/bench.log 2>/dev/null | awk -F: '{s+=$2} END{print s+0}')
-    if [[ "${done_n:-0}" -lt 8 ]] && box_ready "$BOX24"; then
-      actions+=("queue empty with incomplete arms → submit_all.sh")
-      bash "${ROOT}/scripts/slurm/dense_dt_campaign/submit_all.sh" | tee -a "$MONITOR_LOG" || true
-    fi
-  fi
 fi
 
 if ((${#actions[@]} > 0)); then
@@ -252,15 +262,13 @@ else
   echo "- (none)" | tee -a "$STATUS" "$MONITOR_LOG"
 fi
 
-# Agent reminder breadcrumb
 {
   echo
   echo "## Agent TODO (when you wake)"
   echo
   echo "1. Read \`$STATUS\` and \`$MONITOR_LOG\` tail"
-  echo "2. If boxes stuck: check packmol tolerance fix + \`/tmp/build_dense_boxes_v3.log\`"
+  echo "2. Plots for passed NVT: \`$OUT_ROOT/plots/\`"
   echo "3. When H5s land: compare E_tot / H_NHC / bond health vs sparse L30"
-  echo "4. Manuscript path: density table for DCM hybrid → docs/manuscripts/.../results.md §3"
   echo
 } >> "$STATUS"
 

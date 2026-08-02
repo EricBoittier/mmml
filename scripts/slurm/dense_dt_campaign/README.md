@@ -57,13 +57,19 @@ rg -n 'RESULT|H_NHC|nsteps_completed|ERROR' artifacts/lj_scales/dense_dt_campaig
 - `scripts/slurm/dense_dt_campaign/sbatch_one.sh`
 - `scripts/slurm/dense_dt_campaign/monitor_and_progress.sh` — status + `--react` remediation
 - `scripts/slurm/dense_dt_campaign/install_monitor_cron.sh` — every **15 min** cron
+- `scripts/slurm/dense_dt_campaign/plot_passed_runs.py` — thermo / RDF / box / bond plots
 
 ```bash
 bash scripts/slurm/dense_dt_campaign/install_monitor_cron.sh
 bash scripts/slurm/dense_dt_campaign/monitor_and_progress.sh --react
+uv run python scripts/slurm/dense_dt_campaign/plot_passed_runs.py
 ```
 
-Live status: `artifacts/lj_scales/dense_dt_campaign/STATUS.md`
+Live status: `artifacts/lj_scales/dense_dt_campaign/STATUS.md`  
+Plots: `artifacts/lj_scales/dense_dt_campaign/plots/`
+
+Note: `sbatch_one.sh` must use `SLURM_SUBMIT_DIR` as repo ROOT (Slurm copies the
+script under `/var/spool`, so `BASH_SOURCE` is wrong in the allocation).
 
 ## Manuscript link
 
