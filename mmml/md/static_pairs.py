@@ -20,9 +20,26 @@ pair once, upload once, and let the switch cull on the GPU.
 Measured on this campaign: 8.3 -> 24 steps/s on a 2625-atom water box, with
 energies agreeing to 0.000000 eV.
 
-It is O(N^2) in the energy, so beyond roughly ten thousand atoms a real cell
-list (``jax_md.partition.neighbor_list``) wins again -- a different regime from
-a solute in a solvent box.
+Benchmarked since, on TIP3P water from 300 to 15000 atoms
+(``scripts/bench_static_vs_neighbor_pairs.py``, A100, host rebuild amortised
+over a 20-step block). Energy and forces are *identical* to the rebuilt list at
+the production cutoff -- |dE| <= 2.5e-12 eV on totals of order 200 eV, max |dF|
+<= 6.4e-14 eV/A -- so the choice is purely about cost:
+
+    atoms      300    1200    2625    4800    7200   10500   15000
+    speedup   5.9x    6.1x    2.7x    1.5x   0.97x   0.65x   0.41x
+
+Two effects drive the small-system win. Below roughly twice the cutoff a
+neighbour list prunes nothing (at 300 atoms it holds 44548 of 44550 possible
+intermolecular pairs), and the rebuilt list is padded to a generous capacity
+estimate -- 434400 slots for those 44548 pairs -- so it evaluates about ten
+times more pairs than the complete list.
+
+It is O(N^2) in the energy, so past ~7000 atoms on GPU (~2600 on CPU, where
+there is no parallelism to hide it) the rebuilt list wins and
+``UmbrellaConfig.static_pairs`` should be turned off. Beyond that again, a real
+cell list (``jax_md.partition.neighbor_list``) is the right structure -- a
+different regime from a solute in a solvent box.
 """
 
 from __future__ import annotations

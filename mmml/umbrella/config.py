@@ -303,11 +303,17 @@ class UmbrellaConfig:
     box_size: float | None = None
     ml_resnames: tuple[str, ...] = ("AMM1", "CH3CL")
     #: Use a complete static on-device pair list instead of rebuilding a padded
-    #: neighbour list on the host each block. Correct because the switched
-    #: force field makes distant pairs contribute exactly zero; roughly 3x
-    #: faster for a solute in a few thousand solvent atoms, and the win grows
-    #: with how often the driver would otherwise rebuild. Turn off above ~10k
-    #: atoms, where the O(N^2) energy costs more than the host rebuild saves.
+    #: neighbour list on the host each block.
+    #:
+    #: Correct because the switched force field makes pairs beyond ``ctofnb``
+    #: contribute exactly zero: benchmarked 300-15000 atoms, the two agree to
+    #: |dE| <= 2.5e-12 eV on totals of order 200 eV. So this is a cost choice,
+    #: not an accuracy one.
+    #:
+    #: Measured 5.9x / 2.7x / 1.5x faster at 300 / 2625 / 4800 atoms (A100,
+    #: host rebuild amortised over a 20-step block). Turn off above **~7000
+    #: atoms** on GPU, or ~2600 on CPU, where the O(N^2) energy costs more than
+    #: the host rebuild saves. See ``scripts/bench_static_vs_neighbor_pairs.py``.
     static_pairs: bool = True
     atom_name_i: str | None = None
     atom_name_j: str | None = None
