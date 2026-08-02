@@ -224,14 +224,42 @@ def test_end_to_end_peptide_water_ml_no_double_counting(cg_unified):
     kw_buggy = make_intermolecular_neighbor_fn(system, cutoff, None, peptide_water_ml=False)(
         np.asarray(system.R), np.asarray(system.box)
     )
-    # the buggy (unexcluded) pair list must include strictly more pairs, and the
-    # excluded set must be exactly the peptide-water pairs (core x all groups)
-    n_correct = int(kw_correct["pair_mask"].sum())
-    n_buggy = int(kw_buggy["pair_mask"].sum())
-    assert n_buggy > n_correct
-    core_indices = system.monomer_indices[0]
-    n_water_atoms = sum(len(g) for g in system.water_indices)
-    assert n_buggy - n_correct == len(core_indices) * n_water_atoms
+    # The buggy (unexcluded) list must contain strictly more pairs, and every
+    # pair it has in excess must be a peptide-water pair -- none may survive the
+    # exclusion.
+    #
+    # Compare the pair *sets*, not just their sizes. The count form
+    # (``n_buggy - n_correct == len(core_indices) * n_water_atoms``) silently
+    # assumed all 42x12 peptide-water pairs sit inside the neighbor cutoff, but
+    # the list is built at 12 A in a 15 A box, where the largest possible
+    # minimum-image separation is 15*sqrt(3)/2 = 12.99 A. Any pair past 12 A is
+    # absent from *both* lists and shrinks the difference, so the assertion
+    # tracked CHARMM's run-to-run box geometry rather than the exclusion wiring:
+    # it failed in CI with 503 != 504 on a commit whose code was byte-identical
+    # to a passing one (only a .png and a .md differed). The set form below is
+    # geometry-independent and strictly stronger -- it checks *which* pairs were
+    # removed, not merely how many.
+    def _live_pairs(kw):
+        mask = np.asarray(kw["pair_mask"]).astype(bool)
+        return set(
+            zip(
+                np.asarray(kw["pair_i"])[mask].tolist(),
+                np.asarray(kw["pair_j"])[mask].tolist(),
+            )
+        )
+
+    pairs_correct = _live_pairs(kw_correct)
+    pairs_buggy = _live_pairs(kw_buggy)
+    mol_id = np.asarray(system.mol_id)
+
+    def _is_pep_water(pair):
+        i, j = pair
+        return (mol_id[i] == 0) != (mol_id[j] == 0)
+
+    assert pairs_correct < pairs_buggy, "exclusion removed nothing"
+    removed = pairs_buggy - pairs_correct
+    assert all(map(_is_pep_water, removed)), "exclusion removed a non peptide-water pair"
+    assert not any(map(_is_pep_water, pairs_correct)), "a peptide-water pair survived"
 
     efn = hybrid.as_jax_energy_fn()
     e_correct = float(efn(R, **{k: jnp.asarray(v) for k, v in kw_correct.items()}))
