@@ -281,7 +281,6 @@ class SoftWellGeometryPool:
         Returns the number of geometries retained.
         """
         import jax
-        import jax.numpy as jnp
         from mmml.data.units import EV_TO_KCAL_MOL as _EV2K
         from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
         from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
@@ -353,7 +352,6 @@ class SoftWellGeometryPool:
     def next_batch(self, batch_size: int | None = None) -> dict:
         """Return one prepared hybrid batch (JAX arrays)."""
         import jax
-        import jax.numpy as jnp
         from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
         from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
