@@ -43,6 +43,11 @@ results/
 outputs/
 out/
 artifacts/
+# Scratch run output. Repo scripts write here (scripts/run_tip3_box_pressure_opt.sh,
+# scripts/analyze_water_nve_h5.py, ...) and the results kept getting committed:
+# 720 files / 168 MB are already tracked. This stops it growing; untracking what
+# is already in is a separate, more disruptive change.
+scratch/
 mmml/models/physnetjax/ckpts/*
 !mmml/models/physnetjax/ckpts/DESdimers/
 
