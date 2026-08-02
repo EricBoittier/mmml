@@ -28,3 +28,18 @@ Regenerate profiles:
 uv run python scripts/slurm/dense_dt_campaign/plot_dimer_profiles.py
 ```
 
+## POV overlays (no text boxes)
+
+| Figure | Content |
+|---|---|
+| `dcm_dimer_Eint_profile_povray.png` | 1D mean + force/dipole thumbs |
+| `dcm_dimer_Eint_profile_povray_by_charge.png` | same with charge coloring |
+| `dcm_dimer_Eint_zoom_povray.png` | well zoom + thumbs |
+| `../overbind_ablation/contact_ok_settings_compare.png` | handoff settings, contact-ok |
+
+Soft-well median (contact-ok): **-3.7 kcal/mol**. See ablation compare for on=5 / contact deploy.
+
+Regenerate overlays:
+```bash
+uv run python scripts/slurm/dense_dt_campaign/plot_dimer_profile_overlays.py
+```

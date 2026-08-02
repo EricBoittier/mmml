@@ -5,31 +5,57 @@ Epoch222 hybrid checkpoint. Ablation grid: 64 rays × 36 COM distances
 
 Literature DCM dimer wells are about **−3 to −5 kcal/mol**.
 
-**Contact policy:** COM–COM `r` alone is not steric for DCM. Ablation tables
-below still quote unfiltered ray minima (includes Cl/H clashes at short `r`).
-Clash-filtered soft-well median for the epoch222 baseline is about **−3.7
-kcal/mol** (`dmin ≥ 2 Å`; see `docs/images/dense-dt-campaign/dimer_scans/` and
-`DEFAULT_ORIENT_MIN_CONTACT_A`). Re-run `ablate_overbind.py` to refresh the
-grid with the same cut.
+## Contact-ok results (authoritative)
 
-## Results (soft well = per-ray min at r ≥ 3.4 Å; unfiltered)
+COM–COM `r` alone is not steric for DCM. Metrics below keep only points with
+intermolecular atom–atom $d_\mathrm{min} \geq 2$ Å
+(`DEFAULT_ORIENT_MIN_CONTACT_A`). Soft well = per-ray min at $r \geq 3.4$ Å
+among contact-ok points.
 
-| Run | Soft well median | Contact ray-min median | ML full below | Role |
+| Setting | Soft median | Soft deepest | Mean-curve min | Verdict |
 |---|---:|---:|---:|---|
-| baseline train handoff (on=8) | −8.9 | −30.8 | 6.5 Å | overbinds (raw) |
-| `es_off_on8` | −8.9 | −30.8 | 6.5 Å | ES not the driver |
-| **`handoff_on5_w1p5` (lever 2 soft)** | **−4.4** | −30.8 | 3.5 Å | **campaign default** |
-| `handoff_on4p5_w1` | −3.0 | −30.8 | 3.5 Å | still contact-deep |
-| `contact_on3p5_w1p5` | −1.1 | **−1.1** | 2.0 Å | kills contacts, underbinds |
+| baseline train handoff (`on=8`) | **−3.7** | −13.0 | −6.8 | soft median ≈ lit; mean curve & deep tails still overbind |
+| ES-off `on=8` | −2.9 | −14.6 | −4.3 | ES not the driver |
+| lever-2 soft `on=6` | −2.5 | −14.5 | −4.3 | milder overbind / near underbind |
+| **lever-2 soft `on=5` (campaign default)** | **−1.3** | −13.8 | −4.3 | soft median **underbinds**; deep rays remain |
+| lever-2 `on=4.5` | −1.2 | −12.1 | −4.3 | same pattern |
+| contact deploy `on=3.5` | −1.1 | −2.0 | −0.4 | kills deep wells, soft underbinds |
+| short CPU FT @ `on=5` | ~−1 | ~−1.5 | ~−0.3 | collapsed — not usable |
 
-## Lever 2 — earlier MM handoff (shipped in campaign)
+![Contact-ok soft medians vs handoff](contact_ok_settings_compare.png)
 
-`run_one.sh` now passes `--mm-switch-on 5 --ml-switch-width 1.5` (`DDC_HANDOFF=soft`).
-This is a **deploy mismatch** vs the epoch222 train taper (8/1.5/5); the calculator
-warns on purpose. Soft wells move into the literature band and should reduce the
-dense NVT droplet drive from medium-range overbinding.
+So yes — **it still overbinds in the sense that matters for density**: the
+orientation-mean curve for train handoff bottoms near **−7 kcal/mol**, and a
+fat tail of soft rays reaches **−13**. The soft *median* (−3.7) looks fine;
+averages and MD sample the deep tail too.
 
-## How to fix contact rays (r ≲ 3.4 Å, −30 kcal)
+## What helps MD (not cosmetic)
+
+| Change | MD effect | Status |
+|---|---|---|
+| Contact filter on *reported* scan metrics | Cosmetic for analysis only — MD still sees clashes | docs only |
+| **Deploy `DDC_HANDOFF=soft` (`on=5`)** | Soft median → ~−1.3 (underbinds); deep contact rays still −10…−30 until ML unlearns | **shipped in campaign** |
+| Deploy `DDC_HANDOFF=contact` (`on=3.5`) | Kills contact wells; soft underbinds | diagnostic |
+| **Retrain at `on=5`** matching deploy | Needed so soft wells stay ~−4 and contact rays unlearn | **recommended** |
+| POV / overlays / bounding boxes | Visualization only | cosmetic |
+
+Deploy-time earlier handoff is a real force-field change (ML interaction
+switches off sooner), so dense NVT should feel less medium-range attraction —
+but it is a train/deploy mismatch until you retrain. Clash-filtered figures do
+**not** change the Hamiltonian.
+
+## Raw (unfiltered) table — legacy
+
+These include steric overlaps and look much worse (soft medians −8…−9). Kept
+for comparison with older notes.
+
+| Run | Soft well mean (raw) | Contact ray-min median | ML full below |
+|---|---:|---:|---:|
+| baseline / ES-off `on=8` | ~−8.4 | ~−30 | 6.5 Å |
+| `handoff_on5_w1p5` | ~−5.4 | ~−30 | 3.5 Å |
+| `contact_on3p5_w1p5` | ~−1.2 | ~−1.1 | 2.0 Å |
+
+## How to fix contact rays (r ≲ 3.4 Å)
 
 Contact minima sit where `ml_scale=1` even under soft lever-2 (ML full below 3.5 Å).
 
@@ -37,9 +63,6 @@ Contact minima sit where `ml_scale=1` even under soft lever-2 (ML full below 3.5
 |---|---|---|---|
 | Deploy `DDC_HANDOFF=contact` (on=3.5) | underbinds (~−1) | fixed | diagnostic only |
 | **Retrain at on=5** with dimer soft targets | keep ~−4 | should unlearn | **recommended** |
-| Stronger short-range wall (`r_on`≫1 Å) | may distort | partial | not preferred |
-
-Recommended next train:
 
 ```bash
 uv run mmml physnet-train \
@@ -51,9 +74,9 @@ uv run mmml physnet-train \
   --tag hybrid_mm_lever2_on5_ft --num-epochs 50
 ```
 
-Then redeploy MD with the **same** handoff (parity, no mismatch warning).
+## Assets
 
-## Figures
-
-- `overbind_ablation_compare.png` — mean E_int curves + soft-well bars
-- `overbind_handoff_components.png` — ML vs MM for early-handoff variants
+- `contact_ok_settings_compare.png` — contact-ok soft median / mean-curve / deepest
+- `overbind_ablation_compare.png` — older unfiltered mean curves
+- Regenerated contact-ok table: `contact_ok_settings.json`
+- Overlay profiles: `../dimer_scans/dcm_dimer_Eint_*_povray.png`
