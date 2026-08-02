@@ -28,9 +28,13 @@ contains
     integer, parameter :: iunit = 128, max_line = 256
     character(len=len) :: fn_str
 
-    logical :: qappend = .false.
+    ! No initializer: a Fortran local declared with one is implicitly SAVEd, so
+    ! `qappend` would keep the previous call's value and the one-way
+    ! `if (append .ne. 0) qappend = .true.` below could never clear it. One
+    ! append read then silently turned every later read into an append.
+    logical :: qappend
 
-    if (append .ne. 0) qappend = .true.
+    qappend = (append .ne. 0)
 
     fn_str = c2f_string(filename, len)
     open(iunit, file=fn_str, action='read', err=99)
@@ -76,10 +80,15 @@ contains
     integer :: j
     character(len = fn_len) :: fn_str, winit
 
-    logical :: qappend = .false., qflex = .false.
+    ! See read_rtf_file: initializers here would implicitly SAVE both flags, and
+    ! the one-way assignments below never clear them. A single
+    ! `read.prm(..., append=True)` then latched qappend for the rest of the
+    ! process, so the next full parameter read ran as READ PARAM APPEND and
+    ! wiped the live NONBONDED table (VDW epsilon = 0).
+    logical :: qappend, qflex
 
-    if (append .ne. 0) qappend = .true.
-    if (flex .ne. 0) qflex = .true.
+    qappend = (append .ne. 0)
+    qflex = (flex .ne. 0)
 
     fn_str = c2f_string(filename, fn_len)
 
