@@ -41,7 +41,17 @@ REFERENCES: dict[str, tuple[float, float]] = {
     "TIP3": (0.99705, 298.15),
     "MEOH": (0.78660, 298.15),
     "AMM1": (0.68190, 239.82),
+    "AR1": (1.37860, 90.0),  # NIST sat. liquid argon
 }
+
+# g/mol for density from volume when the traj lacks density_g_cm3 (npz).
+_MOLAR_MASS: dict[str, float] = {
+    "TIP3": 18.01528,
+    "MEOH": 32.042,
+    "AMM1": 17.031,
+    "AR1": 39.948,
+}
+_AVOGADRO = 6.02214076e23
 
 
 def block_average_sem(x: np.ndarray, n_blocks: int = 10) -> float:
@@ -77,7 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--traj", type=Path, required=True, help="NpT trajectory HDF5")
+    ap.add_argument(
+        "--traj",
+        type=Path,
+        required=True,
+        help="NpT trajectory HDF5 or jaxmd-unified trajectory.npz",
+    )
     ap.add_argument("--species", type=str, default=None, help="RESI for the reference")
     ap.add_argument("--reference", type=float, default=None,
                     help="experimental density g/cm3 (overrides --species)")
@@ -89,23 +104,59 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--output", type=Path, default=None)
     a = ap.parse_args(argv)
 
-    import h5py
-
-    with h5py.File(a.traj, "r") as fh:
-        if "density_g_cm3" not in fh:
+    attrs: dict = {}
+    if a.traj.suffix == ".npz":
+        z = np.load(a.traj, allow_pickle=True)
+        if "volumes_A3" not in z.files:
             raise SystemExit(
-                f"{a.traj} has no 'density_g_cm3'. That series is only recorded "
-                f"for NpT runs - an NVT/NVE trajectory cannot measure density "
-                f"because its volume is fixed by construction. "
-                f"Datasets present: {sorted(fh.keys())[:10]}"
+                f"{a.traj} has no volumes_A3; cannot form a density series"
             )
-        rho = np.asarray(fh["density_g_cm3"], dtype=np.float64)
-        time_ps = (
-            np.asarray(fh["time_ps"], dtype=np.float64)
-            if "time_ps" in fh
-            else np.arange(rho.size, dtype=np.float64)
-        )
-        attrs = dict(fh.attrs)
+        if not a.species or a.species.upper() not in _MOLAR_MASS:
+            raise SystemExit(
+                "npz density needs --species with a known molar mass "
+                f"(one of {sorted(_MOLAR_MASS)})"
+            )
+        V = np.asarray(z["volumes_A3"], dtype=np.float64)
+        atoms_per = {"AR1": 1, "TIP3": 3, "MEOH": 6, "AMM1": 4}
+        sp = a.species.upper()
+        n_atoms = int(np.asarray(z["Z"]).shape[0])
+        apm = atoms_per[sp]
+        if n_atoms % apm != 0:
+            raise SystemExit(
+                f"{a.traj}: {n_atoms} atoms not divisible by {apm} for {sp}"
+            )
+        n_mol = n_atoms // apm
+        mass = _MOLAR_MASS[sp]
+        # g/cm3 = n_mol * M / (N_A * V_cm3); V_A3 * 1e-24 = cm3
+        rho = n_mol * mass / (_AVOGADRO * V * 1e-24)
+        if "times_ps" in z.files:
+            time_ps = np.asarray(z["times_ps"], dtype=np.float64)
+        elif "time_ps" in z.files:
+            time_ps = np.asarray(z["time_ps"], dtype=np.float64)
+        else:
+            time_ps = np.arange(rho.size, dtype=np.float64)
+        if "target_temperatures_K" in z.files:
+            attrs["temperature_target"] = float(
+                np.asarray(z["target_temperatures_K"], dtype=np.float64).ravel()[0]
+            )
+    else:
+        import h5py
+
+        with h5py.File(a.traj, "r") as fh:
+            if "density_g_cm3" not in fh:
+                raise SystemExit(
+                    f"{a.traj} has no 'density_g_cm3'. That series is only recorded "
+                    f"for NpT runs - an NVT/NVE trajectory cannot measure density "
+                    f"because its volume is fixed by construction. "
+                    f"Datasets present: {sorted(fh.keys())[:10]}"
+                )
+            rho = np.asarray(fh["density_g_cm3"], dtype=np.float64)
+            time_ps = (
+                np.asarray(fh["time_ps"], dtype=np.float64)
+                if "time_ps" in fh
+                else np.arange(rho.size, dtype=np.float64)
+            )
+            attrs = dict(fh.attrs)
 
     if rho.size == 0:
         raise SystemExit(f"{a.traj} contains no frames")
