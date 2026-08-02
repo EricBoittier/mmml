@@ -9,15 +9,12 @@ from __future__ import annotations
 
 import json
 import sys
-from collections import defaultdict
-from itertools import combinations
 from pathlib import Path
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from ase import Atoms
-from ase.data.colors import jmol_colors
 from ase.io import read as ase_read
 from matplotlib.collections import LineCollection
 from matplotlib.ticker import MaxNLocator
