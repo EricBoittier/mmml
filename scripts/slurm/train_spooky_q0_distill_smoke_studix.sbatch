@@ -33,6 +33,12 @@
 # full ~924k-step epoch that the wall clock kills before any checkpoint is
 # written. --steps-per-epoch ends the epoch for real, so validation runs and
 # --save-every 1 produces the checkpoint this smoke exists to produce.
+#
+# --no-auto-batch for the same reason: probing compiles the model once per pad
+# width and this cache has 24 of them, which consumed the entire 45-minute
+# budget before a single training step ran (job 206099). A smoke wants a fixed
+# small batch, not an optimal one. The full run keeps --auto-batch, where the
+# one-off probing cost is amortized over days and cached in auto_batch_sizes.json.
 #SBATCH --job-name=q0-distill-smoke
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
@@ -88,7 +94,7 @@ done
   --distill-energy-align atomic --distill-align-batches 16 \
   --epochs 1 --steps-per-epoch 40 --num-devices 1 \
   --batch-size-per-device 4 --max-pairs-per-device 18000 \
-  --atom-bucket-width 4 --auto-batch --auto-batch-margin 1 \
+  --atom-bucket-width 4 --no-auto-batch \
   --optimizer adamw --learning-rate 2.5e-5 \
   --lr-schedule warmup_cosine --lr-warmup-steps 50 --lr-decay-steps 0 \
   --lr-end-fraction 0.05 --weight-decay 0.0 --clip-global-norm 1.0 \
