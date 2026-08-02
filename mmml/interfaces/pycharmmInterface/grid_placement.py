@@ -52,7 +52,7 @@ def grid_centers_cube(
     *,
     center: tuple[float, float, float] = (0.0, 0.0, 0.0),
     side: float | None = None,
-    spacing: float = 4.0,
+    spacing: float = 2.5,
     seed: int | None = None,
 ) -> np.ndarray:
     """Return up to ``n_centers`` COM centers on a 3D cubic grid."""

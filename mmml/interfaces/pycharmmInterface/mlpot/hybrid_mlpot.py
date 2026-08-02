@@ -1398,6 +1398,21 @@ def build_decomposed_mlpot_model(
     do_ml = True if args is None else bool(getattr(args, "do_ml", True))
     include_mm = True if args is None else bool(getattr(args, "include_mm", True))
     do_mm = include_mm and not periodic_mode
+
+    # periodic_external takes its VDW from CHARMM IMAGE, so `do_mm` is False and
+    # the JAX pair loop that applies per-type LJ scales never runs. Trained
+    # scales therefore have to reach the energy through CHARMM's parameters.
+    # See scaled_cgenff_prm: this is exact (per-type, pre-combining), and it is
+    # a once-per-session operation -- re-deploying is a guarded no-op, and a
+    # different sidecar raises rather than silently zeroing the VDW.
+    if periodic_mode and include_mm and args is not None:
+        scales_file = getattr(args, "mm_lj_scales_file", None)
+        if scales_file:
+            from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
+                deploy_scaled_lj_into_charmm,
+            )
+
+            deploy_scaled_lj_into_charmm(scales_file, verbose=verbose)
     do_ml_dimer = True if args is None else bool(getattr(args, "do_ml_dimer", True))
     if args is not None and bool(getattr(args, "skip_ml_dimers", False)):
         do_ml_dimer = False
