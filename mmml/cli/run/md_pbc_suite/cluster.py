@@ -437,14 +437,25 @@ def assert_packmol_cluster_minimize_sane(
         )
 
     limit = resolve_max_monomer_internal_deviation_A(max_deviation_A)
-    report = assert_monomer_internal_geometry(
-        positions,
-        atoms_per_list,
-        residue_names=residue_names,
-        templates=residue_geometries,
-        max_deviation_A=limit,
-        context="Packmol cluster post-MM geometry",
-    )
+    try:
+        report = assert_monomer_internal_geometry(
+            positions,
+            atoms_per_list,
+            residue_names=residue_names,
+            templates=residue_geometries,
+            max_deviation_A=limit,
+            context="Packmol cluster post-MM geometry",
+        )
+    except RuntimeError as exc:
+        # Name the likely cause rather than leaving "the build returned garbage".
+        from mmml.utils.monomer_internal_geometry import (
+            charmm_collapsed_nonbonded_hint,
+        )
+
+        detail = charmm_collapsed_nonbonded_hint(int(np.asarray(positions).shape[0]))
+        if detail:
+            raise RuntimeError(f"{exc} {detail}") from exc
+        raise
     if report.n_monomers_checked == 0 and report.n_monomers_skipped > 0:
         # Silent vacuity is the failure mode this gate exists to prevent.
         print(

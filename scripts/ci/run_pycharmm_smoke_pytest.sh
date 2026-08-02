@@ -35,6 +35,12 @@ SCALED_LJ_CHARMM_SMOKE="$ROOT/tests/unit/test_scaled_lj_charmm_in_the_loop.py"
 # libcharmm. Running that child beneath mpirun can deadlock in MPI finalization,
 # so exercise it once in a genuinely serial parent process.
 PYTEST_EXIT_STATUS_SMOKE="$ROOT/tests/unit/test_pytest_exit_status_preserved.py"
+# Deliberately re-reads the CGenFF parameters several times to prove the reload
+# is non-destructive, so it must own its process for the same reason as the
+# scaled-LJ smoke.
+PARAM_READ_CONTRACT_SMOKE="$ROOT/tests/functionality/charmm/test_charmm_param_read_contract.py"
+# Registers a real MLpot, so it mutates the process-global MLpot/PSF state.
+MLPOT_PAIRS_SMOKE="$ROOT/tests/functionality/mlpot/test_mlpot_pair_lists_against_oracle.py"
 
 # CHARMM owns process-global PSF/topology/parameter state.  Any smoke module that
 # initializes or rebuilds that state must run in a fresh interpreter: re-reading
@@ -53,6 +59,8 @@ STATEFUL_SMOKE_PATHS=(
   "$MD_SYSTEM_FFPARAMS_SMOKE"
   "$SCALED_LJ_CHARMM_SMOKE"
   "$PYTEST_EXIT_STATUS_SMOKE"
+  "$PARAM_READ_CONTRACT_SMOKE"
+  "$MLPOT_PAIRS_SMOKE"
 )
 
 # JUnit reports per invocation. pytest exits 0 when every selected test skips,
