@@ -1636,7 +1636,7 @@ def set_up_nhc_sim_routine(
     # No-op unless --rigid-water; interleaved RATTLE for NVE. See mmml.md.constraints.
     apply_fn = maybe_wrap_rigid_water(
         apply_fn, args, n_monomers, monomer_offsets, force_fn=wrapped_force_fn,
-        shift_fn=shift, dt=dt, box=getattr(args, "box_size", None),
+        shift_fn=shift, dt=dt, box=getattr(args, "cell", None),
         ensemble=str(getattr(args, "ensemble", "nve")), console=c,
     )
     apply_fn = jit(apply_fn)

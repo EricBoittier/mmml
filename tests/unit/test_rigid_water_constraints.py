@@ -488,3 +488,37 @@ def test_step_boundary_projection_drifts_more_than_interleaving(x64) -> None:
         f"interleaved {drift_interleaved:.3e} not better than "
         f"step-boundary {drift_boundary:.3e}"
     )
+
+
+def test_jaxmd_jargs_whitelist_carries_rigid_water() -> None:
+    """The runner reads a hand-built SimpleNamespace, not the parsed args.
+
+    md_pbc_suite.jaxmd builds `jargs` as an explicit whitelist and passes THAT to
+    set_up_nhc_sim_routine. A flag present on the parser but absent from the
+    whitelist reaches the runner as the getattr default -- so --rigid-water
+    parsed fine, appeared in the launched command line, and silently did nothing:
+    the rigid arm's O-H ran 0.372-8.00 A, indistinguishable from the flexible
+    control. Assert against the construction site itself.
+    """
+    import inspect
+
+    from mmml.cli.run.md_pbc_suite import jaxmd
+
+    src = inspect.getsource(jaxmd)
+    start = src.index("jargs = SimpleNamespace(")
+    depth, end = 0, start
+    for i in range(start, len(src)):
+        if src[i] == "(":
+            depth += 1
+        elif src[i] == ")":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    block = src[start:end]
+
+    for field in ("rigid_water", "rigid_water_roh", "rigid_water_theta"):
+        assert f"{field}=" in block, (
+            f"{field} missing from the jargs whitelist; the runner would see the "
+            "getattr default and the flag would be a silent no-op"
+        )
