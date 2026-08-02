@@ -1425,6 +1425,10 @@ def _attach_ase_mmml_calculator(
         mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
         ml_potential_mode=getattr(args, "ml_potential_mode", None),
         jax_mm_spoof_psf=getattr(args, "jax_mm_spoof_psf", None),
+        bonded_intra_damp_onset=getattr(args, "bonded_intra_damp_onset", None),
+        bonded_intra_damp_cutoff=float(
+            getattr(args, "bonded_intra_damp_cutoff", None) or 15.0
+        ),
     )
     atoms.calc = calc
     return calc
@@ -1530,6 +1534,10 @@ def _evaluate_jaxmd_mmml(
         # PhysNet (spans 193.88 / 293.79 kcal/mol) with no error anywhere.
         ml_potential_mode=getattr(args, "ml_potential_mode", None),
         jax_mm_spoof_psf=getattr(args, "jax_mm_spoof_psf", None),
+        bonded_intra_damp_onset_kcal=getattr(args, "bonded_intra_damp_onset", None),
+        bonded_intra_damp_cutoff_kcal=float(
+            getattr(args, "bonded_intra_damp_cutoff", None) or 15.0
+        ),
         max_pairs=_evaluate_int_arg(args, "max_pairs", 20_000),
         jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.75)),
         jax_md_capacity_growth_factor=float(

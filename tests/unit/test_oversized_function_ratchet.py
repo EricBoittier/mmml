@@ -118,7 +118,12 @@ _BASELINE: dict[str, int] = {
     # backend's CLI surface can be parsed in a test instead of only in a
     # subprocess mid-run.
     "mmml/cli/run/md_pbc_suite/jaxmd.py::main": 1467,
-    "mmml/cli/run/md_system.py::build_parser": 2093,
+    # 2093 -> 2153. Same drift as the entry above: other work had already taken
+    # it to 2130 inside the grace. The remaining +23 is two argparse arguments
+    # for the bonded-intra damping window. There is no honest extraction for a
+    # single flag -- this function *is* the extraction that split
+    # md_pbc_suite/jaxmd.py::main, and its whole body is add_argument calls.
+    "mmml/cli/run/md_system.py::build_parser": 2153,
     "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine.run_sim": 1986,
     "mmml/interfaces/pycharmmInterface/mlpot/dynamics.py::run_dynamics_with_io": 1587,
     # 1543 -> 1620 (+77, past the grace). Raised to record uncommitted work in

@@ -443,6 +443,20 @@ def test_md_system_parser_accepts_bonded_intra() -> None:
         build_parser().parse_args(["--ml-potential-mode", "not-a-mode"])
 
 
+def test_md_system_parser_accepts_the_damping_window() -> None:
+    from mmml.cli.run.md_system import build_parser
+
+    args = build_parser().parse_args([])
+    assert args.bonded_intra_damp_onset is None, "damping must be opt-in"
+    assert args.bonded_intra_damp_cutoff == 15.0
+
+    args = build_parser().parse_args(
+        ["--bonded-intra-damp-onset", "5.0", "--bonded-intra-damp-cutoff", "12.0"]
+    )
+    assert args.bonded_intra_damp_onset == 5.0
+    assert args.bonded_intra_damp_cutoff == 12.0
+
+
 def test_factory_mmml_forwards_bonded_intra_configuration() -> None:
     """The mode is useless if the factory drops it before setup_calculator."""
     import inspect
@@ -452,3 +466,54 @@ def test_factory_mmml_forwards_bonded_intra_configuration() -> None:
     params = inspect.signature(_factory_mmml).parameters
     assert "ml_potential_mode" in params
     assert "jax_mm_spoof_psf" in params
+    assert "bonded_intra_damp_onset" in params
+    assert "bonded_intra_damp_cutoff" in params
+
+
+def test_setup_calculator_accepts_the_damping_window() -> None:
+    """A renamed kwarg here would be a TypeError only at run time, on a cluster."""
+    import inspect
+
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
+    params = inspect.signature(setup_calculator).parameters
+    assert params["bonded_intra_damp_onset_kcal"].default is None
+    assert params["bonded_intra_damp_cutoff_kcal"].default == 15.0
+
+
+def test_both_evaluate_backends_forward_the_damping_window() -> None:
+    """md_evaluate_npz builds calculators on two separate paths.
+
+    Forwarding on only one of them is how ``bonded_intra`` itself first shipped:
+    the --backend jaxmd arm came back bit-identical to plain PhysNet, with no
+    error anywhere (see the comment at that call site). A damping window that
+    reaches one backend and not the other would fail the same silent way, so
+    both call sites are checked rather than just the signature.
+    """
+    import ast
+    from pathlib import Path
+
+    import mmml
+
+    source = (Path(mmml.__file__).parent / "cli/run/md_evaluate_npz.py").read_text()
+    wanted = {"_factory_mmml": "bonded_intra_damp_onset",
+              "setup_calculator": "bonded_intra_damp_onset_kcal"}
+
+    seen = {name: 0 for name in wanted}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = getattr(node.func, "id", None)
+        if callee not in wanted:
+            continue
+        kwargs = {kw.arg for kw in node.keywords}
+        # Only calculator-building calls carry the mode at all.
+        if "ml_potential_mode" not in kwargs:
+            continue
+        seen[callee] += 1
+        assert wanted[callee] in kwargs, (
+            f"{callee}(...) at line {node.lineno} forwards ml_potential_mode but "
+            f"not {wanted[callee]}; bonded_intra damping would silently no-op there"
+        )
+
+    assert all(seen.values()), f"expected both backends to be present, found {seen}"

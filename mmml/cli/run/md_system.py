@@ -1742,6 +1742,29 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--bonded-intra-damp-onset",
+        type=float,
+        default=None,
+        help=(
+            "Enable the bonded_intra damping guard: taper the ML dimer "
+            "interaction to zero as either monomer's CGenFF bonded energy rises "
+            "from this value (kcal/mol) to --bonded-intra-damp-cutoff. The "
+            "interaction term is a difference of two model totals and is "
+            "extrapolation noise off-manifold. Off unless set; 5.0 is the "
+            "measured onset above ordinary thermal distortion."
+        ),
+    )
+    parser.add_argument(
+        "--bonded-intra-damp-cutoff",
+        type=float,
+        default=15.0,
+        help=(
+            "Bonded energy (kcal/mol) at which the ML dimer interaction is fully "
+            "damped. Ignored unless --bonded-intra-damp-onset is set. Default "
+            "15.0 is where the measured noise well sits (O-H = 0.771 A)."
+        ),
+    )
+    parser.add_argument(
         "--residue",
         type=str,
         default="MEOH",
@@ -3424,6 +3447,16 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if bool(getattr(args, "jax_mm_spoof", False)):
         cmd.append("--jax-mm-spoof")
     _append_optional(cmd, "--jax-mm-spoof-psf", getattr(args, "jax_mm_spoof_psf", None))
+    _append_optional(
+        cmd,
+        "--bonded-intra-damp-onset",
+        getattr(args, "bonded_intra_damp_onset", None),
+    )
+    _append_optional(
+        cmd,
+        "--bonded-intra-damp-cutoff",
+        getattr(args, "bonded_intra_damp_cutoff", None),
+    )
     _append_optional(
         cmd,
         "--min-com-restraint-distance",

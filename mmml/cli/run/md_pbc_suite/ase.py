@@ -1088,6 +1088,8 @@ def _factory_mmml(
     shared_cutoff: float | None = None,
     ml_potential_mode: str | None = None,
     jax_mm_spoof_psf: str | Path | None = None,
+    bonded_intra_damp_onset: float | None = None,
+    bonded_intra_damp_cutoff: float = 15.0,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1146,6 +1148,10 @@ def _factory_mmml(
         mm_latent_charge_template=mm_latent_charge_template,
         ml_potential_mode=ml_potential_mode,
         jax_mm_spoof_psf=jax_mm_spoof_psf,
+        bonded_intra_damp_onset_kcal=bonded_intra_damp_onset,
+        bonded_intra_damp_cutoff_kcal=(
+            15.0 if bonded_intra_damp_cutoff is None else float(bonded_intra_damp_cutoff)
+        ),
         hybrid_hamiltonian=hybrid_hamiltonian,
         shared_cutoff=shared_cutoff,
     )
