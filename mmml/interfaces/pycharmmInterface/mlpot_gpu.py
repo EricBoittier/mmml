@@ -30,7 +30,8 @@ def run_chunked_model_apply(
     max_atoms: int,
     n_gpus: int,
     apply_one_chunk: Callable[[Array, Array, Array], Tuple[Array, Array]],
-) -> Tuple[Array, Array]:
+    has_aux: bool = False,
+) -> tuple:
     """Evaluate PhysNet chunks; use ``jax.pmap`` when ``n_gpus > 1``."""
     from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
         get_mlpot_profile_stats,
@@ -41,12 +42,20 @@ def run_chunked_model_apply(
     t0 = time.perf_counter() if profile else None
 
     if n_gpus <= 1:
-        e_list, f_list = jax.lax.map(
+        mapped = jax.lax.map(
             lambda i: apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i]),
             jnp.arange(n_chunks),
         )
+        if has_aux:
+            e_list, f_list, aux_list = mapped
+        else:
+            e_list, f_list = mapped
         e_out = jnp.reshape(e_list, -1)[:effective_batch_size]
         f_out = jnp.reshape(f_list, (-1, 3))[: effective_batch_size * max_atoms]
+        if has_aux:
+            aux_out = jnp.reshape(aux_list, (-1, aux_list.shape[-1]))[
+                : effective_batch_size * max_atoms
+            ]
     else:
         n_padded = int(np.ceil(n_chunks / n_gpus) * n_gpus)
         if n_padded > n_chunks:
@@ -82,12 +91,19 @@ def run_chunked_model_apply(
             wi = w.astype(jnp.int32)
             return pmap_apply(R_w[wi], Z_w[wi], N_w[wi])
 
-        e_waves, f_waves = jax.lax.map(process_wave, jnp.arange(n_waves))
+        mapped = jax.lax.map(process_wave, jnp.arange(n_waves))
+        if has_aux:
+            e_waves, f_waves, aux_waves = mapped
+        else:
+            e_waves, f_waves = mapped
         e_flat = jnp.reshape(e_waves, (-1))
         f_flat = jnp.reshape(f_waves, (-1, 3))
 
         e_out = e_flat[:effective_batch_size]
         f_out = f_flat[: effective_batch_size * max_atoms]
+        if has_aux:
+            aux_flat = jnp.reshape(aux_waves, (-1, aux_waves.shape[-1]))
+            aux_out = aux_flat[: effective_batch_size * max_atoms]
 
     if profile and t0 is not None:
         e_out = jax.block_until_ready(e_out)
@@ -99,4 +115,6 @@ def run_chunked_model_apply(
             chunk_size=int(chunk_size),
             effective_batch_size=int(effective_batch_size),
         )
+    if has_aux:
+        return e_out, f_out, aux_out
     return e_out, f_out
