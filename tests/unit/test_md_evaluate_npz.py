@@ -117,6 +117,31 @@ def test_attach_ase_mmml_forwards_ml_charge_configuration(monkeypatch) -> None:
     assert captured["mm_latent_charge_template"] is None
 
 
+def test_composition_mismatch_frames_flags_relabelled_frames() -> None:
+    """Frames the evaluator would silently relabel must be reported.
+
+    Reproduces des_water300.npz: 295 water dimers plus 5 O,C,O,H,H,Ar frames
+    that were scored as water and correlated -0.92 against their own reference.
+    """
+    from types import SimpleNamespace
+
+    from mmml.cli.run.md_evaluate_npz import composition_mismatch_frames
+
+    water = [8, 1, 1, 8, 1, 1]
+    other = [8, 6, 8, 1, 1, 18]
+    z_ref = np.array([water] * 8 + [other] * 2, dtype=np.int32)
+    reference = SimpleNamespace(Z=z_ref)
+    evaluator_z = np.array(water, dtype=np.int32)
+
+    flagged = composition_mismatch_frames(reference, np.arange(10), evaluator_z)
+    assert flagged == [8, 9]
+
+    # A permutation of the same elements is handled legitimately elsewhere and
+    # must not be flagged, or every reordered frame becomes a false positive.
+    permuted = np.array([[8, 8, 1, 1, 1, 1]], dtype=np.int32)
+    assert composition_mismatch_frames(SimpleNamespace(Z=permuted), np.array([0]), evaluator_z) == []
+
+
 @pytest.mark.parametrize("multi", [False, True])
 def test_evaluate_npz_declares_the_unit_it_actually_stores(tmp_path: Path, multi: bool) -> None:
     """The declared unit for E must match the number stored in E.

@@ -335,6 +335,33 @@ def _reference_z_for_frame(reference: Any, frame: int, n_atoms: int) -> np.ndarr
     return np.asarray(z_arr[int(frame), :n_atoms], dtype=np.int32)
 
 
+def composition_mismatch_frames(
+    reference: Any,
+    frame_indices: np.ndarray,
+    z: np.ndarray,
+) -> list[int]:
+    """Reference frames whose element composition differs from the evaluator's.
+
+    Such a frame is silently relabelled to match ``--composition``: five frames
+    of des_water300.npz are O,C,O,H,H,Ar and were scored as water dimers. They
+    correlated -0.92 against their own reference and pulled the set from +0.92
+    to +0.45, with nothing in the output saying anything had happened.
+
+    Compares element counts, not per-atom order, so a permuted-but-equivalent
+    frame is not flagged -- ``positions_for_evaluator_z`` handles that case
+    legitimately.
+    """
+    evaluator_formula = np.bincount(np.asarray(z, dtype=int).reshape(-1), minlength=119)
+    n_atoms = int(len(np.asarray(z).reshape(-1)))
+    mismatched: list[int] = []
+    for ref_frame in np.asarray(frame_indices, dtype=int).reshape(-1):
+        ref_z = _reference_z_for_frame(reference, int(ref_frame), n_atoms)
+        formula = np.bincount(np.asarray(ref_z, dtype=int).reshape(-1), minlength=119)
+        if not np.array_equal(formula, evaluator_formula):
+            mismatched.append(int(ref_frame))
+    return mismatched
+
+
 def center_positions_at_com(
     positions: np.ndarray,
     atomic_numbers: np.ndarray,
@@ -2016,6 +2043,8 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         for warning in ctx.get("z_warnings", []):
             print(f"  note: {warning}", flush=True)
 
+    mismatched_frames = composition_mismatch_frames(reference, frame_indices, z)
+
     for ref_frame in frame_indices:
         ref_z = _reference_z_for_frame(reference, int(ref_frame), len(z))
         ref_r = np.asarray(reference.R[int(ref_frame), : len(z)], dtype=np.float64)
@@ -2125,7 +2154,22 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         "n_frames": n_eval,
         "frame_indices": frame_indices.tolist(),
         "per_frame": per_frame_compare,
+        "composition_mismatch_frames": mismatched_frames,
+        "n_composition_mismatch": len(mismatched_frames),
     }
+    if mismatched_frames:
+        for cmp_entry in per_frame_compare:
+            if int(cmp_entry.get("reference_frame", -1)) in set(mismatched_frames):
+                cmp_entry["composition_mismatch"] = True
+        preview = ", ".join(str(f) for f in mismatched_frames[:10])
+        if len(mismatched_frames) > 10:
+            preview += f", ... (+{len(mismatched_frames) - 10} more)"
+        print(
+            f"  WARNING: {len(mismatched_frames)} of {n_eval} reference frames have a "
+            f"different composition than the evaluator and were relabelled to match "
+            f"--composition; their scores are meaningless. Frames: {preview}",
+            flush=True,
+        )
     if ok_compares and "delta_energy_eV" in ok_compares[0]:
         delta_e = np.asarray([c["delta_energy_eV"] for c in ok_compares], dtype=np.float64)
         compare_summary["mean_delta_energy_eV"] = float(delta_e.mean())
