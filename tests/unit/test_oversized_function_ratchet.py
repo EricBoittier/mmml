@@ -104,14 +104,26 @@ _CROWDED = {k: v for k, v in _FUNCTIONS.items() if v > _CROWDED_LINES}
 # grow. Raising a number is allowed when the growth is genuinely unavoidable --
 # say why in the commit, so the register keeps meaning something.
 _BASELINE: dict[str, int] = {
-    "mmml/interfaces/pycharmmInterface/mmml_calculator.py::setup_calculator": 3363,
+    # 3363 -> 3445. Two separate movements, recorded together because the entry
+    # had drifted: other work in flight had already taken it to 3413, which fit
+    # inside the grace and so never had to be written down. The remaining +32 is
+    # the bonded-intra damping wiring, and it is call sites only -- the logic
+    # went to module level as `apply_bonded_intra_damping`, `bonded_intra_bundle`
+    # and `resolve_bonded_intra_damping`, which is why they are unit tested and
+    # the enclosing function still is not.
+    "mmml/interfaces/pycharmmInterface/mmml_calculator.py::setup_calculator": 3445,
     "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine": 2522,
     "mmml/interfaces/pycharmmInterface/mlpot/staged_workflow.py::run_staged_workflow": 2469,
     # 2186 -> 1467: its 743-line argparse block became `build_parser`, so the
     # backend's CLI surface can be parsed in a test instead of only in a
     # subprocess mid-run.
     "mmml/cli/run/md_pbc_suite/jaxmd.py::main": 1467,
-    "mmml/cli/run/md_system.py::build_parser": 2093,
+    # 2093 -> 2153. Same drift as the entry above: other work had already taken
+    # it to 2130 inside the grace. The remaining +23 is two argparse arguments
+    # for the bonded-intra damping window. There is no honest extraction for a
+    # single flag -- this function *is* the extraction that split
+    # md_pbc_suite/jaxmd.py::main, and its whole body is add_argument calls.
+    "mmml/cli/run/md_system.py::build_parser": 2153,
     "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine.run_sim": 1986,
     "mmml/interfaces/pycharmmInterface/mlpot/dynamics.py::run_dynamics_with_io": 1587,
     # 1543 -> 1620 (+77, past the grace). Raised to record uncommitted work in

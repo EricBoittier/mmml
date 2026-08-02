@@ -1,8 +1,39 @@
 # Handoff — DES hybrid LJ scales, condensed-phase validation
 
-Written 2026-08-02. Branch `perf/ase-calculator-speedup`, 14 commits ahead of
-`main`. No jobs running. Working tree clean except `setup/charmm/source/api/*.F90`,
-which belong to a different session — leave them alone.
+Written 2026-08-02. Branch `perf/ase-calculator-speedup`, 15 commits ahead of
+`main` (this document is the 15th). No jobs running as of 18:24.
+
+**The working tree is not clean, and none of the dirty files are mine.** Other
+sessions were editing this same checkout while I wrote this. `git checkout --` or
+a reset on any of these destroys work in flight — read it first:
+
+| file | last touched |
+|---|---|
+| `mmml/cli/run/md_evaluate_npz.py` | 18:14 |
+| `mmml/interfaces/pycharmmInterface/mmml_calculator.py` | 18:19 |
+| `mmml/interfaces/pycharmmInterface/mlpot_gpu.py` | 18:19 |
+| `tests/unit/test_md_evaluate_npz.py` | 18:14 |
+| `tests/unit/test_mlpot_gpu.py` | 18:20 |
+| `setup/charmm/source/api/api_func.F90` | 16:03 |
+| `setup/charmm/source/api/api_read.F90` | 13:21 |
+| `scripts/test_checkpoint_pbc_translation.py` (untracked) | 18:15 |
+| `scripts/slurm/test_checkpoint_pbc_translation_studix.sbatch` (untracked) | 18:15 |
+| `scripts/slurm/run_checkpoint_pes_compare_studix.sbatch` (untracked) | 16:47 |
+| `tests/unit/test_molecular_pbc_wrapping.py` (untracked) | 17:48 |
+
+Two of these overlap the leads below. Check their state before redoing the work:
+
+- the `md_evaluate_npz` + `mmml_calculator` + `mlpot_gpu` diff threads
+  `mm_charge_mode` through `--evaluate-npz` and removes the `NotImplementedError`
+  that blocked ML-derived MM charges on the chunked apply path. That is Lead 2.
+- `scripts/test_checkpoint_pbc_translation.py` evaluates one checkpoint under a
+  lattice shift, an arbitrary translation, and atom- vs molecule-wrapped images
+  of the same configuration, with a byte-identical repeat to separate
+  nondeterminism from image effects. That is a direct probe of Lead 1 — an
+  evaluator whose output is near-constant in geometry is one that will look
+  suspiciously invariant here too.
+
+Numbers reported below were measured before those edits landed.
 
 ## The goal, and where it stands
 

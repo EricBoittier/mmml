@@ -1009,7 +1009,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         testing).
   --jax-mm-spoof-psf JAX_MM_SPOOF_PSF
                         Optional cluster PSF for --jax-mm-spoof bonded
-                        parameters.
+                        parameters. Also supplies the CGenFF bonded terms for
+                        --ml-potential-mode bonded_intra, where it is REQUIRED.
   --jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS
                         Pre-dynamics FIRE steps in the JAX-MD runner (default:
                         1000). Free space: COM-centered. PBC: molecular
@@ -1257,6 +1258,27 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         Path to hybrid_mm.json with learnable per-type MM LJ σ/ε
                         scales. When omitted, MLpot looks next to --checkpoint
                         for hybrid_mm.json.
+  --ml-potential-mode {physnet,kernnn,jax_mm_clone,jax_mm_spoof,bonded_intra}
+                        Which potential supplies the ML terms. 'bonded_intra'
+                        keeps PhysNet for the dimer interaction but hands the
+                        internal monomer energy to CGenFF bonded (requires
+                        --jax-mm-spoof-psf). Use it when the model was trained
+                        on rigid monomers and carries no restoring force for
+                        intramolecular coordinates. See docs/hybrid-bonded-
+                        intra.md.
+  --bonded-intra-damp-onset BONDED_INTRA_DAMP_ONSET
+                        Enable the bonded_intra damping guard: taper the ML
+                        dimer interaction to zero as either monomer's CGenFF
+                        bonded energy rises from this value (kcal/mol) to
+                        --bonded-intra-damp-cutoff. The interaction term is a
+                        difference of two model totals and is extrapolation
+                        noise off-manifold. Off unless set; 5.0 is the measured
+                        onset above ordinary thermal distortion.
+  --bonded-intra-damp-cutoff BONDED_INTRA_DAMP_CUTOFF
+                        Bonded energy (kcal/mol) at which the ML dimer
+                        interaction is fully damped. Ignored unless --bonded-
+                        intra-damp-onset is set. Default 15.0 is where the
+                        measured noise well sits (O-H = 0.771 A).
   --mm-nl-backend {auto,vesin,cell_list,jax_md}
                         MM neighbor-list builder for jaxmd (default:
                         MMML_MM_NL_BACKEND or auto→vesin).
