@@ -1,108 +1,97 @@
-# NpT argon + water campaign — overnight status, 2026-08-02
+# NpT density campaign — status and diagnosis, 2026-08-02
 
-Written while you were asleep. **No density number exists yet.** All eight argon
-runs failed; the two water runs are still going. Everything below is measured,
-and where I got something wrong earlier it says so.
+**No density, ΔH_vap or ΔG number exists.** The campaign is blocked, and the
+blocker is the potential energy surface, not the MD machinery. Everything below
+is measured on the certified 732-molecule TIP3 box (2,196 atoms, 28.0 Å cube) on
+one A100, changing one variable at a time.
 
-## Where the jobs are
+![NpT/NVE diagnosis](images/des-so3lr-dimers/npt_diagnosis.png)
 
-| Job | Runs | State |
+## The blocker
+
+In bulk water the DES-fitted hybrid potential releases
+
+| | step 100 | step 3100 |
 |---|---|---|
-| `19364535_0..5` | argon 90 / 120 / 130 K, trained + unit | **FAILED** — energy blow-up |
-| `19364549_6..7` | argon 140 K, trained + unit | **FAILED** — energy blow-up |
-| `19364535_8,9` | water 298 K, trained + unit | **RUNNING** (~25 min in, still pre-minimising) |
+| E_pot | −8750.81 eV | −11903.94 eV |
+| T | 297.61 K | 1446.19 K |
 
-Partition `a100`, QOS `a100-1day`. Running from an isolated clone at
-`~/mmml_npt` — scicore's `~/mmml` was left untouched because three `des-big`
-jobs are using it.
+**−3153 eV = 4.31 eV = 99.3 kcal/mol per water molecule**, which appears as heat.
+That is bond-breaking scale. The model was fitted to dimers; in the condensed
+phase it is extrapolating into a deep well that is not physical.
 
-## The argon failure
+Ruled out as causes, each by a controlled comparison:
 
-Every argon run dies the same way:
+- **Not the neighbour list.** Per-step rebuilds give T = 1446 K, 40-step rebuilds
+  give 1403 K at step 3100. No effect on the runaway.
+- **Not the thermostat.** NVE shows the same descent with E_tot conserved.
+- **Not the integrator or forces.** NVE conserves E_tot to **0.70 meV** across
+  steps 400–1200. The forces are the gradient of the energy.
+- **Not the ensemble.** Present in NVE, NVT and NpT alike.
+- **Not the LJ scales.** The unit-scale control fails identically to the trained
+  one.
+
+## Defects found and fixed
+
+All verified numerically, not by inspection.
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | `jaxmd.build_parser()` registered `--hybrid-hamiltonian` and `--shared-cutoff` twice, so it raised before returning — `md-system --backend jaxmd` could not run at all | `argparse.ArgumentError: conflicting option string`; no test had ever called it |
+| 2 | Monoatomic residues unbuildable at three layers (zero extent treated as degenerate) | blocked AR1/KR1/XE1 and the ions CLA/POT/SOD/LIT |
+| 3 | Noble-gas RTF/PRM aborted CHARMM — a bare `*` mid-comment ends a title block | parameters unchanged, verified record-for-record against the `.str` |
+| 4 | The campaign never loaded its boxes: without `--from-psf/--from-crd/--skip-cluster-build`, `RESI:1` is an absolute count, so every run was a **one-molecule** system | log showed `residues TIP3x1` |
+| 5 | NpT position cotangent missing the boxᵀ factor | ratio fd/analytic **28.09** on a 28.0 Å cell → **1.0071** after |
+| 6 | NpT virial cotangent was `None`, so pressure collapsed to the kinetic term | P_meas 4059.58 atm vs 4059.63 predicted for 2KE/3V alone (0.001%) → 0.06–0.2% after |
+| 7 | `find_worst_intermonomer_overlap` was an O(n²) Python loop re-inverting a constant cell 8.3M times | 42% of a 1,054 s job → **16.2× faster**, bit-identical result |
+
+Fix 6 was wrong on the first attempt: `−(1/3p)·Σ Fᵢ·rᵢ` is the *atomic* virial,
+valid only without minimum-image wrapping. Under PBC the energy depends on the
+perturbation through both the positions and the box, so the correct object is the
+pair virial, which the backward pass cannot see. The in-situ self-check caught it
+(+397 eV against a true −33 eV) and it was replaced with a central difference of
+the real energy.
+
+`MMML_NPT_VIRIAL_SELFCHECK=1` checks both cotangents and the absolute energy
+against the real system at NpT initialisation. It is diagnostic only.
+
+## Worth adopting independently
+
+**Per-step neighbour-list rebuilds.** NVE drift across steps 400–1200:
+0.70 meV per-step vs 127 meV every-40 — **180× flatter**. This does not fix any
+of the failures above, but it is nearly free and the difference is large.
+
+## The SO3LR control — unresolved
+
+Running a pretrained SO3LR model on the same box would show whether the deep well
+is specific to our fit. It has not produced a result.
+
+- The MBD checkpoint cannot run: it needs **128 × (3N)² float32 = 20.70 GiB** for
+  3N = 6,588, matching the observed 20.69 GiB to 0.02%. Independent of
+  `--ml-batch-size` (identical at 1024 and 128); many-body dispersion is O(N²) in
+  memory and is not viable for a 2,196-atom box on a 40 GB A100.
+- The MBD-free checkpoints run without OOM, but start at max|F| = 8.0 eV/Å on
+  this box (the DES hybrid starts at 3.94) and the NVE start gate refuses them:
+  `post-FIRE max|F|=8.1001 > gate 7.0292`. The obstacle there is the minimiser,
+  not memory.
+
+## What would actually unblock a density
+
+1. Decompose E_pot into ML / MM / dimer terms across the descent on a short NVE
+   and identify which term supplies the −99 kcal/mol.
+2. Get the SO3LR control to run — smaller box, or an MBD-free checkpoint with a
+   real minimisation budget — to establish whether the well is ours or general.
+3. Only then re-run the campaign. Re-queuing before (1) burns GPU hours on a
+   potential that does not hold water together at 298 K.
+
+## Reproducing
 
 ```
-Energy blow-up at step 100 (E_pot=15353874.8511); stopping.
+scripts/slurm/npt_bisect.sbatch          # ensemble x prep x rebuild-interval matrix
+scripts/slurm/profile_ase_premin.sbatch  # the cProfile behind the 16x fix
+scripts/gen_docs_npt_diagnosis_figures.py
+scripts/validate_virial_vs_charmm.py     # written, unit tested, NOT yet run on the cluster
 ```
 
-1.5e7 eV for 500 atoms. Step 100 is the first *recorded* frame
-(`--steps-per-recording 100`), so the divergence starts earlier than that.
-
-**It is not the trained scales**: the unit control blows up identically. So
-this is an argon-specific setup or physics problem, not a verdict on the fit.
-
-Note the boxes themselves are sound — `ar1_90k` certified with a worst
-inter-monomer contact of 3.529 A, which is sensible for argon (sigma 3.405 A,
-LJ minimum 3.82 A). The one exception is `ar1_140k` at 2.165 A, deep in the
-repulsive wall; that one had an independent reason to be fragile.
-
-## An open inconsistency — read this before trusting an argon result
-
-For **water**, the trained and unit arms give different energies
-(-9225.72 vs -9179.04 eV), so the LJ scales are demonstrably being applied.
-
-For **argon**, the two arms are byte-identical at every point I checked
-(pre-min final energy -1060.250520 eV both, blow-up energy 15353874.8511 both).
-
-That should not happen. `AR` is present in the CHARMM ATC table at index 163
-and `resolve_md_lj_scales` returns the correct values for it
-(eps_scale 0.2501, sig_scale 0.8001, versus 1.0/1.0 for the control); the two
-sidecars differ in 86 of 166 ATC entries. So the scales resolve correctly and
-are applied for water, yet appear to have no effect on argon.
-
-I have not root-caused this. Until it is understood, an argon
-trained-vs-control comparison cannot be interpreted — the control may not be a
-control. **This is the first thing to look at.**
-
-(I briefly concluded the scales were being ignored entirely. That was wrong —
-it was based on argon alone, before the water runs diverged. Corrected here.)
-
-## Code defects found and fixed on the way
-
-Committed as `e0030a247`, with 19 unit tests.
-
-1. **`jaxmd.build_parser()` could not be called at all.** It registered
-   `--hybrid-hamiltonian` and `--shared-cutoff` twice in the same function and
-   raised `argparse.ArgumentError: conflicting option string`. That made
-   `mmml md-system --backend jaxmd` impossible to run. The removed duplicate was
-   also the stale one — `choices=("handoff","additive")` where `md_system.py`
-   and `ase.py` both use `("handoff","shared_cutoff")`. No test had ever called
-   `build_parser()`.
-
-2. **Monoatomic residues were unbuildable at three layers.** A single atom has
-   zero extent, which is correct, not degenerate, but `_has_resolved_geometry`,
-   `_monomer_geometry_is_3d` and `validate_cluster_geometry` each rejected it.
-   Fixed for n < 2 while keeping the collapsed-polyatomic check intact. This
-   also unblocks the monoatomic ions CLA/POT/SOD/LIT.
-
-3. **The noble-gas RTF/PRM aborted CHARMM.** A bare `*` mid-comment terminates a
-   CHARMM title block, so it parsed prose as topology. Parameters unchanged —
-   verified record-for-record against the `.str`.
-
-4. **The campaign never loaded its boxes.** Without
-   `--from-psf/--from-crd/--skip-cluster-build`, md-system re-runs Packmol from
-   `--composition`, where `RESI:1` is an absolute count — so every run was a
-   **one-molecule** system (`residues TIP3x1`). Now the molecule count and cell
-   are read from each box's own `box.json`.
-
-5. **`scicore_env.sh` must be sourced, not hand-rolled.** A Slurm shell is not a
-   login shell: with `module` defined but MODULEPATH empty, `module load` finds
-   nothing and fails *silently*, and the job then dies on `GLIBCXX_3.4.32`.
-
-## Still unfixed
-
-- `jaxmd.py` lines ~1203-1257 contain the **LJ-scale loading block twice**,
-  verbatim — the same bad-merge signature as defect 1. It is benign (the second
-  copy recomputes the same values, which is why the log prints "Loaded MM LJ
-  scales" twice) so I left it rather than change more code untested. Worth
-  removing.
-- `ar1_140k` box has a 2.165 A worst contact where the others have ~3.5 A.
-- The `--ps 500` / `--dt-fs 0.25` combination is 2,000,000 steps. Nothing has
-  reached steady-state MD yet, so the achievable rate is still unmeasured; if
-  water does not finish in 12 h, that needs revisiting.
-
-## Suggested next steps
-
-1. Resolve why argon is insensitive to the LJ scales while water is not.
-2. Diagnose the argon blow-up on a short NVT run before spending NpT time —
-   both arms failing identically points at setup, not the fit.
-3. Let the water pair finish; it is the only path to a density today.
+Overrides on the bisect script: `NLINT` (rebuild interval), `SKIN`, `MINSTEPS`,
+`ML_BATCH`, `CKPT_PATH`, `USE_SCALES`, `TAGSUFFIX`, `PS`, `REC`.
