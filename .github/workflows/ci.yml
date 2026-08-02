@@ -138,7 +138,10 @@ jobs:
             setup/charmm/lib
             setup/charmm/.ci-charmm-build-stamp
             ~/.cache/mmml-charmm-build
-          key: charmm-lib-${{ hashFiles('setup/charmm.tar.xz', 'setup/charmm/source/api/api_func.F90', 'setup/charmm/source/api/api_psf.F90', 'setup/charmm/source/api/api_eval.F90', 'setup/charmm/source/api/api_minimize.F90', 'setup/charmm/source/api/api_dynamics.F90', 'setup/charmm/source/api/api_crystal.F90', 'scripts/rebuild_charmm_mlpot.sh') }}
+          # Hash every api/*.F90, not a hand-picked subset: an api_read.F90 fix
+          # (sticky READ PARAM APPEND, which zeroed the VDW table) hit a stale
+          # cache because that file was not on the list.
+          key: charmm-lib-${{ hashFiles('setup/charmm.tar.xz', 'setup/charmm/source/api/*.F90', 'scripts/rebuild_charmm_mlpot.sh') }}
       - name: Build libcharmm.so
         if: steps.charmm-cache.outputs.cache-hit != 'true'
         run: bash scripts/ci/setup_charmm_lib.sh

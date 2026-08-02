@@ -125,11 +125,10 @@ Run these on a cluster node — they execute CHARMM.
 
 ---
 
-## Environments that currently fail the gate
+## The first real failure it caught: sticky `READ PARAM APPEND`
 
-The gate is not hypothetical: two of the three CHARMM builds available to this
-project distort monomers during the cluster relax. Identical builds
-(`--seed 23`, SD 50 / ABNR 100), worst monomer:
+When this gate went in, two of the three CHARMM environments failed it. Identical
+builds (`--seed 23`, SD 50 / ABNR 100), worst monomer:
 
 | Build | pc-studix | local darwin | GitHub CI `charmm` job |
 |-------|-----------|--------------|------------------------|
@@ -137,20 +136,83 @@ project distort monomers during the cluster relax. Identical builds
 | `MEOH:4`, L = 15 Å | 0.014 Å | 0.966 Å | — |
 | `TIP3:60`, L = 15 Å | 0.048 Å | 0.451 Å | — |
 
-On the local build the distortion enters during **ABNR**, and it is a converged
-state, not a transient: SD alone (2000 steps) leaves the skeleton at 0.018 Å,
-ABNR alone (2000 steps) reaches 0.514 Å, and SD 500 + ABNR 2000 lands on the same
-0.304 Å as SD 50 + ABNR 100. A TIP3 O–H placed at 0.953 Å ends at 1.257 Å there
-(1.345 Å on CI) — a 30–40 % bond stretch that no force field supports.
+The distortion entered during **ABNR** and was a converged state, not a transient:
+SD alone (2000 steps) left the skeleton at 0.018 Å, ABNR alone (2000 steps)
+reached 0.514 Å, and SD 500 + ABNR 2000 landed on the same 0.304 Å as SD 50 /
+ABNR 100. A TIP3 O–H placed at 0.953 Å came back at 1.257 Å (1.345 Å on CI) — a
+30–40 % bond stretch no force field supports.
 
-Because pc-studix reproduces none of it, this is an environment/build problem
-rather than something inherent to small or dilute systems, and the threshold does
-not need to accommodate it. `tests/unit/test_md_system_unified_ffparams.py`
-therefore sets `MMML_MAX_MONOMER_INTERNAL_DEVIATION_A=0` (measure, don't gate) so
-that CHARMM smoke test can keep asserting what it is about — FFParams lowering —
-while the gate stays armed for real builds. Fixing those CHARMM builds is
-separate work; until then, boxes built on them carry distorted monomers, which is
-exactly what this gate now makes visible.
+It looked like a build-flag difference. It was not: every environment had the
+identical, buggy source.
+
+`setup/charmm/source/api/api_read.F90` declared its append flag with an
+initializer inside both read entry points:
+
+```fortran
+logical :: qappend = .false., qflex = .false.   ! initializer ⇒ implicitly SAVEd
+if (append .ne. 0) qappend = .true.             ! only ever sets, never clears
+```
+
+A Fortran local declared with an initializer is implicitly `SAVE`d, so `qappend`
+survived across calls, and the one-way assignment could never clear it. The
+**first** `read.prm(..., append=True)` in a process latched append mode for every
+later read. (`read_psf_card`, sixty lines down, gets this right — no initializer,
+explicit `qappend = .false.`.)
+
+`read_cgenff_toppar()` appends the repo-bundled `examples/m/top_ch3cl.rtf` and
+`par_ch3cl.prm` whenever those files exist, which arms the latch. The Packmol
+builder then calls `read_cgenff_toppar()` **twice** — once per monomer template,
+once in `_build_cluster_psf_from_composition` — so the second call's
+`append=False` ran as `READ PARAM APPEND`, wiping CHARMM's live NONBONDED table.
+The cluster relax then had **no VDW at all**: `VDWaals` read `-0.00000` even for
+two waters at 2.5 Å O–O, `PARRDR` warned `Null nonbond group found`, and `ELEC`
+reached −4.4 × 10⁶ kcal/mol after ABNR. SD barely moves; ABNR converged to a pure
+electrostatic collapse, with H falling onto a neighbouring O and dragging its own
+O–H bond out with it.
+
+The isolated monomer looked healthy throughout only because all three atoms of one
+water are mutually excluded, so nonbonded never enters that minimization.
+
+pc-studix looked healthy for a mundane reason: the numbers came from `~/mmml_gate2`,
+a non-git copy of the tree that simply lacks `examples/m/par_ch3cl.prm`, so the
+append never fired and the latch never armed. Hiding those two files on the darwin
+build reproduced the healthy result exactly.
+
+Confirmed directly on pc-studix — one compute node, one `libcharmm.so`, one
+checkout, `MEOH:4` L = 15 Å seed 23, the *only* difference being whether the
+bundled append files are reachable (`MMML_CGENFF_EXTRA_RTF` / `_PRM`):
+
+| Arm | append RTF/PRM resolved | worst monomer |
+|-----|-------------------------|---------------|
+| A | none | 0.014 Å |
+| B | `top_ch3cl.rtf`, `par_ch3cl.prm` | **0.424 Å** — gate raises |
+
+So **no CHARMM build was ever healthy**; the pc-studix checkout was just missing an
+optional data file. Production runs from `~/mmml` on pc-studix, which does ship
+`examples/m/par_ch3cl.prm`, were building boxes with VDW switched off. The 0.35 Å
+threshold itself is unaffected: it was calibrated on arm-A-style runs, which have a
+live nonbonded table and are genuinely healthy.
+
+Controlled A/B on the darwin build — same source tree, same MLpot tier, same CMake
+build directory, only `api_read.F90` differing, bundled append files **present**
+in both arms:
+
+| Build | `qappend` saved | `qappend` per call | pc-studix reference |
+|-------|-----------------|--------------------|---------------------|
+| `TIP3:4`, L = 15 Å | 0.304 Å | **0.031 Å** | 0.040 Å |
+| `MEOH:4`, L = 15 Å | 0.423 Å — gate raises | **0.021 Å** | 0.014 Å |
+| `TIP3:60`, L = 15 Å | 0.451 Å | **0.037 Å** | 0.048 Å |
+
+The `TIP3:4` figure reproduces the originally observed 0.304 Å to four figures.
+Note that `TIP3:4` alone sits *under* the 0.35 Å threshold on this build — it was
+the CI build (0.393 Å) and `MEOH:4` that tripped the gate, which is why the
+composition used for a spot check matters.
+
+!!! warning "Rebuilding after an `api/*.F90` change"
+    The CI libcharmm cache key and `scripts/ci/setup_charmm_lib.sh`'s build stamp
+    used to hash a hand-picked subset of `setup/charmm/source/api/*.F90` that did
+    not include `api_read.F90`, so this fix would have been served a stale
+    library. Both now hash every `api/*.F90`.
 
 ---
 
