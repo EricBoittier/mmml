@@ -59,9 +59,19 @@ STATEFUL_SMOKE_PATHS=(
   "$MD_SYSTEM_FFPARAMS_SMOKE"
   "$SCALED_LJ_CHARMM_SMOKE"
   "$PYTEST_EXIT_STATUS_SMOKE"
-  "$PARAM_READ_CONTRACT_SMOKE"
   "$MLPOT_PAIRS_SMOKE"
 )
+
+# tests/conftest.py auto-marks everything under tests/functionality/charmm/ as
+# ``charmm_serial`` ("must not run under mpirun -- second PSF/CGENFF read"), and
+# MARK_EXPR excludes that marker. So these modules can never run in the loop
+# above: listing PARAM_READ_CONTRACT_SMOKE there selected 0 tests and only broke
+# the job. They need the opposite treatment -- a serial parent with no mpirun,
+# and a mark expression that keeps charmm_serial in.
+SERIAL_SMOKE_PATHS=(
+  "$PARAM_READ_CONTRACT_SMOKE"
+)
+SERIAL_MARK_EXPR="${MMML_PYTEST_SERIAL_MARK:-pycharmm and not gpu}"
 
 # JUnit reports per invocation. pytest exits 0 when every selected test skips,
 # so the exit status below cannot distinguish "the live suite passed" from "the
@@ -82,11 +92,29 @@ mkdir -p "$REPORT_DIR"
 # scripts/ci/check_test_report.py is what actually decides pass/fail.
 status=0
 
+# pytest exit 5 is NO_TESTS_COLLECTED -- a configuration result, not a failure.
+# It fires when every test in a smoke module is deselected by MARK_EXPR, and it
+# turned the whole charmm job red while every test passed: adding
+# tests/functionality/charmm/ to the stateful list met tests/conftest.py, which
+# auto-marks that entire directory ``charmm_serial`` (_CHARMM_SERIAL_PATH_PREFIXES),
+# MARK_EXPR excludes charmm_serial, so pytest selected 0 of 2, exited 5, and
+# mpirun surfaced that as non-zero -- "36 passed, 0 failed" and exit 1.
+#
+# Tolerate it, but say so loudly: a smoke path that selects nothing is dead
+# weight and the warning is how it gets noticed. This does not weaken the gate --
+# check_test_report.py's --min-passed floor is what proves the suite actually ran.
 run_smoke() {  # run_smoke <report-name> <pytest args...>
   local report_name="$1"; shift
   local report="$REPORT_DIR/$report_name.xml"
+  local rc=0
   mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
-    --junitxml="$report" "$@" || status=1
+    --junitxml="$report" "$@" || rc=$?
+  if [[ "$rc" -eq 5 ]]; then
+    echo "::warning::run_pycharmm_smoke_pytest: $report_name selected no tests" \
+         "(pytest exit 5) under -m '$MARK_EXPR'; it contributes nothing to this job" >&2
+  elif [[ "$rc" -ne 0 ]]; then
+    status=1
+  fi
   if [[ ! -s "$report" ]]; then
     # A process killed before pytest could write its report leaves no evidence
     # at all, and an absent file would otherwise just shrink the aggregate the
@@ -100,7 +128,14 @@ run_smoke() {  # run_smoke <report-name> <pytest args...>
 run_serial_smoke() {  # run_serial_smoke <report-name> <pytest args...>
   local report_name="$1"; shift
   local report="$REPORT_DIR/$report_name.xml"
-  "$MMML_PYTHON" -m pytest --color=yes --junitxml="$report" "$@" || status=1
+  local rc=0
+  "$MMML_PYTHON" -m pytest --color=yes --junitxml="$report" "$@" || rc=$?
+  if [[ "$rc" -eq 5 ]]; then
+    echo "::warning::run_pycharmm_smoke_pytest: $report_name selected no tests" \
+         "(pytest exit 5); it contributes nothing to this job" >&2
+  elif [[ "$rc" -ne 0 ]]; then
+    status=1
+  fi
   if [[ ! -s "$report" ]]; then
     echo "::error::run_pycharmm_smoke_pytest: no JUnit report from $report_name;" \
          "the serial run died before pytest could write one" >&2
@@ -120,8 +155,14 @@ done
 run_serial_smoke "$(basename "$PYTEST_EXIT_STATUS_SMOKE" .py)" \
   -m "$MARK_EXPR" "$PYTEST_EXIT_STATUS_SMOKE" "$@"
 
+# charmm_serial modules: no mpirun, and a mark expression that keeps the marker in.
+for smoke_path in "${SERIAL_SMOKE_PATHS[@]}"; do
+  run_serial_smoke "$(basename "$smoke_path" .py)" \
+    -m "$SERIAL_MARK_EXPR" "$smoke_path" "$@"
+done
+
 ignore_args=()
-for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}"; do
+for smoke_path in "${STATEFUL_SMOKE_PATHS[@]}" "${SERIAL_SMOKE_PATHS[@]}"; do
   ignore_args+=("--ignore=$smoke_path")
 done
 
