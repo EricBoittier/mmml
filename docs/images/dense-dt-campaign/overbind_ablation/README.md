@@ -7,29 +7,46 @@ Literature DCM dimer wells are about **−3 to −5 kcal/mol**.
 
 ## Results (soft well = per-ray min at r ≥ 3.4 Å)
 
-| Run | Soft well mean | Soft well median | Contact ray-min mean | ML full below |
-|---|---:|---:|---:|---:|
-| baseline (96-ray campaign) | −10.2 | −9.9 | −30.4 | 6.5 Å |
-| `es_off_on8` (lever 1) | −8.4 | −8.9 | −30.1 | 6.5 Å |
-| `handoff_on6_w1p5` | −8.4 | −8.9 | −30.1 | 4.5 Å |
-| `handoff_on5_w1p5` (lever 2) | −5.4 | −4.4 | −29.4 | 3.5 Å |
-| `handoff_on4p5_w1` (lever 2) | −4.6 | −3.0 | −29.4 | 3.5 Å |
-| `ft_early_handoff_*` | ≳ −1 | ≳ −1 | ≳ −1 | — |
+| Run | Soft well median | Contact ray-min median | ML full below | Role |
+|---|---:|---:|---:|---|
+| baseline train handoff (on=8) | −8.9 | −30.8 | 6.5 Å | overbinds |
+| `es_off_on8` | −8.9 | −30.8 | 6.5 Å | ES not the driver |
+| **`handoff_on5_w1p5` (lever 2 soft)** | **−4.4** | −30.8 | 3.5 Å | **campaign default** |
+| `handoff_on4p5_w1` | −3.0 | −30.8 | 3.5 Å | still contact-deep |
+| `contact_on3p5_w1p5` | −1.1 | **−1.1** | 2.0 Å | kills contacts, underbinds |
 
-## Takeaways
+## Lever 2 — earlier MM handoff (shipped in campaign)
 
-1. **Lever 1 (ES-off):** PhysNet Coulomb off does **not** change the wells.
-   Overbinding is neural local ML energy. A 5-epoch CPU warm-start fine-tune
-   with earlier handoff collapsed the interaction (underbinding) — needs a
-   proper GPU retrain, not a smoke FT.
-2. **Lever 2 (earlier MM handoff):** Deploy-time `mm_switch_on=5` / `4.5`
-   moves **soft** wells into the literature band, but **~94% of rays still
-   minimize at r ≲ 3.4 Å** where ML remains fully on (−30 kcal contact wells).
-   Turning MM on near 3.5–4 Å also produces rare LJ explosions (mean curves
-   are outlier-sensitive; medians are the right summary).
+`run_one.sh` now passes `--mm-switch-on 5 --ml-switch-width 1.5` (`DDC_HANDOFF=soft`).
+This is a **deploy mismatch** vs the epoch222 train taper (8/1.5/5); the calculator
+warns on purpose. Soft wells move into the literature band and should reduce the
+dense NVT droplet drive from medium-range overbinding.
+
+## How to fix contact rays (r ≲ 3.4 Å, −30 kcal)
+
+Contact minima sit where `ml_scale=1` even under soft lever-2 (ML full below 3.5 Å).
+
+| Approach | Soft well | Contact wells | Status |
+|---|---|---|---|
+| Deploy `DDC_HANDOFF=contact` (on=3.5) | underbinds (~−1) | fixed | diagnostic only |
+| **Retrain at on=5** with dimer soft targets | keep ~−4 | should unlearn | **recommended** |
+| Stronger short-range wall (`r_on`≫1 Å) | may distort | partial | not preferred |
+
+Recommended next train:
+
+```bash
+uv run mmml physnet-train \
+  --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml \
+  --data artifacts/lj_scales/dataset_cgenff.npz \
+  --physnet-checkpoint artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json \
+  --hybrid-mm --learn-mm-lj-scales --lr-solver mic \
+  --mm-switch-on 5.0 --ml-switch-width 1.5 --mm-switch-width 5.0 \
+  --tag hybrid_mm_lever2_on5_ft --num-epochs 50
+```
+
+Then redeploy MD with the **same** handoff (parity, no mismatch warning).
 
 ## Figures
 
 - `overbind_ablation_compare.png` — mean E_int curves + soft-well bars
 - `overbind_handoff_components.png` — ML vs MM for early-handoff variants
-EOF

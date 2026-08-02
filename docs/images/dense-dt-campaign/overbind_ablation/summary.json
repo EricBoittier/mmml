@@ -135,5 +135,15 @@
     "lever2_early_handoff": "soft-well median \u22128.9 \u2192 \u22124.4 (on=5) / \u22123.0 (on=4.5); contact minima still \u221230",
     "fine_tune_smoke": "5-epoch CPU warm-start collapsed wells to ~\u22121 kcal; not a usable fix",
     "next": "GPU retrain with mm_switch_on\u22485 and dimer soft-well regularizer; keep contact wall"
+  },
+  "campaign": {
+    "default_DDC_HANDOFF": "soft",
+    "mm_switch_on": 5.0,
+    "ml_switch_width": 1.5,
+    "contact_mode": {
+      "DDC_HANDOFF": "contact",
+      "mm_switch_on": 3.5
+    },
+    "contact_ray_fix": "retrain at mm_switch_on=5 (deploy-only contact mode underbinds soft well)"
   }
 }

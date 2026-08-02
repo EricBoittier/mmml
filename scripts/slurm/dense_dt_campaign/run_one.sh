@@ -26,6 +26,27 @@ CRD="${BOX_DIR}/model.crd"
 [[ -f "$PSF" ]] || PSF="${BOX_DIR}/mini.psf"
 [[ -f "$CRD" ]] || CRD="${BOX_DIR}/mini.crd"
 
+# Lever-2 handoff (see docs/images/dense-dt-campaign/overbind_ablation/):
+#   soft (default): mm_switch_on=5 → soft wells ~lit (−3…−5); contact rays still deep
+#   contact:        mm_switch_on=3.5 → kills contact −30 kcal wells but soft underbinds
+# Override: DDC_HANDOFF=soft|contact  or  DDC_MM_SWITCH_ON / DDC_ML_SWITCH_WIDTH
+DDC_HANDOFF="${DDC_HANDOFF:-soft}"
+case "${DDC_HANDOFF}" in
+  soft)
+    MM_SWITCH_ON="${DDC_MM_SWITCH_ON:-5.0}"
+    ML_SWITCH_WIDTH="${DDC_ML_SWITCH_WIDTH:-1.5}"
+    ;;
+  contact)
+    MM_SWITCH_ON="${DDC_MM_SWITCH_ON:-3.5}"
+    ML_SWITCH_WIDTH="${DDC_ML_SWITCH_WIDTH:-1.5}"
+    ;;
+  *)
+    echo "ERROR: DDC_HANDOFF must be soft|contact (got ${DDC_HANDOFF})" >&2
+    exit 2
+    ;;
+esac
+MM_SWITCH_WIDTH="${DDC_MM_SWITCH_WIDTH:-5.0}"
+
 mkdir -p "$OUT"
 if [[ ! -f "$PSF" || ! -f "$CRD" ]]; then
   echo "ERROR: missing PSF/CRD under $BOX_DIR" | tee "$OUT/FAIL.txt"
@@ -53,6 +74,8 @@ fi
   echo "host=$(hostname) job=${SLURM_JOB_ID:-local} $(date -Is)"
   echo "box_dir=$BOX_DIR box_A=$BOX_A ensemble=$ENSEMBLE ps=$PS dt_fs=$DT_FS x64=$X64 seed=$SEED"
   echo "psf=$PSF crd=$CRD"
+  echo "handoff=${DDC_HANDOFF} mm_switch_on=${MM_SWITCH_ON} ml_switch_width=${ML_SWITCH_WIDTH} mm_switch_width=${MM_SWITCH_WIDTH}"
+  echo "note=deploy handoff differs from epoch222 train (8/1.5/5); calculator will warn — intentional lever-2 probe"
   python3 - <<PY
 import json
 from pathlib import Path
@@ -129,6 +152,9 @@ set +e
     --from-psf "$PSF" --from-crd "$CRD" --no-packmol \
     --checkpoint "$CKPT" --mm-lj-scales-file "$SIDECAR" \
     --mm-nonbond-mode jax_mic --mm-charge-mode fixed \
+    --mm-switch-on "$MM_SWITCH_ON" \
+    --ml-switch-width "$ML_SWITCH_WIDTH" \
+    --mm-switch-width "$MM_SWITCH_WIDTH" \
     --output-dir "$OUT" --temperature 300 --pressure 1.0 --seed "$SEED" \
     --ps "$PS" --dt-fs "$DT_FS" \
     --quiet \
