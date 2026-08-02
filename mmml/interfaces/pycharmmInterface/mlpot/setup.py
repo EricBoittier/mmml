@@ -1977,6 +1977,16 @@ def load_physnet_mlpot_bundle(
         )
 
         if atoms_per_monomer is None:
+            # The staged cluster builder records exact residue sizes on args;
+            # use that authoritative list before probing the live PSF.
+            from_args = getattr(args, "_cluster_atoms_per_list", None)
+            if from_args is not None:
+                try:
+                    per_args = [int(x) for x in from_args]
+                    if len(per_args) == int(n_monomers) and sum(per_args) == int(n_atoms):
+                        atoms_per_monomer = per_args
+                except (TypeError, ValueError):
+                    pass
             # Mixed solvent systems have heterogeneous residue sizes.  Use
             # PSF residue boundaries before applying the legacy uniform split.
             try:
@@ -1984,9 +1994,10 @@ def load_physnet_mlpot_bundle(
                     atoms_per_monomer_from_psf,
                 )
 
-                per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
-                if len(per_psf) == int(n_monomers) and sum(per_psf) == int(n_atoms):
-                    atoms_per_monomer = per_psf
+                if atoms_per_monomer is None:
+                    per_psf = [int(x) for x in atoms_per_monomer_from_psf()]
+                    if len(per_psf) == int(n_monomers) and sum(per_psf) == int(n_atoms):
+                        atoms_per_monomer = per_psf
             except Exception:
                 pass
             if atoms_per_monomer is None:

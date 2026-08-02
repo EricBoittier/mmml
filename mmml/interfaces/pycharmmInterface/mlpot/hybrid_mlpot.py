@@ -1398,6 +1398,28 @@ def build_decomposed_mlpot_model(
     do_ml = True if args is None else bool(getattr(args, "do_ml", True))
     include_mm = True if args is None else bool(getattr(args, "include_mm", True))
     do_mm = include_mm and not periodic_mode
+    periodic_external_scales: Path | None = None
+
+    # periodic_external takes its VDW from CHARMM IMAGE, so `do_mm` is False and
+    # the JAX pair loop that applies per-type LJ scales never runs. Trained
+    # scales therefore have to reach the energy through CHARMM's parameters.
+    # See scaled_cgenff_prm: this is exact (per-type, pre-combining), and it is
+    # a once-per-session operation -- re-deploying is a guarded no-op, and a
+    # different sidecar raises rather than silently zeroing the VDW.
+    if periodic_mode and include_mm and args is not None:
+        from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
+
+        scales_file = getattr(args, "mm_lj_scales_file", None)
+        periodic_external_scales = find_learnable_lj_scales_sidecar(
+            scales_file=scales_file,
+            checkpoint=None if _spoof else ckpt,
+        )
+        if periodic_external_scales is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
+                deploy_scaled_lj_into_charmm,
+            )
+
+            deploy_scaled_lj_into_charmm(periodic_external_scales, verbose=verbose)
     do_ml_dimer = True if args is None else bool(getattr(args, "do_ml_dimer", True))
     if args is not None and bool(getattr(args, "skip_ml_dimers", False)):
         do_ml_dimer = False
@@ -1528,12 +1550,11 @@ def build_decomposed_mlpot_model(
                 f"from hybrid_mm.json / --mm-lj-scales-file",
                 flush=True,
             )
-    elif args is not None:
-        # doMM off (periodic_external, or include_mm false): ep_scale/sig_scale
-        # feed the JAX switched-MM pair loop only, and CHARMM IMAGE VDW does not
-        # read the sidecar. Applying nothing while the user believes trained LJ
-        # is active is a silent-wrong-results failure, so say so — loudly when
-        # the scales were requested explicitly, on stderr when auto-discovered.
+    elif args is not None and periodic_external_scales is None:
+        # doMM off without a successful CHARMM deployment: ep_scale/sig_scale
+        # feed the JAX switched-MM pair loop only. Applying nothing while the
+        # user believes trained LJ is active is a silent-wrong-results failure,
+        # so say so loudly for an explicit request and warn for auto-discovery.
         from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
 
         found = None
@@ -1551,21 +1572,38 @@ def build_decomposed_mlpot_model(
         )
         if scales_file is not None:
             raise ValueError(
-                f"--mm-lj-scales-file={scales_file} was given but JAX MM is off "
+                f"--mm-lj-scales-file={scales_file} was given but no LJ backend "
+                "can consume it "
                 f"({mode_note}), so per-type LJ scales cannot be applied: the "
-                "switched-MM pair loop is what consumes ep_scale/sig_scale, and "
-                "CHARMM IMAGE VDW ignores hybrid_mm.json. Use "
-                "--include-mm with --mm-nonbond-mode jax_mic to deploy trained "
-                "LJ scales, or drop --mm-lj-scales-file to run stock CGenFF LJ. "
+                "JAX switched-MM pair loop is disabled and CHARMM parameter "
+                "deployment requires --include-mm with periodic_external. Use "
+                "--include-mm, or drop --mm-lj-scales-file to run without the "
+                "trained LJ correction. "
                 "See docs/hybrid-mm-lj-scales.md."
             )
         if found is not None:
             print(
                 f"mmml WARNING: {found} carries trained MM LJ scales but JAX MM "
-                f"is off ({mode_note}) — they are NOT applied and this run uses "
-                "stock CGenFF LJ. Use --mm-nonbond-mode jax_mic with "
-                "--include-mm to deploy them. See docs/hybrid-mm-lj-scales.md.",
+                f"is off ({mode_note}) — they are NOT applied. Use --include-mm "
+                "to deploy them through the selected LJ backend. See "
+                "docs/hybrid-mm-lj-scales.md.",
                 file=sys.stderr,
+                flush=True,
+            )
+    # Native ewald doMM: optional switched LJ beside untapered Coulomb (#139).
+    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+
+    _ewald_include_lj = False
+    if do_mm and pick_lr_solver(lr_solver) == "ewald":
+        _flag = getattr(args, "mm_include_lj", None) if args is not None else None
+        if _flag is None:
+            _ewald_include_lj = ep_scale is not None
+        else:
+            _ewald_include_lj = bool(_flag)
+        if verbose:
+            print(
+                f"Decomposed MLpot: lr_solver=ewald include_lj={_ewald_include_lj} "
+                f"(COM-switched LJ beside untapered full-box Coulomb)",
                 flush=True,
             )
     factory = setup_calculator(
@@ -1627,6 +1665,7 @@ def build_decomposed_mlpot_model(
             if args is not None
             else True
         ),
+        include_lj=_ewald_include_lj,
         mm_nonbond_mode=mm_nonbond_mode,
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True

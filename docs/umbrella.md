@@ -7,9 +7,12 @@
 | `packed_ml` (default) | Vacuum / free-space molecule | Pure ML; \(K\) windows packed into one JAX-MD NVT |
 | `hybrid_jaxmd` | Explicit solvent (PSF + box) | Mechanical embedding: **ML reactive complex** + **MM solvent**; one window at a time |
 
-Both add a harmonic distance restraint
-\(W_k = \tfrac12 k_k(\xi-\xi_{0,k})^2\). Free-energy differences come from
-**pymbar MBAR** on the saved snapshots.
+Both add a harmonic restraint
+\(W_k = \tfrac12 k_k(\xi-\xi_{0,k})^2\). For **distances**, \(\xi\) is in Å and
+\(k\) in eV/Å². For **dihedrals** (`cv_x.kind: dihedral`), \(\xi\) is in degrees
+(periodic shortest-arc Δφ) and \(k\) in eV/deg² — see the
+[peptide φ/ψ teaching exercise](examples/tria-phi-psi-scan.md).
+Free-energy differences come from **pymbar MBAR** on the saved snapshots.
 
 This is **not** CHARMM ADUMB (adaptive umbrella / WHAM). For ADUMB on hybrid
 CHARMM+ML systems see [examples/m](examples/nh3-ch3cl-results.md). For MEP /
@@ -21,6 +24,7 @@ barrier paths see [NEB](neb.md).
 |------|------|
 | Canonical PMF along a bond / contact distance (pure ML, gas) | `mmml umbrella-sample` (`packed_ml`) + `mmml umbrella-mbar` |
 | Same PMF with explicit solvent (ML solute + MM solvent) | `mmml umbrella-sample --engine hybrid_jaxmd` + `mmml umbrella-mbar` |
+| Backbone φ/ψ constrained maps + gas dihedral PMF | [Teaching exercise](examples/tria-phi-psi-scan.md) (`DihedralCV`, `seed_mode: frames`) |
 | Alchemical λ free energy (hybrid MMML) | `md-system --setup lambda_ti` + `mmml lambda-mbar` |
 | Adaptive umbrella in CHARMM | ADUMB via `pycharmm_pre_dynamics_lingo` |
 | Minimum-energy path | [`mmml neb`](neb.md) |
@@ -151,6 +155,22 @@ checkpoint. For `hybrid_jaxmd`, snapshots store
 `energies_unbiased_ev` \(=U_{\mathrm{ML}}+U_{\mathrm{MM}}\) at sample time
 (biases remain analytic; MIC distances when a box is present).
 The reported PMF is window free energy relative to the minimum window.
+
+### Dihedral collective variables
+
+```yaml
+cv_x:
+  kind: dihedral
+  atoms: [14, 16, 18, 24]   # 0-based; φ for TRIA central ALA
+seed_mode: frames           # required — stretch seeding is distance-only
+k_ev_A2: 0.05               # eV/deg²
+xi_min: -180
+xi_max: 180
+n_windows: 13
+```
+
+Worked TRIA path (gas scan → seeds → sample → MBAR → plot):
+[Peptide φ/ψ scan → umbrella PMF](examples/tria-phi-psi-scan.md).
 
 ## CLI reference
 

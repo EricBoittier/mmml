@@ -67,6 +67,9 @@ mmml physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz \
 --natoms 64 --batch-size 32 --plots --num-samples 500
 ```
 
+## Visual examples
+
+![Element-resolved force validation](../../images/prepare-mm-dataset/force_validation.png)
 
 
 ---

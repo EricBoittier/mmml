@@ -14,6 +14,7 @@ from mmml.interfaces.pyxtal_placement import (
     scale_atoms_cell_to_density,
 )
 from mmml.paths import (
+    default_acetone_crystal_cif,
     default_benzene_crystal_cif,
     default_dcm_crystal_cif,
     default_dcm_molecule_xyz,
@@ -286,8 +287,12 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
     benz_lit = metrics_from_cif(
         default_benzene_crystal_cif(), space_group=14, label="COD 4501704"
     )
+    aco_lit = metrics_from_cif(
+        default_acetone_crystal_cif("pbca_150k"), space_group=61, label="COD 7110464"
+    )
     dcm_charmm = charmm_crystal_metrics_from_preset("dcm")
     benz_charmm = charmm_crystal_metrics_from_preset("benz")
+    aco_charmm = charmm_crystal_metrics_from_preset("aco")
     if use_live_pyxtal and have_pyxtal():
         dcm_built = _pyxtal_built_dcm()
         benz_built = _pyxtal_built_benzene()
@@ -305,7 +310,7 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
         "",
         "Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`",
         "",
-        "#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/2100015.html)",
+        "#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/cod/2100015.html)",
         "",
         comparison_table_markdown(
             dcm_lit,
@@ -341,6 +346,28 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
             built_caption=(
                 "PyXtal: `-m benzene` (not `c1ccccc1`), `--spg 14 --z 2 --seed 7`, "
                 "ρ scaled to literature."
+            ),
+        ),
+        "#### Acetone (C₃H₆O) — [COD 7110464](https://www.crystallography.net/cod/7110464.html)",
+        "",
+        comparison_table_markdown(
+            aco_lit,
+            None,
+            charmm=aco_charmm,
+            literature_citation=(
+                "Allan *et al.*, *Chem. Commun.* **1999**, 751 "
+                "([doi:10.1039/a900558g](https://doi.org/10.1039/a900558g)); "
+                "Pbca, Z=16, ambient pressure / 150 K. Three more phases ship as "
+                "presets (`aco5k`, `aco110k`, `acocmcm`); all five published "
+                "structures are checked against the paper by "
+                "`examples/acetone_crystal/01_phases.py`."
+            ),
+            charmm_caption=(
+                "make-res+CIF: `mmml build-crystal --literature aco` (unit cell)."
+            ),
+            built_caption=(
+                "No PyXtal column: acetone is used here as an experimental "
+                "reference structure, not a packing target."
             ),
         ),
     ]

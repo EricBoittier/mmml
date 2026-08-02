@@ -7,7 +7,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from mmml.md.restraints import LinearDistanceCV
+from mmml.md.restraints import DihedralCV, LinearDistanceCV, cv_from_spec
 from mmml.umbrella.config import UmbrellaMbarConfig
 from mmml.umbrella.energy import make_single_ml_energy_fn, numpy_bias_matrix_nd
 from mmml.umbrella.io import (
@@ -121,18 +121,32 @@ def subsample_u_kln(
     return u_eff, n_k_eff, g_k
 
 
-def _snap_cvs(snap: dict[str, Any]) -> list[LinearDistanceCV]:
+def _cv_to_spec(cv: Any) -> dict[str, Any]:
+    if isinstance(cv, DihedralCV):
+        return cv.to_spec()
+    if hasattr(cv, "to_spec"):
+        return cv.to_spec()
+    return {
+        "pairs": [list(p) for p in cv.pairs],
+        "coefficients": list(cv.coefficients),
+    }
+
+
+def _snap_cvs(snap: dict[str, Any]) -> list[Any]:
     """Recover the sampling CVs from a snapshot.
 
     Prefers the stored ``cv_spec``: for a combination CV such as
     ``xi = r(C-Cl) - r(C-N)`` the legacy ``atom_i``/``atom_j`` fields name only
     the first distance, so rebuilding from them would re-weight MBAR with the
-    wrong bias and silently produce a wrong PMF.
+    wrong bias and silently produce a wrong PMF. Dihedral CVs are restored via
+    ``cv_from_spec`` (periodic degrees / eV·deg⁻²).
     """
     spec = snap.get("cv_spec")
     if spec:
-        return [LinearDistanceCV.from_spec(s) for s in spec]
-    cvs = [LinearDistanceCV.distance(int(snap["atom_i"]), int(snap["atom_j"]))]
+        return [cv_from_spec(s) for s in spec]
+    cvs: list[Any] = [
+        LinearDistanceCV.distance(int(snap["atom_i"]), int(snap["atom_j"]))
+    ]
     if "atom_k" in snap and "atom_l" in snap:
         cvs.append(
             LinearDistanceCV.distance(
@@ -217,8 +231,40 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     if "box" in snap:
         box = np.asarray(snap["box"], dtype=np.float64)
 
-    if engine == "hybrid_jaxmd" or "energies_unbiased_ev" in snap:
-        if "energies_unbiased_ev" not in snap:
+    # Drop windows that blew up (all-NaN / explicitly failed). Keep original ξ₀
+    # indexing in the returned PMF by scattering results back onto the full grid.
+    k_all = int(positions.shape[0])
+    failed: set[int] = set()
+    if "failed_windows" in snap:
+        failed.update(int(x) for x in np.asarray(snap["failed_windows"]).reshape(-1))
+    u_unb = None
+    if "energies_unbiased_ev" in snap:
+        u_unb = np.asarray(snap["energies_unbiased_ev"], dtype=np.float64)
+        for k in range(k_all):
+            if not np.any(np.isfinite(u_unb[k])):
+                failed.add(k)
+    keep = [k for k in range(k_all) if k not in failed]
+    if not keep:
+        return {
+            "error": "MBAR skipped: every umbrella window failed or has no finite frames.",
+            "failed_windows": sorted(failed),
+        }
+    if failed:
+        print(
+            f"MBAR: dropping {len(failed)} failed/non-finite window(s): {sorted(failed)}",
+            flush=True,
+        )
+        positions = positions[keep]
+        targets_per_cv = [[row[k] for k in keep] for row in targets_per_cv]
+        k_per_cv = [[row[k] for k in keep] for row in k_per_cv]
+        xi0 = xi0[keep]
+        if u_unb is not None:
+            u_unb = u_unb[keep]
+        if yi0 is not None:
+            yi0 = yi0[keep]
+
+    if engine == "hybrid_jaxmd" or u_unb is not None:
+        if u_unb is None:
             raise ValueError(
                 "hybrid_jaxmd MBAR requires energies_unbiased_ev in umbrella_snapshots.npz"
             )
@@ -228,7 +274,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
             targets_per_cv=targets_per_cv,
             k_per_cv=k_per_cv,
             temperature_K=float(temperature_K),
-            unbiased_energies=np.asarray(snap["energies_unbiased_ev"], dtype=np.float64),
+            unbiased_energies=u_unb,
             box=box,
         )
     else:
@@ -256,6 +302,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
         return {
             "error": "MBAR skipped: at least one umbrella window has no snapshots.",
             "N_k": n_k.tolist(),
+            "failed_windows": sorted(failed),
         }
 
     u_eff, n_k_eff, g_k = subsample_u_kln(u_kln, n_k)
@@ -267,8 +314,18 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     kbt = _K_B_EV * float(temperature_K)
     pmf_kt = delta_f[0, :].copy()
     pmf_kt -= pmf_kt.min()
-    pmf_ev = pmf_kt * kbt
-    d_pmf_ev = d_delta_f[0, :] * kbt
+    pmf_ev_kept = pmf_kt * kbt
+    d_pmf_ev_kept = d_delta_f[0, :] * kbt
+    # Scatter onto the original window grid (NaN where the window was dropped).
+    pmf_ev = np.full(k_all, np.nan, dtype=np.float64)
+    d_pmf_ev = np.full(k_all, np.nan, dtype=np.float64)
+    for i_kept, k_orig in enumerate(keep):
+        pmf_ev[k_orig] = pmf_ev_kept[i_kept]
+        d_pmf_ev[k_orig] = d_pmf_ev_kept[i_kept]
+    xi0 = np.asarray(snap["xi0"], dtype=np.float64)
+    yi0_out = None
+    if "yi0" in snap:
+        yi0_out = np.asarray(snap["yi0"], dtype=np.float64).tolist()
 
     grid_shape = None
     if "grid_shape" in snap:
@@ -278,14 +335,13 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
         "temperature_K": float(temperature_K),
         "ndim": len(cvs),
         "atom_pairs": [list(cv.pairs[0]) for cv in cvs],
-        "cv_spec": [
-            {"pairs": [list(p) for p in cv.pairs], "coefficients": list(cv.coefficients)}
-            for cv in cvs
-        ],
+        "cv_spec": [_cv_to_spec(cv) for cv in cvs],
         "cv_label": [cv.label() for cv in cvs],
         "xi0": xi0.tolist(),
-        "yi0": None if yi0 is None else yi0.tolist(),
+        "yi0": yi0_out,
         "k_ev_A2": k_x.tolist(),
+        "failed_windows": sorted(failed),
+        "n_windows_used": len(keep),
         "grid_shape": grid_shape,
         "Delta_f_kT": delta_f.tolist(),
         "dDelta_f_kT": d_delta_f.tolist(),

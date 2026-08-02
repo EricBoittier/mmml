@@ -73,6 +73,26 @@ def _masked_pair_distance(
     return jnp.sqrt(r2_safe)
 
 
+def _pair_epsilon(eps: Array, iu: Array, ju: Array) -> Array:
+    """Geometric-mean well depth ``sqrt(eps_i eps_j)`` with a NaN-safe gradient.
+
+    Same hazard as :func:`_masked_pair_distance`, one operation later:
+    ``d sqrt(x)/dx`` is infinite at ``x = 0`` and the cotangent of a masked-out
+    pair is zero, so a zero-epsilon type (CGenFF lone pairs carry ``eps = 0`` by
+    design, and padding atoms borrow row 0) yields ``0 * inf`` and poisons every
+    force.  Substituting a dummy product before the sqrt makes that gradient
+    identically zero instead.
+
+    A *negative* product cannot arise from the CGenFF tables, whose epsilons are
+    non-negative, only from an epsilon scale driven below zero.  Training bounds
+    the scales away from that (:data:`mmml.models.mm_lj_scales.MM_LJ_EPSILON_SCALE_BOUNDS`);
+    here such a pair contributes nothing rather than NaN-ing the whole system.
+    """
+    prod = eps[iu] * eps[ju]
+    positive = prod > 0.0
+    return jnp.where(positive, jnp.sqrt(jnp.where(positive, prod, 1.0)), 0.0)
+
+
 def cgenff_pair_lj(r: Array, pair_rmin: Array, pair_eps: Array) -> Array:
     """CHARMM Lennard-Jones for a pair: ``eps * [(Rmin/r)^12 - 2 (Rmin/r)^6]``.
 
@@ -123,7 +143,7 @@ def cgenff_lj_energy(
     iu, ju = jnp.triu_indices(n, k=1)
 
     pair_rmin = rmin_half[iu] + rmin_half[ju]          # arithmetic (CHARMM)
-    pair_eps = jnp.sqrt(eps[iu] * eps[ju])             # geometric (CHARMM)
+    pair_eps = _pair_epsilon(eps, iu, ju)              # geometric (CHARMM)
 
     mask = valid[iu] & valid[ju]
     if intermolecular_only:
@@ -193,6 +213,8 @@ def cgenff_mm_energy(
     mm_switch_width: float,
     ml_switch_width: float,
     complementary_handoff: bool = True,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
 ) -> Array:
     """Switched CGenFF MM energy (LJ + electrostatics) for one padded dimer.
 
@@ -219,7 +241,7 @@ def cgenff_mm_energy(
     iu, ju = jnp.triu_indices(n, k=1)
 
     pair_rmin = rmin_half[iu] + rmin_half[ju]
-    pair_eps = jnp.sqrt(eps[iu] * eps[ju])
+    pair_eps = _pair_epsilon(eps, iu, ju)
     pair_qq = q[iu] * q[ju]
 
     # Intermolecular pairs only; padding excluded.
@@ -227,6 +249,20 @@ def cgenff_mm_energy(
 
     r = _masked_pair_distance(positions, iu, ju, inter)
     pair_e = cgenff_pair_lj(r, pair_rmin, pair_eps) + cgenff_pair_coulomb(r, pair_qq)
+    if hybrid_hamiltonian == "shared_cutoff":
+        rc = float(shared_cutoff if shared_cutoff is not None else mm_switch_on)
+        if rc <= 0.0:
+            raise ValueError("shared_cutoff must be > 0")
+        # Force-shift V_FS(r)=V(r)-V(rc)-(r-rc)V'(rc).  This makes both
+        # energy and radial force continuous at the common ML/MM cutoff.
+        rc_a = jnp.asarray(rc, dtype=r.dtype)
+        lj_rc = cgenff_pair_lj(rc_a, pair_rmin, pair_eps)
+        x6 = (pair_rmin / rc_a) ** 6
+        dlj_rc = 12.0 * pair_eps * (x6 - x6**2) / rc_a
+        coul_rc = cgenff_pair_coulomb(rc_a, pair_qq)
+        dcoul_rc = -COULOMB_CONSTANT * pair_qq / (rc_a**2)
+        shifted = pair_e - (lj_rc + coul_rc) - (r - rc_a) * (dlj_rc + dcoul_rc)
+        return jnp.sum(jnp.where(inter & (r < rc_a), shifted, 0.0))
     e_raw = jnp.sum(jnp.where(inter, pair_e, 0.0))
 
     coms = monomer_centroids(positions, mol_id, n_monomers=2)

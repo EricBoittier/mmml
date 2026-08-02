@@ -37,8 +37,22 @@ def _load_script_module(name: str, path: Path) -> ModuleType:
 
 
 cl = _load_script_module("pbc_solvent_burst_campaign_lib", SCRIPTS / "campaign_lib.py")
+
+# monitor_lib.py does a bare ``from campaign_lib import ...``, so that name must
+# resolve while it executes. Seven workflows ship a campaign_lib.py and
+# sys.modules is consulted before sys.path, so leaving the alias behind hijacks
+# the name for every module imported later in the session -- which is how
+# tests/unit/test_window_status.py came to fail collection against this
+# workflow's library instead of its own. Scope it to the load, then restore.
+_saved_cl = sys.modules.get("campaign_lib")
 sys.modules["campaign_lib"] = cl
-ml = _load_script_module("pbc_solvent_burst_monitor_lib", SCRIPTS / "monitor_lib.py")
+try:
+    ml = _load_script_module("pbc_solvent_burst_monitor_lib", SCRIPTS / "monitor_lib.py")
+finally:
+    if _saved_cl is not None:
+        sys.modules["campaign_lib"] = _saved_cl
+    else:
+        sys.modules.pop("campaign_lib", None)
 RunCell = cl.RunCell
 grep_errors = ml.grep_errors
 inspect_run = ml.inspect_run

@@ -315,9 +315,20 @@ def pack_window_seeds(
 
     resolved = None
     if cvs is not None:
-        from mmml.md.restraints import LinearDistanceCV
+        from mmml.md.restraints import DihedralCV, LinearDistanceCV, cv_from_spec
 
-        resolved = [LinearDistanceCV.from_spec(cv) for cv in cvs]
+        resolved = [cv_from_spec(cv) for cv in cvs]
+        if any(isinstance(cv, DihedralCV) for cv in resolved):
+            raise ValueError(
+                "seed_mode='stretch' cannot seed dihedral CVs; use "
+                "seed_mode='frames' (e.g. geometries from "
+                "scan_trialanine_phi_psi_pes.py)."
+            )
+        # Remaining stretch logic expects LinearDistanceCV.
+        resolved = [
+            cv if isinstance(cv, LinearDistanceCV) else LinearDistanceCV.from_spec(cv)
+            for cv in resolved
+        ]
 
     if resolved is not None and len(resolved) == 1 and len(resolved[0].pairs) == 2:
         cv = resolved[0]

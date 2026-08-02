@@ -14,6 +14,10 @@ from rich.table import Table
 
 from mmml.data.units import subtract_atom_refs
 
+# Used by the ``esp_mask`` branch of ``prepare_multiple_datasets`` below, which
+# raised NameError for want of this import.
+from .cut_grid import cut_vdw
+
 # Atomic energies in Hartree sourced from reference table
 ATOM_ENERGIES_HARTREE = get_atomic_reference_array(
     level=DEFAULT_REFERENCE_LEVEL,

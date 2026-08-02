@@ -14,6 +14,7 @@ from mmml.cli.run.md_config import (
     load_yaml_config,
     merge_campaign_job_config,
     topological_job_order,
+    validate_campaign_checkpoint,
 )
 from mmml.cli.run.md_handoff import (
     clear_handoff_context,
@@ -68,6 +69,32 @@ def _resolve_output_dir(merged: dict[str, Any], run_id: str, *, rep: int = 0) ->
     if root is None:
         root = "results"
     return (Path(str(root)) / run_id).resolve()
+
+
+def _explicit_cli_output_dir(
+    args: Namespace,
+    expanded: list[tuple[str, str, int]],
+) -> Path | None:
+    """``--output-dir`` given on the parent CLI, when it can name exactly one run.
+
+    Without this the flag is accepted and then dropped: :func:`_resolve_output_dir`
+    reads the per-job ``output_dir`` out of the YAML, so a caller who passes
+    ``--job-id X --output-dir DIR`` gets its results under the YAML's path instead
+    and nothing says so. One directory cannot serve several runs, so refuse rather
+    than pile them on top of each other.
+    """
+    explicit = getattr(args, "_cli_explicit", None) or set()
+    raw = getattr(args, "output_dir", None)
+    if "output_dir" not in explicit or not raw:
+        return None
+    if len(expanded) != 1:
+        run_ids = ", ".join(run_id for _, run_id, _ in expanded)
+        raise ValueError(
+            f"--output-dir names one directory but this campaign expands to "
+            f"{len(expanded)} runs ({run_ids}). Use --campaign-output-dir to move "
+            f"the whole campaign, or --job-id to select a single run."
+        )
+    return Path(str(raw)).expanduser().resolve()
 
 
 def _unique_output_dir_if_exists(path: Path, *, resume: bool) -> Path:
@@ -147,6 +174,26 @@ _CAMPAIGN_CLI_OVERRIDE_KEYS: tuple[str, ...] = (
     "skip_jit_warmup",
     "auto_warmup_mlpot_jax",
     "handoff_pre_minimize",
+    # Dynamics / hybrid-stability knobs (parent CLI must reach campaign jobs).
+    "dt_fs",
+    "nvt_integrator",
+    "checkpoint",
+    "mm_lj_scales_file",
+    "jaxmd_minimize_steps",
+    "nhc_tau",
+    "nhc_barostat_tau",
+    "mm_nl_backend",
+    "mm_nl_device",
+    "ml_compute_dtype",
+    # Certified-box / LJ-scales deploy: parent ``--from-psf`` etc. must reach
+    # jaxmd_settle (otherwise the job silently Packmol-rebuilds and can hit
+    # exact inter-monomer overlaps at liquid density).
+    "from_psf",
+    "from_crd",
+    "from_pdb",
+    "composition",
+    "box_size",
+    "packmol_tolerance",
 )
 
 # Long-range / MM-stack flags: only override job YAML when present on the parent CLI.
@@ -162,6 +209,20 @@ _CAMPAIGN_CLI_EXPLICIT_OVERRIDE_KEYS: tuple[str, ...] = (
     "do_ml",
     "do_ml_dimer",
     "skip_ml_dimers",
+    # Seed geometry / packmol: parent --from-psf/--from-crd/--no-packmol must
+    # reach jaxmd_settle (otherwise the job re-Packmols and can self-overlap).
+    "from_psf",
+    "from_crd",
+    "from_pdb",
+    "packmol",
+    "packmol_tolerance",
+    "composition",
+    "box_size",
+    "no_echeck",
+    "no_echeck_heat",
+    "skip_cluster_build",
+    "max_fmax_before_dyn_ev_A",
+    "allow_high_grms",
 )
 
 
@@ -237,6 +298,8 @@ def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
                 argv.append(flag)
             elif key == "bonded_mm_mini":
                 argv.append("--no-bonded-mm-mini")
+            elif key == "packmol":
+                argv.append("--no-packmol")
             elif key.startswith("no_") or key in {
                 "handoff_write_res",
                 "continue_velocities",
@@ -363,6 +426,7 @@ def run_campaign(args: Namespace) -> int:
         print_campaign_plan(plan_rows)
 
     expanded = expand_repeated_jobs(campaign, order)
+    cli_output_dir = _explicit_cli_output_dir(args, expanded)
     handoff_by_run: dict[str, Any] = {}
     resolved_output_dirs: dict[str, Path] = {}
     job_summaries: list[MdJobSummary] = []
@@ -373,7 +437,7 @@ def run_campaign(args: Namespace) -> int:
         if rep:
             merged["seed"] = int(merged.get("seed", 123)) + rep
         merged["campaign_output_dir"] = str(campaign_root)
-        requested_out_dir = _resolve_output_dir(merged, run_id, rep=rep)
+        requested_out_dir = cli_output_dir or _resolve_output_dir(merged, run_id, rep=rep)
         out_dir = requested_out_dir
         if run_all and not resume:
             out_dir = _unique_output_dir_if_exists(out_dir, resume=False)
@@ -439,6 +503,7 @@ def run_campaign(args: Namespace) -> int:
         apply_campaign_cli_overrides(merged, args)
         ns = namespace_from_merged(merged)
         resolve_campaign_namespace_paths(ns, config_path=getattr(args, "config", None))
+        validate_campaign_checkpoint(getattr(ns, "checkpoint", None), job_id=run_id)
         ns.output_dir = out_dir
         ns.job_name = run_id
         t0 = time.perf_counter()

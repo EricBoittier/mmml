@@ -153,6 +153,11 @@ pyscf.npz -o ./out \ --energy-in hartree --energy-out ev \ --force-in hartree-
 bohr --force-out ev-angstrom \ --dipole-in debye --dipole-out e-angstrom
 ```
 
+## Visual examples
+
+![Residue and atom-type assignment](../../images/prepare-mm-dataset/acodcm_assignment.png)
+
+![Charge-conservation validation](../../images/prepare-mm-dataset/charge_conservation.png)
 
 
 ---

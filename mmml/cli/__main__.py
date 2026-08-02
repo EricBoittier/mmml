@@ -41,7 +41,7 @@ install_colored_argparse()
 
 
 def _hard_exit(code: int | None) -> None:
-    """Terminate with *code*, bypassing CHARMM's Fortran teardown.
+    """Terminate with *code*, preserving non-zero status past CHARMM teardown.
 
     Importing pycharmm installs a Fortran/MPI finalizer that runs during
     interpreter shutdown and **resets the process exit status to 0**. A command
@@ -49,13 +49,18 @@ def _hard_exit(code: int | None) -> None:
     that trusts exit codes -- Slurm, CI, Make, the validation campaign -- was
     blind to failures.
 
-    ``os._exit`` skips atexit handlers and interpreter shutdown entirely, so the
-    status chosen here is the status the caller actually observes. Streams are
-    flushed first because ``os._exit`` will not do it for us.
+    For **non-zero** codes we ``os._exit`` so atexit/Fortran shutdown cannot
+    mask the failure. For **zero** we take a normal ``SystemExit`` so OpenMPI
+    can finalize cleanly: ``os._exit(0)`` skips ``MPI_Finalize`` and PRRTE then
+    often returns exit 1 (with empty Sphinx help noise) even though the app
+    succeeded.
     """
+    code_i = int(code or 0)
     sys.stdout.flush()
     sys.stderr.flush()
-    os._exit(int(code or 0))
+    if code_i == 0:
+        raise SystemExit(0)
+    os._exit(code_i)
 
 
 def cli() -> None:
@@ -333,6 +338,12 @@ def main():
         sys.argv = ["mmml compare-npz"] + args.args
         return compare_npz.main()
 
+    elif command == "diagnose-lc-outliers":
+        from .misc.diagnose_learning_curve_outliers import (
+            main as diagnose_lc_outliers_main,
+        )
+        return diagnose_lc_outliers_main(args.args)
+
     elif command == "compare-charmm-ml":
         from .misc import compare_charmm_ml
         sys.argv = ["mmml compare-charmm-ml"] + args.args
@@ -373,6 +384,10 @@ def main():
         sys.argv = ["mmml active-learning"] + args.args
         return active_learning.main()
 
+    elif command == "pes-design":
+        from .misc import pes_design
+        return pes_design.main(args.args)
+
     elif command == "kernel-fit":
         from .misc import kernel_fit
         sys.argv = ["mmml kernel-fit"] + args.args
@@ -387,6 +402,10 @@ def main():
         from .misc import unwrap_traj
         sys.argv = ["mmml unwrap-traj"] + args.args
         return unwrap_traj.main()
+
+    elif command == "analyze-liquid":
+        from .misc import analyze_liquid
+        return analyze_liquid.main(args.args)
 
     elif command == "sample-diverse-xyz":
         from mmml.generate.sample import sample_diverse_xyz

@@ -1,0 +1,4 @@
+.snakemake/
+snakemake_gpu.log
+*.log
+results/

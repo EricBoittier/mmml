@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
-"""Validate train full-box native Ewald == MD many-to-many Ewald.
+"""Validate train full-box native Ewald (+ optional switched LJ) == MD reference.
 
-Training (``lr_solver=ewald``) and MD (``periodic_external`` + ``lr_solver
-ewald``) are meant to share one operator::
+Training (``lr_solver=ewald``) and MD share::
 
-    E_MM = E_ewald(all atoms, q_CGenFF)   # no exclusions, no intra subtract
+    E_MM = E_ewald(all atoms, q_CGenFF)           # untapered full-box Coulomb
+         + λ_MM(R) * E_LJ(σ_eff, ε_eff)          # when --include-lj
 
-Mirrors ``check_nvalchemiops_train_md_pme_parity.py`` exactly, but for the
-pure-JAX ``ewald_native`` backend (no external PME library, no CUDA
-requirement -- so unlike the nvalchemiops variant, this script needs nothing
-beyond the base install to run).
-
-This script checks in layers:
-
-1. **kernel** — train helper vs ``compute_native_ewald_coulomb`` (kcal/mol)
-2. **e_mm** — ``hybrid_forward`` ``e_mm`` vs MD Coulomb in eV
-
-No CHARMM required::
+With ``--include-lj`` / ``--no-include-lj`` (default: off for Coulomb-only
+backward compatibility). The MD side of layer 2 is a composed reference —
+``compute_native_ewald_coulomb`` plus the same COM-switched LJ helper training
+uses — so this check needs no CHARMM / no GPU::
 
     python scripts/check_ewald_train_md_pme_parity.py \\
         --data /path/to/energies_forces_dipoles_test.npz \\
         --pme-box-length 30
+
+    python scripts/check_ewald_train_md_pme_parity.py \\
+        --data ... --pme-box-length 30 --include-lj
 """
 
 from __future__ import annotations
@@ -87,6 +83,85 @@ def compare_ewald_kernel_kcalmol(
     }
 
 
+def md_reference_emm_eV(
+    positions_A: np.ndarray,
+    charges_e: np.ndarray,
+    mol_id: np.ndarray,
+    type_idx: np.ndarray,
+    master_sigmas: np.ndarray,
+    master_epsilons: np.ndarray,
+    *,
+    box_length_A: float,
+    accuracy: float = 1e-6,
+    real_space_cutoff_A: float | None = None,
+    include_lj: bool = False,
+    sigma_scale: np.ndarray | None = None,
+    epsilon_scale: np.ndarray | None = None,
+    ml_switch_width: float = 1.5,
+    mm_switch_on: float = 8.0,
+    mm_switch_width: float = 5.0,
+    complementary_handoff: bool = True,
+) -> dict[str, float]:
+    """Composed MD reference: native Ewald Coulomb + optional switched LJ (eV)."""
+    import jax.numpy as jnp
+
+    from mmml.data.units import KCAL_MOL_TO_EV
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        compute_native_ewald_coulomb,
+    )
+    from mmml.models.hybrid_energy import switched_lj_kcal
+
+    pos = np.asarray(positions_A, dtype=np.float64)
+    q = np.asarray(charges_e, dtype=np.float64).reshape(-1)
+    mid = np.asarray(mol_id, dtype=np.int32).reshape(-1)
+    tidx = np.asarray(type_idx, dtype=np.int32).reshape(-1)
+
+    md = compute_native_ewald_coulomb(
+        pos,
+        q,
+        box_length_A=float(box_length_A),
+        accuracy=float(accuracy),
+        real_space_cutoff_A=real_space_cutoff_A,
+    )
+    e_coul_kcal = float(md.energy_kcalmol)
+    e_lj_kcal = 0.0
+    if include_lj:
+        sig_s = (
+            None
+            if sigma_scale is None
+            else jnp.asarray(sigma_scale, dtype=jnp.float64)
+        )
+        eps_s = (
+            None
+            if epsilon_scale is None
+            else jnp.asarray(epsilon_scale, dtype=jnp.float64)
+        )
+        e_lj_kcal = float(
+            np.asarray(
+                switched_lj_kcal(
+                    jnp.asarray(pos),
+                    jnp.asarray(tidx),
+                    jnp.asarray(mid),
+                    jnp.asarray(master_sigmas, dtype=jnp.float64),
+                    jnp.asarray(master_epsilons, dtype=jnp.float64),
+                    sigma_scale=sig_s,
+                    epsilon_scale=eps_s,
+                    include_lj=True,
+                    mm_switch_on=float(mm_switch_on),
+                    mm_switch_width=float(mm_switch_width),
+                    ml_switch_width=float(ml_switch_width),
+                    complementary_handoff=bool(complementary_handoff),
+                )
+            )
+        )
+    e_md_eV = (e_coul_kcal + e_lj_kcal) * KCAL_MOL_TO_EV
+    return {
+        "e_md_coulomb_kcalmol": e_coul_kcal,
+        "e_md_lj_kcalmol": e_lj_kcal,
+        "e_md_eV": e_md_eV,
+    }
+
+
 def compare_hybrid_emm_eV(
     data: dict,
     index: int,
@@ -95,17 +170,17 @@ def compare_hybrid_emm_eV(
     accuracy: float = 1e-6,
     real_space_cutoff_A: float | None = None,
     checkpoint: Path | None = None,
+    include_lj: bool = False,
+    sigma_scale: np.ndarray | None = None,
+    epsilon_scale: np.ndarray | None = None,
     ml_switch_width: float = 1.5,
     mm_switch_on: float = 8.0,
     mm_switch_width: float = 5.0,
+    complementary_handoff: bool = True,
 ) -> dict[str, float]:
-    """``hybrid_forward`` ``e_mm`` (eV) vs MD full-box Coulomb (eV)."""
+    """``hybrid_forward`` ``e_mm`` (eV) vs composed MD Ewald(+LJ) reference (eV)."""
     import jax.numpy as jnp
 
-    from mmml.data.units import KCAL_MOL_TO_EV
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
-        compute_native_ewald_coulomb,
-    )
     from mmml.models.hybrid_energy import hybrid_forward
 
     i = int(index)
@@ -117,17 +192,27 @@ def compare_hybrid_emm_eV(
     n = int(np.asarray(data["N"])[i]) if "N" in data else int((Z > 0).sum())
     Z, R, mid, q, tidx = Z[:n], R[:n], mid[:n], q[:n], tidx[:n]
 
-    md = compute_native_ewald_coulomb(
+    sigmas = np.asarray(data["cgenff_master_sigmas"])
+    epsilons = np.asarray(data["cgenff_master_epsilons"])
+    md_ref = md_reference_emm_eV(
         R,
         q,
+        mid,
+        tidx,
+        sigmas,
+        epsilons,
         box_length_A=float(box_length_A),
         accuracy=float(accuracy),
         real_space_cutoff_A=real_space_cutoff_A,
+        include_lj=bool(include_lj),
+        sigma_scale=sigma_scale,
+        epsilon_scale=epsilon_scale,
+        ml_switch_width=float(ml_switch_width),
+        mm_switch_on=float(mm_switch_on),
+        mm_switch_width=float(mm_switch_width),
+        complementary_handoff=bool(complementary_handoff),
     )
-    e_md_eV = float(md.energy_kcalmol) * KCAL_MOL_TO_EV
-
-    sigmas = jnp.asarray(data["cgenff_master_sigmas"])
-    epsilons = jnp.asarray(data["cgenff_master_epsilons"])
+    e_md_eV = float(md_ref["e_md_eV"])
 
     if checkpoint is not None:
         from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
@@ -161,28 +246,39 @@ def compare_hybrid_emm_eV(
         "cgenff_type_idx": jnp.asarray(tidx[None, :]),
         "cgenff_charge": jnp.asarray(q[None, :]),
     }
+    sig_j = jnp.asarray(sigmas)
+    eps_j = jnp.asarray(epsilons)
+    scale_kw = {}
+    if sigma_scale is not None:
+        scale_kw["mm_lj_sigma_scale"] = jnp.asarray(sigma_scale)
+    if epsilon_scale is not None:
+        scale_kw["mm_lj_epsilon_scale"] = jnp.asarray(epsilon_scale)
     out = hybrid_forward(
         model_apply,
         params,
         batch,
         1,
-        sigmas,
-        epsilons,
+        sig_j,
+        eps_j,
         mm_switch_on=float(mm_switch_on),
         mm_switch_width=float(mm_switch_width),
         ml_switch_width=float(ml_switch_width),
+        complementary_handoff=bool(complementary_handoff),
         mm_charge_mode="fixed",
         short_range_wall=False,
         lr_solver="ewald",
-        include_lj=False,
+        include_lj=bool(include_lj),
         pme_box_length=float(box_length_A),
         pme_accuracy=float(accuracy),
         pme_real_space_cutoff=real_space_cutoff_A,
+        **scale_kw,
     )
     e_mm_train = float(np.asarray(out["e_mm"]).reshape(-1)[0])
     return {
         "e_mm_train_eV": e_mm_train,
-        "e_md_coulomb_eV": e_md_eV,
+        "e_md_coulomb_eV": e_md_eV,  # full MD ref (name kept for CLI table)
+        "e_md_ref_eV": e_md_eV,
+        "e_md_lj_kcalmol": float(md_ref["e_md_lj_kcalmol"]),
         "abs_diff_eV": abs(e_mm_train - e_md_eV),
     }
 
@@ -214,6 +310,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ml-switch-width", type=float, default=1.5)
     p.add_argument("--mm-switch-on", type=float, default=8.0)
     p.add_argument("--mm-switch-width", type=float, default=5.0)
+    p.add_argument(
+        "--include-lj",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Compare Ewald Coulomb + COM-switched LJ (default: Coulomb-only).",
+    )
     args = p.parse_args(argv)
 
     data = dict(np.load(args.data, allow_pickle=True))
@@ -235,12 +337,13 @@ def main(argv: list[str] | None = None) -> int:
         print("no structures to check", file=sys.stderr)
         return 2
 
+    lj_txt = "Ewald+LJ" if args.include_lj else "Ewald Coulomb-only"
     print(
-        f"ewald train<->MD parity | box={args.pme_box_length} A | "
+        f"ewald train<->MD parity ({lj_txt}) | box={args.pme_box_length} A | "
         f"accuracy={args.pme_accuracy} | n={len(indices)}"
     )
     print(
-        f"{'idx':>5} {'|dE_kernel|':>12} {'e_mm(tr)':>12} {'E_coul(md)':>12} "
+        f"{'idx':>5} {'|dE_kernel|':>12} {'e_mm(tr)':>12} {'E_md(ref)':>12} "
         f"{'|dE_mm|':>12}  status"
     )
 
@@ -269,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
                 box_length_A=float(args.pme_box_length),
                 accuracy=float(args.pme_accuracy),
                 checkpoint=ckpt,
+                include_lj=bool(args.include_lj),
                 ml_switch_width=float(args.ml_switch_width),
                 mm_switch_on=float(args.mm_switch_on),
                 mm_switch_width=float(args.mm_switch_width),
@@ -294,12 +398,12 @@ def main(argv: list[str] | None = None) -> int:
         f"\nworst |E_train - E_md|_kernel = {worst_k:.3e} kcal/mol "
         f"(tol {args.tol_kcal})"
     )
-    print(f"worst |e_mm - E_coul|_eV     = {worst_mm:.3e} eV (tol {args.tol_eV})")
+    print(f"worst |e_mm - E_md_ref|_eV   = {worst_mm:.3e} eV (tol {args.tol_eV})")
 
     if bad:
         print(f"PARITY FAILED on {bad}/{len(indices)} structures", file=sys.stderr)
         return 1
-    print(f"PARITY OK on {len(indices)} structures: train ewald == MD ewald")
+    print(f"PARITY OK on {len(indices)} structures: train ewald == MD ref ({lj_txt})")
     return 0
 
 

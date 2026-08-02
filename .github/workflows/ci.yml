@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Without this the job inherits the 360-minute default, so one hung test
+    # burns six hours of runner time before anyone sees a red mark.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -40,12 +43,56 @@ jobs:
         run: |
           uv run python -V
           uv run python -c "import mmml; print('package imports ok')"
+          uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
+      # Part of `make merge-check` but previously absent from CI, so generated
+      # CLI docs / architecture pages could drift on main unnoticed.
+      - name: Generated docs are up to date
+        if: always()
+        run: |
+          uv run python scripts/generate_cli_docs.py --check
+          uv run python scripts/generate_package_architecture.py --check
       - name: Run tests
         if: always()
-        run: uv run pytest -v --color=yes --cov=mmml --cov-report=xml tests/
+        run: |
+          mkdir -p .ci-reports
+          uv run pytest -v --color=yes --cov=mmml --cov-report=xml \
+            --junitxml=.ci-reports/junit-unit.xml tests/
+      # pytest exits 0 when every selected test skips, so the step above can be
+      # green having validated nothing (a bad install, a missing fixture tree, a
+      # guard that starts returning False for everyone). Assert the run's shape,
+      # not just its exit code.
+      - name: Unit suite ran for real
+        if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py .ci-reports/junit-unit.xml \
+            --label "unit suite" --min-passed 3000 --max-skipped-frac 0.25
+      # Coverage floor, not a coverage target. Roughly 18.7k statements need
+      # live CHARMM, 10.9k are plotting and 5.3k need PySCF/torch/GPU, so the
+      # CI-reachable ceiling is near 70% and chasing a percentage here is
+      # pointless. What this catches is a *slide*: a module that stops
+      # importing, a fixture tree that disappears, a large untested subsystem
+      # landing at once. The Codecov status does the same job on PRs, but it is
+      # advisory (`fail_ci_if_error: false`) and needs a token, so it does not
+      # run on forks. Measured 2026-08-01 on a full MMML_DISABLE_CHARMM=1 run:
+      # 45.81%, 55706 of 121608 lines. The floors sit ~3.8pp and ~6.6% below
+      # that, which absorbs CI-vs-local jitter without waving through a
+      # collapse. Raise them as coverage rises, never lower them to go green.
+      - name: Coverage floor
+        if: always()
+        run: |
+          uv run python scripts/ci/check_coverage_floor.py coverage.xml \
+            --label "unit coverage" --min-percent 42 --min-covered-lines 52000
       - name: Run CHARMM MPI unit suite
         if: always()
-        run: uv run pytest -v --color=yes tests/charmm_mpi/ -m "charmm_mpi and not pycharmm"
+        run: |
+          mkdir -p .ci-reports
+          uv run pytest -v --color=yes tests/charmm_mpi/ \
+            -m "charmm_mpi and not pycharmm" --junitxml=.ci-reports/junit-charmm-mpi.xml
+      - name: CHARMM MPI suite ran for real
+        if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py .ci-reports/junit-charmm-mpi.xml \
+            --label "charmm_mpi suite" --min-passed 15 --max-skipped 5
       - name: Lint gate
         if: always()
         run: |
@@ -91,7 +138,10 @@ jobs:
             setup/charmm/lib
             setup/charmm/.ci-charmm-build-stamp
             ~/.cache/mmml-charmm-build
-          key: charmm-lib-${{ hashFiles('setup/charmm.tar.xz', 'setup/charmm/source/api/api_func.F90', 'setup/charmm/source/api/api_psf.F90', 'setup/charmm/source/api/api_eval.F90', 'setup/charmm/source/api/api_minimize.F90', 'setup/charmm/source/api/api_dynamics.F90', 'setup/charmm/source/api/api_crystal.F90', 'scripts/rebuild_charmm_mlpot.sh') }}
+          # Hash every api/*.F90, not a hand-picked subset: an api_read.F90 fix
+          # (sticky READ PARAM APPEND, which zeroed the VDW table) hit a stale
+          # cache because that file was not on the list.
+          key: charmm-lib-${{ hashFiles('setup/charmm.tar.xz', 'setup/charmm/source/api/*.F90', 'scripts/rebuild_charmm_mlpot.sh') }}
       - name: Build libcharmm.so
         if: steps.charmm-cache.outputs.cache-hit != 'true'
         run: bash scripts/ci/setup_charmm_lib.sh
@@ -104,5 +154,29 @@ jobs:
           } > CHARMMSETUP
       - name: Install package and dependencies
         run: uv sync --extra dev --extra all-cpu --extra charmm-interface
+      # Packmol is gitignored and not part of the libcharmm cache, so a cache hit
+      # used to skip rebuild_charmm_mlpot.sh and leave the binary missing. Smoke
+      # tests that cold-start boxes then fail with FileNotFoundError.
+      - name: Build Packmol
+        run: bash scripts/rebuild_packmol.sh
+      # Every live-CHARMM test is guarded by `skipif(not can_import_pycharmm())`,
+      # and that guard only checks that the .so *file* exists. A library that is
+      # present but cannot be dlopen'ed therefore turns this whole 45-minute job
+      # into skips that exit 0. Fail here instead, where the cause is obvious.
+      - name: PyCHARMM loads
+        run: |
+          [[ -f CHARMMSETUP ]] && source CHARMMSETUP
+          uv run python scripts/ci/assert_pycharmm_live.py
       - name: Run PyCHARMM smoke tests
         run: uv run bash scripts/ci/run_pycharmm_smoke_pytest.sh -q
+      # This gate -- not the step above -- is what decides whether the live suite
+      # passed. Once libcharmm is loaded, CHARMM's Fortran STOP runs at
+      # interpreter teardown and replaces Python's exit status with 0, so a
+      # session with failing tests still exits 0 and the script's `|| status=1`
+      # never fires. The JUnit reports are the only honest record, and a missing
+      # one means the process was killed mid-run (the script fails on that too).
+      - name: PyCHARMM smoke suite ran for real
+        if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py .ci-reports/junit-pycharmm \
+            --label "pycharmm smoke" --min-passed 10

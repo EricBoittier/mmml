@@ -50,7 +50,12 @@ end
 
 RUNNER = """#!/bin/bash
 #SBATCH -p {partition}
-#SBATCH -n {nprocs}
+# ORCA's MPI ranks share scratch files, so every calculation must stay on one
+# physical node. A bare ``-n`` lets Slurm spread ranks over several nodes.
+#SBATCH --nodes=1
+#SBATCH --ntasks={nprocs}
+#SBATCH --ntasks-per-node={nprocs}
+#SBATCH --cpus-per-task=1
 #SBATCH -t {walltime}
 #SBATCH --array=0-{last}%{throttle}
 #SBATCH -o {run_dir}/logs/task_%a.out
@@ -76,7 +81,7 @@ NTOT={ntot}
 [ $END -ge $NTOT ] && END=$(( NTOT - 1 ))
 
 # Node-local scratch: ORCA is IO-heavy and $HOME is shared and 87% full.
-WORK=${{TMPDIR:-/tmp}}/orca_$SLURM_ARRAY_TASK_ID_$$
+WORK=${{TMPDIR:-/tmp}}/orca_${{SLURM_ARRAY_JOB_ID}}_${{SLURM_ARRAY_TASK_ID}}_$$
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 

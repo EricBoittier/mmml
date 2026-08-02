@@ -175,6 +175,23 @@ def cell_run_tag_long(cell: RunCell) -> str:
     return f"{sol}_{int(cell.n_monomers)}_t{t}_l{box}"
 
 
+def cell_ml_atoms(cell: RunCell) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+
+    return estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent)
+
+
+def cell_bulk_total(cell: RunCell, fraction: float = 1.0) -> int:
+    """Monomer count at ``fraction`` × bulk liquid density for this cell's box.
+
+    Required by ``cleanup_strategy.dense_cell_mlpot_overrides`` (imported as
+    ``from campaign_lib import cell_bulk_total`` while this module is on sys.path).
+    """
+    return n_monomers_at_bulk_density(
+        cell.solvent, cell.box_size, fraction, min_n=1
+    )
+
+
 def composition_string(cell: RunCell) -> str:
     return f"{solvent_slug(cell.solvent)}:{int(cell.n_monomers)}"
 

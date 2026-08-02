@@ -699,12 +699,45 @@ def resolve_pre_md_fire_start_positions(
     return jnp.asarray(R - com, dtype=jnp.float32)
 
 
+# Ensemble-aware PBC MM neighbor refresh when ``--jax-md-update-interval`` is
+# omitted / 0. Explicit positive values always win.
+#
+# NVT can batch more aggressively (thermostat absorbs force noise). NpT needs
+# fresher pairs because the cell moves every step. NVE is in between: stale
+# pairs show up as E_tot drift, so stay tighter than NVT but not interval=1.
+ENSEMBLE_JAXMD_UPDATE_INTERVAL: dict[str, int] = {
+    "nvt": 10,
+    "npt": 5,
+    "nve": 5,
+}
+
+
+def resolve_ensemble_jaxmd_update_interval(
+    ensemble: str | None,
+    requested: int | None,
+    *,
+    use_pbc: bool = True,
+) -> int:
+    """Resolve MM neighbor refresh cadence (MD steps) for a JAX-MD ensemble.
+
+    ``requested <= 0`` or ``None`` selects the ensemble default when ``use_pbc``;
+    free-space falls back to a large batch interval (no dynamic MM pairs).
+    """
+    if requested is not None and int(requested) > 0:
+        return int(requested)
+    if not use_pbc:
+        return 100
+    key = str(ensemble or "nve").strip().lower()
+    return int(ENSEMBLE_JAXMD_UPDATE_INTERVAL.get(key, 1))
+
+
 def resolve_jaxmd_steps_per_loop_call(
     *,
     steps_per_recording: int,
     use_pbc: bool,
     has_update_fn: bool,
     jax_md_update_interval: int | None,
+    ensemble: str | None = None,
 ) -> int:
     """Return the JAX-MD block size that also controls MM pair refresh cadence.
 
@@ -715,20 +748,23 @@ def resolve_jaxmd_steps_per_loop_call(
     - how often Python rebuilds the neighbor list;
     - how many MD steps a single compiled JAX block advances before returning.
 
-    The default is intentionally conservative for PBC (`1` step), because stale
-    MM pairs can produce wrong forces. Explicit larger intervals are allowed for
-    stable NVT/NVE runs where avoiding per-step host synchronization matters.
-    The final value always divides ``steps_per_recording`` so each recording
-    block ends exactly on a neighbor-list refresh boundary.
+    When ``jax_md_update_interval`` is ``None``/``0``, the ensemble default from
+    :func:`resolve_ensemble_jaxmd_update_interval` is used (NVT batches more than
+    NpT/NVE). Explicit positive intervals always win. The final value always
+    divides ``steps_per_recording`` so each recording block ends exactly on a
+    neighbor-list refresh boundary.
     """
     has_dynamic_pbc_pairs = use_pbc and has_update_fn
-    conservative_pbc_interval = 1
-    non_pbc_batch_interval = 100
-    default_interval = conservative_pbc_interval if has_dynamic_pbc_pairs else non_pbc_batch_interval
-
-    requested_interval = int(jax_md_update_interval or default_interval)
-    if requested_interval <= 0:
-        requested_interval = default_interval
+    if has_dynamic_pbc_pairs:
+        requested_interval = resolve_ensemble_jaxmd_update_interval(
+            ensemble, jax_md_update_interval, use_pbc=True
+        )
+    else:
+        requested_interval = (
+            int(jax_md_update_interval)
+            if jax_md_update_interval is not None and int(jax_md_update_interval) > 0
+            else 100
+        )
 
     max_block_steps = min(requested_interval, int(steps_per_recording))
     for candidate_block_steps in range(max_block_steps, 0, -1):
@@ -944,6 +980,61 @@ def _run_npt_diagnostics(
     c.print(Panel("NPT diagnostic complete", title="[bold]NPT Diagnostics (--npt-diagnose)[/bold]", border_style="green"))
 
 
+def _add_psf_angle_restraints(args, positions, energy_fn, force_fn):
+    """Wrap JAX-MD energy/force callables with optional PSF angle terms."""
+    if not bool(getattr(args, "psf_angle_restraints", False)):
+        return energy_fn, force_fn, None
+
+    from mmml.md.restraints.psf_angles import build_psf_angle_restraint_fns
+
+    psf_path = getattr(args, "from_psf", None)
+    if psf_path is None:
+        raise ValueError("--psf-angle-restraints requires --from-psf")
+    box_A = float(args.cell) if getattr(args, "cell", None) else None
+    restraint_energy_fn, restraint_force_fn, info = build_psf_angle_restraint_fns(
+        psf_path,
+        positions,
+        box_A=box_A,
+        scale=float(getattr(args, "psf_angle_restraint_scale", 1.0) or 1.0),
+        include_urey=not bool(getattr(args, "psf_angle_restraints_no_urey", False)),
+    )
+
+    @jit
+    def energy_with_restraints(
+        position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs
+    ):
+        return energy_fn(
+            position,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
+            **kwargs,
+        ) + restraint_energy_fn(as_jaxmd_dtype(position))
+
+    @jit
+    def force_with_restraints(
+        position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs
+    ):
+        return force_fn(
+            position,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
+            **kwargs,
+        ) + as_jaxmd_dtype(restraint_force_fn(as_jaxmd_dtype(position)))
+
+    Console().print(
+        Panel(
+            f"PSF={info.psf_path}\n"
+            f"angles={info.n_angles}  urey={info.n_urey}  "
+            f"scale={info.scale:g}  box={info.box_A}",
+            title="[bold]PSF angle restraints (tetrahedral)[/bold]",
+            border_style="magenta",
+        )
+    )
+    return energy_with_restraints, force_with_restraints, restraint_energy_fn
+
+
 def set_up_nhc_sim_routine(
     atoms,
     args,
@@ -1028,6 +1119,12 @@ def set_up_nhc_sim_routine(
             box=box,
         )
         return as_jaxmd_dtype(result.forces)
+
+    # Optional PSF/CGenFF angle (+ Urey) restraints keep ML monomers tetrahedral
+    # when hybrid ml_intra has no classical bonded MM / SHAKE.
+    jax_md_energy_fn, jax_md_force_fn, _psf_angle_energy_fn = (
+        _add_psf_angle_restraints(args, R, jax_md_energy_fn, jax_md_force_fn)
+    )
 
     # evaluate_energies_and_forces (initial call - get update_fn if available)
     use_pbc = args.cell is not None
@@ -1317,6 +1414,7 @@ def set_up_nhc_sim_routine(
         use_pbc=bool(use_pbc),
         has_update_fn=get_update_fn is not None,
         jax_md_update_interval=getattr(args, "jax_md_update_interval", None),
+        ensemble=getattr(args, "ensemble", None),
     )
 
     kT = as_jaxmd_dtype(T * unit['temperature'])
@@ -1430,9 +1528,70 @@ def set_up_nhc_sim_routine(
                 mm_pair_mask=pair_mask,
                 box=box_eff,
             )
-            # grad(E) = -F; quantity.force = -grad, so we supply -F as grad
-            grad_frac = as_jaxmd_dtype(-F * g)
-            return (grad_frac, None, None, None, None, None)
+            # grad(E) = -F in REAL space. The primal argument is FRACTIONAL, and
+            # real = box . frac, so the cotangent needs the chain-rule factor:
+            #     dE/dfrac = box^T . dE/dreal   ->   (-F) @ box_eff
+            # Returning -F alone under-scales the position gradient by the box
+            # length, which for a 28.0 A cell is 28x. Measured by the in-situ
+            # self-check (MMML_NPT_VIRIAL_SELFCHECK=1) on the certified TIP3 box:
+            #     dE/dfrac analytic            -4.196231e-01 eV
+            #     dE/dfrac central difference  -1.178808e+01 eV
+            #     ratio fd/analytic             28.0921      (box side 28.0 A)
+            # A mis-scaled position gradient corrupts the first integration step,
+            # which is what "E_pot = 8e7 eV at step 1, immediately after a
+            # minimisation that ended at -8751 eV, with T and the cell both
+            # healthy" looks like.
+            grad_frac = as_jaxmd_dtype((-F @ box_eff) * g)
+
+            # dE/d(perturbation) is the VIRIAL, and returning None for it makes
+            # the barostat blind to the potential.
+            #
+            # jax-md gets the internal pressure by differentiating this energy
+            # with respect to `perturbation` at eps=0 (quantity.pressure builds
+            # U(eps) = energy_fn(..., perturbation=1+eps) and takes grad(U)(0.)).
+            # With a None cotangent that derivative is identically zero, so
+            #     P_int = 2*KE/(3V) + 0
+            # i.e. the ideal-gas term alone. That was measured, not inferred: a
+            # 732-TIP3 box at 297.87 K in 21955.3 A^3 reported P_meas = 4059.58
+            # atm against a 1 atm target, and the kinetic-only value is 4059.63
+            # atm -- agreement to 0.001%. The barostat then drove the cell on a
+            # 4000x pressure error, which is what produced the 8e7 eV blow-up.
+            #
+            # For isotropic scaling r = p^(1/3) r0:
+            #     dE/dp = sum_i (dE/dr_i) . (r_i / 3p) = -(1/3p) sum_i F_i . r_i
+            # Both F and real_pos are already in hand above, so this costs
+            # nothing extra.
+            if perturbation is None:
+                grad_pert = None
+            else:
+                # NOTE: -(1/3p) * sum_i F_i . r_i is WRONG here, and was tried.
+                # That is the *atomic* virial, valid only without minimum-image
+                # wrapping. Under PBC the energy depends on `perturbation`
+                # through two channels -- the positions scale AND the box scales,
+                # which rescales the MIC displacements -- and the correct object
+                # is the *pair* virial sum_ij f_ij . d_ij, which this backward
+                # pass cannot see (it has forces, not pair displacements). The
+                # in-situ self-check (MMML_NPT_VIRIAL_SELFCHECK=1) reported the
+                # atomic form as +3.971e2 eV against a central difference of
+                # -3.319e1 eV: wrong sign, 1296% off.
+                #
+                # Differentiate the real energy instead. Two extra evaluations
+                # per backward pass, but it captures both channels by
+                # construction and needs no assumption about the MIC.
+                p_val = jnp.asarray(perturbation, dtype=jnp.float32)
+                _h = jnp.asarray(1.0e-3, dtype=jnp.float32)
+                _e_plus = _npt_energy_fn_raw(
+                    frac_pos, box=box, neighbor=neighbor,
+                    perturbation=p_val * (1.0 + _h),
+                )
+                _e_minus = _npt_energy_fn_raw(
+                    frac_pos, box=box, neighbor=neighbor,
+                    perturbation=p_val * (1.0 - _h),
+                )
+                grad_pert = as_jaxmd_dtype(
+                    (_e_plus - _e_minus) / (2.0 * _h * p_val) * g
+                )
+            return (grad_frac, None, None, grad_pert, None, None)
 
         npt_energy_fn.defvjp(npt_energy_fn_fwd, npt_energy_fn_bwd)
         npt_energy_fn = jit(npt_energy_fn)
@@ -2004,6 +2163,107 @@ def set_up_nhc_sim_routine(
             npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
             current_neighbors = (npt_pair_idx, npt_pair_mask)
             npt_pressure = pressure  # Use same pressure as NPT block (handles --pressure 0)
+
+            # MMML_NPT_VIRIAL_SELFCHECK=1: verify the barostat actually sees the
+            # potential. The custom VJP supplies dE/d(perturbation) analytically
+            # (the virial); if that cotangent is wrong or dropped, jax-md's
+            # pressure silently degrades to the kinetic term alone and the
+            # barostat drives the cell on a huge phantom pressure error. That is
+            # exactly the failure this check exists to catch, so compare the
+            # analytic derivative against a central difference of the SAME
+            # energy function -- no reference implementation required.
+            import os as _os
+
+            if _os.environ.get("MMML_NPT_VIRIAL_SELFCHECK") == "1":
+                try:
+                    _nb = (npt_pair_idx, npt_pair_mask)
+                    _h = 1.0e-3
+                    _e_plus = float(
+                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0 + _h, kT, Si_mass)
+                    )
+                    _e_minus = float(
+                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0 - _h, kT, Si_mass)
+                    )
+                    _fd = (_e_plus - _e_minus) / (2.0 * _h)
+                    _analytic = float(
+                        jax.grad(
+                            lambda _p: npt_energy_fn(
+                                md_pos_frac, box_curr, _nb, _p, kT, Si_mass
+                            )
+                        )(1.0)
+                    )
+                    _denom = max(abs(_fd), 1.0e-12)
+                    _rel = abs(_analytic - _fd) / _denom
+                    # Also check the POSITION cotangent. The bwd returns -F, the
+                    # real-space force, as dE/d(frac). But E depends on frac via
+                    # real = box . frac, so dE/dfrac = box^T . dE/dreal -- a
+                    # factor of the box (28x for this cell) that is missing. A
+                    # mis-scaled position gradient corrupts the very first
+                    # integration step, which is what "E_pot = 8e7 eV at step 1
+                    # after a minimisation that ended at -8751 eV" looks like.
+                    _i0 = 0
+                    _d = 1.0e-4
+                    _fp = md_pos_frac
+                    _pert1 = 1.0
+
+                    def _e_at(fp):
+                        return float(npt_energy_fn(fp, box_curr, _nb, _pert1, kT, Si_mass))
+
+                    _fp_p = _fp.at[_i0, 0].add(_d)
+                    _fp_m = _fp.at[_i0, 0].add(-_d)
+                    _fd_frac = (_e_at(_fp_p) - _e_at(_fp_m)) / (2.0 * _d)
+                    _an_frac = float(
+                        jax.grad(lambda fp: npt_energy_fn(fp, box_curr, _nb, _pert1, kT, Si_mass))(_fp)[_i0, 0]
+                    )
+                    _dn = max(abs(_fd_frac), 1.0e-12)
+                    _rel_frac = abs(_an_frac - _fd_frac) / _dn
+                    _ratio = _fd_frac / _an_frac if abs(_an_frac) > 1e-12 else float("nan")
+
+                    # Absolute energies. The NpT path evaluates through
+                    # npt_energy_fn (fractional coords + box); the real-space
+                    # calculator is the reference. A large CONSTANT gap between
+                    # them means the NpT energy is mis-evaluated rather than the
+                    # dynamics being unstable -- which is what a "blow-up" that
+                    # sits at 8.02e7 eV for 100 steps while T and rho stay put
+                    # actually is.
+                    _e_npt = float(
+                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0, kT, Si_mass)
+                    )
+                    try:
+                        _e_real = float(
+                            jnp.reshape(
+                                evaluate_energies_and_forces(
+                                    atomic_numbers=atomic_numbers,
+                                    positions=jnp.asarray(md_pos_wrapped),
+                                    mm_pair_idx=npt_pair_idx,
+                                    mm_pair_mask=npt_pair_mask,
+                                    box=jnp.asarray(_cell_jax),
+                                ).energy,
+                                (-1,),
+                            )[0]
+                        )
+                    except Exception:
+                        _e_real = float("nan")
+
+                    c.print(Panel(
+                        f"E via npt_energy_fn (fractional) {_e_npt:.6e} eV\n"
+                        f"E via real-space calculator      {_e_real:.6e} eV\n"
+                        f"difference                       {_e_npt - _e_real:.6e} eV\n"
+                        f"---- derivatives ----\n"
+                        f"dE/dp analytic {_analytic:.6e} eV\n"
+                        f"dE/dp central-difference (h={_h}) {_fd:.6e} eV\n"
+                        f"relative difference {_rel:.3%}\n"
+                        f"{'OK' if _rel < 0.05 else 'MISMATCH - barostat pressure will be wrong'}\n"
+                        f"---- position cotangent (atom 0, x) ----\n"
+                        f"dE/dfrac analytic {_an_frac:.6e} eV\n"
+                        f"dE/dfrac central-difference {_fd_frac:.6e} eV\n"
+                        f"relative difference {_rel_frac:.3%}   fd/analytic = {_ratio:.4f}\n"
+                        f"{'OK' if _rel_frac < 0.05 else 'MISMATCH - integration will be wrong'}",
+                        title="[bold]NPT VJP self-check[/bold]",
+                        border_style="green" if (_rel < 0.05 and _rel_frac < 0.05) else "red",
+                    ))
+                except Exception as _exc:  # diagnostic only; never abort the run
+                    c.print(f"[yellow]NPT virial self-check unavailable: {_exc}[/yellow]")
         elif args.ensemble == "nvt":
             state = init_fn(key, as_jaxmd_dtype(md_pos), mass=Si_mass)
             npt_pair_idx, npt_pair_mask = None, None
@@ -2974,6 +3234,13 @@ def set_up_nhc_sim_routine(
                         pair_mask=pair_mask,
                     )
                 e_pot = float(out_dyn.energy)
+                # Hybrid calculator output omits optional PSF angle restraints;
+                # add them so E_pot / E_tot match the forces the integrator sees.
+                if _psf_angle_energy_fn is not None:
+                    _pos_rep = state.position
+                    if is_npt:
+                        _pos_rep = space.transform(simulate.npt_box(state), state.position)
+                    e_pot += float(_psf_angle_energy_fn(as_jaxmd_dtype(_pos_rep)))
                 e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
                 if use_flat_bottom:
                     com_dist_report = float(out_dyn.com_dist)
@@ -3341,11 +3608,48 @@ def set_up_nhc_sim_routine(
                         pos_for_h5 = _wrap_monomers(pos_for_h5, box_curr)
                 elif use_pbc and traj_export_molecular_wrap:
                     pos_for_h5 = _wrap_monomers(state.position, _cell_jax)
+                # True extended-system invariant for NHC (not bare E_tot).
+                # jax_md's nvt/npt_nose_hoover_invariant includes thermostat
+                # (and barostat) degrees of freedom; bare E_tot is not conserved
+                # in NVT/NpT and was previously written here by mistake.
+                e_invariant = e_tot
+                try:
+                    if is_npt:
+                        # jax_md already passes box=box_fn(volume) into energy_fn;
+                        # do not also forward box= here (TypeError: multiple values).
+                        e_invariant = float(
+                            simulate.npt_nose_hoover_invariant(
+                                npt_energy_fn,
+                                state,
+                                pressure,
+                                kT,
+                                neighbor=(npt_pair_idx, npt_pair_mask),
+                            )
+                        )
+                    elif args.ensemble == "nvt":
+                        e_invariant = float(
+                            simulate.nvt_nose_hoover_invariant(
+                                wrapped_energy_fn,
+                                state,
+                                kT,
+                                neighbor=current_neighbors,
+                            )
+                        )
+                except Exception as _inv_exc:
+                    if not getattr(run_sim, "_invariant_warn_once", False):
+                        print(
+                            f"[jaxmd] NHC invariant fallback to E_tot "
+                            f"({type(_inv_exc).__name__}: {_inv_exc})",
+                            flush=True,
+                        )
+                        run_sim._invariant_warn_once = True
+                    e_invariant = e_tot
+
                 report_kw = dict(
                     potential_energy=e_pot,
                     kinetic_energy=e_kin,
                     temperature=temp,
-                    invariant=e_tot,
+                    invariant=e_invariant,
                     total_energy=e_tot,
                     time_ps=time_ps,
                     positions=pos_for_h5,

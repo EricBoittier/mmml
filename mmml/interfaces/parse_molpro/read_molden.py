@@ -3,10 +3,27 @@ Read Molpro XML output files and convert data to NumPy arrays.
 Schema: https://www.molpro.net/schema/molpro-output.xsd
 """
 
+import re
 import xml.etree.ElementTree as ET
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
+
+_XPATH_PREFIX_RE = re.compile(r"\b\w+:")
+
+
+def _strip_xpath_prefixes(path: str) -> str:
+    """Drop ``ns:`` prefixes from an XPath for a document that has no namespaces.
+
+    Callers build paths like ``.//cml:molecule`` unconditionally. When the
+    document declares no namespace, ``self.ns`` is empty and there is no prefix
+    map to resolve ``cml:`` against, so ElementTree raises ``SyntaxError:
+    prefix 'cml' not found in prefix map`` -- ``parse_geometry`` crashed on any
+    namespace-free Molpro output, and its own "Fallback: try non-CML format"
+    branch was unreachable. Stripping the prefix lets those documents match on
+    the bare tag name, which is what the fallback was written to do.
+    """
+    return _XPATH_PREFIX_RE.sub("", path)
 
 
 @dataclass
@@ -100,7 +117,7 @@ class MolproXMLParser:
                         namespaced_parts.append(part)
                 path = '/'.join(namespaced_parts)
                 return self.root.findall(path, self.ns)
-        return self.root.findall(path, {})
+        return self.root.findall(_strip_xpath_prefixes(path), {})
     
     def _find(self, path: str, use_cml: bool = False) -> Optional[ET.Element]:
         """Find first element matching path, handling namespace."""
@@ -129,7 +146,7 @@ class MolproXMLParser:
                         namespaced_parts.append(part)
                 path = '/'.join(namespaced_parts)
                 return self.root.find(path, self.ns)
-        return self.root.find(path, {})
+        return self.root.find(_strip_xpath_prefixes(path), {})
     
     def parse_geometry(self, use_last: bool = True) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """

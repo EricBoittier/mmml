@@ -19,7 +19,37 @@ from mmml.md.energy.registry import HybridEnergy
 from mmml.md.results import Trajectory
 from mmml.md.system import MolecularSystem
 
-__all__ = ["JaxmdDriver"]
+__all__ = ["JaxmdDriver", "NonFiniteStateError"]
+
+
+class NonFiniteStateError(RuntimeError):
+    """A run aborted on a non-finite frame, carrying what it had recorded.
+
+    The frames leading up to a blow-up are the only evidence of *why* it blew
+    up, and discarding them is what makes these failures so hard to diagnose:
+    the driver's progress line prints step counts only, so a window that dies at
+    step 600 otherwise leaves nothing behind but the step number.
+
+    Subclasses ``RuntimeError`` so existing ``except RuntimeError`` handlers
+    keep working unchanged.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        step: int,
+        n_steps: int,
+        positions: list[np.ndarray] | None = None,
+        energies: list[float] | None = None,
+        kinetic_energies: list[float] | None = None,
+    ):
+        super().__init__(message)
+        self.step = int(step)
+        self.n_steps = int(n_steps)
+        self.positions = list(positions or [])
+        self.energies = list(energies or [])
+        self.kinetic_energies = list(kinetic_energies or [])
 
 
 @dataclass(frozen=True)
@@ -39,6 +69,9 @@ class JaxmdDriver:
     name: str = "jaxmd"
     # When set, print ``step i/N`` after blocks that cross this cadence (flush).
     progress_every: int | None = None
+    # Abort as soon as a recorded frame has non-finite positions/energy (hybrid
+    # umbrella windows can otherwise burn hours after a silent blow-up).
+    abort_nonfinite: bool = False
 
     def run(
         self,
@@ -63,6 +96,8 @@ class JaxmdDriver:
             import jax
             import jax.numpy as jnp
             from jax_md import minimize, quantity, simulate, space, units
+
+            from mmml.md.step_batching import make_block_stepper
         except ImportError as exc:  # pragma: no cover - environment dependent
             raise RuntimeError("JaxmdDriver requires the optional jax and jax-md packages") from exc
 
@@ -178,10 +213,10 @@ class JaxmdDriver:
             if is_npt:
                 return float(
                     jax.device_get(
-                        energy_fn(state.position, box=_box_of(state), **dyn)
+                        _energy_jit(state.position, box=_box_of(state), **dyn)
                     )
                 )
-            return float(jax.device_get(energy_fn(state.position, **dyn)))
+            return float(jax.device_get(_energy_jit(state.position, **dyn)))
 
         def _record_kinetic(state):
             """Kinetic energy (eV) of the integrator state.
@@ -235,8 +270,10 @@ class JaxmdDriver:
             """
             box_now = _box_of(state)
             ke = jnp.asarray(kinetic_eV, dtype=dtype)
+            # First call compiles AD through the hybrid energy (virial); can take
+            # minutes with GPU idle / host CPU busy — not "slow MD".
             p_metal = quantity.pressure(
-                energy_fn,
+                _energy_jit,
                 state.position,
                 box_now,
                 kinetic_energy=ke,
@@ -347,9 +384,30 @@ class JaxmdDriver:
             else:
                 init_fn, step_fn = simulate.nve(energy_fn, shift_fn, dt)
 
+        # Match legacy jaxmd_runner: without jit, NPT force+stress AD is traced
+        # every Python step (GPU util ~0, host CPU pegged for tens of minutes).
+        step_fn = jax.jit(step_fn)
+
+        # ...and batch whole blocks into one dispatch, as jaxmd_runner's
+        # `_bind_sim` does. A Python loop over single jitted steps pays a
+        # dispatch per step; `fori_loop` pays one per block. The pair arrays
+        # ride along as block-constant arguments, which is exactly the
+        # neighbor-list cadence the block size already encodes.
+        _block_cache: dict[tuple[int, int], Any] = {}
+
+        def _block_stepper(fn, n_steps: int):
+            key = (id(fn), int(n_steps))
+            cached = _block_cache.get(key)
+            if cached is None:
+                cached = make_block_stepper(fn, int(n_steps))
+                _block_cache[key] = cached
+            return cached
+
         # bootstrap: build the first neighbor list from the initial real positions
         real_init = _to_real(init_position, box) if is_npt else init_position
         dynamic_kwargs = refresh_real(real_init, box)
+        if is_npt:
+            print(f"    [{self.name}] NPT: init state + E0/P0 (first compile)…", flush=True)
         state = _init_state(init_position, dynamic_kwargs)
 
         frames = [np.asarray(jax.device_get(_real_of(state)))]
@@ -363,17 +421,28 @@ class JaxmdDriver:
         pressures_vir_bar: list[float] = []
         if is_npt:
             volumes_A3.append(_volume_A3(boxes[0]))
+            print(f"    [{self.name}] NPT: compiling pressure/virial AD…", flush=True)
             p_tot, p_kin, p_vir = _record_pressure_parts_bar(
                 state, dynamic_kwargs, kinetic_energies[0], volumes_A3[0]
             )
             pressures_bar.append(p_tot)
             pressures_kin_bar.append(p_kin)
             pressures_vir_bar.append(p_vir)
+            print(
+                f"    [{self.name}] NPT: P0={p_tot:.4g} bar "
+                f"(Pkin={p_kin:.4g}, Pvir={p_vir:.4g}); starting dynamics…",
+                flush=True,
+            )
         target_temperatures.append(_target_temperature(0))
         block_size = int(self.record_every if self.block_size is None else self.block_size)
 
         completed = 0
         next_record = min(self.record_every, ensemble.n_steps)
+        # NPT smokes: surface progress even when progress_every is unset.
+        if is_npt and (self.progress_every is None or int(self.progress_every) <= 0):
+            self_progress_every = max(1, min(block_size, ensemble.n_steps // 4 or 1))
+        else:
+            self_progress_every = self.progress_every
         while completed < ensemble.n_steps:
             dynamic_kwargs = refresh(state)
             count = min(
@@ -416,11 +485,18 @@ class JaxmdDriver:
                             energy_fn, shift_fn, dt, block_kT,
                             thermostat_kwargs=options.get("thermostat_kwargs", {}),
                         )
-            for _ in range(count):
-                state = step_fn(state, **dynamic_kwargs)
+                step_fn = jax.jit(step_fn)
+            # One dispatch for the whole block. The ragged tail (a final block
+            # shorter than block_size) would compile a second variant, so step
+            # it the old way rather than paying a compile for one short block.
+            if count == block_size:
+                state = _block_stepper(step_fn, count)(state, **dynamic_kwargs)
+            else:
+                for _ in range(count):
+                    state = step_fn(state, **dynamic_kwargs)
             state.position.block_until_ready()
             completed += count
-            prog = self.progress_every
+            prog = self_progress_every
             if prog is not None and int(prog) > 0:
                 # Print when this block crossed a progress boundary (or finished).
                 prev = completed - count
@@ -460,7 +536,24 @@ class JaxmdDriver:
                 boxes.append(None if box is None else np.asarray(jax.device_get(_box_of(state))))
                 energies.append(_record_energy(state, dynamic_kwargs))
                 kinetic_energies.append(_record_kinetic(state))
-                momenta.append(_record_momentum(state))
+                if self.abort_nonfinite:
+                    e_now = float(energies[-1])
+                    kin_now = float(kinetic_energies[-1])
+                    if (
+                        not np.isfinite(e_now)
+                        or not np.isfinite(kin_now)
+                        or not np.all(np.isfinite(frames[-1]))
+                    ):
+                        raise NonFiniteStateError(
+                            f"{self.name}: non-finite state at step {completed}/"
+                            f"{ensemble.n_steps} (E={e_now}, K={kin_now}). "
+                            "Try a smaller timestep (e.g. 0.25 fs) or softer seeds.",
+                            step=int(completed),
+                            n_steps=int(ensemble.n_steps),
+                            positions=[np.asarray(f) for f in frames],
+                            energies=[float(x) for x in energies],
+                            kinetic_energies=[float(x) for x in kinetic_energies],
+                        )
                 if is_npt:
                     volumes_A3.append(_volume_A3(boxes[-1]))
                     p_tot, p_kin, p_vir = _record_pressure_parts_bar(

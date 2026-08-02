@@ -1,0 +1,76 @@
+* Lennard-Jones parameters for argon, krypton and xenon.
+*
+* NOT A CHARMM FILE. These are the classical 12-6 noble-gas parameters from the
+* standard gas-transport / second-virial literature, converted to CHARMM's
+* (epsilon, Rmin/2) convention. CHARMM ships no residue for Ar, Kr or Xe:
+* toppar/stream/misc/toppar_dum_noble_gases.str covers only He and Ne, and the
+* only other in-tree values are from BMS (toppar/non_charmm/par_bms_dec03.inp),
+* whose noble-gas set disagrees with CHARMM's on helium by 51x and assigns
+* argon a SMALLER epsilon than neon. This file exists so those numbers are not
+* used by accident.
+*
+* Source values (sigma in Angstrom, epsilon/k_B in Kelvin):
+*     Ar   sigma 3.405   eps/k_B 119.8
+*     Kr   sigma 3.600   eps/k_B 171.0
+*     Xe   sigma 4.100   eps/k_B 221.0
+*
+* Converted with k_B = 0.0019872041 kcal/(mol K) and Rmin/2 = sigma*2^(1/6)/2:
+*     Ar   eps 0.23807 kcal/mol   Rmin/2 1.91099 A
+*     Kr   eps 0.33981 kcal/mol   Rmin/2 2.02043 A
+*     Xe   eps 0.43917 kcal/mol   Rmin/2 2.30105 A
+*
+* Consistency check against the CHARMM He/Ne file, which is loaded alongside
+* this one: sigma rises He 2.637 < Ne 2.726 < Ar 3.405 < Kr 3.600 < Xe 4.100
+* and epsilon rises He 0.0213 < Ne 0.0855 < Ar 0.238 < Kr 0.340 < Xe 0.439, so
+* the combined series is monotonic in both parameters across the two sources.
+*
+* These are isolated-atom pair parameters. They were not fitted alongside
+* CGenFF and are combined with it under CHARMM's Lorentz-Berthelot rules with
+* no cross-term validation. Treat any noble-gas result as provisional.
+*
+
+read rtf card append
+* Topology for argon, krypton and xenon.
+*
+31  1
+
+MASS  -1  AR        39.94800 AR ! argon
+MASS  -1  KR        83.79800 KR ! krypton
+MASS  -1  XE       131.29300 XE ! xenon
+
+RESI AR1       0.00 ! argon
+GROUP
+ATOM AR01  AR  0.00
+PATCHING FIRST NONE LAST NONE
+
+RESI KR1       0.00 ! krypton
+GROUP
+ATOM KR01  KR  0.00
+PATCHING FIRST NONE LAST NONE
+
+RESI XE1       0.00 ! xenon
+GROUP
+ATOM XE01  XE  0.00
+PATCHING FIRST NONE LAST NONE
+
+end
+
+read para card flex append
+* Parameters for argon, krypton and xenon.
+*
+
+ATOMS
+MASS  -1  AR        39.94800 ! argon
+MASS  -1  KR        83.79800 ! krypton
+MASS  -1  XE       131.29300 ! xenon
+
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+AR     0.000000  -0.238070     1.910990
+KR     0.000000  -0.339810     2.020430
+XE     0.000000  -0.439170     2.301050
+
+end
+
+return

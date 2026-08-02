@@ -378,7 +378,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-seed-force",
         type=float,
         default=None,
-        help="Abort if any window seed max|F| exceeds this (eV/Å; default: 15)",
+        help=(
+            "Fail a window whose seed max|F| over the ML region exceeds this "
+            "(eV/Å; default: 15). The whole-system max is not used: solvent "
+            "contacts pin it at the same value in every window."
+        ),
+    )
+    parser.add_argument(
+        "--relax-seed-steps",
+        type=int,
+        default=None,
+        help=(
+            "FIRE steps relaxing the surroundings around the frozen seeded "
+            "solute before dynamics (default: 0 = off)"
+        ),
+    )
+    parser.add_argument(
+        "--relax-seed-fmax",
+        type=float,
+        default=None,
+        help="Convergence target for --relax-seed-steps (eV/Å; default: 1.0)",
     )
     parser.add_argument(
         "--thermostat",
@@ -453,6 +472,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--overwrite",
         action="store_true",
         help="Allow writing into a non-empty output directory",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Hybrid: keep finished windows under output_dir/windows/ and only "
+            "run missing / failed ones (implies allowing a non-empty output_dir)"
+        ),
+    )
+    parser.add_argument(
+        "--no-resume-failed",
+        action="store_true",
+        help="With --resume, leave previously failed windows as failed (do not retry)",
+    )
+    parser.add_argument(
+        "--windows",
+        type=str,
+        default=None,
+        help=(
+            "Hybrid: comma-separated 0-based window indices to run "
+            "(e.g. 19,20,21). Combine with --resume to fill holes."
+        ),
     )
     parser.add_argument(
         "--write-window-xyz",
@@ -544,6 +585,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         "invert_with": args.invert_with,
         "equilibration_steps": args.equilibration_steps,
         "max_seed_force": args.max_seed_force,
+        "relax_seed_steps": args.relax_seed_steps,
+        "relax_seed_fmax": args.relax_seed_fmax,
         "thermostat": args.thermostat,
         "langevin_gamma": args.langevin_gamma,
         "max_window_temp_K": args.max_window_temp_K,
@@ -671,6 +714,14 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
         data["use_ema"] = False
     if args.overwrite:
         data["overwrite"] = True
+    if getattr(args, "resume", False):
+        data["resume"] = True
+    if getattr(args, "no_resume_failed", False):
+        data["resume_failed"] = False
+    if getattr(args, "windows", None) is not None:
+        data["only_windows"] = tuple(
+            int(x.strip()) for x in args.windows.split(",") if x.strip()
+        )
     if args.replica_exchange:
         data["replica_exchange"] = True
     if args.write_window_xyz:
@@ -711,6 +762,9 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("seed", 42)
     data.setdefault("use_ema", True)
     data.setdefault("overwrite", False)
+    data.setdefault("resume", False)
+    data.setdefault("resume_failed", True)
+    data.setdefault("only_windows", ())
     data.setdefault("write_window_xyz", False)
     data.setdefault("structure_index", 0)
     data.setdefault("seed_mode", "stretch")
@@ -719,6 +773,8 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
     data.setdefault("invert_with", ())
     data.setdefault("equilibration_steps", 0)
     data.setdefault("max_seed_force", 15.0)
+    data.setdefault("relax_seed_steps", 0)
+    data.setdefault("relax_seed_fmax", 1.0)
     data.setdefault("thermostat", "langevin")
     data.setdefault("langevin_gamma", 0.1)
     data.setdefault("replica_exchange", False)

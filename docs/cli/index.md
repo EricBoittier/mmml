@@ -65,24 +65,36 @@ See [Tab completion](completion.md) for per-shell setup and fallbacks when
 
 ## Command index
 
-Browse the sidebar under **CLI** for a page per subcommand (options pulled from
-each command's `argparse` help). Structure builders (`make-res`, `make-box`,
-`build-crystal`) include ASE structure figures — see
-[Structure building](structure-building.md).
+These docs are organized the same way `mmml commands` is. Each task group is a
+section in the sidebar that opens with an orientation page, then its conceptual
+guides, then a **Commands** subsection with one generated reference page per
+subcommand (options pulled from that command's `argparse` help).
 
-Highlights:
+Every section follows the same shape, so the same position always means the
+same thing:
 
-**Structure & boxes** — `make-res`, `make-box`, `build-crystal`, `liquid-box`
+| Slot | What it is |
+|------|------------|
+| Section index | What the area covers, the happy path, where it leads |
+| Tutorial | One start-to-finish worked path |
+| How-to | Task-focused pages that assume you have context |
+| Commands | Generated reference, one page per subcommand |
 
-**MD & campaigns** — `md-system` (see also [md-system YAML configs](../md-system-configs.md)),
-`warmup-mlpot-jax`, `mpi-check`, `health-check`
+| Section | Start here | Commands |
+|---------|------------|----------|
+| [Structure & boxes](../sections/structure-boxes.md) | [Structure building](structure-building.md) | `make-res`, `make-box`, `build-crystal`, `liquid-box` |
+| [MD & campaigns](../sections/md-campaigns.md) | [Tri-alanine water box](../trialanine-water-box.md); [φ/ψ → umbrella teaching](../examples/tria-phi-psi-scan.md) | `md-system`, `md-embedding`, `umbrella-sample`, `health-check` |
+| [QM & data](../sections/qm-data.md) | [QC cross-check](../qc-cross-check.md) | `pyscf-*`, `dimer-scan`, `ic-scan`, `fix-and-split` |
+| [Hybrid ML/MM potentials](../sections/hybrid-potentials.md) | [Cutoffs, regions & LR solvers](../hybrid-potential-regions.md) | — |
+| [Training & sampling](../sections/training-sampling.md) | [NEB](../neb.md), [DMC](../dmc.md) | `physnet-*`, `efield-*`, `kernnn-*`, `neb`, `dmc` |
+| [Environment & clusters](../sections/environment-clusters.md) | [SciCORE guide](../scicore.md) | `env`, `configure`, `doctor`, `mpi-launch`, `completion` |
 
-**QM & data** — `pyscf-dft`, `pyscf-evaluate`, `fix-and-split`, `xml2npz`, `npz2traj`
+**Hybrid ML/MM potentials has no command group.** Assembling a hybrid potential
+is configuration, not a subcommand — which is exactly why those pages needed a
+section of their own rather than being filed under training.
 
-**ML training & sampling** — `physnet-train`, `physnet-evaluate`, `physnet-md`,
-`neb`, `dmc`, `efield-train`
-
-**Workflow helpers** — `configure`, `env`, `commands`, `examples`
+Structure builders (`make-res`, `make-box`, `build-crystal`) include ASE
+structure figures — see [Structure building](structure-building.md).
 
 Run `mmml commands --audit` locally to see which commands are **deprecated** or
 **legacy** and what to use instead.

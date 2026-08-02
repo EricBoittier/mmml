@@ -19,6 +19,8 @@ usage: mmml warmup-mlpot-jax [-h] [--checkpoint CHECKPOINT]
                              [--ml-batch-size ML_BATCH_SIZE]
                              [--ml-gpu-count ML_GPU_COUNT]
                              [--ml-max-active-dimers N]
+                             [--hybrid-hamiltonian {handoff,shared_cutoff}]
+                             [--shared-cutoff SHARED_CUTOFF]
                              [--ml-switch-width ML_SWITCH_WIDTH]
                              [--mm-switch-on MM_SWITCH_ON]
                              [--mm-switch-width MM_SWITCH_WIDTH]
@@ -38,6 +40,9 @@ Input & configuration:
                         MMML_CHECKPOINT)
 
 Scientific model:
+  --shared-cutoff SHARED_CUTOFF
+                        Atomic ML/MM cutoff (Å) for --hybrid-hamiltonian
+                        shared_cutoff; defaults to the model cutoff.
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where the complementary handoff ends:
                         ML scale reaches 0 and MM scale reaches 1 (default: 6).
@@ -81,6 +86,11 @@ Other options:
                         Sparse ML dimer slot cap per step (PBC default all
                         unique dimers when n≤4005; same as md-system --ml-max-
                         active-dimers).
+  --hybrid-hamiltonian {handoff,shared_cutoff}
+                        Hybrid assembly: handoff preserves the existing COM-
+                        switched Hamiltonian; shared_cutoff uses additive ML+MM
+                        with no handoff and force-shifts MM pairs at --shared-
+                        cutoff.
   --mm-pair-source {jax,charmm_callback}
                         Decomposed MLpot MM pair provider: Fortran callback
                         idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-

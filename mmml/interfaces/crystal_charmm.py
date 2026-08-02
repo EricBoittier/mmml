@@ -18,6 +18,7 @@ from mmml.interfaces.pyxtal_placement import (
     write_psf_order_mapping_pdb,
 )
 from mmml.paths import (
+    default_acetone_crystal_cif,
     default_benzene_crystal_cif,
     default_dcm_crystal_cif,
 )
@@ -31,17 +32,58 @@ MonomerTemplate = tuple[np.ndarray, list[str], np.ndarray]
 DEFAULT_MIN_BOX_SIDE_A = 28.0
 
 LITERATURE_CRYSTAL_PRESETS: dict[str, dict[str, Any]] = {
+    # Podsiadlo, Dziubek & Katrusiak, Acta Crystallogr. B 61, 595 (2005). Both
+    # entries are diamond-anvil-cell structures, so both are compressed well
+    # below the ambient-pressure cell -- fine as packing references, wrong as
+    # cohesive-energy references. See docs/dcm-crystal-cohesion.md.
     "dcm": {
         "residue": "DCM",
         "cif": default_dcm_crystal_cif,
         "space_group": 60,
         "reference_density_g_cm3": 1.972,
     },
+    "dcm133": {
+        "residue": "DCM",
+        "cif": lambda: default_dcm_crystal_cif("pbcn_133gpa"),
+        "space_group": 60,
+        "reference_density_g_cm3": 1.920,
+    },
     "benz": {
         "residue": "BENZ",
         "cif": default_benzene_crystal_cif,
         "space_group": 14,
         "reference_density_g_cm3": 1.202,
+    },
+    # Allan et al., Chem. Commun. 1999, 751. The stable low-temperature Pbca
+    # phase is the default acetone entry; ``aco5k``/``aco110k`` are the same
+    # phase at the other two temperatures the paper reports, which differ
+    # enough in cell shape (b contracts 6% from 150 K to 5 K while a expands)
+    # to be worth building separately. The 15 kbar Cmcm phase is deliberately
+    # absent: its methyls are rotationally disordered, so it has no single set
+    # of hydrogen positions to hand a force field.
+    "aco": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_150k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 0.987,
+    },
+    "aco5k": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_5k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 1.052,
+    },
+    "aco110k": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_110k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 1.001,
+    },
+    "acocmcm": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("cmcm_160k"),
+        "space_group": 63,
+        "reference_density_g_cm3": 1.017,
     },
 }
 
@@ -63,9 +105,13 @@ class CharmmLiteratureCrystalResult:
 
 def default_make_res_monomer_pdb(residue: str) -> Path:
     """Bundled CHARMM monomer PDB (``make-res``-style atom names)."""
-    from mmml.paths import bundled_file
+    from mmml.paths import bundled_file, default_aco_template_pdb
 
     key = residue.strip().upper()
+    if key == "ACO":
+        # Acetone's template already ships with the cluster builders rather than
+        # under data/molecules; reuse it instead of duplicating the geometry.
+        return default_aco_template_pdb()
     name = {"DCM": "dcm", "BENZ": "benz"}.get(key, key.lower())
     return bundled_file("data", "molecules", f"{name}_monomer.pdb")
 

@@ -151,7 +151,7 @@ names, simulation supercell) or PyXtal random placement with space-group symmetr
 The deposited structure at
 [CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)
 (Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595; COD
-[2100015](https://www.crystallography.net/2100015.html)) is orthorhombic **Pbcn**
+[2100015](https://www.crystallography.net/cod/2100015.html)) is orthorhombic **Pbcn**
 (SG 60), Z=4, measured at **1.63 GPa / 293 K**:
 
 | Quantity | Value |
@@ -160,7 +160,13 @@ The deposited structure at
 | ρ (experimental) | **1.972 g/cm³** |
 | Low-*T* phase (153 K, 0.1 MPa) | same SG; *a*≈4.25, *b*≈8.14, *c*≈9.49 Å ([Kawaguchi *et al.* 1973](https://doi.org/10.1246/bcsj.46.62)) |
 
-MMML ships the CIF as `default_dcm_crystal_cif()`. For MD, build a **simulation
+MMML ships the CIF as `default_dcm_crystal_cif()`, and the companion 1.33 GPa
+structure ([COD 2100014](https://www.crystallography.net/cod/2100014.html)) as
+`default_dcm_crystal_cif("pbcn_133gpa")`. Both are compressed — 13% and 11% below
+the ambient-pressure cell — which is fine for packing and density but not for a
+cohesive energy; see
+[Solid dichloromethane & halogen contacts](../dcm-crystal-cohesion.md) for
+relaxing to ambient pressure. For MD, build a **simulation
 supercell** with CHARMM atom names from `make-res` and literature geometry from
 the bundled CIF (no PyXtal required). Supercell repeats default to ≥28 Å per
 edge (≈2× CHARMM `cutnb`), preserving experimental density.
@@ -253,7 +259,7 @@ Bundled experimental CIFs vs **make-res+CIF** (exact literature unit cell, CHARM
 
 Regenerate: `uv run python scripts/generate_crystal_lit_compare.py`
 
-#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/2100015.html)
+#### DCM (CH₂Cl₂) — [COD 2100015](https://www.crystallography.net/cod/2100015.html)
 
 Podsiadło *et al.*, *Acta Cryst.* B **2005**, 61, 595 ([CCDC doi:10.5517/cc9lyjb](https://www.ccdc.cam.ac.uk/structures/search?id=doi:10.5517/cc9lyjb&sid=DataCite)); Pbcn, Z=4, 1.63 GPa / 293 K.
 
@@ -292,6 +298,26 @@ Katrusiak *et al.*, *Cryst. Growth Des.* **2010**, 10, 3461 ([doi:10.1021/cg1002
 
 _make-res+CIF: `mmml build-crystal --literature benz` (unit cell)._
 _PyXtal: `-m benzene` (not `c1ccccc1`), `--spg 14 --z 2 --seed 7`, ρ scaled to literature._
+
+#### Acetone (C₃H₆O) — [COD 7110464](https://www.crystallography.net/cod/7110464.html)
+
+Allan *et al.*, *Chem. Commun.* **1999**, 751 ([doi:10.1039/a900558g](https://doi.org/10.1039/a900558g)); Pbca, Z=16, ambient pressure / 150 K. Three more phases ship as presets (`aco5k`, `aco110k`, `acocmcm`); all five published structures are checked against the paper by `examples/acetone_crystal/01_phases.py`.
+
+| Quantity | Literature | make-res+CIF | Δ (CIF−lit) | PyXtal build | Δ (PyXtal−lit) |
+|----------|------------|--------------|-------------|--------------|----------------|
+| Space group | 61 | 61 | — | — | — |
+| N atoms | 160 | 160 | +0.0% | — | — |
+| *a* (Å) | 8.873 | 8.873 | +0.0% | — | — |
+| *b* (Å) | 8.000 | 8.000 | +0.0% | — | — |
+| *c* (Å) | 22.027 | 22.027 | +0.0% | — | — |
+| α (°) | 90.0 | 90.0 | +0.0% | — | — |
+| β (°) | 90.0 | 90.0 | +0.0% | — | — |
+| γ (°) | 90.0 | 90.0 | +0.0% | — | — |
+| Volume (Å³) | 1563.6 | 1563.6 | +0.0% | — | — |
+| ρ (g/cm³) | 0.987 | 0.987 | -0.0% | — | — |
+
+_make-res+CIF: `mmml build-crystal --literature aco` (unit cell)._
+_No PyXtal column: acetone is used here as an experimental reference structure, not a packing target._
 <!-- CRYSTAL_LIT_COMPARE_END -->
 
 ### Other examples

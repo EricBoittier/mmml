@@ -197,6 +197,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Abort dynamics if post-min GRMS exceeds this (kcal/mol/Å)",
     )
     parser.add_argument(
+        "--max-fmax-before-dyn-ev-A",
+        type=float,
+        default=None,
+        metavar="EV_A",
+        dest="max_fmax_before_dyn_ev_A",
+        help=(
+            "Abort if max atomic |F| exceeds this (eV/Å) before dynamics; "
+            "default 2.0. Raise only for controlled smokes."
+        ),
+    )
+    parser.add_argument(
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,

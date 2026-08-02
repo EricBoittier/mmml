@@ -16,10 +16,11 @@ from jax import jit
 from jax_md import simulate, space, units as jax_md_units
 
 from mmml.cli.run.jaxmd_runner import as_jaxmd_dtype, normalize_jaxmd_state
+from mmml.md.nl_cadence import resolve_block_steps, resolve_update_interval
+from mmml.md.step_batching import make_block_stepper
 from mmml.cli.run.lambda_dynamics import (
     LambdaDynamicsConfig,
     LambdaMdSettings,
-    ensure_jax_cuda_toolchain,
     is_lambda_prod_complete,
     lambda_array,
     lambda_min_traj_path,
@@ -34,6 +35,9 @@ from mmml.cli.run.lambda_dynamics import (
     resolve_model_restart_path,
 )
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+# Lives in jax_gpu_warmup, not lambda_dynamics; the wrong import made this whole
+# module (i.e. `lambda_ti --backend jaxmd`) fail at import time.
+from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
 import pycharmm.param as param
 import pycharmm.psf as psf
@@ -199,13 +203,29 @@ def build_lambda_jaxmd_bundle(
         return as_jaxmd_dtype(out.forces)
 
     @jit
-    def wrapped_force_fn(position, **_kwargs):
+    def _force_with_pairs(position, mm_pair_idx, mm_pair_mask, box):
         return jax_md_force_fn(
             position,
-            mm_pair_idx=pbc_state["pair_idx"],
-            mm_pair_mask=pbc_state["pair_mask"],
-            box=pbc_state["box"],
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
         )
+
+    def wrapped_force_fn(position, neighbor=None, **_kwargs):
+        """Force function for the jax-md integrator.
+
+        ``neighbor`` is ``(pair_idx, pair_mask, box)`` and is threaded through as
+        an *argument*, not read from ``pbc_state`` inside the jit. Reading the
+        dict inside a jitted body bakes the pair arrays in as trace-time
+        constants, so every later ``_refresh_pbc_neighbors`` was silently
+        discarded and a window ran its whole trajectory on the list built at
+        step 0. jax-md forwards ``**kwargs`` from ``apply_fn`` to the force
+        function, which is how ``jaxmd_runner`` passes ``neighbor=`` too.
+        """
+        if neighbor is None:
+            neighbor = (pbc_state["pair_idx"], pbc_state["pair_mask"], pbc_state["box"])
+        mm_pair_idx, mm_pair_mask, box = neighbor
+        return _force_with_pairs(position, mm_pair_idx, mm_pair_mask, box)
 
     masses = jnp.asarray(atomic_masses[np.asarray(atomic_numbers, dtype=int)], dtype=jnp.float32)
 
@@ -226,48 +246,110 @@ def build_lambda_jaxmd_bundle(
     )
 
 
-def _refresh_pbc_neighbors(bundle: LambdaJaxMdBundle, position: np.ndarray) -> None:
+def _neighbor_tuple(bundle: LambdaJaxMdBundle) -> tuple[Any, Any, Any]:
+    """Current ``(pair_idx, pair_mask, box)`` for ``wrapped_force_fn(neighbor=…)``."""
+    return (
+        bundle.pbc_state["pair_idx"],
+        bundle.pbc_state["pair_mask"],
+        bundle.pbc_state["box"],
+    )
+
+
+def _refresh_pbc_neighbors(bundle: LambdaJaxMdBundle, position) -> tuple[Any, Any, Any]:
+    """Rebuild the MM pair list and return the neighbor tuple.
+
+    ``position`` should be passed as a **device** array whenever the caller has
+    one. ``update_mm_pairs`` gates its GPU Vesin rebuild and its device-side
+    Verlet skin check on ``hasattr(positions, "__dlpack_device__")``, so a
+    ``jax.device_get`` here silently forces the host path and downloads every
+    coordinate on every call — even when the skin check would have concluded
+    that no rebuild was needed.
+    """
     if not bundle.use_pbc or bundle.get_update_fn is None or bundle.box_L is None:
-        return
-    pos = np.asarray(position, dtype=float)
-    update_fn = bundle.get_update_fn(pos, bundle.cutoff)
+        return _neighbor_tuple(bundle)
+    # get_update_fn builds the MM closure and wants host coords, so resolve it
+    # once and cache it (as hybrid_mlpot does); the per-step path below then
+    # never needs positions on the host.
+    update_fn = bundle.pbc_state.get("update_fn")
     if update_fn is None:
-        return
+        update_fn = bundle.get_update_fn(
+            np.asarray(jax.device_get(position), dtype=float), bundle.cutoff
+        )
+        bundle.pbc_state["update_fn"] = update_fn
+    if update_fn is None:
+        return _neighbor_tuple(bundle)
     box_nl = np.array([bundle.box_L, bundle.box_L, bundle.box_L], dtype=np.float64)
-    pair_idx, pair_mask = update_fn(pos, box=box_nl)
+    pair_idx, pair_mask = update_fn(position, box=box_nl)
     bundle.pbc_state["pair_idx"] = pair_idx
     bundle.pbc_state["pair_mask"] = pair_mask
-    bundle.pbc_state["box"] = bundle.pbc_state["box"]
+    return _neighbor_tuple(bundle)
+
+
+def _probe_energy_fn(bundle: LambdaJaxMdBundle, which: str) -> Callable:
+    """Jitted inter-monomer ML+MM energy for a TI probe (``\"on\"`` / ``\"off\"``).
+
+    The probe calculators are the raw ``spherical_cutoff_calculator`` partials,
+    which are *not* jitted: evaluating them straight retraces the whole ML+MM
+    graph on every recorded sample. ``n_monomers`` and ``cutoff`` are static, so
+    one compile per probe covers the whole run.
+    """
+    cache = bundle.pbc_state.setdefault("probe_fns", {})
+    fn = cache.get(which)
+    if fn is not None:
+        return fn
+
+    spherical_fn = bundle.spherical_on if which == "on" else bundle.spherical_off
+
+    @jit
+    def _energy(pos, mm_pair_idx, mm_pair_mask, box):
+        out = spherical_fn(
+            pos,
+            bundle.atomic_numbers,
+            bundle.n_monomers,
+            bundle.cutoff,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
+        )
+        return jnp.sum(jnp.asarray(out.ml_2b_E)) + jnp.sum(jnp.asarray(out.mm_E))
+
+    cache[which] = _energy
+    return _energy
 
 
 def _interaction_energy_eV(
     bundle: LambdaJaxMdBundle,
-    spherical_fn: Callable,
-    position: np.ndarray,
+    which: str,
+    position,
+    neighbor: tuple[Any, Any, Any] | None = None,
 ) -> float:
-    """Evaluate inter-monomer ML+MM energy (eV) via the pre-JIT spherical calculator."""
-    if bundle.use_pbc:
-        _refresh_pbc_neighbors(bundle, np.asarray(position, dtype=float))
+    """Inter-monomer ML+MM energy (eV) for a TI probe at fixed neighbor state."""
+    if neighbor is None:
+        neighbor = (
+            _refresh_pbc_neighbors(bundle, position)
+            if bundle.use_pbc
+            else _neighbor_tuple(bundle)
+        )
+    pair_idx, pair_mask, box = neighbor
     pos = jnp.asarray(position, dtype=jnp.float32)
-    box = bundle.pbc_state["box"]
-    pair_idx = bundle.pbc_state["pair_idx"]
-    pair_mask = bundle.pbc_state["pair_mask"]
-    out = spherical_fn(
-        pos,
-        bundle.atomic_numbers,
-        bundle.n_monomers,
-        bundle.cutoff,
-        mm_pair_idx=pair_idx,
-        mm_pair_mask=pair_mask,
-        box=box,
-    )
-    e = jnp.sum(jnp.asarray(out.ml_2b_E)) + jnp.sum(jnp.asarray(out.mm_E))
+    e = _probe_energy_fn(bundle, which)(pos, pair_idx, pair_mask, box)
     return float(jax.device_get(e))
 
 
-def _dudl_at_position(bundle: LambdaJaxMdBundle, position: np.ndarray) -> float:
-    e_on = _interaction_energy_eV(bundle, bundle.spherical_on, position)
-    e_off = _interaction_energy_eV(bundle, bundle.spherical_off, position)
+def _dudl_at_position(bundle: LambdaJaxMdBundle, position) -> float:
+    """dU/dλ = E(λ=1) - E(λ=0) at one configuration.
+
+    Both probes must see the *same* neighbor list, and one rebuild covers both:
+    previously each probe re-ran the rebuild, so every recorded sample paid two
+    full MM pair rebuilds for one dU/dλ value.
+    """
+    neighbor = (
+        _refresh_pbc_neighbors(bundle, position)
+        if bundle.use_pbc
+        else _neighbor_tuple(bundle)
+    )
+    e_on = _interaction_energy_eV(bundle, "on", position, neighbor)
+    e_off = _interaction_energy_eV(bundle, "off", position, neighbor)
     return e_on - e_off
 
 
@@ -292,7 +374,7 @@ def _init_jaxmd_state(
         R = _center_positions(R, bundle.masses)
 
     if bundle.use_pbc and bundle.box_L is not None:
-        _refresh_pbc_neighbors(bundle, np.asarray(jax.device_get(R), dtype=float))
+        _refresh_pbc_neighbors(bundle, R)
 
     if ensemble == "nvt":
         nhc_tau = 100.0
@@ -360,28 +442,50 @@ def run_jaxmd_segment(
         traj = Trajectory(str(traj_path), "w", template)
 
     interval = max(1, int(interval))
-    nbr_every = max(1, int(neighbor_update_interval))
+    # Block size doubles as the MM pair refresh cadence and the compiled-step
+    # batch, and always divides `interval` so a recording lands on a refresh.
+    block_steps = resolve_block_steps(
+        steps_per_recording=interval,
+        use_pbc=bool(bundle.use_pbc),
+        has_update_fn=bundle.get_update_fn is not None,
+        update_interval=neighbor_update_interval,
+        ensemble=ensemble,
+    )
+    block = make_block_stepper(apply_fn, block_steps, normalize=normalize_jaxmd_state)
 
-    for step in range(1, int(n_steps) + 1):
-        if bundle.use_pbc and step % nbr_every == 0:
-            _refresh_pbc_neighbors(
-                bundle, np.asarray(jax.device_get(state.position), dtype=float)
-            )
-        state = apply_fn(state)
-        if remove_net_drift and step % interval == 0:
-            state = state.set(
-                momentum=_zero_com_momentum(state.momentum, bundle.masses)
-            )
+    neighbor = _neighbor_tuple(bundle)
+    completed = 0
+    total = int(n_steps)
+    while completed < total:
+        count = min(block_steps, total - completed)
+        if bundle.use_pbc:
+            # Device array in: lets update_mm_pairs run its device-side skin
+            # check (one scalar sync) and its GPU Vesin rebuild.
+            neighbor = _refresh_pbc_neighbors(bundle, state.position)
+        if count == block_steps:
+            state = block(state, neighbor=neighbor)
+        else:
+            # Ragged tail: stepping it compiles no second block variant.
+            for _ in range(count):
+                state = normalize_jaxmd_state(apply_fn(state, neighbor=neighbor))
+        completed += count
 
-        if step % interval == 0:
-            pos_np = np.asarray(jax.device_get(state.position), dtype=float)
-            samples.append(_dudl_at_position(bundle, pos_np))
-            snapshots.append(pos_np.copy())
-            frames.append(pos_np.copy())
-            if traj is not None:
-                frame = ase.Atoms(numbers=z, positions=pos_np)
-                prepare_atoms_geometry(frame, pos_np, md_settings)
-                traj.write(frame)
+        if completed % interval != 0:
+            continue
+
+        if remove_net_drift:
+            state = normalize_jaxmd_state(
+                state.set(momentum=_zero_com_momentum(state.momentum, bundle.masses))
+            )
+        pos_dev = state.position
+        pos_np = np.asarray(jax.device_get(pos_dev), dtype=float)
+        samples.append(_dudl_at_position(bundle, pos_dev))
+        snapshots.append(pos_np.copy())
+        frames.append(pos_np.copy())
+        if traj is not None:
+            frame = ase.Atoms(numbers=z, positions=pos_np)
+            prepare_atoms_geometry(frame, pos_np, md_settings)
+            traj.write(frame)
 
     if traj is not None:
         traj.close()
@@ -475,7 +579,11 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
             interval=cfg.interval,
         )
 
-    neighbor_update_interval = 10
+    neighbor_update_interval = resolve_update_interval(
+        ensemble,
+        getattr(cfg, "jax_md_update_interval", None),
+        use_pbc=bool(md_settings.use_pbc),
+    )
 
     def _build_bundle(r_min: np.ndarray) -> LambdaJaxMdBundle:
         calc_kw = dict(calc_common)

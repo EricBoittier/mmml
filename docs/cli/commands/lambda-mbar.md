@@ -49,6 +49,9 @@ Other options:
                         or scripts/meoh_dimer_lambda_ti.py
 ```
 
+## Visual examples
+
+![Trialanine free-energy surface](../../images/plots/test4_phi_psi_fes.png)
 
 
 ---

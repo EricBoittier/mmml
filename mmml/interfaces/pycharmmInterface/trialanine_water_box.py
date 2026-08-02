@@ -90,7 +90,8 @@ def _load_cgenff_with_trialanine() -> None:
         read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
         read_cgenff_prm(bomlev=False)
         for cmap_prm in trialanine_cmap_extra_prm_files():
-            read.prm(str(cmap_prm), append=True)
+            # FLEX explicitly; see protein_charmm_build for why.
+            read.prm(str(cmap_prm), append=True, flex=True)
         read.rtf(str(trialanine_cgenff_rtf_path()), append=True)
 
 
@@ -258,8 +259,14 @@ def build_trialanine_water_box_in_charmm(
     seed: int = 42,
     workdir: Path | None = None,
     skip_reset_block: bool = False,
+    peptide_positions: np.ndarray | None = None,
 ) -> TrialanineWaterBox:
-    """Construct CGENFF ``TRIA`` + TIP3 waters in CHARMM and return PSF-ordered coordinates."""
+    """Construct CGENFF ``TRIA`` + TIP3 waters in CHARMM and return PSF-ordered coordinates.
+
+    If ``peptide_positions`` is given (shape ``(N_pept, 3)`` in Å), those
+    coordinates replace the IC-built peptide before Packmol (COM placed at
+    box center). Used by φ/ψ solvent scans seeded from a gas-phase grid.
+    """
     import pycharmm.coor as coor
     import pycharmm.generate as generate
     import pycharmm.ic as ic
@@ -307,9 +314,23 @@ def build_trialanine_water_box_in_charmm(
 
     pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     if np.any(np.abs(pos) > 9000.0) or float(np.std(pos)) < 0.05:
-        setupRes.generate_coordinates(skip_energy_show=True, validate=True)
+        # This branch is not the exception it looks like: ic.build() above places
+        # nothing without an IC SEED, so all 42 atoms are still CHARMM's 9999
+        # placeholder and the peptide's entire geometry comes from here. Hand it
+        # the seeded generator -- unseeded, it minimizes to a different local
+        # minimum every run and ``seed`` only ever reached Packmol.
+        setupRes.generate_coordinates(skip_energy_show=True, validate=True, rng=rng)
 
-    peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
+    if peptide_positions is not None:
+        peptide = np.asarray(peptide_positions, dtype=float).reshape(-1, 3).copy()
+        n_live = int(coor.get_positions().shape[0])
+        if peptide.shape[0] != n_live:
+            raise ValueError(
+                f"peptide_positions has {peptide.shape[0]} atoms; "
+                f"live PEPT segment has {n_live}"
+            )
+    else:
+        peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
     peptide -= peptide.mean(axis=0)
     peptide += np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
     coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))

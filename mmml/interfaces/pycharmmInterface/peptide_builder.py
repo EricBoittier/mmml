@@ -413,7 +413,7 @@ def build_peptide_in_charmm(
         # 2. Append standard protein topology and parameters second
         tp = toppar or protein_toppar_paths()
         read.rtf(str(tp.rtf), append=True)
-        read.prm(str(tp.prm), append=True)
+        read.prm(str(tp.prm), append=True, flex=True)
 
         # 3. Load extra RTF/PRM files if provided
         if extra_rtfs:
@@ -421,7 +421,7 @@ def build_peptide_in_charmm(
                 read.rtf(str(rtf_file), append=True)
         if extra_prms:
             for prm_file in extra_prms:
-                read.prm(str(prm_file), append=True)
+                read.prm(str(prm_file), append=True, flex=True)
 
         # Read sequence and build
         read.sequence_string(" ".join(res_list))

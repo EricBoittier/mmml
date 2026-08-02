@@ -289,10 +289,29 @@ def test_should_skip_pre_dyn_fmax_gate_for_equi_from_heat():
         dyn_stages=["equi"],
         restart_from="heat.7.res",
     )
+    # Memory handoff uses continue_seed.res; coords are already finite-T liquid.
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["prod"],
+        restart_from="handoff/continue_seed.res",
+    )
+    # Failed-prod resume may point at baseline.res while handoff still holds liquid.
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["prod"],
+        restart_from="baseline.res",
+        handoff_coords_in_memory=True,
+    )
     assert not _should_skip_pre_dyn_fmax_gate(
         seeded_from_dynamics_restart=False,
         dyn_stages=["equi"],
         restart_from=None,
+    )
+    assert not _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["prod"],
+        restart_from="baseline.res",
+        handoff_coords_in_memory=False,
     )
     assert not _should_skip_pre_dyn_fmax_gate(
         seeded_from_dynamics_restart=True, dyn_stages=["heat"]

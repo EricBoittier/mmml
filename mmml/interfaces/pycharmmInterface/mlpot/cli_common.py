@@ -22,7 +22,10 @@ REPO_ROOT = _package_dir().parent
 
 DEFAULT_RESIDUE = "ACO"
 DEFAULT_N_MOLECULES = 2
-DEFAULT_SPACING = 4.0
+# COM pitch for grid / multi-residue placement. Dense liquids (water O···O
+# ~2.8 Å, MeOH COM ~4.1 Å) need well below the old 4 Å default; Packmol's
+# atom-atom floor is ``--packmol-tolerance`` (default 2 Å), not this.
+DEFAULT_SPACING = 2.5
 ACO_ATOMS_PER_MONOMER = 10
 NVE_TIMESTEP_PS = 0.00025
 
@@ -323,6 +326,15 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Disable ECHECK. Uses a huge sentinel (not -1): velocity-Verlet "
             "paths still apply MAX(ECHECK, 0.1×KE) when ECHECK≤0."
+        ),
+    )
+    group.add_argument(
+        "--no-echeck-heat",
+        action="store_true",
+        help=(
+            "Disable ECHECK during the heat stage only "
+            "(equi/prod still use --echeck). Needed for ML USER-only heat "
+            "before Hoover settles."
         ),
     )
     group.add_argument(
@@ -992,7 +1004,11 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         "--spacing",
         type=float,
         default=DEFAULT_SPACING,
-        help="Spacing (Å) when placing multiple residues",
+        help=(
+            "COM pitch (Å) when placing multiple residues on a grid. "
+            "Default 2.5 Å suits dense liquids; raise for sparse / gas packs. "
+            "Not Packmol's atom-atom tolerance (--packmol-tolerance)."
+        ),
     )
     parser.add_argument(
         "--checkpoint",
@@ -1304,11 +1320,18 @@ def validate_cluster_geometry(
         com_dists: list[float] = []
         for i in range(n_molecules):
             chunk = r[i * n_per : (i + 1) * n_per]
-            extent = float(np.linalg.norm(chunk.max(axis=0) - chunk.min(axis=0)))
-            if extent < min_monomer_extent:
-                raise ValueError(
-                    f"Monomer {i + 1} extent {extent:.3f} Å < {min_monomer_extent} Å"
-                )
+            # A monoatomic monomer (AR1/KR1/XE1, or the ions CLA/POT/SOD/LIT)
+            # has zero extent by definition, so the collapsed-monomer test does
+            # not apply to it -- applying it anyway makes every single-atom
+            # species unbuildable. Monomers still contribute their COM to the
+            # separation checks below, which is what actually detects a bad pack
+            # for a monoatomic species.
+            if n_per > 1:
+                extent = float(np.linalg.norm(chunk.max(axis=0) - chunk.min(axis=0)))
+                if extent < min_monomer_extent:
+                    raise ValueError(
+                        f"Monomer {i + 1} extent {extent:.3f} Å < {min_monomer_extent} Å"
+                    )
             coms.append(chunk.mean(axis=0))
         if len(coms) > 1:
             for i in range(len(coms)):
@@ -4402,6 +4425,14 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     pretreat.add_argument(
+        "--charmm-mm-pretreat-with-liquid-prep",
+        action="store_true",
+        help=(
+            "Run CHARMM MM pretreat even when --liquid-prep is set "
+            "(default skips pretreat because liquid-prep already relaxes the box)."
+        ),
+    )
+    pretreat.add_argument(
         "--charmm-mm-pretreat-ps-heat",
         type=float,
         default=None,
@@ -4602,6 +4633,19 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--mm-include-lj",
+        "--mm_include_lj",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="mm_include_lj",
+        help=(
+            "With --lr-solver ewald and jax_mic doMM: add COM-switched "
+            "intermolecular LJ beside untapered Ewald Coulomb (reads "
+            "--mm-lj-scales-file / hybrid_mm.json). Default: on when LJ scales "
+            "are loaded, otherwise off. Prefer jax_mic+jax_pme for large boxes."
+        ),
+    )
+    group.add_argument(
         "--jax-pme-method",
         type=str,
         choices=("ewald", "pme", "p3m"),
@@ -4737,7 +4781,22 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "Optional cluster PSF for --jax-mm-spoof bonded parameters "
-            "(first monomer slice). Default: minimal harmonic chain."
+            "(first monomer slice). Also supplies the CGenFF bonded terms for "
+            "--ml-potential-mode bonded_intra, where it is REQUIRED. "
+            "Default: minimal harmonic chain."
+        ),
+    )
+    group.add_argument(
+        "--ml-potential-mode",
+        type=str,
+        default=None,
+        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra"),
+        help=(
+            "Which potential supplies the ML terms. 'bonded_intra' keeps PhysNet "
+            "for the dimer interaction but hands the internal monomer energy to "
+            "CGenFF bonded, which requires --jax-mm-spoof-psf. Use it when the ML "
+            "model was trained on rigid monomers and so carries no restoring force "
+            "for intramolecular coordinates. See docs/hybrid-bonded-intra.md."
         ),
     )
 

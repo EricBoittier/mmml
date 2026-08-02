@@ -17,8 +17,10 @@ import numpy as np
 from mmml.md.restraints import (
     AngleWall,
     BondRetentionWall,
+    DihedralCV,
     FlatBottomWall,
-    LinearDistanceCV,
+    cv_from_spec,
+    periodic_delta_deg,
 )
 from mmml.md.restraints.linear_distance import ReactionChannelRestraint
 
@@ -49,9 +51,9 @@ def _resolve_wall(spec):
     return FlatBottomWall.from_spec(spec)
 
 
-def _as_cvs(specs: Sequence[Any]) -> tuple[LinearDistanceCV, ...]:
-    """Promote ``(i, j)`` pairs / mappings / CV instances to CVs."""
-    return tuple(LinearDistanceCV.from_spec(spec) for spec in specs)
+def _as_cvs(specs: Sequence[Any]) -> tuple[Any, ...]:
+    """Promote ``(i, j)`` / dihedral / mappings / CV instances to CVs."""
+    return tuple(cv_from_spec(spec) for spec in specs)
 
 
 def cv_distance(positions: Any, atom_i: int, atom_j: int) -> Any:
@@ -110,12 +112,11 @@ def packed_cv_values(
 ) -> Any:
     """CV value for each packed window copy. Shape ``(K,)``.
 
-    Generalises :func:`packed_cv_distances` to any
-    :class:`~mmml.md.restraints.LinearDistanceCV` (or ``(i, j)`` pair).
+    Generalises :func:`packed_cv_distances` to
+    :class:`~mmml.md.restraints.LinearDistanceCV` or
+    :class:`~mmml.md.restraints.DihedralCV`.
     """
-    return LinearDistanceCV.from_spec(cv).value_batched(
-        positions_packed, n_atoms, n_windows
-    )
+    return cv_from_spec(cv).value_batched(positions_packed, n_atoms, n_windows)
 
 
 def packed_cv_values_nd(
@@ -128,7 +129,7 @@ def packed_cv_values_nd(
     import jax.numpy as jnp
 
     cols = [
-        LinearDistanceCV.from_spec(cv).value_batched(positions_packed, n_atoms, n_windows)
+        cv_from_spec(cv).value_batched(positions_packed, n_atoms, n_windows)
         for cv in cvs
     ]
     return jnp.stack(cols, axis=-1)
@@ -144,11 +145,16 @@ def packed_bias_energies_cv(
     """Per-window harmonic bias on one general CV. Shape ``(K,)``."""
     import jax.numpy as jnp
 
+    resolved = cv_from_spec(cv)
     k = len(targets_A)
-    values = packed_cv_values(positions_packed, n_atoms, cv, k)
+    values = packed_cv_values(positions_packed, n_atoms, resolved, k)
     targets = jnp.asarray(targets_A, dtype=values.dtype)
     ks = jnp.asarray(k_ev_A2, dtype=values.dtype)
-    return 0.5 * ks * jnp.square(values - targets)
+    if isinstance(resolved, DihedralCV) or getattr(resolved, "is_periodic", False):
+        delta = periodic_delta_deg(values, targets)
+    else:
+        delta = values - targets
+    return 0.5 * ks * jnp.square(delta)
 
 
 def packed_bias_energies_nd(
@@ -254,17 +260,22 @@ def packed_bias_forces_cv(
 
     Uses the CV's analytic gradient so bias forces never differentiate through
     the ML model (nesting AD inside PhysNet's ``value_and_grad`` yields NaNs).
+    Periodic dihedral CVs use the shortest-arc Δφ in degrees.
     """
     import jax.numpy as jnp
 
-    resolved = LinearDistanceCV.from_spec(cv)
+    resolved = cv_from_spec(cv)
     k = len(targets_A)
     values = resolved.value_batched(positions_packed, n_atoms, k)
     grad = resolved.gradient_batched(positions_packed, n_atoms, k)  # (K, N, 3)
     targets = jnp.asarray(targets_A, dtype=values.dtype)
     ks = jnp.asarray(k_ev_A2, dtype=values.dtype)
-    # W = 0.5 k (xi - xi0)^2 -> grad W = k (xi - xi0) * grad xi ; F = -grad W
-    scale = (ks * (values - targets))[:, None, None]
+    if isinstance(resolved, DihedralCV) or getattr(resolved, "is_periodic", False):
+        delta = periodic_delta_deg(values, targets)
+    else:
+        delta = values - targets
+    # W = 0.5 k Δ² -> grad W = k Δ * grad ξ ; F = -grad W
+    scale = (ks * delta)[:, None, None]
     return (-scale * grad).reshape(k * n_atoms, 3)
 
 
@@ -479,10 +490,17 @@ def numpy_bias_matrix_cv(
     cell: np.ndarray | None = None,
 ) -> np.ndarray:
     """Analytic ``W_l(R)`` for one frame and one general CV. Shape ``(K,)``."""
-    value = LinearDistanceCV.from_spec(cv).value_numpy(positions, cell=cell)
+    resolved = cv_from_spec(cv)
+    value = float(resolved.value_numpy(positions, cell=cell))
     targets = np.asarray(targets_A, dtype=np.float64)
     ks = np.asarray(k_ev_A2, dtype=np.float64)
-    return 0.5 * ks * (value - targets) ** 2
+    if isinstance(resolved, DihedralCV) or getattr(resolved, "is_periodic", False):
+        # NumPy periodic Δφ (deg)
+        d = np.deg2rad(value - targets)
+        delta = np.rad2deg(np.arctan2(np.sin(d), np.cos(d)))
+    else:
+        delta = value - targets
+    return 0.5 * ks * delta**2
 
 
 def numpy_bias_matrix_nd(

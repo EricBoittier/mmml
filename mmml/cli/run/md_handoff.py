@@ -1014,8 +1014,20 @@ def kinetic_temperature_k_from_jaxmd_metal_velocities(
         raise ValueError("ndegf must be positive")
     # k_B in eV/K (CODATA); matches jax_md.units.metal_unit_system()['temperature'].
     k_b_ev = 8.617330337217213e-05
-    # Same as jax_md.quantity.temperature(momentum=m*v, mass=m) / k_B.
+    # Same as jax_md.quantity.temperature(momenta=m*v, mass=m) / k_B.
     return float(np.sum(m[:, None] * v * v)) / (float(dof) * k_b_ev)
+
+
+def ang_ps_velocities_to_jaxmd_metal(velocities_ang_ps: np.ndarray) -> np.ndarray:
+    """Convert ordinary Å/ps velocities to ASE / JAX-MD metal velocity units.
+
+    ASE stores velocities such that ``v_metal = v_Å/fs / units.fs`` and
+    ``1 Å/ps = 0.001 Å/fs``.
+    """
+    from ase import units
+
+    v = np.asarray(velocities_ang_ps, dtype=np.float64).reshape(-1, 3)
+    return v / (1000.0 * float(units.fs))
 
 
 def remove_center_of_mass_velocity_ang_ps(
@@ -1673,9 +1685,18 @@ def load_handoff_from_npz(path: Path, *, frame: int = 0) -> MdHandoffState:
 
 
 def load_handoff_from_h5(path: Path, *, frame: int = -1) -> MdHandoffState:
+  import h5py
+
   from mmml.utils.hdf5_reporter import load_hdf5_trajectory
 
-  data = load_hdf5_trajectory(path, datasets=["positions", "velocities", "box"])
+  # NVT reporters often omit ``box`` (constant cell). Require positions only;
+  # velocities/box are optional — caller supplies ``--box-size`` / PSF+CRD cell.
+  with h5py.File(str(path), "r") as f:
+    datasets = ["positions"]
+    for name in ("velocities", "box"):
+      if name in f:
+        datasets.append(name)
+  data = load_hdf5_trajectory(path, datasets=datasets)
   pos = np.asarray(data["positions"][frame], dtype=np.float64)
   vel = None
   if "velocities" in data:
@@ -1684,7 +1705,6 @@ def load_handoff_from_h5(path: Path, *, frame: int = -1) -> MdHandoffState:
   if "box" in data:
     cell = np.asarray(data["box"][frame], dtype=np.float64)
   attrs: dict[str, Any] = {}
-  import h5py
 
   with h5py.File(str(path), "r") as f:
     for key in ("atomic_numbers", "temperature_target", "ensemble"):

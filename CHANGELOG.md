@@ -32,8 +32,174 @@ and versioning process.
 - First-class CLI: `mmml compare-charmm-ml` (CHARMM PSF charges vs joint
   PhysNet/DCMNet dipoles and ESP on a validation split).
 
+- CI test-shape gates: `scripts/ci/check_test_report.py` reads the JUnit XML each
+  pytest step now emits and fails when too few tests passed, too many skipped, a
+  failure was recorded, or the report is missing entirely. `pytest`'s exit code
+  alone could not distinguish a passing suite from one that never ran. Also
+  `scripts/ci/assert_pycharmm_live.py` (hard PyCHARMM import before the live
+  job), `make test-shape`, and a 60-minute timeout on the `build` job.
+- Repo-wide guard against the unit-constant bug class
+  (`tests/unit/test_conversion_constant_drift.py`). Every bug in the units audit
+  was a module-local literal used on both the write and the read side, so it
+  round-tripped perfectly and disagreed only with physics — invisible to any
+  test of the module holding it. The guard parses the package with `ast` (no
+  imports, so it also covers modules needing JAX/PySCF/CHARMM) and asserts that
+  every module-level constant reusing a `mmml.data.units` name agrees with the
+  canonical value, and that ~25 conversions with no canonical twin match an
+  SI/CODATA derivation spelled out in the test. Tolerance 1e-4: rounded literals
+  in the tree deviate by at most 1.5e-5, the historical `1.88873` transposition
+  by 5.3e-4.
+- CI coverage floor: `scripts/ci/check_coverage_floor.py` plus a `Coverage
+  floor` step and `make coverage-gate`. A floor, not a target — ~18.7k
+  statements need live CHARMM, ~10.9k are plotting and ~5.3k need
+  PySCF/torch/GPU, so the CI-reachable ceiling is near 70%. It also pins the
+  absolute covered-line count, since deleting untested code raises the
+  percentage. Complements the Codecov status, which is advisory and needs a
+  token.
+- Oversized-function ratchet (`tests/unit/test_oversized_function_ratchet.py`),
+  two tiers: the 11 functions over 1,000 lines may not grow and none may be
+  added; the 26 over 500 lines are capped by count, so ordinary edits to an
+  already-large function do not turn the suite red but a 27th does.
+  `run_staged_workflow` alone holds 699 of the 902 uncovered statements in its
+  module and caps that file near 35% coverage; the ratchet keeps the pattern
+  from spreading while decomposition waits on the golden-record harness.
+- `MMML_DISABLE_CHARMM=1` makes CHARMM discovery report nothing and blocks
+  `import pycharmm` outright, so `make test-ci` genuinely reproduces the
+  libcharmm-free CI environment. Setting `CHARMM_LIB_DIR` to a nonexistent path
+  does not work: a lib-less explicit override is treated as stale and replaced
+  by the discovered `setup/charmm` tree.
+
 ### Fixed
 
+- **libcharmm did not link on arm64 (macOS), at any MLpot tier.** `api_func.F90`
+  held twelve `max_Npr` integer arrays in static storage — 6.1 GB at
+  `max_Npr = 128000000` — which overruns arm64's ±4 GB ADRP reach
+  (`ld: fixup error (kind=arm64_was_adrp_ldr_got_elide_got) ... ADRP out of
+  range`) and only linked on x86_64 because the build passes `-mcmodel=medium`.
+  They are now allocated on the heap on first MLpot use, so the linker sees
+  twelve descriptors: `__common` drops from 207 MB at the 4 M tier to 15 MB at
+  the 128 M tier, and `scripts/rebuild_charmm_mlpot.sh` completes on darwin-arm64
+  at the full tier. Capacity, the `max_Npr` bounds checks and the `tier_*` build
+  layout are unchanged; a failed allocation now reports the requested size
+  instead of crashing.
+- **Every MLpot neighbour-list update walked all `max_Npr` entries.** The
+  Fortran-to-Python index shift at the end of `mlpot_update` was written as
+  whole-array `idxp = idxp - 1` over eight arrays, so it touched
+  8 × `max_Npr` elements per update regardless of system size — over a billion
+  integer updates at the 128 M tier — and first-touched every page, forcing the
+  whole tier resident. Now bounded to the populated prefix (`natom`/`natim`,
+  `Nmlp`, `Nmlmmp`), which is exactly what `mlpot_call` and `mlpot_export_*`
+  read.
+- **One `READ PARAM APPEND` disabled van der Waals for the rest of the CHARMM
+  process.** `setup/charmm/source/api/api_read.F90` declared `qappend` (and
+  `qflex`) with an initializer, which implicitly `SAVE`s a Fortran local, and only
+  ever set it — never cleared it. The first `read.prm(..., append=True)` latched
+  append mode permanently, so every later full parameter read ran as
+  `READ PARAM APPEND` and wiped the live NONBONDED table. Because
+  `read_cgenff_toppar()` appends the bundled `examples/m/par_ch3cl.prm` and the
+  Packmol builder calls it twice, the cluster relax ran with `VDWaals` identically
+  zero: ABNR then converged to a pure-electrostatic collapse (`ELEC` −4.4 × 10⁶
+  kcal/mol) that stretched TIP3 O–H from 0.953 Å to 1.257 Å. Both flags are now
+  assigned per call. In a controlled A/B on the darwin build (same source tree,
+  tier and build directory, only `api_read.F90` differing) the worst monomer
+  deviation drops from 0.304 Å to 0.031 Å (`TIP3:4`), 0.423 Å to 0.021 Å
+  (`MEOH:4`) and 0.451 Å to 0.037 Å (`TIP3:60`). No CHARMM build was ever exempt:
+  on one pc-studix compute node, one `libcharmm.so` and one checkout, `MEOH:4`
+  goes from 0.014 Å to 0.424 Å purely by making the bundled append files
+  reachable, so the environment that looked healthy was only missing an optional
+  data file. The CI libcharmm cache key and
+  `scripts/ci/setup_charmm_lib.sh`'s build stamp now hash every
+  `setup/charmm/source/api/*.F90` — `api_read.F90` was not in the previous
+  hand-picked list, so the fix would have been served a stale library — and
+  `tests/unit/test_md_system_unified_ffparams.py` runs with the monomer geometry
+  gate armed again. See `docs/packmol-monomer-geometry-gate.md`.
+- **The Packmol cluster cache stored CHARMM-minimized coordinates without
+  validating them.** A broken CHARMM/pycharmm build returned scrambled
+  coordinates (a `MEOH:327` / L=28 build: all 327 monomers distorted, worst 1-2/1-3
+  distance change 2.006 Å, one monomer's `OG` bit-identical to another monomer's
+  `HG1`), and nothing noticed — the garbage was cached to
+  `.packmol_cache/<key>/cluster.npz`, triggered the expensive Packmol repack in
+  the pre-MLpot geometry gate, and would have been used for the box.
+  `build_packmol_composition_cluster` now compares every monomer's covalent
+  skeleton against the template Packmol placed, both before writing the cache and
+  on cache hit, and raises instead of caching
+  (`mmml/utils/monomer_internal_geometry.py`, threshold 0.35 Å, override
+  `MMML_MAX_MONOMER_INTERNAL_DEVIATION_A`). Threshold calibrated on real
+  pc-studix builds — worst healthy monomer across MEOH/TIP3, two densities and a
+  20× range of minimization length was 0.073 Å
+  (`scripts/validate_packmol_monomer_geometry.py`). `minimize_charmm_mm_only`
+  now returns a `CharmmMmMinimizeReport`; a GRMS of exactly 0.0 only warns,
+  because healthy KEY_LIBRARY CHARMM builds report it too. See
+  [`docs/packmol-monomer-geometry-gate.md`](docs/packmol-monomer-geometry-gate.md).
+- **`md-system` died in the child process on both PBC backends.** `run_sim`
+  grew `--hybrid-hamiltonian` / `--shared-cutoff` and `md_system.build_command`
+  forwards them to every backend unconditionally, but neither
+  `md_pbc_suite.ase` nor `md_pbc_suite.jaxmd` declared them — so the forwarded
+  argv hit argparse exit 2 *inside the subprocess*, after the run had started.
+  Both parsers now accept them and thread them into `setup_calculator` and
+  `CutoffParameters`, matching `run_sim`. `md_pbc_suite/jaxmd.py::main` grew a
+  `build_parser` (its 743-line argparse block, extracted) so the argv a backend
+  receives can be parsed in a test rather than only in a live run;
+  `tests/unit/test_md_system_ase_cmd.py` now parses the *whole* forwarded argv
+  against both backends instead of one flag at a time.
+- `tests/unit/test_lambda_jaxmd_neighbors.py` aborted collection wherever
+  libcharmm is absent — `lambda_jaxmd` imports `lambda_dynamics`, which does a
+  module-level `import pycharmm.param`. pytest reports that as "Interrupted: 1
+  error during collection" and runs **zero** tests, so it failed the whole
+  build rather than skipping one file. Guarded with a module-level skip;
+  deferring that import in `lambda_dynamics` would let the tests run in CI.
+- `mmml pes-design` was registered without a `CLI_NAV_GROUPS` entry, which made
+  `scripts/generate_cli_docs.py` refuse to run at all and left the generated
+  CLI reference and package-architecture docs stale in CI.
+- **DCMNet dipole units.** `dcmnet/loss.py:pred_dipole` multiplied by `1.88873`
+  and documented its result as Debye. The value is a transposed-digit typo for
+  the Angstrom -> bohr factor `1.8897261` (5.3e-4 relative), and the unit was
+  never Debye — both callers in `dcmnet/analysis.py` convert the residual with
+  `au_to_debye` afterwards. The docstring now states atomic units (e*bohr) and
+  the factor comes from `mmml.data.units.ANGSTROM_TO_BOHR`.
+
+  `dcmnet_ase.DCMNetCalculator._compute_molecular_dipole` carried the same
+  literal under an "atomic units to Debye" comment while its input was
+  e*Angstrom, so **every dipole that calculator reported was ~2.54x too small**
+  despite being labelled Debye in the method docstring, in `get_dcm_data`, and
+  in the example script's printout. It now applies `EANGSTROM_TO_DEBYE`.
+
+  `dcmnet/analysis.py` held a third independent literal for e*bohr -> Debye;
+  it now uses the shared `EBOHR_TO_DEBYE`, which `mmml.data.units` derives from
+  the other two so the chain cannot drift apart again. `au_to_kcal` likewise
+  moved to `HARTREE_TO_KCAL_MOL` (`627.509` -> `627.509474`).
+
+  Impact: recorded DCMNet dipole MAEs shift by 5.3e-4 relative; checkpoints are
+  unaffected (the change is to a reported/loss scale, not to parameters). ASE
+  calculator dipoles change by a factor of 2.5417. Covered by
+  `tests/unit/test_dcmnet_dipole_units.py`, which anchors on CODATA values
+  computed in the test and on the identity
+  `EANGSTROM_TO_DEBYE == ANGSTROM_TO_BOHR * EBOHR_TO_DEBYE`.
+- **PhysNetJAX `cut_vdw`.** The DCMNet copy of `cut_vdw` was fixed during the
+  units audit; the PhysNetJAX copy in `physnetjax/data/cut_grid.py` kept the
+  same defect — `elements` stayed a plain list on the element-symbol path, so
+  `elements[closest_atom]` raised "only integer scalar arrays can be converted
+  to a scalar index" for exactly the input the docstring advertises.
+  `physnetjax/data/data.py` also called `cut_vdw` without importing it, so
+  `prepare_multiple_datasets(..., esp_mask=True)` raised `NameError` for every
+  caller. Both fixed; `tests/unit/test_physnetjax_cut_grid.py` pins the two
+  implementations to identical output so a fix to one cannot skip the other.
+- Docs: `docs/UNITS_SUMMARY.md` listed the E-field PhysNet Coulomb prefactor
+  `7.199822675975274` as an unresolved question. It is `(e²/4πε₀)/2` — halved
+  because the pair sum runs over ordered pairs — now named
+  `COULOMB_PAIR_FACTOR_EV_A` and anchored against `1/(4πε₀)` in the drift test.
+- Test isolation: `test_mpi_openmpi_static_shmem_fallback` leaked
+  `LD_PRELOAD` / `DYLD_INSERT_LIBRARIES` into the real environment, pointing at a
+  library under a `tmp_path` pytest later deleted. Every subsequent test that
+  spawned a subprocess then died in the dynamic loader (exit -6) with a message
+  naming neither the cause nor the culprit; six unrelated tests failed that way
+  in a full-suite run while passing in isolation.
+- `python -m mmml.data.npz_schema` raised `NameError` instead of printing usage:
+  `sys` was imported inside `main()` only, but the module-level guard calls
+  `sys.exit(main())`.
+- Codecov could not report a regression: `patch: false` waived coverage on new
+  code entirely and a 50-percentage-point project threshold let total coverage
+  halve while the status stayed green.
 - Missing comma in `mmml/data/qcml/atomic_reference_energies.json` that broke
   `json.load` (and any import of `mmml.data`) after the QCML reference table
   update.

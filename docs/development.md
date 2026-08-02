@@ -14,6 +14,46 @@ Run the same static check that CI enforces:
 make lint
 ```
 
+Reproduce CI's `build` job on a machine that *has* a CHARMM build:
+
+```bash
+make test-ci
+```
+
+That target sets `MMML_DISABLE_CHARMM=1`, which makes
+`charmm_paths.resolve_charmm_paths()` report no CHARMM at all. Setting
+`CHARMM_LIB_DIR` to a nonexistent directory does **not** work: a lib-less
+explicit override is treated as stale and silently replaced by the discovered
+`setup/charmm` tree, so live-CHARMM tests keep running locally and the local
+result stops matching CI.
+
+## Why CI checks the *shape* of a test run
+
+`pytest` exits 0 when every selected test skips. Every live-dependency guard in
+this repo (`@pytest.mark.skipif(not can_import_pycharmm())`, `if not
+CKPT.exists(): pytest.skip(...)`, and the `libcharmm`-unavailable hook in
+`tests/conftest.py`) is a skip, so a broken install, a missing checkpoint, or a
+`libcharmm` that exists but cannot be `dlopen`'ed converts a whole job into a
+no-op that reports success.
+
+CI therefore asserts what a run should *look* like, not just its exit code:
+
+- `scripts/ci/check_test_report.py` reads the JUnit XML each pytest step emits
+  and fails when too few tests actually passed or too many skipped.
+- `scripts/ci/assert_pycharmm_live.py` imports PyCHARMM for real before the
+  live-CHARMM job runs, so a present-but-unusable library fails there instead of
+  turning 45 minutes of tests into skips.
+
+Locally:
+
+```bash
+make test-shape
+```
+
+When you add tests, the `--min-passed` thresholds in
+`.github/workflows/ci.yml` are floors, not targets — raise them as the suite
+grows so the gate keeps its teeth.
+
 ## Repository boundaries
 
 - `mmml/` is the supported distributable library and CLI. Production code must

@@ -1,0 +1,65 @@
+{
+  "checkpoint": "/mmhome/boittier/home/mmml/artifacts/lj_scales/ckpts/params_hybrid_mm_lever2_on5_softwell_2026-08-02_22-15-54.json",
+  "sidecar": "/mmhome/boittier/home/mmml/artifacts/lj_scales/ckpts/hybrid_mm_lever2_on5_softwell-657cb7db-74a1-4623-84a5-f772b8fe7928/hybrid_mm.json",
+  "pdb": "/mmhome/boittier/home/mmml/artifacts/lj_scales/liquid_dense_L24/model.pdb",
+  "box_A": 24.0,
+  "n_atoms": 600,
+  "n_monomers": 120,
+  "atoms_per_monomer": 5,
+  "mm_switch_on": 5.0,
+  "ml_switch_width": 1.5,
+  "mm_switch_width": 5.0,
+  "cases": {
+    "base": {
+      "energy_eV": 1571.4605311273285,
+      "delta_energy_eV": 0.0,
+      "force_max_abs_delta_eV_A": 0.0,
+      "force_rms_delta_eV_A": 0.0
+    },
+    "lattice_shift_x": {
+      "energy_eV": 1571.4605311273258,
+      "delta_energy_eV": -2.7284841053187847e-12,
+      "force_max_abs_delta_eV_A": 2.3646862246096134e-11,
+      "force_rms_delta_eV_A": 1.8154275941902298e-12
+    },
+    "lattice_shift_xyz": {
+      "energy_eV": 1571.4605311273303,
+      "delta_energy_eV": 1.8189894035458565e-12,
+      "force_max_abs_delta_eV_A": 3.6834535421803594e-11,
+      "force_rms_delta_eV_A": 3.018970083001284e-12
+    },
+    "arbitrary_molecule_wrapped": {
+      "energy_eV": 1571.4605311273167,
+      "delta_energy_eV": -1.1823431123048067e-11,
+      "force_max_abs_delta_eV_A": 4.729372449219227e-11,
+      "force_rms_delta_eV_A": 2.5471420737508522e-12
+    },
+    "half_cell_molecule_wrapped": {
+      "energy_eV": 1571.4605311273322,
+      "delta_energy_eV": 3.637978807091713e-12,
+      "force_max_abs_delta_eV_A": 2.97859514830634e-11,
+      "force_rms_delta_eV_A": 2.45161654598248e-12
+    },
+    "base_repeat": {
+      "energy_eV": 1571.4605311273313,
+      "delta_energy_eV": 2.7284841053187847e-12,
+      "force_max_abs_delta_eV_A": 8.753886504564434e-12,
+      "force_rms_delta_eV_A": 4.0060441335314744e-13
+    }
+  },
+  "pass_criteria": {
+    "lattice_abs_delta_E_eV": 0.0001,
+    "lattice_force_max_abs_delta_eV_A": 0.001,
+    "wrap_abs_delta_E_eV": 0.0005,
+    "wrap_force_max_abs_delta_eV_A": 0.005,
+    "repeat_abs_delta_E_eV": 1e-06
+  },
+  "checks": {
+    "lattice_shift_x": true,
+    "lattice_shift_xyz": true,
+    "arbitrary_molecule_wrapped": true,
+    "half_cell_molecule_wrapped": true,
+    "base_repeat": true
+  },
+  "pbc_ok": true
+}

@@ -6,25 +6,47 @@ Run from repo root::
     uv run python scripts/generate_cli_docs.py
 
 Writes ``docs/cli/commands/<name>.md`` for every entry in ``COMMAND_REGISTRY`` and
-updates the ``# CLI_NAV_START`` … ``# CLI_NAV_END`` block in ``mkdocs.yml``.
+updates the ``# CLI_NAV_START: <group>`` … ``# CLI_NAV_END: <group>`` blocks in
+``mkdocs.yml``.
+
+One marker block per group, so hand-written guides can sit next to the generated
+command pages inside the same nav section without being clobbered. Group names
+track ``mmml.cli.help_text.COMMAND_GROUPS`` so the sidebar reads like
+``mmml commands``.
 """
 
 from __future__ import annotations
 
 import argparse
 import io
+import os
 import re
 import sys
 from pathlib import Path
+
+# Rendering a page imports the command module, which initializes JAX. On a busy
+# GPU that import raises, get_subcommand_parser() swallows the error, and the
+# page silently regenerates as a "help could not be loaded" stub — which the
+# pre-commit hook then stages over the real option dump. Docs need argparse only.
+os.environ["JAX_PLATFORMS"] = "cpu"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_CLI = REPO_ROOT / "docs" / "cli"
 COMMANDS_DIR = DOCS_CLI / "commands"
 MKDOCS = REPO_ROOT / "mkdocs.yml"
+INDEX_MD = REPO_ROOT / "docs" / "index.md"
+EXAMPLES_MD = REPO_ROOT / "docs" / "examples.md"
 NAV_START = "# CLI_NAV_START"
 NAV_END = "# CLI_NAV_END"
+HELP_START = "MMML_TOP_HELP_START"
+HELP_END = "MMML_TOP_HELP_END"
 
-# Sidebar groups (order matters). Commands not listed fall into "Other utilities".
+# Sidebar groups (order matters). Every registry command must land in exactly one
+# group; unassigned commands are reported as an error rather than silently pooled,
+# so a new subcommand cannot quietly disappear into an "Other" bucket.
+#
+# The first five names mirror ``mmml.cli.help_text.COMMAND_GROUPS`` — see
+# ``tests/unit/test_generate_cli_docs.py`` for the drift guard.
 CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "Structure & boxes",
@@ -36,10 +58,14 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "md-system",
             "run",
             "run-pycharmm",
+            "md-embedding",
             "warmup-mlpot-jax",
             "mpi-check",
+            "mpi-launch",
             "health-check",
             "lambda-mbar",
+            "umbrella-sample",
+            "umbrella-mbar",
             "pycharmm-two-residue-sample",
         ),
     ),
@@ -51,6 +77,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "pyscf-evaluate",
             "pyscf-evaluate-mp2",
             "fix-and-split",
+            "prepare-mm-dataset",
             "xml2npz",
             "npz2traj",
             "validate",
@@ -60,11 +87,16 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "ic-scan",
             "mode-check",
             "compare-npz",
+            "compare-charmm-ml",
             "cross-check",
         ),
     ),
     (
-        "ML training & sampling",
+        "ORCA external",
+        ("orca-server", "orca-client", "orca-external"),
+    ),
+    (
+        "ML training & MD",
         (
             "physnet-train",
             "physnet-evaluate",
@@ -74,7 +106,10 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "efield-train",
             "efield-evaluate",
             "efield-md",
+            "kernnn-train",
+            "kernnn-evaluate",
             "active-learning",
+            "pes-design",
             "kernel-fit",
             "sample-diverse-xyz",
             "interpolate-xyz",
@@ -89,26 +124,15 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "configure",
             "env",
+            "doctor",
             "commands",
             "examples",
             "completion",
             "gui",
             "unwrap-traj",
+            "analyze-liquid",
+            "plot-restart-velocities",
             "downstream",
-        ),
-    ),
-    (
-        "ORCA external",
-        ("orca-server", "orca-client", "orca-external"),
-    ),
-    (
-        "Deprecated & legacy",
-        (
-            "train",
-            "evaluate",
-            "ef-train",
-            "ef-evaluate",
-            "ef-md",
         ),
     ),
 )
@@ -123,6 +147,14 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     ],
     "build-crystal": [
         ("Structure building guide", "../structure-building.md"),
+        (
+            "Solid acetone & sublimation enthalpy",
+            "../../acetone-crystal-sublimation.md",
+        ),
+        (
+            "Solid dichloromethane & halogen contacts",
+            "../../dcm-crystal-cohesion.md",
+        ),
     ],
     "md-system": [
         ("md-system YAML configs", "../../md-system-configs.md"),
@@ -158,6 +190,33 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "dmc": [
         ("Diffusion Monte Carlo guide", "../../dmc.md"),
     ],
+    "verify-esp-alignment": [
+        ("DCMNet calculators and ESP", "../../dcmnet_calculators.md"),
+    ],
+    "efield-evaluate": [
+        ("DCMNet calculators and ESP", "../../dcmnet_calculators.md"),
+        ("Multipole visualization gallery", "../../plot-style-gallery.md#fields-as-parametric-surfaces"),
+    ],
+    "train-joint": [
+        ("DCMNet calculators and ESP", "../../dcmnet_calculators.md"),
+    ],
+    "pes-design": [
+        ("Bayesian PES design", "../../bayesian-pes-design.md"),
+    ],
+    "neb": [
+        ("NEB guide", "../../neb.md"),
+        ("Menshutkin example", "../../examples/menshutkin.md"),
+    ],
+    "analyze-liquid": [
+        ("Liquid box workflow", "../../liquid-box-workflow.md"),
+        ("Plotting style guide", "../../plotting-style-guide.md"),
+    ],
+    "umbrella-sample": [
+        ("Batched umbrella sampling", "../../umbrella.md"),
+    ],
+    "umbrella-mbar": [
+        ("Batched umbrella sampling", "../../umbrella.md"),
+    ],
 }
 
 # Static figures under docs/images/ (see scripts/generate_docs_figures.py).
@@ -173,6 +232,90 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
     ],
     "liquid-box": [
         ("Density prep ladder (schematic)", "../../images/plots/liquid-box-density-ladder.png"),
+    ],
+    "prepare-mm-dataset": [
+        ("MM baseline decomposition", "../../images/prepare-mm-dataset/mm_baseline_decomposition.png"),
+        ("Force-field assignment", "../../images/prepare-mm-dataset/acodcm_assignment.png"),
+        ("Force validation", "../../images/prepare-mm-dataset/force_validation.png"),
+    ],
+    "fix-and-split": [
+        ("Residue and atom-type assignment", "../../images/prepare-mm-dataset/acodcm_assignment.png"),
+        ("Charge-conservation validation", "../../images/prepare-mm-dataset/charge_conservation.png"),
+    ],
+    "validate": [
+        ("Force and unit validation", "../../images/prepare-mm-dataset/force_validation.png"),
+    ],
+    "compare-charmm-ml": [
+        ("MM/ML force validation", "../../images/prepare-mm-dataset/force_validation.png"),
+    ],
+    "dimer-scan": [
+        ("Dimer force profiles across cutoff policies", "../../images/mlpot-settings/dcm_dimer_forces_cutoffs.png"),
+    ],
+    "ic-scan": [
+        ("Trialanine PES with force-annotated conformers", "../../images/povray-overlays/trialanine_pes_with_povray.png"),
+    ],
+    "normal-mode-sample": [
+        ("Harmonic and trajectory-derived vibrational spectra", "../../images/mcp/smoke001_ir_comparison.png"),
+    ],
+    "neb": [
+        ("NEB profile with ordered force-annotated geometries", "../../images/povray-overlays/neb_profile_with_povray.png"),
+    ],
+    "physnet-md": [
+        ("Energy conservation with force snapshots", "../../images/povray-overlays/water_nve_with_povray.png"),
+    ],
+    "physnet-evaluate": [
+        ("Element-resolved force validation", "../../images/prepare-mm-dataset/force_validation.png"),
+    ],
+    "md-system": [
+        ("Structure, thermodynamics, RDF, and geometry validation", "../../images/structures/validation_summary.png"),
+    ],
+    "run": [
+        ("Energy trace with force-annotated trajectory snapshots", "../../images/povray-overlays/water_nve_with_povray.png"),
+    ],
+    "run-pycharmm": [
+        ("Liquid structure and thermodynamic validation", "../../images/structures/validation_summary.png"),
+    ],
+    "lambda-mbar": [
+        ("Trialanine free-energy surface", "../../images/plots/test4_phi_psi_fes.png"),
+    ],
+    "umbrella-sample": [
+        ("Trialanine conformers anchored to collective-variable coordinates", "../../images/povray-overlays/trialanine_pes_with_povray.png"),
+    ],
+    "umbrella-mbar": [
+        ("One-dimensional free-energy profile", "../../images/plots/test4_phi_fes.png"),
+        ("Two-dimensional free-energy surface", "../../images/plots/test4_phi_psi_fes.png"),
+    ],
+    "active-learning": [
+        ("Descriptor-space coverage of a selected PES batch", "../../images/pes-design/descriptor_coverage.png"),
+    ],
+    "pes-design": [
+        ("Descriptor-space coverage", "../../images/pes-design/descriptor_coverage.png"),
+        ("Coverage CDF against random selection", "../../images/pes-design/coverage_cdf.png"),
+        ("Pair-distance spectrum reproduction", "../../images/pes-design/rdf_spectrum.png"),
+    ],
+    "sample-diverse-xyz": [
+        ("Descriptor-space coverage of a diverse subset", "../../images/pes-design/descriptor_coverage.png"),
+    ],
+    "verify-esp-alignment": [
+        ("ESP from explicit distributed charge sites", "../../images/povray-overlays/distributed_charge_esp.png"),
+        ("Distributed sites and equivalent multipoles", "../../images/povray-overlays/distributed_charge_model.png"),
+    ],
+    "efield-evaluate": [
+        ("Learned electrostatic-potential field", "../../plot-style-gallery-assets/chart_multipole_field_learned.png"),
+    ],
+    "efield-train": [
+        ("Electrostatic field represented by learned multipoles", "../../plot-style-gallery-assets/chart_multipole_field_learned.png"),
+    ],
+    "efield-md": [
+        ("Distributed electrostatics and equivalent moments", "../../images/povray-overlays/distributed_charge_model.png"),
+    ],
+    "train-joint": [
+        ("Joint-model distributed sites and electrostatic moments", "../../images/povray-overlays/distributed_charge_model.png"),
+        ("ESP generated by distributed sites", "../../images/povray-overlays/distributed_charge_esp.png"),
+    ],
+    "analyze-liquid": [
+        ("Liquid structure and thermodynamic validation summary", "../../images/structures/validation_summary.png"),
+        ("Element-pair radial distribution functions", "../../images/structures/element_pair_rdfs.png"),
     ],
 }
 
@@ -234,20 +377,57 @@ mmml env --json
 ```
 """,
     "build-crystal": """
-Build molecular crystals for MD. **Recommended for DCM and benzene:** literature
-CIF + `make-res` atom names (`--literature dcm|benz`) — exact experimental unit
+Build molecular crystals for MD. **Recommended for DCM, benzene and acetone:**
+literature CIF + `make-res` atom names (`--literature`) — exact experimental unit
 cell, tiled to a simulation supercell (≥28 Å edges by default) at literature ρ.
 
 ```bash
 mmml make-res --res DCM --skip-energy-show
 mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
 mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
+mmml build-crystal --literature aco -o acetone_pbca_150k.pdb
 ```
 
 PyXtal (`uv sync --extra chem`) is optional for random placement in the same
-space group. DCM crystal: [COD 2100015](https://www.crystallography.net/2100015.html)
-(Pbcn, ρ≈1.97 g/cm³). Benzene: [COD 4501704](https://www.crystallography.net/cod/4501704.html)
-(P2₁/c, ρ≈1.20 g/cm³).
+space group.
+
+## Bundled presets
+
+| Preset | Residue | Structure | Source |
+|---|---|---|---|
+| `dcm` | `DCM` | Pbcn, 1.63 GPa, ρ≈1.97 g/cm³ | [COD 2100015](https://www.crystallography.net/cod/2100015.html) |
+| `dcm133` | `DCM` | Pbcn, 1.33 GPa, ρ≈1.92 g/cm³ | [COD 2100014](https://www.crystallography.net/cod/2100014.html) |
+| `benz` | `BENZ` | P2₁/c, ρ≈1.20 g/cm³ | [COD 4501704](https://www.crystallography.net/cod/4501704.html) |
+| `aco` | `ACO` | Acetone Pbca, 150 K, Z=16 | [COD 7110464](https://www.crystallography.net/cod/7110464.html) |
+| `aco110k` | `ACO` | Acetone Pbca, 110 K | [COD 7110466](https://www.crystallography.net/cod/7110466.html) |
+| `aco5k` | `ACO` | Acetone Pbca, 5 K (neutron, d6) | [COD 7110465](https://www.crystallography.net/cod/7110465.html) |
+| `acocmcm` | `ACO` | Acetone Cmcm, 160 K (metastable) | [COD 7110463](https://www.crystallography.net/cod/7110463.html) |
+
+The acetone structures come from Allan et al., *Chem. Commun.* 1999, 751
+([doi:10.1039/a900558g](https://doi.org/10.1039/a900558g)). The paper's fifth
+structure — the 15 kbar Cmcm phase — is bundled but has no preset: its methyls
+are rotationally disordered, so it has no single set of hydrogen positions to map
+onto CGenFF. See
+[Solid acetone & sublimation enthalpy](../../acetone-crystal-sublimation.md) for
+validating a built acetone cell against the published contacts and computing its
+sublimation enthalpy.
+
+Both DCM presets are **high-pressure** structures, the two points of Podsiadło et
+al., *Acta Crystallogr. B* 61, 595 (2005)
+([doi:10.1107/S0108768105017374](https://doi.org/10.1107/S0108768105017374)), and
+the only pure CH₂Cl₂ entries in COD. They are fine as packing references and as
+starting densities, but they are compressed 13% and 11% below the
+ambient-pressure cell, so their static lattice energies are not cohesive
+energies. See
+[Solid dichloromethane & halogen contacts](../../dcm-crystal-cohesion.md) for
+relaxing to ambient pressure and for the H···Cl versus Cl···Cl decomposition.
+
+!!! warning "Non-cubic cells and `--write-charmm`"
+
+    `--write-charmm` installs a **cubic** CHARMM IMAGE. The acetone Pbca cell is
+    9.17 × 7.53 × 21.25 Å, which no cubic box represents, so MD started that way
+    would run a differently shaped cell than the one you built. For a static
+    periodic energy on the true cell use `mmml.analysis.lattice_energy` instead.
 
 ```bash
 mmml build-crystal \\
@@ -414,12 +594,13 @@ def _figures_section(name: str) -> str:
     figs = COMMAND_FIGURES.get(name)
     if not figs:
         return ""
-    lines = ["## Example structures", ""]
+    lines = ["## Visual examples", ""]
     for caption, href in figs:
         lines.append(f"![{caption}]({href})")
         lines.append("")
-    lines.append("More detail: [Structure building guide](../structure-building.md).")
-    lines.append("")
+    if name in {"make-res", "make-box", "build-crystal", "liquid-box"}:
+        lines.append("More detail: [Structure building guide](../structure-building.md).")
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -504,38 +685,121 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _nav_yaml_lines(registry_names: set[str]) -> list[str]:
-    grouped: set[str] = set()
-    lines = [f"      {NAV_START}"]
-    for group, names in CLI_NAV_GROUPS:
-        present = [n for n in names if n in registry_names]
-        if not present:
-            continue
-        grouped.update(present)
-        lines.append(f"      - {group}:")
-        for name in present:
-            lines.append(f"          - {name}: cli/commands/{name}.md")
-    other = sorted(registry_names - grouped - {"completion"})
-    if other:
-        lines.append("      - Other utilities:")
-        for name in other:
-            lines.append(f"          - {name}: cli/commands/{name}.md")
-    lines.append(f"      {NAV_END}")
-    return lines
+def _render_examples_page() -> str:
+    """``docs/examples.md`` — the ``mmml examples`` output, verbatim."""
+    from mmml.cli.help_text import EXAMPLE_BLOCKS
+
+    lines = [
+        "# Examples",
+        "",
+        "Copy-paste invocations, grouped the same way as `mmml examples`.",
+        "Run `mmml <command> --help` for the full flag list of any of these.",
+        "",
+        "!!! note",
+        "    This page is generated from `mmml.cli.help_text.EXAMPLE_BLOCKS`,",
+        "    so it always matches what `mmml examples` prints.",
+        "",
+    ]
+    for title, examples in EXAMPLE_BLOCKS:
+        lines.append(f"## {title}")
+        lines.append("")
+        lines.append("```bash")
+        lines.extend(examples)
+        lines.append("```")
+        lines.append("")
+    lines.append("Interactive setup for YAML and Snakemake scaffolds: `mmml configure`.")
+    lines.append("")
+    lines.append("See also: [How the CLI is organized](cli/index.md).")
+    return "\n".join(lines).rstrip() + "\n"
 
 
-def _patch_mkdocs(nav_block_lines: list[str]) -> None:
-    text = MKDOCS.read_text(encoding="utf-8")
+def _update_top_level_help(text: str) -> str:
+    """Refresh the ``mmml -h`` transcript embedded in ``docs/index.md``."""
+    from mmml.cli.help_text import format_top_level_help
+
     pattern = re.compile(
-        rf"^      {re.escape(NAV_START)}.*?^      {re.escape(NAV_END)}\n",
+        rf"^([ \t]*)<!-- {HELP_START} -->$.*?^[ \t]*<!-- {HELP_END} -->$\n",
         re.MULTILINE | re.DOTALL,
     )
-    replacement = "\n".join(nav_block_lines) + "\n"
-    if not pattern.search(text):
+    match = pattern.search(text)
+    if match is None:
         raise SystemExit(
-            f"{MKDOCS} missing {NAV_START} / {NAV_END} markers — add them under the CLI nav section."
+            f"{INDEX_MD} missing <!-- {HELP_START} --> / <!-- {HELP_END} --> markers"
         )
-    MKDOCS.write_text(pattern.sub(replacement, text), encoding="utf-8")
+    indent = match.group(1)
+    body = "\n".join(
+        [
+            f"{indent}<!-- {HELP_START} -->",
+            f"{indent}```console",
+            f"{indent}$ mmml -h",
+            *(f"{indent}{line}".rstrip() for line in format_top_level_help().splitlines()),
+            f"{indent}```",
+            f"{indent}<!-- {HELP_END} -->",
+        ]
+    )
+    return pattern.sub(lambda _m: body + "\n", text, count=1)
+
+
+def _check_group_coverage(registry_names: set[str]) -> None:
+    """Fail loudly when a registry command has no nav group, or is in two."""
+    seen: dict[str, str] = {}
+    for group, names in CLI_NAV_GROUPS:
+        for name in names:
+            if name in seen:
+                raise SystemExit(
+                    f"command {name!r} listed in both {seen[name]!r} and {group!r} "
+                    "in CLI_NAV_GROUPS"
+                )
+            seen[name] = group
+    missing = sorted(registry_names - set(seen))
+    if missing:
+        raise SystemExit(
+            "commands missing from CLI_NAV_GROUPS in scripts/generate_cli_docs.py: "
+            + ", ".join(missing)
+        )
+
+
+def _nav_block_pattern(group: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"^([ \t]*){re.escape(NAV_START)}: {re.escape(group)}[ \t]*$"
+        rf".*?"
+        rf"^[ \t]*{re.escape(NAV_END)}: {re.escape(group)}[ \t]*$\n",
+        re.MULTILINE | re.DOTALL,
+    )
+
+
+def _render_nav_block(group: str, names: list[str], indent: str) -> str:
+    lines = [f"{indent}{NAV_START}: {group}"]
+    for name in names:
+        lines.append(f"{indent}- {name}: cli/commands/{name}.md")
+    lines.append(f"{indent}{NAV_END}: {group}")
+    return "\n".join(lines) + "\n"
+
+
+def _update_nav(text: str, registry_names: set[str]) -> str:
+    """Rewrite each per-group marker block in ``mkdocs.yml`` in place."""
+    _check_group_coverage(registry_names)
+    for group, names in CLI_NAV_GROUPS:
+        present = [n for n in names if n in registry_names]
+        pattern = _nav_block_pattern(group)
+        match = pattern.search(text)
+        if match is None:
+            raise SystemExit(
+                f"{MKDOCS} missing '{NAV_START}: {group}' / '{NAV_END}: {group}' markers"
+            )
+        if not present:
+            # An empty block would leave a null-valued nav key and break the build.
+            raise SystemExit(
+                f"nav group {group!r} matches no registry command — drop it from "
+                "CLI_NAV_GROUPS and remove its section from mkdocs.yml"
+            )
+        indent = match.group(1)
+        text = pattern.sub(
+            lambda _m, g=group, n=present, i=indent: _render_nav_block(g, n, i),
+            text,
+            count=1,
+        )
+    return text
 
 
 def generate(*, check: bool = False) -> int:
@@ -559,15 +823,18 @@ def generate(*, check: bool = False) -> int:
                 path.write_text(body, encoding="utf-8")
                 changed += 1
 
-    nav_lines = _nav_yaml_lines(registry_names)
-    old_mkdocs = MKDOCS.read_text(encoding="utf-8")
-    _patch_mkdocs(nav_lines)
-    if MKDOCS.read_text(encoding="utf-8") != old_mkdocs:
-        if check:
-            print("stale: mkdocs.yml (CLI nav block)", file=sys.stderr)
-            changed += 1
-        else:
-            changed += 1
+    for path, body in (
+        (MKDOCS, _update_nav(MKDOCS.read_text(encoding="utf-8"), registry_names)),
+        (INDEX_MD, _update_top_level_help(INDEX_MD.read_text(encoding="utf-8"))),
+        (EXAMPLES_MD, _render_examples_page()),
+    ):
+        if not path.exists() or path.read_text(encoding="utf-8") != body:
+            if check:
+                print(f"stale: {path.relative_to(REPO_ROOT)}", file=sys.stderr)
+                changed += 1
+            else:
+                path.write_text(body, encoding="utf-8")
+                changed += 1
 
     # remove orphan command pages
     for path in COMMANDS_DIR.glob("*.md"):
@@ -599,5 +866,28 @@ def main() -> int:
     return generate(check=args.check)
 
 
+def _hard_exit(code: int) -> None:
+    """Exit with *code*, preserving a non-zero status past CHARMM teardown.
+
+    Rendering a page imports command modules, which pull in PyCHARMM; that
+    installs a Fortran/MPI finalizer which runs at interpreter shutdown and
+    **resets the process exit status to 0**. So ``--check`` printed
+    ``stale: ...`` and still exited 0: the pre-push hook and the Docs
+    workflow both trusted that status, and stale pages sailed through both
+    gates (``physnet-train.md`` had been missing two real flags since
+    63b549073).
+
+    Mirrors ``mmml.cli.__main__._hard_exit``: ``os._exit`` only on the
+    failure path, so a clean run still shuts down normally and lets OpenMPI
+    finalize -- ``os._exit(0)`` skips ``MPI_Finalize`` and PRRTE then often
+    returns 1 for a run that actually succeeded.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if code == 0:
+        raise SystemExit(0)
+    os._exit(code)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    _hard_exit(main())

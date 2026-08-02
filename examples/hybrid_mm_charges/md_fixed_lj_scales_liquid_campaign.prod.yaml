@@ -1,0 +1,87 @@
+# Production-length DCM liquid campaign (jax_mic + learned LJ scales) — jaxmd.
+#
+# Same ladder / throughput knobs as md_fixed_lj_scales_liquid_campaign.yaml with
+# a longer NVT production leg (20 ps). NpT remains a 2 ps density probe.
+# Throughput defaults: dt=1.0 fs + float32 + skin 0.5 Å + NVT interval 40 + GPU Vesin.
+#
+#   LJ_MD_PROD=1 bash examples/lj_scales/07_deploy_md.sh
+
+defaults:
+  composition: "DCM:120"
+  box_size: 30.0
+  packmol_radius: 6.9
+  packmol_tolerance: 3.0
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/params.json
+  temperature: 300.0
+  pressure: 1.0
+  dt_fs: 1.0
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+  skip_jit_warmup: true
+  quiet: true
+  continue_velocities: true
+  handoff_write_res: true
+  mc_density_equalize: false
+  handoff_quality_gate: true
+  handoff_quality_fmax_eVA: 3.0
+  max_fmax_before_dyn_ev_A: 3.5
+  ml_compute_dtype: float32
+  mm_nl_device: gpu
+  jax_md_skin_distance: 0.5
+  jax_md_update_interval: 0
+
+campaign_output: results/hybrid_mm_fixed_lj_scales_liquid_prod
+
+runs:
+  jaxmd_settle:
+    description: jaxmd FIRE + NVT settle before production
+    backend: jaxmd
+    setup: pbc_nvt
+    ps: 1.0
+    jaxmd_minimize_steps: 1000
+    fire_min_steps: 400
+    continue_velocities: false
+    jax_md_update_interval: 20
+    steps_per_recording: 200
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_settle
+
+  jaxmd_nvt:
+    description: jaxmd NVT production (20 ps)
+    backend: jaxmd
+    setup: pbc_nvt
+    depends_on: jaxmd_settle
+    ps: 20.0
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    jax_md_update_interval: 40
+    steps_per_recording: 1000
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_nvt
+
+  jaxmd_npt:
+    description: jaxmd NpT density probe (2 ps) from NVT handoff
+    backend: jaxmd
+    setup: pbc_npt
+    depends_on: jaxmd_nvt
+    ps: 2.0
+    pressure: 1.0
+    nhc_barostat_tau: 20000.0
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    jax_md_update_interval: 10
+    steps_per_recording: 200
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_npt
+
+  jaxmd_nve:
+    description: short jaxmd NVE conservation check
+    backend: jaxmd
+    setup: pbc_nve
+    depends_on: jaxmd_npt
+    ps: 2.0
+    jax_md_update_interval: 10
+    steps_per_recording: 100
+    output_dir: results/hybrid_mm_fixed_lj_scales_liquid_prod/jaxmd_nve

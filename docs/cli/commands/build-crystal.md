@@ -3,20 +3,57 @@
 Symmetry-aware crystals (PyXtal).
 
 
-Build molecular crystals for MD. **Recommended for DCM and benzene:** literature
-CIF + `make-res` atom names (`--literature dcm|benz`) — exact experimental unit
+Build molecular crystals for MD. **Recommended for DCM, benzene and acetone:**
+literature CIF + `make-res` atom names (`--literature`) — exact experimental unit
 cell, tiled to a simulation supercell (≥28 Å edges by default) at literature ρ.
 
 ```bash
 mmml make-res --res DCM --skip-energy-show
 mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
 mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
+mmml build-crystal --literature aco -o acetone_pbca_150k.pdb
 ```
 
 PyXtal (`uv sync --extra chem`) is optional for random placement in the same
-space group. DCM crystal: [COD 2100015](https://www.crystallography.net/2100015.html)
-(Pbcn, ρ≈1.97 g/cm³). Benzene: [COD 4501704](https://www.crystallography.net/cod/4501704.html)
-(P2₁/c, ρ≈1.20 g/cm³).
+space group.
+
+## Bundled presets
+
+| Preset | Residue | Structure | Source |
+|---|---|---|---|
+| `dcm` | `DCM` | Pbcn, 1.63 GPa, ρ≈1.97 g/cm³ | [COD 2100015](https://www.crystallography.net/cod/2100015.html) |
+| `dcm133` | `DCM` | Pbcn, 1.33 GPa, ρ≈1.92 g/cm³ | [COD 2100014](https://www.crystallography.net/cod/2100014.html) |
+| `benz` | `BENZ` | P2₁/c, ρ≈1.20 g/cm³ | [COD 4501704](https://www.crystallography.net/cod/4501704.html) |
+| `aco` | `ACO` | Acetone Pbca, 150 K, Z=16 | [COD 7110464](https://www.crystallography.net/cod/7110464.html) |
+| `aco110k` | `ACO` | Acetone Pbca, 110 K | [COD 7110466](https://www.crystallography.net/cod/7110466.html) |
+| `aco5k` | `ACO` | Acetone Pbca, 5 K (neutron, d6) | [COD 7110465](https://www.crystallography.net/cod/7110465.html) |
+| `acocmcm` | `ACO` | Acetone Cmcm, 160 K (metastable) | [COD 7110463](https://www.crystallography.net/cod/7110463.html) |
+
+The acetone structures come from Allan et al., *Chem. Commun.* 1999, 751
+([doi:10.1039/a900558g](https://doi.org/10.1039/a900558g)). The paper's fifth
+structure — the 15 kbar Cmcm phase — is bundled but has no preset: its methyls
+are rotationally disordered, so it has no single set of hydrogen positions to map
+onto CGenFF. See
+[Solid acetone & sublimation enthalpy](../../acetone-crystal-sublimation.md) for
+validating a built acetone cell against the published contacts and computing its
+sublimation enthalpy.
+
+Both DCM presets are **high-pressure** structures, the two points of Podsiadło et
+al., *Acta Crystallogr. B* 61, 595 (2005)
+([doi:10.1107/S0108768105017374](https://doi.org/10.1107/S0108768105017374)), and
+the only pure CH₂Cl₂ entries in COD. They are fine as packing references and as
+starting densities, but they are compressed 13% and 11% below the
+ambient-pressure cell, so their static lattice energies are not cohesive
+energies. See
+[Solid dichloromethane & halogen contacts](../../dcm-crystal-cohesion.md) for
+relaxing to ambient pressure and for the H···Cl versus Cl···Cl decomposition.
+
+!!! warning "Non-cubic cells and `--write-charmm`"
+
+    `--write-charmm` installs a **cubic** CHARMM IMAGE. The acetone Pbca cell is
+    9.17 × 7.53 × 21.25 Å, which no cubic box represents, so MD started that way
+    would run a differently shaped cell than the one you built. For a static
+    periodic energy on the true cell use `mmml.analysis.lattice_energy` instead.
 
 ```bash
 mmml build-crystal \
@@ -68,9 +105,11 @@ options:
   --format OUT_FORMAT   ASE output format override (default: inferred from
                         --output suffix)
 
-Literature CIF + make-res (recommended for DCM / benzene):
-  --literature PRESET   Bundled experimental CIF preset: dcm (Pbcn) or benz
-                        (P2₁/c)
+Literature CIF + make-res (recommended for DCM / benzene / acetone):
+  --literature PRESET   Bundled experimental CIF preset: dcm / dcm133 (DCM Pbcn
+                        at 1.63 and 1.33 GPa), benz (P2₁/c), aco / aco5k /
+                        aco110k (acetone Pbca at 150, 5, 110 K), acocmcm
+                        (metastable acetone Cmcm)
   --from-cif PATH       Override CIF path (requires --residue or --literature
                         for residue name)
   --residue NAME        CHARMM residue (DCM, BENZ) for --from-cif / --write-
@@ -122,7 +161,7 @@ ASE optimization (optional, PyXtal path):
   --quiet-opt           Suppress ASE optimizer log output
 ```
 
-## Example structures
+## Visual examples
 
 ![DCM crystal / periodic cell (experimental Pbcn)](../../images/structures/build-crystal.png)
 
@@ -131,6 +170,8 @@ More detail: [Structure building guide](../structure-building.md).
 ## Related docs
 
 - [Structure building guide](../structure-building.md)
+- [Solid acetone & sublimation enthalpy](../../acetone-crystal-sublimation.md)
+- [Solid dichloromethane & halogen contacts](../../dcm-crystal-cohesion.md)
 
 ---
 

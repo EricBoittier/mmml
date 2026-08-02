@@ -9,11 +9,12 @@
 #   USE_DENSITY=1 BOX_SIZE=30 bash examples/m/08_make_boxes.sh
 #
 #   source examples/m/_env.sh
-#   bash examples/m/14_umbrella_sample_sol_prod.sh
+#   bash examples/m/14_umbrella_sample_sol_prod.sh              # or SOLVENT=tip3
+#   SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh
 #
-# Timing (defaults): 30 windows × 40000 steps × 0.5 fs = 20 ps / window;
-#   equilibration_steps 4000 → 2 ps discarded; ~401 saved frames / window.
-# If a window heats, set TIMESTEP_FS=0.25 (and double NSTEPS for same wall time).
+# Timing (defaults): 30 windows × 80000 steps × 0.25 fs = 20 ps / window;
+#   equilibration_steps 8000 → 2 ps discarded; ~401 saved frames / window.
+# 0.25 fs matches Menshutkin gas practice (PhysNet + H unstable at 0.5 fs near TS).
 
 engine: hybrid_jaxmd
 checkpoint: ../../model_ext.json
@@ -46,13 +47,20 @@ n_windows: 30
 k_ev_A2: 6.505
 
 temperature_K: 300.0
-timestep_fs: 0.5
-nsteps: 40000
-equilibration_steps: 4000
-printfreq: 500
-savefreq: 100
+timestep_fs: 0.25
+nsteps: 80000
+equilibration_steps: 8000
+printfreq: 1000
+savefreq: 200
 seed: 0
 seed_mode: stretch
 overwrite: false
 lr_solver: mic
-max_seed_force: 30.0
+# Seeding rigidly displaces the solute inside a box packed at a single ξ, so the
+# solvent must move aside before dynamics starts (see the ACN prod YAML: without
+# this, every window past ξ≈+0.6 aborted non-finite within ~1 ps).
+relax_seed_steps: 300
+relax_seed_fmax: 1.0
+# Gate is the ML-region max |F|; the whole-system max is pinned by raw Packmol
+# solvent contacts and is identical in every window.
+max_seed_force: 80.0

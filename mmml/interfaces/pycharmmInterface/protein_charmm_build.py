@@ -56,7 +56,10 @@ def build_alad_dipeptide(
     settings.set_verbosity(5)
     settings.set_warn_level(-5)
     read.rtf(str(toppar.rtf))
-    read.prm(str(toppar.prm))
+    # FLEX explicitly: the c36 protein parameter file needs it. This used to
+    # work only because an earlier CGenFF read latched CHARMM's saved qflex
+    # (api_read.F90), which no longer leaks between calls.
+    read.prm(str(toppar.prm), flex=True)
     read.sequence_string("ALA")
     generate.new_segment(
         seg_name="ALAD",

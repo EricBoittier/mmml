@@ -9,6 +9,7 @@ from pathlib import Path
 import ase.units
 import e3x
 import jax
+import numpy as np
 from flax.training import train_state
 
 # Try to enable lovely_jax for better array printing (optional; may fail with lovely-numpy>=0.2.19)
@@ -63,6 +64,10 @@ CONVERSION = {
     "energy": 1 / (ase.units.kcal / ase.units.mol),
     "forces": 1 / (ase.units.kcal / ase.units.mol),
 }
+
+# Explicit eV -> kcal/mol for the streaming per-epoch line, which must state a
+# unit that does not depend on whatever `conversion` the caller passed.
+_EV_TO_KCAL_MOL = 1 / (ase.units.kcal / ase.units.mol)
 
 def is_valid_advanced_batch_config(batch_args_dict):
     """
@@ -125,6 +130,10 @@ def train_model(
     optimizer=None,
     transform=None,
     schedule_fn=None,
+    # Global-norm gradient clip. None keeps get_optimizer's default (10.0),
+    # which is loose enough that most steps pass through unclipped; lower it
+    # (~1.0) when the raw params oscillate instead of converging.
+    clip_global=None,
     objective="valid_forces_mae",
     ckpt_dir=BASE_CKPT_DIR,
     log_tb=False,
@@ -142,6 +151,9 @@ def train_model(
     distill_targets=None,
     ema_decay: float = 0.999,
     hybrid_mm=None,
+    soft_well_aux=None,
+    frozen_mm_lj_sigma_scale=None,
+    frozen_mm_lj_epsilon_scale=None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -226,6 +238,12 @@ def train_model(
         ``mmml.models.hybrid_energy.HybridMMConfig`` (master LJ tables +
         switching widths); a plain dict is coerced to one.  Requires the CGenFF
         per-atom fields in the batch (see ``HYBRID_MM_BATCH_KEYS``).
+    soft_well_aux : SoftWellConfig | dict | None, optional
+        When enabled, run contact-ok soft-well ``E_int`` aux steps after each
+        epoch's ASE train loop (lit DCM window −5…−3 kcal/mol).
+    frozen_mm_lj_sigma_scale, frozen_mm_lj_epsilon_scale : array | None
+        If set, hard-restore these LJ scale leaves after every optimizer step
+        so train/deploy share the sidecar scales while the neural net moves.
     ema_decay : float, optional
         Decay for the exponential moving average of parameters, by default
         0.999.  Validation, checkpointing and restart all use the EMA weights,
@@ -255,6 +273,32 @@ def train_model(
     from mmml.models.hybrid_energy import HybridMMConfig
 
     hybrid_mm = HybridMMConfig.coerce(hybrid_mm)
+    from mmml.models.physnetjax.physnetjax.training.soft_well_aux import (
+        SoftWellConfig,
+        SoftWellGeometryPool,
+        extract_monomer_from_hybrid_frame,
+        restore_mm_lj_scales,
+        soft_well_train_step,
+    )
+
+    soft_well_cfg = SoftWellConfig.coerce(soft_well_aux)
+    soft_well_pool = None
+    if soft_well_cfg is not None and soft_well_cfg.enabled:
+        if hybrid_mm is None:
+            raise ValueError("soft_well_aux requires hybrid_mm")
+        mono = extract_monomer_from_hybrid_frame(train_data, frame=0)
+        soft_well_pool = SoftWellGeometryPool(mono, soft_well_cfg)
+        print(
+            f"Soft-well E_int aux ON: {soft_well_pool.n} contact-ok geoms "
+            f"(dmin≥{soft_well_cfg.min_contact:g} Å, "
+            f"r∈[{soft_well_cfg.r_min:g},{soft_well_cfg.r_max:g}] Å); "
+            f"{soft_well_cfg.steps_per_epoch} end-steps/epoch + every "
+            f"{soft_well_cfg.every_n_train_batches} ASE batches; "
+            f"batch {soft_well_cfg.batch_size}; loss_scale={soft_well_cfg.loss_scale:g}; "
+            f"target [{soft_well_cfg.target_lo_kcal:g},"
+            f"{soft_well_cfg.target_hi_kcal:g}] kcal/mol",
+            flush=True,
+        )
     if profile_epoch_timing is None:
         import os
 
@@ -362,6 +406,7 @@ def train_model(
         schedule_fn=schedule_fn,
         optimizer=optimizer,
         transform=transform,
+        **({} if clip_global is None else {"clip_global": float(clip_global)}),
     )
 
     train_params_dict = {
@@ -421,6 +466,10 @@ def train_model(
                         mm_lj_scales_metadata(
                             learn_mm_lj_scales=True,
                             type_names=_names,
+                            sigma_bounds=hybrid_mm.mm_lj_sigma_scale_bounds,
+                            epsilon_bounds=hybrid_mm.mm_lj_epsilon_scale_bounds,
+                            trainable_mask=hybrid_mm.mm_lj_trainable_mask,
+                            type_frame_counts=hybrid_mm.mm_lj_type_frame_counts,
                         )
                     )
             except Exception as exc:  # pragma: no cover - PRM missing in some envs
@@ -476,6 +525,20 @@ def train_model(
         params = _merge_params(fresh_params, init_params)
     else:
         params = fresh_params
+
+    if (
+        frozen_mm_lj_sigma_scale is not None
+        and frozen_mm_lj_epsilon_scale is not None
+        and not restart
+    ):
+        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+        params = attach_mm_lj_scales(
+            params,
+            len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1)),
+            sigma_scale=np.asarray(frozen_mm_lj_sigma_scale, dtype=np.float32),
+            epsilon_scale=np.asarray(frozen_mm_lj_epsilon_scale, dtype=np.float32),
+        )
 
     # load from restart
     if restart:
@@ -549,7 +612,52 @@ def train_model(
 
     if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
         print(
-            f"Learnable MM LJ scales enabled ({len(hybrid_mm.master_sigmas)} CGenFF types)",
+            f"Learnable MM LJ scales enabled ({len(hybrid_mm.master_sigmas)} CGenFF types; "
+            f"projected each step to sigma {hybrid_mm.mm_lj_sigma_scale_bounds}, "
+            f"epsilon {hybrid_mm.mm_lj_epsilon_scale_bounds}; "
+            f"{sum(hybrid_mm.mm_lj_trainable_mask or ())} trainable)",
+            flush=True,
+        )
+
+    if (
+        frozen_mm_lj_sigma_scale is not None
+        and frozen_mm_lj_epsilon_scale is not None
+    ):
+        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+        # Restart path: scales may be missing from the orbax tree.
+        params = attach_mm_lj_scales(
+            params,
+            len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1)),
+            sigma_scale=np.asarray(frozen_mm_lj_sigma_scale, dtype=np.float32),
+            epsilon_scale=np.asarray(frozen_mm_lj_epsilon_scale, dtype=np.float32),
+        )
+        ema_params = attach_mm_lj_scales(
+            ema_params,
+            len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1)),
+            sigma_scale=np.asarray(frozen_mm_lj_sigma_scale, dtype=np.float32),
+            epsilon_scale=np.asarray(frozen_mm_lj_epsilon_scale, dtype=np.float32),
+        )
+        print(
+            f"Frozen MM LJ scales from sidecar "
+            f"({len(np.asarray(frozen_mm_lj_sigma_scale).reshape(-1))} types; "
+            "hard-restored after every step)",
+            flush=True,
+        )
+
+    if soft_well_pool is not None and soft_well_cfg is not None and hybrid_mm is not None:
+        n_before = soft_well_pool.n
+        n_keep = soft_well_pool.filter_by_teacher_e_int(
+            model.apply,
+            params,
+            hybrid_mm,
+            batch_size=int(soft_well_cfg.batch_size),
+            max_e_int_kcal=float(soft_well_cfg.pool_max_e_int_kcal),
+        )
+        print(
+            f"Soft-well pool filtered by teacher E_int≤"
+            f"{soft_well_cfg.pool_max_e_int_kcal:g} kcal/mol: "
+            f"{n_before} → {n_keep}",
             flush=True,
         )
 
@@ -612,10 +720,55 @@ def train_model(
             epoch_timing.batch_prep_s = time.perf_counter() - batch_t0
 
             train_t0 = time.perf_counter()
+            # NOTE: train_loss below is measured on the raw `params`, while
+            # valid_loss is measured on `ema_params` (see the eval loop). The
+            # two are therefore NOT comparable, and a large train/valid ratio
+            # means the raw weights are oscillating, not that the model is
+            # overfitting. On the DES warm start (job 19360535) this read as a
+            # 128x "generalization gap" that was purely params-vs-EMA.
             train_loss = 0.0
             train_energy_mae = 0.0
             train_forces_mae = 0.0
             train_dipoles_mae = 0.0
+            soft_well_loss = 0.0
+            soft_well_e_med = 0.0
+            soft_well_n = 0
+
+            def _run_soft_well_step():
+                nonlocal params, ema_params, opt_state
+                nonlocal soft_well_loss, soft_well_e_med, soft_well_n
+                sw_batch = soft_well_pool.next_batch(soft_well_cfg.batch_size)
+                (
+                    params,
+                    ema_params,
+                    opt_state,
+                    sw_loss,
+                    sw_emed,
+                ) = soft_well_train_step(
+                    model_apply=model.apply,
+                    optimizer_update=optimizer.update,
+                    batch=sw_batch,
+                    batch_size=int(soft_well_cfg.batch_size),
+                    opt_state=opt_state,
+                    params=params,
+                    ema_params=ema_params,
+                    hybrid_mm=hybrid_mm,
+                    target_lo_kcal=float(soft_well_cfg.target_lo_kcal),
+                    target_hi_kcal=float(soft_well_cfg.target_hi_kcal),
+                    target_mid_kcal=float(soft_well_cfg.target_mid_kcal),
+                    deep_floor_kcal=float(soft_well_cfg.deep_floor_kcal),
+                    hard_floor_kcal=float(soft_well_cfg.hard_floor_kcal),
+                    center_weight=float(soft_well_cfg.center_weight),
+                    loss_scale=float(soft_well_cfg.loss_scale),
+                    update_scale=float(getattr(transform_state, "scale", 1.0)),
+                    ema_decay=ema_decay,
+                    frozen_sigma_scale=frozen_mm_lj_sigma_scale,
+                    frozen_epsilon_scale=frozen_mm_lj_epsilon_scale,
+                )
+                soft_well_n += 1
+                soft_well_loss += (float(sw_loss) - soft_well_loss) / soft_well_n
+                soft_well_e_med += (float(sw_emed) - soft_well_e_med) / soft_well_n
+
             for i, batch in enumerate(train_batches):
                 (
                     params,
@@ -650,12 +803,46 @@ def train_model(
                     distill_dipole=distill_dipole,
                     debug=True,
                 )
+                if (
+                    frozen_mm_lj_sigma_scale is not None
+                    and frozen_mm_lj_epsilon_scale is not None
+                ):
+                    params = restore_mm_lj_scales(
+                        params,
+                        frozen_mm_lj_sigma_scale,
+                        frozen_mm_lj_epsilon_scale,
+                    )
+                    ema_params = restore_mm_lj_scales(
+                        ema_params,
+                        frozen_mm_lj_sigma_scale,
+                        frozen_mm_lj_epsilon_scale,
+                    )
+                # Interleave soft-well so ASE batches cannot erase the lever.
+                if (
+                    soft_well_pool is not None
+                    and soft_well_cfg is not None
+                    and int(soft_well_cfg.every_n_train_batches) > 0
+                    and (i + 1) % int(soft_well_cfg.every_n_train_batches) == 0
+                ):
+                    _run_soft_well_step()
                 # Block until JAX operations complete to avoid async context issues
                 # This prevents RuntimeError: cannot enter context in IPython/Jupyter
                 train_loss += (loss - train_loss) / (i + 1)
                 train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
                 train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
                 train_dipoles_mae += (dipole_mae - train_dipoles_mae) / (i + 1)
+
+            # End-of-epoch soft-well block (primary shaping pressure).
+            if soft_well_pool is not None and soft_well_cfg is not None:
+                for _ in range(int(soft_well_cfg.steps_per_epoch)):
+                    _run_soft_well_step()
+                if epoch % print_freq == 0:
+                    print(
+                        f"  soft-well aux: n={soft_well_n} loss={soft_well_loss:.4f} "
+                        f"batch_E_int_median={soft_well_e_med:.2f} kcal/mol",
+                        flush=True,
+                    )
+
             jax.block_until_ready(loss)
             jax.block_until_ready(params)
             epoch_timing.train_s = time.perf_counter() - train_t0
@@ -690,7 +877,14 @@ def train_model(
                 updates=params, state=transform_state, value=valid_loss
             )
 
+            # Raw (pre-conversion) values, kept so the streaming line below can
+            # state kcal/mol unambiguously whatever `conversion` happens to be.
+            _raw_valid_e_mae = valid_energy_mae
+            _raw_valid_f_mae = valid_forces_mae
+
             # convert statistics to kcal/mol for printing
+            # NB: the CLI passes conversion={'energy':1,'forces':1}, so in practice
+            # this is a no-op and the table's MAE columns are eV, not kcal/mol.
             valid_energy_mae *= conversion["energy"]
             valid_forces_mae *= conversion["forces"]
             train_energy_mae *= conversion["energy"]
@@ -795,6 +989,27 @@ def train_model(
                 live.update(combined, refresh=True)
                 import sys
                 sys.stdout.flush()  # Force output to SLURM log file
+
+            # Plain one-line-per-epoch record. The rich Live table above is a
+            # *live* display: it overwrites in place, so a redirected log keeps
+            # only the final render and a multi-hour run shows no progress at all
+            # until it exits. (TERM=dumb removes the control codes but not this;
+            # Live still renders once.) Units are spelled out because the table's
+            # MAE columns are eV, which has been misread as kcal/mol.
+            if epoch % print_freq == 0:
+                # float() on every value: these are JAX scalars whose __format__
+                # is overridden (they render as "Array f64 gpu:0 5.6e+05"), which
+                # makes the line unparseable and unreadable.
+                print(
+                    f"[epoch {epoch}/{num_epochs}] "
+                    f"train_loss={float(train_loss):.6g} "
+                    f"valid_loss={float(valid_loss):.6g} "
+                    f"best={float(best_loss):.6g} "
+                    f"valid_E_MAE={float(_raw_valid_e_mae) * _EV_TO_KCAL_MOL:.4f} kcal/mol "
+                    f"valid_F_MAE={float(_raw_valid_f_mae) * _EV_TO_KCAL_MOL:.4f} kcal/mol/A "
+                    f"lr={float(lr_eff):.3g} t={epoch_length}",
+                    flush=True,
+                )
                 sys.stderr.flush()  # Flush errors too
                 gc.collect()  # Force garbage collection to prevent memory buildup during long training runs
                 if PROFILE:
@@ -836,6 +1051,10 @@ def train_model(
                 type_names=_names,
                 sigma_scale=ema_params[MM_LJ_SIGMA_SCALE_KEY],
                 epsilon_scale=ema_params[MM_LJ_EPSILON_SCALE_KEY],
+                sigma_bounds=hybrid_mm.mm_lj_sigma_scale_bounds,
+                epsilon_bounds=hybrid_mm.mm_lj_epsilon_scale_bounds,
+                trainable_mask=hybrid_mm.mm_lj_trainable_mask,
+                type_frame_counts=hybrid_mm.mm_lj_type_frame_counts,
             )
             print(
                 f"Wrote final MM LJ scales to {CKPT_DIR / 'hybrid_mm.json'}",

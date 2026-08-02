@@ -44,6 +44,9 @@ traj1.traj traj2.traj -o md_sampled.npz --max-temp 300 mmml active-learning -i
 "out/*.traj" -o md_sampled.npz --stride 5
 ```
 
+## Visual examples
+
+![Descriptor-space coverage of a selected PES batch](../../images/pes-design/descriptor_coverage.png)
 
 
 ---

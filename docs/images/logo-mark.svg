@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="MMML">
+  <title>MMML</title>
+  <!--
+    Simplified mark derived from the central motif of docs/images/mmml.svg:
+    a ring with a beam passing through it. White, for the Material header bar.
+  -->
+  <g fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round">
+    <path d="M 7 35 L 41 13"/>
+    <circle cx="24" cy="24" r="12.2"/>
+  </g>
+</svg>

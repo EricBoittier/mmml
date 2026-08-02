@@ -18,6 +18,8 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--n-valid N_VALID] [--seed SEED]
                           [--batch-size BATCH_SIZE] [--num-epochs NUM_EPOCHS]
                           [--learning-rate LEARNING_RATE]
+                          [--subtract-atom-energies] [--subtract-mean]
+                          [--clip-global CLIP_GLOBAL]
                           [--energy-weight ENERGY_WEIGHT]
                           [--forces-weight FORCES_WEIGHT]
                           [--dipole-weight DIPOLE_WEIGHT]
@@ -25,6 +27,8 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--objective OBJECTIVE]
                           [--mm-charge-mode {fixed,q0,latent,q1,fixed_plus_latent}]
                           [--mm-charge-correction] [--hybrid-mm]
+                          [--hybrid-hamiltonian {handoff,shared_cutoff}]
+                          [--shared-cutoff SHARED_CUTOFF]
                           [--ml-switch-width ML_SWITCH_WIDTH]
                           [--mm-switch-on MM_SWITCH_ON]
                           [--mm-switch-width MM_SWITCH_WIDTH]
@@ -35,6 +39,11 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--pme-accuracy PME_ACCURACY]
                           [--mm-include-lj | --no-mm-include-lj | --mm_include_lj | --no-mm_include_lj]
                           [--learn-mm-lj-scales | --no-learn-mm-lj-scales | --learn_mm_lj_scales | --no-learn_mm_lj_scales]
+                          [--mm-lj-sigma-scale-min MM_LJ_SIGMA_SCALE_MIN]
+                          [--mm-lj-sigma-scale-max MM_LJ_SIGMA_SCALE_MAX]
+                          [--mm-lj-epsilon-scale-min MM_LJ_EPSILON_SCALE_MIN]
+                          [--mm-lj-epsilon-scale-max MM_LJ_EPSILON_SCALE_MAX]
+                          [--mm-lj-min-type-frames MM_LJ_MIN_TYPE_FRAMES]
                           [--ema-decay EMA_DECAY] [--restart RESTART]
                           [--num-atoms NUM_ATOMS] [--features FEATURES]
                           [--max-degree MAX_DEGREE]
@@ -64,6 +73,14 @@ usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--distill-alpha DISTILL_ALPHA]
                           [--distill-targets DISTILL_TARGETS [DISTILL_TARGETS ...]]
                           [--teacher-checkpoint TEACHER_CHECKPOINT]
+                          [--soft-well-aux]
+                          [--soft-well-steps-per-epoch SOFT_WELL_STEPS_PER_EPOCH]
+                          [--soft-well-every-n-train-batches SOFT_WELL_EVERY_N_TRAIN_BATCHES]
+                          [--soft-well-batch-size SOFT_WELL_BATCH_SIZE]
+                          [--soft-well-loss-scale SOFT_WELL_LOSS_SCALE]
+                          [--soft-well-target-lo SOFT_WELL_TARGET_LO]
+                          [--soft-well-target-hi SOFT_WELL_TARGET_HI]
+                          [--frozen-mm-lj-scales-sidecar FROZEN_MM_LJ_SCALES_SIDECAR]
                           [--metrics-plot METRICS_PLOT] [--log-loss]
                           [--rot-augment] [--rot-perturbation ROT_PERTURBATION]
                           [--charges] [--no-charges]
@@ -117,6 +134,9 @@ Scientific model:
                         CGenFF charges in MM electrostatics (q_eff = q_cgenff +
                         dq_ML, projected net-zero per monomer). Requires
                         --charges.
+  --shared-cutoff SHARED_CUTOFF
+                        Atomic ML/MM cutoff (Å) for --hybrid-hamiltonian
+                        shared_cutoff; defaults to the model cutoff.
   --mm-switch-on MM_SWITCH_ON
                         COM distance (Å) where the complementary handoff ends:
                         ML scale reaches 0 and MM scale reaches 1 (default: 6).
@@ -171,10 +191,19 @@ Execution:
                         COM-distance width (Å) of the MM outer tail after
                         mm_switch_on. Switched MM reaches zero at mm_switch_on +
                         width (default: 5).
+  --mm-lj-epsilon-scale-min MM_LJ_EPSILON_SCALE_MIN
+  --mm-lj-epsilon-scale-max MM_LJ_EPSILON_SCALE_MAX
   --batch-method, --batch_method BATCH_METHOD
                         Batching method ('default' or 'advanced')
   --batch-args-dict, --batch_args_dict BATCH_ARGS_DICT
                         JSON string or file path for advanced batch arguments
+  --soft-well-steps-per-epoch, --soft_well_steps_per_epoch SOFT_WELL_STEPS_PER_EPOCH
+                        Soft-well aux optimizer steps after each ASE epoch
+  --soft-well-every-n-train-batches, --soft_well_every_n_train_batches SOFT_WELL_EVERY_N_TRAIN_BATCHES
+                        Interleave one soft-well step every N ASE train batches
+                        (0=off)
+  --soft-well-batch-size, --soft_well_batch_size SOFT_WELL_BATCH_SIZE
+                        Batch size for soft-well aux steps
 
 Output & artifacts:
   --no-save-every-epoch
@@ -207,6 +236,21 @@ Other options:
                         Validation samples to split from --data (default: 100).
                         Omit when --valid-data is set: the full files are used.
   --learning-rate, --learning_rate LEARNING_RATE
+  --subtract-atom-energies, --subtract_atom_energies
+                        Subtract per-element atomic reference energies from E
+                        before training. Essential when training from scratch on
+                        absolute energies: without it the network must learn the
+                        whole ~1300 kcal/mol offset itself, and in practice it
+                        does not (energy MAE sat at ~1200 kcal/mol for 6 epochs
+                        while forces converged fine). A warm start hides this by
+                        carrying the scale in its weights.
+  --subtract-mean, --subtract_mean
+                        Subtract the dataset mean energy (applied after atom
+                        refs).
+  --clip-global, --clip_global CLIP_GLOBAL
+                        Global-norm gradient clip (default 10.0). Lower it
+                        (~1.0) when the raw parameters oscillate rather than
+                        converge.
   --dipole-weight, --dipole_weight DIPOLE_WEIGHT
   --objective OBJECTIVE
   --hybrid-mm, --hybrid_mm
@@ -218,6 +262,11 @@ Other options:
                         and the cgenff_master_* LJ tables. The handoff is
                         controlled by --ml-switch-width/--mm-switch-on/--mm-
                         switch-width (same flags and defaults as the MD side).
+  --hybrid-hamiltonian {handoff,shared_cutoff}
+                        Hybrid assembly: handoff preserves the existing COM-
+                        switched Hamiltonian; shared_cutoff uses additive ML+MM
+                        with no handoff and force-shifts MM pairs at --shared-
+                        cutoff.
   --mm-pair-source {jax,charmm_callback}
                         Decomposed MLpot MM pair provider: Fortran callback
                         idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
@@ -228,21 +277,29 @@ Other options:
                         Hybrid-MM long-range Coulomb for training (default:
                         mic). mic: switched CGenFF LJ+Coulomb pairs.
                         nvalchemiops_pme: full-box many-to-many PME on fixed
-                        CGenFF charges (no exclusions / no intra subtract; LJ
-                        omitted; requires --pme-box-length and
-                        mmml[nvalchemiops-pme]). ewald: same full-box/no-
-                        exclusion contract as nvalchemiops_pme, pure JAX (no
-                        external PME library, no CUDA requirement); requires
-                        --pme-box-length. Matches fast MD periodic_external.
+                        CGenFF charges (no exclusions / no intra subtract;
+                        requires --pme-box-length and mmml[nvalchemiops-pme]).
+                        ewald: same full-box/no-exclusion Coulomb as
+                        nvalchemiops_pme, pure JAX (no external PME library, no
+                        CUDA requirement); requires --pme-box-length. With --mm-
+                        include-lj, COM-switched LJ is added beside the lattice
+                        Coulomb (Coulomb itself stays untapered).
   --mm-include-lj, --no-mm-include-lj, --mm_include_lj, --no-mm_include_lj
-                        Include CGenFF LJ in hybrid E_MM (default: on for mic).
-                        Forced off when --lr-solver nvalchemiops_pme or ewald.
+                        Include CGenFF LJ in hybrid E_MM (default: on). Under
+                        --lr-solver ewald|nvalchemiops_pme this is COM-switched
+                        intermolecular LJ beside untapered full-box Coulomb;
+                        under mic it is the usual switched LJ+Coulomb pair term.
   --learn-mm-lj-scales, --no-learn-mm-lj-scales, --learn_mm_lj_scales, --no-learn_mm_lj_scales
                         Learn per-CGenFF-type multiplicative scales on master σ
-                        and ε (separate arrays, init 1.0). Only affects mic
-                        hybrid E_MM LJ; ignored when LJ is forced off (ewald /
-                        nvalchemiops_pme). Scales are saved in hybrid_mm.json
-                        for MD ep_scale/sig_scale.
+                        and ε (separate arrays, init 1.0). Works under --lr-
+                        solver mic and under ewald|nvalchemiops_pme when --mm-
+                        include-lj is on. Scales are saved in hybrid_mm.json for
+                        MD ep_scale/sig_scale.
+  --mm-lj-sigma-scale-min MM_LJ_SIGMA_SCALE_MIN
+  --mm-lj-sigma-scale-max MM_LJ_SIGMA_SCALE_MAX
+  --mm-lj-min-type-frames MM_LJ_MIN_TYPE_FRAMES
+                        Freeze LJ scales at 1.0 for CGenFF types seen in fewer
+                        training frames.
   --ema-decay, --ema_decay EMA_DECAY
                         Decay for the parameter EMA (default: 0.999).
                         Validation, checkpointing and restart all use the EMA
@@ -299,6 +356,18 @@ Other options:
   --distill-targets, --distill_targets DISTILL_TARGETS [DISTILL_TARGETS ...]
                         Distillation targets: energy forces dipole (default: all
                         three)
+  --soft-well-aux, --soft_well_aux
+                        Enable contact-ok soft-well E_int aux loss (lit DCM
+                        window −5…−3 kcal/mol)
+  --soft-well-loss-scale, --soft_well_loss_scale SOFT_WELL_LOSS_SCALE
+                        Multiplier on soft-well window loss
+  --soft-well-target-lo SOFT_WELL_TARGET_LO
+                        Soft-well E_int lower window edge (kcal/mol)
+  --soft-well-target-hi SOFT_WELL_TARGET_HI
+                        Soft-well E_int upper window edge (kcal/mol)
+  --frozen-mm-lj-scales-sidecar, --frozen_mm_lj_scales_sidecar FROZEN_MM_LJ_SCALES_SIDECAR
+                        hybrid_mm.json with mm_lj_*_scale; attach and hard-
+                        freeze so train/deploy share the same MM LJ
   --rot-augment, --rot_augment
                         Apply random rotation augmentation to inputs
   --rot-perturbation, --rot_perturbation ROT_PERTURBATION

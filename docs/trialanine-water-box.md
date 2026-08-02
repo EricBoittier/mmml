@@ -4,6 +4,9 @@ A minimal **periodic peptide + water** system for PyCHARMM and JAX MM cross-chec
 
 For **peptide ML + solvent MM** (partial MLpot), use [`mmml md-embedding`](examples/md-embedding-design.md) `build` — it reuses this box builder and registers PhysNet on segment `PEPT`.
 
+**Teaching exercise** (gas/solvent φ/ψ maps → dihedral umbrella, plus how to
+swap peptides): [Peptide φ/ψ scan → umbrella PMF](examples/tria-phi-psi-scan.md).
+
 The peptide is a single CGENFF residue **`TRIA`** (documented as **TRIALANINE**: ACE–ALA×3–CT3) in `mmml/data/charmm/top_trialanine_cgenff.rtf`. Waters are TIP3 on a simple cubic grid inside a cubic cell.
 
 ![Tri-alanine + TIP3 periodic box](images/structures/trialanine-water-box.png)

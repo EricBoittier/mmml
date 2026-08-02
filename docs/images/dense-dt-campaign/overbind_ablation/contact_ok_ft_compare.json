@@ -1,0 +1,31 @@
+{
+  "ft_on5_matched": {
+    "soft_median": -2.2775568971633913,
+    "soft_mean": -5.871097196400166,
+    "soft_deepest": -20.79152006340027,
+    "soft_p10": -14.911930026626587,
+    "soft_p90": -0.36995289897918693,
+    "mean_curve_min": -35.43328609530131,
+    "r_mean": 3.0428571428571427,
+    "n_soft": 64
+  },
+  "deploy_only_on5_epoch222": {
+    "soft_median": -1.2569938945217376,
+    "soft_mean": -2.584895675973117,
+    "soft_deepest": -13.790980169751313,
+    "soft_p10": -8.05077796688261,
+    "soft_p90": -0.7188621077512756,
+    "n_soft": 64
+  },
+  "baseline_on8_epoch222": {
+    "soft_median": -3.712295043933473,
+    "soft_mean": -4.132341399780512,
+    "soft_deepest": -12.98575157647016,
+    "mean_curve_min": -6.831904699430468
+  },
+  "literature_kcal": [
+    -5.0,
+    -3.0
+  ],
+  "verdict": "FT soft median (-2.3) is between deploy-only underbind (-1.3) and lit (\u22123\u2026\u22125), but the soft deep tail worsened (\u221221) and mean curve is far too deep \u2014 not deploy-ready."
+}

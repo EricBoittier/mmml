@@ -45,6 +45,28 @@ load_evaluate_npz = load_geometry_npz
 EVALUATE_ARTIFACT_UNITS = dict(CALCULATOR_UNITS)
 
 
+def evaluate_term_flags(args: Any) -> tuple[bool, bool, bool]:
+    """Resolve ``(doML, doMM, doML_dimer)`` for a single-point evaluation.
+
+    These were hardcoded to ``True`` at every call site in this module, so
+    ``--evaluate-npz`` silently ignored ``--no-do-ml``, ``--no-include-mm``,
+    ``--do-ml-dimer/--no-do-ml-dimer`` and ``--skip-ml-dimers``. Evaluating one
+    grid four ways -- full, no dimer term, no MM, MM only -- returned
+    bit-identical energies (max |dE| = 0.000e+00 eV), which makes any per-term
+    decomposition impossible and quietly misreports what was computed.
+
+    Kept as one helper because the three call sites must agree; the same
+    resolution is used by the jax-md runner, including ``--skip-ml-dimers`` as
+    an override on top of ``--do-ml-dimer``.
+    """
+    do_ml = bool(getattr(args, "do_ml", True))
+    do_mm = bool(getattr(args, "include_mm", True))
+    do_ml_dimer = bool(getattr(args, "do_ml_dimer", True)) and not bool(
+        getattr(args, "skip_ml_dimers", False)
+    )
+    return do_ml, do_mm, do_ml_dimer
+
+
 def _evaluate_int_arg(args: Any, name: str, default: int) -> int:
     value = getattr(args, name, default)
     if value is None:
@@ -311,6 +333,33 @@ def _reference_z_for_frame(reference: Any, frame: int, n_atoms: int) -> np.ndarr
     if z_arr.ndim == 1:
         return np.asarray(z_arr[:n_atoms], dtype=np.int32)
     return np.asarray(z_arr[int(frame), :n_atoms], dtype=np.int32)
+
+
+def composition_mismatch_frames(
+    reference: Any,
+    frame_indices: np.ndarray,
+    z: np.ndarray,
+) -> list[int]:
+    """Reference frames whose element composition differs from the evaluator's.
+
+    Such a frame is silently relabelled to match ``--composition``: five frames
+    of des_water300.npz are O,C,O,H,H,Ar and were scored as water dimers. They
+    correlated -0.92 against their own reference and pulled the set from +0.92
+    to +0.45, with nothing in the output saying anything had happened.
+
+    Compares element counts, not per-atom order, so a permuted-but-equivalent
+    frame is not flagged -- ``positions_for_evaluator_z`` handles that case
+    legitimately.
+    """
+    evaluator_formula = np.bincount(np.asarray(z, dtype=int).reshape(-1), minlength=119)
+    n_atoms = int(len(np.asarray(z).reshape(-1)))
+    mismatched: list[int] = []
+    for ref_frame in np.asarray(frame_indices, dtype=int).reshape(-1):
+        ref_z = _reference_z_for_frame(reference, int(ref_frame), n_atoms)
+        formula = np.bincount(np.asarray(ref_z, dtype=int).reshape(-1), minlength=119)
+        if not np.array_equal(formula, evaluator_formula):
+            mismatched.append(int(ref_frame))
+    return mismatched
 
 
 def center_positions_at_com(
@@ -993,6 +1042,26 @@ def _energy_ev_from_metrics(metrics: dict[str, Any]) -> float | None:
     return None
 
 
+def _evaluate_npz_units_json() -> str:
+    """Units declared inside the evaluate NPZs.
+
+    ``E`` holds the eV energy multiplied by ``EV_TO_HARTREE``, so it is hartree —
+    it was previously declared "ev", which made ``units_from_npz`` hand every
+    downstream consumer a label 27.211 times off the stored value. Note that this
+    is a model energy carrying an arbitrary zero, not a QM total energy; only its
+    variation across frames is meaningful.
+    """
+    return json.dumps(
+        {
+            "E": "hartree",
+            "E_eV": "ev",
+            "F": "ev_angstrom",
+            "F_hartree_bohr": "hartree_bohr",
+            "R": "angstrom",
+        }
+    )
+
+
 def save_evaluate_trajectory_npz(
     path: Path,
     *,
@@ -1012,9 +1081,7 @@ def save_evaluate_trajectory_npz(
         "R": r.reshape(1, n_atoms, 3),
         "E": np.array([float(energy_eV) * EV_TO_HARTREE], dtype=np.float64),
         "E_eV": np.array([float(energy_eV)], dtype=np.float64),
-        "_mmml_units": np.array(
-            json.dumps({"E": "ev", "F": "ev_angstrom", "R": "angstrom", "E_eV": "ev"})
-        ),
+        "_mmml_units": np.array(_evaluate_npz_units_json()),
     }
     if forces_eV_A is not None:
         f_ev = np.asarray(forces_eV_A, dtype=np.float64).reshape(n_atoms, 3)
@@ -1080,9 +1147,7 @@ def save_evaluate_trajectory_npz_multi(
         "R": r,
         "E": e_ev * EV_TO_HARTREE,
         "E_eV": e_ev,
-        "_mmml_units": np.array(
-            json.dumps({"E": "ev", "F": "ev_angstrom", "R": "angstrom", "E_eV": "ev"})
-        ),
+        "_mmml_units": np.array(_evaluate_npz_units_json()),
     }
     if frame_indices is not None:
         payload["source_indices"] = np.asarray(frame_indices, dtype=np.int32).reshape(-1)
@@ -1355,6 +1420,15 @@ def _attach_ase_mmml_calculator(
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
         at_codes_override=at_codes_override,
+        mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
+        mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
+        ml_potential_mode=getattr(args, "ml_potential_mode", None),
+        jax_mm_spoof_psf=getattr(args, "jax_mm_spoof_psf", None),
+        bonded_intra_damp_onset=getattr(args, "bonded_intra_damp_onset", None),
+        bonded_intra_damp_cutoff=float(
+            getattr(args, "bonded_intra_damp_cutoff", None) or 15.0
+        ),
     )
     atoms.calc = calc
     return calc
@@ -1428,6 +1502,14 @@ def _evaluate_jaxmd_mmml(
     import pycharmm.psf as psf
 
     ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
+    # Resolved once and used at all three construction/evaluation sites below,
+    # which previously hardcoded True and so ignored the term flags entirely.
+    _do_ml, _do_mm, _do_ml_dimer = evaluate_term_flags(args)
+    if not getattr(args, "quiet", False):
+        print(
+            f"mmml evaluate: doML={_do_ml} doMM={_do_mm} doML_dimer={_do_ml_dimer}",
+            flush=True,
+        )
     if at_codes_override is not None:
         at_codes = np.asarray(at_codes_override, dtype=int)
     else:
@@ -1438,14 +1520,24 @@ def _evaluate_jaxmd_mmml(
         ml_switch_width=ml_w,
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
+        doML=_do_ml,
+        doMM=_do_mm,
+        doML_dimer=_do_ml_dimer,
         debug=False,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=False if not use_pbc else float(L),
         at_codes_override=at_codes,
+        # --backend jaxmd builds its calculator here, not through _factory_mmml,
+        # so the mode has to be forwarded on this path too. Omitting it made
+        # bonded_intra silently no-op: the arms came back bit-identical to plain
+        # PhysNet (spans 193.88 / 293.79 kcal/mol) with no error anywhere.
+        ml_potential_mode=getattr(args, "ml_potential_mode", None),
+        jax_mm_spoof_psf=getattr(args, "jax_mm_spoof_psf", None),
+        bonded_intra_damp_onset_kcal=getattr(args, "bonded_intra_damp_onset", None),
+        bonded_intra_damp_cutoff_kcal=float(
+            getattr(args, "bonded_intra_damp_cutoff", None) or 15.0
+        ),
         max_pairs=_evaluate_int_arg(args, "max_pairs", 20_000),
         jax_md_capacity_multiplier=float(getattr(args, "jax_md_capacity_multiplier", 1.75)),
         jax_md_capacity_growth_factor=float(
@@ -1474,9 +1566,9 @@ def _evaluate_jaxmd_mmml(
         atomic_positions=atoms.get_positions(),
         n_monomers=n_monomers,
         cutoff_params=cutoff,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
+        doML=_do_ml,
+        doMM=_do_mm,
+        doML_dimer=_do_ml_dimer,
         backprop=False,
         energy_conversion_factor=1.0,
         force_conversion_factor=1.0,
@@ -1525,9 +1617,9 @@ def _evaluate_jaxmd_mmml(
         positions=pos,
         n_monomers=n_monomers,
         cutoff_params=cutoff,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
+        doML=_do_ml,
+        doMM=_do_mm,
+        doML_dimer=_do_ml_dimer,
         mm_pair_idx=mm_pair_idx,
         mm_pair_mask=mm_pair_mask,
         box=box_j,
@@ -1967,6 +2059,8 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         for warning in ctx.get("z_warnings", []):
             print(f"  note: {warning}", flush=True)
 
+    mismatched_frames = composition_mismatch_frames(reference, frame_indices, z)
+
     for ref_frame in frame_indices:
         ref_z = _reference_z_for_frame(reference, int(ref_frame), len(z))
         ref_r = np.asarray(reference.R[int(ref_frame), : len(z)], dtype=np.float64)
@@ -2076,7 +2170,22 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         "n_frames": n_eval,
         "frame_indices": frame_indices.tolist(),
         "per_frame": per_frame_compare,
+        "composition_mismatch_frames": mismatched_frames,
+        "n_composition_mismatch": len(mismatched_frames),
     }
+    if mismatched_frames:
+        for cmp_entry in per_frame_compare:
+            if int(cmp_entry.get("reference_frame", -1)) in set(mismatched_frames):
+                cmp_entry["composition_mismatch"] = True
+        preview = ", ".join(str(f) for f in mismatched_frames[:10])
+        if len(mismatched_frames) > 10:
+            preview += f", ... (+{len(mismatched_frames) - 10} more)"
+        print(
+            f"  WARNING: {len(mismatched_frames)} of {n_eval} reference frames have a "
+            f"different composition than the evaluator and were relabelled to match "
+            f"--composition; their scores are meaningless. Frames: {preview}",
+            flush=True,
+        )
     if ok_compares and "delta_energy_eV" in ok_compares[0]:
         delta_e = np.asarray([c["delta_energy_eV"] for c in ok_compares], dtype=np.float64)
         compare_summary["mean_delta_energy_eV"] = float(delta_e.mean())

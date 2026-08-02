@@ -257,11 +257,106 @@ def test_resolve_output_dir_repeat_subdirs(tmp_path) -> None:
     ).resolve()
 
 
+def test_explicit_cli_output_dir_overrides_single_job(tmp_path) -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+
+    args = Namespace(output_dir=str(tmp_path / "elsewhere"), _cli_explicit={"output_dir"})
+    got = _explicit_cli_output_dir(args, [("prod", "prod", 0)])
+    assert got == (tmp_path / "elsewhere").resolve()
+
+
+def test_explicit_cli_output_dir_ignores_non_cli_value(tmp_path) -> None:
+    """A default or YAML-sourced output_dir must not displace the per-job path."""
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+
+    args = Namespace(output_dir=str(tmp_path / "default"), _cli_explicit=set())
+    assert _explicit_cli_output_dir(args, [("prod", "prod", 0)]) is None
+
+
+def test_explicit_cli_output_dir_rejects_multi_run_campaign(tmp_path) -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+
+    args = Namespace(output_dir=str(tmp_path / "one"), _cli_explicit={"output_dir"})
+    with pytest.raises(ValueError, match="--campaign-output-dir"):
+        _explicit_cli_output_dir(args, [("equil", "equil", 0), ("prod", "prod", 0)])
+
+
 def test_merge_campaign_job_config_defaults() -> None:
     merged = merge_campaign_job_config(_sample_campaign(), "prod")
     assert merged["composition"] == "DCM:5"
     assert merged["depends_on"] == "equil"
     assert merged["backend"] == "jaxmd"
+
+
+PLACEHOLDER_CKPT = "/path/to/ckpts/tag/<run>/params.json"
+
+
+def _campaign_yaml_with_placeholder_checkpoint(tmp_path: Path) -> Path:
+    cfg = tmp_path / "campaign.yaml"
+    cfg.write_text(
+        "defaults:\n"
+        f"  checkpoint: {PLACEHOLDER_CKPT}\n"
+        "  composition: DCM:2\n"
+        "runs:\n"
+        "  liquid_nvt:\n"
+        "    backend: pycharmm\n"
+        "    setup: pbc_nvt\n",
+        encoding="utf-8",
+    )
+    return cfg
+
+
+def test_cli_checkpoint_overrides_unresolvable_config_placeholder(tmp_path: Path) -> None:
+    """A CLI --checkpoint must win before the config value is checked for existence."""
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    cfg = _campaign_yaml_with_placeholder_checkpoint(tmp_path)
+    real = tmp_path / "params.json"
+    real.write_text("{}", encoding="utf-8")
+
+    args = parse_md_system_args(
+        ["--config", str(cfg), "--checkpoint", str(real), "--job-id", "liquid_nvt"]
+    )
+    assert Path(args.checkpoint) == real
+    assert "checkpoint" in args._cli_explicit
+
+
+def test_config_placeholder_checkpoint_still_rejected_without_cli(tmp_path: Path) -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    cfg = _campaign_yaml_with_placeholder_checkpoint(tmp_path)
+    with pytest.raises(FileNotFoundError, match="Checkpoint not found"):
+        parse_md_system_args(["--config", str(cfg), "--job-id", "liquid_nvt"])
+
+
+def test_merge_campaign_job_config_does_not_require_checkpoint(tmp_path: Path) -> None:
+    """Merge expands only; the CLI still gets to replace the value afterwards."""
+    campaign = {
+        "defaults": {"checkpoint": PLACEHOLDER_CKPT},
+        "runs": {"liquid_nvt": {"backend": "pycharmm"}},
+    }
+    merged = merge_campaign_job_config(campaign, "liquid_nvt")
+    assert merged["checkpoint"].endswith("params.json")
+
+
+def test_validate_campaign_checkpoint(tmp_path: Path) -> None:
+    from mmml.cli.run.md_config import validate_campaign_checkpoint
+
+    real = tmp_path / "params.json"
+    real.write_text("{}", encoding="utf-8")
+    validate_campaign_checkpoint(str(real), job_id="liquid_nvt")
+    validate_campaign_checkpoint(None)
+
+    with pytest.raises(FileNotFoundError, match="liquid_nvt"):
+        validate_campaign_checkpoint(str(tmp_path / "missing.json"), job_id="liquid_nvt")
+    with pytest.raises(FileNotFoundError, match="placeholder"):
+        validate_campaign_checkpoint(PLACEHOLDER_CKPT)
 
 
 def test_apply_campaign_cli_overrides_ml_flags() -> None:
@@ -278,6 +373,19 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_spatial_mpi=False,
         skip_jit_warmup=True,
         handoff_pre_minimize=False,
+        dt_fs=0.25,
+        nvt_integrator="langevin",
+        checkpoint="/tmp/ck.json",
+        mm_lj_scales_file="/tmp/hybrid_mm.json",
+        jaxmd_minimize_steps=250,
+        nhc_tau=None,
+        nhc_barostat_tau=None,
+        from_psf="/tmp/mini.psf",
+        from_crd="/tmp/mini.crd",
+        from_pdb=None,
+        composition="DCM:120",
+        box_size=30.0,
+        packmol_tolerance=3.5,
         _cli_explicit=set(),
     )
     apply_campaign_cli_overrides(merged, parent)
@@ -286,6 +394,17 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
     assert merged["charmm_omp_threads"] == 16
     assert merged["skip_jit_warmup"] is True
     assert merged["handoff_pre_minimize"] is False
+    assert merged["dt_fs"] == 0.25
+    assert merged["nvt_integrator"] == "langevin"
+    assert merged["checkpoint"] == "/tmp/ck.json"
+    assert merged["mm_lj_scales_file"] == "/tmp/hybrid_mm.json"
+    assert merged["jaxmd_minimize_steps"] == 250
+    assert merged["from_psf"] == "/tmp/mini.psf"
+    assert merged["from_crd"] == "/tmp/mini.crd"
+    assert merged["mm_lj_scales_file"] == "/tmp/hybrid_mm.json"
+    assert merged["composition"] == "DCM:120"
+    assert merged["box_size"] == 30.0
+    assert merged["packmol_tolerance"] == 3.5
 
     merged2 = {"backend": "pycharmm"}
     parent2 = Namespace(
@@ -296,12 +415,26 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
         ml_spatial_mpi=True,
         skip_jit_warmup=False,
         handoff_pre_minimize=True,
+        dt_fs=None,
+        nvt_integrator=None,
+        checkpoint=None,
+        mm_lj_scales_file=None,
+        jaxmd_minimize_steps=None,
+        nhc_tau=None,
+        nhc_barostat_tau=None,
+        from_psf=None,
+        from_crd=None,
+        from_pdb=None,
+        composition=None,
+        box_size=None,
+        packmol_tolerance=None,
         _cli_explicit=set(),
     )
     apply_campaign_cli_overrides(merged2, parent2)
     assert merged2["ml_max_active_dimers"] == 900
     assert merged2["ml_spatial_mpi"] is True
     assert "ml_gpu_count" not in merged2
+    assert "dt_fs" not in merged2
 
 
 def test_apply_campaign_cli_overrides_lr_flags_when_explicit() -> None:

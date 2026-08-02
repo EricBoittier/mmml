@@ -173,10 +173,29 @@ def _needs_coordinate_seed(positions: np.ndarray) -> bool:
     return bool(np.any(np.abs(positions) > 9000.0))
 
 
-def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) -> Atoms:
+def generate_coordinates(
+    skip_energy_show: bool = False,
+    validate: bool = True,
+    rng: np.random.Generator | None = None,
+) -> Atoms:
+    """Build coordinates for the live CHARMM residue.
+
+    ``rng`` makes the result **reproducible**. Both random draws below feed a
+    minimization, so an unseeded generator lands in a different local minimum on
+    every call: for trialanine the radius of gyration wandered between 3.29 and
+    3.88 Å across runs of identical code. That non-determinism reached CI as a
+    flaky pair-count assertion in ``test_cg_jaxmd_unified`` (see PR #180), and it
+    silently undermines any baseline built on a structure from here.
+
+    ``None`` keeps the historical unseeded behavior so existing callers are
+    unaffected; pass a seeded generator when you need the same structure twice.
+    """
     print("*" * 5, "Generating coordinates", "*" * 5)
 
     set_up_directories()
+
+    if rng is None:
+        rng = np.random.default_rng()
 
     ic.build()
     pycharmm_quiet()
@@ -185,14 +204,14 @@ def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) 
     if _needs_coordinate_seed(pos):
         # ``ic.build()`` can leave CHARMM's 9999 placeholder coords; seed finite
         # values before minimization (use numpy — not in-place DataFrame ops).
-        pos = np.random.default_rng().uniform(0.5, 2.5, size=pos.shape)
+        pos = rng.uniform(0.5, 2.5, size=pos.shape)
         _set_charmm_xyz(pos)
 
     mini(nbxmod=1, skip_energy_show=skip_energy_show)
 
     # Light jitter breaks symmetric IC seeds before the production exclusion list.
     pos = _charmm_xyz_array().copy()
-    pos *= np.random.default_rng().uniform(0.85, 1.15, size=pos.shape)
+    pos *= rng.uniform(0.85, 1.15, size=pos.shape)
     _set_charmm_xyz(pos)
     mini(nbxmod=5, skip_energy_show=skip_energy_show)
     # end_energy = pycharmm.lingo.get_energy_value("ENER")

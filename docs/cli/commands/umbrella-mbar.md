@@ -44,7 +44,15 @@ CLI for MBAR post-processing of umbrella sampling runs. Usage: mmml umbrella-
 mbar --run-dir out/umbrella [--checkpoint PATH] [--temperature-K 300]
 ```
 
+## Visual examples
 
+![One-dimensional free-energy profile](../../images/plots/test4_phi_fes.png)
+
+![Two-dimensional free-energy surface](../../images/plots/test4_phi_psi_fes.png)
+
+## Related docs
+
+- [Batched umbrella sampling](../../umbrella.md)
 
 ---
 

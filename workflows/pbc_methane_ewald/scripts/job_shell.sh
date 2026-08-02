@@ -25,6 +25,12 @@ source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
+# Wrapper experiments may leave MMML_NO_MPI_RERUN=1 in the submitter env; scrub
+# so CLI auto-rerun under mpirun still runs for MPI-linked CHARMM.
+if [[ "${MMML_FORCE_NO_MPI_RERUN:-}" != "1" ]]; then
+  unset MMML_NO_MPI_RERUN || true
+fi
+
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
 if ! ldconfig -p 2>/dev/null | grep -q 'libOpenCL\.so'; then

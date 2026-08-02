@@ -37,6 +37,8 @@ import numpy as np
 import jax.numpy as jnp
 from ase.calculators.calculator import Calculator, all_changes
 
+from mmml.data.units import EANGSTROM_TO_DEBYE
+
 try:
     import e3x
     HAVE_E3X = True
@@ -261,18 +263,26 @@ class DCMNetCalculator(Calculator):
         -------
         array_like
             Molecular dipole moment in Debye, shape (3,)
+
+        Notes
+        -----
+        This used to multiply by ``1.88873`` under a "atomic units to Debye"
+        comment, which was wrong twice over: the sum below is in e*Angstrom
+        (ASE positions are Angstrom), not atomic units, and 1.88873 is neither
+        conversion. The reported dipole was therefore ~2.54x too small while
+        being labelled Debye here, in :meth:`get_dcm_data` and in the example
+        script's printout.
         """
         # Flatten to (n_atoms * n_dcm, 3) and (n_atoms * n_dcm,)
         dcm_positions = dipole_positions.reshape(-1, 3)
         dcm_charges = monopoles.reshape(-1)
-        
-        # Compute dipole: sum(q_i * (r_i - com))
+
+        # Compute dipole: sum(q_i * (r_i - com)), in e*Angstrom
         dipole = np.zeros(3)
         for i in range(len(dcm_charges)):
             dipole += dcm_charges[i] * (dcm_positions[i] - com)
-        
-        # Convert to Debye (atomic units to Debye)
-        return dipole * 1.88873
+
+        return dipole * EANGSTROM_TO_DEBYE
 
 
 # Example usage script

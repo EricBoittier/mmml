@@ -75,13 +75,81 @@ def test_ewald_branch_matches_hybrid_ewald_coulomb_energy():
         R_j, mol_id, jnp.asarray(charges), box_length_A=L,
     )
     assert float(e) == pytest.approx(float(e_ref), rel=1e-9)
-    assert float(vdw) == 0.0  # no LJ term at all for this lr_solver
+    assert float(vdw) == 0.0  # include_lj defaults False
     assert float(elec) == pytest.approx(float(e_ref), rel=1e-9)
 
     f_ref = -jax.grad(
         lambda r: hybrid_ewald_coulomb_energy(r, mol_id, jnp.asarray(charges), box_length_A=L)
     )(R_j)
     assert np.allclose(np.asarray(forces), np.asarray(f_ref), atol=1e-8)
+    assert np.all(np.isfinite(np.asarray(forces)))
+
+
+def test_ewald_branch_include_lj_adds_nonzero_vdw():
+    """include_lj=True returns VDW channel from COM-switched intermolecular LJ."""
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+
+    # Two monomers close enough that mm_switch is on (complementary handoff).
+    R = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [7.0, 0.0, 0.0],
+            [8.0, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    charges = np.array([0.5, -0.5, -0.5, 0.5], dtype=np.float64)
+    L = 30.0
+    box = np.diag([L, L, L])
+    fake_psf = MagicMock()
+    fake_psf.get_charges.return_value = charges
+    # ATC index 0 → planted non-zero LJ via patched param.get_atc + PRM dict path.
+    fake_psf.get_iac.return_value = np.zeros(4, dtype=np.int32)
+    fake_param = MagicMock()
+    fake_param.get_atc.return_value = ["XTEST", "YTEST"]
+
+    import builtins
+    from io import StringIO
+
+    real_open = builtins.open
+
+    def _fake_open(path, *args, **kwargs):
+        path_s = str(path).lower()
+        if path_s.endswith(".prm"):
+            # Parser requires >4 tokens; CHARMM NONBONDED: type 0.0 eps rmin/2 …
+            return StringIO("XTEST 0.0 -0.1 2.0 0.0\nYTEST 0.0 -0.05 1.5 0.0\n")
+        if path_s.endswith(".rtf"):
+            return StringIO("ATOM X XTEST 0.0\nATOM Y YTEST 0.0\n")
+        return real_open(path, *args, **kwargs)
+
+    with patch("pycharmm.psf", fake_psf), patch(
+        "pycharmm.param", fake_param
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
+        return_value=charges,
+    ), patch("builtins.open", _fake_open):
+        mm_fn = build_mm_energy_forces_fn(
+            R,
+            total_atoms=4,
+            n_monomers=2,
+            monomer_offsets=np.array([0, 2, 4], dtype=np.int32),
+            atoms_per_monomer_list=[2, 2],
+            lambda_monomer=np.ones(2, dtype=np.float64),
+            ml_switch_width=1.5,
+            mm_switch_on=8.0,
+            mm_switch_width=5.0,
+            complementary_handoff=True,
+            pbc_cell=box,
+            lr_solver="ewald",
+            include_lj=True,
+            defer_xla_gpu_warmup=True,
+            debug=False,
+        )
+    fn, _ = mm_fn
+    e, forces, vdw, elec = fn(jnp.asarray(R), charges=jnp.asarray(charges))
+    assert float(vdw) != 0.0
+    assert float(e) == pytest.approx(float(elec) + float(vdw), rel=1e-9)
     assert np.all(np.isfinite(np.asarray(forces)))
 
 

@@ -45,11 +45,21 @@ def _ensure_vendored_pycharmm_on_path() -> None:
     ``sys.path.append(tool/pycharmm)`` alone lets an older CHARMM install shadow the
     vendored package (missing ``MLpot.skip_iblo_inb_update`` for PBC registration).
     """
+    entries = _vendored_pycharmm_sys_path_entries()
     root = str(_REPO_ROOT)
-    # Drop stale repo-root inserts from prior imports; re-add only when valid.
-    while root in sys.path:
-        sys.path.remove(root)
-    for entry in reversed(_vendored_pycharmm_sys_path_entries()):
+    # Drop stale repo-root inserts from prior imports, but ONLY when the repo
+    # root is itself one of the vendored entries (i.e. <repo>/pycharmm is a real
+    # package) and we are about to re-insert it at the front.
+    #
+    # Removing it unconditionally made importing this module strip the repo root
+    # from sys.path for the rest of the process. Under pytest that root is what
+    # `pythonpath = .` inserts, so any later `import workflows...` -- a namespace
+    # package rooted there -- died with ModuleNotFoundError in whichever test ran
+    # after the first PyCHARMM import, and passed when run alone.
+    if root in entries:
+        while root in sys.path:
+            sys.path.remove(root)
+    for entry in reversed(entries):
         if entry in sys.path:
             sys.path.remove(entry)
         sys.path.insert(0, entry)

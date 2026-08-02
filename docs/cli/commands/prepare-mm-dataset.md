@@ -49,6 +49,13 @@ Other options:
                         baseline
 ```
 
+## Visual examples
+
+![MM baseline decomposition](../../images/prepare-mm-dataset/mm_baseline_decomposition.png)
+
+![Force-field assignment](../../images/prepare-mm-dataset/acodcm_assignment.png)
+
+![Force validation](../../images/prepare-mm-dataset/force_validation.png)
 
 
 ---

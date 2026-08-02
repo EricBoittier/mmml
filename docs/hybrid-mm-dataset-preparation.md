@@ -116,6 +116,7 @@ out dropped frames consistently) and appends:
 | `cgenff_type_idx` | `(n, atoms)` | int32 | index into master σ/ε tables; **`-1` = padding** |
 | `mol_id` | `(n, atoms)` | int32 | monomer id 0/1; **`-1` = padding** |
 | `cgenff_charge` | `(n, atoms)` | float64 | per-monomer-conserved CGenFF charge (0 on padding) |
+| `cgenff_res_name` | `(n, 2)` | `<U8` | matched `RESI` names in `mol_id` order |
 | `cgenff_master_sigmas` | `(n_types,)` | float64 | conventional σ (Å), shared across all frames |
 | `cgenff_master_epsilons` | `(n_types,)` | float64 | \|ε\| (kcal/mol), shared across all frames |
 | `E_cgenff_mm` | `(n, 1)` | float64 | inter-monomer MM energy (eV) |
@@ -126,6 +127,28 @@ skips them; the trainer loads them once as closure state
 ([`make_training.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/make/make_training.py)).
 `cgenff_type_idx`, `mol_id` and `cgenff_charge` are the
 `HYBRID_MM_BATCH_KEYS` its preflight check requires.
+
+`cgenff_res_name` is not used by the trainer — it is what lets a later step
+select frames by residue, e.g.
+[`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/filter_mm_dataset_by_residue.py)
+keeping only the best-sampled residues of a broad set
+([DES dimers](des-so3lr-dimers.md)). It is named `cgenff_res_name` rather than
+`res_name` because some upstream geometry banks already carry a per-frame
+`(n,)` `res_name` that means something different.
+
+!!! note "The reference is CGenFF plus `toppar_water_ions.str`"
+    `load_reference` merges the stream files in `DEF_EXTRA_TOPPAR` on top of
+    CGenFF, which adds the monatomic ion residues (`CLA`, `SOD`, `POT`, `LIT`,
+    `CAL`, `MG`) that CGenFF has no template for. The merge is additive — an
+    atom type or `RESI` CGenFF already defines is left alone, and new
+    compositions are appended behind the existing candidates — so type indices
+    and existing assignments are unchanged. Pass `extra_toppar=()` for the bare
+    CGenFF reference.
+
+    Ion residues carry a non-zero net charge, and `match_cgenff_template`
+    defaults to conserving **the template's own** net charge
+    (`target_charge=None`). The previous hard-coded `0.0` would have rescaled a
+    chloride to neutral; for the neutral CGenFF residues the two are identical.
 
 σ follows the conventional `4ε[(σ/r)¹² − (σ/r)⁶]` form; CHARMM's `Rmin/2` is
 converted on parse via `σ = 2·(Rmin/2)/2^(1/6)`.

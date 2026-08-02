@@ -126,3 +126,75 @@ def test_build_command_forwards_electrostatics_damping_sigma() -> None:
     assert backend == "jaxmd"
     assert "--electrostatics-damping-sigma" in argv
     assert argv[argv.index("--electrostatics-damping-sigma") + 1] == "0.0"
+
+
+# --- every forwarded flag must be parseable by the backend it is sent to -----
+#
+# `md_system.build_command` builds an argv and hands it to a *subprocess*, so a
+# flag the backend parser does not know is not a TypeError anyone sees -- it is
+# argparse exit 2 inside the child, after the run has already started. That is
+# how `--hybrid-hamiltonian` and `--shared-cutoff` shipped: `run_sim` grew both
+# options, md_system forwarded them to every backend unconditionally, and
+# neither `md_pbc_suite.ase` nor `md_pbc_suite.jaxmd` declared them.
+#
+# Checking one flag at a time (as the tests above do) only ever catches the
+# flag someone remembered to write a test for. These two parse the whole argv.
+
+
+def _backend_parser(backend: str):
+    if backend == "ase":
+        from mmml.cli.run.md_pbc_suite.ase import build_parser
+    else:
+        from mmml.cli.run.md_pbc_suite.jaxmd import build_parser
+    return build_parser()
+
+
+@pytest.mark.parametrize("backend", ["ase", "jaxmd"])
+def test_every_forwarded_flag_is_accepted_by_its_backend(backend: str) -> None:
+    from mmml.cli.run.md_system import build_command
+
+    # `extra_args` is user passthrough -- the fixture's are ASE-specific -- so
+    # it is excluded here. Everything else in the argv is chosen by md_system.
+    resolved, argv = build_command(_ase_args(backend=backend, extra_args=[]))
+
+    assert resolved == backend
+    # Raises SystemExit(2) on an unknown flag rather than returning.
+    _backend_parser(backend).parse_args(argv)
+
+
+@pytest.mark.parametrize("backend", ["ase", "jaxmd"])
+def test_hybrid_hamiltonian_reaches_the_backend_with_its_value(backend: str) -> None:
+    """Accepting the flag is not enough -- it has to arrive intact."""
+    from mmml.cli.run.md_system import build_command
+
+    _, argv = build_command(
+        _ase_args(
+            backend=backend,
+            extra_args=[],
+            hybrid_hamiltonian="shared_cutoff",
+            shared_cutoff=6.5,
+        )
+    )
+    parsed = _backend_parser(backend).parse_args(argv)
+
+    assert parsed.hybrid_hamiltonian == "shared_cutoff"
+    assert parsed.shared_cutoff == pytest.approx(6.5)
+
+
+@pytest.mark.parametrize("backend", ["ase", "jaxmd"])
+def test_the_backend_default_matches_run_sim(backend: str) -> None:
+    """Three parsers declare these options; a default that drifts between them
+    silently changes which Hamiltonian a run uses."""
+    from mmml.cli.run.run_sim import build_parser as run_sim_parser
+
+    reference = {
+        action.dest: action.default
+        for action in run_sim_parser()._actions
+        if action.dest in ("hybrid_hamiltonian", "shared_cutoff")
+    }
+    assert reference == {"hybrid_hamiltonian": "handoff", "shared_cutoff": None}
+
+    parsed = _backend_parser(backend).parse_args([])
+
+    assert parsed.hybrid_hamiltonian == reference["hybrid_hamiltonian"]
+    assert parsed.shared_cutoff == reference["shared_cutoff"]

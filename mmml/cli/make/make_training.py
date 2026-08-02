@@ -191,6 +191,38 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--learning-rate", "--learning_rate", type=float, default=0.001, dest="learning_rate"
     )
     parser.add_argument(
+        "--subtract-atom-energies",
+        "--subtract_atom_energies",
+        action="store_true",
+        dest="subtract_atom_energies",
+        help=(
+            "Subtract per-element atomic reference energies from E before "
+            "training. Essential when training from scratch on absolute "
+            "energies: without it the network must learn the whole ~1300 "
+            "kcal/mol offset itself, and in practice it does not (energy MAE "
+            "sat at ~1200 kcal/mol for 6 epochs while forces converged fine). "
+            "A warm start hides this by carrying the scale in its weights."
+        ),
+    )
+    parser.add_argument(
+        "--subtract-mean",
+        "--subtract_mean",
+        action="store_true",
+        dest="subtract_mean",
+        help="Subtract the dataset mean energy (applied after atom refs).",
+    )
+    parser.add_argument(
+        "--clip-global",
+        "--clip_global",
+        type=float,
+        default=None,
+        dest="clip_global",
+        help=(
+            "Global-norm gradient clip (default 10.0). Lower it (~1.0) when the "
+            "raw parameters oscillate rather than converge."
+        ),
+    )
+    parser.add_argument(
         "--energy-weight", "--energy_weight", type=float, default=1.0, dest="energy_weight"
     )
     parser.add_argument(
@@ -263,11 +295,12 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "Hybrid-MM long-range Coulomb for training (default: mic). "
             "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: full-box "
             "many-to-many PME on fixed CGenFF charges (no exclusions / no "
-            "intra subtract; LJ omitted; requires --pme-box-length and "
+            "intra subtract; requires --pme-box-length and "
             "mmml[nvalchemiops-pme]). ewald: same full-box/no-exclusion "
-            "contract as nvalchemiops_pme, pure JAX (no external PME library, "
-            "no CUDA requirement); requires --pme-box-length. Matches fast MD "
-            "periodic_external."
+            "Coulomb as nvalchemiops_pme, pure JAX (no external PME library, "
+            "no CUDA requirement); requires --pme-box-length. With "
+            "--mm-include-lj, COM-switched LJ is added beside the lattice "
+            "Coulomb (Coulomb itself stays untapered)."
         ),
     )
     parser.add_argument(
@@ -296,8 +329,10 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         default=True,
         dest="mm_include_lj",
         help=(
-            "Include CGenFF LJ in hybrid E_MM (default: on for mic). "
-            "Forced off when --lr-solver nvalchemiops_pme or ewald."
+            "Include CGenFF LJ in hybrid E_MM (default: on). Under "
+            "--lr-solver ewald|nvalchemiops_pme this is COM-switched "
+            "intermolecular LJ beside untapered full-box Coulomb; under mic "
+            "it is the usual switched LJ+Coulomb pair term."
         ),
     )
     parser.add_argument(
@@ -308,10 +343,18 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         dest="learn_mm_lj_scales",
         help=(
             "Learn per-CGenFF-type multiplicative scales on master σ and ε "
-            "(separate arrays, init 1.0). Only affects mic hybrid E_MM LJ; "
-            "ignored when LJ is forced off (ewald / nvalchemiops_pme). "
+            "(separate arrays, init 1.0). Works under --lr-solver mic and "
+            "under ewald|nvalchemiops_pme when --mm-include-lj is on. "
             "Scales are saved in hybrid_mm.json for MD ep_scale/sig_scale."
         ),
+    )
+    parser.add_argument("--mm-lj-sigma-scale-min", type=float, default=0.95)
+    parser.add_argument("--mm-lj-sigma-scale-max", type=float, default=1.05)
+    parser.add_argument("--mm-lj-epsilon-scale-min", type=float, default=0.25)
+    parser.add_argument("--mm-lj-epsilon-scale-max", type=float, default=4.0)
+    parser.add_argument(
+        "--mm-lj-min-type-frames", type=int, default=0,
+        help="Freeze LJ scales at 1.0 for CGenFF types seen in fewer training frames.",
     )
     parser.add_argument(
         "--ema-decay",
@@ -646,6 +689,76 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         help="Teacher checkpoint for distillation (defaults to warm-start checkpoint)",
     )
 
+    # Soft-well E_int aux (real lever for lit DCM soft wells at on=5)
+    parser.add_argument(
+        "--soft-well-aux",
+        "--soft_well_aux",
+        action="store_true",
+        default=False,
+        dest="soft_well_aux",
+        help=(
+            "Enable contact-ok soft-well E_int aux loss "
+            "(lit DCM window −5…−3 kcal/mol)"
+        ),
+    )
+    parser.add_argument(
+        "--soft-well-steps-per-epoch",
+        "--soft_well_steps_per_epoch",
+        type=int,
+        default=48,
+        dest="soft_well_steps_per_epoch",
+        help="Soft-well aux optimizer steps after each ASE epoch",
+    )
+    parser.add_argument(
+        "--soft-well-every-n-train-batches",
+        "--soft_well_every_n_train_batches",
+        type=int,
+        default=25,
+        dest="soft_well_every_n_train_batches",
+        help="Interleave one soft-well step every N ASE train batches (0=off)",
+    )
+    parser.add_argument(
+        "--soft-well-batch-size",
+        "--soft_well_batch_size",
+        type=int,
+        default=32,
+        dest="soft_well_batch_size",
+        help="Batch size for soft-well aux steps",
+    )
+    parser.add_argument(
+        "--soft-well-loss-scale",
+        "--soft_well_loss_scale",
+        type=float,
+        default=50.0,
+        dest="soft_well_loss_scale",
+        help="Multiplier on soft-well window loss",
+    )
+    parser.add_argument(
+        "--soft-well-target-lo",
+        type=float,
+        default=-5.0,
+        dest="soft_well_target_lo",
+        help="Soft-well E_int lower window edge (kcal/mol)",
+    )
+    parser.add_argument(
+        "--soft-well-target-hi",
+        type=float,
+        default=-3.0,
+        dest="soft_well_target_hi",
+        help="Soft-well E_int upper window edge (kcal/mol)",
+    )
+    parser.add_argument(
+        "--frozen-mm-lj-scales-sidecar",
+        "--frozen_mm_lj_scales_sidecar",
+        type=str,
+        default=None,
+        dest="frozen_mm_lj_scales_sidecar",
+        help=(
+            "hybrid_mm.json with mm_lj_*_scale; attach and hard-freeze so "
+            "train/deploy share the same MM LJ"
+        ),
+    )
+
     # Post-hoc learning curves
     parser.add_argument(
         "--metrics-plot",
@@ -894,6 +1007,17 @@ def validate_train_args(args: argparse.Namespace) -> None:
                 "(set --teacher-checkpoint, --physnet-checkpoint, or --physnet-transfer-model)"
             )
 
+    if args.soft_well_aux and not args.hybrid_mm:
+        raise ValueError("--soft-well-aux requires --hybrid-mm")
+    if args.soft_well_aux and args.soft_well_steps_per_epoch < 1:
+        raise ValueError("--soft-well-steps-per-epoch must be >= 1")
+    if args.soft_well_target_lo >= args.soft_well_target_hi:
+        raise ValueError("--soft-well-target-lo must be < --soft-well-target-hi")
+    if args.frozen_mm_lj_scales_sidecar:
+        side = Path(args.frozen_mm_lj_scales_sidecar)
+        if not side.is_file():
+            raise ValueError(f"--frozen-mm-lj-scales-sidecar not found: {side}")
+
     if args.valid_data:
         # ``n_train``/``n_valid`` default to None so that *omitting* them (what the
         # example config documents) is not mistaken for an explicit request; only a
@@ -925,6 +1049,16 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     if not getattr(args, "hybrid_mm", False):
         return None
 
+    if str(getattr(args, "hybrid_hamiltonian", "handoff")) == "shared_cutoff":
+        shared = getattr(args, "shared_cutoff", None)
+        shared = float(args.cutoff if shared is None else shared)
+        model_cutoff = float(args.cutoff)
+        if abs(shared - model_cutoff) > 1e-9:
+            raise ValueError(
+                "hybrid_hamiltonian=shared_cutoff requires shared_cutoff to equal "
+                f"the ML model cutoff (got {shared:g} vs {model_cutoff:g} Å)"
+            )
+
     import numpy as _np
 
     from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
@@ -953,6 +1087,19 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             n_atoms_est = int(_np.asarray(d["R"]).shape[1])
         else:
             n_atoms_est = 32
+
+    min_type_frames = int(getattr(args, "mm_lj_min_type_frames", 0))
+    if min_type_frames < 0:
+        raise ValueError("--mm-lj-min-type-frames must be >= 0")
+    type_frame_counts = _np.zeros(len(sigmas), dtype=_np.int64)
+    for data_path in data_paths:
+        with _np.load(data_path, allow_pickle=True) as d:
+            idx = _np.asarray(d["cgenff_type_idx"], dtype=_np.int64)
+        if idx.ndim == 1:
+            idx = idx[None, :]
+        for type_idx in range(len(sigmas)):
+            type_frame_counts[type_idx] += _np.any(idx == type_idx, axis=1).sum()
+    trainable_mask = type_frame_counts >= max(1, min_type_frames)
 
     from mmml.models.mm_charge_mode import (
         mm_charge_mode_needs_q_ml,
@@ -985,7 +1132,6 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             raise ValueError(
                 "--lr-solver nvalchemiops_pme requires --pme-box-length > 0"
             )
-        include_lj = False
         pme_box_length = float(pme_box_length)
         # Static cutoff for jitted train steps (PME params fixed for the run).
         pme_real_space_cutoff = estimate_nvalchemiops_pme_real_space_cutoff(
@@ -1004,13 +1150,10 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     elif lr_solver == "ewald":
         if pme_box_length is None or float(pme_box_length) <= 0.0:
             raise ValueError("--lr-solver ewald requires --pme-box-length > 0")
-        include_lj = False
         pme_box_length = float(pme_box_length)
         # No external-package / cutoff-estimation step needed: ewald_hybrid_
         # coulomb.py defaults real_space_cutoff_A to box_length/2 internally
         # when left None, already validated at that setting.
-    if lr_solver in ("nvalchemiops_pme", "ewald"):
-        learn_mm_lj_scales = False
     if learn_mm_lj_scales and not include_lj:
         learn_mm_lj_scales = False
     cfg = {
@@ -1020,10 +1163,24 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "mm_switch_width": float(args.mm_switch_width),
         "ml_switch_width": float(args.ml_switch_width),
         "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
+        "hybrid_hamiltonian": str(getattr(args, "hybrid_hamiltonian", "handoff")),
+        "shared_cutoff": (
+            getattr(args, "shared_cutoff", None)
+            if getattr(args, "shared_cutoff", None) is not None
+            else float(getattr(args, "cutoff", 6.0))
+        ),
         "mm_charge_mode": mode.value,
         "lr_solver": lr_solver,
         "include_lj": include_lj,
         "learn_mm_lj_scales": learn_mm_lj_scales,
+        "mm_lj_sigma_scale_bounds": (
+            float(args.mm_lj_sigma_scale_min), float(args.mm_lj_sigma_scale_max)
+        ),
+        "mm_lj_epsilon_scale_bounds": (
+            float(args.mm_lj_epsilon_scale_min), float(args.mm_lj_epsilon_scale_max)
+        ),
+        "mm_lj_trainable_mask": tuple(bool(x) for x in trainable_mask),
+        "mm_lj_type_frame_counts": tuple(int(x) for x in type_frame_counts),
         "pme_box_length": pme_box_length,
         "pme_accuracy": pme_accuracy,
         "pme_real_space_cutoff": pme_real_space_cutoff,
@@ -1049,7 +1206,9 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             f"complementary_handoff={cfg['complementary_handoff']}, "
             f"mm_charge_mode={cfg['mm_charge_mode']}, "
             f"lr_solver={lr_solver}, E_MM={lj_txt}, "
-            f"learn_mm_lj_scales={learn_mm_lj_scales}{pme_txt})",
+            f"learn_mm_lj_scales={learn_mm_lj_scales}, "
+            f"trainable_lj_types={int(trainable_mask.sum())}/{len(trainable_mask)}, "
+            f"min_type_frames={min_type_frames}{pme_txt})",
             flush=True,
         )
     return cfg
@@ -1124,6 +1283,15 @@ def load_transfer_init_params(
         else:
             teacher_params, teacher_config = load_physnet_checkpoint(teacher_path)
         print(f"Loaded teacher checkpoint: {teacher_path}")
+
+    # Portable JSON often stores a bare module tree (Embed_0, …). Student
+    # ``_merge_params(model.init(), bare)`` drops the checkpoint when structures
+    # disagree; teacher ``model.apply`` also requires a top-level ``params``
+    # collection. Normalize both before training.
+    if init_params is not None:
+        init_params = normalize_flax_params_for_apply(init_params, backend="jax")
+    if teacher_params is not None:
+        teacher_params = normalize_flax_params_for_apply(teacher_params, backend="jax")
 
     arch_config = warm_config or teacher_config
     if args.match_checkpoint_architecture and arch_config is not None:
@@ -1251,15 +1419,24 @@ def _maybe_unpad_dataset(data_path: str, natoms: Optional[int]) -> tuple[str, in
             if padded_atoms > max_n:
                 print(f"  ⚠️  Data is PADDED: {padded_atoms} atoms in array (padding: {padded_atoms - max_n})")
                 print("  🔧 Auto-removing padding to train efficiently...")
+                n_samples = int(np.asarray(data["R"]).shape[0])
                 data_unpadded = {}
                 for key, value in data.items():
                     arr = np.asarray(value)
-                    if key == "R" and arr.ndim == 3:
-                        data_unpadded[key] = arr[:, :max_n, :]
-                    elif key == "Z" and arr.ndim == 2:
-                        data_unpadded[key] = arr[:, :max_n]
-                    elif key == "F" and arr.ndim == 3:
-                        data_unpadded[key] = arr[:, :max_n, :]
+                    # Trim every per-sample array whose axis 1 is the padded
+                    # atom axis -- not just R/Z/F. The hybrid ML/MM fields
+                    # (cgenff_type_idx, mol_id, cgenff_charge, F_cgenff_mm) are
+                    # also (n, atoms[, 3]); leaving them at the old width makes
+                    # hybrid_forward fail with a broadcasting error between
+                    # atom_mask (n*max_n) and the mol_id-derived keep mask
+                    # (n*padded_atoms). Shape-driven so new per-atom fields are
+                    # handled without another edit here.
+                    if (
+                        arr.ndim >= 2
+                        and arr.shape[0] == n_samples
+                        and arr.shape[1] == padded_atoms
+                    ):
+                        data_unpadded[key] = arr[:, :max_n, ...]
                     else:
                         data_unpadded[key] = value
                 unpadded_path = Path(data_path).parent / f"{Path(data_path).stem}_unpadded.npz"
@@ -1326,7 +1503,9 @@ def main_loop(args):
         valid_data = _load_physnet_npz_dict(args.valid_data, natoms)
     else:
         train_data, valid_data = prepare_datasets(
-            data_key, args.n_train, args.n_valid, data_paths, natoms=natoms
+            data_key, args.n_train, args.n_valid, data_paths, natoms=natoms,
+            subtract_atom_energies=bool(getattr(args, "subtract_atom_energies", False)),
+            subtract_mean=bool(getattr(args, "subtract_mean", False)),
         )
     
     if args.model is not None:
@@ -1383,6 +1562,26 @@ def main_loop(args):
             k for k in HYBRID_MM_BATCH_KEYS if k not in data_keys
         )
 
+    _frozen_scales = None
+    if args.frozen_mm_lj_scales_sidecar:
+        from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+
+        _payload = load_mm_lj_scales_sidecar(Path(args.frozen_mm_lj_scales_sidecar))
+        if _payload is None:
+            raise ValueError(
+                f"--frozen-mm-lj-scales-sidecar missing mm_lj scales: "
+                f"{args.frozen_mm_lj_scales_sidecar}"
+            )
+        _frozen_scales = (
+            np.asarray(_payload["mm_lj_sigma_scale"], dtype=np.float32),
+            np.asarray(_payload["mm_lj_epsilon_scale"], dtype=np.float32),
+        )
+        print(
+            f"Loaded frozen MM LJ scales from {args.frozen_mm_lj_scales_sidecar} "
+            f"({_frozen_scales[0].shape[0]} types)",
+            flush=True,
+        )
+
     # nvalchemiops PME cannot nest on the same GPU XLA executor as jit_train_step
     # (deadlock), and a spawn child often gets CUDA_ERROR_DEVICE_UNAVAILABLE after
     # the parent has already initialized CUDA.  Default isolate mode runs the
@@ -1413,6 +1612,7 @@ def main_loop(args):
             train_data,
             valid_data,
             learning_rate=args.learning_rate,
+            clip_global=args.clip_global,
             batch_size=args.batch_size,
             num_atoms=natoms,
             energy_weight=args.energy_weight,
@@ -1445,6 +1645,28 @@ def main_loop(args):
             teacher_params=teacher_params if args.distill else None,
             distill_alpha=args.distill_alpha,
             distill_targets=distill_targets,
+            soft_well_aux=(
+                {
+                    "enabled": True,
+                    "steps_per_epoch": int(args.soft_well_steps_per_epoch),
+                    "every_n_train_batches": int(args.soft_well_every_n_train_batches),
+                    "batch_size": int(args.soft_well_batch_size),
+                    "loss_scale": float(args.soft_well_loss_scale),
+                    "target_lo_kcal": float(args.soft_well_target_lo),
+                    "target_hi_kcal": float(args.soft_well_target_hi),
+                    "target_mid_kcal": 0.5
+                    * (float(args.soft_well_target_lo) + float(args.soft_well_target_hi)),
+                    "seed": int(args.seed),
+                }
+                if args.soft_well_aux
+                else None
+            ),
+            frozen_mm_lj_sigma_scale=(
+                _frozen_scales[0] if _frozen_scales is not None else None
+            ),
+            frozen_mm_lj_epsilon_scale=(
+                _frozen_scales[1] if _frozen_scales is not None else None
+            ),
         )
 
     if args.metrics_plot and run_ckpt_dir is not None:

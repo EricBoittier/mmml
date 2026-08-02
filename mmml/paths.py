@@ -39,14 +39,64 @@ def default_dcm_molecule_xyz() -> Path:
     return bundled_file("data", "molecules", "dcm.xyz")
 
 
-def default_dcm_crystal_cif() -> Path:
-    """Experimental DCM crystal (Pbcn, COD 2100015 / CCDC doi:10.5517/cc9lyjb)."""
-    return bundled_file("data", "structures", "dcm_pbcn_cod2100015.cif")
+# The two pressure points of Podsiadło, Dziubek & Katrusiak, Acta Crystallogr. B
+# 61, 595 (2005) (doi:10.1107/S0108768105017374), redistributed by the
+# Crystallography Open Database.  These are the only pure CH2Cl2 structures in
+# COD; the ambient-pressure phase (Kawaguchi et al. 1973) has no open CIF.
+DCM_CRYSTAL_CIFS: dict[str, str] = {
+    "pbcn_133gpa": "dcm_pbcn_133gpa_cod2100014.cif",
+    "pbcn_163gpa": "dcm_pbcn_cod2100015.cif",
+}
+
+
+def default_dcm_crystal_cif(phase: str = "pbcn_163gpa") -> Path:
+    """Experimental DCM crystal for one pressure point of Podsiadło et al. (2005).
+
+    Defaults to the 1.63 GPa structure (COD 2100015 / CCDC doi:10.5517/cc9lyjb)
+    because that is what the ``dcm`` ``build-crystal`` preset and the literature
+    cross-check table have always used.
+    """
+    key = phase.strip().lower()
+    try:
+        filename = DCM_CRYSTAL_CIFS[key]
+    except KeyError:
+        known = ", ".join(sorted(DCM_CRYSTAL_CIFS))
+        raise KeyError(f"Unknown DCM phase {phase!r}; known phases: {known}") from None
+    return bundled_file("data", "structures", filename)
 
 
 def default_benzene_crystal_cif() -> Path:
     """Experimental benzene crystal (P2₁/c, COD 4501704)."""
     return bundled_file("data", "structures", "benzene_p21c_cod4501704.cif")
+
+
+# The five acetone phases of Allan, Clark, Ibberson, Parsons, Pulham & Sawyer,
+# Chem. Commun. 1999, 751 (doi:10.1039/a900558g), deposited as CCDC 182/1197 and
+# redistributed by the Crystallography Open Database.  Keys are the phase labels
+# used by ``ACETONE_CRYSTAL_PHASES``.
+ACETONE_CRYSTAL_CIFS: dict[str, str] = {
+    "pbca_5k": "acetone_pbca_5k_cod7110465.cif",
+    "pbca_110k": "acetone_pbca_110k_cod7110466.cif",
+    "pbca_150k": "acetone_pbca_150k_cod7110464.cif",
+    "cmcm_160k": "acetone_cmcm_160k_cod7110463.cif",
+    "cmcm_15kbar": "acetone_cmcm_15kbar_cod7110462.cif",
+}
+
+
+def default_acetone_crystal_cif(phase: str = "pbca_150k") -> Path:
+    """Experimental acetone crystal for one phase of Allan et al. (1999).
+
+    ``pbca_150k`` is the default because it is the stable low-temperature phase
+    with ordered, refined hydrogens -- the 5 K entry is the deuterated neutron
+    refinement and the 15 kbar entry has rotationally disordered methyls.
+    """
+    key = phase.strip().lower()
+    try:
+        filename = ACETONE_CRYSTAL_CIFS[key]
+    except KeyError:
+        known = ", ".join(sorted(ACETONE_CRYSTAL_CIFS))
+        raise KeyError(f"Unknown acetone phase {phase!r}; known phases: {known}") from None
+    return bundled_file("data", "structures", filename)
 
 
 def default_trialanine_water_smoke_extxyz() -> Path:

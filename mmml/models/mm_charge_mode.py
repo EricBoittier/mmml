@@ -319,6 +319,10 @@ def hybrid_mm_metadata_dict(hybrid_mm: Any) -> dict[str, Any]:
         "complementary_handoff": bool(
             getattr(hybrid_mm, "complementary_handoff", True)
         ),
+        "hybrid_hamiltonian": str(
+            getattr(hybrid_mm, "hybrid_hamiltonian", "handoff")
+        ),
+        "shared_cutoff": getattr(hybrid_mm, "shared_cutoff", None),
         "learn_mm_lj_scales": bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)),
         "include_lj": bool(getattr(hybrid_mm, "include_lj", True)),
         "lr_solver": str(getattr(hybrid_mm, "lr_solver", "mic")),

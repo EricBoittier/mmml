@@ -124,6 +124,87 @@ def test_build_decomposed_mlpot_vacuum_cell_false():
     assert model._get_update_fn is get_update_fn
 
 
+def test_periodic_external_deploys_scales_and_does_not_enter_jax_mm_guard(tmp_path):
+    """#139: CHARMM deployment is a valid LJ consumer when JAX MM is off."""
+    z = np.array([8, 1, 1, 8, 1, 1], dtype=int)
+    sidecar = tmp_path / "hybrid_mm.json"
+    sidecar.write_text("{}", encoding="utf-8")
+    args = type(
+        "Args",
+        (),
+        {
+            "mm_nonbond_mode": "periodic_external",
+            "include_mm": True,
+            "mm_lj_scales_file": str(sidecar),
+            "lr_solver": "ewald",
+            "ml_spatial_mpi": None,
+            "max_pairs": None,
+        },
+    )()
+    factory = MagicMock(return_value=(None, MagicMock(), None))
+
+    with _hybrid_compat_patch(), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        return_value=factory,
+    ) as mock_setup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(None, MagicMock(), None),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), patch(
+        "mmml.models.mm_lj_scales.find_learnable_lj_scales_sidecar",
+        return_value=sidecar,
+    ) as find_sidecar, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm.deploy_scaled_lj_into_charmm"
+    ) as deploy:
+        model = build_decomposed_mlpot_model(
+            tmp_path / "params.json",
+            z,
+            [3, 3],
+            2,
+            cell=30.0,
+            args=args,
+        )
+
+    deploy.assert_called_once_with(sidecar, verbose=False)
+    find_sidecar.assert_called_once_with(
+        scales_file=str(sidecar),
+        checkpoint=(tmp_path / "params.json").resolve(),
+    )
+    assert mock_setup.call_args.kwargs["doMM"] is False
+    assert model._do_mm is False
+
+
+def test_periodic_external_rejects_explicit_scales_when_mm_is_disabled(tmp_path):
+    """Protect against silently claiming deployment in an ML-only run."""
+    z = np.array([8, 1, 1, 8, 1, 1], dtype=int)
+    sidecar = tmp_path / "hybrid_mm.json"
+    sidecar.write_text("{}", encoding="utf-8")
+    args = type(
+        "Args",
+        (),
+        {
+            "mm_nonbond_mode": "periodic_external",
+            "include_mm": False,
+            "mm_lj_scales_file": str(sidecar),
+            "lr_solver": "ewald",
+            "ml_spatial_mpi": None,
+            "max_pairs": None,
+        },
+    )()
+
+    with _hybrid_compat_patch(), pytest.raises(ValueError, match="no LJ backend"):
+        build_decomposed_mlpot_model(
+            tmp_path / "params.json",
+            z,
+            [3, 3],
+            2,
+            cell=30.0,
+            args=args,
+        )
+
+
 def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
     z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
     per = [4, 4]
@@ -1631,7 +1712,6 @@ def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
         DEFAULT_MM_SWITCH_WIDTH,
     )
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        PbcNbondCutoffs,
         pbc_nbond_cutoffs_from_mlpot_switches,
         resolve_pbc_nbond_cutoffs,
         stash_pbc_nbond_cutoffs,

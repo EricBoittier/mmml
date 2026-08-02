@@ -1009,7 +1009,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         testing).
   --jax-mm-spoof-psf JAX_MM_SPOOF_PSF
                         Optional cluster PSF for --jax-mm-spoof bonded
-                        parameters.
+                        parameters. Also supplies the CGenFF bonded terms for
+                        --ml-potential-mode bonded_intra, where it is REQUIRED.
   --jaxmd-minimize-steps JAXMD_MINIMIZE_STEPS
                         Pre-dynamics FIRE steps in the JAX-MD runner (default:
                         1000). Free space: COM-centered. PBC: molecular
@@ -1023,9 +1024,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         0.10). Set 0 to always run FIRE backoff stages.
   --jax-md-update-interval JAX_MD_UPDATE_INTERVAL
                         JAX-MD/ASE PBC MM neighbor-list refresh interval in MD
-                        steps or calculator calls (default: 1, conservative).
-                        Larger values reduce host/device sync when pair-list
-                        stability has been validated.
+                        steps (0 = ensemble auto: NVT=10, NpT=5, NVE=5; 1 =
+                        every step / safest). Larger values reduce host/device
+                        sync on stable runs.
   --jax-md-skin-distance JAX_MD_SKIN_DISTANCE
                         JAX-MD/ASE PBC MM neighbor-list skin distance in Å
                         (default: 0.25).
@@ -1216,6 +1217,15 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         (solvent stays CHARMM MM); requires
                         mm_nonbond_mode=periodic_external (not jax_mic). YAML:
                         ml_resnames: [AMM1, CH3CL].
+  --psf-angle-restraints
+                        jaxmd: add scaled CGenFF harmonic angle (+ Urey–Bradley)
+                        forces from --from-psf so ML monomers stay tetrahedral
+                        (no classical SHAKE on this path).
+  --psf-angle-restraint-scale W
+                        Scale for --psf-angle-restraints (default: 1.0).
+  --psf-angle-restraints-no-urey
+                        With --psf-angle-restraints: omit Urey–Bradley 1–3 terms
+                        (angles only).
   --pycharmm-pre-dynamics-lingo PYCHARMM_PRE_DYNAMICS_LINGO
                         pycharmm: CHARMM lingo run once after setup/constraints
                         and before scheduled dynamics (YAML may use a multiline
@@ -1223,6 +1233,16 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --pycharmm-pre-dynamics-lingo-file PYCHARMM_PRE_DYNAMICS_LINGO_FILE
                         pycharmm: path to a CHARMM script file run once before
                         dynamics
+  --max-fmax-before-dyn-ev-A EV_A
+                        pycharmm: abort if max atomic |F| exceeds this (eV/Å)
+                        before dynamics; default 2.0. Raise only for controlled
+                        smokes.
+  --hybrid-hamiltonian {handoff,shared_cutoff}
+                        Hybrid Hamiltonian: existing COM handoff or additive
+                        force-shifted shared cutoff.
+  --shared-cutoff SHARED_CUTOFF
+                        Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults
+                        to checkpoint model cutoff.
   --mm-pair-source {jax,charmm_callback}
                         pycharmm decomposed MLpot MM pair provider: Fortran
                         callback idxu/idxv or JAX neighbor rebuild. All-ML
@@ -1238,8 +1258,46 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         Path to hybrid_mm.json with learnable per-type MM LJ σ/ε
                         scales. When omitted, MLpot looks next to --checkpoint
                         for hybrid_mm.json.
+  --ml-potential-mode {physnet,kernnn,jax_mm_clone,jax_mm_spoof,bonded_intra}
+                        Which potential supplies the ML terms. 'bonded_intra'
+                        keeps PhysNet for the dimer interaction but hands the
+                        internal monomer energy to CGenFF bonded (requires
+                        --jax-mm-spoof-psf). Use it when the model was trained
+                        on rigid monomers and carries no restoring force for
+                        intramolecular coordinates. See docs/hybrid-bonded-
+                        intra.md.
+  --bonded-intra-damp-onset BONDED_INTRA_DAMP_ONSET
+                        Enable the bonded_intra damping guard: taper the ML
+                        dimer interaction to zero as either monomer's CGenFF
+                        bonded energy rises from this value (kcal/mol) to
+                        --bonded-intra-damp-cutoff. The interaction term is a
+                        difference of two model totals and is extrapolation
+                        noise off-manifold. Off unless set; 5.0 is the measured
+                        onset above ordinary thermal distortion.
+  --bonded-intra-damp-cutoff BONDED_INTRA_DAMP_CUTOFF
+                        Bonded energy (kcal/mol) at which the ML dimer
+                        interaction is fully damped. Ignored unless --bonded-
+                        intra-damp-onset is set. Default 15.0 is where the
+                        measured noise well sits (O-H = 0.771 A).
+  --mm-nl-backend {auto,vesin,cell_list,jax_md}
+                        MM neighbor-list builder for jaxmd (default:
+                        MMML_MM_NL_BACKEND or auto→vesin).
+  --mm-nl-device {cpu,gpu}
+                        MM Vesin rebuild device for jaxmd (default:
+                        MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy
+                        failure).
+  --nhc-tau MULT        jaxmd: Nose–Hoover thermostat coupling multiplier (tau =
+                        nhc_tau * dt; default 100 in the jaxmd suite).
+  --nhc-barostat-tau MULT
+                        jaxmd NpT: Nose–Hoover barostat coupling multiplier (tau
+                        = nhc_barostat_tau * dt; default 10000 in the jaxmd
+                        suite). Larger = softer piston (useful for under-dense
+                        liquid boxes).
 ```
 
+## Visual examples
+
+![Structure, thermodynamics, RDF, and geometry validation](../../images/structures/validation_summary.png)
 
 ## Related docs
 

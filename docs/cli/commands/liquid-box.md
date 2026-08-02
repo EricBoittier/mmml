@@ -16,7 +16,7 @@ usage: mmml liquid-box [-h] --composition COMPOSITION --output-dir OUTPUT_DIR
                        [--profile {standard,dense,conservative}]
                        [--spacing SPACING] [--seed SEED]
                        [--temperature TEMPERATURE] [--dt-fs DT_FS]
-                       [--echeck KCAL] [--no-echeck]
+                       [--echeck KCAL] [--no-echeck] [--no-echeck-heat]
                        [--allow-incomplete-dynamics]
                        [--charmm-mm-pretreat-echeck KCAL]
                        [--charmm-sd-steps CHARMM_SD_STEPS]
@@ -77,7 +77,10 @@ options:
                         standard: MC + CHARMM pre-minimize only; dense: liquid-
                         prep preventive stack; conservative: dense with looser
                         initial density.
-  --spacing SPACING     Monomer template spacing for cluster build (Å).
+  --spacing SPACING     Monomer COM pitch for grid / template placement (Å). 4 Å
+                        is too coarse for dense liquids (MeOH COM ~4.1 Å); 2.5 Å
+                        leaves headroom for water-like and denser packs. Packmol
+                        atom-atom contact uses --packmol-tolerance, not this.
   --seed SEED           Random seed for Packmol / MC placement.
   --temperature TEMPERATURE
                         Temperature for mini box equilibration (K).
@@ -109,6 +112,9 @@ Dynamics stability (ECHECK):
   --no-echeck           Disable ECHECK. Uses a huge sentinel (not -1): velocity-
                         Verlet paths still apply MAX(ECHECK, 0.1×KE) when
                         ECHECK≤0.
+  --no-echeck-heat      Disable ECHECK during the heat stage only (equi/prod
+                        still use --echeck). Needed for ML USER-only heat before
+                        Hoover settles.
   --allow-incomplete-dynamics
                         Do not fail staged MD when CHARMM stops early (echeck)
                         or the stage DCD has too few frames. Default: abort with
@@ -288,7 +294,7 @@ Geometry cleanup (one-shot recovery):
                         remain overridable.
 ```
 
-## Example structures
+## Visual examples
 
 ![Density prep ladder (schematic)](../../images/plots/liquid-box-density-ladder.png)
 

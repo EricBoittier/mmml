@@ -1,0 +1,42 @@
+# Parallel hybrid umbrella windows (ML solute + MM solvent) via Snakemake/Slurm.
+#
+#   cd workflows/hybrid_umbrella_windows
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   MMML_WORKFLOW_CONFIG=config.yaml bash scripts/snakemake_slurm.sh 8
+#
+# Each window is one GPU job writing output_dir/windows/wXXX.npz; assemble+MBAR
+# run once all windows exist (failed windows still produce a checkpoint).
+
+solvent: acn
+umbrella_yaml: examples/m/yaml/umbrella_nc_acn_prod.yaml
+output_dir: artifacts/nh3_ch3cl/umbrella_nc_acn_prod
+n_windows: 30
+
+# Dense Packmol box if PSF/PDB missing under artifacts/nh3_ch3cl/boxes/{solvent}/
+box_size: 30.0
+use_density: true
+build_box_if_missing: true
+
+checkpoint: examples/m/model_ext.json
+run_mbar: true
+
+slurm:
+  partition: gpu
+  # Leave empty to let Slurm pick any gpu node; or e.g. "gpu08,gpu09"
+  nodelist: ""
+  # Nodes to keep jobs off, e.g. "gpu11" for a wedged GPU that fails cuInit
+  # with "Unable to determine the device handle". Snakemake only auto-excludes
+  # on Slurm NODE_FAIL, so a broken GPU has to be blacklisted here by hand.
+  exclude_nodes: "gpu11,gpu10"
+  gpu: 1
+  nodes: 1
+  ntasks: 1
+  cpus_per_task: 4
+  mem_mb_per_cpu: 8000
+  # Concurrent window jobs (also snakemake -j default)
+  max_jobs: 8
+  # Per-window wall time (minutes). 20 ps @ 0.25 fs needs headroom for compile.
+  runtime_min_window: 720
+  runtime_min_box: 120
+  runtime_min_assemble: 180
+  mail_user: ""

@@ -140,6 +140,58 @@ def test_npz_to_extxyz_and_stride(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert frames[0].info["frame_index"] == 0
 
 
+def test_md_npz_to_dcd_with_resname_split(tmp_path: Path) -> None:
+    """jaxmd-unified trajectory.npz → PSF+DCD (+ TRIA / TIP3 copies)."""
+    psf = tmp_path / "model.psf"
+    psf.write_text(
+        "\n".join(
+            [
+                "PSF",
+                "",
+                "       5 !NATOM",
+                "       1 A    1    TRIA N    N     -0.470000       14.0070           0",
+                "       2 A    1    TRIA HN   H      0.310000        1.0080           0",
+                "       3 WAT  1    TIP3 OH2  OT    -0.834000       15.9994           0",
+                "       4 WAT  1    TIP3 H1   HT     0.417000        1.0080           0",
+                "       5 WAT  1    TIP3 H2   HT     0.417000        1.0080           0",
+                "",
+                "       3 !NBOND: bonds",
+                "       1       2       3       4       3       5",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    npz = tmp_path / "trajectory.npz"
+    positions = np.zeros((3, 5, 3), dtype=np.float64)
+    positions[:, :, 0] = np.arange(5)[None, :]
+    boxes = np.broadcast_to(np.eye(3)[None, ...] * 20.0, (3, 3, 3)).copy()
+    np.savez(
+        npz,
+        positions=positions,
+        Z=np.array([7, 1, 8, 1, 1], dtype=np.int32),
+        boxes=boxes,
+        energies=np.array([-1.0, -1.1, -1.2]),
+    )
+    out = tmp_path / "all.dcd"
+    n = convert_npz_traj.export_md_npz(
+        npz,
+        out,
+        psf=psf,
+        split_resnames="TRIA,TIP3",
+        verbose=False,
+    )
+    assert n == 3
+    assert out.is_file()
+    assert out.with_suffix(".psf").is_file()
+    tria = tmp_path / "all.TRIA.dcd"
+    tip3 = tmp_path / "all.TIP3.dcd"
+    assert tria.is_file() and tip3.is_file()
+    assert tria.with_suffix(".psf").is_file()
+    assert "TIP3" not in tria.with_suffix(".psf").read_text(encoding="utf-8")
+    assert "TRIA" not in tip3.with_suffix(".psf").read_text(encoding="utf-8")
+
+
 def test_gui_ase_frame_reads_dipole_and_charges(tmp_path: Path) -> None:
     from mmml.gui.api.parsers import MolecularFileParser
 

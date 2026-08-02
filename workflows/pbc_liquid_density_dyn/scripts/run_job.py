@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one liquid-density PBC dynamics campaign via mmml-charmm-mpirun.sh."""
+"""Run one liquid-density PBC dynamics campaign via mmml md-system --run-all."""
 
 from __future__ import annotations
 
@@ -38,6 +38,19 @@ def _resolve_mpirun_wrapper(cfg: dict) -> Path:
     return (workflow_root() / raw).resolve()
 
 
+def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
+    """Invoke md-system with the workflow's Python (editable repo checkout)."""
+    py = os.environ.get("MMML_PYTHON", sys.executable)
+    return [py, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+
+
+def _use_mpirun_wrapper(cfg: dict) -> bool:
+    """Outer mpirun wrapper is opt-in; default is direct Python + CLI auto-rerun."""
+    if "use_mpirun_wrapper" in cfg:
+        return bool(cfg.get("use_mpirun_wrapper"))
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", help="Run cell tag, e.g. dcm_277_t300_l32")
@@ -73,14 +86,19 @@ def main() -> int:
     md_argv = build_md_system_campaign_argv(cfg, cell, out_dir=paths["out_dir"])
     os.chdir(_repo_root())
 
-    mpirun_wrapper = _resolve_mpirun_wrapper(cfg)
-    if not mpirun_wrapper.is_file():
-        raise SystemExit(f"MPI wrapper not found: {mpirun_wrapper}")
-
     env = os.environ.copy()
     env.setdefault("MMML_MPI_NP", str(cfg.get("MMML_MPI_NP", 1)))
-    env["MMML_NO_MPI_RERUN"] = "1"
-    cmd = [str(mpirun_wrapper), "md-system", *md_argv]
+    if _use_mpirun_wrapper(cfg):
+        mpirun_wrapper = _resolve_mpirun_wrapper(cfg)
+        if not mpirun_wrapper.is_file():
+            raise SystemExit(f"MPI wrapper not found: {mpirun_wrapper}")
+        # Outer wrapper already provides mpirun; suppress nested CLI re-exec.
+        env["MMML_NO_MPI_RERUN"] = "1"
+        cmd = [str(mpirun_wrapper), "md-system", *md_argv]
+    else:
+        # Prefer direct Python like methane/solvent_burst: md-campaign re-execs
+        # under OpenMPI when MPI-linked CHARMM is required.
+        cmd = _resolve_mmml_cmd(md_argv)
 
     tag = cell_run_tag(cell, cfg)
     print(f"Campaign jobs ({tag}): {campaign_job_order(cfg)}", flush=True)
@@ -102,6 +120,8 @@ def main() -> int:
         except (json.JSONDecodeError, TypeError) as exc:
             print(f"Could not parse {summary_path}: {exc}", file=sys.stderr)
             return 1
+    else:
+        print(f"Warning: missing campaign summary {summary_path}", flush=True)
 
     if not paths["final_handoff"].is_file():
         print(f"Expected final handoff missing: {paths['final_handoff']}", file=sys.stderr)

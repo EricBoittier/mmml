@@ -69,6 +69,9 @@ splits/energies_forces_dipoles_train.npz -o out/ mmml physnet-md --checkpoint
 out/ckpts/cybz_physnet --data splits/train.npz -o out/ --n-replicas 4
 ```
 
+## Visual examples
+
+![Energy conservation with force snapshots](../../images/povray-overlays/water_nve_with_povray.png)
 
 
 ---

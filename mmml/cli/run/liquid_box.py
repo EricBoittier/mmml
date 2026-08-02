@@ -44,8 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--spacing",
         type=float,
-        default=4.0,
-        help="Monomer template spacing for cluster build (Å).",
+        default=2.5,
+        help=(
+            "Monomer COM pitch for grid / template placement (Å). "
+            "4 Å is too coarse for dense liquids (MeOH COM ~4.1 Å); "
+            "2.5 Å leaves headroom for water-like and denser packs. "
+            "Packmol atom-atom contact uses --packmol-tolerance, not this."
+        ),
     )
     parser.add_argument(
         "--seed",

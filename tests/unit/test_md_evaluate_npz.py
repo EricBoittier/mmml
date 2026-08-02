@@ -76,6 +76,121 @@ def test_evaluate_int_arg_treats_none_as_default() -> None:
     assert _evaluate_int_arg(Namespace(), "max_pairs", 20_000) == 20_000
 
 
+def test_attach_ase_mmml_forwards_ml_charge_configuration(monkeypatch) -> None:
+    """Static validation must exercise the requested E_MM charge Hamiltonian."""
+    from mmml.cli.run.md_evaluate_npz import _attach_ase_mmml_calculator
+
+    captured: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_factory(**kwargs):
+        captured.update(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(
+        "mmml.cli.run.md_pbc_suite.ase._factory_mmml", fake_factory
+    )
+    atoms = MagicMock()
+    atoms.get_positions.return_value = np.zeros((6, 3), dtype=np.float64)
+    args = Namespace(
+        mm_charge_mode="q0",
+        mm_charge_correction=False,
+        mm_latent_charge_template=None,
+    )
+
+    result = _attach_ase_mmml_calculator(
+        args,
+        atoms=atoms,
+        z=np.array([8, 1, 1, 8, 1, 1], dtype=np.int32),
+        n_monomers=2,
+        atoms_per_list=[3, 3],
+        base_ckpt_dir=Path("charge-model.json"),
+        use_pbc=True,
+        L=20.0,
+        at_codes_override=None,
+    )
+
+    assert result is sentinel
+    assert atoms.calc is sentinel
+    assert captured["mm_charge_mode"] == "q0"
+    assert captured["mm_charge_correction"] is False
+    assert captured["mm_latent_charge_template"] is None
+
+
+def test_composition_mismatch_frames_flags_relabelled_frames() -> None:
+    """Frames the evaluator would silently relabel must be reported.
+
+    Reproduces des_water300.npz: 295 water dimers plus 5 O,C,O,H,H,Ar frames
+    that were scored as water and correlated -0.92 against their own reference.
+    """
+    from types import SimpleNamespace
+
+    from mmml.cli.run.md_evaluate_npz import composition_mismatch_frames
+
+    water = [8, 1, 1, 8, 1, 1]
+    other = [8, 6, 8, 1, 1, 18]
+    z_ref = np.array([water] * 8 + [other] * 2, dtype=np.int32)
+    reference = SimpleNamespace(Z=z_ref)
+    evaluator_z = np.array(water, dtype=np.int32)
+
+    flagged = composition_mismatch_frames(reference, np.arange(10), evaluator_z)
+    assert flagged == [8, 9]
+
+    # A permutation of the same elements is handled legitimately elsewhere and
+    # must not be flagged, or every reordered frame becomes a false positive.
+    permuted = np.array([[8, 8, 1, 1, 1, 1]], dtype=np.int32)
+    assert composition_mismatch_frames(SimpleNamespace(Z=permuted), np.array([0]), evaluator_z) == []
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_evaluate_npz_declares_the_unit_it_actually_stores(tmp_path: Path, multi: bool) -> None:
+    """The declared unit for E must match the number stored in E.
+
+    ``E`` is written as eV * EV_TO_HARTREE but was declared "ev", so
+    ``units_from_npz`` reported a label 27.211x off. Asserted against CODATA
+    rather than against EV_TO_HARTREE, so a wrong internal constant cannot make
+    this pass by being consistently wrong with the writer.
+    """
+    from mmml.data.units import units_from_npz
+
+    hartree_to_ev = 27.211386245988  # CODATA 2018
+    energy_ev = -19.9964262266207
+    z = np.array([8, 1, 1, 8, 1, 1], dtype=np.int32)
+    r = np.zeros((6, 3), dtype=np.float64)
+    path = tmp_path / "evaluate.npz"
+
+    if multi:
+        save_evaluate_trajectory_npz_multi(
+            path,
+            atomic_numbers=z,
+            positions=r.reshape(1, 6, 3),
+            energies_eV=np.array([energy_ev]),
+            forces_eV_A=None,
+        )
+    else:
+        save_evaluate_trajectory_npz(
+            path,
+            atomic_numbers=z,
+            positions=r,
+            energy_eV=energy_ev,
+            forces_eV_A=None,
+        )
+
+    with np.load(path, allow_pickle=True) as data:
+        stored_e = float(np.asarray(data["E"]).reshape(-1)[0])
+        stored_e_ev = float(np.asarray(data["E_eV"]).reshape(-1)[0])
+        declared = json.loads(str(np.asarray(data["_mmml_units"]).item()))
+
+    assert stored_e_ev == pytest.approx(energy_ev, rel=1e-12)
+    assert stored_e * hartree_to_ev == pytest.approx(energy_ev, rel=1e-6)
+    assert declared["E"] == "hartree"
+    assert declared["E_eV"] == "ev"
+
+    manifest = units_from_npz(path)
+    assert manifest is not None
+    assert manifest.arrays["E"] == "hartree"
+
+
 def test_save_evaluate_trajectory_npz_roundtrip(tmp_path: Path) -> None:
     z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
     r = np.random.default_rng(0).random((5, 3))
@@ -676,23 +791,15 @@ def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
         charmm_total_forces_kcalmol_A,
     )
 
-    class _ForceFrame:
-        def __init__(self, dx: float, dy: float, dz: float) -> None:
-            self._vals = {"dx": dx, "dy": dy, "dz": dz}
-
-        def __getitem__(self, key: str):
-            val = np.array([self._vals[key]], dtype=float)
-
-            class _Series:
-                @staticmethod
-                def to_numpy(dtype=float):
-                    return val.astype(dtype)
-
-            return _Series()
-
+    # Patch the gradient source rather than pycharmm.coor.get_forces: since the
+    # C-API path landed, charmm_gradient_array() short-circuits on
+    # coor.get_natom() == 0 (no PSF is loaded here) and returns an empty (0, 3)
+    # array, so a get_forces stub is never reached. What this test is actually
+    # pinning is the sign flip (gradient -> force) and the kcal/mol -> eV
+    # conversion, both of which sit above that call.
     monkeypatch.setattr(
-        "pycharmm.coor.get_forces",
-        lambda: _ForceFrame(-23.060548867, 0.0, 0.0),
+        "mmml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
+        lambda: np.array([[-23.060548867, 0.0, 0.0]], dtype=float),
     )
     kcal = charmm_total_forces_kcalmol_A()
     assert kcal[0, 0] == pytest.approx(23.060548867)

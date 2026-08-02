@@ -10,7 +10,17 @@ from typing import Any, Sequence
 import numpy as np
 
 # amu * (Angstrom/psec)^2 -> kcal/mol (CHARMM kinetic-energy convention).
-_AMU_ANG_PS2_TO_KCALMOL = 0.001036427219371
+#
+# Exact by the AKMA definition: 1 kcal/mol == 418.4 amu*A^2/ps^2, which follows
+# from amu * N_A == 1 g/mol and the thermochemical calorie (4184 J/kcal).
+#
+# This was 0.001036427219371 until the units audit -- the mantissa of the *eV*
+# conversion (1 amu*(A/ps)^2 = 1.036427e-4 eV) with the wrong exponent and the
+# wrong unit label, so it was a factor 2.306 too small. Because assignment and
+# read-back both used it, the error cancelled internally and every self-check
+# agreed; it was only wrong against CHARMM, ASE and physics. Measured end to
+# end, velocities drawn for "300 K" were 690.6 K.
+_AMU_ANG_PS2_TO_KCALMOL = 1.0 / 418.4
 _KCALMOL_PER_K = 0.0019872041
 
 # Hard floor for every Maxwell-Boltzmann / CHARMM ASSVEL draw (K).

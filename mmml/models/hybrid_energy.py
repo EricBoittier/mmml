@@ -44,8 +44,12 @@ import jax
 import jax.numpy as jnp
 
 from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
+from mmml.interfaces.pycharmmInterface.calculator_utils import (
+    ml_switch_scale,
+    mm_switch_scale,
+)
 from mmml.models.cgenff_mm import (
+    cgenff_lj_energy,
     cgenff_mm_energy,
     monomer_centroids,
 )
@@ -79,6 +83,7 @@ __all__ = [
     "HybridMMConfig",
     "hybrid_forward",
     "ml_scale_from_positions",
+    "switched_lj_kcal",
 ]
 
 #: Per-atom dataset fields the hybrid mode needs in each training batch.
@@ -119,11 +124,17 @@ class HybridMMConfig:
     lr_solver: str = "mic"
     include_lj: bool = True
     learn_mm_lj_scales: bool = False
+    mm_lj_sigma_scale_bounds: tuple[float, float] = (0.95, 1.05)
+    mm_lj_epsilon_scale_bounds: tuple[float, float] = (0.25, 4.0)
+    mm_lj_trainable_mask: tuple[bool, ...] | None = None
+    mm_lj_type_frame_counts: tuple[int, ...] | None = None
     pme_box_length: float | None = None
     pme_accuracy: float = 1e-6
     pme_real_space_cutoff: float | None = None
     # Ewald Gaussian self term (−α/√π Σ q²). Default on (train-matched).
     ewald_include_self: bool = True
+    hybrid_hamiltonian: str = "handoff"
+    shared_cutoff: float | None = None
 
     @property
     def charge_correction(self) -> bool:
@@ -159,17 +170,40 @@ class HybridMMConfig:
                 f"hybrid lr_solver must be mic|nvalchemiops_pme|ewald; got {lr!r}"
             )
         d["lr_solver"] = lr
+        d["include_lj"] = bool(d.get("include_lj", True))
         if lr in ("nvalchemiops_pme", "ewald"):
-            d["include_lj"] = False
             box = d.get("pme_box_length", None)
             if box is None or float(box) <= 0.0:
                 raise ValueError(
                     f"lr_solver={lr!r} requires pme_box_length > 0"
                 )
             d["pme_box_length"] = float(box)
-        else:
-            d["include_lj"] = bool(d.get("include_lj", True))
         d["learn_mm_lj_scales"] = bool(d.get("learn_mm_lj_scales", False))
+        if d["learn_mm_lj_scales"] and not d["include_lj"]:
+            d["learn_mm_lj_scales"] = False
+        for key, default in (
+            ("mm_lj_sigma_scale_bounds", (0.95, 1.05)),
+            ("mm_lj_epsilon_scale_bounds", (0.25, 4.0)),
+        ):
+            bounds = tuple(float(x) for x in d.get(key, default))
+            if len(bounds) != 2 or not (0.0 < bounds[0] <= 1.0 <= bounds[1]):
+                raise ValueError(f"{key} must be positive (min, max) containing 1.0")
+            d[key] = bounds
+        if d.get("mm_lj_trainable_mask") is not None:
+            d["mm_lj_trainable_mask"] = tuple(bool(x) for x in d["mm_lj_trainable_mask"])
+        if d.get("mm_lj_type_frame_counts") is not None:
+            d["mm_lj_type_frame_counts"] = tuple(int(x) for x in d["mm_lj_type_frame_counts"])
+        hamiltonian = str(d.get("hybrid_hamiltonian", "handoff")).strip().lower()
+        if hamiltonian not in ("handoff", "shared_cutoff"):
+            raise ValueError("hybrid_hamiltonian must be handoff|shared_cutoff")
+        d["hybrid_hamiltonian"] = hamiltonian
+        if hamiltonian == "shared_cutoff":
+            cutoff = d.get("shared_cutoff", None)
+            if cutoff is None:
+                cutoff = d.get("mm_switch_on", None)
+            if cutoff is None or float(cutoff) <= 0.0:
+                raise ValueError("shared_cutoff Hamiltonian requires shared_cutoff > 0")
+            d["shared_cutoff"] = float(cutoff)
         if "pme_accuracy" in d and d["pme_accuracy"] is not None:
             d["pme_accuracy"] = float(d["pme_accuracy"])
         if d.get("pme_real_space_cutoff", None) is not None:
@@ -185,9 +219,67 @@ class HybridMMConfig:
     def kwargs(self) -> dict:
         """Keyword arguments for :func:`hybrid_forward`."""
         d = dataclasses.asdict(self)
+        # Optimizer projection/support metadata belongs to the training step,
+        # not the physical forward Hamiltonian. Without this, every
+        # learn_mm_lj_scales run dies on the first training step with
+        #   TypeError: hybrid_forward() got an unexpected keyword argument
+        #              'mm_lj_sigma_scale_bounds'
+        # because dataclasses.asdict() sweeps the bounds in alongside the
+        # physical terms. Keyed defensively so fields that only exist on newer
+        # configs (trainable mask, per-type frame counts) cannot reintroduce
+        # the same crash later.
+        for key in (
+            "mm_lj_sigma_scale_bounds",
+            "mm_lj_epsilon_scale_bounds",
+            "mm_lj_trainable_mask",
+            "mm_lj_type_frame_counts",
+        ):
+            d.pop(key, None)
         d["master_sigmas"] = jnp.asarray(self.master_sigmas)
         d["master_epsilons"] = jnp.asarray(self.master_epsilons)
         return d
+
+
+def switched_lj_kcal(
+    positions: Array,
+    type_idx: Array,
+    mol_id: Array,
+    master_sigmas: Array,
+    master_epsilons: Array,
+    *,
+    sigma_scale: Array | None,
+    epsilon_scale: Array | None,
+    include_lj: bool,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    ml_switch_width: float,
+    complementary_handoff: bool,
+) -> Array:
+    """COM-switched intermolecular LJ (kcal/mol); zero when ``include_lj`` is off.
+
+    Used beside untapered Ewald/PME Coulomb so the lattice sum is not
+    double-counted with MIC pair Coulomb from :func:`cgenff_mm_energy`.
+    """
+    sig_eff, eps_eff = apply_mm_lj_scales(
+        master_sigmas,
+        master_epsilons,
+        sigma_scale,
+        epsilon_scale,
+        include_lj=include_lj,
+    )
+    e_lj = cgenff_lj_energy(positions, type_idx, mol_id, sig_eff, eps_eff)
+    coms = monomer_centroids(positions, mol_id, n_monomers=2)
+    d_com = coms[1] - coms[0]
+    r_com = jnp.sqrt(jnp.maximum(jnp.sum(d_com * d_com), 1e-20))
+    scale = mm_switch_scale(
+        r_com,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        ml_switch_width=ml_switch_width,
+        complementary_handoff=complementary_handoff,
+    )
+    is_dimer = jnp.any(mol_id == 1)
+    return jnp.where(is_dimer, scale * e_lj, 0.0)
 
 
 def ml_scale_from_positions(
@@ -255,6 +347,8 @@ def hybrid_forward(
     pme_accuracy: float = 1e-6,
     pme_real_space_cutoff: float | None = None,
     ewald_include_self: bool = True,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
 ) -> dict:
     """Model forward assembled into the hybrid ML/MM total the calculator uses.
 
@@ -369,11 +463,12 @@ def hybrid_forward(
             # UNITS: MM helpers return kcal/mol; training targets are eV. Convert
             # at this boundary (same as mmml_calculator). Pinned by
             # tests/unit/test_hybrid_mm_units.py.
+            #
+            # Ewald / nvalchemiops_pme (#139):
+            #   E_MM = E_Coulomb_LR (untapered full-box) + λ_MM * E_LJ
+            # Do not call cgenff_mm_energy here — that would add MIC Coulomb.
             if lr_solver == "nvalchemiops_pme":
-                # Full-box many-to-many PME (no exclusions / no intra subtract):
-                # same operator as fast MD periodic_external nvalchemiops.
-                # Fixed CGenFF charges; LJ omitted for now.
-                e = KCAL_MOL_TO_EV * hybrid_nvalchemiops_pme_coulomb_energy(
+                e_coul = hybrid_nvalchemiops_pme_coulomb_energy(
                     x,
                     m,
                     q,
@@ -385,12 +480,23 @@ def hybrid_forward(
                     ml_switch_width=ml_switch_width,
                     complementary_handoff=complementary_handoff,
                 )
+                e_lj = switched_lj_kcal(
+                    x,
+                    t,
+                    m,
+                    master_sigmas,
+                    master_epsilons,
+                    sigma_scale=sigma_scale,
+                    epsilon_scale=epsilon_scale,
+                    include_lj=include_lj,
+                    mm_switch_on=mm_switch_on,
+                    mm_switch_width=mm_switch_width,
+                    ml_switch_width=ml_switch_width,
+                    complementary_handoff=complementary_handoff,
+                )
+                e = KCAL_MOL_TO_EV * (e_coul + e_lj)
             elif lr_solver == "ewald":
-                # Same full-box, no-exclusion contract as nvalchemiops_pme, but
-                # pure JAX (jit-native Ewald, ewald_native.py) -- no external
-                # PME library / no CUDA requirement. Useful wherever
-                # nvalchemiops isn't installed (e.g. CPU-only clusters).
-                e = KCAL_MOL_TO_EV * hybrid_ewald_coulomb_energy(
+                e_coul = hybrid_ewald_coulomb_energy(
                     x,
                     m,
                     q,
@@ -403,6 +509,21 @@ def hybrid_forward(
                     complementary_handoff=complementary_handoff,
                     include_self_energy=bool(ewald_include_self),
                 )
+                e_lj = switched_lj_kcal(
+                    x,
+                    t,
+                    m,
+                    master_sigmas,
+                    master_epsilons,
+                    sigma_scale=sigma_scale,
+                    epsilon_scale=epsilon_scale,
+                    include_lj=include_lj,
+                    mm_switch_on=mm_switch_on,
+                    mm_switch_width=mm_switch_width,
+                    ml_switch_width=ml_switch_width,
+                    complementary_handoff=complementary_handoff,
+                )
+                e = KCAL_MOL_TO_EV * (e_coul + e_lj)
             else:
                 sig_eff, eps_eff = apply_mm_lj_scales(
                     master_sigmas,
@@ -422,6 +543,8 @@ def hybrid_forward(
                     mm_switch_width=mm_switch_width,
                     ml_switch_width=ml_switch_width,
                     complementary_handoff=complementary_handoff,
+                    hybrid_hamiltonian=hybrid_hamiltonian,
+                    shared_cutoff=shared_cutoff,
                 )
             if short_range_wall:
                 # Already eV. NOT scaled by the MM taper: the taper is exactly
@@ -431,17 +554,25 @@ def hybrid_forward(
                 e = e + inter_monomer_wall_energy(x, m, r_on=wall_r_on, k=wall_k)
             return e
 
-        s, ds_dR = jax.value_and_grad(_scale)(p)
+        if hybrid_hamiltonian == "shared_cutoff":
+            s = jnp.asarray(1.0, dtype=p.dtype)
+            ds_dR = jnp.zeros_like(p)
+        else:
+            s, ds_dR = jax.value_and_grad(_scale)(p)
         e_mm, demm_dR = jax.value_and_grad(_emm)(p)
 
         e_mono = ea + eb
-        energy = (1.0 - s) * e_mono + s * eab + e_mm
-        forces = (
-            (1.0 - s) * (fa + fb)
-            + s * fab
-            + (e_mono - eab) * ds_dR
-            - demm_dR
-        )
+        if hybrid_hamiltonian == "shared_cutoff":
+            energy = eab + e_mm
+            forces = fab - demm_dR
+        else:
+            energy = (1.0 - s) * e_mono + s * eab + e_mm
+            forces = (
+                (1.0 - s) * (fa + fb)
+                + s * fab
+                + (e_mono - eab) * ds_dR
+                - demm_dR
+            )
         forces = jnp.where((m >= 0)[:, None], forces, 0.0)
         return energy, forces, s, e_mm
 
@@ -458,9 +589,17 @@ def hybrid_forward(
         f_b,
     )
 
+    # Interaction energy relative to separated monomers:
+    #   E_int = E_total - E_A - E_B = s*(E_AB - E_A - E_B) + E_MM
+    # (handoff). Soft-well aux loss targets this, not the absolute total.
+    e_int = energy - e_a - e_b
+
     out = dict(out_ab)
     out["energy"] = energy.reshape(out_ab["energy"].shape)
     out["forces"] = forces.reshape(out_ab["forces"].shape)
     out["ml_scale"] = scale
     out["e_mm"] = e_mm
+    out["e_int"] = e_int.reshape(out_ab["energy"].shape)
+    out["e_a"] = e_a.reshape(out_ab["energy"].shape)
+    out["e_b"] = e_b.reshape(out_ab["energy"].shape)
     return out

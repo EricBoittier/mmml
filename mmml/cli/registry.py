@@ -147,9 +147,19 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         parser_module="mmml.models.kernnn.evaluate",
     ),
     CommandSpec("active-learning", "mmml.cli.misc.active_learning", "Sample structures for re-labeling"),
+    CommandSpec(
+        "pes-design",
+        "mmml.cli.misc.pes_design",
+        "Bayesian physical/diverse PES subset design + validation plots",
+    ),
     CommandSpec("kernel-fit", "mmml.cli.misc.kernel_fit", "Kernel fitting utilities"),
     CommandSpec("interpolate-xyz", "mmml.cli.misc.interpolate_xyz", "Interpolate XYZ via Z-matrix → NPZ"),
     CommandSpec("unwrap-traj", "mmml.cli.misc.unwrap_traj", "Unwrap periodic trajectories"),
+    CommandSpec(
+        "analyze-liquid",
+        "mmml.cli.misc.analyze_liquid",
+        "Neat-liquid MD analysis (density, RDF, MSD, plots)",
+    ),
     CommandSpec(
         "sample-diverse-xyz",
         "mmml.generate.sample",

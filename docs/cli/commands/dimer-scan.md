@@ -79,6 +79,9 @@ Diagnostics & safety:
   --allow-partial
 ```
 
+## Visual examples
+
+![Dimer force profiles across cutoff policies](../../images/mlpot-settings/dcm_dimer_forces_cutoffs.png)
 
 ## Related docs
 

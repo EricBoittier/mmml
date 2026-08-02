@@ -122,6 +122,9 @@ Other options:
                         --rot-augment)
 ```
 
+## Visual examples
+
+![Electrostatic field represented by learned multipoles](../../plot-style-gallery-assets/chart_multipole_field_learned.png)
 
 
 ---

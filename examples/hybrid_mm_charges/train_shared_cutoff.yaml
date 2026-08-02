@@ -1,0 +1,28 @@
+# Opt-in additive shared-cutoff Hamiltonian demo.
+# Existing hybrid training remains `hybrid_hamiltonian: handoff` by default.
+data: /path/to/train_cgenff.npz
+valid_data: /path/to/valid_cgenff.npz
+ckpt_dir: ./ckpts/hybrid_mm_shared_cutoff
+tag: hybrid_mm_shared_cutoff
+
+hybrid_mm: true
+hybrid_hamiltonian: shared_cutoff
+shared_cutoff: 6.0
+mm_charge_mode: fixed
+learn_mm_lj_scales: false
+mm_include_lj: true
+lr_solver: mic
+
+charges: false
+batch_size: 32
+num_epochs: 200
+learning_rate: 0.001
+seed: 42
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 0.0
+charges_weight: 0.0
+objective: valid_loss
+best: true
+cutoff: 6.0
+

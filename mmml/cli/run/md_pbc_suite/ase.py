@@ -112,9 +112,19 @@ reset_block_no_internal()
 
 
 def _has_resolved_geometry(coords: np.ndarray, min_span: float = 1.0e-4) -> bool:
-    """Return True if a residue has more than origin/identical coordinates."""
+    """Return True if a residue has more than origin/identical coordinates.
+
+    The span test catches an unresolved IC table, which collapses every atom of
+    a polyatomic residue onto the same point. A **monoatomic** residue has zero
+    span by definition -- there is no internal geometry to resolve -- so the
+    same test would reject a perfectly good single point and make every
+    single-atom residue unbuildable (AR1/KR1/XE1, and the monoatomic ions
+    CLA/POT/SOD/LIT). For one atom, finiteness is the whole check.
+    """
     if coords.size == 0 or not np.all(np.isfinite(coords)):
         return False
+    if coords.shape[0] == 1:
+        return True
     return bool(np.max(np.ptp(coords, axis=0)) > min_span)
 
 
@@ -628,6 +638,20 @@ def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) ->
 
     box_json = Path(crd_path).expanduser().resolve().parent / "box.json"
     if not box_json.is_file():
+        # Allow an explicit CLI/YAML --box-size when mini/handoff CRDs lack box.json.
+        prev = getattr(args, "box_size", None)
+        if prev is not None and float(prev) > 0.0:
+            side_f = float(prev)
+            args.box_auto = None
+            args.target_density_g_cm3 = None
+            args.bulk_density_fraction = None
+            if not getattr(args, "quiet", False):
+                print(
+                    f"Certified box: L={side_f:.3f} Å from --box-size "
+                    f"(no sibling box.json at {box_json})",
+                    flush=True,
+                )
+            return side_f
         raise FileNotFoundError(
             f"Certified --from-crd requires sibling box.json next to {crd_path} "
             f"(expected {box_json}). Pass an explicit --box-size matching the "
@@ -1060,6 +1084,12 @@ def _factory_mmml(
     mm_charge_correction: bool = False,
     mm_latent_charge_template: str | Path | None = None,
     backprop: bool = False,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
+    ml_potential_mode: str | None = None,
+    jax_mm_spoof_psf: str | Path | None = None,
+    bonded_intra_damp_onset: float | None = None,
+    bonded_intra_damp_cutoff: float = 15.0,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1116,12 +1146,22 @@ def _factory_mmml(
         mm_charge_mode=mm_charge_mode,
         mm_charge_correction=mm_charge_correction,
         mm_latent_charge_template=mm_latent_charge_template,
+        ml_potential_mode=ml_potential_mode,
+        jax_mm_spoof_psf=jax_mm_spoof_psf,
+        bonded_intra_damp_onset_kcal=bonded_intra_damp_onset,
+        bonded_intra_damp_cutoff_kcal=(
+            15.0 if bonded_intra_damp_cutoff is None else float(bonded_intra_damp_cutoff)
+        ),
+        hybrid_hamiltonian=hybrid_hamiltonian,
+        shared_cutoff=shared_cutoff,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(
         ml_switch_width=ml_cut,
         mm_switch_on=mm_sw,
         mm_switch_width=mm_cut,
+        hybrid_hamiltonian=hybrid_hamiltonian,
+        shared_cutoff=shared_cutoff,
     )
     calc_result = factory(
         atomic_numbers=z,
@@ -1648,6 +1688,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    # md_system forwards both of these to every backend unconditionally, so a
+    # parser that does not know them turns `mmml md-system` into argparse
+    # exit 2 in the subprocess. Kept name-for-name with `run_sim`.
+    parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to model cutoff.",
+    )
     parser.add_argument(
         "--include-mm",
         "--do-mm",
@@ -2414,6 +2469,8 @@ def main(argv: list[str] | None = None) -> int:
             mm_charge_mode=getattr(args, "mm_charge_mode", None),
             mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
             mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
+            hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+            shared_cutoff=getattr(args, "shared_cutoff", None),
         )
         atoms.calc = calc
         _save_cutoff_plot(

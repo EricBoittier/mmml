@@ -16,6 +16,7 @@ except ModuleNotFoundError:  # pragma: no cover
     optax = None  # type: ignore[assignment]
     otu = None  # type: ignore[assignment]
 
+from mmml.models.mm_lj_scales import clip_mm_lj_scale_params
 from mmml.models.physnetjax.physnetjax.training.loss import (
     mean_absolute_error,
     mean_squared_loss,
@@ -136,8 +137,18 @@ else:
 
         teacher_output = None
         if doDistill and teacher_params is not None:
+            # Must use the same hybrid assembly as the student. Omitting
+            # hybrid_mm made the teacher a pure-ML total while the student
+            # trained hybrid E_int — distillation then fought the soft-well
+            # lever instead of regularising it.
             teacher_output = jax.lax.stop_gradient(
-                _forward(model_apply, teacher_params, batch, batch_size)
+                _forward(
+                    model_apply,
+                    teacher_params,
+                    batch,
+                    batch_size,
+                    hybrid_mm=hybrid_mm,
+                )
             )
 
         if doCharges:
@@ -234,6 +245,15 @@ else:
 
         updates = otu.tree_scalar_mul(transform_state.scale, updates)
         params = optax.apply_updates(params, updates)
+        # Learnable LJ scales are physical multipliers, not free weights: left
+        # unbounded they drift until sqrt(eps_i * eps_j) sees a negative product
+        # and the run NaNs. No-op when the leaves are absent.
+        params = clip_mm_lj_scale_params(
+            params,
+            sigma_bounds=getattr(hybrid_mm, "mm_lj_sigma_scale_bounds", (0.95, 1.05)),
+            epsilon_bounds=getattr(hybrid_mm, "mm_lj_epsilon_scale_bounds", (0.25, 4.0)),
+            trainable_mask=getattr(hybrid_mm, "mm_lj_trainable_mask", None),
+        )
 
         energy_mae = mean_absolute_error(
             energy,

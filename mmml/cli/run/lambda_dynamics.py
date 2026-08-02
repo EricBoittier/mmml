@@ -207,6 +207,10 @@ class LambdaDynamicsConfig:
     packmol_center: tuple[float, float, float] | None = None
     packmol_tolerance: float = 2.0
     skip_jit_warmup: bool = False
+    # MM neighbor refresh cadence in MD steps for --backend jaxmd. None/0 uses
+    # the ensemble default in mmml.md.nl_cadence (NVT 10, NVE 5). This also sets
+    # the compiled block size, so raising it needs a matching Verlet skin.
+    jax_md_update_interval: int | None = None
     resume: bool = False
     repo_root: Path | None = None
 

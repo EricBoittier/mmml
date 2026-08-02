@@ -165,7 +165,26 @@ def finalize_pycharmm_plan_rows(
     return plan
 
 
-def cubic_box_side_from_cell(cell: Any) -> float | None:
+# How far the edges of a cell may differ, relative to their mean, before
+# collapsing it to a single cubic side is a lie rather than a rounding error.
+# Matches the tolerance ``pbc_env._is_cubic_box_sides`` uses on the CHARMM side.
+CUBIC_CELL_REL_TOLERANCE = 1e-3
+
+
+def cubic_box_side_from_cell(cell: Any, *, warn_non_cubic: bool = True) -> float | None:
+    """Collapse a cell to one cubic side length (Å), averaging the three edges.
+
+    Every periodic path downstream of this -- CHARMM's ``crystal.define_cubic``,
+    ``atoms.set_cell([L, L, L])``, the PME box length -- takes a single side, so
+    a genuinely non-cubic cell cannot survive the trip. It used to be averaged
+    in silence, which turns e.g. a 9.17 x 7.53 x 21.25 Å crystal cell into a
+    12.65 Å cube with the wrong density and no indication anything happened.
+
+    The averaging is kept, because existing cubic workflows depend on this
+    tolerating float noise, but an unequal cell now says so. Pass
+    ``warn_non_cubic=False`` from callers that only want a length scale (a
+    neighbour-list capacity estimate, a log line) rather than a simulation box.
+    """
     if cell is None:
         return None
     import numpy as np
@@ -173,8 +192,23 @@ def cubic_box_side_from_cell(cell: Any) -> float | None:
     arr = np.asarray(cell, dtype=float)
     if arr.shape == (3, 3):
         lengths = [float(np.linalg.norm(arr[k])) for k in range(3)]
-        if all(l > 0 for l in lengths):
-            return sum(lengths) / len(lengths)
+        if all(length > 0 for length in lengths):
+            mean = sum(lengths) / len(lengths)
+            if warn_non_cubic and max(abs(length - mean) for length in lengths) > (
+                CUBIC_CELL_REL_TOLERANCE * mean
+            ):
+                import warnings
+
+                warnings.warn(
+                    f"Non-cubic cell {lengths[0]:.4f} x {lengths[1]:.4f} x "
+                    f"{lengths[2]:.4f} Å collapsed to a {mean:.4f} Å cube: mmml's "
+                    "periodic paths are cubic-only, so the simulated box is not "
+                    "the one you supplied. For a static periodic energy on the "
+                    "true cell see mmml.analysis.lattice_energy.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            return mean
     if arr.size >= 1:
         return float(arr.reshape(-1)[0])
     return None

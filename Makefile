@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci coverage-gate check-prs-landed
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -40,6 +40,7 @@ help:
 	@echo "  make test-all          - Run full pytest suite (needs mpirun for charmm_mpi live tests)"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
+	@echo "  make coverage-gate     - Run tests and enforce CI's coverage floor"
 	@echo "  make test-ci           - Local stand-in for CI's build job (hides libcharmm)"
 	@echo "  make lint-dupes        - Duplicate defs / conflict markers (bad-merge detector)"
 	@echo "  make merge-check       - Pre-merge gate: lint-dupes + lint + imports + docs"
@@ -206,6 +207,29 @@ test-quick:
 test-coverage:
 	uv run pytest --cov=mmml --cov-report=html --cov-report=term tests/
 
+# The same coverage floor CI enforces, runnable before you push. It is a floor,
+# not a target: ~35k of the uncovered statements need live CHARMM, plotting, or
+# PySCF/torch/GPU, so the CI-reachable ceiling is around 70%. This only catches
+# the number sliding backwards. Measured 2026-08-01: 45.81%, 55706/121608
+# lines. Run: make coverage-gate
+coverage-gate:
+	uv run pytest tests/ -q -p no:cacheprovider --cov=mmml --cov-report=xml || true
+	uv run python scripts/ci/check_coverage_floor.py coverage.xml \
+	  --label "local coverage" --min-percent 42 --min-covered-lines 52000
+
+# The honest local verdict on a test run. pytest's exit code cannot be trusted
+# here for two reasons: it is 0 when every selected test skips, and it is 0 once
+# libcharmm has been loaded (CHARMM's Fortran STOP replaces the exit status at
+# teardown, and can kill the session mid-run). The JUnit report is the only
+# record that survives both, so `|| true` below is deliberate -- the gate that
+# follows is what decides pass/fail.
+# Run: make test-shape
+test-shape:
+	mkdir -p .ci-reports
+	uv run pytest tests/ -q -p no:cacheprovider --junitxml=.ci-reports/junit-local.xml || true
+	uv run python scripts/ci/check_test_report.py .ci-reports/junit-local.xml \
+	  --label "local suite" --min-passed 3000 --max-skipped-frac 0.25
+
 test-data:
 	@if [ -z "$(MMML_DATA)" ] || [ -z "$(MMML_CKPT)" ]; then \
 		echo "Error: MMML_DATA and MMML_CKPT must be set"; \
@@ -246,9 +270,15 @@ lint-dupes:
 # they run instead and abort the session inside test_charmm_mpi.py on a native
 # CHARMM exit, truncating the run long before the real failures. Hiding the
 # library reproduces CI's skip behaviour and gives an honest signal.
+#
+# MMML_DISABLE_CHARMM is the *only* reliable way to do that: pointing
+# CHARMM_LIB_DIR at /nonexistent used to leave `resolve_charmm_paths()` still
+# returning the real setup/charmm tree (a lib-less explicit override is treated
+# as stale and discarded), so this target only half-hid the build and did not
+# reproduce CI. See charmm_paths.charmm_disabled.
 # Run: make test-ci
 test-ci:
-	CHARMM_LIB_DIR=/nonexistent CHARMM_HOME=/nonexistent \
+	MMML_DISABLE_CHARMM=1 \
 	  uv run pytest tests/ -q -p no:cacheprovider
 
 # Pre-merge gate: everything CI checks first, in the order it fails.
@@ -391,6 +421,15 @@ lfs-remove-hooks:
 # Install the repo's git hooks (currently a pre-commit that auto-regenerates the
 # CI-checked generated docs so commits never carry stale copies).
 # Run: make install-hooks
+# Find merged PRs whose content never reached main. GitHub marks a stacked PR
+# "MERGED" when it merges into its own base, which is not the same as landing on
+# main -- #167 merged into a branch that had itself merged 16 seconds earlier, so
+# its files never arrived while the PR looked done.
+# Run: make check-prs-landed
+check-prs-landed:
+	git fetch origin --quiet
+	uv run python scripts/ci/check_merged_prs_landed.py --limit 100
+
 install-hooks:
 	@hooks_dir="$$(git rev-parse --git-path hooks)"; \
 	mkdir -p "$$hooks_dir"; \

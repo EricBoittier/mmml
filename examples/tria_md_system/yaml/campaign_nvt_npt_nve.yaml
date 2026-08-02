@@ -4,9 +4,8 @@
 #   uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
 #   # writes model.psf / model.crd / model.pdb + box.json
 #
-# Smoke campaign (jaxmd-unified). Each leg cold-starts from the same box —
-# ``--continue-from`` / campaign handoff is not yet supported on jaxmd-unified,
-# so this is NVT / NPT / NVE *setups*, not a chained thermostat protocol.
+# Smoke campaign (jaxmd-unified). Legs chain via ``depends_on`` (geometry
+# handoff: positions + box; velocities rethermalized; FIRE skipped after NVT).
 #
 # NPT pass on this short smoke: finite E + finite V + Vfinal/V0 in [0.5, 2]
 # (see driver volume gate). Not a density-equilibration criterion.
@@ -51,8 +50,9 @@ runs:
     output_dir: artifacts/tria_md_system/campaign/nvt
 
   npt:
-    description: "Short PBC NPT smoke (mechanical embedding)"
+    description: "Short PBC NPT smoke from NVT handoff"
     setup: pbc_npt
+    depends_on: nvt
     ps: 0.05
     # Soft Nose–Hoover piston (jax-md metal time). The aaa 28 Å / 10-water box
     # sits near P_inst ~ -10^3 bar; default tau=1000*dt compresses into NaN.
@@ -61,7 +61,8 @@ runs:
     output_dir: artifacts/tria_md_system/campaign/npt
 
   nve:
-    description: "Short PBC NVE smoke (mechanical embedding)"
+    description: "Short PBC NVE smoke from NPT handoff"
     setup: pbc_nve
+    depends_on: npt
     ps: 0.05
     output_dir: artifacts/tria_md_system/campaign/nve

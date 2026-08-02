@@ -80,7 +80,14 @@ Other options:
                         --rot-augment)
 ```
 
+## Visual examples
 
+![Learned electrostatic-potential field](../../plot-style-gallery-assets/chart_multipole_field_learned.png)
+
+## Related docs
+
+- [DCMNet calculators and ESP](../../dcmnet_calculators.md)
+- [Multipole visualization gallery](../../plot-style-gallery.md#fields-as-parametric-surfaces)
 
 ---
 

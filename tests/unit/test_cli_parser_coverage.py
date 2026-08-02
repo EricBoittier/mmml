@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from mmml.cli import __main__ as cli_main
 from mmml.cli.configure_presets import PRESET_BY_KEY, apply_preset
 from mmml.cli.parser_utils import get_subcommand_parser, parser_available, parsers_with_flags
@@ -74,3 +76,23 @@ def test_configure_preset_md_benchmark_tree(tmp_path: Path):
 
 def test_parsers_with_flags_count():
     assert len(parsers_with_flags()) >= 30
+
+
+def test_hard_exit_success_uses_system_exit():
+    with pytest.raises(SystemExit) as exc:
+        cli_main._hard_exit(0)
+    assert exc.value.code == 0
+
+
+def test_hard_exit_failure_uses_os_exit(monkeypatch):
+    calls: list[int] = []
+
+    def _fake_exit(code: int) -> None:
+        calls.append(int(code))
+        raise SystemExit(code)
+
+    monkeypatch.setattr(cli_main.os, "_exit", _fake_exit)
+    with pytest.raises(SystemExit) as exc:
+        cli_main._hard_exit(2)
+    assert calls == [2]
+    assert exc.value.code == 2

@@ -389,6 +389,26 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--psf-angle-restraints",
+        action="store_true",
+        help=(
+            "jaxmd: add scaled CGenFF harmonic angle (+ Urey–Bradley) forces from "
+            "--from-psf so ML monomers stay tetrahedral (no classical SHAKE on this path)."
+        ),
+    )
+    parser.add_argument(
+        "--psf-angle-restraint-scale",
+        type=float,
+        default=1.0,
+        metavar="W",
+        help="Scale for --psf-angle-restraints (default: 1.0).",
+    )
+    parser.add_argument(
+        "--psf-angle-restraints-no-urey",
+        action="store_true",
+        help="With --psf-angle-restraints: omit Urey–Bradley 1–3 terms (angles only).",
+    )
+    parser.add_argument(
         "--min-com-restraint-distance",
         type=float,
         default=None,
@@ -762,6 +782,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=50.0,
         help="pycharmm: abort if post-min GRMS exceeds this (kcal/mol/Å)",
+    )
+    parser.add_argument(
+        "--max-fmax-before-dyn-ev-A",
+        type=float,
+        default=None,
+        metavar="EV_A",
+        dest="max_fmax_before_dyn_ev_A",
+        help=(
+            "pycharmm: abort if max atomic |F| exceeds this (eV/Å) before dynamics; "
+            "default 2.0. Raise only for controlled smokes."
+        ),
     )
     parser.add_argument(
         "--test-first",
@@ -1437,6 +1468,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--ml-cutoff", type=float, default=1.0, help="lambda_ti: ML cutoff (Å).")
     parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to checkpoint model cutoff.",
+    )
+    parser.add_argument(
         "--ml-switch-width",
         "--ml-cutoff-distance",
         dest="ml_switch_width",
@@ -1679,7 +1722,47 @@ def build_parser() -> argparse.ArgumentParser:
         "--jax-mm-spoof-psf",
         type=Path,
         default=None,
-        help="Optional cluster PSF for --jax-mm-spoof bonded parameters.",
+        help=(
+            "Optional cluster PSF for --jax-mm-spoof bonded parameters. Also "
+            "supplies the CGenFF bonded terms for --ml-potential-mode "
+            "bonded_intra, where it is REQUIRED."
+        ),
+    )
+    parser.add_argument(
+        "--ml-potential-mode",
+        type=str,
+        default=None,
+        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra"),
+        help=(
+            "Which potential supplies the ML terms. 'bonded_intra' keeps PhysNet "
+            "for the dimer interaction but hands the internal monomer energy to "
+            "CGenFF bonded (requires --jax-mm-spoof-psf). Use it when the model "
+            "was trained on rigid monomers and carries no restoring force for "
+            "intramolecular coordinates. See docs/hybrid-bonded-intra.md."
+        ),
+    )
+    parser.add_argument(
+        "--bonded-intra-damp-onset",
+        type=float,
+        default=None,
+        help=(
+            "Enable the bonded_intra damping guard: taper the ML dimer "
+            "interaction to zero as either monomer's CGenFF bonded energy rises "
+            "from this value (kcal/mol) to --bonded-intra-damp-cutoff. The "
+            "interaction term is a difference of two model totals and is "
+            "extrapolation noise off-manifold. Off unless set; 5.0 is the "
+            "measured onset above ordinary thermal distortion."
+        ),
+    )
+    parser.add_argument(
+        "--bonded-intra-damp-cutoff",
+        type=float,
+        default=15.0,
+        help=(
+            "Bonded energy (kcal/mol) at which the ML dimer interaction is fully "
+            "damped. Ignored unless --bonded-intra-damp-onset is set. Default "
+            "15.0 is where the measured noise well sits (O-H = 0.771 A)."
+        ),
     )
     parser.add_argument(
         "--residue",
@@ -1856,11 +1939,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--jax-md-update-interval",
         type=int,
-        default=1,
+        default=0,
         help=(
-            "JAX-MD/ASE PBC MM neighbor-list refresh interval in MD steps or calculator "
-            "calls (default: 1, conservative). Larger values reduce host/device sync "
-            "when pair-list stability has been validated."
+            "JAX-MD/ASE PBC MM neighbor-list refresh interval in MD steps "
+            "(0 = ensemble auto: NVT=10, NpT=5, NVE=5; 1 = every step / safest). "
+            "Larger values reduce host/device sync on stable runs."
         ),
     )
     parser.add_argument(
@@ -1868,6 +1951,45 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.25,
         help="JAX-MD/ASE PBC MM neighbor-list skin distance in Å (default: 0.25).",
+    )
+    parser.add_argument(
+        "--mm-nl-backend",
+        choices=["auto", "vesin", "cell_list", "jax_md"],
+        default=None,
+        help=(
+            "MM neighbor-list builder for jaxmd "
+            "(default: MMML_MM_NL_BACKEND or auto→vesin)."
+        ),
+    )
+    parser.add_argument(
+        "--mm-nl-device",
+        choices=["cpu", "gpu"],
+        default=None,
+        help=(
+            "MM Vesin rebuild device for jaxmd "
+            "(default: MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy failure)."
+        ),
+    )
+    parser.add_argument(
+        "--nhc-tau",
+        type=float,
+        default=None,
+        metavar="MULT",
+        help=(
+            "jaxmd: Nose–Hoover thermostat coupling multiplier "
+            "(tau = nhc_tau * dt; default 100 in the jaxmd suite)."
+        ),
+    )
+    parser.add_argument(
+        "--nhc-barostat-tau",
+        type=float,
+        default=None,
+        metavar="MULT",
+        help=(
+            "jaxmd NpT: Nose–Hoover barostat coupling multiplier "
+            "(tau = nhc_barostat_tau * dt; default 10000 in the jaxmd suite). "
+            "Larger = softer piston (useful for under-dense liquid boxes)."
+        ),
     )
     parser.add_argument(
         "--steps-per-recording",
@@ -2063,6 +2185,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI with optional ``--config`` YAML (CLI overrides file)."""
     from mmml.cli.run.md_config import (
         apply_mapping_to_namespace,
+        collect_explicit_cli_dests,
         config_is_campaign,
         CONFIG_PASSTHROUGH_PREFIXES,
         load_yaml_config,
@@ -2073,6 +2196,8 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--config", type=str, default=None)
     pre_args, remaining = pre.parse_known_args(argv)
+    parser = build_parser()
+    cli_explicit = collect_explicit_cli_dests(remaining, parser)
     defaults = vars(parse_args([]))
     if pre_args.config:
         cfg = load_yaml_config(pre_args.config)
@@ -2082,7 +2207,14 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
             from mmml.cli.run.md_campaign import strip_campaign_metadata_keys
 
             merged.update(strip_campaign_metadata_keys(defaults_block))
-        if config_is_campaign(cfg) and merged.get("checkpoint") is not None:
+        # A CLI --checkpoint replaces the config value below, so resolving the
+        # config one first would reject a shared campaign YAML whose placeholder
+        # checkpoint this invocation never uses.
+        if (
+            config_is_campaign(cfg)
+            and merged.get("checkpoint") is not None
+            and "checkpoint" not in cli_explicit
+        ):
             from mmml.cli.run.md_config import resolve_campaign_checkpoint_value
 
             merged["checkpoint"] = resolve_campaign_checkpoint_value(merged["checkpoint"])
@@ -2099,16 +2231,14 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
         defaults.update(vars(tmp))
         defaults["config"] = pre_args.config
-    parser = build_parser()
     parser.set_defaults(**defaults)
     args = parser.parse_args(remaining)
     from mmml.cli.run.md_config import (
-        collect_explicit_cli_dests,
         normalize_hybrid_assembly_flags,
         normalize_resume_flags,
     )
 
-    args._cli_explicit = collect_explicit_cli_dests(remaining, parser)
+    args._cli_explicit = cli_explicit
     normalize_resume_flags(args)
     normalize_hybrid_assembly_flags(args)
     # Resolve interaction_policy relative to the --config file (not CWD).
@@ -2340,6 +2470,10 @@ def _append_suite_mmml_handoff_args(
     )
     ml_width = str(getattr(args, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH))
     cmd.extend(
+        ["--hybrid-hamiltonian", str(getattr(args, "hybrid_hamiltonian", "handoff"))]
+    )
+    _append_optional(cmd, "--shared-cutoff", getattr(args, "shared_cutoff", None))
+    cmd.extend(
         ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
     )
     if backend == "ase":
@@ -2391,17 +2525,29 @@ def _append_suite_mmml_handoff_args(
                 str(getattr(args, "jaxmd_fire_skip_max_f_eVA", 0.10)),
             ]
         )
+        _append_optional(cmd, "--nhc-tau", getattr(args, "nhc_tau", None))
+        _append_optional(
+            cmd, "--nhc-barostat-tau", getattr(args, "nhc_barostat_tau", None)
+        )
         _append_boolean_optional_flag(
             cmd,
             "--calculator-pre-minimize",
             bool(getattr(args, "calculator_pre_minimize", True)),
         )
-    cmd.extend(
-        ["--jax-md-update-interval", str(getattr(args, "jax_md_update_interval", 1))]
-    )
+    _nl_interval = int(getattr(args, "jax_md_update_interval", 0) or 0)
+    if backend != "jaxmd" and _nl_interval <= 0:
+        # ASE path has no ensemble-auto yet; keep the conservative every-step default.
+        _nl_interval = 1
+    cmd.extend(["--jax-md-update-interval", str(_nl_interval)])
     cmd.extend(
         ["--jax-md-skin-distance", str(getattr(args, "jax_md_skin_distance", 0.25))]
     )
+    if getattr(args, "mm_nl_backend", None) is not None:
+        cmd.extend(["--mm-nl-backend", str(args.mm_nl_backend)])
+    if getattr(args, "mm_nl_device", None) is not None:
+        cmd.extend(["--mm-nl-device", str(args.mm_nl_device)])
+    # nhc-tau / nhc-barostat-tau already forwarded above for backend==jaxmd
+    # via _append_optional (do not duplicate here).
     if backend == "jaxmd":
         cmd.extend(
             [
@@ -3222,6 +3368,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
     )
     cmd.extend(
+        ["--hybrid-hamiltonian", str(getattr(args, "hybrid_hamiltonian", "handoff"))]
+    )
+    _append_optional(cmd, "--shared-cutoff", getattr(args, "shared_cutoff", None))
+    cmd.extend(
         [
             "--mm-switch-width",
             str(
@@ -3297,6 +3447,16 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if bool(getattr(args, "jax_mm_spoof", False)):
         cmd.append("--jax-mm-spoof")
     _append_optional(cmd, "--jax-mm-spoof-psf", getattr(args, "jax_mm_spoof_psf", None))
+    _append_optional(
+        cmd,
+        "--bonded-intra-damp-onset",
+        getattr(args, "bonded_intra_damp_onset", None),
+    )
+    _append_optional(
+        cmd,
+        "--bonded-intra-damp-cutoff",
+        getattr(args, "bonded_intra_damp_cutoff", None),
+    )
     _append_optional(
         cmd,
         "--min-com-restraint-distance",
@@ -3422,6 +3582,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--max-pairs", str(args.max_pairs)])
     if args.no_echeck:
         cmd.append("--no-echeck")
+    if getattr(args, "no_echeck_heat", False):
+        cmd.append("--no-echeck-heat")
     if getattr(args, "allow_incomplete_dynamics", False):
         cmd.append("--allow-incomplete-dynamics")
     if getattr(args, "skip_energy_show", False):
@@ -3448,6 +3610,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if getattr(args, "no_scale_max_grms", False):
         cmd.append("--no-scale-max-grms")
     cmd.extend(["--max-grms-before-dyn", str(args.max_grms_before_dyn)])
+    if getattr(args, "max_fmax_before_dyn_ev_A", None) is not None:
+        cmd.extend(
+            ["--max-fmax-before-dyn-ev-A", str(args.max_fmax_before_dyn_ev_A)]
+        )
     if getattr(args, "test_first", False):
         cmd.append("--test-first")
         cmd.extend(["--test-first-tol", str(args.test_first_tol)])
@@ -3768,6 +3934,16 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     if args.flat_bottom_radius is not None:
         cmd.extend(["--flat-bottom-k", str(args.flat_bottom_k)])
         cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
+    if getattr(args, "psf_angle_restraints", False):
+        cmd.append("--psf-angle-restraints")
+        cmd.extend(
+            [
+                "--psf-angle-restraint-scale",
+                str(getattr(args, "psf_angle_restraint_scale", 1.0)),
+            ]
+        )
+        if getattr(args, "psf_angle_restraints_no_urey", False):
+            cmd.append("--psf-angle-restraints-no-urey")
     _append_optional(
         cmd,
         "--min-com-restraint-distance",
