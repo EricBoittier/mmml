@@ -81,12 +81,69 @@ Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](https://github.com/EricBoitti
 
 | `static_pairs` | What happens | Use when |
 |---|---|---|
-| `true` (default) | The complete intermolecular list is built once and uploaded once. The switching functions cull by distance on the GPU, so no host rebuild happens and none of the per-block transfer cost is paid. Measured 8.3 → 24 steps/s on a 2625-atom box. | Solute in a few thousand solvent atoms |
-| `false` | `make_intermolecular_neighbor_fn` rebuilds a padded list on the host, with `nl_skin_A` of Verlet skin and a block size from `mmml.md.nl_cadence`. | Above ~10k atoms, where the O(N²) energy costs more than the rebuild saves |
+| `true` (default) | The complete intermolecular list is built once and uploaded once. The switching functions cull by distance on the GPU, so no host rebuild happens and none of the per-block transfer cost is paid. | Up to ~7 000 atoms |
+| `false` | `make_intermolecular_neighbor_fn` rebuilds a padded list on the host, with `nl_skin_A` of Verlet skin and a block size from `mmml.md.nl_cadence`. | Above ~7 000 atoms, where the O(N²) energy costs more than the rebuild saves |
 
-Correctness is the same either way: the switched force field makes distant pairs
-contribute exactly zero, so a complete list and a cutoff list give the same
-energy. Only the cost differs.
+**Correctness is identical**, which is the precondition for treating this as a
+pure performance choice. The switched force field makes pairs beyond `ctofnb`
+contribute exactly zero, so the complete list and the cutoff list evaluate to
+the same number. Measured across 300–15 000 atoms, complete list versus a list
+built at the production cutoff (12 Å = `ctofnb`):
+
+| | worst case over all sizes |
+|---|---|
+| \|ΔE\| | 2.5 × 10⁻¹² eV, on totals of order 200 eV |
+| max \|ΔF\| | 6.4 × 10⁻¹⁴ eV/Å |
+
+Reproduce with
+[`scripts/bench_static_vs_neighbor_pairs.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/bench_static_vs_neighbor_pairs.py)
+(CHARMM-free; TIP3P water at experimental density).
+
+##### Where the crossover is
+
+Per-step cost, energy + forces, with the host rebuild amortised over a 20-step
+block. A100 and a single CPU core; ratio > 1 means the static list is faster:
+
+| atoms | GPU static (ms) | GPU rebuilt (ms) | GPU ratio | CPU ratio |
+|---:|---:|---:|---:|---:|
+| 300 | 1.02 | 6.00 | **5.9×** | 3.4× |
+| 600 | 1.99 | 11.29 | **5.7×** | 3.2× |
+| 1 200 | 3.80 | 23.02 | **6.1×** | 2.5× |
+| 2 625 | 14.57 | 38.63 | **2.7×** | 1.0× |
+| 4 800 | 45.65 | 67.39 | **1.5×** | 0.40× |
+| 7 200 | 103.42 | 100.20 | 0.97× | 0.12× |
+| 10 500 | 224.07 | 145.78 | 0.65× | 0.05× |
+| 15 000 | 490.25 | 200.94 | 0.41× | — |
+
+Two effects drive the small-system win, and neither is subtle:
+
+- **Below about twice the cutoff, a neighbour list prunes nothing.** At 300
+  atoms the box is 14.4 Å against a 12 Å cutoff, and the list holds 44 548 of
+  the 44 550 possible intermolecular pairs. The rebuild is pure overhead.
+- **The rebuilt list is padded to a capacity estimate that is generous by
+  design.** At 300 atoms that is 434 400 slots for 44 548 live pairs, so the
+  padded list evaluates roughly ten times more pairs than the complete one.
+  Tightening `shell_capacity` headroom would move the crossover down; the
+  numbers above are for the capacity policy as it stands.
+
+The CPU crossover is much earlier (~2 600 atoms) because the O(N²) work has no
+parallelism to hide behind. Set `static_pairs: false` for large CPU runs.
+
+##### What the static list cannot get wrong
+
+Beyond speed, it removes two failure modes that the rebuilt path has:
+
+- **A list built below `ctofnb` is silently wrong.** Against the complete list
+  as reference, a 2 625-atom box gives −33 meV/atom at a 9 Å build cutoff,
+  +27 at 10 Å and −5 at 11 Å, reaching exact agreement only at 12 Å = `ctofnb`.
+  The static list has no cutoff to get wrong.
+- **A rebuilt list is only correct at the configuration it was built at.** After
+  1 Å RMS drift it is off by 3.2 meV/atom and 0.45 eV/Å in the worst force.
+  At the per-block drift a 20-step block actually produces this is negligible
+  (~0.1 Å → 6 × 10⁻³ eV/Å), but the margin is a function of the block size, and
+  a 10 ps equilibration block is what caused two failures in the Menshutkin
+  campaign — see [the campaign record](examples/menshutkin-campaign-record.md).
+  The static list cannot go stale.
 
 #### Pre-equilibration and window chaining
 

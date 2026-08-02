@@ -10,7 +10,50 @@ and versioning process.
 
 ## [Unreleased]
 
+### Changed
+
+- Hybrid umbrella sampling (`engine: hybrid_jaxmd`) keeps `static_pairs: true`
+  as its default after a measured comparison against the rebuilt neighbour
+  list, and the documented crossover is tightened from "~10k atoms" to the
+  measured **~7 000**. The two paths were competing answers to the same
+  bottleneck — one arrived with the electrical-embedding work, the other grew
+  on `main` as `nl_skin_A` + `mmml.md.nl_cadence` — so the default was decided
+  on data rather than on which landed last.
+
+  **Correctness is identical**, which is what makes this a pure performance
+  choice: pairs beyond `ctofnb` contribute exactly zero through the switching
+  function, so across 300–15 000 atoms the complete list and a list built at
+  the production cutoff agree to |ΔE| ≤ 2.5 × 10⁻¹² eV on totals of order
+  200 eV, and max |ΔF| ≤ 6.4 × 10⁻¹⁴ eV/Å.
+
+  Per-step energy + forces on an A100, host rebuild amortised over a 20-step
+  block: the static list is **5.9× / 6.1× / 2.7× / 1.5×** faster at 300 / 1 200
+  / 2 625 / 4 800 atoms, ties at ~7 200, and loses beyond (0.65× at 10 500,
+  0.41× at 15 000). The 2 625-atom point independently reproduces the 8.3 → 24
+  steps/s (2.9×) reported for that box to within 9 %. On CPU the crossover is
+  ~2 600 atoms, since the O(N²) work has no parallelism to hide behind — set
+  `static_pairs: false` for large CPU runs.
+
+  Two effects drive the small-system win: below roughly twice the cutoff a
+  neighbour list prunes nothing (at 300 atoms it holds 44 548 of 44 550
+  possible intermolecular pairs), and the rebuilt list is padded to a
+  deliberately generous capacity (434 400 slots for those 44 548 pairs), so it
+  evaluates about ten times more pairs than the complete list. Tightening
+  `shell_capacity` headroom would move the crossover down.
+
+  The static list also cannot be built below `ctofnb` (which costs −33 meV/atom
+  at a 9 Å build cutoff) and cannot go stale (1 Å RMS drift costs 3.2 meV/atom
+  and 0.45 eV/Å) — the failure mode behind two Menshutkin campaign losses.
+
+  Reproduce with `scripts/bench_static_vs_neighbor_pairs.py` (CHARMM-free).
+  See [`docs/umbrella.md`](docs/umbrella.md#pair-lists-static-or-rebuilt).
+
 ### Added
+
+- `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs
+  rebuilt neighbour list, on correctness (fixed-configuration parity, build
+  cutoff sensitivity, staleness under drift) and speed vs system size. Runs on
+  TIP3P water at experimental density with no CHARMM dependency.
 
 - Docs: student walkthrough for trainable hybrid MM LJ scales
   ([`docs/hybrid-mm-lj-scales.md`](docs/hybrid-mm-lj-scales.md)).
