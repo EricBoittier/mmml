@@ -455,6 +455,7 @@ def build_embedding_box(
 
     psf_path = out / "model.psf"
     crd_path = out / "model.crd"
+    pdb_path = out / "model.pdb"
     prev = os.getcwd()
     try:
         os.chdir(out)
@@ -462,6 +463,21 @@ def build_embedding_box(
         write.coor_card(crd_path.name)
     finally:
         os.chdir(prev)
+
+    # Sibling PDB for ``md-system --from-pdb`` / jaxmd-unified mechanical embedding.
+    # Use CHARMM ``coor_pdb`` so RESN is TRIA/TIP3 (ASE defaults everything to MOL).
+    try:
+        prev_pdb = os.getcwd()
+        try:
+            os.chdir(out)
+            write.coor_pdb(pdb_path.name)
+        finally:
+            os.chdir(prev_pdb)
+        if not pdb_path.is_file():
+            raise FileNotFoundError(pdb_path)
+    except Exception as exc:
+        print(f"WARN: could not write {pdb_path.name} for md-system from_pdb: {exc}", flush=True)
+        pdb_path = None
 
     bonded_report: dict[str, float] | None = None
     if write_bonded_report:
@@ -493,6 +509,7 @@ def build_embedding_box(
         ),
         "psf": str(psf_path.name),
         "crd": str(crd_path.name),
+        **({"pdb": str(pdb_path.name)} if pdb_path is not None else {}),
         "bonded_report": bonded_report,
     }
     box_json_path = out / "box.json"
@@ -537,6 +554,8 @@ def register_embedding_mlpot(
     ml_fq: bool = True,
     mlmm_ctonnb: float | None = None,
     mlmm_ctofnb: float | None = None,
+    use_pbc: bool = True,
+    cubic_box_side_A: float | None = None,
 ) -> Any:
     """Register partial MLpot on ``ml_seg_id`` using single-monomer PhysNet (``n_monomers=1``)."""
     from ase import Atoms
@@ -556,45 +575,29 @@ def register_embedding_mlpot(
         raise ValueError(f"ML segment {ml_seg_id!r} has no atoms")
 
     import pycharmm.coor as coor
-    import pycharmm.psf as psf
 
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    # ``psf.get_atype()`` is the atom *name* array (CAY, HY1, …), not CGenFF
+    # chemical types (CG331, HGA3). Map Z from PSF masses like the rest of MLpot;
+    # name→Z tables default unknown H names to carbon and blow Spooky/PhysNet to ~1e68.
     positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
-    atypes = psf.get_atype()
-    # Map CHARMM atom types to Z for ASE (fallback: C for unknown protein types)
-    _atype_z = {
-        "H": 1,
-        "HC": 1,
-        "HA": 1,
-        "HP": 1,
-        "HN": 1,
-        "CT": 6,
-        "CA": 6,
-        "C": 6,
-        "CB": 6,
-        "N": 7,
-        "NH1": 7,
-        "NH2": 7,
-        "NH3": 7,
-        "O": 8,
-        "OT": 8,
-        "OH1": 8,
-        "OG2D1": 8,
-        "NG2S1": 7,
-        "CG311": 6,
-        "CG2O1": 6,
-        "CG331": 6,
-        "HGA1": 1,
-        "HGA2": 1,
-        "HGA3": 1,
-        "HGP1": 1,
-        "OG2D1": 8,
-    }
-    z = np.array(
-        [_atype_z.get(str(atypes[i]).strip().upper(), 6) for i in ml_indices],
-        dtype=int,
-    )
-    r = positions[np.asarray(ml_indices, dtype=int)]
+    idx = np.asarray(ml_indices, dtype=int)
+    z = np.asarray(get_Z_from_psf(), dtype=int)[idx]
+    r = positions[idx]
     atoms = Atoms(numbers=z, positions=r)
+    n_h = int(np.sum(z == 1))
+    n_c = int(np.sum(z == 6))
+    print(
+        f"ML Z (mass-mapped): n={len(z)} H={n_h} C={n_c} "
+        f"Z=[{','.join(str(int(x)) for x in z[:8])}{'…' if len(z) > 8 else ''}]",
+        flush=True,
+    )
+    if n_h < len(z) // 3:
+        print(
+            "WARN: unusually few hydrogens in ML Z — check PSF masses / get_Z_from_psf",
+            flush=True,
+        )
 
     _, _, pyCModel = load_physnet_mlpot_bundle(
         Path(checkpoint),
@@ -609,6 +612,10 @@ def register_embedding_mlpot(
         mlmm_ctonnb=mlmm_ctonnb,
         mlmm_ctofnb=mlmm_ctofnb,
         use_mlmm_pair_lists=False,
+        use_pbc=bool(use_pbc),
+        cubic_box_side_A=(
+            float(cubic_box_side_A) if cubic_box_side_A is not None else None
+        ),
     )
     return register_mlpot_partial_mm(pyCModel, z.tolist(), config)
 
@@ -629,10 +636,13 @@ def run_embedding_phase(
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
+    import pycharmm.coor as coor
     import pycharmm.energy as energy
-    import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        apply_crd_file_to_charmm,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
@@ -652,7 +662,23 @@ def run_embedding_phase(
 
     prepare_charmm_for_trialanine_box_psf()
     read_psf_card_file(psf_path)
-    read.coor_card(str(crd_path))
+    # PyCHARMM ``read.coor_card`` is unreliable after PSF EXT (often leaves all
+    # coords at 0 → VDW ~1e68). Parse EXT CRD in Python and sync, same as
+    # ``load_minimized_coordinates`` / trialanine reload path.
+    apply_crd_file_to_charmm(crd_path)
+    positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    if positions.shape[0] == 0 or float(np.std(positions)) < 1e-6:
+        raise RuntimeError(
+            f"Coordinates not loaded into CHARMM from {crd_path} "
+            f"(natom={positions.shape[0]}, std={float(np.std(positions)):.3g}). "
+            "Rebuild with md-embedding build or check model.crd."
+        )
+    print(
+        f"Loaded CRD {crd_path.name}: natom={positions.shape[0]} "
+        f"std={float(np.std(positions)):.3f} Å "
+        f"extent={float(np.ptp(positions, axis=0).max()):.3f} Å",
+        flush=True,
+    )
     prepare_charmm_pbc(side)
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
 
@@ -663,12 +689,27 @@ def run_embedding_phase(
         ml_fq=ml_fq,
         mlmm_ctonnb=mlmm_cuton,
         mlmm_ctofnb=mlmm_cutoff,
+        use_pbc=True,
+        cubic_box_side_A=side,
     )
     minimized = False
     total: float | None = None
     try:
         energy.show()
         total = float(energy.get_total())
+        if not np.isfinite(total) or abs(total) > 1.0e6:
+            terms: dict[str, float] = {}
+            for name in ("USER", "VDW", "ELEC", "BOND", "ANGL", "DIHE", "IMNB", "IMEL"):
+                try:
+                    terms[name] = float(energy.get_term_by_name(name))
+                except Exception:
+                    pass
+            raise RuntimeError(
+                f"Pathological CHARMM energy after MLpot register: ENER={total}. "
+                f"Terms={terms}. If VDW dominates and coords were all-zero, "
+                f"CRD failed to load (use apply_crd_file_to_charmm). "
+                f"If USER dominates with H≈0 in ML Z, mass-based Z is missing."
+            )
         if mini_nstep > 0:
             from mmml.interfaces.pycharmmInterface.mlpot import (
                 MinimizeWithMlpotConfig,

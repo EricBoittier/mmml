@@ -39,8 +39,14 @@ def cut_vdw(grid, xyz, elements, vdw_scale=1.4):
         - closest_atom_type: Atomic numbers of closest atoms
         - closest_atom: Indices of closest atoms
     """
-    if type(elements[0]) == str:
-        elements = [ase.data.atomic_numbers[s] for s in elements]
+    # Must be an array, not a list: ``elements[closest_atom]`` below indexes
+    # with a numpy array, which raises "only integer scalar arrays can be
+    # converted to a scalar index" on a plain list. The symbol path documented
+    # above therefore used to fail outright.
+    if isinstance(elements[0], str):
+        elements = np.array([ase.data.atomic_numbers[s] for s in elements])
+    else:
+        elements = np.asarray(elements)
     vdw_radii = [ase.data.vdw_radii[s] for s in elements]
     vdw_radii = np.array(vdw_radii) * vdw_scale
     distances = cdist(grid, xyz)

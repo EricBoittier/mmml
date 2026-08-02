@@ -108,14 +108,36 @@ def test_setup_charmm_environment_defers_domdec_off():
 def test_ensure_vendored_pycharmm_on_path_prefers_repo_root():
     import sys
 
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        _ensure_vendored_pycharmm_on_path,
+        _vendored_pycharmm_sys_path_entries,
+    )
+
     repo = Path(__file__).resolve().parents[2]
-    root = str(repo)
-    if root in sys.path:
-        sys.path.remove(root)
-    sys.path.append("/tmp/fake-charmm-pycharmm-tail")
+    entries = _vendored_pycharmm_sys_path_entries()
+    assert entries, "expected at least setup/charmm/tool/pycharmm on path"
+    # Repo-root sibling only when it has a real package __init__.py
+    repo_pkg = repo / "pycharmm" / "__init__.py"
+    if repo_pkg.is_file():
+        assert entries[0] == str(repo)
+    else:
+        assert str(repo) not in entries
+        assert entries[0].endswith(str(Path("setup/charmm/tool/pycharmm")))
 
-    if root in sys.path:
-        sys.path.remove(root)
-    sys.path.insert(0, root)
+    _ensure_vendored_pycharmm_on_path()
+    assert sys.path[0] == entries[0]
 
-    assert sys.path[0] == root
+
+def test_vendored_pycharmm_entries_skip_initless_namespace(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface import import_pycharmm as ip
+
+    fake_repo = tmp_path / "mmml"
+    (fake_repo / "pycharmm").mkdir(parents=True)  # no __init__.py → namespace trap
+    tool = fake_repo / "setup" / "charmm" / "tool" / "pycharmm" / "pycharmm"
+    tool.mkdir(parents=True)
+    (tool / "__init__.py").write_text("name = 'pycharmm'\n", encoding="utf-8")
+
+    monkeypatch.setattr(ip, "_REPO_ROOT", fake_repo)
+    entries = ip._vendored_pycharmm_sys_path_entries()
+    assert str(fake_repo) not in entries
+    assert entries == [str(fake_repo / "setup" / "charmm" / "tool" / "pycharmm")]

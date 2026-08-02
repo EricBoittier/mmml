@@ -2,7 +2,12 @@ schema_version: 1
 artifact_root: artifacts/validation_campaign
 defaults:
   require_x64: true
-  checkpoint: artifacts/spooky_so3lr_muon_tight/epoch-0001_params.json
+  # Provisional. The previous default (artifacts/spooky_so3lr_muon_tight/
+  # epoch-0001_params.json) did not exist on any machine, so every task
+  # depending on it was silently broken. Revise this from the
+  # checkpoint.scoreboard output rather than by preference.
+  checkpoint: examples/sppoky-epoch-0010_params.json
+  checkpoint_glob: examples/sppoky-epoch-*_params.json
   seed: 69420
 
 coverage_dimensions:
@@ -34,6 +39,11 @@ goals:
     description: Alanine and trialanine are stable and physically meaningful in TIP3 solution.
   coverage:
     description: Every supported method/backend combination has an explicit result.
+  checkpoint:
+    description: >-
+      Candidate ML checkpoints are ranked by a cheap-to-expensive triage ladder,
+      so the one the campaign depends on is chosen from evidence. Validation MAE
+      alone does not qualify a checkpoint for MD.
 
 tasks:
   platform.static:
@@ -121,6 +131,40 @@ tasks:
     acceptance: [ensemble_pass, energy_temperature_report, conformation_report, solvent_contact_report]
     state: gated
     requires: [peptide_gas.smoke, peptide_solution.smoke, backend_parity.dcm10_pycharmm_jaxmd]
+
+  checkpoint.triage:
+    goal: checkpoint
+    tier: smoke
+    environments: [pcstudix, scicore, local_computer]
+    command: >-
+      {python} workflows/validation_campaign/scripts/checkpoint_triage.py
+      --output-dir {output_dir}
+      --checkpoint-glob 'examples/sppoky-epoch-*_params.json'
+      --tiers load,dataset,physics,smoothness
+      --test-extxyz '~/data/so3lr_test/qm7x_10k_testset.extxyz,~/data/so3lr_test/TorsionNet500.extxyz'
+      --cache-dir '~/data/so3lr_orbax_cache'
+    acceptance: [all_checkpoints_load, dataset_error_ranked, fd_forces_pass, no_spurious_minima]
+    note: >-
+      Only qm7x_10k_testset and TorsionNet500 are evaluated; ~/data/so3lr_test
+      holds eight more sets that are deliberately skipped. Each is evaluated and
+      reported separately -- their errors are not on a common scale, so the
+      scoreboard ranks by mean rank across sets, never by mean MAE.
+      The smoothness tier still needs a CGenFF-typed dimer NPZ via --dimer-npz
+      (or MMML_DIMER_NPZ); until then it reports `skipped`, asserts nothing, and
+      the task stays INCOMPLETE rather than falsely passing.
+
+  checkpoint.scoreboard:
+    goal: checkpoint
+    tier: report
+    environments: [pcstudix, scicore, local_computer, local_laptop]
+    command: >-
+      {python} workflows/validation_campaign/scripts/checkpoint_scoreboard.py
+      --metrics {output_dir}/../checkpoint.triage/metrics.json
+      --csv {output_dir}/scoreboard.csv
+      --markdown docs/checkpoint-scoreboard.md
+      --glob 'examples/sppoky-epoch-*_params.json'
+    acceptance: [exit_zero]
+    requires: [checkpoint.triage]
 
   coverage.matrix:
     goal: coverage

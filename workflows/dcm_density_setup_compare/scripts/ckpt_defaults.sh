@@ -2,7 +2,6 @@
 default_mmml_ckpt() {
   local repo_root="$1"
   local candidates=(
-    "/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json"
     "${repo_root}/examples/ckpts_json/DESdimers_params.json"
   )
   local c
@@ -12,5 +11,5 @@ default_mmml_ckpt() {
       return 0
     fi
   done
-  echo "${candidates[1]}"
+  echo "${candidates[0]}"
 }

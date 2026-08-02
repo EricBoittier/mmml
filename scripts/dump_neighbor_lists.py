@@ -244,7 +244,9 @@ def main() -> int:
         cmp_path.write_text(json.dumps(comparison, indent=2), encoding="utf-8")
         paths["comparison_aligned"] = cmp_path
 
-    print(json.dumps({"written": {k: str(v) for k, v in paths.items()}}, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json({"written": {k: str(v) for k, v in paths.items()}})
     if charmm_snap is not None and charmm_snap.pairs:
         w = charmm_snap.pairs[0]
         print(

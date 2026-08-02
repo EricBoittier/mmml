@@ -5,16 +5,25 @@ module api_func
   
   ! MLpot atom indices list
   integer, parameter :: max_Nml = 50000
-  integer, parameter :: max_Npr = 64000000
+  integer, parameter :: max_Npr = 128000000
   logical :: mlpot_is_init
   integer :: Nml, Nmlp, Nmlmmp, Nmlpcc
   integer, dimension(*) :: mlidx(max_Nml)
-  integer, dimension(*) :: mlidxi(max_Npr), mlidxj(max_Npr)
-  integer, dimension(*) :: idxp(max_Npr)
-  integer, dimension(*) :: idxi(max_Npr), idxj(max_Npr), idxjp(max_Npr)
-  integer, dimension(*) :: idxu(max_Npr), idxv(max_Npr)
-  integer, dimension(*) :: idxup(max_Npr), idxvp(max_Npr)
-  integer, dimension(*) :: idxk(max_Npr), idxkp(max_Npr)
+
+  ! Allocatable, not fixed-size module arrays. Twelve max_Npr integer arrays are
+  ! 12 * 4 * max_Npr bytes of static storage: 6.1 GB at max_Npr = 128000000.
+  ! That does not link on arm64, where ADRP has a +-4 GB reach --
+  !   ld: fixup error (kind=arm64_was_adrp_ldr_got_elide_got) ... ADRP out of range
+  ! -- and on x86_64 it is only linkable because the build passes
+  ! -mcmodel=medium. On the heap the linker sees twelve descriptors instead, so
+  ! every tier links on every platform; the pages are still committed lazily, so
+  ! resident memory is unchanged.
+  integer, allocatable :: mlidxi(:), mlidxj(:)
+  integer, allocatable :: idxp(:)
+  integer, allocatable :: idxi(:), idxj(:), idxjp(:)
+  integer, allocatable :: idxu(:), idxv(:)
+  integer, allocatable :: idxup(:), idxvp(:)
+  integer, allocatable :: idxk(:), idxkp(:)
   
   interface
      function callback(natom, &
@@ -68,6 +77,33 @@ module api_func
             mlpot_set_nb_components
 
 contains
+
+  !> Allocate the MLpot pair-index arrays on first use.
+  !
+  ! Called from every entry point that writes them. Idempotent: one allocated()
+  ! test is enough because they are always allocated together and never freed.
+  subroutine mlpot_alloc_pair_arrays()
+    use, intrinsic :: iso_fortran_env, only: output_unit
+    implicit none
+    integer :: ierr
+    character(len=120) :: msg
+    if (allocated(idxp)) return
+    allocate(mlidxi(max_Npr), mlidxj(max_Npr),                &
+             idxp(max_Npr),                                   &
+             idxi(max_Npr), idxj(max_Npr), idxjp(max_Npr),    &
+             idxu(max_Npr), idxv(max_Npr),                    &
+             idxup(max_Npr), idxvp(max_Npr),                  &
+             idxk(max_Npr), idxkp(max_Npr), stat=ierr)
+    if (ierr /= 0) then
+       ! Say how much was wanted: the tier is a compile-time constant, so the
+       ! fix is a smaller max_Npr build, not a runtime setting.
+       write(msg, '(a,i0,a,f0.1,a)')                                          &
+            'cannot allocate MLpot pair arrays for max_Npr=', max_Npr,        &
+            ' (', 12.0 * 4.0 * real(max_Npr) / 1.0e9, ' GB); rebuild a smaller tier'
+       write(output_unit, '(a)') trim(msg)
+       call wrndie(-5, '<mlpot_alloc_pair_arrays>', trim(msg))
+    endif
+  end subroutine mlpot_alloc_pair_arrays
 
   subroutine func_set(new_func) bind(c)
     use energym, only: qeterm, user
@@ -131,6 +167,7 @@ contains
 
     integer(c_int) :: c, i, j
 
+    call mlpot_alloc_pair_arrays()
 
     ! Set number of ML atoms and ML atom indices
     Nml = new_Nml
@@ -167,6 +204,9 @@ contains
     integer(c_int), dimension(*) :: jnb, inblo, imattr, imjnb, imblo
     integer(c_int) :: Niml
     integer(c_int) :: c, ic, i, j, u, v, w, n
+    integer(c_int) :: np
+
+    call mlpot_alloc_pair_arrays()
 
     ! Update central and image to central atom index list
     do i = 1, natom
@@ -311,15 +351,28 @@ contains
       write(104,*) "Out of space - Nmlmmp"
     endif
 
-    ! Shift indices by -1 to account for python indexing
-    idxp = idxp - 1
-    idxi = idxi - 1
-    idxj = idxj - 1
-    idxjp = idxjp - 1
-    idxu = idxu - 1
-    idxv = idxv - 1
-    idxup = idxup - 1
-    idxvp = idxvp - 1
+    ! Shift indices by -1 to account for python indexing.
+    !
+    ! Only the populated prefix of each array: idxp holds natom (natim under
+    ! images) entries, the ML-ML lists hold Nmlp and the ML-MM lists Nmlmmp, and
+    ! every consumer is bounded by those same counts -- mlpot_call passes them to
+    ! user_mlpot, and mlpot_export_* clamp to them. Shifting the whole array
+    ! instead walked all max_Npr elements on every neighbour-list update (over a
+    ! billion integer updates at max_Npr = 128000000) and, worse, first-touched
+    ! every page, making the entire tier resident.
+    if (Ntrans /= 0) then
+      np = natim
+    else
+      np = natom
+    endif
+    idxp(1:np) = idxp(1:np) - 1
+    idxi(1:Nmlp) = idxi(1:Nmlp) - 1
+    idxj(1:Nmlp) = idxj(1:Nmlp) - 1
+    idxjp(1:Nmlp) = idxjp(1:Nmlp) - 1
+    idxu(1:Nmlmmp) = idxu(1:Nmlmmp) - 1
+    idxv(1:Nmlmmp) = idxv(1:Nmlmmp) - 1
+    idxup(1:Nmlmmp) = idxup(1:Nmlmmp) - 1
+    idxvp(1:Nmlmmp) = idxvp(1:Nmlmmp) - 1
 
     ! Set MLpot initialization flag
     mlpot_is_init = .true.
@@ -419,6 +472,7 @@ contains
     success = 0
     out_count = 0
     if (max_pairs <= 0) return
+    if (.not. allocated(idxu)) return
     n = min(Nmlmmp, int(max_pairs))
     do k = 1, n
        out_u(k) = idxu(k)
@@ -440,6 +494,7 @@ contains
     success = 0
     out_count = 0
     if (max_pairs <= 0) return
+    if (.not. allocated(idxi)) return
     n = min(Nmlp, int(max_pairs))
     do k = 1, n
        out_i(k) = idxi(k)

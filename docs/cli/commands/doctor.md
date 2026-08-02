@@ -17,14 +17,22 @@ usage: mmml doctor [-h] [--json] [--require-gpu] [--mpi]
 
 Check that this machine can run MMML (Python, JAX, CHARMM, Packmol).
 
-options:
-  -h, --help            show this help message and exit
-  --json                machine-readable report on stdout
-  --require-gpu         fail unless JAX sees a GPU
-  --mpi                 also check OpenMPI / mpi4py wiring
+Input & configuration:
   --checkpoint CHECKPOINT
                         also validate an ML checkpoint
+
+Execution:
+  --mpi                 also check OpenMPI / mpi4py wiring
+
+Output & artifacts:
+  --json                machine-readable report on stdout
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
   --strict              treat warnings as failures
+
+Other options:
+  --require-gpu         fail unless JAX sees a GPU
 ```
 
 

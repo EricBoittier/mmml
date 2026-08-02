@@ -105,11 +105,188 @@ def test_build_command_jaxmd_forwards_default_cutoffs_from_namespace() -> None:
     assert "--handoff-pre-minimize" not in argv
 
 
+def test_build_command_jaxmd_forwards_nhc_barostat_tau() -> None:
+    """Campaign YAML nhc_barostat_tau must reach jaxmd NpT (soft piston)."""
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(setup="pbc_npt", nhc_barostat_tau=20000.0, nhc_tau=150.0)
+    )
+    assert backend == "jaxmd"
+    assert "--nhc-barostat-tau" in argv
+    assert argv[argv.index("--nhc-barostat-tau") + 1] == "20000.0"
+    assert "--nhc-tau" in argv
+    assert argv[argv.index("--nhc-tau") + 1] == "150.0"
+
+
+def test_build_command_jaxmd_forwards_mm_lj_scales_file() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(mm_lj_scales_file="/tmp/hybrid_mm.json")
+    )
+    assert backend == "jaxmd"
+    assert "--mm-lj-scales-file" in argv
+    assert argv[argv.index("--mm-lj-scales-file") + 1] == "/tmp/hybrid_mm.json"
+
+
+def test_jaxmd_suite_accepts_mm_lj_scales_file_flag() -> None:
+    """md-system forwards --mm-lj-scales-file into jaxmd in-process argv; the
+    suite parser must accept it (otherwise GPU1 direct md-system benches die
+    with 'unrecognized arguments' before any MD)."""
+    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+
+    argv = [
+        "--ensemble",
+        "nvt",
+        "--composition",
+        "ACO:2",
+        "--checkpoint",
+        "/tmp/definitely-not-a-real-checkpoint",
+        "--mm-lj-scales-file",
+        "/tmp/hybrid_mm.json",
+        "--output-dir",
+        "/tmp/out",
+    ]
+    with pytest.raises(SystemExit) as exc:
+        jaxmd_suite.main(argv)
+    msg = str(exc.value)
+    assert "unrecognized arguments" not in msg
+    assert "not found" in msg or "Checkpoint" in msg
+
+
+def test_build_command_jaxmd_forwards_lr_solver_and_mm_charge_mode() -> None:
+    """Regression: these were silently dropped for jaxmd/ase (only pycharmm
+    got --lr-solver; --mm-charge-mode was forwarded nowhere at all), so a
+    YAML defaults: {lr_solver: ewald, mm_charge_mode: latent} campaign job
+    silently ran with mic + fixed CGenFF charges instead."""
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(lr_solver="ewald", mm_charge_mode="latent", mm_charge_correction=False)
+    )
+    assert backend == "jaxmd"
+    assert "--lr-solver" in argv
+    assert argv[argv.index("--lr-solver") + 1] == "ewald"
+    assert "--mm-charge-mode" in argv
+    assert argv[argv.index("--mm-charge-mode") + 1] == "latent"
+    assert "--mm-charge-correction" not in argv
+    assert "--ewald-omit-self" not in argv
+
+    backend, argv = build_command(
+        _jaxmd_args(lr_solver="ewald", ewald_omit_self=True, mm_charge_mode="fixed")
+    )
+    assert "--ewald-omit-self" in argv
+    assert argv[argv.index("--mm-charge-mode") + 1] == "fixed"
+
+    backend, argv = build_command(_jaxmd_args(mm_charge_correction=True))
+    assert "--mm-charge-correction" in argv
+
+
+def test_jaxmd_jargs_forwards_mm_charge_mode_into_runner() -> None:
+    """NVE Hellmann–Feynman preflight reads args.mm_charge_mode on the
+    SimpleNamespace passed to set_up_nhc_sim_routine. If missing, it defaults
+    to fixed and never freezes q_MM — the gate then fails for q0/latent*."""
+    from pathlib import Path
+
+    src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    assert "jargs = SimpleNamespace(" in src
+    jargs_start = src.index("jargs = SimpleNamespace(")
+    # End at the call that consumes jargs (avoids nested-paren fragility).
+    jargs_end = src.index("set_up_nhc_sim_routine(", jargs_start)
+    jargs_block = src[jargs_start:jargs_end]
+    assert 'mm_charge_mode=getattr(args, "mm_charge_mode"' in jargs_block
+
+
+def test_jaxmd_and_ase_suites_accept_lr_solver_and_mm_charge_mode_flags() -> None:
+    """The actual downstream parsers (md_pbc_suite/{jaxmd,ase}.py) must
+    recognize these flags -- build_command forwarding them is necessary but
+    not sufficient if the consuming argparse doesn't define them too."""
+    from mmml.cli.run.md_pbc_suite import ase as ase_suite
+    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+
+    common_argv = [
+        "--lr-solver", "ewald",
+        "--ewald-omit-self",
+        "--mm-charge-mode", "latent",
+        "--composition", "ACO:2",
+        "--checkpoint", "/tmp/definitely-not-a-real-checkpoint",
+        "--output-dir", "/tmp/out",
+    ]
+    for suite in (jaxmd_suite, ase_suite):
+        with pytest.raises(SystemExit) as exc:
+            suite.main(common_argv)
+        # argparse rejection raises SystemExit(2) with a stderr usage dump;
+        # getting *past* parsing means the failure is the (expected) missing
+        # checkpoint, not "unrecognized arguments".
+        assert "not found" in str(exc.value) or "Checkpoint" in str(exc.value)
+
+
 def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
     jaxmd_src = (root / "mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
-    warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:400]
+    warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:500]
     assert "doMM=include_mm" in warmup_block
     assert 'getattr(args, "include_mm", True)' in jaxmd_src
+    assert 'getattr(args, "do_ml", True)' in warmup_block
+    assert 'getattr(args, "do_ml_dimer", True)' in warmup_block
+    assert "doML=True" not in warmup_block
+    assert "doML_dimer=True" not in warmup_block
+
+
+def test_build_command_jaxmd_forwards_do_ml_flags() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(do_ml=False, do_ml_dimer=False, include_mm=True)
+    )
+    assert backend == "jaxmd"
+    assert "--no-do-ml" in argv
+    assert "--no-do-ml-dimer" in argv
+    assert "--include-mm" in argv
+
+
+def test_jaxmd_setup_calculator_forwards_ewald_include_self() -> None:
+    from pathlib import Path
+
+    src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    assert "--ewald-omit-self" in src
+    assert "ewald_include_self=not bool(getattr(args, \"ewald_omit_self\"" in src
+    assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in src
+
+
+def test_ase_setup_calculator_forwards_ewald_include_intra() -> None:
+    """jaxmd/ase must match hybrid_mlpot: --ewald-omit-self drops intra Coulomb."""
+    from pathlib import Path
+
+    ase_src = Path("mmml/cli/run/md_pbc_suite/ase.py").read_text(encoding="utf-8")
+    assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in ase_src
+    assert "ewald_include_intra=bool(ewald_include_intra)" in ase_src
+    # Signature must accept the kwarg (not only the call site).
+    assert "ewald_include_intra: bool = True" in ase_src
+
+def test_build_command_jaxmd_forwards_ml_gpu_and_profile_flags() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(
+        _jaxmd_args(ml_gpu_count=2, ml_batch_size=256, mlpot_profile=True)
+    )
+    assert backend == "jaxmd"
+    assert "--ml-gpu-count" in argv
+    assert argv[argv.index("--ml-gpu-count") + 1] == "2"
+    assert "--ml-batch-size" in argv
+    assert argv[argv.index("--ml-batch-size") + 1] == "256"
+    assert "--mlpot-profile" in argv
+
+
+def test_build_command_jaxmd_forwards_fire_min_steps() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(_jaxmd_args(fire_min_steps=1000, fire_min_maxstep=0.05))
+    assert backend == "jaxmd"
+    assert "--fire-min-steps" in argv
+    assert argv[argv.index("--fire-min-steps") + 1] == "1000"
+    assert "--fire-min-maxstep" in argv
+    assert argv[argv.index("--fire-min-maxstep") + 1] == "0.05"

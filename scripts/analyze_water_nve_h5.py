@@ -1,0 +1,1841 @@
+#!/usr/bin/env python3
+"""Analyze a TIP3 NVE HDF5 from jaxmd (positions, charges, energies).
+
+Produces:
+  - NVE validation dashboard (time series + rotated marginals + Fourier)
+  - IR from atomic charge-current ACF with harmonic QM correction
+    I(w) ~ w (1 - exp(-beta hbar w)) C_mm(w); cut <500 cm^-1 before smooth (arb. u.)
+  - Charge vs (r_sym, angle) scatters (Reds/Blues)
+  - Twin-axis E_tot / E_kin with matched axis spans
+
+Example
+-------
+uv run python scripts/analyze_water_nve_h5.py \\
+  --h5 scratch/spooky_muon3_nve/pbc_nve_jaxmd_nve.h5 \\
+  --box-A 23 --output-dir scratch/spooky_muon3_nve/analysis
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.gridspec import GridSpec
+from mmml.spectra.spectra_md import (
+    FS_INV_TO_CM_INV,
+    autocorrelation,
+    correlation_to_spectrum,
+)
+
+EV_TO_KCAL_MOL = 23.06054783061903
+# hc/k_B in cm*K — converts w[cm^-1] -> beta*hbar*w at temperature T
+HC_OVER_K_CM_K = 1.4387769
+# CHARMM TIP3P partial charges (e)
+TIP3_Q_O = -0.834
+TIP3_Q_H = 0.417
+
+
+def tip3_fixed_charges(z: np.ndarray) -> np.ndarray:
+    """Per-atom TIP3 charges from atomic numbers (O,H,H repeating)."""
+    z = np.asarray(z, dtype=np.int32)
+    q = np.zeros(z.shape[0], dtype=np.float64)
+    q[z == 8] = TIP3_Q_O
+    q[z == 1] = TIP3_Q_H
+    if not np.all((z == 8) | (z == 1)):
+        raise ValueError("tip3_fixed_charges expects only O/H atomic numbers")
+    return q
+
+
+def _periodogram_density(
+    signal: np.ndarray,
+    dt_fs: float,
+    *,
+    zero_pad: int = 4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """One-sided power spectral density of a 1-D signal (Hann window).
+
+    Returns ``(freq_cm, psd)`` with freq in cm^-1.  PSD is |FT|^2 normalized
+    so Parseval holds approximately on the positive-frequency axis.
+    """
+    x = np.asarray(signal, dtype=np.float64).ravel()
+    x = x - x.mean()
+    n = x.size
+    w = np.hanning(n)
+    n_fft = max(n * zero_pad, 8)
+    ft = np.fft.rfft(x * w, n=n_fft)
+    freq_cm = np.fft.rfftfreq(n_fft, d=dt_fs) * FS_INV_TO_CM_INV
+    # Window power correction
+    psd = (np.abs(ft) ** 2) / (np.sum(w**2))
+    return freq_cm, psd
+
+
+def _average_periodogram(
+    signals: np.ndarray,
+    dt_fs: float,
+    *,
+    zero_pad: int = 4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Mean PSD over columns of ``signals`` with shape (n_frames, n_series)."""
+    signals = np.asarray(signals, dtype=np.float64)
+    if signals.ndim == 1:
+        signals = signals[:, None]
+    freq = None
+    acc = None
+    for j in range(signals.shape[1]):
+        f, p = _periodogram_density(signals[:, j], dt_fs, zero_pad=zero_pad)
+        if freq is None:
+            freq = f
+            acc = np.zeros_like(p)
+        acc += p
+    assert freq is not None and acc is not None
+    return freq, acc / signals.shape[1]
+
+
+def _smooth_spectrum(
+    freq_cm: np.ndarray,
+    intensity: np.ndarray,
+    smooth_cm: float,
+) -> np.ndarray:
+    if smooth_cm <= 0.0 or freq_cm.size < 4:
+        return intensity.copy()
+    df = float(np.median(np.diff(freq_cm)))
+    sigma = max(smooth_cm / (2.0 * np.sqrt(2.0 * np.log(2.0))), df)
+    half = int(max(3, np.ceil(4.0 * sigma / df)))
+    x = np.arange(-half, half + 1) * df
+    ker = np.exp(-0.5 * (x / sigma) ** 2)
+    ker /= ker.sum()
+    return np.convolve(intensity, ker, mode="same")
+
+
+def _rolling_avg(y: np.ndarray, window: int) -> np.ndarray:
+    """Centered rolling mean (odd window preferred); edges use partial windows."""
+    y = np.asarray(y, dtype=np.float64)
+    w = int(window)
+    if w < 2 or y.size < 2:
+        return y.copy()
+    if w % 2 == 0:
+        w += 1
+    ker = np.ones(w, dtype=np.float64) / w
+    return np.convolve(y, ker, mode="same")
+
+
+def _apply_qm_factor(
+    freq_cm: np.ndarray,
+    spectrum: np.ndarray,
+    temperature_K: float,
+    *,
+    mode: str,
+) -> np.ndarray:
+    """Frequency-dependent intensity / quantum correction factors.
+
+    Modes
+    -----
+    none : identity
+    harmonic : I ∝ ω · S(ω)
+    classical : I ∝ ω² · S(ω)
+    exp_qm : I ∝ ω (1 − exp(−βℏω)) · S(ω)   (dipole ACF form)
+    exp_qm_from_JJ : I ∝ (1 − exp(−βℏω))/ω · S_JJ(ω)
+        (current ACF form; equivalent to exp_qm on C_μμ)
+    """
+    s = np.asarray(spectrum, dtype=np.float64)
+    f = np.asarray(freq_cm, dtype=np.float64)
+    out = np.zeros_like(s)
+    pos = f > 0.0
+    t_k = max(float(temperature_K), 1.0)
+    beta_hbar_w = (HC_OVER_K_CM_K / t_k) * f
+    exp_corr = 1.0 - np.exp(-np.clip(beta_hbar_w, 0.0, 100.0))
+    if mode == "none":
+        out[pos] = np.maximum(s[pos], 0.0)
+    elif mode == "harmonic":
+        out[pos] = np.maximum(f[pos] * s[pos], 0.0)
+    elif mode == "classical":
+        out[pos] = np.maximum((f[pos] ** 2) * s[pos], 0.0)
+    elif mode == "exp_qm":
+        out[pos] = np.maximum(f[pos] * exp_corr[pos] * s[pos], 0.0)
+    elif mode == "exp_qm_from_JJ":
+        out[pos] = np.maximum((exp_corr[pos] / f[pos]) * s[pos], 0.0)
+    else:
+        raise ValueError(f"unknown QM mode: {mode}")
+    return out
+
+
+def _spectrum_from_signal(
+    signal: np.ndarray,
+    frame_dt_fs: float,
+    *,
+    kind: str,
+    zero_pad: int = 8,
+) -> tuple[np.ndarray, np.ndarray]:
+    """FT route: ``acf`` of signal, or direct ``periodogram`` of signal."""
+    x = np.asarray(signal, dtype=np.float64)
+    x = x - x.mean(axis=0, keepdims=True)
+    if kind == "acf":
+        acf = autocorrelation(x)
+        freq_cm, spec = correlation_to_spectrum(
+            acf, frame_dt_fs, window="blackman", zero_pad=zero_pad, qcf=None
+        )
+        return freq_cm, np.abs(spec)
+    if kind == "periodogram":
+        # Sum of |FT|^2 over Cartesian components (dipole fluctuation IR style)
+        n = len(x)
+        w = np.blackman(n)
+        n_fft = n * zero_pad
+        spec = np.zeros(n_fft // 2 + 1, dtype=np.float64)
+        for a in range(x.shape[1]):
+            ft = np.fft.rfft(x[:, a] * w, n=n_fft)
+            spec += np.abs(ft) ** 2
+        freq_cm = np.fft.rfftfreq(n_fft, d=frame_dt_fs) * FS_INV_TO_CM_INV
+        return freq_cm, spec
+    raise ValueError(kind)
+
+
+def write_geometry_power_spectra(
+    path: Path,
+    *,
+    r_oh1: np.ndarray,
+    r_oh2: np.ndarray,
+    ang: np.ndarray,
+    frame_dt_fs: float,
+    min_cm: float = 500.0,
+    max_cm: float = 4500.0,
+    smooth_cm: float = 15.0,
+) -> dict:
+    """Power spectra of intramolecular coordinates (diagnostic for IR)."""
+    r_oh = np.concatenate([r_oh1, r_oh2], axis=1)
+    r_sym = 0.5 * (r_oh1 + r_oh2)
+    r_asym = 0.5 * (r_oh1 - r_oh2)
+
+    series = {
+        r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)": r_oh,
+        r"$r_\mathrm{sym}=(r_a+r_b)/2$": r_sym,
+        r"$r_\mathrm{asym}=(r_a-r_b)/2$": r_asym,
+        r"$\angle\mathrm{HOH}$": ang,
+    }
+    colors = {
+        r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)": "#16a085",
+        r"$r_\mathrm{sym}=(r_a+r_b)/2$": "#1f4e79",
+        r"$r_\mathrm{asym}=(r_a-r_b)/2$": "#c45c26",
+        r"$\angle\mathrm{HOH}$": "#8e44ad",
+    }
+
+    spectra: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for name, sig in series.items():
+        spectra[name] = _average_periodogram(sig, frame_dt_fs, zero_pad=4)
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.2), sharex=False)
+
+    # Top: full band, log scale (shows far-IR dominance clearly)
+    ax = axes[0]
+    for name, (f, p) in spectra.items():
+        m = (f > 0) & (f <= max_cm)
+        ax.plot(f[m], p[m], color=colors[name], lw=1.0, label=name)
+    ax.set_yscale("log")
+    ax.set_xlim(0, max_cm)
+    ax.set_ylabel("PSD (arb. u.)")
+    ax.set_title(
+        f"Intramolecular power spectra (log) · frame Δt={frame_dt_fs:.3f} fs"
+    )
+    ax.legend(frameon=False, fontsize=8)
+    ax.grid(True, which="both", alpha=0.25, lw=0.5)
+
+    # Bottom: cut < min_cm before smooth; peak-norm each curve (shape compare)
+    ax = axes[1]
+    peaks: dict[str, float] = {}
+    for name, (f, p) in spectra.items():
+        m = (f >= min_cm) & (f <= max_cm)
+        fc, pc = f[m], p[m]
+        ps = _smooth_spectrum(fc, pc, smooth_cm)
+        scale = float(np.max(ps)) if ps.size and np.max(ps) > 0 else 1.0
+        ax.plot(fc, pc / scale, color=colors[name], lw=0.5, alpha=0.35)
+        ax.plot(fc, ps / scale, color=colors[name], lw=1.35, label=name)
+        if ps.size:
+            peaks[name] = float(fc[int(np.argmax(ps))])
+    ax.set_xlim(min_cm, max_cm)
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("PSD (peak-norm., arb.)")
+    ax.set_title(
+        f"cut <{min_cm:g} cm$^{{-1}}$ before smooth (HWHM={smooth_cm:g}) · "
+        "each series peak-normalized"
+    )
+    ax.legend(frameon=False, fontsize=8)
+    ax.axvline(1600, color="0.7", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.7", ls=":", lw=0.8)
+    fig.tight_layout()
+    ymin, ymax = axes[1].get_ylim()
+    if ymax > ymin:
+        axes[1].text(
+            1600,
+            ymin + 0.92 * (ymax - ymin),
+            "bend",
+            ha="center",
+            fontsize=7,
+            color="0.45",
+        )
+        axes[1].text(
+            3400,
+            ymin + 0.92 * (ymax - ymin),
+            "stretch",
+            ha="center",
+            fontsize=7,
+            color="0.45",
+        )
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+
+    # Band power fractions for r_OH (diagnostic)
+    f, p = spectra[r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)"]
+    def _band(lo: float, hi: float) -> float:
+        m = (f >= lo) & (f <= hi)
+        return float(np.trapezoid(p[m], f[m])) if np.any(m) else 0.0
+
+    tot = _band(0, max_cm) or 1.0
+    return {
+        "r_OH_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{O-H}$ (mean of per-bond PSDs)"),
+        "r_sym_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{sym}=(r_a+r_b)/2$"),
+        "r_asym_psd_peak_ge500_cm": peaks.get(r"$r_\mathrm{asym}=(r_a-r_b)/2$"),
+        "angle_psd_peak_ge500_cm": peaks.get(r"$\angle\mathrm{HOH}$"),
+        "r_OH_power_frac_0_500": _band(0, 500) / tot,
+        "r_OH_power_frac_1400_1800": _band(1400, 1800) / tot,
+        "r_OH_power_frac_3000_3800": _band(3000, 3800) / tot,
+        "artifact": str(path),
+    }
+
+
+def write_oh_bond_power_spectra(
+    path: Path,
+    *,
+    r_oh1: np.ndarray,
+    r_oh2: np.ndarray,
+    frame_dt_fs: float,
+    min_cm: float = 50.0,
+    max_cm: float = 4500.0,
+    smooth_cm: float = 15.0,
+    zero_pad: int = 4,
+) -> dict:
+    """PSD of every O–H bond separately, then mean (±std) across bonds.
+
+    Each bond time series is mean-centered and Hann-windowed independently;
+    the reported spectrum is the average of those per-bond PSDs (not the PSD of
+    the concatenated or mean bond length).
+    """
+    r_oh = np.concatenate(
+        [np.asarray(r_oh1, dtype=np.float64), np.asarray(r_oh2, dtype=np.float64)],
+        axis=1,
+    )
+    n_bonds = int(r_oh.shape[1])
+    freq = None
+    stack = []
+    for j in range(n_bonds):
+        f, p = _periodogram_density(r_oh[:, j], frame_dt_fs, zero_pad=zero_pad)
+        if freq is None:
+            freq = f
+        stack.append(p)
+    assert freq is not None
+    psd = np.stack(stack, axis=0)  # (n_bonds, n_freq)
+    mean_p = psd.mean(axis=0)
+    std_p = psd.std(axis=0)
+    med_p = np.median(psd, axis=0)
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.8, 7.4), sharex=False)
+
+    # Top: log PSD — faint individuals + mean ± 1σ
+    ax = axes[0]
+    m_full = (freq > 0) & (freq <= max_cm)
+    for j in range(n_bonds):
+        ax.plot(
+            freq[m_full],
+            psd[j, m_full],
+            color="#16a085",
+            lw=0.35,
+            alpha=0.12,
+            zorder=1,
+        )
+    ax.plot([], [], color="#16a085", lw=0.8, alpha=0.5, label="individual bonds")
+    ax.fill_between(
+        freq[m_full],
+        np.maximum(mean_p[m_full] - std_p[m_full], 1e-30),
+        mean_p[m_full] + std_p[m_full],
+        color="#1f4e79",
+        alpha=0.22,
+        zorder=2,
+        label=r"mean $\pm 1\sigma$",
+    )
+    ax.plot(
+        freq[m_full],
+        mean_p[m_full],
+        color="#1f4e79",
+        lw=1.6,
+        zorder=3,
+        label=rf"mean of {n_bonds} per-bond PSDs",
+    )
+    ax.set_yscale("log")
+    ax.set_xlim(0, max_cm)
+    ax.set_ylabel("PSD (arb. u.)")
+    ax.set_title(
+        f"O–H bond power spectra · per-bond then average · "
+        f"Δt={frame_dt_fs:.3f} fs · {n_bonds} bonds"
+    )
+    ax.legend(frameon=False, fontsize=8, loc="upper right")
+    ax.grid(True, which="both", alpha=0.25, lw=0.5)
+
+    # Bottom: cut low-ω, smooth mean; peak-norm for shape; show individuals peak-normed faintly
+    ax = axes[1]
+    m = (freq >= min_cm) & (freq <= max_cm)
+    fc = freq[m]
+    mean_c = mean_p[m]
+    med_c = med_p[m]
+    mean_s = _smooth_spectrum(fc, mean_c, smooth_cm)
+    med_s = _smooth_spectrum(fc, med_c, smooth_cm)
+    scale = float(np.max(mean_s)) if mean_s.size and np.max(mean_s) > 0 else 1.0
+    for j in range(n_bonds):
+        pj = _smooth_spectrum(fc, psd[j, m], smooth_cm)
+        sj = float(np.max(pj)) if pj.size and np.max(pj) > 0 else 1.0
+        ax.plot(fc, pj / sj, color="#16a085", lw=0.4, alpha=0.12, zorder=1)
+    ax.plot(fc, mean_c / scale, color="#1f4e79", lw=0.6, alpha=0.4, zorder=2)
+    ax.plot(
+        fc,
+        mean_s / scale,
+        color="#1f4e79",
+        lw=1.7,
+        zorder=3,
+        label="mean (smooth, peak-norm)",
+    )
+    ax.plot(
+        fc,
+        med_s / (float(np.max(med_s)) if np.max(med_s) > 0 else 1.0),
+        color="#c45c26",
+        lw=1.2,
+        ls="--",
+        zorder=3,
+        label="median (smooth, peak-norm)",
+    )
+    ax.set_xlim(min_cm, max_cm)
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("PSD (peak-norm., arb.)")
+    ax.set_title(
+        f"cut <{min_cm:g} cm$^{{-1}}$ · smooth HWHM={smooth_cm:g} · "
+        "each individual peak-normalized before overlay"
+    )
+    ax.legend(frameon=False, fontsize=8)
+    ax.axvline(1600, color="0.7", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.7", ls=":", lw=0.8)
+    fig.tight_layout()
+    ymin, ymax = ax.get_ylim()
+    if ymax > ymin:
+        ax.text(1600, ymin + 0.92 * (ymax - ymin), "bend", ha="center", fontsize=7, color="0.45")
+        ax.text(3400, ymin + 0.92 * (ymax - ymin), "stretch", ha="center", fontsize=7, color="0.45")
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+
+    def _band(lo: float, hi: float) -> float:
+        mm = (freq >= lo) & (freq <= hi)
+        return float(np.trapezoid(mean_p[mm], freq[mm])) if np.any(mm) else 0.0
+
+    tot = _band(0, max_cm) or 1.0
+    peak_ge = float("nan")
+    m_pk = (freq >= min_cm) & (freq <= max_cm)
+    if np.any(m_pk):
+        ps = _smooth_spectrum(freq[m_pk], mean_p[m_pk], smooth_cm)
+        peak_ge = float(freq[m_pk][int(np.argmax(ps))])
+
+    npz_path = path.with_suffix(".npz")
+    np.savez_compressed(
+        npz_path,
+        freq_cm=freq,
+        psd_mean=mean_p,
+        psd_std=std_p,
+        psd_median=med_p,
+        n_bonds=np.int32(n_bonds),
+        frame_dt_fs=np.float64(frame_dt_fs),
+    )
+
+    return {
+        "n_bonds": n_bonds,
+        "psd_peak_ge_min_cm": peak_ge,
+        "power_frac_0_500": _band(0, 500) / tot,
+        "power_frac_1400_1800": _band(1400, 1800) / tot,
+        "power_frac_3000_3800": _band(3000, 3800) / tot,
+        "artifact": str(path),
+        "npz": str(npz_path),
+    }
+
+
+def _running_linear_slope(
+    t: np.ndarray, y: np.ndarray, *, window: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Sliding-window linear slope of y(t). Returns mid-times and slopes."""
+    t = np.asarray(t, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if window < 8 or window >= len(t):
+        window = max(8, len(t) // 10)
+    half = window // 2
+    mids, slopes = [], []
+    for i in range(half, len(t) - half):
+        sl = slice(i - half, i + half)
+        slopes.append(float(np.polyfit(t[sl], y[sl], 1)[0]))
+        mids.append(float(t[i]))
+    return np.asarray(mids), np.asarray(slopes)
+
+
+def _ts_with_rotated_hist(
+    ax_ts,
+    ax_hist,
+    t: np.ndarray,
+    y: np.ndarray,
+    *,
+    color: str,
+    ylabel: str,
+    bins: int = 48,
+    lw: float = 0.8,
+    label: str | None = None,
+    href: float | None = None,
+) -> None:
+    """Time series on ``ax_ts`` with a matching rotated marginal on ``ax_hist``."""
+    ax_ts.plot(t, y, color=color, lw=lw, label=label)
+    if href is not None:
+        ax_ts.axhline(href, color="0.55", ls="--", lw=0.7)
+    ax_ts.set_ylabel(ylabel, color=color)
+    ax_ts.tick_params(axis="y", colors=color)
+    ax_ts.grid(True, axis="x", alpha=0.2, lw=0.5)
+
+    counts, edges = np.histogram(y, bins=bins, density=True)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    ax_hist.barh(
+        centers,
+        counts,
+        height=np.diff(edges),
+        color=color,
+        alpha=0.75,
+        align="center",
+    )
+    ax_hist.set_ylim(ax_ts.get_ylim())
+    ax_hist.set_xlabel("dens.")
+    ax_hist.tick_params(axis="y", labelleft=False)
+    ax_hist.grid(True, axis="x", alpha=0.2, lw=0.5)
+
+
+def write_nve_validation_dashboard(
+    path: Path,
+    *,
+    t_ps: np.ndarray,
+    e_tot_kcal: np.ndarray,
+    e_pot_kcal: np.ndarray,
+    e_kin_kcal: np.ndarray,
+    temp: np.ndarray,
+    r_sym: np.ndarray,
+    ang: np.ndarray,
+    q_o: np.ndarray,
+    q_h_mean: np.ndarray,
+    freq_cm: np.ndarray,
+    ir_smooth: np.ndarray,
+    ir_vib: np.ndarray,
+    frame_dt_fs: float,
+    mm_mode: str,
+    box: float,
+    n_mol: int,
+    ir_method: str,
+    t_ir: float,
+    ir_min_cm: float = 500.0,
+) -> dict:
+    """Composite NVE validation figure: TS + rotated marginals + Fourier."""
+    drift = float(e_tot_kcal[-1] - e_tot_kcal[0])
+    slope = float(np.polyfit(t_ps, e_tot_kcal, 1)[0])
+    t_mean = float(np.mean(temp))
+    corr_pk = float(np.corrcoef(e_pot_kcal, e_kin_kcal)[0, 1])
+    de = e_tot_kcal - e_tot_kcal.mean()
+    dk = e_kin_kcal - e_kin_kcal.mean()
+
+    # Frequency content of conservation / kinetics (cm^-1)
+    f_e, psd_e = _periodogram_density(de, frame_dt_fs)
+    f_k, psd_k = _periodogram_density(dk, frame_dt_fs)
+    f_t, psd_t = _periodogram_density(temp - t_mean, frame_dt_fs)
+    # Bond symmetric-stretch DOS proxy (mean over molecules)
+    r_sym_mean_t = r_sym.mean(axis=1)
+    f_r, psd_r = _periodogram_density(r_sym_mean_t, frame_dt_fs)
+
+    # Running drift of E_tot
+    win = max(64, len(t_ps) // 20)
+    t_run, slope_run = _running_linear_slope(t_ps, e_tot_kcal, window=win)
+
+    # Molecule-averaged geometry / charge traces
+    r_t = r_sym.mean(axis=1)
+    a_t = ang.mean(axis=1)
+    qo_t = q_o.mean(axis=1)
+    qh_t = q_h_mean.mean(axis=1)
+
+    fig = plt.figure(figsize=(14.5, 16.5), constrained_layout=False)
+    gs = GridSpec(
+        6,
+        4,
+        figure=fig,
+        height_ratios=[0.55, 1.05, 1.05, 1.15, 1.0, 1.15],
+        width_ratios=[1.0, 1.0, 1.0, 0.32],
+        hspace=0.42,
+        wspace=0.28,
+        left=0.07,
+        right=0.98,
+        top=0.94,
+        bottom=0.04,
+    )
+
+    # --- metrics banner ---
+    ax_m = fig.add_subplot(gs[0, :])
+    ax_m.axis("off")
+    banner = (
+        f"NVE validation dashboard   ·   TIP3:{n_mol}   ·   "
+        f"mm_charge_mode={mm_mode}   ·   L={box:.1f} A   ·   "
+        f"frame Δt={frame_dt_fs:.3f} fs   ·   T={t_ps[-1] - t_ps[0]:.2f} ps\n"
+        f"E_tot drift={drift:+.3f} kcal/mol   ·   "
+        f"slope={slope:+.3f} kcal/mol/ps   ·   "
+        f"σ(E_tot)={np.std(e_tot_kcal):.3f}   ·   "
+        f"⟨T⟩={t_mean:.1f}±{np.std(temp):.1f} K   ·   "
+        f"corr(E_pot,E_kin)={corr_pk:.3f}"
+    )
+    ax_m.text(
+        0.0,
+        0.55,
+        banner,
+        transform=ax_m.transAxes,
+        va="center",
+        ha="left",
+        fontsize=10,
+        family="monospace",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="#f4f4f4", edgecolor="#cccccc"),
+    )
+
+    # --- Row 1: energies + twin + rotated ΔE marginal ---
+    ax_e = fig.add_subplot(gs[1, :3])
+    ax_e2 = ax_e.twinx()
+    ax_eh = fig.add_subplot(gs[1, 3], sharey=None)
+    (ln1,) = ax_e.plot(t_ps, e_tot_kcal, color="#1f4e79", lw=0.75, label=r"$E_\mathrm{tot}$")
+    (ln2,) = ax_e2.plot(t_ps, e_kin_kcal, color="#2a6f3b", lw=0.75, label=r"$E_\mathrm{kin}$")
+    ax_e.set_ylabel(r"$E_\mathrm{tot}$ (kcal/mol)", color="#1f4e79")
+    ax_e2.set_ylabel(r"$E_\mathrm{kin}$ (kcal/mol)", color="#2a6f3b")
+    ax_e.tick_params(axis="y", colors="#1f4e79")
+    ax_e2.tick_params(axis="y", colors="#2a6f3b")
+    ax_e.set_title("Energy conservation (twin axes, equal span)")
+    ax_e.legend(handles=[ln1, ln2], loc="upper right", frameon=False, fontsize=8)
+    _twin_equal_span(ax_e, ax_e2, e_tot_kcal, e_kin_kcal)
+    ax_e.grid(True, axis="x", alpha=0.2, lw=0.5)
+    # Marginal of demeaned energies (same kcal scale for visual comparison)
+    c_de, e_de = np.histogram(de, bins=50, density=True)
+    c_dk, e_dk = np.histogram(dk, bins=50, density=True)
+    ax_eh.barh(
+        0.5 * (e_de[:-1] + e_de[1:]),
+        c_de,
+        height=np.diff(e_de),
+        color="#1f4e79",
+        alpha=0.65,
+        label=r"$\Delta E_\mathrm{tot}$",
+    )
+    ax_eh.barh(
+        0.5 * (e_dk[:-1] + e_dk[1:]),
+        c_dk,
+        height=np.diff(e_dk),
+        color="#2a6f3b",
+        alpha=0.45,
+        label=r"$\Delta E_\mathrm{kin}$",
+    )
+    ax_eh.set_xlabel("dens.")
+    ax_eh.set_title(r"$\Delta E$", fontsize=9)
+    ax_eh.legend(fontsize=7, frameon=False, loc="upper right")
+    ax_eh.tick_params(axis="y", labelleft=False)
+
+    # --- Row 2: temperature + marginal ---
+    ax_t = fig.add_subplot(gs[2, :3], sharex=ax_e)
+    ax_th = fig.add_subplot(gs[2, 3])
+    _ts_with_rotated_hist(
+        ax_t,
+        ax_th,
+        t_ps,
+        temp,
+        color="#5a3d7a",
+        ylabel="T (K)",
+        href=300.0,
+        label="T",
+    )
+    ax_t.set_title("Kinetic temperature")
+    ax_t.set_xlabel("time (ps)")
+
+    # --- Row 3: Fourier / tendency ---
+    ax_psd = fig.add_subplot(gs[3, 0:2])
+    # Show low-frequency conservation band + kinetic content (log y)
+    for f, p, c, lab in (
+        (f_e, psd_e, "#1f4e79", r"$E_\mathrm{tot}$"),
+        (f_k, psd_k, "#2a6f3b", r"$E_\mathrm{kin}$"),
+        (f_t, psd_t, "#5a3d7a", "T"),
+        (f_r, psd_r, "#c45c26", r"$\langle r_\mathrm{sym}\rangle$"),
+    ):
+        m = (f > 0) & (f <= 500)
+        # Normalize each PSD to its max in-band for shape comparison
+        pn = p[m] / max(float(p[m].max()), 1e-30)
+        ax_psd.plot(f[m], pn, color=c, lw=1.0, label=lab)
+    ax_psd.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax_psd.set_ylabel("PSD (peak-norm.)")
+    ax_psd.set_title("Fluctuation spectra (0–500 cm$^{-1}$)")
+    ax_psd.set_yscale("log")
+    ax_psd.legend(fontsize=7, frameon=False, ncol=2)
+    ax_psd.grid(True, alpha=0.25, which="both", lw=0.5)
+
+    ax_run = fig.add_subplot(gs[3, 2])
+    ax_run.plot(t_run, slope_run, color="#1f4e79", lw=0.9)
+    ax_run.axhline(0.0, color="0.5", ls="--", lw=0.7)
+    ax_run.axhline(slope, color="#c0392b", ls=":", lw=0.8, label="global slope")
+    ax_run.set_xlabel("time (ps)")
+    ax_run.set_ylabel("local dE/dt")
+    ax_run.set_title(f"Running E_tot drift (win={win})")
+    ax_run.legend(fontsize=7, frameon=False)
+
+    ax_xy = fig.add_subplot(gs[3, 3])
+    ax_xy.scatter(
+        e_pot_kcal - e_pot_kcal.mean(),
+        e_kin_kcal - e_kin_kcal.mean(),
+        s=3,
+        alpha=0.25,
+        c="#444444",
+        rasterized=True,
+        linewidths=0,
+    )
+    ax_xy.set_xlabel(r"$\Delta E_\mathrm{pot}$")
+    ax_xy.set_ylabel(r"$\Delta E_\mathrm{kin}$")
+    ax_xy.set_title(f"exchange\ncorr={corr_pk:.2f}", fontsize=9)
+    ax_xy.set_aspect("equal", adjustable="datalim")
+    ax_xy.axhline(0, color="0.7", lw=0.5)
+    ax_xy.axvline(0, color="0.7", lw=0.5)
+
+    # --- Row 4: geometry ---
+    ax_g = fig.add_subplot(gs[4, :3], sharex=ax_e)
+    ax_g2 = ax_g.twinx()
+    ax_gh = fig.add_subplot(gs[4, 3])
+    (lg1,) = ax_g.plot(t_ps, r_t, color="#16a085", lw=0.8, label=r"$\langle r_\mathrm{sym}\rangle$")
+    (lg2,) = ax_g2.plot(t_ps, a_t, color="#8e44ad", lw=0.8, label=r"$\langle\angle\rangle$")
+    ax_g.set_ylabel(r"$\langle r_\mathrm{sym}\rangle$ (A)", color="#16a085")
+    ax_g2.set_ylabel(r"$\langle\angle\mathrm{HOH}\rangle$ (deg)", color="#8e44ad")
+    ax_g.tick_params(axis="y", colors="#16a085")
+    ax_g2.tick_params(axis="y", colors="#8e44ad")
+    ax_g.set_title("Mean intramolecular geometry")
+    ax_g.legend(handles=[lg1, lg2], loc="upper right", frameon=False, fontsize=8)
+    ax_g.set_xlabel("time (ps)")
+    # Rotated hist for r_sym (all mols) — denser structural metric
+    counts, edges = np.histogram(r_sym.ravel(), bins=40, density=True)
+    ax_gh.barh(
+        0.5 * (edges[:-1] + edges[1:]),
+        counts,
+        height=np.diff(edges),
+        color="#16a085",
+        alpha=0.75,
+    )
+    ax_gh.set_xlabel("dens.")
+    ax_gh.set_title(r"$r_\mathrm{sym}$", fontsize=9)
+    ax_gh.tick_params(axis="y", labelleft=False)
+
+    # --- Row 5: charges + IR + geom-charge map ---
+    # Split bottom into: charge TS+hist | IR | O scatter | H scatter — use nested gs
+    gs5 = gs[5, :].subgridspec(1, 4, width_ratios=[1.35, 1.15, 1.0, 1.0], wspace=0.35)
+
+    ax_q = fig.add_subplot(gs5[0, 0])
+    ax_q2 = ax_q.twinx()
+    (lq1,) = ax_q.plot(t_ps, qo_t, color="#c0392b", lw=0.8, label=r"$\langle q_\mathrm{O}\rangle$")
+    (lq2,) = ax_q2.plot(t_ps, qh_t, color="#2980b9", lw=0.8, label=r"$\langle q_\mathrm{H}\rangle$")
+    ax_q.set_ylabel(r"$\langle q_\mathrm{O}\rangle$ (e)", color="#c0392b")
+    ax_q2.set_ylabel(r"$\langle q_\mathrm{H}\rangle$ (e)", color="#2980b9")
+    ax_q.tick_params(axis="y", colors="#c0392b")
+    ax_q2.tick_params(axis="y", colors="#2980b9")
+    ax_q.set_title("Mean MM charges")
+    ax_q.set_xlabel("time (ps)")
+    ax_q.legend(handles=[lq1, lq2], loc="best", frameon=False, fontsize=7)
+
+    ax_ir = fig.add_subplot(gs5[0, 1])
+    ax_ir.plot(freq_cm, ir_smooth, color="#111111", lw=1.1)
+    ax_ir.set_xlabel(r"cm$^{-1}$")
+    ax_ir.set_ylabel("I (arb. u.)")
+    ax_ir.set_title(
+        f"IR (≥{ir_min_cm:g}) · T={t_ir:.0f}K", fontsize=9
+    )
+    if freq_cm.size:
+        ax_ir.set_xlim(float(freq_cm[0]), float(freq_cm[-1]))
+    ax_ir.set_ylim(bottom=0)
+
+    ax_so = fig.add_subplot(gs5[0, 2])
+    sc = ax_so.scatter(
+        r_sym.ravel()[::2],
+        ang.ravel()[::2],
+        c=q_o.ravel()[::2],
+        s=2,
+        alpha=0.3,
+        cmap="Reds",
+        linewidths=0,
+        rasterized=True,
+    )
+    ax_so.set_xlabel(r"$r_\mathrm{sym}$ (A)")
+    ax_so.set_ylabel(r"$\angle$ (deg)")
+    ax_so.set_title(r"$q_\mathrm{O}$", fontsize=9)
+    plt.colorbar(sc, ax=ax_so, fraction=0.046, pad=0.04)
+
+    ax_sh = fig.add_subplot(gs5[0, 3])
+    sc2 = ax_sh.scatter(
+        r_sym.ravel()[::2],
+        ang.ravel()[::2],
+        c=q_h_mean.ravel()[::2],
+        s=2,
+        alpha=0.3,
+        cmap="Blues",
+        linewidths=0,
+        rasterized=True,
+    )
+    ax_sh.set_xlabel(r"$r_\mathrm{sym}$ (A)")
+    ax_sh.set_ylabel(r"$\angle$ (deg)")
+    ax_sh.set_title(r"$\langle q_\mathrm{H}\rangle$", fontsize=9)
+    plt.colorbar(sc2, ax=ax_sh, fraction=0.046, pad=0.04)
+
+    fig.suptitle("Hybrid ML/MM NVE validation", fontsize=13, fontweight="bold", y=0.985)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+    # Peak of kinetic PSD in the far-IR band (diagnostic)
+    m_far = (f_k > 5) & (f_k < 400)
+    k_peak = float(f_k[m_far][np.argmax(psd_k[m_far])]) if np.any(m_far) else float("nan")
+
+    return {
+        "corr_Epot_Ekin": corr_pk,
+        "E_tot_running_drift_window": int(win),
+        "E_kin_psd_peak_cm": k_peak,
+        "dashboard": str(path),
+    }
+
+
+def _mic(d: np.ndarray, box: float) -> np.ndarray:
+    return d - box * np.round(d / box)
+
+
+def molecular_dipoles(
+    positions: np.ndarray,
+    charges: np.ndarray,
+    z: np.ndarray,
+    box: float,
+) -> np.ndarray:
+    """Sum of per-molecule dipoles (e*A) with intramolecular MIC about O."""
+    n_frames, n_atoms, _ = positions.shape
+    assert n_atoms % 3 == 0
+    n_mol = n_atoms // 3
+    mu = np.zeros((n_frames, 3), dtype=np.float64)
+    for m in range(n_mol):
+        i0 = 3 * m
+        if not (z[i0] == 8 and z[i0 + 1] == 1 and z[i0 + 2] == 1):
+            raise ValueError(
+                f"molecule {m}: expected O,H,H atomic numbers, got {z[i0:i0+3]}"
+            )
+        r_o = positions[:, i0]
+        for k in (0, 1, 2):
+            r = positions[:, i0 + k]
+            dr = _mic(r - r_o, box)
+            mu += charges[:, i0 + k, None] * dr
+    return mu
+
+
+def water_geometry(
+    positions: np.ndarray,
+    box: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return (r_OH1, r_OH2, angle_HOH_deg) with shape (n_frames, n_mol)."""
+    n_frames, n_atoms, _ = positions.shape
+    n_mol = n_atoms // 3
+    r1 = np.zeros((n_frames, n_mol), dtype=np.float64)
+    r2 = np.zeros((n_frames, n_mol), dtype=np.float64)
+    ang = np.zeros((n_frames, n_mol), dtype=np.float64)
+    for m in range(n_mol):
+        i0 = 3 * m
+        ro = positions[:, i0]
+        v1 = _mic(positions[:, i0 + 1] - ro, box)
+        v2 = _mic(positions[:, i0 + 2] - ro, box)
+        n1 = np.linalg.norm(v1, axis=1)
+        n2 = np.linalg.norm(v2, axis=1)
+        r1[:, m] = n1
+        r2[:, m] = n2
+        cos = np.sum(v1 * v2, axis=1) / np.maximum(n1 * n2, 1e-12)
+        ang[:, m] = np.degrees(np.arccos(np.clip(cos, -1.0, 1.0)))
+    return r1, r2, ang
+
+
+def _twin_equal_span(
+    ax_left, ax_right, y_left: np.ndarray, y_right: np.ndarray
+) -> None:
+    """Match twin-axis spans so fluctuation amplitudes compare visually."""
+    y_left = np.asarray(y_left, dtype=np.float64)
+    y_right = np.asarray(y_right, dtype=np.float64)
+    span_l = float(y_left.max() - y_left.min())
+    span_r = float(y_right.max() - y_right.min())
+    span = max(span_l, span_r, 1e-12) * 1.08
+    mid_l = 0.5 * float(y_left.max() + y_left.min())
+    mid_r = 0.5 * float(y_right.max() + y_right.min())
+    ax_left.set_ylim(mid_l - 0.5 * span, mid_l + 0.5 * span)
+    ax_right.set_ylim(mid_r - 0.5 * span, mid_r + 0.5 * span)
+
+
+def ir_spectrum_qm_corrected(
+    current: np.ndarray,
+    frame_dt_fs: float,
+    temperature_K: float,
+    *,
+    zero_pad: int = 8,
+    smooth_cm: float = 15.0,
+    min_cm: float = 50.0,
+    max_cm: float = 4500.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Charge-current ACF -> IR with harmonic / experimental QM correction.
+
+    ``current`` is J(t) = sum_i q_i v_i or dmu/dt, shape (T, 3).  With
+    C_JJ(w) = w^2 C_mm(w), absorption is
+
+        I(w) ~ [(1 - exp(-beta hbar w)) / w] C_JJ(w)
+             = w (1 - exp(-beta hbar w)) C_mm(w)
+
+    Frequencies below ``min_cm`` are discarded *before* smoothing.  Intensities
+    are left in arbitrary units (no integral normalization).
+
+    Returns ``(freq_cm, I_raw, I_smooth)`` restricted to [min_cm, max_cm].
+    """
+    J = np.asarray(current, dtype=np.float64)
+    J = J - J.mean(axis=0, keepdims=True)
+    acf = autocorrelation(J)
+    freq_cm, c_jj = correlation_to_spectrum(
+        acf, frame_dt_fs, window="blackman", zero_pad=zero_pad, qcf=None
+    )
+    c_jj = np.abs(c_jj)
+
+    t_k = max(float(temperature_K), 1.0)
+    beta_hbar_w = (HC_OVER_K_CM_K / t_k) * freq_cm
+    exp_corr = 1.0 - np.exp(-np.clip(beta_hbar_w, 0.0, 100.0))
+    intensity = np.zeros_like(c_jj)
+    pos = freq_cm > 0.0
+    intensity[pos] = (exp_corr[pos] / freq_cm[pos]) * c_jj[pos]
+
+    # Cut far-IR pedestal before any smooth / display scaling.
+    band = (freq_cm >= float(min_cm)) & (freq_cm <= float(max_cm))
+    freq_cm = freq_cm[band]
+    intensity = intensity[band]
+
+    if smooth_cm > 0.0 and freq_cm.size > 3:
+        df = float(np.median(np.diff(freq_cm)))
+        sigma = max(smooth_cm / (2.0 * np.sqrt(2.0 * np.log(2.0))), df)
+        half = int(max(3, np.ceil(4.0 * sigma / df)))
+        x = np.arange(-half, half + 1) * df
+        ker = np.exp(-0.5 * (x / sigma) ** 2)
+        ker /= ker.sum()
+        smooth = np.convolve(intensity, ker, mode="same")
+    else:
+        smooth = intensity.copy()
+
+    return freq_cm, intensity, smooth
+
+
+def _charge_geometry_scatter(
+    ax,
+    x: np.ndarray,
+    y: np.ndarray,
+    c: np.ndarray,
+    *,
+    cmap: str,
+    xlabel: str,
+    ylabel: str,
+    clabel: str,
+    title: str,
+    s: float = 4.0,
+    alpha: float = 0.35,
+) -> None:
+    """Scatter of geometry with charge (or variance) as color."""
+    x = np.asarray(x, dtype=np.float64).ravel()
+    y = np.asarray(y, dtype=np.float64).ravel()
+    c = np.asarray(c, dtype=np.float64).ravel()
+    sc = ax.scatter(
+        x,
+        y,
+        c=c,
+        s=s,
+        alpha=alpha,
+        cmap=cmap,
+        linewidths=0,
+        rasterized=True,
+    )
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    plt.colorbar(sc, ax=ax, fraction=0.046, pad=0.04, label=clabel)
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--h5", type=Path, required=True)
+    p.add_argument("--box-A", type=float, default=None, help="Cubic box side (A).")
+    p.add_argument("--output-dir", type=Path, required=True)
+    p.add_argument(
+        "--ir-min-cm",
+        type=float,
+        default=50.0,
+        help="Discard frequencies below this (cm^-1) before smooth/scale.",
+    )
+    p.add_argument("--ir-max-cm", type=float, default=4500.0)
+    p.add_argument(
+        "--ir-temperature-K",
+        type=float,
+        default=None,
+        help="Temperature for beta-hbar-w QM correction (default: trajectory mean T).",
+    )
+    p.add_argument(
+        "--ir-smooth-cm",
+        type=float,
+        default=15.0,
+        help="Gaussian HWHM (cm^-1) for display smoothing (0 disables).",
+    )
+    p.add_argument(
+        "--ir-smooth-wide-cm",
+        type=float,
+        default=60.0,
+        help="Wider Gaussian HWHM (cm^-1) shown as dashed overlay.",
+    )
+    p.add_argument(
+        "--ir-rolling-frames",
+        type=int,
+        default=100,
+        help="Rolling-average window (spectrum bins) overlaid on IR plots.",
+    )
+    args = p.parse_args()
+    out = args.output_dir
+    out.mkdir(parents=True, exist_ok=True)
+
+    with h5py.File(args.h5, "r") as f:
+        pos = np.asarray(f["positions"], dtype=np.float64)
+        q = np.asarray(f["charges"], dtype=np.float64)
+        z = np.asarray(f.attrs["atomic_numbers"], dtype=np.int32)
+        t_ps = np.asarray(f["time_ps"], dtype=np.float64)
+        e_tot = np.asarray(f["total_energy"], dtype=np.float64)
+        e_pot = np.asarray(f["potential_energy"], dtype=np.float64)
+        e_kin = np.asarray(f["kinetic_energy"], dtype=np.float64)
+        temp = np.asarray(f["temperature"], dtype=np.float64)
+        velocities = (
+            np.asarray(f["velocities"], dtype=np.float64) if "velocities" in f else None
+        )
+        dt_ps = float(f.attrs["dt_ps"])
+        spr = int(f.attrs["steps_per_recording"])
+        mm_mode = str(f.attrs.get("mm_charge_mode", "?"))
+        box_attr = f.attrs.get("box_A", None)
+
+    box = float(args.box_A if args.box_A is not None else (box_attr or 23.0))
+    frame_dt_fs = dt_ps * 1000.0 * spr
+    n_frames, n_atoms, _ = pos.shape
+    n_mol = n_atoms // 3
+
+    e_tot_kcal = e_tot * EV_TO_KCAL_MOL
+    e_pot_kcal = e_pot * EV_TO_KCAL_MOL
+    e_kin_kcal = e_kin * EV_TO_KCAL_MOL
+    drift = float(e_tot_kcal[-1] - e_tot_kcal[0])
+    slope = float(np.polyfit(t_ps, e_tot_kcal, 1)[0])
+    t_mean = float(np.mean(temp))
+
+    # --- energies: TS including E_pot + mean-centered fits / moments ---
+    de_tot = e_tot_kcal - float(np.mean(e_tot_kcal))
+    de_pot = e_pot_kcal - float(np.mean(e_pot_kcal))
+    de_kin = e_kin_kcal - float(np.mean(e_kin_kcal))
+    energy_moments = {
+        "E_tot": {
+            "mean_kcal_mol": float(np.mean(e_tot_kcal)),
+            "delta_mean_kcal_mol": float(np.mean(de_tot)),
+            "delta_var_kcal_mol2": float(np.var(de_tot)),
+            "delta_std_kcal_mol": float(np.std(de_tot)),
+        },
+        "E_pot": {
+            "mean_kcal_mol": float(np.mean(e_pot_kcal)),
+            "delta_mean_kcal_mol": float(np.mean(de_pot)),
+            "delta_var_kcal_mol2": float(np.var(de_pot)),
+            "delta_std_kcal_mol": float(np.std(de_pot)),
+        },
+        "E_kin": {
+            "mean_kcal_mol": float(np.mean(e_kin_kcal)),
+            "delta_mean_kcal_mol": float(np.mean(de_kin)),
+            "delta_var_kcal_mol2": float(np.var(de_kin)),
+            "delta_std_kcal_mol": float(np.std(de_kin)),
+        },
+    }
+
+    fig = plt.figure(figsize=(12.0, 9.0))
+    gs_e = GridSpec(
+        3,
+        2,
+        figure=fig,
+        height_ratios=[1.15, 1.0, 0.95],
+        width_ratios=[3.4, 1.15],
+        hspace=0.35,
+        wspace=0.18,
+        left=0.08,
+        right=0.98,
+        top=0.93,
+        bottom=0.07,
+    )
+
+    # Row 0: E_tot (absolute, left) + mean-subtracted pot/kin (right, shared scale)
+    ax0 = fig.add_subplot(gs_e[0, 0])
+    ax0b = ax0.twinx()
+    (ln_t,) = ax0.plot(t_ps, e_tot_kcal, color="#1f4e79", lw=0.75, label=r"$E_\mathrm{tot}$")
+    (ln_p,) = ax0b.plot(t_ps, de_pot, color="#c45c26", lw=0.7, label=r"$\Delta E_\mathrm{pot}$")
+    (ln_k,) = ax0b.plot(t_ps, de_kin, color="#2a6f3b", lw=0.7, label=r"$\Delta E_\mathrm{kin}$")
+    ax0.set_ylabel(r"$E_\mathrm{tot}$ (kcal/mol)", color="#1f4e79")
+    ax0b.set_ylabel(r"$\Delta E_\mathrm{pot},\,\Delta E_\mathrm{kin}$ (kcal/mol)")
+    ax0.tick_params(axis="y", colors="#1f4e79")
+    lo = min(float(de_pot.min()), float(de_kin.min()))
+    hi = max(float(de_pot.max()), float(de_kin.max()))
+    pad = 0.06 * (hi - lo + 1e-12)
+    ax0b.set_ylim(lo - pad, hi + pad)
+    ax0.set_title(
+        f"NVE energies (mm_charge_mode={mm_mode}, L={box:.1f} A)  "
+        f"drift={drift:.3f} kcal/mol, slope={slope:.3f} kcal/mol/ps"
+    )
+    ax0.legend(handles=[ln_t, ln_p, ln_k], loc="upper right", frameon=False, fontsize=8)
+    ax0.grid(True, axis="x", alpha=0.2, lw=0.5)
+
+    # Mean-centered rotated hist (all three)
+    ax0h = fig.add_subplot(gs_e[0, 1])
+    for lab, dlt, col in (
+        (r"$\Delta E_\mathrm{tot}$", de_tot, "#1f4e79"),
+        (r"$\Delta E_\mathrm{pot}$", de_pot, "#c45c26"),
+        (r"$\Delta E_\mathrm{kin}$", de_kin, "#2a6f3b"),
+    ):
+        c, edges = np.histogram(dlt, bins=55, density=True)
+        ax0h.barh(
+            0.5 * (edges[:-1] + edges[1:]),
+            c,
+            height=np.diff(edges),
+            color=col,
+            alpha=0.45,
+            label=lab,
+        )
+    ax0h.set_xlabel("dens.")
+    ax0h.set_title(r"$\Delta E=E-\langle E\rangle$", fontsize=9)
+    ax0h.legend(fontsize=7, frameon=False)
+    ax0h.tick_params(axis="y", labelleft=False)
+    ax0h.axhline(0.0, color="0.5", lw=0.6)
+
+    # Row 1: mean-centered time series (same scale)
+    ax1 = fig.add_subplot(gs_e[1, :])
+    ax1.plot(t_ps, de_tot, color="#1f4e79", lw=0.7, label=r"$\Delta E_\mathrm{tot}$")
+    ax1.plot(t_ps, de_pot, color="#c45c26", lw=0.7, label=r"$\Delta E_\mathrm{pot}$")
+    ax1.plot(t_ps, de_kin, color="#2a6f3b", lw=0.7, label=r"$\Delta E_\mathrm{kin}$")
+    ax1.axhline(0.0, color="0.55", lw=0.7)
+    ax1.set_ylabel(r"$\Delta E$ (kcal/mol)")
+    ax1.set_title(r"Mean-subtracted energies (common scale)")
+    ax1.legend(frameon=False, fontsize=8, ncol=3)
+    ax1.grid(True, alpha=0.2, lw=0.5)
+
+    # Row 2: fitted Gaussians on ΔE + moment comparison
+    ax2 = fig.add_subplot(gs_e[2, 0])
+    x_grid = np.linspace(
+        min(de_tot.min(), de_pot.min(), de_kin.min()),
+        max(de_tot.max(), de_pot.max(), de_kin.max()),
+        400,
+    )
+    for lab, dlt, col, key in (
+        (r"$E_\mathrm{tot}$", de_tot, "#1f4e79", "E_tot"),
+        (r"$E_\mathrm{pot}$", de_pot, "#c45c26", "E_pot"),
+        (r"$E_\mathrm{kin}$", de_kin, "#2a6f3b", "E_kin"),
+    ):
+        ax2.hist(dlt, bins=60, density=True, color=col, alpha=0.28)
+        mu1 = float(np.mean(dlt))
+        mu2 = float(np.var(dlt))  # second central moment
+        sig = float(np.sqrt(mu2)) if mu2 > 0 else 1e-12
+        # Normal fit with sample moments (after mean subtraction μ1≈0)
+        pdf = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(
+            -0.5 * ((x_grid - mu1) / sig) ** 2
+        )
+        ax2.plot(
+            x_grid,
+            pdf,
+            color=col,
+            lw=1.6,
+            label=rf"{lab} $\mathcal{{N}}$($\mu_1$={mu1:.2e}, $\sigma$={sig:.3f})",
+        )
+        energy_moments[key]["gauss_fit_mu1"] = mu1
+        energy_moments[key]["gauss_fit_mu2"] = mu2
+    ax2.set_xlabel(r"$\Delta E$ (kcal/mol)")
+    ax2.set_ylabel("density")
+    ax2.set_title(r"Distributions of $E-\langle E\rangle$ + Gaussian fits")
+    ax2.legend(frameon=False, fontsize=7)
+    ax2.axvline(0.0, color="0.5", lw=0.6)
+
+    ax3 = fig.add_subplot(gs_e[2, 1])
+    labels = ["E_tot", "E_pot", "E_kin"]
+    colors_m = ["#1f4e79", "#c45c26", "#2a6f3b"]
+    mu1s = [energy_moments[k]["delta_mean_kcal_mol"] for k in labels]
+    mu2s = [energy_moments[k]["delta_var_kcal_mol2"] for k in labels]
+    x = np.arange(len(labels))
+    w = 0.35
+    # Scale mu1 for visibility (near zero); plot std on twin for second moment
+    ax3.bar(x - w / 2, mu1s, w, color=colors_m, alpha=0.85, label=r"$\mu_1=\langle\Delta E\rangle$")
+    ax3b = ax3.twinx()
+    ax3b.bar(
+        x + w / 2,
+        [np.sqrt(v) for v in mu2s],
+        w,
+        color=colors_m,
+        alpha=0.45,
+        hatch="//",
+        label=r"$\sqrt{\mu_2}=\sigma$",
+    )
+    ax3.axhline(0.0, color="0.5", lw=0.6)
+    ax3.set_xticks(x)
+    ax3.set_xticklabels([r"$E_\mathrm{tot}$", r"$E_\mathrm{pot}$", r"$E_\mathrm{kin}$"])
+    ax3.set_ylabel(r"$\mu_1$ (kcal/mol)")
+    ax3b.set_ylabel(r"$\sigma=\sqrt{\mu_2}$ (kcal/mol)")
+    ax3.set_title(r"Moments of $\Delta E$")
+    # Combined legend
+    h1, l1 = ax3.get_legend_handles_labels()
+    h2, l2 = ax3b.get_legend_handles_labels()
+    ax3.legend(h1 + h2, l1 + l2, frameon=False, fontsize=7, loc="upper left")
+    # Annotate numeric moments
+    txt = "\n".join(
+        f"{k}: μ1={energy_moments[k]['delta_mean_kcal_mol']:.2e}, "
+        f"μ2={energy_moments[k]['delta_var_kcal_mol2']:.3f}, "
+        f"σ={energy_moments[k]['delta_std_kcal_mol']:.3f}"
+        for k in labels
+    )
+    ax3.text(
+        0.02,
+        0.02,
+        txt,
+        transform=ax3.transAxes,
+        fontsize=6.5,
+        family="monospace",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.25", facecolor="white", alpha=0.85, edgecolor="#ccc"),
+    )
+
+    fig.suptitle(
+        f"Energy fluctuations · {n_frames} frames · {t_ps[-1]-t_ps[0]:.2f} ps",
+        fontsize=12,
+        y=0.98,
+    )
+    fig.savefig(out / "energy_fluctuations.png", dpi=170)
+    plt.close(fig)
+
+    # --- charges (1D) ---
+    o_idx = np.where(z == 8)[0]
+    h_idx = np.where(z == 1)[0]
+    q_var = q.var(axis=0)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    axes[0].hist(q[:, o_idx].ravel(), bins=60, color="#c0392b", alpha=0.85, density=True)
+    axes[0].set_xlabel(r"$q_\mathrm{O}$ (e)")
+    axes[0].set_ylabel("density")
+    axes[0].set_title(
+        f"Oxygen  <q>={q[:, o_idx].mean():.3f}  sigma={q[:, o_idx].std():.4f}"
+    )
+    axes[1].hist(q[:, h_idx].ravel(), bins=60, color="#2980b9", alpha=0.85, density=True)
+    axes[1].set_xlabel(r"$q_\mathrm{H}$ (e)")
+    axes[1].set_title(
+        f"Hydrogen  <q>={q[:, h_idx].mean():.3f}  sigma={q[:, h_idx].std():.4f}"
+    )
+    fig.suptitle("Per-element charge distributions")
+    fig.tight_layout()
+    fig.savefig(out / "charge_distributions.png", dpi=160)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(8, 3.5))
+    ax.bar(
+        np.arange(n_atoms),
+        q_var,
+        color=np.where(z == 8, "#c0392b", "#2980b9"),
+        width=1.0,
+    )
+    ax.set_xlabel("atom index")
+    ax.set_ylabel(r"Var$(q)$ ($e^2$)")
+    ax.set_title("Per-atom charge variance over the trajectory")
+    fig.tight_layout()
+    fig.savefig(out / "charge_variance_per_atom.png", dpi=160)
+    plt.close(fig)
+
+    # --- geometry histograms + charge scatter in (r_sym, angle) ---
+    r_oh1, r_oh2, ang = water_geometry(pos, box)
+    r_oh_all = np.concatenate([r_oh1, r_oh2], axis=1)
+    # Symmetric stretch: (r_HaO + r_HbO) / 2  (not a single-bond axis)
+    r_sym = 0.5 * (r_oh1 + r_oh2)
+    q_o = q[:, 0::3]
+    q_h1 = q[:, 1::3]
+    q_h2 = q[:, 2::3]
+    q_h_mean_mol = 0.5 * (q_h1 + q_h2)
+    # Per-molecule charge variance across the trajectory (broadcast to frames)
+    var_q_o = np.broadcast_to(q_o.var(axis=0, keepdims=True), q_o.shape)
+    var_q_h = np.broadcast_to(
+        q_h_mean_mol.var(axis=0, keepdims=True), q_h_mean_mol.shape
+    )
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    axes[0].hist(r_oh_all.ravel(), bins=80, color="#16a085", density=True, alpha=0.9)
+    axes[0].set_xlabel(r"$r_\mathrm{O-H}$ (A)")
+    axes[0].set_ylabel("density")
+    axes[0].set_title(
+        f"O-H bonds  <r>={r_oh_all.mean():.4f} A  sigma={r_oh_all.std():.4f} A"
+    )
+    axes[1].hist(ang.ravel(), bins=80, color="#8e44ad", density=True, alpha=0.9)
+    axes[1].set_xlabel(r"angle H-O-H (deg)")
+    axes[1].set_title(
+        f"H-O-H angle  <theta>={ang.mean():.2f} deg  sigma={ang.std():.2f} deg"
+    )
+    fig.tight_layout()
+    fig.savefig(out / "geometry_distributions.png", dpi=160)
+    plt.close(fig)
+
+    # Charge colored by q (Reds / Blues)
+    fig, axes = plt.subplots(1, 2, figsize=(11.5, 5.0))
+    _charge_geometry_scatter(
+        axes[0],
+        r_sym,
+        ang,
+        q_o,
+        cmap="Reds",
+        xlabel=r"$(r_\mathrm{HaO}+r_\mathrm{HbO})/2$ (A)",
+        ylabel=r"$\angle\mathrm{HOH}$ (deg)",
+        clabel=r"$q_\mathrm{O}$ (e)",
+        title=r"Oxygen charge",
+    )
+    _charge_geometry_scatter(
+        axes[1],
+        r_sym,
+        ang,
+        q_h_mean_mol,
+        cmap="Blues",
+        xlabel=r"$(r_\mathrm{HaO}+r_\mathrm{HbO})/2$ (A)",
+        ylabel=r"$\angle\mathrm{HOH}$ (deg)",
+        clabel=r"$\langle q_\mathrm{H}\rangle$ (e)",
+        title=r"Hydrogen charge",
+    )
+    fig.suptitle("Charge vs symmetric stretch and HOH angle", y=1.02)
+    fig.tight_layout()
+    fig.savefig(out / "charge_vs_geometry_scatter.png", dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+    # Variance colored (same axes; per-molecule Var_t(q))
+    fig, axes = plt.subplots(1, 2, figsize=(11.5, 5.0))
+    _charge_geometry_scatter(
+        axes[0],
+        r_sym,
+        ang,
+        var_q_o,
+        cmap="Reds",
+        xlabel=r"$(r_\mathrm{HaO}+r_\mathrm{HbO})/2$ (A)",
+        ylabel=r"$\angle\mathrm{HOH}$ (deg)",
+        clabel=r"$\mathrm{Var}_t(q_\mathrm{O})$ ($e^2$)",
+        title=r"Oxygen charge variance",
+    )
+    _charge_geometry_scatter(
+        axes[1],
+        r_sym,
+        ang,
+        var_q_h,
+        cmap="Blues",
+        xlabel=r"$(r_\mathrm{HaO}+r_\mathrm{HbO})/2$ (A)",
+        ylabel=r"$\angle\mathrm{HOH}$ (deg)",
+        clabel=r"$\mathrm{Var}_t(\langle q_\mathrm{H}\rangle)$ ($e^2$)",
+        title=r"Hydrogen charge variance",
+    )
+    fig.suptitle(
+        "Per-molecule charge variance vs symmetric stretch and HOH angle", y=1.02
+    )
+    fig.tight_layout()
+    fig.savefig(
+        out / "charge_variance_vs_geometry_scatter.png", dpi=170, bbox_inches="tight"
+    )
+    plt.close(fig)
+
+    corr_qo_r = float(np.corrcoef(r_sym.ravel(), q_o.ravel())[0, 1])
+    corr_qh_r = float(np.corrcoef(r_sym.ravel(), q_h_mean_mol.ravel())[0, 1])
+    corr_qo_a = float(np.corrcoef(ang.ravel(), q_o.ravel())[0, 1])
+    corr_qh_a = float(np.corrcoef(ang.ravel(), q_h_mean_mol.ravel())[0, 1])
+
+    geom_psd = write_geometry_power_spectra(
+        out / "geometry_power_spectra.png",
+        r_oh1=r_oh1,
+        r_oh2=r_oh2,
+        ang=ang,
+        frame_dt_fs=frame_dt_fs,
+        min_cm=float(args.ir_min_cm),
+        max_cm=float(args.ir_max_cm),
+        smooth_cm=float(args.ir_smooth_cm),
+    )
+    oh_psd = write_oh_bond_power_spectra(
+        out / "oh_bond_power_spectra.png",
+        r_oh1=r_oh1,
+        r_oh2=r_oh2,
+        frame_dt_fs=frame_dt_fs,
+        min_cm=float(args.ir_min_cm),
+        max_cm=float(args.ir_max_cm),
+        smooth_cm=float(args.ir_smooth_cm),
+    )
+
+    # --- IR: mol vs box + alternate processing recipes ---
+    t_ir = float(args.ir_temperature_K) if args.ir_temperature_K else t_mean
+    if args.ir_temperature_K is None and t_mean < 250.0:
+        t_ir = 300.0
+    smooth_n = float(args.ir_smooth_cm)
+    smooth_w = float(args.ir_smooth_wide_cm)
+    roll_n = int(args.ir_rolling_frames)
+    fmin = float(args.ir_min_cm)
+    fmax = float(args.ir_max_cm)
+
+    mu_mol = molecular_dipoles(pos, q, z, box)
+    J_mol = np.gradient(mu_mol, frame_dt_fs, axis=0)
+    f_mol, raw_mol, _ = ir_spectrum_qm_corrected(
+        J_mol, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+    )
+    sm_mol = _smooth_spectrum(f_mol, raw_mol, smooth_n)
+    sm_mol_w = _smooth_spectrum(f_mol, raw_mol, smooth_w)
+    roll_mol = _rolling_avg(raw_mol, roll_n)
+
+    has_box = velocities is not None
+    if has_box:
+        J_box = np.sum(q[..., None] * velocities, axis=1)
+        f_box, raw_box, _ = ir_spectrum_qm_corrected(
+            J_box, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+        )
+        sm_box = _smooth_spectrum(f_box, raw_box, smooth_n)
+        sm_box_w = _smooth_spectrum(f_box, raw_box, smooth_w)
+        roll_box = _rolling_avg(raw_box, roll_n)
+    else:
+        f_box = raw_box = sm_box = sm_box_w = roll_box = None
+
+    def _peak_norm(y: np.ndarray) -> np.ndarray:
+        m = float(np.max(np.abs(y))) if y.size else 0.0
+        return y / m if m > 0.0 else y
+
+    def _cut(f: np.ndarray, s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        m = (f >= fmin) & (f <= fmax)
+        return f[m], s[m]
+
+    fig, axes = plt.subplots(3, 1, figsize=(9.5, 9.5), sharex=True)
+    ax = axes[0]
+    ax.plot(f_mol, raw_mol, color="#1f4e79", lw=0.35, alpha=0.25)
+    ax.plot(f_mol, sm_mol, color="#1f4e79", lw=1.3, label=rf"$\dot\mu$ HWHM={smooth_n:g}")
+    ax.plot(f_mol, sm_mol_w, color="#1f4e79", lw=1.45, ls="--", label=rf"$\dot\mu$ HWHM={smooth_w:g}")
+    ax.plot(f_mol, roll_mol, color="#5dade2", lw=1.2, ls="-.", label=rf"$\dot\mu$ roll-{roll_n}")
+    if has_box:
+        ax.plot(f_box, raw_box, color="#c0392b", lw=0.35, alpha=0.25)
+        ax.plot(f_box, sm_box, color="#c0392b", lw=1.3, label=rf"$J$ HWHM={smooth_n:g}")
+        ax.plot(f_box, sm_box_w, color="#c0392b", lw=1.45, ls="--", label=rf"$J$ HWHM={smooth_w:g}")
+        ax.plot(f_box, roll_box, color="#e74c3c", lw=1.2, ls="-.", label=rf"$J$ roll-{roll_n}")
+    ax.set_ylabel("intensity (arb. u.)")
+    ax.set_title(
+        f"IR · QM corr. omega*(1-exp(-beta hbar omega)) at T={t_ir:.0f} K · "
+        f"cut <{fmin:g} cm$^{{-1}}$"
+    )
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=7, ncol=3)
+
+    ax = axes[1]
+    ax.plot(f_mol, _peak_norm(sm_mol), color="#1f4e79", lw=1.3, label=rf"$\dot\mu$ HWHM={smooth_n:g}")
+    ax.plot(f_mol, _peak_norm(sm_mol_w), color="#1f4e79", lw=1.45, ls="--", label=rf"$\dot\mu$ HWHM={smooth_w:g}")
+    ax.plot(f_mol, _peak_norm(roll_mol), color="#5dade2", lw=1.2, ls="-.", label=rf"$\dot\mu$ roll-{roll_n}")
+    if has_box:
+        ax.plot(f_box, _peak_norm(sm_box), color="#c0392b", lw=1.3, label=rf"$J$ HWHM={smooth_n:g}")
+        ax.plot(f_box, _peak_norm(sm_box_w), color="#c0392b", lw=1.45, ls="--", label=rf"$J$ HWHM={smooth_w:g}")
+        ax.plot(f_box, _peak_norm(roll_box), color="#e74c3c", lw=1.2, ls="-.", label=rf"$J$ roll-{roll_n}")
+    ax.set_ylabel("intensity (peak-norm.)")
+    ax.set_title("peak-normalized")
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=7, ncol=3)
+
+    ax = axes[2]
+    if has_box:
+        if f_box.shape != f_mol.shape or not np.allclose(f_box, f_mol):
+            sm_box_i = np.interp(f_mol, f_box, sm_box)
+            sm_box_w_i = np.interp(f_mol, f_box, sm_box_w)
+            roll_box_i = np.interp(f_mol, f_box, roll_box)
+        else:
+            sm_box_i, sm_box_w_i, roll_box_i = sm_box, sm_box_w, roll_box
+        diff_n = _peak_norm(sm_mol) - _peak_norm(sm_box_i)
+        diff_w = _peak_norm(sm_mol_w) - _peak_norm(sm_box_w_i)
+        diff_r = _peak_norm(roll_mol) - _peak_norm(roll_box_i)
+        ax.axhline(0.0, color="0.6", lw=0.7)
+        ax.plot(f_mol, diff_n, color="#2c3e50", lw=1.3, label=rf"Δ peak-norm HWHM={smooth_n:g}")
+        ax.plot(f_mol, diff_w, color="#2c3e50", lw=1.5, ls="--", label=rf"Δ peak-norm HWHM={smooth_w:g}")
+        ax.plot(f_mol, diff_r, color="#8e44ad", lw=1.3, ls="-.", label=rf"Δ peak-norm roll-{roll_n}")
+        ax.set_ylabel(r"$\Delta I$ (peak-norm.)")
+        ax.set_title(r"peak-norm($\dot\mu_\mathrm{mol}$) − peak-norm($J$)")
+        ax.legend(frameon=False, fontsize=8)
+    else:
+        ax.text(0.5, 0.5, "no velocities → no box current", transform=ax.transAxes,
+                ha="center", va="center")
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_xlim(fmin, fmax)
+    fig.suptitle(
+        f"frame dt={frame_dt_fs:.3f} fs · {n_frames} frames · {n_mol} TIP3",
+        fontsize=10,
+        y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(out / "ir_spectrum.png", dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+    # Alternate processing on molecular dipole (same cut / arb. / peak-norm overlay)
+    variants: list[tuple[str, np.ndarray, np.ndarray]] = []
+    # 1) μ̇ ACF + exp QM (reference)
+    variants.append(("mu_dot ACF + exp QM", f_mol, raw_mol))
+    # 2) μ ACF + harmonic ω
+    f1, s1 = _spectrum_from_signal(mu_mol, frame_dt_fs, kind="acf")
+    s1 = _apply_qm_factor(f1, s1, t_ir, mode="harmonic")
+    f1, s1 = _cut(f1, s1)
+    variants.append(("mu ACF + harmonic ω", f1, s1))
+    # 3) μ ACF + full exp QM
+    f2, s2 = _spectrum_from_signal(mu_mol, frame_dt_fs, kind="acf")
+    s2 = _apply_qm_factor(f2, s2, t_ir, mode="exp_qm")
+    f2, s2 = _cut(f2, s2)
+    variants.append(("mu ACF + exp QM", f2, s2))
+    # 4) periodogram |FT μ|² + exp QM
+    f3, s3 = _spectrum_from_signal(mu_mol, frame_dt_fs, kind="periodogram")
+    s3 = _apply_qm_factor(f3, s3, t_ir, mode="exp_qm")
+    f3, s3 = _cut(f3, s3)
+    variants.append(("mu periodogram + exp QM", f3, s3))
+    # 5) μ̇ ACF, no QM
+    f4, s4 = _spectrum_from_signal(J_mol, frame_dt_fs, kind="acf")
+    s4 = _apply_qm_factor(f4, s4, t_ir, mode="none")
+    f4, s4 = _cut(f4, s4)
+    variants.append(("mu_dot ACF, no QM", f4, s4))
+    # 6) time-domain 100-frame rolling on μ before spectrum (low-pass)
+    ker = np.ones(roll_n) / roll_n
+    mu_roll = np.stack(
+        [np.convolve(mu_mol[:, a], ker, mode="same") for a in range(3)], axis=1
+    )
+    J_roll = np.gradient(mu_roll, frame_dt_fs, axis=0)
+    f5, s5 = _spectrum_from_signal(J_roll, frame_dt_fs, kind="acf")
+    s5 = _apply_qm_factor(f5, s5, t_ir, mode="exp_qm_from_JJ")
+    f5, s5 = _cut(f5, s5)
+    variants.append((f"mu roll-{roll_n} then mu_dot ACF + exp QM", f5, s5))
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.5), sharex=True)
+    cmap = plt.get_cmap("tab10")
+    ax = axes[0]
+    for i, (name, f, s) in enumerate(variants):
+        ax.plot(f, _smooth_spectrum(f, s, smooth_w), color=cmap(i), lw=1.2, label=name)
+    ax.set_yscale("log")
+    ax.set_ylabel("I (arb. u., log)")
+    ax.set_title(
+        f"IR processing variants on $μ_\\mathrm{{mol}}$ · cut <{fmin:g} · "
+        f"wide smooth HWHM={smooth_w:g}"
+    )
+    ax.legend(frameon=False, fontsize=7)
+    ax.grid(True, which="both", alpha=0.25, lw=0.5)
+
+    ax = axes[1]
+    for i, (name, f, s) in enumerate(variants):
+        sm = _smooth_spectrum(f, s, smooth_w)
+        ax.plot(f, _peak_norm(sm), color=cmap(i), lw=1.25, label=name)
+        ax.plot(f, _peak_norm(_rolling_avg(s, roll_n)), color=cmap(i), lw=1.0, ls=":", alpha=0.8)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("I (peak-norm.)")
+    ax.set_title(f"peak-norm · solid=HWHM {smooth_w:g} · dotted=roll-{roll_n}")
+    ax.set_xlim(fmin, fmax)
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=7, ncol=2)
+    fig.tight_layout()
+    fig.savefig(out / "ir_processing_variants.png", dpi=170)
+    plt.close(fig)
+
+    ir_method = "molecular_dipole_velocity"
+    ir_specs = {"molecular_dipole_velocity": (f_mol, raw_mol, sm_mol)}
+    if has_box:
+        ir_specs["atomic_charge_current"] = (f_box, raw_box, sm_box)
+    freq_cm, ir_raw, ir_smooth = f_mol, raw_mol, sm_mol
+    save_kw: dict = {
+        "freq_cm_mol": f_mol,
+        "intensity_mol": raw_mol,
+        "intensity_smooth_mol": sm_mol,
+        "intensity_smooth_wide_mol": sm_mol_w,
+        "intensity_rolling_mol": roll_mol,
+        "frame_dt_fs": frame_dt_fs,
+        "temperature_K_qcf": t_ir,
+        "ir_min_cm": fmin,
+        "ir_max_cm": fmax,
+        "smooth_hwhm_cm": smooth_n,
+        "smooth_wide_hwhm_cm": smooth_w,
+        "rolling_frames": roll_n,
+        "qm_correction": "omega*(1-exp(-beta*hbar*omega))  [freq-dependent]",
+        "qm_correction_freq_dependent": True,
+        "methods": np.array(list(ir_specs.keys())),
+        "variant_names": np.array([v[0] for v in variants]),
+        "units": "arbitrary",
+        "freq_cm": freq_cm,
+        "intensity": ir_raw,
+        "intensity_smooth": ir_smooth,
+        "method": ir_method,
+    }
+    if has_box:
+        save_kw["freq_cm_box"] = f_box
+        save_kw["intensity_box"] = raw_box
+        save_kw["intensity_smooth_box"] = sm_box
+        save_kw["intensity_smooth_wide_box"] = sm_box_w
+        save_kw["intensity_rolling_box"] = roll_box
+        save_kw["diff_peaknorm_mol_minus_box"] = diff_n
+        save_kw["diff_peaknorm_mol_minus_box_wide"] = diff_w
+        save_kw["diff_peaknorm_mol_minus_box_roll"] = diff_r
+    # Fixed TIP3 charges vs fluctuating q0 (same geometry / velocities)
+    q_tip3_1d = tip3_fixed_charges(z)
+    q_tip3 = np.broadcast_to(q_tip3_1d[None, :], q.shape).copy()
+    mu_tip3 = molecular_dipoles(pos, q_tip3, z, box)
+    J_tip3 = np.gradient(mu_tip3, frame_dt_fs, axis=0)
+    f_t3, raw_t3, _ = ir_spectrum_qm_corrected(
+        J_tip3, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+    )
+    sm_t3 = _smooth_spectrum(f_t3, raw_t3, smooth_n)
+    sm_t3_w = _smooth_spectrum(f_t3, raw_t3, smooth_w)
+    if has_box:
+        J_box_t3 = np.sum(q_tip3[..., None] * velocities, axis=1)
+        f_bt3, raw_bt3, _ = ir_spectrum_qm_corrected(
+            J_box_t3, frame_dt_fs, t_ir, smooth_cm=0.0, min_cm=fmin, max_cm=fmax
+        )
+        sm_bt3 = _smooth_spectrum(f_bt3, raw_bt3, smooth_n)
+        sm_bt3_w = _smooth_spectrum(f_bt3, raw_bt3, smooth_w)
+    else:
+        f_bt3 = raw_bt3 = sm_bt3 = sm_bt3_w = None
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.2), sharex=True)
+    ax = axes[0]
+    ax.plot(f_mol, sm_mol, color="#1f4e79", lw=1.35, label=r"$q^0$ fluct. $\dot\mu_\mathrm{mol}$")
+    ax.plot(f_t3, sm_t3, color="#16a085", lw=1.35, label=r"TIP3 fixed $\dot\mu_\mathrm{mol}$")
+    ax.plot(f_mol, sm_mol_w, color="#1f4e79", lw=1.4, ls="--", alpha=0.85)
+    ax.plot(f_t3, sm_t3_w, color="#16a085", lw=1.4, ls="--", alpha=0.85)
+    if has_box:
+        ax.plot(f_box, sm_box, color="#c0392b", lw=1.1, alpha=0.85, label=r"$q^0$ fluct. $J$")
+        ax.plot(f_bt3, sm_bt3, color="#e67e22", lw=1.1, alpha=0.85, label=r"TIP3 fixed $J$")
+    ax.set_ylabel("intensity (arb. u.)")
+    ax.set_title(
+        f"IR: fluctuating $q^0$ vs fixed TIP3 ({TIP3_Q_O}/{TIP3_Q_H}/{TIP3_Q_H}) · "
+        f"T_QCF={t_ir:.0f} K · cut <{fmin:g} · solid HWHM={smooth_n:g}, dashed {smooth_w:g}"
+    )
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=8)
+
+    ax = axes[1]
+    ax.plot(f_mol, _peak_norm(sm_mol), color="#1f4e79", lw=1.35, label=r"$q^0$ $\dot\mu$")
+    ax.plot(f_t3, _peak_norm(sm_t3), color="#16a085", lw=1.35, label=r"TIP3 $\dot\mu$")
+    ax.plot(f_mol, _peak_norm(sm_mol_w), color="#1f4e79", lw=1.4, ls="--", alpha=0.85)
+    ax.plot(f_t3, _peak_norm(sm_t3_w), color="#16a085", lw=1.4, ls="--", alpha=0.85)
+    if has_box:
+        ax.plot(f_box, _peak_norm(sm_box), color="#c0392b", lw=1.1, label=r"$q^0$ $J$")
+        ax.plot(f_bt3, _peak_norm(sm_bt3), color="#e67e22", lw=1.1, label=r"TIP3 $J$")
+    if f_t3.shape != f_mol.shape or not np.allclose(f_t3, f_mol):
+        sm_t3_i = np.interp(f_mol, f_t3, sm_t3_w)
+    else:
+        sm_t3_i = sm_t3_w
+    d_qt = _peak_norm(sm_mol_w) - _peak_norm(sm_t3_i)
+    ax2 = ax.twinx()
+    ax2.plot(
+        f_mol,
+        d_qt,
+        color="#8e44ad",
+        lw=1.2,
+        ls=":",
+        label=r"peak-norm $\Delta\dot\mu$ ($q^0-$TIP3)",
+    )
+    ax2.set_ylabel(r"$\Delta I_{\dot\mu}$ (peak-norm)", color="#8e44ad")
+    ax2.tick_params(axis="y", colors="#8e44ad")
+    ax2.axhline(0.0, color="#8e44ad", lw=0.5, alpha=0.4)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel("intensity (peak-norm.)")
+    ax.set_xlim(fmin, fmax)
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False, fontsize=8, loc="upper right")
+    fig.tight_layout()
+    fig.savefig(out / "ir_q0_vs_tip3.png", dpi=170)
+    plt.close(fig)
+
+    # Blow up the mid/high-frequency floor (exclude far-IR spike from y-scale)
+    floor_lo = 800.0
+    m_floor = (f_mol >= floor_lo) & (f_mol <= fmax)
+
+    def _on_mol_grid(f: np.ndarray, s: np.ndarray) -> np.ndarray:
+        if f.shape == f_mol.shape and np.allclose(f, f_mol):
+            return s
+        return np.interp(f_mol, f, s)
+
+    floor_series = [
+        (f_mol, sm_mol, "#1f4e79", r"$q^0$ $\dot\mu$ HWHM=15", "-"),
+        (f_t3, sm_t3, "#16a085", r"TIP3 $\dot\mu$ HWHM=15", "-"),
+        (f_mol, sm_mol_w, "#1f4e79", r"$q^0$ $\dot\mu$ HWHM=60", "--"),
+        (f_t3, sm_t3_w, "#16a085", r"TIP3 $\dot\mu$ HWHM=60", "--"),
+    ]
+    if has_box:
+        floor_series += [
+            (f_box, sm_box, "#c0392b", r"$q^0$ $J$ HWHM=15", "-"),
+            (f_bt3, sm_bt3, "#e67e22", r"TIP3 $J$ HWHM=15", "-"),
+            (f_box, sm_box_w, "#c0392b", r"$q^0$ $J$ HWHM=60", "--"),
+            (f_bt3, sm_bt3_w, "#e67e22", r"TIP3 $J$ HWHM=60", "--"),
+        ]
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.2), sharex=True)
+
+    ax = axes[0]
+    ymax = 0.0
+    for f, s, c, lab, ls in floor_series:
+        y = _on_mol_grid(f, s)
+        ax.plot(f_mol[m_floor], y[m_floor], color=c, lw=1.25, ls=ls, label=lab)
+        ymax = max(ymax, float(np.max(y[m_floor])) if np.any(m_floor) else 0.0)
+    ax.axvline(1600, color="0.65", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.65", ls=":", lw=0.8)
+    ax.set_ylabel("intensity (arb. u.)")
+    ax.set_title(
+        f"absolute · y-scale from ≥{floor_lo:g} cm$^{{-1}}$ only (far-IR spike excluded)"
+    )
+    ax.set_ylim(0, ymax * 1.15 if ymax > 0 else 1.0)
+    ax.legend(frameon=False, fontsize=7, ncol=2)
+    ax.grid(True, alpha=0.2, lw=0.5)
+
+    ax = axes[1]
+    for f, s, c, lab, ls in floor_series:
+        if "HWHM=15" in lab:
+            continue  # keep panel readable: wide smooth only
+        y = _on_mol_grid(f, s)[m_floor]
+        scale = float(np.max(np.abs(y))) if y.size and np.max(np.abs(y)) > 0 else 1.0
+        ax.plot(f_mol[m_floor], y / scale, color=c, lw=1.45, ls=ls, label=lab)
+    ax.axvline(1600, color="0.65", ls=":", lw=0.8)
+    ax.axvline(3400, color="0.65", ls=":", lw=0.8)
+    ax.text(1600, 0.92, "bend", ha="center", fontsize=8, color="0.45")
+    ax.text(3400, 0.92, "stretch", ha="center", fontsize=8, color="0.45")
+    ax.set_xlim(floor_lo, fmax)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel(r"wavenumber (cm$^{-1}$)")
+    ax.set_ylabel(f"intensity (re-norm. on ≥{floor_lo:g} cm$^{{-1}}$)")
+    ax.set_title("each curve / max in this window")
+    ax.legend(frameon=False, fontsize=8)
+    ax.grid(True, alpha=0.2, lw=0.5)
+
+    fig.suptitle(
+        f"IR noise-floor blow-up · display ≥{floor_lo:g} cm$^{{-1}}$",
+        fontsize=11,
+        y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(out / "ir_noise_floor_blowup.png", dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+    save_kw["freq_cm_tip3_mol"] = f_t3
+    save_kw["intensity_tip3_mol"] = raw_t3
+    save_kw["intensity_smooth_tip3_mol"] = sm_t3
+    save_kw["tip3_charges_e"] = np.array([TIP3_Q_O, TIP3_Q_H, TIP3_Q_H])
+    if has_box:
+        save_kw["freq_cm_tip3_box"] = f_bt3
+        save_kw["intensity_tip3_box"] = raw_bt3
+        save_kw["intensity_smooth_tip3_box"] = sm_bt3
+    np.savez_compressed(out / "ir_spectrum.npz", **save_kw)
+
+    dash_meta = write_nve_validation_dashboard(
+        out / "nve_validation_dashboard.png",
+        t_ps=t_ps,
+        e_tot_kcal=e_tot_kcal,
+        e_pot_kcal=e_pot_kcal,
+        e_kin_kcal=e_kin_kcal,
+        temp=temp,
+        r_sym=r_sym,
+        ang=ang,
+        q_o=q_o,
+        q_h_mean=q_h_mean_mol,
+        freq_cm=freq_cm,
+        ir_smooth=ir_smooth,
+        ir_vib=ir_smooth,
+        frame_dt_fs=frame_dt_fs,
+        mm_mode=mm_mode,
+        box=box,
+        n_mol=n_mol,
+        ir_method=ir_method,
+        t_ir=t_ir,
+        ir_min_cm=float(args.ir_min_cm),
+    )
+
+    summary = {
+        "h5": str(args.h5),
+        "n_frames": int(n_frames),
+        "n_molecules": int(n_mol),
+        "box_A": box,
+        "mm_charge_mode": mm_mode,
+        "frame_dt_fs": frame_dt_fs,
+        "duration_ps": float(t_ps[-1] - t_ps[0]),
+        "energy": {
+            "E_tot_drift_kcal_mol": drift,
+            "E_tot_slope_kcal_mol_per_ps": slope,
+            "E_tot_std_kcal_mol": float(np.std(e_tot_kcal)),
+            "E_pot_std_kcal_mol": float(np.std(e_pot_kcal)),
+            "E_kin_std_kcal_mol": float(np.std(e_kin_kcal)),
+            "T_mean_K": t_mean,
+            "T_std_K": float(np.std(temp)),
+            "corr_Epot_Ekin": dash_meta["corr_Epot_Ekin"],
+            "E_kin_psd_peak_cm": dash_meta["E_kin_psd_peak_cm"],
+            "moments_mean_centered": energy_moments,
+        },
+        "charges": {
+            "q_O_mean": float(q[:, o_idx].mean()),
+            "q_O_std": float(q[:, o_idx].std()),
+            "q_H_mean": float(q[:, h_idx].mean()),
+            "q_H_std": float(q[:, h_idx].std()),
+            "corr_qO_vs_r_sym": corr_qo_r,
+            "corr_qH_vs_r_sym": corr_qh_r,
+            "corr_qO_vs_angle": corr_qo_a,
+            "corr_qH_vs_angle": corr_qh_a,
+        },
+        "geometry": {
+            "r_OH_mean_A": float(r_oh_all.mean()),
+            "r_OH_std_A": float(r_oh_all.std()),
+            "r_sym_mean_A": float(r_sym.mean()),
+            "r_sym_std_A": float(r_sym.std()),
+            "angle_HOH_mean_deg": float(ang.mean()),
+            "angle_HOH_std_deg": float(ang.std()),
+            "power_spectra": geom_psd,
+            "oh_bond_power_spectra": oh_psd,
+        },
+        "ir": {
+            "temperature_K_qcf": t_ir,
+            "primary_method": ir_method,
+            "methods": list(ir_specs.keys()),
+            "qm_correction": "omega*(1-exp(-beta*hbar*omega))",
+            "ir_min_cm": float(args.ir_min_cm),
+            "ir_max_cm": float(args.ir_max_cm),
+            "units": "arbitrary",
+            "cut_before_smooth": True,
+            "smooth_hwhm_cm": float(args.ir_smooth_cm),
+            "smooth_wide_hwhm_cm": float(args.ir_smooth_wide_cm),
+            "rolling_frames": int(args.ir_rolling_frames),
+            "qm_correction_freq_dependent": True,
+            "tip3_fixed_charges_e": [TIP3_Q_O, TIP3_Q_H, TIP3_Q_H],
+            "note": (
+                f"frame_dt_fs={frame_dt_fs:.3f}. "
+                f"Frequencies <{args.ir_min_cm:g} cm^-1 removed before smooth. "
+                "QM factor omega*(1-exp(-beta*hbar*omega)) is frequency-dependent. "
+                "See ir_q0_vs_tip3.png for fluctuating q0 vs fixed TIP3 charges."
+            ),
+        },
+        "artifacts": [
+            "nve_validation_dashboard.png",
+            "energy_fluctuations.png",
+            "charge_distributions.png",
+            "charge_variance_per_atom.png",
+            "geometry_distributions.png",
+            "charge_vs_geometry_scatter.png",
+            "charge_variance_vs_geometry_scatter.png",
+            "geometry_power_spectra.png",
+            "oh_bond_power_spectra.png",
+            "oh_bond_power_spectra.npz",
+            "ir_spectrum.png",
+            "ir_processing_variants.png",
+            "ir_q0_vs_tip3.png",
+            "ir_noise_floor_blowup.png",
+            "ir_spectrum.npz",
+        ],
+    }
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(summary)
+
+
+if __name__ == "__main__":
+    main()

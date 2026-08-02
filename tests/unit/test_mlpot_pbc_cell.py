@@ -124,6 +124,87 @@ def test_build_decomposed_mlpot_vacuum_cell_false():
     assert model._get_update_fn is get_update_fn
 
 
+def test_periodic_external_deploys_scales_and_does_not_enter_jax_mm_guard(tmp_path):
+    """#139: CHARMM deployment is a valid LJ consumer when JAX MM is off."""
+    z = np.array([8, 1, 1, 8, 1, 1], dtype=int)
+    sidecar = tmp_path / "hybrid_mm.json"
+    sidecar.write_text("{}", encoding="utf-8")
+    args = type(
+        "Args",
+        (),
+        {
+            "mm_nonbond_mode": "periodic_external",
+            "include_mm": True,
+            "mm_lj_scales_file": str(sidecar),
+            "lr_solver": "ewald",
+            "ml_spatial_mpi": None,
+            "max_pairs": None,
+        },
+    )()
+    factory = MagicMock(return_value=(None, MagicMock(), None))
+
+    with _hybrid_compat_patch(), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        return_value=factory,
+    ) as mock_setup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(None, MagicMock(), None),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), patch(
+        "mmml.models.mm_lj_scales.find_learnable_lj_scales_sidecar",
+        return_value=sidecar,
+    ) as find_sidecar, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm.deploy_scaled_lj_into_charmm"
+    ) as deploy:
+        model = build_decomposed_mlpot_model(
+            tmp_path / "params.json",
+            z,
+            [3, 3],
+            2,
+            cell=30.0,
+            args=args,
+        )
+
+    deploy.assert_called_once_with(sidecar, verbose=False)
+    find_sidecar.assert_called_once_with(
+        scales_file=str(sidecar),
+        checkpoint=(tmp_path / "params.json").resolve(),
+    )
+    assert mock_setup.call_args.kwargs["doMM"] is False
+    assert model._do_mm is False
+
+
+def test_periodic_external_rejects_explicit_scales_when_mm_is_disabled(tmp_path):
+    """Protect against silently claiming deployment in an ML-only run."""
+    z = np.array([8, 1, 1, 8, 1, 1], dtype=int)
+    sidecar = tmp_path / "hybrid_mm.json"
+    sidecar.write_text("{}", encoding="utf-8")
+    args = type(
+        "Args",
+        (),
+        {
+            "mm_nonbond_mode": "periodic_external",
+            "include_mm": False,
+            "mm_lj_scales_file": str(sidecar),
+            "lr_solver": "ewald",
+            "ml_spatial_mpi": None,
+            "max_pairs": None,
+        },
+    )()
+
+    with _hybrid_compat_patch(), pytest.raises(ValueError, match="no LJ backend"):
+        build_decomposed_mlpot_model(
+            tmp_path / "params.json",
+            z,
+            [3, 3],
+            2,
+            cell=30.0,
+            args=args,
+        )
+
+
 def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
     z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
     per = [4, 4]
@@ -157,7 +238,11 @@ def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
         mock_unpack.assert_not_called()
         model.get_pycharmm_calculator()
     mock_setup.assert_called_once()
-    assert mock_setup.call_args.kwargs["defer_xla_gpu_warmup"] is True
+    # Default (GPU) MLpot runs no longer defer XLA GPU warmup: setup_calculator
+    # is called with defer_xla_gpu_warmup=False and the warmup runs eagerly.
+    # Deferral is now gated on the CPU-load path (_cpu_load in
+    # build_decomposed_mlpot_model), which is not exercised here.
+    assert mock_setup.call_args.kwargs["defer_xla_gpu_warmup"] is False
     mock_xla_warm.assert_called_once()
     mock_unpack.assert_called_once()
     assert model._spherical_fn is not None
@@ -236,31 +321,40 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_without_jax_pme():
 
 def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
     """jax-pme mesh defer still promotes on first hybrid ENER."""
-    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
-    model = DecomposedMlpotModel(
-        MagicMock(),
-        CutoffParameters(),
-        2,
-        z,
-        cell=40.0,
-        do_mm=True,
-        defer_jax_until_after_sd=True,
-        lr_solver="jax_pme",
-        jax_pme_method="pme",
-    )
-    model._jax_on_gpu = False
-    calc = MagicMock(spec=DecomposedMlpotCalculator)
-    calc._spherical_forward_fn = "cached"
-    calc._forward_cache_key = ("k",)
-    calc.spherical_fn = MagicMock()
-    calc._get_update_fn = None
-    calc._cached_update_fn = "cached_update"
+    # jax-pme is an optional extra (see pyproject.toml's jax-pme-solver);
+    # this test exercises the mesh-defer logic regardless of whether it's
+    # actually installed in the test environment.
+    with patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+        model = DecomposedMlpotModel(
+            MagicMock(),
+            CutoffParameters(),
+            2,
+            z,
+            cell=40.0,
+            do_mm=True,
+            defer_jax_until_after_sd=True,
+            lr_solver="jax_pme",
+            jax_pme_method="pme",
+        )
+        model._jax_on_gpu = False
+        calc = MagicMock(spec=DecomposedMlpotCalculator)
+        calc._spherical_forward_fn = "cached"
+        calc._forward_cache_key = ("k",)
+        calc.spherical_fn = MagicMock()
+        calc._get_update_fn = None
+        calc._cached_update_fn = "cached_update"
 
-    def _fake_promote(**_kwargs: object) -> None:
-        model._jax_on_gpu = True
+        def _fake_promote(**_kwargs: object) -> None:
+            model._jax_on_gpu = True
 
-    with patch.object(model, "promote_jax_factory_to_gpu", side_effect=_fake_promote) as mock_promote:
-        model._maybe_promote_deferred_jax_on_hybrid_eval(calc)
+        with patch.object(
+            model, "promote_jax_factory_to_gpu", side_effect=_fake_promote
+        ) as mock_promote:
+            model._maybe_promote_deferred_jax_on_hybrid_eval(calc)
 
     mock_promote.assert_called_once()
     assert calc._spherical_forward_fn is None
@@ -322,6 +416,51 @@ def test_finalize_jax_factory_gpu_promote_ignores_defer_cpu_env(monkeypatch):
 
     assert ctx_calls == ["gpu"]
     assert model._jax_on_gpu is True
+
+
+def test_finalize_jax_factory_real_gpu_fallback_does_not_claim_gpu(monkeypatch, capsys):
+    """Regression: a GPU request that silently falls back to CPU inside the real
+    ``mlpot_jax_device_context`` must leave ``_jax_on_gpu`` False, not True -- so
+    callers (e.g. the "promoted JAX factory to GPU" print) never claim GPU while
+    actually computing on CPU. Uses the real (unmocked) device-context function,
+    with only ``jax.devices`` faked to simulate no visible GPU."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
+    model = DecomposedMlpotModel(
+        None,
+        CutoffParameters(),
+        2,
+        z,
+        defer_jax_until_after_sd=False,
+        pending_factory=MagicMock(return_value=(0.0, MagicMock(), None)),
+        pending_factory_z=z,
+    )
+    model._verbose = False
+
+    cpu_dev = jax.devices("cpu")[0]
+
+    def devices_side_effect(name=None):
+        if name == "gpu":
+            raise RuntimeError("no gpu")
+        return [cpu_dev]
+
+    with patch("jax.devices", side_effect=devices_side_effect), patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
+        new=lambda: __import__("contextlib").nullcontext(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        return_value=(0.0, MagicMock(), None),
+    ):
+        model._finalize_jax_factory(gpu=True)
+
+    assert model._jax_on_gpu is False
+    combined = capsys.readouterr().out
+    assert "WARNING" in combined
 
 
 def test_promote_jax_factory_to_gpu_blocked_during_charmm_sd():
@@ -543,7 +682,10 @@ def test_register_mlpot_context_forwards_cell():
         "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.register_mlpot",
         side_effect=_register,
     ) as mock_register, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.select_all_atoms",
+        # run_workflow now resolves the ML region via
+        # resolve_mlpot_selection_from_args (imported inside the function),
+        # so patch it at the source module.
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.resolve_mlpot_selection_from_args",
         return_value=fake_sel,
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
@@ -1362,7 +1504,12 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
-    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=40.0)
+    ctx = MagicMock(
+        use_pbc=True,
+        ml_selection=fake_sel,
+        cubic_box_side_A=40.0,
+        periodic_external=True,
+    )
     fake_psf = MagicMock()
     fake_psf.get_nnb.side_effect = [5, 6]
 
@@ -1411,7 +1558,12 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
-    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel, cubic_box_side_A=42.0)
+    ctx = MagicMock(
+        use_pbc=True,
+        ml_selection=fake_sel,
+        cubic_box_side_A=42.0,
+        periodic_external=True,
+    )
     ctx._mlpot_pbc_exclusions_upinb_done = False
     fake_psf = MagicMock()
     fake_psf.get_nnb.return_value = 6
@@ -1560,7 +1712,6 @@ def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
         DEFAULT_MM_SWITCH_WIDTH,
     )
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        PbcNbondCutoffs,
         pbc_nbond_cutoffs_from_mlpot_switches,
         resolve_pbc_nbond_cutoffs,
         stash_pbc_nbond_cutoffs,
@@ -1660,12 +1811,29 @@ def test_apply_nbonds_kwargs_uses_update_script_for_nbxmod():
 
     with patch("pycharmm.nbonds.configure"), patch(
         "pycharmm.nbonds.update_bnbnd"
-    ) as rebuild, patch("pycharmm.UpdateNonBondedScript") as update_script:
-        update_script.return_value.run.return_value = None
+    ) as rebuild, patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script"
+    ) as resolve:
+        update_script = MagicMock()
+        resolve.return_value = update_script
         apply_nbonds_kwargs({"cutnb": 12.0, "nbxmod": 5})
     rebuild.assert_not_called()
     update_script.assert_called_once_with(nbxmod=5)
     update_script.return_value.run.assert_called_once()
+
+
+def test_apply_nbonds_kwargs_falls_back_without_update_script():
+    """Cluster KEY_LIBRARY builds may lack UpdateNonBondedScript."""
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
+
+    with patch("pycharmm.nbonds.configure"), patch(
+        "pycharmm.nbonds.update_bnbnd"
+    ) as rebuild, patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script",
+        return_value=None,
+    ):
+        apply_nbonds_kwargs({"cutnb": 12.0, "nbxmod": 5})
+    rebuild.assert_called_once()
 
 
 def test_calculator_dimer_wrap_detaches_lattice_shift():
@@ -1721,7 +1889,10 @@ def test_calculator_wrapping_translation_invariance():
             "natoms": 8,
             "total_charge": 0,
             "n_res": 3,
-            "zbl": True,
+            # Isolate MIC wrap: ZBL / wall are pair-Å priors and sit on the
+            # MIC contact (~1 Å) in this geometry, which is not what this
+            # test is checking.
+            "zbl": False,
             "debug": False,
             "efa": False,
             "use_energy_bias": False,
@@ -1756,6 +1927,7 @@ def test_calculator_wrapping_translation_invariance():
             cell=30.0,
             model_restart_path=restart_path,
             doMM=False,
+            short_range_wall=False,
         )
         calculator, configured_spherical_cutoff, update_fn_factory = factory(
             atomic_numbers,

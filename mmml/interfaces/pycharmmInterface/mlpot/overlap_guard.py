@@ -22,6 +22,10 @@ if TYPE_CHECKING:
 
 DynamicsOverlapAction = Literal["error", "warn", "rescue", "off"]
 
+# Cap selective per-monomer template restores before falling back to a full-system
+# mini/baseline checkpoint ladder (all-ML PBC intra crush policy).
+ALL_ML_PBC_INTRA_TEMPLATE_RESTORE_MAX = 16
+
 
 @dataclass(frozen=True)
 class OverlapRescueConfig:
@@ -896,13 +900,15 @@ def _overlap_cell(
     if not use_pbc:
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        resolve_charmm_cubic_box_side_A,
+        probe_charmm_cubic_box_side_A,
     )
 
-    side, _ = resolve_charmm_cubic_box_side_A(
+    # Non-raising: vacuum / free_* mis-flagged as PBC must not abort heat.
+    # Fall back to open-boundary distances when no cubic cell is available.
+    side, _ = probe_charmm_cubic_box_side_A(
         fallback_side_A=fallback_box_side_A,
     )
-    return float(side)
+    return float(side) if side is not None else None
 
 
 def measure_worst_intermonomer_distance(
@@ -1099,14 +1105,31 @@ def flyoff_checkpoint_geometry_acceptable(
     return str(diag.kind) != "both_high"
 
 
+def _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+    config: DynamicsOverlapConfig,
+    mlpot_ctx: "MlpotContext",
+) -> bool:
+    """True for all-ML PBC liquid: restore mini/baseline + cold start.
+
+    Never Packmol-repack, and never MLpot/bonded SD polish on extent or
+    intra-monomer crush rescue (SD can re-crush O–H with no MM bonded topology).
+    """
+    if not bool(config.use_pbc) or not bool(getattr(mlpot_ctx, "use_pbc", False)):
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
+
+    return bool(_is_all_ml_pbc_context(mlpot_ctx))
+
+
 def _try_flyoff_checkpoint_ladder_rescue(
     config: DynamicsOverlapConfig,
     *,
     label: str,
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
+    require_intra: bool = False,
 ) -> float:
-    """Walk prior restart checkpoints until extent + hybrid GRMS are acceptable."""
+    """Walk prior restart checkpoints until extent (+ optional intra) gates pass."""
     from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
         polish_after_extent_repack,
     )
@@ -1129,7 +1152,19 @@ def _try_flyoff_checkpoint_ladder_rescue(
     )
 
     def _acceptable() -> bool:
-        return flyoff_checkpoint_geometry_acceptable(mlpot_ctx, config)
+        if not flyoff_checkpoint_geometry_acceptable(mlpot_ctx, config):
+            return False
+        if not require_intra or float(config.intra_min_distance_A) <= 0.0:
+            return True
+        try:
+            _intramonomer_check(
+                config,
+                context="checkpoint ladder intra probe",
+                mlpot_ctx=mlpot_ctx,
+            )
+        except RuntimeError:
+            return False
+        return True
 
     path = try_recovery_from_checkpoint_ladder(
         candidates,
@@ -1139,12 +1174,30 @@ def _try_flyoff_checkpoint_ladder_rescue(
     setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
     setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", False)
     invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
-    polish_after_extent_repack(
-        mlpot_ctx,
-        config,
-        label=f"{label} after {path.name}",
+    checkpoint_only = _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+        config, mlpot_ctx
     )
+    if checkpoint_only:
+        # Restored mini/baseline geometry is the recovery; MLpot SD polish can
+        # re-crush intra O–H on all-ML liquids (no CHARMM bonded topology).
+        print(
+            f"{label} after {path.name}: skipping polish — cold-starting from "
+            "restored checkpoint (all-ML PBC; MLpot SD polish disabled)",
+            flush=True,
+        )
+    else:
+        polish_after_extent_repack(
+            mlpot_ctx,
+            config,
+            label=f"{label} after {path.name}",
+        )
     setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
+    if require_intra:
+        return _intramonomer_check(
+            config,
+            context=f"{label} after checkpoint ladder ({path.name})",
+            mlpot_ctx=mlpot_ctx,
+        )
     return _extent_check(config, context=f"{label} after checkpoint ladder ({path.name})")
 
 
@@ -1418,6 +1471,100 @@ def _handle_inter_monomer_rescue(
         ) from still_bad
 
 
+def _handle_all_ml_pbc_intramonomer_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    """All-ML PBC: template-restore crushed monomer(s), else mini/baseline + cold start.
+
+    Never MLpot/bonded SD polish — with no CHARMM bonded topology, SD can re-crush
+    O–H and leave the segment unrecoverable.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        restore_monomer_from_template_for_violation,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from mmml.utils.geometry_checks import find_worst_intramonomer_close_contact
+
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
+    excluded = _bond_exclusion_pairs(exclude_1_3=config.intra_exclude_1_3)
+    n_monomers = max(1, int(config.n_monomers or 1))
+    max_attempts = min(ALL_ML_PBC_INTRA_TEMPLATE_RESTORE_MAX, n_monomers)
+
+    for attempt in range(max_attempts):
+        pos = get_charmm_positions_array()
+        _, violation = find_worst_intramonomer_close_contact(
+            pos,
+            offsets,
+            excluded,
+            cell=cell,
+            min_distance=float(config.intra_min_distance_A),
+        )
+        if violation is None:
+            break
+        restored = restore_monomer_from_template_for_violation(
+            mlpot_ctx,
+            int(violation.monomer),
+            context=(
+                f"{label} all-ML PBC intra template restore "
+                f"(attempt {attempt + 1}/{max_attempts})"
+            ),
+            restart_path=config.prior_segment_restart,
+        )
+        if not restored:
+            break
+        try:
+            dmin = _intramonomer_check(
+                config,
+                context=f"{label} after all-ML PBC intra template restore",
+                mlpot_ctx=mlpot_ctx,
+            )
+            setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
+            return dmin
+        except RuntimeError:
+            continue
+
+    print(
+        f"{exc}\nAll-ML PBC: refusing intra MLpot/bonded SD polish; "
+        "restoring 02_mini/baseline checkpoint ladder + cold start...",
+        flush=True,
+    )
+    try:
+        return _try_flyoff_checkpoint_ladder_rescue(
+            config,
+            label=label,
+            exc=exc,
+            mlpot_ctx=mlpot_ctx,
+            require_intra=True,
+        )
+    except RuntimeError as ladder_exc:
+        try:
+            _restore_extent_from_memory_checkpoint_only(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+            dmin = _intramonomer_check(
+                config,
+                context=f"{label} after all-ML PBC memory checkpoint",
+                mlpot_ctx=mlpot_ctx,
+            )
+            setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
+            return dmin
+        except RuntimeError as memory_exc:
+            raise RuntimeError(
+                f"{exc}; all-ML PBC intra rescue: template restore + "
+                f"02_mini/baseline checkpoint ladder did not restore "
+                f"{config.intra_min_distance_A:.2f} Å (MLpot SD polish disabled). "
+                f"Ladder: {ladder_exc}; memory: {memory_exc}"
+            ) from memory_exc
+
+
 def _handle_intramonomer_rescue(
     config: DynamicsOverlapConfig,
     *,
@@ -1425,6 +1572,11 @@ def _handle_intramonomer_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
+    if _prefer_all_ml_pbc_checkpoint_only_extent_rescue(config, mlpot_ctx):
+        return _handle_all_ml_pbc_intramonomer_rescue(
+            config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+        )
+
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
         restore_monomer_from_template_for_violation,
     )
@@ -1546,6 +1698,50 @@ def _load_extent_reference_positions(
     )
 
 
+def _restore_extent_from_memory_checkpoint_only(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    """Restore in-memory mini/baseline geometry + cold start (no Packmol/SD)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        resolve_extent_reference_positions,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        invalidate_mlpot_pre_sd_ener_probe,
+        sync_charmm_positions,
+    )
+
+    ref_pos, ref_path = resolve_extent_reference_positions([], mlpot_ctx)
+    sync_charmm_positions(ref_pos)
+    sync_charmm_velocities_akma(
+        np.zeros((int(ref_pos.shape[0]), 3), dtype=np.float64)
+    )
+    setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
+    setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", False)
+    invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx)
+    print(
+        f"{exc}\nRestored in-memory reference {ref_path.name} "
+        "(all-ML PBC checkpoint-only; Packmol / MLpot SD polish disabled)",
+        flush=True,
+    )
+    # Memory restore is only used on the all-ML PBC checkpoint-only path.
+    print(
+        f"{label} after {ref_path.name}: skipping polish — cold-starting from "
+        "restored geometry (all-ML PBC; MLpot SD polish disabled)",
+        flush=True,
+    )
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
+    return _extent_check(
+        config, context=f"{label} after memory checkpoint ({ref_path.name})"
+    )
+
+
 def _handle_extent_cleanup_rescue(
     config: DynamicsOverlapConfig,
     *,
@@ -1553,7 +1749,25 @@ def _handle_extent_cleanup_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
-    """Rebuild fly-off monomer(s) from mini checkpoint, then minimize + cold restart."""
+    """Rebuild fly-off monomer(s) from mini checkpoint, then minimize + cold restart.
+
+    All-ML PBC liquids never enter Packmol here: checkpoint ladder + cold start only.
+    """
+    if _prefer_all_ml_pbc_checkpoint_only_extent_rescue(config, mlpot_ctx):
+        print(
+            f"{exc}\nAll-ML PBC: refusing Packmol cleanup extent rescue; "
+            "restoring 02_mini/baseline checkpoint ladder + cold start...",
+            flush=True,
+        )
+        try:
+            return _try_flyoff_checkpoint_ladder_rescue(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+        except RuntimeError:
+            return _restore_extent_from_memory_checkpoint_only(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
     )
@@ -1694,9 +1908,15 @@ def _escalate_extent_rescue(
     recovery_path: Path | None = None,
     sd_steps: int | None = None,
 ) -> float:
-    """Try density prep ladder, then monomer repack, before aborting extent rescue."""
+    """Try density prep ladder, then monomer repack, before aborting extent rescue.
+
+    All-ML PBC liquid never Packmol-repacks: checkpoint ladder + cold start only.
+    """
     exc: RuntimeError = still_bad
-    if config.density_prep_ladder_fallback:
+    checkpoint_only = _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+        config, mlpot_ctx
+    )
+    if config.density_prep_ladder_fallback and not checkpoint_only:
         try:
             return _try_density_prep_ladder_after_extent_failure(
                 config,
@@ -1716,8 +1936,21 @@ def _escalate_extent_rescue(
             exc=exc,
             mlpot_ctx=mlpot_ctx,
         )
-    except RuntimeError:
-        pass
+    except RuntimeError as ladder_exc:
+        if checkpoint_only:
+            sd_txt = f" (SD={sd_steps})" if sd_steps is not None else ""
+            src = (
+                f" from {recovery_path.name}{sd_txt}"
+                if recovery_path is not None
+                else ""
+            )
+            raise RuntimeError(
+                f"{ladder_exc}; all-ML PBC extent rescue refused Packmol / density "
+                f"prep after fly-off recovery{src} — restore 02_mini/baseline and "
+                f"cold-start only (monomer extent must be "
+                f"<= {config.max_monomer_extent_A:.2f} A)"
+            ) from ladder_exc
+        exc = ladder_exc
 
     try:
         return _handle_extent_cleanup_rescue(
@@ -1750,10 +1983,27 @@ def _handle_extent_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
-    if config.cleanup_mode:
+    checkpoint_only = _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
+        config, mlpot_ctx
+    )
+    if config.cleanup_mode and not checkpoint_only:
         return _handle_extent_cleanup_rescue(
             config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
         )
+    if config.cleanup_mode and checkpoint_only:
+        print(
+            f"{exc}\nAll-ML PBC: cleanup/Packmol extent rescue disabled; "
+            "restoring 02_mini/baseline checkpoint ladder + cold start...",
+            flush=True,
+        )
+        try:
+            return _try_flyoff_checkpoint_ladder_rescue(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+        except RuntimeError:
+            return _restore_extent_from_memory_checkpoint_only(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
 
     from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
@@ -1771,6 +2021,15 @@ def _handle_extent_rescue(
             f"mini/baseline coordinates on MlpotContext"
         ) from exc
     if not candidates:
+        if checkpoint_only:
+            print(
+                f"{exc}\nAll-ML PBC: no disk geometry checkpoint; restoring "
+                "in-memory mini/baseline without Packmol...",
+                flush=True,
+            )
+            return _restore_extent_from_memory_checkpoint_only(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
         print(
             f"{exc}\nNo disk geometry checkpoint; repacking from in-memory "
             "mini/baseline snapshot...",
@@ -1809,6 +2068,10 @@ def _handle_extent_rescue(
             recovery_path=recovery_path,
             sd_steps=sd_steps,
         )
+    # Geometry-only checkpoints (baseline.res / 02_mini.crd) have no usable
+    # velocities. Arm ASE Maxwell–Boltzmann + iasvel=1 so the next Bussi chunk
+    # does not continue with COMP coordinates-as-velocities (T ≫ 10^12 K).
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     try:
         return _extent_check(config, context=f"{label} after fly-off recovery")
     except RuntimeError as still_bad:
@@ -1899,6 +2162,9 @@ def _try_density_prep_ladder_after_extent_failure(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(sync_positions)
+    # Density ladder rewrites liquid geometry; force velocity cold-start like
+    # other extent fly-off rescues (avoid COMP-as-velocity Bussi continuation).
+    setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
     return _extent_check(config, context=f"{label} after density prep ladder")
 
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from mmml.md.system import SystemSpec
+from mmml.md.temperature import TemperatureSchedule
 
 __all__ = ["EnsembleSpec", "RunConfig"]
 
@@ -33,6 +34,7 @@ class EnsembleSpec:
     ensemble: str = "nve"
     space: str = "pbc"
     temperature_K: float = 300.0
+    temperature_schedule: TemperatureSchedule | None = None
     pressure_bar: float = 1.0
     dt_fs: float = 1.0
     n_steps: int = 0

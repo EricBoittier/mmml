@@ -21,8 +21,7 @@ usage: mmml physnet-md [-h] --checkpoint CHECKPOINT (--structure STRUCTURE |
 
 PhysNet MD sampling with ASE and JAX-MD.
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --checkpoint CHECKPOINT
                         Path to PhysNet checkpoint directory (e.g.
                         out/ckpts/cybz_physnet)
@@ -30,15 +29,26 @@ options:
                         Initial structure (XYZ, PDB, etc.)
   --data DATA           NPZ with R, Z (e.g.
                         splits/energies_forces_dipoles_train.npz)
-  -o, --output-dir OUTPUT_DIR
-                        Output directory (default: .)
+
+Scientific model:
   --temperature TEMPERATURE
                         Temperature in K (default: 300)
-  --timestep TIMESTEP   Timestep in fs (default: 0.5)
+
+Execution:
   --nsteps-ase NSTEPS_ASE
                         ASE Langevin steps (default: 100)
   --nsteps-jaxmd NSTEPS_JAXMD
                         JAX-MD Nose-Hoover steps (default: 200)
+
+Output & artifacts:
+  -o, --output-dir OUTPUT_DIR
+                        Output directory (default: .)
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
+  --timestep TIMESTEP   Timestep in fs (default: 0.5)
   --printfreq PRINTFREQ
                         Print/save interval (default: 25)
   --skip-jaxmd          Skip JAX-MD (ASE only)
@@ -59,6 +69,9 @@ splits/energies_forces_dipoles_train.npz -o out/ mmml physnet-md --checkpoint
 out/ckpts/cybz_physnet --data splits/train.npz -o out/ --n-replicas 4
 ```
 
+## Visual examples
+
+![Energy conservation with force snapshots](../../images/povray-overlays/water_nve_with_povray.png)
 
 
 ---

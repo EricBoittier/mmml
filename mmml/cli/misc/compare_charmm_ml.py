@@ -103,28 +103,64 @@ def load_checkpoint_and_model(checkpoint_path: Path, natoms_override: int | None
     return params, model
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Compare CHARMM PSF charges vs joint PhysNet/DCMNet dipoles and ESPs."""
     parser = argparse.ArgumentParser(
         description="Compare CHARMM vs ML dipoles and ESPs",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--checkpoint", type=Path, required=True,
-                        help="Path to train_joint checkpoint (dir with best_params.pkl or path to best_params.pkl)")
-    parser.add_argument("--valid-efd", type=Path, required=True,
-                        help="Validation energies/forces/dipoles NPZ file")
-    parser.add_argument("--valid-esp", type=Path, required=True,
-                        help="Validation ESP grids NPZ file")
-    parser.add_argument("--pdb", type=Path, required=True,
-                        help="PDB path for CHARMM setup (same molecule as validation data)")
-    parser.add_argument("--n-samples", type=int, default=100,
-                        help="Number of validation samples to evaluate")
-    parser.add_argument("--out-dir", type=Path, default=Path("charmm_ml_comparison"),
-                        help="Output directory for plots")
-    parser.add_argument("--cutoff", type=float, default=10.0,
-                        help="Cutoff for prepare_batch_data")
-    parser.add_argument("--subtract-atom-energies", action="store_true",
-                        help="Subtract reference atomic energies (match training)")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        required=True,
+        help="Path to train_joint checkpoint (dir with best_params.pkl or path to best_params.pkl)",
+    )
+    parser.add_argument(
+        "--valid-efd",
+        type=Path,
+        required=True,
+        help="Validation energies/forces/dipoles NPZ file",
+    )
+    parser.add_argument(
+        "--valid-esp",
+        type=Path,
+        required=True,
+        help="Validation ESP grids NPZ file",
+    )
+    parser.add_argument(
+        "--pdb",
+        type=Path,
+        required=True,
+        help="PDB path for CHARMM setup (same molecule as validation data)",
+    )
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=100,
+        help="Number of validation samples to evaluate",
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=Path("charmm_ml_comparison"),
+        help="Output directory for plots",
+    )
+    parser.add_argument(
+        "--cutoff",
+        type=float,
+        default=10.0,
+        help="Cutoff for prepare_batch_data",
+    )
+    parser.add_argument(
+        "--subtract-atom-energies",
+        action="store_true",
+        help="Subtract reference atomic energies (match training)",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     has_pycharmm, setup_box_generic, psf_module = _check_pycharmm()
     if not has_pycharmm:

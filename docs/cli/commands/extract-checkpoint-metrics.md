@@ -25,23 +25,29 @@ Extract and plot training metrics from Orbax checkpoints
 positional arguments:
   checkpoint_dir        Checkpoint directory containing epoch-* subdirectories
 
-options:
-  -h, --help            show this help message and exit
-  -o, --output OUTPUT   Output plot file (PNG)
-  --log-loss            Use log scale for loss axes (recommended)
-  --quiet               Suppress output
-  --stride STRIDE       Read every Nth epoch checkpoint (default: 1 = all). Use
-                        for large runs.
+Execution:
   --max-epochs MAX_EPOCHS
                         Cap the number of epoch checkpoints read after stride
                         (default: no cap).
+
+Output & artifacts:
+  -o, --output OUTPUT   Output plot file (PNG)
+  --log-loss            Use log scale for loss axes (recommended)
   --metrics-json METRICS_JSON
                         Optional path to write extracted metrics as JSON arrays.
-  --ef-only             Plot energy/forces panels only (omit dipole inset from
-                        main layout).
   --plot-style {dark,editorial_cm,editorial_dejavu_sans,editorial_dejavu_serif,editorial_stix,google,icml,mpl_classic,nature,science,tron,xmgrace}
                         Matplotlib style preset (default: google). Options:
                         nature, xmgrace, google, tron, mpl_classic.
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --quiet               Suppress output
+
+Other options:
+  --stride STRIDE       Read every Nth epoch checkpoint (default: 1 = all). Use
+                        for large runs.
+  --ef-only             Plot energy/forces panels only (omit dipole inset from
+                        main layout).
   --individual-dir INDIVIDUAL_DIR
                         If set, write one PNG per metric into this directory.
 

@@ -228,6 +228,14 @@ class PeptideWaterSystemBuilder:
             )
         )
         waters = [g for g in system.monomer_indices if len(g) == 3 and int(g[0]) >= peptide_n]
+        n_waters = int(result.n_waters)
+        residue_names = ("TRIA",) + tuple("TIP3" for _ in range(n_waters))
+        if len(residue_names) != len(system.monomer_indices):
+            # Fallback: keep builder label only; policies need exact alignment.
+            residue_names = tuple(
+                "TIP3" if len(g) == 3 and int(g[0]) >= peptide_n else "TRIA"
+                for g in system.monomer_indices
+            )
         return MolecularSystem(
             R=system.R,
             Z=system.Z,
@@ -237,5 +245,10 @@ class PeptideWaterSystemBuilder:
             water_indices=waters,
             psf_path=system.psf_path,
             ff_params=system.ff_params,
-            metadata={**system.metadata, "builder": self.name, "n_waters": int(result.n_waters)},
+            metadata={
+                **system.metadata,
+                "builder": self.name,
+                "n_waters": n_waters,
+                "residue_names": residue_names,
+            },
         )

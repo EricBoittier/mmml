@@ -42,6 +42,16 @@ def _args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+def test_liquid_box_spacing_default_allows_dense_liquids():
+    """4 Å COM pitch sits at MeOH liquid mean (~4.1 Å) and blocks density."""
+    from mmml.cli.run.liquid_box import build_parser
+
+    args = build_parser().parse_args(
+        ["--composition", "MEOH:8", "--output-dir", "/tmp/lb"]
+    )
+    assert args.spacing == pytest.approx(2.5)
+
+
 def test_apply_liquid_box_profile_dense_enables_liquid_prep():
     args = _args(profile="dense")
     name = apply_liquid_box_profile(args)
@@ -156,6 +166,25 @@ def test_estimate_density_g_cm3_round_trip():
     )
     assert rho is not None
     assert rho == pytest.approx(target, rel=1e-6)
+
+
+def test_estimate_density_scales_stale_stoichiometry_with_n_molecules():
+    """box-auto count bug: composition left as TIP3:1 while N=903 was built."""
+    rho = estimate_density_g_cm3(
+        composition={"TIP3": 1},
+        box_side_A=30.0,
+        n_molecules=903,
+    )
+    assert rho is not None
+    assert rho == pytest.approx(1.0, rel=0.02)
+
+    rho_unit = estimate_density_g_cm3(
+        composition={"TIP3": 1},
+        box_side_A=30.0,
+        n_molecules=1,
+    )
+    assert rho_unit is not None
+    assert rho_unit == pytest.approx(1.0 / 903.0, rel=0.05)
 
 
 def test_certify_intermonomer_geometry_pass_and_fail():
@@ -328,7 +357,7 @@ def test_liquid_box_pretreat_cpt_echeck_disabled_by_default():
     args = parser.parse_args(
         ["--composition", "DCM:103", "--output-dir", "/tmp/x", "--profile", "dense"]
     )
-    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == -1.0
+    assert resolve_charmm_mm_pretreat_cpt_echeck(args, echeck=5150.0) == pytest.approx(1.0e30)
 
 
 def test_liquid_box_pretreat_cpt_echeck_explicit_override():
@@ -402,9 +431,9 @@ def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
     monkeypatch.setitem(sys.modules, "pycharmm.dynamics", fake_dyn)
     kw: dict[str, float | int] = {"echeck": 500.0}
     apply_charmm_dynamics_echeck_kw(kw, -1.0)
-    assert kw["echeck"] == -1.0
+    assert kw["echeck"] == pytest.approx(1.0e30)
     assert kw["ichecw"] == 0
-    assert calls == [-1.0]
+    assert calls == [pytest.approx(1.0e30)]
 
 
 def test_apply_charmm_dynamics_timestep_kw_sets_global_state(monkeypatch):

@@ -283,13 +283,22 @@ pytest tests/unit/test_mlpot_pbc_cell.py -q
 
 ## Profiling
 
-### Built-in MLpot Profiling
-To enable lightweight timing metrics showing callback counts, JAX/ML evaluation time, and CHARMM overhead:
+### Built-in MLpot / ASE / JAX-MD Profiling
+To enable lightweight wall-time metrics for CHARMM MLpot callbacks **and** the
+ASE/jaxmd calculator path (per-call ``calculate`` + multi-GPU chunk apply):
 
 ```bash
-mmml md-system ... --mlpot-profile
-# or on the PyCHARMM MLpot driver:
-python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase dynamics --mlpot-profile ...
+mmml md-system ... --backend jaxmd --mlpot-profile \
+  --ml-gpu-count 2 --ml-batch-size 256
+# writes <output-dir>/mlpot_profile.json and prints a one-line summary
+```
+
+Optional TensorBoard device trace (prefer a short ``--ps``):
+
+```bash
+mmml md-system ... --backend jaxmd --mlpot-profile \
+  --jax-profiler-dir /tmp/mmml_jax_trace
+tensorboard --logdir /tmp/mmml_jax_trace
 ```
 
 Environment variables (same effect when set before Python starts):
@@ -297,7 +306,12 @@ Environment variables (same effect when set before Python starts):
 ```bash
 export MMML_MLPOT_PROFILE=1
 export MMML_JAX_COMPILE_TIMERS=1
+export MMML_JAX_PROFILER_DIR=/tmp/mmml_jax_trace   # optional
 ```
+
+Check ``mlpot_profile.json`` fields ``last_n_gpus`` / ``chunk_apply_mean_ms`` —
+if ``last_n_gpus`` stays 1 with ``--ml-gpu-count 2``, batching never split
+(need ``--ml-batch-size`` smaller than the monomer+dimer batch).
 
 ### Python cProfile on MD System CLI
 You can profile the python-level code (coordinate synchronizations, exclusions setup, CLI arguments parsing) when running standard configs:

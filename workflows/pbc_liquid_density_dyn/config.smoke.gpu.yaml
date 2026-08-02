@@ -6,6 +6,8 @@
 #     bash scripts/job_shell.sh dcm_32_t300_l25
 
 solvents: [DCM]
+# Clear keys inherited when Snakemake merges this file onto config.yaml.
+bulk_density_fractions: []
 cluster_sizes: [32]
 temperatures: [300.0]
 box_sizes: [25.0]

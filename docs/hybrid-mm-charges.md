@@ -1,15 +1,26 @@
-# Hybrid MM charges: fixed, latent, and fixed+latent
+# Hybrid MM charges: fixed, q0 (Q⁰), latent/q1 (Q¹), …
 
 How per-atom charges enter **intermolecular `E_MM` Coulomb** in hybrid ML/MM
 training and deployment.  Implementation:
 [`mmml/models/mm_charge_mode.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/mm_charge_mode.py).
 
 Related: [Hybrid potential regions](hybrid-potential-regions.md),
-[hybrid energy assembly](https://github.com/EricBoittier/mmml/blob/main/mmml/models/hybrid_energy.py).
+[hybrid energy assembly](https://github.com/EricBoittier/mmml/blob/main/mmml/models/hybrid_energy.py),
+[**trainable LJ scales**](hybrid-mm-lj-scales.md).
 
 **Example YAMLs (train + MD for all three modes):**
 [`examples/hybrid_mm_charges/`](https://github.com/EricBoittier/mmml/tree/main/examples/hybrid_mm_charges)
 — see that folder’s `README.md` for the table and copy-paste commands.
+
+### Perturbative nomenclature (Q⁰ / Q¹)
+
+Hybrid ML energy already uses an E(AB)−E(A)−E(B) split (monomers ≈ E⁰,
+switched dimer interaction ≈ E¹).  MM charges follow the same language:
+
+| Symbol | CLI | `q_ML` source | Liquid MD |
+|--------|-----|---------------|-----------|
+| **Q⁰** | `q0` | Isolated monomer forwards | yes |
+| **Q¹** | `q1` / `latent` | AB dimer forward | no (dimer-only) |
 
 ---
 
@@ -17,7 +28,7 @@ Related: [Hybrid potential regions](hybrid-potential-regions.md),
 
 | Axis | What it controls | Unrelated to |
 |------|------------------|--------------|
-| **MM charge Mode A/B/C** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
+| **MM charge mode** | `q` in intermolecular **`E_MM` Coulomb** | Energy-layer toggles (`doML` / `doMM`) |
 | Energy assembly | `doML`, `doML_dimer`, `doMM` | Charge taxonomy |
 | Handoff / cutoffs | complementary vs legacy COM switches | Charge taxonomy |
 | `lr_solver` | MIC vs jax-pme long-range Coulomb | Charge taxonomy (B/C + PME refused) |
@@ -32,8 +43,12 @@ Related: [Hybrid potential regions](hybrid-potential-regions.md),
 | PhysNet charge head → model Coulomb / dipoles | `--charges`, `include_electrostatics` | Inside **`E_ML`** (fragments A, B, AB) |
 | MM electrostatic charges | `mm_charge_mode` / `--mm-charge-correction` | Intermolecular **`E_MM`** Coulomb only |
 
-`--charges` alone does **not** put the head into `E_MM`.  LJ always uses
-fixed CGenFF ε / Rmin.
+|--charges` alone does **not** put the head into `E_MM`.  By default LJ uses
+fixed CGenFF ε / Rmin.  With ``--learn-mm-lj-scales`` (MIC only), hybrid
+training learns **per-type** multiplicative scales on master σ and ε; MD loads
+them from ``hybrid_mm.json`` (or ``--mm-lj-scales-file``) into
+``ep_scale`` / ``sig_scale``.  Full student walkthrough:
+[trainable hybrid MM LJ scales](hybrid-mm-lj-scales.md).
 
 If `include_electrostatics=True` (PhysNet default) **and** hybrid `E_MM` is
 on, short-range intermolecular electrostatics can appear in both `E_ML` and
@@ -58,20 +73,85 @@ q_MM = q_CGenFF
 
 ---
 
-## Mode B — `latent` (dimer-only)
+## Q⁰ — `q0` (unperturbed monomers; train + liquid)
 
 ```text
-q_MM = neutralize_per_monomer(q_ML)
+q_MM = neutralize_per_monomer(Q⁰)
 ```
 
-Replace CGenFF in `E_MM`; do not add.
+Q⁰ is the charge head evaluated on **isolated** monomers (no partner in the
+ML graph) — the same A/B forwards already used for E⁰ in hybrid training.
 
-- **Train:** `--hybrid-mm --mm-charge-mode latent --charges`
+- **Train:** `--hybrid-mm --mm-charge-mode q0 --charges`
+  — assembles Q⁰ from `out_a` / `out_b` via
+  `assemble_q0_from_monomer_forwards`
+- **MD:** `--mm-charge-mode q0` — reads monomer slots in the PhysNet batch
+  (`[monomers…, dimers…]`), any `n_monomers`
+- **Train/MD parity:** same operator (unlike `latent_mean` / `latent_dynamic`)
+- Requires `doML` and `charges=True`; does **not** require `doML_dimer`
+- Recommended starting point for ACO liquid with a latent-capable checkpoint
+- **NVE forces:** MM Coulomb uses Hellmann–Feynman gradients
+  (`∂E_MM/∂R` at fixed `q_MM`). That matches hybrid training. The NVE
+  force–energy preflight therefore freezes `q_MM` at `R0` when checking FD
+  consistency (`--nve-force-energy-freeze-charges`, default on for `q0`).
+  Short NVE is still useful; expect mild `E_tot` drift versus a fully
+  charge-responsive force if you monitor `E(R, q(R))`.
+
+---
+
+## Mode B / Q¹ — `latent` / `q1` (dimer-only)
+
+```text
+q_MM = neutralize_per_monomer(Q¹)
+```
+
+Replace CGenFF in `E_MM`; do not add.  Q¹ is partner-perturbed (AB context).
+
+- **Train:** `--hybrid-mm --mm-charge-mode latent` (or `q1`) `--charges`
   — YAML: [`train_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_latent.yaml)
 - **MD:** `--mm-charge-mode latent` (dimer-only; same gates as Mode C)
   — YAML: [`md_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_latent.yaml)
 - **`q_ML` source:** AB dimer forward (train `out_ab["charges"]`; MD sole dimer slot)
 - Liquids / JAX-PME / chunked multi-GPU apply: refused
+
+### Minimal runnable example — native Ewald, `fixed` vs `latent`, small system
+
+[`examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py)
+exercises **Mode A** and **Mode B** together with `lr_solver="ewald"` on a
+tiny synthetic 2-monomer/5-atom system — no checkpoint, no CHARMM:
+
+```bash
+python examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
+```
+
+The two monomers are placed past the ML→MM handoff tail
+(`mm_switch_on + mm_switch_width`), so the switched ML-dimer correction
+`s(r_com) * dE_ML` is ~0 for both modes and `E_total` collapses to
+`E_ML(A) + E_ML(B) + E_MM` — the **Monomer ML + MM** assembly from
+[`docs/calculator-capabilities.md`](calculator-capabilities.md#monomer-ml-mm-with-native-ewald-fixed-vs-latent),
+reached here by separation rather than `--skip-ml-dimers` (that MD-only
+calculator flag has no equivalent on the training-side `hybrid_forward`, and
+Mode B needs a live AB-dimer forward for its charges regardless). Each
+mode's `e_mm` is cross-checked against the independent MD-side
+`compute_native_ewald_coulomb` kernel, mirroring
+`scripts/check_ewald_train_md_pme_parity.py`'s methodology but adding the
+`latent` leg that script's headless model can't produce. Fast/mocked
+regression: `tests/unit/test_hybrid_energy.py::test_ewald_monomer_ml_plus_mm_fixed_and_latent`.
+
+#### Optional: same assembly under PyCHARMM (CHARMM bonded retained)
+
+The analytic script is Coulomb-only. For a small **DCM:2** PBC smoke where
+CHARMM still evaluates BOND/ANGL/DIHE while USER owns ML monomers + native
+Ewald Coulomb, use:
+
+```bash
+export MMML_CKPT=/path/to/params.json   # Mode B: charges=True / latent-trained
+mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
+mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
+```
+
+Point `defaults.checkpoint` at a matching Mode A / Mode B hybrid checkpoint
+(`lr_solver: ewald` for energy-meaningful runs). Mode B remains dimer-only.
 
 ---
 
@@ -103,15 +183,104 @@ mismatch but still requires explicit opt-in.
 
 ---
 
-## Liquid follow-up (blocked until dimer Mode B/C parity is green)
+## Mode D — `latent_mean` (MD-only, liquid-compatible)
 
-Training never saw multi-neighbor charge environments.  Before `md-system`
-liquid boxes:
+```text
+q_MM = tile( mean_over_dataset( neutralize_per_monomer(q_ML) ) )
+```
 
-| Option | Idea |
-|--------|------|
-| **L1** | Per-monomer `q_ML` (environment-free) + Mode B/C — simple, systematically unlike train AB context |
-| **L2** | Aggregate charges from active ML dimer slots — closer to train, expensive and ambiguous |
-| **L3** | Train liquid-aware charge correction before deploying |
+Modes B/C need a **live** `q_ML` from an AB-dimer forward at every MD step —
+that has no meaning once there are more than 2 monomers ("the AB dimer" is
+undefined in a liquid).  Mode D sidesteps this by freezing the charges: it
+averages Mode B's `neutralize_per_monomer(q_ML)` over many training-set
+homo-dimer forwards of one species **offline**, once, then tiles that single
+monomer's charge template across every monomer copy in the box at MD setup
+time. No AB forward, no `n_monomers == 2` gate, no `doML_dimer` requirement,
+and it composes with any `lr_solver` (`mic`, `ewald`, `nvalchemiops_pme`)
+since it is just a fixed per-atom charges array handed to the same
+`mm_charges` override Modes B/C already use.
 
-Do not pick L1 inside an unrelated "pass charges into `mm_fn`" change.
+- **Precompute (once per checkpoint + species):**
+  ```bash
+  python scripts/compute_latent_monomer_charges.py \
+      --checkpoint ./ckpts/mp2_nms/mp2nms_ewald \
+      --data /path/to/mp2_nms15_clean_train.npz \
+      --resid DCM \
+      --out ckpts/mp2_nms/latent_charge_template_DCM.npz
+  ```
+  This runs the trained model over `--max-samples` `DCM,DCM` homo-dimers,
+  reads `out_ab["charges"]` for monomer A of each, projects it net-zero with
+  `neutralize_per_monomer`, and averages. The saved `.npz`
+  (`mmml.models.latent_charge_template.LatentChargeTemplate`) records the
+  mean, the per-atom std (diagnostic — large values mean a single frozen
+  template is a poor fit for that species), sample count, and provenance.
+  Loading refuses a template whose net charge exceeds `1e-3 e` (a non-neutral
+  monomer makes the tiled box non-neutral, which breaks the Ewald sum).
+- **MD:** `--mm-charge-mode latent_mean --mm-latent-charge-template <path>`
+  on `mmml/cli/run/md_system.py` or the `md-pbc-suite` `jaxmd`/`ase` backends.
+- **v1 limitation:** homogeneous liquids only (every monomer the same size
+  and species as the template) — `setup_calculator` raises if
+  `ATOMS_PER_MONOMER` is heterogeneous. Mixed-species liquids need one
+  template per species and per-species tiling, not implemented yet.
+- **What it is not:** a live, geometry-dependent liquid charge model. The
+  charges are fixed for the whole run (same value regardless of local
+  environment) — see Mode D vs L2/L3 below.
+
+Implementation: [`mmml/models/latent_charge_template.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/latent_charge_template.py),
+wired into `setup_calculator` in
+[`mmml/interfaces/pycharmmInterface/mmml_calculator.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mmml_calculator.py).
+
+---
+
+## Mode E — `latent_dynamic` (MD-only, liquid-compatible, live)
+
+```text
+q_MM = neutralize_per_monomer( weighted_mean_over_active_dimers(q_ML) )
+```
+
+Mode D freezes the charges offline. Mode E instead answers "L2" below live:
+every MD step, for each monomer, average the per-atom `q_ML` it gets from
+**every currently active** ML-dimer forward it participates in (a monomer in
+a liquid can have several neighbors inside `mm_switch_on` at once), weighted
+by `ml_switch_scale` of that pair's COM separation — the same smooth weight
+that already blends the pair's ML energy into the total, so a partner
+leaving the cutoff fades its charge influence exactly as smoothly as its
+energy contribution.
+
+- **No precompute step** — unlike Mode D, there's no template to generate;
+  `--mm-charge-mode latent_dynamic` on its own is enough (same checkpoint as
+  Mode B, `charges=True`).
+- **Costs no extra model forwards** — the per-dimer `charges` output already
+  comes out of the sparse ML-dimer batch computed for the energy every step;
+  Mode E just stops discarding it. (Previously the code only ever read one
+  fixed dimer slot's charges, hardcoded for the `n_monomers==2` case — see
+  `calculate_ml_contributions` / `_aggregate_dynamic_latent_charges` in
+  `mmml_calculator.py`.)
+- **Aggregation core is pure and unit-tested**: the generic "weighted
+  scatter-average" reduction lives in
+  [`mmml/models/dynamic_latent_charges.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/dynamic_latent_charges.py)
+  (`weighted_scatter_average`), separate from the MD-calculator-specific
+  geometry/padding code that feeds it.
+- **v1 limitation — zero-weight atoms get charge 0, not an isolated-monomer
+  fallback.** An atom with no active dimer partner within the switch radius
+  (an isolated monomer, or a transient gap in a dilute region) gets `q_MM =
+  0` under this mode, since Mode E replaces CGenFF entirely. This is a real
+  gap for genuinely isolated molecules, not just a rounding detail — Mode E
+  is only appropriate for boxes where every monomer reliably has neighbors
+  inside `mm_switch_on`.
+- **It is a heuristic, not a trained quantity**: the model was trained on
+  isolated AB-dimer forwards, never on a weighted average of several. Treat
+  Mode E's charges as a physically-motivated approximation, not something
+  with the same guarantees as Mode B's in-distribution dimer charges.
+
+## Live liquid charges — what's left (L3)
+
+| Option | Idea | Status |
+|--------|------|--------|
+| **L1 / Q⁰** | Per-monomer unperturbed `q_ML` | **`q0`** — live train+MD (preferred). Mode D `latent_mean` = frozen offline mean of AB charges (not Q⁰). |
+| **L2 / multi-Q¹** | Aggregate charges from active ML dimer slots | Mode E `latent_dynamic` — live heuristic; not train-identical to Mode B |
+| **L3** | Train liquid-aware charge correction before deploying | Not implemented — needs multi-neighbor liquid training data, not a plumbing change |
+
+L3 is the only remaining gap: a charge head that is actually a function of
+liquid-density context, rather than an offline/live aggregate of pairwise
+predictions never seen together during training.

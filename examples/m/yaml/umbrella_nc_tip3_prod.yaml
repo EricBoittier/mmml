@@ -1,0 +1,66 @@
+# Solvated mechanical-embedding umbrella — production (dense TIP3 @ 30 Å).
+#
+# Reaction coordinate (1D PMF):
+#   ξ = r(C–Cl) − r(C–N)     [= ADUMB ``rdif`` / Menshutkin convention]
+#   reactants: ξ < 0   |   products: ξ > 0
+#
+# Same CV / ML region / walls as umbrella_nc_tip3.yaml; longer sampling for MBAR.
+# Prerequisite: dense make-box (USE_DENSITY=1):
+#   USE_DENSITY=1 BOX_SIZE=30 bash examples/m/08_make_boxes.sh
+#
+#   source examples/m/_env.sh
+#   bash examples/m/14_umbrella_sample_sol_prod.sh              # or SOLVENT=tip3
+#   SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh
+#
+# Timing (defaults): 30 windows × 80000 steps × 0.25 fs = 20 ps / window;
+#   equilibration_steps 8000 → 2 ps discarded; ~401 saved frames / window.
+# 0.25 fs matches Menshutkin gas practice (PhysNet + H unstable at 0.5 fs near TS).
+
+engine: hybrid_jaxmd
+checkpoint: ../../model_ext.json
+from_psf: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.psf
+from_pdb: ../../../artifacts/nh3_ch3cl/boxes/tip3/model.pdb
+box_size: 30.0
+output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_tip3_prod
+
+ml_resnames: [AMM1, CH3CL]
+
+# ξ = r(C1–CL1) − r(C1–N1); names resolved against ml_resnames in the PSF.
+cv_x:
+  pairs:
+    - [C1, CL1]
+    - [C1, N1]
+  coefficients: [1.0, -1.0]
+
+walls:
+  - pairs: [[C1, CL1], [C1, N1]]
+    r_max: 2.25
+    k: 100.0
+  - atoms: [N1, C1, CL1]
+    theta_min_deg: 130.0
+    k: 50.0
+
+# Turan et al.: ξ ∈ [-1.3, 1.6], ~0.1 Å spacing → 30 windows.
+xi_min: -1.3
+xi_max: 1.6
+n_windows: 30
+k_ev_A2: 6.505
+
+temperature_K: 300.0
+timestep_fs: 0.25
+nsteps: 80000
+equilibration_steps: 8000
+printfreq: 1000
+savefreq: 200
+seed: 0
+seed_mode: stretch
+overwrite: false
+lr_solver: mic
+# Seeding rigidly displaces the solute inside a box packed at a single ξ, so the
+# solvent must move aside before dynamics starts (see the ACN prod YAML: without
+# this, every window past ξ≈+0.6 aborted non-finite within ~1 ps).
+relax_seed_steps: 300
+relax_seed_fmax: 1.0
+# Gate is the ML-region max |F|; the whole-system max is pinned by raw Packmol
+# solvent contacts and is identical in every window.
+max_seed_force: 80.0

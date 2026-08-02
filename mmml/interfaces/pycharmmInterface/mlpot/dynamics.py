@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,12 @@ HeatThermostat = Literal["scale", "hoover"]
 # NPT/CPT Hoover: max steps per ``dyn.run()`` (overlap guard off, or per overlap sub-chunk).
 # Long single segments can NaN the barostat/crystal and segfault in Fortran ``upimag``.
 DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP = 250
+
+# Stop Bussi heat micro-chunk continuation when CHARMM GRMS indicates liquid/PBC
+# breakdown (group extent / fly-off) that is still below the hard 250 kcal/mol/Å
+# blow-up ceiling. Matches fly-off checkpoint hybrid GRMS gate; prevents the next
+# micro-chunk from IASVEL=1 redraw / ECHECK on already-wrecked geometry.
+BUSSI_SUBCHUNK_CONTINUE_MAX_GRMS_KCALMOL_A = 50.0
 
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
@@ -47,6 +54,32 @@ def _dynamics_io_fortran_path(
         return str(fortran_path), alias
     except ImportError:
         return str(p.expanduser().resolve()), None
+
+
+def _resolve_charmm_file_cls(pycharmm: Any | None = None) -> Any:
+    """Return the ``CharmmFile`` class from a loaded ``pycharmm`` package.
+
+    Some installs expose only the ``charmm_file`` submodule (e.g. a PEP 420
+    namespace ``pycharmm/`` at the repo root shadowing CHARMM's package). Prefer
+    the top-level export, then fall back to ``pycharmm.charmm_file.CharmmFile``.
+    """
+    mod = pycharmm
+    if mod is None:
+        import pycharmm as _pycharmm  # noqa: PLC0415
+
+        mod = _pycharmm
+
+    cls = getattr(mod, "CharmmFile", None)
+    if cls is not None:
+        return cls
+    try:
+        from pycharmm.charmm_file import CharmmFile as _CharmmFile
+    except ImportError as exc:  # pragma: no cover - both missing is fatal
+        raise AttributeError(
+            "module 'pycharmm' has no attribute 'CharmmFile' "
+            "(and pycharmm.charmm_file.CharmmFile is unavailable)"
+        ) from exc
+    return _CharmmFile
 
 
 def _apply_dynamics_io_setters(
@@ -136,7 +169,7 @@ class CharmmTrajectoryFiles:
             # cluster MPI build but DYNA RESTART subsequently sees an empty unit
             # and assigns zero-K velocities.  Open the formatted restart on the
             # conventional explicit unit instead and retain IUNREA in the script.
-            restart_file = pycharmm.CharmmFile(
+            restart_file = _resolve_charmm_file_cls(pycharmm)(
                 file_name=str(fortran_path),
                 file_unit=int(self.restart_read_unit),
                 formatted=True,
@@ -169,7 +202,7 @@ class CharmmTrajectoryFiles:
 
             p = Path(self.pressure_tensor_log)
             p.parent.mkdir(parents=True, exist_ok=True)
-            f = pycharmm.CharmmFile(
+            f = _resolve_charmm_file_cls(pycharmm)(
                 file_name=str(p),
                 file_unit=self.pressure_tensor_log_unit,
                 formatted=True,
@@ -196,7 +229,7 @@ class CharmmTrajectoryFiles:
             return [], {}
         p = Path(self.trajectory)
         p.parent.mkdir(parents=True, exist_ok=True)
-        f = pycharmm.CharmmFile(
+        f = _resolve_charmm_file_cls(pycharmm)(
             file_name=str(p),
             file_unit=self.trajectory_unit,
             formatted=False,
@@ -247,7 +280,44 @@ class CharmmMmMinimizeConfig:
     """
 
 
-def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
+def _charmm_grms_or_none() -> float | None:
+    """Current GRMS, or None when this CHARMM build does not expose one.
+
+    Read for reporting only, so a missing accessor must not break a minimization
+    that would otherwise succeed.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+    try:
+        return float(charmm_grms())
+    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
+        return None
+
+
+@dataclass(frozen=True)
+class CharmmMmMinimizeReport:
+    """GRMS around a :func:`minimize_charmm_mm_only` call (kcal/mol/Å)."""
+
+    n_atoms: int
+    ran: bool
+    start_grms_kcalmol_A: float | None = None
+    end_grms_kcalmol_A: float | None = None
+
+    @property
+    def start_grms_is_exactly_zero(self) -> bool:
+        """True when the pre-minimize GRMS is a bit-exact 0.0 on a real system.
+
+        A packed multi-atom configuration always has finite gradients, so an exact
+        0.0 means CHARMM reported no gradient at all. Suspicious, but not
+        conclusive: healthy KEY_LIBRARY builds (measured on pc-studix) leave
+        ``energy.get_grms()`` unpopulated and read 0.0 straight through a
+        minimization that demonstrably moves atoms. Warn on this; do not fail.
+        """
+        start = self.start_grms_kcalmol_A
+        return int(self.n_atoms) > 1 and start is not None and float(start) == 0.0
+
+
+def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> CharmmMmMinimizeReport:
     """Run CHARMM SD (and optional ABNR) on the current PSF using MM terms only.
 
     Call **before** :func:`register_mlpot` so the PSF still has bonds and no ML model is loaded.
@@ -294,18 +364,20 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     elif not bool(config.use_pbc):
         setup_default_nbonds()
     if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
-        return
+        return CharmmMmMinimizeReport(
+            n_atoms=int(get_charmm_positions_array().shape[0]),
+            ran=False,
+        )
 
     n_atoms = int(get_charmm_positions_array().shape[0])
     if n_atoms == 0:
         raise RuntimeError("CHARMM MM minimize: no atoms in PSF (coordinates not loaded?)")
 
     pycharmm.lingo.charmm_script("ENER")
-    if config.verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
+    start_grms = _charmm_grms_or_none()
+    if config.verbose and start_grms is not None:
         print(
-            f"CHARMM MM minimize start: {n_atoms} atoms, GRMS={charmm_grms():.4f} kcal/mol/Å",
+            f"CHARMM MM minimize start: {n_atoms} atoms, GRMS={start_grms:.4f} kcal/mol/Å",
             flush=True,
         )
 
@@ -367,11 +439,10 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
                     **dcd_kw,
                 )
         pycharmm.lingo.charmm_script("ENER")
-        if config.verbose:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
+        end_grms = _charmm_grms_or_none()
+        if config.verbose and end_grms is not None:
             print(
-                f"CHARMM MM minimize end: GRMS={charmm_grms():.4f} kcal/mol/Å",
+                f"CHARMM MM minimize end: GRMS={end_grms:.4f} kcal/mol/Å",
                 flush=True,
             )
         if config.verbose and config.show_energy:
@@ -398,6 +469,13 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
             dcd_file.close()
         cons_fix.turn_off()
 
+    return CharmmMmMinimizeReport(
+        n_atoms=n_atoms,
+        ran=True,
+        start_grms_kcalmol_A=None if start_grms is None else float(start_grms),
+        end_grms_kcalmol_A=None if end_grms is None else float(end_grms),
+    )
+
 
 _BONDED_INTERNAL_TERM_KEYS = ("BOND", "ANGL", "ANGLE", "UREY", "UB", "DIHE", "IMPR", "CMAP")
 
@@ -406,8 +484,27 @@ def _charmm_eterm_value(name: str) -> float | None:
     """Read one CHARMM energy term by name (after ``ENER``)."""
     import pycharmm.energy as energy
 
+    get_term_by_name = getattr(energy, "get_term_by_name", None)
+    if get_term_by_name is not None:
+        try:
+            return float(get_term_by_name(name.upper()))
+        except ValueError:
+            return None
+
+    import pycharmm
+    import pycharmm.lingo as lingo
+
+    lingo.charmm_script(f"SET __mmml_eterm ?{name.upper()}")
+    raw = pycharmm.get_charmm_variable("__MMML_ETERM")
+    if raw is None:
+        return None
+    if isinstance(raw, bytes):
+        raw = raw.decode(errors="replace")
+    text = str(raw).strip()
+    if not text or text.startswith("?"):
+        return None
     try:
-        return float(energy.get_term_by_name(name.upper()))
+        return float(text)
     except ValueError:
         return None
 
@@ -958,7 +1055,8 @@ class MinimizeWithMlpotConfig:
     nstep_abnr: Optional[int] = None
     # When the MLpot USER energy before SD exceeds this threshold (kcal/mol),
     # run a bonded-MM rescue pass (MLpot detached) before the main MLpot SD.
-    # None disables the check; 1e5 is a safe default for catching severe clashes.
+    # None disables the check. 1e5 is a legacy, unverified heuristic threshold;
+    # see [evidence: pre_sd_recovery_threshold].
     pre_sd_bonded_recovery_energy_kcalmol: Optional[float] = None
     # Number of bonded-MM SD steps to use for the pre-SD recovery pass.
     pre_sd_bonded_recovery_nstep: int = 200
@@ -1747,6 +1845,11 @@ def _maybe_abort_heat_on_grms_jump(
     args = getattr(mlpot_ctx, "workflow_args", None)
     if bool(getattr(args, "no_heat_grms_jump_abort", False)):
         return
+    # ADUMB RC sampling: RESD walls + umbrella routinely spike hybrid GRMS when
+    # an RC presses the outer wall. Hard-aborting mid-map loses hours of WHAM
+    # sampling; warn/rewind paths handle true blow-ups instead.
+    if args is not None and getattr(args, "_adumb_rc_guard", None) is not None:
+        return
 
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         refresh_mlpot_energy_and_grms,
@@ -2489,8 +2592,10 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
     chunk_kw["tstruct"] = target
     chunk_kw["hoover reft"] = target
-    # Chunk 0 at segment start: single dyna with ``start`` + ``iasvel=1`` (see
-    # ``_configure_heat_dynamics_start``).  Later chunks / retries keep RAM vel.
+    # Always ``iasvel=1`` at the ramp target. CPT in-memory ``iasvel=0`` + COMP
+    # velocity handoff is unreliable on this CHARMM/gfortran build (T≈10¹² even
+    # after ``coor_set_comparison`` sync). Barostat piston state stays in RAM;
+    # only particle velocities are redrawn each overlap chunk.
     if _hoover_cpt_overlap_chunk_needs_cold_start(
         chunk_kw,
         chunk_index=chunk_index,
@@ -2498,10 +2603,11 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
         steps_done=int(steps_done),
     ):
         chunk_kw["start"] = True
-        chunk_kw["iasvel"] = 1
     else:
-        chunk_kw["iasvel"] = 0
         chunk_kw["start"] = False
+    chunk_kw["iasvel"] = 1
+    chunk_kw["iasors"] = 0
+    chunk_kw.pop("_skip_ase_cold_velocity_assign", None)
 
 
 def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
@@ -3895,8 +4001,18 @@ def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
 
     Pretreat/minimize legs can leave a positive ECHECK in Fortran; dynamics must
     reset it explicitly or short NPT legs abort at iprfrq cadence (e.g. step 240).
+
+    Values ``<= 0`` (legacy ``-1``) are coerced to
+    :func:`~mmml.interfaces.pycharmmInterface.mlpot.cli_common.disabled_charmm_echeck_kcal`
+    so velocity-Verlet still disables the ``MAX(ECHECK, 0.1×KE)`` gate.
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        disabled_charmm_echeck_kcal,
+    )
+
     val = float(echeck)
+    if val <= 0.0:
+        val = disabled_charmm_echeck_kcal()
     kw["echeck"] = val
     kw["ichecw"] = 0
     try:
@@ -4079,21 +4195,83 @@ def _dynamics_writes_dcd(kw: dict[str, Any]) -> bool:
     return nsavc > 0
 
 
+def _bussi_allows_iasvel0_continuation() -> bool:
+    """Experimental in-memory ``iasvel=0`` path (COMP / C-API inject). Off by default."""
+    return os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") == "1"
+
+
+def _cpt_hoover_keeps_in_memory_velocities_without_c_api_inject(
+    kw: dict[str, Any],
+    init_velocities: dict[str, np.ndarray],
+) -> bool:
+    """True when CPT Hoover can continue with COMP / in-memory ``iasvel=0``.
+
+    DCD forbids C-API ``init_velocities`` on this CHARMM build.  Redrawing
+    Boltzmann every overlap chunk (heat or equi) destroys the trajectory; when
+    handoff arrays are present (already validated + COMP-synced by the caller),
+    keep ``iasvel=0`` instead of ``iasvel=1`` redraw.
+    """
+    if not init_velocities:
+        return False
+    if _bussi_heat_ramp_active(kw):
+        return False
+    if not bool(kw.get("cpt")) or "hoover reft" not in kw:
+        return False
+    if bool(kw.get("start")) or int(kw.get("iasvel", 0) or 0) != 0:
+        return False
+    return True
+
+
 def _drop_unsafe_bussi_init_velocities_for_dcd(
     kw: dict[str, Any],
     init_velocities: dict[str, np.ndarray] | None,
     *,
     quiet: bool = False,
 ) -> dict[str, np.ndarray] | None:
-    """Avoid ``dynamics_run_kw`` dynopt segfault with DCD + init_velocities."""
-    if init_velocities is None or not _dynamics_writes_dcd(kw):
+    """Refuse C-API ``init_velocities`` when gfortran would still read COMP coords.
+
+    Drops handoff arrays when writing DCD (dynopt segfault) **or** when Bussi heat
+    is active without ``MMML_BUSSI_IASVEL0_CONTINUATION`` (deferred-DCD micro-chunks
+    previously kept inject + ``iasvel=0`` → T ≫ 10¹² K).
+
+    CPT Hoover (heat/equi) with valid handoff arrays keeps ``iasvel=0`` and relies
+    on COMP sync instead of a Boltzmann redraw.
+    """
+    if init_velocities is None:
+        return None
+    bussi_blocks_inject = (
+        _bussi_heat_ramp_active(kw) and not _bussi_allows_iasvel0_continuation()
+    )
+    dcd_blocks_inject = _dynamics_writes_dcd(kw)
+    if not bussi_blocks_inject and not dcd_blocks_inject:
         return init_velocities
+    if dcd_blocks_inject and _cpt_hoover_keeps_in_memory_velocities_without_c_api_inject(
+        kw, init_velocities
+    ):
+        if not quiet:
+            print(
+                "run_dynamics: DCD forbids C-API init_velocities; "
+                "CPT Hoover keeps iasvel=0 in-memory / COMP velocities "
+                "(no Boltzmann redraw)",
+                flush=True,
+            )
+        kw["iasvel"] = 0
+        kw["start"] = False
+        return None
     if not quiet:
-        print(
-            "run_dynamics: DCD output with C-API init_velocities is unsafe on this "
-            "CHARMM build; using iasvel=1 Bussi continuation instead",
-            flush=True,
-        )
+        if bussi_blocks_inject:
+            print(
+                "run_dynamics: Bussi default refuses C-API init_velocities "
+                "(COMP-as-velocity unsafe on gfortran; deferred-DCD path); "
+                "using iasvel=1 Boltzmann continuation instead",
+                flush=True,
+            )
+        else:
+            print(
+                "run_dynamics: DCD output with C-API init_velocities is unsafe on this "
+                "CHARMM build; using iasvel=1 Boltzmann at bath FIRSTT instead",
+                flush=True,
+            )
     _apply_bussi_iasvel_one_at_ramp_target(kw)
     return None
 
@@ -4103,8 +4281,15 @@ def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
 
     When ``restart=True``, READYN loads velocities from the restart file; do not
     inject COMP / C-API handoff or fall back to ``iasvel=1`` Boltzmann.
+
+    Bussi heat never takes this path unless ``MMML_BUSSI_IASVEL0_CONTINUATION=1``:
+    gfortran builds ignore injected arrays and fill velocities from COMP coordinates.
     """
     if bool(kw.get("restart")):
+        return False
+    if bool(kw.get("_skip_ase_cold_velocity_assign")):
+        return False
+    if _bussi_heat_ramp_active(kw) and not _bussi_allows_iasvel0_continuation():
         return False
     return not bool(kw.get("start")) and int(kw.get("iasvel", 0) or 0) == 0
 
@@ -4134,12 +4319,55 @@ def _bussi_ramp_target_k_for_kw(kw: dict[str, Any]) -> float | None:
     )
 
 
+def _bath_temperature_k_from_dyn_kw(kw: dict[str, Any], *, default_K: float = 300.0) -> float:
+    """Resolve CHARMM Boltzmann / bath target (K) from dynamics kwargs."""
+    for key in (
+        "hoover reft",
+        "treference",
+        "tbath",
+        "tstruct",
+        "finalt",
+        "firstt",
+    ):
+        if key not in kw:
+            continue
+        try:
+            val = float(kw[key])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(val) and val > 0.0:
+            return val
+    return float(default_K)
+
+
 def _apply_bussi_iasvel_one_at_ramp_target(kw: dict[str, Any]) -> None:
-    """Boltzmann at ramp target when ``dynopt`` cannot take ``init_velocities`` (COMP path unsafe)."""
+    """Boltzmann at bath target when ``dynopt`` cannot take ``init_velocities``.
+
+    Used for Bussi heat *and* CPT/DCD fallbacks that drop C-API inject. Without
+    an explicit ``FIRSTT``, CHARMM assigns at 0 K (seen on CPT equi chunk
+    continuations after ``no readable velocities``).
+
+    When ``MMML_ADUMB_IASVEL1_T_CAP`` is set (ADUMB examples), cap the assign
+    temperature so a wall-near redraw cannot leap past umbrella ``max`` mid-dyna.
+    """
     target = _bussi_ramp_target_k_for_kw(kw)
-    if target is not None:
-        kw["firstt"] = float(target)
-        kw["tstruct"] = float(target)
+    if target is None:
+        target = _bath_temperature_k_from_dyn_kw(kw)
+    t_assign = float(target)
+    raw_cap = os.environ.get("MMML_ADUMB_IASVEL1_T_CAP", "").strip()
+    if raw_cap:
+        try:
+            t_cap = float(raw_cap)
+        except ValueError:
+            t_cap = 0.0
+        if t_cap > 0.0:
+            t_assign = min(t_assign, t_cap)
+    elif bool(kw.get("_adumb_forbid_iasvel0")) or bool(
+        kw.get("_adumb_preserve_velocities")
+    ):
+        t_assign = min(t_assign, 250.0)
+    kw["firstt"] = t_assign
+    kw["tstruct"] = t_assign
     kw["iasvel"] = 1
     kw["iasors"] = 0
     kw["start"] = False
@@ -4157,10 +4385,17 @@ def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
 
     It is gated behind ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` because PyCHARMM
     cannot force the START flag off via API: if START lingers from chunk 0,
-    ``iasvel=0`` reads comparison COMP coordinates as velocities (T collapses to
-    ~0 K).  Needs on-node validation — watch for a sudden T≈0 K chunk (COMP
+    ``iasvel=0`` reads comparison COMP coordinates as velocities (T ≫ 10¹² K).
+    Needs on-node validation — watch for a sudden T≈0 K chunk (COMP
     misread) or a ``dynopt`` segfault, and unset the flag if either occurs.
+
+    ADUMB RC-guarded heat must never take this path (UM1RXN after T≃10¹³ K).
     """
+    if bool(kw.pop("_adumb_forbid_iasvel0", False)) or bool(
+        kw.get("_adumb_preserve_velocities")
+    ):
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
     kw["iasvel"] = 0
     kw["iasors"] = 0
     kw["start"] = False
@@ -4169,33 +4404,42 @@ def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
 
 
 def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
-    """Use safe ``iasvel=1`` Bussi continuation unless a handoff is explicitly requested.
+    """Continue Bussi micro-chunks with the guarded velocity assignment.
 
-    Some libcharmm builds expose ``dynamics_run_kw`` but segfault in ``dynopt`` when
-    `init_velocities` are injected on an in-memory continuation.  The stable default
-    is therefore a ramp-target Boltzmann continuation.  Two opt-in alternatives:
+    Default is ``iasvel=1`` Boltzmann at the ramp target. Lingering CHARMM START
+    makes ``iasvel=0`` read COMP *coordinates* as velocities (T ≫ 10¹² K) on
+    typical gfortran builds — even when C-API ``init_velocities`` is injected.
 
-    * ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` — keep CHARMM in-memory velocities
-      (``iasvel=0``); experimental, see :func:`_apply_bussi_iasvel_zero_continuation`.
-    * ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1`` — legacy C-API velocity injection
-      (known to segfault on gfortran).
+    Opt in to experimental in-memory continuation with
+    ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` (optionally plus
+    ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1``). ``MMML_BUSSI_IASVEL1_REDRAW=1``
+    is accepted as an explicit alias of the default.
     """
-    if os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") == "1":
-        _apply_bussi_iasvel_zero_continuation(kw)
+    if bool(kw.get("_adumb_forbid_iasvel0")) or bool(
+        kw.get("_adumb_preserve_velocities")
+    ):
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
+    if bool(kw.pop("_bussi_force_iasvel_one", False)):
+        # One-shot: only the first post-rescue dyna may force IASVEL=1.
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
+    if os.environ.get("MMML_BUSSI_IASVEL1_REDRAW") == "1":
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
+    if not _bussi_allows_iasvel0_continuation():
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
     if not use_c_api_handoff or not _dynamics_c_api_available():
-        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        _apply_bussi_iasvel_zero_continuation(kw)
         return
-    # WARNING: This path passes velocity arrays to Fortran bind(c) optional
-    # assumed-shape arguments via raw ctypes pointers.  Most gfortran builds
-    # segfault inside dynopt because gfortran's CFI array descriptor ABI is
-    # not satisfied by plain C pointers.  Use iasvel=1 (default) instead.
+    # WARNING: velocity arrays via ctypes → often ignored; COMP coords → T~1e12.
     print(
-        "WARN: MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1 — C-API velocity injection enabled. "
-        "This path is known to segfault in dynopt on gfortran builds (bind(c) optional "
-        "assumed-shape array ABI mismatch). Unset MMML_BUSSI_INIT_VELOCITIES_HANDOFF "
-        "to use the safe iasvel=1 Boltzmann continuation instead.",
+        "WARN: MMML_BUSSI_IASVEL0_CONTINUATION=1 with "
+        "MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1 — C-API velocity injection enabled. "
+        "gfortran builds often ignore init_velocities and read COMP coordinates "
+        "(T ≫ 10¹² K). Unset both flags for safe iasvel=1 Boltzmann continuation.",
         flush=True,
     )
     kw["iasvel"] = 0
@@ -4518,7 +4762,6 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     allow_zero_temperature_start = bool(
         kw.pop("_allow_zero_temperature_start", False)
     )
-    skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
     restart_read_unit = int(kw.pop("_restart_read_unit", 3) or 3)
@@ -4530,7 +4773,25 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         "_required_handoff_velocity_restart", None
     )
     bussi_active = _bussi_heat_ramp_active(kw)
+    adumb_forbid_iasvel0 = bool(kw.pop("_adumb_forbid_iasvel0", False)) or bool(
+        kw.pop("_adumb_preserve_velocities", False)
+    )
     _ensure_bussi_heat_continuation_iasvel(kw)
+    # Defense: outer-chunk / subchunk callers can leave iasvel=0; never enter the
+    # COMP/C-API inject path for Bussi without explicit opt-in (deferred DCD).
+    # ADUMB always forbids iasvel=0 (COMP-as-positions → T≃10¹³ → UM1RXN).
+    if (
+        bussi_active
+        and (
+            adumb_forbid_iasvel0
+            or not _bussi_allows_iasvel0_continuation()
+        )
+        and not bool(kw.get("start"))
+        and int(kw.get("iasvel", 0) or 0) == 0
+    ):
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+    # Pop *after* Bussi/CPT continuation helpers may arm the flag.
+    skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     nstep = int(kw.get("nstep", 0) or 0)
     if nstep < 1:
         raise ValueError(
@@ -4553,20 +4814,33 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         kw,
         allow_zero_temperature_start=allow_zero_temperature_start,
     )
-    # Resolve / assign warm AKMA velocities before COMP mirror (post-rescue CGENFF
-    # reregister clears CHARMM memory; MB fallback must run before mirror can raise).
-    if required_handoff_velocity_restart is not None:
+    # CPT in-memory continuation sets ``_skip_ase_cold_velocity_assign`` then we
+    # pop it above.  Re-apply for handoff gates: otherwise ``iasvel=0`` looks like
+    # a COMP-inject path, ``_resolve_dynamics_init_velocities`` redraws Maxwell–
+    # Boltzmann ("ASE Bussi rescale: no readable velocities"), and DCD forces
+    # another ``iasvel=1`` redraw — the heat T=40→20→40 treadmill.
+    if skip_ase_cold:
+        init_velocities = None
+        needs_init_velocities_handoff = False
+    elif required_handoff_velocity_restart is not None:
         init_velocities = _required_handoff_init_velocities(
             required_handoff_velocity_restart,
             quiet=quiet_ase,
         )
         skip_ase_cold = True
+        needs_init_velocities_handoff = False
     else:
+        # Resolve / assign warm AKMA velocities before COMP mirror (post-rescue
+        # CGENFF reregister clears CHARMM memory; MB fallback must run before
+        # mirror can raise).
         init_velocities = _resolve_dynamics_init_velocities(
             kw,
             restart_read_path=restart_read_path,
             fallback_paths=bussi_restart_fallbacks,
         )
+        # Preserve skip across strip: otherwise stripping ``_skip_ase_cold_*``
+        # re-enables inject into a COMP path that gfortran fills from coordinates.
+        needs_init_velocities_handoff = _requires_init_velocities_handoff(kw)
     _bussi_handoff_preserve = frozenset({"_bussi_ramp", "_bussi_global_step"})
     _strip_non_charmm_dynamics_keywords(
         kw,
@@ -4584,7 +4858,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     # Lingering START + iasvel=0 still reads COMP. Always keep COMP in sync with
     # handoff / main velocities — even when C-API init_velocities is also injected
     # (gfortran builds often ignore those arrays and keep using COMP).
-    if _requires_init_velocities_handoff(kw):
+    if needs_init_velocities_handoff:
         if handoff_vel is not None:
             sync_comparison_velocities_akma(handoff_vel)
         else:
@@ -4592,6 +4866,17 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
                 kw,
                 restart_read_path=restart_read_path,
             )
+    elif skip_ase_cold and int(kw.get("iasvel", 0) or 0) == 0:
+        # CPT Hoover in-memory continuation: no Maxwell redraw / no C-API inject.
+        # After ENER between overlap chunks, live main buffers are often empty while
+        # COMP still holds coordinates — syncing from the post-dyna cache (or
+        # falling back to iasvel=1) prevents T≈10¹² COMP-as-velocity blow-ups.
+        _ensure_cpt_iasvel0_comp_velocity_handoff(
+            kw,
+            restart_read_path=restart_read_path,
+            fallback_paths=bussi_restart_fallbacks,
+            quiet=quiet_ase,
+        )
     if not skip_ase_cold:
         maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     if "echeck" in kw:
@@ -4600,7 +4885,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     if int(kw.get("ihtfrq", 0) or 0) > 0:
         apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
     _release_charmm_dynamics_api_buffers()
-    if _requires_init_velocities_handoff(kw):
+    if needs_init_velocities_handoff:
         if not _dynamics_c_api_available():
             raise RuntimeError(
                 "run_dynamics: iasvel=0 in-memory continuation requires "
@@ -4655,7 +4940,12 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             or post_dyna_restart_write
         )
     # Capture in-memory velocities before ``velos_del`` frees the dynamics buffers.
-    if bussi_active:
+    # Hoover CPT heat/equi needs the same cache: mid-segment overlap chunks cannot
+    # re-read live CHARMM buffers after release, and DCD forbids C-API inject.
+    capture_for_handoff = bussi_active or (
+        bool(kw.get("cpt")) and "hoover reft" in kw
+    )
+    if capture_for_handoff:
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             capture_charmm_velocities_for_bussi,
         )
@@ -5051,13 +5341,17 @@ def _overlap_chunk_uses_memory_handoff(
     Bussi sub-chunks rely on.  Set ``MMML_BUSSI_READYN_OVERLAP=1`` to opt into
     legacy scratch ``READYN`` (debug only).
 
+    ADUMB RC-guarded runs also stay in RAM: between-chunk RESD wall reinstall +
+    umbrella state churn often leaves scratch ``.a/.b.res`` files that fail
+    ``READYN`` with dynio "Bad value during floating point read".
+
     Other non-CPT overlap uses alternating scratch ``READYN`` with patched
     ``JHSTRT``.  ``overlap.memory_handoff`` on the config affects chunk-0
     ``start``/READYN only, not between-chunk I/O for scale-heat / NVE.
     CPT stability *sub-chunks* within one overlap chunk also stay in-memory
     (``_run_cpt_stability_subchunked``) unless ``MMML_CPT_READYN_SUBCHUNK=1``.
     """
-    del chunk_index, mlpot_ctx, overlap
+    del chunk_index, overlap
     if n_chunks <= 1:
         return False
     if cpt:
@@ -5068,6 +5362,10 @@ def _overlap_chunk_uses_memory_handoff(
         if _truthy_env("MMML_BUSSI_READYN_OVERLAP"):
             return False
         return True
+    if mlpot_ctx is not None:
+        wf = getattr(mlpot_ctx, "workflow_args", None)
+        if getattr(wf, "_adumb_rc_guard", None) is not None:
+            return True
     return False
 
 
@@ -5605,8 +5903,14 @@ def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | 
         return None
     for attr in ("charmm_cubic_box_side_A", "cubic_box_side_A"):
         side = getattr(mlpot_ctx, attr, None)
-        if side is not None and float(side) > 0.0:
-            return float(side)
+        # Mock/spec-less proxy objects fabricate attributes on demand.  Only
+        # accept actual scalar numbers as scientific box metadata.
+        if isinstance(side, (int, float, np.integer, np.floating)) and not isinstance(
+            side, (bool, np.bool_)
+        ):
+            numeric_side = float(side)
+            if np.isfinite(numeric_side) and numeric_side > 0.0:
+                return numeric_side
     return None
 
 
@@ -5637,13 +5941,25 @@ def _prepare_post_rescue_bath_and_crystal(
         mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
     )
     if use_pbc and bool(chunk_kw.get("cpt")):
-        side = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
-        if side is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-                ensure_charmm_crystal_for_cpt,
-            )
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            ensure_charmm_crystal_for_cpt,
+            probe_charmm_cubic_box_side_A,
+        )
 
-            ensure_charmm_crystal_for_cpt(side, quiet=True)
+        fallback = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
+        live, source = probe_charmm_cubic_box_side_A(fallback_side_A=fallback)
+        # Prefer the live NPT cell so post-rescue does not reinstall the
+        # certified-handoff L from stale ctx metadata.
+        side = live if live is not None else fallback
+        if side is not None:
+            ensure_charmm_crystal_for_cpt(float(side), quiet=True)
+            if (
+                mlpot_ctx is not None
+                and live is not None
+                and source in ("pbound", "xucell")
+            ):
+                mlpot_ctx.cubic_box_side_A = float(live)
+                mlpot_ctx.charmm_cubic_box_side_A = float(live)
 
 
 def _assign_post_rescue_velocities_and_crystal(
@@ -5677,28 +5993,26 @@ def _prepare_post_rescue_overlap_handoff(
     Also used for ASE Bussi heat so COMP-mirrored velocities and dynamics buffers
     stay in RAM instead of reloading stale scratch ``WRIDYN`` state.
     """
-    if mlpot_ctx is not None and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False):
+    if (
+        mlpot_ctx is not None
+        and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False) is True
+    ):
         _prepare_post_rescue_cold_start_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
         return
     if mlpot_ctx is not None and getattr(
         mlpot_ctx, "_overlap_velocity_redraw_memory_handoff", False
     ) is True:
-        # Keep Maxwell–Boltzmann redraws in CHARMM RAM; do not IASVEL=1 reassign.
+        # Selective monomer redraw already wrote warm velocities into main, but
+        # ``start=True`` + ``iasvel=0`` makes lingering START read COMP
+        # *coordinates* as velocities (T ≫ 10¹² K → ECHECK). Use the same ASE
+        # Maxwell–Boltzmann + one-shot ``iasvel=1`` cold-start as extent fly-off.
         setattr(mlpot_ctx, "_overlap_velocity_redraw_memory_handoff", False)
-        chunk_kw["restart"] = False
-        chunk_kw["new"] = False
-        chunk_kw["start"] = True
-        chunk_kw["iasvel"] = 0
-        chunk_kw.pop("iunrea", None)
-        chunk_kw["iunrea"] = -1
-        _strip_stale_heat_ramp_keywords(chunk_kw)
-        if int(chunk_kw.get("ihtfrq", 0) or 0) != 0:
-            chunk_kw["ihtfrq"] = 0
         print(
-            "overlap: post-velocity-redraw in-memory handoff "
-            "(iasvel=0; no READYN / no MLpot rescue mini)",
+            "overlap: post-velocity-redraw → ASE cold-start "
+            "(iasvel=1; avoid COMP-as-velocity continuation)",
             flush=True,
         )
+        _prepare_post_rescue_cold_start_overlap_handoff(chunk_kw, mlpot_ctx=mlpot_ctx)
         return
     if _bussi_heat_ramp_active(chunk_kw):
         _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
@@ -5707,6 +6021,7 @@ def _prepare_post_rescue_overlap_handoff(
             chunk_kw,
             restart_path=chunk_kw.get("_restart_read_path"),
             global_step=int(chunk_kw.get("_bussi_global_step", 0) or 0),
+            mlpot_ctx=mlpot_ctx,
         )
         return
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
@@ -5726,7 +6041,13 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     *,
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Assign ASE Maxwell-Boltzmann velocities before IHTFRQ heat ramp continuation."""
+    """Assign ASE Maxwell-Boltzmann velocities before IHTFRQ heat ramp continuation.
+
+    Sets ``_bussi_force_iasvel_one`` (one-shot) so the first ``run_dynamics`` /
+    ``_ensure_bussi_heat_continuation_iasvel`` cannot flip back to ``iasvel=0``
+    (COMP-as-velocity / C-API inject path that yields T ≫ 10¹² K after fly-off).
+    Later Bussi micro-chunks clear the flag and continue with in-memory velocities.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         assign_maxwell_boltzmann_velocities_via_ase,
         resolve_assignment_temperature_k,
@@ -5740,6 +6061,8 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     chunk_kw["start"] = False
     chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
+    chunk_kw["_bussi_force_iasvel_one"] = True
+    chunk_kw.pop("_skip_ase_cold_velocity_assign", None)
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
     if mlpot_ctx is not None:
@@ -5769,8 +6092,9 @@ def _materialize_post_rescue_restart_handoff(
     )
 
     _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
-    cold_start = mlpot_ctx is not None and getattr(
-        mlpot_ctx, "_overlap_post_rescue_cold_start", False
+    cold_start = (
+        mlpot_ctx is not None
+        and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False) is True
     )
     if cold_start:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
@@ -5974,13 +6298,15 @@ def _prepare_overlap_chunk_after_restart(
     long MD (same as ``reregister_mlpot`` / ``refresh_nbonds_after_mlpot*``).
     ``READYN`` on the scratch restart restores coordinates, velocities, and lists.
 
-    When MLpot is active, refresh the JAX MIC cell from the upcoming scratch restart
-    (or live CHARMM pbound) so ``calculate_charmm`` does not keep using a stale
-    pretreat ``.res`` path set at registration time.
+    When MLpot is active **and periodic**, refresh the JAX MIC cell from the
+    upcoming scratch restart (or live CHARMM pbound) so ``calculate_charmm``
+    does not keep using a stale pretreat ``.res`` path set at registration time.
+    Vacuum / ``free_*`` setups skip the box sync (no crystal / pbound).
     """
     if mlpot_ctx is not None:
         pyCModel = getattr(mlpot_ctx, "pyCModel", None)
-        if pyCModel is not None:
+        use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+        if use_pbc and pyCModel is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
                 sync_mlpot_pbc_cell_from_charmm,
             )
@@ -6037,23 +6363,97 @@ def _cpt_subchunk_use_in_memory_handoff() -> bool:
     return True
 
 
+def _ensure_cpt_iasvel0_comp_velocity_handoff(
+    kw: dict[str, Any],
+    *,
+    restart_read_path: Path | str | None,
+    fallback_paths: Any = None,
+    quiet: bool = True,
+) -> None:
+    """Keep ``iasvel=0`` only when COMP holds warm AKMA velocities, else Boltzmann.
+
+    CPT in-memory legs set ``_skip_ase_cold_velocity_assign`` so we do not redraw
+    Maxwell–Boltzmann or inject C-API velocities (DCD-unsafe on gfortran).  That
+    path *requires* COMP to hold velocities.  After mid-segment ENER / list
+    rebuilds, live main buffers are often cold while COMP still matches main
+    coordinates — continuing would yield T≈10¹² K.  Prefer the post-dyna velocity
+    cache; if COMP cannot be made safe, fall back to ``iasvel=1`` at the bath
+    target (barostat state stays in RAM).
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        capture_charmm_velocities_for_bussi,
+        last_synced_velocities_akma_raw,
+        velocities_are_cold,
+        velocities_are_pathological,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        assert_comparison_holds_velocities_not_positions,
+        comparison_matches_main_positions,
+        sync_comparison_velocities_akma,
+        sync_comparison_velocities_from_main,
+    )
+
+    synced = False
+    raw = last_synced_velocities_akma_raw()
+    if (
+        raw is not None
+        and not velocities_are_cold(raw)
+        and not velocities_are_pathological(raw)
+    ):
+        sync_comparison_velocities_akma(raw)
+        synced = True
+    if not synced:
+        synced = bool(sync_comparison_velocities_from_main())
+    if not synced:
+        capture_charmm_velocities_for_bussi(
+            restart_path=restart_read_path,
+            fallback_paths=fallback_paths,
+            quiet=quiet,
+        )
+        raw = last_synced_velocities_akma_raw()
+        if (
+            raw is not None
+            and not velocities_are_cold(raw)
+            and not velocities_are_pathological(raw)
+        ):
+            sync_comparison_velocities_akma(raw)
+            synced = True
+        else:
+            synced = bool(sync_comparison_velocities_from_main())
+    if synced and not comparison_matches_main_positions():
+        assert_comparison_holds_velocities_not_positions(
+            context="run_dynamics CPT iasvel=0 handoff"
+        )
+        return
+    print(
+        "run_dynamics: CPT iasvel=0 COMP handoff unsafe "
+        "(no warm velocities / COMP matches positions); "
+        "falling back to iasvel=1 at bath target",
+        flush=True,
+    )
+    _apply_bussi_iasvel_one_at_ramp_target(kw)
+
+
 def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     """In-process ``dyna`` continuation for CPT sub-chunks (no ``READYN``).
 
     Preserves Hoover CPT barostat state in RAM between sub-chunks.  Plain
     ``write restart`` / ``READYN`` handoffs do not restore piston internals.
+
+    Particle velocities use ``iasvel=1`` at the bath target — not ``iasvel=0`` /
+    COMP — because COMP-as-velocity continues to yield T≈10¹² on this build even
+    after post-dyna velocity-cache sync into comparison coordinates.
     """
     kw["restart"] = False
     kw["new"] = False
     kw["start"] = False
-    kw["iasvel"] = 0
-    kw.pop("firstt", None)
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
-    kw["_skip_ase_cold_velocity_assign"] = True
+    kw.pop("_skip_ase_cold_velocity_assign", None)
     _strip_stale_heat_ramp_keywords(kw)
     if int(kw.get("ihtfrq", 0) or 0) != 0:
         kw["ihtfrq"] = 0
+    _apply_bussi_iasvel_one_at_ramp_target(kw)
 
 
 def _apply_cpt_restart_continuation_kw(kw: dict[str, Any]) -> None:
@@ -6237,9 +6637,21 @@ def _restore_bussi_velocities_after_overlap_recovery(
     *,
     restart_path: Path | str | None,
     global_step: int,
+    mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> None:
-    """Rehydrate AKMA velocities after overlap rescue / MLpot reregister."""
+    """Rehydrate AKMA velocities after overlap rescue / MLpot reregister.
+
+    Skip when ``_overlap_post_rescue_cold_start`` is armed: extent fly-off often
+    restores geometry-only checkpoints (``02_mini.crd`` / baseline) whose COMP
+    / restart velocities are positions or absent. The cold-start handoff assigns
+    Maxwell–Boltzmann velocities and continues with ``iasvel=1``.
+    """
     if not _bussi_heat_ramp_active(chunk_kw):
+        return
+    if (
+        mlpot_ctx is not None
+        and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False) is True
+    ):
         return
     spec = bussi_heat_ramp_spec_from_kw(chunk_kw)
     if spec is None:
@@ -6264,10 +6676,21 @@ def _restore_bussi_velocities_after_overlap_recovery(
 
 
 def _ensure_bussi_heat_continuation_iasvel(chunk_kw: dict[str, Any]) -> None:
-    """Bussi continuation: ``iasvel=0`` + ``init_velocities``, or ``iasvel=1`` when C API absent."""
+    """Bussi continuation: ``iasvel=0`` + ``init_velocities``, or ``iasvel=1`` when C API absent.
+
+    Do not clobber an explicit ``iasvel=1`` cold-start / Boltzmann redraw (extent
+    fly-off sets this before ``run_dynamics``; overwriting to ``iasvel=0`` makes
+    CHARMM read COMP coordinates as velocities → T ≫ 10¹² K).
+    """
     if not _bussi_heat_ramp_active(chunk_kw):
         return
     if bool(chunk_kw.get("start")):
+        return
+    if bool(chunk_kw.pop("_bussi_force_iasvel_one", False)):
+        # One-shot (see ``_configure_bussi_in_memory_continuation_iasvel``).
+        _apply_bussi_iasvel_one_at_ramp_target(chunk_kw)
+        return
+    if int(chunk_kw.get("iasvel", 0) or 0) == 1:
         return
     _configure_bussi_in_memory_continuation_iasvel(chunk_kw)
 
@@ -6314,6 +6737,11 @@ def _apply_overlap_chunk_dynamics_kw(
     preserve_handoff_velocities = bool(
         chunk_kw.pop("_preserve_handoff_velocities", False)
     )
+    # ADUMB: never Boltzmann-redraw between overlap chunks — soft RESD walls
+    # cannot hold a 500 K kick mid-dyna before UM1RXN aborts.
+    adumb_preserve_velocities = bool(
+        chunk_kw.pop("_adumb_preserve_velocities", False)
+    )
     if int(chunk_index) > 0:
         chunk_kw.pop("_required_handoff_velocity_restart", None)
     if preserve_handoff_velocities and int(chunk_index) == 0 and not has_restart_read:
@@ -6325,6 +6753,41 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw["iunrea"] = -1
         for key in ("firstt", "finalt", "tbath", "tstruct"):
             chunk_kw.pop(key, None)
+        return
+    if (
+        adumb_preserve_velocities
+        and int(chunk_index) > 0
+        and not bool(chunk_kw.get("cpt"))
+    ):
+        chunk_kw["new"] = False
+        chunk_kw["restart"] = bool(has_restart_read)
+        chunk_kw["start"] = False
+        if has_restart_read:
+            chunk_kw.pop("iunrea", None)
+        else:
+            chunk_kw["iunrea"] = -1
+        chunk_kw.pop("firstt", None)
+        _strip_stale_heat_ramp_keywords(chunk_kw)
+        # Never iasvel=0 for ADUMB: PyCHARMM often leaves START set, so IASVEL=0
+        # reads COMP *positions* as AKMA velocities (T≃10¹³ K → UM1RXN). Same
+        # conclusion as CPT in-memory legs — use iasvel=1 at the ramp target;
+        # stiff RESD walls + memory handoff absorb the redraw.
+        if _bussi_heat_ramp_active(chunk_kw):
+            _apply_bussi_iasvel_one_at_ramp_target(chunk_kw)
+        else:
+            chunk_kw["iasvel"] = 1
+            chunk_kw["iasors"] = 0
+        # Cap Boltzmann redraw temperature: a full 500 K kick at wall-near RCs
+        # punches past soft RESD mid-dyna (UM1RXN) before the wall can act.
+        t_cap = float(os.environ.get("MMML_ADUMB_IASVEL1_T_CAP", "250") or 250.0)
+        if t_cap > 0.0:
+            for key in ("firstt", "tbath", "tstruct", "finalt"):
+                if key in chunk_kw and chunk_kw[key] is not None:
+                    try:
+                        chunk_kw[key] = min(float(chunk_kw[key]), t_cap)
+                    except (TypeError, ValueError):
+                        pass
+        chunk_kw.pop("_skip_ase_cold_velocity_assign", None)
         return
     if has_restart_read:
         chunk_kw["new"] = False
@@ -6705,6 +7168,44 @@ def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | No
     return chunk
 
 
+def _maybe_prepare_adumb_rc_before_overlap_chunk(
+    *,
+    mlpot_ctx: Any | None,
+    overlap_context: str,
+    chunk_index: int,
+    n_chunks: int,
+    final_restart: Path | None,
+    force_rewind: bool = False,
+) -> bool:
+    """Reinstall RC walls and rewind if a traced RC exceeds umbrella ``max``.
+
+    Returns ``True`` when the overlap loop should retry the current chunk
+    from restored in-memory coordinates.
+
+    ``force_rewind``: rewind from numbered restarts even when RC distances are
+    still inside the umbrella (monomer fly-off / extent explosion).
+    """
+    if mlpot_ctx is None:
+        return False
+    wf_args = getattr(mlpot_ctx, "workflow_args", None)
+    guard = getattr(wf_args, "_adumb_rc_guard", None) if wf_args is not None else None
+    if guard is None:
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        prepare_adumb_rc_before_overlap_chunk,
+    )
+
+    return prepare_adumb_rc_before_overlap_chunk(
+        guard,
+        overlap_context=overlap_context,
+        chunk_index=chunk_index,
+        n_chunks=n_chunks,
+        final_restart=final_restart,
+        quiet_walls=chunk_index > 0,
+        force_rewind=force_rewind,
+    )
+
+
 def _dynamics_chunk_state_corrupt(
     *,
     overlap_context: str,
@@ -6734,6 +7235,61 @@ def _dynamics_chunk_state_corrupt(
         )
         return True
     return False
+
+
+def _bussi_subchunk_grms_blocks_continuation(
+    *,
+    overlap_context: str,
+    global_step: int,
+    max_grms_kcalmol_A: float = BUSSI_SUBCHUNK_CONTINUE_MAX_GRMS_KCALMOL_A,
+    mlpot_ctx: Any | None = None,
+    microchunk_series: list[dict[str, Any]] | None = None,
+    restart_path: Path | str | None = None,
+) -> bool:
+    """True when post-subchunk CHARMM GRMS is too hot to continue Bussi heat.
+
+    On trip, writes a structured force/bond dump under ``cleanup/`` when an
+    output directory is available (see
+    :mod:`bussi_continuation_gate_diagnostics`).
+    """
+    limit = float(max_grms_kcalmol_A)
+    if limit <= 0.0:
+        return False
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+        grms = float(charmm_grms())
+    except Exception:
+        return False
+    if not np.isfinite(grms) or grms <= limit:
+        return False
+    print(
+        f"WARN: {overlap_context}: CHARMM GRMS {grms:.4f} kcal/mol/Å after Bussi "
+        f"sub-chunk ending step {global_step} exceeds continuation gate "
+        f"{limit:.1f} kcal/mol/Å (liquid/PBC breakdown) — stopping before the "
+        "next micro-chunk",
+        flush=True,
+    )
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
+            dump_bussi_continuation_gate_diagnostics,
+        )
+
+        dump_bussi_continuation_gate_diagnostics(
+            mlpot_ctx,
+            overlap_context=overlap_context,
+            global_step=int(global_step),
+            gate_grms_kcalmol_A=float(grms),
+            gate_limit_kcalmol_A=float(limit),
+            microchunk_series=microchunk_series,
+            restart_path=restart_path,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"{overlap_context}: WARN Bussi gate diagnostics failed ({exc})",
+            flush=True,
+        )
+    return True
 
 
 def _run_cpt_stability_subchunked(
@@ -6920,8 +7476,12 @@ def _run_bussi_heat_subchunked(
     global_step_offset: int = 0,
     quiet_bussi: bool = False,
     split_trajectory: bool = False,
+    mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> Any:
     """Integrate Verlet heat in short segments with ASE Bussi rescales between them."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
+        sample_bussi_microchunk_metrics,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         append_bussi_rescale_ase_frame,
         apply_bussi_velocity_rescale,
@@ -6968,12 +7528,23 @@ def _run_bussi_heat_subchunked(
             f"{overlap_context}: ASE Bussi rescale trajectory → {ase_traj_path.name}",
             flush=True,
         )
+    microchunk_series: list[dict[str, Any]] = []
     while steps_done < total:
         n = min(chunk_nstep, total - steps_done)
         sub_kw = dict(kw)
         sub_kw["nstep"] = n
         if steps_done > 0:
+            # Parent ``kw`` may still carry ``_bussi_force_iasvel_one`` from a
+            # post-rescue cold-start: ``run_dynamics`` only pops it on a copy, so
+            # later ``dict(kw)`` sub-chunks would keep forcing IASVEL=1 Boltzmann
+            # every micro-chunk (discarding ASE Bussi rescale).
+            sub_kw.pop("_bussi_force_iasvel_one", None)
+            kw.pop("_bussi_force_iasvel_one", None)
             _apply_bussi_in_memory_continuation_kw(sub_kw)
+        elif not bool(sub_kw.get("start")):
+            # Outer overlap chunk > 0 enters with start=False; do not inherit a
+            # stale iasvel=0 from the previous leg (deferred-DCD COMP crash).
+            _configure_bussi_in_memory_continuation_iasvel(sub_kw)
         global_start = int(global_step_offset) + steps_done
         global_end = global_start + n
         sub_kw["_bussi_global_step"] = global_start
@@ -7047,6 +7618,8 @@ def _run_bussi_heat_subchunked(
             rng_base=rng_base,
             rng_salt=rng_salt_base + steps_done,
         )
+        # Consume one-shot force on the parent after the first micro-chunk.
+        kw.pop("_bussi_force_iasvel_one", None)
         global_after = int(global_step_offset) + steps_done + n
         target_k = heat_ramp_bath_target_K(
             firstt=float(spec["firstt"]),
@@ -7064,11 +7637,27 @@ def _run_bussi_heat_subchunked(
                 (p for p in candidates if p.is_file() and p.stat().st_size > 0),
                 sub_io.restart_write,
             )
-        if _dynamics_chunk_state_corrupt(
+        microchunk_series.append(
+            sample_bussi_microchunk_metrics(
+                global_step=global_after,
+                target_temperature_K=float(target_k),
+            )
+        )
+        chunk_corrupt = _dynamics_chunk_state_corrupt(
             overlap_context=f"{overlap_context} Bussi sub-chunk ending step {global_after}",
             restart_path=restart_path,
-        ):
+        )
+        # Evaluate GRMS gate even when corrupt so the cleanup/ dump still runs.
+        grms_blocks = _bussi_subchunk_grms_blocks_continuation(
+            overlap_context=overlap_context,
+            global_step=global_after,
+            mlpot_ctx=mlpot_ctx,
+            microchunk_series=microchunk_series,
+            restart_path=restart_path,
+        )
+        if chunk_corrupt or grms_blocks:
             kw["_bussi_subchunk_abort_global_step"] = global_after
+            kw["_bussi_subchunk_aborted_corrupt"] = True
             print(
                 f"{overlap_context}: stopping Bussi heat sub-chunks at step "
                 f"{global_after} before continuation; overlap recovery will run",
@@ -7699,6 +8288,16 @@ def run_dynamics_with_io(
                         steps_done=steps_done,
                         ramp_spec=heat_ramp_spec,
                     )
+                if mlpot_ctx is not None:
+                    wf_args = getattr(mlpot_ctx, "workflow_args", None)
+                    if (
+                        wf_args is not None
+                        and getattr(wf_args, "_adumb_rc_guard", None) is not None
+                    ):
+                        # Mark ADUMB: memory handoff + forbid COMP-as-velocity
+                        # (iasvel=0). Soft walls stay; safe redraw is iasvel=1.
+                        chunk_kw["_adumb_preserve_velocities"] = True
+                        chunk_kw["_adumb_forbid_iasvel0"] = True
                 _apply_overlap_chunk_dynamics_kw(
                     chunk_kw,
                     chunk_index=chunk_index,
@@ -7749,8 +8348,24 @@ def run_dynamics_with_io(
                         False,
                     ) is True
                 )
+                # Extent fly-off arms ``_overlap_post_rescue_cold_start`` even when
+                # Bussi skipped scratch ``restart_write`` (so the rescued-block
+                # below never sets ``post_rescue_in_memory_mode``). Consume it here
+                # so the next chunk still gets ASE MB + iasvel=1 instead of
+                # COMP-as-velocity continuation.
+                extent_cold_start_pending = bool(
+                    mlpot_ctx is not None
+                    and getattr(
+                        mlpot_ctx, "_overlap_post_rescue_cold_start", False
+                    )
+                    is True
+                )
                 if (
-                    (post_rescue_memory_this_chunk or velocity_redraw_pending)
+                    (
+                        post_rescue_memory_this_chunk
+                        or velocity_redraw_pending
+                        or extent_cold_start_pending
+                    )
                     and not post_rescue_handoff_applied
                 ):
                     _prepare_post_rescue_overlap_handoff(
@@ -7848,6 +8463,40 @@ def run_dynamics_with_io(
                     chunk_kw["_numbered_restart_chunk_index"] = chunk_index
                     chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
                     chunk_kw["_numbered_restart_context"] = overlap_context
+                adumb_rc_retry = _maybe_prepare_adumb_rc_before_overlap_chunk(
+                    mlpot_ctx=mlpot_ctx,
+                    overlap_context=overlap_context,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                    final_restart=final_restart,
+                )
+                if adumb_rc_retry:
+                    if chunk_retry_count >= _MAX_EARLY_ABORT_CHUNK_RETRIES:
+                        raise RuntimeError(
+                            f"overlap ({overlap_context}): ADUMB RC recovery "
+                            f"exhausted retries on chunk {chunk_index + 1}/{n_chunks}"
+                        )
+                    chunk_retry_count += 1
+                    early_abort_memory_handoff = True
+                    if mlpot_ctx is not None:
+                        _prepare_overlap_chunk_after_restart(
+                            mlpot_ctx, restart_read=None
+                        )
+                        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                            probe_and_light_resync_if_desync,
+                        )
+
+                        probe_and_light_resync_if_desync(
+                            mlpot_ctx,
+                            context=(
+                                f"{overlap_context} ADUMB RC recovery "
+                                f"chunk {chunk_index + 1}/{n_chunks}"
+                            ),
+                            silent_charmm=True,
+                            verbose=False,
+                        )
+                    rerun_chunk = True
+                    continue
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
                         mlpot_ctx,
@@ -7919,6 +8568,7 @@ def run_dynamics_with_io(
                         global_step_offset=steps_before_chunk,
                         quiet_bussi=bool(chunk_kw.get("_quiet_bussi_rescale", False)),
                         split_trajectory=split_trajectory,
+                        mlpot_ctx=mlpot_ctx,
                     )
                 else:
                     if "_numbered_restart_stage_path" in chunk_kw:
@@ -7948,7 +8598,7 @@ def run_dynamics_with_io(
                         f"overlap ({overlap_context}) chunk {chunk_index + 1}/{n_chunks}"
                     ),
                     restart_path=chunk_restart_path,
-                )
+                ) or bool(chunk_kw.pop("_bussi_subchunk_aborted_corrupt", False))
                 if chunk_io is not None and getattr(chunk_io, "restart_write", None) is not None:
                     _refresh_restart_write_after_chunk(
                         chunk_io.restart_write,
@@ -8169,7 +8819,12 @@ def run_dynamics_with_io(
                                 ),
                                 step=steps_before_chunk,
                             )
-                        if geometry_violation and mlpot_ctx is not None and overlap is not None:
+                        if (
+                            geometry_violation
+                            and mlpot_ctx is not None
+                            and overlap is not None
+                            and getattr(overlap, "action", None) == "rescue"
+                        ):
                             from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                                 finalize_overlap_rescue_for_dynamics,
                             )
@@ -8190,6 +8845,7 @@ def run_dynamics_with_io(
                                     else overlap_restart_read_for_chunk
                                 ),
                                 global_step=steps_before_chunk,
+                                mlpot_ctx=mlpot_ctx,
                             )
                             from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                                 save_stabilized_overlap_rescue_snapshot,
@@ -8222,6 +8878,7 @@ def run_dynamics_with_io(
                                     else overlap_restart_read_for_chunk
                                 ),
                                 global_step=steps_before_chunk,
+                                mlpot_ctx=mlpot_ctx,
                             )
                         use_readyn_handoff = (
                             chunk_io is not None
@@ -8319,6 +8976,15 @@ def run_dynamics_with_io(
                             maybe_intervene_monomer_health,
                         )
 
+                        # Redraw at the *current* segment's live bath target, not
+                        # the workflow's overall heat_finalt — a mid-ramp redraw
+                        # at the final heat temperature would inject velocities
+                        # far hotter than the chunk actually being run.
+                        health_temperature_K = _bussi_ramp_target_k_for_kw(chunk_kw)
+                        if health_temperature_K is None:
+                            health_temperature_K = _bath_temperature_k_from_dyn_kw(
+                                chunk_kw, default_K=0.0
+                            )
                         health_action = maybe_intervene_monomer_health(
                             mlpot_ctx,
                             overlap,
@@ -8327,6 +8993,7 @@ def run_dynamics_with_io(
                             restart_path=(
                                 chunk_io.restart_write if chunk_io is not None else None
                             ),
+                            temperature_K=health_temperature_K,
                         )
                     geometry_health_rescued = bool(
                         getattr(health_action, "geometry_restored", False)
@@ -8334,6 +9001,112 @@ def run_dynamics_with_io(
                     velocity_health_redrawn = bool(
                         getattr(health_action, "velocities_redrawn", False)
                     )
+                    adumb_skipped_template = bool(
+                        getattr(health_action, "adumb_skip_template_restore", False)
+                    )
+                    if adumb_skipped_template and mlpot_ctx is not None:
+                        overlap_action = str(
+                            getattr(overlap, "action", "rescue") or "rescue"
+                        ).lower()
+                        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                            attempt_overlap_early_abort_recovery,
+                        )
+                        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                            reinstall_adumb_rxncor_walls_from_workflow_args,
+                        )
+
+                        def _adumb_force_rewind_or_false() -> bool:
+                            try:
+                                return bool(
+                                    _maybe_prepare_adumb_rc_before_overlap_chunk(
+                                        mlpot_ctx=mlpot_ctx,
+                                        overlap_context=overlap_context,
+                                        chunk_index=chunk_index,
+                                        n_chunks=n_chunks,
+                                        final_restart=final_restart,
+                                        force_rewind=True,
+                                    )
+                                )
+                            except RuntimeError as exc:
+                                print(
+                                    f"WARN: overlap ({overlap_context}): ADUMB rewind "
+                                    f"failed ({exc}); treating as no-restart.",
+                                    flush=True,
+                                )
+                                return False
+
+                        if chunk_retry_count >= _MAX_EARLY_ABORT_CHUNK_RETRIES:
+                            if overlap_action == "warn":
+                                print(
+                                    f"WARN: overlap ({overlap_context}): ADUMB fly-off "
+                                    f"at step {steps_done} — rewind retries exhausted; "
+                                    "restoring best available restart and continuing "
+                                    "(dynamics_overlap_action=warn).",
+                                    flush=True,
+                                )
+                                _adumb_force_rewind_or_false()
+                                wf = getattr(mlpot_ctx, "workflow_args", None)
+                                if wf is not None:
+                                    reinstall_adumb_rxncor_walls_from_workflow_args(wf)
+                            else:
+                                raise RuntimeError(
+                                    f"overlap ({overlap_context}): ADUMB fly-off at step "
+                                    f"{steps_done} — template restore skipped and restart "
+                                    "rewind retries exhausted. Check RESD walls "
+                                    "(expect RESDistance in ENER) / lower T / seed / "
+                                    "raise --dynamics-max-monomer-extent / enable SHAKE."
+                                )
+                        elif chunk_retry_count < _MAX_EARLY_ABORT_CHUNK_RETRIES:
+                            recovery = attempt_overlap_early_abort_recovery(
+                                overlap,
+                                chunk_nstep=chunk_nstep,
+                                steps_done=steps_done,
+                                steps_before_chunk=steps_before_chunk,
+                                overlap_context=overlap_context,
+                                overlap_run_state_dir=overlap_run_state_dir,
+                                overlap_restart_read=overlap_restart_read_for_chunk,
+                                segment_restart_read=segment_restart_read,
+                                stage_final_restart=final_restart,
+                                mlpot_ctx=mlpot_ctx,
+                                cpt=bool(chunk_kw.get("cpt")),
+                                chunk_index=chunk_index,
+                            )
+                            adumb_retry = bool(recovery.ok) or _adumb_force_rewind_or_false()
+                            if adumb_retry:
+                                wf = getattr(mlpot_ctx, "workflow_args", None)
+                                if wf is not None:
+                                    reinstall_adumb_rxncor_walls_from_workflow_args(wf)
+                                chunk_retry_count += 1
+                                steps_done = steps_before_chunk
+                                early_abort_memory_handoff = True
+                                print(
+                                    f"overlap ({overlap_context}): retrying chunk "
+                                    f"{chunk_index + 1}/{n_chunks} after ADUMB fly-off "
+                                    "rewind (monomer template restore skipped; "
+                                    f"attempt {chunk_retry_count}/"
+                                    f"{_MAX_EARLY_ABORT_CHUNK_RETRIES})",
+                                    flush=True,
+                                )
+                                rerun_chunk = True
+                                continue
+                            if overlap_action == "warn":
+                                print(
+                                    f"WARN: overlap ({overlap_context}): ADUMB "
+                                    f"fly-off at step {steps_done} — no restart to "
+                                    "rewind; reinstalling walls and continuing.",
+                                    flush=True,
+                                )
+                                wf = getattr(mlpot_ctx, "workflow_args", None)
+                                if wf is not None:
+                                    reinstall_adumb_rxncor_walls_from_workflow_args(wf)
+                            else:
+                                raise RuntimeError(
+                                    f"overlap ({overlap_context}): ADUMB fly-off "
+                                    f"at step {steps_done} — no numbered restart "
+                                    "to rewind. Confirm RESD walls, heat.NNNN.res / "
+                                    "baseline.res, or raise "
+                                    "--dynamics-max-monomer-extent / enable SHAKE."
+                                )
                     rescued = bool(rescued or geometry_health_rescued)
                     if (
                         velocity_health_redrawn
@@ -8374,7 +9147,7 @@ def run_dynamics_with_io(
                             overlap,
                             restart_path=refresh_path,
                         )
-                    if rescued and chunk_io is not None and chunk_io.restart_write is not None:
+                    if rescued and chunk_io is not None:
                         from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                             finalize_overlap_rescue_for_dynamics,
                         )
@@ -8382,14 +9155,17 @@ def run_dynamics_with_io(
                             patch_restart_global_step,
                         )
 
-                        _refresh_restart_write_after_chunk(
-                            chunk_io.restart_write,
-                            final_restart=final_restart,
-                        )
-                        patch_restart_global_step(
-                            Path(chunk_io.restart_write),
-                            steps_done,
-                        )
+                        # Bussi in-memory legs often drop scratch restart_write
+                        # before the extent check; still finalize + arm handoff.
+                        if chunk_io.restart_write is not None:
+                            _refresh_restart_write_after_chunk(
+                                chunk_io.restart_write,
+                                final_restart=final_restart,
+                            )
+                            patch_restart_global_step(
+                                Path(chunk_io.restart_write),
+                                steps_done,
+                            )
                         if mlpot_ctx is not None and overlap is not None:
                             finalize_overlap_rescue_for_dynamics(
                                 mlpot_ctx,
@@ -8400,6 +9176,7 @@ def run_dynamics_with_io(
                                 chunk_kw,
                                 restart_path=chunk_io.restart_write,
                                 global_step=steps_done,
+                                mlpot_ctx=mlpot_ctx,
                             )
                             from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                                 save_stabilized_overlap_rescue_snapshot,
@@ -8411,22 +9188,41 @@ def run_dynamics_with_io(
                                 label=f"{overlap_context} at step {steps_done}",
                             )
                         if chunk_index + 1 < n_chunks:
-                            chunk_io, in_memory = _apply_post_rescue_overlap_handoff(
-                                chunk_io,
-                                chunk_kw,
-                                steps_done=steps_done,
-                                mlpot_ctx=mlpot_ctx,
-                                overlap=overlap,
-                                overlap_context=overlap_context,
-                            )
-                            if in_memory:
+                            if (
+                                chunk_io.restart_write is None
+                                and (
+                                    _bussi_heat_ramp_active(chunk_kw)
+                                    or bool(chunk_kw.get("cpt"))
+                                )
+                            ):
+                                # No scratch WRIDYN path — keep velocities in RAM
+                                # and force the next chunk through post-rescue
+                                # handoff (cold-start when extent fly-off armed).
                                 post_rescue_in_memory_mode = True
+                                print(
+                                    f"overlap ({overlap_context}): post-rescue "
+                                    f"in-memory handoff scheduled at global step "
+                                    f"{max(0, int(steps_done))} (no scratch "
+                                    f"restart_write on this Bussi/CPT leg)",
+                                    flush=True,
+                                )
                             else:
-                                pending_readyn_chunk_io = chunk_io
-                            post_rescue_handoff_applied = True
-                            if not in_memory:
-                                any_post_rescue_restart_handoff = True
-                        else:
+                                chunk_io, in_memory = _apply_post_rescue_overlap_handoff(
+                                    chunk_io,
+                                    chunk_kw,
+                                    steps_done=steps_done,
+                                    mlpot_ctx=mlpot_ctx,
+                                    overlap=overlap,
+                                    overlap_context=overlap_context,
+                                )
+                                if in_memory:
+                                    post_rescue_in_memory_mode = True
+                                else:
+                                    pending_readyn_chunk_io = chunk_io
+                                post_rescue_handoff_applied = True
+                                if not in_memory:
+                                    any_post_rescue_restart_handoff = True
+                        elif chunk_io.restart_write is not None:
                             _refresh_segment_restart_after_overlap_rescue(
                                 chunk_io.restart_write,
                                 chunk_kw,
@@ -8561,7 +9357,7 @@ def open_minimize_dcd(path: PathLike, *, unit: int = 51) -> Any:
     pycharmm, *_ = _import_pycharmm_modules()
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    return pycharmm.CharmmFile(
+    return _resolve_charmm_file_cls(pycharmm)(
         file_name=str(p),
         file_unit=unit,
         formatted=False,
@@ -8859,7 +9655,11 @@ def minimize_with_mlpot(
                             calc_result = minimize_hybrid_calculator_fire_before_sd(
                                 config.mlpot_ctx,
                                 max_steps=int(config.calculator_fire_steps),
-                                fmax_ev_a=float(config.calculator_fire_fmax_ev_a),
+                                fmax_ev_a=(
+                                    float(config.calculator_fire_fmax_ev_a)
+                                    if config.calculator_fire_fmax_ev_a is not None
+                                    else float(config.calculator_minimize_fmax_ev_a)
+                                ),
                                 fire_maxstep=float(config.calculator_fire_maxstep),
                                 verbose=config.verbose,
                                 context_prefix="Post-SD-plateau",

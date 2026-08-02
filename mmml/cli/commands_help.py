@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from mmml.cli.help_text import format_commands_help, format_examples_help
+from mmml.cli.help_style import print_cli_text
 from mmml.cli.registry import format_audit_report
 
 
@@ -36,13 +37,13 @@ def build_examples_parser() -> argparse.ArgumentParser:
 def commands_main(argv: list[str] | None = None) -> int:
     args = build_commands_parser().parse_args(argv if argv is not None else [])
     if args.audit:
-        sys.stdout.write(format_audit_report() + "\n")
+        print_cli_text(format_audit_report(), stream=sys.stdout)
         return 0
-    sys.stdout.write(format_commands_help() + "\n")
+    print_cli_text(format_commands_help(), stream=sys.stdout)
     return 0
 
 
 def examples_main(argv: list[str] | None = None) -> int:
     build_examples_parser().parse_args(argv if argv is not None else [])
-    sys.stdout.write(format_examples_help() + "\n")
+    print_cli_text(format_examples_help(), stream=sys.stdout)
     return 0

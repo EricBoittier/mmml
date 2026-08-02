@@ -1,0 +1,30 @@
+# Vacuum NEB for NH3–CH3Cl (ASE + PhysNet kl.json).
+#
+# Endpoints: examples/m/neb/{reag_0_opt,prod_0_opt}.xyz
+# Regenerate: uv run python examples/m/07_export_neb_endpoints.py
+#
+#   source examples/m/_env.sh
+#   uv run mmml neb --config examples/m/yaml/neb.yaml --overwrite
+#   bash examples/m/13_neb.sh
+
+initial: ../neb/reag_0_opt.xyz
+final: ../neb/prod_0_opt.xyz
+checkpoint: ../model_ext.json
+output_dir: ../../artifacts/nh3_ch3cl/neb
+
+n_images: 11
+fmax: 0.05
+climb: false
+interpolate: idpp
+optimizer: BFGS
+neb_method: improvedtangent
+spring_k: 0.1
+shared_calculator: true
+max_steps: 80
+plot: true
+overwrite: false
+
+# Cl=0, N=1, C=2 in dataset order → N–C and Cl–C profile columns
+pair_indices:
+  - [1, 2]
+  - [0, 2]

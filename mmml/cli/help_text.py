@@ -42,8 +42,16 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("pyscf-mp2", "GPU MP2"),
             CommandInfo("pyscf-evaluate", "Batch E/F/D/ESP evaluation"),
             CommandInfo("fix-and-split", "Unit fixes + train/valid/test splits"),
+            CommandInfo("prepare-mm-dataset", "Assign CGenFF types/charges to a dimer NPZ (hybrid ML/MM)"),
             CommandInfo("xml2npz", "Molpro XML → NPZ"),
+            CommandInfo("npz2traj", "NPZ → ASE trajectory (E/F/dipole/charges)"),
             CommandInfo("validate", "Validate NPZ against schema"),
+            CommandInfo("dimer-scan", "Rigid 1D dimer energy/force scan"),
+            CommandInfo("ic-scan", "Bond/angle/dihedral scans (1D or N-D) for QM/ML"),
+            CommandInfo(
+                "mode-check",
+                "Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD)",
+            ),
         ),
     ),
     (
@@ -52,9 +60,13 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("physnet-train", "Train PhysNetJAX EF from NPZ"),
             CommandInfo("physnet-evaluate", "Evaluate PhysNet checkpoint"),
             CommandInfo("physnet-md", "PhysNet MD sampling"),
+            CommandInfo("neb", "NEB reaction-path sampling with PhysNet"),
+            CommandInfo("dmc", "Diffusion Monte Carlo (batched PhysNetJax walkers)"),
             CommandInfo("ef-train", "Train EF equivariant model"),
             CommandInfo("ef-evaluate", "Evaluate EF model"),
             CommandInfo("ef-md", "MD with trained EF model"),
+            CommandInfo("kernnn-train", "Train KerNN kernel Softplus MLP"),
+            CommandInfo("kernnn-evaluate", "Evaluate KerNN checkpoint"),
             CommandInfo("active-learning", "Sample structures for re-labeling"),
         ),
     ),
@@ -74,7 +86,9 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         (
             CommandInfo("cross-check", "Supplementary QC cross-check"),
             CommandInfo("compare-npz", "Reference vs model NPZ plots"),
+            CommandInfo("compare-charmm-ml", "CHARMM PSF charges vs joint ML dipoles/ESP"),
             CommandInfo("unwrap-traj", "Unwrap periodic trajectories"),
+            CommandInfo("analyze-liquid", "Neat-liquid MD analysis (density, RDF, MSD)"),
             CommandInfo("orca-server", "Persistent JAX server for ORCA"),
         ),
     ),
@@ -86,7 +100,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "mmml make-res --list-residues",
             "mmml make-res --res CYBZ",
-            "mmml make-box --res CYBZ --n 50 --side_length 25.0",
+            "mmml make-box --res CYBZ --n 50 --box-size 25.0",
             "mmml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 -o boxes/dcm206",
             "mmml health-check --require-gpu",
         ),
@@ -98,14 +112,31 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300",
             "mmml md-system --config campaign.yaml --run-all",
             "mmml warmup-mlpot-jax --checkpoint \"$MMML_CKPT\" --n-monomers 20",
+            "mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/",
         ),
     ),
     (
         "QM pipeline",
         (
             "mmml fix-and-split --efd data.npz --output-dir ./splits",
+            "mmml npz2traj data.npz -o trajectory.traj",
             "mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp",
+            "mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint "
+            "--valid-efd splits/energies_forces_dipoles_test.npz "
+            "--valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb "
+            "--n-samples 50 --out-dir charmm_ml_comparison",
             "mmml physnet-train --config train.yaml",
+            "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
+            "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",
+            "mmml mode-check --pbc-fd --checkpoint \"$MMML_CKPT\" --output artifacts/fd_force_check.json",
+            "mmml neb --config examples/m/yaml/neb.yaml --overwrite",
+            "mmml neb --checkpoint examples/m/kl.json "
+            "--initial examples/m/neb/reag_0_opt.xyz "
+            "--final examples/m/neb/prod_0_opt.xyz "
+            "--output-dir artifacts/nh3_ch3cl/neb --n-images 11 --fmax 0.05",
+            "mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 "
+            "--alpha 1200.0 --checkpoint \"$MMML_CKPT\" "
+            "--input mmml/generate/dmc/examples/acetone_dmc.extxyz",
         ),
     ),
 )

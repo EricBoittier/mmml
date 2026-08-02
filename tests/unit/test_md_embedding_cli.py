@@ -52,6 +52,42 @@ def test_md_embedding_parser_subcommands():
     assert args.mini_nstep == 10
 
 
+def test_cmd_run_mpi_rerun_forwards_mini_nstep(monkeypatch):
+    """MPI re-launch must keep --mini-nstep (was dropped when only -o/ckpt forwarded)."""
+    captured: dict[str, object] = {}
+
+    def _fake_rerun(argv, *, subcommand="md-system"):
+        captured["argv"] = list(argv)
+        captured["subcommand"] = subcommand
+        return 0
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.maybe_rerun_mmml_under_mpirun",
+        _fake_rerun,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
+        lambda: None,
+    )
+    argv = [
+        "run",
+        "-o",
+        "artifacts/x",
+        "--checkpoint",
+        "ckpt.json",
+        "--mini-nstep",
+        "2000",
+        "--ml-charge",
+        "1.0",
+    ]
+    code = md_embedding.main(argv)
+    assert code == 0
+    assert captured["subcommand"] == "md-embedding"
+    assert captured["argv"] == argv
+    assert "--mini-nstep" in captured["argv"]
+    assert "2000" in captured["argv"]
+
+
 def test_split_npz_dataset_preserves_atom_count(tmp_path: Path):
     npz = tmp_path / "data.npz"
     _minimal_aaa_npz(npz, n_frames=10)

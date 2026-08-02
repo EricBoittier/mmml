@@ -1,0 +1,41 @@
+# Electrostatic embedding Mode E (latent_dynamic) — liquid-compatible Q¹ heuristic.
+# Live weighted mean of partner charges over active ML dimers → E_MM Coulomb.
+# Refused with jax_pme; smoke uses mic.
+#
+#   uv run mmml md-system --config examples/m/yaml/es_embed_tip3_latent_dynamic.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,TIP3:12"
+  box_size: 20.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_switch_on: 8.0
+  mm_charge_mode: latent_dynamic
+  lr_solver: mic
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/es_embed_tip3_latent_dynamic
+
+runs:
+  ase:
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3_latent_dynamic/ase
+
+  jaxmd:
+    backend: jaxmd
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3_latent_dynamic/jaxmd
+
+  pycharmm:
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/es_embed_tip3_latent_dynamic/pycharmm

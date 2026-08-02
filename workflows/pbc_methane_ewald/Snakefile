@@ -1,0 +1,84 @@
+configfile: "config.yaml"
+
+import os
+import sys
+from pathlib import Path
+
+
+_REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
+_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+_SCRIPTS = Path(workflow.basedir) / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from campaign_lib import (  # noqa: E402
+    cell_run_tag,
+    iter_matrix_cells,
+    load_config,
+    slurm_nodelist,
+)
+
+_CFG = load_config(_CFG_PATH)
+_OUTPUT_ROOT = str(_CFG.get("output_root", "artifacts/pbc_methane_ewald"))
+_ARTIFACT_ROOT = str((_REPO_ROOT / _OUTPUT_ROOT).resolve())
+_MATRIX = list(iter_matrix_cells(_CFG))
+_CELL_TAGS = [cell_run_tag(c, _CFG) for c in _MATRIX]
+
+
+def _artifact_dir(wildcards) -> str:
+    return str(_REPO_ROOT / _OUTPUT_ROOT / wildcards.tag)
+
+
+def _slurm_extra(wildcards) -> str:
+    del wildcards
+    mail = str(_CFG.get("slurm_mail_user", "") or "").strip()
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
+    nodelist = slurm_nodelist(_CFG)
+    suppress = os.environ.get("MMML_SLURM_NO_NODELIST", "").lower() in {"1", "true", "yes", "on"}
+    if nodelist and not suppress:
+        parts.append(f"--nodelist={nodelist}")
+    extra = os.environ.get("MMML_SLURM_EXTRA", "").strip()
+    if extra:
+        parts.append(extra)
+    return " ".join(parts)
+
+
+rule all:
+    input:
+        expand(
+            "{root}/{tag}/done.txt",
+            root=_ARTIFACT_ROOT,
+            tag=_CELL_TAGS,
+        ),
+
+
+rule run_methane_ewald:
+    output:
+        touch("{root}/{tag}/done.txt"),
+    log:
+        stdout="{root}/{tag}/stdout.log",
+    params:
+        out_dir=_artifact_dir,
+        workflow_dir=workflow.basedir,
+        config=_CFG_PATH,
+    resources:
+        gpu=1,
+        charmm_slot=1,
+        runtime=int(_CFG.get("slurm_runtime_min", 2880)),
+        mem_mb_per_cpu=int(_CFG.get("slurm_mem_mb_per_cpu", 4000)),
+        tasks=int(_CFG.get("slurm_ntasks", 1)),
+        cpus_per_task=int(_CFG.get("slurm_cpus_per_task", 4)),
+        nodes=int(_CFG.get("slurm_nodes", 1)),
+        slurm_partition=str(_CFG.get("slurm_partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p {params.out_dir}
+        export MMML_WORKFLOW_CONFIG="{params.config}"
+        bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.tag} \
+          > {log.stdout} 2>&1
+        test -s {output}
+        """

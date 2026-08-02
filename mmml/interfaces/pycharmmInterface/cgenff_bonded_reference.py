@@ -49,14 +49,14 @@ def read_psf_card_file(
     import ctypes
 
     import pycharmm.lib as lib
-    from pycharmm.charmm_file import c_api_path_buffer
 
     from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
     p = Path(path)
     use_xplor = _psf_needs_xplor_reader(p) if xplor is None else bool(xplor)
     fortran_path, _alias = charmm_fortran_path(p)
-    buf, fn_len = c_api_path_buffer(fortran_path)
+    buf = ctypes.c_char_p(fortran_path.encode())
+    fn_len = ctypes.c_int(len(fortran_path))
     c_append = ctypes.c_int(int(append))
     c_xplor = ctypes.c_int(int(use_xplor))
     status = lib.charmm.read_psf_card(

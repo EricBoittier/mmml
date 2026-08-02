@@ -1,0 +1,46 @@
+# Acetamide (CGenFF ACEM) dihedral scans — methyl rotor + amide N–H torsion.
+#
+# Atom order (0-based, top_all36_cgenff.rtf RESI ACEM / make-res):
+#   0 CC, 1 C, 2 N, 3 HC, 4 HT, 5 O, 6 HC1, 7 HC2, 8 HC3
+#
+# IMPORTANT: PhysNet / KerNN checkpoints must use this same atom order as the
+# training NPZ. Prefer dumping a min-energy frame from the ACEM split:
+#   python examples/ic_scan/structure_from_npz.py \
+#     --npz splits/acem/energies_forces_dipoles_train.npz \
+#     --out acem_from_npz.xyz
+# NPZ ``Z`` is integer atomic numbers. CGenFF ACEM order is
+# ``[6, 6, 7, 1, 1, 8, 1, 1, 1]`` (CC,C,N,HC,HT,O,HC1,HC2,HC3). If your split
+# uses a different Z permutation, retarget ``structure:`` and the dihedral
+# ``atoms:`` indices below.
+#
+#   mmml ic-scan --config examples/ic_scan/acem_dihedrals.yaml \
+#     --output artifacts/ic_scan/acem_xtb --overwrite
+#
+# Multi-model overlay (PhysNet + KerNN GT + KerNN distill):
+#   bash examples/kernnn/acem_dihedral_scan_compare.sh
+
+structure: acem.xyz
+calculator: xtb
+evaluate: energy
+geometry_mode: rigid
+failure_policy: fail
+
+dofs:
+  - name: methyl
+    kind: dihedral
+    atoms: [5, 1, 0, 6]   # O–C–CC–HC1
+    start: -180
+    stop: 180
+    n_points: 37
+  - name: amide_hc
+    kind: dihedral
+    atoms: [5, 1, 2, 3]   # O–C–N–HC
+    start: -180
+    stop: 180
+    n_points: 37
+
+scans:
+  - name: methyl_1d
+    dofs: [methyl]
+  - name: amide_hc_1d
+    dofs: [amide_hc]

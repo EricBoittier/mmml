@@ -1,0 +1,151 @@
+# ADUMB on NH3–CH3Cl Cl–C distance (RXNCOR) — PyCHARMM only.
+#
+# 1D scan: umbrella on ``rcl`` = r(Cl⋯C) with window [0, 8] Å (matches adumrcmax).
+# (Difference ξ = r(Cl⋯C)−r(C⋯N) is defined as ``rdif``; switch
+# ``rxncor set nrxn`` / ``umbrella … name`` to ``rdif`` for that coordinate.)
+#
+# Reaction freedom (important):
+#   RESD walls follow the *active* umbrella name: ``rcl`` → Cl–C only;
+#   ``rdif`` → both Cl–C and C–N (using adumrcmax, not the difference max).
+#   What *does* block bond breaking is the CGenFF ``BOND C1 CL1`` (k≈220) in
+#   ``par_ch3cl.prm``. With MLpot, CHARMM bonded terms stay on (see ENER INTERN);
+#   this YAML ``delete bond/angle`` removes C–Cl before heat so PhysNet owns the
+#   reactive degrees of freedom. Keep N–H / C–H bonds.
+#   Optional A/B: ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable distance walls.
+#   Single-residue topology is optional bookkeeping — not required for reactivity.
+#
+# Requires CHARMM with ADUMB + ADUMBRXNCOR + mmml UM1RXN patch (eadumb.F90).
+#
+#   bash scripts/rebuild_charmm_mlpot.sh --clean
+#   export CHARMM_LIB_DIR=$PWD/setup/charmm/lib
+#   source examples/m/_env.sh
+#   USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
+#
+# Alignment (this file — 100 ps heat):
+#   dt_fs=1.0, ps_heat=100 → heat nstep = 100_000
+#   umbrella init: nsim=100 × update=1000 = 100_000; equi=200
+# Smoke (short): ps_heat=0.2 → nstep=200; nsim=4 update=50 equi=25
+#
+# Pass checks:
+#   1. exit 0
+#   2. staged lingo has ``umbrella rxncor`` name rcl (or rdif for ξ)
+#   3. ADUMB-WUNI.DAT / UMBCOR / RXNCOR_TRACE.DAT under output_dir
+#
+# Wipe output_dir/pycharmm_pre_dynamics_lingo.inp after YAML edits (09 script does).
+# Docs: docs/examples/nh3-ch3cl-results.md (ADUMB section).
+
+setup: free_nvt
+backend: pycharmm
+composition: "AMM1:1,CH3CL:1"
+spacing: 4.0
+checkpoint: examples/m/kl.json
+# Mechanical embedding style for the dimer (ML + MM); use include_mm: false for ML-only.
+include_mm: false
+mm_switch_on: 8.0
+mm_charge_mode: fixed
+# jax_mic energy policy empties CHARMM nonbond lists — use JAX MM pairs (vacuum).
+mm_nonbond_mode: jax_mic
+mm_pair_source: jax
+temperature: 500
+dt_fs: 1.0
+md_stages: "mini,heat"
+# free_nvt → mini,heat: set ps_heat explicitly (bare ``ps`` does not override defaults).
+ps_heat: 100.0
+# Keep Packmol dimer compact near a typical N⋯C contact (~3–4 Å).
+packmol_placement: sphere
+packmol_radius: 6.0
+reuse_packmol_cache: false
+# --- Reactive-coordinate dynamics guards (bond breaking + forming) ---
+# Chunk size = overlap check interval; keep == umbrella `update` (1000) so each
+# MD block spans exactly one ADUMB update cycle. 100 chunks over 100 ps heat.
+dynamics_overlap_check_interval: 1000
+# CRITICAL for ADUMB: dyn_freq_cadence is the velocity-reassignment (IASVEL=1)
+# micro-chunk size during the Bussi heat ramp. It MUST equal `update` so each
+# thermal redraw lands on an update boundary and is absorbed by the following
+# `equi` discarded steps. If it stays at the 500 default while update=1000, a
+# redraw hits the MIDDLE of every recorded window (MOD(ICUM,1000)=500 > equi 200)
+# and biases the umbrella statistics.
+dyn_freq_cadence: 1000
+# Repair without biasing the umbrella histogram: warn (not rescue) so CHARMM SD
+# never fires on TS/bond contacts. Mid-chunk CHARMM aborts still rewind from
+# numbered heat.NNNN.res when ADUMB RC guard is armed (see geometry_checkpoint).
+dynamics_overlap_action: warn
+dynamics_overlap_min_distance: 0.2
+dynamics_intra_min_distance: 0.2
+# Fly-off guard: dissociating Cl fragment can grow the CH3Cl extent; raise past
+# the 12 Å default (still catches a true explosion beyond 25 Å).
+dynamics_max_monomer_extent: 25.0
+mini_nstep: 10
+skip_energy_show: true
+skip_jit_warmup: true
+no_echeck_heat: true
+quiet: false
+seed: 0
+mc_density_equalize: false
+output_dir: artifacts/nh3_ch3cl/adumb_nc_distance
+
+# Optional NPZ geometry:
+#   USE_NPZ_PDB=1 bash examples/m/09_adumb_nc_distance.sh
+
+# ~100 frames over 100_000 steps
+dcd_nsavc: 1000
+dcd_max_frames: 200
+
+# Do NOT put PSF/PBC/nbonds/SHAKE/DYNAmics here — md-system owns those.
+# Builder segids differ (packmol=CLST, --from-pdb=SYS); rxncor selects by atom
+# name below so either path works. resid 1 = AMM1, resid 2 = CH3CL in both.
+# OPEN names are basenames: lingo runs with cwd=output_dir (mxcmsz-safe).
+# ADUMB NAME tokens are ≤4 chars (rdif).
+pycharmm_pre_dynamics_lingo: |
+  ! Weak COM tether: stops global drift/rotation in vacuum without confining the
+  ! reaction. Acts on the aggregate COM (sele all), so it does NOT bias the
+  ! internal RC ξ=r(Cl-C)−r(C-N) — that is translation-invariant.
+  cons hmcm force 2.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+
+  ! --- Make SN2 possible under MLpot ---
+  ! CGenFF CH3CL has BOND C1–CL1 (k≈220 kcal/mol/Å²). That harmonic stays in
+  ! ENER INTERN even with include_mm: false and prevents Cl leaving. Remove the
+  ! reactive C–Cl bond + Cl–C–H angles; PhysNet owns those coordinates.
+  ! Do NOT delete N–H / C–H. Do NOT add a C–N bond (that would lock the product).
+  delete bond sele atom * * CL1 end sele atom * * C1 end
+  delete angle sele atom * * CL1 end sele atom * * C1 end
+
+  ! Soft upper walls on the *active* umbrella distance (Å). For ``name rcl``,
+  ! only Cl–C is walled (capped at umbrella max). For ``name rdif``, both
+  ! component bonds use adumrcmax (difference max is not a bond length).
+  ! k=2000: soft wall must hold at 500 K with C–Cl deleted (ADUMB explores
+  ! dissociation); k=500 was overrun by ~86 ps → mid-chunk abort.
+  ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
+  set adumrcmax = 8.0
+  set adumrcwall = 2000.0
+
+  ! Optional dihedral restraint (needs FORCE/MIN before BYNUM; four distinct atoms):
+  !   cons dihe force 200.0 min 0.0 bynu 1 5 6 7
+  ! Do not use ``cons dihe bynu … 200 0.0`` — CHARMM then warns "no force constant"
+  ! and drops the restraint (LEVEL 0 from CSTRAN).
+
+  ! Filenames uppercased: library eval_charmm_script uppercases the whole card.
+  open unit 44 write card name ADUMB-WUNI.DAT
+  open unit 50 write card name UMBCOR
+  open unit 45 write card name RXNCOR_TRACE.DAT
+
+  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1 (IUPAC names; segid/resid-agnostic).
+  rxncor define pn point select atom * * N1 end
+  rxncor define pc point select atom * * C1 end
+  rxncor define pcl point select atom * * CL1 end
+
+  ! Bond distances (+ optional SN2 difference ξ = r(Cl-C) − r(C-N))
+  rxncor define rcl distance pcl pc
+  rxncor define rcn distance pc pn
+  rxncor define rdif combination rcl 1.0 rcn -1.0
+
+  rxncor set nrxn 1 rcl
+  rxncor trace rcl unit 45
+
+  ! Adaptive umbrella on Cl–C. Keep max == adumrcmax so RESD engages ~0.75 Å
+  ! before UM1RXN; a tight max (e.g. 4–6) with soft k is easy to punch through.
+  umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 8.0 name rcl
+
+  ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 100_000 here)
+  umbrella init nsim 100 update 1000 equi 200 temp 500 wuni 44 ucun 50
+  umbrella ston

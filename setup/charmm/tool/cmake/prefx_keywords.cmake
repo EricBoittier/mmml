@@ -17,6 +17,9 @@ if(NOT lite)
   list(APPEND keywords
     ACE
     ADUMB
+    # Link ADUMB ↔ RXNCOR (umbrella rxncor). Pref key is ADUMBRXNCOR;
+    # CHARMM ``?`` substitutions truncate to 8 chars → ``?ADUMBRXN``.
+    ADUMBRXNCOR
     AFM
     ASPENER
     ASPMEMB

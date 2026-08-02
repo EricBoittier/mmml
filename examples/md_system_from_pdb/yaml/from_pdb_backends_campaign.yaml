@@ -1,0 +1,39 @@
+# Campaign: same full-system PDB through ASE, JAX-MD, and PyCHARMM vacuum NVE.
+#
+#   uv run mmml md-system \
+#     --config examples/md_system_from_pdb/yaml/from_pdb_backends_campaign.yaml \
+#     --run-all
+#
+# Single backend:
+#   uv run mmml md-system --config ... --job-id ase_nve
+
+defaults:
+  from_pdb: mmml/generate/sample/pdb/aco_monomer.pdb
+  checkpoint: examples/ckpts_json/DESdimers_params.json
+  setup: free_nve
+  ps: 0.1
+  dt_fs: 0.5
+  seed: 42
+  skip_jit_warmup: true
+
+campaign_output: artifacts/md_system_from_pdb/yaml_backends
+
+runs:
+  ase_nve:
+    description: "Vacuum NVE via ASE"
+    backend: ase
+    output_dir: artifacts/md_system_from_pdb/yaml_backends/ase_nve
+
+  jaxmd_nve:
+    description: "Vacuum NVE via JAX-MD"
+    backend: jaxmd
+    output_dir: artifacts/md_system_from_pdb/yaml_backends/jaxmd_nve
+
+  pycharmm_nve:
+    description: "Vacuum NVE via PyCHARMM + flat-bottom"
+    backend: pycharmm
+    flat_bottom_radius: 20.0
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/md_system_from_pdb/yaml_backends/pycharmm_nve

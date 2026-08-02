@@ -190,6 +190,10 @@ def test_validate_dense_aco_200_l32_needs_xxxlarge(monkeypatch):
 def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.setup import register_mlpot
 
+    # Fully-mocked unit test of the PBC pair-budget path; bypass the MPI-launcher
+    # gate that would otherwise refuse serial python for MPI-linked libcharmm.
+    monkeypatch.setenv("MMML_ALLOW_SERIAL_MPI_CHARMM", "1")
+
     calls: list[tuple[int, bool, float | None]] = []
 
     def _capture(n_ml: int, *, pbc: bool = False, box_side_A: float | None = None) -> None:
@@ -278,6 +282,9 @@ def test_limits_status_reads_tier_api_func(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CHARMM_LIB_DIR", str(lib_dir))
     monkeypatch.setenv("CHARMM_HOME", str(charmm_home))
+    # This asserts which api_func.F90 discovery picks, not whether a build
+    # exists, so it must not inherit `make test-ci`'s MMML_DISABLE_CHARMM=1.
+    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)
     _clear_limits_cache()
 
     status = mlpot_limits.mlpot_limits_status()

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
 
 from mmml.cli import __main__ as cli_main
@@ -94,6 +94,7 @@ def test_configure_md_single_writes_yaml(tmp_path: Path):
             "260",
             "artifacts/test_run",
             "30",
+            "",  # accept validated preview
         ]
     )
     with patch("builtins.input", lambda _p="": next(answers)):
@@ -113,6 +114,7 @@ def test_configure_physnet_train(tmp_path: Path):
             "./ckpts/x",
             "tag1",
             "2",  # medium scale
+            "",  # accept validated preview
         ]
     )
     with patch("builtins.input", lambda _p="": next(answers)):
@@ -129,14 +131,92 @@ def test_configure_snakemake_scaffold(tmp_path: Path):
             "DCM:5",
             "y",  # pycharmm
             "n",  # jaxmd
+            "",  # accept validated preview
         ]
     )
     with patch("builtins.input", lambda _p="": next(answers)):
-        paths = run_wizard("snakemake-md", tmp_path)
+        run_wizard("snakemake-md", tmp_path)
     wf = tmp_path / "wf_test"
     assert (wf / "Snakefile").is_file()
     assert (wf / "config.yaml").is_file()
     assert (wf / "scripts" / "job_shell.sh").is_file()
+
+
+def test_every_wizard_previews_before_writing_and_can_reject(tmp_path: Path, capsys):
+    answers = iter(
+        [
+            "splits/train.npz",
+            "splits/valid.npz",
+            "./ckpts/x",
+            "tag1",
+            "2",
+            "n",  # reject after validation and preview
+        ]
+    )
+    with patch("builtins.input", lambda _p="": next(answers)):
+        with pytest.raises(ConfigureCancelled):
+            run_wizard("physnet-train", tmp_path)
+    assert not (tmp_path / "physnet_train.yaml").exists()
+    output = capsys.readouterr().out
+    assert "Validation passed" in output
+    assert '"num_epochs"' in output
+
+
+def test_interaction_policy_wizard_writes_md_companion(tmp_path: Path):
+    answers = iter(
+        [
+            "2",  # md-system companion
+            "PEP,TIP3,SOD",
+            "PEP",
+            "1",  # PhysNet
+            "/models/pep.json",
+            "",  # no QM-only species
+            "PEP+TIP3",
+            "5.0",
+            "7.0",
+            "PEP:1,TIP3:10,SOD:1",
+            "y",  # validated preview
+        ]
+    )
+    with patch("builtins.input", lambda _p="": next(answers)):
+        paths = run_wizard("interaction-policy", tmp_path)
+
+    assert [path.name for path in paths] == ["interaction_policy.yaml", "md_system.yaml"]
+    policy = yaml.safe_load(paths[0].read_text())
+    md = yaml.safe_load(paths[1].read_text())
+    assert policy["schema_version"] == 1
+    assert policy["monomers"] == {"PEP": "ml", "TIP3": "cgenff", "SOD": "cgenff"}
+    assert policy["pairs"][0]["near_provider"] == "ml"
+    assert md["interaction_policy"] == "interaction_policy.yaml"
+
+
+def test_interaction_policy_wizard_writes_dimer_companion(tmp_path: Path):
+    answers = iter(
+        [
+            "3",  # dimer companion
+            "TIP3",
+            "TIP3",
+            "1",  # PhysNet
+            "/models/water.json",
+            "",  # no QM-only species
+            "",  # default TIP3+TIP3 near pair
+            "5.0",
+            "7.0",
+            "",  # default TIP3,TIP3 residues
+            "1",  # PhysNet dimer calculator
+            "2.5",
+            "3.0",
+            "0.5",
+            "y",
+        ]
+    )
+    with patch("builtins.input", lambda _p="": next(answers)):
+        paths = run_wizard("interaction-policy", tmp_path)
+
+    scan = yaml.safe_load(paths[1].read_text())
+    assert scan["residues"] == ["TIP3", "TIP3"]
+    assert scan["distances_angstrom"] == [2.5, 3.0]
+    assert scan["interaction_policy"] == "interaction_policy.yaml"
 
 
 def test_md_system_subcommand_parser_builds():

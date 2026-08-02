@@ -1,0 +1,26 @@
+{
+  "checkpoint": "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/params_hybrid_mm_fixed_lj_scales_2026-07-31_13-39-37.json",
+  "sidecar": "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/hybrid_mm_fixed_lj_scales-f7be8ce9-6b0c-4eae-bcc1-c50def501d13/hybrid_mm.json",
+  "data": "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/dataset_cgenff.npz",
+  "n_rays": 48,
+  "n_r": 36,
+  "r_min": 2.8,
+  "r_max": 12.0,
+  "mm_switch_on": 8.0,
+  "ml_switch_width": 1.5,
+  "mm_switch_width": 5.0,
+  "deepest_kcal": -8.971912182097233,
+  "mean_well_kcal": -1.8434113174034341,
+  "Z_monomer": [
+    6,
+    17,
+    17,
+    1,
+    1
+  ],
+  "deepest_soft_kcal": -6.691699128278761,
+  "mean_soft_well_kcal": -1.5792705993050038,
+  "r_at_deepest_soft": 4.377142857142857,
+  "median_peak_dFcom_soft_kcal_A": 52.57827015819608,
+  "median_mean_abs_dF_at_handoff": 2.580092665386129
+}

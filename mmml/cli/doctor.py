@@ -52,7 +52,7 @@ def _stdout_to_stderr():
 
 # The install-relevant subset: MPI and checkpoints are runtime concerns, not
 # "did the build work" concerns, so they are opt-in via --mpi / --checkpoint.
-INSTALL_CHECKS = ("core", "jax", "charmm", "mlpot", "packmol")
+INSTALL_CHECKS = ("core", "jax", "gpu_quantum", "charmm", "mlpot", "packmol")
 
 
 def _charmm_section() -> tuple[list[str], bool]:

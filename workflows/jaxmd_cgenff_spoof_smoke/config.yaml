@@ -1,0 +1,68 @@
+# Simple JAX-MD + CGenFF “spoof” smokes (no PhysNet evaluation).
+#
+# ``jax_mm_spoof: true`` replaces the ML monomer/dimer slots with a JAX CGenFF
+# bonded clone so the jaxmd hybrid path can be exercised without a trained
+# checkpoint. A portable JSON path is still listed because md-system resolves
+# checkpoints early; hybrid_mlpot ignores it under spoof.
+#
+# Solvents: DCM (5 atoms) and ACO (10 atoms).
+# Matrix: vacuum NVE + cubic PBC NVE, short ps.
+#
+# From mmml_cursor:
+#   bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all.sh
+#   bash workflows/jaxmd_cgenff_spoof_smoke/scripts/report.sh
+
+output_root: artifacts/jaxmd_cgenff_spoof_smoke
+# Placeholder only (ignored when jax_mm_spoof is on). Prefer env MMML_CKPT.
+checkpoint: examples/ckpts_json/DESdimers_params.json
+
+defaults:
+  backend: jaxmd
+  jax_mm_spoof: true
+  include_mm: true
+  mm_nonbond_mode: jax_mic
+  dt_fs: 0.5
+  temperature: 300.0
+  pressure: 1.0
+  seed: 20260730
+  spacing: 5.0
+  packmol_tolerance: 1.0
+  mm_switch_on: 8.0
+  mm_switch_width: 4.0
+  ml_switch_width: 1.0
+  ml_batch_size: 64
+  ml_compute_dtype: float64
+  jaxmd_minimize_steps: 20
+  jaxmd_pbc_minimize_steps: 0
+  steps_per_recording: 20
+  no_echeck: true
+  quiet: false
+
+jobs:
+  dcm_vac_nve:
+    description: "DCM:4 vacuum NVE — jax-mm-spoof CGenFF bonded clone"
+    composition: "DCM:4"
+    setup: free_nve
+    ps: 0.05
+    box_size: 20.0
+
+  dcm_pbc_nve:
+    description: "DCM:4 PBC NVE — jax-mm-spoof CGenFF bonded clone"
+    composition: "DCM:4"
+    setup: pbc_nve
+    ps: 0.05
+    box_size: 18.0
+
+  aco_vac_nve:
+    description: "ACO:4 vacuum NVE — jax-mm-spoof CGenFF bonded clone"
+    composition: "ACO:4"
+    setup: free_nve
+    ps: 0.05
+    box_size: 22.0
+
+  aco_pbc_nve:
+    description: "ACO:4 PBC NVE — jax-mm-spoof CGenFF bonded clone"
+    composition: "ACO:4"
+    setup: pbc_nve
+    ps: 0.05
+    box_size: 20.0

@@ -11,6 +11,49 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface import charmm_mpi
 
+# Bootstrap helpers such as ``mpi_openmpi_install_env_defaults`` write the
+# dynamic loader's preload variable into the real ``os.environ``. In these unit
+# tests the value they write points into ``tmp_path``, which pytest deletes a few
+# tests later -- after which *every* subsequent test that spawns a subprocess
+# dies in the loader ("could not be loaded: ... libopen-pal.so", exit -6) with a
+# message that names neither the leaking test nor the real cause. Six unrelated
+# tests failed that way in a full-suite run while passing in isolation.
+#
+# ``monkeypatch`` cannot undo what it never set, so snapshot and restore these
+# explicitly. See ``test_loader_env_does_not_leak_between_tests`` below.
+_LOADER_ENV_VARS = (
+    "LD_PRELOAD",
+    "DYLD_INSERT_LIBRARIES",
+    "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
+    "OPAL_PREFIX",
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_dynamic_loader_env():
+    """Undo any loader-environment mutation this module's tests perform."""
+    saved = {name: os.environ.get(name) for name in _LOADER_ENV_VARS}
+    yield
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
+@pytest.fixture(autouse=True)
+def _ignore_charmm_disable_flag(monkeypatch):
+    """These tests exercise CHARMM/OpenMPI *discovery* against stub trees.
+
+    ``make test-ci`` runs the suite with ``MMML_DISABLE_CHARMM=1`` so that live
+    CHARMM tests skip. Discovery would then correctly find nothing, and the
+    assertions here -- which are about the search order, not about whether a
+    build exists -- would fail for a reason that has nothing to do with the code
+    under test.
+    """
+    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)
+
 
 def test_charmm_lib_links_mpi_detects_ldd(monkeypatch, tmp_path):
     lib = tmp_path / "libcharmm.so"
@@ -508,6 +551,23 @@ def test_mpi_charmm_script_all_ranks_under_mpirun():
     assert mock_barrier.call_count == 0
 
 
+def test_invoke_charmm_script_uppercases_card():
+    """Library eval_charmm_script is case-sensitive; lowercase cons/open fail."""
+    fake_lingo = mock.Mock()
+    fake_lingo.charmm_script.return_value = True
+    with mock.patch.dict("sys.modules", {"pycharmm.lingo": fake_lingo}), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        mock.MagicMock(),
+    ):
+        ok = charmm_mpi._invoke_charmm_script(
+            "cons hmcm force 5.0 sele all end"
+        )
+    assert ok is True
+    fake_lingo.charmm_script.assert_called_once_with(
+        "CONS HMCM FORCE 5.0 SELE ALL END"
+    )
+
+
 def test_mpi_charmm_script_barriers_both():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
@@ -682,7 +742,8 @@ def test_mpi_mpirun_extra_args_includes_detected_shmem(tmp_path, monkeypatch):
         return_value=tmp_path,
     ):
         args = charmm_mpi.mpi_mpirun_extra_args()
-    assert args[:3] == ["--mca", "pmix", "^ext3x"]
+    assert args[0] == "--report-child-jobs-separately"
+    assert args[1:4] == ["--mca", "pmix", "^ext3x"]
     assert ["--mca", "mca_base_component_path", str(mca)] in [
         args[i : i + 3] for i in range(len(args) - 2)
     ]
@@ -692,14 +753,37 @@ def test_mpi_mpirun_extra_args_includes_detected_shmem(tmp_path, monkeypatch):
 def test_mpi_mpirun_extra_args_abort_stack_by_default(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_ABORT_STACK", raising=False)
     monkeypatch.delenv("MMML_MPI_VERBOSE", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY", raising=False)
     monkeypatch.setenv("MMML_NO_MPI_MCA_PREFIX", "1")
-    for var in ("LD_LIBRARY_PATH", "OPENMPI_ROOT", "EBROOTOPENMPI", "CHARMM_LIB_DIR"):
+    for var in (
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "OPENMPI_ROOT",
+        "EBROOTOPENMPI",
+        "CHARMM_LIB_DIR",
+    ):
         monkeypatch.delenv(var, raising=False)
     assert charmm_mpi.mpi_mpirun_extra_args() == [
+        "--report-child-jobs-separately",
         "--mca",
         "orte_abort_print_stack",
         "1",
     ]
+
+
+def test_mpi_mpirun_extra_args_can_disable_child_job_report(monkeypatch):
+    monkeypatch.setenv("MMML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY", "1")
+    monkeypatch.setenv("MMML_NO_MPI_MCA_PREFIX", "1")
+    monkeypatch.setenv("MMML_NO_MPI_ABORT_STACK", "1")
+    for var in (
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "OPENMPI_ROOT",
+        "EBROOTOPENMPI",
+        "CHARMM_LIB_DIR",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    assert charmm_mpi.mpi_mpirun_extra_args() == []
 
 
 def test_mpi_mpirun_extra_args_forwards_ld_library_path(monkeypatch):
@@ -772,7 +856,8 @@ def test_mpi_mpirun_extra_args_verbose(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
     monkeypatch.setenv("MMML_MPI_VERBOSE", "1")
     args = charmm_mpi.mpi_mpirun_extra_args()
-    assert args[:3] == ["--mca", "pmix", "^ext3x"]
+    assert args[0] == "--report-child-jobs-separately"
+    assert args[1:4] == ["--mca", "pmix", "^ext3x"]
     assert "orte_abort_print_stack" in args
     assert "plm_base_verbose" in args
 
@@ -1506,3 +1591,42 @@ def test_stage_topology_files_for_rank_copies_to_uuid_dir(tmp_path, monkeypatch)
     assert staged["psf"].parent == staged["crd"].parent == staged["rtf"].parent
     assert staged["staging_dir"].name.startswith("rank2_")
     assert staged["rtf"].read_text(encoding="utf-8").startswith("* MMML MPI bootstrap")
+
+
+def test_loader_env_does_not_leak_between_tests(monkeypatch, tmp_path):
+    """``mpi_openmpi_install_env_defaults`` must not outlive the test that ran it.
+
+    It writes the platform preload variable into the real process environment,
+    pointing at a library under ``tmp_path``. Once pytest removes that directory
+    the value is a dangling path, and every later subprocess aborts inside the
+    dynamic loader before running a line of Python -- a failure that surfaces in
+    whichever unrelated test happens to shell out next. The autouse fixture at
+    the top of this module restores it; this test is what notices if that
+    fixture is removed or stops covering a newly-set variable.
+    """
+    preload_var = "DYLD_INSERT_LIBRARIES" if charmm_mpi._IS_DARWIN else "LD_PRELOAD"
+    monkeypatch.delenv("MMML_NO_MPI_MCA_PREFIX", raising=False)
+    monkeypatch.delenv("OMPI_MCA_shmem", raising=False)
+    monkeypatch.delenv(preload_var, raising=False)
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "libopen-pal.so").write_bytes(b"")
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.openmpi_install_prefix",
+        return_value=tmp_path,
+    ):
+        charmm_mpi.mpi_openmpi_install_env_defaults()
+
+    # The helper really does set it -- otherwise this test would pass vacuously
+    # and stop protecting anything.
+    assert str(tmp_path) in os.environ.get(preload_var, ""), (
+        "helper no longer sets the loader preload variable; either the leak is "
+        "gone for good (drop this test) or the variable name changed"
+    )
+    assert every_loader_var_is_covered(preload_var)
+
+
+def every_loader_var_is_covered(name: str) -> bool:
+    """The autouse fixture must know about the variable that gets written."""
+    return name in _LOADER_ENV_VARS

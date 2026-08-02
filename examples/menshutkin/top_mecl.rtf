@@ -1,0 +1,26 @@
+* Menshutkin campaign append topology: chloromethane as a 4-character residue.
+* Atom types reuse CGenFF CLGA1 / CG331 / HGA3 (see CLET methyl chloride fragment).
+* Append-only: no version line (36 1) - CHARMM 'read rtf append' rejects a second version.
+* Named MECL, not CH3CL, because the PDB residue-name field is columns 18-21,
+* i.e. four characters. A five-character name forces a shifted, whitespace-
+* delimited PDB that CHARMM tolerates but strict readers (ASE, and therefore
+* mmml make-box) reject. Four characters keeps every file standards-compliant.
+* Parameters are keyed by atom type, so examples/m/par_ch3cl.prm applies unchanged.
+* NOTE: keep this title block free of interior lone-asterisk lines - CHARMM ends
+* the title at the first one and parses everything after it as RTF commands.
+*
+
+RESI MECL          0.00 ! CH3Cl, chloromethane (Menshutkin campaign)
+GROUP
+ATOM C1   CG331    0.027
+ATOM CL1  CLGA1   -0.204
+ATOM H11  HGA3     0.059
+ATOM H12  HGA3     0.059
+ATOM H13  HGA3     0.059
+BOND C1 CL1  C1 H11  C1 H12  C1 H13
+IC CL1  H11  *C1  H12   0.00  0.00  120.00  0.00  0.00
+IC CL1  H11  *C1  H13   0.00  0.00 -120.00  0.00  0.00
+IC H11  C1   CL1  H12   0.00  0.00  180.00  0.00  0.00
+PATC FIRS NONE LAST NONE
+
+END

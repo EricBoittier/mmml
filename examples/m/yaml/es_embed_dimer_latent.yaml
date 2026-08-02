@@ -1,0 +1,44 @@
+# Electrostatic embedding Mode B (latent / Q¹) — dimer-only (AMM1 + CH3CL).
+# Partner-perturbed ML charges enter E_MM Coulomb. Not for liquid boxes.
+#
+#   uv run mmml md-system --config examples/m/yaml/es_embed_dimer_latent.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1"
+  spacing: 4.0
+  box_size: 20.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_switch_on: 8.0
+  mm_charge_mode: latent
+  lr_solver: ewald
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/es_embed_dimer_latent
+
+runs:
+  ase:
+    description: "Latent (Q¹) electrostatic embedding — ASE"
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/es_embed_dimer_latent/ase
+
+  jaxmd:
+    description: "Latent (Q¹) electrostatic embedding — JAX-MD"
+    backend: jaxmd
+    output_dir: artifacts/nh3_ch3cl/es_embed_dimer_latent/jaxmd
+
+  pycharmm:
+    description: "Latent (Q¹) electrostatic embedding — PyCHARMM"
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/es_embed_dimer_latent/pycharmm

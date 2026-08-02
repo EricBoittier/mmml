@@ -1,7 +1,11 @@
 # PBC pure-liquid solvent burst campaign workflow
 
-Snakemake workflow for pure solvents in cubic PBC boxes. The default validated
-matrix uses **TIP3 water** and **MEOH methanol**. DCM and ACO remain supported
+Snakemake workflow for pure solvents in cubic PBC boxes.
+
+**⚠ UNVERIFIED:** The default **TIP3 water** and **MEOH methanol** matrix is a
+campaign hypothesis, not a current validation result. [evidence: solvent_burst_default_matrix]
+
+DCM and ACO remain supported
 for targeted diagnostics, but are excluded from the default campaign because
 their current dimer PES validation fails. Each matrix cell runs one in-process
 `mmml md-system --run-all` campaign:

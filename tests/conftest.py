@@ -4,6 +4,98 @@ from __future__ import annotations
 
 import os
 os.environ["JAX_ENABLE_X64"] = "1"
+
+
+def _sanitize_jax_platforms_env() -> None:
+    """Drop GPU-class JAX backends that cannot initialize from ``JAX_PLATFORMS``.
+
+    A stale ``JAX_PLATFORMS=rocm`` (or ``cuda`` / ``gpu``) inherited from the
+    shell makes ``jax.default_backend()`` raise at import / collection time
+    ("Unable to initialize backend 'rocm': ... not in the list of known
+    backends") whenever that backend is not usable here — the plugin may be
+    absent *or* pip-installed but non-functional (no ROCm/CUDA runtime). We
+    can't just check whether the plugin dist is installed, so probe the backend
+    for real in a subprocess (importing jax in-process would crash the
+    collector on a bad backend). If it fails, keep only ``cpu`` / ``tpu`` so the
+    suite runs on CPU; real GPU machines pass the probe and are left untouched.
+    """
+    raw = (os.environ.get("JAX_PLATFORMS") or "").strip()
+    if not raw:
+        return
+    tokens = [part.strip() for part in raw.split(",") if part.strip()]
+    # Only GPU-class backends can fail to initialize; cpu/tpu need no probe.
+    if not any(t.lower() in ("gpu", "cuda", "rocm") for t in tokens):
+        return
+
+    import subprocess
+    import sys
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", "import jax; jax.default_backend()"],
+            env={**os.environ, "JAX_PLATFORMS": raw},
+            capture_output=True,
+            timeout=180,
+        )
+        backend_ok = proc.returncode == 0
+    except Exception:
+        backend_ok = False
+    if backend_ok:
+        return
+
+    safe = [t for t in tokens if t.lower() in ("cpu", "tpu")]
+    if safe:
+        os.environ["JAX_PLATFORMS"] = ",".join(safe)
+    else:
+        # Nothing usable was requested; let JAX auto-select an available backend.
+        os.environ.pop("JAX_PLATFORMS", None)
+
+
+_sanitize_jax_platforms_env()
+
+
+def _block_pycharmm_imports_when_disabled() -> None:
+    """Make ``import pycharmm`` fail outright under ``MMML_DISABLE_CHARMM=1``.
+
+    ``make test-ci`` exists to reproduce the CI ``build`` job -- which has no
+    libcharmm -- on a machine that does have one. Hiding the library from
+    ``charmm_paths`` is not enough: several tests guard themselves with a bare
+    ``__import__("pycharmm")``, and the ``pycharmm`` package finds and dlopens
+    the library through its own search path. Those tests then run for real, and
+    a native CHARMM ``STOP`` at interpreter teardown ends the session early
+    *with exit status 0* -- the local run stops at 2% and still looks green.
+
+    Installing a meta-path blocker makes the guard checks answer "no", so the
+    same tests skip locally that skip in CI.
+    """
+    import sys
+
+    if (os.environ.get("MMML_DISABLE_CHARMM") or "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        return
+
+    class _PycharmmBlocker:
+        """A ``sys.meta_path`` finder that refuses the ``pycharmm`` package."""
+
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == "pycharmm" or fullname.startswith("pycharmm."):
+                raise ImportError(
+                    f"{fullname} is blocked by MMML_DISABLE_CHARMM=1 "
+                    "(see tests/conftest.py)"
+                )
+            return None
+
+    sys.meta_path.insert(0, _PycharmmBlocker())
+    for name in [n for n in sys.modules if n == "pycharmm" or n.startswith("pycharmm.")]:
+        del sys.modules[name]
+
+
+_block_pycharmm_imports_when_disabled()
+
 import shutil
 from pathlib import Path
 
@@ -202,6 +294,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             pass
 
 
+# Raised by the ``MMML_DISABLE_CHARMM`` meta-path blocker installed above.
+_BLOCKED_IMPORT_SIGNATURE = "blocked by MMML_DISABLE_CHARMM"
+
 # Substrings that identify a failure caused purely by ``libcharmm`` being
 # absent (unbuilt), rather than a genuine defect in the code under test.
 _CHARMM_UNAVAILABLE_SIGNATURES = (
@@ -209,6 +304,11 @@ _CHARMM_UNAVAILABLE_SIGNATURES = (
     "libcharmm.dylib",
     "No module named 'pycharmm.",
     "'pycharmm' is not a package",
+    # The MMML_DISABLE_CHARMM blocker above. Without this the flag turns the
+    # ~50 tests that reach production code importing pycharmm into failures
+    # instead of the skips CI produces, which is the opposite of what a
+    # CI-reproduction switch is for.
+    _BLOCKED_IMPORT_SIGNATURE,
 )
 
 
@@ -229,9 +329,13 @@ def pytest_runtest_call(item: pytest.Item):
     exc = excinfo[1]
     if not isinstance(exc, (OSError, ImportError)):
         return
-    if charmm_env_configured():
-        return  # CHARMM available: a failure here is a real bug, keep it.
     message = str(exc)
+    # The MMML_DISABLE_CHARMM blocker is a deliberate harness decision, so it
+    # always yields a skip -- unlike the signatures below it does not describe
+    # the machine's real CHARMM state, and a test that clears the flag for its
+    # own discovery assertions must not turn the blocker into a failure.
+    if _BLOCKED_IMPORT_SIGNATURE not in message and charmm_env_configured():
+        return  # CHARMM available: a failure here is a real bug, keep it.
     if any(sig in message for sig in _CHARMM_UNAVAILABLE_SIGNATURES):
         outcome.force_exception(
             pytest.skip.Exception(
@@ -320,3 +424,68 @@ def build_synthetic_water_box(n_waters: int = 8, box_len: float = 18.0, seed: in
 def synthetic_water_box():
     """Factory fixture: ``synthetic_water_box(n_waters=, box_len=, seed=)``."""
     return build_synthetic_water_box
+
+
+# ---------------------------------------------------------------------------
+# Preserve a failing exit status past CHARMM's Fortran shutdown.
+#
+# Importing pycharmm installs a Fortran/MPI finalizer that runs during
+# interpreter shutdown and resets the process exit status to 0. A pytest session
+# with failing tests therefore reports success to the shell:
+#
+#     pytest <a test that loads pycharmm and then fails>; echo $?   ->  0
+#
+# That is why scripts/ci/check_test_report.py judges live-CHARMM runs from the
+# JUnit XML rather than the exit code. This hook closes the hole at the source so
+# `make test-all`, developer runs and any wrapper script get an honest status too.
+#
+# Only fires when BOTH conditions hold, so it is inert everywhere else:
+#   * the session actually failed (exitstatus != 0), and
+#   * pycharmm was really imported (the finalizer that does the masking exists).
+#
+# ``os._exit`` is deliberately confined to the failure path: for a clean run we
+# let normal shutdown proceed so OpenMPI can finalize (``os._exit(0)`` skips
+# MPI_Finalize, after which PRRTE often returns 1 for a successful job). This is
+# the same trade-off ``mmml.cli.__main__._hard_exit`` makes.
+#
+# It runs in ``pytest_unconfigure`` rather than ``pytest_sessionfinish`` so that
+# the JUnit writer and pytest-cov have already emitted their reports -- killing
+# the process earlier would destroy the very evidence the CI gate reads.
+_FORCED_EXIT_STATUS: dict[str, int] = {}
+
+
+def _pycharmm_was_loaded() -> bool:
+    """True when libcharmm was actually dlopen'ed during this session."""
+    import sys
+
+    return any(
+        name == "pycharmm" or name.startswith("pycharmm.") for name in sys.modules
+    )
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001
+    try:
+        code = int(exitstatus)
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        code = 1
+    if code != 0:
+        _FORCED_EXIT_STATUS["code"] = code
+
+
+def pytest_unconfigure(config) -> None:  # noqa: ARG001
+    code = _FORCED_EXIT_STATUS.get("code")
+    if not code:
+        return
+    if not _pycharmm_was_loaded():
+        return  # no Fortran finalizer to outrun; let pytest exit normally
+    if (os.environ.get("MMML_NO_FORCE_PYTEST_EXIT") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    import sys
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)

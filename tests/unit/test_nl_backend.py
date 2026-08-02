@@ -8,6 +8,7 @@ import pytest
 def test_pick_static_rebuild_backend_auto_prefers_vesin(monkeypatch):
     from mmml.interfaces.pycharmmInterface.nl_backend import pick_static_rebuild_backend
 
+    monkeypatch.delenv("MMML_MM_NL_BACKEND", raising=False)
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.nl_backend.have_vesin",
         lambda: True,
@@ -22,6 +23,7 @@ def test_pick_static_rebuild_backend_auto_prefers_vesin(monkeypatch):
 def test_pick_static_rebuild_backend_auto_falls_back_to_jax_md_without_vesin(monkeypatch):
     from mmml.interfaces.pycharmmInterface.nl_backend import pick_static_rebuild_backend
 
+    monkeypatch.delenv("MMML_MM_NL_BACKEND", raising=False)
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.nl_backend.have_vesin",
         lambda: False,
@@ -53,3 +55,12 @@ def test_resolve_mm_nl_backend_env(monkeypatch, env_value):
 
     monkeypatch.setenv("MMML_MM_NL_BACKEND", env_value)
     assert resolve_mm_nl_backend() == env_value
+    # Call sites pass default "auto"; that must still honor the env.
+    assert resolve_mm_nl_backend("auto") == env_value
+
+
+def test_resolve_mm_nl_backend_explicit_overrides_env(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.nl_backend import resolve_mm_nl_backend
+
+    monkeypatch.setenv("MMML_MM_NL_BACKEND", "jax_md")
+    assert resolve_mm_nl_backend("vesin") == "vesin"

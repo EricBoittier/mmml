@@ -21,24 +21,30 @@ usage: mmml health-check [-h] [--only CHECK [CHECK ...]]
 Validate MMML interface health before PyCHARMM / MLpot jobs: imports, JAX
 devices, libcharmm, MLpot symbols, Packmol, checkpoint, MPI.
 
-options:
-  -h, --help            show this help message and exit
-  --only CHECK [CHECK ...]
-                        Run subset of: core, jax, charmm, mlpot, packmol,
-                        checkpoint, mpi, live
-  --skip CHECK [CHECK ...]
-                        Skip checks from the default set.
-  --live                Run live MLpot registration + CHARMM energy (implies
-                        charmm + checkpoint).
+Input & configuration:
   --checkpoint CHECKPOINT
                         PhysNet checkpoint (default: MMML_CKPT).
   --live-residue LIVE_RESIDUE
                         Residue for --live smoke (default: DCM).
+
+Output & artifacts:
+  --json                Emit machine-readable JSON.
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --strict              Treat warnings as errors.
+
+Other options:
+  --only CHECK [CHECK ...]
+                        Run subset of: core, jax, gpu_quantum, charmm, mlpot,
+                        packmol, checkpoint, mpi, live
+  --skip CHECK [CHECK ...]
+                        Skip checks from the default set.
+  --live                Run live MLpot registration + CHARMM energy (implies
+                        charmm + checkpoint).
   --live-n-molecules LIVE_N_MOLECULES
                         Monomer count for --live smoke (default: 2).
   --require-gpu         Fail if JAX does not see a CUDA device.
-  --json                Emit machine-readable JSON.
-  --strict              Treat warnings as errors.
   --prelaunch           Relax MPI prelaunch warnings (serial health-check before
                         mpirun).
   --tier2               Also run spatial-MPI GPU checks inside the mpi section.

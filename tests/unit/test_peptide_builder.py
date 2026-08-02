@@ -153,6 +153,7 @@ def test_qc_validation_mock() -> None:
 
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="PyCHARMM is not available")
+@pytest.mark.pycharmm
 def test_live_peptide_builder_and_qc(tmp_path: Path) -> None:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
     from mmml.interfaces.pycharmmInterface.peptide_builder import (

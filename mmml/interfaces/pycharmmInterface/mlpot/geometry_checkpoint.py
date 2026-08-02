@@ -919,9 +919,19 @@ def attempt_overlap_early_abort_recovery(
 
     ``overlap_restart_read`` is the scratch/file path the failed chunk would
   have ``READYN`` from (end of the previous overlap chunk).
+
+    ``dynamics_overlap_action=warn`` normally skips recovery (no SD rescue so
+    ADUMB histograms stay unbiased). When ``workflow_args._adumb_rc_guard`` is
+    set, still allow a **restart-ladder rewind** so mid-chunk UM1RXN / NaN
+    aborts can retry without geometry SD.
     """
-    if overlap is None or overlap.action != "rescue":
+    if overlap is None:
         return GeometryRecoveryResult(False)
+    action = getattr(overlap, "action", None)
+    if action != "rescue":
+        wf = getattr(mlpot_ctx, "workflow_args", None) if mlpot_ctx is not None else None
+        if getattr(wf, "_adumb_rc_guard", None) is None:
+            return GeometryRecoveryResult(False)
     integrated = int(steps_done) - int(steps_before_chunk)
     if integrated <= 0:
         return GeometryRecoveryResult(False)

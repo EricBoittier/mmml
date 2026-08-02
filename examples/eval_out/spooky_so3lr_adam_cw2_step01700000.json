@@ -1,0 +1,102 @@
+{
+  "TorsionNet500.extxyz": {
+    "charge_mae": 0.11619840061292053,
+    "charge_rmse": 0.15006264958552862,
+    "dipole_mae": 0.16131758215402564,
+    "dipole_rmse": 0.23607544415964327,
+    "energy_mae": 2.628900068283081,
+    "energy_rmse": 3.9632698561164244,
+    "forces_mae": 0.22107345604561054,
+    "forces_rmse": 0.4519470541437744
+  },
+  "gems_ala15.extxyz": {
+    "charge_mae": 2.1616208390213356,
+    "charge_rmse": 2.706926206975232,
+    "dipole_mae": NaN,
+    "dipole_rmse": NaN,
+    "energy_mae": 35.161670782627205,
+    "energy_rmse": 41.34821727931631,
+    "forces_mae": 0.5596561858557668,
+    "forces_rmse": 0.851185148237974
+  },
+  "gems_bottom_up_10k_testset.extxyz": {
+    "charge_mae": 0.10719554975181818,
+    "charge_rmse": 0.2790638965948539,
+    "dipole_mae": 0.11106953095644713,
+    "dipole_rmse": 0.19691389500788153,
+    "energy_mae": 0.9719671167373657,
+    "energy_rmse": 1.7538941239809716,
+    "forces_mae": 0.13169860569275813,
+    "forces_rmse": 0.25189205747584803
+  },
+  "gems_crambin.extxyz": {
+    "charge_mae": 12.311937712828318,
+    "charge_rmse": 12.85346669948672,
+    "dipole_mae": NaN,
+    "dipole_rmse": NaN,
+    "energy_mae": 77.1578423461914,
+    "energy_rmse": 85.05412319819291,
+    "forces_mae": 0.5632528486954953,
+    "forces_rmse": 0.8693939213760997
+  },
+  "md22_ac.extxyz": {
+    "charge_mae": 0.14090605497360228,
+    "charge_rmse": 0.15306158504313866,
+    "dipole_mae": 0.2561855634053548,
+    "dipole_rmse": 0.3193246703731522,
+    "energy_mae": 21.574955139160156,
+    "energy_rmse": 21.586054616493723,
+    "forces_mae": 0.31610801333472843,
+    "forces_rmse": 0.5159878797078119
+  },
+  "md22_at.extxyz": {
+    "charge_mae": 0.772427122592926,
+    "charge_rmse": 0.8351272999069914,
+    "dipole_mae": 0.27910484313964845,
+    "dipole_rmse": 0.36809788008717387,
+    "energy_mae": 11.327120361328125,
+    "energy_rmse": 11.456646105655633,
+    "forces_mae": 0.24182208930121527,
+    "forces_rmse": 0.3385654958310316
+  },
+  "md22_bb.extxyz": {
+    "charge_mae": 24.363372491598128,
+    "charge_rmse": 28.204788867462277,
+    "dipole_mae": 40.66524790445963,
+    "dipole_rmse": 50.816316474332645,
+    "energy_mae": 1380.4140698242188,
+    "energy_rmse": 1473.4799625376654,
+    "forces_mae": 86.50790979333826,
+    "forces_rmse": 145.19184148216254
+  },
+  "md22_dha.extxyz": {
+    "charge_mae": 0.12486271232366562,
+    "charge_rmse": 0.15989482966821478,
+    "dipole_mae": 0.21206773360570272,
+    "dipole_rmse": 0.2664157487251672,
+    "energy_mae": 22.181529235839843,
+    "energy_rmse": 22.23405146242119,
+    "forces_mae": 0.2997972297668457,
+    "forces_rmse": 0.4648277955906452
+  },
+  "md22_sta.extxyz": {
+    "charge_mae": 0.7866260072588921,
+    "charge_rmse": 0.8957431390203394,
+    "dipole_mae": 0.34863668064276376,
+    "dipole_rmse": 0.4391281517785129,
+    "energy_mae": 44.83711212158203,
+    "energy_rmse": 45.12247125445785,
+    "forces_mae": 0.9417291096069804,
+    "forces_rmse": 1.3960465771683366
+  },
+  "qm7x_10k_testset.extxyz": {
+    "charge_mae": 0.035122423893213274,
+    "charge_rmse": 0.049057319629437296,
+    "dipole_mae": 0.05894565365811189,
+    "dipole_rmse": 0.0824104421103933,
+    "energy_mae": 0.8074991924285889,
+    "energy_rmse": 1.2228730951925766,
+    "forces_mae": 0.11102216542702562,
+    "forces_rmse": 0.19573801000735147
+  }
+}

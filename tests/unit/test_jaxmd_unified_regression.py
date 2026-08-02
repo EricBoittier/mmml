@@ -32,7 +32,8 @@ pytest.importorskip("jax_md")
 
 
 def _run(system, *, term="mm_nonbonded", ensemble="nve", n_steps=20, dt_fs=0.5,
-         seed=0, temperature_K=300.0, output_dir=None, extra_params=None, term_kwargs=None):
+         seed=0, temperature_K=300.0, output_dir=None, extra_params=None, term_kwargs=None,
+         record_every=None):
     params = {"seed": seed}
     if extra_params:
         params.update(extra_params)
@@ -46,7 +47,12 @@ def _run(system, *, term="mm_nonbonded", ensemble="nve", n_steps=20, dt_fs=0.5,
         backend="jaxmd",
         output_dir=output_dir,
     )
-    return assemble_and_run(cfg, system=system, term_kwargs=term_kwargs)
+    driver = None
+    if record_every is not None:
+        from mmml.md.drivers import JaxmdDriver
+
+        driver = JaxmdDriver(record_every=record_every)
+    return assemble_and_run(cfg, system=system, term_kwargs=term_kwargs, driver=driver)
 
 
 def _smd_kwargs():
@@ -78,15 +84,43 @@ def test_nvt_seed_changes_trajectory(synthetic_water_box):
 
 
 def test_nve_energy_is_conserved_smd(synthetic_water_box):
-    """A pure harmonic (smd) NVE run must not drift: it's a clean oscillator."""
+    """A pure harmonic (smd) NVE run must conserve *total* energy.
+
+    Conservation lives in potential + kinetic. ``metadata["energies"]`` is the
+    potential surface alone, which genuinely swings for an oscillator (here
+    ~17 -> ~9 eV over 100 steps) while the total holds to ~1e-4 relative -- so
+    asserting on it measured the oscillation, not the integrator. That only
+    looked flat while ``dt`` was ~98x too small and the dynamics were nearly
+    frozen; the timestep-unit fix exposed it.
+    """
     traj = _run(synthetic_water_box(seed=3), term="smd", ensemble="nve",
-                n_steps=100, dt_fs=0.25, term_kwargs=_smd_kwargs())
-    energies = np.asarray(traj.metadata["energies"])
-    assert np.all(np.isfinite(energies))
-    drift = energy_drift_metrics(energies)
-    scale = float(np.abs(energies).mean()) + 1e-6
+                n_steps=100, dt_fs=0.25, term_kwargs=_smd_kwargs(),
+                record_every=10)
+    total = np.asarray(traj.metadata["total_energies"])
+    assert np.all(np.isfinite(total))
+    assert total.size >= 10, "need a real trace, not two endpoints, to fit a trend"
+    drift = energy_drift_metrics(total)
+    scale = float(np.abs(total).mean()) + 1e-6
     # Symplectic NVE: systematic trend must be a small fraction of the scale.
     assert abs(drift["energy_trend_total_ev"]) < 0.05 * scale
+
+
+def test_nve_potential_alone_is_not_conserved_smd(synthetic_water_box):
+    """Pin the distinction: the oscillator's potential energy really does swing.
+
+    Guards against someone "fixing" a future failure by reverting the assertion
+    above to ``metadata["energies"]``.
+    """
+    traj = _run(synthetic_water_box(seed=3), term="smd", ensemble="nve",
+                n_steps=100, dt_fs=0.25, term_kwargs=_smd_kwargs(),
+                record_every=10)
+    potential = np.asarray(traj.metadata["energies"])
+    kinetic = np.asarray(traj.metadata["kinetic_energies"])
+    total = np.asarray(traj.metadata["total_energies"])
+    assert np.allclose(total, potential + kinetic)
+    # Energy sloshes between the two reservoirs by far more than the 5% budget.
+    assert float(np.ptp(potential)) > 0.2 * float(np.abs(total).mean())
+    assert float(np.ptp(kinetic)) > 0.2 * float(np.abs(total).mean())
 
 
 def test_nve_mm_nonbonded_finite_and_bounded(synthetic_water_box):
@@ -112,11 +146,25 @@ def test_all_ensembles_run_and_stay_finite(synthetic_water_box, ensemble):
 @pytest.mark.parametrize("float64", [False, True])
 def test_npt_runs_in_both_dtypes(synthetic_water_box, float64):
     """Regression guard for the barostat dtype fix: the driver casts kT/pressure
-    to the run dtype, so NPT runs in float32 *and* float64 under JAX_ENABLE_X64
-    (previously float32 raised a mixed-carry TypeError in the barostat scan)."""
+    **and dt** to the run dtype, so NPT runs in float32 *and* float64 under
+    JAX_ENABLE_X64 (a Python-float dt promoted the Nose-Hoover chain carry and
+    float32 raised ``carry component cs[0] ... float32[] ... float64[]``)."""
     traj = _run(synthetic_water_box(seed=0), ensemble="npt", n_steps=10,
                 extra_params={"float64": float64})
     assert np.all(np.isfinite(np.asarray(traj.metadata["energies"])))
+
+
+@pytest.mark.parametrize("ensemble", ["min", "nve", "nvt", "npt"])
+def test_kinetic_and_total_energy_are_recorded(synthetic_water_box, ensemble):
+    """Every ensemble records KE, so total energy is available to diagnostics."""
+    traj = _run(synthetic_water_box(seed=0), ensemble=ensemble, n_steps=10)
+    potential = np.asarray(traj.metadata["energies"])
+    kinetic = np.asarray(traj.metadata["kinetic_energies"])
+    total = np.asarray(traj.metadata["total_energies"])
+    assert kinetic.shape == potential.shape == total.shape
+    assert np.all(np.isfinite(kinetic)), f"{ensemble} recorded non-finite KE"
+    assert np.allclose(total, potential + kinetic)
+    assert np.all(kinetic >= 0.0)
 
 
 # --- dtype handling ---------------------------------------------------------

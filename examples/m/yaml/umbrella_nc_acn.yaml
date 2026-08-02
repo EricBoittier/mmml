@@ -1,0 +1,57 @@
+# Solvated mechanical-embedding umbrella — smoke (ACN make-box).
+#
+# Reaction coordinate (1D PMF):
+#   ξ = r(C–Cl) − r(C–N)     [= ADUMB ``rdif`` / Menshutkin convention]
+#   reactants: ξ < 0   |   products: ξ > 0
+#
+# ML region = AMM1+CH3CL; solvent = MM intermolecular ACN.
+# Prerequisite dense box:
+#   USE_DENSITY=1 BOX_SIZE=30 SOLVENT_ONLY=acn bash examples/m/08_make_boxes.sh
+#
+#   source examples/m/_env.sh
+#   SOLVENT=acn bash examples/m/14_umbrella_sample_sol.sh
+#
+# Timing: 3 windows × 4000 steps × 0.25 fs = 1 ps / window.
+# Production: yaml/umbrella_nc_acn_prod.yaml
+
+engine: hybrid_jaxmd
+checkpoint: ../../model_ext.json
+from_psf: ../../../artifacts/nh3_ch3cl/boxes/acn/model.psf
+from_pdb: ../../../artifacts/nh3_ch3cl/boxes/acn/model.pdb
+box_size: 30.0
+output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_acn
+
+ml_resnames: [AMM1, CH3CL]
+
+# ξ = r(C1–CL1) − r(C1–N1); names resolved against ml_resnames in the PSF.
+cv_x:
+  pairs:
+    - [C1, CL1]
+    - [C1, N1]
+  coefficients: [1.0, -1.0]
+
+walls:
+  - pairs: [[C1, CL1], [C1, N1]]
+    r_max: 2.25
+    k: 100.0
+  - atoms: [N1, C1, CL1]
+    theta_min_deg: 130.0
+    k: 50.0
+
+xi_min: -1.3
+xi_max: 1.6
+n_windows: 3
+k_ev_A2: 6.505
+
+temperature_K: 300.0
+timestep_fs: 0.25
+nsteps: 4000
+equilibration_steps: 400
+printfreq: 400
+savefreq: 200
+seed: 0
+seed_mode: stretch
+overwrite: false
+lr_solver: mic
+# Antisymmetric stretch seeds at ξ≈±1.3 can exceed ~35 eV/Å before MD relaxes.
+max_seed_force: 80.0

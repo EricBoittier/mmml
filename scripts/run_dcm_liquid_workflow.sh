@@ -60,9 +60,9 @@ PY="${MMML_PYTHON}"
 
 # --- sizing (override with N_DCM=..., BOX_SIZE=...) -------------------------
 N_DCM="${N_DCM:-60}"
-BOX_SIZE="${BOX_SIZE:-32}"              # Å; MIC-safe default (not bulk-ρ L for N=60)
+BOX_SIZE="${BOX_SIZE:-32}"              # Å; UNVERIFIED legacy recipe, not a safety guarantee
 DCM_RHO="${DCM_RHO:-1.326}"            # g/cm³ target for MC / NPT equilibration
-MIC_MIN_BOX="${MIC_MIN_BOX:-28}"         # Å; warn below this (L/2 vs ml_cutoff/cutnb)
+MIC_MIN_BOX="${MIC_MIN_BOX:-28}"         # Å; UNVERIFIED heuristic warning threshold
 ML_CUTOFF="${ML_CUTOFF:-12.0}"
 LIQUID_BOX_PROFILE="${LIQUID_BOX_PROFILE:-dense}"  # dense → liquid_prep + mini-NPT toward ρ
 

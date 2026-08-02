@@ -7,15 +7,41 @@ Provides a unified interface for all MMML command-line tools.
 
 import os
 import sys
+
+# Must run before any ``import mmml.*`` / ``import jax`` (umbrella → jax_md).
+# Do not import mmml here: package init pulls PhysNet and can init JAX too early.
+# Stale JAX_PLATFORMS=rocm on NVIDIA nodes aborts backend init.
+_plat = (os.environ.get("JAX_PLATFORMS") or "").strip()
+if _plat:
+    _parts = [p.strip() for p in _plat.split(",") if p.strip()]
+    _clean = [p for p in _parts if p.lower() != "rocm"]
+    if _clean != _parts:
+        if _clean:
+            os.environ["JAX_PLATFORMS"] = ",".join(_clean)
+        else:
+            # Prefer CUDA when a GPU allocation is visible; else leave unset (auto).
+            os.environ.pop("JAX_PLATFORMS", None)
+            if (
+                (os.environ.get("CUDA_VISIBLE_DEVICES") or "").strip()
+                or (os.environ.get("SLURM_JOB_GPUS") or "").strip()
+                or "gpu" in str(os.environ.get("SLURM_JOB_PARTITION", "")).lower()
+            ):
+                os.environ["JAX_PLATFORMS"] = "cuda"
+if (os.environ.get("JAX_PLATFORM_NAME") or "").strip().lower() == "rocm":
+    os.environ.pop("JAX_PLATFORM_NAME", None)
+
 import argparse
 
 from mmml.cli.completion import completion_main, try_autocomplete
 from mmml.cli.help_text import format_top_level_help, validate_command
+from mmml.cli.help_style import install_colored_argparse
 from mmml.cli.registry import _DISPATCH_COMMANDS
+
+install_colored_argparse()
 
 
 def _hard_exit(code: int | None) -> None:
-    """Terminate with *code*, bypassing CHARMM's Fortran teardown.
+    """Terminate with *code*, preserving non-zero status past CHARMM teardown.
 
     Importing pycharmm installs a Fortran/MPI finalizer that runs during
     interpreter shutdown and **resets the process exit status to 0**. A command
@@ -23,13 +49,18 @@ def _hard_exit(code: int | None) -> None:
     that trusts exit codes -- Slurm, CI, Make, the validation campaign -- was
     blind to failures.
 
-    ``os._exit`` skips atexit handlers and interpreter shutdown entirely, so the
-    status chosen here is the status the caller actually observes. Streams are
-    flushed first because ``os._exit`` will not do it for us.
+    For **non-zero** codes we ``os._exit`` so atexit/Fortran shutdown cannot
+    mask the failure. For **zero** we take a normal ``SystemExit`` so OpenMPI
+    can finalize cleanly: ``os._exit(0)`` skips ``MPI_Finalize`` and PRRTE then
+    often returns exit 1 (with empty Sphinx help noise) even though the app
+    succeeded.
     """
+    code_i = int(code or 0)
     sys.stdout.flush()
     sys.stderr.flush()
-    os._exit(int(code or 0))
+    if code_i == 0:
+        raise SystemExit(0)
+    os._exit(code_i)
 
 
 def cli() -> None:
@@ -37,8 +68,21 @@ def cli() -> None:
 
     ``main`` keeps returning an ``int`` so it stays callable from tests; only
     this wrapper forces the process exit status.
+
+    Uncaught exceptions must also go through ``os._exit``: importing PyCHARMM
+    installs a Fortran atexit that otherwise resets the process status to 0,
+    which made failed ``umbrella-sample`` look successful to Snakemake.
     """
-    _hard_exit(main())
+    try:
+        code = main()
+    except SystemExit as exc:
+        code = exc.code
+    except BaseException:
+        import traceback
+
+        traceback.print_exc()
+        code = 1
+    _hard_exit(code)
 
 
 class _MMMLTopLevelParser(argparse.ArgumentParser):
@@ -190,24 +234,18 @@ def main():
         sys.argv = ["mmml xml2npz"] + args.args
         return xml2npz.main()
 
+    elif command == "npz2traj":
+        from .misc import convert_npz_traj
+        return convert_npz_traj.main(args.args)
+
     elif command == "validate":
         from .misc import validate_cli
         return validate_cli.main(args.args)
-
-    elif command == "train":
-        from . import train
-        sys.argv = ["mmml train"] + args.args
-        return train.main()
 
     elif command == "train-joint":
         from .misc import train_joint
         sys.argv = ["mmml train-joint"] + args.args
         return train_joint.main()
-
-    elif command == "evaluate":
-        from . import evaluate
-        sys.argv = ["mmml evaluate"] + args.args
-        return evaluate.main()
 
     elif command == "downstream":
         from . import downstream
@@ -218,6 +256,10 @@ def main():
         from .misc import fix_and_split
         sys.argv = ["mmml fix-and-split"] + args.args
         return fix_and_split.main()
+
+    elif command == "prepare-mm-dataset":
+        from .misc import prepare_mm_dataset
+        return prepare_mm_dataset.main(args.args)
 
     elif command == "pyscf-dft":
         from .misc import pyscf_dft
@@ -249,6 +291,33 @@ def main():
         sys.argv = ["mmml normal-mode-sample"] + args.args
         return normal_mode_sample.main()
 
+    elif command == "dimer-scan":
+        from .misc import dimer_scan
+        return dimer_scan.main(args.args)
+    elif command == "ic-scan":
+        from .misc import ic_scan
+        return ic_scan.main(args.args)
+
+    elif command == "neb":
+        from .misc import neb
+        return neb.main(args.args)
+
+    elif command == "umbrella-sample":
+        from .misc import umbrella_sample
+        return umbrella_sample.main(args.args)
+
+    elif command == "umbrella-mbar":
+        from .misc import umbrella_mbar
+        return umbrella_mbar.main(args.args)
+
+    elif command == "dmc":
+        from mmml.generate.dmc.dmc import main as dmc_main
+        return dmc_main(args.args)
+
+    elif command == "mode-check":
+        from .misc import mode_check
+        return mode_check.main(args.args)
+
     elif command == "physnet-train":
         from .make import make_training
         sys.argv = ["mmml physnet-train"] + args.args
@@ -268,6 +337,17 @@ def main():
         from .misc import compare_npz
         sys.argv = ["mmml compare-npz"] + args.args
         return compare_npz.main()
+
+    elif command == "diagnose-lc-outliers":
+        from .misc.diagnose_learning_curve_outliers import (
+            main as diagnose_lc_outliers_main,
+        )
+        return diagnose_lc_outliers_main(args.args)
+
+    elif command == "compare-charmm-ml":
+        from .misc import compare_charmm_ml
+        sys.argv = ["mmml compare-charmm-ml"] + args.args
+        return compare_charmm_ml.main()
 
     elif command == "cross-check":
         from .misc import cross_check
@@ -289,25 +369,24 @@ def main():
         sys.argv = ["mmml efield-md"] + args.args
         return efield_md.main()
 
-    elif command == "ef-train":
-        from .misc import ef_train
-        sys.argv = ["mmml ef-train"] + args.args
-        return ef_train.main()
+    elif command == "kernnn-train":
+        from .misc import kernnn_train
+        sys.argv = ["mmml kernnn-train"] + args.args
+        return kernnn_train.main()
 
-    elif command == "ef-evaluate":
-        from .misc import ef_evaluate
-        sys.argv = ["mmml ef-evaluate"] + args.args
-        return ef_evaluate.main()
-
-    elif command == "ef-md":
-        from .misc import ef_md
-        sys.argv = ["mmml ef-md"] + args.args
-        return ef_md.main()
+    elif command == "kernnn-evaluate":
+        from .misc import kernnn_evaluate
+        sys.argv = ["mmml kernnn-evaluate"] + args.args
+        return kernnn_evaluate.main()
 
     elif command == "active-learning":
         from .misc import active_learning
         sys.argv = ["mmml active-learning"] + args.args
         return active_learning.main()
+
+    elif command == "pes-design":
+        from .misc import pes_design
+        return pes_design.main(args.args)
 
     elif command == "kernel-fit":
         from .misc import kernel_fit
@@ -323,6 +402,10 @@ def main():
         from .misc import unwrap_traj
         sys.argv = ["mmml unwrap-traj"] + args.args
         return unwrap_traj.main()
+
+    elif command == "analyze-liquid":
+        from .misc import analyze_liquid
+        return analyze_liquid.main(args.args)
 
     elif command == "sample-diverse-xyz":
         from mmml.generate.sample import sample_diverse_xyz

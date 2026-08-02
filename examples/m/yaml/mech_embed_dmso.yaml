@@ -1,0 +1,39 @@
+# Mechanical embedding: AMM1+CH3CL in DMSO.
+#   uv run mmml md-system --config examples/m/yaml/mech_embed_dmso.yaml --run-all
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,DMSO:12"
+  box_size: 30.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_switch_on: 8.0
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/mech_embed_dmso
+
+runs:
+  ase:
+    description: "Mechanical embedding PBC NVE — ASE"
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/mech_embed_dmso/ase
+
+  jaxmd:
+    description: "Mechanical embedding PBC NVE — JAX-MD unified (cg_jax)"
+    backend: jaxmd
+    jaxmd_unified: true
+    output_dir: artifacts/nh3_ch3cl/mech_embed_dmso/jaxmd
+
+  pycharmm:
+    description: "Mechanical embedding PBC NVE — PyCHARMM MLpot"
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/mech_embed_dmso/pycharmm

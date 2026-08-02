@@ -1,15 +1,94 @@
 # Hybrid MM charge modes — example YAMLs
 
-Example configs for the three MM Coulomb charge modes (dimer-only for B/C).
-See [`docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md).
+Example configs for the MM Coulomb charge modes (dimer-only for B/C; D is
+liquid-compatible). See
+[`docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md).
 
 | Mode | Formula | Train YAML | MD YAML |
 |------|---------|------------|---------|
 | A `fixed` | `q_MM = q_CGenFF` | [`train_fixed.yaml`](train_fixed.yaml) | [`md_fixed.yaml`](md_fixed.yaml) |
+| A + LJ scales | fixed charges + learnable per-type σ/ε | [`train_fixed_lj_scales.yaml`](train_fixed_lj_scales.yaml) | [`md_fixed_lj_scales.yaml`](md_fixed_lj_scales.yaml) |
 | A + PME (nvalchemiops) | fixed + `nvalchemiops_pme` Coulomb (LJ off) | [`train_fixed_nvalchemiops_pme.yaml`](train_fixed_nvalchemiops_pme.yaml) | [`md_fixed_nvalchemiops_pme.yaml`](md_fixed_nvalchemiops_pme.yaml) |
 | A + PME (native ewald) | fixed + `ewald` Coulomb (LJ off, pure JAX, no CUDA) | [`train_fixed_ewald.yaml`](train_fixed_ewald.yaml) | [`md_fixed_ewald.yaml`](md_fixed_ewald.yaml) |
 | B `latent` | `q_MM = neutralize(q_ML)` | [`train_latent.yaml`](train_latent.yaml) | [`md_latent.yaml`](md_latent.yaml) |
 | C `fixed_plus_latent` | `q_CGenFF + neutralize(q_ML)` | [`train_fixed_plus_latent.yaml`](train_fixed_plus_latent.yaml) | [`md_fixed_plus_latent.yaml`](md_fixed_plus_latent.yaml) |
+| D `latent_mean` (liquid) | `q_MM = tile(mean(neutralize(q_ML)))` | same checkpoint as B | `--mm-charge-mode latent_mean --mm-latent-charge-template <path>` (see below) |
+| E `latent_dynamic` (liquid) | `q_MM = neutralize(weighted_mean_over_active_dimers(q_ML))` | same checkpoint as B | `--mm-charge-mode latent_dynamic` (no precompute) |
+
+Student walkthrough (train → `hybrid_mm.json` → MD):
+[`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.md).
+Staged MIC LJ then Ewald TL (ML-only under Ewald; adjusted LJ stays MIC/jax_mic):
+[§ Staged MIC LJ then Ewald transfer learning](../../docs/hybrid-mm-lj-scales.md#staged-mic-lj-then-ewald-transfer-learning).
+
+## Trainable LJ scales — start here
+
+| Resource | What it is |
+|---|---|
+| [`../lj_scales/`](../lj_scales/) | **Numbered command-line ladder** (`00_check_env.py` → `07_deploy_md.sh`) with `_env.sh` and `run_all.sh`, same convention as `examples/m` and `examples/md_cpu`. Start here if you prefer a shell to a notebook. |
+| [`lj_scales_walkthrough.ipynb`](lj_scales_walkthrough.ipynb) | Annotated notebook: why LJ is fitted without Ewald, differentiating σ/ε by hand, a miniature fit that recovers a planted scale, then deployment. Cells run in seconds on a laptop CPU — no GPU, no CHARMM. |
+| [`submit_lj_scales_scicore.sbatch`](submit_lj_scales_scicore.sbatch) | SciCORE job running the real pipeline: `prepare-mm-dataset` → train → condensed-phase MD, with each stage gated on the previous. |
+| [`docs/hybrid-mm-lj-scales.md`](../../docs/hybrid-mm-lj-scales.md) | Reference page, support matrix, troubleshooting. |
+
+### Jupyter kernel — do this first
+
+```bash
+# once, from the repo root
+.venv/bin/python -m ipykernel install --user --name mmml-venv --display-name "mmml venv"
+```
+
+Then pick `mmml venv` via **Kernel → Change Kernel**. The kernelspec `uv` installs
+is named `python3` but has a bare `"python"` in its `argv`, so it resolves against
+`PATH` and will happily start an active conda interpreter instead of `.venv`. That
+fails on the first `import mmml...` with
+
+```
+TypeError: 'type' object is not subscriptable
+```
+
+which is a *kernel* problem, not a code problem. The notebook's first cell checks
+this and aborts with the fix, so you cannot get far down the wrong path.
+
+### Two things the notebook will save you from
+
+- **PSF ordering.** `dcm_mp2_psf_order.npz` is `C Cl Cl H H`; the otherwise
+  identical `new-dcm-round-2-only_MP2_41950.npz` is `C H H Cl Cl`. Only the first
+  can be typed by `prepare-mm-dataset`. The wrong one does not crash — it silently
+  mis-assigns CGenFF types.
+- **σ/ε degeneracy.** Against an energy-only target, a deeper well with a larger
+  radius is indistinguishable from a shallower one with a smaller radius. You can
+  drive the loss to zero and still recover the wrong parameters. Forces and a
+  range of separations are what break the tie.
+
+## Minimal example: native Ewald, `fixed` vs `latent`, small system, no checkpoint
+
+[`monomer_ml_mm_ewald_example.py`](monomer_ml_mm_ewald_example.py) runs the
+**Monomer ML + MM** assembly (ML monomers + MM electrostatics; see
+[`docs/calculator-capabilities.md`](../../docs/calculator-capabilities.md#monomer-ml-mm-with-native-ewald-fixed-vs-latent))
+with `lr_solver="ewald"` for both Mode A (`fixed`) and Mode B (`latent`) on a
+tiny synthetic 2-monomer/5-atom system — no checkpoint, no CHARMM:
+
+```bash
+python examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
+```
+
+See [Mode B in `docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md#minimal-runnable-example--native-ewald-fixed-vs-latent-small-system)
+for what it checks and why `--skip-ml-dimers` isn't the mechanism used.
+
+### Same assembly under PyCHARMM (`DCM:2`, CHARMM bonded retained)
+
+| Mode | YAML | Notes |
+|------|------|-------|
+| A `fixed` + Ewald | [`md_fixed_ewald_dimer.yaml`](md_fixed_ewald_dimer.yaml) | Small PBC NVT; CHARMM BOND/ANGL/DIHE on |
+| B `latent` + Ewald | [`md_latent_ewald_dimer.yaml`](md_latent_ewald_dimer.yaml) | Dimer-only; same bonded ownership |
+
+```bash
+export MMML_CKPT=/path/to/params.json   # Mode B needs charges=True / latent-trained
+mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
+mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
+```
+
+For a larger liquid Mode A Ewald smoke see [`md_fixed_ewald.yaml`](md_fixed_ewald.yaml)
+(`DCM:20`). Mode B cannot use liquids — use Mode D/E instead.
 
 ## Train
 
@@ -30,8 +109,9 @@ mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_plus_latent.y
 ## MD (dimer vacuum smoke)
 
 Modes B/C are **dimer-only** (`composition: "DCM:2"`). Do not use liquid
-boxes with `mm_charge_mode: latent` / `fixed_plus_latent` yet. Use
-`lr_solver: mic` (or omit) — jax-pme is refused for B/C.
+boxes with `mm_charge_mode: latent` / `fixed_plus_latent` — use `latent_mean`
+(Mode D, below) for liquids instead. Use `lr_solver: mic` (or omit) for B/C —
+jax-pme is refused for B/C (Mode D has no such restriction).
 
 ```bash
 # After training + orbax-to-json (or point checkpoint at an existing JSON)
@@ -64,6 +144,57 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
   --lr-solver ewald \
   --no-periodic-charmm-vdw \
   --mm-charge-mode fixed \
+  --checkpoint /path/to/params.json
+```
+
+### Mode D: latent-charge liquid MD with native Ewald
+
+`latent`/`fixed_plus_latent` (B/C) cannot run on a 20-monomer liquid box —
+their `q_ML` needs a live AB-dimer forward, undefined once there are more
+than 2 monomers. Mode D uses a checkpoint trained with `--mm-charge-mode
+latent --charges` (Mode B), but instead of a live forward, precomputes one
+monomer's mean latent charge offline and tiles it across the box:
+
+```bash
+# 1) Precompute the template once, from the checkpoint + its training data
+python scripts/compute_latent_monomer_charges.py \
+  --checkpoint ./ckpts/mp2_nms/mp2nms_ewald \
+  --data /path/to/mp2_nms15_clean_train.npz \
+  --resid DCM \
+  --out ./ckpts/mp2_nms/latent_charge_template_DCM.npz
+
+# 2) Run the liquid box with it, same lr_solver as training (ewald)
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 30 \
+  --mm-nonbond-mode periodic_external \
+  --lr-solver ewald \
+  --no-periodic-charmm-vdw \
+  --mm-charge-mode latent_mean \
+  --mm-latent-charge-template ./ckpts/mp2_nms/latent_charge_template_DCM.npz \
+  --checkpoint /path/to/params.json
+```
+
+See [Mode D in `docs/hybrid-mm-charges.md`](../../docs/hybrid-mm-charges.md#mode-d--latent_mean-md-only-liquid-compatible)
+for the v1 limitation (homogeneous liquids only) and what it is not (a live,
+geometry-dependent charge model).
+
+### Mode E: live latent-charge liquid MD (no precompute)
+
+`latent_dynamic` recomputes charges every step instead of freezing them:
+each monomer's charge is a live, `ml_switch_scale`-weighted average of
+`q_ML` over every currently active ML-dimer partner (no template to
+generate first). Trade-off: no training-set averaging to smooth out
+per-pair noise, and atoms with no active partner within `mm_switch_on` get
+charge 0 (only appropriate where every monomer reliably has neighbors —
+see [Mode E's v1 limitation](../../docs/hybrid-mm-charges.md#mode-e--latent_dynamic-md-only-liquid-compatible-live)):
+
+```bash
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 30 \
+  --mm-nonbond-mode periodic_external \
+  --lr-solver ewald \
+  --no-periodic-charmm-vdw \
+  --mm-charge-mode latent_dynamic \
   --checkpoint /path/to/params.json
 ```
 

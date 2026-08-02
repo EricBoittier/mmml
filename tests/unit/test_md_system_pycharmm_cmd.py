@@ -70,6 +70,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         restart_from=None,
         from_psf=None,
         from_crd=None,
+        from_pdb=None,
         no_pre_minimize=False,
         skip_cluster_build=False,
         skip_if_crd_exists=False,
@@ -129,9 +130,105 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         bonded_recovery_backend="jax",
         bonded_mm_internal_margin=0.0,
         bonded_mm_mini_always=False,
+        ml_resnames=None,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
+
+
+def test_pycharmm_extra_args_strip_skip_jit_warmup():
+    """Campaign YAML often puts --skip-jit-warmup in extra_args; PyCHARMM rejects it."""
+    from mmml.cli.run.md_system import _suite_extra_argv
+
+    args = _pycharmm_args(
+        extra_args=["--skip-jit-warmup", "--quiet", "--no-auto-warmup-mlpot-jax"]
+    )
+    extra = _suite_extra_argv(args, "pycharmm")
+    assert "--skip-jit-warmup" not in extra
+    assert "--no-auto-warmup-mlpot-jax" not in extra
+    assert "--quiet" in extra
+
+
+def test_build_pycharmm_command_forwards_pre_dynamics_lingo(tmp_path: Path):
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    out = tmp_path / "run"
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=out,
+            pycharmm_pre_dynamics_lingo="cons fix sele resid 1 end",
+        )
+    )
+    assert "--pycharmm-pre-dynamics-lingo-file" in cmd
+    path = Path(cmd[cmd.index("--pycharmm-pre-dynamics-lingo-file") + 1])
+    assert path == out / "pycharmm_pre_dynamics_lingo.inp"
+    assert path.read_text(encoding="utf-8").strip() == "cons fix sele resid 1 end"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert Path(parsed.pycharmm_pre_dynamics_lingo_file) == path
+
+
+def test_build_pycharmm_command_overwrites_stale_staging_lingo(tmp_path: Path):
+    """YAML inline must replace leftover output_dir lingo (not append it)."""
+    out = tmp_path / "run"
+    out.mkdir(parents=True)
+    stale = out / "pycharmm_pre_dynamics_lingo.inp"
+    stale.write_text(
+        "umbrella rxncor nresol 40 trig 0 poly 6 min 2.0 max 6.0 name r_nc\n",
+        encoding="utf-8",
+    )
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=out,
+            pycharmm_pre_dynamics_lingo=(
+                "umbrella rxncor nresol 40 trig 0 poly 6 min 0.0 max 12.0 name r_nc"
+            ),
+            # Simulate a resume that also points --lingo-file at the staging path.
+            pycharmm_pre_dynamics_lingo_file=stale,
+        )
+    )
+    path = Path(cmd[cmd.index("--pycharmm-pre-dynamics-lingo-file") + 1])
+    body = path.read_text(encoding="utf-8")
+    assert "min 0.0" in body
+    assert "min 2.0" not in body
+    assert body.count("umbrella rxncor") == 1
+
+
+def test_build_pycharmm_command_forwards_pre_dynamics_lingo_list(tmp_path: Path):
+    out = tmp_path / "run"
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=out,
+            pycharmm_pre_dynamics_lingo=["cons fix sele resid 1 end", "umbr", "end"],
+        )
+    )
+    path = Path(cmd[cmd.index("--pycharmm-pre-dynamics-lingo-file") + 1])
+    assert path.read_text(encoding="utf-8").strip() == (
+        "cons fix sele resid 1 end\numbr\nend"
+    )
+
+
+def test_build_pycharmm_command_omits_empty_pre_dynamics_lingo(tmp_path: Path):
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            output_dir=tmp_path / "run",
+            pycharmm_pre_dynamics_lingo="",
+            pycharmm_pre_dynamics_lingo_file=None,
+        )
+    )
+    assert "--pycharmm-pre-dynamics-lingo-file" not in cmd
+    assert "--pycharmm-pre-dynamics-lingo" not in cmd
+
+
+def test_build_command_rejects_pre_dynamics_lingo_for_non_pycharmm():
+    from mmml.cli.run.md_system import build_command
+
+    args = _pycharmm_args(
+        backend="jaxmd",
+        setup="pbc_nvt",
+        pycharmm_pre_dynamics_lingo="cons fix sele resid 1 end",
+    )
+    with pytest.raises(ValueError, match="require --backend pycharmm"):
+        build_command(args)
 
 
 def test_build_pycharmm_command_forwards_pre_mlpot_pair_floors():
@@ -271,6 +368,21 @@ def test_build_pycharmm_command_forwards_include_mm_false():
     assert "--no-include-mm" in cmd
 
 
+def test_build_pycharmm_command_forwards_mm_pair_source():
+    cmd = build_pycharmm_command(_pycharmm_args(mm_pair_source="jax"))
+    assert "--mm-pair-source" in cmd
+    assert cmd[cmd.index("--mm-pair-source") + 1] == "jax"
+
+
+def test_adumb_yaml_accepts_mm_pair_source():
+    args = parse_md_system_args(
+        ["--config", "examples/m/yaml/adumb_nc_distance.yaml"]
+    )
+    assert args.mm_pair_source == "jax"
+    cmd = build_pycharmm_command(args)
+    assert cmd[cmd.index("--mm-pair-source") + 1] == "jax"
+
+
 def test_build_pycharmm_command_omits_include_mm_when_default_true():
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--include-mm" not in cmd
@@ -284,6 +396,30 @@ def test_build_pycharmm_command_no_include_mm_parses_in_pycharmm_backend():
     assert "--no-include-mm" in cmd
     parsed = pycharmm_mlpot.parse_args(cmd)
     assert parsed.include_mm is False
+
+
+def test_build_pycharmm_command_forwards_do_ml_flags():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(do_ml=False, do_ml_dimer=False, skip_ml_dimers=False)
+    )
+    assert "--no-do-ml" in cmd
+    assert "--no-do-ml-dimer" in cmd
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.do_ml is False
+    assert parsed.do_ml_dimer is False
+
+
+def test_build_pycharmm_command_skip_ml_dimers_parses():
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(_pycharmm_args(skip_ml_dimers=True, do_ml_dimer=True))
+    assert "--skip-ml-dimers" in cmd
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    normalize_hybrid_assembly_flags(parsed)
+    assert parsed.do_ml_dimer is False
 
 
 def test_build_pycharmm_command_fire_min_flags_parse_in_pycharmm_backend():
@@ -307,7 +443,13 @@ def test_build_pycharmm_command_fire_min_flags_parse_in_pycharmm_backend():
     assert parsed.rescue_fire_fmax == pytest.approx(0.05)
 
 
-def test_build_pycharmm_command_omits_residue_when_composition_set():
+def test_build_pycharmm_command_forwards_from_pdb():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(from_pdb=Path("system.pdb"), composition=None)
+    )
+    assert "--from-pdb" in cmd
+    assert "system.pdb" in cmd
+
     cmd = build_pycharmm_command(_pycharmm_args())
     assert "--composition" in cmd
     assert "DCM:20" in cmd
@@ -350,6 +492,22 @@ def test_build_pycharmm_command_forwards_intra_monomer_guard():
     cmd = build_pycharmm_command(_pycharmm_args(dynamics_intra_min_distance=0.5))
     idx = cmd.index("--dynamics-intra-min-distance")
     assert cmd[idx + 1] == "0.5"
+
+
+def test_build_pycharmm_command_forwards_max_monomer_extent_and_adumb_guards():
+    """YAML extent / ADUMB flags must reach pycharmm_mlpot (not only md-system)."""
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            dynamics_max_monomer_extent=30.0,
+            dynamics_overlap_memory_handoff=True,
+            no_dynamics_monomer_template_restore=True,
+            no_dynamics_geometry_limits_auto=True,
+        )
+    )
+    assert cmd[cmd.index("--dynamics-max-monomer-extent") + 1] == "30.0"
+    assert "--dynamics-overlap-memory-handoff" in cmd
+    assert "--no-dynamics-monomer-template-restore" in cmd
+    assert "--no-dynamics-geometry-limits-auto" in cmd
 
 
 def test_build_pycharmm_command_omits_intra_monomer_guard_when_none():
@@ -408,7 +566,14 @@ def test_parse_md_system_config_accepts_thermalize_setup(tmp_path):
 
 def test_build_pycharmm_command_forwards_npt_cpt_flags():
     cmd = build_pycharmm_command(
-        _pycharmm_args(npt_thermostat="berendsen", npt_pressure=2.5, npt_pgamma=0.0)
+        _pycharmm_args(
+            npt_thermostat="berendsen",
+            npt_pressure=2.5,
+            npt_pgamma=0.0,
+            npt_pressure_log_interval=50,
+            npt_pressure_tensor="2,1,1,0,0,0",
+            skip_npt_pressure_report=True,
+        )
     )
     idx = cmd.index("--npt-thermostat")
     assert cmd[idx + 1] == "berendsen"
@@ -416,6 +581,18 @@ def test_build_pycharmm_command_forwards_npt_cpt_flags():
     assert cmd[idx + 1] == "2.5"
     idx = cmd.index("--npt-pgamma")
     assert cmd[idx + 1] == "0.0"
+    idx = cmd.index("--npt-pressure-log-interval")
+    assert cmd[idx + 1] == "50"
+    idx = cmd.index("--npt-pressure-tensor")
+    assert cmd[idx + 1] == "2,1,1,0,0,0"
+    assert "--skip-npt-pressure-report" in cmd
+
+
+def test_parse_md_system_accepts_npt_pressure_log_interval():
+    args = parse_md_system_args(
+        ["--backend", "pycharmm", "--npt-pressure-log-interval", "50"]
+    )
+    assert args.npt_pressure_log_interval == 50
 
 
 def test_build_pycharmm_command_includes_ml_switch_width_default():
@@ -608,6 +785,35 @@ def test_build_pycharmm_command_forwards_mc_density_flags():
     assert parsed.mc_density_steps == 12
 
 
+def test_build_pycharmm_command_forwards_density_prep_off():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            density_prep_mode="off",
+            density_prep_ladder=False,
+            mc_density_equalize=False,
+        )
+    )
+    assert cmd[cmd.index("--density-prep-mode") + 1] == "off"
+    assert "--no-density-prep-ladder" in cmd
+    assert "--no-mc-density-equalize" in cmd
+
+
+def test_build_pycharmm_command_forwards_no_monomer_physnet_mini():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            monomer_physnet_mini=False,
+            monomer_physnet_mini_max_select=2,
+        )
+    )
+    assert "--no-monomer-physnet-mini" in cmd
+    assert cmd[cmd.index("--monomer-physnet-mini-max-select") + 1] == "2"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.monomer_physnet_mini is False
+    assert parsed.monomer_physnet_mini_max_select == 2
+
+
 def test_build_pycharmm_command_forwards_flat_bottom_selection():
     cmd = build_pycharmm_command(
         _pycharmm_args(flat_bottom_radius=15.0, flat_bottom_selection="TYPE C*")
@@ -640,6 +846,22 @@ def test_build_pycharmm_command_forwards_periodic_mm_flags():
     assert cmd[cmd.index("--scafacos-method") + 1] == "p3m"
 
 
+def test_build_pycharmm_command_forwards_ml_resnames_list():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            ml_resnames=["AMM1", "CH3CL"],
+            mm_nonbond_mode="periodic_external",
+        )
+    )
+    assert "--ml-resnames" in cmd
+    assert cmd[cmd.index("--ml-resnames") + 1] == "AMM1,CH3CL"
+
+
+def test_build_pycharmm_command_forwards_ml_resnames_string():
+    cmd = build_pycharmm_command(_pycharmm_args(ml_resnames="AMM1,CH3CL"))
+    assert cmd[cmd.index("--ml-resnames") + 1] == "AMM1,CH3CL"
+
+
 def test_build_pycharmm_command_forwards_jax_pme_flags():
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -654,6 +876,24 @@ def test_build_pycharmm_command_forwards_jax_pme_flags():
     assert cmd[cmd.index("--jax-pme-method") + 1] == "pme"
     assert cmd[cmd.index("--jax-pme-sr-cutoff") + 1] == "7.5"
     assert "--no-jax-pme-dispersion" in cmd
+
+
+def test_build_pycharmm_command_forwards_ewald_omit_self():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(lr_solver="ewald", ewald_omit_self=True)
+    )
+    assert cmd[cmd.index("--lr-solver") + 1] == "ewald"
+    assert "--ewald-omit-self" in cmd
+    cmd_default = build_pycharmm_command(_pycharmm_args(lr_solver="ewald"))
+    assert "--ewald-omit-self" not in cmd_default
+
+
+def test_build_pycharmm_command_forwards_mm_charge_mode():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(mm_charge_mode="fixed", lr_solver="ewald")
+    )
+    assert "--mm-charge-mode" in cmd
+    assert cmd[cmd.index("--mm-charge-mode") + 1] == "fixed"
 
 
 def test_build_pycharmm_command_forwards_no_periodic_charmm_vdw():

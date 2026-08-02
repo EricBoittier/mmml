@@ -16,7 +16,6 @@ Or trigger a rebuild first:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -57,7 +56,9 @@ def main() -> int:
         )
         return 1
     if args.json:
-        print(json.dumps(stats.__dict__, indent=2, sort_keys=True))
+        from mmml.utils.rich_report import print_colored_json
+
+        print_colored_json(stats.__dict__, sort_keys=True)
     else:
         print(format_charmm_image_nb_stats(stats))
     return 0

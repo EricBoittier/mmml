@@ -145,11 +145,26 @@ sequenceDiagram
 
 ## Builders for condensed phase
 
-`composition` uses `RES:N` entries such as `DCM:60` or `DCM:40,ACO:20`. A bare `RES` means one molecule. The builder determines the initial coordinates before minimization.
+`composition` uses `RES:N` entries such as `DCM:60` or `DCM:40,ACO:20`. A bare `RES` means one molecule. Residue names are validated against the bundled CGenFF RTF (aliases: `water`→`TIP3`, `octanol`→`OCOH`). The builder determines the initial coordinates before minimization.
 
-**Packmol is the default for `composition`.** When `composition` is set, MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
+**PDB tokens in composition.** Paths ending in `.pdb` (or containing `/`) are allowed:
 
-**Grid placement is the fast alternative.** Set `packmol: false` and `builder: liquid` (or `--no-packmol --builder liquid`) to place whole molecules on a cubic/spherical grid without the Packmol binary. Useful for CI smoke tests and quick JAX-MD probes.
+```yaml
+# Packmol mix: user monomer PDB (single CGenFF residue) + CGenFF solvent
+composition: "solute.pdb:1,DCM:200"
+
+# Full-system cold start (CHARMM READ SEQU PDB; no Packmol)
+composition: "system.pdb"
+# equivalent CLI: --from-pdb system.pdb
+```
+
+PDB files must carry CGenFF residue and atom names (for example from `mmml make-res`). Packmol-mix PDB monomers must be a single residue; a lone `system.pdb` (count 1) may contain many residues. `--from-pdb` is mutually exclusive with `--from-psf`/`--from-crd`.
+
+**Runnable PDB → backend examples.** Numbered YAML jobs (`yaml/01_*.yaml` … `07_*.yaml`) plus matching shell wrappers for `--from-pdb`, Packmol monomer PDBs, and certified PSF/CRD across `ase` / `jaxmd` / `pycharmm` live in [`examples/md_system_from_pdb/`](https://github.com/EricBoittier/mmml/blob/main/examples/md_system_from_pdb/README.md).
+
+**Packmol is the default for `composition`.** When `composition` is set (CGenFF-only or Packmol-mix PDB), MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
+
+**Grid placement is the fast alternative.** Set `packmol: false` and `builder: liquid` (or `--no-packmol --builder liquid`) to place whole molecules on a cubic/spherical grid without the Packmol binary. Useful for CI smoke tests and quick JAX-MD probes. PDB composition tokens require Packmol (or a lone full-system PDB); they are not compatible with `--no-packmol` or PyXtal.
 
 **Spherical liquid/cluster starts.** Use `packmol_placement: sphere` plus `packmol_radius` for finite clusters or flat-bottom restraints. For PBC liquids, prefer cube packing (`packmol_placement: cube`, default) so the initial geometry matches the periodic cell.
 
@@ -363,7 +378,7 @@ seed: 123
 dt_fs: 0.25
 temperature: 300.0
 pressure: 1.0
-spacing: 4.0
+spacing: 2.5
 packmol_tolerance: 1.5
 
 # Box build + target density
@@ -753,7 +768,7 @@ box_size: 32.0
 target_density_g_cm3: 1.326
 density_prep_mode: resilient
 density_prep_ladder_max_rounds: 5
-spacing: 4.0
+spacing: 2.5
 packmol_tolerance: 1.0
 charmm_sd_steps: 1000
 charmm_abnr_steps: 1000
@@ -997,11 +1012,23 @@ There are several “MM off” levels — pick the one that matches your goal:
 
 | Goal | Config approach |
 |------|-----------------|
-| **ML only — no MM LJ or Coulomb pairs** | `include_mm: false` — PhysNet monomer/dimer terms only (`doMM=False`); no JAX switched LJ, no MIC Coulomb, no MM pair list |
+| **ML only — no MM LJ or Coulomb pairs** | `include_mm: false` (alias `doMM: false`) — PhysNet monomer/dimer terms only (`doMM=False`); no JAX switched LJ, no MIC Coulomb, no MM pair list |
 | **No JAX real-space LJ/Coulomb, but add long-range Coulomb** | `mm_nonbond_mode: periodic_external` + `lr_solver: scafacos` or `nvalchemiops_pme` — replaces JAX MM with full-box Coulomb (+ optional CHARMM VDW) |
 | **ML + ScaFaCoS Coulomb only** (no LJ anywhere) | `periodic_external` + `periodic_charmm_vdw: false` |
 | **No scaled CGENFF internals on ML atoms** | `mlpot_mm_internal_scale: 0.0` (default) |
-| **Skip ML dimers, keep MM** | `extra_args: ["--skip-ml-dimers"]` |
+| **Skip ML dimers, keep MM** | `doML_dimer: false` or `do_ml_dimer: false` or `skip_ml_dimers: true` |
+| **Skip ML monomers** | `doML: false` / `do_ml: false` (rare; MM-only / diagnosis) |
+
+Hybrid assembly YAML keys map to calculator flags:
+
+| YAML | Calculator |
+|------|------------|
+| `doML` / `do_ml` / `--do-ml` | `doML` |
+| `include_mm` / `doMM` / `do_mm` / `--include-mm` / `--do-mm` | `doMM` |
+| `doML_dimer` / `do_ml_dimer` / `--do-ml-dimer` | `doML_dimer` |
+| `skip_ml_dimers: true` | forces `doML_dimer=False` |
+
+Do not set conflicting `include_mm` and `doMM` in the same mapping.
 
 **ML-only (`include_mm: false`)** is what you want when the hybrid potential should be **just the ML model** — no inter-monomer Lennard-Jones and no truncated electrostatics from the MM force field. Cutoff keys (`mm_switch_on`, etc.) still configure the ML handoff taper but do not build MM pair lists.
 
@@ -1365,6 +1392,137 @@ python scripts/validate_mlpot_sparse_dimers.py \
 
 Exit code `0` means the sparse dimer cap covers the near dimers. Exit code `1` means the cap is saturated; raise `ml_max_active_dimers`, enlarge the box, or reduce the system.
 
+### Pre-dynamics CHARMM lingo (PyCHARMM only)
+
+For umbrella sampling, extra `CONS`/`UMBR`/`ADUMB` blocks, or other free-form CHARMM setup that must run after minimize/constraints and immediately before scheduled dynamics, set:
+
+```yaml
+backend: pycharmm
+pycharmm_pre_dynamics_lingo: |
+  cons fix sele resid 1 end
+```
+
+A YAML list of lines is also accepted. `md-system` writes the script to
+`{output_dir}/pycharmm_pre_dynamics_lingo.inp` and forwards
+`--pycharmm-pre-dynamics-lingo-file` to the PyCHARMM backend. Execution happens
+once per job after `constrain_resids` / MMFP setup and before the heat/nve/equi/prod
+loop (skipped for mini-only runs). This option is rejected for ASE/JAX-MD backends.
+
+**Smoke example** (acetone monomer PDB → short vacuum NVE with `cons fix`):
+
+```bash
+uv run mmml md-system \
+  --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
+# or:
+bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
+```
+
+Pass checks:
+
+1. Job exits 0.
+2. `artifacts/md_system_from_pdb/08_pre_dynamics_lingo/pycharmm_pre_dynamics_lingo.inp` contains `cons fix sele resid 1 end`.
+3. Log prints `Pre-dynamics CHARMM lingo` before the NVE stage (example sets `quiet: false`).
+
+#### Mapping a classic ADUMB / umbrella input
+
+A full CHARMM umbrella script usually mixes system setup and dynamics. With
+`md-system`, keep only the **umbrella setup** in `pycharmm_pre_dynamics_lingo`;
+leave topology, PBC, nbonds, SHAKE, and `DYNAmics` to the normal PyCHARMM path.
+
+| Classic input | Where it goes |
+|---------------|---------------|
+| `DIMENS` / `stream toppar` / `read psf` / `read coor` | md-system (`from_psf`/`from_crd`/`from_pdb`, checkpoint) |
+| `crystal` / `image` / `nbonds` … PME | md-system (`pbc_*` setups + cutoff knobs) |
+| `cons hmcm …` | optional: `pycharmm_pre_dynamics_lingo` |
+| `shake bonh …` | md-system dynamics path (do not duplicate unless you know you need it) |
+| `open unit … adumb-dihe.dat` / `umbcor` | `pycharmm_pre_dynamics_lingo` (paths relative to process CWD; prefer under `output_dir`) |
+| `umbrella dihe …` / `umbrella init …` | `pycharmm_pre_dynamics_lingo` |
+| `dynamics cpt leap …` / DCD+restart opens | md-system stages (`md_stages`, `ps_prod`, `dt_fs`, …) — **not** in the lingo |
+
+Minimal ADUMB fragment for the lingo block (edit atom specs / numbers):
+
+```yaml
+pycharmm_pre_dynamics_lingo: |
+  cons hmcm force 1.0 refx 0.0 refy 0.0 refz 0.0 sele .not. (segid WAT) end
+
+  open unit 44 write card name artifacts/my_umbrella/adumb-dihe.dat
+  open unit 50 write card name artifacts/my_umbrella/umbcor
+
+  umbrella dihe nresol 72 trig 12 poly 1 PEPT 1 C  PEPT 2 N  PEPT 2 CA PEPT 2 C
+  umbrella dihe nresol 72 trig 12 poly 1 PEPT 1 N  PEPT 1 CA PEPT 1 C  PEPT 2 N
+
+  ! Align nsim / update / equi with prod length (dt_fs and ps_prod).
+  ! Classic script: ts=0.001 ps, update=10/ts, equi=2/ts, nsim=500.
+  umbrella init nsim 500 update 10000 equi 2000 thresh 10 temp 300 wuni 44 ucun 50
+```
+
+Commented full-job skeleton (peptide PSF paths left for you to fill in):
+
+[`examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml)
+
+**Alignment tip:** classic `calc NSTEP = @NRUN * @UPDATE` must match the prod
+`nstep` that md-system derives from `ps_prod` and `dt_fs`. If they disagree,
+ADUMB bookkeeping (`nsim` / `update` / `equi`) will not line up with the
+trajectory CHARMM actually runs.
+
+#### ADUMB RXNCOR guards and recovery
+
+For NH3-CH3Cl RXNCOR umbrellas, `md-system` recognizes a small guard contract in
+the pre-dynamics lingo:
+
+```charmm
+set adumrcmax = 8.0
+set adumrcwall = 2000.0
+umbrella rxncor ... min 0.0 max @adumrcmax name rcl
+umbrella rxncor ... min 0.0 max @adumrcmax name rcn
+```
+
+When both `set` commands and at least one `umbrella rxncor ... name ...` card are
+present, the PyCHARMM backend parses the umbrella bounds before running
+dynamics. The current guard is tailored to the NH3-CH3Cl examples and expects
+unique atom names `CL1`, `C1`, and `N1`:
+
+| RXNCOR name | Guarded distance walls |
+|-------------|------------------------|
+| `rcl` / `r_cl` | Cl1-C1 only |
+| `rcn` / `r_cn` / `r_nc` | C1-N1 only |
+| `rdif` / `rrat` | Cl1-C1 and C1-N1 |
+| multiple `umbrella rxncor` cards | union of all named distances |
+
+The default wall backend is CHARMM `RESDistance POSITIVE`, which does not require
+the NOE module. Set `MMML_ADUMB_RC_WALL_BACKEND=noe`, `mmfp`, or `off` only for
+site-specific debugging. Walls are installed below the umbrella hard maximum
+(`adumrcmax - 0.75 Å` by default; override with `MMML_ADUMB_RC_WALL_MARGIN`) so
+the restraint can act before UM1RXN aborts.
+
+Operational constraints:
+
+- Keep `dynamics_overlap_check_interval` aligned with the ADUMB `update` value
+  when you use staged heat. The numbered `heat.NNNN.res` files are the restart
+  ladder used for recovery.
+- `dynamics_overlap_action: warn` is appropriate for reactive ADUMB runs when
+  steepest-descent rescue would bias the histogram. With an ADUMB guard active,
+  mid-chunk fly-offs can still rewind to an earlier numbered restart and retry.
+- If monomer health detects geometry fly-off while the ADUMB guard is armed,
+  `md-system` skips monomer template restore. Restoring one monomer from a
+  template preserves bad inter-monomer COM separation and usually leaves the
+  RXNCOR outside the umbrella window; restart-ladder rewind is safer.
+- For bond-difference umbrellas such as `rdif = r(Cl-C) - r(C-N)`, the guard
+  also checks the soft `min`/`max` window for the difference coordinate. Component
+  distance walls still use `adumrcmax`, because the difference maximum is not a
+  physical bond length.
+- `no_echeck` / `no_echeck_heat` now disable CHARMM ECHECK with a huge sentinel
+  rather than `-1`; velocity-Verlet paths still apply `MAX(ECHECK, 0.1*KE)` for
+  nonpositive ECHECK values.
+
+Troubleshooting checks:
+
+| Symptom | Check |
+|---------|-------|
+| `Unknown umbrella specified` near `umbrella rxncor` | Rebuild CHARMM with ADUMB and ADUMBRXNCOR (`?ADUMBRXN == 1`). |
+| `UM1RXN` reaction coordinate out of range | Confirm the staged lingo contains all active `name` cards (`rcl` + `rcn` for 2D), `ENER` reports `RESDistance`, and numbered `heat.NNNN.res` files exist. Widen `max` / `adumrcmax` or lower the heat temperature if recovery exhausts the restart ladder. |
+| Old `r_nc`, `rrat`, or stale `min`/`max` appears after YAML edits | Remove `{output_dir}/pycharmm_pre_dynamics_lingo.inp` and `next_run.*`, or use the example scripts which clear these files before launching. |
+
 ## Template improvements
 
 Use this structure when turning ad hoc configs into reusable campaign templates:
@@ -1478,6 +1636,8 @@ min_com_restraint_k: 1.0
 extra_args: []
 fix_resids: ''
 constrain_resids: ''
+pycharmm_pre_dynamics_lingo: ''
+pycharmm_pre_dynamics_lingo_file: null
 no_fix: false
 mini_nstep: 20
 no_pre_minimize: false

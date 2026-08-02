@@ -348,6 +348,10 @@ class ModelOutput(NamedTuple):
     mm_elec_primary_E: Array = 0.0  # primary-cell MM Coulomb (kcal/mol bookkeeping)
     mm_elec_image_E: Array = 0.0  # image MM Coulomb (kcal/mol bookkeeping)
     wall_E: Array = 0.0  # short-range inter-monomer repulsive wall (eV)
+    # Per-atom charges used for E_MM Coulomb this evaluation (e), shape (n_atoms,).
+    # Mode A = PSF CGenFF; q0/latent*/fixed_plus_latent = neutralized ML charges.
+    # Zeros when MM Coulomb is inactive / unavailable.
+    mm_charges: Array = 0.0
 
 
 FLAT_BOTTOM_MODES = ("system", "monomer")

@@ -1,0 +1,25 @@
+# 05 — Monomer PDB + Packmol (4-mer) → PyCHARMM free_nve
+#
+#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/05_packmol_mix_pdb_monomer.yaml
+#   bash examples/md_system_from_pdb/05_packmol_mix_pdb_monomer.sh
+#
+# Solute + solvent mix (edit composition):
+#   composition: "/path/to/solute.pdb:1,DCM:20"
+#   setup: pbc_nvt
+#   box_size: 28.0
+#   md_stages: "mini"
+
+setup: free_nve
+backend: pycharmm
+composition: "mmml/generate/sample/pdb/aco_monomer.pdb:4"
+checkpoint: examples/ckpts_json/DESdimers_params.json
+packmol_radius: 15.0
+flat_bottom_radius: 12.0
+ps: 0.1
+dt_fs: 0.5
+mini_nstep: 20
+fix_resids: "1"
+skip_energy_show: true
+quiet: true
+output_dir: artifacts/md_system_from_pdb/05_packmol_4mer
+seed: 42

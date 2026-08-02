@@ -1,0 +1,62 @@
+# Native PyCHARMM (no jax_mm_spoof) counterparts to the jaxmd CGenFF spoof smokes.
+#
+# Same compositions / ensembles / lengths as config.yaml, but backend=pycharmm
+# so energies come from CHARMM rather than the JAX CGenFF bonded clone.
+#
+# From mmml_cursor:
+#   bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all_native.sh
+#   python workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py
+
+output_root: artifacts/jaxmd_cgenff_spoof_smoke_native_charmm
+checkpoint: examples/ckpts_json/DESdimers_params.json
+
+defaults:
+  backend: pycharmm
+  jax_mm_spoof: false
+  include_mm: true
+  # Match vacuum / MIC PBC hybrid defaults (not periodic_external/Ewald).
+  mm_nonbond_mode: jax_mic
+  lr_solver: mic
+  dt_fs: 0.5
+  temperature: 300.0
+  pressure: 1.0
+  seed: 20260730
+  spacing: 5.0
+  packmol_tolerance: 1.0
+  mm_switch_on: 8.0
+  mm_switch_width: 4.0
+  ml_switch_width: 1.0
+  ml_batch_size: 64
+  ml_compute_dtype: float64
+  steps_per_recording: 20
+  no_echeck: true
+  quiet: false
+
+jobs:
+  dcm_vac_nve:
+    description: "DCM:4 vacuum NVE — native PyCHARMM hybrid (PhysNet+MM)"
+    composition: "DCM:4"
+    setup: free_nve
+    ps: 0.05
+    box_size: 20.0
+
+  dcm_pbc_nve:
+    description: "DCM:4 PBC NVE — native PyCHARMM hybrid (PhysNet+MM)"
+    composition: "DCM:4"
+    setup: pbc_nve
+    ps: 0.05
+    box_size: 18.0
+
+  aco_vac_nve:
+    description: "ACO:4 vacuum NVE — native PyCHARMM hybrid (PhysNet+MM)"
+    composition: "ACO:4"
+    setup: free_nve
+    ps: 0.05
+    box_size: 22.0
+
+  aco_pbc_nve:
+    description: "ACO:4 PBC NVE — native PyCHARMM hybrid (PhysNet+MM)"
+    composition: "ACO:4"
+    setup: pbc_nve
+    ps: 0.05
+    box_size: 20.0

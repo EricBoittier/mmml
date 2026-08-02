@@ -21,6 +21,19 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 PathLike = str | Path
 
 
+def _reinstall_adumb_rxncor_walls_from_ctx(ctx: MlpotContext | None) -> None:
+    if ctx is None:
+        return
+    wf = getattr(ctx, "workflow_args", None)
+    if wf is None:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        reinstall_adumb_rxncor_walls_from_workflow_args,
+    )
+
+    reinstall_adumb_rxncor_walls_from_workflow_args(wf)
+
+
 def write_overlap_recovery_trace(
     ctx: MlpotContext,
     *,
@@ -339,7 +352,14 @@ def restore_charmm_state_from_restart(
 
 
 def restore_charmm_state_from_crd(crd_path: PathLike) -> None:
-    """Load coordinates from a CHARMM CRD card into memory."""
+    """Load coordinates from a CHARMM CRD card into memory.
+
+    CRD cards are geometry-only: clear leftover CHARMM / COMP velocities so
+    monomer-health preflight does not treat prior fly-off ``|v|`` as current.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import load_minimized_coordinates
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
@@ -350,6 +370,7 @@ def restore_charmm_state_from_crd(crd_path: PathLike) -> None:
     pos = get_charmm_positions_array()
     if pos is None or not np.all(np.isfinite(pos)):
         raise RuntimeError(f"CRD {path.name} did not yield finite CHARMM coordinates")
+    sync_charmm_velocities_akma(np.zeros((int(pos.shape[0]), 3), dtype=np.float64))
 
 
 def charmm_memory_coordinates_usable() -> bool:
@@ -525,7 +546,19 @@ def _run_mlpot_recovery_mini(
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_adumb_rxncor_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
+
+    # All-ML PBC liquid: never MLpot SD polish after geometry rescue. Restored
+    # mini/baseline (or selective template) geometry + cold start only — SD can
+    # re-crush O–H with no CHARMM bonded topology (seen mid-heat).
+    if _is_all_ml_pbc_context(ctx) and bool(getattr(ctx, "use_pbc", False)):
+        print(
+            f"{context}: skipping MLpot SD mini — keeping restored geometry for "
+            "cold start (all-ML PBC; MLpot SD polish disabled)",
+            flush=True,
+        )
+        return
 
     steps = max(1, int(nstep if nstep is not None else bonded_cfg.nstep_sd))
     if bonded_cfg.verbose:
@@ -534,7 +567,8 @@ def _run_mlpot_recovery_mini(
             abnr_txt = f", ABNR={int(nstep_abnr)}"
         print(f"{context}: MLpot SD mini ({steps} steps{abnr_txt})", flush=True)
     if clear_restraints:
-        clear_mmfp_restraints()
+        clear_adumb_rxncor_restraints()
+        _reinstall_adumb_rxncor_walls_from_ctx(ctx)
     minimize_with_mlpot(
         MinimizeWithMlpotConfig(
             nstep=steps,
@@ -628,7 +662,7 @@ def _run_all_ml_extent_recovery(
     positions: np.ndarray,
 ) -> None:
     """Fly-off recovery: restore prior coords, then bonded recovery + MLpot polish."""
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_adumb_rxncor_restraints
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     topo = getattr(config, "topology_psf", None) or getattr(ctx, "topology_psf_path", None)
@@ -643,9 +677,23 @@ def _run_all_ml_extent_recovery(
             f"(topology {Path(topo).name})",
             flush=True,
         )
-    sync_charmm_positions(np.asarray(positions, dtype=float))
-    clear_mmfp_restraints()
-    _maybe_run_per_monomer_bonded_jax_preflight(ctx, config, context="Fly-off recovery")
+    pos = np.asarray(positions, dtype=float)
+    sync_charmm_positions(pos)
+    # Geometry-only handoff: drop fly-off velocities before health preflight.
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        sync_charmm_velocities_akma,
+    )
+
+    sync_charmm_velocities_akma(np.zeros((int(pos.shape[0]), 3), dtype=np.float64))
+    if bonded_cfg.verbose:
+        print(
+            "Fly-off recovery: cleared velocities after geometry restore "
+            "(CRD/coords have no valid velocities; cold-start comes later)",
+            flush=True,
+        )
+    clear_adumb_rxncor_restraints()
+    _reinstall_adumb_rxncor_walls_from_ctx(ctx)
+    # Preflight runs once inside hybrid recovery (avoid duplicate 900-row dumps).
     _run_hybrid_bonded_mlpot_recovery(
         ctx,
         bonded_cfg,
@@ -905,6 +953,19 @@ def _run_all_ml_intra_overlap_rescue(
     bonded_cfg: BondedMmMiniConfig,
 ) -> None:
     """Intra-monomer rescue: preflight, then JAX bonded mini or legacy CHARMM BLOCK SD."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
+
+    # Belt-and-suspenders: all-ML PBC liquids must recover via template restore +
+    # mini/baseline checkpoint ladder + cold start (overlap_guard), never SD.
+    if (
+        bool(getattr(config, "use_pbc", False))
+        and bool(getattr(ctx, "use_pbc", False))
+        and _is_all_ml_pbc_context(ctx)
+    ):
+        raise RuntimeError(
+            "Intra overlap rescue: all-ML PBC refuses MLpot/bonded SD polish; "
+            "use template restore + 02_mini/baseline checkpoint ladder + cold start"
+        )
 
     _maybe_run_per_monomer_bonded_jax_preflight(
         ctx, config, context="Intra overlap rescue"
@@ -1062,11 +1123,17 @@ def finalize_overlap_rescue_for_dynamics(
     max_grms: float | None = None,
 ) -> float:
     """Re-register MLpot, optional SD polish, and hybrid GRMS gate before continuing MD."""
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        clear_calculator_mini_historical_best,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         refresh_mlpot_energy_and_grms,
         resolve_mlpot_grms_kcalmol_A,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _is_all_ml_pbc_context,
+        assert_mlpot_user_active,
+    )
 
     verbose = bool(getattr(getattr(config, "rescue", None), "verbose", False))
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -1074,6 +1141,17 @@ def finalize_overlap_rescue_for_dynamics(
         sync_charmm_lists_after_mini,
     )
 
+    all_ml_pbc = bool(
+        getattr(config, "use_pbc", False)
+        and getattr(ctx, "use_pbc", False)
+        and _is_all_ml_pbc_context(ctx)
+    )
+    # Mid-HEAT rescue must not roll back to pre-heat calculator mini geometry.
+    clear_calculator_mini_historical_best(ctx)
+    # Template / bonded rescue often lands on mini or baseline coordinates without
+    # usable velocities. Arm ASE Maxwell–Boltzmann + iasvel=1 for the next Bussi
+    # chunk (same as extent fly-off); otherwise iasvel=0 reads COMP as velocities.
+    setattr(ctx, "_overlap_post_rescue_cold_start", True)
     sync_charmm_lists_after_mini(quiet=True)
     write_overlap_recovery_trace(
         ctx,
@@ -1096,10 +1174,15 @@ def finalize_overlap_rescue_for_dynamics(
         context=context,
         evaluate=False,
     )
-
     mini_n = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
     if mini_n > 0:
-        if bool(getattr(ctx, "_overlap_extent_polish_mlpot_sd_done", False)):
+        if all_ml_pbc:
+            print(
+                f"{context}: skip post-rescue MLpot SD mini "
+                f"({mini_n} steps) — all-ML PBC cold start only",
+                flush=True,
+            )
+        elif bool(getattr(ctx, "_overlap_extent_polish_mlpot_sd_done", False)):
             if verbose:
                 print(
                     f"{context}: skip duplicate MLpot SD mini "
@@ -1137,6 +1220,15 @@ def finalize_overlap_rescue_for_dynamics(
         ctx,
         context=f"{context} post-rescue gate",
     )
+    if all_ml_pbc and grms > limit:
+        # Do not retry with MLpot SD; cold-start from restored geometry.
+        print(
+            f"WARN: {context}: post-rescue GRMS {grms:.4f} kcal/mol/Å > "
+            f"{float(limit):.4f}; continuing with cold start "
+            "(all-ML PBC; MLpot SD polish disabled)",
+            flush=True,
+        )
+        return grms
     if grms > limit:
         retry_factor = float(
             getattr(config, "post_rescue_grms_retry_factor", 3.0) or 3.0
@@ -1415,9 +1507,13 @@ def _run_heavy_bonded_recovery_check(
         )
     _reload_pre_mlpot_topology(ctx, topology_psf=path)
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+            clear_adumb_rxncor_restraints,
+            reinstall_adumb_rxncor_walls_from_workflow_args,
+        )
 
-        clear_mmfp_restraints()
+        clear_adumb_rxncor_restraints()
+        reinstall_adumb_rxncor_walls_from_workflow_args(args)
         current = _measure_current_mm_strain()
         always = bonded_mm_mini_always(args)
         if always:

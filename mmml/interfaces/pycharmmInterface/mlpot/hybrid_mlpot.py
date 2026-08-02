@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -54,14 +55,18 @@ class _CallbackPairListUnavailable(RuntimeError):
 def resolve_mm_pair_source(
     args: Any | None = None,
     *,
-    all_ml_pbc_jax_mic: bool = False,
+    all_ml_jax_mic: bool = False,
+    all_ml_pbc_jax_mic: bool | None = None,
 ) -> MmPairSource:
     """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback).
 
     Default is ``charmm_callback`` (Fortran ``idxu/idxv`` primary pairs). All-ML
-    bulk systems with empty callback lists fall back to JAX rebuild automatically.
+    ``jax_mic`` hybrids (vacuum or PBC) zero CHARMM ELEC/VDW via energy policy, so
+    the Fortran primary list is empty — those runs default to JAX neighbor rebuild.
     Set ``MMML_MM_PAIR_SOURCE=jax`` or ``--mm-pair-source jax`` to force Vesin/cell-list.
     """
+    if all_ml_pbc_jax_mic is not None:
+        all_ml_jax_mic = bool(all_ml_pbc_jax_mic) or bool(all_ml_jax_mic)
     if args is not None:
         src = getattr(args, "mm_pair_source", None)
         if src is not None:
@@ -80,7 +85,7 @@ def resolve_mm_pair_source(
         raise ValueError(
             f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
         )
-    if all_ml_pbc_jax_mic:
+    if all_ml_jax_mic:
         return "jax"
     return _DEFAULT_MM_PAIR_SOURCE
 
@@ -168,17 +173,22 @@ class DecomposedMlpotCalculator:
         get_update_fn: Any | None = None,
         ml_compute_dtype: str | None = None,
         *,
+        do_ml: bool = True,
+        do_ml_dimer: bool = True,
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
         periodic_mm_config: Any | None = None,
         mm_pair_source: MmPairSource = _DEFAULT_MM_PAIR_SOURCE,
         mm_r_min: float | None = None,
         mm_pair_capacity_hint: int | None = None,
+        ml_atom_indices: Sequence[int] | np.ndarray | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
         self.n_monomers = int(n_monomers)
         self.do_mm = bool(do_mm)
+        self.do_ml = bool(do_ml)
+        self.do_ml_dimer = bool(do_ml_dimer)
         self._periodic_mm_config = periodic_mm_config
         self._get_update_fn = get_update_fn
         self._ml_compute_dtype = ml_compute_dtype
@@ -191,6 +201,10 @@ class DecomposedMlpotCalculator:
         self.atomic_numbers = np.asarray(
             physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
         )
+        if ml_atom_indices is None:
+            self._ml_atom_indices: np.ndarray | None = None
+        else:
+            self._ml_atom_indices = np.asarray(ml_atom_indices, dtype=int).reshape(-1)
         self.ev2kcal = float(ev2kcalmol)
         self._cell = float(cell) if cell else False
         self.last_ml_forces: np.ndarray | None = None
@@ -206,6 +220,41 @@ class DecomposedMlpotCalculator:
     def _mm_pair_pad_capacity(self) -> int:
         cap = getattr(self, "_mm_pair_capacity", None)
         return max(int(cap), 1) if cap is not None else 1
+
+    def _resolve_ml_callback_slice(self, n_charmm: int) -> np.ndarray:
+        """PSF indices of the ML region for this callback (all-ML → ``0..n-1``).
+
+        Mechanical embedding registers a model sized to the ML solute only while
+        CHARMM still passes full-system coordinates (``Natom``). Without this
+        slice, the hybrid forward is evaluated on solvent atoms with the wrong
+        ``atoms_per_monomer`` layout and USER/GRMS explode.
+        """
+        expected = int(self.atomic_numbers.shape[0])
+        stored = getattr(self, "_ml_atom_indices", None)
+        if stored is not None:
+            ml_idx = np.asarray(stored, dtype=int).reshape(-1)
+        elif int(n_charmm) == expected:
+            ml_idx = np.arange(expected, dtype=int)
+        else:
+            raise RuntimeError(
+                f"Decomposed MLpot: CHARMM Natom={int(n_charmm)} != model "
+                f"n_ml={expected} and ml_atom_indices was not set. Partial ML "
+                "(ml_resnames) requires get_pycharmm_calculator(ml_atom_indices=...)."
+            )
+        if ml_idx.size != expected:
+            raise RuntimeError(
+                f"Decomposed MLpot: ml_atom_indices length {ml_idx.size} != "
+                f"model n_ml={expected}"
+            )
+        if ml_idx.size == 0:
+            raise RuntimeError("Decomposed MLpot: empty ml_atom_indices")
+        if int(ml_idx.min()) < 0 or int(ml_idx.max()) >= int(n_charmm):
+            raise RuntimeError(
+                f"Decomposed MLpot: ml_atom_indices out of range for "
+                f"Natom={int(n_charmm)} (min={int(ml_idx.min())}, "
+                f"max={int(ml_idx.max())})"
+            )
+        return ml_idx
 
     def _invalidate_forward_jit_cache(self) -> None:
         owner = self._grad_cache_owner()
@@ -300,6 +349,8 @@ class DecomposedMlpotCalculator:
             int(n_atoms),
             int(self.n_monomers),
             bool(self.do_mm),
+            bool(self.do_ml),
+            bool(self.do_ml_dimer),
             dtype,
             box_present,
             bool(self._spatial_mpi),
@@ -312,6 +363,8 @@ class DecomposedMlpotCalculator:
         cutoff_params = self.cutoff_params
         n_monomers = self.n_monomers
         do_mm = self.do_mm
+        do_ml = self.do_ml
+        do_ml_dimer = self.do_ml_dimer
 
         if box_present:
 
@@ -330,9 +383,9 @@ class DecomposedMlpotCalculator:
                     atomic_numbers=atomic_numbers_jax,
                     n_monomers=n_monomers,
                     cutoff_params=cutoff_params,
-                    doML=True,
+                    doML=do_ml,
                     doMM=do_mm,
-                    doML_dimer=True,
+                    doML_dimer=do_ml_dimer,
                     box=box,
                 )
                 if use_mm_pairs:
@@ -386,9 +439,9 @@ class DecomposedMlpotCalculator:
                     atomic_numbers=atomic_numbers_jax,
                     n_monomers=n_monomers,
                     cutoff_params=cutoff_params,
-                    doML=True,
+                    doML=do_ml,
                     doMM=do_mm,
-                    doML_dimer=True,
+                    doML_dimer=do_ml_dimer,
                 )
                 if use_mm_pairs:
                     kwargs["mm_pair_idx"] = mm_pair_idx
@@ -584,8 +637,11 @@ class DecomposedMlpotCalculator:
         idxvp,
     ) -> float:
         n = int(Natom)
-        pos = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
-        pos = self._maybe_rewrap_primary_cell_in_callback(pos, n, x, y, z)
+        pos_full = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
+        pos_full = self._maybe_rewrap_primary_cell_in_callback(pos_full, n, x, y, z)
+        ml_idx = self._resolve_ml_callback_slice(n)
+        n_ml = int(ml_idx.size)
+        pos = pos_full[ml_idx]
         box = None
         if self._cell or self._requires_callback_pbc_box():
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -620,7 +676,7 @@ class DecomposedMlpotCalculator:
 
         run_ml = mlpot_runs_on_this_rank()
         e_kcal = 0.0
-        forces = np.zeros((n, 3), dtype=np.float64)
+        forces_ml = np.zeros((n_ml, 3), dtype=np.float64)
         mm_pair_idx = None
         mm_pair_mask = None
         use_mm_pairs = False
@@ -640,7 +696,7 @@ class DecomposedMlpotCalculator:
                                 idxv,
                                 idxup,
                                 idxvp,
-                                natom=n,
+                                natom=n_ml,
                                 nmlmmp=int(Nmlmmp),
                                 pos=pos,
                                 box=box,
@@ -668,9 +724,9 @@ class DecomposedMlpotCalculator:
                     pos,
                     dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
                 )
-                atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
+                atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n_ml])
                 forward_fn = self._get_spherical_forward_fn(
-                    n_atoms=n,
+                    n_atoms=n_ml,
                     atomic_numbers_jax=atomic_numbers_jax,
                     box_jax=box,
                 )
@@ -709,7 +765,11 @@ class DecomposedMlpotCalculator:
                 e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
                 forces_ev = jnp.where(jnp.isfinite(forces_ev), forces_ev, 0.0)
                 e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
-                forces = np.asarray(jax.device_get(forces_ev), dtype=np.float64) * self.ev2kcal
+                forces_ml = (
+                    np.asarray(jax.device_get(forces_ev), dtype=np.float64) * self.ev2kcal
+                )
+                forces = np.zeros((n, 3), dtype=np.float64)
+                forces[ml_idx] = forces_ml
                 self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
                 parent = getattr(self, "_parent_model", None)
                 if parent is not None:
@@ -727,6 +787,8 @@ class DecomposedMlpotCalculator:
             parent = getattr(self, "_parent_model", None)
             if parent is not None:
                 parent._maybe_promote_deferred_jax_on_hybrid_eval(self)
+        else:
+            forces = np.zeros((n, 3), dtype=np.float64)
         forces, e_kcal = broadcast_mlpot_result(forces, e_kcal, n)
         self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
         parent = getattr(self, "_parent_model", None)
@@ -739,16 +801,26 @@ class DecomposedMlpotCalculator:
             from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
                 add_periodic_coulomb_to_callback,
             )
+            from mmml.interfaces.pycharmmInterface.nl_reference import (
+                monomer_id_from_offsets,
+            )
 
             side = float(self._cell)
+            offsets = _monomer_offsets_from_atoms_per_monomer(self._atoms_per_monomer)
+            mid = monomer_id_from_offsets(offsets, int(n_ml))
             try:
-                e_kcal, forces = add_periodic_coulomb_to_callback(
+                e_ml, forces_ml_cb = add_periodic_coulomb_to_callback(
                     pos,
                     box_side_A=side,
                     cfg=periodic_cfg,
                     energy_kcal=float(e_kcal),
-                    forces_kcal=np.asarray(forces, dtype=np.float64),
+                    forces_kcal=np.asarray(forces[ml_idx], dtype=np.float64),
+                    mol_id=mid,
+                    n_monomers=int(self.n_monomers),
                 )
+                e_kcal = float(e_ml)
+                forces = np.asarray(forces, dtype=np.float64, copy=True)
+                forces[ml_idx] = np.asarray(forces_ml_cb, dtype=np.float64)
             except Exception as exc:
                 # ScaFaCoS/MPI failures inside the CHARMM callback must not zero the
                 # whole USER term (ML energy was already computed above).
@@ -794,10 +866,16 @@ class _DeferredDecomposedMlpotCalculator:
         model: "DecomposedMlpotModel",
         *,
         ml_atomic_numbers: np.ndarray | None = None,
+        ml_atom_indices: Sequence[int] | np.ndarray | None = None,
     ) -> None:
         self._model = model
         self._ml_atomic_numbers = (
             None if ml_atomic_numbers is None else np.asarray(ml_atomic_numbers, dtype=int)
+        )
+        self._ml_atom_indices = (
+            None
+            if ml_atom_indices is None
+            else np.asarray(ml_atom_indices, dtype=int).reshape(-1)
         )
         self._real: DecomposedMlpotCalculator | None = None
 
@@ -819,6 +897,7 @@ class _DeferredDecomposedMlpotCalculator:
             return self._real
         self._real = self._model._build_registered_calculator(
             ml_atomic_numbers=self._ml_atomic_numbers,
+            ml_atom_indices=self._ml_atom_indices,
         )
         return self._real
 
@@ -871,6 +950,7 @@ class DecomposedMlpotModel:
         self._charmm_mlpot_sd_active = 0
         self._jax_on_gpu = spherical_fn is not None
         self._registered_calculator: DecomposedMlpotCalculator | None = None
+        self._ml_atom_indices: np.ndarray | None = None
         if atoms_per_monomer is None:
             apm = max(1, len(self._atomic_numbers) // max(1, int(n_monomers)))
             self._atoms_per_monomer = [apm] * int(n_monomers)
@@ -929,14 +1009,26 @@ class DecomposedMlpotModel:
             jax_compile_threads_context,
         )
         from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+            jax_cpu_backend_available,
             jax_cpu_until_mlpot_registered,
+            mlpot_device_context_fell_back_to_cpu,
             mlpot_jax_device_context,
             mlpot_jax_device_name,
+            reset_mlpot_device_fallback_flag,
         )
 
         cpu_only = not gpu and (
             self._defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
         )
+        if cpu_only and not jax_cpu_backend_available():
+            if self._verbose:
+                print(
+                    "Decomposed MLpot: CPU defer requested but JAX CPU backend is "
+                    "unavailable (jax likely imported with GPU-only platforms); "
+                    "compiling on GPU instead",
+                    flush=True,
+                )
+            cpu_only = False
 
         with jax_compile_threads_context():
             if not cpu_only:
@@ -959,6 +1051,8 @@ class DecomposedMlpotModel:
                     "(MPI defer path; ignoring registration-time CPU env)",
                     flush=True,
                 )
+            if not cpu_only:
+                reset_mlpot_device_fallback_flag()
             with device_ctx():
                 _, spherical_fn, get_update_fn = unpack_factory_result(
                     self._pending_factory(
@@ -976,7 +1070,14 @@ class DecomposedMlpotModel:
         self._spherical_fn = spherical_fn
         if self._do_mm:
             self._get_update_fn = get_update_fn
-        self._jax_on_gpu = not cpu_only
+        # Track the device actually used, not the request: mlpot_jax_device_context
+        # silently fell back to CPU when GPU was requested but unavailable (see its
+        # docstring), so `not cpu_only` alone previously left `_jax_on_gpu=True` while
+        # the compute ran on CPU (the "promoted to GPU" message with 0% nvidia-smi
+        # utilization bug this fixes). `reset_mlpot_device_fallback_flag` right before
+        # `device_ctx()` means a test-mocked `mlpot_jax_device_context` (which never
+        # touches the flag) is correctly read as "no fallback".
+        self._jax_on_gpu = (not cpu_only) and not mlpot_device_context_fell_back_to_cpu()
         if not cpu_only:
             self._pending_factory = None
             self._pending_factory_z = None
@@ -1086,12 +1187,15 @@ class DecomposedMlpotModel:
         self,
         *,
         ml_atomic_numbers: np.ndarray | None = None,
+        ml_atom_indices: Sequence[int] | np.ndarray | None = None,
     ) -> DecomposedMlpotCalculator:
         self._finalize_jax_factory()
         if ml_atomic_numbers is not None:
             z = np.asarray(ml_atomic_numbers, dtype=int)
         else:
             z = self._atomic_numbers
+        if ml_atom_indices is None:
+            ml_atom_indices = getattr(self, "_ml_atom_indices", None)
         calc = DecomposedMlpotCalculator(
             self._spherical_fn,
             self._cutoff_params,
@@ -1099,6 +1203,8 @@ class DecomposedMlpotModel:
             z,
             cell=self._cell,
             do_mm=self._do_mm,
+            do_ml=self._pending_do_ml,
+            do_ml_dimer=self._pending_do_ml_dimer,
             get_update_fn=self._get_update_fn,
             ml_compute_dtype=self._ml_compute_dtype,
             spatial_mpi=self._spatial_mpi,
@@ -1107,12 +1213,15 @@ class DecomposedMlpotModel:
             mm_pair_source=self._mm_pair_source,
             mm_r_min=self._mm_r_min,
             mm_pair_capacity_hint=self._mm_pair_capacity_hint,
+            ml_atom_indices=ml_atom_indices,
         )
         calc._parent_model = self
         self._registered_calculator = calc
         return calc
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
+        if ml_atom_indices is not None:
+            self._ml_atom_indices = np.asarray(ml_atom_indices, dtype=int).reshape(-1)
         if self._spherical_fn is None and self._pending_factory is not None:
             if self._defer_jax_until_mlpot_registered:
                 if self._defer_jax_until_after_sd:
@@ -1121,19 +1230,25 @@ class DecomposedMlpotModel:
                     deferred = _DeferredDecomposedMlpotCalculator(
                         self,
                         ml_atomic_numbers=ml_atomic_numbers,
+                        ml_atom_indices=getattr(self, "_ml_atom_indices", None),
                     )
                     self._registered_calculator = deferred
                     return deferred
                 return self._build_registered_calculator(
-                    ml_atomic_numbers=ml_atomic_numbers
+                    ml_atomic_numbers=ml_atomic_numbers,
+                    ml_atom_indices=getattr(self, "_ml_atom_indices", None),
                 )
             deferred = _DeferredDecomposedMlpotCalculator(
                 self,
                 ml_atomic_numbers=ml_atomic_numbers,
+                ml_atom_indices=getattr(self, "_ml_atom_indices", None),
             )
             self._registered_calculator = deferred
             return deferred
-        return self._build_registered_calculator(ml_atomic_numbers=ml_atomic_numbers)
+        return self._build_registered_calculator(
+            ml_atomic_numbers=ml_atomic_numbers,
+            ml_atom_indices=getattr(self, "_ml_atom_indices", None),
+        )
 
 
 def build_decomposed_mlpot_model(
@@ -1154,15 +1269,22 @@ def build_decomposed_mlpot_model(
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel:
     from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import jax_mm_spoof_enabled
+    from mmml.models.kernnn import is_kernnn_checkpoint
 
     _spoof = jax_mm_spoof_enabled(args)
+    _ckpt_probe = Path(checkpoint).expanduser() if checkpoint is not None else None
+    if args is not None and getattr(args, "model_restart_path", None) is not None:
+        _ckpt_probe = Path(getattr(args, "model_restart_path")).expanduser()
+    _kernnn = bool(_ckpt_probe) and is_kernnn_checkpoint(_ckpt_probe)
+    _ml_mode = "jax_mm_clone" if _spoof else ("kernnn" if _kernnn else "physnet")
     if _spoof:
         ckpt = Path("/dev/null")
     else:
         ckpt = Path(checkpoint).expanduser().resolve()
-        from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
+        if not _kernnn:
+            from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
 
-        assert_hybrid_ml_compatible(ckpt)
+            assert_hybrid_ml_compatible(ckpt)
     if args is not None and ml_compute_dtype is None:
         ml_compute_dtype = getattr(args, "ml_compute_dtype", None)
     cutoff_params = (
@@ -1187,11 +1309,25 @@ def build_decomposed_mlpot_model(
 
     n_dimers_total = int(n_monomers) * (int(n_monomers) - 1) // 2
     free_space = cell is False or cell is None
+    _box_volume = None
+    _active_radius = None
+    if not free_space and cell is not None:
+        try:
+            side = float(cell)
+            if side > 0.0:
+                _box_volume = side**3
+                _active_radius = float(cutoff_params.mm_switch_on) + float(
+                    cutoff_params.ml_switch_width
+                )
+        except (TypeError, ValueError):
+            pass
     dimer_cap = resolve_max_active_dimers(
         int(n_monomers),
         n_dimers_total,
         ml_max_active_dimers,
         free_space=free_space,
+        box_volume=_box_volume,
+        active_radius=_active_radius,
     )
     max_pairs = None
     if args is not None:
@@ -1259,10 +1395,34 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
             flush=True,
         )
-    do_ml = True
+    do_ml = True if args is None else bool(getattr(args, "do_ml", True))
     include_mm = True if args is None else bool(getattr(args, "include_mm", True))
     do_mm = include_mm and not periodic_mode
-    do_ml_dimer = True
+    periodic_external_scales: Path | None = None
+
+    # periodic_external takes its VDW from CHARMM IMAGE, so `do_mm` is False and
+    # the JAX pair loop that applies per-type LJ scales never runs. Trained
+    # scales therefore have to reach the energy through CHARMM's parameters.
+    # See scaled_cgenff_prm: this is exact (per-type, pre-combining), and it is
+    # a once-per-session operation -- re-deploying is a guarded no-op, and a
+    # different sidecar raises rather than silently zeroing the VDW.
+    if periodic_mode and include_mm and args is not None:
+        from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
+
+        scales_file = getattr(args, "mm_lj_scales_file", None)
+        periodic_external_scales = find_learnable_lj_scales_sidecar(
+            scales_file=scales_file,
+            checkpoint=None if _spoof else ckpt,
+        )
+        if periodic_external_scales is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
+                deploy_scaled_lj_into_charmm,
+            )
+
+            deploy_scaled_lj_into_charmm(periodic_external_scales, verbose=verbose)
+    do_ml_dimer = True if args is None else bool(getattr(args, "do_ml_dimer", True))
+    if args is not None and bool(getattr(args, "skip_ml_dimers", False)):
+        do_ml_dimer = False
     if verbose and periodic_mm_config is not None and cell:
         print(
             periodic_mm_status_line(periodic_mm_config, box_side_A=float(cell)),
@@ -1337,11 +1497,12 @@ def build_decomposed_mlpot_model(
             f"r^-6 dispersion={disp_text} when lr_solver=jax_pme)",
             flush=True,
         )
+    # Energy policy zeroes CHARMM ELEC/VDW on ML atoms for jax_mic hybrids, so
+    # Fortran primary lists are empty in vacuum and PBC — use JAX pairs.
     mm_pair_source = resolve_mm_pair_source(
         args,
-        all_ml_pbc_jax_mic=(
-            bool(cell)
-            and bool(do_mm)
+        all_ml_jax_mic=(
+            bool(do_mm)
             and int(n_monomers) > 1
             and str(mm_nonbond_mode) == "jax_mic"
         ),
@@ -1350,7 +1511,7 @@ def build_decomposed_mlpot_model(
     if verbose and mm_pair_source == "jax":
         print(
             "Decomposed MLpot: mm_pair_source=jax "
-            "(all-ML/PBC JAX-MIC; CHARMM callback lists are fully excluded)",
+            "(all-ML jax_mic; CHARMM callback lists are fully excluded)",
             flush=True,
         )
     if verbose and mm_pair_source == "charmm_callback":
@@ -1359,6 +1520,92 @@ def build_decomposed_mlpot_model(
             "(Fortran idxu/idxv primary pairs for parity diagnostics)",
             flush=True,
         )
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
+
+    # Only pin setup_calculator onto CPU when we intentionally defer GPU work.
+    # Default GPU runs used to always pass defer_xla_gpu_warmup=True, which
+    # called jax_cpu_until_mlpot_registered during Orbax restore and spammed
+    # "CPU backend is not registered" whenever jax had already initialized
+    # CUDA-only — while PhysNet still belonged on GPU.
+    _cpu_load = defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
+    ep_scale = None
+    sig_scale = None
+    scales_file = getattr(args, "mm_lj_scales_file", None) if args is not None else None
+    if args is not None and do_mm:
+        from mmml.models.mm_lj_scales import resolve_md_lj_scales
+
+        try:
+            ep_scale, sig_scale = resolve_md_lj_scales(
+                scales_file=scales_file,
+                checkpoint=None if _spoof else ckpt,
+            )
+        except Exception as exc:
+            if scales_file is not None:
+                raise
+            if verbose:
+                print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
+        if verbose and ep_scale is not None:
+            print(
+                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+                f"from hybrid_mm.json / --mm-lj-scales-file",
+                flush=True,
+            )
+    elif args is not None and periodic_external_scales is None:
+        # doMM off without a successful CHARMM deployment: ep_scale/sig_scale
+        # feed the JAX switched-MM pair loop only. Applying nothing while the
+        # user believes trained LJ is active is a silent-wrong-results failure,
+        # so say so loudly for an explicit request and warn for auto-discovery.
+        from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
+
+        found = None
+        try:
+            found = find_learnable_lj_scales_sidecar(
+                scales_file=scales_file,
+                checkpoint=None if _spoof else ckpt,
+            )
+        except Exception:  # pragma: no cover - discovery must never break setup
+            found = None
+        mode_note = (
+            f"mm_nonbond_mode={mm_nonbond_mode!r}"
+            if str(mm_nonbond_mode) == "periodic_external"
+            else f"include_mm=false, mm_nonbond_mode={mm_nonbond_mode!r}"
+        )
+        if scales_file is not None:
+            raise ValueError(
+                f"--mm-lj-scales-file={scales_file} was given but no LJ backend "
+                "can consume it "
+                f"({mode_note}), so per-type LJ scales cannot be applied: the "
+                "JAX switched-MM pair loop is disabled and CHARMM parameter "
+                "deployment requires --include-mm with periodic_external. Use "
+                "--include-mm, or drop --mm-lj-scales-file to run without the "
+                "trained LJ correction. "
+                "See docs/hybrid-mm-lj-scales.md."
+            )
+        if found is not None:
+            print(
+                f"mmml WARNING: {found} carries trained MM LJ scales but JAX MM "
+                f"is off ({mode_note}) — they are NOT applied. Use --include-mm "
+                "to deploy them through the selected LJ backend. See "
+                "docs/hybrid-mm-lj-scales.md.",
+                file=sys.stderr,
+                flush=True,
+            )
+    # Native ewald doMM: optional switched LJ beside untapered Coulomb (#139).
+    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+
+    _ewald_include_lj = False
+    if do_mm and pick_lr_solver(lr_solver) == "ewald":
+        _flag = getattr(args, "mm_include_lj", None) if args is not None else None
+        if _flag is None:
+            _ewald_include_lj = ep_scale is not None
+        else:
+            _ewald_include_lj = bool(_flag)
+        if verbose:
+            print(
+                f"Decomposed MLpot: lr_solver=ewald include_lj={_ewald_include_lj} "
+                f"(COM-switched LJ beside untapered full-box Coulomb)",
+                flush=True,
+            )
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -1367,6 +1614,8 @@ def build_decomposed_mlpot_model(
         doML=do_ml,
         doML_dimer=do_ml_dimer,
         verbose=verbose,
+        ep_scale=ep_scale,
+        sig_scale=sig_scale,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
         ml_gpu_count=gpu_count,
@@ -1374,7 +1623,7 @@ def build_decomposed_mlpot_model(
         cell=cell,
         max_pairs=max_pairs,
         ml_compute_dtype=ml_compute_dtype,
-        defer_xla_gpu_warmup=defer_jax_until_mlpot_registered,
+        defer_xla_gpu_warmup=_cpu_load and defer_jax_until_mlpot_registered,
         ml_switch_width=cutoff_params.ml_switch_width,
         mm_switch_on=cutoff_params.mm_switch_on,
         mm_switch_width=cutoff_params.mm_switch_width,
@@ -1406,11 +1655,22 @@ def build_decomposed_mlpot_model(
         jax_pme_method=jax_pme_method,
         jax_pme_sr_cutoff_A=jax_pme_sr_cutoff,
         jax_pme_dispersion=jax_pme_dispersion,
+        ewald_include_self=(
+            not bool(getattr(args, "ewald_omit_self", False))
+            if args is not None
+            else True
+        ),
+        ewald_include_intra=(
+            not bool(getattr(args, "ewald_omit_self", False))
+            if args is not None
+            else True
+        ),
+        include_lj=_ewald_include_lj,
         mm_nonbond_mode=mm_nonbond_mode,
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True
         ),
-        ml_potential_mode="jax_mm_clone" if _spoof else "physnet",
+        ml_potential_mode=_ml_mode,
         jax_mm_spoof_psf=(
             getattr(args, "jax_mm_spoof_psf", None) if args is not None else None
         ),
@@ -1473,6 +1733,8 @@ def build_decomposed_mlpot_model(
         do_mm=do_mm,
         get_update_fn=get_update_fn if do_mm else None,
         ml_compute_dtype=ml_compute_dtype,
+        pending_do_ml=do_ml,
+        pending_do_ml_dimer=do_ml_dimer,
         spatial_mpi=spatial_mpi,
         atoms_per_monomer=per,
         periodic_mm_config=periodic_mm_config,

@@ -425,18 +425,48 @@ def iter_device_batches(
     n_devices: int,
     rng: np.random.Generator,
     shuffle_pad_buckets: bool = False,
+    max_batches_per_bucket_visit: int | None = None,
 ) -> Iterator[tuple[int, np.ndarray]]:
     """Yield ``(pad_atoms, device_indices)`` with shape ``(n_devices, B)``.
 
     Pad widths are sorted (large→small) by default so each shape is trained in
     a block; shuffling pads interleaves compiles and fragments GPU memory.
     Indices *within* a pad bucket are always shuffled.
+
+    ``max_batches_per_bucket_visit``, if set, bounds how many consecutive
+    batches are drawn from one bucket before moving on to the next, cycling
+    back to any bucket with leftover batches once every other bucket has had
+    its turn (round-robin), instead of fully draining one bucket before
+    starting the next.
+
+    Without this bound, bucket *visit order* being shuffled does not bound
+    bucket *visit duration*: a single disproportionately large bucket (e.g.
+    one atom-count bin holding a large majority of the training pool) can
+    still monopolize well over a million consecutive optimizer steps once
+    it's picked, giving zero gradient signal from every other structure
+    population (composites, other sizes) for that whole stretch. Observed in
+    practice: two checkpoints saved back-to-back while stuck in one such
+    bucket for >1M steps both showed broad eval regressions across nearly
+    every test set relative to a checkpoint saved before that bucket became
+    active, then recovered once training moved on -- consistent with drift
+    from prolonged single-population training, not a real capability loss.
+
+    This still switches the active compiled shape only at bucket-visit
+    boundaries (same cost profile as the unbounded version), but a small
+    bound means more total switches over an epoch (each bucket may be
+    revisited many times to fully drain it) -- shape recompilation is paid
+    per switch (`_activate_shape` evicts the previous compiled executable to
+    avoid multi-GPU OOM), so this trades some extra compile overhead for
+    bounding cross-population staleness. Choose a bound large enough that
+    this overhead stays small relative to an epoch's total step count.
     """
     bucket_keys = list(buckets)
     if shuffle_pad_buckets:
         rng.shuffle(bucket_keys)
     else:
         bucket_keys = sorted(bucket_keys, reverse=True)
+
+    per_bucket_chunks: dict[int, list[np.ndarray]] = {}
     for pad_atoms in bucket_keys:
         bucket_batch_size = int(batch_sizes[pad_atoms])
         if bucket_batch_size < 1:
@@ -445,9 +475,34 @@ def iter_device_batches(
         indices = buckets[pad_atoms].copy()
         rng.shuffle(indices)
         usable = (len(indices) // global_batch) * global_batch
-        for start in range(0, usable, global_batch):
-            chunk = indices[start : start + global_batch]
-            yield pad_atoms, chunk.reshape(n_devices, bucket_batch_size)
+        chunks = [
+            indices[start : start + global_batch].reshape(n_devices, bucket_batch_size)
+            for start in range(0, usable, global_batch)
+        ]
+        if chunks:
+            per_bucket_chunks[pad_atoms] = chunks
+
+    if max_batches_per_bucket_visit is None:
+        for pad_atoms in bucket_keys:
+            for chunk in per_bucket_chunks.get(pad_atoms, []):
+                yield pad_atoms, chunk
+        return
+
+    cursors = {pad_atoms: 0 for pad_atoms in per_bucket_chunks}
+    remaining = set(per_bucket_chunks)
+    while remaining:
+        order = list(remaining)
+        if shuffle_pad_buckets:
+            rng.shuffle(order)
+        for pad_atoms in order:
+            chunks = per_bucket_chunks[pad_atoms]
+            start = cursors[pad_atoms]
+            end = min(start + max_batches_per_bucket_visit, len(chunks))
+            for chunk in chunks[start:end]:
+                yield pad_atoms, chunk
+            cursors[pad_atoms] = end
+            if end >= len(chunks):
+                remaining.discard(pad_atoms)
 
 
 def stack_device_batches(
@@ -582,6 +637,10 @@ def probe_max_batch_size(
     (seen: ``Acquire clique`` wait after B=4 OOM while B=3 is tried).
 
     Starts at ``start_batch`` (pair-budget heuristic) and grows upward.
+
+    Returns 0 if not even batch size 1 fits in device memory for this
+    ``pad_atoms`` -- callers must treat that as "this pad width cannot be
+    trained on this hardware," not silently floor it back up to 1.
     """
     max_batch = max(1, int(max_batch))
     start_batch = max(1, min(max_batch, int(start_batch)))
@@ -625,11 +684,19 @@ def probe_max_batch_size(
                 hi = mid - 1
         return best
 
-    # Establish a feasible floor at/below start_batch.
+    # Establish a feasible floor at/below start_batch. `best=0` here is a
+    # genuine "nothing verified yet" sentinel, not a batch size -- if no
+    # size in [1, start_batch) fits either (including the start_batch==1
+    # case, where the search range is empty), 0 propagates out to signal
+    # this pad width doesn't fit at any batch size on this hardware. A
+    # previous version of this function passed `best=1` here, which meant
+    # an empty search range silently returned an UNVERIFIED "1" even when
+    # _try(1) itself had just OOM'd -- the failure was deferred to the
+    # first real training step on that bucket instead of being caught here.
     if _try(start_batch):
         best = start_batch
     else:
-        return _search(1, start_batch - 1, 1)
+        return _search(1, start_batch - 1, 0)
 
     # Grow upward from the floor toward max_batch.
     trial = min(max_batch, max(best + 1, best * 2))
@@ -703,7 +770,24 @@ def resolve_batch_sizes(
             steps_for_batch_size=steps_for_batch_size,
             state=state,
         )
-        sizes[pad_atoms] = max(1, probed)
+        if probed < 1:
+            # Do not silently floor to 1 -- probe_max_batch_size returning 0
+            # means even batch size 1 OOM'd, so this pad width cannot be
+            # trained at all with the current model/hardware/memory budget.
+            # Failing here (seconds into probing) instead of deferring to
+            # the first real training step on this bucket (potentially
+            # hours later, mid-epoch) is the whole point of probing.
+            raise RuntimeError(
+                f"pad_atoms={pad_atoms}: no batch size (not even 1) fits in "
+                "device memory during auto-batch probing. This structure "
+                "size cannot be trained with the current model/hardware "
+                "memory budget. For far-field composite structures, lower "
+                "--far-field-max-k and/or set --far-field-max-fragment-atoms "
+                "to keep composites within a size that fits; otherwise "
+                "reduce --features/--num-basis-functions or free more GPU "
+                "memory."
+            )
+        sizes[pad_atoms] = probed
         committed_bsz.add(sizes[pad_atoms])
         print(
             f"  auto-batch pad_atoms={pad_atoms}: B/device={sizes[pad_atoms]} "
@@ -844,6 +928,13 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
         electrostatics_damping_sigma=args.electrostatics_damping_sigma,
+        # Keep create_model usable from notebooks/tests and older campaign code
+        # whose Namespace predates these CLI options.  These values are the
+        # historical model defaults and match the parser defaults below.
+        switch_start=getattr(args, "switch_start", 1.0),
+        switch_end=getattr(args, "switch_end", 10.0),
+        electrostatics_off_start=getattr(args, "electrostatics_off_start", 8.0),
+        electrostatics_off_end=getattr(args, "electrostatics_off_end", 10.0),
         # --fixed-cgenff-vdw pins the CGenFF LJ term at its published parameters, so it
         # acts as a fixed physical prior the network can only add to, never scale away.
         learn_cgenff_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
@@ -870,6 +961,8 @@ def make_steps(
     mbd_weight = args.mbd_weight
     multipole_consistency_weight = args.multipole_consistency_weight
     neural_interaction_l2 = args.neural_interaction_l2
+    far_field_charge_weight = args.far_field_charge_weight
+    far_field_max_k = args.far_field_max_k
     if (mbd_model is None) != (mbd_params is None):
         raise ValueError("mbd_model and mbd_params must be provided together")
     if mbd_params is not None:
@@ -950,6 +1043,7 @@ def make_steps(
         charge_mse = jnp.asarray(0.0)
         multipole_dipole_mae = jnp.asarray(0.0)
         multipole_dipole_mse = jnp.asarray(0.0)
+        far_field_charge_mse = jnp.asarray(0.0)
         if args.predict_charges:
             dipole_pred = out["dipoles"].reshape(batch["D"].shape)
             charge_pred = out["sum_charges"].reshape(batch["Q_total"].shape)
@@ -984,6 +1078,27 @@ def make_steps(
                 multipole_dipole_mse = jnp.mean((dipole_pred - multipole_dipole) ** 2)
                 multipole_dipole_mae = jnp.mean(jnp.abs(dipole_pred - multipole_dipole))
                 loss += multipole_consistency_weight * multipole_dipole_mse
+            if far_field_charge_weight > 0.0 and batch.get("mol_id") is not None:
+                # Auxiliary size-extensivity signal, active only on synthetic
+                # far-field composite structures (see
+                # far_field_augment.py / _per_fragment_charge_conservation_mse):
+                # penalise each FRAGMENT's own net charge deviating from 0,
+                # not just the whole structure's. This is what the eval-time
+                # post-hoc "enforce sum(q)=target" correction (used for
+                # diagnosis only, never fed back into gradients per the
+                # earlier decision that a hard in-model renormalization risks
+                # poisoning gradients) cannot reach: a whole-structure charge
+                # sum can look conserved by cancellation between fragments
+                # while individual fragments are still wrong.
+                far_field_charge_mse = _per_fragment_charge_conservation_mse(
+                    out["charges"].reshape(-1),
+                    batch["mol_id"],
+                    batch["atom_mask"],
+                    batch["batch_segments"],
+                    per_device_batch_size,
+                    far_field_max_k,
+                )
+                loss += far_field_charge_weight * far_field_charge_mse
         # Shrinkage of the neural *interaction* energy toward zero.
         #
         # The MM terms (CGenFF LJ + electrostatics) are a physical prior, but nothing
@@ -1079,6 +1194,14 @@ def make_steps(
             "mbd_scale": mbd_scale,
             "multipole_dipole_mae": multipole_dipole_mae,
             "multipole_dipole_mse": multipole_dipole_mse,
+            "far_field_charge_mse": far_field_charge_mse,
+            "far_field_charge_rms": jnp.sqrt(far_field_charge_mse + 1e-12),
+            # Real (unpadded) atom count, averaged over the structures in this
+            # batch -- printed alongside the loss/MAE metrics so a bucket's
+            # elevated values (e.g. multi-fragment far-field composites,
+            # whose whole-structure energy error naturally scales with
+            # fragment count) can be told apart from genuine regressions.
+            "avg_n_atoms": jnp.sum(batch["atom_mask"]) / per_device_batch_size,
         }
         return loss, metrics
 
@@ -1374,6 +1497,46 @@ def _per_structure(value: Any, batch_segments: jnp.ndarray, batch_size: int) -> 
     return flat.reshape(batch_size, -1).sum(axis=1, keepdims=True)
 
 
+def _per_fragment_charge_conservation_mse(
+    atomic_charges: jnp.ndarray,
+    mol_id: jnp.ndarray,
+    atom_mask: jnp.ndarray,
+    batch_segments: jnp.ndarray,
+    batch_size: int,
+    k_max: int,
+) -> jnp.ndarray:
+    """Mean squared per-fragment net charge, over MULTI-fragment structures only.
+
+    ``mol_id`` is a per-atom LOCAL fragment index within its own structure (0
+    for every atom of an ordinary single-molecule structure; 0..K-1 for a
+    synthetic far-field composite's K fragments -- see
+    mmml/models/physnetjax/physnetjax/training/far_field_augment.py). Target
+    charge per fragment is always 0.0: far-field composites are only ever
+    built from exactly-neutral source structures.
+
+    Ordinary single-fragment structures are EXCLUDED (not just trivially
+    zero): they already get this exact signal from the whole-structure
+    ``charges_weight * charge_mse`` term against ``Q_total`` in ``loss_fn``,
+    so including them here would silently double that term's effective
+    weight. Only structures where more than one fragment slot is actually
+    populated (i.e. genuine multi-fragment composites) contribute.
+    """
+    global_fragment_id = batch_segments * k_max + jnp.clip(mol_id, 0, k_max - 1)
+    num_segments = batch_size * k_max
+    frag_charge_sum = jax.ops.segment_sum(
+        atomic_charges * atom_mask, global_fragment_id, num_segments=num_segments
+    ).reshape(batch_size, k_max)
+    frag_atom_count = jax.ops.segment_sum(
+        atom_mask, global_fragment_id, num_segments=num_segments
+    ).reshape(batch_size, k_max)
+    frag_used = frag_atom_count > 0
+    is_multi_fragment_structure = jnp.sum(frag_used, axis=1, keepdims=True) > 1
+    contributing = frag_used & is_multi_fragment_structure
+    sq_err = jnp.where(contributing, frag_charge_sum**2, 0.0)
+    denom = jnp.maximum(jnp.sum(contributing), 1)
+    return jnp.sum(sq_err) / denom
+
+
 def _merge_compatible_params(
     initialized: Any,
     loaded: Any,
@@ -1527,6 +1690,57 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             )
     else:
         print("No CGenFF LJ data in cache — training a plain ML potential", flush=True)
+
+    if args.far_field_augment_fraction > 0.0:
+        from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
+            append_far_field_composites_to_data,
+            build_far_field_composites,
+            compute_safe_separation,
+        )
+
+        frac = args.far_field_augment_fraction
+        if not 0.0 < frac < 1.0:
+            raise ValueError(f"--far-field-augment-fraction must be in (0, 1), got {frac}")
+        # Computed from THIS run's actual --cutoff/--electrostatics-off-end,
+        # not a hardcoded assumption -- see compute_safe_separation's
+        # docstring for why a bare constant here was a latent bug.
+        safe_separation = compute_safe_separation(
+            cutoff=args.cutoff, electrostatics_off_end=args.electrostatics_off_end
+        )
+        n_structures_before = int(np.asarray(data["E"]).shape[0])
+        # Solve for n_composites so composites make up `frac` of the resulting
+        # pool: n_composites / (n_structures_before + n_composites) = frac.
+        n_composites = max(1, int(round(frac * n_structures_before / (1.0 - frac))))
+        far_field_seed = args.far_field_seed if args.far_field_seed is not None else args.seed
+        rng = np.random.default_rng(far_field_seed)
+        composites = build_far_field_composites(
+            data,
+            rng,
+            n_composites=n_composites,
+            k_min=args.far_field_min_k,
+            k_max=args.far_field_max_k,
+            safe_separation=safe_separation,
+            max_fragment_atoms=args.far_field_max_fragment_atoms,
+        )
+        composite_sizes = [c["N"] for c in composites]
+        fragment_cap_msg = (
+            f", fragments capped at {args.far_field_max_fragment_atoms} atoms"
+            if args.far_field_max_fragment_atoms is not None
+            else ""
+        )
+        data = append_far_field_composites_to_data(data, composites)
+        print(
+            f"Far-field augmentation: added {n_composites} synthetic composite "
+            f"structures (K={args.far_field_min_k}-{args.far_field_max_k} fragments "
+            f"each{fragment_cap_msg}, sizes {min(composite_sizes)}-{max(composite_sizes)} atoms, "
+            f">={safe_separation:g} A apart [computed from cutoff={args.cutoff:g}, "
+            f"electrostatics_off_end={args.electrostatics_off_end:g}], exact "
+            f"E=sum(E_fragment) by construction) — "
+            f"{n_structures_before} -> {n_structures_before + n_composites} total "
+            f"structures ({100.0 * n_composites / (n_structures_before + n_composites):.1f}% of pool)",
+            flush=True,
+        )
+
     n_molecules = int(np.asarray(data["E"]).shape[0])
     max_atoms = int(np.max(np.asarray(data["N"]).reshape(-1)))
     train_idx, valid_idx = split_indices(n_molecules, args.valid_fraction, args.seed)
@@ -1937,9 +2151,22 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         if active_shape is not None:
             step_functions.clear()
             _clear_jax_caches()
+        # A bucket's structure count and its step count are only proportional
+        # when batch_size is constant across buckets -- it isn't (auto-batch
+        # gives large pad_atoms far smaller B/device, e.g. B=1 vs B=6). A
+        # bucket with the same structure count as another can take ~6x more
+        # steps just because its batch size collapsed, which is easy to
+        # mistake for that bucket dominating training when it's really a
+        # throughput artifact. Print both counts so this is visible directly
+        # instead of inferred from how long the loss stays elevated.
+        n_structures = len(train_buckets.get(pad_atoms, ()))
+        global_batch = batch_size * args.num_devices
+        expected_steps = n_structures // global_batch if global_batch else 0
         print(
             f"Compiling steps for pad_atoms={pad_atoms} "
-            f"with per-device batch {batch_size}",
+            f"with per-device batch {batch_size} "
+            f"(bucket: {n_structures} structures, ~{expected_steps} steps "
+            f"at global batch {global_batch})",
             flush=True,
         )
         active_shape = shape
@@ -1957,6 +2184,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 n_devices=args.num_devices,
                 rng=rng,
                 shuffle_pad_buckets=args.shuffle_pad_buckets,
+                max_batches_per_bucket_visit=args.max_batches_per_bucket_visit,
             ),
             data,
             depth=args.prefetch_batches,
@@ -1992,12 +2220,15 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     f"[{pct_done:5.1f}% of {total_planned_steps}] "
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
                     f"F_MAE={m['forces_mae']:.6g} "
-                    f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g}"
+                    f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g} "
+                    f"avg_N={m['avg_n_atoms']:.1f}"
                 )
                 if mbd_model is not None:
                     line += f" MBD_λ={m['mbd_scale']:.3f}"
                 if multipole_model is not None:
                     line += f" MultipoleD_MAE={m['multipole_dipole_mae']:.6g}"
+                if args.far_field_augment_fraction > 0.0:
+                    line += f" FarFieldQ_RMS={m['far_field_charge_rms']:.6g}"
                 print(line)
             if args.steps_per_epoch and step >= args.steps_per_epoch:
                 break
@@ -2181,6 +2412,25 @@ def build_parser() -> argparse.ArgumentParser:
             "Interleaving pads forces many live compiles and can OOM-hang pmap."
         ),
     )
+    parser.add_argument(
+        "--max-batches-per-bucket-visit",
+        type=int,
+        default=None,
+        help=(
+            "Cap consecutive training batches drawn from one atom-pad bucket "
+            "before round-robining to the next (default: none -- fully drain "
+            "each bucket before moving on, same as before this flag existed). "
+            "Bucket visit ORDER being shuffled (--shuffle-pad-buckets) does not "
+            "bound visit DURATION: a disproportionately large bucket can still "
+            "monopolize well over a million consecutive steps, giving zero "
+            "gradient signal from every other structure population (e.g. "
+            "far-field composites) for that whole stretch -- observed to cause "
+            "broad eval regressions that recovered once training moved past "
+            "such a bucket. Setting this (e.g. a few thousand) bounds that "
+            "staleness at the cost of more shape recompiles (each bucket may "
+            "be revisited many times to fully drain it)."
+        ),
+    )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument(
         "--restart",
@@ -2265,6 +2515,82 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--forces-weight", type=float, default=52.91)
     parser.add_argument("--dipole-weight", type=float, default=1.0)
     parser.add_argument("--charges-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--far-field-augment-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Fraction of the TRAINING STRUCTURE POOL that is synthetic "
+            "'far-field replica' composites (0 disables; try 0.1-0.2). Each "
+            "composite concatenates --far-field-min-k..--far-field-max-k "
+            "real (exactly neutral, singlet) training structures, placed "
+            ">= 12 A apart atom-to-atom -- exactly beyond both the "
+            "electrostatics switch (hard zero at 10 A) and the "
+            "message-passing cutoff, so E_composite = sum(E_fragment) is "
+            "exact by construction, not approximate. Trains size "
+            "extensivity from data already in the cache -- no new "
+            "structures or QM calculations needed. Note: because "
+            "composites are large (many atoms/structure) while ordinary "
+            "structures are small, this is a fraction of STRUCTURES, not "
+            "of training STEPS -- composites will occupy a "
+            "disproportionately higher fraction of steps than of the pool "
+            "(smaller per-device batch sizes at large pad widths)."
+        ),
+    )
+    parser.add_argument(
+        "--far-field-min-k",
+        type=int,
+        default=5,
+        help="Minimum fragments per synthetic far-field composite (default: 5).",
+    )
+    parser.add_argument(
+        "--far-field-max-k",
+        type=int,
+        default=50,
+        help=(
+            "Maximum fragments per synthetic far-field composite (default: 50) -- "
+            "also the static k_max bound used for the per-fragment charge-"
+            "conservation loss's segment_sum indexing."
+        ),
+    )
+    parser.add_argument(
+        "--far-field-charge-weight",
+        type=float,
+        default=1.0,
+        help=(
+            "Weight for the auxiliary per-fragment charge-conservation loss "
+            "on far-field composite structures only (penalises each "
+            "fragment's own net predicted charge deviating from 0; ordinary "
+            "single-fragment structures are excluded to avoid double-"
+            "counting the existing whole-structure charges_weight term). "
+            "No effect when --far-field-augment-fraction is 0."
+        ),
+    )
+    parser.add_argument(
+        "--far-field-seed",
+        type=int,
+        default=None,
+        help="Seed for far-field composite sampling (default: --seed).",
+    )
+    parser.add_argument(
+        "--far-field-max-fragment-atoms",
+        type=int,
+        default=None,
+        help=(
+            "Exclude source structures above this atom count from far-field "
+            "fragment sampling (default: no cap). Source structure sizes are "
+            "heavy-tailed, so --far-field-max-k alone only bounds composite "
+            "size in EXPECTATION, not the worst case -- a handful of large "
+            "outlier fragments can still produce a composite far bigger than "
+            "k_max times the typical fragment size (observed: k_max=6 with "
+            "no cap produced a 394-atom composite from a population with "
+            "median fragment size 18, which OOM'd auto-batch probing). Set "
+            "this so k_max * max_fragment_atoms stays within a known-safe "
+            "atom count (e.g. the largest already-probed auto-batch pad "
+            "width) for a guaranteed bound -- see "
+            "far_field_augment.resolve_composite_max_atoms."
+        ),
+    )
     parser.add_argument(
         "--mbd-checkpoint",
         type=str,
@@ -2419,6 +2745,40 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=4.0,
         help="Apply erf(r/sigma) damping to the learned-charge Coulomb term; set 0 to disable.",
+    )
+    parser.add_argument(
+        "--switch-start",
+        type=float,
+        default=1.0,
+        help=(
+            "Distance (A) where the short-range/long-range electrostatics blend begins "
+            "(default: 1.0, matches every checkpoint trained before this was configurable -- "
+            "changing it changes electrostatics behavior, not backward compatible with "
+            "existing checkpoints)."
+        ),
+    )
+    parser.add_argument(
+        "--switch-end",
+        type=float,
+        default=10.0,
+        help="Distance (A) where the short-range/long-range electrostatics blend completes (default: 10.0).",
+    )
+    parser.add_argument(
+        "--electrostatics-off-start",
+        type=float,
+        default=8.0,
+        help="Distance (A) where the electrostatics term begins switching off (default: 8.0).",
+    )
+    parser.add_argument(
+        "--electrostatics-off-end",
+        type=float,
+        default=10.0,
+        help=(
+            "Distance (A) where the electrostatics term reaches EXACTLY zero (default: 10.0). "
+            "far_field_augment.py's safe-separation calculation depends on this being an exact "
+            "hard-zero point -- if you change it, any --far-field-augment-fraction run must be "
+            "using the SAME value the checkpoint's own switch was configured with."
+        ),
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--log-every", type=int, default=10000, help="Structure interval while parsing extxyz")

@@ -1,12 +1,21 @@
+# Read the Docs — MkDocs (matches `make docs-serve` / CI MkDocs HTML)
+# https://docs.readthedocs.io/en/stable/config-file/v2.html
 version: 2
 
 build:
-  os: "ubuntu-22.04"
+  os: ubuntu-24.04
   tools:
-    python: "mambaforge-23.11"
+    python: "3.13"
 
-conda:
-  environment: docs/requirements.yaml
+mkdocs:
+  configuration: mkdocs.yml
+  # Broken cross-page anchors currently emit warnings; keep builds green like
+  # local `mkdocs serve` (CI uses `--strict` separately).
+  fail_on_warning: false
 
-sphinx:
-  configuration: docs/conf.py
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - dev

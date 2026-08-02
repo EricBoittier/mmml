@@ -1,0 +1,35 @@
+# Fixed-bias umbrella sampling (gas phase, 9-atom ML dimer).
+#
+# CV: N–C distance (fix C=2, move N+H). Same ordering as NEB endpoints.
+#
+#   source examples/m/_env.sh
+#   uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_gas.yaml --overwrite
+#   bash examples/m/14_umbrella_sample_gas.sh
+#
+# MBAR: mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
+
+# Paths resolve relative to this file (examples/m/yaml/) → repo root is ../../..
+checkpoint: ../../model_ext.json
+structure: ../neb/reag_0_opt.xyz
+output_dir: ../../../artifacts/nh3_ch3cl/umbrella_nc_gas
+
+# 0-based: C–N distance; move NH3 with N
+atom_i: 2
+atom_j: 1
+move_with: [1, 3, 4, 5]
+
+xi_min: 2.2
+xi_max: 3.2
+n_windows: 3
+k_ev_A2: 5.0
+
+temperature_K: 300.0
+timestep_fs: 0.05
+nsteps: 100
+printfreq: 50
+savefreq: 50
+seed: 0
+seed_mode: stretch
+thermostat: langevin
+langevin_gamma: 0.1
+overwrite: false

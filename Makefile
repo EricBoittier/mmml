@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci coverage-gate
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -40,6 +40,10 @@ help:
 	@echo "  make test-all          - Run full pytest suite (needs mpirun for charmm_mpi live tests)"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
+	@echo "  make coverage-gate     - Run tests and enforce CI's coverage floor"
+	@echo "  make test-ci           - Local stand-in for CI's build job (hides libcharmm)"
+	@echo "  make lint-dupes        - Duplicate defs / conflict markers (bad-merge detector)"
+	@echo "  make merge-check       - Pre-merge gate: lint-dupes + lint + imports + docs"
 	@echo "  make deadcode          - Report dead/unused code (Ruff + Vulture)"
 	@echo "  make deadcode-fix      - Auto-fix safe unused-code issues with Ruff"
 	@echo ""
@@ -71,6 +75,9 @@ help:
 	@echo "  make lfs-audit         - Save LFS file list (sorted by size) to lfs_audit.txt"
 	@echo "  make lfs-setup-symlinks - Replace duplicate grids_esp with symlinks to preclassified_data"
 	@echo "  make lfs-remove-hooks  - Remove LFS hooks (silence warning when git-lfs not installed)"
+	@echo ""
+	@echo "Git hooks:"
+	@echo "  make install-hooks     - Install pre-commit hook that auto-regenerates CI-checked docs"
 	@echo ""
 
 # ==============================================================================
@@ -189,16 +196,39 @@ docker-clean:
 # ==============================================================================
 
 test:
-	cd tests && uv run pytest . -m "not pycharmm and not gpu and not mlpot"
+	uv run pytest tests -m "not pycharmm and not gpu and not mlpot"
 
 test-all:
-	cd tests && uv run pytest .
+	uv run pytest tests
 
 test-quick:
 	uv run pytest -q tests/functionality/mmml_tests/test_mmml_calc.py::test_ev2kcalmol_constant
 
 test-coverage:
 	uv run pytest --cov=mmml --cov-report=html --cov-report=term tests/
+
+# The same coverage floor CI enforces, runnable before you push. It is a floor,
+# not a target: ~35k of the uncovered statements need live CHARMM, plotting, or
+# PySCF/torch/GPU, so the CI-reachable ceiling is around 70%. This only catches
+# the number sliding backwards. Measured 2026-08-01: 45.81%, 55706/121608
+# lines. Run: make coverage-gate
+coverage-gate:
+	uv run pytest tests/ -q -p no:cacheprovider --cov=mmml --cov-report=xml || true
+	uv run python scripts/ci/check_coverage_floor.py coverage.xml \
+	  --label "local coverage" --min-percent 42 --min-covered-lines 52000
+
+# The honest local verdict on a test run. pytest's exit code cannot be trusted
+# here for two reasons: it is 0 when every selected test skips, and it is 0 once
+# libcharmm has been loaded (CHARMM's Fortran STOP replaces the exit status at
+# teardown, and can kill the session mid-run). The JUnit report is the only
+# record that survives both, so `|| true` below is deliberate -- the gate that
+# follows is what decides pass/fail.
+# Run: make test-shape
+test-shape:
+	mkdir -p .ci-reports
+	uv run pytest tests/ -q -p no:cacheprovider --junitxml=.ci-reports/junit-local.xml || true
+	uv run python scripts/ci/check_test_report.py .ci-reports/junit-local.xml \
+	  --label "local suite" --min-passed 3000 --max-skipped-frac 0.25
 
 test-data:
 	@if [ -z "$(MMML_DATA)" ] || [ -z "$(MMML_CKPT)" ]; then \
@@ -213,6 +243,51 @@ test-data:
 
 lint:
 	uv run ruff check mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+
+# Duplicated definitions / dead imports / syntax breakage, repo-wide.
+# A bad merge that concatenates two versions of a file shows up here as F811
+# "Redefinition of unused X" -- which is exactly how three duplicated blocks
+# (mm_bonded.py, linear_distance.py, umbrella/energy.py) reached main after the
+# PR #140 merge. Two of them were not cosmetic: a duplicate @register_term made
+# `import mmml.md.energy.terms` raise, and a duplicated block was the only home
+# of a helper that was still being called. Unlike `make lint` this also covers
+# shipped code (`make lint` covers the same dirs, so this is the same verdict)
+# and, advisory-only, the dirs lint never sees. tests/ examples/ workflows/ carry
+# pre-existing redefinitions, so they are reported but do not fail the gate --
+# a gate that is red on day one gets ignored. Conflict markers are always fatal.
+# Run: make lint-dupes
+lint-dupes:
+	@uv run ruff check --select F811 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	@if git grep -nE '^(<<<<<<< |>>>>>>> )' -- '*.py' '*.sh' '*.yaml' '*.yml' '*.toml' '*.md'; then \
+	  echo "lint-dupes: unresolved conflict markers above" >&2; exit 1; \
+	fi
+	@echo "--- advisory: redefinitions outside lint scope (not fatal) ---"
+	@uv run ruff check --select F811 --quiet tests/ examples/ workflows/ || true
+	@echo "lint-dupes: shipped code has no duplicate definitions; no conflict markers"
+
+# Local stand-in for the CI `build` job on a machine that HAS libcharmm.
+# CI installs no libcharmm, so every live-PyCHARMM test self-skips there. Locally
+# they run instead and abort the session inside test_charmm_mpi.py on a native
+# CHARMM exit, truncating the run long before the real failures. Hiding the
+# library reproduces CI's skip behaviour and gives an honest signal.
+#
+# MMML_DISABLE_CHARMM is the *only* reliable way to do that: pointing
+# CHARMM_LIB_DIR at /nonexistent used to leave `resolve_charmm_paths()` still
+# returning the real setup/charmm tree (a lib-less explicit override is treated
+# as stale and discarded), so this target only half-hid the build and did not
+# reproduce CI. See charmm_paths.charmm_disabled.
+# Run: make test-ci
+test-ci:
+	MMML_DISABLE_CHARMM=1 \
+	  uv run pytest tests/ -q -p no:cacheprovider
+
+# Pre-merge gate: everything CI checks first, in the order it fails.
+# Run: make merge-check
+merge-check: lint-dupes lint
+	uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
+	uv run python scripts/generate_cli_docs.py --check
+	uv run python scripts/generate_package_architecture.py --check
+	@echo "merge-check: OK -- now run 'make test-ci' for the full suite"
 
 format:
 	uv run ruff format mmml/ scripts/
@@ -342,6 +417,16 @@ lfs-remove-hooks:
 	  fi; \
 	done
 	@echo "LFS hooks removed. git pull/checkout will no longer warn about missing git-lfs."
+
+# Install the repo's git hooks (currently a pre-commit that auto-regenerates the
+# CI-checked generated docs so commits never carry stale copies).
+# Run: make install-hooks
+install-hooks:
+	@hooks_dir="$$(git rev-parse --git-path hooks)"; \
+	mkdir -p "$$hooks_dir"; \
+	ln -sf "$$(pwd)/scripts/git-hooks/pre-commit" "$$hooks_dir/pre-commit"; \
+	chmod +x scripts/git-hooks/pre-commit; \
+	echo "Installed pre-commit hook -> $$hooks_dir/pre-commit"
 
 # ==============================================================================
 # Data utilities

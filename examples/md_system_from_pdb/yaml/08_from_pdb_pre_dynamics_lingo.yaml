@@ -1,0 +1,26 @@
+# 08 — Full-system PDB → PyCHARMM NVE with pre-dynamics CHARMM lingo
+#
+#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
+#   bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
+#
+# Pass checks:
+#   1. Job exits 0
+#   2. {output_dir}/pycharmm_pre_dynamics_lingo.inp contains the cons fix line
+#   3. Log (without quiet) prints "Pre-dynamics CHARMM lingo" before dynamics
+#
+# Swap the lingo block for UMBR/ADUMB when you need umbrella sampling.
+
+setup: free_nve
+backend: pycharmm
+from_pdb: mmml/generate/sample/pdb/aco_monomer.pdb
+checkpoint: examples/ckpts_json/DESdimers_params.json
+flat_bottom_radius: 20.0
+ps: 0.1
+dt_fs: 0.5
+mini_nstep: 20
+skip_energy_show: true
+quiet: false
+pycharmm_pre_dynamics_lingo: |
+  cons fix sele resid 1 end
+output_dir: artifacts/md_system_from_pdb/08_pre_dynamics_lingo
+seed: 42

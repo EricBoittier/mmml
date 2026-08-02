@@ -7,8 +7,11 @@ MONITOR="$WORKFLOW_ROOT/scripts/monitor_health.sh"
 LOG_DIR="$WORKFLOW_ROOT/logs"
 mkdir -p "$LOG_DIR"
 
-CKPT="${MMML_CKPT:-/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70}"
-CRON_LINE="0 * * * * PATH=${HOME}/.local/bin:${HOME}/.cargo/bin:\$PATH MMML_CKPT=${CKPT} JAX_ENABLE_X64=1 ${MONITOR} --react >> ${LOG_DIR}/monitor.log 2>&1"
+CKPT_ENV=""
+if [[ -n "${MMML_CKPT:-}" ]]; then
+  CKPT_ENV="MMML_CKPT=${MMML_CKPT} "
+fi
+CRON_LINE="0 * * * * PATH=${HOME}/.local/bin:${HOME}/.cargo/bin:\$PATH ${CKPT_ENV}JAX_ENABLE_X64=1 ${MONITOR} --react >> ${LOG_DIR}/monitor.log 2>&1"
 
 MARKER="# mmml-pbc-liquid-density-monitor"
 TMP="$(mktemp)"

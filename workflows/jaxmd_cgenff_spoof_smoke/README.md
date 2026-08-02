@@ -1,0 +1,64 @@
+# JAX-MD + CGenFF spoof smokes (DCM / ACO)
+
+Small **infrastructure** jobs that exercise the hybrid **jaxmd** path with
+`--jax-mm-spoof` (JAX CGenFF bonded clone in place of PhysNet). No trained ML
+weights are required for the energy/force evaluation.
+
+| Job | Composition | Setup |
+|-----|-------------|-------|
+| `dcm_vac_nve` | `DCM:4` | `free_nve` |
+| `dcm_pbc_nve` | `DCM:4` | `pbc_nve` |
+| `aco_vac_nve` | `ACO:4` | `free_nve` |
+| `aco_pbc_nve` | `ACO:4` | `pbc_nve` |
+
+## Clone / branch
+
+Work only in the dedicated clone:
+
+```bash
+cd ~/mmml_cursor
+git checkout cursor/jaxmd-cgenff-spoof-dcm-aco-b59b
+```
+
+## Run
+
+```bash
+cd ~/mmml_cursor
+bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all.sh
+# or one job:
+bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all.sh dcm_vac_nve
+```
+
+Outputs land under `artifacts/jaxmd_cgenff_spoof_smoke/{job_id}/` with
+`job.yaml` + `smoke_report.json`.
+
+```bash
+python workflows/jaxmd_cgenff_spoof_smoke/scripts/report.py
+```
+
+## Compare to native CHARMM
+
+Energy/force parity of the jax-mm-spoof CGenFF bonded clone vs PyCHARMM
+``ENER`` ETERMs is documented in
+[jax-mm-spoof vs native CHARMM](../../docs/jax-mm-spoof-charmm-parity.md).
+
+```bash
+sbatch workflows/jaxmd_cgenff_spoof_smoke/scripts/submit_compare_slurm.sh compare
+# or interactively on a GPU node:
+python workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py --no-mm
+python workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py
+```
+
+Native PyCHARMM MD counterparts (same DCM/ACO matrix, no spoof):
+
+```bash
+sbatch workflows/jaxmd_cgenff_spoof_smoke/scripts/submit_compare_slurm.sh native
+# or:
+bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all_native.sh
+```
+
+Both (native MD + E/F compare):
+
+```bash
+sbatch workflows/jaxmd_cgenff_spoof_smoke/scripts/submit_compare_slurm.sh all
+```

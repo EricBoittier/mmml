@@ -1,0 +1,57 @@
+# 08b — ADUMB / umbrella dihedral skeleton (edit for your peptide PSF)
+#
+# NOT a runnable aco_monomer smoke. Copy and point at a peptide system whose
+# PSF has the PEPT atom selections below (or rewrite the umbrella dihe lines).
+#
+# What md-system already does (do NOT put these in pycharmm_pre_dynamics_lingo):
+#   - toppar / PSF / CRD (or from_pdb / Packmol)
+#   - PBC crystal + image (for pbc_* setups)
+#   - nbonds / PME
+#   - SHAKE (when enabled by the dynamics path)
+#   - the DYNAmics CPT/NVE/NVT stage itself
+#
+# Put only the umbrella setup (and optional CONS) in pycharmm_pre_dynamics_lingo.
+# Align umbrella init nsim / update / equi with the dynamics length you request
+# via ps / ps_prod / dt_fs (see calc notes below).
+#
+# Unit file paths are relative to the process CWD (usually the repo root when
+# you `uv run mmml md-system`). Prefer paths under output_dir.
+#
+# Smoke for the lingo plumbing (cons fix): 08_from_pdb_pre_dynamics_lingo.yaml
+
+setup: pbc_npt
+backend: pycharmm
+# from_psf: /path/to/step1_pdbreader.psf
+# from_crd: /path/to/step5.crd
+# box_size: 32.0   # or leave to certified box.json
+checkpoint: examples/ckpts_json/DESdimers_params.json
+md_stages: "mini,heat,equi,prod"
+temperature: 300.0
+pressure: 1.0
+dt_fs: 1.0
+ps_heat: 2.0
+ps_equi: 2.0
+# Example: NRUN=500 segments × update; match umbrella init to prod length.
+# With dt_fs=1.0 and ps_prod=5.0 → nstep = 5000 (same order as NRUN*UPDATE below).
+ps_prod: 5.0
+skip_energy_show: true
+quiet: false
+output_dir: artifacts/md_system_from_pdb/08_umbrella_adumb
+
+# Classic ADUMB fragment (adapted from umbrella.inp):
+#   open units → umbrella dihe → umbrella init
+# Original used: NRUN=500, update=10/ts, equi=2/ts, ts=0.001 ps (1 fs).
+pycharmm_pre_dynamics_lingo: |
+  ! optional COM restraint (edit selection for your solute)
+  cons hmcm force 1.0 refx 0.0 refy 0.0 refz 0.0 sele .not. (segid WAT) end
+
+  open unit 44 write card name artifacts/md_system_from_pdb/08_umbrella_adumb/adumb-dihe.dat
+  open unit 50 write card name artifacts/md_system_from_pdb/08_umbrella_adumb/umbcor
+
+  ! φ/ψ-style dihedrals — rewrite atom specs to match your PSF
+  umbrella dihe nresol 72 trig 12 poly 1 PEPT 1 C  PEPT 2 N  PEPT 2 CA PEPT 2 C
+  umbrella dihe nresol 72 trig 12 poly 1 PEPT 1 N  PEPT 1 CA PEPT 1 C  PEPT 2 N
+
+  ! nsim / update / equi must match the upcoming prod stage length
+  ! Here: nsim=500, update=10000 (10 ps / 0.001 ps), equi=2000 (2 ps / 0.001 ps)
+  umbrella init nsim 500 update 10000 equi 2000 thresh 10 temp 300 wuni 44 ucun 50

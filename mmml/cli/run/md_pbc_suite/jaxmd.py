@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -145,10 +146,14 @@ class _BestMinimizationFrame:
         return summary
 
 
-def main(argv: list[str] | None = None) -> int:
-    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+def build_parser() -> argparse.ArgumentParser:
+    """The JAX-MD backend CLI.
 
-    apply_xla_cuda_timer_log_filter()
+    Split out of ``main`` so the argv ``md_system`` forwards to this
+    backend can be parsed in a test. While the parser lived inside
+    ``main``, the only way to discover that a forwarded flag was unknown
+    was to start a run and watch the subprocess exit 2.
+    """
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", type=Path, default=None)
     p.add_argument(
@@ -241,6 +246,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--nve-force-energy-freeze-charges",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "NVE force–energy FD: freeze MM Coulomb charges at R0 (Hellmann–Feynman). "
+            "Default: on for q0/latent*/fixed_plus_latent (train-matched MM forces "
+            "hold q fixed); off for fixed CGenFF charges."
+        ),
+    )
+    p.add_argument(
         "--nve-etot-drift-abort-eV",
         type=float,
         default=0.5,
@@ -297,8 +312,9 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=1.5,
         help=(
-            "Refuse to start NVE when post-FIRE max atomic |F| exceeds this (eV/Å). "
-            "Default 1.5; use <=0 to disable."
+            "Base ceiling (eV/Å) for post-FIRE max atomic |F| before NVE "
+            "(default 1.5 at N_ref=100 atoms; <=0 disables). "
+            "Effective gate = base×sqrt(N/N_ref), capped at 15 eV/Å."
         ),
     )
     p.add_argument("--nhc-chain-length", type=int, default=3)
@@ -354,10 +370,38 @@ def main(argv: list[str] | None = None) -> int:
         help="Load certified/liquid-box PSF with --from-crd (skips Packmol rebuild).",
     )
     p.add_argument(
+        "--psf-angle-restraints",
+        action="store_true",
+        help=(
+            "Add scaled CGenFF harmonic angle (+ Urey–Bradley) forces from --from-psf "
+            "so ML monomers stay tetrahedral."
+        ),
+    )
+    p.add_argument(
+        "--psf-angle-restraint-scale",
+        type=float,
+        default=1.0,
+        help="Scale for --psf-angle-restraints (default: 1.0).",
+    )
+    p.add_argument(
+        "--psf-angle-restraints-no-urey",
+        action="store_true",
+        help="With --psf-angle-restraints: omit Urey–Bradley 1–3 terms.",
+    )
+    p.add_argument(
         "--from-crd",
         type=Path,
         default=None,
         help="Load certified/liquid-box CRD with --from-psf (skips Packmol rebuild).",
+    )
+    p.add_argument(
+        "--from-pdb",
+        type=Path,
+        default=None,
+        help=(
+            "Full-system cold start from a CGenFF-named PDB (CHARMM READ SEQU PDB). "
+            "Equivalent to a lone composition PDB token."
+        ),
     )
     p.add_argument(
         "--packmol",
@@ -457,11 +501,48 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_ML_SWITCH_WIDTH,
     )
     p.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    # md_system forwards both of these to every backend unconditionally, so a
+    # parser that does not know them turns `mmml md-system` into argparse
+    # exit 2 in the subprocess. Kept name-for-name with `run_sim`.
+    p.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    p.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to model cutoff.",
+    )
     p.add_argument(
         "--include-mm",
+        "--do-mm",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Include JAX MM LJ/Coulomb pairs; --no-include-mm = ML (PhysNet) only.",
+        dest="include_mm",
+        help="Include JAX MM LJ/Coulomb pairs (doMM); --no-include-mm = ML only.",
+    )
+    p.add_argument(
+        "--do-ml",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml",
+        help="Include ML monomer terms (doML). Default: on.",
+    )
+    p.add_argument(
+        "--do-ml-dimer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml_dimer",
+        help="Include ML dimer correction (doML_dimer). Default: on.",
+    )
+    p.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        default=False,
+        help="Disable ML dimer terms (sets do_ml_dimer=False).",
     )
     p.add_argument(
         "--mm-switch-width",
@@ -479,11 +560,39 @@ def main(argv: list[str] | None = None) -> int:
         help="Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40)."
     )
     p.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Parallel PhysNet chunks across N local GPUs (default 1; "
+            "or MMML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
+        ),
+    )
+    p.add_argument(
         "--ml-max-active-dimers",
         type=int,
         default=None,
         metavar="N",
         help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+    )
+    p.add_argument(
+        "--mlpot-profile",
+        action="store_true",
+        help=(
+            "Enable ASE calculator / chunk-apply wall-time profiling "
+            "(writes mlpot_profile.json under --output-dir)."
+        ),
+    )
+    p.add_argument(
+        "--jax-profiler-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Write a TensorBoard JAX profiler trace under DIR "
+            "(also MMML_JAX_PROFILER_DIR). Prefer short --ps."
+        ),
     )
     from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
     add_ml_compute_dtype_args(p)
@@ -573,7 +682,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.75)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
-    p.add_argument("--jax-md-update-interval", type=int, default=1)
+    p.add_argument(
+        "--jax-md-update-interval",
+        type=int,
+        default=0,
+        help=(
+            "MM neighbor-list refresh interval in MD steps. "
+            "0 = ensemble auto (NVT=10, NpT=5, NVE=5); 1 = rebuild every step "
+            "(slowest / safest)."
+        ),
+    )
     p.add_argument(
         "--jax-md-skin-distance",
         type=float,
@@ -595,6 +713,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Deprecated no-op: NPT pre-minimization uses configured neighbor update interval/skin by default.",
     )
     p.add_argument("--jax-md-disable-fallback", action="store_true")
+    p.add_argument(
+        "--mm-nl-backend",
+        choices=["auto", "vesin", "cell_list", "jax_md"],
+        default=None,
+        help=(
+            "MM neighbor-list builder (default: MMML_MM_NL_BACKEND or auto→vesin). "
+            "jax_md uses device-side incremental lists when available."
+        ),
+    )
+    p.add_argument(
+        "--mm-nl-device",
+        choices=["cpu", "gpu"],
+        default=None,
+        help=(
+            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or cpu). "
+            "gpu needs working CuPy JIT + vesin; falls back to cpu on failure."
+        ),
+    )
     p.add_argument(
         "--charmm-pre-minimize",
         dest="charmm_pre_minimize",
@@ -696,6 +832,60 @@ def main(argv: list[str] | None = None) -> int:
         help="Require periodic cell in handoff for PBC runs.",
     )
     p.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        dest="mm_charge_mode",
+        type=str,
+        default=None,
+        choices=(
+            "fixed",
+            "q0",
+            "latent",
+            "q1",
+            "fixed_plus_latent",
+            "latent_mean",
+            "latent_dynamic",
+        ),
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
+            "q0 / Q⁰ (neutralize unperturbed monomer q_ML; train+liquid), "
+            "latent / q1 / Q¹ (AB-perturbed q_ML; dimer-only), "
+            "fixed_plus_latent, latent_mean (frozen template; see "
+            "--mm-latent-charge-template), or latent_dynamic (live multi-dimer "
+            "Q¹ average). q0/latent_mean/latent_dynamic work for liquids."
+        ),
+    )
+    p.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        dest="mm_charge_correction",
+        action="store_true",
+        default=False,
+        help="Alias for --mm-charge-mode fixed_plus_latent.",
+    )
+    p.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        dest="mm_latent_charge_template",
+        type=str,
+        default=None,
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
+        ),
+    )
+    p.add_argument(
+        "--mm-lj-scales-file",
+        "--mm_lj_scales_file",
+        dest="mm_lj_scales_file",
+        type=str,
+        default=None,
+        help=(
+            "Path to hybrid_mm.json with learnable per-type MM LJ σ/ε scales. "
+            "When omitted, looks next to --checkpoint for hybrid_mm.json."
+        ),
+    )
+    p.add_argument(
         "--lr-solver",
         "--lr_solver",
         dest="lr_solver",
@@ -713,15 +903,66 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
+        ),
+    )
+    p.add_argument(
         "--quiet",
         action="store_true",
         help="Reduce console output.",
     )
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+
+    apply_xla_cuda_timer_log_filter()
+    p = build_parser()
     args = p.parse_args(argv)
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+
+    normalize_hybrid_assembly_flags(args)
     if args.free_space and args.ensemble == "npt":
         raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
+
+    # NL backend/device are resolved via env inside mm_energy_forces / nl_gpu.
+    if getattr(args, "mm_nl_backend", None):
+        os.environ["MMML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
+    if getattr(args, "mm_nl_device", None):
+        os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
+    if (os.environ.get("MMML_MM_NL_DEVICE") or "").strip().lower() == "gpu":
+        # Repair stale /usr/local/cuda→cuda-9.0 before the first CuPy JIT.
+        try:
+            from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
+
+            ensure_cupy_cuda_path()
+        except Exception as exc:
+            print(f"[jaxmd] CUDA_PATH repair skipped ({type(exc).__name__}: {exc})", flush=True)
+
+    if getattr(args, "mlpot_profile", False):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            enable_mlpot_profiling,
+            reset_mlpot_profile_stats,
+        )
+
+        enable_mlpot_profiling()
+        reset_mlpot_profile_stats()
+
+    profiler_dir_raw = getattr(args, "jax_profiler_dir", None)
+    if profiler_dir_raw is None:
+        env_prof = (os.environ.get("MMML_JAX_PROFILER_DIR") or "").strip()
+        profiler_dir = Path(env_prof) if env_prof else None
+    else:
+        profiler_dir = Path(profiler_dir_raw).expanduser().resolve()
+        os.environ["MMML_JAX_PROFILER_DIR"] = str(profiler_dir)
 
     out_dir = (Path.cwd() / args.output_dir.expanduser()).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -738,6 +979,8 @@ def main(argv: list[str] | None = None) -> int:
         get_handoff_in,
         handoff_from_atoms,
         handoff_velocities_as_ang_ps,
+        ang_ps_velocities_to_jaxmd_metal,
+        kinetic_temperature_k_from_ang_ps_velocities,
         kinetic_temperature_k_from_jaxmd_metal_velocities,
         remove_center_of_mass_velocity_ang_ps,
         handoff_skip_pre_min,
@@ -936,15 +1179,73 @@ def main(argv: list[str] | None = None) -> int:
             f"({minimization_summary.get('charmm_min_wall_s', 0.0):.3f} s)"
         )
 
-    if args.ensemble == "npt":
-        effective_update_interval = int(max(1, args.jax_md_update_interval))
-        effective_skin = float(max(0.0, args.jax_md_skin_distance))
-    elif args.ensemble == "nvt":
-        effective_update_interval = int(max(1, args.jax_md_update_interval))
-        effective_skin = float(max(0.0, args.jax_md_skin_distance))
-    else:
-        effective_update_interval = int(max(1, args.jax_md_update_interval))
-        effective_skin = float(max(0.0, args.jax_md_skin_distance))
+    from mmml.cli.run.jaxmd_runner import resolve_ensemble_jaxmd_update_interval
+
+    # 0 / unset → ensemble auto (NVT batches more; NpT/NVE stay tighter).
+    effective_update_interval = resolve_ensemble_jaxmd_update_interval(
+        args.ensemble,
+        getattr(args, "jax_md_update_interval", None),
+        use_pbc=not free_space,
+    )
+    effective_skin = float(max(0.0, args.jax_md_skin_distance))
+
+    do_mm = bool(getattr(args, "include_mm", True))
+    ep_scale = None
+    sig_scale = None
+    if do_mm:
+        from mmml.models.mm_lj_scales import resolve_md_lj_scales
+
+        scales_file = getattr(args, "mm_lj_scales_file", None)
+        try:
+            ep_scale, sig_scale = resolve_md_lj_scales(
+                scales_file=scales_file,
+                checkpoint=getattr(args, "checkpoint", None),
+            )
+        except Exception:
+            if scales_file is not None:
+                raise
+        if ep_scale is not None and not args.quiet:
+            print(
+                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+                f"from hybrid_mm.json / --mm-lj-scales-file",
+                flush=True,
+            )
+    elif getattr(args, "mm_lj_scales_file", None) is not None:
+        raise ValueError(
+            f"--mm-lj-scales-file={args.mm_lj_scales_file} was given but "
+            "--no-include-mm disables the JAX MM pair loop that applies "
+            "per-type LJ scales. Use --include-mm (default) or drop "
+            "--mm-lj-scales-file."
+        )
+
+    do_mm = bool(getattr(args, "include_mm", True))
+    ep_scale = None
+    sig_scale = None
+    if do_mm:
+        from mmml.models.mm_lj_scales import resolve_md_lj_scales
+
+        scales_file = getattr(args, "mm_lj_scales_file", None)
+        try:
+            ep_scale, sig_scale = resolve_md_lj_scales(
+                scales_file=scales_file,
+                checkpoint=getattr(args, "checkpoint", None),
+            )
+        except Exception:
+            if scales_file is not None:
+                raise
+        if ep_scale is not None and not args.quiet:
+            print(
+                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+                f"from hybrid_mm.json / --mm-lj-scales-file",
+                flush=True,
+            )
+    elif getattr(args, "mm_lj_scales_file", None) is not None:
+        raise ValueError(
+            f"--mm-lj-scales-file={args.mm_lj_scales_file} was given but "
+            "--no-include-mm disables the JAX MM pair loop that applies "
+            "per-type LJ scales. Use --include-mm (default) or drop "
+            "--mm-lj-scales-file."
+        )
 
     factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per_list,
@@ -952,10 +1253,15 @@ def main(argv: list[str] | None = None) -> int:
         ml_switch_width=ml_w,
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
-        doML=True,
-        doMM=bool(getattr(args, "include_mm", True)),
-        doML_dimer=True,
+        doML=bool(getattr(args, "do_ml", True)),
+        doMM=do_mm,
+        doML_dimer=(
+            bool(getattr(args, "do_ml_dimer", True))
+            and not bool(getattr(args, "skip_ml_dimers", False))
+        ),
         debug=False,
+        ep_scale=ep_scale,
+        sig_scale=sig_scale,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=False if free_space else float(L),
@@ -974,22 +1280,36 @@ def main(argv: list[str] | None = None) -> int:
         min_com_restraint_force_const=args.min_com_restraint_k,
         defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        ml_gpu_count=int(getattr(args, "ml_gpu_count", None) or 1),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
         mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
         mbd_weight=getattr(args, "mbd_weight", 1.0),
         lr_solver=getattr(args, "lr_solver", None),
+        ewald_include_self=not bool(getattr(args, "ewald_omit_self", False)),
+        ewald_include_intra=not bool(getattr(args, "ewald_omit_self", False)),
+        mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
+        mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
+        hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+        shared_cutoff=getattr(args, "shared_cutoff", None),
     )
-    cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
+    cutoff = CutoffParameters(
+        ml_switch_width=ml_w,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
+        hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+        shared_cutoff=getattr(args, "shared_cutoff", None),
+    )
     calc_result = factory(
         atomic_numbers=z,
         atomic_positions=atoms.get_positions(),
         n_monomers=n_molecules,
         cutoff_params=cutoff,
-        doML=True,
+        doML=bool(getattr(args, "do_ml", True)),
         doMM=bool(getattr(args, "include_mm", True)),
-        doML_dimer=True,
+        doML_dimer=bool(getattr(args, "do_ml_dimer", True)),
         backprop=False,
         debug=False,
         energy_conversion_factor=1.0,
@@ -1030,9 +1350,9 @@ def main(argv: list[str] | None = None) -> int:
             positions=jnp.asarray(atoms.get_positions(), dtype=jnp.float32),
             n_monomers=n_molecules,
             cutoff_params=cutoff,
-            doML=True,
+            doML=bool(getattr(args, "do_ml", True)),
             doMM=include_mm,
-            doML_dimer=True,
+            doML_dimer=bool(getattr(args, "do_ml_dimer", True)),
             box=box_warm,
             mm_pair_idx=mm_pair_idx,
             mm_pair_mask=mm_pair_mask,
@@ -1459,6 +1779,23 @@ def main(argv: list[str] | None = None) -> int:
             f"E={best_frame.best_force_energy:.6f} eV)"
         )
         if fmin > args.max_fmax_after_min:
+            if getattr(args, "mlpot_profile", False):
+                from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                    maybe_log_mlpot_profile,
+                    write_mlpot_profile_summary,
+                )
+
+                maybe_log_mlpot_profile(quiet=bool(getattr(args, "quiet", False)))
+                write_mlpot_profile_summary(
+                    out_dir,
+                    extra={
+                        "backend": "jaxmd",
+                        "phase": "pre_md_minimize",
+                        "fmax_eVA": float(fmin),
+                        "ml_gpu_count": int(getattr(args, "ml_gpu_count", None) or 1),
+                        "ml_batch_size": getattr(args, "ml_batch_size", None),
+                    },
+                )
             raise RuntimeError(
                 f"post-calculator minimization fmax={fmin:.6f} eV/A exceeds "
                 f"--max-fmax-after-min={args.max_fmax_after_min:.6f}. "
@@ -1486,21 +1823,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         if converted_velocities is None:
             raise RuntimeError("handoff velocity policy selected velocities, but none were converted")
-        initial_velocities = np.asarray(converted_velocities, dtype=float)
+        velocities_ang_ps = np.asarray(converted_velocities, dtype=float)
+        masses_amu = np.asarray(atoms.get_masses(), dtype=float)
         if getattr(args, "handoff_velocity_remove_drift", True):
-            masses_amu = np.asarray(atoms.get_masses(), dtype=float)
-            initial_velocities = remove_center_of_mass_velocity_ang_ps(
-                initial_velocities, masses_amu
+            velocities_ang_ps = remove_center_of_mass_velocity_ang_ps(
+                velocities_ang_ps, masses_amu
             )
-        else:
-            masses_amu = np.asarray(atoms.get_masses(), dtype=float)
-        # JAX-MD / ASE metal units (same as state.momentum/state.mass), not Å/ps.
-        handoff_temperature = kinetic_temperature_k_from_jaxmd_metal_velocities(
-            initial_velocities, masses_amu
+        physical_temperature = kinetic_temperature_k_from_ang_ps_velocities(
+            velocities_ang_ps, masses_amu
         )
         dt_ps = float(args.dt_fs) * 0.001
         max_step_displacement = float(
-            np.max(np.linalg.norm(initial_velocities, axis=1)) * dt_ps
+            np.max(np.linalg.norm(velocities_ang_ps, axis=1)) * dt_ps
         )
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             MIN_VELOCITY_ASSIGNMENT_TEMP_K,
@@ -1509,22 +1843,21 @@ def main(argv: list[str] | None = None) -> int:
         target_T = float(args.temperature)
         cold_floor = max(float(MIN_VELOCITY_ASSIGNMENT_TEMP_K), 0.1 * target_T)
         if (
-            not np.all(np.isfinite(initial_velocities))
-            or not np.isfinite(handoff_temperature)
-            or handoff_temperature <= 0.0
+            not np.all(np.isfinite(velocities_ang_ps))
+            or not np.isfinite(physical_temperature)
+            or physical_temperature <= 0.0
             or max_step_displacement > 0.25
         ):
             raise RuntimeError(
                 "implausible converted handoff velocities: "
-                f"T={handoff_temperature:.3f} K, "
+                f"T={physical_temperature:.3f} K, "
                 f"max one-step displacement={max_step_displacement:.6f} Å "
                 f"at dt={float(args.dt_fs):g} fs"
             )
-        if float(handoff_temperature) < cold_floor:
-            # Truly quenched momenta (metal-unit T ≪ target) — re-thermalize.
+        if float(physical_temperature) < cold_floor:
             if not getattr(args, "quiet", False):
                 print(
-                    f"WARN: handoff kinetic T={float(handoff_temperature):.3f} K "
+                    f"WARN: handoff kinetic T={float(physical_temperature):.3f} K "
                     f"< floor {cold_floor:.1f} K (target {target_T:.1f} K); "
                     "re-thermalizing Maxwell–Boltzmann (ignoring dead handoff velocities).",
                     flush=True,
@@ -1532,13 +1865,18 @@ def main(argv: list[str] | None = None) -> int:
             initial_velocities = None
             use_handoff_velocities = False
             velocity_policy = "rethermalize_cold_handoff"
-        elif not getattr(args, "quiet", False):
-            print(
-                f"Using converted handoff velocities ({len(initial_velocities)} atoms): "
-                f"T={handoff_temperature:.3f} K (JAX-MD metal), "
-                f"max dt*v={max_step_displacement:.6f} Å.",
-                flush=True,
+        else:
+            initial_velocities = ang_ps_velocities_to_jaxmd_metal(velocities_ang_ps)
+            handoff_temperature = kinetic_temperature_k_from_jaxmd_metal_velocities(
+                initial_velocities, masses_amu
             )
+            if not getattr(args, "quiet", False):
+                print(
+                    f"Using converted handoff velocities ({len(initial_velocities)} atoms): "
+                    f"T_phys={physical_temperature:.3f} K → T_metal={handoff_temperature:.3f} K, "
+                    f"max dt*v={max_step_displacement:.6f} Å.",
+                    flush=True,
+                )
     if initial_velocities is None:
         if not getattr(args, "quiet", False):
             if velocity_policy == "rethermalize_cold_handoff":
@@ -1641,7 +1979,7 @@ def main(argv: list[str] | None = None) -> int:
         ensemble=args.ensemble,
         cell=None if free_space else float(L),
         include_mm=bool(getattr(args, "include_mm", True)),
-        skip_ml_dimers=False,
+        skip_ml_dimers=not bool(getattr(args, "do_ml_dimer", True)),
         debug=False,
         steps_per_recording=max(1, args.steps_per_recording),
         jax_md_update_interval=effective_update_interval,
@@ -1682,6 +2020,9 @@ def main(argv: list[str] | None = None) -> int:
         nve_force_energy_rescue_fire_steps=int(
             getattr(args, "nve_force_energy_rescue_fire_steps", 50)
         ),
+        nve_force_energy_freeze_charges=getattr(
+            args, "nve_force_energy_freeze_charges", None
+        ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
         nve_etot_drift_rescue=bool(getattr(args, "nve_etot_drift_rescue", True)),
         nve_etot_drift_rescue_attempts=int(
@@ -1700,6 +2041,17 @@ def main(argv: list[str] | None = None) -> int:
             getattr(args, "nve_etot_drift_rescue_min_dt_fs", 0.05)
         ),
         nve_max_f_start_eVA=float(getattr(args, "nve_max_f_start_eVA", 1.5)),
+        # Required for NVE Hellmann–Feynman preflight (freeze q_MM for q0/latent*).
+        mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        # PSF/CGenFF angle (+ Urey) restraints for tetrahedral ML monomers.
+        from_psf=getattr(args, "from_psf", None),
+        psf_angle_restraints=bool(getattr(args, "psf_angle_restraints", False)),
+        psf_angle_restraint_scale=float(
+            getattr(args, "psf_angle_restraint_scale", 1.0) or 1.0
+        ),
+        psf_angle_restraints_no_urey=bool(
+            getattr(args, "psf_angle_restraints_no_urey", False)
+        ),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
@@ -1743,12 +2095,29 @@ def main(argv: list[str] | None = None) -> int:
                     "expected_neighbor_updates": int(expected_nbr_updates),
                     "skin_distance_A": float(effective_skin),
                     "free_space": bool(free_space),
+                    "ml_gpu_count": int(getattr(args, "ml_gpu_count", None) or 1),
+                    "ml_batch_size": getattr(args, "ml_batch_size", None),
                 }
             },
         )
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)
-    steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
+    _jax_trace_started = False
+    if profiler_dir is not None:
+        import jax
+
+        profiler_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[jaxmd] starting JAX profiler trace → {profiler_dir}", flush=True)
+        jax.profiler.start_trace(str(profiler_dir))
+        _jax_trace_started = True
+    try:
+        steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
+    finally:
+        if _jax_trace_started:
+            import jax
+
+            jax.profiler.stop_trace()
+            print(f"[jaxmd] stopped JAX profiler trace → {profiler_dir}", flush=True)
     run_status = getattr(run_sim, "last_status", "complete")
     run_error = getattr(run_sim, "last_error", None)
     _hdf5 = getattr(run_sim, "last_hdf5_path", None)
@@ -1954,7 +2323,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(summary_line, flush=True)
     (out_dir / "suite_summary_jaxmd.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    print(json.dumps(summary, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(summary)
     for traj_path in traj_paths:
         print(f"Wrote {traj_path}")
     if run_status != "complete":
@@ -1966,9 +2337,9 @@ def main(argv: list[str] | None = None) -> int:
         model_type="Hybrid ML/MM (spherical_cutoff_calculator)",
         n_monomers=n_molecules,
         n_atoms=len(atoms),
-        doML=True,
+        doML=bool(getattr(args, "do_ml", True)),
         doMM=bool(getattr(args, "include_mm", True)),
-        doML_dimer=True,
+        doML_dimer=bool(getattr(args, "do_ml_dimer", True)),
         ensemble=args.ensemble,
         checkpoint=str(base_ckpt_dir),
         nl_skin_distance_A=float(effective_skin),
@@ -1994,6 +2365,30 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Wrote {_ho_path}")
         except Exception as _e:
             print(f"[warning] Could not save handoff calculator_summary.json: {_e}")
+
+    if getattr(args, "mlpot_profile", False):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            maybe_log_mlpot_profile,
+            write_mlpot_profile_summary,
+        )
+
+        maybe_log_mlpot_profile(quiet=bool(getattr(args, "quiet", False)))
+        profile_path = write_mlpot_profile_summary(
+            out_dir,
+            extra={
+                "backend": "jaxmd",
+                "ensemble": args.ensemble,
+                "ml_gpu_count": int(getattr(args, "ml_gpu_count", None) or 1),
+                "ml_batch_size": getattr(args, "ml_batch_size", None),
+                "box_A": float(L) if L is not None else None,
+                "n_atoms": int(len(atoms)),
+                "nsteps_completed": int(steps_completed),
+                "run_status": run_status,
+                "jax_profiler_dir": str(profiler_dir) if profiler_dir is not None else None,
+            },
+        )
+        if profile_path is not None and not getattr(args, "quiet", False):
+            print(f"Wrote {profile_path}", flush=True)
 
     if run_status == "interrupted":
         return 130

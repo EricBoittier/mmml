@@ -546,6 +546,13 @@ def create_model_from_config(config: dict[str, Any], max_atoms: int) -> SpookyPh
         efa=config.get("efa", False),
         use_energy_bias=config.get("use_energy_bias", False),
         electrostatics_damping_sigma=config.get("electrostatics_damping_sigma", 4.0),
+        # Defaults reproduce what every checkpoint trained before these fields
+        # existed was implicitly hardcoded to -- see spooky_model.py's
+        # SpookyPhysNet field comments.
+        switch_start=config.get("switch_start", 1.0),
+        switch_end=config.get("switch_end", 10.0),
+        electrostatics_off_start=config.get("electrostatics_off_start", 8.0),
+        electrostatics_off_end=config.get("electrostatics_off_end", 10.0),
     )
 
 
@@ -663,8 +670,13 @@ def plot_force_parity(
 
 
 def restore_checkpoint(checkpoint_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
+
     checkpointer = ocp.PyTreeCheckpointer()
-    restored = checkpointer.restore(checkpoint_path)
+    # Device-agnostic restore: a checkpoint saved on one multi-GPU node's
+    # specific device topology must still load when evaluating on different
+    # (or busy) GPUs -- see _restore_pytree_cpu_safe's docstring.
+    restored = _restore_pytree_cpu_safe(checkpointer, str(checkpoint_path))
     
     params = restored.get("params")
     if params is None and "model" in restored:

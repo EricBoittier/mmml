@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
+
+from mmml.utils.rich_report import get_reporter
 
 
 @dataclass
@@ -165,7 +165,26 @@ def finalize_pycharmm_plan_rows(
     return plan
 
 
-def cubic_box_side_from_cell(cell: Any) -> float | None:
+# How far the edges of a cell may differ, relative to their mean, before
+# collapsing it to a single cubic side is a lie rather than a rounding error.
+# Matches the tolerance ``pbc_env._is_cubic_box_sides`` uses on the CHARMM side.
+CUBIC_CELL_REL_TOLERANCE = 1e-3
+
+
+def cubic_box_side_from_cell(cell: Any, *, warn_non_cubic: bool = True) -> float | None:
+    """Collapse a cell to one cubic side length (Å), averaging the three edges.
+
+    Every periodic path downstream of this -- CHARMM's ``crystal.define_cubic``,
+    ``atoms.set_cell([L, L, L])``, the PME box length -- takes a single side, so
+    a genuinely non-cubic cell cannot survive the trip. It used to be averaged
+    in silence, which turns e.g. a 9.17 x 7.53 x 21.25 Å crystal cell into a
+    12.65 Å cube with the wrong density and no indication anything happened.
+
+    The averaging is kept, because existing cubic workflows depend on this
+    tolerating float noise, but an unequal cell now says so. Pass
+    ``warn_non_cubic=False`` from callers that only want a length scale (a
+    neighbour-list capacity estimate, a log line) rather than a simulation box.
+    """
     if cell is None:
         return None
     import numpy as np
@@ -173,8 +192,23 @@ def cubic_box_side_from_cell(cell: Any) -> float | None:
     arr = np.asarray(cell, dtype=float)
     if arr.shape == (3, 3):
         lengths = [float(np.linalg.norm(arr[k])) for k in range(3)]
-        if all(l > 0 for l in lengths):
-            return sum(lengths) / len(lengths)
+        if all(length > 0 for length in lengths):
+            mean = sum(lengths) / len(lengths)
+            if warn_non_cubic and max(abs(length - mean) for length in lengths) > (
+                CUBIC_CELL_REL_TOLERANCE * mean
+            ):
+                import warnings
+
+                warnings.warn(
+                    f"Non-cubic cell {lengths[0]:.4f} x {lengths[1]:.4f} x "
+                    f"{lengths[2]:.4f} Å collapsed to a {mean:.4f} Å cube: mmml's "
+                    "periodic paths are cubic-only, so the simulated box is not "
+                    "the one you supplied. For a static periodic energy on the "
+                    "true cell see mmml.analysis.lattice_energy.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            return mean
     if arr.size >= 1:
         return float(arr.reshape(-1)[0])
     return None
@@ -337,60 +371,55 @@ def write_campaign_summary(path: Path, jobs: list[MdJobSummary]) -> Path:
 
 
 def print_campaign_plan(rows: list[MdStageSummary], *, console: Console | None = None) -> None:
-    c = console or Console()
-    table = Table(title="[bold cyan]MD campaign plan[/bold cyan]", show_header=True)
-    for col in ("Job", "Backend", "Stage", "Steps", "ps", "dt", "T", "P", "Box"):
-        table.add_column(col)
-    for row in rows:
-        table.add_row(
-            row.job_id,
-            row.backend,
-            row.stage,
-            str(row.nsteps_requested),
-            f"{row.ps_requested:.2f}",
-            f"{row.dt_fs}",
-            f"{row.temperature_K}" if row.temperature_K is not None else "—",
-            f"{row.pressure_atm}" if row.pressure_atm is not None else "—",
-            f"{row.box_A_initial:.1f}" if row.box_A_initial else "—",
-        )
-    c.print(Panel(table, border_style="cyan"))
+    get_reporter(console=console).table(
+        "MD campaign plan",
+        ("Job", "Backend", "Stage", "Steps", "ps", "dt", "T", "P", "Box"),
+        (
+            (
+                row.job_id,
+                row.backend,
+                row.stage,
+                row.nsteps_requested,
+                f"{row.ps_requested:.2f}",
+                row.dt_fs,
+                row.temperature_K if row.temperature_K is not None else "—",
+                row.pressure_atm if row.pressure_atm is not None else "—",
+                f"{row.box_A_initial:.1f}" if row.box_A_initial else "—",
+            )
+            for row in rows
+        ),
+    )
 
 
 def print_stage_summary(stage: MdStageSummary, *, console: Console | None = None) -> None:
-    c = console or Console()
-    table = Table(title=f"[bold]{stage.job_id} / {stage.stage}[/bold]")
-    table.add_column("Quantity")
-    table.add_column("Value")
-    table.add_row("Steps", f"{stage.nsteps_completed}/{stage.nsteps_requested}")
-    table.add_row("ps", f"{stage.ps_completed:.3f}/{stage.ps_requested:.3f}")
+    rows: list[tuple[str, Any]] = [
+        ("Steps", f"{stage.nsteps_completed}/{stage.nsteps_requested}"),
+        ("ps", f"{stage.ps_completed:.3f}/{stage.ps_requested:.3f}"),
+    ]
     if stage.temperature_K is not None:
-        table.add_row("T target (K)", f"{stage.temperature_K:.2f}")
+        rows.append(("T target (K)", f"{stage.temperature_K:.2f}"))
     if stage.pressure_atm is not None:
-        table.add_row("P target (atm)", f"{stage.pressure_atm:.2f}")
+        rows.append(("P target (atm)", f"{stage.pressure_atm:.2f}"))
     if stage.density_g_cm3_final is not None:
-        table.add_row("rho final (g/cm³)", f"{stage.density_g_cm3_final:.4f}")
+        rows.append(("rho final (g/cm³)", f"{stage.density_g_cm3_final:.4f}"))
     if stage.box_A_final is not None:
-        table.add_row("box final (Å)", f"{stage.box_A_final:.3f}")
-    table.add_row("frames", str(stage.frames_written))
-    table.add_row("status", stage.status)
-    c.print(Panel(table, border_style="green" if not stage.truncated else "yellow"))
+        rows.append(("box final (Å)", f"{stage.box_A_final:.3f}"))
+    rows.extend((("frames", stage.frames_written), ("status", stage.status)))
+    get_reporter(console=console).summary(f"{stage.job_id} / {stage.stage}", rows)
 
 
 def print_campaign_report(jobs: list[MdJobSummary], *, console: Console | None = None) -> None:
-    c = console or Console()
-    table = Table(title="[bold]Campaign summary[/bold]")
-    table.add_column("Job")
-    table.add_column("Backend")
-    table.add_column("Stages")
-    table.add_column("Steps ok")
-    table.add_column("Exit")
-    for job in jobs:
-        ok = sum(1 for s in job.stages if not s.truncated and s.status == "complete")
-        table.add_row(
-            job.job_id,
-            job.backend,
-            str(len(job.stages)),
-            f"{ok}/{len(job.stages)}",
-            str(job.exit_code),
-        )
-    c.print(Panel(table, border_style="blue"))
+    get_reporter(console=console).table(
+        "Campaign summary",
+        ("Job", "Backend", "Stages", "Steps ok", "Exit"),
+        (
+            (
+                job.job_id,
+                job.backend,
+                len(job.stages),
+                f"{sum(1 for stage in job.stages if not stage.truncated and stage.status == 'complete')}/{len(job.stages)}",
+                job.exit_code,
+            )
+            for job in jobs
+        ),
+    )

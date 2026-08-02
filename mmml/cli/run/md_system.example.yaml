@@ -50,6 +50,9 @@ runs:
     ps_equi: 0.1
     pressure: 1.0
     output_dir: results/pycharmm_equil
+    # Optional: free-form CHARMM lingo once before heat/equi/prod (CONS/UMBR/ADUMB, …)
+    # pycharmm_pre_dynamics_lingo: |
+    #   cons fix sele resid 1 end
 
   jaxmd_prod:
     description: "NVT production with JAX-MD after PyCHARMM equilibration"

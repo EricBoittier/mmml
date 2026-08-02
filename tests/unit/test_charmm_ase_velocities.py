@@ -193,13 +193,21 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
     np.testing.assert_allclose(sync_comp.call_args[0][0], vel)
 
 
-def test_run_dynamics_ensures_bussi_iasvel_zero(monkeypatch):
+def test_run_dynamics_preserves_explicit_bussi_iasvel_one(monkeypatch):
+    """Explicit ``iasvel=1`` must not be overwritten to ``iasvel=0``.
+
+    Extent fly-off / cold-start arms Boltzmann redraw before ``run_dynamics``.
+    Clobbering to ``iasvel=0`` makes lingering START read COMP *coordinates*
+    as velocities (T ≫ 10¹² K). See ``_ensure_bussi_heat_continuation_iasvel``.
+    """
     import sys
     from unittest.mock import MagicMock, patch
 
     import numpy as np
 
+    # Even with the experimental handoff env, explicit iasvel=1 wins.
     monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
+    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
@@ -218,7 +226,13 @@ def test_run_dynamics_ensures_bussi_iasvel_zero(monkeypatch):
         "vz": np.array([0.0]),
     }
     fake_pycharmm = MagicMock()
-    with patch.dict(sys.modules, {"pycharmm": fake_pycharmm}), patch(
+    # Stub the submodule as well as the parent: run_dynamics finishes with
+    # sync_comparison_velocities_from_main(), which does `import pycharmm.lib`.
+    # With only the parent mocked that raises "'pycharmm' is not a package".
+    with patch.dict(
+        sys.modules,
+        {"pycharmm": fake_pycharmm, "pycharmm.lib": fake_pycharmm.lib},
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=MagicMock(),
     ) as run_capi, patch(
@@ -245,4 +259,4 @@ def test_run_dynamics_ensures_bussi_iasvel_zero(monkeypatch):
     ):
         run_dynamics(kw)
     passed_kw = run_capi.call_args[0][0]
-    assert passed_kw["iasvel"] == 0
+    assert passed_kw["iasvel"] == 1

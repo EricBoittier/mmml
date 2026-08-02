@@ -57,6 +57,7 @@ GAMMA_OFF: float = 3.0
 DEFAULT_MM_SWITCH_ON: float = 6.0
 DEFAULT_MM_SWITCH_WIDTH: float = 5.0
 DEFAULT_ML_SWITCH_WIDTH: float = 1.5
+HYBRID_HAMILTONIANS = ("handoff", "shared_cutoff")
 
 
 def handoff_widths_from_args(args) -> tuple[float, float, float]:
@@ -80,11 +81,29 @@ def cutoff_parameters_from_args(args) -> "CutoffParameters":
         mm_switch_on=mm_on,
         mm_switch_width=mm_w,
         complementary_handoff=complementary,
+        hybrid_hamiltonian=str(getattr(args, "hybrid_hamiltonian", "handoff")),
+        shared_cutoff=getattr(args, "shared_cutoff", None),
     )
 
 
 def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
     """ML/MM handoff widths (shared by md-system and PyCHARMM MLpot CLIs)."""
+    parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=HYBRID_HAMILTONIANS,
+        default="handoff",
+        help=(
+            "Hybrid assembly: handoff preserves the existing COM-switched "
+            "Hamiltonian; shared_cutoff uses additive ML+MM with no handoff "
+            "and force-shifts MM pairs at --shared-cutoff."
+        ),
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for --hybrid-hamiltonian shared_cutoff; defaults to the model cutoff.",
+    )
     parser.add_argument(
         "--ml-switch-width",
         "--ml-cutoff",
@@ -169,6 +188,8 @@ class CutoffParameters:
         mm_switch_width: float = DEFAULT_MM_SWITCH_WIDTH,
         *,
         complementary_handoff: bool = True,
+        hybrid_hamiltonian: str = "handoff",
+        shared_cutoff: float | None = None,
         # Deprecated aliases (same semantics as the canonical names above).
         ml_cutoff: float | None = None,
         mm_cutoff: float | None = None,
@@ -207,6 +228,8 @@ class CutoffParameters:
             mm_switch_width, mm_cutoff=mm_cutoff
         )
         self.complementary_handoff = complementary_handoff
+        self.hybrid_hamiltonian = str(hybrid_hamiltonian)
+        self.shared_cutoff = None if shared_cutoff is None else float(shared_cutoff)
 
     @property
     def ml_cutoff(self) -> float:
@@ -231,7 +254,9 @@ class CutoffParameters:
             f"CutoffParameters(ml_switch_width={self.ml_switch_width}, "
             f"mm_switch_on={self.mm_switch_on}, "
             f"mm_switch_width={self.mm_switch_width}, "
-            f"complementary_handoff={self.complementary_handoff})"
+            f"complementary_handoff={self.complementary_handoff}, "
+            f"hybrid_hamiltonian={self.hybrid_hamiltonian!r}, "
+            f"shared_cutoff={self.shared_cutoff})"
         )
 
     def __repr__(self):
@@ -252,6 +277,10 @@ class CutoffParameters:
             and mm_w_self == mm_w_other
             and getattr(self, "complementary_handoff", True)
             == getattr(other, "complementary_handoff", True)
+            and getattr(self, "hybrid_hamiltonian", "handoff")
+            == getattr(other, "hybrid_hamiltonian", "handoff")
+            and getattr(self, "shared_cutoff", None)
+            == getattr(other, "shared_cutoff", None)
         )
 
     def __ne__(self, other):
@@ -265,6 +294,8 @@ class CutoffParameters:
                 float(self.mm_switch_on),
                 float(self.mm_switch_width),
                 comp,
+                self.hybrid_hamiltonian,
+                self.shared_cutoff,
             )
         )
 
@@ -283,6 +314,8 @@ class CutoffParameters:
     def ml_scale(self, r, gamma_ml: float = GAMMA_ON):
         """ML taper: 1→0 over [mm_switch_on - ml_switch_width, mm_switch_on]."""
         r = np.asarray(r, dtype=float)
+        if self.hybrid_hamiltonian == "shared_cutoff":
+            return np.ones_like(r, dtype=float)
         start = float(self.mm_switch_on) - float(self.ml_switch_width)
         stop = float(self.mm_switch_on)
         return 1.0 - self._sharpstep(r, start, stop, gamma=gamma_ml)
@@ -313,6 +346,8 @@ class CutoffParameters:
 
     def mm_scale(self, r, gamma_on: float = GAMMA_ON, gamma_off: float = GAMMA_OFF):
         """MM window (legacy): 0→1 over [mm_switch_on, mm_switch_on+mm_switch_width], then 1→0."""
+        if self.hybrid_hamiltonian == "shared_cutoff":
+            raise ValueError("shared_cutoff MM scaling is atom-pair based, not COM based")
         r = np.asarray(r, dtype=float)
         mm_on = self._sharpstep(
             r,
@@ -334,6 +369,8 @@ class CutoffParameters:
             "mm_switch_on": self.mm_switch_on,
             "mm_switch_width": self.mm_switch_width,
             "complementary_handoff": getattr(self, "complementary_handoff", True),
+            "hybrid_hamiltonian": getattr(self, "hybrid_hamiltonian", "handoff"),
+            "shared_cutoff": getattr(self, "shared_cutoff", None),
             # Legacy keys for saved configs
             "ml_cutoff": self.ml_switch_width,
             "mm_cutoff": self.mm_switch_width,
@@ -350,6 +387,8 @@ class CutoffParameters:
                 "mm_switch_width", d.get("mm_cutoff", DEFAULT_MM_SWITCH_WIDTH)
             ),
             complementary_handoff=d.get("complementary_handoff", True),
+            hybrid_hamiltonian=d.get("hybrid_hamiltonian", "handoff"),
+            shared_cutoff=d.get("shared_cutoff", None),
         )
 
     def plot_cutoff_parameters(self, save_dir: Path | None = None):

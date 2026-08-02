@@ -1,0 +1,45 @@
+# Mode A + learnable per-type LJ σ/ε scales on CGenFF master tables
+#   σ_eff[t] = master_σ[t] * s_σ[t]
+#   ε_eff[t] = master_ε[t] * s_ε[t]
+#
+#   mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
+#
+# MIC only (ewald / nvalchemiops_pme force LJ off). Scales land in
+# hybrid_mm.json next to the run for MD --mm-lj-scales-file / auto-load.
+#
+# Staged workflow (MIC LJ → optional Ewald TL of ML only):
+#   see docs/hybrid-mm-lj-scales.md § "Staged MIC LJ then Ewald transfer learning"
+#   Adjusted LJs are for jax_mic / include_mm MD — not periodic_external+Ewald.
+
+data: /path/to/out_combined_dedup/energies_forces_dipoles_train.npz
+valid_data: /path/to/out_combined_dedup/energies_forces_dipoles_valid.npz
+ckpt_dir: ./ckpts/hybrid_mm_fixed_lj_scales
+tag: hybrid_mm_fixed_lj_scales
+
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: true
+mm_include_lj: true
+lr_solver: mic
+
+ml_switch_width: 1.5
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+
+charges: true
+batch_size: 32
+num_epochs: 200
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+best: true
+features: 64
+max_degree: 0
+num_iterations: 5
+num_basis_functions: 64
+cutoff: 10.0

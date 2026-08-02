@@ -1,0 +1,24 @@
+# 07 — Certified liquid-box (PSF/CRD) → JAX-MD PBC NVE
+#
+# Edit from_psf / from_crd (or override on the CLI), then:
+#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/07_certified_psf_crd_pbc.yaml
+#   bash examples/md_system_from_pdb/07_certified_psf_crd_pbc.sh
+#
+# Build a tiny box first if needed:
+#   uv run mmml liquid-box --composition DCM:8 \
+#     --output-dir artifacts/md_system_from_pdb/box_dcm8
+#
+# For NVT → NVE handoff campaign, see pbc_certified_jaxmd.yaml.
+
+setup: pbc_nve
+backend: jaxmd
+from_psf: artifacts/md_system_from_pdb/box_dcm8/model.psf
+from_crd: artifacts/md_system_from_pdb/box_dcm8/model.crd
+checkpoint: examples/ckpts_json/DESdimers_params.json
+ps: 0.1
+dt_fs: 0.5
+skip_jit_warmup: true
+quiet: true
+mc_density_equalize: false
+output_dir: artifacts/md_system_from_pdb/07_pbc_nve_jaxmd
+seed: 22

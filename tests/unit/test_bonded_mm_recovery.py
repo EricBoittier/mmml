@@ -227,6 +227,39 @@ def test_selected_max_radius_uses_charmm_selection_bounds():
     assert radius == pytest.approx((4.0**2 + 5.0**2 + 6.0**2) ** 0.5)
 
 
+def test_selected_max_radius_all_uses_coor_api():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    x = np.array([0.0, 3.0])
+    y = np.array([0.0, 4.0])
+    z = np.array([0.0, 0.0])
+    with patch.object(restraints, "_positions_xyz", return_value=(x, y, z)):
+        radius = restraints._selected_max_radius("all", xref=0.0, yref=0.0, zref=0.0)
+    assert radius == pytest.approx(5.0)
+
+
+def test_center_cluster_at_origin_uses_coor_api_not_lingo_translate():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    pycharmm = MagicMock()
+    x = np.array([1.0, 3.0], dtype=np.float64)
+    y = np.array([2.0, 4.0], dtype=np.float64)
+    z = np.array([0.0, 0.0], dtype=np.float64)
+    set_xyz = MagicMock()
+
+    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm), patch.object(
+        restraints, "_positions_xyz", return_value=(x, y, z)
+    ), patch.object(restraints, "_set_positions_xyz", set_xyz):
+        restraints.center_cluster_at_origin(orient=False)
+
+    set_xyz.assert_called_once()
+    args = set_xyz.call_args.args
+    assert float(np.mean(args[0])) == pytest.approx(0.0)
+    assert float(np.mean(args[1])) == pytest.approx(0.0)
+    assert float(np.mean(args[2])) == pytest.approx(0.0)
+    pycharmm.lingo.charmm_script.assert_not_called()
+
+
 def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
     from mmml.interfaces.pycharmmInterface.mlpot import restraints
 
@@ -237,6 +270,10 @@ def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
         restraints,
         "_selected_max_radius",
         return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=False,
     ), patch.object(
         restraints,
         "_current_charmm_energy_kcalmol",
@@ -253,6 +290,41 @@ def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
     )
 
 
+def test_apply_flat_bottom_workflow_skips_ener_under_mpi():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    with patch.object(restraints, "center_cluster_at_origin"), patch.object(
+        restraints,
+        "setup_flat_bottom_sphere_mmfp",
+    ) as setup, patch.object(
+        restraints,
+        "_selected_max_radius",
+        return_value=4.0,
+    ), patch.object(
+        restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=True,
+    ), patch.object(
+        restraints,
+        "_current_charmm_energy_kcalmol",
+    ) as energy, patch(
+        "builtins.print",
+    ) as mock_print:
+        cfg = restraints.apply_flat_bottom_workflow(
+            radius=10.0,
+            force=0.01,
+            selection="all",
+        )
+
+    assert cfg is not None
+    setup.assert_called_once()
+    energy.assert_not_called()
+    assert any(
+        "skipping CHARMM ENER" in str(call.args[0])
+        for call in mock_print.call_args_list
+    )
+
+
 def test_apply_flat_bottom_workflow_retries_until_energy_unchanged():
     from mmml.interfaces.pycharmmInterface.mlpot import restraints
 
@@ -263,6 +335,10 @@ def test_apply_flat_bottom_workflow_retries_until_energy_unchanged():
         restraints,
         "_selected_max_radius",
         return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=False,
     ), patch.object(
         restraints,
         "_current_charmm_energy_kcalmol",
@@ -299,6 +375,10 @@ def test_apply_flat_bottom_workflow_warns_when_energy_never_converges():
         restraints,
         "_selected_max_radius",
         return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_skip_mmfp_energy_verify",
+        return_value=False,
     ), patch.object(
         restraints,
         "_current_charmm_energy_kcalmol",
@@ -1446,6 +1526,34 @@ def test_run_intra_overlap_rescue_all_ml_uses_bonded_sd_path(tmp_path):
     intra.assert_called_once()
 
 
+def test_run_all_ml_intra_overlap_rescue_refuses_all_ml_pbc_sd():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _run_all_ml_intra_overlap_rescue,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+
+    ctx = MagicMock()
+    ctx.use_pbc = True
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=1.0,
+        n_monomers=9,
+        use_pbc=True,
+        rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
+    )
+    bonded = BondedMmMiniConfig(nstep_sd=50, verbose=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), pytest.raises(RuntimeError, match="refuses MLpot/bonded SD polish"):
+        _run_all_ml_intra_overlap_rescue(ctx, cfg, bonded)
+
+
 def test_run_inter_overlap_rescue_all_ml_uses_bonded_vdw_path(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_inter_monomer_overlap_rescue,
@@ -2076,6 +2184,7 @@ def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
     ctx.reregister_mlpot.assert_called_once_with(verbose=False, reregister_params=False)
     assert refresh.call_count == 1
     assert grms == 12.0
+    assert ctx._overlap_post_rescue_cold_start is True
 
 
 def test_finalize_overlap_rescue_skips_duplicate_mlpot_sd_after_extent_polish():
@@ -2118,6 +2227,77 @@ def test_finalize_overlap_rescue_skips_duplicate_mlpot_sd_after_extent_polish():
     mini.assert_not_called()
     assert refresh.call_count == 1
     assert grms == 28.9
+
+
+def test_finalize_overlap_rescue_all_ml_pbc_skips_mlpot_sd_mini():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        finalize_overlap_rescue_for_dynamics,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.use_pbc = True
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=900,
+        use_pbc=True,
+        rescue=OverlapRescueConfig(verbose=False, nstep_sd=1000),
+        mlpot_rescue_mini_nstep=1000,
+        pyCModel=MagicMock(),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        return_value=4.3,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        return_value=4.3,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+    ) as mini:
+        grms = finalize_overlap_rescue_for_dynamics(
+            ctx, cfg, context="heat segment 1/2 at step 500"
+        )
+    mini.assert_not_called()
+    assert grms == 4.3
+    assert ctx._overlap_post_rescue_cold_start is True
+
+
+def test_run_mlpot_recovery_mini_skips_all_ml_pbc():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _run_mlpot_recovery_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+
+    ctx = MagicMock()
+    ctx.use_pbc = True
+    bonded = BondedMmMiniConfig(nstep_sd=1000, verbose=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
+    ) as mini:
+        _run_mlpot_recovery_mini(
+            ctx,
+            bonded,
+            pyCModel=MagicMock(),
+            context="heat at step 500",
+            nstep=1000,
+        )
+    mini.assert_not_called()
 
 
 def test_finalize_overlap_rescue_retries_near_miss_grms_gate():
@@ -2334,3 +2514,36 @@ def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
             finalize_overlap_rescue_for_dynamics(
                 ctx, cfg, context="EQUI at step 2500"
             )
+
+
+def test_run_mlpot_recovery_mini_skips_when_all_ml_pbc_lattice_not_ready():
+    """All-ML PBC: keep restored geometry; never MLpot SD polish (even if lattice-ready)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _run_mlpot_recovery_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.use_pbc = True
+    ctx.cubic_box_side_A = 30.0
+    bonded = BondedMmMiniConfig(nstep_sd=10, verbose=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
+    ) as mini, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.clear_mmfp_restraints",
+    ) as clear:
+        _run_mlpot_recovery_mini(
+            ctx,
+            bonded,
+            pyCModel=MagicMock(),
+            context="Fly-off recovery",
+        )
+    mini.assert_not_called()
+    clear.assert_not_called()

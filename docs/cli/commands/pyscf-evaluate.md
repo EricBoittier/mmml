@@ -22,21 +22,15 @@ usage: mmml pyscf-evaluate [-h] -i INPUT [-o OUTPUT] [--basis BASIS] [--xc XC]
 
 Evaluate geometries with pyscf-dft (energy, forces, dipoles, ESP).
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   -i, --input INPUT     Input NPZ with R, Z, N (e.g. from normal-mode-sample)
-  -o, --output OUTPUT   Output NPZ path (default: evaluated.npz)
+
+Scientific model:
   --basis BASIS         Basis set (default: def2-SVP)
   --xc XC               XC functional (default: PBE0)
   --spin SPIN           2*spin (0=singlet, 1=doublet, default: 0)
   --charge CHARGE       Total charge (default: 0)
   --no-energy           Skip energy (not recommended)
-  --no-gradient         Skip forces/gradients
-  --no-dipole           Skip dipole moments
-  --esp                 Compute ESP on density-selected grid (slower)
-  --esp-cpu-fallback    Use CPU path for ESP (slower; default: GPU int1e_grids)
-  --polarizability      Compute molecular polarizability tensor for each
-                        geometry
   --EF                  Include uniform electric field in the Hamiltonian
                         (atomic units). Without --efield, draw a random
                         (Ex,Ey,Ez) per geometry (see --efield-sigma). Giving
@@ -50,13 +44,29 @@ options:
   --efield-sigma EFIELD_SIGMA
                         Std dev (a.u.) per component for random fields when --EF
                         is set without --efield (default: 0.01)
-  --add-random-noise SIGMA
-                        Gaussian noise std dev in Angstrom added to all R
-                        components before evaluation
-  --seed SEED           RNG seed for --add-random-noise and random --EF draws
   --no-efield-include-nuclear-energy
                         With --EF/--efield: use mf.kernel energy only (omit
                         nuclear-field term after SCF).
+
+Execution:
+  --seed SEED           RNG seed for --add-random-noise and random --EF draws
+
+Output & artifacts:
+  -o, --output OUTPUT   Output NPZ path (default: evaluated.npz)
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
+  --no-gradient         Skip forces/gradients
+  --no-dipole           Skip dipole moments
+  --esp                 Compute ESP on density-selected grid (slower)
+  --esp-cpu-fallback    Use CPU path for ESP (slower; default: GPU int1e_grids)
+  --polarizability      Compute molecular polarizability tensor for each
+                        geometry
+  --add-random-noise SIGMA
+                        Gaussian noise std dev in Angstrom added to all R
+                        components before evaluation
 
 CLI to evaluate sampled geometries with pyscf-dft (energy, forces, dipoles,
 ESP). Runs all geometries in one process (same GPU context) for speed. Input:

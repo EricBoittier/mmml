@@ -1634,6 +1634,19 @@ IC NT CA *C O       0.00   0.00  180.00   0.00 0.00
 IC CA C NT HT2      0.00   0.00  180.00   0.00 0.00
 IC C HT2 *NT HT1    0.00   0.00  180.00   0.00 0.00
 
+RESI METH          0.00 ! CH4, methane (MMML; CG331/HGA3 alkane types)
+GROUP
+ATOM  C1  CG331   -0.36 !     H11
+ATOM  H11 HGA3     0.09 !      |
+ATOM  H12 HGA3     0.09 ! H12--C1--H13
+ATOM  H13 HGA3     0.09 !      |
+ATOM  H14 HGA3     0.09 !     H14
+BOND C1 H11  C1 H12  C1 H13  C1 H14
+IC  H11  H12  *C1  H13   0.00  0.00  120.00  0.00  0.00
+IC  H11  H12  *C1  H14   0.00  0.00 -120.00  0.00  0.00
+IC  H12  C1   H11  H13   0.00  0.00  180.00  0.00  0.00
+PATC FIRS NONE LAST NONE
+
 RESI ETHA          0.00 ! C2H6, ethane
 GROUP
 ATOM  H11 HGA3     0.09 !  H11      H21

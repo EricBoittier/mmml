@@ -1,0 +1,17 @@
+# 04 — Full-system PDB → PyCHARMM vacuum NVE (+ flat-bottom)
+#
+#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/04_from_pdb_free_nve_pycharmm.yaml
+#   bash examples/md_system_from_pdb/04_from_pdb_free_nve_pycharmm.sh
+
+setup: free_nve
+backend: pycharmm
+from_pdb: mmml/generate/sample/pdb/aco_monomer.pdb
+checkpoint: examples/ckpts_json/DESdimers_params.json
+flat_bottom_radius: 20.0
+ps: 0.1
+dt_fs: 0.5
+mini_nstep: 20
+skip_energy_show: true
+quiet: true
+output_dir: artifacts/md_system_from_pdb/04_free_nve_pycharmm
+seed: 42

@@ -29,19 +29,9 @@ usage: mmml run-pycharmm [-h] --pdbfile PDBFILE [--cell CELL]
 
 Pure PyCHARMM: heating and equilibration only (no MM/ML)
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --pdbfile PDBFILE     Path to the PDB file (requires correct atom names and
                         types for CHARMM).
-  --cell CELL           Cubic cell side length in Å for periodic boundary
-                        conditions (default: 1000).
-  --skip-setup-energy-show
-                        Skip energy.show() in setup_box for faster startup.
-  --pycharmm-minimize/--no-pycharmm-minimize, --no-pycharmm-minimize/--no-pycharmm-minimize
-                        Run PyCHARMM nbonds/minimize before heat (default:
-                        True).
-  --pycharmm-minimize-steps N
-                        ABNR minimization steps (default: 1000).
   --two-residue-sampling, --no-two-residue-sampling
                         Run restrained two-residue PyCHARMM sampling after
                         nbonds/block setup (default: True).
@@ -60,6 +50,22 @@ options:
   --two-residue-restraint-resid2 TWO_RESIDUE_RESTRAINT_RESID2
                         Second CHARMM residue id for two-residue sampling
                         (default: 2).
+
+Execution:
+  --skip-setup-energy-show
+                        Skip energy.show() in setup_box for faster startup.
+  --pycharmm-minimize-steps N
+                        ABNR minimization steps (default: 1000).
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
+  --cell CELL           Cubic cell side length in Å for periodic boundary
+                        conditions (default: 1000).
+  --pycharmm-minimize/--no-pycharmm-minimize, --no-pycharmm-minimize/--no-pycharmm-minimize
+                        Run PyCHARMM nbonds/minimize before heat (default:
+                        True).
   --view-braille        Display braille molecular viewer at each phase.
 
 Pure PyCHARMM runner: heating and equilibration only (no MM/ML). Runs CHARMM
@@ -70,6 +76,9 @@ mmml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40 mmml run-
 pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
 ```
 
+## Visual examples
+
+![Liquid structure and thermodynamic validation](../../images/structures/validation_summary.png)
 
 
 ---

@@ -2,7 +2,7 @@
 # Stop the Snakemake driver and relaunch all workflow cells with the current MMML_CKPT.
 #
 # Usage (pc-studix / gpu09 login node):
-#   export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json
+#   export MMML_CKPT=/path/to/checkpoint.json
 #   bash scripts/rerun_slurm_campaign.sh              # prep sweep (24 jobs)
 #   bash scripts/rerun_slurm_campaign.sh --main         # main config.yaml matrix
 set -euo pipefail
@@ -47,7 +47,7 @@ export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
 if [[ ! -f "${MMML_CKPT}" ]]; then
   echo "ERROR: checkpoint not found: ${MMML_CKPT}" >&2
-  echo "  export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json" >&2
+  echo "  export MMML_CKPT=/path/to/checkpoint.json" >&2
   exit 1
 fi
 

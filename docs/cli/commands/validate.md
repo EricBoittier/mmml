@@ -24,6 +24,9 @@ options:
   --quiet     Only print pass/fail summary
 ```
 
+## Visual examples
+
+![Force and unit validation](../../images/prepare-mm-dataset/force_validation.png)
 
 
 ---

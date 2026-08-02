@@ -1,0 +1,38 @@
+# Electrostatic embedding (q0) from a make-box TIP3 artifact.
+#   bash examples/m/08_make_boxes.sh
+#   uv run mmml md-system --config examples/m/yaml/es_embed_from_box_tip3.yaml --run-all
+
+defaults:
+  from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_switch_on: 8.0
+  mm_charge_mode: q0
+  lr_solver: mic
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+
+campaign_output: artifacts/nh3_ch3cl/es_embed_from_box_tip3
+
+runs:
+  ase:
+    backend: ase
+    output_dir: artifacts/nh3_ch3cl/es_embed_from_box_tip3/ase
+
+  jaxmd:
+    backend: jaxmd
+    output_dir: artifacts/nh3_ch3cl/es_embed_from_box_tip3/jaxmd
+
+  pycharmm:
+    backend: pycharmm
+    mini_nstep: 20
+    skip_energy_show: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/es_embed_from_box_tip3/pycharmm

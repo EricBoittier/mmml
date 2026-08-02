@@ -87,6 +87,13 @@ for comp in "${COMPOSITIONS[@]}"; do
   _run_scan "$comp" "pbc_mic" \
     --box-size "$BOX_SIZE" --mlpot-pbc --lr-solver mic
 
+  # Hybrid-native Ewald (train ↔ liquid MD path; not jax-pme method=ewald).
+  _run_scan "$comp" "pbc_hybrid_ewald" \
+    --box-size "$BOX_SIZE" --mlpot-pbc --lr-solver ewald
+  _run_scan "$comp" "pbc_hybrid_ewald_omit_self" \
+    --box-size "$BOX_SIZE" --mlpot-pbc \
+    --lr-solver ewald --ewald-omit-self
+
   for method in ewald pme p3m; do
     _run_scan "$comp" "pbc_jax_pme_${method}" \
       --box-size "$BOX_SIZE" --mlpot-pbc \

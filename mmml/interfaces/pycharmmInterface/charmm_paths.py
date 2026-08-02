@@ -17,6 +17,24 @@ _MIN_CGENFF_PRM_BYTES = 500_000
 _CHARMM_LIB_NAMES = ("libcharmm.so", "libcharmm.dylib", "charmm.so", "charmm.dylib")
 
 
+_DISABLE_ENV_VAR = "MMML_DISABLE_CHARMM"
+_TRUTHY = ("1", "true", "yes", "on")
+
+
+def charmm_disabled(env: "os._Environ | dict[str, str] | None" = None) -> bool:
+    """True when ``MMML_DISABLE_CHARMM`` asks discovery to pretend CHARMM is absent.
+
+    Pointing ``CHARMM_LIB_DIR`` at a nonexistent directory does *not* hide a
+    build: :func:`_resolve_lib_dir` treats a lib-less explicit value as stale
+    and falls back to the discovered ``setup/charmm``.  That is right for a
+    developer with an out-of-date override and wrong for ``make test-ci``,
+    which needs to reproduce CI's no-libcharmm environment honestly.  This flag
+    is the supported way to do that.
+    """
+    environ = env if env is not None else os.environ
+    return (environ.get(_DISABLE_ENV_VAR) or "").strip().lower() in _TRUTHY
+
+
 def mmml_repo_root(start: Path | None = None) -> Path:
     here = (start or Path(__file__)).resolve()
     for parent in here.parents:
@@ -46,6 +64,65 @@ def default_repo_charmm_home(repo_root: Path | None = None) -> Path | None:
     if find_charmm_lib_in_dir(candidate):
         return candidate
     return None
+
+
+def charmm_build_cache_dirs(env: "os._Environ | dict[str, str] | None" = None) -> list[Path]:
+    """Out-of-tree build directories that hold a ``libcharmm``.
+
+    ``scripts/rebuild_charmm_mlpot.sh`` builds into
+    ``$HOME/.cache/mmml-charmm-build/<platform-tag>`` (overridable with
+    ``CHARMM_BUILD_DIR``), and the per-tier helpers add
+    ``.../tier_<max_npr>_nodomdec/lib``. Those builds are frequently *newer*
+    than the copy under ``setup/charmm``, so they must be discoverable — a
+    stale in-tree library silently caps MLpot at the conservative
+    ``max_Nml``/``max_Npr`` fallback even when a fresh build exists.
+
+    Reads ``CHARMM_BUILD_DIR`` / ``HOME`` from *env* (default ``os.environ``);
+    passing an explicit mapping keeps discovery hermetic under test.
+    """
+    environ = env if env is not None else os.environ
+    roots: list[Path] = []
+    explicit = (environ.get("CHARMM_BUILD_DIR") or "").strip()
+    if explicit:
+        build_dir = Path(explicit).expanduser()
+        # CHARMM_BUILD_DIR names one build directory; its siblings are the
+        # other platform/tier builds from the same cache.
+        roots.extend([build_dir, build_dir.parent])
+    home_raw = (environ.get("HOME") or "").strip()
+    if home_raw:
+        roots.append(Path(home_raw) / ".cache" / "mmml-charmm-build")
+    elif env is None:
+        roots.append(Path("~/.cache/mmml-charmm-build").expanduser())
+
+    out: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        candidates = [root, *(c for c in sorted(root.iterdir()) if c.is_dir())]
+        for candidate in candidates:
+            if find_charmm_lib_in_dir(candidate) is None:
+                continue
+            resolved = candidate.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            out.append(candidate)
+    return out
+
+
+def newest_charmm_lib_dir(candidates: list[Path]) -> Path | None:
+    """The candidate whose ``libcharmm`` has the most recent mtime."""
+    best: Path | None = None
+    best_mtime: float | None = None
+    for directory in candidates:
+        lib = find_charmm_lib_in_dir(directory)
+        if lib is None:
+            continue
+        mtime = lib.stat().st_mtime
+        if best_mtime is None or mtime > best_mtime:
+            best, best_mtime = directory, mtime
+    return best
 
 
 def normalize_charmm_lib_dir(raw: str | None) -> str:
@@ -113,6 +190,8 @@ def resolve_charmm_paths(
     (for example the per-tier libs built by ``ensure_charmm_mlpot_limits.sh``).
     """
     environ = env if env is not None else os.environ
+    if charmm_disabled(environ):
+        return "", ""
     root = repo_root or mmml_repo_root()
 
     default_home = default_repo_charmm_home(root)
@@ -122,9 +201,23 @@ def resolve_charmm_paths(
     if home and not _valid_charmm_home(home) and default_home_s:
         home = default_home_s
 
-    lib = _resolve_lib_dir(env=environ, default=default_home_s)
-    if lib and not _valid_charmm_home(lib) and default_home_s:
-        lib = default_home_s
+    # CHARMM_HOME stays the *source* tree (it owns source/api/api_func.F90 and
+    # toppar); only the library directory follows the freshest build. Prefer an
+    # out-of-tree build-cache library over a stale setup/charmm copy, matching
+    # what the cluster workflow scripts set by hand.
+    default_lib_s = default_home_s
+    freshest = newest_charmm_lib_dir(
+        [
+            *([default_home] if default_home else []),
+            *charmm_build_cache_dirs(env=environ),
+        ]
+    )
+    if freshest is not None:
+        default_lib_s = str(freshest)
+
+    lib = _resolve_lib_dir(env=environ, default=default_lib_s)
+    if lib and not _valid_charmm_home(lib) and default_lib_s:
+        lib = default_lib_s
 
     return home, lib
 
@@ -199,7 +292,14 @@ def charmm_io_staging_root() -> Path:
     raw = (os.environ.get("MMML_CHARMM_IO_STAGING") or "").strip()
     if raw:
         return Path(os.path.expandvars(raw)).expanduser()
-    return Path(os.environ.get("TMPDIR", "/tmp")) / "mmml-charmm-io"
+    base = Path(os.environ.get("TMPDIR", "/tmp"))
+    # Per-user directory name: on shared compute nodes a legacy flat
+    # ``/tmp/mmml-charmm-io`` is often owned by another account (mode 755),
+    # which blocks mkdir for everyone else.
+    user = (os.environ.get("USER") or os.environ.get("LOGNAME") or "").strip()
+    if not user:
+        user = f"u{os.getuid()}"
+    return base / f"mmml-charmm-io-{user}"
 
 
 def _charmm_io_alias_scope() -> str:

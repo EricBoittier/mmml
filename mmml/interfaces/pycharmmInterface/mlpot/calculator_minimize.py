@@ -151,6 +151,18 @@ def _hybrid_grms_from_ase_atoms(atoms: Any) -> float:
     return forces_grms_kcalmol_A(forces_ev * EV_TO_KCAL_MOL)
 
 
+def _atomic_fmax_ev_a(forces_ev_a: np.ndarray) -> float:
+    """Largest per-atom Euclidean force magnitude (eV/Å)."""
+    f = np.asarray(forces_ev_a, dtype=np.float64).reshape(-1, 3)
+    if f.size == 0:
+        return 0.0
+    mags = np.linalg.norm(f, axis=1)
+    mags = mags[np.isfinite(mags)]
+    if mags.size == 0:
+        return 0.0
+    return float(np.max(mags))
+
+
 def hybrid_calculators_synced(diag_kind: str) -> bool:
     """True when hybrid ASE mini is safe (hybrid/CHARMM GRMS are not desynced)."""
     return str(diag_kind) != "desync_suspected"
@@ -494,6 +506,19 @@ def _get_calculator_mini_historical_best(mlpot_ctx: Any) -> CalculatorMiniHistor
     return hist
 
 
+def clear_calculator_mini_historical_best(mlpot_ctx: Any) -> None:
+    """Drop session-best mini geometry (call when entering heat or mid-heat rescue).
+
+    Pre-heat / pretreat mini frames often have much lower fmax/energy than a
+    mid-HEAT rescue on a liquid configuration. Keeping them as session-best
+    makes spike-abort FIRE roll the box back to t≈0 mini geometry and wipe
+    picoseconds of dynamics.
+    """
+    if mlpot_ctx is None:
+        return
+    mlpot_ctx.calculator_mini_historical_best = CalculatorMiniHistoricalBest()
+
+
 def _update_calculator_mini_historical_best(
     mlpot_ctx: Any,
     positions: np.ndarray,
@@ -564,8 +589,15 @@ def _commit_hybrid_calculator_mini_result(
     step_count: int,
     verbose: bool,
     stopped_on_safe_grms: bool = False,
+    allow_historical_restore: bool = True,
 ) -> float:
-    """Sync CHARMM, update historical best, and return hybrid GRMS (kcal/mol/Å)."""
+    """Sync CHARMM, update historical best, and return hybrid GRMS (kcal/mol/Å).
+
+    When ``allow_historical_restore`` is false (constrained monomer repair), keep
+    the just-relaxed frame even if an older whole-box mini has a slightly better
+    recorded fmax — restoring that frame reintroduces the stressed monomers the
+    repair just fixed (seen: TIP3:903 gate 3.59 eV/Å after a successful 0.9 repair).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot import cli_common
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
@@ -624,15 +656,19 @@ def _commit_hybrid_calculator_mini_result(
         label=best_frame.restored_label(),
         context=context_prefix,
     )
-    fmax, energy_ev, grms1, restored_hist = _maybe_restore_calculator_mini_historical_best(
-        mlpot_ctx,
-        atoms,
-        fmax_ev_a=fmax,
-        energy_ev=energy_ev,
-        grms_kcalmol_A=float(grms1),
-        context_prefix=context_prefix,
-        verbose=verbose,
-    )
+    restored_hist = False
+    if allow_historical_restore:
+        fmax, energy_ev, grms1, restored_hist = (
+            _maybe_restore_calculator_mini_historical_best(
+                mlpot_ctx,
+                atoms,
+                fmax_ev_a=fmax,
+                energy_ev=energy_ev,
+                grms_kcalmol_A=float(grms1),
+                context_prefix=context_prefix,
+                verbose=verbose,
+            )
+        )
     if restored_hist:
         sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
         _invalidate_deferred_ener_probe()
@@ -693,12 +729,18 @@ def _hybrid_mlpot_ase_calculator_class():
         ) -> None:
             super().calculate(atoms, properties, system_changes)
             pos = np.asarray(atoms.get_positions(), dtype=np.float64)
-            evald = mlpot_spherical_energy_forces_ev_angstrom(
-                self._pyCModel,
-                positions=pos,
-                use_pbc=self.use_pbc,
-                box_A=self._box_A,
-            )
+            # Pair-list preparation may call CHARMM UPDATE/ENER internally.
+            # Keep those implementation details quiet; Python exceptions still
+            # propagate and explicit MMML optimizer/stage reports remain visible.
+            from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+
+            with charmm_quiet_output():
+                evald = mlpot_spherical_energy_forces_ev_angstrom(
+                    self._pyCModel,
+                    positions=pos,
+                    use_pbc=self.use_pbc,
+                    box_A=self._box_A,
+                )
             if evald is None:
                 raise RuntimeError(
                     "hybrid spherical_fn evaluation failed during calculator mini"
@@ -708,6 +750,38 @@ def _hybrid_mlpot_ase_calculator_class():
             self.results["forces"] = np.asarray(forces_ev, dtype=np.float64)
 
     return HybridMlpotAseCalculator
+
+
+def _hybrid_minimize_atoms(mlpot_ctx: Any, z: Any, positions: np.ndarray) -> Any:
+    """Build ASE atoms in the same periodic coordinate convention as CHARMM.
+
+    CHARMM uses a cell centered at the origin. Before calculator minimization,
+    rigidly rewrap whole monomers into that cell so a molecule cannot enter the
+    JAX MIC path through a stale CHARMM image. The custom calculator still owns
+    the exact MIC energy convention; ASE's cell metadata makes the boundary
+    condition explicit to optimizers and constraints.
+    """
+    import ase
+
+    pos = np.asarray(positions, dtype=np.float64)
+    use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
+    box_side_A = getattr(mlpot_ctx, "cubic_box_side_A", None)
+    if box_side_A is None:
+        box_side_A = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+    atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if use_pbc and box_side_A is not None and atoms_per is not None:
+        from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+
+        pos = rewrap_charmm_pbc_molecules(
+            pos,
+            [int(count) for count in atoms_per],
+            float(box_side_A),
+        )
+    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos)
+    if use_pbc and box_side_A is not None:
+        atoms.set_cell(np.eye(3, dtype=np.float64) * float(box_side_A))
+        atoms.set_pbc(True)
+    return atoms
 
 
 def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> None:
@@ -781,8 +855,17 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
                     verbose=False,
                 )
         if verbose:
+            # `_jax_on_gpu` reflects the device actually used after promotion
+            # (mlpot_jax_device_context falls back to CPU -- with a warning --
+            # when GPU was requested but unavailable); report reality, not the
+            # request, so this line can't claim GPU while nvidia-smi shows 0%.
+            now_gpu = bool(getattr(pyCModel, "_jax_on_gpu", False))
             print(
-                "Pre-SD hybrid calculator minimize: promoted JAX factory to GPU",
+                "Pre-SD hybrid calculator minimize: promoted JAX factory to GPU"
+                if now_gpu
+                else "Pre-SD hybrid calculator minimize: JAX factory promotion "
+                "requested GPU but no CUDA device is visible; continuing on CPU "
+                "(see WARNING above)",
                 flush=True,
             )
         return
@@ -827,7 +910,9 @@ def _run_hybrid_calculator_bfgs(
         nonlocal stopped_on_spike, stopped_on_safe_grms
         if stopped_on_spike or stopped_on_safe_grms:
             return
-        fmax = float(np.abs(atoms.get_forces()).max())
+        forces_ev = np.asarray(atoms.get_forces(), dtype=np.float64)
+        fmax = float(np.abs(forces_ev).max())
+        fmax_atom = _atomic_fmax_ev_a(forces_ev)
         safe_grms = config.safe_grms_kcalmol_A
         if safe_grms is not None:
             try:
@@ -835,12 +920,12 @@ def _run_hybrid_calculator_bfgs(
             except Exception:
                 grms = float("inf")
             # RMS force alone can hide one catastrophically stressed atom or
-            # monomer.  Only use the relaxed GRMS shortcut once the maximum
-            # component is also in the optimizer's soft-force region.
+            # monomer.  Only use the relaxed GRMS shortcut once the max atomic
+            # |F| is also in the optimizer's soft-force region.
             safe_fmax = float(config.fmax_ev_a) * float(config.stall_soft_fmax_factor)
             if safe_grms_stop_allowed(
                 grms,
-                fmax,
+                fmax_atom,
                 safe_grms_kcalmol_A=float(safe_grms),
                 safe_fmax_ev_a=safe_fmax,
             ):
@@ -849,8 +934,8 @@ def _run_hybrid_calculator_bfgs(
                     print(
                         f"{context_prefix} hybrid calculator BFGS: "
                         f"safe GRMS reached ({grms:.4f} <= {float(safe_grms):.4f} "
-                        f"kcal/mol/Å; fmax={fmax:.4f} <= {safe_fmax:.4f} eV/Å); "
-                        "stopping early",
+                        f"kcal/mol/Å; atomic fmax={fmax_atom:.4f} <= "
+                        f"{safe_fmax:.4f} eV/Å); stopping early",
                         flush=True,
                     )
                 return
@@ -965,9 +1050,14 @@ def _run_hybrid_calculator_fire(
         if stopped_on_spike or stopped_on_safe_grms:
             return
         try:
-            fmax = float(np.abs(atoms.get_forces()).max())
+            forces_ev = np.asarray(atoms.get_forces(), dtype=np.float64)
+            # Spike / ASE irun guards use max |component|; safe-GRMS uses
+            # Euclidean per-atom |F| so it matches the pre-dynamics fmax gate.
+            fmax = float(np.abs(forces_ev).max())
+            fmax_atom = _atomic_fmax_ev_a(forces_ev)
         except Exception:
             fmax = float("inf")
+            fmax_atom = float("inf")
         safe_grms = config.safe_grms_kcalmol_A
         if safe_grms is not None:
             try:
@@ -975,12 +1065,12 @@ def _run_hybrid_calculator_fire(
             except Exception:
                 grms = float("inf")
             # A low RMS can hide a handful of atoms at multi-eV/Å; only take the
-            # safe-GRMS shortcut once the max component is also in the soft-force
+            # safe-GRMS shortcut once the max atomic |F| is also in the soft-force
             # region, otherwise FIRE stops at step 0 leaving stressed atoms.
             safe_fmax = float(config.fmax_ev_a) * float(config.stall_soft_fmax_factor)
             if safe_grms_stop_allowed(
                 grms,
-                fmax,
+                fmax_atom,
                 safe_grms_kcalmol_A=float(safe_grms),
                 safe_fmax_ev_a=safe_fmax,
             ):
@@ -989,8 +1079,8 @@ def _run_hybrid_calculator_fire(
                     print(
                         f"{context_prefix} hybrid calculator FIRE: "
                         f"safe GRMS reached ({grms:.4f} <= {float(safe_grms):.4f} "
-                        f"kcal/mol/Å; fmax={fmax:.4f} <= {safe_fmax:.4f} eV/Å); "
-                        "stopping early",
+                        f"kcal/mol/Å; atomic fmax={fmax_atom:.4f} <= "
+                        f"{safe_fmax:.4f} eV/Å); stopping early",
                         flush=True,
                     )
                 return
@@ -1076,8 +1166,6 @@ def minimize_hybrid_calculator_before_sd(
     context_prefix: str = "Pre-SD",
 ) -> HybridMinimizeResult:
     """Relax CHARMM coordinates with ASE BFGS on the hybrid calculator."""
-    import ase
-
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
@@ -1114,7 +1202,7 @@ def minimize_hybrid_calculator_before_sd(
             flush=True,
         )
 
-    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms = _hybrid_minimize_atoms(mlpot_ctx, z, pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     initial_fmax = float(np.abs(atoms.get_forces()).max())
     if initial_fmax > float(config.max_initial_fmax_ev_a):
@@ -1197,8 +1285,6 @@ def minimize_hybrid_calculator_fire_before_sd(
     context_prefix: str = "Pre-SD",
 ) -> HybridMinimizeResult:
     """Relax CHARMM coordinates with guarded ASE FIRE on the hybrid calculator."""
-    import ase
-
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
@@ -1234,7 +1320,7 @@ def minimize_hybrid_calculator_fire_before_sd(
             )
         return HybridMinimizeResult(grms=float(grms0), ran=False)
 
-    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms = _hybrid_minimize_atoms(mlpot_ctx, z, pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     initial_fmax = float(np.abs(atoms.get_forces()).max())
     initial_energy = float(atoms.get_potential_energy())
@@ -1338,11 +1424,9 @@ def repair_stressed_monomers_with_calculator(
     guarded FIRE so the optimizer spends its steps on the atoms that actually
     need it, then re-checks the max force.
     """
-    import ase
     from ase.constraints import FixAtoms
 
     from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
-        atomic_fmax_kcalmol_A,
         per_monomer_fmax_from_forces,
         select_stressed_monomers,
     )
@@ -1356,10 +1440,10 @@ def repair_stressed_monomers_with_calculator(
 
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=verbose)
     pos0 = get_charmm_positions_array()
-    atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos0)
+    atoms = _hybrid_minimize_atoms(mlpot_ctx, z, pos0)
     atoms.calc = _hybrid_mlpot_ase_calculator_class()(mlpot_ctx)
     forces0 = np.asarray(atoms.get_forces(), dtype=np.float64)  # eV/Å
-    fmax_before = atomic_fmax_kcalmol_A(forces0)  # norm-based, eV/Å here
+    fmax_before = _atomic_fmax_ev_a(forces0)
 
     per_mono = per_monomer_fmax_from_forces(forces0, atoms_per_list)
     stressed = select_stressed_monomers(per_mono, float(fmax_ceiling_ev_a))
@@ -1416,10 +1500,19 @@ def repair_stressed_monomers_with_calculator(
         step_count=int(opt.get_number_of_steps()),
         verbose=verbose,
         stopped_on_safe_grms=stopped_on_safe_grms,
+        # Do not roll back to a whole-box mini that still has the stressed monomers.
+        allow_historical_restore=False,
     )
 
+    # Re-measure on CHARMM-synced coords (commit may have refreshed caches).
+    pos1 = get_charmm_positions_array()
+    atoms.set_positions(np.asarray(pos1, dtype=np.float64))
+    try:
+        atoms.calc.results.clear()
+    except Exception:
+        pass
     forces1 = np.asarray(atoms.get_forces(), dtype=np.float64)
-    fmax_after = atomic_fmax_kcalmol_A(forces1)
+    fmax_after = _atomic_fmax_ev_a(forces1)
     if verbose:
         print(
             f"{context_prefix}: max atomic force {fmax_before:.2f} -> "

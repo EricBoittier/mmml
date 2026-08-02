@@ -61,7 +61,12 @@ def fetch_charmm_image_nb_stats() -> CharmmImageNbStats | None:
         import pycharmm.image as charmm_image
     except (ImportError, OSError):
         return None
-    raw = charmm_image.get_iminb_stats()
+    # ``get_iminb_stats`` is an MMML-patched addition; a stock/older pycharmm
+    # build won't have it. Treat that like an unavailable image module.
+    get_iminb_stats = getattr(charmm_image, "get_iminb_stats", None)
+    if get_iminb_stats is None:
+        return None
+    raw = get_iminb_stats()
     if raw is None:
         return None
     return CharmmImageNbStats(

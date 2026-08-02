@@ -676,23 +676,15 @@ def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
         charmm_total_forces_kcalmol_A,
     )
 
-    class _ForceFrame:
-        def __init__(self, dx: float, dy: float, dz: float) -> None:
-            self._vals = {"dx": dx, "dy": dy, "dz": dz}
-
-        def __getitem__(self, key: str):
-            val = np.array([self._vals[key]], dtype=float)
-
-            class _Series:
-                @staticmethod
-                def to_numpy(dtype=float):
-                    return val.astype(dtype)
-
-            return _Series()
-
+    # Patch the gradient source rather than pycharmm.coor.get_forces: since the
+    # C-API path landed, charmm_gradient_array() short-circuits on
+    # coor.get_natom() == 0 (no PSF is loaded here) and returns an empty (0, 3)
+    # array, so a get_forces stub is never reached. What this test is actually
+    # pinning is the sign flip (gradient -> force) and the kcal/mol -> eV
+    # conversion, both of which sit above that call.
     monkeypatch.setattr(
-        "pycharmm.coor.get_forces",
-        lambda: _ForceFrame(-23.060548867, 0.0, 0.0),
+        "mmml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
+        lambda: np.array([[-23.060548867, 0.0, 0.0]], dtype=float),
     )
     kcal = charmm_total_forces_kcalmol_A()
     assert kcal[0, 0] == pytest.approx(23.060548867)

@@ -57,26 +57,48 @@ def assert_mm_charge_mode_dimer_supported(
 ) -> None:
     """Raise if Mode B/C cannot be applied under the current calculator settings."""
     mode = parse_mm_charge_mode(mode)
-    if mode is MMChargeMode.FIXED:
+    if mode in (MMChargeMode.FIXED, MMChargeMode.LATENT_MEAN):
+        # latent_mean's charges are a precomputed template injected once at
+        # setup (see mmml.models.latent_charge_template) -- no live q_ML, no
+        # AB-dimer forward, so none of the dimer-only/doML/lr_solver
+        # restrictions below apply. It is the liquid-compatible mode.
         return
     require_charge_head_for_mode(mode, has_charges=has_charges)
-    if int(n_monomers) != 2:
-        raise ValueError(
-            f"mm_charge_mode={mode.value} MD support is dimer-only "
-            f"(n_monomers==2); got n_monomers={n_monomers}. Liquid q_ML context "
-            "is undefined — see docs/hybrid-mm-charges.md."
-        )
-    if not doML or not doML_dimer:
-        raise ValueError(
-            f"mm_charge_mode={mode.value} requires doML and doML_dimer so the "
-            "AB forward can supply q_ML (same as hybrid training)."
-        )
     lr = (lr_solver or "").strip().lower()
     if lr in {"jax_pme", "jax-pme", "pme"}:
         raise ValueError(
             f"mm_charge_mode={mode.value} is not wired through JAX-PME yet; "
-            "refuse half-applied long-range. Use lr_solver=None / jax_mic for "
-            "dimer Mode B/C parity."
+            "refuse half-applied long-range. Use lr_solver=None / jax_mic / "
+            "ewald for live q_ML modes."
+        )
+    if mode is MMChargeMode.Q0:
+        # Q⁰ from isolated monomer slots — any n_monomers; needs doML only.
+        if not doML:
+            raise ValueError(
+                "mm_charge_mode=q0 requires doML so monomer forwards can "
+                "supply Q⁰ (same as hybrid training with --mm-charge-mode q0)."
+            )
+        return
+    if mode is MMChargeMode.LATENT_DYNAMIC:
+        # Live multi-dimer Q¹ aggregate — liquid-capable; needs dimer ML.
+        if not doML or not doML_dimer:
+            raise ValueError(
+                f"mm_charge_mode={mode.value} requires doML and doML_dimer so "
+                "active dimer slots can supply q_ML."
+            )
+        return
+    if int(n_monomers) != 2:
+        # latent/fixed_plus_latent still need a single AB slot.
+        raise ValueError(
+            f"mm_charge_mode={mode.value} MD support is dimer-only "
+            f"(n_monomers==2); got n_monomers={n_monomers}. Use q0 (Q⁰ "
+            "monomer charges) or latent_dynamic for liquids — see "
+            "docs/hybrid-mm-charges.md."
+        )
+    if not doML or not doML_dimer:
+        raise ValueError(
+            f"mm_charge_mode={mode.value} requires doML and doML_dimer so the "
+            "AB forward can supply Q¹ (same as hybrid training)."
         )
 
 

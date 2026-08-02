@@ -1,6 +1,9 @@
 # Long-range electrostatics in MLpot
 
-Technical reference for how **short-range** and **long-range** Coulomb interactions are handled in the hybrid ML/MM potential, and how optional backends (**ScaFaCoS**, **jax-pme**) plug in.
+Technical reference for how **short-range** and **long-range** Coulomb
+interactions are handled in the hybrid ML/MM potential. The supported execution
+faces are enforced by long-range and MM-nonbonded tests.
+`[evidence: long_range_solver_surface]`
 
 Related: [NONBOND_LISTS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) (neighbor lists), [ScaFaCoS README](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/scafacosInterface/README.md) (installation), [`long_range_backend.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/long_range_backend.py) (Python selector).
 
@@ -13,11 +16,11 @@ MLpot runs a **dual-stack** nonbond model:
 | Stack | Electrostatics today | Cutoff |
 |-------|---------------------|--------|
 | CHARMM Fortran | `cdie` + switched VDW/ELEC on non-ML atoms; **BLOCK zeros ELEC on ML atoms** | `cutnb` ≈ 18 Å (vacuum preset) |
-| JAX MM (`mm_energy_forces.py`) | MIC \(q_i q_j / r\) on cross-monomer pairs | `mm_switch_on + mm_switch_width` ≈ **13 Å** default |
+| JAX MM (`mm_energy_forces.py`) | MIC, native Ewald, or a host-orchestrated periodic solver, depending on execution face | Explicit cutoff configuration |
 
-Neither path applies a **k-space Ewald/PME correction** beyond the JAX pair cutoff. For large periodic clusters or boxes where 13 Å real-space Coulomb is insufficient, forces and energies can drift from a fully converged PME reference.
-
-ScaFaCoS and jax-pme are optional backends to close that gap without moving all electrostatics back into CHARMM Ewald (which is disabled in current MMML `nbonds_config` presets).
+Plain `mic` applies no reciprocal correction. Native Ewald supplies a JIT-safe
+real/reciprocal/self decomposition; JAX-PME, NValChemI/Ops PME, and ScaFaCoS
+are host-orchestrated full-box alternatives.
 
 ---
 
@@ -42,15 +45,19 @@ flowchart TB
   subgraph lr [Long-range layer - optional]
     SEL[long_range_backend.pick_lr_solver]
     SCF[ScaFaCoS libfcs]
-    PME[jax-pme reserved]
+    EWL[native JAX Ewald]
+    PME[JAX-PME]
+    NVAL[NValChemI/Ops PME]
     MICONLY[mic: no extra pass]
     SEL --> SCF
+    SEL --> EWL
     SEL --> PME
+    SEL --> NVAL
     SEL --> MICONLY
   end
 
   BLOCK --> jax
-  MIC -.->|future: subtract SR overlap| SCF
+  MIC --> SEL
 ```
 
 ### Design goals
@@ -70,6 +77,7 @@ Implementation: [`long_range_backend.py`](https://github.com/EricBoittier/mmml/b
 |------|-------------|--------|
 | `mic` | Default (unset env/YAML) or explicit | **Production default** — truncated MIC in pair loop |
 | `auto` | Legacy alias | Same as `mic` |
+| `ewald` | Explicit opt-in | Native JAX Ewald; available to the JIT MM term and periodic-external path |
 | `jax_pme` | `lr_solver: jax_pme` or `MMML_LR_SOLVER=jax_pme` | Opt-in — jax-pme Ewald/PME/P3M + switched MM |
 | `scafacos` | `MMML_LR_SOLVER=scafacos` and `libfcs` loads | Opt-in — full-box Coulomb via ScaFaCoS |
 | `nvalchemiops_pme` | Explicit opt-in | Opt-in — full-box PME via nvalchemiops |
@@ -112,26 +120,30 @@ ScaFaCoS expects an MPI communicator. MMML passes `MPI.COMM_WORLD.py2f()` when `
 
 ### Short-range / long-range splitting
 
-ScaFaCoS supports a `short_range_flag` in `fcs_set_common` so the library can compute only the k-space part while a local pair list supplies the real-space term. MMML’s planned wiring:
-
-1. JAX pair loop keeps **switched LJ + short-range Coulomb** inside `mm_switch_on + mm_switch_width`.
-2. ScaFaCoS evaluates **total** or **k-space-only** Coulomb for the same atom subset.
-3. If total: subtract the JAX pair sum to avoid double counting.
-4. ML atoms: charges may be zero in CHARMM BLOCK path; include only atoms that carry MM partial charges in the ScaFaCoS charge array.
-
-This split is **not yet applied inside `build_mm_energy_forces_fn`** — the interface and docs land first so HPC sites can validate `libfcs` standalone.
+ScaFaCoS supports a `short_range_flag` in `fcs_set_common`. MMML's maintained
+`periodic_external` integration uses the selected full-box solver as the
+Coulomb owner and keeps Lennard-Jones ownership separate. A future
+k-space-only ScaFaCoS optimization would require explicit overlap subtraction;
+it is not implied by the current full-box path.
 
 ---
 
-## jax-pme (reserved)
+## JAX-PME and NValChemI/Ops PME
 
-`jax-pme` is a core MMML dependency (git pin in `pyproject.toml`) for a **pure-JAX** PME path without Fortran/MPI binaries. It will share the same `LongRangeCoulombSolver` protocol once implemented, giving laptops and CI a long-range option when ScaFaCoS is unavailable.
+Both are implemented through `long_range_backend.py` and the periodic-external
+MM adapter. They are host-orchestrated and therefore available through the ASE
+or callback face, not inside every `jax.jit` propagation graph. The unified
+JAX MM term rejects those host-only solvers instead of silently falling back to
+MIC; native `ewald` is the JIT-compatible reciprocal-space choice.
 
 ---
 
-## CHARMM Ewald (not used by MMML workflows)
+## Native Ewald and CHARMM ownership
 
-Vendored CHARMM sources include PME (`pme.F90`), helPME (`helpme_wrapper.F90`), and FMM (`grape.F90`). MMML production presets use `vacuum_nbond_kwargs()` / PBC variants with **`cdie` only** — no `ewald` / `pmewald` keywords from Python.
+Vendored CHARMM sources include PME (`pme.F90`), helPME
+(`helpme_wrapper.F90`), and FMM (`grape.F90`). MMML's `--lr-solver ewald`
+path is the native JAX Ewald implementation in `ewald_native.py`; it is not a
+claim that CHARMM's internal PME owns the same charge interactions.
 
 A CHARMM-native ScaFaCoS hook (Fortran `iso_c_binding` wrapper, analogous to helPME) remains a secondary integration path if residual MM atoms need reciprocal-space treatment inside Fortran rather than in the MLpot callback.
 
@@ -139,11 +151,12 @@ A CHARMM-native ScaFaCoS hook (Fortran `iso_c_binding` wrapper, analogous to hel
 
 ## Periodic external MM (`--mm-nonbond-mode periodic_external`)
 
-Requires **full PBC** (`--setup pbc_nve|pbc_nvt|pbc_npt`), **ML MIC** (default for `pbc_*`), and a built **ScaFaCoS** library.
+Requires **full PBC** (`--setup pbc_nve|pbc_nvt|pbc_npt`) and one supported
+full-box solver. Optional packages/libraries are checked during preflight.
 
 | Term | Backend | Notes |
 |------|---------|-------|
-| Coulomb | ScaFaCoS (`--lr-solver scafacos`) | Full periodic; JAX real-space Coulomb **off** |
+| Coulomb | `ewald`, `jax_pme`, `nvalchemiops_pme`, or `scafacos` | Full periodic; JAX MIC Coulomb **off** |
 | Lennard-Jones | CHARMM IMAGE VDW | Switched VDW at `cutnb` (scaled to box); **not** ScaFaCoS |
 | JAX MM pairs | disabled | No truncated MIC LJ/Coulomb in callback |
 

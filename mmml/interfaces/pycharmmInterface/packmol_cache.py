@@ -66,6 +66,32 @@ def packmol_prep_settings_from_namespace(args: Any) -> dict[str, Any]:
     return packmol_prep_settings_from_mapping(data)
 
 
+def monomer_pdb_cache_entries(
+    monomer_pdb_templates: Mapping[str, Any] | None,
+) -> list[list[Any]]:
+    """Fingerprint user monomer PDBs (path + mtime + size) for cache keys."""
+    if not monomer_pdb_templates:
+        return []
+    out: list[list[Any]] = []
+    for residue in sorted(str(k).upper() for k in monomer_pdb_templates):
+        raw = monomer_pdb_templates.get(residue)
+        if raw is None:
+            # Case-insensitive lookup
+            for key, value in monomer_pdb_templates.items():
+                if str(key).upper() == residue:
+                    raw = value
+                    break
+        if raw is None:
+            continue
+        path = Path(str(raw)).expanduser().resolve()
+        try:
+            st = path.stat()
+            out.append([residue, str(path), int(st.st_mtime_ns), int(st.st_size)])
+        except OSError:
+            out.append([residue, str(path), 0, 0])
+    return out
+
+
 def packmol_cache_fingerprint(
     *,
     composition: list[tuple[str, int]],
@@ -83,6 +109,7 @@ def packmol_cache_fingerprint(
     spacing: float | None = None,
     sim_cell_side: float | None = None,
     prep_gate_settings: Mapping[str, Any] | None = None,
+    monomer_pdb_templates: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Canonical fingerprint for a Packmol cluster build (hashed into cache dir names)."""
     payload: dict[str, Any] = {
@@ -104,6 +131,9 @@ def packmol_cache_fingerprint(
         "spacing": None if spacing is None else float(spacing),
         "sim_cell_side": None if sim_cell_side is None else float(sim_cell_side),
     }
+    pdb_entries = monomer_pdb_cache_entries(monomer_pdb_templates)
+    if pdb_entries:
+        payload["monomer_pdb_templates"] = pdb_entries
     gates = packmol_prep_settings_from_mapping(prep_gate_settings or {})
     if gates:
         payload["prep_gate_settings"] = gates
@@ -127,6 +157,7 @@ def packmol_cache_key(
     spacing: float | None = None,
     sim_cell_side: float | None = None,
     prep_gate_settings: Mapping[str, Any] | None = None,
+    monomer_pdb_templates: Mapping[str, Any] | None = None,
 ) -> str:
     """Stable cache directory name from placement and CHARMM pre-relax parameters."""
     payload = packmol_cache_fingerprint(
@@ -145,6 +176,7 @@ def packmol_cache_key(
         spacing=spacing,
         sim_cell_side=sim_cell_side,
         prep_gate_settings=prep_gate_settings,
+        monomer_pdb_templates=monomer_pdb_templates,
     )
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
@@ -275,6 +307,7 @@ def try_load_packmol_cluster_cache(
     spacing: float | None = None,
     sim_cell_side: float | None = None,
     prep_gate_settings: Mapping[str, Any] | None = None,
+    monomer_pdb_templates: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     fingerprint = packmol_cache_fingerprint(
         composition=composition,
@@ -292,6 +325,7 @@ def try_load_packmol_cluster_cache(
         spacing=spacing,
         sim_cell_side=sim_cell_side,
         prep_gate_settings=prep_gate_settings,
+        monomer_pdb_templates=monomer_pdb_templates,
     )
     key = packmol_cache_key(
         composition=composition,
@@ -309,6 +343,7 @@ def try_load_packmol_cluster_cache(
         spacing=spacing,
         sim_cell_side=sim_cell_side,
         prep_gate_settings=prep_gate_settings,
+        monomer_pdb_templates=monomer_pdb_templates,
     )
     return load_packmol_cluster_cache(
         _entry_dir(cache_root, key),

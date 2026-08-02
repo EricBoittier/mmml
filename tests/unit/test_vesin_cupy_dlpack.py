@@ -52,12 +52,20 @@ def test_gpu_rebuild_parity_when_available():
     from mmml.interfaces.pycharmmInterface.nl_gpu import gpu_nl_path_available, rebuild_vesin_pairs_gpu
     from mmml.interfaces.pycharmmInterface.nl_reference import extract_valid_pairs
 
-    if not jax.devices("gpu"):
+    try:
+        gpu_devices = jax.devices("gpu")
+    except Exception:
+        pytest.skip("no JAX GPU device")
+    if not gpu_devices:
         pytest.skip("no JAX GPU device")
 
     prev = os.environ.get("MMML_MM_NL_DEVICE")
     os.environ["MMML_MM_NL_DEVICE"] = "gpu"
     try:
+        # Repair stale /usr/local/cuda before availability probe.
+        from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
+
+        ensure_cupy_cuda_path(quiet=True)
         if not gpu_nl_path_available():
             pytest.skip("cupy or vesin GPU path unavailable")
     finally:
@@ -86,8 +94,7 @@ def test_gpu_rebuild_parity_when_available():
         monomer_offsets=offsets,
         total_atoms=n,
     )
-    gpu_set = extract_valid_pairs(
-        np.asarray(jax.device_get(pair_idx)),
-        np.asarray(jax.device_get(pair_mask), dtype=bool),
-    )
+    idx = np.asarray(jax.device_get(pair_idx))
+    mask = np.asarray(jax.device_get(pair_mask), dtype=bool)
+    gpu_set = extract_valid_pairs(idx[:, 0], idx[:, 1], mask)
     assert gpu_set == ref

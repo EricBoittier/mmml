@@ -24,17 +24,9 @@ usage: mmml pycharmm-two-residue-sample [-h] --pdbfile PDBFILE [--cell CELL]
 
 Set up a two-residue CHARMM system and run restrained sampling.
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --pdbfile PDBFILE     Path to a PDB file containing the two-residue CHARMM
                         system.
-  --cell CELL           Cubic cell side length in Angstrom for periodic boundary
-                        conditions (default: 1000).
-  --skip-setup-energy-show
-                        Skip energy.show() in setup_box for faster startup.
-  --pycharmm-minimize-steps N
-                        Fallback ABNR steps when --two-residue-sampling-steps is
-                        not set (default: 1000).
   --output-pdb OUTPUT_PDB
                         Path for sampled coordinates as PDB (default: pdb/two-
                         residue-sampled.pdb).
@@ -53,6 +45,20 @@ options:
   --two-residue-restraint-resid2 TWO_RESIDUE_RESTRAINT_RESID2
                         Second CHARMM residue id for two-residue sampling
                         (default: 2).
+
+Execution:
+  --skip-setup-energy-show
+                        Skip energy.show() in setup_box for faster startup.
+  --pycharmm-minimize-steps N
+                        Fallback ABNR steps when --two-residue-sampling-steps is
+                        not set (default: 1000).
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
+  --cell CELL           Cubic cell side length in Angstrom for periodic boundary
+                        conditions (default: 1000).
 ```
 
 

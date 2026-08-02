@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence
@@ -16,6 +18,7 @@ from mmml.interfaces.pyxtal_placement import (
     write_psf_order_mapping_pdb,
 )
 from mmml.paths import (
+    default_acetone_crystal_cif,
     default_benzene_crystal_cif,
     default_dcm_crystal_cif,
 )
@@ -29,17 +32,58 @@ MonomerTemplate = tuple[np.ndarray, list[str], np.ndarray]
 DEFAULT_MIN_BOX_SIDE_A = 28.0
 
 LITERATURE_CRYSTAL_PRESETS: dict[str, dict[str, Any]] = {
+    # Podsiadlo, Dziubek & Katrusiak, Acta Crystallogr. B 61, 595 (2005). Both
+    # entries are diamond-anvil-cell structures, so both are compressed well
+    # below the ambient-pressure cell -- fine as packing references, wrong as
+    # cohesive-energy references. See docs/dcm-crystal-cohesion.md.
     "dcm": {
         "residue": "DCM",
         "cif": default_dcm_crystal_cif,
         "space_group": 60,
         "reference_density_g_cm3": 1.972,
     },
+    "dcm133": {
+        "residue": "DCM",
+        "cif": lambda: default_dcm_crystal_cif("pbcn_133gpa"),
+        "space_group": 60,
+        "reference_density_g_cm3": 1.920,
+    },
     "benz": {
         "residue": "BENZ",
         "cif": default_benzene_crystal_cif,
         "space_group": 14,
         "reference_density_g_cm3": 1.202,
+    },
+    # Allan et al., Chem. Commun. 1999, 751. The stable low-temperature Pbca
+    # phase is the default acetone entry; ``aco5k``/``aco110k`` are the same
+    # phase at the other two temperatures the paper reports, which differ
+    # enough in cell shape (b contracts 6% from 150 K to 5 K while a expands)
+    # to be worth building separately. The 15 kbar Cmcm phase is deliberately
+    # absent: its methyls are rotationally disordered, so it has no single set
+    # of hydrogen positions to hand a force field.
+    "aco": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_150k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 0.987,
+    },
+    "aco5k": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_5k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 1.052,
+    },
+    "aco110k": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("pbca_110k"),
+        "space_group": 61,
+        "reference_density_g_cm3": 1.001,
+    },
+    "acocmcm": {
+        "residue": "ACO",
+        "cif": lambda: default_acetone_crystal_cif("cmcm_160k"),
+        "space_group": 63,
+        "reference_density_g_cm3": 1.017,
     },
 }
 
@@ -61,9 +105,13 @@ class CharmmLiteratureCrystalResult:
 
 def default_make_res_monomer_pdb(residue: str) -> Path:
     """Bundled CHARMM monomer PDB (``make-res``-style atom names)."""
-    from mmml.paths import bundled_file
+    from mmml.paths import bundled_file, default_aco_template_pdb
 
     key = residue.strip().upper()
+    if key == "ACO":
+        # Acetone's template already ships with the cluster builders rather than
+        # under data/molecules; reuse it instead of duplicating the geometry.
+        return default_aco_template_pdb()
     name = {"DCM": "dcm", "BENZ": "benz"}.get(key, key.lower())
     return bundled_file("data", "molecules", f"{name}_monomer.pdb")
 
@@ -409,3 +457,173 @@ def charmm_crystal_metrics_from_preset(
     )
     sg = int(LITERATURE_CRYSTAL_PRESETS[preset.strip().lower()]["space_group"])
     return metrics_from_atoms(result.atoms, label="make-res+CIF", space_group=sg)
+
+
+def map_ase_crystal_to_charmm_pdb(
+    atoms: Any,
+    *,
+    residue: str,
+    monomer_pdb: Path | str | None = None,
+    pdb_out: Path | str,
+) -> Path:
+    """Map ASE crystal coordinates onto ``make-res`` atom names and write a PDB."""
+    res_key = residue.strip().upper()
+    monomer_path = resolve_make_res_monomer_pdb(res_key, monomer_pdb=monomer_pdb)
+    template = load_monomer_template(monomer_path)
+    n_per = int(template[2].shape[0])
+    blocks = split_crystal_molecules(atoms, n_per)
+    ordered_names = [res_key] * len(blocks)
+    residue_geometries = {res_key: template}
+    ordered_blocks = _match_molecule_blocks_to_psf_order(
+        blocks, ordered_names, residue_geometries
+    )
+    return write_charmm_crystal_pdb(
+        pdb_out,
+        molecule_blocks=ordered_blocks,
+        ordered_residue_names=ordered_names,
+        residue_geometries=residue_geometries,
+        cell_atoms=atoms,
+    )
+
+
+@dataclass(frozen=True)
+class CrystalCharmmTopologyPaths:
+    """Paths written by :func:`write_crystal_charmm_topology`."""
+
+    pdb: Path
+    psf: Path
+    crd: Path
+    box_json: Path
+
+
+def _ensure_crystal_image_str_cwd() -> None:
+    """Copy ``crystal_image.str`` into cwd when CHARMM IMAGE setup needs it."""
+    dst = Path("crystal_image.str")
+    if dst.exists():
+        return
+    from mmml.paths import crystal_image_str_source
+
+    src = crystal_image_str_source()
+    if src.exists():
+        shutil.copy2(src, dst)
+        return
+    raise FileNotFoundError(
+        f"crystal_image.str not found in cwd and source {src} does not exist. "
+        "CHARMM requires this file for periodic box setup."
+    )
+
+
+def write_crystal_charmm_topology(
+    pdb_in: Path | str,
+    out_stem: Path | str,
+    *,
+    side_length_A: float,
+    skip_energy_show: bool = True,
+    n_molecules: int | None = None,
+    residue: str | None = None,
+) -> CrystalCharmmTopologyPaths:
+    """GENERATE a crystal PDB into PSF/CRD/PDB with cubic CHARMM IMAGE.
+
+    Requires PyCHARMM. Writes ``{stem}.pdb``, ``{stem}.psf``, ``{stem}.crd``,
+    and ``{stem}_box.json`` with ``box_side_A`` for ``md-system --from-psf``.
+    """
+    side = float(side_length_A)
+    if side <= 0.0:
+        raise ValueError(f"side_length_A must be positive, got {side}")
+
+    pdb_path = Path(pdb_in).expanduser().resolve()
+    if not pdb_path.is_file():
+        raise FileNotFoundError(f"crystal PDB not found: {pdb_path}")
+
+    stem = Path(out_stem).expanduser()
+    if stem.suffix.lower() in {".pdb", ".psf", ".crd", ".json", ".xyz", ".extxyz", ".cif", ".npz"}:
+        stem = stem.with_suffix("")
+    stem.parent.mkdir(parents=True, exist_ok=True)
+    out_pdb = stem.with_suffix(".pdb").resolve()
+    out_psf = stem.with_suffix(".psf").resolve()
+    out_crd = stem.with_suffix(".crd").resolve()
+    out_json = Path(f"{stem}_box.json").resolve()
+
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+            pycharmm_quiet,
+            safe_energy_show,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            _parse_pdb_atoms_whitespace,
+            _residue_sequence_from_pdb,
+            sync_charmm_positions,
+        )
+        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+        from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+        import pycharmm.generate as generate
+        import pycharmm.read as read
+        import pycharmm.write as write
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "write_crystal_charmm_topology requires PyCHARMM/CHARMM. "
+            "See setup docs for CHARMM installation."
+        ) from exc
+
+    _ensure_crystal_image_str_cwd()
+    CLEAR_CHARMM()
+
+    res_seq = _residue_sequence_from_pdb(str(pdb_path))
+    _names, _resnames, _resids, pdb_xyz = _parse_pdb_atoms_whitespace(str(pdb_path))
+    print(
+        f"write_crystal_charmm_topology: sequence_string {' '.join(res_seq)} "
+        f"({len(pdb_xyz)} atoms) from {pdb_path}",
+        flush=True,
+    )
+    read_cgenff_toppar()
+    with charmm_relaxed_bomlev():
+        read.sequence_string(" ".join(res_seq))
+        status = generate.new_segment(
+            seg_name="SYS",
+            first_patch="NONE",
+            last_patch="NONE",
+            setup_ic=True,
+        )
+        if status is not None and int(status) not in (0, 1):
+            raise RuntimeError(
+                f"GENERATE SYS failed for {pdb_path} (status={status}; "
+                f"sequence={res_seq}). Check CGenFF residue names and "
+                "MMML_CGENFF_EXTRA_RTF."
+            )
+    sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
+    prepare_charmm_pbc(side)
+    if not skip_energy_show:
+        safe_energy_show()
+
+    write.psf_card(str(out_psf))
+    write.coor_pdb(str(out_pdb))
+    write.coor_card(str(out_crd))
+    pycharmm_quiet()
+
+    payload = {
+        "source": "build-crystal",
+        "box_side_A": side,
+        "final_cubic_side_A": side,
+        "pdb": str(out_pdb),
+        "psf": str(out_psf),
+        "crd": str(out_crd),
+        "input_pdb": str(pdb_path),
+    }
+    if n_molecules is not None:
+        payload["n_molecules"] = int(n_molecules)
+    if residue is not None:
+        payload["residue"] = str(residue).strip().upper()
+    out_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"Wrote CHARMM topology: {out_pdb.name}, {out_psf.name}, "
+        f"{out_crd.name}, {out_json.name} (cubic side {side:.3f} Å)",
+        flush=True,
+    )
+    return CrystalCharmmTopologyPaths(
+        pdb=out_pdb,
+        psf=out_psf,
+        crd=out_crd,
+        box_json=out_json,
+    )

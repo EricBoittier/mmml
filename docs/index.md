@@ -1,25 +1,102 @@
-# MMML Documentation
+<div class="mmml-hero" markdown>
+![MMML](images/mmml.svg)
+</div>
 
-MMML combines molecular mechanics workflows with machine-learned force fields built on JAX.
+# MMML
 
-Use this site for installation, the **CLI reference**, MD workflow guides, and development notes.
+Molecular mechanics workflows and machine-learned force fields, on JAX.
+Everything runs through one command: `mmml`.
 
-## What is here
+<!-- MMML_TOP_HELP_START -->
+```console
+$ mmml -h
+usage: mmml [-h] <command> ...
 
-- [Getting started](getting-started.md) — install with `uv`, serve docs locally
-- [PyCHARMM + MM/ML capabilities checklist](md-cg-capabilities-checklist.md) — status checklist, examples, diagrams
-- [CLI overview](cli/index.md) — `mmml commands`, `mmml examples`, tab completion, per-command `--help`
-- [md-system YAML configs](md-system-configs.md) — single runs, campaigns, condensed-phase builders
-- [Packmol placement](packmol-placement.md) — default composition builder
-- [Protein force fields](protein-force-fields.md) — CHARMM36 + jax-md peptide examples
-- [CHARMM CGenFF JAX clone](cgenff-jax-clone.md) — bonded + switched nonbonded JAX vs PyCHARMM
-- [MLpot guides](mlpot-settings.md) — COM handoff switches, medium PBC, spatial MPI, long-range electrostatics
-- [Calculator profiling](calculator-profiling.md) — JAX compile vs run, jax-pme primitives, cProfile / TensorBoard
-- [PyCHARMM on clusters](pycharmm-mpi.md) — MPI launcher, threading, FFTW
-- [PyCHARMM C API: PBC box & pressure](pycharmm-c-api-pbc-box-pressure.md) — KEY_LIBRARY get/set for cell side and CPT pressure tensor
+MMML: Machine Learning for Molecular Modeling
+
+Subcommands (65 total). Common:
+  md-system      mixed-composition MD (YAML + campaigns)
+  physnet-train  train PhysNetJAX from NPZ
+  configure      interactive config / Snakemake wizard
+  env            find resolved/bundled checkpoints and CHARMM paths
+  liquid-box     build periodic liquid boxes
+
+Browse:   mmml commands
+Setup:    mmml configure
+Examples: mmml examples
+Flags:    mmml <command> --help
+
+Tab completion (bash/zsh/fish):
+  pip install 'mmml[cli]'
+  eval "$(register-python-argcomplete mmml)"
+
+options:
+  -h, --help  show this help message and exit
+```
+<!-- MMML_TOP_HELP_END -->
+
+These docs are laid out the same way. The sections along the top are the task
+groups from `mmml commands`, and each one holds its guides next to the reference
+page for every command in that group.
+
+## Start here
+
+<div class="grid cards" markdown>
+
+-   __Install & first run__
+
+    Set up with `uv`, check the machine with `mmml doctor`, run something small.
+
+    [→ Getting started](getting-started.md)
+
+-   __How the CLI is organized__
+
+    The four help layers — `-h`, `commands`, `examples`, `<cmd> --help` — and
+    what each is for.
+
+    [→ CLI overview](cli/index.md)
+
+-   __Examples__
+
+    Copy-paste invocations, mirroring `mmml examples`.
+
+    [→ Examples](examples.md)
+
+-   __Tab completion__
+
+    Per-shell setup for bash, zsh, and fish.
+
+    [→ Completion](cli/completion.md)
+
+</div>
+
+## Browse by task
+
+| Section | Covers | Commands |
+|---|---|---|
+| [Structure & boxes](sections/structure-boxes.md) | residues, packing, crystals, liquid boxes | `make-res`, `make-box`, `build-crystal`, `liquid-box` |
+| [MD & campaigns](sections/md-campaigns.md) | mixed MM/ML dynamics, umbrella sampling, cluster runs | `md-system`, `md-embedding`, `umbrella-sample`, `health-check` |
+| [QM & data](sections/qm-data.md) | reference calculations, scans, dataset prep | `pyscf-dft`, `dimer-scan`, `ic-scan`, `fix-and-split` |
+| [Hybrid ML/MM potentials](sections/hybrid-potentials.md) | regions, charges, LJ scales, long-range solvers | — (assembly is configured, not commanded) |
+| [Training & sampling](sections/training-sampling.md) | PhysNet / EF / KerNN training, NEB, DMC | `physnet-train`, `neb`, `dmc`, `efield-train` |
+| [Environment & clusters](sections/environment-clusters.md) | checkpoints, MPI, threading, SciCORE, profiling | `env`, `configure`, `doctor`, `mpi-launch` |
+
+Each section opens with its own orientation page — what the area covers, the
+happy path, and where it leads next.
+
+## Reference & policy
+
 - [Package architecture](package-architecture.md) — module layout and import graph
+- [Calculator capability matrix](calculator-capabilities.md) — what each calculator supports
+- [Units summary](UNITS_SUMMARY.md) — conventions and conversions
+- [API reference](api.md) — generated from docstrings
+- [Scientific code policy](scientific-code.md) — reproducibility, provenance, review checklist
+- [Contributor guide](development.md) — tests, linting, docs builds
 
-## External resources
+Design notes, audits, tool inventories, and results reports live under
+**Internals & reports**. They are engineering records, not user guides.
 
-- [Project repository](https://github.com/EricBoittier/mmml)
+## Elsewhere
+
+- [Repository](https://github.com/EricBoittier/mmml)
 - [Issue tracker](https://github.com/EricBoittier/mmml/issues)

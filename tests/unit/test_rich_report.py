@@ -2,11 +2,99 @@
 
 from __future__ import annotations
 
-import os
+import json
 
 import pytest
 
 from mmml.utils import rich_report
+
+
+def _recording_console():
+    from rich.console import Console
+
+    return Console(record=True, force_terminal=True, color_system="standard", width=100)
+
+
+def test_compact_reporter_mixes_status_summary_and_table_without_borders(monkeypatch):
+    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    console = _recording_console()
+    report = rich_report.get_reporter(console=console)
+
+    report.status("success", "scan complete", detail="40/40 points")
+    report.summary("Run", {"Calculator": "PhysNet", "Output": "scan.extxyz"})
+    report.table(
+        "Calculators",
+        ("Name", "Energy", "Forces"),
+        (("PhysNet", "yes", "yes"), ("Multipoles", "yes", "no")),
+    )
+
+    rendered = console.export_text(styles=False)
+    assert "OK" in rendered and "scan complete  40/40 points" in rendered
+    assert "Run" in rendered and "Calculator PhysNet" in rendered
+    assert "Calculators" in rendered and "Multipoles" in rendered
+    assert not any(character in rendered for character in "┏┓┗┛┃━│─")
+
+
+def test_compact_reporter_validates_shape_and_status():
+    report = rich_report.get_reporter(console=_recording_console())
+    with pytest.raises(ValueError, match="unknown status"):
+        report.status("maybe", "ambiguous")
+    with pytest.raises(ValueError, match="same length"):
+        report.table("Bad", ("a", "b"), ((1,),))
+
+
+def test_print_colored_json_is_valid_json_and_has_semantic_styles(monkeypatch):
+    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    console = _recording_console()
+    payload = {
+        "summary": "/tmp/cutoff_sweep_summary.json",
+        "station": {"energy_eV": -23.3, "skipped": False, "errors": {}},
+    }
+
+    rich_report.print_colored_json(payload, console=console)
+
+    rendered = console.export_text(styles=False)
+    assert json.loads(rendered) == payload
+    styled = rich_report._colored_json_text(payload)
+    styles = {str(span.style) for span in styled.spans}
+    assert "bold blue underline" in styles
+    assert "bright_magenta" in styles
+    assert "bold red" in styles
+    assert "bold green" in styles
+
+
+def test_print_colored_json_plain_fallback_and_validation(capsys):
+    payload = {"ok": True, "errors": {"point": "SCF failed"}}
+    rich_report.print_colored_json(payload, sort_keys=True)
+    assert json.loads(capsys.readouterr().out) == payload
+    with pytest.raises(ValueError, match="Out of range float"):
+        rich_report.print_colored_json({"energy": float("nan")})
+    with pytest.raises(ValueError, match="indent"):
+        rich_report.print_colored_json({}, indent=-1)
+
+
+def test_print_colored_json_supports_explicit_serializer(capsys):
+    from pathlib import Path
+
+    rich_report.print_colored_json({"output": Path("result.json")}, default=str)
+    assert json.loads(capsys.readouterr().out) == {"output": "result.json"}
+
+
+def test_print_colored_python_repr_rich_and_plain(monkeypatch, capsys):
+    from dataclasses import dataclass
+
+    @dataclass
+    class CalculatorConfig:
+        cutoff_A: float
+        enabled: bool
+
+    value = CalculatorConfig(6.0, True)
+    rich_report.print_colored_python_repr(value)
+    assert "CalculatorConfig" in capsys.readouterr().out
+
+    monkeypatch.setenv("MMML_NO_RICH", "1")
+    rich_report.print_colored_python_repr(value)
+    assert "cutoff_A=6.0" in capsys.readouterr().out
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +171,7 @@ def test_emit_model_loaded_runtime_max_padded_atoms(capsys) -> None:
 
     rich_report.emit_model_loaded(_Model(), runtime_max_padded_atoms=34)
     out = capsys.readouterr().out
-    assert "runtime_max_padded_atoms=34" in out
+    assert "runtime_max_padded_atoms" in out and "34" in out
 
 
 def test_model_attribute_rows_from_object() -> None:
@@ -127,6 +215,54 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
     assert "Runtime threads" in out
     assert "XLA_FLAGS" in out
     assert "features" in out
+
+
+def test_startup_reports_are_borderless_and_collapse_repeated_sizes(
+    monkeypatch, capsys
+) -> None:
+    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    monkeypatch.setenv("MMML_RICH", "1")
+    rich_report._console.cache_clear()
+
+    class _Model:
+        features = 32
+        cutoff = 8.0
+
+    rich_report.emit_charmm_env(
+        cgenff_rtf="/repo/mmml/data/charmm/top.rtf",
+        cgenff_prm="/repo/mmml/data/charmm/par.prm",
+        charmm_home="/repo/setup/charmm",
+        charmm_lib_dir="/repo/setup/charmm",
+    )
+    rich_report.emit_hybrid_ml_setup(
+        system={
+            "n_monomers": 10,
+            "atoms_per_monomer": [6] * 10,
+            "total_atoms": 60,
+        },
+        handoff={"mm_switch_on_Å": 6.0},
+        neighbor_lists={"capacity": 100},
+        model=_Model(),
+    )
+    out = capsys.readouterr().out
+    assert "PyCHARMM environment" in out
+    assert "top.rtf, par.prm" in out
+    assert "6 × 10" in out
+    assert not any(character in out for character in "╭╮╰╯┏┓┗┛┃━│─")
+
+
+def test_physnet_dictionary_report_is_vertical_and_keeps_all_model_fields() -> None:
+    from mmml.models.physnetjax.physnetjax.utils.pretty_printer import (
+        print_dict_as_table,
+    )
+
+    attributes = {f"model_field_{index}": index for index in range(15)}
+    table = print_dict_as_table(attributes, title="Model Attributes")
+
+    assert len(table.columns) == 2
+    assert len(table.rows) == 15
+    assert table.box is None
+    assert table.show_edge is False
 
 
 def test_collect_zbl_cutoff_mapping_from_model() -> None:
@@ -333,6 +469,7 @@ def test_emit_md_system_calculator_report_includes_track_a_and_b(capsys) -> None
     assert "ML energy terms" in out or "electrostatics" in out
     assert "MBD" in out
     assert "predicted charges" in out or "electrostatics" in out
+    assert "MD safety" in out or "pair-Å" in out or "not on COM" in out
 
 
 def test_emit_md_system_calculator_report_nl_only_refresh(capsys) -> None:

@@ -1,0 +1,418 @@
+configfile: "config.yaml"
+
+import os
+import sys
+from pathlib import Path
+
+_SCRIPTS = Path(workflow.basedir) / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from campaign_lib import (  # noqa: E402
+    dmc_basins,
+    enabled,
+    expand_targets,
+    job_runtime_min,
+    load_config,
+    seeds as cfg_seeds,
+    solvents,
+    slurm_value,
+    temperatures as cfg_temps,
+    umbrella_variants,
+)
+
+_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
+
+WORKFLOW_DIR = Path(workflow.basedir)
+REPO_ROOT = WORKFLOW_DIR.parents[1].resolve()
+OUTPUT_ROOT = str(CFG.get("output_root", "artifacts/nh3_ch3cl_reaction_path"))
+# Absolute artifact root so Slurm jobs do not depend on cwd.
+ARTIFACT_ROOT = str((REPO_ROOT / OUTPUT_ROOT).resolve())
+JOB_SHELL = str(WORKFLOW_DIR / "scripts" / "job_shell.sh")
+
+_need_umb = enabled(CFG, "umbrella_gas") or enabled(CFG, "umbrella_sol")
+VARIANTS = umbrella_variants(CFG) if _need_umb else ["smoke"]
+SOLVENTS = solvents(CFG)
+BASINS = dmc_basins(CFG)
+TEMPS = cfg_temps(CFG)
+SEEDS = cfg_seeds(CFG)
+
+_TEMP_WC = "|".join(str(t) for t in TEMPS) if TEMPS else "300"
+_SEED_WC = "|".join(str(s) for s in SEEDS) if SEEDS else "0"
+
+TARGETS = expand_targets(CFG, ARTIFACT_ROOT)
+
+
+def _slurm_extra(wildcards) -> str:
+    mail = str(slurm_value(CFG, "mail_user", "") or "").strip()
+    nodelist = str(slurm_value(CFG, "nodelist", "") or "").strip()
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
+    if nodelist:
+        parts.append(f"--nodelist={nodelist}")
+    return " ".join(parts)
+
+
+def _deps(*paths):
+    return [p for p in paths if p]
+
+
+def _res(job: str, *, variant=None):
+    return dict(
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(
+            CFG, job, variant=getattr(wildcards, "variant", variant)
+        ),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    )
+
+
+rule all:
+    input:
+        TARGETS,
+        "results/summary.md",
+
+
+rule endpoints:
+    output:
+        status=f"{ARTIFACT_ROOT}/endpoints/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/endpoints/stdout.log",
+    params:
+        out=f"{ARTIFACT_ROOT}/endpoints",
+        job_shell=JOB_SHELL,
+    resources:
+        **_res("endpoints"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job endpoints \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule make_boxes:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/boxes/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/boxes/stdout.log",
+    params:
+        out=ARTIFACT_ROOT,
+        job_shell=JOB_SHELL,
+    resources:
+        **_res("make_boxes"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}/boxes
+        bash {params.job_shell} \
+          --job make_boxes \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule neb:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/neb/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/neb/stdout.log",
+    params:
+        out=f"{ARTIFACT_ROOT}/neb",
+        job_shell=JOB_SHELL,
+    resources:
+        **_res("neb"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job neb \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule dmc:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}/stdout.log",
+    params:
+        out=f"{ARTIFACT_ROOT}/dmc/{{basin}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
+    wildcard_constraints:
+        basin="|".join(BASINS) if BASINS else "react|product",
+        seed=_SEED_WC,
+    resources:
+        **_res("dmc"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job dmc \
+          --basin {wildcards.basin} \
+          --seed {wildcards.seed} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule umbrella_gas:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
+    params:
+        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
+    wildcard_constraints:
+        variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "umbrella_gas", variant=wildcards.variant),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job umbrella_gas \
+          --variant {wildcards.variant} \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule umbrella_sol:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/boxes/status.json" if enabled(CFG, "make_boxes") else None,
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/stdout.log",
+    params:
+        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
+    wildcard_constraints:
+        solvent="|".join(SOLVENTS),
+        variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
+    resources:
+        gpu=lambda wildcards: int(slurm_value(CFG, "gpu", 1)),
+        charmm_slot=1,
+        runtime=lambda wildcards: job_runtime_min(CFG, "umbrella_sol", variant=wildcards.variant),
+        nodes=lambda wildcards: int(slurm_value(CFG, "nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value(CFG, "ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value(CFG, "cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value(CFG, "mem_mb_per_cpu", 4000)),
+        slurm_partition=lambda wildcards: str(slurm_value(CFG, "partition", "gpu")),
+        slurm_extra=_slurm_extra,
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job umbrella_sol \
+          --solvent {wildcards.solvent} \
+          --variant {wildcards.variant} \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule adumb_gas:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/endpoints/status.json" if enabled(CFG, "endpoints") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}/stdout.log",
+    params:
+        out=f"{ARTIFACT_ROOT}/adumb_gas/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
+    wildcard_constraints:
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
+    resources:
+        **_res("adumb_gas"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job adumb_gas \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule adumb_sol:
+    input:
+        _deps(
+            f"{ARTIFACT_ROOT}/boxes/status.json" if enabled(CFG, "make_boxes") else None,
+        ),
+    output:
+        status=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}/stdout.log",
+    params:
+        out=f"{ARTIFACT_ROOT}/adumb_sol/{{solvent}}/T{{temperature}}/seed{{seed}}",
+        job_shell=JOB_SHELL,
+    wildcard_constraints:
+        solvent="|".join(SOLVENTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
+    resources:
+        **_res("adumb_sol"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job adumb_sol \
+          --solvent {wildcards.solvent} \
+          --temperature {wildcards.temperature} \
+          --seed {wildcards.seed} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule mbar_gas:
+    input:
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/stdout.log",
+    params:
+        run_dir=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_gas/{{variant}}/T{{temperature}}/seed{{seed}}/mbar",
+        job_shell=JOB_SHELL,
+    wildcard_constraints:
+        variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
+    resources:
+        **_res("mbar"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job mbar \
+          --run-dir {params.run_dir} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule mbar_sol:
+    input:
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/status.json",
+        snapshots=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/umbrella_snapshots.npz",
+    output:
+        status=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/status.json",
+    log:
+        f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar/stdout.log",
+    params:
+        run_dir=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}",
+        out=f"{ARTIFACT_ROOT}/umbrella_sol/{{solvent}}/{{variant}}/T{{temperature}}/seed{{seed}}/mbar",
+        job_shell=JOB_SHELL,
+    wildcard_constraints:
+        solvent="|".join(SOLVENTS),
+        variant="|".join(VARIANTS),
+        temperature=_TEMP_WC,
+        seed=_SEED_WC,
+    resources:
+        **_res("mbar"),
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.out}
+        bash {params.job_shell} \
+          --job mbar \
+          --run-dir {params.run_dir} \
+          --output-dir {params.out} \
+          --status {output.status} \
+          > {log} 2>&1
+        """
+
+
+rule collect:
+    input:
+        TARGETS,
+    output:
+        csv="results/summary.csv",
+        md="results/summary.md",
+    params:
+        script=str(WORKFLOW_DIR / "scripts" / "collect_results.py"),
+        root=ARTIFACT_ROOT,
+    shell:
+        r"""
+        python {params.script} \
+          --artifact-root {params.root} \
+          --csv {output.csv} \
+          --markdown {output.md}
+        """

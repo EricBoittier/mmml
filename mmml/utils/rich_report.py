@@ -3,9 +3,330 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Iterable, Mapping, Sequence
+
+
+_STATUS_STYLES = {
+    "success": ("OK", "bold green"),
+    "info": ("INFO", "bold cyan"),
+    "warning": ("WARNING", "bold yellow"),
+    "error": ("ERROR", "bold red"),
+    "skipped": ("SKIPPED", "dim"),
+}
+
+_JSON_KEY_STYLE = "bold cyan"
+_JSON_STRING_STYLE = "green"
+_JSON_PATH_STYLE = "bold blue underline"
+_JSON_NUMBER_STYLE = "bright_magenta"
+_JSON_TRUE_STYLE = "bold green"
+_JSON_FALSE_STYLE = "bold red"
+_JSON_NULL_STYLE = "dim"
+_JSON_EMPTY_STYLE = "green"
+_JSON_ERROR_STYLE = "bold red"
+_JSON_PATH_KEYS = frozenset(
+    {
+        "file",
+        "filename",
+        "path",
+        "directory",
+        "dir",
+        "output",
+        "output_dir",
+        "summary",
+        "trajectory",
+        "checkpoint",
+    }
+)
+
+
+def _looks_like_path(value: str, key: str | None) -> bool:
+    key_lower = "" if key is None else key.lower()
+    return (
+        key_lower in _JSON_PATH_KEYS
+        or key_lower.endswith(("_path", "_file", "_dir", "_directory"))
+        or value.startswith(("/", "./", "../", "~/"))
+    )
+
+
+def _colored_json_text(value: Any, *, indent: int = 2):
+    """Build a Rich ``Text`` rendering from an already-normalized JSON value."""
+
+    from rich.text import Text
+
+    out = Text()
+
+    def whitespace(level: int) -> None:
+        out.append(" " * (level * indent))
+
+    def render(item: Any, level: int, key: str | None = None) -> None:
+        if isinstance(item, dict):
+            if not item:
+                style = _JSON_EMPTY_STYLE if key != "errors" else _JSON_TRUE_STYLE
+                out.append("{}", style=style)
+                return
+            container_style = _JSON_ERROR_STYLE if key == "errors" else None
+            out.append("{", style=container_style)
+            out.append("\n")
+            entries = list(item.items())
+            for index, (child_key, child) in enumerate(entries):
+                whitespace(level + 1)
+                out.append(json.dumps(child_key, ensure_ascii=False), style=_JSON_KEY_STYLE)
+                out.append(": ")
+                render(child, level + 1, child_key)
+                if index + 1 < len(entries):
+                    out.append(",")
+                out.append("\n")
+            whitespace(level)
+            out.append("}", style=container_style)
+            return
+        if isinstance(item, list):
+            if not item:
+                out.append("[]", style=_JSON_EMPTY_STYLE)
+                return
+            out.append("[")
+            out.append("\n")
+            for index, child in enumerate(item):
+                whitespace(level + 1)
+                render(child, level + 1)
+                if index + 1 < len(item):
+                    out.append(",")
+                out.append("\n")
+            whitespace(level)
+            out.append("]")
+            return
+        if isinstance(item, str):
+            style = _JSON_PATH_STYLE if _looks_like_path(item, key) else _JSON_STRING_STYLE
+            out.append(json.dumps(item, ensure_ascii=False), style=style)
+            return
+        if item is True:
+            out.append("true", style=_JSON_TRUE_STYLE)
+            return
+        if item is False:
+            out.append("false", style=_JSON_FALSE_STYLE)
+            return
+        if item is None:
+            out.append("null", style=_JSON_NULL_STYLE)
+            return
+        if isinstance(item, (int, float)):
+            out.append(json.dumps(item, allow_nan=False), style=_JSON_NUMBER_STYLE)
+            return
+        raise TypeError(f"unsupported normalized JSON value: {type(item).__name__}")
+
+    render(value, 0)
+    return out
+
+
+def print_colored_json(
+    value: Any,
+    *,
+    console: Any | None = None,
+    indent: int = 2,
+    sort_keys: bool = False,
+    default: Any = None,
+    quiet: bool = False,
+    stderr: bool = False,
+) -> None:
+    """Print valid, indented JSON with compact semantic coloring.
+
+    Paths are blue/underlined, keys cyan, strings green, numbers magenta,
+    ``true`` green, ``false`` red, and ``null`` dim. Empty containers are green;
+    a non-empty value under an ``errors`` key is red at its boundary. With Rich
+    disabled, output is ordinary JSON suitable for copying or parsing.
+
+    ``value`` must be JSON-serializable. Non-finite floats are rejected because
+    ``NaN`` and infinities are not valid JSON.
+    """
+
+    if quiet or is_quiet():
+        return
+    if indent < 0:
+        raise ValueError("indent must be non-negative")
+    # Round-trip through the standard library to validate and normalize values
+    # before rendering; this guarantees the colored text is also valid JSON.
+    serialized = json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=sort_keys,
+        default=default,
+    )
+    normalized = json.loads(serialized)
+    if not rich_enabled(quiet=quiet):
+        _emit_plain(
+            json.dumps(normalized, ensure_ascii=False, indent=indent, sort_keys=sort_keys),
+            stderr=stderr,
+        )
+        return
+    target = console if console is not None else _console(stderr=stderr)
+    target.print(_colored_json_text(normalized, indent=indent), soft_wrap=True)
+
+
+def print_colored_python_repr(
+    value: Any,
+    *,
+    console: Any | None = None,
+    max_length: int | None = 20,
+    max_string: int | None = 240,
+    expand_all: bool = False,
+    quiet: bool = False,
+    stderr: bool = False,
+) -> None:
+    """Print a compact, colored Python representation of an object.
+
+    This is intended for calculators, dataclasses, configuration objects, and
+    other Python-native diagnostics where JSON would lose type information.
+    Rich honors ``__rich_repr__`` when a class provides it and otherwise falls
+    back to a bounded ``repr``. Plain mode prints ``repr(value)``.
+    """
+
+    if quiet or is_quiet():
+        return
+    if not rich_enabled(quiet=quiet):
+        _emit_plain(repr(value), stderr=stderr)
+        return
+    from rich.pretty import Pretty
+
+    target = console if console is not None else _console(stderr=stderr)
+    target.print(
+        Pretty(
+            value,
+            max_length=max_length,
+            max_string=max_string,
+            expand_all=expand_all,
+        )
+    )
+
+
+@dataclass(frozen=True)
+class CompactReporter:
+    """Small, semantic Rich reports without panels or table borders.
+
+    Choose the method from the information shape:
+
+    - :meth:`status` for one event or outcome;
+    - :meth:`summary` for key/value metadata;
+    - :meth:`table` for repeated records with the same fields.
+
+    Color is supplementary: plain output retains headings and status words.
+    ``console`` is injectable for tests, capture, and callers using Rich Live.
+    """
+
+    console: Any | None = None
+    quiet: bool = False
+    stderr: bool = False
+
+    def _active_console(self):
+        return self.console if self.console is not None else _console(stderr=self.stderr)
+
+    def _plain(self, text: str) -> None:
+        _emit_plain(text, stderr=self.stderr)
+
+    def _can_render(self) -> bool:
+        return not self.quiet and not is_quiet() and rich_enabled(quiet=self.quiet)
+
+    def status(
+        self,
+        level: str,
+        message: str,
+        *,
+        detail: str | None = None,
+    ) -> None:
+        """Emit one compact, copy-friendly status line."""
+
+        if self.quiet or is_quiet():
+            return
+        try:
+            label, style = _STATUS_STYLES[level.lower()]
+        except KeyError:
+            raise ValueError(f"unknown status level {level!r}; expected {sorted(_STATUS_STYLES)}") from None
+        suffix = f"  {detail}" if detail else ""
+        if not self._can_render():
+            self._plain(f"{label}  {message}{suffix}")
+            return
+        self._active_console().print(f"[{style}]{label:<7}[/{style}]  {message}{suffix}")
+
+    def summary(self, title: str, rows: Mapping[str, Any] | Sequence[tuple[str, Any]]) -> None:
+        """Emit a heading followed by a compact borderless key/value table."""
+
+        if self.quiet or is_quiet():
+            return
+        items = list(rows.items() if isinstance(rows, Mapping) else rows)
+        plain = "\n".join([title, *(f"{key}  {_format_cell(value)}" for key, value in items)])
+        if not self._can_render():
+            self._plain(plain)
+            return
+        table = make_compact_table(show_header=False)
+        table.add_column(style="dim cyan", no_wrap=True)
+        table.add_column()
+        for key, value in items:
+            table.add_row(str(key), _format_cell(value))
+        console = self._active_console()
+        console.print(f"[bold cyan]{title}[/bold cyan]")
+        console.print(table)
+
+    def table(
+        self,
+        title: str,
+        columns: Sequence[str],
+        rows: Iterable[Sequence[Any]],
+        *,
+        column_styles: Sequence[str | None] | None = None,
+    ) -> None:
+        """Emit repeated records as a compact borderless table."""
+
+        if self.quiet or is_quiet():
+            return
+        materialized = [tuple(row) for row in rows]
+        if any(len(row) != len(columns) for row in materialized):
+            raise ValueError("every table row must have the same length as columns")
+        if column_styles is not None and len(column_styles) != len(columns):
+            raise ValueError("column_styles must have the same length as columns")
+        if not self._can_render():
+            lines = [title, "  ".join(str(column) for column in columns)]
+            lines.extend("  ".join(_format_cell(value) for value in row) for row in materialized)
+            self._plain("\n".join(lines))
+            return
+        table = make_compact_table(show_header=True)
+        styles = column_styles or (None,) * len(columns)
+        for column, style in zip(columns, styles, strict=True):
+            table.add_column(str(column), style=style)
+        for row in materialized:
+            table.add_row(*(_format_cell(value) for value in row))
+        console = self._active_console()
+        console.print(f"[bold cyan]{title}[/bold cyan]")
+        console.print(table)
+
+
+def make_compact_table(*, show_header: bool = True):
+    """Construct the single canonical copy-friendly Rich table style."""
+
+    from rich.table import Table
+
+    return Table(
+        box=None,
+        show_header=show_header,
+        header_style="bold",
+        show_edge=False,
+        pad_edge=False,
+        collapse_padding=True,
+        padding=(0, 1),
+        expand=False,
+    )
+
+
+def get_reporter(
+    *,
+    console: Any | None = None,
+    quiet: bool = False,
+    stderr: bool = False,
+) -> CompactReporter:
+    """Factory for the canonical compact CLI reporting interface."""
+
+    return CompactReporter(console=console, quiet=quiet, stderr=stderr)
 
 
 def is_quiet() -> bool:
@@ -108,14 +429,9 @@ def emit_panel(
     if not rich_enabled(quiet=quiet):
         _emit_plain(f"{title}\n{body}", stderr=stderr)
         return
-    try:
-        from rich.panel import Panel
-
-        _console(stderr=stderr).print(
-            Panel(body, title=f"[bold]{title}[/bold]", border_style=border_style)
-        )
-    except Exception:
-        _emit_plain(f"{title}\n{body}", stderr=stderr)
+    console = _console(stderr=stderr)
+    console.print(f"[bold {border_style}]{title}[/bold {border_style}]")
+    console.print(body)
 
 
 def emit_table(
@@ -128,27 +444,12 @@ def emit_table(
 ) -> None:
     if quiet or is_quiet():
         return
-    plain_lines = [title, *(f"  {k}: {v}" for k, v in rows)]
-    if not rich_enabled(quiet=quiet):
-        _emit_plain("\n".join(plain_lines), stderr=stderr)
-        return
-    try:
-        from rich.panel import Panel
-        from rich.table import Table
-
-        table = Table(show_header=True, header_style="bold", expand=True)
-        table.add_column("Field", style="cyan", no_wrap=True)
-        table.add_column("Value", style="white")
-        for key, value in rows:
-            table.add_row(str(key), _format_cell(value))
-        _console(stderr=stderr).print(
-            Panel(table, title=f"[bold]{title}[/bold]", border_style=border_style)
-        )
-    except Exception:
-        _emit_plain("\n".join(plain_lines), stderr=stderr)
+    get_reporter(quiet=quiet, stderr=stderr).summary(title, rows)
 
 
 def _format_cell(value: Any) -> str:
+    if isinstance(value, (list, tuple)) and len(value) >= 4 and len(set(map(repr, value))) == 1:
+        return f"{value[0]!r} × {len(value)}"
     if isinstance(value, (list, tuple)) and len(value) > 12:
         head = ", ".join(repr(x) for x in value[:6])
         return f"[{head}, …] ({len(value)} items)"
@@ -219,22 +520,7 @@ def emit_horizontal_table(
     """Model-Attributes style table: field names as columns, one value row."""
     if quiet or is_quiet() or not mapping:
         return
-    plain = [title, "  " + "  ".join(f"{k}={_format_cell(v)}" for k, v in mapping.items())]
-    if not rich_enabled(quiet=quiet):
-        _emit_plain("\n".join(plain), stderr=stderr)
-        return
-    try:
-        from rich.panel import Panel
-
-        _console(stderr=stderr).print(
-            Panel(
-                _horizontal_table_from_mapping(mapping, title=None),
-                title=f"[bold]{title}[/bold]",
-                border_style="blue",
-            )
-        )
-    except Exception:
-        _emit_plain("\n".join(plain), stderr=stderr)
+    get_reporter(quiet=quiet, stderr=stderr).summary(title, mapping)
 
 
 def _model_attributes_mapping(model: Any) -> dict[str, Any]:
@@ -248,7 +534,7 @@ def emit_dashboard(
     border_style: str = "cyan",
     quiet: bool = False,
 ) -> None:
-    """Multi-section Rich panel (plain-text fallback when Rich is disabled)."""
+    """Render a compact multi-section report with a plain-text fallback."""
     if quiet or is_quiet():
         return
 
@@ -259,44 +545,21 @@ def emit_dashboard(
     if not rich_enabled(quiet=quiet):
         lines = [title]
         for section_title, mapping in active:
-            lines.append(f"[{section_title}]")
-            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
+            lines.append(section_title)
+            lines.extend(f"  {k}  {_format_cell(v)}" for k, v in mapping.items())
         _emit_plain("\n".join(lines))
         return
 
-    try:
-        from rich.console import Group
-        from rich.panel import Panel
-
-        vertical_sections = {"System", "Runtime threads", "Checkpoint"}
-        blocks = []
-        for section_title, mapping in active:
-            table = (
-                _vertical_table_from_mapping(mapping)
-                if section_title in vertical_sections
-                else _horizontal_table_from_mapping(mapping)
-            )
-            blocks.append(
-                Panel(
-                    table,
-                    title=f"[bold]{section_title}[/bold]",
-                    border_style="dim",
-                    padding=(0, 1),
-                )
-            )
-        _console().print(
-            Panel(
-                Group(*blocks),
-                title=f"[bold {border_style}]{title}[/bold {border_style}]",
-                border_style=border_style,
-            )
-        )
-    except Exception:
-        lines = [title]
-        for section_title, mapping in active:
-            lines.append(f"[{section_title}]")
-            lines.extend(f"  {k}: {_format_cell(v)}" for k, v in mapping.items())
-        _emit_plain("\n".join(lines))
+    console = _console()
+    console.print(f"[bold {border_style}]{title}[/bold {border_style}]")
+    for section_title, mapping in active:
+        console.print(f"[bold dim]{section_title}[/bold dim]")
+        table = make_compact_table(show_header=False)
+        table.add_column(style="cyan", no_wrap=True)
+        table.add_column()
+        for key, value in mapping.items():
+            table.add_row(str(key), _format_cell(value))
+        console.print(table)
 
 
 def collect_zbl_cutoff_mapping(model: Any) -> dict[str, Any] | None:
@@ -358,6 +621,10 @@ def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
 
     Reads the defaults from the single source of truth so the printout cannot
     drift from what the calculator actually evaluates.
+
+    This term is an MD safety prior on **pair** distance. It is not a COM
+    handoff parameter and is outside the region probed by the usual 2D dimer
+    scan (COM ≥ ~3.5 Å).
     """
     from mmml.models.short_range_wall import (
         DEFAULT_WALL_K_EV_A2,
@@ -368,6 +635,8 @@ def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
         "enabled": bool(enabled),
         "r_on_Å": float(DEFAULT_WALL_R_ON_A),
         "k_eV_A2": float(DEFAULT_WALL_K_EV_A2),
+        "distance": "pair r (Å), not COM",
+        "role": "md_safety_net",
     }
 
 
@@ -555,6 +824,16 @@ def emit_md_system_calculator_report(
             wall=wall_map,
             energy_terms=energy_map,
             extra=dict(calculator_extra) if calculator_extra else None,
+            mm_nonbond_mode=(
+                None
+                if long_range is None
+                else long_range.get("mm_nonbond_mode")
+            ),
+            ml_resnames=(
+                None
+                if system is None
+                else system.get("ml_resnames")
+            ),
         )
 
     if include_neighbor_list_summary and n_atoms is not None:
@@ -843,7 +1122,7 @@ def emit_model_loaded(
     runtime_natoms: int | None = None,
     quiet: bool = False,
 ) -> None:
-    """Pretty-print a loaded PhysNet model summary (horizontal table)."""
+    """Pretty-print a loaded PhysNet model as a compact field/value summary."""
     mapping = _model_attributes_mapping(model)
     if checkpoint is not None:
         mapping["checkpoint"] = checkpoint
@@ -891,12 +1170,20 @@ def emit_charmm_env(
 ) -> None:
     if quiet or is_quiet():
         return
-    rows = [
-        ("CGENFF RTF", cgenff_rtf),
-        ("CGENFF PRM", cgenff_prm),
-        ("CHARMM_HOME", charmm_home),
-        ("CHARMM_LIB_DIR", charmm_lib_dir),
-    ]
+    from pathlib import Path
+
+    rtf = Path(cgenff_rtf)
+    prm = Path(cgenff_prm)
+    cgenff_root = rtf.parent if rtf.parent == prm.parent else None
+    rows: list[tuple[str, Any]] = []
+    if cgenff_root is not None:
+        rows.append(("CGenFF", f"{cgenff_root}  ({rtf.name}, {prm.name})"))
+    else:
+        rows.extend((("CGenFF RTF", rtf), ("CGenFF PRM", prm)))
+    if Path(charmm_home) == Path(charmm_lib_dir):
+        rows.append(("CHARMM", charmm_home))
+    else:
+        rows.extend((("CHARMM home", charmm_home), ("CHARMM library", charmm_lib_dir)))
     emit_table("PyCHARMM environment", rows, border_style="dim", quiet=quiet)
 
 

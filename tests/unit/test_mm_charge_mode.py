@@ -202,3 +202,192 @@ def test_hybrid_mm_metadata_latent():
     meta = hybrid_mm_metadata_dict(_Cfg())
     assert meta["mm_charge_mode"] == "latent"
     assert meta["charge_correction"] is False
+
+
+# --- Mode D: latent_mean (precomputed template, liquid-compatible) --------
+
+
+def test_parse_latent_mean_aliases():
+    for alias in ("latent_mean", "latent-mean", "d", "mode_d"):
+        assert parse_mm_charge_mode(alias) is MMChargeMode.LATENT_MEAN
+    # Static-template mode needs no live q_ML.
+    assert not mm_charge_mode_needs_q_ml("latent_mean")
+
+
+def test_latent_mean_is_static_template_only():
+    from mmml.models.mm_charge_mode import mm_charge_mode_is_static_template
+
+    assert mm_charge_mode_is_static_template("latent_mean")
+    assert not mm_charge_mode_is_static_template("fixed")
+    assert not mm_charge_mode_is_static_template("latent")
+    assert not mm_charge_mode_is_static_template("fixed_plus_latent")
+
+
+def test_apply_mm_charge_mode_rejects_latent_mean():
+    # latent_mean has no per-step composition -- it's injected directly by
+    # the MD calculator as a precomputed mm_charges array, never routed
+    # through apply_mm_charge_mode (training-time or live q_ML composition).
+    q_c = jnp.array([0.1, -0.1, 0.2, -0.2])
+    mid = jnp.array([0, 0, 1, 1])
+    with pytest.raises(ValueError, match="precomputed template"):
+        apply_mm_charge_mode("latent_mean", q_c, None, mid)
+
+
+# --- Mode E: latent_dynamic (live, per-step aggregation, liquid-compatible) --
+
+
+def test_parse_latent_dynamic_aliases():
+    for alias in ("latent_dynamic", "latent-dynamic", "dynamic", "e", "mode_e"):
+        assert parse_mm_charge_mode(alias) is MMChargeMode.LATENT_DYNAMIC
+    # Unlike latent_mean, latent_dynamic still needs a live model forward.
+    assert mm_charge_mode_needs_q_ml("latent_dynamic")
+
+
+def test_latent_dynamic_is_not_static_template():
+    from mmml.models.mm_charge_mode import (
+        mm_charge_mode_is_dynamic_liquid,
+        mm_charge_mode_is_static_template,
+    )
+
+    assert not mm_charge_mode_is_static_template("latent_dynamic")
+    assert mm_charge_mode_is_dynamic_liquid("latent_dynamic")
+    assert not mm_charge_mode_is_dynamic_liquid("latent")
+    assert not mm_charge_mode_is_dynamic_liquid("latent_mean")
+
+
+def test_apply_mm_charge_mode_latent_dynamic_matches_latent_formula():
+    # latent_dynamic differs from latent only in how q_ML was obtained
+    # upstream (live weighted aggregation vs a single AB-dimer forward) --
+    # once q_ML is in hand, the projection is identical.
+    q_c = jnp.array([0.1, -0.1, 0.2, -0.2])
+    dq = jnp.array([0.4, -0.1, 0.25, 0.05])
+    mid = jnp.array([0, 0, 1, 1])
+    expected = neutralize_per_monomer(dq, mid)
+    out = apply_mm_charge_mode("latent_dynamic", q_c, dq, mid)
+    assert np.allclose(np.asarray(out), np.asarray(expected), atol=1e-12)
+
+
+def test_latent_dynamic_bypasses_dimer_only_gate_for_liquids():
+    assert_mm_charge_mode_dimer_supported(
+        MMChargeMode.LATENT_DYNAMIC,
+        n_monomers=32,
+        has_charges=True,
+        lr_solver="ewald",
+        doML=True,
+        doML_dimer=True,
+    )
+    # Still needs a live AB-style forward (doML_dimer) and a charge head,
+    # unlike latent_mean's precomputed template.
+    with pytest.raises(ValueError, match="charges=True"):
+        assert_mm_charge_mode_dimer_supported(
+            MMChargeMode.LATENT_DYNAMIC,
+            n_monomers=32,
+            has_charges=False,
+            lr_solver="ewald",
+            doML=True,
+            doML_dimer=True,
+        )
+    with pytest.raises(ValueError, match="doML"):
+        assert_mm_charge_mode_dimer_supported(
+            MMChargeMode.LATENT_DYNAMIC,
+            n_monomers=32,
+            has_charges=True,
+            lr_solver="ewald",
+            doML=True,
+            doML_dimer=False,
+        )
+    with pytest.raises(ValueError, match="JAX-PME"):
+        assert_mm_charge_mode_dimer_supported(
+            MMChargeMode.LATENT_DYNAMIC,
+            n_monomers=32,
+            has_charges=True,
+            lr_solver="jax_pme",
+            doML=True,
+            doML_dimer=True,
+        )
+
+
+def test_latent_mean_bypasses_dimer_only_gate_for_liquids():
+    # Unlike latent/fixed_plus_latent, latent_mean must work for any
+    # n_monomers (a liquid box), with no charge head, no doML_dimer, and any
+    # lr_solver -- it's a static charges array, not a live AB-dimer forward.
+    assert_mm_charge_mode_dimer_supported(
+        MMChargeMode.LATENT_MEAN,
+        n_monomers=64,
+        has_charges=False,
+        lr_solver="ewald",
+        doML=True,
+        doML_dimer=False,
+    )
+    assert_mm_charge_mode_dimer_supported(
+        MMChargeMode.LATENT_MEAN,
+        n_monomers=1,
+        has_charges=False,
+        lr_solver="jax_pme",
+        doML=False,
+        doML_dimer=False,
+    )
+
+
+# --- Q⁰ (`q0`): unperturbed monomer charges (train + liquid) ----------------
+
+
+def test_parse_q0_and_q1_aliases():
+    from mmml.models.mm_charge_mode import mm_charge_mode_is_q0
+
+    for alias in ("q0", "q_0", "latent_q0", "unperturbed", "monomer"):
+        assert parse_mm_charge_mode(alias) is MMChargeMode.Q0
+        assert mm_charge_mode_is_q0(alias)
+    for alias in ("q1", "q_1", "latent_q1", "latent"):
+        assert parse_mm_charge_mode(alias) is MMChargeMode.LATENT
+    assert mm_charge_mode_needs_q_ml("q0")
+    assert not mm_charge_mode_is_q0("latent")
+
+
+def test_assemble_q0_from_monomer_forwards():
+    from mmml.models.mm_charge_mode import assemble_q0_from_monomer_forwards
+
+    # One padded dimer: A=[0.5,-0.5], B=[0.2,-0.2], pad zeros.
+    q_a = jnp.array([[0.5, -0.5, 9.0, 9.0]])  # B/pad slots ignored
+    q_b = jnp.array([[9.0, 9.0, 0.2, -0.2]])
+    mid = jnp.array([[0, 0, 1, 1]])
+    q0 = assemble_q0_from_monomer_forwards(q_a, q_b, mid, batch_size=1, n_atoms=4)
+    assert np.allclose(np.asarray(q0), [[0.5, -0.5, 0.2, -0.2]])
+
+
+def test_apply_mm_charge_mode_q0_matches_latent_projection():
+    q_c = jnp.array([0.1, -0.1, 0.2, -0.2])
+    dq = jnp.array([0.4, -0.1, 0.25, 0.05])
+    mid = jnp.array([0, 0, 1, 1])
+    expected = neutralize_per_monomer(dq, mid)
+    out = apply_mm_charge_mode("q0", q_c, dq, mid)
+    assert np.allclose(np.asarray(out), np.asarray(expected), atol=1e-12)
+
+
+def test_q0_liquid_gate_needs_doml_not_dimer():
+    assert_mm_charge_mode_dimer_supported(
+        MMChargeMode.Q0,
+        n_monomers=178,
+        has_charges=True,
+        lr_solver="ewald",
+        doML=True,
+        doML_dimer=False,
+    )
+    with pytest.raises(ValueError, match="doML"):
+        assert_mm_charge_mode_dimer_supported(
+            MMChargeMode.Q0,
+            n_monomers=178,
+            has_charges=True,
+            lr_solver="ewald",
+            doML=False,
+            doML_dimer=False,
+        )
+    with pytest.raises(ValueError, match="JAX-PME"):
+        assert_mm_charge_mode_dimer_supported(
+            MMChargeMode.Q0,
+            n_monomers=178,
+            has_charges=True,
+            lr_solver="jax_pme",
+            doML=True,
+            doML_dimer=False,
+        )

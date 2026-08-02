@@ -1,0 +1,135 @@
+# ADUMB 2D on NH3–CH3Cl: Cl⋯C and C⋯N distances (RXNCOR) — PyCHARMM only.
+#
+# Menshutkin / SN2-like reaction coordinates on the vacuum dimer:
+#   rcl = CH3CL CL1⋯C1
+#   rcn = CH3CL C1⋯AMM1 N1
+# Same system as adumb_nc_distance.yaml; two ``umbrella rxncor`` cards then one
+# ``umbrella init`` (CHARMM ADUMBRXNCOR multi-dimensional WHAM).
+#
+# Reaction freedom:
+#   delete CGenFF C–Cl bond/angles before heat (PhysNet owns SN2 coords).
+#   RESD walls cover *both* umbrella RCs (rcl + rcn). First-name-only walls
+#   left C–N free → UM1RXN "reaction coordinate out of range".
+#
+# Requires CHARMM with ADUMB + ADUMBRXNCOR (``?ADUMBRXN == 1``).
+# Prefer min 0.0 (UM1RXN quirk when min>0); max 12 Å + soft RESD walls (k=500).
+# Heat: Bussi + in-memory overlap handoff; iasvel=1 (never IASVEL0/COMP-as-vel).
+# Wipe staged lingo after YAML edits.
+#
+#   source examples/m/_env.sh
+#   USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh
+#   RCL=3.8 RCN=1.57 USE_NPZ_PDB=1 bash examples/m/10_adumb_clc_cn_2d.sh  # product seed
+#
+# Alignment (this file — 200 ps heat):
+#   dt_fs=1.0, ps_heat=200 → heat nstep = 200_000
+#   umbrella init: nsim=400 × update=500 = 200_000; equi=250
+#
+# Pass checks: exit 0; lingo has both ``rcl`` and ``rcn`` umbrella cards;
+# ADUMB-WUNI.DAT under output_dir; RESD installs 2 walls (CL1-C1 and C1-N1).
+# Log: "in-memory handoff between N chunks" (not scratch .overlap_a/.b.res).
+#
+# Docs: docs/examples/nh3-ch3cl-results.md (ADUMB 2D section).
+
+setup: free_nvt
+backend: pycharmm
+composition: "AMM1:1,CH3CL:1"
+spacing: 4.0
+checkpoint: examples/m/model_ext.json
+# ML-only hybrid: CHARMM bonded C–Cl must still be deleted (see lingo).
+include_mm: false
+mm_switch_on: 8.0
+mm_charge_mode: fixed
+mm_nonbond_mode: jax_mic
+mm_pair_source: jax
+temperature: 1000
+dt_fs: 1.0
+md_stages: "mini,heat"
+ps_heat: 200.0
+# Prefer Bussi (default): auto in-memory overlap handoff. Never IASVEL0 for
+# ADUMB — COMP-as-velocity (T≃10¹³ K) → UM1RXN. Safe continuation is iasvel=1
+# at the ramp target; stiff RESD walls absorb redraws.
+heat_firstt: 200.0
+packmol_placement: sphere
+packmol_radius: 6.0
+reuse_packmol_cache: false
+# --- Reactive-coordinate dynamics guards ---
+dynamics_overlap_check_interval: 500
+dyn_freq_cadence: 500
+# warn: no SD rescue (keeps ADUMB unbiased). Mid-chunk abort still rewinds
+# numbered heat.NNNN.res when ADUMB RC guard is armed.
+dynamics_overlap_action: warn
+# Belt-and-suspenders: skip scratch READYN between chunks (also auto when
+# _adumb_rc_guard is armed).
+dynamics_overlap_memory_handoff: true
+dynamics_overlap_min_distance: 0.2
+dynamics_intra_min_distance: 0.2
+# Product / dissociated Cl makes CH3CL "monomer" large; keep explicit ceiling.
+# md-system must forward this to pycharmm (else auto bond limits ≈4–5 Å abort).
+dynamics_max_monomer_extent: 30.0
+# CRITICAL for ADUMB: never rigid-body template-restore monomers after fly-off.
+# That keeps inter-monomer COMs and leaves r(C–N) ≫ umbrella max → UM1RXN.
+# (Also auto-skipped when _adumb_rc_guard is armed.)
+no_dynamics_monomer_template_restore: true
+mini_nstep: 40
+skip_energy_show: true
+skip_jit_warmup: true
+# Heat uses Verlet: echeck=-1 still leaves MAX(ECHECK,0.1×KE). no_echeck uses
+# a huge sentinel so ENERGY CHANGE TOLERANCE cannot abort ADUMB heat.
+no_echeck: true
+no_echeck_heat: true
+quiet: false
+seed: 0
+mc_density_equalize: false
+output_dir: artifacts/nh3_ch3cl/adumb_clc_cn_2d
+
+dcd_nsavc: 1000
+dcd_max_frames: 200
+
+# Packmol/composition: segid CLST, resid 1 = AMM1, resid 2 = CH3CL.
+# RXNCOR NAME tokens are ≤4 chars in ADUMB (param_store).
+pycharmm_pre_dynamics_lingo: |
+  ! Weak COM tether — keep vacuum fragments from drifting (product seed).
+  ! force 10 + hard RC walls fought each other (CDROplet ~190); keep moderate.
+  cons hmcm force 5.0 refx 0.0 refy 0.0 refz 0.0 sele all end
+
+  ! Shake X–H: without this, Bussi iasvel=1 redraws fling AMM1 H to 100+ Å
+  ! (extent fly-off) while Cl–C / C–N walls stay in-range.
+  shake bonh param
+
+  ! --- Make SN2 possible under MLpot ---
+  ! CGenFF BOND C1–CL1 (k≈220) stays in ENER INTERN even with include_mm: false
+  ! and prevents Cl leaving. Delete reactive C–Cl bond + Cl–C–H angles.
+  delete bond sele atom * * CL1 end sele atom * * C1 end
+  delete angle sele atom * * CL1 end sele atom * * C1 end
+
+  ! Outer walls for both 2D RCs (Å). Python installs RESD on Cl–C *and* C–N.
+  ! k=10000 detonated (NaN); k=500 allowed IASVEL=1 punch → UM1RXN. Use 2000.
+  ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
+  set adumrcmax = 12.0
+  set adumrcwall = 2000.0
+
+  open unit 44 write card name ADUMB-WUNI.DAT
+  open unit 50 write card name UMBCOR
+  open unit 45 write card name RXNCOR_RCL.DAT
+  open unit 46 write card name RXNCOR_RCN.DAT
+
+  ! Points: NH3 N1, CH3Cl C1, CH3Cl CL1 (IUPAC names via ATOM, not TYPE).
+  rxncor define pn point select atom * * N1 end
+  rxncor define pc point select atom * * C1 end
+  rxncor define pcl point select atom * * CL1 end
+
+  ! Distances (Angstrom): Cl-C and C-N
+  rxncor define rcl distance pcl pc
+  rxncor define rcn distance pc pn
+  rxncor set nrxn 2 rcl rcn
+  rxncor trace rcl unit 45
+  rxncor trace rcn unit 46
+
+  ! Adaptive umbrella on Cl-C and C-N. min 0.0 for unpatched UM1RXN safety.
+  ! max matches adumrcmax (12 Å); RESD engages ~2.5 Å earlier (margin env).
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adumrcmax name rcl
+  umbrella rxncor nresol 20 trig 0 poly 4 min 0.0 max @adumrcmax name rcn
+
+  ! nsim * update = heat nstep (ps_heat*1000/dt_fs = 200_000 here): 400*500.
+  umbrella init nsim 400 update 500 equi 250 thresh 10 temp 500 wuni 44 ucun 50
+  umbrella ston

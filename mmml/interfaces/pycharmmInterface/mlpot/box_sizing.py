@@ -25,6 +25,8 @@ MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A = 1.0
 MAX_PACKMOL_MARGIN_FRAC_PER_SIDE = 0.20
 
 # Experimental bulk liquid densities (~298 K) for auto-sizing.
+# METH: liquid CH4 near the normal boiling point (~111.7 K); used for
+# liquid-density matrix sizing (same value as workflows/.../bulk_density.py).
 SOLVENT_BULK_PROPS: dict[str, dict[str, float]] = {
     "BENZ": {"rho_g_cm3": 0.874, "mw_g_mol": 78.11},
     "DCM": {"rho_g_cm3": 1.326, "mw_g_mol": 84.93},
@@ -33,28 +35,38 @@ SOLVENT_BULK_PROPS: dict[str, dict[str, float]] = {
     "ETOH": {"rho_g_cm3": 0.789, "mw_g_mol": 46.07},
     "TIP3": {"rho_g_cm3": 1.000, "mw_g_mol": 18.015},
     "WAT": {"rho_g_cm3": 1.000, "mw_g_mol": 18.015},
+    "METH": {"rho_g_cm3": 0.4226, "mw_g_mol": 16.0425},
+    "CH4": {"rho_g_cm3": 0.4226, "mw_g_mol": 16.0425},
 }
 
 BoxAutoMode = Literal["geometry", "density", "count"]
 
 
 def parse_composition_dict(spec: str | None) -> dict[str, int] | None:
-    """Parse ``RES:N,RES:N`` into a residue count map."""
+    """Parse ``RES:N`` / PDB composition into a residue-count map keyed by RESN.
+
+    PDB path tokens resolve to the CGenFF residue name read from the file.
+    A lone full-system PDB (mode ``full_system_pdb``) returns ``None`` because
+    stoichiometry is defined by the PDB sequence, not by composition counts.
+    """
     if spec is None or not str(spec).strip():
         return None
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        composition_mode,
+        ensure_packmol_pdb_monomers,
+        parse_composition_entries,
+    )
+
+    entries = parse_composition_entries(str(spec))
+    mode = composition_mode(entries)
+    if mode == "full_system_pdb":
+        return None
+    if mode == "packmol_pdb":
+        entries = ensure_packmol_pdb_monomers(entries)
     out: dict[str, int] = {}
-    for tok in str(spec).split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        if ":" not in tok:
-            raise ValueError(f"Invalid composition token: {tok!r}")
-        residue, count_s = tok.split(":", 1)
-        residue = residue.strip().upper()
-        count = int(count_s.strip())
-        if not residue or count <= 0:
-            raise ValueError(f"Invalid composition token: {tok!r}")
-        out[residue] = out.get(residue, 0) + int(count)
+    for entry in entries:
+        key = str(entry.residue).upper()
+        out[key] = out.get(key, 0) + int(entry.count)
     return out or None
 
 
@@ -78,7 +90,20 @@ def resolve_box_size_from_certified_artifacts(args: argparse.Namespace) -> float
                 payload = json.loads(box_json.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError, TypeError, ValueError):
                 continue
-            side_raw = payload.get("box_side_A", payload.get("box_side"))
+            # Canonical liquid-box key is box_side_A; make-box / hybrid also
+            # write box_size or side_length_A.
+            side_raw = None
+            for key in (
+                "box_side_A",
+                "final_cubic_side_A",
+                "box_side",
+                "box_size",
+                "side_length_A",
+                "L",
+            ):
+                if key in payload and payload[key] is not None:
+                    side_raw = payload[key]
+                    break
             if side_raw is None:
                 continue
             side = float(side_raw)

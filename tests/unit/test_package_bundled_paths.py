@@ -6,6 +6,8 @@ from pathlib import Path
 
 import importlib.util
 
+import pytest
+
 from mmml.paths import (
     _package_dir,
     bundled_file,
@@ -15,6 +17,7 @@ from mmml.paths import (
     default_dcm_crystal_cif,
     default_dcm_molecule_xyz,
     default_meoh_template_pdb,
+    default_tip3_template_pdb,
 )
 
 
@@ -40,6 +43,21 @@ def test_default_aco_template_pdb_is_bundled() -> None:
     assert "O1" in text and "ACO" in text
 
 
+def test_default_tip3_template_pdb_is_bundled() -> None:
+    path = default_tip3_template_pdb()
+    assert path.is_file(), f"missing bundled TIP3 template PDB: {path}"
+    text = path.read_text(encoding="utf-8")
+    assert "OH2" in text and "TIP3" in text
+
+
+def test_default_template_pdb_for_residue_tip3():
+    from mmml.cli.run.md_pbc_suite.cluster import _default_template_pdb_for_residue
+
+    path = _default_template_pdb_for_residue("TIP3")
+    assert path is not None and path.is_file()
+    assert "OH2" in path.read_text(encoding="utf-8")
+
+
 def test_crystal_image_str_is_bundled() -> None:
     path = crystal_image_str_source()
     assert path.is_file(), f"missing bundled CHARMM helper: {path}"
@@ -58,6 +76,23 @@ def test_default_dcm_crystal_cif_is_bundled() -> None:
     text = path.read_text(encoding="utf-8")
     assert "P b c n" in text or "Pbcn" in text
     assert "_cell_formula_units_Z" in text
+
+
+def test_both_dcm_pressure_points_are_bundled() -> None:
+    """The default must stay the 1.63 GPa entry: presets and doc tables use it."""
+    from mmml.paths import DCM_CRYSTAL_CIFS
+
+    assert set(DCM_CRYSTAL_CIFS) == {"pbcn_133gpa", "pbcn_163gpa"}
+    for phase in DCM_CRYSTAL_CIFS:
+        path = default_dcm_crystal_cif(phase)
+        assert path.is_file(), f"missing bundled DCM CIF for {phase}: {path}"
+        assert "_cell_measurement_pressure" in path.read_text(encoding="utf-8")
+    assert default_dcm_crystal_cif() == default_dcm_crystal_cif("pbcn_163gpa")
+
+
+def test_unknown_dcm_phase_names_the_alternatives() -> None:
+    with pytest.raises(KeyError, match="pbcn_133gpa"):
+        default_dcm_crystal_cif("ambient")
 
 
 def test_default_benzene_crystal_cif_is_bundled() -> None:

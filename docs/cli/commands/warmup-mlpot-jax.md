@@ -19,6 +19,8 @@ usage: mmml warmup-mlpot-jax [-h] [--checkpoint CHECKPOINT]
                              [--ml-batch-size ML_BATCH_SIZE]
                              [--ml-gpu-count ML_GPU_COUNT]
                              [--ml-max-active-dimers N]
+                             [--hybrid-hamiltonian {handoff,shared_cutoff}]
+                             [--shared-cutoff SHARED_CUTOFF]
                              [--ml-switch-width ML_SWITCH_WIDTH]
                              [--mm-switch-on MM_SWITCH_ON]
                              [--mm-switch-width MM_SWITCH_WIDTH]
@@ -32,39 +34,63 @@ Warm up MLpot PhysNet JAX compilation in serial Python (multithreaded XLA).
 Populates JAX_COMPILATION_CACHE_DIR for faster later runs under mpirun. Does not
 import PyCHARMM or call MPI.
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --checkpoint CHECKPOINT
                         PhysNet checkpoint (default: MMML_CKPT or
                         MMML_CHECKPOINT)
+
+Scientific model:
+  --shared-cutoff SHARED_CUTOFF
+                        Atomic ML/MM cutoff (Å) for --hybrid-hamiltonian
+                        shared_cutoff; defaults to the model cutoff.
+  --mm-switch-on MM_SWITCH_ON
+                        COM distance (Å) where the complementary handoff ends:
+                        ML scale reaches 0 and MM scale reaches 1 (default: 6).
+  --no-complementary-handoff
+                        Legacy MM window: MM starts at mm_switch_on instead of
+                        filling the ML taper handoff.
+
+Execution:
+  --ml-batch-size ML_BATCH_SIZE
+                        MLpot batch size
+  --ml-switch-width, --ml-cutoff ML_SWITCH_WIDTH
+                        COM-distance width (Å) of the ML→MM handoff. ML is fully
+                        on below mm_switch_on - width and tapers to zero at
+                        mm_switch_on (default: 1.5).
+  --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
+                        COM-distance width (Å) of the MM outer tail after
+                        mm_switch_on. Switched MM reaches zero at mm_switch_on +
+                        width (default: 5).
+  --compile-threads COMPILE_THREADS
+                        Override MMML_JAX_COMPILE_THREADS (default: min(16,
+                        ncpu) when unset)
+  --allow-under-mpirun  Allow running under mpirun (not recommended; compile
+                        threads usually off)
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --dry-run             Print planned warmup settings and exit
+  --quiet
+  --verbose
+
+Other options:
   --n-monomers N_MONOMERS
                         Monomer count (default 20)
   --atoms-per-monomer ATOMS_PER_MONOMER
                         Atoms per monomer for synthetic lattice (default 10)
   --box-side BOX_SIDE   PBC box side Å (0 = vacuum)
   --spacing SPACING     Lattice spacing Å
-  --ml-batch-size ML_BATCH_SIZE
-                        MLpot batch size
   --ml-gpu-count ML_GPU_COUNT
                         JAX pmap GPU count
   --ml-max-active-dimers N
                         Sparse ML dimer slot cap per step (PBC default all
                         unique dimers when n≤4005; same as md-system --ml-max-
                         active-dimers).
-  --ml-switch-width, --ml-cutoff ML_SWITCH_WIDTH
-                        COM-distance width (Å) of the ML→MM handoff. ML is fully
-                        on below mm_switch_on - width and tapers to zero at
-                        mm_switch_on (default: 1.5).
-  --mm-switch-on MM_SWITCH_ON
-                        COM distance (Å) where the complementary handoff ends:
-                        ML scale reaches 0 and MM scale reaches 1 (default: 6).
-  --mm-switch-width, --mm-cutoff MM_SWITCH_WIDTH
-                        COM-distance width (Å) of the MM outer tail after
-                        mm_switch_on. Switched MM reaches zero at mm_switch_on +
-                        width (default: 5).
-  --no-complementary-handoff
-                        Legacy MM window: MM starts at mm_switch_on instead of
-                        filling the ML taper handoff.
+  --hybrid-hamiltonian {handoff,shared_cutoff}
+                        Hybrid assembly: handoff preserves the existing COM-
+                        switched Hamiltonian; shared_cutoff uses additive ML+MM
+                        with no handoff and force-shifts MM pairs at --shared-
+                        cutoff.
   --mm-pair-source {jax,charmm_callback}
                         Decomposed MLpot MM pair provider: Fortran callback
                         idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
@@ -73,14 +99,6 @@ options:
                         MMML_MM_PAIR_SOURCE.
   --do-mm               Include MM pair path in warmup (closer to production
                         hybrid)
-  --compile-threads COMPILE_THREADS
-                        Override MMML_JAX_COMPILE_THREADS (default: min(16,
-                        ncpu) when unset)
-  --allow-under-mpirun  Allow running under mpirun (not recommended; compile
-                        threads usually off)
-  --dry-run             Print planned warmup settings and exit
-  --quiet
-  --verbose
 
 Examples: export MMML_CKPT=/path/to/DESdimers_params.json mmml warmup-mlpot-jax
 --n-monomers 20 --ml-batch-size 128 # Match DCM:60 liquid workflow (resilient

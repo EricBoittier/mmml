@@ -2,7 +2,7 @@
 
 Runnable scripts to bring up `pycharmm.MLpot` alongside the existing ASE PhysNet path (`get_ase_calc` / `get_pyc`). Run them **in order** from the repository root.
 
-**Default cluster:** acetone **ACO × N** (10 atoms per monomer). `ic.build()` alone is nearly 1D; builders use bundled `mmml/generate/sample/pdb/aco_monomer.pdb` and place monomers on a grid with `--spacing` (default 4 Å). Each CGenFF **resid** = one monomer for constraints.
+**Default cluster:** acetone **ACO × N** (10 atoms per monomer). `ic.build()` alone is nearly 1D; builders use bundled `mmml/generate/sample/pdb/aco_monomer.pdb` and place monomers on a grid with `--spacing` (default 2.5 Å). Each CGenFF **resid** = one monomer for constraints.
 
 ## Prerequisites
 

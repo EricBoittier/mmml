@@ -605,8 +605,15 @@ def write_psf_order_mapping_pdb(
     ordered_residue_names: Sequence[str],
     residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]],
 ) -> Path:
-    """Write a Packmol-style PDB with CHARMM atom names and PSF residue indices."""
-    from mmml.interfaces.pycharmmInterface.packmol_placement import _element_symbol
+    """Write a Packmol-style PDB with CHARMM atom names and PSF residue indices.
+
+    Uses :func:`format_cgenff_pdb_atom_line` so 4–5 character CGenFF names
+    (``BENZ``, ``CH3CL``) are not truncated to 3 characters.
+    """
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        _element_symbol,
+        format_cgenff_pdb_atom_line,
+    )
 
     lines = [
         "REMARK   mmml PyXtal cluster (CHARMM atom names for PSF reordering)",
@@ -625,14 +632,18 @@ def write_psf_order_mapping_pdb(
             tmpl_names,
             tmpl_z,
         )
-        resn = key[:3] or "UNK"
+        resid = int(mol_idx)
+        if resid > 9999:
+            raise ValueError(
+                f"residue index {resid} exceeds PDB resid field (9999); "
+                "split the system or use a multi-segment export"
+            )
         for name, zi, xyz in zip(atom_names, z_block, pos):
             elem = _element_symbol(int(zi))
-            x, y, z_coord = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
             lines.append(
-                f"ATOM  {serial:5d} {name[:4]:>4s} {resn:<3s} A{mol_idx:4d}    "
-                f"{x:8.3f}{y:8.3f}{z_coord:8.3f}  1.00  0.00          "
-                f"{elem:>2s}"
+                format_cgenff_pdb_atom_line(
+                    serial, str(name), key, resid, xyz, elem
+                )
             )
             serial += 1
     lines.append("END")

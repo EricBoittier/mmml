@@ -10,7 +10,24 @@ import pytest
 from mmml.interfaces.pycharmmInterface.cluster_geometry import (
     atoms_from_reference_npz,
     reference_frame_geometry,
+    resolve_cluster_residue_labels,
 )
+
+
+def test_resolve_cluster_residue_labels_prefers_composition_over_default_aco():
+    """Certified TIP3:N handoffs must not report ACO (argparse residue default)."""
+    args = type(
+        "Args",
+        (),
+        {
+            "composition": "TIP3:4",
+            "residue": "ACO",
+            "_cluster_residue_labels": None,
+            "_cluster_atoms_per_list": [3, 3, 3, 3],
+        },
+    )()
+    ctx = type("Ctx", (), {"workflow_args": args, "atoms_per_monomer": [3, 3, 3, 3]})()
+    assert resolve_cluster_residue_labels(ctx, 4) == ["TIP3", "TIP3", "TIP3", "TIP3"]
 
 
 def test_reference_frame_geometry_trajectory_npz(tmp_path: Path) -> None:
@@ -83,10 +100,6 @@ def test_ensure_charmm_session_ready_sets_bomlev(monkeypatch: pytest.MonkeyPatch
         _fake_apply,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.utils.set_up_directories",
-        lambda: None,
-    )
-    monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.prepare_charmm_vacuum",
         lambda: None,
     )
@@ -99,6 +112,43 @@ def test_ensure_charmm_session_ready_sets_bomlev(monkeypatch: pytest.MonkeyPatch
     assert calls == [-2]
     cg.ensure_charmm_session_ready()
     assert calls == [-2]
+
+
+def test_ensure_charmm_session_ready_does_not_mkdir_cwd_layout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """md-system session init must not litter CWD with unused pdb/res/dcd/psf/xyz."""
+    from mmml.interfaces.pycharmmInterface import cluster_geometry as cg
+
+    cg._charmm_session_ready = False
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity",
+        lambda **kwargs: kwargs,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.prepare_charmm_vacuum",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.import_pycharmm.reset_block",
+        lambda: None,
+    )
+
+    cg.ensure_charmm_session_ready()
+
+    for name in ("pdb", "res", "dcd", "psf", "xyz"):
+        assert not (tmp_path / name).exists()
+
+
+def test_set_up_directories_respects_base(tmp_path) -> None:
+    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
+
+    set_up_directories(tmp_path / "out")
+    for name in ("pdb", "res", "dcd", "psf", "xyz"):
+        assert (tmp_path / "out" / name).is_dir()
+    for name in ("pdb", "res", "dcd", "psf", "xyz"):
+        assert not (tmp_path / name).exists()
 
 
 def test_build_same_residue_reference_cluster_copies_first_monomer():

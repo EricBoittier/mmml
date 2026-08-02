@@ -89,8 +89,17 @@ def _is_usable_coordinate(path: Path) -> bool:
 
 def _is_valid_restart(path: Path) -> bool:
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        restart_coordinates_are_unsafe,
+        restart_has_nonfinite_coordinates,
+    )
 
-    return _valid_restart_file(path) is not None
+    valid = _valid_restart_file(path)
+    if valid is None:
+        return False
+    if restart_has_nonfinite_coordinates(valid) or restart_coordinates_are_unsafe(valid):
+        return False
+    return True
 
 
 def _add_candidate(
@@ -331,8 +340,12 @@ def _is_mlpot_restart_leg(candidate: RestartCandidate) -> bool:
 
 
 def _mlpot_pool(candidates: list[RestartCandidate]) -> list[RestartCandidate]:
-    pool = [c for c in candidates if _is_mlpot_restart_leg(c)]
-    return pool if pool else list(candidates)
+    """Prefer MLpot-era checkpoints; never fall back to pretreat-only set.
+
+    Falling back when the filtered pool is empty used to recommend fly-off
+    ``pretreat/heat.res`` after CHARMM_MM_PRETREAT_HEAT blow-ups.
+    """
+    return [c for c in candidates if _is_mlpot_restart_leg(c)]
 
 
 def _failure_leg_priority(leg: str) -> int:
@@ -632,6 +645,12 @@ def _failure_preset_hints(
             "Typical causes: hybrid GRMS above the MLpot registration limit "
             "('not ML-safe'), or geometry gates (intra/extent) after mini."
         )
+        if (output_dir / "pretreat").is_dir():
+            notes.append(
+                "pretreat/ present — if the log shows CHARMM_MM_PRETREAT_HEAT "
+                "fly-off (coords >|2000| Å), wipe pretreat/ and re-run without "
+                "--charmm-mm-pretreat (use Packmol + calculator-pre-minimize only)."
+            )
         mini_grms = _read_mini_hybrid_grms(output_dir)
         if mini_grms is not None and mini_grms > 25.0:
             notes.append(

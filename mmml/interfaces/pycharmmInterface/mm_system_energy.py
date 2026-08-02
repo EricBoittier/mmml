@@ -694,38 +694,127 @@ def load_nonbonded_system_from_charmm(
     )
 
 
+def _normalize_cell_matrix(cell: np.ndarray) -> np.ndarray:
+    cell_mat = np.asarray(cell, dtype=np.float64)
+    if cell_mat.ndim == 0:
+        L = float(cell_mat)
+        return np.diag([L, L, L])
+    if cell_mat.shape == (3,):
+        return np.diag(cell_mat)
+    return cell_mat
+
+
+def _filter_excluded_pairs(
+    pair_i: np.ndarray,
+    pair_j: np.ndarray,
+    excluded: frozenset[tuple[int, int]],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Drop bonded/exclusion pairs; ``excluded`` stores sorted ``(i, j)`` with ``i < j``."""
+    if not excluded or pair_i.size == 0:
+        return pair_i, pair_j
+    n_atoms = int(max(int(pair_i.max()), int(pair_j.max())) + 1)
+    excl_keys = np.fromiter(
+        (int(a) * n_atoms + int(b) for a, b in excluded),
+        dtype=np.int64,
+        count=len(excluded),
+    )
+    a = np.minimum(pair_i, pair_j).astype(np.int64, copy=False)
+    b = np.maximum(pair_i, pair_j).astype(np.int64, copy=False)
+    keep = ~np.isin(a * n_atoms + b, excl_keys)
+    return pair_i[keep], pair_j[keep]
+
+
+def _build_pair_indices_vectorized(
+    pos: np.ndarray,
+    cell_mat: np.ndarray,
+    excluded: frozenset[tuple[int, int]],
+    cutoff: float,
+    *,
+    chunk: int = 128,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Chunked NumPy MIC all-pairs (no per-pair Python MIC)."""
+    n = int(pos.shape[0])
+    if n < 2:
+        empty = np.empty(0, dtype=np.int32)
+        return empty, empty
+    inv = np.linalg.inv(cell_mat)
+    cutoff_sq = float(cutoff) ** 2
+    pairs_i: list[np.ndarray] = []
+    pairs_j: list[np.ndarray] = []
+    j_idx = np.arange(n, dtype=np.int32)
+    for i0 in range(0, n - 1, int(chunk)):
+        i1 = min(i0 + int(chunk), n)
+        i_block = pos[i0:i1]
+        dr = pos[None, :, :] - i_block[:, None, :]
+        frac = dr @ inv.T
+        frac -= np.round(frac)
+        dr_mic = frac @ cell_mat
+        r_sq = np.einsum("cij,cij->ci", dr_mic, dr_mic)
+        i_idx = np.arange(i0, i1, dtype=np.int32)[:, None]
+        mask = (j_idx[None, :] > i_idx) & (r_sq < cutoff_sq)
+        loc_i, loc_j = np.nonzero(mask)
+        if loc_i.size:
+            pairs_i.append((i0 + loc_i).astype(np.int32, copy=False))
+            pairs_j.append(loc_j.astype(np.int32, copy=False))
+    if not pairs_i:
+        empty = np.empty(0, dtype=np.int32)
+        return empty, empty
+    pi = np.concatenate(pairs_i)
+    pj = np.concatenate(pairs_j)
+    return _filter_excluded_pairs(pi, pj, excluded)
+
+
 def _build_pair_indices(
     positions: np.ndarray,
     cell: np.ndarray,
     excluded: frozenset[tuple[int, int]],
     cutoff: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Host-side O(N²) MIC pair list (``i < j``, ``r < cutoff``)."""
+    """Host-side MIC pair list (``i < j``, ``r_MIC < cutoff``).
+
+    Prefer Vesin when the cutoff is within the unique-MIC regime
+    (``cutoff <= L/2``); otherwise use chunked vectorized NumPy. Vesin can emit
+    multiple lattice images / self-images when ``cutoff > L/2``, which is wrong
+    for the MIC pair lists consumed by hybrid MM. The previous pure-Python
+    O(N²) loop starved the GPU on ~2k-atom solvent boxes.
+    """
     pos = np.asarray(positions, dtype=np.float64)
-    cell_mat = np.asarray(cell, dtype=np.float64)
-    if cell_mat.shape == (3,):
-        cell_mat = np.diag(cell_mat)
-    inv = np.linalg.inv(cell_mat)
-    cutoff_sq = float(cutoff) ** 2
-    n = pos.shape[0]
-    pairs_i: list[int] = []
-    pairs_j: list[int] = []
-    for i in range(n):
-        for j in range(i + 1, n):
-            if (i, j) in excluded:
-                continue
-            dr = pos[j] - pos[i]
-            frac = dr @ inv.T
-            frac = frac - np.round(frac)
-            dr_mic = frac @ cell_mat
-            r_sq = float(np.dot(dr_mic, dr_mic))
-            if r_sq < cutoff_sq:
-                pairs_i.append(i)
-                pairs_j.append(j)
-    return (
-        np.asarray(pairs_i, dtype=np.int32),
-        np.asarray(pairs_j, dtype=np.int32),
-    )
+    cell_mat = _normalize_cell_matrix(cell)
+    n = int(pos.shape[0])
+    if n < 2:
+        empty = np.empty(0, dtype=np.int32)
+        return empty, empty
+
+    box_sides = np.linalg.norm(cell_mat, axis=1)
+    min_side = float(np.min(box_sides)) if box_sides.size else 0.0
+    # Unique MIC: at most one image of each pair when r_cut <= L/2.
+    vesin_safe = min_side > 0.0 and float(cutoff) <= 0.5 * min_side + 1e-12
+
+    if vesin_safe:
+        try:
+            from mmml.interfaces.pycharmmInterface.nl_reference import (
+                have_vesin,
+                vesin_raw_half_list,
+            )
+
+            if have_vesin():
+                i_raw, j_raw, dist = vesin_raw_half_list(pos, cell_mat, float(cutoff))
+                i_arr = np.asarray(i_raw, dtype=np.int32)
+                j_arr = np.asarray(j_raw, dtype=np.int32)
+                dist_arr = np.asarray(dist, dtype=np.float64)
+                keep = (dist_arr < float(cutoff)) & (i_arr != j_arr)
+                pi = i_arr[keep]
+                pj = j_arr[keep]
+                swap = pi > pj
+                if np.any(swap):
+                    pi = pi.copy()
+                    pj = pj.copy()
+                    pi[swap], pj[swap] = pj[swap], pi[swap]
+                return _filter_excluded_pairs(pi, pj, excluded)
+        except Exception:
+            pass
+
+    return _build_pair_indices_vectorized(pos, cell_mat, excluded, float(cutoff))
 
 
 def nonbonded_energy_and_forces(

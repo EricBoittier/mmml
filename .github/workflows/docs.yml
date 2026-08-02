@@ -23,6 +23,9 @@ jobs:
       - name: Build docs
         run: |
           uv run python scripts/generate_cli_docs.py --check
+          uv run python scripts/check_evidence_registry.py
+          uv run python scripts/audit_hardcoded_recommendations.py
+          uv run python scripts/generate_package_architecture.py --check
           uv run python scripts/generate_docs_figures.py --check
           uv run python scripts/generate_crystal_lit_compare.py --check
           uv run python scripts/plot_mlpot_settings.py
@@ -59,6 +62,9 @@ jobs:
           MMML_MERMAID_PUPPETEER_CONFIG: mermaid-puppeteer-config.json
         run: |
           uv run python scripts/generate_cli_docs.py --check
+          uv run python scripts/check_evidence_registry.py
+          uv run python scripts/audit_hardcoded_recommendations.py
+          uv run python scripts/generate_package_architecture.py --check
           uv run python scripts/generate_docs_figures.py --check
           uv run python scripts/generate_crystal_lit_compare.py --check
           uv run python scripts/plot_mlpot_settings.py

@@ -223,24 +223,31 @@ def test_build_pycharmm_command_omits_ml_compute_dtype_when_unset():
 
 
 def test_decomposed_mlpot_defers_gpu_promote_until_first_ener_for_jax_pme_mesh():
-    z = np.zeros(8, dtype=int)
-    model = DecomposedMlpotModel(
-        None,
-        CutoffParameters(),
-        2,
-        z,
-        defer_jax_until_after_sd=True,
-        lr_solver="jax_pme",
-        jax_pme_method="pme",
-    )
-    assert model._jax_pme_hybrid_first_ener_done is False
-    with patch.object(model, "_finalize_jax_factory") as mock_finalize:
-        model.promote_jax_factory_to_gpu()
-    mock_finalize.assert_not_called()
-    model._jax_pme_hybrid_first_ener_done = True
-    with patch.object(model, "_finalize_jax_factory") as mock_finalize:
-        model.promote_jax_factory_to_gpu()
-    mock_finalize.assert_called_once()
+    # jax-pme is an optional extra (see pyproject.toml's jax-pme-solver);
+    # this test exercises the mesh-defer logic regardless of whether it's
+    # actually installed in the test environment.
+    with patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        z = np.zeros(8, dtype=int)
+        model = DecomposedMlpotModel(
+            None,
+            CutoffParameters(),
+            2,
+            z,
+            defer_jax_until_after_sd=True,
+            lr_solver="jax_pme",
+            jax_pme_method="pme",
+        )
+        assert model._jax_pme_hybrid_first_ener_done is False
+        with patch.object(model, "_finalize_jax_factory") as mock_finalize:
+            model.promote_jax_factory_to_gpu()
+        mock_finalize.assert_not_called()
+        model._jax_pme_hybrid_first_ener_done = True
+        with patch.object(model, "_finalize_jax_factory") as mock_finalize:
+            model.promote_jax_factory_to_gpu()
+        mock_finalize.assert_called_once()
 
 
 def test_promote_mlpot_jax_for_calculator_mini_skips_gpu_when_mpi_defers_sd():

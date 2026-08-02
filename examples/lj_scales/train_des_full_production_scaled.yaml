@@ -1,0 +1,35 @@
+# Production DES fit: all typeable neutral frames are used for both fitting and
+# in-loss evaluation. Thermodynamic properties are the external validation.
+# Unlike the fixed-LJ/no-ZBL controls, this run is explicitly an LJ refit.
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: true
+mm_include_lj: true
+lr_solver: mic
+
+# Wider sigma search requested for the production refit. Defaults elsewhere
+# remain 0.95..1.05 so existing/comparison jobs are reproducible.
+mm_lj_sigma_scale_min: 0.8
+mm_lj_sigma_scale_max: 1.2
+mm_lj_epsilon_scale_min: 0.25
+mm_lj_epsilon_scale_max: 4.0
+# 95/185 types occur; six have only 14..24 frames. Learn the 89 types with at
+# least 25 frames and pin all other scales exactly to 1.0.
+mm_lj_min_type_frames: 25
+
+ml_switch_width: 1.5
+mm_switch_on: 6.0
+mm_switch_width: 5.0
+
+charges: false
+batch_size: 32
+num_epochs: 25
+learning_rate: 0.001
+seed: 42
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 0.0
+charges_weight: 0.0
+objective: valid_loss
+best: true

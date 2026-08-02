@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 
+from mmml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
+    DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
+    add_charmm_mm_pretreat_physics_args,
+)
 from mmml.paths import _package_dir
 
 # Repository root (parent of the installed ``mmml`` package directory).
@@ -17,9 +22,17 @@ REPO_ROOT = _package_dir().parent
 
 DEFAULT_RESIDUE = "ACO"
 DEFAULT_N_MOLECULES = 2
-DEFAULT_SPACING = 4.0
+# COM pitch for grid / multi-residue placement. Dense liquids (water O···O
+# ~2.8 Å, MeOH COM ~4.1 Å) need well below the old 4 Å default; Packmol's
+# atom-atom floor is ``--packmol-tolerance`` (default 2 Å), not this.
+DEFAULT_SPACING = 2.5
 ACO_ATOMS_PER_MONOMER = 10
 NVE_TIMESTEP_PS = 0.00025
+
+# This is only a coarse guard against collapsed/repeated monomer coordinates.
+# It must remain below the physical size of supported small monomers; detailed,
+# species-aware geometry validation is handled by ``monomer_geometry_limits``.
+DEFAULT_MIN_MONOMER_EXTENT_A = 1.0
 
 
 def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
@@ -233,6 +246,29 @@ def resolve_show_energy(args: argparse.Namespace) -> bool:
     return False
 
 
+def add_pre_dynamics_lingo_args(parser: argparse.ArgumentParser) -> None:
+    """Free-form CHARMM lingo executed once before scheduled dynamics."""
+    group = parser.add_argument_group("Pre-dynamics CHARMM lingo")
+    group.add_argument(
+        "--pycharmm-pre-dynamics-lingo",
+        type=str,
+        default="",
+        metavar="SCRIPT",
+        help=(
+            "CHARMM lingo to run once after setup/constraints and before dynamics "
+            "(e.g. CONS/UMBR/ADUMB). Prefer --pycharmm-pre-dynamics-lingo-file for "
+            "multiline scripts."
+        ),
+    )
+    group.add_argument(
+        "--pycharmm-pre-dynamics-lingo-file",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Path to a CHARMM script file run once before dynamics.",
+    )
+
+
 def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:
     """CHARMM MMFP flat-bottom spherical potential (non-PBC)."""
     group = parser.add_argument_group("Flat-bottom sphere (CHARMM MMFP)")
@@ -287,7 +323,19 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--no-echeck",
         action="store_true",
-        help="Disable ECHECK (CHARMM -1 = no early stop)",
+        help=(
+            "Disable ECHECK. Uses a huge sentinel (not -1): velocity-Verlet "
+            "paths still apply MAX(ECHECK, 0.1×KE) when ECHECK≤0."
+        ),
+    )
+    group.add_argument(
+        "--no-echeck-heat",
+        action="store_true",
+        help=(
+            "Disable ECHECK during the heat stage only "
+            "(equi/prod still use --echeck). Needed for ML USER-only heat "
+            "before Hoover settles."
+        ),
     )
     group.add_argument(
         "--allow-incomplete-dynamics",
@@ -299,9 +347,19 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+# VV2 / dynamc4 use MAX(ECHECK, 0.1*KE) without testing echeck>0, so echeck=-1
+# still leaves a ~10%-of-KE gate. A huge positive sentinel disables all paths.
+_DISABLED_CHARMM_ECHECK_KCAL = 1.0e30
+
+
+def disabled_charmm_echeck_kcal() -> float:
+    """ECHECK value that disables energy-drift abort on leapfrog and VV."""
+    return float(_DISABLED_CHARMM_ECHECK_KCAL)
+
+
 def resolve_echeck_from_args(args: argparse.Namespace) -> float:
     if getattr(args, "no_echeck", False):
-        return -1.0
+        return disabled_charmm_echeck_kcal()
     return float(getattr(args, "echeck", 100.0))
 
 
@@ -568,9 +626,6 @@ def resolve_charmm_mm_pretreat_for_staged(
     return True
 
 
-DEFAULT_CHARMM_MM_PRETREAT_DT_FS = 1.0
-
-
 @dataclass(frozen=True)
 class CharmmMmPretreatSettings:
     """Resolved CHARMM MM pretreat integrator and bath targets."""
@@ -735,73 +790,6 @@ def apply_pretreat_dyn_freq_kwargs(
         kw["imgfrq"] = 0
         kw["ihbfrq"] = 0
         kw["ilbfrq"] = 0
-
-
-def add_charmm_mm_pretreat_physics_args(group: Any) -> None:
-    """Pretreat integrator and bath flags (shared by staged CLI and md-system)."""
-    group.add_argument(
-        "--charmm-mm-pretreat-dt-fs",
-        type=float,
-        default=DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
-        metavar="FS",
-        help=(
-            "Pretreat CHARMM dynamics timestep in fs (default: 1.0). "
-            "Independent of MLpot --dt-fs."
-        ),
-    )
-    group.add_argument(
-        "--charmm-mm-pretreat-temperature",
-        type=float,
-        default=None,
-        metavar="K",
-        help="Pretreat CHARMM heat/equi/prod temperature (default: --temperature).",
-    )
-    group.add_argument(
-        "--charmm-mm-pretreat-pressure",
-        type=float,
-        default=None,
-        metavar="ATM",
-        help=(
-            "Pretreat CHARMM NPT reference pressure (default: --npt-pressure or --pressure)."
-        ),
-    )
-    group.add_argument(
-        "--charmm-mm-pretreat-echeck",
-        type=float,
-        default=None,
-        metavar="KCAL",
-        help=(
-            "ECHECK for pretreat CPT equi/prod and mini box equil (kcal/mol). "
-            "Default: disabled. Use 0 or a negative value to keep ECHECK off."
-        ),
-    )
-    group.add_argument(
-        "--charmm-mm-pretreat-inbfrq",
-        type=int,
-        default=None,
-        metavar="N",
-        help=(
-            "Pretreat CHARMM nonbond list rebuild cadence (inbfrq). "
-            "Default scales with --charmm-mm-pretreat-dt-fs (400 at 2 fs vs 50 for MLpot)."
-        ),
-    )
-    group.add_argument(
-        "--charmm-mm-pretreat-imgfrq",
-        type=int,
-        default=None,
-        metavar="N",
-        help=(
-            "Pretreat PBC image/HB list cadence (imgfrq/ihbfrq/ilbfrq). "
-            "Default matches pretreat inbfrq."
-        ),
-    )
-    group.add_argument(
-        "--charmm-mm-pretreat-ixtfrq",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Pretreat crystal transform cadence (ixtfrq; default scales with pretreat dt).",
-    )
 
 
 def heat_thermostat_requires_hoover_after_pretreat(args: argparse.Namespace) -> bool:
@@ -996,7 +984,12 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         "--composition",
         type=str,
         default=None,
-        help="Comma-separated RES:N entries (e.g. ACO:4,MEOH:2)",
+        help=(
+            "Comma-separated RES:N and/or PDB path tokens "
+            "(e.g. ACO:4,MEOH:2 or solute.pdb:1,DCM:200). "
+            "A lone system.pdb (count 1) loads the full system via CHARMM READ SEQU PDB. "
+            "CGenFF residue names are validated against top_all36_cgenff.rtf."
+        ),
     )
     parser.add_argument(
         "--packmol",
@@ -1011,13 +1004,29 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         "--spacing",
         type=float,
         default=DEFAULT_SPACING,
-        help="Spacing (Å) when placing multiple residues",
+        help=(
+            "COM pitch (Å) when placing multiple residues on a grid. "
+            "Default 2.5 Å suits dense liquids; raise for sparse / gas packs. "
+            "Not Packmol's atom-atom tolerance (--packmol-tolerance)."
+        ),
     )
     parser.add_argument(
         "--checkpoint",
         type=Path,
         default=None,
         help="Checkpoint (.json or Orbax root). Default: MMML_CKPT or repo ckpts.",
+    )
+    parser.add_argument(
+        "--ml-resnames",
+        type=str,
+        default=None,
+        dest="ml_resnames",
+        help=(
+            "Mechanical embedding: comma-separated residue names for USER/PhysNet "
+            "(e.g. AMM1,CH3CL). Solvent residues stay CHARMM MM. Requires "
+            "mm_nonbond_mode=periodic_external (not jax_mic). "
+            "YAML: ml_resnames: [AMM1, CH3CL]."
+        ),
     )
 
 
@@ -1278,9 +1287,15 @@ def validate_cluster_geometry(
     positions: np.ndarray,
     *,
     min_axis_span: float = 0.3,
-    min_monomer_extent: float = 1.5,
+    min_monomer_extent: float = DEFAULT_MIN_MONOMER_EXTENT_A,
     n_molecules: int | None = None,
 ) -> dict[str, float]:
+    """Validate coarse cluster geometry before calculator setup.
+
+    ``min_monomer_extent`` is a collapse sentinel in angstrom, not a
+    species-specific equilibrium-geometry criterion. More detailed limits are
+    derived from reference geometry later in the MD setup.
+    """
     r = np.asarray(positions, dtype=float)
     if r.ndim != 2 or r.shape[1] != 3:
         raise ValueError(f"positions must be (N, 3), got {r.shape}")
@@ -1439,24 +1454,34 @@ def prepare_notebook_kernel(*, jax_required: bool = True) -> None:
 
 
 def parse_composition(spec: str) -> list[tuple[str, int]]:
-    """Parse ``RES:count`` composition strings (e.g. ``DCM:52,MEOH:10``)."""
-    out: list[tuple[str, int]] = []
-    for tok in spec.split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        if ":" in tok:
-            residue, count_str = tok.split(":", 1)
-            count = int(count_str)
-        else:
-            residue, count = tok, 1
-        residue = residue.strip().upper()
-        if not residue or count <= 0:
-            raise ValueError(f"Invalid composition token: '{tok}'")
-        out.append((residue, count))
-    if not out:
-        raise ValueError("Empty composition")
-    return out
+    """Parse ``RES:count`` / PDB composition strings (e.g. ``DCM:52,MEOH:10``).
+
+    PDB path tokens are allowed (``solute.pdb:1,DCM:200`` or lone ``system.pdb``).
+    CGenFF residue names are validated against the bundled RTF.  Returns
+    ``[(resolved_RESN, count), ...]``; use ``parse_composition_entries`` when
+    monomer PDB paths are needed.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        composition_as_pairs,
+        composition_mode,
+        ensure_packmol_pdb_monomers,
+        parse_composition_entries,
+    )
+
+    entries = parse_composition_entries(spec)
+    mode = composition_mode(entries)
+    if mode == "packmol_pdb":
+        entries = ensure_packmol_pdb_monomers(entries)
+    return composition_as_pairs(entries)
+
+
+def parse_composition_entries(spec: str, **kwargs):
+    """Parse composition into ``CompositionEntry`` rows (including PDB paths)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        parse_composition_entries as _parse_entries,
+    )
+
+    return _parse_entries(spec, **kwargs)
 
 
 def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_molecules: int) -> str:
@@ -1500,7 +1525,6 @@ def build_cluster_from_args_with_tag(
         _build_cluster_from_composition,
         _build_cluster_from_composition_packmol,
         _build_cluster_from_composition_pyxtal,
-        _parse_composition,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
     from mmml.interfaces.pycharmmInterface.packmol_cache import (
@@ -1519,10 +1543,24 @@ def build_cluster_from_args_with_tag(
             apply_box_auto_count_composition,
             resolve_box_auto_mode,
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            apply_from_pdb_alias,
+            resolve_composition_plan,
+        )
 
+        apply_from_pdb_alias(args)
         if resolve_box_auto_mode(args) == "count":
             apply_box_auto_count_composition(args)
-        composition = _parse_composition(args.composition)
+        _entries, mode, composition, monomer_pdb_templates = resolve_composition_plan(
+            str(args.composition),
+            builder=getattr(args, "builder", None),
+            packmol=getattr(args, "packmol", None),
+            pyxtal=getattr(args, "pyxtal", None),
+        )
+        if mode == "full_system_pdb":
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+
+            return load_cluster_from_pdb(args)
         if use_pyxtal_placement(args):
             import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
             from mmml.interfaces.pyxtal_placement import parse_supercell_reps
@@ -1605,8 +1643,13 @@ def build_cluster_from_args_with_tag(
                 prep_gate_settings=packmol_prep_settings_from_namespace(args),
                 quiet=bool(getattr(args, "quiet", False)),
                 geometry_store=args,
+                monomer_pdb_templates=monomer_pdb_templates,
             )
         else:
+            if mode == "packmol_pdb":
+                raise ValueError(
+                    "PDB composition tokens require Packmol; remove --no-packmol"
+                )
             from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
 
             builder = resolve_system_builder(
@@ -1735,8 +1778,551 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
             "MMFP flat-bottom sphere: "
             f"droff={cfg.radius:.2f} Å force={cfg.force:.2f} "
             f"center=({cfg.xref:.2f}, {cfg.yref:.2f}, {cfg.zref:.2f}) "
-            f"selection='{cfg.selection}'"
+            f"selection='{cfg.selection}'",
+            flush=True,
         )
+
+
+def normalize_pycharmm_pre_dynamics_lingo(value: Any) -> str:
+    """Normalize YAML/CLI lingo to a single CHARMM script string (empty = no-op)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return ""
+        parts: list[str] = []
+        for i, item in enumerate(value):
+            if not isinstance(item, str):
+                raise ValueError(
+                    "pycharmm_pre_dynamics_lingo list items must be strings; "
+                    f"got {type(item).__name__} at index {i}"
+                )
+            text = item.strip()
+            if text:
+                parts.append(text)
+        return "\n".join(parts).strip()
+    raise ValueError(
+        "pycharmm_pre_dynamics_lingo must be a string, list of strings, or empty; "
+        f"got {type(value).__name__}"
+    )
+
+
+def resolve_pre_dynamics_lingo_script(args: argparse.Namespace) -> str:
+    """Resolve inline and/or file-based pre-dynamics CHARMM lingo."""
+    inline = normalize_pycharmm_pre_dynamics_lingo(
+        getattr(args, "pycharmm_pre_dynamics_lingo", None)
+    )
+    file_raw = getattr(args, "pycharmm_pre_dynamics_lingo_file", None)
+    file_text = ""
+    if file_raw is not None and str(file_raw).strip():
+        path = Path(file_raw)
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"pycharmm_pre_dynamics_lingo_file not found: {path}"
+            )
+        file_text = path.read_text(encoding="utf-8").strip()
+    if inline and file_text:
+        return f"{inline}\n{file_text}".strip()
+    return inline or file_text
+
+
+_ADUM_RCMAX_SET_RE = re.compile(
+    r"(?im)^\s*set\s+(?:adumrcmax|adum_rcmax)\s*=\s*([^\s!]+)"
+)
+_ADUM_RCWALL_SET_RE = re.compile(
+    r"(?im)^\s*set\s+(?:adumrcwall|adum_rcwall)\s*=\s*([^\s!]+)"
+)
+_ADUM_RCMAX_TOKEN_RE = re.compile(r"@adum_?rc_?max\b", re.I)
+_ADUM_RCWALL_TOKEN_RE = re.compile(r"@adum_?rc_?wall\b", re.I)
+_UMB_RXNCOR_MIN_RE = re.compile(
+    r"(?im)^\s*umbrella\s+rxncor\b.*?[\s-]min\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+)
+_UMB_RXNCOR_MAX_RE = re.compile(
+    r"(?im)^\s*umbrella\s+rxncor\b.*?[\s-]max\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+)
+_UMB_RXNCOR_NAME_RE = re.compile(
+    r"(?im)^\s*umbrella\s+rxncor\b.*?[\s-]name\s+(\S+)"
+)
+_RXNCOR_COMBINATION_DEF_RE = re.compile(
+    r"(?im)^\s*rxncor\s+define\s+(\S+)\s+combination\b"
+)
+
+
+def parse_adumb_rc_params(script: str) -> tuple[float | None, float | None]:
+    """Return ``(rcmax, rcwall)`` from ``set adumrcmax`` / ``set adumrcwall`` lingo."""
+    text = str(script or "")
+    rcmax = rcwall = None
+    mmax = _ADUM_RCMAX_SET_RE.search(text)
+    mwall = _ADUM_RCWALL_SET_RE.search(text)
+    if mmax:
+        try:
+            rcmax = float(mmax.group(1))
+        except ValueError:
+            rcmax = None
+    if mwall:
+        try:
+            rcwall = float(mwall.group(1))
+        except ValueError:
+            rcwall = None
+    if rcmax is not None and rcmax <= 0:
+        rcmax = None
+    if rcwall is not None and rcwall <= 0:
+        rcwall = None
+    return rcmax, rcwall
+
+
+def parse_adumb_umbrella_bounds(script: str) -> tuple[float | None, float | None]:
+    """Return (umb_min, umb_max) for the xi soft-window when umbrella is a combination RC.
+
+    Distance-only umbrellas (``name rcl``) return ``(None, None)`` so the xi =
+    r(ClC)-r(CN) guard stays off. Use :func:`parse_adumb_umbrella_minmax` for the
+    raw card bounds (wall alignment).
+    """
+    text = str(script or "")
+    if not adumb_umbrella_is_bond_difference(text):
+        return None, None
+    return parse_adumb_umbrella_minmax(text)
+
+
+def parse_adumb_umbrella_minmax(script: str) -> tuple[float | None, float | None]:
+    """Return raw ``(min, max)`` from the first ``umbrella rxncor`` card (any RC type)."""
+    text = str(script or "")
+    umin = umax = None
+    mmin = _UMB_RXNCOR_MIN_RE.search(text)
+    mmax = _UMB_RXNCOR_MAX_RE.search(text)
+    if mmin:
+        try:
+            umin = float(mmin.group(1))
+        except ValueError:
+            umin = None
+    if mmax:
+        try:
+            umax = float(mmax.group(1))
+        except ValueError:
+            umax = None
+    return umin, umax
+
+
+def resolve_adumb_wall_rcmax(adumrcmax: float | None, script: str) -> float | None:
+    """Wall ``rcmax`` for the active umbrella distance RC.
+
+    Cap at umbrella ``max`` only for **distance** umbrellas (``rcl`` / ``rcn``),
+    so RESD engages before UM1RXN. Combination RCs (``rdif``) keep ``adumrcmax``
+    for both component walls — the umbrella max is a difference, not a bond length.
+    """
+    if adumrcmax is None:
+        return None
+    if adumb_umbrella_is_bond_difference(script):
+        return float(adumrcmax)
+    _umin, umax = parse_adumb_umbrella_minmax(script)
+    if umax is not None and umax > 0:
+        return float(min(float(adumrcmax), float(umax)))
+    return float(adumrcmax)
+
+
+def parse_adumb_umbrella_name(script: str) -> str | None:
+    """Return the first ``umbrella rxncor … name`` token (lowercased), if any."""
+    names = parse_adumb_umbrella_names(script)
+    return names[0] if names else None
+
+
+def parse_adumb_umbrella_names(script: str) -> list[str]:
+    """Return all ``umbrella rxncor … name`` tokens (lowercased), in order."""
+    return [
+        m.group(1).strip().lower()
+        for m in _UMB_RXNCOR_NAME_RE.finditer(str(script or ""))
+        if m.group(1).strip()
+    ]
+
+
+def adumb_umbrella_is_bond_difference(script: str) -> bool:
+    """True when the first ``umbrella rxncor`` name is a ``combination`` RXNCOR."""
+    text = str(script or "")
+    umb_name = parse_adumb_umbrella_name(text)
+    if not umb_name:
+        return False
+    for mdef in _RXNCOR_COMBINATION_DEF_RE.finditer(text):
+        if mdef.group(1).strip().lower() == umb_name:
+            return True
+    return False
+
+
+def parse_adumb_rc_wall_params(
+    script: str,
+) -> tuple[float, float, tuple[tuple[str, str], ...]] | None:
+    """Return ``(rcmax, rcwall, pairs)`` when ADUMB RC wall parameters are set.
+
+    ``rcmax`` is capped by umbrella ``max`` for distance RCs. ``pairs`` cover
+    **every** ``umbrella rxncor`` distance name (2D: both Cl–C and C–N). Using
+    only the first name left C–N unwalled and UM1RXN aborted on ``rcn``.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        adumb_rc_wall_pairs_for_names,
+    )
+
+    rcmax, rcwall = parse_adumb_rc_params(script)
+    if rcmax is None or rcwall is None:
+        return None
+    capped = resolve_adumb_wall_rcmax(rcmax, script)
+    if capped is None:
+        return None
+    pairs = adumb_rc_wall_pairs_for_names(parse_adumb_umbrella_names(script))
+    return capped, rcwall, pairs
+
+
+def substitute_adumb_rc_tokens(
+    command: str,
+    *,
+    rcmax: float | None,
+    rcwall: float | None,
+) -> str:
+    """Replace ``@adumrcmax`` tokens with numeric literals (CHARMM ``@`` names cannot contain ``_``)."""
+    cmd = str(command or "")
+    if rcmax is not None:
+        cmd = _ADUM_RCMAX_TOKEN_RE.sub(f"{float(rcmax):g}", cmd)
+    if rcwall is not None:
+        cmd = _ADUM_RCWALL_TOKEN_RE.sub(f"{float(rcwall):g}", cmd)
+    return cmd
+
+
+def strip_mmfp_blocks_from_script(script: str) -> str:
+    """Drop ``MMFP`` … ``END`` blocks (installed from Python instead)."""
+    kept: list[str] = []
+    in_mmfp = False
+    for raw in str(script or "").splitlines():
+        line = raw.strip()
+        if not in_mmfp and line.upper().startswith("MMFP"):
+            in_mmfp = True
+            continue
+        if in_mmfp:
+            if line and line.upper().split()[0] == "END":
+                in_mmfp = False
+            continue
+        kept.append(raw)
+    return "\n".join(kept).strip()
+
+
+def adumb_rc_walls_enabled() -> bool:
+    """True when ADUMB RC outer walls are installed (NOE default, or MMFP)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        adumb_rc_walls_enabled as _enabled,
+    )
+
+    return _enabled()
+
+
+def split_charmm_lingo_commands(script: str) -> list[str]:
+    """Split CHARMM lingo into executable command strings (join ``-`` continuations).
+
+    Blank lines and ``!`` / ``*`` comment lines are dropped. Each returned command
+    is suitable for a single ``charmm_script`` call.  ``MMFP`` … ``END`` blocks are
+    kept as multi-line strings; flattening them into one card exceeds ``mxcmsz``
+    (~80) and CHARMM treats the tail as extraneous text.
+    """
+    stripped_lines: list[str] = []
+    for raw in script.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(("!", "*")):
+            continue
+        stripped_lines.append(line)
+
+    commands: list[str] = []
+    i = 0
+    n = len(stripped_lines)
+    while i < n:
+        line = stripped_lines[i]
+        if line.upper().startswith("MMFP"):
+            block: list[str] = [line]
+            i += 1
+            while i < n:
+                block.append(stripped_lines[i])
+                head = stripped_lines[i].upper().split()[0]
+                if head == "END":
+                    i += 1
+                    break
+                i += 1
+            commands.append("\n".join(block))
+            continue
+
+        if line.upper().startswith("NOE"):
+            block = [line]
+            i += 1
+            while i < n:
+                block.append(stripped_lines[i])
+                head = stripped_lines[i].upper().split()[0]
+                if head == "END":
+                    i += 1
+                    break
+                i += 1
+            commands.append("\n".join(block))
+            continue
+
+        pending: list[str] = [line]
+        i += 1
+        while pending[-1].endswith("-") and i < n:
+            pending.append(stripped_lines[i])
+            i += 1
+        joined = " ".join(
+            part.rstrip("- ").strip() for part in pending if part.rstrip("- ").strip()
+        )
+        if joined:
+            commands.append(joined)
+    return commands
+
+
+def script_uses_umbrella_rxncor(script: str) -> bool:
+    """True when lingo requests ADUMB ``umbrella rxncor`` (needs KEY_ADUMBRXNCOR)."""
+    return bool(re.search(r"(?im)^\s*umbrella\s+rxncor\b", str(script or "")))
+
+
+def _charmm_pref_keyword_flag(lingo: Any, name: str) -> int | None:
+    """Return a CHARMM pref-keyword ``?NAME`` flag (0/1), or None if absent.
+
+    Must **not** use ``lingo.get_energy_value``: that API matches energy-term
+    labels on the first four characters, so ``ADUMBRXN`` / ``ADUMB`` collide
+    with the adaptive-umbrella energy term ``ADUM`` (usually 0.0) and false-fail
+    KEY_ADUMBRXNCOR preflights. Use exact ``get_charmm_builtins`` names only
+    (param_store; pref keys truncated to 8 chars).
+    """
+    key = str(name).strip().upper()
+    try:
+        builtins = lingo.get_charmm_builtins()
+    except Exception:
+        return None
+    if not isinstance(builtins, dict):
+        return None
+    flag = None
+    for raw, val in builtins.items():
+        if str(raw).strip().upper() == key:
+            flag = val
+            break
+    if flag is None:
+        return None
+    if isinstance(flag, bool):
+        return 1 if flag else 0
+    try:
+        return int(flag)
+    except (TypeError, ValueError):
+        return None
+
+
+def require_adumbrxncor_for_umbrella_rxncor(script: str) -> None:
+    """Fail fast if ``umbrella rxncor`` is used without CHARMM KEY_ADUMBRXNCOR.
+
+    ``ADUMB`` + ``RXNCOR`` alone compile RXNCOR define/trace, but
+    ``umbrella rxncor`` is gated on ``KEY_ADUMBRXNCOR`` (pref keyword
+    ``ADUMBRXNCOR``; substitution ``?ADUMBRXN``). Without it CHARMM prints
+    ``Unknown umbrella specified``, ``umbrella init`` proceeds half-initialized,
+    and dynamics often SIGSEGV under MLpot/MPI.
+
+    Only raise when the keyword table is queryable (``?ADUMB`` works) and
+    ``?ADUMBRXN`` is explicitly missing/off — avoid false negatives when
+    builtins cannot be listed.
+    """
+    if not script_uses_umbrella_rxncor(script):
+        return
+    try:
+        from pycharmm import lingo
+    except Exception:
+        return
+    # Pref key ADUMBRXNCOR truncates to 8 chars for ``?`` substitutions.
+    adumbrxn = _charmm_pref_keyword_flag(lingo, "ADUMBRXN")
+    if adumbrxn == 1:
+        return
+    adumb = _charmm_pref_keyword_flag(lingo, "ADUMB")
+    if adumbrxn is None and adumb is None:
+        print(
+            "WARN: cannot query CHARMM pref builtins ?ADUMBRXN / ?ADUMB; "
+            "skipping KEY_ADUMBRXNCOR preflight for umbrella rxncor",
+            flush=True,
+        )
+        return
+    if adumbrxn is None and adumb == 1:
+        raise RuntimeError(
+            "pycharmm_pre_dynamics_lingo uses 'umbrella rxncor' but this "
+            "libcharmm was built without KEY_ADUMBRXNCOR (?ADUMBRXN unset, "
+            "?ADUMB=1). Rebuild with: bash scripts/rebuild_charmm_mlpot.sh "
+            "(pref keyword ADUMBRXNCOR; confirm keywords.inc contains it)."
+        )
+    if adumbrxn == 0:
+        raise RuntimeError(
+            "pycharmm_pre_dynamics_lingo uses 'umbrella rxncor' but this "
+            "libcharmm was built without KEY_ADUMBRXNCOR (?ADUMBRXN=0). "
+            "Rebuild with: bash scripts/rebuild_charmm_mlpot.sh "
+            "(pref keyword ADUMBRXNCOR; confirm keywords.inc contains it)."
+        )
+
+
+def run_charmm_lingo_script(
+    script: str,
+    *,
+    inp_path: Path | None = None,
+    workdir: Path | None = None,
+) -> None:
+    """Execute multi-line CHARMM lingo safely under library PyCHARMM.
+
+    Always runs **one ``charmm_script`` call per command**. Library
+    ``eval_charmm_script`` truncates multi-line blobs to ``mxcmsz``, and
+    ``eval_charmm_inp_file`` / CHARMM ``stream`` are unsafe on MPI-linked
+    builds (segfault in ``adjustl`` / missing stream). Persist *inp_path* for
+    provenance only.
+    """
+    text = str(script or "").strip()
+    if not text:
+        return
+
+    require_adumbrxncor_for_umbrella_rxncor(text)
+
+    adumb_rcmax, adumb_rcwall = parse_adumb_rc_params(text)
+    adumb_walls = parse_adumb_rc_wall_params(text)
+    exec_text = strip_mmfp_blocks_from_script(text) if adumb_walls else text
+
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        _bootstrap_workdir,
+        mpi_charmm_script,
+    )
+
+    path = Path(inp_path) if inp_path is not None else None
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "* MMML pre-dynamics CHARMM lingo\n*\n" + text.rstrip() + "\n",
+            encoding="utf-8",
+        )
+
+    cwd = Path(workdir) if workdir is not None else (
+        path.parent if path is not None else Path.cwd()
+    )
+    commands = split_charmm_lingo_commands(exec_text)
+    if not commands:
+        return
+
+    walls_installed = False
+
+    with _bootstrap_workdir(cwd):
+        for cmd in commands:
+            cmd = substitute_adumb_rc_tokens(
+                cmd, rcmax=adumb_rcmax, rcwall=adumb_rcwall
+            )
+            for line in cmd.splitlines():
+                if len(line) > 78:
+                    print(
+                        f"WARN: CHARMM lingo line length {len(line)} may exceed "
+                        f"mxcmsz (~80); shorten paths/tokens: {line[:60]}…",
+                        flush=True,
+                    )
+            if "\n" not in cmd and len(cmd) > 78:
+                print(
+                    f"WARN: CHARMM lingo command length {len(cmd)} may exceed "
+                    f"mxcmsz (~80); shorten paths/tokens: {cmd[:60]}…",
+                    flush=True,
+                )
+            mpi_charmm_script(cmd, barriers="none")
+            if (
+                adumb_walls
+                and not walls_installed
+                and re.match(r"(?i)^\s*umbrella\s+init\b", cmd)
+            ):
+                if adumb_rc_walls_enabled():
+                    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                        install_adumb_rxncor_distance_walls,
+                    )
+
+                    rcmax, rcwall, wall_pairs = adumb_walls
+                    install_adumb_rxncor_distance_walls(
+                        rcmax=rcmax, rcwall=rcwall, pairs=wall_pairs
+                    )
+                else:
+                    print(
+                        "ADUMB RC walls disabled "
+                        "(MMML_ADUMB_RC_WALL_BACKEND=off; umbrella max is the only "
+                        "hard limit — UM1RXN aborts if a traced RC exceeds it)",
+                        flush=True,
+                    )
+                walls_installed = True
+
+
+def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
+    """Run free-form CHARMM lingo once before scheduled dynamics (no-op if empty)."""
+    script = resolve_pre_dynamics_lingo_script(args)
+    if not script:
+        return
+    if not bool(getattr(args, "quiet", False)):
+        n_lines = script.count("\n") + 1
+        src = "inline"
+        if getattr(args, "pycharmm_pre_dynamics_lingo_file", None):
+            src = (
+                "file"
+                if not normalize_pycharmm_pre_dynamics_lingo(
+                    getattr(args, "pycharmm_pre_dynamics_lingo", None)
+                )
+                else "inline+file"
+            )
+        print(
+            f"Pre-dynamics CHARMM lingo ({src}, {n_lines} line(s)):",
+            flush=True,
+        )
+        print(script, flush=True)
+
+    out_dir = getattr(args, "output_dir", None)
+    workdir = Path(out_dir) if out_dir is not None else Path.cwd()
+    workdir.mkdir(parents=True, exist_ok=True)
+    file_raw = getattr(args, "pycharmm_pre_dynamics_lingo_file", None)
+    inp_path = Path(file_raw) if file_raw is not None and str(file_raw).strip() else (
+        workdir / "pycharmm_pre_dynamics_lingo.inp"
+    )
+    run_charmm_lingo_script(script, inp_path=inp_path, workdir=workdir)
+
+    if script_uses_umbrella_rxncor(script):
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+            AdumbRcGuard,
+            adumb_rc_wall_margin_A,
+        )
+
+        wall_params = parse_adumb_rc_wall_params(script)
+        umb_min, umb_max = parse_adumb_umbrella_bounds(script)
+        if wall_params is not None:
+            wall_rcmax, rcwall, wall_pairs = wall_params
+            setattr(
+                args,
+                "_adumb_rc_guard",
+                AdumbRcGuard(
+                    rcmax=float(wall_rcmax),
+                    rcwall=float(rcwall),
+                    pairs=wall_pairs,
+                    wall_margin=adumb_rc_wall_margin_A(),
+                    umb_min=umb_min,
+                    umb_max=umb_max,
+                ),
+            )
+        else:
+            # Umbrella without set adumrcmax/adumrcwall: still arm distance guard
+            # when raw params exist (legacy) or skip soft walls.
+            rcmax, rcwall = parse_adumb_rc_params(script)
+            wall_rcmax = resolve_adumb_wall_rcmax(rcmax, script)
+            if wall_rcmax is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                    adumb_rc_wall_pairs_for_names,
+                )
+
+                setattr(
+                    args,
+                    "_adumb_rc_guard",
+                    AdumbRcGuard(
+                        rcmax=float(wall_rcmax),
+                        rcwall=float(rcwall if rcwall is not None else 500.0),
+                        pairs=adumb_rc_wall_pairs_for_names(
+                            parse_adumb_umbrella_names(script)
+                        ),
+                        wall_margin=adumb_rc_wall_margin_A(),
+                        umb_min=umb_min,
+                        umb_max=umb_max,
+                    ),
+                )
 
 
 def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:
@@ -1885,8 +2471,28 @@ def check_mlpot_symbols() -> list[str]:
     return missing
 
 
+def charmm_system_is_evaluable() -> bool:
+    """True when CHARMM has atoms loaded, so ``ENER`` can run safely.
+
+    Running ``ENER`` / ``ENER FORCE`` on an empty session aborts CHARMM fatally
+    ("Nonbond data structure is not defined" → BOMLEV TERMINATING). That abort
+    is a native Fortran exit, not a catchable Python exception, so callers that
+    might run against a torn-down or never-populated session must gate on this.
+    """
+    try:
+        import pycharmm.psf as psf
+
+        return int(psf.get_natom()) > 0
+    except Exception:
+        return False
+
+
 def charmm_energy_row() -> dict[str, float]:
     import pycharmm.energy as energy
+
+    # ``get_energy`` runs ``ENER``; guard the empty-session fatal abort.
+    if not charmm_system_is_evaluable():
+        return {}
 
     df = energy.get_energy()
     row = df.iloc[0].to_dict()
@@ -1912,6 +2518,11 @@ def charmm_grms_after_ener_force(*, silent: bool = True) -> float:
     """
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
+
+    # ``ENER FORCE`` on an empty session aborts CHARMM fatally; return a benign
+    # 0.0 GRMS instead of killing the process.
+    if not charmm_system_is_evaluable():
+        return 0.0
 
     if silent:
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
@@ -2261,9 +2872,11 @@ def classify_hybrid_charmm_grms_mismatch(
     ``get_grms()`` often stays ~1 kcal/mol/Å with ELEC/VDW blocked on ML atoms,
     so a high hybrid/CHARMM ratio with low CHARMM is healthy, not desync.
 
-    When hybrid is modest (``<= hybrid_desync_ok_max``) but CHARMM GRMS is very
-    high, treat as ``desync_suspected`` (stale ``get_grms()`` after deferred
-    ENER or a session-best geometry rollback), not ``both_high``.
+    When hybrid is modest (``<= hybrid_desync_ok_max``) but CHARMM GRMS is
+    *much higher* than hybrid (``> hybrid * warn_ratio``), treat as
+    ``desync_suspected`` (stale ``get_grms()`` after deferred ENER or a
+    session-best geometry rollback), not ``both_high``. Matching values
+    (ratio ≈ 1) are ``ok`` even when both sit above ``charmm_bonded_ok_max``.
     """
     if not (np.isfinite(hybrid) and np.isfinite(charmm)):
         return "unknown"
@@ -2273,7 +2886,12 @@ def classify_hybrid_charmm_grms_mismatch(
         return "ok"
     if charmm <= charmm_bonded_ok_max:
         return "geometry_stress"
-    if hybrid <= hybrid_desync_ok_max and charmm > charmm_bonded_ok_max:
+    # Stale CHARMM GRMS: hybrid still modest, CHARMM far above hybrid.
+    if (
+        hybrid <= hybrid_desync_ok_max
+        and charmm > charmm_bonded_ok_max
+        and charmm > hybrid * warn_ratio
+    ):
         return "desync_suspected"
     ratio = float(max(hybrid / charmm, charmm / hybrid))
     if ratio <= warn_ratio:
@@ -3390,21 +4008,22 @@ def resolve_charmm_mm_pretreat_cpt_echeck(
     or ``--no-scale-echeck --echeck`` to override.
     """
     if getattr(args, "no_echeck", False):
-        return -1.0
+        return disabled_charmm_echeck_kcal()
     explicit = getattr(args, "charmm_mm_pretreat_echeck", None)
     if explicit is not None:
         val = float(explicit)
-        return -1.0 if val <= 0 else max(val, 500.0)
+        return disabled_charmm_echeck_kcal() if val <= 0 else max(val, 500.0)
     if float(echeck) > 0 and getattr(args, "no_scale_echeck", False):
         return max(float(echeck), 500.0)
-    return -1.0
+    return disabled_charmm_echeck_kcal()
 
 
 def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
-    """Size-aware ECHECK floor for MLpot clusters (kcal/mol).
+    """Legacy size-scaled ECHECK heuristic for MLpot clusters (kcal/mol).
 
-    Single-monomer smoke tests keep 100 kcal/mol. Multi-monomer clusters (e.g.
-    DCM:9) scale with size so ML heat/nonbond updates do not trip ECHECK.
+    UNVERIFIED HEURISTIC [evidence: cluster_echeck_scaling]. This is retained
+    for compatibility and is user-overridable; it is not a validated stability
+    boundary.
     """
     n_mol = max(1, int(n_monomers))
     n_at = max(1, int(n_atoms))
@@ -3416,7 +4035,7 @@ def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
 
 
 def recommend_heat_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
-    """Looser ECHECK floor for MLpot heat (MLpot UPDATE spikes, no SHAKE)."""
+    """Looser legacy heat heuristic; see ``cluster_echeck_scaling`` evidence claim."""
     return max(5000.0, 2.0 * recommend_echeck_kcal(n_monomers, n_atoms))
 
 
@@ -3438,7 +4057,7 @@ def resolve_echeck_for_cluster(
         print(
             f"echeck loosened {base} -> {scaled:.0f} kcal/mol for "
             f"{n_monomers} monomer(s) / {n_atoms} atoms "
-            f"(recommended floor {recommended:.0f}; --no-scale-echeck to keep {base})",
+            f"(legacy heuristic floor {recommended:.0f}; --no-scale-echeck to keep {base})",
             flush=True,
         )
     return scaled
@@ -3799,6 +4418,14 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     pretreat.add_argument(
+        "--charmm-mm-pretreat-with-liquid-prep",
+        action="store_true",
+        help=(
+            "Run CHARMM MM pretreat even when --liquid-prep is set "
+            "(default skips pretreat because liquid-prep already relaxes the box)."
+        ),
+    )
+    pretreat.add_argument(
         "--charmm-mm-pretreat-ps-heat",
         type=float,
         default=None,
@@ -3892,6 +4519,15 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         help="Load coordinates from CRD (with --from-psf)",
     )
     group.add_argument(
+        "--from-pdb",
+        type=Path,
+        default=None,
+        help=(
+            "Full-system cold start from a CGenFF-named PDB (CHARMM READ SEQU PDB). "
+            "Equivalent to a lone composition PDB token."
+        ),
+    )
+    group.add_argument(
         "--skip-cluster-build",
         action="store_true",
         help="Do not run Packmol/IC build; requires --from-psf/--from-crd or prior mini artifacts",
@@ -3981,6 +4617,28 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
+        ),
+    )
+    group.add_argument(
+        "--mm-include-lj",
+        "--mm_include_lj",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="mm_include_lj",
+        help=(
+            "With --lr-solver ewald and jax_mic doMM: add COM-switched "
+            "intermolecular LJ beside untapered Ewald Coulomb (reads "
+            "--mm-lj-scales-file / hybrid_mm.json). Default: on when LJ scales "
+            "are loaded, otherwise off. Prefer jax_mic+jax_pme for large boxes."
+        ),
+    )
+    group.add_argument(
         "--jax-pme-method",
         type=str,
         choices=("ewald", "pme", "p3m"),
@@ -4021,11 +4679,85 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
     )
     group.add_argument(
         "--include-mm",
+        "--do-mm",
         action=argparse.BooleanOptionalAction,
         default=True,
+        dest="include_mm",
         help=(
             "Include JAX switched MM LJ+Coulomb pairs in the hybrid MLpot calculator "
-            "(default: on). Use --no-include-mm for ML-only (PhysNet terms only)."
+            "(doMM; default: on). Use --no-include-mm / --no-do-mm for ML-only."
+        ),
+    )
+    group.add_argument(
+        "--do-ml",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml",
+        help="Include ML monomer terms (doML). Default: on.",
+    )
+    group.add_argument(
+        "--do-ml-dimer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml_dimer",
+        help="Include switched ML dimer correction (doML_dimer). Default: on.",
+    )
+    group.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        default=False,
+        help="Disable ML dimer terms (sets do_ml_dimer=False).",
+    )
+    group.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        type=str,
+        default=None,
+        dest="mm_charge_mode",
+        choices=(
+            "fixed",
+            "q0",
+            "latent",
+            "q1",
+            "fixed_plus_latent",
+            "latent_mean",
+            "latent_dynamic",
+        ),
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF; use for "
+            "charge-less PhysNet), q0 / Q⁰, latent / q1 / Q¹ (dimer-only), "
+            "fixed_plus_latent, latent_mean, or latent_dynamic. Default: fixed "
+            "unless the calculator resolves another mode."
+        ),
+    )
+    group.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        action="store_true",
+        dest="mm_charge_correction",
+        help="Alias for --mm-charge-mode fixed_plus_latent on the MD calculator.",
+    )
+    group.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        type=str,
+        default=None,
+        dest="mm_latent_charge_template",
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
+        ),
+    )
+    group.add_argument(
+        "--mm-lj-scales-file",
+        "--mm_lj_scales_file",
+        type=str,
+        default=None,
+        dest="mm_lj_scales_file",
+        help=(
+            "Path to hybrid_mm.json (or scales sidecar) with learn_mm_lj_scales "
+            "and per-type mm_lj_sigma_scale / mm_lj_epsilon_scale. When omitted, "
+            "MLpot looks for hybrid_mm.json next to --checkpoint."
         ),
     )
     group.add_argument(
@@ -4212,6 +4944,24 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         help="ASE FIRE max atomic displacement per step in Å (default: 0.2).",
     )
     group.add_argument(
+        "--pre-min-ase-order",
+        choices=("fire-first", "bfgs-first"),
+        default="fire-first",
+        help=(
+            "ASE hybrid pre-min order: fire-first (default) runs FIRE then optional "
+            "BFGS polish; bfgs-first is legacy. Accepted for md-system argv parity."
+        ),
+    )
+    group.add_argument(
+        "--bfgs-polish-max-fmax",
+        type=float,
+        default=1.0,
+        help=(
+            "Soft hybrid max|F| gate (eV/Å; default 1.0) for BFGS polish / MM rescue "
+            "skip when already soft. Accepted for md-system argv parity."
+        ),
+    )
+    group.add_argument(
         "--rescue-fire-fmax",
         type=float,
         default=0.05,
@@ -4362,7 +5112,15 @@ def resolve_mlpot_use_pbc(args: argparse.Namespace) -> bool:
     if getattr(args, "mlpot_pbc", False):
         return True
     setup = (getattr(args, "setup", None) or "").strip().lower()
-    return setup.startswith("pbc_")
+    if setup.startswith("pbc_"):
+        return True
+    # Full-box Ewald needs a PBC cell on the hybrid calculator. With CHARMM
+    # crystal on (--box-size / pbc setups) but without --mlpot-pbc, the default
+    # is "loose PBC" (open ML boundary) — auto-enable MIC/cell for ewald.
+    lr = str(getattr(args, "lr_solver", None) or "").strip().lower()
+    if lr in ("ewald", "native_ewald", "jit_ewald") and resolve_charmm_use_pbc(args):
+        return True
+    return False
 
 
 def resolve_loose_pbc(charmm_pbc: bool, mlpot_pbc: bool) -> bool:

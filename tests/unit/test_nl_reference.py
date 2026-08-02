@@ -128,6 +128,7 @@ def test_pbc_nbond_cutoffs_from_mlpot_switches_aligns_outer_radius() -> None:
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         mlpot_mm_nl_cutoff_A,
         pbc_nbond_cutoffs_from_mlpot_switches,
+        pbc_nbond_cutoffs_invariant_ok,
     )
 
     outer = mlpot_mm_nl_cutoff_A(mm_switch_on=8.0, mm_switch_width=5.0)
@@ -142,3 +143,29 @@ def test_pbc_nbond_cutoffs_from_mlpot_switches_aligns_outer_radius() -> None:
     assert cuts.cutnb >= outer
     assert cuts.cutnb - cuts.ctofnb == pytest.approx(2.0)
     assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
+    assert pbc_nbond_cutoffs_invariant_ok(cuts)
+
+
+def test_pbc_nbond_cutoffs_density_sized_tip3_90_box() -> None:
+    """TIP3:90 @ ρ=1 → L≈13.9 Å must still satisfy cutnb < L/2."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        pbc_nbond_cutoffs_from_mlpot_switches,
+        pbc_nbond_cutoffs_invariant_ok,
+        resolve_pbc_nbond_cutoffs,
+    )
+
+    L = 13.912
+    cuts = pbc_nbond_cutoffs_from_mlpot_switches(
+        L,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
+    )
+    assert pbc_nbond_cutoffs_invariant_ok(cuts)
+    assert cuts.cutnb < 0.5 * L
+    assert cuts.ctonnb < cuts.ctofnb <= cuts.cutnb
+    resolved = resolve_pbc_nbond_cutoffs(L)
+    assert pbc_nbond_cutoffs_invariant_ok(resolved)

@@ -1,0 +1,720 @@
+"""Batched JAX-MD NVT Nose-Hoover umbrella sampling."""
+
+from __future__ import annotations
+
+import dataclasses
+import json
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from mmml.umbrella.config import UmbrellaConfig
+from mmml.umbrella.energy import (
+    build_packed_graph,
+    make_packed_energy_fn,
+)
+from mmml.umbrella.io import (
+    BIN_MINIMA_TRAJ,
+    SNAPSHOTS_NPZ,
+    SUMMARY_JSON,
+    save_snapshots,
+    write_summary,
+)
+from mmml.umbrella.structure import (
+    load_structure,
+    load_structure_frames,
+    pack_window_seeds,
+)
+
+
+@dataclass(frozen=True)
+class UmbrellaResult:
+    """Artifacts from :func:`run_umbrella_nvt`."""
+
+    output_dir: Path
+    snapshots_path: Path
+    summary_path: Path
+    n_windows: int
+    n_frames: int
+    paths: dict[str, Path]
+
+
+def center_com_positions(
+    positions: np.ndarray,
+    masses: np.ndarray,
+) -> np.ndarray:
+    """Translate so the mass-weighted CoM is at the origin.
+
+    ``positions`` may be ``(N, 3)`` or ``(..., N, 3)``.
+    """
+    pos = np.asarray(positions, dtype=np.float64)
+    m = np.asarray(masses, dtype=np.float64).reshape(-1)
+    if pos.ndim < 2 or pos.shape[-1] != 3:
+        raise ValueError(f"positions must be (..., N, 3); got shape {pos.shape}")
+    if pos.shape[-2] != m.shape[0]:
+        raise ValueError(
+            f"masses length {m.shape[0]} != n_atoms {pos.shape[-2]}"
+        )
+    total_mass = float(np.sum(m))
+    if total_mass <= 0.0:
+        raise ValueError("sum of masses must be positive")
+    com = np.sum(pos * m.reshape((1,) * (pos.ndim - 2) + (-1, 1)), axis=-2) / total_mass
+    return pos - com[..., None, :]
+
+
+def select_lowest_energy_frames(
+    positions: np.ndarray,
+    energies: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pick the lowest-``E_ML+W`` frame in each window.
+
+    Returns ``(coords, frame_indices, energies)`` with shapes
+    ``(K, N, 3)``, ``(K,)``, ``(K,)``.
+    """
+    pos = np.asarray(positions, dtype=np.float64)
+    ene = np.asarray(energies, dtype=np.float64)
+    if pos.ndim != 4:
+        raise ValueError(f"positions must be (K, T, N, 3); got {pos.shape}")
+    if ene.shape != pos.shape[:2]:
+        raise ValueError(
+            f"energies shape {ene.shape} must match positions[:2] {pos.shape[:2]}"
+        )
+    k = pos.shape[0]
+    idx = np.zeros(k, dtype=np.int64)
+    for i in range(k):
+        row = ene[i]
+        if np.all(~np.isfinite(row)):
+            idx[i] = 0
+        else:
+            idx[i] = int(np.nanargmin(row))
+    chosen = pos[np.arange(k), idx]
+    return chosen, idx, ene[np.arange(k), idx]
+
+
+def _per_window_temperatures_K(
+    momenta,
+    masses,
+    *,
+    n_windows: int,
+    n_atoms: int,
+    k_b: float,
+) -> "np.ndarray":
+    """Kinetic temperature of each packed window (K)."""
+    import numpy as np
+
+    p = np.asarray(momenta, dtype=np.float64).reshape(n_windows, n_atoms, 3)
+    m = np.asarray(masses, dtype=np.float64).reshape(n_windows, n_atoms)
+    ke = 0.5 * np.sum((p * p) / m[..., None], axis=(1, 2))
+    dof = 3 * n_atoms
+    return (2.0 * ke) / (dof * k_b)
+
+
+def _schedule_targets_ks(sched):
+    targets = [list(sched.xi0)]
+    ks = [list(sched.k_x)]
+    if sched.ndim == 2:
+        assert sched.yi0 is not None and sched.k_y is not None
+        targets.append(list(sched.yi0))
+        ks.append(list(sched.k_y))
+    return targets, ks
+
+
+def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
+    """Run umbrella sampling (packed pure-ML or hybrid mechanical embedding)."""
+    if cfg.engine == "hybrid_jaxmd":
+        from mmml.umbrella.hybrid import run_umbrella_hybrid_nvt
+
+        return run_umbrella_hybrid_nvt(cfg)
+
+    import jax
+    import jax.numpy as jnp
+    from ase.data import atomic_masses
+    from ase.io import write
+    from jax_md import quantity, simulate, space, units
+
+    from mmml.umbrella.checkpoint import load_params_and_model
+
+    jax.config.update("jax_enable_x64", True)
+
+    output_dir = Path(cfg.output_dir).expanduser().resolve()
+    if output_dir.exists() and any(output_dir.iterdir()) and not cfg.overwrite:
+        raise FileExistsError(
+            f"output_dir is not empty: {output_dir} (pass overwrite=True to proceed)"
+        )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if cfg.structure is None:
+        raise ValueError("packed_ml engine requires structure")
+    structure_path = Path(cfg.structure).expanduser().resolve()
+    sched = cfg.resolve_schedule()
+    k_windows = sched.n_windows
+    targets_per_cv, k_per_cv = _schedule_targets_ks(sched)
+
+    frames = None
+    seed_mode = cfg.seed_mode
+    if seed_mode == "frames":
+        r_multi, z = load_structure_frames(
+            structure_path,
+            n_frames=k_windows,
+            start_index=int(cfg.structure_index),
+        )
+        r0 = r_multi[0]
+        frames = r_multi
+    else:
+        r0, z = load_structure(structure_path, index=int(cfg.structure_index))
+
+    n_atoms = int(len(z))
+    for cv in sched.cvs:
+        cv.validate_against(n_atoms)
+    for wall in sched.walls:
+        # Both wall kinds expose validate_against; only FlatBottomWall has .cv.
+        wall.validate_against(n_atoms)
+
+    r0_cvs = [cv.value_numpy(r0) for cv in sched.cvs]
+    move_groups: list[tuple[int, ...]] = [tuple(cfg.move_with)]
+    if sched.ndim == 2:
+        move_groups.append(tuple(cfg.move_with2))
+    r_packed_np = pack_window_seeds(
+        positions=r0,
+        atom_pairs=sched.atom_pairs,
+        targets_per_cv=targets_per_cv,
+        seed_mode=seed_mode,
+        frames=frames,
+        move_groups=move_groups,
+        invert_with=cfg.invert_with,
+        cvs=sched.cvs,
+    )
+
+    params, model = load_params_and_model(
+        Path(cfg.checkpoint).expanduser().resolve(),
+        natoms=n_atoms,
+        prefer_ema=cfg.use_ema,
+        model=getattr(cfg, "model", None),
+    )
+
+    graph = build_packed_graph(n_atoms, k_windows)
+    energy_sum_fn = make_packed_energy_fn(
+        model_apply=model.apply,
+        params=params,
+        atomic_numbers=z,
+        graph=graph,
+        cvs=sched.cvs,
+        targets_per_cv=targets_per_cv,
+        k_per_cv=k_per_cv,
+        walls=sched.walls,
+    )
+    # Use explicit PhysNet forces + analytic bias forces. Autodiff of
+    # energy_sum_fn nests AD through PhysNet's internal value_and_grad and
+    # can yield NaN forces even when the energy is finite.
+    force_fn = energy_sum_fn.force_fn  # type: ignore[attr-defined]
+    per_window_energy_fn = energy_sum_fn.per_window_energy_fn  # type: ignore[attr-defined]
+    energy_sum_fn = jax.jit(energy_sum_fn)
+    force_fn = jax.jit(force_fn)
+    per_window_energy_fn = jax.jit(per_window_energy_fn)
+
+    masses = np.array([atomic_masses[int(zi)] for zi in z], dtype=np.float64)
+    masses_batched = jnp.tile(jnp.asarray(masses), k_windows)
+    r_packed = jnp.asarray(r_packed_np, dtype=jnp.float64)
+
+    e0 = float(energy_sum_fn(r_packed))
+    f0 = force_fn(r_packed)
+    f0_max = float(jnp.max(jnp.abs(f0)))
+    if not np.isfinite(e0) or not bool(jnp.all(jnp.isfinite(f0))):
+        raise RuntimeError(
+            f"initial umbrella E/F non-finite (E={e0}, max|F|={f0_max}). "
+            "Check checkpoint, geometry, and --atoms / --atoms2 CV indices."
+        )
+    f_win = np.asarray(f0).reshape(k_windows, n_atoms, 3)
+    fmax_k = np.max(np.abs(f_win), axis=(1, 2))
+    hot = [
+        (int(i), float(fmax_k[i]), float(targets_per_cv[0][i]))
+        for i in range(k_windows)
+        if float(fmax_k[i]) > float(cfg.max_seed_force)
+    ]
+    if hot:
+        detail = ", ".join(
+            f"k={i} max|F|={fm:.1f} ξ₀={xi:.3f}" for i, fm, xi in hot[:8]
+        )
+        more = f" (+{len(hot) - 8} more)" if len(hot) > 8 else ""
+        raise RuntimeError(
+            f"{len(hot)}/{k_windows} window seeds exceed --max-seed-force="
+            f"{cfg.max_seed_force} eV/Å ({detail}{more}). "
+            "For SN2-like 2D grids add --invert-with for CH3 H atoms "
+            "(e.g. 6,7,8), use --move-with2 for NH3, soften --k/--ky, "
+            "narrow the product grid, or --seed-mode frames from an NEB path."
+        )
+
+    k_b = 8.617333262145e-5  # eV/K
+    kt = k_b * float(cfg.temperature_K)
+    # jax-md's metal unit system (Å, eV, amu) has an internal time unit of
+    # Å·sqrt(amu/eV) = 10.18 fs, NOT 1 fs and not 1 ps. Passing femtoseconds
+    # straight to the integrator runs a ~10x too large step, which is what the
+    # old "0.5 fs often NaNs by step ~100" behaviour actually was.
+    _time_unit = units.metal_unit_system()["time"]  # internal units per ps
+    dt = float(cfg.timestep_fs) * 1.0e-3 * _time_unit
+    savefreq = cfg.effective_savefreq()
+    # Periodic partial dump of the trajectory so progress is visible while the
+    # run is still going. Costs one compressed write per `live_every` saved
+    # frames; set MMML_UMBRELLA_LIVE_EVERY=0 to disable.
+    live_every = int(os.environ.get("MMML_UMBRELLA_LIVE_EVERY", "10"))
+    live_path = Path(cfg.output_dir) / "umbrella_live.npz"
+    # Recover from a single-window blow-up rather than losing the whole run.
+    recover_windows = os.environ.get("MMML_UMBRELLA_RECOVER", "1") not in ("0", "")
+    if recover_windows and bool(cfg.replica_exchange):
+        # Measured the hard way: with REX on, a reset window resumes near
+        # whatever region blew it up, replica exchange then swaps that
+        # configuration into its neighbours, and the corruption walks along the
+        # ladder. A 220 ps run left 24 of 30 windows with xi standard deviations
+        # of 5-620 A -- finite numbers, smooth-looking output, no crash, and
+        # completely unusable. Only the windows furthest from the exchange
+        # traffic stayed clean.
+        #
+        # Per-window recovery is only sound when the windows are actually
+        # independent, which is exactly what REX gives up.
+        raise ValueError(
+            "per-window recovery cannot be combined with replica exchange: a "
+            "reset window's configuration propagates to its neighbours and "
+            "corrupts the ladder silently. Either drop --replica-exchange "
+            "(windows are then independent and recovery is local and correct) "
+            "or set MMML_UMBRELLA_RECOVER=0 to abort on the first spike."
+        )
+    reset_counts = [0] * int(np.prod(sched.grid_shape))
+    # A window that has to be reset more than a handful of times is not
+    # recovering -- it sits beside a spurious well and falls back in within a
+    # couple of thousand steps. Observed: three windows resetting 106, 84 and 42
+    # times in one run while the other 27 sampled cleanly for 55 ps. Retrying
+    # such a window forever fills it with garbage; the honest outcome is to mark
+    # it failed so downstream analysis drops it.
+    max_resets = int(os.environ.get("MMML_UMBRELLA_MAX_RESETS", "5"))
+    failed_windows: set[int] = set()
+    last_good = None
+    recover_rng = np.random.default_rng(int(cfg.seed) + 991)
+    if float(cfg.timestep_fs) > 0.5:
+        print(
+            f"WARNING: timestep {cfg.timestep_fs} fs is large for a reactive ML "
+            "potential with X-H stretches; 0.25-0.5 fs is the usual safe range."
+        )
+
+    _, shift = space.free()
+    # Packed multi-window MD must not use a shared Nose-Hoover chain or global
+    # COM velocity removal: one hot replica then drags every other window.
+    if cfg.thermostat == "langevin":
+        init_fn, apply_fn = simulate.nvt_langevin(
+            force_fn,
+            shift,
+            dt,
+            kt,
+            gamma=float(cfg.langevin_gamma),
+            center_velocity=False,
+        )
+    else:
+        init_fn, apply_fn = simulate.nvt_nose_hoover(force_fn, shift, dt, kt)
+    apply_fn = jax.jit(apply_fn)
+
+    key = jax.random.PRNGKey(int(cfg.seed))
+    state = init_fn(key, r_packed, mass=masses_batched)
+    t_abort = (
+        float(cfg.max_window_temp_K)
+        if cfg.max_window_temp_K is not None
+        else 5.0 * float(cfg.temperature_K)
+    )
+
+    def _cv_frame(pos):
+        cols = [
+            np.asarray(cv.value_batched(pos, n_atoms, k_windows)) for cv in sched.cvs
+        ]
+        return np.stack(cols, axis=-1)  # (K, ndim)
+
+    # Frames before ``equilibration_steps`` are thermal transient, not samples:
+    # window seeds come from optimised scan/NEB geometries with no kinetic
+    # energy, so including them biases MBAR toward the seed configuration.
+    equil_steps = int(cfg.equilibration_steps)
+    if equil_steps >= int(cfg.nsteps):
+        raise ValueError(
+            f"equilibration_steps={equil_steps} leaves no production frames "
+            f"(nsteps={cfg.nsteps})"
+        )
+    frames_traj: list[np.ndarray] = []
+    cv_frames: list[np.ndarray] = []
+    energy_frames: list[np.ndarray] = []
+    if equil_steps == 0:
+        frames_traj.append(np.asarray(state.position).reshape(k_windows, n_atoms, 3))
+        cv_frames.append(_cv_frame(state.position))
+        energy_frames.append(
+            np.asarray(per_window_energy_fn(state.position), dtype=np.float64)
+        )
+
+    print(
+        f"=== Umbrella NVT ({k_windows} windows, {sched.ndim}D, "
+        f"T={cfg.temperature_K} K, dt={cfg.timestep_fs} fs, thermostat={cfg.thermostat}) ==="
+    )
+    print(
+        f"  structure={structure_path.name}  seed_mode={seed_mode}  "
+        f"cv={[cv.label() for cv in sched.cvs]}  r0={r0_cvs}  grid={sched.grid_shape}"
+    )
+    if sched.walls:
+        print(f"  walls={[w.label() for w in sched.walls]}"
+    )
+    if any(move_groups):
+        print(f"  move_groups={move_groups}")
+    if cfg.invert_with:
+        print(f"  invert_with={tuple(cfg.invert_with)}")
+    print(
+        f"  per-window max|F|:"
+        f" min={float(np.min(fmax_k)):.2f} median={float(np.median(fmax_k)):.2f}"
+        f" max={float(np.max(fmax_k)):.2f} eV/Å"
+    )
+    print(f"  Initial E_total={e0:.4f} eV  max|F|={f0_max:.4f} eV/Å")
+    rex_stats = None
+    rex_phase = 0
+    rex_rng = None
+    if cfg.replica_exchange:
+        from mmml.umbrella.rex import RexStats
+
+        if k_windows < 2:
+            raise ValueError("replica exchange requires at least 2 windows")
+        rex_stats = RexStats()
+        rex_rng = np.random.default_rng(int(cfg.seed) + 17)
+        print(
+            f"  replica_exchange=on  rex_freq={cfg.rex_freq}  "
+            f"neighbor even/odd on grid={sched.grid_shape}"
+        )
+    for step in range(1, int(cfg.nsteps) + 1):
+        state = apply_fn(state)
+        if (
+            cfg.replica_exchange
+            and rex_stats is not None
+            and rex_rng is not None
+            and step % int(cfg.rex_freq) == 0
+        ):
+
+            from mmml.umbrella.rex import attempt_replica_exchanges
+
+            cv_now = _cv_frame(state.position)
+            force_arr = getattr(state, "force", None)
+            pos_new, mom_new, frc_new, n_att, n_acc = attempt_replica_exchanges(
+                positions_packed=np.asarray(state.position),
+                momenta_packed=np.asarray(state.momentum),
+                forces_packed=None if force_arr is None else np.asarray(force_arr),
+                cv=cv_now,
+                targets_per_cv=targets_per_cv,
+                k_per_cv=k_per_cv,
+                grid_shape=sched.grid_shape,
+                phase=rex_phase,
+                beta=1.0 / kt,
+                rng=rex_rng,
+                n_atoms=n_atoms,
+                stats=rex_stats,
+            )
+            rex_phase += 1
+            replace_kwargs = {
+                "position": jnp.asarray(pos_new, dtype=state.position.dtype),
+                "momentum": jnp.asarray(mom_new, dtype=state.momentum.dtype),
+            }
+            if frc_new is not None and force_arr is not None:
+                replace_kwargs["force"] = jnp.asarray(frc_new, dtype=force_arr.dtype)
+            state = dataclasses.replace(state, **replace_kwargs)
+            if step % int(cfg.printfreq) == 0 or step == cfg.nsteps:
+                print(
+                    f"  rex step {step:6d}  accepted {n_acc}/{n_att}  "
+                    f"cum_acc={rex_stats.acceptance:.3f}"
+                )
+        if step > equil_steps and (step % savefreq == 0 or step == cfg.nsteps):
+            pos_batch = np.asarray(state.position).reshape(k_windows, n_atoms, 3)
+            frames_traj.append(pos_batch)
+            # Kept for the recovery path: the most recent frame that passed the
+            # temperature check, per window.
+            last_good = pos_batch.copy()
+            cv_frames.append(_cv_frame(state.position))
+            energy_frames.append(
+                np.asarray(per_window_energy_fn(state.position), dtype=np.float64)
+            )
+            # Flush what we have so far, so a long run can be watched (and
+            # salvaged if it dies) instead of yielding nothing until the end.
+            # Written to a temporary file and renamed, so a reader never sees a
+            # half-written archive.
+            if live_every and len(frames_traj) % live_every == 0:
+                tmp = live_path.with_suffix(".tmp.npz")
+                np.savez_compressed(
+                    tmp,
+                    positions=np.asarray(frames_traj, dtype=np.float32).transpose(
+                        1, 0, 2, 3
+                    ),
+                    cv_traj=np.asarray(cv_frames, dtype=np.float32).transpose(1, 0, 2),
+                    energies_ev=np.asarray(
+                        energy_frames, dtype=np.float64
+                    ).transpose(1, 0),
+                    Z=np.asarray(z),
+                    xi0=np.asarray(sched.xi0, dtype=np.float64),
+                    step=np.asarray(step),
+                )
+                tmp.replace(live_path)
+        if step % int(cfg.printfreq) == 0 or step == cfg.nsteps:
+            e_tot = float(energy_sum_fn(state.position))
+            t_curr = float(
+                quantity.temperature(momentum=state.momentum, mass=state.mass) / k_b
+            )
+            t_win = _per_window_temperatures_K(
+                state.momentum,
+                state.mass,
+                n_windows=k_windows,
+                n_atoms=n_atoms,
+                k_b=k_b,
+            )
+            f_now = np.asarray(force_fn(state.position)).reshape(k_windows, n_atoms, 3)
+            fmax_now = np.max(np.abs(f_now), axis=(1, 2))
+            if not np.isfinite(e_tot) or not np.isfinite(t_curr) or not np.all(
+                np.isfinite(t_win)
+            ):
+                hot_idx = int(np.nanargmax(t_win)) if np.any(np.isfinite(t_win)) else -1
+                raise RuntimeError(
+                    f"non-finite thermodynamics at step {step}: "
+                    f"E={e_tot} T={t_curr} hottest_window={hot_idx}. "
+                    "Try --thermostat langevin (default), smaller --timestep, "
+                    "softer --k, or drop harsh 2D corners."
+                )
+            hot_t = [
+                (int(i), float(t_win[i]), float(fmax_now[i]))
+                for i in range(k_windows)
+                if float(t_win[i]) > t_abort
+            ]
+            if hot_t:
+                hot_t.sort(key=lambda x: -x[1])
+                detail = ", ".join(
+                    f"k={i} T={t:.0f}K max|F|={fm:.1f}" for i, t, fm in hot_t[:6]
+                )
+                xi = float(targets_per_cv[0][hot_t[0][0]])
+                yi = (
+                    float(targets_per_cv[1][hot_t[0][0]])
+                    if len(targets_per_cv) > 1
+                    else None
+                )
+                cv = f"ξ₀={xi:.3f}" + (f" η₀={yi:.3f}" if yi is not None else "")
+                if recover_windows and last_good is not None:
+                    # Reset just the offending windows to their last saved frame
+                    # with fresh velocities, instead of discarding the other 29.
+                    #
+                    # A fitted potential can carry narrow spurious wells that
+                    # thermal sampling finds occasionally: the geometry is
+                    # entirely normal one saved frame earlier (angle 175 deg,
+                    # bonds 1.9/2.5 A, E above the training floor) and destroyed
+                    # the next. Aborting the whole packed run for one such event
+                    # makes long runs impossible, so recover and count it.
+                    #
+                    # This is a modification of the sampled ensemble, not a fix:
+                    # affected windows are reported at the end and their
+                    # statistics should be treated with the reset count in mind.
+                    import jax.numpy as _jnp
+
+                    pos = np.asarray(state.position).reshape(
+                        k_windows, n_atoms, 3
+                    ).copy()
+                    mom = np.asarray(state.momentum).reshape(
+                        k_windows, n_atoms, 3
+                    ).copy()
+                    # NOT `masses`: that name holds the per-window masses the
+                    # bin-minima writer needs at the end of the run.
+                    packed_masses = np.asarray(state.mass).reshape(
+                        k_windows, n_atoms, 1
+                    )
+                    for i, t_hot, _fm in hot_t:
+                        pos[i] = last_good[i]
+                        sigma = np.sqrt(
+                            k_b * float(cfg.temperature_K) * packed_masses[i]
+                        )
+                        mom[i] = recover_rng.normal(size=(n_atoms, 3)) * sigma
+                        reset_counts[i] += 1
+                        if reset_counts[i] > max_resets:
+                            failed_windows.add(i)
+                    state = dataclasses.replace(
+                        state,
+                        position=_jnp.asarray(pos.reshape(-1, 3)),
+                        momentum=_jnp.asarray(mom.reshape(-1, 3)),
+                    )
+                    newly_failed = sorted(
+                        i for i, _, _ in hot_t
+                        if reset_counts[i] == max_resets + 1
+                    )
+                    if newly_failed:
+                        print(
+                            f"  step {step:6d}  window(s) {newly_failed} exceeded "
+                            f"{max_resets} resets -- marked FAILED, their samples "
+                            f"will be dropped"
+                        )
+                    print(
+                        f"  step {step:6d}  RESET window(s) "
+                        f"{[i for i, _, _ in hot_t]} after a temperature spike "
+                        f"({detail}); resets so far: "
+                        + ", ".join(
+                            f"w{k}={v}"
+                            for k, v in enumerate(reset_counts)
+                            if v
+                        )
+                    )
+                else:
+                    raise RuntimeError(
+                        f"window temperature spike at step {step}: {detail} "
+                        f"(limit {t_abort:.0f} K; hottest {cv}). "
+                        "Packed Nose-Hoover couples replicas — prefer Langevin; "
+                        "soften --k/--ky or remove that grid corner. "
+                        "Set MMML_UMBRELLA_RECOVER=1 to reset the offending "
+                        "window and continue instead of aborting."
+                    )
+            print(
+                f"  step {step:6d}  E_total={e_tot:.4f} eV  "
+                f"T={t_curr:.1f} K  "
+                f"T_win[min/med/max]="
+                f"{float(np.min(t_win)):.0f}/"
+                f"{float(np.median(t_win)):.0f}/"
+                f"{float(np.max(t_win)):.0f}"
+            )
+
+    print(
+        f"=== MD finished ({cfg.nsteps} steps); writing snapshots "
+        f"({k_windows} windows × {len(frames_traj)} frames) ==="
+    )
+    positions = np.stack(frames_traj, axis=1)
+    cv_traj = np.stack(cv_frames, axis=1)  # (K, N_frames, ndim)
+    energies = np.stack(energy_frames, axis=1)  # (K, N_frames)
+    n_frames = int(positions.shape[1])
+    minima_pos, minima_idx, minima_e = select_lowest_energy_frames(
+        positions, energies
+    )
+
+    # Sampling quality, recorded alongside the data rather than only printed:
+    # a consumer that does not look at these will happily average windows that
+    # spent the run falling into a spurious well.
+    extra = {
+        "reset_counts": np.asarray(reset_counts, dtype=np.int32),
+        "failed_windows": np.asarray(sorted(failed_windows), dtype=np.int32),
+        "ndim": np.int32(sched.ndim),
+        "grid_shape": np.asarray(sched.grid_shape, dtype=np.int32),
+        "energies_ev": np.asarray(energies, dtype=np.float64),
+        "bin_minima_frame_idx": np.asarray(minima_idx, dtype=np.int64),
+        "bin_minima_energy_ev": np.asarray(minima_e, dtype=np.float64),
+        # Authoritative CV definition. atom_i/atom_j below are the legacy view
+        # and describe only the first pair, so MBAR must prefer this.
+        "cv_spec": np.asarray(json.dumps(sched.cv_specs())),
+        "wall_spec": np.asarray(json.dumps(sched.wall_specs())),
+    }
+    if sched.ndim == 2:
+        assert sched.yi0 is not None and sched.k_y is not None
+        extra["yi0"] = np.asarray(sched.yi0, dtype=np.float64)
+        extra["k_y_ev_A2"] = np.asarray(sched.k_y, dtype=np.float64)
+        extra["atom_k"] = np.int32(sched.atom_pairs[1][0])
+        extra["atom_l"] = np.int32(sched.atom_pairs[1][1])
+
+    snapshots_path = output_dir / SNAPSHOTS_NPZ
+    print(f"  writing {snapshots_path.name} …")
+    save_snapshots(
+        snapshots_path,
+        positions=positions,
+        Z=z,
+        atom_i=sched.atom_pairs[0][0],
+        atom_j=sched.atom_pairs[0][1],
+        xi0=np.asarray(sched.xi0, dtype=np.float64),
+        k_ev_A2=np.asarray(sched.k_x, dtype=np.float64),
+        temperature_K=float(cfg.temperature_K),
+        dt_fs=float(cfg.timestep_fs),
+        cv_traj=cv_traj,
+        checkpoint=str(Path(cfg.checkpoint).expanduser().resolve()),
+        extra=extra,
+    )
+    print(f"  snapshots done → {snapshots_path}")
+
+    traj_paths: dict[str, Path] = {}
+    from ase import Atoms
+
+    minima_centered = center_com_positions(minima_pos, masses)
+    minima_path = output_dir / BIN_MINIMA_TRAJ
+    minima_frames = [
+        Atoms(
+            numbers=z,
+            positions=minima_centered[wid],
+            masses=masses,
+            info={
+                "window": wid,
+                "frame_idx": int(minima_idx[wid]),
+                "energy_ev": float(minima_e[wid]),
+            },
+        )
+        for wid in range(k_windows)
+    ]
+    write(minima_path, minima_frames)
+    traj_paths["bin_minima"] = minima_path
+    print(
+        f"  wrote {minima_path.name} "
+        f"({k_windows} CoM-centered lowest-E_ML+W frames)"
+    )
+
+    if cfg.write_window_xyz:
+        print(
+            f"  writing {k_windows} window XYZ trajectories "
+            f"({n_frames} frames each, CoM→origin) …"
+        )
+        for wid in range(k_windows):
+            traj_path = output_dir / f"umbrella_window{wid:03d}.xyz"
+            centered = center_com_positions(positions[wid], masses)
+            frames = [
+                Atoms(numbers=z, positions=centered[frame_idx], masses=masses)
+                for frame_idx in range(n_frames)
+            ]
+            write(traj_path, frames)
+            traj_paths[f"window_{wid:03d}"] = traj_path
+            if (wid + 1) % max(1, k_windows // 8) == 0 or wid + 1 == k_windows:
+                print(f"    XYZ {wid + 1}/{k_windows}")
+    else:
+        print(
+            "  skipping per-window XYZ (MBAR uses NPZ only); "
+            "pass --write-window-xyz to export trajectories"
+        )
+
+    summary = {
+        "args": cfg.to_dict(),
+        "engine": "packed_ml",
+        "ndim": sched.ndim,
+        "n_windows": k_windows,
+        "n_frames": n_frames,
+        "n_atoms": n_atoms,
+        "atom_pairs": [list(p) for p in sched.atom_pairs],
+        "cv_spec": sched.cv_specs(),
+        "cv_label": [cv.label() for cv in sched.cvs],
+        "wall_spec": sched.wall_specs(),
+        "wall_label": [w.label() for w in sched.walls],
+        "xi0": list(sched.xi0),
+        "yi0": list(sched.yi0) if sched.yi0 is not None else None,
+        "k_ev_A2": list(sched.k_x),
+        "k_y_ev_A2": list(sched.k_y) if sched.k_y is not None else None,
+        "grid_shape": list(sched.grid_shape),
+        "r0_cv_A": r0_cvs,
+        "seed_mode": seed_mode,
+        "replica_exchange": bool(cfg.replica_exchange),
+        "rex_freq": int(cfg.rex_freq) if cfg.replica_exchange else None,
+        "rex_attempted": None if rex_stats is None else rex_stats.attempted,
+        "rex_accepted": None if rex_stats is None else rex_stats.accepted,
+        "rex_acceptance": None if rex_stats is None else rex_stats.acceptance,
+        "cv_mean": cv_traj.mean(axis=1).tolist(),
+        "cv_std": cv_traj.std(axis=1).tolist(),
+        "snapshots": str(snapshots_path),
+        "bin_minima": str(minima_path),
+        "bin_minima_frame_idx": minima_idx.tolist(),
+        "bin_minima_energy_ev": minima_e.tolist(),
+        "has_energies_unbiased_ev": False,
+    }
+    summary_path = write_summary(output_dir / SUMMARY_JSON, summary)
+
+    paths: dict[str, Path] = {
+        "snapshots": snapshots_path,
+        "summary": summary_path,
+        **traj_paths,
+    }
+    return UmbrellaResult(
+        output_dir=output_dir,
+        snapshots_path=snapshots_path,
+        summary_path=summary_path,
+        n_windows=k_windows,
+        n_frames=n_frames,
+        paths=paths,
+    )

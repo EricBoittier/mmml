@@ -1,0 +1,33 @@
+{
+  "checkpoint": "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/params_hybrid_mm_fixed_lj_scales_2026-07-31_14-34-33.json",
+  "sidecar": "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/hybrid_mm_fixed_lj_scales-32a09175-7932-419d-8935-9832caf00c78/hybrid_mm.json",
+  "data": "/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ace_cgenff.npz",
+  "n_rays": 48,
+  "n_r": 32,
+  "r_min": 3.0,
+  "r_max": 12.0,
+  "mm_switch_on": 8.0,
+  "ml_switch_width": 1.5,
+  "mm_switch_width": 5.0,
+  "deepest_kcal": -97.120267506494,
+  "mean_well_kcal": -2.1883725507694325,
+  "Z_monomer": [
+    6,
+    6,
+    6,
+    8,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "species": "ACE",
+  "file_prefix": "hybrid_orient_ACE",
+  "median_mean_abs_dF_at_handoff": 171.64434139980443,
+  "median_peak_dFcom_soft_kcal_A": 632.5913689746399,
+  "deepest_soft_kcal": -0.6735448894286342,
+  "mean_soft_well_kcal": -0.1674847320093825,
+  "r_at_deepest_soft": 7.935483870967742
+}

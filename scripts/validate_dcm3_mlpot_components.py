@@ -351,6 +351,7 @@ def _eval_breakdown(
         "dH": _scalar(full.dH),
         "mm_E": _scalar(full.mm_E) if do_mm else 0.0,
         "flat_bottom_E": _scalar(full.flat_bottom_E),
+        "wall_E": _scalar(getattr(full, "wall_E", 0.0)),
         "ml_internal_only": _scalar(ml_internal.internal_E),
         "ml_2b_contrib": _scalar(ml_dimer_only.ml_2b_E),
     }

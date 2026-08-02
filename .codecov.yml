@@ -1,12 +1,26 @@
-# Codecov configuration to make it a bit less noisy
+# Codecov configuration.
+#
+# The previous settings could not report a regression: `patch: false` waived
+# coverage on new code entirely, and a 50-percentage-point project threshold
+# meant total coverage could halve while the status stayed green. A check that
+# cannot go red is a false positive, so both are tightened here.
 coverage:
   status:
-    patch: false
+    # New/changed lines. Informational for now -- it annotates the PR with the
+    # patch number but does not block, so the signal appears before the gate
+    # does. Flip `informational` to false once patch coverage is routinely met.
+    patch:
+      default:
+        target: 60%
+        informational: true
+    # Total coverage. 1 percentage point of slack absorbs run-to-run jitter
+    # (skipped optional-dependency tests shifting a few lines) without waving
+    # through a real drop.
     project:
       default:
-        threshold: 50%
+        threshold: 1%
 comment:
-  layout: "header"
+  layout: "header, diff, files"
   require_changes: false
   branches: null
   behavior: default

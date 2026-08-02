@@ -182,9 +182,11 @@ def emit_hybrid_grms_diag(
     """Replace plain hybrid/CHARMM GRMS one-liners with a dashboard."""
     if quiet or not context:
         return
-    note = _DIAG_NOTES.get(kind, kind)
+    # Put detail on Diag only; avoid duplicating the same sentence as Note.
+    diag_kind = kind
+    note = ""
     if kind == "desync_suspected" and ratio is not None and np.isfinite(ratio):
-        note = f"{note} (ratio={float(ratio):.1f})"
+        note = f"hybrid/CHARMM GRMS ratio={float(ratio):.1f}"
     # Reporting must remain observational.  In particular, do not probe the
     # live CHARMM energy function here: this helper is also used while the
     # nonbond list/MLpot state is only partially initialized, where an implicit
@@ -194,21 +196,25 @@ def emit_hybrid_grms_diag(
         hybrid_grms=float(hybrid),
         charmm_grms=charmm,
         user_kcal=user_kcal,
-        diag_kind=kind,
+        diag_kind=diag_kind,
     )
     if rich_enabled(quiet=quiet):
         emit_prep_checkpoint(context, metrics, note=note, quiet=quiet)
         return
     if kind == "ok":
         print(
-            f"{context}: hybrid GRMS={float(hybrid):.4f} kcal/mol/Å (calculator)",
+            f"{context}: hybrid GRMS={float(hybrid):.4f} kcal/mol/Å "
+            f"(calculator; hybrid/CHARMM consistent)",
             flush=True,
         )
         return
     charmm_txt = f"{float(charmm):.4f}" if charmm is not None else "?"
+    detail = _DIAG_NOTES.get(kind, kind)
+    if note:
+        detail = f"{detail}; {note}"
     print(
         f"{context}: hybrid GRMS={float(hybrid):.4f} kcal/mol/Å (calculator); "
-        f"CHARMM GRMS={charmm_txt} ({note})",
+        f"CHARMM GRMS={charmm_txt} ({detail})",
         flush=True,
     )
 

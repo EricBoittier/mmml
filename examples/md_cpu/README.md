@@ -84,6 +84,7 @@ bash examples/md_cpu/06_md_system_free_nve_jaxmd.sh
 
 ## Related
 
+- [`examples/md_system_from_pdb/`](../md_system_from_pdb/) — PDB → `md-system` across backends
 - [`tests/functionality/neighbor_lists/README.md`](../../tests/functionality/neighbor_lists/README.md)
 - [`tests/functionality/mlpot/README.md`](../../tests/functionality/mlpot/README.md)
 - [`tests/functionality/pyxtal/README.md`](../../tests/functionality/pyxtal/README.md)

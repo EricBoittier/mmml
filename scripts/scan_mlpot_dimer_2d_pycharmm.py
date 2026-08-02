@@ -274,6 +274,7 @@ def _eval_decomposed(
         "mm_E": _scalar(full.mm_E) if do_mm else 0.0,
         "flat_bottom_E": _scalar(full.flat_bottom_E),
         "com_restraint_E": _scalar(full.com_restraint_E),
+        "wall_E": _scalar(getattr(full, "wall_E", 0.0)),
         "ml_internal_only": _scalar(ml_internal.internal_E),
         "ml_2b_contrib": _scalar(ml_dimer_only.ml_2b_E),
     }
@@ -450,6 +451,10 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         "mm_nonbond_mode": np.array(str(getattr(args, "mm_nonbond_mode", "jax_mic") or "jax_mic")),
         "lr_solver_requested": np.array("" if lr_requested is None else str(lr_requested)),
         "lr_solver_active": np.array(str(lr_active)),
+        "ewald_omit_self": np.bool_(bool(getattr(args, "ewald_omit_self", False))),
+        "mm_charge_mode": np.array(
+            str(getattr(args, "mm_charge_mode", None) or "fixed")
+        ),
         "jax_pme_method": np.array(
             str(getattr(args, "jax_pme_method", None) or os.environ.get("JAX_PME_METHOD", "ewald"))
         ),

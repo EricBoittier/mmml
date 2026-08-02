@@ -190,6 +190,16 @@ checkpoint trained with it deploys consistently here):
   --lr-solver ewald
 ```
 
+For a **small-system** check of **Monomer ML + MM** with native Ewald under
+both `mm_charge_mode: fixed` and `latent` (no checkpoint required for the
+analytic smoke; optional `DCM:2` PyCHARMM YAMLs keep CHARMM bonded on), see
+[calculator-capabilities.md](calculator-capabilities.md#monomer-ml-mm-with-native-ewald-fixed-vs-latent)
+and [hybrid-mm-charges.md](hybrid-mm-charges.md#minimal-runnable-example-native-ewald-fixed-vs-latent-small-system):
+
+```bash
+python examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py
+```
+
 ---
 
 

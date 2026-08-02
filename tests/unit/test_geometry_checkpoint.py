@@ -708,6 +708,55 @@ def test_attempt_overlap_early_abort_recovery_uses_baseline_without_overlap_read
     assert scratch not in called_candidates
 
 
+def test_attempt_overlap_early_abort_recovery_warn_adumb_rewinds(tmp_path):
+    """ADUMB + dynamics_overlap_action=warn still rewinds from numbered restarts."""
+    prior = tmp_path / "heat.0086.res"
+    write_minimal_restart(prior)
+    cfg = DynamicsOverlapConfig(
+        action="warn",
+        n_monomers=2,
+        geometry_fallback_restarts=(),
+    )
+    mlpot_ctx = SimpleNamespace(
+        workflow_args=SimpleNamespace(_adumb_rc_guard=object()),
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        return_value=prior,
+    ) as restore:
+        recovery = attempt_overlap_early_abort_recovery(
+            cfg,
+            chunk_nstep=1000,
+            steps_done=86500,
+            steps_before_chunk=86000,
+            overlap_context="HEAT",
+            overlap_restart_read=prior,
+            mlpot_ctx=mlpot_ctx,
+            chunk_index=86,
+        )
+    assert recovery.ok is True
+    assert recovery.source == "restart"
+    restore.assert_called_once()
+
+
+def test_attempt_overlap_early_abort_recovery_warn_without_adumb_skips(tmp_path):
+    """warn without ADUMB guard must not invent recovery (preserves non-ADUMB warn)."""
+    prior = tmp_path / "heat.0086.res"
+    write_minimal_restart(prior)
+    cfg = DynamicsOverlapConfig(action="warn", n_monomers=2)
+    recovery = attempt_overlap_early_abort_recovery(
+        cfg,
+        chunk_nstep=1000,
+        steps_done=86500,
+        steps_before_chunk=86000,
+        overlap_context="HEAT",
+        overlap_restart_read=prior,
+        mlpot_ctx=SimpleNamespace(workflow_args=SimpleNamespace()),
+        chunk_index=86,
+    )
+    assert recovery.ok is False
+
+
 def test_first_valid_geometry_crd_path_skips_restart_files(tmp_path):
     junk = (
         "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n"

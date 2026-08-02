@@ -120,7 +120,9 @@ def cmd_cell(args: argparse.Namespace) -> int:
     print_run_detail(monitor, cfg=cfg)
     traj = analyze_cell_trajectories(Path(monitor.out_dir))
     print("\nTrajectory / handoff:")
-    print(json.dumps(traj, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(traj)
     if args.output_dir:
         out = args.output_dir / args.tag
         out.mkdir(parents=True, exist_ok=True)
@@ -141,7 +143,7 @@ def cmd_trajectory(args: argparse.Namespace) -> int:
         stride=args.stride,
         max_frames=args.max_frames,
     )
-    print(json.dumps(payload, indent=2))
+    print_colored_json(payload)
     if args.output:
         write_trajectory_json(payload, args.output)
         print(f"Wrote {args.output}")

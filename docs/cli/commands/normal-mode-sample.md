@@ -19,11 +19,17 @@ usage: mmml normal-mode-sample [-h] -i INPUT [-o OUTPUT] [--amplitude AMPLITUDE]
 
 Sample geometries along vibrational modes from pyscf-dft harmonic output.
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   -i, --input INPUT     Path to pyscf-dft output .h5 (must contain harmonic
                         group)
+
+Output & artifacts:
   -o, --output OUTPUT   Output NPZ path (default: sampled.npz)
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
   --amplitude AMPLITUDE
                         Displacement amplitude in Angstrom (default: 0.1)
   --amplitudes AMPLITUDES [AMPLITUDES ...]
@@ -44,6 +50,9 @@ normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
 --include-equilibrium
 ```
 
+## Visual examples
+
+![Harmonic and trajectory-derived vibrational spectra](../../images/mcp/smoke001_ir_comparison.png)
 
 
 ---

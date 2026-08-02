@@ -184,9 +184,15 @@ def build_physnet_from_config(
 ) -> Any:
     """Construct a PhysNet-family model from checkpoint config (legacy keys OK)."""
     if model_cls is None:
-        from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+        merged_type = str({**config, **overrides}.get("model_type", "")).lower()
+        if merged_type == "spooky":
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
-        model_cls = PhysNet
+            model_cls = SpookyPhysNet
+        else:
+            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+
+            model_cls = PhysNet
     merged = normalize_physnet_config({**config, **overrides})
     return model_cls(**physnet_constructor_kwargs(merged, model_cls))
 
@@ -409,7 +415,7 @@ def load_model_checkpoint(
     if use_orbax is None:
         if json_params_path is not None and json_params_path.exists():
             use_orbax = False
-        elif (checkpoint_dir / "params").exists() or (checkpoint_dir / "default").exists() or (checkpoint_dir / "_checkpoint").exists() or (checkpoint_dir / "manifest.ocp").exists():
+        elif (checkpoint_dir / "params").exists() or (checkpoint_dir / "default").exists() or (checkpoint_dir / "_checkpoint").exists() or (checkpoint_dir / "manifest.ocp").exists() or (checkpoint_dir / "manifest.ocdbt").exists():
             use_orbax = True
         else:
             use_orbax = False
@@ -446,7 +452,7 @@ def load_model_checkpoint(
                 for path in params_candidates:
                     if path.exists():
                         try:
-                            restored = checkpointer.restore(path)
+                            restored = _restore_pytree_cpu_safe(checkpointer, str(path))
                             if restored is not None:
                                 break
                         except Exception:
@@ -550,7 +556,9 @@ def load_model_checkpoint(
         if json_params_path is not None and json_params_path.is_file()
         else checkpoint_dir
     )
-    print(f"✓ Loaded checkpoint from {load_source}")
+    from mmml.utils.rich_report import get_reporter
+
+    get_reporter().status("success", "Loaded checkpoint", detail=str(load_source))
     if "config" in result and isinstance(result["config"], dict):
         result["config"] = normalize_physnet_config(result["config"])
     return result
@@ -642,6 +650,62 @@ def quick_save(
     return save_model_checkpoint(params, model, save_dir, **kwargs)
 
 
+_TENSOR_LEAF_METADATA_TYPES = ("ScalarMetadata", "ArrayMetadata")
+
+
+def _choose_cpu_safe_restore_args(leaf_metadata: Any) -> Any:
+    """Pick orbax RestoreArgs for one checkpoint leaf, dispatched by its
+    metadata type -- tensor leaves (scalars/arrays) get a device-agnostic
+    numpy restore; everything else (e.g. strings) gets the default, since
+    they use a different on-disk backend and error under array restore args.
+
+    Split out from :func:`_restore_pytree_cpu_safe` so the dispatch logic
+    itself (the actual bug: blanket-applying array restore args to string
+    leaves broke on a zarr "metadata not found" error) is unit-testable
+    without needing real orbax checkpoint I/O or non-CPU devices.
+    """
+    import orbax.checkpoint as ocp
+
+    if type(leaf_metadata).__name__ in _TENSOR_LEAF_METADATA_TYPES:
+        return ocp.RestoreArgs(restore_type=np.ndarray)
+    return ocp.RestoreArgs()
+
+
+def _restore_pytree_cpu_safe(checkpointer: Any, path: str) -> Any:
+    """Restore an orbax PyTree checkpoint without needing its original device
+    topology to be available.
+
+    ``checkpointer.restore(path)`` with no ``restore_args`` reconstructs each
+    array leaf on the exact devices/sharding it was saved with. That fails
+    both when those devices are unavailable (e.g. a GPU busy with a live
+    training job on the same machine) and when restoring on a machine with no
+    matching GPUs at all (plain CPU). Building a per-leaf
+    ``RestoreArgs(restore_type=np.ndarray)`` for every tensor leaf --
+    discovered via ``checkpointer.metadata(path)``, which is itself
+    device-agnostic -- sidesteps device placement entirely by restoring plain
+    numpy instead of a sharded ``jax.Array``.
+
+    Non-tensor leaves (e.g. strings such as a stored ``cache_path``) must
+    NOT get this treatment: they use a different on-disk backend, and
+    blanket-applying array restore args to them raises a zarr-driver
+    "metadata not found" error. Leaf type is dispatched via the metadata
+    class name (``ScalarMetadata``/``ArrayMetadata`` vs. everything else).
+    """
+    meta = checkpointer.metadata(path)
+    item_metadata = getattr(meta, "item_metadata", None)
+    if item_metadata is None:
+        # Non-PyTree checkpoint or an orbax version without per-leaf
+        # metadata: no way to build safe restore_args, fall back to default.
+        return checkpointer.restore(path)
+
+    restore_args = jax.tree_util.tree_map(
+        _choose_cpu_safe_restore_args,
+        item_metadata,
+        is_leaf=lambda x: type(x).__name__.endswith("Metadata"),
+    )
+    return checkpointer.restore(path, restore_args=restore_args)
+
+
 def orbax_to_json(
     orbax_checkpoint_dir: Union[str, Path],
     output_path: Union[str, Path],
@@ -652,9 +716,11 @@ def orbax_to_json(
     """
     Convert an orbax checkpoint to a JSON file for CPU/portable use.
 
-    Loads the checkpoint (requires same device topology for GPU-saved checkpoints),
-    converts parameters to JSON-serializable format, and saves to output_path.
-    The resulting JSON can be loaded on CPU with arbitrary precision (e.g. float64).
+    Loads the checkpoint -- safe even without its original (possibly
+    multi-GPU) device topology available, e.g. on a CPU-only machine or a
+    GPU node where another process holds the original devices -- converts
+    parameters to JSON-serializable format, and saves to output_path. The
+    resulting JSON can be loaded on CPU with arbitrary precision (e.g. float64).
 
     Parameters
     ----------
@@ -682,8 +748,6 @@ def orbax_to_json(
     ------
     FileNotFoundError
         If checkpoint directory does not exist.
-    ValueError
-        If orbax restore fails (e.g. GPU checkpoint on CPU-only machine).
     """
     orbax_checkpoint_dir = Path(orbax_checkpoint_dir).resolve()
     output_path = Path(output_path).resolve()
@@ -697,7 +761,7 @@ def orbax_to_json(
         raise ImportError("orbax-checkpoint is required for orbax_to_json") from e
 
     checkpointer = ocp.PyTreeCheckpointer()
-    restored = checkpointer.restore(str(orbax_checkpoint_dir))
+    restored = _restore_pytree_cpu_safe(checkpointer, str(orbax_checkpoint_dir))
 
     keys_to_try = [params_key]
     if params_key == "ema_params":

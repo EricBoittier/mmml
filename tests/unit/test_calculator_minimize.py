@@ -72,6 +72,56 @@ def test_dual_unit_logfile_is_treated_as_open_by_ase():
         assert opened is log
 
 
+def test_hybrid_minimize_atoms_rewraps_charmm_pbc_molecules():
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _hybrid_minimize_atoms,
+    )
+
+    box_side_A = 10.0
+    ctx = SimpleNamespace(
+        use_pbc=True,
+        cubic_box_side_A=box_side_A,
+        atoms_per_monomer=[2, 2],
+    )
+    positions = np.array(
+        [
+            [5.2, 0.0, 0.0],
+            [5.7, 0.0, 0.0],
+            [-5.6, 1.0, 0.0],
+            [-5.1, 1.0, 0.0],
+        ]
+    )
+
+    atoms = _hybrid_minimize_atoms(ctx, [1, 1, 1, 1], positions)
+
+    assert atoms.pbc.all()
+    np.testing.assert_allclose(atoms.cell.array, np.eye(3) * box_side_A)
+    wrapped = atoms.get_positions()
+    assert np.all(np.abs(wrapped[:, 0]) < box_side_A / 2.0)
+    np.testing.assert_allclose(wrapped[1] - wrapped[0], [0.5, 0.0, 0.0])
+    np.testing.assert_allclose(wrapped[3] - wrapped[2], [0.5, 0.0, 0.0])
+
+
+def test_hybrid_minimize_atoms_leaves_open_boundary_coordinates_unchanged():
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _hybrid_minimize_atoms,
+    )
+
+    positions = np.array([[12.0, -3.0, 1.0], [13.0, -3.0, 1.0]])
+    atoms = _hybrid_minimize_atoms(
+        SimpleNamespace(use_pbc=False),
+        [1, 1],
+        positions,
+    )
+
+    assert not atoms.pbc.any()
+    np.testing.assert_allclose(atoms.get_positions(), positions)
+
+
 def test_should_abort_bfgs_fmax_running_best_spike():
     assert should_abort_bfgs_fmax(
         1470.0,
@@ -366,6 +416,38 @@ def test_historical_best_restores_when_later_mini_regresses():
     assert fmax == pytest.approx(38.0)
     assert grms == pytest.approx(51.0)
     atoms.set_positions.assert_called_once()
+
+
+def test_clear_calculator_mini_historical_best_drops_preheat_frame():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        CalculatorMiniHistoricalBest,
+        _maybe_restore_calculator_mini_historical_best,
+        clear_calculator_mini_historical_best,
+    )
+
+    ctx = MagicMock()
+    ctx.calculator_mini_historical_best = CalculatorMiniHistoricalBest(
+        positions=np.ones((1, 3)),
+        fmax_ev_a=1.11,
+        energy_ev=-1093.13,
+        grms_kcalmol_A=1.85,
+        label="initial",
+        context="Pre-SD",
+    )
+    clear_calculator_mini_historical_best(ctx)
+    atoms = MagicMock()
+    fmax, energy, grms, restored = _maybe_restore_calculator_mini_historical_best(
+        ctx,
+        atoms,
+        fmax_ev_a=3.48,
+        energy_ev=-1088.88,
+        grms_kcalmol_A=9.76,
+        context_prefix="Pre-SD (pre-recovery)",
+        verbose=False,
+    )
+    assert restored is False
+    assert fmax == pytest.approx(3.48)
+    atoms.set_positions.assert_not_called()
 
 
 def test_run_hybrid_calculator_fire_stops_on_spike():

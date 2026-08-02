@@ -123,6 +123,8 @@ def test_charmm_grms_after_ener_force_runs_script():
         extra={"pycharmm.lingo": fake_lingo},
     ) as (fake_pycharmm, _coor, _energy), mock.patch.object(
         cli_common, "charmm_grms", return_value=1.23
+    ), mock.patch.object(
+        cli_common, "charmm_system_is_evaluable", return_value=True
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
         return_value=__import__("contextlib").nullcontext(),

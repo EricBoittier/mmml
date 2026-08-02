@@ -25,18 +25,24 @@ optional H5.
 positional arguments:
   h5                    charmm_ml_comparison.h5 or similar
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
+  --residue-name RESIDUE_NAME
+                        Residue name for mdcm header and default filenames
+
+Output & artifacts:
   --out-dir, -o OUT_DIR
                         Directory for x_fit.txt, coefs*.txt
-  --natmk NATMK         Number of atoms for distance matrix (default: from H5)
   --out-h5 OUT_H5       If set, evaluate and write H5 for GUI
   --out-mdcm OUT_MDCM   Write .mdcm file (default: out_dir/RESIDUE.mdcm)
   --out-kmdcm OUT_KMDCM
                         Write .kmdcm kernel file (default:
                         out_dir/RESIDUE.kmdcm)
-  --residue-name RESIDUE_NAME
-                        Residue name for mdcm header and default filenames
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
+  --natmk NATMK         Number of atoms for distance matrix (default: from H5)
   --nkfr NKFR           NKFR for kmdcm (default: number of frames)
   --optimize            Optimize (AQ,BQ,CQ) per frame before fitting
   --train-frames TRAIN_FRAMES

@@ -835,7 +835,10 @@ def verify_mlpot_charmm_atom_consistency(
         issues.append(f"context ml_Z length {z_ctx.shape[0]} != ml_Natoms {n_ml}")
     if z_mlpot.shape[0] != n_ml:
         issues.append(f"mlpot.ml_Z length {z_mlpot.shape[0]} != ml_Natoms {n_ml}")
-    if n_ml != n_psf:
+    partial_ml = n_ml < n_psf
+    if n_ml > n_psf:
+        issues.append(f"ml_Natoms {n_ml} > CHARMM natom {n_psf}")
+    if not partial_ml and n_ml != n_psf:
         issues.append(f"ml_Natoms {n_ml} != CHARMM natom {n_psf}")
 
     if expected_z is not None:
@@ -846,21 +849,29 @@ def verify_mlpot_charmm_atom_consistency(
                 f"(build {z_exp.tolist()[:8]}... vs ctx {z_ctx.tolist()[:8]}...)"
             )
 
-    if not np.array_equal(z_psf, z_ctx):
-        mismatch = np.where(z_psf != z_ctx)[0]
+    z_psf_ml = z_psf[ml_idx] if partial_ml else z_psf
+    if not np.array_equal(z_psf_ml, z_ctx):
+        mismatch = np.where(z_psf_ml != z_ctx)[0]
         issues.append(
-            "PSF mass-derived Z != MlpotContext.ml_Z at indices "
+            "PSF mass-derived Z != MlpotContext.ml_Z at ML indices "
             + ", ".join(str(int(i)) for i in mismatch[:12])
             + ("..." if mismatch.size > 12 else "")
         )
     if not np.array_equal(z_ctx, z_mlpot):
         issues.append("MlpotContext.ml_Z != mlpot.ml_Z (registration vs MLpot object)")
 
-    expected_idx = np.arange(n_ml, dtype=int)
-    if ml_idx.shape != expected_idx.shape or not np.array_equal(ml_idx, expected_idx):
-        issues.append(
-            f"mlpot.ml_indices not 0..{n_ml - 1} (got {ml_idx.tolist()[:16]}...)"
-        )
+    if partial_ml:
+        if ml_idx.size != n_ml or ml_idx.min() < 0 or ml_idx.max() >= n_psf:
+            issues.append(
+                f"mlpot.ml_indices out of range for partial ML "
+                f"(n_ml={n_ml}, natom={n_psf}, idx={ml_idx.tolist()[:16]}...)"
+            )
+    else:
+        expected_idx = np.arange(n_ml, dtype=int)
+        if ml_idx.shape != expected_idx.shape or not np.array_equal(ml_idx, expected_idx):
+            issues.append(
+                f"mlpot.ml_indices not 0..{n_ml - 1} (got {ml_idx.tolist()[:16]}...)"
+            )
 
     z_calc = _calculator_atomic_numbers(ctx)
     if z_calc is None:
@@ -882,15 +893,22 @@ def verify_mlpot_charmm_atom_consistency(
         )
 
     if not quiet:
-        sample = min(3, n_psf)
+        sample = min(3, n_psf if not partial_ml else n_ml)
+        region = (
+            f"partial ML n_ml={n_ml}/{n_psf}"
+            if partial_ml
+            else f"all-ML N={n_psf}"
+        )
         lines = [
-            f"Atom consistency OK before {context}: N={n_psf} "
+            f"Atom consistency OK before {context}: {region} "
             f"(PSF ↔ MLpot ↔ calculator Z and masses)"
         ]
-        for i in range(sample):
+        sample_idx = ml_idx[:sample] if partial_ml else range(sample)
+        for i in sample_idx:
+            ii = int(i)
             lines.append(
-                f"  atom {i}: type={atypes[i]} Z={int(z_psf[i])} "
-                f"mass={float(masses[i]):.4f} amu"
+                f"  atom {ii}: type={atypes[ii]} Z={int(z_psf[ii])} "
+                f"mass={float(masses[ii]):.4f} amu"
             )
         print("\n".join(lines), flush=True)
 
@@ -902,19 +920,35 @@ def _import_pycharmm():
     return pycharmm
 
 
+def _select_atoms_cls():
+    """Resolve ``SelectAtoms`` across PyCHARMM layouts.
+
+    Some builds expose ``pycharmm.SelectAtoms``; others only ship the
+    ``pycharmm.select_atoms`` submodule (``AttributeError: ... Did you mean:
+    'select_atoms'?``). Prefer the package attribute when present.
+    """
+    pycharmm = _import_pycharmm()
+    cls = getattr(pycharmm, "SelectAtoms", None)
+    if cls is not None:
+        return cls
+    from pycharmm.select_atoms import SelectAtoms
+
+    return SelectAtoms
+
+
 def select_all_atoms():
     """CHARMM selection of all atoms."""
-    return _import_pycharmm().SelectAtoms().all_atoms()
+    return _select_atoms_cls()().all_atoms()
 
 
 def select_by_seg_id(seg_id: str):
     """CHARMM selection by segment ID (e.g. ``'AMM1'`` for an ML region)."""
-    return _import_pycharmm().SelectAtoms(seg_id=seg_id)
+    return _select_atoms_cls()(seg_id=seg_id)
 
 
 def select_by_resid(resid: int | str):
     """CHARMM selection by residue ID (e.g. ``1`` for the first residue)."""
-    return _import_pycharmm().SelectAtoms(res_id=str(resid))
+    return _select_atoms_cls()(res_id=str(resid))
 
 
 def select_by_resids(resids: Sequence[int | str]) -> Any:
@@ -926,6 +960,45 @@ def select_by_resids(resids: Sequence[int | str]) -> Any:
     for rid in ids[1:]:
         sel = sel | select_by_resid(rid)
     return sel
+
+
+def select_by_resname(res_name: str) -> Any:
+    """CHARMM selection by residue name (e.g. ``'AMM1'``)."""
+    name = str(res_name).strip()
+    if not name:
+        raise ValueError("select_by_resname: empty residue name")
+    return _select_atoms_cls()(res_name=name)
+
+
+def select_by_resnames(res_names: Sequence[str]) -> Any:
+    """Union selection over multiple residue names (mechanical-embedding ML region)."""
+    names = [str(r).strip() for r in res_names if str(r).strip()]
+    if not names:
+        raise ValueError("select_by_resnames: empty residue-name list")
+    # Include known CGenFF truncations (CH3CL → CH3C) so PSF tables still match.
+    from mmml.md.ml_region import _expand_resname_match_set
+
+    expanded = sorted(_expand_resname_match_set(names))
+    sel = select_by_resname(expanded[0])
+    for name in expanded[1:]:
+        sel = sel | select_by_resname(name)
+    return sel
+
+
+def resolve_mlpot_selection_from_args(args: Any | None) -> Any:
+    """Return ML ``SelectAtoms``: ``ml_resnames`` subset, else all atoms.
+
+    Mechanical embedding on PyCHARMM: PhysNet/USER only on the listed residues;
+    solvent keeps CHARMM MM (requires BLOCK registration + non-``jax_mic`` VDW).
+    """
+    from mmml.md.ml_region import parse_ml_resnames
+
+    ml_resnames = parse_ml_resnames(
+        getattr(args, "ml_resnames", None) if args is not None else None
+    )
+    if ml_resnames is None:
+        return select_all_atoms()
+    return select_by_resnames(ml_resnames)
 
 
 def apply_charmm_verbosity(
@@ -1405,6 +1478,361 @@ def _cluster_atoms_per_from_composition(
     return list(atoms_per)
 
 
+def _vacuum_from_pdb_allows_missing_box(args: Any) -> bool:
+    """``free_*`` / ``--free-space`` cold-starts do not need CRYST1 / box.json."""
+    if bool(getattr(args, "free_space", False)):
+        return True
+    setup = str(getattr(args, "setup", None) or "").strip().lower()
+    return setup in {"free_nve", "free_nvt", "free_thermalize"} or setup.startswith(
+        "free_"
+    )
+
+
+def _parse_pdb_atoms_whitespace(
+    pdb_path: Path | str,
+) -> tuple[list[str], list[str], list[int], np.ndarray]:
+    """Parse ATOM records with ``str.split`` (safe for 4–5 char CGenFF RESN).
+
+    Classic PDB columns 17–20 cannot hold ``CH3CL``. Examples/m solute PDBs use a
+    chain-less, space-delimited layout; fixed-column parsers truncate RESN and
+    shift coordinates.
+    """
+    path = Path(pdb_path)
+    names: list[str] = []
+    resnames: list[str] = []
+    resids: list[int] = []
+    positions: list[list[float]] = []
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            parts = line.split()
+            if not parts or parts[0] not in ("ATOM", "HETATM"):
+                continue
+            if len(parts) < 8:
+                raise RuntimeError(f"Truncated PDB ATOM record in {path}: {line!r}")
+            # ATOM serial name resname [chain] resid x y z ...
+            # Never harvest "all floats" — serial/resid would be mistaken for x/y
+            # when occupancy/tempFactor are omitted (only 5 numeric tokens).
+            try:
+                if len(parts[4]) == 1 and parts[4].isalpha() and not parts[4].isdigit():
+                    name, resn, resid_s = parts[2], parts[3], parts[5]
+                    xyz = parts[6:9]
+                else:
+                    name, resn, resid_s = parts[2], parts[3], parts[4]
+                    xyz = parts[5:8]
+                resid = int(resid_s)
+                x, y, z = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
+            except (ValueError, IndexError) as exc:
+                raise RuntimeError(
+                    f"Could not parse PDB ATOM record in {path}: {line!r}"
+                ) from exc
+            names.append(str(name))
+            resnames.append(str(resn).strip().upper())
+            resids.append(int(resid))
+            positions.append([x, y, z])
+    if not names:
+        raise RuntimeError(f"No ATOM/HETATM records found in {path}")
+    return names, resnames, resids, np.asarray(positions, dtype=float)
+
+
+def _residue_sequence_from_pdb(pdb_path: Path | str) -> list[str]:
+    """Ordered residue names (one per resid) for ``read.sequence_string``."""
+    _names, resnames, resids, _pos = _parse_pdb_atoms_whitespace(pdb_path)
+    seq: list[str] = []
+    seen: set[int] = set()
+    for resid, resn in zip(resids, resnames, strict=True):
+        rid = int(resid)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        seq.append(str(resn).strip().upper())
+    if not seq:
+        raise RuntimeError(f"No residues found in {pdb_path}")
+    return seq
+
+
+# CHARMM command buffers are short; a solvated make-box sequence ("TIP3 " * N)
+# overflows and aborts with ABNORMAL TERMINATION / LEVEL 0 and no Python trace.
+_FROM_PDB_SEQUENCE_STRING_MAX_CHARS = 480
+_FROM_PDB_SEQUENCE_STRING_MAX_RESIDUES = 80
+
+
+def _sibling_psf_for_pdb(pdb_path: Path) -> Path | None:
+    """Return ``model.psf`` next to ``model.pdb`` when present (make-box layout)."""
+    sibling = pdb_path.with_suffix(".psf")
+    return sibling if sibling.is_file() else None
+
+
+def from_pdb_topology_strategy(
+    pdb_path: Path,
+    res_seq: Sequence[str],
+) -> str:
+    """How to build CHARMM topology for a full-system PDB.
+
+    Returns ``sibling_psf``, ``sequence_string``, or ``too_large``.
+    """
+    if _sibling_psf_for_pdb(pdb_path) is not None:
+        return "sibling_psf"
+    joined = " ".join(str(r) for r in res_seq)
+    if (
+        len(res_seq) > _FROM_PDB_SEQUENCE_STRING_MAX_RESIDUES
+        or len(joined) > _FROM_PDB_SEQUENCE_STRING_MAX_CHARS
+    ):
+        return "too_large"
+    return "sequence_string"
+
+
+def _record_from_pdb_cluster_metadata(
+    args: Any,
+    *,
+    path: Path,
+    side: float | None,
+    z: np.ndarray,
+    pdb_res_seq: Sequence[str] | None = None,
+) -> tuple[int, str]:
+    """Fill ``args._cluster_*`` from the live PSF; return ``(n_mol, tag)``.
+
+    Prefer ``pdb_res_seq`` (whitespace-parsed PDB residue names) when its length
+    matches the PSF monomer count — ``psf.get_res()`` often truncates 5-char
+    CGenFF names (``CH3CL`` → ``CH3C``), which breaks ``ml_resnames``.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        atoms_per_monomer_from_psf,
+    )
+
+    atoms_per_list = [int(x) for x in atoms_per_monomer_from_psf()]
+    n_mol = int(len(atoms_per_list))
+    residue_labels: list[str] = []
+    pdb_labels = [str(x).strip().upper() for x in (pdb_res_seq or [])]
+    _placeholder = frozenset({"", "UNK", "MOL", "UNL", "XXX"})
+
+    def _usable(labels: list[str]) -> bool:
+        return (
+            len(labels) == n_mol
+            and all(labels)
+            and not all(lab in _placeholder for lab in labels)
+        )
+
+    if _usable(pdb_labels):
+        residue_labels = list(pdb_labels)
+    else:
+        try:
+            import pycharmm.psf as psf_mod
+
+            # ``get_res()`` is one name per *residue* (nres), not per atom.
+            if hasattr(psf_mod, "get_res"):
+                res_all = [str(x).strip().upper() for x in psf_mod.get_res()]
+                if len(res_all) == n_mol and _usable(res_all):
+                    residue_labels = list(res_all)
+                elif len(res_all) >= n_mol and any(
+                    r not in _placeholder for r in res_all[:n_mol]
+                ):
+                    residue_labels = list(res_all[:n_mol])
+        except Exception:
+            residue_labels = []
+        if not _usable(residue_labels):
+            # Last resort: first atom of each monomer from a flat per-atom view.
+            try:
+                import pycharmm.psf as psf_mod
+
+                if hasattr(psf_mod, "get_res"):
+                    res_flat = [str(x).strip().upper() for x in psf_mod.get_res()]
+                    if len(res_flat) == int(np.sum(atoms_per_list)):
+                        residue_labels = []
+                        offset = 0
+                        for n in atoms_per_list:
+                            residue_labels.append(
+                                res_flat[offset]
+                                if 0 <= offset < len(res_flat)
+                                else "UNK"
+                            )
+                            offset += int(n)
+            except Exception:
+                residue_labels = ["UNK"] * n_mol
+        if len(residue_labels) != n_mol:
+            residue_labels = ["UNK"] * n_mol
+
+    summary: dict[str, int] = {}
+    for lab in residue_labels:
+        summary[lab] = summary.get(lab, 0) + 1
+
+    tag = str(getattr(args, "tag", None) or path.stem or f"from_pdb_{n_mol}mer")
+    setattr(args, "_cluster_atoms_per_list", list(atoms_per_list))
+    setattr(args, "_cluster_residue_labels", list(residue_labels))
+    setattr(args, "_cluster_composition_summary", dict(summary))
+    setattr(args, "n_molecules", n_mol)
+    if not getattr(args, "quiet", False):
+        box_msg = f"box={side:.3f} Å" if side is not None else "vacuum (no box)"
+        print(
+            f"Loading full-system PDB {path.name} "
+            f"({n_mol} residues, {int(z.size)} atoms, {box_msg}; "
+            f"species={dict(summary)})",
+            flush=True,
+        )
+    return n_mol, tag
+
+
+def load_cluster_from_pdb(
+    args: Any,
+    *,
+    pdb_path: str | Path | None = None,
+) -> tuple[np.ndarray, np.ndarray, int, str]:
+    """Cold-start from a full-system PDB (CGenFF names).
+
+    Prefer a sibling ``.psf`` (make-box writes ``model.psf`` next to
+    ``model.pdb``): regenerating a solvated cell via ``sequence_string`` exceeds
+    CHARMM's command buffer and aborts with LEVEL 0. Small vacuum systems still
+    use ``sequence_string`` + ``generate.new_segment`` + coordinate overlay.
+    For PBC setups, box side prefers CRYST1, then sibling ``box.json``, then
+    ``--box-size``. Vacuum ``free_*`` / ``--free-space`` may omit the box.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        charmm_relaxed_bomlev,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        read_pdb_cryst1_side_A,
+    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    _import_pycharmm()
+
+    raw = pdb_path if pdb_path is not None else getattr(args, "from_pdb", None)
+    if raw is None and getattr(args, "composition", None):
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            composition_mode,
+            parse_composition_entries,
+        )
+
+        entries = parse_composition_entries(str(args.composition))
+        if composition_mode(entries) == "full_system_pdb" and entries[0].pdb_path:
+            raw = entries[0].pdb_path
+    if raw is None:
+        raise ValueError("load_cluster_from_pdb requires a PDB path")
+    path = Path(str(raw)).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Full-system PDB not found: {path}")
+
+    side: float | None = read_pdb_cryst1_side_A(path)
+    if side is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            resolve_box_size_from_certified_artifacts,
+        )
+
+        # Temporarily point from_crd-like lookup at the PDB parent for box.json
+        prev_crd = getattr(args, "from_crd", None)
+        try:
+            setattr(args, "from_crd", path)
+            side = resolve_box_size_from_certified_artifacts(args)
+        finally:
+            setattr(args, "from_crd", prev_crd)
+    if side is None:
+        box_size = getattr(args, "box_size", None)
+        if box_size is not None and float(box_size) > 0.0:
+            side = float(box_size)
+    if side is None or float(side) <= 0.0:
+        if not _vacuum_from_pdb_allows_missing_box(args):
+            raise ValueError(
+                f"Full-system PDB {path.name} needs a positive box side: set CRYST1, "
+                "place box.json next to the PDB, or pass --box-size"
+            )
+        side = None
+        setattr(args, "_cold_start_box_sizing_source", "from_pdb_vacuum")
+    else:
+        side = float(side)
+        setattr(args, "box_size", side)
+        setattr(args, "_cold_start_sim_cell_side_A", side)
+        setattr(args, "_cold_start_box_sizing_source", "from_pdb")
+
+    res_seq = _residue_sequence_from_pdb(path)
+    _atom_names, _resnames, _resids, pdb_xyz = _parse_pdb_atoms_whitespace(path)
+    strategy = from_pdb_topology_strategy(path, res_seq)
+    sibling_psf = _sibling_psf_for_pdb(path)
+
+    if strategy == "too_large":
+        raise ValueError(
+            f"Full-system PDB {path.name} has {len(res_seq)} residues; regenerating "
+            "topology via CHARMM sequence_string exceeds the command buffer and "
+            "aborts with ABNORMAL TERMINATION (LEVEL 0). Place a sibling "
+            f"{path.with_suffix('.psf').name} next to the PDB (make-box writes "
+            "model.psf alongside model.pdb), or pass a smaller system."
+        )
+
+    read_cgenff_toppar()
+
+    if strategy == "sibling_psf":
+        assert sibling_psf is not None
+        from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+            read_psf_card_file,
+        )
+
+        if not getattr(args, "quiet", False):
+            print(
+                f"Loading full-system PDB {path.name} via sibling {sibling_psf.name} "
+                f"({len(res_seq)} residues, {len(pdb_xyz)} atoms)…",
+                flush=True,
+            )
+        with charmm_relaxed_bomlev():
+            # PSF EXT XPLOR (make-box model.psf) needs the Fortran C API reader.
+            read_psf_card_file(sibling_psf)
+        z = np.asarray(get_Z_from_psf(), dtype=int)
+        if int(z.size) != int(pdb_xyz.shape[0]):
+            raise ValueError(
+                f"Sibling PSF atom count ({int(z.size)}) != PDB atom count "
+                f"({int(pdb_xyz.shape[0])}) for {path.name} / {sibling_psf.name}. "
+                "Rebuild the box (make-box) so model.psf and model.pdb match."
+            )
+        sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
+    else:
+        # Small systems only: sequence_string + generate + coordinate overlay.
+        # Whitespace PDB parse keeps full CGenFF names (e.g. CH3CL).
+        import pycharmm.generate as generate
+        import pycharmm.read as read
+
+        if not getattr(args, "quiet", False):
+            print(
+                f"Loading full-system PDB {path.name} "
+                f"(sequence_string {' '.join(res_seq)}, {len(pdb_xyz)} atoms)…",
+                flush=True,
+            )
+        with charmm_relaxed_bomlev():
+            read.sequence_string(" ".join(res_seq))
+            status = generate.new_segment(
+                seg_name="SYS",
+                first_patch="NONE",
+                last_patch="NONE",
+                setup_ic=True,
+            )
+            if status is not None and int(status) not in (0, 1):
+                raise RuntimeError(
+                    f"GENERATE SYS failed for full-system PDB {path.name} "
+                    f"(status={status}; sequence={res_seq}). Check CGenFF residue "
+                    "names and MMML_CGENFF_EXTRA_RTF for append topologies (e.g. CH3CL)."
+                )
+
+        z = np.asarray(get_Z_from_psf(), dtype=int)
+        if int(z.size) != int(pdb_xyz.shape[0]):
+            raise ValueError(
+                f"PSF atom count ({int(z.size)}) != PDB atom count "
+                f"({int(pdb_xyz.shape[0])}) for {path.name}. "
+                "Atom order must match CGenFF RTF residue order."
+            )
+        sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
+
+    r = get_charmm_positions_array()
+    if int(r.shape[0]) == 0 or np.allclose(r, 0.0):
+        raise ValueError(
+            f"Full-system PDB load produced 0/undefined atoms ({path}). "
+            "Ensure the PDB has CGenFF RESN/atom names readable by CHARMM "
+            "and MMML_CGENFF_EXTRA_RTF is set for append residues (e.g. CH3CL)."
+        )
+
+    n_mol, tag = _record_from_pdb_cluster_metadata(
+        args, path=path, side=side, z=z, pdb_res_seq=res_seq
+    )
+    sync_charmm_positions(r)
+    return z, np.asarray(r, dtype=float), n_mol, tag
+
+
 def load_cluster_from_artifacts(
     args: Any,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
@@ -1501,6 +1929,21 @@ def load_cluster_from_artifacts(
     if not getattr(args, "quiet", False):
         report_charmm_topology_summary()
     n_mol, _ = reconcile_n_monomers_with_psf(args, z, n_mol)
+    # Certified --from-psf handoffs often leave --residue at the ACO default;
+    # seed labels from composition / PSF so monomer-health grids are not wrong.
+    if getattr(args, "_cluster_residue_labels", None) is None or len(
+        getattr(args, "_cluster_residue_labels", []) or []
+    ) != int(n_mol):
+        fake_ctx = type("Ctx", (), {"workflow_args": args, "atoms_per_monomer": getattr(
+            args, "_cluster_atoms_per_list", None
+        )})()
+        from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+            resolve_cluster_residue_labels,
+        )
+
+        labels = resolve_cluster_residue_labels(fake_ctx, int(n_mol))
+        if labels:
+            setattr(args, "_cluster_residue_labels", list(labels))
     return z, r, n_mol, tag
 
 
@@ -1617,17 +2060,45 @@ def _expected_ml_ml_exclusion_pairs(n_ml: int) -> int:
     return n * (n - 1) // 2
 
 
+def should_skip_dense_ml_ml_exclusions(
+    ml_selection: Any,
+    *,
+    periodic_external: bool = False,
+    n_total: int | None = None,
+) -> bool:
+    """Skip O(N²) ML–ML PSF exclusions when CHARMM nonbond lists are unused.
+
+    All-ML + ``jax_mic`` (``periodic_external=False``) evaluates MM pairs in JAX;
+    CHARMM VDW/ELEC are zeroed at registration. Installing ``N(N-1)/2`` exclusions
+    (~3.7M for TIP3:903) segfaults MPI ``libcharmm`` in ``psf_set_iblo_inb`` /
+    ``resize_psf(NNB)`` on large PBC boxes. Topology bonded exclusions remain.
+    """
+    if bool(periodic_external):
+        return False
+    try:
+        n_ml = len(ml_selection.get_atom_indexes())
+        if n_total is None:
+            n_total = int(_import_pycharmm().coor.get_natom())
+    except Exception:
+        return False
+    n_tot = int(n_total)
+    return n_tot > 0 and int(n_ml) >= n_tot
+
+
 def _verify_ml_exclusion_lists_installed(
     ml_selection: Any,
     *,
     context: str = "MLpot PBC exclusions",
+    require_dense_ml_ml: bool = True,
 ) -> int:
     """Raise when PSF ``inb`` lacks ML–ML exclusions (``upinb`` would see PSF-only ~1k)."""
     pycharmm = _import_pycharmm()
+    nnb = int(pycharmm.psf.get_nnb())
+    if not require_dense_ml_ml:
+        return nnb
     ml_indices = ml_selection.get_atom_indexes()
     n_ml = len(ml_indices)
     min_nnb = _expected_ml_ml_exclusion_pairs(n_ml)
-    nnb = int(pycharmm.psf.get_nnb())
     if nnb >= min_nnb:
         return nnb
     raise RuntimeError(
@@ -1652,20 +2123,36 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
     since registration, run the same order as
     :func:`_finalize_pbc_mlpot_exclusions_after_param_read`: crystal/IMAGE,
     cutoffs (no rebuild), ML ``iblo/inb``, then one ``update_bnbnd``/``upinb``.
+
+    All-ML + ``jax_mic`` skips dense ML–ML install (see
+    :func:`should_skip_dense_ml_ml_exclusions`).
     """
     if not bool(getattr(mlpot_ctx, "use_pbc", False)):
         return 0
     ml_selection = getattr(mlpot_ctx, "ml_selection", None)
     if ml_selection is None:
         return 0
+    skip_dense = should_skip_dense_ml_ml_exclusions(
+        ml_selection,
+        periodic_external=bool(getattr(mlpot_ctx, "periodic_external", False)),
+    )
     ml_indices = ml_selection.get_atom_indexes()
     n_ml = len(ml_indices)
-    min_nnb = _expected_ml_ml_exclusion_pairs(n_ml)
-    if min_nnb <= 0:
+    min_nnb = 0 if skip_dense else _expected_ml_ml_exclusion_pairs(n_ml)
+    if min_nnb <= 0 and not skip_dense:
         return 0
     pycharmm = _import_pycharmm()
     nnb = int(pycharmm.psf.get_nnb())
-    needs_install = nnb < min_nnb
+    if skip_dense:
+        # Topology exclusions only; do not force a second upinb just to densify.
+        if not force_rebuild and bool(
+            getattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
+        ):
+            return nnb
+        # Still allow force_rebuild to refresh IMAGE/nbonds without dense iblo/inb.
+        needs_install = False
+    else:
+        needs_install = nnb < min_nnb
     if not needs_install and not force_rebuild:
         return nnb
     # One ``prepare_charmm_pbc`` + ``upinb`` per coordinate/box regime is enough;
@@ -1683,6 +2170,7 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
             nnb = _verify_ml_exclusion_lists_installed(
                 ml_selection,
                 context=context,
+                require_dense_ml_ml=not skip_dense,
             )
             pycharmm.image.update_bimag()
         return nnb
@@ -1714,13 +2202,12 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
             workflow_args=workflow_args,
             context=f"{context} (pre-upinb)",
         )
-    # Always reinstall ML iblo/inb before upinb (same as registration finalize).
-    # prepare_charmm_pbc / READ PARAM can leave PSF-only ~1k bonded exclusions while
-    # psf_get_nnb() still reports the pre-clear count.
-    _install_ml_exclusions(ml_selection, update=False)
+    if needs_install or (force_rebuild and not skip_dense):
+        _install_ml_exclusions(ml_selection, update=False)
     nnb = _verify_ml_exclusion_lists_installed(
         ml_selection,
         context=context,
+        require_dense_ml_ml=not skip_dense,
     )
     print(
         f"{context}: rebuilding PBC nonbond lists (upinb, nnb={nnb}, L={side:.3f} Å)…",
@@ -1810,6 +2297,7 @@ def _apply_mlpot_psf_mm_off_and_pbc(ctx: MlpotContext, *, verbose: bool = False)
                 cubic_box_side_A=float(box_side),
                 verbose=verbose,
                 workflow_args=getattr(ctx, "workflow_args", None),
+                periodic_external=bool(getattr(ctx, "periodic_external", False)),
             )
     return block_tag
 
@@ -1897,6 +2385,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     cubic_box_side_A: float,
     verbose: bool = False,
     workflow_args: argparse.Namespace | None = None,
+    periodic_external: bool = False,
 ) -> None:
     """Rebuild crystal/nb lists after READ PARAM, then apply ML exclusions once.
 
@@ -1905,8 +2394,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
 
     1. Crystal build + ``image byres`` (repopulate NATIM; no ``upinb`` yet).
     2. PBC nonbond **cutoffs only** (no ``update_bnbnd`` — it rebuilds PSF-only lists).
-    3. ML ``iblo/inb`` via ``set_iblo_inb_no_update``.
-    4. One ``update_bnbnd`` / ``upinb`` with ML exclusions installed.
+    3. ML ``iblo/inb`` via ``set_iblo_inb_no_update`` (skipped for all-ML ``jax_mic``).
+    4. One ``update_bnbnd`` / ``upinb`` with ML exclusions installed (when required).
 
     Installing exclusions before ``apply_pbc_nbonds`` left PSF-only exclusions (~1000
     for DCM:100) and ``MAKINB`` resize segfaults at the first MLpot SD ``ENER``.
@@ -1922,6 +2411,10 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     )
 
     side = float(cubic_box_side_A)
+    skip_dense = should_skip_dense_ml_ml_exclusions(
+        ml_selection,
+        periodic_external=bool(periodic_external),
+    )
     rewrap_charmm_coords_for_mlpot_pbc(
         cubic_box_side_A=side,
         workflow_args=workflow_args,
@@ -1934,10 +2427,19 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC crystal/IMAGE build",
     )
-    print(
-        f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
-        flush=True,
-    )
+    if skip_dense:
+        n_ml = len(ml_selection.get_atom_indexes())
+        print(
+            f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); "
+            f"skipping dense ML–ML exclusions for all-ML jax_mic "
+            f"(n_ml={n_ml}, would need {_expected_ml_ml_exclusion_pairs(n_ml)} pairs)",
+            flush=True,
+        )
+    else:
+        print(
+            f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
+            flush=True,
+        )
     print("MLpot PBC: configuring PBC nonbond cutoffs (defer upinb)…", flush=True)
     with charmm_relaxed_bomlev():
         reassert_pbc_nbond_cutoffs(
@@ -1946,10 +2448,12 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (pre-upinb)",
         )
-    _install_ml_exclusions(ml_selection, update=False)
+    if not skip_dense:
+        _install_ml_exclusions(ml_selection, update=False)
     nnb = _verify_ml_exclusion_lists_installed(
         ml_selection,
         context="MLpot PBC registration",
+        require_dense_ml_ml=not skip_dense,
     )
     print(
         f"MLpot PBC: rebuilding nonbond lists (upinb, nnb={nnb})…",
@@ -1966,7 +2470,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 1)",
         )
-        _install_ml_exclusions(ml_selection, update=False)
+        if not skip_dense:
+            _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
@@ -1987,7 +2492,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 2)",
         )
-        _install_ml_exclusions(ml_selection, update=False)
+        if not skip_dense:
+            _install_ml_exclusions(ml_selection, update=False)
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
@@ -2154,6 +2660,7 @@ def register_mlpot(
                 cubic_box_side_A=box_side,
                 verbose=verbose,
                 workflow_args=workflow_args,
+                periodic_external=bool(periodic_external),
             )
             skip_iblo_inb_update = True
         else:

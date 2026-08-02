@@ -611,7 +611,9 @@ def main() -> None:
         include_cartesian=not args.skip_cartesian,
         include_plots=not args.skip_plots,
     )
-    print(json.dumps(metrics, indent=2, sort_keys=True))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(metrics, sort_keys=True)
     print(f"Wrote report to {args.output_dir}")
 
 

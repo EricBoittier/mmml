@@ -25,11 +25,12 @@ dependencies = [
     "pandas",
     "matplotlib>=3.5.0",
     # JAX ecosystem (CPU version by default).
-    # jax-md 0.2.29+ / flax 0.12.1+ use jax.Ref (not jax._src.core.mutable_array, gone in JAX 0.10).
+    # flax>=0.12.1 (below) uses jax.Ref instead of jax._src.core.mutable_array,
+    # which is gone in JAX 0.10 — that's what actually gates JAX-0.10 compat,
+    # not the jax-md version. jax-md>=0.2.29 is just the current PyPI release.
     "jax>=0.10.0",
     "jaxlib>=0.10.0",
-    "jax-md",
-    "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
+    "jax-md>=0.2.29",
     "flax>=0.12.1",
     "optax",
     "jaxtyping",
@@ -81,7 +82,7 @@ plotting = [
 
 # Neighbor-list validation (Vesin reference oracle; not required at runtime)
 nl-validation = [
-    "vesin",
+    "vesin>=0.6.1",
 ]
 
 # Shell tab completion for ``mmml`` (bash/zsh/fish)
@@ -104,10 +105,18 @@ nvalchemiops-pme = [
     "nvalchemi-toolkit-ops[jax]",
 ]
 
+# jax-pme long-range Coulomb backend (--lr-solver jax_pme). Not on PyPI under
+# this name yet (lab-cosmo/jax-pme upstream); the native "mic"/ewald path is
+# the default and does not need this. pick_lr_solver() falls back cleanly to
+# mic/nvalchemiops_pme/scafacos when jax-pme isn't installed.
+jax-pme-solver = [
+    "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
+]
+
 # CPU MD smoke testing: neighbor-list parity (Vesin), trajectory I/O, no CUDA.
 # Uses bundled examples/ckpts_json/DESdimers_params.json (ACO dimer, natoms=20).
 md-cpu = [
-    "vesin",
+    "vesin>=0.6.1",
     "mdanalysis",
     "mda-xdrlib",
 ]
@@ -126,7 +135,12 @@ mbar = [
 gpu = [
     "jax[cuda13]",
     "nvidia-cudnn-cu13>=9.10.1",
-    "cupy-cuda13x>=13.0.0",
+    # Cap cupy at <14: cupy 14 fails to load cuTENSOR, so gpu4pyscf's `contract`
+    # silently falls back to cupy.einsum (non-C-contiguous output), which trips
+    # `assert a.flags.c_contiguous` in transpose_sum during DFT Hessian/CPSCF.
+    # See issue #135 and gpu4pyscf#836. Stay on the 13.x series where cuTENSOR
+    # loads and contractions return contiguous arrays.
+    "cupy-cuda13x>=13.0.0,<14",
     "cutensor-cu13>=2.0.0",
     "mpi4py",
 #    "cuequivariance-ops-jax-cu13",
@@ -136,7 +150,10 @@ gpu = [
 # jaxlib has no [cuda12] extra in JAX 0.9+; jax[cuda12] pulls jax-cuda12-plugin[with-cuda] + jaxlib from PyPI.
 gpu-cuda12 = [
     "jax[cuda12]>=0.9.0",
-    "cupy-cuda12x>=13.0.0",
+    # Cap cupy at <14 (see the cuda13 note above / issue #135, gpu4pyscf#836):
+    # cupy 14 drops cuTENSOR, forcing gpu4pyscf into a non-contiguous einsum
+    # fallback that breaks DFT Hessian with a c_contiguous assertion.
+    "cupy-cuda12x>=13.0.0,<14",
     "cutensor-cu12>=2.0.0",
     "mpi4py",
 #    "cuequivariance-ops-jax-cu12",
@@ -194,7 +211,8 @@ viz = [
 
 # Molecular dynamics and analysis
 md = [
-    "vesin>=0.5.0",
+    # 0.6.1+ required for Blackwell (sm_120) GPU NeighborList NVRTC builds.
+    "vesin>=0.6.1",
     "mdanalysis",
     "mda-xdrlib",
     "mmtf-python",
@@ -239,6 +257,7 @@ experiments = [
 # Development and testing
 dev = [
     "pytest>=6.1.2",
+    "pytest-cov>=4.1",
     "ipykernel>=6.30.1",
     "mkdocs>=1.6,<2.0",
     "mkdocs-material>=9.7",
@@ -268,11 +287,6 @@ all-cuda13 = [
 all-cpu = [
     "mmml[quantum,ml,viz,md,md-cpu,chem,data,notebooks,experiments,plotting]",
 ]
-
-[tool.uv.sources]
-# jax-md 0.2.29+ (type-checking / API cleanup, PR #408)
-jax-md = { git = "https://github.com/google/jax-md.git", rev = "a722def5f2c30bd9dceb5fcc5c2a8d19f3cba2b6" }
-jax-pme = { git = "https://github.com/EricBoittier/jax-pme.git", rev = "c5f82726840de0abe29e3074adfaac8c826ffb85" }
 
 [[tool.uv.index]]
 name = "jax-cuda"
@@ -309,12 +323,14 @@ mmml = [
     "data/external/aaa_ama_dataset_summary.json",
     "data/charmm/alad_reference.pdb",
     "data/charmm/alad_reference.psf",
+    "data/charmm/tip3.pdb",
     "data/structures/make-box-aco-8x22A.pdb",
     "data/molecules/dcm.xyz",
     "data/molecules/dcm_monomer.pdb",
     "data/molecules/benz_monomer.pdb",
-    "data/structures/dcm_pbcn_cod2100015.cif",
+    "data/structures/dcm_*.cif",
     "data/structures/benzene_p21c_cod4501704.cif",
+    "data/structures/acetone_*.cif",
     "generate/sample/pdb/*.pdb",
     "generate/sample/psf/*.psf",
     "models/physnetjax/defaults/*.json",
@@ -337,7 +353,7 @@ distance-dirty = "{base_version}+{distance}.{vcs}{rev}.dirty"
 [tool.versioningit.vcs]
 method = "git"
 match = ["*"]
-default-tag = "1.0.0"
+default-tag = "0.1.0"
 
 [tool.versioningit.write]
 file = "mmml/_version.py"
@@ -346,7 +362,9 @@ file = "mmml/_version.py"
 target-version = "py313"
 line-length = 119
 src = ["mmml", "tests", "scripts", "setup/charmm/tool/pycharmm"]
-extend-exclude = ["*.ipynb"]
+# scripts/kernn is vendored external KerNN (torch) model code, not part of the
+# mmml package and not maintained to this repo's lint rules; exclude from ruff.
+extend-exclude = ["*.ipynb", "scripts/kernn"]
 
 [tool.ruff.lint]
 select = [

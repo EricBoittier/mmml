@@ -1,0 +1,214 @@
+#------------------------------------------------------------------------------
+#$Date: 2025-01-28 16:00:40 +0200 (Tue, 28 Jan 2025) $
+#$Revision: 297501 $
+#$URL: file:///home/coder/svn-repositories/_RELOADED_COD/cod-reloaded/cif/7/11/04/7110465.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/. The original data for this entry
+# were provided the Crystal Eye server at
+# http://wwmm.ch.cam.ac.uk/crystaleye/, created by Nick Day at the
+# Peter Murray-Rust laboratory.
+#
+# The file may be used within the scientific community so long as
+# proper attribution is given to the journal article from which the
+# data were obtained.
+#
+data_7110465
+loop_
+_publ_author_name
+'Allan, David R.'
+'Clark, Stewart J.'
+'Ibberson, Richard M.'
+'Parsons, Simon'
+'Pulham, Colin R.'
+'Sawyer, Lindsay'
+_publ_section_title
+;
+ The influence of pressure and temperature on the crystal structure of
+ acetone
+;
+_journal_issue                   8
+_journal_name_full               'Chemical Communications'
+_journal_page_first              751
+_journal_paper_doi               10.1039/a900558g
+_journal_year                    1999
+_chemical_formula_sum            'C3 D6 O'
+_chemical_name_systematic        Acetone-d6
+_space_group_IT_number           61
+_symmetry_cell_setting           orthorhombic
+_symmetry_space_group_name_Hall  '-P 2ac 2ab'
+_symmetry_space_group_name_H-M   'P b c a'
+_cell_angle_alpha                90
+_cell_angle_beta                 90
+_cell_angle_gamma                90
+_cell_formula_units_Z            16
+_cell_length_a                   9.1669(1)
+_cell_length_b                   7.5323(1)
+_cell_length_c                   21.2486(1)
+_cell_measurement_temperature    5
+_cell_volume                     1467.17(3)
+_diffrn_ambient_temperature      5
+_diffrn_measurement_device       'HRPD, ISIS'
+_diffrn_radiation_probe          neutron
+_diffrn_radiation_type           Neutron
+_diffrn_radiation_wavelength     'Time of flight'
+_exptl_crystal_density_diffrn    1.052
+_cod_data_source_file            900558gsup1.cif
+_cod_data_source_block           5KPBCA
+_cod_depositor_comments
+;
+The following automatic conversions were performed:
+
+'_symmetry_cell_setting' value 'Orthorhombic' changed to
+'orthorhombic' according to
+/home/saulius/struct/CIF-dictionaries/cif_core.dic dictionary named
+'cif_core.dic' version 2.4.2 from 2011-04-26.
+
+Automatic conversion script
+Id: cif_fix_values 1891 2012-01-12 08:04:46Z andrius 
+;
+_cod_original_formula_sum        ' C3 D6 O'
+_cod_database_code               7110465
+loop_
+_symmetry_equiv_pos_as_xyz
+x,y,z
+1/2-x,1/2+y,z
+x,1/2-y,1/2+z
+1/2-x,-y,1/2+z
+-x,-y,-z
+1/2+x,1/2-y,-z
+-x,1/2+y,1/2-z
+1/2+x,y,1/2-z
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_23
+_atom_site_aniso_U_13
+_atom_site_aniso_U_12
+H2A1 0.029(13) 0.020(9) 0.04(7) -0.007(16) 0.01(3) 0.011(7)
+H2A2 0.016(13) 0.040(9) 0.05(7) 0.02(2) -0.01(3) 0.017(7)
+H2A3 0.028(13) 0.019(9) 0.05(7) 0.003(16) -0.01(2) -0.002(7)
+H3A1 0.013(13) 0.045(11) 0.02(7) 0.006(16) -0.01(2) -0.008(7)
+H3A2 0.047(13) 0.020(6) 0.03(7) -0.004(16) 0.01(2) 0.006(7)
+H3A3 0.012(9) 0.047(9) 0.04(7) 0.00(2) -0.03(2) -0.009(10)
+H2B1 0.033(13) 0.027(9) 0.03(7) -0.011(16) 0.00(2) -0.017(7)
+H2B2 0.034(13) 0.026(9) 0.05(9) -0.021(16) 0.01(3) -0.009(10)
+H2B3 0.015(13) 0.041(9) 0.04(7) -0.01(2) -0.01(2) -0.001(7)
+H3B1 0.037(13) 0.036(9) 0.02(7) 0.001(16) -0.01(2) 0.004(7)
+H3B2 0.019(13) 0.061(11) 0.04(7) 0.00(2) 0.01(2) 0.002(7)
+H3B3 0.039(13) 0.016(9) 0.03(7) 0.006(16) 0.02(2) 0.015(7)
+loop_
+_atom_site_label
+_atom_site_thermal_displace_type
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_U_iso_or_equiv
+_atom_site_type_symbol
+O1A Uiso 0.4993(4) -0.0669(4) 0.28376(14) 1.000 0.0040(9) O
+C1A Uiso 0.3981(3) 0.0236(3) 0.26574(14) 1.000 0.0034(7) C
+C2A Uiso 0.3028(3) 0.1280(4) 0.31064(16) 1.000 0.0106(8) C
+C3A Uiso 0.3547(3) 0.0331(4) 0.19796(16) 1.000 0.0133(8) C
+O1B Uiso 0.6890(4) 0.4607(4) 0.02165(15) 1.000 0.0076(8) O
+C1B Uiso 0.6127(3) 0.3355(4) 0.00945(13) 1.000 0.0094(8) C
+C2B Uiso 0.5305(3) 0.2398(5) 0.06158(15) 1.000 0.0085(8) C
+C3B Uiso 0.5960(3) 0.2651(4) -0.05583(15) 1.000 0.0077(8) C
+H2A1 Uani 0.3172(4) 0.0817(4) 0.35888(19) 1.000 0.03(2) D
+H2A2 Uani 0.1903(4) 0.1212(5) 0.29879(17) 1.000 0.04(2) D
+H2A3 Uani 0.3370(4) 0.2669(5) 0.30645(17) 1.000 0.03(2) D
+H3A1 Uani 0.4328(4) -0.0433(4) 0.16929(16) 1.000 0.03(2) D
+H3A2 Uani 0.3586(4) 0.1701(5) 0.18216(17) 1.000 0.03(2) D
+H3A3 Uani 0.2447(5) -0.0226(5) 0.19109(16) 1.000 0.03(2) D
+H2B1 Uani 0.5423(4) 0.3087(4) 0.10694(15) 1.000 0.03(2) D
+H2B2 Uani 0.5844(5) 0.1086(5) 0.06632(17) 1.000 0.04(3) D
+H2B3 Uani 0.4182(4) 0.2199(4) 0.04823(16) 1.000 0.03(2) D
+H3B1 Uani 0.6390(4) 0.3592(5) -0.09029(18) 1.000 0.03(2) D
+H3B2 Uani 0.4824(4) 0.2451(6) -0.06688(17) 1.000 0.04(2) D
+H3B3 Uani 0.6559(4) 0.1364(5) -0.05946(17) 1.000 0.03(2) D
+loop_
+_atom_type_symbol
+_atom_type_description
+_atom_type_scat_dispersion_real
+_atom_type_scat_dispersion_imag
+_atom_type_scat_source
+O O 0.0000 0.0000 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+D H 0.0000 0.0000 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+C C 0.0000 0.0000 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+loop_
+_geom_angle_atom_site_label_1
+_geom_angle_atom_site_label_2
+_geom_angle_atom_site_label_3
+_geom_angle
+_geom_angle_publ_flag
+O1A C1A C2A 122.3(3) yes
+O1A C1A C3A 122.3(3) yes
+C2A C1A C3A 115.4(2) no
+C1A C2A H2A1 110.9(3) no
+C1A C2A H2A2 112.7(3) no
+C1A C2A H2A3 106.2(3) no
+H2A1 C2A H2A2 108.9(4) no
+H2A1 C2A H2A3 110.3(4) no
+H2A2 C2A H2A3 107.7(4) no
+C1A C3A H3A1 109.5(3) no
+C1A C3A H3A2 109.5(3) no
+C1A C3A H3A3 110.7(3) no
+H3A1 C3A H3A2 107.7(4) no
+H3A1 C3A H3A3 108.8(4) no
+H3A2 C3A H3A3 110.6(4) no
+O1B C1B C2B 120.2(3) yes
+O1B C1B C3B 122.6(3) yes
+C2B C1B C3B 117.2(3) no
+C1B C2B H2B1 111.5(3) no
+C1B C2B H2B2 105.5(3) no
+C1B C2B H2B3 110.3(3) no
+H2B1 C2B H2B2 107.3(4) no
+H2B1 C2B H2B3 113.0(4) no
+H2B2 C2B H2B3 109.0(4) no
+C1B C3B H3B1 110.8(3) no
+C1B C3B H3B2 110.6(3) no
+C1B C3B H3B3 108.8(3) no
+H3B1 C3B H3B2 107.0(4) no
+H3B1 C3B H3B3 109.8(4) no
+H3B2 C3B H3B3 109.8(4) no
+loop_
+_geom_bond_atom_site_label_1
+_geom_bond_atom_site_label_2
+_geom_bond_distance
+_geom_bond_publ_flag
+O1A C1A 1.213(4) yes
+C1A C2A 1.514(4) no
+C1A C3A 1.496(4) no
+C2A H2A1 1.091(5) no
+C2A H2A2 1.063(5) no
+C2A H2A3 1.096(5) no
+C3A H3A1 1.102(5) no
+C3A H3A2 1.086(5) no
+C3A H3A3 1.102(5) no
+O1B C1B 1.202(4) yes
+C1B C2B 1.521(4) no
+C1B C3B 1.493(4) no
+C2B H2B1 1.100(5) no
+C2B H2B2 1.109(5) no
+C2B H2B3 1.078(5) no
+C3B H3B1 1.093(5) no
+C3B H3B2 1.078(5) no
+C3B H3B3 1.117(5) no
+loop_
+_cod_changelog_entry_id
+_cod_changelog_entry_author
+_cod_changelog_entry_date
+_cod_changelog_entry_text
+1 'Merkys, Andrius' 2021-10-01T16:07:49+03:00
+;
+ Added the '_atom_site_type_symbol' data item. As a result, all hydrogen atoms
+ are now correctly identified as deuterium atoms.
+;
+2 'Vaitkus, Antanas' 2025-01-28T15:54:11+02:00
+;
+ Changed the '_atom_type_symbol' data item value 'H' to 'D' to match the
+ previously added '_atom_site_type_symbol' data values.
+;

@@ -131,10 +131,10 @@ def test_packmol_default_center_comes_from_box():
 
     def fake_build(**kwargs):
         seen.update(kwargs)
-        return np.array([1]), np.zeros((1, 3)), [1], ["ION"]
+        return np.array([1]), np.zeros((1, 3)), [1], ["DCM"]
 
     PackmolSystemBuilder(build_fn=fake_build).build(
-        SystemSpec(builder="packmol", composition="ION:1", box_size=12.0)
+        SystemSpec(builder="packmol", composition="DCM:1", box_size=12.0)
     )
     assert seen["center"] == (6.0, 6.0, 6.0)
     assert seen["cube_side"] == 12.0
@@ -142,11 +142,11 @@ def test_packmol_default_center_comes_from_box():
 
 def test_placement_builder_rejects_inconsistent_molecule_sizes():
     def fake_build(**kwargs):
-        return np.ones(3), np.zeros((3, 3)), [2], ["BAD"]
+        return np.ones(3), np.zeros((3, 3)), [2], ["DCM"]
 
     with pytest.raises(ValueError, match="sum to 3"):
         PyxtalSystemBuilder(build_fn=fake_build).build(
-            SystemSpec(builder="pyxtal", composition="BAD:1")
+            SystemSpec(builder="pyxtal", composition="DCM:1")
         )
 
 

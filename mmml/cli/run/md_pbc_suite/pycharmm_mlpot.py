@@ -16,6 +16,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_flat_bottom_args,
     add_monomer_constraint_args,
     add_packmol_cache_args,
+    add_pre_dynamics_lingo_args,
     add_run_state_checkpoint_args,
     add_staged_md_args,
     add_test_first_args,
@@ -70,6 +71,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_dynamics_overlap_args(parser)
     add_dynamics_stability_args(parser)
     add_flat_bottom_args(parser)
+    add_pre_dynamics_lingo_args(parser)
     add_monomer_constraint_args(parser, for_dynamics=True)
     add_test_first_args(parser)
     add_staged_md_args(parser)
@@ -195,6 +197,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Abort dynamics if post-min GRMS exceeds this (kcal/mol/Å)",
     )
     parser.add_argument(
+        "--max-fmax-before-dyn-ev-A",
+        type=float,
+        default=None,
+        metavar="EV_A",
+        dest="max_fmax_before_dyn_ev_A",
+        help=(
+            "Abort if max atomic |F| exceeds this (eV/Å) before dynamics; "
+            "default 2.0. Raise only for controlled smokes."
+        ),
+    )
+    parser.add_argument(
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -294,6 +307,9 @@ def main(argv: list[str] | None = None) -> int:
     # After MPI/CHARMM prepends LD_LIBRARY_PATH, prefer pip cuDNN over module stacks.
     ensure_jax_cuda_toolchain()
     args = parse_args(argv)
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+
+    normalize_hybrid_assembly_flags(args)
     # Alias for run_workflow helpers that read ``temp``.
     args.temp = args.temperature
     try:
@@ -304,6 +320,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"pycharmm_mlpot: error: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        # Surface unexpected failures (e.g. import / CHARMM abort wrappers) with
+        # a traceback — otherwise MPI re-launch only shows exit 2.
+        import traceback
+
+        print(f"pycharmm_mlpot: error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         return 2
 
 

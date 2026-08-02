@@ -292,6 +292,45 @@ def test_select_restart_skips_pretreat_on_success(tmp_path: Path) -> None:
     assert picked.path == heat
 
 
+def test_select_restart_does_not_fall_back_to_pretreat_heat(tmp_path: Path) -> None:
+    pretreat_heat = tmp_path / "pretreat" / "heat.res"
+    pretreat_heat.parent.mkdir(parents=True)
+    _write_restart(pretreat_heat)
+    candidates = [
+        RestartCandidate(
+            path=pretreat_heat,
+            label="pretreat heat",
+            leg="pretreat_heat",
+            hybrid_grms=None,
+            source="pretreat",
+            mtime=5.0,
+            is_restart=True,
+        ),
+    ]
+    assert select_restart_candidate(candidates, failed=True) is None
+    assert select_restart_candidate(candidates, failed=False) is None
+
+
+def test_is_valid_restart_rejects_flyoff_coords(tmp_path: Path) -> None:
+    from mmml.cli.run.md_run_advice import _is_valid_restart
+
+    bad = tmp_path / "heat.res"
+    bad.write_text(
+        "\n".join(
+            [
+                "!NATOM",
+                "         2",
+                "!X, Y, Z",
+                "  0.1000000D+01  0.2000000D+01  0.3000000D+01",
+                "  0.5000000D+04  0.0000000D+00  0.0000000D+00",
+            ]
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    assert _is_valid_restart(bad) is False
+
+
 def test_build_run_advice_full_success_has_no_resume_command(tmp_path: Path) -> None:
     out = tmp_path / "run"
     out.mkdir()

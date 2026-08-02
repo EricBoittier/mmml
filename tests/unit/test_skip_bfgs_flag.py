@@ -15,22 +15,16 @@ from __future__ import annotations
 def test_jaxmd_exposes_skip_bfgs_defaulting_on():
     """BFGS is skipped by DEFAULT: it descends into holes in the ML PES at 0 K.
 
-    The runner builds its parser inside main(), so drive it the way a user does.
-
-    Parsing the real argv is the only non-vacuous check that the flag exists and
-    defaults off; a source grep would pass on a flag that never reaches argparse.
+    This used to grep ``main``'s source for the flag and then assert the
+    tri-state on a *freshly built* parser -- which is precisely the vacuous
+    check its own docstring warned against, since the replica would pass
+    whatever the runner actually declared. The runner's parser is now
+    ``build_parser``, so ask it directly.
     """
-    import argparse
-    import inspect
+    from mmml.cli.run.md_pbc_suite.jaxmd import build_parser
 
-    from mmml.cli.run.md_pbc_suite import jaxmd
+    p = build_parser()
 
-    src = inspect.getsource(jaxmd.main)
-    assert '"--skip-bfgs"' in src, "--skip-bfgs must be registered on the runner parser"
-
-    # rebuild just the flag the way the runner does and confirm the tri-state
-    p = argparse.ArgumentParser()
-    p.add_argument("--skip-bfgs", action=argparse.BooleanOptionalAction, default=True)
     assert p.parse_args([]).skip_bfgs is True, "BFGS must be OFF by default until it is fixed"
     assert p.parse_args(["--skip-bfgs"]).skip_bfgs is True
     assert p.parse_args(["--no-skip-bfgs"]).skip_bfgs is False

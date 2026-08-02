@@ -4,7 +4,18 @@ from __future__ import annotations
 
 import numpy as np
 
-from scripts.prepare_ml_mm_dataset import match_cgenff_template_fast
+# The template-to-geometry mapping now lives in the shared core; the Orbax
+# script (scripts/prepare_ml_mm_dataset.py) and `mmml prepare-mm-dataset` both
+# call it from here.
+from mmml.data.cgenff_dataset import load_reference, match_cgenff_template
+
+_REF = load_reference()
+
+
+def match_cgenff_template_fast(z_sub, pos_sub=None, target_charge=0.0, canonical_smiles=None):
+    return match_cgenff_template(
+        _REF, z_sub, pos_sub, target_charge=target_charge, canonical_smiles=canonical_smiles
+    )
 
 
 def _water_ohh() -> tuple[np.ndarray, np.ndarray]:

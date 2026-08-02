@@ -67,6 +67,28 @@ def test_scan_parser_accepts_lr_solver_flags():
     assert args.jax_pme_method == "pme"
     assert args.scan_1d is True
 
+    args_ewald = mod._parse_args(
+        [
+            "DCM:2",
+            "--scan-tag",
+            "pbc_hybrid_ewald_omit_self",
+            "--lr-solver",
+            "ewald",
+            "--ewald-omit-self",
+            "--mm-charge-mode",
+            "fixed",
+            "--box-size",
+            "36",
+            "--mlpot-pbc",
+            "--scan-1d",
+            "--output",
+            "/tmp/scan_ewald.npz",
+        ]
+    )
+    assert args_ewald.lr_solver == "ewald"
+    assert args_ewald.ewald_omit_self is True
+    assert args_ewald.mm_charge_mode == "fixed"
+
 
 def test_resolve_output_path_includes_scan_tag():
     mod = _load_scan_module()
@@ -116,10 +138,34 @@ def test_plot_dimer_lr_scan_compare_on_synthetic(tmp_path: Path):
 def test_add_mlpot_lr_nonbond_args_on_parser():
     import argparse
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import add_mlpot_lr_nonbond_args
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        add_calculator_pre_minimize_args,
+        add_mlpot_lr_nonbond_args,
+    )
 
     p = argparse.ArgumentParser()
     add_mlpot_lr_nonbond_args(p)
     args = p.parse_args(["--lr-solver", "scafacos", "--mm-nonbond-mode", "periodic_external"])
     assert args.lr_solver == "scafacos"
     assert args.mm_nonbond_mode == "periodic_external"
+
+    p2 = argparse.ArgumentParser()
+    add_mlpot_lr_nonbond_args(p2)
+    add_calculator_pre_minimize_args(p2)
+    args2 = p2.parse_args(
+        [
+            "--lr-solver",
+            "ewald",
+            "--ewald-omit-self",
+            "--mm-charge-mode",
+            "fixed",
+            "--pre-min-ase-order",
+            "fire-first",
+            "--bfgs-polish-max-fmax",
+            "1.0",
+        ]
+    )
+    assert args2.ewald_omit_self is True
+    assert args2.mm_charge_mode == "fixed"
+    assert args2.pre_min_ase_order == "fire-first"
+    assert args2.bfgs_polish_max_fmax == 1.0

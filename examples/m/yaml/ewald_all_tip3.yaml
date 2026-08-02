@@ -1,0 +1,180 @@
+# Long-range Coulomb matrix for AMM1+CH3CL in TIP3 — all ``lr_solver`` options.
+# Fixed CGenFF MM charges (Mode A). Mechanical / electrostatic embedding are
+# orthogonal; see es_embed_*.yaml and mech_embed_*.yaml.
+#
+#   source examples/m/_env.sh
+#   uv run mmml md-system --config examples/m/yaml/ewald_all_tip3.yaml --run-all
+#   # or one job:  ... --job-id ewald_jax_mic_ase
+#
+# Optional deps:
+#   - jax_pme methods need the jax-pme package
+#   - nvalchemiops_pme needs nvalchemiops
+#   - scafacos needs SCAFACOS_LIB / libfcs
+# The runner script skips missing backends; campaigns fail loudly if a lib is absent.
+
+defaults:
+  composition: "AMM1:1,CH3CL:1,TIP3:12"
+  box_size: 20.0
+  checkpoint: examples/m/kl.json
+  setup: pbc_nve
+  ps: 0.05
+  dt_fs: 0.5
+  temperature: 300
+  include_mm: true
+  mm_switch_on: 8.0
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  skip_jit_warmup: true
+  quiet: true
+  seed: 0
+  mc_density_equalize: false
+  mini_nstep: 20
+  skip_energy_show: true
+
+campaign_output: artifacts/nh3_ch3cl/ewald_all_tip3
+
+runs:
+  # --- truncated MIC (default) ---
+  mic_ase:
+    description: "lr_solver=mic (jax_mic) — ASE"
+    backend: ase
+    lr_solver: mic
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/mic_ase
+
+  mic_jaxmd:
+    description: "lr_solver=mic (jax_mic) — JAX-MD"
+    backend: jaxmd
+    lr_solver: mic
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/mic_jaxmd
+
+  mic_pycharmm:
+    description: "lr_solver=mic (jax_mic) — PyCHARMM"
+    backend: pycharmm
+    lr_solver: mic
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/mic_pycharmm
+
+  # --- pure-JAX hybrid Ewald (train-matched full-box) ---
+  ewald_ase:
+    description: "lr_solver=ewald (full-box) — ASE"
+    backend: ase
+    lr_solver: ewald
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/ewald_ase
+
+  ewald_jaxmd:
+    description: "lr_solver=ewald (full-box) — JAX-MD"
+    backend: jaxmd
+    lr_solver: ewald
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/ewald_jaxmd
+
+  ewald_pycharmm:
+    description: "lr_solver=ewald (full-box) — PyCHARMM"
+    backend: pycharmm
+    lr_solver: ewald
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/ewald_pycharmm
+
+  # --- Ewald compatibility operator (MIC-trained models) ---
+  ewald_omit_self_ase:
+    description: "lr_solver=ewald --ewald-omit-self — ASE"
+    backend: ase
+    lr_solver: ewald
+    ewald_omit_self: true
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/ewald_omit_self_ase
+
+  ewald_omit_self_jaxmd:
+    description: "lr_solver=ewald --ewald-omit-self — JAX-MD"
+    backend: jaxmd
+    lr_solver: ewald
+    ewald_omit_self: true
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/ewald_omit_self_jaxmd
+
+  ewald_omit_self_pycharmm:
+    description: "lr_solver=ewald --ewald-omit-self — PyCHARMM"
+    backend: pycharmm
+    lr_solver: ewald
+    ewald_omit_self: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/ewald_omit_self_pycharmm
+
+  # --- jax-pme (method = ewald | pme | p3m) ---
+  jax_pme_ewald_ase:
+    description: "lr_solver=jax_pme method=ewald — ASE"
+    backend: ase
+    lr_solver: jax_pme
+    jax_pme_method: ewald
+    jax_pme_sr_cutoff: 6.0
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/jax_pme_ewald_ase
+
+  jax_pme_ewald_jaxmd:
+    description: "lr_solver=jax_pme method=ewald — JAX-MD"
+    backend: jaxmd
+    lr_solver: jax_pme
+    jax_pme_method: ewald
+    jax_pme_sr_cutoff: 6.0
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/jax_pme_ewald_jaxmd
+
+  jax_pme_ewald_pycharmm:
+    description: "lr_solver=jax_pme method=ewald — PyCHARMM"
+    backend: pycharmm
+    lr_solver: jax_pme
+    jax_pme_method: ewald
+    jax_pme_sr_cutoff: 6.0
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/jax_pme_ewald_pycharmm
+
+  jax_pme_pme_pycharmm:
+    description: "lr_solver=jax_pme method=pme — PyCHARMM"
+    backend: pycharmm
+    lr_solver: jax_pme
+    jax_pme_method: pme
+    jax_pme_sr_cutoff: 6.0
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/jax_pme_pme_pycharmm
+
+  jax_pme_p3m_pycharmm:
+    description: "lr_solver=jax_pme method=p3m — PyCHARMM"
+    backend: pycharmm
+    lr_solver: jax_pme
+    jax_pme_method: p3m
+    jax_pme_sr_cutoff: 6.0
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/jax_pme_p3m_pycharmm
+
+  # --- periodic_external full-box Coulomb (PyCHARMM only) ---
+  pe_ewald_pycharmm:
+    description: "periodic_external + lr_solver=ewald — PyCHARMM"
+    backend: pycharmm
+    mm_nonbond_mode: periodic_external
+    lr_solver: ewald
+    periodic_charmm_vdw: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/pe_ewald_pycharmm
+
+  pe_ewald_coulomb_only_pycharmm:
+    description: "periodic_external + ewald, no CHARMM VDW — PyCHARMM"
+    backend: pycharmm
+    mm_nonbond_mode: periodic_external
+    lr_solver: ewald
+    periodic_charmm_vdw: false
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/pe_ewald_coulomb_only_pycharmm
+
+  pe_nvalchemiops_pycharmm:
+    description: "periodic_external + nvalchemiops_pme — PyCHARMM (needs nvalchemiops)"
+    backend: pycharmm
+    mm_nonbond_mode: periodic_external
+    lr_solver: nvalchemiops_pme
+    periodic_charmm_vdw: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/pe_nvalchemiops_pycharmm
+
+  pe_scafacos_pycharmm:
+    description: "periodic_external + scafacos — PyCHARMM (needs SCAFACOS_LIB)"
+    backend: pycharmm
+    mm_nonbond_mode: periodic_external
+    lr_solver: scafacos
+    scafacos_method: p2nfft
+    periodic_charmm_vdw: true
+    skip_jit_warmup: false
+    output_dir: artifacts/nh3_ch3cl/ewald_all_tip3/pe_scafacos_pycharmm

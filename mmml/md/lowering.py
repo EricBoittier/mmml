@@ -21,6 +21,7 @@ from typing import Any, Mapping
 
 from mmml.md.config import EnsembleSpec, RunConfig
 from mmml.md.system import SystemSpec
+from mmml.md.temperature import parse_temperature_schedule
 
 __all__ = [
     "terms_from_cg_config",
@@ -83,10 +84,12 @@ def runconfig_from_cg_config(cfg: Mapping[str, Any], phase: str = "nve") -> RunC
         seed=int(cfg.get("seed", 0)),
         params={k: cfg[k] for k in ("sequence", "workdir", "initial_peptide_pdb") if k in cfg},
     )
+    schedule_text = cfg.get("temperature_schedule") or cfg.get("temp_schedule")
     ensemble = EnsembleSpec(
         ensemble=ensemble_name,
         space="pbc",
         temperature_K=float(cfg.get("temperature", 300.0)),
+        temperature_schedule=(parse_temperature_schedule(str(schedule_text)) if schedule_text else None),
         dt_fs=dt_fs,
         n_steps=n_steps,
         params={"block_steps": cfg.get(f"{phase}_block_steps")},
@@ -158,20 +161,78 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
     dt_fs = float(getattr(args, "dt_fs", 1.0))
     ps = float(getattr(args, "ps", 0.0))
 
+    # ``--from-pdb`` loads a prebuilt full-system PDB (e.g. a make-box solvated
+    # cell) and needs no composition; without this it fell through to the
+    # packmol composition builder and failed on the missing composition.
+    from_pdb = getattr(args, "from_pdb", None)
+    builder = getattr(args, "builder", None)
+    if not builder:
+        builder = "from_pdb" if from_pdb else "packmol"
     system = SystemSpec(
-        builder=getattr(args, "builder", None) or "packmol",
+        builder=builder,
         composition=getattr(args, "composition", None),
         n_molecules=getattr(args, "n_molecules", None),
         box_size=getattr(args, "box_size", None),
+        # Full-system PDB for the ``from_pdb`` builder. Distinct from the
+        # ``--template-pdb`` monomer-template flag, which this path rejects.
+        template_pdb=Path(from_pdb) if from_pdb else None,
         seed=int(getattr(args, "seed", 0)),
     )
+    schedule_text = getattr(args, "temperature_schedule", None)
+    ens_params: dict[str, Any] = {
+        "seed": int(getattr(args, "seed", 0)),
+    }
+    # Hybrid ML/MM PBC dynamics: prefer float64 (float32 NVT can NaN on packed boxes).
+    if ensemble_name in ("nvt", "npt", "nve"):
+        ens_params["float64"] = True
+    thermostat: str | None = None
+    if ensemble_name == "nvt":
+        # md-system --nvt-integrator; "auto" → langevin for packed hybrid solvated boxes.
+        raw_thermo = getattr(args, "nvt_integrator", None) or getattr(
+            args, "thermostat", None
+        )
+        mode = str(raw_thermo or "auto").strip().lower()
+        if mode in ("langevin", "lgv"):
+            thermostat = "langevin"
+        elif mode == "nhc":
+            thermostat = "nhc"
+        else:
+            thermostat = "langevin"
+        gamma = getattr(args, "langevin_friction", None)
+        if gamma is None:
+            gamma = getattr(args, "langevin_gamma", None)
+        if gamma is not None:
+            ens_params["langevin_gamma"] = float(gamma)
+        thermo_tau = getattr(args, "thermostat_tau", None)
+        if thermo_tau is not None:
+            ens_params["thermostat_kwargs"] = {"tau": float(thermo_tau)}
+    if ensemble_name == "npt":
+        # Optional soft piston for dilute / cold-start smokes (jax-md metal time).
+        # Default jax-md tau is 1000*dt; a 28 Å box with ~10 waters can sit at
+        # P_inst ~ -10^3 bar and slam the cell unless tau is raised.
+        barostat_tau = getattr(args, "barostat_tau", None)
+        if barostat_tau is not None:
+            ens_params["barostat_kwargs"] = {"tau": float(barostat_tau)}
+        thermo_tau = getattr(args, "thermostat_tau", None)
+        if thermo_tau is not None:
+            ens_params["thermostat_kwargs"] = {"tau": float(thermo_tau)}
+        raw_thermo = getattr(args, "nvt_integrator", None) or getattr(
+            args, "thermostat", None
+        )
+        mode = str(raw_thermo or "nhc").strip().lower()
+        if mode in ("langevin", "lgv", "nhc"):
+            # NPT driver currently uses Nose–Hoover only; keep nhc unless extended.
+            thermostat = "nhc"
     ensemble = EnsembleSpec(
         ensemble=ensemble_name,
         space=space,
         temperature_K=float(getattr(args, "temperature", 300.0)),
+        temperature_schedule=(parse_temperature_schedule(schedule_text) if schedule_text else None),
         pressure_bar=float(getattr(args, "pressure", 1.0)),
         dt_fs=dt_fs,
         n_steps=_nsteps_from_ps(ps, dt_fs),
+        thermostat=thermostat,
+        params=ens_params,
     )
     terms = terms_from_md_system_args(args)
     checkpoint = getattr(args, "checkpoint", None)
@@ -193,6 +254,7 @@ def runconfig_from_md_system_args(args: Any) -> RunConfig:
                 "mbd_checkpoint": getattr(args, "mbd_checkpoint", None),
                 "mbd_weight": getattr(args, "mbd_weight", 1.0),
                 "multipole_checkpoint": getattr(args, "multipole_checkpoint", None),
+                "interaction_policy": getattr(args, "interaction_policy", None),
             }.items()
             if v is not None
         },

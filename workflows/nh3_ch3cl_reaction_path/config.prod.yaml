@@ -1,0 +1,107 @@
+# Production matrix after smoke OK.
+#   MMML_WORKFLOW_CONFIG=config.prod.yaml nohup bash scripts/snakemake_slurm.sh 8 \
+#     > snakemake_prod.log 2>&1 &
+#
+# Axes:
+#   seeds × temperatures × solvents × umbrella variants (dt)
+# Timestep lives on the variant (not a free Snakemake wildcard).
+
+checkpoint: examples/m/model_ext.json
+example_dir: examples/m
+output_root: artifacts/nh3_ch3cl_reaction_path_prod
+box_size: 30.0
+
+seeds: [0, 1, 2]
+temperatures: [200, 300, 400]   # Kelvin
+
+enable:
+  endpoints: true
+  make_boxes: true
+  neb: true
+  dmc: true
+  umbrella_gas: true
+  umbrella_sol: true
+  adumb_gas: false   # enable when ADUMBRXNCOR build is available
+  adumb_sol: false
+  mbar: true
+
+# Start with TIP3; add acn/dmso when tip3 looks healthy.
+solvents: [tip3]
+
+umbrella:
+  # One variant per timestep (fs). Artifact path includes the name:
+  #   umbrella_{gas,sol}/.../dt{1,05,025}/T{T}/seed{S}/
+  active: [dt1, dt05, dt025]
+  variants:
+    # Soft short-ξ corner: 1.8Å/k=10 and hybrid NHC blew windows at T≥300.
+    dt1:
+      n_windows: 11
+      xi_min: 2.2
+      xi_max: 3.5
+      k_ev_A2: 2.5
+      nsteps: 10000
+      langevin_gamma: 1.0
+      # Keep gas << sol; 1 fs sol is too hot with ML embedding.
+      timestep_fs_gas: 0.05
+      timestep_fs_sol: 0.5
+      printfreq: 200
+      savefreq: 200
+      runtime_min: 720
+    dt05:
+      n_windows: 11
+      xi_min: 2.2
+      xi_max: 3.5
+      k_ev_A2: 2.5
+      nsteps: 10000
+      langevin_gamma: 1.0
+      timestep_fs_gas: 0.05
+      timestep_fs_sol: 0.5
+      printfreq: 200
+      savefreq: 200
+      runtime_min: 720
+    dt025:
+      n_windows: 11
+      xi_min: 2.2
+      xi_max: 3.5
+      k_ev_A2: 2.5
+      nsteps: 10000
+      langevin_gamma: 1.0
+      timestep_fs_gas: 0.05
+      timestep_fs_sol: 0.25
+      printfreq: 200
+      savefreq: 200
+      runtime_min: 720
+
+neb:
+  n_images: 11
+  max_steps: 200
+  fmax: 0.05
+  runtime_min: 180
+
+dmc:
+  basins: [react, product]
+  nwalker: 128
+  nstep: 1000
+  eqstep: 200
+  stepsize: 5.0e-4
+  alpha: 1200.0
+  runtime_min: 240
+
+adumb:
+  use_npz_pdb: true
+  runtime_min: 360
+
+make_boxes:
+  use_density: false
+  n_solvent: 12
+  runtime_min: 60
+
+slurm:
+  partition: gpu
+  runtime_min: 120
+  mem_mb_per_cpu: 4000
+  cpus_per_task: 4
+  nodes: 1
+  ntasks: 1
+  gpu: 1
+  max_jobs: 8

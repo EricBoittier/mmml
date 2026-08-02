@@ -23,34 +23,44 @@ usage: mmml downstream [-h] --dataset DATASET --checkpoint-dcm CHECKPOINT_DCM
 
 Run harmonic / MD downstream analyses on an MMML dataset
 
-options:
-  -h, --help            show this help message and exit
+Input & configuration:
   --dataset DATASET     Path to dataset NPZ file
   --checkpoint-dcm CHECKPOINT_DCM
                         Equivariant checkpoint (best_params.pkl)
   --checkpoint-noneq CHECKPOINT_NONEQ
                         Non-equivariant checkpoint
+
+Scientific model:
+  --temperature TEMPERATURE
+                        MD temperature in Kelvin
+  --raman-field RAMAN_FIELD
+                        Electric field strength for Raman finite-field (V/Å)
+
+Execution:
+  --md-steps MD_STEPS   Number of MD steps for full mode
+  --opt-steps OPT_STEPS
+                        Maximum optimisation steps
+
+Output & artifacts:
+  --output-dir OUTPUT_DIR
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+
+Other options:
   --sample-index SAMPLE_INDEX
                         Configuration index in dataset
   --mode {check,quick,full}
                         Analysis mode: 'check' (single-point), 'quick'
                         (harmonic), 'full' (+MD)
-  --output-dir OUTPUT_DIR
-  --temperature TEMPERATURE
-                        MD temperature in Kelvin
-  --md-steps MD_STEPS   Number of MD steps for full mode
   --timestep TIMESTEP   MD timestep in femtoseconds
   --ir-delta IR_DELTA   Displacement for IR finite differences (Å)
   --freq-delta FREQ_DELTA
                         Displacement for numerical Hessian (Å)
   --opt-fmax OPT_FMAX   Geometry optimisation force threshold (eV/Å)
-  --opt-steps OPT_STEPS
-                        Maximum optimisation steps
   --raman               Compute Raman spectrum using finite-field polarizability
   --raman-delta RAMAN_DELTA
                         Displacement for Raman derivatives (Å)
-  --raman-field RAMAN_FIELD
-                        Electric field strength for Raman finite-field (V/Å)
 ```
 
 

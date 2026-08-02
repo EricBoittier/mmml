@@ -235,10 +235,19 @@ styles = [
 
 
 def print_dict_as_table(dictionary: dict, title="Dictionary", plot=False):
-    table = Table(title=title)
-    for i, (key, value) in enumerate(dictionary.items()):
-        table.add_column(key, style=styles[i], no_wrap=False)
-    table.add_row(*[str(value) for value in dictionary.values()])
+    """Render mappings vertically so large scientific configs never clip horizontally."""
+    table = Table(
+        title=title,
+        show_header=False,
+        show_edge=False,
+        box=None,
+        padding=(0, 1),
+        collapse_padding=True,
+    )
+    table.add_column("Field", style="cyan", no_wrap=True)
+    table.add_column("Value", style="white", overflow="fold")
+    for key, value in dictionary.items():
+        table.add_row(str(key), str(value))
     if plot:
         from rich.console import Console
 

@@ -1,0 +1,98 @@
+# NH₃–CH₃Cl reaction-path campaign (pc-studix GPU queue).
+#
+# Launch from login node:
+#   cd workflows/nh3_ch3cl_reaction_path
+#   nohup bash scripts/snakemake_slurm.sh 8 > snakemake_gpu.log 2>&1 &
+#
+# Smoke matrix:
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
+#
+# Place the checkpoint at examples/m/model_ext.json (or override `checkpoint:`).
+
+checkpoint: examples/m/model_ext.json
+example_dir: examples/m
+output_root: artifacts/nh3_ch3cl_reaction_path
+box_size: 30.0
+
+# Classical sampling matrix (umbrella + ADUMB). DMC expands seeds only; NEB once.
+seeds: [0, 1, 2]
+temperatures: [250, 300, 350]   # Kelvin
+
+# Which job classes to schedule (true/false).
+enable:
+  endpoints: true
+  make_boxes: true
+  neb: true
+  dmc: true
+  umbrella_gas: true
+  umbrella_sol: true
+  adumb_gas: true
+  adumb_sol: true
+  mbar: true
+
+solvents: [tip3, acn, dmso]
+
+# Umbrella variants (name → sampling knobs). Active list selects the matrix.
+umbrella:
+  active: [smoke, medium]
+  variants:
+    smoke:
+      n_windows: 3
+      xi_min: 2.2
+      xi_max: 3.2
+      k_ev_A2: 5.0
+      nsteps: 200
+      timestep_fs_gas: 0.05
+      timestep_fs_sol: 0.5
+      printfreq: 50
+      savefreq: 50
+      runtime_min: 60
+    medium:
+      n_windows: 11
+      xi_min: 1.8
+      xi_max: 3.5
+      k_ev_A2: 10.0
+      nsteps: 10000
+      timestep_fs_gas: 0.1
+      timestep_fs_sol: 0.5
+      printfreq: 200
+      savefreq: 200
+      runtime_min: 720
+
+neb:
+  n_images: 11
+  max_steps: 200
+  fmax: 0.05
+  runtime_min: 180
+
+dmc:
+  basins: [react, product]
+  nwalker: 128
+  nstep: 1000
+  eqstep: 200
+  stepsize: 5.0e-4
+  alpha: 1200.0
+  runtime_min: 240
+
+adumb:
+  use_npz_pdb: true
+  runtime_min: 360
+
+make_boxes:
+  use_density: false
+  n_solvent: 12
+  runtime_min: 60
+
+# pc-studix GPU convention (see workflows/unified_backend_sweep).
+slurm:
+  partition: gpu
+  runtime_min: 120
+  mem_mb_per_cpu: 4000
+  cpus_per_task: 4
+  nodes: 1
+  ntasks: 1
+  gpu: 1
+  max_jobs: 8
+  # Optional:
+  # mail_user: you@example.com
+  # nodelist: gpu08,gpu09

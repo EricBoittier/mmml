@@ -333,7 +333,12 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=dyn,
-    ) as run_c_api, patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
+    ) as run_c_api, patch.dict(
+        # pycharmm.lib as well as the parent: run_dynamics finishes with
+        # sync_comparison_velocities_from_main(), which does `import pycharmm.lib`.
+        sys.modules,
+        {"pycharmm": fake_pycharmm, "pycharmm.lib": fake_pycharmm.lib},
+    ):
         run_dynamics({"iasvel": 0, "start": False, "nstep": 10})
     sync_vel.assert_not_called()
     mirror_comp.assert_not_called()

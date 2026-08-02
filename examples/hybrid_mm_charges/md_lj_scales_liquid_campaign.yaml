@@ -1,0 +1,94 @@
+# Joint LJ-scales liquid campaign (jax_mic throughout) — smoke lengths.
+#
+# Ordering: certified PSF/CRD → jaxmd settle → PyCHARMM NpT heat/eq →
+# jaxmd NVT → jaxmd NVE. Learned LJ requires jax_mic (truncated MIC), not Ewald.
+#
+# Heat settings match the fixed DCM campaign: dt=0.25 fs, Hoover, explicit
+# heat_ihtfrq (quiet would otherwise rescale once per segment). See
+# md_fixed_lj_scales_liquid_campaign.yaml for the fly-off postmortem.
+# Production: md_lj_scales_liquid_campaign.prod.yaml (LJ_MD_PROD=1).
+#
+# Override composition / from_psf / from_crd / checkpoint / mm_lj_scales_file /
+# output dirs on the CLI (see examples/lj_scales/07_deploy_md.sh).
+#
+#   uv run mmml md-system \
+#     --config examples/hybrid_mm_charges/md_lj_scales_liquid_campaign.yaml \
+#     --run-all \
+#     --checkpoint CKPT --mm-lj-scales-file SIDECAR \
+#     --from-psf BOX/model.psf --from-crd BOX/model.crd \
+#     --composition DCM:N --output-dir OUT
+
+defaults:
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales_aco_dcm/<run>/params.json
+  # mm_lj_scales_file: /path/to/.../hybrid_mm.json
+  from_psf: /path/to/boxes/dcm/model.psf
+  from_crd: /path/to/boxes/dcm/model.crd
+  composition: "DCM:1"
+  temperature: 300.0
+  pressure: 1.0
+  dt_fs: 0.25
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  mm_nonbond_mode: jax_mic
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+  skip_jit_warmup: true
+  quiet: true
+  continue_velocities: true
+  handoff_write_res: true
+  mc_density_equalize: false
+  no_echeck_heat: true
+  n_heat_segments: 8
+  heat_thermostat: hoover
+  heat_ihtfrq: 50
+  dynamics_overlap_check_interval: 100
+  # Match train/deploy cutoffs; do not loosen after handoff.
+  handoff_quality_gate: true
+  handoff_quality_fmax_eVA: 3.0
+  max_fmax_before_dyn_ev_A: 3.5
+
+campaign_output: results/lj_scales_liquid_campaign
+
+runs:
+  jaxmd_settle:
+    description: jaxmd FIRE + NVT settle from certified liquid box
+    backend: jaxmd
+    setup: pbc_nvt
+    ps: 1.0
+    jaxmd_minimize_steps: 1000
+    fire_min_steps: 400
+    continue_velocities: false
+    output_dir: results/lj_scales_liquid_campaign/jaxmd_settle
+
+  pycharmm_npt:
+    description: PyCHARMM NpT heat + equilibration (CPT)
+    backend: pycharmm
+    setup: pbc_npt
+    depends_on: jaxmd_settle
+    md_stages: "mini,heat,equi"
+    ps_heat: 2.0
+    ps_equi: 1.0
+    mm_nonbond_mode: jax_mic
+    max_fmax_before_dyn_ev_A: 3.5
+    no_echeck_heat: true
+    output_dir: results/lj_scales_liquid_campaign/pycharmm_npt
+
+  jaxmd_nvt:
+    description: jaxmd NVT production from NpT handoff
+    backend: jaxmd
+    setup: pbc_nvt
+    depends_on: pycharmm_npt
+    ps: 0.50
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 1.0
+    output_dir: results/lj_scales_liquid_campaign/jaxmd_nvt
+
+  jaxmd_nve:
+    description: jaxmd NVE production from NVT handoff
+    backend: jaxmd
+    setup: pbc_nve
+    depends_on: jaxmd_nvt
+    ps: 0.25
+    output_dir: results/lj_scales_liquid_campaign/jaxmd_nve

@@ -9,12 +9,22 @@ import numpy as np
 import pytest
 
 from mmml.cli.run.jaxmd_runner import (
+    ENSEMBLE_JAXMD_UPDATE_INTERVAL,
+    JAXMD_FIRE_DT_HIGH_F_PS,
+    JAXMD_FIRE_DT_VERY_HIGH_F_PS,
+    JAXMD_FIRE_HARD_START_MAX_STEPS_PER_STAGE,
     _nl_update_positions,
+    fire_stage_blew_up,
     jaxmd_fire_dt_backoff_schedule,
+    resolve_ensemble_jaxmd_update_interval,
     resolve_jaxmd_fire_dt_start_ps,
+    resolve_jaxmd_fire_stage_steps,
     resolve_jaxmd_steps_per_loop_call,
     resolve_mm_pair_list_capacity,
     resolve_pre_md_fire_start_positions,
+    run_jaxmd_fire_with_dt_backoff,
+    should_attempt_fire_template_rebuild,
+    should_skip_first_fire_when_pbc_fire_follows,
     should_skip_jaxmd_fire,
 )
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
@@ -27,13 +37,16 @@ PBC_RECORDING_BLOCK_STEPS = 800
 PBC_BOX_A = np.array([40.0, 40.0, 40.0])
 
 
-def resolve_pbc_loop_steps(jax_md_update_interval: int | None) -> int:
+def resolve_pbc_loop_steps(
+    jax_md_update_interval: int | None, *, ensemble: str | None = "nve"
+) -> int:
     """Resolve the production PBC case: dynamic MM pairs inside a fixed recording block."""
     return resolve_jaxmd_steps_per_loop_call(
         steps_per_recording=PBC_RECORDING_BLOCK_STEPS,
         use_pbc=True,
         has_update_fn=True,
         jax_md_update_interval=jax_md_update_interval,
+        ensemble=ensemble,
     )
 
 
@@ -128,8 +141,19 @@ def test_default_skin_rejects_disp_beyond_half_skin():
     )
 
 
-def test_resolve_steps_per_loop_call_defaults_to_one_for_pbc_with_update_fn():
-    assert resolve_pbc_loop_steps(jax_md_update_interval=None) == 1
+def test_ensemble_auto_update_intervals_rank_nvt_loosest():
+    assert resolve_ensemble_jaxmd_update_interval("nvt", None) == ENSEMBLE_JAXMD_UPDATE_INTERVAL["nvt"]
+    assert resolve_ensemble_jaxmd_update_interval("npt", 0) == ENSEMBLE_JAXMD_UPDATE_INTERVAL["npt"]
+    assert resolve_ensemble_jaxmd_update_interval("nve", None) == ENSEMBLE_JAXMD_UPDATE_INTERVAL["nve"]
+    assert ENSEMBLE_JAXMD_UPDATE_INTERVAL["nvt"] > ENSEMBLE_JAXMD_UPDATE_INTERVAL["npt"]
+    assert ENSEMBLE_JAXMD_UPDATE_INTERVAL["nvt"] > ENSEMBLE_JAXMD_UPDATE_INTERVAL["nve"]
+    assert resolve_ensemble_jaxmd_update_interval("nvt", 1) == 1
+
+
+def test_resolve_steps_per_loop_call_defaults_to_ensemble_auto_for_pbc():
+    # None/0 → NVE auto (5), not the old hard-coded 1.
+    assert resolve_pbc_loop_steps(jax_md_update_interval=None, ensemble="nve") == 5
+    assert resolve_pbc_loop_steps(jax_md_update_interval=0, ensemble="nvt") == 10
 
 
 def test_resolve_steps_per_loop_call_honors_pbc_update_interval():
@@ -148,15 +172,17 @@ def test_format_mm_pair_update_stats_summary():
     assert "reallocs=0" in line
 
 
-def test_jaxmd_and_ase_cli_defaults_use_interval_one_conservative_skin():
+def test_jaxmd_cli_defaults_use_ensemble_auto_interval_and_skin():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
     jaxmd_src = (root / "mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
     ase_src = (root / "mmml/cli/run/md_pbc_suite/ase.py").read_text(encoding="utf-8")
     assert "DEFAULT_JAX_MD_SKIN_DISTANCE_A" in jaxmd_src
-    assert "default=1" in jaxmd_src.split("jax-md-update-interval")[1][:120]
+    assert "default=0" in jaxmd_src.split("jax-md-update-interval")[1][:200]
+    assert "resolve_ensemble_jaxmd_update_interval" in jaxmd_src
     assert "DEFAULT_JAX_MD_SKIN_DISTANCE_A" in ase_src
+    # ASE path stays conservative (interval 1) until it grows the same auto policy.
     assert "default=1," in ase_src.split('"--jax-md-update-interval"')[1][:200]
     assert "default=1.75" in ase_src.split('"--jax-md-capacity-multiplier"')[1][:200]
 
@@ -164,7 +190,14 @@ def test_jaxmd_and_ase_cli_defaults_use_interval_one_conservative_skin():
 def test_resolve_jaxmd_fire_dt_start_shrinks_for_soft_geometry():
     assert resolve_jaxmd_fire_dt_start_ps(0.08) == pytest.approx(1.0e-4)
     assert resolve_jaxmd_fire_dt_start_ps(0.3) == pytest.approx(3.0e-4)
-    assert resolve_jaxmd_fire_dt_start_ps(1.0) == pytest.approx(1.0e-3)
+    assert resolve_jaxmd_fire_dt_start_ps(0.8) == pytest.approx(1.0e-3)
+
+
+def test_resolve_jaxmd_fire_dt_start_colder_for_hard_geometry():
+    """max|F| ≳ 1 must not inherit the historical 1e-3 ps inertial step."""
+    assert resolve_jaxmd_fire_dt_start_ps(1.0) == pytest.approx(JAXMD_FIRE_DT_HIGH_F_PS)
+    assert resolve_jaxmd_fire_dt_start_ps(7.0) == pytest.approx(JAXMD_FIRE_DT_VERY_HIGH_F_PS)
+    assert resolve_jaxmd_fire_dt_start_ps(7.0) < 1.0e-3
 
 
 def test_jaxmd_fire_dt_backoff_schedule_descends():
@@ -172,6 +205,78 @@ def test_jaxmd_fire_dt_backoff_schedule_descends():
     assert sched[0] == pytest.approx(1.0e-4)
     assert len(sched) >= 2
     assert sched[1] < sched[0]
+
+
+def test_fire_stage_blew_up_factor_and_abs_rise():
+    assert fire_stage_blew_up(85.0, best_max_f_eVA=6.5, stage_start_max_f_eVA=7.7)
+    # Absolute rise vs stage start (5 eV/Å) catches mid-stage spikes sooner.
+    assert fire_stage_blew_up(13.0, best_max_f_eVA=6.5, stage_start_max_f_eVA=7.7)
+    assert not fire_stage_blew_up(8.0, best_max_f_eVA=6.5, stage_start_max_f_eVA=7.7)
+
+
+def test_should_skip_first_fire_when_pbc_fire_follows():
+    assert should_skip_first_fire_when_pbc_fire_follows(
+        use_pbc=True, first_fire_steps=1000, pbc_fire_steps=500
+    )
+    assert not should_skip_first_fire_when_pbc_fire_follows(
+        use_pbc=True, first_fire_steps=1000, pbc_fire_steps=0
+    )
+    assert not should_skip_first_fire_when_pbc_fire_follows(
+        use_pbc=False, first_fire_steps=1000, pbc_fire_steps=500
+    )
+
+
+def test_resolve_jaxmd_fire_stage_steps_caps_hard_starts():
+    assert resolve_jaxmd_fire_stage_steps(1000, 7.0) == JAXMD_FIRE_HARD_START_MAX_STEPS_PER_STAGE
+    assert resolve_jaxmd_fire_stage_steps(1000, 0.2) == 1000
+
+
+def test_should_attempt_fire_template_rebuild_on_blowup_or_stall():
+    assert should_attempt_fire_template_rebuild(
+        {"stages": [{"blew_up": True}], "start_max_f": 7.0},
+        6.5,
+    )
+    assert should_attempt_fire_template_rebuild(
+        {"stages": [{"blew_up": False}], "start_max_f": 7.0},
+        6.8,
+    )
+    assert not should_attempt_fire_template_rebuild(
+        {"stages": [{"blew_up": False}], "start_max_f": 7.0},
+        0.5,
+    )
+
+
+def test_run_jaxmd_fire_aborts_stage_on_blowup_and_tries_colder_dt():
+    """A force spike must not freeze the backoff after a tiny early improvement."""
+    masses = jnp.ones(2)
+    pos0 = jnp.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    call = {"n": 0}
+
+    def force_fn(pos, **_kwargs):
+        call["n"] += 1
+        # First evaluations soft; after a few steps explode (stage blow-up).
+        if call["n"] < 4:
+            return jnp.array([[0.2, 0.0, 0.0], [-0.2, 0.0, 0.0]])
+        return jnp.array([[20.0, 0.0, 0.0], [-20.0, 0.0, 0.0]])
+
+    def shift_fn(R, dR, **_kwargs):
+        return R + dR
+
+    _pos, best_f, info = run_jaxmd_fire_with_dt_backoff(
+        force_fn=force_fn,
+        shift_fn=shift_fn,
+        positions=pos0,
+        masses=masses,
+        n_steps=20,
+        dt_schedule=(1.0e-3, 3.0e-4),
+        worsen_limit=100,
+        blowup_factor=3.0,
+    )
+    assert info["blew_up"] is True
+    assert any(s.get("blew_up") for s in info["stages"])
+    # Must advance past the first (hot) stage rather than declaring success.
+    assert len(info["stages"]) >= 2
+    assert best_f < 20.0
 
 
 def test_should_skip_jaxmd_fire_when_already_soft():

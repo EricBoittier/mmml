@@ -23,21 +23,27 @@ Convert Molpro XML files to standardized NPZ format
 positional arguments:
   inputs                Input XML file(s) or directory/directories
 
-options:
-  -h, --help            show this help message and exit
+Execution:
+  --continue-on-error   Continue processing even if some files fail
+
+Output & artifacts:
   -o, --output OUTPUT   Output NPZ file path
+
+Diagnostics & safety:
+  -h, --help            show this help message and exit
+  --validate            Validate output NPZ file against schema
+  --no-validate         Skip validation (faster but not recommended)
+  --strict              Use strict validation (fail on warnings)
+  --quiet, -q           Suppress progress output
+  --verbose, -v         Verbose output
+
+Other options:
   --padding PADDING     Number of atoms to pad to (default: 60)
   --no-variables        Exclude Molpro internal variables from output
   --first-geometry      Use first geometry from files with multiple geometries
                         (default: use last/final)
   --recursive, -r       Recursively search directories for XML files
-  --validate            Validate output NPZ file against schema
-  --no-validate         Skip validation (faster but not recommended)
-  --strict              Use strict validation (fail on warnings)
   --summary SUMMARY     Save conversion summary to JSON file
-  --quiet, -q           Suppress progress output
-  --verbose, -v         Verbose output
-  --continue-on-error   Continue processing even if some files fail
   --max-files MAX_FILES
                         Maximum number of files to process (for testing)
 

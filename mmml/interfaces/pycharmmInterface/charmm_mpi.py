@@ -39,6 +39,20 @@ def _truthy(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
 
 
+def _tempdir() -> Path:
+    """Return the process temp directory, honoring ``TMPDIR``/``TMP``/``TEMP``.
+
+    ``tempfile.gettempdir()`` caches its first resolution for the process, so
+    tests (and wrappers) that set ``TMPDIR`` after import would otherwise still
+    stage under ``/tmp``. Read the env vars on each call instead.
+    """
+    for key in ("TMPDIR", "TMP", "TEMP"):
+        raw = (os.environ.get(key) or "").strip()
+        if raw:
+            return Path(raw)
+    return Path(tempfile.gettempdir())
+
+
 def _under_mpirun() -> bool:
     return any(
         os.environ.get(k) is not None
@@ -67,8 +81,13 @@ def _openmpi_env_without_launch() -> bool:
 
 
 def _charmm_lib_path() -> Path | None:
-    from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
+    from mmml.interfaces.pycharmmInterface.charmm_paths import (
+        bootstrap_charmm_env,
+        charmm_disabled,
+    )
 
+    if charmm_disabled():
+        return None
     bootstrap_charmm_env()
     lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
     if not lib_dir:
@@ -710,8 +729,17 @@ def mpi_diagnostic_env_defaults() -> None:
 
 
 def mpi_mpirun_extra_args() -> list[str]:
-    """Extra ``mpirun`` argv tokens for crash diagnostics."""
+    """Extra ``mpirun`` argv tokens for crash diagnostics and clean exit codes.
+
+    OpenMPI/PRRTE can return the exit status of a *secondary* (spawned) job even
+    when the primary mmml process exits 0 — often accompanied by empty
+    "PRRTE was built without Sphinx" help blocks. Default to reporting only the
+    primary job's status so successful CHARMM/jaxmd campaigns are not marked
+    failed by helper-process teardown.
+    """
     args: list[str] = []
+    if not _truthy("MMML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY"):
+        args.append("--report-child-jobs-separately")
     if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
         args.extend(["--mca", "pmix", "^ext3x"])
         mca_dir = openmpi_mca_component_dir()
@@ -1190,6 +1218,13 @@ def _invoke_charmm_script(
         charmm_relaxed_bomlev,
     )
 
+    # Library ``eval_charmm_script`` does not uppercase (unlike ``rdcmnd``), so
+    # ``cons``/``open`` miss the Fortran ``CONS``/``OPEN`` cases. Match legacy
+    # pycharmm ``_charmm_script_line`` and pass uppercase cards.
+    card = str(script or "").strip().upper()
+    if not card:
+        return True
+
     if relaxed_bomlev:
         ctx = charmm_relaxed_bomlev()
     elif quiet:
@@ -1197,7 +1232,7 @@ def _invoke_charmm_script(
     else:
         ctx = nullcontext()
     with ctx:
-        return bool(lingo.charmm_script(script))
+        return bool(lingo.charmm_script(card))
 
 
 def configure_mpi_bootstrap_env() -> None:
@@ -1348,7 +1383,7 @@ def stage_topology_files_for_rank(
 ) -> dict[str, Path]:
     """Copy topology artifacts to ``$TMPDIR/mmml_mpi_bootstrap/rank<R>_<uuid>/``."""
     run_id = uuid.uuid4().hex
-    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base = _tempdir() / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
     base.mkdir(parents=True, exist_ok=True)
     staged: dict[str, Path] = {"staging_dir": base.resolve()}
     for key, src in paths.items():
@@ -1377,7 +1412,7 @@ def prepare_rank_local_bootstrap_paths(
 ) -> dict[str, Path]:
     """Stage PSF/CRD/PRM (and optional RTF/res) under a per-rank UUID directory."""
     run_id = uuid.uuid4().hex
-    base = Path(tempfile.gettempdir()) / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base = _tempdir() / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
     base.mkdir(parents=True, exist_ok=True)
 
     if rtf_path is not None and Path(rtf_path).is_file():

@@ -95,9 +95,19 @@ def test_run_scan_2d_accepts_dimer_cluster() -> None:
         metric_keys=("energy_kcal", "min_inter_01", "min_inter_02"),
     )
     assert out["energy_kcal"].shape == (2, 2)
-    assert np.all(out["energy_kcal"] == d1_grid[:, None])
-    assert np.all(out["min_inter_01"] == d1_grid[:, None])
+    # Dimer 2D: monomer B at (d01, d02, 0) → COM distance sqrt(d01² + d02²).
+    expected = np.sqrt(d1_grid[:, None] ** 2 + d2_grid[None, :] ** 2)
+    assert np.allclose(out["energy_kcal"], expected)
+    assert np.allclose(out["min_inter_01"], expected)
     assert np.all(np.isnan(out["min_inter_02"]))
+
+
+def test_place_dimer_uses_lateral_offset() -> None:
+    atoms_per = [1, 1]
+    ref = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=float)
+    pos = place_trimer(ref, atoms_per, d01=4.0, d02=3.0, angle_02_rad=0.0)
+    assert pos[1] == pytest.approx(np.array([4.0, 3.0, 0.0]))
+    assert com_distances(pos, atoms_per)[0] == pytest.approx(5.0)
 
 
 def test_run_scan_2d_accepts_more_than_three_monomers() -> None:
@@ -168,6 +178,16 @@ def test_atoms_per_monomer_from_psf_rejects_residue_table_as_atom_resids(monkeyp
 def test_scan_mlpot_dimer_2d_pycharmm_batch_parse() -> None:
     mod = _load_scan_script()
     assert mod._parse_batch_compositions("DCM:2, ACO:4") == ["DCM:2", "ACO:4"]
+
+
+def test_default_scan_2d_metric_keys_include_wall_E() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        default_scan_2d_metric_keys,
+    )
+
+    keys = default_scan_2d_metric_keys(include_mm=True)
+    assert "wall_E_kcal" in keys
+    assert "mm_E_kcal" in keys
 
 
 def test_scan_mlpot_dimer_2d_pycharmm_help_accepts_dimer_example(capsys) -> None:

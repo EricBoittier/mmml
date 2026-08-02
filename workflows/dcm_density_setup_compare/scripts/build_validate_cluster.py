@@ -152,7 +152,9 @@ def main() -> int:
         box_size=float(cell.box_size),
     )
     print(f"Cluster validation OK -> {summary_path}", flush=True)
-    print(json.dumps(summary, indent=2), flush=True)
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(summary)
     return 0
 
 

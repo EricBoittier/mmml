@@ -5,7 +5,9 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-
+from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+    encode_geometry_and_basis,
+)
 
 
 class DCMNetCharges(nn.Module):
@@ -94,20 +96,18 @@ class DCMNetCharges(nn.Module):
             - atomic_mono: Distributed monopoles, shape (batch_size * natoms, n_dcm)
             - atomic_dipo: Distributed dipole positions, shape (batch_size * natoms, n_dcm, 3)
         """
-        # 1. Calculate displacement vectors.
-        positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
-        positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
-        displacements = positions_src - positions_dst  # Shape (num_pairs, 3).
-
-        # 2. Expand displacement vectors in basis functions.
-        basis = e3x.nn.basis(
-            # Shape (num_pairs, 1, (max_degree+1)**2, num_basis_functions).
-            displacements,
-            num=self.num_basis_functions,
+        # 1–2. Shared non-parametric encode (displacements + basis).
+        # Embed / MessagePass stay local so Flax param names stay stable.
+        basis, displacements = encode_geometry_and_basis(
+            positions,
+            dst_idx,
+            src_idx,
+            num_basis_functions=self.num_basis_functions,
             max_degree=self.max_degree,
+            cutoff=self.cutoff,
             radial_fn=e3x.nn.reciprocal_bernstein,
-            cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
+        del displacements  # DCM readout uses positions, not pair vectors
 
         x = e3x.nn.Embed(
             num_embeddings=self.max_atomic_number + 1, features=self.features

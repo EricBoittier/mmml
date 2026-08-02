@@ -105,7 +105,9 @@ def main() -> None:
     legend_outside(fig, side="bottom", fontsize=9)
     fig.tight_layout()
     fig.savefig(args.output_dir / "boundary_scan.png", dpi=200, bbox_inches="tight")
-    print(json.dumps({k: result[k] for k in result if k.startswith("max_")}, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json({k: result[k] for k in result if k.startswith("max_")})
 
 if __name__ == "__main__":
     main()

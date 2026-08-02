@@ -15,6 +15,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from mmml.utils.rich_report import make_compact_table
+
 
 def _ensure_np(arr: Any) -> np.ndarray:
     """Convert JAX/other arrays to numpy for stats."""
@@ -297,6 +299,19 @@ def _scale_bar(fraction: float, width: int = _BAR_WIDTH, color: str = "cyan") ->
     return t
 
 
+def _format_do_mm_summary(do_mm: bool, *, mm_nonbond_mode: Optional[str] = None) -> str:
+    """Human-readable JAX doMM flag (periodic_external turns JAX MM off on purpose)."""
+    mode = str(mm_nonbond_mode or "").strip().lower()
+    if do_mm:
+        return "[green]✓[/green] JAX real-space LJ/Coulomb"
+    if mode == "periodic_external":
+        return (
+            "[yellow]✗[/yellow] JAX off by design — solvent–solute MM via "
+            "CHARMM IMAGE VDW + Ewald"
+        )
+    return "[red]✗[/red] no JAX MM pairs (ML-only)"
+
+
 def print_calculator_summary(
     cutoff_params: Any,
     *,
@@ -313,6 +328,8 @@ def print_calculator_summary(
     wall: Optional[dict] = None,
     energy_terms: Optional[dict] = None,
     extra: Optional[dict] = None,
+    mm_nonbond_mode: Optional[str] = None,
+    ml_resnames: Optional[Any] = None,
     console: Optional[Console] = None,
 ) -> None:
     """Print a rich, colored summary of the hybrid calculator configuration.
@@ -377,7 +394,7 @@ def print_calculator_summary(
     legend.append(" inactive", style="dim white")
 
     # ── Scale table ──────────────────────────────────────────────────────────
-    table = Table(title="[bold green]Calculator Configuration[/bold green]", show_header=True)
+    table = make_compact_table(show_header=True)
     table.add_column("Parameter", style="bright_cyan", no_wrap=True)
     table.add_column("Value", style="white")
 
@@ -393,9 +410,21 @@ def print_calculator_summary(
         table.add_row("Atoms", str(n_atoms))
 
     table.add_row("doML", "[green]✓[/green]" if doML else "[red]✗[/red]")
-    table.add_row("doMM", "[green]✓[/green]" if doMM else "[red]✗[/red]")
+    table.add_row("doMM (JAX)", _format_do_mm_summary(doMM, mm_nonbond_mode=mm_nonbond_mode))
     table.add_row("doML_dimer", "[green]✓[/green]" if doML_dimer else "[red]✗[/red]")
     table.add_row("Complementary handoff", "[green]✓[/green]" if complementary_handoff else "[yellow]legacy[/yellow]")
+    if mm_nonbond_mode:
+        table.add_row("mm_nonbond_mode", str(mm_nonbond_mode))
+    if ml_resnames:
+        names = (
+            ", ".join(str(x) for x in ml_resnames)
+            if isinstance(ml_resnames, (list, tuple))
+            else str(ml_resnames)
+        )
+        table.add_row(
+            "ml_resnames (USER)",
+            f"[green]{names}[/green] — solvent stays CHARMM MM",
+        )
     if energy_terms:
         table.add_row("─" * 22, "─" * 22)
         table.add_row("[bold]ML energy terms[/bold]", "")
@@ -408,22 +437,31 @@ def print_calculator_summary(
     table.add_row("ML fully-on range (Å)", f"0 → [bright_blue]{ml_full_end:.3f}[/bright_blue]")
     table.add_row("ML/MM handoff range (Å)", f"[bright_blue]{ml_full_end:.3f}[/bright_blue] → [bright_yellow]{mm_on:.3f}[/bright_yellow]")
     table.add_row("MM tail range (Å)", f"[bright_yellow]{mm_on:.3f}[/bright_yellow] → [bright_red]{mm_outer_end:.3f}[/bright_red]")
+    if str(mm_nonbond_mode or "").strip().lower() == "periodic_external":
+        table.add_row(
+            "MM engine (solvent–solute)",
+            "[green]CHARMM[/green] IMAGE VDW + Ewald (JAX doMM off by design)",
+        )
     if wall is not None:
         table.add_row("─" * 22, "─" * 22)
         w_on = bool(wall.get("enabled", False))
         table.add_row(
             "Short-range wall",
-            "[green]✓[/green]" if w_on else "[dim]off[/dim]",
+            "[green]✓[/green] MD safety net" if w_on else "[dim]off[/dim]",
         )
         if w_on:
-            # The MM LJ wall is tapered off below (mm_switch_on - ml_switch_width)
-            # and the ML model has no repulsive prior outside its data, so this is
-            # what stops atoms collapsing at close range. Zero above r_on.
+            # Pair-distance prior for catastrophic overlap when MM LJ is tapered
+            # off. Not part of the COM handoff, and not what the 2D dimer scan
+            # (COM ≥ ~3.5 Å) validates — see wall_E on scan NPZs when present.
             table.add_row("wall onset r_on (pair Å)", f"[magenta]{wall['r_on_Å']:.3f}[/magenta]")
             table.add_row("wall stiffness k (eV·Å²)", f"[magenta]{wall['k_eV_A2']:.3f}[/magenta]")
             table.add_row(
                 "wall active range (pair Å)",
                 f"0 → [magenta]{wall['r_on_Å']:.3f}[/magenta] (0 above; inter-monomer only)",
+            )
+            table.add_row(
+                "wall vs dimer scan",
+                "[dim]pair Å prior; not on COM ruler / not a scanned handoff term[/dim]",
             )
 
     if zbl is not None:
@@ -448,8 +486,14 @@ def print_calculator_summary(
         for k, v in extra.items():
             table.add_row(str(k), str(v))
 
-    # Assemble panel content
+    # Keep the scientifically useful ruler, without nested panels or borders.
     from rich.console import Group
+    pair_note = Text(
+        "  Note: ZBL and the short-range wall are pair-Å MD priors "
+        "(not COM handoff). The 2D dimer scan validates COM switching; "
+        "it does not place those terms on this ruler.",
+        style="dim magenta",
+    )
     inner = Group(
         table,
         Text(""),
@@ -460,15 +504,10 @@ def print_calculator_summary(
         Text("  ") + legend,
         Text(""),
         Text(f"  ruler scale: 0 → {ruler_max:.1f} Å", style="dim white"),
-        Text(
-            "  ZBL cutoffs and the short-range wall are pair distances "
-            "(recorded above), not on this COM ruler.",
-            style="dim magenta",
-        )
-        if zbl is not None
-        else Text(""),
+        pair_note if (zbl is not None or wall is not None) else Text(""),
     )
-    c.print(Panel(inner, title="[bold green]Calculator Summary[/bold green]", border_style="green"))
+    c.print("[bold green]Calculator Summary[/bold green]")
+    c.print(inner)
 
 
 def print_neighbor_list_summary(
@@ -490,7 +529,7 @@ def print_neighbor_list_summary(
     """Print a rich summary of neighbor-list configuration and initial capacities."""
     c = console or Console()
 
-    table = Table(title="[bold magenta]Neighbor List Configuration[/bold magenta]", show_header=True)
+    table = make_compact_table(show_header=True)
     table.add_column("Property", style="bright_magenta", no_wrap=True)
     table.add_column("Value", style="white")
 
@@ -528,9 +567,41 @@ def print_neighbor_list_summary(
             table.add_row("JAX-MD fill fraction", f"{fill_jax * 100:.1f}%")
             bars.append(("JAX-MD NL", jax_md_n_valid, jax_md_capacity, "bright_green"))
 
+    # Sparse ML-dimer slot budget vs all monomer pairs (always known at setup,
+    # unlike jax_md_n_valid which is often still null when this summary prints).
+    sparse_cap = None
+    dimers_total = None
+    if extra:
+        if "max_active_dimers" in extra and extra["max_active_dimers"] is not None:
+            try:
+                sparse_cap = int(extra["max_active_dimers"])
+            except (TypeError, ValueError):
+                sparse_cap = None
+        if "dimers_total" in extra and extra["dimers_total"] is not None:
+            try:
+                dimers_total = int(extra["dimers_total"])
+            except (TypeError, ValueError):
+                dimers_total = None
+    if (
+        sparse_cap is not None
+        and dimers_total is not None
+        and dimers_total > 0
+        and sparse_cap > 0
+    ):
+        table.add_row("─" * 22, "─" * 22)
+        table.add_row("Sparse ML dimer cap", f"{sparse_cap:,}")
+        table.add_row("Monomer dimer pairs", f"{dimers_total:,}")
+        table.add_row(
+            "Sparse cap / all pairs",
+            f"{100.0 * sparse_cap / dimers_total:.1f}%",
+        )
+        bars.append(("Sparse ML dimers", sparse_cap, dimers_total, "bright_yellow"))
+
     if extra:
         table.add_row("─" * 22, "─" * 22)
         for k, v in extra.items():
+            if k in ("max_active_dimers", "dimers_total"):
+                continue  # already shown above when both present
             table.add_row(str(k), str(v))
 
     # Build bar chart rows
@@ -548,7 +619,8 @@ def print_neighbor_list_summary(
 
     from rich.console import Group
     inner_parts: list[Any] = [table] + bar_lines
-    c.print(Panel(Group(*inner_parts), title="[bold magenta]Neighbor Lists[/bold magenta]", border_style="magenta"))
+    c.print("[bold magenta]Neighbor Lists[/bold magenta]")
+    c.print(Group(*inner_parts))
 
 
 def build_calculator_summary_dict(
@@ -617,4 +689,3 @@ def save_calculator_summary_json(
     d = build_calculator_summary_dict(cutoff_params, **kwargs)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(json.dumps(d, indent=2), encoding="utf-8")
-

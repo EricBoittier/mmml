@@ -31,9 +31,43 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _overlap_for_stage,
     _publish_staged_handoff,
     _prior_restart_for_stage,
+    _seed_charmm_coords_from_dynamics_restart,
     _should_seed_heat_prior_restart,
+    _should_skip_pre_dyn_fmax_gate,
+    should_auto_resume_failed_staged_run,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+
+
+def test_should_auto_resume_failed_staged_run_from_stage_summary(tmp_path: Path):
+    (tmp_path / "stage_summary.json").write_text(
+        '{"exit_code": 2}',
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(restart_from=None, rebuild_packmol=False, quiet=True)
+    assert should_auto_resume_failed_staged_run(args, out_dir=tmp_path) is True
+
+
+def test_should_auto_resume_skips_when_rebuild_packmol(tmp_path: Path):
+    (tmp_path / "stage_summary.json").write_text(
+        '{"exit_code": 2}',
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(restart_from=None, rebuild_packmol=True, quiet=True)
+    assert should_auto_resume_failed_staged_run(args, out_dir=tmp_path) is False
+
+
+def test_should_auto_resume_skips_when_restart_from_set(tmp_path: Path):
+    (tmp_path / "stage_summary.json").write_text(
+        '{"exit_code": 2}',
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(
+        restart_from=str(tmp_path / "baseline.res"),
+        rebuild_packmol=False,
+        quiet=True,
+    )
+    assert should_auto_resume_failed_staged_run(args, out_dir=tmp_path) is False
 
 
 def test_resolve_md_stages_pycharmm_full():
@@ -146,6 +180,19 @@ def test_mlpot_pbc_flag_enables_mic_on_free_setup_with_box():
     assert resolve_mlpot_use_pbc(args) is True
 
 
+def test_ewald_auto_enables_mlpot_pbc_with_charmm_box():
+    """lr_solver=ewald needs a cell; do not leave open-boundary loose PBC."""
+    args = argparse.Namespace(
+        setup="pycharmm_full",
+        free_space=False,
+        box_size=30.0,
+        mlpot_pbc=False,
+        lr_solver="ewald",
+    )
+    assert resolve_charmm_use_pbc(args) is True
+    assert resolve_mlpot_use_pbc(args) is True
+
+
 def test_pbc_setup_enables_both():
     args = argparse.Namespace(setup="pbc_nve", free_space=False, box_size=None)
     assert resolve_charmm_use_pbc(args) is True
@@ -185,6 +232,102 @@ def test_prior_restart_for_equi_falls_back_to_heat_without_nve(tmp_path: Path):
 
     got = _prior_restart_for_stage("equi", paths, restart_from=None)
     assert got == paths["heat_res"]
+
+
+def test_prior_restart_for_equi_prefers_final_heat_segment(tmp_path: Path):
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        stage_segment_restart,
+    )
+
+    paths = _artifact_paths(tmp_path, "dcm_60")
+    heat_final = stage_segment_restart(tmp_path, "heat", 7)
+    heat_final.write_text("heat-seg\n", encoding="utf-8")
+    paths["heat_res"].write_text("heat-legacy\n", encoding="utf-8")
+
+    got = _prior_restart_for_stage(
+        "equi", paths, restart_from=None, n_heat_segments=8
+    )
+    assert got == heat_final
+
+
+def test_seed_charmm_coords_from_dynamics_restart_loads_heat(tmp_path: Path):
+    heat = tmp_path / "heat.7.res"
+    heat.write_text("heat\n", encoding="utf-8")
+    pos = np.zeros((9, 3), dtype=np.float64)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+        return_value=pos,
+    ) as read_coords, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as sync, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+    ):
+        assert _seed_charmm_coords_from_dynamics_restart(heat, quiet=True) is True
+    read_coords.assert_called_once()
+    sync.assert_called_once()
+    np.testing.assert_array_equal(sync.call_args[0][0], pos)
+
+
+def test_seed_charmm_coords_from_dynamics_restart_skips_handoff_seed(tmp_path: Path):
+    seed = tmp_path / "continue_seed.res"
+    seed.write_text("seed\n", encoding="utf-8")
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+    ) as read_coords:
+        assert _seed_charmm_coords_from_dynamics_restart(seed, quiet=True) is False
+    read_coords.assert_not_called()
+
+
+def test_should_skip_pre_dyn_fmax_gate_for_equi_from_heat():
+    """Equi-from-heat must not apply the 2 eV/Å cold-start |F|max ceiling."""
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=True, dyn_stages=["equi"]
+    )
+    # Seed may fail (unreadable restart) but --restart-from heat.N.res still skips.
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["equi"],
+        restart_from="heat.7.res",
+    )
+    # Memory handoff uses continue_seed.res; coords are already finite-T liquid.
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["prod"],
+        restart_from="handoff/continue_seed.res",
+    )
+    # Failed-prod resume may point at baseline.res while handoff still holds liquid.
+    assert _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["prod"],
+        restart_from="baseline.res",
+        handoff_coords_in_memory=True,
+    )
+    assert not _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["equi"],
+        restart_from=None,
+    )
+    assert not _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=False,
+        dyn_stages=["prod"],
+        restart_from="baseline.res",
+        handoff_coords_in_memory=False,
+    )
+    assert not _should_skip_pre_dyn_fmax_gate(
+        seeded_from_dynamics_restart=True, dyn_stages=["heat"]
+    )
+
+
+def test_is_dynamics_stage_restart_path():
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _is_dynamics_stage_restart_path,
+    )
+
+    assert _is_dynamics_stage_restart_path("heat.7.res")
+    assert _is_dynamics_stage_restart_path("heat.res")
+    assert _is_dynamics_stage_restart_path("/tmp/nve.res")
+    assert not _is_dynamics_stage_restart_path("continue_seed.res")
+    assert not _is_dynamics_stage_restart_path("pretreat/charmm_mm_equi.res")
 
 
 def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
@@ -506,7 +649,7 @@ def test_build_stage_dynamics_kw_heat_auto_no_echeck_heat_disables_echeck():
         restart=False,
         use_pbc=True,
     )
-    assert kw["echeck"] == -1.0
+    assert kw["echeck"] == pytest.approx(1.0e30)
 
 
 def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
@@ -524,7 +667,7 @@ def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
         restart=False,
         use_pbc=True,
     )
-    assert kw["echeck"] == -1.0
+    assert kw["echeck"] == pytest.approx(1.0e30)
     assert "cpt" not in kw
     assert kw["ihtfrq"] > 0
 
@@ -1206,6 +1349,8 @@ def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
     assert kw["start"] is True
     assert kw["iasvel"] == 1
     assert kw["iunrea"] == -1
+    assert kw["firstt"] == pytest.approx(280.0)
+    assert kw["tstruct"] == pytest.approx(280.0)
     assert io.restart_read is None
 
 

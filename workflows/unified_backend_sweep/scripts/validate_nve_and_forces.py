@@ -130,7 +130,10 @@ def main() -> None:
         "mean_rel_error": float(rel_err.mean()),
         "max_force_component_ev_per_A": float(np.abs(analytic_force).max()),
     }
-    print("Finite-difference force check:", json.dumps(fd_report, indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print("Finite-difference force check:")
+    print_colored_json(fd_report)
 
     # --- 2. Dense-recorded NVE trajectory: real conservation signature. ---
     driver = JaxmdDriver(
@@ -160,7 +163,8 @@ def main() -> None:
         "max_abs_deviation_from_mean_ev": float(np.max(np.abs(energies - energies.mean()))),
         "drift_per_step_ev": float((energies[-1] - energies[0]) / max(args.n_steps, 1)),
     }
-    print("Dense-recorded NVE energy trace:", json.dumps(nve_report, indent=2))
+    print("Dense-recorded NVE energy trace:")
+    print_colored_json(nve_report)
 
     (output_dir / "report.json").write_text(
         json.dumps({"finite_difference": fd_report, "nve_energy_trace": nve_report}, indent=2)

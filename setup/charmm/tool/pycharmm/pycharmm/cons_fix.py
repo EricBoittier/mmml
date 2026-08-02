@@ -37,8 +37,8 @@ Fix all atoms in a segment named PROT
 
 import ctypes
 
-import pycharmm
 import pycharmm.lib as lib
+from .select_atoms import SelectAtoms
 
 
 def turn_off(comparison=False):
@@ -56,7 +56,7 @@ def turn_off(comparison=False):
 
 
     """
-    none_selected = pycharmm.SelectAtoms()
+    none_selected = SelectAtoms()
     status = setup(none_selected, comparison)
     return status
 
@@ -67,7 +67,7 @@ def setup(selection, comparison=False, purge=False,
 
     Parameters
     ----------
-    selection : pycharmm.SelectAtoms  
+    selection : SelectAtoms  
                 selection[i] == 1 <=> apply constraints to atom i
     comparison : bool
                 if true, do constraints on comparison set instead of main set

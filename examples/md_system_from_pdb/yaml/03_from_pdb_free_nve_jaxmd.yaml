@@ -1,0 +1,15 @@
+# 03 — Full-system PDB → JAX-MD vacuum NVE
+#
+#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/03_from_pdb_free_nve_jaxmd.yaml
+#   bash examples/md_system_from_pdb/03_from_pdb_free_nve_jaxmd.sh
+
+setup: free_nve
+backend: jaxmd
+from_pdb: mmml/generate/sample/pdb/aco_monomer.pdb
+checkpoint: examples/ckpts_json/DESdimers_params.json
+ps: 0.1
+dt_fs: 0.5
+skip_jit_warmup: true
+quiet: true
+output_dir: artifacts/md_system_from_pdb/03_free_nve_jaxmd
+seed: 42

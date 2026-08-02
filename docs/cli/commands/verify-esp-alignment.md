@@ -18,13 +18,19 @@ usage: mmml verify-esp-alignment [-h] -i INPUT [--sample SAMPLE]
 
 Verify esp-grid alignment in evaluated NPZ (data generation check).
 
-options:
-  -h, --help           show this help message and exit
+Input & configuration:
   -i, --input INPUT    Input NPZ (e.g. 07_evaluated.npz)
-  --sample SAMPLE      Sample index to check (default 0)
-  --n-points N_POINTS  Number of grid points to verify (default 200, for speed)
+
+Scientific model:
   --basis BASIS        Basis (default def2-SVP)
   --xc XC              XC functional (default PBE0)
+
+Diagnostics & safety:
+  -h, --help           show this help message and exit
+
+Other options:
+  --sample SAMPLE      Sample index to check (default 0)
+  --n-points N_POINTS  Number of grid points to verify (default 200, for speed)
   --grid-in-angstrom   Grid coords already in Angstrom (e.g. from fix-and-
                        split). Default: Bohr (pyscf-evaluate)
 
@@ -35,7 +41,15 @@ alignment -i 07_evaluated.npz mmml verify-esp-alignment -i 07_evaluated.npz
 --sample 0 --n-points 200
 ```
 
+## Visual examples
 
+![ESP from explicit distributed charge sites](../../images/povray-overlays/distributed_charge_esp.png)
+
+![Distributed sites and equivalent multipoles](../../images/povray-overlays/distributed_charge_model.png)
+
+## Related docs
+
+- [DCMNet calculators and ESP](../../dcmnet_calculators.md)
 
 ---
 

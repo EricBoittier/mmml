@@ -17,22 +17,28 @@ usage: mmml make-res [-h] [--res RES] [--list-residues] [--no-pager]
 
 Generate a CGENFF residue (PDB, PSF, topology) via PyCHARMM.
 
-options:
-  -h, --help          show this help message and exit
-  --res RES           CGENFF residue name (RESI in top_all36_cgenff.rtf), e.g.
-                      ACO, CYBZ, TIP3.
+Input & configuration:
   --list-residues     List valid CGENFF residue names and descriptions (opens
                       less on a TTY).
-  --no-pager          With --list-residues, print the table to stdout instead of
-                      piping to less.
+
+Scientific model:
   --skip-energy-show  Skip the final CHARMM energy.show() (avoids segfault on
                       some clusters/SLURM).
+
+Diagnostics & safety:
+  -h, --help          show this help message and exit
+
+Other options:
+  --res RES           CGENFF residue name (RESI in top_all36_cgenff.rtf), e.g.
+                      ACO, CYBZ, TIP3.
+  --no-pager          With --list-residues, print the table to stdout instead of
+                      piping to less.
 
 Examples: mmml make-res --list-residues mmml make-res --list-residues --no-pager
 | grep -i acetone mmml make-res --res ACO
 ```
 
-## Example structures
+## Visual examples
 
 ![Acetone monomer (ACO)](../../images/structures/make-res-aco.png)
 

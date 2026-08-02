@@ -64,6 +64,10 @@ CONVERSION = {
     "forces": 1 / (ase.units.kcal / ase.units.mol),
 }
 
+# Explicit eV -> kcal/mol for the streaming per-epoch line, which must state a
+# unit that does not depend on whatever `conversion` the caller passed.
+_EV_TO_KCAL_MOL = 1 / (ase.units.kcal / ase.units.mol)
+
 def is_valid_advanced_batch_config(batch_args_dict):
     """
     Check if batch arguments dictionary has valid advanced batching configuration.
@@ -125,6 +129,10 @@ def train_model(
     optimizer=None,
     transform=None,
     schedule_fn=None,
+    # Global-norm gradient clip. None keeps get_optimizer's default (10.0),
+    # which is loose enough that most steps pass through unclipped; lower it
+    # (~1.0) when the raw params oscillate instead of converging.
+    clip_global=None,
     objective="valid_forces_mae",
     ckpt_dir=BASE_CKPT_DIR,
     log_tb=False,
@@ -362,6 +370,7 @@ def train_model(
         schedule_fn=schedule_fn,
         optimizer=optimizer,
         transform=transform,
+        **({} if clip_global is None else {"clip_global": float(clip_global)}),
     )
 
     train_params_dict = {
@@ -406,11 +415,32 @@ def train_model(
         import json
 
         from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+        from mmml.models.mm_lj_scales import (
+            cgenff_type_names_from_prm,
+            mm_lj_scales_metadata,
+        )
 
         CKPT_DIR.mkdir(parents=True, exist_ok=True)
+        _meta = hybrid_mm_metadata_dict(hybrid_mm)
+        if bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+            try:
+                _names = cgenff_type_names_from_prm()
+                if len(_names) == len(hybrid_mm.master_sigmas):
+                    _meta.update(
+                        mm_lj_scales_metadata(
+                            learn_mm_lj_scales=True,
+                            type_names=_names,
+                            sigma_bounds=hybrid_mm.mm_lj_sigma_scale_bounds,
+                            epsilon_bounds=hybrid_mm.mm_lj_epsilon_scale_bounds,
+                            trainable_mask=hybrid_mm.mm_lj_trainable_mask,
+                            type_frame_counts=hybrid_mm.mm_lj_type_frame_counts,
+                        )
+                    )
+            except Exception as exc:  # pragma: no cover - PRM missing in some envs
+                print(f"WARNING: could not resolve CGenFF type names: {exc}", flush=True)
         _meta_path = CKPT_DIR / "hybrid_mm.json"
         with open(_meta_path, "w") as _mf:
-            json.dump(hybrid_mm_metadata_dict(hybrid_mm), _mf, indent=2)
+            json.dump(_meta, _mf, indent=2)
             _mf.write("\n")
         print(f"Wrote hybrid MM metadata to {_meta_path}", flush=True)
 
@@ -449,6 +479,10 @@ def train_model(
         dst_idx=dst_idx,
         src_idx=src_idx,
     )
+    if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+        fresh_params = attach_mm_lj_scales(fresh_params, len(hybrid_mm.master_sigmas))
     # Use caller-supplied params (e.g. transplanted from a previous stage)
     # when available, falling back to fresh random init.
     if init_params is not None and not restart:
@@ -477,6 +511,12 @@ def train_model(
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
+        if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+            from mmml.models.mm_lj_scales import attach_mm_lj_scales
+
+            fresh_restart_params = attach_mm_lj_scales(
+                fresh_restart_params, len(hybrid_mm.master_sigmas)
+            )
         params = _merge_params(fresh_restart_params, params)
         ema_params = _merge_params(fresh_restart_params, ema_params)
         do_charges = bool(getattr(model, "charges", False))
@@ -519,6 +559,16 @@ def train_model(
         state = train_state.TrainState.create(
             apply_fn=model.apply, params=params, tx=optimizer
         )
+
+    if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+        print(
+            f"Learnable MM LJ scales enabled ({len(hybrid_mm.master_sigmas)} CGenFF types; "
+            f"projected each step to sigma {hybrid_mm.mm_lj_sigma_scale_bounds}, "
+            f"epsilon {hybrid_mm.mm_lj_epsilon_scale_bounds}; "
+            f"{sum(hybrid_mm.mm_lj_trainable_mask or ())} trainable)",
+            flush=True,
+        )
+
     if best_loss is None or restart:
         best_loss = float('inf')
 
@@ -578,6 +628,12 @@ def train_model(
             epoch_timing.batch_prep_s = time.perf_counter() - batch_t0
 
             train_t0 = time.perf_counter()
+            # NOTE: train_loss below is measured on the raw `params`, while
+            # valid_loss is measured on `ema_params` (see the eval loop). The
+            # two are therefore NOT comparable, and a large train/valid ratio
+            # means the raw weights are oscillating, not that the model is
+            # overfitting. On the DES warm start (job 19360535) this read as a
+            # 128x "generalization gap" that was purely params-vs-EMA.
             train_loss = 0.0
             train_energy_mae = 0.0
             train_forces_mae = 0.0
@@ -656,7 +712,14 @@ def train_model(
                 updates=params, state=transform_state, value=valid_loss
             )
 
+            # Raw (pre-conversion) values, kept so the streaming line below can
+            # state kcal/mol unambiguously whatever `conversion` happens to be.
+            _raw_valid_e_mae = valid_energy_mae
+            _raw_valid_f_mae = valid_forces_mae
+
             # convert statistics to kcal/mol for printing
+            # NB: the CLI passes conversion={'energy':1,'forces':1}, so in practice
+            # this is a no-op and the table's MAE columns are eV, not kcal/mol.
             valid_energy_mae *= conversion["energy"]
             valid_forces_mae *= conversion["forces"]
             train_energy_mae *= conversion["energy"]
@@ -761,6 +824,27 @@ def train_model(
                 live.update(combined, refresh=True)
                 import sys
                 sys.stdout.flush()  # Force output to SLURM log file
+
+            # Plain one-line-per-epoch record. The rich Live table above is a
+            # *live* display: it overwrites in place, so a redirected log keeps
+            # only the final render and a multi-hour run shows no progress at all
+            # until it exits. (TERM=dumb removes the control codes but not this;
+            # Live still renders once.) Units are spelled out because the table's
+            # MAE columns are eV, which has been misread as kcal/mol.
+            if epoch % print_freq == 0:
+                # float() on every value: these are JAX scalars whose __format__
+                # is overridden (they render as "Array f64 gpu:0 5.6e+05"), which
+                # makes the line unparseable and unreadable.
+                print(
+                    f"[epoch {epoch}/{num_epochs}] "
+                    f"train_loss={float(train_loss):.6g} "
+                    f"valid_loss={float(valid_loss):.6g} "
+                    f"best={float(best_loss):.6g} "
+                    f"valid_E_MAE={float(_raw_valid_e_mae) * _EV_TO_KCAL_MOL:.4f} kcal/mol "
+                    f"valid_F_MAE={float(_raw_valid_f_mae) * _EV_TO_KCAL_MOL:.4f} kcal/mol/A "
+                    f"lr={float(lr_eff):.3g} t={epoch_length}",
+                    flush=True,
+                )
                 sys.stderr.flush()  # Flush errors too
                 gc.collect()  # Force garbage collection to prevent memory buildup during long training runs
                 if PROFILE:
@@ -777,6 +861,40 @@ def train_model(
 
     if profile_epoch_timing and console is not None and timing_summary.epochs > 0:
         console.print(timing_summary.format_means())
+
+    if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
+        from mmml.models.mm_lj_scales import (
+            MM_LJ_EPSILON_SCALE_KEY,
+            MM_LJ_SIGMA_SCALE_KEY,
+            cgenff_type_names_from_prm,
+            write_mm_lj_scales_into_hybrid_mm_json,
+        )
+
+        if (
+            isinstance(ema_params, dict)
+            and MM_LJ_SIGMA_SCALE_KEY in ema_params
+            and MM_LJ_EPSILON_SCALE_KEY in ema_params
+        ):
+            try:
+                _names = cgenff_type_names_from_prm()
+            except Exception:
+                _names = [f"type_{i}" for i in range(len(hybrid_mm.master_sigmas))]
+            if len(_names) != len(hybrid_mm.master_sigmas):
+                _names = [f"type_{i}" for i in range(len(hybrid_mm.master_sigmas))]
+            write_mm_lj_scales_into_hybrid_mm_json(
+                CKPT_DIR / "hybrid_mm.json",
+                type_names=_names,
+                sigma_scale=ema_params[MM_LJ_SIGMA_SCALE_KEY],
+                epsilon_scale=ema_params[MM_LJ_EPSILON_SCALE_KEY],
+                sigma_bounds=hybrid_mm.mm_lj_sigma_scale_bounds,
+                epsilon_bounds=hybrid_mm.mm_lj_epsilon_scale_bounds,
+                trainable_mask=hybrid_mm.mm_lj_trainable_mask,
+                type_frame_counts=hybrid_mm.mm_lj_type_frame_counts,
+            )
+            print(
+                f"Wrote final MM LJ scales to {CKPT_DIR / 'hybrid_mm.json'}",
+                flush=True,
+            )
 
     # Return final model parameters, best objective value, and run checkpoint dir.
     return ema_params, best_loss, CKPT_DIR

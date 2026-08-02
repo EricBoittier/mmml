@@ -343,6 +343,42 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
     assert "G O R" in out or "G" in out
 
 
+def test_emit_monomer_health_summarizes_systemic_velocity_only(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Geometry-restore leftover |v| must not dump O(10³) identical rows."""
+    entries = tuple(
+        MonomerHealthEntry(
+            index=i,
+            label="TIP3",
+            velocity_rms_akma=1.0e4 + i,
+            velocity_max_akma=5.0e4 + 10 * i,
+            hybrid_grms_kcalmol_A=6.0,
+            charmm_grms_kcalmol_A=6.0,
+            velocity_level=LEVEL_BAD,
+            force_level=LEVEL_OK,
+            energy_level=LEVEL_OK,
+            geometry_level=LEVEL_OK,
+            reasons=(f"|v| abs {5.0e4 + 10 * i:.1f} ≥ 15000.0",),
+        )
+        for i in range(40)
+    )
+    report = MonomerHealthReport(
+        entries=entries,
+        flagged_bad=tuple(range(40)),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+    with patch("mmml.utils.rich_report.rich_enabled", return_value=False):
+        emit_monomer_health_dot_matrix(
+            report, context="Fly-off", quiet=False, max_detail_rows=8
+        )
+    out = capsys.readouterr().out
+    assert "40/40 velocity-bad" in out
+    assert "full grid suppressed" in out
+    assert out.count("TIP3") <= 10
+
+
 @patch(
     "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma"
 )
@@ -498,6 +534,80 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
 
 
 @patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 2, 4, 6], dtype=int),
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+)
+@patch("pycharmm.coor.get_natom", return_value=6)
+def test_maybe_intervene_monomer_health_uses_caller_ramp_temperature(
+    _natom: MagicMock,
+    audit: MagicMock,
+    _offsets: MagicMock,
+    redraw: MagicMock,
+    _restore_template: MagicMock,
+) -> None:
+    """A caller-supplied ``temperature_K`` (live heat-ramp target) must win over
+    ``workflow_args.temperature`` — the overall/final heat target used only as a
+    fallback — so a mid-ramp redraw does not inject velocities far hotter than
+    the segment actually being run.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_intervene_monomer_health,
+    )
+
+    audit.return_value = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="TIP3",
+                velocity_rms_akma=40000.0,
+                velocity_max_akma=50000.0,
+                hybrid_grms_kcalmol_A=2.0,
+                charmm_grms_kcalmol_A=1.0,
+                velocity_level=LEVEL_BAD,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+                geometry_level=LEVEL_OK,
+            ),
+        ),
+        flagged_bad=(0,),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+    # Overall workflow target is 200 K, but the active heat segment is only
+    # ramping through ~80 K right now — that is what the redraw should use.
+    ctx = MagicMock(workflow_args=SimpleNamespace(heat_finalt=200.0))
+    overlap = SimpleNamespace(
+        n_monomers=1,
+        monomer_health=MonomerHealthConfig(verbose=False),
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ):
+        recovered = maybe_intervene_monomer_health(
+            ctx,
+            overlap,
+            context="HEAT",
+            global_step=2000,
+            temperature_K=80.0,
+        )
+    assert recovered.velocities_redrawn
+    redraw.assert_called_once()
+    assert redraw.call_args.kwargs["temperature_K"] == pytest.approx(80.0)
+
+
+@patch(
     "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
 )
 @patch(
@@ -586,6 +696,93 @@ def test_maybe_intervene_templates_only_geometry_bad(
     assert 0 in redraw_idx
     assert 1 not in redraw_idx
     jax_mini.assert_called_once()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 2, 4], dtype=int),
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+)
+@patch("pycharmm.coor.get_natom", return_value=4)
+def test_maybe_intervene_adumb_skips_template_restore(
+    _natom: MagicMock,
+    audit: MagicMock,
+    _offsets: MagicMock,
+    redraw: MagicMock,
+    restore_template: MagicMock,
+    jax_mini: MagicMock,
+) -> None:
+    """ADUMB must not template-restore: inter-monomer COMs stay OOR → UM1RXN."""
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_intervene_monomer_health,
+    )
+
+    audit.return_value = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="AMM1",
+                velocity_rms_akma=100.0,
+                velocity_max_akma=200.0,
+                hybrid_grms_kcalmol_A=5.0,
+                charmm_grms_kcalmol_A=5.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+                geometry_level=LEVEL_BAD,
+                reasons=("extent 312.0 Å > 30.0 Å",),
+            ),
+            MonomerHealthEntry(
+                index=1,
+                label="CH3CL",
+                velocity_rms_akma=100.0,
+                velocity_max_akma=200.0,
+                hybrid_grms_kcalmol_A=5.0,
+                charmm_grms_kcalmol_A=5.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+                geometry_level=LEVEL_BAD,
+                reasons=("extent 135.0 Å > 30.0 Å",),
+            ),
+        ),
+        flagged_bad=(0, 1),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+    ctx = MagicMock(
+        workflow_args=SimpleNamespace(
+            temperature=500.0,
+            _adumb_rc_guard=object(),
+        )
+    )
+    overlap = SimpleNamespace(
+        n_monomers=2,
+        monomer_health=MonomerHealthConfig(verbose=False),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.restraints.reinstall_adumb_rxncor_walls_from_workflow_args"
+    ) as reinstall:
+        out = maybe_intervene_monomer_health(
+            ctx, overlap, context="HEAT", global_step=2000
+        )
+    assert out.adumb_skip_template_restore is True
+    assert out.geometry_restored is False
+    restore_template.assert_not_called()
+    redraw.assert_not_called()
+    jax_mini.assert_not_called()
+    reinstall.assert_called_once()
 
 
 def test_maybe_rebaseline_heat_once() -> None:

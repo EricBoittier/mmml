@@ -15,7 +15,8 @@ Each run writes `scan_1d.npz` with decomposed energies on a COM grid (`d₀₁`)
 | `scan_2d_hybrid_energy_kcal` | Total hybrid USER energy |
 | `scan_2d_ml_2b_E_kcal` | PhysNet dimer (ML two-body) |
 | `scan_2d_mm_E_kcal` | Switched JAX MM |
-| `lr_solver_active` | Resolved backend (`mic`, `jax_pme`, …) |
+| `lr_solver_active` | Resolved backend (`mic`, `ewald`, `jax_pme`, …) |
+| `ewald_omit_self` | Whether `--ewald-omit-self` was set (hybrid-native Ewald) |
 | `mm_nonbond_mode` | `jax_mic` or `periodic_external` |
 
 Vertical lines at **6.5 / 8 / 13 Å** mark default cutoff regions (see [hybrid-potential-regions.md](../../docs/hybrid-potential-regions.md)).
@@ -39,13 +40,17 @@ chmod +x scripts/run_dcm_aco_dimer_lr_scans.sh
 |------------|-------------------|-------------|-------|
 | `vacuum_mic` | `jax_mic` | `mic` | Free space; pair-loop MIC only |
 | `pbc_mic` | `jax_mic` | `mic` | Periodic box; truncated Coulomb |
-| `pbc_jax_pme_ewald` | `jax_mic` | `jax_pme` | + Coulomb & r⁻⁶ tail |
+| `pbc_hybrid_ewald` | `jax_mic` | `ewald` | Hybrid-native full-box Ewald (train↔MD); includes self term |
+| `pbc_hybrid_ewald_omit_self` | `jax_mic` | `ewald` | Same + `--ewald-omit-self` (MIC/non-Ewald-trained models) |
+| `pbc_jax_pme_ewald` | `jax_mic` | `jax_pme` | jax-pme method=ewald; + Coulomb & r⁻⁶ tail |
 | `pbc_jax_pme_pme` | `jax_mic` | `jax_pme` | PME mesh |
 | `pbc_jax_pme_p3m` | `jax_mic` | `jax_pme` | P3M |
 | `pbc_jax_pme_ewald_no_disp` | `jax_mic` | `jax_pme` | Coulomb-only LR |
 | `pbc_periodic_external_jax_pme_pme` | `periodic_external` | `jax_pme` | Full-box Coulomb + CHARMM LJ |
 | `pbc_periodic_external_nvalchemiops` | `periodic_external` | `nvalchemiops_pme` | If `mmml[nvalchemiops-pme]` installed |
 | `pbc_periodic_external_scafacos_ewald` | `periodic_external` | `scafacos` | If `SCAFACOS_LIB` set |
+
+`lr_solver=ewald` is **not** the same as `jax_pme --jax-pme-method ewald`. The hybrid-native tags above are the parity lane for liquid `md-system --lr-solver ewald`.
 
 Environment knobs:
 
@@ -58,6 +63,19 @@ BOX_SIZE=40 SCAN_MIN=4.0 SCAN_MAX=15.0 SCAN_STEPS=16 \
 `SKIP_PERIODIC=1` skips `periodic_external` legs (no ScaFaCoS / nvalchemiops required).
 
 ## Single manual scan
+
+Hybrid-native Ewald (train↔MD parity; omit self for MIC-trained ckpts):
+
+```bash
+export MMML_CKPT=/path/to/dcm_ckpt
+./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \
+  DCM:2 --scan-1d --scan-tag pbc_hybrid_ewald_omit_self \
+  --box-size 36 --mlpot-pbc --lr-solver ewald --ewald-omit-self \
+  --scan-2d-min 3.5 --scan-2d-max 14.0 --scan-2d-steps 12 \
+  --output-dir artifacts/dimer_lr_scans
+```
+
+jax-pme Ewald method (separate backend):
 
 ```bash
 export MMML_CKPT=/path/to/dcm_ckpt

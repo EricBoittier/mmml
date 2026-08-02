@@ -60,3 +60,86 @@ def test_count_near_dimer_pairs_free_space_cap_is_all_pairs():
     stats = validate_sparse_dimer_cap(pos, n, apm, mm_switch_on=7.0, free_space=True)
     assert stats["max_active_dimers_cap"] == n * (n - 1) // 2
     assert stats["free_space"] is True
+
+
+def test_resolve_max_active_dimers_flat_heuristic_undersizes_real_liquid_water():
+    """Locks in the bug this module's density-aware branch fixes.
+
+    Numbers are from the TIP3:903, L=30.307409163768842 A NVE run that
+    motivated this fix (mmml_calculator.py active_radius =
+    mm_switch_on + ml_switch_width = 7.5 A): every recorded frame of the
+    actual trajectory had ~26,470-26,493 monomer pairs within that radius,
+    while the flat "6 neighbors/monomer" heuristic caps at 5,418 -- a ~79.5%
+    silent truncation of in-range ML-dimer pairs every step.
+    """
+    n_monomers = 903
+    n_dimers_total = max_dimer_pairs(n_monomers)
+    real_measured_near_pairs = 26480  # actual trajectory, see docstring above
+
+    flat_cap = resolve_max_active_dimers(n_monomers, n_dimers_total)
+    assert flat_cap == max(4005, 6 * n_monomers) == 5418
+    assert flat_cap < real_measured_near_pairs, (
+        "this assertion documents the pre-fix bug: the flat heuristic must "
+        "NOT cover the real near-pair count without box density info"
+    )
+
+
+def test_resolve_max_active_dimers_density_aware_covers_real_liquid_water():
+    """Same real-run numbers as above, but with box_volume/active_radius
+    supplied (the PBC path `mmml_calculator.setup_calculator` now uses) --
+    the resulting cap must comfortably cover the actually-measured near-pair
+    count from the real trajectory, not just an idealized estimate.
+    """
+    n_monomers = 903
+    box_side_A = 30.307409163768842
+    box_volume = box_side_A**3
+    active_radius = 6.0 + 1.5  # mm_switch_on + ml_switch_width for this run
+    n_dimers_total = max_dimer_pairs(n_monomers)
+    real_measured_near_pairs = 26480
+
+    cap = resolve_max_active_dimers(
+        n_monomers, n_dimers_total, box_volume=box_volume, active_radius=active_radius
+    )
+    assert cap > real_measured_near_pairs
+    margin = (cap - real_measured_near_pairs) / real_measured_near_pairs
+    assert margin > 0.2, f"expected a healthy safety margin, got {margin:.1%}"
+
+
+def test_resolve_max_active_dimers_density_aware_covers_tip3_548_liquid():
+    """TIP3:548 @ ~32 Å had ~10780 in-range pairs vs ~8200 uniform estimate.
+
+    The 1.4 safety margin must clear that undercount without an explicit cap.
+    """
+    n_monomers = 548
+    box_side_A = 31.86819225525291
+    box_volume = box_side_A**3
+    active_radius = 6.0 + 1.5
+    n_dimers_total = max_dimer_pairs(n_monomers)
+    real_measured_near_pairs = 10786
+
+    cap = resolve_max_active_dimers(
+        n_monomers, n_dimers_total, box_volume=box_volume, active_radius=active_radius
+    )
+    assert cap >= real_measured_near_pairs
+    # Old 1.1 margin gave ~9020 and saturated; keep a clear gap above measured.
+    assert cap > 11000
+
+
+def test_resolve_max_active_dimers_density_aware_never_below_flat_fallback():
+    """The density-aware branch must not regress a caller relying on the old
+    floor for a sparse/dilute PBC system (e.g. a solute in a huge box)."""
+    n_monomers = 200
+    n_dimers_total = max_dimer_pairs(n_monomers)
+    huge_box_volume = 1.0e9  # dilute enough that density-aware estimate -> ~0
+    cap = resolve_max_active_dimers(
+        n_monomers, n_dimers_total, box_volume=huge_box_volume, active_radius=6.0
+    )
+    assert cap >= max(4005, 6 * n_monomers)
+
+
+def test_resolve_max_active_dimers_without_density_info_unchanged():
+    """Backward compatibility: omitting box_volume/active_radius must give
+    the exact pre-fix result (existing callers that don't pass them yet)."""
+    n_monomers = 903
+    n_dimers_total = max_dimer_pairs(n_monomers)
+    assert resolve_max_active_dimers(n_monomers, n_dimers_total) == 5418

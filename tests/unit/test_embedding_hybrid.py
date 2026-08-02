@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
@@ -13,6 +14,95 @@ from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
     export_embedding_checkpoint,
     validate_embedding_monomer_potential,
 )
+
+
+def test_tria_psf_atom_names_must_not_map_as_cgenff_types() -> None:
+    """Regression: embedding used get_atype() names with a type→Z table.
+
+    TRIA atom names like HY1 / CAY are not CGenFF types (HGA3 / CG331). Looking
+    them up in a type table defaults to Z=6 and yields ~1e68 Spooky energies.
+    Mass-based Z (get_Z_from_psf) is required.
+    """
+    import ase.data
+
+    # ACE methyl: CAY (CG331) + HY1–3 (HGA3) — names as CHARMM stores them
+    names = ["CAY", "HY1", "HY2", "HY3"]
+    masses = np.array([12.011, 1.008, 1.008, 1.008], dtype=float)
+    type_table = {
+        "HGA3": 1,
+        "CG331": 6,
+        "H": 1,
+        "C": 6,
+    }
+    z_from_names = [type_table.get(n.upper(), 6) for n in names]
+    ase_m = ase.data.atomic_masses_common
+    z_from_mass = [int(np.argmin((ase_m - float(m)) ** 2)) for m in masses]
+    assert z_from_names == [6, 6, 6, 6]
+    assert z_from_mass == [6, 1, 1, 1]
+
+
+def test_partial_mlmm_config_forwards_pbc_to_register() -> None:
+    from unittest import mock
+
+    from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
+        PartialMlMmConfig,
+        register_mlpot_partial_mm,
+    )
+
+    cfg = PartialMlMmConfig(
+        ml_seg_id="PEPT",
+        use_pbc=True,
+        cubic_box_side_A=28.0,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.select_by_seg_id",
+        return_value=mock.Mock(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.partial_mm.register_mlpot",
+        return_value="ctx",
+    ) as reg:
+        out = register_mlpot_partial_mm(object(), [1, 6, 1], cfg)
+    assert out == "ctx"
+    assert reg.call_args.kwargs["use_pbc"] is True
+    assert reg.call_args.kwargs["cubic_box_side_A"] == 28.0
+
+
+def test_read_crd_coordinates_parses_ext_card(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_crd_coordinates,
+    )
+
+    crd = tmp_path / "tiny.crd"
+    crd.write_text(
+        "* title\n"
+        "*\n"
+        "         2  EXT\n"
+        "         1         1  TIP3      OH         1.0000000000         2.0000000000         3.0000000000  SOLV      1       0.0000000000\n"
+        "         2         1  TIP3      H1         4.0000000000         5.0000000000         6.0000000000  SOLV      1       0.0000000000\n",
+        encoding="utf-8",
+    )
+    pos = read_crd_coordinates(crd)
+    assert pos is not None
+    assert pos.shape == (2, 3)
+    assert float(pos[0, 0]) == pytest.approx(1.0)
+    assert float(pos[1, 2]) == pytest.approx(6.0)
+
+
+def test_embedding_run_uses_apply_crd_not_coor_card() -> None:
+    """Regression: md-embedding run must not call pycharmm read.coor_card."""
+    import inspect
+
+    from mmml.interfaces.pycharmmInterface.mlpot import embedding_workflow
+
+    src = inspect.getsource(embedding_workflow.run_embedding_phase)
+    code_lines = [
+        line
+        for line in src.splitlines()
+        if line.lstrip() and not line.lstrip().startswith("#")
+    ]
+    code = "\n".join(code_lines)
+    assert "apply_crd_file_to_charmm" in code
+    assert "read.coor_card" not in code
 
 
 def test_export_embedding_checkpoint_calls_orbax_to_json(tmp_path: Path) -> None:

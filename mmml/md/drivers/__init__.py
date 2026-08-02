@@ -1,9 +1,8 @@
 """Drivers: integrator engines that propagate a system under a hybrid energy.
 
-One driver per engine — ``AseDriver``, ``JaxmdDriver``, ``CharmmDriver``,
-``ApoCharmmDriver`` — each consuming a :class:`~mmml.md.energy.registry.HybridEnergy`
-and an :class:`~mmml.md.config.EnsembleSpec` and producing a
-:class:`~mmml.md.results.Trajectory`.
+The maintained unified driver is currently ``JaxmdDriver``. Proposed
+``AseDriver``, ``CharmmDriver``, and ``ApoCharmmDriver`` names appear in the
+architecture design but are not implementations in this package.
 
 The ``on_overlap`` hook is the explicit, impure escape hatch for CHARMM
 repair/minimize (decision, §10) so energy terms stay pure. Concrete drivers
@@ -20,7 +19,7 @@ from mmml.md.energy.registry import HybridEnergy
 from mmml.md.results import Trajectory
 from mmml.md.system import MolecularSystem
 
-__all__ = ["Driver", "JaxmdDriver"]
+__all__ = ["Driver", "JaxmdDriver", "NonFiniteStateError"]
 
 
 @runtime_checkable
@@ -41,4 +40,4 @@ class Driver(Protocol):
 
 
 # Safe eager export: the implementation itself keeps jax/jax-md imports lazy.
-from mmml.md.drivers.jaxmd import JaxmdDriver  # noqa: E402
+from mmml.md.drivers.jaxmd import JaxmdDriver, NonFiniteStateError  # noqa: E402

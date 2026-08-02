@@ -14,16 +14,17 @@ source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
+# Wrapper experiments may leave MMML_NO_MPI_RERUN=1 in the submitter env; scrub
+# so CLI auto-rerun under mpirun still runs for MPI-linked CHARMM.
+if [[ "${MMML_FORCE_NO_MPI_RERUN:-}" != "1" ]]; then
+  unset MMML_NO_MPI_RERUN || true
+fi
+
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 if [[ -z "${MMML_CKPT:-}" || ! -e "${MMML_CKPT:-}" ]]; then
-  _default_ckpt="/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70"
-  if [[ -d "$_default_ckpt" ]]; then
-    export MMML_CKPT="$_default_ckpt"
-  else
-    _fallback_ckpt="$("$PY" -c "from mmml.cli.base import resolve_checkpoint_paths; print(resolve_checkpoint_paths(None)[0])" 2>/dev/null || true)"
-    if [[ -n "$_fallback_ckpt" && -e "$_fallback_ckpt" ]]; then
-      export MMML_CKPT="$_fallback_ckpt"
-    fi
+  _fallback_ckpt="$("$PY" -c "from mmml.cli.base import resolve_checkpoint_paths; print(resolve_checkpoint_paths(None)[0])" 2>/dev/null || true)"
+  if [[ -n "$_fallback_ckpt" && -e "$_fallback_ckpt" ]]; then
+    export MMML_CKPT="$_fallback_ckpt"
   fi
 fi
 

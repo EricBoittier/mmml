@@ -1,4 +1,4 @@
-"""Optional MLpot callback timing (CHARMM vs ML wall time)."""
+"""Optional MLpot / ASE calculator timing (CHARMM vs ML wall time)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 def mlpot_profiling_enabled() -> bool:
@@ -20,11 +20,26 @@ def mlpot_profiling_enabled() -> bool:
     )
 
 
+def enable_mlpot_profiling() -> None:
+    """Turn on lightweight MLpot/ASE timing and JAX compile timers."""
+    os.environ["MMML_MLPOT_PROFILE"] = "1"
+    os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
+
+
 @dataclass
 class MlpotProfileStats:
     ml_calls: int = 0
     ml_seconds: float = 0.0
     charmm_gap_seconds: float = 0.0
+    calculate_calls: int = 0
+    calculate_seconds: float = 0.0
+    chunk_apply_calls: int = 0
+    chunk_apply_seconds: float = 0.0
+    last_n_gpus: int = 0
+    last_n_chunks: int = 0
+    last_chunk_size: int = 0
+    last_effective_batch_size: int = 0
+    max_n_gpus: int = 0
     _last_callback_end: Optional[float] = field(default=None, repr=False)
 
     def record_ml(self, elapsed_s: float) -> None:
@@ -37,16 +52,87 @@ class MlpotProfileStats:
             return
         self.charmm_gap_seconds += time.perf_counter() - self._last_callback_end
 
+    def record_calculate(self, elapsed_s: float) -> None:
+        """Wall time for one ASE ``Calculator.calculate`` (includes GPU sync)."""
+        self.calculate_calls += 1
+        self.calculate_seconds += float(elapsed_s)
+
+    def record_chunk_apply(
+        self,
+        elapsed_s: float,
+        *,
+        n_gpus: int,
+        n_chunks: int,
+        chunk_size: int,
+        effective_batch_size: int,
+    ) -> None:
+        """Wall time for PhysNet chunked / multi-GPU apply (includes GPU sync)."""
+        self.chunk_apply_calls += 1
+        self.chunk_apply_seconds += float(elapsed_s)
+        self.last_n_gpus = int(n_gpus)
+        self.last_n_chunks = int(n_chunks)
+        self.last_chunk_size = int(chunk_size)
+        self.last_effective_batch_size = int(effective_batch_size)
+        self.max_n_gpus = max(self.max_n_gpus, int(n_gpus))
+
     def summary_line(self) -> str:
-        total = self.ml_seconds + self.charmm_gap_seconds
-        if total <= 0:
+        parts: list[str] = []
+        total_cb = self.ml_seconds + self.charmm_gap_seconds
+        if total_cb > 0:
+            ml_pct = 100.0 * self.ml_seconds / total_cb
+            parts.append(
+                f"{self.ml_calls} ML callbacks, "
+                f"ML={self.ml_seconds:.3f}s ({ml_pct:.1f}%), "
+                f"CHARMM+overhead={self.charmm_gap_seconds:.3f}s"
+            )
+        if self.calculate_calls > 0:
+            mean_ms = 1000.0 * self.calculate_seconds / self.calculate_calls
+            parts.append(
+                f"{self.calculate_calls} ASE calculate, "
+                f"total={self.calculate_seconds:.3f}s "
+                f"(mean={mean_ms:.2f} ms/call)"
+            )
+        if self.chunk_apply_calls > 0:
+            mean_ms = 1000.0 * self.chunk_apply_seconds / self.chunk_apply_calls
+            parts.append(
+                f"{self.chunk_apply_calls} chunk-apply, "
+                f"total={self.chunk_apply_seconds:.3f}s "
+                f"(mean={mean_ms:.2f} ms, last n_gpus={self.last_n_gpus}, "
+                f"n_chunks={self.last_n_chunks}, chunk={self.last_chunk_size}, "
+                f"batch={self.last_effective_batch_size})"
+            )
+        if not parts:
             return "MLpot profile: no samples"
-        ml_pct = 100.0 * self.ml_seconds / total
-        return (
-            f"MLpot profile: {self.ml_calls} ML callbacks, "
-            f"ML={self.ml_seconds:.3f}s ({ml_pct:.1f}%), "
-            f"CHARMM+overhead={self.charmm_gap_seconds:.3f}s"
+        return "MLpot profile: " + "; ".join(parts)
+
+    def to_dict(self) -> dict[str, Any]:
+        mean_calc_ms = (
+            1000.0 * self.calculate_seconds / self.calculate_calls
+            if self.calculate_calls
+            else None
         )
+        mean_chunk_ms = (
+            1000.0 * self.chunk_apply_seconds / self.chunk_apply_calls
+            if self.chunk_apply_calls
+            else None
+        )
+        return {
+            "ml_calls": self.ml_calls,
+            "ml_seconds": self.ml_seconds,
+            "charmm_gap_seconds": self.charmm_gap_seconds,
+            "calculate_calls": self.calculate_calls,
+            "calculate_seconds": self.calculate_seconds,
+            "calculate_mean_ms": mean_calc_ms,
+            "chunk_apply_calls": self.chunk_apply_calls,
+            "chunk_apply_seconds": self.chunk_apply_seconds,
+            "chunk_apply_mean_ms": mean_chunk_ms,
+            "last_n_gpus": self.last_n_gpus,
+            "last_n_chunks": self.last_n_chunks,
+            "last_chunk_size": self.last_chunk_size,
+            "last_effective_batch_size": self.last_effective_batch_size,
+            "max_n_gpus": self.max_n_gpus,
+            "summary": self.summary_line(),
+        }
 
 
 _GLOBAL_STATS = MlpotProfileStats()
@@ -65,6 +151,27 @@ def maybe_log_mlpot_profile(*, quiet: bool = False) -> None:
     if not mlpot_profiling_enabled() or quiet:
         return
     print(get_mlpot_profile_stats().summary_line(), flush=True)
+
+
+def write_mlpot_profile_summary(
+    output_dir: str | os.PathLike[str] | None = None,
+    *,
+    extra: dict[str, Any] | None = None,
+    filename: str = "mlpot_profile.json",
+) -> Path | None:
+    """Write calculator/chunk timing JSON when profiling is enabled."""
+    if not mlpot_profiling_enabled():
+        return None
+    path = Path(output_dir or ".") / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, Any] = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        **get_mlpot_profile_stats().to_dict(),
+    }
+    if extra:
+        payload["extra"] = extra
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def _repo_root() -> Path:

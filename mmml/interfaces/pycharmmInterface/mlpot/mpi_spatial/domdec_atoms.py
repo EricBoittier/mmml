@@ -27,7 +27,7 @@ All Python-facing functions return **0-based** ``np.int32`` arrays.
 
 Fallback
 --------
-Every function returns a safe default (``False``, ``(1,1,1)``, empty array)
+Every function returns a conservative fallback (``False``, ``(1,1,1)``, empty array)
 when the symbol is absent.  This covers: DOMDEC compiled out (``KEY_DOMDEC=0``),
 non-gfortran compilers, or PyCHARMM not yet imported (``libcharmm.so`` not
 loaded into the process).

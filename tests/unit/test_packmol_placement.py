@@ -60,7 +60,10 @@ def test_execute_packmol_script_captures_output(tmp_path, monkeypatch):
         result = packmol_placement.execute_packmol_script("seed 1\n", inp)
 
     args, kwargs = run_mock.call_args
-    assert args[0] == ["/usr/bin/packmol", "-i", str(inp.resolve())]
+    # Packmol is driven via its documented stdin interface (packmol < input.inp),
+    # so the argv is just the binary and the input is fed on stdin.
+    assert args[0] == ["/usr/bin/packmol"]
+    assert "stdin" in kwargs
     assert kwargs["capture_output"] is True
     assert kwargs["cwd"] == str(inp.resolve().parent)
     assert result.success is True
@@ -68,7 +71,7 @@ def test_execute_packmol_script_captures_output(tmp_path, monkeypatch):
     assert result.max_distance_violation == pytest.approx(0.123456)
 
 
-def test_execute_packmol_script_falls_back_to_stdin(tmp_path, monkeypatch):
+def test_execute_packmol_script_falls_back_to_cli_flag(tmp_path, monkeypatch):
     inp = tmp_path / "pack.inp"
     inp.write_text("seed 1\n")
     monkeypatch.setattr(
@@ -76,7 +79,8 @@ def test_execute_packmol_script_falls_back_to_stdin(tmp_path, monkeypatch):
         "packmol_executable",
         lambda: "/usr/bin/packmol",
     )
-    cli_fail = mock.Mock(
+    # stdin is tried first; only a CLI-level rejection triggers the -i fallback.
+    stdin_fail = mock.Mock(
         returncode=174,
         stdout="ERROR: packmol command-line error\n",
         stderr="",
@@ -88,13 +92,13 @@ def test_execute_packmol_script_falls_back_to_stdin(tmp_path, monkeypatch):
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
-        side_effect=[cli_fail, cli_ok],
+        side_effect=[stdin_fail, cli_ok],
     ) as run_mock:
         result = packmol_placement.execute_packmol_script("seed 1\n", inp)
 
     assert run_mock.call_count == 2
-    assert run_mock.call_args_list[0].args[0] == ["/usr/bin/packmol", "-i", str(inp.resolve())]
-    assert run_mock.call_args_list[1].args[0] == ["/usr/bin/packmol"]
+    assert run_mock.call_args_list[0].args[0] == ["/usr/bin/packmol"]
+    assert run_mock.call_args_list[1].args[0] == ["/usr/bin/packmol", "-i", str(inp.resolve())]
     assert result.success is True
 
 

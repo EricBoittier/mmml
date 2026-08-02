@@ -192,6 +192,39 @@ def test_resolve_periodic_charmm_vdw_on_for_periodic_external():
     assert resolve_periodic_charmm_vdw(args_off) is False
 
 
+def test_build_periodic_mm_config_ewald_omit_self():
+    """--ewald-omit-self must select cross-monomer native Ewald (no intra/self)."""
+    args = argparse.Namespace(
+        mm_nonbond_mode="periodic_external",
+        lr_solver="ewald",
+        scafacos_method=None,
+        jax_pme_method=None,
+        jax_pme_sr_cutoff=None,
+        periodic_charmm_vdw=False,
+        include_mm=True,
+        ewald_omit_self=True,
+        _cli_explicit=set(),
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="ewald",
+    ):
+        cfg = build_periodic_mm_config(args)
+    assert cfg is not None
+    assert cfg.lr_solver == "ewald"
+    assert cfg.ewald_include_self is False
+    assert cfg.ewald_include_intra is False
+
+    args.ewald_omit_self = False
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        return_value="ewald",
+    ):
+        cfg_full = build_periodic_mm_config(args)
+    assert cfg_full.ewald_include_self is True
+    assert cfg_full.ewald_include_intra is True
+
+
 def test_periodic_mm_status_line_no_vdw():
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         PeriodicMmConfig,

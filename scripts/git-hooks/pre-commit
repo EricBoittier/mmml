@@ -1,0 +1,51 @@
+#!/bin/sh
+# Auto-regenerate the CI-checked generated docs so no commit ever carries stale
+# copies. These are the two artifacts that drift from ordinary code changes and
+# repeatedly break the Docs workflow's `--check` steps:
+#
+#   * docs/cli/commands/*.md + mkdocs.yml   (scripts/generate_cli_docs.py)
+#   * docs/package-architecture.md          (scripts/generate_package_architecture.py)
+#
+# The hook only runs a generator when the relevant sources are staged, restages
+# the regenerated output into the current commit, and never blocks a commit
+# (a generator failure warns and lets the commit proceed; CI `--check` remains
+# the backstop). Install with `make install-hooks`.
+set -u
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$repo_root" || exit 0
+
+staged=$(git diff --cached --name-only)
+[ -z "$staged" ] && exit 0
+
+run_py() {
+	if command -v uv >/dev/null 2>&1; then
+		uv run python "$@"
+	else
+		python "$@"
+	fi
+}
+
+# CLI reference docs + mkdocs nav: regenerate when the CLI surface changes.
+if printf '%s\n' "$staged" | grep -qE '^mmml/cli/'; then
+	echo "pre-commit: regenerating CLI reference docs (generate_cli_docs.py)…"
+	if run_py scripts/generate_cli_docs.py >/tmp/mmml-precommit-clidocs.log 2>&1; then
+		git add docs/cli/commands mkdocs.yml 2>/dev/null || true
+	else
+		echo "pre-commit: WARNING generate_cli_docs.py failed" \
+			"(see /tmp/mmml-precommit-clidocs.log); committing without regenerating." >&2
+	fi
+fi
+
+# Package-architecture module counts: regenerate when modules are added/removed.
+if git diff --cached --name-status | grep -qE '^[AD][[:space:]]+mmml/.*\.py$'; then
+	echo "pre-commit: regenerating package architecture doc (generate_package_architecture.py)…"
+	if run_py scripts/generate_package_architecture.py >/tmp/mmml-precommit-arch.log 2>&1; then
+		git add docs/package-architecture.md 2>/dev/null || true
+	else
+		echo "pre-commit: WARNING generate_package_architecture.py failed" \
+			"(see /tmp/mmml-precommit-arch.log); committing without regenerating." >&2
+	fi
+fi
+
+exit 0

@@ -13,9 +13,14 @@ def get_Z_from_psf():
         Z .append( np.argmin(mdif) )
     return Z
 
-def set_up_directories() -> None:
-    os.makedirs("pdb", exist_ok=True)
-    os.makedirs("res", exist_ok=True)
-    os.makedirs("dcd", exist_ok=True)
-    os.makedirs("psf", exist_ok=True)
-    os.makedirs("xyz", exist_ok=True)
+def set_up_directories(base: str | os.PathLike[str] | None = None) -> None:
+    """Create legacy make-res / make-box layout dirs (pdb, psf, xyz, res, dcd).
+
+    Only call this from paths that still write relative ``pdb/…``, ``psf/…``,
+    etc. (``mmml make-res``, ``mmml make-box``, ``generate_coordinates``).
+    ``md-system`` / MLpot use flat files under ``--output-dir`` and must not
+    create these in CWD via :func:`ensure_charmm_session_ready`.
+    """
+    root = os.fspath(base) if base is not None else "."
+    for name in ("pdb", "res", "dcd", "psf", "xyz"):
+        os.makedirs(os.path.join(root, name), exist_ok=True)

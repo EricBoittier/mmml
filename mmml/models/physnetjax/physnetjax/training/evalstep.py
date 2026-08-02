@@ -29,13 +29,24 @@ def _eval_forward(model_apply, params, batch, batch_size, hybrid_mm=None):
     If validation scored raw E_ML instead, the two metrics would measure different
     things (observed: train energy MAE ~43 vs valid ~1 on the same distribution).
     """
+    from mmml.models.mm_lj_scales import split_mm_lj_scale_params
+
+    model_params, sigma_scale, epsilon_scale = split_mm_lj_scale_params(params)
     if hybrid_mm is not None:
         from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
 
         cfg = HybridMMConfig.coerce(hybrid_mm)
-        return hybrid_forward(model_apply, params, batch, batch_size, **cfg.kwargs())
+        return hybrid_forward(
+            model_apply,
+            model_params,
+            batch,
+            batch_size,
+            mm_lj_sigma_scale=sigma_scale,
+            mm_lj_epsilon_scale=epsilon_scale,
+            **cfg.kwargs(),
+        )
     return model_apply(
-        params,
+        model_params,
         atomic_numbers=batch["Z"],
         positions=batch["R"],
         dst_idx=batch["dst_idx"],

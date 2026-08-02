@@ -1,0 +1,70 @@
+# Mode A MD with trained per-type LJ scales from hybrid_mm.json
+#
+#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml --run-all
+#
+# Point checkpoint at the Mode A + learn_mm_lj_scales train run. MLpot auto-loads
+# hybrid_mm.json next to the checkpoint; override with mm_lj_scales_file if needed.
+
+defaults:
+  composition: "DCM:2"
+  checkpoint: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/params.json
+  # mm_lj_scales_file: /path/to/ckpts/hybrid_mm_fixed_lj_scales/<run>/hybrid_mm.json
+  spacing: 5.0
+  packmol_radius: 6.9
+  # Packmol's tolerance is the minimum distance between atoms of different
+  # molecules, so 2.0 hands the hybrid PES Cl···H contacts near 2.07 Å — about
+  # 0.9 Å inside the vdW contact distance. Every molecule here is ML, so CHARMM
+  # GRMS is 0 and only the calculator can relax that; it plateaus above the
+  # 2 eV/Å pre-dynamics force gate. 3.0 packs comfortably at this density.
+  packmol_tolerance: 3.0
+  dt_fs: 0.5
+  temperature: 300.0
+  seed: 42
+  include_mm: true
+  mm_charge_mode: fixed
+  ml_switch_width: 1.5
+  mm_switch_on: 8.0
+  mm_switch_width: 5.0
+
+  skip_jit_warmup: true
+  quiet: true
+
+campaign_output: results/hybrid_mm_fixed_lj_scales
+runs:
+  dimer_nve:
+    description: Vacuum NVE — Mode A + trained LJ scales
+    backend: pycharmm
+    setup: free_nve
+    ps: 0.05
+    output_dir: results/hybrid_mm_fixed_lj_scales/dimer_nve
+
+  # Condensed phase single-job fallback (smoke). Prefer the Packmol campaign
+  # md_fixed_lj_scales_liquid_campaign.yaml (jaxmd settle → PyCHARMM → jaxmd)
+  # via examples/lj_scales/07_deploy_md.sh — cold PyCHARMM heat from Packmol
+  # hits ENERGY CHANGE TOLERANCE.
+  liquid_nvt:
+    description: PBC liquid NVT smoke — Mode A + trained LJ scales (jax_mic MM)
+    backend: pycharmm
+    setup: pbc_nvt
+    composition: "DCM:120"
+    box_size: 30.0
+    mm_nonbond_mode: jax_mic
+    # pbc_nvt runs mini,heat,equi; resolve_stage_ps only reads `ps` for prod/nve.
+    # Keep these smoke-short (≤0.1 ps); use the liquid campaign for real deploys.
+    ps_heat: 0.05
+    ps_equi: 0.05
+    output_dir: results/hybrid_mm_fixed_lj_scales/liquid_nvt
+
+  liquid_nvt_full_box_ewald:
+    description: PBC liquid NVT demo — full-box Ewald + scaled CHARMM IMAGE LJ
+    backend: pycharmm
+    setup: pbc_nvt
+    composition: "DCM:120"
+    box_size: 30.0
+    mm_nonbond_mode: periodic_external
+    lr_solver: ewald
+    # hybrid_mm.json is auto-discovered beside checkpoint. Setting the explicit
+    # path above is recommended for an auditable production invocation.
+    ps_heat: 0.05
+    ps_equi: 0.05
+    output_dir: results/hybrid_mm_fixed_lj_scales/liquid_nvt_full_box_ewald

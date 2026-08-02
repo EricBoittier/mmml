@@ -247,7 +247,7 @@ def test_hoover_cpt_heat_ramp_preserves_cold_start_on_overlap_chunk_zero():
     assert chunk_kw["restart"] is False
 
 
-def test_hoover_cpt_heat_ramp_overlap_chunk_keeps_iasvel_zero_after_boltzmann():
+def test_hoover_cpt_heat_ramp_overlap_chunk_uses_iasvel_one_after_boltzmann():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         apply_hoover_cpt_heat_ramp_overlap_chunk,
@@ -271,8 +271,38 @@ def test_hoover_cpt_heat_ramp_overlap_chunk_keeps_iasvel_zero_after_boltzmann():
         total_nstep=4000,
         n_chunks=8,
     )
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
+
+
+def test_hoover_cpt_heat_ramp_overlap_chunk_continuation_uses_iasvel_one():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        apply_hoover_cpt_heat_ramp_overlap_chunk,
+    )
+
+    chunk_kw = {
+        "start": False,
+        "iasvel": 0,
+        "cpt": True,
+        "hoover reft": 40.0,
+        "firstt": 40.0,
+        "finalt": 200.0,
+        "_skip_ase_cold_velocity_assign": True,
+    }
+    apply_hoover_cpt_heat_ramp_overlap_chunk(
+        chunk_kw,
+        chunk_index=1,
+        steps_done=250,
+        ramp_spec={"firstt": 120.0, "finalt": 200.0},
+        total_nstep=4000,
+        n_chunks=8,
+    )
+    assert chunk_kw["iasvel"] == 1
+    assert chunk_kw["start"] is False
+    assert "_skip_ase_cold_velocity_assign" not in chunk_kw
+
+
+def test_hoover_cpt_heat_ramp_targets_and_iasvel_one():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_hoover_cpt_heat_ramp_overlap_chunk,
         hoover_cpt_heat_ramp_spec_from_kw,
@@ -312,7 +342,7 @@ def test_hoover_cpt_heat_ramp_overlap_chunk_keeps_iasvel_zero_after_boltzmann():
         n_chunks=1,
     )
     assert chunk_kw["hoover reft"] == pytest.approx(15.0)
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
     chunk_kw = {}
     apply_hoover_cpt_heat_ramp_overlap_chunk(
         chunk_kw,
@@ -326,19 +356,8 @@ def test_hoover_cpt_heat_ramp_overlap_chunk_keeps_iasvel_zero_after_boltzmann():
     assert chunk_kw["finalt"] == 30.0
     assert chunk_kw["tbath"] == 30.0
     assert chunk_kw["hoover reft"] == pytest.approx(0.6)
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
-
-    chunk_kw = {"restart": True}
-    apply_hoover_cpt_heat_ramp_overlap_chunk(
-        chunk_kw,
-        chunk_index=1,
-        steps_done=500,
-        ramp_spec=spec,
-        total_nstep=25000,
-        n_chunks=50,
-    )
-    assert chunk_kw["iasvel"] == 0
 
 
 def test_apply_heat_segment_ramp_kwargs_splits_ramp():

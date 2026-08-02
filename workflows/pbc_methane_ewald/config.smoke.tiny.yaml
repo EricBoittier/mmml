@@ -1,0 +1,101 @@
+# Tiny smoke: few monomers, large box, jax_mm_spoof + Ewald.
+# Avoid density-sized packing that leaves MIC overlaps in Packmol.
+solvents: [METH]
+temperatures: [100.0]
+box_sizes: [24.0]
+cluster_sizes: [8]
+backends: [pycharmm, jaxmd]
+
+checkpoints:
+  des: examples/ckpts_json/DESdimers_params.json
+
+output_root: artifacts/pbc_methane_ewald_smoke_tiny
+seed_base: 4242
+
+jax_mm_spoof: true
+mm_nonbond_mode: periodic_external
+lr_solver: ewald
+ensemble: pbc_nvt
+
+ps_heat: 0.25
+n_heat_segments: 1
+heat_firstt: 50.0
+heat_thermostat: scale
+pycharmm_equi_ps: 0.25
+pycharmm_equi_legs: 1
+pycharmm_prod_ps: 0.25
+pycharmm_prod_legs: 1
+jaxmd_equi_ps: 0.25
+jaxmd_prod_ps: 0.25
+
+dt_fs: 0.25
+pressure: 1.0
+spacing: 5.0
+packmol_tolerance: 2.0
+
+# Fixed N + box: certify geometry without forcing liquid bulk compression.
+liquid_prep: true
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 2
+mc_density_equalize: false
+min_intermonomer_atom_distance: 1.0
+max_grms_before_dyn: 100.0
+# Do not raise max_fmax to paper over failed DES+methane mini: seed 89904
+# (pycharmm backend) stalled at fmax≈20.7 eV/Å / USER≈2826 kcal/mol, then
+# heat hit ENERGY CHANGE TOLERANCE by step ~85. Default ~2 eV/Å gate fails
+# that case cleanly; jaxmd seed 89921 still minimises to fmax≈1 eV/Å.
+
+cleanup_strategy:
+  name: pbc_methane_ewald_smoke_tiny
+  charmm_mm:
+    pretreat_on_pycharmm: true
+    # Do not force pretreat under liquid-prep: MM pretreat+Ewald left
+    # high-energy frames that calculator mini could not recover.
+    ps_heat: 0.25
+    ps_equi: 0.25
+    ps_prod: 0.1
+    overlap_rescue_sd_steps: 100
+    overlap_rescue_abnr_steps: 200
+  mlpot:
+    cleanup: true
+    no_echeck_heat: true
+    # DES checkpoint is not methane; avoid PhysNet monomer reshape under spoof.
+    monomer_physnet_mini: false
+    # Tiny dilute boxes: extent rescue loops + echeck fight cold-start heat.
+    no_dynamics_max_monomer_extent: true
+    dynamics_overlap_action: rescue
+    dynamics_overlap_min_distance: 1.5
+    dynamics_intra_min_distance: 0.5
+    dynamics_overlap_check_interval: 250
+    bonded_mm_mini: true
+    bonded_mm_mini_after: mini,heat
+    bonded_mm_mini_steps: 200
+    charmm_pre_minimize: true
+    charmm_sd_steps: 300
+    charmm_abnr_steps: 300
+    mini_nstep: 100
+    dcd_nsavc: 50
+    dyn_nprint: 50
+    save_run_state: true
+  jaxmd_pbc:
+    handoff_quality_gate: true
+    handoff_quality_fmax_eVA: 50.0
+    handoff_quality_action: minimize
+    jaxmd_minimize_steps: 50
+    steps_per_recording: 100
+
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+ml_gpu_count: 1
+ml_batch_size: 128
+
+warmup_mlpot_jax: false
+
+slurm:
+  partition: gpu
+  gpus: 1
+  cpus: 4
+  mem: 16G
+  time: "02:00:00"
+  jobs: 2

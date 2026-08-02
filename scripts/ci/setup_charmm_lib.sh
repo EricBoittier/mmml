@@ -14,7 +14,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHARMM_TAR="$ROOT/setup/charmm.tar.xz"
 CHARMM_HOME="$ROOT/setup/charmm"
 CHARMMSETUP="$ROOT/CHARMMSETUP"
-API_FUNC="$CHARMM_HOME/source/api/api_func.F90"
 
 if [[ ! -f "$CHARMM_TAR" ]]; then
   echo "ci/setup_charmm_lib: missing $CHARMM_TAR" >&2
@@ -45,10 +44,14 @@ fi
 
 # Rebuild when hosted source or build script changes; skip when lib already present and fresh.
 BUILD_STAMP="$ROOT/setup/charmm/.ci-charmm-build-stamp"
+# Stamp every api/*.F90, not just api_func.F90: an api_read.F90 fix (sticky
+# READ PARAM APPEND, which zeroed the VDW table) left the stamp unchanged and
+# the broken libcharmm.so was reused.
 CURRENT_STAMP="$(
   {
     [[ -f "$CHARMM_TAR" ]] && sha256sum "$CHARMM_TAR"
-    [[ -f "$API_FUNC" ]] && sha256sum "$API_FUNC"
+    find "$CHARMM_HOME/source/api" -name '*.F90' -type f -print0 2>/dev/null \
+      | sort -z | xargs -0 -r sha256sum
     sha256sum "$ROOT/scripts/rebuild_charmm_mlpot.sh"
   } 2>/dev/null | sha256sum | awk '{print $1}'
 )"

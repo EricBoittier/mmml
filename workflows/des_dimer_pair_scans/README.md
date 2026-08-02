@@ -44,23 +44,37 @@ uv sync --extra quantum-crosscheck   # tblite xTB (optional)
 # ORCA binary on PATH or export ORCA=/path/to/orca
 ```
 
+On **scicore**, CHARMM is MPI-linked. Use `run_campaign_gpu.sh` (sources
+`scripts/scicore_env.sh` + `mmml-charmm-mpirun.sh`). Do not load a mismatched
+OpenMPI/GCC module by hand — that makes every pair exit 1 before writing an NPZ.
+
 ## Run
 
 ```bash
 cd workflows/des_dimer_pair_scans
 bash scripts/preflight.sh
 
+# SciCORE GPU node (recommended)
+bash run_campaign_gpu.sh 4
+
 # Dry-run DAG (78 pair jobs + collect)
 bash scripts/snakemake_local.sh 2 -n
 
-# Local (2 concurrent pairs)
-bash scripts/snakemake_local.sh 2
+# Local (2 concurrent pairs; serial CHARMM / macOS)
+MMML_DES_SCAN_NO_MPIRUN=1 bash scripts/snakemake_local.sh 2
 
 # Slurm CPU farm
 bash scripts/snakemake_slurm.sh 8
 
-# Single pair
+# Single pair (scicore: uses mmml-charmm-mpirun.sh)
 bash scripts/job_shell.sh aco__meoh
+```
+
+If a pair fails, the real traceback is in the pair log (campaign now also prints
+a tail on failure):
+
+```bash
+tail -80 ../../artifacts/des_dimer_pair_scans/aco__water/stdout.log
 ```
 
 ## Report with Matplotlib figures

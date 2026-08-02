@@ -1,4 +1,4 @@
-"""Hybrid train: lr_solver="ewald" Coulomb (LJ off) + force-energy consistency.
+"""Hybrid train: lr_solver="ewald" Coulomb (+ optional switched LJ) + FD checks.
 
 Mirrors test_hybrid_nvalchemiops_pme_train.py's coverage, but the ewald path
 needs no mocking -- it's pure JAX (no external library, no CUDA), so these
@@ -77,7 +77,7 @@ def _dimer_batch(sep: float = 6.0):
     }
 
 
-def test_hybrid_mm_config_ewald_forces_lj_off_and_requires_box():
+def test_hybrid_mm_config_ewald_honors_include_lj_and_requires_box():
     with pytest.raises(ValueError, match="pme_box_length"):
         HybridMMConfig.coerce(
             {"master_sigmas": SIG, "master_epsilons": EPS, **KW, "lr_solver": "ewald"}
@@ -85,12 +85,31 @@ def test_hybrid_mm_config_ewald_forces_lj_off_and_requires_box():
     cfg = HybridMMConfig.coerce(
         {
             "master_sigmas": SIG, "master_epsilons": EPS, **KW,
-            "lr_solver": "ewald", "pme_box_length": 30.0, "include_lj": True,  # forced off
+            "lr_solver": "ewald", "pme_box_length": 30.0, "include_lj": True,
+            "learn_mm_lj_scales": True,
         }
     )
     assert cfg.lr_solver == "ewald"
-    assert cfg.include_lj is False
+    assert cfg.include_lj is True
+    assert cfg.learn_mm_lj_scales is True
     assert cfg.pme_box_length == pytest.approx(30.0)
+
+    cfg_learn_off = HybridMMConfig.coerce(
+        {
+            "master_sigmas": SIG, "master_epsilons": EPS, **KW,
+            "lr_solver": "ewald", "pme_box_length": 30.0,
+            "include_lj": False, "learn_mm_lj_scales": True,
+        }
+    )
+    assert cfg_learn_off.learn_mm_lj_scales is False
+
+    cfg_off = HybridMMConfig.coerce(
+        {
+            "master_sigmas": SIG, "master_epsilons": EPS, **KW,
+            "lr_solver": "ewald", "pme_box_length": 30.0, "include_lj": False,
+        }
+    )
+    assert cfg_off.include_lj is False
 
 
 def test_build_hybrid_mm_config_cli_ewald(tmp_path):
@@ -111,6 +130,11 @@ def test_build_hybrid_mm_config_cli_ewald(tmp_path):
         charges=False, quiet=True, mm_switch_on=8.0, mm_switch_width=5.0,
         ml_switch_width=1.5, no_complementary_handoff=False,
         lr_solver="ewald", pme_box_length=None, pme_accuracy=1e-4, mm_include_lj=True,
+        learn_mm_lj_scales=True,
+        mm_lj_sigma_scale_min=0.95, mm_lj_sigma_scale_max=1.05,
+        mm_lj_epsilon_scale_min=0.25, mm_lj_epsilon_scale_max=4.0,
+        mm_lj_min_type_frames=0,
+        hybrid_hamiltonian="handoff", shared_cutoff=None, cutoff=6.0,
     )
     with pytest.raises(ValueError, match="pme-box-length"):
         _build_hybrid_mm_config(args, [str(path)])
@@ -118,7 +142,8 @@ def test_build_hybrid_mm_config_cli_ewald(tmp_path):
     args.pme_box_length = 28.0
     cfg = _build_hybrid_mm_config(args, [str(path)])
     assert cfg["lr_solver"] == "ewald"
-    assert cfg["include_lj"] is False
+    assert cfg["include_lj"] is True
+    assert cfg["learn_mm_lj_scales"] is True
     assert cfg["pme_box_length"] == pytest.approx(28.0)
     assert cfg["pme_real_space_cutoff"] is None  # no estimation step for ewald
 
@@ -186,6 +211,54 @@ def test_full_box_ewald_keeps_intra_monomer_coulomb():
         pos, mid, q, box_length_A=40.0, real_space_cutoff_A=10.0, **KW,
     )
     assert float(e) != 0.0  # not subtracted away like the mic hybrid path would
+
+
+def test_cross_monomer_ewald_removes_single_monomer_coulomb():
+    """MIC-trained compatibility mode must not double-count monomer Coulomb."""
+    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+
+    pos = jnp.array([[0.0, 0.0, 0.0], [0.96, 0.0, 0.0]], dtype=jnp.float64)
+    energy = hybrid_ewald_coulomb_energy(
+        pos,
+        jnp.array([0, 0]),
+        jnp.array([-0.8, 0.8], dtype=jnp.float64),
+        box_length_A=20.0,
+        n_monomers=1,
+        include_self_energy=False,
+        include_intramolecular=False,
+    )
+
+    assert float(energy) == pytest.approx(0.0, abs=1.0e-5)
+
+
+def test_ewald_omit_self_drops_geometry_independent_offset():
+    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from mmml.interfaces.pycharmmInterface.ewald_native import (
+        default_ewald_alpha,
+        ewald_self_energy,
+    )
+
+    pos = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
+    mid = jnp.array([0, 1])
+    q = jnp.array([1.0, -1.0], dtype=jnp.float64)
+    e_full = float(
+        hybrid_ewald_coulomb_energy(
+            pos, mid, q, box_length_A=40.0, real_space_cutoff_A=10.0, include_self_energy=True
+        )
+    )
+    e_noself = float(
+        hybrid_ewald_coulomb_energy(
+            pos, mid, q, box_length_A=40.0, real_space_cutoff_A=10.0, include_self_energy=False
+        )
+    )
+    import math
+
+    from mmml.models.ewald_hybrid_coulomb import COULOMB_KCAL
+
+    alpha = default_ewald_alpha(10.0, accuracy_exponent=math.sqrt(max(-math.log(1e-6), 1.0)))
+    e_self = float(ewald_self_energy(q, alpha) * COULOMB_KCAL)
+    assert e_full == pytest.approx(e_noself + e_self, rel=0, abs=1e-8)
+    assert e_noself != pytest.approx(e_full, abs=1e-6)
 
 
 def test_full_box_ewald_ignores_com_switch_kwargs():

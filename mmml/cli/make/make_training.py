@@ -191,6 +191,38 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         "--learning-rate", "--learning_rate", type=float, default=0.001, dest="learning_rate"
     )
     parser.add_argument(
+        "--subtract-atom-energies",
+        "--subtract_atom_energies",
+        action="store_true",
+        dest="subtract_atom_energies",
+        help=(
+            "Subtract per-element atomic reference energies from E before "
+            "training. Essential when training from scratch on absolute "
+            "energies: without it the network must learn the whole ~1300 "
+            "kcal/mol offset itself, and in practice it does not (energy MAE "
+            "sat at ~1200 kcal/mol for 6 epochs while forces converged fine). "
+            "A warm start hides this by carrying the scale in its weights."
+        ),
+    )
+    parser.add_argument(
+        "--subtract-mean",
+        "--subtract_mean",
+        action="store_true",
+        dest="subtract_mean",
+        help="Subtract the dataset mean energy (applied after atom refs).",
+    )
+    parser.add_argument(
+        "--clip-global",
+        "--clip_global",
+        type=float,
+        default=None,
+        dest="clip_global",
+        help=(
+            "Global-norm gradient clip (default 10.0). Lower it (~1.0) when the "
+            "raw parameters oscillate rather than converge."
+        ),
+    )
+    parser.add_argument(
         "--energy-weight", "--energy_weight", type=float, default=1.0, dest="energy_weight"
     )
     parser.add_argument(
@@ -209,11 +241,13 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         type=str,
         default=None,
         dest="mm_charge_mode",
-        choices=["fixed", "latent", "fixed_plus_latent"],
+        choices=["fixed", "q0", "latent", "q1", "fixed_plus_latent"],
         help=(
-            "Hybrid MM Coulomb charges: fixed (q_CGenFF, default), latent "
-            "(neutralize(q_ML)), or fixed_plus_latent (q_CGenFF + neutralize(q_ML)). "
-            "Modes latent / fixed_plus_latent require --charges and are dimer-only. "
+            "Hybrid MM Coulomb charges: fixed (q_CGenFF, default), q0 / Q⁰ "
+            "(neutralize unperturbed monomer q_ML; train+liquid), latent / q1 / Q¹ "
+            "(neutralize AB-perturbed q_ML; dimer-only), or fixed_plus_latent "
+            "(q_CGenFF + neutralize(Q¹)). Modes q0/latent/q1/fixed_plus_latent "
+            "require --charges. latent/q1/fixed_plus_latent are dimer-only. "
             "See docs/hybrid-mm-charges.md."
         ),
     )
@@ -261,11 +295,12 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "Hybrid-MM long-range Coulomb for training (default: mic). "
             "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: full-box "
             "many-to-many PME on fixed CGenFF charges (no exclusions / no "
-            "intra subtract; LJ omitted; requires --pme-box-length and "
+            "intra subtract; requires --pme-box-length and "
             "mmml[nvalchemiops-pme]). ewald: same full-box/no-exclusion "
-            "contract as nvalchemiops_pme, pure JAX (no external PME library, "
-            "no CUDA requirement); requires --pme-box-length. Matches fast MD "
-            "periodic_external."
+            "Coulomb as nvalchemiops_pme, pure JAX (no external PME library, "
+            "no CUDA requirement); requires --pme-box-length. With "
+            "--mm-include-lj, COM-switched LJ is added beside the lattice "
+            "Coulomb (Coulomb itself stays untapered)."
         ),
     )
     parser.add_argument(
@@ -294,9 +329,32 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         default=True,
         dest="mm_include_lj",
         help=(
-            "Include CGenFF LJ in hybrid E_MM (default: on for mic). "
-            "Forced off when --lr-solver nvalchemiops_pme or ewald."
+            "Include CGenFF LJ in hybrid E_MM (default: on). Under "
+            "--lr-solver ewald|nvalchemiops_pme this is COM-switched "
+            "intermolecular LJ beside untapered full-box Coulomb; under mic "
+            "it is the usual switched LJ+Coulomb pair term."
         ),
+    )
+    parser.add_argument(
+        "--learn-mm-lj-scales",
+        "--learn_mm_lj_scales",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        dest="learn_mm_lj_scales",
+        help=(
+            "Learn per-CGenFF-type multiplicative scales on master σ and ε "
+            "(separate arrays, init 1.0). Works under --lr-solver mic and "
+            "under ewald|nvalchemiops_pme when --mm-include-lj is on. "
+            "Scales are saved in hybrid_mm.json for MD ep_scale/sig_scale."
+        ),
+    )
+    parser.add_argument("--mm-lj-sigma-scale-min", type=float, default=0.95)
+    parser.add_argument("--mm-lj-sigma-scale-max", type=float, default=1.05)
+    parser.add_argument("--mm-lj-epsilon-scale-min", type=float, default=0.25)
+    parser.add_argument("--mm-lj-epsilon-scale-max", type=float, default=4.0)
+    parser.add_argument(
+        "--mm-lj-min-type-frames", type=int, default=0,
+        help="Freeze LJ scales at 1.0 for CGenFF types seen in fewer training frames.",
     )
     parser.add_argument(
         "--ema-decay",
@@ -354,6 +412,40 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "to wherever MM takes over, or it is silently truncated inside the "
             "handoff. Baked into the checkpoint; MD reads it back automatically."
         ),
+    )
+    # Electrostatics switching distances. These are model fields but were never
+    # passed through from the training config, so every run silently took the
+    # dataclass defaults regardless of --cutoff. That is how a model trained at
+    # cutoff 8.0 ended up switching its Coulomb tail off at 8.0 as well, leaving
+    # a dissociating ion pair with no long-range interaction at all -- and 12 %
+    # of the Menshutkin training set beyond that radius, structurally unfittable.
+    #
+    # They are deliberately NOT derived from --cutoff. The radial cutoff decides
+    # which atoms exchange features; the electrostatics range decides where the
+    # Coulomb tail is truncated, and for a reaction that separates charges the
+    # latter should extend well beyond the former. Defaults are unchanged, so
+    # existing configs reproduce their previous behaviour exactly.
+    parser.add_argument(
+        "--switch-start", "--switch_start", type=float, default=1.0,
+        help="Short-range Coulomb switch start (Angstrom)",
+    )
+    parser.add_argument(
+        "--switch-end", "--switch_end", type=float, default=10.0,
+        help="Short-range Coulomb switch end (Angstrom)",
+    )
+    parser.add_argument(
+        "--electrostatics-off-start", "--electrostatics_off_start",
+        type=float, default=8.0,
+        help=(
+            "Distance at which the electrostatic term begins switching off "
+            "(Angstrom). Set this beyond the largest separation the reaction "
+            "reaches, or the Coulomb tail vanishes there."
+        ),
+    )
+    parser.add_argument(
+        "--electrostatics-off-end", "--electrostatics_off_end",
+        type=float, default=10.0,
+        help="Distance at which the electrostatic term is fully off (Angstrom)",
     )
     parser.add_argument(
         "--max-atomic-number",
@@ -788,10 +880,36 @@ def _validate_handoff_within_cutoff(args: argparse.Namespace) -> None:
         )
 
 
+def _warn_electrostatics_shorter_than_cutoff(args: argparse.Namespace) -> None:
+    """Electrostatics dying before the radial basis does is almost never wanted.
+
+    If the Coulomb term switches off at or inside ``--cutoff``, any pair beyond
+    that distance contributes nothing at all: no message passing and no
+    electrostatics. Training points out there are then unfittable, and the model
+    does not fail loudly -- it fits what it can and returns a frozen artefact
+    beyond. That is what happened to the Menshutkin checkpoint, where the ion
+    pair lost its 1/r tail at exactly the radius the graph disconnected.
+    """
+    if not getattr(args, "include_electrostatics", True):
+        return
+    cutoff = float(getattr(args, "cutoff", 0.0))
+    off_end = float(getattr(args, "electrostatics_off_end", 0.0))
+    if off_end <= cutoff:
+        print(
+            f"WARNING: --electrostatics-off-end ({off_end:g} A) is not beyond "
+            f"--cutoff ({cutoff:g} A), so pairs past {cutoff:g} A get neither "
+            f"message passing nor electrostatics. If your data contains "
+            f"separations beyond that, those points cannot be fitted. Raise "
+            f"--electrostatics-off-start/--electrostatics-off-end past the "
+            f"largest separation in the dataset."
+        )
+
+
 def validate_train_args(args: argparse.Namespace) -> None:
     if not args.data:
         raise ValueError("--data is required (or set 'data' / 'train' in --config)")
     _validate_handoff_within_cutoff(args)
+    _warn_electrostatics_shorter_than_cutoff(args)
     data_paths = normalize_data_paths(args.data)
     if not data_paths:
         raise ValueError("--data must contain at least one NPZ path")
@@ -850,6 +968,16 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     if not getattr(args, "hybrid_mm", False):
         return None
 
+    if str(getattr(args, "hybrid_hamiltonian", "handoff")) == "shared_cutoff":
+        shared = getattr(args, "shared_cutoff", None)
+        shared = float(args.cutoff if shared is None else shared)
+        model_cutoff = float(args.cutoff)
+        if abs(shared - model_cutoff) > 1e-9:
+            raise ValueError(
+                "hybrid_hamiltonian=shared_cutoff requires shared_cutoff to equal "
+                f"the ML model cutoff (got {shared:g} vs {model_cutoff:g} Å)"
+            )
+
     import numpy as _np
 
     from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
@@ -879,6 +1007,19 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         else:
             n_atoms_est = 32
 
+    min_type_frames = int(getattr(args, "mm_lj_min_type_frames", 0))
+    if min_type_frames < 0:
+        raise ValueError("--mm-lj-min-type-frames must be >= 0")
+    type_frame_counts = _np.zeros(len(sigmas), dtype=_np.int64)
+    for data_path in data_paths:
+        with _np.load(data_path, allow_pickle=True) as d:
+            idx = _np.asarray(d["cgenff_type_idx"], dtype=_np.int64)
+        if idx.ndim == 1:
+            idx = idx[None, :]
+        for type_idx in range(len(sigmas)):
+            type_frame_counts[type_idx] += _np.any(idx == type_idx, axis=1).sum()
+    trainable_mask = type_frame_counts >= max(1, min_type_frames)
+
     from mmml.models.mm_charge_mode import (
         mm_charge_mode_needs_q_ml,
         resolve_hybrid_mm_charge_mode,
@@ -890,6 +1031,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     )
     lr_solver = str(getattr(args, "lr_solver", "mic") or "mic").strip().lower()
     include_lj = bool(getattr(args, "mm_include_lj", True))
+    learn_mm_lj_scales = bool(getattr(args, "learn_mm_lj_scales", False))
     pme_box_length = getattr(args, "pme_box_length", None)
     pme_accuracy = float(getattr(args, "pme_accuracy", 1e-6) or 1e-6)
     pme_real_space_cutoff = None
@@ -909,7 +1051,6 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             raise ValueError(
                 "--lr-solver nvalchemiops_pme requires --pme-box-length > 0"
             )
-        include_lj = False
         pme_box_length = float(pme_box_length)
         # Static cutoff for jitted train steps (PME params fixed for the run).
         pme_real_space_cutoff = estimate_nvalchemiops_pme_real_space_cutoff(
@@ -928,11 +1069,12 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     elif lr_solver == "ewald":
         if pme_box_length is None or float(pme_box_length) <= 0.0:
             raise ValueError("--lr-solver ewald requires --pme-box-length > 0")
-        include_lj = False
         pme_box_length = float(pme_box_length)
         # No external-package / cutoff-estimation step needed: ewald_hybrid_
         # coulomb.py defaults real_space_cutoff_A to box_length/2 internally
         # when left None, already validated at that setting.
+    if learn_mm_lj_scales and not include_lj:
+        learn_mm_lj_scales = False
     cfg = {
         "master_sigmas": sigmas,
         "master_epsilons": epsilons,
@@ -940,9 +1082,24 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         "mm_switch_width": float(args.mm_switch_width),
         "ml_switch_width": float(args.ml_switch_width),
         "complementary_handoff": not bool(getattr(args, "no_complementary_handoff", False)),
+        "hybrid_hamiltonian": str(getattr(args, "hybrid_hamiltonian", "handoff")),
+        "shared_cutoff": (
+            getattr(args, "shared_cutoff", None)
+            if getattr(args, "shared_cutoff", None) is not None
+            else float(getattr(args, "cutoff", 6.0))
+        ),
         "mm_charge_mode": mode.value,
         "lr_solver": lr_solver,
         "include_lj": include_lj,
+        "learn_mm_lj_scales": learn_mm_lj_scales,
+        "mm_lj_sigma_scale_bounds": (
+            float(args.mm_lj_sigma_scale_min), float(args.mm_lj_sigma_scale_max)
+        ),
+        "mm_lj_epsilon_scale_bounds": (
+            float(args.mm_lj_epsilon_scale_min), float(args.mm_lj_epsilon_scale_max)
+        ),
+        "mm_lj_trainable_mask": tuple(bool(x) for x in trainable_mask),
+        "mm_lj_type_frame_counts": tuple(int(x) for x in type_frame_counts),
         "pme_box_length": pme_box_length,
         "pme_accuracy": pme_accuracy,
         "pme_real_space_cutoff": pme_real_space_cutoff,
@@ -967,7 +1124,10 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             f"mm_switch_on={cfg['mm_switch_on']}, mm_switch_width={cfg['mm_switch_width']}, "
             f"complementary_handoff={cfg['complementary_handoff']}, "
             f"mm_charge_mode={cfg['mm_charge_mode']}, "
-            f"lr_solver={lr_solver}, E_MM={lj_txt}{pme_txt})",
+            f"lr_solver={lr_solver}, E_MM={lj_txt}, "
+            f"learn_mm_lj_scales={learn_mm_lj_scales}, "
+            f"trainable_lj_types={int(trainable_mask.sum())}/{len(trainable_mask)}, "
+            f"min_type_frames={min_type_frames}{pme_txt})",
             flush=True,
         )
     return cfg
@@ -1169,15 +1329,24 @@ def _maybe_unpad_dataset(data_path: str, natoms: Optional[int]) -> tuple[str, in
             if padded_atoms > max_n:
                 print(f"  ⚠️  Data is PADDED: {padded_atoms} atoms in array (padding: {padded_atoms - max_n})")
                 print("  🔧 Auto-removing padding to train efficiently...")
+                n_samples = int(np.asarray(data["R"]).shape[0])
                 data_unpadded = {}
                 for key, value in data.items():
                     arr = np.asarray(value)
-                    if key == "R" and arr.ndim == 3:
-                        data_unpadded[key] = arr[:, :max_n, :]
-                    elif key == "Z" and arr.ndim == 2:
-                        data_unpadded[key] = arr[:, :max_n]
-                    elif key == "F" and arr.ndim == 3:
-                        data_unpadded[key] = arr[:, :max_n, :]
+                    # Trim every per-sample array whose axis 1 is the padded
+                    # atom axis -- not just R/Z/F. The hybrid ML/MM fields
+                    # (cgenff_type_idx, mol_id, cgenff_charge, F_cgenff_mm) are
+                    # also (n, atoms[, 3]); leaving them at the old width makes
+                    # hybrid_forward fail with a broadcasting error between
+                    # atom_mask (n*max_n) and the mol_id-derived keep mask
+                    # (n*padded_atoms). Shape-driven so new per-atom fields are
+                    # handled without another edit here.
+                    if (
+                        arr.ndim >= 2
+                        and arr.shape[0] == n_samples
+                        and arr.shape[1] == padded_atoms
+                    ):
+                        data_unpadded[key] = arr[:, :max_n, ...]
                     else:
                         data_unpadded[key] = value
                 unpadded_path = Path(data_path).parent / f"{Path(data_path).stem}_unpadded.npz"
@@ -1244,7 +1413,9 @@ def main_loop(args):
         valid_data = _load_physnet_npz_dict(args.valid_data, natoms)
     else:
         train_data, valid_data = prepare_datasets(
-            data_key, args.n_train, args.n_valid, data_paths, natoms=natoms
+            data_key, args.n_train, args.n_valid, data_paths, natoms=natoms,
+            subtract_atom_energies=bool(getattr(args, "subtract_atom_energies", False)),
+            subtract_mean=bool(getattr(args, "subtract_mean", False)),
         )
     
     if args.model is not None:
@@ -1257,6 +1428,10 @@ def main_loop(args):
             num_iterations=args.num_iterations,
             n_refinement_blocks=args.n_res,
             cutoff=args.cutoff,
+            switch_start=args.switch_start,
+            switch_end=args.switch_end,
+            electrostatics_off_start=args.electrostatics_off_start,
+            electrostatics_off_end=args.electrostatics_off_end,
             max_atomic_number=args.max_atomic_number,
             zbl=args.zbl,
             trainable_zbl=args.trainable_zbl,
@@ -1327,6 +1502,7 @@ def main_loop(args):
             train_data,
             valid_data,
             learning_rate=args.learning_rate,
+            clip_global=args.clip_global,
             batch_size=args.batch_size,
             num_atoms=natoms,
             energy_weight=args.energy_weight,

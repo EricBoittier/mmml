@@ -44,10 +44,11 @@ def _build_update_fn(skip_charmm: bool, mm_nl_backend: str = "auto"):
         mm_switch_on=12.0,
         mm_switch_width=1.0,
         pbc_cell=float(cell[0, 0]),
-        jax_md_skin_distance=0.0,
+        jax_md_skin_distance=0.5,
         jax_md_update_interval=3,
         defer_xla_gpu_warmup=True,
         mm_nl_backend=mm_nl_backend,
+        debug=True,
     )
     if not isinstance(result, tuple) or len(result) != 2:
         raise RuntimeError(f"expected (mm_fn, update_mm_pairs) from dynamic NL path ({mm_nl_backend})")

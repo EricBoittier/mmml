@@ -27,6 +27,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_heat_ihtfrq,
     resolve_heat_firstt_finalt,
     apply_flat_bottom_from_args,
+    apply_pre_dynamics_lingo_from_args,
     assert_dynamics_ready,
     charmm_grms,
     resolve_echeck_for_cluster,
@@ -69,7 +70,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     refresh_nbonds_after_mlpot_pbc,
     register_mlpot,
     save_cluster_topology_for_vmd,
-    select_all_atoms,
     select_by_resids,
     setup_default_nbonds,
     sync_charmm_positions,
@@ -472,7 +472,11 @@ def run_charmm_mm_pretreat_before_mlpot(
                         quarantine_restart_file(hr, reason="pretreat_heat_fresh")
             heat_echeck = echeck
             if getattr(args, "no_echeck", False) or getattr(args, "no_echeck_heat", False):
-                heat_echeck = -1.0
+                from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                    disabled_charmm_echeck_kcal,
+                )
+
+                heat_echeck = disabled_charmm_echeck_kcal()
             save_interval_ps = timestep_ps * max(
                 1,
                 resolve_dcd_nsavc(
@@ -713,9 +717,28 @@ def _register_mlpot_context(
         defer_jax_warmup = defer_jax_warmup_until_after_mlpot_sd()
 
     if defer_jax_warmup and charmm_lib_links_mpi():
-        # Keep JAX off GPU until after MLpot registration upinb (MPI-linked CHARMM).
-        os.environ["JAX_PLATFORMS"] = "cpu"
-        os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+        # Keep placement on CPU until after MLpot registration upinb (MPI-linked
+        # CHARMM), but register both backends so post-SD GPU promote works.
+        import sys
+
+        if "jax" not in sys.modules:
+            os.environ["JAX_PLATFORMS"] = "cpu,gpu"
+            os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+        else:
+            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                jax_cpu_backend_available,
+            )
+
+            if jax_cpu_backend_available():
+                os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+            elif verbose:
+                print(
+                    "mmml WARNING: MPI MLpot CPU defer skipped — JAX has no CPU "
+                    "backend (imported earlier with GPU-only platforms). Continuing "
+                    "on GPU. Restart with JAX_PLATFORMS=gpu,cpu before import jax "
+                    "to restore CPU defer.",
+                    flush=True,
+                )
 
     if verbose and charmm_lib_links_mpi() and not _under_mpirun():
         print(
@@ -725,23 +748,115 @@ def _register_mlpot_context(
             flush=True,
         )
 
-    atoms = ase.Atoms(numbers=z, positions=r)
     apm = (
         list(atoms_per_monomer)
         if atoms_per_monomer is not None
         else _atoms_per_monomer_list(z, n_monomers, args=args)
     )
-    import sys
+    from mmml.md.ml_region import parse_ml_resnames
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        resolve_mlpot_selection_from_args,
+    )
 
-    if "jax" not in sys.modules:
-        os.environ["JAX_PLATFORMS"] = "cpu"
-        os.environ["MMML_MLPOT_DEVICE"] = "cpu"
+    ml_resnames = parse_ml_resnames(
+        getattr(args, "ml_resnames", None) if args is not None else None
+    )
+    ml_selection = resolve_mlpot_selection_from_args(args)
+    ml_atom_idx = np.asarray(ml_selection.get_atom_indexes(), dtype=int)
+    z_model = np.asarray(z, dtype=int)
+    r_model = np.asarray(r, dtype=float)
+    n_atoms_model = int(n_atoms)
+    n_monomers_model = int(n_monomers)
+    apm_model = list(apm)
+    partial_ml = ml_resnames is not None and int(ml_atom_idx.size) < int(n_atoms)
+    if partial_ml:
+        from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+            resolve_mm_nonbond_mode,
+        )
+
+        if resolve_mm_nonbond_mode(args) == "jax_mic":
+            raise ValueError(
+                "ml_resnames mechanical embedding on PyCHARMM cannot use "
+                "mm_nonbond_mode=jax_mic (that zeros all CHARMM VDW, including "
+                "solvent). Set mm_nonbond_mode: periodic_external and "
+                "lr_solver: ewald (or jax_pme)."
+            )
+        # PhysNet only on the ML residue atoms; solvent stays CHARMM MM.
+        if ml_atom_idx.size == 0:
+            raise ValueError(f"ml_resnames={list(ml_resnames)} selected no atoms")
+        if int(ml_atom_idx.max()) >= int(n_atoms) or int(ml_atom_idx.min()) < 0:
+            raise ValueError(
+                f"ml_resnames selection out of range for n_atoms={n_atoms}: "
+                f"{ml_atom_idx.tolist()[:16]}"
+            )
+        z_model = z_model[ml_atom_idx]
+        r_model = r_model[ml_atom_idx]
+        n_atoms_model = int(z_model.shape[0])
+        # One monomer per contiguous ML residue block in selection order.
+        labels = [
+            str(x).strip().upper()
+            for x in (getattr(args, "_cluster_residue_labels", None) or [])
+        ]
+        if labels and len(labels) == int(n_monomers):
+            from mmml.md.ml_region import _expand_resname_match_set
+
+            want = _expand_resname_match_set(ml_resnames)
+            apm_model = [
+                int(apm[i])
+                for i, lab in enumerate(labels)
+                if str(lab).strip().upper() in want
+            ]
+            if not apm_model or int(sum(apm_model)) != n_atoms_model:
+                apm_model = [n_atoms_model]
+                n_monomers_model = 1
+            else:
+                n_monomers_model = int(len(apm_model))
+        else:
+            apm_model = [n_atoms_model]
+            n_monomers_model = 1
+        if verbose:
+            print(
+                f"MLpot mechanical embedding: ml_resnames={list(ml_resnames)} "
+                f"→ {n_atoms_model} ML atoms / {n_monomers_model} monomers "
+                f"(CHARMM keeps {int(n_atoms) - n_atoms_model} MM atoms)",
+                flush=True,
+            )
+        # Hybrid BLOCK keeps solvent CGenFF; default PSF-zero path would
+        # globally zero bonded params and break TIP3/ACN/DMSO.
+        if args is not None and not bool(getattr(args, "mlpot_use_block", False)):
+            args.mlpot_use_block = True
+            if verbose:
+                print(
+                    "MLpot mechanical embedding: enabling --mlpot-use-block "
+                    "(required for partial ML + solvent MM)",
+                    flush=True,
+                )
+
+    # Platforms + MMML_MLPOT_DEVICE must be set *before* the first jax import
+    # inside load_physnet_mlpot_bundle. A later apply is a no-op for backends.
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        apply_mlpot_jax_platform_env,
+        mlpot_jax_device_name,
+    )
+
+    apply_mlpot_jax_platform_env(quiet=not verbose)
+    if verbose:
+        print(
+            f"MLpot device policy: MMML_MLPOT_DEVICE={mlpot_jax_device_name()} "
+            f"JAX_PLATFORMS={os.environ.get('JAX_PLATFORMS', '(unset)')}",
+            flush=True,
+        )
+    # Do **not** force MMML_MLPOT_DEVICE=cpu here. That used to run whenever jax
+    # was not yet imported, which pinned PhysNet/SD to host CPU for the whole
+    # job (nvidia-smi idle) even though defer-until-after-SD is opt-in and off
+    # by default. CPU pinning belongs only in the defer branch above.
+    atoms_model = ase.Atoms(numbers=z_model, positions=r_model)
     _, _, pyCModel = load_physnet_mlpot_bundle(
         ckpt,
-        n_atoms,
-        atoms,
-        n_monomers=n_monomers,
-        atoms_per_monomer=apm,
+        n_atoms_model,
+        atoms_model,
+        n_monomers=n_monomers_model,
+        atoms_per_monomer=apm_model,
         ml_batch_size=ml_batch_size,
         ml_gpu_count=ml_gpu_count,
         ml_max_active_dimers=ml_max_active_dimers,
@@ -773,8 +888,8 @@ def _register_mlpot_context(
         registration_kwargs["workflow_args"] = args
     ctx = register_mlpot(
         pyCModel,
-        z,
-        select_all_atoms(),
+        z_model,
+        ml_selection,
         use_pbc=mlpot_use_pbc,
         mm_internal_scale=mm_internal_scale,
         mm_nonbond_mode=(
@@ -795,9 +910,6 @@ def _register_mlpot_context(
         **registration_kwargs,
     )
     recover_mpi_for_charmm_after_jax(phase="after MLpot registration")
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
-
-    apply_mlpot_jax_platform_env(quiet=not verbose)
     from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         pin_cuda_for_spatial_mpi,
         spatial_mpi_enabled,
@@ -812,7 +924,7 @@ def _register_mlpot_context(
                 f"{os.environ.get('CUDA_VISIBLE_DEVICES', '')}",
                 flush=True,
             )
-    if int(n_monomers) > 1:
+    if int(n_monomers_model) > 1:
         from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
             DecomposedMlpotModel,
             warmup_decomposed_mlpot,
@@ -837,7 +949,7 @@ def _register_mlpot_context(
             else:
                 warmup_decomposed_mlpot(
                     pyCModel,
-                    r,
+                    r_model,
                     cell=ml_cell,
                     verbose=verbose,
                 )
@@ -845,9 +957,9 @@ def _register_mlpot_context(
 
     if isinstance(pyCModel, DecomposedMlpotModel) and cubic_box_side_A is not None:
         pyCModel._charmm_box_side_A = float(cubic_box_side_A)
-    ctx.ml_Z = np.asarray(z, dtype=int)
+    ctx.ml_Z = np.asarray(z_model, dtype=int)
     ctx.use_pbc = bool(mlpot_use_pbc)
-    ctx.atoms_per_monomer = list(apm)
+    ctx.atoms_per_monomer = list(apm_model)
     ctx.workflow_args = args
     ctx.cubic_box_side_A = float(cubic_box_side_A) if mlpot_use_pbc and cubic_box_side_A else None
     ctx.charmm_cubic_box_side_A = (
@@ -1243,6 +1355,7 @@ def run_dynamics_workflow(
 
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
+        apply_pre_dynamics_lingo_from_args(args)
 
         label = ensemble.upper()
         print(
@@ -1620,6 +1733,11 @@ def run_workflow(
 ) -> int:
     if getattr(args, "mlpot_profile", False):
         import os
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            enable_mlpot_profiling,
+        )
+
+        enable_mlpot_profiling()
         os.environ["MMML_MLPOT_PROFILE"] = "1"
         os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
     setattr(args, "ensemble", ensemble)

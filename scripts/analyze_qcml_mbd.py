@@ -680,7 +680,9 @@ def main() -> None:
         prediction,
         num_atoms,
     )
-    print(json.dumps(metrics, indent=2, sort_keys=True))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(metrics, sort_keys=True)
     print(f"Wrote MBD report to {args.output_dir}")
 
 

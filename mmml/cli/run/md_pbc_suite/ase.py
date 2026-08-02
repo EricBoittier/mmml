@@ -35,6 +35,7 @@ import argparse
 import json
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -480,6 +481,7 @@ def _build_cluster_from_composition_packmol(
     prep_gate_settings: dict[str, Any] | None = None,
     quiet: bool = False,
     geometry_store: Any | None = None,
+    monomer_pdb_templates: dict[str, Path] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
@@ -507,6 +509,7 @@ def _build_cluster_from_composition_packmol(
         prep_gate_settings=prep_gate_settings,
         quiet=quiet,
         geometry_store=geometry_store,
+        monomer_pdb_templates=monomer_pdb_templates,
     )
 
 
@@ -625,6 +628,20 @@ def _maybe_apply_certified_box_json(args: argparse.Namespace, crd_path: Path) ->
 
     box_json = Path(crd_path).expanduser().resolve().parent / "box.json"
     if not box_json.is_file():
+        # Allow an explicit CLI/YAML --box-size when mini/handoff CRDs lack box.json.
+        prev = getattr(args, "box_size", None)
+        if prev is not None and float(prev) > 0.0:
+            side_f = float(prev)
+            args.box_auto = None
+            args.target_density_g_cm3 = None
+            args.bulk_density_fraction = None
+            if not getattr(args, "quiet", False):
+                print(
+                    f"Certified box: L={side_f:.3f} Å from --box-size "
+                    f"(no sibling box.json at {box_json})",
+                    flush=True,
+                )
+            return side_f
         raise FileNotFoundError(
             f"Certified --from-crd requires sibling box.json next to {crd_path} "
             f"(expected {box_json}). Pass an explicit --box-size matching the "
@@ -744,6 +761,29 @@ def resolve_cluster_geometry(
             "--from-psf and --from-crd must be provided together to load a "
             "certified liquid-box (or mini) geometry on ase/jaxmd."
         )
+    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        apply_from_pdb_alias,
+        composition_mode,
+        parse_composition_entries,
+    )
+
+    apply_from_pdb_alias(args)
+    if getattr(args, "composition", None):
+        entries = parse_composition_entries(str(args.composition))
+        if composition_mode(entries) == "full_system_pdb":
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+
+            z, r0, n_mol, _tag = load_cluster_from_pdb(args)
+            atoms_per_list = list(getattr(args, "_cluster_atoms_per_list", []) or [])
+            residue_labels = list(getattr(args, "_cluster_residue_labels", []) or [])
+            composition_summary = dict(
+                getattr(args, "_cluster_composition_summary", {}) or {}
+            )
+            if not atoms_per_list:
+                atoms_per_list = [int(len(z) // max(n_mol, 1))] * int(n_mol)
+            if not residue_labels:
+                residue_labels = ["UNK"] * int(n_mol)
+            return z, r0, atoms_per_list, residue_labels, composition_summary or None
     return build_initial_cluster_from_args(args)
 
 
@@ -770,7 +810,21 @@ def build_initial_cluster_from_args(
         )
 
     if args.composition:
-        composition = _parse_composition(args.composition)
+        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+            resolve_composition_plan,
+        )
+
+        _entries, mode, composition, monomer_pdb_templates = resolve_composition_plan(
+            str(args.composition),
+            builder=getattr(args, "builder", None),
+            packmol=getattr(args, "packmol", None),
+            pyxtal=getattr(args, "pyxtal", None) if use_pyxtal else False,
+        )
+        if mode == "full_system_pdb":
+            raise RuntimeError(
+                "full-system PDB composition should be handled before "
+                "build_initial_cluster_from_args"
+            )
         composition_summary = {res: int(cnt) for res, cnt in composition}
         if use_pyxtal:
             supercell_reps = None
@@ -852,12 +906,17 @@ def build_initial_cluster_from_args(
                 spacing=float(getattr(args, "spacing", 5.0)),
                 prep_gate_settings=packmol_prep_settings_from_namespace(args),
                 quiet=bool(getattr(args, "quiet", False)),
+                monomer_pdb_templates=monomer_pdb_templates,
             )
         else:
             placement = resolve_packmol_placement_mode(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
             )
+            if mode == "packmol_pdb":
+                raise ValueError(
+                    "PDB composition tokens require Packmol; remove --no-packmol"
+                )
             center = packmol_center_for_cold_start(args)
             cube_side: float | None = None
             radius: float | None = None
@@ -948,14 +1007,25 @@ def _build_cluster_from_composition(
             seed=seed,
         )
 
+    # Random SO(3) per monomer when a seed is provided (evenly spaced COMs,
+    # randomized orientations — preferred for dilute PBC smokes).
+    rng = np.random.default_rng(int(seed)) if seed is not None else None
+    if rng is not None:
+        from mmml.utils.geometry_checks import _oriented_repack_template
+
     for i in range(n_molecules):
         s = int(offsets[i])
         e = int(offsets[i + 1])
         residue = ordered_residue_names[i]
         residue_coords, _residue_atom_names, _residue_z = residue_geometries[residue]
-        shifted[s:e] = residue_coords
-        com = shifted[s:e].mean(axis=0)
-        shifted[s:e] = shifted[s:e] - com + centers[i]
+        block = np.asarray(residue_coords, dtype=float).copy()
+        com0 = block.mean(axis=0)
+        internal = block - com0
+        if rng is not None:
+            internal = _oriented_repack_template(
+                internal, random_rotations=True, rng=rng
+            )
+        shifted[s:e] = internal + centers[i]
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     return z, shifted, atoms_per_list, ordered_residue_names
 
@@ -990,12 +1060,22 @@ def _factory_mmml(
     min_com_restraint_force_const: float = 1.0,
     defer_xla_gpu_warmup: bool = False,
     ml_batch_size: Optional[int] = None,
+    ml_gpu_count: int = 1,
     ml_max_active_dimers: Optional[int] = None,
     ml_compute_dtype: Optional[str] = None,
     electrostatics_damping_sigma: float | None = None,
     at_codes_override: np.ndarray | None = None,
     mbd_checkpoint: str | Path | None = None,
     mbd_weight: float = 1.0,
+    lr_solver: str | None = None,
+    ewald_include_self: bool = True,
+    ewald_include_intra: bool = True,
+    mm_charge_mode: str | None = None,
+    mm_charge_correction: bool = False,
+    mm_latent_charge_template: str | Path | None = None,
+    backprop: bool = False,
+    hybrid_hamiltonian: str = "handoff",
+    shared_cutoff: float | None = None,
 ):
     _load_pycharmm_modules()
     if at_codes_override is not None:
@@ -1040,17 +1120,28 @@ def _factory_mmml(
         min_com_restraint_force_const=min_com_restraint_force_const,
         defer_xla_gpu_warmup=defer_xla_gpu_warmup,
         ml_batch_size=ml_batch_size,
+        ml_gpu_count=int(ml_gpu_count or 1),
         ml_max_active_dimers=ml_max_active_dimers,
         ml_compute_dtype=ml_compute_dtype,
         electrostatics_damping_sigma=electrostatics_damping_sigma,
         mbd_checkpoint=mbd_checkpoint,
         mbd_weight=mbd_weight,
+        lr_solver=lr_solver,
+        ewald_include_self=bool(ewald_include_self),
+        ewald_include_intra=bool(ewald_include_intra),
+        mm_charge_mode=mm_charge_mode,
+        mm_charge_correction=mm_charge_correction,
+        mm_latent_charge_template=mm_latent_charge_template,
+        hybrid_hamiltonian=hybrid_hamiltonian,
+        shared_cutoff=shared_cutoff,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(
         ml_switch_width=ml_cut,
         mm_switch_on=mm_sw,
         mm_switch_width=mm_cut,
+        hybrid_hamiltonian=hybrid_hamiltonian,
+        shared_cutoff=shared_cutoff,
     )
     calc_result = factory(
         atomic_numbers=z,
@@ -1060,7 +1151,7 @@ def _factory_mmml(
         doML=do_ml,
         doMM=do_mm,
         doML_dimer=do_ml_dimer,
-        backprop=False,
+        backprop=bool(backprop),
         debug=False,
         energy_conversion_factor=1.0,
         force_conversion_factor=1.0,
@@ -1522,10 +1613,8 @@ def run_md(
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
-
-    apply_xla_cuda_timer_log_filter()
+def build_parser() -> argparse.ArgumentParser:
+    """CLI parser for the ASE md-system backend (also used by unit tests)."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--checkpoint",
@@ -1579,11 +1668,48 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
+    # md_system forwards both of these to every backend unconditionally, so a
+    # parser that does not know them turns `mmml md-system` into argparse
+    # exit 2 in the subprocess. Kept name-for-name with `run_sim`.
+    parser.add_argument(
+        "--hybrid-hamiltonian",
+        choices=("handoff", "shared_cutoff"),
+        default="handoff",
+        help="Hybrid Hamiltonian: existing COM handoff or additive force-shifted shared cutoff.",
+    )
+    parser.add_argument(
+        "--shared-cutoff",
+        type=float,
+        default=None,
+        help="Atomic ML/MM cutoff (Å) for shared_cutoff mode; defaults to model cutoff.",
+    )
     parser.add_argument(
         "--include-mm",
+        "--do-mm",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Include JAX MM LJ/Coulomb pairs; --no-include-mm = ML (PhysNet) only.",
+        dest="include_mm",
+        help="Include JAX MM LJ/Coulomb pairs (doMM); --no-include-mm = ML only.",
+    )
+    parser.add_argument(
+        "--do-ml",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml",
+        help="Include ML monomer terms (doML). Default: on.",
+    )
+    parser.add_argument(
+        "--do-ml-dimer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="do_ml_dimer",
+        help="Include ML dimer correction (doML_dimer). Default: on.",
+    )
+    parser.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        default=False,
+        help="Disable ML dimer terms (sets do_ml_dimer=False).",
     )
     parser.add_argument("--mm-cutoff", type=float, default=DEFAULT_MM_SWITCH_WIDTH)
     parser.add_argument("--pre-min-fmax", type=float, default=0.1)
@@ -1607,6 +1733,21 @@ def main(argv: list[str] | None = None) -> int:
         help="Abort before MD if post-minimization Fmax exceeds this threshold (eV/A).",
     )
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05, help="ASE BFGS maxstep (A)")
+    parser.add_argument(
+        "--fire-min-steps",
+        type=int,
+        default=200,
+        help=(
+            "ASE FIRE steps for calculator / rescue-style minimize (md-system argv "
+            "parity with jaxmd/pycharmm; default 200)."
+        ),
+    )
+    parser.add_argument(
+        "--fire-min-maxstep",
+        type=float,
+        default=0.2,
+        help="ASE FIRE max atomic displacement per step in Å (default 0.2).",
+    )
     parser.add_argument(
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
@@ -1655,6 +1796,15 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="Load certified/liquid-box CRD with --from-psf (skips Packmol rebuild).",
+    )
+    parser.add_argument(
+        "--from-pdb",
+        type=Path,
+        default=None,
+        help=(
+            "Full-system cold start from a CGenFF-named PDB (CHARMM READ SEQU PDB). "
+            "Equivalent to a lone composition PDB token."
+        ),
     )
     parser.add_argument(
         "--packmol",
@@ -1817,11 +1967,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40)."
     )
     parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Parallel PhysNet chunks across N local GPUs (default 1; "
+            "or MMML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
+        ),
+    )
+    parser.add_argument(
         "--ml-max-active-dimers",
         type=int,
         default=None,
         metavar="N",
         help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+    )
+    parser.add_argument(
+        "--mlpot-profile",
+        action="store_true",
+        help="Enable ASE calculator / chunk-apply wall-time profiling.",
     )
     from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
     add_ml_compute_dtype_args(parser)
@@ -1899,11 +2064,87 @@ def main(argv: list[str] | None = None) -> int:
         help="Require periodic cell in handoff for PBC continuation.",
     )
     parser.add_argument(
+        "--lr-solver",
+        "--lr_solver",
+        dest="lr_solver",
+        type=str,
+        default=None,
+        choices=("auto", "mic", "jax_pme", "nvalchemiops_pme", "ewald", "scafacos"),
+        help=(
+            "Long-range Coulomb backend (default: mic, the switched pair loop). "
+            "ewald: jit-native, pure JAX full-box Ewald over ALL atoms (no "
+            "exclusions, no switching, no LJ) -- the same operator "
+            "physnet-train --lr-solver ewald trains against."
+        ),
+    )
+    parser.add_argument(
+        "--ewald-omit-self",
+        action="store_true",
+        help=(
+            "With --lr-solver ewald: use the MIC/non-Ewald-trained compatibility "
+            "operator (cross-monomer Ewald only; omit intramolecular and Gaussian "
+            "self terms). Default full-box Ewald retains both for Ewald-trained models."
+        ),
+    )
+    parser.add_argument(
+        "--mm-charge-mode",
+        "--mm_charge_mode",
+        dest="mm_charge_mode",
+        type=str,
+        default=None,
+        choices=(
+            "fixed",
+            "q0",
+            "latent",
+            "q1",
+            "fixed_plus_latent",
+            "latent_mean",
+            "latent_dynamic",
+        ),
+        help=(
+            "Hybrid MM Coulomb charges for E_MM: fixed (q_CGenFF, default), "
+            "q0 / Q⁰ (neutralize unperturbed monomer q_ML; train+liquid), "
+            "latent / q1 / Q¹ (AB-perturbed q_ML; dimer-only), "
+            "fixed_plus_latent, latent_mean (frozen template; see "
+            "--mm-latent-charge-template), or latent_dynamic (live multi-dimer "
+            "Q¹ average). q0/latent_mean/latent_dynamic work for liquids."
+        ),
+    )
+    parser.add_argument(
+        "--mm-charge-correction",
+        "--mm_charge_correction",
+        dest="mm_charge_correction",
+        action="store_true",
+        default=False,
+        help="Alias for --mm-charge-mode fixed_plus_latent.",
+    )
+    parser.add_argument(
+        "--mm-latent-charge-template",
+        "--mm_latent_charge_template",
+        dest="mm_latent_charge_template",
+        type=str,
+        default=None,
+        help=(
+            "Path to a .npz template from scripts/compute_latent_monomer_charges.py. "
+            "Required with --mm-charge-mode latent_mean."
+        ),
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Reduce console output.",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+
+    apply_xla_cuda_timer_log_filter()
+    args = build_parser().parse_args(argv)
+    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+
+    normalize_hybrid_assembly_flags(args)
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
 
@@ -2091,8 +2332,10 @@ def main(argv: list[str] | None = None) -> int:
             "runs": {},
         },
     }
-    use_ml_terms = True
-    use_ml_dimer_terms = True
+    use_ml_terms = bool(getattr(args, "do_ml", True))
+    use_ml_dimer_terms = bool(getattr(args, "do_ml_dimer", True))
+    if bool(getattr(args, "skip_ml_dimers", False)):
+        use_ml_dimer_terms = False
     if args.composition and args.mm_only_on_mixed:
         use_ml_terms = False
         use_ml_dimer_terms = False
@@ -2194,11 +2437,20 @@ def main(argv: list[str] | None = None) -> int:
             min_com_restraint_force_const=args.min_com_restraint_k,
             defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
             ml_batch_size=getattr(args, "ml_batch_size", None),
+            ml_gpu_count=int(getattr(args, "ml_gpu_count", None) or 1),
             ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
             ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
             electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
             mbd_checkpoint=getattr(args, "mbd_checkpoint", None),
             mbd_weight=getattr(args, "mbd_weight", 1.0),
+            lr_solver=getattr(args, "lr_solver", None),
+            ewald_include_self=not bool(getattr(args, "ewald_omit_self", False)),
+            ewald_include_intra=not bool(getattr(args, "ewald_omit_self", False)),
+            mm_charge_mode=getattr(args, "mm_charge_mode", None),
+            mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
+            mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
+            hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
+            shared_cutoff=getattr(args, "shared_cutoff", None),
         )
         atoms.calc = calc
         _save_cutoff_plot(
@@ -2473,7 +2725,9 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "suite_timing.json").write_text(json.dumps(timing_payload, indent=2))
     (out_dir / "suite_summary.json").write_text(json.dumps(suite_summary, indent=2))
     (out_dir / "timing_log.txt").write_text("\n".join(timing_log) + "\n", encoding="utf-8")
-    print(json.dumps(suite_summary["runs"], indent=2))
+    from mmml.utils.rich_report import print_colored_json
+
+    print_colored_json(suite_summary["runs"])
     print(f"Wrote {out_dir / 'suite_summary.json'}")
     print(f"Wrote {out_dir / 'suite_timing.json'} and {out_dir / 'timing_log.txt'}")
     return 0

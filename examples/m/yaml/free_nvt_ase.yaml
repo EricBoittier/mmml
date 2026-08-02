@@ -1,0 +1,18 @@
+# Vacuum NVT (ASE Langevin, ML-only) — AMM1 + CH3CL
+setup: free_nvt
+backend: ase
+composition: AMM1:1,CH3CL:1
+spacing: 4.0
+checkpoint: examples/m/model_ext.json
+ps: 0.1
+dt_fs: 0.5
+temperature: 300
+include_mm: false
+mm_switch_on: 8.0
+skip_jit_warmup: true
+output_dir: artifacts/nh3_ch3cl/md_system_free_nvt_ase
+quiet: true
+
+# Trajectory output (PyCHARMM → DCD+PSF; ASE/jaxmd → .traj under output_dir)
+dcd_nsavc: 1
+dcd_max_frames: 50
