@@ -23,7 +23,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO / "artifacts" / "md_embedding" / "aaa_docs"
-LONG_CFG = REPO / "mmml" / "cli" / "run" / "md_embedding_aaa_train_long.yaml"
+LONG_CFG = REPO / "mmml" / "cli" / "run" / "md_embedding_aaa_train_long.example.yaml"
 
 
 def _run(cmd: list[str]) -> None:

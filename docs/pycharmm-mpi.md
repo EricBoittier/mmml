@@ -30,7 +30,7 @@ python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
   --output-dir artifacts/serial_vs_mpirun_$(date +%Y%m%d_%H%M%S)
 ```
 
-Writes `serial_vs_mpirun.json` with exit codes, elapsed time, and env snapshot (`MMML_MLPOT_DEVICE`, `OMP_NUM_THREADS`, etc.). Config: `mmml/cli/run/md_system.serial_mpi_probe.yaml`.
+Writes `serial_vs_mpirun.json` with exit codes, elapsed time, and env snapshot (`MMML_MLPOT_DEVICE`, `OMP_NUM_THREADS`, etc.). Config: `mmml/cli/run/md_system.serial_mpi_probe.example.yaml`.
 
 **Production / Slurm / `np>1`:** still use `mmml-charmm-mpirun.sh` even when the probe passes — correct MPI bootstrap, OMP pin, GPU-per-rank, and deferred JAX.
 

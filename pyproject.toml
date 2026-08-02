@@ -336,9 +336,15 @@ mmml = [
     "models/physnetjax/defaults/*.json",
     "models/physnetjax/defaults/hf_json/*.json",
     "cli/templates/workflows/**/*",
+    # Configs a user is told to run by name in the docs must ship with the
+    # package, or `mmml md-system --config <that path>` only works from a source
+    # checkout. `.example.yaml` is the marker for "shipped example" in cli/run;
+    # cli/misc and mcp/examples are documented entry points too.
     "cli/run/*.example.yaml",
     "cli/run/presets/*.yaml",
+    "cli/misc/*.example.yaml",
     "mcp/recipes/*.yaml",
+    "mcp/examples/*.yaml",
 ]
 pycharmm = ["README.md", "LICENSE"]
 

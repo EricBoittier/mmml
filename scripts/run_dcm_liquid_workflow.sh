@@ -20,7 +20,7 @@
 #   True bulk ρ + MIC: BOX_AUTO=count BOX_SIZE=32 (→ ~DCM:308; slow; ensure_charmm_mlpot_limits)
 #
 # MD profiles (Phase B):
-#   resilient (default) — full preset stack via dcm_liquid_workflow.resilient.yaml
+#   resilient (default) — full preset stack via dcm_liquid_workflow.resilient.example.yaml
 #   smoke             — stripped mini-only run (legacy fast path)
 #
 # Prerequisites:
@@ -51,7 +51,7 @@ set -euo pipefail
 MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
-RESILIENT_MD_CONFIG="$MMML_ROOT/mmml/cli/run/dcm_liquid_workflow.resilient.yaml"
+RESILIENT_MD_CONFIG="$MMML_ROOT/mmml/cli/run/dcm_liquid_workflow.resilient.example.yaml"
 
 # shellcheck source=scripts/resolve_mmml_env.sh
 source "$MMML_ROOT/scripts/resolve_mmml_env.sh"

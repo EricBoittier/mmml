@@ -236,7 +236,7 @@ python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
   --output-dir artifacts/serial_vs_mpirun_$(date +%Y%m%d_%H%M%S)
 ```
 
-Config: `mmml/cli/run/md_system.serial_mpi_probe.yaml` (ACO:2 hybrid mini). JSON report
+Config: `mmml/cli/run/md_system.serial_mpi_probe.example.yaml` (ACO:2 hybrid mini). JSON report
 includes hostname, UTC timestamp, env snapshot, and per-run `elapsed_s`.
 
 ## Library module
