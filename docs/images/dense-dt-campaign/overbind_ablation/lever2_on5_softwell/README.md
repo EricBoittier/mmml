@@ -47,6 +47,16 @@ wells.
 
 ## PBC confirmation
 
-See `pbc_translation.json` (lattice shift / wrap cases). Pass criterion:
-$|\Delta E|\lesssim 10^{-4}$ eV and force max-abs delta $\lesssim 10^{-3}$ eV/Å
-on lattice and molecule-wrapped images (repeat-only isolates nondeterminism).
+**`pbc_ok: true`** on DCM:120, L=24, 5 atoms/monomer, softwell portable ckpt
+(`on=5`, `ml_w=1.5`, `mm_w=5`). See [`pbc_translation.json`](pbc_translation.json).
+
+| case | $\Delta E$ (eV) | force max $|\Delta|$ (eV/Å) | pass |
+|---|---:|---:|:---:|
+| lattice_shift_x | $\sim 10^{-12}$ | $\sim 10^{-11}$ | ✓ |
+| lattice_shift_xyz | $\sim 10^{-12}$ | $\sim 10^{-11}$ | ✓ |
+| arbitrary_molecule_wrapped | $\sim 10^{-11}$ | $\sim 10^{-11}$ | ✓ |
+| half_cell_molecule_wrapped | $\sim 10^{-12}$ | $\sim 10^{-11}$ | ✓ |
+| base_repeat | $\sim 10^{-12}$ | $\sim 10^{-12}$ | ✓ |
+
+Criteria: lattice $|\Delta E|\le 10^{-4}$ eV / force $\le 10^{-3}$ eV/Å;
+wrap $|\Delta E|\le 5\cdot10^{-4}$ eV / force $\le 5\cdot10^{-3}$ eV/Å.
