@@ -1,0 +1,191 @@
+{
+  "frames": [
+    {
+      "file": "ori_d00_q00_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 0,
+      "orientation": 0,
+      "r_A": 3.5,
+      "dmin_A": 1.0638191817005898
+    },
+    {
+      "file": "ori_d00_q01_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 0,
+      "orientation": 1,
+      "r_A": 3.5,
+      "dmin_A": 1.6469982067801752
+    },
+    {
+      "file": "ori_d00_q02_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 0,
+      "orientation": 2,
+      "r_A": 3.5,
+      "dmin_A": 1.840871520987048
+    },
+    {
+      "file": "ori_d00_q03_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 0,
+      "orientation": 3,
+      "r_A": 3.5,
+      "dmin_A": 1.8082531134582183
+    },
+    {
+      "file": "ori_d01_q00_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 1,
+      "orientation": 0,
+      "r_A": 3.5,
+      "dmin_A": 0.714013677070066
+    },
+    {
+      "file": "ori_d01_q01_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 1,
+      "orientation": 1,
+      "r_A": 3.5,
+      "dmin_A": 1.922078468328378
+    },
+    {
+      "file": "ori_d01_q02_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 1,
+      "orientation": 2,
+      "r_A": 3.5,
+      "dmin_A": 1.3037206144045037
+    },
+    {
+      "file": "ori_d01_q03_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 1,
+      "orientation": 3,
+      "r_A": 3.5,
+      "dmin_A": 1.9608732644166633
+    },
+    {
+      "file": "ori_d02_q00_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 2,
+      "orientation": 0,
+      "r_A": 3.5,
+      "dmin_A": 1.8313548798020982
+    },
+    {
+      "file": "ori_d02_q01_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 2,
+      "orientation": 1,
+      "r_A": 3.5,
+      "dmin_A": 1.4381846746789095
+    },
+    {
+      "file": "ori_d02_q02_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 2,
+      "orientation": 2,
+      "r_A": 3.5,
+      "dmin_A": 2.0279733216008577
+    },
+    {
+      "file": "ori_d02_q03_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 2,
+      "orientation": 3,
+      "r_A": 3.5,
+      "dmin_A": 1.411740101800873
+    },
+    {
+      "file": "ori_d03_q00_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 3,
+      "orientation": 0,
+      "r_A": 3.5,
+      "dmin_A": 1.6419600331827005
+    },
+    {
+      "file": "ori_d03_q01_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 3,
+      "orientation": 1,
+      "r_A": 3.5,
+      "dmin_A": 1.1969701220857725
+    },
+    {
+      "file": "ori_d03_q02_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 3,
+      "orientation": 2,
+      "r_A": 3.5,
+      "dmin_A": 1.499690289645993
+    },
+    {
+      "file": "ori_d03_q03_r3p50.png",
+      "kind": "orientation_grid",
+      "direction": 3,
+      "orientation": 3,
+      "r_A": 3.5,
+      "dmin_A": 1.0251045522563154
+    },
+    {
+      "file": "approach_d00_q00_r2p80.png",
+      "kind": "approach",
+      "direction": 0,
+      "orientation": 0,
+      "r_A": 2.8,
+      "dmin_A": 0.6009693133750178
+    },
+    {
+      "file": "approach_d00_q00_r3p50.png",
+      "kind": "approach",
+      "direction": 0,
+      "orientation": 0,
+      "r_A": 3.5,
+      "dmin_A": 1.0638191817005898
+    },
+    {
+      "file": "approach_d00_q00_r5p00.png",
+      "kind": "approach",
+      "direction": 0,
+      "orientation": 0,
+      "r_A": 5.0,
+      "dmin_A": 2.4663502762327596
+    },
+    {
+      "file": "approach_d00_q00_r8p00.png",
+      "kind": "approach",
+      "direction": 0,
+      "orientation": 0,
+      "r_A": 8.0,
+      "dmin_A": 5.430030253369866
+    },
+    {
+      "file": "deepest_well_ray066_r2p50.png",
+      "kind": "deepest_well",
+      "ray": 66,
+      "direction": 8,
+      "orientation": 2,
+      "r_A": 2.5,
+      "dmin_A": 0.9159868539083517
+    },
+    {
+      "file": "softest_well_ray018_r3p51.png",
+      "kind": "softest_well",
+      "ray": 18,
+      "direction": 2,
+      "orientation": 2,
+      "r_A": 3.5106382978723403,
+      "dmin_A": 1.935189915936846
+    },
+    {
+      "file": "shallow_soft_ray038_r4p52.png",
+      "kind": "shallow_soft",
+      "ray": 38,
+      "direction": 4,
+      "orientation": 6,
+      "r_A": 4.5212765957446805,
+      "dmin_A": 2.3293971390715473
+    }
+  ]
+}
