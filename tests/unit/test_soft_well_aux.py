@@ -40,10 +40,10 @@ def test_soft_well_loss_penalises_underbind_and_deep_wells():
 def test_soft_well_loss_caps_outlier_samples():
     import jax.numpy as jnp
 
-    # Pathological deep well must not explode past per_sample_cap.
+    # Pathological deep well must soft-cap near per_sample_cap (tanh).
     deep = jnp.asarray([-200.0 * KCAL_MOL_TO_EV])
     loss = float(soft_well_e_int_loss(deep, center_weight=0.0, per_sample_cap=64.0))
-    assert loss == pytest.approx(64.0, abs=1e-5)
+    assert 60.0 <= loss <= 64.0
 
 
 def test_soft_well_loss_units_match_ev_to_kcal():

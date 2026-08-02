@@ -70,15 +70,20 @@ def soft_well_e_int_loss(
     deep = jnp.maximum(float(deep_floor_kcal) - e_kcal, 0.0)
     hard = jnp.maximum(float(hard_floor_kcal) - e_kcal, 0.0)
     center = e_kcal - float(target_mid_kcal)
+    # Only centre-pull samples already near the soft well; far-repulsive
+    # outliers (E_int ≫ 0) must not dominate the gradient.
+    near = jnp.exp(-((e_kcal - float(target_mid_kcal)) / 6.0) ** 2)
     per = (
         under * under
         + over * over
         + float(deep_weight) * deep * deep
         + float(hard_weight) * hard * hard
-        + float(center_weight) * center * center
+        + float(center_weight) * near * center * center
     )
+    # Soft cap keeps a non-zero gradient (hard min() zeros grads past the cap).
     if per_sample_cap is not None and float(per_sample_cap) > 0.0:
-        per = jnp.minimum(per, float(per_sample_cap))
+        c = float(per_sample_cap)
+        per = c * jnp.tanh(per / c)
     return jnp.mean(per)
 
 
@@ -361,12 +366,12 @@ if jax is not None and jnp is not None and optax is not None and otu is not None
             "hard_floor_kcal",
             "center_weight",
             "loss_scale",
+            "update_scale",
         ),
     )
     def soft_well_train_step(
         model_apply,
         optimizer_update,
-        transform_state,
         batch,
         batch_size,
         opt_state,
@@ -381,6 +386,7 @@ if jax is not None and jnp is not None and optax is not None and otu is not None
         hard_floor_kcal: float = DEFAULT_HARD_FLOOR_KCAL,
         center_weight: float = 0.25,
         loss_scale: float = 1.0,
+        update_scale: float = 1.0,
         ema_decay: float = 0.999,
         frozen_sigma_scale=None,
         frozen_epsilon_scale=None,
@@ -405,7 +411,7 @@ if jax is not None and jnp is not None and optax is not None and otu is not None
 
         (loss, e_int), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
         updates, opt_state = optimizer_update(grad, opt_state, params)
-        updates = otu.tree_scalar_mul(transform_state.scale, updates)
+        updates = otu.tree_scalar_mul(float(update_scale), updates)
         params = optax.apply_updates(params, updates)
         params = clip_mm_lj_scale_params(
             params,

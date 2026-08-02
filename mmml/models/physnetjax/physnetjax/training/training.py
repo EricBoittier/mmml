@@ -731,7 +731,6 @@ def train_model(
                 ) = soft_well_train_step(
                     model_apply=model.apply,
                     optimizer_update=optimizer.update,
-                    transform_state=transform_state,
                     batch=sw_batch,
                     batch_size=int(soft_well_cfg.batch_size),
                     opt_state=opt_state,
@@ -745,6 +744,7 @@ def train_model(
                     hard_floor_kcal=float(soft_well_cfg.hard_floor_kcal),
                     center_weight=float(soft_well_cfg.center_weight),
                     loss_scale=float(soft_well_cfg.loss_scale),
+                    update_scale=float(getattr(transform_state, "scale", 1.0)),
                     ema_decay=ema_decay,
                     frozen_sigma_scale=frozen_mm_lj_sigma_scale,
                     frozen_epsilon_scale=frozen_mm_lj_epsilon_scale,
