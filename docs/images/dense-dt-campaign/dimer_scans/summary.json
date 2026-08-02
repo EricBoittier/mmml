@@ -1,0 +1,61 @@
+{
+  "learned": {
+    "checkpoint": "artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json",
+    "sidecar": "artifacts/lj_scales/ckpts/hybrid_mm_fixed_lj_scales-4d68132d-c686-4ded-9887-efc16d5b2638/hybrid_mm.json",
+    "data": "artifacts/lj_scales/dataset_cgenff.npz",
+    "n_rays": 96,
+    "n_r": 48,
+    "r_min": 2.5,
+    "r_max": 12.0,
+    "mm_switch_on": 8.0,
+    "ml_switch_width": 1.5,
+    "mm_switch_width": 5.0,
+    "deepest_kcal": -55.34628813826397,
+    "mean_well_kcal": -30.430216421392615,
+    "Z_monomer": [
+      6,
+      17,
+      17,
+      1,
+      1
+    ],
+    "species": "DCM",
+    "file_prefix": "hybrid_orient_DCM_epoch222",
+    "median_mean_abs_dF_at_handoff": 0.5766333773599953,
+    "median_peak_dFcom_soft_kcal_A": 39.66741230528089,
+    "deepest_soft_kcal": -21.334029821996843,
+    "mean_soft_well_kcal": -10.172028997266857,
+    "r_at_deepest_soft": 3.5106382978723403
+  },
+  "unit": {
+    "checkpoint": "artifacts/lj_scales/ckpts/params_hybrid_mm_fixed_lj_scales_epoch222.json",
+    "sidecar": "artifacts/lj_scales/dense_dt_campaign/dimer_scans/hybrid_mm_unit_scales.json",
+    "data": "artifacts/lj_scales/dataset_cgenff.npz",
+    "n_rays": 96,
+    "n_r": 48,
+    "r_min": 2.5,
+    "r_max": 12.0,
+    "mm_switch_on": 8.0,
+    "ml_switch_width": 1.5,
+    "mm_switch_width": 5.0,
+    "deepest_kcal": -55.3466892654571,
+    "mean_well_kcal": -30.430664139182255,
+    "Z_monomer": [
+      6,
+      17,
+      17,
+      1,
+      1
+    ],
+    "species": "DCM",
+    "file_prefix": "hybrid_orient_DCM_unit_scales",
+    "median_mean_abs_dF_at_handoff": 0.5766124828642054,
+    "median_peak_dFcom_soft_kcal_A": 39.66822041684289,
+    "deepest_soft_kcal": -21.33453352328313,
+    "mean_soft_well_kcal": -10.172476715056495,
+    "r_at_deepest_soft": 3.5106382978723403
+  },
+  "mean_well_kcal_learned": -8.697393019592285,
+  "r_at_mean_well_A": 3.5106382978723403,
+  "note": "DCM\u2013DCM hybrid wells are far deeper than literature (~\u22123 to \u22125 kcal/mol). Learned vs unit LJ scales are nearly identical here \u2014 the overbinding is dominated by the ML/electrostatic handoff, which rationalizes the dense NVT droplet collapse."
+}

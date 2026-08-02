@@ -77,3 +77,5 @@ Supports draft Results §§7–8 (conservation + DCM liquid density) in
 `docs/manuscripts/condensed-phase-hybrid-mlmm/`. Dense NPT/NVT at L=24/26 is the
 bridge from the sparse L=30 (~0.63 g/cm³) cliff toward bulk ρ≈1.33 before bond
 SHAKE / full `pbc_liquid_density_dyn` production tables.
+
+- `scripts/slurm/dense_dt_campaign/plot_dimer_profiles.py` — DCM–DCM 1D interaction profiles
