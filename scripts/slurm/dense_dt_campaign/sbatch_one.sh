@@ -8,8 +8,17 @@
 # Job name / logs set by submit_all via --job-name and -o/-e overrides.
 
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# Slurm copies this script to /var/spool/slurm/job*/slurm_script — never derive
+# ROOT from BASH_SOURCE under the batch allocation.
+if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}" ]]; then
+  ROOT="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
+elif [[ -n "${MMML_ROOT:-}" && -d "${MMML_ROOT}" ]]; then
+  ROOT="$(cd "${MMML_ROOT}" && pwd)"
+else
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+fi
 cd "$ROOT"
+echo "ROOT=$ROOT (submit_dir=${SLURM_SUBMIT_DIR:-})"
 
 TAG="${CAMPAIGN_TAG:?}"
 BOX_DIR="${CAMPAIGN_BOX_DIR:?}"
