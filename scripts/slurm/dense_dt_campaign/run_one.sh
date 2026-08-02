@@ -146,8 +146,8 @@ set +e
 rc=$?
 set -e
 
-el="nan"
-[[ -s "$OUT/wall.time" ]] && el=$(awk '{print $NF}' "$OUT/wall.time")
+# Keep RESULT logging even if wall.time is missing/corrupt (set -e must not abort here).
+el=$(awk '{print $NF}' "$OUT/wall.time" 2>/dev/null || echo nan)
 echo "RESULT $TAG rc=$rc wall=${el}s ensemble=$ENSEMBLE dt=$DT_FS x64=$X64 box=$BOX_A" | tee -a "$OUT_ROOT/bench.log"
 if [[ $rc -ne 0 ]]; then
   echo "---- tail $TAG/bench.log ----" | tee -a "$OUT_ROOT/bench.log"
