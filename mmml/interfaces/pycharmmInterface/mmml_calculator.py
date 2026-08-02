@@ -2338,14 +2338,7 @@ def setup_calculator(
                         return out["energy"], out["forces"], out.get("charges")
                     return out["energy"], out["forces"]
 
-                if _needs_ml_mm_charges:
-                    # Chunked multi-GPU path does not yet scatter Mode B/C charges;
-                    # dimers used for parity are small and use the non-chunked path.
-                    raise NotImplementedError(
-                        f"mm_charge_mode={_mm_charge_mode.value} is not supported "
-                        "with chunked ML apply; reduce system size or disable chunking."
-                    )
-                e_out, f_out = run_chunked_model_apply(
+                chunked_out = run_chunked_model_apply(
                     R_chunks=R_chunks,
                     Z_chunks=Z_chunks,
                     N_chunks=N_chunks,
@@ -2355,7 +2348,12 @@ def setup_calculator(
                     max_atoms=max_atoms,
                     n_gpus=_ml_n_gpus,
                     apply_one_chunk=apply_one_chunk,
+                    has_aux=_needs_ml_mm_charges,
                 )
+                if _needs_ml_mm_charges:
+                    e_out, f_out, q_out = chunked_out
+                    return {"energy": e_out, "forces": f_out, "charges": q_out}
+                e_out, f_out = chunked_out
                 return {"energy": e_out, "forces": f_out}
 
             if is_spooky_model:

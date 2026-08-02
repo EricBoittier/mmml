@@ -1377,6 +1377,9 @@ def _attach_ase_mmml_calculator(
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
         at_codes_override=at_codes_override,
+        mm_charge_mode=getattr(args, "mm_charge_mode", None),
+        mm_charge_correction=bool(getattr(args, "mm_charge_correction", False)),
+        mm_latent_charge_template=getattr(args, "mm_latent_charge_template", None),
     )
     atoms.calc = calc
     return calc

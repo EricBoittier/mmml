@@ -76,6 +76,47 @@ def test_evaluate_int_arg_treats_none_as_default() -> None:
     assert _evaluate_int_arg(Namespace(), "max_pairs", 20_000) == 20_000
 
 
+def test_attach_ase_mmml_forwards_ml_charge_configuration(monkeypatch) -> None:
+    """Static validation must exercise the requested E_MM charge Hamiltonian."""
+    from mmml.cli.run.md_evaluate_npz import _attach_ase_mmml_calculator
+
+    captured: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_factory(**kwargs):
+        captured.update(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(
+        "mmml.cli.run.md_pbc_suite.ase._factory_mmml", fake_factory
+    )
+    atoms = MagicMock()
+    atoms.get_positions.return_value = np.zeros((6, 3), dtype=np.float64)
+    args = Namespace(
+        mm_charge_mode="q0",
+        mm_charge_correction=False,
+        mm_latent_charge_template=None,
+    )
+
+    result = _attach_ase_mmml_calculator(
+        args,
+        atoms=atoms,
+        z=np.array([8, 1, 1, 8, 1, 1], dtype=np.int32),
+        n_monomers=2,
+        atoms_per_list=[3, 3],
+        base_ckpt_dir=Path("charge-model.json"),
+        use_pbc=True,
+        L=20.0,
+        at_codes_override=None,
+    )
+
+    assert result is sentinel
+    assert atoms.calc is sentinel
+    assert captured["mm_charge_mode"] == "q0"
+    assert captured["mm_charge_correction"] is False
+    assert captured["mm_latent_charge_template"] is None
+
+
 def test_save_evaluate_trajectory_npz_roundtrip(tmp_path: Path) -> None:
     z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
     r = np.random.default_rng(0).random((5, 3))
