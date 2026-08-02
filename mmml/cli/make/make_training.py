@@ -689,6 +689,68 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
         help="Teacher checkpoint for distillation (defaults to warm-start checkpoint)",
     )
 
+    # Soft-well E_int aux (real lever for lit DCM soft wells at on=5)
+    parser.add_argument(
+        "--soft-well-aux",
+        "--soft_well_aux",
+        action="store_true",
+        default=False,
+        dest="soft_well_aux",
+        help=(
+            "Enable contact-ok soft-well E_int aux loss "
+            "(lit DCM window −5…−3 kcal/mol)"
+        ),
+    )
+    parser.add_argument(
+        "--soft-well-steps-per-epoch",
+        "--soft_well_steps_per_epoch",
+        type=int,
+        default=16,
+        dest="soft_well_steps_per_epoch",
+        help="Soft-well aux optimizer steps after each ASE epoch",
+    )
+    parser.add_argument(
+        "--soft-well-batch-size",
+        "--soft_well_batch_size",
+        type=int,
+        default=32,
+        dest="soft_well_batch_size",
+        help="Batch size for soft-well aux steps",
+    )
+    parser.add_argument(
+        "--soft-well-loss-scale",
+        "--soft_well_loss_scale",
+        type=float,
+        default=1.0,
+        dest="soft_well_loss_scale",
+        help="Multiplier on soft-well window loss",
+    )
+    parser.add_argument(
+        "--soft-well-target-lo",
+        type=float,
+        default=-5.0,
+        dest="soft_well_target_lo",
+        help="Soft-well E_int lower window edge (kcal/mol)",
+    )
+    parser.add_argument(
+        "--soft-well-target-hi",
+        type=float,
+        default=-3.0,
+        dest="soft_well_target_hi",
+        help="Soft-well E_int upper window edge (kcal/mol)",
+    )
+    parser.add_argument(
+        "--frozen-mm-lj-scales-sidecar",
+        "--frozen_mm_lj_scales_sidecar",
+        type=str,
+        default=None,
+        dest="frozen_mm_lj_scales_sidecar",
+        help=(
+            "hybrid_mm.json with mm_lj_*_scale; attach and hard-freeze so "
+            "train/deploy share the same MM LJ"
+        ),
+    )
+
     # Post-hoc learning curves
     parser.add_argument(
         "--metrics-plot",
@@ -936,6 +998,17 @@ def validate_train_args(args: argparse.Namespace) -> None:
                 "--distill requires a teacher checkpoint "
                 "(set --teacher-checkpoint, --physnet-checkpoint, or --physnet-transfer-model)"
             )
+
+    if args.soft_well_aux and not args.hybrid_mm:
+        raise ValueError("--soft-well-aux requires --hybrid-mm")
+    if args.soft_well_aux and args.soft_well_steps_per_epoch < 1:
+        raise ValueError("--soft-well-steps-per-epoch must be >= 1")
+    if args.soft_well_target_lo >= args.soft_well_target_hi:
+        raise ValueError("--soft-well-target-lo must be < --soft-well-target-hi")
+    if args.frozen_mm_lj_scales_sidecar:
+        side = Path(args.frozen_mm_lj_scales_sidecar)
+        if not side.is_file():
+            raise ValueError(f"--frozen-mm-lj-scales-sidecar not found: {side}")
 
     if args.valid_data:
         # ``n_train``/``n_valid`` default to None so that *omitting* them (what the
@@ -1203,12 +1276,14 @@ def load_transfer_init_params(
             teacher_params, teacher_config = load_physnet_checkpoint(teacher_path)
         print(f"Loaded teacher checkpoint: {teacher_path}")
 
-    # Portable JSON often stores a bare module tree (Embed_0, …). Student training
-    # merges into model.init() so it still works; teacher apply does not — wrap.
+    # Portable JSON often stores a bare module tree (Embed_0, …). Student
+    # ``_merge_params(model.init(), bare)`` drops the checkpoint when structures
+    # disagree; teacher ``model.apply`` also requires a top-level ``params``
+    # collection. Normalize both before training.
     if init_params is not None:
-        init_params = normalize_flax_params_for_apply(init_params, backend="numpy")
+        init_params = normalize_flax_params_for_apply(init_params, backend="jax")
     if teacher_params is not None:
-        teacher_params = normalize_flax_params_for_apply(teacher_params, backend="numpy")
+        teacher_params = normalize_flax_params_for_apply(teacher_params, backend="jax")
 
     arch_config = warm_config or teacher_config
     if args.match_checkpoint_architecture and arch_config is not None:
@@ -1479,6 +1554,26 @@ def main_loop(args):
             k for k in HYBRID_MM_BATCH_KEYS if k not in data_keys
         )
 
+    _frozen_scales = None
+    if args.frozen_mm_lj_scales_sidecar:
+        from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+
+        _payload = load_mm_lj_scales_sidecar(Path(args.frozen_mm_lj_scales_sidecar))
+        if _payload is None:
+            raise ValueError(
+                f"--frozen-mm-lj-scales-sidecar missing mm_lj scales: "
+                f"{args.frozen_mm_lj_scales_sidecar}"
+            )
+        _frozen_scales = (
+            np.asarray(_payload["mm_lj_sigma_scale"], dtype=np.float32),
+            np.asarray(_payload["mm_lj_epsilon_scale"], dtype=np.float32),
+        )
+        print(
+            f"Loaded frozen MM LJ scales from {args.frozen_mm_lj_scales_sidecar} "
+            f"({_frozen_scales[0].shape[0]} types)",
+            flush=True,
+        )
+
     # nvalchemiops PME cannot nest on the same GPU XLA executor as jit_train_step
     # (deadlock), and a spawn child often gets CUDA_ERROR_DEVICE_UNAVAILABLE after
     # the parent has already initialized CUDA.  Default isolate mode runs the
@@ -1542,6 +1637,27 @@ def main_loop(args):
             teacher_params=teacher_params if args.distill else None,
             distill_alpha=args.distill_alpha,
             distill_targets=distill_targets,
+            soft_well_aux=(
+                {
+                    "enabled": True,
+                    "steps_per_epoch": int(args.soft_well_steps_per_epoch),
+                    "batch_size": int(args.soft_well_batch_size),
+                    "loss_scale": float(args.soft_well_loss_scale),
+                    "target_lo_kcal": float(args.soft_well_target_lo),
+                    "target_hi_kcal": float(args.soft_well_target_hi),
+                    "target_mid_kcal": 0.5
+                    * (float(args.soft_well_target_lo) + float(args.soft_well_target_hi)),
+                    "seed": int(args.seed),
+                }
+                if args.soft_well_aux
+                else None
+            ),
+            frozen_mm_lj_sigma_scale=(
+                _frozen_scales[0] if _frozen_scales is not None else None
+            ),
+            frozen_mm_lj_epsilon_scale=(
+                _frozen_scales[1] if _frozen_scales is not None else None
+            ),
         )
 
     if args.metrics_plot and run_ckpt_dir is not None:
