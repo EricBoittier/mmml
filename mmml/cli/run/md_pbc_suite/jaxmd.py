@@ -200,6 +200,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Split output trajectory into chunks with at most this many frames each (0 = single file).",
     )
     p.add_argument("--ensemble", type=str, default="npt", choices=["nve", "nvt", "npt"])
+    p.add_argument(
+        "--rigid-water",
+        action="store_true",
+        help=(
+            "Constrain monomers rigid with SHAKE/RATTLE (O-H, O-H, H-H). Use when "
+            "the ML term was trained on rigid monomers and so has no "
+            "intramolecular restoring force. See docs/hybrid-bonded-intra.md."
+        ),
+    )
+    p.add_argument("--rigid-water-roh", type=float, default=0.9572, help="A (CHARMM TIP3)")
+    p.add_argument("--rigid-water-theta", type=float, default=104.52, help="deg (CHARMM TIP3)")
     p.add_argument("--temperature", type=float, default=300.0)
     p.add_argument("--pressure", type=float, default=1.0, help="atm (for NPT)")
     p.add_argument(

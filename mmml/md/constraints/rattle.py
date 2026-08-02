@@ -45,6 +45,8 @@ __all__ = [
     "shake_positions",
     "rattle_velocities",
     "constraint_residuals",
+    "wrap_apply_fn_with_constraints",
+    "molecular_virial_decomposition",
 ]
 
 
@@ -211,3 +213,129 @@ def rattle_velocities(
 
     v, _ = jax.lax.scan(sweep, _as_molecules(velocities, spec), None, length=int(iterations))
     return jnp.reshape(v, (-1, 3))
+
+
+def wrap_apply_fn_with_constraints(
+    apply_fn,
+    spec: MolecularConstraints,
+    *,
+    shake_iterations: int = 100,
+    rattle_iterations: int = 100,
+):
+    """Compose SHAKE/RATTLE onto a jax-md ``apply_fn``.
+
+    Wrapping rather than editing the integrator keeps this out of
+    ``set_up_nhc_sim_routine``, which is already over the oversized-function
+    ratchet.
+
+    The projection is applied at step boundaries: positions first, using the
+    pre-step configuration as the SHAKE reference, then velocities against the
+    constrained positions. jax-md states carry ``momentum``, so the velocity
+    projection converts both ways around ``mass``.
+
+    Note this is step-boundary projection, not RATTLE interleaved inside the
+    velocity-Verlet half-kicks. For small ``dt`` the two agree; the NVE
+    conservation gate is what decides whether ``dt`` is small enough, so run it
+    rather than assuming.
+    """
+    from jax_md import dataclasses as jax_md_dataclasses
+
+    def constrained_apply(state, **kwargs):
+        previous = state.position
+        state = apply_fn(state, **kwargs)
+
+        position = shake_positions(
+            state.position, previous, spec, iterations=shake_iterations
+        )
+        mass = state.mass
+        velocity = rattle_velocities(
+            state.momentum / mass, position, spec, iterations=rattle_iterations
+        )
+        return jax_md_dataclasses.replace(
+            state, position=position, momentum=velocity * mass
+        )
+
+    return constrained_apply
+
+
+def molecular_virial_decomposition(positions, forces, spec: MolecularConstraints):
+    """Split the virial into intermolecular (molecular) and internal parts.
+
+    For rigid molecules the atomic virial ``sum_i r_i . f_i`` and the molecular
+    virial ``sum_mol R_com . F_mol`` differ by the work of the internal forces,
+    including the constraint forces. Only the molecular form is meaningful for
+    the pressure of a constrained system -- the atomic form picks up constraint
+    contributions that do no work and should not appear in P.
+
+    This matters here: the NpT virial was previously measured as identically
+    zero (pressure matched 2KE/3V to 0.001%), so the decomposition is worth
+    looking at directly rather than trusting a single scalar.
+
+    Returns ``(w_atomic, w_molecular, w_internal)`` with
+    ``w_internal = w_atomic - w_molecular``, each a scalar in energy units.
+    """
+    r = _as_molecules(positions, spec)
+    f = _as_molecules(forces, spec)
+    mass = jnp.asarray(1.0 / spec.inv_mass)[None, :, None]
+
+    w_atomic = jnp.sum(r * f)
+    com = jnp.sum(r * mass, axis=1) / jnp.sum(mass, axis=1)
+    f_mol = jnp.sum(f, axis=1)
+    w_molecular = jnp.sum(com * f_mol)
+    return w_atomic, w_molecular, w_atomic - w_molecular
+
+
+def rigid_water_spec_from_args(args, n_monomers: int, monomer_offsets) -> "MolecularConstraints | None":
+    """Build the TIP3 constraint spec from CLI args, or ``None`` when disabled.
+
+    Lives here rather than in the runner so ``set_up_nhc_sim_routine`` does not
+    grow -- it is already over the oversized-function ratchet.
+
+    Refuses heterogeneous monomers rather than silently constraining the wrong
+    atoms: the spec is one pattern repeated across molecules, so a mixed system
+    would apply water constraints to whatever happens to sit at those offsets.
+    """
+    if not bool(getattr(args, "rigid_water", False)):
+        return None
+
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    sizes = np.diff(offsets)
+    unique = sorted(set(int(s) for s in sizes))
+    if unique != [3]:
+        raise NotImplementedError(
+            f"--rigid-water expects 3-atom monomers throughout; found sizes {unique}. "
+            "Constraining a mixed system with one repeated pattern would apply "
+            "water constraints to whatever sits at those offsets."
+        )
+    return tip3_rigid_constraints(
+        int(n_monomers),
+        r_oh=float(getattr(args, "rigid_water_roh", 0.9572)),
+        theta_hoh_deg=float(getattr(args, "rigid_water_theta", 104.52)),
+    )
+
+
+def maybe_wrap_rigid_water(apply_fn, args, n_monomers: int, monomer_offsets, console=None):
+    """Compose rigid-water constraints onto ``apply_fn`` when ``--rigid-water`` is set.
+
+    Returns ``apply_fn`` untouched when the flag is absent, so existing runs are
+    bit-identical. Reporting lives here too: ``set_up_nhc_sim_routine`` is over
+    the oversized-function ratchet, so the call site stays one line.
+    """
+    spec = rigid_water_spec_from_args(args, n_monomers, monomer_offsets)
+    if spec is None:
+        return apply_fn
+    if console is not None:
+        try:
+            from rich.panel import Panel
+
+            console.print(
+                Panel(
+                    f"SHAKE/RATTLE on {n_monomers} monomers | "
+                    f"O-H={spec.targets[0]:.4f} A  H-H={spec.targets[2]:.4f} A",
+                    title="[bold]Rigid water[/bold]",
+                    border_style="cyan",
+                )
+            )
+        except Exception:
+            pass
+    return wrap_apply_fn_with_constraints(apply_fn, spec)

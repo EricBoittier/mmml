@@ -271,3 +271,114 @@ def test_unconstrained_control_actually_dissociates(x64) -> None:
     d = np.asarray(pos).reshape(n, 3, 3)
     oh = np.linalg.norm(d[:, 1] - d[:, 0], axis=-1)
     assert oh.max() > 1.2, f"control did not dissociate (max O-H {oh.max():.3f} A)"
+
+
+def test_rigid_water_spec_from_args_is_off_by_default() -> None:
+    """Existing runs must be unaffected unless the flag is passed."""
+    from argparse import Namespace
+
+    from mmml.md.constraints import rigid_water_spec_from_args
+
+    offsets = np.arange(0, 3 * 5 + 1, 3)
+    assert rigid_water_spec_from_args(Namespace(), 5, offsets) is None
+    assert rigid_water_spec_from_args(Namespace(rigid_water=False), 5, offsets) is None
+
+    spec = rigid_water_spec_from_args(Namespace(rigid_water=True), 5, offsets)
+    assert spec is not None and spec.n_molecules == 5
+
+
+def test_rigid_water_spec_refuses_heterogeneous_monomers() -> None:
+    """One repeated pattern would constrain whatever sits at those offsets."""
+    from argparse import Namespace
+
+    from mmml.md.constraints import rigid_water_spec_from_args
+
+    offsets = np.array([0, 3, 3 + 5, 3 + 5 + 3])
+    with pytest.raises(NotImplementedError, match="3-atom monomers"):
+        rigid_water_spec_from_args(Namespace(rigid_water=True), 3, offsets)
+
+
+def test_wrapped_apply_fn_keeps_monomers_rigid(x64) -> None:
+    """The wrapper must project whatever the integrator produced."""
+    import jax.numpy as jnp
+    from jax_md import dataclasses as jmd
+    from jax_md import simulate
+
+    from mmml.md.constraints import (
+        constraint_residuals,
+        tip3_rigid_constraints,
+        wrap_apply_fn_with_constraints,
+    )
+
+    rng = np.random.default_rng(7)
+    n = 12
+    r = _water(n, rng)
+    spec = tip3_rigid_constraints(n)
+    mass = jnp.asarray(np.tile(1.0 / spec.inv_mass, n)[:, None])
+
+    state = simulate.NVEState(
+        position=jnp.asarray(r),
+        momentum=jnp.asarray(rng.normal(scale=0.01, size=r.shape)) * mass,
+        force=jnp.zeros_like(jnp.asarray(r)),
+        mass=mass,
+    )
+
+    # An "integrator" that distorts every monomer by a step-sized amount.
+    def bad_apply(st, **kwargs):
+        kick = jnp.asarray(rng.normal(scale=0.02, size=r.shape))
+        return jmd.replace(st, position=st.position + kick)
+
+    assert np.abs(np.asarray(constraint_residuals(bad_apply(state).position, spec))).max() > 1e-4
+
+    wrapped = wrap_apply_fn_with_constraints(bad_apply, spec)
+    out = wrapped(state)
+    assert np.abs(np.asarray(constraint_residuals(out.position, spec))).max() < 1e-10
+
+    # Velocities must also come back orthogonal to the bonds.
+    v = np.asarray(out.momentum / out.mass).reshape(n, 3, 3)
+    rr = np.asarray(out.position).reshape(n, 3, 3)
+    for i, j in spec.pairs:
+        d = rr[:, i] - rr[:, j]
+        dv = v[:, i] - v[:, j]
+        assert np.abs(np.sum(d * dv, axis=-1)).max() < 1e-9
+
+
+def test_virial_decomposition_is_additive_and_isolates_internal_forces(x64) -> None:
+    """w_atomic = w_molecular + w_internal, and purely internal forces move only w_internal."""
+    import jax.numpy as jnp
+
+    from mmml.md.constraints import (
+        molecular_virial_decomposition,
+        tip3_rigid_constraints,
+    )
+
+    rng = np.random.default_rng(8)
+    n = 15
+    r = _water(n, rng)
+    spec = tip3_rigid_constraints(n)
+
+    f = rng.normal(scale=0.5, size=r.shape)
+    w_at, w_mol, w_int = molecular_virial_decomposition(jnp.asarray(r), jnp.asarray(f), spec)
+    assert float(w_at) == pytest.approx(float(w_mol) + float(w_int), rel=1e-10)
+
+    # Forces that sum to zero within each molecule are purely internal: they
+    # cannot contribute to the molecular virial at all.
+    f_int = rng.normal(scale=0.5, size=(n, 3, 3))
+    f_int -= f_int.mean(axis=1, keepdims=True)
+    _, w_mol_int, _ = molecular_virial_decomposition(
+        jnp.asarray(r), jnp.asarray(f_int.reshape(-1, 3)), spec
+    )
+    assert abs(float(w_mol_int)) < 1e-9
+
+
+def test_md_system_forwards_rigid_water_to_the_jaxmd_subprocess() -> None:
+    """The flag is useless if it does not survive the subprocess hand-off."""
+    from mmml.cli.run.md_system import build_parser
+    from mmml.cli.run.md_pbc_suite.jaxmd import build_parser as jaxmd_parser
+
+    args = build_parser().parse_args(["--rigid-water", "--rigid-water-roh", "0.96"])
+    assert args.rigid_water is True
+
+    sub = jaxmd_parser().parse_args(["--rigid-water", "--rigid-water-roh", "0.96"])
+    assert sub.rigid_water is True
+    assert sub.rigid_water_roh == pytest.approx(0.96)
