@@ -33,6 +33,12 @@
 # full ~924k-step epoch that the wall clock kills before any checkpoint is
 # written. --steps-per-epoch ends the epoch for real, so validation runs and
 # --save-every 1 produces the checkpoint this smoke exists to produce.
+#
+# --no-auto-batch for the same reason: probing compiles the model once per pad
+# width and this cache has 24 of them, which consumed the entire 45-minute
+# budget before a single training step ran (job 206099). A smoke wants a fixed
+# small batch, not an optimal one. The full run keeps --auto-batch, where the
+# one-off probing cost is amortized over days and cached in auto_batch_sizes.json.
 #SBATCH --job-name=q0-distill-smoke
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
@@ -42,6 +48,11 @@
 #SBATCH --time=00:45:00
 #SBATCH --output=artifacts/spooky_q0_distill_smoke/slurm-%j.out
 #SBATCH --error=artifacts/spooky_q0_distill_smoke/slurm-%j.err
+# Ask for SIGTERM 90s before the wall clock so the verdict below still runs when
+# the job is killed. Without it a timeout leaves no statement about whether the
+# thing under test succeeded -- job 206099 timed out *after* the fix it existed
+# to verify had already passed, and its state said only "TIMEOUT".
+#SBATCH --signal=B:TERM@90
 set -euo pipefail
 
 ROOT="${MMML_REPO:-$HOME/mmml}"
@@ -80,6 +91,21 @@ for required in "$CACHE/_METADATA" "$INIT/_CHECKPOINT_METADATA" "$TEACHER/_CHECK
   [[ -s "$required" ]] || { echo "missing required input: $required" >&2; exit 66; }
 done
 
+# The job's own verdict, not the SLURM state, is the answer. Runs on normal exit
+# and on the pre-timeout SIGTERM, so a killed job still says whether the run had
+# already done what it was asked to.
+verdict() {
+  local rc=$?
+  set +e
+  "$MMML_PYTHON" scripts/check_training_run.py \
+    --workdir "$OUT" \
+    --require-steps 40 --require-distillation --max-force-mae 50.0
+  local verdict_rc=$?
+  echo "smoke verdict exit=$verdict_rc (training exit=$rc)"
+  exit $(( verdict_rc != 0 ? verdict_rc : rc ))
+}
+trap verdict EXIT TERM
+
 "$MMML_PYTHON" scripts/train_so3lr_spooky_extxyz.py \
   --mode train --cache-path "$CACHE" \
   --workdir "$OUT" --init-checkpoint "$INIT" \
@@ -88,7 +114,7 @@ done
   --distill-energy-align atomic --distill-align-batches 16 \
   --epochs 1 --steps-per-epoch 40 --num-devices 1 \
   --batch-size-per-device 4 --max-pairs-per-device 18000 \
-  --atom-bucket-width 4 --auto-batch --auto-batch-margin 1 \
+  --atom-bucket-width 4 --no-auto-batch \
   --optimizer adamw --learning-rate 2.5e-5 \
   --lr-schedule warmup_cosine --lr-warmup-steps 50 --lr-decay-steps 0 \
   --lr-end-fraction 0.05 --weight-decay 0.0 --clip-global-norm 1.0 \
@@ -101,10 +127,7 @@ done
   --valid-fraction 0.05 --valid-steps 10 \
   --save-every 1 --seed 0 --log-every 10 --log-every-steps 10
 
-# The point of the smoke: a checkpoint that records WHICH teacher it used.
-[[ -s "$OUT/distillation.json" ]] || {
-  echo "smoke produced no distillation.json -- teacher provenance was not recorded" >&2
-  exit 67
-}
 echo "distillation provenance:"
 cat "$OUT/distillation.json"
+# The EXIT trap runs check_training_run.py from here; it writes run_verdict.json
+# and decides the job's exit code.
