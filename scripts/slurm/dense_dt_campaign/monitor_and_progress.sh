@@ -49,9 +49,10 @@ done
 declare -a NEED_RESUBMIT=()
 if [[ -f "$OUT_ROOT/job_ids.txt" ]]; then
   while read -r _line; do
+    # SUBMITTED <tag> -> job <jid> ...
     tag=$(awk '{print $2}' <<<"$_line")
-    jid=$(awk '{print $5}' <<<"$_line")
-    [[ -z "${tag:-}" || -z "${jid:-}" ]] && continue
+    jid=$(awk '{for(i=1;i<=NF;i++) if($i=="job"){print $(i+1); exit}}' <<<"$_line")
+    [[ -z "${tag:-}" || -z "${jid:-}" || ! "$jid" =~ ^[0-9]+$ ]] && continue
     state=$(sacct -j "$jid" -n -X -o State 2>/dev/null | head -1 | tr -d ' ' || true)
     if [[ "$state" == FAILED || "$state" == TIMEOUT || "$state" == NODE_FAIL || "$state" == CANCELLED ]]; then
       if [[ ! -f "$OUT_ROOT/${tag}/SUCCESS.flag" ]] && ! squeue -j "$jid" -h >/dev/null 2>&1; then

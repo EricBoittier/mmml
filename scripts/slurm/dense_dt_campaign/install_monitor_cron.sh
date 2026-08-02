@@ -7,7 +7,7 @@ LOG_DIR="${ROOT}/artifacts/lj_scales/dense_dt_campaign"
 mkdir -p "$LOG_DIR"
 chmod +x "$MONITOR" "${ROOT}/scripts/slurm/dense_dt_campaign/"*.sh
 
-CRON_LINE="*/15 * * * * PATH=${HOME}/.local/bin:${HOME}/.cargo/bin:/usr/bin:/bin:\$PATH bash ${MONITOR} --react >> ${LOG_DIR}/monitor.log 2>&1"
+CRON_LINE="*/15 * * * * PATH=${HOME}/.local/bin:${HOME}/.cargo/bin:/usr/bin:/bin:\$PATH /usr/bin/bash ${MONITOR} --react >> ${LOG_DIR}/monitor.log 2>&1"
 MARKER="# mmml-dense-dt-campaign-monitor"
 
 TMP="$(mktemp)"
