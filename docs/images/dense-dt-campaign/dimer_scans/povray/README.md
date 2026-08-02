@@ -1,16 +1,22 @@
 # DCM–DCM dimer scan POV-Ray stills
 
-Visual check that multi-orientation COM scans are chemically sensible.
+House glossy POV style (`docs/plotting-style-guide.md`):
+
+- **forces** — red arrows from the hybrid model on the exact frame;
+  fixed panel normalization (see `manifest.json`).
+- **dipoles** — gold per-monomer μ from PhysNet `q_ML` (e·Å).
+- **by charge** — atom spheres + soft halos, blue = +, red = −.
 
 | Asset | Content |
 |---|---|
-| `ori_d*_q*_r3.5.png` | Orientation grid at soft-well r≈3.5 Å |
-| `approach_d00_q00_r*.png` | One ray approaching from contact → MM region |
-| `deepest_well_*.png` / `softest_well_*.png` | Extremes from campaign CSV |
-| `dimer_scan_povray_sheet.png` | Contact sheet |
+| `*_forces_dipoles.png` | Glossy atoms + red F + gold μ |
+| `*_by_charge.png` | Charge-colored atoms + gold μ |
+| `ori_*/approach_*/…png` | Element-colored overview stills |
+| `dimer_scan_povray_sheet_forces_dipoles.png` | F+μ contact sheet |
+| `dimer_scan_povray_sheet_by_charge.png` | Charge contact sheet |
+| `dimer_scan_povray_sheet.png` | Element-color contact sheet |
 
-Green = Cl, dark = C, light = H. `dmin` in titles is the shortest
-cross-monomer atom–atom distance (Å).
+Handoff used for forces: `mm_switch_on=8`, `ml_switch_width=1.5`, `mm_switch_width=5` (epoch222 train taper by default).
 
 Regenerate:
 ```bash
