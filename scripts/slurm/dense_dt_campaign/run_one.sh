@@ -88,9 +88,14 @@ case "$TAG" in
     CONTINUE_FROM="$(pick_nvt_h5 L24_nvt_dt05_x64_50ps L24_nvt_dt1_f32_50ps || true)"
     ;;
   L26_npt_*|L26_nve_*)
-    CONTINUE_FROM="$(pick_nvt_h5 L26_nvt_dt1_f32_50ps || true)"
+    CONTINUE_FROM="$(pick_nvt_h5 L26_nvt_dt05_x64_50ps L26_nvt_dt1_f32_50ps || true)"
     ;;
 esac
+# Soft-barostat NPT probes (tag contains softbaro): slower piston for §8 density.
+if [[ "$TAG" == *softbaro* && "$ENSEMBLE" == npt ]]; then
+  EXTRA_ARGS+=(--nhc-barostat-tau 50000)
+  echo "softbaro: --nhc-barostat-tau 50000" | tee -a "$OUT/run_meta.txt"
+fi
 
 case "$ENSEMBLE" in
   npt|nve)

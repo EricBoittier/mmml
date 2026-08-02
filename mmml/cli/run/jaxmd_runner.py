@@ -3453,7 +3453,8 @@ def set_up_nhc_sim_routine(
                 e_invariant = e_tot
                 try:
                     if is_npt:
-                        box_for_inv = simulate.npt_box(state)
+                        # jax_md already passes box=box_fn(volume) into energy_fn;
+                        # do not also forward box= here (TypeError: multiple values).
                         e_invariant = float(
                             simulate.npt_nose_hoover_invariant(
                                 npt_energy_fn,
@@ -3461,7 +3462,6 @@ def set_up_nhc_sim_routine(
                                 pressure,
                                 kT,
                                 neighbor=(npt_pair_idx, npt_pair_mask),
-                                box=box_for_inv,
                             )
                         )
                     elif args.ensemble == "nvt":
