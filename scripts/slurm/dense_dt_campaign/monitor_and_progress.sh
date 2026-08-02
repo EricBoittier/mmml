@@ -80,7 +80,18 @@ for tag in "${!LATEST_JID[@]}"; do
   state=$(sacct -j "$jid" -n -X -o State 2>/dev/null | head -1 | tr -d ' ' || true)
   if [[ "$state" == COMPLETED ]]; then
     mkdir -p "$OUT_ROOT/${tag}"
-    touch "$OUT_ROOT/${tag}/SUCCESS.flag" 2>/dev/null || true
+    # Only SUCCESS when the arm's RESULT is rc=0 and the log is not a blow-up.
+    res_line=""
+    [[ -f "$OUT_ROOT/bench.log" ]] && res_line="$(_match "^RESULT ${tag} " "$OUT_ROOT/bench.log" 2>/dev/null | tail -1 || true)"
+    [[ -z "$res_line" && -f "$OUT_ROOT/${tag}/bench.log" ]] \
+      && res_line="$(_match "^RESULT " "$OUT_ROOT/${tag}/bench.log" 2>/dev/null | tail -1 || true)"
+    blew=0
+    _match "energy blow-up|Partial output saved after error" "$OUT_ROOT/${tag}/bench.log" >/dev/null 2>&1 && blew=1
+    if [[ "$res_line" == *" rc=0 "* && "$blew" -eq 0 ]]; then
+      touch "$OUT_ROOT/${tag}/SUCCESS.flag" 2>/dev/null || true
+    else
+      rm -f "$OUT_ROOT/${tag}/SUCCESS.flag" 2>/dev/null || true
+    fi
     continue
   fi
   if [[ "$state" == FAILED || "$state" == TIMEOUT || "$state" == NODE_FAIL ]]; then
