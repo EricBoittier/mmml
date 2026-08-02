@@ -859,10 +859,19 @@ def warmup_hybrid_spherical_cutoff(
     except ImportError:
         return
 
+    # prefer_cpu needs a live CPU backend. With JAX_PLATFORMS=cuda (campaign
+    # GPU jobs), only CUDA is registered — fall back to default-device warmup.
+    use_cpu_device = backend == "cpu" or prefer_cpu
+    if use_cpu_device:
+        try:
+            cpu_devs = jax.devices("cpu")
+            if not cpu_devs:
+                use_cpu_device = False
+        except Exception:
+            use_cpu_device = False
+
     device_ctx = (
-        jax.default_device(jax.devices("cpu")[0])
-        if backend == "cpu" or prefer_cpu
-        else nullcontext()
+        jax.default_device(jax.devices("cpu")[0]) if use_cpu_device else nullcontext()
     )
 
     def _block_spherical_result(result: Any) -> None:

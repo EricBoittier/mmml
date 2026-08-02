@@ -59,6 +59,7 @@ uv run python scripts/slurm/dense_dt_campaign/render_dimer_scan_povray.py \
   --povray "$POVRAY_BIN"
 
 # PBC translation confirmation on DCM:120 L=24
+set +e
 uv run python scripts/slurm/dense_dt_campaign/confirm_softwell_pbc.py \
   --checkpoint "$CKPT" \
   --sidecar "$SIDECAR" \
@@ -66,7 +67,24 @@ uv run python scripts/slurm/dense_dt_campaign/confirm_softwell_pbc.py \
   --box 24.0 \
   --n-monomers 120 \
   --atoms-per-monomer 5
+pbc_rc=$?
+set -e
+if [[ "$pbc_rc" -ne 0 ]]; then
+  echo "ERROR: confirm_softwell_pbc.py failed rc=$pbc_rc" >&2
+  exit "$pbc_rc"
+fi
+if [[ ! -f "$OUT_PBC" ]]; then
+  echo "ERROR: missing $OUT_PBC" >&2
+  exit 2
+fi
 
 echo "=== softwell deploy visuals done ==="
 date -Is
 ls -la docs/images/dense-dt-campaign/overbind_ablation/lever2_on5_softwell/ | head -40
+ls -la "$OUT_POV" | head -20
+python - <<PY
+import json
+from pathlib import Path
+rep = json.loads(Path("$OUT_PBC").read_text())
+print("pbc_ok:", rep.get("pbc_ok"), "checks:", rep.get("checks"))
+PY
