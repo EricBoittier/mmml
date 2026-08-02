@@ -137,8 +137,18 @@ else:
 
         teacher_output = None
         if doDistill and teacher_params is not None:
+            # Must use the same hybrid assembly as the student. Omitting
+            # hybrid_mm made the teacher a pure-ML total while the student
+            # trained hybrid E_int — distillation then fought the soft-well
+            # lever instead of regularising it.
             teacher_output = jax.lax.stop_gradient(
-                _forward(model_apply, teacher_params, batch, batch_size)
+                _forward(
+                    model_apply,
+                    teacher_params,
+                    batch,
+                    batch_size,
+                    hybrid_mm=hybrid_mm,
+                )
             )
 
         if doCharges:

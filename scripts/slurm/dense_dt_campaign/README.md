@@ -49,6 +49,40 @@ soft well. The real fix is a GPU retrain at `mm_switch_on=5` (matching deploy)
 so the ML local interaction unlearns contact overbinding under the new taper.
 See `docs/images/dense-dt-campaign/overbind_ablation/`.
 
+### Retrain at `on=5` (warm-start epoch222)
+
+Config: `examples/hybrid_mm_charges/train_fixed_lj_scales_on5.yaml`  
+Tag: `hybrid_mm_lever2_on5_ft` → `artifacts/lj_scales/ckpts/`
+
+```bash
+mkdir -p artifacts/lj_scales/dense_dt_campaign/logs
+bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5.sh
+# or: sbatch scripts/slurm/dense_dt_campaign/sbatch_train_lever2_on5.sh
+```
+
+Defaults: 50 epochs, batch 64, `n_train=32000` / `n_valid=5950`, hard-fail
+unless JAX sees `CudaDevice` (avoids silent CPU training from a stale
+`JAX_PLATFORMS=cpu`). Optional `DDC_ON5_EXCLUSIVE=1`. Overrides:
+`DDC_ON5_EPOCHS`, `DDC_ON5_BATCH`, `DDC_ON5_TAG`, `DDC_ON5_CKPT`,
+`DDC_ON5_DATA`. After train, re-run contact-ok dimer scans /
+`ablate_overbind.py` on the new best ckpt + sidecar before swapping campaign
+`CKPT`/`SIDECAR` in `run_one.sh`.
+
+### Distill FT (preferred)
+
+Plain 50-ep FT widened the soft deep tail. Preferred recipe: distill from
+epoch222, `lr=1e-4`, 15 epochs, LJ scales frozen (sidecar copied from ep222):
+
+```bash
+bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5_distill.sh
+# after train completes:
+bash scripts/slurm/dense_dt_campaign/submit_eval_lever2_on5_distill.sh
+```
+
+Epoch sweep writes
+`artifacts/lj_scales/dense_dt_campaign/overbind_ablation/lever2_on5_distill/epoch_sweep.json`.
+Only swap campaign ckpt if `deploy_ready` (soft median ≈ −3…−5, deepest ≳ −15).
+
 ## Where to look
 
 ```bash

@@ -1,0 +1,48 @@
+# Soft-well E_int aux FT at mm_switch_on=5 (the real lever).
+# Warm-start epoch222, freeze LJ scales from sidecar, pull contact-ok soft
+# wells into lit DCM −5…−3 kcal/mol.
+#
+#   bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5_softwell.sh
+
+data: artifacts/lj_scales/dataset_cgenff.npz
+valid_data: ""
+ckpt_dir: artifacts/lj_scales/ckpts
+tag: hybrid_mm_lever2_on5_softwell
+
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: false
+mm_include_lj: true
+lr_solver: mic
+
+ml_switch_width: 1.5
+mm_switch_on: 5.0
+mm_switch_width: 5.0
+
+soft_well_aux: true
+soft_well_steps_per_epoch: 48
+soft_well_every_n_train_batches: 25
+soft_well_batch_size: 32
+soft_well_loss_scale: 10.0
+soft_well_target_lo: -5.0
+soft_well_target_hi: -3.0
+
+charges: true
+batch_size: 64
+num_epochs: 20
+learning_rate: 0.0001
+seed: 42
+early_stop_patience: 10
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+best: true
+save_every_epoch: true
+features: 64
+max_degree: 0
+num_iterations: 5
+num_basis_functions: 64
+cutoff: 10.0

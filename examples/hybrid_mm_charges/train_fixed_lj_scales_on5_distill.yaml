@@ -1,0 +1,50 @@
+# Constrained lever-2 FT at mm_switch_on=5:
+#   - warm-start + distill from epoch222 (keeps soft wells near teacher)
+#   - low LR, short run
+#   - LJ scales frozen (use epoch222 sidecar scales at deploy)
+#
+#   bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5_distill.sh
+
+data: artifacts/lj_scales/dataset_cgenff.npz
+valid_data: ""
+ckpt_dir: artifacts/lj_scales/ckpts
+tag: hybrid_mm_lever2_on5_distill
+
+hybrid_mm: true
+mm_charge_mode: fixed
+learn_mm_lj_scales: false
+mm_include_lj: true
+lr_solver: mic
+
+ml_switch_width: 1.5
+mm_switch_on: 5.0
+mm_switch_width: 5.0
+
+# Teacher = warm-start (epoch222). alpha is GT weight:
+#   loss = alpha*L_gt + (1-alpha)*L_teacher  → 0.35 keeps teacher dominant.
+distill: true
+distill_alpha: 0.35
+distill_targets:
+  - energy
+  - forces
+  - dipole
+
+charges: true
+batch_size: 64
+num_epochs: 15
+learning_rate: 0.0001
+seed: 42
+early_stop_patience: 8
+
+energy_weight: 1.0
+forces_weight: 52.91
+dipole_weight: 27.21
+charges_weight: 14.39
+objective: valid_loss
+best: true
+save_every_epoch: true
+features: 64
+max_degree: 0
+num_iterations: 5
+num_basis_functions: 64
+cutoff: 10.0
