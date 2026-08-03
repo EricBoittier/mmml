@@ -205,7 +205,9 @@ fi
 if [[ "$REACT" -eq 1 ]]; then
   if [[ "$packmol_stuck" -eq 1 ]]; then
     actions+=("kill stuck dense-campaign packmol (>45min) and restart dense box build v3")
-    pkill -f 'build_dense_boxes_v[23]\.sh' 2>/dev/null || true
+    while IFS= read -r _pid; do
+      [[ -n "${_pid:-}" ]] && kill "${_pid}" 2>/dev/null || true
+    done < <(pgrep -f 'build_dense_boxes_v[23]\.sh' 2>/dev/null || true)
     # Never pkill -x packmol globally — other campaigns (e.g. MeOH DES) may be packing.
     while IFS= read -r _pk; do
       [[ -z "${_pk:-}" ]] && continue
@@ -222,10 +224,11 @@ if [[ "$REACT" -eq 1 ]]; then
 
   if [[ "$box_build_alive" -eq 0 ]] && { ! box_ready "$BOX24" || ! box_ready "$BOX26"; }; then
     actions+=("start/restart dense box build (L24 then L26, packmol-tol=1.5)")
+    export MMML_DENSE_DT_ROOT="$ROOT"
     cat > "$MARKER_BOX_BUILD" <<'EOS'
 #!/usr/bin/env bash
 set -uo pipefail
-cd /mmhome/boittier/home/mmml
+cd "${MMML_DENSE_DT_ROOT:-/mmhome/boittier/home/mmml}"
 source examples/lj_scales/_env.sh
 export JAX_PLATFORMS=cpu LJ_DEVICE=cpu
 LOG=/tmp/build_dense_boxes_v3.log
