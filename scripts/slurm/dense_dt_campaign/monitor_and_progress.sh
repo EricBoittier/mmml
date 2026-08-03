@@ -131,6 +131,21 @@ while IFS= read -r _pk; do
   esac
 done < <(pgrep -x packmol 2>/dev/null || true)
 
+charmm_available=0
+if [[ -n "${CHARMM_LIB_DIR:-}" && -f "${CHARMM_LIB_DIR}/libcharmm.so" ]] \
+  || [[ -f "${ROOT}/setup/charmm/libcharmm.so" ]]; then
+  charmm_available=1
+fi
+box_build_charmm_blocked=0
+if [[ "$charmm_available" -eq 0 ]]; then
+  for _box_log in "$BOX24/build.log" "$BOX26/build.log"; do
+    if [[ -f "$_box_log" ]] \
+      && _match "Could not load the CHARMM shared library|libcharmm\\.so" "$_box_log" >/dev/null 2>&1; then
+      box_build_charmm_blocked=1
+    fi
+  done
+fi
+
 {
   echo "# dense_dt_campaign STATUS"
   echo
@@ -155,6 +170,7 @@ done < <(pgrep -x packmol 2>/dev/null || true)
   done
   echo
   echo "- box_build_alive=$box_build_alive packmol_alive=$packmol_alive packmol_stuck=$packmol_stuck"
+  echo "- box_build_charmm_blocked=$box_build_charmm_blocked charmm_available=$charmm_available"
   echo
   echo "## Slurm ddc-*"
   echo
@@ -222,7 +238,9 @@ if [[ "$REACT" -eq 1 ]]; then
     box_build_alive=0
   fi
 
-  if [[ "$box_build_alive" -eq 0 ]] && { ! box_ready "$BOX24" || ! box_ready "$BOX26"; }; then
+  if [[ "$box_build_charmm_blocked" -eq 1 ]]; then
+    actions+=("box build blocked: libcharmm.so unavailable; set CHARMM_LIB_DIR or build setup/charmm/libcharmm.so before retry")
+  elif [[ "$box_build_alive" -eq 0 ]] && { ! box_ready "$BOX24" || ! box_ready "$BOX26"; }; then
     actions+=("start/restart dense box build (L24 then L26, packmol-tol=1.5)")
     export MMML_DENSE_DT_ROOT="$ROOT"
     cat > "$MARKER_BOX_BUILD" <<'EOS'
