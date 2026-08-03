@@ -257,9 +257,15 @@ build() {
   echo "rc=$rc $(date -Is)" | tee -a "$LOG" | tee -a "$OUT/build.log"
   return $rc
 }
-build 24 1.15 artifacts/lj_scales/liquid_dense_L24
-build 26 0.96 artifacts/lj_scales/liquid_dense_L26
-echo "ALL BOXES DONE $(date -Is)" | tee -a "$LOG"
+status=0
+build 24 1.15 artifacts/lj_scales/liquid_dense_L24 || status=$?
+build 26 0.96 artifacts/lj_scales/liquid_dense_L26 || status=$?
+if [[ "$status" -eq 0 ]]; then
+  echo "ALL BOXES DONE $(date -Is)" | tee -a "$LOG"
+else
+  echo "BOX BUILD FAILED status=$status $(date -Is)" | tee -a "$LOG"
+fi
+exit "$status"
 EOS
     chmod +x "$MARKER_BOX_BUILD"
     SESSION=dense-box-build
