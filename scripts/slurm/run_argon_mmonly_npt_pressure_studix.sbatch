@@ -65,13 +65,13 @@ echo "scales=$SCALES out=$OUT ps=$PS dt_fs=$DT_FS"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1 || true
 
 # Pure CGenFF LJ (--ff cgenff, no checkpoint, no ML). Load certified geometry.
+# jaxmd-unified forbids combining --from-pdb with a Packmol composition string.
 uv run mmml md-system \
   --backend jaxmd \
   --jaxmd-unified \
   --ff cgenff \
   --setup pbc_npt \
   --from-pdb "$BOX/model.pdb" \
-  --composition "AR1:${NMOL}" \
   --box-size "$SIDE" \
   --temperature "$T_K" \
   --pressure "$P_BAR" \
