@@ -53,6 +53,13 @@ help:
 	@echo "  make docs-pdf          - Build PDF docs at site/mmml-docs.pdf"
 	@echo "  make docs-serve        - Serve docs locally with MkDocs"
 	@echo ""
+	@echo "Benchmarks (airspeed velocity; manual, GPU node -- not in CI):"
+	@echo "  make bench             - Run the full asv suite + publish HTML   [BENCH=<regex>]"
+	@echo "  make bench-quick       - One sample per benchmark (smoke, not a timing)"
+	@echo "  make bench-publish     - Regenerate benchmarks/html from existing results"
+	@echo "  make bench-preview     - Serve the report on localhost"
+	@echo "  make bench-gpu         - sbatch benchmarks/slurm_bench_gpu.sh"
+	@echo ""
 	@echo "Training (PhysNetJAX):"
 	@echo "  make physnet-train         TRAIN=train.npz [VALID=valid.npz] [NATOMS=60] [BATCH=32] [EPOCHS=100] [LR=0.001] [NAME=run] [CHARGES=false]"
 	@echo "  make physnet-train-adv     TRAIN=train.npz [VALID=valid.npz] [NATOMS=60] [BATCH=32] [EPOCHS=100] [LR=0.001] [NAME=run] BATCH_SHAPE=512 NBLEN=16384"
@@ -325,6 +332,34 @@ docs-pdf:
 
 docs-serve:
 	uv run --extra dev mkdocs serve
+
+# ==============================================================================
+# Benchmarks (airspeed velocity)
+# ==============================================================================
+# Manual, on purpose: a meaningful timing needs a quiet machine with a known
+# accelerator, so these are never run by CI. See benchmarks/README.md.
+#
+#   make bench                     # everything, then publish the HTML report
+#   make bench BENCH=MDSystemSize  # one class (any asv --bench regex)
+
+BENCH ?=
+
+bench:
+	bash benchmarks/run_bench.sh $(BENCH)
+
+# One sample per benchmark: proves the suite still runs. The numbers it prints
+# are NOT timings -- asv skips its own calibration and repetition in quick mode.
+bench-quick:
+	uv run --extra dev asv run --python=same --quick $(if $(BENCH),--bench $(BENCH),)
+
+bench-publish:
+	uv run --extra dev asv publish
+
+bench-preview:
+	uv run --extra dev asv preview
+
+bench-gpu:
+	sbatch benchmarks/slurm_bench_gpu.sh
 
 # ==============================================================================
 # Cleanup
