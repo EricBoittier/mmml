@@ -96,3 +96,69 @@ def test_int8_mask_matches_float_mask_numerically():
     e_int8 = float(fn(R, active_group_slots=slots, active_group_mask=jnp.ones(n_groups, dtype=jnp.int8)))
     e_f64 = float(fn(R, active_group_slots=slots, active_group_mask=jnp.ones(n_groups, dtype=jnp.float64)))
     assert e_int8 == pytest.approx(e_f64, rel=0, abs=0)
+
+
+# --- pair_capacity ----------------------------------------------------------
+#
+# The pair estimate used to be `n_atoms * shell_capacity(...)`, which counts
+# every unordered pair twice. That factor was not a safety margin -- it was a
+# double-count that made `headroom` mean twice what it said. These pin the
+# corrected behaviour so it cannot drift back.
+
+
+def test_pair_capacity_is_half_the_shell_sum_before_headroom():
+    """One atom's shell x atoms / 2, because the builders emit j > i only."""
+    from mmml.md.energy.capacity import pair_capacity, shell_capacity
+
+    n, cutoff, rho = 4000, 6.0, 0.03
+    per_atom = shell_capacity(cutoff, rho, headroom=1.0, minimum=1)
+    got = pair_capacity(n, cutoff, rho, headroom=1.0)
+    assert got == pytest.approx(n * per_atom / 2, rel=1e-9)
+
+
+def test_pair_capacity_scales_with_headroom():
+    from mmml.md.energy.capacity import pair_capacity
+
+    n, cutoff, rho = 4000, 6.0, 0.03
+    one = pair_capacity(n, cutoff, rho, headroom=1.0)
+    assert pair_capacity(n, cutoff, rho, headroom=3.0) == pytest.approx(3 * one, rel=1e-6)
+
+
+def test_pair_capacity_never_exceeds_the_pairs_that_can_exist():
+    """The shell estimate assumes an unbounded medium; the box is the truth."""
+    from mmml.md.energy.capacity import pair_capacity
+
+    # Tiny box, huge cutoff: the sphere estimate is wildly impossible.
+    got = pair_capacity(50, 100.0, 0.1, headroom=3.0)
+    assert got == 50 * 49 // 2
+
+
+def test_pair_capacity_discounts_intramolecular_pairs():
+    from mmml.md.energy.capacity import pair_capacity
+
+    sizes = np.full(10, 3)  # 10 molecules of 3 atoms
+    got = pair_capacity(30, 100.0, 0.1, mol_sizes=sizes, headroom=3.0)
+    assert got == 30 * 29 // 2 - 10 * 3
+
+
+def test_pair_capacity_rejects_headroom_below_one():
+    from mmml.md.energy.capacity import pair_capacity
+
+    with pytest.raises(ValueError, match="headroom"):
+        pair_capacity(100, 6.0, 0.03, headroom=0.5)
+
+
+def test_pair_capacity_default_headroom_covers_a_dense_excursion():
+    """PAIR_HEADROOM is sized against a 3.6x density spike, not equilibrium.
+
+    Measured worst requirement over 300-10 800 atoms was 2.50x the mean-field
+    estimate; the default must stay above that with room to spare.
+    """
+    from mmml.md.energy.capacity import PAIR_HEADROOM, pair_capacity
+
+    assert PAIR_HEADROOM >= 2.75, "below the measured worst case (2.50x) plus margin"
+
+    n, cutoff, rho = 4000, 12.0, 0.1
+    mean_field = pair_capacity(n, cutoff, rho, headroom=1.0)
+    default = pair_capacity(n, cutoff, rho)
+    assert default >= 2.5 * mean_field

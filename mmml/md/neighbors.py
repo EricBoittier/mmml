@@ -17,7 +17,7 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from mmml.md.energy.capacity import check_capacity, shell_capacity
+from mmml.md.energy.capacity import check_capacity, pair_capacity
 from mmml.md.system import MolecularSystem
 
 __all__ = ["make_intermolecular_neighbor_fn"]
@@ -62,10 +62,17 @@ def make_intermolecular_neighbor_fn(
             density = n / volume if volume > 0 else 0.0
         else:
             density = 0.0
-        # per-atom shell × atoms, generous headroom for a dense pair list.
         # Size the shell at the *build* cutoff so the skin pairs fit too.
-        per_atom = shell_capacity(build_cutoff_A, max(density, 1e-6), headroom=2.0, minimum=8)
-        capacity = int(max(n * per_atom, 16))
+        # pair_capacity halves the per-atom shell count (an unordered pair list
+        # holds each pair once) and bounds the result by the pairs that can
+        # exist, so PAIR_HEADROOM is the only safety factor and means what it
+        # says. See its docstring for what that factor is sized against.
+        capacity = pair_capacity(
+            n,
+            build_cutoff_A,
+            density,
+            mol_sizes=np.bincount(np.asarray(system.mol_id, dtype=np.int64)),
+        )
 
     cap = int(capacity)
 

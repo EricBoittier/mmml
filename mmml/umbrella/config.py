@@ -310,10 +310,12 @@ class UmbrellaConfig:
     #: |dE| <= 2.5e-12 eV on totals of order 200 eV. So this is a cost choice,
     #: not an accuracy one.
     #:
-    #: Measured 5.9x / 2.7x / 1.5x faster at 300 / 2625 / 4800 atoms (A100,
-    #: host rebuild amortised over a 20-step block). Turn off above **~7000
-    #: atoms** on GPU, or ~2600 on CPU, where the O(N^2) energy costs more than
-    #: the host rebuild saves. See ``scripts/bench_static_vs_neighbor_pairs.py``.
+    #: Measured 1.5x / 2.5x / 2.3x faster at 600 / 1200 / 2625 atoms (A100,
+    #: host rebuild amortised over a 20-step block), level at 4800 and 1.4x
+    #: slower at 7200. Turn off above **~4800 atoms** on GPU, or ~2600 on CPU,
+    #: where the O(N^2) energy costs more than the host rebuild saves; the
+    #: sampler prints a note if a run starts past that with this still on.
+    #: See ``scripts/bench_static_vs_neighbor_pairs.py``.
     static_pairs: bool = True
     atom_name_i: str | None = None
     atom_name_j: str | None = None
