@@ -105,10 +105,21 @@ nvalchemiops-pme = [
     "nvalchemi-toolkit-ops[jax]",
 ]
 
-# jax-pme long-range Coulomb backend (--lr-solver jax_pme). Not on PyPI under
-# this name yet (lab-cosmo/jax-pme upstream); the native "mic"/ewald path is
-# the default and does not need this. pick_lr_solver() falls back cleanly to
-# mic/nvalchemiops_pme/scafacos when jax-pme isn't installed.
+# jax-pme long-range Coulomb backend (--lr-solver jax_pme). The native
+# "mic"/ewald path is the default and does not need this; pick_lr_solver() falls
+# back cleanly to mic/nvalchemiops_pme/scafacos when jax-pme isn't installed.
+#
+# Why a git URL rather than a version: PyPI's `jax-pme` is a 0.0.0 placeholder
+# uploaded 2024-11-14, not the current code — the real project publishes nothing
+# there. Note the import name is `jaxpme`, not `jax_pme`.
+#
+# Why the fork rather than lab-cosmo/jax-pme directly: the fork carries no
+# patches (verified identical to upstream main), it exists so the pinned SHA
+# stays reachable if upstream force-pushes or deletes. Re-point at upstream only
+# if you are willing to lose that.
+#
+# CI installs this extra: 19 test files gate on have_jax_pme_package() and skip
+# silently without it. See .github/workflows/ci.yml.
 jax-pme-solver = [
     "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
 ]
