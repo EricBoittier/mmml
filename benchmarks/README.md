@@ -138,6 +138,18 @@ Re-running the **same** commit replaces that commit's entry; set
 `results/` JSON — `asv publish`'s regression view is only as long as the history
 that is checked in.
 
+`asv.conf.json` lists only `main` under `branches`, so a run on a feature branch
+records its JSON but `asv publish` reports
+
+```
+Couldn't find <hash> in branches (main)
+```
+
+and leaves that point off the graphs. This is expected: the report tracks `main`
+over time, and a branch's numbers join it when the branch merges. To plot a
+branch before then, add it to `branches` locally — don't commit that, or the
+report grows a dead series once the branch is gone.
+
 Because `environment_type` is `existing`, asv benchmarks the interpreter that
 invokes it rather than building a fresh environment per commit. Rebuilding a
 JAX + CUDA + libcharmm environment for every commit is not viable, and the runs
