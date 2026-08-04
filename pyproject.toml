@@ -266,6 +266,9 @@ dev = [
     "reportlab>=4.0",
     "ruff>=0.15",
     "vulture>=2.16",
+    # airspeed velocity — speed benchmarks + static HTML report (see benchmarks/).
+    # Run manually (`make bench`), typically on a GPU node; not wired into CI.
+    "asv>=0.6.4",
 ]
 
 # Full installation with all optional dependencies (CUDA 13 default)

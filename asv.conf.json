@@ -1,0 +1,21 @@
+{
+    "version": 1,
+    "project": "mmml",
+    "project_url": "https://mmml.readthedocs.io/en/latest/",
+    "repo": ".",
+    "dvcs": "git",
+    "branches": ["main"],
+    "show_commit_url": "https://github.com/EricBoittier/mmml/commit/",
+
+    "environment_type": "existing",
+    "pythons": ["same"],
+    "matrix": {},
+
+    "benchmark_dir": "benchmarks/benchmarks",
+    "env_dir": "benchmarks/env",
+    "results_dir": "benchmarks/results",
+    "html_dir": "benchmarks/html",
+
+    "default_benchmark_timeout": 900.0,
+    "build_cache_size": 0
+}
