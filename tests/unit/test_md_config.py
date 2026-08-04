@@ -86,7 +86,7 @@ def test_dcm_liquid_workflow_resilient_merges_presets() -> None:
     from mmml.cli.run.md_config import load_yaml_config
 
     repo = Path(__file__).resolve().parents[2]
-    cfg = load_yaml_config(repo / "mmml/cli/run/dcm_liquid_workflow.resilient.yaml")
+    cfg = load_yaml_config(repo / "mmml/cli/run/dcm_liquid_workflow.resilient.example.yaml")
     d = cfg["defaults"]
     assert d["md_stages"] == "mini,heat,equi"
     assert d["calculator_pre_minimize"] is True
@@ -103,7 +103,7 @@ def test_parse_md_system_args_resilient_workflow_config() -> None:
     from mmml.cli.run.md_system import parse_md_system_args
 
     repo = Path(__file__).resolve().parents[2]
-    cfg = repo / "mmml/cli/run/dcm_liquid_workflow.resilient.yaml"
+    cfg = repo / "mmml/cli/run/dcm_liquid_workflow.resilient.example.yaml"
     args = parse_md_system_args(
         [
             "--config",

@@ -283,10 +283,7 @@ def load_pdb_data(pdb_file):
         "charmm_res_at_dict": charmm_res_at_dict,
         "an_charmm_res_at_dict": an_charmm_res_at_dict,
         "an_mda_res_at_dict": an_mda_res_at_dict,
-        "atom_positions": atom_positions,
         "reorder": reorder,
-        "atom_positions": atom_positions,
-        "atomic_numbers": atomic_numbers,
     }
 
 

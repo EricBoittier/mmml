@@ -1258,6 +1258,14 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         Path to hybrid_mm.json with learnable per-type MM LJ σ/ε
                         scales. When omitted, MLpot looks next to --checkpoint
                         for hybrid_mm.json.
+  --rigid-water         Constrain monomers rigid with SHAKE/RATTLE (jax-md
+                        backend). Use when the ML term was trained on rigid
+                        monomers and carries no intramolecular restoring force.
+                        See docs/hybrid-bonded-intra.md.
+  --rigid-water-roh RIGID_WATER_ROH
+                        A (CHARMM TIP3)
+  --rigid-water-theta RIGID_WATER_THETA
+                        deg (CHARMM TIP3)
   --ml-potential-mode {physnet,kernnn,jax_mm_clone,jax_mm_spoof,bonded_intra}
                         Which potential supplies the ML terms. 'bonded_intra'
                         keeps PhysNet for the dimer interaction but hands the

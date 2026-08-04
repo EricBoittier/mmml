@@ -91,7 +91,11 @@ exact-force annotations, charge distributions, force distributions, and the
 per-atom force change relative to fixed TIP3 charges using the same epoch-2
 checkpoint and structure.
 
-![Epoch-2 Q0 charge-aware validation](../artifacts/npt_argon_water/checkpoint_pes_compare_20260802/povray_snapshots/q0_epoch2_charge_validation_dashboard.png)
+The dashboard is written to, and stays in, the run tree — `artifacts/` is
+gitignored (large binary outputs are not versioned), so it is a path to open
+locally rather than a figure embedded here:
+
+- `artifacts/npt_argon_water/checkpoint_pes_compare_20260802/povray_snapshots/q0_epoch2_charge_validation_dashboard.png`
 
 Machine-readable evidence:
 

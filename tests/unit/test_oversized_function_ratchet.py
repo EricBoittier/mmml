@@ -112,11 +112,18 @@ _BASELINE: dict[str, int] = {
     # and `resolve_bonded_intra_damping`, which is why they are unit tested and
     # the enclosing function still is not.
     "mmml/interfaces/pycharmmInterface/mmml_calculator.py::setup_calculator": 3445,
-    # 2522 -> 2734 (+212). NpT virial VJP + in-situ self-check + absolute-energy
-    # NVE arm landed as nested helpers (`npt_energy_fn_bwd`, FD checks) inside the
-    # existing closure rather than a module-level extract. Raising the register
-    # so the next append is noticed; the debt is still one uncoverable blob.
-    "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine": 2734,
+    # 2522 -> 2736. Not one change: the NpT virial/NHC work of 2026-08-02 grew it
+    # in steps on a side branch (2559, 2588, 2650, 2691, 2757, 2787), each inside
+    # the grace against *that* branch's baseline, and `b6c88bd27` merged the lot
+    # back at once (+162). `da805a50c` had briefly returned it to exactly 2572,
+    # the grace limit, which is how it stayed green until the merge.
+    #
+    # The rigid-water feature that surfaced this is the +2 at the end: a32388ac4
+    # composed `maybe_wrap_rigid_water` onto apply_fn precisely to avoid the
+    # twelve lines an inline block would have cost. Raised to record landed work,
+    # NOT because 2736 lines is acceptable -- this function and its nested
+    # `run_sim` still owe the extraction the failure message asks for.
+    "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine": 2736,
     "mmml/interfaces/pycharmmInterface/mlpot/staged_workflow.py::run_staged_workflow": 2469,
     # 2186 -> 1467: its 743-line argparse block became `build_parser`, so the
     # backend's CLI surface can be parsed in a test instead of only in a
@@ -128,9 +135,9 @@ _BASELINE: dict[str, int] = {
     # single flag -- this function *is* the extraction that split
     # md_pbc_suite/jaxmd.py::main, and its whole body is add_argument calls.
     "mmml/cli/run/md_system.py::build_parser": 2153,
-    # 1986 -> 2131 (+145). Same NpT / diagnostic append as the parent
-    # set_up_nhc_sim_routine entry above; run_sim is where the FD checks and
-    # rescue path growth actually live.
+    # 1986 -> 2131, the same merge as its enclosing function above. All of it is
+    # NpT virial and NHC-invariant work; the rigid-water change added 0 lines
+    # here. Nested inside a 2736-line function, so none of it is CI-coverable.
     "mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine.run_sim": 2131,
     "mmml/interfaces/pycharmmInterface/mlpot/dynamics.py::run_dynamics_with_io": 1587,
     # 1543 -> 1620 (+77, past the grace). Raised to record uncommitted work in

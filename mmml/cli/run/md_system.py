@@ -1729,6 +1729,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--rigid-water",
+        action="store_true",
+        help=(
+            "Constrain monomers rigid with SHAKE/RATTLE (jax-md backend). Use when "
+            "the ML term was trained on rigid monomers and carries no "
+            "intramolecular restoring force. See docs/hybrid-bonded-intra.md."
+        ),
+    )
+    parser.add_argument("--rigid-water-roh", type=float, default=0.9572, help="A (CHARMM TIP3)")
+    parser.add_argument(
+        "--rigid-water-theta", type=float, default=104.52, help="deg (CHARMM TIP3)"
+    )
+    parser.add_argument(
         "--ml-potential-mode",
         type=str,
         default=None,
@@ -2473,6 +2486,10 @@ def _append_suite_mmml_handoff_args(
         ["--hybrid-hamiltonian", str(getattr(args, "hybrid_hamiltonian", "handoff"))]
     )
     _append_optional(cmd, "--shared-cutoff", getattr(args, "shared_cutoff", None))
+    if bool(getattr(args, "rigid_water", False)):
+        cmd.append("--rigid-water")
+        cmd.extend(["--rigid-water-roh", str(getattr(args, "rigid_water_roh", 0.9572))])
+        cmd.extend(["--rigid-water-theta", str(getattr(args, "rigid_water_theta", 104.52))])
     cmd.extend(
         ["--mm-switch-on", str(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))]
     )

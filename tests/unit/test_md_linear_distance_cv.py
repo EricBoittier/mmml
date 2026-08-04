@@ -89,8 +89,10 @@ def test_gradient_accumulates_on_the_shared_atom():
 
 def test_harmonic_bias_energy_is_zero_at_target():
     xi = _CV.value_numpy(_SN2)
-    assert float(harmonic_bias_energy(xi, target=xi, k=150.0)) == pytest.approx(0.0)
-    assert float(harmonic_bias_energy(xi, target=xi + 1.0, k=4.0)) == pytest.approx(2.0)
+    assert float(harmonic_bias_energy(xi, target=xi, k_ev_A2=150.0)) == pytest.approx(0.0)
+    assert float(
+        harmonic_bias_energy(xi, target=xi + 1.0, k_ev_A2=4.0)
+    ) == pytest.approx(2.0)
 
 
 def test_minimum_image_is_applied_when_a_cell_is_given():
