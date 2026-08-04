@@ -7,6 +7,8 @@ former.
 
 from mmml.md.constraints.rattle import (
     MolecularConstraints,
+    constrained_nve,
+    constrained_velocity_verlet,
     constraint_residuals,
     maybe_wrap_rigid_water,
     molecular_virial_decomposition,
@@ -19,6 +21,8 @@ from mmml.md.constraints.rattle import (
 
 __all__ = [
     "MolecularConstraints",
+    "constrained_nve",
+    "constrained_velocity_verlet",
     "constraint_residuals",
     "maybe_wrap_rigid_water",
     "molecular_virial_decomposition",

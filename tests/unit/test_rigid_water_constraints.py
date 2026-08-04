@@ -382,3 +382,143 @@ def test_md_system_forwards_rigid_water_to_the_jaxmd_subprocess() -> None:
     sub = jaxmd_parser().parse_args(["--rigid-water", "--rigid-water-roh", "0.96"])
     assert sub.rigid_water is True
     assert sub.rigid_water_roh == pytest.approx(0.96)
+
+
+def test_constrained_nve_apply_fn_conserves_energy(x64) -> None:
+    """Drives the REAL apply_fn from constrained_nve, not a loop beside it.
+
+    The earlier conservation test hand-rolled velocity Verlet and, in doing so,
+    implemented proper interleaved RATTLE -- while the shipped wrapper projected
+    at step boundaries. It passed at 1e-6 while validating an integrator that did
+    not exist in the codebase. This one steps the object production calls.
+    """
+    import jax
+    import jax.numpy as jnp
+    from jax_md import space
+
+    from mmml.md.constraints import constrained_nve, constraint_residuals, tip3_rigid_constraints
+
+    rng = np.random.default_rng(11)
+    n = 8
+    r0 = _water(n, rng)
+    spec = tip3_rigid_constraints(n)
+    mass = jnp.asarray(np.tile(1.0 / spec.inv_mass, n)[:, None])
+    displacement, shift = space.free()
+
+    def energy(pos, **kwargs):
+        p = jnp.reshape(pos, (n, 3, 3))
+        d1 = jnp.linalg.norm(p[:, 1] - p[:, 0], axis=-1)
+        d2 = jnp.linalg.norm(p[:, 2] - p[:, 0], axis=-1)
+        return -_K_BOND * jnp.sum(d1 + d2) + 0.5 * _K_TRAP * jnp.sum(p[:, 0] ** 2)
+
+    init_fn, apply_fn = constrained_nve(energy, shift, _DT, spec)
+    state = init_fn(jax.random.PRNGKey(0), jnp.asarray(r0), kT=1e-4, mass=mass)
+    apply_fn = jax.jit(apply_fn)
+
+    def total(st):
+        return float(energy(st.position) + 0.5 * jnp.sum(st.momentum**2 / st.mass))
+
+    e0 = total(state)
+    for _ in range(_N_STEPS):
+        state = apply_fn(state)
+    e1 = total(state)
+
+    resid = float(np.abs(np.asarray(constraint_residuals(state.position, spec))).max())
+    assert resid < 1e-9, f"constraints drifted: {resid:.3e}"
+
+    d = np.asarray(state.position).reshape(n, 3, 3)
+    np.testing.assert_allclose(
+        np.linalg.norm(d[:, 1] - d[:, 0], axis=-1), 0.9572, atol=1e-6
+    )
+
+    drift = abs(e1 - e0) / max(abs(e0), 1e-12)
+    assert drift < 1e-6, f"E_tot drift {drift:.3e} (E0={e0:.6f}, E1={e1:.6f})"
+
+
+def test_step_boundary_projection_drifts_more_than_interleaving(x64) -> None:
+    """The reason the integrator exists, made measurable.
+
+    Same system and step count; the only difference is where the constraints are
+    applied. If this stops holding, the interleaving is not buying anything and
+    the simpler wrapper would do.
+    """
+    import jax
+    import jax.numpy as jnp
+    from jax_md import simulate, space
+
+    from mmml.md.constraints import (
+        constrained_nve,
+        tip3_rigid_constraints,
+        wrap_apply_fn_with_constraints,
+    )
+
+    rng = np.random.default_rng(11)
+    n = 8
+    r0 = _water(n, rng)
+    spec = tip3_rigid_constraints(n)
+    mass = jnp.asarray(np.tile(1.0 / spec.inv_mass, n)[:, None])
+    _, shift = space.free()
+
+    def energy(pos, **kwargs):
+        p = jnp.reshape(pos, (n, 3, 3))
+        d1 = jnp.linalg.norm(p[:, 1] - p[:, 0], axis=-1)
+        d2 = jnp.linalg.norm(p[:, 2] - p[:, 0], axis=-1)
+        return -_K_BOND * jnp.sum(d1 + d2) + 0.5 * _K_TRAP * jnp.sum(p[:, 0] ** 2)
+
+    def total(st):
+        return float(energy(st.position) + 0.5 * jnp.sum(st.momentum**2 / st.mass))
+
+    def run(apply_fn, state, steps):
+        apply_fn = jax.jit(apply_fn)
+        e0 = total(state)
+        for _ in range(steps):
+            state = apply_fn(state)
+        return abs(total(state) - e0) / max(abs(e0), 1e-12)
+
+    init_fn, interleaved = constrained_nve(energy, shift, _DT, spec)
+    state0 = init_fn(jax.random.PRNGKey(0), jnp.asarray(r0), kT=1e-4, mass=mass)
+
+    _, plain = simulate.nve(energy, shift, _DT)
+    boundary = wrap_apply_fn_with_constraints(plain, spec)
+
+    drift_interleaved = run(interleaved, state0, 400)
+    drift_boundary = run(boundary, state0, 400)
+
+    assert drift_interleaved < drift_boundary, (
+        f"interleaved {drift_interleaved:.3e} not better than "
+        f"step-boundary {drift_boundary:.3e}"
+    )
+
+
+def test_jaxmd_jargs_whitelist_carries_rigid_water() -> None:
+    """The runner reads a hand-built SimpleNamespace, not the parsed args.
+
+    md_pbc_suite.jaxmd builds `jargs` as an explicit whitelist and passes THAT to
+    set_up_nhc_sim_routine. A flag present on the parser but absent from the
+    whitelist reaches the runner as the getattr default -- so --rigid-water
+    parsed fine, appeared in the launched command line, and silently did nothing:
+    the rigid arm's O-H ran 0.372-8.00 A, indistinguishable from the flexible
+    control. Assert against the construction site itself.
+    """
+    import inspect
+
+    from mmml.cli.run.md_pbc_suite import jaxmd
+
+    src = inspect.getsource(jaxmd)
+    start = src.index("jargs = SimpleNamespace(")
+    depth, end = 0, start
+    for i in range(start, len(src)):
+        if src[i] == "(":
+            depth += 1
+        elif src[i] == ")":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    block = src[start:end]
+
+    for field in ("rigid_water", "rigid_water_roh", "rigid_water_theta"):
+        assert f"{field}=" in block, (
+            f"{field} missing from the jargs whitelist; the runner would see the "
+            "getattr default and the flag would be a silent no-op"
+        )

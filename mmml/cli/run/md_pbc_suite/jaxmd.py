@@ -1996,6 +1996,12 @@ def main(argv: list[str] | None = None) -> int:
         jax_md_update_interval=effective_update_interval,
         jax_md_skin_distance=effective_skin,
         nhc_chain_length=args.nhc_chain_length,
+        # jargs is an explicit whitelist: anything missing here reaches the
+        # runner as the getattr default, so a flag omitted from this list is a
+        # silent no-op with no error anywhere. --rigid-water was exactly that.
+        rigid_water=bool(getattr(args, "rigid_water", False)),
+        rigid_water_roh=float(getattr(args, "rigid_water_roh", 0.9572)),
+        rigid_water_theta=float(getattr(args, "rigid_water_theta", 104.52)),
         nhc_chain_steps=args.nhc_chain_steps,
         nhc_sy_steps=args.nhc_sy_steps,
         nhc_tau=args.nhc_tau,
