@@ -39,7 +39,7 @@ doubt.
 
 Field-by-field reference for these: [md-system-configs.md](md-system-configs.md).
 Preset composition rules:
-[`mmml/cli/run/presets/README.md`](https://github.com/EricBoittier/mmml/tree/main/mmml/cli/run/presets#readme).
+[`mmml/cli/run/presets/README.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/presets/README.md).
 
 ## The `.example.yaml` suffix is load-bearing
 
