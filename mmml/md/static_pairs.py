@@ -26,16 +26,14 @@ over a 20-step block). Energy and forces are *identical* to the rebuilt list at
 the production cutoff -- |dE| <= 2.5e-12 eV on totals of order 200 eV, max |dF|
 <= 6.4e-14 eV/A -- so the choice is purely about cost:
 
-    atoms      300    1200    2625    4800    7200   10500   15000
-    speedup   5.9x    6.1x    2.7x    1.5x   0.97x   0.65x   0.41x
+    atoms      300     600    1200    2625    4800    7200   15000
+    speedup   1.1x    1.5x    2.5x    2.3x    1.0x   0.72x   0.31x
 
-Two effects drive the small-system win. Below roughly twice the cutoff a
-neighbour list prunes nothing (at 300 atoms it holds 44548 of 44550 possible
-intermolecular pairs), and the rebuilt list is padded to a generous capacity
-estimate -- 434400 slots for those 44548 pairs -- so it evaluates about ten
-times more pairs than the complete list.
+Below roughly twice the cutoff a neighbour list prunes nothing -- at 300 atoms
+it holds 44548 of 44550 possible intermolecular pairs -- so the two converge
+there and the rebuild is pure overhead.
 
-It is O(N^2) in the energy, so past ~7000 atoms on GPU (~2600 on CPU, where
+It is O(N^2) in the energy, so past ~4800 atoms on GPU (~2600 on CPU, where
 there is no parallelism to hide it) the rebuilt list wins and
 ``UmbrellaConfig.static_pairs`` should be turned off. Beyond that again, a real
 cell list (``jax_md.partition.neighbor_list``) is the right structure -- a

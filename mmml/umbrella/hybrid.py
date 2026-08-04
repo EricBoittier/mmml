@@ -30,6 +30,7 @@ from mmml.umbrella.sample import (
 )
 
 __all__ = [
+    "STATIC_PAIRS_CROSSOVER_ATOMS",
     "bind_hybrid_atom_names",
     "find_atom_index_by_name",
     "merge_ml_region_mol_id",
@@ -42,6 +43,13 @@ __all__ = [
     "stretch_antisymmetric_seed_mic",
     "stretch_distance_seed_mic",
 ]
+
+#: System size past which the rebuilt neighbour list beats the static complete
+#: list, measured on an A100 with the host rebuild amortised over a 20-step
+#: block (``scripts/bench_static_vs_neighbor_pairs.py``). Static is 2.3x faster
+#: at 2 625 atoms, level at 4 800, and 1.4x slower at 7 200. The two give
+#: identical energies and forces, so this is purely where to spend the time.
+STATIC_PAIRS_CROSSOVER_ATOMS = 4800
 
 
 def find_atom_index_by_name(
@@ -619,11 +627,19 @@ def _build_window_leg(
     if getattr(cfg, "static_pairs", True):
         # Complete intermolecular list, uploaded once. The switching functions
         # cull by distance on the GPU, so no host rebuild is needed and none of
-        # the per-block transfer cost is paid. Measured 2.7x faster on this
-        # 2625-atom box (A100, 20-step block), and 5.9x at 300 atoms.
-        # O(N^2), so nl_skin_A and the block cadence in the caller are the path
-        # that scales: they win past ~7000 atoms on GPU, ~2600 on CPU. Energies
-        # are identical either way -- see scripts/bench_static_vs_neighbor_pairs.py.
+        # the per-block transfer cost is paid. Measured 2.3x faster on this
+        # 2625-atom box (A100, 20-step block).
+        #
+        # O(N^2), so the rebuilt list wins on large systems: measured crossover
+        # ~4800 atoms on GPU, ~2600 on CPU. Energies are identical either way --
+        # see scripts/bench_static_vs_neighbor_pairs.py.
+        if verbose_pairs and leg_system.n_atoms > STATIC_PAIRS_CROSSOVER_ATOMS:
+            print(
+                f"  note: static_pairs is on at {leg_system.n_atoms} atoms, past the "
+                f"measured ~{STATIC_PAIRS_CROSSOVER_ATOMS}-atom crossover; "
+                f"static_pairs: false is faster here, with identical energies",
+                flush=True,
+            )
         leg_nbr = make_static_pair_fn(leg_system, verbose=verbose_pairs)
     else:
         leg_nbr = make_intermolecular_neighbor_fn(

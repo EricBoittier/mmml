@@ -12,10 +12,50 @@ and versioning process.
 
 ### Changed
 
+- **Fixed a double-count in the intermolecular pair capacity, and bounded it by
+  the pairs that can exist.** `shell_capacity` returns the neighbours of *one*
+  atom; the neighbour builder multiplied that by the atom count, which counts
+  every unordered pair twice, since the builders emit `j > i` only. That factor
+  was never a deliberate margin — it made `headroom` mean twice what it said.
+  The estimate also assumed an unbounded medium, so once the cutoff was
+  comparable to the box it asked for the impossible: 300 atoms in a 14.4 Å box
+  at a 12 Å cutoff were allocated **434 400 slots for a list that can never
+  exceed 44 550**. Padding is not free — masked slots are still evaluated,
+  because fixed shapes are what keeps the kernel jitted.
+
+  New `mmml.md.energy.capacity.pair_capacity` halves the shell estimate, applies
+  a single explicit `PAIR_HEADROOM`, and caps the result at `n(n-1)/2` minus the
+  intramolecular pairs the builder drops. `PAIR_HEADROOM = 3.0` is chosen from
+  measurement rather than inherited: on TIP3P water from 300 to 10 800 atoms the
+  worst live count over perturbed and 0.65×-compressed configurations — a 3.6×
+  density spike, well past anything equilibrium sampling reaches — needed at
+  most **2.50×** the mean-field estimate (equilibrium needs ~1.0×).
+
+  Measured on an A100, energy + forces per step for the rebuilt path: 5.63 →
+  0.96 ms at 300 atoms, 10.47 → 1.53 at 600, and a uniform ~25 % cut from
+  4 800 atoms up.
+
+- **The `static_pairs` crossover moves from ~7 000 to ~4 800 atoms** as a result,
+  and every docstring, the config field and `docs/umbrella.md` now carry the new
+  number. Per-step ratios (static / rebuilt, A100, 20-step block): 1.14× at 300,
+  1.50× at 600, 2.49× at 1 200, 2.33× at 2 625, level at 4 800, then 0.72× at
+  7 200 and 0.31× at 15 000.
+
+  `static_pairs: true` stays the default — it is the fastest correct choice
+  across the regime this engine targets, a solute in a few thousand solvent
+  atoms — and `run_umbrella_hybrid_nvt` now prints a note when a run starts past
+  `STATIC_PAIRS_CROSSOVER_ATOMS` with it still on, since the two give identical
+  energies and the only question is where the time goes.
+
+  An earlier revision of `docs/umbrella.md` predicted the padding would not move
+  the crossover. That was measured with only the box bound applied, before the
+  double-count was removed, and is corrected.
+
 - Hybrid umbrella sampling (`engine: hybrid_jaxmd`) keeps `static_pairs: true`
   as its default after a measured comparison against the rebuilt neighbour
-  list, and the documented crossover is tightened from "~10k atoms" to the
-  measured **~7 000**. The two paths were competing answers to the same
+  list, and the documented crossover is tightened from "~10k atoms" to a
+  measured number (**~7 000** at the time; the capacity fix above has since
+  moved it to ~4 800). The two paths were competing answers to the same
   bottleneck — one arrived with the electrical-embedding work, the other grew
   on `main` as `nl_skin_A` + `mmml.md.nl_cadence` — so the default was decided
   on data rather than on which landed last.
@@ -36,10 +76,11 @@ and versioning process.
 
   Two effects drive the small-system win: below roughly twice the cutoff a
   neighbour list prunes nothing (at 300 atoms it holds 44 548 of 44 550
-  possible intermolecular pairs), and the rebuilt list is padded to a
+  possible intermolecular pairs), and the rebuilt list was padded to a
   deliberately generous capacity (434 400 slots for those 44 548 pairs), so it
-  evaluates about ten times more pairs than the complete list. Tightening
-  `shell_capacity` headroom would move the crossover down.
+  evaluated about ten times more pairs than the complete list. *That second
+  effect has since been fixed — see the capacity entry above, which supersedes
+  the ratios and the crossover quoted here.*
 
   The static list also cannot be built below `ctofnb` (which costs −33 meV/atom
   at a 9 Å build cutoff) and cannot go stale (1 Å RMS drift costs 3.2 meV/atom

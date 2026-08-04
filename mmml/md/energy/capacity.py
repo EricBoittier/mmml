@@ -30,8 +30,10 @@ __all__ = [
     "MASK_DTYPE",
     "COMPUTE_DTYPE",
     "DEFAULT_HEADROOM",
+    "PAIR_HEADROOM",
     "CapacityOverflow",
     "shell_capacity",
+    "pair_capacity",
     "check_capacity",
     "pad_indices",
 ]
@@ -48,6 +50,18 @@ INDEX_DTYPE = np.int32
 MASK_DTYPE = np.int8
 
 DEFAULT_HEADROOM = 1.5
+
+#: Safety factor on the *pair* estimate in :func:`pair_capacity`.
+#:
+#: Chosen from measurement, not inherited. On TIP3P water from 300 to 10 800
+#: atoms, the worst live pair count over perturbed and 0.65x-compressed
+#: configurations -- a 3.6x density spike, well past anything equilibrium
+#: sampling reaches -- needed at most **2.50x** the mean-field estimate, rising
+#: with system size (2.00x at 4 800, 2.30x at 7 200, 2.50x at 10 800). At
+#: equilibrium the requirement is ~1.0x. 3.0 keeps a fifth in hand above the
+#: pathological case; ``scripts/bench_static_vs_neighbor_pairs.py`` and the
+#: tests in ``tests/unit/test_md_capacity.py`` are where that is checked.
+PAIR_HEADROOM = 3.0
 
 
 class CapacityOverflow(RuntimeError):
@@ -74,6 +88,61 @@ def shell_capacity(
     volume = (4.0 / 3.0) * math.pi * cutoff_A**3
     estimate = volume * number_density_per_A3 * headroom
     return max(int(minimum), int(math.ceil(estimate)))
+
+
+def pair_capacity(
+    n_atoms: int,
+    cutoff_A: float,
+    number_density_per_A3: float,
+    *,
+    mol_sizes: np.ndarray | None = None,
+    headroom: float = PAIR_HEADROOM,
+    minimum: int = 16,
+) -> int:
+    """Padded slot count for an *unordered* intermolecular pair list.
+
+    Two things distinguish this from ``n_atoms * shell_capacity(...)``, which is
+    what the neighbour builder used to do.
+
+    **The pair count is half the shell count.** :func:`shell_capacity` counts the
+    neighbours of *one* atom; summing that over atoms counts every unordered
+    pair twice. The builders emit ``j > i`` only, so the estimate must be
+    halved. That factor was never a deliberate margin -- it was a double-count
+    that happened to look like one, and it made ``headroom`` mean twice what it
+    said.
+
+    **A pair list cannot exceed the pairs that exist.** The shell estimate
+    assumes an unbounded medium, so once the cutoff is comparable to the box it
+    asks for the impossible: 300 atoms in a 14.4 A box at a 12 A cutoff scored
+    434 400 slots for a list that can never hold more than 44 550. Padding is
+    not free -- masked slots are still evaluated, because fixed shapes are what
+    keeps the kernel jitted -- so the excess is per-step arithmetic thrown away.
+    ``mol_sizes`` (atoms per molecule) tightens the bound by the intramolecular
+    pairs the builder drops.
+
+    ``headroom`` is now the only safety factor, and :data:`PAIR_HEADROOM`
+    records what it is sized against.
+    """
+    n = int(n_atoms)
+    if n < 2:
+        return int(minimum)
+    if headroom < 1.0:
+        raise ValueError("headroom must be >= 1.0")
+
+    per_atom = shell_capacity(
+        cutoff_A, max(float(number_density_per_A3), 1e-6), headroom=1.0, minimum=1
+    )
+    estimate = math.ceil(n * per_atom / 2.0 * float(headroom))
+
+    max_possible = n * (n - 1) // 2
+    if mol_sizes is not None:
+        sizes = np.asarray(mol_sizes, dtype=np.int64)
+        max_possible -= int((sizes * (sizes - 1) // 2).sum())
+    max_possible = max(int(max_possible), 1)
+
+    # The exact bound is applied last: the minimum is there so a tiny system
+    # still gets a sane buffer, not a licence to allocate impossible pairs.
+    return int(min(max(estimate, int(minimum)), max_possible))
 
 
 def check_capacity(

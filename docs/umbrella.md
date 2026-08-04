@@ -81,8 +81,8 @@ Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](https://github.com/EricBoitti
 
 | `static_pairs` | What happens | Use when |
 |---|---|---|
-| `true` (default) | The complete intermolecular list is built once and uploaded once. The switching functions cull by distance on the GPU, so no host rebuild happens and none of the per-block transfer cost is paid. | Up to ~7 000 atoms |
-| `false` | `make_intermolecular_neighbor_fn` rebuilds a padded list on the host, with `nl_skin_A` of Verlet skin and a block size from `mmml.md.nl_cadence`. | Above ~7 000 atoms, where the O(N²) energy costs more than the rebuild saves |
+| `true` (default) | The complete intermolecular list is built once and uploaded once. The switching functions cull by distance on the GPU, so no host rebuild happens and none of the per-block transfer cost is paid. | Up to ~4 800 atoms |
+| `false` | `make_intermolecular_neighbor_fn` rebuilds a padded list on the host, with `nl_skin_A` of Verlet skin and a block size from `mmml.md.nl_cadence`. | Above ~4 800 atoms, where the O(N²) energy costs more than the rebuild saves |
 
 **Correctness is identical**, which is the precondition for treating this as a
 pure performance choice. The switched force field makes pairs beyond `ctofnb`
@@ -104,29 +104,41 @@ Reproduce with
 Per-step cost, energy + forces, with the host rebuild amortised over a 20-step
 block. A100 and a single CPU core; ratio > 1 means the static list is faster:
 
-| atoms | GPU static (ms) | GPU rebuilt (ms) | GPU ratio | CPU ratio |
-|---:|---:|---:|---:|---:|
-| 300 | 1.02 | 6.00 | **5.9×** | 3.4× |
-| 600 | 1.99 | 11.29 | **5.7×** | 3.2× |
-| 1 200 | 3.80 | 23.02 | **6.1×** | 2.5× |
-| 2 625 | 14.57 | 38.63 | **2.7×** | 1.0× |
-| 4 800 | 45.65 | 67.39 | **1.5×** | 0.40× |
-| 7 200 | 103.42 | 100.20 | 0.97× | 0.12× |
-| 10 500 | 224.07 | 145.78 | 0.65× | 0.05× |
-| 15 000 | 490.25 | 200.94 | 0.41× | — |
+| atoms | GPU static (ms) | GPU rebuilt (ms) | GPU ratio | faster |
+|---:|---:|---:|---:|---|
+| 300 | 1.02 | 1.16 | 1.14× | static |
+| 600 | 1.65 | 2.48 | 1.50× | static |
+| 1 200 | 3.84 | 9.58 | **2.49×** | static |
+| 2 625 | 15.69 | 36.58 | **2.33×** | static |
+| 4 800 | 50.54 | 51.80 | 1.02× | level |
+| 7 200 | 104.07 | 75.00 | 0.72× | **rebuilt** |
+| 10 500 | 227.35 | 111.34 | 0.49× | **rebuilt** |
+| 15 000 | 502.72 | 155.18 | 0.31× | **rebuilt** |
 
-Two effects drive the small-system win, and neither is subtle:
+So the crossover is at **~4 800 atoms**. Below it the static list wins by up to
+2.5×; above it the rebuilt list wins, reaching 3.2× by 15 000 atoms. The
+default targets the regime this engine is for — a solute in a few thousand
+solvent atoms — and the sampler prints a note if a run starts past the
+crossover with `static_pairs` still on.
 
-- **Below about twice the cutoff, a neighbour list prunes nothing.** At 300
-  atoms the box is 14.4 Å against a 12 Å cutoff, and the list holds 44 548 of
-  the 44 550 possible intermolecular pairs. The rebuild is pure overhead.
-- **The rebuilt list is padded to a capacity estimate that is generous by
-  design.** At 300 atoms that is 434 400 slots for 44 548 live pairs, so the
-  padded list evaluates roughly ten times more pairs than the complete one.
-  Tightening `shell_capacity` headroom would move the crossover down; the
-  numbers above are for the capacity policy as it stands.
+**Below about twice the cutoff, a neighbour list prunes nothing.** At 300 atoms
+the box is 14.4 Å against a 12 Å cutoff, and the list holds 44 548 of the
+44 550 possible intermolecular pairs. The rebuild is pure overhead, and the two
+paths converge — which is what the 1.14× at the top of the table shows.
 
-The CPU crossover is much earlier (~2 600 atoms) because the O(N²) work has no
+!!! note "These numbers moved when the capacity bug was fixed"
+    The rebuilt path's capacity used to be sized by
+    `n_atoms × shell_capacity(...)`. That double-counts — `shell_capacity`
+    returns the neighbours of *one* atom, and an unordered pair list holds each
+    pair once — and it came from a cutoff-sphere estimate that ignores the box,
+    so a 300-atom system that can hold at most 44 550 pairs was allocated
+    434 400 slots. Padding is not free: masked slots are still evaluated.
+
+    Fixing both moved the crossover from ~7 000 to ~4 800 atoms. An earlier
+    revision of this page said the padding would not move it; that was measured
+    with only the box bound applied, before the double-count was removed.
+
+The CPU crossover is earlier still (~2 600 atoms) because the O(N²) work has no
 parallelism to hide behind. Set `static_pairs: false` for large CPU runs.
 
 ##### What the static list cannot get wrong
