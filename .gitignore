@@ -356,3 +356,19 @@ tests/packmol_repack/repack.inp
 **/next_run.sh
 **/next_run.command
 **/next_run_advice.json
+
+# airspeed-velocity benchmark artifacts (benchmarks/README.md).
+# results/ IS tracked: asv's regression view is only as long as the history that
+# is checked in. html/ is regenerated from it by `asv publish`, and env/ is
+# asv's own scratch, so neither belongs in git.
+benchmarks/html/
+benchmarks/env/
+.asv/
+# ...but the results themselves are tracked, against the blanket `results/`
+# rule above.
+!benchmarks/results/
+!benchmarks/results/**
+# ...except asv's regenerated discovery metadata and per-machine records, which
+# are rebuilt by every `asv run`.
+benchmarks/results/benchmarks.json
+benchmarks/results/*/machine.json

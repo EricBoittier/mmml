@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import time
 
-import numpy as np
 
 from ._common import require_jax, require_jax_md, skip, synthetic_system
 

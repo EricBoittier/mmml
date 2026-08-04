@@ -37,8 +37,8 @@ def _synthetic_dataset(n_samples: int, n_atoms: int, *, seed: int = 0) -> dict:
 class BatchPreparation:
     """``prepare_batches_jit`` vs. ``prepare_batches_fast`` for one epoch."""
 
-    params = [(2048, 32), (2048, 64), (8192, 32)]
-    param_names = ["n_samples_n_atoms"]
+    params = ([2048, 8192], [32, 64])
+    param_names = ["n_samples", "n_atoms"]
     timeout = 1200.0
     warmup_time = 0.0
     number = 1
@@ -46,7 +46,7 @@ class BatchPreparation:
 
     batch_size = 32
 
-    def setup(self, n_samples_n_atoms):
+    def setup(self, n_samples, n_atoms):
         jax = require_jax()
         try:
             from mmml.models.physnetjax.physnetjax.data.batches import (
@@ -57,7 +57,6 @@ class BatchPreparation:
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"physnetjax.data.batches unavailable: {exc}") from exc
 
-        n_samples, n_atoms = n_samples_n_atoms
         self.n_atoms = int(n_atoms)
         self.data = _synthetic_dataset(int(n_samples), self.n_atoms)
         self.key = jax.random.PRNGKey(0)
@@ -67,7 +66,7 @@ class BatchPreparation:
         # (num_atoms, batch_size), so a real training loop builds it once.
         self.pair_cache = _pair_indices(self.n_atoms, self.batch_size)
 
-    def time_prepare_batches_jit(self, n_samples_n_atoms):
+    def time_prepare_batches_jit(self, n_samples, n_atoms):
         block(
             self._jit(
                 self.key,
@@ -77,7 +76,7 @@ class BatchPreparation:
             )
         )
 
-    def time_prepare_batches_fast(self, n_samples_n_atoms):
+    def time_prepare_batches_fast(self, n_samples, n_atoms):
         block(
             self._fast(
                 self.key,
@@ -87,7 +86,7 @@ class BatchPreparation:
             )
         )
 
-    def time_prepare_batches_fast_cached_pairs(self, n_samples_n_atoms):
+    def time_prepare_batches_fast_cached_pairs(self, n_samples, n_atoms):
         block(
             self._fast(
                 self.key,
@@ -140,13 +139,13 @@ class BatchRotationAugmentation:
 class PairIndexCache:
     """``_pair_indices`` — the ``(batch_size * n_atoms)^2`` edge layout itself."""
 
-    params = [(32, 32), (64, 32), (32, 128)]
-    param_names = ["n_atoms_batch_size"]
+    params = ([32, 64], [32, 128])
+    param_names = ["n_atoms", "batch_size"]
     timeout = 600.0
     number = 1
     repeat = (3, 10, 20.0)
 
-    def setup(self, n_atoms_batch_size):
+    def setup(self, n_atoms, batch_size):
         require_jax()
         try:
             from mmml.models.physnetjax.physnetjax.data.batches import _pair_indices
@@ -154,9 +153,9 @@ class PairIndexCache:
             raise skip(f"physnetjax.data.batches unavailable: {exc}") from exc
 
         self.fn = _pair_indices
-        self.n_atoms, self.batch_size = (int(v) for v in n_atoms_batch_size)
+        self.n_atoms, self.batch_size = int(n_atoms), int(batch_size)
 
-    def time_pair_indices(self, n_atoms_batch_size):
+    def time_pair_indices(self, n_atoms, batch_size):
         block(self.fn(self.n_atoms, self.batch_size))
 
 
@@ -167,13 +166,13 @@ class DCDTrajectoryIO:
     with, so its cost lands directly on every recorded frame.
     """
 
-    params = [(200, 1500), (1000, 1500), (200, 8000)]
-    param_names = ["n_frames_n_atoms"]
+    params = ([200, 1000], [1500, 8000])
+    param_names = ["n_frames", "n_atoms"]
     timeout = 900.0
     number = 1
     repeat = (3, 10, 60.0)
 
-    def setup(self, n_frames_n_atoms):
+    def setup(self, n_frames, n_atoms):
         import tempfile
         from pathlib import Path
 
@@ -185,7 +184,7 @@ class DCDTrajectoryIO:
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"DCD I/O unavailable: {exc}") from exc
 
-        n_frames, n_atoms = (int(v) for v in n_frames_n_atoms)
+        n_frames, n_atoms = int(n_frames), int(n_atoms)
         rng = np.random.default_rng(0)
         self.positions = rng.uniform(0.0, 30.0, size=(n_frames, n_atoms, 3)).astype(
             np.float32
@@ -198,13 +197,13 @@ class DCDTrajectoryIO:
         self.path = Path(self._tmpdir.name) / "traj.dcd"
         self._save(self.path, self.positions, self.atoms, dt_ps=0.0005)
 
-    def teardown(self, n_frames_n_atoms):
+    def teardown(self, n_frames, n_atoms):
         tmpdir = getattr(self, "_tmpdir", None)
         if tmpdir is not None:
             tmpdir.cleanup()
 
-    def time_write_dcd(self, n_frames_n_atoms):
+    def time_write_dcd(self, n_frames, n_atoms):
         self._save(self.path, self.positions, self.atoms, dt_ps=0.0005)
 
-    def time_read_dcd(self, n_frames_n_atoms):
+    def time_read_dcd(self, n_frames, n_atoms):
         self._read(self.path)

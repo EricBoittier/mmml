@@ -188,7 +188,7 @@ class VerletSkinCache:
 
 
 class NeighborCapacitySizing:
-    """``shell_capacity`` / ``pad_indices`` — the padding arithmetic itself.
+    """``pad_indices`` — padding a raw pair list into fixed-capacity arrays.
 
     Tiny next to a pair build, but it runs on every refresh and it is pure host
     Python, so a regression here is invisible in profiles and shows up as GPU
@@ -202,18 +202,14 @@ class NeighborCapacitySizing:
 
     def setup(self, n_pairs):
         try:
-            from mmml.md.energy.capacity import pad_indices, shell_capacity
+            from mmml.md.energy.capacity import pad_indices
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"capacity module unavailable: {exc}") from exc
 
         rng = np.random.default_rng(0)
-        self.shell_capacity = shell_capacity
         self.pad_indices = pad_indices
         self.pi = rng.integers(0, 5000, size=int(n_pairs)).astype(np.int32)
         self.capacity = int(n_pairs * 1.5)
-
-    def time_shell_capacity(self, n_pairs):
-        self.shell_capacity(CUTOFF_A, 0.1, headroom=1.5, minimum=8)
 
     def time_pad_indices(self, n_pairs):
         self.pad_indices(self.pi, self.capacity)
