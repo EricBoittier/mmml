@@ -159,6 +159,7 @@ nav:
       - Hybrid MM charges (fixed / latent / fixed+latent): hybrid-mm-charges.md
       - Trainable hybrid MM LJ scales (per-type σ / ε): hybrid-mm-lj-scales.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
+      - Bonded intra + rigid-water stabilization: hybrid-bonded-intra.md
       - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - MLpot settings: mlpot-settings.md
       - DCMNet calculators: dcmnet_calculators.md

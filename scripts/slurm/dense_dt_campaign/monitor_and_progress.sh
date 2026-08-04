@@ -131,6 +131,21 @@ while IFS= read -r _pk; do
   esac
 done < <(pgrep -x packmol 2>/dev/null || true)
 
+charmm_available=0
+if [[ -n "${CHARMM_LIB_DIR:-}" && -f "${CHARMM_LIB_DIR}/libcharmm.so" ]] \
+  || [[ -f "${ROOT}/setup/charmm/libcharmm.so" ]]; then
+  charmm_available=1
+fi
+box_build_charmm_blocked=0
+if [[ "$charmm_available" -eq 0 ]]; then
+  for _box_log in "$BOX24/build.log" "$BOX26/build.log"; do
+    if [[ -f "$_box_log" ]] \
+      && _match "Could not load the CHARMM shared library|libcharmm\\.so" "$_box_log" >/dev/null 2>&1; then
+      box_build_charmm_blocked=1
+    fi
+  done
+fi
+
 {
   echo "# dense_dt_campaign STATUS"
   echo
@@ -155,6 +170,7 @@ done < <(pgrep -x packmol 2>/dev/null || true)
   done
   echo
   echo "- box_build_alive=$box_build_alive packmol_alive=$packmol_alive packmol_stuck=$packmol_stuck"
+  echo "- box_build_charmm_blocked=$box_build_charmm_blocked charmm_available=$charmm_available"
   echo
   echo "## Slurm ddc-*"
   echo
@@ -205,7 +221,9 @@ fi
 if [[ "$REACT" -eq 1 ]]; then
   if [[ "$packmol_stuck" -eq 1 ]]; then
     actions+=("kill stuck dense-campaign packmol (>45min) and restart dense box build v3")
-    pkill -f 'build_dense_boxes_v[23]\.sh' 2>/dev/null || true
+    while IFS= read -r _pid; do
+      [[ -n "${_pid:-}" ]] && kill "${_pid}" 2>/dev/null || true
+    done < <(pgrep -f 'build_dense_boxes_v[23]\.sh' 2>/dev/null || true)
     # Never pkill -x packmol globally — other campaigns (e.g. MeOH DES) may be packing.
     while IFS= read -r _pk; do
       [[ -z "${_pk:-}" ]] && continue
@@ -220,12 +238,15 @@ if [[ "$REACT" -eq 1 ]]; then
     box_build_alive=0
   fi
 
-  if [[ "$box_build_alive" -eq 0 ]] && { ! box_ready "$BOX24" || ! box_ready "$BOX26"; }; then
+  if [[ "$box_build_charmm_blocked" -eq 1 ]]; then
+    actions+=("box build blocked: libcharmm.so unavailable; set CHARMM_LIB_DIR or build setup/charmm/libcharmm.so before retry")
+  elif [[ "$box_build_alive" -eq 0 ]] && { ! box_ready "$BOX24" || ! box_ready "$BOX26"; }; then
     actions+=("start/restart dense box build (L24 then L26, packmol-tol=1.5)")
+    export MMML_DENSE_DT_ROOT="$ROOT"
     cat > "$MARKER_BOX_BUILD" <<'EOS'
 #!/usr/bin/env bash
 set -uo pipefail
-cd /mmhome/boittier/home/mmml
+cd "${MMML_DENSE_DT_ROOT:-/mmhome/boittier/home/mmml}"
 source examples/lj_scales/_env.sh
 export JAX_PLATFORMS=cpu LJ_DEVICE=cpu
 LOG=/tmp/build_dense_boxes_v3.log
@@ -254,9 +275,15 @@ build() {
   echo "rc=$rc $(date -Is)" | tee -a "$LOG" | tee -a "$OUT/build.log"
   return $rc
 }
-build 24 1.15 artifacts/lj_scales/liquid_dense_L24
-build 26 0.96 artifacts/lj_scales/liquid_dense_L26
-echo "ALL BOXES DONE $(date -Is)" | tee -a "$LOG"
+status=0
+build 24 1.15 artifacts/lj_scales/liquid_dense_L24 || status=$?
+build 26 0.96 artifacts/lj_scales/liquid_dense_L26 || status=$?
+if [[ "$status" -eq 0 ]]; then
+  echo "ALL BOXES DONE $(date -Is)" | tee -a "$LOG"
+else
+  echo "BOX BUILD FAILED status=$status $(date -Is)" | tee -a "$LOG"
+fi
+exit "$status"
 EOS
     chmod +x "$MARKER_BOX_BUILD"
     SESSION=dense-box-build

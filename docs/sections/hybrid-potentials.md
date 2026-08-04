@@ -28,6 +28,10 @@ covers decision 1 and frames the rest.
 - [Hybrid ML/MM decomposition](../hybrid-mlmm-decomposition.md) — mapping each
   energy term back to its PyCHARMM counterpart. The page to read when a hybrid
   energy disagrees with CHARMM and you need to find *which* term.
+- [Bonded intra and rigid-water stabilization](../hybrid-bonded-intra.md) —
+  operational controls for ML models trained on rigid monomers: when to use
+  `--ml-potential-mode bonded_intra`, when to use jax-md `--rigid-water`, and
+  what to check before NPT density runs.
 - [Interaction-prior constraints & trust map](../interaction-prior-constraints.md)
   — constraining the model where you have no data.
 - [MLpot settings](../mlpot-settings.md) — the COM handoff switches and the

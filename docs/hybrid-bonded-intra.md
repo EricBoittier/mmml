@@ -1,6 +1,8 @@
-# Bonded intra + ML interaction
+# Bonded intra and rigid-water stabilization
 
-Design note for `--ml-potential-mode bonded_intra`. Written 2026-08-02.
+Design and operations note for `--ml-potential-mode bonded_intra` and the
+jax-md `--rigid-water` constraint path. Written 2026-08-02; updated 2026-08-03
+after rigid-water constraints landed.
 
 ## The problem this solves
 
@@ -69,6 +71,16 @@ in kcal/mol relative to 0.9840 Å:
 
 The bonded model is correct in both directions, so the intramolecular problem is
 already solved in the MM term — it simply is not wired in.
+
+## Choosing a stabilization control
+
+The water blow-up is one failure mode with three possible controls:
+
+| Control | Use when | Trade-off |
+|---|---|---|
+| `--rigid-water` | You want to test the DES/TIP3 liquid on the rigid geometry the ML model saw during training. | Removes the three internal degrees of freedom per water; only implemented for homogeneous 3-atom monomers on the jax-md path. |
+| `--ml-potential-mode bonded_intra` | You need flexible intramolecular motion but have a PSF/CGenFF bonded model for the monomer. | Restores O-H stretching, but still exposes the compressed-geometry interaction hole unless the damping guard is also used. |
+| Flexible-monomer retraining or a direct interaction model | You need production dynamics away from the rigid training manifold. | Larger model/data campaign; it is the general fix rather than an operational gate. |
 
 ## What `bonded_intra` does
 
@@ -146,24 +158,77 @@ Open parameters, deliberately not chosen yet:
 
 Default must be off, so existing runs stay bit-identical.
 
-## Future work: rigid water
+## Rigid water in the jax-md runner
 
-The cheapest route to a density number is not to fix the intramolecular potential
-at all, but to remove the degrees of freedom: constrain O–H and HOH with
-SHAKE/RATTLE. That makes MD sample exactly the distribution the model was trained
-on, and rigid TIP3P is the standard CHARMM setup regardless.
+`--rigid-water` is now the explicit jax-md control for the "rigid training
+geometry, no intramolecular restoring force" case. It is off by default; without
+the flag the runner returns the original jax-md `apply_fn` unchanged.
 
-It would answer, in one job, whether the intermolecular physics — validated at
-r = +0.9208 against PBE0 on 295 DES water dimers, slope 1.153, residual std 0.63
-kcal/mol — gives a sensible liquid. That question is currently confounded by the
-intramolecular blow-up and cannot be answered any other way until either this
-mode or the constraint lands.
+### What it does
 
-Flexible-monomer retraining is the general fix, but it is a training campaign.
-Note that it is *not* required for the interaction term specifically: the
-interaction energy depends only weakly on monomer internal geometry, so a model
-trained to predict it directly — rather than as a difference of two large totals
-— would not need flexible dimer data.
+- Builds one `MolecularConstraints` pattern for every monomer in
+  `mmml.md.constraints.rattle`.
+- Applies three distance constraints per water: O-H1, O-H2, and H1-H2. The H-H
+  pseudo-bond fixes the HOH angle, so no separate angle constraint is needed.
+- Composes the projection onto the selected jax-md integrator after the runner
+  chooses NVE, NVT, or NPT and before `jit(apply_fn)`.
+- Uses step-boundary projection: SHAKE projects positions using the pre-step
+  geometry as reference, then RATTLE removes velocity along constrained bonds.
+  This is not an interleaved velocity-Verlet RATTLE implementation; validate the
+  timestep with the NVE conservation gate instead of assuming equivalence.
+- Uses fixed-count Gauss-Seidel sweeps (`100` iterations by default in the
+  wrapper) so the path stays jit-friendly.
+
+### Supported geometry
+
+The current implementation is deliberately narrow:
+
+- all monomers must have exactly three atoms, or `rigid_water_spec_from_args`
+  raises `NotImplementedError`;
+- atom order within each monomer is assumed to be O, H, H;
+- default geometry is CHARMM TIP3:
+  `--rigid-water-roh 0.9572 --rigid-water-theta 104.52`;
+- H-H is derived from `r_oh` and `theta` by the law of cosines, so the three
+  constraints cannot be internally inconsistent.
+
+Choose the geometry intentionally. The DES dimers diagnosed above were rigid at
+O-H = 0.9840 A and HOH = 104.60 degrees, while the CLI defaults are CHARMM TIP3.
+For a run meant to stay exactly on the DES training geometry, pass those values
+explicitly:
+
+```bash
+mmml md-system --backend jaxmd --setup pbc_nvt \
+  --rigid-water --rigid-water-roh 0.9840 --rigid-water-theta 104.60 \
+  ...
+```
+
+### Operational checks
+
+Start with short NVT or NVE gates before interpreting an NPT density:
+
+1. Confirm post-run O-H and H-H distances stay at the requested targets to within
+   the analysis tolerance for the trajectory.
+2. Run the jax-md NVE energy-drift gate at the intended timestep; reduce `dt` if
+   the constrained step-boundary projection drifts.
+3. For temperature analysis from saved velocities, account for the removed
+   degrees of freedom. A rigid 3-atom water has 6 kinetic degrees of freedom
+   instead of 9; helper functions such as
+   `kinetic_temperature_k_from_jaxmd_metal_velocities(..., ndegf=...)` accept an
+   explicit `ndegf`.
+4. Treat NPT pressure as diagnostic for now. The live jax-md pressure reporters
+   use `jax_md.quantity.pressure`; `molecular_virial_decomposition` exists for
+   analysis of constrained systems, but the molecular virial is not yet the
+   production barostat/reporting path.
+
+`--rigid-water` is separate from PyCHARMM SHAKE. The PyCHARMM path already emits
+`shake bonh para sele all end`; this jax-md wrapper exists because the jax-md
+backend had no equivalent.
+
+Flexible-monomer retraining remains the general fix, but it is a training
+campaign. Note that it is *not* required for the interaction term specifically:
+the interaction energy depends only weakly on monomer internal geometry, so a
+model trained to predict it directly — rather than as a difference of two large
+totals — would not need flexible dimer data.
 
 ## Provenance
 
@@ -173,3 +238,9 @@ trained to predict it directly — rather than as a difference of two large tota
 - Bonded comparison: `scripts/bonded_vs_ml_intramolecular.py`, which also confirms
   s(R) = 1.000000 across the scan (COM separation 2.71–2.78 Å, taper starts at
   4.5 Å), so the arm differencing is valid.
+- Rigid-water implementation: `mmml/md/constraints/rattle.py` and
+  `mmml/cli/run/jaxmd_runner.py`.
+- Rigid-water tests: `tests/unit/test_rigid_water_constraints.py`,
+  `tests/unit/test_md_handoff_velocities.py::test_constrained_degrees_of_freedom_raise_the_temperature`,
+  and the oversized-function ratchet notes in
+  `tests/unit/test_oversized_function_ratchet.py`.
