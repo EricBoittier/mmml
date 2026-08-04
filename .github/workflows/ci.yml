@@ -24,8 +24,12 @@ jobs:
           enable-cache: true
       - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
+      # jax-pme-solver is not part of `all-cpu`, and 19 test files gate on
+      # have_jax_pme_package(). Without the extra every one of them skips and
+      # pytest still exits 0, so the whole `--lr-solver jax_pme` backend rode
+      # along untested. Costs one git clone (cached by setup-uv), buys ~63 tests.
       - name: Install package and dependencies
-        run: uv sync --extra dev --extra all-cpu
+        run: uv sync --extra dev --extra all-cpu --extra jax-pme-solver
       # Lint and the duplicate-definition scan record their result but do not
       # abort the job: a lint failure used to stop the run before a single test
       # executed, so a bad merge surfaced one problem per push instead of all of
@@ -44,6 +48,10 @@ jobs:
           uv run python -V
           uv run python -c "import mmml; print('package imports ok')"
           uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
+          # Assert the extra above actually landed. have_jax_pme_package() is a
+          # try/except import, so a failed install downgrades 19 files back to
+          # silent skips rather than failing anything.
+          uv run python -c "from jaxpme import PME, P3M, Ewald; print('jax-pme backend importable')"
       # Part of `make merge-check` but previously absent from CI, so generated
       # CLI docs / architecture pages could drift on main unnoticed.
       - name: Generated docs are up to date
