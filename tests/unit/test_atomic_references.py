@@ -230,3 +230,48 @@ def test_shipped_table_unit_scaling_is_consistent():
     in_ev = get_atomic_reference_dict(unit="ev")
     z = next(iter(hartree))
     assert in_ev[z] == pytest.approx(hartree[z] * _HARTREE_EV, rel=1e-6)
+
+
+def test_shipped_table_is_a_single_well_formed_json_document():
+    """The shipped table must parse, and parse as ONE document.
+
+    A merge once concatenated two versions of this file -- the second document's
+    opening brace landed where a comma belonged, leaving 271 '{' against 270
+    '}'. Nothing caught it until `import mmml.md.energy.terms` died in CI,
+    because the table is read at module scope by `mmml.data.preprocessing`, so a
+    malformed file takes down the whole package rather than one code path.
+
+    Fork PRs get no CI in this repository, so this file is the guard.
+    """
+    from mmml.data.atomic_references import _DATA_PATH
+
+    raw = Path(_DATA_PATH).read_text(encoding="utf-8")
+
+    # json.load would accept only the first document if there were trailing
+    # data, so assert on the balance too -- that is what actually broke.
+    assert raw.count("{") == raw.count("}"), (
+        f"unbalanced braces: {raw.count('{')} open vs {raw.count('}')} close; "
+        "this is what two concatenated JSON documents look like"
+    )
+
+    decoder = json.JSONDecoder()
+    obj, end = decoder.raw_decode(raw.lstrip())
+    assert not raw.lstrip()[end:].strip(), (
+        "trailing content after the first JSON document -- the file holds more "
+        "than one document"
+    )
+    assert isinstance(obj, dict) and obj, "table must be a non-empty mapping"
+
+
+def test_shipped_table_has_no_duplicate_levels():
+    """Duplicate top-level keys parse fine and silently drop the earlier one."""
+    from mmml.data.atomic_references import _DATA_PATH
+
+    seen: list[str] = []
+    json.loads(
+        Path(_DATA_PATH).read_text(encoding="utf-8"),
+        object_pairs_hook=lambda kv: seen.extend(k for k, _ in kv) or dict(kv),
+    )
+    # Only the outermost object's keys are level names; inner ones are species.
+    levels = [k for k in seen if ":" not in k]
+    assert len(levels) == len(set(levels)), "a level appears twice; one would win silently"
