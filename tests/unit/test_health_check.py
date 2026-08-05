@@ -70,6 +70,32 @@ def test_render_health_report():
     text = render_health_report(report)
     assert "interface health check" in text
     assert "[OK] core" in text
+    assert "interface probes passed" in text
+    assert "add --live" in text
+
+
+def test_checkpoint_hint_for_hf_portable(tmp_path):
+    from mmml.cli.run.health_check import _checkpoint_hint
+
+    p = tmp_path / "hf_json" / "neutral_best_forces_portable.json"
+    p.parent.mkdir()
+    p.write_text("{}")
+    hint = _checkpoint_hint(p)
+    assert "HF portable" in hint
+
+
+def test_jax_cpu_summary_mentions_require_gpu():
+    class _Dev:
+        def __str__(self) -> str:
+            return "cpu:0"
+
+    with mock.patch("jax.devices", return_value=[_Dev()]), mock.patch(
+        "jax.default_backend", return_value="cpu"
+    ):
+        check = check_jax(require_gpu=False)
+    assert check.ok is True
+    assert "CPU only" in check.summary
+    assert "--require-gpu" in check.summary
 
 
 def test_main_json_exit_code(monkeypatch):
@@ -141,6 +167,9 @@ def test_gpu_quantum_noop_without_cupy(monkeypatch):
     assert check.ok is True
     assert check.warnings == []
     assert check.details["cupy"] is None
+    assert check.details.get("applicable") is False
+    assert "skipped" in check.summary.lower()
+    assert "cupy not installed" in check.summary.lower()
 
 
 def _reject_import(blocked: str):

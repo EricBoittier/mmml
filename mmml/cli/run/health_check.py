@@ -118,9 +118,12 @@ def check_jax(*, require_gpu: bool = False) -> InterfaceCheck:
         check.warnings.append(f"CUDA runtime lib probe failed: {exc}")
 
     if check.ok and check.details.get("cuda_visible"):
-        check.summary = f"JAX CUDA ({', '.join(check.details['devices'])})"
+        check.summary = f"JAX CUDA ready ({', '.join(check.details['devices'])})"
     elif check.ok:
-        check.summary = f"JAX CPU ({', '.join(check.details.get('devices', []))})"
+        check.summary = (
+            f"JAX CPU only ({', '.join(check.details.get('devices', []))}; "
+            "GPU not required unless --require-gpu)"
+        )
     return check
 
 
@@ -136,15 +139,21 @@ def check_gpu_quantum() -> InterfaceCheck:
     """
     import importlib.util
 
-    check = InterfaceCheck(name="gpu_quantum", ok=True, summary="GPU quantum (cupy not installed)")
+    check = InterfaceCheck(
+        name="gpu_quantum",
+        ok=True,
+        summary="skipped — cupy not installed (GPU DFT Hessian not required)",
+    )
     try:
         import cupy  # type: ignore
     except Exception:
         check.details["cupy"] = None
+        check.details["applicable"] = False
         return check
 
     ver = str(getattr(cupy, "__version__", "0"))
     check.details["cupy"] = ver
+    check.details["applicable"] = True
     try:
         major = int(ver.split(".")[0])
     except Exception:
@@ -159,9 +168,14 @@ def check_gpu_quantum() -> InterfaceCheck:
             "Pin cupy to the 13.x series: uv pip install 'cupy-cuda12x>=13,<14' "
             "(or cupy-cuda13x). See issue #135 / gpu4pyscf#836."
         )
-        check.summary = f"GPU quantum (cupy {ver} — cuTENSOR incompatible)"
+        check.summary = (
+            f"cupy {ver} + gpu4pyscf installed — cuTENSOR incompatible "
+            "(DFT Hessian at risk; still OK unless --strict)"
+        )
+    elif has_gpu4pyscf:
+        check.summary = f"cupy {ver} + gpu4pyscf present (GPU DFT Hessian path)"
     else:
-        check.summary = f"GPU quantum (cupy {ver})"
+        check.summary = f"cupy {ver} present (gpu4pyscf not installed)"
     return check
 
 
@@ -203,7 +217,9 @@ def check_charmm() -> InterfaceCheck:
         check.warnings.append(
             "MPI-linked libcharmm — launch MLpot via ./scripts/mmml-charmm-mpirun.sh"
         )
-    check.summary = f"libcharmm @ {lib}"
+        check.summary = f"importable MPI-linked libcharmm @ {lib}"
+    else:
+        check.summary = f"importable serial libcharmm @ {lib}"
     return check
 
 
@@ -222,7 +238,10 @@ def check_mlpot_symbols() -> InterfaceCheck:
                 "mlpot_set_properties",
                 "mlpot_unset",
             ]
-            check.summary = "MLpot hooks present in libcharmm"
+            check.summary = (
+                "MLpot symbols present in libcharmm "
+                "(not ENER-tested; use --live)"
+            )
     except Exception as exc:
         check.ok = False
         check.errors.append(str(exc))
@@ -243,11 +262,28 @@ def check_packmol() -> InterfaceCheck:
             check.ok = False
             check.errors.append(f"Packmol not executable: {exe}")
         else:
-            check.summary = f"Packmol @ {exe}"
+            check.summary = f"Packmol binary present @ {exe}"
     except Exception as exc:
         check.ok = False
         check.errors.append(str(exc))
     return check
+
+
+def _checkpoint_hint(ckpt: Path) -> str:
+    """Short chemistry / provenance hint for resolved checkpoint paths."""
+    name = ckpt.name.lower()
+    parts = {p.lower() for p in ckpt.parts}
+    if "hf_json" in parts or "portable" in name:
+        return "bundled HF portable (generic small-mol; verify chemistry fit)"
+    if "desdimers" in name:
+        return "DESdimers / ACO-like organics (md_cpu smoke default)"
+    if "params_aaa" in name or "aaa" in name:
+        return "peptide-oriented (φ/ψ scan default)"
+    if "sppoky" in name or "spooky" in name:
+        return "SpookyNet example weights"
+    if "meoh" in name:
+        return "MeOH / charge-transfer init"
+    return "path resolved only — weights not loaded; chemistry not validated"
 
 
 def check_checkpoint(path: Path | None) -> InterfaceCheck:
@@ -256,8 +292,10 @@ def check_checkpoint(path: Path | None) -> InterfaceCheck:
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
 
         ckpt = resolve_checkpoint(path)
+        hint = _checkpoint_hint(ckpt)
         check.details["path"] = str(ckpt)
-        check.summary = f"checkpoint @ {ckpt}"
+        check.details["resolved_meaning"] = hint
+        check.summary = f"path found ({hint}) @ {ckpt.name}"
         if ckpt.suffix.lower() == ".json":
             import json as _json
 
@@ -266,6 +304,9 @@ def check_checkpoint(path: Path | None) -> InterfaceCheck:
                 check.warnings.append("checkpoint JSON root is not an object")
             else:
                 check.details["json_keys"] = sorted(payload.keys())[:12]
+                check.details["load_status"] = (
+                    "JSON keys peeked only — model not instantiated"
+                )
     except FileNotFoundError as exc:
         check.ok = False
         check.errors.append(str(exc))
@@ -310,7 +351,16 @@ def check_mpi(*, strict: bool = False, tier2: bool = False, prelaunch: bool = Fa
             check.errors.extend(tier2_report.errors)
             check.warnings.extend(tier2_report.warnings)
     if check.ok:
-        check.summary = f"MPI env OK (mpirun={mpi_report.mpirun_path or 'n/a'})"
+        if mpi_report.charmm_links_mpi:
+            check.summary = (
+                f"MPI-linked libcharmm OK "
+                f"(mpirun={mpi_report.mpirun_path or 'missing'})"
+            )
+        else:
+            check.summary = (
+                "serial libcharmm — MPI not required "
+                f"(mpirun={'present' if mpi_report.mpirun_path else 'unused'})"
+            )
     return check
 
 
@@ -427,10 +477,20 @@ def run_health_check(
 
 
 def render_health_report(report: HealthReport) -> str:
+    has_live = any(c.name == "live" for c in report.checks)
+    if not report.ok:
+        status = "FAIL"
+    elif has_live:
+        status = "OK — probes + live MLpot ENER passed"
+    else:
+        status = (
+            "OK — interface probes passed "
+            "(imports/paths/symbols; not full MD/GPU readiness; add --live for ENER)"
+        )
     lines = [
         "MMML interface health check",
         "===========================",
-        f"Status: {'OK' if report.ok else 'FAIL'}",
+        f"Status: {status}",
         "",
     ]
     for check in report.checks:
@@ -439,7 +499,13 @@ def render_health_report(report: HealthReport) -> str:
         for key, value in check.details.items():
             if key == "energy_terms":
                 lines.append(f"      energy: {value}")
-            elif key in ("devices", "symbols", "json_keys"):
+            elif key in (
+                "devices",
+                "symbols",
+                "json_keys",
+                "resolved_meaning",
+                "load_status",
+            ):
                 lines.append(f"      {key}: {value}")
             elif key not in ("tier2",):
                 lines.append(f"      {key}: {value}")
