@@ -367,7 +367,7 @@ Reference pipeline:
 (analysis + ICML summary figure) and the campaign renderer under
 `artifacts/lj_scales/structure_analysis/make_structure_plots.py` (POV-Ray
 call). Example assets live in
-[`docs/images/structures/`](images/structures/) (`dcm120_*_psf_bonds*.png`,
+`docs/images/structures/` (`dcm120_*_psf_bonds*.png`,
 `validation_summary.png`).
 
 Hard rules for liquid POV-Ray panels:

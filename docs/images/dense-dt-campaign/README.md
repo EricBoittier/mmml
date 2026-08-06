@@ -23,5 +23,5 @@ rsync -a --exclude='*.npz' --exclude='plot.log' \
 
 ## Dimer 1D interaction profiles
 
-See [`dimer_scans/`](dimer_scans/) for DCM–DCM hybrid COM–COM scans
+See [`dimer_scans/`](dimer_scans/README.md) for DCM–DCM hybrid COM–COM scans
 (`dcm_dimer_Eint_profile.png`, component decomposition, multi-orientation rays).

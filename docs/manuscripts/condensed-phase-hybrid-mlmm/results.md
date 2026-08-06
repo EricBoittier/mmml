@@ -186,5 +186,5 @@ Artifact roots: `artifacts/pbc_liquid_density_dyn_smoke_tiny/`,
 | RDF / diffusion | Not until analysis hooks |
 | Timings | Not until benchmark export |
 
-Numeric extract: [latex/figures/extracted_metrics.json](latex/figures/extracted_metrics.json).  
+Numeric extract: `manuscripts/condensed-phase-hybrid-mlmm/latex/figures/extracted_metrics.json` (kept with the LaTeX tree; not published on this site).  
 Regenerate mapping: [workflow-map.md](workflow-map.md).

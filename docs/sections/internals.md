@@ -30,8 +30,9 @@ uv run python scripts/audit_hardcoded_recommendations.py
 uv run python scripts/audit_charmm_fortran_api.py
 ```
 
-**Reports** — the simulation robustness report, MD sweep plotting notes, and the
-md-embedding smoke results, each tied to a particular run.
+**Reports** — the simulation robustness report, MD sweep plotting notes,
+md-embedding smoke results, NpT / outside-loss density notes, and Q⁰ / Spooky
+distillation campaign records, each tied to a particular run.
 
 **Manuscript** — outline, Methods and Results drafts, and the Snakemake workflow
 map for the condensed-phase hybrid ML/MM paper. The LaTeX sources stay in-tree

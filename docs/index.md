@@ -100,3 +100,7 @@ Design notes, audits, tool inventories, and results reports live under
 
 - [Repository](https://github.com/EricBoittier/mmml)
 - [Issue tracker](https://github.com/EricBoittier/mmml/issues)
+
+## CDO: Mr Connor Brandes (Chief Dog Officer)
+
+![CDO: Mr Connor Brandes (Chief Dog Officer)](images/staff/connor.jpeg){ width="320" }
