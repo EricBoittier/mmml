@@ -95,13 +95,22 @@ Example config: `mmml/cli/run/dcm_long_range_solvers.example.yaml`.
 
 ## 3. Standalone validation (no PyCHARMM)
 
-Quick check that jax-pme and backends are installed:
+Install the optional jax-pme backend before using `--lr-solver jax_pme`.
+The Python import name is `jaxpme`, and CI installs the same extra so the
+jax-pme tests do not silently skip:
+
+```bash
+uv sync --extra jax-pme-solver
+uv run python -c "from jaxpme import PME, P3M, Ewald; print('jax-pme backend importable')"
+```
+
+Quick check that jax-pme and the other long-range backends are usable:
 
 ```bash
 cd ~/mmml
-python tests/functionality/long_range/00_check_lr_env.py
-pytest tests/functionality/long_range/test_coulomb_backends.py -v
-pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
+uv run python tests/functionality/long_range/00_check_lr_env.py
+uv run pytest tests/functionality/long_range/test_coulomb_backends.py -v
+uv run pytest tests/functionality/long_range/test_hybrid_jax_pme_mm.py -v
 bash tests/functionality/long_range/run_all.sh
 ```
 
@@ -304,7 +313,7 @@ The **Hybrid ML/MM setup** dashboard (always printed at calculator init) include
 
 | Issue                                        | Fix                                                                    |
 | -------------------------------------------- | ---------------------------------------------------------------------- |
-| `jax_pme` falls back to `mic`                | Install jax-pme: `uv sync` (pinned in pyproject.toml)                  |
+| `jax_pme` falls back to `mic`                | Install the optional backend: `uv sync --extra jax-pme-solver`; verify `from jaxpme import PME, P3M, Ewald` |
 | `nvalchemiops_pme` falls back                | Install `mmml[nvalchemiops-pme]` and a compatible JAX runtime          |
 | `scafacos` unavailable                       | Build to `~/.local/scafacos`, set `SCAFACOS_LIB` and `LD_LIBRARY_PATH` |
 | MIC box too small                            | Use L ≥ 28–32 Å for DCM; see `run_dcm_liquid_workflow.sh` header       |
