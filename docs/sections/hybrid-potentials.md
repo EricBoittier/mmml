@@ -31,7 +31,9 @@ covers decision 1 and frames the rest.
 - [Bonded intra and rigid-water stabilization](../hybrid-bonded-intra.md) —
   operational controls for ML models trained on rigid monomers: when to use
   `--ml-potential-mode bonded_intra`, when to use jax-md `--rigid-water`, and
-  what to check before NPT density runs.
+  what to check before NPT density runs. The jax-md rigid-water path uses
+  interleaved RATTLE for NVE; NVT/NPT remain approximate step-boundary
+  projections.
 - [Interaction-prior constraints & trust map](../interaction-prior-constraints.md)
   — constraining the model where you have no data.
 - [MLpot settings](../mlpot-settings.md) — the COM handoff switches and the

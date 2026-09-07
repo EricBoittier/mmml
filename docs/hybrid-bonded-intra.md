@@ -1,8 +1,8 @@
 # Bonded intra and rigid-water stabilization
 
 Design and operations note for `--ml-potential-mode bonded_intra` and the
-jax-md `--rigid-water` constraint path. Written 2026-08-02; updated 2026-08-03
-after rigid-water constraints landed.
+jax-md `--rigid-water` constraint path. Written 2026-08-02; updated after
+interleaved NVE RATTLE landed on the rigid-water path.
 
 ## The problem this solves
 
@@ -172,12 +172,44 @@ the flag the runner returns the original jax-md `apply_fn` unchanged.
   pseudo-bond fixes the HOH angle, so no separate angle constraint is needed.
 - Composes the projection onto the selected jax-md integrator after the runner
   chooses NVE, NVT, or NPT and before `jit(apply_fn)`.
-- Uses step-boundary projection: SHAKE projects positions using the pre-step
-  geometry as reference, then RATTLE removes velocity along constrained bonds.
-  This is not an interleaved velocity-Verlet RATTLE implementation; validate the
-  timestep with the NVE conservation gate instead of assuming equivalence.
+- Uses interleaved velocity-Verlet RATTLE for NVE: SHAKE projects the drifted
+  positions onto the manifold, the SHAKE impulse is fed back into momentum, the
+  force is evaluated at the constrained positions, and RATTLE removes velocity
+  along constrained bonds.
+- Uses step-boundary projection for NVT and NPT. That path runs the selected
+  thermostat/barostat step first, then projects positions and velocities; it
+  emits an "approximate: not interleaved" runtime note because those updates are
+  not part of the constraint solve.
 - Uses fixed-count Gauss-Seidel sweeps (`100` iterations by default in the
   wrapper) so the path stays jit-friendly.
+
+### Integrator scheme by ensemble
+
+| jax-md ensemble | Constraint scheme | Operational meaning |
+|---|---|---|
+| `nve` | Interleaved RATTLE via `constrained_nve` when the runner can pass the force function, shift function, and timestep. | Forces are evaluated on the constrained geometry, and the SHAKE correction changes momentum before the second half-kick. Use this path for the NVE conservation gate. |
+| `nvt`, `npt` | Step-boundary SHAKE/RATTLE projection via `wrap_apply_fn_with_constraints`. | Positions and velocities are cleaned up after the thermostat/barostat step. Useful as an operational stabilizer, but validate geometry and treat pressure/temperature diagnostics with the caveats below. |
+
+If `--rigid-water` is absent, `maybe_wrap_rigid_water` returns the original
+`apply_fn` unchanged. If it is present, the console panel reports the selected
+scheme and the O-H / H-H targets.
+
+The interleaved NVE sequence is:
+
+1. half-kick;
+2. drift with the jax-md `shift_fn`;
+3. SHAKE positions using the pre-step, on-manifold geometry as the reference;
+4. add the SHAKE correction impulse to momentum;
+5. evaluate forces at the constrained positions;
+6. second half-kick;
+7. RATTLE velocities.
+
+This avoids the two step-boundary failure modes that motivated the change:
+forces sampled off the rigid training manifold and missing SHAKE impulse in the
+velocity update. The regression tests compare the production `constrained_nve`
+`apply_fn` against step-boundary projection on a toy bond-breaking potential and
+assert that the interleaved path conserves total energy to the `1e-6` relative
+gate.
 
 ### Supported geometry
 
@@ -202,20 +234,33 @@ mmml md-system --backend jaxmd --setup pbc_nvt \
   ...
 ```
 
+### PBC and minimum-image constraints
+
+Constraint residuals use minimum-image intramolecular vectors when a box is
+available. Do not replace this with individual atom wrapping: a water molecule
+split across the periodic boundary can otherwise appear to have one-box-long
+O-H vectors, and SHAKE will try to "repair" a molecule that was only wrapped
+differently. The interleaved NVE impulse is computed from the small SHAKE
+correction (`r_constrained - r_free`), not from the wrapped step displacement, so
+crossing a boundary does not inject a box-length velocity jump.
+
 ### Operational checks
 
 Start with short NVT or NVE gates before interpreting an NPT density:
 
 1. Confirm post-run O-H and H-H distances stay at the requested targets to within
    the analysis tolerance for the trajectory.
-2. Run the jax-md NVE energy-drift gate at the intended timestep; reduce `dt` if
-   the constrained step-boundary projection drifts.
+2. Run the jax-md NVE energy-drift gate at the intended timestep. This exercises
+   the interleaved RATTLE path; reduce `dt` if total energy still drifts.
 3. For temperature analysis from saved velocities, account for the removed
    degrees of freedom. A rigid 3-atom water has 6 kinetic degrees of freedom
    instead of 9; helper functions such as
    `kinetic_temperature_k_from_jaxmd_metal_velocities(..., ndegf=...)` accept an
    explicit `ndegf`.
-4. Treat NPT pressure as diagnostic for now. The live jax-md pressure reporters
+4. For NVT and NPT, remember that rigid-water projection is step-boundary and
+   approximate: the thermostat/barostat update is not interleaved with the
+   constraint impulses.
+5. Treat NPT pressure as diagnostic for now. The live jax-md pressure reporters
    use `jax_md.quantity.pressure`; `molecular_virial_decomposition` exists for
    analysis of constrained systems, but the molecular virial is not yet the
    production barostat/reporting path.
@@ -241,6 +286,9 @@ totals — would not need flexible dimer data.
 - Rigid-water implementation: `mmml/md/constraints/rattle.py` and
   `mmml/cli/run/jaxmd_runner.py`.
 - Rigid-water tests: `tests/unit/test_rigid_water_constraints.py`,
+  especially `test_constrained_nve_apply_fn_conserves_energy`,
+  `test_step_boundary_projection_drifts_more_than_interleaving`, and
+  `test_jaxmd_jargs_whitelist_carries_rigid_water`;
   `tests/unit/test_md_handoff_velocities.py::test_constrained_degrees_of_freedom_raise_the_temperature`,
   and the oversized-function ratchet notes in
   `tests/unit/test_oversized_function_ratchet.py`.
