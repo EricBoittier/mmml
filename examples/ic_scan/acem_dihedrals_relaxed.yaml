@@ -1,0 +1,42 @@
+# Acetamide (CGenFF ACEM) *relaxed* dihedral scans.
+#
+# Same DoFs as acem_dihedrals.yaml, but each grid point holds the scanned
+# torsion with ASE FixInternals and FIRE-minimizes every other coordinate.
+# That is what recovers the 3-fold methyl rotor on a non-symmetric starting
+# XYZ (unequal H–C–C angles, non-stationary amide).
+#
+# Do not pass --prepare-only: constrained-relax needs the calculator.
+#
+#   mmml ic-scan --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+#     --output artifacts/ic_scan/acem_xtb_relaxed --overwrite
+
+structure: acem.xyz
+calculator: xtb
+evaluate: energy
+geometry_mode: constrained-relax
+relax_fmax_ev_A: 0.05
+relax_steps: 200
+relax_maxstep_A: 0.03
+relax_optimizer: fire     # or bfgs if FixInternals steps fail to converge
+relax_chain: true          # each point starts from the previous relaxed frame
+failure_policy: fail
+
+dofs:
+  - name: methyl
+    kind: dihedral
+    atoms: [5, 1, 0, 6]   # O–C–CC–HC1
+    start: -180
+    stop: 180
+    n_points: 37
+  - name: amide_hc
+    kind: dihedral
+    atoms: [5, 1, 2, 3]   # O–C–N–HC
+    start: -180
+    stop: 180
+    n_points: 37
+
+scans:
+  - name: methyl_1d
+    dofs: [methyl]        # only this torsion is constrained; amide can relax
+  - name: amide_hc_1d
+    dofs: [amide_hc]

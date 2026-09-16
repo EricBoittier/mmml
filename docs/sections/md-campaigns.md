@@ -4,8 +4,6 @@ Running dynamics — pure MM, pure ML, or hybrid ML/MM — across the ASE, JAX-M
 and PyCHARMM backends. `md-system` is the single entry point; a *campaign* is
 one YAML describing many runs.
 
-## Happy path
-
 ```bash
 mmml env                                 # resolved checkpoints + CHARMM paths
 mmml configure                           # interactive YAML, or hand-edit
@@ -58,4 +56,4 @@ and the MPI helpers.
 Runs that need a trained potential come from
 [Training & sampling](training-sampling.md); how that potential is *assembled*
 is [Hybrid ML/MM potentials](hybrid-potentials.md). For partitions, MPI, and
-launchers see [Environment & clusters](environment-clusters.md).
+launchers see [Environment and HPCs](environment-clusters.md).

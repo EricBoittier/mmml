@@ -35,14 +35,28 @@ Other options:
                    evaluate)
 ```
 
+Set `geometry_mode: constrained-relax` in the YAML for a relaxed scan (active
+torsions held with ASE `FixInternals`, other coordinates FIRE- or
+BFGS-minimized). That mode needs `evaluate: energy` and cannot be combined with
+`--prepare-only`. Details: [ic-scan](../../ic-scan-design.md).
+
 ## Visual examples
 
 ![Trialanine PES with force-annotated conformers](../../images/povray-overlays/trialanine_pes_with_povray.png)
 
-## Related docs
+Relaxed methyl scans (3-fold ACEM rotor, atom indices): [ic-scan](../../ic-scan-design.md).
 
-- [Internal-coordinate scan design](../../ic-scan-design.md)
-- [Scientific code policy](../../scientific-code.md)
+```bash
+mmml ic-scan \
+  --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+  --output artifacts/ic_scan/acem_xtb_relaxed \
+  --overwrite
+```
+
+## Related
+
+- [Internal-coordinate scans](../../ic-scan-design.md)
+- `examples/ic_scan/acem_dihedrals_relaxed.yaml`
 
 ---
 

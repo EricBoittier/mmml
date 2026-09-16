@@ -9,8 +9,9 @@ import numpy as np
 import pytest
 import yaml
 from ase import Atoms
+from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.emt import EMT
-from ase.io import write
+from ase.io import read, write
 
 from mmml.cli.__main__ import main as mmml_main
 from mmml.cli.misc.ic_scan import build_parser, main as ic_scan_main
@@ -358,3 +359,201 @@ def test_ic_scan_cli_registered_and_prepare_only(structure_xyz: Path, tmp_path: 
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["counts"]["prepared"] == 2
     assert manifest["counts"]["successful"] == 0
+
+
+class _HarmonicReferenceCalculator(Calculator):
+    """E = ½ k ||R − R_ref||²; forces −k (R − R_ref)."""
+
+    implemented_properties = ("energy", "forces")
+
+    def __init__(self, ref_positions, k: float = 2.0, **kwargs):
+        super().__init__(**kwargs)
+        self.ref_positions = np.asarray(ref_positions, dtype=float)
+        self.k = float(k)
+
+    def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+        Calculator.calculate(self, atoms, properties, system_changes)
+        delta = atoms.get_positions() - self.ref_positions
+        energy = 0.5 * self.k * float(np.sum(delta**2))
+        self.results = {"energy": energy, "forces": -self.k * delta}
+
+
+def _harmonic_factory(ref_positions, k: float = 2.0):
+    return lambda: _HarmonicReferenceCalculator(ref_positions, k=k)
+
+
+def test_constrained_relax_requires_energy_evaluation(structure_xyz: Path):
+    with pytest.raises(ValueError, match="evaluate='energy'"):
+        IcScanConfig(
+            structure=structure_xyz,
+            geometry_mode="constrained-relax",
+            evaluate="none",
+            calculator="xtb",
+            dofs=(
+                DegreeOfFreedom(
+                    name="phi",
+                    kind="dihedral",
+                    atoms=(0, 1, 2, 3),
+                    values=(0.0,),
+                ),
+            ),
+        )
+
+
+def test_fix_internals_constraint_active_dofs_only():
+    from mmml.ic_scan.relax import fix_internals_constraint
+
+    dofs = (
+        DegreeOfFreedom("phi", "dihedral", (0, 1, 2, 3), (90.0,)),
+        DegreeOfFreedom("r", "bond", (0, 1), (1.5,)),
+    )
+    constraint = fix_internals_constraint(
+        dofs, {"phi": 90.0, "r": 1.5}, names=("phi",)
+    )
+    assert constraint.dihedrals == [[90.0, [0, 1, 2, 3]]]
+    assert constraint.bonds in (None, [])
+
+
+def test_constrained_relax_holds_dihedral_and_lowers_energy(structure_xyz: Path):
+    from mmml.ic_scan.relax import constrained_relax_atoms
+    from mmml.ic_scan.topology import angles_match
+
+    atoms = read(structure_xyz)
+    target = float(atoms.get_dihedral(0, 1, 2, 3))
+    ref = atoms.get_positions().copy()
+    factory = _harmonic_factory(ref, k=2.0)
+    start = atoms.copy()
+    displaced = start.get_positions()
+    displaced[0, 0] -= 0.20
+    start.set_positions(displaced)
+    start.calc = factory()
+    rigid_energy = float(start.get_potential_energy())
+    config = IcScanConfig(
+        structure=structure_xyz,
+        calculator="xtb",
+        evaluate="energy",
+        geometry_mode="constrained-relax",
+        relax_fmax_ev_A=0.05,
+        relax_steps=80,
+        relax_chain=False,
+        dofs=(
+            DegreeOfFreedom(
+                name="phi",
+                kind="dihedral",
+                atoms=(0, 1, 2, 3),
+                values=(target,),
+            ),
+        ),
+    )
+    relaxed = constrained_relax_atoms(
+        start,
+        factory,
+        config,
+        active_dofs=("phi",),
+        coordinates={"phi": target},
+    )
+    assert angles_match(float(relaxed.get_dihedral(0, 1, 2, 3)), target, atol_deg=1.0)
+    relaxed.calc = factory()
+    assert float(relaxed.get_potential_energy()) < rigid_energy - 0.001
+
+
+class _ZeroCalculator(Calculator):
+    implemented_properties = ("energy", "forces")
+
+    def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+        Calculator.calculate(self, atoms, properties, system_changes)
+        self.results = {
+            "energy": 0.0,
+            "forces": np.zeros((len(atoms), 3)),
+        }
+
+
+def test_run_ic_scan_constrained_relax_roundtrip(structure_xyz: Path, tmp_path: Path):
+    config = IcScanConfig(
+        structure=structure_xyz,
+        calculator="xtb",
+        evaluate="energy",
+        geometry_mode="constrained-relax",
+        relax_fmax_ev_A=0.05,
+        relax_steps=20,
+        dofs=(
+            DegreeOfFreedom(
+                name="phi",
+                kind="dihedral",
+                atoms=(0, 1, 2, 3),
+                values=(0.0, 30.0),
+            ),
+        ),
+    )
+    result = run_ic_scan(config, calculator=lambda: _ZeroCalculator())
+    assert len(result.records) == 2
+    assert all(record.status == "success" for record in result.records)
+    for record, frame in zip(result.records, result.frames, strict=True):
+        actual = json.loads(record.actual_coordinates_json)["phi"]
+        requested = json.loads(record.coordinates_json)["phi"]
+        delta = (actual - requested + 180.0) % 360.0 - 180.0
+        assert abs(delta) < 1.0
+        assert frame.info.get("relax_converged") is True
+    out = tmp_path / "relaxed"
+    result.write(out)
+    loaded = type(result).read(out)
+    assert loaded.config.geometry_mode == "constrained-relax"
+    assert loaded.config.relax_chain is True
+
+
+def test_prepare_only_rejected_for_constrained_relax(structure_xyz: Path, tmp_path: Path, capsys):
+    config_path = tmp_path / "scan.yaml"
+    write(tmp_path / "mol.xyz", _butane_like())
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "structure": "mol.xyz",
+                "evaluate": "energy",
+                "calculator": "xtb",
+                "geometry_mode": "constrained-relax",
+                "dofs": [
+                    {
+                        "name": "phi",
+                        "kind": "dihedral",
+                        "atoms": [0, 1, 2, 3],
+                        "values": [0.0],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as exc:
+        ic_scan_main(
+            [
+                "--config",
+                str(config_path),
+                "--prepare-only",
+                "--output",
+                str(tmp_path / "out"),
+            ]
+        )
+    assert exc.value.code == 2
+    assert "constrained-relax" in capsys.readouterr().err
+
+
+def test_style_dihedral_scan_axes_uniform():
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from mmml.ic_scan.plotting import (
+        DIHEDRAL_AXIS_MAX_DEG,
+        DIHEDRAL_AXIS_MIN_DEG,
+        style_dihedral_scan_axes,
+    )
+
+    fig, ax = plt.subplots()
+    style_dihedral_scan_axes(ax, y_max=1.0, y_min=0.0)
+    assert ax.get_xlim() == (DIHEDRAL_AXIS_MIN_DEG, DIHEDRAL_AXIS_MAX_DEG)
+    ticks = list(ax.get_xticks())
+    assert ticks[0] == pytest.approx(-180.0)
+    assert ticks[-1] == pytest.approx(180.0)
+    assert (ticks[1] - ticks[0]) == pytest.approx(60.0)
+    assert ax.get_ylim()[0] == pytest.approx(0.0)
+    plt.close(fig)

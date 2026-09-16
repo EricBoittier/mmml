@@ -13,9 +13,15 @@ CONFIG_SCHEMA_VERSION = "1.0"
 
 DofKind = Literal["bond", "angle", "dihedral"]
 ScanMode = Literal["product", "individual"]
-GeometryMode = Literal["rigid"]
+GeometryMode = Literal["rigid", "constrained-relax"]
+RelaxOptimizer = Literal["fire", "bfgs"]
 FailurePolicy = Literal["fail", "allow_partial"]
 EvaluateMode = Literal["none", "energy"]
+
+# ASE FIRE settings for geometry_mode=constrained-relax (eV / Å / steps).
+DEFAULT_RELAX_FMAX_EV_A = 0.05
+DEFAULT_RELAX_STEPS = 200
+DEFAULT_RELAX_MAXSTEP_A = 0.03
 
 
 def _finite(value: float, *, name: str) -> float:
@@ -172,6 +178,11 @@ class IcScanConfig:
     scan_mode: ScanMode = "product"
     scans: tuple[ScanSpec, ...] | None = None
     geometry_mode: GeometryMode = "rigid"
+    relax_fmax_ev_A: float = DEFAULT_RELAX_FMAX_EV_A
+    relax_steps: int = DEFAULT_RELAX_STEPS
+    relax_maxstep_A: float = DEFAULT_RELAX_MAXSTEP_A
+    relax_optimizer: RelaxOptimizer = "fire"
+    relax_chain: bool = True
     evaluate: EvaluateMode = "energy"
     failure_policy: FailurePolicy = "fail"
     reference: dict[str, float] = field(default_factory=dict)
@@ -201,13 +212,37 @@ class IcScanConfig:
         if scan_mode not in ("product", "individual"):
             raise ValueError("scan_mode must be 'product' or 'individual'")
         geometry_mode = str(self.geometry_mode).lower()
-        if geometry_mode not in ("rigid",):
-            raise ValueError("geometry_mode currently supports only 'rigid'")
+        if geometry_mode not in ("rigid", "constrained-relax"):
+            raise ValueError(
+                "geometry_mode must be 'rigid' or 'constrained-relax'"
+            )
         evaluate = str(self.evaluate).lower()
         if evaluate not in ("none", "energy"):
             raise ValueError("evaluate must be 'none' or 'energy'")
         if evaluate == "energy" and not self.calculator:
             raise ValueError("calculator is required when evaluate='energy'")
+        if geometry_mode == "constrained-relax":
+            if evaluate != "energy":
+                raise ValueError(
+                    "geometry_mode='constrained-relax' requires evaluate='energy' "
+                    "(omit --prepare-only); relaxation needs a calculator"
+                )
+            if not self.calculator:
+                raise ValueError(
+                    "geometry_mode='constrained-relax' requires a calculator"
+                )
+        relax_optimizer = str(self.relax_optimizer).lower()
+        if relax_optimizer not in ("fire", "bfgs"):
+            raise ValueError("relax_optimizer must be 'fire' or 'bfgs'")
+        relax_fmax = _finite(self.relax_fmax_ev_A, name="relax_fmax_ev_A")
+        if relax_fmax <= 0.0:
+            raise ValueError("relax_fmax_ev_A must be positive")
+        relax_maxstep = _finite(self.relax_maxstep_A, name="relax_maxstep_A")
+        if relax_maxstep <= 0.0:
+            raise ValueError("relax_maxstep_A must be positive")
+        relax_steps = int(self.relax_steps)
+        if relax_steps < 1:
+            raise ValueError("relax_steps must be >= 1")
         if evaluate == "none" and self.calculator is not None:
             # Allowed: prepare-only with calculator recorded for later use.
             pass
@@ -241,6 +276,11 @@ class IcScanConfig:
         object.__setattr__(self, "dofs", dofs)
         object.__setattr__(self, "scan_mode", scan_mode)
         object.__setattr__(self, "geometry_mode", geometry_mode)
+        object.__setattr__(self, "relax_optimizer", relax_optimizer)
+        object.__setattr__(self, "relax_fmax_ev_A", relax_fmax)
+        object.__setattr__(self, "relax_maxstep_A", relax_maxstep)
+        object.__setattr__(self, "relax_steps", relax_steps)
+        object.__setattr__(self, "relax_chain", bool(self.relax_chain))
         object.__setattr__(self, "evaluate", evaluate)
         object.__setattr__(self, "failure_policy", failure_policy)
         object.__setattr__(self, "reference", reference)
@@ -282,6 +322,11 @@ class IcScanConfig:
             "calculator": self.calculator,
             "scan_mode": self.scan_mode,
             "geometry_mode": self.geometry_mode,
+            "relax_fmax_ev_A": self.relax_fmax_ev_A,
+            "relax_steps": self.relax_steps,
+            "relax_maxstep_A": self.relax_maxstep_A,
+            "relax_optimizer": self.relax_optimizer,
+            "relax_chain": self.relax_chain,
             "evaluate": self.evaluate,
             "failure_policy": self.failure_policy,
             "reference": dict(self.reference),

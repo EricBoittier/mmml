@@ -214,7 +214,7 @@ MM GRMS is recorded in `box.json` but does **not** gate certification in Phase A
 
 ## Recommended workflows
 
-### Happy path — new dense liquid
+### New dense liquid
 
 ```bash
 mmml liquid-box --composition DCM:206 --profile dense \

@@ -134,6 +134,7 @@ nav:
       - SO3LR / DES dimers — chemical space & LJ coverage: des-so3lr-dimers.md
       - SO3LR / DES dimers — training handoff: des-lj-scales-handoff.md
       - Dimer scans (DCM / ACO): functionality/dimer_scans/README.md
+      - Internal-coordinate scans (ic-scan): ic-scan-design.md
       - Orientation scan plots (path atlas): functionality/orient_scan_plots.md
       - Commands:
           # CLI_NAV_START: QM & data
@@ -200,7 +201,7 @@ nav:
           - diagnose-lc-outliers: cli/commands/diagnose-lc-outliers.md
           - orbax-to-json: cli/commands/orbax-to-json.md
           # CLI_NAV_END: ML training & MD
-  - Environment & clusters:
+  - Environment and HPCs:
       - sections/environment-clusters.md
       - SciCORE cluster guide: scicore.md
       - MPI operations: pycharmm-mpi.md
@@ -249,7 +250,6 @@ nav:
           - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
           - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
           - 1D dimer scan design: dimer-scan-design.md
-          - Internal-coordinate scan design: ic-scan-design.md
           - DES hybrid LJ scales handoff: HANDOFF-npt-des-hybrid.md
           - Compact DES / NpT state (2026-08-02): npt-state-2026-08-02.md
           - Charge-aware water retraining handoff: q0-charge-retraining-handoff.md

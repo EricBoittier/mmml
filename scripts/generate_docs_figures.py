@@ -29,6 +29,7 @@ IMG = REPO / "docs" / "images"
 STRUCT = IMG / "structures"
 PLOTS = IMG / "plots"
 
+from mmml.ic_scan.plotting import style_dihedral_scan_axes
 from mmml.utils.ase_structure_plot import (
     DOCS_STRUCTURE_STYLE as _STYLE,
     SCALE_BOX as _SCALE_BOX,
@@ -40,7 +41,7 @@ from mmml.utils.ase_structure_plot import (
     save_structure_figure as _save_structure_figure,
     use_matplotlib_agg as _use_agg,
 )
-from mmml.utils.plotting.styles import apply_plot_style
+from mmml.utils.plotting.styles import OKABE_ITO_PALETTE, apply_plot_style, comparison_colors
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -421,7 +422,145 @@ def figure_compose_workflow(out: Path) -> None:
     plt.close(fig)
 
 
-def generate(*, check: bool = False) -> int:
+# CGenFF ACEM (examples/ic_scan/acem.xyz): methyl torsion O–C–CC–HC1.
+ACEM_XYZ = REPO / "examples" / "ic_scan" / "acem.xyz"
+ACEM_METHYL_ATOMS = (5, 1, 0, 6)
+ACEM_METHYL_LABELS = ("a1  O", "a2  C", "a3  CC", "a4  HC1")
+ACEM_METHYL_ROTATION = "90x,0y,0z"
+ACEM_METHYL_RADII = 0.55
+ACEM_OTHER_ATOM_HEX = "#94A3B8"
+# Schematic barriers (kcal/mol). Not a live xTB scan: V3 is the chemical
+# 3-fold rotor; V1 is the 1-fold leak from inequivalent H–C–C on a rigid twist.
+ACEM_DOCS_V3_KCAL_MOL = 0.80
+ACEM_DOCS_V1_KCAL_MOL = 0.35
+ACEM_DOCS_V1_PHASE_DEG = 25.0
+ACEM_DOCS_PHI_N = 361
+
+
+def _hex_to_rgb(hex_color: str) -> np.ndarray:
+    digits = hex_color.lstrip("#")
+    return np.array([int(digits[i : i + 2], 16) for i in (0, 2, 4)], dtype=float) / 255.0
+
+
+def _methyl_rotor_kcal_mol(phi_deg: np.ndarray, *, onefold: bool) -> np.ndarray:
+    """V3/2 (1 − cos 3φ) plus optional V1/2 (1 − cos(φ − φ0))."""
+
+    phi = np.deg2rad(np.asarray(phi_deg, dtype=float))
+    energy = 0.5 * ACEM_DOCS_V3_KCAL_MOL * (1.0 - np.cos(3.0 * phi))
+    if onefold:
+        phase = np.deg2rad(ACEM_DOCS_V1_PHASE_DEG)
+        energy = energy + 0.5 * ACEM_DOCS_V1_KCAL_MOL * (1.0 - np.cos(phi - phase))
+    return energy
+
+
+def figure_acem_methyl_scan(out: Path) -> None:
+    """ASE dihedral highlight + rigid vs relaxed methyl profiles on shared axes."""
+
+    import ase.io
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
+    from matplotlib.lines import Line2D
+
+    from mmml.utils.ase_structure_plot import draw_orthographic_structure
+
+    _style_matplotlib_rc()
+    atoms = ase.io.read(ACEM_XYZ)
+    n_atoms = len(atoms)
+    colors = comparison_colors("icml", n=len(ACEM_METHYL_ATOMS))
+    # Skip near-black so labels stay visible on the structure background.
+    if colors and colors[0].lower() in ("#000000", "#000"):
+        colors = list(OKABE_ITO_PALETTE[1 : 1 + len(ACEM_METHYL_ATOMS)])
+    atom_rgb = np.repeat(_hex_to_rgb(ACEM_OTHER_ATOM_HEX)[None, :], n_atoms, axis=0)
+    for index, hex_color in zip(ACEM_METHYL_ATOMS, colors, strict=True):
+        atom_rgb[index] = _hex_to_rgb(hex_color)
+
+    phi = np.linspace(-180.0, 180.0, ACEM_DOCS_PHI_N)
+    e_rigid = _methyl_rotor_kcal_mol(phi, onefold=True)
+    e_relax = _methyl_rotor_kcal_mol(phi, onefold=False)
+    y_max = float(max(np.max(e_rigid), np.max(e_relax)))
+
+    fig = plt.figure(figsize=(8.4, 7.0), dpi=150, facecolor=_STYLE["figure_facecolor"])
+    grid = fig.add_gridspec(2, 2, height_ratios=[1.2, 1.0], hspace=0.38, wspace=0.22)
+    ax_mol = fig.add_subplot(grid[0, :])
+    ax_rigid = fig.add_subplot(grid[1, 0])
+    ax_relax = fig.add_subplot(grid[1, 1], sharey=ax_rigid)
+
+    ax_mol.set_facecolor(_STYLE["axes_facecolor"])
+    writer = draw_orthographic_structure(
+        atoms,
+        ax_mol,
+        rotation=ACEM_METHYL_ROTATION,
+        scale=_SCALE_MONOMER,
+        show_unit_cell=0,
+        radii=ACEM_METHYL_RADII,
+        atom_colors=atom_rgb,
+    )
+    image_xy = writer.to_image_plane_positions(atoms.get_positions())[:, :2]
+    torsion = image_xy[list(ACEM_METHYL_ATOMS)]
+    ax_mol.add_collection(
+        LineCollection(
+            [torsion],
+            colors="#334155",
+            linewidths=1.6,
+            linestyles="--",
+            zorder=4,
+        )
+    )
+    ax_mol.set_title(
+        "ACEM methyl DoF  O–C–CC–HC1  (atoms 5–1–0–6)",
+        fontsize=11.5,
+        fontweight="500",
+        color=_STYLE["title_color"],
+        pad=8,
+    )
+    legend_handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="",
+            markersize=8,
+            markerfacecolor=hex_color,
+            markeredgecolor="#1e293b",
+            markeredgewidth=0.6,
+            label=label,
+        )
+        for label, hex_color in zip(ACEM_METHYL_LABELS, colors, strict=True)
+    ]
+    ax_mol.legend(
+        handles=legend_handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.08),
+        ncol=4,
+        fontsize=9,
+        frameon=False,
+    )
+
+    line_color = colors[1] if len(colors) > 1 else "#0072B2"
+    for ax, energy, title in (
+        (ax_rigid, e_rigid, "Rigid (1-fold leak)"),
+        (ax_relax, e_relax, "Relaxed (3-fold)"),
+    ):
+        ax.set_facecolor(_STYLE["axes_facecolor"])
+        ax.plot(phi, energy, color=line_color, linewidth=2.0)
+        style_dihedral_scan_axes(ax, y_max=y_max, y_min=0.0)
+        ax.set_xlabel("O–C–CC–HC1 / deg")
+        ax.set_title(title, fontweight="500")
+    ax_rigid.set_ylabel("ΔE / kcal·mol⁻¹")
+    plt.setp(ax_relax.get_yticklabels(), visible=False)
+
+    fig.suptitle(
+        "Methyl scan axes are identical: 3-fold symmetry is visible only when relaxed",
+        fontsize=11,
+        color=_STYLE["title_color"],
+        y=0.995,
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, bbox_inches="tight", facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+
+
+def generate(*, check: bool = False, only: tuple[str, ...] = ()) -> int:
     _use_agg()
     _style_matplotlib_rc()
     targets: dict[Path, str] = {
@@ -435,6 +574,7 @@ def generate(*, check: bool = False) -> int:
         PLOTS / "liquid-box-density-ladder.png": "liquid_box",
         PLOTS / "structure-builder-sizes.png": "workflow",
         PLOTS / "trialanine-build-pipeline.png": "trialanine_pipeline",
+        PLOTS / "acem-methyl-scan.png": "acem_methyl",
     }
 
     builders = {
@@ -447,7 +587,14 @@ def generate(*, check: bool = False) -> int:
         "trialanine_pipeline": lambda p: figure_trialanine_build_pipeline(p),
         "mixed_system_zoom": lambda p: figure_mixed_system_zoom(p),
         "mixed_system_overview": lambda p: figure_mixed_system_overview(p),
+        "acem_methyl": lambda p: figure_acem_methyl_scan(p),
     }
+    if only:
+        wanted = set(only)
+        unknown = wanted - set(targets.values())
+        if unknown:
+            raise ValueError(f"unknown figure keys: {sorted(unknown)}")
+        targets = {path: key for path, key in targets.items() if key in wanted}
 
     changed = 0
     for path, key in targets.items():
@@ -465,7 +612,7 @@ def generate(*, check: bool = False) -> int:
         if before != after:
             changed += 1
 
-    if not check:
+    if not check and (not only or "trialanine_box" in only or "trialanine_peptide" in only):
         _write_bundled_trialanine_reference_extxyz()
 
     if check:
@@ -477,8 +624,14 @@ def generate(*, check: bool = False) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Exit 1 if images missing")
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        default=(),
+        help="Generate only these figure keys (e.g. acem_methyl)",
+    )
     args = parser.parse_args()
-    return generate(check=args.check)
+    return generate(check=args.check, only=tuple(args.only))
 
 
 if __name__ == "__main__":

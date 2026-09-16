@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from .config import (
     CONFIG_SCHEMA_VERSION,
+    DEFAULT_RELAX_FMAX_EV_A,
+    DEFAULT_RELAX_MAXSTEP_A,
+    DEFAULT_RELAX_STEPS,
     RESULT_SCHEMA_VERSION,
     DegreeOfFreedom,
     IcScanConfig,
@@ -20,11 +23,15 @@ from .geometry import (
 )
 from .grid import ScanPoint, expand_scan_points
 from .plotting import plot_model_comparison
+from .relax import constrained_relax_atoms, fix_internals_constraint
 from .result import Provenance, ScanRecord, ScanResult
 from .topology import angles_match, circular_delta_deg, covalent_bond_graph
 
 __all__ = [
     "CONFIG_SCHEMA_VERSION",
+    "DEFAULT_RELAX_FMAX_EV_A",
+    "DEFAULT_RELAX_MAXSTEP_A",
+    "DEFAULT_RELAX_STEPS",
     "DegreeOfFreedom",
     "IcScanConfig",
     "Provenance",
@@ -37,8 +44,10 @@ __all__ = [
     "apply_coordinates",
     "build_grid",
     "circular_delta_deg",
+    "constrained_relax_atoms",
     "covalent_bond_graph",
     "expand_scan_points",
+    "fix_internals_constraint",
     "load_structure",
     "measure_all",
     "measure_dof",

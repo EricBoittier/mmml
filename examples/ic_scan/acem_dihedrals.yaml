@@ -16,13 +16,17 @@
 #   mmml ic-scan --config examples/ic_scan/acem_dihedrals.yaml \
 #     --output artifacts/ic_scan/acem_xtb --overwrite
 #
+# Relaxed methyl scan (FixInternals + FIRE; needed for 3-fold rotor symmetry):
+#   mmml ic-scan --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+#     --output artifacts/ic_scan/acem_xtb_relaxed --overwrite
+#
 # Multi-model overlay (PhysNet + KerNN GT + KerNN distill):
 #   bash examples/kernnn/acem_dihedral_scan_compare.sh
 
 structure: acem.xyz
 calculator: xtb
 evaluate: energy
-geometry_mode: rigid
+geometry_mode: rigid   # rigid rotor; use acem_dihedrals_relaxed.yaml for constrained min
 failure_policy: fail
 
 dofs:

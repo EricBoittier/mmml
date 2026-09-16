@@ -1,62 +1,68 @@
-# Reproducible internal-coordinate scan design
+# Internal-coordinate scans (`ic-scan`)
 
-## Status and scope
+![ACEM methyl: O–C–CC–HC1 atoms, rigid vs relaxed profiles on identical axes](images/plots/acem-methyl-scan.png)
 
-`mmml ic-scan` is the supported interface for bond / angle / dihedral scans on
-an arbitrary molecular structure identified by **0-based ASE atom indices**.
-It prepares geometries for QM or ML evaluation and can optionally evaluate
-energies/forces in-process with the same calculator set as `dimer-scan`.
+`mmml ic-scan` scans **bonds**, **angles**, or **dihedrals** by 0-based ASE
+index. Default `geometry_mode: rigid` rotates a fragment and evaluates. That
+is why the ACEM methyl above is not 3-fold until you relax: the CGenFF XYZ has
+unequal H–C–C angles, so 120° does not permute equivalent hydrogens.
 
-## Goals
+Kinds are only `bond` | `angle` | `dihedral`. There is no user-defined CV
+(linear combinations, COM distances, …). What you *can* customize is the
+grid (`values:`), the moving fragment (`mask:`), and inactive-DoF
+`reference:` values.
 
-- Config-driven DoFs: kind, atom indices, grid (`start`/`stop`/`n_points` or
-  explicit `values`).
-- Combine scans as:
-  - `scan_mode: product` — one exhaustive N-D grid over all DoFs
-  - `scan_mode: individual` — separate 1D scans per DoF (others at reference)
-  - `scans:` — explicit named jobs selecting DoF subsets (1D or N-D each)
-- Prepare-only mode (`evaluate: none` or `--prepare-only`) for external QM/ML.
-- Calculator-neutral evaluation via the ASE calculator contract.
-- Self-describing result bundles (`manifest.json`, `data.csv`, trajectories).
-
-## Non-goals (v1)
-
-- Constrained relaxation (`FixInternals` / CHARMM `CONS DIHE`) — planned as
-  `geometry_mode: constrained-relax`.
-- Periodic / MIC internal coordinates.
-- Fragment interaction energies (use `dimer-scan` for that).
-- Replacing the trialanine-specific φ/ψ campaign script.
-
-## Config sketch
-
-```yaml
-structure: mol.xyz
-calculator: xtb          # or physnet/spookynet/pyscf/...; omit with evaluate: none
-evaluate: energy         # energy | none
-scan_mode: product       # product | individual (used when scans omitted)
-dofs:
-  - name: omega
-    kind: dihedral       # bond | angle | dihedral
-    atoms: [0, 4, 6, 8]  # a1 a2 a3 a4 — see mask rules below
-    # mask: omit to use covalent-topology default (recommended)
-    start: -180
-    stop: 180
-    n_points: 36
-scans:                   # optional explicit jobs
-  - name: omega_1d
-    dofs: [omega]
-  - name: omega_methyl_2d
-    dofs: [omega, n_methyl]
+```bash
+mmml ic-scan --config CONFIG.yaml --output artifacts/ic_scan/out --overwrite
 ```
 
-## Dihedral atom order and `mask` (read this)
+`--prepare-only` writes geometries without energies (incompatible with
+`constrained-relax`).
 
-ASE `Atoms.set_dihedral(a1, a2, a3, a4, angle, indices=…)`:
+## Bonds
 
-1. Rotates about the **central bond a2–a3**.
-2. Moves only atoms listed in `indices` / `mask`.
-3. The geometric target is the torsion **a1–a2–a3–a4**, so **a4 must be in the
-   moving set** and must lie on the **a3** side of a2–a3.
+`kind: bond` takes two atoms. Default mask: the covalent fragment on the
+**a1** side of a0–a1 (a1 must move). Lengths in Å, must be positive.
+
+```yaml
+dofs:
+  - name: r12
+    kind: bond
+    atoms: [0, 1]
+    start: 1.40
+    stop: 1.70
+    n_points: 4
+scans:
+  - name: bond_1d
+    dofs: [r12]
+```
+
+Example: `examples/ic_scan/butane_like.yaml`.
+
+## Angles
+
+`kind: angle` takes three atoms **a1–a2–a3**. Default mask: fragment on the
+**a3** side of a2–a3. Values in degrees.
+
+```yaml
+dofs:
+  - name: theta
+    kind: angle
+    atoms: [0, 1, 2]     # C–C–C on the butane-like chain
+    start: 90
+    stop: 130
+    n_points: 5
+scans:
+  - name: angle_1d
+    dofs: [theta]
+```
+
+Same file: `examples/ic_scan/butane_like.yaml` (`angle_1d`).
+
+## Dihedrals
+
+`kind: dihedral` takes four atoms. ASE rotates about **a2–a3**. **a4 must be
+on the a3 side** and in `mask`.
 
 ```text
  a1          a4
@@ -64,76 +70,132 @@ ASE `Atoms.set_dihedral(a1, a2, a3, a4, angle, indices=…)`:
    a2 ---- a3     ← rotate about this bond
 ```
 
-### Default mask (when `mask` is omitted)
+Omit `mask` unless you have a reason: default is the covalent fragment on the
+a3 side of a2–a3. PSF index order is not that fragment. If you set `mask`, it
+must include a4.
 
-MMML builds a covalent bond graph and takes every atom on the **a3 side** of
-bond a2–a3 (BFS from a3, blocked at a2). That fragment always includes a4 when
-the atom order is chemically correct.
+```yaml
+dofs:
+  - name: methyl
+    kind: dihedral
+    atoms: [5, 1, 0, 6]   # ACEM O–C–CC–HC1
+    start: -180
+    stop: 180
+    n_points: 37
+```
 
-**Do not** rely on “indices from a3 to n−1” — PSF order is not a topological
-side of the bond.
+| Rotor (CGenFF `make-res`) | `atoms` |
+|---------------------------|---------|
+| ACEM methyl `O–C–CC–HC1` | `[5, 1, 0, 6]` |
+| NMA amide `CL–C–N–CR` | `[0, 4, 6, 8]` |
+| NMA acetyl methyl `N–C–CL–HL1` | `[6, 4, 0, 1]` |
+| NMA N-methyl `C–N–CR–HR1` | `[4, 6, 8, 9]` |
 
-### Explicit `mask`
+NMA ω with `mask: [9, 10, 11]` (HR* only, no CR) is broken — a4 never moves.
 
-If you set `mask`, it **must include a4**. Common failure for NMA amide
-`CL–C–N–CR` (`atoms: [0, 4, 6, 8]`):
+## Relaxed scans
 
-| Mask | Result |
-|------|--------|
-| omitted / `[6,7,8,9,10,11]` / `[7,8,9,10,11]` | OK |
-| `[9,10,11]` (HR* only, **no CR**) | **Broken** — a4=CR never moves |
-| methyl order `HL1–CL–C–N` with methyl-H mask | **Broken** — wrong a3/a4 side |
+`geometry_mode: constrained-relax` holds **active** DoFs with `FixInternals`
+and FIRE/BFGS-minimizes the rest. A 1D methyl job does not freeze the amide.
+Needs `evaluate: energy` (no `--prepare-only`).
 
-`ic-scan` validates masks up front and re-checks requested vs actual angles
-after each geometry (multi-pass for N-D). Mismatches raise a clear error
-instead of writing a silent wrong trajectory.
-
-### NMA examples (CGenFF `make-res` order)
-
-| Name | Chemically | `atoms` | Default moving fragment |
-|------|------------|---------|-------------------------|
-| Amide C–C–N–C | `CL–C–N–CR` | `[0, 4, 6, 8]` | N side: N, H, CR, HR* |
-| Acetyl methyl | `N–C–CL–HL1` | `[6, 4, 0, 1]` | CL, HL* |
-| N-methyl | `C–N–CR–HR1` | `[4, 6, 8, 9]` | CR, HR* |
-
-Bundled configs:
-
-- `examples/ic_scan/nma_methyl.yaml` — both methyl 1D scans
-- `examples/ic_scan/nma_omega_methyl_2d.yaml` — amide ω 1D + N-methyl 1D + 2D product
-- `examples/ic_scan/acem_dihedrals.yaml` — acetamide methyl + amide N–H 1D
-- `examples/kernnn/acem_dihedral_scan_compare.sh` — PhysNet vs KerNN overlay plots
-
-### N-D / 2D scans
-
-A `scans` job with two dihedrals builds the cartesian product. Coupled torsions
-are applied in several passes until every active DoF matches. If two DoFs fight
-(impossible rigid combination), preparation fails with the residual errors
-listed — fix atom order / masks rather than trusting `actual_*` in the CSV.
-
-## Result bundle
-
-Every successful run writes an atomic directory (safe `--overwrite`):
-
-| File | Role |
-|------|------|
-| `manifest.json` | Schema, counts, resolved config snapshot, output checksums |
-| `resolved_config.json` | Full config with absolute paths |
-| `data.csv` | Tabular records (`scan_name`, coordinates, status, energies) |
-| `trajectory.extxyz` | Archival frames + per-frame `info` |
-| `trajectory.traj` | ASE traj for `ase gui trajectory.traj` |
-| `energy_<scan>.png` | 1D energy plots only when `evaluate: energy` succeeded |
-
-Prepare-only example (NMA ω + N-methyl, 195 points):
+```yaml
+evaluate: energy
+geometry_mode: constrained-relax
+relax_fmax_ev_A: 0.05
+relax_steps: 200
+relax_maxstep_A: 0.03
+relax_optimizer: fire    # or bfgs if FixInternals steps fail
+relax_chain: true
+scans:
+  - name: methyl_1d
+    dofs: [methyl]
+```
 
 ```bash
-mmml make-res --res NMA
-cp xyz/nma.xyz ~/mmml/examples/ic_scan/
-mmml ic-scan --config ~/mmml/examples/ic_scan/nma_omega_methyl_2d.yaml \
+mmml ic-scan \
+  --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+  --output artifacts/ic_scan/acem_xtb_relaxed \
+  --overwrite
+```
+
+Pass: `methyl_1d` repeats every 120° with three equal wells. Peptide φ/ψ with
+CHARMM `CONS DIHE` is still `scripts/scan_trialanine_phi_psi_pes.py`.
+
+## 2D scans
+
+A `scans` job with two (or more) DoFs is the cartesian product. 1D jobs in the
+same YAML still run as 1D. `scan_mode: product` (default when `scans:` is
+omitted) is one N-D grid over every DoF; `individual` is a 1D sweep per DoF
+with the others held at the reference geometry.
+
+```yaml
+# examples/ic_scan/nma_omega_methyl_2d.yaml
+scans:
+  - name: omega_1d
+    dofs: [omega]
+  - name: n_methyl_1d
+    dofs: [n_methyl]
+  - name: omega_methyl_2d
+    dofs: [omega, n_methyl]   # 13 × 13
+```
+
+```yaml
+# examples/ic_scan/butane_like.yaml — mixed kinds
+scans:
+  - name: bond_dihedral_2d
+    dofs: [r12, phi]
+```
+
+Coupled internals are re-applied until they match. If they fight, preparation
+fails — fix atom order / mask. 1D plots go to `energy_*.png`; 2D is
+`data.csv` + `trajectory.traj`.
+
+```bash
+mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
   --prepare-only --output ic_scan/omega_methyl_2d --overwrite
 ase gui ic_scan/omega_methyl_2d/trajectory.traj
 ```
 
-## Public API
+## Custom grids
+
+Not a new `kind`. Use an explicit list instead of `start` / `stop` /
+`n_points` (do not mix the two). Units are still Å or degrees.
+
+```yaml
+dofs:
+  - name: r12
+    kind: bond
+    atoms: [0, 1]
+    values: [1.40, 1.45, 1.50, 1.70]    # irregular spacing
+  - name: phi
+    kind: dihedral
+    atoms: [0, 1, 2, 3]
+    values: [-180, -60, 0, 60, 180]     # skip the rest of the circle
+```
+
+Optional:
+
+```yaml
+reference:
+  r12: 1.54          # inactive DoFs in 1D / subset scans (else measured)
+  phi: 180.0
+dofs:
+  - name: omega
+    kind: dihedral
+    atoms: [0, 4, 6, 8]
+    mask: [6, 7, 8, 9, 10, 11]   # must include a4; omit to use topology
+    values: [0, 180]
+```
+
+## Output
+
+| File | |
+|------|-|
+| `manifest.json` | counts, resolved config, checksums |
+| `data.csv` | coordinates, `status`, energies |
+| `trajectory.extxyz` / `trajectory.traj` | frames (`ase gui …`) |
+| `energy_*.png` | 1D plots when `evaluate: energy` |
 
 ```python
 from mmml.ic_scan import IcScanConfig, run_ic_scan
@@ -143,18 +205,7 @@ result = run_ic_scan(config)
 result.write("artifacts/ic_scan_out")
 ```
 
-```bash
-mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
-  --prepare-only --output ic_scan/omega_methyl_2d --overwrite
-ase gui ic_scan/omega_methyl_2d/trajectory.traj
-```
-
-## Relation to other tools
-
-| Tool | Role |
-|------|------|
-| `mmml dimer-scan` | Rigid intermolecular separation |
-| `scripts/scan_trialanine_phi_psi_pes.py` | Peptide-specific constrained φ/ψ PES |
-| `mmml mode-check` | Diagnostic X–H bond scans |
-| `mmml ic-scan` | General monomer IC grids for QM/ML |
-| [NMA end-to-end tutorial](examples/nma-workflow.md) | make-res → methyl/`ω` `ic-scan` → train → dimer → MD |
+Examples: `examples/ic_scan/butane_like.yaml`, `nma_methyl.yaml`,
+`nma_omega_methyl_2d.yaml`, `acem_dihedrals.yaml`,
+`acem_dihedrals_relaxed.yaml`. Related: [`dimer-scan`](cli/commands/dimer-scan.md),
+[NMA tutorial](examples/nma-workflow.md).

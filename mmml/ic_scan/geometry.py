@@ -216,12 +216,16 @@ def prepare_geometries(
     *,
     base: Atoms | None = None,
 ) -> tuple[Atoms, list[tuple[ScanPoint, Atoms]]]:
-    """Build all rigid scan geometries without evaluating energies.
+    """Build rigid starting geometries for every scan point.
+
+    ``geometry_mode='constrained-relax'`` still uses this rigid set as the
+    FIRE starting guess; ``run_ic_scan`` then holds active DoFs with
+    ``FixInternals`` and relaxes the rest.
 
     Returns the reference structure and an ordered list of ``(point, atoms)``.
     """
 
-    if config.geometry_mode != "rigid":
+    if config.geometry_mode not in ("rigid", "constrained-relax"):
         raise ValueError(f"unsupported geometry_mode: {config.geometry_mode!r}")
     structure = base if base is not None else load_structure(config.structure)
     _validate_indices(structure, config.dofs)

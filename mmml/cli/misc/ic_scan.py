@@ -87,6 +87,12 @@ def main(argv: list[str] | None = None) -> int:
         _resolve_path_fields(data, path)
     except ValueError as exc:
         build_parser().error(str(exc))
+    if args.prepare_only and str(data.get("geometry_mode", "rigid")).lower() == (
+        "constrained-relax"
+    ):
+        build_parser().error(
+            "geometry_mode=constrained-relax needs energy evaluation; omit --prepare-only"
+        )
     config = IcScanConfig.from_dict(data)
     if args.prepare_only and config.evaluate != "none":
         from dataclasses import replace

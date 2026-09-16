@@ -1,15 +1,18 @@
 # QM & data
 
 Producing **reference data** and turning it into training sets: DFT/MP2 energies,
-forces, dipoles and ESP; rigid dimer and internal-coordinate scans; and the
+forces, dipoles and ESP; rigid dimer and internal-coordinate scans (rigid or constrained-relax); and the
 NPZ conversion, validation, and splitting steps in between.
 
-## Happy path
+How-to: [internal-coordinate scans](../ic-scan-design.md) (`mmml ic-scan`),
+[dimer scans](../functionality/dimer_scans/README.md).
 
 ```bash
 mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp   # label geometries
 mmml validate out.npz                                   # check against schema
 mmml fix-and-split --efd out.npz --output-dir ./splits  # unit fixes + splits
+mmml ic-scan --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+  --output artifacts/ic_scan/acem --overwrite
 ```
 
 Converting from other sources:
@@ -30,6 +33,9 @@ mmml npz2traj data.npz -o traj.traj     # NPZ -> ASE trajectory
 - [Dimer scans (DCM / ACO)](../functionality/dimer_scans/README.md) and
   [Orientation scan plots](../functionality/orient_scan_plots.md) — generating
   and reading rigid scan surfaces.
+- [Internal-coordinate scans](../ic-scan-design.md) — bond / angle / dihedral
+  how-to (`mmml ic-scan`). Default is rigid; `geometry_mode: constrained-relax`
+  for a methyl rotor.
 
 **Commands** — the `pyscf-*` family, `dimer-scan`, `ic-scan`, `mode-check`,
 `fix-and-split`, `validate`, plus the ORCA external interface.

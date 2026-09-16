@@ -1,4 +1,4 @@
-# Example: butane-like backbone dihedral + bond 1D and 2D scans
+# Example: butane-like bond / angle / dihedral 1D + bond×dihedral 2D
 #
 # Run prepare-only (geometries for external QM/ML):
 #   mmml ic-scan --config examples/ic_scan/butane_like.yaml --prepare-only --output artifacts/ic_butane_prep
@@ -26,6 +26,12 @@ dofs:
     start: 1.40
     stop: 1.70
     n_points: 4
+  - name: theta
+    kind: angle
+    atoms: [0, 1, 2]
+    start: 90
+    stop: 130
+    n_points: 5
   - name: phi
     kind: dihedral
     atoms: [0, 1, 2, 3]
@@ -33,10 +39,12 @@ dofs:
     stop: 180
     n_points: 6
 
-# Explicit scan jobs: 1D each + full 2D product.
+# Explicit scan jobs: 1D each + a 2D product.
 scans:
   - name: bond_1d
     dofs: [r12]
+  - name: angle_1d
+    dofs: [theta]
   - name: dihedral_1d
     dofs: [phi]
   - name: bond_dihedral_2d

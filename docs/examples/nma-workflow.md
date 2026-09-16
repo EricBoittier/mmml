@@ -139,6 +139,11 @@ a smoke check, not a production reference.
 Swap `calculator: physnet` + `checkpoint:` (or `pyscf`) for ML/QM single-points
 on the same rigid grid.
 
+Methyl rotors on a non-minimized XYZ are not 3-fold under
+`geometry_mode: rigid`. Relaxed scan: [ic-scan](../ic-scan-design.md),
+`examples/ic_scan/acem_dihedrals_relaxed.yaml`. Same YAML keys for NMA acetyl /
+N-methyl 1D.
+
 ---
 
 ## 3. Prepare a training dataset

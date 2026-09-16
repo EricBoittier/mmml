@@ -4,8 +4,6 @@ Everything that produces a **starting structure**: a single residue from CGenFF,
 a packed periodic box, or a symmetry-generated crystal. These are the inputs
 every MD and QM workflow downstream expects.
 
-## Happy path
-
 ```bash
 mmml make-res --list-residues            # what topologies are available
 mmml make-res --res CYBZ                 # residue -> PDB/PSF/topology

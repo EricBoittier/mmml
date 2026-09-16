@@ -4,8 +4,6 @@ Fitting ML potentials — PhysNet, EF (electric field), KerNN, DCMNet — and th
 sampling methods that use them: reaction paths, diffusion Monte Carlo, and
 active learning.
 
-## Happy path
-
 ```bash
 mmml fix-and-split --efd data.npz --output-dir ./splits
 mmml physnet-train --config train.yaml

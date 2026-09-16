@@ -12,8 +12,9 @@ from ase.calculators.singlepoint import SinglePointCalculator
 
 from .calculators import calculator_factory
 from .config import IcScanConfig
-from .geometry import measure_all, prepare_geometries
+from .geometry import apply_coordinates, measure_all, prepare_geometries
 from .grid import ScanPoint
+from .relax import constrained_relax_atoms
 from .result import EV_TO_KCAL_MOL, Provenance, ScanRecord, ScanResult
 
 CalculatorFactory = Callable[[], Calculator]
@@ -76,6 +77,7 @@ def run_ic_scan(
     factory = calculator
     if evaluate and factory is None:
         factory = calculator_factory(config)
+    previous_relaxed: dict[str, Atoms] = {}
 
     for point, atoms in prepared:
         frame = atoms.copy()
@@ -89,6 +91,32 @@ def run_ic_scan(
             continue
         assert factory is not None
         try:
+            if config.geometry_mode == "constrained-relax":
+                start = frame
+                if config.relax_chain:
+                    prior = previous_relaxed.get(point.scan_name)
+                    if prior is not None:
+                        start = apply_coordinates(
+                            prior,
+                            config.dofs,
+                            {
+                                name: point.coordinates[name]
+                                for name in point.active_dofs
+                            },
+                            active_dofs=point.active_dofs,
+                        )
+                frame = constrained_relax_atoms(
+                    start,
+                    factory,
+                    config,
+                    active_dofs=point.active_dofs,
+                    coordinates=point.coordinates,
+                )
+                frame.info.update(point.to_info())
+                stash = frame.copy()
+                stash.calc = None
+                stash.set_constraint()
+                previous_relaxed[point.scan_name] = stash
             energy, forces = _evaluate_atoms(frame, factory)
             max_f = float(np.max(np.linalg.norm(forces, axis=1)))
             frame.info.update(

@@ -75,7 +75,7 @@ same thing:
 
 | Slot | What it is |
 |------|------------|
-| Section index | What the area covers, the happy path, where it leads |
+| Section index | What the area covers and where the guides are |
 | Tutorial | One start-to-finish worked path |
 | How-to | Task-focused pages that assume you have context |
 | Commands | Generated reference, one page per subcommand |
@@ -84,10 +84,10 @@ same thing:
 |---------|------------|----------|
 | [Structure & boxes](../sections/structure-boxes.md) | [Structure building](structure-building.md) | `make-res`, `make-box`, `build-crystal`, `liquid-box` |
 | [MD & campaigns](../sections/md-campaigns.md) | [Tri-alanine water box](../trialanine-water-box.md); [φ/ψ → umbrella teaching](../examples/tria-phi-psi-scan.md) | `md-system`, `md-embedding`, `umbrella-sample`, `health-check` |
-| [QM & data](../sections/qm-data.md) | [QC cross-check](../qc-cross-check.md) | `pyscf-*`, `dimer-scan`, `ic-scan`, `fix-and-split` |
+| [QM & data](../sections/qm-data.md) | [Internal-coordinate scans](../ic-scan-design.md); [QC cross-check](../qc-cross-check.md) | `pyscf-*`, `dimer-scan`, `ic-scan`, `fix-and-split` |
 | [Hybrid ML/MM potentials](../sections/hybrid-potentials.md) | [Cutoffs, regions & LR solvers](../hybrid-potential-regions.md) | — |
 | [Training & sampling](../sections/training-sampling.md) | [NEB](../neb.md), [DMC](../dmc.md) | `physnet-*`, `efield-*`, `kernnn-*`, `neb`, `dmc` |
-| [Environment & clusters](../sections/environment-clusters.md) | [SciCORE guide](../scicore.md) | `env`, `configure`, `doctor`, `mpi-launch`, `completion` |
+| [Environment and HPCs](../sections/environment-clusters.md) | [SciCORE guide](../scicore.md) | `env`, `configure`, `doctor`, `mpi-launch`, `completion` |
 
 **Hybrid ML/MM potentials has no command group.** Assembling a hybrid potential
 is configuration, not a subcommand — which is exactly why those pages needed a

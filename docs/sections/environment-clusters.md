@@ -1,10 +1,8 @@
-# Environment & clusters
+# Environment and HPCs
 
 Getting MMML to run *where* you need it: resolving checkpoints and CHARMM paths,
 diagnosing a broken environment, and the MPI / threading / launcher details that
 decide whether a cluster job is fast or merely running.
-
-## Happy path
 
 ```bash
 mmml doctor                    # is this machine ready? (JAX, CHARMM, Packmol)
